@@ -1,0 +1,385 @@
+import { AdditiveBlending, BufferGeometry, Color, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
+import { makeToonMaterial, shared } from './materials';
+import {
+  basaltGeometry,
+  blossomGeometry,
+  charPineGeometry,
+  gateBeamGeometry,
+  giftGeometry,
+  kickerLipGeometry,
+  lanternPostGeometry,
+  obstacleGeometry,
+  obstacleModelRadius,
+  pineGeometry,
+  seracGeometry,
+  spireGeometry,
+  ventGeometry,
+} from './meshes';
+import { Palette } from './palette';
+
+// Instanced props for the visible chunk window: obstacles, the decorative forest beyond the
+// treeline, gifts, kicker lips, vents and spirit gates. Instance lists are rebuilt only when the
+// window moves or something is collected or smashed.
+
+const KINDS: ObstacleKind[] = ['pine', 'rock', 'log', 'snowman', 'spire', 'serac', 'iceblock', 'basalt', 'lavarock', 'charpine', 'blossom', 'lantern', 'pillar'];
+
+interface Batch {
+  mesh: InstancedMesh;
+  count: number;
+  /** Instances in the chunks up to the player's (they are packed in chunk order). */
+  near: number;
+}
+
+/** The soft amber halo round a trail lantern's lamp (Lantern Night): a camera-facing glow about
+ *  1.4 m across up close that never shrinks below about a hundredth of the screen height far away, so
+ *  a lamp a few hundred metres down the corridor still reads as a point of warm light. Additive, and
+ *  only half swallowed by the fog. */
+function haloMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    uniforms: { uColor: { value: new Color('#FFB45E') }, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar },
+    vertexShader: /* glsl */ `
+      uniform float uFogNear;
+      uniform float uFogFar;
+      varying vec2 vQ;
+      varying float vFade;
+      void main() {
+        vQ = position.xy * 2.0;
+        vec4 c = modelViewMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
+        float d = max(-c.z, 0.1);
+        c.xy += position.xy * max(1.4, 0.04 * d / projectionMatrix[1][1]);
+        vFade = (1.0 - 0.55 * smoothstep(uFogNear, uFogFar * 1.4, d)) * smoothstep(3.0, 10.0, d);
+        gl_Position = projectionMatrix * c;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      varying vec2 vQ;
+      varying float vFade;
+      void main() {
+        float r = length(vQ);
+        float a = (exp(-r * r * 14.0) * 1.0 + exp(-r * 3.6) * 0.3) * (1.0 - smoothstep(0.75, 1.0, r)) * vFade;
+        if (a < 0.003) discard;
+        gl_FragColor = vec4(uColor * 2.2, a);
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+}
+
+function hashf(a: number, b: number, c: number): number {
+  let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
+  h ^= h >>> 15;
+  h = Math.imul(h, 0x2c1b3c6d);
+  h ^= h >>> 12;
+  return (h >>> 0) / 4294967296;
+}
+
+export class Props {
+  readonly root = new Object3D();
+  private batches = new Map<string, Batch>();
+  private materials: ShaderMaterial[] = [];
+  private giftMat: ShaderMaterial;
+  private range = { from: -1, to: -1 };
+  private dirty = true;
+  private m = new Matrix4();
+  private q = new Quaternion();
+  private v = new Vector3();
+  private s = new Vector3();
+  private up = new Vector3(0, 1, 0);
+  private xAxis = new Vector3(1, 0, 0);
+  private tilt = new Vector3();
+  private cache = new Map<number, Map<string, Float32Array>>();
+  private collecting: Map<string, number[]> | null = null;
+
+  constructor(
+    private course: Course,
+    private palette: Palette,
+    private forestDensity: number,
+    private shadows: boolean,
+    /** The scene renders to a multisampled target: near props fade through coverage, not a dither. */
+    private smoothFade = false,
+  ) {
+    // Gifts shrink away as they pass the lens (and right around the rider after a perfect landing).
+    this.giftMat = makeToonMaterial({ bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2], clearFocus: true });
+    this.build();
+  }
+
+  setCourse(course: Course, palette: Palette): void {
+    this.course = course;
+    this.palette = palette;
+    this.build();
+  }
+
+  setQuality(forestDensity: number, shadows: boolean, smoothFade = this.smoothFade): void {
+    this.forestDensity = forestDensity;
+    this.shadows = shadows;
+    this.smoothFade = smoothFade;
+    this.build();
+  }
+
+  markDirty(): void {
+    this.dirty = true;
+  }
+
+  private build(): void {
+    for (const b of this.batches.values()) {
+      this.root.remove(b.mesh);
+      b.mesh.dispose();
+    }
+    this.batches.clear();
+    this.cache.clear();
+    for (const mat of this.materials) mat.dispose();
+    this.materials = [];
+    const p = this.palette;
+    const biome = this.course.biome;
+    // Props dissolve out fully well before the lens, so nothing screen-doors at the frame edges.
+    const near: [number, number] = [1.8, 3.6];
+    const cf = this.smoothFade;
+    // Obstacles and forest are hazards: the sled lantern never warms them (a cool moon rim instead).
+    // Kicker lips and gate beams are friendly signals and keep the lantern's light.
+    const toon = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true });
+    // Foliage keeps its spruce teal in shade (at 0.55 the cool shade tint turned every pine indigo).
+    const foliage = makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true });
+    const plain = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf });
+    const glow = makeToonMaterial({ coolShade: 0.3, emissive: new Color('#FF9A4A'), emissiveStrength: 0.2, nearFade: near, coverageFade: cf });
+    // Stone lanterns and lava rocks are hazards too: dark and cold, with only a stone lantern's
+    // window lit (a pale moonlit paper glow). A warm glow over the whole prop read as an orange crate.
+    const hazGlow = makeToonMaterial({ coolShade: 0.5, emissive: new Color('#CFE4FF'), emissiveStrength: 0.75, glowMask: true, nearFade: near, coverageFade: cf, hazard: true });
+    // Frostfang's spires, seracs and crystal rocks are translucent ice (still hazards).
+    const ice = makeToonMaterial({ coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, ice: true });
+    // The far rows of the forest lean into the fog with distance (materials.ts AERIAL).
+    const farFoliage = makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true, aerial: true });
+    const farToon = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, aerial: true });
+    const farIce = makeToonMaterial({ coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, ice: true, aerial: true });
+    this.materials.push(toon, foliage, plain, glow, hazGlow, ice, farFoliage, farToon, farIce);
+    const add = (key: string, geo: BufferGeometry, mat: ShaderMaterial, cap: number, cast = true) => {
+      const mesh = new InstancedMesh(geo, mat, cap);
+      mesh.count = 0;
+      mesh.castShadow = cast && this.shadows;
+      mesh.receiveShadow = false;
+      mesh.frustumCulled = false;
+      this.root.add(mesh);
+      this.batches.set(key, { mesh, count: 0, near: 0 });
+    };
+    for (const k of KINDS) {
+      const mat = k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
+      add('ob:' + k, obstacleGeometry(k, p), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+    }
+    // Decorative forest: biome-appropriate silhouettes.
+    const forestCap = Math.round(2200 * this.forestDensity) + 10;
+    // The treeline wall casts the long bank shadows; the far forest never reaches the shadow
+    // frustum, so it skips the (instanced, uncullable) shadow pass entirely.
+    const forestPair = (prefix: string, cast: boolean, cap: number, far: boolean) => {
+      const fol = far ? farFoliage : foliage;
+      if (biome === 'alpine') {
+        add(prefix + 'a', pineGeometry(p, 1), fol, cap, cast);
+        add(prefix + 'b', pineGeometry(p, 2), fol, cap, cast);
+      } else if (biome === 'glacier') {
+        add(prefix + 'a', spireGeometry(p), far ? farIce : ice, cap, cast);
+        add(prefix + 'b', seracGeometry(p), far ? farIce : ice, cap, cast);
+      } else if (biome === 'volcanic') {
+        add(prefix + 'a', charPineGeometry(p), far ? farToon : toon, cap, cast);
+        add(prefix + 'b', basaltGeometry(p), far ? farToon : toon, cap, cast);
+      } else {
+        add(prefix + 'a', blossomGeometry(p), fol, cap, cast);
+        add(prefix + 'b', pineGeometry(p, 3), fol, cap, cast);
+      }
+    };
+    forestPair('fw:', true, Math.round(forestCap * 0.45) + 10, false);
+    forestPair('fo:', false, forestCap, true);
+    add('gift', giftGeometry(false), this.giftMat, 900, false);
+    add('gift5', giftGeometry(true), this.giftMat, 200, false);
+    add('lip', kickerLipGeometry(p), plain, 120, false);
+    add('vent', ventGeometry(), glow, 120, false);
+    add('beam', gateBeamGeometry(p), plain, 60);
+    if (p.lantern) {
+      // Lantern Night: a trail lantern at the treeline every few chunks, so the far end of the corridor
+      // holds a few faint warm lights instead of a dead void at the vanishing point.
+      const lamp = makeToonMaterial({ coolShade: 0.5, emissive: new Color('#FFB45E'), emissiveStrength: 1.6, glowMask: true, nearFade: near, coverageFade: cf });
+      const halo = haloMaterial();
+      this.materials.push(lamp, halo);
+      add('beacon', lanternPostGeometry(), lamp, 24, false);
+      add('halo', new PlaneGeometry(1, 1), halo, 24, false);
+      this.batches.get('halo')!.mesh.renderOrder = 2;
+    }
+    this.dirty = true;
+  }
+
+  /** `nearChunk` is the player's chunk: the instances up to it are what the rear-view mirror needs. */
+  update(from: number, to: number, collected: Set<number>, destroyed: Set<number>, nearChunk = to): void {
+    if (!this.dirty && from === this.range.from && to === this.range.to) return;
+    this.range = { from, to };
+    this.dirty = false;
+    for (const b of this.batches.values()) b.count = b.near = 0;
+    const c = this.course;
+    for (const k of this.cache.keys()) if (k < from - 2 || k > to + 2) this.cache.delete(k);
+    for (let i = Math.max(-2, from); i <= to; i++) {
+      // Static instances are computed once per chunk; only gifts and smashables change.
+      let st = this.cache.get(i);
+      if (!st) {
+        st = this.buildStatic(i);
+        this.cache.set(i, st);
+      }
+      for (const [key, arr] of st) {
+        const b = this.batches.get(key);
+        if (!b) continue;
+        const room = b.mesh.instanceMatrix.count - b.count;
+        const n = Math.min(room, arr.length / 16);
+        (b.mesh.instanceMatrix.array as Float32Array).set(n * 16 === arr.length ? arr : arr.subarray(0, n * 16), b.count * 16);
+        b.count += n;
+      }
+      const chunk = c.chunk(i);
+      for (const o of chunk.obstacles) {
+        if (!o.soft || destroyed.has(o.id)) continue;
+        this.q.setFromAxisAngle(this.up, o.rot);
+        this.v.set(o.x, o.y - 0.05, -o.z);
+        this.s.setScalar(o.scale);
+        this.push('ob:' + o.kind, this.v, this.q, this.s);
+      }
+      // In low visibility (Blizzard) gifts grow by a fifth, so the marigold trail reads through the fog.
+      const gs = 1 + 0.2 * Math.min(1, this.palette.giftGlow);
+      for (const g of chunk.gifts) {
+        if (collected.has(g.id)) continue;
+        // Each gift sits a little higher or lower, leans a little and is its own size (where it is stays
+        // the sim's), so a row reads as presents set out on the snow rather than a ruled fence.
+        const h1 = hashf(g.id, 7, 1);
+        const h2 = hashf(g.id, 7, 2);
+        this.tilt.set(Math.cos(h2 * 6.28), 0, Math.sin(h2 * 6.28));
+        this.q.setFromAxisAngle(this.tilt, (h1 - 0.5) * 0.32);
+        this.v.set(g.x, c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.22, -g.z);
+        this.s.setScalar(gs * (0.9 + 0.2 * hashf(g.id, 7, 4)));
+        this.push(g.value > 1 ? 'gift5' : 'gift', this.v, this.q, this.s);
+      }
+      if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;
+    }
+    for (const b of this.batches.values()) {
+      if (nearChunk >= to) b.near = b.count;
+      b.mesh.count = b.count;
+      b.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
+
+  /**
+   * The rear-view mirror looks back up the slope, so it draws only the instances in the chunks behind
+   * the player. The batches span the whole visible course and cannot be frustum culled, so without
+   * this the mirror paid the vertex cost of every tree downhill too.
+   */
+  nearOnly(on: boolean): void {
+    for (const b of this.batches.values()) b.mesh.count = on ? b.near : b.count;
+  }
+
+  private buildStatic(i: number): Map<string, Float32Array> {
+    const c = this.course;
+    const chunk = c.chunk(i);
+    this.collecting = new Map();
+    for (const o of chunk.obstacles) {
+      if (o.soft) continue;
+      if (o.kind === 'log') {
+        const dx = o.x2 - o.x;
+        const dz = o.z2 - o.z;
+        const len = Math.sqrt(dx * dx + dz * dz);
+        this.q.setFromAxisAngle(this.up, Math.atan2(dz, dx));
+        this.v.set((o.x + o.x2) / 2, o.y, -(o.z + o.z2) / 2);
+        this.s.set(len + 0.4, 1, 1);
+      } else {
+        const model = obstacleModelRadius(o.kind);
+        const k = model > 0 ? o.r / model : o.scale;
+        this.q.setFromAxisAngle(this.up, o.rot);
+        this.v.set(o.x, o.y - 0.05, -o.z);
+        // Pines in the run vary in height (only ever up: their collider stands taller than the model).
+        const tallK = o.kind === 'pine' || o.kind === 'charpine' || o.kind === 'blossom' ? 1 + 0.3 * hashf(o.id, 3, 9) : 1;
+        this.s.set(k, o.kind === 'spire' || o.kind === 'basalt' ? o.h / 5 : k * tallK, k);
+      }
+      this.push('ob:' + o.kind, this.v, this.q, this.s);
+    }
+    for (const gate of chunk.gates) {
+      this.q.identity();
+      const x = (gate.x1 + gate.x2) / 2;
+      this.v.set(x, c.ground(x, gate.z), -gate.z);
+      this.s.set(gate.x2 - gate.x1 + 0.9, 1, 1);
+      this.push('beam', this.v, this.q, this.s);
+    }
+    for (const r of chunk.zones.ramps) {
+      const lz = r.z + r.len - 0.15;
+      this.q.setFromAxisAngle(this.xAxis, Math.atan((2 * r.h) / r.len - c.params.slope));
+      this.v.set(r.x, c.ground(r.x, lz) - 0.02, -lz);
+      this.s.set(r.w, 1, 1);
+      this.push('lip', this.v, this.q, this.s);
+    }
+    for (const vt of chunk.zones.vents) {
+      this.q.identity();
+      this.v.set(vt.x, c.ground(vt.x, vt.z) + 0.02, -vt.z);
+      this.s.set(vt.r / 1.2, 1, vt.r / 1.2);
+      this.push('vent', this.v, this.q, this.s);
+    }
+    if (this.palette.lantern && i >= 1 && i % 3 === 1) {
+      const side = (i / 3) % 2 < 1 ? -1 : 1;
+      const z = i * CHUNK_LEN + 32;
+      const x = c.centerX(z) + side * (c.halfWidth(z) + FOREST_LIMIT + 0.1);
+      // The lamp arm reaches out over the run.
+      this.q.setFromAxisAngle(this.up, side < 0 ? 0 : Math.PI);
+      this.v.set(x, c.ground(x, z) - 0.05, -z);
+      this.s.set(1, 1, 1);
+      this.push('beacon', this.v, this.q, this.s);
+      this.q.identity();
+      this.v.set(x - side * 0.3, c.ground(x, z) + 2.27, -z);
+      this.push('halo', this.v, this.q, this.s);
+    }
+    this.forest(i);
+    const out = new Map<string, Float32Array>();
+    for (const [k, arr] of this.collecting) out.set(k, Float32Array.from(arr));
+    this.collecting = null;
+    return out;
+  }
+
+  private forest(i: number): void {
+    const c = this.course;
+    const a = 'fo:a';
+    const bb = 'fo:b';
+    const dens = this.forestDensity;
+    const z0 = i * CHUNK_LEN;
+    let k = 0;
+    for (let side = -1; side <= 1; side += 2) {
+      // A dense wall right at the treeline so the forest limit reads clearly.
+      for (let z = z0; z < z0 + CHUNK_LEN; z += 3.4 / Math.max(0.35, dens)) {
+        const jz = z + (hashf(i, k, 1) - 0.5) * 2.5;
+        const e = FOREST_LIMIT + 0.6 + hashf(i, k, 2) * 3.2;
+        this.tree(hashf(i, k, 3) < 0.7 ? 'fw:a' : 'fw:b', c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.9 + hashf(i, k, 4) * 0.6, hashf(i, k, 5) * 6.28, 0.75 + 0.5 * hashf(i, k, 11));
+        k++;
+      }
+      // Sparser forest further out.
+      const n = Math.round(26 * dens);
+      for (let t = 0; t < n; t++) {
+        const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
+        const e = FOREST_LIMIT + 4 + Math.pow(hashf(i, k, 7), 1.6) * 75;
+        this.tree(hashf(i, k, 8) < 0.6 ? a : bb, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.8 + hashf(i, k, 9) * 0.9, hashf(i, k, 10) * 6.28, 0.75 + 0.5 * hashf(i, k, 12));
+        k++;
+      }
+    }
+  }
+
+  /** One forest tree; `tall` stretches it (about +-25%), so no two neighbours stand the same height. */
+  private tree(b: string, x: number, z: number, scale: number, rot: number, tall = 1): void {
+    this.q.setFromAxisAngle(this.up, rot);
+    this.v.set(x, this.course.ground(x, z) - 0.1, -z);
+    this.s.set(scale, scale * tall, scale);
+    this.push(b, this.v, this.q, this.s);
+  }
+
+  private push(key: string, pos: Vector3, q: Quaternion, s: Vector3): void {
+    this.m.compose(pos, q, s);
+    if (this.collecting) {
+      let arr = this.collecting.get(key);
+      if (!arr) this.collecting.set(key, (arr = []));
+      for (let k = 0; k < 16; k++) arr.push(this.m.elements[k]);
+      return;
+    }
+    const b = this.batches.get(key);
+    if (!b || b.count >= b.mesh.instanceMatrix.count) return;
+    b.mesh.setMatrixAt(b.count++, this.m);
+  }
+}

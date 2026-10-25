@@ -1,0 +1,7 @@
+node_modules
+dist
+.playwright-cli
+*.log
+
+# Play-test captures (scripts/playtest write here); the final set is kept in screenshots/.
+shots/

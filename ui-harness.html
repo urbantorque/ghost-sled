@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#121933" />
+    <title>Ghost Sled UI Harness</title>
+    <link rel="icon" href="data:," />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        overflow: hidden;
+        background: #121933;
+      }
+      body {
+        -webkit-user-select: none;
+        user-select: none;
+        touch-action: none;
+      }
+      /* Stand-in for the 3D scene: sky, low sun, ridges, a snow slope, the rider and a ghost. */
+      #scene {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+        background: linear-gradient(180deg, var(--z, #2b4c9b) 0%, var(--hz, #ffb38a) 46%, var(--hz, #ffb38a) 47%);
+      }
+      #scene .sun {
+        position: absolute;
+        left: 22%;
+        top: 34%;
+        width: 18vmin;
+        height: 18vmin;
+        border-radius: 50%;
+        background: radial-gradient(circle, #fff3dc 0 38%, rgba(255, 228, 190, 0.55) 39%, rgba(255, 210, 160, 0) 70%);
+      }
+      #scene .ridge {
+        position: absolute;
+        left: -5%;
+        right: -5%;
+        bottom: 50%;
+        height: 18%;
+        clip-path: polygon(0 100%, 0 60%, 8% 30%, 16% 55%, 26% 10%, 36% 50%, 46% 25%, 58% 60%, 68% 15%, 80% 55%, 90% 30%, 100% 50%, 100% 100%);
+        background: rgba(124, 140, 200, 0.55);
+      }
+      #scene .ridge.near {
+        bottom: 46%;
+        height: 14%;
+        clip-path: polygon(0 100%, 0 70%, 12% 40%, 22% 70%, 34% 20%, 48% 65%, 60% 35%, 72% 70%, 86% 30%, 100% 60%, 100% 100%);
+        background: rgba(84, 98, 168, 0.75);
+      }
+      #scene .snow {
+        position: absolute;
+        left: -20%;
+        right: -20%;
+        top: 52%;
+        bottom: -40%;
+        border-radius: 50% 50% 0 0 / 22% 22% 0 0;
+        background: linear-gradient(180deg, var(--s1, #fff4e6) 0%, var(--s2, #c9d3f5) 40%, var(--s3, #9db2ec) 100%);
+      }
+      #scene .pine {
+        position: absolute;
+        width: 0;
+        height: 0;
+        border-left: 2.2vmin solid transparent;
+        border-right: 2.2vmin solid transparent;
+        border-bottom: 7vmin solid #1f4a5c;
+      }
+      #scene .rider {
+        position: absolute;
+        width: 2.6vmin;
+        height: 2.6vmin;
+        margin: -1.3vmin 0 0 -1.3vmin;
+        border-radius: 50%;
+        background: #ff4d2e;
+        box-shadow: 0 1.4vmin 0 -0.6vmin #121933;
+      }
+      #scene .ghost {
+        position: absolute;
+        left: 57%;
+        top: 54%;
+        width: 2vmin;
+        height: 2vmin;
+        border-radius: 50%;
+        background: rgba(143, 243, 228, 0.75);
+        box-shadow: 0 0 2vmin rgba(143, 243, 228, 0.7);
+      }
+      #harness {
+        position: fixed;
+        left: 8px;
+        bottom: 8px;
+        z-index: 100;
+        max-width: min(560px, calc(100vw - 16px));
+        max-height: 46vh;
+        overflow: auto;
+        padding: 8px;
+        border-radius: 12px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #ddd;
+        font: 600 11px/1.3 ui-monospace, Consolas, monospace;
+      }
+      #harness.min .groups {
+        display: none;
+      }
+      #harness .groups {
+        display: grid;
+        gap: 6px;
+        margin-top: 6px;
+      }
+      #harness .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        align-items: center;
+      }
+      #harness b {
+        min-width: 58px;
+        color: #8ff3e4;
+      }
+      #harness button {
+        padding: 4px 7px;
+        border: 0;
+        border-radius: 6px;
+        background: #2a335a;
+        color: #fff;
+        font: inherit;
+        cursor: pointer;
+      }
+      #harness button:hover {
+        background: #3b4778;
+      }
+      #harness .log {
+        margin-top: 6px;
+        color: #aab;
+        white-space: pre-wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="scene">
+      <div class="sun"></div>
+      <div class="ridge"></div>
+      <div class="ridge near"></div>
+      <div class="snow"></div>
+      <div class="pine" style="left: 12%; top: 58%"></div>
+      <div class="pine" style="left: 16%; top: 62%"></div>
+      <div class="pine" style="left: 84%; top: 60%"></div>
+      <div class="pine" style="left: 78%; top: 66%"></div>
+      <div class="ghost"></div>
+      <div class="rider" id="rider" style="left: 50%; top: 64%"></div>
+    </div>
+    <div id="app"></div>
+    <div id="harness"></div>
+    <script type="module" src="/src/ui/harness.ts"></script>
+  </body>
+</html>

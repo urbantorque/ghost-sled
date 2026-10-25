@@ -1,0 +1,31 @@
+{
+  "name": "ghost-sled",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Ghost Sled - an endless downhill sled run racing the ghosts of other players' best runs.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "generate-ghosts": "tsx scripts/generate-ghosts.ts",
+    "package": "tsx scripts/package.ts",
+    "release": "npm run test && npm run build && npm run package"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/three": "0.186.0",
+    "tsx": "^4.23.15",
+    "typescript": "5.9.3",
+    "vite": "^8.3.5",
+    "vitest": "^5.0.5"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
+  }
+}

@@ -1,0 +1,7352 @@
+/*
+  Ghost Sled overlay UI. Tokens follow ART.md section 10.
+  Radii: buttons and chips are full pills, cards are 18px. Nothing else.
+  Colour roles: vermillion = primary action and the player, marigold = gifts, mint = ghosts,
+  rose = grudge ghost, gold-white = your own best. Never borrowed for anything else.
+  Layers (z-index inside .gs-ui): 1 touch rings, 2 HUD, 3 callouts, 4 hints, 5 notices,
+  6 title, 7 results, 8 menus, 9 loading bar.
+*/
+
+.gs-ui {
+  --ink: #121933;
+  --panel: rgba(18, 25, 51, 0.86);
+  --panel-solid: rgba(18, 25, 51, 0.94);
+  --hair: rgba(245, 243, 255, 0.1);
+  --hair-2: rgba(245, 243, 255, 0.18);
+  --text: #f5f3ff;
+  --dim: rgba(245, 243, 255, 0.68);
+  --signal: #ff4d2e;
+  --gift: #ffd34d;
+  --ghost: #8ff3e4;
+  --grudge: #ff5a7a;
+  --you: #ffe08a;
+  --alarm: #ff3848;
+  --tier1: #7fd8ff;
+  --tier2: #ffb040;
+  --tier3: #ff5a7a;
+  --r-card: 18px;
+  --r-pill: 999px;
+  --spring: cubic-bezier(0.2, 0.9, 0.2, 1.1);
+  --out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --shadow: 0 12px 32px -14px rgba(5, 9, 30, 0.7), 0 2px 8px -3px rgba(5, 9, 30, 0.45);
+  /* Scene text (no panel behind it) gets an ink halo: a 2px ink-navy stroke (eight offsets) inside a
+     tight glow, so it holds AA contrast on white snow (Blizzard, Glass Ice, Powder Day) and bright sky. */
+  --halo-c: rgba(18, 25, 51, 0.95);
+  --halo: 2px 0 0 var(--halo-c), -2px 0 0 var(--halo-c), 0 2px 0 var(--halo-c), 0 -2px 0 var(--halo-c),
+    1.5px 1.5px 0 var(--halo-c), -1.5px 1.5px 0 var(--halo-c), 1.5px -1.5px 0 var(--halo-c), -1.5px -1.5px 0 var(--halo-c),
+    0 0 4px rgba(18, 25, 51, 0.9), 0 1px 9px rgba(18, 25, 51, 0.5);
+  /* Text on a translucent chip: a tight dark shadow in case the chip itself sits on white snow. */
+  --halo-tight: 0 0 2px rgba(18, 25, 51, 0.95), 0 1px 2px rgba(18, 25, 51, 0.9);
+  --u: clamp(14px, calc(8px + 0.9vmin), 18px);
+  --gut: clamp(12px, 2.4vmin, 28px);
+  --st: calc(env(safe-area-inset-top, 0px) + var(--gut));
+  --sr: calc(env(safe-area-inset-right, 0px) + var(--gut));
+  --sb: calc(env(safe-area-inset-bottom, 0px) + var(--gut));
+  --sl: calc(env(safe-area-inset-left, 0px) + var(--gut));
+
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: none;
+  color-scheme: dark;
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-size: var(--u);
+  line-height: 1.25;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.gs-ui [hidden] {
+  display: none !important;
+}
+
+/* A surface playing its exit animation is already gone as far as input is concerned: the first
+   steering drag after Ride or Run again must reach the canvas, not a fading button or scrim. */
+.gs-ui .is-out,
+.gs-ui .is-out * {
+  pointer-events: none !important;
+}
+
+.gs-ui *,
+.gs-ui *::before,
+.gs-ui *::after {
+  box-sizing: border-box;
+}
+
+/* Resets carry zero specificity so every component class below wins over them. */
+
+:where(.gs-ui) :where(h1, h2, h3, p, ul, dl, dd) {
+  margin: 0;
+  padding: 0;
+  font: inherit;
+}
+
+:where(.gs-ui) :where(ul) {
+  list-style: none;
+}
+
+:where(.gs-ui) :where(button, input) {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  pointer-events: auto;
+}
+
+:where(.gs-ui) :where(button) {
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:where(.gs-ui) :where(:focus) {
+  outline: none;
+}
+
+/* Two-tone by default (off-white with an ink fringe on both sides) so the ring reads over white snow
+   and bright sky as well as on the ink panels. Controls with their own shadow restate the fringe. */
+:where(.gs-ui) :where(:focus-visible) {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ink);
+}
+
+.gs-num {
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Glyphs */
+
+.gs-i {
+  display: inline-block;
+  flex: none;
+  width: 1.25em;
+  height: 1.25em;
+  line-height: 0;
+}
+
+.gs-i svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+/* Surfaces */
+
+.gs-panel {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+}
+
+.gs-pill {
+  border-radius: var(--r-pill);
+}
+
+.gs-scrim {
+  pointer-events: auto;
+}
+
+.gs-h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 0.74em;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gs-h2 .gs-i {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+/* Colour roles for ghost kinds and chaos events */
+
+.k-ghost {
+  --k: var(--ghost);
+  --k-a: rgba(143, 243, 228, 0.45);
+  --k-b: rgba(143, 243, 228, 0.12);
+}
+
+.k-grudge {
+  --k: var(--grudge);
+  --k-a: rgba(255, 90, 122, 0.55);
+  --k-b: rgba(255, 90, 122, 0.14);
+}
+
+.k-you {
+  --k: var(--you);
+  --k-a: rgba(255, 224, 138, 0.55);
+  --k-b: rgba(255, 224, 138, 0.13);
+}
+
+.e-avalanche,
+.e-yeti,
+.e-none {
+  --e: var(--alarm);
+  --e-a: rgba(255, 56, 72, 0.6);
+}
+
+.e-giftstorm {
+  --e: var(--gift);
+  --e-a: rgba(255, 211, 77, 0.6);
+}
+
+.e-ghosttrain {
+  --e: var(--ghost);
+  --e-a: rgba(143, 243, 228, 0.6);
+}
+
+/* Buttons */
+
+.gs-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55em;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 1.15em;
+  border-radius: var(--r-pill);
+  color: var(--text);
+  font-weight: 800;
+  line-height: 1;
+  white-space: nowrap;
+  /* Motion is transform and opacity only; colour changes on hover and press snap. */
+  transition:
+    transform 160ms var(--spring),
+    opacity 160ms ease;
+}
+
+.gs-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.gs-btn:disabled {
+  cursor: default;
+}
+
+.gs-btn .gs-i {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.gs-btn-primary {
+  background: var(--signal);
+  color: var(--ink);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    inset 0 -3px 0 rgba(110, 18, 0, 0.22),
+    0 14px 30px -14px rgba(255, 77, 46, 0.85),
+    0 2px 6px -2px rgba(5, 9, 30, 0.4);
+}
+
+.gs-btn-soft {
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+}
+
+.gs-btn-quiet {
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--dim);
+}
+
+.gs-btn-gift {
+  background: var(--gift);
+  color: var(--ink);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4), inset 0 -3px 0 rgba(120, 80, 0, 0.18);
+}
+
+.gs-btn-round {
+  width: 44px;
+  padding: 0;
+}
+
+.gs-btn-lg {
+  min-height: 56px;
+  padding: 0 1.6em;
+  font-size: 1.12em;
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.gs-btn-xl {
+  min-height: clamp(56px, 9vmin, 72px);
+  padding: 0 clamp(22px, 2.6vw, 34px) 0 clamp(20px, 2.2vw, 28px);
+  font-size: clamp(19px, calc(var(--u) * 1.35), 26px);
+  font-weight: 900;
+  font-style: italic;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.gs-btn-sub {
+  color: var(--dim);
+  font-size: 0.82em;
+  font-weight: 650;
+}
+
+.gs-btn-primary:focus-visible {
+  outline-color: var(--text);
+}
+
+@media (hover: hover) {
+  .gs-btn-primary:hover:not(:disabled) {
+    background: #ff6143;
+  }
+
+  .gs-btn-soft:hover:not(:disabled) {
+    background: rgba(30, 40, 80, 0.94);
+  }
+
+  .gs-btn-gift:hover:not(:disabled) {
+    background: #ffdc6e;
+  }
+
+  .gs-mtn:not(.is-locked):hover {
+    transform: translateY(-3px);
+  }
+
+  .gs-mtn:not(.is-sel):not(.is-locked):hover::after {
+    box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.4);
+  }
+
+  .gs-daily:hover:not([aria-disabled='true']) {
+    background: linear-gradient(100deg, rgba(143, 243, 228, 0.16), rgba(143, 243, 228, 0) 70%), #1d2548;
+  }
+
+  .gs-daily:hover:not([aria-disabled='true']) .gs-daily-go {
+    background: #b3f8ee;
+  }
+
+  .gs-seg-btn:hover:not([aria-pressed='true']) {
+    color: var(--text);
+  }
+
+  .gs-switch-row:hover .gs-switch {
+    box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.4);
+  }
+}
+
+.gs-btn-gift.is-armed {
+  background: var(--text);
+  box-shadow: inset 0 0 0 2px var(--gift);
+}
+
+/* Pause > Home armed: the second tap quits the run. */
+.gs-pause-home.is-armed {
+  background: var(--signal);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+}
+
+.gs-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.5em;
+  height: 1.5em;
+  padding: 0 0.4em;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.14);
+  /* Never under 11 px, the floor for small UI text. */
+  font-size: max(11px, 0.76em);
+  font-weight: 850;
+}
+
+/* Keycaps */
+
+.gs-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2em;
+  height: 1.8em;
+  padding: 0 0.6em;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.08);
+  box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 -2px 0 rgba(245, 243, 255, 0.08);
+  color: inherit;
+  font-family: inherit;
+  font-size: 0.72em;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  line-height: 1;
+}
+
+.gs-kbd-ico {
+  padding: 0 0.45em;
+}
+
+.gs-kbd-ico .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* A light lift, not a dark one: ink on the lifted vermillion keeps the keycap text above 4.5:1. */
+.gs-btn-primary .gs-kbd {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(18, 25, 51, 0.32);
+}
+
+/* Tags */
+
+.gs-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 1.55em;
+  padding: 0 0.6em;
+  border-radius: var(--r-pill);
+  background: rgba(143, 243, 228, 0.14);
+  color: var(--ghost);
+  font-weight: 800;
+}
+
+/* ------------------------------------------------------------------ Title */
+
+.gs-title {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  display: grid;
+  grid-template-columns: minmax(0, 40fr) minmax(0, 22fr) minmax(0, 38fr);
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  /* The mountain cards sit directly above the Ride that rides them, so the choice and the action
+     read as one; the daily card is a separate mode and keeps the bottom right. */
+  grid-template-areas:
+    'main . stats'
+    'main . .'
+    'side . .'
+    'ride . daily'
+    'bar  . daily';
+  column-gap: clamp(16px, 3vw, 48px);
+  row-gap: clamp(12px, 2.4vmin, 22px);
+  padding: var(--st) var(--sr) var(--sb) var(--sl);
+}
+
+.gs-title > * {
+  position: relative;
+  min-width: 0;
+}
+
+.gs-title > .gs-title-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(100deg, rgba(18, 25, 51, 0.62) 0%, rgba(18, 25, 51, 0.3) 30%, rgba(18, 25, 51, 0) 52%),
+    linear-gradient(0deg, rgba(18, 25, 51, 0.5) 0%, rgba(18, 25, 51, 0.2) 26%, rgba(18, 25, 51, 0) 46%);
+}
+
+.gs-title.is-in .gs-title-scrim {
+  animation: gs-fade-in 400ms ease both;
+}
+
+.gs-title.is-in .gs-t-anim {
+  animation: gs-rise 420ms var(--out) both;
+}
+
+.gs-title.is-in .gs-t-main {
+  animation-name: gs-rise-l;
+}
+
+.gs-title.is-in .gs-t-ride {
+  animation-delay: 80ms;
+}
+
+.gs-title.is-in .gs-t-stats {
+  animation-delay: 140ms;
+}
+
+.gs-title.is-in .gs-t-side {
+  animation-delay: 160ms;
+}
+
+.gs-title.is-in .gs-t-daily {
+  animation-delay: 180ms;
+}
+
+.gs-title.is-in .gs-t-bar {
+  animation-delay: 200ms;
+}
+
+.gs-title.is-out {
+  animation: gs-fade-out 200ms ease both;
+}
+
+/* Content refreshed while a surface is already open swaps in place: entrance animations play once. */
+.gs-title.is-static .gs-title-scrim,
+.gs-title.is-static .gs-t-anim,
+.gs-results.is-static .gs-res-card,
+.gs-results.is-static .gs-res-card *,
+.gs-results.is-static .gs-res-card *::before {
+  animation: none !important;
+}
+
+.gs-t-main {
+  grid-area: main;
+  align-self: end;
+  display: grid;
+  justify-items: start;
+  gap: clamp(10px, 2vmin, 18px);
+}
+
+.gs-logo {
+  display: grid;
+  justify-items: start;
+  color: var(--text);
+  /* A step under the old 13vmin, so the left column's tiers (logo, tagline, cards, Ride, menu) have
+     room to breathe and Ride stands alone. Portrait sets its own size. */
+  font-size: clamp(40px, 11vmin, 116px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 0.84;
+  text-transform: uppercase;
+  padding: 0 0.14em 0 0;
+  position: relative;
+  isolation: isolate;
+}
+
+/* Landscape: a soft ink-navy pool (about 35% at its heart) under the letterforms, so the white logo
+   never leans on its mint and vermillion shadows to hold against the pale snow bank behind it. */
+@media (min-aspect-ratio: 1/1) {
+  .gs-logo::before {
+    content: '';
+    position: absolute;
+    inset: -42% -34% -40% -30%;
+    z-index: -1;
+    border-radius: 50%;
+    background: radial-gradient(closest-side, rgba(18, 25, 51, 0.36) 0%, rgba(18, 25, 51, 0.28) 38%, rgba(18, 25, 51, 0.12) 70%, rgba(18, 25, 51, 0) 100%);
+    pointer-events: none;
+  }
+}
+
+.gs-logo-l1 {
+  text-shadow:
+    0.05em 0.045em 0 var(--ghost),
+    0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.gs-logo-l2 {
+  margin-left: 0.3em;
+  text-shadow:
+    0.05em 0.045em 0 var(--signal),
+    0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.gs-logo-runner {
+  display: block;
+  width: 2.05em;
+  height: 0.16em;
+  margin: 0.12em 0 0 0.24em;
+  color: var(--signal);
+  filter: drop-shadow(0.05em 0.04em 0 rgba(18, 25, 51, 0.45));
+}
+
+.gs-logo-runner svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.gs-logo-runner path {
+  stroke-width: 0.075em;
+}
+
+.gs-tagline {
+  max-width: 36ch;
+  color: var(--text);
+  font-size: clamp(15px, calc(var(--u) * 1.12), 21px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-shadow: var(--halo);
+  text-wrap: balance;
+}
+
+.gs-t-ride {
+  grid-area: ride;
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.gs-ride {
+  min-width: clamp(210px, 21vw, 300px);
+  min-height: clamp(58px, 10vmin, 78px);
+  padding: 0 clamp(16px, 1.8vw, 24px) 0 clamp(22px, 2.4vw, 32px);
+  justify-content: flex-start;
+  font-size: clamp(21px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.gs-ride .gs-i {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.gs-ride .gs-btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+/* "RIDE" over the choice it acts on (the picked mountain's character, or its name): the choice
+   travels with the action. */
+.gs-ride-label {
+  display: grid;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+}
+
+.gs-ride-mtn {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: max(13px, 0.54em);
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.gs-ride-key {
+  font-size: 0.54em;
+}
+
+/* A first visit's goal line under Ride: the loop in one line, before the first tap. */
+.gs-t-goal {
+  padding-left: 6px;
+  color: rgba(245, 243, 255, 0.92);
+  font-size: 0.9em;
+  font-weight: 750;
+  text-shadow: var(--halo);
+}
+
+.gs-challenge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 26em;
+  padding: 12px 20px 12px 14px;
+  border-radius: var(--r-card);
+  background: linear-gradient(rgba(143, 243, 228, 0.13), rgba(143, 243, 228, 0.13)), var(--panel-solid);
+  box-shadow: inset 0 0 0 1px rgba(143, 243, 228, 0.5), var(--shadow);
+}
+
+.gs-challenge-ico {
+  width: 2.1em;
+  height: 2.1em;
+  color: var(--ghost);
+}
+
+.gs-challenge-txt {
+  display: grid;
+  gap: 3px;
+}
+
+.gs-challenge-k {
+  color: var(--ghost);
+  font-size: 0.82em;
+  font-weight: 800;
+}
+
+.gs-challenge-v {
+  font-size: 1.12em;
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+/* First visit: the sound toggle holds the top-right corner the wallet takes later. */
+.gs-title > .gs-t-sound {
+  position: absolute;
+  top: var(--st);
+  right: var(--sr);
+  z-index: 1;
+}
+
+.gs-t-sound.is-muted {
+  color: var(--dim);
+}
+
+.gs-t-stats {
+  grid-area: stats;
+  justify-self: end;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 42px;
+  padding: 0 18px 0 12px;
+  font-weight: 850;
+}
+
+.gs-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.gs-stat .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-stat-gift {
+  color: var(--gift);
+}
+
+.gs-stat-trophy {
+  color: var(--dim);
+}
+
+.gs-stat-l {
+  color: var(--dim);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+
+.gs-stat-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--hair-2);
+}
+
+/* The card row keeps about 12 px more air above Ride than the column's other tiers, so the call to
+   action stands alone rather than reading as a fifth card. */
+.gs-t-side {
+  --art-h: clamp(56px, 9vmin, 92px);
+  grid-area: side;
+  align-self: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.gs-t-daily {
+  grid-area: daily;
+  align-self: end;
+  justify-self: end;
+  display: grid;
+  width: min(100%, 440px);
+}
+
+.gs-mtns-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+/* Arrows sit on the strip edges, over the card art, only while there is more to see. */
+.gs-mtns-prev,
+.gs-mtns-next {
+  position: absolute;
+  top: calc(var(--art-h) / 2 - 22px + 0px);
+  z-index: 1;
+  background: var(--panel-solid);
+}
+
+.gs-mtns-prev {
+  left: -10px;
+}
+
+.gs-mtns-next {
+  right: -10px;
+}
+
+.gs-mtns-prev:disabled,
+.gs-mtns-next:disabled {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+/* Touch screens swipe the strip; an arrow there would only sit on top of the peeking card. */
+@media (hover: none) and (pointer: coarse) {
+  .gs-mtns-prev,
+  .gs-mtns-next {
+    display: none;
+  }
+}
+
+.gs-mtns-wrap.more-r .gs-mtns {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent 100%);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent 100%);
+}
+
+.gs-mtns-wrap.more-l .gs-mtns {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 56px);
+  mask-image: linear-gradient(90deg, transparent 0, #000 56px);
+}
+
+.gs-mtns-wrap.more-l.more-r .gs-mtns {
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
+  mask-image: linear-gradient(90deg, transparent 0, #000 56px, #000 calc(100% - 56px), transparent 100%);
+}
+
+.gs-mtns {
+  display: grid;
+  grid-auto-columns: clamp(130px, 12.6vw, 184px);
+  grid-auto-flow: column;
+  gap: 10px;
+  margin: -6px -6px -20px;
+  padding: 6px 6px 20px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-padding: 6px 56px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  pointer-events: auto;
+}
+
+.gs-mtns::-webkit-scrollbar {
+  display: none;
+}
+
+/* Wide enough, the row ends cleanly: every card shows whole, with its name and its lock line, and
+   no arrow sits on any card's art. All four fit from about 440 px; between 330 and 440 three fit,
+   and the one arrow (only one end is ever open with four mountains) waits outside the strip, over
+   the open scene beside it. Narrower strips, and portrait screens, keep the swipe with a peeking
+   card. */
+.gs-mtns-wrap {
+  container-type: inline-size;
+}
+
+@media (min-aspect-ratio: 1/1) {
+  @container (min-width: 330px) {
+    .gs-mtns-wrap .gs-mtns {
+      grid-auto-columns: calc((100% - 20px) / 3);
+      scroll-padding: 0 6px;
+    }
+
+    .gs-mtns-wrap.more-l .gs-mtns,
+    .gs-mtns-wrap.more-r .gs-mtns,
+    .gs-mtns-wrap.more-l.more-r .gs-mtns {
+      -webkit-mask-image: none;
+      mask-image: none;
+    }
+
+    .gs-mtns-wrap .gs-mtns-prev,
+    .gs-mtns-wrap .gs-mtns-next {
+      right: -54px;
+      left: auto;
+    }
+
+    .gs-mtns .gs-mtn-name {
+      line-height: 1.12;
+      white-space: normal;
+      text-wrap: balance;
+    }
+  }
+
+  @container (min-width: 440px) {
+    .gs-mtns-wrap .gs-mtns {
+      grid-auto-columns: calc((100% - 30px) / 4);
+    }
+
+    .gs-mtns .gs-mtn-body {
+      padding: 8px 10px 10px;
+    }
+  }
+}
+
+.gs-mtn {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: 0 8px 18px -10px rgba(5, 9, 30, 0.75);
+  text-align: left;
+  scroll-snap-align: start;
+  transition: transform 180ms var(--spring);
+}
+
+.gs-mtn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--hair);
+  pointer-events: none;
+}
+
+/* The picked mountain (the one Ride rides) stands up out of the row: a 3 px off-white ring, a check
+   badge on its art, a lifted card with a deeper shadow and a brighter body. */
+.gs-mtns .gs-mtn.is-sel {
+  background: #1d2552;
+  box-shadow: 0 14px 24px -12px rgba(5, 9, 30, 0.85);
+  transform: translateY(-4px);
+}
+
+.gs-mtn.is-sel::after {
+  box-shadow: inset 0 0 0 3px var(--text);
+}
+
+.gs-mtn-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  box-shadow: 0 2px 6px -1px rgba(5, 9, 30, 0.55);
+  color: var(--ink);
+}
+
+.gs-mtn-check .gs-i {
+  width: 16px;
+  height: 16px;
+}
+
+.gs-mtn:active:not(.is-locked) {
+  transform: scale(0.97);
+}
+
+.gs-mtns .gs-mtn.is-sel:active {
+  transform: translateY(-4px) scale(0.97);
+}
+
+.gs-mtn:focus-visible {
+  outline-offset: 2px;
+}
+
+/* Title controls sit on the live scene (white snow, bright sky): the focus ring gets an ink fringe
+   on both sides so it reads on any backdrop. */
+.gs-title .gs-btn:focus-visible,
+.gs-title .gs-mtn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ink), var(--shadow);
+}
+
+.gs-title .gs-btn-primary:focus-visible {
+  box-shadow: 0 0 0 6px var(--ink), inset 0 1px 0 rgba(255, 255, 255, 0.34), inset 0 -3px 0 rgba(110, 18, 0, 0.22);
+}
+
+.gs-mtn-art {
+  position: relative;
+  display: block;
+  height: var(--art-h);
+}
+
+.gs-mtn-sky {
+  position: absolute;
+  inset: 0;
+}
+
+.gs-mtn-sky svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.b-alpine .gs-mtn-sky {
+  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
+}
+
+.b-glacier .gs-mtn-sky {
+  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
+}
+
+.b-volcanic .gs-mtn-sky {
+  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
+}
+
+.b-blossom .gs-mtn-sky {
+  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
+}
+
+/* A locked mountain keeps its own biome colours under about 40% dim, with the lock badge: as a grey
+   silhouette it read as a failed thumbnail and hid the game's variety. */
+.gs-mtn.is-locked .gs-mtn-sky {
+  filter: brightness(0.6) saturate(0.9);
+}
+
+.gs-mtn-lockico {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.86);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--text);
+}
+
+.gs-mtn-lockico .gs-i {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+.gs-mtn-body {
+  display: grid;
+  align-content: start;
+  gap: 3px;
+  padding: 9px 12px 11px;
+  transition: opacity 160ms ease;
+}
+
+/* A card cut by the strip edge shows its art and lock only: no word sliced in half. */
+.gs-mtn.is-peek .gs-mtn-body {
+  opacity: 0;
+}
+
+.gs-mtn-name {
+  font-size: 0.95em;
+  font-style: italic;
+  font-weight: 850;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The one line under a card's name (how to unlock it, or your best there): off-white at 12 to 13 px,
+   since it is the goal the run works toward, not a footnote. */
+.gs-mtn-meta {
+  color: var(--text);
+  font-size: max(12px, 0.86em);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.gs-mtn.is-locked .gs-mtn-name {
+  color: var(--dim);
+}
+
+/* A picked mountain with no record yet says what it is like, a quieter line than a goal or a best. */
+.gs-mtn-meta.is-about {
+  color: rgba(245, 243, 255, 0.8);
+  font-weight: 650;
+  text-wrap: pretty;
+}
+
+/* The picked card's own record, one stat a line: your best there (a gold-white trophy, your own
+   colour) and the ghosts passed so far (a mint ghost), numbers in off-white, units dim. */
+.gs-mtn-rec {
+  display: grid;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: max(12px, 0.86em);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.gs-mtn-recl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.gs-mtn-recl .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--you);
+}
+
+.gs-mtn-recl.is-ghost .gs-i {
+  color: var(--ghost);
+}
+
+.gs-mtn-recu {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dim);
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.gs-daily {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 62px;
+  padding: 10px 10px 10px 10px;
+  border-radius: var(--r-card);
+  background: linear-gradient(100deg, rgba(143, 243, 228, 0.1), rgba(143, 243, 228, 0) 70%), var(--panel-solid);
+  box-shadow: inset 0 0 0 1px rgba(143, 243, 228, 0.42), var(--shadow);
+  text-align: left;
+  transition: transform 160ms var(--spring), opacity 160ms ease;
+}
+
+.gs-daily:active:not([aria-disabled='true']) {
+  transform: scale(0.97);
+}
+
+.gs-daily:focus-visible {
+  outline: 2px solid var(--ghost);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ink), inset 0 0 0 1px rgba(143, 243, 228, 0.42);
+}
+
+.gs-daily[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.gs-daily-ico {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: var(--r-pill);
+  background: rgba(143, 243, 228, 0.12);
+  color: var(--ghost);
+}
+
+.gs-daily-ico .gs-i {
+  width: 1.45em;
+  height: 1.45em;
+}
+
+.gs-daily-txt {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gs-daily-title {
+  color: var(--ghost);
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-daily-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 700;
+}
+
+.gs-daily-best {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  font-weight: 850;
+}
+
+.gs-daily-best-l {
+  color: var(--dim);
+  font-size: max(11px, 0.72em);
+  font-weight: 700;
+}
+
+/* The daily's go glyph is an outlined ink disc: vermillion Ride is the only filled play target on
+   the screen, and mint stays ghost information (the daily's title and its rivals tag). */
+.gs-daily-go {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--r-pill);
+  background: #0b1026;
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.62);
+  color: var(--text);
+}
+
+/* The play triangle's mass sits left of its box: nudge it to look centred in the disc. */
+.gs-daily-go .gs-i {
+  width: 1.05em;
+  height: 1.05em;
+  margin-left: 2px;
+}
+
+.gs-daily[aria-disabled='true'] .gs-daily-go {
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.22);
+  color: var(--dim);
+}
+
+@media (hover: hover) {
+  .gs-title .gs-daily:hover:not([aria-disabled='true']) .gs-daily-go {
+    background: #1b2348;
+    box-shadow: inset 0 0 0 2px var(--text);
+  }
+}
+
+.gs-t-bar {
+  grid-area: bar;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.gs-t-bar > .gs-btn {
+  min-height: 46px;
+  padding: 0 16px 0 13px;
+}
+
+/* The solid sled glyph sits low in its box and is wide: give it more room than the line icons. */
+.gs-t-bar .gs-t-sleds .gs-i {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.gs-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 10px);
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  width: min(380px, calc(100vw - var(--sl) - var(--sr)));
+  padding: 16px 18px 18px;
+  border-radius: var(--r-card);
+  background: #151c39;
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 24px 48px -16px rgba(5, 9, 30, 0.8);
+  pointer-events: auto;
+}
+
+.gs-title.is-first .gs-t-main {
+  align-self: end;
+}
+
+.gs-title.is-first {
+  grid-template-areas:
+    'main . .'
+    'main . .'
+    'side . .'
+    'ride . .'
+    'bar  . .';
+}
+
+/* Missions (shared by the title popover and results) */
+
+.gs-missions {
+  display: grid;
+  gap: 14px;
+}
+
+.gs-mis {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px 12px;
+}
+
+.gs-mis-text {
+  font-size: 0.92em;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.gs-mis-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 800;
+}
+
+.gs-mis-prog {
+  color: var(--dim);
+  font-size: 0.86em;
+}
+
+.gs-mis-reward {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gift);
+  font-size: 0.9em;
+}
+
+.gs-mis-reward.is-quiet {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
+.gs-mis-reward .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* A real progress bar: the fill grows over a visible track, so "1/5" never reads as an underline. */
+.gs-mis-line {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.06);
+}
+
+.gs-mis-line::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+}
+
+/* A finished mission is the brightest row, never a dimmed one: full text, a full gold bar, the
+   reward in full marigold and a check-and-Done stamp. */
+.gs-mis.is-done .gs-mis-line::before {
+  background: var(--gift);
+}
+
+.gs-mis-complete {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  height: 1.8em;
+  padding: 0 0.8em 0 0.55em;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  color: var(--ink);
+  font-size: 0.76em;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.gs-mis-complete .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-mis.is-new::before {
+  content: '';
+  position: absolute;
+  inset: -7px -10px;
+  border-radius: var(--r-card);
+  background: rgba(255, 211, 77, 0.16);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* On the results the missions land last (the reveal stagger there): the bars fill, then each one
+   this run completed stamps Done with a flash, 140 ms after the row above (MIS_STAMP_MS). */
+.gs-results.is-in .gs-mis.is-new::before {
+  animation: gs-flash 900ms ease-out calc(1050ms + var(--i, 0) * 140ms) 2 both;
+}
+
+.gs-results.is-in .gs-mis.is-new .gs-mis-complete {
+  animation: gs-stamp 360ms var(--spring) calc(1050ms + var(--i, 0) * 140ms) both;
+  --rot: -4deg;
+}
+
+.gs-results.is-in .gs-mis-line::before {
+  animation: gs-grow 560ms var(--out) 800ms both;
+}
+
+/* -------------------------------------------------------------------- HUD */
+
+.gs-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
+/* The HUD's own type unit, shared with the banners that dock over its race row. On wide screens it
+   grows with the height (Hud.hudPx() mirrors it): on the overlay's base unit, 1280 x 720 set
+   "PASSED" and the mood chip at 10 to 11 px. The race row's height follows it. */
+.gs-hud,
+.gs-notices {
+  --u: clamp(14px, calc(8px + 0.9vmin), 18px);
+  --race-h: max(36px, calc(var(--u) * 2.5));
+  font-size: var(--u);
+}
+
+@media (min-aspect-ratio: 1/1) {
+  .gs-hud,
+  .gs-notices {
+    --u: clamp(14px, calc(7.5px + 1.25vh), 22px);
+  }
+}
+
+.gs-hud.is-in {
+  animation: gs-fade-in 240ms ease both;
+}
+
+.gs-hud.is-out {
+  animation: gs-fade-out 200ms ease both;
+}
+
+/* The pause button sits over white snow and bright sky: a two-tone focus ring (off-white with an
+   ink fringe on both sides) stays visible on either. */
+.gs-hud .gs-btn:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 6px var(--ink), var(--shadow);
+}
+
+.gs-hud-tl {
+  position: absolute;
+  top: var(--st);
+  left: var(--sl);
+  display: grid;
+  justify-items: start;
+}
+
+.gs-hud-sub {
+  display: grid;
+  justify-items: start;
+}
+
+.gs-score {
+  padding-right: 0.1em;
+  font-size: clamp(32px, calc(var(--u) * 2.8), 54px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+  text-shadow: var(--halo);
+  transform-origin: left center;
+}
+
+/* Distance is what the race is ranked by: about 60% of the score's size, never a footnote. */
+.gs-dist {
+  margin-top: 2px;
+  color: rgba(245, 243, 255, 0.94);
+  font-size: clamp(18px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.1;
+  text-shadow: var(--halo);
+}
+
+/* Bright moods (pale sky, white snow, ice): the score block sits on a soft radial ink plate at about
+   30%, so the white numerals keep their contrast without a hard panel. */
+.gs-hud:is([data-mood='glassice'], [data-mood='powder'], [data-mood='blizzard']) .gs-hud-tl::before {
+  content: '';
+  position: absolute;
+  inset: -34px -70px -34px -46px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(18, 25, 51, 0.32), rgba(18, 25, 51, 0.16) 55%, rgba(18, 25, 51, 0));
+  pointer-events: none;
+}
+
+/* Night moods (Lantern Night, Comet Night, Haunted Hollow): navy pills on a navy sky lost their
+   edges, so each pill's inner hairline brightens to moon blue at about 40% (the HUD sets gs-night on
+   the overlay for the run). */
+.gs-night :is(.gs-hud, .gs-notices) {
+  --hair: rgba(180, 196, 255, 0.4);
+  --hair-2: rgba(180, 196, 255, 0.46);
+}
+
+/* Mood tints, shared by the HUD mood chip and the reveal card: an accent (icon, edge, the reveal's
+   mood name and key number) and a deep fill for the reveal's slammed glow. Each accent is its own hue
+   from the mood's sky (ART.md section 7), so a card reads by colour before it is read: Blizzard steel,
+   Lantern Night moon blue, Glass Ice aqua, Comet Night lilac, Haunted Hollow spectral green, Powder
+   Day azure. Gold and marigold in the UI always mean gifts and currency, so no mood borrows them. */
+:is(.gs-mood, .gs-reveal) {
+  --m: var(--text);
+  --m-a: rgba(245, 243, 255, 0.4);
+  --m-bg: #2a3358;
+  --m-bg2: #3a4572;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='blizzard'] {
+  --m: #b3c8e4;
+  --m-a: rgba(179, 200, 228, 0.55);
+  --m-bg: #26344f;
+  --m-bg2: #3d5070;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='lantern'] {
+  --m: #b4c4ff;
+  --m-a: rgba(180, 196, 255, 0.55);
+  --m-bg: #1d1747;
+  --m-bg2: #322a6e;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='glassice'] {
+  --m: #7fe6f5;
+  --m-a: rgba(127, 230, 245, 0.55);
+  --m-bg: #0b355c;
+  --m-bg2: #145489;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='comet'] {
+  --m: #cdb0ff;
+  --m-a: rgba(205, 176, 255, 0.55);
+  --m-bg: #26174f;
+  --m-bg2: #40297a;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='haunted'] {
+  --m: #9ff0c2;
+  --m-a: rgba(159, 240, 194, 0.5);
+  --m-bg: #0d343b;
+  --m-bg2: #175058;
+}
+
+:is(.gs-mood, .gs-reveal)[data-mood='powder'] {
+  --m: #7cb8ff;
+  --m-a: rgba(124, 184, 255, 0.6);
+  --m-bg: #1b4a86;
+  --m-bg2: #2b67b0;
+}
+
+/* The mood chip carries the modifier's icon (a feather for Comet Night's low gravity), so the rule
+   stays on screen after the reveal card leaves. */
+.gs-mood {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 2.2em;
+  margin-top: 9px;
+  padding: 0 0.95em 0 0.65em;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--m-a), var(--shadow);
+  font-size: max(12px, 0.88em);
+  font-style: italic;
+  font-weight: 850;
+  text-shadow: var(--halo-tight);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-4px);
+  transition: opacity 200ms ease, transform 240ms var(--spring), visibility 0s linear 200ms;
+}
+
+.gs-mood.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 200ms ease, transform 240ms var(--spring), visibility 0s;
+}
+
+.gs-mood-ico {
+  display: inline-grid;
+  color: var(--m);
+}
+
+.gs-mood-ico .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-hud-tr {
+  position: absolute;
+  top: var(--st);
+  right: var(--sr);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gs-gifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 44px;
+  padding: 0 16px 0 12px;
+  color: var(--gift);
+  font-size: 1.05em;
+  font-weight: 900;
+}
+
+.gs-gifts .gs-i {
+  width: 1.35em;
+  height: 1.35em;
+}
+
+.gs-pausebtn .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* Top centre, two tiers at most: the race row (where passes flash), then the combo meter with the
+   one trick callout slot directly under it. A banner docks over the race row (which fades under it)
+   and the second tier steps down only by the banner's extra height. */
+.gs-hud-tc {
+  position: absolute;
+  top: var(--st);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  width: max-content;
+  transform: translateX(-50%);
+}
+
+/* Never wider than the screen's safe width: with "12 m behind" and a long name the row ran past both
+   edges of a 360 px phone. When it binds, the rival's name gives way (an ellipsis); the place pill,
+   the gap chip and the avalanche meter keep their size. */
+.gs-race {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  transition: opacity 160ms ease, visibility 0s linear 0s;
+}
+
+/* Hidden under a banner: visibility drops once the fade ends, so the row also leaves the
+   accessibility tree. The run-start reveal card hangs under the row instead, so the race reads from
+   the first frame. In a portrait chase the row carries the avalanche meter, and a banner docks under
+   it (the avalanche unit, below). */
+.gs-band-on .gs-race {
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+
+.gs-band-on .gs-combo,
+.gs-band-on .gs-callouts {
+  translate: 0 max(0px, calc(var(--band-h, 0px) - var(--race-h)));
+}
+
+/* The run-start reveal card covers the second tier for its two seconds: the combo and callouts wait. */
+.gs-reveal-on .gs-combo.is-on,
+.gs-reveal-on .gs-callouts {
+  opacity: 0;
+}
+
+.gs-place,
+.gs-next {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: var(--race-h);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 180ms ease, visibility 0s linear 180ms;
+}
+
+.gs-place.is-on,
+.gs-next.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 180ms ease, visibility 0s;
+}
+
+/* Race position is the first number the eye should read in a ghost race: an italic numeral in the
+   score's size class with a small raised suffix ("5th"), then a quiet "of 7". A gained place punches
+   the pill up from its right edge (away from the rival pill) and flashes it mint under the numeral;
+   the pill isolates so the flash paints over its fill, under its text. The glow ring is the pass's
+   alone, in the rival pill: two glowing pills at once read as no event at all. */
+.gs-place {
+  flex: none;
+  gap: 0.3em;
+  padding: 0 0.95em 0 0.8em;
+  isolation: isolate;
+  transform-origin: 100% 50%;
+}
+
+/* The rank flips over on a gain and drops in from above on a loss, inside this clip. It reaches a
+   little past the pill's edges, so the tall numeral is never cut. */
+.gs-place-nwrap {
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  margin: -0.4em -0.14em -0.4em 0;
+  padding-right: 0.14em;
+  overflow: hidden;
+}
+
+.gs-place-n {
+  display: inline-flex;
+  align-items: baseline;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: var(--halo-tight);
+}
+
+.gs-place-num {
+  font-size: 2.7em;
+  letter-spacing: -0.03em;
+}
+
+/* The suffix rides high, like a racing position ("4th"), a step under the numeral's cap height. */
+.gs-place-suf {
+  margin-left: 0.04em;
+  font-size: 1em;
+  translate: 0 -0.62em;
+}
+
+/* The colour snaps (never animated): mint for a moment after a gain. */
+.gs-place .gs-place-n.is-gain {
+  color: var(--ghost);
+}
+
+.gs-place-of {
+  color: var(--dim);
+  font-size: max(12px, 0.84em);
+  font-weight: 700;
+}
+
+.gs-place-flash {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--ghost);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* "of 7" and a place change share one grid cell after the numeral, so the race row keeps its width:
+   for a moment "5th of 7" reads "5th ▲2" (a mint arrow: places gained) or "6th ▼1" (dim: lost). An
+   arrow and a count, never a sign beside the numeral ("5th −2" read as losing places in the middle of
+   a pass), and never a badge (a disc on the pill's corner read as a dropdown). */
+.gs-place-tail {
+  display: inline-grid;
+  align-items: center;
+}
+
+.gs-place-tail > * {
+  grid-area: 1 / 1;
+}
+
+.gs-place-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.14em;
+  justify-self: start;
+  font-size: 1.1em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: var(--halo-tight);
+  white-space: nowrap;
+  visibility: hidden;
+}
+
+.gs-place-delta .gs-place-dir {
+  width: 0.74em;
+  height: 0.74em;
+  filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.8));
+}
+
+.gs-place:is(.is-up, .is-down) .gs-place-of {
+  visibility: hidden;
+}
+
+.gs-place:is(.is-up, .is-down) .gs-place-delta {
+  visibility: visible;
+}
+
+.gs-place.is-up .gs-place-delta {
+  color: var(--ghost);
+}
+
+.gs-place.is-down .gs-place-delta {
+  color: rgba(245, 243, 255, 0.62);
+}
+
+.gs-place.is-down .gs-place-dir {
+  rotate: 180deg;
+}
+
+/* Leading the race: a gold-white crown and numeral, and a gold-white edge on the pill. */
+.gs-place-crown {
+  display: none;
+  width: 1.3em;
+  height: 1.3em;
+  margin-right: 1px;
+  color: var(--you);
+  filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.9));
+}
+
+.gs-place.is-first .gs-place-crown {
+  display: inline-block;
+}
+
+.gs-place.is-first .gs-place-n:not(.is-gain) {
+  color: var(--you);
+}
+
+.gs-place.is-first {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 224, 138, 0.6), var(--shadow);
+}
+
+/* A one-shot ring for passes, played by the HUD (mint, or the ghost's kind colour). */
+.gs-ring-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--k, var(--ghost)), 0 0 18px 2px var(--k-a, rgba(143, 243, 228, 0.45));
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Kind-coloured text (rose for the grudge) sits on the denser panel so it keeps 4.5:1 over snow. */
+.gs-next {
+  min-width: 0;
+  background: var(--panel-solid);
+  gap: 0.5em;
+  padding: 0 0.28em 0 0.7em;
+  box-shadow: inset 0 0 0 1px var(--k-a), var(--shadow);
+  font-weight: 800;
+}
+
+.gs-next-ico {
+  position: relative;
+  display: grid;
+  flex: none;
+  overflow: hidden;
+  color: var(--k);
+}
+
+.gs-next-ico .gs-i {
+  grid-area: 1 / 1;
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-next-ico .gs-next-trail {
+  opacity: 0;
+}
+
+.gs-next-k {
+  display: none;
+  color: var(--k);
+  font-size: max(11px, 0.84em);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gs-next-name {
+  max-width: 9em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The gap (contract C12): a positive number of metres and a word, the word a step smaller, in the
+   ghost's kind colour (mint for pool ghosts, rose for the grudge, gold-white for your best). "6 m
+   ahead" is a target, a solid chip with ink type; "6 m behind" is your lead over it, the same colour
+   as an outlined chip. Never a bare sign, a lone triangle or a chevron. The spans are inline on one
+   baseline; the chip's own line height centres them. */
+.gs-next-gap {
+  --gh: calc(var(--race-h) - 8px);
+  display: inline-block;
+  height: var(--gh);
+  padding: 0 0.78em 0 0.66em;
+  border-radius: var(--r-pill);
+  font-style: italic;
+  font-weight: 900;
+  line-height: var(--gh);
+  white-space: nowrap;
+}
+
+.gs-next-gap > * {
+  line-height: 1;
+}
+
+.gs-next-n {
+  font-size: 1.1em;
+  letter-spacing: -0.01em;
+}
+
+.gs-next-u {
+  font-size: 0.82em;
+}
+
+.gs-next-w {
+  font-size: max(11px, 0.78em);
+  font-weight: 850;
+  letter-spacing: 0.01em;
+}
+
+.gs-next.is-ahead .gs-next-gap {
+  background: var(--k);
+  color: var(--ink);
+}
+
+.gs-next.is-behind .gs-next-gap,
+.gs-next.is-even .gs-next-gap {
+  background: var(--k-b);
+  box-shadow: inset 0 0 0 1.5px var(--k-a);
+  color: var(--k);
+}
+
+/* Rose type on the 14% rose tint fell to about 4.1:1 where the pill's see-through 6% met white snow;
+   a 6% tint keeps the grudge's "6 m behind" at 4.5:1 (mint and gold-white clear it with room). */
+.gs-next.k-grudge:is(.is-behind, .is-even) .gs-next-gap {
+  background: rgba(255, 90, 122, 0.06);
+}
+
+.gs-next.is-even :is(.gs-next-n, .gs-next-u) {
+  display: none;
+}
+
+/* A pass takes the pill over for a moment: "PASSED <name>" in the ghost's colour, ring lit. */
+.gs-next.is-flash {
+  padding-right: 16px;
+  box-shadow: inset 0 0 0 1.5px var(--k), 0 0 22px -4px var(--k), var(--shadow);
+}
+
+.gs-next.is-flash .gs-next-k {
+  display: inline;
+}
+
+.gs-next.is-flash .gs-next-gap {
+  display: none;
+}
+
+.gs-next.is-flash .gs-next-name {
+  font-style: italic;
+  font-weight: 900;
+}
+
+/* Being passed is quieter than a pass you make: the name in off-white (rose for the grudge,
+   gold-white for your best, their own kind colours) a step smaller, on a plain 1 px edge with no
+   glow, then "passed you", for about a second (the HUD only settles it in, no punch or shake), and
+   the place pill shows a dim down-arrow. Mint stays the colour of your own passes. */
+.gs-next.is-flash.is-lost:not(.k-grudge, .k-you) {
+  --k: var(--text);
+  --k-a: rgba(245, 243, 255, 0.36);
+}
+
+.gs-next.is-flash.is-lost {
+  gap: 7px;
+  padding-right: 14px;
+  box-shadow: inset 0 0 0 1px var(--k-a), var(--shadow);
+  font-size: 0.9em;
+}
+
+.gs-next.is-lost .gs-next-ico {
+  color: var(--k);
+}
+
+.gs-next.is-lost .gs-next-name {
+  color: var(--k);
+  font-style: italic;
+  font-weight: 850;
+}
+
+/* "<name> PASSED YOU": the name, then the tail in small spaced caps, a little dimmer than the name
+   (never under 11 px on a phone). */
+.gs-next-tail {
+  display: none;
+  color: rgba(245, 243, 255, 0.8);
+  font-size: max(11px, 0.82em);
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gs-next.is-flash.is-lost .gs-next-tail {
+  display: inline;
+}
+
+.gs-next.is-flash.is-lost .gs-next-k {
+  display: none;
+}
+
+/* Your own best run reads "Your best" in gold-white wherever it shows (contract C7), passed or not. */
+.gs-next.k-you .gs-next-name,
+.gs-next.is-lost.k-you .gs-next-name {
+  color: var(--you);
+}
+
+/* A lost combo takes the meter away at once, so a fading total never reads as greyed out. */
+.gs-combo {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px) scale(0.94);
+  transition: opacity 90ms ease, transform 260ms var(--spring), translate 240ms var(--out), visibility 0s linear 90ms;
+}
+
+.gs-combo.is-on {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition: opacity 160ms ease, transform 260ms var(--spring), translate 240ms var(--out), visibility 0s;
+}
+
+/* A fixed row height, empty or not: the avalanche unit hangs under this column and must not shift.
+   The total waits (opacity only, its height kept) until it adds something over the one callout under
+   it: a multiplier of x2 or a second move banked. */
+.gs-combo-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: clamp(22px, calc(var(--u) * 1.75), 34px);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.gs-combo.has-total .gs-combo-row {
+  opacity: 1;
+}
+
+/* A banked total still holds over the meter: the new combo's total waits under it (never two numbers
+   printed over each other). */
+.gs-combo.is-banking .gs-combo-row {
+  opacity: 0;
+}
+
+.gs-combo-pts {
+  padding-right: 0.08em;
+  font-size: clamp(22px, calc(var(--u) * 1.75), 34px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: var(--halo);
+}
+
+/* The multiplier is what the player is protecting, so it is no footnote: its "x3" stands about the
+   cap height of the total beside it, on a pill as tall as the total's numerals. */
+.gs-combo-mult {
+  display: inline-flex;
+  align-items: center;
+  height: 1.24em;
+  padding: 0 0.42em 0 0.36em;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  color: var(--ink);
+  font-size: clamp(18px, calc(var(--u) * 1.4), 27px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px rgba(18, 25, 51, 0.85), 0 4px 14px -6px rgba(5, 9, 30, 0.6);
+}
+
+/* Nothing multiplied yet: the total stands alone over the timer, no "x1". */
+.gs-combo-mult.is-x1 {
+  display: none;
+}
+
+/* The combo timer: an off-white fill draining from the right over a dark ink track, so the time left
+   reads at speed (the track shows what is gone). The last quarter turns amber and blinks. */
+.gs-combo-track {
+  width: clamp(104px, 12vw, 176px);
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(10, 15, 36, 0.62);
+  /* An ink edge keeps the track visible on white snow. */
+  box-shadow: 0 0 0 1.5px rgba(18, 25, 51, 0.85), 0 1px 6px rgba(18, 25, 51, 0.5);
+}
+
+.gs-combo-bar {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--text);
+  transform-origin: left center;
+}
+
+.gs-combo.is-low .gs-combo-bar {
+  background: var(--tier2);
+  animation: gs-blink 320ms ease-in-out infinite alternate;
+}
+
+/* Keyboard and mouse hints seat right under this row, so it keeps a hint's height clear below it. */
+.gs-hud-bc {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--sb) + 54px);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 26px;
+  width: max-content;
+  transform: translateX(-50%);
+}
+
+.gs-drift,
+.gs-draft {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 14px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+
+.gs-drift.is-on,
+.gs-draft.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms ease, visibility 0s;
+}
+
+.gs-drift {
+  justify-self: end;
+}
+
+.gs-draft {
+  justify-self: start;
+  color: var(--ghost);
+}
+
+.gs-drift-l,
+.gs-draft-l {
+  font-size: 0.8em;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gs-draft {
+  padding-left: 10px;
+}
+
+.gs-pips {
+  display: flex;
+  gap: 5px;
+}
+
+.gs-pip {
+  width: 11px;
+  height: 11px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.2);
+}
+
+/* The tier colour lives on the pips and the pill's ring; the label stays off-white so it keeps
+   AA contrast on the translucent panel over bright snow (rose text does not). */
+.gs-drift[data-tier='1'] {
+  box-shadow: inset 0 0 0 1.5px rgba(127, 216, 255, 0.7), var(--shadow);
+}
+
+.gs-drift[data-tier='2'] {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 176, 64, 0.75), var(--shadow);
+}
+
+.gs-drift[data-tier='3'] {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 90, 122, 0.8), var(--shadow);
+}
+
+.gs-drift[data-tier='1'] .gs-pip:nth-child(-n + 1) {
+  background: var(--tier1);
+}
+
+.gs-drift[data-tier='2'] .gs-pip:nth-child(-n + 2) {
+  background: var(--tier2);
+}
+
+.gs-drift[data-tier='3'] .gs-pip:nth-child(-n + 3) {
+  background: var(--tier3);
+}
+
+/* Slipstream charge: unlit chevrons are ink-grey, lit ones full mint with a soft glow, so "2 of 5"
+   reads at a glance at speed (mint at 22% read too close to lit). A full charge is its own state:
+   the pill fills mint with ink type and chevrons and a glow ring breathes round it, so "ready" never
+   looks like "4 of 5". The colours snap; only the ring's opacity loops. */
+.gs-draft {
+  position: relative;
+}
+
+.gs-chevs {
+  display: flex;
+}
+
+.gs-chev {
+  width: 14px;
+  height: 17px;
+  margin-right: -3px;
+  color: #4a5579;
+}
+
+.gs-chev.is-on {
+  color: var(--ghost);
+  filter: drop-shadow(0 0 3px rgba(143, 243, 228, 0.85));
+}
+
+.gs-draft::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px rgba(143, 243, 228, 0.75), 0 0 20px 4px rgba(143, 243, 228, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-draft.is-full {
+  background: var(--ghost);
+  box-shadow: inset 0 0 0 1.5px rgba(18, 25, 51, 0.32), 0 0 16px 1px rgba(143, 243, 228, 0.5), var(--shadow);
+  color: var(--ink);
+}
+
+.gs-draft.is-full .gs-chev {
+  color: var(--ink);
+  filter: none;
+}
+
+.gs-draft.is-full::after {
+  animation: gs-pulse 560ms ease-in-out infinite alternate;
+}
+
+/* The avalanche unit (contract C2): the WebGL rear-view mirror with an AVALANCHE tab on its top edge
+   and the danger meter set into its bottom edge, one compact cold unit hung top-centre right under
+   the race row, high in the sky above the rider so the horizon and the sun stay open (the combo meter
+   and callout line move under it for the chase). On a phone held upright the meter rides in the race
+   row in the rival pill's place and the mirror, about 25% smaller, hangs under it alone, so the top
+   HUD keeps to about a fifth of the height. --av-w, --av-mh, --av-bar, --avm-w, --av-tab and --av-tick
+   come from the HUD; the world draws the mirror into .gs-av-mirror's rect, which is otherwise empty.
+   Out of a chase the unit waits, unseen, at exactly the spot it takes in one (absolute, a race row and
+   a gap below the top), so the rect the world reads from the telegraph on never jumps when the chase
+   starts. */
+.gs-av {
+  --av-beat: 1500ms;
+  --av-glow: 0.34;
+  position: absolute;
+  top: calc(var(--race-h) + 8px);
+  left: 50%;
+  display: grid;
+  width: var(--av-w, 240px);
+  margin-left: calc(var(--av-w, 240px) / -2);
+  padding-top: calc(var(--av-tab, 28px) / 2);
+  pointer-events: none;
+}
+
+/* Portrait hangs the mirror 6 px under the race row (the column's gap during the chase), so the
+   whole top HUD keeps to about a fifth of a phone's height. */
+.gs-hud.is-portrait .gs-av {
+  top: calc(var(--race-h) + 6px);
+  padding-top: 0;
+}
+
+.gs-hud.is-portrait.is-chased .gs-hud-tc {
+  gap: 6px;
+}
+
+.gs-hud.is-chased .gs-av {
+  position: relative;
+  top: auto;
+  left: auto;
+  order: 1;
+  margin-left: 0;
+}
+
+.gs-hud.is-chased .gs-combo {
+  order: 2;
+}
+
+.gs-hud.is-chased .gs-callouts {
+  order: 3;
+}
+
+/* A banner over the race row pushes the whole column down by its extra height. The unit moves with
+   no transition, so the mirror's rect never lags the meter. */
+.gs-band-on .gs-av {
+  translate: 0 max(0px, calc(var(--band-h, 0px) - var(--race-h)));
+}
+
+/* Portrait chase: the meter takes the rival pill's place in the race row (the HUD moves it there).
+   The row then stays up under a banner: the banner docks right under it instead, and the mirror, the
+   combo and the callout line step down by its height. */
+.gs-hud.is-portrait.is-chased .gs-next,
+.gs-hud.is-portrait:not(.is-chased) .gs-race > .gs-danger {
+  display: none;
+}
+
+/* The portrait race row's top (Portrait layouts, below), plus the row and the column's gap. */
+.gs-chase-p .gs-notices {
+  top: calc(var(--st) + 4.6 * var(--u) + 14px + var(--race-h) + 6px);
+}
+
+.gs-chase-p.gs-band-on .gs-race {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 160ms ease, visibility 0s;
+}
+
+.gs-chase-p.gs-band-on :is(.gs-av, .gs-combo, .gs-callouts) {
+  translate: 0 calc(var(--band-h, 0px) + 6px);
+}
+
+/* Urgency climbs in steps as the gap closes (the HUD sets data-band): the mirror's ring and the
+   wall's icy front beat faster and glow brighter, so 41 m and 15 m differ at a glance. */
+.gs-av[data-band='1'] {
+  --av-beat: 1150ms;
+  --av-glow: 0.46;
+}
+
+.gs-av[data-band='2'] {
+  --av-beat: 860ms;
+  --av-glow: 0.58;
+}
+
+.gs-av[data-band='3'] {
+  --av-beat: 620ms;
+  --av-glow: 0.72;
+}
+
+.gs-av[data-band='4'] {
+  --av-beat: 400ms;
+  --av-glow: 0.86;
+}
+
+.gs-av[data-band='5'] {
+  --av-beat: 280ms;
+  --av-glow: 1;
+}
+
+@keyframes gs-av-beat {
+  from {
+    opacity: 0.3;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-av-dark {
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* The mirror's glass. The world draws the picture into this box's rect (contract C2) at the card
+   radius; the HUD lays a faint glass glint and an inner hairline over it, so it reads as a mirror on
+   the unit and not as a video window. It drops in with the picture as the chase starts. */
+.gs-av-mirror {
+  position: relative;
+  height: var(--av-mh, 96px);
+}
+
+/* The urgency ring hugging the mirror: ice blue, its glow set by the band, beating with it. */
+.gs-av-mirror::before {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: calc(var(--r-card) + 4px);
+  box-shadow: 0 0 0 2px rgba(111, 195, 255, var(--av-glow)), 0 0 18px 3px rgba(111, 195, 255, calc(var(--av-glow) * 0.6));
+  opacity: 0;
+}
+
+.gs-hud.is-chased .gs-av-mirror::before {
+  animation: gs-av-beat var(--av-beat) ease-in-out infinite alternate;
+}
+
+/* Under 25 m the rim turns a dark hazard tone (danger reads dark and hard): a thick ink frame with a
+   thin ice line on the glass, so it still holds on a night sky, and a dark halo, pulsing at the beat. */
+.gs-av:is([data-band='4'], [data-band='5']) .gs-av-mirror::before {
+  inset: 0;
+  border-radius: var(--r-card);
+  box-shadow: 0 0 0 1.5px rgba(150, 214, 255, 0.8), 0 0 0 6px rgba(3, 5, 16, 0.95), 0 0 24px 9px rgba(3, 5, 16, 0.55);
+}
+
+.gs-hud.is-chased .gs-av:is([data-band='4'], [data-band='5']) .gs-av-mirror::before {
+  animation-name: gs-av-dark;
+}
+
+.gs-av-mirror::after {
+  content: '';
+  position: absolute;
+  inset: 2px;
+  border-radius: calc(var(--r-card) - 2px);
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0.24) 0%,
+    rgba(255, 255, 255, 0.09) 24%,
+    rgba(255, 255, 255, 0) 24.6%,
+    rgba(255, 255, 255, 0) 66%,
+    rgba(255, 255, 255, 0.07) 66.6%,
+    rgba(255, 255, 255, 0) 78%
+  );
+  box-shadow:
+    inset 0 0 0 1px rgba(245, 243, 255, 0.24),
+    inset 0 10px 14px -12px rgba(255, 255, 255, 0.4);
+  opacity: 0;
+  translate: 0 -8px;
+  transition: opacity 260ms ease, translate 360ms var(--out);
+}
+
+.gs-hud.is-chased .gs-av-mirror::after {
+  opacity: 1;
+  translate: 0 0;
+}
+
+/* Low tier draws no picture: the box closes up to the tab over the meter, with no empty glass (in
+   portrait, where the meter is in the race row, to nothing). */
+.gs-hud.gs-no-mirror .gs-av-mirror {
+  height: calc(var(--av-tab, 28px) / 2 + var(--av-bar, 32px) / 2 + 4px);
+}
+
+.gs-hud.is-portrait.gs-no-mirror .gs-av-mirror {
+  height: 0;
+}
+
+.gs-hud.gs-no-mirror .gs-av-mirror::before,
+.gs-hud.gs-no-mirror .gs-av-mirror::after {
+  display: none;
+}
+
+/* The unit's label: a tab on the mirror's top-left edge, half above the glass, at the rival name's
+   size (up to 17.5 px, since the unit itself stops growing at 246 px), in the meter's own cold ice
+   blue on ink (hazards are never warm), up for the whole chase. Inside the picture at about 10 px it
+   read as a footnote. On a phone the meter's hazard disc names the threat instead, so the stack stays
+   short. */
+.gs-av-label {
+  position: absolute;
+  top: calc(var(--av-tab, 28px) / -2);
+  left: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  height: var(--av-tab, 28px);
+  padding: 0 0.72em 0 0.46em;
+  border-radius: var(--r-pill);
+  background: rgba(8, 12, 30, 0.94);
+  box-shadow: inset 0 0 0 1.5px rgba(111, 195, 255, 0.55), 0 4px 12px -4px rgba(3, 5, 16, 0.7);
+  color: #bfe4ff;
+  font-size: min(1em, 17.5px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+
+.gs-av-label .gs-i {
+  width: 1.2em;
+  height: 1.2em;
+  color: #eef7ff;
+}
+
+.gs-hud.is-portrait .gs-av-label {
+  display: none;
+}
+
+/* Up from the chase's first frame (contract C9): the telegraph already warned, so it all but snaps in. */
+.gs-hud.is-chased .gs-av-label {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 80ms ease, visibility 0s;
+}
+
+/* A big air lifting the rider up under the unit: the meter and tab step back for it. */
+.gs-av.is-dodge .gs-danger.is-on,
+.gs-av.is-dodge .gs-av-label {
+  opacity: 0.25;
+}
+
+/* The avalanche meter is a proportional bar. The hazard (an ink disc with a light glyph, fixed at the
+   left end) and you (the vermillion rider badge at the right end) bound a lighter track ticked every
+   10 m, and the wall, a near-black fill with hazard stripes and an icy front, advances over it toward
+   you in proportion to the gap: a full bar plainly means caught, and the gap reads without the
+   number. The hazard accent is cold ice blue: never the player's vermillion, never warm, never mint.
+   In landscape the meter is set into the mirror's bottom edge (half over the glass, 8 px in from each
+   side); in portrait it is a race-row pill. */
+.gs-danger {
+  --hz: #6fc3ff;
+  position: relative;
+  z-index: 1;
+  flex: none;
+  justify-self: center;
+  width: var(--avm-w, calc(100% - 16px));
+  height: var(--av-bar, 32px);
+  margin-top: calc(var(--av-bar, 32px) * -0.5);
+  border-radius: var(--r-pill);
+  background: linear-gradient(180deg, #51669f, #3a4c82);
+  box-shadow: inset 0 0 0 1px rgba(170, 214, 255, 0.42), 0 0 0 1.5px rgba(5, 8, 22, 0.85), var(--shadow);
+  font-style: italic;
+  font-weight: 900;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 200ms ease, visibility 0s linear 200ms;
+}
+
+.gs-race > .gs-danger {
+  margin-top: 0;
+}
+
+.gs-danger.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 80ms ease, visibility 0s;
+}
+
+/* The wall is clipped to the pill; the rider badge is not, so its alarm glow can spill past the edge. */
+.gs-danger-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+/* The track's ticks, one every 10 m counted back from the rider badge (--av-tick from the HUD), from
+   the hazard disc's edge to the badge's. */
+.gs-danger::before {
+  content: '';
+  position: absolute;
+  top: 30%;
+  bottom: 30%;
+  left: calc(var(--av-bar, 32px) - 3px);
+  right: calc(var(--av-bar, 32px) - 3px);
+  background: repeating-linear-gradient(270deg, rgba(228, 240, 255, 0.5) 0 2px, transparent 2px var(--av-tick, 20px));
+}
+
+.gs-danger::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--hz), inset 0 0 12px rgba(111, 195, 255, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Under 25 m the whole meter throbs as well, at the unit's beat: the ice ring flashes, the bar swells
+   and glows, and the wall's icy front flares. It reads as a threat closing in, not a progress bar
+   filling up. */
+.gs-danger.is-urgent {
+  box-shadow: inset 0 0 0 1px rgba(111, 195, 255, 0.6), 0 0 0 1.5px rgba(5, 8, 22, 0.85), 0 0 22px 2px rgba(111, 195, 255, 0.5), var(--shadow);
+  animation: gs-av-throb var(--av-beat, 330ms) ease-in-out infinite alternate;
+}
+
+.gs-danger.is-urgent::after {
+  z-index: 1;
+  animation: gs-pulse var(--av-beat, 330ms) ease-in-out infinite alternate;
+}
+
+.gs-danger.is-urgent .gs-danger-wall::after {
+  width: 4px;
+  box-shadow: 0 0 16px 5px rgba(111, 195, 255, 0.95);
+}
+
+/* Compositor-only loops: the throb is a scale, the flashes are opacity on the rings. */
+@keyframes gs-av-throb {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.05;
+  }
+}
+
+.gs-danger-wall {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background:
+    repeating-linear-gradient(-55deg, transparent 0 7px, rgba(111, 195, 255, 0.14) 7px 10px),
+    linear-gradient(90deg, #04060f 0%, #070b1e 78%, #0f1a40 100%);
+  transform: translate3d(-100%, 0, 0);
+  transition: transform 240ms linear;
+  will-change: transform;
+}
+
+/* The icy front edge: its glow grows with the unit's band and beats with the mirror's ring. */
+.gs-danger-wall::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 3px;
+  background: #dcf2ff;
+  box-shadow: 0 0 calc(6px + 10px * var(--av-glow, 0.5)) calc(1px + 3px * var(--av-glow, 0.5)) rgba(111, 195, 255, 0.9);
+}
+
+.gs-hud.is-chased .gs-danger-wall::after {
+  animation: gs-av-beat var(--av-beat, 1500ms) ease-in-out infinite alternate;
+}
+
+/* The hazard: an ink-dark disc with a light glyph at the wall's end of the track. Danger reads as a
+   dark, hard shape; the sky-blue disc it replaced read as friendly. */
+.gs-danger .gs-danger-ico {
+  --s: calc(var(--av-bar, 32px) - 6px);
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  z-index: 2;
+  width: var(--s);
+  height: var(--s);
+  margin-top: calc(var(--s) / -2);
+  padding: calc(var(--s) * 0.17);
+  border-radius: var(--r-pill);
+  background: #04060f;
+  box-shadow: inset 0 0 0 1.5px rgba(150, 214, 255, 0.75);
+  color: #eef7ff;
+}
+
+/* The gap, in metres, is printed straight on the bar, no puck: in the open track between the wall's
+   front and the rider badge while it fits there (the HUD centres it as the wall closes), then on the
+   wall just behind its front. On its own ink puck it hid the open track, and the bar read as a number
+   again. It is the most important number on screen during a chase, so it keeps the combo total's
+   size, "m" a step smaller, with a tight ink halo. */
+.gs-danger-gap {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 3;
+  display: block;
+  color: #fff;
+  /* The combo total's size (--av-num, from the HUD: 22 px on a phone, where the track is short). */
+  font-size: var(--av-num, clamp(22px, calc(var(--u) * 1.75), 34px));
+  letter-spacing: -0.01em;
+  line-height: var(--av-bar, 32px);
+  text-shadow: 0 0 2px rgba(5, 8, 22, 0.95), 0 1px 3px rgba(5, 8, 22, 0.9), 0 0 8px rgba(5, 8, 22, 0.5);
+  white-space: nowrap;
+  transform: translateX(-50%);
+  transition: transform 240ms linear;
+  will-change: transform;
+}
+
+.gs-danger-m {
+  margin-left: 0.12em;
+  font-size: 0.56em;
+  letter-spacing: 0;
+}
+
+/* Under 25 m the number goes icy. */
+.gs-danger.is-urgent .gs-danger-gap {
+  color: #e6f6ff;
+}
+
+/* You: the rider in vermillion (the player's own colour), at the end the wall is closing on. */
+.gs-danger-you {
+  --s: calc(var(--av-bar, 32px) - 6px);
+  position: absolute;
+  top: 50%;
+  right: 3px;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: var(--s);
+  height: var(--s);
+  margin-top: calc(var(--s) / -2);
+  border-radius: var(--r-pill);
+  background: var(--signal);
+  color: #fff;
+  box-shadow: 0 0 0 2px rgba(10, 15, 36, 0.9);
+}
+
+.gs-danger-you .gs-i {
+  width: calc(var(--s) - 8px);
+  height: calc(var(--s) - 8px);
+}
+
+/* The vermillion badge (you) pulses with an alarm ring and shakes as the wall reaches for it. */
+.gs-danger-you::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 5px rgba(255, 77, 46, 0.5), 0 0 16px 6px rgba(255, 77, 46, 0.45);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-danger.is-urgent .gs-danger-you {
+  animation:
+    gs-shake 240ms ease-in-out infinite,
+    gs-av-you 330ms ease-in-out infinite alternate;
+}
+
+.gs-danger.is-urgent .gs-danger-you::after {
+  animation: gs-pulse 330ms ease-in-out infinite alternate;
+}
+
+@keyframes gs-av-you {
+  from {
+    scale: 1;
+  }
+  to {
+    scale: 1.2;
+  }
+}
+
+@keyframes gs-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px) rotate(-4deg);
+  }
+  75% {
+    transform: translateX(2px) rotate(4deg);
+  }
+}
+
+/* The last 12 m: the bottom edge of the screen darkens a little toward a deep cold blue, under the
+   HUD's own pills (a static gradient that fades in and out, opacity only). Plain ink at this alpha
+   laid over white powder read as grey fog; the bible keeps the bottom edge blue, never grey. */
+.gs-av-edge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 28%;
+  background: linear-gradient(0deg, rgba(16, 26, 92, 0.48) 0%, rgba(16, 26, 92, 0.2) 45%, rgba(16, 26, 92, 0) 100%);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 500ms ease, visibility 0s linear 500ms;
+}
+
+.gs-av-edge.is-on {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity 500ms ease, visibility 0s;
+}
+
+
+/* --------------------------------------------------------------- Callouts */
+
+.gs-fx {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+}
+
+/* The one trick callout slot, directly under the combo meter (the second tier of the top-centre
+   stack). One line at a time, "BACKFLIP +600" or "SLIPSTREAM ••• +28"; the multiplier lives on the
+   combo meter only. A line a newcomer replaces rises into the total while its grid row eases to
+   zero, so the new line slides up into place. Perfect landings are a stamp (below). The slot's box
+   is one line tall: the avalanche unit hangs right under that line, so it never moves as lines come
+   and go. */
+.gs-callouts {
+  display: grid;
+  justify-items: center;
+  height: calc(var(--u) * 1.68 + 2px);
+  transition: translate 240ms var(--out);
+  contain: layout;
+}
+
+/* A leaving line collapses its row (grid-template-rows) so the line under it closes up instead of
+   jumping. This is a layout transition on purpose: it only runs on exit, for at most two short lines,
+   inside a fixed-height slot whose layout is contained, so it never reflows the rest of the HUD. */
+.gs-call-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 220ms var(--out);
+}
+
+.gs-call-wrap.is-gone {
+  grid-template-rows: 0fr;
+}
+
+.gs-call-wrap.is-fast {
+  transition-duration: 140ms;
+}
+
+.gs-call {
+  position: relative;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.42em;
+  min-height: 0;
+  padding: 1px 0.2em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.12;
+  white-space: nowrap;
+  text-shadow: var(--halo);
+}
+
+.gs-call-label {
+  font-size: clamp(17px, calc(var(--u) * 1.22), 23px);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.gs-call-t {
+  position: relative;
+}
+
+/* Merged repeats: a row of small pips after the label (--n of them, up to five), "SLIPSTREAM ••• +28".
+   Never "x3": "x" is the combo multiplier's alone. Drawn as one repeated dot, with an ink edge so it
+   holds on white snow like the halo'd type. */
+.gs-call-count {
+  --n: 2;
+  display: inline-block;
+  width: calc((var(--n) - 1) * 0.46em + 0.32em);
+  height: 0.34em;
+  margin-left: 0.4em;
+  vertical-align: 0.2em;
+  background: radial-gradient(circle at 0.16em 50%, currentColor 0.135em, transparent 0.155em) 0 0 / 0.46em 100% repeat-x;
+  opacity: 0.9;
+  filter: drop-shadow(0 0 1px rgba(18, 25, 51, 0.95)) drop-shadow(0 1px 2px rgba(18, 25, 51, 0.6));
+}
+
+/* Points ride on the same line, a step under the label: never a tiny line crushed beneath it. */
+.gs-call-pts {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.36em;
+  color: rgba(245, 243, 255, 0.96);
+  font-size: clamp(16px, calc(var(--u) * 1.12), 21px);
+}
+
+.gs-call.is-big .gs-call-label {
+  font-size: clamp(21px, calc(var(--u) * 1.5), 29px);
+}
+
+.gs-call.is-big .gs-call-pts {
+  font-size: clamp(18px, calc(var(--u) * 1.3), 25px);
+}
+
+/* A lost combo sits on a solid ink pill with off-white words, and only the number in vermillion
+   (5.2:1 on the ink), so it reads at full strength over an aurora or white snow alike. The pill keeps
+   to the slot's one line. */
+.gs-call.is-lost {
+  align-items: center;
+  padding: 2px 0.8em 3px;
+  border-radius: var(--r-pill);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 77, 46, 0.5), 0 6px 16px -6px rgba(5, 9, 30, 0.8);
+  color: var(--text);
+  text-shadow: none;
+}
+
+.gs-call.is-lost .gs-call-label,
+.gs-call.is-lost .gs-call-pts {
+  font-size: clamp(18px, calc(var(--u) * 1.3), 24px);
+}
+
+.gs-call.is-lost .gs-call-pts {
+  color: var(--signal);
+}
+
+/* The perfect-landing stamp: one hero line placed by Fx beside the rider (left, top, width and
+   --hero-f, once per landing), off the sky where the low sun sits. "PERFECT LANDING" is white-gold,
+   white at the top of each letter to #FFE08A at the foot (never the marigold of gifts), tilted like a
+   stamp, inside a heavy ink-navy stroke and a hard drop shadow, so it holds its contrast on a pink
+   sky, white trees or the sun's glow. Its points and the landing's tricks share one small sub-line. */
+.gs-hero {
+  position: absolute;
+  display: grid;
+  justify-items: center;
+  font-size: var(--hero-f, 32px);
+  transform: translateX(-50%);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.gs-hero-in {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.1em;
+  max-width: 100%;
+  color: var(--you);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-shadow: var(--halo);
+  rotate: -4deg;
+}
+
+/* The stroke scales with the type (about 3 px at 40 px): eight ink offsets, then a hard ink drop and
+   a soft dark glow. The gradient face (::after) paints on top of it. */
+.gs-hero-t {
+  --o: 0.075em;
+  --d: 0.053em;
+  position: relative;
+  padding: 0 0.06em;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  text-shadow:
+    var(--o) 0 0 var(--ink),
+    calc(var(--o) * -1) 0 0 var(--ink),
+    0 var(--o) 0 var(--ink),
+    0 calc(var(--o) * -1) 0 var(--ink),
+    var(--d) var(--d) 0 var(--ink),
+    calc(var(--d) * -1) var(--d) 0 var(--ink),
+    var(--d) calc(var(--d) * -1) 0 var(--ink),
+    calc(var(--d) * -1) calc(var(--d) * -1) 0 var(--ink),
+    0.02em 0.14em 0 var(--ink),
+    0 0.12em 0.35em rgba(5, 9, 30, 0.6);
+}
+
+.gs-hero-t::after {
+  content: attr(data-t);
+  position: absolute;
+  inset: 0;
+  padding: inherit;
+  background: linear-gradient(180deg, #fff 24%, #ffe08a 84%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  text-shadow: none;
+}
+
+/* The sub-line: every number with its label, "PERFECT +490 · BACKFLIP +600". Three or more parts
+   break after the landing's own points (Fx puts the break in), and it never runs wider than the stamp. */
+.gs-hero-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.08em 0.42em;
+  max-width: 100%;
+  font-size: max(16px, 0.6em);
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.gs-hero-sub:empty {
+  display: none;
+}
+
+.gs-hero-part {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.32em;
+  white-space: nowrap;
+}
+
+/* Labels a step smaller, off-white, so the stamp keeps one headline; numbers in pale gold-white. */
+.gs-hero-lbl {
+  color: var(--text);
+  font-size: 0.8em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gs-hero-pts {
+  color: #fff4cf;
+}
+
+.gs-hero-sep {
+  color: rgba(245, 243, 255, 0.62);
+  font-size: 0.8em;
+}
+
+.gs-hero-br {
+  flex-basis: 100%;
+  height: 0;
+}
+
+.gs-burst {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: -1;
+  /* Kept small and faint: the hero stamp should read, not flare over the scene. */
+  width: 3.6em;
+  height: 3.6em;
+  margin: -1.8em 0 0 -1.8em;
+  color: var(--you);
+  pointer-events: none;
+  animation: gs-burst 600ms var(--out) both;
+}
+
+.gs-burst svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gs-bank {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-style: italic;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.gs-bank-num {
+  font-size: clamp(30px, calc(var(--u) * 2.4), 46px);
+  line-height: 1;
+  text-shadow: var(--halo);
+}
+
+/* ----------------------------------------------------------------- Notices */
+
+/* The notice band docks over the race row (same top), so a banner is never a third tier: the row
+   fades out under it and the combo meter steps down only by the banner's extra height. The reveal
+   card takes the race row's place the same way. */
+.gs-notices {
+  position: absolute;
+  top: var(--st);
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: max-content;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  transform: translateX(-50%);
+}
+
+/* Over the results the toasts carry their feedback, so they rise above the scrim. */
+.gs-notices.is-over-results {
+  z-index: 8;
+}
+
+/* The run-start reveal card hangs right under the race row for its two seconds, in the combo tier's
+   place (the combo and callouts wait under it), so the race (your place and the next ghost) reads
+   from the first frame. It took the row's place before, and the first second said nothing about a
+   race. */
+.gs-slot {
+  margin-top: calc(var(--race-h) + 8px);
+}
+
+.gs-band-on .gs-slot {
+  margin-top: 10px;
+}
+
+.gs-slot:empty {
+  display: none;
+}
+
+/* One banner at a time. Every child shares one grid cell, so a leaving banner and the next one
+   cross-fade in place instead of stacking. */
+.gs-stage {
+  display: grid;
+  justify-items: center;
+  align-items: start;
+}
+
+.gs-stage > * {
+  grid-area: 1 / 1;
+}
+
+.gs-stage > .is-leaving {
+  z-index: -1;
+}
+
+.gs-toast {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(460px, calc(100vw - var(--sl) - var(--sr)));
+  min-height: 36px;
+  padding: 6px 16px 6px 12px;
+  font-size: 0.92em;
+  font-weight: 800;
+}
+
+.gs-toast .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-toast-txt {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* When space runs out the secondary line gives way first: it shrinks far faster than the main text. */
+.gs-toast-sub {
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--dim);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-toast.t-info {
+  padding-left: 16px;
+}
+
+.t-ghost .gs-i {
+  color: var(--ghost);
+}
+
+.t-grudge .gs-i {
+  color: var(--grudge);
+}
+
+.t-gift .gs-i,
+.t-gift .gs-toast-sub {
+  color: var(--gift);
+}
+
+.t-warn .gs-i {
+  color: var(--alarm);
+}
+
+.t-ghost {
+  box-shadow: inset 0 0 0 1px rgba(143, 243, 228, 0.35), var(--shadow);
+}
+
+.t-grudge {
+  box-shadow: inset 0 0 0 1px rgba(255, 90, 122, 0.45), var(--shadow);
+}
+
+.t-warn {
+  box-shadow: inset 0 0 0 1px rgba(255, 56, 72, 0.5), var(--shadow);
+}
+
+/* Bounded to the safe width: with the reward beside the name a long name ran the banner off a 360 px
+   phone. The name gives way first (an ellipsis); the badge and "+10 gifts" keep their size. */
+.gs-pass {
+  background: var(--panel-solid);
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  min-height: 50px;
+  padding: 6px 24px 6px 10px;
+  box-shadow: inset 0 0 0 1px var(--k-a), var(--shadow);
+}
+
+.gs-pass-ico {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--k-b);
+  color: var(--k);
+}
+
+.gs-pass-ico > .gs-i {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.gs-pass-trail {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -0.75em 0 0 -0.75em;
+}
+
+.gs-pass-txt {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-pass-k {
+  color: var(--k);
+  font-size: max(11px, 0.8em);
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gs-pass-name {
+  max-width: 13em;
+  overflow: hidden;
+  font-size: clamp(19px, calc(var(--u) * 1.4), 27px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The grudge settled celebration (the only pass that takes a banner): the kicker over the ghost's
+   name as the headline, and the gift reward beside them at the name's size, past a hairline. The
+   reward is the payoff of the grudge: as a small third line it was the least legible thing on it. */
+.gs-pass.k-grudge {
+  border-radius: var(--r-card);
+}
+
+.gs-pass-gift {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28em;
+  margin-left: 2px;
+  padding: 4px 0 4px 16px;
+  box-shadow: inset 1px 0 0 var(--hair-2);
+  color: var(--gift);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.gs-pass-gift .gs-i {
+  align-self: center;
+  width: 1.45em;
+  height: 1.45em;
+  margin-right: 0.1em;
+}
+
+.gs-pass-gift-n {
+  font-size: clamp(19px, calc(var(--u) * 1.4), 27px);
+}
+
+.gs-pass-gift-w {
+  font-size: max(12px, 0.9em);
+  font-weight: 850;
+}
+
+.gs-warn {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  padding: 12px 26px 12px 12px;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--e-a), var(--shadow);
+}
+
+.gs-warn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--e);
+  opacity: 0;
+  pointer-events: none;
+  animation: gs-pulse 440ms ease-in-out 6 alternate both;
+}
+
+.gs-warn-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--r-pill);
+  background: var(--e);
+  color: var(--ink);
+}
+
+.gs-warn-ico .gs-i {
+  width: 1.6em;
+  height: 1.6em;
+}
+
+/* Hazard telegraphs (the avalanche, the yeti) and the reveal's "Watch for" chip speak in the
+   avalanche unit's cold voice: an ice-blue edge and pulse, and the hazard as an ink-dark disc with a
+   light glyph, like the meter's. Danger reads dark and hard, never warm: a red disc and edge read as
+   the player's vermillion. Gift Storm and the Ghost Train keep their filled marigold and mint discs. */
+.gs-notices :is(.e-avalanche, .e-yeti, .e-none) {
+  --e: #6fc3ff;
+  --e-a: rgba(111, 195, 255, 0.6);
+}
+
+.gs-warn:is(.e-avalanche, .e-yeti, .e-none) .gs-warn-ico {
+  background: #04060f;
+  box-shadow: inset 0 0 0 2px rgba(150, 214, 255, 0.8);
+  color: #eef7ff;
+}
+
+.gs-warn-txt {
+  font-size: clamp(20px, calc(var(--u) * 1.6), 32px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.05;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+
+/* Reveal card */
+
+/* The mood reveal is a moment: the title at about 1.6x, slammed onto a soft glow in the mood's tint
+   and held, then one line with the gameplay modifier and its icon. No slab: the card is a soft ink
+   halo that fades out toward its edges under glowing type, so an aurora or a comet's tail behind it
+   keeps its brightest band (a solid navy panel there covered it). It hangs under the race row. */
+.gs-reveal {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: min(19em, calc(100vw - var(--sl) - var(--sr)));
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  padding: 6px 30px 14px;
+  text-align: center;
+  transform-origin: 50% 50%;
+}
+
+.gs-reveal::before {
+  content: '';
+  position: absolute;
+  inset: -8px -14px;
+  z-index: -1;
+  background: radial-gradient(closest-side, rgba(9, 13, 34, 0.6), rgba(9, 13, 34, 0.42) 58%, rgba(9, 13, 34, 0) 100%);
+  pointer-events: none;
+}
+
+.gs-reel-wrap {
+  position: relative;
+  padding: 0 4px;
+}
+
+.gs-reel {
+  --reel-fs: min(clamp(35px, calc(var(--u) * 2.6), 50px), 7.4vw);
+  --reel-h: calc(var(--reel-fs) * 1.24);
+  position: relative;
+  z-index: 1;
+  height: var(--reel-h);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 26%, #000 74%, transparent 100%);
+  mask-image: linear-gradient(180deg, transparent 0, #000 26%, #000 74%, transparent 100%);
+}
+
+.gs-reel.is-landed {
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.gs-reel-strip {
+  display: grid;
+  will-change: transform;
+}
+
+.gs-reel-item {
+  height: var(--reel-h);
+  padding: 0 0.5em;
+  font-size: var(--reel-fs);
+  font-style: italic;
+  font-weight: 900;
+  line-height: var(--reel-h);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(5, 9, 30, 0.6), 0 0 12px rgba(5, 9, 30, 0.5);
+}
+
+/* The landed name is slammed into a soft glow in the mood's own tint: no pill and no outline, so the
+   name reads as glowing type over the sky. */
+.gs-reel-stamp {
+  position: absolute;
+  inset: -8px -30px;
+  z-index: 0;
+  background: radial-gradient(closest-side, var(--m-bg2), var(--m-bg) 48%, rgba(18, 25, 51, 0));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-reel-stamp.is-on {
+  opacity: 0.9;
+}
+
+/* The landed name snaps to the mood's own accent (the reel spins in off-white), so each mood's card
+   reads by its colour before it is read: Lantern Night lands moon blue, Comet Night lilac. */
+.gs-reel.is-landed .gs-reel-item:last-child {
+  color: var(--m);
+  text-shadow: 0 2px 0 rgba(5, 9, 30, 0.6), 0 0 10px rgba(5, 9, 30, 0.55), 0 0 22px var(--m-a);
+}
+
+/* The gameplay modifier is the line that changes how you play: big and bold in off-white, with the
+   icon the HUD mood chip keeps in the mood's own accent, and its key number ("50%") in the accent at
+   full weight. It lands with the name, never as a slow fade a screenshot can catch half-grey. With no
+   panel behind it, it carries its own ink halo. */
+.gs-reveal-mod {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 20em;
+  color: var(--text);
+  font-size: max(20px, 1.6em);
+  font-weight: 850;
+  line-height: 1.15;
+  text-shadow: 0 1px 1px rgba(5, 9, 30, 0.95), 0 0 3px rgba(5, 9, 30, 0.9), 0 0 12px rgba(5, 9, 30, 0.6);
+  text-wrap: balance;
+}
+
+.gs-reveal-mod-ico {
+  width: 1.35em;
+  height: 1.35em;
+  color: var(--m);
+  filter: drop-shadow(0 1px 2px rgba(5, 9, 30, 0.9));
+}
+
+.gs-reveal-key {
+  color: var(--m);
+  font-weight: 900;
+  text-shadow: 0 1px 1px rgba(5, 9, 30, 0.95), 0 0 3px rgba(5, 9, 30, 0.9), 0 0 14px var(--m-a);
+}
+
+.gs-reveal-ev {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  margin-top: 4px;
+  padding: 0 13px 0 9px;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--e-a);
+  font-size: max(12px, 0.84em);
+  font-weight: 800;
+}
+
+.gs-reveal-ev .gs-i {
+  color: var(--e);
+}
+
+/* ------------------------------------------------------------------- Hints */
+
+.gs-hintlayer {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+}
+
+/* Keyboard and mouse hints sit just above the bottom safe area, under the drift and slipstream pills:
+   never on the corridor under the sled. With touch they clear the thumb zones (below). */
+.gs-hint {
+  position: absolute;
+  left: 50%;
+  bottom: var(--sb);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 46px;
+  margin-left: 0;
+  padding: 6px 22px 6px 8px;
+  font-weight: 800;
+  white-space: nowrap;
+  translate: -50% 0;
+}
+
+.gs-touch-mode .gs-hint {
+  bottom: calc(var(--sb) + 100px);
+}
+
+.gs-hint-keys {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.gs-hint .gs-kbd {
+  min-width: 2.4em;
+  height: 2.4em;
+  font-size: 0.8em;
+}
+
+.gs-hint .gs-kbd-wide {
+  min-width: 4.6em;
+}
+
+.gs-hint-or,
+.gs-hint-plus {
+  padding: 0 3px;
+  color: var(--dim);
+  font-size: 0.82em;
+  font-weight: 700;
+}
+
+.gs-hint-mouse {
+  width: 1.7em;
+  height: 1.7em;
+}
+
+.gs-hint-arrow {
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--dim);
+}
+
+.gs-hint-ghost {
+  width: 1.6em;
+  height: 1.6em;
+  margin-left: 6px;
+  color: var(--ghost);
+}
+
+.gs-hint-txt {
+  font-size: 1.02em;
+}
+
+.gs-zones {
+  position: absolute;
+  inset: 0;
+}
+
+/* Touch zones stay light: a soft radial pool of ink over each zone the hint is about (the bottom 22%
+   of the screen), the glyph on an ink disc, a short label and one soft thumb ring where the thumb
+   should go. A dashed outline there read as a debug overlay, and washed out on white snow. */
+.gs-zone {
+  position: absolute;
+  top: 78%;
+  bottom: var(--sb);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 6px 10px;
+  border-radius: var(--r-card);
+  text-align: center;
+}
+
+/* The zone this hint is not about steps back without going translucent: its disc thins to about 70%
+   ink and its label dims, but the label's pill keeps its full ink, so it never washes out to a grey
+   lozenge on white snow (a 0.75 opacity on the whole zone did). The active zone has the thumb ring. */
+.gs-zone:not(.is-active) .gs-zone-mark {
+  background: rgba(18, 25, 51, 0.7);
+}
+
+.gs-zone:not(.is-active) .gs-zone-txt {
+  color: rgba(245, 243, 255, 0.78);
+}
+
+.gs-zone:not(.is-active) .gs-zone-edge {
+  opacity: 0.6;
+}
+
+/* The pool: a deep ink blue at about 20% over most of it (less in the zone that steps back),
+   feathering out to nothing inside the zone's box with no edge line at all, so it reads as a soft
+   glow on the snow rather than a drawn frame. Plain ink navy this thin over white powder read as a
+   grey smudge; a touch more blue keeps it in the snow's own shade. It stays until that zone's first
+   use, and once the player has steered and drifted it fades out for good (later hints are built
+   without it). */
+.gs-zone-edge {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(closest-side, rgba(18, 28, 84, 0.2), rgba(18, 28, 84, 0.17) 55%, rgba(18, 28, 84, 0.07) 82%, rgba(18, 28, 84, 0) 100%);
+  pointer-events: none;
+}
+
+.gs-zones.is-learned .gs-zone-edge {
+  opacity: 0;
+  animation: gs-zone-out 600ms ease both;
+}
+
+@keyframes gs-zone-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.gs-zone-l {
+  left: var(--sl);
+  right: calc(40% + 5px);
+}
+
+.gs-zone-r {
+  left: calc(60% + 5px);
+  right: var(--sr);
+}
+
+/* Each glyph sits on an ink-navy disc (about 60% even in the zone that steps back), so the white line
+   art holds on white snow; at 45% the pad washed out to a low-contrast grey. */
+.gs-zone-mark {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.8);
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 4px 14px -6px rgba(5, 9, 30, 0.6);
+}
+
+.gs-zone-mark .gs-i {
+  width: 1.6em;
+  height: 1.6em;
+  filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.5));
+}
+
+.gs-zone-mark.has-ring::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-pill);
+  box-shadow:
+    inset 0 0 0 2px rgba(245, 243, 255, 0.55),
+    inset 0 0 0 3.5px rgba(18, 25, 51, 0.16),
+    0 0 0 1px rgba(18, 25, 51, 0.2),
+    0 0 16px rgba(245, 243, 255, 0.16);
+  animation: gs-press 1600ms ease-in-out infinite;
+}
+
+.gs-zone-mark.is-drag::before {
+  animation-name: gs-sway;
+}
+
+/* The label rides on the HUD's ink pill (no heavy text stroke, which looked crude at 2x). */
+.gs-zone-txt {
+  max-width: 11em;
+  padding: 5px 13px 6px;
+  border-radius: var(--r-pill);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair), 0 6px 16px -8px rgba(5, 9, 30, 0.6);
+  font-size: 0.92em;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+/* ------------------------------------------------------------- Touch rings */
+
+.gs-touch {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.gs-ring {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  transition: opacity 140ms ease;
+}
+
+/* The steering origin: a soft ink ring with a light edge, so it holds on white snow. */
+.gs-ring::before {
+  content: '';
+  position: absolute;
+  width: 78px;
+  height: 78px;
+  margin: -39px 0 0 -39px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.16);
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.42), 0 0 0 1px rgba(18, 25, 51, 0.3);
+}
+
+.gs-ring.is-on {
+  opacity: 1;
+}
+
+/* The pad under the steering thumb: ink navy at about 60% with a light rim. A white fill there washed
+   out to a low-contrast grey on bright snow. */
+.gs-ring-thumb::before {
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  background: rgba(18, 25, 51, 0.6);
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.62), 0 3px 12px -4px rgba(5, 9, 30, 0.55);
+}
+
+.gs-ring-act::before {
+  width: 64px;
+  height: 64px;
+  margin: -32px 0 0 -32px;
+  background: rgba(18, 25, 51, 0.32);
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.55), 0 0 0 1px rgba(18, 25, 51, 0.3);
+}
+
+.gs-ring-line {
+  position: absolute;
+  top: -1px;
+  left: 0;
+  width: 1px;
+  height: 2px;
+  background: rgba(245, 243, 255, 0.5);
+  opacity: 0;
+  transform-origin: 0 50%;
+  transition: opacity 140ms ease;
+}
+
+.gs-ring-line.is-on {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------- Results */
+
+.gs-results {
+  position: absolute;
+  inset: 0;
+  z-index: 7;
+  display: grid;
+  place-items: center;
+  padding: var(--st) var(--sr) var(--sb) var(--sl);
+  background: linear-gradient(180deg, rgba(8, 12, 30, 0.44) 0%, rgba(8, 12, 30, 0.76) 100%);
+}
+
+.gs-results.is-in {
+  animation: gs-fade-in 200ms ease both;
+}
+
+.gs-results.is-in .gs-res-card {
+  animation: gs-slideup 320ms var(--spring) both;
+}
+
+.gs-results.is-out {
+  animation: gs-fade-out 200ms ease both;
+}
+
+.gs-res-card {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: rgba(18, 25, 51, 0.92);
+}
+
+/* The card takes focus itself for touch players: it is a container, not a control, so no ring. */
+.gs-res-card:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+}
+
+.gs-res-scroll {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  min-height: 0;
+}
+
+/* Landscape: the run (head, stats, missions) flows down the left column with no dead band, and the
+   finishing order runs down the right; a tip for next time takes a full-width row under both. Margins
+   set the vertical rhythm (no row gap), so a slot with nothing in it (no stats worth naming) costs
+   nothing. */
+.gs-res-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas:
+    'head race'
+    'run  race'
+    'mis  race'
+    'tip  tip';
+  align-content: start;
+  gap: 0 clamp(18px, 3.2vw, 44px);
+  min-height: 0;
+  padding: clamp(18px, 3.4vmin, 34px) clamp(18px, 3.4vmin, 36px) 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* A control focused (or a list opened) near the bottom scrolls clear of the bottom fade and the
+     More cue, which would otherwise cover it. */
+  scroll-padding-bottom: 72px;
+  pointer-events: auto;
+}
+
+/* The card clips, and the bottom fade masks, anything drawn outside the scroller: its ring sits
+   just inside its edge, rounded to the card's top corners. */
+.gs-res-body:focus-visible {
+  border-radius: var(--r-card) var(--r-card) 0 0;
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+.gs-res-body.no-race {
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    'head mis'
+    'run  mis'
+    'tip  tip';
+}
+
+.gs-res-head {
+  grid-area: head;
+  min-width: 0;
+}
+
+.gs-res-run {
+  grid-area: run;
+}
+
+.gs-res-run,
+.gs-res-missions,
+.gs-res-tip {
+  margin-top: clamp(14px, 2.4vmin, 22px);
+}
+
+.gs-res-body.no-race .gs-res-missions {
+  margin-top: 0;
+}
+
+.gs-res-race {
+  grid-area: race;
+}
+
+.gs-res-run,
+.gs-res-race {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+}
+
+/* Bottom fade plus a More cue while the end of the card is out of view (phones, short screens). */
+.gs-res-scroll.has-more .gs-res-body {
+  -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 72px), rgba(0, 0, 0, 0.2) calc(100% - 16px), transparent 100%);
+  mask-image: linear-gradient(180deg, #000 calc(100% - 72px), rgba(0, 0, 0, 0.2) calc(100% - 16px), transparent 100%);
+}
+
+/* The end sentinel takes a row of its own after every area: auto-placed, it fell into the empty
+   stats slot under the head and the card never said it ran on. */
+.gs-res-end {
+  grid-column: 1 / -1;
+  grid-row: -1;
+  height: 1px;
+  margin-top: -1px;
+}
+
+.gs-res-more {
+  position: absolute;
+  left: 50%;
+  bottom: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px 0 14px;
+  border-radius: var(--r-pill);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 6px 16px -8px rgba(5, 9, 30, 0.9);
+  color: var(--text);
+  font-size: max(11px, 0.78em);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 6px);
+  transition:
+    opacity 180ms ease,
+    transform 220ms var(--out);
+}
+
+.gs-res-scroll.has-more .gs-res-more {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate(-50%, 0);
+}
+
+/* The 30 px pill's hit area reaches 44 px (touch tablets in landscape) without changing its look. */
+.gs-res-more::after {
+  content: '';
+  position: absolute;
+  inset: -7px 0;
+}
+
+.gs-res-more-ico {
+  width: 1.1em;
+  height: 1.1em;
+  transform: rotate(90deg);
+}
+
+.gs-res-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  font-size: 0.88em;
+  font-weight: 750;
+}
+
+.gs-res-mood {
+  display: inline-flex;
+  align-items: center;
+  height: 1.7em;
+  padding: 0 0.7em;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  font-style: italic;
+}
+
+.gs-res-scorerow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  margin-top: 4px;
+}
+
+/* The race headline beside the score: your place (a deep ink medal with off-white type) over the
+   best-run line. It stays quieter than Run again: no bright fill. Gold stays for gifts, and the
+   gold-white of your own best is kept for first place. */
+.gs-res-side {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.gs-res-place {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.4em;
+  height: 50px;
+  padding: 0 20px 0 18px;
+  border-radius: var(--r-pill);
+  background: #0b1026;
+  box-shadow: inset 0 0 0 1.5px var(--hair-2), 0 10px 24px -12px rgba(5, 9, 30, 0.8);
+  color: var(--text);
+  line-height: 50px;
+  white-space: nowrap;
+}
+
+.gs-res-place-n {
+  font-size: 1.9em;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+
+.gs-res-place-of {
+  color: var(--dim);
+  font-size: 0.95em;
+  font-weight: 800;
+}
+
+/* First place: nobody went further, so the medal turns gold-white with a full ring and a soft glow. */
+.gs-res-place.is-first {
+  box-shadow: inset 0 0 0 2px var(--you), 0 0 26px -8px rgba(255, 224, 138, 0.6), 0 10px 24px -12px rgba(5, 9, 30, 0.8);
+  color: var(--you);
+}
+
+/* The card lands one beat at a time (transform and opacity only): the score counts up at once, then
+   your place, how the run ended with the gifts it paid, your run, the race and its Beat stamps, and
+   the missions last (their bars and Done stamps follow in the missions block). Run again is there
+   from the first frame. Reduced motion shows everything at once (after the Beat stamps, below). */
+.gs-results.is-in .gs-res-place {
+  animation: gs-pop 320ms var(--spring) 300ms both;
+}
+
+.gs-results.is-in .gs-res-sub {
+  animation: gs-res-step 340ms var(--out) 440ms both;
+}
+
+.gs-results.is-in .gs-res-run {
+  animation: gs-res-step 340ms var(--out) 540ms both;
+}
+
+.gs-results.is-in .gs-res-race {
+  animation: gs-res-step 360ms var(--out) 620ms both;
+}
+
+.gs-results.is-in .gs-res-missions {
+  animation: gs-res-step 360ms var(--out) 740ms both;
+}
+
+.gs-results.is-in .gs-res-tip {
+  animation: gs-res-step 360ms var(--out) 820ms both;
+}
+
+@keyframes gs-res-step {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.gs-res-side .gs-res-newbest {
+  margin-left: 4px;
+}
+
+.gs-res-score {
+  padding-right: 0.08em;
+  font-size: clamp(50px, 11vmin, 96px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.gs-stamp {
+  display: inline-flex;
+  align-items: center;
+  height: 2em;
+  padding: 0 0.85em;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 2px var(--you);
+  color: var(--you);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  transform: rotate(var(--rot, -7deg));
+}
+
+.gs-results.is-in .gs-res-newbest {
+  animation: gs-stamp 380ms var(--spring) 560ms both;
+}
+
+/* How it ended, the hook to go again, and the pay: three lines stacked under the score. */
+.gs-res-sub {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  margin-top: 12px;
+  font-weight: 750;
+}
+
+.gs-res-cause {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  font-size: 1.08em;
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-res-cause-ico {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--text);
+}
+
+.gs-res-best {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-left: 4px;
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-res-best .gs-num {
+  color: var(--text);
+}
+
+.gs-res-best .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-res-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px clamp(16px, 2.2vw, 26px);
+}
+
+.gs-res-stat {
+  display: grid;
+  align-content: end;
+  gap: 2px;
+}
+
+/* Distance is what the race is ranked by: it leads the row, a step larger. */
+.gs-res-stat.is-key dd {
+  font-size: 1.38em;
+  line-height: 1.1;
+}
+
+.gs-res-stat dt {
+  color: var(--dim);
+  font-size: max(11px, 0.72em);
+  font-weight: 750;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gs-res-stat dd {
+  font-size: 1.18em;
+  font-style: italic;
+  font-weight: 900;
+}
+
+/* A personal record: a small gold-white tag on the number (gold-white is your own best). */
+.gs-res-rec {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  margin-left: 8px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--you);
+  color: var(--you);
+  font-size: max(11px, 0.56em);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: 0.2em;
+}
+
+/* A run with nothing worth naming shows one tip for next time: a full-width row of its own above the
+   buttons, the label beside the tip on one line, on a faint panel so it reads as advice rather than
+   a stat. */
+.gs-res-tip {
+  display: grid;
+  grid-area: tip;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 11px 18px 12px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-res-tip-k {
+  color: var(--dim);
+  font-size: max(11px, 0.72em);
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.gs-res-tip-t {
+  color: var(--text);
+  font-size: 1em;
+  font-weight: 750;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+
+.gs-res-gifts {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-self: start;
+  margin-top: 8px;
+}
+
+.gs-res-gifts-ico {
+  width: 1.7em;
+  height: 1.7em;
+  color: var(--gift);
+}
+
+.gs-res-gifts-n {
+  color: var(--gift);
+  font-size: 1.6em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.gs-x2 {
+  display: inline-flex;
+  align-items: center;
+  height: 1.6em;
+  padding: 0 0.55em;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  color: var(--ink);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-res-wallet {
+  margin-left: 4px;
+  color: var(--dim);
+  font-size: 0.86em;
+  font-weight: 700;
+}
+
+.gs-res-wallet .gs-num {
+  display: inline-block;
+  color: var(--text);
+}
+
+/* A completed mission's reward on its way to the wallet (transform and opacity only). */
+.gs-res-fly {
+  position: absolute;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  box-shadow: 0 8px 20px -8px rgba(255, 211, 77, 0.9);
+  color: var(--ink);
+  font-size: 0.86em;
+  font-style: italic;
+  font-weight: 900;
+  pointer-events: none;
+  will-change: transform;
+}
+
+.gs-res-fly .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-res-unlock {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* The crash line and an unlock card share the head: stacked here, side by side on wide screens. */
+.gs-res-subrow {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.gs-res-subrow > .gs-res-sub,
+.gs-res-subrow > .gs-res-unlock {
+  margin-top: 0;
+}
+
+.gs-res-unlock:has(.gs-unlock) {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.gs-unlock {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 0 14px 0 10px;
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  font-weight: 800;
+}
+
+/* A new mountain is the most shareable beat of a run: a reveal card with the biome's own art, its
+   name, and a shortcut to ride it straight away. */
+.gs-ul {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 6px 6px 6px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 138, 0.34);
+}
+
+.gs-ul-art {
+  position: relative;
+  display: block;
+  height: 52px;
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.gs-ul-txt {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.gs-ul-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--you);
+  font-size: max(11px, 0.74em);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.gs-ul-k .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-ul-name {
+  font-size: 1.08em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+
+.gs-ul-ride {
+  min-height: 44px;
+  padding: 0 16px 0 13px;
+}
+
+.gs-ul-ride .gs-i {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.gs-results.is-in .gs-ul {
+  animation: gs-pop 360ms var(--spring) 480ms both;
+}
+
+.gs-res-h {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  font-size: max(11px, 0.74em);
+}
+
+.gs-res-h-meta {
+  color: var(--text);
+  letter-spacing: 0.06em;
+}
+
+/* Straight under the crash line, hung from its words, in the order's own terms: how far short of the
+   next place you stopped. It is the reason to ride again, so it reads at about 16 px, not as a note. */
+.gs-res-note {
+  color: rgba(245, 243, 255, 0.86);
+  font-size: 1.1em;
+  font-weight: 750;
+  line-height: 1.3;
+}
+
+.gs-res-cause + .gs-res-note {
+  margin-left: 40px;
+}
+
+.gs-res-note .gs-num {
+  color: var(--text);
+  font-weight: 900;
+}
+
+/* The race shows a window around your row; the rest folds behind a compact Show All link. It reads
+   as a link (off-white, underlined, a chevron), not a disabled row, and its hit area reaches 44 px
+   into the gaps around it without taking that height from the card. */
+.gs-standings:not(.is-all) > .is-far {
+  display: none;
+}
+
+/* Rows only the phone's three-row window folds, and the link a field folded only there needs. */
+.gs-res-all.is-p-only {
+  display: none;
+}
+
+.gs-res-all {
+  justify-self: center;
+  gap: 5px;
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 10px;
+  color: var(--text);
+  font-size: 0.86em;
+  font-weight: 800;
+}
+
+.gs-res-all::after {
+  content: '';
+  position: absolute;
+  inset: -6px 0;
+}
+
+.gs-res-all .gs-btn-label {
+  text-decoration: underline;
+  text-decoration-color: rgba(245, 243, 255, 0.45);
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 4px;
+}
+
+.gs-res-all .gs-res-chev {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+/* The Missions row: what this run changed, and a chevron that opens the list in place. Phones
+   always fold the list behind it; wide screens fold it only when the run finished no mission
+   (is-fold), so the race and the unlock carry the moment. */
+.gs-res-mis-toggle {
+  display: none;
+}
+
+/* Folded (always, now), the row's own button shows the name; the heading stays in the tree, visually
+   hidden like .gs-sr, so heading navigation still finds Missions beside Race. */
+.gs-res-missions.is-fold > .gs-res-mis-h {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.gs-res-missions.is-fold > .gs-res-mis-toggle {
+  display: flex;
+}
+
+.gs-res-missions.is-fold:not(.is-open) > .gs-missions {
+  display: none;
+}
+
+.gs-res-missions.is-fold.is-open > .gs-missions {
+  margin-top: 8px;
+}
+
+/* Landscape: a mission this run finished stands open under the folded row on its own (its Done
+   stamp lands and its reward flies to the wallet), and the row counts what is left. */
+@media (min-aspect-ratio: 1/1) {
+  .gs-res-missions.is-fold.has-new:not(.is-open) > .gs-missions {
+    display: grid;
+    margin-top: 8px;
+  }
+
+  .gs-res-missions.is-fold.has-new:not(.is-open) > .gs-missions > .gs-mis:not(.is-new) {
+    display: none;
+  }
+
+  .gs-res-missions.has-new .gs-res-mis-sum > .gs-res-mis-pay {
+    display: none;
+  }
+
+  .gs-res-missions.has-new .gs-res-mis-sum > .gs-res-mis-left {
+    display: inline;
+  }
+}
+
+/* The row's count: what is left, or (on a phone, where the finished one folds away too) its pay. */
+.gs-res-mis-pay {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gs-res-mis-left {
+  color: var(--dim);
+}
+
+.gs-res-mis-sum.is-won > .gs-res-mis-left {
+  display: none;
+}
+
+.gs-res-mis-toggle {
+  justify-content: flex-start;
+  gap: 9px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  color: var(--text);
+  font-size: 0.86em;
+}
+
+.gs-res-mis-toggle .gs-btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+.gs-res-mis-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font-weight: 800;
+}
+
+.gs-res-mis-sum.is-won {
+  color: var(--gift);
+}
+
+.gs-res-mis-sum .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-res-chev {
+  width: 1em;
+  height: 1em;
+  transform: rotate(90deg);
+  transition: transform 180ms var(--out);
+}
+
+[aria-expanded='true'] > .gs-res-chev {
+  transform: rotate(-90deg);
+}
+
+@media (hover: hover) {
+  .gs-res-mis-toggle:hover {
+    background: rgba(245, 243, 255, 0.08);
+    color: var(--text);
+  }
+
+  .gs-res-all:hover .gs-btn-label {
+    text-decoration-color: var(--text);
+  }
+}
+
+/* A finished mission: the Done stamp has the bar row to itself, beside the full gold bar. */
+.gs-mis-foot {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.gs-mis-foot > .gs-mis-line {
+  grid-column: auto;
+}
+
+.gs-mis-foot > .gs-mis-complete {
+  height: 22px;
+  font-size: max(11px, 0.72em);
+  transform: rotate(-4deg);
+  transform-origin: left center;
+}
+
+/* Missions sit under your run as compact cards: text and progress on one line, the bar beneath. */
+.gs-res-missions {
+  grid-area: mis;
+  min-width: 0;
+}
+
+.gs-res-missions .gs-missions {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+
+.gs-res-missions .gs-mis {
+  gap: 6px 12px;
+  padding: 10px 14px 11px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.045);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-res-missions .gs-mis.is-done {
+  background: rgba(255, 211, 77, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.5);
+}
+
+.gs-res-missions .gs-mis.is-new::before {
+  inset: 0;
+}
+
+/* The finishing order, by distance. Rows are pills; yours wears vermillion, the ghosts you beat
+   their kind colour and a Beat stamp in a column of its own after the distance (every row keeps
+   that column, so distances line up and a stamp never covers one). Long fields (seven ghosts or
+   more) tighten their rows, so Show All opens a list that still fits. */
+.gs-standings {
+  display: grid;
+  gap: 5px 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-standings.is-long {
+  gap: 4px;
+}
+
+.gs-standings.is-long .gs-st-row {
+  height: 31px;
+}
+
+.gs-st-row {
+  display: grid;
+  grid-template-columns: 1.5em 1.3em minmax(0, 1fr) auto 4.4em;
+  align-items: center;
+  gap: 9px;
+  height: 34px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.04);
+  font-size: 0.92em;
+  font-weight: 750;
+}
+
+.gs-st-rank {
+  color: var(--dim);
+  font-style: italic;
+  font-weight: 900;
+  text-align: center;
+}
+
+.gs-st-ico {
+  width: 1.3em;
+  height: 1.3em;
+  color: var(--k, var(--text));
+}
+
+.gs-st-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-st-val {
+  color: rgba(245, 243, 255, 0.86);
+  font-size: 0.9em;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.gs-st-row.is-beat {
+  background: var(--k-b);
+}
+
+.gs-st-row.is-you {
+  background: rgba(255, 77, 46, 0.18);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 77, 46, 0.75);
+  font-weight: 900;
+}
+
+/* The rider glyph wears vermillion; the rank numeral is text, and vermillion on the row's own
+   vermillion tint is under 4.5:1, so it stays off-white like the name and distance. */
+.gs-st-row.is-you .gs-st-ico {
+  color: var(--signal);
+}
+
+.gs-st-row.is-you .gs-st-rank {
+  color: var(--text);
+}
+
+.gs-st-row.is-you .gs-st-name {
+  font-style: italic;
+}
+
+.gs-st-row.is-you .gs-st-val {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.gs-st-stamp {
+  display: inline-flex;
+  align-items: center;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--k);
+  color: var(--ink);
+  font-size: max(11px, 0.66em);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  justify-self: end;
+  transform: rotate(var(--rot, -6deg));
+  --rot: -6deg;
+}
+
+/* The place above yours, the one to chase next: an outlined tag, upright and unfilled, so it never
+   reads as one more Beat stamp. */
+.gs-st-next {
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  height: 21px;
+  padding: 0 8px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.7);
+  color: var(--text);
+  font-size: max(11px, 0.66em);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gs-st-row.is-next {
+  background: rgba(245, 243, 255, 0.07);
+}
+
+/* Stamps land with a small press (1.25x down to size) inside their own slot, so even mid-flight
+   they never reach the distance or the reward beside them. */
+.gs-results.is-in .gs-st-stamp {
+  animation: gs-stamp-slot 320ms var(--spring) calc(860ms + var(--i, 0) * 110ms) both;
+}
+
+.gs-results.is-in .gs-mis.is-new .gs-mis-foot > .gs-mis-complete {
+  animation: gs-stamp-slot 340ms var(--spring) calc(1050ms + var(--i, 0) * 140ms) both;
+}
+
+@keyframes gs-stamp-slot {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--rot, -6deg)) scale(1.25);
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--rot, -6deg)) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes gs-stamp-slot {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Reduced motion: the card lands whole. A fade alone would still hold each beat back by its delay
+     (the Done stamps by up to 1.5 s), so every step of the stagger is simply there. These rules sit
+     after the last of them so they win at equal specificity. */
+  .gs-results.is-in .gs-res-place,
+  .gs-results.is-in .gs-res-newbest,
+  .gs-results.is-in .gs-res-sub,
+  .gs-results.is-in .gs-res-run,
+  .gs-results.is-in .gs-res-race,
+  .gs-results.is-in .gs-res-missions,
+  .gs-results.is-in .gs-res-tip,
+  .gs-results.is-in .gs-ul,
+  .gs-results.is-in .gs-st-stamp,
+  .gs-results.is-in .gs-mis-line::before,
+  .gs-results.is-in .gs-mis.is-new::before,
+  .gs-results.is-in .gs-mis.is-new .gs-mis-complete,
+  .gs-results.is-in .gs-mis.is-new .gs-mis-foot > .gs-mis-complete {
+    animation: none;
+  }
+}
+
+.gs-res-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 14px clamp(18px, 3.4vmin, 36px) clamp(16px, 3vmin, 28px);
+  box-shadow: 0 -1px 0 var(--hair);
+}
+
+.gs-res-extra {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.gs-res-opt {
+  min-height: 48px;
+}
+
+.gs-res-opt .gs-i {
+  color: var(--dim);
+}
+
+/* A pressed offer waits for the game's answer (aria-disabled, so it keeps focus), and one the game
+   then withdrew keeps its slot as a quiet status with a check. */
+.gs-res-opt[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.gs-res-opt.gs-btn[aria-disabled='true']:active {
+  transform: none;
+}
+
+.gs-res-opt.is-spent {
+  opacity: 1;
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--dim);
+}
+
+@media (hover: hover) {
+  .gs-res-opt.gs-btn-soft[aria-disabled='true']:hover {
+    background: var(--panel);
+  }
+
+  .gs-res-opt.gs-btn-soft.is-spent:hover {
+    background: transparent;
+  }
+}
+
+.gs-res-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.gs-again {
+  min-width: clamp(220px, 22vw, 300px);
+  justify-content: flex-start;
+}
+
+.gs-again .gs-btn-label {
+  flex: 1;
+  text-align: left;
+}
+
+.gs-again .gs-kbd {
+  font-size: max(11px, 0.55em);
+}
+
+.gs-again .gs-i {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.gs-res-home {
+  min-height: 48px;
+}
+
+/* Challenge a Friend shares the main row: it takes the row's far left, and Home and Run again
+   keep the right. */
+.gs-res-main.has-chal {
+  flex: 1 1 auto;
+}
+
+.gs-res-main > .gs-res-chal {
+  min-height: 48px;
+  margin-right: auto;
+}
+
+/* Wide landscape (desktop, tablets sideways): the card keeps to the right 58% and the scrim lifts
+   off the left, where the camera frames the crashed rider as a 3/4 hero shot of the live scene. */
+@media (min-aspect-ratio: 1/1) and (min-width: 901px) {
+  .gs-results {
+    justify-items: end;
+    background:
+      linear-gradient(90deg, rgba(8, 12, 30, 0) 0%, rgba(8, 12, 30, 0.06) 28%, rgba(8, 12, 30, 0.42) 42%, rgba(8, 12, 30, 0.62) 100%),
+      linear-gradient(0deg, rgba(8, 12, 30, 0.34) 0%, rgba(8, 12, 30, 0) 30%);
+  }
+
+  .gs-res-card {
+    width: min(max(58vw - var(--sr), 600px), 1060px);
+  }
+
+  .gs-results.is-in .gs-res-card {
+    animation-name: gs-res-in;
+  }
+
+  /* Only the mountain line and the score row run the full width. Under them the race starts at once,
+     level with the crash line (or under an unlocked mountain's card), so the eye goes from your
+     place straight to the order; the left column tells the run: how it ended, what it did well, then
+     the missions row. The two columns come out about even, where a head across the whole card left
+     a short left column beside a long race; a tip for next time runs under both, above the buttons.
+     The head's own boxes take grid cells (display: contents), and margins set the rhythm, so an
+     empty slot costs nothing. */
+  .gs-res-body {
+    grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+    grid-template-rows: auto auto auto auto 1fr auto;
+    grid-template-areas:
+      'where where'
+      'score score'
+      'sub   race'
+      'run   race'
+      'mis   race'
+      'tip   tip';
+    column-gap: clamp(20px, 2.6vw, 40px);
+    row-gap: 0;
+  }
+
+  .gs-res-body.has-ul {
+    grid-template-areas:
+      'where where'
+      'score score'
+      'sub   ul'
+      'run   race'
+      'mis   race'
+      'tip   tip';
+  }
+
+  .gs-res-body.no-race {
+    grid-template-rows: auto auto auto auto 1fr auto;
+    grid-template-areas:
+      'where where'
+      'score score'
+      'sub   mis'
+      'run   mis'
+      '.     mis'
+      'tip   tip';
+  }
+
+  .gs-res-head,
+  .gs-res-head > .gs-res-subrow {
+    display: contents;
+  }
+
+  .gs-res-where {
+    grid-area: where;
+  }
+
+  .gs-res-scorerow {
+    grid-area: score;
+  }
+
+  .gs-res-head > .gs-res-sub,
+  .gs-res-subrow > .gs-res-sub {
+    grid-area: sub;
+    margin-top: 14px;
+  }
+
+  .gs-res-subrow > .gs-res-unlock {
+    grid-area: ul;
+    align-self: start;
+    min-width: 0;
+    margin-top: 14px;
+  }
+
+  .gs-res-race {
+    margin-top: 14px;
+  }
+
+  .gs-res-body.has-ul .gs-res-race {
+    margin-top: 18px;
+  }
+
+  .gs-res-run,
+  .gs-res-missions,
+  .gs-res-tip {
+    margin-top: 18px;
+  }
+
+  .gs-res-body.no-race .gs-res-missions {
+    margin-top: 14px;
+  }
+
+  /* The score row runs the full card width: the medal and the stamp sit side by side beside the
+     number, so the head is no taller than the score. */
+  .gs-res-scorerow {
+    flex-wrap: nowrap;
+  }
+
+  .gs-res-side {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 14px;
+  }
+
+  /* Your run reads as one line of four stats, and missions are slim cards, so the run, missions and
+     race all fit a 1280 x 720 screen without scrolling. */
+  .gs-res-stats {
+    gap: 8px clamp(14px, 1.6vw, 26px);
+  }
+
+  .gs-res-stat dt {
+    font-size: max(11px, 0.66em);
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+  }
+
+  .gs-res-missions .gs-missions {
+    gap: 6px;
+  }
+
+  .gs-res-missions .gs-mis {
+    gap: 5px 10px;
+    padding: 8px 14px 9px;
+  }
+
+  .gs-res-missions .gs-mis-line {
+    height: 4px;
+  }
+
+  /* The offers are slimmer than Home and Run again: one quiet row above the two that matter. */
+  .gs-res-actions {
+    row-gap: 8px;
+    padding-top: 12px;
+  }
+
+  .gs-res-opt {
+    min-height: 42px;
+    padding: 0 1em;
+    font-size: 0.92em;
+  }
+
+  /* The 42 px pill's hit area reaches 44 px (touch tablets sideways) without changing its look. */
+  .gs-res-opt::after {
+    content: '';
+    position: absolute;
+    inset: -1px 0;
+  }
+
+  /* When the card is short enough to scroll, the bottom fade and the Missions cue say so; a bare
+     scrollbar line down the card edge only reads as a layout bug. */
+  .gs-results .gs-res-body {
+    scrollbar-width: none;
+  }
+
+  .gs-results .gs-res-body::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* A narrow hero card (small laptops, tablets sideways): the four stats sit two by two instead of
+   three and a stray, and the offers drop "Watch Ad:" (the video glyph says it, the accessible name
+   keeps it) so they stay one row and the footer leaves the missions room. */
+@media (min-aspect-ratio: 1/1) and (min-width: 901px) and (max-width: 1199px) {
+  .gs-res-stats {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+  }
+
+  .gs-res-opt-pre {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+@keyframes gs-res-in {
+  from {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes gs-res-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ Menus */
+
+.gs-pause,
+.gs-sheetwrap {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: var(--st) var(--sr) var(--sb) var(--sl);
+  background: rgba(8, 12, 30, 0.58);
+}
+
+/* Sheets push the title right back: a deep ink scrim, the title layer itself faded, and on
+   desktop-class pointers a soft blur. Phones skip the blur (a live WebGL frame sits under it). */
+.gs-sheetwrap {
+  background: radial-gradient(120% 90% at 50% 50%, rgba(8, 12, 30, 0.62) 0%, rgba(8, 12, 30, 0.82) 100%);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .gs-sheetwrap {
+    -webkit-backdrop-filter: blur(7px) saturate(0.8);
+    backdrop-filter: blur(7px) saturate(0.8);
+  }
+}
+
+.gs-ui:has(> .gs-sheetwrap:not([hidden]):not(.is-out)) > .gs-title {
+  opacity: 0.3;
+  transition: opacity 180ms ease;
+}
+
+.gs-pause.is-in,
+.gs-sheetwrap.is-in {
+  animation: gs-fade-in 180ms ease both;
+}
+
+.gs-pause.is-in .gs-pause-card,
+.gs-sheetwrap.is-in .gs-sheet {
+  animation: gs-pop 260ms var(--spring) both;
+}
+
+.gs-pause.is-out,
+.gs-sheetwrap.is-out {
+  animation: gs-fade-out 180ms ease both;
+}
+
+.gs-pause-card {
+  display: grid;
+  grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+  grid-template-rows: auto auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'title set'
+    'resume set'
+    'home set'
+    'key set'
+    '. set';
+  align-items: start;
+  gap: 12px clamp(18px, 3.4vw, 40px);
+  width: min(780px, 100%);
+  max-height: 100%;
+  padding: clamp(18px, 3.6vmin, 34px);
+  overflow-y: auto;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  overscroll-behavior: contain;
+}
+
+.gs-pause-title {
+  grid-area: title;
+  margin-bottom: 4px;
+  font-size: clamp(30px, calc(var(--u) * 2.4), 48px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.gs-pause-card > .gs-btn-primary {
+  grid-area: resume;
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.gs-pause-card > .gs-btn-soft {
+  grid-area: home;
+  justify-self: start;
+}
+
+.gs-pause-card > .gs-set {
+  grid-area: set;
+}
+
+.gs-pause-key {
+  grid-area: key;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--dim);
+  font-size: 0.86em;
+  font-weight: 700;
+}
+
+.gs-pause-key .gs-kbd {
+  font-size: 0.9em;
+}
+
+.gs-touch-mode .gs-kbd-only {
+  display: none;
+}
+
+.gs-sheet {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: min(840px, 100%);
+  max-height: 100%;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: #141b38;
+  box-shadow: inset 0 0 0 1px var(--hair-2), 0 30px 60px -20px rgba(5, 9, 30, 0.85);
+}
+
+.gs-sheet-settings {
+  width: min(520px, 100%);
+}
+
+.gs-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 10px 14px;
+}
+
+.gs-sheet-title {
+  flex: 1;
+  font-size: clamp(22px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.gs-sheet-body {
+  padding: 6px 20px 22px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+}
+
+.gs-sheet-body,
+.gs-res-body,
+.gs-pause-card {
+  scrollbar-color: rgba(245, 243, 255, 0.22) transparent;
+  scrollbar-width: thin;
+}
+
+.gs-sheet-body::-webkit-scrollbar,
+.gs-res-body::-webkit-scrollbar,
+.gs-pause-card::-webkit-scrollbar {
+  width: 6px;
+}
+
+.gs-sheet-body::-webkit-scrollbar-thumb,
+.gs-res-body::-webkit-scrollbar-thumb,
+.gs-pause-card::-webkit-scrollbar-thumb {
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.22);
+}
+
+.gs-sheet-body::-webkit-scrollbar-track,
+.gs-res-body::-webkit-scrollbar-track,
+.gs-pause-card::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.gs-wallet {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px 0 12px;
+  color: var(--gift);
+  font-weight: 900;
+}
+
+.gs-wallet .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+/* Sled shop: the preview card beside a grid of tiles (stacked in portrait). Tiles only pick; the
+   one action (Equip, Buy with the price inside, or the shortfall) lives in the preview. */
+
+/* On a laptop-sized screen the shop fills about 85% of the viewport rather than floating in wide
+   blurred margins: the sheet is wider and its type, preview and tiles a step larger. */
+.gs-sheet-sleds {
+  width: min(1100px, 100%);
+}
+
+@media (min-aspect-ratio: 1/1) and (min-height: 561px) {
+  .gs-sheet-sleds {
+    font-size: calc(var(--u) * 1.12);
+  }
+
+  .gs-sheet-sleds .gs-shop-stage {
+    height: clamp(160px, 31vmin, 250px);
+  }
+
+  .gs-sheet-sleds .gs-tile-art {
+    min-height: clamp(64px, 12.5vmin, 108px);
+  }
+}
+
+.gs-shop {
+  display: grid;
+  grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
+  align-items: stretch;
+  gap: 16px;
+}
+
+.gs-shop-hero {
+  display: grid;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+/* A slice of Pinecrest at golden hour: the ridge art over the biome sky, a snow mound, the sled. */
+.gs-shop-stage {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  place-items: end center;
+  height: clamp(150px, 27vmin, 206px);
+  padding-bottom: 4px;
+  overflow: hidden;
+  background: #8e7db4;
+}
+
+/* The game's own dusk (menus.ts STAGE_SVG): the graded sky, a low sun with a soft warm corona and
+   two ridge layers paling with distance. */
+.gs-shop-sky {
+  position: absolute;
+  inset: 0 0 14%;
+}
+
+.gs-shop-sky svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* The snow mound in the snow's two tones: lit cream along its crest (warmest toward the sun on the
+   left), periwinkle shade falling away toward the foot of the stage. */
+.gs-shop-stage::after {
+  content: '';
+  position: absolute;
+  left: -12%;
+  right: -12%;
+  bottom: -46%;
+  height: 78%;
+  border-radius: 50% 50% 0 0 / 34% 34% 0 0;
+  background:
+    radial-gradient(60% 40% at 30% 0%, rgba(255, 236, 214, 0.75) 0%, rgba(255, 236, 214, 0) 100%),
+    linear-gradient(180deg, #f7f1f2 0%, #dbe0f6 30%, #b3c1ee 62%, #96a8e4 100%);
+  box-shadow: 0 -1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.gs-shop-stage > .gs-sled-svg {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  height: 94%;
+}
+
+.gs-shop-stage > .gs-sled-svg svg {
+  display: block;
+  width: auto;
+  max-width: 92%;
+  height: 100%;
+  filter: drop-shadow(0 6px 8px rgba(18, 25, 51, 0.25));
+}
+
+/* The real sled and rider, rendered by the game in its own toon light: they sit on the snow mound,
+   as large as the stage allows. */
+.gs-shop-stage > .gs-sled-img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: auto;
+  max-width: 94%;
+  height: 98%;
+  object-fit: contain;
+  object-position: center bottom;
+  transition: opacity 200ms ease;
+}
+
+.gs-sled-img.is-loading {
+  opacity: 0;
+}
+
+.gs-shop-stage.is-new > .gs-sled-svg,
+.gs-shop-stage.is-new > .gs-sled-img {
+  animation: gs-shop-in 380ms var(--spring) both;
+}
+
+.gs-shop-info {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 16px;
+}
+
+.gs-shop-title {
+  display: grid;
+  gap: 5px;
+}
+
+/* What the sled does, in one plain line: the reason to pick it, above the bars that size it. */
+.gs-shop-effect {
+  color: var(--text);
+  font-size: 0.95em;
+  font-weight: 750;
+  line-height: 1.3;
+  text-wrap: pretty;
+}
+
+.gs-shop-name {
+  font-size: clamp(20px, calc(var(--u) * 1.45), 27px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.gs-stats {
+  display: grid;
+  gap: 8px;
+}
+
+.gs-stat-row {
+  display: grid;
+  grid-template-columns: 22px 6.8em minmax(0, 1fr) 3.1em;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  font-size: 0.92em;
+  font-weight: 800;
+}
+
+.gs-stat-row .gs-stat-sign {
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border-radius: var(--r-pill);
+}
+
+.gs-stat-row.is-up .gs-stat-sign {
+  background: var(--text);
+  color: var(--ink);
+}
+
+.gs-stat-row.is-down .gs-stat-sign {
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.55);
+  color: var(--text);
+}
+
+/* The bar centres on the baseline sled (the tick): a gain grows bright past it, a loss leaves a
+   hatched gap short of it. Light against dark carries the sign, not a borrowed colour role. */
+.gs-stat-bar {
+  position: relative;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+}
+
+.gs-stat-bar::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: calc(50% - 1px);
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(245, 243, 255, 0.6);
+}
+
+.gs-stat-fill,
+.gs-stat-delta {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--r-pill);
+}
+
+.gs-stat-fill {
+  left: 0;
+  width: min(50%, var(--end));
+  background: rgba(245, 243, 255, 0.34);
+}
+
+.is-up .gs-stat-delta {
+  left: 50%;
+  width: calc(var(--end) - 50%);
+  background: var(--text);
+  box-shadow: 0 0 10px rgba(245, 243, 255, 0.35);
+}
+
+.is-down .gs-stat-delta {
+  left: var(--end);
+  width: calc(50% - var(--end));
+  background: repeating-linear-gradient(-45deg, rgba(245, 243, 255, 0.36) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.32);
+}
+
+.gs-stat-v {
+  font-style: italic;
+  font-weight: 900;
+  text-align: right;
+}
+
+.gs-stat-row.is-down .gs-stat-v {
+  color: var(--dim);
+}
+
+.gs-stat-row.is-even {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+  color: var(--text);
+  font-weight: 750;
+}
+
+/* Body copy at about 78% white: the dim tone at this size was the lowest-contrast text in the UI. */
+.gs-stat-even-sub {
+  color: rgba(245, 243, 255, 0.78);
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
+.gs-shop-act {
+  display: grid;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.gs-shop-btn {
+  width: 100%;
+}
+
+.gs-shop-price {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding-left: 14px;
+  box-shadow: inset 1.5px 0 0 rgba(18, 25, 51, 0.28);
+  font-style: normal;
+}
+
+.gs-shop-price .gs-i {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+/* Buy is the vermillion primary: ink type and an ink gift glyph, the price after a hairline. */
+.gs-shop-buy .gs-shop-price {
+  font-weight: 900;
+}
+
+/* Armed (the second tap spends): off-white inside a vermillion ring. Wins over the hover tint. */
+.gs-shop-act .gs-shop-buy.is-armed {
+  background: var(--text);
+  box-shadow: inset 0 0 0 3px var(--signal), 0 0 0 4px rgba(255, 77, 46, 0.3);
+}
+
+/* Equipped is a status, not a control: a small filled chip on the slot's leading edge, with no ring
+   and no button height, so the slot reads as "nothing to do here". */
+.gs-shop-act .gs-sled-state {
+  justify-self: start;
+  width: auto;
+  min-height: 34px;
+  padding: 0 14px 0 11px;
+  background: rgba(245, 243, 255, 0.1);
+  color: var(--text);
+  font-size: 0.9em;
+}
+
+.gs-shop-act .gs-sled-state .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-shop-save {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  color: var(--dim);
+  font-size: 0.86em;
+  font-weight: 800;
+}
+
+.gs-shop-save-bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.12);
+}
+
+.gs-shop-save-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--gift);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+}
+
+.gs-shop-save-t {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.gs-shop-save-t .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+  color: var(--gift);
+}
+
+/* Tiles stretch to the preview's height, so the grid never leaves a dead corner. */
+.gs-shop-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: 1fr;
+  gap: 10px;
+}
+
+.gs-tile {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto auto;
+  align-content: start;
+  justify-items: start;
+  gap: 3px;
+  padding-bottom: 11px;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  /* The card body takes a breath of its sled's own colour under the stage. */
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tint, #9db2ec) 10%, transparent) 0%, transparent 70%),
+    rgba(245, 243, 255, 0.04);
+  text-align: left;
+  transition: transform 160ms var(--spring);
+}
+
+/* The card's rim, in its sled's colour, drawn over the stage as well as the body (an inset shadow on
+   the card itself was hidden behind the art, so the picked ring ran round the body only). */
+.gs-tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--tile-rim, var(--hair));
+  pointer-events: none;
+}
+
+.gs-tile:active {
+  transform: scale(0.97);
+}
+
+.gs-tile:focus-visible {
+  outline-offset: 2px;
+}
+
+.gs-tile.is-pick {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--tint, #9db2ec) 14%, transparent) 0%, transparent 70%),
+    rgba(245, 243, 255, 0.09);
+}
+
+.gs-tile.is-pick::after {
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+/* Every tile is the preview's stage in small, in its own sky (menus.ts TILE_LOOK: a step deeper
+   than the preview's, so six of them never outshine it) with the sled's own colour glowing low
+   behind it, and a broad snow drift it stands on, its contact shadow drawn into the portrait. */
+.gs-tile-art {
+  position: relative;
+  display: grid;
+  place-items: end center;
+  width: 100%;
+  height: 100%;
+  min-height: clamp(58px, 10.5vmin, 86px);
+  padding-bottom: 7%;
+  overflow: hidden;
+  background:
+    radial-gradient(70% 46% at 50% 62%, color-mix(in srgb, var(--tint, #9db2ec) 42%, transparent) 0%, transparent 74%),
+    linear-gradient(180deg, var(--sky1, #34418c) 0%, var(--sky2, #5b5ca3) 48%, var(--sky3, #b88fae) 100%);
+}
+
+/* The drift: a wide mound in the snow's shade periwinkle with a soft lit crest, rather than a hard
+   disc. Its crest rides a little above the middle of the stage, so the sled stands on the snow with
+   its shadow on the drift, never on the sky behind it. Mid-toned, so a pale shell and a pale deck
+   stand off it as clearly as wood and vermillion. */
+.gs-tile-art::before {
+  content: '';
+  position: absolute;
+  left: -45%;
+  right: -45%;
+  bottom: -36%;
+  height: 84%;
+  border-radius: 50%;
+  background:
+    radial-gradient(44% 26% at 50% 4%, rgba(236, 232, 248, 0.7) 0%, rgba(236, 232, 248, 0) 100%),
+    linear-gradient(180deg, #b6c1ee 0%, #95a6e2 30%, #7a8bd2 62%, #6574c0 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+/* The sled fills about three quarters of the tile, so it reads as the product, not a thumbnail. */
+.gs-tile-art .gs-sled-svg {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  margin-bottom: 7px;
+}
+
+.gs-tile-art svg {
+  display: block;
+  width: 94%;
+  max-width: 210px;
+  height: auto;
+  margin: 0 auto;
+}
+
+/* The sled is the product: about three quarters of the tile's width, its contact shadow landing on
+   the drift's crest. */
+.gs-tile-art > .gs-sled-img {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 90%;
+  max-width: 240px;
+  height: 82%;
+  max-height: 124px;
+  object-fit: contain;
+  object-position: center bottom;
+  transition: opacity 200ms ease;
+}
+
+/* A sled you are still saving for keeps its colour, so you can see what you are working toward: the
+   dim falls on its stage (sky and drift) and only lightly on the sled, and the lock and the gifts it
+   still needs sit in its corner. Grey on grey read as broken, not as something to want. */
+.gs-tile.is-short .gs-tile-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: rgba(14, 20, 52, 0.5);
+  pointer-events: none;
+}
+
+.gs-tile.is-short .gs-tile-art > .gs-sled-img,
+.gs-tile.is-short .gs-tile-art > .gs-sled-svg {
+  filter: brightness(0.88);
+}
+
+.gs-tile-lockico {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 9px 0 7px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.88);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--text);
+  font-size: max(11px, 0.74em);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.gs-tile-lockico .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-tile-lockico .gs-tile-need-ico {
+  color: var(--gift);
+}
+
+.gs-tile-name {
+  padding: 6px 12px 0;
+  font-size: 0.9em;
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+/* Every foot holds the price chip's height, so the art (and its drift) lines up across a row. */
+.gs-tile-foot {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 26px;
+  padding: 0 12px;
+  color: rgba(245, 243, 255, 0.78);
+  font-size: 0.8em;
+  font-weight: 850;
+}
+
+.gs-tile-foot .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-tile-foot.is-on {
+  color: var(--text);
+}
+
+/* Within reach: the price is a filled marigold chip (ink type and gift glyph), so "you can buy this"
+   reads at a glance; one you are saving for keeps a quiet dim price under its lock tag. */
+.gs-tile-foot.is-price {
+  gap: 5px;
+  height: 24px;
+  margin: 2px 0 0 12px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.gs-tile-foot.is-price.is-short {
+  height: auto;
+  margin: 0;
+  padding: 0 12px;
+  background: none;
+  color: rgba(245, 243, 255, 0.78);
+  font-weight: 850;
+}
+
+.gs-tile-lock {
+  margin-right: 2px;
+}
+
+/* The one thing this sled does better, in off-white at 13 px or more, so tiles compare at a glance. */
+.gs-tile-trait {
+  display: block;
+  max-width: 100%;
+  padding: 0 12px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: max(13px, 0.8em);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Within reach is said by the filled marigold price chip; the card keeps its own rim. */
+@media (hover: hover) {
+  .gs-tile:not(.is-pick):hover::after {
+    box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
+  }
+}
+
+/* The shortfall is real information, not decoration: keep it at the readable secondary tone. */
+.gs-need {
+  color: rgba(245, 243, 255, 0.78);
+  font-size: 0.84em;
+  font-weight: 750;
+}
+
+.gs-sled-state {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 44px;
+  border-radius: var(--r-pill);
+  font-weight: 850;
+}
+
+@keyframes gs-shop-in {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-shop-stage.is-new > .gs-sled-svg,
+  .gs-shop-stage.is-new > .gs-sled-img {
+    animation-name: gs-fade-in;
+  }
+}
+
+/* Settings controls */
+
+.gs-set {
+  display: grid;
+  gap: 16px;
+}
+
+.gs-set-group {
+  display: grid;
+  gap: 2px;
+}
+
+.gs-set-h {
+  margin-bottom: 4px;
+}
+
+.gs-set-row {
+  display: grid;
+  grid-template-columns: 5.4em minmax(0, 1fr) 2.4em;
+  align-items: center;
+  gap: 14px;
+  min-height: 44px;
+}
+
+.gs-set-label {
+  font-weight: 750;
+}
+
+.gs-set-val {
+  color: var(--dim);
+  font-weight: 800;
+  text-align: right;
+}
+
+.gs-range {
+  --p: 50%;
+  width: 100%;
+  height: 44px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  touch-action: pan-y;
+}
+
+.gs-range:focus-visible {
+  outline: none;
+}
+
+.gs-range::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: linear-gradient(90deg, var(--text) var(--p), rgba(245, 243, 255, 0.16) var(--p));
+}
+
+.gs-range::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+  margin-top: -9px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  box-shadow: 0 0 0 4px var(--ink), 0 2px 8px rgba(5, 9, 30, 0.5);
+  -webkit-appearance: none;
+  appearance: none;
+  transition: transform 140ms var(--spring);
+}
+
+.gs-range:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+.gs-range:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--text);
+}
+
+.gs-range::-moz-range-track {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.16);
+}
+
+.gs-range::-moz-range-progress {
+  height: 4px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+}
+
+.gs-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  box-shadow: 0 0 0 4px var(--ink);
+}
+
+.gs-range:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--ink), 0 0 0 5px var(--text);
+}
+
+.gs-seg {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-seg-btn {
+  min-height: 44px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  color: var(--dim);
+  font-size: 0.9em;
+  font-weight: 800;
+  transition: transform 160ms var(--spring);
+}
+
+.gs-seg-btn:active {
+  transform: scale(0.97);
+}
+
+.gs-seg-btn[aria-pressed='true'] {
+  background: var(--text);
+  color: var(--ink);
+}
+
+.gs-seg-btn:focus-visible {
+  outline-offset: 1px;
+}
+
+.gs-set-cap {
+  margin-top: 6px;
+  color: var(--dim);
+  font-size: 0.8em;
+  font-weight: 650;
+}
+
+.gs-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  border-radius: var(--r-pill);
+  text-align: left;
+}
+
+.gs-switch {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.18);
+}
+
+.gs-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  transition: transform 220ms var(--spring);
+}
+
+.gs-switch-row[aria-checked='true'] .gs-switch {
+  background: var(--text);
+}
+
+.gs-switch-row[aria-checked='true'] .gs-switch::after {
+  background: var(--ink);
+  transform: translateX(20px);
+}
+
+/* ---------------------------------------------------------------- Loading */
+
+.gs-load {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 9;
+  height: 3px;
+  background: var(--text);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 220ms var(--out), opacity 320ms ease;
+}
+
+.gs-load.is-done {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------- Portrait layouts */
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-title {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto;
+    grid-template-areas:
+      'stats'
+      'main'
+      '.'
+      'daily'
+      'side'
+      'ride'
+      'bar';
+    row-gap: 14px;
+  }
+
+  .gs-title > .gs-title-scrim {
+    background:
+      linear-gradient(180deg, rgba(18, 25, 51, 0.55) 0%, rgba(18, 25, 51, 0) 32%),
+      linear-gradient(0deg, rgba(18, 25, 51, 0.72) 0%, rgba(18, 25, 51, 0.3) 46%, rgba(18, 25, 51, 0) 62%);
+  }
+
+  .gs-title.is-first {
+    grid-template-areas:
+      'stats'
+      'main'
+      '.'
+      'daily'
+      'side'
+      'ride'
+      'bar';
+  }
+
+  .gs-title.is-first .gs-t-main {
+    align-self: start;
+  }
+
+  /* Brand-new player: the logo keeps the top, the 3D scene owns everything from the sky down past
+     the rider (the 45 to 60% band stays empty), and a soft ink floor rises only under the hook line,
+     Ride and its goal line. */
+  /* The floor is measured from the bottom edge, where the hook line, Ride and its goal line are
+     anchored: the hook line sits on at least 80% ink whatever the phone's height. It starts just
+     under the sled (about 330 px up) and its hue travels with its alpha: the snow first deepens into
+     its own shade periwinkle, then into a saturated blue, then ink navy. A navy at half alpha laid
+     straight over lit snow mixed to a muddy grey-violet band. A faint static grain dithers the ramp
+     so it never steps. */
+  .gs-title.is-first > .gs-title-scrim {
+    --fb: env(safe-area-inset-bottom, 0px);
+    background:
+      linear-gradient(180deg, rgba(18, 25, 51, 0.5) 0%, rgba(18, 25, 51, 0.18) 13%, rgba(18, 25, 51, 0) 22%),
+      linear-gradient(
+        0deg,
+        rgba(14, 20, 46, 0.96) 0,
+        rgba(16, 22, 52, 0.92) calc(var(--fb) + 176px),
+        rgba(19, 27, 64, 0.84) calc(var(--fb) + 222px),
+        rgba(30, 42, 100, 0.72) calc(var(--fb) + 240px),
+        rgba(52, 70, 150, 0.54) calc(var(--fb) + 258px),
+        rgba(86, 106, 194, 0.36) calc(var(--fb) + 276px),
+        rgba(122, 144, 222, 0.2) calc(var(--fb) + 294px),
+        rgba(150, 171, 234, 0.08) calc(var(--fb) + 312px),
+        rgba(157, 178, 236, 0) calc(var(--fb) + 330px)
+      );
+  }
+
+  /* The hook, Ride and its goal line stand about 54 px higher than the bottom gutter, closing most
+     of the plain snow between the rider and the hook (the rider keeps the 45 to 60% band, C5): at
+     28 px a band of empty fog still sat between the sled and the hook. */
+  .gs-title.is-first {
+    padding-bottom: calc(var(--sb) + 54px);
+  }
+
+  .gs-title.is-first > .gs-title-scrim::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: calc(var(--fb) + 296px);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='96'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.62 0 0 0 0 0.66 0 0 0 0 0.9 0 0 0 0.5 -0.18'/%3E%3C/filter%3E%3Crect width='96' height='96' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 96px 96px;
+    opacity: 0.22;
+    -webkit-mask-image: linear-gradient(0deg, transparent 0, #000 40%, #000 70%, transparent 100%);
+    mask-image: linear-gradient(0deg, transparent 0, #000 40%, #000 70%, transparent 100%);
+    pointer-events: none;
+  }
+
+  .gs-title.is-first .gs-t-ride {
+    gap: 12px;
+  }
+
+  .gs-title.is-first .gs-t-ride .gs-tagline {
+    justify-self: center;
+    max-width: 24ch;
+    font-size: clamp(17px, 4.6vw, 21px);
+    text-align: center;
+  }
+
+  /* The logo stands on the screen's centre line, the same axis as the centred Ride stack below. */
+  .gs-t-main {
+    align-self: start;
+    justify-items: center;
+    text-align: center;
+  }
+
+  .gs-logo {
+    font-size: clamp(48px, 16vw, 92px);
+  }
+
+  .gs-t-ride {
+    justify-items: stretch;
+  }
+
+  .gs-ride {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .gs-ride .gs-btn-label {
+    flex: none;
+  }
+
+  .gs-ride-label {
+    justify-items: center;
+  }
+
+  .gs-t-goal {
+    padding-left: 0;
+    text-align: center;
+  }
+
+  /* Portrait reads top to bottom as one path: today's daily as a slim chip, then the mountain cards
+     directly above the Ride that rides them. The 45 to 60% height band stays open for the reel. */
+  .gs-t-side {
+    gap: 12px;
+    margin-bottom: 0;
+  }
+
+  .gs-t-daily {
+    justify-self: stretch;
+    width: auto;
+  }
+
+  .gs-daily {
+    order: -1;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 10px;
+    min-height: 52px;
+    padding: 4px 4px 4px 16px;
+    border-radius: var(--r-pill);
+  }
+
+  .gs-daily-ico,
+  .gs-daily-date {
+    display: none;
+  }
+
+  .gs-daily-txt {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .gs-daily-title {
+    white-space: nowrap;
+  }
+
+  .gs-daily-meta {
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .gs-daily-meta .gs-tag {
+    white-space: nowrap;
+  }
+
+  .gs-daily-best {
+    grid-auto-flow: column;
+    align-items: baseline;
+    gap: 5px;
+  }
+
+  /* The strip runs to the screen edge and the last visible card dissolves into it: a clean fade with
+     its lock still showing, never a hard cut through a word. */
+  .gs-mtns-wrap {
+    margin-right: calc(-1 * var(--sr));
+  }
+
+  .gs-mtns {
+    padding-right: var(--sr);
+  }
+
+  .gs-mtns-wrap.more-r .gs-mtns {
+    -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 96px), rgba(0, 0, 0, 0.35) calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(90deg, #000 calc(100% - 96px), rgba(0, 0, 0, 0.35) calc(100% - 36px), transparent 100%);
+  }
+
+  .gs-mtns-wrap.more-l .gs-mtns {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 40px);
+    mask-image: linear-gradient(90deg, transparent 0, #000 40px);
+  }
+
+  .gs-mtns-wrap.more-l.more-r .gs-mtns {
+    -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 calc(100% - 96px), rgba(0, 0, 0, 0.35) calc(100% - 36px), transparent 100%);
+    mask-image: linear-gradient(90deg, transparent 0, #000 40px, #000 calc(100% - 96px), rgba(0, 0, 0, 0.35) calc(100% - 36px), transparent 100%);
+  }
+
+  .gs-mtns-next {
+    right: calc(var(--sr) - 6px);
+  }
+
+  .gs-challenge {
+    max-width: none;
+  }
+
+  .gs-t-stats {
+    min-height: 40px;
+  }
+
+  .gs-t-bar {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .gs-t-bar > .gs-btn {
+    gap: 0.45em;
+    padding: 0 8px;
+  }
+
+  .gs-t-bar .gs-btn-sub {
+    display: none;
+  }
+
+  .gs-mtns {
+    grid-auto-columns: clamp(132px, 38vw, 184px);
+  }
+
+  .gs-pop {
+    left: 0;
+    width: 100%;
+  }
+
+  /* Distance and the mood chip share one row under the score, so the left column stays short. */
+  .gs-hud-sub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 5px;
+  }
+
+  .gs-hud-sub .gs-dist,
+  .gs-hud-sub .gs-mood {
+    margin-top: 0;
+  }
+
+  /* The whole top-centre stack (race row, combo, callouts, banner, reveal) sits in the top band, about
+     9 px clear of the score row (whose height follows the unit), and ends well above the horizon. A
+     portrait chase docks its banner one race row lower (the avalanche unit, above). */
+  .gs-hud-tc,
+  .gs-notices {
+    top: calc(var(--st) + 4.6 * var(--u) + 14px);
+  }
+
+  .gs-hud-bc {
+    bottom: calc(var(--sb) + 48px);
+    gap: 18px;
+  }
+
+  /* With touch, the bottom 22% belongs to the thumbs and the zone labels: the drift and slipstream
+     pills sit just above it (the avalanche unit hangs at the top, so they keep this spot in a chase). */
+  .gs-touch-mode .gs-hud-bc {
+    bottom: calc(22% + 14px);
+  }
+
+  /* Mid-run the gifts pill is a counter, not a button: about 30% smaller than the 44 px pause disc
+     beside it, so it never outweighs the race row. */
+  .gs-gifts {
+    gap: 5px;
+    height: 32px;
+    padding: 0 12px 0 9px;
+    font-size: 0.94em;
+  }
+
+  .gs-gifts .gs-i {
+    width: 1.2em;
+    height: 1.2em;
+  }
+
+  .gs-hint {
+    white-space: normal;
+    width: max-content;
+    max-width: calc(100vw - var(--sl) - var(--sr));
+  }
+
+  .gs-zone {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Your run's one line of stats sits right under the head and the race follows it (three rows), so
+     the score, your place and the order around you share the first view, offers or not, and nothing
+     but the folded Missions row waits below. Under the race, the stats row was cut by the footer's
+     fade and its labels peeked out like a clipping bug. A run with no stats worth naming has no
+     stats row at all, so the race sits straight under the head, and its tip comes last. */
+  .gs-res-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'head'
+      'run'
+      'race'
+      'mis'
+      'tip';
+    gap: 0;
+  }
+
+  .gs-res-body.no-race {
+    grid-template-rows: none;
+    grid-template-areas:
+      'head'
+      'run'
+      'mis'
+      'tip';
+  }
+
+  /* The fade and the More cue say there is more; a scrollbar line on the card edge only looks broken. */
+  .gs-res-body {
+    scrollbar-width: none;
+  }
+
+  .gs-res-body::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* One full-width column: the landscape space-between would stop the grid track short of the
+     card's right edge. */
+  .gs-res-actions {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-content: stretch;
+    gap: 8px;
+    padding-top: 12px;
+  }
+
+  /* The optional offers are one-line pills the full card width (two per row when there are more),
+     so the footer stays short, the missions stay visible and Run again keeps the thumb zone. */
+  .gs-res-extra {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+  }
+
+  .gs-res-opt {
+    width: 100%;
+    min-height: 44px;
+    padding: 0 12px;
+    gap: 7px;
+    font-size: 0.88em;
+  }
+
+  /* The video glyph says "ad" on its own here; the accessible name keeps the full "Watch Ad:". */
+  .gs-res-opt-pre {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* One big Run again across the card, with Home as a compact labelled glyph button beside it. */
+  .gs-res-main {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    margin-left: 0;
+  }
+
+  .gs-res-home {
+    flex-direction: column;
+    gap: 3px;
+    min-width: 62px;
+    padding: 6px 10px 5px;
+    font-size: max(11.5px, 0.8em);
+    font-weight: 850;
+    letter-spacing: 0.01em;
+  }
+
+  .gs-res-home .gs-i {
+    width: 1.6em;
+    height: 1.6em;
+  }
+
+  /* Challenge a Friend is a compact glyph button beside Home ("Challenge" under the link glyph, the
+     full name kept for readers), so Run again carries the footer on its own. */
+  .gs-res-main.has-chal {
+    grid-template-columns: auto auto minmax(0, 1fr);
+  }
+
+  .gs-res-main > .gs-res-chal {
+    flex-direction: column;
+    gap: 3px;
+    width: auto;
+    min-width: 62px;
+    min-height: 48px;
+    margin-right: 0;
+    padding: 6px 8px 5px;
+    font-size: max(11.5px, 0.8em);
+    font-weight: 850;
+    letter-spacing: 0.01em;
+  }
+
+  .gs-res-main > .gs-res-chal .gs-i {
+    width: 1.6em;
+    height: 1.6em;
+    color: var(--text);
+  }
+
+  .gs-res-chal-tail {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .gs-again {
+    min-width: 0;
+    justify-content: center;
+  }
+
+  .gs-again .gs-btn-label {
+    flex: none;
+  }
+
+  /* Contract C6: the card's top edge sits at 28% of the height (plus the top inset), so the band
+     above shows the live wreck the results camera frames there, under a light scrim only. The card
+     runs down to the bottom gutter, so Run again keeps the thumb zone. */
+  .gs-results {
+    grid-template-rows: calc(28% + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+    align-items: stretch;
+    padding-top: 0;
+    background: linear-gradient(180deg, rgba(8, 12, 30, 0.2) 0%, rgba(8, 12, 30, 0) 12%, rgba(8, 12, 30, 0) 21%, rgba(8, 12, 30, 0.5) 28%, rgba(8, 12, 30, 0.74) 100%);
+  }
+
+  .gs-res-card {
+    grid-row: 2;
+    align-self: stretch;
+    width: 100%;
+    height: 100%;
+  }
+
+  /* A compact head: the score with the place medal and the stamp beside it, then the crash line. */
+  .gs-res-body {
+    padding: 14px 18px 12px;
+  }
+
+  .gs-res-run,
+  .gs-res-race,
+  .gs-res-missions,
+  .gs-res-tip,
+  .gs-res-body.no-race .gs-res-missions {
+    margin-top: 14px;
+  }
+
+  .gs-res-score {
+    font-size: clamp(44px, 13vw, 58px);
+  }
+
+  .gs-res-scorerow {
+    flex-wrap: nowrap;
+    gap: 8px 14px;
+    margin-top: 2px;
+  }
+
+  /* The medal and the stamp share a line when the score leaves them room, and stack when not. */
+  .gs-res-side {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    min-width: 0;
+  }
+
+  .gs-res-place {
+    height: 40px;
+    padding: 0 14px 0 13px;
+    line-height: 40px;
+  }
+
+  .gs-res-place-n {
+    font-size: 1.55em;
+  }
+
+  .gs-res-newbest {
+    font-size: 0.82em;
+  }
+
+  .gs-res-sub {
+    margin-top: 6px;
+  }
+
+  .gs-res-subrow {
+    gap: 10px;
+    margin-top: 6px;
+  }
+
+  .gs-res-cause-ico {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+  }
+
+  .gs-res-cause + .gs-res-note {
+    margin-left: 36px;
+  }
+
+  .gs-ul {
+    grid-template-columns: 56px minmax(0, 1fr) auto;
+    padding: 4px;
+    gap: 10px;
+  }
+
+  .gs-ul-art {
+    height: 38px;
+  }
+
+  /* Your run: the four stats on one line, the gifts beside nothing else. */
+  .gs-res-stats {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, auto));
+    justify-content: space-between;
+    gap: 6px 10px;
+  }
+
+  .gs-res-stat dt {
+    font-size: max(11px, 0.64em);
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+  }
+
+  .gs-res-stat dd {
+    font-size: 1.08em;
+  }
+
+  .gs-res-stat.is-key dd {
+    font-size: 1.22em;
+  }
+
+  /* On a phone the tip comes last, under the missions row: the label over one or two lines. */
+  .gs-res-tip {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
+    padding: 10px 14px 11px;
+  }
+
+  .gs-res-tip-t {
+    font-size: 0.94em;
+  }
+
+  /* The reward beat sits in the head, under the crash line, so a phone never folds it away. */
+  .gs-res-gifts {
+    margin-top: 4px;
+  }
+
+  .gs-res-gifts-n {
+    font-size: 1.36em;
+  }
+
+  /* The race: the two places above you and the one below; Show All opens the rest. */
+  .gs-res-h {
+    margin-bottom: 7px;
+  }
+
+  .gs-standings,
+  .gs-standings.is-long {
+    gap: 4px;
+  }
+
+  .gs-st-row,
+  .gs-standings.is-long .gs-st-row {
+    height: 31px;
+  }
+
+  .gs-res-all {
+    margin-top: 2px;
+  }
+
+  /* Three rows: the next place, you and the one you beat. */
+  .gs-standings:not(.is-all) > .is-far-p {
+    display: none;
+  }
+
+  .gs-res-all.is-p-only {
+    display: inline-flex;
+  }
+
+  /* Missions always fold into a row of their own under the race: what this run changed, and a
+     chevron (the row's own styles sit with the results). */
+  .gs-res-mis-toggle {
+    display: flex;
+  }
+
+  .gs-res-mis-h {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .gs-res-missions:not(.is-open) > .gs-missions {
+    display: none;
+  }
+
+  .gs-res-missions.is-open > .gs-missions {
+    margin-top: 8px;
+  }
+
+  /* A short fade still says when the body runs on; a floating cue would sit on a row of the list. */
+  .gs-res-more {
+    display: none;
+  }
+
+  /* What the card's end cuts melts out over its last 44 px and is gone 8 px above the footer's
+     hairline, so nothing faint ever hugs the divider. Only the folded Missions row can reach it now
+     (the stats sit above the race), and a whole row fading out reads as a list that scrolls on. */
+  .gs-res-scroll.has-more .gs-res-body {
+    -webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 52px), rgba(0, 0, 0, 0.55) calc(100% - 30px), rgba(0, 0, 0, 0.12) calc(100% - 15px), transparent calc(100% - 8px));
+    mask-image: linear-gradient(180deg, #000 calc(100% - 52px), rgba(0, 0, 0, 0.55) calc(100% - 30px), rgba(0, 0, 0, 0.12) calc(100% - 15px), transparent calc(100% - 8px));
+  }
+
+  /* Focus scrolling keeps a control clear of that shorter fade. */
+  .gs-res-body {
+    scroll-padding-bottom: 52px;
+  }
+
+  .gs-res-actions {
+    padding: 10px 18px 14px;
+  }
+
+  .gs-pause-card {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-template-areas:
+      'title'
+      'resume'
+      'set'
+      'home'
+      'key';
+  }
+
+  .gs-pause-card > .gs-btn-soft {
+    justify-self: stretch;
+  }
+
+  .gs-sheetwrap {
+    place-items: end stretch;
+    padding: var(--st) 0 0;
+  }
+
+  .gs-sheet,
+  .gs-sheet-settings {
+    width: 100%;
+    max-height: 88dvh;
+    border-radius: var(--r-card) var(--r-card) 0 0;
+  }
+
+  .gs-sheet-body {
+    padding-bottom: calc(22px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .gs-sheetwrap.is-in .gs-sheet {
+    animation-name: gs-slideup;
+  }
+
+  .gs-shop {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .gs-shop-stage {
+    height: clamp(132px, 19vh, 176px);
+  }
+
+  .gs-shop-info {
+    gap: 10px;
+    padding: 12px 14px 14px;
+  }
+
+  .gs-stat-row {
+    grid-template-columns: 22px 6.4em minmax(0, 1fr) 3em;
+    gap: 8px;
+  }
+
+  .gs-shop-grid {
+    gap: 8px;
+  }
+
+  /* Narrow tiles stand a little taller, so the sled sits under the lock tag rather than behind it. */
+  .gs-tile-art {
+    min-height: 92px;
+    padding-bottom: 6px;
+  }
+
+  .gs-tile-art::before {
+    bottom: -40%;
+    height: 82%;
+  }
+
+  .gs-tile-art > .gs-sled-img {
+    width: 94%;
+    height: 70%;
+  }
+
+  .gs-tile-lockico {
+    top: 6px;
+    right: 6px;
+    height: 22px;
+    padding: 0 7px 0 5px;
+    gap: 3px;
+    font-size: max(11px, 0.68em);
+  }
+
+  .gs-tile-name {
+    padding: 4px 10px 0;
+    font-size: 0.84em;
+  }
+
+  .gs-tile-foot {
+    padding: 0 10px;
+    font-size: 0.76em;
+  }
+
+  /* The bonus keeps its 12 px and wraps in a narrow tile rather than losing its number. */
+  .gs-tile-trait {
+    padding: 0 10px;
+    font-size: max(12px, 0.84em);
+    line-height: 1.2;
+    white-space: normal;
+  }
+}
+
+/* Narrow phones in portrait (360 to 420 px wide) */
+
+@media (max-aspect-ratio: 1/1) and (max-width: 420px) {
+  /* Three menu buttons share one row: glyph above the label, the mission count as a corner badge. */
+  .gs-t-bar > .gs-btn {
+    flex-direction: column;
+    gap: 4px;
+    min-height: 56px;
+    padding: 7px 4px 6px;
+    font-size: 0.88em;
+  }
+
+  .gs-t-bar > .gs-btn .gs-count {
+    position: absolute;
+    top: 5px;
+    left: calc(50% + 0.75em);
+    font-size: max(11px, 0.7em);
+  }
+
+  .gs-t-bar > .gs-btn .gs-i {
+    width: 1.35em;
+    height: 1.35em;
+  }
+
+  /* One glyph height for all three: the wide sled is drawn larger so its deck reads as clearly. */
+  .gs-t-bar .gs-t-sleds .gs-i {
+    width: 1.75em;
+    height: 1.75em;
+    margin: -0.2em 0;
+  }
+
+  /* Drift and Slipstream pills must fit side by side inside the gutters. */
+  .gs-hud-bc {
+    gap: 8px;
+  }
+
+  .gs-drift {
+    gap: 7px;
+    padding: 0 12px;
+  }
+
+  .gs-draft {
+    gap: 6px;
+    padding: 0 11px 0 8px;
+  }
+
+  .gs-chev {
+    width: 12px;
+    margin-right: -4px;
+  }
+
+  /* No room for the keycap beside "Run again"; Space still works. */
+  .gs-again .gs-kbd {
+    display: none;
+  }
+
+  /* Three offers: two share the first row and the third takes the full width under them. */
+  .gs-res-opt:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Short landscape (CrazyGames iframe, phones held sideways) */
+
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .gs-logo {
+    font-size: clamp(40px, 12.5vmin, 70px);
+  }
+
+  .gs-title {
+    grid-template-columns: minmax(0, 47fr) minmax(0, 8fr) minmax(0, 45fr);
+    row-gap: 10px;
+  }
+
+  .gs-tagline {
+    font-size: 15px;
+  }
+
+  .gs-t-bar {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .gs-t-bar > .gs-btn {
+    gap: 0.45em;
+    padding: 0 13px 0 11px;
+  }
+
+  .gs-t-bar .gs-btn-sub {
+    display: none;
+  }
+
+  .gs-t-side {
+    --art-h: 50px;
+    margin-bottom: 4px;
+  }
+
+  /* Too narrow for the whole row: the cards stay wide enough for "Frostfang Glacier" on one line
+     (a full name beats an ellipsis). Strips of 330 px and more show whole cards instead. */
+  .gs-mtns {
+    grid-auto-columns: 152px;
+  }
+
+  .gs-mtn-body {
+    padding: 7px 11px 9px;
+  }
+
+  .gs-daily {
+    min-height: 54px;
+    padding: 7px 10px 7px 8px;
+  }
+
+  .gs-daily-ico {
+    width: 36px;
+    height: 36px;
+  }
+
+  .gs-ride {
+    min-height: 54px;
+  }
+
+  .gs-hud-bc {
+    bottom: calc(var(--sb) + 46px);
+  }
+
+  /* Short screens: the warn banner and the reveal card tighten so the stack stays above the rider. */
+  .gs-warn {
+    padding: 8px 22px 8px 8px;
+  }
+
+  .gs-warn-ico {
+    width: 40px;
+    height: 40px;
+  }
+
+  .gs-reveal {
+    gap: 5px;
+    padding: 9px 18px 12px;
+  }
+
+  .gs-reel {
+    --reel-fs: clamp(30px, 8.6vh, 44px);
+  }
+
+  .gs-pass {
+    min-height: 44px;
+    padding: 4px 20px 4px 6px;
+  }
+
+  .gs-pass-ico {
+    width: 34px;
+    height: 34px;
+  }
+
+  .gs-hint {
+    min-height: 42px;
+  }
+
+  .gs-res-body {
+    padding-top: 16px;
+  }
+
+  .gs-res-score {
+    font-size: clamp(44px, 12vmin, 64px);
+  }
+
+  .gs-res-gifts {
+    margin-top: 4px;
+  }
+
+  .gs-res-cause + .gs-res-note {
+    margin-left: 36px;
+  }
+
+  .gs-standings {
+    gap: 4px 10px;
+  }
+
+  .gs-st-row {
+    height: 30px;
+  }
+
+  .gs-res-place {
+    height: 44px;
+    padding: 0 16px 0 14px;
+    line-height: 44px;
+  }
+
+  .gs-res-place-n {
+    font-size: 1.6em;
+  }
+
+  .gs-res-sub {
+    margin-top: 8px;
+  }
+
+  .gs-res-cause-ico {
+    width: 26px;
+    height: 26px;
+    padding: 5px;
+  }
+
+  .gs-res-h {
+    margin-bottom: 8px;
+  }
+
+  .gs-res-h ~ .gs-res-h {
+    margin-top: 12px;
+  }
+
+  .gs-missions {
+    gap: 9px;
+  }
+
+  .gs-res-opt,
+  .gs-res-home {
+    min-height: 44px;
+  }
+
+  .gs-res-actions {
+    padding-top: 10px;
+    padding-bottom: 14px;
+  }
+
+  .gs-btn-xl {
+    min-height: 52px;
+  }
+
+  .gs-pause-card {
+    padding: 18px 22px;
+  }
+
+  .gs-sheet-head {
+    padding: 10px 14px 6px 12px;
+  }
+
+  .gs-shop {
+    gap: 12px;
+  }
+
+  .gs-shop-stage {
+    height: 92px;
+  }
+
+  .gs-shop-stage::before {
+    top: 9%;
+    left: 6%;
+    width: 20px;
+    height: 20px;
+    box-shadow: 0 0 0 6px rgba(255, 226, 190, 0.22), 0 0 30px 14px rgba(255, 190, 150, 0.4);
+  }
+
+  .gs-shop-stage > .gs-sled-svg,
+  .gs-shop-stage > .gs-sled-img {
+    height: 100%;
+  }
+
+  .gs-shop-info {
+    gap: 8px;
+    padding: 10px 14px 12px;
+  }
+
+  .gs-stats {
+    gap: 4px;
+  }
+
+  .gs-shop-act .gs-btn-lg,
+  .gs-shop-act .gs-sled-state {
+    min-height: 46px;
+  }
+
+  .gs-shop-grid {
+    gap: 8px;
+  }
+
+  .gs-tile {
+    padding-bottom: 8px;
+  }
+
+  .gs-tile-art {
+    min-height: 50px;
+  }
+
+  .gs-tile-name {
+    padding-top: 4px;
+    font-size: 0.86em;
+  }
+
+  /* Rows tighten, but sliders and segments keep their 44px touch targets. */
+  .gs-set {
+    gap: 10px;
+  }
+
+  .gs-set-group {
+    gap: 0;
+  }
+}
+
+/* ------------------------------------------------------------- Keyframes */
+
+@keyframes gs-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gs-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-rise-l {
+  from {
+    opacity: 0;
+    transform: translateX(-28px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-slideup {
+  from {
+    opacity: 0;
+    transform: translateY(56px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-stamp {
+  0% {
+    opacity: 0;
+    transform: rotate(var(--rot, -7deg)) scale(1.9);
+  }
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 1;
+    transform: rotate(var(--rot, -7deg)) scale(1);
+  }
+}
+
+@keyframes gs-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(var(--p, 0));
+  }
+}
+
+@keyframes gs-burst {
+  from {
+    opacity: 0.5;
+    transform: scale(0.4) rotate(-10deg);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.5) rotate(0deg);
+  }
+}
+
+@keyframes gs-pulse {
+  from {
+    opacity: 0.1;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes gs-blink {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.35;
+  }
+}
+
+/* Thumb ring for the touch hints: a press for holds, a side to side sway for steering. */
+@keyframes gs-press {
+  0%,
+  100% {
+    opacity: 0.7;
+    transform: scale(1);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(0.86);
+  }
+}
+
+@keyframes gs-sway {
+  0%,
+  100% {
+    transform: translateX(-14px);
+  }
+  50% {
+    transform: translateX(14px);
+  }
+}
+
+@keyframes gs-flash {
+  0% {
+    opacity: 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: every keyframe collapses to a fade, transforms snap instead of travelling. */
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-ui *,
+  .gs-ui *::before,
+  .gs-ui *::after {
+    transition-property: opacity !important;
+  }
+
+  .gs-zone-mark.has-ring::before {
+    animation: none;
+  }
+
+  /* HUD loops stop; a static emphasis takes their place (the avalanche unit's ring and the wall's
+     front keep the band's glow, which still climbs as the gap closes). */
+  .gs-combo.is-low .gs-combo-bar,
+  .gs-draft.is-full::after,
+  .gs-danger.is-urgent,
+  .gs-danger.is-urgent::after,
+  .gs-danger.is-urgent .gs-danger-you,
+  .gs-danger.is-urgent .gs-danger-you::after,
+  .gs-hud.is-chased .gs-av-mirror::before,
+  .gs-hud.is-chased .gs-danger-wall::after,
+  .gs-zone-edge {
+    animation: none;
+  }
+
+  .gs-combo.is-low .gs-combo-bar {
+    background: var(--tier2);
+  }
+
+  .gs-danger.is-urgent::after,
+  .gs-danger.is-urgent .gs-danger-you::after,
+  .gs-draft.is-full::after,
+  .gs-hud.is-chased .gs-av-mirror::before,
+  .gs-warn::after {
+    opacity: 1;
+  }
+
+  .gs-warn::after {
+    animation: none;
+  }
+
+  @keyframes gs-rise {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-rise-l {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-pop {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-slideup {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-stamp {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-grow {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes gs-burst {
+    from {
+      opacity: 0.45;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+}

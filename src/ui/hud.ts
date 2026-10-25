@@ -1,0 +1,1048 @@
+import type { GhostKind, HudModel, MirrorRect, ScreenRect, UIHandlers } from './contract';
+import { Mood, moodInfo } from '../sim/chaos';
+import { btn, Flag, h, Layer, sr, Txt, type Ctx } from './dom';
+import { kindCls, NBSP, ordinal } from './fmt';
+import { icon, type IconName } from './icons';
+import { bump, EASE_OUT, play, SPRING } from './motion';
+
+// In-run HUD. updateHud runs every frame: nodes are built once and each value is diffed, so a
+// frame where nothing changed touches no DOM at all. The top-centre stack is two tiers at most: the
+// race row (rank and next ghost, where passes flash), then the combo meter with the one trick callout
+// slot under it. During an avalanche chase the mirror unit hangs right under the race row, high in the
+// sky above the rider (the combo meter and callout slot move under it), so the horizon and the sun
+// stay open. On a phone held upright the chase's meter takes the rival pill's place in the race row
+// and the mirror hangs under it alone, so the stack stays short. The centre of the screen stays empty.
+
+const CHEVRONS = 5;
+/**
+ * The avalanche meter's scale: the wall's fill runs in proportion from the hazard disc (a gap this
+ * large or more) to the rider badge (caught), so the bar reads without the number. It starts 45 m back.
+ */
+const DANGER_FAR = 64;
+/** Under this gap the meter throbs and the mirror's rim pulses in a dark hazard tone. */
+const DANGER_URGENT = 25;
+/**
+ * Urgency bands for the avalanche unit: the mirror's ring and the wall's icy front pulse faster and
+ * glow brighter in each band down (style.css maps data-band to the beat), so 41 m and 15 m look
+ * different without reading the digits. Bands, not a continuous rate: a CSS animation whose duration
+ * changes every metre jumps phase every metre. From band 4 the rim turns dark, and in band 5 the
+ * bottom edge of the screen darkens a little as well.
+ */
+const DANGER_BANDS = [60, 44, 32, DANGER_URGENT, 12];
+const EDGE_BAND = 5;
+/** Metres between the meter's tick marks. */
+const TICK_M = 10;
+/** The mirror's rect outlives the chase by the world's fade-out, and goes out with the telegraph. */
+const MIRROR_HOLD_MS = 900;
+const WARN_HOLD_MS = 4500;
+/** How long a pass takes over the next-ghost pill. */
+const FLASH_MS = 1300;
+/** Being passed is quieter and shorter than a pass you make. */
+const LOST_MS = 1000;
+/**
+ * A pass waiting its turn (behind a perfect-landing stamp, or "passed you" behind a pass of yours)
+ * goes stale after this long: by then the standings have moved on.
+ */
+const PEND_MS = 2600;
+/** A pass flash this young when a stamp lands steps back and plays after it (one message per beat). */
+const REQUEUE_MS = 450;
+/** How long a place change shows its arrow and count after the numeral. */
+const DELTA_MS = 1300;
+/** A rank change shows once it has held this long; rank ticks animate at most this often. */
+const RANK_SETTLE_MS = 180;
+const TICK_GAP_MS = 500;
+/** A gained place turns its numeral mint once the pill's flash thins, for this long (the colour snaps). */
+const GAIN_DELAY_MS = 200;
+const GAIN_MS = 800;
+
+/** First place wears a crown (same 24 px grid and fill style as the icon set). */
+const CROWN_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M3.2 7.6a1 1 0 0 1 1.6-.9l3.6 3 2.8-5a1 1 0 0 1 1.7 0l2.8 5 3.6-3a1 1 0 0 1 1.6.9l-1.5 9.2a1 1 0 0 1-1 .8H5.7a1 1 0 0 1-1-.8z"/><rect fill="currentColor" x="5" y="19" width="14" height="2.2" rx="1.1"/></svg>';
+
+/** Your own best run is never named by your name (contract C7): it is "Your best", in gold-white. */
+function shownName(name: string, kind: GhostKind): string {
+  return kind === 'you' ? 'Your best' : name;
+}
+
+/**
+ * Each mood's gameplay modifier as an icon and one short line: the reveal card and the HUD chip.
+ * `key` is the part of the line the reveal sets in the mood's accent (the number that changes play).
+ */
+export const MOOD_MOD: Record<Mood, { icon: IconName; text: string; key: string }> = {
+  [Mood.None]: { icon: 'snowflake', text: 'A clean run', key: '' },
+  [Mood.Blizzard]: { icon: 'slip', text: 'Drafting 60% stronger', key: '60%' },
+  [Mood.Lantern]: { icon: 'timer', text: 'Combos last 50% longer', key: '50%' },
+  [Mood.GlassIce]: { icon: 'bolt', text: 'Drifts charge 60% faster', key: '60%' },
+  [Mood.Comet]: { icon: 'feather', text: 'Low gravity, huge air', key: 'huge air' },
+  [Mood.Haunted]: { icon: 'ghostPlus', text: '4 extra ghosts, passes pay double', key: 'double' },
+  [Mood.Powder]: { icon: 'gift', text: 'Gifts worth double', key: 'double' },
+};
+
+/** Moods with a dark sky: navy pills there get a moon-blue hairline so their edges hold (style.css). */
+const NIGHT = new Set<Mood>([Mood.Lantern, Mood.Comet, Mood.Haunted]);
+
+interface PendingPass {
+  name: string;
+  kind: GhostKind;
+  passed: boolean;
+  at: number;
+}
+
+export class Hud {
+  readonly layer: Layer;
+  readonly el: HTMLElement;
+  readonly scoreEl: HTMLElement;
+  readonly moodEl: HTMLElement;
+  readonly comboEl: HTMLElement;
+  /** Fixed slot under the combo meter where Fx lays out trick callouts. */
+  readonly calloutSlot: HTMLElement;
+  /** Called whenever something visible changed size or came and went (the occluder cache). */
+  onLayout: () => void = () => undefined;
+  /** True while the perfect-landing stamp is up (Fx): a pass flash waits behind it. */
+  stampUp: () => boolean = () => false;
+  /** A pass of yours starts flashing (now or after waiting its turn): minor callout lines step out. */
+  onPassFlash: () => void = () => undefined;
+
+  private readonly tl: HTMLElement;
+  private readonly tr: HTMLElement;
+  private readonly score: Txt;
+  private readonly dist: Txt;
+  private readonly moodIco: HTMLElement;
+  private readonly moodTxt: Txt;
+  private readonly moodOn: Flag;
+  private readonly giftsEl: HTMLElement;
+  private readonly gifts: Txt;
+  private readonly race: HTMLElement;
+  private readonly placeEl: HTMLElement;
+  private readonly placeOn: Flag;
+  private readonly placeFlash: HTMLElement;
+  private readonly placeFirst: Flag;
+  /**
+   * A place change: a small arrow and the count after the numeral for a moment, in the "of 7" slot
+   * (same width). Mint and pointing up on a gain, dim and pointing down on a loss.
+   */
+  private readonly placeUp: Flag;
+  private readonly placeDown: Flag;
+  private readonly placeDelta: Txt;
+  private readonly placeDeltaEl: HTMLElement;
+  private deltaTimer = 0;
+  /** Places gained (positive) or lost (negative) while the arrow is up: a second change adds to it. */
+  private deltaSum = 0;
+  private readonly rankEl: HTMLElement;
+  private gainTimer = 0;
+  private readonly rankNum: Txt;
+  private readonly rankSuf: Txt;
+  private readonly of: Txt;
+  private readonly nextEl: HTMLElement;
+  private readonly nextOn: Flag;
+  private readonly nextRing: HTMLElement;
+  private readonly nextTrail: HTMLElement;
+  private readonly nextK: Txt;
+  private readonly nextName: Txt;
+  private readonly nextGap: Txt;
+  private readonly nextWord: Txt;
+  private readonly nextAhead: Flag;
+  private readonly nextBehind: Flag;
+  private readonly nextEven: Flag;
+  private readonly nextFlash: Flag;
+  private readonly nextLost: Flag;
+  /** When the flash on the pill started, and the passes waiting their turn (oldest first). */
+  private flashAt = 0;
+  private readonly pend: PendingPass[] = [];
+  private readonly comboOn: Flag;
+  /** The total shows whenever the combo is up: a timer bar with no number over it read as empty. */
+  private readonly comboTotal: Flag;
+  private readonly comboRow: HTMLElement;
+  private readonly comboLow: Flag;
+  private readonly comboPts: Txt;
+  private readonly multEl: HTMLElement;
+  private readonly mult: Txt;
+  /** At x1 the multiplier chip stays out: it would only say "nothing multiplied yet". */
+  private readonly multX1: Flag;
+  /** A banked total is holding over the combo meter: the new total waits under it. */
+  private readonly banking: Flag;
+  private bankTimer = 0;
+  private readonly comboBar: HTMLElement;
+  private readonly driftEl: HTMLElement;
+  private readonly driftOn: Flag;
+  private readonly draftEl: HTMLElement;
+  private readonly draftOn: Flag;
+  private readonly draftFull: Flag;
+  private readonly chevs: Flag[] = [];
+  private readonly dangerEl: HTMLElement;
+  private readonly dangerOn: Flag;
+  private readonly dangerUrgent: Flag;
+  private readonly dangerGap: Txt;
+  private readonly dangerGapEl: HTMLElement;
+  private readonly wall: HTMLElement;
+  private readonly chased: Flag;
+  /** The last few metres: the bottom edge of the screen darkens a little (opacity only). */
+  private readonly edgeOn: Flag;
+  /**
+   * The avalanche unit: the mirror box (the world draws the inset into its rect) with its label tab
+   * on the top edge, and the meter set into its bottom edge (in portrait the meter rides in the race
+   * row instead).
+   */
+  private readonly avEl: HTMLElement;
+  private readonly mirrorBox: HTMLElement;
+  private readonly avDodge: Flag;
+  private lastBand = -1;
+  private readonly live: HTMLElement;
+
+  private lastMood = -1;
+  private lastGifts = -1;
+  private lastMult = 0;
+  private lastRank = -1;
+  private lastOf = -1;
+  private wantRank = -1;
+  private wantAt = 0;
+  private tickAt = 0;
+  private wantName = '';
+  private wantNameAt = 0;
+  /** Show the target's name at once (after a pass flash hands the pill back). */
+  private nameNow = false;
+  private lastGap = Number.NaN;
+  /** 1 the ghost is ahead, -1 behind, 0 neck and neck. */
+  private lastSide = 2;
+  private lastKind: GhostKind | null = null;
+  private lastTimer = -1;
+  private lastTier = -1;
+  private lastChev = -1;
+  private lastDanger = -1;
+  private lastScoreLen = 0;
+  private lastGapLen = 0;
+  private revealing = false;
+  private moodWanted = false;
+  private flashUntil = 0;
+  /** Phone held upright: the chase's meter rides in the race row (set on resize). */
+  private portrait = false;
+  /** Avalanche meter width (contract C2 with the rear-view mirror), set on resize. */
+  private meterW = 0;
+  /** The wall's front edge travels between these (px from the meter's left): the hazard disc's edge and the rider badge's. */
+  private wallMin = 30;
+  private wallMax = 200;
+  /** The rider badge's left edge. */
+  private badgeL = 200;
+  /** The gap number's size: its width is estimated from it and the digit count, never read from layout. */
+  private gapF = 22;
+  private wallX = Number.NaN;
+  private gapX = Number.NaN;
+  private dangerOffAt = -1e9;
+  private warnedAt = -1e9;
+  private scoreAt: { x: number; y: number } | null = null;
+  private comboAt: { x: number; y: number } | null = null;
+  /**
+   * Layout read in measure() (after the browser's own layout pass, never forced): the mirror's rect
+   * for the world, the unit's box for the rider check, and the room the perfect-landing stamp has.
+   */
+  private readonly mirror: MirrorRect = { x: 0, y: 0, w: 0, h: 0 };
+  private readonly avBox: ScreenRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
+  private readonly room = { left: 0, right: 0, slotTop: 0, measured: false };
+
+  constructor(parent: HTMLElement, ctx: Ctx, hd: UIHandlers) {
+    this.el = h('div', 'gs-hud');
+    this.layer = new Layer(this.el, 200);
+
+    // Top left: score, then distance and the mood chip (side by side on phones in portrait).
+    this.scoreEl = h('div', 'gs-score gs-num');
+    this.score = new Txt(this.scoreEl);
+    const distEl = h('div', 'gs-dist gs-num');
+    this.dist = new Txt(distEl);
+    this.moodIco = h('span', 'gs-mood-ico');
+    const moodName = h('span', 'gs-mood-name');
+    this.moodTxt = new Txt(moodName);
+    this.moodEl = h('div', 'gs-mood gs-pill', this.moodIco, moodName);
+    this.moodOn = new Flag(this.moodEl);
+    this.tl = h('div', 'gs-hud-tl', sr('Score'), this.scoreEl, h('div', 'gs-hud-sub', distEl, this.moodEl));
+
+    // Top right: gifts, pause.
+    const giftNum = h('span', 'gs-num');
+    this.gifts = new Txt(giftNum);
+    this.giftsEl = h('div', 'gs-gifts gs-panel gs-pill', icon('gift'), giftNum, sr(' gifts'));
+    // The pause button never keeps focus, even after a keyboard press: on resume, focus must not come
+    // back to it, or Space (the action key) would press it again instead of reaching the game.
+    const pause: HTMLButtonElement = btn(ctx, {
+      cls: 'gs-btn-soft gs-btn-round gs-pausebtn',
+      icon: 'pause',
+      aria: 'Pause',
+      onClick: () => {
+        pause.blur();
+        hd.onPause(true);
+      },
+    });
+    this.tr = h('div', 'gs-hud-tr', this.giftsEl, pause);
+
+    // Tier one: race position and the next ghost. A pass flashes here (mint pulse, rank flip, the
+    // passed ghost's name for a moment) instead of taking a banner of its own. The place is a numeral
+    // the size of the score with a small suffix ("5th"): in a ghost race your place is the first number
+    // the eye should read. First place wears a crown.
+    const numEl = h('span', 'gs-place-num');
+    const sufEl = h('span', 'gs-place-suf');
+    this.rankEl = h('span', 'gs-place-n gs-num', numEl, sufEl);
+    const ofEl = h('span', 'gs-place-of gs-num');
+    this.rankNum = new Txt(numEl);
+    this.rankSuf = new Txt(sufEl);
+    this.of = new Txt(ofEl);
+    this.placeFlash = h('span', 'gs-place-flash');
+    const crown = h('span', 'gs-i gs-place-crown');
+    crown.innerHTML = CROWN_SVG;
+    // A place change reads as a small arrow and the count right after the numeral for a moment: a mint
+    // up-arrow on a gain ("5th ▲2"), a dim down-arrow on a loss. It shares one grid cell with "of 7",
+    // which steps out for it, so the race row never changes width. Never a sign: "5th −2" read as
+    // losing places in the middle of a pass, and a badge on the pill's corner read as a dropdown.
+    const deltaN = h('span', 'gs-place-dn');
+    this.placeDelta = new Txt(deltaN);
+    this.placeDeltaEl = h('span', 'gs-place-delta gs-num', icon('tri', 'gs-place-dir'), deltaN);
+    this.placeDeltaEl.setAttribute('aria-hidden', 'true');
+    this.placeEl = h('div', 'gs-place gs-panel gs-pill', this.placeFlash, crown, h('span', 'gs-place-nwrap', this.rankEl), h('span', 'gs-place-tail', ofEl, this.placeDeltaEl));
+    this.placeOn = new Flag(this.placeEl);
+    this.placeFirst = new Flag(this.placeEl, 'is-first');
+    this.placeUp = new Flag(this.placeEl, 'is-up');
+    this.placeDown = new Flag(this.placeEl, 'is-down');
+
+    // The gap reads as a positive number of metres with a word (contract C12): "6 m ahead" for a ghost
+    // in front of you, on a solid chip in its kind colour (a target), and "6 m behind" for one you lead,
+    // the same colour as an outline. The word is a step smaller than the number. Never a bare sign, a
+    // lone triangle or a chevron: "▲ 4 m" and "^ +7 m" told direction in two different ways.
+    const kEl = h('span', 'gs-next-k');
+    const nameEl = h('span', 'gs-next-name');
+    nameEl.translate = false;
+    const gapNum = h('span', 'gs-next-n gs-num');
+    const gapWord = h('span', 'gs-next-w');
+    const gapEl = h('span', 'gs-next-gap', gapNum, h('span', 'gs-next-u', NBSP + 'm '), gapWord);
+    this.nextK = new Txt(kEl);
+    this.nextName = new Txt(nameEl);
+    this.nextGap = new Txt(gapNum);
+    this.nextWord = new Txt(gapWord);
+    this.nextTrail = icon('ghost', 'gs-next-trail');
+    this.nextRing = h('span', 'gs-ring-pulse');
+    // Being passed reads as a quiet sentence: "<name> passed you" ("Your best passed you" for your own
+    // run), the name in off-white (rose for the grudge, gold-white for your best), smaller than a pass
+    // you make, with no glow, and only for about a second.
+    const tailEl = h('span', 'gs-next-tail', 'passed you');
+    this.nextEl = h('div', 'gs-next gs-pill k-ghost', this.nextRing, h('span', 'gs-next-ico', icon('ghost'), this.nextTrail), kEl, nameEl, tailEl, gapEl);
+    this.nextOn = new Flag(this.nextEl);
+    this.nextAhead = new Flag(this.nextEl, 'is-ahead');
+    this.nextBehind = new Flag(this.nextEl, 'is-behind');
+    this.nextEven = new Flag(this.nextEl, 'is-even');
+    this.nextFlash = new Flag(this.nextEl, 'is-flash');
+    this.nextLost = new Flag(this.nextEl, 'is-lost');
+    this.race = h('div', 'gs-race', this.placeEl, this.nextEl);
+
+    // Tier two: the combo meter, with the trick callout slot directly under it.
+    const ptsEl = h('span', 'gs-combo-pts gs-num');
+    this.comboPts = new Txt(ptsEl);
+    this.multEl = h('span', 'gs-combo-mult gs-num');
+    this.mult = new Txt(this.multEl);
+    this.multX1 = new Flag(this.multEl, 'is-x1');
+    // The timer drains left to right over a dark track, so what is left reads at a glance.
+    this.comboBar = h('div', 'gs-combo-bar');
+    this.comboRow = h('div', 'gs-combo-row', ptsEl, this.multEl);
+    this.comboEl = h('div', 'gs-combo', this.comboRow, h('div', 'gs-combo-track', this.comboBar));
+    this.comboOn = new Flag(this.comboEl);
+    this.comboTotal = new Flag(this.comboEl, 'has-total');
+    this.comboLow = new Flag(this.comboEl, 'is-low');
+    this.banking = new Flag(this.comboEl, 'is-banking');
+    this.calloutSlot = h('div', 'gs-callouts');
+    this.calloutSlot.setAttribute('aria-hidden', 'true');
+
+    // Avalanche unit (contract C2 with the WebGL rear-view mirror): it hangs top-centre right under
+    // the race row in both orientations, in the open sky above the rider, with the combo meter and the
+    // callout line moving under it for the chase. One compact block: an AVALANCHE tab on the mirror's
+    // top edge (the rival name's size), and the meter set into its bottom edge. The mirror box is empty:
+    // the world draws the inset into its rect (mirrorRect()). The meter is a proportional bar: from the
+    // hazard (an ink disc at the left end) the wall, a dark fill with an icy front, advances over a
+    // lighter ticked track toward the rider badge at the right end, so a full bar plainly means caught.
+    // The gap in metres, the combo total's size, rides in the open track between the wall and the
+    // rider, or on the wall just behind its front once the track is too short for it. On a phone held
+    // upright the meter takes the rival pill's place in the race row (fit()). Screen readers get the
+    // appearance and the urgent moment through the live region, not a stream of distances.
+    const gapN = h('span', 'gs-danger-n');
+    this.dangerGapEl = h('span', 'gs-danger-gap gs-num', gapN, h('span', 'gs-danger-m', 'm'));
+    this.dangerGap = new Txt(gapN);
+    this.wall = h('div', 'gs-danger-wall');
+    this.dangerEl = h('div', 'gs-danger', h('div', 'gs-danger-clip', this.wall), icon('avalanche', 'gs-danger-ico'), this.dangerGapEl, h('span', 'gs-danger-you', icon('rider')));
+    // Hidden on the meter itself, not only through the unit: in portrait fit() moves it into the race
+    // row, outside the unit, where it would read out a bare "34 m" that changes every metre.
+    this.dangerEl.setAttribute('aria-hidden', 'true');
+    this.dangerOn = new Flag(this.dangerEl);
+    this.dangerUrgent = new Flag(this.dangerEl, 'is-urgent');
+    const avLabel = h('div', 'gs-av-label', icon('avalanche'), h('span', 'gs-av-label-t', 'Avalanche'));
+    this.mirrorBox = h('div', 'gs-av-mirror', avLabel);
+    this.avEl = h('div', 'gs-av', this.mirrorBox, this.dangerEl);
+    this.avEl.setAttribute('aria-hidden', 'true');
+    this.avDodge = new Flag(this.avEl, 'is-dodge');
+    const tc = h('div', 'gs-hud-tc', this.race, this.comboEl, this.calloutSlot, this.avEl);
+    const edge = h('div', 'gs-av-edge');
+    this.edgeOn = new Flag(edge);
+
+    // Bottom centre: drift tier pips and slipstream chevrons share one stable row.
+    const pips = h('span', 'gs-pips', h('i', 'gs-pip'), h('i', 'gs-pip'), h('i', 'gs-pip'));
+    this.driftEl = h('div', 'gs-drift gs-panel gs-pill', h('span', 'gs-drift-l', 'Drift'), pips);
+    this.driftOn = new Flag(this.driftEl);
+    const chevRow = h('span', 'gs-chevs');
+    for (let i = 0; i < CHEVRONS; i++) {
+      const c = icon('chevR', 'gs-chev');
+      chevRow.append(c);
+      this.chevs.push(new Flag(c));
+    }
+    this.draftEl = h('div', 'gs-draft gs-panel gs-pill', chevRow, h('span', 'gs-draft-l', 'Slipstream'));
+    this.draftOn = new Flag(this.draftEl);
+    this.draftFull = new Flag(this.draftEl, 'is-full');
+    const bc = h('div', 'gs-hud-bc', this.driftEl, this.draftEl);
+
+    this.chased = new Flag(this.el, 'is-chased');
+
+    this.live = h('div', 'gs-sr');
+    this.live.setAttribute('role', 'status');
+    this.live.setAttribute('aria-live', 'polite');
+
+    this.el.append(edge, this.tl, this.tr, tc, bc, this.live);
+    parent.append(this.el);
+    window.addEventListener('resize', () => this.fit());
+    this.fit();
+  }
+
+  show(): void {
+    if (this.layer.show()) {
+      this.lastGifts = -1;
+      this.lastMult = 0;
+      this.lastRank = -1;
+      this.wantRank = -1;
+      this.lastMood = -1;
+      this.flashUntil = 0;
+      this.pend.length = 0;
+      this.nextFlash.set(false);
+      this.fit();
+    }
+  }
+
+  hide(): void {
+    this.layer.hide();
+    this.revealing = false;
+    window.clearTimeout(this.deltaTimer);
+    this.deltaSum = 0;
+    this.placeUp.set(false);
+    this.placeDown.set(false);
+    this.pend.length = 0;
+    this.el.parentElement?.classList.remove('gs-night', 'gs-chase-p');
+    this.onLayout();
+  }
+
+  /** True while a pass you made flashes in the race row: minor callout lines stay out of the stack. */
+  get passing(): boolean {
+    return this.nextFlash.on && !this.nextLost.on && this.flashUntil > performance.now();
+  }
+
+  /** True while the Slipstream pill is up: it names the slipstream, so no callout repeats it. */
+  get drafting(): boolean {
+    return this.draftOn.on;
+  }
+
+  /** True while the combo total is printed over the timer (not waiting under a banked total). */
+  get totalShown(): boolean {
+    return this.comboOn.on && this.comboTotal.on && !this.banking.on;
+  }
+
+  /** True while an avalanche chases you: the callout slot keeps to one line above the mirror. */
+  get isChased(): boolean {
+    return this.chased.on;
+  }
+
+  /**
+   * The mirror's rect in CSS px, top-left origin, while an avalanche chases you; null otherwise
+   * (contract C2). Read from the last layout, so it costs nothing per frame. The object is reused.
+   * The mirror sits in its slot from the chase's first frame, its nameplate and meter with it
+   * (contract C9): there is no opening enlargement.
+   */
+  mirrorRect(): MirrorRect | null {
+    // The rect is out from the avalanche's telegraph (the world may start fading the inset in on the
+    // chase's first frame, before this frame's HUD update) until the world's fade-out after the chase,
+    // so the inset never flashes at the renderer's fallback spot. The unit never moves in between.
+    const now = performance.now();
+    const live = this.dangerOn.on || now - this.dangerOffAt < MIRROR_HOLD_MS || now - this.warnedAt < WARN_HOLD_MS;
+    if (!live || !this.layer.open || this.mirror.w <= 0) return null;
+    return this.mirror;
+  }
+
+  /** Low tier draws no mirror picture: the avalanche unit drops the empty glass and keeps chip and meter. */
+  setMirror(on: boolean): void {
+    if (this.el.classList.contains('gs-no-mirror') !== on) return;
+    this.el.classList.toggle('gs-no-mirror', !on);
+    this.onLayout();
+  }
+
+  /** The avalanche was telegraphed: the chase (and the mirror) starts in about three seconds. */
+  expectChase(): void {
+    this.warnedAt = performance.now();
+  }
+
+  /**
+   * The rider's projected position (about head height). The unit sits well above the rider by
+   * layout; if a big air ever lifts the rider up under it anyway, the meter and its tag step back.
+   */
+  setRider(x: number, y: number): void {
+    const b = this.avBox;
+    this.avDodge.set(this.dangerOn.on && y - 34 < b.y1 + 6 && x > b.x0 - 28 && x < b.x1 + 28);
+  }
+
+  /**
+   * Room for the perfect-landing stamp: the safe-area edges, and the lowest top-centre HUD edge it
+   * must stay under (one callout line under the combo meter, or the avalanche unit and its tag
+   * during a chase). Null before the first layout read.
+   */
+  stampRoom(): { left: number; right: number; top: number } | null {
+    const r = this.room;
+    if (!r.measured) return null;
+    const line = 1.68 * this.hudPx() + 2;
+    // In a chase the unit hangs right under the race row, and the combo and callout line under it.
+    const top = this.chased.on ? Math.max(this.avBox.y1 + 10, r.slotTop + line + 8) : r.slotTop + 2 * line + 8;
+    return { left: r.left, right: r.right, top };
+  }
+
+  /** The overlay's base type size (--u on .gs-ui in style.css): the stamp and the menus use it. */
+  unitPx(): number {
+    return Math.max(14, Math.min(18, 8 + 0.009 * Math.min(window.innerWidth, window.innerHeight)));
+  }
+
+  /**
+   * The HUD's own type size (--u on .gs-hud and .gs-notices in style.css). On wide screens it grows
+   * with the height: at 1280 x 720 the base size set "PASSED" and the mood chip at 10 to 11 px.
+   */
+  hudPx(): number {
+    const w = window.innerWidth;
+    const hh = window.innerHeight;
+    return w >= hh ? Math.max(14, Math.min(22, 7.5 + 0.0125 * hh)) : this.unitPx();
+  }
+
+  /** While the reveal card is up, the mood chip waits so the card can collapse into it. */
+  setRevealing(on: boolean): void {
+    this.revealing = on;
+    if (this.moodOn.set(this.moodWanted && !on)) this.onLayout();
+    if (!on && this.moodWanted) play(this.moodEl, [{ transform: 'scale(0.6)', opacity: 0 }, { transform: 'scale(1.12)', opacity: 1, offset: 0.6 }, { transform: 'scale(1)', opacity: 1 }], { duration: 320, easing: 'ease-out' });
+  }
+
+  get moodVisibleSoon(): boolean {
+    return this.moodWanted && this.layer.open;
+  }
+
+  bumpScore(): void {
+    bump(this.scoreEl, 1.14, 300);
+  }
+
+  /**
+   * A banked combo's number holds where the combo meter is for `ms` before it flies to the score: a
+   * new combo's total waits under it for that long, so the two numbers never print over each other.
+   */
+  holdComboRow(ms: number): void {
+    this.banking.set(true);
+    window.clearTimeout(this.bankTimer);
+    this.bankTimer = window.setTimeout(() => this.banking.set(false), ms);
+  }
+
+  /**
+   * Polite screen-reader announcement. A live region only speaks when its text changes, so the same
+   * words twice in a row (a second "Avalanche close behind") get a trailing no-break space.
+   */
+  say(text: string): void {
+    this.live.textContent = this.live.textContent === text ? text + NBSP : text;
+  }
+
+  /**
+   * A ghost overtake, flashed inside the race row: the next-ghost pill shows "Passed <name>" with a
+   * mint pulse, or, quieter and shorter, "<name> passed you" (the name in off-white or its kind
+   * colour, no glow), and then hands back to the next target. The rank pill ticks on its own when the
+   * standings change. Your own best run is "Your best" here too (contract C7): "Passed Your best",
+   * "Your best passed you". One message per beat: a pass waits while the perfect-landing stamp is up,
+   * and "passed you" also waits while a pass of yours flashes; each then plays in turn (a pass that
+   * waited too long is stale and dropped). Screen readers hear it at once.
+   */
+  flashPass(name: string, kind: GhostKind, passed: boolean): void {
+    const shown = shownName(name, kind);
+    this.say(passed ? (kind === 'you' ? 'Passed your best' : `Passed ${name}`) : `${shown} passed you`);
+    const now = performance.now();
+    if (this.stampUp() || (!passed && this.passing)) {
+      this.queuePass({ name, kind, passed, at: now });
+      return;
+    }
+    this.showPass(name, kind, passed, now);
+  }
+
+  /**
+   * The perfect-landing stamp just landed and takes the moment: a pass flash that only just started
+   * (the same beat) steps back and plays after the stamp; an older one has had its moment and ends.
+   */
+  yieldToStamp(): void {
+    const now = performance.now();
+    if (!this.nextFlash.on || this.flashUntil <= now) return;
+    if (now - this.flashAt < REQUEUE_MS) {
+      const g = { name: this.nextName.el.textContent ?? '', kind: this.lastKind ?? 'pool', passed: !this.nextLost.on, at: now };
+      // The pill holds the shown name ("Your best"), which shownName() keeps as it is.
+      this.pend.unshift(g);
+      if (this.pend.length > 2) this.pend.length = 2;
+    }
+    this.flashUntil = now;
+  }
+
+  /** A pass waits its turn. A newer event about the same ghost replaces its older one; two at most. */
+  private queuePass(p: PendingPass): void {
+    const i = this.pend.findIndex((q) => q.name === p.name);
+    if (i >= 0) this.pend.splice(i, 1);
+    this.pend.push(p);
+    if (this.pend.length > 2) this.pend.shift();
+  }
+
+  private showPass(name: string, kind: GhostKind, passed: boolean, now: number): void {
+    const shown = shownName(name, kind);
+    this.flashAt = now;
+    this.flashUntil = now + (passed ? FLASH_MS : LOST_MS);
+    this.nextFlash.set(true);
+    this.nextLost.set(!passed);
+    this.nextK.str(passed ? 'Passed' : '');
+    this.nextName.str(shown);
+    this.setKind(kind);
+    this.nextOn.set(true);
+    if (passed) {
+      play(this.nextEl, [{ transform: 'scale(0.86)' }, { transform: 'scale(1.08)', offset: 0.5 }, { transform: 'scale(1)' }], { duration: 340, easing: 'ease-out' });
+      play(this.nextRing, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.18, 1.5)' }], { duration: 620, easing: EASE_OUT });
+      // The ghost you passed falls behind: it slips out of its icon to the left (clipped there, so
+      // it never floats loose beside the pill).
+      play(this.nextTrail, [{ opacity: 0.9, transform: 'translateX(0) scale(1)' }, { opacity: 0, transform: 'translateX(-18px) scale(0.7)' }], { duration: 700, delay: 80, easing: EASE_OUT, fill: 'both' });
+      this.onPassFlash();
+    } else {
+      // A small settle, no punch, shake or ring: losing a place is news, not a celebration.
+      play(this.nextEl, [{ opacity: 0.75, transform: 'translateY(-3px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
+    }
+    this.onLayout();
+  }
+
+  private setKind(kind: GhostKind): void {
+    if (kind === this.lastKind) return;
+    this.nextEl.classList.remove('k-ghost', 'k-grudge', 'k-you');
+    this.nextEl.classList.add(kindCls(kind));
+    this.lastKind = kind;
+  }
+
+  /**
+   * Avalanche unit size (contract C2, shared with the mirror in src/render/world.ts). Landscape: W
+   * wide (about 19% of the screen, 196 to 246 px, so the horizon and the sun stay open), the mirror
+   * W x 0.4 W, and the meter, inset 8 px from each side, set into its bottom edge. Portrait: the
+   * mirror about 25% smaller (33% of the width, up to 143 px, a little wider than tall at 0.36 W) hangs
+   * 6 px under the race row alone, and the meter rides in the race row in the rival pill's place, the
+   * race row's height, so the top HUD keeps to about a fifth of a phone's height (it took 27%). The gap numeral is the combo total's size (22 px on a
+   * phone). CSS stacks the unit in the top-centre column; measure() reads where it landed.
+   */
+  private fit(): void {
+    const w = window.innerWidth;
+    const portrait = w < window.innerHeight;
+    const u = this.hudPx();
+    // At least 196 px in landscape: on a phone held sideways 19% left the meter's track about 80 px long.
+    const W = Math.round(portrait ? Math.min(0.33 * w, 143) : Math.min(Math.max(0.187 * w, 196), 246));
+    // In portrait the meter is the race row's height (--race-h in style.css: 2.5 units, at least 36 px).
+    const bar = portrait ? Math.round(Math.max(36, 2.5 * u)) : 34;
+    const meter = portrait ? Math.round(Math.min(0.56 * w, 236)) : W - 16;
+    const f = portrait ? 22 : Math.max(22, Math.min(34, 1.75 * u));
+    this.meterW = meter;
+    this.gapF = f;
+    // The hazard disc and the rider badge (bar - 6 across, 3 px in from each end) bound the track.
+    this.wallMin = bar - 3;
+    this.badgeL = meter - 3 - (bar - 6);
+    this.wallMax = this.badgeL;
+    this.wallX = Number.NaN;
+    this.gapX = Number.NaN;
+    this.lastDanger = -1;
+    if (portrait !== this.portrait || !this.dangerEl.parentElement) {
+      this.portrait = portrait;
+      this.el.classList.toggle('is-portrait', portrait);
+      (portrait ? this.race : this.avEl).append(this.dangerEl);
+    }
+    this.el.parentElement?.classList.toggle('gs-chase-p', portrait && this.chased.on);
+    this.el.style.setProperty('--av-w', `${W}px`);
+    this.el.style.setProperty('--av-mh', `${Math.round(W * (portrait ? 0.36 : 0.4))}px`);
+    this.el.style.setProperty('--av-bar', `${bar}px`);
+    this.el.style.setProperty('--avm-w', `${meter}px`);
+    this.el.style.setProperty('--av-num', `${Math.round(f)}px`);
+    this.el.style.setProperty('--av-tab', `${Math.round(1.75 * Math.min(u, 17.5))}px`);
+    // One tick every 10 m, counted back from the rider badge.
+    this.el.style.setProperty('--av-tick', `${(((this.wallMax - this.wallMin) * TICK_M) / DANGER_FAR).toFixed(2)}px`);
+    this.onLayout();
+  }
+
+  /**
+   * Pushes the viewport rects of every visible HUD element into `out` from index `n` and returns the
+   * new count. Called by the UI once per layout change, after the frame's DOM writes.
+   */
+  measure(out: ScreenRect[], n: number): number {
+    if (!this.layer.open) return n;
+    // The score and combo positions are kept even while the combo is hidden: the cash-in flies
+    // between them without reading layout.
+    this.scoreAt = centre(this.scoreEl, this.scoreAt);
+    this.comboAt = centre(this.comboEl, this.comboAt);
+    this.readLayout();
+    n = pushRect(out, n, this.tl);
+    n = pushRect(out, n, this.tr);
+    if (this.placeOn.on && !this.bandHides()) n = pushRect(out, n, this.placeEl);
+    if (this.nextOn.on && !this.bandHides()) n = pushRect(out, n, this.nextEl);
+    if (this.comboOn.on) n = pushRect(out, n, this.comboEl);
+    for (const c of Array.from(this.calloutSlot.children)) if (!c.classList.contains('is-gone')) n = pushRect(out, n, c);
+    if (this.driftOn.on) n = pushRect(out, n, this.driftEl);
+    if (this.draftOn.on) n = pushRect(out, n, this.draftEl);
+    if (this.dangerOn.on) {
+      n = pushRect(out, n, this.mirrorBox);
+      n = pushRect(out, n, this.dangerEl);
+    }
+    return n;
+  }
+
+  /**
+   * Caches the mirror's rect, the unit's box and the stamp's room. The unit is laid out even while it
+   * is hidden, so the rect is ready the frame a chase starts.
+   */
+  private readLayout(): void {
+    const m = this.mirrorBox.getBoundingClientRect();
+    if (m.width > 0 && m.height > 0) {
+      this.mirror.x = Math.round(m.left);
+      this.mirror.y = Math.round(m.top);
+      this.mirror.w = Math.round(m.width);
+      this.mirror.h = Math.round(m.height);
+    }
+    const u = this.avEl.getBoundingClientRect();
+    if (u.width > 0) {
+      this.avBox.x0 = u.left;
+      this.avBox.y0 = u.top;
+      this.avBox.x1 = u.right;
+      this.avBox.y1 = u.bottom;
+    }
+    const l = this.tl.getBoundingClientRect();
+    const r = this.tr.getBoundingClientRect();
+    if (r.width > 0) {
+      this.room.left = l.left;
+      this.room.right = r.right;
+      this.room.slotTop = this.calloutSlot.getBoundingClientRect().top;
+      this.room.measured = true;
+    }
+  }
+
+  /** Last measured centre of the score or the combo meter, or null before the first measure. */
+  centreOf(el: HTMLElement): { x: number; y: number } | null {
+    return el === this.scoreEl ? this.scoreAt : el === this.comboEl ? this.comboAt : null;
+  }
+
+  /**
+   * A banner docks over the race row while it shows (the row fades out under it). In a portrait
+   * chase the row carries the avalanche meter, so the banner docks under it instead.
+   */
+  private bandHides(): boolean {
+    const c = this.el.parentElement?.classList;
+    return c !== undefined && c.contains('gs-band-on') && !c.contains('gs-chase-p');
+  }
+
+  update(m: HudModel): void {
+    let moved = false;
+    this.score.num(m.score);
+    const sLen = this.scoreEl.textContent?.length ?? 0;
+    if (sLen !== this.lastScoreLen) {
+      this.lastScoreLen = sLen;
+      moved = true;
+    }
+    this.dist.num(m.distance, NBSP + 'm');
+
+    if (m.mood !== this.lastMood) {
+      this.lastMood = m.mood;
+      const info = moodInfo(m.mood);
+      this.moodTxt.str(info.name);
+      this.moodEl.dataset.mood = info.key;
+      // Bright moods (white sky and ice) seat the score block on a soft ink plate (style.css).
+      this.el.dataset.mood = info.key;
+      // Night moods give every navy pill (the HUD's and the banners') a moon-blue hairline.
+      this.el.parentElement?.classList.toggle('gs-night', NIGHT.has(m.mood));
+      this.moodIco.replaceChildren(icon(MOOD_MOD[m.mood].icon));
+      moved = true;
+    }
+    this.moodWanted = m.mood !== Mood.None;
+    if (this.moodOn.set(this.moodWanted && !this.revealing)) moved = true;
+
+    if (this.gifts.num(m.gifts)) {
+      if (this.lastGifts >= 0 && m.gifts > this.lastGifts) bump(this.giftsEl, 1.1, 240);
+      this.lastGifts = m.gifts;
+    }
+
+    // Race position. A new rank must hold for a moment before it shows (ghosts bunched at the start
+    // swap places every frame), then it ticks: a gain rolls the new place up in mint, a loss drops it in.
+    const now = performance.now();
+    const showPlace = m.place.of > 1;
+    if (this.placeOn.set(showPlace)) moved = true;
+    if (showPlace) {
+      const r = m.place.rank;
+      if (r !== this.wantRank) {
+        this.wantRank = r;
+        this.wantAt = now;
+      }
+      const settled = this.lastRank < 0 || now - this.wantAt >= RANK_SETTLE_MS;
+      if (settled && (r !== this.lastRank || m.place.of !== this.lastOf)) {
+        const prev = this.lastRank;
+        this.lastRank = r;
+        this.lastOf = m.place.of;
+        const num = String(r);
+        this.rankNum.str(num);
+        this.rankSuf.str(ordinal(r).slice(num.length));
+        this.placeFirst.set(r === 1);
+        this.of.str(`of ${m.place.of}`);
+        moved = true;
+        if (prev > 0 && r !== prev) {
+          const animate = now - this.tickAt > TICK_GAP_MS;
+          if (animate) this.tickAt = now;
+          this.tick(prev - r, animate);
+        }
+      }
+    }
+
+    // Next ghost. While a pass flashes in the pill, it holds; the target comes back after, unless a
+    // pass that waited its turn (behind a landing stamp or a pass of yours) goes up next.
+    let flashing = this.flashUntil > now;
+    if (!flashing && this.pend.length > 0 && !this.stampUp()) {
+      while (this.pend.length > 0 && now - this.pend[0].at > PEND_MS) this.pend.shift();
+      const p = this.pend.shift();
+      if (p) {
+        this.showPass(p.name, p.kind, p.passed, now);
+        flashing = true;
+      }
+    }
+    if (!flashing && this.nextFlash.on) {
+      this.nextFlash.set(false);
+      this.nextLost.set(false);
+      this.lastSide = 2;
+      this.lastGap = Number.NaN;
+      this.nameNow = true;
+      moved = true;
+    }
+    const g = m.nextGhost;
+    if (!flashing) {
+      if (this.nextOn.set(g !== null)) moved = true;
+      if (g) {
+        // A new target name also has to hold for a moment (a bunched pack swaps the nearest ghost).
+        if (g.name !== this.wantName) {
+          this.wantName = g.name;
+          this.wantNameAt = now;
+        }
+        if (this.nameNow || now - this.wantNameAt >= RANK_SETTLE_MS || this.nextName.el.textContent === '') {
+          this.nameNow = false;
+          if (this.nextName.str(shownName(g.name, g.kind))) moved = true;
+          this.setKind(g.kind);
+        }
+        // Level under 1.5 m, with a little hysteresis so the readout does not flicker at the edge.
+        const a = Math.abs(g.gap);
+        const side = a < (this.lastSide === 0 ? 1.9 : 1.5) ? 0 : g.gap > 0 ? 1 : -1;
+        if (side !== this.lastSide) {
+          this.lastSide = side;
+          this.lastGap = Number.NaN;
+          this.nextAhead.set(side > 0);
+          this.nextBehind.set(side < 0);
+          this.nextEven.set(side === 0);
+          this.nextWord.str(side === 0 ? 'neck and neck' : side > 0 ? 'ahead' : 'behind');
+          moved = true;
+        }
+        const r = side === 0 ? -1 : Math.round(a);
+        if (r !== this.lastGap) {
+          this.lastGap = r;
+          const s = side === 0 ? '' : String(r);
+          this.nextGap.str(s);
+          if (s.length !== this.lastGapLen) {
+            this.lastGapLen = s.length;
+            moved = true;
+          }
+        }
+      }
+    }
+
+    // Combo.
+    const c = m.combo;
+    if (this.comboOn.set(c.active)) moved = true;
+    // The total is up whenever the combo is: a timer bar with nothing over it read as an empty slot.
+    // At x1 the multiplier chip stays out ("x1" would only say nothing is multiplied yet), so "x"
+    // only ever appears once there is a real multiplier.
+    const total = c.active;
+    if (this.comboTotal.set(total) && total && this.comboOn.on) bump(this.comboRow, 1.16, 260);
+    if (c.active) {
+      if (this.comboPts.num(c.pending, '', '+')) moved = true;
+      if (this.multX1.set(c.mult < 2)) moved = true;
+      if (this.mult.str('x' + c.mult)) {
+        if (c.mult > this.lastMult && this.lastMult > 0) bump(this.multEl, 1.25, 280);
+        this.lastMult = c.mult;
+      }
+      const t = Math.max(0, Math.min(1, c.timer));
+      if (Math.abs(t - this.lastTimer) > 0.004) {
+        this.lastTimer = t;
+        this.comboBar.style.transform = `scaleX(${t.toFixed(3)})`;
+      }
+      this.comboLow.set(t < 0.25);
+    } else {
+      this.lastMult = 0;
+      this.comboLow.set(false);
+    }
+
+    // Drift tier.
+    const tier = Math.max(0, Math.min(3, Math.round(m.driftTier)));
+    if (this.driftOn.set(tier > 0)) moved = true;
+    if (tier > 0 && tier !== this.lastTier) {
+      if (tier > this.lastTier && this.lastTier > 0) bump(this.driftEl, 1.12, 240);
+      this.driftEl.dataset.tier = String(tier);
+    }
+    this.lastTier = tier;
+
+    // Slipstream.
+    const lit = m.draft > 0 ? Math.max(1, Math.min(CHEVRONS, Math.ceil(m.draft * CHEVRONS))) : 0;
+    if (this.draftOn.set(lit > 0)) moved = true;
+    this.draftFull.set(m.draft >= 0.999);
+    if (lit !== this.lastChev) {
+      this.lastChev = lit;
+      for (let i = 0; i < CHEVRONS; i++) this.chevs[i].set(i < lit);
+    }
+
+    // Avalanche: the wall advances over the track in proportion to the gap, and the gap number rides in
+    // the open track between the wall's front and the rider badge (transform only).
+    const d = m.danger;
+    const wasChased = this.dangerOn.on;
+    if (this.dangerOn.set(d !== null)) {
+      moved = true;
+      if (d) this.say(`Avalanche chasing, ${Math.round(d.gap)} metres behind`);
+      else if (wasChased) this.dangerOffAt = performance.now();
+    }
+    if (this.chased.set(d !== null)) this.el.parentElement?.classList.toggle('gs-chase-p', this.portrait && d !== null);
+    if (d) {
+      const gap = Math.max(0, Math.round(d.gap));
+      if (gap !== this.lastDanger) {
+        this.lastDanger = gap;
+        const num = String(gap);
+        if (this.dangerGap.str(num)) moved = true;
+        let band = 0;
+        while (band < DANGER_BANDS.length && gap < DANGER_BANDS[band]) band++;
+        if (band !== this.lastBand) {
+          this.lastBand = band;
+          this.avEl.dataset.band = String(band);
+          this.edgeOn.set(band >= EDGE_BAND);
+        }
+        this.placeWall(gap, num.length);
+      }
+      if (this.dangerUrgent.set(gap < DANGER_URGENT) && gap < DANGER_URGENT) this.say('Avalanche close behind');
+    } else {
+      this.dangerUrgent.set(false);
+      this.edgeOn.set(false);
+      this.lastBand = -1;
+      this.lastDanger = -1;
+    }
+
+    if (moved) this.onLayout();
+  }
+
+  /**
+   * The wall's front sits in proportion between the hazard disc (DANGER_FAR or more) and the rider
+   * badge (caught). The gap number rides centred in the open track while it fits there; closer in
+   * it rides on the wall, just behind the front, so the front itself is never covered. Its width is
+   * estimated from its font size (tabular digits), so nothing reads layout.
+   */
+  private placeWall(gap: number, digits: number): void {
+    const near = 1 - Math.min(1, gap / DANGER_FAR);
+    const front = Math.round(this.wallMin + near * (this.wallMax - this.wallMin));
+    const cw = 6 + this.gapF * (0.58 * digits + 0.42);
+    const open = this.badgeL - front;
+    const cx = Math.round(open >= cw + 10 ? (front + this.badgeL) / 2 : Math.max(this.wallMin + cw / 2 + 2, front - 6 - cw / 2));
+    if (front !== this.wallX) {
+      this.wallX = front;
+      this.wall.style.transform = `translate3d(${front - this.meterW}px, 0, 0)`;
+    }
+    if (cx !== this.gapX) {
+      this.gapX = cx;
+      this.dangerGapEl.style.transform = `translate3d(${cx}px, 0, 0) translateX(-50%)`;
+    }
+  }
+
+  /**
+   * A place change of `delta` places (positive: gained). The arrow and the count stand after the
+   * numeral for a moment, where "of 7" was (a second change while they show adds to the count). A
+   * gained place is the race's big beat: the numeral flips over to the new place, the pill punches up
+   * and flashes mint, and the numeral holds mint for a moment before it snaps back (white, or
+   * gold-white in first). The pass itself owns the glow ring, in the rival pill: two glowing pills at
+   * once read as no event at all. A lost place ticks down: the new numeral drops in from above with a
+   * little bounce and the pill dips. Transform and opacity only: the colour snaps, it is never animated.
+   */
+  private tick(delta: number, animate: boolean): void {
+    const gain = delta > 0;
+    const live = this.placeUp.on || this.placeDown.on;
+    this.deltaSum = live && (this.deltaSum > 0) === gain ? this.deltaSum + delta : delta;
+    this.placeDelta.str(String(Math.abs(this.deltaSum)));
+    this.placeUp.set(gain);
+    this.placeDown.set(!gain);
+    window.clearTimeout(this.deltaTimer);
+    this.deltaTimer = window.setTimeout(() => {
+      this.deltaSum = 0;
+      this.placeUp.set(false);
+      this.placeDown.set(false);
+    }, DELTA_MS);
+    if (!animate) return;
+    play(this.placeDeltaEl, [{ opacity: 0, transform: `translateY(${gain ? 0.4 : -0.4}em)` }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'ease-out' });
+    if (!gain) {
+      play(
+        this.rankEl,
+        [
+          { transform: 'translateY(-0.8em)', opacity: 0.5 },
+          { transform: 'translateY(0.12em)', opacity: 1, offset: 0.6 },
+          { transform: 'none', opacity: 1 },
+        ],
+        { duration: 340, easing: 'ease-out' },
+      );
+      play(this.placeEl, [{ transform: 'none' }, { transform: 'translateY(3px) scale(0.97)', offset: 0.35 }, { transform: 'none' }], { duration: 340, easing: SPRING });
+      return;
+    }
+    // It never starts fully transparent or edge-on: in a bunched field the place can change every few
+    // frames, and a restart from zero (or from past 90 degrees, its back to the lens) left the pill
+    // reading " of 6" for as long as the field stayed bunched. From 60 degrees the new numeral is
+    // already half height, so every frame of the flip still reads as a number.
+    play(
+      this.rankEl,
+      [
+        { transform: 'perspective(90px) rotateX(-60deg)', opacity: 0.7 },
+        { transform: 'perspective(90px) rotateX(12deg)', opacity: 1, offset: 0.55 },
+        { transform: 'none', opacity: 1 },
+      ],
+      { duration: 320, easing: 'ease-out' },
+    );
+    play(this.placeEl, [{ transform: 'scale(1)' }, { transform: 'scale(1.18)', offset: 0.3 }, { transform: 'scale(1)' }], { duration: 460, easing: SPRING });
+    // The flash peaks at about half strength, so the white numeral over it keeps its contrast.
+    play(this.placeFlash, [{ opacity: 0.55 }, { opacity: 0 }], { duration: 440, easing: EASE_OUT });
+    // The numeral stays white over the bright flash, then snaps to mint once the flash has thinned.
+    const el = this.rankEl;
+    el.classList.remove('is-gain');
+    window.clearTimeout(this.gainTimer);
+    this.gainTimer = window.setTimeout(() => {
+      el.classList.add('is-gain');
+      this.gainTimer = window.setTimeout(() => el.classList.remove('is-gain'), GAIN_MS);
+    }, GAIN_DELAY_MS);
+  }
+}
+
+function centre(el: HTMLElement, prev: { x: number; y: number } | null): { x: number; y: number } | null {
+  const r = el.getBoundingClientRect();
+  if (r.width === 0 && r.height === 0) return prev;
+  const p = prev ?? { x: 0, y: 0 };
+  p.x = r.left + r.width / 2;
+  p.y = r.top + r.height / 2;
+  return p;
+}
+
+/** Writes an element's padded viewport rect into the reused slot `out[n]`; returns the new count. */
+export function pushRect(out: ScreenRect[], n: number, el: Element): number {
+  const r = el.getBoundingClientRect();
+  if (r.width <= 0 || r.height <= 0) return n;
+  let o = out[n];
+  if (!o) {
+    o = { x0: 0, y0: 0, x1: 0, y1: 0 };
+    out[n] = o;
+  }
+  // A little padding: a tag that only grazes a pill still reads as clutter.
+  o.x0 = r.left - 4;
+  o.y0 = r.top - 4;
+  o.x1 = r.right + 4;
+  o.y1 = r.bottom + 4;
+  return n + 1;
+}
