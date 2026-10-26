@@ -37,9 +37,26 @@ export function ladderBase(k: Key): number {
 
 /** MIDI note of pentatonic ladder step i (negative steps go below the base). */
 export function ladder(k: Key, i: number): number {
+  return ladderAt(k, ladderBase(k), i);
+}
+
+/** Pentatonic step i of the key, counted from `base` (a tonic in any octave). */
+export function ladderAt(k: Key, base: number, i: number): number {
   const n = k.penta.length;
-  const oct = Math.floor(i / n);
-  return ladderBase(k) + k.penta[i - oct * n] + 12 * oct;
+  const step = Math.round(i);
+  const oct = Math.floor(step / n);
+  return base + k.penta[step - oct * n] + 12 * oct;
+}
+
+/** The ladder step of MIDI note m (the nearest step at or below it when m is off the scale). */
+export function ladderIndexOf(k: Key, m: number): number {
+  const n = k.penta.length;
+  const rel = Math.round(m) - ladderBase(k);
+  const oct = Math.floor(rel / 12);
+  const pc = rel - 12 * oct;
+  let j = 0;
+  for (let x = 0; x < n; x++) if (k.penta[x] <= pc) j = x;
+  return oct * n + j;
 }
 
 /** Root of the bright reward chord, placed at or above `lo`. */

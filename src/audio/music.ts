@@ -69,6 +69,8 @@ export interface Drive {
   intensity: number;
   danger: number;
   mult: number;
+  /** Move the faders fast this pass (the count-in's release). */
+  snap?: boolean;
 }
 
 function deckId(scene: Scene, mood: Mood, biome: BiomeId): string {
@@ -228,10 +230,12 @@ class Deck {
       L.sparkle = 0.5;
       L.hat = 0.25;
     } else {
-      // Intensity builds the arrangement: 0 pad only, 0.4 + bass and hats, 0.7 + arp and kick,
-      // 0.9 everything plus the lead counter-melody.
+      // Intensity builds the arrangement (src/game/intensity.ts): the pad always; the bass from 0.26
+      // (the run floor of 0.30 already has it under the pad; full at 0.40); hats from 0.30 (cruising
+      // at 0.36 has them at a third); the arp from 0.58 and the kick from 0.60; clap and sparkle from
+      // 0.80; the lead counter-melody from 0.85.
       const i = this.drive.intensity;
-      L.bass = smoothstep(0.28, 0.42, i);
+      L.bass = smoothstep(0.26, 0.4, i);
       L.hat = smoothstep(0.3, 0.45, i);
       L.arp = smoothstep(0.58, 0.72, i);
       L.kick = smoothstep(0.6, 0.74, i);
@@ -243,12 +247,24 @@ class Deck {
   }
 
   private applyLevels(now: number): void {
+    // A snap (the band arriving on the reveal card's collapse) moves the faders in about 0.2 s.
+    const tau = this.drive.snap ? 0.06 : 0.45;
     for (const l of LAYERS) {
       const target = MIX[l] * this.level[l];
       if (Math.abs(target - this.applied[l]) < 0.004) continue;
       this.applied[l] = target;
-      this.fader[l].gain.setTargetAtTime(target, now, 0.45);
+      this.fader[l].gain.setTargetAtTime(target, now, tau);
     }
+  }
+
+  /** Probe: each layer's presence (0..1) as last computed. */
+  layerLevels(): Readonly<Record<Layer, number>> {
+    return this.level;
+  }
+
+  /** The deck's 16th-note grid: step s sounds at t0 + s * dur (before swing). */
+  grid(): { t0: number; dur: number } {
+    return { t0: this.base - this.step * this.stepDur, dur: this.stepDur };
   }
 
   private chordAt(bar: number): Placed {
@@ -490,8 +506,9 @@ export class Music {
     this.biome = biome;
   }
 
-  setDrive(intensity: number, danger: number, mult: number): void {
-    this.drive = { intensity, danger, mult };
+  /** snap: move the layer faders fast on the next scheduler pass (kept until that pass runs). */
+  setDrive(intensity: number, danger: number, mult: number, snap = false): void {
+    this.drive = { intensity, danger, mult, snap: snap || this.drive.snap === true };
   }
 
   /** Key of the arrangement that is playing (or about to): every reward sound uses it. */
@@ -500,6 +517,19 @@ export class Music {
     if (top) return top.key;
     const s = styleFor(this.mood);
     return { tonic: s.tonic, penta: s.penta, bright: s.bright, bpm: s.bpm };
+  }
+
+  /** The playing arrangement's 16th-note grid, so pulses (fuse ticks, the duel heartbeat, the km
+   *  bell) land in time with the band. Null before the first deck exists. */
+  grid(): { t0: number; dur: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.grid() : null;
+  }
+
+  /** Probe: the playing deck's layer presence (0..1 each). */
+  layerLevels(): Readonly<Record<string, number>> | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.layerLevels() : null;
   }
 
   tick(now: number, until: number): void {
@@ -524,6 +554,7 @@ export class Music {
       d.setDrive(this.drive);
       d.schedule(until, now, this.enabled);
     }
+    if (this.drive.snap) this.drive = { ...this.drive, snap: false };
     for (let i = this.decks.length - 1; i >= 0; i--) {
       if (now >= this.decks[i].retireAt) {
         this.decks[i].dispose();

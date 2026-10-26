@@ -187,6 +187,11 @@ export class Voice {
 
 export class VoicePool {
   private readonly list: Voice[] = [];
+  /** Probe counters: voices stolen at the cap, and how many of them were kept (pad) voices. */
+  steals = 0;
+  keptSteals = 0;
+  /** Probe: the most voices alive at once. */
+  peak = 0;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -207,10 +212,21 @@ export class VoicePool {
       else oldest ??= v;
     }
     const victim = oldest ?? oldestKept;
-    if (live >= this.max && victim) victim.kill(now);
+    if (live >= this.max && victim) {
+      victim.kill(now);
+      this.steals++;
+      if (victim.keep) this.keptSteals++;
+      live--;
+    }
     const v = new Voice(this.ctx, this.bank, t0, level, dry, wet, send, pan);
     this.list.push(v);
+    if (live + 1 > this.peak) this.peak = live + 1;
     return v;
+  }
+
+  /** Silences voices that have not started yet (sounds scheduled ahead for a screen that has gone). */
+  killFuture(now: number): void {
+    for (const v of this.list) if (!v.dead && v.t0 > now + 0.002) v.kill(now);
   }
 
   get active(): number {

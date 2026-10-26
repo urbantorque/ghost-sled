@@ -39,8 +39,9 @@ export class Bus {
   }
 
   /** Dip to `depth`, hold, then recover with time constant `release`. A shallower duck never
-   *  cuts short a deeper one that is still holding. */
-  duck(depth: number, now: number, hold: number, release: number): void {
+   *  cuts short a deeper one that is still holding. `attack` is the dip's time constant: a drop
+   *  (the band cutting out under a big bank) uses a fast one so the gap reads as a gap. */
+  duck(depth: number, now: number, hold: number, release: number, attack = 0.025): void {
     if (now < this.duckUntil && depth > this.duckDepth) return;
     this.duckDepth = depth;
     this.duckUntil = now + hold;
@@ -48,9 +49,30 @@ export class Bus {
       const p = g.gain;
       p.cancelScheduledValues(now);
       p.setValueAtTime(p.value, now);
-      p.setTargetAtTime(depth, now, 0.025);
+      p.setTargetAtTime(depth, now, attack);
       p.setTargetAtTime(1, now + hold, release);
     }
+  }
+
+  /** Two stages in one schedule: dip hard to `d1` for `h1`, settle to `d2` for `h2`, then recover.
+   *  (Two duck() calls cannot do this: the second, shallower one is ignored while the first holds.) */
+  duckSeq(now: number, d1: number, h1: number, d2: number, h2: number, release: number): void {
+    if (now < this.duckUntil && Math.min(d1, d2) > this.duckDepth) return;
+    this.duckDepth = Math.max(d1, d2);
+    this.duckUntil = now + h1 + h2;
+    for (const g of [this.duckDry, this.duckWet]) {
+      const p = g.gain;
+      p.cancelScheduledValues(now);
+      p.setValueAtTime(p.value, now);
+      p.setTargetAtTime(d1, now, 0.012);
+      p.setTargetAtTime(d2, now + h1, 0.04);
+      p.setTargetAtTime(1, now + h1 + h2, release);
+    }
+  }
+
+  /** Probe: the duck gain right now (1 = open). */
+  get ducked(): number {
+    return this.duckDry.gain.value;
   }
 
   disconnect(): void {

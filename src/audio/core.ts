@@ -20,6 +20,9 @@ export class Core {
   readonly music: Music;
   readonly sfx: Sfx;
   readonly ambience: Ambience;
+  /** Grid pulses the scheduler keeps in time with the band: the fuse on a draining stake and the
+   *  duel heartbeat (0..1 each; set every frame by the engine). */
+  readonly pulse = { fuse: 0, duel: 0 };
 
   constructor(readonly ctx: BaseAudioContext) {
     this.bank = createBank(ctx);
@@ -27,14 +30,15 @@ export class Core {
     this.sfxPool = new VoicePool(ctx, this.bank, SFX_VOICES);
     this.musicPool = new VoicePool(ctx, this.bank, MUSIC_VOICES);
     this.music = new Music(ctx, this.musicPool, this.graph.music);
-    this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key());
+    this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key(), this.graph.music);
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
   }
 
-  /** One scheduler pass: fill the music lookahead, build deferred effect parts, free finished
-   *  voices, settle idle ambience. */
+  /** One scheduler pass: fill the music lookahead, place grid pulses, build deferred effect parts,
+   *  free finished voices, settle idle ambience. */
   tick(now: number, lookahead: number): void {
     this.music.tick(now, now + lookahead);
+    this.sfx.pulses(now, now + lookahead, this.music.grid(), this.pulse.fuse, this.pulse.duel);
     this.sfx.flush(now);
     this.sfxPool.sweep(now);
     this.musicPool.sweep(now);
