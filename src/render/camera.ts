@@ -1,5 +1,7 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { WRECK_SLED } from './rider';
+import { IDLE_FEEL, type Beat, type Feel } from '../game/beats';
+import type { SimEvent } from '../sim/sim';
 
 // Chase camera (ART.md section 8): leads into turns, breathes FOV with speed, rolls into carves,
 // shakes on impacts, punches on perfect landings, orbits on a crash, frames portrait screens with a
@@ -133,6 +135,53 @@ export class ChaseCamera {
 
   kick(amount: number): void {
     this.punch = Math.min(1, this.punch + amount);
+  }
+
+  /** This frame's feel from the director (reduced motion, time scale, streak); set by beats(). */
+  feel: Feel = IDLE_FEEL;
+
+  /** The camera's reactions to raw sim events: kicks on boosts and perfect landings, shakes on impacts. */
+  onSimEvent(e: SimEvent): void {
+    switch (e.type) {
+      case 'land':
+        if (e.quality === 'perfect') {
+          this.kick(0.9);
+          this.shake(0.25);
+        } else if (e.quality === 'clean') this.shake(Math.min(0.5, e.impact * 0.03));
+        else if (e.quality === 'sketchy') this.shake(0.55);
+        break;
+      case 'crash':
+        this.shake(1.1);
+        break;
+      case 'bump':
+        this.shake(0.5);
+        break;
+      case 'boost':
+        this.kick(0.35);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** This frame's named moments and feel, every frame after the raw events. Never keeps the list. */
+  beats(_list: readonly Beat[], feel: Feel): void {
+    this.feel = feel;
+  }
+
+  /** A positional knock in camera space (metres right, up and back). Scaffold: no-op. */
+  jolt(_right: number, _up: number, _back: number): void {
+    // (The spring lands with the camera's weight work.)
+  }
+
+  /** Clears held feel (a freeze, a jolt) on revive and at a run's start. Scaffold: nothing is held. */
+  resetFeel(): void {
+    // (Nothing held yet.)
+  }
+
+  /** The current lens roll in radians, for probes. */
+  get rollNow(): number {
+    return this.roll;
   }
 
   /** Title: the nearest live ghost to the hero (sim coordinates in, three.js out), or null. Also

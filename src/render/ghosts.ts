@@ -2,6 +2,7 @@ import { AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, 
 import { Course } from '../sim/course';
 import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
+import type { Beat, Feel, GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
 import { ghostRiderGeometry } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
@@ -545,7 +546,12 @@ export class GhostVisuals {
     }
   }
 
-  setField(list: Array<{ id: number; name: string; kind: GhostKind }>): void {
+  /** This frame's named moments and feel (ring pulses, tag swaps). Scaffold: no-op. Never keeps the list. */
+  beats(_list: readonly Beat[], _feel: Feel): void {
+    // (Nothing reacts yet.)
+  }
+
+  setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
     this.clear();
     for (const g of list) {
       const color = new Color(GHOST_COLORS[g.kind]);

@@ -15,6 +15,14 @@ export interface Grudge {
   name: string;
   score: number;
   record: string;
+  /** Head-to-head tally: runs this ghost has beaten you in (old saves read as 1). */
+  them?: number;
+  /** Wins in a row by this ghost (3 or more makes it a nemesis). */
+  streak?: number;
+  /** Metres it beat you by in the run that made it the grudge. */
+  by?: number;
+  /** How far its whole run went, in metres. */
+  distance?: number;
 }
 
 export interface Settings {
@@ -42,6 +50,8 @@ export interface SaveData {
   stats: { bestScore: number; bestCombo: number; longestAir: number; perfects: number; topSpeed: number; yetiHops: number; avalanches: number };
   hints: Record<string, number>;
   daily: { key: string; best: number };
+  /** The last few run-end distances per mountain key (field.ts anchorFor). */
+  runDists?: Record<string, number[]>;
 }
 
 export function defaultSave(name: string): SaveData {

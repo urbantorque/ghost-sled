@@ -62,10 +62,13 @@ export const MISSIONS: readonly MissionDef[] = [
 ];
 
 export interface MissionState {
-  active: Array<{ id: string; best: number }>;
+  /** tier: 1 to 3 from the second cycle on (read as a.tier ?? 1). */
+  active: Array<{ id: string; best: number; tier?: number }>;
   /** Next index into the rotation. */
   cursor: number;
   completed: number;
+  /** The rotation's shuffle seed, captured once so a later name change never reshuffles it. */
+  seed?: number;
 }
 
 export function newMissionState(): MissionState {

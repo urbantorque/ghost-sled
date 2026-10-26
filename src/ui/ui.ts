@@ -15,7 +15,9 @@ import type {
   UIHandlers,
 } from './contract';
 import { ChaosEvent } from '../sim/chaos';
+import type { Beat } from '../game/beats';
 import type { InputMode, TouchVisual } from '../game/input';
+import { BeatRouter } from './beatsui';
 import { h, type Ctx, type UiSound } from './dom';
 import { Fx } from './fx';
 import { Hint } from './hint';
@@ -52,6 +54,8 @@ export class UI implements GameUI {
   private readonly hud: Hud;
   private readonly fx: Fx;
   private readonly notices: Notices;
+  /** Turns the director's beats into fx, race-row and banner calls. */
+  private readonly router: BeatRouter;
   private readonly revealer: Reveal;
   private readonly hints: Hint;
   private readonly results: Results;
@@ -134,6 +138,7 @@ export class UI implements GameUI {
     this.fx = new Fx(this.el, this.hud);
     this.hints = new Hint(this.el);
     this.notices = new Notices(this.el);
+    this.router = new BeatRouter(this.hud, this.fx, this.notices);
     this.revealer = new Reveal(this.notices.revealSlot, this.hud);
     this.menus = new Menus(this.el, ctx, hd);
     this.title = new Title(this.el, ctx, hd, {
@@ -307,6 +312,10 @@ export class UI implements GameUI {
 
   toast(text: string, tone: ToastTone, sub?: string): void {
     this.notices.toast(text, tone, sub);
+  }
+
+  beats(list: readonly Beat[]): void {
+    if (list.length) this.router.handle(list);
   }
 
   ghostPass(name: string, kind: GhostKind, passed: boolean): void {

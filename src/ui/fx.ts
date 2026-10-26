@@ -1,3 +1,4 @@
+import type { StampPart } from '../game/beats';
 import type { StyleTone } from './contract';
 import { h } from './dom';
 import { fmt } from './fmt';
@@ -39,7 +40,7 @@ const RESUME_MS = 1500;
 /** Count pips past this many would only add noise: the points carry the rest. */
 const MAX_PIPS = 5;
 
-const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, perfect: 3 };
+const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5, perfect: 3 };
 
 /** Display names for the sim's style labels. "Draft" and "Drift" are one letter apart. */
 const SLIPSTREAM = 'Slipstream';
@@ -88,7 +89,7 @@ export class Fx {
    */
   private tricks: Array<{ label: string; points: number; at: number }> = [];
   /** The live perfect-landing stamp (null once it starts to leave). */
-  private stamp: HTMLElement | null = null;
+  private heroEl: HTMLElement | null = null;
   private stampTimer = 0;
   /** The rider's projected position, updated every frame by the game. */
   private rx = Number.NaN;
@@ -104,7 +105,7 @@ export class Fx {
     this.el.setAttribute('aria-hidden', 'true');
     parent.append(this.el);
     this.slot = hud.calloutSlot;
-    hud.stampUp = () => this.stamp !== null;
+    hud.stampUp = () => this.heroEl !== null;
   }
 
   /** The rider's projected position: the perfect-landing stamp is placed beside it when it lands. */
@@ -115,7 +116,7 @@ export class Fx {
 
   /** The live stamp, for the occluder cache. */
   get stampEl(): HTMLElement | null {
-    return this.stamp;
+    return this.heroEl;
   }
 
   /** A style callout. The multiplier is not repeated per line: the combo meter carries it. */
@@ -135,7 +136,7 @@ export class Fx {
     // stays out of the stack. Its points still reach the combo total, and its running total is kept.
     // So does a slipstream tick while the Slipstream pill shows: "SLIPSTREAM +40" under it said the
     // same word twice in one glance.
-    if (tone === 'normal' && (this.stamp !== null || this.hud.passing || (text === SLIPSTREAM && this.hud.drafting))) {
+    if (tone === 'normal' && (this.heroEl !== null || this.hud.passing || (text === SLIPSTREAM && this.hud.drafting))) {
       this.remember(text, points, 1, now);
       return;
     }
@@ -228,7 +229,7 @@ export class Fx {
 
   /** The HUD is going away (results): the stamp goes with it. */
   clear(): void {
-    if (this.stamp) this.dropStamp(this.stamp, true);
+    if (this.heroEl) this.dropStamp(this.heroEl, true);
     this.recent.clear();
   }
 
@@ -331,11 +332,27 @@ export class Fx {
     // slot); air and clean-landing ticks only fold into the combo total, and so does any older line.
     for (const t of this.tricks) if (now - t.at <= LANDING_MS) parts.push([t.label, t.points]);
     this.tricks.length = 0;
-    for (const c of this.items.slice()) if (c.tone !== 'lost') this.leave(c, true);
-    if (this.stamp) this.dropStamp(this.stamp, true);
     // Three or more parts break after the landing's own points: "PERFECT +490" over the tricks.
+    this.showStamp(text, parts, parts.length >= 3 && points > 0);
+  }
+
+  /**
+   * A hero stamp with a given title and parts, each number with its label ("YETI HOP +1,500"). The
+   * same builder and placement as the perfect-landing stamp, so it is the one headline of its beat;
+   * nothing is folded in from the slot. Three or more parts break after the first.
+   */
+  stamp(title: string, parts: ReadonlyArray<StampPart>): void {
+    const raw = title.trim();
+    if (raw === '') return;
+    const list: Array<[string, number]> = parts.map((p) => [p.label, p.points]);
+    this.showStamp(raw, list, list.length >= 3 && list[0][1] > 0);
+  }
+
+  /** Builds, places and plays a stamp: any older line rolls up into the total, an older stamp snaps out. */
+  private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean): void {
+    for (const c of this.items.slice()) if (c.tone !== 'lost') this.leave(c, true);
+    if (this.heroEl) this.dropStamp(this.heroEl, true);
     const sub = h('span', 'gs-hero-sub');
-    const split = parts.length >= 3 && points > 0;
     parts.forEach(([label, pts], i) => {
       if (i > 0) sub.append(split && i === 1 ? h('span', 'gs-hero-br') : h('span', 'gs-hero-sep', '·'));
       sub.append(h('span', 'gs-hero-part', h('span', 'gs-hero-lbl', label), pts > 0 ? h('span', 'gs-hero-pts gs-num', '+' + fmt(pts)) : null));
@@ -354,7 +371,7 @@ export class Fx {
     const el = h('div', 'gs-hero', inner);
     this.place(el, parts.length === 0 ? 0 : split ? 2 : 1);
     this.el.append(el);
-    this.stamp = el;
+    this.heroEl = el;
     // A pass flash from this same beat steps back and plays once the stamp has gone.
     this.hud.yieldToStamp();
     // A scale punch at full strength: opaque within two frames, slammed down from 1.6x, a small
@@ -417,8 +434,8 @@ export class Fx {
   }
 
   private dropStamp(el: HTMLElement, fast: boolean): void {
-    if (this.stamp === el) {
-      this.stamp = null;
+    if (this.heroEl === el) {
+      this.heroEl = null;
       window.clearTimeout(this.stampTimer);
       this.onLayout();
     }

@@ -1,5 +1,5 @@
 import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventTriggerZ, moodInfo } from './chaos';
-import { CHUNK_LEN, Course, FOREST_LIMIT, Obstacle, courseFor } from './course';
+import { CHUNK_LEN, Course, FOREST_LIMIT, Obstacle, ObstacleKind, courseFor } from './course';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
 import { MAX_RUN_TICKS, actionOf, draftOf, steerOf } from './input';
 import { Rng } from './prng';
@@ -26,7 +26,9 @@ export type SimEvent =
   | { type: 'takeoff'; kind: TakeoffKind; vy: number }
   | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean }
   | { type: 'crash'; cause: CrashCause }
-  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number }
+  /** Near-miss styles may carry the edge gap (m), the side (+1 = obstacle on the sled's +x side), the
+   *  nearest point on the obstacle (x, z), its kind and id. Optional and never hashed; filled later. */
+  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
   | { type: 'comboBank'; points: number; mult: number }
   | { type: 'comboLost'; points: number }
   | { type: 'gift'; id: number; value: number; x: number; y: number; z: number }

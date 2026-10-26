@@ -1,4 +1,5 @@
 import type { GhostKind } from '../ui/contract';
+import type { GhostRole } from './beats';
 import {
   F_AIRPITCH,
   F_AIRYAW,
@@ -29,6 +30,10 @@ export interface GhostEntry {
   kind: GhostKind;
   score: number;
   record: string;
+  /** The field's role for this ghost (field.ts pickField); absent for an unplanned pick. */
+  role?: GhostRole;
+  /** A grudge promoted to nemesis (three wins in a row). */
+  nemesis?: boolean;
 }
 
 export interface GhostTrack {

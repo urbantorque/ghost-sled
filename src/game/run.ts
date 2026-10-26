@@ -28,6 +28,8 @@ export interface Snap {
   drifting: boolean;
   driftDir: number;
   driftTier: number;
+  /** Drift charge (sim s.driftCharge: tier 1 at 0.6, 2 at 1.35, 3 at 2.4). Presentation only, never hashed. */
+  driftCharge: number;
   action: boolean;
   drafting: boolean;
   onIce: boolean;
@@ -57,6 +59,7 @@ export function emptySnap(): Snap {
     drifting: false,
     driftDir: 0,
     driftTier: 0,
+    driftCharge: 0,
     action: false,
     drafting: false,
     onIce: false,
@@ -86,6 +89,7 @@ export function copySnap(s: SledState, o: Snap): void {
   o.drifting = s.drifting;
   o.driftDir = s.driftDir;
   o.driftTier = s.driftTier;
+  o.driftCharge = s.driftCharge;
   o.action = s.action;
   o.drafting = s.drafting;
   o.onIce = s.onIce;
@@ -117,6 +121,7 @@ export function lerpSnap(a: Snap, b: Snap, t: number, o: Snap): void {
   o.drifting = b.drifting;
   o.driftDir = b.driftDir;
   o.driftTier = b.driftTier;
+  o.driftCharge = b.driftCharge;
   o.action = b.action;
   o.drafting = b.drafting;
   o.onIce = b.onIce;

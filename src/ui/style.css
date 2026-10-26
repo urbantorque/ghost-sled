@@ -3133,6 +3133,12 @@
   box-shadow: inset 0 0 0 1px rgba(255, 56, 72, 0.5), var(--shadow);
 }
 
+/* Finale and unlock banners (stubs): the same plain pill as a mission banner until they get a tone. */
+.gs-toast.t-finale,
+.gs-toast.t-unlock {
+  padding-left: 12px;
+}
+
 /* Bounded to the safe width: with the reward beside the name a long name ran the banner off a 360 px
    phone. The name gives way first (an ellipsis); the badge and "+10 gifts" keep their size. */
 .gs-pass {

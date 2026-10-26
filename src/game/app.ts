@@ -10,12 +10,16 @@ import { RunRecord, recordFromString, recordToString } from '../sim/replay';
 import { decodeLog } from '../sim/input';
 import { SimEvent } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
-import { STYLE_LABEL } from '../sim/scoring';
 import { UI } from '../ui/ui';
+import { reduced } from '../ui/motion';
+import { REVEAL_TIMING } from '../ui/reveal';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GhostKind, HintKind, ResultsModel, SettingsModel, StyleTone, TitleModel } from '../ui/contract';
+import type { GhostKind, HintKind, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import { Director } from './director';
+import { anchorFor, pickField } from './field';
 import { PoolGhostData } from './ghostdata';
-import { GhostEntry, GhostManager, GhostPose, emptyPose } from './ghosts';
+import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose } from './ghosts';
+import { intensity } from './intensity';
 import { InputController } from './input';
 import { FixedLoop } from './loop';
 import { RunSummary, missionViews } from './missions';
@@ -56,6 +60,9 @@ function poolFor(id: string): PoolGhostData[] {
 }
 
 
+/** No race events outside the run phase. */
+const NO_RACE: readonly RaceEvent[] = [];
+
 interface Challenge {
   record: RunRecord;
   attempts: number;
@@ -69,6 +76,8 @@ export class App {
   private audio = new AudioEngine();
   private input: InputController;
   private ghosts = new GhostManager();
+  /** Turns each frame's sim and race events into beats and feel (window.__gs.director for probes). */
+  readonly director = new Director(reduced);
   private pacing = new AdPacing();
   private tiers: TierController;
   private phase: Phase = 'boot';
@@ -101,6 +110,8 @@ export class App {
   private time = 0;
   private attract = { tick: 0, focus: -1 };
   private ghostPoses = new Map<number, GhostPose | null>();
+  /** This frame's standings, computed once (the world's rival, the HUD pill and the hints read them). */
+  private frameStandings: ReturnType<GhostManager['standings']> | null = null;
   private airTicks = 0;
   private hintTimer = 0;
   private hintShown: HintKind | null = null;
@@ -270,7 +281,7 @@ export class App {
     const picks = pool.length ? [pool[Math.floor(pool.length * 0.6)], pool[Math.floor(pool.length * 0.72)], pool[Math.floor(pool.length * 0.84)]].filter(Boolean) : [];
     const entries = picks.map((g) => ({ name: g.name, kind: 'pool' as GhostKind, score: g.score, record: g.record }));
     this.ghosts.setField(entries);
-    this.world.setGhostField(this.ghosts.tracks.map((t) => ({ id: t.entry.id, name: t.entry.name, kind: t.entry.kind })));
+    this.world.setGhostField(this.ghostField());
     this.attract = { tick: REEL_START, focus: -1 };
     const pose = emptySnap();
     pose.z = 2;
@@ -387,34 +398,37 @@ export class App {
     this.startRun();
   }
 
-  private pickField(mood: Mood): Omit<GhostEntry, 'id'>[] {
+  /** The run's field (field.ts pickField), as ghost entries with their role and nemesis flags. */
+  private pickField(chaos: ChaosRoll): Omit<GhostEntry, 'id'>[] {
     const d = this.save.data;
-    const key = this.mountain.id === 'daily' ? `daily:${this.daily.tagline}` : this.mountain.id;
-    const best = d.best[key]?.score ?? 0;
-    const pool = this.poolForMountain(this.mountain);
-    const count = 5 + moodInfo(mood).params.extraGhosts;
-    const above = pool.filter((g) => g.score > best);
-    let picks: PoolGhostData[];
-    if (above.length >= count) {
-      // The next few just above your best, spread so they are not all the same pace.
-      const span = above.slice(0, Math.max(count, Math.min(above.length, count * 2)));
-      picks = [];
-      for (let i = 0; i < count; i++) picks.push(span[Math.floor((i * span.length) / count)]);
-    } else picks = pool.slice(Math.max(0, pool.length - count));
-    const kind: GhostKind = this.mountain.id === 'daily' ? 'daily' : 'pool';
-    const out: Omit<GhostEntry, 'id'>[] = picks.map((g) => ({ name: g.name, kind, score: g.score, record: g.record }));
+    const key = this.mountainKey();
     const own = d.best[key];
-    if (own?.record) out.push({ name: d.name, kind: 'you', score: own.score, record: own.record });
     const grudge = d.grudge[key];
-    if (grudge?.record && !out.some((o) => o.record === grudge.record)) {
-      const i = out.findIndex((o) => o.name === grudge.name);
-      if (i >= 0) out.splice(i, 1);
-      out.push({ name: grudge.name, kind: 'grudge', score: grudge.score, record: grudge.record });
-    }
-    if (this.challenge && this.challenge.record.seed === this.mountain.seed) {
-      out.push({ name: this.challenge.record.name, kind: 'friend', score: this.challenge.record.score, record: recordToString(this.challenge.record) });
-    }
-    return out;
+    const friend = this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
+    const picks = pickField({
+      pool: this.poolForMountain(this.mountain),
+      kind: this.mountain.id === 'daily' ? 'daily' : 'pool',
+      mood: chaos.mood,
+      event: chaos.event,
+      count: 5 + moodInfo(chaos.mood).params.extraGhosts,
+      anchor: anchorFor(d.runDists ?? {}, key),
+      seed: chaos.seed,
+      bestScore: own?.score ?? 0,
+      you: own?.record ? { name: d.name, score: own.score, distance: own.distance, record: own.record } : null,
+      grudge: grudge?.record ? { name: grudge.name, score: grudge.score, record: grudge.record, distance: grudge.distance, nemesis: (grudge.streak ?? 0) >= 3 } : null,
+      friend: friend ? { name: friend.name, score: friend.score, record: recordToString(friend) } : null,
+    });
+    return picks.map((g) => {
+      const e: Omit<GhostEntry, 'id'> = { name: g.name, kind: g.kind, score: g.score, record: g.record };
+      if (g.role) e.role = g.role;
+      if (g.nemesis) e.nemesis = true;
+      return e;
+    });
+  }
+
+  /** The save's key for this mountain (a Daily Mountain is keyed by its day). */
+  private mountainKey(): string {
+    return this.mountain.id === 'daily' ? `daily:${this.daily.tagline}` : this.mountain.id;
   }
 
   private startRun(): void {
@@ -437,9 +451,9 @@ export class App {
 
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(chaos.mood);
-    const field = this.pickField(chaos.mood);
+    const field = this.pickField(chaos);
     this.ghosts.setField(field);
-    this.world.setGhostField(this.ghosts.tracks.map((t) => ({ id: t.entry.id, name: t.entry.name, kind: t.entry.kind })));
+    this.world.setGhostField(this.ghostField());
 
     this.input.releaseAll();
     // Dev demo: the rider replays an expert pool run (for capturing showcase moments).
@@ -468,13 +482,14 @@ export class App {
           }
         };
         this.ghosts.setField(field.filter((f) => f.name !== pick.name && !same(f.record)));
-        this.world.setGhostField(this.ghosts.tracks.map((t) => ({ id: t.entry.id, name: t.entry.name, kind: t.entry.kind })));
+        this.world.setGhostField(this.ghostField());
       }
     }
     this.run = new Run(this.mountain.seed, chaos, sled, source);
     this.run.draftProbe = this.ghosts.draftProbe;
     this.loop = new FixedLoop(() => this.run!.tick());
     this.world.beginRun(this.run.cur, chaos.event, sled);
+    this.world.resetFeel();
     this.phase = 'run';
     this.paused = false;
     this.reviveUsed = false;
@@ -491,6 +506,7 @@ export class App {
     this.airTicks = 0;
     this.hintTimer = 0;
     this.hintShown = null;
+    this.beginDirector(chaos);
 
     this.audio.setScene('run');
     this.audio.setMood(chaos.mood, biomeForSeed(this.mountain.seed));
@@ -505,6 +521,42 @@ export class App {
       this.audio.ui('reveal-land');
     }
     this.platform.gameplayStart();
+  }
+
+  /** The ghost layer's field: each track's id, name and kind, with its role and nemesis flags. */
+  private ghostField(): Array<{ id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean }> {
+    return this.ghosts.tracks.map((t) => {
+      const g: { id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean } = { id: t.entry.id, name: t.entry.name, kind: t.entry.kind };
+      if (t.entry.role) g.role = t.entry.role;
+      if (t.entry.nemesis) g.nemesis = true;
+      return g;
+    });
+  }
+
+  /** Hands the director this run's snapshots (taken before the run can change the save). */
+  private beginDirector(chaos: ChaosRoll): void {
+    const d = this.save.data;
+    const key = this.mountainKey();
+    const g = d.grudge[key];
+    const friend = this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
+    const reveal = chaos.mood !== Mood.None || chaos.event !== ChaosEvent.None;
+    this.director.beginRun({
+      mood: chaos.mood,
+      event: chaos.event,
+      triggerZ: this.run ? this.run.sim.dyn.triggerZ : Infinity,
+      hasReveal: reveal,
+      revealLeaveS: reveal ? REVEAL_TIMING.T_LEAVE / 1000 : 0,
+      bestDistAtStart: d.best[key]?.distance ?? 0,
+      bestScoreAtStart: d.best[key]?.score ?? 0,
+      bestComboAtStart: d.stats.bestCombo,
+      grudgeAtStart: g ? { name: g.name, record: g.record, them: g.them ?? 1, streak: g.streak ?? 0 } : null,
+      friend: friend ? { name: friend.name, distance: friend.distance } : null,
+      lifetimePassed: d.ghostsPassed,
+      unlockLadder: MOUNTAINS.filter((m) => m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
+      // (Mid-run mission pops are not wired yet: progress.missionsCrossed through the director.)
+      missionsCrossed: () => [],
+    });
+    this.director.time.reset();
   }
 
   private runAgain(): void {
@@ -560,6 +612,8 @@ export class App {
       this.pacing.adShown(Date.now());
       this.ui.hideResults();
       this.run.revive();
+      this.director.revive();
+      this.world.resetFeel();
       this.phase = 'run';
       this.world.cam.mode = 'chase';
       this.last = performance.now();
@@ -1138,11 +1192,11 @@ export class App {
     if (!run || !this.loop) return;
     const frozen = this.paused || this.adPlaying || this.ui.modal && this.phase === 'run';
     let alpha = 1;
-    // Hit-stop: time briefly thickens on a perfect landing. Only the real-time feed into the fixed
+    // Hit-stop and slow motion are the director's time scale. Only the real-time feed into the fixed
     // loop is scaled, so the simulation itself stays tick-exact.
-    const scale = this.hitstop > 0 ? 0.35 : 1;
-    this.hitstop = Math.max(0, this.hitstop - dt);
-    if (!frozen && this.phase === 'run') alpha = this.loop.advance(dt * scale);
+    const time = this.director.time;
+    time.step(dt);
+    if (!frozen && this.phase === 'run') alpha = this.loop.advance(dt * time.feed);
     lerpSnap(run.prev, run.cur, alpha, this.view);
     const sim = run.sim;
     // Ghosts keep riding past you while you tumble and read the results.
@@ -1154,23 +1208,63 @@ export class App {
       const p = emptyPose();
       this.ghostPoses.set(t.entry.id, this.ghosts.pose(t, tick, p) ? p : null);
     }
-    if (this.phase === 'run') {
-      for (const ev of this.ghosts.race(sim.tick, sim.s.z)) this.onRace(ev);
-    }
+    const race: readonly RaceEvent[] = this.phase === 'run' ? this.ghosts.race(sim.tick, sim.s.z) : NO_RACE;
+    for (const ev of race) this.onRace(ev);
 
-    const events = run.drain().map((p) => p.e);
-    // The sim emits a landing's trick styles before the land event itself; read the land first so
-    // spin and flip callouts name this landing, not the previous one.
-    for (const e of events) if (e.type === 'land') this.lastLand = { halfTurns: e.halfTurns, flips: e.flips };
-    for (const e of events) this.onSimEvent(e);
+    const drained = run.drain();
+    const events = drained.map((p) => p.e);
     if (!sim.s.grounded) this.airTicks++;
     else this.airTicks = 0;
+    // Standings once per frame: the world's rival, the HUD pill and the hints all read these.
+    const st = this.ghosts.standings(sim.tick, sim.s.z);
+    this.frameStandings = st;
+
+    // The frame's named moments: the race's first, then the sim events' in order.
+    const out = this.director.step({
+      phase: this.phase === 'run' ? 'run' : 'crashed',
+      dt: frozen ? 0 : dt,
+      sim,
+      events: drained,
+      race,
+      tracks: this.ghosts.tracks,
+      poses: this.ghostPoses,
+      standings: st,
+      passedThisRun: this.passedThisRun.size,
+      settledPassed: this.settlement?.passed ?? 0,
+      timeToLand: this.world.landing.timeToLand,
+      airTicks: this.airTicks,
+      reduced: reduced(),
+    });
+    // Beats never touch the sim: their gifts go to passBonus (so live state matches replays).
+    for (const b of out.beats) {
+      switch (b.type) {
+        case 'pass':
+        case 'duel':
+        case 'finale':
+        case 'graveyard':
+          this.passBonus += b.gifts;
+          break;
+        case 'grudgeSettled':
+          this.grudgeBeaten = true;
+          this.platform.happytime();
+          break;
+        default:
+          break;
+      }
+    }
+    this.ui.beats(out.beats);
+    // Before this frame's raw sounds, so streak and whisker data are known when they play.
+    this.audio.beats(out.beats);
+    for (const e of events) {
+      this.audio.simEvent(e);
+      this.onSimEvent(e);
+    }
 
     this.world.frame({
       mode: this.phase === 'results' ? 'results' : 'run',
       labels: this.phase !== 'results',
       snap: this.view,
-      dt: frozen ? 0 : dt,
+      dt: frozen ? 0 : dt * out.feel.timeRender,
       time: this.time,
       events,
       collected: sim.collected,
@@ -1182,30 +1276,37 @@ export class App {
       occluders: this.ui.occluders(),
       // Where the HUD hung the avalanche mirror (top-centre, over its danger meter); null with no chase.
       mirror: this.ui.mirrorRect(),
-      // The ghost the rival pill names (standings are cheap; the HUD reads them again below).
-      rival: this.phase === 'run' ? ((n) => (n ? { id: n.track.entry.id, gap: n.gap } : null))(this.ghosts.standings(sim.tick, sim.s.z).next) : null,
+      // The ghost the rival pill names.
+      rival: this.phase === 'run' ? out.rival : null,
+      beats: out.beats,
+      feel: out.feel,
     });
     this.ui.setRiderScreen(this.world.riderScreen.x, this.world.riderScreen.y);
     this.ui.touchVisual(this.input.visual, this.input.mode === 'touch' && this.phase === 'run');
 
     if (this.phase === 'run' || this.phase === 'crashed') {
-      const st = this.ghosts.standings(sim.tick, sim.s.z);
       const c = sim.combo;
       const av = sim.dyn.avalanche;
+      const rv = out.rival;
+      const rt = rv ? this.ghosts.tracks.find((t) => t.entry.id === rv.id) : undefined;
+      const hm = out.hud;
       this.ui.updateHud({
         score: sim.score,
         distance: sim.distance,
         gifts: sim.gifts + this.passBonus,
-        combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0 },
+        combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
-        nextGhost: st.next ? { name: st.next.track.entry.name, kind: st.next.track.entry.kind, gap: st.next.gap } : null,
+        nextGhost: rv && rt ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel } : null,
         place: { rank: st.rank, of: st.of },
         draft: sim.s.drafting ? sim.s.draftCharge : 0,
         driftTier: sim.s.drifting ? sim.s.driftTier : 0,
         danger: av.phase === 2 ? { kind: 'avalanche', gap: sim.s.z - av.z } : null,
         mood: this.chaos.mood,
+        bestIn: hm.bestIn,
+        countdown: hm.countdown,
       });
       const danger = av.phase === 2 ? Math.max(0, 1 - (sim.s.z - av.z) / 60) : sim.dyn.yeti.phase === 2 ? 0.5 : 0;
+      const a = out.audio;
       const frame: AudioFrame = {
         speed: sim.s.speed,
         grounded: sim.s.grounded,
@@ -1217,69 +1318,45 @@ export class App {
         drafting: sim.s.drafting,
         comboChain: c.chain,
         comboMult: c.multiplier,
-        intensity: Math.min(1, Math.max(0, (sim.s.speed - 10) / 34) * 0.55 + Math.min(1, c.multiplier / 8) * 0.3 + danger * 0.35 + (this.chaos.event !== ChaosEvent.None ? 0.05 : 0)),
+        intensity: intensity({
+          speed: sim.s.speed,
+          mult: c.multiplier,
+          skillChain: a.skillChain,
+          earnedFlow: a.earnedFlow,
+          raceNear: a.race > 0,
+          danger,
+          eventRolled: this.chaos.event !== ChaosEvent.None,
+          lift: a.lift,
+          runTime: sim.tick / 60,
+          countIn: a.countIn,
+        }),
         danger,
         crashed: sim.s.crashed,
+        flow: a.flow,
+        driftCharge: a.driftCharge,
+        skillMult: a.skillMult,
+        race: a.race,
+        duel: a.duel,
+        shoulder: a.shoulder,
+        fuse: a.fuse,
+        streak: a.streak,
+        countIn: a.countIn,
       };
       this.audio.update(frame, frozen ? 0 : dt);
       if (this.phase === 'run') this.updateHints(dt);
     }
   }
 
-  private onRace(ev: ReturnType<GhostManager['race']>[number]): void {
-    const t = ev.track;
-    if (ev.type === 'pass') {
-      if (ev.first) {
-        this.passedThisRun.add(t.entry.id);
-        const bonus = (this.chaos.mood === Mood.Haunted ? 2 : 1) * (t.entry.kind === 'grudge' ? 10 : 5);
-        this.passBonus += bonus;
-        if (t.entry.kind === 'grudge' && !this.grudgeBeaten) {
-          this.grudgeBeaten = true;
-          this.platform.happytime();
-          this.ui.toast('Grudge settled', 'grudge', `+${bonus} gifts`);
-        }
-        this.ui.ghostPass(t.entry.name, t.entry.kind, true);
-        this.audio.ui('ghost-pass', this.passedThisRun.size);
-      } else {
-        this.ui.ghostPass(t.entry.name, t.entry.kind, true);
-        this.audio.ui('ghost-pass', this.passedThisRun.size);
-      }
-    } else if (ev.type === 'passedBy') {
-      this.ui.ghostPass(t.entry.name, t.entry.kind, false);
-      this.audio.ui('ghost-passed-you');
-    }
+  /** Race bookkeeping only: what the director names, sounds and pays travels in its beats. */
+  private onRace(ev: RaceEvent): void {
+    if (ev.type === 'pass' && ev.first) this.passedThisRun.add(ev.track.entry.id);
   }
 
-  private styleTone(kind: string, points: number): StyleTone {
-    if (kind === 'perfect') return 'perfect';
-    if (points >= 300 || kind === 'flip' || kind === 'spin' || kind === 'yetiHop' || kind === 'avalanche') return 'big';
-    return 'normal';
-  }
-
+  /** A sim event's game logic: the crash, onboarding, the event telegraph and the revive cut. */
   private onSimEvent(e: SimEvent): void {
-    this.audio.simEvent(e);
     switch (e.type) {
-      case 'style': {
-        let label = STYLE_LABEL[e.kind];
-        // Every number on a callout carries its label, and "x" is the combo multiplier's alone.
-        if (e.kind === 'spin' && this.lastLand && this.lastLand.halfTurns > 0) label = `Spin ${this.lastLand.halfTurns * 180}`;
-        if (e.kind === 'flip' && this.lastLand) label = ['Backflip', 'Double Backflip', 'Triple Backflip'][Math.max(1, this.lastLand.flips) - 1] ?? `${this.lastLand.flips} Backflips`;
-        this.ui.popStyle(label, e.points, e.mult, this.styleTone(e.kind, e.points));
-        break;
-      }
       case 'land':
-        this.lastLand = { halfTurns: e.halfTurns, flips: e.flips };
-        if (e.quality === 'sketchy') this.ui.popStyle('Sketchy', 0, 1, 'lost');
-        if (e.quality === 'perfect') {
-          this.markHint('stomp');
-          this.hitstop = 0.13;
-        }
-        break;
-      case 'comboBank':
-        this.ui.comboBank(e.points, e.mult);
-        break;
-      case 'comboLost':
-        this.ui.popStyle('Combo lost', e.points, 1, 'lost');
+        if (e.quality === 'perfect') this.markHint('stomp');
         break;
       case 'drift':
         if (e.phase === 'release') this.markHint('drift');
@@ -1291,7 +1368,7 @@ export class App {
         if (e.phase === 'warn') {
           this.ui.warn(EVENTS[e.event]?.warn ?? 'Something stirs', e.event);
           this.audio.ui('warn');
-        } else if (e.phase === 'success') this.ui.toast('Outran the avalanche', 'info', '+2,000 style');
+        }
         break;
       case 'crash':
         this.crashed();
@@ -1303,9 +1380,6 @@ export class App {
         break;
     }
   }
-
-  private lastLand: { halfTurns: number; flips: number } | null = null;
-  private hitstop = 0;
 
   // ------------------------------------------------------------------ onboarding
 
@@ -1334,7 +1408,7 @@ export class App {
     if (!want && (h.pop ?? 0) < 1 && sim.s.action && sim.s.grounded && !sim.s.drifting) want = 'pop';
     if (!sim.s.grounded && (h.stomp ?? 0) < 3 && this.world.landing.timeToLand < 1.2) want = 'stomp';
     if (!want && (h.draft ?? 0) < 1 && this.hintTimer > 20 && this.ghosts.tracks.length) {
-      const st = this.ghosts.standings(sim.tick, sim.s.z);
+      const st = this.frameStandings ?? this.ghosts.standings(sim.tick, sim.s.z);
       if (st.next && st.next.gap > 2 && st.next.gap < 25) want = 'draft';
     }
     if (sim.s.drafting) h.draft = 1;

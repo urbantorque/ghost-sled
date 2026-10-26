@@ -3,6 +3,7 @@ import { ChaosEvent, Mood } from '../sim/chaos';
 import { CHUNK_LEN, Course, courseFor } from '../sim/course';
 import type { Snap } from '../game/run';
 import type { GhostPose } from '../game/ghosts';
+import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
 import { ChaseCamera } from './camera';
@@ -76,7 +77,13 @@ export interface FrameView {
   /** Contract C2: the avalanche mirror's rect (CSS px, top-left origin) from the HUD's own layout,
    *  null while no chase is on. Absent, the renderer falls back to its built-in geometry. */
   mirror?: { x: number; y: number; w: number; h: number } | null;
+  /** This frame's named moments from the director (the same list the HUD and audio get; never kept). */
+  beats?: readonly Beat[];
+  /** This frame's continuous feel from the director; absent reads as IDLE_FEEL. */
+  feel?: Feel;
 }
+
+const NO_BEATS: readonly Beat[] = [];
 
 const tmpV = new Vector3();
 const tmpV2 = new Vector3();
@@ -315,8 +322,13 @@ export class World {
     this.lastChunkRange = '';
   }
 
-  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind }>): void {
+  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
     this.ghosts.setField(list);
+  }
+
+  /** Clears held feel (the camera's freeze and jolts) on revive and at a run's start. */
+  resetFeel(): void {
+    this.cam.resetFeel();
   }
 
   /** The sled shop's previews (src/render/portrait.ts): the real sled mesh, with the rider seated
@@ -400,6 +412,12 @@ export class World {
     this.punch = Math.max(0, this.punch - dt * 2.5);
 
     if (v.mode === 'run') for (const e of v.events) this.onEvent(e, s);
+    // Named moments after the raw events: the camera, the ghost layer, then the world's own.
+    const beats = v.beats ?? NO_BEATS;
+    const feel = v.feel ?? IDLE_FEEL;
+    this.cam.beats(beats, feel);
+    this.ghosts.beats(beats, feel);
+    this.onBeats(beats, feel);
 
     // Rider.
     const showRider = v.playerVisible;
@@ -665,8 +683,15 @@ export class World {
     r.shadowMap.autoUpdate = autoShadow;
   }
 
+  /** The world's own reactions to named moments. Scaffold: none yet. */
+  private onBeats(_beats: readonly Beat[], _feel: Feel): void {
+    // (Nothing reacts yet.)
+  }
+
   private onEvent(e: SimEvent, s: Snap): void {
     const pos = new Vector3(s.x, s.y, -s.z);
+    // The camera's kicks and shakes for this event (ChaseCamera.onSimEvent).
+    this.cam.onSimEvent(e);
     switch (e.type) {
       case 'land': {
         // Landing powder rides along the slope, not along the fall the sled has just ended: the snap's
@@ -680,14 +705,10 @@ export class World {
           this.rider.flash();
           this.landing.pulse(s.x, s.z, s.heading);
           this.punch = 1;
-          this.cam.kick(0.9);
-          this.cam.shake(0.25);
           this.particles.perfect(pos, lv);
         } else if (e.quality === 'clean') {
-          this.cam.shake(Math.min(0.5, e.impact * 0.03));
           this.particles.burst(pos, 0.9, 22, lv);
         } else if (e.quality === 'sketchy') {
-          this.cam.shake(0.55);
           this.particles.burst(pos, 1.0, 26, lv);
         } else {
           this.particles.burst(pos, 0.5, 8, lv);
@@ -704,11 +725,9 @@ export class World {
         // wall, every lens looked through a row of dissolving trunks and cones.
         if (e.cause === 'forest') this.rider.startCrash(new Vector3(Math.sign(this.course.centerX(s.z) - s.x) * 1.5, s.vy, -s.vz), 0.35);
         else this.rider.startCrash(new Vector3(s.vx, s.vy, -s.vz), 1);
-        this.cam.shake(1.1);
         this.particles.burst(pos, 2, 60);
         break;
       case 'bump':
-        this.cam.shake(0.5);
         this.particles.burst(pos, 0.8, 14);
         break;
       case 'smash':
@@ -723,7 +742,6 @@ export class World {
         this.props.markDirty();
         break;
       case 'boost':
-        this.cam.kick(0.35);
         this.punch = Math.max(this.punch, 0.6);
         this.particles.sparkle(pos.clone().add(LOW), BOOST_C, 8, 2.4, 0.35, 0.18, this.landV.set(s.vx, 0, -s.vz));
         break;

@@ -1,6 +1,7 @@
 import { ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
+import type { Beat } from '../game/beats';
 import { Core } from './core';
 import type { Scene } from './music';
 
@@ -69,6 +70,16 @@ export interface AudioFrame {
   intensity: number; // 0..1 musical intensity computed by the game (speed, combo, danger)
   danger: number; // 0..1 tension (avalanche closing in, yeti near)
   crashed: boolean;
+  // Feel inputs, filled by the director (all optional; absent reads as none).
+  flow?: number; // 0..1 earned flow, display-capped
+  driftCharge?: number; // 0..1 drift charge while drifting
+  skillMult?: number; // 1..10 skill multiplier of the live combo
+  race?: number; // 0..1 race closeness
+  duel?: number; // 0..1 an open duel's tension, 0 when none
+  shoulder?: { amt: number; pan: number } | null; // a ghost at your shoulder: level and pan
+  fuse?: number; // 0..1 fuse on a big draining stake
+  streak?: number; // current stomp streak
+  countIn?: boolean; // the run-start reveal is up (chaos runs): intensity is held low
 }
 
 export type UiSound =
@@ -85,7 +96,9 @@ export type UiSound =
   | 'unlock'
   | 'go'
   | 'results-stamp'
-  | 'coin';
+  | 'coin'
+  | 'results-tick'
+  | 'results-mallet';
 
 type MuteReason = 'sdk' | 'ad' | 'hidden' | 'user';
 
@@ -252,18 +265,47 @@ export class AudioEngine {
     }
   }
 
-  /** detail: e.g. ghost-pass count this run, mission index. */
-  ui(name: UiSound, detail?: number): void {
+  /**
+   * The run's named moments for this frame (src/game/beats.ts), called BEFORE that frame's
+   * simEvent(e) calls so their data is known when the raw sounds play. Never keeps the list.
+   */
+  beats(list: readonly Beat[]): void {
+    for (const b of list) {
+      if (b.type === 'pass') {
+        if (!b.muted) this.ui('ghost-pass', b.ladder);
+      } else if (b.type === 'passedBy') {
+        if (!b.muted) this.ui('ghost-passed-you');
+      }
+    }
+  }
+
+  /** detail: e.g. ghost-pass count this run, mission index. delay: seconds from now (sync with UI). */
+  ui(name: UiSound, detail?: number, delay = 0): void {
     const ctx = this.ctx;
     const c = this.core;
     if (!ctx || !c || !this.live(ctx)) return;
     try {
       const now = ctx.currentTime;
-      c.sfx.ui(name, detail ?? 0, now + START_LEAD);
-      if (name === 'new-best' || name === 'unlock') c.graph.music.duck(0.6, now, 0.9, 0.5);
+      const d = Number.isFinite(delay) ? Math.max(0, delay) : 0;
+      c.sfx.ui(name, detail ?? 0, now + START_LEAD + d);
+      if (name === 'new-best' || name === 'unlock') c.graph.music.duck(0.6, now + d, 0.9, 0.5);
     } catch (err) {
       this.warn(err);
     }
+  }
+
+  /** Drops UI sounds scheduled ahead (results and reveal sync) that have not started building yet. */
+  cancelPending(): void {
+    try {
+      this.core?.sfx.clearPending();
+    } catch (err) {
+      this.warn(err);
+    }
+  }
+
+  /** Probe-only readout of the mix: the smoothed music intensity (layer levels join it later). */
+  debugLevels(): Record<string, number> {
+    return { intensity: this.intensity };
   }
 
   dispose(): void {

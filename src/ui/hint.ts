@@ -17,6 +17,10 @@ const TEXT: Record<HintKind, string> = {
   pop: 'Release to pop',
   stomp: 'Tap just before landing',
   draft: 'Tuck in behind a ghost',
+  // Taught as players reach them (teach-moves); their glyph is the stomp glyph until they get their own.
+  spin: 'Steer in the air to spin',
+  flip: 'Press and hold in the air to flip',
+  boostPop: 'Hold, then let go at the lip',
 };
 
 export class Hint {
@@ -113,6 +117,9 @@ const HOLD_TEXT: Record<HintKind, string> = {
   pop: 'Release to pop',
   stomp: 'Tap before landing',
   draft: 'Hold to drift',
+  spin: 'Drag in the air to spin',
+  flip: 'Hold in the air to flip',
+  boostPop: 'Hold, then let go at the lip',
 };
 
 /**

@@ -1,6 +1,7 @@
 import type { ChaosEvent, Mood } from '../sim/chaos';
 import type { CrashCause } from '../sim/sim';
 import type { InputMode, TouchVisual } from '../game/input';
+import type { Beat } from '../game/beats';
 
 // The contract between the game layer (src/game) and the DOM overlay (src/ui). The game owns all
 // state and calls these methods; the UI owns presentation only and reports intent via handlers.
@@ -44,8 +45,8 @@ export interface TitleModel {
   best: number;
   wallet: number;
   sledName: string;
-  /** A friend's challenge link was opened. */
-  challenge: { name: string; score: number; mountain: string } | null;
+  /** A friend's challenge link was opened. distance: how far their run went; daily: it was on a Daily Mountain. */
+  challenge: { name: string; score: number; mountain: string; distance?: number; daily?: boolean } | null;
   missions: MissionView[];
   inputMode: InputMode;
   firstVisit: boolean;
@@ -53,20 +54,26 @@ export interface TitleModel {
   master?: number;
   /** Ghosts passed across all runs (the selected mountain card shows it). */
   ghostsPassed?: number;
+  /** A one-line greeting over the Ride button (progress.titleGreeting), or none. */
+  greet?: string | null;
 }
 
 export interface HudModel {
   score: number;
   distance: number;
   gifts: number;
-  combo: { active: boolean; pending: number; mult: number; chain: number; timer: number };
+  /**
+   * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
+   * (stake.fuseLevel); pace: the stake has passed your lifetime best combo this run.
+   */
+  combo: { active: boolean; pending: number; mult: number; chain: number; timer: number; stake?: number; fuse?: number; pace?: boolean };
   speed: number;
   /**
    * The nearest ghost ahead of you (or the one just behind if you lead). `gap` is signed, positive
    * ahead. Contract C12: the HUD shows it as a positive number with a word ("6 m ahead", "6 m
    * behind"), in the ghost's kind colour, never a bare sign or a lone triangle.
    */
-  nextGhost: { name: string; kind: GhostKind; gap: number } | null;
+  nextGhost: { name: string; kind: GhostKind; gap: number; duel?: boolean } | null;
   /** Your race position among live ghosts, 1 = leading. */
   place: { rank: number; of: number };
   /** 0..1 slipstream charge while drafting, 0 otherwise. */
@@ -75,11 +82,16 @@ export interface HudModel {
   /** Avalanche gap in metres when one is chasing you. */
   danger: { kind: 'avalanche'; gap: number } | null;
   mood: Mood;
+  /** Metres to your best distance on this mountain while within 250 m, else null. */
+  bestIn?: number | null;
+  /** The rolled event coming up: metres to its trigger in 10 m steps (400 m or less), else null. */
+  countdown?: { event: ChaosEvent; metres: number } | null;
 }
 
 export interface RevealModel {
   mood: { id: Mood; name: string; rule: string };
-  event: { id: ChaosEvent; name: string } | null;
+  /** goal: what the event pays and how ("Outrun it: +2,000"). */
+  event: { id: ChaosEvent; name: string; goal?: string } | null;
   /** All mood names, for the slot-reel animation. */
   reel: string[];
 }
@@ -133,7 +145,22 @@ export interface ResultsModel {
   unlocked: string[];
   /** The same unlocks with their biome, for the reveal card and its Ride action (names stay above). */
   unlockedMountains?: UnlockedMountain[];
+  /** The run's longest stomp streak. */
+  bestStreak?: number;
+  /** The stake lost to the crash (results append " with 4,960 on the line" from 1,000). */
+  lostCombo?: number;
+  /** At most ONE extra race line on the card (C6 budget): friend, then grudge, then event note. */
+  raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' } | null;
+  /** The Run Again button's label ("Rematch Mila") and its accessible name. */
+  runAgainLabel?: { text: string; aria: string };
+  /** The next unlock to work toward, in the unlock-card slot. */
+  nextUnlock?: ResultsNextUnlock | null;
+  /** You beat the friend's challenge: Challenge becomes the primary "Send It Back". */
+  sendItBack?: boolean;
 }
+
+/** The next unlock on the results card: a mountain by ghosts passed, else a sled by gifts. */
+export type ResultsNextUnlock = { kind: 'mountain'; name: string; biome: MountainCard['biome']; have: number; need: number } | { kind: 'sled'; name: string; gifts: number };
 
 export interface SettingsModel {
   master: number;
@@ -177,9 +204,9 @@ export interface MirrorRect {
   h: number;
 }
 
-export type StyleTone = 'normal' | 'big' | 'perfect' | 'lost';
-export type ToastTone = 'ghost' | 'mission' | 'gift' | 'warn' | 'info' | 'grudge';
-export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft';
+export type StyleTone = 'normal' | 'big' | 'perfect' | 'lost' | 'best';
+export type ToastTone = 'ghost' | 'mission' | 'gift' | 'warn' | 'info' | 'grudge' | 'finale' | 'unlock';
+export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop';
 
 export interface GameUI {
   showTitle(m: TitleModel): void;
@@ -195,6 +222,11 @@ export interface GameUI {
   /** Combo banked: big cash-in number. */
   comboBank(points: number, mult: number): void;
   toast(text: string, tone: ToastTone, sub?: string): void;
+  /**
+   * Every run-time named moment (src/game/beats.ts). Called once per frame when non-empty; never
+   * retain the array (the director reuses it next frame).
+   */
+  beats(list: readonly Beat[]): void;
   /** You passed a ghost (passed=true) or a ghost passed you. */
   ghostPass(name: string, kind: GhostKind, passed: boolean): void;
   /** Slot-reel chaos reveal at run start. Never blocks gameplay; resolves when the card leaves. */

@@ -6,6 +6,7 @@ import { fmt, kindCls, metres, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
 import { missionList } from './title';
+import './meta.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
@@ -17,6 +18,11 @@ import { missionList } from './title';
 // screens the card keeps to the right, so the live crash scene on the left is the hero shot.
 
 const COUNT_MS = 650;
+/**
+ * The card's beat timeline (ms after it opens), for sound sync (engine.ui delays). The values mirror
+ * the constants and style.css delays they are named after; they change together.
+ */
+export const RESULTS_TIMING = { COUNT_MS, PLACE_MS: 300, NEW_BEST_MS: 560, BEAT_MS: 860, BEAT_STEP: 110, DONE_MS: 1050, DONE_STEP: 140, FLY_MS: 1470, FLY_STEP: 140, FLY_DUR: 680 } as const;
 /** When the missions land (ms after the card opens), matching the stagger in style.css. Their bars
  *  fill, each completed one's Done stamp lands 140 ms after the last, then its reward flies. */
 const MIS_STAMP_MS = 1050;
@@ -297,7 +303,7 @@ export class Results {
     }
     const again = btn(
       ctx,
-      { cls: 'gs-btn-primary gs-btn-xl gs-again', icon: 'play', label: 'Run Again', sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
+      { cls: 'gs-btn-primary gs-btn-xl gs-again', icon: 'play', label: m.runAgainLabel?.text ?? 'Run Again', aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
       this.inputMode !== 'touch' ? kbd('Space') : null,
     );
     // The keycap is a hint, not part of the name.

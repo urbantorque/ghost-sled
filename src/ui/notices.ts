@@ -37,12 +37,17 @@ const TOAST_ICON: Record<ToastTone, IconName | null> = {
   gift: 'gift',
   warn: 'alert',
   info: null,
+  finale: 'flag',
+  unlock: 'snowflake',
 };
 
 const TOAST_PRI: Record<ToastTone, number> = {
   grudge: P_CELEBRATE,
   mission: P_CELEBRATE,
   gift: P_CELEBRATE,
+  // (A finale gets its own priority between celebrate and alert later: MAX_WAIT is indexed by it.)
+  finale: P_CELEBRATE,
+  unlock: P_CELEBRATE,
   warn: P_CAUTION,
   ghost: P_INFO,
   info: P_INFO,

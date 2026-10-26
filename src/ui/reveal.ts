@@ -27,6 +27,9 @@ const HOLD_MS = 1200;
 const T_LEAVE = T_STAMP + HOLD_MS;
 const LEAVE_MS = 280;
 
+/** The reveal's timeline (ms from the card's start), for sound sync (engine.ui delays) and the count-in. */
+export const REVEAL_TIMING = { T_REEL, REEL_MS, T_STAMP, T_RULE, T_EVENT, T_LEAVE, LEAVE_MS } as const;
+
 export class Reveal {
   private timers: number[] = [];
   private card: HTMLElement | null = null;
