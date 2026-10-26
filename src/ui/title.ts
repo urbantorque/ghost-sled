@@ -2,7 +2,7 @@ import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contra
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt } from './fmt';
+import { dailyDate, fmt, metres } from './fmt';
 import { icon } from './icons';
 import { play, reduced } from './motion';
 
@@ -99,26 +99,12 @@ export class Title {
     const ride = h('div', 'gs-t-ride gs-t-anim');
     if (m.firstVisit) ride.append(tagline);
     if (m.challenge) {
-      const c = m.challenge;
-      // Player and mountain names are proper nouns: keep auto-translate off them.
-      const who = h('span', '', c.name);
-      who.setAttribute('translate', 'no');
-      const place = h('span', '', c.mountain);
-      place.setAttribute('translate', 'no');
-      const banner = h(
-        'div',
-        'gs-challenge',
-        icon('ghost', 'gs-challenge-ico'),
-        h(
-          'div',
-          'gs-challenge-txt',
-          h('span', 'gs-challenge-k', 'Challenge from ', who),
-          h('span', 'gs-challenge-v', 'Beat ', h('span', 'gs-num', fmt(c.score)), ' on ', place),
-        ),
-      );
-      // No live role: the title re-renders often and each render would announce it again. It sits
-      // right above the Accept button, so it is read in context.
-      ride.append(banner);
+      // A friend's link opens on their ghost: "Racing Mila's ghost" over how far it went and where.
+      ride.append(challengeBanner(m.challenge));
+    } else if (m.greet && !m.firstVisit) {
+      // A returning player gets one line over Ride: who is waiting, what is close, or the nearest
+      // mission. It is read in context right above Ride, so it carries no live role.
+      ride.append(greeting(m.greet));
     }
     const showKey = m.inputMode !== 'touch';
     // The button carries the choice it acts on. With the mountain cards on screen (the selected one
@@ -413,6 +399,54 @@ function ghostsPassed(m: TitleModel): number {
     if (need && def) return Math.max(0, def.unlockGhosts - Number(need[1]));
   }
   return 0;
+}
+
+/**
+ * A friend's challenge: "Racing Mila's ghost" over "2,340 m on Pinecrest" (how far their run went).
+ * A run on today's Daily Mountain reads "on the Daily Mountain"; one on another day's Daily (no
+ * mountain named) shows the first line alone. Links from before distances were carried keep the
+ * score: "Beat 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
+ * context, and the title re-renders often.
+ */
+function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
+  // Player and mountain names are proper nouns: keep auto-translate off them.
+  const who = h('span', '', `${c.name}\u2019s`);
+  who.setAttribute('translate', 'no');
+  const k = h('span', 'gs-challenge-k', 'Racing ', who, ' ghost');
+  const where = c.daily ? (c.mountain ? 'the Daily Mountain' : '') : c.mountain;
+  let v: HTMLElement | null = null;
+  if (where) {
+    const place = h('span', '', where);
+    place.setAttribute('translate', 'no');
+    v =
+      typeof c.distance === 'number' && c.distance > 0
+        ? h('span', 'gs-challenge-v', h('span', 'gs-num', metres(c.distance)), ' on ', place)
+        : h('span', 'gs-challenge-v', 'Beat ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
+  }
+  return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
+}
+
+/**
+ * The returning player's greeting (progress.titleGreeting): a grudge waiting here (the rival's name in
+ * rose, "Your nemesis" when it is one), the ghosts still to pass for the next mountain (mint), or the
+ * nearest mission (its flag).
+ */
+function greeting(text: string): HTMLElement {
+  const grudge = /^(Your nemesis )?(.+) is waiting on (.+)$/.exec(text);
+  if (grudge) {
+    const who = h('span', 'gs-t-greet-who', grudge[2]);
+    who.setAttribute('translate', 'no');
+    const where = h('span', '', grudge[3]);
+    where.setAttribute('translate', 'no');
+    return h('p', 'gs-t-greet is-grudge', icon('ghost'), h('span', '', grudge[1] ?? '', who, ' is waiting on ', where));
+  }
+  const unlock = /^(\d+) (more ghosts? opens?) (.+)$/.exec(text);
+  if (unlock) {
+    const where = h('span', '', unlock[3]);
+    where.setAttribute('translate', 'no');
+    return h('p', 'gs-t-greet is-unlock', icon('ghost'), h('span', '', h('span', 'gs-t-greet-n gs-num', unlock[1]), ` ${unlock[2]} `, where));
+  }
+  return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text));
 }
 
 /** "270/800" on screen, "270 of 800" to a reader. */

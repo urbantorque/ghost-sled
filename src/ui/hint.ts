@@ -17,7 +17,8 @@ const TEXT: Record<HintKind, string> = {
   pop: 'Release to pop',
   stomp: 'Tap just before landing',
   draft: 'Tuck in behind a ghost',
-  // Taught as players reach them (teach-moves); their glyph is the stomp glyph until they get their own.
+  // Taught as players reach them (teach-moves): a spin is steering in the air, so it shows the steer
+  // keys (the mouse sweep, the left zone); a flip and the boosted pop are holds, so they show the hold.
   spin: 'Steer in the air to spin',
   flip: 'Press and hold in the air to flip',
   boostPop: 'Hold, then let go at the lip',
@@ -91,9 +92,9 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
   if (kind === 'draft') {
     glyphs.append(icon('ghost', 'gs-hint-ghost'));
   } else if (mode === 'mouse') {
-    if (kind === 'steer') {
+    if (kind === 'steer' || kind === 'spin') {
       glyphs.append(icon('arrowL', 'gs-hint-arrow'), icon('mouse', 'gs-hint-mouse'), icon('arrowR', 'gs-hint-arrow'));
-      text = 'Move to steer';
+      text = kind === 'spin' ? 'Move in the air to spin' : 'Move to steer';
     } else if (kind === 'drift') {
       glyphs.append(icon('mouseHold', 'gs-hint-mouse'), plus(), icon('arrowL', 'gs-hint-arrow'), icon('arrowR', 'gs-hint-arrow'));
     } else {
@@ -101,7 +102,7 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
       if (kind === 'crouch') text = 'Hold button to crouch';
     }
   } else {
-    if (kind === 'steer') glyphs.append(...steerKeys());
+    if (kind === 'steer' || kind === 'spin') glyphs.append(...steerKeys());
     else if (kind === 'drift') glyphs.append(space(), plus(), kbd('A'), kbd('D'));
     else glyphs.append(space());
   }
@@ -117,9 +118,17 @@ const HOLD_TEXT: Record<HintKind, string> = {
   pop: 'Release to pop',
   stomp: 'Tap before landing',
   draft: 'Hold to drift',
-  spin: 'Drag in the air to spin',
+  // A spin is taught on the left (drag) zone; the hold zone keeps its plain air verb.
+  spin: 'Hold to flip',
   flip: 'Hold in the air to flip',
   boostPop: 'Hold, then let go at the lip',
+};
+
+/** The left (drag) zone's label when a hint is about steering. */
+const DRAG_TEXT: Partial<Record<HintKind, string>> = {
+  steer: 'Drag to steer',
+  drift: 'Drag to steer',
+  spin: 'Drag in the air to spin',
 };
 
 /**
@@ -131,10 +140,11 @@ const HOLD_TEXT: Record<HintKind, string> = {
  * this hint: on the left for steering, on the right for every hold, tap or release.
  */
 function touchZones(kind: HintKind, learned: boolean): HTMLElement {
-  const steerOn = kind === 'steer' || kind === 'drift';
-  const holdOn = kind !== 'steer';
-  const ringLeft = kind === 'steer';
-  const left = zone('l', 'drag', steerOn ? 'Drag to steer' : 'Steer', steerOn, ringLeft, !learned && kind === 'steer');
+  const drag = DRAG_TEXT[kind];
+  const steerOn = drag !== undefined;
+  const holdOn = kind !== 'steer' && kind !== 'spin';
+  const ringLeft = kind === 'steer' || kind === 'spin';
+  const left = zone('l', 'drag', drag ?? 'Steer', steerOn, ringLeft, !learned && kind === 'steer');
   const right = zone('r', 'hold', HOLD_TEXT[kind], holdOn, !ringLeft, !learned);
   return h('div', 'gs-zones', left, right);
 }

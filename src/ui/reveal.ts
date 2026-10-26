@@ -26,6 +26,15 @@ const T_EVENT = 940;
 const HOLD_MS = 1200;
 const T_LEAVE = T_STAMP + HOLD_MS;
 const LEAVE_MS = 280;
+/** The event's goal line lands this long after its chip. */
+const GOAL_LAG = 110;
+
+/** "Outrun it: +2,000" as text with its figure ("+2,000", "48") in bold. */
+function goalParts(goal: string): Array<string | HTMLElement> {
+  const at = /[+]?\d[\d,]*/.exec(goal);
+  if (!at) return [goal];
+  return [goal.slice(0, at.index), h('b', 'gs-num', at[0]), goal.slice(at.index + at[0].length)];
+}
 
 /** The reveal's timeline (ms from the card's start), for sound sync (engine.ui delays) and the count-in. */
 export const REVEAL_TIMING = { T_REEL, REEL_MS, T_STAMP, T_RULE, T_EVENT, T_LEAVE, LEAVE_MS } as const;
@@ -83,12 +92,19 @@ export class Reveal {
     // The reel of up to 12 names is decoration; the result is announced once through the HUD's live
     // region (a freshly inserted status node is not announced reliably).
     card.setAttribute('aria-hidden', 'true');
-    this.hud.say(`Run mood: ${m.mood.name}. ${m.mood.rule}${m.event && m.event.id !== ChaosEvent.None ? `. Watch for ${m.event.name}` : ''}`);
+    const ev = m.event && m.event.id !== ChaosEvent.None ? m.event : null;
+    this.hud.say(`Run mood: ${m.mood.name}. ${m.mood.rule}${ev ? `. Watch for ${ev.name}${ev.goal ? `. ${ev.goal}` : ''}` : ''}`);
 
     let chip: HTMLElement | null = null;
-    if (m.event && m.event.id !== ChaosEvent.None) {
-      chip = h('span', `gs-reveal-ev gs-pill e-${eventInfo(m.event.id).key}`, icon(EVENT_ICON[m.event.id] ?? 'alert'), `Watch for: ${m.event.name}`);
+    let goal: HTMLElement | null = null;
+    if (ev) {
+      chip = h('span', `gs-reveal-ev gs-pill e-${eventInfo(ev.id).key}`, icon(EVENT_ICON[ev.id] ?? 'alert'), `Watch for: ${ev.name}`);
       card.append(chip);
+      // What the event pays and how ("Outrun it: +2,000"), the figure at full weight.
+      if (ev.goal) {
+        goal = h('p', 'gs-reveal-goal', ...goalParts(ev.goal));
+        card.append(goal);
+      }
     }
     this.slot.append(card);
     this.card = card;
@@ -128,6 +144,15 @@ export class Reveal {
       this.at(rm ? 300 : T_EVENT, () => {
         c.style.opacity = '';
         play(c, [{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'scale(1.06)', offset: 0.6 }, { opacity: 1, transform: 'scale(1)' }], { duration: 240, easing: 'ease-out' });
+      });
+    }
+    if (goal) {
+      const g = goal;
+      g.style.opacity = '0';
+      // Just behind the chip it explains: a short rise, no scale (it is a line of text, not a stamp).
+      this.at(rm ? 300 : T_EVENT + GOAL_LAG, () => {
+        g.style.opacity = '';
+        play(g, [{ opacity: 0, transform: 'translateY(4px)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: 'ease-out' });
       });
     }
 

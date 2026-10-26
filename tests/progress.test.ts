@@ -78,7 +78,7 @@ describe('results race line', () => {
   it('friend lines read in race-gap grammar', () => {
     expect(friendLine('Mila', 2340, 2460)).toBe('You beat Mila by 120 m.');
     expect(friendLine('Mila', 2340, 2000)).toBe('Mila is 340 m ahead.');
-    expect(friendBeatenText('Mila', 2340)).toBe("Beat Mila's 2,340 m");
+    expect(friendBeatenText('Mila', 2340)).toBe('Beat Mila\u2019s 2,340 m');
   });
 });
 

@@ -107,7 +107,7 @@ export function friendLine(name: string, friendDistance: number, youDistance: nu
 
 /** The friend's run, crossed alive: the callout on the friendBeaten beat. */
 export function friendBeatenText(name: string, distance: number): string {
-  return `Beat ${name}'s ${m(distance)}`;
+  return `Beat ${name}\u2019s ${m(distance)}`;
 }
 
 /** Where a challenge was ridden, for copy: a Daily Mountain reads "the Daily Mountain". */
