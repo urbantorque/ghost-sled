@@ -1,5 +1,6 @@
 import { MissionResult, MissionState, RunSummary, applyRun } from './missions';
-import type { SaveData } from './save';
+import type { Grudge, SaveData } from './save';
+import type { GhostKind } from '../ui/contract';
 
 // Settling a run into the save: the run count, ghosts passed, lifetime stats and missions. A revive
 // followed by a second crash settles the same run again, so everything is credited as the difference
@@ -30,7 +31,23 @@ function clone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null): SettleResult {
+/** How the run ended against the grudge it started with (contract; meta implements the tally). */
+export interface GrudgeOutcome {
+  youDistance: number;
+  rode: { distance: number; passed: boolean } | null;
+  next: { name: string; score: number; record: string; distance: number; kind: GhostKind } | null;
+}
+
+/** The grudge after a run: tally, nemesis promotion and the results line. Idempotent from one
+ *  snapshot, so a revive's second settle gives the same answer. (Stub until meta lands it.) */
+export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge: Grudge | null; settled: boolean; nemesisDown: boolean; line: string | null } {
+  void o;
+  return { grudge: atStart, settled: false, nemesisDown: false, line: null };
+}
+
+/** `key` is the save key of the mountain (daily runs use `daily:<tag>`); meta uses it for runDists. */
+export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null, key?: string): SettleResult {
+  void key;
   if (!prior) d.runs++;
   const missionsBefore = prior ? prior.missionsBefore : clone(d.missions);
   d.missions = clone(missionsBefore);
