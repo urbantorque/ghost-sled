@@ -15,6 +15,16 @@ export interface TitleMenuHooks {
   openSettings(): void;
 }
 
+/**
+ * The daily card's model: TitleModel.daily plus the day streak and today's medal (settle.ts
+ * dailyStreakNow and dailyMedalNow). Both optional, so a model without them shows the card as before.
+ * (Contract amendment requested: TitleModel.daily gains `medal?: number; streak?: number`.)
+ */
+type DailyCardModel = TitleModel['daily'] & { medal?: number; streak?: number };
+
+/** Medal names by rank (0 none). */
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
 export class Title {
   readonly layer: Layer;
   private readonly el: HTMLElement;
@@ -173,7 +183,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily)));
+    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily as DailyCardModel)));
     this.watchEnds(track, prev, next, strip);
 
     // Secondary row.
@@ -279,7 +289,7 @@ export class Title {
     return b;
   }
 
-  private dailyCard(d: TitleModel['daily']): HTMLButtonElement {
+  private dailyCard(d: DailyCardModel): HTMLButtonElement {
     const b = h('button', 'gs-daily');
     b.type = 'button';
     b.dataset.fk = 'daily';
@@ -292,16 +302,22 @@ export class Title {
     // The key is the UTC day ("2026-10-24"); it shows as a short date in the player's locale.
     const date = dailyDate(d.key);
     const status = d.ready ? 'Fresh rivals' : 'Finding rivals…';
-    const meta = h('span', 'gs-daily-meta', h('span', 'gs-daily-date gs-num', date), h('span', 'gs-tag', status));
+    // Days in a row with a Daily run ("Day 3", from the second day), and today's medal beside the best.
+    const streak = Math.floor(d.streak ?? 0);
+    const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
+    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', 'Day ', h('span', 'gs-num', String(streak))) : null;
+    const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
     b.append(
       h('span', 'gs-daily-ico', icon('snowflake')),
       h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Daily Mountain'), meta),
     );
-    if (d.best > 0) b.append(h('span', 'gs-daily-best', h('span', 'gs-daily-best-l', 'Best'), h('span', 'gs-num', fmt(d.best))));
+    const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
+    if (d.best > 0 || disc) b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc ?? h('span', 'gs-daily-best-l', 'Best'), d.best > 0 ? h('span', 'gs-num', fmt(d.best)) : null));
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
-    b.setAttribute('aria-label', `Daily Mountain, ${date}. ${status}${d.best > 0 ? `. Best ${fmt(d.best)}` : ''}`);
+    const said = [`Daily Mountain, ${date}`, status, streak >= 2 ? `Day ${streak} in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
+    b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!d.ready) return;
       this.ctx.sound('confirm');

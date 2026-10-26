@@ -37,7 +37,7 @@ function goalParts(goal: string): Array<string | HTMLElement> {
 }
 
 /** The reveal's timeline (ms from the card's start), for sound sync (engine.ui delays) and the count-in. */
-export const REVEAL_TIMING = { T_REEL, REEL_MS, T_STAMP, T_RULE, T_EVENT, T_LEAVE, LEAVE_MS } as const;
+export const REVEAL_TIMING = { T_REEL, REEL_MS, T_STAMP, T_RULE, T_EVENT, T_GOAL: T_EVENT + GOAL_LAG, T_LEAVE, LEAVE_MS } as const;
 
 export class Reveal {
   private timers: number[] = [];

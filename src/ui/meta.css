@@ -4,7 +4,8 @@
    action, mint for ghosts, rose for the grudge only, marigold for gifts, gold-white for your best.
 
    Timing: every results delay below mirrors RESULTS_TIMING in results.ts (the head's sub block
-   lands at 440 ms, the unlock slot at 480 ms, the race at 620 ms); the reveal's goal line lands with
+   lands at 440 ms (SUB_MS), the unlock slot at 480 ms (UNLOCK_MS), the race at 620 ms, the meter
+   fill at 760 ms for 620 ms (METER_MS, METER_DUR)); the reveal's goal line lands 110 ms after
    the event chip at REVEAL_TIMING.T_EVENT (reveal.ts drives it). */
 
 /* ------------------------------------------------------------------ Results: the race line */
@@ -277,6 +278,61 @@
   font-weight: 900;
 }
 
+/* ------------------------------------------------------------------ Daily medal and streak */
+
+/* Today's Daily medal: a small struck disc in its metal, distinct from marigold (gifts) and
+   gold-white (your best, first place). Bronze is copper, silver a cool steel, gold an old amber that
+   sits redder than marigold. The disc carries a lit face and a darker rim, so it reads as a coin
+   even at 14 px. */
+.gs-medal {
+  --m: #c9d4e8;
+  --m-rim: #7c879e;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--m);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.gs-medal::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.78), var(--m) 46%, var(--m-rim) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px var(--m-rim),
+    0 0 0 1.5px rgba(18, 25, 51, 0.9);
+}
+
+.gs-medal.m-1 {
+  --m: #e0a072;
+  --m-rim: #8a5233;
+}
+
+.gs-medal.m-2 {
+  --m: #cdd6e8;
+  --m-rim: #7c879e;
+}
+
+.gs-medal.m-3 {
+  --m: #f0a93b;
+  --m-rim: #94601a;
+}
+
+/* On the daily card the medal takes the Best label's place over the figure. */
+.gs-daily-best.has-medal .gs-medal {
+  font-size: max(11px, 0.72em);
+}
+
+/* "Day 3": the run of days in an off-white tag (your own streak, not a ghost's). */
+.gs-tag.gs-daily-day {
+  background: rgba(245, 243, 255, 0.1);
+  color: var(--text);
+}
+
 /* ------------------------------------------------------------------ Reveal */
 
 /* The event's goal under its chip: what it pays and how, the figure at full weight. */
@@ -334,6 +390,11 @@
   /* Send It Back says its whole name on phones too: it is the reason this card exists. */
   .gs-res-opt.gs-res-send {
     font-size: 0.94em;
+  }
+
+  /* The daily pill is one line on a phone: with a day streak showing, it replaces the rivals tag. */
+  .gs-daily-meta.has-day .gs-daily-status {
+    display: none;
   }
 
   /* A rematch label is longer than "Run Again": a step smaller so the name fits beside Home. */

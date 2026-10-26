@@ -23,7 +23,25 @@ const COUNT_MS = 650;
  * The card's beat timeline (ms after it opens), for sound sync (engine.ui delays). The values mirror
  * the constants and style.css delays they are named after; they change together.
  */
-export const RESULTS_TIMING = { COUNT_MS, PLACE_MS: 300, NEW_BEST_MS: 560, BEAT_MS: 860, BEAT_STEP: 110, DONE_MS: 1050, DONE_STEP: 140, FLY_MS: 1470, FLY_STEP: 140, FLY_DUR: 680 } as const;
+export const RESULTS_TIMING = {
+  COUNT_MS,
+  PLACE_MS: 300,
+  NEW_BEST_MS: 560,
+  BEAT_MS: 860,
+  BEAT_STEP: 110,
+  DONE_MS: 1050,
+  DONE_STEP: 140,
+  FLY_MS: 1470,
+  FLY_STEP: 140,
+  FLY_DUR: 680,
+  /** The head's sub block (crash line, race line, gifts) steps in (style.css .gs-res-sub). */
+  SUB_MS: 440,
+  /** The unlock slot pops in: a new mountain's card, or the next-unlock meter (style.css .gs-ul). */
+  UNLOCK_MS: 480,
+  /** The next-unlock meter fills from where the run started to where it ended (meta.css). */
+  METER_MS: 760,
+  METER_DUR: 620,
+} as const;
 /** When the missions land (ms after the card opens), matching the stagger in style.css. Their bars
  *  fill, each completed one's Done stamp lands 140 ms after the last, then its reward flies. */
 const MIS_STAMP_MS = 1050;
@@ -617,7 +635,12 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
 function raceLine(m: ResultsModel): HTMLElement | null {
   const l = m.raceLine;
   if (!l || !l.text) return null;
-  const glyph = l.tone === 'event' ? null : icon('ghost', 'gs-res-line-ico');
+  // The Daily medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon column.
+  const medal = l.tone === 'event' ? /^Daily: (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const rank = medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
+  const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
+  disc?.setAttribute('aria-hidden', 'true');
+  const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
   const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', l.text));
   // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
   if (l.tone !== 'event') p.setAttribute('translate', 'no');

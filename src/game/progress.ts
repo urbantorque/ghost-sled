@@ -1,6 +1,6 @@
 import type { ResultsNextUnlock } from '../ui/contract';
 import { ChaosEvent } from '../sim/chaos';
-import { MOUNTAINS, biomeForSeed } from '../sim/mountains';
+import { MOUNTAINS, biomeForSeed, type BiomeId } from '../sim/mountains';
 import { SLEDS } from '../sim/sleds';
 import { MissionCtx, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
 import { isNemesis } from './settle';
@@ -45,6 +45,39 @@ export function nextUnlock(d: SaveData): ResultsNextUnlock | null {
   const sled = SLEDS.filter((s) => !d.ownedSleds.includes(s.id) && s.price > 0).sort((a, b) => a.price - b.price)[0];
   if (sled) return { kind: 'sled', name: sled.name, gifts: Math.max(0, sled.price - d.gifts) };
   return null;
+}
+
+/**
+ * Ghosts passed counting this run as it goes (for the mid-run unlock pop): the lifetime count plus
+ * this run's passes that no settlement has credited yet (a revive's first settle already did). Jostle
+ * and wreck passes count, as they do when the run settles.
+ */
+export function livePassed(lifetime: number, passedThisRun: number, settledPassed: number): number {
+  return lifetime + Math.max(0, passedThisRun - settledPassed);
+}
+
+/** The mountain a live pass count just opened (its unlockGhosts in (before, now]), or null. */
+export function unlockCrossed(before: number, now: number): { id: string; name: string; biome: BiomeId } | null {
+  if (now <= before) return null;
+  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > before && x.unlockGhosts <= now);
+  return mtn ? { id: mtn.id, name: mtn.name, biome: biomeForSeed(mtn.seed) } : null;
+}
+
+/** The raceNews 'unlockTease' line once a pass leaves one ghost to go, else null. */
+export function unlockTease(live: number): string | null {
+  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > live);
+  return mtn && mtn.unlockGhosts - live === 1 ? `1 more ghost opens ${mtn.name}` : null;
+}
+
+/**
+ * The results event note for a rolled event the run never reached (it ended at phase 0): "The yeti
+ * was 220 m away." Feeds resultsRaceLine at event priority. Null for no event or no distance left.
+ */
+export function eventNote(event: ChaosEvent, metresAway: number): string | null {
+  const what =
+    event === ChaosEvent.Avalanche ? 'The avalanche' : event === ChaosEvent.Yeti ? 'The yeti' : event === ChaosEvent.GiftStorm ? 'The gift storm' : event === ChaosEvent.GhostTrain ? 'The Spirit Train' : null;
+  const away = Math.round(metresAway);
+  return what && away >= 1 ? `${what} was ${m(away)} away.` : null;
 }
 
 /**

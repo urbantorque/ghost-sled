@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RunSummary, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { Grudge, defaultSave } from '../src/game/save';
-import { GrudgeOutcome, settleGrudge, settleRun } from '../src/game/settle';
+import { GrudgeOutcome, dailyLine, dailyMedalNow, dailyStreakNow, medalFor, medalThresholds, prevDay, settleGrudge, settleRun } from '../src/game/settle';
 import type { GhostKind } from '../src/ui/contract';
 
 function summary(p: Partial<RunSummary> = {}): RunSummary {
@@ -192,5 +192,69 @@ describe('the grudge (settleGrudge)', () => {
     const r = settleGrudge(mila, { youDistance: 900, rode: null, next: null });
     expect(r.grudge).toBe(mila);
     expect(r.line).toBeNull();
+  });
+});
+
+describe('the daily medal and streak (stretch)', () => {
+  const day = 'daily:2026-10-26';
+  // Ten pool runs from 100 m to 1,000 m: bronze at the 40th percentile, silver the 70th, gold the 90th.
+  const pool = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+  const t = medalThresholds(pool)!;
+
+  it('thresholds sit at the 40th, 70th and 90th percentile of the pool distances', () => {
+    expect(t).toEqual([460, 730, 910]);
+    expect(medalThresholds([])).toBeNull();
+    // A flat pool still gives three rising thresholds.
+    const flat = medalThresholds([500, 500, 500])!;
+    expect(flat[0]).toBeLessThan(flat[1]);
+    expect(flat[1]).toBeLessThan(flat[2]);
+    expect(medalFor(459, t)).toBe(0);
+    expect(medalFor(460, t)).toBe(1);
+    expect(medalFor(800, t)).toBe(2);
+    expect(medalFor(2000, t)).toBe(3);
+  });
+
+  it('reads as one results line with the next medal to ride for', () => {
+    expect(dailyLine(2, [460, 2410, 2900])).toBe('Daily: Silver. Gold at 2,900 m.');
+    expect(dailyLine(1, [460, 2410, 2900])).toBe('Daily: Bronze. Silver at 2,410 m.');
+    expect(dailyLine(0, [1180, 2410, 2900])).toBe('Daily: Bronze at 1,180 m.');
+    expect(dailyLine(3, t)).toBe('Daily: Gold.');
+  });
+
+  it('is credited once across a revive', () => {
+    const d = defaultSave('Test');
+    const first = settleRun(d, summary({ mountain: 'daily', distance: 500 }), null, day, t);
+    expect(first.daily).toEqual({ medal: 1, best: 1, streak: 1, line: 'Daily: Bronze. Silver at 730 m.' });
+    const again = settleRun(d, summary({ mountain: 'daily', distance: 800 }), first.settlement, day, t);
+    expect(again.daily).toMatchObject({ medal: 2, best: 2, streak: 1 });
+    expect(again.settlement.medal).toBe(2);
+    expect(d.daily).toMatchObject({ medal: 2, streak: 1, last: '2026-10-26' });
+    // A second run the same day keeps the streak and the better medal.
+    settleRun(d, summary({ mountain: 'daily', distance: 200 }), null, day, t);
+    expect(d.daily).toMatchObject({ medal: 2, streak: 1 });
+  });
+
+  it('the streak grows day to day and resets after a missed day', () => {
+    const d = defaultSave('Test');
+    settleRun(d, summary({ mountain: 'daily', distance: 950 }), null, 'daily:2026-10-24', t);
+    settleRun(d, summary({ mountain: 'daily', distance: 100 }), null, 'daily:2026-10-25', t);
+    expect(d.daily).toMatchObject({ streak: 2, medal: 0, last: '2026-10-25' });
+    expect(dailyStreakNow(d.daily, '2026-10-26')).toBe(2);
+    expect(dailyMedalNow(d.daily, '2026-10-26')).toBe(0);
+    // 26 skipped: the 27th starts over.
+    expect(dailyStreakNow(d.daily, '2026-10-27')).toBe(0);
+    settleRun(d, summary({ mountain: 'daily', distance: 950 }), null, 'daily:2026-10-27', t);
+    expect(d.daily).toMatchObject({ streak: 1, medal: 3 });
+    expect(dailyMedalNow(d.daily, '2026-10-27')).toBe(3);
+  });
+
+  it('counts the streak without a pool, and never touches plain runs', () => {
+    const d = defaultSave('Test');
+    const r = settleRun(d, summary({ mountain: 'daily', distance: 950 }), null, day);
+    expect(r.daily).toEqual({ medal: 0, best: 0, streak: 1, line: null });
+    expect(settleRun(d, summary({ distance: 950 }), null, 'pinecrest', t).daily).toBeUndefined();
+    expect(prevDay('2026-03-01')).toBe('2026-02-28');
+    expect(prevDay('2027-01-01')).toBe('2026-12-31');
+    expect(prevDay('nope')).toBe('');
   });
 });

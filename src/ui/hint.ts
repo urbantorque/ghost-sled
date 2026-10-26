@@ -15,7 +15,9 @@ const TEXT: Record<HintKind, string> = {
   crouch: 'Hold to crouch',
   drift: 'Hold while turning to drift',
   pop: 'Release to pop',
-  stomp: 'Tap just before landing',
+  // The landing ring closes as you come down (the stomp ticks count it in by ear): the words name what
+  // you see, so they hold with the sound off.
+  stomp: 'Tap as the ring closes',
   draft: 'Tuck in behind a ghost',
   // Taught as players reach them (teach-moves): a spin is steering in the air, so it shows the steer
   // keys (the mouse sweep, the left zone); a flip and the boosted pop are holds, so they show the hold.
@@ -116,7 +118,7 @@ const HOLD_TEXT: Record<HintKind, string> = {
   crouch: 'Hold to crouch',
   drift: 'Hold to drift',
   pop: 'Release to pop',
-  stomp: 'Tap before landing',
+  stomp: 'Tap as the ring closes',
   draft: 'Hold to drift',
   // A spin is taught on the left (drag) zone; the hold zone keeps its plain air verb.
   spin: 'Hold to flip',

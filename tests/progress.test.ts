@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { challengeShareTitle, ellipsize, friendBeatenText, friendLine, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from '../src/game/progress';
+import { challengeShareTitle, ellipsize, eventNote, friendBeatenText, friendLine, livePassed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting, unlockCrossed, unlockTease } from '../src/game/progress';
 import { defaultSave } from '../src/game/save';
 import { ChaosEvent } from '../src/sim/chaos';
 
@@ -106,5 +106,35 @@ describe('challenge share title and reveal goal', () => {
     expect(revealGoal(ChaosEvent.GiftStorm)).toBe('Catch all 48');
     expect(revealGoal(ChaosEvent.GhostTrain)).toBe('Ride its slipstream');
     expect(revealGoal(ChaosEvent.None)).toBeNull();
+  });
+});
+
+describe('mid-run unlocks and event notes', () => {
+  it('counts this run live, minus what a revive already settled', () => {
+    expect(livePassed(3, 2, 0)).toBe(5);
+    expect(livePassed(5, 2, 2)).toBe(5);
+    expect(livePassed(5, 3, 2)).toBe(6);
+    expect(livePassed(5, 0, 2)).toBe(5);
+  });
+
+  it('pops the mountain a pass just opened, once', () => {
+    expect(unlockCrossed(3, 4)).toEqual({ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier' });
+    expect(unlockCrossed(4, 5)).toBeNull();
+    expect(unlockCrossed(4, 4)).toBeNull();
+    expect(unlockCrossed(11, 13)?.name).toBe('Ember Peak');
+  });
+
+  it('teases the next mountain with one ghost to go', () => {
+    expect(unlockTease(3)).toBe('1 more ghost opens Frostfang Glacier');
+    expect(unlockTease(2)).toBeNull();
+    expect(unlockTease(23)).toBe('1 more ghost opens Sakura Ridge');
+    expect(unlockTease(30)).toBeNull();
+  });
+
+  it('names an event the run never reached, with its distance', () => {
+    expect(eventNote(ChaosEvent.Yeti, 220.4)).toBe('The yeti was 220 m away.');
+    expect(eventNote(ChaosEvent.GhostTrain, 1340)).toBe('The Spirit Train was 1,340 m away.');
+    expect(eventNote(ChaosEvent.None, 200)).toBeNull();
+    expect(eventNote(ChaosEvent.Avalanche, 0.2)).toBeNull();
   });
 });
