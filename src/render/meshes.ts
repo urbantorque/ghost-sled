@@ -360,6 +360,64 @@ export function lanternPostGeometry(): BufferGeometry {
   ]);
 }
 
+/** How high the km arch's beam rides over the snow at its posts (metres to its top). */
+export const ARCH_HEIGHT = 7;
+
+/** A kilometre arch over the run (render only, no collider): two snow-capped timber posts `span`
+ *  metres apart (centre to centre) standing just outside the corridor, a beam across with a soft
+ *  drift of snow along its top, corner braces, a small evergreen wreath at its middle and a sagging
+ *  string of round paper lanterns under it. The lanterns' colour is pushed past 1 so their lit sides
+ *  bloom on Medium and High through the plain toon material (no emissive and no new shader). The
+ *  posts reach 6 m below the snow so they never float over a falling bank. Local x runs across the
+ *  run, y up; one instance per arch. */
+export function kmArchGeometry(span: number): BufferGeometry {
+  reseed(1717);
+  const H = ARCH_HEIGHT;
+  const half = span / 2;
+  const timber = new Color('#6E4A36');
+  const beamC = new Color('#7E5640');
+  const rope = new Color('#3A3046');
+  const lamp = new Color('#FFB45E').multiplyScalar(1.7);
+  const cream = new Color('#FFF1D6').multiplyScalar(1.35);
+  const spruce = new Color('#2F6F68');
+  const parts: BufferGeometry[] = [];
+  for (const sx of [-1, 1]) {
+    const x = sx * half;
+    // The post: square timber, darker toward its foot.
+    parts.push(paint(part(new BoxGeometry(0.46, H + 6, 0.46), timber, { pos: [x, (H - 6) / 2 - 0.35, 0] }), -6, H, 0.7, 1.08, 0.12));
+    // A collar of packed snow where the post meets the slope.
+    parts.push(part(new CylinderGeometry(0.62, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
+    // A cap of snow on the post's top, proud of the beam.
+    parts.push(part(new CylinderGeometry(0.34, 0.36, 0.22, 8), SNOW, { pos: [x, H + 0.08, 0], scale: [1, 1, 1] }));
+    // A diagonal brace from the post up under the beam.
+    parts.push(part(new BoxGeometry(0.2, 2.0, 0.2), beamC, { pos: [x - sx * 0.62, H - 1.25, 0], rot: [0, 0, sx * 0.785] }));
+  }
+  // The beam, overhanging each post a little, and the drift along its top.
+  parts.push(paint(part(new BoxGeometry(span + 1.6, 0.52, 0.52), beamC, { pos: [0, H - 0.36, 0] }), H - 0.62, H - 0.1, 0.82, 1.06, 0.1));
+  parts.push(part(new CylinderGeometry(0.34, 0.34, span + 1.7, 9, 3), SNOW, { pos: [0, H - 0.04, 0], rot: [0, 0, Math.PI / 2], scale: [0.5, 1, 0.95], jitter: 0.03 }));
+  // The wreath at the middle of the beam's face (downhill, toward the rider coming).
+  parts.push(part(new TorusGeometry(0.5, 0.16, 6, 14), spruce, { pos: [0, H - 0.5, 0.36], jitter: 0.04 }));
+  parts.push(part(new SphereGeometry(0.11, 8, 6), lamp, { pos: [0, H - 0.98, 0.42] }));
+  // The lantern string: a shallow sag from post to post, a round paper lantern every 1.6 m or so on a
+  // short drop (every fourth a cream one), joined by a thin cord.
+  const n = Math.max(6, Math.round(span / 1.6));
+  const sag = Math.min(1.4, 0.04 * span);
+  const top = H - 0.9;
+  const at = (t: number): [number, number] => [-half + 0.5 + (span - 1) * t, top - sag * 4 * t * (1 - t)];
+  for (let i = 0; i < n; i++) {
+    const [ax, ay] = at(i / n);
+    const [bx, by] = at((i + 1) / n);
+    const len = Math.hypot(bx - ax, by - ay);
+    parts.push(part(new BoxGeometry(len, 0.035, 0.035), rope, { pos: [(ax + bx) / 2, (ay + by) / 2, 0], rot: [0, 0, Math.atan2(by - ay, bx - ax)] }));
+    if (i === 0) continue;
+    const c = i % 4 === 0 ? cream : lamp;
+    parts.push(part(new BoxGeometry(0.03, 0.22, 0.03), rope, { pos: [ax, ay - 0.11, 0] }));
+    parts.push(part(new SphereGeometry(0.19, 8, 6), c, { pos: [ax, ay - 0.42, 0], scale: [1, 1.2, 1] }));
+    parts.push(part(new CylinderGeometry(0.08, 0.1, 0.07, 6), rope, { pos: [ax, ay - 0.18, 0] }));
+  }
+  return merge(parts);
+}
+
 /** Ring of dark rock around a steam vent. */
 export function ventGeometry(): BufferGeometry {
   reseed(1313);
