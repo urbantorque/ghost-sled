@@ -2,12 +2,18 @@ import type { Bank } from './buffers';
 import type { AudioFrame } from './engine';
 import type { Bus } from './graph';
 import type { Scene } from './music';
-import { fit, mtof } from './theory';
+import { type Key, fit, ladderAt, mtof } from './theory';
 import { bandComp, blockRate, clamp, smoothstep } from './voices';
 
-// Continuous layers: wind and snow surface. The whole graph is built once and only its parameters
-// move, so update() never creates a node. Three looping noise sources (white, pink, brown) feed
-// every filter branch; two grain-train sources chop the crunch and scrape into granules.
+// Continuous layers: wind and snow surface, plus three voices that read the run's feel: the wind
+// turning into a tone in the song's key as earned flow builds, the drift whine climbing the key's
+// pentatonic ladder with the drift charge, and the shoulder hiss of a rival closing behind you. The
+// whole graph is built once and only its parameters move, so update() never creates a node. Three
+// looping noise sources (white, pink, brown) feed every filter branch; two grain-train sources chop
+// the crunch and scrape into granules.
+
+/** A fourth down: the flow tone bends this far when a bump snuffs it. */
+const FOURTH_DOWN = 0.7491535384383408;
 
 type Link = readonly [AudioNode, AudioNode | AudioParam];
 
@@ -69,6 +75,11 @@ class Smooth {
     this.last = v;
     this.p.setTargetAtTime(v, now, tau);
   }
+
+  /** The parameter was moved directly: the next to() always applies. */
+  reset(): void {
+    this.last = Number.NaN;
+  }
 }
 
 const CALM: AudioFrame = {
@@ -124,6 +135,27 @@ export class Ambience {
   private readonly ringG: Smooth;
   private readonly rumbleF: Smooth;
   private readonly rumbleG: Smooth;
+
+  /** In-key voices and the shoulder hiss: straight onto the effects bus at their own levels (the
+   *  bed's run trim would bury a sine), silent outside a run. */
+  private readonly tone: GainNode;
+  private readonly whine1: OscillatorNode;
+  private readonly whine2: OscillatorNode;
+  private readonly whineG: Smooth;
+  private whineGain: AudioParam;
+  private whineNote = -1;
+  /** Until this time a release whip owns the whine (pitch up an octave, gain away). */
+  private whipUntil = 0;
+  private readonly shoulderF: Smooth;
+  private readonly shoulderG: Smooth;
+  private readonly shoulderPan: Smooth | null;
+  /** The wind's last centre and Q, and the snuff's bend (a fourth down, Q held) while it lasts. */
+  private windNow = 500;
+  private windQNow = 0.7;
+  private snuffUntil = 0;
+  private snuffF = 500;
+  private snuffQ = 0.7;
+  private readonly windParam: AudioParam;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -196,6 +228,7 @@ export class Ambience {
     osc('sine', 0.037, gain(0.12, gust.gain));
     const windBP = filter('bandpass', 500, 0.7, gust);
     pink.connect(windBP);
+    this.windParam = windBP.frequency;
     this.windF = P(windBP.frequency, 0.015, true);
     this.windQ = P(windBP.Q, 0.02);
     this.windG = P(windG.gain, 0.002);
@@ -266,6 +299,65 @@ export class Ambience {
     const rumbleLP = filter('lowpass', 110, 0.7, rumbleG);
     this.rumbleF = P(rumbleLP.frequency, 0.02, true);
     this.rumbleG = G(rumbleG.gain, [[brown, rumbleLP]]);
+
+    this.tone = ctx.createGain();
+    this.tone.gain.value = 0;
+    this.tone.connect(bus.dry);
+    this.tone.connect(gain(0.12, bus.wet));
+
+    // Drift whine: a sine and a quiet triangle an octave up, on the key's pentatonic ladder.
+    const whineG = gain(0, this.tone);
+    const whine2G = gain(0.25, whineG);
+    this.whine1 = osc('sine', 587, null);
+    this.whine2 = osc('triangle', 1174, null);
+    this.whineGain = whineG.gain;
+    this.whineG = G(whineG.gain, [[this.whine1, whineG], [this.whine2, whine2G]]);
+
+    // Shoulder: a band of hiss over the shoulder a rival is closing on.
+    let shTail: AudioNode = this.tone;
+    let pan: StereoPannerNode | null = null;
+    if (typeof ctx.createStereoPanner === 'function') {
+      pan = ctx.createStereoPanner();
+      pan.connect(this.tone);
+      this.nodes.push(pan);
+      shTail = pan;
+    }
+    const shG = gain(0, shTail);
+    const shBP = filter('bandpass', 1100, 3, shG);
+    this.shoulderF = P(shBP.frequency, 0.02, true);
+    this.shoulderG = G(shG.gain, [[white, shBP]]);
+    this.shoulderPan = pan ? P(pan.pan, 0.03) : null;
+  }
+
+  /** A drift released: the whine whips up an octave in 0.08 s as it falls away. */
+  whineRelease(now: number): void {
+    if (this.whineNote < 0) return;
+    const f = mtof(this.whineNote);
+    this.whipUntil = now + 0.16;
+    for (const [o, mul] of [
+      [this.whine1, 1],
+      [this.whine2, 2],
+    ] as const) {
+      o.frequency.cancelScheduledValues(now);
+      o.frequency.setValueAtTime(f * mul, now);
+      o.frequency.setTargetAtTime(f * mul * 2, now, 0.027);
+    }
+    this.whineGain.cancelScheduledValues(now);
+    this.whineGain.setValueAtTime(this.whineGain.value, now);
+    this.whineGain.setTargetAtTime(0, now + 0.02, 0.035);
+    this.whineG.reset();
+    this.whineNote = -1;
+  }
+
+  /** Flow snuffed by a bump: the wind tone bends down a fourth over 0.25 s, then opens back to noise. */
+  snuff(now: number): void {
+    this.snuffUntil = now + 0.3;
+    this.snuffF = this.windNow * FOURTH_DOWN;
+    this.snuffQ = Math.max(this.windQNow, 2.5);
+    this.windParam.cancelScheduledValues(now);
+    this.windParam.setValueAtTime(this.windNow, now);
+    this.windParam.setTargetAtTime(this.snuffF, now, 0.08);
+    this.windF.reset();
   }
 
   setScene(scene: Scene, now: number): void {
@@ -273,6 +365,7 @@ export class Ambience {
     // Run level keeps cruising wind and snow near -33 dBFS RMS and full speed near -25, under
     // the music; menus get a faint wind bed.
     this.out.gain.setTargetAtTime(scene === 'run' ? 0.4 : scene === 'title' ? 0.35 : 0.25, now, 0.6);
+    this.tone.gain.setTargetAtTime(scene === 'run' ? 1 : 0, now, 0.05);
     if (scene !== 'run') this.calm(now);
   }
 
@@ -284,16 +377,16 @@ export class Ambience {
 
   private calm(now: number): void {
     this.calmed = true;
-    this.apply(CALM, now, false, 0, false);
+    this.apply(CALM, now, false, null, false);
   }
 
-  update(f: AudioFrame, now: number, avalanche: boolean, tonic: number): void {
+  update(f: AudioFrame, now: number, avalanche: boolean, key: Key): void {
     this.lastFrame = now;
     this.calmed = false;
-    this.apply(f, now, avalanche, tonic, true);
+    this.apply(f, now, avalanche, key, true);
   }
 
-  private apply(f: AudioFrame, now: number, avalanche: boolean, tonic: number, surface: boolean): void {
+  private apply(f: AudioFrame, now: number, avalanche: boolean, key: Key | null, surface: boolean): void {
     const sr = this.ctx.sampleRate;
     const sp = clamp(f.speed || 0, 0, 60);
     const s01 = clamp(sp / 46, 0, 1);
@@ -301,14 +394,27 @@ export class Ambience {
     const live = f.crashed ? 0 : 1;
     const ground = surface && f.grounded && !f.crashed ? 1 : 0;
     const slow = surface ? 1 : 4;
+    const tonic = key ? key.tonic : 0;
 
-    // Wind: quiet below 8 m/s, roaring past 35. Airborne opens it up and thins it out.
+    // Wind: quiet below 8 m/s, roaring past 35. Airborne opens it up and thins it out. Earned flow
+    // narrows the band and pulls it onto a note in the song's key, so the wind sings.
+    const fk = surface && key ? clamp(f.flow ?? 0, 0, 1) * live : 0;
     const w = smoothstep(6, 40, sp);
-    const wf = (260 + sp * 26) * (air ? 1.3 : 1);
-    const wq = air ? 0.45 : 0.7;
-    this.windF.to(wf, now, 0.12 * slow);
-    this.windQ.to(wq, now, 0.2);
-    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1);
+    const wNoise = (260 + sp * 26) * (air ? 1.3 : 1);
+    const wq0 = air ? 0.45 : 0.7;
+    let wf = fk > 0 ? Math.exp(Math.log(wNoise) * (1 - fk) + Math.log(mtof(fit(tonic, 79))) * fk) : wNoise;
+    let wq = wq0 + (7 - wq0) * fk;
+    if (now < this.snuffUntil) {
+      // Snuffed: hold the bent note a moment before it opens back into noise.
+      wf = this.snuffF;
+      wq = this.snuffQ;
+    } else {
+      this.windF.to(wf, now, (fk > 0.05 ? 0.06 : 0.12) * slow);
+    }
+    this.windNow = wf;
+    this.windQNow = wq;
+    this.windQ.to(wq, now, now < this.snuffUntil ? 0.05 : 0.2);
+    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk);
     this.windG.to(wind * bandComp(wf, wq, sr) * 0.5, now, 0.15 * slow);
     this.roarG.to(0.42 * smoothstep(24, 44, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
     const whf = 1500 + sp * 38 + (air ? 900 : 0);
@@ -358,6 +464,34 @@ export class Ambience {
     const d = avalanche ? clamp(f.danger, 0, 1) : 0;
     this.rumbleF.to(80 + d * 220, now, 0.3);
     this.rumbleG.to(0.55 * Math.pow(d, 1.3) * live, now, f.crashed ? 1 : 0.3);
+
+    // Drift whine: the charge climbs the key's pentatonic ladder, steps 2 to 10 above the tonic
+    // between A4 and G#5, gliding 0.05 s between steps so it always sings in key.
+    if (now >= this.whipUntil) {
+      const k = surface && key && f.drifting && !f.crashed ? clamp(f.driftCharge ?? 0, 0, 1) : 0;
+      if (k > 0 && key) {
+        const note = ladderAt(key, fit(key.tonic, 69), Math.round(2 + 8 * k));
+        if (note !== this.whineNote) {
+          const glide = this.whineNote < 0 ? 0.004 : 0.017;
+          this.whineNote = note;
+          this.whine1.frequency.setTargetAtTime(mtof(note), now, glide);
+          this.whine2.frequency.setTargetAtTime(mtof(note) * 2, now, glide);
+        }
+        this.whineG.to(0.012 + 0.035 * k, now, 0.06);
+      } else {
+        this.whineG.to(0, now, 0.05);
+        if (!f.drifting) this.whineNote = -1;
+      }
+    }
+
+    // Shoulder: a rival closing behind you, panned to its side. Silent while drafting (the hum owns
+    // that), in a crash and under any danger (it must never mask the avalanche).
+    const sh = surface && f.shoulder && !f.drafting && !f.crashed && !(f.danger > 0) ? f.shoulder : null;
+    const amt = sh ? clamp(sh.amt, 0, 1) : 0;
+    const shf = 1100 + 900 * amt;
+    if (amt > 0) this.shoulderF.to(shf, now, 0.04);
+    if (sh && this.shoulderPan) this.shoulderPan.to(clamp(sh.pan, -0.85, 0.85), now, 0.04);
+    this.shoulderG.to(0.05 * amt * bandComp(shf, 3, sr), now, 0.04);
   }
 
   dispose(): void {
@@ -371,5 +505,6 @@ export class Ambience {
     }
     for (const n of this.nodes) n.disconnect();
     this.out.disconnect();
+    this.tone.disconnect();
   }
 }
