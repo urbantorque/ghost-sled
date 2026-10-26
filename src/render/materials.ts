@@ -1,4 +1,5 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
+import { BEST_HEX, FRIEND_HEX } from '../game/beats';
 import { Palette } from './palette';
 
 // One shared stylized lighting model for every surface (ART.md section 2). All materials share the
@@ -56,6 +57,25 @@ export const shared = {
   uHazardFog: { value: 1 },
   /** 1 in bright day moods, 0 at night (from the lit snow's luminance, as the snow shader's dayK). */
   uDayK: { value: 1 },
+};
+
+/** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
+ *  corridor by the snow shader: zero draw calls on every tier and nothing extra in the mirror. Declared
+ *  with the snow material, so nothing recompiles when a band appears. World sets them each run frame
+ *  (three.js z, corridor centre x, half-width with 2 m over each bank, and the best band's flare
+ *  0..1); a half-width of 0 hides a band. */
+export const bands = {
+  uBestZ: { value: 0 },
+  uBestX: { value: 0 },
+  uBestHW: { value: 0 },
+  uBestK: { value: 0 },
+  /** New ground: metres the flare's wave of light has run on down the slope from the band (0: none). */
+  uBestWave: { value: 0 },
+  uBestC: { value: new Color(BEST_HEX) },
+  uFriendZ: { value: 0 },
+  uFriendX: { value: 0 },
+  uFriendHW: { value: 0 },
+  uFriendC: { value: new Color(FRIEND_HEX) },
 };
 
 export function applyPalette(p: Palette): void {
@@ -216,7 +236,7 @@ function lightsUniforms() {
 export function makeSnowMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     lights: true,
-    uniforms: { ...lightsUniforms(), ...shared },
+    uniforms: { ...lightsUniforms(), ...shared, ...bands },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       attribute float aEdge;
@@ -247,11 +267,38 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec3 uSkyZenith;
       uniform vec3 uSkyHorizon;
       uniform vec3 uDiskDir;
+      uniform float uBestZ;
+      uniform float uBestX;
+      uniform float uBestHW;
+      uniform float uBestK;
+      uniform float uBestWave;
+      uniform vec3 uBestC;
+      uniform float uFriendZ;
+      uniform float uFriendX;
+      uniform float uFriendHW;
+      uniform vec3 uFriendC;
       varying vec3 vWorldPos;
       varying vec3 vNormalW;
       varying float vEdge;
       varying float vIce;
       varying vec4 vKick;
+      /** A distance band across the corridor at three.js z0 (centre x0, half-width hw), halfD metres
+       *  deep each way: 1 on it, feathering out over its last metre and a half at the banks. Never
+       *  thinner than about two pixels (fwz: metres of z one pixel spans), so a band far down the
+       *  slope stays a thin bright line you can aim for instead of breaking up; that far it thins a
+       *  little by coverage. */
+      float distBand(float z0, float x0, float hw, float halfD, float fwz) {
+        float hd = max(halfD, fwz * 1.1);
+        float dz = abs(vWorldPos.z - z0);
+        float m = 1.0 - smoothstep(hd - fwz * 0.5, hd + fwz * 0.5, dz);
+        m *= 1.0 - smoothstep(hw - 1.5, hw, abs(vWorldPos.x - x0));
+        return m * pow(halfD / hd, 0.3);
+      }
+      /** The band's light spilling onto the snow either side of it (its glow on the powder). */
+      float bandSpill(float z0, float x0, float hw, float reach) {
+        float dz = abs(vWorldPos.z - z0);
+        return exp(-dz / reach) * (1.0 - smoothstep(hw - 1.5, hw + 0.5, abs(vWorldPos.x - x0)));
+      }
       float vnoise(vec2 p) {
         vec2 i = floor(p);
         vec2 f = fract(p);
@@ -364,6 +411,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         float dist = length(cameraPosition - vWorldPos);
         // Metres of snow one pixel spans (taken here, outside any branch, where derivatives are valid).
         float footprint = length(fwidth(vWorldPos.xz));
+        float fwz = fwidth(vWorldPos.z);
         // Glass Ice glazes the whole course; elsewhere ice patches (and the glacier's base sheen) glaze.
         float ice = max(vIce, uIceMood >= 1.0 ? 0.85 : uIceMood * 0.55);
         // 1 in bright day moods, 0 at night.
@@ -603,6 +651,30 @@ export function makeSnowMaterial(): ShaderMaterial {
           lamp *= (0.55 + 0.45 * clamp(n.y, 0.0, 1.0)) * (1.0 + dot(rip, normalize(uLanternPos.xz - vWorldPos.xz + vec2(0.0001, 0.0))) * 0.55);
           col = col * (1.0 - 0.88 * min(pool, 1.0)) + lamp * pool * 1.1;
           col += uLanternColor * glint * pool * 2.5;
+        }
+        // Your best is a place on the mountain: a gold-white band across the corridor at that distance
+        // (the stated exception to decision 69, which keeps the snow's own marks carved). Emissive, so it
+        // blooms on Medium and High and reads as a bright stripe on Low, with a little of its light on
+        // the powder either side. Its flare (uBestK) deepens and brightens it. A friend's unbeaten
+        // distance is the same band in mint.
+        if (uBestHW > 0.0) {
+          float m = distBand(uBestZ, uBestX, uBestHW, 0.175 + 0.5 * uBestK, fwz);
+          vec3 bc = uBestC * (1.4 + 1.1 * uBestK);
+          col += uBestC * bandSpill(uBestZ, uBestX, uBestHW, 0.7 + 1.2 * uBestK) * (0.2 + 0.4 * uBestK);
+          col = mix(col, bc * mix(0.86, 1.0, shadow), m);
+          if (uBestWave > 0.0) {
+            // New ground: a wave of gold-white light runs on down the slope ahead of you from the band,
+            // a bright front with a short fading wake, gone with the flare.
+            float down = uBestZ - vWorldPos.z;
+            float d = down - uBestWave;
+            float wave = exp(-abs(d) / 0.45) + (d < 0.0 && down > 0.0 ? exp(d / 3.5) * 0.35 : 0.0);
+            col += uBestC * wave * uBestK * 1.1 * (1.0 - smoothstep(uBestHW - 1.5, uBestHW, abs(vWorldPos.x - uBestX)));
+          }
+        }
+        if (uFriendHW > 0.0) {
+          float m = distBand(uFriendZ, uFriendX, uFriendHW, 0.175, fwz);
+          col += uFriendC * bandSpill(uFriendZ, uFriendX, uFriendHW, 0.7) * 0.15;
+          col = mix(col, uFriendC * 1.25 * mix(0.86, 1.0, shadow), m);
         }
         col = fogged(col, vWorldPos);
         gl_FragColor = vec4(col, 1.0);
