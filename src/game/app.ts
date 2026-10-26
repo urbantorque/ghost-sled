@@ -18,10 +18,11 @@ import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, emptyPose } from './ghosts';
 import { InputController } from './input';
 import { FixedLoop } from './loop';
-import { RunSummary, applyRun, missionViews } from './missions';
+import { RunSummary, missionViews } from './missions';
 import { TierController, guessTier } from './quality';
 import { Run, emptySnap, lerpSnap } from './run';
 import { SaveStore } from './save';
+import { Settlement, settleRun } from './settle';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
@@ -88,6 +89,8 @@ export class App {
   private giftsPersisted = 0;
   private bestPersisted = false;
   private results: ResultsModel | null = null;
+  /** What this run has already credited to the save (a revive settles it again, by difference). */
+  private settlement: Settlement | null = null;
   private passedThisRun = new Set<number>();
   /** Gifts earned for passing ghosts (kept out of the sim so live state matches replays). */
   private passBonus = 0;
@@ -483,6 +486,7 @@ export class App {
     this.passedThisRun.clear();
     this.passBonus = 0;
     this.grudgeBeaten = false;
+    this.settlement = null;
     this.results = null;
     this.airTicks = 0;
     this.hintTimer = 0;
@@ -693,22 +697,15 @@ export class App {
     this.phase = 'results';
     const d = this.save.data;
     const sim = this.run.sim;
-    d.runs++;
-    const sum = this.summary();
-    const missions = applyRun(d.missions, sum);
-    if (missions.reward > 0) {
-      d.gifts += missions.reward;
-      d.lifetimeGifts += missions.reward;
-      this.audio.ui('mission');
-    }
-    d.ghostsPassed += this.passedThisRun.size;
-    d.stats.perfects += sim.stats.perfects;
-    if (sim.stats.yetiHop) d.stats.yetiHops++;
-    if (sim.stats.outranAvalanche) d.stats.avalanches++;
+    // A revive and a second crash settle the same run again: settleRun credits only the difference.
+    const settled = settleRun(d, this.summary(), this.settlement);
+    this.settlement = settled.settlement;
+    const missions = { views: settled.missions };
+    if (settled.missionReward > 0) this.audio.ui('mission');
     const unlocked: string[] = [];
     const unlockedMountains: NonNullable<ResultsModel['unlockedMountains']> = [];
     for (const m of MOUNTAINS) {
-      const before = d.ghostsPassed - this.passedThisRun.size;
+      const before = settled.passedBefore;
       if (before < m.unlockGhosts && d.ghostsPassed >= m.unlockGhosts) {
         unlocked.push(m.name);
         unlockedMountains.push({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), tagline: m.tagline });
