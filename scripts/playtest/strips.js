@@ -6,7 +6,9 @@
 // be read as numbers too.
 //
 // The default plan rides REAL runs with the merged director: pass, duel won, whisker, stomp streak,
-// drift tier 3 release, bank tier 3, km arch, graveyard, finale and the crash orbit.
+// drift tier 3 release, bank tier 3, km arch, graveyard, finale and the crash orbit, plus a held
+// drift's spray heating through tiers 1 to 3 and earned flow on the rider ('In the flow' when a run
+// earns it: maxPerType counts it, a run that never does leaves it unstripped).
 //
 // The game runs on a virtual clock while strips are taken: requestAnimationFrame, performance.now and
 // setTimeout are driven from here in exact 1/60 s steps, so a screenshot never costs game time and
@@ -61,6 +63,14 @@ async (page) => {
     whisker: { type: 'nearMiss', grade: 'whisker', frames: [0, 2, 5, 9, 16] },
     stompStreak: { type: 'stomp', minTier: 2, frames: [0, 3, 7, 12, 20, 32] },
     drift3: { type: 'driftRelease', tier: 3, frames: [0, 3, 7, 12, 20, 32] },
+    // A held drift's spray heating through its tiers (the first frame each tier shows).
+    heat1: { state: 'driftTier', tier: 1, frames: [0, 4, 8] },
+    heat2: { state: 'driftTier', tier: 2, frames: [0, 4, 8] },
+    heat3: { state: 'driftTier', tier: 3, frames: [0, 4, 8] },
+    // Earned flow burning on the rider (Feel.flow past 0.6: the rim, the scarf and the wider lens),
+    // and the 'In the flow' beat itself when a run earns it.
+    flow: { state: 'flow', min: 0.6, frames: [0, 6, 12] },
+    flowIn: { type: 'flow', grade: 'in', frames: [0, 4, 9, 16, 26] },
     bank3: { type: 'bank', tier: 3, frames: [0, 10, 24, 44, 70, 104] },
     km: { approach: 'km', at: [-60, -38, -20, -8, 1] },
     graveyard: { approach: 'grave', at: [-70, -45, -28, -14, -5] },
@@ -323,7 +333,7 @@ async (page) => {
         return null;
       };
       S.match = (w, e) => {
-        if (w.approach || e.type !== w.type) return false;
+        if (w.approach || w.state || e.type !== w.type) return false;
         if (w.named && !e.named) return false;
         if (w.grade !== undefined && !(Array.isArray(w.grade) ? w.grade.includes(e.grade) : e.grade === w.grade)) return false;
         if (w.tier !== undefined && e.tier !== w.tier) return false;
@@ -447,9 +457,24 @@ async (page) => {
         if (ramp) target = () => ramp.x;
         const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
         const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
-        if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) P.drift = T + 0.4 + rnd() * 0.4;
-        if (P.drift > T && (room < 4 || Math.abs(s.x - c.safeX(s.z)) > 0.8)) P.drift = T;
+        // (Until the heat strips are taken, a drift is held a little longer for its tiers to show.)
+        const heat = standIns && (S.need.heat1 || S.need.heat2 || S.need.heat3);
+        if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) {
+          P.drift = T + (heat ? 1.0 : 0.4 + rnd() * 0.4);
+          P.driftAt = T;
+        }
+        if (P.drift > T && (room < (heat ? 3 : 4) || Math.abs(s.x - c.safeX(s.z)) > (heat ? 2 : 0.8))) P.drift = T;
         if (P.drift > T) {
+          // Stand-in 2b: a held drift's charge is staged through tiers 1, 2 and 3 (0.62, 1.38, 2.45),
+          // a fifth of a second each, so its spray can be seen heating (the tiers and spray are real).
+          if (heat && s.drifting) {
+            const el = T - P.driftAt;
+            const want = el > 0.55 ? 2.45 : el > 0.35 ? 1.38 : el > 0.15 ? 0.62 : 0;
+            if (s.driftCharge < want) {
+              s.driftCharge = want;
+              S.standIns.heat = (S.standIns.heat || 0) + 1;
+            }
+          }
           // Stand-in 2: a held drift is topped up past tier 3 (once, until a tier-3 release is stripped).
           if (standIns && S.need.drift3 && s.drifting && s.driftCharge > 0.3 && s.driftCharge < 2.45 && T > P.drift - 0.25) {
             s.driftCharge = 2.45;
@@ -553,6 +578,16 @@ async (page) => {
               }
               if (app.phase === 'run' && app.run) {
                 for (const w of open) {
+                  if (w.state === 'driftTier') {
+                    const f = app.director.feel;
+                    if (app.run.sim.s.drifting && f && f.driftTier === w.tier) return { hit: { key: w.key, type: 'driftTier', t: app.run.sim.tick / 60, label: `tier ${w.tier} charge ${f.driftCharge.toFixed(2)}` }, idx };
+                    continue;
+                  }
+                  if (w.state === 'flow') {
+                    const f = app.director.feel;
+                    if (f && f.flow >= w.min && !app.run.sim.s.crashed) return { hit: { key: w.key, type: 'flow', t: app.run.sim.tick / 60, label: `flow ${f.flow.toFixed(2)}` }, idx };
+                    continue;
+                  }
                   if (!w.approach) continue;
                   const at = S.place(w);
                   if (at) return { hit: { key: w.key, type: w.approach, t: app.run.sim.tick / 60, label: at.label, z: at.z }, idx };
