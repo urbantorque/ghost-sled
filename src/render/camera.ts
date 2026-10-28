@@ -1,12 +1,19 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { WRECK_SLED } from './rider';
-import { IDLE_FEEL, type Beat, type Feel } from '../game/beats';
+import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
 import type { SimEvent } from '../sim/sim';
 
 // Chase camera (ART.md section 8): leads into turns, breathes FOV with speed, rolls into carves,
 // shakes on impacts, punches on perfect landings, orbits on a crash, frames portrait screens with a
 // higher, wider view, eases a close rival into the frame, and on the results screen settles into a
 // hero shot of the wreck.
+//
+// Weight (the fun pass): landings sink the lens and nod the horizon, a bump knocks it sideways and
+// rolls it, a whisker flinches it away, passes lean it toward the ghost, and a crash holds the lens
+// still while the rider tumbles away from it before the orbit. Knocks are jolts: a stiff spring
+// (omega 22, zeta 0.5) integrated exactly, so it settles alike at any frame rate. The shake runs on
+// its own clock, slowed by hit-stops and held by a held frame or a pause. Every kick, shake, jolt,
+// roll and freeze is off under reduced motion (Feel.reduced); the speed FOV breathing stays.
 
 export interface CamTarget {
   pos: Vector3;
@@ -16,6 +23,12 @@ export interface CamTarget {
   steer: number;
   airborne: boolean;
   boost: number;
+  /** Run only: the drift, which leans the horizon into it (absent reads as not drifting). */
+  drifting?: boolean;
+  /** The drift's locked direction (-1 or 1, the sign steer takes). */
+  driftDir?: number;
+  /** The drift's slip angle (radians). */
+  slip?: number;
   /** Title only: the nearest ghost to share the hero shot with (three.js world position). */
   mate?: Vector3 | null;
   /** Run only: the chest of the ghost the HUD's rival pill names (three.js world position). */
@@ -56,6 +69,38 @@ const HERO_BACKS = [1, 1.6, 2.2];
 const TREELINE = 10.3;
 /** A hero framing that cannot see the wreck at all. */
 const HERO_BLOCKED = 99;
+
+// The jolt spring: omega 22 rad/s, zeta 0.5, integrated exactly (closed form per frame).
+const J_OMEGA = 22;
+const J_A = J_OMEGA * 0.5;
+const J_WD = J_OMEGA * Math.sqrt(1 - 0.25);
+/** Peak displacement of the spring after a unit velocity impulse: a jolt's amount is its peak. */
+const J_PEAK = (() => {
+  const tp = Math.atan(J_WD / J_A) / J_WD;
+  return (Math.exp(-J_A * tp) * Math.sin(J_WD * tp)) / J_WD;
+})();
+/** The lens may roll this far either way (ART.md section 8: about 4 degrees). */
+const ROLL_MAX = 0.07;
+/** Pass words that lean the lens toward the ghost (race-news). */
+const NUDGE_WORDS: ReadonlySet<PassWord> = new Set<PassWord>(['slung', 'double', 'triple', 'streak', 'duelWon', 'heldOff']);
+/** Bank kicks by tier (none for tier 0, nor for a bump bank). */
+const BANK_KICK = [0, 0.15, 0.25, 0.4];
+/** Drift release kicks by tier. */
+const RELEASE_KICK = [0, 0.3, 0.5, 0.75];
+/** The crash orbit: radius, height over the wreck, and drift (radians per second of scaled time). */
+const ORBIT_R = 7.5;
+const ORBIT_UP = 3.2;
+const ORBIT_SPIN = 0.55;
+/** The crash orbit's turn to face the pack: a start further than ORBIT_CUT (radians) from where the
+ *  held lens stood is a cut, a nearer one a swing at ORBIT_EASE per second, at most ORBIT_SWING
+ *  radians per second of scaled time. The orbit winds up over ORBIT_WIND seconds from the hold. */
+const ORBIT_CUT = 0.6;
+/** Facing the pack, the lens stays downhill of the wreck, at most this far (radians) off looking
+ *  straight up the slope. */
+const ORBIT_FACE = 0.9;
+const ORBIT_EASE = 5;
+const ORBIT_SWING = 3.6;
+const ORBIT_WIND = 0.15;
 
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
@@ -108,6 +153,42 @@ export class ChaseCamera {
   private crowdN = 0;
   private lastFocus = new Vector3();
   private initialized = false;
+  /** The jolt spring in camera space (metres right, up, back) plus a roll (radians): displacement
+   *  and velocity per axis. */
+  private jx = 0;
+  private jy = 0;
+  private jz = 0;
+  private jr = 0;
+  private jvx = 0;
+  private jvy = 0;
+  private jvz = 0;
+  private jvr = 0;
+  /** The shake's own clock: real seconds times Feel.shakeScale (a pause or a held frame stops it). */
+  private shakeT = 0;
+  /** Scaled seconds the crash lens still holds still (CRASH_FREEZE_S after the crash beat). */
+  private freezeLeft = 0;
+  /** The crash beat's bearing to the nearest live ghost behind (pack-orbit), or null. */
+  private orbitFrom: number | null = null;
+  /** The crash orbit has taken over from the held lens (its angle seeded from where the lens was). */
+  private orbitSeeded = false;
+  /** Scaled seconds since the orbit took over from the hold (the swing winds up over ORBIT_WIND). */
+  private orbitT = 0;
+  /** The orbit angle a short swing is easing to (facing the pack), or null. */
+  private orbitAim: number | null = null;
+  private orbitR = ORBIT_R;
+  private orbitUp = ORBIT_UP;
+  /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
+  private orbitSpin = ORBIT_SPIN;
+  /** Raw events this frame that a beat may take over: a perfect landing (the stomp beat kicks by
+   *  streak) and a drift boost (the release beat kicks by tier). Settled in beats(). */
+  private pendPerfect = false;
+  private pendDriftKick = 0;
+  /** Ghosts the lens already leaned toward this frame (a duel result and its pass are one nudge). */
+  private nudged: number[] = [];
+  /** The applied roll this frame (eased roll plus the bump's impulse, clamped). */
+  private rollOut = 0;
+  private lens = new Vector3();
+  private lookT = new Vector3();
   /** Terrain height at a three.js (x, z), so low title shots never sink into a bank. */
   ground: ((x: number, z: number) => number) | null = null;
   /** The course corridor at a three.js z: its centre x and half width (the results shot of a wreck
@@ -129,26 +210,37 @@ export class ChaseCamera {
     this.camera.updateProjectionMatrix();
   }
 
+  /** A shake (off under reduced motion; the world's rumbles come through here too). */
   shake(amount: number): void {
+    if (this.feel.reduced) return;
     this.shakeAmp = Math.min(1.2, this.shakeAmp + amount);
   }
 
+  /** A FOV punch (off under reduced motion). */
   kick(amount: number): void {
+    if (this.feel.reduced) return;
     this.punch = Math.min(1, this.punch + amount);
   }
 
   /** This frame's feel from the director (reduced motion, time scale, streak); set by beats(). */
   feel: Feel = IDLE_FEEL;
 
-  /** The camera's reactions to raw sim events: kicks on boosts and perfect landings, shakes on impacts. */
+  /** The camera's reactions to raw sim events: shakes on impacts, a sink on clean and sketchy
+   *  landings, and boost kicks. A perfect landing's kick and a drift boost's are left to their beats
+   *  (the stomp kicks by streak, the release by tier), with today's numbers as the fallback when no
+   *  beat names them. Called before beats() each frame, so it reads the last frame's feel. */
   onSimEvent(e: SimEvent): void {
     switch (e.type) {
       case 'land':
         if (e.quality === 'perfect') {
-          this.kick(0.9);
-          this.shake(0.25);
-        } else if (e.quality === 'clean') this.shake(Math.min(0.5, e.impact * 0.03));
-        else if (e.quality === 'sketchy') this.shake(0.55);
+          this.pendPerfect = true;
+        } else if (e.quality === 'clean' || e.quality === 'sketchy') {
+          this.shake(e.quality === 'clean' ? Math.min(0.5, e.impact * 0.03) : 0.55);
+          // The lens sinks with a hard landing and the horizon nods (a late stomp after it never dips
+          // again: its stomp beat says late).
+          const a = MathUtils.clamp((e.impact - 6) * 0.022, 0, 0.28);
+          if (a > 0) this.jolt(0, -a, 0);
+        }
         break;
       case 'crash':
         this.shake(1.1);
@@ -157,7 +249,8 @@ export class ChaseCamera {
         this.shake(0.5);
         break;
       case 'boost':
-        this.kick(0.35);
+        if (e.source === 'drift') this.pendDriftKick = 0.35;
+        else this.kick(0.35);
         break;
       default:
         break;
@@ -165,23 +258,168 @@ export class ChaseCamera {
   }
 
   /** This frame's named moments and feel, every frame after the raw events. Never keeps the list. */
-  beats(_list: readonly Beat[], feel: Feel): void {
+  beats(list: readonly Beat[], feel: Feel): void {
     this.feel = feel;
+    if (feel.reduced) {
+      // A calm screen: nothing kicks, shakes, knocks, rolls or holds.
+      this.pendPerfect = false;
+      this.pendDriftKick = 0;
+      this.calm();
+      this.freezeLeft = 0;
+      return;
+    }
+    let stomped = false;
+    let released = false;
+    this.nudged.length = 0;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      switch (b.type) {
+        case 'stomp': {
+          const n = Math.max(1, b.streak);
+          this.kick(n <= 1 ? 0.9 : n === 2 ? 0.95 : 1);
+          this.shake(n >= 4 ? 0.35 : 0.25);
+          // A late stomp follows a clean landing that already sank the lens.
+          if (!b.late) this.jolt(0, -Math.min(0.28, 0.2 + 0.02 * (n - 1)), 0);
+          stomped = true;
+          break;
+        }
+        case 'bump':
+          // Knocked away from the obstacle (side is the way away), and the horizon tips with it.
+          this.jolt(0.22 * b.side, -0.05, 0);
+          this.jvr += (0.035 * b.side) / J_PEAK;
+          break;
+        case 'nearMiss':
+          // A whisker flinches the lens away from the obstacle's side.
+          if (b.grade === 'whisker') {
+            this.jolt(-0.08 * b.side, 0, 0);
+            this.kick(0.2);
+          }
+          break;
+        case 'driftRelease':
+          this.kick(RELEASE_KICK[b.tier] ?? 0.3);
+          if (b.tier === 3) this.jolt(0, 0, 0.25);
+          released = true;
+          break;
+        case 'flow':
+          if (b.phase === 'in') {
+            this.kick(0.2);
+            this.jolt(0, -0.1, 0);
+          }
+          break;
+        case 'pass':
+          if (!b.muted && NUDGE_WORDS.has(b.word)) this.nudge(b.ghost);
+          break;
+        case 'duel':
+          if (b.phase === 'won' || b.phase === 'heldOff') this.nudge(b.ghost);
+          break;
+        case 'lead':
+          this.kick(0.15);
+          break;
+        case 'bank':
+          if (!b.bump) this.kick(BANK_KICK[b.tier] ?? 0);
+          break;
+        case 'finale':
+          if (b.stamp) this.kick(0.6);
+          break;
+        case 'crash':
+          // The lens holds still while the wreck tumbles away from it, then the orbit takes over.
+          this.freezeLeft = CRASH_FREEZE_S;
+          this.orbitFrom = b.orbitFrom;
+          this.orbitSeeded = false;
+          break;
+        default:
+          break;
+      }
+    }
+    if (this.pendPerfect && !stomped) {
+      this.kick(0.9);
+      this.shake(0.25);
+    }
+    if (this.pendDriftKick > 0 && !released) this.kick(this.pendDriftKick);
+    this.pendPerfect = false;
+    this.pendDriftKick = 0;
   }
 
-  /** A positional knock in camera space (metres right, up and back). Scaffold: no-op. */
-  jolt(_right: number, _up: number, _back: number): void {
-    // (The spring lands with the camera's weight work.)
+  /** Leans the lens a few centimetres toward a ghost just passed (once per ghost per frame). */
+  private nudge(g: GhostRef): void {
+    if (this.nudged.includes(g.id) || g.dx === 0) return;
+    this.nudged.push(g.id);
+    this.jolt(0.06 * Math.sign(g.dx), 0, 0);
   }
 
-  /** Clears held feel (a freeze, a jolt) on revive and at a run's start. Scaffold: nothing is held. */
+  /** A positional knock in camera space (metres right, up and back), each amount its peak: a velocity
+   *  impulse into a stiff spring, so it lands over about 55 ms and settles within about 0.25 s.
+   *  Chase only, off under reduced motion. */
+  jolt(right: number, up: number, back: number): void {
+    if (this.feel.reduced || this.mode !== 'chase') return;
+    this.jvx += right / J_PEAK;
+    this.jvy += up / J_PEAK;
+    this.jvz += back / J_PEAK;
+  }
+
+  /** Clears held feel on revive and at a run's start: the crash hold, jolts, the shake and the punch. */
   resetFeel(): void {
-    // (Nothing held yet.)
+    this.calm();
+    this.freezeLeft = 0;
+    this.orbitFrom = null;
+    this.orbitSeeded = false;
+    this.pendPerfect = false;
+    this.pendDriftKick = 0;
   }
 
-  /** The current lens roll in radians, for probes. */
+  private calm(): void {
+    this.jx = this.jy = this.jz = this.jr = 0;
+    this.jvx = this.jvy = this.jvz = this.jvr = 0;
+    this.shakeAmp = 0;
+    this.punch = 0;
+  }
+
+  /** The current lens roll in radians (the eased lean plus a bump's knock, clamped), for probes. */
   get rollNow(): number {
-    return this.roll;
+    return this.rollOut;
+  }
+
+  /** The current jolt offset (metres right, up, back), for probes. */
+  get joltNow(): { right: number; up: number; back: number } {
+    return { right: this.jx, up: this.jy, back: this.jz };
+  }
+
+  /** Scaled seconds the crash lens still holds (0 once the orbit has it), for probes. */
+  get holdNow(): number {
+    return this.freezeLeft;
+  }
+
+  /** Advances the jolt spring exactly over dt (clamped to 1/30 s). */
+  private stepJolt(dt: number): void {
+    const d = Math.min(Math.max(0, dt), 1 / 30);
+    if (d === 0) return;
+    const e = Math.exp(-J_A * d);
+    const c = Math.cos(J_WD * d) * e;
+    const s = Math.sin(J_WD * d) * e;
+    // x' = e(x cos + (v + a x) / wd sin), v' = e(v cos - (a v + w^2 x) / wd sin), per axis.
+    const p = s / J_WD;
+    const w2 = J_OMEGA * J_OMEGA;
+    let x = this.jx;
+    let v = this.jvx;
+    this.jx = x * c + (v + J_A * x) * p;
+    this.jvx = v * c - (J_A * v + w2 * x) * p;
+    x = this.jy;
+    v = this.jvy;
+    this.jy = x * c + (v + J_A * x) * p;
+    this.jvy = v * c - (J_A * v + w2 * x) * p;
+    x = this.jz;
+    v = this.jvz;
+    this.jz = x * c + (v + J_A * x) * p;
+    this.jvz = v * c - (J_A * v + w2 * x) * p;
+    x = this.jr;
+    v = this.jvr;
+    this.jr = x * c + (v + J_A * x) * p;
+    this.jvr = v * c - (J_A * v + w2 * x) * p;
+    // Settled: rest exactly (no denormal drift).
+    if (Math.abs(this.jx) + Math.abs(this.jy) + Math.abs(this.jz) + Math.abs(this.jr) < 1e-5 && Math.abs(this.jvx) + Math.abs(this.jvy) + Math.abs(this.jvz) + Math.abs(this.jvr) < 1e-4) {
+      this.jx = this.jy = this.jz = this.jr = 0;
+      this.jvx = this.jvy = this.jvz = this.jvr = 0;
+    }
   }
 
   /** Title: the nearest live ghost to the hero (sim coordinates in, three.js out), or null. Also
@@ -238,6 +476,17 @@ export class ChaseCamera {
     const tanHalfW = tanHalf * this.aspect;
     const travelAz = azimuth(this.dirS.x, this.dirS.z);
     if (this.mode !== 'hero') this.heroPicked = false;
+    const reduced = this.feel.reduced;
+    // The crash hold lasts only while the crash orbit is the mode (a revive or the results end it).
+    if (this.mode !== 'crash' || reduced || !this.initialized) this.freezeLeft = 0;
+    const held = this.mode === 'crash' && this.freezeLeft > 0;
+    if (this.mode !== 'crash') this.orbitSeeded = false;
+    // Jolts ride the chase only: elsewhere they die away at once.
+    if (this.mode === 'chase' && !reduced) this.stepJolt(dt);
+    else if (this.jx || this.jy || this.jz || this.jr || this.jvx || this.jvy || this.jvz || this.jvr) {
+      this.jx = this.jy = this.jz = this.jr = 0;
+      this.jvx = this.jvy = this.jvz = this.jvr = 0;
+    }
 
     if (this.mode === 'chase' && portrait) {
       // Portrait (contract C3): close behind and high, so the rider is big enough to read its pose
@@ -304,11 +553,21 @@ export class ChaseCamera {
       lookAt.copy(t.pos).addScaledVector(this.dirS, 6.5 + speedK * 5);
       lookAt.y += 0.25;
     } else if (this.mode === 'crash') {
-      // Slow drift around the wreck.
-      this.orbitAngle += dt * 0.55;
-      const r = 7.5;
-      desired.set(t.pos.x + Math.sin(this.orbitAngle) * r, t.pos.y + 3.2, t.pos.z + Math.cos(this.orbitAngle) * r);
-      lookAt.copy(t.pos);
+      if (held) {
+        // The crash beat: the lens holds where it was, looking where it looked, while the rider
+        // tumbles away from it (scaled time, so the held frame and the slow motion hold it longer).
+        this.freezeLeft = Math.max(0, this.freezeLeft - dt);
+        desired.copy(this.pos);
+        lookAt.copy(this.look);
+      } else {
+        if (this.crashOrbit(t, dt, desired)) {
+          // A cut to face the pack: the lens stands there at once.
+          this.pos.copy(desired);
+          this.look.copy(t.pos);
+          this.lookS.copy(t.pos);
+        }
+        lookAt.copy(t.pos);
+      }
     } else if (this.mode === 'hero') {
       this.heroShot(t, desired, lookAt, tanHalfW, travelAz);
     } else {
@@ -342,7 +601,8 @@ export class ChaseCamera {
     // Never dip below the snow just behind the sled (the title orbit keeps its own ground clearance).
     // (The hero shot keeps its own clearance: on a phone it lies low on the snow downhill of the wreck,
     // and held 0.8 m over the wreck it looked down onto blank snow.)
-    if (this.pos.y < t.pos.y + 0.8 && this.mode !== 'orbit' && this.mode !== 'hero') this.pos.y = t.pos.y + 0.8;
+    // (Held still on the crash beat, whatever the tumbling wreck does.)
+    if (this.pos.y < t.pos.y + 0.8 && this.mode !== 'orbit' && this.mode !== 'hero' && !held) this.pos.y = t.pos.y + 0.8;
     // Nor into the snow under the lens or halfway to the rider: just past a kicker or a bank lip the
     // mound behind the rider can stand higher than the rider itself, and the lens sank into it, the
     // lower frame a flat slab of terrain with its dark underside showing.
@@ -382,9 +642,11 @@ export class ChaseCamera {
       this.frameRival(t, 0, dt);
     }
 
-    // FOV: breathe with speed, kick on boosts and perfect landings.
-    this.punch = Math.max(0, this.punch - dt * 2.4);
-    let baseFov = 62 + speedK * 14 + t.boost * 4 + this.punch * 8 + this.rivalFov + (this.mode === 'chase' && this.aspect >= 1 ? this.airK * 4 : 0);
+    // FOV: breathe with speed, kick on boosts and perfect landings, and open a little in earned flow
+    // (the chase only; the kick and the flow are off under reduced motion, the breathing stays).
+    this.punch = reduced ? 0 : Math.max(0, this.punch - dt * 2.4);
+    const flowFov = this.mode === 'chase' && !reduced ? 2.5 * MathUtils.clamp(this.feel.flow, 0, 1) : 0;
+    let baseFov = 62 + speedK * 14 + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (this.mode === 'chase' && this.aspect >= 1 ? this.airK * 4 : 0);
     if (this.mode === 'hero') {
       // A longer lens for the still hero shot: less distortion, a bigger sun. A phone's band is short
       // and narrow, so there the lens is wider: at 50 degrees it was a close-up of the rider alone.
@@ -402,18 +664,134 @@ export class ChaseCamera {
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
 
-    // The hero shot is level: a roll held over from the last carve tilted the wreck's horizon.
-    const rollT = this.mode === 'hero' ? 0 : -t.steer * 0.07 * (0.4 + speedK);
-    this.roll += (rollT - this.roll) * (1 - Math.exp(-dt * 4));
-    this.shakeAmp = Math.max(0, this.shakeAmp - dt * 2.2);
+    // Roll: a drift leans the horizon into it, with its slip; otherwise the carve leans it with the
+    // steer, more with speed; never past ROLL_MAX either way. The hero shot is level (a roll held
+    // over from the last carve tilted the wreck's horizon), and so is the crash orbit, which eases
+    // level from the roll the crash hold kept (the hand-off to the hero shot never tilts). Reduced
+    // motion never rolls.
+    let rollT = 0;
+    if (this.mode === 'chase' && !reduced) {
+      if (t.drifting) rollT = -(t.driftDir ?? 0) * (0.035 + 0.035 * Math.min(1, Math.abs(t.slip ?? 0) / 0.7));
+      else rollT = -t.steer * 0.05 * (0.4 + speedK);
+      rollT = MathUtils.clamp(rollT, -ROLL_MAX, ROLL_MAX);
+    }
+    if (reduced) this.roll = 0;
+    else if (!held) this.roll += (rollT - this.roll) * (1 - Math.exp(-dt * 4));
+    this.rollOut = reduced ? 0 : MathUtils.clamp(this.roll + this.jr, -ROLL_MAX, ROLL_MAX);
+
+    // The shake runs on its own clock: real time scaled by the hit-stop (Feel.shakeScale), so a
+    // stomp's shake thickens with it, a held frame or a pause freezes it, and nothing jitters while
+    // time stands still. (dt arrives already scaled by the render channel.)
+    const tr = this.feel.timeRender;
+    const realDt = tr > 1e-4 ? dt / tr : 0;
+    this.shakeT += realDt * this.feel.shakeScale;
+    this.shakeAmp = reduced ? 0 : Math.max(0, this.shakeAmp - dt * 2.2);
     const sh = this.shakeAmp * this.shakeAmp;
-    const time = performance.now() / 1000;
+    const time = this.shakeT;
     const ox = Math.sin(time * 47) * sh * 0.25 + Math.sin(time * 23) * sh * 0.12;
     const oy = Math.cos(time * 41) * sh * 0.2;
 
-    this.camera.position.set(this.pos.x + ox, this.pos.y + oy, this.pos.z);
-    this.camera.up.set(Math.sin(this.roll), Math.cos(this.roll), 0);
-    this.camera.lookAt(this.look);
+    // The lens: the eased position plus the jolt and the shake in camera-local axes (right is level,
+    // up is the world's, back is away from the look point), then held clear of the snow again, so a
+    // landing's sink never takes the near plane into the slope behind the rider.
+    let fx = this.look.x - this.pos.x;
+    let fz = this.look.z - this.pos.z;
+    const fl = Math.hypot(fx, fz);
+    if (fl > 1e-6) {
+      fx /= fl;
+      fz /= fl;
+    } else {
+      fx = 0;
+      fz = -1;
+    }
+    const rx = -fz;
+    const rz = fx;
+    const lens = this.lens.copy(this.pos);
+    const look = this.lookT.copy(this.look);
+    if (this.mode === 'chase') {
+      const jr = this.jx;
+      const jb = this.jz;
+      lens.x += rx * jr - fx * jb;
+      lens.z += rz * jr - fz * jb;
+      lens.y += this.jy;
+      // The look point moves with the lens sideways and back, and dips half as far: the horizon nods.
+      look.x += rx * jr - fx * jb;
+      look.z += rz * jr - fz * jb;
+      look.y += this.jy * 0.5;
+    }
+    lens.x += rx * ox;
+    lens.z += rz * ox;
+    lens.y += oy;
+    if (this.mode === 'chase' && this.ground) {
+      const mx = (lens.x + t.pos.x) * 0.5;
+      const mz = (lens.z + t.pos.z) * 0.5;
+      lens.y = Math.max(lens.y, this.ground(lens.x, lens.z) + 0.2, this.ground(mx, mz) + 0.3);
+    }
+    this.camera.position.copy(lens);
+    if (this.mode === 'chase') {
+      // A true roll about the view axis (the chase turns with the course).
+      const sr = Math.sin(this.rollOut);
+      this.camera.up.set(rx * sr, Math.cos(this.rollOut), rz * sr);
+    } else this.camera.up.set(Math.sin(this.rollOut), Math.cos(this.rollOut), 0);
+    this.camera.lookAt(look);
+  }
+
+  /** The crash orbit: a slow drift round the wreck. With no ghost to watch it takes over from
+   *  wherever the held lens stood (its angle, distance and height ease to the orbit's), so it never
+   *  jumps. With the crash beat's bearing to the nearest live ghost behind or abreast (pack-orbit),
+   *  it starts facing that ghost: the lens stands downhill of the wreck on the far side from it and
+   *  looks past the wreck up the slope toward the ghost, so the pack streams down past your wreck
+   *  through the frame (the race went on without you). From the chase lens behind the wreck that is a reverse angle, far
+   *  too far to swing in the third of a second before the results, so after the held frame it is a
+   *  cut; a start within ORBIT_CUT of the lens swings there instead. Then it drifts on slowly, so a
+   *  narrow screen's panel never sits over a frozen frame. Reduced motion never cuts or swings: the
+   *  orbit drifts on from the lens. Returns true on a cut (the caller snaps the lens there). */
+  private crashOrbit(t: CamTarget, dt: number, desired: Vector3): boolean {
+    let cut = false;
+    if (!this.orbitSeeded) {
+      this.orbitSeeded = true;
+      const dx = this.pos.x - t.pos.x;
+      const dz = this.pos.z - t.pos.z;
+      this.orbitAngle = Math.atan2(dx, dz);
+      this.orbitR = MathUtils.clamp(Math.hypot(dx, dz), 2, 12);
+      this.orbitUp = MathUtils.clamp(this.pos.y - t.pos.y, 0.8, 6);
+      this.orbitSpin = ORBIT_SPIN;
+      this.orbitT = 0;
+      this.orbitAim = null;
+      const from = this.feel.reduced ? null : this.orbitFrom;
+      if (from !== null) {
+        // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward
+        // +x). In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens
+        // along (sin a, cos a), so the lens opposite the ghost, facing it, is at a = -from. It stays
+        // on the downhill side (a = PI looks straight up the slope): a ghost abreast is watched
+        // across the slope as it comes down, not from deeper in the trees beside a wreck.
+        const aim = Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE);
+        const gap = wrapAngle(aim - this.orbitAngle);
+        this.orbitSpin = ORBIT_SPIN * 0.4 * (gap < 0 ? -1 : 1);
+        if (Math.abs(gap) > ORBIT_CUT) {
+          this.orbitAngle = aim;
+          this.orbitR = ORBIT_R;
+          this.orbitUp = ORBIT_UP;
+          this.orbitT = ORBIT_WIND;
+          cut = true;
+        } else this.orbitAim = aim;
+      }
+    }
+    this.orbitT += dt;
+    const wind = Math.min(1, this.orbitT / ORBIT_WIND);
+    if (this.orbitAim !== null) {
+      const gap = wrapAngle(this.orbitAim - this.orbitAngle);
+      if (Math.abs(gap) < 0.02) this.orbitAim = null;
+      else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
+    } else this.orbitAngle += dt * this.orbitSpin * wind;
+    const k = 1 - Math.exp(-dt * 2.5);
+    this.orbitR += (ORBIT_R - this.orbitR) * k;
+    this.orbitUp += (ORBIT_UP - this.orbitUp) * k;
+    desired.set(t.pos.x + Math.sin(this.orbitAngle) * this.orbitR, t.pos.y + this.orbitUp, t.pos.z + Math.cos(this.orbitAngle) * this.orbitR);
+    // Facing the pack can put the lens over a bank or among the trees beside the course: never in
+    // the snow.
+    if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 1);
+    return cut;
   }
 
   /** Sell top fix 1, put the rivals in the frame: the ghost the HUD's rival pill names used to sit
