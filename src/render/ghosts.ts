@@ -439,6 +439,7 @@ function injectStyle(): void {
   @keyframes ghost-ring-out { 0% { opacity: 1; } 100% { opacity: 0; } }
   .ghost-label.line { background: #121933; color: var(--c); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--c), 0 2px 6px rgba(18, 25, 51, 0.35), 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
   .ghost-label.grave { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 11px 5px; border-radius: 9px; text-align: center; }
+  .ghost-label.grave .gn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
   .ghost-label.grave .gf { font-size: 11px; font-weight: 650; letter-spacing: 0.01em; color: #F5F3FF; }
   @media (prefers-reduced-motion: reduce) {
     .ghost-label.trick .tw { animation-name: ghost-trick-fade; animation-timing-function: linear; }
