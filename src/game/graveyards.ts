@@ -25,14 +25,15 @@ export const GRAVE_GIFTS = 3;
 /** A pool ghost that rode this long finished the generator's run: it never crashed (field.ts FINISH_TICKS). */
 const FINISHED_TICKS = 18000;
 
-/** Short place names (proper nouns, no pronouns), at most 14 characters so 'Name: 4 fell here' fits a phone tag. */
+/** Short place names (proper nouns, no pronouns, typographic apostrophes), at most 14 characters so
+ *  'Name: 4 fell here' fits a phone tag. */
 export const GRAVE_NAMES = [
-  "Widow's Bend",
+  'Widow’s Bend',
   'Lantern Rest',
   'Hush Hollow',
   'Bonepile Bend',
   'Last Light',
-  "Tumbler's Gate",
+  'Tumbler’s Gate',
   'Cold Comfort',
   'Grim Gully',
   'Rattle Run',
