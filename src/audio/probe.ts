@@ -178,9 +178,69 @@ export interface RenderOpts {
   biome?: BiomeId;
 }
 
+/** The shoulder probe's timeline (s): the bed alone, a ghost 2 m to the left closing from 5.5 m to
+ *  0.5 m behind, then one sitting 2 m behind without closing. */
+const SHOULDER = { offFrom: 2, closeFrom: 4, closeTo: 7, sitTo: 10 } as const;
+
+function shoulderAt(t: number): { amt: number; pan: number } | null {
+  if (t < SHOULDER.closeFrom) return null;
+  const pan = -2 / 3;
+  if (t < SHOULDER.closeTo) {
+    const gap = 5.5 - (5 * (t - SHOULDER.closeFrom)) / (SHOULDER.closeTo - SHOULDER.closeFrom);
+    return { amt: (1 - gap / 6) ** 2, pan };
+  }
+  return { amt: (1 - 2 / 6) ** 2, pan };
+}
+
+/** Drives the 'layers' probe solos each layer at: a novice cruise, a skilled stretch (a skill chain
+ *  on a stomp streak with the pack close) and the stress drive (everything). */
+const LAYER_DRIVES = { cruise: 0.36, skilled: 0.6, stress: 1 } as const;
+const LAYER_NAMES = ['pad', 'bass', 'hat', 'arp', 'kick', 'clap', 'sparkle', 'lead', 'tension'] as const;
+
+/** Each music layer alone (dBFS RMS, after the limiter, music bus only) at each drive. */
+async function renderLayers(): Promise<Record<string, number | number[]>> {
+  const out: Record<string, number | number[]> = {};
+  for (const [label, drive] of Object.entries(LAYER_DRIVES)) {
+    for (const layer of LAYER_NAMES) {
+      const secs = 6;
+      const ctx = new OfflineAudioContext(2, SR * secs, SR);
+      const core = new Core(ctx);
+      core.graph.setMaster(1, 0);
+      core.graph.sfx.setLevel(0, 0);
+      core.music.setTarget('run', Mood.None, 'alpine');
+      core.music.solo = layer;
+      const danger = label === 'stress' ? 0.9 : 0;
+      core.music.setDrive(drive, danger, label === 'stress' ? 10 : 1, true);
+      core.tick(0, LOOKAHEAD);
+      for (let k = 1; k * STEP < secs - 0.05; k++) {
+        const t = k * STEP;
+        ctx.suspend(t).then(
+          () => {
+            core.music.setDrive(drive, danger, label === 'stress' ? 10 : 1);
+            core.tick(ctx.currentTime, LOOKAHEAD);
+            void ctx.resume();
+          },
+          () => undefined,
+        );
+      }
+      const buf = await ctx.startRendering();
+      const L = buf.getChannelData(0);
+      const R = buf.getChannelData(1);
+      let acc = 0;
+      const from = 2 * SR;
+      for (let i = from; i < L.length; i++) acc += (L[i] * L[i] + R[i] * R[i]) / 2;
+      out[`${label}.${layer}`] = Math.round(db(Math.sqrt(acc / Math.max(1, L.length - from))) * 10) / 10;
+      core.dispose();
+    }
+  }
+  return out;
+}
+
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
+  if (kind === 'layers') return renderLayers();
   const isMoment = kind === 'drop' || kind === 'massive' || kind === 'lost' || kind === 'escape';
-  const secs = isMoment ? 5 : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
+  const shoulder = kind === 'shoulder';
+  const secs = isMoment ? 5 : shoulder ? SHOULDER.sitTo : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
   const core = new Core(ctx);
   // 'stress-music' and 'stress-sfx' render the stress mix with the other bus muted (diagnosis).
@@ -194,7 +254,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   if (o.release !== undefined) lim.release.value = o.release;
   if (opts.ceiling !== undefined) core.graph.ceiling.gain.value = opts.ceiling;
   core.graph.setMaster(1, 0);
-  const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb';
+  const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb' || shoulder;
   // 'song': the band alone at a cruise, to read a mountain's A A B B form (bars and decks).
   const song = kind === 'song';
   const choir = kind === 'choir';
@@ -209,6 +269,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   let nextBurst = 2;
   const step = (t: number): void => {
     const f = stress ? stressFrame(t) : baseFrame(t);
+    if (shoulder) f.shoulder = shoulderAt(t);
     const target = Math.max(0, Math.min(1, f.intensity));
     drive += (target - drive) * (1 - Math.exp(-STEP / (target > drive ? 0.7 : 2.2)));
     core.music.setDrive(drive, f.danger, f.comboMult);
@@ -280,6 +341,25 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     musicPeak: core.musicPool.peak,
     errors,
   };
+  if (shoulder) {
+    // L and R RMS (dBFS) of the bed alone, the last second of the closing (the ghost 2.2 to 0.5 m
+    // behind on the left) and a ghost sitting 2 m behind without closing.
+    const lr = (a: number, b: number): number[] => {
+      let l = 0;
+      let r = 0;
+      const i0 = Math.floor(a * SR);
+      const i1 = Math.min(L.length, Math.floor(b * SR));
+      for (let i = i0; i < i1; i++) {
+        l += L[i] * L[i];
+        r += R[i] * R[i];
+      }
+      const n = Math.max(1, i1 - i0);
+      return [Math.round(db(Math.sqrt(l / n)) * 10) / 10, Math.round(db(Math.sqrt(r / n)) * 10) / 10];
+    };
+    out.offLR = lr(SHOULDER.offFrom + 0.3, SHOULDER.closeFrom);
+    out.closingLR = lr(SHOULDER.closeTo - 1, SHOULDER.closeTo);
+    out.sittingLR = lr(SHOULDER.closeTo + 1, SHOULDER.sitTo);
+  }
   if (choir) {
     // Mean level per stretch: none, one, two, three voices, then the retake.
     const win = (a: number, b: number): number => {

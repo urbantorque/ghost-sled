@@ -116,6 +116,8 @@ class Deck {
   private phrase: LeadNote[] = [];
   private walk = 5;
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  /** Probe-only (probe.ts 'layers'): one layer heard alone, the rest held at zero. */
+  solo: string | null = null;
 
   constructor(
     ctx: BaseAudioContext,
@@ -239,21 +241,25 @@ class Deck {
       L.sparkle = 0.5;
       L.hat = 0.25;
     } else {
-      // Intensity builds the arrangement (src/game/intensity.ts): the pad always; the bass from 0.26
-      // (the run floor of 0.30 already has it under the pad; full at 0.40); hats from 0.30 (cruising
-      // at 0.36 has them at a third); the arp from 0.58 and the kick from 0.60; clap and sparkle from
-      // 0.80; the lead counter-melody from 0.85.
+      // The drive builds the arrangement (src/game/intensity.ts plus the engine's groove and accents).
+      // Played runs sit between 0.36 (a cruise) and about 0.6 (a skill chain on a stomp streak with
+      // the pack close), so the layers that say "you earned this" come in inside that band: the pad
+      // always; the bass from 0.26 (the run floor of 0.30 already has it under the pad; full at
+      // 0.40); hats from 0.30 (a third at a 0.36 cruise, full with the pack); the arp from 0.48 and
+      // the kick from 0.54; clap and sparkle from 0.72; the lead counter-melody from 0.82. A draft
+      // boost with the pack tops out near 0.48, under the arp: drafting never builds the band.
       const i = this.drive.intensity;
       L.bass = smoothstep(0.26, 0.4, i);
       L.hat = smoothstep(0.3, 0.45, i);
-      L.arp = smoothstep(0.58, 0.72, i);
-      L.kick = smoothstep(0.6, 0.74, i);
-      L.clap = smoothstep(0.8, 0.9, i);
-      L.sparkle = smoothstep(0.8, 0.92, i);
-      L.lead = smoothstep(0.85, 0.95, i);
+      L.arp = smoothstep(0.48, 0.6, i);
+      L.kick = smoothstep(0.54, 0.66, i);
+      L.clap = smoothstep(0.72, 0.84, i);
+      L.sparkle = smoothstep(0.74, 0.86, i);
+      L.lead = smoothstep(0.82, 0.92, i);
       L.tension = smoothstep(0.05, 0.6, this.drive.danger);
       L.choir = this.choirN > 0 ? 1 : 0;
     }
+    if (this.solo) for (const l of LAYERS) if (l !== this.solo) L[l] = 0;
   }
 
   private applyLevels(now: number): void {
@@ -559,6 +565,8 @@ export class Music {
   /** Probe: decks started (each after the first is a crossfade). */
   decksStarted = 0;
   private choir = 0;
+  /** Probe-only: solo one layer on every deck (null: the whole band). */
+  solo: string | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -639,6 +647,7 @@ export class Music {
     }
     for (const d of this.decks) {
       d.setDrive(this.drive);
+      d.solo = this.solo;
       d.schedule(until, now, this.enabled);
     }
     if (this.drive.snap) this.drive = { ...this.drive, snap: false };
