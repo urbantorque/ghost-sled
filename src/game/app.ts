@@ -74,7 +74,9 @@ const EVENT_GOAL: Partial<Record<ChaosEvent, string>> = {
   [ChaosEvent.GhostTrain]: 'Ride its slipstream',
 };
 
-const STALE_LINK = 'That challenge was made on an older Ghost Sled. Ride it fresh.';
+/** A challenge link from an older build. Short enough for the toast pill at 390 px; the sub gives
+ *  way first when space runs out. */
+const STALE_LINK = { text: 'Challenge from an older Ghost Sled', sub: 'Ride it fresh' } as const;
 
 /** A saved or shared record that still replays on this build (a stale one degrades to no ghost). */
 function validRecord(r: string | undefined | null): boolean {
@@ -251,11 +253,22 @@ export class App {
     this.applyAudioSettings();
     const user = await this.platform.getUser().catch(() => null);
     if (user?.username && this.save.data.runs === 0) this.save.data.name = user.username.slice(0, 16);
-    this.readChallenge();
+    const stale = this.readChallenge();
     this.adblock = await this.platform.hasAdblock().catch(() => false);
     this.ui.setLoading(null);
     this.platform.loadingStop();
     this.refreshTitle();
+    // Said once the title is up and painting (its first frames compile shaders and can hold the
+    // main thread for a second or more), so the toast's whole time on screen can be read.
+    if (stale) {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          window.setTimeout(() => {
+            if (this.phase === 'title') this.ui.toast(STALE_LINK.text, 'info', STALE_LINK.sub);
+          }, 600);
+        }),
+      );
+    }
     // Once the title has settled, the shop's portraits are drawn in the background (title only).
     window.setTimeout(() => prewarmSledPortraits(SLEDS.map((s) => s.id), this.save.data.sled, () => this.phase === 'title'), 1200);
     if (DEV_ON && DEV.has('autoride')) this.ride();
@@ -331,10 +344,12 @@ export class App {
     this.audio.setVolumes({ master: s.master, music: s.music, sfx: s.sfx });
   }
 
-  private readChallenge(): void {
+  /** Reads the challenge link; true when it was made on an older build (the caller says so). */
+  private readChallenge(): boolean {
     const raw = this.platform.getInviteParam('c') ?? new URLSearchParams(location.search).get('c');
-    if (!raw) return;
+    if (!raw) return false;
     const before = this.mountain;
+    let stale = false;
     try {
       const rec = recordFromString(raw);
       this.challenge = { record: rec, attempts: 0 };
@@ -346,7 +361,7 @@ export class App {
       const seed = rawSeed(raw);
       const m = seed !== null ? MOUNTAINS.find((mm) => mm.seed === seed) : undefined;
       if (m) this.mountain = m;
-      this.ui.toast(STALE_LINK, 'info');
+      stale = true;
     }
     // The title was built before the link was read: rebuild its course and reel on the link's mountain.
     if (this.mountain !== before && this.phase === 'title') {
@@ -354,6 +369,7 @@ export class App {
       this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed));
       this.setAttractField();
     }
+    return stale;
   }
 
   // ------------------------------------------------------------------ title
