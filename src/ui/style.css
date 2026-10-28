@@ -2114,6 +2114,12 @@
   display: inline-block;
 }
 
+/* On a phone held upright an open duel's pill already carries DUEL and the gap chip: the badge steps
+   out so the friend's name keeps its room (its mint and the duel ring still say who it is). */
+.gs-hud.is-portrait .gs-next.is-duel .gs-next-vs {
+  display: none;
+}
+
 /* Race news ("Tess wiped out"): quieter than a pass, the name in its kind colour on a plain 1 px edge,
    then the news in off-white sentence case, a step smaller, for 1.3 s. Never a glow or a punch. */
 .gs-next.is-flash.is-news {
@@ -7536,6 +7542,36 @@
   /* Three offers: two share the first row and the third takes the full width under them. */
   .gs-res-opt:last-child:nth-child(odd) {
     grid-column: 1 / -1;
+  }
+}
+
+/* A phone held upright has no room for a finale's line and its payoff side by side ("CAUGHT 48 OF 48"
+   beside "Clean sweep: +10 gifts" cut the line to "CAUGH..."): the payoff steps under the line, past no
+   hairline, the glyph's disc beside both, and the line wraps (balanced) rather than ellipsizes. */
+@media (max-aspect-ratio: 1/1) and (max-width: 520px) {
+  .gs-fin {
+    display: inline-grid;
+    grid-template-columns: auto minmax(0, auto);
+    align-items: center;
+    column-gap: 12px;
+    row-gap: 1px;
+    padding: 7px 20px 7px 8px;
+  }
+
+  .gs-fin:has(.gs-fin-pay) .gs-fin-ico {
+    grid-row: span 2;
+  }
+
+  .gs-fin-t {
+    overflow: visible;
+    text-wrap: balance;
+    white-space: normal;
+  }
+
+  .gs-fin-pay {
+    justify-self: start;
+    padding: 0;
+    box-shadow: none;
   }
 }
 

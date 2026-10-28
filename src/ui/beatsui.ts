@@ -46,6 +46,11 @@ function newsText(b: Extract<Beat, { type: 'raceNews' }>): string {
 export class BeatRouter {
   /** The ghost whose duel was just lost, and when: its "pulled away" news is the same line. */
   private lostDuel = { id: -1, at: -1e9 };
+  /**
+   * The unlock tease still waiting or up ("1 more ghost opens Frostfang Glacier"). The next first pass
+   * of any ghost opens that mountain (jostles and wrecks count), so from then on it is not true.
+   */
+  private tease: string | null = null;
 
   constructor(
     private readonly hud: Hud,
@@ -78,6 +83,7 @@ export class BeatRouter {
           this.hud.paceHit();
           break;
         case 'pass':
+          if (b.first) this.dropTease();
           if (b.muted) break;
           // The word and the name flash in the race row ("DOUBLE PASS Mika"); passing the grudge also
           // names its "Grudge settled" banner from the same beat (when the settle beat did not already).
@@ -118,6 +124,7 @@ export class BeatRouter {
           break;
         }
         case 'unlockPop':
+          this.dropTease();
           this.notices.unlock(b.name, b.biome);
           break;
         default:
@@ -137,7 +144,20 @@ export class BeatRouter {
    */
   private news(b: Extract<Beat, { type: 'raceNews' }>): void {
     if (b.news === 'pulledAway' && b.ghost.id === this.lostDuel.id && performance.now() - this.lostDuel.at < SAME_LINE_MS) return;
-    this.hud.news(b.ghost.name, b.ghost.kind, newsText(b), b.news === 'unlockTease' ? TEASE_WAIT_MS : undefined);
+    const text = newsText(b);
+    if (b.news === 'unlockTease') {
+      this.dropTease();
+      this.tease = text;
+      this.hud.news(b.ghost.name, b.ghost.kind, text, TEASE_WAIT_MS);
+      return;
+    }
+    this.hud.news(b.ghost.name, b.ghost.kind, text);
+  }
+
+  private dropTease(): void {
+    if (this.tease === null) return;
+    this.hud.retract(this.tease);
+    this.tease = null;
   }
 
   /** Duel phases: the open duel shows in the pill itself (the model's duel flag); results flash. */

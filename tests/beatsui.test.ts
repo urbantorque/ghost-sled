@@ -21,6 +21,7 @@ function rig() {
   const hud = {
     flashPass: rec('hud.flashPass'),
     news: rec('hud.news'),
+    retract: rec('hud.retract'),
     call: rec('hud.call'),
     lead: rec('hud.lead'),
     say: rec('hud.say'),
@@ -130,10 +131,32 @@ describe('BeatRouter', () => {
       { type: 'raceNews', tick: 3, ghost: pool, news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier', pan: 0, gain: 0 },
     ]);
     const news = of('hud.news');
-    expect(news[0]).toEqual(['hud.news', 'Noor Frostberg', 'you', 'Your best pulled away', undefined]);
-    expect(news[1]).toEqual(['hud.news', 'Tess', 'pool', 'Tess wiped out', undefined]);
+    expect(news[0]).toEqual(['hud.news', 'Noor Frostberg', 'you', 'Your best pulled away']);
+    expect(news[1]).toEqual(['hud.news', 'Tess', 'pool', 'Tess wiped out']);
     expect(news[2][3]).toBe('1 more ghost opens Frostfang Glacier');
     expect(news[2][4]).toBeGreaterThanOrEqual(2600);
+  });
+
+  it('takes the unlock tease back once the next first pass (or the unlock itself) makes it untrue', () => {
+    const tease = '1 more ghost opens Frostfang Glacier';
+    const pass = (g: GhostRef, first: boolean, muted: boolean): Beat => ({ type: 'pass', tick: 1, ghost: g, word: muted ? 'jostle' : 'passed', text: 'Passed', first, chain: 0, ladder: 1, octave: false, gifts: 5, muted });
+    const a = rig();
+    // The pass that leaves one to go comes before its tease in the same list: it does not retract it.
+    a.router.handle([pass(pool, true, false), { type: 'raceNews', tick: 1, ghost: pool, news: 'unlockTease', text: tease, pan: 0, gain: 0 }]);
+    expect(a.of('hud.retract')).toHaveLength(0);
+    // A repeat pass of a ghost already passed opens nothing.
+    a.router.handle([pass(pool, false, false)]);
+    expect(a.of('hud.retract')).toHaveLength(0);
+    // A start-line jostle (muted) still counts toward the unlock.
+    a.router.handle([pass(mila, true, true)]);
+    expect(a.of('hud.retract')).toEqual([['hud.retract', tease]]);
+    a.router.handle([{ type: 'unlockPop', tick: 2, id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier' }]);
+    expect(a.of('hud.retract')).toHaveLength(1);
+
+    const b = rig();
+    b.router.handle([{ type: 'raceNews', tick: 1, ghost: pool, news: 'unlockTease', text: tease, pan: 0, gain: 0 }]);
+    b.router.handle([{ type: 'unlockPop', tick: 2, id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier' }]);
+    expect(b.of('hud.retract')).toEqual([['hud.retract', tease]]);
   });
 
   it('routes duels, the lead, the start-line call, finales and the pops', () => {

@@ -139,6 +139,8 @@ interface Flash {
   at: number;
   /** How long it may wait its turn before it is stale (ms). */
   stale: number;
+  /** A news line's whole text, so it can be taken back (retract). */
+  line?: string;
 }
 
 export class Hud {
@@ -795,7 +797,18 @@ export class Hud {
         break;
       }
     }
-    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait });
+    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait, line: t });
+  }
+
+  /**
+   * Takes a news line back once it is no longer true ("1 more ghost opens Frostfang Glacier" after the
+   * pass that opened it): dropped while it waits its turn, or ended at once if it is up.
+   */
+  retract(text: string): void {
+    const t = text.trim();
+    for (let i = this.pend.length - 1; i >= 0; i--) if (this.pend[i].line === t) this.pend.splice(i, 1);
+    const now = performance.now();
+    if (this.cur && this.cur.line === t && this.flashUntil > now) this.flashUntil = now;
   }
 
   /**
