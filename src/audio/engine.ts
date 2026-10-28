@@ -464,6 +464,13 @@ export class AudioEngine {
     if (!c) return out;
     const layers = c.music.layerLevels();
     if (layers) for (const k of Object.keys(layers)) out[k] = layers[k];
+    const pos = c.music.position();
+    if (pos) {
+      // The song form: bar of the loop (A A B B on Clear Skies, 4 bars each) and decks started.
+      out.bar = pos.bar;
+      out.cycleBars = pos.cycle;
+    }
+    out.decksStarted = c.music.decksStarted;
     out.duck = c.graph.music.ducked;
     out.sfxVoices = c.sfxPool.active;
     out.musicVoices = c.musicPool.active;

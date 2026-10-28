@@ -1,6 +1,7 @@
 import type { Beat } from '../game/beats';
 import { intensity } from '../game/intensity';
 import { ChaosEvent, Mood } from '../sim/chaos';
+import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import { Core } from './core';
 import type { AudioFrame } from './engine';
@@ -173,6 +174,8 @@ function envelope(L: Float32Array, R: Float32Array, from: number, to: number, lo
 export interface RenderOpts {
   limiter?: { threshold?: number; knee?: number; ratio?: number; attack?: number; release?: number };
   ceiling?: number;
+  /** The mountain whose song plays (default alpine). */
+  biome?: BiomeId;
 }
 
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
@@ -192,10 +195,12 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   if (opts.ceiling !== undefined) core.graph.ceiling.gain.value = opts.ceiling;
   core.graph.setMaster(1, 0);
   const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb';
+  // 'song': the band alone at a cruise, to read a mountain's A A B B form (bars and decks).
+  const song = kind === 'song';
   core.graph.music.setLevel(noMusic ? 0 : 1, 0);
-  core.graph.sfx.setLevel(kind === 'music' || kind === 'stress-music' ? 0 : 1, 0);
+  core.graph.sfx.setLevel(kind === 'music' || kind === 'stress-music' || song ? 0 : 1, 0);
   core.music.enabled = !noMusic;
-  core.music.setTarget('run', Mood.None, 'alpine');
+  core.music.setTarget('run', Mood.None, opts.biome ?? 'alpine');
   core.ambience.setScene('run', 0);
 
   let drive = 0;
@@ -267,6 +272,33 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     musicPeak: core.musicPool.peak,
     errors,
   };
+  if (song) {
+    // The bass under the pad follows each chord's root: per bar, the zero-crossing rate of the
+    // low band (two one-pole low-passes at 220 Hz) reads as that bar's root. A song shows its A
+    // section's four roots twice, then the B section's.
+    const g = core.music.grid();
+    const barS = g ? g.dur * 16 : 60 / 112 * 4;
+    const a = 1 - Math.exp((-2 * Math.PI * 220) / SR);
+    let y1 = 0;
+    let y2 = 0;
+    let prev = 0;
+    const bars: number[] = [];
+    for (let b0 = 0; (b0 + 1) * barS <= secs; b0++) {
+      const i0 = Math.floor(b0 * barS * SR);
+      const i1 = Math.floor((b0 + 1) * barS * SR);
+      let zc = 0;
+      for (let i = i0; i < i1; i++) {
+        y1 += a * ((L[i] + R[i]) * 0.5 - y1);
+        y2 += a * (y1 - y2);
+        if ((y2 >= 0) !== (prev >= 0)) zc++;
+        prev = y2;
+      }
+      bars.push(Math.round(zc / 2 / barS));
+    }
+    out.barLowHz = bars;
+    out.decksStarted = core.music.decksStarted;
+    out.cycleBars = core.music.position()?.cycle ?? 0;
+  }
   if (isMoment) {
     // From 0.4 s before the moment to 1.6 s after: the full mix and its sub band (under 100 Hz).
     const a = Math.floor((MOMENT_T - 0.4) * SR);

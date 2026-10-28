@@ -2,7 +2,7 @@ import { Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { Bus } from './graph';
 import { clap, fmBell, hat, kick, lead, mallet, pad, ping, pluck } from './instruments';
-import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, styleFor } from './theory';
+import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, progFor, styleFor } from './theory';
 import { VoicePool, rand, smoothstep } from './voices';
 
 // Generative soundtrack. A deck is one arrangement (scene + mood + biome) with its own faders and
@@ -122,7 +122,8 @@ class Deck {
     this.style = styleFor(mood);
     this.accent = accentFor(biome);
     const s = this.style;
-    let prog = s.prog;
+    // Clear Skies plays the mountain's song (A A B B, theory.ts); moods keep their own loop.
+    let prog = progFor(mood, biome);
     if (scene === 'results') {
       this.key = { tonic: s.tonic + s.bright, penta: MAJOR_PENTA, bright: 0, bpm: Math.round(s.bpm * 0.85) };
       prog = RESOLVED;
@@ -260,6 +261,11 @@ class Deck {
   /** Probe: each layer's presence (0..1) as last computed. */
   layerLevels(): Readonly<Record<Layer, number>> {
     return this.level;
+  }
+
+  /** Probe: the bar of the deck's loop being scheduled, and the loop's length in bars. */
+  position(): { bar: number; cycle: number } {
+    return { bar: (this.step >> 4) % this.cycle, cycle: this.cycle };
   }
 
   /** The deck's 16th-note grid: step s sounds at t0 + s * dur (before swing). */
@@ -493,6 +499,8 @@ export class Music {
   private mood = Mood.None;
   private biome: BiomeId = 'alpine';
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  /** Probe: decks started (each after the first is a crossfade). */
+  decksStarted = 0;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -532,6 +540,12 @@ export class Music {
     return top ? top.layerLevels() : null;
   }
 
+  /** Probe: the playing deck's place in its loop. */
+  position(): { bar: number; cycle: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.position() : null;
+  }
+
   tick(now: number, until: number): void {
     // Applied here rather than in setTarget, so a setScene + setMood pair in one frame makes a
     // single crossfade.
@@ -542,6 +556,7 @@ export class Music {
       const d = new Deck(this.ctx, this.pool, this.bus, this.scene, this.mood, this.biome, now + 0.05);
       d.fadeIn(now, top ? XFADE : 1.2);
       this.decks.push(d);
+      this.decksStarted++;
       // Flipping mountains on the title screen can stack decks faster than they fade; keep three
       // and fade older ones out in 40 ms (disposing a deck mid-fade would click).
       let kept = 0;
