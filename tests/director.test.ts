@@ -322,7 +322,8 @@ describe('milestones', () => {
     const r = new Rig({ friend: { name: 'Mila', distance: 900 } });
     r.sim.distance = 950;
     const a = r.frame();
-    expect(of(a, 'friendBeaten')[0]).toMatchObject({ name: 'Mila', say: { label: "Beat Mila's 900 m" } });
+    // (The callout is meta's copy, progress.friendBeatenText, with its typographic apostrophe.)
+    expect(of(a, 'friendBeaten')[0]).toMatchObject({ name: 'Mila', say: { label: 'Beat Mila’s 900 m' } });
     r.sim.distance = 1001;
     expect(of(r.frame(), 'km')[0]).toMatchObject({ km: 1, say: { label: '1 km' } });
     expect(of(r.frame(), 'km')).toHaveLength(0);
@@ -660,6 +661,94 @@ describe('mission and unlock pops', () => {
     r.passed = 1;
     const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
     expect(of(a, 'raceNews')[0]).toMatchObject({ news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier' });
+  });
+});
+
+describe('graveyards', () => {
+  it('riding 20 m past one alive is its beat, once, with 3 gifts inside the extras cap', () => {
+    const r = new Rig({ graveyards: [{ z: 395, name: "Widow's Bend", fell: 4 }, { z: 600, name: 'Grim Gully', fell: 3 }] });
+    r.sim.distance = 414;
+    expect(of(r.frame(), 'graveyard')).toHaveLength(0);
+    r.sim.distance = 415.5;
+    const a = of(r.frame(), 'graveyard');
+    expect(a).toHaveLength(1);
+    expect(a[0]).toMatchObject({ name: "Widow's Bend", fell: 4, gifts: 3, say: { label: "Survived Widow's Bend", tone: 'big' } });
+    expect(of(r.idle(1), 'graveyard')).toHaveLength(0);
+    // Crashed past the next one: nothing; a revive keeps what was survived and still pays the rest.
+    r.sim.s.crashed = true;
+    r.sim.distance = 640;
+    expect(of(r.frame([], { phase: 'crashed' }), 'graveyard')).toHaveLength(0);
+    r.d.revive();
+    r.sim.s.crashed = false;
+    const b = of(r.frame(), 'graveyard');
+    expect(b.map((g) => g.name)).toEqual(['Grim Gully']);
+  });
+
+  it('pays only what the run has left of its extras', () => {
+    const r = new Rig({ graveyards: [{ z: 300, name: 'Grim Gully', fell: 3 }] });
+    // Spend the cap on finales and duels: take() is shared.
+    (r.d as unknown as { extras: { take(n: number): number } }).extras.take(29);
+    r.sim.distance = 330;
+    expect(of(r.frame(), 'graveyard')[0].gifts).toBe(1);
+  });
+});
+
+describe('the choir', () => {
+  it('counts passed ghosts still riding within 150 m behind, at most 3; never a jostle', () => {
+    const r = new Rig();
+    r.sim.tick = 2000;
+    const gs = [track(1), track(2), track(3), track(4), track(5)];
+    r.tracks = gs;
+    for (const g of gs) r.poses.set(g.entry.id, pose(r.sim.s.z + 30));
+    const frameAudio = (race: RaceEvent[] = []) => {
+      r.frame([], { race });
+      return (r.d as unknown as { out: { audio: { choir: number } } }).out.audio.choir;
+    };
+    expect(frameAudio()).toBe(0);
+    // Passed 1 and 2 (shown passes): they sit behind you now.
+    r.poses.set(1, pose(r.sim.s.z - 5));
+    r.poses.set(2, pose(r.sim.s.z - 40));
+    expect(frameAudio([{ type: 'pass', track: gs[0], first: true }, { type: 'pass', track: gs[1], first: true }])).toBe(2);
+    // One falls 160 m back, one crashes: neither sings.
+    r.poses.set(2, pose(r.sim.s.z - 160));
+    expect(frameAudio()).toBe(1);
+    r.poses.set(1, pose(r.sim.s.z - 5, 0, true));
+    expect(frameAudio()).toBe(0);
+    // Four more passes: the choir tops out at 3.
+    for (const id of [2, 3, 4, 5]) r.poses.set(id, pose(r.sim.s.z - 10));
+    r.idle(2);
+    expect(frameAudio([2, 3, 4].map((i) => ({ type: 'pass' as const, track: gs[i], first: true })))).toBe(3);
+    // A ghost that passes you back is ahead again: out of the choir until passed.
+    r.poses.set(3, pose(r.sim.s.z + 4));
+    r.poses.set(4, pose(r.sim.s.z + 4));
+    expect(frameAudio()).toBe(2);
+  });
+
+  it('a start-line jostle never joins it', () => {
+    const r = new Rig();
+    r.sim.tick = 100;
+    const g = track(7);
+    r.tracks = [g];
+    r.poses.set(7, pose(r.sim.s.z - 2));
+    r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect((r.d as unknown as { out: { audio: { choir: number } } }).out.audio.choir).toBe(0);
+  });
+});
+
+describe('bests within a run', () => {
+  it("a second bank under this run's best is no new best; a lost combo under it is no best combo lost", () => {
+    const r = new Rig({ bestComboAtStart: 2000 });
+    const chain = () => {
+      for (const k of ['spin', 'flip', 'nearMiss'] as const) r.frame([style(k, 100, 2)]);
+    };
+    chain();
+    const a = of(r.frame([{ type: 'comboBank', points: 3000, mult: 3 }]), 'bank')[0];
+    expect(a).toMatchObject({ tier: 3, header: 'New best combo', origin: 1000 });
+    chain();
+    const b = of(r.frame([{ type: 'comboBank', points: 2500, mult: 5 }]), 'bank')[0];
+    expect(b).toMatchObject({ tier: 1, header: null, origin: 500 });
+    const c = of(r.frame([{ type: 'comboLost', points: 2600 }]), 'comboLost')[0];
+    expect(c).toMatchObject({ best: false, crack: true, say: { label: 'Combo lost' } });
   });
 });
 
