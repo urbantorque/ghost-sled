@@ -165,11 +165,11 @@ export function challengeShareTitle(name: string, distance: number, mountain: st
 export function revealGoal(event: ChaosEvent): string | null {
   switch (event) {
     case ChaosEvent.Avalanche:
-      return 'Outrun it: +2,000';
+      return 'Outrun it: +2,000 style';
     case ChaosEvent.Yeti:
-      return 'Hop it: +1,500';
+      return 'Hop it: +1,500 style';
     case ChaosEvent.GiftStorm:
-      return 'Catch all 48';
+      return 'Catch all 48 gifts';
     case ChaosEvent.GhostTrain:
       return 'Ride its slipstream';
     default:

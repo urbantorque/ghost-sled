@@ -29,7 +29,7 @@ const LEAVE_MS = 280;
 /** The event's goal line lands this long after its chip. */
 const GOAL_LAG = 110;
 
-/** "Outrun it: +2,000" as text with its figure ("+2,000", "48") in bold. */
+/** "Outrun it: +2,000 style" as text with its figure ("+2,000", "48") in bold. */
 function goalParts(goal: string): Array<string | HTMLElement> {
   const at = /[+]?\d[\d,]*/.exec(goal);
   if (!at) return [goal];
@@ -100,7 +100,7 @@ export class Reveal {
     if (ev) {
       chip = h('span', `gs-reveal-ev gs-pill e-${eventInfo(ev.id).key}`, icon(EVENT_ICON[ev.id] ?? 'alert'), `Watch for: ${ev.name}`);
       card.append(chip);
-      // What the event pays and how ("Outrun it: +2,000"), the figure at full weight.
+      // What the event pays and how ("Outrun it: +2,000 style"), the figure at full weight.
       if (ev.goal) {
         goal = h('p', 'gs-reveal-goal', ...goalParts(ev.goal));
         card.append(goal);

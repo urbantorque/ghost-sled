@@ -101,9 +101,9 @@ describe('challenge share title and reveal goal', () => {
   });
 
   it('names what each event pays', () => {
-    expect(revealGoal(ChaosEvent.Avalanche)).toBe('Outrun it: +2,000');
-    expect(revealGoal(ChaosEvent.Yeti)).toBe('Hop it: +1,500');
-    expect(revealGoal(ChaosEvent.GiftStorm)).toBe('Catch all 48');
+    expect(revealGoal(ChaosEvent.Avalanche)).toBe('Outrun it: +2,000 style');
+    expect(revealGoal(ChaosEvent.Yeti)).toBe('Hop it: +1,500 style');
+    expect(revealGoal(ChaosEvent.GiftStorm)).toBe('Catch all 48 gifts');
     expect(revealGoal(ChaosEvent.GhostTrain)).toBe('Ride its slipstream');
     expect(revealGoal(ChaosEvent.None)).toBeNull();
   });
