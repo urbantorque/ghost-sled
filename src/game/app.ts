@@ -171,6 +171,8 @@ export class App {
   private lostCombo = 0;
   /** This mountain's graveyards (graveyards.ts): the cairns the world places and the director's beat. */
   private graves: Graveyard[] = [];
+  /** Lifetime ghosts passed as the run started (the results' unlocks are this run's, revive or not). */
+  private passedAtStart = 0;
   /** Held the button through a kicker's lip: the boosted-pop hint shows on the next approach. */
   private heldLip = false;
   /** Presentation time for shader bobs and wisps: scaled by the director's render scale in a run. */
@@ -637,6 +639,7 @@ export class App {
     this.passedThisRun.clear();
     this.passBonus = 0;
     this.grudgeBeaten = false;
+    this.passedAtStart = d.ghostsPassed;
     this.settlement = null;
     this.results = null;
     this.airTicks = 0;
@@ -956,8 +959,10 @@ export class App {
     const missions = { views: settled.missions };
     const unlocked: string[] = [];
     const unlockedMountains: NonNullable<ResultsModel['unlockedMountains']> = [];
+    // What this run unlocked, counted from the run's start: a revive's re-settle has already credited
+    // the first crash's passes (its passedBefore), and the card still belongs to this run's results.
+    const before = Math.min(settled.passedBefore, this.passedAtStart);
     for (const m of MOUNTAINS) {
-      const before = settled.passedBefore;
       if (before < m.unlockGhosts && d.ghostsPassed >= m.unlockGhosts) {
         unlocked.push(m.name);
         unlockedMountains.push({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), tagline: m.tagline });
