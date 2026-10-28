@@ -1003,7 +1003,7 @@ export class Particles {
       if (glow) {
         this.glow.emit(x, y, z, car.x + (Math.random() - 0.5) * 2.2, car.y + 0.3 + Math.random() * 0.8, car.z + (Math.random() - 0.5) * 2.2, 0.45 + Math.random() * 0.35, 0.2, 0.05, color.r * 1.8, color.g * 1.8, color.b * 1.8, 1, 2.2, 2.5, KIND_GRAIN, car);
       } else {
-        this.powder.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.6, car.y + 0.3 + Math.random() * 0.6, car.z + (Math.random() - 0.5) * 1.6, 0.6 + Math.random() * 0.3, 0.1, 0.26 + Math.random() * 0.1, color.r, color.g, color.b, 0.8, 0.6, 2, puffKind(), car);
+        this.powder.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.6, car.y + 0.3 + Math.random() * 0.6, car.z + (Math.random() - 0.5) * 1.6, 0.6 + Math.random() * 0.3, 0.14, 0.3 + Math.random() * 0.12, color.r, color.g, color.b, 0.8, 0.6, 2, puffKind(), car);
       }
     }
   }

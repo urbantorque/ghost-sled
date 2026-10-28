@@ -98,7 +98,7 @@ const BOOST_C = new Color('#FF8A5C');
 const DRIFT_C = DRIFT_TIER_HEX.map((h) => new Color(h));
 const FLOW_C = new Color(FLOW_HEX);
 /** A snuffed flow's puff off the scarf: cold periwinkle-grey powder. */
-const SNUFF_C = new Color('#A8B0D6');
+const SNUFF_C = new Color('#8E96C6');
 const GHOST_C: Record<GhostKind, Color> = {
   pool: new Color(GHOST_COLORS.pool),
   daily: new Color(GHOST_COLORS.daily),
@@ -335,6 +335,8 @@ export class World {
     const c = courseFor(seed);
     if (c === this.course) return;
     this.course = c;
+    // Another mountain's graveyards never stand on this one (the next run sets its own).
+    if (this.graves.length) this.setGraveyards([]);
     this.terrain.setCourse(c);
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
@@ -365,6 +367,26 @@ export class World {
   setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
     this.ghosts.setField(list);
   }
+
+  /** Graveyards (stretch; a contract amendment): this run's spots where several pool ghosts fell (the
+   *  director's clusters, sim z, with a name and how many fell). Each gets a cairn on the bank beside
+   *  it (Medium and High; Low keeps no mesh), on the side its hash picks, 1.4 m outside the corridor so
+   *  it is never in the line. Call it at each run's start, after setCourse; an empty list clears them.
+   *  The placed spots go on to the ghost layer for its tags when it takes them (setGraveyards). */
+  setGraveyards(list: ReadonlyArray<{ z: number; name: string; fell: number }>): void {
+    const c = this.course;
+    const placed = list.slice(0, 4).map((g) => {
+      const side = Math.imul(Math.round(g.z * 7), 0x9e3779b1) >>> 31 ? 1 : -1;
+      const x = c.centerX(g.z) + side * (c.halfWidth(g.z) + 1.4);
+      return { name: g.name, fell: g.fell, x, z: g.z, y: c.ground(x, g.z) + 3.2 };
+    });
+    this.graves = placed;
+    this.props.setGraveyards(placed);
+    (this.ghosts as unknown as { setGraveyards?: (l: typeof placed) => void }).setGraveyards?.(placed);
+  }
+
+  /** The cairns placed this run (for the ghost layer's tags and play-tests). */
+  graves: ReadonlyArray<{ name: string; fell: number; x: number; z: number; y: number }> = [];
 
   /** Clears held feel (the camera's freeze and jolts; the world's rim pulse and band flare) on revive
    *  and at a run's start. */
@@ -786,7 +808,7 @@ export class World {
     return this.fxV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz);
   }
 
-  /** A near miss shakes the hazard you shaved: snow drops off a tree's boughs (2.5 to 4 m up, on the
+  /** A near miss shakes the hazard you shaved: snow drops off a tree's lower boughs (on the
    *  side facing you), anything else kicks grit off its foot toward your line. A whisker throws the
    *  full amount, an ordinary near miss about two thirds. */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {

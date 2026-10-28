@@ -15,6 +15,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ObstacleKind } from '../sim/course';
+import { FRIEND_HEX as MINT_HEX } from '../game/beats';
 import { Palette } from './palette';
 
 // Every mesh in the game is built here from primitives. Parts are flat-shaded (non-indexed) and
@@ -366,8 +367,9 @@ export const ARCH_HEIGHT = 7;
 /** A kilometre arch over the run (render only, no collider): two snow-capped timber posts `span`
  *  metres apart (centre to centre) standing just outside the corridor, a beam across with a soft
  *  drift of snow along its top, corner braces, a small evergreen wreath at its middle and a sagging
- *  string of round paper lanterns under it. The lanterns' colour is pushed past 1 so their lit sides
- *  bloom on Medium and High through the plain toon material (no emissive and no new shader). The
+ *  string of round paper lanterns under it. The lanterns' colour is pushed well past 1 so even their
+ *  shaded sides (the chase camera often looks into the sun) clear the bloom threshold on Medium and
+ *  High through the plain toon material (no emissive and no new shader). The
  *  posts reach 6 m below the snow so they never float over a falling bank. Local x runs across the
  *  run, y up; one instance per arch. */
 export function kmArchGeometry(span: number): BufferGeometry {
@@ -377,14 +379,14 @@ export function kmArchGeometry(span: number): BufferGeometry {
   const timber = new Color('#6E4A36');
   const beamC = new Color('#7E5640');
   const rope = new Color('#3A3046');
-  const lamp = new Color('#FFB45E').multiplyScalar(1.7);
-  const cream = new Color('#FFF1D6').multiplyScalar(1.35);
+  const lamp = new Color('#FFB45E').multiplyScalar(2.8);
+  const cream = new Color('#FFF1D6').multiplyScalar(2.2);
   const spruce = new Color('#2F6F68');
   const parts: BufferGeometry[] = [];
   for (const sx of [-1, 1]) {
     const x = sx * half;
     // The post: square timber, darker toward its foot.
-    parts.push(paint(part(new BoxGeometry(0.46, H + 6, 0.46), timber, { pos: [x, (H - 6) / 2 - 0.35, 0] }), -6, H, 0.7, 1.08, 0.12));
+    parts.push(paint(part(new BoxGeometry(0.58, H + 6, 0.58), timber, { pos: [x, (H - 6) / 2 - 0.35, 0] }), -6, H, 0.7, 1.08, 0.12));
     // A collar of packed snow where the post meets the slope.
     parts.push(part(new CylinderGeometry(0.62, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
     // A cap of snow on the post's top, proud of the beam.
@@ -393,9 +395,8 @@ export function kmArchGeometry(span: number): BufferGeometry {
     parts.push(part(new BoxGeometry(0.2, 2.0, 0.2), beamC, { pos: [x - sx * 0.62, H - 1.25, 0], rot: [0, 0, sx * 0.785] }));
   }
   // The beam, overhanging each post a little, and the drift along its top.
-  parts.push(paint(part(new BoxGeometry(span + 1.6, 0.52, 0.52), beamC, { pos: [0, H - 0.36, 0] }), H - 0.62, H - 0.1, 0.82, 1.06, 0.1));
-  parts.push(part(new CylinderGeometry(0.34, 0.34, span + 1.7, 9, 3), SNOW, { pos: [0, H - 0.04, 0], rot: [0, 0, Math.PI / 2], scale: [0.5, 1, 0.95], jitter: 0.03 }));
-  // The wreath at the middle of the beam's face (downhill, toward the rider coming).
+  parts.push(paint(part(new BoxGeometry(span + 1.6, 0.62, 0.56), beamC, { pos: [0, H - 0.36, 0] }), H - 0.62, H - 0.1, 0.82, 1.06, 0.1));
+  parts.push(part(new CylinderGeometry(0.34, 0.34, span + 1.7, 9, 3), SNOW, { pos: [0, H - 0.04, 0], rot: [0, 0, Math.PI / 2], scale: [0.5, 1, 0.95], jitter: 0.03 }));  // The wreath at the middle of the beam's face (downhill, toward the rider coming).
   parts.push(part(new TorusGeometry(0.5, 0.16, 6, 14), spruce, { pos: [0, H - 0.5, 0.36], jitter: 0.04 }));
   parts.push(part(new SphereGeometry(0.11, 8, 6), lamp, { pos: [0, H - 0.98, 0.42] }));
   // The lantern string: a shallow sag from post to post, a round paper lantern every 1.6 m or so on a
@@ -414,6 +415,49 @@ export function kmArchGeometry(span: number): BufferGeometry {
     parts.push(part(new BoxGeometry(0.03, 0.22, 0.03), rope, { pos: [ax, ay - 0.11, 0] }));
     parts.push(part(new SphereGeometry(0.19, 8, 6), c, { pos: [ax, ay - 0.42, 0], scale: [1, 1.2, 1] }));
     parts.push(part(new CylinderGeometry(0.08, 0.1, 0.07, 6), rope, { pos: [ax, ay - 0.18, 0] }));
+  }
+  return merge(parts);
+}
+
+/** A graveyard cairn (render only, no collider): where several ghosts fell, a waist-high stack of
+ *  snow-capped stones on the bank with a leaning timber marker, a ghost-mint ribbon knotted round it
+ *  and two small mint lanterns at its foot. The mint is the ghosts' own colour role (ART.md); the
+ *  lanterns' colour is pushed well past 1, so they bloom on Medium and High through the plain toon
+ *  material (no emissive and no new shader). The stones sink 0.4 m into the snow so the cairn never
+ *  floats on a slope. Local y up; one instance per graveyard. */
+export function cairnGeometry(p: Palette): BufferGeometry {
+  reseed(2929);
+  const stone = shade(p.low, 0.85);
+  const stoneLit = shade(p.lowLit, 0.9);
+  const timber = new Color('#5E4232');
+  const mint = new Color(MINT_HEX);
+  const lamp = mint.clone().multiplyScalar(2.4);
+  const parts: BufferGeometry[] = [];
+  // The stack: broad flat stones narrowing upward, each a little off the last, alternately lit.
+  const stones: Array<[number, number, number, number]> = [
+    [0.78, 0.0, 0.0, 0.05],
+    [0.62, 0.42, 0.08, -0.04],
+    [0.48, 0.78, -0.06, 0.05],
+    [0.36, 1.08, 0.04, 0.0],
+    [0.24, 1.32, -0.02, 0.03],
+  ];
+  stones.forEach(([r, y, x, z], i) => {
+    parts.push(part(new IcosahedronGeometry(r, 0), i % 2 ? stoneLit : stone, { pos: [x, y - 0.12, z], scale: [1.15, 0.55, 1.0], rot: [rnd() * 0.3, rnd() * 3, rnd() * 0.3], jitter: r * 0.3 }));
+    // A cap of snow on each stone's upper face.
+    parts.push(part(new IcosahedronGeometry(r * 0.78, 0), SNOW, { pos: [x, y + r * 0.22, z], scale: [1.1, 0.22, 0.95], jitter: r * 0.12 }));
+  });
+  // A drift banked against the stack's foot.
+  parts.push(part(new IcosahedronGeometry(1.05, 0), SNOW, { pos: [0, -0.32, 0], scale: [1.25, 0.32, 1.1], jitter: 0.14 }));
+  // The marker: a timber stake leaning out of the stack, a short cross piece, the ribbon round it.
+  parts.push(paint(part(new BoxGeometry(0.12, 2.3, 0.12), timber, { pos: [0.28, 1.25, -0.1], rot: [0.06, 0, -0.16] }), 0, 2.4, 0.75, 1.05, 0.1));
+  parts.push(part(new BoxGeometry(0.62, 0.1, 0.1), timber, { pos: [0.43, 1.95, -0.06], rot: [0.06, 0, -0.16] }));
+  parts.push(part(new BoxGeometry(0.16, 0.08, 0.16), mint, { pos: [0.4, 1.78, -0.08], rot: [0.06, 0, -0.16] }));
+  parts.push(part(new BoxGeometry(0.05, 0.62, 0.02), mint, { pos: [0.5, 1.48, -0.02], rot: [0.12, 0, 0.32] }));
+  parts.push(part(new BoxGeometry(0.05, 0.5, 0.02), mint, { pos: [0.56, 1.52, -0.12], rot: [-0.1, 0, 0.5] }));
+  // The lanterns at its foot: little mint globes on the drift, glowing like the ghosts.
+  for (const [x, z] of [[-0.75, 0.42], [0.62, 0.55]] as const) {
+    parts.push(part(new CylinderGeometry(0.07, 0.09, 0.1, 6), timber, { pos: [x, -0.02, z] }));
+    parts.push(part(new SphereGeometry(0.15, 8, 6), lamp, { pos: [x, 0.16, z], scale: [1, 1.15, 1] }));
   }
   return merge(parts);
 }
