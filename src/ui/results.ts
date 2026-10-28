@@ -270,9 +270,11 @@ export class Results {
     const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
+    // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
+    // line count (C6), so your row stays in the first view under an unlock card and three offers.
     const line = raceLine(m);
     const note = raceNote(m);
-    const sub = h('div', 'gs-res-sub', cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
+    const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
     // wide screens and straight under it on phones, so it is never below the fold. With none, the
     // same slot holds the next unlock to ride for, with how close it is.

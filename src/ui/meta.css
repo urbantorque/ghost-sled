@@ -433,6 +433,13 @@
     text-align: center;
   }
 
+  /* C6 budget: on a phone the race line takes the place note's slot rather than adding a line, so
+     the head is as tall as it was and your row stays in the first view (the order shows the place
+     above with its distance and Next tag anyway). */
+  .gs-res-sub.has-line > .gs-res-note {
+    display: none;
+  }
+
   .gs-res-line {
     grid-template-columns: 26px minmax(0, 1fr);
     font-size: 0.94em;

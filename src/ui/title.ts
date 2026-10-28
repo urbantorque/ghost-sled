@@ -462,7 +462,8 @@ function greeting(text: string): HTMLElement {
     where.setAttribute('translate', 'no');
     return h('p', 'gs-t-greet is-unlock', icon('ghost'), h('span', '', h('span', 'gs-t-greet-n gs-num', unlock[1]), ` ${unlock[2]} `, where));
   }
-  return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text));
+  // "1,600 m" never breaks before its unit.
+  return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text.replace(/(\d) m\b/g, `$1${NBSP}m`)));
 }
 
 /** "270/800" on screen, "270 of 800" to a reader. */
