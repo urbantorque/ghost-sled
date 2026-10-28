@@ -1,15 +1,16 @@
 import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
-import { STYLE_LABEL } from '../sim/scoring';
+import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
-import { IDLE_FEEL, NAMED, type Beat, type BeatLogEntry, type Feel, type GhostRef } from './beats';
+import { IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
 import { FinaleTracker } from './finales';
 import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
-import { classifyPass, DuelTracker, rivalPick } from './race';
+import { skillMult } from './intensity';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { bankTier, fuseLevel } from './stake';
-import { StompStreak, stompTitle } from './streak';
-import { TimeScale } from './timescale';
+import { StompStreak, stompTitle, streakLine } from './streak';
+import { CRASH_CURVE, TimeScale } from './timescale';
 
 // The director: turns this frame's sim events, race events and sim state into Beats (named moments)
 // and continuous Feel, once per frame, before any consumer runs. The app hands the same beat list to
@@ -18,12 +19,13 @@ import { TimeScale } from './timescale';
 //
 // Pure: no DOM, render or audio imports (types only).
 //
-// Scaffold: today's decisions, moved out of the app unchanged. Race beats come first, then the sim
-// events in order (the order the game always made its calls in): each style event is a callout with
-// its label and tone (a perfect landing's is the stomp stamp), a sketchy landing a 'Sketchy' line,
-// a bank a tier-0 cash-in, a lost combo its line, each pass a 'Passed' flash (the grudge's first pass
-// settles it first), and the avalanche escape its banner. A perfect landing is a 0.35 hit-stop on the
-// sim feed for 0.13 s.
+// Each frame, in order: the batch is pre-scanned (a landing's 'perfect' style comes before its land
+// event, a bank before its bump, a lost combo before its crash, a slingshot before the pass it
+// carries); New ground (so the 'you' wreck right on it is muted); duels; the race (passes, wipeouts,
+// the lead); the sim events in order (stomps, near misses, drift releases, banks, finales, the
+// crash); then the state beats (New best, Best combo pace, a friend beaten, kilometres, the stomp
+// metronome, ghosts' tricks, the start-line call, mission and unlock pops); then Feel, the HUD and
+// audio fields.
 
 export interface DirectorRun {
   mood: Mood;
@@ -76,11 +78,74 @@ export interface DirectorOutput {
 /** Telemetry keeps the most recent entries of a run. */
 const LOG_MAX = 4096;
 const FLIPS = ['Backflip', 'Double Backflip', 'Triple Backflip'];
+/** Stomp hit-stop by streak (1, 2, 3, 4, 5+), seconds on the sim feed at 0.35. */
+const STOMP_STOP = [0.13, 0.15, 0.17, 0.19, 0.19];
+const HITSTOP_SCALE = 0.35;
+/** A perfect landing this soon (ticks) after a yeti hop keeps the 'Yeti hop' title. */
+const YETI_TITLE_TICKS = 90;
+/** Wipeout news: a ghost ahead within this many metres, or behind within WIPE_BEHIND (no duel). */
+const WIPE_AHEAD = 200;
+const WIPE_BEHIND = 25;
+/** A duel's result names that ghost's moment: its wreck passed or its wipeout this soon after (ticks)
+ *  says nothing more. */
+const DUEL_AFTER_TICKS = 120;
+/** The lead beat: from this tick, with this many ghosts in the race; re-armed after losing it this long. */
+const LEAD_TICKS = 600;
+const LEAD_GHOSTS = 3;
+const LEAD_REARM_TICKS = 300;
+/** The start-line call: shown for this long (s); given up when its ghost is not ready this long after. */
+const CALL_SHOW_S = POP_DEFER.call / 1000;
+const CALL_GIVE_UP_S = 6;
+/** A finale banner holds the queue this long (s). */
+const FINALE_HOLD_S = 3;
+/** A new mountain is a run's biggest news, and usually lands on a pass in a busy pack (often mid
+ *  duel): it waits this long (s) for a clear moment, where a mission gives up after POP_DEFER.giveUp. */
+const UNLOCK_GIVE_UP_S = 12;
+/** New best crossed by a bank waits for the bank's fly-in (s). */
+const NEW_BEST_DEFER_S = 1.25;
+/** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
+const TRICK_AHEAD = 60;
+const TRICK_BEHIND = 20;
+const WHISPER_S = 1.5;
+/** Flow display. */
+const FLOW_SMOOTH_S = 0.2;
+const FLOW_IN_AT = 5.5;
+const FLOW_IN_KINDS = 3;
+const FLOW_SNUFF_MIN = 2;
+const SNUFF_S = 0.15;
+const FLOW_PULSE_S = 0.3;
+/** Audio lifts: New ground for the rest of the run, an avalanche escape decaying over 8 s. */
+const LIFT_NEW_GROUND = 0.08;
+const LIFT_AVALANCHE = 0.2;
+const LIFT_AVALANCHE_S = 8;
+/** The stomp metronome: downward crossings of timeToLand (s) and their ladder steps. */
+const TICK_AT = [0.6, 0.45, 0.3, 0.15];
+const TICK_STEP = [2, 3, 4, 5];
 
 function styleTone(kind: string, points: number): StyleTone {
   if (kind === 'perfect') return 'perfect';
   if (points >= 300 || kind === 'flip' || kind === 'spin' || kind === 'yetiHop' || kind === 'avalanche') return 'big';
   return 'normal';
+}
+
+function smoothstep(a: number, b: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+}
+
+function fmtInt(n: number): string {
+  return Math.round(n).toLocaleString('en-US');
+}
+
+function trickWord(halfTurns: number, flips: number): string | null {
+  if (flips > 0) return FLIPS[flips - 1] ?? `${flips} Backflips`;
+  if (halfTurns > 0) return `Spin ${halfTurns * 180}`;
+  return null;
+}
+
+interface Pop {
+  beat: BeatOf<'missionPop'> | BeatOf<'unlockPop'>;
+  since: number;
 }
 
 export class Director {
@@ -95,10 +160,75 @@ export class Director {
   private readonly streak = new StompStreak();
   private readonly duels = new DuelTracker();
   private readonly finales = new FinaleTracker();
+  private readonly extras = new ExtraGifts();
   private run: DirectorRun | null = null;
-  /** The latest landing's tricks, for the spin and flip labels (kept across runs, as it always was). */
+  /** Real seconds of this run (frozen frames excluded). */
+  private clock = 0;
+  private lastTick = 0;
+  /** The latest landing's tricks, for the spin and flip labels. */
   private lastLand: { halfTurns: number; flips: number } | null = null;
+  private lastReleaseTier = 0;
+  private yetiHopTick = -1e9;
   private grudgeDone = false;
+
+  // Race.
+  private readonly ledBy2m = new Set<number>();
+  private readonly passedYou = new Set<number>();
+  private lastSlingTick = -1e9;
+  private lastShownPassTick = -1e9;
+  private chainN = 0;
+  private ladderN = 0;
+  private leadArmed = true;
+  private leadLost = 0;
+  private leading = false;
+  private call: { id: number; at: number } | null = null;
+  private callDone = false;
+  /** The nearest ghost the pill named last frame (held through a bunched pack). */
+  private heldNext: number | null = null;
+  /** Sim tick each ghost's duel last resolved won or held off. */
+  private readonly duelEnd = new Map<number, number>();
+
+  // Milestones.
+  private newGroundTick = -1e9;
+  private newGroundAt = -1;
+  private newBestDone = false;
+  private newBestAt = -1;
+  private paceDone = false;
+  private friendDone = false;
+  private kmDone = 0;
+  private avalancheAt = -1;
+  private bestBank = 0;
+
+  // Flow and skill.
+  private skillChain = 0;
+  private perfects = 0;
+  private readonly kinds = new Set<StyleKind>();
+  private earnCap = 0;
+  private flowShown = 0;
+  private flowInDone = false;
+  private snuffAt = -1;
+  private snuffFrom = 0;
+  private pulseAt = -1;
+
+  // Crash.
+  private crashT = -1;
+
+  // Pops.
+  private readonly pops: Pop[] = [];
+  private readonly unlockDone = new Set<string>();
+  private teased = false;
+  private pollAt = 0;
+  private lastPopAt = -1e9;
+  private lastStompAt = -1e9;
+  private lastPassAt = -1e9;
+  private lastNewsAt = -1e9;
+  private lastFinaleAt = -1e9;
+
+  // Ghost tricks and the stomp metronome.
+  private readonly cursors = new Map<number, number>();
+  private lastWhisperAt = -1e9;
+  private readonly ticked = [false, false, false, false];
+  private prevTtl = NaN;
 
   /** reduced: prefers-reduced-motion, handed to the time scale (the app also reads it into each frame). */
   constructor(reduced: () => boolean) {
@@ -117,144 +247,779 @@ export class Director {
     return this.shown;
   }
 
+  /** The run's best stomp streak. */
+  get bestStreak(): number {
+    return this.streak.best;
+  }
+
+  /** A results line for an event the run never reached ('The yeti was 220 m away.'), else null. */
+  eventNote(sim: Sim): string | null {
+    return this.finales.eventNote(sim);
+  }
+
   beginRun(r: DirectorRun): void {
     this.run = r;
     this.log.length = 0;
     this.shown.clear();
+    this.clock = 0;
+    this.lastTick = 0;
+    this.lastLand = null;
+    this.lastReleaseTier = 0;
+    this.yetiHopTick = -1e9;
     this.grudgeDone = false;
     this.streak.reset();
     this.duels.reset();
     this.finales.begin(r.event, r.triggerZ);
+    this.extras.reset();
+    this.ledBy2m.clear();
+    this.passedYou.clear();
+    this.lastSlingTick = -1e9;
+    this.lastShownPassTick = -1e9;
+    this.chainN = 0;
+    this.ladderN = 0;
+    this.leadArmed = true;
+    this.leadLost = 0;
+    this.leading = false;
+    this.call = null;
+    this.callDone = false;
+    this.heldNext = null;
+    this.duelEnd.clear();
+    this.newGroundTick = -1e9;
+    this.newGroundAt = -1;
+    this.newBestDone = false;
+    this.newBestAt = -1;
+    this.paceDone = false;
+    this.friendDone = false;
+    this.kmDone = 0;
+    this.avalancheAt = -1;
+    this.bestBank = 0;
+    this.resetSkill();
+    this.flowShown = 0;
+    this.pulseAt = -1;
+    this.crashT = -1;
+    this.pops.length = 0;
+    this.unlockDone.clear();
+    this.teased = false;
+    this.pollAt = 0;
+    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = -1e9;
+    this.cursors.clear();
+    this.lastWhisperAt = -1e9;
+    this.ticked.fill(false);
+    this.prevTtl = NaN;
+    Object.assign(this.feel, IDLE_FEEL);
   }
 
-  /** Resets the streak and the time scale; keeps the run's snapshots, passes and the grudge. */
+  /** Resets the streak, the flow cap, the skill chain and the time scale (the crash curve); keeps the
+   *  run's snapshots, passes, milestones and the popped set. */
   revive(): void {
     this.streak.revive();
     this.duels.crash();
     this.finales.revive();
     this.time.reset();
+    this.resetSkill();
+    this.flowShown = 0;
+    this.crashT = -1;
+    this.newBestAt = -1;
+    this.ticked.fill(false);
+    this.prevTtl = NaN;
+  }
+
+  private resetSkill(): void {
+    this.skillChain = 0;
+    this.perfects = 0;
+    this.kinds.clear();
+    this.earnCap = 0;
+    this.flowInDone = false;
+    this.snuffAt = -1;
   }
 
   step(f: DirectorFrame): DirectorOutput {
     const beats = this.beats;
     beats.length = 0;
     const sim = f.sim;
+    const s = sim.s;
     const run = this.run;
+    const dt = Math.max(0, f.dt);
+    this.clock += dt;
+    const now = this.clock;
+    const dTicks = Math.max(0, sim.tick - this.lastTick);
+    this.lastTick = sim.tick;
+    const live = f.phase === 'run' && !s.crashed;
+    const haunted = run !== null && run.mood === Mood.Haunted;
+    const motion = !f.reduced;
 
-    // Race first. The ladder is the count of first passes so far, as each pass happens.
-    let ladder = f.passedThisRun;
-    for (const ev of f.race) if (ev.type === 'pass' && ev.first) ladder--;
+    // ---- Pre-scan the batch.
+    const evs = this.simEvents;
+    evs.length = 0;
+    let bankInBatch = false;
+    let lostStake = 0;
+    const bumpTicks: number[] = [];
+    const bankTicks: number[] = [];
+    for (const p of f.events) {
+      evs.push(p.e);
+      const e = p.e;
+      if (e.type === 'boost' && e.source === 'slingshot') this.lastSlingTick = Math.max(this.lastSlingTick, p.tick);
+      else if (e.type === 'comboBank') {
+        bankInBatch = true;
+        bankTicks.push(p.tick);
+      } else if (e.type === 'bump') bumpTicks.push(p.tick);
+      else if (e.type === 'comboLost') lostStake = e.points;
+    }
+
+    // Who has ever led you by 2 m (a start-line jostle is an edge past one that never did).
+    if (live) {
+      for (const t of f.tracks) {
+        const p = f.poses.get(t.entry.id);
+        if (p && !p.done && p.z - s.z >= 2) this.ledBy2m.add(t.entry.id);
+      }
+    }
+
+    // ---- New ground first: the 'you' wreck that sits right on it is then muted (it owns the beat).
+    if (live && run && this.newGroundAt < 0 && run.bestDistAtStart >= 150 && sim.distance > run.bestDistAtStart) {
+      this.newGroundAt = now;
+      this.newGroundTick = sim.tick;
+      this.push({ type: 'newGround', tick: sim.tick, z: run.bestDistAtStart, say: { label: 'New ground', points: 0, tone: 'best' } }, sim);
+    }
+
+    // ---- Duels, stepped with whole sim ticks.
+    const resolved = new Map<number, 'won' | 'heldOff'>();
+    if (live) {
+      const gaps: Array<{ id: number; gap: number; live: boolean }> = [];
+      for (const t of f.tracks) {
+        if (!t.ready) continue;
+        const p = f.poses.get(t.entry.id);
+        if (!p) continue;
+        gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
+      }
+      for (const d of this.duels.step(dTicks, sim.tick, gaps)) {
+        const t = f.tracks.find((k) => k.entry.id === d.id);
+        if (!t) continue;
+        const ghost = this.ref(t, f, sim);
+        if (d.phase === 'won' || d.phase === 'heldOff') {
+          resolved.set(d.id, d.phase);
+          this.duelEnd.set(d.id, sim.tick);
+          const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
+          this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
+          this.lastPassAt = now;
+        } else {
+          this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
+          if (d.phase === 'lost') {
+            this.push({ type: 'raceNews', tick: sim.tick, ghost, news: 'pulledAway', text: `${ghost.name} pulled away`, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: 0.6 }, sim);
+            this.lastNewsAt = now;
+          }
+        }
+      }
+    }
+
+    // ---- The race.
+    let passedNow: GhostRef | null = null;
     for (const ev of f.race) {
-      if (ev.type === 'pass') {
-        if (ev.first) ladder++;
-        const ghost = this.ref(ev.track, f, sim);
+      const t = ev.track;
+      const id = t.entry.id;
+      if (ev.type === 'crashed') {
+        // A duel ghost going down is the duel's result (won), not news.
+        if (this.duels.open === id || resolved.has(id) || this.afterDuel(id, sim.tick)) continue;
+        const p = f.poses.get(id);
+        if (!p) continue;
+        const gap = p.z - s.z;
+        const ghost = this.ref(t, f, sim);
+        const behind = gap < 0;
+        if (behind ? -gap > WIPE_BEHIND || this.duels.open !== null : gap > WIPE_AHEAD) continue;
+        const text = behind
+          ? `${t.entry.kind === 'you' ? 'Your best' : t.entry.name} wiped out behind you`
+          : t.entry.kind === 'you'
+            ? 'Your best wiped out'
+            : t.entry.kind === 'grudge'
+              ? `${t.entry.name} wiped out. Pass the lantern`
+              : `${t.entry.name} wiped out`;
+        this.push({ type: 'raceNews', tick: sim.tick, ghost, news: behind ? 'wipeoutBehind' : 'wipeout', text, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: Math.max(0, Math.min(1, 1 - Math.abs(gap) / 300)) }, sim);
+        this.lastNewsAt = now;
+      } else if (ev.type === 'pass') {
+        const ghost = this.ref(t, f, sim);
+        const wreck = t.crashSeen;
+        const liveFirst = ev.first && !wreck;
+        const chainN = liveFirst && sim.tick - this.lastShownPassTick <= CHAIN_TICKS ? this.chainN + 1 : 1;
         const c = classifyPass({
           tick: sim.tick,
           first: ev.first,
           ghost,
-          wreck: false,
-          everLedBy2m: false,
-          lastSlingTick: -1e9,
-          lastShownPassTick: -1e9,
-          chainN: 0,
-          passedYouBefore: false,
-          duel: null,
-          haunted: run !== null && run.mood === Mood.Haunted,
-          newGroundTick: -1e9,
+          wreck,
+          everLedBy2m: this.ledBy2m.has(id),
+          lastSlingTick: this.lastSlingTick,
+          lastShownPassTick: this.lastShownPassTick,
+          chainN,
+          passedYouBefore: this.passedYou.has(id),
+          duel: resolved.get(id) ?? null,
+          haunted,
+          newGroundTick: this.newGroundTick,
         });
-        if (ev.first && ghost.kind === 'grudge' && !this.grudgeDone) {
+        // Passes with the duel ghost still pay a first pass but say nothing: the duel's result will (or
+        // just did: the wreck of a ghost that crashed out of its duel is that result's, not a 'Beat').
+        const muted = c.muted || (this.duels.open === id && !resolved.has(id)) || (wreck && this.afterDuel(id, sim.tick));
+        // The nemesis pays double the grudge's pass.
+        const nemesisBonus = ev.first && t.entry.kind === 'grudge' && t.entry.nemesis ? (haunted ? 20 : 10) : 0;
+        const gifts = c.gifts + nemesisBonus + this.extras.take(c.extra);
+        if (!muted && t.entry.kind === 'grudge' && !this.grudgeDone) {
           // Settled before its pass flash: the banner the pass then names.
           this.grudgeDone = true;
-          this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis: false, after: 0, paid: c.gifts }, sim);
+          const g = run?.grudgeAtStart;
+          const nemesis = !!t.entry.nemesis;
+          this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid: (nemesis ? 20 : 10) * (haunted ? 2 : 1) }, sim);
         }
-        this.push({ type: 'pass', tick: sim.tick, ghost, word: c.word, text: c.text, first: ev.first, chain: 0, ladder, octave: false, gifts: c.gifts + c.extra, muted: c.muted }, sim);
-        if (!c.muted) this.shown.add(ghost.id);
+        let ladder = this.ladderN;
+        if (!muted && !wreck) ladder = ++this.ladderN;
+        const li = ladderIndex(Math.max(1, ladder));
+        this.push({ type: 'pass', tick: sim.tick, ghost, word: c.word, text: c.text, first: ev.first, chain: liveFirst && !muted ? chainN : 0, ladder: Math.max(1, ladder), octave: li.octave, gifts, muted }, sim);
+        if (!muted) {
+          this.shown.add(id);
+          this.lastPassAt = now;
+          if (liveFirst) {
+            this.chainN = chainN;
+            this.lastShownPassTick = sim.tick;
+          }
+          passedNow = ghost;
+        }
       } else if (ev.type === 'passedBy') {
-        this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(ev.track, f, sim), muted: false }, sim);
+        this.passedYou.add(id);
+        const muted = this.duels.open === id || (sim.tick < START_TICKS && !this.ledBy2m.has(id));
+        this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(t, f, sim), muted }, sim);
       }
     }
 
-    // Then the sim events. The sim emits a landing's trick styles before the land event itself, so
-    // the batch is read for its land first: spin and flip callouts name this landing.
-    const evs = this.simEvents;
-    evs.length = 0;
-    let land: Extract<SimEvent, { type: 'land' }> | null = null;
-    for (const p of f.events) {
-      evs.push(p.e);
-      if (p.e.type === 'land') {
-        land = p.e;
-        this.lastLand = { halfTurns: p.e.halfTurns, flips: p.e.flips };
+    // Taking the lead: rank 1 after 10 s with 3 or more ghosts, one still riding. Once, or again after
+    // losing it for 5 s.
+    if (live) {
+      const lead = f.standings.rank === 1 && f.standings.of - 1 >= LEAD_GHOSTS && sim.tick >= LEAD_TICKS && this.anyLive(f);
+      if (lead) {
+        this.leadLost = 0;
+        if (!this.leading && this.leadArmed) {
+          this.leadArmed = false;
+          this.push({ type: 'lead', tick: sim.tick, of: f.standings.of }, sim);
+        }
+      } else if (f.standings.rank !== 1) {
+        this.leadLost += dTicks;
+        if (this.leadLost >= LEAD_REARM_TICKS) this.leadArmed = true;
       }
+      this.leading = lead;
     }
-    // Finales are read from the whole batch, then placed at their chaos event (where the banner always
-    // came in the frame's order); any left over follow the batch.
-    const finales = this.finales.step(sim, evs, f.dt);
-    let fi = 0;
+
+    // ---- The sim events, in order. Finales go where the event they answer sits.
+    const finales = this.finales.step(sim, evs, dt);
+    const placed = new Array<boolean>(finales.length).fill(false);
+    const placeFinales = (src: SimEvent) => {
+      for (let i = 0; i < finales.length; i++) {
+        if (!placed[i] && this.finales.sources[i] === src) {
+          placed[i] = true;
+          this.pushFinale(finales[i], sim, now, motion);
+        }
+      }
+    };
     for (const p of f.events) {
       const e = p.e;
       switch (e.type) {
         case 'chaos':
-          if (e.phase === 'success') while (fi < finales.length && finales[fi].event === e.event) this.push(finales[fi++], sim);
+          placeFinales(e);
           break;
         case 'style': {
+          this.skill(e.kind, e.chain);
+          if (e.kind === 'yetiHop') {
+            this.yetiHopTick = p.tick;
+            placeFinales(e);
+            break;
+          }
+          // The avalanche's 2,000 is shown once, by its finale banner.
+          if (e.kind === 'avalanche') break;
           if (e.kind === 'perfect') {
-            const late = land?.late ?? false;
-            const n = this.streak.land('perfect', late, p.tick).n;
-            this.push({ type: 'stomp', tick: p.tick, streak: n, late, title: stompTitle(n), lead: [{ label: 'Perfect', points: e.points }], x: sim.s.x, z: sim.s.z, heading: sim.s.heading, yetiHop: false }, sim);
+            this.stomp(p.tick, e.points, f, sim, motion);
+            break;
+          }
+          if (e.kind === 'nearMiss') {
+            const whisker = (e.gap ?? Infinity) < WHISKER_GAP && s.speed >= WHISKER_SPEED;
+            if (whisker && motion) this.time.pulse(HITSTOP_SCALE, 0.05, 'feed');
+            this.push(
+              {
+                type: 'nearMiss',
+                tick: p.tick,
+                grade: whisker ? 'whisker' : 'near',
+                gap: e.gap ?? 1,
+                side: e.side ?? 1,
+                x: e.x ?? s.x,
+                z: e.z ?? s.z,
+                obs: e.obs ?? 'pine',
+                speed: s.speed,
+                say: whisker ? { label: 'Whisker', points: e.points, tone: 'big' } : { label: 'Near miss', points: e.points, tone: 'normal' },
+              },
+              sim,
+            );
             break;
           }
           let label = STYLE_LABEL[e.kind];
           // Every number on a callout carries its label, and "x" is the combo multiplier's alone.
           if (e.kind === 'spin' && this.lastLand && this.lastLand.halfTurns > 0) label = `Spin ${this.lastLand.halfTurns * 180}`;
           if (e.kind === 'flip' && this.lastLand) label = FLIPS[Math.max(1, this.lastLand.flips) - 1] ?? `${this.lastLand.flips} Backflips`;
+          if (e.kind === 'drift') label = this.lastReleaseTier >= 3 ? 'Max drift' : this.lastReleaseTier === 2 ? 'Big drift' : label;
           this.push({ type: 'callout', tick: p.tick, source: e.kind, say: { label, points: e.points, tone: styleTone(e.kind, e.points) } }, sim);
           break;
         }
         case 'land':
           this.lastLand = { halfTurns: e.halfTurns, flips: e.flips };
-          if (e.quality === 'sketchy') this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
-          // Hit-stop: time briefly thickens on a perfect landing (the stomp itself was its style event).
-          if (e.quality === 'perfect') this.time.pulse(0.35, 0.13, 'feed');
-          else this.streak.land(e.quality, e.late, p.tick);
+          if (e.quality === 'perfect') break; // (its stomp came with the 'perfect' style event)
+          if (e.quality === 'sketchy') {
+            const r = this.streak.land('sketchy', false, p.tick);
+            if (r.broke >= 3) this.push({ type: 'streakBroken', tick: p.tick, was: r.broke, say: { label: 'Streak broken', points: 0, tone: 'lost' } }, sim);
+            else this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
+          } else this.streak.land(e.quality, e.late, p.tick);
           break;
-        case 'comboBank':
-          this.push({ type: 'bank', tick: p.tick, points: e.points, mult: e.mult, origin: Math.round(e.points / Math.max(1, e.mult)), tier: bankTier(e.points, 0, run?.bestComboAtStart ?? 0), header: null, bump: false }, sim);
+        case 'drift':
+          if (e.phase === 'release') {
+            this.lastReleaseTier = e.tier;
+            if (e.tier >= 1) {
+              const tier = Math.min(3, e.tier) as 1 | 2 | 3;
+              if (tier === 3 && motion) this.time.pulse(HITSTOP_SCALE, 0.07, 'feed');
+              this.push({ type: 'driftRelease', tick: p.tick, tier, x: s.x, z: s.z, heading: s.heading, driftDir: s.driftDir }, sim);
+            }
+          } else if (e.phase === 'start') this.lastReleaseTier = 0;
           break;
-        case 'comboLost':
-          this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: false, crack: false }, sim);
+        case 'comboBank': {
+          const bump = bumpTicks.includes(p.tick);
+          const best = Math.max(run?.bestComboAtStart ?? 0, this.bestBank);
+          const tier = bankTier(e.points, this.skillChain, best);
+          const header = tier === 3 ? (best > 0 && e.points > best ? 'New best combo' : 'Massive') : null;
+          if (!bump && motion) {
+            if (tier === 2) this.time.pulse(HITSTOP_SCALE, 0.06, 'feed');
+            else if (tier === 3) this.time.pulse(HITSTOP_SCALE, 0.08, 'feed');
+          }
+          this.push({ type: 'bank', tick: p.tick, points: e.points, mult: e.mult, origin: Math.round(e.points / Math.max(1, e.mult)), tier, header, bump }, sim);
+          this.bestBank = Math.max(this.bestBank, e.points);
+          // A bump knocked the combo out of you: the flow it earned goes out with it.
+          if (bump && this.flowShown >= FLOW_SNUFF_MIN) {
+            this.snuffAt = now;
+            this.snuffFrom = this.flowShown;
+            this.push({ type: 'flow', tick: p.tick, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } }, sim);
+          }
+          if (bump) this.earnCap = 0;
+          this.skillChain = 0;
+          this.perfects = 0;
           break;
+        }
+        case 'bump': {
+          const side = this.bumpSide(sim, e.id);
+          this.push({ type: 'bump', tick: p.tick, side, bank: bankTicks.includes(p.tick) }, sim);
+          break;
+        }
+        case 'comboLost': {
+          const best = run?.bestComboAtStart ?? 0;
+          const isBest = best > 0 && e.points > best;
+          this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
+          this.skillChain = 0;
+          this.perfects = 0;
+          break;
+        }
         case 'crash':
           this.streak.crash();
           this.duels.crash();
+          this.newBestAt = -1;
+          if (motion) this.time.curve(CRASH_CURVE, 'render');
+          this.crashT = 0;
+          this.push({ type: 'crash', tick: p.tick, cause: e.cause, stake: lostStake, orbitFrom: this.orbitFrom(f, sim) }, sim);
           break;
         default:
           break;
       }
     }
     this.streak.tick(sim.tick);
-    while (fi < finales.length) this.push(finales[fi++], sim);
+    for (let i = 0; i < finales.length; i++) if (!placed[i]) this.pushFinale(finales[i], sim, now, motion);
 
-    // Continuous state for this frame.
+    // ---- State beats.
+    const c = sim.combo;
+    const stake = c.active ? Math.round(c.pending * c.multiplier) : 0;
+    if (live && run) {
+      // New best: the first time the score passes the best this mountain had at the start (once per
+      // run, never again after a revive). A bank that crossed it lands its fly-in first.
+      if (!this.newBestDone && run.bestScoreAtStart > 0 && sim.score > run.bestScoreAtStart) {
+        this.newBestDone = true;
+        this.newBestAt = bankInBatch ? now + NEW_BEST_DEFER_S : now;
+      }
+      if (this.newBestAt >= 0 && now >= this.newBestAt) {
+        this.newBestAt = -1;
+        this.push({ type: 'newBest', tick: sim.tick, score: sim.score, say: { label: 'New best', points: 0, tone: 'best' } }, sim);
+      }
+      if (!this.paceDone && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart) {
+        this.paceDone = true;
+        this.push({ type: 'bestComboPace', tick: sim.tick, stake, say: { label: 'Best combo pace', points: 0, tone: 'best' } }, sim);
+      }
+      const fr = run.friend;
+      if (fr && !this.friendDone && fr.distance > 0 && sim.distance > fr.distance) {
+        this.friendDone = true;
+        this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: `Beat ${fr.name}'s ${fmtInt(fr.distance)} m`, points: 0, tone: 'big' } }, sim);
+      }
+      const km = Math.floor(sim.distance / 1000);
+      if (km > this.kmDone) {
+        this.kmDone = km;
+        this.push({ type: 'km', tick: sim.tick, km, say: { label: `${km} km`, points: 0, tone: 'big' } }, sim);
+      }
+      this.metronome(f, sim);
+      this.tricks(f, sim, now);
+      this.raceCall(f, sim, now);
+      this.queuePops(f, sim, now, passedNow);
+    }
+    if (!live) this.pops.length = 0;
+
+    // ---- Continuous state for this frame.
     const feel = this.feel;
+    const earned = Math.min(s.flow, this.earnCap);
+    if (dt > 0) this.flowShown += (earned - this.flowShown) * (1 - Math.exp(-dt / FLOW_SMOOTH_S));
+    // The snuff's display cap takes the glow to 0 over 0.15 s; then the shown flow starts again from
+    // nothing (so the next move never flashes the old glow back).
+    if (this.snuffAt >= 0 && now - this.snuffAt >= SNUFF_S) {
+      this.snuffAt = -1;
+      this.flowShown = Math.min(this.flowShown, earned);
+    }
+    let shown = this.flowShown;
+    if (this.snuffAt >= 0) shown = Math.min(shown, Math.max(0, this.snuffFrom * (1 - (now - this.snuffAt) / SNUFF_S)));
+    if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS) {
+      this.flowInDone = true;
+      this.pulseAt = now;
+      this.push({ type: 'flow', tick: sim.tick, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } }, sim);
+    }
+    const fk = Math.pow(smoothstep(0.5, 6, shown), 0.8);
+    if (this.crashT >= 0) this.crashT += dt * this.time.render;
+
     feel.reduced = f.reduced;
+    feel.flow = fk;
+    feel.flowPulse = this.pulseAt >= 0 ? Math.max(0, 1 - (now - this.pulseAt) / FLOW_PULSE_S) : 0;
+    feel.driftCharge = s.drifting ? Math.max(0, Math.min(1, s.driftCharge / 2.4)) : 0;
+    feel.driftTier = s.drifting ? s.driftTier : 0;
+    feel.streak = this.streak.n;
     feel.timeFeed = this.time.feed;
     feel.timeRender = this.time.render;
     feel.shakeScale = this.time.shake;
+    feel.crashT = this.crashT;
+    feel.duelId = this.duels.open;
+    if (run && run.bestDistAtStart >= 150) {
+      const k = this.newGroundAt >= 0 ? Math.max(0, 1 - (now - this.newGroundAt) / 0.6) : 0;
+      const bl = feel.bestLine;
+      if (bl && bl.distance === run.bestDistAtStart) {
+        bl.z = run.bestDistAtStart;
+        bl.k = k;
+      } else feel.bestLine = { z: run.bestDistAtStart, k, distance: run.bestDistAtStart };
+    } else feel.bestLine = null;
+    const fr = run?.friend;
+    if (fr && fr.distance > 0 && !this.friendDone) {
+      if (!feel.friendLine || feel.friendLine.name !== fr.name || feel.friendLine.distance !== fr.distance) feel.friendLine = { z: fr.distance, name: fr.name, distance: fr.distance };
+    } else feel.friendLine = null;
 
     const out = this.out;
+    // One rival for the pill, the C11 ring and the camera: an open duel, the start-line call, else
+    // the nearest ghost ahead.
     const next = f.standings.next;
-    out.rival = rivalPick(next ? { id: next.track.entry.id, gap: next.gap } : null, null, null);
-    const c = sim.combo;
-    const stake = c.active ? Math.round(c.pending * c.multiplier) : 0;
+    const duelId = this.duels.open;
+    const callUp = this.call && now - this.call.at < CALL_SHOW_S ? this.call.id : null;
+    const steady = steadyNext(this.gapOf(this.heldNext, f, sim), next ? { id: next.track.entry.id, gap: next.gap } : null);
+    this.heldNext = steady ? steady.id : null;
+    out.rival = rivalPick(steady, this.gapOf(duelId, f, sim), this.gapOf(callUp, f, sim));
+
+    const timerFrac = c.window > 0 ? c.timer / c.window : 0;
+    const draining = c.active && s.grounded && !s.drifting && !s.drafting;
     out.hud.stake = stake;
-    out.hud.fuse = fuseLevel(stake, c.window > 0 ? c.timer / c.window : 0, c.active);
-    out.hud.pace = false;
-    out.hud.duel = this.duels.open !== null;
+    out.hud.fuse = fuseLevel(stake, timerFrac, draining);
+    out.hud.pace = this.paceDone && c.active && run !== null && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart;
+    out.hud.duel = duelId !== null;
     out.hud.bestIn = null;
+    if (run && run.bestDistAtStart >= 150 && this.newGroundAt < 0 && !s.crashed) {
+      const d = run.bestDistAtStart - sim.distance;
+      if (d > 0 && d <= 250) out.hud.bestIn = Math.max(10, Math.ceil(d / 10) * 10);
+    }
     out.hud.countdown = this.finales.countdown(sim);
-    out.audio.fuse = out.hud.fuse;
-    out.audio.streak = this.streak.n;
+
+    const a = out.audio;
+    a.flow = fk;
+    a.driftCharge = feel.driftCharge;
+    a.skillChain = this.skillChain;
+    a.skillMult = skillMult(this.skillChain);
+    a.earnedFlow = earned;
+    a.race = live && (duelId !== null || this.anyNear(f, sim, 8)) ? 0.06 : 0;
+    a.duel = duelId !== null ? this.duels.amount : 0;
+    a.shoulder = live && !s.drafting ? this.shoulder(f, sim) : null;
+    a.fuse = out.hud.fuse;
+    a.streak = this.streak.n;
+    a.countIn = run !== null && run.hasReveal && now < run.revealLeaveS;
+    a.lift = (this.newGroundAt >= 0 ? LIFT_NEW_GROUND : 0) + (this.avalancheAt >= 0 ? LIFT_AVALANCHE * Math.max(0, 1 - (now - this.avalancheAt) / LIFT_AVALANCHE_S) : 0);
     return out;
+  }
+
+  // ------------------------------------------------------------------ pieces
+
+  /** A style event's part in the live combo's skill: drafting never counts. A new combo starts over. */
+  private skill(kind: StyleKind, chain: number): void {
+    if (chain <= 1) {
+      this.skillChain = 0;
+      this.perfects = 0;
+      this.kinds.clear();
+      this.flowInDone = false;
+    }
+    if (kind === 'draft') return;
+    this.skillChain++;
+    this.kinds.add(kind);
+    if (kind === 'perfect') this.perfects++;
+    this.earnCap = this.skillChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** A perfect landing's stamp: its streak, title and lead parts, and the hit-stop that grows. */
+  private stomp(tick: number, points: number, f: DirectorFrame, sim: Sim, motion: boolean): void {
+    let late = false;
+    for (const p of f.events) if (p.tick === tick && p.e.type === 'land' && p.e.quality === 'perfect') late = p.e.late;
+    const n = this.streak.land('perfect', late, tick).n;
+    const line = streakLine(n);
+    const lead: Array<{ label: string; points: number }> = [line ? { label: line, points: 0 } : { label: 'Perfect', points }];
+    const yeti = tick - this.yetiHopTick >= 0 && tick - this.yetiHopTick <= YETI_TITLE_TICKS;
+    if (yeti) lead.push({ label: 'Yeti hop', points: 1500 });
+    if (motion) this.time.pulse(HITSTOP_SCALE, STOMP_STOP[Math.min(n, STOMP_STOP.length) - 1] ?? 0.13, 'feed');
+    this.lastStompAt = this.clock;
+    const s = sim.s;
+    this.push({ type: 'stomp', tick, streak: n, late, title: yeti ? 'Yeti hop' : stompTitle(n), lead, x: s.x, z: s.z, heading: s.heading, yetiHop: yeti }, sim);
+  }
+
+  private pushFinale(b: BeatOf<'finale'>, sim: Sim, now: number, motion: boolean): void {
+    const g = b.gifts > 0 ? this.extras.take(b.gifts) : 0;
+    if (g !== b.gifts) {
+      // The run's extras ran out: the line says only what was credited.
+      b.gifts = g;
+      if (b.outcome === 'caught' && b.sub) b.sub = g > 0 ? `Clean sweep: +${g} gifts` : 'Clean sweep';
+      else if (b.outcome === 'rode') b.sub = g > 0 ? `+${g} gifts` : null;
+    }
+    if (b.stamp && motion) this.time.pulse(HITSTOP_SCALE, 0.1, 'feed');
+    if (b.outcome === 'outran') this.avalancheAt = now;
+    if (b.banner) this.lastFinaleAt = now;
+    this.push(b, sim);
+  }
+
+  /** Which way a bump knocked you: away from the obstacle (its nearest point; a log is a segment). */
+  private bumpSide(sim: Sim, id: number): -1 | 1 {
+    const s = sim.s;
+    const course = (sim as Partial<Sim>).course;
+    if (!course) return 1;
+    const k = Math.floor(id / 256);
+    for (const ci of [k, k - 1, k + 1]) {
+      if (ci < 0) continue;
+      const o = course.chunk(ci).obstacles.find((ob) => ob.id === id);
+      if (!o) continue;
+      let px = o.x;
+      if (o.x2 !== o.x || o.z2 !== o.z) {
+        const ex = o.x2 - o.x;
+        const ez = o.z2 - o.z;
+        const t = Math.max(0, Math.min(1, ((s.x - o.x) * ex + (s.z - o.z) * ez) / (ex * ex + ez * ez)));
+        px = o.x + ex * t;
+      }
+      return px > s.x ? -1 : 1;
+    }
+    return 1;
+  }
+
+  /** The bearing (sim heading convention) of the nearest live ghost within 60 m behind or abreast. */
+  private orbitFrom(f: DirectorFrame, sim: Sim): number | null {
+    const s = sim.s;
+    let best = Infinity;
+    let out: number | null = null;
+    for (const t of f.tracks) {
+      const p = f.poses.get(t.entry.id);
+      if (!p || p.done) continue;
+      const dz = p.z - s.z;
+      if (dz > 3 || dz < -60) continue;
+      const dx = p.x - s.x;
+      const d = dx * dx + dz * dz;
+      if (d < best) {
+        best = d;
+        out = Math.atan2(dx, dz);
+      }
+    }
+    return out;
+  }
+
+  /** The stomp metronome: ticks as the landing ring closes, the open note on the stomp window. */
+  private metronome(f: DirectorFrame, sim: Sim): void {
+    if (sim.s.grounded || f.airTicks <= 14 || !Number.isFinite(f.timeToLand)) {
+      if (sim.s.grounded) {
+        this.ticked.fill(false);
+        this.prevTtl = NaN;
+      }
+      return;
+    }
+    const ttl = f.timeToLand;
+    const flight = f.airTicks / 60 + ttl;
+    if (Number.isNaN(this.prevTtl)) {
+      // The first look at this flight: crossings already behind it stay silent.
+      for (let i = 0; i < TICK_AT.length; i++) if (ttl <= TICK_AT[i]) this.ticked[i] = true;
+      this.prevTtl = ttl;
+      return;
+    }
+    for (let i = 0; i < TICK_AT.length; i++) {
+      if (this.ticked[i]) continue;
+      if (i === 0 && flight <= 0.8) continue;
+      if (this.prevTtl > TICK_AT[i] && ttl <= TICK_AT[i]) {
+        // (Latched for the flight: a re-prediction that jumps back up never repeats a tick.)
+        for (let j = 0; j <= i; j++) this.ticked[j] = true;
+        this.push({ type: 'stompTick', tick: sim.tick, step: TICK_STEP[i], open: i === TICK_AT.length - 1 }, sim);
+        break;
+      }
+    }
+    this.prevTtl = ttl;
+  }
+
+  /** Ghosts show off: a rival near you landing a trick is whispered, at most once per 1.5 s. */
+  private tricks(f: DirectorFrame, sim: Sim, now: number): void {
+    const tick = sim.tick;
+    let fired = now - this.lastWhisperAt < WHISPER_S;
+    for (const t of f.tracks) {
+      const tr = t.tricks;
+      if (!t.ready || !tr || tr.length < 4) continue;
+      const id = t.entry.id;
+      const n = tr.length >> 2;
+      let i = this.cursors.get(id);
+      if (i === undefined) {
+        // First seen (the worker's reply may land mid-run): tricks already behind it stay quiet.
+        i = 0;
+        while (i < n && tr[i * 4] <= tick) i++;
+        this.cursors.set(id, i);
+        continue;
+      }
+      while (i < n && tr[i * 4] <= tick) {
+        const q = tr[i * 4 + 1];
+        const word = trickWord(tr[i * 4 + 2], tr[i * 4 + 3]);
+        i++;
+        if (fired) continue;
+        const p = f.poses.get(id);
+        if (!p || p.done) continue;
+        const gap = p.z - sim.s.z;
+        if (gap > TRICK_AHEAD || gap < -TRICK_BEHIND) continue;
+        fired = true;
+        this.lastWhisperAt = now;
+        this.push({ type: 'ghostTrick', tick, ghost: this.ref(t, f, sim), quality: q === 1 ? 'perfect' : q === 2 ? 'sketchy' : 'clean', word, x: p.x, y: p.y, z: p.z }, sim);
+      }
+      this.cursors.set(id, i);
+    }
+  }
+
+  /** The start-line call, on the first frame its ghost is ready (after the reveal card, if any). */
+  private raceCall(f: DirectorFrame, sim: Sim, now: number): void {
+    const run = this.run;
+    if (this.callDone || !run) return;
+    const at = run.hasReveal ? run.revealLeaveS + 0.3 : 0.6;
+    if (now < at) return;
+    const pick = callPick(
+      f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis })),
+      run.bestDistAtStart,
+    );
+    if (!pick) {
+      if (now > at + CALL_GIVE_UP_S) this.callDone = true;
+      return;
+    }
+    const t = f.tracks.find((k) => k.entry.id === pick.id);
+    if (!t) return;
+    this.callDone = true;
+    this.call = { id: pick.id, at: now };
+    const ghost = this.ref(t, f, sim);
+    const name = t.entry.kind === 'you' ? 'Your best' : t.entry.name;
+    let sr = `${pick.word} ${name}.`;
+    const g = run.grudgeAtStart;
+    if (t.entry.kind === 'friend' && run.friend) sr += ` ${name} rode ${fmtInt(run.friend.distance)} m.`;
+    else if (t.entry.kind === 'grudge' && g) sr += g.streak >= 2 ? ` ${name} beat you ${g.streak} runs running.` : ` ${name} beat you last time.`;
+    else if (t.entry.kind === 'you') sr += ` ${fmtInt(run.bestDistAtStart)} m.`;
+    this.push({ type: 'raceCall', tick: sim.tick, ghost, word: pick.word, sr }, sim);
+  }
+
+  /** Mission and unlock pops: polled at 2 Hz, then held until nothing else owns the moment. */
+  private queuePops(f: DirectorFrame, sim: Sim, now: number, passed: GhostRef | null): void {
+    const run = this.run;
+    if (!run) return;
+    if (sim.tick >= START_TICKS && now >= this.pollAt) {
+      this.pollAt = now + 0.5;
+      for (const m of run.missionsCrossed()) this.pops.push({ beat: { type: 'missionPop', tick: sim.tick, id: m.id, text: m.text, reward: m.reward }, since: now });
+    }
+    // Unlocks live: jostle and wreck passes count, as they do when the run settles.
+    const have = run.lifetimePassed + f.passedThisRun;
+    let tease: { name: string } | null = null;
+    for (const u of run.unlockLadder) {
+      if (this.unlockDone.has(u.id)) continue;
+      if (have >= u.need) {
+        this.unlockDone.add(u.id);
+        this.pops.push({ beat: { type: 'unlockPop', tick: sim.tick, id: u.id, name: u.name, biome: u.biome }, since: now });
+      } else if (!tease && u.need - have === 1) tease = u;
+    }
+    if (passed && tease && !this.teased) {
+      this.teased = true;
+      this.push({ type: 'raceNews', tick: sim.tick, ghost: passed, news: 'unlockTease', text: `1 more ghost opens ${tease.name}`, pan: 0, gain: 0 }, sim);
+      this.lastNewsAt = now;
+    }
+    // Give up on what waited too long; then show the next one if the moment is clear.
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i];
+      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : POP_DEFER.giveUp / 1000)) this.pops.splice(i, 1);
+    }
+    if (!this.pops.length) return;
+    const clear =
+      now - this.lastStompAt >= POP_DEFER.stomp / 1000 &&
+      now - this.lastPassAt >= POP_DEFER.pass / 1000 &&
+      now - this.lastNewsAt >= POP_DEFER.news / 1000 &&
+      this.duels.open === null &&
+      !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
+      now - this.lastFinaleAt >= FINALE_HOLD_S &&
+      !this.finales.pending &&
+      now - this.lastPopAt >= POP_DEFER.spacing / 1000;
+    if (!clear) return;
+    // A waiting unlock goes before any mission.
+    const p = this.pops.splice(Math.max(0, this.pops.findIndex((q) => q.beat.type === 'unlockPop')), 1)[0];
+    p.beat.tick = sim.tick;
+    this.lastPopAt = now;
+    this.push(p.beat, sim);
+  }
+
+  /** Shoulder wind: the nearest live ghost closing on you from behind, within 6 m and 4 m aside. */
+  private shoulder(f: DirectorFrame, sim: Sim): { amt: number; pan: number } | null {
+    const s = sim.s;
+    let best: GhostPose | null = null;
+    let bg = Infinity;
+    for (const t of f.tracks) {
+      const p = f.poses.get(t.entry.id);
+      if (!p || p.done) continue;
+      const back = s.z - p.z;
+      if (back <= 0 || back >= 6 || Math.abs(p.x - s.x) >= 4) continue;
+      if (back < bg) {
+        bg = back;
+        best = p;
+      }
+    }
+    if (!best) return null;
+    const k = 1 - bg / 6;
+    return { amt: k * k, pan: Math.max(-0.85, Math.min(0.85, (best.x - s.x) / 3)) };
+  }
+
+  /** A duel with this ghost resolved won or held off within DUEL_AFTER_TICKS. */
+  private afterDuel(id: number, tick: number): boolean {
+    const t = this.duelEnd.get(id);
+    return t !== undefined && tick - t <= DUEL_AFTER_TICKS;
+  }
+
+  private anyNear(f: DirectorFrame, sim: Sim, m: number): boolean {
+    for (const t of f.tracks) {
+      const p = f.poses.get(t.entry.id);
+      if (p && !p.done && Math.abs(p.z - sim.s.z) < m) return true;
+    }
+    return false;
+  }
+
+  private anyLive(f: DirectorFrame): boolean {
+    for (const t of f.tracks) {
+      const p = f.poses.get(t.entry.id);
+      if (p && !p.done) return true;
+    }
+    return false;
+  }
+
+  private gapOf(id: number | null, f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+    if (id === null) return null;
+    const p = f.poses.get(id);
+    return p ? { id, gap: p.z - sim.s.z } : null;
   }
 
   /** A ghost as beats name it. dx: ghost x minus rider x in sim metres (0 without a pose). */
@@ -269,17 +1034,55 @@ export class Director {
     this.beats.push(b);
     const muted = (b.type === 'pass' || b.type === 'passedBy') && b.muted;
     const entry: BeatLogEntry = { t: sim.tick / 60, type: b.type, named: NAMED.has(b.type) && !muted };
-    if (b.type === 'callout') entry.label = b.say.label;
-    else if (b.type === 'stomp') entry.label = b.title;
-    else if (b.type === 'pass') {
-      entry.label = b.ghost.name;
-      entry.word = b.word;
-      entry.gifts = b.gifts;
-    } else if (b.type === 'passedBy' || b.type === 'grudgeSettled') entry.label = b.ghost.name;
-    else if (b.type === 'bank') entry.tier = b.tier;
-    else if (b.type === 'finale') {
-      entry.label = b.text;
-      entry.gifts = b.gifts;
+    if (b.say) entry.label = b.say.label;
+    switch (b.type) {
+      case 'stomp':
+        entry.label = b.title;
+        entry.tier = b.streak;
+        break;
+      case 'pass':
+        entry.label = b.ghost.name;
+        entry.word = b.word;
+        entry.gifts = b.gifts;
+        break;
+      case 'passedBy':
+      case 'grudgeSettled':
+      case 'raceCall':
+        entry.label = b.ghost.name;
+        break;
+      case 'raceNews':
+        entry.label = b.text;
+        break;
+      case 'duel':
+        entry.label = b.ghost.name;
+        entry.grade = b.phase;
+        entry.gifts = b.gifts;
+        break;
+      case 'bank':
+        entry.tier = b.tier;
+        break;
+      case 'driftRelease':
+        entry.tier = b.tier;
+        break;
+      case 'nearMiss':
+        entry.grade = b.grade;
+        break;
+      case 'flow':
+        entry.grade = b.phase;
+        break;
+      case 'finale':
+        entry.label = b.text;
+        entry.gifts = b.gifts;
+        entry.grade = String(b.grade);
+        break;
+      case 'missionPop':
+        entry.label = b.text;
+        break;
+      case 'unlockPop':
+        entry.label = b.name;
+        break;
+      default:
+        break;
     }
     if (this.log.length >= LOG_MAX) this.log.shift();
     this.log.push(entry);
