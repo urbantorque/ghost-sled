@@ -58,6 +58,11 @@ import { bankLandDelay } from './sfx';
  *   draining stake, the duel heartbeat, the km bell) are quantised to the playing deck's 16ths.
  * - Harmony (theory.ts): every reward note comes from the playing deck's pentatonic ladder, and the
  *   reward chord is a major add9 made of those same tones, so rewards never clash with the music.
+ *   On Clear Skies each mountain has its own song, A A B B in one 16-bar deck loop (no crossfade).
+ * - The ghost choir (music.ts): each ghost you pass joins the band as a sung voice on the chord
+ *   (up to three, in the music pool, kept like the pad) while it stays behind you (30 s stands in
+ *   for 150 m); a retake sighs the top voice down a fourth, a wipeout or the crash ends it. The
+ *   stress mix sings all three: the music pool peaks at 29 of 32 with no steals.
  * - Filters automate at k-rate (once per 128 samples); a-rate biquad automation recomputes
  *   coefficients per sample and costs several times more.
  * - Levels (offline renders, sliders at 1; scripts/playtest/levels.js): a novice cruise about -25
@@ -128,6 +133,9 @@ const COUNT_IN_HOLD_S = 3;
 /** Accents: added on top of the smoothed drive and fading with this time constant (gone in 1.5 s). */
 const ACCENT_TAU = 0.5;
 const ACCENT_MAX = 0.2;
+/** The ghost choir: a ghost you passed sings for this long, standing in for 'still live within
+ *  150 m behind' (the beats carry no gap; a retake or a wipeout ends it sooner). */
+const CHOIR_TTL_S = 30;
 
 /** Reveal timeline (ms from the card's start); reveal.ts exports it as REVEAL_TIMING. */
 export interface RevealCue {
@@ -206,6 +214,8 @@ export class AudioEngine {
   private countIn = false;
   private releaseUntil = 0;
   private avalanche = false;
+  /** The ghost choir: ghosts you passed that are still behind you (id to the time of the pass). */
+  private readonly passed = new Map<number, number>();
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -262,11 +272,13 @@ export class AudioEngine {
       this.releaseUntil = 0;
       this.avalanche = false;
     }
+    this.passed.clear();
     const c = this.core;
     const ctx = this.ctx;
     if (!c || !ctx) return;
     try {
       if (scene === 'run') c.sfx.reset();
+      c.music.setChoir(0, ctx.currentTime);
       c.pulse.fuse = 0;
       c.pulse.duel = 0;
       c.music.setTarget(this.scene, this.mood, this.biome);
@@ -320,6 +332,9 @@ export class AudioEngine {
       if (crashed) this.accent = 0;
       c.music.setDrive(clamp01(this.intensity + this.accent), clamp01(frame.danger), frame.comboMult || 1, snap);
       c.ambience.update(frame, now, this.avalanche, c.music.key());
+      if (crashed && this.passed.size > 0) this.passed.clear();
+      for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
+      c.music.setChoir(this.passed.size, now);
       c.pulse.fuse = crashed ? 0 : clamp01(frame.fuse ?? 0);
       c.pulse.duel = crashed ? 0 : clamp01(frame.duel ?? 0);
     } catch (err) {
@@ -358,6 +373,7 @@ export class AudioEngine {
       c?.sfx.frame();
       const now = ctx ? ctx.currentTime : 0;
       for (const b of list) this.accentFor(b, now);
+      if (list.length > 0 && c && ctx) this.choirFor(list, now, c);
       if (!ctx || !c || !this.live(ctx) || list.length === 0) return;
       const t = now + START_LEAD;
       for (const b of list) {
@@ -471,6 +487,7 @@ export class AudioEngine {
       out.cycleBars = pos.cycle;
     }
     out.decksStarted = c.music.decksStarted;
+    out.choir = c.music.choirVoices();
     out.duck = c.graph.music.ducked;
     out.sfxVoices = c.sfxPool.active;
     out.musicVoices = c.musicPool.active;
@@ -492,6 +509,25 @@ export class AudioEngine {
   async debugRender(kind: string, seconds?: number, opts?: import('./probe').RenderOpts): Promise<Record<string, number | number[]>> {
     const m = await import('./probe');
     return m.renderMix(kind, seconds, opts);
+  }
+
+  /**
+   * The ghost choir: each ghost you pass joins the band as a voice (up to three) while it stays
+   * behind you; one that passes you back leaves with a sigh, and a wipeout or the crash ends it.
+   */
+  private choirFor(list: readonly Beat[], now: number, c: Core): void {
+    const before = this.passed.size;
+    let retaken = false;
+    for (const b of list) {
+      if (b.type === 'pass') {
+        if (!b.muted && b.word !== 'jostle' && b.word !== 'beat') this.passed.set(b.ghost.id, now);
+      } else if (b.type === 'passedBy') {
+        if (this.passed.delete(b.ghost.id)) retaken = true;
+      } else if (b.type === 'raceNews') {
+        if (b.news === 'wipeout' || b.news === 'wipeoutBehind') this.passed.delete(b.ghost.id);
+      } else if (b.type === 'crash') this.passed.clear();
+    }
+    if (this.passed.size !== before) c.music.setChoir(this.passed.size, now, retaken);
   }
 
   /** Accents: internal lifts on the drive for the beats that should swell the band for a moment. */

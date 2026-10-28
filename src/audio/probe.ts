@@ -197,6 +197,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb';
   // 'song': the band alone at a cruise, to read a mountain's A A B B form (bars and decks).
   const song = kind === 'song';
+  const choir = kind === 'choir';
   core.graph.music.setLevel(noMusic ? 0 : 1, 0);
   core.graph.sfx.setLevel(kind === 'music' || kind === 'stress-music' || song ? 0 : 1, 0);
   core.music.enabled = !noMusic;
@@ -214,6 +215,13 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     core.ambience.update(f, t, stress, core.music.key());
     core.pulse.fuse = f.fuse ?? 0;
     core.pulse.duel = f.duel ?? 0;
+    // The stress mix sings a full ghost choir; 'choir' walks it up one voice at a time and then
+    // has one ghost retake you (the sigh).
+    if (stress && t >= 2) core.music.setChoir(3, t);
+    if (choir) {
+      const n = t < 3 ? 0 : t < 4.5 ? 1 : t < 6 ? 2 : t < 8 ? 3 : 2;
+      core.music.setChoir(n, t, t >= 8);
+    }
     if (stress && kind !== 'stress-amb' && t >= nextBurst) {
       burst(core, t + 0.006, n++);
       nextBurst += 0.25;
@@ -272,6 +280,18 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     musicPeak: core.musicPool.peak,
     errors,
   };
+  if (choir) {
+    // Mean level per stretch: none, one, two, three voices, then the retake.
+    const win = (a: number, b: number): number => {
+      let acc = 0;
+      const i0 = Math.floor(a * SR);
+      const i1 = Math.min(L.length, Math.floor(b * SR));
+      for (let i = i0; i < i1; i++) acc += (L[i] * L[i] + R[i] * R[i]) / 2;
+      return Math.round(db(Math.sqrt(acc / Math.max(1, i1 - i0))) * 10) / 10;
+    };
+    out.choirStepsDb = [win(2.2, 3), win(3.6, 4.5), win(5.1, 6), win(6.6, 8), win(8.6, 9.6)];
+    out.musicPeakVoices = core.musicPool.peak;
+  }
   if (song) {
     // The bass under the pad follows each chord's root: per bar, the zero-crossing rate of the
     // low band (two one-pole low-passes at 220 Hz) reads as that bar's root. A song shows its A

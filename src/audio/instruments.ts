@@ -85,6 +85,63 @@ export function lead(v: Voice, t: number, f: number, dur: number, amp: number, k
 
 /** Warm pad chord through a slowly opening lowpass: one warm saw per note, detuned alternately
  *  sharp and flat for width, plus a triangle under the root (freqs[0]) for body. */
+/** One sung note of the ghost choir. */
+export interface Sung {
+  g: GainNode;
+  oscs: OscillatorNode[];
+  f: number;
+  end: number;
+}
+
+/**
+ * A sung vowel for the ghost choir: two detuned warm saws and a triangle through three vowel
+ * formants, a slow swell and a vibrato that blooms in after the attack. `bright` 0..1 moves the
+ * vowel from 'oo' toward 'ah'. `sigh()` bends a note down and lets it go.
+ */
+export function sing(v: Voice, t: number, f: number, dur: number, amp: number, attack: number, bright: number, dest: AudioNode = v.out): Sung {
+  const g = v.gain(0, dest);
+  const end = swell(g.gain, t, amp, attack, Math.max(0, dur - attack), 0.35);
+  const b = bright < 0 ? 0 : bright > 1 ? 1 : bright;
+  const mix = v.gain(1, null);
+  for (const [fc, q, lvl] of [
+    [320 + 480 * b, 5, 1],
+    [800 + 400 * b, 7, 0.55],
+    [2700, 10, 0.15],
+  ] as const) {
+    mix.connect(v.filter('bandpass', fc, q, v.gain(lvl, g)));
+  }
+  const vib = v.gain(0, null);
+  vib.gain.setValueAtTime(0, t);
+  vib.gain.linearRampToValueAtTime(14, t + attack + 0.6);
+  v.osc('sine', 4.6 + 0.8 * b, t, end, vib);
+  const oscs = [v.osc(v.bank.warmSaw, f, t, end, mix, -6), v.osc(v.bank.warmSaw, f, t, end, mix, 6), v.osc('triangle', f * 2, t, end, v.gain(0.3, mix))];
+  for (const o of oscs) vib.connect(o.detune);
+  return { g, oscs, f, end };
+}
+
+/** A choir note retaken: it slides down a fourth over 0.6 s as it fades (a sigh). */
+export function sigh(s: Sung, now: number): void {
+  const t = Math.max(now, 0);
+  for (const o of s.oscs) {
+    const f0 = o.frequency.value;
+    o.frequency.cancelScheduledValues(t);
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.749, t + 0.6);
+  }
+  const p = s.g.gain;
+  p.cancelScheduledValues(t);
+  p.setValueAtTime(p.value, t);
+  p.setTargetAtTime(0, t + 0.12, 0.22);
+}
+
+/** A choir note leaving quietly (its ghost fell out of range or wiped out). */
+export function fadeSung(s: Sung, now: number): void {
+  const p = s.g.gain;
+  p.cancelScheduledValues(now);
+  p.setValueAtTime(p.value, now);
+  p.setTargetAtTime(0, now, 0.3);
+}
+
 export function pad(v: Voice, t: number, freqs: readonly number[], dur: number, amp: number, cutoff: number, attack: number, detune: number, wobble: number, dest: AudioNode = v.out): number {
   const g = v.gain(0, dest);
   const end = swell(g.gain, t, amp, attack, Math.max(0, dur - attack), 0.45);
