@@ -611,6 +611,10 @@ export class GhostVisuals {
   private friendTag: Tag | null = null;
   private bestTxt = '';
   private friendTxt = '';
+  /** The side of the course each line tag stands on (-1 or 1): away from the rider, chosen while the
+   *  tag is hidden and kept while it shows (the rider rides the middle, where a centred tag hid). */
+  private bestSide = 1;
+  private friendSide = -1;
 
   /** This frame's named moments and feel: the start-line call pings its ghost's ring, a stamp quiets
    *  the rival's tag, and a ghost's trick near you swaps its name for the trick. Never keeps the list. */
@@ -1078,7 +1082,7 @@ export class GhostVisuals {
         this.project(it.markTag, tmpP, camera, w, h, MARK_RANGE);
       }
     }
-    this.lineTags(camera, w, h);
+    this.lineTags(camera, w, h, player);
     this.dimOverlaps(dt, riderDepth);
     if (this.wisp) {
       const g = this.wisp.geometry;
@@ -1096,9 +1100,10 @@ export class GhostVisuals {
   }
 
   /** The tags over the best and friend bands on the snow: 'Your best · 1,240 m' in gold-white and
-   *  'Mila · 2,340 m' in mint, standing over the course's middle at the band. Your best's tag goes
+   *  'Mila · 2,340 m' in mint, standing at the band on the side of the course away from the rider
+   *  (centred, it sat behind the rider and hid). Your best's tag goes
    *  once its ghost has crashed there (its lantern marker says it from then on). */
-  private lineTags(camera: PerspectiveCamera, w: number, h: number): void {
+  private lineTags(camera: PerspectiveCamera, w: number, h: number, player: Vector3): void {
     const f = this.feel;
     const on = this.labels && !this.reel;
     const best = on ? f.bestLine : null;
@@ -1111,7 +1116,8 @@ export class GhostVisuals {
         t.el.textContent = txt;
         t.w = 0;
       }
-      this.projectLine(t, best.z, camera, w, h);
+      if (t.a === 0) this.bestSide = this.awaySide(best.z, player);
+      this.projectLine(t, best.z, this.bestSide, camera, w, h);
     }
     const friend = on ? f.friendLine : null;
     if (this.friendTag) this.friendTag.ok = false;
@@ -1123,7 +1129,8 @@ export class GhostVisuals {
         t.el.textContent = txt;
         t.w = 0;
       }
-      this.projectLine(t, friend.z, camera, w, h);
+      if (t.a === 0) this.friendSide = this.awaySide(friend.z, player);
+      this.projectLine(t, friend.z, this.friendSide, camera, w, h);
     }
   }
 
@@ -1137,9 +1144,17 @@ export class GhostVisuals {
     return newTag(l, 2);
   }
 
-  private projectLine(t: Tag, z: number, camera: PerspectiveCamera, w: number, h: number): void {
+  /** The side of the course at a band away from the rider (player is three.js: sim z is -z). */
+  private awaySide(z: number, player: Vector3): number {
     const c = this.course;
-    const x = c.centerX(z);
+    const pz = Math.min(-player.z, z);
+    return player.x > c.centerX(pz) ? -1 : 1;
+  }
+
+  /** A line tag over the band at sim z, standing on one side of the course, halfway to its edge. */
+  private projectLine(t: Tag, z: number, side: number, camera: PerspectiveCamera, w: number, h: number): void {
+    const c = this.course;
+    const x = c.centerX(z) + side * c.halfWidth(z) * 0.45;
     tmpP.set(x, c.ground(x, z) + 1.7, -z);
     this.project(t, tmpP, camera, w, h, LINE_RANGE);
   }

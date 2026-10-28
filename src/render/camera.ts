@@ -91,8 +91,13 @@ const RELEASE_KICK = [0, 0.3, 0.5, 0.75];
 const ORBIT_R = 7.5;
 const ORBIT_UP = 3.2;
 const ORBIT_SPIN = 0.55;
-/** The fastest the crash orbit swings round to the pack's side (radians per second of scaled time). */
-const ORBIT_SWING = 2.4;
+/** The crash orbit's swing round to the pack's side: its ease rate (per second), its top speed
+ *  (radians per second of scaled time) and the time it takes to wind up from the held lens. Quick
+ *  enough to arrive in the third of a second between the hold and the results, so the pack crosses
+ *  the frame from where it rides. */
+const ORBIT_EASE = 5;
+const ORBIT_SWING = 3.6;
+const ORBIT_WIND = 0.15;
 
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
@@ -163,6 +168,8 @@ export class ChaseCamera {
   private orbitFrom: number | null = null;
   /** The crash orbit has taken over from the held lens (its angle seeded from where the lens was). */
   private orbitSeeded = false;
+  /** Scaled seconds since the orbit took over from the hold (the swing winds up over ORBIT_WIND). */
+  private orbitT = 0;
   private orbitR = ORBIT_R;
   private orbitUp = ORBIT_UP;
   /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
@@ -649,14 +656,17 @@ export class ChaseCamera {
 
     // Roll: a drift leans the horizon into it, with its slip; otherwise the carve leans it with the
     // steer, more with speed; never past ROLL_MAX either way. The hero shot is level (a roll held
-    // over from the last carve tilted the wreck's horizon), and reduced motion never rolls.
+    // over from the last carve tilted the wreck's horizon), and so is the crash orbit, which eases
+    // level from the roll the crash hold kept (the hand-off to the hero shot never tilts). Reduced
+    // motion never rolls.
     let rollT = 0;
-    if (this.mode !== 'hero' && !reduced) {
+    if (this.mode === 'chase' && !reduced) {
       if (t.drifting) rollT = -(t.driftDir ?? 0) * (0.035 + 0.035 * Math.min(1, Math.abs(t.slip ?? 0) / 0.7));
       else rollT = -t.steer * 0.05 * (0.4 + speedK);
       rollT = MathUtils.clamp(rollT, -ROLL_MAX, ROLL_MAX);
     }
-    this.roll = reduced ? 0 : this.roll + (rollT - this.roll) * (1 - Math.exp(-dt * 4));
+    if (reduced) this.roll = 0;
+    else if (!held) this.roll += (rollT - this.roll) * (1 - Math.exp(-dt * 4));
     this.rollOut = reduced ? 0 : MathUtils.clamp(this.roll + this.jr, -ROLL_MAX, ROLL_MAX);
 
     // The shake runs on its own clock: real time scaled by the hit-stop (Feel.shakeScale), so a
@@ -733,7 +743,10 @@ export class ChaseCamera {
       this.orbitR = MathUtils.clamp(Math.hypot(dx, dz), 2, 12);
       this.orbitUp = MathUtils.clamp(this.pos.y - t.pos.y, 0.8, 6);
       this.orbitSpin = ORBIT_SPIN;
+      this.orbitT = 0;
     }
+    this.orbitT += dt;
+    const wind = Math.min(1, this.orbitT / ORBIT_WIND);
     const from = this.feel.reduced ? null : this.orbitFrom;
     if (from !== null) {
       // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward +x).
@@ -745,11 +758,11 @@ export class ChaseCamera {
         this.orbitFrom = null;
         this.orbitSpin = ORBIT_SPIN * 0.3 * (this.orbitSpin < 0 ? -1 : 1);
       } else {
-        const step = MathUtils.clamp(gap * (1 - Math.exp(-dt * 3)), -dt * ORBIT_SWING, dt * ORBIT_SWING);
-        this.orbitAngle += step;
+        const step = MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING);
+        this.orbitAngle += step * wind;
         this.orbitSpin = gap < 0 ? -1 : 1;
       }
-    } else this.orbitAngle += dt * this.orbitSpin;
+    } else this.orbitAngle += dt * this.orbitSpin * wind;
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += (ORBIT_R - this.orbitR) * k;
     this.orbitUp += (ORBIT_UP - this.orbitUp) * k;
