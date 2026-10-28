@@ -442,9 +442,10 @@ async (page) => {
           };
           // Drafting first: by the plain phase the run has settled near cruise speed, so the bed
           // itself no longer grows under the measurement.
+          // (The run's own slipstream is overridden too: a pilot drafting a pack ghost would mute it.)
           await run('drafting', { drafting: true });
-          await run('plain', {});
-          await run('danger', { danger: 0.6 });
+          await run('plain', { drafting: false });
+          await run('danger', { danger: 0.6, drafting: false });
           window.__inject = null;
         });
         const s = await collect();
