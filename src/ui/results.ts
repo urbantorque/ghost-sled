@@ -3,7 +3,7 @@ import type { InputMode } from '../game/input';
 import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { fmt, kindCls, metres, ordinal, seconds } from './fmt';
+import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
 import { missionList } from './title';
@@ -268,7 +268,11 @@ export class Results {
     // A big combo the crash took is named right on that line: it is what the run lost.
     const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with ', h('span', 'gs-num', fmt(m.lostCombo!)), ' on the line') : null;
     const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
-    const sub = h('div', 'gs-res-sub', cause, raceNote(m), raceLine(m), giftsRow(m));
+    // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
+    // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
+    const line = raceLine(m);
+    const note = raceNote(m);
+    const sub = h('div', 'gs-res-sub', cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
     // wide screens and straight under it on phones, so it is never below the fold. With none, the
     // same slot holds the next unlock to ride for, with how close it is.
@@ -346,11 +350,12 @@ export class Results {
       { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
       this.inputMode !== 'touch' ? kbd('Space') : null,
     );
-    // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone.
+    // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
+    // word stacks over the name (meta.css), so the name keeps the button's width to itself.
     if (rematch) {
       const who = h('span', 'gs-again-who', label.slice('Rematch '.length));
       who.setAttribute('translate', 'no');
-      again.querySelector('.gs-btn-label')?.replaceChildren('Rematch ', who);
+      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
     }
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
@@ -364,7 +369,7 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}`, head, run, race, mis, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
@@ -641,10 +646,18 @@ function raceLine(m: ResultsModel): HTMLElement | null {
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');
   const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
-  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', l.text));
+  // "85 m" never breaks between the number and its unit.
+  const text = l.text.replace(/(\d) m\b/g, `$1${NBSP}m`);
+  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
   // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
   if (l.tone !== 'event') p.setAttribute('translate', 'no');
   return p;
+}
+
+/** The race line names the same margin as the place note (its first figure, "85 m"). */
+function sameMargin(line: HTMLElement, note: HTMLElement): boolean {
+  const fig = note.querySelector('.gs-num')?.textContent;
+  return !!fig && (line.textContent ?? '').includes(fig);
 }
 
 /**
