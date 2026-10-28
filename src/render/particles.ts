@@ -925,8 +925,9 @@ export class Particles {
     const tz = out.x;
     for (let i = 0; i < n; i++) {
       const r = i % 10;
-      // Six in ten are grains, three soft clumps and one a faint veil.
-      const kind = r < 6 ? KIND_GRAIN : r < 9 ? puffKind() : KIND_MIST;
+      // Six in ten are grains, three soft clumps and one a faint veil, interleaved so even a small burst
+      // (a near miss on Low, or the share brushed past the rider) carries a clump that reads.
+      const kind = r % 3 === 1 ? puffKind() : r === 9 ? KIND_MIST : KIND_GRAIN;
       const along = (Math.random() - 0.5) * 1.6;
       const o = Math.random() * 0.5;
       const push = 0.8 + Math.random() * 1.6;
