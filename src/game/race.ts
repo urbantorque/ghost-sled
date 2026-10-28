@@ -134,8 +134,9 @@ export class DuelTracker {
     return this.amt;
   }
 
-  /** Advance by whole sim ticks with each ghost's signed gap. */
-  step(dTicks: number, tick: number, gaps: ReadonlyArray<{ id: number; gap: number; live: boolean }>): DuelEvent[] {
+  /** Advance by whole sim ticks with each ghost's signed gap. canOpen false holds a new duel back for
+   *  now (closeness still accrues; an open duel runs on as usual). */
+  step(dTicks: number, tick: number, gaps: ReadonlyArray<{ id: number; gap: number; live: boolean }>, canOpen = true): DuelEvent[] {
     const out: DuelEvent[] = [];
     const d = Math.max(0, Math.floor(dTicks));
     if (this.openId !== null) {
@@ -180,7 +181,7 @@ export class DuelTracker {
       if (this.paid.has(g.id) || (this.lost.get(g.id) ?? 0) >= 2 || tick < (this.coolUntil.get(g.id) ?? -1)) continue;
       if ((this.acc.get(g.id) ?? 0) >= DUEL_OPEN_TICKS && a < DUEL_NEAR && (!pick || a < Math.abs(pick.gap))) pick = g;
     }
-    if (pick) {
+    if (pick && canOpen) {
       this.openId = pick.id;
       this.openTicks = 0;
       this.behindTicks = 0;

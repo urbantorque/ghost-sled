@@ -670,6 +670,43 @@ describe('mission and unlock pops', () => {
     expect(pops[0]).toMatchObject({ name: 'Frostfang Glacier' });
   });
 
+  it('back-to-back duels leave a waiting unlock its moment between them', () => {
+    const r = new Rig({ lifetimePassed: 3, unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }] });
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    r.poses.set(1002, pose(r.sim.s.z + 1.0));
+    expect(of(r.idle(1.5), 'duel').map((d) => [d.phase, d.ghost.id])).toEqual([['open', 1001]]);
+    r.passed = 1;
+    expect(of(r.idle(3), 'unlockPop')).toHaveLength(0);
+    // The first duel is won; the second ghost was right there all along.
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    const after = r.idle(4);
+    const order = after.filter((x) => x.type === 'unlockPop' || x.type === 'duel').map((x) => (x.type === 'duel' ? `${x.phase}:${x.ghost.id}` : x.type));
+    expect(order).toEqual(['won:1001', 'unlockPop', 'open:1002']);
+    const won = after.find((x) => x.type === 'duel')!;
+    const pop = after.find((x) => x.type === 'unlockPop')!;
+    const open = after.filter((x) => x.type === 'duel')[1];
+    expect((pop.tick - won.tick) / 60).toBeGreaterThanOrEqual(1.35);
+    expect((open.tick - won.tick) / 60).toBeLessThanOrEqual(2.4);
+  });
+
+  it('with nothing waiting, the next duel opens at once', () => {
+    const r = new Rig();
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    r.poses.set(1002, pose(r.sim.s.z + 1.0));
+    r.idle(1.5);
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    const after = r.idle(0.2);
+    expect(of(after, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['won:1001', 'open:1002']);
+  });
+
   it('the pass that leaves one to go teases the unlock once', () => {
     const r = new Rig({ lifetimePassed: 2, unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }] });
     const g = track(1001);

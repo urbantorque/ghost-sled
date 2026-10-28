@@ -111,6 +111,10 @@ const UNLOCK_GIVE_UP_S = 12;
  *  real runs: a fresh save meets 'Pass a ghost' as the unlock pops, and the 6 s spacing after it
  *  outlasted 3 s every time. 8 s lets it follow (orchestrator: at most 8 s, never ~10 s late). */
 const MISSION_GIVE_UP_S = 8;
+/** While a pop waits, a new duel opens no sooner than this (s) after the last one resolved: in a
+ *  bunched pack one duel opened 0.02 s after another for 22 s straight, and the run's unlock (and a
+ *  mission) never found the 1.4 s of quiet they wait for. */
+const DUEL_POP_GAP_S = 2.2;
 /** New best crossed by a bank waits for the bank's fly-in (s). */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
@@ -236,6 +240,7 @@ export class Director {
   private lastPassAt = -1e9;
   private lastNewsAt = -1e9;
   private lastFinaleAt = -1e9;
+  private lastDuelEndAt = -1e9;
 
   // Ghost tricks and the stomp metronome.
   private readonly cursors = new Map<number, number>();
@@ -327,7 +332,7 @@ export class Director {
     this.unlockDone.clear();
     this.teased = false;
     this.pollAt = 0;
-    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = -1e9;
+    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = -1e9;
     this.cursors.clear();
     this.lastWhisperAt = -1e9;
     this.ticked.fill(false);
@@ -419,10 +424,12 @@ export class Director {
         if (!p) continue;
         gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
       }
-      for (const d of this.duels.step(dTicks, sim.tick, gaps)) {
+      const canOpen = this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S;
+      for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;
         const ghost = this.ref(t, f, sim);
+        if (d.phase !== 'open') this.lastDuelEndAt = now;
         if (d.phase === 'won' || d.phase === 'heldOff') {
           resolved.set(d.id, d.phase);
           this.duelEnd.set(d.id, sim.tick);
