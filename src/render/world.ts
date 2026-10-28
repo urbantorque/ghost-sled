@@ -476,7 +476,9 @@ export class World {
     this.flowPulseT += dt;
     const pt = this.flowPulseT;
     const pulse = pt >= FLOW_PULSE_S ? 0 : feel.reduced ? 0.6 * Math.sin((Math.PI * pt) / FLOW_PULSE_S) : pt < 0.05 ? pt / 0.05 : 1 - smooth01((pt - 0.05) / (FLOW_PULSE_S - 0.05));
-    this.rider.setFlow(v.mode === 'title' ? 0 : feel.flow, v.mode === 'title' ? 0 : Math.max(feel.flowPulse, pulse));
+    // (Only while riding: the crash owns its own beat, and the title reel's hero has earned nothing.)
+    const riding = v.mode === 'run' && !this.rider.crashing;
+    this.rider.setFlow(riding ? feel.flow : 0, riding ? Math.max(feel.flowPulse, pulse) : 0);
     const showRider = v.playerVisible;
     this.rider.setVisible(showRider);
     if (showRider && !this.rider.crashing) {
@@ -788,25 +790,54 @@ export class World {
    *  side facing you), anything else kicks grit off its foot toward your line. A whisker throws the
    *  full amount, an ordinary near miss about two thirds. */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
-    // Level direction from the hazard (its point nearest the sled) toward the sled, three.js space.
+    // The beat lands as the sled clears the hazard (it is already a metre or two past it): the level
+    // direction from the hazard's point toward the sled now, mostly across the slope, is the side you
+    // shaved. Three.js space (z flipped).
     let ox = s.x - b.x;
-    let oz = b.z - s.z;
+    let oz = (b.z - s.z) * 0.5;
     let d = Math.hypot(ox, oz);
     if (d < 0.05) {
-      ox = -b.side;
+      ox = 1;
       oz = 0;
       d = 1;
     }
     const out = this.fxO.set(ox / d, 0, oz / d);
-    // Its near edge: the edge gap plus the sled's own radius short of the sled.
-    const reach = Math.max(0, d - b.gap - 0.45);
+    // Its near edge: the hazard's own radius out from its point (a tree's canopy, a rock's flank).
+    const r = this.hazardRadius(b);
+    const bough = BOUGHS.has(b.obs);
+    const reach = bough ? r * 0.85 : r;
     const ex = b.x + out.x * reach;
     const ez = b.z - out.z * reach;
     const at = this.fxA.set(ex, this.course.ground(ex, ez), -ez);
     const vel = this.carrier(s);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    if (BOUGHS.has(b.obs)) this.particles.boughs(at, out, vel, 16 * k);
+    if (bough) this.particles.boughs(at, out, vel, 16 * k);
     else this.particles.grit(at, out, vel, ICY.has(b.obs), 8 * k);
+  }
+
+  /** The collider radius of the hazard a near-miss beat names: the obstacle of that kind whose point
+   *  lies nearest the beat's (it is on that obstacle's centre line), or a typical radius. */
+  private hazardRadius(b: BeatOf<'nearMiss'>): number {
+    let best = 0.7;
+    let bd = 4;
+    const ci = Math.floor(b.z / CHUNK_LEN);
+    for (let i = ci - 1; i <= ci + 1; i++) {
+      if (i < 0) continue;
+      for (const o of this.course.chunk(i).obstacles) {
+        if (o.kind !== b.obs) continue;
+        // Distance from the beat's point to the obstacle's segment (a circle's is its centre).
+        const sx = o.x2 - o.x;
+        const sz = o.z2 - o.z;
+        const l2 = sx * sx + sz * sz;
+        const t = l2 > 1e-6 ? Math.max(0, Math.min(1, ((b.x - o.x) * sx + (b.z - o.z) * sz) / l2)) : 0;
+        const dd = Math.hypot(b.x - (o.x + sx * t), b.z - (o.z + sz * t));
+        if (dd < bd) {
+          bd = dd;
+          best = o.r;
+        }
+      }
+    }
+    return best;
   }
 
   /** A drift released: the post punch by tier (0.6, 0.8, 1; none under reduced motion), and at the
