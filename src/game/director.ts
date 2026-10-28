@@ -270,6 +270,14 @@ export class Director {
     return this.streak.best;
   }
 
+  /** The grudge was settled this run (its grudgeSettled beat fired): a shown pass of it, a duel with
+   *  it won or held off, or riding past where its whole run ended. The save's settlement reads this
+   *  as 'passed', so the results never settle a grudge the run did not show settled (a start-line
+   *  jostle past it is no overtake). */
+  get grudgeSettled(): boolean {
+    return this.grudgeDone;
+  }
+
   /** A results line for an event the run never reached ('The yeti was 220 m away.'), else null. */
   eventNote(sim: Sim): string | null {
     return this.finales.eventNote(sim);
@@ -419,6 +427,8 @@ export class Director {
           resolved.set(d.id, d.phase);
           this.duelEnd.set(d.id, sim.tick);
           this.choirIds.add(d.id);
+          // Beating the grudge in a duel settles it (its passes were muted while the duel ran).
+          if (t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted);
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
@@ -480,13 +490,8 @@ export class Director {
         // The nemesis pays double the grudge's pass.
         const nemesisBonus = ev.first && t.entry.kind === 'grudge' && t.entry.nemesis ? (haunted ? 20 : 10) : 0;
         const gifts = c.gifts + nemesisBonus + this.extras.take(c.extra);
-        if (!muted && t.entry.kind === 'grudge' && !this.grudgeDone) {
-          // Settled before its pass flash: the banner the pass then names.
-          this.grudgeDone = true;
-          const g = run?.grudgeAtStart;
-          const nemesis = !!t.entry.nemesis;
-          this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid: (nemesis ? 20 : 10) * (haunted ? 2 : 1) }, sim);
-        }
+        // Settled before its pass flash: the banner the pass then names.
+        if (!muted && t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted);
         let ladder = this.ladderN;
         if (!muted && !wreck) ladder = ++this.ladderN;
         const li = ladderIndex(Math.max(1, ladder));
@@ -505,6 +510,14 @@ export class Director {
         this.passedYou.add(id);
         const muted = this.duels.open === id || (sim.tick < START_TICKS && !this.ledBy2m.has(id));
         this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(t, f, sim), muted }, sim);
+      }
+    }
+
+    // A grudge you only edged past (a muted jostle, a pass inside its duel) is settled for sure once
+    // you ride past where its whole run ended: it can never come back.
+    if (live && !this.grudgeDone) {
+      for (const t of f.tracks) {
+        if (t.entry.kind === 'grudge' && t.ready && t.distance > 0 && sim.distance > t.distance) this.settle(t, this.ref(t, f, sim), sim, haunted);
       }
     }
 
@@ -813,6 +826,16 @@ export class Director {
     this.kinds.add(kind);
     if (kind === 'perfect') this.perfects++;
     this.earnCap = this.skillChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** The grudge settled, once per run: the banner ('Grudge settled' or 'Nemesis down'). paid is the
+   *  display of what its first pass already credited (10, or 20 for a nemesis; x2 in Haunted). */
+  private settle(t: GhostTrack, ghost: GhostRef, sim: Sim, haunted: boolean): void {
+    if (this.grudgeDone) return;
+    this.grudgeDone = true;
+    const g = this.run?.grudgeAtStart;
+    const nemesis = !!t.entry.nemesis;
+    this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid: (nemesis ? 20 : 10) * (haunted ? 2 : 1) }, sim);
   }
 
   /** A perfect landing's stamp: its streak, title and lead parts, and the hit-stop that grows. */

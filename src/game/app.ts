@@ -918,14 +918,17 @@ export class App {
   }
 
   /** How the run ended against its grudge: did the grudge ride, was it passed, and the results'
-   *  Next row (the nearest ghost whose whole run went further than yours; never 'you' or a friend). */
+   *  Next row (the nearest ghost whose whole run went further than yours; never 'you' or a friend).
+   *  'Passed' is the director's verdict (its grudgeSettled beat fired: a shown pass, a duel beaten, or
+   *  riding past where it ended), so the results settle exactly what the run showed settled: a
+   *  start-line jostle past it is no overtake. */
   private grudgeOutcome(sim: Sim): Parameters<typeof settleGrudge>[1] {
     const g = this.grudgeAtStart;
     let rode: { distance: number; passed: boolean } | null = null;
     let next: { name: string; score: number; record: string; distance: number; kind: GhostKind } | null = null;
     for (const t of this.ghosts.tracks) {
       if (!t.ready) continue;
-      if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, passed: this.passedThisRun.has(t.entry.id) };
+      if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, passed: this.director.grudgeSettled };
       if (t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
       const ahead = t.distance - sim.distance;
       if (ahead > 0 && (!next || ahead < next.distance - sim.distance)) next = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
@@ -1596,12 +1599,11 @@ export class App {
     }
   }
 
-  /** Race bookkeeping only: what the director names, sounds and pays travels in its beats. */
+  /** Race bookkeeping only: what the director names, sounds and pays travels in its beats. (The
+   *  'Beat your grudge ghost' mission counts the grudgeSettled beat, as the settlement does.) */
   private onRace(ev: RaceEvent): void {
     if (ev.type !== 'pass' || !ev.first) return;
     this.passedThisRun.add(ev.track.entry.id);
-    // (The 'Beat your grudge ghost' mission counts any pass of it, as its settlement does.)
-    if (ev.track.entry.kind === 'grudge') this.grudgeBeaten = true;
   }
 
   /** A sim event's game logic: the crash, onboarding, the event telegraph and the revive cut. */

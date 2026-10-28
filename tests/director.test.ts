@@ -681,6 +681,63 @@ describe('mission and unlock pops', () => {
   });
 });
 
+describe('the grudge settled', () => {
+  const grudgeAtStart = { name: 'Mila', record: 'r', them: 3, streak: 3 };
+  function nemesisRig(): { r: Rig; g: GhostTrack } {
+    const r = new Rig({ grudgeAtStart });
+    const g = track(1001, 'grudge', 'Mila');
+    g.entry.nemesis = true;
+    g.distance = 365;
+    r.tracks = [g];
+    return { r, g };
+  }
+
+  it('a start-line jostle past it settles nothing; riding past where its run ended does, once', () => {
+    const { r, g } = nemesisRig();
+    r.sim.tick = 100;
+    r.poses.set(1001, pose(100.5));
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(a, 'pass')[0]).toMatchObject({ word: 'jostle', muted: true });
+    expect(of(a, 'grudgeSettled')).toHaveLength(0);
+    expect(r.d.grudgeSettled).toBe(false);
+    r.sim.distance = 360;
+    expect(of(r.idle(1), 'grudgeSettled')).toHaveLength(0);
+    r.sim.distance = 366;
+    const b = of(r.frame(), 'grudgeSettled');
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ nemesis: true, after: 3, paid: 20, ghost: { name: 'Mila' } });
+    expect(r.d.grudgeSettled).toBe(true);
+    r.sim.distance = 400;
+    expect(of(r.idle(1), 'grudgeSettled')).toHaveLength(0);
+  });
+
+  it('a shown pass settles it before its flash; a duel beaten settles it before its result', () => {
+    const { r, g } = nemesisRig();
+    r.poses.set(1001, pose(110));
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(a.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'pass')).toEqual(['grudgeSettled', 'pass']);
+
+    const q = nemesisRig();
+    q.r.sim.tick = 2000;
+    q.r.poses.set(1001, pose(q.r.sim.s.z + 0.8));
+    for (let i = 0; i < 61; i++) q.r.frame();
+    q.r.poses.set(1001, pose(q.r.sim.s.z - 1));
+    const p = q.r.frame([], { race: [{ type: 'pass', track: q.g, first: true }] });
+    expect(of(p, 'grudgeSettled')).toHaveLength(0);
+    q.r.poses.set(1001, pose(q.r.sim.s.z - 4.5));
+    const w = q.r.frame();
+    expect(w.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'duel')).toEqual(['grudgeSettled', 'duel']);
+    expect(q.r.d.grudgeSettled).toBe(true);
+  });
+
+  it('crashed past it settles nothing (the crash owns the moment)', () => {
+    const { r } = nemesisRig();
+    r.sim.s.crashed = true;
+    r.sim.distance = 400;
+    expect(of(r.frame([], { phase: 'crashed' }), 'grudgeSettled')).toHaveLength(0);
+  });
+});
+
 describe('graveyards', () => {
   it('riding 20 m past one alive is its beat, once, with 3 gifts inside the extras cap', () => {
     const r = new Rig({ graveyards: [{ z: 395, name: "Widow's Bend", fell: 4 }, { z: 600, name: 'Grim Gully', fell: 3 }] });
