@@ -4,6 +4,7 @@ import type { SimEvent } from '../sim/sim';
 import type { Beat } from '../game/beats';
 import { Core } from './core';
 import type { Scene } from './music';
+import { bankLandDelay } from './sfx';
 
 /*
  * Ghost Sled audio: fully procedural WebAudio. No files, no fetches; every sound is synthesized.
@@ -23,7 +24,7 @@ import type { Scene } from './music';
  *                                                                   v      v      v
  *                                          master gain (volume) <-----------------+
  *                                               -> mute gain (stackable reasons, 12 ms ramp)
- *                                               -> DynamicsCompressor (gentle limiter)
+ *                                               -> DynamicsCompressor (fast limiter for stacked peaks)
  *                                               -> ceiling trim (absorbs the compressor's makeup gain)
  *                                               -> destination
  *
@@ -41,17 +42,33 @@ import type { Scene } from './music';
  *   their node creation over several frames.
  * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
- *   deck and crossfades over 1.5 s. Intensity fades layers in: 0 pad, 0.4 bass + hats, 0.7 arp +
- *   kick, 0.9 everything + lead. Danger adds a pulsing low root. The music pool (32) steals the
- *   oldest non-pad voice, so the pad bed is never cut mid-chord; skipped steps (a stalled timer,
- *   music volume at zero) rebuild the missing pad.
+ *   deck and crossfades over 1.5 s. Intensity (src/game/intensity.ts) fades layers in: the pad
+ *   always, the bass from 0.26 (the run floor of 0.30 holds it from 2.5 s), hats from 0.30
+ *   (cruising sits at 0.36), the arp from 0.58 and the kick from 0.60, clap and sparkle from 0.80,
+ *   the lead from 0.85. Danger adds a pulsing low root. The music pool (32) steals the oldest
+ *   non-pad voice, so the pad bed is never cut mid-chord; skipped steps (a stalled timer, music
+ *   volume at zero) rebuild the missing pad.
+ * - The drive: the engine smooths the game's intensity (rise 0.7 s, fall 2.2 s), holds it at 0.25
+ *   under a chaos reveal and snaps the band in as the card collapses, and adds short accents on
+ *   top (a big callout, a stomp that grows with the streak, a tier-3 drift crack, a big bank, a
+ *   kilometre) that fade within 1.5 s.
+ * - Beats (src/game/beats.ts) arrive before the frame's raw sim events: sfx.ts voices every named
+ *   moment (pass words, chimes, stings, the bank roll and drop) and keeps the context the raw
+ *   sounds read (the stomp streak, a near miss's side and grade). Grid pulses (the fuse on a big
+ *   draining stake, the duel heartbeat, the km bell) are quantised to the playing deck's 16ths.
  * - Harmony (theory.ts): every reward note comes from the playing deck's pentatonic ladder, and the
  *   reward chord is a major add9 made of those same tones, so rewards never clash with the music.
+ *   On Clear Skies each mountain has its own song, A A B B in one 16-bar deck loop (no crossfade).
+ * - The ghost choir (music.ts): each ghost you pass joins the band as a sung voice on the chord
+ *   (up to three, in the music pool, kept like the pad) while it stays behind you (30 s stands in
+ *   for 150 m); a retake sighs the top voice down a fourth, a wipeout or the crash ends it. The
+ *   stress mix sings all three: the music pool peaks at 29 of 32 with no steals.
  * - Filters automate at k-rate (once per 128 samples); a-rate biquad automation recomputes
  *   coefficients per sample and costs several times more.
- * - Levels (offline renders, sliders at 1): pad alone about -27 dBFS RMS, full arrangement about
- *   -21, cruising ambience -33, full speed -25, style notes peak near -22, the busiest stress mix
- *   peaks at -3 dBFS after the limiter.
+ * - Levels (offline renders, sliders at 1; scripts/playtest/levels.js): a novice cruise about -25
+ *   dBFS RMS (peaks near -12), its ambience alone -33, full arrangement about -21, style notes
+ *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
+ *   -5 dBFS after the limiter.
  * - Muting: any reason muted silences output; after 1 s fully muted the context is suspended to
  *   save CPU and resumed on unmute. All calls are no-ops before unlock() or without WebAudio.
  */
@@ -107,6 +124,59 @@ const LOOKAHEAD = 0.12;
 const SUSPEND_AFTER_MS = 1000;
 /** A tiny lead so attacks are never scheduled in the past. */
 const START_LEAD = 0.006;
+/** The count-in: the drive is held to this while a chaos reveal is up (matches intensity.ts). */
+const COUNT_IN_MAX = 0.25;
+/** As the reveal card collapses the band snaps in at cruise level (bass and hats) and holds there
+ *  for a few seconds while the run picks up speed. */
+const COUNT_IN_RELEASE = 0.36;
+const COUNT_IN_HOLD_S = 3;
+/** Accents: added on top of the smoothed drive and fading with this time constant (gone in 1.5 s). */
+const ACCENT_TAU = 0.5;
+const ACCENT_MAX = 0.2;
+/** The ghost choir: a ghost you passed sings for this long, standing in for 'still live within
+ *  150 m behind' (the beats carry no gap; a retake or a wipeout ends it sooner). */
+const CHOIR_TTL_S = 30;
+
+/** Reveal timeline (ms from the card's start); reveal.ts exports it as REVEAL_TIMING. */
+export interface RevealCue {
+  T_REEL: number;
+  REEL_MS: number;
+  T_STAMP: number;
+}
+/** Results timeline (ms after the card opens); results.ts exports it as RESULTS_TIMING. */
+export interface ResultsCue {
+  COUNT_MS: number;
+  PLACE_MS: number;
+  NEW_BEST_MS: number;
+  BEAT_MS: number;
+  BEAT_STEP: number;
+  DONE_MS: number;
+  DONE_STEP: number;
+  FLY_MS: number;
+  FLY_STEP: number;
+  FLY_DUR: number;
+}
+/** The reel's easing in reveal.ts (cubic-bezier(0.18, 0.62, 0.22, 1)). */
+const REEL_EASE = [0.18, 0.62, 0.22, 1] as const;
+/** The new-best arpeggio's chord lands this long after it starts (6 notes, 70 ms apart). */
+const NEW_BEST_LEAD_MS = 420;
+
+function bezier(p1: number, p2: number, s: number): number {
+  const u = 1 - s;
+  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
+}
+
+/** Time fraction (0..1) at which a CSS cubic-bezier easing reaches progress y. */
+function easeTimeAt(e: readonly [number, number, number, number], y: number): number {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 40; i++) {
+    const m = (lo + hi) / 2;
+    if (bezier(e[1], e[3], m) < y) lo = m;
+    else hi = m;
+  }
+  return bezier(e[0], e[2], (lo + hi) / 2);
+}
 
 const clamp01 = (v: number): number => (v > 0 ? (v < 1 ? v : 1) : 0);
 /** Old webkit contexts return undefined from resume/suspend/close; newer ones may reject. */
@@ -135,8 +205,17 @@ export class AudioEngine {
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   /** Until this clock time a just-requested resume still accepts sounds (they play on resume). */
   private resumeUntil = 0;
+  /** The smoothed drive, the frame's target, and the accent on top (probes read all three). */
   private intensity = 0;
+  private target = 0;
+  private accent = 0;
+  private readonly accents: Array<{ at: number; amt: number }> = [];
+  /** The count-in seen last frame, and until when its release holds the band in. */
+  private countIn = false;
+  private releaseUntil = 0;
   private avalanche = false;
+  /** The ghost choir: ghosts you passed that are still behind you (id to the time of the pass). */
+  private readonly passed = new Map<number, number>();
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -186,13 +265,22 @@ export class AudioEngine {
     this.scene = scene;
     if (scene === 'run') {
       this.intensity = 0;
+      this.target = 0;
+      this.accent = 0;
+      this.accents.length = 0;
+      this.countIn = false;
+      this.releaseUntil = 0;
       this.avalanche = false;
     }
+    this.passed.clear();
     const c = this.core;
     const ctx = this.ctx;
     if (!c || !ctx) return;
     try {
       if (scene === 'run') c.sfx.reset();
+      c.music.setChoir(0, ctx.currentTime);
+      c.pulse.fuse = 0;
+      c.pulse.duel = 0;
       c.music.setTarget(this.scene, this.mood, this.biome);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
@@ -215,12 +303,40 @@ export class AudioEngine {
     try {
       const now = ctx.currentTime;
       const d = Number.isFinite(dt) ? Math.min(Math.max(dt, 0), 0.25) : 0;
+      const crashed = frame.crashed === true;
+      const countIn = frame.countIn === true && !crashed;
+      // A crash lets the band deflate to the pad; the results deck takes over soon after.
+      let target = crashed ? 0 : clamp01(frame.intensity);
+      if (countIn) target = Math.min(target, COUNT_IN_MAX);
+      let snap = false;
+      if (this.countIn && !countIn && !crashed) {
+        // The reveal card collapses: the band arrives on it, past the 0.7 s rise.
+        this.releaseUntil = now + COUNT_IN_HOLD_S;
+        this.intensity = Math.max(target, COUNT_IN_RELEASE);
+        snap = true;
+      }
+      this.countIn = countIn;
+      if (now < this.releaseUntil && !crashed) target = Math.max(target, COUNT_IN_RELEASE);
+      this.target = target;
       // Rise quickly with the action, fall back slowly so the arrangement does not flap.
-      const target = clamp01(frame.intensity);
-      const tau = target > this.intensity ? 0.7 : 2.2;
+      const tau = target > this.intensity ? 0.7 : crashed ? 1 : 2.2;
       this.intensity += (target - this.intensity) * (1 - Math.exp(-d / tau));
-      c.music.setDrive(this.intensity, clamp01(frame.danger), frame.comboMult || 1);
-      c.ambience.update(frame, now, this.avalanche, c.music.key().tonic);
+      // Accents ride on top of the smoothed drive and fade within 1.5 s.
+      this.accent *= Math.exp(-d / ACCENT_TAU);
+      for (let i = this.accents.length - 1; i >= 0; i--) {
+        const a = this.accents[i];
+        if (a.at > now) continue;
+        this.accents.splice(i, 1);
+        this.accent = Math.min(ACCENT_MAX, this.accent + a.amt);
+      }
+      if (crashed) this.accent = 0;
+      c.music.setDrive(clamp01(this.intensity + this.accent), clamp01(frame.danger), frame.comboMult || 1, snap);
+      c.ambience.update(frame, now, this.avalanche, c.music.key());
+      if (crashed && this.passed.size > 0) this.passed.clear();
+      for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
+      c.music.setChoir(this.passed.size, now);
+      c.pulse.fuse = crashed ? 0 : clamp01(frame.fuse ?? 0);
+      c.pulse.duel = crashed ? 0 : clamp01(frame.duel ?? 0);
     } catch (err) {
       this.warn(err);
     }
@@ -238,28 +354,9 @@ export class AudioEngine {
     if (!ctx || !c || !this.live(ctx)) return;
     try {
       const now = ctx.currentTime;
+      // Sounds and the music ducks under them (sfx.ts).
       c.sfx.event(e, now + START_LEAD);
-      const duck = c.graph.music;
-      switch (e.type) {
-        case 'crash':
-          duck.duck(0.3, now, 0.7, 0.9);
-          break;
-        case 'land':
-          if (e.quality === 'perfect') duck.duck(0.62, now, 0.18, 0.25);
-          break;
-        case 'chaos':
-          if (e.phase === 'warn') duck.duck(0.55, now, e.event === ChaosEvent.Avalanche ? 2.8 : 1.4, 0.6);
-          else if (e.phase === 'success') duck.duck(0.5, now, 1, 0.6);
-          break;
-        case 'comboBank':
-          if (e.points >= 2000) duck.duck(0.75, now, 0.3, 0.3);
-          break;
-        case 'revive':
-          duck.duck(0.6, now, 0.8, 0.5);
-          break;
-        default:
-          break;
-      }
+      if (e.type === 'drift' && e.phase === 'release') c.ambience.whineRelease(now);
     } catch (err) {
       this.warn(err);
     }
@@ -270,16 +367,33 @@ export class AudioEngine {
    * simEvent(e) calls so their data is known when the raw sounds play. Never keeps the list.
    */
   beats(list: readonly Beat[]): void {
-    for (const b of list) {
-      if (b.type === 'pass') {
-        if (!b.muted) this.ui('ghost-pass', b.ladder);
-      } else if (b.type === 'passedBy') {
-        if (!b.muted) this.ui('ghost-passed-you');
+    const ctx = this.ctx;
+    const c = this.core;
+    try {
+      c?.sfx.frame();
+      const now = ctx ? ctx.currentTime : 0;
+      for (const b of list) this.accentFor(b, now);
+      if (list.length > 0 && c && ctx) this.choirFor(list, now, c);
+      if (!ctx || !c || !this.live(ctx) || list.length === 0) return;
+      const t = now + START_LEAD;
+      for (const b of list) {
+        if (b.type === 'km') {
+          // The milestone bell lands on the band's next beat.
+          const g = c.music.grid();
+          const tq = g ? g.t0 + Math.ceil((t - g.t0) / (g.dur * 4)) * g.dur * 4 : t;
+          c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
+        } else c.sfx.beat(b, t);
+        if (b.type === 'unlockPop') c.graph.music.duck(0.6, now, 0.9, 0.5);
+        // A bump snuffed the flow: the singing wind bends down a fourth and opens back to noise.
+        else if (b.type === 'flow' && b.phase === 'snuff') c.ambience.snuff(now);
       }
+    } catch (err) {
+      this.warn(err);
     }
   }
 
-  /** detail: e.g. ghost-pass count this run, mission index. delay: seconds from now (sync with UI). */
+  /** detail: the ladder step for ticks, an index for stamps and chimes. delay: seconds from now
+   *  (sync with the UI); a sound scheduled ahead can still be dropped by cancelPending(). */
   ui(name: UiSound, detail?: number, delay = 0): void {
     const ctx = this.ctx;
     const c = this.core;
@@ -287,25 +401,165 @@ export class AudioEngine {
     try {
       const now = ctx.currentTime;
       const d = Number.isFinite(delay) ? Math.max(0, delay) : 0;
-      c.sfx.ui(name, detail ?? 0, now + START_LEAD + d);
-      if (name === 'new-best' || name === 'unlock') c.graph.music.duck(0.6, now + d, 0.9, 0.5);
+      const duck = name === 'new-best' || name === 'unlock' ? (t: number) => c.graph.music.duck(0.6, Math.max(t - START_LEAD, ctx.currentTime), 0.9, 0.5) : undefined;
+      c.sfx.ui(name, detail ?? 0, now + START_LEAD + d, duck);
     } catch (err) {
       this.warn(err);
     }
   }
 
-  /** Drops UI sounds scheduled ahead (results and reveal sync) that have not started building yet. */
+  /** Drops UI sounds scheduled ahead (results and reveal sync), including any already built that
+   *  have not started: Run Again or a new reveal mid-sequence leaves no strays. */
   cancelPending(): void {
     try {
-      this.core?.sfx.clearPending();
+      const c = this.core;
+      if (!c) return;
+      c.sfx.clearPending();
+      c.sfxPool.killFuture(c.ctx.currentTime);
     } catch (err) {
       this.warn(err);
     }
   }
 
-  /** Probe-only readout of the mix: the smoothed music intensity (layer levels join it later). */
+  /**
+   * The reveal's sounds on its timeline (call as the card starts; cancelPending() first): a tick on
+   * each reel name change climbing ladder steps 3 to 9, and the slam as the name lands (T_STAMP, or
+   * 200 ms under reduced motion, which skips the reel). `names` is the reel's length (12).
+   */
+  cueReveal(t: RevealCue, reduced: boolean, names = 12): void {
+    if (reduced) {
+      this.ui('reveal-land', 0, 0.2);
+      return;
+    }
+    const rows = Math.max(1, names - 1);
+    for (let k = 1; k <= rows; k++) {
+      // Name k shows once the strip has travelled past half a row toward it.
+      const at = t.T_REEL + t.REEL_MS * easeTimeAt(REEL_EASE, (k - 0.5) / rows);
+      this.ui('reveal-tick', 3 + Math.round((6 * (k - 1)) / Math.max(1, rows - 1)), at / 1000);
+    }
+    this.ui('reveal-land', 0, t.T_STAMP / 1000);
+  }
+
+  /**
+   * The results card's sounds on its timeline (call as the card opens): ten ticks up the ladder
+   * along the score's ease-out count, the stamp with your place, the new-best chord on its stamp, a
+   * soft mallet per Beat stamp, a chime per mission Done stamp and a coin as each reward lands.
+   * Reduced motion collapses it all to the opening moment with a single tick.
+   */
+  cueResults(r: { count: boolean; newBest: boolean; beats: number; missions: number; coins: number }, t: ResultsCue, reduced: boolean): void {
+    if (reduced) {
+      if (r.count) this.ui('results-tick', 9);
+      this.ui('results-stamp');
+      if (r.newBest) this.ui('new-best');
+      if (r.beats > 0) this.ui('results-mallet', 0);
+      if (r.missions > 0) this.ui('mission', 0);
+      if (r.coins > 0) this.ui('coin');
+      return;
+    }
+    if (r.count) {
+      for (let i = 0; i < 10; i++) {
+        // The count eases out (1 - (1 - x)^3): tick as it passes each tenth of the score.
+        const x = 1 - Math.cbrt(1 - (i + 1) / 10);
+        this.ui('results-tick', i, (t.COUNT_MS * x) / 1000);
+      }
+    }
+    this.ui('results-stamp', 0, t.PLACE_MS / 1000);
+    if (r.newBest) this.ui('new-best', 0, Math.max(0, t.NEW_BEST_MS - NEW_BEST_LEAD_MS) / 1000);
+    for (let i = 0; i < r.beats; i++) this.ui('results-mallet', i, (t.BEAT_MS + t.BEAT_STEP * i) / 1000);
+    for (let i = 0; i < r.missions; i++) this.ui('mission', i, (t.DONE_MS + t.DONE_STEP * i) / 1000);
+    for (let i = 0; i < r.coins; i++) this.ui('coin', i, (t.FLY_MS + t.FLY_DUR + t.FLY_STEP * i) / 1000);
+  }
+
+  /** Probe-only readout of the mix: the drive (smoothed intensity, its target and the accent), each
+   *  music layer's presence, the music duck and both voice pools. */
   debugLevels(): Record<string, number> {
-    return { intensity: this.intensity };
+    const out: Record<string, number> = { intensity: this.intensity, target: this.target, accent: this.accent, drive: clamp01(this.intensity + this.accent) };
+    const c = this.core;
+    const ctx = this.ctx;
+    out.running = ctx && ctx.state === 'running' ? 1 : 0;
+    if (!c) return out;
+    const layers = c.music.layerLevels();
+    if (layers) for (const k of Object.keys(layers)) out[k] = layers[k];
+    const pos = c.music.position();
+    if (pos) {
+      // The song form: bar of the loop (A A B B on Clear Skies, 4 bars each) and decks started.
+      out.bar = pos.bar;
+      out.cycleBars = pos.cycle;
+    }
+    out.decksStarted = c.music.decksStarted;
+    out.choir = c.music.choirVoices();
+    out.duck = c.graph.music.ducked;
+    out.sfxVoices = c.sfxPool.active;
+    out.musicVoices = c.musicPool.active;
+    out.sfxPeak = c.sfxPool.peak;
+    out.musicPeak = c.musicPool.peak;
+    out.sfxSteals = c.sfxPool.steals;
+    out.musicSteals = c.musicPool.steals;
+    out.padSteals = c.musicPool.keptSteals;
+    return out;
+  }
+
+  /** Probe-only: the context and the master's last node before the speakers, for a capture tap. */
+  debugTap(): { ctx: AudioContext; out: AudioNode } | null {
+    return this.ctx && this.core ? { ctx: this.ctx, out: this.core.graph.ceiling } : null;
+  }
+
+  /** Probe-only: an offline render of a scripted mix through the same Core (probe.ts, loaded on
+   *  demand): 'cruise', 'ambience', 'stress' or 'groove'. Levels in dBFS. */
+  async debugRender(kind: string, seconds?: number, opts?: import('./probe').RenderOpts): Promise<Record<string, number | number[]>> {
+    const m = await import('./probe');
+    return m.renderMix(kind, seconds, opts);
+  }
+
+  /**
+   * The ghost choir: each ghost you pass joins the band as a voice (up to three) while it stays
+   * behind you; one that passes you back leaves with a sigh, and a wipeout or the crash ends it.
+   */
+  private choirFor(list: readonly Beat[], now: number, c: Core): void {
+    const before = this.passed.size;
+    let retaken = false;
+    for (const b of list) {
+      if (b.type === 'pass') {
+        if (!b.muted && b.word !== 'jostle' && b.word !== 'beat') this.passed.set(b.ghost.id, now);
+      } else if (b.type === 'passedBy') {
+        if (this.passed.delete(b.ghost.id)) retaken = true;
+      } else if (b.type === 'raceNews') {
+        if (b.news === 'wipeout' || b.news === 'wipeoutBehind') this.passed.delete(b.ghost.id);
+      } else if (b.type === 'crash') this.passed.clear();
+    }
+    if (this.passed.size !== before) c.music.setChoir(this.passed.size, now, retaken);
+  }
+
+  /** Accents: internal lifts on the drive for the beats that should swell the band for a moment. */
+  private accentFor(b: Beat, now: number): void {
+    let amt = 0;
+    let at = now;
+    switch (b.type) {
+      case 'callout':
+        if (b.say.tone === 'big') amt = 0.06;
+        break;
+      case 'stomp':
+        amt = Math.min(0.12, 0.06 + 0.02 * Math.max(0, b.streak - 1));
+        break;
+      case 'driftRelease':
+        if (b.tier >= 3) amt = 0.06;
+        break;
+      case 'bank':
+        if (b.points >= 1500) {
+          amt = 0.08;
+          // On the figure's landing (the slam), not as the roll starts.
+          at = now + bankLandDelay(b.tier);
+        }
+        break;
+      case 'km':
+        amt = 0.06;
+        break;
+      default:
+        break;
+    }
+    if (amt <= 0) return;
+    if (at <= now) this.accent = Math.min(ACCENT_MAX, this.accent + amt);
+    else this.accents.push({ at, amt });
   }
 
   dispose(): void {

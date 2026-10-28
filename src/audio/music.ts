@@ -1,8 +1,8 @@
 import { Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { Bus } from './graph';
-import { clap, fmBell, hat, kick, lead, mallet, pad, ping, pluck } from './instruments';
-import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, styleFor } from './theory';
+import { Sung, clap, fadeSung, fmBell, hat, kick, lead, mallet, pad, ping, pluck, sigh, sing } from './instruments';
+import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, progFor, styleFor } from './theory';
 import { VoicePool, rand, smoothstep } from './voices';
 
 // Generative soundtrack. A deck is one arrangement (scene + mood + biome) with its own faders and
@@ -11,8 +11,10 @@ import { VoicePool, rand, smoothstep } from './voices';
 
 export type Scene = 'title' | 'run' | 'results';
 
-type Layer = 'pad' | 'bass' | 'arp' | 'kick' | 'hat' | 'clap' | 'sparkle' | 'lead' | 'tension';
-const LAYERS: readonly Layer[] = ['pad', 'bass', 'arp', 'kick', 'hat', 'clap', 'sparkle', 'lead', 'tension'];
+type Layer = 'pad' | 'bass' | 'arp' | 'kick' | 'hat' | 'clap' | 'sparkle' | 'lead' | 'tension' | 'choir';
+const LAYERS: readonly Layer[] = ['pad', 'bass', 'arp', 'kick', 'hat', 'clap', 'sparkle', 'lead', 'tension', 'choir'];
+/** The ghost choir: at most this many voices (one per live passed ghost behind you). */
+export const CHOIR_MAX = 3;
 
 /** Fader level of each layer at full presence. Balanced from solo renders: pad alone sits near
  *  -27 dBFS RMS and the full arrangement near -20, leaving headroom for effects on top. */
@@ -26,6 +28,7 @@ const MIX: Record<Layer, number> = {
   sparkle: 0.26,
   lead: 0.07,
   tension: 0.16,
+  choir: 0.2,
 };
 
 /** Reverb send per layer, scaled by the style's verb. */
@@ -39,6 +42,7 @@ const SEND: Record<Layer, number> = {
   sparkle: 0.65,
   lead: 0.4,
   tension: 0.1,
+  choir: 0.7,
 };
 
 const XFADE = 1.5;
@@ -69,6 +73,8 @@ export interface Drive {
   intensity: number;
   danger: number;
   mult: number;
+  /** Move the faders fast this pass (the count-in's release). */
+  snap?: boolean;
 }
 
 function deckId(scene: Scene, mood: Mood, biome: BiomeId): string {
@@ -101,6 +107,10 @@ class Deck {
   private wasEnabled = true;
   private arpCount = 0;
   private arpLast = -1;
+  /** The ghost choir: how many sing, the notes of the chord now sounding, and that chord. */
+  private choirN = 0;
+  private sung: Sung[] = [];
+  private choirChord: { chord: Chord; root: number; end: number } | null = null;
   private arpChord: Chord | null = null;
   private arpNotes: number[] = [];
   private phrase: LeadNote[] = [];
@@ -120,7 +130,8 @@ class Deck {
     this.style = styleFor(mood);
     this.accent = accentFor(biome);
     const s = this.style;
-    let prog = s.prog;
+    // Clear Skies plays the mountain's song (A A B B, theory.ts); moods keep their own loop.
+    let prog = progFor(mood, biome);
     if (scene === 'results') {
       this.key = { tonic: s.tonic + s.bright, penta: MAJOR_PENTA, bright: 0, bpm: Math.round(s.bpm * 0.85) };
       prog = RESOLVED;
@@ -228,10 +239,12 @@ class Deck {
       L.sparkle = 0.5;
       L.hat = 0.25;
     } else {
-      // Intensity builds the arrangement: 0 pad only, 0.4 + bass and hats, 0.7 + arp and kick,
-      // 0.9 everything plus the lead counter-melody.
+      // Intensity builds the arrangement (src/game/intensity.ts): the pad always; the bass from 0.26
+      // (the run floor of 0.30 already has it under the pad; full at 0.40); hats from 0.30 (cruising
+      // at 0.36 has them at a third); the arp from 0.58 and the kick from 0.60; clap and sparkle from
+      // 0.80; the lead counter-melody from 0.85.
       const i = this.drive.intensity;
-      L.bass = smoothstep(0.28, 0.42, i);
+      L.bass = smoothstep(0.26, 0.4, i);
       L.hat = smoothstep(0.3, 0.45, i);
       L.arp = smoothstep(0.58, 0.72, i);
       L.kick = smoothstep(0.6, 0.74, i);
@@ -239,16 +252,78 @@ class Deck {
       L.sparkle = smoothstep(0.8, 0.92, i);
       L.lead = smoothstep(0.85, 0.95, i);
       L.tension = smoothstep(0.05, 0.6, this.drive.danger);
+      L.choir = this.choirN > 0 ? 1 : 0;
     }
   }
 
   private applyLevels(now: number): void {
+    // A snap (the band arriving on the reveal card's collapse) moves the faders in about 0.2 s.
+    const tau = this.drive.snap ? 0.06 : 0.45;
     for (const l of LAYERS) {
       const target = MIX[l] * this.level[l];
       if (Math.abs(target - this.applied[l]) < 0.004) continue;
       this.applied[l] = target;
-      this.fader[l].gain.setTargetAtTime(target, now, 0.45);
+      this.fader[l].gain.setTargetAtTime(target, now, tau);
     }
+  }
+
+  /** Probe: each layer's presence (0..1) as last computed. */
+  layerLevels(): Readonly<Record<Layer, number>> {
+    return this.level;
+  }
+
+  /**
+   * The ghost choir (run scene): n voices from now. A voice joining comes in on the chord already
+   * sounding; a retake (a ghost passed you back) sighs the top voice down a fourth, and when the
+   * choir is still full (more ghosts behind than voices) another voice takes its place.
+   */
+  setChoir(n: number, now: number, retaken: boolean): void {
+    const want = this.scene === 'run' ? Math.max(0, Math.min(CHOIR_MAX, Math.round(n))) : 0;
+    let delay = 0.02;
+    if (retaken && want >= this.choirN && this.sung.length > 0) {
+      const s = this.sung.pop();
+      if (s) sigh(s, now);
+      this.choirN = this.sung.length;
+      delay = 0.5;
+    }
+    if (want === this.choirN) return;
+    const cc = this.choirChord;
+    if (want > this.choirN && cc && cc.end - now > delay + 0.5 && now < this.stopAt && this.wasEnabled) {
+      for (let k = this.choirN; k < want; k++) this.singNote(k, cc.chord, cc.root, now + delay, cc.end - now - delay, 0.6);
+    } else if (want < this.choirN) {
+      while (this.sung.length > want) {
+        const s = this.sung.pop();
+        if (s) (retaken ? sigh : fadeSung)(s, now);
+      }
+    }
+    this.choirN = want;
+  }
+
+  /** Probe: voices singing in the choir now. */
+  get choirVoices(): number {
+    return this.choirN;
+  }
+
+  /** Choir voice k on a chord: the 3rd low, the 5th above it, then the top extension. */
+  private singNote(k: number, chord: Chord, root: number, t: number, dur: number, attack: number): void {
+    const tones = chord.tones;
+    // A triad has no extension: the third voice doubles the root an octave up instead.
+    const pick = k === 0 ? tones[1] : k === 1 ? tones[2] : tones.length > 3 ? tones[tones.length - 1] : 12;
+    const m = fit(root + (pick ?? 0), k === 0 ? 64 : k === 1 ? 67 : 71);
+    const v = this.pool.voice(t, 1, this.fader.choir, null, 0);
+    v.keep = true;
+    const s = sing(v, t, mtof(m), dur, 0.2, attack, 0.2 + 0.3 * k);
+    this.sung.push(s);
+  }
+
+  /** Probe: the bar of the deck's loop being scheduled, and the loop's length in bars. */
+  position(): { bar: number; cycle: number } {
+    return { bar: (this.step >> 4) % this.cycle, cycle: this.cycle };
+  }
+
+  /** The deck's 16th-note grid: step s sounds at t0 + s * dur (before swing). */
+  grid(): { t0: number; dur: number } {
+    return { t0: this.base - this.step * this.stepDur, dur: this.stepDur };
   }
 
   private chordAt(bar: number): Placed {
@@ -271,6 +346,10 @@ class Deck {
     if (s16 === 0 && bar % this.cycle === placed.start) {
       this.arpCount = 0;
       if (step === 0) this.padChord(chord, root, t, chord.bars * 16 * sd);
+      const dur = chord.bars * 16 * sd;
+      this.choirChord = { chord, root, end: t + dur };
+      this.sung = [];
+      for (let k = 0; k < this.choirN; k++) this.singNote(k, chord, root, t, dur, 0.35);
     }
     if (s16 === 8) {
       // Build the next chord's pad half a bar early, so its oscillators do not pile onto the
@@ -477,6 +556,9 @@ export class Music {
   private mood = Mood.None;
   private biome: BiomeId = 'alpine';
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  /** Probe: decks started (each after the first is a crossfade). */
+  decksStarted = 0;
+  private choir = 0;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -490,8 +572,9 @@ export class Music {
     this.biome = biome;
   }
 
-  setDrive(intensity: number, danger: number, mult: number): void {
-    this.drive = { intensity, danger, mult };
+  /** snap: move the layer faders fast on the next scheduler pass (kept until that pass runs). */
+  setDrive(intensity: number, danger: number, mult: number, snap = false): void {
+    this.drive = { intensity, danger, mult, snap: snap || this.drive.snap === true };
   }
 
   /** Key of the arrangement that is playing (or about to): every reward sound uses it. */
@@ -500,6 +583,38 @@ export class Music {
     if (top) return top.key;
     const s = styleFor(this.mood);
     return { tonic: s.tonic, penta: s.penta, bright: s.bright, bpm: s.bpm };
+  }
+
+  /** The playing arrangement's 16th-note grid, so pulses (fuse ticks, the duel heartbeat, the km
+   *  bell) land in time with the band. Null before the first deck exists. */
+  grid(): { t0: number; dur: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.grid() : null;
+  }
+
+  /** Probe: the playing deck's layer presence (0..1 each). */
+  layerLevels(): Readonly<Record<string, number>> | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.layerLevels() : null;
+  }
+
+  /** The ghost choir's size (0..3): the top deck sings it; a retake sighs. */
+  setChoir(n: number, now: number, retaken = false): void {
+    this.choir = n;
+    const top = this.decks[this.decks.length - 1];
+    top?.setChoir(n, now, retaken);
+  }
+
+  /** Probe: voices singing in the choir. */
+  choirVoices(): number {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.choirVoices : 0;
+  }
+
+  /** Probe: the playing deck's place in its loop. */
+  position(): { bar: number; cycle: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.position() : null;
   }
 
   tick(now: number, until: number): void {
@@ -511,7 +626,9 @@ export class Music {
       if (top) top.fadeOut(now, XFADE);
       const d = new Deck(this.ctx, this.pool, this.bus, this.scene, this.mood, this.biome, now + 0.05);
       d.fadeIn(now, top ? XFADE : 1.2);
+      d.setChoir(this.choir, now, false);
       this.decks.push(d);
+      this.decksStarted++;
       // Flipping mountains on the title screen can stack decks faster than they fade; keep three
       // and fade older ones out in 40 ms (disposing a deck mid-fade would click).
       let kept = 0;
@@ -524,6 +641,7 @@ export class Music {
       d.setDrive(this.drive);
       d.schedule(until, now, this.enabled);
     }
+    if (this.drive.snap) this.drive = { ...this.drive, snap: false };
     for (let i = this.decks.length - 1; i >= 0; i--) {
       if (now >= this.decks[i].retireAt) {
         this.decks[i].dispose();
