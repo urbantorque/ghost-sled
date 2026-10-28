@@ -35,18 +35,28 @@ async (page) => {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
       const app = window.__gs;
-      const tele = { calls: [], intensity: [], live: [], crash: null, firstPassAt: null, skill };
+      const tele = { calls: [], beats: [], intensity: [], live: [], crash: null, firstPassAt: null, skill };
       window.__tele = tele;
       const now = () => (app.run ? app.run.sim.tick / 60 : -1);
       const SKIP = new Set(['constructor', 'updateHud', 'occluders', 'mirrorRect', 'setRiderScreen', 'touchVisual', 'setLoading', 'setMirror', 'markOcc', 'measureOcc', 'syncInert', 'syncHint', 'setMode', 'performed']);
+      // Wrappers outlive a run (Run Again keeps the page), so they always log into the current run's record.
       const wrap = (obj, name, tag) => {
         const f = obj[name];
         if (typeof f !== 'function' || f.__w) return;
         const w = function (...args) {
           try {
-            let s = '';
-            try { s = JSON.stringify(args); } catch { s = String(args[0]); }
-            tele.calls.push({ t: +now().toFixed(2), m: `${tag}.${name}`, a: s.length > 400 ? s.slice(0, 400) : s });
+            const tele = window.__tele;
+            const t = +now().toFixed(2);
+            if (name === 'beats' && Array.isArray(args[0])) {
+              // Beats are logged one by one, compactly (a whole list can be long).
+              for (const b of args[0]) {
+                tele.beats.push({ t, type: b.type, tone: b.say ? b.say.tone : undefined, label: b.say ? b.say.label : b.text || b.title || undefined, muted: !!b.muted, word: b.word, grade: b.grade, tier: b.tier, phase: b.phase, gifts: b.gifts, streak: b.streak, news: b.news, outcome: b.outcome });
+              }
+            } else {
+              let s = '';
+              try { s = JSON.stringify(args); } catch { s = String(args[0]); }
+              tele.calls.push({ t, m: `${tag}.${name}`, a: s.length > 400 ? s.slice(0, 400) : s });
+            }
           } catch {}
           return f.apply(this, args);
         };
@@ -57,9 +67,9 @@ async (page) => {
         for (const k of Object.getOwnPropertyNames(p)) if (!SKIP.has(k)) wrap(app.ui, k, 'ui');
       }
       wrap(app.audio, 'ui', 'audio');
-      if (typeof app.audio.beats === 'function') wrap(app.audio, 'beats', 'audio');
-      const up = app.audio.update;
-      app.audio.update = function (f, dt) {
+      const up = app.audio.update.__w ? null : app.audio.update;
+      if (up) app.audio.update = Object.assign(function (f, dt) {
+        const tele = window.__tele;
         if (app.run && app.phase === 'run') {
           const T = app.run.sim.tick / 60;
           if (tele.lastI === undefined || T - tele.lastI >= 0.5) {
@@ -68,7 +78,7 @@ async (page) => {
           }
         }
         return up.call(this, f, dt);
-      };
+      }, { __w: 1 });
 
       const run = app.run;
       const sim = run.sim;
@@ -186,7 +196,7 @@ async (page) => {
             const end = t.crashTick >= 0 ? t.crashTick : t.ticks;
             return { name: t.entry.name, kind: t.entry.kind, gap: +(app.ghosts.zAt(t, r.sim.tick) - s.z).toFixed(1), riding: r.sim.tick < end, dist: Math.round(t.distance) };
           });
-          tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
+          tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, gifts: (r.sim.gifts || 0) + (app.passBonus || 0), passBonus: app.passBonus || 0, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
         }
         return { phase: app.phase, crashed: s.crashed, t: T };
       };
@@ -222,49 +232,85 @@ async (page) => {
     await page.waitForTimeout(1600);
   };
 
+  // Named moments, counted the same way on both builds (parity): big, perfect and best callouts,
+  // stamps, banks, banners and toasts, warns, and passes that were shown. The new build also reports
+  // every named beat (namedAll), which the old build has no equivalent for.
   const summarize = (tele, extra) => {
     const runT = tele.crash ? tele.crash.t : tele.intensity.length ? tele.intensity[tele.intensity.length - 1][0] : 0;
     const mins = Math.max(1 / 60, runT / 60);
     const inRun = tele.calls.filter((c) => c.t >= 0 && c.t <= runT + 0.05);
+    const beats = tele.beats.filter((b) => b.t >= 0 && b.t <= runT + 0.05);
     const count = (re) => inRun.filter((c) => re.test(c.m)).length;
-    const passesMine = inRun.filter((c) => c.m === 'ui.ghostPass' && /,true\]$/.test(c.a)).length;
-    const passedBy = inRun.filter((c) => c.m === 'ui.ghostPass' && /,false\]$/.test(c.a)).length;
-    const styles = inRun.filter((c) => c.m === 'ui.popStyle');
-    const big = styles.filter((c) => /"(big|perfect)"\]$/.test(c.a)).length;
-    const beatTypes = {};
-    for (const c of inRun.filter((c) => /beats$/.test(c.m))) for (const m of c.a.matchAll(/"type":"([a-zA-Z]+)"/g)) beatTypes[m[1]] = (beatTypes[m[1]] || 0) + 1;
-    const named = big + count(/^ui\.(comboBank|toast|warn)$/) + passesMine;
-    const missionsMid = inRun.filter((c) => /mission/i.test(c.m) || (c.m === 'ui.toast' && /mission/i.test(c.a))).length;
+    const legacy = !beats.length && inRun.some((c) => c.m === 'ui.popStyle' || c.m === 'ui.ghostPass');
+    const BIG = /^(big|perfect|best)$/;
+    let shown, passedBy, banks, bigCallouts, toasts, missions, firstPass, firstNamed;
+    if (legacy || !beats.length) {
+      const passes = inRun.filter((c) => c.m === 'ui.ghostPass' && /,true]$/.test(c.a));
+      shown = passes.length;
+      passedBy = inRun.filter((c) => c.m === 'ui.ghostPass' && /,false]$/.test(c.a)).length;
+      banks = count(/^ui.comboBank$/);
+      bigCallouts = inRun.filter((c) => c.m === 'ui.popStyle' && /"(big|perfect)"]$/.test(c.a)).length;
+      toasts = count(/^ui.toast$/);
+      missions = 0;
+      firstPass = passes.length ? passes[0].t : null;
+      const fn = inRun.find((c) => (c.m === 'ui.popStyle' && /"(big|perfect)"]$/.test(c.a)) || c.m === 'ui.comboBank' || (c.m === 'ui.ghostPass' && /,true]$/.test(c.a)));
+      firstNamed = fn ? fn.t : null;
+    } else {
+      const passes = beats.filter((b) => b.type === 'pass' && !b.muted);
+      shown = passes.length;
+      passedBy = beats.filter((b) => b.type === 'passedBy' && !b.muted).length;
+      banks = beats.filter((b) => b.type === 'bank').length;
+      bigCallouts = beats.filter((b) => b.type === 'stomp' || (b.tone && BIG.test(b.tone) && b.type !== 'bank')).length;
+      toasts = beats.filter((b) => ['finale', 'grudgeSettled', 'missionPop', 'unlockPop'].includes(b.type)).length + count(/^ui.toast$/);
+      missions = beats.filter((b) => b.type === 'missionPop').length;
+      firstPass = passes.length ? passes[0].t : null;
+      const NAMED = new Set(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'km', 'graveyard']);
+      const isNamed = (b) => NAMED.has(b.type) && !b.muted && !(b.type === 'nearMiss' && b.grade !== 'whisker') && b.type !== 'crash';
+      const fn = beats.find(isNamed);
+      firstNamed = fn ? fn.t : null;
+      extra.namedAll = beats.filter(isNamed).length;
+      extra.namedAllPerMin = +(extra.namedAll / mins).toFixed(2);
+      extra.namedKindsMin1 = [...new Set(beats.filter((b) => b.t <= 60 && isNamed(b)).map((b) => (b.type === 'pass' ? 'pass:' + b.word : b.type)))];
+      const bt = {};
+      for (const b of beats) { const k = b.type + (b.word ? ':' + b.word : '') + (b.grade ? ':' + b.grade : '') + (b.phase ? ':' + b.phase : '') + (b.type === 'bank' ? ':t' + b.tier : ''); bt[k] = (bt[k] || 0) + 1; }
+      extra.beatTypes = bt;
+    }
+    const warns = count(/^ui.warn$/);
+    const named = bigCallouts + banks + toasts + warns + shown;
     const I = tele.intensity;
     const meanI = I.length ? I.reduce((s, v) => s + v[1], 0) / I.length : 0;
     const iAt = (sec) => { const v = I.find((x) => x[0] >= sec); return v ? v[1] : null; };
-    const firstNamed = inRun.find((c) => (c.m === 'ui.popStyle' && /"(big|perfect)"\]$/.test(c.a)) || c.m === 'ui.comboBank' || (c.m === 'ui.ghostPass' && /,true\]$/.test(c.a)));
     const liveFrac = tele.live.length ? tele.live.filter((l) => l[1] > 0).length / tele.live.length : 0;
+    const g = tele.crash ? tele.crash.ghosts.filter((x) => x.riding) : [];
+    const strict = g.filter((x) => Math.abs(x.gap) <= 40).length >= 2 || g.some((x) => Math.abs(x.gap) <= 25);
     return {
       ...extra,
       seconds: +runT.toFixed(1),
       distance: tele.crash ? tele.crash.distance : null,
       score: tele.crash ? tele.crash.score : null,
       cause: tele.crash ? tele.crash.cause : 'timeout',
-      passes: passesMine,
+      gifts: tele.crash ? tele.crash.gifts : null,
+      passBonus: tele.crash ? tele.crash.passBonus : null,
+      passes: shown,
       passedBy,
-      firstPassAt: tele.firstPassAt,
-      firstNamedAt: firstNamed ? firstNamed.t : null,
+      firstPassAt: firstPass,
+      firstNamedAt: firstNamed,
       namedMoments: named,
       namedPerMin: +(named / mins).toFixed(2),
-      passesPerMin: +(passesMine / mins).toFixed(2),
-      banks: count(/^ui\.comboBank$/),
-      warns: count(/^ui\.warn$/),
-      toasts: count(/^ui\.toast$/),
-      missionsMidRun: missionsMid,
-      beatTypes,
+      passesPerMin: +(shown / mins).toFixed(2),
+      banks,
+      warns,
+      toasts,
+      missionsMidRun: missions,
       raceLiveAtCrash: tele.crash ? tele.crash.liveNear > 0 : null,
+      raceLiveStrict: tele.crash ? strict : null,
       liveNearAtCrash: tele.crash ? tele.crash.liveNear : null,
       ridingAtCrash: tele.crash ? tele.crash.riding : null,
       raceLiveFraction: +liveFrac.toFixed(2),
       intensity: { mean: +meanI.toFixed(3), at10: iAt(10), at30: iAt(30), at60: iAt(60), max: I.length ? Math.max(...I.map((v) => v[1])) : 0 },
       crashField: tele.crash ? tele.crash.ghosts : null,
-      calls: inRun.filter((c) => !/^audio\.ui$/.test(c.m)).slice(0, 400),
+      calls: inRun.filter((c) => !/^audio.ui$/.test(c.m)).slice(0, 300),
+      beatLog: beats.slice(0, 400),
     };
   };
 
@@ -294,12 +340,15 @@ async (page) => {
   }
   const agg = {};
   for (const r of out) {
-    const g = (agg[r.skill] = agg[r.skill] || { runs: 0, seconds: 0, passesPerMin: 0, namedPerMin: 0, live: 0, liveFrac: 0, firstPass: [], firstNamed: [], meanI: 0, missionsMid: 0 });
+    const g = (agg[r.skill] = agg[r.skill] || { runs: 0, seconds: 0, passesPerMin: 0, namedPerMin: 0, namedAllPerMin: 0, live: 0, strict: 0, liveFrac: 0, firstPass: [], firstNamed: [], meanI: 0, missionsMid: 0, gifts: 0 });
     g.runs++;
     g.seconds += r.seconds;
     g.passesPerMin += r.passesPerMin;
     g.namedPerMin += r.namedPerMin;
     g.live += r.raceLiveAtCrash ? 1 : 0;
+    g.strict += r.raceLiveStrict ? 1 : 0;
+    g.namedAllPerMin += r.namedAllPerMin || 0;
+    g.gifts += r.gifts || 0;
     g.liveFrac += r.raceLiveFraction;
     if (r.firstPassAt !== null) g.firstPass.push(r.firstPassAt);
     if (r.firstNamedAt !== null) g.firstNamed.push(r.firstNamedAt);
@@ -314,6 +363,9 @@ async (page) => {
       passesPerMin: +(g.passesPerMin / g.runs).toFixed(2),
       namedPerMin: +(g.namedPerMin / g.runs).toFixed(2),
       raceLiveAtCrash: `${g.live}/${g.runs}`,
+      raceLiveStrict: `${g.strict}/${g.runs}`,
+      namedAllPerMin: +(g.namedAllPerMin / g.runs).toFixed(2),
+      giftsPerRun: +(g.gifts / g.runs).toFixed(1),
       raceLiveFraction: +(g.liveFrac / g.runs).toFixed(2),
       firstPassAt: g.firstPass.length ? +(g.firstPass.reduce((s, v) => s + v, 0) / g.firstPass.length).toFixed(1) : null,
       firstPassRuns: `${g.firstPass.length}/${g.runs}`,

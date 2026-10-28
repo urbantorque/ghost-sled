@@ -12,7 +12,7 @@ import type { BiomeId } from '../sim/mountains';
 import type { GhostKind, StyleTone } from '../ui/contract';
 
 // ---------- shared constants (single source for every consumer)
-export const WHISKER_GAP = 0.3; // m, edge gap
+export const WHISKER_GAP = 0.45; // m, edge gap (about 19% of fast near misses in the pool replays grade Whisker)
 export const WHISKER_SPEED = 18; // m/s
 export const CRASH_FREEZE_S = 0.45; // chase lens holds (scaled render time)
 export const CRASH_RESULTS_MS = 1150;

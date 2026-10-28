@@ -12,7 +12,8 @@
         "--enable-gpu-rasterization",
         "--ignore-gpu-blocklist",
         "--enable-gpu",
-        "--use-angle=d3d11"
+        "--use-angle=d3d11",
+        "--autoplay-policy=no-user-gesture-required"
       ]
     },
     "contextOptions": {

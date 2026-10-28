@@ -41,7 +41,8 @@ export interface SledCard {
 export interface TitleModel {
   mountains: MountainCard[];
   selected: string;
-  daily: { key: string; best: number; ready: boolean };
+  /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row. */
+  daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number };
   best: number;
   wallet: number;
   sledName: string;
