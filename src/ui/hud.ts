@@ -137,6 +137,8 @@ interface Flash {
   strong: boolean;
   /** When it arrived (it goes stale waiting its turn). */
   at: number;
+  /** How long it may wait its turn before it is stale (ms). */
+  stale: number;
 }
 
 export class Hud {
@@ -202,6 +204,8 @@ export class Hud {
   private readonly nextStrong: Flag;
   /** An open duel with the named ghost: "DUEL" before its name, the ring pulsing. */
   private readonly nextDuel: Flag;
+  /** The pill names the friend whose challenge this is: a small mint "vs" badge after the name. */
+  private readonly nextFriend: Flag;
   private readonly nextTail: Txt;
   /** When the flash on the pill started, the one showing, and those waiting their turn (oldest first). */
   private flashAt = 0;
@@ -436,7 +440,10 @@ export class Hud {
     // Race news is quieter still: the name in its kind colour, then the news in off-white, sentence case.
     const tailEl = h('span', 'gs-next-tail', 'passed you');
     this.nextTail = new Txt(tailEl);
-    this.nextEl = h('div', 'gs-next gs-pill k-ghost', this.nextRing, h('span', 'gs-next-ico', icon('ghost'), this.nextTrail), kEl, nameEl, tailEl, gapEl);
+    // A friend's challenge ghost wears the same small mint "vs" badge as its row on the results card.
+    const vsEl = h('span', 'gs-next-vs', 'vs');
+    vsEl.setAttribute('aria-hidden', 'true');
+    this.nextEl = h('div', 'gs-next gs-pill k-ghost', this.nextRing, h('span', 'gs-next-ico', icon('ghost'), this.nextTrail), kEl, nameEl, vsEl, tailEl, gapEl);
     this.nextOn = new Flag(this.nextEl);
     this.nextAhead = new Flag(this.nextEl, 'is-ahead');
     this.nextBehind = new Flag(this.nextEl, 'is-behind');
@@ -447,6 +454,7 @@ export class Hud {
     this.nextCall = new Flag(this.nextEl, 'is-call');
     this.nextStrong = new Flag(this.nextEl, 'is-strong');
     this.nextDuel = new Flag(this.nextEl, 'is-duel');
+    this.nextFriend = new Flag(this.nextEl, 'is-friend');
     this.race = h('div', 'gs-race', this.placeEl, this.nextEl);
 
     // Tier two: the combo meter, with the trick callout slot directly under it.
@@ -542,6 +550,7 @@ export class Hud {
       this.cur = null;
       this.nextFlash.set(false);
       this.nextDuel.set(false);
+      this.nextFriend.set(false);
       this.leadDone = true;
       this.lastFuse = -1;
       this.fit();
@@ -748,7 +757,7 @@ export class Hud {
     const spoken = kind === 'you' ? 'your best' : name;
     if (!passed) {
       this.say(`${shown} passed you`);
-      this.flash({ type: 'lost', name: shown, kind, k: '', tail: 'passed you', ms: LOST_MS, strong: false, at: 0 });
+      this.flash({ type: 'lost', name: shown, kind, k: '', tail: 'passed you', ms: LOST_MS, strong: false, at: 0, stale: PEND_MS });
       return;
     }
     const k = text.trim() || 'Passed';
@@ -762,15 +771,17 @@ export class Hud {
       this.lastStrong.at = now;
     }
     this.say(`${k} ${spoken}`);
-    this.flash({ type: 'pass', name: shown, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0 });
+    this.flash({ type: 'pass', name: shown, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0, stale: PEND_MS });
   }
 
   /**
    * Race news in the pass-flash slot: a quiet line, the ghost's name (when the text leads with it) in
    * its kind colour and the rest in off-white ("Tess wiped out", "Your best wiped out", "1 more ghost
    * opens Frostfang Glacier"). It never cuts a pass, waits behind one, and is the first thing dropped.
+   * `wait` is how long it may wait its turn: a line that only ever comes with a pass (the unlock
+   * tease) waits as long as a pass does, or it would always go stale behind its own pass.
    */
-  news(name: string, kind: GhostKind, text: string): void {
+  news(name: string, kind: GhostKind, text: string, wait = NEWS_PEND_MS): void {
     const t = text.trim();
     if (t === '') return;
     this.say(t);
@@ -784,7 +795,7 @@ export class Hud {
         break;
       }
     }
-    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0 });
+    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait });
   }
 
   /**
@@ -795,7 +806,7 @@ export class Hud {
   call(word: string, name: string, kind: GhostKind, srText: string): void {
     const shown = shownName(name, kind);
     this.say(srText.trim() || `${word} ${kind === 'you' ? 'your best' : name}`);
-    this.flash({ type: 'call', name: shown, kind, k: word, tail: '', ms: CALL_MS, strong: false, at: 0 });
+    this.flash({ type: 'call', name: shown, kind, k: word, tail: '', ms: CALL_MS, strong: false, at: 0, stale: PEND_MS });
   }
 
   /**
@@ -861,6 +872,7 @@ export class Hud {
     this.nextName.str(f.name);
     this.nextTail.str(f.tail);
     this.setKind(f.kind);
+    this.nextFriend.set(f.kind === 'friend' && f.name !== '');
     this.nextOn.set(true);
     if (f.type === 'pass') {
       const peak = f.strong ? 1.13 : 1.08;
@@ -1083,7 +1095,7 @@ export class Hud {
     // pass that waited its turn (behind a landing stamp or a pass of yours) goes up next.
     let flashing = this.flashUntil > now;
     if (!flashing && this.pend.length > 0 && !this.stampUp()) {
-      while (this.pend.length > 0 && now - this.pend[0].at > (this.pend[0].type === 'news' ? NEWS_PEND_MS : PEND_MS)) this.pend.shift();
+      while (this.pend.length > 0 && now - this.pend[0].at > this.pend[0].stale) this.pend.shift();
       const p = this.pend.shift();
       if (p) {
         this.showFlash(p, now);
@@ -1122,6 +1134,7 @@ export class Hud {
           this.nameNow = false;
           if (this.nextName.str(shownName(g.name, g.kind))) moved = true;
           this.setKind(g.kind);
+          if (this.nextFriend.set(g.kind === 'friend')) moved = true;
         }
         // Level under 1.5 m, with a little hysteresis so the readout does not flicker at the edge.
         const a = Math.abs(g.gap);

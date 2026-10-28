@@ -2093,6 +2093,27 @@
   display: none;
 }
 
+/* The friend whose challenge link this run answers: a small mint "vs" badge after the name, the same
+   badge as its row on the results card. It stays with the name through a pass flash. */
+.gs-next-vs {
+  display: none;
+  flex: none;
+  padding: 0 0.5em;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--ghost);
+  color: var(--ghost);
+  font-size: max(11px, 0.7em);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.gs-next.is-friend .gs-next-vs {
+  display: inline-block;
+}
+
 /* Race news ("Tess wiped out"): quieter than a pass, the name in its kind colour on a plain 1 px edge,
    then the news in off-white sentence case, a step smaller, for 1.3 s. Never a glow or a punch. */
 .gs-next.is-flash.is-news {
@@ -3695,6 +3716,34 @@
   letter-spacing: 0.02em;
 }
 
+/* "Beat Mila after 3 runs": the words around the name are quiet, the name stays the headline. With
+   no room beside a long name (a phone), the run count wraps under it; the name gives way last. */
+.gs-pass-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.32em;
+  min-width: 0;
+}
+
+.gs-pass-line > .gs-pass-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.gs-pass-pre {
+  flex: none;
+  color: rgba(245, 243, 255, 0.86);
+  font-size: max(12px, 0.86em);
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-pass-line > .gs-pass-note {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* Bounded to the safe width: with the reward beside the name a long name ran the banner off a 360 px
    phone. The name gives way first (an ellipsis); the badge and "+10 gifts" keep their size. */
 .gs-pass {
@@ -5292,12 +5341,16 @@
   }
 }
 
+/* The footer row may shrink below its content (min-width: 0, here and on .gs-res-main): a "Rematch
+   <name>" label then ellipsizes inside its button instead of setting the card's minimum width and
+   pushing the race column off the right edge. */
 .gs-res-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 10px 16px;
+  min-width: 0;
   padding: 14px clamp(18px, 3.4vmin, 36px) clamp(16px, 3vmin, 28px);
   box-shadow: 0 -1px 0 var(--hair);
 }
@@ -5349,6 +5402,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   margin-left: auto;
 }
 
@@ -5410,28 +5464,61 @@
      the missions row. The two columns come out about even, where a head across the whole card left
      a short left column beside a long race; a tip for next time runs under both, above the buttons.
      The head's own boxes take grid cells (display: contents), and margins set the rhythm, so an
-     empty slot costs nothing. */
+     empty slot costs nothing.
+     The rows are all content-sized, with an empty row under the missions: a grid ignores an item that
+     spans a flexible row when it sizes rows, so with a 1fr missions row a card filled to its max height
+     (a two-line race line, the unlock card and a tip) ran the race out of its rows and its Show All
+     link sat on the tip. The empty row takes the race's extra height instead; rows holding content
+     keep their own heights, so the left column stacks with no gaps. Without stats (no-run) the run row
+     is left out, so it cannot take a share either. (The :not(.no-race) guards keep these off the
+     no-race layout below at any specificity, and win over the portrait grid on a square screen.) */
   .gs-res-body {
     grid-template-columns: minmax(0, 0.94fr) minmax(0, 1.06fr);
-    grid-template-rows: auto auto auto auto 1fr auto;
+    column-gap: clamp(20px, 2.6vw, 40px);
+    row-gap: 0;
+  }
+
+  .gs-res-body:not(.no-race) {
+    grid-template-rows: repeat(7, auto);
     grid-template-areas:
       'where where'
       'score score'
       'sub   race'
       'run   race'
       'mis   race'
+      '.     race'
       'tip   tip';
-    column-gap: clamp(20px, 2.6vw, 40px);
-    row-gap: 0;
   }
 
-  .gs-res-body.has-ul {
+  .gs-res-body.has-ul:not(.no-race) {
     grid-template-areas:
       'where where'
       'score score'
       'sub   ul'
       'run   race'
       'mis   race'
+      '.     race'
+      'tip   tip';
+  }
+
+  .gs-res-body.no-run:not(.no-race) {
+    grid-template-rows: repeat(6, auto);
+    grid-template-areas:
+      'where where'
+      'score score'
+      'sub   race'
+      'mis   race'
+      '.     race'
+      'tip   tip';
+  }
+
+  .gs-res-body.has-ul.no-run:not(.no-race) {
+    grid-template-areas:
+      'where where'
+      'score score'
+      'sub   ul'
+      'mis   race'
+      '.     race'
       'tip   tip';
   }
 

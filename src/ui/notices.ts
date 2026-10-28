@@ -1,6 +1,7 @@
 import type { MountainCard, ToastTone } from './contract';
 import { ChaosEvent, eventInfo } from '../sim/chaos';
 import { h } from './dom';
+import { fmt } from './fmt';
 import { icon, type IconName } from './icons';
 import { EASE_OUT, play, reduced, SPRING } from './motion';
 
@@ -69,7 +70,7 @@ export const EVENT_ICON: Record<ChaosEvent, IconName> = {
 };
 
 type Spec =
-  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; biome?: MountainCard['biome'] }
+  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; biome?: MountainCard['biome']; nemesis?: boolean; said?: string }
   | { type: 'warn'; text: string; event: ChaosEvent }
   | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent };
 
@@ -146,6 +147,7 @@ export class Notices {
     const b = this.find((x) => x.spec.type === 'toast' && x.spec.tone === 'grudge' && now - x.at <= MERGE_MS);
     if (!b || b.spec.type !== 'toast' || b.spec.name === name) return;
     b.spec.name = name;
+    b.spec.said = undefined;
     if (b.el) {
       const fresh = render(b.spec);
       b.el.replaceWith(fresh);
@@ -156,15 +158,15 @@ export class Notices {
 
   /**
    * The grudge settled (the director's grudgeSettled beat, which names its ghost): the rose banner,
-   * "GRUDGE SETTLED" over the name with the paid gifts beside it, or for a nemesis "NEMESIS DOWN" with
-   * how many runs it took ("after 3 runs") and a longer hold.
+   * "GRUDGE SETTLED" over the name with the paid gifts beside it. A nemesis is "NEMESIS DOWN" over
+   * "Beat Mila after 3 runs", the gifts beside it ("Beat Mila after 3 runs · +20 gifts" read as one
+   * line), with a longer hold.
    */
   grudgeSettled(name: string, nemesis: boolean, after: number, paid: number): void {
-    const text = nemesis ? 'Nemesis down' : 'Grudge settled';
-    const note = after >= 2 ? `after ${after} runs` : undefined;
-    const sub = paid > 0 ? `+${paid} gifts` : undefined;
+    const c = grudgeCopy(name, nemesis, after, paid);
+    const text = c.text;
     this.push({
-      spec: { type: 'toast', text, tone: 'grudge', sub, name, note },
+      spec: { type: 'toast', text, tone: 'grudge', sub: c.sub, name, note: c.note, nemesis, said: c.said },
       pri: P_CELEBRATE,
       key: `t:grudge:${text}`,
       ms: nemesis ? NEMESIS_MS : GRUDGE_MS,
@@ -343,6 +345,21 @@ export class Notices {
   }
 }
 
+/**
+ * The settled-grudge banner's copy: the kicker, the run count under the name, the reward, and the one
+ * line a screen reader hears. A nemesis: "Nemesis down" over "Beat Mila after 3 runs", "+20 gifts"
+ * beside it, read as "Nemesis down. Beat Mila after 3 runs · +20 gifts". Otherwise "Grudge settled"
+ * over the name ("after 2 runs" under it once it took more than one). Names only, never a pronoun.
+ */
+export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: number): { text: string; note?: string; sub?: string; said: string } {
+  const text = nemesis ? 'Nemesis down' : 'Grudge settled';
+  const runs = Math.max(1, Math.round(after));
+  const note = nemesis ? `after ${fmt(runs)} ${runs === 1 ? 'run' : 'runs'}` : runs >= 2 ? `after ${fmt(runs)} runs` : undefined;
+  const sub = paid > 0 ? `+${fmt(paid)} gifts` : undefined;
+  const line = `${nemesis ? 'Beat ' : ''}${name}${note ? ` ${note}` : ''}`;
+  return { text, note, sub, said: `${text}. ${line}${sub ? ` · ${sub}` : ''}` };
+}
+
 function render(s: Spec): HTMLElement {
   if (s.type === 'warn') {
     const key = eventInfo(s.event).key;
@@ -360,12 +377,19 @@ function render(s: Spec): HTMLElement {
   }
   if (s.tone === 'grudge' && s.name) {
     // Grudge settled: the rose celebration, with the ghost's name as the headline and the reward
-    // beside it at the same size. A nemesis adds how many runs it took under the name.
+    // beside it at the same size. A nemesis reads "Beat Mila after 3 runs" under its kicker, the name
+    // still the headline (the run count wraps under it when a phone has no room beside it).
     const ico = h('span', 'gs-pass-ico', icon('ghost'), icon('ghost', 'gs-pass-trail'));
     const name = h('span', 'gs-pass-name', s.name);
     name.translate = false;
-    const txt = h('span', 'gs-pass-txt', h('span', 'gs-pass-k', s.text), name, s.note ? h('span', 'gs-pass-note', s.note) : null);
-    return h('div', 'gs-pass gs-panel k-grudge', ico, txt, s.sub ? reward(s.sub) : null);
+    const kicker = h('span', 'gs-pass-k', s.text);
+    const line = s.nemesis ? h('span', 'gs-pass-line', h('span', 'gs-pass-pre', 'Beat'), name, s.note ? h('span', 'gs-pass-note', s.note) : null) : null;
+    const txt = line ? h('span', 'gs-pass-txt', kicker, line) : h('span', 'gs-pass-txt', kicker, name, s.note ? h('span', 'gs-pass-note', s.note) : null);
+    const pay = s.sub ? reward(s.sub) : null;
+    // Screen readers hear it as one line ("Nemesis down. Beat Mila after 3 runs · +20 gifts"); the
+    // hairline before the reward is its visible separator.
+    if (s.said) for (const part of [ico, txt, pay]) part?.setAttribute('aria-hidden', 'true');
+    return h('div', `gs-pass gs-panel k-grudge${s.nemesis ? ' is-nemesis' : ''}`, ico, txt, pay, s.said ? h('span', 'gs-sr', s.said) : null);
   }
   const ic = TOAST_ICON[s.tone];
   // An unlocked mountain's snowflake sits on a swatch of that mountain's own sky.

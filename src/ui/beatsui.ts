@@ -25,7 +25,28 @@ import type { Notices } from './notices';
 /** Beats that draw their own picture: a `say` on them would print the same moment twice. */
 const OWN_PICTURE = new Set<Beat['type']>(['callout', 'stomp', 'bank', 'comboLost', 'pass', 'passedBy', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'finale', 'missionPop', 'unlockPop', 'streakBroken', 'bestComboPace', 'newBest', 'friendBeaten']);
 
+/**
+ * The unlock tease ("1 more ghost opens Frostfang Glacier") only ever comes with the pass that made it
+ * true, so it always waits behind that pass's flash: it may wait as long as a pass would (the hud's
+ * PEND_MS), where other news goes stale after 1.3 s.
+ */
+const TEASE_WAIT_MS = 2600;
+/** A duel lost and its "pulled away" news arrive together: the news is the same line, shown once. */
+const SAME_LINE_MS = 500;
+
+/** Race news names your own best "Your best", never your name (contract C7). */
+function newsText(b: Extract<Beat, { type: 'raceNews' }>): string {
+  const t = b.text.trim();
+  const name = b.ghost.name;
+  if (b.ghost.kind !== 'you' || name === '' || !t.startsWith(name)) return t;
+  const rest = t.slice(name.length);
+  return rest === '' || rest[0] === ' ' || rest[0] === "'" ? `Your best${rest}` : t;
+}
+
 export class BeatRouter {
+  /** The ghost whose duel was just lost, and when: its "pulled away" news is the same line. */
+  private lostDuel = { id: -1, at: -1e9 };
+
   constructor(
     private readonly hud: Hud,
     private readonly fx: Fx,
@@ -70,7 +91,7 @@ export class BeatRouter {
           this.hud.lead();
           break;
         case 'raceNews':
-          this.hud.news(b.ghost.name, b.ghost.kind, b.text);
+          this.news(b);
           break;
         case 'duel':
           this.duel(b);
@@ -110,6 +131,15 @@ export class BeatRouter {
     this.fx.pop(s.label, s.points, s.tone);
   }
 
+  /**
+   * Race news in the pass-flash slot. A duel lost already said "Mila pulled away" from the same beat, so
+   * its news says nothing more; the unlock tease may wait out the pass it came with.
+   */
+  private news(b: Extract<Beat, { type: 'raceNews' }>): void {
+    if (b.news === 'pulledAway' && b.ghost.id === this.lostDuel.id && performance.now() - this.lostDuel.at < SAME_LINE_MS) return;
+    this.hud.news(b.ghost.name, b.ghost.kind, newsText(b), b.news === 'unlockTease' ? TEASE_WAIT_MS : undefined);
+  }
+
   /** Duel phases: the open duel shows in the pill itself (the model's duel flag); results flash. */
   private duel(b: Extract<Beat, { type: 'duel' }>): void {
     const g = b.ghost;
@@ -124,6 +154,8 @@ export class BeatRouter {
         this.hud.flashPass(g.name, g.kind, true, 'Held off', 'heldOff');
         break;
       case 'lost':
+        this.lostDuel.id = g.id;
+        this.lostDuel.at = performance.now();
         this.hud.news(g.name, g.kind, `${g.kind === 'you' ? 'Your best' : g.name} pulled away`);
         break;
       default:
