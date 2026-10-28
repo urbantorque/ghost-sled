@@ -3,8 +3,10 @@
 // URL params: s=<scenario> (see SCENARIOS), mode=keyboard|mouse|touch,
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
-import type { HudModel, MissionView, ResultsModel, SettingsModel, SledCard, TitleModel, UIHandlers } from './contract';
+import type { GhostKind, HudModel, MissionView, ResultsModel, SettingsModel, SledCard, TitleModel, UIHandlers } from './contract';
+import type { Beat, BankTier, GhostRef, PassWord } from '../game/beats';
 import type { InputMode, TouchVisual } from '../game/input';
+import { bankHeader, bankTier } from '../game/stake';
 import { ChaosEvent, EVENTS, Mood, MOODS } from '../sim/chaos';
 import { UI, type UIMenuHandlers } from './ui';
 
@@ -357,6 +359,33 @@ const followMirror = () => {
 requestAnimationFrame(followMirror);
 
 const touchV: TouchVisual = { steer: null, action: null };
+
+// ---------------------------------------------------------------- Beats (src/game/beats.ts)
+
+const ghost = (name: string, kind: GhostKind = 'pool', dx = 1.5): GhostRef => ({ id: name.length * 7 + kind.length, name, kind, dx });
+/** One frame's beats, the way the director hands them over. */
+const beats = (...list: Beat[]): void => ui.beats(list);
+/** A cash-in of `points` at `mult`, graded the way the director grades it (skill chain 6, given best). */
+function bankBeat(points: number, mult: number, best = 0, bump = false): Beat {
+  const tier: BankTier = bankTier(points, 6, best);
+  return { type: 'bank', tick: 0, points, mult, origin: Math.round(points / mult), tier, header: bankHeader(points, tier, best), bump };
+}
+const passBeat = (g: GhostRef, word: PassWord, text: string, muted = false): Beat => ({ type: 'pass', tick: 0, ghost: g, word, text, first: true, chain: 0, ladder: 5, octave: false, gifts: 5, muted });
+const quietCombo = { active: false, pending: 0, mult: 1, chain: 0, timer: 0 };
+/** A HUD whose combo banks the moment the beat arrives (the meter drops as the figure takes over). */
+function bankHud(): HudModel {
+  const m = staticHud({ ...quietHud, combo: { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.1, stake: 4960 } });
+  return m;
+}
+function cashIn(m: HudModel, b: Beat, at: number): void {
+  window.setTimeout(() => {
+    if (b.type === 'bank') m.combo = { active: true, pending: b.origin, mult: b.mult, chain: 12, timer: 0.05, stake: b.points };
+    window.setTimeout(() => {
+      m.combo = { ...quietCombo };
+      beats(b);
+    }, 260);
+  }, at);
+}
 
 const SCENARIOS: Record<string, () => void> = {
   title: () => goTitle(),
@@ -830,6 +859,276 @@ const SCENARIOS: Record<string, () => void> = {
     goTitle();
     ui.setLoading(0.62);
   },
+
+  // ------------------------------------------------------------ Beats: cash-in (src/game/stake.ts)
+  // Four tiers in a row, 2.4 s apart: "+80" alone; "+600 x4" rolling to "+2,400"; "+1,500 x6" to
+  // "+9,000" with sparks; "+5,000 x8" to "+40,000" under MASSIVE. Each lands on the product alone.
+  'bank-tiers': () => {
+    const m = bankHud();
+    [bankBeat(80, 1), bankBeat(2400, 4), bankBeat(9000, 6), bankBeat(40000, 8)].forEach((b, i) => cashIn(m, b, 300 + i * 2400));
+  },
+  'bank-t0': () => cashIn(bankHud(), bankBeat(80, 1), 200),
+  'bank-t1': () => cashIn(bankHud(), bankBeat(2400, 4), 200),
+  'bank-t2': () => cashIn(bankHud(), bankBeat(9000, 6), 200),
+  'bank-t3': () => cashIn(bankHud(), bankBeat(40000, 8), 200),
+  // A new lifetime best combo (best 3,000 at the start): tier 3 with the gold-white header.
+  'bank-best': () => cashIn(bankHud(), bankBeat(4960, 4, 3000), 200),
+  // A draft-only x10 never slams: capped at tier 1 by its skill chain.
+  'bank-draft': () => {
+    const m = bankHud();
+    cashIn(m, { type: 'bank', tick: 0, points: 12400, mult: 10, origin: 1240, tier: bankTier(12400, 1, 0), header: null, bump: false }, 200);
+  },
+  // A bump bank: the same roll, kept small, no sparks.
+  'bank-bump': () => cashIn(bankHud(), bankBeat(9000, 6, 0, true), 200),
+  // The stake line from x2, then the pace (gold-white, after the Best combo pace beat), then the fuse
+  // throbbing faster as the timer drains.
+  stake: () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 620, mult: 2, chain: 6, timer: 0.9, stake: 1240 } });
+    window.setTimeout(() => (m.combo = { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.85, stake: 4960 }), 900);
+    window.setTimeout(() => {
+      m.combo = { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.8, stake: 4960, pace: true };
+      beats({ type: 'bestComboPace', tick: 0, stake: 4960 });
+    }, 1900);
+  },
+  'stake-fuse': () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.38, stake: 4960, fuse: 0.05 } });
+    let t = 0.38;
+    const step = () => {
+      if (screen !== 'run' || t <= 0.02) return;
+      t -= 0.01;
+      m.combo = { active: true, pending: 1240, mult: 4, chain: 12, timer: t, stake: 4960, fuse: 1 - t / 0.4 };
+      window.setTimeout(step, 90);
+    };
+    window.setTimeout(step, 600);
+  },
+  'stake-held': () => staticHud({ ...quietHud, combo: { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.3, stake: 4960, fuse: 0.6 } }),
+  // A crash with 4,960 on the line: the figure cracks, greys, tilts and falls under COMBO LOST.
+  'lost-crack': () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.6, stake: 4960 } });
+    window.setTimeout(() => {
+      m.combo = { ...quietCombo };
+      beats({ type: 'comboLost', tick: 0, points: 4960, stake: 4960, best: false, crack: true });
+    }, 700);
+  },
+  'lost-best': () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 2480, mult: 5, chain: 15, timer: 0.6, stake: 12400 } });
+    window.setTimeout(() => {
+      m.combo = { ...quietCombo };
+      beats({ type: 'comboLost', tick: 0, points: 12400, stake: 12400, best: true, crack: true });
+    }, 700);
+  },
+  'lost-small': () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 120, mult: 1, chain: 2, timer: 0.6, stake: 120 } });
+    window.setTimeout(() => {
+      m.combo = { ...quietCombo };
+      beats({ type: 'comboLost', tick: 0, points: 120, stake: 120, best: false, crack: false });
+    }, 700);
+  },
+
+  // ------------------------------------------------------------ Beats: stomps
+  // Perfect landing, then Double, Triple, Quad stomp and Stomp streak 5, 1.9 s apart, with a spin folded in.
+  streak: () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 2480, mult: 4, chain: 12, timer: 0.9, stake: 9920 } });
+    const titles = ['Perfect landing', 'Double stomp', 'Triple stomp', 'Quad stomp', 'Stomp streak 5'];
+    titles.forEach((title, i) =>
+      window.setTimeout(() => {
+        const n = i + 1;
+        const lead = n === 1 ? [{ label: 'Perfect', points: 250 }] : [{ label: `${n} in a row`, points: 0 }];
+        beats(
+          { type: 'callout', tick: 0, source: 'spin', say: { label: 'Spin 540', points: 450, tone: 'big' } },
+          { type: 'stomp', tick: 0, streak: n, late: false, title, lead, x: 0, z: 0, heading: 0, yetiHop: false },
+        );
+      }, 300 + i * 1900),
+    );
+    window.setTimeout(() => beats({ type: 'streakBroken', tick: 0, was: 5 }), 300 + 5 * 1900);
+  },
+  'streak-5': () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 2480, mult: 4, chain: 12, timer: 0.9, stake: 9920 } });
+    beats(
+      { type: 'callout', tick: 0, source: 'flip', say: { label: 'Backflip', points: 600, tone: 'big' } },
+      { type: 'callout', tick: 0, source: 'spin', say: { label: 'Spin 360', points: 300, tone: 'big' } },
+      { type: 'stomp', tick: 0, streak: 5, late: false, title: 'Stomp streak 5', lead: [{ label: '5 in a row', points: 0 }], x: 0, z: 0, heading: 0, yetiHop: false },
+    );
+  },
+
+  // ------------------------------------------------------------ Beats: the race row
+  // Every pass word, 1.7 s apart (jostle is muted: nothing shows).
+  'pass-words': () => {
+    staticHud({ ...quietHud, place: { rank: 4, of: 7 } });
+    const words: Array<[PassWord, string, GhostRef]> = [
+      ['jostle', 'Passed', ghost('ida_runs')],
+      ['passed', 'Passed', ghost('Mika')],
+      ['double', 'Double pass', ghost('Kai_on_Tour')],
+      ['triple', 'Triple pass', ghost('TobogganTeo')],
+      ['streak', 'Pass streak 4', ghost('MarmotMateo')],
+      ['slung', 'Slung past', ghost('Brave Rhea')],
+      ['tookBack', 'Took back', ghost('thabo.swoosh')],
+      ['beat', 'Beat', ghost('KestrelHailstone')],
+      ['duelWon', 'Duel won', ghost('fjord348')],
+      ['heldOff', 'Held off', ghost('Juniper', 'grudge')],
+      ['yourBest', 'Passed', ghost('Nico Sledsen', 'you')],
+    ];
+    words.forEach(([w, text, g], i) => window.setTimeout(() => beats(passBeat(g, w, text, w === 'jostle')), 200 + i * 1700));
+  },
+  'pass-streak': () => {
+    staticHud({ ...quietHud, place: { rank: 3, of: 7 } });
+    beats(passBeat(ghost('MaximilianTheUnstoppable'), 'streak', 'Pass streak 4'));
+  },
+  // Race news: a wipeout ahead, your best, the grudge's lantern line, behind you, and the unlock tease.
+  'race-news': () => {
+    staticHud({ ...quietHud, place: { rank: 4, of: 7 }, nextGhost: { name: 'Mika', kind: 'pool', gap: 18 } });
+    const lines: Array<[GhostRef, string]> = [
+      [ghost('Tess'), 'Tess wiped out'],
+      [ghost('Nico Sledsen', 'you'), 'Your best wiped out'],
+      [ghost('Juniper', 'grudge'), 'Juniper wiped out. Pass the lantern'],
+      [ghost('Kai_on_Tour'), 'Kai_on_Tour wiped out behind you'],
+      [ghost('Tess'), '1 more ghost opens Frostfang Glacier'],
+    ];
+    lines.forEach(([g, text], i) =>
+      window.setTimeout(() => beats({ type: 'raceNews', tick: 0, ghost: g, news: i === 4 ? 'unlockTease' : 'wipeout', text, pan: 0, gain: 1 }), 200 + i * 1600),
+    );
+  },
+  // A pass arriving over news: the pass takes the pill at once; news waiting behind a pass is dropped first.
+  'race-queue': () => {
+    staticHud({ ...quietHud, place: { rank: 4, of: 7 } });
+    beats({ type: 'raceNews', tick: 0, ghost: ghost('Tess'), news: 'wipeout', text: 'Tess wiped out', pan: 0, gain: 1 });
+    window.setTimeout(() => beats(passBeat(ghost('Mika'), 'passed', 'Passed')), 400);
+    window.setTimeout(() => beats({ type: 'passedBy', tick: 0, ghost: ghost('Brave Rhea'), muted: false }), 500);
+    window.setTimeout(() => beats({ type: 'raceNews', tick: 0, ghost: ghost('Rook'), news: 'wipeout', text: 'Rook wiped out', pan: 0, gain: 1 }), 600);
+    window.setTimeout(() => beats({ type: 'raceNews', tick: 0, ghost: ghost('Ansel'), news: 'wipeout', text: 'Ansel wiped out', pan: 0, gain: 1 }), 700);
+  },
+  // The start-line call: "CHASE fjord348", then (as on later runs) the rose "REMATCH Juniper" and "NEMESIS".
+  'race-call': () => {
+    staticHud({ ...quietHud, place: { rank: 5, of: 6 }, nextGhost: { name: 'fjord348', kind: 'pool', gap: 42 } });
+    beats({ type: 'raceCall', tick: 0, ghost: ghost('fjord348'), word: 'Chase', sr: 'Chase fjord348. fjord348 rode 1,820 m.' });
+  },
+  'race-call-grudge': () => {
+    staticHud({ ...quietHud, place: { rank: 5, of: 6 }, nextGhost: { name: 'Juniper', kind: 'grudge', gap: 12 } });
+    beats({ type: 'raceCall', tick: 0, ghost: ghost('Juniper', 'grudge'), word: 'Rematch', sr: 'Rematch Juniper. Juniper beat you by 38 m.' });
+  },
+  'race-call-you': () => {
+    staticHud({ ...quietHud, place: { rank: 5, of: 6 }, nextGhost: { name: 'Nico Sledsen', kind: 'you', gap: 30 } });
+    beats({ type: 'raceCall', tick: 0, ghost: ghost('Nico Sledsen', 'you'), word: 'Chase', sr: 'Chase your best. 1,240 m.' });
+  },
+  // A duel: "DUEL Mika" with its ring beating, neck and neck, then "DUEL WON Mika".
+  duel: () => {
+    const m = staticHud({ ...quietHud, place: { rank: 3, of: 7 }, nextGhost: { name: 'Mika', kind: 'pool', gap: 0.6, duel: true } });
+    beats({ type: 'duel', tick: 0, phase: 'open', ghost: ghost('Mika'), gifts: 0 });
+    window.setTimeout(() => (m.nextGhost = { name: 'Mika', kind: 'pool', gap: -2.6, duel: true }), 1800);
+    window.setTimeout(() => {
+      m.nextGhost = { name: 'Rook', kind: 'pool', gap: 22 };
+      m.place = { rank: 2, of: 7 };
+      beats({ type: 'duel', tick: 0, phase: 'won', ghost: ghost('Mika'), gifts: 5 }, passBeat(ghost('Mika'), 'duelWon', 'Duel won'));
+    }, 3200);
+  },
+  'duel-lost': () => {
+    const m = staticHud({ ...quietHud, place: { rank: 3, of: 7 }, nextGhost: { name: 'Juniper', kind: 'grudge', gap: 1.1, duel: true } });
+    window.setTimeout(() => {
+      m.nextGhost = { name: 'Juniper', kind: 'grudge', gap: 5 };
+      beats({ type: 'duel', tick: 0, phase: 'lost', ghost: ghost('Juniper', 'grudge'), gifts: 0 });
+    }, 1400);
+  },
+  // Taking the lead: the crown pulses with a gold-white ring as the pill turns to first place.
+  lead: () => {
+    const m = staticHud({ ...quietHud, place: { rank: 2, of: 7 }, nextGhost: { name: 'Rook', kind: 'pool', gap: 3 } });
+    window.setTimeout(() => {
+      m.place = { rank: 1, of: 7 };
+      m.nextGhost = { name: 'Rook', kind: 'pool', gap: -2 };
+      beats(passBeat(ghost('Rook'), 'passed', 'Passed'), { type: 'lead', tick: 0, of: 7 });
+    }, 600);
+  },
+
+  // ------------------------------------------------------------ Beats: banners and best
+  'grudge-settled': () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 640, mult: 3, chain: 4, timer: 0.7, stake: 1920 } });
+    const g = ghost('Juniper', 'grudge');
+    beats({ type: 'grudgeSettled', tick: 0, ghost: g, nemesis: false, after: 1, paid: 10 }, passBeat(g, 'passed', 'Passed'));
+  },
+  'nemesis-down': () => {
+    staticHud({ ...quietHud });
+    const g = ghost('MarmotMateo', 'grudge');
+    beats({ type: 'grudgeSettled', tick: 0, ghost: g, nemesis: true, after: 3, paid: 20 }, passBeat(g, 'passed', 'Passed'));
+  },
+  'finale-avalanche': () => {
+    staticHud({ ...quietHud, mood: Mood.Blizzard });
+    beats({ type: 'finale', tick: 0, event: ChaosEvent.Avalanche, outcome: 'outran', text: 'Outran the avalanche', sub: '+2,000 style', gifts: 0, grade: 1, banner: true, stamp: false });
+  },
+  'finale-storm': () => {
+    staticHud({ ...quietHud, mood: Mood.Powder });
+    beats({ type: 'finale', tick: 0, event: ChaosEvent.GiftStorm, outcome: 'caught', text: 'Caught 48 of 48', sub: 'Clean sweep: +10 gifts', gifts: 10, grade: 3, banner: true, stamp: false });
+  },
+  'finale-train': () => {
+    staticHud({ ...quietHud, mood: Mood.Haunted });
+    beats({ type: 'finale', tick: 0, event: ChaosEvent.GhostTrain, outcome: 'rode', text: 'Rode the Spirit Train 6.2 s', sub: '+6 gifts', gifts: 6, grade: 2, banner: true, stamp: false });
+  },
+  'finale-yeti': () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 1500, mult: 1, chain: 1, timer: 1 } });
+    beats({ type: 'finale', tick: 0, event: ChaosEvent.Yeti, outcome: 'hopped', text: 'Yeti hop', sub: 'Yeti hop +1,500', gifts: 0, grade: 1, banner: false, stamp: true });
+  },
+  'finale-dodged': () => {
+    staticHud({ ...quietHud });
+    beats({ type: 'finale', tick: 0, event: ChaosEvent.Yeti, outcome: 'dodged', text: 'Yeti dodged', sub: null, gifts: 5, grade: 1, banner: false, stamp: false });
+  },
+  // Priority: a mission pop on stage yields to a finale, then comes back; the unlock waits its turn.
+  pops: () => {
+    staticHud({ ...quietHud });
+    beats({ type: 'missionPop', tick: 0, id: 'pass1', text: 'Pass a ghost', reward: 40 });
+    window.setTimeout(() => beats({ type: 'finale', tick: 0, event: ChaosEvent.Avalanche, outcome: 'outran', text: 'Outran the avalanche', sub: '+2,000 style', gifts: 0, grade: 1, banner: true, stamp: false }), 1100);
+    window.setTimeout(() => beats({ type: 'unlockPop', tick: 0, id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier' }), 1300);
+  },
+  'pop-mission': () => {
+    staticHud({ ...quietHud });
+    beats({ type: 'missionPop', tick: 0, id: 'pass1', text: 'Pass a ghost', reward: 40 });
+  },
+  'pop-unlock': () => {
+    staticHud({ ...quietHud });
+    beats({ type: 'unlockPop', tick: 0, id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier' });
+  },
+  'new-best': () => {
+    staticHud({ ...quietHud, score: 5020 });
+    beats({ type: 'newBest', tick: 0, score: 5020 });
+  },
+  'friend-beaten': () => {
+    staticHud({ ...quietHud });
+    beats({ type: 'friendBeaten', tick: 0, name: 'Mila', distance: 2340 });
+  },
+  // Say on any beat: a whisker, a max drift, In the flow, 1 km, New ground.
+  says: () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 980, mult: 3, chain: 9, timer: 0.9, stake: 2940 } });
+    const list: Beat[] = [
+      { type: 'nearMiss', tick: 0, grade: 'whisker', gap: 0.2, side: 1, x: 0, z: 0, obs: 'pine', speed: 24, say: { label: 'Whisker', points: 120, tone: 'big' } },
+      { type: 'flow', tick: 0, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
+      { type: 'km', tick: 0, km: 1, say: { label: '1 km', points: 0, tone: 'big' } },
+      { type: 'newGround', tick: 0, z: 0, say: { label: 'New ground', points: 0, tone: 'best' } },
+    ];
+    list.forEach((b, i) => window.setTimeout(() => beats(b), 200 + i * 1400));
+  },
+  // The countdown chip beside the mood chip, "Best in 240 m" under the distance, both counting down.
+  countdown: () => {
+    const m = staticHud({ ...quietHud, mood: Mood.Haunted, distance: 1000, bestIn: 240, countdown: { event: ChaosEvent.Avalanche, metres: 380 } });
+    let d = 380;
+    let b = 240;
+    const step = () => {
+      if (screen !== 'run') return;
+      d = Math.max(10, d - 10);
+      b = Math.max(0, b - 10);
+      m.countdown = { event: ChaosEvent.Avalanche, metres: d };
+      m.bestIn = b > 0 ? b : null;
+      window.setTimeout(step, 420);
+    };
+    window.setTimeout(step, 1200);
+  },
+  'countdown-storm': () => staticHud({ ...quietHud, mood: Mood.Powder, bestIn: 120, countdown: { event: ChaosEvent.GiftStorm, metres: 90 } }),
+  'countdown-plain': () => staticHud({ ...quietHud, mood: Mood.None, countdown: { event: ChaosEvent.GhostTrain, metres: 260 } }),
+  'countdown-yeti': () => staticHud({ ...quietHud, mood: Mood.Lantern, bestIn: 60, countdown: { event: ChaosEvent.Yeti, metres: 120 } }),
+  // A portrait phone in a chase with the stake line and a big cash-in: the row stays clear of the unit.
+  'chase-stake': () => {
+    const m = staticHud({ ...quietHud, combo: { active: true, pending: 1240, mult: 4, chain: 12, timer: 0.55, stake: 4960 }, danger: { kind: 'avalanche', gap: 30 } });
+    window.setTimeout(() => {
+      m.combo = { ...quietCombo };
+      beats(bankBeat(4960, 4));
+    }, 1600);
+  },
 };
 
 // ---------------------------------------------------------------- Control panel
@@ -852,6 +1151,8 @@ const GROUPS: Record<string, string[]> = {
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
   hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-learn'],
   menus: ['results', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
+  cash: ['bank-tiers', 'bank-t0', 'bank-t1', 'bank-t2', 'bank-t3', 'bank-best', 'bank-draft', 'bank-bump', 'stake', 'stake-fuse', 'stake-held', 'lost-crack', 'lost-best', 'lost-small', 'chase-stake'],
+  beats: ['streak', 'streak-5', 'pass-words', 'pass-streak', 'race-news', 'race-queue', 'race-call', 'race-call-grudge', 'race-call-you', 'duel', 'duel-lost', 'lead', 'grudge-settled', 'nemesis-down', 'finale-avalanche', 'finale-storm', 'finale-train', 'finale-yeti', 'finale-dodged', 'pops', 'pop-mission', 'pop-unlock', 'new-best', 'friend-beaten', 'says', 'countdown', 'countdown-storm', 'countdown-plain', 'countdown-yeti'],
 };
 for (const [g, list] of Object.entries(GROUPS)) {
   const row = document.createElement('div');

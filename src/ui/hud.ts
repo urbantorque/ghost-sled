@@ -1,9 +1,10 @@
 import type { GhostKind, HudModel, MirrorRect, ScreenRect, UIHandlers } from './contract';
-import { Mood, moodInfo } from '../sim/chaos';
+import { ChaosEvent, eventInfo, Mood, moodInfo } from '../sim/chaos';
 import { btn, Flag, h, Layer, sr, Txt, type Ctx } from './dom';
 import { kindCls, NBSP, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
-import { bump, EASE_OUT, play, SPRING } from './motion';
+import { bump, EASE_OUT, play, reduced, SPRING } from './motion';
+import { EVENT_ICON } from './notices';
 
 // In-run HUD. updateHud runs every frame: nodes are built once and each value is diffed, so a
 // frame where nothing changed touches no DOM at all. The top-centre stack is two tiers at most: the
@@ -12,6 +13,16 @@ import { bump, EASE_OUT, play, SPRING } from './motion';
 // sky above the rider (the combo meter and callout slot move under it), so the horizon and the sun
 // stay open. On a phone held upright the chase's meter takes the rival pill's place in the race row
 // and the mirror hangs under it alone, so the stack stays short. The centre of the screen stays empty.
+//
+// The rival pill is also where the race talks: a pass flashes its word and the name ("DOUBLE PASS
+// Mika", "SLUNG PAST Mika"), being passed is a quiet "Mika PASSED YOU", race news is a quieter line
+// with the name in its kind colour ("Tess wiped out"), the start-line call names who to chase
+// ("REMATCH Mila", 2.6 s, with a ring), and an open duel reads "DUEL Mika" over its gap. One flash at a
+// time: the landing stamp holds them all, a pass beats news and the call, and news is dropped first.
+// Under the combo timer a small line names the one number at stake ("4,960 AT STAKE"); it turns
+// gold-white on your best combo's pace and throbs like a fuse while a big stake drains. Top left,
+// "Best in 240 m" counts down to your best in gold-white, and a rolled event counts down in its own chip
+// beside the mood chip ("Avalanche in 380 m"), coloured by its role.
 
 const CHEVRONS = 5;
 /**
@@ -54,6 +65,32 @@ const TICK_GAP_MS = 500;
 /** A gained place turns its numeral mint once the pill's flash thins, for this long (the colour snaps). */
 const GAIN_DELAY_MS = 200;
 const GAIN_MS = 800;
+/** A chain, a sling or a duel result flashes a little longer than a plain pass. */
+const STRONG_MS = 1500;
+/** Race news is a quiet line for this long, and is stale (dropped) once it has waited this long. */
+const NEWS_MS = 1300;
+const NEWS_PEND_MS = 1300;
+/** The start-line call holds the pill this long, its ring pulsing at the C11 marker's 1.2 Hz. */
+const CALL_MS = 2600;
+const RING_HZ_MS = 833;
+/** The same duel result arriving twice (its pass and its duel beat) shows once within this window. */
+const SAME_MS = 2000;
+/** The lead beat's crown pulse waits this long at most for the place pill to show first place. */
+const LEAD_WAIT_MS = 2000;
+/** The score flashes gold-white this long on a mid-run New best. */
+const BEST_FLASH_MS = 600;
+
+/** Short names for the countdown chip ("Yeti in 380 m", not "Yeti Crossing in 380 m"). */
+const EVENT_SHORT: Record<ChaosEvent, string> = {
+  [ChaosEvent.None]: '',
+  [ChaosEvent.Avalanche]: 'Avalanche',
+  [ChaosEvent.Yeti]: 'Yeti',
+  [ChaosEvent.GiftStorm]: 'Gift Storm',
+  [ChaosEvent.GhostTrain]: 'Spirit Train',
+};
+
+/** Pass words that are worth a bigger punch: chains, slings, duel results. */
+const STRONG_WORDS = new Set(['double', 'triple', 'streak', 'slung', 'duelWon', 'heldOff']);
 
 /** First place wears a crown (same 24 px grid and fill style as the icon set). */
 const CROWN_SVG =
@@ -81,10 +118,24 @@ export const MOOD_MOD: Record<Mood, { icon: IconName; text: string; key: string 
 /** Moods with a dark sky: navy pills there get a moon-blue hairline so their edges hold (style.css). */
 const NIGHT = new Set<Mood>([Mood.Lantern, Mood.Comet, Mood.Haunted]);
 
-interface PendingPass {
+/**
+ * One message in the rival pill. pass: a pass of yours ("PASSED Mika"); lost: a ghost passed you
+ * ("Mika PASSED YOU"); news: a quiet race line ("Tess wiped out"); call: the start-line call
+ * ("REMATCH Mila").
+ */
+interface Flash {
+  type: 'pass' | 'lost' | 'news' | 'call';
+  /** The name as shown ("Your best" for your own run), or '' for a line with no ghost. */
   name: string;
   kind: GhostKind;
-  passed: boolean;
+  /** The word before the name ("Passed", "Double pass", "Rematch"), or ''. */
+  k: string;
+  /** The words after the name ("passed you", "wiped out"), or ''. */
+  tail: string;
+  ms: number;
+  /** A chain, a sling, a duel result: a bigger punch and a longer hold. */
+  strong: boolean;
+  /** When it arrived (it goes stale waiting its turn). */
   at: number;
 }
 
@@ -146,9 +197,45 @@ export class Hud {
   private readonly nextEven: Flag;
   private readonly nextFlash: Flag;
   private readonly nextLost: Flag;
-  /** When the flash on the pill started, and the passes waiting their turn (oldest first). */
+  private readonly nextNews: Flag;
+  private readonly nextCall: Flag;
+  private readonly nextStrong: Flag;
+  /** An open duel with the named ghost: "DUEL" before its name, the ring pulsing. */
+  private readonly nextDuel: Flag;
+  private readonly nextTail: Txt;
+  /** When the flash on the pill started, the one showing, and those waiting their turn (oldest first). */
   private flashAt = 0;
-  private readonly pend: PendingPass[] = [];
+  private cur: Flash | null = null;
+  private readonly pend: Flash[] = [];
+  /** The last strong word shown or queued, so a duel result arriving twice shows once. */
+  private lastStrong = { key: '', at: -1e9 };
+  /** The crown on the place pill, its gold-white ring, and when the lead beat asked for its pulse. */
+  private readonly crown: HTMLElement;
+  private readonly placeRing: HTMLElement;
+  private leadAt = -1e9;
+  private leadDone = true;
+  /** Under the combo timer: the number at stake, gold-white on your best combo's pace, a fuse when it drains. */
+  private readonly stakeEl: HTMLElement;
+  private readonly stakeOn: Flag;
+  private readonly stakePace: Flag;
+  private readonly stakeNum: Txt;
+  private lastStakeLen = 0;
+  private lastFuse = -1;
+  /** The combo as it last showed while up: a lost combo's figure cracks from it. */
+  readonly lastCombo = { pending: 0, mult: 1, stake: 0 };
+  /** "Best in 240 m" under the distance, and the event countdown chip beside the mood chip. */
+  private readonly bestInEl: HTMLElement;
+  private readonly bestInOn: Flag;
+  private readonly bestInNum: Txt;
+  private readonly cdEl: HTMLElement;
+  private readonly cdOn: Flag;
+  private readonly cdNear: Flag;
+  private readonly cdIco: HTMLElement;
+  private readonly cdName: Txt;
+  private readonly cdNum: Txt;
+  private lastCd: ChaosEvent = ChaosEvent.None;
+  private readonly moodGone: Flag;
+  private bestTimer = 0;
   private readonly comboOn: Flag;
   /** The total shows whenever the combo is up: a timer bar with no number over it read as empty. */
   private readonly comboTotal: Flag;
@@ -231,6 +318,7 @@ export class Hud {
   private warnedAt = -1e9;
   private scoreAt: { x: number; y: number } | null = null;
   private comboAt: { x: number; y: number } | null = null;
+  private rowAt: { x: number; y: number } | null = null;
   /**
    * Layout read in measure() (after the browser's own layout pass, never forced): the mirror's rect
    * for the world, the unit's box for the rider check, and the room the perfect-landing stamp has.
@@ -253,7 +341,30 @@ export class Hud {
     this.moodTxt = new Txt(moodName);
     this.moodEl = h('div', 'gs-mood gs-pill', this.moodIco, moodName);
     this.moodOn = new Flag(this.moodEl);
-    this.tl = h('div', 'gs-hud-tl', sr('Score'), this.scoreEl, h('div', 'gs-hud-sub', distEl, this.moodEl));
+    this.moodGone = new Flag(this.moodEl, 'is-gone');
+    // Your best within 250 m: "Best in 240 m" in gold-white (your best's colour) under the distance.
+    const biN = h('span', 'gs-num');
+    this.bestInNum = new Txt(biN);
+    this.bestInEl = h('div', 'gs-best-in', 'Best in ', biN, NBSP + 'm');
+    this.bestInOn = new Flag(this.bestInEl);
+    // A rolled event on its way, in its own chip beside the mood chip (never in its place), coloured by
+    // its role: the hazards ice blue, the Gift Storm marigold, the Spirit Train mint. On a phone held
+    // upright the event's name steps out (screen readers keep it) and the glyph names it: "in 380 m".
+    this.cdIco = h('span', 'gs-cd-ico');
+    const cdNameEl = h('span', 'gs-cd-name');
+    this.cdName = new Txt(cdNameEl);
+    const cdNumEl = h('span', 'gs-num');
+    this.cdNum = new Txt(cdNumEl);
+    this.cdEl = h('div', 'gs-cd gs-pill', this.cdIco, h('span', 'gs-cd-t', cdNameEl, h('span', 'gs-cd-in', 'in '), cdNumEl, NBSP + 'm'));
+    this.cdOn = new Flag(this.cdEl);
+    this.cdNear = new Flag(this.cdEl, 'is-near');
+    this.tl = h(
+      'div',
+      'gs-hud-tl',
+      sr('Score'),
+      this.scoreEl,
+      h('div', 'gs-hud-sub', h('div', 'gs-hud-dist', distEl, this.bestInEl), h('div', 'gs-hud-chips', this.moodEl, this.cdEl)),
+    );
 
     // Top right: gifts, pause.
     const giftNum = h('span', 'gs-num');
@@ -286,6 +397,9 @@ export class Hud {
     this.placeFlash = h('span', 'gs-place-flash');
     const crown = h('span', 'gs-i gs-place-crown');
     crown.innerHTML = CROWN_SVG;
+    this.crown = crown;
+    // Taking the lead: a gold-white ring rings the pill once as the crown pulses.
+    this.placeRing = h('span', 'gs-place-ring');
     // A place change reads as a small arrow and the count right after the numeral for a moment: a mint
     // up-arrow on a gain ("5th ▲2"), a dim down-arrow on a loss. It shares one grid cell with "of 7",
     // which steps out for it, so the race row never changes width. Never a sign: "5th −2" read as
@@ -294,7 +408,7 @@ export class Hud {
     this.placeDelta = new Txt(deltaN);
     this.placeDeltaEl = h('span', 'gs-place-delta gs-num', icon('tri', 'gs-place-dir'), deltaN);
     this.placeDeltaEl.setAttribute('aria-hidden', 'true');
-    this.placeEl = h('div', 'gs-place gs-panel gs-pill', this.placeFlash, crown, h('span', 'gs-place-nwrap', this.rankEl), h('span', 'gs-place-tail', ofEl, this.placeDeltaEl));
+    this.placeEl = h('div', 'gs-place gs-panel gs-pill', this.placeFlash, this.placeRing, crown, h('span', 'gs-place-nwrap', this.rankEl), h('span', 'gs-place-tail', ofEl, this.placeDeltaEl));
     this.placeOn = new Flag(this.placeEl);
     this.placeFirst = new Flag(this.placeEl, 'is-first');
     this.placeUp = new Flag(this.placeEl, 'is-up');
@@ -319,7 +433,9 @@ export class Hud {
     // Being passed reads as a quiet sentence: "<name> passed you" ("Your best passed you" for your own
     // run), the name in off-white (rose for the grudge, gold-white for your best), smaller than a pass
     // you make, with no glow, and only for about a second.
+    // Race news is quieter still: the name in its kind colour, then the news in off-white, sentence case.
     const tailEl = h('span', 'gs-next-tail', 'passed you');
+    this.nextTail = new Txt(tailEl);
     this.nextEl = h('div', 'gs-next gs-pill k-ghost', this.nextRing, h('span', 'gs-next-ico', icon('ghost'), this.nextTrail), kEl, nameEl, tailEl, gapEl);
     this.nextOn = new Flag(this.nextEl);
     this.nextAhead = new Flag(this.nextEl, 'is-ahead');
@@ -327,6 +443,10 @@ export class Hud {
     this.nextEven = new Flag(this.nextEl, 'is-even');
     this.nextFlash = new Flag(this.nextEl, 'is-flash');
     this.nextLost = new Flag(this.nextEl, 'is-lost');
+    this.nextNews = new Flag(this.nextEl, 'is-news');
+    this.nextCall = new Flag(this.nextEl, 'is-call');
+    this.nextStrong = new Flag(this.nextEl, 'is-strong');
+    this.nextDuel = new Flag(this.nextEl, 'is-duel');
     this.race = h('div', 'gs-race', this.placeEl, this.nextEl);
 
     // Tier two: the combo meter, with the trick callout slot directly under it.
@@ -338,7 +458,14 @@ export class Hud {
     // The timer drains left to right over a dark track, so what is left reads at a glance.
     this.comboBar = h('div', 'gs-combo-bar');
     this.comboRow = h('div', 'gs-combo-row', ptsEl, this.multEl);
-    this.comboEl = h('div', 'gs-combo', this.comboRow, h('div', 'gs-combo-track', this.comboBar));
+    // The one number at stake (the total times the multiplier), from x2: "4,960 AT STAKE". Its row is
+    // always reserved, so the callout line under it never moves when it comes and goes.
+    const stakeN = h('span', 'gs-stake-n gs-num');
+    this.stakeNum = new Txt(stakeN);
+    this.stakeEl = h('div', 'gs-stake', stakeN, h('span', 'gs-stake-w', 'at stake'));
+    this.stakeOn = new Flag(this.stakeEl);
+    this.stakePace = new Flag(this.stakeEl, 'is-pace');
+    this.comboEl = h('div', 'gs-combo', this.comboRow, h('div', 'gs-combo-track', this.comboBar), this.stakeEl);
     this.comboOn = new Flag(this.comboEl);
     this.comboTotal = new Flag(this.comboEl, 'has-total');
     this.comboLow = new Flag(this.comboEl, 'is-low');
@@ -412,7 +539,11 @@ export class Hud {
       this.lastMood = -1;
       this.flashUntil = 0;
       this.pend.length = 0;
+      this.cur = null;
       this.nextFlash.set(false);
+      this.nextDuel.set(false);
+      this.leadDone = true;
+      this.lastFuse = -1;
       this.fit();
     }
   }
@@ -421,17 +552,25 @@ export class Hud {
     this.layer.hide();
     this.revealing = false;
     window.clearTimeout(this.deltaTimer);
+    window.clearTimeout(this.bestTimer);
+    this.scoreEl.classList.remove('is-best');
     this.deltaSum = 0;
     this.placeUp.set(false);
     this.placeDown.set(false);
     this.pend.length = 0;
+    this.cur = null;
+    this.lastStrong.at = -1e9;
     this.el.parentElement?.classList.remove('gs-night', 'gs-chase-p');
     this.onLayout();
   }
 
-  /** True while a pass you made flashes in the race row: minor callout lines stay out of the stack. */
+  /**
+   * True while a pass you made (or the start-line call) flashes in the race row: minor callout lines
+   * stay out of the stack. Being passed and race news are quiet, and leave the stack alone.
+   */
   get passing(): boolean {
-    return this.nextFlash.on && !this.nextLost.on && this.flashUntil > performance.now();
+    const t = this.cur?.type;
+    return this.nextFlash.on && (t === 'pass' || t === 'call') && this.flashUntil > performance.now();
   }
 
   /** True while the Slipstream pill is up: it names the slipstream, so no callout repeats it. */
@@ -531,6 +670,53 @@ export class Hud {
   }
 
   /**
+   * A mid-run New best: the score flashes gold-white (your best's colour) for 0.6 s with a punch. The
+   * colour snaps; reduced motion keeps the colour and drops the punch.
+   */
+  flashBest(): void {
+    this.scoreEl.classList.add('is-best');
+    bump(this.scoreEl, 1.2, 380);
+    window.clearTimeout(this.bestTimer);
+    this.bestTimer = window.setTimeout(() => this.scoreEl.classList.remove('is-best'), BEST_FLASH_MS);
+  }
+
+  /** Best combo pace: the stake line (gold-white from here, through the model's pace flag) punches once. */
+  paceHit(): void {
+    this.stakePace.set(this.stakeOn.on);
+    bump(this.stakeEl, 1.3, 420);
+  }
+
+  /** Where a cash-in or a cracked figure sits: the combo total's row (last measured), or null. */
+  bankAnchor(): { x: number; y: number } | null {
+    return this.rowAt ?? this.comboAt;
+  }
+
+  /**
+   * Taking the lead: screen readers hear "Into the lead", and the crown on the place pill pulses with a
+   * gold-white ring as soon as the pill shows first place (the rank settles a moment after the beat).
+   */
+  lead(): void {
+    this.say('Into the lead');
+    this.leadAt = performance.now();
+    this.leadDone = false;
+    if (this.placeFirst.on) this.playLead();
+  }
+
+  private playLead(): void {
+    this.leadDone = true;
+    play(
+      this.crown,
+      [
+        { transform: 'translateY(0.3em) scale(0.4)', opacity: 0.3 },
+        { transform: 'translateY(-0.12em) scale(1.5)', opacity: 1, offset: 0.45 },
+        { transform: 'none', opacity: 1 },
+      ],
+      { duration: 560, easing: SPRING },
+    );
+    if (!reduced()) play(this.placeRing, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.22, 1.6)' }], { duration: 760, easing: EASE_OUT });
+  }
+
+  /**
    * A banked combo's number holds where the combo meter is for `ms` before it flies to the score: a
    * new combo's total waits under it for that long, so the two numbers never print over each other.
    */
@@ -557,15 +743,78 @@ export class Hud {
    * and "passed you" also waits while a pass of yours flashes; each then plays in turn (a pass that
    * waited too long is stale and dropped). Screen readers hear it at once.
    */
-  flashPass(name: string, kind: GhostKind, passed: boolean): void {
+  flashPass(name: string, kind: GhostKind, passed: boolean, text = 'Passed', word = 'passed'): void {
     const shown = shownName(name, kind);
-    this.say(passed ? (kind === 'you' ? 'Passed your best' : `Passed ${name}`) : `${shown} passed you`);
-    const now = performance.now();
-    if (this.stampUp() || (!passed && this.passing)) {
-      this.queuePass({ name, kind, passed, at: now });
+    const spoken = kind === 'you' ? 'your best' : name;
+    if (!passed) {
+      this.say(`${shown} passed you`);
+      this.flash({ type: 'lost', name: shown, kind, k: '', tail: 'passed you', ms: LOST_MS, strong: false, at: 0 });
       return;
     }
-    this.showPass(name, kind, passed, now);
+    const k = text.trim() || 'Passed';
+    const strong = STRONG_WORDS.has(word);
+    // A duel result can arrive twice (its pass and its duel beat): it shows once.
+    if (strong) {
+      const key = `${k}|${shown}`;
+      const now = performance.now();
+      if (key === this.lastStrong.key && now - this.lastStrong.at < SAME_MS) return;
+      this.lastStrong.key = key;
+      this.lastStrong.at = now;
+    }
+    this.say(`${k} ${spoken}`);
+    this.flash({ type: 'pass', name: shown, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0 });
+  }
+
+  /**
+   * Race news in the pass-flash slot: a quiet line, the ghost's name (when the text leads with it) in
+   * its kind colour and the rest in off-white ("Tess wiped out", "Your best wiped out", "1 more ghost
+   * opens Frostfang Glacier"). It never cuts a pass, waits behind one, and is the first thing dropped.
+   */
+  news(name: string, kind: GhostKind, text: string): void {
+    const t = text.trim();
+    if (t === '') return;
+    this.say(t);
+    const shown = shownName(name, kind);
+    let lead = '';
+    let tail = t;
+    for (const n of [shown, name]) {
+      if (n !== '' && t.startsWith(n) && (t.length === n.length || t[n.length] === ' ' || t[n.length] === "'")) {
+        lead = n;
+        tail = t.slice(n.length).trim();
+        break;
+      }
+    }
+    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0 });
+  }
+
+  /**
+   * The start-line call, in the pill's flash state for 2.6 s with its ring pulsing at the C11 marker's
+   * 1.2 Hz: the word and the name ("REMATCH Mila", "CHASE Your best"), no gap number (C12 holds).
+   * Screen readers hear the margin too (sr). Reduced motion: no slide and no ring pulse.
+   */
+  call(word: string, name: string, kind: GhostKind, srText: string): void {
+    const shown = shownName(name, kind);
+    this.say(srText.trim() || `${word} ${kind === 'you' ? 'your best' : name}`);
+    this.flash({ type: 'call', name: shown, kind, k: word, tail: '', ms: CALL_MS, strong: false, at: 0 });
+  }
+
+  /**
+   * One message at a time in the pill. The landing stamp holds them all. A pass of yours takes the pill
+   * at once (the newest pass is the news); the call yields only to a pass; "passed you" and news wait
+   * behind a pass or the call, and news also waits behind "passed you".
+   */
+  private flash(f: Flash): void {
+    const now = performance.now();
+    f.at = now;
+    const cur = this.flashUntil > now && this.nextFlash.on ? this.cur : null;
+    let wait = this.stampUp();
+    if (!wait && cur) {
+      if (f.type === 'call') wait = cur.type === 'pass';
+      else if (f.type === 'lost') wait = cur.type === 'pass' || cur.type === 'call';
+      else if (f.type === 'news') wait = cur.type !== 'news';
+    }
+    if (wait) this.enqueue(f);
+    else this.showFlash(f, now);
   }
 
   /**
@@ -575,42 +824,60 @@ export class Hud {
   yieldToStamp(): void {
     const now = performance.now();
     if (!this.nextFlash.on || this.flashUntil <= now) return;
-    if (now - this.flashAt < REQUEUE_MS) {
-      const g = { name: this.nextName.el.textContent ?? '', kind: this.lastKind ?? 'pool', passed: !this.nextLost.on, at: now };
-      // The pill holds the shown name ("Your best"), which shownName() keeps as it is.
-      this.pend.unshift(g);
+    const c = this.cur;
+    if (c && now - this.flashAt < REQUEUE_MS) {
+      c.at = now;
+      this.pend.unshift(c);
       if (this.pend.length > 2) this.pend.length = 2;
     }
     this.flashUntil = now;
   }
 
-  /** A pass waits its turn. A newer event about the same ghost replaces its older one; two at most. */
-  private queuePass(p: PendingPass): void {
-    const i = this.pend.findIndex((q) => q.name === p.name);
+  /**
+   * A flash waits its turn. A newer one about the same ghost replaces its older one; two wait at most,
+   * and when a third arrives news goes first, then the oldest.
+   */
+  private enqueue(f: Flash): void {
+    const i = f.name === '' ? -1 : this.pend.findIndex((q) => q.name === f.name && (q.type === 'news') === (f.type === 'news'));
     if (i >= 0) this.pend.splice(i, 1);
-    this.pend.push(p);
-    if (this.pend.length > 2) this.pend.shift();
+    this.pend.push(f);
+    while (this.pend.length > 2) {
+      const n = this.pend.findIndex((q) => q.type === 'news');
+      this.pend.splice(n >= 0 && n < this.pend.length - 1 ? n : 0, 1);
+    }
   }
 
-  private showPass(name: string, kind: GhostKind, passed: boolean, now: number): void {
-    const shown = shownName(name, kind);
+  private showFlash(f: Flash, now: number): void {
+    this.cur = f;
     this.flashAt = now;
-    this.flashUntil = now + (passed ? FLASH_MS : LOST_MS);
+    this.flashUntil = now + f.ms;
     this.nextFlash.set(true);
-    this.nextLost.set(!passed);
-    this.nextK.str(passed ? 'Passed' : '');
-    this.nextName.str(shown);
-    this.setKind(kind);
+    this.nextLost.set(f.type === 'lost');
+    this.nextNews.set(f.type === 'news');
+    this.nextCall.set(f.type === 'call');
+    this.nextStrong.set(f.strong);
+    this.nextDuel.set(false);
+    this.nextK.str(f.k);
+    this.nextName.str(f.name);
+    this.nextTail.str(f.tail);
+    this.setKind(f.kind);
     this.nextOn.set(true);
-    if (passed) {
-      play(this.nextEl, [{ transform: 'scale(0.86)' }, { transform: 'scale(1.08)', offset: 0.5 }, { transform: 'scale(1)' }], { duration: 340, easing: 'ease-out' });
-      play(this.nextRing, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.18, 1.5)' }], { duration: 620, easing: EASE_OUT });
+    if (f.type === 'pass') {
+      const peak = f.strong ? 1.13 : 1.08;
+      play(this.nextEl, [{ transform: 'scale(0.84)' }, { transform: `scale(${peak})`, offset: 0.5 }, { transform: 'scale(1)' }], { duration: f.strong ? 380 : 340, easing: 'ease-out' });
+      play(this.nextRing, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: f.strong ? 'scale(1.26, 1.8)' : 'scale(1.18, 1.5)' }], { duration: f.strong ? 720 : 620, easing: EASE_OUT });
       // The ghost you passed falls behind: it slips out of its icon to the left (clipped there, so
       // it never floats loose beside the pill).
       play(this.nextTrail, [{ opacity: 0.9, transform: 'translateX(0) scale(1)' }, { opacity: 0, transform: 'translateX(-18px) scale(0.7)' }], { duration: 700, delay: 80, easing: EASE_OUT, fill: 'both' });
       this.onPassFlash();
+    } else if (f.type === 'call') {
+      // The call slides in from above and its ring pulses three times at the marker's beat.
+      play(this.nextEl, [{ opacity: 0, transform: 'translateY(-10px) scale(0.92)' }, { opacity: 1, transform: 'scale(1.05)', offset: 0.6 }, { opacity: 1, transform: 'none' }], { duration: 360, easing: 'ease-out' });
+      if (!reduced()) play(this.nextRing, [{ opacity: 0.9, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14, 1.45)' }], { duration: RING_HZ_MS, iterations: 3, easing: EASE_OUT });
+      this.onPassFlash();
     } else {
-      // A small settle, no punch, shake or ring: losing a place is news, not a celebration.
+      // A small settle, no punch, shake or ring: losing a place, or a ghost's wipeout, is news, not a
+      // celebration.
       play(this.nextEl, [{ opacity: 0.75, transform: 'translateY(-3px)' }, { opacity: 1, transform: 'none' }], { duration: 160, easing: 'ease-out' });
     }
     this.onLayout();
@@ -678,12 +945,19 @@ export class Hud {
     // between them without reading layout.
     this.scoreAt = centre(this.scoreEl, this.scoreAt);
     this.comboAt = centre(this.comboEl, this.comboAt);
+    // The total's row, from its layout box: the meter's hidden state is scaled and nudged up, which a
+    // transformed rect would carry into the cash-in's anchor.
+    this.rowAt = layoutCentre(this.comboRow, this.rowAt);
     this.readLayout();
+    // The top-left block carries the distance, "Best in 240 m", the mood chip and the countdown chip.
     n = pushRect(out, n, this.tl);
+    if (this.cdOn.on) n = pushRect(out, n, this.cdEl);
+    if (this.bestInOn.on) n = pushRect(out, n, this.bestInEl);
     n = pushRect(out, n, this.tr);
     if (this.placeOn.on && !this.bandHides()) n = pushRect(out, n, this.placeEl);
     if (this.nextOn.on && !this.bandHides()) n = pushRect(out, n, this.nextEl);
     if (this.comboOn.on) n = pushRect(out, n, this.comboEl);
+    if (this.stakeOn.on) n = pushRect(out, n, this.stakeEl);
     for (const c of Array.from(this.calloutSlot.children)) if (!c.classList.contains('is-gone')) n = pushRect(out, n, c);
     if (this.driftOn.on) n = pushRect(out, n, this.driftEl);
     if (this.draftOn.on) n = pushRect(out, n, this.draftEl);
@@ -761,6 +1035,9 @@ export class Hud {
     }
     this.moodWanted = m.mood !== Mood.None;
     if (this.moodOn.set(this.moodWanted && !this.revealing)) moved = true;
+    // A plain run has no mood chip at all, so a countdown chip takes the row's start (the chip holds its
+    // place only while a reveal is about to collapse into it).
+    if (this.moodGone.set(!this.moodWanted)) moved = true;
 
     if (this.gifts.num(m.gifts)) {
       if (this.lastGifts >= 0 && m.gifts > this.lastGifts) bump(this.giftsEl, 1.1, 240);
@@ -796,21 +1073,30 @@ export class Hud {
         }
       }
     }
+    // The lead beat's crown pulse plays once the pill shows first place (or gives up after a moment).
+    if (!this.leadDone) {
+      if (now - this.leadAt > LEAD_WAIT_MS) this.leadDone = true;
+      else if (this.placeFirst.on) this.playLead();
+    }
 
     // Next ghost. While a pass flashes in the pill, it holds; the target comes back after, unless a
     // pass that waited its turn (behind a landing stamp or a pass of yours) goes up next.
     let flashing = this.flashUntil > now;
     if (!flashing && this.pend.length > 0 && !this.stampUp()) {
-      while (this.pend.length > 0 && now - this.pend[0].at > PEND_MS) this.pend.shift();
+      while (this.pend.length > 0 && now - this.pend[0].at > (this.pend[0].type === 'news' ? NEWS_PEND_MS : PEND_MS)) this.pend.shift();
       const p = this.pend.shift();
       if (p) {
-        this.showPass(p.name, p.kind, p.passed, now);
+        this.showFlash(p, now);
         flashing = true;
       }
     }
     if (!flashing && this.nextFlash.on) {
       this.nextFlash.set(false);
       this.nextLost.set(false);
+      this.nextNews.set(false);
+      this.nextCall.set(false);
+      this.nextStrong.set(false);
+      this.cur = null;
       this.lastSide = 2;
       this.lastGap = Number.NaN;
       this.nameNow = true;
@@ -819,6 +1105,13 @@ export class Hud {
     const g = m.nextGhost;
     if (!flashing) {
       if (this.nextOn.set(g !== null)) moved = true;
+      // An open duel names its ghost "DUEL Mika" over the gap, its ring beating with the C11 marker's.
+      const duel = g !== null && g.duel === true;
+      if (this.nextK.str(duel ? 'Duel' : '')) moved = true;
+      if (this.nextDuel.set(duel) && duel) {
+        play(this.nextEl, [{ transform: 'scale(0.9)' }, { transform: 'scale(1.06)', offset: 0.5 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
+        moved = true;
+      }
       if (g) {
         // A new target name also has to hold for a moment (a bunched pack swaps the nearest ghost).
         if (g.name !== this.wantName) {
@@ -876,9 +1169,62 @@ export class Hud {
         this.comboBar.style.transform = `scaleX(${t.toFixed(3)})`;
       }
       this.comboLow.set(t < 0.25);
+      this.lastCombo.pending = c.pending;
+      this.lastCombo.mult = c.mult;
+      this.lastCombo.stake = Math.round(c.stake ?? c.pending * c.mult);
     } else {
       this.lastMult = 0;
       this.comboLow.set(false);
+    }
+
+    // The number at stake, from x2 (at x1 the total above already is it). Gold-white once it passes
+    // your best combo; a fuse while a big stake drains, its throb quickening in bands as the timer runs
+    // out (bands, not a rate per frame, so the CSS loop never jumps phase every frame).
+    const stake = Math.round(c.stake ?? 0);
+    const showStake = c.active && c.mult >= 2 && stake > 0;
+    if (this.stakeOn.set(showStake)) moved = true;
+    if (showStake && this.stakeNum.num(stake)) {
+      const len = this.stakeNum.el.textContent?.length ?? 0;
+      if (len !== this.lastStakeLen) {
+        this.lastStakeLen = len;
+        moved = true;
+      }
+    }
+    this.stakePace.set(showStake && c.pace === true);
+    const fuse = showStake ? (c.fuse ?? 0) : 0;
+    const fb = fuse <= 0 ? 0 : fuse < 0.5 ? 1 : fuse < 0.8 ? 2 : 3;
+    if (fb !== this.lastFuse) {
+      this.lastFuse = fb;
+      this.stakeEl.dataset.fuse = String(fb);
+    }
+
+    // Your best within 250 m, under the distance.
+    const bi = m.bestIn ?? null;
+    const showBi = bi !== null && bi > 0;
+    if (this.bestInOn.set(showBi)) moved = true;
+    if (showBi) this.bestInNum.num(bi);
+
+    // The rolled event's countdown chip (it goes at the warn, before any chase opens).
+    const cd = m.countdown ?? null;
+    const showCd = cd !== null && cd.event !== ChaosEvent.None && EVENT_SHORT[cd.event] !== '';
+    if (showCd && cd.event !== this.lastCd) {
+      this.lastCd = cd.event;
+      const key = eventInfo(cd.event).key;
+      this.cdEl.classList.remove('e-avalanche', 'e-yeti', 'e-giftstorm', 'e-ghosttrain');
+      this.cdEl.classList.add(`e-${key}`);
+      this.cdIco.replaceChildren(icon(EVENT_ICON[cd.event]));
+      this.cdName.str(EVENT_SHORT[cd.event] + ' ');
+    }
+    if (this.cdOn.set(showCd)) {
+      moved = true;
+      if (showCd) {
+        this.say(`${EVENT_SHORT[cd.event]} in ${Math.round(cd.metres)} metres`);
+        play(this.cdEl, [{ opacity: 0, transform: 'translateY(-4px) scale(0.86)' }, { opacity: 1, transform: 'scale(1.06)', offset: 0.6 }, { opacity: 1, transform: 'none' }], { duration: 320, easing: 'ease-out' });
+      }
+    }
+    if (showCd) {
+      if (this.cdNum.num(cd.metres) && (this.cdNum.el.textContent?.length ?? 0) < 3) moved = true;
+      this.cdNear.set(cd.metres <= 100);
     }
 
     // Drift tier.
@@ -1028,6 +1374,35 @@ function centre(el: HTMLElement, prev: { x: number; y: number } | null): { x: nu
   p.x = r.left + r.width / 2;
   p.y = r.top + r.height / 2;
   return p;
+}
+
+/**
+ * An element's centre from its layout box inside its positioned parent (whose own rect carries the
+ * column's centring), so transforms between them (a hidden meter's nudge and scale) never move it.
+ */
+function layoutCentre(el: HTMLElement, prev: { x: number; y: number } | null): { x: number; y: number } | null {
+  const parent = el.offsetParent;
+  if (!(parent instanceof HTMLElement) || el.offsetWidth === 0) return prev;
+  const r = parent.getBoundingClientRect();
+  const p = prev ?? { x: 0, y: 0 };
+  p.x = r.left + parent.clientLeft + el.offsetLeft + el.offsetWidth / 2;
+  p.y = r.top + parent.clientTop + el.offsetTop + el.offsetHeight / 2;
+  return p;
+}
+
+/** Writes a padded box (CSS px) into the reused slot `out[n]`; returns the new count. */
+export function pushBox(out: ScreenRect[], n: number, x0: number, y0: number, x1: number, y1: number): number {
+  if (!(x1 > x0 && y1 > y0)) return n;
+  let o = out[n];
+  if (!o) {
+    o = { x0: 0, y0: 0, x1: 0, y1: 0 };
+    out[n] = o;
+  }
+  o.x0 = x0 - 4;
+  o.y0 = y0 - 4;
+  o.x1 = x1 + 4;
+  o.y1 = y1 + 4;
+  return n + 1;
 }
 
 /** Writes an element's padded viewport rect into the reused slot `out[n]`; returns the new count. */

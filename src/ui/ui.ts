@@ -199,6 +199,8 @@ export class UI implements GameUI {
     if (this.hud.layer.open) {
       const stamp = this.fx.stampEl;
       if (stamp) n = pushRect(pool, n, stamp);
+      // The cash-in figure (until it flies) and a lost combo's cracked figure (contract C8).
+      n = this.fx.measure(pool, n);
       const banner = this.notices.current;
       if (banner) n = pushRect(pool, n, banner);
       for (const c of Array.from(this.notices.revealSlot.children)) n = pushRect(pool, n, c);

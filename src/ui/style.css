@@ -21,9 +21,13 @@
   --grudge: #ff5a7a;
   --you: #ffe08a;
   --alarm: #ff3848;
-  --tier1: #7fd8ff;
-  --tier2: #ffb040;
-  --tier3: #ff5a7a;
+  /* The drift charge heats inside your own vermillion (beats.ts DRIFT_TIER_HEX): pale coral, coral,
+     vermillion. Tier 1 used to be the hazards' ice blue and tier 3 exactly the grudge's rose. */
+  --tier1: #ffc2a8;
+  --tier2: #ff8a5c;
+  --tier3: #ff4d2e;
+  /* The combo timer's last quarter, and the fuse on a big stake while it drains. */
+  --amber: #ffb040;
   --r-card: 18px;
   --r-pill: 999px;
   --spring: cubic-bezier(0.2, 0.9, 0.2, 1.1);
@@ -1436,6 +1440,100 @@
   justify-items: start;
 }
 
+/* The distance, and under it "Best in 240 m" while your best is within 250 m. */
+.gs-hud-dist {
+  display: grid;
+  justify-items: start;
+}
+
+/* The mood chip and the event countdown chip, side by side (the countdown never takes the mood's place). */
+.gs-hud-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: 6px;
+}
+
+/* Your best's own colour (gold-white), a step under the distance, every number with its unit. */
+.gs-best-in {
+  display: none;
+  margin-top: 1px;
+  color: var(--you);
+  font-size: max(12px, 0.86em);
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.15;
+  text-shadow: var(--halo);
+  white-space: nowrap;
+}
+
+.gs-best-in.is-on {
+  display: block;
+}
+
+/* A mid-run New best: the score turns gold-white for 0.6 s (the colour snaps). */
+.gs-score.is-best {
+  color: var(--you);
+}
+
+/* The rolled event on its way: an ink pill like the mood chip, its glyph and edge in the event's role
+   colour (hazards ice blue, the Gift Storm marigold, the Spirit Train mint), "Avalanche in 380 m". */
+.gs-cd {
+  --e: #6fc3ff;
+  --e-a: rgba(111, 195, 255, 0.55);
+  display: none;
+  align-items: center;
+  gap: 6px;
+  height: 2.2em;
+  margin-top: 9px;
+  padding: 0 0.95em 0 0.6em;
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--e-a), var(--shadow);
+  font-size: max(12px, 0.88em);
+  font-style: italic;
+  font-weight: 850;
+  text-shadow: var(--halo-tight);
+  white-space: nowrap;
+}
+
+.gs-cd.is-on {
+  display: inline-flex;
+}
+
+.gs-cd.e-giftstorm {
+  --e: var(--gift);
+  --e-a: rgba(255, 211, 77, 0.55);
+}
+
+.gs-cd.e-ghosttrain {
+  --e: var(--ghost);
+  --e-a: rgba(143, 243, 228, 0.5);
+}
+
+/* The last 100 m: the edge firms up in the role colour (static, no loop). */
+.gs-cd.is-near {
+  box-shadow: inset 0 0 0 1.5px var(--e), 0 0 14px -4px var(--e), var(--shadow);
+}
+
+.gs-cd-ico {
+  display: inline-grid;
+  color: var(--e);
+}
+
+.gs-cd-ico .gs-i {
+  width: 1.3em;
+  height: 1.3em;
+}
+
+.gs-cd-in {
+  color: rgba(245, 243, 255, 0.82);
+}
+
+/* A plain run has no mood chip at all (it would only hold empty space beside the countdown). */
+.gs-mood.is-gone {
+  display: none;
+}
+
 .gs-score {
   padding-right: 0.1em;
   font-size: clamp(32px, calc(var(--u) * 2.8), 54px);
@@ -1849,6 +1947,9 @@
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
+  /* One line: a long name gives way (it ellipsizes), never the word. */
+  flex: none;
+  white-space: nowrap;
 }
 
 .gs-next-name {
@@ -1987,6 +2088,92 @@
   color: var(--you);
 }
 
+/* A line with no ghost name ("1 more ghost opens Frostfang Glacier") is just its words. */
+.gs-next-name:empty {
+  display: none;
+}
+
+/* Race news ("Tess wiped out"): quieter than a pass, the name in its kind colour on a plain 1 px edge,
+   then the news in off-white sentence case, a step smaller, for 1.3 s. Never a glow or a punch. */
+.gs-next.is-flash.is-news {
+  gap: 7px;
+  padding-right: 14px;
+  box-shadow: inset 0 0 0 1px var(--k-a), var(--shadow);
+  font-size: 0.9em;
+}
+
+.gs-next.is-news .gs-next-name {
+  color: var(--k);
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-next.is-flash.is-news .gs-next-tail {
+  display: inline;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: rgba(245, 243, 255, 0.9);
+  font-size: max(11px, 0.92em);
+  font-style: italic;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.gs-next.is-flash.is-news .gs-next-k {
+  display: none;
+}
+
+/* A chain, a sling, a duel result: the word a touch larger and the ring a step brighter. */
+.gs-next.is-flash.is-strong .gs-next-k {
+  font-size: max(11.5px, 0.9em);
+}
+
+.gs-next.is-flash.is-strong {
+  box-shadow: inset 0 0 0 2px var(--k), 0 0 26px -2px var(--k), var(--shadow);
+}
+
+/* The start-line call: "REMATCH Mila" in the kind colour on a firm edge, no gap number (C12). */
+.gs-next.is-flash.is-call {
+  box-shadow: inset 0 0 0 1.5px var(--k), 0 0 18px -4px var(--k), var(--shadow);
+}
+
+/* An open duel: "DUEL" before the name over the usual gap ("2 m ahead", "neck and neck"), and a ring
+   in the kind colour beating at the C11 marker's 1.2 Hz (opacity only). */
+.gs-next.is-duel .gs-next-k {
+  display: inline;
+}
+
+.gs-next.is-duel {
+  box-shadow: inset 0 0 0 1.5px var(--k), var(--shadow);
+}
+
+.gs-next.is-duel::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--k), 0 0 16px 1px var(--k-a);
+  opacity: 0;
+  pointer-events: none;
+  animation: gs-ring-beat 833ms ease-out infinite;
+}
+
+/* Taking the lead: one gold-white ring off the place pill as the crown pulses. */
+.gs-place-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--you), 0 0 20px 2px rgba(255, 224, 138, 0.5);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-place-crown {
+  transform-origin: 50% 80%;
+}
+
 /* A lost combo takes the meter away at once, so a fading total never reads as greyed out. */
 .gs-combo {
   display: grid;
@@ -2080,8 +2267,64 @@
 }
 
 .gs-combo.is-low .gs-combo-bar {
-  background: var(--tier2);
+  background: var(--amber);
   animation: gs-blink 320ms ease-in-out infinite alternate;
+}
+
+/* The one number at stake, under the timer from x2: "4,960 AT STAKE", the figure a step larger than its
+   words. Its row is always reserved (visibility, not display), so the callout line under the meter
+   never moves as it comes and goes. Gold-white once it passes your best combo (your best's colour),
+   amber with a throb while a big stake drains (the fuse), quickening in bands as the timer runs out. */
+.gs-stake {
+  display: flex;
+  align-items: baseline;
+  gap: 0.36em;
+  margin-top: -1px;
+  line-height: 1.1;
+  font-style: italic;
+  white-space: nowrap;
+  text-shadow: var(--halo);
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 140ms ease, visibility 0s linear 140ms;
+}
+
+.gs-stake.is-on {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 140ms ease, visibility 0s;
+}
+
+.gs-stake-n {
+  display: inline-block;
+  font-size: max(13px, 0.92em);
+  font-weight: 900;
+}
+
+.gs-stake-w {
+  color: rgba(245, 243, 255, 0.86);
+  font-size: max(11px, 0.66em);
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gs-stake:not([data-fuse='0']) .gs-stake-n {
+  color: var(--amber);
+  animation: gs-fuse 500ms cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+}
+
+.gs-stake[data-fuse='2'] .gs-stake-n {
+  animation-duration: 250ms;
+}
+
+.gs-stake[data-fuse='3'] .gs-stake-n {
+  animation-duration: 167ms;
+}
+
+.gs-stake.is-pace .gs-stake-n,
+.gs-stake.is-pace .gs-stake-w {
+  color: var(--you);
 }
 
 /* Keyboard and mouse hints seat right under this row, so it keeps a hint's height clear below it. */
@@ -2152,15 +2395,15 @@
 /* The tier colour lives on the pips and the pill's ring; the label stays off-white so it keeps
    AA contrast on the translucent panel over bright snow (rose text does not). */
 .gs-drift[data-tier='1'] {
-  box-shadow: inset 0 0 0 1.5px rgba(127, 216, 255, 0.7), var(--shadow);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 194, 168, 0.7), var(--shadow);
 }
 
 .gs-drift[data-tier='2'] {
-  box-shadow: inset 0 0 0 1.5px rgba(255, 176, 64, 0.75), var(--shadow);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 138, 92, 0.78), var(--shadow);
 }
 
 .gs-drift[data-tier='3'] {
-  box-shadow: inset 0 0 0 1.5px rgba(255, 90, 122, 0.8), var(--shadow);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 77, 46, 0.85), 0 0 14px -3px rgba(255, 77, 46, 0.6), var(--shadow);
 }
 
 .gs-drift[data-tier='1'] .gs-pip:nth-child(-n + 1) {
@@ -2862,6 +3105,20 @@
   color: var(--signal);
 }
 
+/* Your own best (Best combo pace, New ground, New best): gold-white, a big line's size. */
+.gs-call.is-best {
+  color: var(--you);
+}
+
+.gs-call.is-best .gs-call-label {
+  font-size: clamp(21px, calc(var(--u) * 1.5), 29px);
+}
+
+.gs-call.is-best .gs-call-pts {
+  color: var(--you);
+  font-size: clamp(18px, calc(var(--u) * 1.3), 25px);
+}
+
 /* The perfect-landing stamp: one hero line placed by Fx beside the rider (left, top, width and
    --hero-f, once per landing), off the sky where the low sun sits. "PERFECT LANDING" is white-gold,
    white at the top of each letter to #FFE08A at the foot (never the marigold of gifts), tilted like a
@@ -2993,22 +3250,155 @@
   height: 100%;
 }
 
+/* A stomp streak's burst opens wider with each stomp. */
+.gs-hero[data-streak='2'] .gs-burst {
+  scale: 1.12;
+}
+
+.gs-hero[data-streak='3'] .gs-burst {
+  scale: 1.24;
+}
+
+.gs-hero[data-streak='4'] .gs-burst,
+.gs-hero[data-streak='5'] .gs-burst {
+  scale: 1.36;
+}
+
+/* The cash-in. The figure is the combo total's type at a bigger size, with the ink halo; a tier-1 to 3
+   bank shows its origin with the "x4" chip hanging beside it (the multiplier pill's look), and rolls
+   up to the product. The fx layer takes the HUD's type unit so the sizes match the meter. */
+.gs-fx {
+  --u: clamp(14px, calc(8px + 0.9vmin), 18px);
+}
+
+@media (min-aspect-ratio: 1/1) {
+  .gs-fx {
+    --u: clamp(14px, calc(7.5px + 1.25vh), 22px);
+  }
+}
+
 .gs-bank {
   position: absolute;
   top: 0;
   left: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  /* Centred on its anchor even when reduced motion drops the animated transform. */
+  transform: translate(-50%, -50%);
+  justify-items: center;
+  gap: 0.1em;
   font-style: italic;
   font-weight: 900;
   white-space: nowrap;
+  pointer-events: none;
+}
+
+.gs-bank-fig {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gs-bank-tick {
+  display: inline-block;
 }
 
 .gs-bank-num {
+  display: inline-block;
+  padding: 0 0.06em;
   font-size: clamp(30px, calc(var(--u) * 2.4), 46px);
-  line-height: 1;
+  line-height: 1.05;
   text-shadow: var(--halo);
+}
+
+.gs-bank-x {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  display: inline-flex;
+  align-items: center;
+  height: 1.24em;
+  margin: -0.62em 0 0 0.28em;
+  padding: 0 0.42em 0 0.36em;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  color: var(--ink);
+  font-size: clamp(20px, calc(var(--u) * 1.5), 30px);
+  letter-spacing: -0.01em;
+  line-height: 1;
+  box-shadow: 0 0 0 1.5px rgba(18, 25, 51, 0.85), 0 4px 14px -6px rgba(5, 9, 30, 0.6);
+}
+
+/* Tier 3's header over the figure: "NEW BEST COMBO" in gold-white (your best), else "MASSIVE". */
+.gs-bank-head {
+  color: var(--text);
+  font-size: clamp(14px, calc(var(--u) * 0.92), 19px);
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  line-height: 1.1;
+  text-shadow: var(--halo);
+  text-transform: uppercase;
+}
+
+.gs-bank-head.is-best {
+  color: var(--you);
+}
+
+/* Sparks: soft round off-white motes with an ink edge (never marigold, never four-point stars). */
+.gs-spark {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.55), 0 0 6px rgba(245, 243, 255, 0.55);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A lost combo's figure: it greys (a second copy snaps in over it) and a crack runs through it as it
+   tilts and falls under the COMBO LOST line. */
+.gs-crack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  transform: translate(-50%, -50%);
+  font-size: clamp(26px, calc(var(--u) * 2.1), 40px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.05;
+  white-space: nowrap;
+  pointer-events: none;
+  transform-origin: 40% 60%;
+}
+
+.gs-crack > * {
+  grid-area: 1 / 1;
+}
+
+.gs-crack-n,
+.gs-crack-g {
+  padding: 0 0.08em;
+  text-shadow: var(--halo);
+}
+
+.gs-crack-g {
+  color: #8d94b4;
+  opacity: 0;
+}
+
+.gs-crack-line {
+  position: relative;
+  inset: 0;
+  opacity: 0;
+}
+
+.gs-crack-line svg {
+  position: absolute;
+  inset: 8% -4%;
+  width: 108%;
+  height: 84%;
+  overflow: visible;
 }
 
 /* ----------------------------------------------------------------- Notices */
@@ -3133,10 +3523,176 @@
   box-shadow: inset 0 0 0 1px rgba(255, 56, 72, 0.5), var(--shadow);
 }
 
-/* Finale and unlock banners (stubs): the same plain pill as a mission banner until they get a tone. */
+/* A mission done mid-run: the flag and the reward in marigold (a finished mission turns marigold). */
+.t-mission .gs-i,
+.t-mission .gs-toast-sub {
+  color: var(--gift);
+}
+
+.t-mission {
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.4), var(--shadow);
+}
+
+/* Unlock and plain finale pills. An unlocked mountain's snowflake sits on a disc of its own sky. */
 .gs-toast.t-finale,
 .gs-toast.t-unlock {
-  padding-left: 12px;
+  padding-left: 7px;
+}
+
+.t-unlock {
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.34), var(--shadow);
+}
+
+.gs-toast-sky {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2em;
+  height: 2em;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.5);
+  color: #fff;
+}
+
+.gs-toast-sky .gs-i {
+  width: 1.2em;
+  height: 1.2em;
+  filter: drop-shadow(0 1px 1px rgba(18, 25, 51, 0.7));
+}
+
+.gs-toast-sky.b-alpine {
+  background: linear-gradient(180deg, #2b4c9b 0%, #ffb38a 100%);
+}
+
+.gs-toast-sky.b-glacier {
+  background: linear-gradient(180deg, #2b5fa8 0%, #ffd9c4 100%);
+}
+
+.gs-toast-sky.b-volcanic {
+  background: linear-gradient(180deg, #2a1e3a 0%, #ff8a50 100%);
+}
+
+.gs-toast-sky.b-blossom {
+  background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
+}
+
+/* An event's finale: the round it ends on, in the event's role colour (the hazards ice blue, the Gift
+   Storm marigold, the Spirit Train mint). An 18 px card like the telegraph, the glyph on its disc, the
+   line as the headline and the payoff beside it past a hairline. */
+.gs-fin {
+  --e: #6fc3ff;
+  --e-a: rgba(111, 195, 255, 0.6);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  min-height: 52px;
+  padding: 7px 22px 7px 8px;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1.5px var(--e-a), 0 0 22px -6px var(--e-a), var(--shadow);
+}
+
+.gs-fin.e-giftstorm {
+  --e: var(--gift);
+  --e-a: rgba(255, 211, 77, 0.6);
+}
+
+.gs-fin.e-ghosttrain {
+  --e: var(--ghost);
+  --e-a: rgba(143, 243, 228, 0.6);
+}
+
+.gs-fin-ico {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-pill);
+  background: var(--e);
+  color: var(--ink);
+}
+
+/* The hazards keep their cold voice: an ink disc with a light glyph and an ice ring. */
+.gs-fin:is(.e-avalanche, .e-yeti, .e-none) .gs-fin-ico {
+  background: #04060f;
+  box-shadow: inset 0 0 0 2px rgba(150, 214, 255, 0.8);
+  color: #eef7ff;
+}
+
+.gs-fin-ico .gs-i {
+  width: 1.45em;
+  height: 1.45em;
+}
+
+.gs-fin-t {
+  min-width: 0;
+  overflow: hidden;
+  font-size: clamp(18px, calc(var(--u) * 1.3), 26px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.gs-fin-pay {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 0.28em;
+  padding: 4px 0 4px 14px;
+  box-shadow: inset 1px 0 0 var(--hair-2);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.gs-fin-pay-pre {
+  color: var(--dim);
+  font-size: max(12px, 0.86em);
+  font-weight: 800;
+}
+
+.gs-fin-pay-n {
+  font-size: clamp(18px, calc(var(--u) * 1.3), 26px);
+}
+
+.gs-fin-pay-w {
+  font-size: max(12px, 0.9em);
+  font-weight: 850;
+}
+
+.gs-fin-pay.is-gift {
+  color: var(--gift);
+}
+
+.gs-fin-pay.is-gift .gs-i {
+  align-self: center;
+  width: 1.4em;
+  height: 1.4em;
+}
+
+.gs-fin-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 2px var(--e), 0 0 22px 2px var(--e-a);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* A nemesis settled: how many runs it took, a quiet line under the name. */
+.gs-pass-note {
+  color: rgba(245, 243, 255, 0.78);
+  font-size: max(11px, 0.78em);
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 /* Bounded to the safe width: with the reward beside the name a long name ran the banner off a 360 px
@@ -6307,8 +6863,41 @@
   }
 
   .gs-hud-sub .gs-dist,
-  .gs-hud-sub .gs-mood {
+  .gs-hud-sub .gs-mood,
+  .gs-hud-sub .gs-cd {
     margin-top: 0;
+  }
+
+  /* Portrait stacking: distance (with "Best in 240 m" tucked under it), then the mood chip, then the
+     countdown, all in the one row under the score, so the block never reaches the race row. The
+     countdown keeps its glyph and "in 380 m"; its event's name steps out visually (screen readers keep
+     it). */
+  .gs-hud-chips {
+    flex-wrap: nowrap;
+  }
+
+  .gs-best-in {
+    margin-top: 0;
+    font-size: max(11px, 0.74em);
+    line-height: 1.05;
+  }
+
+  .gs-hud-dist:has(.gs-best-in.is-on) .gs-dist {
+    line-height: 1;
+  }
+
+  .gs-cd {
+    gap: 4px;
+    padding: 0 0.8em 0 0.5em;
+  }
+
+  .gs-cd-name {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* The whole top-centre stack (race row, combo, callouts, banner, reveal) sits in the top band, about
@@ -7215,6 +7804,27 @@
   }
 }
 
+/* The fuse: the stake's figure kicks up and settles on every beat. */
+@keyframes gs-fuse {
+  0% {
+    transform: scale(1.16);
+  }
+  55%,
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* An open duel's ring: lit on the beat, fading before the next (opacity only). */
+@keyframes gs-ring-beat {
+  0% {
+    opacity: 0.95;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 /* Thumb ring for the touch hints: a press for holds, a side to side sway for steering. */
 @keyframes gs-press {
   0%,
@@ -7278,7 +7888,17 @@
   }
 
   .gs-combo.is-low .gs-combo-bar {
-    background: var(--tier2);
+    background: var(--amber);
+  }
+
+  /* The fuse keeps its amber, without the throb; the duel ring stays lit instead of beating. */
+  .gs-stake .gs-stake-n,
+  .gs-next.is-duel::after {
+    animation: none !important;
+  }
+
+  .gs-next.is-duel::after {
+    opacity: 0.8;
   }
 
   .gs-danger.is-urgent::after,

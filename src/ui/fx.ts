@@ -1,9 +1,10 @@
-import type { StampPart } from '../game/beats';
-import type { StyleTone } from './contract';
+import type { BankTier, StampPart } from '../game/beats';
+import { BANK_CHIP_MS, BANK_MS, BANK_PEAK, BANK_ROLL_MS, BANK_SPARKS, BANK_TICKS, rollValue } from '../game/stake';
+import type { ScreenRect, StyleTone } from './contract';
 import { h } from './dom';
 import { fmt } from './fmt';
-import type { Hud } from './hud';
-import { EASE_IN, play, reduced, SPRING } from './motion';
+import { pushBox, type Hud } from './hud';
+import { bump, EASE_IN, EASE_OUT, play, reduced, SPRING } from './motion';
 
 // Trick callouts, the perfect-landing stamp and the combo cash-in. Callouts live in one fixed slot
 // directly under the combo meter (the second tier of the top-centre stack), and the slot holds one
@@ -24,6 +25,46 @@ import { EASE_IN, play, reduced, SPRING } from './motion';
 // reach the combo total. Each number shows once: a line whose points are the whole combo total shows
 // its label alone under that total ("+120" over "BOOSTED POP"), and slipstream ticks never get a line
 // while the Slipstream pill at the bottom names them.
+//
+// A stomp streak grows the stamp's title ("DOUBLE STOMP") and its punch, never its points; its sub-line
+// leads with "2 IN A ROW". A cash-in is graded by size (src/game/stake.ts): a plain "+80" flies into the
+// score, while a big one shows its origin, slams the "x4" chip onto it and rolls up to the product
+// before your eyes (the chip is absorbed, so the product is the one figure that lands), with off-white
+// sparks and a header from tier 3. A lost combo cracks: the figure you were protecting greys, tilts and
+// falls under the "COMBO LOST" line.
+
+/** A cash-in on screen: its figure, where it is anchored, and what it schedules. */
+interface BankFx {
+  el: HTMLElement;
+  /** Anchor of the figure (CSS px): the element is centred on it until it flies. */
+  ax: number;
+  ay: number;
+  peak: number;
+  /** Extra width the chip adds beside the figure while it shows. */
+  chipW: number;
+  flying: boolean;
+  anim: Animation | null;
+  raf: number;
+  timers: number[];
+  sparks: HTMLElement[];
+}
+
+interface CrackFx {
+  el: HTMLElement;
+  ax: number;
+  ay: number;
+  anim: Animation | null;
+  timer: number;
+}
+
+/** A crack across the lost figure: one jagged ink stroke with an off-white lip. */
+const CRACK_SVG =
+  '<svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true" focusable="false"><path d="M4 30 L22 18 L30 24 L46 9 L55 19 L70 6 L80 15 L96 4" fill="none" stroke="#121933" stroke-width="4.6" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/><path d="M4 30 L22 18 L30 24 L46 9 L55 19 L70 6 L80 15 L96 4" fill="none" stroke="#f5f3ff" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke" transform="translate(0 2)"/></svg>';
+
+/** The cash-in figure's type size: the CSS clamp(30px, 2.4 x the HUD unit, 46px). */
+function bankFont(u: number): number {
+  return Math.max(30, Math.min(46, 2.4 * u));
+}
 
 const MAX_LINES = 1;
 const LIFE_MS = 1150;
@@ -94,6 +135,9 @@ export class Fx {
   /** The rider's projected position, updated every frame by the game. */
   private rx = Number.NaN;
   private ry = Number.NaN;
+  /** Cash-ins on screen (one at a time in practice), and the lost combo's falling figure. */
+  private banks: BankFx[] = [];
+  private crack: CrackFx | null = null;
   /** Called when a line or the stamp comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
 
@@ -227,10 +271,44 @@ export class Fx {
     r.at = now;
   }
 
-  /** The HUD is going away (results): the stamp goes with it. */
+  /**
+   * The HUD is going away (results): the stamp, any cash-in, the cracked figure and the callout line
+   * go with it.
+   */
   clear(): void {
     if (this.heroEl) this.dropStamp(this.heroEl, true);
     this.recent.clear();
+    this.tricks.length = 0;
+    for (const b of this.banks.slice()) this.dropBank(b);
+    this.dropCrack();
+    for (const c of this.items.splice(0)) {
+      window.clearTimeout(c.timer);
+      c.anim?.cancel();
+      c.wrap.remove();
+    }
+    this.onLayout();
+  }
+
+  /**
+   * Pushes the cash-in figure and the cracked figure (while they hold, before a cash-in flies) into
+   * the occluder pool, from index n; returns the new count. Sizes are layout sizes (transforms aside)
+   * scaled to the punch's peak, read inside the occluder pass, so nothing forces a layout.
+   */
+  measure(out: ScreenRect[], n: number): number {
+    for (const b of this.banks) {
+      if (b.flying) continue;
+      const w = b.el.offsetWidth * b.peak + b.chipW;
+      const hh = b.el.offsetHeight * b.peak;
+      n = pushBox(out, n, b.ax - w / 2, b.ay - hh / 2, b.ax + w / 2, b.ay + hh / 2);
+    }
+    const c = this.crack;
+    if (c) {
+      const w = c.el.offsetWidth;
+      const hh = c.el.offsetHeight;
+      // It falls 24 px and tilts: the box covers the whole fall.
+      n = pushBox(out, n, c.ax - w / 2 - 4, c.ay - hh / 2, c.ax + w / 2 + 4, c.ay + hh / 2 + 26);
+    }
+    return n;
   }
 
   /**
@@ -333,7 +411,21 @@ export class Fx {
     for (const t of this.tricks) if (now - t.at <= LANDING_MS) parts.push([t.label, t.points]);
     this.tricks.length = 0;
     // Three or more parts break after the landing's own points: "PERFECT +490" over the tricks.
-    this.showStamp(text, parts, parts.length >= 3 && points > 0);
+    this.showStamp(text, parts, parts.length >= 3 && points > 0, 1);
+  }
+
+  /**
+   * A stomp (the director's stomp beat): the stamp's title grows with the streak ("DOUBLE STOMP",
+   * "STOMP STREAK 5"), its sub-line leads with the beat's own parts ("2 IN A ROW", or "PERFECT +250"
+   * on a first one), then the tricks this same landing named. Its punch lands harder with the streak.
+   */
+  stomp(title: string, lead: ReadonlyArray<StampPart>, streak: number): void {
+    const now = performance.now();
+    const parts: Array<[string, number]> = lead.filter((p) => p.label.trim() !== '').map((p) => [p.label, p.points]);
+    for (const t of this.tricks) if (now - t.at <= LANDING_MS && !parts.some((p) => p[0] === t.label)) parts.push([t.label, t.points]);
+    this.tricks.length = 0;
+    // Three or more parts break after the lead: "2 IN A ROW" (or "PERFECT +490") over the tricks.
+    this.showStamp(title.trim() || 'Perfect landing', parts, parts.length >= 3, streak);
   }
 
   /**
@@ -345,11 +437,15 @@ export class Fx {
     const raw = title.trim();
     if (raw === '') return;
     const list: Array<[string, number]> = parts.map((p) => [p.label, p.points]);
-    this.showStamp(raw, list, list.length >= 3 && list[0][1] > 0);
+    this.tricks.length = 0;
+    this.showStamp(raw, list, list.length >= 3 && list[0][1] > 0, 1);
   }
 
-  /** Builds, places and plays a stamp: any older line rolls up into the total, an older stamp snaps out. */
-  private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean): void {
+  /**
+   * Builds, places and plays a stamp: any older line rolls up into the total, an older stamp snaps out.
+   * `streak` (1 for a plain stamp) deepens the slam: a streak of 5 lands from about 1.9x.
+   */
+  private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean, streak: number): void {
     for (const c of this.items.slice()) if (c.tone !== 'lost') this.leave(c, true);
     if (this.heroEl) this.dropStamp(this.heroEl, true);
     const sub = h('span', 'gs-hero-sub');
@@ -369,19 +465,24 @@ export class Fx {
     t.dataset.t = text;
     inner.append(t, sub);
     const el = h('div', 'gs-hero', inner);
+    const n = Math.max(1, Math.min(5, Math.round(streak)));
+    if (n > 1) el.dataset.streak = String(n);
     this.place(el, parts.length === 0 ? 0 : split ? 2 : 1);
     this.el.append(el);
     this.heroEl = el;
     // A pass flash from this same beat steps back and plays once the stamp has gone.
     this.hud.yieldToStamp();
-    // A scale punch at full strength: opaque within two frames, slammed down from 1.6x, a small
-    // overshoot, then held. Never a slow fade, which read as cream on a pink sky.
+    // A scale punch at full strength: opaque within two frames, slammed down from 1.6x (deeper with each
+    // stomp in a streak), a small overshoot, then held. Never a slow fade, which read as cream on a
+    // pink sky.
+    const from = 1.6 + 0.07 * (n - 1);
+    const under = 0.92 - 0.012 * (n - 1);
     const a = play(
       inner,
       [
-        { opacity: 0, transform: 'scale(1.6)', offset: 0 },
-        { opacity: 1, transform: 'scale(1.5)', offset: 0.02, easing: EASE_IN },
-        { opacity: 1, transform: 'scale(0.92)', offset: 0.1, easing: SPRING },
+        { opacity: 0, transform: `scale(${from.toFixed(2)})`, offset: 0 },
+        { opacity: 1, transform: `scale(${(from - 0.1).toFixed(2)})`, offset: 0.02, easing: EASE_IN },
+        { opacity: 1, transform: `scale(${under.toFixed(3)})`, offset: 0.1, easing: SPRING },
         { opacity: 1, transform: 'scale(1)', offset: 0.2 },
         { opacity: 1, transform: 'scale(1)', offset: 1 },
       ],
@@ -457,38 +558,301 @@ export class Fx {
     else el.remove();
   }
 
-  /** Combo cash-in: the total pops where the combo meter was, then flies into the score. */
+  /** Combo cash-in at tier 0 (the game's direct comboBank call): "+total" flies into the score. */
   bank(points: number, mult: number): void {
-    const from = this.hud.centreOf(this.hud.comboEl) ?? { x: window.innerWidth / 2, y: window.innerHeight * 0.12 };
+    this.cashIn({ points, mult, origin: Math.round(points / Math.max(1, mult)), tier: 0, header: null, bump: false });
+  }
+
+  /**
+   * Combo cash-in, graded by tier (src/game/stake.ts). Tier 0: "+80" pops where the combo meter was and
+   * flies into the score, the total alone (never beside an "x4" chip, which read as a figure still to
+   * be multiplied). Tiers 1 to 3 with a real multiplier: the origin pops in ("+1,240"), the "x4" chip
+   * slams onto it, and the figure rolls up to the product in equal ticks ("+4,960") while the chip is
+   * absorbed into it; the product punches to its peak, then flies. Tier 2 throws 12 off-white sparks,
+   * tier 3 16 and a header over the figure ("NEW BEST COMBO" in gold-white, else "MASSIVE"). A bump
+   * bank (the combo ended on an obstacle) rolls the same but stays small and throws no sparks: the bump
+   * owns that beat. Reduced motion: it counts up in place with no scaling, chip slam or sparks.
+   */
+  cashIn(b: { points: number; mult: number; origin: number; tier: BankTier; header: 'New best combo' | 'Massive' | null; bump: boolean }): void {
+    // An older cash-in still on screen gives way at once.
+    for (const o of this.banks.slice()) this.dropBank(o);
+    const tier = b.tier;
+    const red = reduced();
+    const multiply = tier > 0 && b.mult >= 2 && b.origin > 0 && b.origin < b.points;
+    const f = bankFont(this.hud.hudPx());
+    const header = tier === 3 ? b.header : null;
+    const peak = b.bump ? Math.min(1.12, BANK_PEAK[tier]) : BANK_PEAK[tier];
+    const C = multiply ? BANK_CHIP_MS : 0;
+    const R = multiply ? BANK_ROLL_MS[tier] : 0;
+    const ticks = multiply ? BANK_TICKS[tier] : 0;
+    const T = BANK_MS[tier];
+    const land = C + R;
+    const fly = tier === 0 ? Math.round(T * 0.56) : T - 380;
+
+    // Anchored on the combo row; a big figure sits a little lower so its punch (and its header) stay
+    // clear of the race row above.
+    const row = this.hud.bankAnchor() ?? { x: window.innerWidth / 2, y: window.innerHeight * 0.12 };
+    const numOffset = Math.round(f * 0.5 * (peak - 1)) + (header ? Math.round(0.28 * f) : 0);
+    const ax = Math.round(row.x);
+    const ay = Math.round(row.y + numOffset - (header ? 0.27 * f : 0));
     const to = this.hud.centreOf(this.hud.scoreEl) ?? { x: 80, y: 40 };
-    const el = h('div', 'gs-bank', h('span', 'gs-bank-num gs-num', '+' + fmt(points)));
-    if (mult > 1) el.append(h('span', 'gs-combo-mult gs-num', 'x' + mult));
-    el.style.left = `${from.x}px`;
-    el.style.top = `${from.y}px`;
+
+    const num = h('span', 'gs-bank-num gs-num', '+' + fmt(multiply ? b.origin : b.points));
+    const tickWrap = h('span', 'gs-bank-tick', num);
+    const fig = h('span', 'gs-bank-fig', tickWrap);
+    const chip = multiply ? h('span', 'gs-bank-x gs-num', 'x' + b.mult) : null;
+    if (chip) fig.append(chip);
+    const head = header ? h('span', `gs-bank-head${header === 'New best combo' ? ' is-best' : ''}`, header) : null;
+    const el = h('div', `gs-bank t-${tier}`, head, fig);
+    el.style.left = `${ax}px`;
+    el.style.top = `${ay}px`;
     this.el.append(el);
-    // It holds over the combo meter for its first 56%: a new combo's total waits under it till then.
-    this.hud.holdComboRow(560);
-    const dx = Math.round(to.x - from.x);
-    const dy = Math.round(to.y - from.y);
+    const item: BankFx = { el, ax, ay, peak, chipW: chip ? Math.round(f * 1.9) : 0, flying: false, anim: null, raf: 0, timers: [], sparks: [] };
+    this.banks.push(item);
+    // It holds over the combo meter until it flies: a new combo's total waits under it till then.
+    this.hud.holdComboRow(fly);
+
+    const dx = Math.round(to.x - ax);
+    const dy = Math.round(to.y - ay);
+    const base = 'translate(-50%, -50%)';
+    const o = (ms: number) => Math.max(0, Math.min(1, ms / T));
+    let a: Animation | null;
+    if (tier === 0) {
+      a = play(
+        el,
+        [
+          { transform: `${base} scale(0.6)`, opacity: 0, offset: 0, easing: SPRING },
+          { transform: `${base} scale(1.16)`, opacity: 1, offset: 0.18 },
+          { transform: `${base} scale(1)`, opacity: 1, offset: 0.3 },
+          { transform: `${base} scale(1)`, opacity: 1, offset: 0.56, easing: EASE_IN },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.3)`, opacity: 0.25, offset: 1 },
+        ],
+        { duration: T, fill: 'forwards' },
+        true,
+      );
+    } else {
+      // The whole cash-in: in, held where the combo was, then a fast flight into the score.
+      a = play(
+        el,
+        [
+          { transform: base, opacity: 0, offset: 0 },
+          { transform: base, opacity: 1, offset: o(50) },
+          { transform: base, opacity: 1, offset: o(fly), easing: EASE_IN },
+          { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.3)`, opacity: 0.25, offset: 1 },
+        ],
+        { duration: T, fill: 'forwards' },
+        true,
+      );
+      // The figure: popped in, steady while it counts, then the landing punch to its peak. With no
+      // multiplier to show it punches at once.
+      play(
+        num,
+        multiply
+          ? [
+              { transform: 'scale(0.6)', offset: 0, easing: SPRING },
+              { transform: 'scale(1.1)', offset: o(C * 0.6) },
+              { transform: 'scale(1)', offset: o(C) },
+              { transform: 'scale(1)', offset: o(land) },
+              { transform: `scale(${peak})`, offset: o(land + 90), easing: SPRING },
+              { transform: 'scale(1)', offset: o(land + 230) },
+              { transform: 'scale(1)', offset: 1 },
+            ]
+          : [
+              { transform: 'scale(0.6)', offset: 0, easing: SPRING },
+              { transform: `scale(${peak})`, offset: o(110) },
+              { transform: 'scale(1)', offset: o(260) },
+              { transform: 'scale(1)', offset: 1 },
+            ],
+        { duration: T, fill: 'forwards' },
+      );
+      if (chip) {
+        // The chip slams onto the origin, holds through the count, then is absorbed into the figure.
+        play(
+          chip,
+          [
+            { opacity: 0, transform: 'translateX(0) scale(2.4) rotate(-12deg)', offset: 0 },
+            { opacity: 1, transform: 'translateX(0) scale(0.88) rotate(0deg)', offset: o(C * 0.75), easing: SPRING },
+            { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(C) },
+            { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(land - 20), easing: EASE_IN },
+            { opacity: 0, transform: 'translateX(-1.6em) scale(0.25) rotate(0deg)', offset: o(land + 100) },
+            { opacity: 0, transform: 'translateX(-1.6em) scale(0.25) rotate(0deg)', offset: 1 },
+          ],
+          { duration: T, fill: 'forwards' },
+          true,
+        );
+      }
+      if (head) {
+        play(
+          head,
+          [
+            { opacity: 0, transform: 'scale(1.5)', offset: 0 },
+            { opacity: 0, transform: 'scale(1.5)', offset: o(land) },
+            { opacity: 1, transform: 'scale(0.94)', offset: o(land + 110), easing: SPRING },
+            { opacity: 1, transform: 'scale(1)', offset: o(land + 220) },
+            { opacity: 1, transform: 'scale(1)', offset: 1 },
+          ],
+          { duration: T, fill: 'forwards' },
+          true,
+        );
+      }
+      const sparks = b.bump || red ? 0 : BANK_SPARKS[tier];
+      if (sparks > 0) this.sparks(item, sparks, f, land);
+    }
+    item.anim = a;
+
+    // The count: equal ticks in time, read off the cash-in's own clock so the number never runs ahead
+    // of the motion (a cash-in can land on a long frame).
+    if (ticks > 0) {
+      let shown = 0;
+      const step = () => {
+        const ct = Number(a?.currentTime ?? T);
+        const i = ct < C ? 0 : Math.min(ticks, Math.floor(((ct - C) * ticks) / Math.max(1, R)) + 1);
+        if (i !== shown) {
+          shown = i;
+          num.textContent = '+' + fmt(rollValue(b.origin, b.points, i, ticks));
+          if (i < ticks) bump(tickWrap, 1.07, 110);
+        }
+        item.raf = i < ticks ? requestAnimationFrame(step) : 0;
+      };
+      if (a) item.raf = requestAnimationFrame(step);
+      else num.textContent = '+' + fmt(b.points);
+    }
+
+    this.onLayout();
+    // From the moment it flies it no longer occludes (contract C8: on screen until it starts to leave).
+    item.timers.push(
+      window.setTimeout(() => {
+        item.flying = true;
+        this.onLayout();
+      }, fly),
+    );
+    const done = () => {
+      this.dropBank(item);
+      if (this.hud.layer.open) this.hud.bumpScore();
+    };
+    if (a) a.onfinish = done;
+    else item.timers.push(window.setTimeout(done, T));
+  }
+
+  /**
+   * Off-white sparks burst from the figure as the roll lands (never marigold: score is not
+   * currency). Soft round motes that arc out and fall a little, in the overlay's own layer.
+   */
+  private sparks(item: BankFx, count: number, f: number, delay: number): void {
+    for (let i = 0; i < count; i++) {
+      const s = h('span', 'gs-spark');
+      s.style.left = `${item.ax}px`;
+      s.style.top = `${item.ay}px`;
+      const size = 4 + Math.round(Math.random() * 4);
+      s.style.width = s.style.height = `${size}px`;
+      // Behind the figure, so a spark never crosses its digits.
+      this.el.insertBefore(s, item.el);
+      item.sparks.push(s);
+      // A low fan: out to the sides and down, never up over the race row (sparks stay low, ART.md 10).
+      const ang = -0.3 + (i / Math.max(1, count - 1)) * (Math.PI + 0.6) + (Math.random() - 0.5) * 0.3;
+      const r = f * (1.1 + Math.random() * 1.3);
+      const x = Math.cos(ang) * r * 1.4;
+      const y = Math.sin(ang) * r * 0.55;
+      const s1 = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+      const s2 = `translate(-50%, -50%) translate(${(x * 1.15).toFixed(1)}px, ${(y + f * 0.9).toFixed(1)}px) scale(0.5)`;
+      // Hidden until its delay is up (the CSS holds it at opacity 0), then it bursts.
+      s.animate(
+        [
+          { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 1 },
+          { transform: s1, opacity: 1, offset: 0.42, easing: EASE_IN },
+          { transform: s2, opacity: 0 },
+        ],
+        { duration: 620 + Math.round(Math.random() * 260), delay, easing: EASE_OUT, fill: 'forwards' },
+      );
+    }
+  }
+
+  /** Takes a cash-in off screen (it landed, a newer one replaced it, or the HUD is going). */
+  private dropBank(b: BankFx): void {
+    const i = this.banks.indexOf(b);
+    if (i < 0) return;
+    this.banks.splice(i, 1);
+    cancelAnimationFrame(b.raf);
+    for (const t of b.timers) window.clearTimeout(t);
+    for (const s of b.sparks) s.remove();
+    b.sparks.length = 0;
+    b.el.remove();
+    this.onLayout();
+  }
+
+  /**
+   * A combo lost to a crash (the director's comboLost beat). With crack (a stake of 300 or more), the
+   * figure you were protecting cracks where the combo meter was: it greys, a crack runs through it, and
+   * it tilts 8 degrees and falls 24 px over 600 ms, while the callout under it reads "COMBO LOST" (or
+   * "BEST COMBO LOST"), the number shown once, on the figure. Without crack, the line alone carries the
+   * points. Reduced motion: the figure greys and fades where it is.
+   */
+  lost(points: number, stake: number, best: boolean, crack: boolean): void {
+    const label = best ? 'Best combo lost' : 'Combo lost';
+    const row = crack ? this.hud.bankAnchor() : null;
+    if (!crack || !row || stake <= 0) {
+      this.pop(label, points, 'lost');
+      return;
+    }
+    this.dropCrack();
+    const last = this.hud.lastCombo;
+    // The figure the meter was showing: the stake once multiplied ("4,960"), else the total ("+120").
+    const text = last.mult >= 2 ? fmt(stake) : '+' + fmt(stake);
+    const grey = h('span', 'gs-crack-g gs-num', text);
+    const line = h('span', 'gs-crack-line');
+    line.innerHTML = CRACK_SVG;
+    const el = h('div', 'gs-crack', h('span', 'gs-crack-n gs-num', text), grey, line);
+    el.setAttribute('aria-hidden', 'true');
+    el.style.left = `${Math.round(row.x)}px`;
+    el.style.top = `${Math.round(row.y)}px`;
+    this.el.append(el);
     const base = 'translate(-50%, -50%)';
     const a = play(
       el,
       [
-        { transform: `${base} scale(0.6)`, opacity: 0, offset: 0, easing: SPRING },
-        { transform: `${base} scale(1.16)`, opacity: 1, offset: 0.18 },
-        { transform: `${base} scale(1)`, opacity: 1, offset: 0.3 },
-        { transform: `${base} scale(1)`, opacity: 1, offset: 0.56, easing: EASE_IN },
-        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(0.3)`, opacity: 0.25, offset: 1 },
+        { transform: `${base} translateX(0)`, opacity: 1, offset: 0 },
+        { transform: `${base} translateX(-4px)`, opacity: 1, offset: 0.05 },
+        { transform: `${base} translateX(3px)`, opacity: 1, offset: 0.1 },
+        { transform: `${base} translateX(0) translateY(0) rotate(0deg)`, opacity: 1, offset: 0.15, easing: EASE_IN },
+        { transform: `${base} translateY(10px) rotate(3.5deg)`, opacity: 1, offset: 0.55, easing: EASE_IN },
+        { transform: `${base} translateY(24px) rotate(8deg)`, opacity: 0, offset: 1 },
       ],
-      { duration: 1000, fill: 'forwards' },
+      { duration: 600, fill: 'forwards' },
       true,
     );
+    // The grey and the crack snap in together a beat after the hit (opacity only, so the colour snaps).
+    for (const part of [grey, line]) {
+      play(
+        part,
+        [
+          { opacity: 0, offset: 0 },
+          { opacity: 0, offset: 0.1 },
+          { opacity: 1, offset: 0.14 },
+          { opacity: 1, offset: 1 },
+        ],
+        { duration: 600, fill: 'forwards' },
+        true,
+      );
+    }
+    const c: CrackFx = { el, ax: Math.round(row.x), ay: Math.round(row.y), anim: a, timer: 0 };
+    this.crack = c;
     const done = () => {
-      el.remove();
-      if (this.hud.layer.open) this.hud.bumpScore();
+      if (this.crack === c) this.dropCrack();
     };
     if (a) a.onfinish = done;
-    else window.setTimeout(done, 1000);
+    else c.timer = window.setTimeout(done, 600);
+    this.pop(label, 0, 'lost');
+    this.onLayout();
+  }
+
+  private dropCrack(): void {
+    const c = this.crack;
+    if (!c) return;
+    this.crack = null;
+    window.clearTimeout(c.timer);
+    c.anim?.cancel();
+    c.el.remove();
+    this.onLayout();
   }
 }
 
@@ -509,7 +873,7 @@ function holdFrames(tone: StyleTone): Keyframe[] {
       { opacity: 1, transform: 'translateX(0)', offset: 1 },
     ];
   }
-  const peak = tone === 'big' ? 1.12 : 1.07;
+  const peak = tone === 'big' || tone === 'best' ? 1.12 : 1.07;
   return [
     { opacity: 0, transform: 'translateY(-8px) scale(0.72)', offset: 0 },
     { opacity: 1, transform: 'translateY(-6px) scale(0.78)', offset: 0.03, easing: SPRING },

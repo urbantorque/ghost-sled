@@ -1,19 +1,26 @@
-import type { ToastTone } from './contract';
+import type { MountainCard, ToastTone } from './contract';
 import { ChaosEvent, eventInfo } from '../sim/chaos';
 import { h } from './dom';
 import { icon, type IconName } from './icons';
-import { EASE_OUT, play, SPRING } from './motion';
+import { EASE_OUT, play, reduced, SPRING } from './motion';
 
 // The notice band: one banner at a time, docked over the race row at the top of the screen (the row
 // fades out under it, and the combo and callout slot step down only by the extra height), so the
 // top-centre stack never grows past two tiers. Under it, the chaos reveal slot. Ghost passes no
 // longer take a banner: they flash inside the race row. Banners are the bigger moments (event
-// telegraphs, grudge settled, missions, unlocks) and wait in a small priority queue: an event
-// telegraph beats a celebration, a celebration beats plain info. While something waits, the banner
-// on stage is cut short (it still gets MIN_MS). Nothing here takes pointer events.
+// telegraphs, event finales, grudge settled, missions, unlocks) and wait in a small priority queue: an
+// event telegraph beats a finale, a finale beats a celebration, a celebration beats plain info. While
+// something waits, the banner on stage is cut short (it still gets MIN_MS). Nothing here takes pointer
+// events.
+//
+// A finale is the round an event ends on ("Outran the avalanche +2,000 style", "Caught 31 of 48"): a
+// card in the event's own role colour with the payoff beside it, ranked above missions and unlocks, so
+// a mission pop waits for it and can never push it out of the queue.
 
 const TOAST_MS = 2200;
 const GRUDGE_MS = 2000;
+const NEMESIS_MS = 2600;
+const FINALE_MS = 2600;
 const WARN_MS = 2600;
 /** Shortest time a banner stays up once shown, even with others waiting. */
 const MIN_MS = 900;
@@ -21,14 +28,15 @@ const MIN_MS = 900;
 const MERGE_MS = 400;
 const MAX_QUEUE = 3;
 
-// Priorities, highest first.
-const P_ALERT = 3; // chaos event telegraph
-const P_CELEBRATE = 2; // grudge, mission, gift
+// Priorities, highest first. They index MAX_WAIT, so they stay consecutive integers.
+const P_ALERT = 4; // chaos event telegraph
+const P_FINALE = 3; // an event's finale
+const P_CELEBRATE = 2; // grudge, mission, unlock, gift
 const P_CAUTION = 1; // warn-tone toast
 const P_INFO = 0; // info and ghost-tone toasts
 
 /** How long each priority may sit in the queue before it is stale and dropped. */
-const MAX_WAIT = [2500, 2500, 6000, 1500];
+const MAX_WAIT = [2500, 2500, 6000, 6000, 1500];
 
 const TOAST_ICON: Record<ToastTone, IconName | null> = {
   ghost: 'ghost',
@@ -45,8 +53,7 @@ const TOAST_PRI: Record<ToastTone, number> = {
   grudge: P_CELEBRATE,
   mission: P_CELEBRATE,
   gift: P_CELEBRATE,
-  // (A finale gets its own priority between celebrate and alert later: MAX_WAIT is indexed by it.)
-  finale: P_CELEBRATE,
+  finale: P_FINALE,
   unlock: P_CELEBRATE,
   warn: P_CAUTION,
   ghost: P_INFO,
@@ -62,8 +69,9 @@ export const EVENT_ICON: Record<ChaosEvent, IconName> = {
 };
 
 type Spec =
-  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string }
-  | { type: 'warn'; text: string; event: ChaosEvent };
+  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; biome?: MountainCard['biome'] }
+  | { type: 'warn'; text: string; event: ChaosEvent }
+  | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent };
 
 interface Banner {
   spec: Spec;
@@ -136,7 +144,7 @@ export class Notices {
   grudge(name: string): void {
     const now = performance.now();
     const b = this.find((x) => x.spec.type === 'toast' && x.spec.tone === 'grudge' && now - x.at <= MERGE_MS);
-    if (!b || b.spec.type !== 'toast') return;
+    if (!b || b.spec.type !== 'toast' || b.spec.name === name) return;
     b.spec.name = name;
     if (b.el) {
       const fresh = render(b.spec);
@@ -144,6 +152,44 @@ export class Notices {
       b.el = fresh;
       enter(fresh, b.spec);
     }
+  }
+
+  /**
+   * The grudge settled (the director's grudgeSettled beat, which names its ghost): the rose banner,
+   * "GRUDGE SETTLED" over the name with the paid gifts beside it, or for a nemesis "NEMESIS DOWN" with
+   * how many runs it took ("after 3 runs") and a longer hold.
+   */
+  grudgeSettled(name: string, nemesis: boolean, after: number, paid: number): void {
+    const text = nemesis ? 'Nemesis down' : 'Grudge settled';
+    const note = after >= 2 ? `after ${after} runs` : undefined;
+    const sub = paid > 0 ? `+${paid} gifts` : undefined;
+    this.push({
+      spec: { type: 'toast', text, tone: 'grudge', sub, name, note },
+      pri: P_CELEBRATE,
+      key: `t:grudge:${text}`,
+      ms: nemesis ? NEMESIS_MS : GRUDGE_MS,
+      at: performance.now(),
+      el: null,
+      shown: 0,
+      end: 0,
+    });
+  }
+
+  /**
+   * An event's finale as a banner: the line in the event's role colour (the hazards ice blue, the Gift
+   * Storm marigold, the Spirit Train mint) and its payoff beside it ("+2,000 style", "+10 gifts").
+   * Ranked above every celebration, below only an event telegraph.
+   */
+  finale(text: string, sub: string | null, event: ChaosEvent): void {
+    const t = text.trim();
+    if (t === '') return;
+    this.push({ spec: { type: 'finale', text: t, sub: sub?.trim() || null, event }, pri: P_FINALE, key: `f:${event}:${t}`, ms: FINALE_MS, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
+  /** A mountain unlocked mid-run: its name, with a swatch of its own sky behind the snowflake. */
+  unlock(name: string, biome: MountainCard['biome']): void {
+    const text = `${name} unlocked`;
+    this.push({ spec: { type: 'toast', text, tone: 'unlock', sub: 'Ride it from the title', biome }, pri: P_CELEBRATE, key: `t:unlock:${text}`, ms: TOAST_MS + 400, at: performance.now(), el: null, shown: 0, end: 0 });
   }
 
   /** Mid-run event telegraph: big banner with a pulsing border for about 2.6 s. */
@@ -305,17 +351,44 @@ function render(s: Spec): HTMLElement {
     el.setAttribute('aria-hidden', 'true');
     return el;
   }
+  if (s.type === 'finale') {
+    // The event's finale: a card in its role colour, the line as the headline and the payoff beside it.
+    const key = eventInfo(s.event).key;
+    const ico = h('span', 'gs-fin-ico', icon(EVENT_ICON[s.event] ?? 'flag'));
+    const pay = s.sub ? payoff(s.sub) : null;
+    return h('div', `gs-fin gs-panel e-${key}`, ico, h('span', 'gs-fin-t', s.text), pay);
+  }
   if (s.tone === 'grudge' && s.name) {
     // Grudge settled: the rose celebration, with the ghost's name as the headline and the reward
-    // beside it at the same size.
+    // beside it at the same size. A nemesis adds how many runs it took under the name.
     const ico = h('span', 'gs-pass-ico', icon('ghost'), icon('ghost', 'gs-pass-trail'));
     const name = h('span', 'gs-pass-name', s.name);
     name.translate = false;
-    const txt = h('span', 'gs-pass-txt', h('span', 'gs-pass-k', s.text), name);
+    const txt = h('span', 'gs-pass-txt', h('span', 'gs-pass-k', s.text), name, s.note ? h('span', 'gs-pass-note', s.note) : null);
     return h('div', 'gs-pass gs-panel k-grudge', ico, txt, s.sub ? reward(s.sub) : null);
   }
   const ic = TOAST_ICON[s.tone];
-  return h('div', `gs-toast gs-panel gs-pill t-${s.tone}`, ic ? icon(ic) : null, h('span', 'gs-toast-txt', s.text), s.sub ? h('span', 'gs-toast-sub', s.sub) : null);
+  // An unlocked mountain's snowflake sits on a swatch of that mountain's own sky.
+  const glyph = ic ? (s.biome ? h('span', `gs-toast-sky b-${s.biome}`, icon(ic)) : icon(ic)) : null;
+  return h('div', `gs-toast gs-panel gs-pill t-${s.tone}`, glyph, h('span', 'gs-toast-txt', s.text), s.sub ? h('span', 'gs-toast-sub', s.sub) : null);
+}
+
+/**
+ * A finale's payoff, past a hairline: a gift reward ("+10 gifts") in marigold with the gift glyph, a
+ * style reward ("+2,000 style") in off-white, any words before it ("Clean sweep:") a step smaller.
+ */
+function payoff(sub: string): HTMLElement {
+  const m = /^(.*?)\s*([+][\d,]+)\s+(gifts?|style)$/i.exec(sub);
+  if (!m) return h('span', 'gs-fin-pay', h('span', 'gs-fin-pay-w', sub));
+  const gift = m[3].toLowerCase().startsWith('gift');
+  return h(
+    'span',
+    `gs-fin-pay${gift ? ' is-gift' : ''}`,
+    m[1] ? h('span', 'gs-fin-pay-pre', m[1]) : null,
+    gift ? icon('gift') : null,
+    h('span', 'gs-fin-pay-n gs-num', m[2]),
+    h('span', 'gs-fin-pay-w', m[3]),
+  );
 }
 
 /** A reward line ("+10 gifts"): the gift glyph, the number at the name's size, the word a step smaller. */
@@ -328,6 +401,24 @@ function reward(sub: string): HTMLElement {
 function enter(el: HTMLElement, s: Spec): void {
   if (s.type === 'warn') {
     play(el, [{ opacity: 0, transform: 'translateY(-12px) scale(0.9)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: SPRING });
+    return;
+  }
+  if (s.type === 'finale') {
+    // Won the round: slammed down onto the band, then one ring flash in the event's colour.
+    play(
+      el,
+      [
+        { opacity: 0, transform: 'scale(1.3)' },
+        { opacity: 1, transform: 'scale(0.95)', offset: 0.55, easing: SPRING },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: 380, easing: 'ease-in' },
+    );
+    if (!reduced()) {
+      const ring = h('span', 'gs-fin-ring');
+      el.append(ring);
+      play(ring, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.08, 1.4)' }], { duration: 700, delay: 180, easing: EASE_OUT, fill: 'both' });
+    }
     return;
   }
   if (s.tone === 'grudge' && s.name) {
