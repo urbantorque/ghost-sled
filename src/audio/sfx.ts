@@ -22,6 +22,10 @@ const STYLE_GAP = 0.06;
 /** Parts of a sound starting further ahead than this are built by a later scheduler pass, so a
  *  big reward spreads its node creation over several frames instead of hitching one. */
 const DEFER = 0.08;
+/** Sounds on a timeline the picture keeps (the reveal, the results card, a big bank's drop and
+ *  slam) are built this far ahead instead: the scheduler runs on a 25 ms main-thread timer, and a
+ *  busy frame can stall it for 150 ms or more, which would play a part built at DEFER late. */
+const TIMELINE_LEAD = 0.25;
 /** A bank's roll (tiers 1 to 3), in step with the HUD (cash-in): the 'xN' chip slams on for CHIP_S,
  *  then the figure rolls for `dur` with `n` ticks climbing ladder steps lo..hi. */
 const CHIP_S = 0.12;
@@ -46,6 +50,7 @@ interface Job {
   t: number;
   v: Voice | null;
   fn: (t: number) => void;
+  lead: number;
 }
 
 const panOf = (dx: number, span: number, fallback: number): number => (dx !== 0 && Number.isFinite(dx) ? clamp(dx / span, -0.8, 0.8) : fallback);
@@ -65,6 +70,9 @@ export class Sfx {
   // Grid pulses: the last time each was scheduled.
   private fuseLast = -1;
   private heartLast = -1;
+  /** The ambience bed's drop (Core wires it to ambience.dip): a gap only reads as a gap when the
+   *  wind goes with the band. */
+  bed: ((t: number, hold: number, depth: number) => void) | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -105,7 +113,7 @@ export class Sfx {
   flush(now: number): void {
     for (let i = 0; i < this.jobs.length; ) {
       const j = this.jobs[i];
-      if (j.t - now < DEFER) {
+      if (j.t - now < j.lead) {
         this.jobs.splice(i, 1);
         if (!j.v || !j.v.dead) j.fn(Math.max(j.t, now + 0.005));
       } else i++;
@@ -177,7 +185,10 @@ export class Sfx {
         else if (e.phase === 'success') {
           // Outran the avalanche: the band drops out (wind and the fading rumble left), then slams
           // back with the fanfare.
-          if (e.event === ChaosEvent.Avalanche) duck.duck(0.02, t, ESCAPE_DROP_S, 0.04, 0.008);
+          if (e.event === ChaosEvent.Avalanche) {
+            duck.duck(0.02, t, ESCAPE_DROP_S, 0.04, 0.008);
+            this.bed?.(t, ESCAPE_DROP_S, 0.3);
+          }
           else duck.duck(0.5, t, 1, 0.6);
         }
         break;
@@ -196,10 +207,14 @@ export class Sfx {
    */
   ui(name: UiSound, detail: number, t: number, onStart?: (t: number) => void): void {
     const d = Number.isFinite(detail) ? Math.max(0, Math.floor(detail)) : 0;
-    this.later(t, (tt) => {
-      onStart?.(tt);
-      this.uiNow(name, d, tt);
-    });
+    this.later(
+      t,
+      (tt) => {
+        onStart?.(tt);
+        this.uiNow(name, d, tt);
+      },
+      TIMELINE_LEAD,
+    );
   }
 
   private uiNow(name: UiSound, d: number, t: number): void {
@@ -350,9 +365,9 @@ export class Sfx {
   }
 
   /** Run `fn(t)` now, or from a later scheduler pass if t is far enough ahead. */
-  private later(t: number, fn: (t: number) => void): void {
-    if (t - this.ctx.currentTime < DEFER) fn(t);
-    else this.jobs.push({ t, v: null, fn });
+  private later(t: number, fn: (t: number) => void, lead = DEFER): void {
+    if (t - this.ctx.currentTime < lead) fn(t);
+    else this.jobs.push({ t, v: null, fn, lead });
   }
 
   /** Like later(), for a part added to an existing voice; the voice is kept alive meanwhile. */
@@ -360,7 +375,7 @@ export class Sfx {
     if (t - this.ctx.currentTime < DEFER) fn(t);
     else {
       v.hold(t + 0.1);
-      this.jobs.push({ t, v, fn });
+      this.jobs.push({ t, v, fn, lead: DEFER });
     }
   }
 
@@ -394,12 +409,13 @@ export class Sfx {
 
   /** A noise swell rising into a moment (a reverse cymbal): exponential crescendo through a
    *  highpass that opens downward, cut as it peaks. */
-  private swellUp(t: number, dur: number, amp: number, pan = 0): void {
-    const v = this.voice(t, 0.5, pan);
+  private swellUp(t: number, dur: number, amp: number, pan = 0, dry = false): void {
+    // Into a drop it is dry and cut hard, so no reverb tail fills the gap.
+    const v = this.voice(t, dry ? 0 : 0.5, pan);
     const g = v.gain(0, v.out);
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(amp, t + dur);
-    g.gain.setTargetAtTime(0, t + dur, 0.025);
+    g.gain.setTargetAtTime(0, t + dur, dry ? 0.006 : 0.025);
     const hp = v.filter('highpass', 7000, 0.7, g);
     hp.frequency.setValueAtTime(7000, t);
     hp.frequency.exponentialRampToValueAtTime(2600, t + dur);
@@ -629,7 +645,7 @@ export class Sfx {
   private style(kind: StyleKind, chain: number, mult: number, t0: number, side?: number): void {
     if (kind === 'avalanche') {
       // The escape's brass stab waits out the drop-out and lands on the slam.
-      this.later(t0 + ESCAPE_DROP_S, (ts) => this.style('yetiHop', chain, mult, ts));
+      this.later(t0 + ESCAPE_DROP_S, (ts) => this.style('yetiHop', chain, mult, ts), TIMELINE_LEAD);
       return;
     }
     let t = Math.max(t0, this.styleNext);
@@ -848,10 +864,14 @@ export class Sfx {
     if (phase === 'success') {
       if (ev === ChaosEvent.Avalanche) {
         // Outran it: the band drops out (the engine's duck), then the fanfare slams back in.
-        this.later(t + ESCAPE_DROP_S, (ts) => {
-          this.slam(ts, true);
-          this.fanfare(ts);
-        });
+        this.later(
+          t + ESCAPE_DROP_S,
+          (ts) => {
+            this.slam(ts, true);
+            this.fanfare(ts);
+          },
+          TIMELINE_LEAD,
+        );
       } else this.fanfare(t);
       return;
     }
@@ -1204,7 +1224,11 @@ export class Sfx {
     }
     const r = ROLL[tier];
     const land = t + CHIP_S + r.dur;
-    const v = this.voice(t, 0.25, 0, 1.4);
+    // A drop (tiers 2 and 3, not a bump bank): the climb tops out as the gap opens, so the last
+    // DROP_S before the landing is a breath, not more ticks. Dry-ish, so the ticks leave no tail.
+    const drop = tier >= 2 && !b.bump;
+    const span = drop ? r.dur - DROP_S : r.dur;
+    const v = this.voice(t, drop ? 0.1 : 0.25, 0, 1.4);
     mallet(v, t, this.note(r.lo), 0.07, 0.08);
     this.at(v, t + CHIP_S - 0.02, (tc) => {
       this.knock(v, tc, 1800, 0.11);
@@ -1212,7 +1236,7 @@ export class Sfx {
     });
     for (let i = 1; i <= r.n; i++) {
       const e = i / r.n;
-      const ti = t + CHIP_S + r.dur * (1 - Math.sqrt(1 - e));
+      const ti = t + CHIP_S + span * (1 - Math.sqrt(1 - e));
       const f = this.note(r.lo + Math.round(((r.hi - r.lo) * (i - 1)) / (r.n - 1)));
       const amp = 0.04 + 0.03 * e;
       this.at(v, ti, (tn) => {
@@ -1234,10 +1258,17 @@ export class Sfx {
     }
     this.chord(land, 0.08, 1 + 0.2 * tier, 5);
     if (tier === 3) this.shimmer(land + 0.05, 16, 9, 0.045);
-    if (b.bump) return;
-    if (tier === 3) this.later(land - DROP_S - 0.5, (ts) => this.swellUp(ts, 0.5, 0.1));
-    if (music) this.later(land - DROP_S, (td) => music.duck(0.12, td, DROP_S, 0.05, 0.006));
-    this.later(land, (ts) => this.slam(ts, tier === 3));
+    if (!drop) return;
+    if (tier === 3) this.later(land - DROP_S - 0.5, (ts) => this.swellUp(ts, 0.5, 0.1, 0, true));
+    this.later(
+      land - DROP_S,
+      (td) => {
+        music?.duck(0.12, td, DROP_S, 0.05, 0.006);
+        this.bed?.(td, DROP_S, 0.25);
+      },
+      TIMELINE_LEAD,
+    );
+    this.later(land, (ts) => this.slam(ts, tier === 3), TIMELINE_LEAD);
   }
 
   /** A lost combo: the song trips (two stumbling kicks off the grid), a pad note sags a semitone

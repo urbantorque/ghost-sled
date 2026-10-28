@@ -32,6 +32,7 @@ export class Core {
     this.music = new Music(ctx, this.musicPool, this.graph.music);
     this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key(), this.graph.music);
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
+    this.sfx.bed = (t, hold, depth) => this.ambience.dip(t, hold, depth);
   }
 
   /** One scheduler pass: fill the music lookahead, place grid pulses, build deferred effect parts,

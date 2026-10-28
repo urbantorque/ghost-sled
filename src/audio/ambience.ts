@@ -364,9 +364,32 @@ export class Ambience {
     this.scene = scene;
     // Run level keeps cruising wind and snow near -33 dBFS RMS and full speed near -25, under
     // the music; menus get a faint wind bed.
-    this.out.gain.setTargetAtTime(scene === 'run' ? 0.4 : scene === 'title' ? 0.35 : 0.25, now, 0.6);
+    this.out.gain.setTargetAtTime(this.bedLevel(), now, 0.6);
     this.tone.gain.setTargetAtTime(scene === 'run' ? 1 : 0, now, 0.05);
     if (scene !== 'run') this.calm(now);
+  }
+
+  /**
+   * A drop: the whole bed (wind, snow, rumble) and the in-key voices fall to `depth` at t for
+   * `hold` seconds, then come back with the slam. With the band ducked at the same moment the gap
+   * reads as a gap (a big bank's drop, the avalanche escape's drop-out). Run scene only.
+   */
+  dip(t: number, hold: number, depth: number): void {
+    if (this.scene !== 'run' || !(hold > 0)) return;
+    const lvl = this.bedLevel();
+    const d = clamp(depth, 0, 1);
+    for (const [p, full] of [
+      [this.out.gain, lvl],
+      [this.tone.gain, 1],
+    ] as const) {
+      p.cancelScheduledValues(t);
+      p.setTargetAtTime(full * d, t, 0.008);
+      p.setTargetAtTime(full, t + hold, 0.03);
+    }
+  }
+
+  private bedLevel(): number {
+    return this.scene === 'run' ? 0.4 : this.scene === 'title' ? 0.35 : 0.25;
   }
 
   /** Called from the scheduler: if frames stop arriving mid-run (paused), settle to a calm bed. */
