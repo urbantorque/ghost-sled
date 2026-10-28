@@ -913,12 +913,14 @@ export class Particles {
   }
 
   /** Snow shaken off a tree's boughs as you shave past it (a near miss): grains and soft clumps
-   *  dropping from 2.5 to 4 m on the side facing you (`pos` is the trunk's near edge on the snow and
-   *  `out` the level direction from the tree toward you), nudged out toward your line by the wind of
-   *  your passing and carried along with the sled for a moment, so it reads at the frame's edge. */
+   *  dropping from its lower boughs, 1.4 to 3.2 m up, on the side facing you (`pos` is the canopy's
+   *  near edge on the snow and `out` the level direction from the tree toward you), swept out toward
+   *  your line by the wind of your passing and dragged along in your wake. The tree is already a couple
+   *  of metres behind the sled when the beat lands (and dissolving before the lens), so the snow keeps
+   *  nearly the sled's speed: it hangs beside the rider, at the frame's side, as it falls. */
   boughs(pos: Vector3, out: Vector3, carrier: Vector3, count = 16): void {
     const n = this.n(count);
-    const car = tmpC.set(carrier.x * 0.7, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.7, carrier.z * 0.7);
+    const car = tmpC.set(carrier.x * 0.95, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.95, carrier.z * 0.95);
     const tx = -out.z;
     const tz = out.x;
     for (let i = 0; i < n; i++) {
@@ -927,11 +929,11 @@ export class Particles {
       const kind = r < 6 ? KIND_GRAIN : r < 9 ? puffKind() : KIND_MIST;
       const along = (Math.random() - 0.5) * 1.6;
       const o = Math.random() * 0.5;
-      const push = 0.5 + Math.random() * 1.3;
+      const push = 0.8 + Math.random() * 1.6;
       const grain = kind === KIND_GRAIN;
       this.powder.emit(
         pos.x + out.x * o + tx * along,
-        pos.y + 2.5 + Math.random() * 1.5,
+        pos.y + 1.4 + Math.random() * 1.8,
         pos.z + out.z * o + tz * along,
         car.x + out.x * push + tx * along * 0.4,
         car.y - 0.4 + Math.random() * 0.9,
@@ -956,7 +958,8 @@ export class Particles {
    *  on the snow, `out` the level direction from it toward you. */
   grit(pos: Vector3, out: Vector3, carrier: Vector3, ice: boolean, count = 8): void {
     const n = this.n(count);
-    const car = tmpC.set(carrier.x * 0.6, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.6, carrier.z * 0.6);
+    // (Swept along in your wake at nearly the sled's speed, like the bough snow, so it reads in frame.)
+    const car = tmpC.set(carrier.x * 0.9, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.9, carrier.z * 0.9);
     const chipC = ice ? SHARD : SLATE;
     for (let i = 0; i < n; i++) {
       const chip = i % 2 === 0;
@@ -990,7 +993,7 @@ export class Particles {
    *  powder (the flow snuffed out). They ride with the sled a moment and fall behind. */
   scarf(a: Vector3, b: Vector3, color: Color, count: number, carrier: Vector3, glow: boolean): void {
     const n = this.n(count);
-    const ck = glow ? 0.85 : 0.7;
+    const ck = glow ? 0.9 : 0.85;
     const car = tmpC.set(carrier.x * ck, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * ck, carrier.z * ck);
     for (let i = 0; i < n; i++) {
       const t = Math.random();
@@ -998,9 +1001,9 @@ export class Particles {
       const y = a.y + (b.y - a.y) * t;
       const z = a.z + (b.z - a.z) * t;
       if (glow) {
-        this.glow.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.6, car.y + 0.1 + Math.random() * 0.5, car.z + (Math.random() - 0.5) * 1.6, 0.3 + Math.random() * 0.25, 0.14, 0.03, color.r * 1.5, color.g * 1.5, color.b * 1.5, 1, 2.2, 2.5, KIND_GRAIN, car);
+        this.glow.emit(x, y, z, car.x + (Math.random() - 0.5) * 2.2, car.y + 0.3 + Math.random() * 0.8, car.z + (Math.random() - 0.5) * 2.2, 0.45 + Math.random() * 0.35, 0.2, 0.05, color.r * 1.8, color.g * 1.8, color.b * 1.8, 1, 2.2, 2.5, KIND_GRAIN, car);
       } else {
-        this.powder.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.2, car.y + 0.2 + Math.random() * 0.5, car.z + (Math.random() - 0.5) * 1.2, 0.45 + Math.random() * 0.3, 0.06, 0.15 + Math.random() * 0.08, color.r, color.g, color.b, 0.7, 0.6, 2, puffKind(), car);
+        this.powder.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.6, car.y + 0.3 + Math.random() * 0.6, car.z + (Math.random() - 0.5) * 1.6, 0.6 + Math.random() * 0.3, 0.1, 0.26 + Math.random() * 0.1, color.r, color.g, color.b, 0.8, 0.6, 2, puffKind(), car);
       }
     }
   }
