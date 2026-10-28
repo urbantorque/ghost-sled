@@ -169,16 +169,32 @@ function envelope(L: Float32Array, R: Float32Array, from: number, to: number, lo
   return out;
 }
 
-export async function renderMix(kind: string, seconds = 8): Promise<Record<string, number | number[]>> {
+/** Probe-only knobs: limiter and ceiling overrides, to tune the master chain against the stress mix. */
+export interface RenderOpts {
+  limiter?: { threshold?: number; knee?: number; ratio?: number; attack?: number; release?: number };
+  ceiling?: number;
+}
+
+export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   const isMoment = kind === 'drop' || kind === 'massive' || kind === 'lost' || kind === 'escape';
   const secs = isMoment ? 5 : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
   const core = new Core(ctx);
-  const stress = kind === 'stress';
+  // 'stress-music' and 'stress-sfx' render the stress mix with the other bus muted (diagnosis).
+  const stress = kind.startsWith('stress');
+  const lim = core.graph.limiter;
+  const o = opts.limiter ?? {};
+  if (o.threshold !== undefined) lim.threshold.value = o.threshold;
+  if (o.knee !== undefined) lim.knee.value = o.knee;
+  if (o.ratio !== undefined) lim.ratio.value = o.ratio;
+  if (o.attack !== undefined) lim.attack.value = o.attack;
+  if (o.release !== undefined) lim.release.value = o.release;
+  if (opts.ceiling !== undefined) core.graph.ceiling.gain.value = opts.ceiling;
   core.graph.setMaster(1, 0);
-  core.graph.music.setLevel(kind === 'ambience' ? 0 : 1, 0);
-  core.graph.sfx.setLevel(kind === 'music' ? 0 : 1, 0);
-  core.music.enabled = kind !== 'ambience';
+  const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb';
+  core.graph.music.setLevel(noMusic ? 0 : 1, 0);
+  core.graph.sfx.setLevel(kind === 'music' || kind === 'stress-music' ? 0 : 1, 0);
+  core.music.enabled = !noMusic;
   core.music.setTarget('run', Mood.None, 'alpine');
   core.ambience.setScene('run', 0);
 
@@ -193,7 +209,7 @@ export async function renderMix(kind: string, seconds = 8): Promise<Record<strin
     core.ambience.update(f, t, stress, core.music.key());
     core.pulse.fuse = f.fuse ?? 0;
     core.pulse.duel = f.duel ?? 0;
-    if (stress && t >= nextBurst) {
+    if (stress && kind !== 'stress-amb' && t >= nextBurst) {
       burst(core, t + 0.006, n++);
       nextBurst += 0.25;
     }

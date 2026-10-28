@@ -24,7 +24,7 @@ import { bankLandDelay } from './sfx';
  *                                                                   v      v      v
  *                                          master gain (volume) <-----------------+
  *                                               -> mute gain (stackable reasons, 12 ms ramp)
- *                                               -> DynamicsCompressor (gentle limiter)
+ *                                               -> DynamicsCompressor (fast limiter for stacked peaks)
  *                                               -> ceiling trim (absorbs the compressor's makeup gain)
  *                                               -> destination
  *
@@ -60,9 +60,10 @@ import { bankLandDelay } from './sfx';
  *   reward chord is a major add9 made of those same tones, so rewards never clash with the music.
  * - Filters automate at k-rate (once per 128 samples); a-rate biquad automation recomputes
  *   coefficients per sample and costs several times more.
- * - Levels (offline renders, sliders at 1): pad alone about -27 dBFS RMS, full arrangement about
- *   -21, cruising ambience -33, full speed -25, style notes peak near -22, the busiest stress mix
- *   peaks at -3 dBFS after the limiter.
+ * - Levels (offline renders, sliders at 1; scripts/playtest/levels.js): a novice cruise about -25
+ *   dBFS RMS (peaks near -12), its ambience alone -33, full arrangement about -21, style notes
+ *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
+ *   -5 dBFS after the limiter.
  * - Muting: any reason muted silences output; after 1 s fully muted the context is suspended to
  *   save CPU and resumed on unmute. All calls are no-ops before unlock() or without WebAudio.
  */
@@ -481,9 +482,9 @@ export class AudioEngine {
 
   /** Probe-only: an offline render of a scripted mix through the same Core (probe.ts, loaded on
    *  demand): 'cruise', 'ambience', 'stress' or 'groove'. Levels in dBFS. */
-  async debugRender(kind: string, seconds?: number): Promise<Record<string, number | number[]>> {
+  async debugRender(kind: string, seconds?: number, opts?: import('./probe').RenderOpts): Promise<Record<string, number | number[]>> {
     const m = await import('./probe');
-    return m.renderMix(kind, seconds);
+    return m.renderMix(kind, seconds, opts);
   }
 
   /** Accents: internal lifts on the drive for the beats that should swell the band for a moment. */

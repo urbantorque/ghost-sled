@@ -97,16 +97,19 @@ export class Graph {
     this.master.gain.value = MASTER_TRIM;
     this.mute = ctx.createGain();
     this.limiter = ctx.createDynamicsCompressor();
-    // Gentle: the mix is levelled by design; this only catches stacked peaks.
-    this.limiter.threshold.value = -9;
-    this.limiter.knee.value = 8;
-    this.limiter.ratio.value = 6;
-    this.limiter.attack.value = 0.004;
+    // The mix is levelled by design (a cruise peaks near -12 dBFS); this is a fast, hard limiter
+    // for stacked rewards only. Tuned against the stress probe (probe.ts): threshold -10, ratio 20
+    // and a 1 ms attack hold that mix's peak near -5 dBFS (the old gentle -9, 6:1, 4 ms let it
+    // reach -1), while a cruise does not move.
+    this.limiter.threshold.value = -10;
+    this.limiter.knee.value = 4;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.001;
     this.limiter.release.value = 0.22;
-    // Browsers add makeup gain inside the compressor; this trim keeps the busiest moments of a
-    // run peaking below -1.5 dBFS.
+    // Browsers add makeup gain inside the compressor (more with a harder ratio); this trim cancels
+    // it, so the cruise mix sits where it did (about -25 dBFS RMS, the ambience alone -33).
     this.ceiling = ctx.createGain();
-    this.ceiling.gain.value = 0.84;
+    this.ceiling.gain.value = 0.65;
     this.master.connect(this.mute).connect(this.limiter).connect(this.ceiling).connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
