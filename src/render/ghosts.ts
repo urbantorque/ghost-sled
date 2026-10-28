@@ -9,6 +9,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { Trail } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
+import { graveCopy, type GravePlace } from './graves';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
@@ -18,7 +19,8 @@ import { fmt, NBSP } from '../ui/fmt';
 // contract C11) and the start-line call pings it; a ghost that stomps a perfect landing near you rings
 // its tag once, and one that lands a trick swaps its name for the trick ('Backflip') for 0.9 s (never
 // the rival's under your own fresh stamp); a grudge on a three-run streak reads 'nemesis'; and your best
-// and a friend's line on the snow carry a tag with the distance ('Your best · 1,240 m').
+// and a friend's line on the snow carry a tag with the distance ('Your best · 1,240 m'). A graveyard's
+// cairn on the bank carries its name over how many fell there ('4 ghosts fell here').
 
 export const GHOST_COLORS: Record<GhostKind, string> = {
   pool: '#8FF3E4',
@@ -129,6 +131,8 @@ const CALL_HOLD = 2.6;
 const STOMP_HOLD = 0.55;
 /** The best and friend line tags show from this far (metres from the lens). */
 const LINE_RANGE = 120;
+/** A graveyard's tag shows from this far: a landmark, so further out than a single crash marker's. */
+const GRAVE_RANGE = 95;
 
 /** How long a pass beat keeps the ghost in it on screen (about as long as the HUD's pass toast). */
 const PASS_HOLD = 2.6;
@@ -431,6 +435,8 @@ function injectStyle(): void {
   @keyframes ghost-ring-stomp { 0% { opacity: 1; transform: scale(0.92); } 100% { opacity: 0; transform: scale(1.45, 2.2); } }
   @keyframes ghost-ring-out { 0% { opacity: 1; } 100% { opacity: 0; } }
   .ghost-label.line { background: #121933; color: var(--c); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--c), 0 2px 6px rgba(18, 25, 51, 0.35), 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
+  .ghost-label.grave { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 11px 5px; border-radius: 9px; text-align: center; }
+  .ghost-label.grave .gf { font-size: 11px; font-weight: 650; letter-spacing: 0.01em; color: #F5F3FF; }
   @media (prefers-reduced-motion: reduce) {
     .ghost-label.trick .tw { animation-name: ghost-trick-fade; animation-timing-function: linear; }
     .ghost-label.duel::before, .ghost-label.call::before { animation: none; opacity: 1; transform: none; }
@@ -615,6 +621,33 @@ export class GhostVisuals {
    *  tag is hidden and kept while it shows (the rider rides the middle, where a centred tag hid). */
   private bestSide = 1;
   private friendSide = -1;
+  /** This run's graveyard tags over their cairns (contract C8: priority 2 like the crash markers, so
+   *  never a dot; one touching the HUD or another tag hides). Kept across setField. */
+  private graves: Array<{ tag: Tag; x: number; y: number; z: number }> = [];
+
+  /** This run's graveyards (World.setGraveyards forwards the placed cairns, sim metres, with the tag's
+   *  anchor height): a two-line tag at each, the place's name over '4 ghosts fell here', on every tier
+   *  (Low draws no cairn). An empty list clears them. */
+  setGraveyards(list: ReadonlyArray<GravePlace>): void {
+    for (const g of this.graves) g.tag.el.remove();
+    this.graves = list.map((g) => {
+      const copy = graveCopy(g.name, g.fell);
+      const l = document.createElement('div');
+      l.className = 'ghost-label marker grave';
+      l.style.setProperty('--c', GHOST_COLORS.pool);
+      const nm = document.createElement('span');
+      nm.className = 'gn';
+      nm.textContent = copy.name;
+      // A place's name is a proper noun; the count line is plain copy.
+      nm.translate = false;
+      const ln = document.createElement('span');
+      ln.className = 'gf';
+      ln.textContent = copy.line;
+      l.append(nm, ln);
+      this.layer.appendChild(l);
+      return { tag: newTag(l, 2), x: g.x, y: g.y, z: g.z };
+    });
+  }
 
   /** This frame's named moments and feel: the start-line call pings its ghost's ring, a stamp quiets
    *  the rival's tag, and a ghost's trick near you swaps its name for the trick. Never keeps the list. */
@@ -1083,6 +1116,12 @@ export class GhostVisuals {
       }
     }
     this.lineTags(camera, w, h, player);
+    // Graveyard tags keep to the race, like the crash markers.
+    const graves = this.labels && !this.reel;
+    for (const g of this.graves) {
+      g.tag.ok = false;
+      if (graves) this.project(g.tag, tmpP.set(g.x, g.y, -g.z), camera, w, h, GRAVE_RANGE);
+    }
     this.dimOverlaps(dt, riderDepth);
     if (this.wisp) {
       const g = this.wisp.geometry;
@@ -1628,6 +1667,10 @@ export class GhostVisuals {
       t.want = false;
       if (t.ok) cands.push(t);
     }
+    for (const g of this.graves) {
+      g.tag.want = false;
+      if (g.tag.ok) cands.push(g.tag);
+    }
     pool.sort(this.byPlayer);
     for (let i = 0; i < pool.length && i < (this.reel ? 1 : POOL_TAGS); i++) cands.push(pool[i]);
     cands.sort(this.byPrio);
@@ -1753,6 +1796,7 @@ export class GhostVisuals {
     }
     if (this.bestTag) this.animate(this.bestTag, dt);
     if (this.friendTag) this.animate(this.friendTag, dt);
+    for (const g of this.graves) this.animate(g.tag, dt);
   }
 
   private animate(t: Tag, dt: number): void {

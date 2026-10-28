@@ -10,6 +10,7 @@ import type { GhostKind } from '../ui/contract';
 import { ChaseCamera } from './camera';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
+import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
 import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
@@ -372,21 +373,18 @@ export class World {
    *  director's clusters, sim z, with a name and how many fell). Each gets a cairn on the bank beside
    *  it (Medium and High; Low keeps no mesh), on the side its hash picks, 1.4 m outside the corridor so
    *  it is never in the line. Call it at each run's start, after setCourse; an empty list clears them.
-   *  The placed spots go on to the ghost layer for its tags when it takes them (setGraveyards). */
+   *  The placed spots go on to the ghost layer for their tags ('Widow's Bend' over '4 ghosts fell
+   *  here'), which show on every tier. */
   setGraveyards(list: ReadonlyArray<{ z: number; name: string; fell: number }>): void {
-    const c = this.course;
-    const placed = list.slice(0, 4).map((g) => {
-      const side = Math.imul(Math.round(g.z * 7), 0x9e3779b1) >>> 31 ? 1 : -1;
-      const x = c.centerX(g.z) + side * (c.halfWidth(g.z) + 1.4);
-      return { name: g.name, fell: g.fell, x, z: g.z, y: c.ground(x, g.z) + 3.2 };
-    });
+    // (The tag hangs just over the marker stake's top; on Low, with no cairn, it marks the same spot.)
+    const placed = placeGraves(this.course, list);
     this.graves = placed;
     this.props.setGraveyards(placed);
-    (this.ghosts as unknown as { setGraveyards?: (l: typeof placed) => void }).setGraveyards?.(placed);
+    this.ghosts.setGraveyards(placed);
   }
 
   /** The cairns placed this run (for the ghost layer's tags and play-tests). */
-  graves: ReadonlyArray<{ name: string; fell: number; x: number; z: number; y: number }> = [];
+  graves: ReadonlyArray<GravePlace> = [];
 
   /** Clears held feel (the camera's freeze and jolts; the world's rim pulse and band flare) on revive
    *  and at a run's start. */
@@ -627,7 +625,10 @@ export class World {
     const runK = v.mode === 'run' && v.sim ? Math.max(0, Math.min(1, (v.sim.tick / 60 - 1.8) / 1.6)) : 1;
     const intro = 1 - runK * runK * (3 - 2 * runK);
     this.cam.sun = this.palette.diskDir;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, mate, rival, intro }, dt);
+    // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
+    // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
+    const drifting = v.mode === 'run' && s.drifting;
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
