@@ -101,6 +101,12 @@ const ORBIT_FACE = 0.9;
 const ORBIT_EASE = 5;
 const ORBIT_SWING = 3.6;
 const ORBIT_WIND = 0.15;
+/** Facing the pack, the lens sits low (this high over the wreck, about head height over the snow
+ *  downhill of it) and looks a little over the wreck, so the slope it came down fills the frame with
+ *  the ghosts riding down it. From the orbit's usual 3.2 m, the downhill lens stood 5 m over its own
+ *  snow and looked down onto a sheet of white with the pack as specks at the top edge. */
+const ORBIT_PACK_UP = 1.3;
+const ORBIT_PACK_LOOK = 1.1;
 
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
@@ -177,6 +183,11 @@ export class ChaseCamera {
   private orbitAim: number | null = null;
   private orbitR = ORBIT_R;
   private orbitUp = ORBIT_UP;
+  /** The height the orbit eases to, and the eased lift of its look point over the wreck (and its
+   *  target): low and looking up the slope while it faces the pack. */
+  private orbitUpT = ORBIT_UP;
+  private orbitLook = 0;
+  private orbitLookT = 0;
   /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
   private orbitSpin = ORBIT_SPIN;
   /** Raw events this frame that a beat may take over: a perfect landing (the stomp beat kicks by
@@ -363,6 +374,7 @@ export class ChaseCamera {
     this.freezeLeft = 0;
     this.orbitFrom = null;
     this.orbitSeeded = false;
+    this.orbitLook = this.orbitLookT = 0;
     this.pendPerfect = false;
     this.pendDriftKick = 0;
   }
@@ -560,13 +572,15 @@ export class ChaseCamera {
         desired.copy(this.pos);
         lookAt.copy(this.look);
       } else {
-        if (this.crashOrbit(t, dt, desired)) {
+        const cut = this.crashOrbit(t, dt, desired);
+        lookAt.copy(t.pos);
+        lookAt.y += this.orbitLook;
+        if (cut) {
           // A cut to face the pack: the lens stands there at once.
           this.pos.copy(desired);
-          this.look.copy(t.pos);
-          this.lookS.copy(t.pos);
+          this.look.copy(lookAt);
+          this.lookS.copy(lookAt);
         }
-        lookAt.copy(t.pos);
       }
     } else if (this.mode === 'hero') {
       this.heroShot(t, desired, lookAt, tanHalfW, travelAz);
@@ -758,8 +772,12 @@ export class ChaseCamera {
       this.orbitSpin = ORBIT_SPIN;
       this.orbitT = 0;
       this.orbitAim = null;
+      this.orbitUpT = ORBIT_UP;
+      this.orbitLook = this.orbitLookT = 0;
       const from = this.feel.reduced ? null : this.orbitFrom;
       if (from !== null) {
+        this.orbitUpT = ORBIT_PACK_UP;
+        this.orbitLookT = ORBIT_PACK_LOOK;
         // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward
         // +x). In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens
         // along (sin a, cos a), so the lens opposite the ghost, facing it, is at a = -from. It stays
@@ -771,7 +789,8 @@ export class ChaseCamera {
         if (Math.abs(gap) > ORBIT_CUT) {
           this.orbitAngle = aim;
           this.orbitR = ORBIT_R;
-          this.orbitUp = ORBIT_UP;
+          this.orbitUp = ORBIT_PACK_UP;
+          this.orbitLook = ORBIT_PACK_LOOK;
           this.orbitT = ORBIT_WIND;
           cut = true;
         } else this.orbitAim = aim;
@@ -786,7 +805,8 @@ export class ChaseCamera {
     } else this.orbitAngle += dt * this.orbitSpin * wind;
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += (ORBIT_R - this.orbitR) * k;
-    this.orbitUp += (ORBIT_UP - this.orbitUp) * k;
+    this.orbitUp += (this.orbitUpT - this.orbitUp) * k;
+    this.orbitLook += (this.orbitLookT - this.orbitLook) * k;
     desired.set(t.pos.x + Math.sin(this.orbitAngle) * this.orbitR, t.pos.y + this.orbitUp, t.pos.z + Math.cos(this.orbitAngle) * this.orbitR);
     // Facing the pack can put the lens over a bank or among the trees beside the course: never in
     // the snow.

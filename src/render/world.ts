@@ -146,6 +146,8 @@ export class World {
   private perfectPulse = 0;
   private flash = 0;
   private punch = 0;
+  /** 1 while riding, easing to 0 through a crash: how much of the speed streaks the post pass gets. */
+  private streakK = 1;
   private sprayAcc = 0;
   private wasGrounded = true;
   private width = 1;
@@ -434,6 +436,7 @@ export class World {
     this.wasGrounded = true;
     this.flash = 0;
     this.punch = 0;
+    this.streakK = 1;
     this.flowPulseT = 9;
     this.flareT = -1;
     this.bestZ = -1;
@@ -668,7 +671,10 @@ export class World {
     // close frame where bloom washed the face and scarf out: both run with less of either.
     const tall = this.width < this.height;
     // Reduced motion halves the speed streaks and the flash and drops the punch (FOV breathing stays).
-    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) : 0;
+    // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
+    // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
+    this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
+    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
