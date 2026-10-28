@@ -61,6 +61,9 @@ interface Tag {
   dot: boolean;
   /** This frame's placement wants the dot. */
   wantDot: boolean;
+  /** Pulled in from the screen edge while its anchor is on screen, rather than hidden (a landmark on
+   *  the bank, which a phone's narrow frame puts right at its edge). */
+  pull?: boolean;
 }
 
 interface Item {
@@ -645,7 +648,9 @@ export class GhostVisuals {
       ln.textContent = copy.line;
       l.append(nm, ln);
       this.layer.appendChild(l);
-      return { tag: newTag(l, 2), x: g.x, y: g.y, z: g.z };
+      const tag = newTag(l, 2);
+      tag.pull = true;
+      return { tag, x: g.x, y: g.y, z: g.z };
     });
   }
 
@@ -1180,7 +1185,10 @@ export class GhostVisuals {
     // A friend's name is a proper noun; the copy around it is plain.
     l.translate = false;
     this.layer.appendChild(l);
-    return newTag(l, 2);
+    const t = newTag(l, 2);
+    // (A band across the snow: on a phone its tag's spot is often at the frame's edge.)
+    t.pull = true;
+    return t;
   }
 
   /** The side of the course at a band away from the rider (player is three.js: sim z is -z). */
@@ -1713,10 +1721,10 @@ export class GhostVisuals {
       // the rider (up to about half its width) rather than up over the rider's head.
       for (let pass = 0; pass < 2 && !(canDot && busy); pass++) {
         let x = t.x;
-        // The rival's tag (contract C11), and the title's one tag, are pulled in from the screen edge
-        // rather than hidden while the ghost is on screen: a ghost racing beside you on a phone sits
-        // right at the edge.
-        if ((t.prio < 0 || this.reel) && t.x > 0 && t.x < W) x = Math.max(8 + safe.l + tw / 2, Math.min(W - 8 - safe.r - tw / 2, x));
+        // The rival's tag (contract C11), the title's one tag, a graveyard's and a line's are pulled in
+        // from the screen edge rather than hidden while what they name is on screen: a ghost racing
+        // beside you on a phone sits right at the edge, and so do a cairn on the bank and a band's tag.
+        if ((t.prio < 0 || this.reel || t.pull) && t.x > 0 && t.x < W) x = Math.max(8 + safe.l + tw / 2, Math.min(W - 8 - safe.r - tw / 2, x));
         if (pass === 1) {
           if (!(y0 < rr.y1 && y > rr.y0 && rr.x1 > rr.x0)) break;
           const slide = x >= (rr.x0 + rr.x1) / 2 ? rr.x1 + 3 - (x - tw / 2) : rr.x0 - 3 - (x + tw / 2);
