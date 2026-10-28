@@ -91,10 +91,13 @@ const RELEASE_KICK = [0, 0.3, 0.5, 0.75];
 const ORBIT_R = 7.5;
 const ORBIT_UP = 3.2;
 const ORBIT_SPIN = 0.55;
-/** The crash orbit's swing round to the pack's side: its ease rate (per second), its top speed
- *  (radians per second of scaled time) and the time it takes to wind up from the held lens. Quick
- *  enough to arrive in the third of a second between the hold and the results, so the pack crosses
- *  the frame from where it rides. */
+/** The crash orbit's turn to face the pack: a start further than ORBIT_CUT (radians) from where the
+ *  held lens stood is a cut, a nearer one a swing at ORBIT_EASE per second, at most ORBIT_SWING
+ *  radians per second of scaled time. The orbit winds up over ORBIT_WIND seconds from the hold. */
+const ORBIT_CUT = 0.6;
+/** Facing the pack, the lens stays downhill of the wreck, at most this far (radians) off looking
+ *  straight up the slope. */
+const ORBIT_FACE = 0.9;
 const ORBIT_EASE = 5;
 const ORBIT_SWING = 3.6;
 const ORBIT_WIND = 0.15;
@@ -170,6 +173,8 @@ export class ChaseCamera {
   private orbitSeeded = false;
   /** Scaled seconds since the orbit took over from the hold (the swing winds up over ORBIT_WIND). */
   private orbitT = 0;
+  /** The orbit angle a short swing is easing to (facing the pack), or null. */
+  private orbitAim: number | null = null;
   private orbitR = ORBIT_R;
   private orbitUp = ORBIT_UP;
   /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
@@ -555,7 +560,12 @@ export class ChaseCamera {
         desired.copy(this.pos);
         lookAt.copy(this.look);
       } else {
-        this.crashOrbit(t, dt, desired);
+        if (this.crashOrbit(t, dt, desired)) {
+          // A cut to face the pack: the lens stands there at once.
+          this.pos.copy(desired);
+          this.look.copy(t.pos);
+          this.lookS.copy(t.pos);
+        }
         lookAt.copy(t.pos);
       }
     } else if (this.mode === 'hero') {
@@ -726,15 +736,18 @@ export class ChaseCamera {
     this.camera.lookAt(look);
   }
 
-  /** The crash orbit: a slow drift round the wreck. It takes over from wherever the held lens stood
-   *  (its angle, distance and height ease to the orbit's), so it never jumps. With the crash beat's
-   *  bearing to the nearest live ghost behind or abreast (pack-orbit), the lens swings round to that
-   *  ghost's side of the wreck, up above its line, and looks back at the wreck: the pack rides in
-   *  under the lens and across the frame past your wreck. That side is the one the race is on (the
-   *  open course, rarely the trees the wreck lies in), and from behind it is where the chase lens
-   *  already stood, so the swing stays short in the third of a second before the results. Once there
-   *  it drifts on slowly, so a narrow screen's panel never sits over a frozen frame. */
-  private crashOrbit(t: CamTarget, dt: number, desired: Vector3): void {
+  /** The crash orbit: a slow drift round the wreck. With no ghost to watch it takes over from
+   *  wherever the held lens stood (its angle, distance and height ease to the orbit's), so it never
+   *  jumps. With the crash beat's bearing to the nearest live ghost behind or abreast (pack-orbit),
+   *  it starts facing that ghost: the lens stands downhill of the wreck on the far side from it and
+   *  looks past the wreck up the slope toward the ghost, so the pack streams down past your wreck
+   *  through the frame (the race went on without you). From the chase lens behind the wreck that is a reverse angle, far
+   *  too far to swing in the third of a second before the results, so after the held frame it is a
+   *  cut; a start within ORBIT_CUT of the lens swings there instead. Then it drifts on slowly, so a
+   *  narrow screen's panel never sits over a frozen frame. Reduced motion never cuts or swings: the
+   *  orbit drifts on from the lens. Returns true on a cut (the caller snaps the lens there). */
+  private crashOrbit(t: CamTarget, dt: number, desired: Vector3): boolean {
+    let cut = false;
     if (!this.orbitSeeded) {
       this.orbitSeeded = true;
       const dx = this.pos.x - t.pos.x;
@@ -744,29 +757,41 @@ export class ChaseCamera {
       this.orbitUp = MathUtils.clamp(this.pos.y - t.pos.y, 0.8, 6);
       this.orbitSpin = ORBIT_SPIN;
       this.orbitT = 0;
+      this.orbitAim = null;
+      const from = this.feel.reduced ? null : this.orbitFrom;
+      if (from !== null) {
+        // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward
+        // +x). In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens
+        // along (sin a, cos a), so the lens opposite the ghost, facing it, is at a = -from. It stays
+        // on the downhill side (a = PI looks straight up the slope): a ghost abreast is watched
+        // across the slope as it comes down, not from deeper in the trees beside a wreck.
+        const aim = Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE);
+        const gap = wrapAngle(aim - this.orbitAngle);
+        this.orbitSpin = ORBIT_SPIN * 0.4 * (gap < 0 ? -1 : 1);
+        if (Math.abs(gap) > ORBIT_CUT) {
+          this.orbitAngle = aim;
+          this.orbitR = ORBIT_R;
+          this.orbitUp = ORBIT_UP;
+          this.orbitT = ORBIT_WIND;
+          cut = true;
+        } else this.orbitAim = aim;
+      }
     }
     this.orbitT += dt;
     const wind = Math.min(1, this.orbitT / ORBIT_WIND);
-    const from = this.feel.reduced ? null : this.orbitFrom;
-    if (from !== null) {
-      // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward +x).
-      // In three.js the ghost lies along (sin from, -cos from); the orbit puts the lens along
-      // (sin a, cos a), so the ghost's side is a = PI - from.
-      const gap = wrapAngle(Math.PI - from - this.orbitAngle);
-      if (Math.abs(gap) < 0.04) {
-        // Arrived: drift on slowly the way it swung.
-        this.orbitFrom = null;
-        this.orbitSpin = ORBIT_SPIN * 0.3 * (this.orbitSpin < 0 ? -1 : 1);
-      } else {
-        const step = MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING);
-        this.orbitAngle += step * wind;
-        this.orbitSpin = gap < 0 ? -1 : 1;
-      }
+    if (this.orbitAim !== null) {
+      const gap = wrapAngle(this.orbitAim - this.orbitAngle);
+      if (Math.abs(gap) < 0.02) this.orbitAim = null;
+      else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
     } else this.orbitAngle += dt * this.orbitSpin * wind;
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += (ORBIT_R - this.orbitR) * k;
     this.orbitUp += (ORBIT_UP - this.orbitUp) * k;
     desired.set(t.pos.x + Math.sin(this.orbitAngle) * this.orbitR, t.pos.y + this.orbitUp, t.pos.z + Math.cos(this.orbitAngle) * this.orbitR);
+    // Facing the pack can put the lens over a bank or among the trees beside the course: never in
+    // the snow.
+    if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 1);
+    return cut;
   }
 
   /** Sell top fix 1, put the rivals in the frame: the ghost the HUD's rival pill names used to sit
