@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXTRA_GIFTS_CAP, type GhostRef } from '../src/game/beats';
-import { DuelTracker, ExtraGifts, callPick, classifyPass, ladderIndex, rivalPick, type PassContext } from '../src/game/race';
+import { DuelTracker, ExtraGifts, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
 
 const ghost = (kind: GhostRef['kind'] = 'pool', name = 'Mila'): GhostRef => ({ id: 1001, name, kind, dx: 1 });
 
@@ -187,6 +187,16 @@ describe('rivalPick and callPick', () => {
     expect(rivalPick(next, null, { id: 3, gap: -2 })).toEqual({ id: 3, gap: -2 });
     expect(rivalPick(next, { id: 2, gap: 0.4 }, { id: 3, gap: -2 })).toEqual({ id: 2, gap: 0.4 });
     expect(rivalPick(null, null, null)).toBeNull();
+  });
+
+  it('the nearest ghost holds through a bunched pack, and gives way past 1 m or across you', () => {
+    // Two ghosts side by side ahead: the name the pill shows does not flip every frame.
+    expect(steadyNext({ id: 1, gap: 6.4 }, { id: 2, gap: 6.1 })).toEqual({ id: 1, gap: 6.4 });
+    expect(steadyNext({ id: 1, gap: 7.3 }, { id: 2, gap: 6.1 })).toEqual({ id: 2, gap: 6.1 });
+    // Passed it: the next one ahead takes over at once.
+    expect(steadyNext({ id: 1, gap: -0.2 }, { id: 2, gap: 0.5 })).toEqual({ id: 2, gap: 0.5 });
+    expect(steadyNext(null, { id: 2, gap: 3 })).toEqual({ id: 2, gap: 3 });
+    expect(steadyNext({ id: 1, gap: 3 }, null)).toBeNull();
   });
 
   it('calls friend, nemesis, grudge, your best, then the pace ghost', () => {

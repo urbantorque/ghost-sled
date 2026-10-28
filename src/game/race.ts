@@ -224,6 +224,21 @@ export function rivalPick(next: { id: number; gap: number } | null, duel: { id: 
   return duel ?? call ?? next;
 }
 
+/** The rival pill keeps the ghost it names while that one stays on the same side of you and within
+ *  this many metres of the nearest: a bunched pack never flickers the name from frame to frame. */
+export const RIVAL_HOLD_M = 1;
+
+/**
+ * The nearest ghost (standings.next) with a little hold: `held` is the ghost named last frame, with
+ * its gap now. It stays named while it is on the same side of you as the nearest and no more than
+ * RIVAL_HOLD_M further; otherwise the nearest takes over.
+ */
+export function steadyNext(held: { id: number; gap: number } | null, next: { id: number; gap: number } | null): { id: number; gap: number } | null {
+  if (!next || !held || held.id === next.id) return next;
+  if (held.gap > 0 === next.gap > 0 && Math.abs(held.gap - next.gap) < RIVAL_HOLD_M) return held;
+  return next;
+}
+
 /**
  * The start-line call: friend 'Racing', nemesis 'Nemesis', grudge 'Rematch', your best (150 m or
  * more) 'Chase', otherwise the pace ghost 'Chase'. The best candidate in the field is chosen whether

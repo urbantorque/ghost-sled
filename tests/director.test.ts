@@ -407,6 +407,39 @@ describe('the race', () => {
     expect(of(w, 'duel')[0]).toMatchObject({ phase: 'won', gifts: 5 });
   });
 
+  it("a ghost that crashes out of its duel: the duel's result, then no 'Beat' and no wipeout for it", () => {
+    const { r, g } = raceRig();
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    for (let i = 0; i < 61; i++) r.frame();
+    expect(r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 2 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).hud.duel).toBe(true);
+    r.poses.set(1001, pose(r.sim.s.z + 1, 0, true));
+    g.crashSeen = true;
+    const w = r.frame();
+    expect(of(w, 'duel')[0]).toMatchObject({ phase: 'won' });
+    const later = [...r.frame([], { ticks: 10, race: [{ type: 'crashed', track: g }] }), ...r.frame([], { ticks: 10, race: [{ type: 'pass', track: g, first: false }] })];
+    expect(of(later, 'raceNews')).toHaveLength(0);
+    expect(of(later, 'pass')[0].muted).toBe(true);
+  });
+
+  it('the pill holds the ghost it names through a bunched pack', () => {
+    const r = new Rig();
+    const a = track(1);
+    const b = track(2);
+    r.tracks = [a, b];
+    const step = (next: GhostTrack, gap: number) =>
+      r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: { track: next, gap }, rank: 3, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id;
+    r.poses.set(1, pose(r.sim.s.z + 5));
+    r.poses.set(2, pose(r.sim.s.z + 5.3));
+    expect(step(a, 5)).toBe(1);
+    // The two swap by a hand's width: the pill keeps naming the first.
+    r.poses.set(2, pose(r.sim.s.z + 4.9));
+    expect(step(b, 4.9)).toBe(1);
+    // A clear metre: the nearer one takes over.
+    r.poses.set(2, pose(r.sim.s.z + 3.6));
+    expect(step(b, 3.6)).toBe(2);
+  });
+
   it('the lead beat once, from 10 s, with 3 or more ghosts and one riding', () => {
     const r = new Rig();
     r.tracks = [track(1), track(2), track(3)];
@@ -433,11 +466,20 @@ describe('finales', () => {
     expect(of(r.idle(3), 'finale')).toHaveLength(0);
   });
 
-  it('a clean sweep pays 10; the storm finale is never later than 2.5 s', () => {
+  it('a clean sweep pays 10, even when the last gift is caught 4 s after the end; never later than 6 s', () => {
+    // The 48th gift drops 62 to 84 m ahead on the tick of 'end': it is still coming at 2.5 s.
+    const late = new Rig({ event: ChaosEvent.GiftStorm, triggerZ: 500 });
+    for (let k = 0; k < 48; k++) late.sim.dyn.storm.push({ z: k < 47 ? 0 : 180, collected: k < 47 });
+    late.sim.s.z = 100;
+    late.frame([{ type: 'chaos', phase: 'end', event: ChaosEvent.GiftStorm }]);
+    expect(of(late.idle(4), 'finale')).toHaveLength(0);
+    late.sim.dyn.storm[47].collected = true;
+    expect(of(late.frame(), 'finale')[0]).toMatchObject({ text: 'Caught 48 of 48', sub: 'Clean sweep: +10 gifts', gifts: 10 });
     const r = new Rig({ event: ChaosEvent.GiftStorm, triggerZ: 500 });
     for (let k = 0; k < 48; k++) r.sim.dyn.storm.push({ z: 1000, collected: k < 47 });
     r.frame([{ type: 'chaos', phase: 'end', event: ChaosEvent.GiftStorm }]);
-    const out = r.idle(2.6);
+    expect(of(r.idle(5.9), 'finale')).toHaveLength(0);
+    const out = r.idle(0.2);
     expect(of(out, 'finale')[0]).toMatchObject({ text: 'Caught 47 of 48' });
     const q = new Rig({ event: ChaosEvent.GiftStorm, triggerZ: 500 });
     for (let k = 0; k < 48; k++) q.sim.dyn.storm.push({ z: 0, collected: true });

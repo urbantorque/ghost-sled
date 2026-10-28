@@ -13,8 +13,10 @@ import type { BeatOf } from './beats';
 
 /** The countdown chip shows from this far out (metres to the trigger). */
 export const COUNTDOWN_M = 400;
-/** The Gift Storm finale waits for the last gifts to fall behind you, at most this long after 'end'. */
-export const STORM_WAIT_TICKS = 150;
+/** The Gift Storm finale waits for the last gifts to fall behind you, at most this long after 'end'.
+ *  (The 48th gift drops 62 to 84 m ahead on the very tick of 'end', so it reaches you 2.5 to 5.5 s
+ *  later: a shorter wait would count before the last catches, and a clean sweep could never pay.) */
+export const STORM_WAIT_TICKS = 360;
 /** Drafted ticks inside the Spirit Train's run that make it a ride. */
 export const TRAIN_RIDE_TICKS = 60;
 export const STORM_SWEEP_GIFTS = 10;

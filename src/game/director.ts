@@ -7,7 +7,7 @@ import { IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, typ
 import { FinaleTracker } from './finales';
 import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { skillMult } from './intensity';
-import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick } from './race';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
@@ -86,6 +86,9 @@ const YETI_TITLE_TICKS = 90;
 /** Wipeout news: a ghost ahead within this many metres, or behind within WIPE_BEHIND (no duel). */
 const WIPE_AHEAD = 200;
 const WIPE_BEHIND = 25;
+/** A duel's result names that ghost's moment: its wreck passed or its wipeout this soon after (ticks)
+ *  says nothing more. */
+const DUEL_AFTER_TICKS = 120;
 /** The lead beat: from this tick, with this many ghosts in the race; re-armed after losing it this long. */
 const LEAD_TICKS = 600;
 const LEAD_GHOSTS = 3;
@@ -177,6 +180,10 @@ export class Director {
   private leading = false;
   private call: { id: number; at: number } | null = null;
   private callDone = false;
+  /** The nearest ghost the pill named last frame (held through a bunched pack). */
+  private heldNext: number | null = null;
+  /** Sim tick each ghost's duel last resolved won or held off. */
+  private readonly duelEnd = new Map<number, number>();
 
   // Milestones.
   private newGroundTick = -1e9;
@@ -272,6 +279,8 @@ export class Director {
     this.leading = false;
     this.call = null;
     this.callDone = false;
+    this.heldNext = null;
+    this.duelEnd.clear();
     this.newGroundTick = -1e9;
     this.newGroundAt = -1;
     this.newBestDone = false;
@@ -385,6 +394,7 @@ export class Director {
         const ghost = this.ref(t, f, sim);
         if (d.phase === 'won' || d.phase === 'heldOff') {
           resolved.set(d.id, d.phase);
+          this.duelEnd.set(d.id, sim.tick);
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
@@ -405,7 +415,7 @@ export class Director {
       const id = t.entry.id;
       if (ev.type === 'crashed') {
         // A duel ghost going down is the duel's result (won), not news.
-        if (this.duels.open === id || resolved.has(id)) continue;
+        if (this.duels.open === id || resolved.has(id) || this.afterDuel(id, sim.tick)) continue;
         const p = f.poses.get(id);
         if (!p) continue;
         const gap = p.z - s.z;
@@ -440,8 +450,9 @@ export class Director {
           haunted,
           newGroundTick: this.newGroundTick,
         });
-        // Passes with the duel ghost still pay a first pass but say nothing: the duel's result will.
-        const muted = c.muted || (this.duels.open === id && !resolved.has(id));
+        // Passes with the duel ghost still pay a first pass but say nothing: the duel's result will (or
+        // just did: the wreck of a ghost that crashed out of its duel is that result's, not a 'Beat').
+        const muted = c.muted || (this.duels.open === id && !resolved.has(id)) || (wreck && this.afterDuel(id, sim.tick));
         // The nemesis pays double the grudge's pass.
         const nemesisBonus = ev.first && t.entry.kind === 'grudge' && t.entry.nemesis ? (haunted ? 20 : 10) : 0;
         const gifts = c.gifts + nemesisBonus + this.extras.take(c.extra);
@@ -701,7 +712,9 @@ export class Director {
     const next = f.standings.next;
     const duelId = this.duels.open;
     const callUp = this.call && now - this.call.at < CALL_SHOW_S ? this.call.id : null;
-    out.rival = rivalPick(next ? { id: next.track.entry.id, gap: next.gap } : null, this.gapOf(duelId, f, sim), this.gapOf(callUp, f, sim));
+    const steady = steadyNext(this.gapOf(this.heldNext, f, sim), next ? { id: next.track.entry.id, gap: next.gap } : null);
+    this.heldNext = steady ? steady.id : null;
+    out.rival = rivalPick(steady, this.gapOf(duelId, f, sim), this.gapOf(callUp, f, sim));
 
     const timerFrac = c.window > 0 ? c.timer / c.window : 0;
     const draining = c.active && s.grounded && !s.drifting && !s.drafting;
@@ -972,6 +985,12 @@ export class Director {
     if (!best) return null;
     const k = 1 - bg / 6;
     return { amt: k * k, pan: Math.max(-0.85, Math.min(0.85, (best.x - s.x) / 3)) };
+  }
+
+  /** A duel with this ghost resolved won or held off within DUEL_AFTER_TICKS. */
+  private afterDuel(id: number, tick: number): boolean {
+    const t = this.duelEnd.get(id);
+    return t !== undefined && tick - t <= DUEL_AFTER_TICKS;
   }
 
   private anyNear(f: DirectorFrame, sim: Sim, m: number): boolean {
