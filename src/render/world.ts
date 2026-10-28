@@ -833,8 +833,16 @@ export class World {
     const at = this.fxA.set(ex, this.course.ground(ex, ez), -ez);
     const vel = this.carrier(s);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    if (bough) this.particles.boughs(at, out, vel, 16 * k);
-    else this.particles.grit(at, out, vel, ICY.has(b.obs), 8 * k);
+    if (bough) this.particles.boughs(at, out, vel, 12 * k);
+    else this.particles.grit(at, out, vel, ICY.has(b.obs), 6 * k);
+    // The rest you brush through: a little of it lands right at the rider's shoulder (or, off a rock,
+    // the runner) on the side you shaved, so the near miss reads on a phone's narrow portrait frame too,
+    // where the hazard's own edge is already out of the picture.
+    const bx = s.x - out.x * 0.55;
+    const bz = s.z + out.z * 0.55;
+    const brush = this.fxB.set(bx, this.course.ground(bx, bz) + (bough ? -0.9 : 0), -bz);
+    if (bough) this.particles.boughs(brush, out, vel, 10 * k);
+    else this.particles.grit(brush, out, vel, ICY.has(b.obs), 4 * k);
   }
 
   /** The collider radius of the hazard a near-miss beat names: the obstacle of that kind whose point
