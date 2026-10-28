@@ -4,10 +4,12 @@ import { makeToonMaterial, shared } from './materials';
 import {
   basaltGeometry,
   blossomGeometry,
+  cairnGeometry,
   charPineGeometry,
   gateBeamGeometry,
   giftGeometry,
   kickerLipGeometry,
+  kmArchGeometry,
   lanternPostGeometry,
   obstacleGeometry,
   obstacleModelRadius,
@@ -70,6 +72,23 @@ function haloMaterial(): ShaderMaterial {
   });
 }
 
+/** The kilometre mark (1, 2, ...) whose 1,000 m line falls in chunk `i`, or 0 for none. Static
+ *  geometry: it never depends on chaos. */
+export function kmInChunk(i: number): number {
+  const k = Math.ceil((i * CHUNK_LEN) / 1000);
+  return k >= 1 && k * 1000 < (i + 1) * CHUNK_LEN ? k : 0;
+}
+
+/** At most this many graveyard cairns a run, each built up to about 2.4 m of stones under a 3.8 m
+ *  marker, so it reads as a place from 30 m up the run. */
+export const CAIRN_CAP = 4;
+const CAIRN_SCALE = 1.7;
+
+/** Where the km arch's posts stand: 2 m outside the corridor's edge on each side, at the mark. */
+function archSpan(c: Course, km: number): number {
+  return 2 * (c.halfWidth(km * 1000) + 2);
+}
+
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h ^= h >>> 15;
@@ -94,6 +113,10 @@ export class Props {
   private tilt = new Vector3();
   private cache = new Map<number, Map<string, Float32Array>>();
   private collecting: Map<string, number[]> | null = null;
+  /** The km mark the arch geometry is built for (its posts' span is that mark's), 0 for none yet. */
+  private archKm = 0;
+  /** This run's graveyard cairns (sim x and z on the bank), at most CAIRN_CAP. */
+  private graves: Array<{ x: number; z: number }> = [];
 
   constructor(
     private course: Course,
@@ -102,6 +125,9 @@ export class Props {
     private shadows: boolean,
     /** The scene renders to a multisampled target: near props fade through coverage, not a dither. */
     private smoothFade = false,
+    /** Landmarks: the kilometre arches and graveyard cairns (Medium and High; Low skips the meshes and
+     *  keeps their callouts, tags and sound). */
+    private arches = false,
   ) {
     // Gifts shrink away as they pass the lens (and right around the rider after a perfect landing).
     this.giftMat = makeToonMaterial({ bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2], clearFocus: true });
@@ -114,14 +140,27 @@ export class Props {
     this.build();
   }
 
-  setQuality(forestDensity: number, shadows: boolean, smoothFade = this.smoothFade): void {
+  setQuality(forestDensity: number, shadows: boolean, smoothFade = this.smoothFade, arches = this.arches): void {
     this.forestDensity = forestDensity;
     this.shadows = shadows;
     this.smoothFade = smoothFade;
+    this.arches = arches;
     this.build();
   }
 
   markDirty(): void {
+    this.dirty = true;
+  }
+
+  /** This run's graveyards (where several ghosts fell), as cairn spots on the bank in sim metres; the
+   *  list is kept on every tier (the mesh is drawn only on Medium and High) and replaced each run. Only
+   *  the chunks holding an old or new cairn are rebuilt. */
+  setGraveyards(list: ReadonlyArray<{ x: number; z: number }>): void {
+    const next = list.slice(0, CAIRN_CAP).map((g) => ({ x: g.x, z: g.z }));
+    if (next.length === this.graves.length && next.every((g, i) => g.x === this.graves[i].x && g.z === this.graves[i].z)) return;
+    for (const g of this.graves) this.cache.delete(Math.floor(g.z / CHUNK_LEN));
+    for (const g of next) this.cache.delete(Math.floor(g.z / CHUNK_LEN));
+    this.graves = next;
     this.dirty = true;
   }
 
@@ -196,6 +235,21 @@ export class Props {
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p), plain, 60);
+    if (this.arches) {
+      // Kilometre arches: one batch of at most two, in the plain toon material (no new shader), casting
+      // no shadow. It is culled by its own bounds (update), so it costs a draw only while one is in view;
+      // its geometry is rebuilt for each mark's span as that mark comes into range.
+      this.archKm = 1;
+      add('arch', kmArchGeometry(archSpan(this.course, 1)), plain, 2, false);
+      const arch = this.batches.get('arch')!.mesh;
+      arch.frustumCulled = true;
+      // Not a prop the results lens must keep clear of: its instance sits on the corridor's middle.
+      arch.userData.noBlock = true;
+      // Graveyard cairns: the same rules (one batch, at most four, plain material, no shadow, culled by
+      // its bounds, so a draw only while one is in view).
+      add('cairn', cairnGeometry(p), plain, CAIRN_CAP, false);
+      this.batches.get('cairn')!.mesh.frustumCulled = true;
+    }
     if (p.lantern) {
       // Lantern Night: a trail lantern at the treeline every few chunks, so the far end of the corridor
       // holds a few faint warm lights instead of a dead void at the vanishing point.
@@ -217,6 +271,20 @@ export class Props {
     for (const b of this.batches.values()) b.count = b.near = 0;
     const c = this.course;
     for (const k of this.cache.keys()) if (k < from - 2 || k > to + 2) this.cache.delete(k);
+    // The first km mark in range gets an arch built to its own span (at most once per kilometre).
+    if (this.arches) {
+      for (let i = Math.max(-2, from); i <= to; i++) {
+        const km = kmInChunk(i);
+        if (!km) continue;
+        if (km !== this.archKm) {
+          const b = this.batches.get('arch')!;
+          b.mesh.geometry.dispose();
+          b.mesh.geometry = kmArchGeometry(archSpan(c, km));
+          this.archKm = km;
+        }
+        break;
+      }
+    }
     for (let i = Math.max(-2, from); i <= to; i++) {
       // Static instances are computed once per chunk; only gifts and smashables change.
       let st = this.cache.get(i);
@@ -260,6 +328,11 @@ export class Props {
       if (nearChunk >= to) b.near = b.count;
       b.mesh.count = b.count;
       b.mesh.instanceMatrix.needsUpdate = true;
+    }
+    // The culled landmark batches get bounds round their instances in range.
+    for (const key of ['arch', 'cairn']) {
+      const b = this.batches.get(key);
+      if (b && b.count > 0) b.mesh.computeBoundingSphere();
     }
   }
 
@@ -328,6 +401,28 @@ export class Props {
       this.q.identity();
       this.v.set(x - side * 0.3, c.ground(x, z) + 2.27, -z);
       this.push('halo', this.v, this.q, this.s);
+    }
+    const km = this.arches ? kmInChunk(i) : 0;
+    if (km) {
+      // The arch stands over the 1,000 m line, its beam about 7 m over the higher of its two posts'
+      // footings (the posts reach well below the snow on the lower side).
+      const z = km * 1000;
+      const cx = c.centerX(z);
+      const half = archSpan(c, km) / 2;
+      this.q.identity();
+      this.v.set(cx, Math.max(c.ground(cx - half, z), c.ground(cx + half, z)), -z);
+      this.s.set(1, 1, 1);
+      this.push('arch', this.v, this.q, this.s);
+    }
+    if (this.arches) {
+      for (const g of this.graves) {
+        if (Math.floor(g.z / CHUNK_LEN) !== i) continue;
+        // Turned a little each its own way, and its marker leaning out over the run.
+        this.q.setFromAxisAngle(this.up, (g.x > c.centerX(g.z) ? Math.PI : 0) + (hashf(Math.round(g.z), 11, 1) - 0.5) * 0.8);
+        this.v.set(g.x, c.ground(g.x, g.z), -g.z);
+        this.s.setScalar(CAIRN_SCALE);
+        this.push('cairn', this.v, this.q, this.s);
+      }
     }
     this.forest(i);
     const out = new Map<string, Float32Array>();

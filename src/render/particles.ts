@@ -490,6 +490,10 @@ class Layer {
 const WHITE = new Color('#FFFFFF');
 const ICE = new Color('#DDF6FF');
 const GOLD = new Color('#FFE08A');
+/** Grit knocked off a hazard's foot: dark slate chips (as the avalanche's debris), or ice shards. */
+const SLATE = new Color(0.3, 0.34, 0.5);
+const SHARD = new Color(0.78, 0.92, 1.05);
+const tmpTint = new Color();
 /** Tint for freshly thrown powder: a touch over white, so a burst outshines the lit snow under it. */
 const POWDER = 1.12;
 const tmpF = new Vector3();
@@ -545,12 +549,15 @@ export class Particles {
    *  chase camera's view it rises beside the rider and streams back past the lens at the frame's side
    *  instead of vanishing behind it in a blink; plus a faint mist puff now and then. `toward` is +1 to
    *  throw to the sled's right, -1 to its left. */
-  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false): void {
+  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false, heat: Color | null = null, heatK = 0, glowShare = 0): void {
     const f = this.forward(vel);
     // Thrown square to the line of travel, not to the sled's nose: in a drift the nose swings well
     // off the line, and spray thrown off it flew out ahead of the rider and hung in the sky.
     const side = vel.x * vel.x + vel.z * vel.z > 4 ? tmpS.set(-f.z * toward, 0, f.x * toward) : tmpS.set(Math.cos(heading) * toward, 0, Math.sin(heading) * toward);
-    const tint = ice ? ICE : WHITE;
+    // Drift heat (a held drift's charge, 0 to 1): the spray warms inside the player's vermillion, the
+    // colour picked once per emit (mix(white or ice, tier colour, 0.25 + 0.5k)), at no extra cost.
+    const base = ice ? ICE : WHITE;
+    const tint = heat ? tmpTint.copy(base).lerp(heat, 0.25 + 0.5 * Math.max(0, Math.min(1, heatK))) : base;
     // Spray rides on most of the sled's velocity (its carrier), so it must keep the matching share of
     // its descent too: otherwise the slope drops away under it and it floats off into the sky. It
     // falls back from the sled at about 3 m/s, so it streams past the lens in about half a second.
@@ -562,6 +569,30 @@ export class Particles {
       const back = 0.1 + Math.random() * 0.5;
       const j = (Math.random() - 0.5) * 1.6;
       const big = Math.random();
+      if (heat && glowShare > 0 && Math.random() < glowShare) {
+        // A fully charged drift throws hot vermillion motes off the runner: low and short-lived,
+        // skimming the snow with the spray (decision 67), hot enough to bloom.
+        this.glow.emit(
+          pos.x + side.x * 0.35 - f.x * back,
+          pos.y + 0.06,
+          pos.z + side.z * 0.35 - f.z * back,
+          car.x + side.x * s * 0.8 + f.x * j,
+          car.y + 0.3 + Math.random() * 0.6,
+          car.z + side.z * s * 0.8 + f.z * j,
+          0.22 + Math.random() * 0.2,
+          0.13,
+          0.04,
+          heat.r * 1.45,
+          heat.g * 1.45,
+          heat.b * 1.45,
+          1,
+          6,
+          2.4,
+          KIND_GRAIN,
+          car,
+        );
+        continue;
+      }
       this.powder.emit(
         pos.x + side.x * 0.4 - f.x * back + (Math.random() - 0.5) * 0.16,
         pos.y + 0.08,
@@ -613,6 +644,10 @@ export class Particles {
     // Mist rolls out low and slow off the runner and swells as it thins: the body of the plume.
     // Many faint, overlapping puffs, so the mist reads as one continuous veil and never as balls.
     const mist = this.n(amount * 0.5);
+    // The mist veil takes half the heat, so the plume's body stays snow and its spray carries the colour.
+    const mr = (base.r + tint.r) * 0.5;
+    const mg = (base.g + tint.g) * 0.5;
+    const mb = (base.b + tint.b) * 0.5;
     for (let i = 0; i < mist; i++) {
       const s = 0.6 + Math.random() * 1.6;
       const back = 0.3 + Math.random() * 0.7;
@@ -626,9 +661,9 @@ export class Particles {
         0.45 + Math.random() * 0.35,
         0.22,
         0.75 + Math.random() * 0.4,
-        tint.r,
-        tint.g,
-        tint.b,
+        mr,
+        mg,
+        mb,
         0.17,
         1.8,
         3,
@@ -692,21 +727,25 @@ export class Particles {
    *  blown out flat from the crater (cream crests, periwinkle bellies), a crown of grains splashed
    *  up, and a ring of gold sparks skimming out over the snow, which blooms. Nothing hangs over the
    *  rider. */
-  perfect(pos: Vector3, vel: Vector3): void {
+  perfect(pos: Vector3, vel: Vector3, strength = 1): void {
     const fall = Math.max(vel.y, -Math.hypot(vel.x, vel.z) * 0.7);
     const car = tmpC.set(vel.x * 0.84, fall * 0.84, vel.z * 0.84);
     // Thrown back toward the lens is thrown uphill: it climbs with the slope (about 0.3) or sinks into it.
     const f = this.forward(vel);
     const up = (dx: number, dz: number, out: number) => 0.32 * out * Math.max(0, -(dx * f.x + dz * f.z));
+    // A stomp streak (strength up to 2, from the streak count) throws more of everything, a little
+    // further out, to match its wider crater; the budget still scales every count.
+    const st = Math.max(1, Math.min(2, strength));
+    const reach = 1 + 0.18 * (st - 1);
     // The burst: billows thrown out all round from the crater's lip, low and flat, swelling as they
     // slow. Fewer and smaller than the crater ring could hold: the ones crossing the rider's outline
     // shrink further (the powder shader), so the stomp never buries the rider.
-    const nb = this.n(20);
+    const nb = this.n(20 * st);
     for (let i = 0; i < nb; i++) {
       const a = (i / Math.max(1, nb)) * Math.PI * 2 + Math.random() * 0.25;
       const dx = Math.cos(a);
       const dz = Math.sin(a);
-      const out = 4.2 + Math.random() * 2.8;
+      const out = (4.2 + Math.random() * 2.8) * reach;
       this.powder.emit(
         pos.x + dx * 1.2,
         pos.y + 0.1,
@@ -728,12 +767,12 @@ export class Particles {
       );
     }
     // The crown: grains splashed up and out all round the sled, backlit by the low sun.
-    const crown = this.n(44);
+    const crown = this.n(44 * st);
     for (let i = 0; i < crown; i++) {
       const a = (i / Math.max(1, crown)) * Math.PI * 2 + Math.random() * 0.3;
       const dx = Math.cos(a);
       const dz = Math.sin(a);
-      const out = 2.4 + Math.random() * 2.6;
+      const out = (2.4 + Math.random() * 2.6) * reach;
       this.powder.emit(
         pos.x + dx * 0.6,
         pos.y + 0.08,
@@ -758,7 +797,7 @@ export class Particles {
     // third as many as before and never lifted off it: a ring of star sprites salted the sky, the
     // ghosts and the crater, and the hit lost its focus. None are thrown back at the lens, where even
     // a low spark climbs the frame. Hot enough to bloom (a few gold-white among them).
-    const ns = this.n(11);
+    const ns = this.n(11 * st);
     for (let i = 0; i < ns; i++) {
       const a = (i / Math.max(1, ns)) * Math.PI * 2 + Math.random() * 0.2;
       let dx = Math.cos(a);
@@ -772,7 +811,7 @@ export class Particles {
         dx /= l;
         dz /= l;
       }
-      const out = 4.6 + Math.random() * 2.0;
+      const out = (4.6 + Math.random() * 2.0) * reach;
       const c = i % 4 === 0 ? WHITE : GOLD;
       const hot = 1.35;
       this.glow.emit(
@@ -828,6 +867,171 @@ export class Particles {
         1,
         7,
         3.2,
+        KIND_GRAIN,
+        car,
+      );
+    }
+  }
+
+  /** A ring of glinting motes thrown out flat over the snow round `pos` (a tier-3 drift release, a
+   *  ghost's stomp): evenly round, skimming low and gone in about half a second (decision 67). With a
+   *  `carrier` it rides along with the sled. Every `whiteEvery`th mote is snow-white; `hot` lifts the
+   *  colour past the bloom threshold; `cap` limits the count after the budget (a ghost's ring on Low). */
+  ring(pos: Vector3, color: Color, count: number, speed: number, carrier: Vector3 | null, whiteEvery = 0, hot = 1.35, life = 0.42, size = 0.18, cap = Infinity): void {
+    const n = Math.min(cap, this.n(count));
+    const cx = carrier ? carrier.x * 0.9 : 0;
+    const cy = carrier ? Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.9 : 0;
+    const cz = carrier ? carrier.z * 0.9 : 0;
+    const car = carrier ? tmpC.set(cx, cy, cz) : null;
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const a = a0 + (i / Math.max(1, n)) * Math.PI * 2 + (Math.random() - 0.5) * 0.15;
+      const dx = Math.cos(a);
+      const dz = Math.sin(a);
+      const s = speed * (0.85 + Math.random() * 0.3);
+      const c = whiteEvery > 0 && i % whiteEvery === whiteEvery - 1 ? WHITE : color;
+      this.glow.emit(
+        pos.x + dx * 0.5,
+        pos.y + 0.08,
+        pos.z + dz * 0.5,
+        cx + dx * s,
+        cy + 0.15 + Math.random() * 0.35,
+        cz + dz * s,
+        life * (0.75 + Math.random() * 0.5),
+        size,
+        size * 0.3,
+        c.r * hot,
+        c.g * hot,
+        c.b * hot,
+        1,
+        5,
+        2.6,
+        KIND_GRAIN,
+        car,
+      );
+    }
+  }
+
+  /** Snow shaken off a tree's boughs as you shave past it (a near miss): grains and soft clumps
+   *  dropping from its lower boughs, 1.4 to 3.2 m up, on the side facing you (`pos` is the canopy's
+   *  near edge on the snow and `out` the level direction from the tree toward you), swept out toward
+   *  your line by the wind of your passing and dragged along in your wake. The tree is already a couple
+   *  of metres behind the sled when the beat lands (and dissolving before the lens), so the snow keeps
+   *  nearly the sled's speed: it hangs beside the rider, at the frame's side, as it falls. */
+  boughs(pos: Vector3, out: Vector3, carrier: Vector3, count = 16): void {
+    const n = this.n(count);
+    const car = tmpC.set(carrier.x * 0.95, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.95, carrier.z * 0.95);
+    const tx = -out.z;
+    const tz = out.x;
+    for (let i = 0; i < n; i++) {
+      const r = i % 10;
+      // Six in ten are grains, three soft clumps and one a faint veil, interleaved so even a small burst
+      // (a near miss on Low, or the share brushed past the rider) carries a clump that reads.
+      const kind = r % 3 === 1 ? puffKind() : r === 9 ? KIND_MIST : KIND_GRAIN;
+      const along = (Math.random() - 0.5) * 1.6;
+      const o = Math.random() * 0.5;
+      const push = 0.8 + Math.random() * 1.6;
+      const grain = kind === KIND_GRAIN;
+      this.powder.emit(
+        pos.x + out.x * o + tx * along,
+        pos.y + 1.4 + Math.random() * 1.8,
+        pos.z + out.z * o + tz * along,
+        car.x + out.x * push + tx * along * 0.4,
+        car.y - 0.4 + Math.random() * 0.9,
+        car.z + out.z * push + tz * along * 0.4,
+        grain ? 0.7 + Math.random() * 0.35 : 0.8 + Math.random() * 0.4,
+        grain ? 0.045 : kind === KIND_MIST ? 0.3 : 0.12,
+        grain ? 0.07 + Math.random() * 0.04 : kind === KIND_MIST ? 0.9 : 0.3 + Math.random() * 0.18,
+        POWDER,
+        POWDER,
+        POWDER,
+        grain ? 0.85 : kind === KIND_MIST ? 0.2 : 0.75,
+        grain ? 5 : 2.4,
+        1.2,
+        kind,
+        car,
+      );
+    }
+  }
+
+  /** Grit knocked off a hazard's foot as you shave past it (a near miss): dark slate chips (`ice`:
+   *  pale shards) and snow thrown out toward your line, low and quick. `pos` is the hazard's near edge
+   *  on the snow, `out` the level direction from it toward you. */
+  grit(pos: Vector3, out: Vector3, carrier: Vector3, ice: boolean, count = 8): void {
+    const n = this.n(count);
+    // (Swept along in your wake at nearly the sled's speed, like the bough snow, so it reads in frame.)
+    const car = tmpC.set(carrier.x * 0.9, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.9, carrier.z * 0.9);
+    const chipC = ice ? SHARD : SLATE;
+    for (let i = 0; i < n; i++) {
+      const chip = i % 2 === 0;
+      const s = 1.5 + Math.random() * 2.2;
+      const j = (Math.random() - 0.5) * 1.4;
+      const c = chip ? chipC : WHITE;
+      this.powder.emit(
+        pos.x + out.x * 0.2 + (Math.random() - 0.5) * 0.4,
+        pos.y + 0.1 + Math.random() * 0.4,
+        pos.z + out.z * 0.2 + (Math.random() - 0.5) * 0.4,
+        car.x + out.x * s - out.z * j,
+        car.y + 1.2 + Math.random() * 1.6,
+        car.z + out.z * s + out.x * j,
+        0.35 + Math.random() * 0.25,
+        chip ? 0.04 : 0.035,
+        chip ? 0.06 : 0.07,
+        chip ? c.r : POWDER,
+        chip ? c.g : POWDER,
+        chip ? c.b : POWDER,
+        chip ? 0.95 : 0.8,
+        9,
+        1.5,
+        KIND_GRAIN,
+        car,
+      );
+    }
+  }
+
+  /** Motes streaming off the scarf, strung between two points on it (`a`, `b`). `glow`: vermillion
+   *  embers in the additive layer (going into the flow); otherwise a cold puff of periwinkle-grey
+   *  powder (the flow snuffed out). They ride with the sled a moment and fall behind. */
+  scarf(a: Vector3, b: Vector3, color: Color, count: number, carrier: Vector3, glow: boolean): void {
+    const n = this.n(count);
+    const ck = glow ? 0.9 : 0.85;
+    const car = tmpC.set(carrier.x * ck, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * ck, carrier.z * ck);
+    for (let i = 0; i < n; i++) {
+      const t = Math.random();
+      const x = a.x + (b.x - a.x) * t;
+      const y = a.y + (b.y - a.y) * t;
+      const z = a.z + (b.z - a.z) * t;
+      if (glow) {
+        this.glow.emit(x, y, z, car.x + (Math.random() - 0.5) * 2.2, car.y + 0.3 + Math.random() * 0.8, car.z + (Math.random() - 0.5) * 2.2, 0.45 + Math.random() * 0.35, 0.2, 0.05, color.r * 1.8, color.g * 1.8, color.b * 1.8, 1, 2.2, 2.5, KIND_GRAIN, car);
+      } else {
+        this.powder.emit(x, y, z, car.x + (Math.random() - 0.5) * 1.6, car.y + 0.3 + Math.random() * 0.6, car.z + (Math.random() - 0.5) * 1.6, 0.6 + Math.random() * 0.3, 0.14, 0.3 + Math.random() * 0.12, color.r, color.g, color.b, 0.8, 0.6, 2, puffKind(), car);
+      }
+    }
+  }
+
+  /** Glinting motes strung along a line on the snow from `a` to `b` (crossing your best distance),
+   *  skimming low and carried along with the sled (decision 67). */
+  line(a: Vector3, b: Vector3, color: Color, count: number, carrier: Vector3, hot = 1.3): void {
+    const n = this.n(count);
+    const car = tmpC.set(carrier.x * 0.9, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.9, carrier.z * 0.9);
+    for (let i = 0; i < n; i++) {
+      const t = (i + Math.random()) / Math.max(1, n);
+      this.glow.emit(
+        a.x + (b.x - a.x) * t,
+        a.y + (b.y - a.y) * t + 0.1,
+        a.z + (b.z - a.z) * t,
+        car.x + (Math.random() - 0.5) * 1.2,
+        car.y + 0.25 + Math.random() * 0.6,
+        car.z + (Math.random() - 0.5) * 1.2,
+        0.5 + Math.random() * 0.4,
+        0.2,
+        0.05,
+        color.r * hot,
+        color.g * hot,
+        color.b * hot,
+        1,
+        4,
+        2.2,
         KIND_GRAIN,
         car,
       );
