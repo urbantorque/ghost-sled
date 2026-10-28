@@ -2,7 +2,7 @@ import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contra
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt } from './fmt';
+import { dailyDate, fmt, metres, NBSP } from './fmt';
 import { icon } from './icons';
 import { play, reduced } from './motion';
 
@@ -14,6 +14,16 @@ export interface TitleMenuHooks {
   openSleds(): void;
   openSettings(): void;
 }
+
+/**
+ * The daily card's model: TitleModel.daily plus the day streak and today's medal (settle.ts
+ * dailyStreakNow and dailyMedalNow). Both optional, so a model without them shows the card as before.
+ * (Contract amendment requested: TitleModel.daily gains `medal?: number; streak?: number`.)
+ */
+type DailyCardModel = TitleModel['daily'] & { medal?: number; streak?: number };
+
+/** Medal names by rank (0 none). */
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 
 export class Title {
   readonly layer: Layer;
@@ -99,26 +109,12 @@ export class Title {
     const ride = h('div', 'gs-t-ride gs-t-anim');
     if (m.firstVisit) ride.append(tagline);
     if (m.challenge) {
-      const c = m.challenge;
-      // Player and mountain names are proper nouns: keep auto-translate off them.
-      const who = h('span', '', c.name);
-      who.setAttribute('translate', 'no');
-      const place = h('span', '', c.mountain);
-      place.setAttribute('translate', 'no');
-      const banner = h(
-        'div',
-        'gs-challenge',
-        icon('ghost', 'gs-challenge-ico'),
-        h(
-          'div',
-          'gs-challenge-txt',
-          h('span', 'gs-challenge-k', 'Challenge from ', who),
-          h('span', 'gs-challenge-v', 'Beat ', h('span', 'gs-num', fmt(c.score)), ' on ', place),
-        ),
-      );
-      // No live role: the title re-renders often and each render would announce it again. It sits
-      // right above the Accept button, so it is read in context.
-      ride.append(banner);
+      // A friend's link opens on their ghost: "Racing Mila's ghost" over how far it went and where.
+      ride.append(challengeBanner(m.challenge));
+    } else if (m.greet && !m.firstVisit) {
+      // A returning player gets one line over Ride: who is waiting, what is close, or the nearest
+      // mission. It is read in context right above Ride, so it carries no live role.
+      ride.append(greeting(m.greet));
     }
     const showKey = m.inputMode !== 'touch';
     // The button carries the choice it acts on. With the mountain cards on screen (the selected one
@@ -187,7 +183,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily)));
+    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily as DailyCardModel)));
     this.watchEnds(track, prev, next, strip);
 
     // Secondary row.
@@ -293,7 +289,7 @@ export class Title {
     return b;
   }
 
-  private dailyCard(d: TitleModel['daily']): HTMLButtonElement {
+  private dailyCard(d: DailyCardModel): HTMLButtonElement {
     const b = h('button', 'gs-daily');
     b.type = 'button';
     b.dataset.fk = 'daily';
@@ -306,16 +302,22 @@ export class Title {
     // The key is the UTC day ("2026-10-24"); it shows as a short date in the player's locale.
     const date = dailyDate(d.key);
     const status = d.ready ? 'Fresh rivals' : 'Finding rivals…';
-    const meta = h('span', 'gs-daily-meta', h('span', 'gs-daily-date gs-num', date), h('span', 'gs-tag', status));
+    // Days in a row with a Daily run ("Day 3", from the second day), and today's medal beside the best.
+    const streak = Math.floor(d.streak ?? 0);
+    const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
+    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', `Day${NBSP}`, h('span', 'gs-num', String(streak))) : null;
+    const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
     b.append(
       h('span', 'gs-daily-ico', icon('snowflake')),
       h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Daily Mountain'), meta),
     );
-    if (d.best > 0) b.append(h('span', 'gs-daily-best', h('span', 'gs-daily-best-l', 'Best'), h('span', 'gs-num', fmt(d.best))));
+    const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
+    if (d.best > 0 || disc) b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc ?? h('span', 'gs-daily-best-l', 'Best'), d.best > 0 ? h('span', 'gs-num', fmt(d.best)) : null));
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
-    b.setAttribute('aria-label', `Daily Mountain, ${date}. ${status}${d.best > 0 ? `. Best ${fmt(d.best)}` : ''}`);
+    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 ? `Day ${streak} in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
+    b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!d.ready) return;
       this.ctx.sound('confirm');
@@ -413,6 +415,55 @@ function ghostsPassed(m: TitleModel): number {
     if (need && def) return Math.max(0, def.unlockGhosts - Number(need[1]));
   }
   return 0;
+}
+
+/**
+ * A friend's challenge: "Racing Mila's ghost" over "2,340 m on Pinecrest" (how far their run went).
+ * A run on today's Daily Mountain reads "on the Daily Mountain"; one on another day's Daily (no
+ * mountain named) shows the first line alone. Links from before distances were carried keep the
+ * score: "Beat 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
+ * context, and the title re-renders often.
+ */
+function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
+  // Player and mountain names are proper nouns: keep auto-translate off them.
+  const who = h('span', '', `${c.name}\u2019s`);
+  who.setAttribute('translate', 'no');
+  const k = h('span', 'gs-challenge-k', 'Racing ', who, ' ghost');
+  const where = c.daily ? (c.mountain ? 'the Daily Mountain' : '') : c.mountain;
+  let v: HTMLElement | null = null;
+  if (where) {
+    const place = h('span', '', where);
+    place.setAttribute('translate', 'no');
+    v =
+      typeof c.distance === 'number' && c.distance > 0
+        ? h('span', 'gs-challenge-v', h('span', 'gs-num', metres(c.distance)), ' on ', place)
+        : h('span', 'gs-challenge-v', 'Beat ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
+  }
+  return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
+}
+
+/**
+ * The returning player's greeting (progress.titleGreeting): a grudge waiting here (the rival's name in
+ * rose, "Your nemesis" when it is one), the ghosts still to pass for the next mountain (mint), or the
+ * nearest mission (its flag).
+ */
+function greeting(text: string): HTMLElement {
+  const grudge = /^(Your nemesis )?(.+) is waiting on (.+)$/.exec(text);
+  if (grudge) {
+    const who = h('span', 'gs-t-greet-who', grudge[2]);
+    who.setAttribute('translate', 'no');
+    const where = h('span', '', grudge[3]);
+    where.setAttribute('translate', 'no');
+    return h('p', 'gs-t-greet is-grudge', icon('ghost'), h('span', '', grudge[1] ?? '', who, ' is waiting on ', where));
+  }
+  const unlock = /^(\d+) (more ghosts? opens?) (.+)$/.exec(text);
+  if (unlock) {
+    const where = h('span', '', unlock[3]);
+    where.setAttribute('translate', 'no');
+    return h('p', 'gs-t-greet is-unlock', icon('ghost'), h('span', '', h('span', 'gs-t-greet-n gs-num', unlock[1]), ` ${unlock[2]} `, where));
+  }
+  // "1,600 m" never breaks before its unit.
+  return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text.replace(/(\d) m\b/g, `$1${NBSP}m`)));
 }
 
 /** "270/800" on screen, "270 of 800" to a reader. */

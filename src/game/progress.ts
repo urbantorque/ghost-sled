@@ -1,44 +1,178 @@
 import type { ResultsNextUnlock } from '../ui/contract';
-import type { MissionState, RunSummary } from './missions';
+import { ChaosEvent } from '../sim/chaos';
+import { MOUNTAINS, biomeForSeed, type BiomeId } from '../sim/mountains';
+import { SLEDS } from '../sim/sleds';
+import { MissionCtx, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
+import { isNemesis } from './settle';
 import type { SaveData } from './save';
 
 // Progress lines: mid-run mission pops, the next unlock, the title greeting, the Run Again label,
-// the results race line and the challenge share title.
+// the results race line, the friend line, the reveal's goal line and the challenge share title.
 //
-// Pure: no DOM, render or audio imports.
-//
-// Scaffold: the lines as they read today (no pops, no greeting, no extra race line, 'Run Again').
+// Pure: no DOM, render or audio imports. Copy rules: names only (handles carry no pronouns), every
+// number carries its label, no em dashes.
 
-export interface MissionCtx {
-  unlockedBiomes: ReadonlySet<string>;
+export type { MissionCtx };
+
+const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
+const num = (v: number): string => NF.format(Math.round(v));
+const m = (v: number): string => `${num(v)} m`;
+
+/**
+ * Missions newly met mid-run that have not popped yet, judged on the run so far against the mission
+ * state the run started with (after a revive, the settlement's missionsBefore, never the refilled
+ * list). Biome missions count only on their biome. Display only: settleRun credits the gifts.
+ * The director passes a summary whose ghostsPassed is min(passedThisRun, shownPasses).
+ */
+export function missionsCrossed(s: MissionState, sum: RunSummary, popped: ReadonlySet<string>, ctx: MissionCtx): Array<{ id: string; text: string; reward: number }> {
+  const out: Array<{ id: string; text: string; reward: number }> = [];
+  for (const a of s.active) {
+    if (popped.has(a.id)) continue;
+    const def = missionDef(a.id);
+    if (!def) continue;
+    if (def.biome && (def.biome !== sum.biome || !ctx.unlockedBiomes.has(def.biome))) continue;
+    const t = missionTier(def, a.tier);
+    if (def.metric(sum) >= t.target) out.push({ id: a.id, text: t.text, reward: t.reward });
+  }
+  return out;
 }
 
-/** Missions newly met mid-run that have not popped yet. Scaffold: none. */
-export function missionsCrossed(_s: MissionState, _sum: RunSummary, _popped: ReadonlySet<string>, _ctx: MissionCtx): Array<{ id: string; text: string; reward: number }> {
-  return [];
-}
-
-/** The next unlock to work toward (a mountain, then a sled), or null. Scaffold: null. */
-export function nextUnlock(_d: SaveData): ResultsNextUnlock | null {
+/** The next unlock to work toward: the next mountain by lifetime ghosts passed, then the cheapest
+ *  sled you do not own (gifts to go, 0 once affordable), then null. */
+export function nextUnlock(d: SaveData): ResultsNextUnlock | null {
+  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > d.ghostsPassed);
+  if (mtn) return { kind: 'mountain', name: mtn.name, biome: biomeForSeed(mtn.seed), have: Math.max(0, d.ghostsPassed), need: mtn.unlockGhosts };
+  const sled = SLEDS.filter((s) => !d.ownedSleds.includes(s.id) && s.price > 0).sort((a, b) => a.price - b.price)[0];
+  if (sled) return { kind: 'sled', name: sled.name, gifts: Math.max(0, sled.price - d.gifts) };
   return null;
 }
 
-/** A one-line title greeting, or null. Scaffold: null. */
-export function titleGreeting(_d: SaveData, _mountainId: string, _mountainName: string): string | null {
+/**
+ * Ghosts passed counting this run as it goes (for the mid-run unlock pop): the lifetime count plus
+ * this run's passes that no settlement has credited yet (a revive's first settle already did). Jostle
+ * and wreck passes count, as they do when the run settles.
+ */
+export function livePassed(lifetime: number, passedThisRun: number, settledPassed: number): number {
+  return lifetime + Math.max(0, passedThisRun - settledPassed);
+}
+
+/** The mountain a live pass count just opened (its unlockGhosts in (before, now]), or null. */
+export function unlockCrossed(before: number, now: number): { id: string; name: string; biome: BiomeId } | null {
+  if (now <= before) return null;
+  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > before && x.unlockGhosts <= now);
+  return mtn ? { id: mtn.id, name: mtn.name, biome: biomeForSeed(mtn.seed) } : null;
+}
+
+/** The raceNews 'unlockTease' line once a pass leaves one ghost to go, else null. */
+export function unlockTease(live: number): string | null {
+  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > live);
+  return mtn && mtn.unlockGhosts - live === 1 ? `1 more ghost opens ${mtn.name}` : null;
+}
+
+/**
+ * The results event note for a rolled event the run never reached (it ended at phase 0): "The yeti
+ * was 220 m away." Feeds resultsRaceLine at event priority. Null for no event or no distance left.
+ */
+export function eventNote(event: ChaosEvent, metresAway: number): string | null {
+  const what =
+    event === ChaosEvent.Avalanche ? 'The avalanche' : event === ChaosEvent.Yeti ? 'The yeti' : event === ChaosEvent.GiftStorm ? 'The gift storm' : event === ChaosEvent.GhostTrain ? 'The Spirit Train' : null;
+  const away = Math.round(metresAway);
+  return what && away >= 1 ? `${what} was ${m(away)} away.` : null;
+}
+
+/**
+ * A one-line title greeting for a returning player, or null. First match wins: a grudge waiting on
+ * this mountain (a nemesis says so), the next mountain when 2 ghosts or fewer open it, then the
+ * closest open mission with how far along it is. `key` is the mountain's save key (a Daily Mountain
+ * is `daily:<day>`).
+ */
+export function titleGreeting(d: SaveData, key: string, mountainName: string): string | null {
+  if (d.runs <= 0) return null;
+  const where = key.startsWith('daily') ? 'the Daily Mountain' : mountainName;
+  const g = d.grudge[key];
+  if (g && g.name && g.record) return isNemesis(g) ? `Your nemesis ${g.name} is waiting on ${where}` : `${g.name} is waiting on ${where}`;
+  const u = nextUnlock(d);
+  if (u && u.kind === 'mountain' && u.need - u.have <= 2) {
+    const left = u.need - u.have;
+    return `${left} more ${left === 1 ? 'ghost opens' : 'ghosts open'} ${u.name}`;
+  }
+  let best: { text: string; frac: number } | null = null;
+  for (const a of d.missions.active) {
+    const def = missionDef(a.id);
+    if (!def) continue;
+    const t = missionTier(def, a.tier);
+    const frac = t.target > 0 ? Math.min(1, a.best / t.target) : 0;
+    if (frac >= 1) continue;
+    if (!best || frac > best.frac) best = { text: frac > 0 ? `${t.text}: ${missionProgressText(def, a.best, t.target)}` : t.text, frac };
+  }
+  return best ? best.text : null;
+}
+
+/** Names longer than this are ellipsized on the button (the accessible name keeps the whole name). */
+const LABEL_NAME_MAX = 12;
+
+export function ellipsize(name: string, max = LABEL_NAME_MAX): string {
+  const chars = [...name];
+  return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : name;
+}
+
+/** The Run Again button's label and accessible name: an unbeaten friend, else the grudge, by name. */
+export function runAgainLabel(friend: { name: string; beaten: boolean } | null, grudge: { name: string } | null): { text: string; aria: string } {
+  const name = friend && !friend.beaten ? friend.name : grudge ? grudge.name : '';
+  if (!name) return { text: 'Run Again', aria: 'Run Again' };
+  return { text: `Rematch ${ellipsize(name)}`, aria: `Rematch ${name}, run again` };
+}
+
+/** The one extra race line on the results card (C6 budget): friend, then grudge, then event note. */
+export function resultsRaceLine(friendLine: string | null, grudgeLine: string | null, eventNote: string | null): { text: string; tone: 'friend' | 'grudge' | 'event' } | null {
+  if (friendLine) return { text: friendLine, tone: 'friend' };
+  if (grudgeLine) return { text: grudgeLine, tone: 'grudge' };
+  if (eventNote) return { text: eventNote, tone: 'event' };
   return null;
 }
 
-/** The Run Again button's label and accessible name. Scaffold: 'Run Again'. */
-export function runAgainLabel(_friend: { name: string; beaten: boolean } | null, _grudge: { name: string } | null): { text: string; aria: string } {
-  return { text: 'Run Again', aria: 'Run Again' };
+/** The friend line on the results: "You beat Mila by 120 m." or "Mila is 340 m ahead." */
+export function friendLine(name: string, friendDistance: number, youDistance: number): string {
+  const gap = Math.round(youDistance - friendDistance);
+  if (gap > 0) return `You beat ${name} by ${m(gap)}.`;
+  return `${name} is ${m(Math.max(1, -gap))} ahead.`;
 }
 
-/** The one extra race line on the results card (friend, then grudge, then event note). Scaffold: null. */
-export function resultsRaceLine(_friendLine: string | null, _grudgeLine: string | null, _eventNote: string | null): { text: string; tone: 'friend' | 'grudge' | 'event' } | null {
-  return null;
+/** The friend's run, crossed alive: the callout on the friendBeaten beat. */
+export function friendBeatenText(name: string, distance: number): string {
+  return `Beat ${name}\u2019s ${m(distance)}`;
 }
 
-/** The share sheet's title for a challenge link. Scaffold: today's title. */
-export function challengeShareTitle(_name: string, _distance: number, _mountain: string, _by: number | null): string {
+/** Where a challenge was ridden, for copy: a Daily Mountain reads "the Daily Mountain". */
+function placeName(mountain: string): string {
+  return /^daily/i.test(mountain) ? 'the Daily Mountain' : mountain;
+}
+
+/**
+ * The share sheet's title for a challenge link. With `by` (you beat a friend's challenge): addressed
+ * back to them, "Mila, I beat your 2,340 m on Pinecrest by 120 m. Your move." `name` is the friend and
+ * `distance` their run. Without: an open challenge for your own run, "Beat my 2,340 m on Pinecrest
+ * in Ghost Sled" (`name` unused, `distance` yours).
+ */
+export function challengeShareTitle(name: string, distance: number, mountain: string, by: number | null): string {
+  const where = placeName(mountain);
+  if (by !== null && name) return `${name}, I beat your ${m(distance)} on ${where} by ${m(Math.max(1, by))}. Your move.`;
+  if (distance > 0) return `Beat my ${m(distance)} on ${where} in Ghost Sled`;
   return 'Beat my Ghost Sled run';
+}
+
+/** The reveal card's goal line for the rolled event: what it pays and how. */
+export function revealGoal(event: ChaosEvent): string | null {
+  switch (event) {
+    case ChaosEvent.Avalanche:
+      return 'Outrun it: +2,000 style';
+    case ChaosEvent.Yeti:
+      return 'Hop it: +1,500 style';
+    case ChaosEvent.GiftStorm:
+      return 'Catch all 48 gifts';
+    case ChaosEvent.GhostTrain:
+      return 'Ride its slipstream';
+    default:
+      return null;
+  }
 }

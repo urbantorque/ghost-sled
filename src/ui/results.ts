@@ -1,8 +1,9 @@
-import type { ResultsGhost, ResultsModel, UIHandlers, UnlockedMountain } from './contract';
+import type { ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
 import type { InputMode } from '../game/input';
+import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { fmt, kindCls, metres, ordinal, seconds } from './fmt';
+import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
 import { missionList } from './title';
@@ -22,7 +23,25 @@ const COUNT_MS = 650;
  * The card's beat timeline (ms after it opens), for sound sync (engine.ui delays). The values mirror
  * the constants and style.css delays they are named after; they change together.
  */
-export const RESULTS_TIMING = { COUNT_MS, PLACE_MS: 300, NEW_BEST_MS: 560, BEAT_MS: 860, BEAT_STEP: 110, DONE_MS: 1050, DONE_STEP: 140, FLY_MS: 1470, FLY_STEP: 140, FLY_DUR: 680 } as const;
+export const RESULTS_TIMING = {
+  COUNT_MS,
+  PLACE_MS: 300,
+  NEW_BEST_MS: 560,
+  BEAT_MS: 860,
+  BEAT_STEP: 110,
+  DONE_MS: 1050,
+  DONE_STEP: 140,
+  FLY_MS: 1470,
+  FLY_STEP: 140,
+  FLY_DUR: 680,
+  /** The head's sub block (crash line, race line, gifts) steps in (style.css .gs-res-sub). */
+  SUB_MS: 440,
+  /** The unlock slot pops in: a new mountain's card, or the next-unlock meter (style.css .gs-ul). */
+  UNLOCK_MS: 480,
+  /** The next-unlock meter fills from where the run started to where it ended (meta.css). */
+  METER_MS: 760,
+  METER_DUR: 620,
+} as const;
 /** When the missions land (ms after the card opens), matching the stagger in style.css. Their bars
  *  fill, each completed one's Done stamp lands 140 ms after the last, then its reward flies. */
 const MIS_STAMP_MS = 1050;
@@ -37,11 +56,15 @@ const WIN_ROWS_PHONE = 3;
  * reads as a list of near misses. The air floor is the air mission's own target. A stat the game
  * flags as a personal record always shows, first, with a Record tag.
  */
-const FLOOR = { bestCombo: 1000, perfects: 1, maxAir: 1.5 } as const;
+const FLOOR = { bestCombo: 1000, perfects: 1, maxAir: 1.5, bestStreak: 3 } as const;
 /** At most this many trick stats, so the score and the race carry the card. */
 const MAX_STATS = 2;
 /** Challenge is answered by a toast, not by updateResults: it re-arms after this long. */
 const CHAL_LOCK_MS = 1500;
+/** A lost combo from this big is named on the crash line ("with 4,960 on the line"). */
+const LOST_LINE_MIN = 1000;
+/** Results opened this session, so the tip for next time rotates through the moves to learn. */
+let tipTurn = 0;
 
 type StatKey = keyof typeof FLOOR;
 
@@ -58,6 +81,8 @@ export class Results {
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
+  /** This card's tip for next time, picked once per results (an update keeps it). */
+  private tipIx = 0;
   inputMode: InputMode = 'keyboard';
 
   constructor(
@@ -85,6 +110,7 @@ export class Results {
     this.raceAll = false;
     // With no race to show (no ghosts rode), the missions have the room: they open from the start.
     this.misOpen = m.ghosts.length === 0;
+    this.tipIx = tipTurn++;
     this.render(m, true);
     this.layer.show();
     this.focusDefault();
@@ -239,11 +265,20 @@ export class Results {
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
     // ride again (how far short of the next place you stopped), then what the run paid: the reward
     // beat sits in the head on every screen, so a phone never folds it below the race.
-    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), m.crashCause) : null;
-    const sub = h('div', 'gs-res-sub', cause, raceNote(m), giftsRow(m));
+    // A big combo the crash took is named right on that line: it is what the run lost.
+    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with ', h('span', 'gs-num', fmt(m.lostCombo!)), ' on the line') : null;
+    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
+    // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
+    // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
+    // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
+    // line count (C6), so your row stays in the first view under an unlock card and three offers.
+    const line = raceLine(m);
+    const note = raceNote(m);
+    const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
-    // wide screens and straight under it on phones, so it is never below the fold.
-    const unlock = this.unlocks(m);
+    // wide screens and straight under it on phones, so it is never below the fold. With none, the
+    // same slot holds the next unlock to ride for, with how close it is.
+    const unlock = this.unlocks(m) ?? nextUnlockCard(m);
     const subRow = unlock ? h('div', 'gs-res-subrow', sub, unlock) : sub;
     // The dialog is named by a fixed heading: the score counts up from 0 as focus lands, so naming the
     // dialog by it read "0, dialog". The score and the mountain describe it instead.
@@ -261,7 +296,7 @@ export class Results {
     const picks = notable(m);
     const showDist = m.ghosts.length === 0;
     const stats = picks.length > 0 || showDist ? h('dl', 'gs-res-stats', showDist ? stat('Distance', metres(m.distance), 'is-key') : null, ...picks) : null;
-    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m))) : null;
+    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
     const run = stats ? h('section', 'gs-res-run', stats) : null;
     run?.setAttribute('aria-label', 'Your run');
 
@@ -293,19 +328,37 @@ export class Results {
     else if (this.pressed.has('revive')) extra.append(this.spent('revive', 'Revive Used'));
     if (m.canDouble && !m.doubled) extra.append(this.rewarded('double', 'video', 'Double Gifts', true, () => this.hd.onDouble()));
     else if (this.pressed.has('double')) extra.append(this.spent('double', m.doubled ? 'Gifts Doubled' : 'No Ad Right Now'));
+    // You beat a friend's challenge: answering back is the move, so the challenge leads the offers as
+    // a filled mint Send It Back (mint: it sends your ghost), full label on every screen. Run again
+    // keeps the vermillion and the Space key.
+    const back = m.canChallenge && m.sendItBack === true;
+    if (back) {
+      const send = this.rewarded('challenge', 'link', 'Send It Back', false, () => this.hd.onChallenge());
+      send.classList.add('gs-res-send');
+      extra.prepend(send);
+    }
     // Challenge a Friend rides with Home: at the far left of that row on wide screens, and a compact
     // glyph button beside Home on phones, so Run again carries the footer on its own.
-    const chal = m.canChallenge ? this.rewarded('challenge', 'link', 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
+    const chal = m.canChallenge && !back ? this.rewarded('challenge', 'link', 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
     if (chal) {
       chal.classList.add('gs-res-chal');
       // Phones show "Challenge" under the glyph; the rest stays in the name for readers and voice.
       chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
     }
+    const label = m.runAgainLabel?.text ?? 'Run Again';
+    const rematch = label.startsWith('Rematch ');
     const again = btn(
       ctx,
-      { cls: 'gs-btn-primary gs-btn-xl gs-again', icon: 'play', label: m.runAgainLabel?.text ?? 'Run Again', aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
+      { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
       this.inputMode !== 'touch' ? kbd('Space') : null,
     );
+    // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
+    // word stacks over the name (meta.css), so the name keeps the button's width to itself.
+    if (rematch) {
+      const who = h('span', 'gs-again-who', label.slice('Rematch '.length));
+      who.setAttribute('translate', 'no');
+      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
+    }
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
       again.querySelector('kbd')?.setAttribute('aria-hidden', 'true');
@@ -318,7 +371,7 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}`, head, run, race, mis, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
@@ -521,13 +574,20 @@ function stat(label: string, value: string, cls = '', record = false): HTMLEleme
  */
 function notable(m: ResultsModel): HTMLElement[] {
   const rec = new Set<StatKey>(m.records ?? []);
+  const streak = m.bestStreak ?? 0;
   const all: Array<{ k: StatKey; label: string; v: number; text: string; i: number }> = [
     { k: 'bestCombo', label: 'Best combo', v: m.bestCombo, text: fmt(m.bestCombo), i: 0 },
     { k: 'perfects', label: 'Perfects', v: m.perfects, text: fmt(m.perfects), i: 1 },
-    { k: 'maxAir', label: 'Max air', v: m.maxAir, text: seconds(m.maxAir), i: 2 },
+    // A stomp streak of 3 or more is the run's rhythm: "Stomp streak 4", like its stamp read.
+    { k: 'bestStreak', label: 'Stomp streak', v: streak, text: fmt(streak), i: 2 },
+    { k: 'maxAir', label: 'Max air', v: m.maxAir, text: seconds(m.maxAir), i: 3 },
   ];
-  const rank = (s: (typeof all)[number]) => (rec.has(s.k) ? 100 : 0) + s.v / FLOOR[s.k];
+  // A streak says more than the perfects count it is made of: it takes that slot (unless the count is
+  // a record) and ranks right after records.
+  const hasStreak = streak >= FLOOR.bestStreak;
+  const rank = (s: (typeof all)[number]) => (rec.has(s.k) ? 100 : 0) + (s.k === 'bestStreak' ? 10 : 0) + s.v / FLOOR[s.k];
   return all
+    .filter((s) => !(hasStreak && s.k === 'perfects' && !rec.has('perfects')))
     .filter((s) => s.v > 0 && (rec.has(s.k) || s.v >= FLOOR[s.k]))
     .sort((a, b) => rank(b) - rank(a))
     .slice(0, MAX_STATS)
@@ -551,10 +611,11 @@ function giftsRow(m: ResultsModel): HTMLElement | null {
 }
 
 /**
- * One short tip for a run with no stat worth naming, in the onboarding hints' own words and true for
- * every input: what ended this run if a habit fixes it, otherwise the first trick to learn.
+ * One short tip for a run with no stat worth naming, in the onboarding hints' own words: what ended
+ * this run if a habit fixes it, otherwise the next move to learn, rotating card to card through the
+ * pop, the spin, the backflip and the boosted pop (touch words on touch).
  */
-function runTip(m: ResultsModel): string {
+function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
   switch (m.crashKind) {
     case 'forest':
       return 'Ride between the banks: they push you back onto the line.';
@@ -563,7 +624,92 @@ function runTip(m: ResultsModel): string {
     case 'avalanche':
       return 'Tuck in behind a ghost to draft away from the wall.';
   }
-  return 'Hold to crouch, then release to pop off a kicker.';
+  const touch = mode === 'touch';
+  const moves = [
+    'Hold to crouch, then release to pop off a kicker.',
+    touch ? 'Drag in the air to spin.' : mode === 'mouse' ? 'Move in the air to spin.' : 'Steer in the air to spin.',
+    touch ? 'Hold in the air to flip.' : 'Press and hold in the air to flip.',
+    'Hold, then let go at the lip for a boosted pop.',
+  ];
+  return moves[turn % moves.length];
+}
+
+/**
+ * The one extra race line (C6 budget: friend, then grudge, then the event note), hung under the crash
+ * line like the place note. A friend or grudge line wears its ghost's colour and a ghost glyph in the
+ * crash line's icon column; an event note stays quiet off-white.
+ */
+function raceLine(m: ResultsModel): HTMLElement | null {
+  const l = m.raceLine;
+  if (!l || !l.text) return null;
+  // The Daily medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon column.
+  const medal = l.tone === 'event' ? /^Daily: (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const rank = medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
+  const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
+  disc?.setAttribute('aria-hidden', 'true');
+  const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
+  // "85 m" never breaks between the number and its unit.
+  const text = l.text.replace(/(\d) m\b/g, `$1${NBSP}m`);
+  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
+  // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
+  if (l.tone !== 'event') p.setAttribute('translate', 'no');
+  return p;
+}
+
+/** The race line names the same margin as the place note (its first figure, "85 m"). */
+function sameMargin(line: HTMLElement, note: HTMLElement): boolean {
+  const fig = note.querySelector('.gs-num')?.textContent;
+  return !!fig && (line.textContent ?? '').includes(fig);
+}
+
+/**
+ * The next unlock, in the unlock card's slot when this run opened nothing: the next mountain with its
+ * biome art under a lock and how many ghosts open it, else the next sled and the gifts to go. The bar
+ * grows from where it stood before this run to where it stands now (reduced motion: it just shows).
+ */
+function nextUnlockCard(m: ResultsModel): HTMLElement | null {
+  const u: ResultsNextUnlock | null | undefined = m.nextUnlock;
+  if (!u) return null;
+  let art: HTMLElement;
+  let name: string;
+  let what: HTMLElement;
+  let said: string;
+  let p: number;
+  let p0: number;
+  if (u.kind === 'mountain') {
+    const sky = h('span', 'gs-mtn-sky');
+    sky.innerHTML = biomeArt(u.biome);
+    art = h('span', `gs-ul-art gs-nu-art b-${u.biome}`, sky, h('span', 'gs-nu-lock', icon('lock')));
+    name = u.name;
+    const have = Math.min(u.have, u.need);
+    what = h('span', 'gs-nu-what', h('span', 'gs-num', `${fmt(have)} of ${fmt(u.need)}`), ' ghosts');
+    said = `Next unlock: ${u.name}, ${fmt(have)} of ${fmt(u.need)} ghosts passed`;
+    p = u.need > 0 ? have / u.need : 0;
+    p0 = u.need > 0 ? Math.max(0, have - m.ghostsPassed) / u.need : 0;
+  } else {
+    const price = SLEDS.find((s) => s.name === u.name)?.price ?? 0;
+    art = h('span', 'gs-nu-sled', icon('sledBold'));
+    name = u.name;
+    what =
+      u.gifts > 0
+        ? h('span', 'gs-nu-what', h('span', 'gs-num', fmt(u.gifts)), ' gifts to go')
+        : h('span', 'gs-nu-what is-ready', 'Ready in the shop');
+    said = u.gifts > 0 ? `Next unlock: ${u.name}, ${fmt(u.gifts)} gifts to go` : `Next unlock: ${u.name}, ready in the shop`;
+    p = price > 0 ? Math.max(0, Math.min(1, (price - u.gifts) / price)) : 1;
+    p0 = price > 0 ? Math.max(0, Math.min(p, (price - u.gifts - Math.max(0, m.giftsEarned)) / price)) : p;
+  }
+  const n = h('span', 'gs-ul-name gs-nu-name', name);
+  n.setAttribute('translate', 'no');
+  const bar = h('span', 'gs-nu-bar');
+  bar.setAttribute('aria-hidden', 'true');
+  bar.style.setProperty('--p', p.toFixed(3));
+  bar.style.setProperty('--p0', p0.toFixed(3));
+  const txt = h('span', 'gs-ul-txt gs-nu-txt', h('span', 'gs-nu-row', n, what), bar);
+  txt.setAttribute('aria-hidden', 'true');
+  const card = h('div', `gs-ul gs-nu is-${u.kind}`, art, txt, sr(said));
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', 'Next unlock');
+  return h('div', 'gs-res-unlock', card);
 }
 
 const dist = (g: ResultsGhost): number => g.distance ?? 0;
@@ -653,12 +799,17 @@ function standings(m: ResultsModel): HTMLElement {
  */
 function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement {
   // Your own best run reads as that, not as your player name repeated in a list of rivals.
-  const name = h('span', 'gs-st-name', g.kind === 'you' ? 'Your best' : g.name);
+  // The friend whose challenge this was wears a small vs badge, like their pill in the race; the name
+  // ellipsizes before the badge does.
+  const name =
+    g.kind === 'friend'
+      ? h('span', 'gs-st-name has-vs', h('span', 'gs-st-nm', g.name), h('span', 'gs-st-vs', 'vs'), sr(', challenge'))
+      : h('span', 'gs-st-name', g.kind === 'you' ? 'Your best' : g.name);
   if (g.kind !== 'you') name.setAttribute('translate', 'no');
   const beat = beatOrder >= 0;
   const li = h(
     'li',
-    `gs-st-row ${kindCls(g.kind)}${beat ? ' is-beat' : ''}`,
+    `gs-st-row ${kindCls(g.kind)}${beat ? ' is-beat' : ''}${g.kind === 'friend' ? ' is-friend' : ''}`,
     h('span', 'gs-st-rank gs-num', String(rank)),
     icon('ghost', 'gs-st-ico'),
     name,
