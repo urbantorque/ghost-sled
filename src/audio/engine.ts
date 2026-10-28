@@ -3,8 +3,11 @@ import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import type { Beat } from '../game/beats';
 import { Core } from './core';
+import { type ResultsCue, type ResultsShow, type RevealCue, choirSize, grooveLift, resultsCues, revealCues } from './cues';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
+
+export type { ResultsCue, ResultsShow, RevealCue } from './cues';
 
 /*
  * Ghost Sled audio: fully procedural WebAudio. No files, no fetches; every sound is synthesized.
@@ -42,16 +45,17 @@ import { bankLandDelay } from './sfx';
  *   their node creation over several frames.
  * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
- *   deck and crossfades over 1.5 s. Intensity (src/game/intensity.ts) fades layers in: the pad
- *   always, the bass from 0.26 (the run floor of 0.30 holds it from 2.5 s), hats from 0.30
- *   (cruising sits at 0.36), the arp from 0.58 and the kick from 0.60, clap and sparkle from 0.80,
- *   the lead from 0.85. Danger adds a pulsing low root. The music pool (32) steals the oldest
- *   non-pad voice, so the pad bed is never cut mid-chord; skipped steps (a stalled timer, music
- *   volume at zero) rebuild the missing pad.
- * - The drive: the engine smooths the game's intensity (rise 0.7 s, fall 2.2 s), holds it at 0.25
- *   under a chaos reveal and snaps the band in as the card collapses, and adds short accents on
- *   top (a big callout, a stomp that grows with the streak, a tier-3 drift crack, a big bank, a
- *   kilometre) that fade within 1.5 s.
+ *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
+ *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.30 (cruising sits at 0.36), the arp
+ *   from 0.48 and the kick from 0.54, clap and sparkle from 0.72, the lead from 0.82. Danger adds a
+ *   pulsing low root. The music pool (32) steals the oldest non-pad voice, so the pad bed is never
+ *   cut mid-chord; skipped steps (a stalled timer, music volume at zero) rebuild the missing pad.
+ * - The drive: the engine takes the game's intensity (src/game/intensity.ts), adds the groove (a
+ *   stomp streak holds it up: +0.06 at 2 in a row up to +0.15 at 5), smooths it (rise 0.7 s, fall
+ *   2.2 s), holds it at 0.25 under a chaos reveal and snaps the band in as the card collapses, and
+ *   adds short accents on top (a big callout, a stomp that grows with the streak, a tier-3 drift
+ *   crack, a big bank on its landing, a kilometre) that fade within 1.5 s. Drafting earns none of
+ *   it: a draft boost with the pack peaks under the arp.
  * - Beats (src/game/beats.ts) arrive before the frame's raw sim events: sfx.ts voices every named
  *   moment (pass words, chimes, stings, the bank roll and drop) and keeps the context the raw
  *   sounds read (the stomp streak, a near miss's side and grade). Grid pulses (the fuse on a big
@@ -60,9 +64,13 @@ import { bankLandDelay } from './sfx';
  *   reward chord is a major add9 made of those same tones, so rewards never clash with the music.
  *   On Clear Skies each mountain has its own song, A A B B in one 16-bar deck loop (no crossfade).
  * - The ghost choir (music.ts): each ghost you pass joins the band as a sung voice on the chord
- *   (up to three, in the music pool, kept like the pad) while it stays behind you (30 s stands in
- *   for 150 m); a retake sighs the top voice down a fourth, a wipeout or the crash ends it. The
- *   stress mix sings all three: the music pool peaks at 29 of 32 with no steals.
+ *   (up to three, in the music pool, kept like the pad) while it stays riding within 150 m behind
+ *   you (AudioFrame.choir, the director's count; without it a 30 s time to live stands in); a retake
+ *   sighs the top voice down a fourth, a wipeout or the crash ends it. The stress mix sings all
+ *   three: the music pool peaks at 29 of 32 with no steals.
+ * - Timelines the picture keeps (cues.ts, pure): a bank's roll ticks on the HUD's count steps
+ *   (src/game/stake.ts), the results card on RESULTS_TIMING and the reveal reel on REVEAL_TIMING.
+ *   The same UI sound asked for twice at one moment plays once.
  * - Filters automate at k-rate (once per 128 samples); a-rate biquad automation recomputes
  *   coefficients per sample and costs several times more.
  * - Levels (offline renders, sliders at 1; scripts/playtest/levels.js): a novice cruise about -25
@@ -134,50 +142,13 @@ const COUNT_IN_HOLD_S = 3;
 /** Accents: added on top of the smoothed drive and fading with this time constant (gone in 1.5 s). */
 const ACCENT_TAU = 0.5;
 const ACCENT_MAX = 0.2;
-/** The ghost choir: a ghost you passed sings for this long, standing in for 'still live within
- *  150 m behind' (the beats carry no gap; a retake or a wipeout ends it sooner). */
+/** The ghost choir without the director's count (AudioFrame.choir absent): a ghost you passed
+ *  sings for this long, standing in for 'still live within 150 m behind' (a retake, a wipeout or
+ *  the crash ends it sooner). */
 const CHOIR_TTL_S = 30;
-
-/** Reveal timeline (ms from the card's start); reveal.ts exports it as REVEAL_TIMING. */
-export interface RevealCue {
-  T_REEL: number;
-  REEL_MS: number;
-  T_STAMP: number;
-}
-/** Results timeline (ms after the card opens); results.ts exports it as RESULTS_TIMING. */
-export interface ResultsCue {
-  COUNT_MS: number;
-  PLACE_MS: number;
-  NEW_BEST_MS: number;
-  BEAT_MS: number;
-  BEAT_STEP: number;
-  DONE_MS: number;
-  DONE_STEP: number;
-  FLY_MS: number;
-  FLY_STEP: number;
-  FLY_DUR: number;
-}
-/** The reel's easing in reveal.ts (cubic-bezier(0.18, 0.62, 0.22, 1)). */
-const REEL_EASE = [0.18, 0.62, 0.22, 1] as const;
-/** The new-best arpeggio's chord lands this long after it starts (6 notes, 70 ms apart). */
-const NEW_BEST_LEAD_MS = 420;
-
-function bezier(p1: number, p2: number, s: number): number {
-  const u = 1 - s;
-  return 3 * u * u * s * p1 + 3 * u * s * s * p2 + s * s * s;
-}
-
-/** Time fraction (0..1) at which a CSS cubic-bezier easing reaches progress y. */
-function easeTimeAt(e: readonly [number, number, number, number], y: number): number {
-  let lo = 0;
-  let hi = 1;
-  for (let i = 0; i < 40; i++) {
-    const m = (lo + hi) / 2;
-    if (bezier(e[1], e[3], m) < y) lo = m;
-    else hi = m;
-  }
-  return bezier(e[0], e[2], (lo + hi) / 2);
-}
+/** A retake's sigh waits this long (s) for the director's count to drop; past it (a full choir,
+ *  more ghosts behind than voices) the top voice sighs and refills anyway. */
+const RETAKE_WAIT_S = 0.25;
 
 const clamp01 = (v: number): number => (v > 0 ? (v < 1 ? v : 1) : 0);
 /** Old webkit contexts return undefined from resume/suspend/close; newer ones may reject. */
@@ -215,8 +186,16 @@ export class AudioEngine {
   private countIn = false;
   private releaseUntil = 0;
   private avalanche = false;
-  /** The ghost choir: ghosts you passed that are still behind you (id to the time of the pass). */
+  /** The ghost choir: ghosts you passed that have not passed you back (id to the time of the pass);
+   *  without the director's count (AudioFrame.choir) it is also the count, with a time to live. */
   private readonly passed = new Map<number, number>();
+  /** The choir size last applied, whether the frame carries the director's count, and when a
+   *  passed ghost last retook you (-1: none waiting for its sigh). */
+  private choirN = 0;
+  private choirFromFrame = false;
+  private retakeAt = -1;
+  /** The groove lift in this frame's target (probe). */
+  private groove = 0;
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -272,8 +251,11 @@ export class AudioEngine {
       this.countIn = false;
       this.releaseUntil = 0;
       this.avalanche = false;
+      this.groove = 0;
     }
     this.passed.clear();
+    this.choirN = 0;
+    this.retakeAt = -1;
     const c = this.core;
     const ctx = this.ctx;
     if (!c || !ctx) return;
@@ -318,6 +300,10 @@ export class AudioEngine {
       }
       this.countIn = countIn;
       if (now < this.releaseUntil && !crashed) target = Math.max(target, COUNT_IN_RELEASE);
+      // The groove: a stomp streak (earned, never by drafting) holds the band up a layer at a time
+      // for as long as it lives, and lets it down slowly when it breaks.
+      this.groove = crashed || countIn ? 0 : grooveLift(frame.streak);
+      target = clamp01(target + this.groove);
       this.target = target;
       // Rise quickly with the action, fall back slowly so the arrangement does not flap.
       const tau = target > this.intensity ? 0.7 : crashed ? 1 : 2.2;
@@ -333,9 +319,7 @@ export class AudioEngine {
       if (crashed) this.accent = 0;
       c.music.setDrive(clamp01(this.intensity + this.accent), clamp01(frame.danger), frame.comboMult || 1, snap);
       c.ambience.update(frame, now, this.avalanche, c.music.key());
-      if (crashed && this.passed.size > 0) this.passed.clear();
-      for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
-      c.music.setChoir(this.passed.size, now);
+      this.choir(frame, now, crashed, c);
       c.pulse.fuse = crashed ? 0 : clamp01(frame.fuse ?? 0);
       c.pulse.duel = crashed ? 0 : clamp01(frame.duel ?? 0);
     } catch (err) {
@@ -374,7 +358,7 @@ export class AudioEngine {
       c?.sfx.frame();
       const now = ctx ? ctx.currentTime : 0;
       for (const b of list) this.accentFor(b, now);
-      if (list.length > 0 && c && ctx) this.choirFor(list, now, c);
+      if (list.length > 0) this.choirFor(list, now);
       if (!ctx || !c || !this.live(ctx) || list.length === 0) return;
       const t = now + START_LEAD;
       for (const b of list) {
@@ -428,53 +412,26 @@ export class AudioEngine {
    * 200 ms under reduced motion, which skips the reel). `names` is the reel's length (12).
    */
   cueReveal(t: RevealCue, reduced: boolean, names = 12): void {
-    if (reduced) {
-      this.ui('reveal-land', 0, 0.2);
-      return;
-    }
-    const rows = Math.max(1, names - 1);
-    for (let k = 1; k <= rows; k++) {
-      // Name k shows once the strip has travelled past half a row toward it.
-      const at = t.T_REEL + t.REEL_MS * easeTimeAt(REEL_EASE, (k - 0.5) / rows);
-      this.ui('reveal-tick', 3 + Math.round((6 * (k - 1)) / Math.max(1, rows - 1)), at / 1000);
-    }
-    this.ui('reveal-land', 0, t.T_STAMP / 1000);
+    for (const q of revealCues(t, reduced, names)) this.ui(q.name, q.detail, q.at);
   }
 
   /**
    * The results card's sounds on its timeline (call as the card opens): ten ticks up the ladder
    * along the score's ease-out count, the stamp with your place, the new-best chord on its stamp, a
-   * soft mallet per Beat stamp, a chime per mission Done stamp and a coin as each reward lands.
-   * Reduced motion collapses it all to the opening moment with a single tick.
+   * soft mallet per Beat stamp, a chime per mission Done stamp and a coin as each reward lands in the
+   * wallet. missions and coins take a count or the rows (each mission's index in
+   * ResultsModel.missions, which places its stamp and its fly-in). Reduced motion collapses it all to
+   * the opening moment with a single tick. A sound the app also asks for at the same moment
+   * (ui('coin', 0, sameDelay)) plays once.
    */
-  cueResults(r: { count: boolean; newBest: boolean; beats: number; missions: number; coins: number }, t: ResultsCue, reduced: boolean): void {
-    if (reduced) {
-      if (r.count) this.ui('results-tick', 9);
-      this.ui('results-stamp');
-      if (r.newBest) this.ui('new-best');
-      if (r.beats > 0) this.ui('results-mallet', 0);
-      if (r.missions > 0) this.ui('mission', 0);
-      if (r.coins > 0) this.ui('coin');
-      return;
-    }
-    if (r.count) {
-      for (let i = 0; i < 10; i++) {
-        // The count eases out (1 - (1 - x)^3): tick as it passes each tenth of the score.
-        const x = 1 - Math.cbrt(1 - (i + 1) / 10);
-        this.ui('results-tick', i, (t.COUNT_MS * x) / 1000);
-      }
-    }
-    this.ui('results-stamp', 0, t.PLACE_MS / 1000);
-    if (r.newBest) this.ui('new-best', 0, Math.max(0, t.NEW_BEST_MS - NEW_BEST_LEAD_MS) / 1000);
-    for (let i = 0; i < r.beats; i++) this.ui('results-mallet', i, (t.BEAT_MS + t.BEAT_STEP * i) / 1000);
-    for (let i = 0; i < r.missions; i++) this.ui('mission', i, (t.DONE_MS + t.DONE_STEP * i) / 1000);
-    for (let i = 0; i < r.coins; i++) this.ui('coin', i, (t.FLY_MS + t.FLY_DUR + t.FLY_STEP * i) / 1000);
+  cueResults(r: ResultsShow, t: ResultsCue, reduced: boolean): void {
+    for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);
   }
 
   /** Probe-only readout of the mix: the drive (smoothed intensity, its target and the accent), each
    *  music layer's presence, the music duck and both voice pools. */
   debugLevels(): Record<string, number> {
-    const out: Record<string, number> = { intensity: this.intensity, target: this.target, accent: this.accent, drive: clamp01(this.intensity + this.accent) };
+    const out: Record<string, number> = { intensity: this.intensity, target: this.target, accent: this.accent, groove: this.groove, drive: clamp01(this.intensity + this.accent), choirFromFrame: this.choirFromFrame ? 1 : 0 };
     const c = this.core;
     const ctx = this.ctx;
     out.running = ctx && ctx.state === 'running' ? 1 : 0;
@@ -513,22 +470,41 @@ export class AudioEngine {
   }
 
   /**
-   * The ghost choir: each ghost you pass joins the band as a voice (up to three) while it stays
-   * behind you; one that passes you back leaves with a sigh, and a wipeout or the crash ends it.
+   * The ghost choir, from the beats: each ghost you pass joins the band as a voice (up to three)
+   * while it stays behind you; one that passes you back leaves with a sigh, and a wipeout or the
+   * crash ends it. The beats keep the set of passed ghosts (for the retake's sigh); the size sung
+   * comes from choir() each frame.
    */
-  private choirFor(list: readonly Beat[], now: number, c: Core): void {
-    const before = this.passed.size;
-    let retaken = false;
+  private choirFor(list: readonly Beat[], now: number): void {
     for (const b of list) {
       if (b.type === 'pass') {
         if (!b.muted && b.word !== 'jostle' && b.word !== 'beat') this.passed.set(b.ghost.id, now);
       } else if (b.type === 'passedBy') {
-        if (this.passed.delete(b.ghost.id)) retaken = true;
+        if (this.passed.delete(b.ghost.id)) this.retakeAt = now;
       } else if (b.type === 'raceNews') {
         if (b.news === 'wipeout' || b.news === 'wipeoutBehind') this.passed.delete(b.ghost.id);
       } else if (b.type === 'crash') this.passed.clear();
     }
-    if (this.passed.size !== before) c.music.setChoir(this.passed.size, now, retaken);
+  }
+
+  /**
+   * The choir's size each frame: the director's AudioFrame.choir (passed ghosts still riding within
+   * 150 m behind) when the frame carries it, else the passed set with a 30 s time to live. A retake
+   * sighs as the count drops, or after RETAKE_WAIT_S when it does not (a full choir with more ghosts
+   * behind than voices: the top voice sighs and another takes its place).
+   */
+  private choir(frame: AudioFrame, now: number, crashed: boolean, c: Core): void {
+    this.choirFromFrame = typeof frame.choir === 'number' && Number.isFinite(frame.choir);
+    if (crashed && this.passed.size > 0) this.passed.clear();
+    if (!this.choirFromFrame) for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
+    const n = crashed ? 0 : choirSize(frame.choir, this.passed.size);
+    let retaken = false;
+    if (this.retakeAt >= 0 && (n < this.choirN || now - this.retakeAt >= RETAKE_WAIT_S || crashed)) {
+      retaken = !crashed;
+      this.retakeAt = -1;
+    }
+    c.music.setChoir(n, now, retaken);
+    this.choirN = n;
   }
 
   /** Accents: internal lifts on the drive for the beats that should swell the band for a moment. */
@@ -549,7 +525,7 @@ export class AudioEngine {
         if (b.points >= 1500) {
           amt = 0.08;
           // On the figure's landing (the slam), not as the roll starts.
-          at = now + bankLandDelay(b.tier);
+          at = now + bankLandDelay(b);
         }
         break;
       case 'km':
