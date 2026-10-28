@@ -47,7 +47,7 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
  *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
- *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.30 (cruising sits at 0.36), the arp
+ *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.28 (cruising sits at 0.36), the arp
  *   from 0.48 and the kick from 0.54, clap and sparkle from 0.72, the lead from 0.82. Danger adds a
  *   pulsing low root. The music pool (32) steals the oldest non-pad voice, so the pad bed is never
  *   cut mid-chord; skipped steps (a stalled timer, music volume at zero) rebuild the missing pad.

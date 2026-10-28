@@ -245,12 +245,12 @@ class Deck {
       // Played runs sit between 0.36 (a cruise) and about 0.6 (a skill chain on a stomp streak with
       // the pack close), so the layers that say "you earned this" come in inside that band: the pad
       // always; the bass from 0.26 (the run floor of 0.30 already has it under the pad; full at
-      // 0.40); hats from 0.30 (a third at a 0.36 cruise, full with the pack); the arp from 0.48 and
-      // the kick from 0.54; clap and sparkle from 0.72; the lead counter-melody from 0.82. A draft
-      // boost with the pack tops out near 0.48, under the arp: drafting never builds the band.
+      // 0.40); hats from 0.28 (more than half at a 0.36 cruise, full with the pack); the arp from
+      // 0.48 and the kick from 0.54; clap and sparkle from 0.72; the lead counter-melody from 0.82.
+      // A draft boost with the pack tops out near 0.48, under the arp: drafting never builds the band.
       const i = this.drive.intensity;
       L.bass = smoothstep(0.26, 0.4, i);
-      L.hat = smoothstep(0.3, 0.45, i);
+      L.hat = smoothstep(0.28, 0.42, i);
       L.arp = smoothstep(0.48, 0.6, i);
       L.kick = smoothstep(0.54, 0.66, i);
       L.clap = smoothstep(0.72, 0.84, i);
