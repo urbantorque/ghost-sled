@@ -115,6 +115,9 @@ const MISSION_GIVE_UP_S = 8;
  *  bunched pack one duel opened 0.02 s after another for 22 s straight, and the run's unlock (and a
  *  mission) never found the 1.4 s of quiet they wait for. */
 const DUEL_POP_GAP_S = 2.2;
+/** ...and no duel opens under a pop's banner (notices TOAST_MS 2,200 plus its exit): the banner band
+ *  covers the race row, so an opening duel there would never be seen. */
+const POP_BANNER_S = 2.5;
 /** New best crossed by a bank waits for the bank's fly-in (s). */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
@@ -424,7 +427,7 @@ export class Director {
         if (!p) continue;
         gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
       }
-      const canOpen = this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S;
+      const canOpen = (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= POP_BANNER_S;
       for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;

@@ -683,14 +683,16 @@ describe('mission and unlock pops', () => {
     expect(of(r.idle(3), 'unlockPop')).toHaveLength(0);
     // The first duel is won; the second ghost was right there all along.
     r.poses.set(1001, pose(r.sim.s.z - 5));
-    const after = r.idle(4);
+    const after = r.idle(5);
     const order = after.filter((x) => x.type === 'unlockPop' || x.type === 'duel').map((x) => (x.type === 'duel' ? `${x.phase}:${x.ghost.id}` : x.type));
     expect(order).toEqual(['won:1001', 'unlockPop', 'open:1002']);
     const won = after.find((x) => x.type === 'duel')!;
     const pop = after.find((x) => x.type === 'unlockPop')!;
     const open = after.filter((x) => x.type === 'duel')[1];
     expect((pop.tick - won.tick) / 60).toBeGreaterThanOrEqual(1.35);
-    expect((open.tick - won.tick) / 60).toBeLessThanOrEqual(2.4);
+    // The next duel waits out the pop's banner (it covers the race row), then opens.
+    expect((open.tick - pop.tick) / 60).toBeGreaterThanOrEqual(2.45);
+    expect((open.tick - pop.tick) / 60).toBeLessThanOrEqual(2.6);
   });
 
   it('with nothing waiting, the next duel opens at once', () => {
