@@ -3346,6 +3346,7 @@
   border-radius: 50%;
   background: var(--text);
   box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.55), 0 0 6px rgba(245, 243, 255, 0.55);
+  opacity: 0;
   pointer-events: none;
 }
 

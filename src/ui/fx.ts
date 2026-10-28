@@ -745,21 +745,24 @@ export class Fx {
       s.style.top = `${item.ay}px`;
       const size = 4 + Math.round(Math.random() * 4);
       s.style.width = s.style.height = `${size}px`;
-      this.el.append(s);
+      // Behind the figure, so a spark never crosses its digits.
+      this.el.insertBefore(s, item.el);
       item.sparks.push(s);
-      const ang = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      // A low fan: out to the sides and down, never up over the race row (sparks stay low, ART.md 10).
+      const ang = -0.3 + (i / Math.max(1, count - 1)) * (Math.PI + 0.6) + (Math.random() - 0.5) * 0.3;
       const r = f * (1.1 + Math.random() * 1.3);
-      const x = Math.cos(ang) * r * 1.35;
-      const y = Math.sin(ang) * r * 0.75 - f * 0.25;
+      const x = Math.cos(ang) * r * 1.4;
+      const y = Math.sin(ang) * r * 0.55;
       const s1 = `translate(-50%, -50%) translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
       const s2 = `translate(-50%, -50%) translate(${(x * 1.15).toFixed(1)}px, ${(y + f * 0.9).toFixed(1)}px) scale(0.5)`;
+      // Hidden until its delay is up (the CSS holds it at opacity 0), then it bursts.
       s.animate(
         [
           { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 1 },
           { transform: s1, opacity: 1, offset: 0.42, easing: EASE_IN },
           { transform: s2, opacity: 0 },
         ],
-        { duration: 620 + Math.round(Math.random() * 260), delay, easing: EASE_OUT, fill: 'both' },
+        { duration: 620 + Math.round(Math.random() * 260), delay, easing: EASE_OUT, fill: 'forwards' },
       );
     }
   }
