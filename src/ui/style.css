@@ -3279,6 +3279,8 @@
   top: 0;
   left: 0;
   display: grid;
+  /* Centred on its anchor even when reduced motion drops the animated transform. */
+  transform: translate(-50%, -50%);
   justify-items: center;
   gap: 0.1em;
   font-style: italic;
@@ -3357,6 +3359,7 @@
   top: 0;
   left: 0;
   display: grid;
+  transform: translate(-50%, -50%);
   font-size: clamp(26px, calc(var(--u) * 2.1), 40px);
   font-style: italic;
   font-weight: 900;
