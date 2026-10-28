@@ -626,6 +626,32 @@ describe('mission and unlock pops', () => {
     expect(of(r.idle(8), 'unlockPop')).toHaveLength(0);
   });
 
+  it('an unlock crossed mid duel waits it out (where a mission would give up), then pops first', () => {
+    let n = 0;
+    const r = new Rig({
+      lifetimePassed: 3,
+      unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }],
+      missionsCrossed: () => (++n === 8 ? [{ id: 'm', text: 'Pass a ghost', reward: 25 }] : []),
+    });
+    const g = track(1001);
+    r.tracks = [g];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    expect(of(r.idle(1.5), 'duel')[0]?.phase).toBe('open');
+    // The 4th pass of a lifetime comes while the duel is still open, and the duel runs 5 s more.
+    r.passed = 1;
+    const during = r.idle(5);
+    expect(of(during, 'unlockPop')).toHaveLength(0);
+    expect(of(during, 'missionPop')).toHaveLength(0);
+    // The ghost drops 5 m back: the duel is won, and after the result's quiet the unlock shows.
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    const after = r.idle(3);
+    expect(of(after, 'duel')[0]?.phase).toBe('won');
+    const pops = [...of(after, 'unlockPop'), ...of(after, 'missionPop')];
+    expect(pops.map((b) => b.type)).toEqual(['unlockPop']);
+    expect(pops[0]).toMatchObject({ name: 'Frostfang Glacier' });
+  });
+
   it('the pass that leaves one to go teases the unlock once', () => {
     const r = new Rig({ lifetimePassed: 2, unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }] });
     const g = track(1001);

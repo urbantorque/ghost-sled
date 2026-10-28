@@ -98,6 +98,9 @@ const CALL_SHOW_S = POP_DEFER.call / 1000;
 const CALL_GIVE_UP_S = 6;
 /** A finale banner holds the queue this long (s). */
 const FINALE_HOLD_S = 3;
+/** A new mountain is a run's biggest news, and usually lands on a pass in a busy pack (often mid
+ *  duel): it waits this long (s) for a clear moment, where a mission gives up after POP_DEFER.giveUp. */
+const UNLOCK_GIVE_UP_S = 12;
 /** New best crossed by a bank waits for the bank's fly-in (s). */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
@@ -949,7 +952,10 @@ export class Director {
       this.lastNewsAt = now;
     }
     // Give up on what waited too long; then show the next one if the moment is clear.
-    while (this.pops.length && now - this.pops[0].since > POP_DEFER.giveUp / 1000) this.pops.shift();
+    for (let i = this.pops.length - 1; i >= 0; i--) {
+      const p = this.pops[i];
+      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : POP_DEFER.giveUp / 1000)) this.pops.splice(i, 1);
+    }
     if (!this.pops.length) return;
     const clear =
       now - this.lastStompAt >= POP_DEFER.stomp / 1000 &&
@@ -961,7 +967,8 @@ export class Director {
       !this.finales.pending &&
       now - this.lastPopAt >= POP_DEFER.spacing / 1000;
     if (!clear) return;
-    const p = this.pops.shift()!;
+    // A waiting unlock goes before any mission.
+    const p = this.pops.splice(Math.max(0, this.pops.findIndex((q) => q.beat.type === 'unlockPop')), 1)[0];
     p.beat.tick = sim.tick;
     this.lastPopAt = now;
     this.push(p.beat, sim);
