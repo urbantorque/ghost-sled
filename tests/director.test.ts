@@ -568,16 +568,33 @@ describe('mission and unlock pops', () => {
     expect(of(out, 'missionPop')).toHaveLength(1);
   });
 
-  it('defers behind a stomp, and gives up after 3 s', () => {
+  it('defers behind a stomp, and gives up after 8 s', () => {
     const { r } = popRig();
     r.idle(0.45);
     // Keep stomping: the pop waits for 1.6 s of quiet that never comes, then gives up.
     const out: Beat[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 13; i++) {
       out.push(...r.frame([style('perfect'), land('perfect')]));
       out.push(...r.idle(0.7));
     }
     expect(of(out, 'missionPop')).toHaveLength(0);
+    expect(of(r.idle(3), 'missionPop')).toHaveLength(0);
+  });
+
+  it('a mission met as an unlock pops follows it once the spacing allows (a fresh save)', () => {
+    let n = 0;
+    const r = new Rig({
+      lifetimePassed: 3,
+      unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }],
+      missionsCrossed: () => (++n === 1 ? [{ id: 'pass1', text: 'Pass a ghost', reward: 25 }] : []),
+    });
+    r.sim.tick = 1000;
+    r.passed = 1;
+    const out = r.idle(8);
+    const pops = out.filter((b) => b.type === 'unlockPop' || b.type === 'missionPop');
+    expect(pops.map((b) => b.type)).toEqual(['unlockPop', 'missionPop']);
+    // 6 s apart (POP_DEFER.spacing), the mission still inside its 8 s wait.
+    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(5.9);
   });
 
   it('defers behind a shown pass, then shows', () => {

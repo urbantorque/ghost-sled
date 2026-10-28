@@ -107,6 +107,10 @@ const FINALE_HOLD_S = 3;
 /** A new mountain is a run's biggest news, and usually lands on a pass in a busy pack (often mid
  *  duel): it waits this long (s) for a clear moment, where a mission gives up after POP_DEFER.giveUp. */
 const UNLOCK_GIVE_UP_S = 12;
+/** A mission pop waits this long (s) for a clear moment. POP_DEFER.giveUp's 3 s lost most of them in
+ *  real runs: a fresh save meets 'Pass a ghost' as the unlock pops, and the 6 s spacing after it
+ *  outlasted 3 s every time. 8 s lets it follow (orchestrator: at most 8 s, never ~10 s late). */
+const MISSION_GIVE_UP_S = 8;
 /** New best crossed by a bank waits for the bank's fly-in (s). */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
@@ -1000,7 +1004,7 @@ export class Director {
     // Give up on what waited too long; then show the next one if the moment is clear.
     for (let i = this.pops.length - 1; i >= 0; i--) {
       const p = this.pops[i];
-      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : POP_DEFER.giveUp / 1000)) this.pops.splice(i, 1);
+      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : MISSION_GIVE_UP_S)) this.pops.splice(i, 1);
     }
     if (!this.pops.length) return;
     const clear =
