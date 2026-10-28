@@ -266,6 +266,18 @@ export class World {
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    this.prewarm();
+  }
+
+  /** Compiles every material in the scene now, the hidden ones too, into the target the scene pass
+   *  draws into. The landing ring first draws on the run's first jump and the stomp crater on its first
+   *  perfect landing: compiled there, each stalled the frame of the moment it was meant to sell. */
+  private prewarm(): void {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(this.post.sceneTarget);
+    r.compile(this.scene, this.cam.camera);
+    r.setRenderTarget(prev);
   }
 
   private configureShadow(): void {
@@ -327,11 +339,12 @@ export class World {
     this.applyWeather();
     this.lastChunkRange = '';
     this.resize();
-    // Materials recompile when the shadow define changes.
+    // Materials recompile when the shadow define changes (the hidden ones now, not on first use).
     this.scene.traverse((o) => {
       const m = (o as { material?: { needsUpdate: boolean } }).material;
       if (m) m.needsUpdate = true;
     });
+    this.prewarm();
   }
 
   setCourse(seed: number): void {
