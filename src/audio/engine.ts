@@ -2,6 +2,7 @@ import { ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import type { Beat } from '../game/beats';
+import { START_TICKS } from '../game/race';
 import { Core } from './core';
 import { type ResultsCue, type ResultsShow, type RevealCue, choirSize, grooveLift, resultsCues, revealCues } from './cues';
 import type { Scene } from './music';
@@ -51,7 +52,7 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   pulsing low root. The music pool (32) steals the oldest non-pad voice, so the pad bed is never
  *   cut mid-chord; skipped steps (a stalled timer, music volume at zero) rebuild the missing pad.
  * - The drive: the engine takes the game's intensity (src/game/intensity.ts), adds the groove (a
- *   stomp streak holds it up: +0.06 at 2 in a row up to +0.15 at 5), smooths it (rise 0.7 s, fall
+ *   stomp streak holds it up: +0.06 at 2 in a row up to +0.18 at 5), smooths it (rise 0.7 s, fall
  *   2.2 s), holds it at 0.25 under a chaos reveal and snaps the band in as the card collapses, and
  *   adds short accents on top (a big callout, a stomp that grows with the streak, a tier-3 drift
  *   crack, a big bank on its landing, a kilometre) that fade within 1.5 s. Drafting earns none of
@@ -149,6 +150,9 @@ const CHOIR_TTL_S = 30;
 /** A retake's sigh waits this long (s) for the director's count to drop; past it (a full choir,
  *  more ghosts behind than voices) the top voice sighs and refills anyway. */
 const RETAKE_WAIT_S = 0.25;
+/** The shoulder hiss waits out the start-line jostle (race.ts START_TICKS: the pack sits right
+ *  behind you and passes say nothing), then fades in over a second. */
+const SHOULDER_FROM_S = START_TICKS / 60;
 
 const clamp01 = (v: number): number => (v > 0 ? (v < 1 ? v : 1) : 0);
 /** Old webkit contexts return undefined from resume/suspend/close; newer ones may reject. */
@@ -196,6 +200,8 @@ export class AudioEngine {
   private retakeAt = -1;
   /** The groove lift in this frame's target (probe). */
   private groove = 0;
+  /** Seconds of run (real time, crashes excluded) since the run scene began. */
+  private runT = 0;
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -252,6 +258,7 @@ export class AudioEngine {
       this.releaseUntil = 0;
       this.avalanche = false;
       this.groove = 0;
+      this.runT = 0;
     }
     this.passed.clear();
     this.choirN = 0;
@@ -318,7 +325,8 @@ export class AudioEngine {
       }
       if (crashed) this.accent = 0;
       c.music.setDrive(clamp01(this.intensity + this.accent), clamp01(frame.danger), frame.comboMult || 1, snap);
-      c.ambience.update(frame, now, this.avalanche, c.music.key());
+      if (!crashed) this.runT += d;
+      c.ambience.update(frame, now, this.avalanche, c.music.key(), clamp01(this.runT - SHOULDER_FROM_S));
       this.choir(frame, now, crashed, c);
       c.pulse.fuse = crashed ? 0 : clamp01(frame.fuse ?? 0);
       c.pulse.duel = crashed ? 0 : clamp01(frame.duel ?? 0);

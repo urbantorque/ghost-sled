@@ -37,6 +37,8 @@ const ROLL_LADDER: readonly { lo: number; hi: number }[] = [
 ];
 /** The drop: the band cuts out this long before a big bank's slam. */
 export const DROP_S = 0.22;
+/** The roll's count steps that fall inside the drop tick this much quieter (about -12 dB). */
+const DROP_TICK = 0.25;
 /** The avalanche escape: the band drops out this long, then the fanfare and the slam land. */
 export const ESCAPE_DROP_S = 0.45;
 
@@ -1251,13 +1253,17 @@ export class Sfx {
       });
     }
     const n = roll.ticks.length;
+    const gapAt = roll.land - DROP_S;
     for (let i = 1; i <= n; i++) {
       const e = i / n;
       const f = this.note(r.lo + Math.round(((r.hi - r.lo) * (i - 1)) / Math.max(1, n - 1)));
-      const amp = 0.04 + 0.03 * e;
+      // Inside the drop the count goes on ticking into the silence, a whisper of itself (no click),
+      // so the gap still reads as a gap.
+      const inGap = drop && roll.ticks[i - 1] >= gapAt - 0.005;
+      const amp = (0.04 + 0.03 * e) * (inGap ? DROP_TICK : 1);
       this.at(v, t + roll.ticks[i - 1], (tn) => {
-        ping(v, tn, f, amp, 0.035);
-        this.click(v, tn, 0.016);
+        ping(v, tn, f, amp, inGap ? 0.025 : 0.035);
+        if (!inGap) this.click(v, tn, 0.016);
       });
     }
     const top = ladder(this.key(), r.hi);

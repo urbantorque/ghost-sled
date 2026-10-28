@@ -168,7 +168,7 @@ export function choirSize(frameChoir: number | undefined, proxy: number): number
 
 /** The groove's lift by stomp streak (0, 1, 2, 3, 4, 5+): consecutive perfect landings hold the band
  *  up a layer at a time for as long as the streak lives. Drafting can never earn one. */
-export const GROOVE_STREAK = [0, 0, 0.06, 0.1, 0.13, 0.15] as const;
+export const GROOVE_STREAK = [0, 0, 0.06, 0.11, 0.15, 0.18] as const;
 
 export function grooveLift(streak: number | undefined): number {
   return GROOVE_STREAK[clampInt(streak ?? 0, 0, GROOVE_STREAK.length - 1)];

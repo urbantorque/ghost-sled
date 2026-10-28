@@ -15,7 +15,7 @@ import { bandComp, blockRate, clamp, smoothstep } from './voices';
 /** A fourth down: the flow tone bends this far when a bump snuffs it. */
 const FOURTH_DOWN = 0.7491535384383408;
 /** The shoulder hiss at full presence (a ghost on your heel and gaining). */
-const SHOULDER_GAIN = 0.62;
+const SHOULDER_GAIN = 0.8;
 /** The shoulder's level rising this fast (per second) is a ghost closing at full tilt: about 2 m/s
  *  faster than you within the last 2 m. */
 const SHOULDER_CLOSING = 0.6;
@@ -423,13 +423,14 @@ export class Ambience {
     this.apply(CALM, now, false, null, false);
   }
 
-  update(f: AudioFrame, now: number, avalanche: boolean, key: Key): void {
+  /** shoulder: 0..1 scale on the shoulder hiss (the engine hushes it through the start-line jostle). */
+  update(f: AudioFrame, now: number, avalanche: boolean, key: Key, shoulder = 1): void {
     this.lastFrame = now;
     this.calmed = false;
-    this.apply(f, now, avalanche, key, true);
+    this.apply(f, now, avalanche, key, true, shoulder);
   }
 
-  private apply(f: AudioFrame, now: number, avalanche: boolean, key: Key | null, surface: boolean): void {
+  private apply(f: AudioFrame, now: number, avalanche: boolean, key: Key | null, surface: boolean, shoulderScale = 1): void {
     const sr = this.ctx.sampleRate;
     const sp = clamp(f.speed || 0, 0, 60);
     const s01 = clamp(sp / 46, 0, 1);
@@ -528,10 +529,10 @@ export class Ambience {
     }
 
     // Shoulder: a rival closing behind you, panned hard to its side. Silent while drafting (the hum
-    // owns that), in a crash and under any danger (it must never mask the avalanche). It is loudest
-    // while the ghost is gaining on you (its level rising): one that only sits behind you, as the
-    // pack does off the start line, keeps a quiet bed of it under the wind.
-    const sh = surface && f.shoulder && !f.drafting && !f.crashed && !(f.danger > 0) ? f.shoulder : null;
+    // owns that), in a crash and under any danger (it must never mask the avalanche). It is a cue of
+    // closing: full while the ghost gains on you (its level rising), a whisper when one only sits
+    // behind you, and it rides with your speed as the wind bed does.
+    const sh = surface && shoulderScale > 0 && f.shoulder && !f.drafting && !f.crashed && !(f.danger > 0) ? f.shoulder : null;
     const amt = sh ? clamp(sh.amt, 0, 1) : 0;
     const dts = this.shAt >= 0 ? clamp(now - this.shAt, 0, 0.25) : 0;
     if (amt === 0) this.shClose = 0;
@@ -550,7 +551,8 @@ export class Ambience {
       const p = clamp(sh.pan, -0.85, 0.85);
       this.shoulderPan.to(Math.sign(p) * Math.min(0.95, Math.pow(Math.abs(p), 0.7)), now, 0.04);
     }
-    this.shoulderG.to(SHOULDER_GAIN * amt * (0.4 + 0.6 * this.shClose) * bandComp(shf, 2.5, sr), now, 0.04);
+    const shSpeed = 0.35 + 0.65 * smoothstep(8, 24, sp);
+    this.shoulderG.to(SHOULDER_GAIN * amt * (0.15 + 0.85 * this.shClose) * shSpeed * clamp(shoulderScale, 0, 1) * bandComp(shf, 2.5, sr), now, 0.04);
   }
 
   dispose(): void {
