@@ -2,7 +2,7 @@ import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contra
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt, metres } from './fmt';
+import { dailyDate, fmt, metres, NBSP } from './fmt';
 import { icon } from './icons';
 import { play, reduced } from './motion';
 
@@ -305,7 +305,7 @@ export class Title {
     // Days in a row with a Daily run ("Day 3", from the second day), and today's medal beside the best.
     const streak = Math.floor(d.streak ?? 0);
     const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
-    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', 'Day ', h('span', 'gs-num', String(streak))) : null;
+    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', `Day${NBSP}`, h('span', 'gs-num', String(streak))) : null;
     const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
     b.append(
       h('span', 'gs-daily-ico', icon('snowflake')),
@@ -316,7 +316,7 @@ export class Title {
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`Daily Mountain, ${date}`, status, streak >= 2 ? `Day ${streak} in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
+    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 ? `Day ${streak} in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
     b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!d.ready) return;

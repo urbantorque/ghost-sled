@@ -370,6 +370,12 @@
    keep their own heights, so the left column still stacks with no gaps, and the tip sits under both
    columns. Without stats the run row is left out, so it cannot take a share either. */
 @media (min-aspect-ratio: 1/1) and (min-width: 901px) {
+  /* "Rematch FlurrySpruce" is twice "Run Again": a step smaller, so a 12 letter name fits whole
+     beside Challenge and Home before it would ellipsize. */
+  .gs-again.is-rematch .gs-btn-label {
+    font-size: 0.88em;
+  }
+
   .gs-res-body:not(.no-race) {
     grid-template-rows: repeat(7, auto);
     grid-template-areas:
