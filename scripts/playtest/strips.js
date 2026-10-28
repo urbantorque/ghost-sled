@@ -169,11 +169,13 @@ async (page) => {
       vc.on = false;
       const off = orig.now() - vc.t;
       performance.now = () => orig.now() - off;
-      window.requestAnimationFrame = orig.raf;
+      // Frame timestamps stay on the same clock as performance.now (a raw browser timestamp, ahead by
+      // the time spent on the virtual clock, sent an unclamped count-up on the results card wild).
+      window.requestAnimationFrame = (cb) => orig.raf((ts) => cb(ts - off));
       window.cancelAnimationFrame = orig.caf;
       window.setTimeout = orig.st;
       window.clearTimeout = orig.ct;
-      for (const cb of vc.q) orig.raf(cb);
+      for (const cb of vc.q) window.requestAnimationFrame(cb);
       for (const x of vc.timers) orig.st(x.fn, Math.max(0, x.at - vc.t));
       vc.q = [];
       vc.timers = [];
