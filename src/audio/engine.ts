@@ -97,6 +97,7 @@ export interface AudioFrame {
   fuse?: number; // 0..1 fuse on a big draining stake
   streak?: number; // current stomp streak
   countIn?: boolean; // the run-start reveal is up (chaos runs): intensity is held low
+  choir?: number; // 0..3 ghosts you passed still riding within 150 m behind (absent: the TTL proxy)
 }
 
 export type UiSound =
