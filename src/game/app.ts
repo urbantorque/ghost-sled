@@ -1709,7 +1709,9 @@ export class App {
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
         nextGhost: rv && rt ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel } : null,
-        place: { rank: st.rank, of: st.of },
+        // 'of N' is the whole field from the first ghost ready on (the pill shows from there), not the
+        // count of tracks ready so far: those come ready over several seconds ("1st of 2", "of 4"...).
+        place: { rank: st.rank, of: st.of > 1 ? Math.max(st.of, this.ghosts.fieldSize) : st.of },
         draft: sim.s.drafting ? sim.s.draftCharge : 0,
         driftTier: sim.s.drifting ? sim.s.driftTier : 0,
         danger: av.phase === 2 ? { kind: 'avalanche', gap: sim.s.z - av.z } : null,

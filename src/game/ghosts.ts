@@ -159,6 +159,14 @@ export class GhostManager {
     return this.tracks.every((t) => t.ready);
   }
 
+  /** The race field with you in it: every ghost ready or still loading (a replay that failed or came
+   *  back empty is out), plus you. standings() counts only the ready ones. */
+  get fieldSize(): number {
+    let n = 1;
+    for (const t of this.tracks) if (t.ready || t.frames === null) n++;
+    return n;
+  }
+
   /** Runs the bot in its own short-lived worker so race replays are never queued behind it. */
   generatePool(seed: number, count: number, salt: number, budgetRuns?: number, maxTicks?: number): Promise<PoolGhostData[]> {
     return new Promise((resolve) => {
