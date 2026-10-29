@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CHOIR_HOLD_S, CHOIR_VOICES, ChoirTracker, GROOVE_STREAK, NEW_BEST_LEAD_MS, RETAKE_WAIT_S, UI_SAME_S, UiOnce, bankRoll, choirSize, floorDrive, grooveLift, resultsCues, revealCues, stormCascade } from '../src/audio/cues';
+import { CHOIR_HOLD_S, CHOIR_VOICES, ChoirTracker, GROOVE_STREAK, NEW_BEST_LEAD_MS, RETAKE_WAIT_S, UI_SAME_CHIME_S, UI_SAME_S, UiOnce, uiSameWindow, bankRoll, choirSize, floorDrive, grooveLift, resultsCues, revealCues, stormCascade } from '../src/audio/cues';
 import type { Beat } from '../src/game/beats';
 import { FLOOR_FROM, RUN_FLOOR } from '../src/game/intensity';
 import { BANK_CHIP_MS, BANK_ROLL_MS, BANK_TICKS, rollValue } from '../src/game/stake';
@@ -106,7 +106,22 @@ describe('results cues', () => {
 
   it('the closest pair of results sounds is wider than the one-sound guard', () => {
     const q = resultsCues({ count: true, newBest: true, beats: 4, missions: [0, 1, 2], coins: [0, 1, 2] }, T, false);
-    for (const a of q) for (const b of q) if (a !== b && a.name === b.name) expect(Math.abs(a.at - b.at)).toBeGreaterThan(UI_SAME_S);
+    for (const a of q) for (const b of q) if (a !== b && a.name === b.name) expect(Math.abs(a.at - b.at)).toBeGreaterThan(uiSameWindow(a.name));
+    // Next rows' chimes and coins sit DONE_STEP / FLY_STEP apart: more than twice the chime window.
+    expect(T.DONE_STEP / 1000).toBeGreaterThan(2 * UI_SAME_CHIME_S);
+    expect(T.FLY_STEP / 1000).toBeGreaterThan(2 * UI_SAME_CHIME_S);
+  });
+
+  it('missions: [] (the app chimes each Done stamp from onMissionStamp) leaves no chime on the timeline', () => {
+    for (const missions of [[], 0, undefined as unknown as number[]]) {
+      const q = resultsCues({ count: true, newBest: true, beats: 1, missions, coins: [] }, T, false);
+      expect(q.some((c) => c.name === 'mission')).toBe(false);
+      expect(q.filter((c) => c.name === 'results-tick')).toHaveLength(10);
+      expect(q.some((c) => c.name === 'results-stamp')).toBe(true);
+    }
+    // Reduced motion keeps its one chime when there are rows, and none for an empty list.
+    expect(resultsCues({ count: false, newBest: false, beats: 0, missions: [1], coins: [] }, T, true).filter((c) => c.name === 'mission')).toHaveLength(1);
+    expect(resultsCues({ count: false, newBest: false, beats: 0, missions: [], coins: [] }, T, true).some((c) => c.name === 'mission')).toBe(false);
   });
 });
 
@@ -143,6 +158,22 @@ describe('the one-sound guard', () => {
     expect(g.admit('coin', 10, 11)).toBe(true);
     g.clear();
     expect(g.admit('coin', 10.14, 9)).toBe(true);
+  });
+
+  it('a coin or a Done chime asked for again a frame or two later is one sound; ticks keep their 22 ms', () => {
+    const g = new UiOnce();
+    // The re-render's landing coin, then the doubled reward's 17 ms on.
+    expect(g.admit('coin', 20.006, 20)).toBe(true);
+    expect(g.admit('coin', 20.023, 20.017)).toBe(false);
+    // A stamp's chime two frames after the timeline's own chime for that moment.
+    expect(g.admit('mission', 20.006, 20)).toBe(true);
+    expect(g.admit('mission', 20.039, 20.033)).toBe(false);
+    // The next row, DONE_STEP on, is its own chime.
+    expect(g.admit('mission', 20.146, 20.14)).toBe(true);
+    // The count's first ticks, 22 ms apart, are two sounds.
+    expect(g.admit('results-tick', 21, 20.9)).toBe(true);
+    expect(g.admit('results-tick', 21.022, 20.92)).toBe(true);
+    expect(uiSameWindow('results-tick')).toBe(UI_SAME_S);
   });
 });
 
