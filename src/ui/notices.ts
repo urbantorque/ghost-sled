@@ -1,6 +1,6 @@
 import type { MountainCard, ToastTone } from './contract';
 import { ChaosEvent, eventInfo } from '../sim/chaos';
-import { h } from './dom';
+import { h, type Kid } from './dom';
 import { fmt } from './fmt';
 import { icon, type IconName } from './icons';
 import { EASE_OUT, play, reduced, SPRING } from './motion';
@@ -202,7 +202,7 @@ export class Notices {
   /** A mountain unlocked mid-run: its name, with a swatch of its own sky behind the snowflake. */
   unlock(name: string, biome: MountainCard['biome']): void {
     const text = `${name} unlocked`;
-    this.push({ spec: { type: 'toast', text, tone: 'unlock', sub: 'Ride it from the title', biome }, pri: P_CELEBRATE, key: `t:unlock:${text}`, ms: TOAST_MS + 400, at: performance.now(), el: null, shown: 0, end: 0 });
+    this.push({ spec: { type: 'toast', text, tone: 'unlock', name, sub: 'Ride it from the title', biome }, pri: P_CELEBRATE, key: `t:unlock:${text}`, ms: TOAST_MS + 400, at: performance.now(), el: null, shown: 0, end: 0 });
   }
 
   /** Mid-run event telegraph: big banner with a pulsing border for about 2.6 s. */
@@ -413,7 +413,12 @@ function render(s: Spec): HTMLElement {
     const key = eventInfo(s.event).key;
     const ico = h('span', 'gs-fin-ico', icon(EVENT_ICON[s.event] ?? 'flag'));
     const pay = s.sub ? payoff(s.sub) : null;
-    return h('div', `gs-fin gs-panel e-${key}`, ico, h('span', 'gs-fin-t', s.text), pay);
+    const t = h('span', 'gs-fin-t', s.text);
+    // Screen readers hear one line ("Caught 48 of 48. Clean sweep: +10 gifts"); the hairline before the
+    // payoff is only a visible separator.
+    const said = s.sub ? `${s.text}. ${s.sub}` : null;
+    if (said) for (const part of [ico, t, pay]) part?.setAttribute('aria-hidden', 'true');
+    return h('div', `gs-fin gs-panel e-${key}`, ico, t, pay, said ? h('span', 'gs-sr', said) : null);
   }
   if (s.tone === 'grudge' && s.name) {
     // Grudge settled: the rose celebration, with the ghost's name as the headline and the reward
@@ -433,12 +438,30 @@ function render(s: Spec): HTMLElement {
     // Screen readers hear it as one line ("Nemesis down. Beat Mila after 3 runs · +20 gifts"); the
     // hairline before the reward is its visible separator.
     if (s.said) for (const part of [ico, txt, pay]) part?.setAttribute('aria-hidden', 'true');
-    return h('div', `gs-pass gs-panel k-grudge${s.nemesis ? ' is-nemesis' : ''}`, ico, txt, pay, s.said ? h('span', 'gs-sr', s.said) : null);
+    return h('div', `gs-pass gs-panel k-grudge${s.nemesis ? ' is-nemesis' : ''}`, ico, txt, pay, s.said ? srWithName(s.said, s.name) : null);
   }
   const ic = TOAST_ICON[s.tone];
   // An unlocked mountain's snowflake sits on a swatch of that mountain's own sky.
   const glyph = ic ? (s.biome ? h('span', `gs-toast-sky b-${s.biome}`, icon(ic)) : icon(ic)) : null;
-  return h('div', `gs-toast gs-panel gs-pill t-${s.tone}`, glyph, h('span', 'gs-toast-txt', s.text), s.sub ? h('span', 'gs-toast-sub', s.sub) : null);
+  // A mountain's name is never machine-translated, as on the title.
+  let body: Kid[] = [s.text];
+  if (s.tone === 'unlock' && s.name && s.text.startsWith(s.name)) {
+    const nm = h('span', '', s.name);
+    nm.translate = false;
+    body = [nm, s.text.slice(s.name.length)];
+  }
+  // The sub follows a spoken stop ("Ember Peak unlocked. Ride it from the title").
+  return h('div', `gs-toast gs-panel gs-pill t-${s.tone}`, glyph, h('span', 'gs-toast-txt', ...body), s.sub ? h('span', 'gs-sr', '. ') : null, s.sub ? h('span', 'gs-toast-sub', s.sub) : null);
+}
+
+/** A screen-reader line with the ghost's handle in it kept out of machine translation, like the
+ *  visible name it stands for. */
+function srWithName(said: string, name: string): HTMLElement {
+  const i = said.indexOf(name);
+  if (i < 0) return h('span', 'gs-sr', said);
+  const nm = h('span', '', name);
+  nm.translate = false;
+  return h('span', 'gs-sr', said.slice(0, i), nm, said.slice(i + name.length));
 }
 
 /**

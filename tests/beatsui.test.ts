@@ -74,8 +74,12 @@ describe('BeatRouter', () => {
       ['Streak broken', 'lost'],
       ['Best combo pace', 'best'],
       ['New best', 'best'],
-      ["Beat Mila's 2,340 m", 'big'],
+      ['Beat Mila’s 2,340 m', 'big'],
     ]);
+    // The friend's handle keeps its own case, possessive and all.
+    expect(of('fx.pop')[4][4]).toBe('Mila’s');
+    // The run's goal markers reach screen readers too (the callout layer is aria-hidden).
+    expect(of('hud.say').map((c) => c[1])).toEqual(expect.arrayContaining(['New best', 'Beat Mila’s 2,340 m']));
     expect(of('hud.paceHit')).toHaveLength(1);
     expect(of('hud.flashBest')).toHaveLength(1);
   });

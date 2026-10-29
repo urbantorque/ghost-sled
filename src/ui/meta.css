@@ -190,9 +190,13 @@
 }
 
 @media (hover: hover) {
-  .gs-res-opt.gs-res-send:hover:not(:disabled),
-  .gs-res-opt.gs-btn-soft.gs-res-send[aria-disabled='true']:hover {
+  .gs-res-opt.gs-res-send:hover:not(:disabled):not([aria-disabled='true']) {
     background: #a8f6eb;
+  }
+
+  /* Locked for a moment after a tap: it keeps its rest mint on hover, so it never looks clickable. */
+  .gs-res-opt.gs-btn-soft.gs-res-send[aria-disabled='true']:hover {
+    background: var(--ghost);
   }
 }
 
@@ -458,8 +462,15 @@
 
   /* The daily pill is one line on a phone: with a day streak showing, it replaces the rivals tag, and
      so does today's medal (its disc and "Bronze · Best 7,967" take that room). */
-  .gs-daily-meta.has-day .gs-daily-status,
-  .gs-daily:has(.gs-daily-best.has-medal) .gs-daily-status {
+  .gs-daily:not(.is-waiting) .gs-daily-meta.has-day .gs-daily-status,
+  .gs-daily:not(.is-waiting):has(.gs-daily-best.has-medal) .gs-daily-status {
+    display: none;
+  }
+
+  /* While its rivals are found, the status ("Finding rivals...") takes the line: the Day tag and the
+     medal row wait, so the dimmed pill says why it does not start yet. */
+  .gs-daily.is-waiting .gs-daily-day,
+  .gs-daily.is-waiting .gs-daily-best {
     display: none;
   }
 

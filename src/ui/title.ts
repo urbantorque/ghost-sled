@@ -440,7 +440,7 @@ function ghostsPassed(m: TitleModel): number {
  * A friend's challenge: "Racing Mila's ghost" over "2,340 m on Pinecrest" (how far their run went).
  * A run on today's Daily Mountain reads "on the Daily Mountain"; one on another day's Daily (no
  * mountain named) shows the first line alone. Links from before distances were carried keep the
- * score: "Beat 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
+ * score: "Beat a score of 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
  * context, and the title re-renders often.
  */
 function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
@@ -456,7 +456,7 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
     v =
       typeof c.distance === 'number' && c.distance > 0
         ? h('span', 'gs-challenge-v', h('span', 'gs-num', metres(c.distance)), ' on ', place)
-        : h('span', 'gs-challenge-v', 'Beat ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
+        : h('span', 'gs-challenge-v', 'Beat a score of ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
   }
   return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
 }

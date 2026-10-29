@@ -538,6 +538,8 @@ export class Hud {
   private readonly avDodge: Flag;
   private lastBand = -1;
   private readonly live: HTMLElement;
+  /** Lines said in this task, written to the live region together (say). */
+  private readonly sayQ: string[] = [];
 
   private lastMood = -1;
   private lastGifts = -1;
@@ -1045,7 +1047,14 @@ export class Hud {
    * words twice in a row (a second "Avalanche close behind") get a trailing no-break space.
    */
   say(text: string): void {
-    this.live.textContent = this.live.textContent === text ? text + NBSP : text;
+    // One frame's beats can say several things in one task ("Passed Mika", then "Into the lead"), and a
+    // live region reads only its last text, so a task's lines are written once, together.
+    if (this.sayQ.push(text) > 1) return;
+    queueMicrotask(() => {
+      const t = this.sayQ.join('. ');
+      this.sayQ.length = 0;
+      this.live.textContent = this.live.textContent === t ? t + NBSP : t;
+    });
   }
 
   /**

@@ -125,13 +125,22 @@ export class BeatRouter {
         case 'grudgeSettled':
           this.notices.grudgeSettled(b.ghost.name, b.nemesis, b.after, b.paid, b.say?.label);
           break;
-        case 'newBest':
-          this.say(b.say ?? { label: 'New best', points: 0, tone: 'best' });
+        case 'newBest': {
+          // The run's goal markers are spoken too: the callout layer is hidden from screen readers.
+          const s = b.say ?? { label: 'New best', points: 0, tone: 'best' };
+          this.say(s);
+          this.hud.say(s.label);
           this.hud.flashBest();
           break;
-        case 'friendBeaten':
-          this.say(b.say ?? { label: `Beat ${b.name}'s ${fmt(b.distance)} m`, points: 0, tone: 'big' });
+        }
+        case 'friendBeaten': {
+          const s = b.say ?? { label: `Beat ${b.name}’s ${fmt(b.distance)} m`, points: 0, tone: 'big' };
+          // The friend's handle keeps its own case on the line, possessive and all ("BEAT Mila’s 640 M").
+          const poss = `${b.name}’s`;
+          this.fx.pop(s.label, s.points, s.tone, s.label.includes(poss) ? poss : b.name);
+          this.hud.say(s.label);
           break;
+        }
         case 'finale':
           this.finale(b);
           break;

@@ -255,8 +255,8 @@ export class Fx {
   }
 
   /** A style callout. The multiplier is not repeated per line: the combo meter carries it. */
-  pop(label: string, points: number, tone: StyleTone): void {
-    this.line(label, points, tone);
+  pop(label: string, points: number, tone: StyleTone, who?: string): void {
+    this.line(label, points, tone, { who });
   }
 
   /**
@@ -369,9 +369,11 @@ export class Fx {
     }
 
     const inner = h('div', `gs-call is-${tone}`);
-    // A race word shrinks to fit a phone's width when it is long (style.css, --len its letter count).
-    if (race !== undefined) {
-      inner.classList.add('is-race');
+    // A race word, or any long line ("Beat SparkleCedar's 1,240 m"), shrinks to fit a phone's width
+    // (style.css .is-fit, --len its letter count).
+    if (race !== undefined) inner.classList.add('is-race');
+    if (fits(text, race)) {
+      inner.classList.add('is-fit');
       inner.style.setProperty('--len', String(text.length));
     }
     const countEl = h('span', 'gs-call-count');
@@ -421,6 +423,7 @@ export class Fx {
     c.arrived = arrived;
     c.stepped = false;
     setLabel(c.tEl, text, who);
+    c.inner.classList.toggle('is-fit', fits(text, c.race));
     c.inner.style.setProperty('--len', String(text.length));
     if (tone !== c.tone) {
       c.inner.classList.replace(`is-${c.tone}`, `is-${tone}`);
@@ -1127,7 +1130,19 @@ function setLabel(el: HTMLElement, text: string, who?: string): void {
     el.textContent = text;
     return;
   }
-  el.replaceChildren(text.slice(0, i), h('span', 'gs-call-who', who), text.slice(i + who.length));
+  // A handle is never machine-translated (as in the rival pill and the pass banner).
+  const whoEl = h('span', 'gs-call-who', who);
+  whoEl.translate = false;
+  el.replaceChildren(text.slice(0, i), whoEl, text.slice(i + who.length));
+}
+
+/** Letters past which any callout line shrinks to fit a phone's width. Shorter lines keep their tone's
+ *  size ("BEST COMBO LOST" stays at the loss size). */
+const FIT_LEN = 18;
+
+/** Whether a line gets the phone-width fit: every race word, and any long line. */
+function fits(text: string, race: string | undefined): boolean {
+  return race !== undefined || text.length > FIT_LEN;
 }
 
 /**

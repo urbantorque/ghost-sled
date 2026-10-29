@@ -569,7 +569,9 @@ export class Results {
       const cue = moreCue(body.scrollHeight - body.clientHeight - body.scrollTop, view, blocks, parts.head?.getBoundingClientRect() ?? null, more.offsetWidth);
       scroll.classList.toggle('has-cue', cue !== null);
       if (!cue) return;
-      moreT.textContent = cue.label === 'missions' ? 'Missions' : 'More';
+      // Written only when it changes, so an ordinary scroll frame reads a clean layout below.
+      const label = cue.label === 'missions' ? 'Missions' : 'More';
+      if (moreT.textContent !== label) moreT.textContent = label;
       const half = more.offsetWidth / 2 + 8;
       more.style.left = `${Math.round(Math.max(half, Math.min(s.width - half, cue.x - s.left)))}px`;
     };
@@ -893,7 +895,12 @@ function nextUnlockCard(m: ResultsModel): HTMLElement | null {
   bar.style.setProperty('--p0', p0.toFixed(3));
   const txt = h('span', 'gs-ul-txt gs-nu-txt', h('span', 'gs-nu-row', n, what), bar);
   txt.setAttribute('aria-hidden', 'true');
-  const card = h('div', `gs-ul gs-nu is-${u.kind}`, art, txt, sr(said));
+  // The spoken copy keeps the name out of machine translation, like the visible one.
+  const i = said.indexOf(name);
+  const srName = h('span', '', name);
+  srName.setAttribute('translate', 'no');
+  const spoken = i < 0 ? sr(said) : h('span', 'gs-sr', said.slice(0, i), srName, said.slice(i + name.length));
+  const card = h('div', `gs-ul gs-nu is-${u.kind}`, art, txt, spoken);
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', 'Next unlock');
   return h('div', 'gs-res-unlock', card);
@@ -990,7 +997,7 @@ function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement
   // ellipsizes before the badge does.
   const name =
     g.kind === 'friend'
-      ? h('span', 'gs-st-name has-vs', h('span', 'gs-st-nm', g.name), h('span', 'gs-st-vs', 'vs'), sr(', challenge'))
+      ? h('span', 'gs-st-name has-vs', h('span', 'gs-st-nm', g.name), hidden(h('span', 'gs-st-vs', 'vs')), sr(', challenge'))
       : h('span', 'gs-st-name', g.kind === 'you' ? 'Your best' : g.name);
   if (g.kind !== 'you') name.setAttribute('translate', 'no');
   const beat = beatOrder >= 0;
@@ -1032,4 +1039,10 @@ function causeIcon(m: ResultsModel): IconName {
   if (c.includes('yeti')) return 'yeti';
   if (c.includes('avalanche')) return 'avalanche';
   return 'impact';
+}
+
+/** Hides a visible mark from screen readers when spoken text beside it already says what it means. */
+function hidden<T extends HTMLElement>(e: T): T {
+  e.setAttribute('aria-hidden', 'true');
+  return e;
 }
