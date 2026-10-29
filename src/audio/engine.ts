@@ -35,8 +35,16 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *
  * - Buses: "level" is the user's volume (squared slider curve), "duck" dips music under crashes,
  *   stingers and big rewards. Both buses feed one shared reverb.
- * - Buffers (white/pink/brown stereo noise, grain train, sleigh bell, impulse) are generated once
- *   per context in buffers.ts. Events never allocate large buffers.
+ * - Buffers (white/pink/brown stereo noise, grain train, sleigh bell, impulse, and the white noise
+ *   high-passed once for the hats, the kick's click and the effects' click) are generated once per
+ *   context in buffers.ts. Events never allocate large buffers.
+ * - Main-thread cost is mostly node creation (at a 6x CPU throttle a node costs about 0.3 ms), so
+ *   sounds make few: voices share one reverb send per send level, a voice holding one part shapes
+ *   its envelope on its own out, a finished voice is unplugged at its tail only, and each choir
+ *   voice keeps one vowel chain per deck. A node made inside a frame (an effect from beats() or
+ *   simEvent()) lengthens that frame, and on the Low tier frames sit near the two-vsync line, so
+ *   voices take their nodes from a reserve the scheduler pass tops up between frames (voices.ts
+ *   NodeReserve).
  * - Ambience (ambience.ts) is a fixed graph built once; update() only retargets parameters with
  *   setTargetAtTime, and only when they moved enough to matter. A branch whose gain has sat at
  *   zero for 2 s (or 8 fade time constants, if longer) is unplugged from its noise source so it
@@ -500,6 +508,8 @@ export class AudioEngine {
     out.duck = c.graph.music.ducked;
     out.sfxVoices = c.sfxPool.active;
     out.musicVoices = c.musicPool.active;
+    // Nodes a voice had to make itself because the reserve was dry (inside a frame, for an effect).
+    out.reserveMisses = c.reserve.misses;
     out.sfxPeak = c.sfxPool.peak;
     out.musicPeak = c.musicPool.peak;
     out.sfxSteals = c.sfxPool.steals;

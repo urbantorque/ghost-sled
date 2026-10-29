@@ -66,7 +66,7 @@ function stubCtx(): BaseAudioContext & { currentTime: number } {
 }
 
 const buf = { duration: 1 } as AudioBuffer;
-const bank = { white: buf, pink: buf, brown: buf, grain: buf, jingle: buf, impulse: buf, warmSaw: {} } as unknown as Bank;
+const bank = { white: buf, pink: buf, brown: buf, hatNoise: buf, kickNoise: buf, clickNoise: buf, grain: buf, jingle: buf, impulse: buf, warmSaw: {} } as unknown as Bank;
 const node = new Node() as unknown as AudioNode;
 
 /** A voice in `pool` from t0 whose sound lasts `len` s (one oscillator). */
