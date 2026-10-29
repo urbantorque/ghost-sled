@@ -114,7 +114,7 @@ export class BeatRouter {
           this.hud.call(b.word, b.ghost.name, b.ghost.kind, b.sr);
           break;
         case 'grudgeSettled':
-          this.notices.grudgeSettled(b.ghost.name, b.nemesis, b.after, b.paid);
+          this.notices.grudgeSettled(b.ghost.name, b.nemesis, b.after, b.paid, b.say?.label);
           break;
         case 'newBest':
           this.say(b.say ?? { label: 'New best', points: 0, tone: 'best' });

@@ -70,7 +70,7 @@ export const EVENT_ICON: Record<ChaosEvent, IconName> = {
 };
 
 type Spec =
-  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; biome?: MountainCard['biome']; nemesis?: boolean; said?: string }
+  | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; why?: string; biome?: MountainCard['biome']; nemesis?: boolean; said?: string }
   | { type: 'warn'; text: string; event: ChaosEvent }
   | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent };
 
@@ -162,13 +162,14 @@ export class Notices {
    * The grudge settled (the director's grudgeSettled beat, which names its ghost): the rose banner,
    * "GRUDGE SETTLED" over the name with the paid gifts beside it. A nemesis is "NEMESIS DOWN" over
    * "Beat Mila after 3 runs", the gifts beside it ("Beat Mila after 3 runs · +20 gifts" read as one
-   * line), with a longer hold.
+   * line), with a longer hold. `why` names the moment that settled it when the director merged one
+   * in (the beat's say, "Wiped out behind you"): a quiet line under the name.
    */
-  grudgeSettled(name: string, nemesis: boolean, after: number, paid: number): void {
-    const c = grudgeCopy(name, nemesis, after, paid);
+  grudgeSettled(name: string, nemesis: boolean, after: number, paid: number, why?: string): void {
+    const c = grudgeCopy(name, nemesis, after, paid, why);
     const text = c.text;
     this.push({
-      spec: { type: 'toast', text, tone: 'grudge', sub: c.sub, name, note: c.note, nemesis, said: c.said },
+      spec: { type: 'toast', text, tone: 'grudge', sub: c.sub, name, note: c.note, why: c.why, nemesis, said: c.said },
       pri: P_CELEBRATE,
       key: `t:grudge:${text}`,
       ms: nemesis ? NEMESIS_MS : GRUDGE_MS,
@@ -372,13 +373,14 @@ export class Notices {
  * beside it, read as "Nemesis down. Beat Mila after 3 runs · +20 gifts". Otherwise "Grudge settled"
  * over the name ("after 2 runs" under it once it took more than one). Names only, never a pronoun.
  */
-export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: number): { text: string; note?: string; sub?: string; said: string } {
+export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: number, why?: string): { text: string; note?: string; why?: string; sub?: string; said: string } {
   const text = nemesis ? 'Nemesis down' : 'Grudge settled';
   const runs = Math.max(1, Math.round(after));
   const note = nemesis ? `after ${fmt(runs)} ${runs === 1 ? 'run' : 'runs'}` : runs >= 2 ? `after ${fmt(runs)} runs` : undefined;
   const sub = paid > 0 ? `+${fmt(paid)} gifts` : undefined;
-  const line = `${nemesis ? 'Beat ' : ''}${name}${note ? ` ${note}` : ''}`;
-  return { text, note, sub, said: `${text}. ${line}${sub ? ` · ${sub}` : ''}` };
+  const w = why?.trim() || undefined;
+  const line = `${nemesis ? 'Beat ' : ''}${name}${note ? ` ${note}` : ''}${w ? `. ${w}` : ''}`;
+  return { text, note, why: w, sub, said: `${text}. ${line}${sub ? ` · ${sub}` : ''}` };
 }
 
 function render(s: Spec): HTMLElement {
@@ -405,7 +407,11 @@ function render(s: Spec): HTMLElement {
     name.translate = false;
     const kicker = h('span', 'gs-pass-k', s.text);
     const line = s.nemesis ? h('span', 'gs-pass-line', h('span', 'gs-pass-pre', 'Beat'), name, s.note ? h('span', 'gs-pass-note', s.note) : null) : null;
-    const txt = line ? h('span', 'gs-pass-txt', kicker, line) : h('span', 'gs-pass-txt', kicker, name, s.note ? h('span', 'gs-pass-note', s.note) : null);
+    // The moment that settled it ("Wiped out behind you") shares the quiet line under the name with a
+    // plain grudge's run count, so the banner never grows a fourth row.
+    const quiet = line ? s.why : [s.why, s.note].filter(Boolean).join(' · ');
+    const under = quiet ? h('span', 'gs-pass-note', quiet) : null;
+    const txt = line ? h('span', 'gs-pass-txt', kicker, line, under) : h('span', 'gs-pass-txt', kicker, name, under);
     const pay = s.sub ? reward(s.sub) : null;
     // Screen readers hear it as one line ("Nemesis down. Beat Mila after 3 runs · +20 gifts"); the
     // hairline before the reward is its visible separator.

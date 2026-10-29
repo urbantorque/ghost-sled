@@ -122,7 +122,15 @@ describe('BeatRouter', () => {
       ['hud.flashPass', 'Mila', 'grudge', true, 'Double pass', 'double'],
       ['hud.flashPass', 'Tess', 'pool', false],
     ]);
-    expect(of('notices.grudgeSettled')).toEqual([['notices.grudgeSettled', 'Mila', true, 3, 20]]);
+    expect(of('notices.grudgeSettled')).toStrictEqual([['notices.grudgeSettled', 'Mila', true, 3, 20, undefined]]);
+  });
+
+  it("puts a merged grudge wipeout on the settle banner's sub-line, not in the callout slot", () => {
+    const { router, of } = rig();
+    router.handle([{ type: 'grudgeSettled', tick: 2, ghost: mila, nemesis: false, after: 1, paid: 10, say: { label: 'Wiped out behind you', points: 0, tone: 'normal' } }]);
+    expect(of('notices.grudgeSettled')).toStrictEqual([['notices.grudgeSettled', 'Mila', false, 1, 10, 'Wiped out behind you']]);
+    expect(of('fx.pop')).toEqual([]);
+    expect(of('hud.say')).toEqual([]);
   });
 
   it('says a lost duel once, never by your own name', () => {
@@ -211,6 +219,12 @@ describe('grudgeCopy', () => {
   it('settles a plain grudge with the name and its reward, a run count only past one run', () => {
     expect(grudgeCopy('Tess', false, 1, 10)).toEqual({ text: 'Grudge settled', note: undefined, sub: '+10 gifts', said: 'Grudge settled. Tess · +10 gifts' });
     expect(grudgeCopy('Tess', false, 2, 20).said).toBe('Grudge settled. Tess after 2 runs · +20 gifts');
+  });
+
+  it('reads the moment that settled it after the name, and keeps it off the copy when absent', () => {
+    expect(grudgeCopy('Tess', false, 1, 10, 'Wiped out behind you')).toEqual({ text: 'Grudge settled', note: undefined, why: 'Wiped out behind you', sub: '+10 gifts', said: 'Grudge settled. Tess. Wiped out behind you · +10 gifts' });
+    expect(grudgeCopy('Mila', true, 3, 15, 'Wiped out behind you').said).toBe('Nemesis down. Beat Mila after 3 runs. Wiped out behind you · +15 gifts');
+    expect(grudgeCopy('Tess', false, 2, 10, '  ').why).toBeUndefined();
   });
 
   it('never prints an em or en dash, and formats big numbers', () => {
