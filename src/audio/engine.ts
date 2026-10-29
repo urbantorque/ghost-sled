@@ -89,7 +89,10 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
  *   -5 dBFS after the limiter.
  * - Muting: any reason muted silences output; after 1 s fully muted the context is suspended to
- *   save CPU and resumed on unmute. All calls are no-ops before unlock() or without WebAudio.
+ *   save CPU and resumed on unmute. A UI sound asked for while it resumes (50 to 90 ms on a desktop,
+ *   about 200 on a phone: the doubled gifts' coin as the rewarded ad closes), and the Revive ad's
+ *   revive, play the moment it runs, once, at full level, or not at all past 1 s; nothing the mute
+ *   cut plays after it. All calls are no-ops before unlock() or without WebAudio.
  */
 
 export interface AudioFrame {
@@ -142,6 +145,19 @@ type MuteReason = 'sdk' | 'ad' | 'hidden' | 'user';
 const TICK_MS = 25;
 const LOOKAHEAD = 0.12;
 const SUSPEND_AFTER_MS = 1000;
+/** After a resume is asked for, sounds are kept for this long instead of dropped: after unlock() (a
+ *  gesture) they are scheduled into the starting context; after an unmute of a parked context the UI
+ *  sounds wait for it to run (resumeQueue). */
+const RESUME_GRACE_MS = 600;
+/** The mute gain's time constant (s) when an unmute finds the context parked (12 ms otherwise). */
+const UNMUTE_PARKED_TAU = 0.004;
+/** A UI sound asked for while an unmuted context resumes plays when it runs, unless that is more than
+ *  this late (ms): then it no longer belongs to the picture that asked for it. A desktop resumes in 50
+ *  to 90 ms; a heavily loaded headless phone took 0.2 to 1.4 s, and a doubled reward's coin a second
+ *  late still lands on its static x2 (silence was the bug). Overdue timeline sounds of one name all
+ *  land at once and the one-sound guard plays them as one. At most RESUME_QUEUE_MAX wait. */
+const RESUME_LATE_MS = 1000;
+const RESUME_QUEUE_MAX = 16;
 /** A tiny lead so attacks are never scheduled in the past. */
 const START_LEAD = 0.006;
 /** The count-in: the drive is held to this while a chaos reveal is up (matches intensity.ts). */
@@ -184,6 +200,12 @@ export class AudioEngine {
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   /** Until this clock time a just-requested resume still accepts sounds (they play on resume). */
   private resumeUntil = 0;
+  /** Until this clock time an unmute's resume of a parked context is under way: UI sounds asked for
+   *  meanwhile wait in resumeQueue and play as it runs again (if that is soon enough). */
+  private unmuteUntil = 0;
+  private readonly resumeQueue: Array<{ name: UiSound; detail: number | undefined; delay: number; at: number }> = [];
+  /** When the Revive ad's revive event came in while the context resumed (-1: none waiting). */
+  private reviveWaiting = -1;
   /** The smoothed drive, the frame's target, and the accent on top (probes read all three). */
   private intensity = 0;
   private target = 0;
@@ -221,7 +243,7 @@ export class AudioEngine {
       // start it.
       let resumed = false;
       if (ctx.state !== 'running' && (this.mutes.size === 0 || !this.started)) {
-        this.resumeUntil = clockMs() + 600;
+        this.resumeUntil = clockMs() + RESUME_GRACE_MS;
         quiet(ctx.resume());
         resumed = true;
         if (this.mutes.size > 0) this.armSuspend();
@@ -345,7 +367,14 @@ export class AudioEngine {
     } else if (e.type === 'revive' || e.type === 'crash') this.avalanche = false;
     const ctx = this.ctx;
     const c = this.core;
-    if (!ctx || !c || !this.live(ctx)) return;
+    if (!ctx || !c) return;
+    if (e.type === 'revive' && this.resuming(ctx)) {
+      // The Revive ad's payoff comes in the first frame after the ad, while the context it parked is
+      // still resuming: it plays the moment it runs (like the doubled gifts' coin).
+      this.reviveWaiting = clockMs();
+      return;
+    }
+    if (!this.live(ctx)) return;
     try {
       const now = ctx.currentTime;
       // Sounds and the music ducks under them (sfx.ts).
@@ -364,7 +393,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     const c = this.core;
     try {
-      c?.sfx.frame();
+      c?.sfx.frame(list);
       const now = ctx ? ctx.currentTime : 0;
       for (const b of list) this.accentFor(b, now);
       if (list.length > 0) this.choirs.beats(list, now);
@@ -378,7 +407,8 @@ export class AudioEngine {
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
         if (b.type === 'unlockPop') c.graph.music.duck(0.6, now, 0.9, 0.5);
-        // A bump snuffed the flow: the singing wind bends down a fourth and opens back to noise.
+        // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
+        // fourth and opens back to noise.
         else if (b.type === 'flow' && b.phase === 'snuff') c.ambience.snuff(now);
       }
     } catch (err) {
@@ -391,7 +421,13 @@ export class AudioEngine {
   ui(name: UiSound, detail?: number, delay = 0): void {
     const ctx = this.ctx;
     const c = this.core;
-    if (!ctx || !c || !this.live(ctx)) return;
+    if (!ctx || !c) return;
+    if (this.resuming(ctx)) {
+      // The context the mute parked is resuming: the sound plays as it runs again.
+      if (this.resumeQueue.length < RESUME_QUEUE_MAX) this.resumeQueue.push({ name, detail, delay, at: clockMs() });
+      return;
+    }
+    if (!this.live(ctx)) return;
     try {
       const now = ctx.currentTime;
       const d = Number.isFinite(delay) ? Math.max(0, delay) : 0;
@@ -405,6 +441,7 @@ export class AudioEngine {
   /** Drops UI sounds scheduled ahead (results and reveal sync), including any already built that
    *  have not started: Run Again or a new reveal mid-sequence leaves no strays. */
   cancelPending(): void {
+    this.resumeQueue.length = 0;
     try {
       const c = this.core;
       if (!c) return;
@@ -433,7 +470,10 @@ export class AudioEngine {
    * the opening moment with a single tick. A sound the app also asks for at the same moment
    * (ui('coin', 0, sameDelay)) plays once. When the app plays each coin as its reward lands
    * (UIHandlers.onRewardLanded: ui('coin', row) at the landing) it passes coins: [] here, and a
-   * second ask at that landing (the doubled reward's coin) is the same sound, played once.
+   * second ask at that landing (the doubled reward's coin) is the same sound, played once. The same
+   * for the Done chimes: played from UIHandlers.onMissionStamp (ui('mission', k) as each stamp starts:
+   * it sounds on the next audio block), with missions: [] here. A coin or a chime asked for again
+   * within UI_SAME_CHIME_S (60 ms: a frame or two) is one sound.
    */
   cueResults(r: ResultsShow, t: ResultsCue, reduced: boolean): void {
     for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);
@@ -579,6 +619,9 @@ export class AudioEngine {
     core.graph.mute.gain.value = this.mutes.size > 0 ? 0 : 1;
     core.music.setTarget(this.scene, this.mood, this.biome);
     core.ambience.setScene(this.scene, ctx.currentTime);
+    // The moment a parked context runs again, the UI sounds asked for while it resumed play (the
+    // scheduler tick does the same, for a browser without the event).
+    if (typeof ctx.addEventListener === 'function') ctx.addEventListener('statechange', () => this.flushResumed());
     this.timer = setInterval(() => this.tick(), TICK_MS);
     if (this.mutes.size > 0) this.applyMute();
     return true;
@@ -589,11 +632,45 @@ export class AudioEngine {
     const c = this.core;
     if (!ctx || !c || ctx.state !== 'running') return;
     this.started = true;
+    this.flushResumed();
     try {
       c.tick(ctx.currentTime, LOOKAHEAD);
     } catch (err) {
       this.warn(err);
     }
+  }
+
+  /** The context runs again after an unmute: the UI sounds asked for while it resumed play now, each
+   *  as late as it waited (a timeline sound keeps its time); one asked for more than RESUME_LATE_MS
+   *  ago is dropped, a coin that late no longer belongs to its picture. */
+  private flushResumed(): void {
+    const ctx = this.ctx;
+    const c = this.core;
+    if (!ctx || !c || ctx.state !== 'running') return;
+    const now = clockMs();
+    if (this.reviveWaiting >= 0) {
+      const waited = now - this.reviveWaiting;
+      this.reviveWaiting = -1;
+      if (waited <= RESUME_LATE_MS && this.mutes.size === 0) {
+        try {
+          c.sfx.event({ type: 'revive' }, ctx.currentTime + START_LEAD);
+        } catch (err) {
+          this.warn(err);
+        }
+      }
+    }
+    if (this.resumeQueue.length === 0) return;
+    const asks = this.resumeQueue.splice(0);
+    for (const a of asks) {
+      const waited = now - a.at;
+      if (waited - a.delay * 1000 > RESUME_LATE_MS) continue;
+      this.ui(a.name, a.detail, Math.max(0, a.delay - waited / 1000));
+    }
+  }
+
+  /** An unmute's resume of the context it parked is under way (and nothing mutes it again). */
+  private resuming(ctx: AudioContext): boolean {
+    return this.mutes.size === 0 && ctx.state !== 'running' && clockMs() < this.unmuteUntil;
   }
 
   /** iOS only routes WebAudio to the speaker after a buffer starts inside a gesture. */
@@ -630,13 +707,29 @@ export class AudioEngine {
     const c = this.core;
     if (!ctx || !c) return;
     const muted = this.mutes.size > 0;
+    const parked = ctx.state !== 'running';
     try {
-      c.graph.setMuted(muted, ctx.currentTime);
+      // A parked context opens in about 10 ms instead of 30 (it rendered nothing meanwhile, so there
+      // is nothing to click against): a coin asked for as it resumes starts 6 ms in and keeps its ting.
+      c.graph.setMuted(muted, ctx.currentTime, !muted && parked ? UNMUTE_PARKED_TAU : undefined);
       if (muted) {
         c.sfx.clearPending();
+        this.resumeUntil = 0;
+        this.unmuteUntil = 0;
+        this.resumeQueue.length = 0;
+        this.reviveWaiting = -1;
         this.armSuspend();
       } else {
         this.clearSuspend();
+        // A context the mute parked takes a moment to run again (50 to 90 ms on a desktop, 200 on a
+        // phone, more under load), and the UI sounds asked for meanwhile are the point of the unmute:
+        // the doubled gifts' coin as the rewarded ad closes. They wait (resumeQueue) and play the
+        // moment it runs, or not at all if that comes more than RESUME_LATE_MS after the ask; built
+        // into the parked context instead, every one would fire at once however late it resumed. Only
+        // on a context that has run: one that never started waits for a gesture (unlock()), so
+        // nothing piles up for a later tap. (Run sounds stay dropped until it runs: frames keep
+        // coming, and a parked clock would stack them all on its first block.)
+        if (parked && this.started) this.unmuteUntil = clockMs() + RESUME_GRACE_MS;
         // Unconditional: a suspend() requested a moment ago can still report 'running' until it
         // settles, and resume() queued after it wins. On a running context it is a no-op.
         quiet(ctx.resume());

@@ -32,13 +32,22 @@
 //             passedBy): the voice is held for the retake and leaves with the sigh
 //   (results also checks the coin played from UIHandlers.onRewardLanded with coins: [], asked for
 //    twice at the landing by the doubled reward: one coin, none on the cue timeline)
+//   adCoin    Double Gifts: the results timeline starts, a rewarded ad mutes 300 ms in for 2.2 s (the
+//             context is parked after 1 s), and on the unmute the card lands both rewards and asks
+//             for the doubled reward's coin 17 ms later, all while the context is still resuming. One
+//             coin plays as it starts, at a lone coin's level, and nothing of the timeline the ad cut
+//             plays after it
+//   stamps    the results card with missions: [] (the app plays each Done chime from
+//             UIHandlers.onMissionStamp at the stamp): each chime asked for at its stamp sounds on
+//             the next audio block, two stamps asked for a frame apart are one chime, and the cue
+//             timeline has none
 // Every scenario asserts the AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/audio-capture.js
 // Set window.__capCfg = { base, scenarios } on the current page first.
 async (page) => {
   const cfg = { scenarios: null, ...((await page.evaluate(() => window.__capCfg).catch(() => null)) || {}) };
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
-  const ALL = ['cruise', 'drop', 'massive', 'lost', 'escape', 'whisker', 'stomp', 'chimes', 'shoulder', 'results', 'reveal', 'cancel', 'roll', 'choir'];
+  const ALL = ['cruise', 'drop', 'massive', 'lost', 'escape', 'whisker', 'stomp', 'chimes', 'shoulder', 'results', 'reveal', 'cancel', 'roll', 'choir', 'adCoin', 'stamps'];
   // Mirror of stake.ts's shared cash-in timing (the HUD's roll).
   const BANK = { CHIP_MS: 120, ROLL_MS: [0, 350, 600, 900], TICKS: [0, 6, 10, 14] };
   const list = cfg.scenarios || ALL;
@@ -605,6 +614,168 @@ async (page) => {
           out[label] = { expectedMs: expect[label].map((w) => Math.round(w * 1000)), errMs: errs, found: hit.length + '/' + errs.length, within30: hit.length > 0 && hit.every((e) => Math.abs(e) <= 30), allFound: hit.length === errs.length };
         }
         results.results = out;
+      } else if (sc === 'adCoin') {
+        const ins = await open('');
+        const R = RESULTS;
+        const lg = await page.evaluate(async (R) => {
+          const a = window.__gs.audio;
+          const c = a.core.ctx;
+          a.setVolumes({ master: 1, music: 0, sfx: 1 });
+          const states = [];
+          c.addEventListener('statechange', () => states.push({ state: c.state, at: performance.now(), ct: c.currentTime }));
+          await window.__sleep(800);
+          // A lone coin first: the level and the onset pattern one coin makes.
+          window.__cap.mark('coin');
+          a.ui('coin');
+          await window.__sleep(1200);
+          // The card opens and its timeline starts; Double Gifts is pressed 300 ms in.
+          window.__cap.mark('open');
+          a.cueResults({ count: true, newBest: true, beats: 2, missions: [0, 1], coins: [] }, R, false);
+          await window.__sleep(300);
+          a.setMuted('ad', true);
+          await window.__sleep(2200);
+          const parked = c.state;
+          // The ad closes: the unmute, then (as app.doubleGifts does) the re-render lands both rewards
+          // (onRewardLanded rows 0 and 1) and the doubled reward's coin follows 17 ms later.
+          window.__cap.mark('unmute');
+          const unmuteAt = performance.now();
+          const unmuteCt = c.currentTime;
+          a.setMuted('ad', false);
+          a.ui('coin', 0);
+          a.ui('coin', 1);
+          const asks = [{ at: performance.now() - unmuteAt, state: c.state }];
+          await window.__sleep(17);
+          a.ui('coin');
+          asks.push({ at: performance.now() - unmuteAt, state: c.state });
+          await window.__sleep(2500);
+          // Context time to performance time after the resume (the coin's onset maps through it).
+          const ts = c.getOutputTimestamp ? c.getOutputTimestamp() : null;
+          // The band and the bed coming back from a parked context with nothing asked for: the mute
+          // gain's opening must not click (its first blocks stay under the steady mix's peaks).
+          a.setVolumes({ master: 1, music: 1, sfx: 1 });
+          await window.__sleep(2500);
+          window.__cap.mark('bandBefore');
+          await window.__sleep(1000);
+          a.setMuted('ad', true);
+          await window.__sleep(2200);
+          window.__cap.mark('bandUnmute');
+          a.setMuted('ad', false);
+          await window.__sleep(1200);
+          return { parked, unmuteAt, unmuteCt, asks, states: states.map((s) => ({ state: s.state, ms: +(s.at - unmuteAt).toFixed(1), ct: s.ct })), ts: ts ? { ct: ts.contextTime, perf: ts.performanceTime } : null, outLat: c.outputLatency || 0, base: c.baseLatency || 0 };
+        }, R);
+        const s = await collect();
+        const tc = mark(s, 'coin') + 0.006;
+        const tu = mark(s, 'unmute');
+        const lone = onsets(s, tc - 0.03, tc + 0.6, 6, -62);
+        const after = onsets(s, tu - 0.01, tu + 2.4, 6, -62);
+        const firstOn = after.length ? after[0] : null;
+        // The onset's wall-clock time after the unmute, through the output timestamp (perf = ts.perf +
+        // (ct - ts.ct) * 1000, then minus the output latency to read when it was rendered).
+        const onPerf = firstOn !== null && lg.ts ? lg.ts.perf + (firstOn - lg.ts.ct) * 1000 : null;
+        // The first bell's attack (its first 30 ms) and the whole coin, against the lone coin's.
+        const loneAttack = lone.length ? peakIn(s, lone[0], lone[0] + 0.03) : null;
+        const adAttack = firstOn !== null ? peakIn(s, firstOn, firstOn + 0.03) : null;
+        const lonePeak = peakIn(s, tc - 0.01, tc + 0.45);
+        const adPeak = firstOn !== null ? peakIn(s, firstOn - 0.01, firstOn + 0.45) : null;
+        const running = lg.states.find((x) => x.state === 'running' && x.ms >= -1);
+        results.adCoin = {
+          running: ins.running,
+          parked: lg.parked,
+          asks: lg.asks,
+          resumedMs: running ? running.ms : null,
+          loneOnsetsMs: lone.map((x) => Math.round((x - tc) * 1000)),
+          // Onsets on context time from the unmute (the clock was frozen while parked, so the coin's
+          // scheduled time is unmute + 6 ms on it).
+          onsetsAfterUnmuteMs: after.map((x) => Math.round((x - tu) * 1000)),
+          coinWallMsAfterUnmute: onPerf !== null ? Math.round(onPerf - lg.unmuteAt - lg.outLat * 1000) : null,
+          coinWallMsAfterResume: onPerf !== null && running ? Math.round(onPerf - lg.unmuteAt - lg.outLat * 1000 - running.ms) : null,
+          loneAttackDb: loneAttack,
+          adAttackDb: adAttack,
+          lonePeakDb: lonePeak,
+          adPeakDb: adPeak,
+          // One coin, at a lone coin's level, and nothing else after it (the cut timeline stays cut).
+          oneCoin: after.length >= 1 && after.length <= lone.length && after.every((x) => x - tu < 0.2) && adPeak !== null && Math.abs(adPeak - lonePeak) < 1.5,
+          strays: after.filter((x) => x - tu >= 0.2).map((x) => ({ ms: Math.round((x - tu) * 1000), peakDb: peakIn(s, x, x + 0.1), env20: env20(s, x - 0.06, x + 0.1) })),
+          env20FromUnmute: env20(s, tu - 0.02, tu + 0.3),
+          env20Lone: env20(s, tc - 0.026, tc + 0.294),
+        };
+        {
+          // The band's return: block peaks over the first 30 ms against the second before the mute.
+          const tb = mark(s, 'bandBefore');
+          const tbu = mark(s, 'bandUnmute');
+          const steady = peakIn(s, tb, tb + 1);
+          const first = peakIn(s, tbu, tbu + 0.03);
+          const firstBlocks = [];
+          for (let i = 0; i < s.t.length; i++) if (s.t[i] > tbu && s.t[i] <= tbu + 0.03) firstBlocks.push(s.pk[i]);
+          results.adCoin.bandReturn = { steadyPeakDb: steady, first30msPeakDb: first, firstBlocksDb: firstBlocks.join(' '), noClick: first <= steady + 1, env20: env20(s, tbu - 0.02, tbu + 0.2) };
+        }
+      } else if (sc === 'stamps') {
+        const ins = await open('');
+        const R = RESULTS;
+        const lg = await page.evaluate(async (R) => {
+          const a = window.__gs.audio;
+          const c = a.core.ctx;
+          a.setVolumes({ master: 1, music: 0, sfx: 1 });
+          await window.__sleep(800);
+          // A lone chime: the reference.
+          window.__cap.mark('lone');
+          a.ui('mission', 0);
+          await window.__sleep(1200);
+          // The card with missions: [] (no stamp, no count: nothing masks the chimes): the app plays a
+          // chime as each Done stamp starts (DONE_MS + DONE_STEP * row; rows 0 and 7, so the first
+          // chime's 0.7 s tail has gone before the second's attack is read).
+          window.__cap.mark('open');
+          a.cueResults({ count: false, newBest: false, beats: 0, missions: [], coins: [] }, { ...R, PLACE_MS: 60000 }, false);
+          const asks = [];
+          await new Promise((res) => {
+            let left = 2;
+            for (const row of [0, 7]) {
+              setTimeout(() => {
+                asks.push({ row, ct: c.currentTime });
+                a.ui('mission', row);
+                if (--left === 0) res();
+              }, R.DONE_MS + R.DONE_STEP * row);
+            }
+          });
+          await window.__sleep(1200);
+          // Two stamps a frame apart (a reduced-motion card landing every stamp at once, a hitch, or a
+          // cue and a stamp both asking): one chime.
+          window.__cap.mark('pair');
+          a.ui('mission', 0);
+          const p0 = performance.now();
+          await new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)));
+          const gapMs = Math.round(performance.now() - p0);
+          a.ui('mission', 1);
+          await window.__sleep(1200);
+          return { asks, gapMs };
+        }, R);
+        const s = await collect();
+        const tl = mark(s, 'lone') + 0.006;
+        const lone = onsets(s, tl - 0.03, tl + 0.8, 6, -62);
+        const lonePeak = peakIn(s, tl - 0.01, tl + 0.6);
+        const to = mark(s, 'open');
+        const stampErr = lg.asks.map((q) => {
+          const w = q.ct + 0.006;
+          const o = nearest(onsets(s, w - 0.03, w + 0.06, 6, -62), w);
+          return { row: q.row, askAfterOpenMs: Math.round((q.ct - to) * 1000), errMs: o === null ? null : Math.round((o - w) * 1000), env20: env20(s, w - 0.04, w + 0.1) };
+        });
+        // Nothing on the cue timeline: no onset before the first stamp's ask.
+        const early = onsets(s, to + 0.02, lg.asks[0].ct - 0.02, 6, -62);
+        const tp = mark(s, 'pair') + 0.006;
+        const pair = onsets(s, tp - 0.03, tp + 0.8, 6, -62);
+        const pairPeak = peakIn(s, tp - 0.01, tp + 0.6);
+        results.stamps = {
+          running: ins.running,
+          loneOnsetsMs: lone.map((x) => Math.round((x - tl) * 1000)),
+          stamps: stampErr,
+          onNextBlock: stampErr.every((x) => x.errMs !== null && x.errMs >= -3 && x.errMs <= 12),
+          cueTimelineOnsets: early.length,
+          pairGapMs: lg.gapMs,
+          pairOnsetsMs: pair.map((x) => Math.round((x - tp) * 1000)),
+          pairPeakDb: pairPeak,
+          lonePeakDb: lonePeak,
+          pairIsOne: pair.length <= lone.length && Math.abs(pairPeak - lonePeak) < 1.5,
+        };
       } else if (sc === 'reveal') {
         const ins = await open('');
         await page.evaluate(async (T) => {

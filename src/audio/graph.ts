@@ -133,8 +133,10 @@ export class Graph {
     this.master.gain.setTargetAtTime(MASTER_TRIM * curve(v), now, 0.05);
   }
 
-  setMuted(muted: boolean, now: number): void {
-    this.mute.gain.setTargetAtTime(muted ? 0 : 1, now, 0.012);
+  /** `tau`: the ramp's time constant. A context the mute parked opens faster (it rendered nothing
+   *  meanwhile), so a sound asked for as it resumes keeps its attack. */
+  setMuted(muted: boolean, now: number, tau = 0.012): void {
+    this.mute.gain.setTargetAtTime(muted ? 0 : 1, now, tau);
   }
 
   disconnect(): void {

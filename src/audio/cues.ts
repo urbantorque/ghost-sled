@@ -73,7 +73,8 @@ export interface RevealCue {
  * What the results card shows. missions and coins are a count (the Done stamps and reward fly-ins
  * are then taken to be rows 0..n-1) or the rows themselves: the index of each mission in
  * ResultsModel.missions, which is the stamp's CSS --i (title.ts missionList) and the fly-in's i
- * (results.ts flyRewards).
+ * (results.ts flyRewards). [] puts none on the timeline: the app plays each coin from
+ * UIHandlers.onRewardLanded and each Done chime from onMissionStamp, as the card lands or stamps it.
  */
 export interface ResultsShow {
   count: boolean;
@@ -86,8 +87,10 @@ export interface ResultsShow {
 /** The new-best arpeggio's chord lands this long after it starts (6 notes, 70 ms apart). */
 export const NEW_BEST_LEAD_MS = 420;
 
-const rows = (v: number | readonly number[]): number[] =>
-  typeof v === 'number' ? Array.from({ length: clampInt(v, 0, 64) }, (_, i) => i) : v.filter((x) => Number.isFinite(x) && x >= 0).map((x) => Math.round(x));
+/** A count or the rows; an empty list (the app plays those sounds from the card's callbacks) or a
+ *  missing one is none. */
+const rows = (v: number | readonly number[] | null | undefined): number[] =>
+  typeof v === 'number' ? Array.from({ length: clampInt(v, 0, 64) }, (_, i) => i) : Array.isArray(v) ? v.filter((x) => Number.isFinite(x) && x >= 0).map((x) => Math.round(x)) : [];
 
 /**
  * The results card's sounds on its CSS beats: ten ticks up the ladder where the score's ease-out
@@ -288,6 +291,18 @@ export function floorDrive(drive: number, target: number, floored: boolean, held
  *  helper both scheduling the same coin, say). The closest real pair, the count's first ticks, sit
  *  22 ms apart. */
 export const UI_SAME_S = 0.01;
+/**
+ * The results card's coin and Done chime are asked for by the picture (UIHandlers.onRewardLanded and
+ * onMissionStamp, as each lands or stamps) as well as by the app: the doubled reward's coin comes 15 to
+ * 20 ms after the re-render's landings, and a stamp's callback can come a frame or two from another
+ * ask for the same moment (a reduced-motion card stamping every row at once, a hitch bunching two
+ * stamps into one frame). Within this (s) they are one coin or one chime, not a flam. Real rows sit
+ * DONE_STEP and FLY_STEP (140 ms) apart.
+ */
+export const UI_SAME_CHIME_S = 0.06;
+
+/** The one-sound window for a UI sound (s). */
+export const uiSameWindow = (name: UiSound): number => (name === 'coin' || name === 'mission' ? UI_SAME_CHIME_S : UI_SAME_S);
 
 /** Remembers the UI sounds scheduled recently, so a duplicate request is dropped. */
 export class UiOnce {
@@ -296,7 +311,8 @@ export class UiOnce {
   /** True if `name` at time t is new (and records it); false if it is already scheduled. */
   admit(name: UiSound, t: number, now: number): boolean {
     for (let i = this.seen.length - 1; i >= 0; i--) if (this.seen[i].t < now - 0.5) this.seen.splice(i, 1);
-    for (const s of this.seen) if (s.name === name && Math.abs(s.t - t) < UI_SAME_S) return false;
+    const win = uiSameWindow(name);
+    for (const s of this.seen) if (s.name === name && Math.abs(s.t - t) < win) return false;
     this.seen.push({ name, t });
     return true;
   }

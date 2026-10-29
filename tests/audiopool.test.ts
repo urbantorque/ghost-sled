@@ -167,6 +167,200 @@ describe('voices per reward', () => {
   });
 });
 
+describe('a voice that only adds to a moment asks the pool first', () => {
+  it('room() is yes under the cap, or when the steal would take a quiet tail or a lighter voice', () => {
+    const ctx = stubCtx();
+    const pool = new VoicePool(ctx, bank, 2);
+    expect(pool.room(PRIO.normal)).toBe(true);
+    const a = voiceAt(pool, 0, 2, PRIO.payoff);
+    const b = voiceAt(pool, 0, 2, PRIO.payoff);
+    // Two fresh payoffs: a normal voice would cut one.
+    ctx.currentTime = 0.1;
+    expect(pool.room(PRIO.normal)).toBe(false);
+    expect(pool.room(PRIO.payoff * 2)).toBe(true);
+    // Near their ends they are quiet tails: a steal nobody hears.
+    ctx.currentTime = 1.8;
+    expect(pool.room(PRIO.normal)).toBe(true);
+    expect(a.dead || b.dead).toBe(false);
+    expect(pool.steals).toBe(0);
+  });
+});
+
+/** A Beat list's flow moments, for the stub Sfx. */
+const flowIn: Beat = { type: 'flow', tick: 0, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } };
+const snuff: Beat = { type: 'flow', tick: 0, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } };
+/** The snuff a broken streak or a lost combo brings (their line says it). */
+const quietSnuff: Beat = { type: 'flow', tick: 0, phase: 'snuff' };
+const broken: Beat = { type: 'streakBroken', tick: 0, was: 4, say: { label: 'Streak broken', points: 0, tone: 'lost' } };
+const bumpBank: Beat[] = [
+  { type: 'bump', tick: 0, side: 1, bank: true },
+  { type: 'bank', tick: 0, points: 6000, mult: 4, origin: 1500, tier: 2, header: null, bump: true },
+];
+const lost: Beat = { type: 'comboLost', tick: 0, points: 500, stake: 2500, best: false, crack: true };
+const crash: Beat = { type: 'crash', tick: 0, cause: 'tree', stake: 2500, orbitFrom: null };
+
+/** Spies on the Sfx's chord and puff builds (when each was made, and for which time). */
+function spyFlow(sfx: Sfx, ctx: { currentTime: number }): { chords: number[]; voices: Array<{ at: number; t: number; prio: number }> } {
+  const o = sfx as unknown as { chord: (...a: unknown[]) => void; voice: (t: number, send: number, pan?: number, level?: number, prio?: number) => Voice };
+  const chords: number[] = [];
+  const voices: Array<{ at: number; t: number; prio: number }> = [];
+  const ch = o.chord.bind(sfx);
+  o.chord = (...a: unknown[]) => {
+    chords.push(a[0] as number);
+    ch(...a);
+  };
+  const vo = o.voice.bind(sfx);
+  o.voice = (t, send, pan, level, prio) => {
+    voices.push({ at: ctx.currentTime, t, prio: prio ?? PRIO.normal });
+    return vo(t, send, pan, level, prio);
+  };
+  return { chords, voices };
+}
+
+/** The frame's beats in the engine's order: frame(list), then each beat. */
+function beats(sfx: Sfx, list: Beat[], t: number): void {
+  sfx.frame(list);
+  for (const b of list) sfx.beat(b, t);
+}
+
+describe("'In the flow' and 'Flow broken' where the snuff now lands", () => {
+  it('a snuff inside the flow-in swell stops it: its chord never lands and its voices fade', () => {
+    const { sfx, ctx, flushTo } = rig();
+    const spy = spyFlow(sfx, ctx);
+    ctx.currentTime = 1;
+    beats(sfx, [flowIn], 1.006);
+    const flowVoices = spy.voices.length;
+    expect(flowVoices).toBe(2);
+    flushTo(1.35);
+    // A sketchy landing's snuff: 'Flow broken' is its line (no 'Sketchy' call with it).
+    beats(sfx, [snuff], 1.356);
+    flushTo(3);
+    expect(spy.chords).toHaveLength(0);
+    // Without the snuff the chord lands 0.6 s after the flow-in.
+    const r2 = rig();
+    const s2 = spyFlow(r2.sfx, r2.ctx);
+    r2.ctx.currentTime = 1;
+    beats(r2.sfx, [flowIn], 1.006);
+    r2.flushTo(3);
+    expect(s2.chords.map((t) => Math.round(t * 1000))).toEqual([1606]);
+  });
+
+  it('a crash inside the swell stops it too, and a snuff with a crash or a lost combo adds no voice', () => {
+    const { sfx, ctx, flushTo } = rig();
+    const spy = spyFlow(sfx, ctx);
+    ctx.currentTime = 1;
+    beats(sfx, [flowIn], 1.006);
+    flushTo(1.4);
+    const before = spy.voices.length;
+    // The director's order: the lost combo, the snuff it caused, the crash.
+    beats(sfx, [lost, quietSnuff, crash], 1.406);
+    flushTo(3);
+    expect(spy.chords).toHaveLength(0);
+    // The stumble's voice is the comboLost beat's; the snuff made none (the raw crash comes after).
+    expect(spy.voices.length - before).toBe(1);
+  });
+
+  it('a crash long after the flow-in has nothing of it left to cut', () => {
+    const { sfx, pool, ctx, flushTo } = rig();
+    ctx.currentTime = 1;
+    beats(sfx, [flowIn], 1.006);
+    flushTo(1.7);
+    const proto = Object.getPrototypeOf(voiceAt(pool, 1.7, 0.1, PRIO.low)) as { fadeOut: (now: number, tau: number) => void };
+    const fade = proto.fadeOut;
+    let fades = 0;
+    proto.fadeOut = function (this: Voice, now: number, tau: number) {
+      fades++;
+      fade.call(this, now, tau);
+    };
+    try {
+      // Inside the cue its swell, tone and chord fade; a minute later there is nothing to fade.
+      const r2 = rig();
+      r2.ctx.currentTime = 1;
+      beats(r2.sfx, [flowIn], 1.006);
+      r2.flushTo(1.7);
+      beats(r2.sfx, [crash], 1.706);
+      expect(fades).toBe(3);
+      fades = 0;
+      flushTo(60);
+      beats(sfx, [crash], 60.006);
+      expect(fades).toBe(0);
+    } finally {
+      proto.fadeOut = fade;
+    }
+  });
+
+  it('on a sketchy landing the pfft waits for the scrape; after a bump it lands at once', () => {
+    const { sfx, ctx, flushTo } = rig();
+    const spy = spyFlow(sfx, ctx);
+    ctx.currentTime = 2;
+    // The landing's snuff comes alone (its raw sketchy landing follows the list).
+    beats(sfx, [snuff], 2.006);
+    flushTo(2.5);
+    expect(spy.voices.map((v) => Math.round(v.t * 1000))).toEqual([2166]);
+    // With 'Streak broken' (whose falling bell is its own voice) the snuff has no line and waits too.
+    const r1 = rig();
+    const s1 = spyFlow(r1.sfx, r1.ctx);
+    r1.ctx.currentTime = 2;
+    beats(r1.sfx, [broken, quietSnuff], 2.006);
+    r1.flushTo(2.5);
+    expect(s1.voices.map((v) => Math.round(v.t * 1000))).toEqual([2006, 2166]);
+    const r2 = rig();
+    const s2 = spyFlow(r2.sfx, r2.ctx);
+    r2.ctx.currentTime = 2;
+    beats(r2.sfx, [{ type: 'bump', tick: 0, side: 1, bank: true }, snuff], 2.006);
+    expect(s2.voices.map((v) => Math.round(v.t * 1000))).toEqual([2006]);
+  });
+
+  it('over a sketchy landing the band dips under the pfft; after a bump or a crash it does not', () => {
+    const ctx = stubCtx();
+    const pool = new VoicePool(ctx, bank, 64);
+    const ducks: number[][] = [];
+    const music = { dry: node, wet: node, duck: (d: number, t: number) => void ducks.push([d, Math.round(t * 1000)]), duckSeq() {} } as unknown as Bus;
+    const bus = { dry: node, wet: node, duck() {}, duckSeq() {} } as unknown as Bus;
+    const sfx = new Sfx(ctx, pool, bus, () => styleFor(Mood.None), music);
+    const run = (to: number): void => {
+      for (let x = ctx.currentTime; x <= to; x += 0.025) {
+        ctx.currentTime = x;
+        sfx.flush(x);
+      }
+    };
+    ctx.currentTime = 2;
+    beats(sfx, [snuff], 2.006);
+    run(2.4);
+    expect(ducks).toEqual([[0.6, 2166]]);
+    ducks.length = 0;
+    // A bump bank (its bump beat and its bank) and a crash: no dip under the snuff.
+    beats(sfx, [...bumpBank, snuff], 2.506);
+    run(2.9);
+    beats(sfx, [lost, quietSnuff, crash], 3.006);
+    run(3.4);
+    expect(ducks.filter((d) => d[0] === 0.6)).toEqual([]);
+  });
+
+  it('a crash before the waiting pfft lands drops it', () => {
+    const { sfx, ctx, flushTo } = rig();
+    const spy = spyFlow(sfx, ctx);
+    ctx.currentTime = 2;
+    beats(sfx, [snuff], 2.006);
+    flushTo(2.08);
+    beats(sfx, [crash], 2.086);
+    const before = spy.voices.length;
+    flushTo(2.6);
+    expect(spy.voices.length).toBe(before);
+  });
+
+  it('never takes a voice a payoff needs: a pool full of fresh payoffs gets no pfft and no steal', () => {
+    const { sfx, pool, ctx, flushTo } = rig(3);
+    ctx.currentTime = 2;
+    for (let i = 0; i < 3; i++) voiceAt(pool, 2, 2, PRIO.payoff);
+    const spy = spyFlow(sfx, ctx);
+    beats(sfx, [{ type: 'bump', tick: 0, side: 1, bank: true }, snuff], 2.006);
+    flushTo(2.3);
+    expect(spy.voices).toHaveLength(0);
+    expect(pool.steals).toBe(0);
+  });
+});
+
 describe("your best overtaken rings whatever the pass's word", () => {
   const golds = (s: Sfx): number[] => {
     const at: number[] = [];
