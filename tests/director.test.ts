@@ -293,7 +293,7 @@ describe('banks, flow and lost combos', () => {
     expect(snuff[0].say).toBeUndefined();
   });
 
-  it('a lost combo (the crash) puts the glow out with no Flow broken beat', () => {
+  it("a lost combo (the crash) snuffs the flow without words: no 'Flow broken' line over the crash", () => {
     const r = new Rig();
     flowUp(r);
     const t = r.sim.tick + 1;
@@ -302,9 +302,17 @@ describe('banks, flow and lost combos', () => {
       { tick: t, e: { type: 'comboLost', points: 3000 } },
       { tick: t, e: { type: 'crash', cause: 'tree' } },
     ]);
-    expect(of(b, 'flow')).toHaveLength(0);
+    const snuff = of(b, 'flow');
+    expect(snuff).toHaveLength(1);
+    expect(snuff[0].phase).toBe('snuff');
+    expect(snuff[0].say).toBeUndefined();
+    expect(of(b, 'comboLost')[0].say?.label).toBe('Combo lost');
     r.idle(0.2);
     expect((r.d as unknown as { out: { feel: { flow: number } } }).out.feel.flow).toBe(0);
+    // Under 1.2 shown, a crash snuffs nothing.
+    const q = new Rig();
+    const c = q.frame([{ type: 'comboLost', points: 300 }, { type: 'crash', cause: 'tree' }]);
+    expect(of(c, 'flow')).toHaveLength(0);
   });
 
   it('a bump snuffs flow from 1.2', () => {
@@ -352,7 +360,7 @@ describe('banks, flow and lost combos', () => {
     expect(o.feel.flow).toBe(0);
   });
 
-  it('comboBank and bump in one batch: a bump bank and a flow snuff; a lost combo never snuffs', () => {
+  it("comboBank and bump in one batch: a bump bank and a flow snuff; a lost combo's snuff says nothing", () => {
     const r = new Rig();
     flowUp(r);
     const t = r.sim.tick + 1;
@@ -374,7 +382,7 @@ describe('banks, flow and lost combos', () => {
       { tick: t2, e: { type: 'comboLost', points: 3000 } },
       { tick: t2, e: { type: 'crash', cause: 'tree' } },
     ]);
-    expect(of(b, 'flow')).toHaveLength(0);
+    expect(of(b, 'flow').map((x) => x.say)).toEqual([undefined]);
     expect(of(b, 'crash')[0]).toMatchObject({ cause: 'tree', stake: 3000 });
   });
 

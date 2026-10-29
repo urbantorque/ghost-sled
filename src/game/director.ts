@@ -792,9 +792,9 @@ export class Director {
           const best = this.comboBest(run?.bestComboAtStart ?? 0);
           const isBest = best > 0 && e.points > best;
           this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
-          // The crash took the combo, and its flow goes out with it: the glow is snuffed, but the crash
-          // and 'Combo lost' own the moment, so no 'Flow broken' beat.
-          if (this.canSnuff()) this.snuffDisplay(now);
+          // The crash took the combo, and its flow goes out with it (the glow, the scarf's puff, the
+          // wind's bend), without words: the crash and 'Combo lost' own the line.
+          if (this.canSnuff()) this.snuff(p.tick, sim, now, false);
           this.skillChain = 0;
           this.flowChain = 0;
           this.perfects = 0;
