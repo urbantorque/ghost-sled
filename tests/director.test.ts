@@ -707,6 +707,29 @@ describe('the race', () => {
     expect(held()).toBe(false);
   });
 
+  it("a duel's result under a landing stamp holds from the stamp's end, when its flash can first show", () => {
+    const r = new Rig();
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.idle(1.5);
+    const out = () => (r.d as unknown as { out: { rival: { id: number } | null; hud: { hold: boolean } } }).out;
+    // A perfect landing's stamp goes up; half a second later the duel is won under it.
+    expect(of(r.frame([style('perfect', 250, 2), land('perfect')]), 'stomp')).toHaveLength(1);
+    r.idle(0.5);
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    expect(of(r.frame(), 'duel').map((d) => d.phase)).toEqual(['won']);
+    // The stamp holds the 'Duel won' flash for another second: the hold runs 1.5 s from there.
+    r.idle(2.4);
+    expect(out().hud.hold).toBe(true);
+    expect(out().rival?.id).toBe(1001);
+    r.idle(0.2);
+    expect(out().hud.hold).toBe(false);
+  });
+
   it('a duel about to open keeps the pill on its ghost: no third name for the quarter second before it', () => {
     const r = new Rig();
     const a = track(1, 'pool', 'SparkleCedar');

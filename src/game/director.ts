@@ -148,8 +148,13 @@ const UNLOCK_DUEL_S = UNLOCK_BANNER_S + AFTER_UNLOCK_S + 0.1;
 const DUEL_POP_BLOCK_S = 2.5;
 /** A duel's result keeps the rival (pill, C11 ring, chip) on its ghost this long (s), the pill's result
  *  flash, and no new duel opens meanwhile: the next one opens only once it can be named. The HUD's own
- *  hold mirrors it (hud.ts DUEL_HOLD_MS, on the wall clock): change the two together. */
+ *  hold mirrors it (hud.ts DUEL_HOLD_MS, on the wall clock): change the two together. out.hud.hold
+ *  carries the director's (from the stamp's end when a landing stamp holds the flash, STAMP_S). */
 const RIVAL_HOLD_S = 1.5;
+/** The perfect-landing stamp holds every pass flash while it is up (fx.ts STAMP_MS): a duel's result
+ *  that lands under it flashes once it has gone, so its hold starts there. Held from the beat, it ended
+ *  0.6 s into the flash and the grudge's banner cut 'Held off' (s109). */
+const STAMP_S = 1.5;
 /** Your best beaten in a duel, the crossing already behind you: its 'Passed Your best' waits this long
  *  (s) at most, once the result's hold is over, for it to be clear behind you (C12's level band).
  *  Pushed with the result, it claimed a pass at the 8 s cap that had not happened ('PASSED Your best',
@@ -576,7 +581,7 @@ export class Director {
         const ghost = this.ref(t, f, sim);
         if (d.phase === 'open') this.duelOpenAt = now;
         else this.lastDuelEndAt = now;
-        if (d.phase === 'won' || d.phase === 'heldOff' || d.phase === 'lost') this.rivalHold = { id: d.id, until: now + RIVAL_HOLD_S };
+        if (d.phase === 'won' || d.phase === 'heldOff' || d.phase === 'lost') this.rivalHold = { id: d.id, until: Math.max(now, this.lastStompAt + STAMP_S) + RIVAL_HOLD_S };
         if (d.phase === 'won' || d.phase === 'heldOff') {
           resolved.set(d.id, d.phase);
           this.duelEnd.set(d.id, sim.tick);
