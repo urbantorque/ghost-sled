@@ -1,5 +1,5 @@
 import { resultsCues } from '../audio/cues';
-import { AudioEngine, AudioFrame } from '../audio/engine';
+import { AudioEngine, AudioFrame, type UiSound } from '../audio/engine';
 import { ghostName } from '../bot/names';
 import { getPlatform, Platform } from '../platform/platform';
 import { AdPacing } from '../platform/pacing';
@@ -95,6 +95,10 @@ function rawSeed(raw: string): number | null {
   }
 }
 
+/** A results sound asked for while the audio context wakes after a rewarded ad waits at most this
+ *  long (ms) for it to run (it resumes within a few frames of the unmute). */
+const WAKE_WAIT_MS = 700;
+
 /** How many Beat stamps the results card shows at first (results.ts standings): your row, the two
  *  places above it and the one below in a field over 5 rows (first place shows the three it beat);
  *  a smaller field shows whole. One soft mallet sounds per stamp in view. */
@@ -147,6 +151,14 @@ export class App {
   private resultsSeq = 0;
   /** Rewards landed on this card (each coin's index). */
   private coinsLanded = 0;
+  /** Mission Done stamps drawn on this card (each chime's index), and which rows already chimed. */
+  private chimesLanded = 0;
+  private readonly chimedRows = new Set<number>();
+  /** Results sounds asked for while the audio context is still waking after a rewarded ad (the ad
+   *  muted it and the engine suspended it): played together once it runs, or dropped after
+   *  WAKE_WAIT_MS. Same moment, same sound: the doubled coin and the landings it sets off play once. */
+  private uiWaiting: Array<{ name: UiSound; detail?: number }> = [];
+  private uiWaitSince = 0;
   /** Ride with a reveal card: 'go' follows the reveal's timeline from its first frame. */
   private goAfterReveal = false;
   /** What this run has already credited to the save (a revive settles it again, by difference). */
@@ -239,6 +251,7 @@ export class App {
         this.audio.ui(k);
       },
       onRewardLanded: () => this.rewardLanded(),
+      onMissionStamp: (row) => this.missionStamp(row),
     });
     // Low draws no rear-view picture, so the avalanche unit closes up to its chip and meter.
     this.ui.setMirror(this.tiers.tier !== 'low');
@@ -858,8 +871,39 @@ export class App {
       this.results.giftsEarned = bonus * 2;
       this.results.wallet = this.save.data.gifts;
       this.ui.updateResults(this.results);
-      this.audio.ui('coin');
+      // (The ad muted the audio and the engine suspended it: this coin, and the landings the re-render
+      // just set off, wait for it to run again, then play as one.)
+      this.resultsSound('coin');
     });
+  }
+
+  /** A results sound now, or, while the audio context is still waking after a rewarded ad, as soon
+   *  as it runs (every sound waiting goes together, so one moment's coins play once). A context that
+   *  stays down (muted, hidden) drops them after WAKE_WAIT_MS: late is worse than none. */
+  private resultsSound(name: UiSound, detail?: number): void {
+    if (this.audio.ready && this.uiWaiting.length === 0) {
+      this.audio.ui(name, detail);
+      return;
+    }
+    if (this.uiWaiting.length === 0) {
+      this.uiWaitSince = performance.now();
+      const seq = this.resultsSeq;
+      const poll = (): void => {
+        if (seq !== this.resultsSeq || this.phase !== 'results') {
+          this.uiWaiting.length = 0;
+          return;
+        }
+        if (!this.audio.ready && performance.now() - this.uiWaitSince < WAKE_WAIT_MS) {
+          window.setTimeout(poll, 16);
+          return;
+        }
+        const list = this.uiWaiting;
+        this.uiWaiting = [];
+        if (this.audio.ready) for (const q of list) this.audio.ui(q.name, q.detail);
+      };
+      window.setTimeout(poll, 0);
+    }
+    this.uiWaiting.push({ name, detail });
   }
 
   private shareChallenge(): void {
@@ -1077,6 +1121,8 @@ export class App {
     // The card's sounds start on its first painted frame, where its CSS beats start: anchored here, a
     // long frame at open put the count-up ticks over a frozen card. Skipped if the card went meanwhile.
     this.coinsLanded = 0;
+    this.chimesLanded = 0;
+    this.chimedRows.clear();
     const seq = ++this.resultsSeq;
     const model = this.results;
     const live = (): boolean => seq === this.resultsSeq && this.phase === 'results' && this.results === model;
@@ -1103,7 +1149,16 @@ export class App {
    *  reduced motion the card lands whole and cueResults plays the one coin. */
   private rewardLanded(): void {
     if (this.phase !== 'results' || reduced()) return;
-    this.audio.ui('coin', this.coinsLanded++);
+    this.resultsSound('coin', this.coinsLanded++);
+  }
+
+  /** A mission's Done stamp started on screen (results.ts): its chime, in landing order, once per row.
+   *  A list folded away or scrolled out of view draws no stamp and makes no sound. Under reduced
+   *  motion the card lands whole and cueResults plays the one chime. */
+  private missionStamp(row: number): void {
+    if (this.phase !== 'results' || reduced() || this.chimedRows.has(row)) return;
+    this.chimedRows.add(row);
+    this.resultsSound('mission', this.chimesLanded++);
   }
 
   /** The friend's challenge on this mountain, for the Rematch label. */
@@ -1124,11 +1179,12 @@ export class App {
   }
 
   /** The results card's sounds on its CSS beats (results.ts RESULTS_TIMING), laid by the engine: the
-   *  count-up ticking up the ladder, the place stamp, the New best chord on its stamp, a mallet per
-   *  Beat stamp in view and a chime per mission Done stamp, each on its own row (the stamp's --i).
-   *  Each reward's coin plays as it lands (rewardLanded, which the card calls whether it flew or
-   *  not); reduced motion plays it all at once, the coin included. (The only mission sound: settleRun
-   *  credits, nothing chimes twice.) */
+   *  count-up ticking up the ladder, the place stamp, the New best chord on its stamp and a mallet per
+   *  Beat stamp in view. Each mission's chime plays as its Done stamp starts on screen (missionStamp)
+   *  and each reward's coin as it lands (rewardLanded), which the card calls whichever path it took: a
+   *  phone's folded list chimes for nothing it does not draw. Reduced motion plays it all at once, the
+   *  one chime and the one coin included. (The only mission sound: settleRun credits, nothing chimes
+   *  twice.) */
   private resultsSounds(m: ResultsModel, lagS = 0): void {
     const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
     const ahead = m.ghosts.filter((g) => (g.distance ?? 0) > m.distance).length;
@@ -1137,7 +1193,7 @@ export class App {
       count: m.score > 0,
       newBest: m.newBest,
       beats: beatStampsShown(m.ghosts.length, ahead),
-      missions: rows((mv) => mv.justCompleted),
+      missions: still ? rows((mv) => mv.justCompleted) : [],
       coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
     };
     if (lagS <= 0.001) {
