@@ -738,15 +738,16 @@ describe('the race', () => {
     expect((q.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id).toBe(2);
   });
 
-  it("a duel with your best won: 'Passed Your best' gets its beat; a duel is resolved after 8 s", () => {
+  it("a duel with your best won, clear behind you: 'Passed Your best' gets its beat; a duel is resolved after 8 s", () => {
     const r = new Rig();
     const you = track(1001, 'you', 'Rider');
     r.tracks = [you];
     r.sim.tick = 2000;
     r.poses.set(1001, pose(r.sim.s.z + 0.8));
     expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
-    // Level and a hand ahead of your line for the whole 8 s: the duel resolves by who leads.
-    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    // Two metres behind your line for the whole 8 s (inside the 4 m resolve line): it resolves by who leads.
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 2));
     const out = r.idle(8);
     const duel = of(out, 'duel');
     expect(duel.map((d) => d.phase)).toEqual(['heldOff']);
@@ -756,6 +757,72 @@ describe('the race', () => {
     // The duel beat first, so the pill's last word on it is the pass.
     expect(out.indexOf(duel[0])).toBeLessThan(out.indexOf(pass[0]));
     expect(r.d.shownPasses.has(1001)).toBe(true);
+  });
+
+  it("a duel with your best capped neck and neck claims no pass: the real crossing is the one 'Passed Your best'", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    r.idle(1.1);
+    // A hand behind your line for the whole 8 s, never 0.8 m clear (the race saw no crossing yet).
+    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    const capped = r.idle(8);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    // The real overtake 3 s later: the race's first pass is the moment, with the base.
+    r.idle(3);
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const real = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(real).toHaveLength(1);
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+  });
+
+  it("neck and neck with the crossing behind you: 'Passed Your best' waits for it to fall clear and the result's hold", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    // Frames up to the duel's result (the rig's first frame opens it).
+    const toResult = (q: Rig): Beat[] => {
+      const out: Beat[] = [];
+      for (let i = 0; i < 600; i++) {
+        const b = q.frame();
+        out.push(...b);
+        if (of(b, 'duel').some((d) => d.phase !== 'open')) break;
+      }
+      return out;
+    };
+    expect(of(r.frame(), 'duel').map((d) => d.phase)).toEqual(['open']);
+    // A metre behind (the race's crossing came inside the duel, muted): level by C12 at the cap.
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 1));
+    const capped = toResult(r);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    // Clear 0.5 s later, but the result's flash holds for 1.5 s: the pass waits for it.
+    r.idle(0.5);
+    r.poses.set(1001, pose(r.sim.s.z - 2.2));
+    expect(of(r.idle(0.9), 'pass')).toHaveLength(0);
+    const after = of(r.idle(0.2), 'pass');
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, ghost: { kind: 'you' } });
+    expect(of(r.idle(2), 'pass')).toHaveLength(0);
+    // Still level after YOU_CLEAR_S: let go, nothing claimed.
+    const q = new Rig();
+    const y2 = track(1001, 'you', 'Rider');
+    q.tracks = [y2];
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.8));
+    q.frame();
+    y2.status = 1;
+    q.poses.set(1001, pose(q.sim.s.z - 1));
+    toResult(q);
+    expect(of(q.idle(6.2), 'pass')).toHaveLength(0);
+    q.poses.set(1001, pose(q.sim.s.z - 2.2));
+    expect(of(q.idle(1), 'pass')).toHaveLength(0);
   });
 
   it('gaps are measured against the rendered rider (riderZ), on the poses\' own render tick', () => {
@@ -883,11 +950,12 @@ describe('the race', () => {
     r.sim.tick = 120;
     r.poses.set(1001, pose(r.sim.s.z - 0.5));
     expect(of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 0 });
-    // A duel with it, held off with you a hand ahead the whole way (no pass inside it).
+    // A duel with it, held off with you two metres ahead the whole way (no pass inside it).
     r.sim.tick = 2000;
     r.poses.set(1001, pose(r.sim.s.z + 0.8));
     expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
-    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 2));
     const out = r.idle(8);
     expect(of(out, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
     const pass = of(out, 'pass');
@@ -895,11 +963,34 @@ describe('the race', () => {
     expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
     // It slips past you and you take it back: its first pass was the duel's 'Passed Your best'.
     r.idle(3);
+    you.status = -1;
     r.poses.set(1001, pose(r.sim.s.z + 3));
     r.frame([], { race: [{ type: 'passedBy', track: you }] });
     r.poses.set(1001, pose(r.sim.s.z - 1.6));
     const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
     expect(again[0]).toMatchObject({ word: 'tookBack', text: 'Took back', gifts: 0 });
+    // Capped neck and neck instead: no pass claimed then; the later real overtake is the one
+    // 'Passed Your best', with the base the jostle kept, and the next re-pass is a retake.
+    const q = new Rig();
+    const y2 = track(1001, 'you', 'Rider');
+    q.tracks = [y2];
+    q.sim.tick = 120;
+    q.poses.set(1001, pose(q.sim.s.z - 0.5));
+    q.frame([], { race: [{ type: 'pass', track: y2, first: true }] });
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.8));
+    q.idle(1.1);
+    q.poses.set(1001, pose(q.sim.s.z - 0.6));
+    const capped = q.idle(8);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    q.idle(3);
+    q.poses.set(1001, pose(q.sim.s.z - 1.6));
+    const real = of(q.frame([], { race: [{ type: 'pass', track: y2, first: false }] }), 'pass');
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    q.idle(1);
+    q.poses.set(1001, pose(q.sim.s.z - 1.6));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: y2, first: false }] }), 'pass')[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
   });
 
   it('a pass muted inside its own duel pays its base and no extras', () => {
@@ -1388,7 +1479,8 @@ describe('mission and unlock pops', () => {
     r.poses.set(1001, pose(110));
     r.passed = 1;
     const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
-    expect(of(a, 'raceNews')[0]).toMatchObject({ news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier' });
+    // News about the field, keyed to no ghost: a duel ghost's pill never takes it for its own news.
+    expect(of(a, 'raceNews')[0]).toMatchObject({ news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier', ghost: { id: -1, name: '' } });
   });
 });
 

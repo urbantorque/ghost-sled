@@ -9,7 +9,7 @@ import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
-import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, LEVEL_IN_M, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
@@ -148,6 +148,11 @@ const DUEL_POP_BLOCK_S = 2.5;
  *  flash, and no new duel opens meanwhile: the next one opens only once it can be named. The HUD's own
  *  hold mirrors it (hud.ts DUEL_HOLD_MS, on the wall clock): change the two together. */
 const RIVAL_HOLD_S = 1.5;
+/** Your best beaten in a duel while still neck and neck, the crossing already behind you: its 'Passed
+ *  Your best' waits this long (s) at most for it to fall clear (C12's level band) once the result's
+ *  hold is over. Pushed at once, it claimed a pass at the 8 s cap that had not happened ('PASSED Your
+ *  best', then 'Your best neck and neck', then 'PASSED Your best' again for real). */
+const YOU_CLEAR_S = 6;
 /** The rival pill never names a wreck or a ghost further back than this (m). */
 const RIVAL_BEHIND_M = 150;
 /** New best this soon (s) after New ground waits that long after it: each gets its own moment. */
@@ -278,6 +283,8 @@ export class Director {
   private lastSlungPassTick = -1e9;
   /** Gifts the grudge's passes and settle have credited this run (its premium is paid once). */
   private grudgePaid = 0;
+  /** Your best's 'Passed Your best' after a duel resolved neck and neck (YOU_CLEAR_S). */
+  private youClear: { id: number; until: number } | null = null;
   /** Your best's ghosts edged past in a muted start-line jostle: rides your own line, so the jostle at
    *  2 s used up its first pass and the real overtake later read 'Took back Your best' for 0 gifts. Its
    *  next pass is still its first (pays the base, reads 'Passed Your best'). */
@@ -412,6 +419,7 @@ export class Director {
     this.slungN = 0;
     this.lastSlungPassTick = -1e9;
     this.grudgePaid = 0;
+    this.youClear = null;
     this.gapRead.reset();
     this.youJostled.clear();
     this.newGroundTick = -1e9;
@@ -455,6 +463,7 @@ export class Director {
     this.crashT = -1;
     this.newBestAt = -1;
     this.rivalHold = null;
+    this.youClear = null;
     this.ticked.fill(false);
     this.prevTtl = NaN;
   }
@@ -550,15 +559,16 @@ export class Director {
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
-          // Your best, beaten in a duel and behind you now: 'Passed Your best' (C7) gets its moment
-          // (the pass itself was muted inside the duel, and a duel with your own line runs long). Only
-          // jostled at the start, its first pass is this one: it pays the base, and it is spent (a
-          // re-pass later read 'Passed Your best' a second time).
+          // Your best, beaten in a duel and clear behind you now: 'Passed Your best' (C7) gets its
+          // moment (the pass itself was muted inside the duel, and a duel with your own line runs
+          // long). Only jostled at the start, its first pass is this one: it pays the base, and it is
+          // spent (a re-pass later read 'Passed Your best' a second time). Still neck and neck (C12),
+          // nothing is passed yet: with the crossing already behind you it waits to fall clear
+          // (YOU_CLEAR_S); with it still to come, the race's own first pass is the moment.
           const p = f.poses.get(d.id);
-          if (t.entry.kind === 'you' && p && p.z < rz) {
-            const owed = this.youJostled.delete(d.id) ? PASS_GIFTS * (haunted ? 2 : 1) : 0;
-            const ladder = ++this.ladderN;
-            this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
+          if (t.entry.kind === 'you' && p) {
+            if (p.z < rz - LEVEL_IN_M) this.passYourBest(ghost, sim, haunted);
+            else if (t.status === 1) this.youClear = { id: d.id, until: now + YOU_CLEAR_S };
           }
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
@@ -677,6 +687,7 @@ export class Director {
         this.settle(t, this.ref(t, f, sim), sim, haunted);
       }
     }
+    if (this.youClear) this.yourBestClear(f, sim, now, live, haunted);
 
     // Taking the lead: rank 1 after 10 s with 3 or more ghosts, one still riding. Once, or again after
     // losing it for 5 s.
@@ -1077,6 +1088,34 @@ export class Director {
     this.push(b, sim);
   }
 
+  /** 'Passed Your best' (C7) for a duel it lost: its first pass, if a start-line jostle kept it, pays
+   *  the base now and is spent. */
+  private passYourBest(ghost: GhostRef, sim: Sim, haunted: boolean): void {
+    const owed = this.youJostled.delete(ghost.id) ? PASS_GIFTS * (haunted ? 2 : 1) : 0;
+    const ladder = ++this.ladderN;
+    this.lastPassAt = this.clock;
+    this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
+  }
+
+  /** Your best, beaten in a duel neck and neck with the crossing behind you: 'Passed Your best' once it
+   *  is clear behind (C12's level band) and the result's hold is over; let go if it gets back level
+   *  with you or past you, wrecks, or YOU_CLEAR_S runs out. */
+  private yourBestClear(f: DirectorFrame, sim: Sim, now: number, live: boolean, haunted: boolean): void {
+    const w = this.youClear;
+    if (!w) return;
+    const t = f.tracks.find((k) => k.entry.id === w.id);
+    const p = f.poses.get(w.id);
+    if (!live || !t || !p || p.done || t.status !== 1 || now > w.until) {
+      this.youClear = null;
+      return;
+    }
+    if (this.rivalHold && now < this.rivalHold.until) return;
+    if (p.z < this.rz - LEVEL_IN_M) {
+      this.youClear = null;
+      this.passYourBest(this.ref(t, f, sim), sim, haunted);
+    }
+  }
+
   /** A perfect landing's stamp: its streak, title and lead parts, and the hit-stop that grows. */
   private stomp(tick: number, points: number, f: DirectorFrame, sim: Sim, motion: boolean): void {
     let late = false;
@@ -1275,9 +1314,12 @@ export class Director {
         this.pops.push({ beat: { type: 'unlockPop', tick: sim.tick, id: u.id, name: u.name, biome: u.biome }, since: now, waited: 0 });
       } else if (!tease && u.need - have === 1) tease = u;
     }
+    // The tease is news about the field, not about the ghost whose pass set it up: it names no ghost
+    // (id -1, no name), so the HUD never takes it for a duel ghost's own news and flashes it, nameless,
+    // in that duel's pill (C1/C11).
     if (passed && tease && !this.teased) {
       this.teased = true;
-      this.push({ type: 'raceNews', tick: sim.tick, ghost: passed, news: 'unlockTease', text: `1 more ghost opens ${tease.name}`, pan: 0, gain: 0 }, sim);
+      this.push({ type: 'raceNews', tick: sim.tick, ghost: { id: -1, name: '', kind: 'pool', dx: 0 }, news: 'unlockTease', text: `1 more ghost opens ${tease.name}`, pan: 0, gain: 0 }, sim);
       this.lastNewsAt = now;
     }
     // Only the head of the queue (a waiting unlock, else the oldest mission) runs its give-up clock;
