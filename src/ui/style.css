@@ -1727,14 +1727,16 @@
   transition: opacity 160ms ease, visibility 0s linear 0s;
 }
 
-/* Hidden under a banner: visibility drops once the fade ends, so the row also leaves the
-   accessibility tree. The run-start reveal card hangs under the row instead, so the race reads from
-   the first frame. In a portrait chase the row carries the avalanche meter, and a banner docks under
-   it (the avalanche unit, below). */
+/* Hidden under a banner, at once: a fade-out under the banner's fade-in drew both full-width layers
+   at partial opacity for about 70 ms at every entry. The row fades back in once the banner's exit
+   has finished (notices.ts), with the transition above. Hidden, it also leaves the accessibility
+   tree. The run-start reveal card hangs under the row instead, so the race reads from the first
+   frame. In a portrait chase the row carries the avalanche meter, and a banner docks under it (the
+   avalanche unit, below). */
 .gs-band-on .gs-race {
   opacity: 0;
   visibility: hidden;
-  transition: opacity 160ms ease, visibility 0s linear 160ms;
+  transition: none;
 }
 
 .gs-band-on .gs-combo,
