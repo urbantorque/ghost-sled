@@ -15,13 +15,6 @@ export interface TitleMenuHooks {
   openSettings(): void;
 }
 
-/**
- * The daily card's model: TitleModel.daily plus the day streak and today's medal (settle.ts
- * dailyStreakNow and dailyMedalNow). Both optional, so a model without them shows the card as before.
- * (Contract amendment requested: TitleModel.daily gains `medal?: number; streak?: number`.)
- */
-type DailyCardModel = TitleModel['daily'] & { medal?: number; streak?: number };
-
 /** Medal names by rank (0 none). */
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 
@@ -183,7 +176,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily as DailyCardModel)));
+    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily)));
     this.watchEnds(track, prev, next, strip);
 
     // Secondary row.
@@ -289,7 +282,8 @@ export class Title {
     return b;
   }
 
-  private dailyCard(d: DailyCardModel): HTMLButtonElement {
+  /** The Daily card: today's best, the day streak ("Day 3") and today's medal disc (TitleModel.daily). */
+  private dailyCard(d: TitleModel['daily']): HTMLButtonElement {
     const b = h('button', 'gs-daily');
     b.type = 'button';
     b.dataset.fk = 'daily';

@@ -196,14 +196,8 @@
   }
 }
 
-/* "Rematch Mila": the name is the point, so a long one ellipsizes inside the button, never past it.
-   The footer row may shrink below its content for that to happen: without it a 12 letter name set
-   the card's minimum width and pushed the race column off the right edge. */
-.gs-res-actions,
-.gs-res-main {
-  min-width: 0;
-}
-
+/* "Rematch Mila": the name is the point, so a long one ellipsizes inside the button, never past it
+   (the footer row may shrink for it: min-width 0 on .gs-res-actions and .gs-res-main, style.css). */
 .gs-again.is-rematch {
   flex: 0 1 auto;
 }
@@ -360,64 +354,14 @@
   font-weight: 900;
 }
 
-/* ------------------------------------------------------------------ Results: wide layout rows */
+/* ------------------------------------------------------------------ Results: wide layout */
 
-/* Wide screens run the race down the right beside the head, the stats and the missions. style.css
-   gives the missions row 1fr to take the race's extra height, but a grid ignores an item that spans
-   a flexible row when it sizes rows, so on a card filled to its max height (a two-line race line,
-   the unlock card and a tip) the race ran out of its rows and its Show All link sat on the tip. An
-   empty content-sized row under the missions takes that extra height instead: rows holding content
-   keep their own heights, so the left column still stacks with no gaps, and the tip sits under both
-   columns. Without stats the run row is left out, so it cannot take a share either. */
+/* (The wide results grid itself, rows and areas, lives in style.css with the rest of that layout.) */
 @media (min-aspect-ratio: 1/1) and (min-width: 901px) {
   /* "Rematch FlurrySpruce" is twice "Run Again": a step smaller, so a 12 letter name fits whole
      beside Challenge and Home before it would ellipsize. */
   .gs-again.is-rematch .gs-btn-label {
     font-size: 0.88em;
-  }
-
-  .gs-res-body:not(.no-race) {
-    grid-template-rows: repeat(7, auto);
-    grid-template-areas:
-      'where where'
-      'score score'
-      'sub   race'
-      'run   race'
-      'mis   race'
-      '.     race'
-      'tip   tip';
-  }
-
-  .gs-res-body.has-ul:not(.no-race) {
-    grid-template-areas:
-      'where where'
-      'score score'
-      'sub   ul'
-      'run   race'
-      'mis   race'
-      '.     race'
-      'tip   tip';
-  }
-
-  .gs-res-body.no-run:not(.no-race) {
-    grid-template-rows: repeat(6, auto);
-    grid-template-areas:
-      'where where'
-      'score score'
-      'sub   race'
-      'mis   race'
-      '.     race'
-      'tip   tip';
-  }
-
-  .gs-res-body.has-ul.no-run:not(.no-race) {
-    grid-template-areas:
-      'where where'
-      'score score'
-      'sub   ul'
-      'mis   race'
-      '.     race'
-      'tip   tip';
   }
 }
 

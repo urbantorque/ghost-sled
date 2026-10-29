@@ -265,8 +265,9 @@ export class Results {
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
     // ride again (how far short of the next place you stopped), then what the run paid: the reward
     // beat sits in the head on every screen, so a phone never folds it below the race.
-    // A big combo the crash took is named right on that line: it is what the run lost.
-    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with ', h('span', 'gs-num', fmt(m.lostCombo!)), ' on the line') : null;
+    // A big combo the crash took is named right on that line: it is what the run lost. "on the line"
+    // keeps together, so a wrap never leaves "line" alone on a row of its own.
+    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with ', h('span', 'gs-num', fmt(m.lostCombo!)), ` on${NBSP}the${NBSP}line`) : null;
     const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
