@@ -9,7 +9,8 @@ import { bump, EASE_IN, EASE_OUT, play, reduced, SPRING } from './motion';
 // Trick callouts, the perfect-landing stamp and the combo cash-in. Callouts live in one fixed slot
 // directly under the combo meter (the second tier of the top-centre stack), and the slot holds one
 // line: a newcomer that ranks at least as high rolls the old line up into the combo total as it takes
-// its place. Every number carries its label ("BACKFLIP +600"); "x" belongs to the combo multiplier
+// its place, except that a payoff line ('best' or 'big') only just landed holds for HOLD_MS against a
+// lower-ranked or 'lost' newcomer, which waits its turn. Every number carries its label ("BACKFLIP +600"); "x" belongs to the combo multiplier
 // alone, so a label that repeats merges into its line with summed points and a row of small pips for
 // the count ("SLIPSTREAM ••• +28"), never "x3". A label that comes back within a moment (slipstream
 // ticks around a gift) picks up its running total again. CSS lays the slot out, so a pop never reads
@@ -80,8 +81,43 @@ const LANDING_MS = 160;
 const RESUME_MS = 1500;
 /** Count pips past this many would only add noise: the points carry the rest. */
 const MAX_PIPS = 5;
+/**
+ * A payoff line ('best': New ground, New best; 'big': a trick) keeps the slot this long against a
+ * lower-ranked or 'lost' newcomer, and a 'best' line against another 'best': a Sketchy landing 0.2 s
+ * after New ground waits its turn instead of erasing it ("N[SKETCHY]D"), and so does a New best one
+ * frame after it.
+ */
+export const HOLD_MS = 600;
+/** A stamp a loss retires (a crash, a lost combo, a broken streak) fades this fast. */
+export const RETIRE_MS = 120;
+/**
+ * A line that has waited this long behind payoff lines is dropped: its moment has passed. Long
+ * enough to wait out two holds back to back (New ground, then a New best that waited for it).
+ */
+const QUEUE_STALE_MS = 2 * HOLD_MS + 250;
+/** Lines born this close together came in one frame's beats (the next frame is 16 ms or more on). */
+export const SAME_FRAME_MS = 8;
+/** At most this many lines wait their turn. */
+const QUEUE_MAX = 2;
 
 const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5, perfect: 3 };
+
+/**
+ * Whether a newcomer may take the one-line slot now or must wait behind the line on it. A 'best' or
+ * 'big' line younger than HOLD_MS holds against a lower-ranked or 'lost' newcomer (a 'lost' line
+ * otherwise skips the rank gate), and a 'best' line against another 'best'; `force` (a crash's lost
+ * combo) always takes the slot. Only 'lost' and 'best' newcomers wait (Fx.line); a lower-ranked
+ * plain or trick line meets the rank gate and stays out.
+ */
+export function admit(top: { tone: StyleTone; born: number } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
+  if (force || !top || tone === 'perfect') return 'show';
+  // A trick line from this same frame (a sketchy landing's own spin, then its Streak broken) has had
+  // no moment yet: the later beat of the frame takes the slot, as the director ordered them. A best
+  // line holds from its first frame (New ground and New best crossed in one frame).
+  const age = now - top.born;
+  const held = age < HOLD_MS && (top.tone === 'best' || (top.tone === 'big' && age >= SAME_FRAME_MS));
+  return held && (tone === 'lost' || RANK[tone] < RANK[top.tone] || (tone === 'best' && top.tone === 'best')) ? 'queue' : 'show';
+}
 
 /** Display names for the sim's style labels. "Draft" and "Drift" are one letter apart. */
 const SLIPSTREAM = 'Slipstream';
@@ -138,6 +174,9 @@ export class Fx {
   /** Cash-ins on screen (one at a time in practice), and the lost combo's falling figure. */
   private banks: BankFx[] = [];
   private crack: CrackFx | null = null;
+  /** Lines waiting behind a young payoff line (admit), oldest first, and the timer for the first. */
+  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number }> = [];
+  private queueTimer = 0;
   /** Called when a line or the stamp comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
 
@@ -165,6 +204,19 @@ export class Fx {
 
   /** A style callout. The multiplier is not repeated per line: the combo meter carries it. */
   pop(label: string, points: number, tone: StyleTone): void {
+    this.line(label, points, tone, false);
+  }
+
+  /**
+   * Retires the live hero stamp in a fast fade (RETIRE_MS): a crash, a lost combo or a broken streak
+   * owns its beat, so a gold PERFECT LANDING or QUAD STOMP never shares the screen with it.
+   */
+  retireStamp(): void {
+    if (this.heroEl) this.dropStamp(this.heroEl, 'retire');
+  }
+
+  /** The line slot's one entry point; `force` (a crash's lost combo) never waits behind a payoff line. */
+  private line(label: string, points: number, tone: StyleTone, force: boolean): void {
     const raw = label.trim();
     if (raw === '' || raw === '0') return;
     const text = DISPLAY[raw] ?? raw;
@@ -187,7 +239,16 @@ export class Fx {
 
     // A repeat of the newest label folds into it: one line with summed points and a count pip more.
     const top = this.items[this.items.length - 1];
-    if (top && top.label === text && (top.tone === 'lost') === (tone === 'lost')) {
+    const fold = top !== undefined && top.label === text && (top.tone === 'lost') === (tone === 'lost');
+    // A loss line (Sketchy, Streak broken) or a second best (New best right after New ground) waits
+    // behind a payoff line that has only just landed rather than erasing it, and takes the slot once
+    // that line has had its moment. Lower-ranked plain and trick lines meet the rank gate below and
+    // stay out, as before.
+    if (!fold && (tone === 'lost' || tone === 'best') && top && admit(top, tone, now, force) === 'queue') {
+      this.queue(text, points, tone, top.born + HOLD_MS - now);
+      return;
+    }
+    if (top && fold) {
       top.count += 1;
       top.points += points;
       if (RANK[tone] > RANK[top.tone]) {
@@ -245,6 +306,44 @@ export class Fx {
     this.onLayout();
   }
 
+  /**
+   * A loss line (or a second best) waits its turn behind a payoff line: it goes up once that line has
+   * held HOLD_MS. Two wait at most, in order (a repeat of a waiting label refreshes it in place); a
+   * crash's lost combo (force) or the HUD going away drops them.
+   */
+  private queue(label: string, points: number, tone: StyleTone, ms: number): void {
+    const same = this.queued.find((q) => q.label === label);
+    if (same) {
+      same.points = points;
+      same.tone = tone;
+    } else {
+      this.queued.push({ label, points, tone, at: performance.now() });
+      if (this.queued.length > QUEUE_MAX) this.queued.shift();
+    }
+    this.armQueue(ms);
+  }
+
+  private armQueue(ms: number): void {
+    window.clearTimeout(this.queueTimer);
+    this.queueTimer = window.setTimeout(() => this.flushQueue(), Math.max(0, ms));
+  }
+
+  /** The oldest waiting line takes the slot (it may wait again behind a newer payoff line). */
+  private flushQueue(): void {
+    const q = this.queued.shift();
+    // Stale once it has waited about a second: by then the moment it named has passed.
+    if (q && performance.now() - q.at <= QUEUE_STALE_MS) this.line(q.label, q.points, q.tone, false);
+    if (this.queued.length > 0) {
+      const top = this.items[this.items.length - 1];
+      this.armQueue(top ? top.born + HOLD_MS - performance.now() : 0);
+    }
+  }
+
+  private dropQueued(): void {
+    this.queued.length = 0;
+    window.clearTimeout(this.queueTimer);
+  }
+
   /** Keeps at most `n` lines: the weakest (then the oldest) rolls up into the total. */
   private cap(n: number): void {
     while (this.items.length > n) this.leave(this.weakest(this.items[this.items.length - 1]), true);
@@ -277,6 +376,7 @@ export class Fx {
    */
   clear(): void {
     if (this.heroEl) this.dropStamp(this.heroEl, true);
+    this.dropQueued();
     this.recent.clear();
     this.tricks.length = 0;
     for (const b of this.banks.slice()) this.dropBank(b);
@@ -534,7 +634,12 @@ export class Fx {
     s.setProperty('--hero-f', `${f.toFixed(1)}px`);
   }
 
-  private dropStamp(el: HTMLElement, fast: boolean): void {
+  /**
+   * Takes a stamp off screen. Its own exit (and a fast one when a newer stamp replaces it) stays solid
+   * for the first part, then snaps up and away; a loss retires it in a plain fast fade that sinks a
+   * little (RETIRE_MS), no celebratory snap.
+   */
+  private dropStamp(el: HTMLElement, fast: boolean | 'retire'): void {
     if (this.heroEl === el) {
       this.heroEl = null;
       window.clearTimeout(this.stampTimer);
@@ -542,18 +647,18 @@ export class Fx {
     }
     const inner = el.firstElementChild;
     for (const a of inner?.getAnimations() ?? []) a.cancel();
-    // A fast exit: it stays solid for the first part, then snaps up and away.
-    const a = inner
-      ? play(
-          inner,
-          [
+    const frames: Keyframe[] =
+      fast === 'retire'
+        ? [
+            { opacity: 1, transform: 'none' },
+            { opacity: 0, transform: 'translateY(6px) scale(0.94)' },
+          ]
+        : [
             { opacity: 1, transform: 'none' },
             { opacity: 1, transform: 'translateY(-3px) scale(1.04)', offset: 0.35 },
             { opacity: 0, transform: 'translateY(-14px) scale(0.86)' },
-          ],
-          { duration: fast ? 110 : STAMP_OUT_MS, easing: EASE_IN, fill: 'forwards' },
-        )
-      : null;
+          ];
+    const a = inner ? play(inner, frames, { duration: fast === 'retire' ? RETIRE_MS : fast ? 110 : STAMP_OUT_MS, easing: EASE_IN, fill: 'forwards' }) : null;
     if (a) a.onfinish = () => el.remove();
     else el.remove();
   }
@@ -789,9 +894,12 @@ export class Fx {
    */
   lost(points: number, stake: number, best: boolean, crack: boolean): void {
     const label = best ? 'Best combo lost' : 'Combo lost';
+    // The crash owns this beat: a stamp still up retires, and a loss line still waiting is superseded.
+    this.retireStamp();
+    this.dropQueued();
     const row = crack ? this.hud.bankAnchor() : null;
     if (!crack || !row || stake <= 0) {
-      this.pop(label, points, 'lost');
+      this.line(label, points, 'lost', true);
       return;
     }
     this.dropCrack();
@@ -841,7 +949,7 @@ export class Fx {
     };
     if (a) a.onfinish = done;
     else c.timer = window.setTimeout(done, 600);
-    this.pop(label, 0, 'lost');
+    this.line(label, 0, 'lost', true);
     this.onLayout();
   }
 

@@ -1,6 +1,7 @@
-import type { HintKind } from './contract';
+import type { HintKind, ScreenRect } from './contract';
 import type { InputMode } from '../game/input';
 import { h, kbd, kbdIcon } from './dom';
+import { pushBox } from './hud';
 import { icon } from './icons';
 import { play } from './motion';
 
@@ -26,6 +27,12 @@ const TEXT: Record<HintKind, string> = {
   boostPop: 'Hold, then let go at the lip',
 };
 
+/** A hint on screen for the occluder cache: the boxes to keep clear, and the node that animates them. */
+interface HintOcc {
+  root: HTMLElement;
+  els: Element[];
+}
+
 export class Hint {
   readonly el: HTMLElement;
   /** Called when a hint comes or goes (the occluder cache). */
@@ -33,7 +40,9 @@ export class Hint {
   private key = '';
   private zones: HTMLElement | null = null;
   private learned = false;
-  private occ: Element[] = [];
+  /** The live hint, and the one still fading out after a swap (it is on screen until it is gone). */
+  private occ: HintOcc | null = null;
+  private leaving: HintOcc[] = [];
 
   constructor(parent: HTMLElement) {
     this.el = h('div', 'gs-hintlayer');
@@ -42,9 +51,16 @@ export class Hint {
     parent.append(this.el);
   }
 
-  /** The visible hint's pill, or the zone glyphs and labels, for the occluder cache. */
-  occluders(): readonly Element[] {
-    return this.occ;
+  /**
+   * Pushes the boxes of the hint on screen into the occluder pool from index n; returns the new count.
+   * A hint entering is measured where it lands, not where its entry animation has it this frame (it
+   * rises 10 px into place), so the ghost edge chip is clear of the new hint's keys from the frame of
+   * a swap; the hint fading out after a swap counts until it has gone. Read inside the occluder pass.
+   */
+  measure(out: ScreenRect[], n: number): number {
+    for (const o of this.leaving) n = pushBoxes(out, n, o, 0);
+    if (this.occ) n = pushBoxes(out, n, this.occ, entryOffset(this.occ.root));
+    return n;
   }
 
   set(kind: HintKind | null, mode: InputMode, learned = this.learned): void {
@@ -58,13 +74,20 @@ export class Hint {
     }
     this.key = key;
     const old = Array.from(this.el.children) as HTMLElement[];
+    if (this.occ) this.leaving.push(this.occ);
     for (const o of old) {
       const a = play(o, [{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' });
-      if (a) a.onfinish = () => o.remove();
-      else o.remove();
+      const gone = () => {
+        o.remove();
+        const n = this.leaving.length;
+        this.leaving = this.leaving.filter((x) => x.root !== o);
+        if (this.leaving.length !== n) this.onLayout();
+      };
+      if (a) a.onfinish = gone;
+      else gone();
     }
     this.zones = null;
-    this.occ = [];
+    this.occ = null;
     if (!kind) {
       this.onLayout();
       return;
@@ -73,15 +96,41 @@ export class Hint {
     if (mode === 'touch' && kind !== 'draft') {
       node = touchZones(kind, learned);
       this.zones = node;
-      this.occ = Array.from(node.querySelectorAll('.gs-zone-mark, .gs-zone-txt'));
+      this.occ = { root: node, els: Array.from(node.querySelectorAll('.gs-zone-mark, .gs-zone-txt')) };
     } else {
       node = pill(kind, mode);
-      this.occ = [node];
+      this.occ = { root: node, els: [node] };
     }
     this.el.append(node);
-    play(node, [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    play(node, [{ opacity: 0, transform: `translateY(${ENTRY_RISE}px)` }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
     this.onLayout();
   }
+}
+
+/** A new hint rises this far into place as it enters. */
+const ENTRY_RISE = 10;
+
+/**
+ * How far the entry animation still has a hint below where it lands (px, from its computed
+ * transform): its rect minus this is its final rect. Zero once it has landed.
+ */
+function entryOffset(root: HTMLElement): number {
+  if (root.getAnimations().length === 0) return 0;
+  const t = getComputedStyle(root).transform;
+  if (!t || t === 'none') return 0;
+  const m = /^matrix\(([^)]+)\)$/.exec(t);
+  const ty = m ? Number(m[1].split(',')[5]) : 0;
+  return Number.isFinite(ty) ? ty : 0;
+}
+
+function pushBoxes(out: ScreenRect[], n: number, o: HintOcc, dy: number): number {
+  for (const el of o.els) {
+    if (!el.isConnected) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    n = pushBox(out, n, r.left, r.top - dy, r.right, r.bottom - dy);
+  }
+  return n;
 }
 
 function pill(kind: HintKind, mode: InputMode): HTMLElement {
