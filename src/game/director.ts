@@ -143,7 +143,8 @@ const UNLOCK_DUEL_S = UNLOCK_BANNER_S + AFTER_UNLOCK_S + 0.1;
  *  pill, the pop in the notice slot (opening duels ran 6 to 13 s and starved the first mission). */
 const DUEL_POP_BLOCK_S = 2.5;
 /** A duel's result keeps the rival (pill, C11 ring, chip) on its ghost this long (s), the pill's result
- *  flash, and no new duel opens meanwhile: the next one opens only once it can be named. */
+ *  flash, and no new duel opens meanwhile: the next one opens only once it can be named. The HUD's own
+ *  hold mirrors it (hud.ts DUEL_HOLD_MS, on the wall clock): change the two together. */
 const RIVAL_HOLD_S = 1.5;
 /** The rival pill never names a wreck or a ghost further back than this (m). */
 const RIVAL_BEHIND_M = 150;
