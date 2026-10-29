@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { COUNT_IN_MAX, FLOOR_FROM, RUN_FLOOR, earnedFlow, intensity, intensityTerms, skillMult, type IntensityInput } from '../src/game/intensity';
+import { COUNT_IN_MAX, FLOOR_FROM, FLOW_FULL, RUN_FLOOR, earnedFlow, intensity, intensityTerms, skillMult, type IntensityInput } from '../src/game/intensity';
 
 // The groove curve: the band grooves from the first cruise, and skill, earned flow and the pack add
 // layers; drafting alone never does.
@@ -67,8 +67,19 @@ describe('intensity', () => {
     near(earnedFlow(6, 8, 2), 3);
     near(earnedFlow(1.5, 40, 4), 1.5);
     near(earnedFlow(9, 40, 4), 6);
+    // Full at FLOW_FULL (3.5), where the glow peaks: an expert combo's flow is felt in the band too.
     near(intensityTerms(base({ earnedFlow: 6 })).flowK, 0.18);
-    near(intensityTerms(base({ earnedFlow: 3 })).flowK, 0.09);
+    near(intensityTerms(base({ earnedFlow: FLOW_FULL })).flowK, 0.18);
+    near(intensityTerms(base({ earnedFlow: 1.75 })).flowK, 0.09);
+  });
+
+  it('holds the boost term above 22 m/s at 0 while drafting or slung (the arp stays earned)', () => {
+    // 31 m/s in the pack: the slipstream's speed alone stays under the arp's entry (0.48).
+    const pack = intensity(base({ speed: 31, raceNear: true, drafting: true }));
+    near(intensityTerms(base({ speed: 31, drafting: true })).speedK, 0.36);
+    expect(pack).toBeLessThan(0.48);
+    // The same speed out of the slipstream (earned by a drift boost, say) keeps its term.
+    near(intensityTerms(base({ speed: 31 })).speedK, 0.36 + 0.16 * 0.45);
   });
 
   it('holds the run floor only from 2.5 s of run time', () => {
