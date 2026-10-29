@@ -148,10 +148,10 @@ const DUEL_POP_BLOCK_S = 2.5;
  *  flash, and no new duel opens meanwhile: the next one opens only once it can be named. The HUD's own
  *  hold mirrors it (hud.ts DUEL_HOLD_MS, on the wall clock): change the two together. */
 const RIVAL_HOLD_S = 1.5;
-/** Your best beaten in a duel while still neck and neck, the crossing already behind you: its 'Passed
- *  Your best' waits this long (s) at most for it to fall clear (C12's level band) once the result's
- *  hold is over. Pushed at once, it claimed a pass at the 8 s cap that had not happened ('PASSED Your
- *  best', then 'Your best neck and neck', then 'PASSED Your best' again for real). */
+/** Your best beaten in a duel, the crossing already behind you: its 'Passed Your best' waits this long
+ *  (s) at most, once the result's hold is over, for it to be clear behind you (C12's level band).
+ *  Pushed with the result, it claimed a pass at the 8 s cap that had not happened ('PASSED Your best',
+ *  then 'Your best neck and neck', then 'PASSED Your best' again for real). */
 const YOU_CLEAR_S = 6;
 /** The rival pill never names a wreck or a ghost further back than this (m). */
 const RIVAL_BEHIND_M = 150;
@@ -559,17 +559,15 @@ export class Director {
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
-          // Your best, beaten in a duel and clear behind you now: 'Passed Your best' (C7) gets its
-          // moment (the pass itself was muted inside the duel, and a duel with your own line runs
-          // long). Only jostled at the start, its first pass is this one: it pays the base, and it is
-          // spent (a re-pass later read 'Passed Your best' a second time). Still neck and neck (C12),
-          // nothing is passed yet: with the crossing already behind you it waits to fall clear
-          // (YOU_CLEAR_S); with it still to come, the race's own first pass is the moment.
-          const p = f.poses.get(d.id);
-          if (t.entry.kind === 'you' && p) {
-            if (p.z < rz - LEVEL_IN_M) this.passYourBest(ghost, sim, haunted);
-            else if (t.status === 1) this.youClear = { id: d.id, until: now + YOU_CLEAR_S };
-          }
+          // Your best, beaten in a duel with the crossing behind you: 'Passed Your best' (C7) gets its
+          // moment once the result's flash has had its hold and the ghost is clear behind you (C12's
+          // level band; YOU_CLEAR_S at most). The pass itself was muted inside the duel, and a duel with
+          // your own line runs long. Pushed with the result, at the 8 s cap, it claimed a pass inside
+          // the neck-and-neck band (then 'PASSED Your best' again for real), and in the same frame it
+          // took the pill from 'Held off Your best', which never showed. Only jostled at the start, its
+          // first pass is this one: it pays the base, and it is spent. With the crossing still to come,
+          // the race's own first pass is the moment.
+          if (t.entry.kind === 'you' && t.status === 1) this.youClear = { id: d.id, until: now + RIVAL_HOLD_S + YOU_CLEAR_S };
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
           if (d.phase === 'lost') {
@@ -1097,15 +1095,15 @@ export class Director {
     this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
   }
 
-  /** Your best, beaten in a duel neck and neck with the crossing behind you: 'Passed Your best' once it
-   *  is clear behind (C12's level band) and the result's hold is over; let go if it gets back level
-   *  with you or past you, wrecks, or YOU_CLEAR_S runs out. */
+  /** Your best, beaten in a duel with the crossing behind you: 'Passed Your best' once the result's
+   *  hold is over and it is clear behind (C12's level band); let go if it gets back past you, wrecks,
+   *  or YOU_CLEAR_S runs out. */
   private yourBestClear(f: DirectorFrame, sim: Sim, now: number, live: boolean, haunted: boolean): void {
     const w = this.youClear;
     if (!w) return;
     const t = f.tracks.find((k) => k.entry.id === w.id);
     const p = f.poses.get(w.id);
-    if (!live || !t || !p || p.done || t.status !== 1 || now > w.until) {
+    if (!live || !t || !p || p.done || t.status === -1 || now > w.until) {
       this.youClear = null;
       return;
     }

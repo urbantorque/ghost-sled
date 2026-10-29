@@ -738,7 +738,7 @@ describe('the race', () => {
     expect((q.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id).toBe(2);
   });
 
-  it("a duel with your best won, clear behind you: 'Passed Your best' gets its beat; a duel is resolved after 8 s", () => {
+  it("a duel with your best won, clear behind you: 'Passed Your best' after the result's flash; a duel is resolved after 8 s", () => {
     const r = new Rig();
     const you = track(1001, 'you', 'Rider');
     r.tracks = [you];
@@ -748,14 +748,16 @@ describe('the race', () => {
     // Two metres behind your line for the whole 8 s (inside the 4 m resolve line): it resolves by who leads.
     you.status = 1;
     r.poses.set(1001, pose(r.sim.s.z - 2));
-    const out = r.idle(8);
+    const out = r.idle(10);
     const duel = of(out, 'duel');
     expect(duel.map((d) => d.phase)).toEqual(['heldOff']);
     const pass = of(out, 'pass');
     expect(pass).toHaveLength(1);
     expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, ghost: { kind: 'you' } });
-    // The duel beat first, so the pill's last word on it is the pass.
-    expect(out.indexOf(duel[0])).toBeLessThan(out.indexOf(pass[0]));
+    // 'Held off Your best' has the pill for its 1.5 s hold first (pushed with it, the pass took the
+    // pill in the same frame and the result never showed).
+    expect(pass[0].tick - duel[0].tick).toBeGreaterThanOrEqual(89);
+    expect(pass[0].tick - duel[0].tick).toBeLessThanOrEqual(92);
     expect(r.d.shownPasses.has(1001)).toBe(true);
   });
 
@@ -810,7 +812,7 @@ describe('the race', () => {
     expect(after).toHaveLength(1);
     expect(after[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, ghost: { kind: 'you' } });
     expect(of(r.idle(2), 'pass')).toHaveLength(0);
-    // Still level after YOU_CLEAR_S: let go, nothing claimed.
+    // Still level YOU_CLEAR_S after the result's hold: let go, nothing claimed.
     const q = new Rig();
     const y2 = track(1001, 'you', 'Rider');
     q.tracks = [y2];
@@ -820,7 +822,7 @@ describe('the race', () => {
     y2.status = 1;
     q.poses.set(1001, pose(q.sim.s.z - 1));
     toResult(q);
-    expect(of(q.idle(6.2), 'pass')).toHaveLength(0);
+    expect(of(q.idle(7.7), 'pass')).toHaveLength(0);
     q.poses.set(1001, pose(q.sim.s.z - 2.2));
     expect(of(q.idle(1), 'pass')).toHaveLength(0);
   });
@@ -956,7 +958,7 @@ describe('the race', () => {
     expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
     you.status = 1;
     r.poses.set(1001, pose(r.sim.s.z - 2));
-    const out = r.idle(8);
+    const out = r.idle(10);
     expect(of(out, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
     const pass = of(out, 'pass');
     expect(pass).toHaveLength(1);
