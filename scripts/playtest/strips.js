@@ -2,66 +2,105 @@
 // strip is 4 to 6 screenshots: after a director beat lands (frame 0 is the frame the beat was named
 // in, keyed on window.__gs.director.log), or, for a place you ride up to (a km arch, a graveyard
 // cairn), at set distances before and just past it. Every frame carries a probe (camera mode, roll,
-// jolt, crash hold, FOV, the time scale, the director's feel and the tags on screen), so a strip can
-// be read as numbers too.
+// jolt, crash hold, FOV, the time scale, the director's feel, the tags on screen, what the HUD says
+// and which banners are mid-transition), so a strip can be read as numbers too.
 //
-// The default plan rides REAL runs with the merged director: pass, duel won, whisker, stomp streak,
-// drift tier 3 release, bank tier 3, km arch, graveyard, finale and the crash orbit, plus a held
-// drift's spray heating through tiers 1 to 3 and earned flow on the rider ('In the flow' when a run
-// earns it: maxPerType counts it, a run that never does leaves it unstripped).
+// USAGE (against a preview build; headless only, a headed browser drops to 2 fps when the display
+// sleeps):
+//   npx vite build && npx vite preview --port 4182 --host 127.0.0.1 --strictPort
+//   playwright-cli -s=gs open --config=.playwright/cli-headless.config.json
+//   playwright-cli -s=gs goto http://127.0.0.1:4182/
+//   playwright-cli -s=gs eval "window.__stripCfg = { label: 'fun', moments: ['slung', 'missionPop'], fresh: true }"
+//   playwright-cli -s=gs run-code --filename=scripts/playtest/strips.js > strips.json
+// (A phone: open the session with .playwright/mobile-headless.config.json instead.) The JSON comes
+// back on stdout; run-code has no file system, so redirect it. PNGs go to cfg.out.
+//
+// The default plan rides REAL runs with the merged director, for the fun panel: a pass, Slung past
+// (N), Passed Your best (C7), a duel opening and its result, Mission done, New ground, a whisker, a
+// stomp streak (2 and 5 or more in a row), drift tier 3 release, bank tier 3, km arch, graveyard,
+// finale and the crash orbit, plus a held drift's spray heating through tiers 1 to 3, earned flow
+// on the rider and 'In the flow' (each when a run earns it: maxPerType counts it, a run that never
+// does leaves it unstripped). Two plans cover the panel between them: the default rivals save (your
+// best rides as a ghost, New ground, Passed Your best, a nemesis, a friend) and fresh: true (a first
+// visit: the opening slingshot through the bunch and 'Mission done: Pass a ghost' after the first
+// pass).
 //
 // The game runs on a virtual clock while strips are taken: requestAnimationFrame, performance.now and
 // setTimeout are driven from here in exact 1/60 s steps, so a screenshot never costs game time and
 // every strip is frame-exact (the crash beat's held frame, the 950 or 1,150 ms results). CSS and
-// WAAPI animations (HUD stamps, tag rings) still run on the wall clock. The clock is handed back to
-// the browser before the script returns, error or not: playwright-cli waits on the page's own
-// setTimeout after every command, so a page left on the virtual clock hangs the next command.
+// WAAPI animations (banner entries and exits, the race row's fade back, HUD stamps, tag rings) follow
+// it too (animClock): each is paused the frame it appears and seeked by the frame's time, so a frozen
+// strip never shows a banner half gone over the race row from the wall-clock time a screenshot took.
+// Frames caught while a banner or stamp is part way through a transition are still real, and listed
+// per strip in midFrames (each probe's bannerMid and anims say which and how far). The clock and the
+// paused animations are handed back to the browser before the script returns, error or not:
+// playwright-cli waits on the page's own setTimeout after every command, so a page left on the
+// virtual clock hangs the next command.
 //
-// Run against a preview build:
-//   playwright-cli -s=gs run-code --filename=scripts/playtest/strips.js
 // Set window.__stripCfg on the current page first (any page of the build) to change the plan:
 //   {
 //     label: 'fun',                        // file name prefix
 //     base: 'http://127.0.0.1:4182/',
 //     params: 'tier=medium&m=0&event=3',   // extra URL parameters (mood=N, event=N, demo=N, tier, m)
 //     out: 'C:/.../shots/strips',          // absolute folder for the PNGs
-//     moments: ['pass', 'crash'],          // names from MOMENTS below (default: all of them)
+//     moments: ['pass', 'crash'],          // names from MOMENTS below (default: all but duelWon)
 //     beats: ['stomp'],                    // also strip these raw director.log types, any entry
 //     frames: [0, 4, 10, 18, 30],          // frame offsets for the raw beats
 //     maxPerType: 1, maxSeconds: 150, after: 0,   // after: ignore beats before this run time (s)
-//     pilot: 'show',                       // 'show' | 'mid' | 'expert' | 'line' | 'none'
-//     rivals: true,                        // a seeded save: your best 330 m (the gold band), best
+//     pilot: 'show',                       // 'show' | 'mid' | 'expert' | 'novice' | 'line' | 'none'
+//     seed: 4321,                          // the pilot's seed for the first run (+1 each run)
+//     rivals: true,                        // a seeded save: your best near 330 m (the gold band), best
 //                                          // combo 1,600 (a bigger bank is a real tier 3), a nemesis
 //                                          // grudge and a friend's challenge link, all from the pool
-//     standIns: true,                      // the two paths a pilot or this tree cannot reach (below)
+//     bestReplay: true,                    // with rivals: your best is a pool run's replay, so 'Your
+//                                          // best' rides in the field (false: the band only)
+//     fresh: false,                        // a first visit instead (no save at all; rivals off)
+//     save: null,                          // or your own: { 'ghostsled.save.v1': {...} }
+//     standIns: true,                      // the paths a pilot or this tree cannot reach (below)
 //     reduced: false,                      // emulate prefers-reduced-motion: reduce
+//     animClock: true,                     // CSS and WAAPI animations on the virtual clock
 //     synth: false,                        // legacy stand-ins for an unmerged director (below)
 //     runs: 3,                             // runs to ride (Run Again between them) until all are stripped
 //   }
 // standIns: true covers, and only until each is stripped once, the paths a scripted pilot (or this
-// tree) cannot reach: (1) the graveyards: the app does not yet cluster the pool's crashes, so the
-// script finds them (3 or more within 8 m) and calls the real world.setGraveyards at the run's start
-// when nothing placed any; (2) drift tier 3: the pilot's drifts run under a second, so while one is
-// held the sled's drift charge is topped up past tier 3's 2.4; (3) bank tier 3: the pilot's combos bank
-// under 1,500, so once a combo holds 3 skill moves its pending pool is raised to bank just over your
-// best combo. In each case the sim event, the director's beat and grading, and every consumer (HUD,
-// camera, world, sound) are real. Counts are reported in the JSON (standIns).
+// tree) cannot reach: (1) the graveyards: when nothing placed any, the script finds the pool's crash
+// clusters (3 or more within 8 m) and calls the real world.setGraveyards at the run's start; (2) drift
+// tier 3: the pilot's drifts run under a second, so while one is held the sled's drift charge is
+// topped up past tier 3's 2.4; (3) bank tier 3: the pilot's combos bank under 1,500, so once a combo
+// holds 3 skill moves its pending pool is raised to bank just over your best combo. In each case the
+// sim event, the director's beat and grading, and every consumer (HUD, camera, world, sound) are
+// real. Counts are reported in the JSON (standIns). Everything else (slung, passes, duels, missions,
+// New ground, stomps, whiskers, flow, the crash) is the pilot's own riding.
 // The show pilot is the expert's hands (spins, tight stomps) that also rides at the next ghost's line
 // (duels) and, until a whisker is stripped, aims to pass a hazard near the line a quarter metre off its
 // edge at speed (the sim grades the real gap).
 // synth: true adds, only where the director has not named them, a crash beat with orbitFrom (and the
 // crash render curve), a bump beat with its side and ghostTrick beats. The director now names all of
 // them, so it is off by default and kept for older trees.
-// Returns JSON: { label, counts, standIns, error, strips: [{ moment, type, t, label, files, probes }] }.
+// Returns JSON: { label, reduced, rivals, counts, standIns, runs, error,
+//   strips: [{ moment, type, t, label, lag, files, probes, midFrames }] }.
 async (page) => {
   /** The named moments: a director.log match and frame offsets, or a place ridden up to and the
    *  distances (metres, negative before it) at which to take each frame. */
   const MOMENTS = {
     pass: { type: 'pass', named: true, frames: [0, 5, 12, 22, 36] },
-    // A duel that pays: won, or held off (the ghost spent most of it behind you). Same camera nudge.
+    // A slingshot pass ('Slung past', or 'Slung past N' through a bunch): the HUD text is in the probes.
+    slung: { type: 'pass', named: true, word: 'slung', frames: [0, 4, 10, 18, 30] },
+    // Contract C7: a shown pass of your own best ghost (needs a best with a replay: rivals does that).
+    passYourBest: { type: 'pass', named: true, you: true, frames: [0, 5, 12, 22, 36] },
+    // A duel opening, and its result (won, held off or lost). Same camera nudge.
+    duelOpen: { type: 'duel', grade: 'open', frames: [0, 6, 14, 30] },
+    duelResult: { type: 'duel', grade: ['won', 'heldOff', 'lost'], frames: [0, 5, 12, 22, 36, 60] },
+    // (The older name: a duel that pays, won or held off. Not in the default plan; duelResult covers it.)
     duelWon: { type: 'duel', grade: ['won', 'heldOff'], frames: [0, 5, 12, 22, 36] },
+    // 'Mission done' mid-run (on a fresh save the first one is 'Pass a ghost', after the first pass).
+    missionPop: { type: 'missionPop', frames: [0, 6, 14, 30, 60, 100] },
+    // Crossing your best distance: the gold band's flare and the 'New ground' callout.
+    newGround: { type: 'newGround', frames: [0, 4, 10, 20, 36] },
     whisker: { type: 'nearMiss', grade: 'whisker', frames: [0, 2, 5, 9, 16] },
     stompStreak: { type: 'stomp', minTier: 2, frames: [0, 3, 7, 12, 20, 32] },
+    // 'Stomp streak N' proper (five in a row or more).
+    stomp5: { type: 'stomp', minTier: 5, frames: [0, 3, 7, 12, 20, 32] },
     drift3: { type: 'driftRelease', tier: 3, frames: [0, 3, 7, 12, 20, 32] },
     // A held drift's spray heating through its tiers (the first frame each tier shows).
     heat1: { state: 'driftTier', tier: 1, frames: [0, 4, 8] },
@@ -83,7 +122,7 @@ async (page) => {
     base: 'http://127.0.0.1:4182/',
     params: 'tier=medium&m=0&event=3',
     out: null,
-    moments: Object.keys(MOMENTS),
+    moments: Object.keys(MOMENTS).filter((k) => k !== 'duelWon'),
     beats: [],
     frames: [0, 4, 10, 18, 30],
     maxPerType: 1,
@@ -95,9 +134,14 @@ async (page) => {
     reduced: false,
     synth: false,
     save: null,
+    fresh: false,
+    bestReplay: true,
+    animClock: true,
+    seed: 4321,
     runs: 3,
   };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__stripCfg).catch(() => null)) || {}) };
+  if (cfg.fresh) cfg.rivals = false;
   const out = (cfg.out || 'shots/strips').replace(/\\/g, '/').replace(/\/$/, '');
   await page.emulateMedia({ reducedMotion: cfg.reduced ? 'reduce' : 'no-preference' });
   // Every wanted thing to strip: the named moments, then any raw beat types.
@@ -106,25 +150,34 @@ async (page) => {
     ...cfg.beats.map((b) => ({ key: b, type: b, frames: cfg.frames })),
   ];
   let extra = '';
-  if (cfg.save || cfg.rivals) {
+  if (cfg.save || cfg.rivals || cfg.fresh) {
     await page.goto(`${cfg.base}?platform=mock&debug&${cfg.params}`);
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'title', null, { timeout: 30000 });
-    if (cfg.save) {
+    if (cfg.fresh) {
+      // A first visit: nothing stored, so the first run is the session's first (plain) and its
+      // missions are the starters ('Pass a ghost' first).
+      await page.evaluate(() => {
+        for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
+      });
+    } else if (cfg.save) {
       await page.evaluate((s) => {
         for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
         for (const [k, v] of Object.entries(s)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
       }, cfg.save);
     } else {
-      // The rivals save, built from this mountain's own pool: a best at 330 m with no replay (so its
-      // gold band and tag show all run), a best combo of 1,600, a grudge on a three-run streak (a
-      // nemesis) and, through the URL, a friend's challenge. Everything else is defaulted by load().
-      const link = await page.evaluate(() => {
+      // The rivals save, built from this mountain's own pool: a best near 330 m (with bestReplay, the
+      // replay of the pool run nearest it, so 'Your best' rides in the field and can be passed;
+      // without, no replay, only the gold band), a best combo of 1,600, a grudge on a three-run
+      // streak (a nemesis) and, through the URL, a friend's challenge. Everything else is defaulted
+      // by load().
+      const link = await page.evaluate((bestReplay) => {
         const app = window.__gs;
         const key = app.mountain.id;
         const pool = app.poolForMountain(app.mountain).slice().sort((a, b) => a.distance - b.distance);
-        const near = (d) => pool.reduce((best, g) => (Math.abs(g.distance - d) < Math.abs(best.distance - d) ? g : best), pool[0]);
+        const near = (d, not = []) => pool.filter((g) => !not.includes(g)).reduce((best, g) => (Math.abs(g.distance - d) < Math.abs(best.distance - d) ? g : best));
         const grudge = near(520);
-        const friend = pool.filter((g) => g !== grudge).reduce((best, g) => (Math.abs(g.distance - 760) < Math.abs(best.distance - 760) ? g : best));
+        const friend = near(760, [grudge]);
+        const own = bestReplay ? near(330, [grudge, friend]) : null;
         for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
         const save = {
           v: 1,
@@ -134,24 +187,28 @@ async (page) => {
           ghostsPassed: 30,
           runs: 12,
           mountain: key,
-          best: { [key]: { score: 2500, distance: 330, record: '' } },
+          best: { [key]: own ? { score: Math.min(2500, own.score), distance: own.distance, record: own.record } : { score: 2500, distance: 330, record: '' } },
           grudge: { [key]: { name: grudge.name, score: grudge.score, record: grudge.record, them: 3, streak: 3, by: 40, distance: grudge.distance } },
           stats: { bestScore: 2500, bestCombo: 1600, longestAir: 2, perfects: 20, topSpeed: 30, yetiHops: 0, avalanches: 0 },
           runDists: { [key]: [300, 340, 310, 360, 330] },
         };
         localStorage.setItem('ghostsled.save.v1', JSON.stringify(save));
-        return { c: friend.record, friend: friend.name, friendAt: Math.round(friend.distance), grudge: grudge.name, grudgeAt: Math.round(grudge.distance) };
-      });
+        return { c: friend.record, friend: friend.name, friendAt: Math.round(friend.distance), grudge: grudge.name, grudgeAt: Math.round(grudge.distance), bestAt: own ? Math.round(own.distance) : 330, bestReplay: !!own };
+      }, cfg.bestReplay);
       extra = `&c=${encodeURIComponent(link.c)}`;
-      cfg.rivalsInfo = { friend: link.friend, friendAt: link.friendAt, grudge: link.grudge, grudgeAt: link.grudgeAt };
+      cfg.rivalsInfo = { friend: link.friend, friendAt: link.friendAt, grudge: link.grudge, grudgeAt: link.grudgeAt, bestAt: link.bestAt, bestReplay: link.bestReplay };
     }
   }
   const url = `${cfg.base}?platform=mock&debug&autoride=1&${cfg.params}${extra}`;
   await page.goto(url);
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 30000 });
 
-  // The virtual clock.
-  await page.evaluate(() => {
+  // The virtual clock. CSS and WAAPI animations follow it too (animClock): each one is paused the
+  // frame it first appears and then seeked by exactly the frame's time, so a banner's entry, hold
+  // and exit, the race row's fade back and every stamp hold still while a strip freezes on a beat
+  // (on the wall clock they ran on during screenshots, and frozen strips showed banners double
+  // exposed over the race row).
+  await page.evaluate((animClock) => {
     if (window.__vc && window.__vc.on) return;
     const orig = {
       now: performance.now.bind(performance),
@@ -160,10 +217,41 @@ async (page) => {
       st: window.setTimeout.bind(window),
       ct: window.clearTimeout.bind(window),
     };
-    const vc = { t: performance.now(), q: [], timers: [], id: 1, frames: 0, on: true };
+    const vc = { t: performance.now(), q: [], timers: [], id: 1, frames: 0, on: true, anims: new Set() };
     window.__vc = vc;
+    // Animations: the ones already seen are advanced by dt (finished once past their end, so their
+    // finish events and promises fire in step); new ones are caught and paused at their start.
+    const seekAnims = (dt) => {
+      for (const an of vc.anims) {
+        try {
+          if (an.playState === 'idle' || an.playState === 'finished') {
+            vc.anims.delete(an);
+            continue;
+          }
+          const end = an.effect ? an.effect.getComputedTiming().endTime : Infinity;
+          const t = (Number(an.currentTime) || 0) + dt * (an.playbackRate || 1);
+          if (Number.isFinite(end) && t >= end) {
+            an.finish();
+            vc.anims.delete(an);
+          } else an.currentTime = t;
+        } catch (e) {
+          vc.anims.delete(an);
+        }
+      }
+    };
+    const catchAnims = () => {
+      for (const an of document.getAnimations()) {
+        if (vc.anims.has(an) || an.playState === 'finished' || an.playState === 'idle' || an.__vcLet) continue;
+        try {
+          an.pause();
+          vc.anims.add(an);
+        } catch (e) {
+          an.__vcLet = true;
+        }
+      }
+    };
     // Back to the browser's clock, carrying on from the virtual time (no jump either way), with the
-    // queued frame callbacks and timers handed over.
+    // queued frame callbacks, timers and paused animations handed over.
     vc.restore = () => {
       if (!vc.on) return;
       vc.on = false;
@@ -179,6 +267,14 @@ async (page) => {
       for (const x of vc.timers) orig.st(x.fn, Math.max(0, x.at - vc.t));
       vc.q = [];
       vc.timers = [];
+      for (const an of vc.anims) {
+        try {
+          if (an.playState === 'paused') an.play();
+        } catch (e) {
+          // (a cancelled animation stays cancelled)
+        }
+      }
+      vc.anims.clear();
     };
     performance.now = () => vc.t;
     window.requestAnimationFrame = (cb) => {
@@ -194,9 +290,11 @@ async (page) => {
     window.clearTimeout = (id) => {
       vc.timers = vc.timers.filter((x) => x.id !== id);
     };
+    if (animClock) catchAnims();
     vc.step = (n = 1, dt = 1000 / 60) => {
       for (let i = 0; i < n; i++) {
         vc.t += dt;
+        if (animClock) seekAnims(dt);
         const due = vc.timers.filter((x) => x.at <= vc.t);
         if (due.length) vc.timers = vc.timers.filter((x) => x.at > vc.t);
         for (const x of due) {
@@ -209,11 +307,12 @@ async (page) => {
         const q = vc.q;
         vc.q = [];
         for (const cb of q) cb(vc.t);
+        // Whatever this frame started (a banner's entry, a transition) waits for the next frame.
+        if (animClock) catchAnims();
         vc.frames++;
       }
     };
-  });
-
+  }, cfg.animClock);
   // Legacy stand-ins for beats an unmerged director has not wired (synth: true).
   if (cfg.synth) {
     await page.evaluate(() => {
@@ -340,6 +439,9 @@ async (page) => {
         if (w.grade !== undefined && !(Array.isArray(w.grade) ? w.grade.includes(e.grade) : e.grade === w.grade)) return false;
         if (w.tier !== undefined && e.tier !== w.tier) return false;
         if (w.minTier !== undefined && !((e.tier ?? 0) >= w.minTier)) return false;
+        if (w.word !== undefined && e.word !== w.word) return false;
+        // Your own best ghost carries your name in the log ('Your best' on screen).
+        if (w.you && !(e.word === 'yourBest' || (e.label && e.label === app.save.data.name))) return false;
         return true;
       };
     },
@@ -363,7 +465,8 @@ async (page) => {
       const sim = run.sim;
       const c = sim.course;
       const expert = skill === 'expert' || skill === 'show';
-      const P = { flight: 0, spin: 0, wasAir: false, drift: 0, bias: 0 };
+      const novice = skill === 'novice';
+      const P = { flight: 0, spin: 0, wasAir: false, drift: 0, bias: 0, stomp: true, away: 0, tap: 0, lvl: 4, next: 0, wob: rnd() * 6.28 };
       const timeToLand = (s) => {
         let y = s.y, vy = s.vy, x = s.x, z = s.z, t = 0;
         while (t < 4) { vy -= sim.gravity / 60; y += vy / 60; x += s.vx / 60; z += s.vz / 60; t += 1 / 60; if (y <= c.ground(x, z)) break; }
@@ -398,8 +501,9 @@ async (page) => {
             P.flight = land.t;
             const off = land.x - c.safeX(land.z);
             const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
-            P.spin = land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (expert ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
-            P.bias = (rnd() - 0.5) * (expert ? 0.05 : 0.16);
+            P.spin = !novice && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (expert ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
+            P.bias = (rnd() - 0.5) * (expert ? 0.05 : novice ? 0.3 : 0.16);
+            P.stomp = !novice || rnd() < 0.4;
           }
           let steer = 4;
           let goal = (expert && P.flight > 2.4 ? 4 : 2) * Math.PI;
@@ -411,9 +515,24 @@ async (page) => {
             if (Math.abs(off) > 0.8) steer = off > 0 ? 2 : 6;
           }
           const w = land.t - P.bias;
-          return { steer, action: w < 0.11 && w > 0.01 };
+          return { steer, action: P.stomp && w < 0.11 && w > 0.01 };
         }
         P.wasAir = false;
+        // The novice (telemetry.js's): a wobbly safe line, a look away now and then, stray taps.
+        if (novice) {
+          if (P.away > T) return { steer: 4, action: false };
+          if (rnd() < 1 / (60 * 30)) {
+            P.away = T + 0.5 + rnd() * 0.6;
+            return { steer: 4, action: false };
+          }
+          if (T >= P.next) {
+            P.next = T + 0.08 + rnd() * 0.08;
+            const wob = 0.45 * Math.sin(T * 0.7 + P.wob) + 0.25 * Math.sin(T * 1.9 + P.wob * 2);
+            P.lvl = steerTo(s, (z) => c.safeX(z) + wob, 10, 0.06);
+          }
+          if (P.tap <= T && rnd() < 1 / (60 * 8)) P.tap = T + 0.3 + rnd() * 0.4;
+          return { steer: P.lvl, action: P.tap > T };
+        }
         const S = window.__strips;
         // Stand-in 3: the pilot's combos bank under 1,500, so once a combo holds 3 skill moves its
         // pending pool is raised to bank just over your best combo (the director grades the real bank).
@@ -537,6 +656,46 @@ async (page) => {
           const el = g.rivalEl;
           return el && el.style.opacity !== '0' && el.style.opacity !== '' ? { id: g.rivalId, c: el.style.getPropertyValue('--c'), txt: g.rivalTxt, op: el.style.opacity, rival: app.director.out && app.director.out.rival ? app.director.out.rival.id : null } : null;
         })(),
+        // What the HUD says in this frame (the words a strip is read by: 'Slung past 3', 'Passed Your
+        // best', 'Mission done', 'DUEL name', 'New ground', a stamp).
+        hud: (() => {
+          // (Screen-reader copies, .gs-sr, are left out: the words as drawn.)
+          const txt = (el) => {
+            if (!el) return null;
+            const parts = [];
+            const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+            for (let n = walk.nextNode(); n; n = walk.nextNode()) if (!(n.parentElement && n.parentElement.closest('.gs-sr'))) parts.push(n.nodeValue.trim());
+            return parts.filter(Boolean).join(' ');
+          };
+          const shown = (el) => el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' && +getComputedStyle(el).opacity > 0.05;
+          const all = (sel) => [...document.querySelectorAll(sel)].filter((el) => shown(el) && !el.classList.contains('gs-sr')).map(txt).filter(Boolean);
+          return { race: txt(document.querySelector('.gs-race')), notices: all('.gs-notices > *'), calls: all('.gs-call-wrap'), hero: all('.gs-hero'), bank: all('.gs-bank'), crack: all('.gs-crack') };
+        })(),
+        // Banners and stamps mid-transition in this frame: each finite animation in progress on the top
+        // band (notices, the race row), a callout, a stamp, a bank or the crack, with its progress and
+        // its target's opacity. bannerMid is true when one of them is caught part faded (opacity
+        // between 0.05 and 0.95): a frame between two states, say a banner over the race row.
+        ...(() => {
+          const SEL = ['.gs-notices', '.gs-race', '.gs-call-wrap', '.gs-hero', '.gs-bank', '.gs-crack'];
+          const anims = [];
+          for (const an of document.getAnimations()) {
+            const tgt = an.effect && an.effect.target;
+            if (!tgt || !tgt.closest) continue;
+            const sel = SEL.find((s) => tgt.closest(s));
+            if (!sel) continue;
+            const ct = an.effect.getComputedTiming();
+            if (!Number.isFinite(ct.endTime) || ct.progress === null || ct.progress === undefined) continue;
+            const name = an.animationName || an.transitionProperty || an.id || 'waapi';
+            // The opacity actually drawn: the target's own times its ancestors' up to the banner root.
+            let op = 1;
+            for (let el = tgt; el && el !== document.body; el = el.parentElement) {
+              op *= +getComputedStyle(el).opacity;
+              if (el.matches(sel)) break;
+            }
+            anims.push({ sel, name, p: +ct.progress.toFixed(2), op: +op.toFixed(2) });
+          }
+          return { anims, bannerMid: anims.some((a) => a.op > 0.05 && a.op < 0.95) };
+        })(),
       };
     });
 
@@ -545,7 +704,7 @@ async (page) => {
   const counts = {};
   const done = () => wants.every((w) => (counts[w.key] || 0) >= cfg.maxPerType);
   let logIdx = 0;
-  let seed = 4321;
+  let seed = cfg.seed;
   let error = null;
   try {
     for (let r = 0; r < cfg.runs && !done(); r++) {
@@ -558,6 +717,13 @@ async (page) => {
         logIdx = 0;
       }
       await installPilot(cfg.pilot, seed++);
+      // The field this run rides against (kind:name), and any pool ghost that rides your best's own line
+      // (rivals with bestReplay: the pool run your best was made from can be picked again).
+      const field = await page.evaluate(() => {
+        const tr = window.__gs.ghosts.tracks;
+        const you = tr.find((x) => x.entry.kind === 'you');
+        return { field: tr.map((x) => x.entry.kind + ':' + x.entry.name), dupOfBest: you ? tr.filter((x) => x !== you && x.entry.record === you.entry.record).map((x) => x.entry.name) : [] };
+      });
       // A frame budget per run as well as the sim-time cap: the sim stops at a crash, so a crash that
       // never reached the results would otherwise step forever.
       const frameCap = (await page.evaluate(() => window.__vc.frames)) + Math.ceil(cfg.maxSeconds * 60) + 1200;
@@ -605,7 +771,7 @@ async (page) => {
         );
         logIdx = res.idx;
         if (res.end) {
-          runs.push({ run: r + 1, end: res.end, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
+          runs.push({ run: r + 1, end: res.end, ...field, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
           break;
         }
         if (!res.hit) continue;
@@ -613,6 +779,9 @@ async (page) => {
         const n = (counts[w.key] = (counts[w.key] || 0) + 1);
         await page.evaluate((k) => (window.__strips.need[k] = false), w.key);
         const strip = { moment: w.key, type: res.hit.type, t: res.hit.t, label: res.hit.label, files: [], probes: [] };
+        // Frames between the beat and frame 0 (a beat that landed while another strip was being taken
+        // is stripped from where the run is now; lag says how far behind its own frame that is).
+        strip.lag = await page.evaluate((t) => (window.__gs.run ? Math.max(0, Math.round((window.__gs.run.sim.tick / 60 - t) * 60)) : 0), res.hit.t);
         const name = (tag) => `${out}/${cfg.label}-${w.key}${n > 1 ? n : ''}-${tag}.png`;
         if (w.approach) {
           // A place: a frame as the sled reaches each distance from it (or wherever it crashed).
@@ -648,11 +817,13 @@ async (page) => {
             strip.probes.push({ k, ...(await probe()) });
           }
         }
+        // The frames caught with a banner or stamp part way through a transition (read them as such).
+        strip.midFrames = strip.probes.filter((q) => q.bannerMid).map((q) => (q.k !== undefined ? q.k : q.at));
         strips.push(strip);
         // The strip may have ridden through the results: the run is over.
         const ph = await page.evaluate(() => window.__gs.phase);
         if (done() || ph === 'results' || ph === 'title') {
-          runs.push({ run: r + 1, end: done() ? 'all stripped' : ph, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
+          runs.push({ run: r + 1, end: done() ? 'all stripped' : ph, ...field, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
           break;
         }
       }
