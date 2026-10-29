@@ -15,7 +15,7 @@ import { LandingAid } from './landing';
 import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
 import { Particles, Weather } from './particles';
-import { brushPoint } from './brush';
+import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { Rider } from './rider';
@@ -835,11 +835,13 @@ export class World {
    *  the top of a desktop frame and off the side of a phone's): the burst is thrown at the rider's side
    *  on the side you shaved, a little ahead and inside the frame (brush.ts). Same powder layer (no
    *  draw call, no material), the count scaled by the tier's particle budget like every burst. A
-   *  whisker throws the full amount, an ordinary near miss about two thirds. */
+   *  whisker throws the full amount, an ordinary near miss about two thirds. Shaved in the air, a
+   *  tree's snow comes off at the rider's height up to its crown; grit stays on the snow; a rider
+   *  well clear over either throws none (brush.ts). */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
     const bough = BOUGHS.has(b.obs);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT);
+    if (brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT, bough ? BRUSH_REACH_BOUGH : 0) === 0) return;
     this.particles.brush(this.fxB, this.fxT, this.carrier(s), bough, ICY.has(b.obs), (bough ? 22 : 18) * k);
   }
 
