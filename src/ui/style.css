@@ -3154,6 +3154,17 @@
   font-size: clamp(21px, calc(var(--u) * 1.5), 29px);
 }
 
+/* A race word on the side line keeps a 16 px gutter on a phone: a long one ("1 MORE GHOST OPENS
+   FROSTFANG GLACIER", 393 px at 17 px) shrinks to fit instead of running off both edges at 360 to
+   390 px. --len is its letter count (Fx); 0.68 em is a wide estimate of one heavy capital. */
+.gs-call.is-race .gs-call-label {
+  font-size: min(clamp(17px, calc(var(--u) * 1.22), 23px), calc((100vw - 32px) / (var(--len, 1) * 0.68)));
+}
+
+.gs-call.is-race.is-big .gs-call-label {
+  font-size: min(clamp(21px, calc(var(--u) * 1.5), 29px), calc((100vw - 32px) / (var(--len, 1) * 0.68)));
+}
+
 .gs-call.is-best .gs-call-pts {
   color: var(--you);
   font-size: clamp(18px, calc(var(--u) * 1.3), 25px);

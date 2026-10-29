@@ -369,6 +369,11 @@ export class Fx {
     }
 
     const inner = h('div', `gs-call is-${tone}`);
+    // A race word shrinks to fit a phone's width when it is long (style.css, --len its letter count).
+    if (race !== undefined) {
+      inner.classList.add('is-race');
+      inner.style.setProperty('--len', String(text.length));
+    }
     const countEl = h('span', 'gs-call-count');
     const tEl = h('span', 'gs-call-t');
     setLabel(tEl, text, o.who);
@@ -416,6 +421,7 @@ export class Fx {
     c.arrived = arrived;
     c.stepped = false;
     setLabel(c.tEl, text, who);
+    c.inner.style.setProperty('--len', String(text.length));
     if (tone !== c.tone) {
       c.inner.classList.replace(`is-${c.tone}`, `is-${tone}`);
       c.tone = tone;
