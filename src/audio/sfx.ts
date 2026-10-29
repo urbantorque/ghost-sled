@@ -1443,7 +1443,8 @@ export class Sfx {
       const after = b.word === 'yourBest' ? 0 : b.word === 'slung' ? 0.2 : b.word === 'double' || b.word === 'triple' || b.word === 'streak' ? 0.16 : 0.12;
       this.goldBell(v, tb + after, b.word !== 'streak' && b.word !== 'duelWon' && b.word !== 'heldOff');
     }
-    if (b.word === 'yourBest') return;
+    // Inside the gap the pass plays its ladder bell like any other.
+    if (b.word === 'yourBest' && best) return;
     fmBell(v, tb, this.note(i), 0.1, 0.4, 2, 1.1);
     ping(v, tb, this.note(i + 5), 0.03, 0.15);
     if (octave) ping(v, tb + 0.03, this.note(i + 10), 0.028, 0.25);

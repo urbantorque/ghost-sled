@@ -206,4 +206,21 @@ describe("your best overtaken rings whatever the pass's word", () => {
     sfx.beat(pass('you', 'tookBack'), 6.5);
     expect(at.map((t) => Math.round(t * 100) / 100)).toEqual([2.18, 6.68]);
   });
+
+  it("a 'yourBest' pass inside the gap still plays its ladder bell", () => {
+    const { sfx, pool } = rig();
+    golds(sfx);
+    sfx.frame();
+    sfx.beat(pass('you', 'yourBest'), 1);
+    const o = sfx as unknown as { note: (i: number) => number };
+    const notes: number[] = [];
+    const orig = o.note.bind(sfx);
+    o.note = (i) => {
+      notes.push(i);
+      return orig(i);
+    };
+    sfx.beat(pass('you', 'yourBest'), 2);
+    expect(notes.length).toBeGreaterThan(0);
+    expect(pool.peak).toBeGreaterThanOrEqual(2);
+  });
 });

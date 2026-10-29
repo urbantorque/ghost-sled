@@ -53,17 +53,18 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
  *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.28 (cruising sits at 0.36), the arp
  *   from 0.48 and the kick from 0.54, clap and sparkle from 0.72, the lead from 0.82. Danger adds a
- *   pulsing low root. The music pool (32) steals the most decayed non-pad voice, so the pad bed is
- *   never cut mid-chord; skipped steps (a stalled timer, music volume at zero) rebuild the missing
- *   pad.
+ *   pulsing low root. The music pool (32) steals by the same rule and never a pad voice while it
+ *   has another, so the pad bed is never cut mid-chord; skipped steps (a stalled timer, music
+ *   volume at zero) rebuild the missing pad.
  * - The drive: the engine takes the game's intensity (src/game/intensity.ts), adds the groove (a
  *   stomp streak holds it up: +0.06 at 2 in a row up to +0.18 at 5), smooths it (rise 0.7 s, fall
  *   2.2 s), holds it at 0.25 under a chaos reveal and snaps the band in as the card collapses, and
  *   adds short accents on top (a big callout, a stomp that grows with the streak, a tier-3 drift
  *   crack, a big bank on its landing, a kilometre) that fade within 1.5 s. The first time a run's
  *   target reaches the run floor (0.30, from 2.5 s) the drive jumps to it instead of rising from
- *   about 0.12 over the 0.7 s rise, so the bass is in a breath after Ride (about 2.6 s, not 5 s) on
- *   plain runs too. Drafting earns none of it: a draft boost with the pack peaks under the arp.
+ *   about 0.12 over the 0.7 s rise, so the bass is in a breath after Ride on plain runs too (2.55 s;
+ *   it was 4.6 to 4.9 s). Drafting earns none of it: a draft boost with the pack peaks under the
+ *   arp.
  * - Beats (src/game/beats.ts) arrive before the frame's raw sim events: sfx.ts voices every named
  *   moment (pass words, chimes, stings, the bank roll and drop) and keeps the context the raw
  *   sounds read (the stomp streak, a near miss's side and grade). Grid pulses (the fuse on a big
