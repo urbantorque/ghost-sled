@@ -1511,6 +1511,38 @@ describe('mission and unlock pops', () => {
     expect((pops[0].tick - open.tick) / 60).toBeGreaterThanOrEqual(2.45);
   });
 
+  it("a duel resolved under a pop's banner keeps its result's hold for after the banner", () => {
+    // ver-3: 'Ember Peak unlocked' went up mid duel, the result landed under it, and the next banner
+    // took the race row as it left, so the duel's ending never showed.
+    let n = 0;
+    const r = new Rig({
+      lifetimePassed: 3,
+      unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }],
+      missionsCrossed: () => (++n === 1 ? [{ id: 'm', text: 'Pass a ghost', reward: 25 }] : []),
+    });
+    const g = track(1001);
+    const h = track(1002);
+    r.tracks = [g, h];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 10));
+    r.poses.set(1002, pose(r.sim.s.z - 30));
+    r.passed = 1;
+    r.frame([], { race: [{ type: 'pass', track: h, first: true }] });
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    expect(of(r.idle(1.1), 'duel')[0]?.phase).toBe('open');
+    const mid = r.idle(2.6);
+    const unlock = of(mid, 'unlockPop')[0];
+    expect(unlock).toBeDefined();
+    // The duel ends right under the unlock's banner.
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    const after = r.idle(6);
+    expect(of(after, 'duel')[0]?.phase).toBe('won');
+    const mission = of(after, 'missionPop')[0];
+    expect(mission).toBeDefined();
+    // The result flashes for its 1.5 s once the banner (2.6 s) has gone; only then the mission.
+    expect((mission.tick - unlock.tick) / 60).toBeGreaterThanOrEqual(2.6 + 1.5 - 0.05);
+  });
+
   it('back-to-back duels leave a waiting unlock its moment between them', () => {
     const r = new Rig({ lifetimePassed: 3, unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }] });
     const a = track(1001);
@@ -1695,6 +1727,30 @@ describe('the grudge settled', () => {
     expect(of(r.idle(2.3), 'duel')).toHaveLength(0);
     expect(of(r.idle(0.3), 'duel').map((b) => `${b.phase}:${b.ghost.id}`)).toEqual([`open:${y.entry.id}`]);
     expect(of(r.idle(5), 'grudgeSettled')).toHaveLength(0);
+    void d;
+  });
+
+  it("a duel with your best won while the grudge waits: 'Passed Your best' flashes first, then the banner", () => {
+    // ver-3: both waited for the result's hold and went up on one tick, so the gold pass played 2.3 s
+    // late under the rose banner.
+    const { r, g, d, y } = bunchRig();
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.poses.set(1003, pose(r.sim.s.z + 0.8));
+    expect(of(r.idle(1.1), 'duel').map((b) => `${b.phase}:${b.ghost.id}`)).toEqual([`open:${y.entry.id}`]);
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: g, first: true }] }), 'grudgeSettled')).toHaveLength(0);
+    // Your best drops clear behind you with the crossing behind: the duel is won.
+    y.status = 1;
+    r.poses.set(1003, pose(r.sim.s.z - 5));
+    const out = r.idle(6);
+    const res = of(out, 'duel')[0];
+    const pass = of(out, 'pass').find((b) => b.word === 'yourBest');
+    const settle = of(out, 'grudgeSettled')[0];
+    expect(res?.phase).toBe('won');
+    expect(pass).toBeDefined();
+    expect(settle).toBeDefined();
+    expect(pass!.tick - res.tick).toBeGreaterThanOrEqual(89);
+    expect(settle.tick - pass!.tick).toBeGreaterThanOrEqual(89);
     void d;
   });
 

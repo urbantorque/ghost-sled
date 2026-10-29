@@ -211,6 +211,11 @@ function isResult(w: Pick<Waiting, 'type' | 'word'>): boolean {
   return w.type === 'pass' && (w.word === 'duelWon' || w.word === 'heldOff');
 }
 
+/** Any duel's result, a lost one's "pulled away" news included. */
+function isAnyResult(w: Pick<Waiting, 'type' | 'word' | 'result'>): boolean {
+  return isResult(w) || (w.type === 'news' && w.result === true);
+}
+
 /**
  * The whole metres the rival pill shows for a signed `gap` (C12). The game holds the gap it sends at
  * the source in whole metres (the edge chip rounds the same number), and the pill shows that number
@@ -260,6 +265,8 @@ export interface Waiting {
   at: number;
   /** It waited under a banner: its stale clock starts again once the band lets the race row back. */
   band?: boolean;
+  /** A lost duel's "pulled away": the duel's result, though it is worded as news. */
+  result?: boolean;
 }
 
 /**
@@ -282,16 +289,16 @@ export function enqueueFlash<T extends Waiting>(pend: T[], f: T, max = 2): void 
   if (i >= 0) pend.splice(i, 1);
   pend.push(f);
   while (pend.length > max) {
-    const n = pend.findIndex((q) => q.type === 'news');
-    const o = pend.findIndex((q, k) => k < pend.length - 1 && !isResult(q) && q.kind !== 'you');
+    const n = pend.findIndex((q) => q.type === 'news' && !isAnyResult(q));
+    const o = pend.findIndex((q, k) => k < pend.length - 1 && !isAnyResult(q) && q.kind !== 'you');
     pend.splice(n >= 0 ? n : o >= 0 ? o : 0, 1);
   }
 }
 
 /**
  * The banner over the race row has gone: the flashes that waited under it start their stale clocks
- * now. A duel's result that waited under it plays first ("Held off RidgeUlla" lost its turn to a later
- * "Slung past SparkleCedar"), then one pass: the newest, or your best's if it was passed meanwhile (C7:
+ * now. A duel's result that waited under it plays first, a lost one's "pulled away" too ("Held off
+ * RidgeUlla" lost its turn to a later "Slung past SparkleCedar"), then one pass: the newest, or your best's if it was passed meanwhile (C7:
  * the gold "Passed Your best" is the moment, not the plain pass after it). The newest pass is the news:
  * a "Slung past 4" stepped back under an unlock toast no longer goes before the "Pass streak 5" after
  * it. With a pass to play, news that waited under the banner is dropped (the unlock tease played after
@@ -303,9 +310,9 @@ export function releaseBand(pend: Waiting[], now: number): void {
   let you = -1;
   for (let i = 0; i < pend.length; i++) {
     const p = pend[i];
-    if (!p.band || p.type !== 'pass') continue;
-    if (isResult(p)) res = i;
-    else {
+    if (!p.band) continue;
+    if (isAnyResult(p)) res = i;
+    else if (p.type === 'pass') {
       last = i;
       if (p.kind === 'you') you = i;
     }
@@ -315,7 +322,8 @@ export function releaseBand(pend: Waiting[], now: number): void {
   for (let i = pend.length - 1; i >= 0; i--) {
     const p = pend[i];
     if (!p.band) continue;
-    if ((p.type === 'pass' && i !== res && i !== pick) || (p.type === 'news' && (res >= 0 || pick >= 0))) pend.splice(i, 1);
+    if (i === res) continue;
+    if ((p.type === 'pass' && i !== pick) || (p.type === 'news' && (res >= 0 || pick >= 0))) pend.splice(i, 1);
   }
   if (kept) {
     pend.splice(pend.indexOf(kept), 1);

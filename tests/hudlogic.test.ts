@@ -186,6 +186,18 @@ describe('releaseBand', () => {
     expect(pend.map((p) => `${p.word}:${p.name}@${p.at}`)).toEqual(['heldOff:RidgeUlla@2230', 'slung:SparkleCedar@2230']);
   });
 
+  it("keeps a lost duel's 'pulled away' first, though it is worded as news", () => {
+    // ver-3: 'Your best pulled away' waited under a mission banner and was dropped as news once
+    // 'Took back Your best' waited with it.
+    const pend: Waiting[] = [
+      { type: 'news', name: 'Your best', kind: 'you', at: 0, band: true, result: true },
+      { type: 'pass', name: 'SparkleCedar', kind: 'pool', word: 'passed', at: 300, band: true },
+      { type: 'news', name: '', at: 400, band: true },
+    ];
+    releaseBand(pend, 2600);
+    expect(pend.map((p) => `${p.type}:${p.name}@${p.at}`)).toEqual(['news:Your best@2600', 'pass:SparkleCedar@2600']);
+  });
+
   it("keeps your best's pass over a newer plain one (C7)", () => {
     const pend: Waiting[] = [
       { type: 'pass', name: 'Your best', kind: 'you', word: 'streak', at: 0, band: true },

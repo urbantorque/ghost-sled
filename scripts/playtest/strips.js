@@ -23,8 +23,8 @@
 //              pilot over that best (New ground, New best, the results card that says so)
 //   rivals     the rivals save: the start call, Passed Your best, tier-3 drift release and bank, a
 //              stomp streak, a whisker, a graveyard, the crash orbit (and one with the pack), results
-//   flow       the expert demo on Frostfang (?demo=4, m=3): flow burning on the rider and 'In the
-//              flow' at about 26 s (deterministic)
+//   flow       the expert demo on Sakura (?demo=4, m=3): flow burning on the rider and 'In the
+//              flow' at about 21.5 s and again at 43 s (deterministic)
 //   stunt      telemetry.js's stunt pilot on Frostfang: 'Stomp streak 5' and up, and 'In the flow'
 //   avalanche  the stunt pilot through an Avalanche to 'Outran the avalanche'
 //   giftStorm  the stunt pilot through a Gift Storm to 'Caught N of 48'
@@ -158,7 +158,7 @@ async (page) => {
   //     then New best, and the results card that says so).
   //   rivals: the rivals save (Passed Your best, a nemesis call, tier-3 drift and bank, stomp streaks, a
   //     whisker, a graveyard, the crash orbit with the pack, the results card).
-  //   flow: the expert demo on Frostfang (?demo=4, m=3): 'In the flow' at about 26 s.
+  //   flow: the expert demo on Sakura (?demo=4, m=3): 'In the flow' at about 21.5 s.
   //   avalanche, giftStorm: an event run to its finale.
   const PLANS = {
     fresh: { fresh: true, params: 'tier=medium&m=0', pilots: ['novice', 'show'], seed: 7, runs: 4, retries: 5, moments: ['startCall', 'slung', 'slungN', 'duelOpen', 'duelResult', 'missionFirst', 'newGround', 'newBest', 'crashPack', 'resultsBest'] },

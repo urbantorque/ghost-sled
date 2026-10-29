@@ -313,6 +313,8 @@ export class Director {
   private settleBannerUntil = -1e9;
   /** Your best's 'Passed Your best' after a duel resolved neck and neck (YOU_CLEAR_S). */
   private youClear: { id: number; until: number } | null = null;
+  /** When the duel's 'Passed Your best' went up (a waiting settle lets it flash first). */
+  private youPassAt = -1e9;
   /** Your best's ghosts edged past in a muted start-line jostle: rides your own line, so the jostle at
    *  2 s used up its first pass and the real overtake later read 'Took back Your best' for 0 gifts. Its
    *  next pass is still its first (pays the base, reads 'Passed Your best'). */
@@ -452,6 +454,7 @@ export class Director {
     this.settleFreeAt = -1e9;
     this.settleBannerUntil = -1e9;
     this.youClear = null;
+    this.youPassAt = -1e9;
     this.gapRead.reset();
     this.youJostled.clear();
     this.newGroundTick = -1e9;
@@ -585,7 +588,10 @@ export class Director {
         const ghost = this.ref(t, f, sim);
         if (d.phase === 'open') this.duelOpenAt = now;
         else this.lastDuelEndAt = now;
-        if (d.phase === 'won' || d.phase === 'heldOff' || d.phase === 'lost') this.rivalHold = { id: d.id, until: Math.max(now, this.lastStompAt + STAMP_S) + RIVAL_HOLD_S };
+        // The result's hold starts once the race row is free: after a landing stamp, or a pop or settle
+        // banner that went up mid duel (the result waits under it and plays after it, and the waiting
+        // settle and the next pop wait out its hold, so a lost duel with your best is never cut).
+        if (d.phase === 'won' || d.phase === 'heldOff' || d.phase === 'lost') this.rivalHold = { id: d.id, until: Math.max(now, this.lastStompAt + STAMP_S, this.bannerUntil()) + RIVAL_HOLD_S };
         if (d.phase === 'won' || d.phase === 'heldOff') {
           resolved.set(d.id, d.phase);
           this.duelEnd.set(d.id, sim.tick);
@@ -1159,10 +1165,18 @@ export class Director {
     }
     if (now - this.settleFreeAt >= SETTLE_BURST_MAX_S) return false;
     return (
+      // 'Passed Your best' (C7) still to come after its duel, or flashing: the banner follows it.
+      this.youClear !== null ||
+      now - this.youPassAt < BURST_FLASH_TICKS / 60 ||
       tick - this.lastSlungPassTick <= SLING_TICKS ||
       (this.chainN >= 2 && tick - this.lastShownPassTick <= BURST_FLASH_TICKS) ||
       now - this.lastPopAt < (this.lastPopUnlock ? UNLOCK_BANNER_S : POP_BANNER_S)
     );
+  }
+
+  /** When the banner over the race row now (a pop's or a grudge settle's) leaves. */
+  private bannerUntil(): number {
+    return Math.max(this.settleBannerUntil, this.lastPopAt + (this.lastPopUnlock ? UNLOCK_BANNER_S : POP_BANNER_S));
   }
 
   private pushSettle(b: BeatOf<'grudgeSettled'>, sim: Sim, now: number): void {
@@ -1177,7 +1191,7 @@ export class Director {
   private passYourBest(ghost: GhostRef, sim: Sim, haunted: boolean): void {
     const owed = this.youJostled.delete(ghost.id) ? PASS_GIFTS * (haunted ? 2 : 1) : 0;
     const ladder = ++this.ladderN;
-    this.lastPassAt = this.clock;
+    this.lastPassAt = this.youPassAt = this.clock;
     this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
   }
 
