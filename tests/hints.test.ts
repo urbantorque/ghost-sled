@@ -135,6 +135,18 @@ describe('the hint coach', () => {
     expect(long[1].t).toBeCloseTo(66 * DT, 5);
   });
 
+  it('a stomp straight into the next flight brings the cue back after 0.2 s, not a frame later', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1, pop: 1, drift: 2, stomp: 1 };
+    expect(play(c, h, (i) => air(0.6 - i * DT, { airTicks: 30 + i }), 0.2)[0].show).toBe('stomp');
+    // Stomped (the app counts it and drops the cue), and the sled is already in the air again.
+    h.stomp = 2;
+    c.drop();
+    const next = play(c, h, (i) => air(1.0 - i * DT, { airTicks: i + 1 }), 0.5);
+    expect(next.map((x) => x.show)).toEqual(['stomp']);
+    expect(next[0].t).toBeGreaterThanOrEqual(0.2 - DT - 1e-9);
+  });
+
   it('the avalanche clears every hint', () => {
     const c = new HintCoach();
     const h: HintCounts = { steer: 1, pop: 1, stomp: 3, drift: 0 };

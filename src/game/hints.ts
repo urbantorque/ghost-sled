@@ -21,7 +21,9 @@ export const STOMP_CUE_S = 1.2;
 export const STOMP_CUE_AIR_TICKS = 6;
 export const STOMP_CUE_MIN_TTL_S = 0.3;
 /** A stomp cue shown holds HINT_MIN_S unless the sled has been back on the snow this long (s): a
- *  run of small hops reads as one cue, not a flicker with 65 ms gaps. */
+ *  run of small hops reads as one cue, not a flicker with 65 ms gaps. A cue that went (stomped, or
+ *  let go) comes back no sooner than this either: a stomp straight into the next flight blinked it
+ *  off for one frame. */
 export const STOMP_GROUND_S = 0.2;
 /** The drift nag: at most this many showings, or this long on screen, per run (a player who never
  *  drifts is not nagged all run). */
@@ -75,6 +77,8 @@ export class HintCoach {
   private spinShows = 0;
   /** Seconds the sled has been on the snow (0 in the air). */
   private ground = 0;
+  /** Seconds since a stomp cue last went. */
+  private sinceStomp = Infinity;
 
   /** A new run: nothing up, the per-run caps start over. */
   reset(): void {
@@ -85,10 +89,12 @@ export class HintCoach {
     this.driftUp = 0;
     this.spinShows = 0;
     this.ground = 0;
+    this.sinceStomp = Infinity;
   }
 
   /** The shown hint was learned (its count went up): it goes at once. */
   drop(): void {
+    if (this.shown === 'stomp') this.sinceStomp = 0;
     this.shown = null;
     this.hold = 0;
     this.up = 0;
@@ -118,7 +124,9 @@ export class HintCoach {
       else if (n('spin') >= 1 && n('flip') < 1 && f.runs >= 2 && f.ttl > room('flip', 0.9)) want = 'flip';
     }
     // The stomp cue always wins (one threshold; it waits only for a hint's HINT_MIN_S), on a real flight.
-    if (!f.grounded && n('stomp') < 3 && f.ttl < STOMP_CUE_S && (f.airTicks > STOMP_CUE_AIR_TICKS || f.ttl >= STOMP_CUE_MIN_TTL_S)) want = 'stomp';
+    const realFlight = f.airTicks > STOMP_CUE_AIR_TICKS || f.ttl >= STOMP_CUE_MIN_TTL_S;
+    const stompBack = this.shown === 'stomp' || this.sinceStomp >= STOMP_GROUND_S;
+    if (!f.grounded && n('stomp') < 3 && f.ttl < STOMP_CUE_S && realFlight && stompBack) want = 'stomp';
     if (!want && n('draft') < 1 && f.timer > 20 && f.draftTarget) want = 'draft';
     if (f.drafting && n('draft') < 1) learned.push('draft');
     if (f.chased) want = null;
@@ -127,6 +135,7 @@ export class HintCoach {
 
   /** Steps the coach; `show` is set when the hint on screen changes. */
   step(f: HintFrame, h: HintCounts): HintStep {
+    this.sinceStomp += f.dt;
     const { want, learned } = this.want(f, h);
     this.hold = Math.max(0, this.hold - f.dt);
     if (this.shown) this.up += f.dt;
@@ -147,6 +156,7 @@ export class HintCoach {
     const stompHeld = this.shown === 'stomp' && want !== 'stomp' && !stompOut && !f.chased;
     const swap = !stompHeld && (this.hold <= 0 || f.chased || doing || stompIn || stompOut);
     if (want === this.shown || !swap) return { learned };
+    if (this.shown === 'stomp') this.sinceStomp = 0;
     this.shown = want;
     this.hold = want ? HINT_HOLD_S : 0;
     this.up = 0;
