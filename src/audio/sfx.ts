@@ -1441,7 +1441,7 @@ export class Sfx {
       // On its own word the pair is the sound; over another word it lands after the word's figure
       // (the slingshot's pluck run, a chain's added bells).
       const after = b.word === 'yourBest' ? 0 : b.word === 'slung' ? 0.2 : b.word === 'double' || b.word === 'triple' || b.word === 'streak' ? 0.16 : 0.12;
-      this.goldBell(v, tb + after, b.word !== 'streak' && b.word !== 'duelWon' && b.word !== 'heldOff');
+      this.goldBell(v, tb + after, b.word !== 'streak' && b.word !== 'duelWon' && b.word !== 'heldOff', b.word === 'yourBest' ? 0.1 : 0.085);
     }
     // Inside the gap the pass plays its ladder bell like any other.
     if (b.word === 'yourBest' && best) return;
@@ -1482,11 +1482,12 @@ export class Sfx {
   }
 
   /** Your best overtaken: the gold-white bell pair (the bright root, then its octave) on the pass's
-   *  voice, and a short shimmer unless the word already has one. */
-  private goldBell(v: Voice, t: number, sparkle: boolean): void {
+   *  voice, and a short shimmer unless the word already has one. Over another word's figure it sits
+   *  1.4 dB lower (amp), so the stack in a start-line bunch keeps the master under -6 dBFS. */
+  private goldBell(v: Voice, t: number, sparkle: boolean, amp = 0.1): void {
     const r = brightRoot(this.key(), 67);
-    this.at(v, t, (tn) => fmBell(v, tn, mtof(r), 0.1, 0.5, 3.5, 1.2));
-    this.at(v, t + 0.09, (tn) => fmBell(v, tn, mtof(r + 12), 0.1, 0.8, 3.5, 1.3));
+    this.at(v, t, (tn) => fmBell(v, tn, mtof(r), amp, 0.5, 3.5, 1.2));
+    this.at(v, t + 0.09, (tn) => fmBell(v, tn, mtof(r + 12), amp, 0.8, 3.5, 1.3));
     if (sparkle) this.shimmer(t + 0.12, 6, 10, 0.035);
   }
 

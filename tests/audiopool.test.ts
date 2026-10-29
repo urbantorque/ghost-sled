@@ -170,11 +170,11 @@ describe('voices per reward', () => {
 describe("your best overtaken rings whatever the pass's word", () => {
   const golds = (s: Sfx): number[] => {
     const at: number[] = [];
-    const o = s as unknown as { goldBell: (v: Voice, t: number, sp: boolean) => void };
+    const o = s as unknown as { goldBell: (v: Voice, t: number, sp: boolean, amp?: number) => void };
     const orig = o.goldBell.bind(s);
-    o.goldBell = (v, t, sp) => {
+    o.goldBell = (v, t, sp, amp) => {
       at.push(t);
-      orig(v, t, sp);
+      orig(v, t, sp, amp);
     };
     return at;
   };
