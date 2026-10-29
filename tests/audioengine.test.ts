@@ -83,8 +83,17 @@ class StubCtx {
   readonly sampleRate = 48000;
   readonly destination = new Node();
   resumes = 0;
+  private readonly listeners: Array<() => void> = [];
   constructor() {
     StubCtx.last = this;
+  }
+  addEventListener(type: string, fn: () => void): void {
+    if (type === 'statechange') this.listeners.push(fn);
+  }
+  /** The context gets there: it runs again and says so. */
+  running(): void {
+    this.state = 'running';
+    for (const fn of this.listeners) fn();
   }
   createGain = (): Node => new Node();
   createBiquadFilter = (): Node => new Node();
@@ -168,7 +177,7 @@ function wait(ms: number): void {
 const cardShow = { count: true, newBest: true, beats: 2, missions: [0, 1], coins: [] as number[] };
 
 describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
-  it('plays once as the parked context resumes, on its first block; nothing the ad cut plays after it', () => {
+  it('plays once the moment the parked context runs again; nothing the ad cut plays after it', () => {
     const { eng, ctx, built } = rig();
     run(ctx, 200);
     // The card opens; Double Gifts is pressed 300 ms in and the ad mutes for 2.2 s.
@@ -177,7 +186,6 @@ describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
     eng.setMuted('ad', true);
     run(ctx, 1000);
     expect(ctx.state).toBe('suspended');
-    const parkedAt = ctx.currentTime;
     wait(1200);
     const before = built.length;
     const resumes = ctx.resumes;
@@ -189,19 +197,56 @@ describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
     eng.ui('coin', 1);
     wait(17);
     eng.ui('coin');
-    const coins = built.slice(before);
-    expect(coins).toHaveLength(1);
-    expect(coins[0].name).toBe('coin');
-    // On the frozen clock: it starts 6 ms after the context runs again.
-    expect(coins[0].t).toBeCloseTo(parkedAt + 0.006, 6);
-    // The context runs 55 ms after the unmute; two seconds on, nothing of the cut card has played.
+    // Nothing is built into the parked context.
+    expect(built.length).toBe(before);
+    // It runs 55 ms after the unmute: one coin, 6 ms ahead on its clock (its first block).
     wait(38);
-    ctx.state = 'running';
+    ctx.running();
+    const coins = built.slice(before);
+    expect(coins.map((b) => b.name)).toEqual(['coin']);
+    expect(coins[0].t).toBeCloseTo(ctx.currentTime + 0.006, 6);
+    // Two seconds on, nothing of the cut card has played.
     run(ctx, 2500);
     expect(built.slice(before)).toEqual(coins);
   });
 
-  it('past the resume grace a context still parked drops the sound (it would play late)', () => {
+  it('a resume that comes too late drops the coin instead of playing it out of its moment', () => {
+    const { eng, ctx, built } = rig();
+    run(ctx, 100);
+    eng.setMuted('ad', true);
+    run(ctx, 1100);
+    eng.setMuted('ad', false);
+    eng.ui('coin');
+    // A loaded phone takes 1.4 s to resume.
+    wait(1400);
+    const before = built.length;
+    ctx.running();
+    run(ctx, 500);
+    expect(built.length).toBe(before);
+  });
+
+  it('a timeline asked for while it resumes keeps what is still ahead on time; the overdue part is one sound', () => {
+    const { eng, ctx, built } = rig();
+    run(ctx, 100);
+    eng.setMuted('ad', true);
+    run(ctx, 1100);
+    eng.setMuted('ad', false);
+    // Run Again's ad closes into a reveal: its reel ticks and slam are asked for at once.
+    eng.cueReveal({ T_REEL: 80, REEL_MS: 660, T_STAMP: 740 }, false);
+    wait(600);
+    const before = built.length;
+    ctx.running();
+    const now = ctx.currentTime;
+    const got = built.slice(before);
+    // The ticks due before the resume land as one tick now; the slam keeps its 740 ms.
+    expect(got.filter((b) => b.name === 'reveal-tick' && Math.abs(b.t - (now + 0.006)) < 0.002)).toHaveLength(1);
+    run(ctx, 400);
+    const slam = built.slice(before).filter((b) => b.name === 'reveal-land');
+    expect(slam).toHaveLength(1);
+    expect(slam[0].t - now).toBeCloseTo(0.14 + 0.006, 2);
+  });
+
+  it('past the resume grace a context still parked drops the sound', () => {
     const { eng, ctx, built } = rig();
     run(ctx, 100);
     eng.setMuted('ad', true);
@@ -211,7 +256,54 @@ describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
     wait(700);
     const before = built.length;
     eng.ui('coin');
+    ctx.running();
     expect(built.length).toBe(before);
+  });
+
+  it("the Revive ad's revive plays as the context runs again; the frames around it stay dropped", () => {
+    const { eng, ctx } = rig();
+    run(ctx, 100);
+    eng.setMuted('ad', true);
+    run(ctx, 1100);
+    eng.setMuted('ad', false);
+    const sfx = (eng as unknown as { core: { sfx: { event: (e: { type: string }, t: number) => void } } }).core.sfx;
+    const events: string[] = [];
+    sfx.event = (e) => void events.push(e.type);
+    wait(16);
+    eng.simEvent({ type: 'revive' });
+    wait(16);
+    eng.simEvent({ type: 'gift', id: 1, value: 1, x: 0, y: 0, z: 0 });
+    expect(events).toEqual([]);
+    wait(30);
+    ctx.running();
+    expect(events).toEqual(['revive']);
+    // Too late a resume drops it.
+    eng.setMuted('ad', true);
+    run(ctx, 1100);
+    eng.setMuted('ad', false);
+    eng.simEvent({ type: 'revive' });
+    wait(1200);
+    ctx.running();
+    expect(events).toEqual(['revive']);
+  });
+
+  it('run sounds are not stacked into the parked context while it resumes', () => {
+    const { eng, ctx } = rig();
+    run(ctx, 100);
+    eng.setMuted('ad', true);
+    run(ctx, 1100);
+    eng.setMuted('ad', false);
+    const sfx = (eng as unknown as { core: { sfx: { event: (e: unknown, t: number) => void } } }).core.sfx;
+    const events: number[] = [];
+    sfx.event = (_e, t) => void events.push(t);
+    for (let k = 0; k < 4; k++) {
+      eng.simEvent({ type: 'gift', id: k, value: 1, x: 0, y: 0, z: 0 });
+      wait(16);
+    }
+    expect(events).toEqual([]);
+    ctx.running();
+    eng.simEvent({ type: 'gift', id: 9, value: 1, x: 0, y: 0, z: 0 });
+    expect(events).toHaveLength(1);
   });
 
   it('muted, nothing is built; a mute inside the grace closes it at once', () => {
