@@ -1,4 +1,4 @@
-import type { GhostKind, HudModel, MirrorRect, ScreenRect, UIHandlers } from './contract';
+import type { GhostKind, HudModel, MirrorRect, ScreenRect, StyleTone, UIHandlers } from './contract';
 import { ChaosEvent, eventInfo, Mood, moodInfo } from '../sim/chaos';
 import { btn, Flag, h, Layer, sr, Txt, type Ctx } from './dom';
 import { kindCls, NBSP, ordinal } from './fmt';
@@ -89,6 +89,19 @@ const EVENT_SHORT: Record<ChaosEvent, string> = {
   [ChaosEvent.GhostTrain]: 'Spirit Train',
 };
 
+/**
+ * The countdown chip's name on a phone held upright, one short word ("Storm in 20 m"): a glyph alone
+ * left "in 20 m" saying nothing about what was coming, and on Powder Day the Gift Storm's glyph sat
+ * beside the mood chip's gift glyph.
+ */
+export const EVENT_TINY: Record<ChaosEvent, string> = {
+  [ChaosEvent.None]: '',
+  [ChaosEvent.Avalanche]: 'Avalanche',
+  [ChaosEvent.Yeti]: 'Yeti',
+  [ChaosEvent.GiftStorm]: 'Storm',
+  [ChaosEvent.GhostTrain]: 'Train',
+};
+
 /** Pass words that are worth a bigger punch: chains, slings, duel results. */
 const STRONG_WORDS = new Set(['double', 'triple', 'streak', 'slung', 'duelWon', 'heldOff']);
 
@@ -99,6 +112,27 @@ const CROWN_SVG =
 /** Your own best run is never named by your name (contract C7): it is "Your best", in gold-white. */
 function shownName(name: string, kind: GhostKind): string {
   return kind === 'you' ? 'Your best' : name;
+}
+
+/**
+ * Where a race-row message goes while a duel is open (contracts C1/C11: the pill, the C11 ring and
+ * the camera name the same ghost every frame of the duel). `duel` is the duel ghost's name, or null
+ * with no duel open. Messages about the duel ghost, and anything with no duel open, take the pill; the
+ * start-line call keeps it too. Another ghost's pass, "passed you" or race news goes to the callout
+ * line under the combo meter instead.
+ */
+/** The whole metres the rival pill shows for a gap of `a` m, given the number it shows now (C12). */
+export function gapShown(a: number, last: number): number {
+  const r = Math.max(1, Math.round(a));
+  // A gap sitting on a half metre (5.5 m) flipped "5 m" and "6 m" every frame for half a second: the
+  // shown number changes only once the gap is clearly past the halfway mark.
+  if (Number.isFinite(last) && last >= 1 && Math.abs(a - last) < 0.6) return last;
+  return r;
+}
+
+export function duelRoute(duel: string | null, raw: string, type: 'pass' | 'lost' | 'news' | 'call'): 'pill' | 'line' {
+  if (duel === null || type === 'call' || raw === duel) return 'pill';
+  return 'line';
 }
 
 /**
@@ -127,6 +161,8 @@ interface Flash {
   type: 'pass' | 'lost' | 'news' | 'call';
   /** The name as shown ("Your best" for your own run), or '' for a line with no ghost. */
   name: string;
+  /** The ghost's own name (as the model names it), so a flash about the duel ghost can be told apart. */
+  raw: string;
   kind: GhostKind;
   /** The word before the name ("Passed", "Double pass", "Rematch"), or ''. */
   k: string;
@@ -157,6 +193,11 @@ export class Hud {
   stampUp: () => boolean = () => false;
   /** A pass of yours starts flashing (now or after waiting its turn): minor callout lines step out. */
   onPassFlash: () => void = () => undefined;
+  /**
+   * A race message that may not take the pill (another ghost's pass or news while a duel is open)
+   * goes to the callout line under the combo meter instead (the UI wires this to Fx).
+   */
+  onSideLine: (text: string, tone: StyleTone) => void = () => undefined;
 
   private readonly tl: HTMLElement;
   private readonly tr: HTMLElement;
@@ -238,6 +279,7 @@ export class Hud {
   private readonly cdNear: Flag;
   private readonly cdIco: HTMLElement;
   private readonly cdName: Txt;
+  private readonly cdTiny: Txt;
   private readonly cdNum: Txt;
   private lastCd: ChaosEvent = ChaosEvent.None;
   private readonly moodGone: Flag;
@@ -294,6 +336,13 @@ export class Hud {
   private wantNameAt = 0;
   /** Show the target's name at once (after a pass flash hands the pill back). */
   private nameNow = false;
+  /**
+   * The model name whose name the pill shows right now ('' while a flash holds it): the gap shown
+   * beside a name is always that same ghost's gap, never the next one's while the name settles.
+   */
+  private nameShown = '';
+  /** The open duel's ghost (its model name), or null: the pill stays on it (duelRoute). */
+  private duelName: string | null = null;
   private lastGap = Number.NaN;
   /** 1 the ghost is ahead, -1 behind, 0 neck and neck. */
   private lastSide = 2;
@@ -359,9 +408,13 @@ export class Hud {
     this.cdIco = h('span', 'gs-cd-ico');
     const cdNameEl = h('span', 'gs-cd-name');
     this.cdName = new Txt(cdNameEl);
+    // The phone's one-word name ("Storm"), seen only there; readers keep the full name above.
+    const cdTinyEl = h('span', 'gs-cd-tiny');
+    cdTinyEl.setAttribute('aria-hidden', 'true');
+    this.cdTiny = new Txt(cdTinyEl);
     const cdNumEl = h('span', 'gs-num');
     this.cdNum = new Txt(cdNumEl);
-    this.cdEl = h('div', 'gs-cd gs-pill', this.cdIco, h('span', 'gs-cd-t', cdNameEl, h('span', 'gs-cd-in', 'in '), cdNumEl, NBSP + 'm'));
+    this.cdEl = h('div', 'gs-cd gs-pill', this.cdIco, h('span', 'gs-cd-t', cdNameEl, cdTinyEl, h('span', 'gs-cd-in', 'in '), cdNumEl, NBSP + 'm'));
     this.cdOn = new Flag(this.cdEl);
     this.cdNear = new Flag(this.cdEl, 'is-near');
     this.tl = h(
@@ -553,6 +606,8 @@ export class Hud {
       this.nextFlash.set(false);
       this.nextDuel.set(false);
       this.nextFriend.set(false);
+      this.duelName = null;
+      this.nameShown = '';
       this.leadDone = true;
       this.lastFuse = -1;
       this.fit();
@@ -759,7 +814,9 @@ export class Hud {
     const spoken = kind === 'you' ? 'your best' : name;
     if (!passed) {
       this.say(`${shown} passed you`);
-      this.flash({ type: 'lost', name: shown, kind, k: '', tail: 'passed you', ms: LOST_MS, strong: false, at: 0, stale: PEND_MS });
+      // While a duel is open the pill stays on its ghost: another ghost's news goes to the line.
+      if (duelRoute(this.duelName, name, 'lost') === 'line') this.onSideLine(`${shown} passed you`, 'normal');
+      else this.flash({ type: 'lost', name: shown, raw: name, kind, k: '', tail: 'passed you', ms: LOST_MS, strong: false, at: 0, stale: PEND_MS });
       return;
     }
     const k = text.trim() || 'Passed';
@@ -773,7 +830,11 @@ export class Hud {
       this.lastStrong.at = now;
     }
     this.say(`${k} ${spoken}`);
-    this.flash({ type: 'pass', name: shown, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0, stale: PEND_MS });
+    if (duelRoute(this.duelName, name, 'pass') === 'line') {
+      this.onSideLine(`${k} ${shown}`, strong ? 'big' : 'normal');
+      return;
+    }
+    this.flash({ type: 'pass', name: shown, raw: name, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0, stale: PEND_MS });
   }
 
   /**
@@ -787,6 +848,10 @@ export class Hud {
     const t = text.trim();
     if (t === '') return;
     this.say(t);
+    if (duelRoute(this.duelName, name, 'news') === 'line') {
+      this.onSideLine(t, 'normal');
+      return;
+    }
     const shown = shownName(name, kind);
     let lead = '';
     let tail = t;
@@ -797,7 +862,7 @@ export class Hud {
         break;
       }
     }
-    this.flash({ type: 'news', name: lead, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait, line: t });
+    this.flash({ type: 'news', name: lead, raw: name, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait, line: t });
   }
 
   /**
@@ -819,7 +884,7 @@ export class Hud {
   call(word: string, name: string, kind: GhostKind, srText: string): void {
     const shown = shownName(name, kind);
     this.say(srText.trim() || `${word} ${kind === 'you' ? 'your best' : name}`);
-    this.flash({ type: 'call', name: shown, kind, k: word, tail: '', ms: CALL_MS, strong: false, at: 0, stale: PEND_MS });
+    this.flash({ type: 'call', name: shown, raw: name, kind, k: word, tail: '', ms: CALL_MS, strong: false, at: 0, stale: PEND_MS });
   }
 
   /**
@@ -883,6 +948,7 @@ export class Hud {
     this.nextDuel.set(false);
     this.nextK.str(f.k);
     this.nextName.str(f.name);
+    this.nameShown = '';
     this.nextTail.str(f.tail);
     this.setKind(f.kind);
     this.nextFriend.set(f.kind === 'friend' && f.name !== '');
@@ -1106,6 +1172,19 @@ export class Hud {
 
     // Next ghost. While a pass flashes in the pill, it holds; the target comes back after, unless a
     // pass that waited its turn (behind a landing stamp or a pass of yours) goes up next.
+    const g = m.nextGhost;
+    // An open duel owns the pill (C1/C11): the moment one opens, a flash about another ghost ends and
+    // the waiting ones about other ghosts are dropped (the start-line call keeps its turn); from then
+    // on another ghost's pass or news goes to the callout line (duelRoute).
+    const duelName = g !== null && g.duel === true ? g.name : null;
+    if (duelName !== this.duelName) {
+      this.duelName = duelName;
+      if (duelName !== null) {
+        const c = this.cur;
+        if (c && this.flashUntil > now && duelRoute(duelName, c.raw, c.type) === 'line') this.flashUntil = now;
+        for (let i = this.pend.length - 1; i >= 0; i--) if (duelRoute(duelName, this.pend[i].raw, this.pend[i].type) === 'line') this.pend.splice(i, 1);
+      }
+    }
     let flashing = this.flashUntil > now;
     if (!flashing && this.pend.length > 0 && !this.stampUp()) {
       while (this.pend.length > 0 && now - this.pend[0].at > this.pend[0].stale) this.pend.shift();
@@ -1127,28 +1206,38 @@ export class Hud {
       this.nameNow = true;
       moved = true;
     }
-    const g = m.nextGhost;
     if (!flashing) {
       if (this.nextOn.set(g !== null)) moved = true;
       // An open duel names its ghost "DUEL Mika" over the gap, its ring beating with the C11 marker's.
-      const duel = g !== null && g.duel === true;
+      const duel = duelName !== null;
       if (this.nextK.str(duel ? 'Duel' : '')) moved = true;
       if (this.nextDuel.set(duel) && duel) {
         play(this.nextEl, [{ transform: 'scale(0.9)' }, { transform: 'scale(1.06)', offset: 0.5 }, { transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
         moved = true;
       }
       if (g) {
-        // A new target name also has to hold for a moment (a bunched pack swaps the nearest ghost).
+        // A new target name also has to hold for a moment (a bunched pack swaps the nearest ghost),
+        // except a duel's ghost, which shows at once.
         if (g.name !== this.wantName) {
           this.wantName = g.name;
           this.wantNameAt = now;
         }
-        if (this.nameNow || now - this.wantNameAt >= RANK_SETTLE_MS || this.nextName.el.textContent === '') {
+        if (duel || this.nameNow || now - this.wantNameAt >= RANK_SETTLE_MS || this.nextName.el.textContent === '') {
           this.nameNow = false;
+          if (g.name !== this.nameShown) {
+            // A new name brings its own gap in the same frame.
+            this.nameShown = g.name;
+            this.lastSide = 2;
+            this.lastGap = Number.NaN;
+          }
           if (this.nextName.str(shownName(g.name, g.kind))) moved = true;
           this.setKind(g.kind);
           if (this.nextFriend.set(g.kind === 'friend')) moved = true;
         }
+      }
+      // The gap beside a name is that ghost's own: while a new name settles, the shown one keeps its
+      // last gap rather than taking the newcomer's.
+      if (g && g.name === this.nameShown) {
         // Level under 1.5 m, with a little hysteresis so the readout does not flicker at the edge.
         const a = Math.abs(g.gap);
         const side = a < (this.lastSide === 0 ? 1.9 : 1.5) ? 0 : g.gap > 0 ? 1 : -1;
@@ -1158,10 +1247,12 @@ export class Hud {
           this.nextAhead.set(side > 0);
           this.nextBehind.set(side < 0);
           this.nextEven.set(side === 0);
-          this.nextWord.str(side === 0 ? 'neck and neck' : side > 0 ? 'ahead' : 'behind');
           moved = true;
         }
-        const r = side === 0 ? -1 : Math.round(a);
+        // On a phone held upright an open duel says "level" for neck and neck: "DUEL", the name and
+        // "neck and neck" left the name about 7 letters at 390 px ("DUEL MarmotM...").
+        if (this.nextWord.str(side === 0 ? (duel && this.portrait ? 'level' : 'neck and neck') : side > 0 ? 'ahead' : 'behind')) moved = true;
+        const r = side === 0 ? -1 : gapShown(a, this.lastGap);
         if (r !== this.lastGap) {
           this.lastGap = r;
           const s = side === 0 ? '' : String(r);
@@ -1240,6 +1331,7 @@ export class Hud {
       this.cdEl.classList.add(`e-${key}`);
       this.cdIco.replaceChildren(icon(EVENT_ICON[cd.event]));
       this.cdName.str(EVENT_SHORT[cd.event] + ' ');
+      this.cdTiny.str(EVENT_TINY[cd.event] + ' ');
     }
     if (this.cdOn.set(showCd)) {
       moved = true;

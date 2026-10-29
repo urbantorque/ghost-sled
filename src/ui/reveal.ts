@@ -16,7 +16,8 @@ import { EVENT_ICON } from './notices';
 // under the score.
 // Timeline (about 2.2 s, collapse included): card in 0.2 s, reel spins 0.08 to 0.74 s, slam, modifier
 // punched in with it at 0.77 s (opaque within two frames), event chip at 0.94 s, hold to 1.94 s,
-// collapse 1.94 to 2.22 s.
+// collapse 1.94 to 2.22 s. The clock starts on the first animation frame after the card goes in (the
+// run's first frame is often long), the frame the game cues the reveal's sound in.
 
 const T_REEL = 80;
 const REEL_MS = 660;
@@ -41,6 +42,8 @@ export const REVEAL_TIMING = { T_REEL, REEL_MS, T_STAMP, T_RULE, T_EVENT, T_GOAL
 
 export class Reveal {
   private timers: number[] = [];
+  /** The first animation frame after the card goes in, which starts the timeline (0: none pending). */
+  private raf = 0;
   private card: HTMLElement | null = null;
   private resolve: (() => void) | null = null;
 
@@ -108,13 +111,31 @@ export class Reveal {
     }
     this.slot.append(card);
     this.card = card;
+    // Hidden parts wait at their start state from the first paint (the card itself until its entry).
+    card.style.opacity = '0';
+    rule.style.opacity = '0';
+    if (chip) chip.style.opacity = '0';
+    if (goal) goal.style.opacity = '0';
+    const travel = names.length > 1 ? ((names.length - 1) / names.length) * 100 : 0;
+    if (!rm && travel > 0) strip.style.transform = 'translateY(0)';
 
-    play(card, [{ opacity: 0, transform: 'translateY(-10px) scale(0.92)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: SPRING });
+    // The timeline starts on the first animation frame after the card goes in, not at this call: the
+    // run's first frame is often a long one, and the reveal's sound (cued in that same first frame)
+    // then keeps time with the reel instead of ticking over a frozen card.
+    this.raf = requestAnimationFrame(() => {
+      this.raf = 0;
+      if (this.card === card) this.timeline(card, { rm, hasMood, travel, strip, reel, stamp, rule, chip, goal });
+    });
+  }
+
+  /** The reveal's beats, timed from its first frame (REVEAL_TIMING). */
+  private timeline(card: HTMLElement, p: { rm: boolean; hasMood: boolean; travel: number; strip: HTMLElement; reel: HTMLElement; stamp: HTMLElement; rule: HTMLElement; chip: HTMLElement | null; goal: HTMLElement | null }): void {
+    const { rm, hasMood, travel, strip, reel, stamp, rule, chip, goal } = p;
+    card.style.opacity = '';
+    play(card,[{ opacity: 0, transform: 'translateY(-10px) scale(0.92)' }, { opacity: 1, transform: 'none' }], { duration: 200, easing: SPRING });
 
     // Spin. The strip travels by a fraction of its own height (equal rows), so nothing reads layout.
-    const travel = names.length > 1 ? ((names.length - 1) / names.length) * 100 : 0;
     if (!rm && travel > 0) {
-      strip.style.transform = 'translateY(0)';
       this.at(T_REEL, () => {
         play(strip, [{ transform: 'translateY(0)' }, { transform: `translateY(${-travel.toFixed(4)}%)` }], {
           duration: REEL_MS,
@@ -133,14 +154,12 @@ export class Reveal {
       play(card, [{ transform: 'translateY(0)' }, { transform: 'translateY(5px)', offset: 0.3 }, { transform: 'translateY(0)' }], { duration: 260, delay: 90, easing: 'ease-out' });
     });
 
-    rule.style.opacity = '0';
     this.at(rm ? 260 : T_RULE, () => {
       rule.style.opacity = '';
       play(rule, [{ opacity: 0, transform: 'scale(1.18)' }, { opacity: 1, transform: 'scale(1.1)', offset: 0.12 }, { opacity: 1, transform: 'scale(0.98)', offset: 0.6 }, { opacity: 1, transform: 'none' }], { duration: 260, easing: 'ease-out' });
     });
     if (chip) {
       const c = chip;
-      c.style.opacity = '0';
       this.at(rm ? 300 : T_EVENT, () => {
         c.style.opacity = '';
         play(c, [{ opacity: 0, transform: 'scale(0.8)' }, { opacity: 1, transform: 'scale(1.06)', offset: 0.6 }, { opacity: 1, transform: 'scale(1)' }], { duration: 240, easing: 'ease-out' });
@@ -148,7 +167,6 @@ export class Reveal {
     }
     if (goal) {
       const g = goal;
-      g.style.opacity = '0';
       // Just behind the chip it explains: a short rise, no scale (it is a line of text, not a stamp).
       this.at(rm ? 300 : T_EVENT + GOAL_LAG, () => {
         g.style.opacity = '';
@@ -183,6 +201,8 @@ export class Reveal {
 
   /** Ends any running reveal immediately and resolves its promise. */
   finish(): void {
+    cancelAnimationFrame(this.raf);
+    this.raf = 0;
     for (const t of this.timers) window.clearTimeout(t);
     this.timers = [];
     this.card?.remove();

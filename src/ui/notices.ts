@@ -99,6 +99,8 @@ export class Notices {
   private queue: Banner[] = [];
   private timer = 0;
   private bandOn = false;
+  /** Bumped whenever the band is claimed or released, so a stale exit's release is ignored. */
+  private bandToken = 0;
   private bandH = -1;
   /** Called when a banner or the reveal card comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
@@ -205,6 +207,7 @@ export class Notices {
     this.cur = null;
     this.queue = [];
     this.stage.replaceChildren();
+    this.bandToken++;
     this.setBand(false);
   }
 
@@ -289,18 +292,31 @@ export class Notices {
   private advance(): void {
     const cur = this.cur;
     this.cur = null;
-    if (cur?.el) this.exit(cur.el, cur.spec.type, false);
+    const out = cur?.el ? this.exit(cur.el, cur.spec.type, false) : null;
     if (cur) cur.el = null;
-    this.next();
+    this.next(out);
   }
 
-  private next(): void {
+  /**
+   * Puts the next banner up, or gives the band back to the race row. `out` is the exit of the banner
+   * that just left: the row fades back in only once that exit has finished, so the leaving banner and
+   * the row never print over each other ("GRUDGE SETTLED chill49" over "1st of 7").
+   */
+  private next(out: Animation | null = null): void {
     if (this.cur) return;
     const now = performance.now();
     this.prune(now);
     const b = this.queue[0];
     if (!b || this.gated(b)) {
-      this.setBand(false);
+      if (out && out.playState !== 'finished') {
+        const token = ++this.bandToken;
+        const off = () => {
+          // A banner that went up meanwhile keeps the band.
+          if (token === this.bandToken && !this.cur) this.setBand(false);
+        };
+        out.addEventListener('finish', off, { once: true });
+        out.addEventListener('cancel', off, { once: true });
+      } else this.setBand(false);
       return;
     }
     this.queue.shift();
@@ -317,11 +333,15 @@ export class Notices {
     this.cur = b;
     this.arm(b, now + b.ms);
     this.hurry(now);
+    this.bandToken++;
     this.setBand(true);
   }
 
-  /** Banner leaves. Exits overlap the next entrance in the same grid cell, so nothing jumps. */
-  private exit(el: HTMLElement, type: Spec['type'], fast: boolean): void {
+  /**
+   * Banner leaves. Exits overlap the next entrance in the same grid cell, so nothing jumps. Returns the
+   * exit animation (null when there is none and the banner went at once).
+   */
+  private exit(el: HTMLElement, type: Spec['type'], fast: boolean): Animation | null {
     el.classList.add('is-leaving');
     const frames: Keyframe[] =
       type === 'warn'
@@ -331,6 +351,7 @@ export class Notices {
     const rm = () => el.remove();
     if (a) a.onfinish = rm;
     else rm();
+    return a;
   }
 
   /**

@@ -175,6 +175,8 @@ export class UI implements GameUI {
     // A pass of yours flashing in the race row (at once, or after waiting out a landing stamp) is the
     // headline: minor callout lines roll up into the total.
     this.hud.onPassFlash = () => this.fx.yieldToPass();
+    // While a duel holds the pill, another ghost's pass or news is a line under the combo meter.
+    this.hud.onSideLine = (text, tone) => this.fx.pop(text, 0, tone);
     this.hud.onLayout = dirty;
     this.fx.onLayout = dirty;
     this.notices.onLayout = dirty;
@@ -204,7 +206,8 @@ export class UI implements GameUI {
       const banner = this.notices.current;
       if (banner) n = pushRect(pool, n, banner);
       for (const c of Array.from(this.notices.revealSlot.children)) n = pushRect(pool, n, c);
-      for (const c of this.hints.occluders()) n = pushRect(pool, n, c);
+      // The hint where it lands (not mid-entry), and one still fading out after a swap.
+      n = this.hints.measure(pool, n);
     }
     this.occ.length = 0;
     for (let i = 0; i < n; i++) this.occ.push(pool[i]);
