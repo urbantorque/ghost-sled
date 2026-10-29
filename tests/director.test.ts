@@ -675,7 +675,7 @@ describe('the race', () => {
     // A wreck just ahead is skipped too; the rider within 150 m behind is named.
     r.poses.set(1, pose(r.sim.s.z + 30, 0, true));
     r.poses.set(2, pose(r.sim.s.z - 120));
-    expect(rival()).toEqual({ id: 2, gap: -120 });
+    expect(rival()).toEqual({ id: 2, gap: -120, raw: -120 });
   });
 
   it("a duel's result keeps the rival on its ghost for 1.5 s, and no duel opens under it", () => {
@@ -699,6 +699,43 @@ describe('the race', () => {
     const after = r.idle(0.3);
     expect(of(after, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['open:1002']);
     expect(rival()).toBe(1002);
+  });
+
+  it('a duel about to open keeps the pill on its ghost: no third name for the quarter second before it', () => {
+    const r = new Rig();
+    const a = track(1, 'pool', 'SparkleCedar');
+    const y = track(2, 'you', 'Rider');
+    r.tracks = [a, y];
+    r.sim.tick = 2000;
+    const z = r.sim.s.z;
+    const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    // SparkleCedar a metre ahead (the nearest), your best 3 m ahead.
+    r.poses.set(1, pose(z + 1));
+    r.poses.set(2, pose(z + 3));
+    const seen: number[] = [];
+    const beats: Beat[] = [];
+    for (let i = 0; i < 42; i++) {
+      beats.push(...r.frame());
+      seen.push(rival()!);
+    }
+    // You edge past it: your best is now the nearest ahead, but its duel is a quarter second off.
+    r.poses.set(1, pose(z - 1));
+    for (let i = 0; i < 30; i++) {
+      beats.push(...r.frame());
+      seen.push(rival()!);
+    }
+    expect(of(beats, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['open:1']);
+    expect(seen.every((id) => id === 1)).toBe(true);
+    // With no duel coming, the nearest ahead takes the pill as before.
+    const q = new Rig();
+    q.tracks = [track(1), track(2)];
+    q.poses.set(1, pose(q.sim.s.z + 1));
+    q.poses.set(2, pose(q.sim.s.z + 3));
+    q.sim.tick = 100;
+    q.idle(0.7);
+    q.poses.set(1, pose(q.sim.s.z - 1));
+    q.frame();
+    expect((q.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id).toBe(2);
   });
 
   it("a duel with your best won: 'Passed Your best' gets its beat; a duel is resolved after 8 s", () => {
@@ -732,17 +769,58 @@ describe('the race', () => {
     // The rider renders 0.4 m short of its integer-tick z (alpha 0.6 at 25 m/s): the pose is taken
     // at the same render tick, so the gap is the rendered one, not 0.4 m short.
     const z = r.sim.s.z;
-    expect(step(z + 13.1, z - 0.4)?.gap).toBeCloseTo(13.5);
+    expect(step(z + 13.1, z - 0.4)?.raw).toBeCloseTo(13.5);
     // Without riderZ it falls back to the sim's own z.
-    expect(step(z + 13.1)?.gap).toBeCloseTo(13.1);
+    expect(step(z + 13.1)?.raw).toBeCloseTo(13.1);
     // A steady 13.5 m chase across ticks: pose and rider move together, so the gap never jumps.
     const gaps: number[] = [];
     for (let i = 0; i < 30; i++) {
       const alpha = (i % 3) / 3;
       const rider = z + (i + alpha) * 0.4;
-      gaps.push(step(rider + 13.5, rider)!.gap);
+      gaps.push(step(rider + 13.5, rider)!.raw);
     }
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
+  });
+
+  it('the pill and the edge chip read one held gap (C12): whole metres, a metre to move, 250 ms to dwell', () => {
+    const r = new Rig();
+    const a = track(1);
+    const b = track(2);
+    r.tracks = [a, b];
+    const z = r.sim.s.z;
+    const rival = () => (r.d as unknown as { out: { rival: { id: number; gap: number; raw: number } | null } }).out.rival;
+    // Behind you, 9.6 m: the readout says 10; the race maths jitter across 9.5 and it holds.
+    r.poses.set(1, pose(z - 9.6));
+    r.poses.set(2, pose(z - 60));
+    r.frame();
+    expect(rival()).toMatchObject({ id: 1, gap: -10 });
+    for (const g of [9.4, 9.55, 9.3, 9.45, 9.2]) {
+      r.poses.set(1, pose(z - g));
+      r.frame();
+      expect(rival()!.gap).toBe(-10);
+      expect(rival()!.raw).toBeCloseTo(-g);
+    }
+    r.idle(0.3);
+    expect(rival()!.gap).toBe(-10);
+    // A metre from it: it moves, then dwells 250 ms however fast the gap runs.
+    r.poses.set(1, pose(z - 8.9));
+    r.frame();
+    expect(rival()!.gap).toBe(-9);
+    r.poses.set(1, pose(z - 7.6));
+    r.idle(0.2);
+    expect(rival()!.gap).toBe(-9);
+    r.idle(0.06);
+    expect(rival()!.gap).toBe(-8);
+    // Neck and neck (under 1.5 m, out again at 1.9 m) reads 1 m: the pill's level, the chip's '1 m'.
+    r.poses.set(1, pose(z - 1.2));
+    r.frame();
+    expect(rival()!.gap).toBe(-1);
+    r.poses.set(1, pose(z + 1.7));
+    r.frame();
+    expect(rival()!.gap).toBe(1);
+    r.poses.set(1, pose(z + 2.1));
+    r.frame();
+    expect(rival()!.gap).toBe(2);
   });
 
   it('the start-line call holds the rival a quarter second under the HUD call flash', () => {

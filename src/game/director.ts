@@ -9,7 +9,7 @@ import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
-import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
@@ -80,8 +80,10 @@ export interface DirectorOutput {
   /** Reused array: consumers never keep it. */
   beats: Beat[];
   feel: Feel;
-  /** HUD pill and FrameView.rival (C1/C11). */
-  rival: { id: number; gap: number } | null;
+  /** HUD pill and FrameView.rival (C1/C11). gap: the gap as shown (C12, GapReadout: whole metres,
+   *  held), the one number the pill (HudModel.nextGhost.gap) and the edge chip read; raw: the race
+   *  maths' gap this frame. */
+  rival: { id: number; gap: number; raw: number } | null;
   hud: { stake: number; fuse: number; pace: boolean; duel: boolean; bestIn: number | null; countdown: { event: ChaosEvent; metres: number } | null };
   /** choir: AudioFrame.choir, 0..3 ghosts you passed this run still riding within 150 m behind.
    *  drafting: in a slipstream or riding a slingshot's boost (intensity holds its boost term at 0). */
@@ -282,6 +284,8 @@ export class Director {
   private readonly youJostled = new Set<number>();
   /** The rider's z on the poses' time base this frame (DirectorFrame.riderZ, else sim.s.z). */
   private rz = 0;
+  /** The rival's gap as shown (C12): the pill and the edge chip read this one held number. */
+  private readonly gapRead = new GapReadout();
 
   // Milestones.
   private newGroundTick = -1e9;
@@ -408,6 +412,7 @@ export class Director {
     this.slungN = 0;
     this.lastSlungPassTick = -1e9;
     this.grudgePaid = 0;
+    this.gapRead.reset();
     this.youJostled.clear();
     this.newGroundTick = -1e9;
     this.newGroundAt = -1;
@@ -932,13 +937,24 @@ export class Director {
     const duelId = this.duels.open;
     const callUp = this.call && now - this.call.at < CALL_HOLD_S ? this.call.id : null;
     if (this.rivalHold && now >= this.rivalHold.until) this.rivalHold = null;
-    const steady = steadyNext(this.riderGap(this.heldNext, f), this.nearestRider(f), now - this.heldSince);
+    const held = this.riderGap(this.heldNext, f);
+    let steady = steadyNext(held, this.nearestRider(f), now - this.heldSince);
+    // A duel about to open (DuelTracker.soon): the pill keeps the ghost it names, or takes the duel's,
+    // rather than naming a third for the quarter second before the duel takes the pill back.
+    const soon = duelId === null ? this.duels.soon : null;
+    if (soon !== null && held && steady && steady.id !== held.id && steady.id !== soon) steady = held;
     const sid = steady ? steady.id : null;
     if (sid !== this.heldNext) {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    out.rival = rivalPick(steady, this.gapOf(duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
+    const rv = rivalPick(steady, this.gapOf(duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
+    // One number for the pill and the edge chip, held on this clock (C12); the race maths keep raw.
+    if (rv) out.rival = { id: rv.id, gap: this.gapRead.show(rv.id, rv.gap, now), raw: rv.gap };
+    else {
+      out.rival = null;
+      this.gapRead.reset();
+    }
 
     const timerFrac = c.window > 0 ? c.timer / c.window : 0;
     const draining = c.active && s.grounded && !s.drifting && !s.drafting;
