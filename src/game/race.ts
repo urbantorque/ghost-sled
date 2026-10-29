@@ -120,6 +120,10 @@ export const DUEL_COOLDOWN_TICKS = 180;
 /** A duel resolves by who leads after this many ticks (8 s): a duel with your own best line held
  *  within 4 m for 10 to 16 s and swallowed every other moment. */
 export const DUEL_MAX_TICKS = 480;
+/** A ghost inside DUEL_NEAR this few ticks of closeness short of DUEL_OPEN_TICKS is about to open a
+ *  duel (DuelTracker.soon): the rival pill stays where it is rather than naming another ghost for the
+ *  moment before the duel takes it back ('SparkleCedar > Your best > SparkleCedar', 0.25 to 0.53 s). */
+export const DUEL_SOON_TICKS = 40;
 
 /**
  * Neck-and-neck fights. Fed once per frame with whole sim-tick deltas (never frame counts) and every
@@ -138,10 +142,17 @@ export class DuelTracker {
   private readonly paid = new Set<number>();
   private readonly lost = new Map<number, number>();
   private readonly coolUntil = new Map<number, number>();
+  private soonId: number | null = null;
 
   /** The ghost id of the open duel, or null. */
   get open(): number | null {
     return this.openId;
+  }
+
+  /** The ghost a duel is about to open on, as of the last step: inside DUEL_NEAR, free to duel, within
+   *  DUEL_SOON_TICKS of opening, and a duel could open then (canOpen). Null with a duel open. */
+  get soon(): number | null {
+    return this.soonId;
   }
 
   /** 0..1 tension of the open duel (1 within 0.8 m, 0 at the 4 m resolve line). */
@@ -154,6 +165,7 @@ export class DuelTracker {
   step(dTicks: number, tick: number, gaps: ReadonlyArray<{ id: number; gap: number; live: boolean }>, canOpen = true): DuelEvent[] {
     const out: DuelEvent[] = [];
     const d = Math.max(0, Math.floor(dTicks));
+    this.soonId = null;
     if (this.openId !== null) {
       const id = this.openId;
       const g = gaps.find((x) => x.id === id);
@@ -185,6 +197,7 @@ export class DuelTracker {
     }
     if (tick < START_TICKS) return out;
     let pick: { id: number; gap: number } | null = null;
+    let soon: { id: number; gap: number } | null = null;
     for (const g of gaps) {
       if (!g.live) {
         this.acc.delete(g.id);
@@ -194,7 +207,9 @@ export class DuelTracker {
       if (a > DUEL_RESOLVE) this.acc.set(g.id, 0);
       else if (a < DUEL_NEAR) this.acc.set(g.id, (this.acc.get(g.id) ?? 0) + d);
       if (this.paid.has(g.id) || (this.lost.get(g.id) ?? 0) >= 2 || tick < (this.coolUntil.get(g.id) ?? -1)) continue;
-      if ((this.acc.get(g.id) ?? 0) >= DUEL_OPEN_TICKS && a < DUEL_NEAR && (!pick || a < Math.abs(pick.gap))) pick = g;
+      const acc = this.acc.get(g.id) ?? 0;
+      if (acc >= DUEL_OPEN_TICKS && a < DUEL_NEAR && (!pick || a < Math.abs(pick.gap))) pick = g;
+      if (acc >= DUEL_OPEN_TICKS - DUEL_SOON_TICKS && a < DUEL_NEAR && (!soon || a < Math.abs(soon.gap))) soon = g;
     }
     if (pick && canOpen) {
       this.openId = pick.id;
@@ -202,7 +217,7 @@ export class DuelTracker {
       this.behindTicks = 0;
       this.amt = Math.max(0, Math.min(1, (DUEL_RESOLVE - Math.abs(pick.gap)) / (DUEL_RESOLVE - 0.8)));
       out.push({ phase: 'open', id: pick.id });
-    }
+    } else if (soon && canOpen) this.soonId = soon.id;
     return out;
   }
 
@@ -217,11 +232,13 @@ export class DuelTracker {
   crash(): void {
     if (this.openId !== null) this.acc.set(this.openId, 0);
     this.openId = null;
+    this.soonId = null;
     this.amt = 0;
   }
 
   reset(): void {
     this.openId = null;
+    this.soonId = null;
     this.amt = 0;
     this.openTicks = 0;
     this.behindTicks = 0;
@@ -262,6 +279,56 @@ export function steadyNext(held: { id: number; gap: number } | null, next: { id:
   if (Math.abs(held.gap) < RIVAL_BUNCH_M && Math.abs(next.gap) < RIVAL_BUNCH_M) return held;
   if (held.gap > 0 === next.gap > 0 && Math.abs(held.gap - next.gap) < RIVAL_HOLD_M) return held;
   return next;
+}
+
+/** C12 neck and neck: a rival nearer than LEVEL_IN_M is level (no number), until it is LEVEL_OUT_M away. */
+export const LEVEL_IN_M = 1.5;
+export const LEVEL_OUT_M = 1.9;
+/** The shown gap number moves only once the gap is GAP_HOLD_M from it, at most once per GAP_DWELL_S. */
+export const GAP_HOLD_M = 1;
+export const GAP_DWELL_S = 0.25;
+
+/**
+ * The rival's gap as it is shown (C12), held at the source so the rival pill and the edge chip read one
+ * number: the chip rounded the raw gap every frame while the pill held its own, and the two named the
+ * same ghost 1 m apart in half the frames ('10 m behind' against '9 m'). The race maths keep the raw
+ * gap. Signed like the raw gap, in whole metres: level (neck and neck) reads 1 m toward the raw sign,
+ * and a number moves only once the raw gap is GAP_HOLD_M from it and it has held GAP_DWELL_S. A new
+ * ghost, or a new side (ahead, level, behind), shows its own number at once.
+ */
+export class GapReadout {
+  private id = -1;
+  private side = 2;
+  private shown = Number.NaN;
+  private at = -1e9;
+
+  /** The gap to show for ghost `id` with raw gap `raw` (m, + = ahead) at clock `now` (s). */
+  show(id: number, raw: number, now: number): number {
+    if (id !== this.id) {
+      this.id = id;
+      this.side = 2;
+    }
+    const a = Math.abs(raw);
+    const side = a < (this.side === 0 ? LEVEL_OUT_M : LEVEL_IN_M) ? 0 : raw > 0 ? 1 : -1;
+    if (side !== this.side) {
+      this.side = side;
+      this.shown = Number.NaN;
+    }
+    if (side === 0) return raw < 0 ? -1 : 1;
+    const r = Math.max(1, Math.round(a));
+    if (!Number.isFinite(this.shown) || (now - this.at >= GAP_DWELL_S && Math.abs(a - this.shown) >= GAP_HOLD_M && r !== this.shown)) {
+      this.shown = r;
+      this.at = now;
+    }
+    return side * this.shown;
+  }
+
+  reset(): void {
+    this.id = -1;
+    this.side = 2;
+    this.shown = Number.NaN;
+    this.at = -1e9;
+  }
 }
 
 /**

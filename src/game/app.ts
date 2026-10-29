@@ -16,7 +16,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GhostKind, HintKind, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
 import { CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS } from './beats';
 import { Director } from './director';
 import { anchorFor, pickField } from './field';
@@ -1702,13 +1702,17 @@ export class App {
       const rv = out.rival;
       const rt = rv ? this.ghosts.tracks.find((t) => t.entry.id === rv.id) : undefined;
       const hm = out.hud;
+      // gap: the director's held C12 number, the edge chip's too. hold: a duel's result holds the pill
+      // on this ghost on the director's clock (RIVAL_HOLD_S), so the HUD gates other ghosts' flashes
+      // on it (HudModel.nextGhost.hold, a contract amendment the HUD reads once it lands).
+      const next: (NonNullable<HudModel['nextGhost']> & { hold?: boolean }) | null = rv && rt ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel, hold: hm.hold } : null;
       this.ui.updateHud({
         score: sim.score,
         distance: sim.distance,
         gifts: sim.gifts + this.passBonus,
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
-        nextGhost: rv && rt ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel } : null,
+        nextGhost: next,
         // 'of N' is the whole field from the first ghost ready on (the pill shows from there), not the
         // count of tracks ready so far: those come ready over several seconds ("1st of 2", "of 4"...).
         place: { rank: st.rank, of: st.of > 1 ? Math.max(st.of, this.ghosts.fieldSize) : st.of },

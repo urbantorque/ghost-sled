@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXTRA_GIFTS_CAP, type GhostRef } from '../src/game/beats';
-import { DUEL_MAX_TICKS, DuelTracker, ExtraGifts, RIVAL_DWELL_S, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
+import { DUEL_MAX_TICKS, DUEL_OPEN_TICKS, DUEL_SOON_TICKS, DuelTracker, ExtraGifts, GapReadout, RIVAL_DWELL_S, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
 
 const ghost = (kind: GhostRef['kind'] = 'pool', name = 'Mila'): GhostRef => ({ id: 1001, name, kind, dx: 1 });
 
@@ -213,6 +213,48 @@ describe('DuelTracker', () => {
     d.crash();
     expect(d.open).toBeNull();
     expect(d.amount).toBe(0);
+  });
+
+  it('names the ghost a duel is about to open on (DUEL_SOON_TICKS of closeness to go), only while one may open', () => {
+    const d = new DuelTracker();
+    let t = 1000;
+    for (let i = 0; i < DUEL_OPEN_TICKS - DUEL_SOON_TICKS - 1; i++) d.step(1, ++t, near(0.5));
+    expect(d.soon).toBeNull();
+    d.step(1, ++t, near(0.5));
+    expect(d.soon).toBe(7);
+    // Held back (a result's hold, a banner): no duel is about to open.
+    d.step(1, ++t, near(0.5), false);
+    expect(d.soon).toBeNull();
+    // Outside DUEL_NEAR it is not about to open (its closeness waits).
+    d.step(1, ++t, near(2.5));
+    expect(d.soon).toBeNull();
+    for (let i = 0; i < DUEL_OPEN_TICKS && d.open === null; i++) d.step(1, ++t, near(0.5));
+    expect(d.open).toBe(7);
+    expect(d.soon).toBeNull();
+  });
+});
+
+describe('GapReadout (C12)', () => {
+  it('whole metres, a metre to move and 250 ms to dwell; level reads 1 m; a new ghost or side at once', () => {
+    const g = new GapReadout();
+    expect(g.show(1, 9.6, 0)).toBe(10);
+    expect(g.show(1, 9.4, 0.3)).toBe(10);
+    expect(g.show(1, 9.05, 0.6)).toBe(10);
+    expect(g.show(1, 8.9, 0.9)).toBe(9);
+    // A metre away, but only 0.1 s on: it dwells.
+    expect(g.show(1, 7.7, 1.0)).toBe(9);
+    expect(g.show(1, 7.7, 1.16)).toBe(8);
+    // Behind, signed; a new side shows its number at once.
+    expect(g.show(1, -6.2, 1.2)).toBe(-6);
+    // Neck and neck under 1.5 m, and until 1.9 m on the way out.
+    expect(g.show(1, -1.4, 1.25)).toBe(-1);
+    expect(g.show(1, 0.3, 1.26)).toBe(1);
+    expect(g.show(1, 1.8, 1.27)).toBe(1);
+    expect(g.show(1, 1.95, 1.28)).toBe(2);
+    // Another ghost: its own number at once.
+    expect(g.show(2, 13.4, 1.29)).toBe(13);
+    g.reset();
+    expect(g.show(2, 0.2, 2)).toBe(1);
   });
 });
 

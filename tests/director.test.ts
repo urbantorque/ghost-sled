@@ -675,7 +675,7 @@ describe('the race', () => {
     // A wreck just ahead is skipped too; the rider within 150 m behind is named.
     r.poses.set(1, pose(r.sim.s.z + 30, 0, true));
     r.poses.set(2, pose(r.sim.s.z - 120));
-    expect(rival()).toEqual({ id: 2, gap: -120 });
+    expect(rival()).toEqual({ id: 2, gap: -120, raw: -120 });
   });
 
   it("a duel's result keeps the rival on its ghost for 1.5 s, and no duel opens under it", () => {
@@ -688,37 +688,222 @@ describe('the race', () => {
     r.poses.set(1002, pose(r.sim.s.z + 1.0));
     r.idle(1.5);
     const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    const held = () => (r.d as unknown as { out: { hud: { hold: boolean } } }).out.hud.hold;
+    expect(held()).toBe(false);
     r.poses.set(1001, pose(r.sim.s.z - 5));
     const won = r.frame();
     expect(of(won, 'duel').map((d) => d.phase)).toEqual(['won']);
-    // The other ghost is right there (and nearer), but the result flash holds the ring and pill.
+    // The other ghost is right there (and nearer), but the result flash holds the ring and pill, and
+    // the HUD hears of the hold on the director's own clock.
     expect(rival()).toBe(1001);
+    expect(held()).toBe(true);
     const hold = r.idle(1.4);
     expect(of(hold, 'duel')).toHaveLength(0);
     expect(rival()).toBe(1001);
+    expect(held()).toBe(true);
     const after = r.idle(0.3);
     expect(of(after, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['open:1002']);
     expect(rival()).toBe(1002);
+    expect(held()).toBe(false);
   });
 
-  it("a duel with your best won: 'Passed Your best' gets its beat; a duel is resolved after 8 s", () => {
+  it("a duel's result under a landing stamp holds from the stamp's end, when its flash can first show", () => {
+    const r = new Rig();
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.5));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.idle(1.5);
+    const out = () => (r.d as unknown as { out: { rival: { id: number } | null; hud: { hold: boolean } } }).out;
+    // A perfect landing's stamp goes up; half a second later the duel is won under it.
+    expect(of(r.frame([style('perfect', 250, 2), land('perfect')]), 'stomp')).toHaveLength(1);
+    r.idle(0.5);
+    r.poses.set(1001, pose(r.sim.s.z - 5));
+    expect(of(r.frame(), 'duel').map((d) => d.phase)).toEqual(['won']);
+    // The stamp holds the 'Duel won' flash for another second: the hold runs 1.5 s from there.
+    r.idle(2.4);
+    expect(out().hud.hold).toBe(true);
+    expect(out().rival?.id).toBe(1001);
+    r.idle(0.2);
+    expect(out().hud.hold).toBe(false);
+    // A stamp 0.3 s into a result's flash steps it back to play after the stamp: the hold starts over.
+    const q = new Rig();
+    q.tracks = [track(1001), track(1002)];
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.5));
+    q.poses.set(1002, pose(q.sim.s.z + 30));
+    q.idle(1.5);
+    q.poses.set(1001, pose(q.sim.s.z - 5));
+    expect(of(q.frame(), 'duel').map((d) => d.phase)).toEqual(['won']);
+    q.idle(0.3);
+    q.frame([style('perfect', 250, 2), land('perfect')]);
+    const qo = () => (q.d as unknown as { out: { hud: { hold: boolean } } }).out.hud;
+    q.idle(2.9);
+    expect(qo().hold).toBe(true);
+    q.idle(0.2);
+    expect(qo().hold).toBe(false);
+    // An older flash has had its moment: a stamp then leaves the hold as it was.
+    const s = new Rig();
+    s.tracks = [track(1001), track(1002)];
+    s.sim.tick = 2000;
+    s.poses.set(1001, pose(s.sim.s.z + 0.5));
+    s.poses.set(1002, pose(s.sim.s.z + 30));
+    s.idle(1.5);
+    s.poses.set(1001, pose(s.sim.s.z - 5));
+    s.frame();
+    s.idle(0.8);
+    s.frame([style('perfect', 250, 2), land('perfect')]);
+    const so = () => (s.d as unknown as { out: { hud: { hold: boolean } } }).out.hud;
+    s.idle(0.6);
+    expect(so().hold).toBe(true);
+    s.idle(0.2);
+    expect(so().hold).toBe(false);
+  });
+
+  it('a duel about to open keeps the pill on its ghost: no third name for the quarter second before it', () => {
+    const r = new Rig();
+    const a = track(1, 'pool', 'SparkleCedar');
+    const y = track(2, 'you', 'Rider');
+    r.tracks = [a, y];
+    r.sim.tick = 2000;
+    const z = r.sim.s.z;
+    const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    // SparkleCedar a metre ahead (the nearest), your best 3 m ahead.
+    r.poses.set(1, pose(z + 1));
+    r.poses.set(2, pose(z + 3));
+    const seen: number[] = [];
+    const beats: Beat[] = [];
+    for (let i = 0; i < 42; i++) {
+      beats.push(...r.frame());
+      seen.push(rival()!);
+    }
+    // You edge past it: your best is now the nearest ahead, but its duel is a quarter second off.
+    r.poses.set(1, pose(z - 1));
+    for (let i = 0; i < 30; i++) {
+      beats.push(...r.frame());
+      seen.push(rival()!);
+    }
+    expect(of(beats, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['open:1']);
+    expect(seen.every((id) => id === 1)).toBe(true);
+    // With no duel coming, the nearest ahead takes the pill as before.
+    const q = new Rig();
+    q.tracks = [track(1), track(2)];
+    q.poses.set(1, pose(q.sim.s.z + 1));
+    q.poses.set(2, pose(q.sim.s.z + 3));
+    q.sim.tick = 100;
+    q.idle(0.7);
+    q.poses.set(1, pose(q.sim.s.z - 1));
+    q.frame();
+    expect((q.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id).toBe(2);
+  });
+
+  it("a duel with your best won, clear behind you: 'Passed Your best' after the result's flash; a duel is resolved after 8 s", () => {
     const r = new Rig();
     const you = track(1001, 'you', 'Rider');
     r.tracks = [you];
     r.sim.tick = 2000;
     r.poses.set(1001, pose(r.sim.s.z + 0.8));
     expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
-    // Level and a hand ahead of your line for the whole 8 s: the duel resolves by who leads.
-    r.poses.set(1001, pose(r.sim.s.z - 0.6));
-    const out = r.idle(8);
+    // Two metres behind your line for the whole 8 s (inside the 4 m resolve line): it resolves by who leads.
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    const out = r.idle(10);
     const duel = of(out, 'duel');
     expect(duel.map((d) => d.phase)).toEqual(['heldOff']);
     const pass = of(out, 'pass');
     expect(pass).toHaveLength(1);
     expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, ghost: { kind: 'you' } });
-    // The duel beat first, so the pill's last word on it is the pass.
-    expect(out.indexOf(duel[0])).toBeLessThan(out.indexOf(pass[0]));
+    // 'Held off Your best' has the pill for its 1.5 s hold first (pushed with it, the pass took the
+    // pill in the same frame and the result never showed).
+    expect(pass[0].tick - duel[0].tick).toBeGreaterThanOrEqual(89);
+    expect(pass[0].tick - duel[0].tick).toBeLessThanOrEqual(92);
     expect(r.d.shownPasses.has(1001)).toBe(true);
+  });
+
+  it("a duel with your best capped neck and neck claims no pass: the real crossing is the one 'Passed Your best'", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    r.idle(1.1);
+    // A hand behind your line for the whole 8 s, never 0.8 m clear (the race saw no crossing yet).
+    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    const capped = r.idle(8);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    // The real overtake 3 s later: the race's first pass is the moment, with the base.
+    r.idle(3);
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const real = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(real).toHaveLength(1);
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+  });
+
+  it("your best passed in view before its duel: the duel's result is the moment, never a second 'Passed Your best'", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const first = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(first[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    // It sticks with you: a duel, held off with it two metres back at the cap.
+    r.poses.set(1001, pose(r.sim.s.z - 1));
+    const out = r.idle(12);
+    expect(of(out, 'duel').map((d) => d.phase)).toEqual(['open', 'heldOff']);
+    expect(of(out, 'pass')).toHaveLength(0);
+    r.poses.set(1001, pose(r.sim.s.z - 2.5));
+    expect(of(r.idle(3), 'pass')).toHaveLength(0);
+  });
+
+  it("neck and neck with the crossing behind you: 'Passed Your best' waits for it to fall clear and the result's hold", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    // Frames up to the duel's result (the rig's first frame opens it).
+    const toResult = (q: Rig): Beat[] => {
+      const out: Beat[] = [];
+      for (let i = 0; i < 600; i++) {
+        const b = q.frame();
+        out.push(...b);
+        if (of(b, 'duel').some((d) => d.phase !== 'open')) break;
+      }
+      return out;
+    };
+    expect(of(r.frame(), 'duel').map((d) => d.phase)).toEqual(['open']);
+    // A metre behind (the race's crossing came inside the duel, muted): level by C12 at the cap.
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 1));
+    const capped = toResult(r);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    // Clear 0.5 s later, but the result's flash holds for 1.5 s: the pass waits for it.
+    r.idle(0.5);
+    r.poses.set(1001, pose(r.sim.s.z - 2.2));
+    expect(of(r.idle(0.9), 'pass')).toHaveLength(0);
+    const after = of(r.idle(0.2), 'pass');
+    expect(after).toHaveLength(1);
+    expect(after[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, ghost: { kind: 'you' } });
+    expect(of(r.idle(2), 'pass')).toHaveLength(0);
+    // Still level YOU_CLEAR_S after the result's hold: let go, nothing claimed.
+    const q = new Rig();
+    const y2 = track(1001, 'you', 'Rider');
+    q.tracks = [y2];
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.8));
+    q.frame();
+    y2.status = 1;
+    q.poses.set(1001, pose(q.sim.s.z - 1));
+    toResult(q);
+    expect(of(q.idle(7.7), 'pass')).toHaveLength(0);
+    q.poses.set(1001, pose(q.sim.s.z - 2.2));
+    expect(of(q.idle(1), 'pass')).toHaveLength(0);
   });
 
   it('gaps are measured against the rendered rider (riderZ), on the poses\' own render tick', () => {
@@ -732,17 +917,58 @@ describe('the race', () => {
     // The rider renders 0.4 m short of its integer-tick z (alpha 0.6 at 25 m/s): the pose is taken
     // at the same render tick, so the gap is the rendered one, not 0.4 m short.
     const z = r.sim.s.z;
-    expect(step(z + 13.1, z - 0.4)?.gap).toBeCloseTo(13.5);
+    expect(step(z + 13.1, z - 0.4)?.raw).toBeCloseTo(13.5);
     // Without riderZ it falls back to the sim's own z.
-    expect(step(z + 13.1)?.gap).toBeCloseTo(13.1);
+    expect(step(z + 13.1)?.raw).toBeCloseTo(13.1);
     // A steady 13.5 m chase across ticks: pose and rider move together, so the gap never jumps.
     const gaps: number[] = [];
     for (let i = 0; i < 30; i++) {
       const alpha = (i % 3) / 3;
       const rider = z + (i + alpha) * 0.4;
-      gaps.push(step(rider + 13.5, rider)!.gap);
+      gaps.push(step(rider + 13.5, rider)!.raw);
     }
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
+  });
+
+  it('the pill and the edge chip read one held gap (C12): whole metres, a metre to move, 250 ms to dwell', () => {
+    const r = new Rig();
+    const a = track(1);
+    const b = track(2);
+    r.tracks = [a, b];
+    const z = r.sim.s.z;
+    const rival = () => (r.d as unknown as { out: { rival: { id: number; gap: number; raw: number } | null } }).out.rival;
+    // Behind you, 9.6 m: the readout says 10; the race maths jitter across 9.5 and it holds.
+    r.poses.set(1, pose(z - 9.6));
+    r.poses.set(2, pose(z - 60));
+    r.frame();
+    expect(rival()).toMatchObject({ id: 1, gap: -10 });
+    for (const g of [9.4, 9.55, 9.3, 9.45, 9.2]) {
+      r.poses.set(1, pose(z - g));
+      r.frame();
+      expect(rival()!.gap).toBe(-10);
+      expect(rival()!.raw).toBeCloseTo(-g);
+    }
+    r.idle(0.3);
+    expect(rival()!.gap).toBe(-10);
+    // A metre from it: it moves, then dwells 250 ms however fast the gap runs.
+    r.poses.set(1, pose(z - 8.9));
+    r.frame();
+    expect(rival()!.gap).toBe(-9);
+    r.poses.set(1, pose(z - 7.6));
+    r.idle(0.2);
+    expect(rival()!.gap).toBe(-9);
+    r.idle(0.06);
+    expect(rival()!.gap).toBe(-8);
+    // Neck and neck (under 1.5 m, out again at 1.9 m) reads 1 m: the pill's level, the chip's '1 m'.
+    r.poses.set(1, pose(z - 1.2));
+    r.frame();
+    expect(rival()!.gap).toBe(-1);
+    r.poses.set(1, pose(z + 1.7));
+    r.frame();
+    expect(rival()!.gap).toBe(1);
+    r.poses.set(1, pose(z + 2.1));
+    r.frame();
+    expect(rival()!.gap).toBe(2);
   });
 
   it('the start-line call holds the rival a quarter second under the HUD call flash', () => {
@@ -805,23 +1031,47 @@ describe('the race', () => {
     r.sim.tick = 120;
     r.poses.set(1001, pose(r.sim.s.z - 0.5));
     expect(of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 0 });
-    // A duel with it, held off with you a hand ahead the whole way (no pass inside it).
+    // A duel with it, held off with you two metres ahead the whole way (no pass inside it).
     r.sim.tick = 2000;
     r.poses.set(1001, pose(r.sim.s.z + 0.8));
     expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
-    r.poses.set(1001, pose(r.sim.s.z - 0.6));
-    const out = r.idle(8);
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    const out = r.idle(10);
     expect(of(out, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
     const pass = of(out, 'pass');
     expect(pass).toHaveLength(1);
     expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
     // It slips past you and you take it back: its first pass was the duel's 'Passed Your best'.
     r.idle(3);
+    you.status = -1;
     r.poses.set(1001, pose(r.sim.s.z + 3));
     r.frame([], { race: [{ type: 'passedBy', track: you }] });
     r.poses.set(1001, pose(r.sim.s.z - 1.6));
     const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
     expect(again[0]).toMatchObject({ word: 'tookBack', text: 'Took back', gifts: 0 });
+    // Capped neck and neck instead: no pass claimed then; the later real overtake is the one
+    // 'Passed Your best', with the base the jostle kept, and the next re-pass is a retake.
+    const q = new Rig();
+    const y2 = track(1001, 'you', 'Rider');
+    q.tracks = [y2];
+    q.sim.tick = 120;
+    q.poses.set(1001, pose(q.sim.s.z - 0.5));
+    q.frame([], { race: [{ type: 'pass', track: y2, first: true }] });
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.8));
+    q.idle(1.1);
+    q.poses.set(1001, pose(q.sim.s.z - 0.6));
+    const capped = q.idle(8);
+    expect(of(capped, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    expect(of(capped, 'pass')).toHaveLength(0);
+    q.idle(3);
+    q.poses.set(1001, pose(q.sim.s.z - 1.6));
+    const real = of(q.frame([], { race: [{ type: 'pass', track: y2, first: false }] }), 'pass');
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    q.idle(1);
+    q.poses.set(1001, pose(q.sim.s.z - 1.6));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: y2, first: false }] }), 'pass')[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
   });
 
   it('a pass muted inside its own duel pays its base and no extras', () => {
@@ -1310,7 +1560,8 @@ describe('mission and unlock pops', () => {
     r.poses.set(1001, pose(110));
     r.passed = 1;
     const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
-    expect(of(a, 'raceNews')[0]).toMatchObject({ news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier' });
+    // News about the field, keyed to no ghost: a duel ghost's pill never takes it for its own news.
+    expect(of(a, 'raceNews')[0]).toMatchObject({ news: 'unlockTease', text: '1 more ghost opens Frostfang Glacier', ghost: { id: -1, name: '' } });
   });
 });
 
@@ -1396,7 +1647,143 @@ describe('the grudge settled', () => {
     q.r.poses.set(1001, pose(q.r.sim.s.z - 4.5));
     const w = q.r.frame();
     expect(w.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'duel')).toEqual(['grudgeSettled', 'duel']);
+    // One moment, not a banner stacked on a result: the banner carries the duel's word.
+    expect(of(w, 'grudgeSettled')[0].say?.label).toBe('Duel won');
     expect(q.r.d.grudgeSettled).toBe(true);
+  });
+
+  /** A second run's start bunch: the grudge, the opening duel's ghost and your best. */
+  function bunchRig(): { r: Rig; g: GhostTrack; d: GhostTrack; y: GhostTrack } {
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 } });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    const d = track(1002, 'pool', 'MarmotMateo');
+    const y = track(1003, 'you', 'Rider');
+    r.tracks = [g, d, y];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 6));
+    r.poses.set(1002, pose(r.sim.s.z + 0.8));
+    r.poses.set(1003, pose(r.sim.s.z + 30));
+    return { r, g, d, y };
+  }
+
+  it("passed while another ghost's duel runs: the banner waits out the duel and its result's flash, then no duel opens under it", () => {
+    const { r, g, d, y } = bunchRig();
+    expect(of(r.idle(1.1), 'duel').map((b) => b.phase)).toEqual(['open']);
+    // You pass the grudge mid duel: its pass (the callout line's) is paid, its banner waits.
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    const p = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(p, 'pass')[0]).toMatchObject({ muted: false, gifts: 0 });
+    expect(of(p, 'grudgeSettled')).toHaveLength(0);
+    expect(r.d.grudgeSettled).toBe(false);
+    expect(of(r.idle(2), 'grudgeSettled')).toHaveLength(0);
+    // The duel resolves: 'Held off' (or 'Duel won') owns the pill for its 1.5 s hold, then the banner.
+    r.poses.set(1002, pose(r.sim.s.z - 5));
+    const res = r.frame();
+    expect(of(res, 'duel').map((b) => b.phase)).toEqual(['won']);
+    expect(of(res, 'grudgeSettled')).toHaveLength(0);
+    // Your best rides up beside you meanwhile: close enough to duel, but the banner goes first.
+    r.poses.set(1003, pose(r.sim.s.z + 0.5));
+    expect(of(r.idle(1.45), 'grudgeSettled')).toHaveLength(0);
+    const up = r.idle(0.1);
+    const s = of(up, 'grudgeSettled');
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ paid: 10, ghost: { name: 'Tess' } });
+    expect(s[0].say).toBeUndefined();
+    expect(r.d.grudgeSettled).toBe(true);
+    // No duel opens under the rose banner (2.5 s): then your best's does.
+    expect(of(r.idle(2.3), 'duel')).toHaveLength(0);
+    expect(of(r.idle(0.3), 'duel').map((b) => `${b.phase}:${b.ghost.id}`)).toEqual([`open:${y.entry.id}`]);
+    expect(of(r.idle(5), 'grudgeSettled')).toHaveLength(0);
+    void d;
+  });
+
+  it("a slingshot burst through the bunch: the banner waits while it still counts, so 'Slung past Your best' shows", () => {
+    const { r, g, y } = bunchRig();
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    r.poses.set(1003, pose(r.sim.s.z - 2));
+    const a = r.frame([{ type: 'boost', amount: 5, source: 'slingshot' }], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(a, 'pass')[0]).toMatchObject({ word: 'slung' });
+    expect(of(a, 'grudgeSettled')).toHaveLength(0);
+    const b = r.frame([], { ticks: 20, race: [{ type: 'pass', track: y, first: true }] });
+    expect(of(b, 'pass')[0]).toMatchObject({ word: 'slung', text: 'Slung past 2', ghost: { kind: 'you' } });
+    expect(of(b, 'grudgeSettled')).toHaveLength(0);
+    // The burst stops counting 90 ticks after its last pass: then the banner.
+    expect(of(r.frame([], { ticks: 89 }), 'grudgeSettled')).toHaveLength(0);
+    expect(of(r.frame([], { ticks: 2 }), 'grudgeSettled')).toHaveLength(1);
+  });
+
+  it('a banner held by a burst goes before a mission met meanwhile, and a pass streak holds it 3 s at most', () => {
+    let met = false;
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 }, missionsCrossed: () => (met ? ((met = false), [{ id: 'm', text: 'Collect 20 gifts in one run', reward: 25 }]) : []) });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    const pack = [1, 2, 3, 4, 5, 6, 7].map((i) => track(i));
+    r.tracks = [g, ...pack];
+    r.sim.tick = 2000;
+    for (const t of r.tracks) r.poses.set(t.entry.id, pose(r.sim.s.z + 20 + t.entry.id / 100));
+    // (Past the start-line call.)
+    r.idle(3.5);
+    // A pass streak through the pack, one every 0.8 s: the grudge third.
+    const order = [pack[0], pack[1], g, pack[2], pack[3], pack[4], pack[5], pack[6]];
+    const beats: Array<{ at: number; b: Beat }> = [];
+    let at = 0;
+    for (const t of order) {
+      r.poses.set(t.entry.id, pose(r.sim.s.z - 2));
+      if (t === pack[2]) met = true;
+      for (const b of r.frame([], { race: [{ type: 'pass', track: t, first: true }] })) beats.push({ at, b });
+      for (let i = 0; i < 47; i++) for (const b of r.frame()) beats.push({ at: at + (i + 1) / 60, b });
+      at += 0.8;
+    }
+    for (let i = 0; i < 300; i++) for (const b of r.frame()) beats.push({ at: at + i / 60, b });
+    const settle = beats.find((x) => x.b.type === 'grudgeSettled');
+    const pop = beats.find((x) => x.b.type === 'missionPop');
+    expect(settle).toBeDefined();
+    expect(pop).toBeDefined();
+    // The grudge was passed at 1.6 s: the streak holds its banner 3 s, no more, and the mission waits for it.
+    expect(settle!.at - 1.6).toBeGreaterThan(2.9);
+    expect(settle!.at - 1.6).toBeLessThan(3.1);
+    expect(pop!.at).toBeGreaterThan(settle!.at + 2.49);
+  });
+
+  it('a plain pass of the grudge with nothing else on: the banner at once, as its picture', () => {
+    const { r, g } = bunchRig();
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(a.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'pass')).toEqual(['grudgeSettled', 'pass']);
+  });
+
+  it('a banner still waiting when the run ends goes up on the crash frame, with its gifts', () => {
+    const { r, g } = bunchRig();
+    r.idle(1.1);
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: g, first: true }] }), 'grudgeSettled')).toHaveLength(0);
+    r.sim.s.crashed = true;
+    const c = r.frame([{ type: 'crash', cause: 'tree' } as SimEvent]);
+    expect(of(c, 'grudgeSettled')).toHaveLength(1);
+    expect(of(c, 'grudgeSettled')[0].paid).toBe(10);
+    expect(r.d.grudgeSettled).toBe(true);
+  });
+
+  it("pops wait out the grudge's banner", () => {
+    let met = false;
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 }, missionsCrossed: () => (met ? ((met = false), [{ id: 'm', text: 'Pass a ghost', reward: 0 }]) : []) });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    r.tracks = [g];
+    r.sim.tick = 2000;
+    // (The start-line call, 'Rematch Tess', has its 2.6 s first.)
+    r.poses.set(1001, pose(r.sim.s.z + 20));
+    r.idle(3.5);
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    met = true;
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(a, 'grudgeSettled')).toHaveLength(1);
+    const wait = r.idle(2.4);
+    expect(of(wait, 'missionPop')).toHaveLength(0);
+    expect(of(r.idle(0.7), 'missionPop')).toHaveLength(1);
   });
 
   it('crashed past it settles nothing (the crash owns the moment)', () => {
