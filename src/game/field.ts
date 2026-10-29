@@ -33,11 +33,11 @@ import type { PoolGhostData } from './ghostdata';
 //
 // Why pace and stretch are long runners whatever the anchor (measured on fresh saves with the
 // novice pilot): every pool ghost covers about the same 140 m in its first 10 s, so the field rides
-// bunched and a novice slings past all of it within about 6 s; and the bots that crash before 1 km
+// bunched and a novice gets past all of it within about 6 s; and the bots that crash before 1 km
 // also ride slower than a novice afterwards, so a field picked by distance alone was behind you or
-// wrecked by 40 s, and a durable run rode on alone for minutes. A fast pace rider (23 m/s is about a
-// mid player's long-run average; a novice averages 19 to 20) comes back past you in the first 30 s
-// and leads; the stretch rider, usually near a novice's speed, is still close a minute or two in.
+// wrecked by 40 s, and a durable run rode on alone for minutes. A pace rider at 23 m/s or more
+// (about a mid player's long-run average) keeps coming back past a novice who drafts it: neck and
+// neck at 30 s, ahead at 60 s. The stretch rider, a little slower, is still near after that.
 //
 // Pure: no DOM, render or audio imports.
 
@@ -73,9 +73,9 @@ export interface FieldPick {
 }
 
 /** The anchor with no runs anywhere yet, and its bounds (metres). A brand-new player's runs swing
- *  widely: 33 fresh novice runs on Pinecrest ended between 215 m and 2.7 km, about a third past
- *  750 m. At 700 m the pack rides the first 35 to 45 s, through most of those crashes, and pace and
- *  stretch carry the long ones. */
+ *  widely: fresh novice runs on Pinecrest end anywhere from 215 m to 2.7 km (median about 400 m, a
+ *  third past 750 m). At 700 m the pack rides the first 35 to 40 s, through most of those crashes,
+ *  and pace and stretch carry the long ones. */
 export const ANCHOR_DEFAULT = 700;
 export const ANCHOR_MIN = 200;
 export const ANCHOR_MAX = 5000;
