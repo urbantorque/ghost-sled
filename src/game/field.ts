@@ -5,9 +5,10 @@ import type { GhostRole } from './beats';
 import type { PoolGhostData } from './ghostdata';
 
 // The race field: which ghosts ride a run. It is built around where this player usually crashes
-// (the anchor, anchorFor): an opener to pass early, a pack fighting right where you tend to fall,
-// and a pace rider who goes on past it, so when you crash ghosts are still racing just ahead and
-// just behind you. Your best, the grudge and a friend's challenge ride on top.
+// (the anchor, anchorFor): an opener to pass early, a pack fighting right where you tend to fall, a
+// pace rider who leaves the start with you and goes on ahead, and a stretch rider who keeps going
+// long past it, so whether you crash at 300 m or ride on for kilometres, ghosts are still racing
+// just ahead and just behind you. Your best, the grudge and a friend's challenge ride on top.
 //
 // The app gathers the inputs (the bundled or Daily pool, the run's chaos, your best, the grudge and
 // a friend's challenge) and maps the picks to GhostEntry.
@@ -18,14 +19,25 @@ import type { PoolGhostData } from './ghostdata';
 // recorded chaos, so a Comet ghost would float visibly wrong through a plain run): a field rides
 // short instead.
 //
-// Roles (A the anchor): opener in [0.5, 0.75]A aiming at 0.62A; three pack ghosts in [0.8, 1.3]A
-// aiming at 0.85, 1.05 and 1.25A; pace, the smallest distance at least max(1.7A, A + 250). Haunted
-// Hollow's four extra ghosts add an opener at 0.55A, pack at 0.95A and 1.15A, and pace at 2.2A or
-// more. Within a window the pick nearest its target wins; candidates within 30 m of the target tie,
-// and a generator seeded with the run's chaos seed picks among them. An empty window widens by 25%
-// up to three times (flagged widened), then the nearest unused candidate is taken. Capped 18,000-tick
-// finishers ride only as pace. Every pick sits 25 m or more from every other pick and from the spot
-// where your best crashed (twin wrecks like Pinecrest's 604.4 and 604.4 m never ride together).
+// Roles (A the anchor; a ghost's speed is its distance over its ride time): opener in [0.5, 0.75]A
+// aiming at 0.62A; two pack ghosts in [0.8, 1.3]A aiming at 0.85 and 1.05A; pace, a long runner at
+// P = max(1.7A, A + 250, 1,500 m) or more that averaged 23 m/s or more when there is one; and the
+// stretch rider (role pace too) at max(2.2A, P + 25) or more, of any speed. Haunted Hollow's four
+// extra ghosts add an opener at 0.55A and pack at 0.95, 1.15 and 1.25A. Within a window the pick
+// nearest its target wins (pace looks among its fast riders first); candidates within 30 m of the
+// target tie, and a generator seeded with the run's chaos seed picks among them. An empty window
+// widens by 25% up to three times (flagged widened), then the nearest unused candidate is taken.
+// Capped 18,000-tick finishers ride only as pace or stretch. Every pick sits 25 m or more from every
+// other pick and from the spot where your best crashed (twin wrecks like Pinecrest's 604.4 and
+// 604.4 m never ride together).
+//
+// Why pace and stretch are long runners whatever the anchor (measured on fresh saves with the
+// novice pilot): every pool ghost covers about the same 140 m in its first 10 s, so the field rides
+// bunched and a novice slings past all of it within about 6 s; and the bots that crash before 1 km
+// also ride slower than a novice afterwards, so a field picked by distance alone was behind you or
+// wrecked by 40 s, and a durable run rode on alone for minutes. A fast pace rider (23 m/s is about a
+// mid player's long-run average; a novice averages 19 to 20) comes back past you in the first 30 s
+// and leads; the stretch rider, usually near a novice's speed, is still close a minute or two in.
 //
 // Pure: no DOM, render or audio imports.
 
@@ -60,18 +72,32 @@ export interface FieldPick {
   nemesis?: boolean;
 }
 
-/** The anchor with no runs anywhere yet, and its bounds (metres). */
-export const ANCHOR_DEFAULT = 420;
+/** The anchor with no runs anywhere yet, and its bounds (metres). A brand-new player's runs swing
+ *  widely: 33 fresh novice runs on Pinecrest ended between 215 m and 2.7 km, about a third past
+ *  750 m. At 700 m the pack rides the first 35 to 45 s, through most of those crashes, and pace and
+ *  stretch carry the long ones. */
+export const ANCHOR_DEFAULT = 700;
 export const ANCHOR_MIN = 200;
 export const ANCHOR_MAX = 5000;
 /** Run-end distances the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
+/** One long run lifts the next anchor to this share of it at least (anchorFor). */
+export const ANCHOR_LAST = 0.7;
 /** Metres every pick keeps from every other pick and from your best's crash spot. */
 export const FIELD_SPACING = 25;
 /** Candidates this close to a role's target tie, and the seeded generator picks. */
 export const FIELD_TIE = 30;
-/** A pool ghost that rode this long finished (the generator's cap): pace only. */
+/** A pool ghost that rode this long finished (the generator's cap): pace or stretch only. */
 export const FINISH_TICKS = 18000;
+/** The pace rider is a long runner: its window starts here at the least (metres). */
+export const PACE_MIN = 1500;
+/** The pace rider looks first among ghosts that averaged this speed or more (m/s). */
+export const PACE_SPEED = 23;
+
+/** A pool ghost's average speed over its whole ride, in m/s. */
+export function poolSpeed(g: Pick<PoolGhostData, 'distance' | 'ticks'>): number {
+  return g.ticks > 0 ? g.distance / (g.ticks / 60) : 0;
+}
 
 function median(xs: number[]): number {
   const s = xs.slice().sort((a, b) => a - b);
@@ -87,12 +113,13 @@ function runs(xs: unknown): number[] {
 }
 
 /** The distance a field is built around for this mountain key: the median of its last 5 run-end
- *  distances; with none, 0.8 times the median of every other key's; else 420 m. Clamped to 200 to
+ *  distances, or 0.7 times the last one when that is more (one long run lifts the next field right
+ *  away); with none, 0.8 times the median of every other key's; else 700 m. Clamped to 200 to
  *  5,000 m. */
 export function anchorFor(runDists: Readonly<Record<string, number[]>>, key: string): number {
   const own = runs(runDists?.[key]).slice(-ANCHOR_RUNS);
   let a = ANCHOR_DEFAULT;
-  if (own.length) a = median(own);
+  if (own.length) a = Math.max(median(own), ANCHOR_LAST * own[own.length - 1]);
   else {
     const others: number[] = [];
     for (const k of Object.keys(runDists ?? {})) if (k !== key) others.push(...runs(runDists[k]).slice(-ANCHOR_RUNS));
@@ -106,30 +133,34 @@ interface Role {
   target: number;
   lo: number;
   hi: number;
+  /** Look first among candidates at this average speed or more (pace). */
+  fast?: number;
 }
 
 /** The roles in priority order (a field shorter than 5 keeps the first ones). */
 function roles(a: number, count: number): Role[] {
-  const pace = Math.max(1.7 * a, a + 250);
+  const pace = Math.max(1.7 * a, a + 250, PACE_MIN);
+  const stretch = Math.max(2.2 * a, pace + FIELD_SPACING);
   const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.8 * a, hi: 1.3 * a });
   const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 0.5 * a, hi: 0.75 * a });
   const all: Role[] = [
     pack(1.05),
     opener(0.62),
-    { role: 'pace', target: pace, lo: pace, hi: Infinity },
+    { role: 'pace', target: pace, lo: pace, hi: Infinity, fast: PACE_SPEED },
     pack(0.85),
-    pack(1.25),
+    // The stretch rider.
+    { role: 'pace', target: stretch, lo: stretch, hi: Infinity },
     // Haunted Hollow's four extra ghosts.
     opener(0.55),
     pack(0.95),
     pack(1.15),
-    { role: 'pace', target: Math.max(2.2 * a, pace + FIELD_SPACING), lo: Math.max(2.2 * a, pace + FIELD_SPACING), hi: Infinity },
+    pack(1.25),
   ];
   // Any further ghosts join the pack around the anchor.
   const more = [1.0, 0.9, 1.1, 1.2, 0.8];
   for (let i = 0; all.length < count; i++) all.push(pack(more[i % more.length]));
   const out = all.slice(0, Math.max(0, count));
-  // Filled from the start line down: openers, then the pack, then pace.
+  // Filled from the start line down: openers, then the pack, then pace and stretch.
   const order: Record<GhostRole, number> = { opener: 0, pack: 1, pace: 2 };
   return out.sort((x, y) => order[x.role] - order[y.role] || x.target - y.target);
 }
@@ -213,8 +244,13 @@ export function pickField(i: FieldInput): FieldPick[] {
     let widened = false;
     for (let k = 0; k <= 3 && !found; k++) {
       const w = widen(r, k, a);
-      const inside = cands.filter((g) => g.distance >= w.lo && g.distance <= w.hi && fits(g));
+      let inside = cands.filter((g) => g.distance >= w.lo && g.distance <= w.hi && fits(g));
       if (!inside.length) continue;
+      // Pace looks among its fast riders first, then takes whoever the window holds.
+      if (r.fast) {
+        const quick = inside.filter((g) => poolSpeed(g) >= r.fast!);
+        if (quick.length) inside = quick;
+      }
       const ties = inside.filter((g) => Math.abs(g.distance - r.target) <= FIELD_TIE);
       if (ties.length > 1) found = ties[Math.min(ties.length - 1, Math.floor(rand() * ties.length))];
       else found = inside.reduce((b, g) => (Math.abs(g.distance - r.target) < Math.abs(b.distance - r.target) ? g : b));
