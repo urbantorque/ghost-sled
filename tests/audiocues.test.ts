@@ -84,6 +84,26 @@ describe('results cues', () => {
     expect(q.map((c) => c.name).sort()).toEqual(['coin', 'mission', 'new-best', 'results-mallet', 'results-stamp', 'results-tick']);
   });
 
+  it('coins: [] (the app plays each coin from onRewardLanded) leaves no coin on the timeline', () => {
+    for (const reduced of [false, true]) {
+      const q = resultsCues({ count: true, newBest: false, beats: 1, missions: [0, 2], coins: [] }, T, reduced);
+      expect(q.some((c) => c.name === 'coin')).toBe(false);
+      // The Done chimes keep their rows.
+      expect(q.filter((c) => c.name === 'mission')).toHaveLength(reduced ? 1 : 2);
+    }
+    expect(resultsCues({ count: false, newBest: false, beats: 0, missions: 0, coins: 0 }, T, false).map((c) => c.name)).toEqual(['results-stamp']);
+  });
+
+  it("the doubled reward's coin plays once when the app and the card's landing both ask at that moment", () => {
+    const g = new UiOnce();
+    // The double: app.ts plays ui('coin') as the ad closes, and a landing callback in the same task
+    // asks again (the clock may move a render quantum, 2.7 ms, between the two calls).
+    expect(g.admit('coin', 30.006, 30)).toBe(true);
+    expect(g.admit('coin', 30.0087, 30.0027)).toBe(false);
+    // A real second landing 140 ms later (the next row) still plays.
+    expect(g.admit('coin', 30.146, 30.14)).toBe(true);
+  });
+
   it('the closest pair of results sounds is wider than the one-sound guard', () => {
     const q = resultsCues({ count: true, newBest: true, beats: 4, missions: [0, 1, 2], coins: [0, 1, 2] }, T, false);
     for (const a of q) for (const b of q) if (a !== b && a.name === b.name) expect(Math.abs(a.at - b.at)).toBeGreaterThan(UI_SAME_S);

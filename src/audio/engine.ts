@@ -430,7 +430,9 @@ export class AudioEngine {
    * wallet. missions and coins take a count or the rows (each mission's index in
    * ResultsModel.missions, which places its stamp and its fly-in). Reduced motion collapses it all to
    * the opening moment with a single tick. A sound the app also asks for at the same moment
-   * (ui('coin', 0, sameDelay)) plays once.
+   * (ui('coin', 0, sameDelay)) plays once. When the app plays each coin as its reward lands
+   * (UIHandlers.onRewardLanded: ui('coin', row) at the landing) it passes coins: [] here, and a
+   * second ask at that landing (the doubled reward's coin) is the same sound, played once.
    */
   cueResults(r: ResultsShow, t: ResultsCue, reduced: boolean): void {
     for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);

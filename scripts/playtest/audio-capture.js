@@ -28,7 +28,10 @@
 //   roll      tier 1 and tier 2 bank rolls with the music off: one tick on each of the HUD's count
 //             steps (stake.ts BANK_CHIP_MS + k * BANK_ROLL_MS / BANK_TICKS) and the landing
 //   choir     AudioFrame.choir walked 0, 1, 2, 3, then a retake down to 2: the voices sung follow
-//             the director's count
+//             the director's count; then the real order (the count drops 70 ms before the
+//             passedBy): the voice is held for the retake and leaves with the sigh
+//   (results also checks the coin played from UIHandlers.onRewardLanded with coins: [], asked for
+//    twice at the landing by the doubled reward: one coin, none on the cue timeline)
 // Every scenario asserts the AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/audio-capture.js
 // Set window.__capCfg = { base, scenarios } on the current page first.
@@ -519,6 +522,9 @@ async (page) => {
           ['coinRow', { count: false, newBest: false, beats: 0, missions: [], coins: [1], noStamp: true }, 2800],
           // cueResults twice and the app's own ui('coin') at the same moment: one coin.
           ['dedupe', { count: false, newBest: false, beats: 0, missions: [], coins: [0], noStamp: true, dup: true }, 2600],
+          // The app plays each coin from UIHandlers.onRewardLanded and passes coins: []: nothing on
+          // the cue timeline, one coin at the landing even when the doubled reward asks again then.
+          ['landing', { count: false, newBest: false, beats: 0, missions: [0], coins: [], noStamp: true, land: true }, 2600],
           ['reduced', { count: true, newBest: true, beats: 3, missions: 2, coins: 2, reduced: true }, 2000],
         ];
         await page.evaluate(() => window.__gs.audio.setVolumes({ master: 1, music: 0, sfx: 1 }));
@@ -538,6 +544,13 @@ async (page) => {
                 a.cueResults(r, t, false);
                 a.ui('coin', 0, (R.FLY_MS + R.FLY_DUR) / 1000);
               }
+              if (r.land) {
+                // onRewardLanded at the fly-in's end, and the doubled reward's ui('coin') in the same task.
+                setTimeout(() => {
+                  a.ui('coin', 0);
+                  a.ui('coin');
+                }, R.FLY_MS + 2 * R.FLY_STEP + R.FLY_DUR);
+              }
               await window.__sleep(ms);
               a.cancelPending();
               await window.__sleep(400);
@@ -552,6 +565,19 @@ async (page) => {
           if (label === 'reduced') {
             const found = onsets(s, t0 - 0.03, t0 + ms / 1000, 6, -62);
             out.reduced = { onsetsMs: found.map((x) => Math.round((x - t0) * 1000)), allNearZero: found.length > 0 && found.every((x) => x - t0 < 0.06) };
+            continue;
+          }
+          if (label === 'landing') {
+            // The landing (setTimeout: 10 to 30 ms of timer slack) has one coin; the cue timeline's
+            // coin time (row 0) has none.
+            const w = (R.FLY_MS + 2 * R.FLY_STEP + R.FLY_DUR) / 1000;
+            const cue = (R.FLY_MS + R.FLY_DUR) / 1000;
+            const found = onsets(s, t0 + w - 0.03, t0 + w + 0.5, 6, -62);
+            const atCue = onsets(s, t0 + cue - 0.04, t0 + cue + 0.1, 6, -62);
+            const one = mark(s, 'coin') + 0.006;
+            const peak = peakIn(s, t0 + w - 0.01, t0 + w + 0.45);
+            const single = peakIn(s, one + cue - 0.01, one + cue + 0.4);
+            out.landing = { onsetsMs: found.map((x) => Math.round((x - t0 - w) * 1000)), atCueTimeline: atCue.length, peakDb: peak, singleCoinPeakDb: single, oneSound: found.length >= 1 && found.length <= 2 && atCue.length === 0 && Math.abs(peak - single) < 2 };
             continue;
           }
           if (label === 'dedupe') {
@@ -664,11 +690,31 @@ async (page) => {
           await window.__sleep(800);
           d = a.debugLevels();
           out.push({ frameChoir: null, sung: d.choir, fromFrame: d.choirFromFrame });
+          // The real order: the director counts a ghost out as it draws level, and the race's
+          // passedBy comes a few frames later (0.8 m ahead). The voice is held for it and sighs.
+          const m = a.core.music;
+          const sc = m.setChoir;
+          const sighs = [];
+          m.setChoir = function (n, now, retaken) {
+            if (retaken) sighs.push(n);
+            return sc.apply(this, arguments);
+          };
+          a.__beats([{ type: 'pass', tick: 0, ghost: ghost(4, 2), word: 'slung', text: 'Slung past', first: true, chain: 1, ladder: 4, octave: false, gifts: 5, muted: false }]);
+          window.__inject = () => ({ choir: 3 });
+          await window.__sleep(1300);
+          window.__inject = () => ({ choir: 2 });
+          await window.__sleep(70);
+          const heldBefore = a.debugLevels().choir;
+          a.__beats([{ type: 'passedBy', tick: 0, ghost: ghost(4, -1), muted: false }]);
+          await window.__sleep(900);
+          d = a.debugLevels();
+          out.push({ frameChoir: 2, dropBeforePassedBy: true, heldBefore, sighed: sighs.length === 1, sung: d.choir, fromFrame: d.choirFromFrame });
+          m.setChoir = sc;
           window.__inject = null;
           return out;
         });
         await collect();
-        results.choir = { running: ins.running, rows, follows: rows.every((r) => r.frameChoir === null || r.sung === r.frameChoir) };
+        results.choir = { running: ins.running, rows, follows: rows.every((r) => r.frameChoir === null || r.sung === r.frameChoir), retakeSighs: rows.filter((r) => r.dropBeforePassedBy).every((r) => r.sighed && r.heldBefore === 3) };
       }
     } catch (err) {
       results[sc] = { error: String(err && err.message ? err.message : err) };
