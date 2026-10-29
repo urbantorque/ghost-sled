@@ -255,6 +255,10 @@ export class Director {
   private lastSlungPassTick = -1e9;
   /** Gifts the grudge's passes and settle have credited this run (its premium is paid once). */
   private grudgePaid = 0;
+  /** Your best's ghosts edged past in a muted start-line jostle: rides your own line, so the jostle at
+   *  2 s used up its first pass and the real overtake later read 'Took back Your best' for 0 gifts. Its
+   *  next pass is still its first (pays the base, reads 'Passed Your best'). */
+  private readonly youJostled = new Set<number>();
   /** The rider's z on the poses' time base this frame (DirectorFrame.riderZ, else sim.s.z). */
   private rz = 0;
 
@@ -379,6 +383,7 @@ export class Director {
     this.slungN = 0;
     this.lastSlungPassTick = -1e9;
     this.grudgePaid = 0;
+    this.youJostled.clear();
     this.newGroundTick = -1e9;
     this.newGroundAt = -1;
     this.newBestDone = false;
@@ -566,12 +571,14 @@ export class Director {
       } else if (ev.type === 'pass') {
         const ghost = this.ref(t, f, sim);
         const wreck = t.crashSeen;
-        const liveFirst = ev.first && !wreck;
+        // Your best edged past in the start bunch still has its first pass to give.
+        const first = ev.first || this.youJostled.has(id);
+        const liveFirst = first && !wreck;
         const chainN = liveFirst && sim.tick - this.lastShownPassTick <= CHAIN_TICKS ? this.chainN + 1 : 1;
         const slungN = sim.tick - this.lastSlungPassTick <= SLING_TICKS ? this.slungN + 1 : 1;
         const c = classifyPass({
           tick: sim.tick,
-          first: ev.first,
+          first,
           ghost,
           wreck,
           everLedBy2m: this.ledBy2m.has(id),
@@ -599,7 +606,13 @@ export class Director {
           base = Math.min(base, Math.max(0, this.grudgeTotal(t, haunted) - this.grudgePaid));
           this.grudgePaid += base;
         }
-        const gifts = base + this.extras.take(c.extra);
+        // A muted start-line jostle of your best pays nothing yet and keeps its first pass for later.
+        if (t.entry.kind === 'you' && c.word === 'jostle') {
+          base = 0;
+          this.youJostled.add(id);
+        } else this.youJostled.delete(id);
+        // Extras (slung, chained) are a shown moment's: a pass muted inside its own duel pays only its base.
+        const gifts = base + (muted ? 0 : this.extras.take(c.extra));
         let ladder = this.ladderN;
         if (!muted && !wreck) ladder = ++this.ladderN;
         const li = ladderIndex(Math.max(1, ladder));

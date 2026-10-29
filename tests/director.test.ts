@@ -696,6 +696,58 @@ describe('the race', () => {
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
   });
 
+  it("your best jostled at the start keeps its first pass: the later overtake is 'Passed Your best' with the base", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 120;
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    const jostle = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(jostle[0]).toMatchObject({ word: 'jostle', muted: true, gifts: 0 });
+    // It rides your own line: it slips back past you in the bunch, then you overtake it for real.
+    r.poses.set(1001, pose(r.sim.s.z + 3));
+    r.frame([], { race: [{ type: 'passedBy', track: you }] });
+    // (Just outside duel range, so no duel opens on the jump in ticks.)
+    r.sim.tick = 560;
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const real = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5, first: false });
+    expect(r.d.shownPasses.has(1001)).toBe(true);
+    // Its first pass is spent now: the next one is a retake that pays nothing more.
+    r.idle(1);
+    const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(again[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
+    // Another ghost's start-line jostle still uses up its first pass (it paid its base then).
+    const q = new Rig();
+    const g = track(7);
+    q.tracks = [g];
+    q.sim.tick = 120;
+    q.poses.set(7, pose(q.sim.s.z - 0.5));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: g, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 5 });
+    q.sim.tick = 560;
+    q.poses.set(7, pose(q.sim.s.z - 1.6));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: g, first: false }] }), 'pass')[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
+  });
+
+  it('a pass muted inside its own duel pays its base and no extras', () => {
+    const r = new Rig();
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.idle(1.1);
+    expect((r.d as unknown as { out: { hud: { duel: boolean } } }).out.hud.duel).toBe(true);
+    // A shown pass of another ghost, then the duel ghost passed muted inside the chain window: a
+    // 'double' would take +2 extra, but nothing of it is seen.
+    r.poses.set(1002, pose(r.sim.s.z - 1));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: b, first: true }] }), 'pass')[0]).toMatchObject({ muted: false, gifts: 5 });
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    const m = of(r.frame([{ type: 'boost', amount: 3, source: 'slingshot' }], { race: [{ type: 'pass', track: a, first: true }] }), 'pass');
+    expect(m[0]).toMatchObject({ muted: true, gifts: 5 });
+  });
+
   it('a slingshot through the pack is one growing moment: Slung past, Slung past 2, 3', () => {
     const r = new Rig();
     const gs = [track(1), track(2), track(3)];
