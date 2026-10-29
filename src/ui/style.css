@@ -1727,14 +1727,16 @@
   transition: opacity 160ms ease, visibility 0s linear 0s;
 }
 
-/* Hidden under a banner: visibility drops once the fade ends, so the row also leaves the
-   accessibility tree. The run-start reveal card hangs under the row instead, so the race reads from
-   the first frame. In a portrait chase the row carries the avalanche meter, and a banner docks under
-   it (the avalanche unit, below). */
+/* Hidden under a banner, at once: a fade-out under the banner's fade-in drew both full-width layers
+   at partial opacity for about 70 ms at every entry. The row fades back in once the banner's exit
+   has finished (notices.ts), with the transition above. Hidden, it also leaves the accessibility
+   tree. The run-start reveal card hangs under the row instead, so the race reads from the first
+   frame. In a portrait chase the row carries the avalanche meter, and a banner docks under it (the
+   avalanche unit, below). */
 .gs-band-on .gs-race {
   opacity: 0;
   visibility: hidden;
-  transition: opacity 160ms ease, visibility 0s linear 160ms;
+  transition: none;
 }
 
 .gs-band-on .gs-combo,
@@ -3081,6 +3083,12 @@
 
 .gs-call-t {
   position: relative;
+}
+
+/* A ghost's name in a race word on this line keeps its own case, as in the rival pill ("TOOK BACK
+   Kai_on_Tour"): it is a handle. */
+.gs-call-who {
+  text-transform: none;
 }
 
 /* Merged repeats: a row of small pips after the label (--n of them, up to five), "SLIPSTREAM ••• +28".
@@ -6876,14 +6884,22 @@
     display: none;
   }
 
+  /* Its tags never spill under the best column: the medal disc drew over "Fresh rivals" and bit into
+     "Day 12". What does not fit is clipped inside this column (meta.css drops the tag first). */
   .gs-daily-txt {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .gs-daily-title {
     white-space: nowrap;
+  }
+
+  .gs-daily-day {
+    flex: none;
   }
 
   .gs-daily-meta {

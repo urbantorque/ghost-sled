@@ -505,6 +505,7 @@ export function missionList(list: MissionView[], flashNew = false): HTMLElement 
     const pct = mv.target > 0 ? Math.max(0, Math.min(1, mv.progress / mv.target)) : 0;
     const li = h('li', `gs-mis${mv.done ? ' is-done' : ''}${flashNew && mv.justCompleted ? ' is-new' : ''}`);
     li.style.setProperty('--i', String(i));
+    li.dataset.row = String(i);
     const right = h('span', 'gs-mis-right');
     const line = h('span', 'gs-mis-line');
     line.setAttribute('aria-hidden', 'true');

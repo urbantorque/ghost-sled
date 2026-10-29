@@ -124,14 +124,22 @@ export class Notices {
       if (!this.cur && this.revealSlot.childElementCount === 0) this.next();
     }).observe(this.revealSlot, { childList: true });
     // The band height drives how far the combo meter steps down: observed, never read after a write.
+    // The write and onLayout wait for the next frame: inside this observer pass they resized what the
+    // observers watch (the stage's own column, the occluder probe re-observed by onLayout), and the
+    // browser reported "ResizeObserver loop completed with undelivered notifications".
     if (typeof ResizeObserver === 'function') {
+      let raf = 0;
       new ResizeObserver((entries) => {
         const e = entries[entries.length - 1];
         const hgt = Math.round(e.borderBoxSize?.[0]?.blockSize ?? e.contentRect.height);
         if (hgt === this.bandH) return;
         this.bandH = hgt;
-        this.parent.style.setProperty('--band-h', `${hgt}px`);
-        this.onLayout();
+        if (raf !== 0) return;
+        raf = requestAnimationFrame(() => {
+          raf = 0;
+          this.parent.style.setProperty('--band-h', `${this.bandH}px`);
+          this.onLayout();
+        });
       }).observe(this.stage);
     }
   }
@@ -215,6 +223,15 @@ export class Notices {
   /** The banner on stage, for the occluder cache. */
   get current(): HTMLElement | null {
     return this.cur?.el ?? null;
+  }
+
+  /**
+   * The ghost the banner on stage names ("GRUDGE SETTLED Mila"), or null: that banner is its pass's
+   * picture, so the pass flash waiting under it does not play again after it (Hud.bannerName).
+   */
+  get currentName(): string | null {
+    const s = this.cur?.spec;
+    return s && s.type === 'toast' && s.tone === 'grudge' && s.name ? s.name : null;
   }
 
   private find(test: (b: Banner) => boolean): Banner | null {

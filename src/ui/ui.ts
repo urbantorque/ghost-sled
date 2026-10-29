@@ -175,8 +175,11 @@ export class UI implements GameUI {
     // A pass of yours flashing in the race row (at once, or after waiting out a landing stamp) is the
     // headline: minor callout lines roll up into the total.
     this.hud.onPassFlash = () => this.fx.yieldToPass();
-    // While a duel holds the pill, another ghost's pass or news is a line under the combo meter.
-    this.hud.onSideLine = (text, tone) => this.fx.pop(text, 0, tone);
+    // While a duel (or its result) holds the pill, another ghost's pass or news is a line under the
+    // combo meter.
+    this.hud.onSideLine = (w) => this.fx.side(w);
+    // A pass waiting under the banner that names its ghost ("GRUDGE SETTLED Mila") was said by it.
+    this.hud.bannerName = () => this.notices.currentName;
     this.hud.onLayout = dirty;
     this.fx.onLayout = dirty;
     this.notices.onLayout = dirty;

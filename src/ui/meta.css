@@ -213,8 +213,14 @@
   white-space: nowrap;
 }
 
+/* The rival's handle keeps its own case at every width ("REMATCH nils_goes", never "NILS_GOES"): it
+   is a handle. Only the "Rematch" kicker is set in caps. */
+.gs-again.is-rematch .gs-again-who {
+  text-transform: none;
+}
+
 /* A long rival name (9 to 12 letters, results.ts) takes the Space keycap's room: Space still runs
-   again (aria-keyshortcuts keeps it), and "REMATCH AMARA CARVER" fits whole. */
+   again (aria-keyshortcuts keeps it), and "REMATCH Amara Carver" fits whole. */
 .gs-again.is-rematch.is-long .gs-kbd {
   display: none;
 }
@@ -450,14 +456,28 @@
     color: var(--ink);
   }
 
-  /* The daily pill is one line on a phone: with a day streak showing, it replaces the rivals tag. */
-  .gs-daily-meta.has-day .gs-daily-status {
+  /* The daily pill is one line on a phone: with a day streak showing, it replaces the rivals tag, and
+     so does today's medal (its disc and "Bronze · Best 7,967" take that room). */
+  .gs-daily-meta.has-day .gs-daily-status,
+  .gs-daily:has(.gs-daily-best.has-medal) .gs-daily-status {
     display: none;
   }
 
   /* The medal and the best share one row here: "Bronze · Best 7,967". */
   .gs-daily-sep {
     display: inline;
+  }
+
+  /* With a day streak beside the title that row leaves no room ("Day 12" ran under the disc): the
+     medal stacks over the best instead, as on wide screens, and the pill keeps its one line of text. */
+  .gs-daily:has(.gs-daily-day) .gs-daily-best.has-medal {
+    grid-auto-flow: row;
+    justify-items: end;
+    gap: 1px;
+  }
+
+  .gs-daily:has(.gs-daily-day) .gs-daily-sep {
+    display: none;
   }
 
   /* A rematch label is longer than "Run Again", and the button shares its row with Challenge and

@@ -3,14 +3,16 @@ import { BANK_CHIP_MS, BANK_MS, BANK_PEAK, BANK_ROLL_MS, BANK_SPARKS, BANK_TICKS
 import type { ScreenRect, StyleTone } from './contract';
 import { h } from './dom';
 import { fmt } from './fmt';
-import { pushBox, type Hud } from './hud';
+import { isNewsKey, pushBox, type Hud, type SideWord } from './hud';
 import { bump, EASE_IN, EASE_OUT, play, reduced, SPRING } from './motion';
 
 // Trick callouts, the perfect-landing stamp and the combo cash-in. Callouts live in one fixed slot
 // directly under the combo meter (the second tier of the top-centre stack), and the slot holds one
 // line: a newcomer that ranks at least as high rolls the old line up into the combo total as it takes
-// its place, except that a payoff line ('best' or 'big') only just landed holds for HOLD_MS against a
-// lower-ranked or 'lost' newcomer, which waits its turn. Every number carries its label ("BACKFLIP +600"); "x" belongs to the combo multiplier
+// its place (once the old line's exit has finished), except that a payoff line ('best' or 'big') only
+// just landed holds for HOLD_MS against a lower-ranked, equal or 'lost' newcomer, which waits its turn.
+// While a duel holds the rival pill, other ghosts' race words take this line too (Fx.side), each
+// holding HOLD_MS against the next. Every number carries its label ("BACKFLIP +600"); "x" belongs to the combo multiplier
 // alone, so a label that repeats merges into its line with summed points and a row of small pips for
 // the count ("SLIPSTREAM ••• +28"), never "x3". A label that comes back within a moment (slipstream
 // ticks around a gift) picks up its running total again. CSS lays the slot out, so a pop never reads
@@ -73,6 +75,11 @@ const OUT_MS = 220;
 /** Once something newer lands, an older line stays at most this long. */
 const OLDER_MS = 800;
 const COLLAPSE_MS = 140;
+/**
+ * A line that waits out the old line's exit starts this much after it: the two animations start on
+ * their own frames, and the old line's ease-in keeps most of its opacity till its last frames.
+ */
+const ENTRY_SLACK_MS = 24;
 const STAMP_MS = 1500;
 const STAMP_OUT_MS = 150;
 /** Lines that arrived this soon before a perfect landing belong to it (a late stomp lands 5 ticks on). */
@@ -82,10 +89,11 @@ const RESUME_MS = 1500;
 /** Count pips past this many would only add noise: the points carry the rest. */
 const MAX_PIPS = 5;
 /**
- * A payoff line ('best': New ground, New best; 'big': a trick) keeps the slot this long against a
- * lower-ranked or 'lost' newcomer, and a 'best' line against another 'best': a Sketchy landing 0.2 s
- * after New ground waits its turn instead of erasing it ("N[SKETCHY]D"), and so does a New best one
- * frame after it.
+ * A payoff line ('best': New ground, New best; 'big': a trick, In the flow) keeps the slot this long
+ * against a lower-ranked, 'lost' or equal newcomer: a Sketchy landing 0.2 s after New ground waits its
+ * turn instead of erasing it ("N[SKETCHY]D"), so does a New best one frame after it, and so does a
+ * graveyard's "SURVIVED WRECK HOLLOW" 0.35 s after IN THE FLOW. A race word on the side line holds
+ * this long against the next race word too (Fx.side).
  */
 export const HOLD_MS = 600;
 /** A stamp a loss retires (a crash, a lost combo, a broken streak) fades this fast. */
@@ -104,19 +112,31 @@ const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5,
 
 /**
  * Whether a newcomer may take the one-line slot now or must wait behind the line on it. A 'best' or
- * 'big' line younger than HOLD_MS holds against a lower-ranked or 'lost' newcomer (a 'lost' line
- * otherwise skips the rank gate), and a 'best' line against another 'best'; `force` (a crash's lost
- * combo) always takes the slot. Only 'lost' and 'best' newcomers wait (Fx.line); a lower-ranked
- * plain or trick line meets the rank gate and stays out.
+ * 'big' line younger than HOLD_MS holds against a 'lost', lower-ranked or equal-ranked newcomer (a
+ * 'best' against a 'best', a 'big' against a 'big'); `force` (a crash's lost combo) always takes the
+ * slot. Fx.line asks for 'lost', 'best' and race-word newcomers, and for a 'big' one over a 'big'
+ * line; any other lower-ranked plain or trick line meets the rank gate and stays out.
  */
 export function admit(top: { tone: StyleTone; born: number } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
   if (force || !top || tone === 'perfect') return 'show';
-  // A trick line from this same frame (a sketchy landing's own spin, then its Streak broken) has had
-  // no moment yet: the later beat of the frame takes the slot, as the director ordered them. A best
-  // line holds from its first frame (New ground and New best crossed in one frame).
+  // A trick line from this same frame (a sketchy landing's own spin, then its Streak broken; a
+  // landing's two tricks) has had no moment yet: the later beat of the frame takes the slot, as the
+  // director ordered them. A best line holds from its first frame (New ground and New best crossed in
+  // one frame).
   const age = now - top.born;
   const held = age < HOLD_MS && (top.tone === 'best' || (top.tone === 'big' && age >= SAME_FRAME_MS));
-  return held && (tone === 'lost' || RANK[tone] < RANK[top.tone] || (tone === 'best' && top.tone === 'best')) ? 'queue' : 'show';
+  return held && (tone === 'lost' || RANK[tone] <= RANK[top.tone]) ? 'queue' : 'show';
+}
+
+/**
+ * What a race word for the side line does with the line on it (Fx.side). Over a race word younger than
+ * HOLD_MS it replaces that line in place when it tells the same story (the same ghost, or one
+ * slingshot burst: "SLUNG PAST 3" over "SLUNG PAST 2"), and otherwise waits its turn, so a burst never
+ * wipes a word unread ("Took back fjord348" lasted 130 ms). Anything else: it goes through the line slot.
+ */
+export function sideAction(top: { race?: string; born: number } | null | undefined, key: string, now: number): 'show' | 'replace' | 'queue' {
+  if (!top || top.race === undefined || now - top.born >= HOLD_MS) return 'show';
+  return top.race === key ? 'replace' : 'queue';
 }
 
 /** Display names for the sim's style labels. "Draft" and "Drift" are one letter apart. */
@@ -132,6 +152,10 @@ interface Callout {
   points: number;
   countEl: HTMLElement;
   ptsEl: HTMLElement;
+  tEl: HTMLElement;
+  /** A race word on the side line (Fx.side): what it is about (SideWord.key), and the name it shows. */
+  race?: string;
+  who?: string;
   /** Its points are the whole combo total printed just above it: the line shows its label alone. */
   same: boolean;
   born: number;
@@ -175,8 +199,10 @@ export class Fx {
   private banks: BankFx[] = [];
   private crack: CrackFx | null = null;
   /** Lines waiting behind a young payoff line (admit), oldest first, and the timer for the first. */
-  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number }> = [];
+  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number; race?: string; who?: string }> = [];
   private queueTimer = 0;
+  /** When the line leaving the slot finishes its exit: the next one fades in only then. */
+  private exitUntil = 0;
   /** Called when a line or the stamp comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
 
@@ -204,7 +230,25 @@ export class Fx {
 
   /** A style callout. The multiplier is not repeated per line: the combo meter carries it. */
   pop(label: string, points: number, tone: StyleTone): void {
-    this.line(label, points, tone, false);
+    this.line(label, points, tone);
+  }
+
+  /**
+   * Another ghost's race word while a duel or its result holds the rival pill (Hud.onSideLine): it
+   * takes the callout line. It holds HOLD_MS against the next race word, which replaces it in place
+   * when it tells the same story (sideAction) and otherwise waits its turn. It is about the race, not
+   * your tricks: it is never folded into a landing stamp, and the headline gates for minor lines (a
+   * pass flashing in the pill, which here is the duel ghost's) do not hold it out.
+   */
+  side(w: SideWord, back?: number): void {
+    const text = w.text.trim();
+    if (text === '') return;
+    const now = performance.now();
+    const top = this.items[this.items.length - 1];
+    const act = sideAction(top, w.key, now);
+    if (top && act === 'replace') this.relabel(top, text, w.tone, now, w.name);
+    else if (top && act === 'queue') this.queue(text, 0, w.tone, top.born + HOLD_MS - now, w.key, back, w.name);
+    else this.line(text, 0, w.tone, { race: w.key, back, who: w.name });
   }
 
   /**
@@ -212,11 +256,18 @@ export class Fx {
    * owns its beat, so a gold PERFECT LANDING or QUAD STOMP never shares the screen with it.
    */
   retireStamp(): void {
-    if (this.heroEl) this.dropStamp(this.heroEl, 'retire');
+    if (!this.heroEl) return;
+    this.dropStamp(this.heroEl, 'retire');
+    // The loss line that follows ("SKETCHY", "COMBO LOST") fades in once the stamp has gone.
+    this.exitUntil = Math.max(this.exitUntil, performance.now() + RETIRE_MS);
   }
 
-  /** The line slot's one entry point; `force` (a crash's lost combo) never waits behind a payoff line. */
-  private line(label: string, points: number, tone: StyleTone, force: boolean): void {
+  /**
+   * The line slot's one entry point. `force` (a crash's lost combo) never waits behind a payoff line;
+   * `race` marks another ghost's race word (Fx.side); `again` is a line coming back from the queue,
+   * and `back` when a race word first arrived (it keeps its place and stale clock if it waits again).
+   */
+  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string } = {}): void {
     const raw = label.trim();
     if (raw === '' || raw === '0') return;
     const text = DISPLAY[raw] ?? raw;
@@ -227,12 +278,13 @@ export class Fx {
     }
     const max = MAX_LINES;
     const now = performance.now();
-    if (tone === 'big') this.noteTrick(text, points, now);
+    const race = o.race;
+    if (tone === 'big' && race === undefined && !o.again) this.noteTrick(text, points, now);
     // A headline (the landing stamp, or a pass flashing in the race row) owns the moment: a minor line
     // stays out of the stack. Its points still reach the combo total, and its running total is kept.
     // So does a slipstream tick while the Slipstream pill shows: "SLIPSTREAM +40" under it said the
-    // same word twice in one glance.
-    if (tone === 'normal' && (this.heroEl !== null || this.hud.passing || (text === SLIPSTREAM && this.hud.drafting))) {
+    // same word twice in one glance. A race word is no minor line: the pill it stands in for is busy.
+    if (tone === 'normal' && race === undefined && (this.heroEl !== null || this.hud.passing || (text === SLIPSTREAM && this.hud.drafting))) {
       this.remember(text, points, 1, now);
       return;
     }
@@ -240,12 +292,13 @@ export class Fx {
     // A repeat of the newest label folds into it: one line with summed points and a count pip more.
     const top = this.items[this.items.length - 1];
     const fold = top !== undefined && top.label === text && (top.tone === 'lost') === (tone === 'lost');
-    // A loss line (Sketchy, Streak broken) or a second best (New best right after New ground) waits
-    // behind a payoff line that has only just landed rather than erasing it, and takes the slot once
-    // that line has had its moment. Lower-ranked plain and trick lines meet the rank gate below and
-    // stay out, as before.
-    if (!fold && (tone === 'lost' || tone === 'best') && top && admit(top, tone, now, force) === 'queue') {
-      this.queue(text, points, tone, top.born + HOLD_MS - now);
+    // A loss line (Sketchy, Streak broken), a second best (New best right after New ground), a race
+    // word, or a payoff over a payoff (a graveyard line just after IN THE FLOW) waits behind a payoff
+    // line that has only just landed rather than erasing it, and takes the slot once that line has had
+    // its moment. Other lower-ranked plain and trick lines meet the rank gate below and stay out.
+    const waits = tone === 'lost' || tone === 'best' || race !== undefined || (tone === 'big' && top?.tone === 'big' && top.race === undefined);
+    if (!fold && waits && top && admit(top, tone, now, o.force) === 'queue') {
+      this.queue(text, points, tone, top.born + HOLD_MS - now, race, o.back, o.who);
       return;
     }
     if (top && fold) {
@@ -265,8 +318,9 @@ export class Fx {
     }
 
     // The slot is full and every line on it outranks this one (a slipstream tick under BACKFLIP): it
-    // is not shown, so the bigger line keeps the moment. Its points still reach the combo meter.
-    if (tone !== 'lost' && this.items.length >= max && this.items.every((c) => RANK[c.tone] > RANK[tone])) {
+    // is not shown, so the bigger line keeps the moment. Its points still reach the combo meter. A
+    // race word has waited out the hold instead, and takes the slot.
+    if (tone !== 'lost' && race === undefined && this.items.length >= max && this.items.every((c) => RANK[c.tone] > RANK[tone])) {
       if (tone === 'normal') this.remember(text, points, 1, now);
       return;
     }
@@ -285,40 +339,86 @@ export class Fx {
 
     const inner = h('div', `gs-call is-${tone}`);
     const countEl = h('span', 'gs-call-count');
-    inner.append(h('span', 'gs-call-label', h('span', 'gs-call-t', text), countEl));
+    const tEl = h('span', 'gs-call-t');
+    setLabel(tEl, text, o.who);
+    inner.append(h('span', 'gs-call-label', tEl, countEl));
     const ptsEl = h('span', 'gs-call-pts');
     inner.append(ptsEl);
 
     const wrap = h('div', 'gs-call-wrap', inner);
     this.slot.append(wrap);
-    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, same: false, born: now, due: 0, anim: null, timer: 0 };
+    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, tEl, race, who: o.who, same: false, born: now, due: 0, anim: null, timer: 0 };
     this.fill(item);
 
     // Beyond the line limit, the lowest-ranked (then the oldest) collapses. The previous newest becomes
-    // the older line and leaves early, unless it outranks the newcomer.
+    // the older line and leaves early, unless it outranks the newcomer. A race word that has not had
+    // its moment yet (a trick of yours landed on it: "Took back fjord348" lasted 80 ms under
+    // "SLINGSHOT +200") steps back into the queue and comes back once the trick has held.
     const prev = this.items[this.items.length - 1];
+    const story = prev?.race;
+    if (prev && story !== undefined && race === undefined && now - prev.born < HOLD_MS && !this.queued.some((q) => q.race === story)) this.queue(prev.label, 0, prev.tone, HOLD_MS, story, Math.min(prev.born, now), prev.who);
     this.items.push(item);
     this.cap(max);
     if (prev && this.items.includes(prev) && RANK[prev.tone] <= RANK[tone]) this.arm(prev, Math.min(OLDER_MS, this.remaining(prev)));
 
-    item.anim = play(inner, holdFrames(tone), { duration: LIFE_MS, easing: 'linear', fill: 'forwards' }, true);
-    this.arm(item, LIFE_MS);
+    // The line it replaces finishes its exit first ("BEST COMBO PACE" drew over a still-fading
+    // "SLINGSHOT +240"): the newcomer holds at nothing till then, and its hold counts from there.
+    const left = this.exitUntil - performance.now();
+    const delay = left > 0 ? Math.round(left + ENTRY_SLACK_MS) : 0;
+    item.born = now + delay;
+    item.anim = play(inner, holdFrames(tone), { duration: LIFE_MS, delay, easing: 'linear', fill: 'both' }, true);
+    this.arm(item, LIFE_MS + delay);
     this.onLayout();
   }
 
   /**
-   * A loss line (or a second best) waits its turn behind a payoff line: it goes up once that line has
-   * held HOLD_MS. Two wait at most, in order (a repeat of a waiting label refreshes it in place); a
-   * crash's lost combo (force) or the HUD going away drops them.
+   * A newer race word of the same story takes the line in place ("SLUNG PAST 3 Mika" over "SLUNG PAST 2
+   * Tess", or "Tess passed you" over "Passed Tess"): a bump, and its hold starts again.
    */
-  private queue(label: string, points: number, tone: StyleTone, ms: number): void {
-    const same = this.queued.find((q) => q.label === label);
+  private relabel(c: Callout, text: string, tone: StyleTone, now: number, who?: string): void {
+    c.label = text;
+    c.who = who;
+    setLabel(c.tEl, text, who);
+    if (tone !== c.tone) {
+      c.inner.classList.replace(`is-${c.tone}`, `is-${tone}`);
+      c.tone = tone;
+    }
+    // A line still waiting out the old line's exit simply enters with the newer words.
+    if (c.born <= now) {
+      c.born = now;
+      c.anim?.cancel();
+      c.anim = play(c.inner, refreshFrames(c.tone), { duration: LIFE_MS, easing: 'linear', fill: 'forwards' }, true);
+      this.arm(c, LIFE_MS);
+    }
+    this.onLayout();
+  }
+
+  /**
+   * A loss line, a second best, a payoff over a payoff or a race word waits its turn behind a payoff
+   * line (or a race word behind a race word): it goes up once that line has held HOLD_MS. Two wait at
+   * most, in order. A repeat of a waiting label refreshes it in place, and so does a newer race word
+   * of the same story (the newer slung count). A crash's lost combo (force) or the HUD going away
+   * drops them. `back` is when it first arrived (its stale clock), for one coming back from the
+   * head of the queue, which keeps its place in line.
+   */
+  private queue(label: string, points: number, tone: StyleTone, ms: number, race?: string, back?: number, who?: string): void {
+    const at = back ?? performance.now();
+    const same = this.queued.find((q) => (race !== undefined ? q.race === race : q.race === undefined && q.label === label));
     if (same) {
+      same.label = label;
+      same.who = who;
       same.points = points;
       same.tone = tone;
+      same.at = Math.max(same.at, at);
     } else {
-      this.queued.push({ label, points, tone, at: performance.now() });
-      if (this.queued.length > QUEUE_MAX) this.queued.shift();
+      // One back from the head of the queue (or stepping back off the line) keeps its place in line.
+      if (back !== undefined) this.queued.unshift({ label, points, tone, at, race, who });
+      else this.queued.push({ label, points, tone, at, race, who });
+      // Over the limit, a news line goes first, then the oldest.
+      while (this.queued.length > QUEUE_MAX) {
+        const n = this.queued.findIndex((q) => isNewsKey(q.race));
+        this.queued.splice(n >= 0 ? n : 0, 1);
+      }
     }
     this.armQueue(ms);
   }
@@ -332,7 +432,10 @@ export class Fx {
   private flushQueue(): void {
     const q = this.queued.shift();
     // Stale once it has waited about a second: by then the moment it named has passed.
-    if (q && performance.now() - q.at <= QUEUE_STALE_MS) this.line(q.label, q.points, q.tone, false);
+    if (q && performance.now() - q.at <= QUEUE_STALE_MS) {
+      if (q.race !== undefined) this.side({ text: q.label, tone: q.tone, key: q.race, name: q.who }, q.at);
+      else this.line(q.label, q.points, q.tone, { again: true });
+    }
     if (this.queued.length > 0) {
       const top = this.items[this.items.length - 1];
       this.armQueue(top ? top.born + HOLD_MS - performance.now() : 0);
@@ -377,6 +480,7 @@ export class Fx {
   clear(): void {
     if (this.heroEl) this.dropStamp(this.heroEl, true);
     this.dropQueued();
+    this.exitUntil = 0;
     this.recent.clear();
     this.tricks.length = 0;
     for (const b of this.banks.slice()) this.dropBank(b);
@@ -416,7 +520,8 @@ export class Fx {
    * gone): it is the headline, so minor lines roll up into the total.
    */
   yieldToPass(): void {
-    for (const c of this.items.slice()) if (c.tone === 'normal') this.leave(c, true);
+    // Another ghost's race word stays: the pill is the duel ghost's, and this line speaks for the rest.
+    for (const c of this.items.slice()) if (c.tone === 'normal' && c.race === undefined) this.leave(c, true);
   }
 
   /**
@@ -484,6 +589,7 @@ export class Fx {
       return;
     }
     c.wrap.classList.add('is-gone', fast ? 'is-fast' : 'is-slow');
+    this.exitUntil = Math.max(this.exitUntil, performance.now() + (fast ? COLLAPSE_MS : OUT_MS));
     const a = fast
       ? play(c.inner, [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateY(-8px) scale(0.7)' }], { duration: COLLAPSE_MS, easing: EASE_IN, fill: 'forwards' })
       : play(c.inner, leaveFrames(c.tone), { duration: OUT_MS, easing: EASE_IN, fill: 'forwards' });
@@ -547,6 +653,8 @@ export class Fx {
    */
   private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean, streak: number): void {
     for (const c of this.items.slice()) if (c.tone !== 'lost') this.leave(c, true);
+    // A trick line still waiting its turn is this stamp's to name (or past): it never prints after it.
+    for (let i = this.queued.length - 1; i >= 0; i--) if (this.queued[i].tone === 'big' && this.queued[i].race === undefined) this.queued.splice(i, 1);
     if (this.heroEl) this.dropStamp(this.heroEl, true);
     const sub = h('span', 'gs-hero-sub');
     parts.forEach(([label, pts], i) => {
@@ -899,7 +1007,7 @@ export class Fx {
     this.dropQueued();
     const row = crack ? this.hud.bankAnchor() : null;
     if (!crack || !row || stake <= 0) {
-      this.line(label, points, 'lost', true);
+      this.line(label, points, 'lost', { force: true });
       return;
     }
     this.dropCrack();
@@ -949,7 +1057,7 @@ export class Fx {
     };
     if (a) a.onfinish = done;
     else c.timer = window.setTimeout(done, 600);
-    this.line(label, 0, 'lost', true);
+    this.line(label, 0, 'lost', { force: true });
     this.onLayout();
   }
 
@@ -962,6 +1070,19 @@ export class Fx {
     c.el.remove();
     this.onLayout();
   }
+}
+
+/**
+ * Writes a callout's label. A ghost's name in it keeps its own case, as in the rival pill ("TOOK BACK
+ * Kai_on_Tour", "Your best PASSED YOU"): it is a handle, and the label is set in caps.
+ */
+function setLabel(el: HTMLElement, text: string, who?: string): void {
+  const i = who ? text.lastIndexOf(who) : -1;
+  if (!who || i < 0) {
+    el.textContent = text;
+    return;
+  }
+  el.replaceChildren(text.slice(0, i), h('span', 'gs-call-who', who), text.slice(i + who.length));
 }
 
 /**
