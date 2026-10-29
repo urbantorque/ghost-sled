@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { GRAVE_MAX, GRAVE_NAMES, graveyards } from '../src/game/graveyards';
+import { GRAVE_MAX, GRAVE_NAMES, bundledGraveyards, graveyards } from '../src/game/graveyards';
 import type { PoolGhostData } from '../src/game/ghostdata';
 
 // Graveyards from the bundled pools: where 3 or more riders crashed within 8 m, named per mountain.
@@ -42,6 +42,21 @@ describe('graveyards', () => {
       expect(g.name.length).toBeLessThanOrEqual(14);
       expect(g.name).not.toMatch(/—/);
     }
+  });
+
+  it('names never repeat across the bundled mountains, and come out the same every time', () => {
+    const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
+    const a = all();
+    const names = [...a.values()].flat().map((g) => g.name);
+    expect(names.length).toBe(7);
+    expect(new Set(names).size).toBe(names.length);
+    expect(all()).toEqual(a);
+    // The clusters are the same ones the per-mountain call finds.
+    expect(a.get(sakura)!.map((g) => [Math.round(g.z), g.fell])).toEqual(graveyards(pool(sakura), sakura).map((g) => [Math.round(g.z), g.fell]));
+    // More places than names: each mountain still never repeats its own.
+    const many = [100, 300, 500, 700].flatMap((z) => [at(z), at(z + 1), at(z + 2)]);
+    const crowd = bundledGraveyards(['a', 'b', 'c', 'd', 'e'].map((key) => ({ key, pool: many })));
+    for (const list of crowd.values()) expect(new Set(list.map((g) => g.name)).size).toBe(list.length);
   });
 
   it('needs 3 within 8 m (first to last), skips finishers, caps at 4, handles an empty pool', () => {
