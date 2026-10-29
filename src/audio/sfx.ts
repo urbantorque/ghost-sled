@@ -44,6 +44,25 @@ export const ESCAPE_DROP_S = 0.45;
 /** Your best's gold-white pair rings at most once in this long (s): a back-and-forth with your best
  *  ghost outside a duel (whose passes are muted) does not ring it on every swap. */
 const GOLD_GAP_S = 4;
+/**
+ * 'Flow broken's pfft: pink noise through a lowpass closing from 3 kHz to 900 Hz (level, start, end,
+ * decay for instruments.puff). A breath out, above the thuds, scrapes and bells it lands with: the old
+ * 900 to 260 Hz puff sat in the same 200 to 800 Hz as a sketchy landing, a broken streak's bell, a
+ * bump and the band, and stayed under them in every 10 ms octave cell (best cell -1.3 to +0.8 dB
+ * over the rest, +2.4 to +3.4 dB on the mix). Now its best cell is the 1.6 kHz band, +3.4 to +5.6 dB
+ * over the rest and +5.1 to +6.7 dB on the mix (probe snuffSketchy / snuffBroken / snuffBump, the
+ * director's own lists, the moment's bed averaged over 8 renders, median of 3), adding -0.2 to +0.2
+ * dB to the moment's peak.
+ */
+const SNUFF_PFFT = { amp: 0.18, f0: 3000, f1: 900, tau: 0.06 } as const;
+/** On a sketchy landing the pfft waits this long (s) for the landing's thud and scrape (and a broken
+ *  streak's falling bell) to pass, and the band dips to SNUFF_SKETCHY_DUCK under it for a moment (a
+ *  0.16 s hold, 0.3 s back): at once it was masked there (+1.5 and -3.8 dB over the rest, +3.8 and
+ *  +1.5 dB on the mix, against +5.4 and +4.1, +6.5 and +5.5 dB). After a bump it lands at once. */
+const SNUFF_SKETCHY_S = 0.16;
+const SNUFF_SKETCHY_DUCK = 0.6;
+/** 'In the flow' stopped by a snuff or a crash fades with this time constant (s). */
+const FLOW_CUT_TAU = 0.03;
 
 /** Seconds from a bank beat to the moment its figure lands (the HUD's punch; the slam on tiers 2
  *  and 3), 0 for a bank the HUD does not roll. */
@@ -76,6 +95,18 @@ export class Sfx {
    *  'pulled away' news after a lost duel stays quiet (the duel's own sigh says it). */
   private readonly duelWon = new Set<number>();
   private readonly duelLost = new Set<number>();
+  /** This frame's list holds a crash (or the combo it lost), or a bump (its beat or a bump bank). */
+  private frameCrash = false;
+  private frameBump = false;
+  /** 'In the flow' while it can still be stopped: its voices, and whether a snuff or a crash cut it. */
+  private flowLive: { voices: Voice[]; cut: boolean } | null = null;
+  /** The snuff's pfft waiting to land (its token), or null. */
+  private snuffDue: object | null = null;
+  /** Probe-only: the snuff's delay (s), level (x SNUFF_PFFT's), music duck and lowpass sweep and decay,
+   *  to tune it; and the snuff without its pfft (everything else it does), the masker it is read
+   *  against. */
+  snuffTweak: { delay: number; amp: number; duck: number; f0?: number; f1?: number; tau?: number } | null = null;
+  snuffMute = false;
   /** UI sounds already scheduled: the same one asked for twice at one moment plays once. */
   private readonly once = new UiOnce();
   // Grid pulses: the last time each was scheduled.
@@ -103,16 +134,26 @@ export class Sfx {
     this.fuseLast = -1;
     this.heartLast = -1;
     this.goldAt = -10;
+    this.flowLive = null;
+    this.snuffDue = null;
     this.frame();
   }
 
-  /** Start of a frame's beats: clears the context the previous frame's beats left. */
-  frame(): void {
+  /** Start of a frame's beats: clears the context the previous frame's beats left, and notes what the
+   *  whole list holds (a beat early in it can depend on one later: a snuff pushed before its crash). */
+  frame(list?: readonly Beat[]): void {
     this.nearQueue.length = 0;
     this.bumpSides.length = 0;
     this.bankBeats = 0;
     this.duelWon.clear();
     this.duelLost.clear();
+    this.frameCrash = false;
+    this.frameBump = false;
+    if (!list) return;
+    for (const b of list) {
+      if (b.type === 'crash' || b.type === 'comboLost') this.frameCrash = true;
+      else if (b.type === 'bump' || (b.type === 'bank' && b.bump)) this.frameBump = true;
+    }
   }
 
   /** Drops deferred parts, so a reward cut off by a mute (an ad) does not finish after it. */
@@ -433,7 +474,7 @@ export class Sfx {
 
   /** A noise swell rising into a moment (a reverse cymbal): exponential crescendo through a
    *  highpass that opens downward, cut as it peaks. */
-  private swellUp(t: number, dur: number, amp: number, pan = 0, dry = false): void {
+  private swellUp(t: number, dur: number, amp: number, pan = 0, dry = false): Voice {
     // Into a drop it is dry and cut hard, so no reverb tail fills the gap.
     const v = this.voice(t, dry ? 0 : 0.5, pan);
     const g = v.gain(0, v.out);
@@ -444,6 +485,7 @@ export class Sfx {
     hp.frequency.setValueAtTime(7000, t);
     hp.frequency.exponentialRampToValueAtTime(2600, t + dur);
     v.buffer(v.bank.white, t, t + dur + 0.16, hp);
+    return v;
   }
 
   /** The band slamming back after a drop: a deep kick, a noise crash and a body thud. */
@@ -1144,6 +1186,12 @@ export class Sfx {
         if (b.phase === 'in') this.flowIn(t);
         else this.flowSnuff(t);
         break;
+      case 'crash':
+        // The crash's own sounds come from the raw event; 'In the flow' stops with it, and a snuff
+        // still waiting for its sketchy landing's scrape is dropped.
+        this.cutFlow();
+        this.snuffDue = null;
+        break;
       case 'bank':
         this.bankBeat(b, t);
         break;
@@ -1225,23 +1273,72 @@ export class Sfx {
    * 'In the flow': a 0.6 s reverse-cymbal swell under a tone in the key, landing on a soft chord over
    * a low thump. Half the flow-ins come a moment after a perfect landing (its +0.5 flow crosses the
    * line), so the cue sits about 4 dB over a skilled stretch's mix (it was 2 to 3 dB, and vanished
-   * under the landing's chord); at one per combo at most (about one a minute in a strong run at
-   * FLOW_IN_AT 3) it is never a repeat. The chord lands on the swell's peak, well before any bank.
+   * under the landing's chord); at one per combo at most (FLOW_IN_AT 2.9, slingshots no longer
+   * counting: a skilled chain of 12 or more) it is never a repeat. The chord lands on the swell's peak,
+   * well before any bank. A snuff or a crash stops it (cutFlow): the chord never lands after them.
    */
   private flowIn(t: number): void {
-    this.swellUp(t, 0.6, 0.11);
+    const flow = { voices: [] as Voice[], cut: false };
+    this.flowLive = flow;
+    flow.voices.push(this.swellUp(t, 0.6, 0.11));
     const k = this.key();
     const v = this.voice(t, 0.55, 0, 1.3, PRIO.payoff);
+    flow.voices.push(v);
     fmBell(v, t, mtof(fit(k.tonic, 79)), 0.07, 0.7, 2, 0.9);
     this.at(v, t + 0.6, (tn) => thump(v, tn, 74, 40, 0.22, 0.12));
-    this.chord(t + 0.6, 0.07, 1.2, 5, 2);
+    // The chord is built a moment before it lands: a snuff or a crash in the swell leaves it unbuilt.
+    this.later(t + 0.6, (tc) => {
+      if (!flow.cut) this.chord(tc, 0.07, 1.2, 5, 2, (cv) => void flow.voices.push(cv));
+    });
   }
 
-  /** Flow snuffed by a bump: a pfft of pink noise, low-passed, a touch longer than a bump's own
-   *  puff so it reads over the bump bank it rides with. (The wind bends in ambience.) */
+  /** The flow went out (a snuff or a crash): 'In the flow' stops with it, what still sounds of its
+   *  swell, its tone and its chord fading in FLOW_CUT_TAU, and a chord still due never lands (it said
+   *  the flow was on). Long after the cue (a crash a minute on) there is nothing left to cut. */
+  private cutFlow(): void {
+    const flow = this.flowLive;
+    this.flowLive = null;
+    if (!flow || flow.cut) return;
+    flow.cut = true;
+    const now = this.ctx.currentTime;
+    for (const v of flow.voices) if (v.end > now) v.fadeOut(now, FLOW_CUT_TAU);
+  }
+
+  /**
+   * 'Flow broken': a breathy pfft of pink noise, low-passed from 3 kHz (SNUFF_PFFT), above the bump,
+   * the scrape and the bells it lands with (the wind's bend is ambience's). It stops 'In the flow' if
+   * that is still sounding. On a sketchy landing it waits SNUFF_SKETCHY_S for the landing's scrape to
+   * pass and the band sags under it for a moment. With a crash or the combo it lost it has no voice:
+   * the stumble and the crash's deflating tone already say it, and a pfft on top was one sound too
+   * many. It never takes a voice a payoff needs (VoicePool.room).
+   * The cause is read from the frame's list, which comes before its raw events: a bump snuffs with
+   * its bump beat and a bump bank, a crash with its lost combo, and a botched landing with nothing
+   * of its own ('Flow broken' is then its line, the 'Sketchy' call dropped) or 'Streak broken'. So a
+   * snuff with no bump and no crash is a landing's.
+   */
   private flowSnuff(t: number): void {
-    const v = this.voice(t, 0.08);
-    puff(v, t, 0.28, 900, 260, 0.05, v.bank.pink);
+    this.cutFlow();
+    if (this.frameCrash) return;
+    const tw = this.snuffTweak;
+    const sketchy = !this.frameBump;
+    const ts = t + (tw ? tw.delay : sketchy ? SNUFF_SKETCHY_S : 0);
+    const amp = SNUFF_PFFT.amp * (tw ? tw.amp : 1);
+    const f0 = tw?.f0 ?? SNUFF_PFFT.f0;
+    const f1 = tw?.f1 ?? SNUFF_PFFT.f1;
+    const tau = tw?.tau ?? SNUFF_PFFT.tau;
+    const duck = tw ? tw.duck : sketchy ? SNUFF_SKETCHY_DUCK : 1;
+    const music = this.music;
+    // A crash before a waiting pfft lands owns the moment: the pfft is dropped (crash: snuffDue null).
+    const due = {};
+    this.snuffDue = due;
+    this.later(ts, (tt) => {
+      if (this.snuffDue !== due) return;
+      this.snuffDue = null;
+      if (music && duck < 1) music.duck(duck, tt, 0.16, 0.3);
+      if (this.snuffMute || !this.pool.room(PRIO.normal)) return;
+      const v = this.voice(tt, 0.08);
+      puff(v, tt, amp, f0, f1, tau, v.bank.pink);
+    });
   }
 
   /**

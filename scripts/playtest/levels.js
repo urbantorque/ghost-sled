@@ -22,14 +22,30 @@
 //             lands 0.6 s in at least 5 dB over the mix before it
 //   flowStomp the same 0.2 s after a perfect landing (half of all flow-ins): the flow's landing still
 //             shows over the landing's tail (at least 2 dB over its neighbours)
+//   snuffBump, snuffSketchy, snuffBroken, snuffLost
+//             'Flow broken' with what broke it, as the director pushes it (a bump bank; a sketchy
+//             landing, whose snuff comes alone with 'Flow broken' as its line; a sketchy landing that
+//             broke a streak; a crash that lost a 2,500 combo), on a skilled stretch with the wind
+//             singing. The pfft alone against the rest of the moment as 10 ms octave-band cells:
+//             glimpse (the share of its energy where it is at least as loud as the rest), its best
+//             cell over the rest, and what it adds to the mix there; what it adds to the moment's peak
+//             and voices (the moment's random bed averaged over 8 renders). Over a bump or a
+//             sketchy landing it must read (its best cell at least 2 dB over the rest and 4 dB on
+//             the mix; the old 900 Hz puff managed -1.2 to +1.4 and 2.4 to 3.8) and add at most
+//             0.5 dB to the moment's peak; with a crash it adds no voice (the stumble says it)
+//   flowSnuff, flowCrash
+//             'In the flow', then a sketchy landing's snuff 0.35 s later or a crash 0.4 s later,
+//             inside its 0.6 s swell: its chord must not land after the snuff (what of the flow-in
+//             sounds from the snuff + 0.2 s to + 1 s at least 12 dB under the flow-in alone)
 // The stress mix also counts its steals: sfxLoudSteals (a victim still above -20 dB) and
 // sfxPayoffSteals (of those, payoffs; at most 2).
 // It also asserts the live AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/levels.js
 // Set window.__levelsCfg = { base, kinds, seconds, songs } on the current page first to change the plan.
 async (page) => {
-  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers', 'wind', 'flowIn', 'flowStomp'], seconds: 10, songs: true };
+  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers', 'wind', 'flowIn', 'flowStomp', 'snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost', 'flowSnuff', 'flowCrash'], seconds: 10, songs: true };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__levelsCfg).catch(() => null)) || {}) };
+  if (!cfg.kinds) cfg.kinds = defaults.kinds;
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
   await page.goto(BASE + '?platform=mock&debug&m=0');
   await page.waitForFunction(() => window.__gs && window.__gs.audio && window.__gs.phase === 'title', null, { timeout: 30000 });
@@ -38,10 +54,19 @@ async (page) => {
   await page.waitForFunction(() => window.__gs.audio.debugLevels().running === 1, null, { timeout: 5000 }).catch(() => null);
   const running = await page.evaluate(() => window.__gs.audio.debugLevels().running === 1);
   const levels = {};
+  // The snuff readings average their random bed inside the probe; snuffReps > 1 also takes the median
+  // of that many readings.
+  const SNUFF = new Set(['snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost', 'flowSnuff', 'flowCrash']);
+  const median = (xs) => [...xs].sort((a, b) => a - b)[Math.floor(xs.length / 2)];
   for (const kind of cfg.kinds) {
-    const r = await page.evaluate(([k, s]) => window.__gs.audio.debugRender(k, s), [kind, cfg.seconds]);
+    const reps = SNUFF.has(kind) ? cfg.snuffReps || 1 : 1;
+    const runs = [];
+    for (let i = 0; i < reps; i++) runs.push(await page.evaluate(([k, s]) => window.__gs.audio.debugRender(k, s), [kind, cfg.seconds]));
     const round = {};
-    for (const [key, v] of Object.entries(r)) round[key] = Array.isArray(v) ? v : Math.round(v * 10) / 10;
+    for (const [key, v] of Object.entries(runs[0])) {
+      const x = Array.isArray(v) ? v : median(runs.map((r) => r[key]));
+      round[key] = Array.isArray(x) ? x : key === 'glimpse' ? Math.round(x * 100) / 100 : Math.round(x * 10) / 10;
+    }
     levels[kind] = round;
   }
   const songs = {};
@@ -76,6 +101,14 @@ async (page) => {
     shoulderSittingQuieter: sh ? sh.sittingLR[0] < sh.closingLR[0] : null,
     songsOneDeck: songList.length ? songList.every((x) => x.decksStarted === 1 && x.cycleBars === 16) : null,
     songsDiffer: songList.length ? new Set(songList.map((x) => x.barLowHz)).size === songList.length : null,
+    snuffReadsOverSketchy: levels.snuffSketchy ? levels.snuffSketchy.smrMaxDb >= 2 && levels.snuffSketchy.liftMaxDb >= 4 : null,
+    snuffReadsOverStreakBroken: levels.snuffBroken ? levels.snuffBroken.smrMaxDb >= 2 && levels.snuffBroken.liftMaxDb >= 4 : null,
+    snuffReadsOverBump: levels.snuffBump ? levels.snuffBump.smrMaxDb >= 2 && levels.snuffBump.liftMaxDb >= 4 : null,
+    snuffNoPileUp: ['snuffBump', 'snuffSketchy', 'snuffBroken'].every((k) => !levels[k] || levels[k].peakAddDb <= 0.5),
+    snuffAtCrashAddsNoVoice: levels.snuffLost ? levels.snuffLost.voicesAdded === 0 : null,
+    snuffKeepsPayoffs: ['snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost'].every((k) => !levels[k] || levels[k].sfxPayoffSteals === 0),
+    flowInStopsAtSnuff: levels.flowSnuff ? levels.flowSnuff.chordLeftDb <= -12 : null,
+    flowInStopsAtCrash: levels.flowCrash ? levels.flowCrash.chordLeftDb <= -12 : null,
   };
   // The envelopes are long: keep the derived lifts, drop the raw windows from the report.
   for (const k of ['flowIn', 'flowStomp']) {

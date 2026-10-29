@@ -393,7 +393,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     const c = this.core;
     try {
-      c?.sfx.frame();
+      c?.sfx.frame(list);
       const now = ctx ? ctx.currentTime : 0;
       for (const b of list) this.accentFor(b, now);
       if (list.length > 0) this.choirs.beats(list, now);
@@ -407,7 +407,8 @@ export class AudioEngine {
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
         if (b.type === 'unlockPop') c.graph.music.duck(0.6, now, 0.9, 0.5);
-        // A bump snuffed the flow: the singing wind bends down a fourth and opens back to noise.
+        // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
+        // fourth and opens back to noise.
         else if (b.type === 'flow' && b.phase === 'snuff') c.ambience.snuff(now);
       }
     } catch (err) {

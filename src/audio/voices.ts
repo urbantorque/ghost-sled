@@ -214,20 +214,27 @@ export class Voice {
   }
 
   kill(now: number): void {
+    this.fadeOut(now, 0.005);
+  }
+
+  /** Fades the whole voice out from `now` with time constant `tau` and stops it; parts still queued
+   *  for it are dropped (it is dead). */
+  fadeOut(now: number, tau: number): void {
     if (this.dead) return;
     this.dead = true;
     const p = this.out.gain;
     p.cancelScheduledValues(now);
     p.setValueAtTime(p.value, now);
-    p.setTargetAtTime(0, now, 0.005);
+    p.setTargetAtTime(0, now, tau);
+    const stop = now + Math.max(0.04, tau * 8);
     for (const s of this.srcs) {
       try {
-        s.stop(now + 0.04);
+        s.stop(stop);
       } catch {
         // Already stopped.
       }
     }
-    this.end = now + 0.05;
+    this.end = stop + 0.01;
   }
 
   release(): void {
@@ -271,6 +278,41 @@ export class VoicePool {
    */
   voice(t0: number, level: number, dry: AudioNode, wet: AudioNode | null, send: number, pan = 0, prio: number = PRIO.normal): Voice {
     const now = this.ctx.currentTime;
+    const pick = this.pick(now);
+    let live = pick.live;
+    const victim = pick.victim;
+    if (live >= this.max && victim) {
+      const loud = victim.level(now) > LOUD;
+      victim.kill(now);
+      this.steals++;
+      if (victim.keep) this.keptSteals++;
+      if (loud) this.loudSteals++;
+      if (loud && victim.prio >= PRIO.payoff) this.payoffSteals++;
+      live--;
+    }
+    const v = new Voice(this.ctx, this.bank, t0, level, dry, wet, send, pan);
+    v.prio = prio;
+    this.list.push(v);
+    if (live + 1 > this.peak) this.peak = live + 1;
+    return v;
+  }
+
+  /**
+   * Whether a voice of priority `prio` can start now without cutting an audible voice that matters
+   * more: the pool is under its cap, or the voice a steal would take is a quiet tail or weighs less
+   * than `prio` would at its attack. A cue that only adds to a moment ('Flow broken' over a sketchy
+   * landing) asks first, so it never costs a payoff its voice.
+   */
+  room(prio: number): boolean {
+    const now = this.ctx.currentTime;
+    const { live, victim, tail } = this.pick(now);
+    if (live < this.max || !victim) return true;
+    return tail || (!victim.keep && victim.weight(now) < prio);
+  }
+
+  /** Live voices and the one a steal would take: a tail already under QUIET (the one with the most
+   *  time left), else the lowest weight(), the oldest on a tie; kept voices only when all are kept. */
+  private pick(now: number): { live: number; victim: Voice | null; tail: boolean } {
     this.sweep(now);
     let live = 0;
     let quietest: Voice | null = null;
@@ -295,21 +337,7 @@ export class VoicePool {
         }
       }
     }
-    const victim = tail ?? quietest ?? oldestKept;
-    if (live >= this.max && victim) {
-      const loud = victim.level(now) > LOUD;
-      victim.kill(now);
-      this.steals++;
-      if (victim.keep) this.keptSteals++;
-      if (loud) this.loudSteals++;
-      if (loud && victim.prio >= PRIO.payoff) this.payoffSteals++;
-      live--;
-    }
-    const v = new Voice(this.ctx, this.bank, t0, level, dry, wet, send, pan);
-    v.prio = prio;
-    this.list.push(v);
-    if (live + 1 > this.peak) this.peak = live + 1;
-    return v;
+    return { live, victim: tail ?? quietest ?? oldestKept, tail: tail !== null };
   }
 
   /** Silences voices that have not started yet (sounds scheduled ahead for a screen that has gone). */
