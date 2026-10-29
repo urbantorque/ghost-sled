@@ -123,11 +123,30 @@ export function runAgainLabel(friend: { name: string; beaten: boolean } | null, 
   return { text: `Rematch ${ellipsize(name)}`, aria: `Rematch ${name}, run again` };
 }
 
-/** The one extra race line on the results card (C6 budget): friend, then grudge, then event note. */
-export function resultsRaceLine(friendLine: string | null, grudgeLine: string | null, eventNote: string | null): { text: string; tone: 'friend' | 'grudge' | 'event' } | null {
-  if (friendLine) return { text: friendLine, tone: 'friend' };
-  if (grudgeLine) return { text: grudgeLine, tone: 'grudge' };
-  if (eventNote) return { text: eventNote, tone: 'event' };
+/** What may fill the results card's one race line. */
+export interface RaceLines {
+  /** 'You beat Mila by 120 m.' (a friend's challenge on this mountain). */
+  friend: string | null;
+  /** The Daily medal line, on a Daily run only ('Daily: Bronze. Silver at 2,916 m.'). */
+  daily?: string | null;
+  /** The grudge settlement's line; strong when it settled ('You settled it with Mila.') or names a
+   *  nemesis ('... 3 runs running. Nemesis.'). */
+  grudge: { text: string; strong: boolean } | null;
+  /** An event the run never reached ('The yeti was 130 m away.'). */
+  event: string | null;
+}
+
+/**
+ * The one extra race line on the results card (C6 budget). A grudge line exists after almost every
+ * run (any ghost that went further is elected), so it ranks by what it says: friend, then the Daily
+ * medal, then a settled grudge or a nemesis, then the event note, then any other grudge line.
+ */
+export function resultsRaceLine(l: RaceLines): { text: string; tone: 'friend' | 'grudge' | 'event' } | null {
+  if (l.friend) return { text: l.friend, tone: 'friend' };
+  if (l.daily) return { text: l.daily, tone: 'event' };
+  if (l.grudge && l.grudge.strong) return { text: l.grudge.text, tone: 'grudge' };
+  if (l.event) return { text: l.event, tone: 'event' };
+  if (l.grudge) return { text: l.grudge.text, tone: 'grudge' };
   return null;
 }
 
