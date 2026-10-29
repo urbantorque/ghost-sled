@@ -6,8 +6,19 @@ const mq: MediaQueryList | null =
     ? window.matchMedia('(prefers-reduced-motion: reduce)')
     : null;
 
+// Read once and kept current by the query's change event: reduced() is asked every frame (the time
+// scale, the HUD), and a live MediaQueryList read is not free.
+let isReduced = mq ? mq.matches : false;
+if (mq) {
+  const sync = (e: MediaQueryListEvent): void => {
+    isReduced = e.matches;
+  };
+  if (typeof mq.addEventListener === 'function') mq.addEventListener('change', sync);
+  else if (typeof mq.addListener === 'function') mq.addListener(sync);
+}
+
 export function reduced(): boolean {
-  return mq ? mq.matches : false;
+  return isReduced;
 }
 
 /** Spring-ish pop: slight overshoot. */
