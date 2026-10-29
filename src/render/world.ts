@@ -15,6 +15,7 @@ import { LandingAid } from './landing';
 import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
 import { Particles, Weather } from './particles';
+import { brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { Rider } from './rider';
@@ -182,6 +183,7 @@ export class World {
   private fxB = new Vector3();
   private fxO = new Vector3();
   private fxV = new Vector3();
+  private fxT = new Vector3();
   /** Projected screen position of the rider (for UI callouts). */
   readonly riderScreen = { x: 0, y: 0 };
 
@@ -829,8 +831,9 @@ export class World {
   }
 
   /** A near miss shakes the hazard you shaved: snow drops off a tree's lower boughs (on the
-   *  side facing you), anything else kicks grit off its foot toward your line. A whisker throws the
-   *  full amount, an ordinary near miss about two thirds. */
+   *  side facing you), anything else kicks grit off its foot toward your line. Most of it is thrown
+   *  where the chase lens sees it (brush.ts): the hazard is already beside or behind the lens when the
+   *  beat lands. A whisker throws the full amount, an ordinary near miss about two thirds. */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
     // The beat lands as the sled clears the hazard (it is already a metre or two past it): the level
     // direction from the hazard's point toward the sled now, mostly across the slope, is the side you
@@ -853,17 +856,19 @@ export class World {
     const at = this.fxA.set(ex, this.course.ground(ex, ez), -ez);
     const vel = this.carrier(s);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    if (bough) this.particles.boughs(at, out, vel, 12 * k);
-    else this.particles.grit(at, out, vel, ICY.has(b.obs), 6 * k);
-    // The rest you brush through: a little of it lands right at the rider's shoulder (or, off a rock,
-    // the runner) on the side you shaved, so the near miss reads on a phone's narrow portrait frame too,
-    // where the hazard's own edge is already out of the picture.
-    const bx = s.x - out.x * 0.55;
-    const bz = s.z + out.z * 0.55;
-    const brush = this.fxB.set(bx, this.course.ground(bx, bz) + (bough ? -0.9 : 0), -bz);
-    if (bough) this.particles.boughs(brush, out, vel, 10 * k);
-    else this.particles.grit(brush, out, vel, ICY.has(b.obs), 4 * k);
+    const ice = ICY.has(b.obs);
+    // A little stays on the hazard itself (it reads in the mirror and on a wide frame)...
+    if (bough) this.particles.boughs(at, out, vel, 8 * k);
+    else this.particles.grit(at, out, vel, ice, 4 * k);
+    // ...and the body of it is thrown at the rider's side on the side you shaved, a little ahead and
+    // inside the frame, so a near miss reads on a phone's narrow portrait frame too. Same powder layer
+    // (no draw call, no material), the count scaled by the tier's particle budget like every burst.
+    brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT);
+    this.particles.brush(this.fxB, this.fxT, vel, bough, ice, (bough ? 16 : 13) * k);
   }
+
+  /** The snow's height at a sim (x, z), for brush.ts. */
+  private readonly groundAt = (x: number, z: number): number => this.course.ground(x, z);
 
   /** The collider radius of the hazard a near-miss beat names: the obstacle of that kind whose point
    *  lies nearest the beat's (it is on that obstacle's centre line), or a typical radius. */

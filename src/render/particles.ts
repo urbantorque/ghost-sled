@@ -989,6 +989,77 @@ export class Particles {
     }
   }
 
+  /** A near miss's burst where the chase lens sees it: `pos` is on the snow beside the rider on the side
+   *  you shaved, a little ahead (brush.ts), `toward` the level direction from it back toward your line.
+   *  Off a tree (`bough`): snow sifting down from about head height in grains, soft clumps and a faint
+   *  veil. Off anything else: chips (`ice`: pale shards), white grains and a puff of powder kicked up
+   *  off the snow. It keeps nearly the sled's speed, so it hangs at the rider's side as it falls and
+   *  drifts back past it, gone in about a second. */
+  brush(pos: Vector3, toward: Vector3, carrier: Vector3, bough: boolean, ice: boolean, count: number): void {
+    const n = this.n(count);
+    const car = tmpC.set(carrier.x * 0.97, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.97, carrier.z * 0.97);
+    const f = this.forward(carrier);
+    const chipC = ice ? SHARD : SLATE;
+    for (let i = 0; i < n; i++) {
+      const r = i % 10;
+      const along = (Math.random() - 0.5) * 1.3;
+      const o = (Math.random() - 0.5) * 0.7;
+      const x = pos.x + toward.x * o + f.x * along;
+      const z = pos.z + toward.z * o + f.z * along;
+      if (bough) {
+        // Six in ten grains, three soft clumps and one veil, interleaved so a small burst (Low, or an
+        // ordinary near miss) still carries a clump that reads.
+        const kind = r % 3 === 1 ? puffKind() : r === 9 ? KIND_MIST : KIND_GRAIN;
+        const grain = kind === KIND_GRAIN;
+        const mist = kind === KIND_MIST;
+        const push = 0.3 + Math.random() * 0.8;
+        this.powder.emit(
+          x,
+          pos.y + 0.75 + Math.random() * 1.25,
+          z,
+          car.x + toward.x * push + f.x * along * 0.3,
+          car.y - 0.3 + Math.random() * 0.7,
+          car.z + toward.z * push + f.z * along * 0.3,
+          grain ? 0.75 + Math.random() * 0.35 : 0.85 + Math.random() * 0.4,
+          grain ? 0.045 : mist ? 0.3 : 0.14,
+          grain ? 0.07 + Math.random() * 0.04 : mist ? 0.9 : 0.34 + Math.random() * 0.2,
+          POWDER,
+          POWDER,
+          POWDER,
+          grain ? 0.9 : mist ? 0.22 : 0.82,
+          grain ? 5 : 2.4,
+          1.2,
+          kind,
+          car,
+        );
+        continue;
+      }
+      // Grit: every other one a chip; of the rest, a puff of powder (r 1, 5, 9) or a white grain.
+      const chip = i % 2 === 0;
+      const puff = !chip && r % 4 === 1;
+      const push = 0.5 + Math.random() * 0.9;
+      this.powder.emit(
+        x,
+        pos.y + 0.1 + Math.random() * 0.35,
+        z,
+        car.x + toward.x * push + f.x * along * 0.3,
+        car.y + (puff ? 0.9 : 1.3) + Math.random() * 1.4,
+        car.z + toward.z * push + f.z * along * 0.3,
+        puff ? 0.7 + Math.random() * 0.3 : 0.45 + Math.random() * 0.3,
+        chip ? 0.05 : puff ? 0.13 : 0.04,
+        chip ? 0.07 : puff ? 0.36 + Math.random() * 0.14 : 0.08,
+        chip ? chipC.r : POWDER,
+        chip ? chipC.g : POWDER,
+        chip ? chipC.b : POWDER,
+        chip ? 0.95 : puff ? 0.8 : 0.85,
+        puff ? 3 : 9,
+        puff ? 1.4 : 1.5,
+        puff ? puffKind() : KIND_GRAIN,
+        car,
+      );
+    }
+  }
+
   /** Motes streaming off the scarf, strung between two points on it (`a`, `b`). `glow`: vermillion
    *  embers in the additive layer (going into the flow); otherwise a cold puff of periwinkle-grey
    *  powder (the flow snuffed out). They ride with the sled a moment and fall behind. */
