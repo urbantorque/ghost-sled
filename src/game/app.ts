@@ -1,3 +1,4 @@
+import { resultsCues } from '../audio/cues';
 import { AudioEngine, AudioFrame } from '../audio/engine';
 import { ghostName } from '../bot/names';
 import { getPlatform, Platform } from '../platform/platform';
@@ -1078,8 +1079,23 @@ export class App {
     this.coinsLanded = 0;
     const seq = ++this.resultsSeq;
     const model = this.results;
+    const live = (): boolean => seq === this.resultsSeq && this.phase === 'results' && this.results === model;
     requestAnimationFrame(() => {
-      if (seq === this.resultsSeq && this.phase === 'results' && this.results === model) this.resultsSounds(model);
+      if (!live()) return;
+      // The beats start when the card's CSS animations do: their start time, once it is resolved (a
+      // frame or so after the card is styled). Anchored at this frame the sounds ran about 22 ms early,
+      // and at the animations' ready promise about 33 ms late, so the cues carry the measured lag.
+      const first = document.querySelector('.gs-results')?.getAnimations?.({ subtree: true }).find((a) => a.pending);
+      let done = false;
+      const go = (): void => {
+        if (done || !live()) return;
+        done = true;
+        const st = first ? first.startTime : null;
+        this.resultsSounds(model, typeof st === 'number' ? Math.max(0, (performance.now() - st) / 1000) : 0);
+      };
+      if (!first) return go();
+      first.ready.then(go, go);
+      window.setTimeout(go, 250);
     });
   }
 
@@ -1113,21 +1129,23 @@ export class App {
    *  Each reward's coin plays as it lands (rewardLanded, which the card calls whether it flew or
    *  not); reduced motion plays it all at once, the coin included. (The only mission sound: settleRun
    *  credits, nothing chimes twice.) */
-  private resultsSounds(m: ResultsModel): void {
+  private resultsSounds(m: ResultsModel, lagS = 0): void {
     const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
     const ahead = m.ghosts.filter((g) => (g.distance ?? 0) > m.distance).length;
     const still = reduced();
-    this.audio.cueResults(
-      {
-        count: m.score > 0,
-        newBest: m.newBest,
-        beats: beatStampsShown(m.ghosts.length, ahead),
-        missions: rows((mv) => mv.justCompleted),
-        coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
-      },
-      RESULTS_TIMING,
-      still,
-    );
+    const show = {
+      count: m.score > 0,
+      newBest: m.newBest,
+      beats: beatStampsShown(m.ghosts.length, ahead),
+      missions: rows((mv) => mv.justCompleted),
+      coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
+    };
+    if (lagS <= 0.001) {
+      this.audio.cueResults(show, RESULTS_TIMING, still);
+      return;
+    }
+    // The card started lagS ago: the same timeline (engine.cueResults' own cues), that much sooner.
+    for (const q of resultsCues(show, RESULTS_TIMING, still)) this.audio.ui(q.name, q.detail, Math.max(0, q.at - lagS));
   }
 
   private crashText(cause: string | null): string {
