@@ -452,6 +452,27 @@ describe('milestones', () => {
     expect(of(q.frame(), 'newBest')).toHaveLength(1);
   });
 
+  it("New best after a 'New best combo' bank waits out the bank's whole cash-in (its tier's BANK_MS)", () => {
+    const r = new Rig({ bestScoreAtStart: 5000, bestComboAtStart: 3000 });
+    r.sim.score = 4000;
+    // A skilled combo (3 moves), banked at 3,790 over a 3,000 best: tier 3, 'New best combo', 1.9 s.
+    for (let i = 0; i < 3; i++) r.frame([style('air', 100, i + 1)]);
+    r.sim.score = 7790;
+    const a = r.frame([{ type: 'comboBank', points: 3790, mult: 4 }]);
+    expect(of(a, 'bank')[0]).toMatchObject({ tier: 3, header: 'New best combo' });
+    expect(of(r.idle(1.85), 'newBest')).toHaveLength(0);
+    expect(of(r.idle(0.1), 'newBest')).toHaveLength(1);
+    // A cash-in that lands while New best is still due holds it too.
+    const q = new Rig({ bestScoreAtStart: 5000, bestDistAtStart: 330 });
+    q.sim.distance = 331;
+    q.sim.score = 5100;
+    q.frame();
+    q.idle(1);
+    q.frame([{ type: 'comboBank', points: 600, mult: 2 }]);
+    expect(of(q.idle(0.9), 'newBest')).toHaveLength(0);
+    expect(of(q.idle(0.2), 'newBest')).toHaveLength(1);
+  });
+
   it('New best crossed with New ground waits 1.25 s after it: each gets its own moment', () => {
     const r = new Rig({ bestDistAtStart: 330, bestScoreAtStart: 5000 });
     r.sim.distance = 329;
@@ -696,6 +717,26 @@ describe('the race', () => {
     expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
   });
 
+  it('the start-line call holds the rival a quarter second under the HUD call flash', () => {
+    const r = new Rig();
+    const pace = track(1, 'pool', 'Pacey');
+    pace.entry.role = 'pace';
+    const near = track(2, 'pool', 'Nearby');
+    r.tracks = [pace, near];
+    r.sim.tick = 10;
+    r.poses.set(1, pose(r.sim.s.z + 40));
+    r.poses.set(2, pose(r.sim.s.z + 3));
+    const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    const beats = r.idle(0.62);
+    expect(of(beats, 'raceCall')).toHaveLength(1);
+    expect(rival()).toBe(1);
+    // POP_DEFER.call (the HUD's CALL_MS) is 2.6 s; the hold ends at 2.35 s.
+    r.idle(2.3);
+    expect(rival()).toBe(1);
+    r.idle(0.1);
+    expect(rival()).toBe(2);
+  });
+
   it("your best jostled at the start keeps its first pass: the later overtake is 'Passed Your best' with the base", () => {
     const r = new Rig();
     const you = track(1001, 'you', 'Rider');
@@ -902,7 +943,7 @@ describe('mission and unlock pops', () => {
     expect(of(r.idle(3), 'missionPop')).toHaveLength(0);
   });
 
-  it('a mission met as an unlock pops follows it once the spacing allows (a fresh save)', () => {
+  it('a mission met as an unlock pops as the unlock banner leaves (a fresh save)', () => {
     let n = 0;
     const r = new Rig({
       lifetimePassed: 3,
@@ -917,8 +958,22 @@ describe('mission and unlock pops', () => {
     const out = [...r.frame([], { race: [{ type: 'pass', track: g, first: true }] }), ...r.idle(8)];
     const pops = out.filter((b) => b.type === 'unlockPop' || b.type === 'missionPop');
     expect(pops.map((b) => b.type)).toEqual(['unlockPop', 'missionPop']);
-    // POP_DEFER.spacing apart, the mission still inside its 8 s wait.
-    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.spacing / 1000 - 0.1);
+    // Past the unlock's 2.6 s on screen (one banner at a time), inside its 200 ms exit, and well under
+    // the 3.5 s spacing that put 'Pass a ghost' after the crash of short first runs.
+    const gap = (pops[1].tick - pops[0].tick) / 60;
+    expect(gap).toBeGreaterThanOrEqual(2.6);
+    expect(gap).toBeLessThan(2.8);
+  });
+
+  it('two missions keep the usual spacing', () => {
+    let n = 0;
+    const r = new Rig({
+      missionsCrossed: () => (++n === 1 ? [{ id: 'pass1', text: 'Pass a ghost', reward: 25 }, { id: 'air', text: 'Catch air', reward: 25 }] : []),
+    });
+    r.sim.tick = 1000;
+    const pops = of(r.idle(8), 'missionPop');
+    expect(pops).toHaveLength(2);
+    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.spacing / 1000 - 0.02);
   });
 
   it("a mission's give-up clock runs only at the head of the queue (behind a slow unlock it loses no time)", () => {

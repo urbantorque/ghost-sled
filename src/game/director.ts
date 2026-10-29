@@ -10,7 +10,7 @@ import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
 import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
-import { bankHeader, bankTier, fuseLevel } from './stake';
+import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
 
@@ -106,11 +106,14 @@ const DUEL_AFTER_TICKS = 120;
 const LEAD_TICKS = 600;
 const LEAD_GHOSTS = 3;
 const LEAD_REARM_TICKS = 300;
-/** The start-line call: shown for this long (s); given up when its ghost is not ready this long after
- *  its moment, or after the first track of the field got ready, whichever is later (a slow cold load
- *  had no track ready for 11 s, and the run never got its call). With no track ready at all it waits
- *  at most CALL_LATE_S. */
-const CALL_SHOW_S = POP_DEFER.call / 1000;
+/** The start-line call: the rival (pill, C11 ring, chip) stays on its ghost this long (s), a quarter
+ *  second under the HUD's call flash (CALL_MS, POP_DEFER.call), which starts a frame or more after the
+ *  beat: held for the whole flash, the pill showed the call's ghost for 130 to 220 ms after the flash
+ *  ended before it named the nearest rider. Given up when its ghost is not ready this long after its
+ *  moment, or after the first track of the field got ready, whichever is later (a slow cold load had
+ *  no track ready for 11 s, and the run never got its call). With no track ready at all it waits at
+ *  most CALL_LATE_S. */
+const CALL_HOLD_S = POP_DEFER.call / 1000 - 0.25;
 const CALL_GIVE_UP_S = 6;
 const CALL_LATE_S = 30;
 /** A finale banner holds the queue this long (s). */
@@ -125,6 +128,13 @@ const MISSION_GIVE_UP_S = 8;
 /** Whatever waits, a pop more than this long (s) after its moment is dropped: late news is worse
  *  than none. */
 const POP_LATE_S = 15;
+/** After an unlock pop the next pop goes up as the unlock's banner leaves: it is on screen for
+ *  UNLOCK_BANNER_S (notices TOAST_MS + 400), and the next arrives AFTER_UNLOCK_S later, inside its
+ *  200 ms exit, so the band hands straight over and one banner shows at a time. With the usual
+ *  POP_DEFER.spacing, 'Pass a ghost' (met on the same pass as the unlock) came 6 s after its pass
+ *  and missed 4 of 30 short first runs. */
+const UNLOCK_BANNER_S = 2.6;
+const AFTER_UNLOCK_S = 0.1;
 /** An open duel holds a waiting pop only this long (s) after it opened: the duel lives in the rival
  *  pill, the pop in the notice slot (opening duels ran 6 to 13 s and starved the first mission). */
 const DUEL_POP_BLOCK_S = 2.5;
@@ -142,7 +152,9 @@ const DUEL_POP_GAP_S = 2.2;
 /** ...and no duel opens under a pop's banner (notices TOAST_MS 2,200 plus its exit): the banner band
  *  covers the race row, so an opening duel there would never be seen. */
 const POP_BANNER_S = 2.5;
-/** New best crossed by a bank waits for the bank's fly-in (s). */
+/** New best this soon after New ground waits until this long (s) after it. New best crossed by a bank
+ *  (or due while one is on screen) waits for the bank's whole cash-in, its tier's BANK_MS (stake.ts):
+ *  under a 1,900 ms 'NEW BEST COMBO' bank a 1.25 s wait printed 'new best' twice. */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
 const TRICK_AHEAD = 60;
@@ -272,6 +284,8 @@ export class Director {
   private kmDone = 0;
   private avalancheAt = -1;
   private bestBank = 0;
+  /** Run clock until which a bank's cash-in is on screen (New best waits for it). */
+  private bankUntil = -1;
 
   // Flow and skill.
   private skillChain = 0;
@@ -295,6 +309,8 @@ export class Director {
   private teased = false;
   private pollAt = 0;
   private lastPopAt = -1e9;
+  /** The last pop was an unlock: the next follows as its banner leaves (UNLOCK_BANNER_S). */
+  private lastPopUnlock = false;
   private lastStompAt = -1e9;
   private lastPassAt = -1e9;
   private lastNewsAt = -1e9;
@@ -393,6 +409,7 @@ export class Director {
     this.kmDone = 0;
     this.avalancheAt = -1;
     this.bestBank = 0;
+    this.bankUntil = -1;
     this.resetSkill();
     this.flowShown = 0;
     this.pulseAt = -1;
@@ -401,6 +418,7 @@ export class Director {
     this.unlockDone.clear();
     this.teased = false;
     this.pollAt = 0;
+    this.lastPopUnlock = false;
     this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = -1e9;
     this.cursors.clear();
     this.lastWhisperAt = -1e9;
@@ -458,7 +476,6 @@ export class Director {
     // ---- Pre-scan the batch.
     const evs = this.simEvents;
     evs.length = 0;
-    let bankInBatch = false;
     let lostStake = 0;
     const bumpTicks: number[] = [];
     const bankTicks: number[] = [];
@@ -468,10 +485,8 @@ export class Director {
       if (e.type === 'boost') {
         if (e.source === 'slingshot') this.lastSlingTick = Math.max(this.lastSlingTick, p.tick);
         this.slingBoost = e.source === 'slingshot';
-      } else if (e.type === 'comboBank') {
-        bankInBatch = true;
-        bankTicks.push(p.tick);
-      } else if (e.type === 'bump') bumpTicks.push(p.tick);
+      } else if (e.type === 'comboBank') bankTicks.push(p.tick);
+      else if (e.type === 'bump') bumpTicks.push(p.tick);
       else if (e.type === 'comboLost') lostStake = e.points;
     }
 
@@ -758,6 +773,7 @@ export class Director {
           }
           this.push({ type: 'bank', tick: p.tick, points: e.points, mult: e.mult, origin: Math.round(e.points / Math.max(1, e.mult)), tier, header, bump }, sim);
           this.bestBank = Math.max(this.bestBank, e.points);
+          this.bankUntil = Math.max(this.bankUntil, now + BANK_MS[tier] / 1000);
           // A bump knocked the combo out of you: the flow it earned goes out with it.
           if (bump && this.canSnuff()) this.snuff(p.tick, sim, now, true);
           if (bump) this.earnCap = 0;
@@ -804,11 +820,13 @@ export class Director {
     const stake = c.active ? Math.round(c.pending * c.multiplier) : 0;
     if (live && run) {
       // New best: the first time the score passes the best this mountain had at the start (once per
-      // run, never again after a revive). A bank that crossed it lands its fly-in first.
+      // run, never again after a revive). A bank that crossed it (or any cash-in still on screen)
+      // lands first: New best waits out its tier's whole BANK_MS, so 'new best' never reads twice.
       if (!this.newBestDone && run.bestScoreAtStart > 0 && sim.score > run.bestScoreAtStart) {
         this.newBestDone = true;
-        this.newBestAt = bankInBatch ? now + NEW_BEST_DEFER_S : now;
+        this.newBestAt = now;
       }
+      if (this.newBestAt >= 0 && this.newBestAt < this.bankUntil) this.newBestAt = this.bankUntil;
       // New ground just had its moment (an early save often crosses both together): New best waits.
       // New ground less than NEW_GROUND_GAP_S of riding away holds it too, then goes first.
       if (this.newBestAt >= 0 && this.newGroundAt >= 0 && this.newBestAt - this.newGroundAt < NEW_GROUND_GAP_S) this.newBestAt = this.newGroundAt + NEW_BEST_DEFER_S;
@@ -900,7 +918,7 @@ export class Director {
     // One rival for the pill, the C11 ring and the camera: an open duel, a duel's result while it
     // flashes, the start-line call, else the nearest riding ghost ahead (or behind within 150 m).
     const duelId = this.duels.open;
-    const callUp = this.call && now - this.call.at < CALL_SHOW_S ? this.call.id : null;
+    const callUp = this.call && now - this.call.at < CALL_HOLD_S ? this.call.id : null;
     if (this.rivalHold && now >= this.rivalHold.until) this.rivalHold = null;
     const steady = steadyNext(this.riderGap(this.heldNext, f), this.nearestRider(f), now - this.heldSince);
     const sid = steady ? steady.id : null;
@@ -1246,12 +1264,13 @@ export class Director {
       !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
       now - this.lastFinaleAt >= FINALE_HOLD_S &&
       !this.finales.pending &&
-      now - this.lastPopAt >= POP_DEFER.spacing / 1000;
+      now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_BANNER_S + AFTER_UNLOCK_S : POP_DEFER.spacing / 1000);
     if (!clear) return;
     // A waiting unlock goes before any mission.
     const p = this.pops.splice(Math.max(0, this.pops.findIndex((q) => q.beat.type === 'unlockPop')), 1)[0];
     p.beat.tick = sim.tick;
     this.lastPopAt = now;
+    this.lastPopUnlock = p.beat.type === 'unlockPop';
     this.push(p.beat, sim);
   }
 
