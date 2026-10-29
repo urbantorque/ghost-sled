@@ -197,7 +197,8 @@ export class BeatRouter {
       case 'lost':
         this.lostDuel.id = g.id;
         this.lostDuel.at = performance.now();
-        this.hud.news(g.name, g.kind, `${g.kind === 'you' ? 'Your best' : g.name} pulled away`);
+        // The duel's result, worded as news: it keeps the pill (other news goes to the line meanwhile).
+        this.hud.news(g.name, g.kind, `${g.kind === 'you' ? 'Your best' : g.name} pulled away`, undefined, true);
         break;
       default:
         break;

@@ -176,13 +176,14 @@ describe('BeatRouter', () => {
     expect(of('hud.say')).toEqual([]);
   });
 
-  it('says a lost duel once, never by your own name', () => {
+  it('says a lost duel once, never by your own name, as the duel result that keeps the pill', () => {
     const { router, of } = rig();
     router.handle([
       { type: 'duel', tick: 1, phase: 'lost', ghost: you, gifts: 0 },
       { type: 'raceNews', tick: 1, ghost: you, news: 'pulledAway', text: 'Noor Frostberg pulled away', pan: 0, gain: 0.6 },
     ]);
-    expect(of('hud.news')).toEqual([['hud.news', 'Noor Frostberg', 'you', 'Your best pulled away']]);
+    // The last argument marks it the duel's result: other news goes to the callout line in a duel.
+    expect(of('hud.news')).toEqual([['hud.news', 'Noor Frostberg', 'you', 'Your best pulled away', undefined, true]]);
   });
 
   it('keeps race news about your best as "Your best", and lets the unlock tease wait out its pass', () => {

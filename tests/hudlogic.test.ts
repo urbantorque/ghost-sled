@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChaosEvent } from '../src/sim/chaos';
-import { DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillOwner, placeSettled, releaseBand, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
+import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
 import { landAt, MORE_MIN_PX, moreCue, RESULTS_TIMING, stampInView, type MoreBlock } from '../src/ui/results';
 
 // The overlay's small decisions, away from the DOM: who may take the rival pill during a duel, the
@@ -13,17 +13,24 @@ describe('duelRoute', () => {
 
   it('keeps the pill on the duel ghost and sends other ghosts to the callout line', () => {
     expect(duelRoute('Mika', 'Mika', 'pass')).toBe('pill');
-    expect(duelRoute('Mika', 'Mika', 'news')).toBe('pill');
+    expect(duelRoute('Mika', 'Mika', 'lost')).toBe('pill');
     expect(duelRoute('Mika', 'Tess', 'pass')).toBe('line');
     expect(duelRoute('Mika', 'Tess', 'lost')).toBe('line');
     expect(duelRoute('Mika', 'Tess', 'news')).toBe('line');
     // The start-line call keeps its turn.
     expect(duelRoute('Mika', 'Tess', 'call')).toBe('pill');
   });
+
+  it("sends the duel ghost's own news to the callout line too (the unlock tease keyed to it)", () => {
+    // '1 more ghost opens Ember Peak' came with 'Passed Your best', then the duel with your best opened:
+    // it flashed in the duel pill with no name while the ring named Your best.
+    expect(duelRoute('Noor Frostberg', 'Noor Frostberg', 'news')).toBe('line');
+    expect(duelRoute(null, 'Noor Frostberg', 'news')).toBe('pill');
+  });
 });
 
 describe('pillOwner', () => {
-  it("keeps the pill on a resolved duel's ghost for the director's 1.5 s hold, then frees it", () => {
+  it("keeps the pill on a resolved duel's ghost for its 1.5 s hold, then frees it", () => {
     const held = { name: 'Kai_on_Tour', until: 1000 + DUEL_HOLD_MS };
     expect(DUEL_HOLD_MS).toBe(1500);
     expect(pillOwner(null, held, 1000)).toBe('Kai_on_Tour');
@@ -33,6 +40,41 @@ describe('pillOwner', () => {
     expect(pillOwner(null, held, 1000 + DUEL_HOLD_MS)).toBeNull();
     // An open duel always owns it.
     expect(pillOwner('Mika', held, 1200)).toBe('Mika');
+  });
+
+  it('holds while the result still waits its turn under a banner, however long the banner stays', () => {
+    // 'Held off RidgeUlla' at 9.37 s under the GRUDGE SETTLED banner: the wall-clock hold is long over
+    // when the banner goes, but the result has not shown yet.
+    const held = { name: 'RidgeUlla', until: 9370 + DUEL_HOLD_MS };
+    expect(pillOwner(null, held, 11300, null, true)).toBe('RidgeUlla');
+    expect(pillOwner(null, held, 11300, null, false)).toBeNull();
+    // No duel yet: nothing holds.
+    expect(pillOwner(null, { name: '', until: -1e9 }, 0, null, true)).toBeNull();
+  });
+
+  it("follows the director's duel-result hold when the game sends it", () => {
+    // Slow motion stretches the director's 1.5 s in sim time past the HUD's wall clock: 'Triple pass
+    // Your best' took the pill while the ring still named RidgeUlla.
+    const held = { name: 'RidgeUlla', until: 1000 };
+    expect(pillOwner(null, held, 1400, 'RidgeUlla')).toBe('RidgeUlla');
+    expect(duelRoute(pillOwner(null, held, 1400, 'RidgeUlla'), 'Noor Frostberg', 'pass')).toBe('line');
+    // Without it, the wall-clock copy.
+    expect(pillOwner(null, held, 1400)).toBeNull();
+    expect(pillOwner('Mika', held, 1400, 'RidgeUlla')).toBe('Mika');
+  });
+});
+
+describe('burstName', () => {
+  it('names your best for the rest of a slingshot burst once the burst passed it (C7)', () => {
+    const b = { at: -1e9, you: '' };
+    expect(burstName(b, 'Brave Rhea', 'pool', 6370)).toEqual({ raw: 'Brave Rhea', kind: 'pool' });
+    expect(burstName(b, 'Noor Frostberg', 'you', 6570)).toEqual({ raw: 'Noor Frostberg', kind: 'you' });
+    // 'Slung past 5 SparkleCedar' 60 ms later reads 'Slung past 5 Your best'.
+    expect(burstName(b, 'SparkleCedar', 'grudge', 6630)).toEqual({ raw: 'Noor Frostberg', kind: 'you' });
+    // The duel ghost keeps its own pass.
+    expect(burstName(b, 'MarmotMateo', 'pool', 6700, 'MarmotMateo')).toEqual({ raw: 'MarmotMateo', kind: 'pool' });
+    // A later burst starts clean.
+    expect(burstName(b, 'Tess', 'pool', 6700 + 1600)).toEqual({ raw: 'Tess', kind: 'pool' });
   });
 });
 
@@ -59,6 +101,28 @@ describe('enqueueFlash', () => {
     expect(pend.map((p) => `${p.type}:${p.name}`)).toEqual(['news:Mila', 'lost:Tess']);
     enqueueFlash(pend, w('pass', 'Kai', 30, 'passed'));
     expect(pend.map((p) => `${p.type}:${p.name}`)).toEqual(['lost:Tess', 'pass:Kai']);
+  });
+
+  it("never drops a duel's result to make room", () => {
+    const pend: Waiting[] = [];
+    enqueueFlash(pend, w('pass', 'RidgeUlla', 0, 'heldOff'));
+    enqueueFlash(pend, w('pass', 'Tess', 10, 'passed'));
+    enqueueFlash(pend, w('pass', 'Kai', 20, 'double'));
+    expect(pend.map((p) => `${p.word}:${p.name}`)).toEqual(['heldOff:RidgeUlla', 'double:Kai']);
+  });
+
+  it('drops arriving news rather than a slingshot burst that passed your best (best-d s56)', () => {
+    // Under GRUDGE SETTLED MarmotMateo: the burst (now 'Slung past 5 Your best') and the grudge's own
+    // pass wait; then the unlock tease comes. It used to push the burst out, and played alone after.
+    const pend: Waiting[] = [
+      { type: 'pass', name: 'Your best', kind: 'you', word: 'slung', at: 6670, band: true },
+      { type: 'pass', name: 'MarmotMateo', kind: 'grudge', word: 'slung', at: 6500, band: true },
+    ];
+    enqueueFlash(pend, { type: 'news', name: '', at: 6670, band: true });
+    expect(pend.map((p) => p.name)).toEqual(['Your best', 'MarmotMateo']);
+    // A plain pass arriving pushes out the oldest that is not your best's.
+    enqueueFlash(pend, { type: 'pass', name: 'Tess', kind: 'pool', word: 'passed', at: 6800, band: true });
+    expect(pend.map((p) => p.name)).toEqual(['Your best', 'Tess']);
   });
 });
 
@@ -96,6 +160,53 @@ describe('releaseBand', () => {
     ];
     releaseBand(pend, 2900);
     expect(pend.map((p) => `${p.type}:${p.name}@${p.at}`)).toEqual(['lost:Tess@2900', 'pass:SparkleCedar@2900']);
+  });
+
+  it("plays a duel's result first, ahead of the newer plain pass that waited with it", () => {
+    // s105-r2: 'Held off RidgeUlla' under GRUDGE SETTLED, then 'Slung past SparkleCedar'.
+    const pend: Waiting[] = [
+      { type: 'pass', name: 'SparkleCedar', word: 'passed', at: 0, band: true },
+      { type: 'pass', name: 'RidgeUlla', word: 'heldOff', at: 130, band: true },
+      { type: 'pass', name: 'SparkleCedar', word: 'slung', at: 1830, band: true },
+    ];
+    releaseBand(pend, 2230);
+    expect(pend.map((p) => `${p.word}:${p.name}@${p.at}`)).toEqual(['heldOff:RidgeUlla@2230', 'slung:SparkleCedar@2230']);
+  });
+
+  it("keeps your best's pass over a newer plain one (C7)", () => {
+    const pend: Waiting[] = [
+      { type: 'pass', name: 'Your best', kind: 'you', word: 'streak', at: 0, band: true },
+      { type: 'pass', name: 'MarmotMateo', kind: 'pool', word: 'streak', at: 120, band: true },
+    ];
+    releaseBand(pend, 2000);
+    expect(pend.map((p) => p.name)).toEqual(['Your best']);
+  });
+
+  it('drops news that waited under the banner when a pass waits too, and keeps it otherwise', () => {
+    // best-d s60: '1 more ghost opens Ember Peak' played after the banner while its pass went stale.
+    const pend: Waiting[] = [
+      { type: 'pass', name: 'Your best', kind: 'you', word: 'slung', at: 0, band: true },
+      { type: 'news', name: '', at: 10, band: true },
+    ];
+    releaseBand(pend, 2300);
+    expect(pend.map((p) => `${p.type}:${p.name}`)).toEqual(['pass:Your best']);
+    const alone: Waiting[] = [{ type: 'news', name: 'Tess', at: 10, band: true }];
+    releaseBand(alone, 2300);
+    expect(alone.map((p) => `${p.type}@${p.at}`)).toEqual(['news@2300']);
+  });
+});
+
+describe('pillGap', () => {
+  it("shows the game's held whole-metre gap unchanged, so the pill and the edge chip read alike", () => {
+    // The chip rounds the same number: 'SparkleCedar 10 m behind' beside a chip reading '9 m' is gone.
+    expect(pillGap(-9, 10, 0)).toBe(9);
+    expect(pillGap(14, 13, 10)).toBe(14);
+    expect(pillGap(13, 14, 10)).toBe(13);
+  });
+
+  it('holds a raw gap itself (C12) when the game sends one with a fraction', () => {
+    expect(pillGap(5.52, 5)).toBe(gapShown(5.52, 5));
+    expect(pillGap(-15.2, 13, GAP_DWELL_MS - 1)).toBe(13);
   });
 });
 
