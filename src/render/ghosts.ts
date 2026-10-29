@@ -30,6 +30,15 @@ export const GHOST_COLORS: Record<GhostKind, string> = {
   grudge: '#FF5A7A',
 };
 
+/**
+ * The off-screen rival chip's text for the rival's gap as shown (contract C12): a positive whole number
+ * of metres, the arrow giving the side. The director holds that gap in signed whole metres (GapReadout),
+ * so this is the rival pill's number too (hud.ts pillGap).
+ */
+export function rivalChipText(gap: number): string {
+  return `${Math.max(1, Math.round(Math.abs(gap)))} m`;
+}
+
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 /** One floating pill: a ghost's name tag or its crash marker's tag. */
@@ -1281,6 +1290,23 @@ export class GhostVisuals {
     this.safe.l = parseFloat(cs.paddingLeft) || 0;
   }
 
+  /** The chip's gap text and its within-3 m pulse for the rival's shown gap (written only on change). */
+  private rivalText(gap: number): void {
+    const close = Math.abs(gap) < 3;
+    if (close !== this.rivalClose) {
+      this.rivalClose = close;
+      this.rivalEl.classList.toggle('close', close);
+    }
+    const txt = rivalChipText(gap);
+    if (txt !== this.rivalTxt) {
+      // The chip's width holds while the digit count does (tabular figures), so it is measured
+      // again only when that changes (and once per viewport).
+      if (txt.length !== this.rivalTxt.length) this.rivalW = 0;
+      this.rivalTxt = txt;
+      this.rivalGap.textContent = txt;
+    }
+  }
+
   private placeRival(
     rival: { id: number; gap: number } | null,
     poses: Map<number, GhostPose | null>,
@@ -1322,20 +1348,7 @@ export class GhostVisuals {
           this.rivalId = it.id;
           this.rivalEl.style.setProperty('--c', GHOST_COLORS[it.kind]);
         }
-        const close = Math.abs(rival!.gap) < 3;
-        if (close !== this.rivalClose) {
-          this.rivalClose = close;
-          this.rivalEl.classList.toggle('close', close);
-        }
-        // Contract C12: the gap as a positive whole number of metres (the arrow gives the side).
-        const txt = `${Math.max(1, Math.round(Math.abs(rival!.gap)))} m`;
-        if (txt !== this.rivalTxt) {
-          // The chip's width holds while the digit count does (tabular figures), so it is measured
-          // again only when that changes (and once per viewport).
-          if (txt.length !== this.rivalTxt.length) this.rivalW = 0;
-          this.rivalTxt = txt;
-          this.rivalGap.textContent = txt;
-        }
+        this.rivalText(rival!.gap);
         if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
         // Room for the arrowhead outside the chip, on whichever side it points.
         const hw = this.rivalW / 2 + 22;
@@ -1369,6 +1382,13 @@ export class GhostVisuals {
         // the safe area and the HUD moved it).
         this.rivalAng = Math.atan2(h * 0.5 + sy - y, w * 0.5 + sx - x);
       }
+    }
+    // A chip fading out (its ghost back in frame, or further back than the marker reaches) still names
+    // that ghost: its number keeps following the rival pill's (C12), not the one it had when it went
+    // ('14 m' against the pill's '15 m' as the rival dropped past 15 m behind).
+    if (!off && rival && rival.id === this.rivalId && this.rivalA > 0) {
+      this.rivalText(rival.gap);
+      if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
     }
     // Only a rival that stays out of frame for a moment earns the marker (no flicker at the edge);
     // once earned it comes in fast, so it is never caught half transparent.
