@@ -221,15 +221,18 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // keeps its colour: over the whole body it read as bleached, and across a pale saucer's face,
         // seen edge-on from the low camera, as the sled blown out to white.
         col = mix(col, vec3(1.5), uFlash * 0.9 * smoothstep(0.74, 0.96, riderEdge) * upright);
-        // Earned flow burns in the player's own vermillion: a rim on the silhouette facets (0.35 at
-        // full flow, the 'In the flow' pulse to full strength, past the bloom threshold on Medium and
-        // High) and a brighter scarf, which goes HDR and blooms. On Low it reads as saturated colour.
-        // Never gold and never a tint on the snow (decision 69). The results fill holds it down.
-        float flowK = 0.35 * uFlow.x + uFlow.y;
+        // Earned flow burns in the player's own vermillion: a rim on the silhouette facets that thickens
+        // and brightens as it builds (a warm edge at 0.3, a clear rim at 0.6, a hot one at full flow,
+        // eased in so the first steps already show; the 'In the flow' pulse to full strength, past the
+        // bloom threshold on Medium and High) and a brighter scarf, which goes HDR and blooms. On Low it
+        // reads as saturated colour. Never gold and never a tint on the snow (decision 69). The results
+        // fill holds it down.
+        float flowE = pow(uFlow.x, 0.7);
         #ifdef DOUBLE_SIDED
-          col *= 1.0 + (0.5 * uFlow.x + 0.35 * uFlow.y) * rimCut;
+          col *= 1.0 + (0.7 * flowE + 0.35 * uFlow.y) * rimCut;
         #else
-          col += uFlowC * smoothstep(0.52, 0.94, riderEdge) * flowK * 1.7 * rimCut;
+          float flowK = 0.55 * flowE + uFlow.y;
+          col += uFlowC * smoothstep(mix(0.55, 0.38, uFlow.x), 0.94, riderEdge) * flowK * 1.7 * rimCut;
         #endif
         `;
   const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
