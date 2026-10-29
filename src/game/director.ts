@@ -173,6 +173,10 @@ const WHISPER_S = 1.5;
 const FLOW_SMOOTH_S = 0.2;
 const FLOW_IN_AT = 2.9;
 const FLOW_IN_KINDS = 3;
+/** ...one of them a trick: a spin or flip in the air, or a gate. The pack's drafting holds the combo
+ *  open, so jumps, landings, carves and near misses alone piled up a novice's flow: 3 of 22 first
+ *  runs named the beat on air, clean and perfect landings (the glow still shows what they earned). */
+const FLOW_IN_TRICKS: ReadonlySet<StyleKind> = new Set<StyleKind>(['spin', 'flip', 'gate']);
 const FLOW_SNUFF_MIN = 1.2;
 const SNUFF_S = 0.15;
 const FLOW_PULSE_S = 0.3;
@@ -889,7 +893,7 @@ export class Director {
     }
     let shown = this.flowShown;
     if (this.snuffAt >= 0) shown = Math.min(shown, Math.max(0, this.snuffFrom * (1 - (now - this.snuffAt) / SNUFF_S)));
-    if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS) {
+    if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS && this.trickIn()) {
       this.flowInDone = true;
       this.pulseAt = now;
       this.push({ type: 'flow', tick: sim.tick, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } }, sim);
@@ -999,6 +1003,12 @@ export class Director {
     this.kinds.add(kind);
     if (kind === 'perfect') this.perfects++;
     this.earnCap = this.flowChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** A trick (FLOW_IN_TRICKS) is among the kinds earning the shown flow. */
+  private trickIn(): boolean {
+    for (const k of this.kinds) if (FLOW_IN_TRICKS.has(k)) return true;
+    return false;
   }
 
   /** The shown flow is high enough to be put out, and no snuff is already taking it down. */

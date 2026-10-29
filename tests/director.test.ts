@@ -4,6 +4,7 @@ import { Director, type DirectorFrame, type DirectorRun } from '../src/game/dire
 import type { GhostPose, GhostTrack, RaceEvent } from '../src/game/ghosts';
 import { emptyPose } from '../src/game/ghosts';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
+import type { StyleKind } from '../src/sim/scoring';
 import type { Sim, SimEvent } from '../src/sim/sim';
 
 // Synthetic batches through the director: the order rules (a 'perfect' style before its land, a bank
@@ -235,6 +236,24 @@ describe('banks, flow and lost combos', () => {
     // The shown flow sits just under 3 (it approaches from below) and the line is 2.9.
     expect((r.d as unknown as { flowShown: number }).flowShown).toBeLessThan(3);
     expect(of(beats, 'flow').filter((b) => b.phase === 'in')).toHaveLength(1);
+  });
+
+  it("jumps and landings alone glow but never name 'In the flow': it wants a spin, a flip or a gate", () => {
+    const ride = (kinds: readonly StyleKind[]): { ins: number; shown: number } => {
+      const r = new Rig();
+      r.sim.s.flow = 3;
+      const beats: Beat[] = [];
+      for (let i = 0; i < 12; i++) beats.push(...r.frame([style(kinds[i % kinds.length], 100, i + 1)]));
+      beats.push(...r.idle(1.5));
+      return { ins: of(beats, 'flow').filter((b) => b.phase === 'in').length, shown: (r.d as unknown as { flowShown: number }).flowShown };
+    };
+    // A novice in the bunch's held combo: air, clean and perfect landings, carves, near misses.
+    const novice = ride(['air', 'clean', 'perfect', 'carve', 'nearMiss']);
+    expect(novice.shown).toBeGreaterThan(2.9);
+    expect(novice.ins).toBe(0);
+    expect(ride(['air', 'perfect', 'spin']).ins).toBe(1);
+    expect(ride(['air', 'perfect', 'flip']).ins).toBe(1);
+    expect(ride(['gate', 'air', 'perfect']).ins).toBe(1);
   });
 
   it('a slingshot is the pack speed: no skill step and no kind', () => {
