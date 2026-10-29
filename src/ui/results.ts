@@ -96,6 +96,17 @@ type Box = { left: number; right: number; top: number; bottom: number };
 export type MoreBlock = { key: 'mis' | 'race' | 'run' | 'tip'; r: Box };
 
 /**
+ * Whether a Done stamp (its box `r`) is on screen inside the results body's visible box `view`: laid
+ * out (not folded away) and its centre inside. A stamp that starts out of view stays silent.
+ */
+export function stampInView(r: Box, view: Box): boolean {
+  if (!(r.right > r.left && r.bottom > r.top)) return false;
+  const cx = (r.left + r.right) / 2;
+  const cy = (r.top + r.bottom) / 2;
+  return cx >= view.left && cx <= view.right && cy >= view.top && cy <= view.bottom;
+}
+
+/**
  * Where the More cue goes, from layout already read: `clip` (px of the body cut off below), the
  * scroller's visible box (`right` inside its padding), the blocks and the missions header. Null: no
  * cue (under MORE_MIN_PX cut, or nothing cut). The cue is centred on the column that runs on: the
@@ -127,6 +138,9 @@ export class Results {
   private timers: number[] = [];
   /** Mission rows whose reward is still on its way to the wallet (each lands, and reports, once). */
   private readonly toLand = new Set<number>();
+  /** Mission rows whose Done stamp has started on screen on this card (onMissionStamp, once each). */
+  private readonly stamped = new Set<number>();
+  private stampRaf = 0;
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
@@ -150,11 +164,18 @@ export class Results {
       const a = document.activeElement;
       if (a === null || a === document.body) this.el.querySelector<HTMLElement>('.gs-res-card')?.focus({ preventScroll: true });
     });
+    // A Done stamp's animation starting with its row in view is its chime's moment (onMissionStamp).
+    // A row folded away never animates; one scrolled out of view when it starts stays silent.
+    this.el.addEventListener('animationstart', (e) => {
+      const t = e.target;
+      if (this.layer.open && t instanceof HTMLElement && t.classList.contains('gs-mis-complete')) this.stampStarted(t);
+    });
   }
 
   show(m: ResultsModel): void {
     this.prev = null;
     this.toLand.clear();
+    this.stamped.clear();
     this.pending.clear();
     this.pressed.clear();
     this.raceAll = false;
@@ -166,6 +187,7 @@ export class Results {
     this.focusDefault();
     if (!reduced()) this.countUp(m.score);
     this.flyRewards(m);
+    this.stampsAtOnce();
   }
 
   update(m: ResultsModel): void {
@@ -174,6 +196,8 @@ export class Results {
     const before = this.prev;
     this.pending.clear();
     this.render(m, false);
+    // A re-render lands the card whole: a stamp that had not started shows now.
+    this.stampsAtOnce();
     if (!restoreFocus(this.el, fk)) this.focusDefault();
     if (before && !before.doubled && m.doubled) {
       const g = this.el.querySelector('.gs-res-gifts');
@@ -196,6 +220,8 @@ export class Results {
 
   hide(): void {
     cancelAnimationFrame(this.raf);
+    cancelAnimationFrame(this.stampRaf);
+    this.stampRaf = 0;
     this.toLand.clear();
     this.clearTimers();
     this.io?.disconnect();
@@ -294,6 +320,45 @@ export class Results {
       }, landAt(i));
       this.timers.push(t);
     }
+  }
+
+  /** A Done stamp's animation began: its row chimes if it is in view (once per row per card). */
+  private stampStarted(el: HTMLElement): void {
+    const li = el.closest<HTMLElement>('.gs-mis.is-new');
+    const body = this.el.querySelector<HTMLElement>('.gs-res-body');
+    if (!li || !body) return;
+    if (stampInView(el.getBoundingClientRect(), this.viewBox(body))) this.stampShown(Number(li.dataset.row));
+  }
+
+  /**
+   * With no stamp animation to wait for (reduced motion, or a re-render that lands the card whole),
+   * each Done stamp is on screen from the next frame: the rows in view then chime at once.
+   */
+  private stampsAtOnce(): void {
+    if (!reduced() && !this.el.classList.contains('is-static')) return;
+    cancelAnimationFrame(this.stampRaf);
+    this.stampRaf = requestAnimationFrame(() => {
+      this.stampRaf = 0;
+      const body = this.el.querySelector<HTMLElement>('.gs-res-body');
+      if (!this.layer.open || !body) return;
+      const view = this.viewBox(body);
+      for (const li of Array.from(this.el.querySelectorAll<HTMLElement>('.gs-res-missions .gs-mis.is-new'))) {
+        const stamp = li.querySelector<HTMLElement>('.gs-mis-complete');
+        if (stamp && stampInView(stamp.getBoundingClientRect(), view)) this.stampShown(Number(li.dataset.row));
+      }
+    });
+  }
+
+  /** The results body's visible box, inside the viewport. */
+  private viewBox(body: HTMLElement): { left: number; right: number; top: number; bottom: number } {
+    const v = body.getBoundingClientRect();
+    return { left: Math.max(0, v.left), right: Math.min(window.innerWidth, v.right), top: Math.max(0, v.top), bottom: Math.min(window.innerHeight, v.bottom) };
+  }
+
+  private stampShown(row: number): void {
+    if (!Number.isInteger(row) || row < 0 || this.stamped.has(row)) return;
+    this.stamped.add(row);
+    this.hd.onMissionStamp?.(row);
   }
 
   /**
@@ -567,7 +632,10 @@ export class Results {
     const toggle = btn(this.ctx, { cls: 'gs-btn-quiet gs-res-mis-toggle', icon: 'flag', label: 'Missions', fk: 'mis-toggle', onClick: () => {
       this.misOpen = !this.misOpen;
       sync();
-      if (this.misOpen) list.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+      if (!this.misOpen) return;
+      list.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+      // Opened with no stamp animation to run: its stamps are on screen once the scroll has settled.
+      this.timers.push(window.setTimeout(() => this.stampsAtOnce(), reduced() ? 0 : 450));
     } }, sum, icon('chevR', 'gs-res-chev'));
     toggle.setAttribute('aria-controls', list.id);
     const sec = h('section', `gs-res-missions is-fold${won.length > 0 ? ' has-new' : ''}`, h('h3', 'gs-h2 gs-res-h gs-res-mis-h', 'Missions'), toggle, list);
