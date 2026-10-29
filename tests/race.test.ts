@@ -112,6 +112,14 @@ describe('DuelTracker', () => {
     }
   });
 
+  it('canOpen false holds a new duel back while closeness keeps accruing', () => {
+    const d = new DuelTracker();
+    let t = 1000;
+    for (let i = 0; i < 90; i++) expect(d.step(1, ++t, near(0.9), false)).toEqual([]);
+    expect(d.open).toBeNull();
+    expect(d.step(1, ++t, near(0.9), true)).toEqual([{ phase: 'open', id: 7 }]);
+  });
+
   it('never opens before tick 360', () => {
     const d = new DuelTracker();
     for (let t = 1; t < 300; t++) expect(d.step(1, t, near(0.5))).toEqual([]);

@@ -6,9 +6,11 @@ import type { StyleTone } from '../ui/contract';
 import { IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
 import { FinaleTracker } from './finales';
 import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
+import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { skillMult } from './intensity';
+import { friendBeatenText } from './progress';
 import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
-import { bankTier, fuseLevel } from './stake';
+import { bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
 
@@ -43,6 +45,9 @@ export interface DirectorRun {
   unlockLadder: Array<{ id: string; name: string; biome: BiomeId; need: number }>;
   /** Called at 2 Hz; returns missions newly met (progress.missionsCrossed). */
   missionsCrossed: () => Array<{ id: string; text: string; reward: number }>;
+  /** The mountain's graveyards (graveyards.ts, the cairns the world placed): ridden 20 m past alive,
+   *  each is a graveyard beat once per run. */
+  graveyards?: ReadonlyArray<Graveyard>;
 }
 
 export interface DirectorFrame {
@@ -72,7 +77,8 @@ export interface DirectorOutput {
   /** HUD pill and FrameView.rival (C1/C11). */
   rival: { id: number; gap: number } | null;
   hud: { stake: number; fuse: number; pace: boolean; duel: boolean; bestIn: number | null; countdown: { event: ChaosEvent; metres: number } | null };
-  audio: { flow: number; driftCharge: number; skillMult: number; skillChain: number; earnedFlow: number; race: number; duel: number; shoulder: { amt: number; pan: number } | null; fuse: number; streak: number; countIn: boolean; lift: number };
+  /** choir: AudioFrame.choir, 0..3 ghosts you passed this run still riding within 150 m behind. */
+  audio: { flow: number; driftCharge: number; skillMult: number; skillChain: number; earnedFlow: number; race: number; duel: number; shoulder: { amt: number; pan: number } | null; fuse: number; streak: number; countIn: boolean; lift: number; choir: number };
 }
 
 /** Telemetry keeps the most recent entries of a run. */
@@ -101,6 +107,17 @@ const FINALE_HOLD_S = 3;
 /** A new mountain is a run's biggest news, and usually lands on a pass in a busy pack (often mid
  *  duel): it waits this long (s) for a clear moment, where a mission gives up after POP_DEFER.giveUp. */
 const UNLOCK_GIVE_UP_S = 12;
+/** A mission pop waits this long (s) for a clear moment. POP_DEFER.giveUp's 3 s lost most of them in
+ *  real runs: a fresh save meets 'Pass a ghost' as the unlock pops, and the 6 s spacing after it
+ *  outlasted 3 s every time. 8 s lets it follow (orchestrator: at most 8 s, never ~10 s late). */
+const MISSION_GIVE_UP_S = 8;
+/** While a pop waits, a new duel opens no sooner than this (s) after the last one resolved: in a
+ *  bunched pack one duel opened 0.02 s after another for 22 s straight, and the run's unlock (and a
+ *  mission) never found the 1.4 s of quiet they wait for. */
+const DUEL_POP_GAP_S = 2.2;
+/** ...and no duel opens under a pop's banner (notices TOAST_MS 2,200 plus its exit): the banner band
+ *  covers the race row, so an opening duel there would never be seen. */
+const POP_BANNER_S = 2.5;
 /** New best crossed by a bank waits for the bank's fly-in (s). */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
@@ -121,6 +138,9 @@ const LIFT_AVALANCHE_S = 8;
 /** The stomp metronome: downward crossings of timeToLand (s) and their ladder steps. */
 const TICK_AT = [0.6, 0.45, 0.3, 0.15];
 const TICK_STEP = [2, 3, 4, 5];
+/** The ghost choir: passed ghosts still riding this close behind you (m) sing, at most CHOIR_MAX. */
+const CHOIR_BEHIND = 150;
+const CHOIR_MAX = 3;
 
 function styleTone(kind: string, points: number): StyleTone {
   if (kind === 'perfect') return 'perfect';
@@ -223,12 +243,18 @@ export class Director {
   private lastPassAt = -1e9;
   private lastNewsAt = -1e9;
   private lastFinaleAt = -1e9;
+  private lastDuelEndAt = -1e9;
 
   // Ghost tricks and the stomp metronome.
   private readonly cursors = new Map<number, number>();
   private lastWhisperAt = -1e9;
   private readonly ticked = [false, false, false, false];
   private prevTtl = NaN;
+
+  // Graveyards survived this run (index into run.graveyards) and the choir: ghosts you passed with a
+  // shown, live pass or beat in a duel (the jostle and the wreck pass never sing).
+  private readonly gravesDone = new Set<number>();
+  private readonly choirIds = new Set<number>();
 
   /** reduced: prefers-reduced-motion, handed to the time scale (the app also reads it into each frame). */
   constructor(reduced: () => boolean) {
@@ -238,7 +264,7 @@ export class Director {
       feel: this.feel,
       rival: null,
       hud: { stake: 0, fuse: 0, pace: false, duel: false, bestIn: null, countdown: null },
-      audio: { flow: 0, driftCharge: 0, skillMult: 1, skillChain: 0, earnedFlow: 0, race: 0, duel: 0, shoulder: null, fuse: 0, streak: 0, countIn: false, lift: 0 },
+      audio: { flow: 0, driftCharge: 0, skillMult: 1, skillChain: 0, earnedFlow: 0, race: 0, duel: 0, shoulder: null, fuse: 0, streak: 0, countIn: false, lift: 0, choir: 0 },
     };
   }
 
@@ -250,6 +276,14 @@ export class Director {
   /** The run's best stomp streak. */
   get bestStreak(): number {
     return this.streak.best;
+  }
+
+  /** The grudge was settled this run (its grudgeSettled beat fired): a shown pass of it, a duel with
+   *  it won or held off, or riding past where its whole run ended. The save's settlement reads this
+   *  as 'passed', so the results never settle a grudge the run did not show settled (a start-line
+   *  jostle past it is no overtake). */
+  get grudgeSettled(): boolean {
+    return this.grudgeDone;
   }
 
   /** A results line for an event the run never reached ('The yeti was 220 m away.'), else null. */
@@ -301,11 +335,13 @@ export class Director {
     this.unlockDone.clear();
     this.teased = false;
     this.pollAt = 0;
-    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = -1e9;
+    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = -1e9;
     this.cursors.clear();
     this.lastWhisperAt = -1e9;
     this.ticked.fill(false);
     this.prevTtl = NaN;
+    this.gravesDone.clear();
+    this.choirIds.clear();
     Object.assign(this.feel, IDLE_FEEL);
   }
 
@@ -391,13 +427,18 @@ export class Director {
         if (!p) continue;
         gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
       }
-      for (const d of this.duels.step(dTicks, sim.tick, gaps)) {
+      const canOpen = (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= POP_BANNER_S;
+      for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;
         const ghost = this.ref(t, f, sim);
+        if (d.phase !== 'open') this.lastDuelEndAt = now;
         if (d.phase === 'won' || d.phase === 'heldOff') {
           resolved.set(d.id, d.phase);
           this.duelEnd.set(d.id, sim.tick);
+          this.choirIds.add(d.id);
+          // Beating the grudge in a duel settles it (its passes were muted while the duel ran).
+          if (t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted);
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
@@ -459,19 +500,15 @@ export class Director {
         // The nemesis pays double the grudge's pass.
         const nemesisBonus = ev.first && t.entry.kind === 'grudge' && t.entry.nemesis ? (haunted ? 20 : 10) : 0;
         const gifts = c.gifts + nemesisBonus + this.extras.take(c.extra);
-        if (!muted && t.entry.kind === 'grudge' && !this.grudgeDone) {
-          // Settled before its pass flash: the banner the pass then names.
-          this.grudgeDone = true;
-          const g = run?.grudgeAtStart;
-          const nemesis = !!t.entry.nemesis;
-          this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid: (nemesis ? 20 : 10) * (haunted ? 2 : 1) }, sim);
-        }
+        // Settled before its pass flash: the banner the pass then names.
+        if (!muted && t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted);
         let ladder = this.ladderN;
         if (!muted && !wreck) ladder = ++this.ladderN;
         const li = ladderIndex(Math.max(1, ladder));
         this.push({ type: 'pass', tick: sim.tick, ghost, word: c.word, text: c.text, first: ev.first, chain: liveFirst && !muted ? chainN : 0, ladder: Math.max(1, ladder), octave: li.octave, gifts, muted }, sim);
         if (!muted) {
           this.shown.add(id);
+          if (!wreck) this.choirIds.add(id);
           this.lastPassAt = now;
           if (liveFirst) {
             this.chainN = chainN;
@@ -483,6 +520,14 @@ export class Director {
         this.passedYou.add(id);
         const muted = this.duels.open === id || (sim.tick < START_TICKS && !this.ledBy2m.has(id));
         this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(t, f, sim), muted }, sim);
+      }
+    }
+
+    // A grudge you only edged past (a muted jostle, a pass inside its duel) is settled for sure once
+    // you ride past where its whole run ended: it can never come back.
+    if (live && !this.grudgeDone) {
+      for (const t of f.tracks) {
+        if (t.entry.kind === 'grudge' && t.ready && t.distance > 0 && sim.distance > t.distance) this.settle(t, this.ref(t, f, sim), sim, haunted);
       }
     }
 
@@ -582,9 +627,11 @@ export class Director {
           break;
         case 'comboBank': {
           const bump = bumpTicks.includes(p.tick);
+          // Graded against your best combo at the start, or this run's best bank once one beat it (a
+          // second bank under the first is no new best).
           const best = Math.max(run?.bestComboAtStart ?? 0, this.bestBank);
           const tier = bankTier(e.points, this.skillChain, best);
-          const header = tier === 3 ? (best > 0 && e.points > best ? 'New best combo' : 'Massive') : null;
+          const header = bankHeader(e.points, tier, best);
           if (!bump && motion) {
             if (tier === 2) this.time.pulse(HITSTOP_SCALE, 0.06, 'feed');
             else if (tier === 3) this.time.pulse(HITSTOP_SCALE, 0.08, 'feed');
@@ -608,7 +655,8 @@ export class Director {
           break;
         }
         case 'comboLost': {
-          const best = run?.bestComboAtStart ?? 0;
+          // The same measure as the banks: a combo under one this run already banked is no best.
+          const best = Math.max(run?.bestComboAtStart ?? 0, this.bestBank);
           const isBest = best > 0 && e.points > best;
           this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
           this.skillChain = 0;
@@ -651,12 +699,23 @@ export class Director {
       const fr = run.friend;
       if (fr && !this.friendDone && fr.distance > 0 && sim.distance > fr.distance) {
         this.friendDone = true;
-        this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: `Beat ${fr.name}'s ${fmtInt(fr.distance)} m`, points: 0, tone: 'big' } }, sim);
+        this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: friendBeatenText(fr.name, fr.distance), points: 0, tone: 'big' } }, sim);
       }
       const km = Math.floor(sim.distance / 1000);
       if (km > this.kmDone) {
         this.kmDone = km;
         this.push({ type: 'km', tick: sim.tick, km, say: { label: `${km} km`, points: 0, tone: 'big' } }, sim);
+      }
+      // A graveyard ridden 20 m past alive: survived, once per run (a revive keeps what was survived).
+      const graves = run.graveyards;
+      if (graves) {
+        for (let i = 0; i < graves.length; i++) {
+          const g = graves[i];
+          if (this.gravesDone.has(i) || sim.distance < g.z + GRAVE_PAST) continue;
+          this.gravesDone.add(i);
+          const gifts = this.extras.take(GRAVE_GIFTS);
+          this.push({ type: 'graveyard', tick: sim.tick, name: g.name, fell: g.fell, gifts, say: { label: `Survived ${g.name}`, points: 0, tone: 'big' } }, sim);
+        }
       }
       this.metronome(f, sim);
       this.tricks(f, sim, now);
@@ -745,7 +804,21 @@ export class Director {
     a.streak = this.streak.n;
     a.countIn = run !== null && run.hasReveal && now < run.revealLeaveS;
     a.lift = (this.newGroundAt >= 0 ? LIFT_NEW_GROUND : 0) + (this.avalancheAt >= 0 ? LIFT_AVALANCHE * Math.max(0, 1 - (now - this.avalancheAt) / LIFT_AVALANCHE_S) : 0);
+    a.choir = live ? this.choir(f, sim) : 0;
     return out;
+  }
+
+  /** The ghost choir: ghosts you passed this run (shown, live, or beaten in a duel) that are still
+   *  riding, behind you and within CHOIR_BEHIND metres; 0..CHOIR_MAX. */
+  private choir(f: DirectorFrame, sim: Sim): number {
+    let n = 0;
+    for (const id of this.choirIds) {
+      const p = f.poses.get(id);
+      if (!p || p.done) continue;
+      const back = sim.s.z - p.z;
+      if (back > 0 && back <= CHOIR_BEHIND && ++n >= CHOIR_MAX) break;
+    }
+    return n;
   }
 
   // ------------------------------------------------------------------ pieces
@@ -763,6 +836,16 @@ export class Director {
     this.kinds.add(kind);
     if (kind === 'perfect') this.perfects++;
     this.earnCap = this.skillChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** The grudge settled, once per run: the banner ('Grudge settled' or 'Nemesis down'). paid is the
+   *  display of what its first pass already credited (10, or 20 for a nemesis; x2 in Haunted). */
+  private settle(t: GhostTrack, ghost: GhostRef, sim: Sim, haunted: boolean): void {
+    if (this.grudgeDone) return;
+    this.grudgeDone = true;
+    const g = this.run?.grudgeAtStart;
+    const nemesis = !!t.entry.nemesis;
+    this.push({ type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid: (nemesis ? 20 : 10) * (haunted ? 2 : 1) }, sim);
   }
 
   /** A perfect landing's stamp: its streak, title and lead parts, and the hit-stop that grows. */
@@ -954,7 +1037,7 @@ export class Director {
     // Give up on what waited too long; then show the next one if the moment is clear.
     for (let i = this.pops.length - 1; i >= 0; i--) {
       const p = this.pops[i];
-      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : POP_DEFER.giveUp / 1000)) this.pops.splice(i, 1);
+      if (now - p.since > (p.beat.type === 'unlockPop' ? UNLOCK_GIVE_UP_S : MISSION_GIVE_UP_S)) this.pops.splice(i, 1);
     }
     if (!this.pops.length) return;
     const clear =
@@ -1080,6 +1163,9 @@ export class Director {
         break;
       case 'unlockPop':
         entry.label = b.name;
+        break;
+      case 'graveyard':
+        entry.gifts = b.gifts;
         break;
       default:
         break;
