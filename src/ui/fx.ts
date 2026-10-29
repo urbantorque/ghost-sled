@@ -83,31 +83,40 @@ const RESUME_MS = 1500;
 const MAX_PIPS = 5;
 /**
  * A payoff line ('best': New ground, New best; 'big': a trick) keeps the slot this long against a
- * lower-ranked or 'lost' newcomer: a Sketchy landing 0.2 s after New ground waits its turn instead of
- * erasing it ("N[SKETCHY]D").
+ * lower-ranked or 'lost' newcomer, and a 'best' line against another 'best': a Sketchy landing 0.2 s
+ * after New ground waits its turn instead of erasing it ("N[SKETCHY]D"), and so does a New best one
+ * frame after it.
  */
 export const HOLD_MS = 600;
 /** A stamp a loss retires (a crash, a lost combo, a broken streak) fades this fast. */
 export const RETIRE_MS = 120;
-/** A loss line that has waited this long behind payoff lines is dropped. */
-const QUEUE_STALE_MS = 1100;
-/** Lines born this close together came in one frame's beats. */
-export const SAME_FRAME_MS = 24;
+/**
+ * A line that has waited this long behind payoff lines is dropped: its moment has passed. Long
+ * enough to wait out two holds back to back (New ground, then a New best that waited for it).
+ */
+const QUEUE_STALE_MS = 2 * HOLD_MS + 250;
+/** Lines born this close together came in one frame's beats (the next frame is 16 ms or more on). */
+export const SAME_FRAME_MS = 8;
+/** At most this many lines wait their turn. */
+const QUEUE_MAX = 2;
 
 const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5, perfect: 3 };
 
 /**
  * Whether a newcomer may take the one-line slot now or must wait behind the line on it. A 'best' or
  * 'big' line younger than HOLD_MS holds against a lower-ranked or 'lost' newcomer (a 'lost' line
- * otherwise skips the rank gate); `force` (a crash's lost combo) always takes the slot.
+ * otherwise skips the rank gate), and a 'best' line against another 'best'; `force` (a crash's lost
+ * combo) always takes the slot. Only 'lost' and 'best' newcomers wait (Fx.line); a lower-ranked
+ * plain or trick line meets the rank gate and stays out.
  */
 export function admit(top: { tone: StyleTone; born: number } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
   if (force || !top || tone === 'perfect') return 'show';
-  // A line from this same frame (a sketchy landing's own spin, then its Streak broken) has had no
-  // moment yet: the later beat of the frame takes the slot, as the director ordered them.
+  // A trick line from this same frame (a sketchy landing's own spin, then its Streak broken) has had
+  // no moment yet: the later beat of the frame takes the slot, as the director ordered them. A best
+  // line holds from its first frame (New ground and New best crossed in one frame).
   const age = now - top.born;
-  const held = (top.tone === 'best' || top.tone === 'big') && age >= SAME_FRAME_MS && age < HOLD_MS;
-  return held && (tone === 'lost' || RANK[tone] < RANK[top.tone]) ? 'queue' : 'show';
+  const held = age < HOLD_MS && (top.tone === 'best' || (top.tone === 'big' && age >= SAME_FRAME_MS));
+  return held && (tone === 'lost' || RANK[tone] < RANK[top.tone] || (tone === 'best' && top.tone === 'best')) ? 'queue' : 'show';
 }
 
 /** Display names for the sim's style labels. "Draft" and "Drift" are one letter apart. */
@@ -165,8 +174,8 @@ export class Fx {
   /** Cash-ins on screen (one at a time in practice), and the lost combo's falling figure. */
   private banks: BankFx[] = [];
   private crack: CrackFx | null = null;
-  /** A 'lost' line waiting behind a young payoff line (admit), and its timer: the newest one waits. */
-  private queued: { label: string; points: number; tone: StyleTone; at: number } | null = null;
+  /** Lines waiting behind a young payoff line (admit), oldest first, and the timer for the first. */
+  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number }> = [];
   private queueTimer = 0;
   /** Called when a line or the stamp comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
@@ -231,10 +240,11 @@ export class Fx {
     // A repeat of the newest label folds into it: one line with summed points and a count pip more.
     const top = this.items[this.items.length - 1];
     const fold = top !== undefined && top.label === text && (top.tone === 'lost') === (tone === 'lost');
-    // A loss line (Sketchy, Streak broken) waits behind a payoff line that has only just landed (New
-    // ground, a trick) rather than erasing it, and takes the slot once that line has had its moment.
-    // Lower-ranked lines that are not losses meet the rank gate below and stay out, as before.
-    if (!fold && tone === 'lost' && top && admit(top, tone, now, force) === 'queue') {
+    // A loss line (Sketchy, Streak broken) or a second best (New best right after New ground) waits
+    // behind a payoff line that has only just landed rather than erasing it, and takes the slot once
+    // that line has had its moment. Lower-ranked plain and trick lines meet the rank gate below and
+    // stay out, as before.
+    if (!fold && (tone === 'lost' || tone === 'best') && top && admit(top, tone, now, force) === 'queue') {
       this.queue(text, points, tone, top.born + HOLD_MS - now);
       return;
     }
@@ -297,24 +307,40 @@ export class Fx {
   }
 
   /**
-   * A loss line waits its turn behind a payoff line: it goes up once that line has held HOLD_MS. Only
-   * the newest one waits (a second Sketchy replaces the first); a crash's lost combo (force) or the HUD
-   * going away drops it.
+   * A loss line (or a second best) waits its turn behind a payoff line: it goes up once that line has
+   * held HOLD_MS. Two wait at most, in order (a repeat of a waiting label refreshes it in place); a
+   * crash's lost combo (force) or the HUD going away drops them.
    */
   private queue(label: string, points: number, tone: StyleTone, ms: number): void {
-    const at = this.queued?.label === label ? this.queued.at : performance.now();
-    this.queued = { label, points, tone, at };
+    const same = this.queued.find((q) => q.label === label);
+    if (same) {
+      same.points = points;
+      same.tone = tone;
+    } else {
+      this.queued.push({ label, points, tone, at: performance.now() });
+      if (this.queued.length > QUEUE_MAX) this.queued.shift();
+    }
+    this.armQueue(ms);
+  }
+
+  private armQueue(ms: number): void {
     window.clearTimeout(this.queueTimer);
-    this.queueTimer = window.setTimeout(() => {
-      const q = this.queued;
-      this.queued = null;
-      // Stale once it has waited about a second: by then the moment it named has passed.
-      if (q && performance.now() - q.at <= QUEUE_STALE_MS) this.line(q.label, q.points, q.tone, false);
-    }, Math.max(0, ms));
+    this.queueTimer = window.setTimeout(() => this.flushQueue(), Math.max(0, ms));
+  }
+
+  /** The oldest waiting line takes the slot (it may wait again behind a newer payoff line). */
+  private flushQueue(): void {
+    const q = this.queued.shift();
+    // Stale once it has waited about a second: by then the moment it named has passed.
+    if (q && performance.now() - q.at <= QUEUE_STALE_MS) this.line(q.label, q.points, q.tone, false);
+    if (this.queued.length > 0) {
+      const top = this.items[this.items.length - 1];
+      this.armQueue(top ? top.born + HOLD_MS - performance.now() : 0);
+    }
   }
 
   private dropQueued(): void {
-    this.queued = null;
+    this.queued.length = 0;
     window.clearTimeout(this.queueTimer);
   }
 

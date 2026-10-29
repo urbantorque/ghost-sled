@@ -501,6 +501,12 @@
     font-size: clamp(13px, 3.5vw, 15px);
     letter-spacing: -0.01em;
   }
+
+  /* Beside Send It Back the button is narrower still: its own side padding gives way first. */
+  .gs-again.is-rematch.is-long {
+    padding-inline: 10px 12px;
+    gap: 8px;
+  }
 }
 
 /* ------------------------------------------------------------------ Reduced motion */

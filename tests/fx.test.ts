@@ -22,6 +22,14 @@ describe('admit', () => {
     expect(admit(top, 'perfect', 100)).toBe('show');
   });
 
+  it('holds New ground against a New best in the same frame or the next', () => {
+    const top = { tone: 'best' as const, born: 0 };
+    expect(admit(top, 'best', 0)).toBe('queue');
+    expect(admit(top, 'best', 25)).toBe('queue');
+    expect(admit(top, 'lost', 1)).toBe('queue');
+    expect(admit(top, 'best', HOLD_MS)).toBe('show');
+  });
+
   it('never holds a plain or lost line, an empty slot, or against a crash', () => {
     expect(admit(null, 'lost', 0)).toBe('show');
     expect(admit({ tone: 'normal', born: 0 }, 'lost', 10)).toBe('show');
