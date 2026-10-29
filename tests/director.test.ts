@@ -4,6 +4,7 @@ import { Director, type DirectorFrame, type DirectorRun } from '../src/game/dire
 import type { GhostPose, GhostTrack, RaceEvent } from '../src/game/ghosts';
 import { emptyPose } from '../src/game/ghosts';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
+import type { StyleKind } from '../src/sim/scoring';
 import type { Sim, SimEvent } from '../src/sim/sim';
 
 // Synthetic batches through the director: the order rules (a 'perfect' style before its land, a bank
@@ -225,6 +226,114 @@ describe('banks, flow and lost combos', () => {
     expect(run(14).fk).toBeCloseTo(1, 3);
   });
 
+  it("'In the flow' on the 3.0 plateau: a chain of 12 with the sim's flow at 3 crosses 2.9", () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    const kinds = ['carve', 'air', 'spin', 'gate'] as const;
+    const beats: Beat[] = [];
+    for (let i = 0; i < 12; i++) beats.push(...r.frame([style(kinds[i % kinds.length], 100, i + 1)]));
+    beats.push(...r.idle(1.5));
+    // The shown flow sits just under 3 (it approaches from below) and the line is 2.9.
+    expect((r.d as unknown as { flowShown: number }).flowShown).toBeLessThan(3);
+    expect(of(beats, 'flow').filter((b) => b.phase === 'in')).toHaveLength(1);
+  });
+
+  it("jumps and landings alone glow but never name 'In the flow': it wants a spin, a flip or a gate", () => {
+    const ride = (kinds: readonly StyleKind[]): { ins: number; shown: number } => {
+      const r = new Rig();
+      r.sim.s.flow = 3;
+      const beats: Beat[] = [];
+      for (let i = 0; i < 12; i++) beats.push(...r.frame([style(kinds[i % kinds.length], 100, i + 1)]));
+      beats.push(...r.idle(1.5));
+      return { ins: of(beats, 'flow').filter((b) => b.phase === 'in').length, shown: (r.d as unknown as { flowShown: number }).flowShown };
+    };
+    // A novice in the bunch's held combo: air, clean and perfect landings, carves, near misses.
+    const novice = ride(['air', 'clean', 'perfect', 'carve', 'nearMiss']);
+    expect(novice.shown).toBeGreaterThan(2.9);
+    expect(novice.ins).toBe(0);
+    expect(ride(['air', 'perfect', 'spin']).ins).toBe(1);
+    expect(ride(['air', 'perfect', 'flip']).ins).toBe(1);
+    expect(ride(['gate', 'air', 'perfect']).ins).toBe(1);
+  });
+
+  it('a slingshot is the pack speed: no skill step and no kind', () => {
+    const r = new Rig();
+    r.sim.s.flow = 6;
+    const beats: Beat[] = [];
+    // Slingshots, a draft and two moves: never 3 kinds, and the earned cap counts the moves alone.
+    const seq = ['slingshot', 'draft', 'slingshot', 'air', 'slingshot', 'clean', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot'] as const;
+    seq.forEach((k, i) => beats.push(...r.frame([style(k, 50, i + 1)])));
+    beats.push(...r.idle(1.5));
+    const d = r.d as unknown as { skillChain: number; earnCap: number; kinds: Set<string> };
+    expect(d.skillChain).toBe(2);
+    expect(d.earnCap).toBeCloseTo(0.5);
+    expect([...d.kinds].sort()).toEqual(['air', 'clean']);
+    expect(of(beats, 'flow')).toHaveLength(0);
+  });
+
+  it("a sketchy landing snuffs flow from 1.2: 'Flow broken' is its line, and the earning starts over", () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    for (let i = 0; i < 8; i++) r.frame([style(i % 2 ? 'carve' : 'air', 100, i + 1)]);
+    r.idle(1.5);
+    const a = r.frame([style('air', 60, 9), land('sketchy')]);
+    expect(of(a, 'flow')[0]).toMatchObject({ phase: 'snuff', say: { label: 'Flow broken' } });
+    // One line for the landing: no 'Sketchy' under it (the air it caught keeps its own callout).
+    expect(of(a, 'callout').map((c) => c.source)).toEqual(['air']);
+    r.idle(0.3);
+    const d = r.d as unknown as { out: { feel: { flow: number } }; earnCap: number; kinds: Set<string>; flowShown: number };
+    expect(d.out.feel.flow).toBe(0);
+    expect(d.earnCap).toBe(0);
+    expect(d.kinds.size).toBe(0);
+    // The combo rides on: the next move earns from nothing, not from the 9 before the snuff.
+    r.frame([style('spin', 100, 10)]);
+    r.idle(1);
+    expect(d.earnCap).toBeCloseTo(0.25);
+    expect(d.flowShown).toBeLessThan(0.3);
+    // A sketchy landing under 1.2 shown is just Sketchy.
+    const b = r.frame([land('sketchy')]);
+    expect(of(b, 'flow')).toHaveLength(0);
+    expect(of(b, 'callout')[0].say.label).toBe('Sketchy');
+  });
+
+  it('a sketchy landing that breaks a streak snuffs flow without a second line', () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    for (let i = 0; i < 3; i++) {
+      r.frame([style('perfect', 250, i * 2 + 1), land('perfect')]);
+      r.frame([style('carve', 100, i * 2 + 2)]);
+      r.idle(0.5);
+    }
+    const a = r.frame([land('sketchy')]);
+    expect(of(a, 'streakBroken')).toHaveLength(1);
+    const snuff = of(a, 'flow');
+    expect(snuff).toHaveLength(1);
+    expect(snuff[0].phase).toBe('snuff');
+    expect(snuff[0].say).toBeUndefined();
+  });
+
+  it("a lost combo (the crash) snuffs the flow without words: no 'Flow broken' line over the crash", () => {
+    const r = new Rig();
+    flowUp(r);
+    const t = r.sim.tick + 1;
+    r.sim.s.crashed = true;
+    const b = r.frame([
+      { tick: t, e: { type: 'comboLost', points: 3000 } },
+      { tick: t, e: { type: 'crash', cause: 'tree' } },
+    ]);
+    const snuff = of(b, 'flow');
+    expect(snuff).toHaveLength(1);
+    expect(snuff[0].phase).toBe('snuff');
+    expect(snuff[0].say).toBeUndefined();
+    expect(of(b, 'comboLost')[0].say?.label).toBe('Combo lost');
+    r.idle(0.2);
+    expect((r.d as unknown as { out: { feel: { flow: number } } }).out.feel.flow).toBe(0);
+    // Under 1.2 shown, a crash snuffs nothing.
+    const q = new Rig();
+    const c = q.frame([{ type: 'comboLost', points: 300 }, { type: 'crash', cause: 'tree' }]);
+    expect(of(c, 'flow')).toHaveLength(0);
+  });
+
   it('a bump snuffs flow from 1.2', () => {
     const r = new Rig();
     r.sim.s.flow = 2;
@@ -270,7 +379,7 @@ describe('banks, flow and lost combos', () => {
     expect(o.feel.flow).toBe(0);
   });
 
-  it('comboBank and bump in one batch: a bump bank and a flow snuff; a lost combo never snuffs', () => {
+  it("comboBank and bump in one batch: a bump bank and a flow snuff; a lost combo's snuff says nothing", () => {
     const r = new Rig();
     flowUp(r);
     const t = r.sim.tick + 1;
@@ -292,7 +401,7 @@ describe('banks, flow and lost combos', () => {
       { tick: t2, e: { type: 'comboLost', points: 3000 } },
       { tick: t2, e: { type: 'crash', cause: 'tree' } },
     ]);
-    expect(of(b, 'flow')).toHaveLength(0);
+    expect(of(b, 'flow').map((x) => x.say)).toEqual([undefined]);
     expect(of(b, 'crash')[0]).toMatchObject({ cause: 'tree', stake: 3000 });
   });
 
@@ -368,6 +477,27 @@ describe('milestones', () => {
     const q = new Rig({ bestScoreAtStart: 5000 });
     q.sim.score = 5200;
     expect(of(q.frame(), 'newBest')).toHaveLength(1);
+  });
+
+  it("New best after a 'New best combo' bank waits out the bank's whole cash-in (its tier's BANK_MS)", () => {
+    const r = new Rig({ bestScoreAtStart: 5000, bestComboAtStart: 3000 });
+    r.sim.score = 4000;
+    // A skilled combo (3 moves), banked at 3,790 over a 3,000 best: tier 3, 'New best combo', 1.9 s.
+    for (let i = 0; i < 3; i++) r.frame([style('air', 100, i + 1)]);
+    r.sim.score = 7790;
+    const a = r.frame([{ type: 'comboBank', points: 3790, mult: 4 }]);
+    expect(of(a, 'bank')[0]).toMatchObject({ tier: 3, header: 'New best combo' });
+    expect(of(r.idle(1.85), 'newBest')).toHaveLength(0);
+    expect(of(r.idle(0.1), 'newBest')).toHaveLength(1);
+    // A cash-in that lands while New best is still due holds it too.
+    const q = new Rig({ bestScoreAtStart: 5000, bestDistAtStart: 330 });
+    q.sim.distance = 331;
+    q.sim.score = 5100;
+    q.frame();
+    q.idle(1);
+    q.frame([{ type: 'comboBank', points: 600, mult: 2 }]);
+    expect(of(q.idle(0.9), 'newBest')).toHaveLength(0);
+    expect(of(q.idle(0.2), 'newBest')).toHaveLength(1);
   });
 
   it('New best crossed with New ground waits 1.25 s after it: each gets its own moment', () => {
@@ -590,6 +720,128 @@ describe('the race', () => {
     expect(r.d.shownPasses.has(1001)).toBe(true);
   });
 
+  it('gaps are measured against the rendered rider (riderZ), on the poses\' own render tick', () => {
+    const r = new Rig();
+    const a = track(1);
+    r.tracks = [a];
+    const step = (poseZ: number, riderZ?: number) => {
+      r.poses.set(1, pose(poseZ));
+      return r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, riderZ, standings: { next: null, rank: 1, of: 2 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival;
+    };
+    // The rider renders 0.4 m short of its integer-tick z (alpha 0.6 at 25 m/s): the pose is taken
+    // at the same render tick, so the gap is the rendered one, not 0.4 m short.
+    const z = r.sim.s.z;
+    expect(step(z + 13.1, z - 0.4)?.gap).toBeCloseTo(13.5);
+    // Without riderZ it falls back to the sim's own z.
+    expect(step(z + 13.1)?.gap).toBeCloseTo(13.1);
+    // A steady 13.5 m chase across ticks: pose and rider move together, so the gap never jumps.
+    const gaps: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      const alpha = (i % 3) / 3;
+      const rider = z + (i + alpha) * 0.4;
+      gaps.push(step(rider + 13.5, rider)!.gap);
+    }
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
+  });
+
+  it('the start-line call holds the rival a quarter second under the HUD call flash', () => {
+    const r = new Rig();
+    const pace = track(1, 'pool', 'Pacey');
+    pace.entry.role = 'pace';
+    const near = track(2, 'pool', 'Nearby');
+    r.tracks = [pace, near];
+    r.sim.tick = 10;
+    r.poses.set(1, pose(r.sim.s.z + 40));
+    r.poses.set(2, pose(r.sim.s.z + 3));
+    const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    const beats = r.idle(0.62);
+    expect(of(beats, 'raceCall')).toHaveLength(1);
+    expect(rival()).toBe(1);
+    // POP_DEFER.call (the HUD's CALL_MS) is 2.6 s; the hold ends at 2.35 s.
+    r.idle(2.3);
+    expect(rival()).toBe(1);
+    r.idle(0.1);
+    expect(rival()).toBe(2);
+  });
+
+  it("your best jostled at the start keeps its first pass: the later overtake is 'Passed Your best' with the base", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 120;
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    const jostle = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(jostle[0]).toMatchObject({ word: 'jostle', muted: true, gifts: 0 });
+    // It rides your own line: it slips back past you in the bunch, then you overtake it for real.
+    r.poses.set(1001, pose(r.sim.s.z + 3));
+    r.frame([], { race: [{ type: 'passedBy', track: you }] });
+    // (Just outside duel range, so no duel opens on the jump in ticks.)
+    r.sim.tick = 560;
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const real = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5, first: false });
+    expect(r.d.shownPasses.has(1001)).toBe(true);
+    // Its first pass is spent now: the next one is a retake that pays nothing more.
+    r.idle(1);
+    const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(again[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
+    // Another ghost's start-line jostle still uses up its first pass (it paid its base then).
+    const q = new Rig();
+    const g = track(7);
+    q.tracks = [g];
+    q.sim.tick = 120;
+    q.poses.set(7, pose(q.sim.s.z - 0.5));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: g, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 5 });
+    q.sim.tick = 560;
+    q.poses.set(7, pose(q.sim.s.z - 1.6));
+    expect(of(q.frame([], { race: [{ type: 'pass', track: g, first: false }] }), 'pass')[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
+  });
+
+  it("your best jostled at the start, then beaten in a duel: one 'Passed Your best' with the base, and a re-pass is a retake", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 120;
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 0 });
+    // A duel with it, held off with you a hand ahead the whole way (no pass inside it).
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
+    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    const out = r.idle(8);
+    expect(of(out, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    const pass = of(out, 'pass');
+    expect(pass).toHaveLength(1);
+    expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    // It slips past you and you take it back: its first pass was the duel's 'Passed Your best'.
+    r.idle(3);
+    r.poses.set(1001, pose(r.sim.s.z + 3));
+    r.frame([], { race: [{ type: 'passedBy', track: you }] });
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(again[0]).toMatchObject({ word: 'tookBack', text: 'Took back', gifts: 0 });
+  });
+
+  it('a pass muted inside its own duel pays its base and no extras', () => {
+    const r = new Rig();
+    const a = track(1001);
+    const b = track(1002);
+    r.tracks = [a, b];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.idle(1.1);
+    expect((r.d as unknown as { out: { hud: { duel: boolean } } }).out.hud.duel).toBe(true);
+    // A shown pass of another ghost, then the duel ghost passed muted inside the chain window: a
+    // 'double' would take +2 extra, but nothing of it is seen.
+    r.poses.set(1002, pose(r.sim.s.z - 1));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: b, first: true }] }), 'pass')[0]).toMatchObject({ muted: false, gifts: 5 });
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    const m = of(r.frame([{ type: 'boost', amount: 3, source: 'slingshot' }], { race: [{ type: 'pass', track: a, first: true }] }), 'pass');
+    expect(m[0]).toMatchObject({ muted: true, gifts: 5 });
+  });
+
   it('a slingshot through the pack is one growing moment: Slung past, Slung past 2, 3', () => {
     const r = new Rig();
     const gs = [track(1), track(2), track(3)];
@@ -744,7 +996,7 @@ describe('mission and unlock pops', () => {
     expect(of(r.idle(3), 'missionPop')).toHaveLength(0);
   });
 
-  it('a mission met as an unlock pops follows it once the spacing allows (a fresh save)', () => {
+  it('a mission met as an unlock pops as the unlock banner leaves (a fresh save)', () => {
     let n = 0;
     const r = new Rig({
       lifetimePassed: 3,
@@ -759,8 +1011,56 @@ describe('mission and unlock pops', () => {
     const out = [...r.frame([], { race: [{ type: 'pass', track: g, first: true }] }), ...r.idle(8)];
     const pops = out.filter((b) => b.type === 'unlockPop' || b.type === 'missionPop');
     expect(pops.map((b) => b.type)).toEqual(['unlockPop', 'missionPop']);
-    // POP_DEFER.spacing apart, the mission still inside its 8 s wait.
-    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.spacing / 1000 - 0.1);
+    // Past the unlock's 2.6 s on screen (one banner at a time), inside its 200 ms exit, and well under
+    // the 3.5 s spacing that put 'Pass a ghost' after the crash of short first runs.
+    const gap = (pops[1].tick - pops[0].tick) / 60;
+    expect(gap).toBeGreaterThanOrEqual(2.6);
+    expect(gap).toBeLessThan(2.8);
+  });
+
+  it('a ghost close enough to duel waits for the mission queued behind the unlock', () => {
+    let n = 0;
+    const r = new Rig({
+      lifetimePassed: 3,
+      unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }],
+      missionsCrossed: () => (++n === 1 ? [{ id: 'pass1', text: 'Pass a ghost', reward: 25 }] : []),
+    });
+    const g = track(1001);
+    const near = track(1002);
+    r.tracks = [g, near];
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.sim.tick = 1000;
+    r.passed = 1;
+    const out = [...r.frame([], { race: [{ type: 'pass', track: g, first: true }] })];
+    out.push(...r.idle(1.5));
+    const unlock = of(out, 'unlockPop');
+    expect(unlock).toHaveLength(1);
+    // A ghost rides up alongside while the unlock shows: it has its 60 ticks within 1.5 m well before
+    // the unlock's banner leaves, and it is still there when the mission is due.
+    r.poses.set(1002, pose(r.sim.s.z + 0.8));
+    out.push(...r.idle(4));
+    const mission = of(out, 'missionPop');
+    const open = of(out, 'duel').filter((d) => d.phase === 'open');
+    expect(mission).toHaveLength(1);
+    expect((mission[0].tick - unlock[0].tick) / 60).toBeLessThan(2.8);
+    // The duel opens under no banner: after the mission's has had POP_BANNER_S (2.5 s).
+    expect(open).toHaveLength(0);
+    out.push(...r.idle(1.5));
+    const later = of(out, 'duel').filter((d) => d.phase === 'open');
+    expect(later).toHaveLength(1);
+    expect((later[0].tick - mission[0].tick) / 60).toBeGreaterThanOrEqual(2.5);
+  });
+
+  it('two missions keep the usual spacing', () => {
+    let n = 0;
+    const r = new Rig({
+      missionsCrossed: () => (++n === 1 ? [{ id: 'pass1', text: 'Pass a ghost', reward: 25 }, { id: 'air', text: 'Catch air', reward: 25 }] : []),
+    });
+    r.sim.tick = 1000;
+    const pops = of(r.idle(8), 'missionPop');
+    expect(pops).toHaveLength(2);
+    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.spacing / 1000 - 0.02);
   });
 
   it("a mission's give-up clock runs only at the head of the queue (behind a slow unlock it loses no time)", () => {
@@ -980,9 +1280,10 @@ describe('mission and unlock pops', () => {
     const pop = after.find((x) => x.type === 'unlockPop')!;
     const open = after.filter((x) => x.type === 'duel')[1];
     expect((pop.tick - won.tick) / 60).toBeGreaterThanOrEqual(1.35);
-    // The next duel waits out the pop's banner (it covers the race row), then opens.
-    expect((open.tick - pop.tick) / 60).toBeGreaterThanOrEqual(2.45);
-    expect((open.tick - pop.tick) / 60).toBeLessThanOrEqual(2.6);
+    // The next duel waits out the pop's banner (it covers the race row; an unlock's is up 2.6 s), then
+    // opens.
+    expect((open.tick - pop.tick) / 60).toBeGreaterThanOrEqual(2.6);
+    expect((open.tick - pop.tick) / 60).toBeLessThanOrEqual(2.85);
   });
 
   it("with nothing waiting, the next duel opens as soon as the last result's flash is over", () => {

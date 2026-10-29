@@ -9,8 +9,8 @@ import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
-import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
-import { bankHeader, bankTier, fuseLevel } from './stake';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
+import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
 
@@ -60,7 +60,13 @@ export interface DirectorFrame {
   /** This frame's race events (empty outside the run phase). */
   race: ReadonlyArray<RaceEvent>;
   tracks: ReadonlyArray<GhostTrack>;
+  /** Ghost poses at the frame's render tick (sim.tick - 1 + alpha in a run). */
   poses: ReadonlyMap<number, GhostPose | null>;
+  /** The rider's z as the app renders it this frame (lerpSnap's view.z, at the same render tick as
+   *  the poses), so every gap the director measures (the rival pill's, the duels', the choir's) is on
+   *  one time base. Omitted: sim.s.z, for poses at the integer tick. Against the integer tick the
+   *  pill's gap was biased 0.41 m and jumped by more than 0.3 m on 83% of frames ('13 m' / '14 m'). */
+  riderZ?: number;
   standings: { next: { track: GhostTrack; gap: number } | null; rank: number; of: number };
   /** passedThisRun.size after this frame's race bookkeeping. */
   passedThisRun: number;
@@ -100,11 +106,14 @@ const DUEL_AFTER_TICKS = 120;
 const LEAD_TICKS = 600;
 const LEAD_GHOSTS = 3;
 const LEAD_REARM_TICKS = 300;
-/** The start-line call: shown for this long (s); given up when its ghost is not ready this long after
- *  its moment, or after the first track of the field got ready, whichever is later (a slow cold load
- *  had no track ready for 11 s, and the run never got its call). With no track ready at all it waits
- *  at most CALL_LATE_S. */
-const CALL_SHOW_S = POP_DEFER.call / 1000;
+/** The start-line call: the rival (pill, C11 ring, chip) stays on its ghost this long (s), a quarter
+ *  second under the HUD's call flash (CALL_MS, POP_DEFER.call), which starts a frame or more after the
+ *  beat: held for the whole flash, the pill showed the call's ghost for 130 to 220 ms after the flash
+ *  ended before it named the nearest rider. Given up when its ghost is not ready this long after its
+ *  moment, or after the first track of the field got ready, whichever is later (a slow cold load had
+ *  no track ready for 11 s, and the run never got its call). With no track ready at all it waits at
+ *  most CALL_LATE_S. */
+const CALL_HOLD_S = POP_DEFER.call / 1000 - 0.25;
 const CALL_GIVE_UP_S = 6;
 const CALL_LATE_S = 30;
 /** A finale banner holds the queue this long (s). */
@@ -119,6 +128,17 @@ const MISSION_GIVE_UP_S = 8;
 /** Whatever waits, a pop more than this long (s) after its moment is dropped: late news is worse
  *  than none. */
 const POP_LATE_S = 15;
+/** After an unlock pop the next pop goes up as the unlock's banner leaves: it is on screen for
+ *  UNLOCK_BANNER_S (notices TOAST_MS + 400), and the next arrives AFTER_UNLOCK_S later, inside its
+ *  200 ms exit, so the band hands straight over and one banner shows at a time. With the usual
+ *  POP_DEFER.spacing, 'Pass a ghost' (met on the same pass as the unlock) came 6 s after its pass
+ *  and missed 4 of 30 short first runs. */
+const UNLOCK_BANNER_S = 2.6;
+const AFTER_UNLOCK_S = 0.1;
+/** ...and no duel opens until a little after that, so a mission waiting behind the unlock goes up
+ *  first (a duel opening 0.1 s before it, under the unlock's 2.5 s POP_BANNER_S, held 'Pass a ghost'
+ *  a further 2.5 s on a phone run). */
+const UNLOCK_DUEL_S = UNLOCK_BANNER_S + AFTER_UNLOCK_S + 0.1;
 /** An open duel holds a waiting pop only this long (s) after it opened: the duel lives in the rival
  *  pill, the pop in the notice slot (opening duels ran 6 to 13 s and starved the first mission). */
 const DUEL_POP_BLOCK_S = 2.5;
@@ -136,19 +156,27 @@ const DUEL_POP_GAP_S = 2.2;
 /** ...and no duel opens under a pop's banner (notices TOAST_MS 2,200 plus its exit): the banner band
  *  covers the race row, so an opening duel there would never be seen. */
 const POP_BANNER_S = 2.5;
-/** New best crossed by a bank waits for the bank's fly-in (s). */
+/** New best this soon after New ground waits until this long (s) after it. New best crossed by a bank
+ *  (or due while one is on screen) waits for the bank's whole cash-in, its tier's BANK_MS (stake.ts):
+ *  under a 1,900 ms 'NEW BEST COMBO' bank a 1.25 s wait printed 'new best' twice. */
 const NEW_BEST_DEFER_S = 1.25;
 /** Ghost tricks: whispered within this window (m, ahead/behind), at most one per WHISPER_S. */
 const TRICK_AHEAD = 60;
 const TRICK_BEHIND = 20;
 const WHISPER_S = 1.5;
-/** Flow display (the sim's flow is untouched). 'In the flow' at 3.0: replaying every bundled pool run
- *  through these rules, it fires in 23 of 46 expert runs over 60 s, in no mid or novice run, and never
- *  from drafting (skill events only, 3 kinds). At 5.5 no rider ever reached it. The glow is full at
- *  FLOW_FULL (3.5), and a bump snuffs anything from 1.2 (at 2 it never happened). */
+/** Flow display (the sim's flow is untouched). Earned from skill moves only: a draft or a slingshot is
+ *  the pack's speed (a novice drafting and slinging through the start bunch reached the beat at 13.5 s
+ *  of a first run). 'In the flow' at 2.9 with 3 kinds: the shown flow approaches the sim's whole-number
+ *  targets from below, so a chain of 12 to 15 sat on 2.99999 under a 3.0 line and live skilled play
+ *  never fired it. The glow is full at FLOW_FULL (3.5). From FLOW_SNUFF_MIN shown, a bump, a sketchy
+ *  landing or a lost combo snuffs it (the flow it earned goes out; earning starts over). */
 const FLOW_SMOOTH_S = 0.2;
-const FLOW_IN_AT = 3;
+const FLOW_IN_AT = 2.9;
 const FLOW_IN_KINDS = 3;
+/** ...one of them a trick: a spin or flip in the air, or a gate. The pack's drafting holds the combo
+ *  open, so jumps, landings, carves and near misses alone piled up a novice's flow: 3 of 22 first
+ *  runs named the beat on air, clean and perfect landings (the glow still shows what they earned). */
+const FLOW_IN_TRICKS: ReadonlySet<StyleKind> = new Set<StyleKind>(['spin', 'flip', 'gate']);
 const FLOW_SNUFF_MIN = 1.2;
 const SNUFF_S = 0.15;
 const FLOW_PULSE_S = 0.3;
@@ -247,6 +275,12 @@ export class Director {
   private lastSlungPassTick = -1e9;
   /** Gifts the grudge's passes and settle have credited this run (its premium is paid once). */
   private grudgePaid = 0;
+  /** Your best's ghosts edged past in a muted start-line jostle: rides your own line, so the jostle at
+   *  2 s used up its first pass and the real overtake later read 'Took back Your best' for 0 gifts. Its
+   *  next pass is still its first (pays the base, reads 'Passed Your best'). */
+  private readonly youJostled = new Set<number>();
+  /** The rider's z on the poses' time base this frame (DirectorFrame.riderZ, else sim.s.z). */
+  private rz = 0;
 
   // Milestones.
   private newGroundTick = -1e9;
@@ -258,9 +292,13 @@ export class Director {
   private kmDone = 0;
   private avalancheAt = -1;
   private bestBank = 0;
+  /** Run clock until which a bank's cash-in is on screen (New best waits for it). */
+  private bankUntil = -1;
 
   // Flow and skill.
   private skillChain = 0;
+  /** The skill moves earning the shown flow: the combo's skill chain since its start or the last snuff. */
+  private flowChain = 0;
   private perfects = 0;
   private readonly kinds = new Set<StyleKind>();
   private earnCap = 0;
@@ -279,6 +317,8 @@ export class Director {
   private teased = false;
   private pollAt = 0;
   private lastPopAt = -1e9;
+  /** The last pop was an unlock: the next follows as its banner leaves (UNLOCK_BANNER_S). */
+  private lastPopUnlock = false;
   private lastStompAt = -1e9;
   private lastPassAt = -1e9;
   private lastNewsAt = -1e9;
@@ -367,6 +407,7 @@ export class Director {
     this.slungN = 0;
     this.lastSlungPassTick = -1e9;
     this.grudgePaid = 0;
+    this.youJostled.clear();
     this.newGroundTick = -1e9;
     this.newGroundAt = -1;
     this.newBestDone = false;
@@ -376,6 +417,7 @@ export class Director {
     this.kmDone = 0;
     this.avalancheAt = -1;
     this.bestBank = 0;
+    this.bankUntil = -1;
     this.resetSkill();
     this.flowShown = 0;
     this.pulseAt = -1;
@@ -384,6 +426,7 @@ export class Director {
     this.unlockDone.clear();
     this.teased = false;
     this.pollAt = 0;
+    this.lastPopUnlock = false;
     this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = -1e9;
     this.cursors.clear();
     this.lastWhisperAt = -1e9;
@@ -412,6 +455,7 @@ export class Director {
 
   private resetSkill(): void {
     this.skillChain = 0;
+    this.flowChain = 0;
     this.perfects = 0;
     this.kinds.clear();
     this.earnCap = 0;
@@ -433,11 +477,13 @@ export class Director {
     const live = f.phase === 'run' && !s.crashed;
     const haunted = run !== null && run.mood === Mood.Haunted;
     const motion = !f.reduced;
+    // Every gap to a ghost pose is taken against the rider on the poses' own time base.
+    const rz = f.riderZ !== undefined && Number.isFinite(f.riderZ) ? f.riderZ : s.z;
+    this.rz = rz;
 
     // ---- Pre-scan the batch.
     const evs = this.simEvents;
     evs.length = 0;
-    let bankInBatch = false;
     let lostStake = 0;
     const bumpTicks: number[] = [];
     const bankTicks: number[] = [];
@@ -447,10 +493,8 @@ export class Director {
       if (e.type === 'boost') {
         if (e.source === 'slingshot') this.lastSlingTick = Math.max(this.lastSlingTick, p.tick);
         this.slingBoost = e.source === 'slingshot';
-      } else if (e.type === 'comboBank') {
-        bankInBatch = true;
-        bankTicks.push(p.tick);
-      } else if (e.type === 'bump') bumpTicks.push(p.tick);
+      } else if (e.type === 'comboBank') bankTicks.push(p.tick);
+      else if (e.type === 'bump') bumpTicks.push(p.tick);
       else if (e.type === 'comboLost') lostStake = e.points;
     }
 
@@ -458,7 +502,7 @@ export class Director {
     if (live) {
       for (const t of f.tracks) {
         const p = f.poses.get(t.entry.id);
-        if (p && !p.done && p.z - s.z >= 2) this.ledBy2m.add(t.entry.id);
+        if (p && !p.done && p.z - rz >= 2) this.ledBy2m.add(t.entry.id);
       }
     }
 
@@ -477,11 +521,11 @@ export class Director {
         if (!t.ready) continue;
         const p = f.poses.get(t.entry.id);
         if (!p) continue;
-        gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
+        gaps.push({ id: t.entry.id, gap: p.z - rz, live: !p.done });
       }
       // A duel's result holds the rival on its ghost (the pill's flash): the next opens once it can be named.
       const holding = this.rivalHold !== null && now < this.rivalHold.until;
-      const canOpen = !holding && (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= POP_BANNER_S;
+      const canOpen = !holding && (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_DUEL_S : POP_BANNER_S);
       for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;
@@ -501,11 +545,14 @@ export class Director {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
           // Your best, beaten in a duel and behind you now: 'Passed Your best' (C7) gets its moment
-          // (the pass itself was muted inside the duel, and a duel with your own line runs long).
+          // (the pass itself was muted inside the duel, and a duel with your own line runs long). Only
+          // jostled at the start, its first pass is this one: it pays the base, and it is spent (a
+          // re-pass later read 'Passed Your best' a second time).
           const p = f.poses.get(d.id);
-          if (t.entry.kind === 'you' && p && p.z < s.z) {
+          if (t.entry.kind === 'you' && p && p.z < rz) {
+            const owed = this.youJostled.delete(d.id) ? PASS_GIFTS * (haunted ? 2 : 1) : 0;
             const ladder = ++this.ladderN;
-            this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: 0, muted: false }, sim);
+            this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
           }
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
@@ -527,7 +574,7 @@ export class Director {
         if (this.duels.open === id || resolved.has(id) || this.afterDuel(id, sim.tick)) continue;
         const p = f.poses.get(id);
         if (!p) continue;
-        const gap = p.z - s.z;
+        const gap = p.z - rz;
         const ghost = this.ref(t, f, sim);
         const behind = gap < 0;
         // The grudge wiping out behind you settles it, and the wipeout is the banner's sub-line: one
@@ -550,12 +597,14 @@ export class Director {
       } else if (ev.type === 'pass') {
         const ghost = this.ref(t, f, sim);
         const wreck = t.crashSeen;
-        const liveFirst = ev.first && !wreck;
+        // Your best edged past in the start bunch still has its first pass to give.
+        const first = ev.first || this.youJostled.has(id);
+        const liveFirst = first && !wreck;
         const chainN = liveFirst && sim.tick - this.lastShownPassTick <= CHAIN_TICKS ? this.chainN + 1 : 1;
         const slungN = sim.tick - this.lastSlungPassTick <= SLING_TICKS ? this.slungN + 1 : 1;
         const c = classifyPass({
           tick: sim.tick,
-          first: ev.first,
+          first,
           ghost,
           wreck,
           everLedBy2m: this.ledBy2m.has(id),
@@ -583,7 +632,13 @@ export class Director {
           base = Math.min(base, Math.max(0, this.grudgeTotal(t, haunted) - this.grudgePaid));
           this.grudgePaid += base;
         }
-        const gifts = base + this.extras.take(c.extra);
+        // A muted start-line jostle of your best pays nothing yet and keeps its first pass for later.
+        if (t.entry.kind === 'you' && c.word === 'jostle') {
+          base = 0;
+          this.youJostled.add(id);
+        } else this.youJostled.delete(id);
+        // Extras (slung, chained) are a shown moment's: a pass muted inside its own duel pays only its base.
+        const gifts = base + (muted ? 0 : this.extras.take(c.extra));
         let ladder = this.ladderN;
         if (!muted && !wreck) ladder = ++this.ladderN;
         const li = ladderIndex(Math.max(1, ladder));
@@ -697,8 +752,12 @@ export class Director {
           if (e.quality === 'perfect') break; // (its stomp came with the 'perfect' style event)
           if (e.quality === 'sketchy') {
             const r = this.streak.land('sketchy', false, p.tick);
+            // A botched landing puts out the flow it had earned: 'Flow broken' is then its line (a broken
+            // streak keeps its own, and the snuff goes without words).
+            const snuff = this.canSnuff();
             if (r.broke >= 3) this.push({ type: 'streakBroken', tick: p.tick, was: r.broke, say: { label: 'Streak broken', points: 0, tone: 'lost' } }, sim);
-            else this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
+            else if (!snuff) this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
+            if (snuff) this.snuff(p.tick, sim, now, r.broke < 3);
           } else this.streak.land(e.quality, e.late, p.tick);
           break;
         case 'drift':
@@ -725,14 +784,12 @@ export class Director {
           }
           this.push({ type: 'bank', tick: p.tick, points: e.points, mult: e.mult, origin: Math.round(e.points / Math.max(1, e.mult)), tier, header, bump }, sim);
           this.bestBank = Math.max(this.bestBank, e.points);
+          this.bankUntil = Math.max(this.bankUntil, now + BANK_MS[tier] / 1000);
           // A bump knocked the combo out of you: the flow it earned goes out with it.
-          if (bump && this.flowShown >= FLOW_SNUFF_MIN) {
-            this.snuffAt = now;
-            this.snuffFrom = this.flowShown;
-            this.push({ type: 'flow', tick: p.tick, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } }, sim);
-          }
+          if (bump && this.canSnuff()) this.snuff(p.tick, sim, now, true);
           if (bump) this.earnCap = 0;
           this.skillChain = 0;
+          this.flowChain = 0;
           this.perfects = 0;
           break;
         }
@@ -746,7 +803,11 @@ export class Director {
           const best = this.comboBest(run?.bestComboAtStart ?? 0);
           const isBest = best > 0 && e.points > best;
           this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
+          // The crash took the combo, and its flow goes out with it (the glow, the scarf's puff, the
+          // wind's bend), without words: the crash and 'Combo lost' own the line.
+          if (this.canSnuff()) this.snuff(p.tick, sim, now, false);
           this.skillChain = 0;
+          this.flowChain = 0;
           this.perfects = 0;
           break;
         }
@@ -770,11 +831,13 @@ export class Director {
     const stake = c.active ? Math.round(c.pending * c.multiplier) : 0;
     if (live && run) {
       // New best: the first time the score passes the best this mountain had at the start (once per
-      // run, never again after a revive). A bank that crossed it lands its fly-in first.
+      // run, never again after a revive). A bank that crossed it (or any cash-in still on screen)
+      // lands first: New best waits out its tier's whole BANK_MS, so 'new best' never reads twice.
       if (!this.newBestDone && run.bestScoreAtStart > 0 && sim.score > run.bestScoreAtStart) {
         this.newBestDone = true;
-        this.newBestAt = bankInBatch ? now + NEW_BEST_DEFER_S : now;
+        this.newBestAt = now;
       }
+      if (this.newBestAt >= 0 && this.newBestAt < this.bankUntil) this.newBestAt = this.bankUntil;
       // New ground just had its moment (an early save often crosses both together): New best waits.
       // New ground less than NEW_GROUND_GAP_S of riding away holds it too, then goes first.
       if (this.newBestAt >= 0 && this.newGroundAt >= 0 && this.newBestAt - this.newGroundAt < NEW_GROUND_GAP_S) this.newBestAt = this.newGroundAt + NEW_BEST_DEFER_S;
@@ -830,7 +893,7 @@ export class Director {
     }
     let shown = this.flowShown;
     if (this.snuffAt >= 0) shown = Math.min(shown, Math.max(0, this.snuffFrom * (1 - (now - this.snuffAt) / SNUFF_S)));
-    if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS) {
+    if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS && this.trickIn()) {
       this.flowInDone = true;
       this.pulseAt = now;
       this.push({ type: 'flow', tick: sim.tick, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } }, sim);
@@ -866,15 +929,15 @@ export class Director {
     // One rival for the pill, the C11 ring and the camera: an open duel, a duel's result while it
     // flashes, the start-line call, else the nearest riding ghost ahead (or behind within 150 m).
     const duelId = this.duels.open;
-    const callUp = this.call && now - this.call.at < CALL_SHOW_S ? this.call.id : null;
+    const callUp = this.call && now - this.call.at < CALL_HOLD_S ? this.call.id : null;
     if (this.rivalHold && now >= this.rivalHold.until) this.rivalHold = null;
-    const steady = steadyNext(this.riderGap(this.heldNext, f, sim), this.nearestRider(f, sim), now - this.heldSince);
+    const steady = steadyNext(this.riderGap(this.heldNext, f), this.nearestRider(f), now - this.heldSince);
     const sid = steady ? steady.id : null;
     if (sid !== this.heldNext) {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    out.rival = rivalPick(steady, this.gapOf(duelId, f, sim), this.gapOf(callUp, f, sim), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f, sim));
+    out.rival = rivalPick(steady, this.gapOf(duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
 
     const timerFrac = c.window > 0 ? c.timer / c.window : 0;
     const draining = c.active && s.grounded && !s.drifting && !s.drafting;
@@ -895,14 +958,14 @@ export class Director {
     a.skillChain = this.skillChain;
     a.skillMult = skillMult(this.skillChain);
     a.earnedFlow = earned;
-    a.race = live && (duelId !== null || this.anyNear(f, sim, 8)) ? 0.06 : 0;
+    a.race = live && (duelId !== null || this.anyNear(f, 8)) ? 0.06 : 0;
     a.duel = duelId !== null ? this.duels.amount : 0;
     a.shoulder = live && !s.drafting ? this.shoulder(f, sim) : null;
     a.fuse = out.hud.fuse;
     a.streak = this.streak.n;
     a.countIn = run !== null && run.hasReveal && now < run.revealLeaveS;
     a.lift = (this.newGroundAt >= 0 ? LIFT_NEW_GROUND : 0) + (this.avalancheAt >= 0 ? LIFT_AVALANCHE * Math.max(0, 1 - (now - this.avalancheAt) / LIFT_AVALANCHE_S) : 0);
-    a.choir = live ? this.choir(f, sim) : 0;
+    a.choir = live ? this.choir(f) : 0;
     // The latest boost was a slingshot and its pool still pushes: the pack's speed, not skill.
     if (this.slingBoost && !((s.boostPool ?? 0) > 0.2)) this.slingBoost = false;
     a.drafting = s.drafting || this.slingBoost;
@@ -911,12 +974,12 @@ export class Director {
 
   /** The ghost choir: ghosts you passed this run (shown, live, or beaten in a duel) that are still
    *  riding, behind you and within CHOIR_BEHIND metres; 0..CHOIR_MAX. */
-  private choir(f: DirectorFrame, sim: Sim): number {
+  private choir(f: DirectorFrame): number {
     let n = 0;
     for (const id of this.choirIds) {
       const p = f.poses.get(id);
       if (!p || p.done) continue;
-      const back = sim.s.z - p.z;
+      const back = this.rz - p.z;
       if (back > 0 && back <= CHOIR_BEHIND && ++n >= CHOIR_MAX) break;
     }
     return n;
@@ -924,19 +987,53 @@ export class Director {
 
   // ------------------------------------------------------------------ pieces
 
-  /** A style event's part in the live combo's skill: drafting never counts. A new combo starts over. */
+  /** A style event's part in the live combo's skill: drafting and slingshots (the pack's speed, not a
+   *  move) never count, as a step or as a kind. A new combo starts over. */
   private skill(kind: StyleKind, chain: number): void {
     if (chain <= 1) {
       this.skillChain = 0;
+      this.flowChain = 0;
       this.perfects = 0;
       this.kinds.clear();
       this.flowInDone = false;
     }
-    if (kind === 'draft') return;
+    if (kind === 'draft' || kind === 'slingshot') return;
     this.skillChain++;
+    this.flowChain++;
     this.kinds.add(kind);
     if (kind === 'perfect') this.perfects++;
-    this.earnCap = this.skillChain / 4 + 0.5 * this.perfects;
+    this.earnCap = this.flowChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** A trick (FLOW_IN_TRICKS) is among the kinds earning the shown flow. */
+  private trickIn(): boolean {
+    for (const k of this.kinds) if (FLOW_IN_TRICKS.has(k)) return true;
+    return false;
+  }
+
+  /** The shown flow is high enough to be put out, and no snuff is already taking it down. */
+  private canSnuff(): boolean {
+    return this.flowShown >= FLOW_SNUFF_MIN && this.snuffAt < 0;
+  }
+
+  /** The glow goes to 0 over SNUFF_S and the flow's earning starts over: the moves before it no longer
+   *  count toward the cap, the kinds or 'In the flow'. */
+  private snuffDisplay(now: number): void {
+    this.snuffAt = now;
+    this.snuffFrom = this.flowShown;
+    this.earnCap = 0;
+    this.flowChain = 0;
+    this.perfects = 0;
+    this.kinds.clear();
+    this.flowInDone = false;
+  }
+
+  /** 'Flow broken': the snuff's beat (the scarf's puff and the wind's bend), with its line when `say`. */
+  private snuff(tick: number, sim: Sim, now: number, say: boolean): void {
+    this.snuffDisplay(now);
+    const b: BeatOf<'flow'> = { type: 'flow', tick, phase: 'snuff' };
+    if (say) b.say = { label: 'Flow broken', points: 0, tone: 'normal' };
+    this.push(b, sim);
   }
 
   /** What beating the grudge is worth in all: 10, or 20 for a nemesis; x2 in Haunted Hollow. */
@@ -1021,7 +1118,7 @@ export class Director {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
       if (!p || p.done) continue;
-      const dz = p.z - s.z;
+      const dz = p.z - this.rz;
       if (dz > 3 || dz < -60) continue;
       const dx = p.x - s.x;
       const d = dx * dx + dz * dz;
@@ -1087,7 +1184,7 @@ export class Director {
         if (fired) continue;
         const p = f.poses.get(id);
         if (!p || p.done) continue;
-        const gap = p.z - sim.s.z;
+        const gap = p.z - this.rz;
         if (gap > TRICK_AHEAD || gap < -TRICK_BEHIND) continue;
         fired = true;
         this.lastWhisperAt = now;
@@ -1184,12 +1281,13 @@ export class Director {
       !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
       now - this.lastFinaleAt >= FINALE_HOLD_S &&
       !this.finales.pending &&
-      now - this.lastPopAt >= POP_DEFER.spacing / 1000;
+      now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_BANNER_S + AFTER_UNLOCK_S : POP_DEFER.spacing / 1000);
     if (!clear) return;
     // A waiting unlock goes before any mission.
     const p = this.pops.splice(Math.max(0, this.pops.findIndex((q) => q.beat.type === 'unlockPop')), 1)[0];
     p.beat.tick = sim.tick;
     this.lastPopAt = now;
+    this.lastPopUnlock = p.beat.type === 'unlockPop';
     this.push(p.beat, sim);
   }
 
@@ -1201,7 +1299,7 @@ export class Director {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
       if (!p || p.done) continue;
-      const back = s.z - p.z;
+      const back = this.rz - p.z;
       if (back <= 0 || back >= 6 || Math.abs(p.x - s.x) >= 4) continue;
       if (back < bg) {
         bg = back;
@@ -1219,10 +1317,10 @@ export class Director {
     return t !== undefined && tick - t <= DUEL_AFTER_TICKS;
   }
 
-  private anyNear(f: DirectorFrame, sim: Sim, m: number): boolean {
+  private anyNear(f: DirectorFrame, m: number): boolean {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
-      if (p && !p.done && Math.abs(p.z - sim.s.z) < m) return true;
+      if (p && !p.done && Math.abs(p.z - this.rz) < m) return true;
     }
     return false;
   }
@@ -1235,29 +1333,30 @@ export class Director {
     return false;
   }
 
-  private gapOf(id: number | null, f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  /** A ghost's gap (ghost minus rider, + = ahead), pose and rider on the same render tick. */
+  private gapOf(id: number | null, f: DirectorFrame): { id: number; gap: number } | null {
     if (id === null) return null;
     const p = f.poses.get(id);
-    return p ? { id, gap: p.z - sim.s.z } : null;
+    return p ? { id, gap: p.z - this.rz } : null;
   }
 
   /** A ghost the rival pill may name: still riding, and ahead or no more than RIVAL_BEHIND_M behind. */
-  private riderGap(id: number | null, f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  private riderGap(id: number | null, f: DirectorFrame): { id: number; gap: number } | null {
     if (id === null) return null;
     const p = f.poses.get(id);
     if (!p || p.done) return null;
-    const gap = p.z - sim.s.z;
+    const gap = p.z - this.rz;
     return gap >= -RIVAL_BEHIND_M ? { id, gap } : null;
   }
 
   /** The nearest riding ghost ahead, else the nearest riding ghost behind within RIVAL_BEHIND_M, else
    *  none: a wreck, or a ghost a kilometre back, is no race ('fjord348 1974 m behind'). */
-  private nearestRider(f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  private nearestRider(f: DirectorFrame): { id: number; gap: number } | null {
     let ahead: { id: number; gap: number } | null = null;
     let behind: { id: number; gap: number } | null = null;
     for (const t of f.tracks) {
       if (!t.ready) continue;
-      const g = this.riderGap(t.entry.id, f, sim);
+      const g = this.riderGap(t.entry.id, f);
       if (!g) continue;
       if (g.gap > 0) {
         if (!ahead || g.gap < ahead.gap) ahead = g;

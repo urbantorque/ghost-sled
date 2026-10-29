@@ -14,6 +14,8 @@ export const CHAIN_TICKS = 180;
 export const SLING_TICKS = 90;
 /** A 'you' wreck passed this soon (ticks) after New ground is muted: New ground owns that beat. */
 export const NEW_GROUND_MUTE_TICKS = 60;
+/** A first pass's base pay (doubled in Haunted Hollow). */
+export const PASS_GIFTS = 5;
 /** Extra gifts: a slung pass and each chained pass. */
 export const SLUNG_GIFTS = 2;
 export const CHAIN_GIFTS = 2;
@@ -55,7 +57,7 @@ export interface PassContext {
  * camera move (the pass still counts for settlement and unlocks). First match wins.
  */
 export function classifyPass(c: PassContext): { word: PassWord; text: string; gifts: number; extra: number; muted: boolean } {
-  const base = c.first ? (c.haunted ? 2 : 1) * 5 : 0;
+  const base = c.first ? (c.haunted ? 2 : 1) * PASS_GIFTS : 0;
   const slung = c.first && !c.wreck && c.tick - c.lastSlingTick >= 0 && c.tick - c.lastSlingTick <= SLING_TICKS;
   // 1. The start-line bunch: edging past a ghost that never got clear of you is no overtake. A
   //    slingshot out of its slipstream is: the burst through the bunch is the run's first moment.
