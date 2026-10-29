@@ -9,7 +9,7 @@ import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
-import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
+import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle, streakLine } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
@@ -537,11 +537,14 @@ export class Director {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
           // Your best, beaten in a duel and behind you now: 'Passed Your best' (C7) gets its moment
-          // (the pass itself was muted inside the duel, and a duel with your own line runs long).
+          // (the pass itself was muted inside the duel, and a duel with your own line runs long). Only
+          // jostled at the start, its first pass is this one: it pays the base, and it is spent (a
+          // re-pass later read 'Passed Your best' a second time).
           const p = f.poses.get(d.id);
           if (t.entry.kind === 'you' && p && p.z < rz) {
+            const owed = this.youJostled.delete(d.id) ? PASS_GIFTS * (haunted ? 2 : 1) : 0;
             const ladder = ++this.ladderN;
-            this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: 0, muted: false }, sim);
+            this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: owed, muted: false }, sim);
           }
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);

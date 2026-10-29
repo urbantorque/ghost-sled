@@ -778,6 +778,32 @@ describe('the race', () => {
     expect(of(q.frame([], { race: [{ type: 'pass', track: g, first: false }] }), 'pass')[0]).toMatchObject({ word: 'tookBack', gifts: 0 });
   });
 
+  it("your best jostled at the start, then beaten in a duel: one 'Passed Your best' with the base, and a re-pass is a retake", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 120;
+    r.poses.set(1001, pose(r.sim.s.z - 0.5));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass')[0]).toMatchObject({ word: 'jostle', gifts: 0 });
+    // A duel with it, held off with you a hand ahead the whole way (no pass inside it).
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 0.8));
+    expect(of(r.idle(1.1), 'duel').map((d) => d.phase)).toEqual(['open']);
+    r.poses.set(1001, pose(r.sim.s.z - 0.6));
+    const out = r.idle(8);
+    expect(of(out, 'duel').map((d) => d.phase)).toEqual(['heldOff']);
+    const pass = of(out, 'pass');
+    expect(pass).toHaveLength(1);
+    expect(pass[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    // It slips past you and you take it back: its first pass was the duel's 'Passed Your best'.
+    r.idle(3);
+    r.poses.set(1001, pose(r.sim.s.z + 3));
+    r.frame([], { race: [{ type: 'passedBy', track: you }] });
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const again = of(r.frame([], { race: [{ type: 'pass', track: you, first: false }] }), 'pass');
+    expect(again[0]).toMatchObject({ word: 'tookBack', text: 'Took back', gifts: 0 });
+  });
+
   it('a pass muted inside its own duel pays its base and no extras', () => {
     const r = new Rig();
     const a = track(1001);
