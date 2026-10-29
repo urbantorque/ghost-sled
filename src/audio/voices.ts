@@ -1,8 +1,31 @@
 import type { Bank } from './buffers';
 
 // One-shot voices and the pool that caps them. A voice is the unit of polyphony: a small node graph
-// with a known end time. When the pool is full the oldest voice is faded out in a few milliseconds
-// (inaudible next to a fresh attack) and every finished voice is disconnected by sweep().
+// with a known end time. When the pool is full the quietest voice is faded out in a few milliseconds
+// (inaudible next to a fresh attack) and every finished voice is disconnected by sweep(). Quietest
+// is an estimate: a voice's priority (PRIO) times how far it has decayed toward its end, so a steal
+// takes a gift tick's tail or a shimmer before a payoff the player just earned.
+
+/** Steal priority classes (the weight a voice keeps at its attack). */
+export const PRIO = {
+  /** Repeated ticks and pickups whose tails nobody misses: gift bells, metronome and fuse ticks,
+   *  ghost whispers, draft notes, distant news. */
+  low: 0.5,
+  /** Decoration on a reward: the shimmer's grains. */
+  sparkle: 0.7,
+  normal: 1,
+  /** The payoff a player just earned: chords, brass, a bank's landing, the named stings. */
+  payoff: 2,
+} as const;
+
+/** A voice built from exponential decays reaches its end at about 5.5 time constants (-48 dB), so
+ *  its level at a fraction p of the way there is near exp(-5.5 p). */
+const DECAY_SPAN = 5.5;
+/** A tail estimated under -20 dB of its attack: a steal nobody hears under the fresh attack that
+ *  takes its slot. (Tuned on the stress mix: -26 dB left more audible steals, -14 dB stole payoffs.) */
+const QUIET = 0.1;
+/** Probe: a stolen voice estimated above this (-20 dB) counts as a steal you might hear. */
+const LOUD = 0.1;
 
 /** NaN maps to lo: a stray NaN in a frame must never reach an AudioParam, which would throw. */
 export const clamp = (v: number, lo: number, hi: number): number => (v > lo ? (v < hi ? v : hi) : lo);
@@ -62,8 +85,13 @@ export class Voice {
   /** Stolen only when every live voice is kept: a pad is the bed, and losing it mid-chord is
    *  far more audible than losing a decaying pluck. */
   keep = false;
+  /** Steal priority (PRIO): the weight this voice keeps at its attack. */
+  prio: number = PRIO.normal;
   private readonly nodes: AudioNode[] = [];
   private readonly srcs: AudioScheduledSourceNode[] = [];
+
+  /** The latest attack built into this voice (an arpeggio or a roll keeps adding them). */
+  private lastOn: number;
 
   constructor(
     readonly ctx: BaseAudioContext,
@@ -76,6 +104,7 @@ export class Voice {
     pan: number,
   ) {
     this.end = t0;
+    this.lastOn = t0;
     this.out = ctx.createGain();
     this.out.gain.value = level;
     let tail: AudioNode = this.out;
@@ -128,6 +157,7 @@ export class Voice {
     o.stop(t1);
     this.srcs.push(o);
     if (t1 > this.end) this.end = t1;
+    if (t0 > this.lastOn) this.lastOn = t0;
     return o;
   }
 
@@ -142,6 +172,7 @@ export class Voice {
     s.stop(t1);
     this.srcs.push(s);
     if (t1 > this.end) this.end = t1;
+    if (t0 > this.lastOn) this.lastOn = t0;
     return s;
   }
 
@@ -152,9 +183,34 @@ export class Voice {
     return g;
   }
 
+  /** A stereo branch inside the voice (a shimmer's left and right grains on one voice): a panner
+   *  into `dest`, or a plain gain where StereoPannerNode is missing. */
+  panner(pan: number, dest: AudioNode): AudioNode {
+    if (typeof this.ctx.createStereoPanner !== 'function') return this.gain(1, dest);
+    const p = this.ctx.createStereoPanner();
+    p.pan.value = clamp(pan, -1, 1);
+    p.connect(dest);
+    this.nodes.push(p);
+    return p;
+  }
+
   /** Keeps the voice allocated until at least t (parts of it will be added later). */
   hold(t: number): void {
     if (t > this.end) this.end = t;
+  }
+
+  /** Its estimated level at `now` (0..1 of its attack): the decay since its latest attack toward its
+   *  end; a voice with an attack still ahead is at full level. */
+  level(now: number): number {
+    if (now <= this.lastOn) return 1;
+    const span = this.end - this.lastOn;
+    const p = span > 1e-3 ? clamp((now - this.lastOn) / span, 0, 1) : 1;
+    return Math.exp(-DECAY_SPAN * p);
+  }
+
+  /** How much stealing this voice would cost at `now`: its priority times its estimated level. */
+  weight(now: number): number {
+    return this.prio * this.level(now);
   }
 
   kill(now: number): void {
@@ -187,11 +243,18 @@ export class Voice {
 
 export class VoicePool {
   private readonly list: Voice[] = [];
-  /** Probe counters: voices stolen at the cap, and how many of them were kept (pad) voices. */
+  /** Probe counters: voices stolen at the cap, how many of them were kept (pad) voices, and how many
+   *  were still audible (estimated above -20 dB: a steal you might hear) and of those, payoffs. */
   steals = 0;
   keptSteals = 0;
+  loudSteals = 0;
+  payoffSteals = 0;
   /** Probe: the most voices alive at once. */
   peak = 0;
+  /** Probe-only: steal the oldest voice instead (the old rule), to compare against. */
+  stealOldest = false;
+  /** Probe-only: the level under which a tail is stolen first (QUIET). */
+  quiet = QUIET;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -199,26 +262,51 @@ export class VoicePool {
     readonly max: number,
   ) {}
 
-  voice(t0: number, level: number, dry: AudioNode, wet: AudioNode | null, send: number, pan = 0): Voice {
+  /**
+   * A new voice from t0. Past the cap one voice goes: a tail already under QUIET (inaudible under a
+   * fresh attack) if there is one, the one with the most time left (it frees its slot for longest, so
+   * the pool stays under its cap); else the lowest weight() (priority times level: a gift tick or a
+   * shimmer before a payoff), the oldest on a tie. Kept voices (the pad) only when every live voice
+   * is kept.
+   */
+  voice(t0: number, level: number, dry: AudioNode, wet: AudioNode | null, send: number, pan = 0, prio: number = PRIO.normal): Voice {
     const now = this.ctx.currentTime;
     this.sweep(now);
     let live = 0;
-    let oldest: Voice | null = null;
+    let quietest: Voice | null = null;
+    let quietestW = Infinity;
+    let tail: Voice | null = null;
+    let tailLeft = -1;
     let oldestKept: Voice | null = null;
     for (const v of this.list) {
       if (v.dead || v.end <= now) continue;
       live++;
       if (v.keep) oldestKept ??= v;
-      else oldest ??= v;
+      else if (this.stealOldest) quietest ??= v;
+      else {
+        const w = v.weight(now);
+        if (w < quietestW) {
+          quietestW = w;
+          quietest = v;
+        }
+        if (v.level(now) < this.quiet && v.end - now > tailLeft) {
+          tailLeft = v.end - now;
+          tail = v;
+        }
+      }
     }
-    const victim = oldest ?? oldestKept;
+    const victim = tail ?? quietest ?? oldestKept;
     if (live >= this.max && victim) {
+      const loud = victim.level(now) > LOUD;
       victim.kill(now);
       this.steals++;
       if (victim.keep) this.keptSteals++;
+      if (loud) this.loudSteals++;
+      if (loud && victim.prio >= PRIO.payoff) this.payoffSteals++;
       live--;
     }
     const v = new Voice(this.ctx, this.bank, t0, level, dry, wet, send, pan);
+    v.prio = prio;
     this.list.push(v);
     if (live + 1 > this.peak) this.peak = live + 1;
     return v;

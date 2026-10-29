@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CHOIR_VOICES, GROOVE_STREAK, NEW_BEST_LEAD_MS, UI_SAME_S, UiOnce, bankRoll, choirSize, grooveLift, resultsCues, revealCues, stormCascade } from '../src/audio/cues';
+import { CHOIR_HOLD_S, CHOIR_VOICES, ChoirTracker, GROOVE_STREAK, NEW_BEST_LEAD_MS, RETAKE_WAIT_S, UI_SAME_S, UiOnce, bankRoll, choirSize, floorDrive, grooveLift, resultsCues, revealCues, stormCascade } from '../src/audio/cues';
+import type { Beat } from '../src/game/beats';
+import { FLOOR_FROM, RUN_FLOOR } from '../src/game/intensity';
 import { BANK_CHIP_MS, BANK_ROLL_MS, BANK_TICKS, rollValue } from '../src/game/stake';
 import { RESULTS_TIMING } from '../src/ui/results';
 import { REVEAL_TIMING } from '../src/ui/reveal';
@@ -82,6 +84,26 @@ describe('results cues', () => {
     expect(q.map((c) => c.name).sort()).toEqual(['coin', 'mission', 'new-best', 'results-mallet', 'results-stamp', 'results-tick']);
   });
 
+  it('coins: [] (the app plays each coin from onRewardLanded) leaves no coin on the timeline', () => {
+    for (const reduced of [false, true]) {
+      const q = resultsCues({ count: true, newBest: false, beats: 1, missions: [0, 2], coins: [] }, T, reduced);
+      expect(q.some((c) => c.name === 'coin')).toBe(false);
+      // The Done chimes keep their rows.
+      expect(q.filter((c) => c.name === 'mission')).toHaveLength(reduced ? 1 : 2);
+    }
+    expect(resultsCues({ count: false, newBest: false, beats: 0, missions: 0, coins: 0 }, T, false).map((c) => c.name)).toEqual(['results-stamp']);
+  });
+
+  it("the doubled reward's coin plays once when the app and the card's landing both ask at that moment", () => {
+    const g = new UiOnce();
+    // The double: app.ts plays ui('coin') as the ad closes, and a landing callback in the same task
+    // asks again (the clock may move a render quantum, 2.7 ms, between the two calls).
+    expect(g.admit('coin', 30.006, 30)).toBe(true);
+    expect(g.admit('coin', 30.0087, 30.0027)).toBe(false);
+    // A real second landing 140 ms later (the next row) still plays.
+    expect(g.admit('coin', 30.146, 30.14)).toBe(true);
+  });
+
   it('the closest pair of results sounds is wider than the one-sound guard', () => {
     const q = resultsCues({ count: true, newBest: true, beats: 4, missions: [0, 1, 2], coins: [0, 1, 2] }, T, false);
     for (const a of q) for (const b of q) if (a !== b && a.name === b.name) expect(Math.abs(a.at - b.at)).toBeGreaterThan(UI_SAME_S);
@@ -140,6 +162,139 @@ describe('choir size and groove', () => {
     expect(grooveLift(undefined)).toBe(0);
     for (let n = 2; n < GROOVE_STREAK.length; n++) expect(grooveLift(n)).toBeGreaterThan(grooveLift(n - 1));
     expect(grooveLift(12)).toBe(GROOVE_STREAK[GROOVE_STREAK.length - 1]);
+  });
+});
+
+describe('the run floor arrives at once', () => {
+  it('snaps the drive to the floor the first time the target reaches it, then smooths as before', () => {
+    // Plain run at 2.5 s: the drive has crept to about 0.12, the floor engages.
+    expect(floorDrive(0.12, RUN_FLOOR, false, false)).toBe(RUN_FLOOR);
+    // Already above (a fast start), already floored this run, or held: untouched.
+    expect(floorDrive(0.4, 0.45, false, false)).toBe(0.4);
+    expect(floorDrive(0.2, RUN_FLOOR, true, false)).toBe(0.2);
+    expect(floorDrive(0.12, RUN_FLOOR, false, true)).toBe(0.12);
+    // Below the floor the target has not reached it: no snap.
+    expect(floorDrive(0.12, 0.25, false, false)).toBe(0.12);
+    expect(floorDrive(0.12, Number.NaN, false, false)).toBe(0.12);
+  });
+
+  it('a plain run has the bass in a breath after the floor engages (the engine smoothing replayed)', () => {
+    // The engine's smoothing (rise 0.7 s) on the game's intensity for a novice start: speed ramps
+    // 8 to 16 m/s over 4 s (speedK below the floor), the floor engages at FLOOR_FROM.
+    const firstBass = (snap: boolean): number => {
+      let drive = 0;
+      let floored = false;
+      const dt = 1 / 60;
+      for (let t = 0; t < 8; t += dt) {
+        const speed = 8 + 2 * Math.min(t, 4);
+        const target = Math.max(t >= FLOOR_FROM ? RUN_FLOOR : 0, 0.36 * Math.max(0, Math.min(1, (speed - 8) / 10)) - 0.1);
+        if (snap) drive = floorDrive(drive, target, floored, false);
+        if (drive >= RUN_FLOOR) floored = true;
+        drive += (target - drive) * (1 - Math.exp(-dt / (target > drive ? 0.7 : 2.2)));
+        // music.ts: the bass layer is smoothstep(0.26, 0.40, drive); audible past 0.15.
+        const x = Math.max(0, Math.min(1, (drive - 0.26) / 0.14));
+        if (x * x * (3 - 2 * x) > 0.15) return t;
+      }
+      return 99;
+    };
+    expect(firstBass(true)).toBeLessThan(FLOOR_FROM + 0.1);
+    expect(firstBass(false)).toBeGreaterThan(FLOOR_FROM + 1.5);
+  });
+});
+
+describe('the ghost choir keeps a retake for its sigh', () => {
+  const g = (id: number) => ({ id, name: 'G' + id, kind: 'pool' as const, dx: 0 });
+  const pass = (id: number, word: 'passed' | 'slung' | 'jostle' = 'passed', muted = false): Beat => ({ type: 'pass', tick: 0, ghost: g(id), word, text: 'Passed', first: true, chain: 1, ladder: 1, octave: false, gifts: 1, muted });
+  const passedBy = (id: number): Beat => ({ type: 'passedBy', tick: 0, ghost: g(id), muted: false });
+
+  it('a count that drops a few frames before the passedBy still sighs (the real-run order)', () => {
+    const c = new ChoirTracker();
+    c.beats([pass(1, 'slung')], 5.47);
+    expect(c.frame(1, 5.47, false)).toEqual({ n: 1, retaken: false });
+    // The director counts it out as it draws level (5.93 s): the voice is held, not faded.
+    expect(c.frame(0, 5.93, false)).toEqual({ n: 1, retaken: false });
+    expect(c.frame(0, 5.98, false)).toEqual({ n: 1, retaken: false });
+    // passedBy at 6.02 s: the held voice leaves with the sigh.
+    c.beats([passedBy(1)], 6.02);
+    expect(c.frame(0, 6.02, false)).toEqual({ n: 0, retaken: true });
+    expect(c.frame(0, 6.1, false)).toEqual({ n: 0, retaken: false });
+  });
+
+  it('each drop is held on its own clock: a ghost leaving range, then a retake 0.5 s later, still sighs', () => {
+    // Real run (novice m=0): the count went 3 -> 2 at 33.92 s, 2 -> 1 at 34.42 s as fjord348 drew
+    // level, and its passedBy came at 34.45 s.
+    const c = new ChoirTracker();
+    c.beats([pass(1), pass(2), pass(3)], 7);
+    c.frame(3, 7.2, false);
+    expect(c.frame(2, 33.92, false).n).toBe(3);
+    // The first drop's hold runs out as the second drop starts its own: one voice fades.
+    expect(c.frame(1, 34.42, false)).toEqual({ n: 2, retaken: false });
+    c.beats([passedBy(2)], 34.45);
+    expect(c.frame(1, 34.45, false)).toEqual({ n: 1, retaken: true });
+  });
+
+  it('a slow retake (0.8 m at 2 m/s, 0.4 s) is still inside the hold', () => {
+    const c = new ChoirTracker();
+    c.beats([pass(1)], 1);
+    c.frame(1, 1, false);
+    for (let t = 2; t < 2 + 0.4; t += 1 / 60) expect(c.frame(0, t, false).n).toBe(1);
+    c.beats([passedBy(1)], 2.4);
+    expect(c.frame(0, 2.4, false)).toEqual({ n: 0, retaken: true });
+  });
+
+  it('a drop with no retake fades after the hold; a ghost that only drew level never changes the choir', () => {
+    const c = new ChoirTracker();
+    c.beats([pass(1), pass(2)], 1);
+    c.frame(2, 1, false);
+    expect(c.frame(1, 3, false).n).toBe(2);
+    expect(c.frame(1, 3 + CHOIR_HOLD_S - 0.01, false).n).toBe(2);
+    expect(c.frame(1, 3 + CHOIR_HOLD_S + 0.01, false)).toEqual({ n: 1, retaken: false });
+    // Level for 0.3 s, then back behind: the count dips and recovers inside the hold, no change sung.
+    const d = new ChoirTracker();
+    d.beats([pass(1)], 1);
+    d.frame(1, 1, false);
+    expect(d.frame(0, 4, false).n).toBe(1);
+    expect(d.frame(0, 4.3, false).n).toBe(1);
+    expect(d.frame(1, 4.32, false)).toEqual({ n: 1, retaken: false });
+    expect(d.frame(1, 5, false).n).toBe(1);
+  });
+
+  it('a wipeout releases at once; a full choir still sighs and refills after the wait', () => {
+    const c = new ChoirTracker();
+    c.beats([pass(1)], 1);
+    c.frame(1, 1, false);
+    c.beats([{ type: 'raceNews', tick: 0, ghost: g(1), news: 'wipeoutBehind', text: 'G1 wiped out behind you', pan: 0, gain: 1 }], 3);
+    expect(c.frame(0, 3.02, false)).toEqual({ n: 0, retaken: false });
+    // Three voices with a fourth ghost behind: the count never drops, the sigh comes after the wait.
+    const f = new ChoirTracker();
+    f.beats([pass(1), pass(2), pass(3), pass(4)], 1);
+    f.frame(3, 1, false);
+    f.beats([passedBy(2)], 2);
+    expect(f.frame(3, 2, false)).toEqual({ n: 3, retaken: false });
+    expect(f.frame(3, 2 + RETAKE_WAIT_S, false)).toEqual({ n: 3, retaken: true });
+  });
+
+  it('a won duel joins like a pass (its retake sighs); muted passes, jostles and the crash do not', () => {
+    const c = new ChoirTracker();
+    c.beats([{ type: 'duel', tick: 0, phase: 'won', ghost: g(5), gifts: 3 }, pass(6, 'jostle', true), pass(7, 'passed', true)], 1);
+    expect([...c.passed.keys()]).toEqual([5]);
+    c.frame(1, 1, false);
+    c.beats([passedBy(6), passedBy(7)], 2);
+    expect(c.frame(1, 2 + RETAKE_WAIT_S, false).retaken).toBe(false);
+    c.beats([passedBy(5)], 3);
+    expect(c.frame(0, 3, false)).toEqual({ n: 0, retaken: true });
+    c.beats([pass(8)], 4);
+    c.frame(1, 4, false);
+    expect(c.frame(1, 5, true)).toEqual({ n: 0, retaken: false });
+    expect(c.passed.size).toBe(0);
+  });
+
+  it('without the director count, the time-to-live proxy still sings and expires', () => {
+    const c = new ChoirTracker();
+    c.beats([pass(1), pass(2)], 0);
+    expect(c.frame(undefined, 1, false).n).toBe(2);
+    expect(c.frame(undefined, 31, false).n).toBe(2);
+    expect(c.frame(undefined, 31 + CHOIR_HOLD_S, false).n).toBe(0);
   });
 });
 

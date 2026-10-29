@@ -15,11 +15,20 @@
 //   songs     each mountain's Clear Skies song (A A B B, 4 bars each) for 20 s, past the A to B
 //             change at 17 s: one deck the whole way (no crossfade), a 16-bar loop, and a per-bar
 //             low-band reading that differs per mountain
+//   wind      the ambience bed at 30 m/s with earned flow 0, 0.5 and 1: the singing wind stays at
+//             the plain wind's level (within 2 dB), so a long stretch in the flow is a tone, not a
+//             louder bed
+//   flowIn    'In the flow' on a skilled stretch (drive 0.55, 30 m/s, the wind singing): its chord
+//             lands 0.6 s in at least 5 dB over the mix before it
+//   flowStomp the same 0.2 s after a perfect landing (half of all flow-ins): the flow's landing still
+//             shows over the landing's tail (at least 2 dB over its neighbours)
+// The stress mix also counts its steals: sfxLoudSteals (a victim still above -20 dB) and
+// sfxPayoffSteals (of those, payoffs; at most 2).
 // It also asserts the live AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/levels.js
 // Set window.__levelsCfg = { base, kinds, seconds, songs } on the current page first to change the plan.
 async (page) => {
-  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers'], seconds: 10, songs: true };
+  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers', 'wind', 'flowIn', 'flowStomp'], seconds: 10, songs: true };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__levelsCfg).catch(() => null)) || {}) };
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
   await page.goto(BASE + '?platform=mock&debug&m=0');
@@ -44,16 +53,36 @@ async (page) => {
   }
   const songList = Object.values(songs);
   const sh = levels.shoulder;
+  // Moment envelopes are 20 ms windows from 0.4 s before the moment.
+  const env = (k) => (levels[k] && Array.isArray(levels[k].env) ? levels[k].env : null);
+  const avg = (a) => a.reduce((s, x) => s + x, 0) / a.length;
+  const fi = env('flowIn');
+  const fs = env('flowStomp');
+  const ws = levels.wind ? levels.wind.windStepsDb : null;
+  // The flow chord at 0.6 s after the moment (flowStomp: 0.8 s), against the 0.4 s before it / its neighbours.
+  const flowInLift = fi ? Math.max(...fi.slice(20 + 29, 20 + 35)) - avg(fi.slice(0, 20)) : null;
+  const flowStompLift = fs ? Math.max(...fs.slice(20 + 39, 20 + 45)) - avg(fs.slice(20 + 30, 20 + 38)) : null;
   const checks = {
     contextRunning: running,
     ambienceNear33: levels.ambience ? Math.abs(levels.ambience.rmsDb + 33) <= 3 : null,
     stressPeakUnder3: levels.stress ? levels.stress.peakDb < -3 : null,
     noPadSteals: levels.stress ? levels.stress.padSteals === 0 : null,
+    stressKeepsPayoffs: levels.stress && levels.stress.sfxPayoffSteals !== undefined ? levels.stress.sfxPayoffSteals <= 2 : null,
+    windToneFlat: ws ? Math.max(...ws) - Math.min(...ws) <= 2 : null,
+    flowInLands: flowInLift !== null ? flowInLift >= 5 : null,
+    flowInOverAStomp: flowStompLift !== null ? flowStompLift >= 2 : null,
     shoulderInItsChannel: sh ? sh.closingLR[0] - sh.closingLR[1] >= 4.5 : null,
     shoulderLeavesTheBed: sh ? Math.abs(sh.closingLR[1] - sh.offLR[1]) <= 1.5 : null,
     shoulderSittingQuieter: sh ? sh.sittingLR[0] < sh.closingLR[0] : null,
     songsOneDeck: songList.length ? songList.every((x) => x.decksStarted === 1 && x.cycleBars === 16) : null,
     songsDiffer: songList.length ? new Set(songList.map((x) => x.barLowHz)).size === songList.length : null,
   };
-  return JSON.stringify({ checks, levels, songs }, null, 1);
+  // The envelopes are long: keep the derived lifts, drop the raw windows from the report.
+  for (const k of ['flowIn', 'flowStomp']) {
+    if (!levels[k]) continue;
+    delete levels[k].env;
+    delete levels[k].subEnv;
+  }
+  const lifts = { flowInLiftDb: flowInLift === null ? null : Math.round(flowInLift * 10) / 10, flowStompLiftDb: flowStompLift === null ? null : Math.round(flowStompLift * 10) / 10 };
+  return JSON.stringify({ checks, lifts, levels, songs }, null, 1);
 }

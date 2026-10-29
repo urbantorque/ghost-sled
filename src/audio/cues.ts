@@ -1,10 +1,12 @@
+import type { Beat } from '../game/beats';
+import { RUN_FLOOR } from '../game/intensity';
 import { BANK_CHIP_MS, BANK_ROLL_MS, BANK_TICKS } from '../game/stake';
 import type { UiSound } from './engine';
 
 // Pure timing for the sounds that sit on a picture's clock: the bank roll on the HUD's count steps,
-// the results card on its CSS beats, the reveal reel, the ghost choir's size, the drive's groove lift
-// and a guard that keeps one UI sound from playing twice. No WebAudio here, so the tests run it in
-// node; sfx.ts and engine.ts schedule what it returns.
+// the results card on its CSS beats, the reveal reel, the ghost choir's bookkeeping, the drive's
+// groove lift and run-floor arrival, and a guard that keeps one UI sound from playing twice. No
+// WebAudio here, so the tests run it in node; sfx.ts and engine.ts schedule what it returns.
 
 const clampInt = (v: number, lo: number, hi: number): number => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, Math.round(v))) : lo);
 
@@ -166,12 +168,120 @@ export function choirSize(frameChoir: number | undefined, proxy: number): number
   return typeof frameChoir === 'number' && Number.isFinite(frameChoir) ? clampInt(frameChoir, 0, CHOIR_VOICES) : clampInt(proxy, 0, CHOIR_VOICES);
 }
 
+/** Without the director's count (AudioFrame.choir absent) a ghost you passed sings this long,
+ *  standing in for 'still riding within 150 m behind' (a retake, a wipeout or the crash ends it
+ *  sooner). */
+export const CHOIR_TTL_S = 30;
+/** A retake's sigh waits this long (s) for the count to drop; past it (a full choir, more ghosts
+ *  behind than voices) the top voice sighs and another takes its place. */
+export const RETAKE_WAIT_S = 0.25;
+/**
+ * A drop in the count with no retake yet is held this long (s) before the voice fades. The
+ * director counts a ghost out as it draws level (back <= 0), but the race's passedBy only fires
+ * once it leads by 0.8 m (src/game/ghosts.ts), 2 to 6 frames later at a typical closing speed and
+ * about 0.4 s for a ghost creeping past at 2 m/s. A retake landing in the hold sighs the voice that
+ * was about to fade; a ghost that only drew level and fell back never changes the choir at all. A
+ * wipeout or the crash releases at once.
+ */
+export const CHOIR_HOLD_S = 0.5;
+
+/**
+ * The ghost choir's bookkeeping (engine.ts applies it to music.setChoir every frame). The beats keep
+ * the set of ghosts you passed that have not passed you back: a shown pass or a won duel adds one
+ * (as the director's count does), a passedBy of one of them is a retake (its sigh), a wipeout
+ * releases its voice without the hold, and the crash clears the set. Each frame takes the count to
+ * sing, the director's when the frame carries it (else this set with a time to live), and returns
+ * the voices to sing and whether a voice leaves with the retake's sigh.
+ */
+export class ChoirTracker {
+  /** Passed ghosts (id to the time of the pass) that have not passed you back. */
+  readonly passed = new Map<number, number>();
+  /** Voices sung now: the count plus the drops still held. */
+  n = 0;
+  /** The count last frame, and when each voice the count has dropped since is held (oldest first). */
+  private want = 0;
+  private readonly holds: number[] = [];
+  private retakeAt = -1;
+  private releaseAt = -1;
+
+  reset(): void {
+    this.passed.clear();
+    this.n = 0;
+    this.want = 0;
+    this.holds.length = 0;
+    this.retakeAt = -1;
+    this.releaseAt = -1;
+  }
+
+  beats(list: readonly Beat[], now: number): void {
+    for (const b of list) {
+      if (b.type === 'pass') {
+        if (!b.muted && b.word !== 'jostle' && b.word !== 'beat') this.passed.set(b.ghost.id, now);
+      } else if (b.type === 'duel') {
+        if (b.phase === 'won' || b.phase === 'heldOff') this.passed.set(b.ghost.id, now);
+      } else if (b.type === 'passedBy') {
+        if (this.passed.delete(b.ghost.id)) this.retakeAt = now;
+      } else if (b.type === 'raceNews') {
+        if ((b.news === 'wipeout' || b.news === 'wipeoutBehind') && this.passed.delete(b.ghost.id)) this.releaseAt = now;
+      } else if (b.type === 'crash') this.passed.clear();
+    }
+  }
+
+  /**
+   * count: AudioFrame.choir (undefined: the time-to-live proxy). Each voice the count drops is held
+   * on its own clock (two ghosts leaving a moment apart each get their full hold); a rise takes a
+   * held voice back first (a ghost that drew level and fell behind again), and a hold that runs out
+   * fades its voice. A retake sighs the newest held voice, or with none held (a full choir with more
+   * ghosts behind than voices) sighs the top voice after RETAKE_WAIT_S and lets another take its
+   * place.
+   */
+  frame(count: number | undefined, now: number, crashed: boolean): { n: number; retaken: boolean } {
+    if (crashed) {
+      this.reset();
+      return { n: 0, retaken: false };
+    }
+    if (!(typeof count === 'number' && Number.isFinite(count))) for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
+    const want = choirSize(count, this.passed.size);
+    if (want < this.want) {
+      // A wipeout just released its voice: that drop is not held.
+      let k = this.want - want;
+      if (this.releaseAt >= 0 && now - this.releaseAt < CHOIR_HOLD_S) {
+        k--;
+        this.releaseAt = -1;
+      }
+      for (; k > 0; k--) this.holds.push(now);
+    } else for (let k = want - this.want; k > 0 && this.holds.length > 0; k--) this.holds.pop();
+    this.want = want;
+    while (this.holds.length > 0 && now - this.holds[0] >= CHOIR_HOLD_S) this.holds.shift();
+    let retaken = false;
+    if (this.retakeAt >= 0 && (this.holds.length > 0 || now - this.retakeAt >= RETAKE_WAIT_S)) {
+      this.holds.pop();
+      retaken = true;
+      this.retakeAt = -1;
+    }
+    this.n = Math.min(CHOIR_VOICES, want + this.holds.length);
+    return { n: this.n, retaken };
+  }
+}
+
 /** The groove's lift by stomp streak (0, 1, 2, 3, 4, 5+): consecutive perfect landings hold the band
  *  up a layer at a time for as long as the streak lives. Drafting can never earn one. */
 export const GROOVE_STREAK = [0, 0, 0.06, 0.11, 0.15, 0.18] as const;
 
 export function grooveLift(streak: number | undefined): number {
   return GROOVE_STREAK[clampInt(streak ?? 0, 0, GROOVE_STREAK.length - 1)];
+}
+
+/**
+ * The run floor's arrival: the first time a run's target reaches RUN_FLOOR (src/game/intensity.ts,
+ * from FLOOR_FROM), the smoothed drive jumps to the floor instead of rising to it from about 0.12
+ * over the 0.7 s rise, which kept the bass out until about 5 s. `floored`: the drive has already
+ * reached the floor this run; `held`: a crash or the chaos count-in (the count-in's release snaps
+ * on its own).
+ */
+export function floorDrive(drive: number, target: number, floored: boolean, held: boolean): number {
+  if (floored || held || !(target >= RUN_FLOOR - 1e-6)) return drive;
+  return drive < RUN_FLOOR ? RUN_FLOOR : drive;
 }
 
 /** Two requests for the same UI sound this close together (s) are one sound (the app and a cue
