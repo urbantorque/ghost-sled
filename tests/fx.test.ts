@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admit, HOLD_MS, SAME_FRAME_MS } from '../src/ui/fx';
+import { admit, HOLD_MS, SAME_FRAME_MS, sideAction } from '../src/ui/fx';
 
 // The one-line callout slot: a payoff line that has only just landed (New ground, New best, a trick)
 // keeps the slot against a lower-ranked or 'lost' newcomer, which waits its turn instead of erasing it.
@@ -12,12 +12,14 @@ describe('admit', () => {
     expect(admit(top, 'lost', 1000 + HOLD_MS)).toBe('show');
   });
 
-  it('holds a young trick line against lower ranks only', () => {
+  it('holds a young payoff line against lower and equal ranks', () => {
     const top = { tone: 'big' as const, born: 0 };
     expect(admit(top, 'lost', 100)).toBe('queue');
     expect(admit(top, 'normal', 100)).toBe('queue');
-    // An equal or higher rank still takes the slot (the newest payoff is the news).
-    expect(admit(top, 'big', 100)).toBe('show');
+    // IN THE FLOW keeps its moment against SURVIVED WRECK HOLLOW 0.35 s later.
+    expect(admit(top, 'big', 350)).toBe('queue');
+    expect(admit(top, 'big', HOLD_MS)).toBe('show');
+    // A higher rank still takes the slot (your best, the landing stamp).
     expect(admit(top, 'best', 100)).toBe('show');
     expect(admit(top, 'perfect', 100)).toBe('show');
   });
@@ -44,8 +46,31 @@ describe('admit', () => {
     expect(admit(top, 'lost', 500 + SAME_FRAME_MS)).toBe('queue');
   });
 
+  it("lets a landing's two tricks of one frame replace each other (the stamp names both)", () => {
+    expect(admit({ tone: 'big', born: 500 }, 'big', 500 + SAME_FRAME_MS - 1)).toBe('show');
+  });
+
   it('keeps the hold about 600 ms', () => {
     expect(HOLD_MS).toBeGreaterThanOrEqual(500);
     expect(HOLD_MS).toBeLessThanOrEqual(700);
+  });
+});
+
+describe('sideAction', () => {
+  it('holds a race word on the side line against the next one, which waits its turn', () => {
+    const top = { race: 'fjord348', born: 8267 };
+    // 'Passed MarmotMateo' 130 ms after 'Took back fjord348' waits, then shows.
+    expect(sideAction(top, 'MarmotMateo', 8400)).toBe('queue');
+    expect(sideAction(top, 'MarmotMateo', 8267 + HOLD_MS)).toBe('show');
+  });
+
+  it('grows a slingshot burst (or a newer word about the same ghost) in place', () => {
+    expect(sideAction({ race: 'slung', born: 0 }, 'slung', 33)).toBe('replace');
+    expect(sideAction({ race: 'Tess', born: 0 }, 'Tess', 200)).toBe('replace');
+  });
+
+  it('goes through the line slot over anything but a young race word', () => {
+    expect(sideAction(null, 'Tess', 0)).toBe('show');
+    expect(sideAction({ born: 0 }, 'Tess', 10)).toBe('show');
   });
 });

@@ -3085,6 +3085,12 @@
   position: relative;
 }
 
+/* A ghost's name in a race word on this line keeps its own case, as in the rival pill ("TOOK BACK
+   Kai_on_Tour"): it is a handle. */
+.gs-call-who {
+  text-transform: none;
+}
+
 /* Merged repeats: a row of small pips after the label (--n of them, up to five), "SLIPSTREAM ••• +28".
    Never "x3": "x" is the combo multiplier's alone. Drawn as one repeated dot, with an ink edge so it
    holds on white snow like the halo'd type. */

@@ -27,6 +27,7 @@ function rig() {
     say: rec('hud.say'),
     paceHit: rec('hud.paceHit'),
     flashBest: rec('hud.flashBest'),
+    holdDuel: rec('hud.holdDuel'),
   } as unknown as Hud;
   const fx = { pop: rec('fx.pop'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
   const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock') } as unknown as Notices;
@@ -107,6 +108,32 @@ describe('BeatRouter', () => {
       { type: 'comboLost', tick: 3, points: 900, stake: 900, best: false, crack: true },
     ]);
     expect(calls.map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'fx.lost']);
+  });
+
+  it('retires a live stamp on a sketchy landing before its line, and leaves it for other callouts', () => {
+    const { router, calls } = rig();
+    router.handle([
+      { type: 'stomp', tick: 1, streak: 1, late: false, title: 'Perfect landing', lead: [{ label: 'Stomp', points: 250 }], x: 0, z: 0, heading: 0, yetiHop: false },
+      { type: 'callout', tick: 2, source: 'drift', say: { label: 'Max drift', points: 300, tone: 'big' } },
+      { type: 'callout', tick: 40, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } },
+    ]);
+    expect(calls.map((c) => c[0])).toEqual(['fx.stomp', 'fx.pop', 'fx.retireStamp', 'fx.pop']);
+  });
+
+  it("holds the pill on a duel's ghost for its result (won, held off, lost), before the result's flash", () => {
+    const { router, calls } = rig();
+    router.handle([
+      { type: 'duel', tick: 1, phase: 'open', ghost: pool, gifts: 0 },
+      { type: 'duel', tick: 2, phase: 'heldOff', ghost: pool, gifts: 10 },
+      { type: 'duel', tick: 3, phase: 'lost', ghost: mila, gifts: 0 },
+      { type: 'duel', tick: 4, phase: 'closed', ghost: you, gifts: 0 },
+    ]);
+    expect(calls.filter((c) => c[0] !== 'hud.say').map((c) => c.slice(0, 2))).toEqual([
+      ['hud.holdDuel', 'Tess'],
+      ['hud.flashPass', 'Tess'],
+      ['hud.holdDuel', 'Mila'],
+      ['hud.news', 'Mila'],
+    ]);
   });
 
   it('flashes shown passes in the pill, keeps muted ones silent, and names a settled grudge once', () => {
