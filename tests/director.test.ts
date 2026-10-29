@@ -688,17 +688,23 @@ describe('the race', () => {
     r.poses.set(1002, pose(r.sim.s.z + 1.0));
     r.idle(1.5);
     const rival = () => (r.d as unknown as { out: { rival: { id: number } | null } }).out.rival?.id;
+    const held = () => (r.d as unknown as { out: { hud: { hold: boolean } } }).out.hud.hold;
+    expect(held()).toBe(false);
     r.poses.set(1001, pose(r.sim.s.z - 5));
     const won = r.frame();
     expect(of(won, 'duel').map((d) => d.phase)).toEqual(['won']);
-    // The other ghost is right there (and nearer), but the result flash holds the ring and pill.
+    // The other ghost is right there (and nearer), but the result flash holds the ring and pill, and
+    // the HUD hears of the hold on the director's own clock.
     expect(rival()).toBe(1001);
+    expect(held()).toBe(true);
     const hold = r.idle(1.4);
     expect(of(hold, 'duel')).toHaveLength(0);
     expect(rival()).toBe(1001);
+    expect(held()).toBe(true);
     const after = r.idle(0.3);
     expect(of(after, 'duel').map((d) => `${d.phase}:${d.ghost.id}`)).toEqual(['open:1002']);
     expect(rival()).toBe(1002);
+    expect(held()).toBe(false);
   });
 
   it('a duel about to open keeps the pill on its ghost: no third name for the quarter second before it', () => {
@@ -1568,7 +1574,143 @@ describe('the grudge settled', () => {
     q.r.poses.set(1001, pose(q.r.sim.s.z - 4.5));
     const w = q.r.frame();
     expect(w.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'duel')).toEqual(['grudgeSettled', 'duel']);
+    // One moment, not a banner stacked on a result: the banner carries the duel's word.
+    expect(of(w, 'grudgeSettled')[0].say?.label).toBe('Duel won');
     expect(q.r.d.grudgeSettled).toBe(true);
+  });
+
+  /** A second run's start bunch: the grudge, the opening duel's ghost and your best. */
+  function bunchRig(): { r: Rig; g: GhostTrack; d: GhostTrack; y: GhostTrack } {
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 } });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    const d = track(1002, 'pool', 'MarmotMateo');
+    const y = track(1003, 'you', 'Rider');
+    r.tracks = [g, d, y];
+    r.sim.tick = 2000;
+    r.poses.set(1001, pose(r.sim.s.z + 6));
+    r.poses.set(1002, pose(r.sim.s.z + 0.8));
+    r.poses.set(1003, pose(r.sim.s.z + 30));
+    return { r, g, d, y };
+  }
+
+  it("passed while another ghost's duel runs: the banner waits out the duel and its result's flash, then no duel opens under it", () => {
+    const { r, g, d, y } = bunchRig();
+    expect(of(r.idle(1.1), 'duel').map((b) => b.phase)).toEqual(['open']);
+    // You pass the grudge mid duel: its pass (the callout line's) is paid, its banner waits.
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    const p = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(p, 'pass')[0]).toMatchObject({ muted: false, gifts: 0 });
+    expect(of(p, 'grudgeSettled')).toHaveLength(0);
+    expect(r.d.grudgeSettled).toBe(false);
+    expect(of(r.idle(2), 'grudgeSettled')).toHaveLength(0);
+    // The duel resolves: 'Held off' (or 'Duel won') owns the pill for its 1.5 s hold, then the banner.
+    r.poses.set(1002, pose(r.sim.s.z - 5));
+    const res = r.frame();
+    expect(of(res, 'duel').map((b) => b.phase)).toEqual(['won']);
+    expect(of(res, 'grudgeSettled')).toHaveLength(0);
+    // Your best rides up beside you meanwhile: close enough to duel, but the banner goes first.
+    r.poses.set(1003, pose(r.sim.s.z + 0.5));
+    expect(of(r.idle(1.45), 'grudgeSettled')).toHaveLength(0);
+    const up = r.idle(0.1);
+    const s = of(up, 'grudgeSettled');
+    expect(s).toHaveLength(1);
+    expect(s[0]).toMatchObject({ paid: 10, ghost: { name: 'Tess' } });
+    expect(s[0].say).toBeUndefined();
+    expect(r.d.grudgeSettled).toBe(true);
+    // No duel opens under the rose banner (2.5 s): then your best's does.
+    expect(of(r.idle(2.3), 'duel')).toHaveLength(0);
+    expect(of(r.idle(0.3), 'duel').map((b) => `${b.phase}:${b.ghost.id}`)).toEqual([`open:${y.entry.id}`]);
+    expect(of(r.idle(5), 'grudgeSettled')).toHaveLength(0);
+    void d;
+  });
+
+  it("a slingshot burst through the bunch: the banner waits while it still counts, so 'Slung past Your best' shows", () => {
+    const { r, g, y } = bunchRig();
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    r.poses.set(1003, pose(r.sim.s.z - 2));
+    const a = r.frame([{ type: 'boost', amount: 5, source: 'slingshot' }], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(a, 'pass')[0]).toMatchObject({ word: 'slung' });
+    expect(of(a, 'grudgeSettled')).toHaveLength(0);
+    const b = r.frame([], { ticks: 20, race: [{ type: 'pass', track: y, first: true }] });
+    expect(of(b, 'pass')[0]).toMatchObject({ word: 'slung', text: 'Slung past 2', ghost: { kind: 'you' } });
+    expect(of(b, 'grudgeSettled')).toHaveLength(0);
+    // The burst stops counting 90 ticks after its last pass: then the banner.
+    expect(of(r.frame([], { ticks: 89 }), 'grudgeSettled')).toHaveLength(0);
+    expect(of(r.frame([], { ticks: 2 }), 'grudgeSettled')).toHaveLength(1);
+  });
+
+  it('a banner held by a burst goes before a mission met meanwhile, and a pass streak holds it 3 s at most', () => {
+    let met = false;
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 }, missionsCrossed: () => (met ? ((met = false), [{ id: 'm', text: 'Collect 20 gifts in one run', reward: 25 }]) : []) });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    const pack = [1, 2, 3, 4, 5, 6, 7].map((i) => track(i));
+    r.tracks = [g, ...pack];
+    r.sim.tick = 2000;
+    for (const t of r.tracks) r.poses.set(t.entry.id, pose(r.sim.s.z + 20 + t.entry.id / 100));
+    // (Past the start-line call.)
+    r.idle(3.5);
+    // A pass streak through the pack, one every 0.8 s: the grudge third.
+    const order = [pack[0], pack[1], g, pack[2], pack[3], pack[4], pack[5], pack[6]];
+    const beats: Array<{ at: number; b: Beat }> = [];
+    let at = 0;
+    for (const t of order) {
+      r.poses.set(t.entry.id, pose(r.sim.s.z - 2));
+      if (t === pack[2]) met = true;
+      for (const b of r.frame([], { race: [{ type: 'pass', track: t, first: true }] })) beats.push({ at, b });
+      for (let i = 0; i < 47; i++) for (const b of r.frame()) beats.push({ at: at + (i + 1) / 60, b });
+      at += 0.8;
+    }
+    for (let i = 0; i < 300; i++) for (const b of r.frame()) beats.push({ at: at + i / 60, b });
+    const settle = beats.find((x) => x.b.type === 'grudgeSettled');
+    const pop = beats.find((x) => x.b.type === 'missionPop');
+    expect(settle).toBeDefined();
+    expect(pop).toBeDefined();
+    // The grudge was passed at 1.6 s: the streak holds its banner 3 s, no more, and the mission waits for it.
+    expect(settle!.at - 1.6).toBeGreaterThan(2.9);
+    expect(settle!.at - 1.6).toBeLessThan(3.1);
+    expect(pop!.at).toBeGreaterThan(settle!.at + 2.49);
+  });
+
+  it('a plain pass of the grudge with nothing else on: the banner at once, as its picture', () => {
+    const { r, g } = bunchRig();
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(a.map((b) => b.type).filter((t) => t === 'grudgeSettled' || t === 'pass')).toEqual(['grudgeSettled', 'pass']);
+  });
+
+  it('a banner still waiting when the run ends goes up on the crash frame, with its gifts', () => {
+    const { r, g } = bunchRig();
+    r.idle(1.1);
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    expect(of(r.frame([], { race: [{ type: 'pass', track: g, first: true }] }), 'grudgeSettled')).toHaveLength(0);
+    r.sim.s.crashed = true;
+    const c = r.frame([{ type: 'crash', cause: 'tree' } as SimEvent]);
+    expect(of(c, 'grudgeSettled')).toHaveLength(1);
+    expect(of(c, 'grudgeSettled')[0].paid).toBe(10);
+    expect(r.d.grudgeSettled).toBe(true);
+  });
+
+  it("pops wait out the grudge's banner", () => {
+    let met = false;
+    const r = new Rig({ grudgeAtStart: { name: 'Tess', record: 'r', them: 1, streak: 1 }, missionsCrossed: () => (met ? ((met = false), [{ id: 'm', text: 'Pass a ghost', reward: 0 }]) : []) });
+    const g = track(1001, 'grudge', 'Tess');
+    g.distance = 900;
+    r.tracks = [g];
+    r.sim.tick = 2000;
+    // (The start-line call, 'Rematch Tess', has its 2.6 s first.)
+    r.poses.set(1001, pose(r.sim.s.z + 20));
+    r.idle(3.5);
+    r.poses.set(1001, pose(r.sim.s.z - 2));
+    met = true;
+    const a = r.frame([], { race: [{ type: 'pass', track: g, first: true }] });
+    expect(of(a, 'grudgeSettled')).toHaveLength(1);
+    const wait = r.idle(2.4);
+    expect(of(wait, 'missionPop')).toHaveLength(0);
+    expect(of(r.idle(0.7), 'missionPop')).toHaveLength(1);
   });
 
   it('crashed past it settles nothing (the crash owns the moment)', () => {

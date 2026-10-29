@@ -84,7 +84,9 @@ export interface DirectorOutput {
    *  held), the one number the pill (HudModel.nextGhost.gap) and the edge chip read; raw: the race
    *  maths' gap this frame. */
   rival: { id: number; gap: number; raw: number } | null;
-  hud: { stake: number; fuse: number; pace: boolean; duel: boolean; bestIn: number | null; countdown: { event: ChaosEvent; metres: number } | null };
+  /** duel: a duel is open on the rival. hold: a duel's result holds the rival on its ghost (the
+   *  director's RIVAL_HOLD_S, on its own clock): the HUD gates other ghosts' pill flashes on it. */
+  hud: { stake: number; fuse: number; pace: boolean; duel: boolean; hold: boolean; bestIn: number | null; countdown: { event: ChaosEvent; metres: number } | null };
   /** choir: AudioFrame.choir, 0..3 ghosts you passed this run still riding within 150 m behind.
    *  drafting: in a slipstream or riding a slingshot's boost (intensity holds its boost term at 0). */
   audio: { flow: number; driftCharge: number; skillMult: number; skillChain: number; earnedFlow: number; race: number; duel: number; shoulder: { amt: number; pan: number } | null; fuse: number; streak: number; countIn: boolean; lift: number; choir: number; drafting: boolean };
@@ -153,6 +155,12 @@ const RIVAL_HOLD_S = 1.5;
  *  Pushed with the result, it claimed a pass at the 8 s cap that had not happened ('PASSED Your best',
  *  then 'Your best neck and neck', then 'PASSED Your best' again for real). */
 const YOU_CLEAR_S = 6;
+/** A chained pass's strong flash in the rival pill (ticks; hud.ts STRONG_MS 1,500). */
+const BURST_FLASH_TICKS = 90;
+/** Once no duel holds a waiting grudge settle, bursts and a pop's banner hold it at most this long (s):
+ *  a pass streak through the bunch kept it back, a mission went up first, and the banner came 5.3 s
+ *  after its pass. */
+const SETTLE_BURST_MAX_S = 3;
 /** The rival pill never names a wreck or a ghost further back than this (m). */
 const RIVAL_BEHIND_M = 150;
 /** New best this soon (s) after New ground waits that long after it: each gets its own moment. */
@@ -162,8 +170,10 @@ const NEW_GROUND_GAP_S = 1.2;
  *  mission) never found the 1.4 s of quiet they wait for. */
 const DUEL_POP_GAP_S = 2.2;
 /** ...and no duel opens under a pop's banner (notices TOAST_MS 2,200 plus its exit): the banner band
- *  covers the race row, so an opening duel there would never be seen. */
+ *  covers the race row, so an opening duel there would never be seen. The grudge's banner (GRUDGE_MS
+ *  2,000 plus its exit) holds duels and pops as long, a nemesis's (NEMESIS_MS 2,600) NEMESIS_BANNER_S. */
 const POP_BANNER_S = 2.5;
+const NEMESIS_BANNER_S = 2.9;
 /** New best this soon after New ground waits until this long (s) after it. New best crossed by a bank
  *  (or due while one is on screen) waits for the bank's whole cash-in, its tier's BANK_MS (stake.ts):
  *  under a 1,900 ms 'NEW BEST COMBO' bank a 1.25 s wait printed 'new best' twice. */
@@ -283,6 +293,15 @@ export class Director {
   private lastSlungPassTick = -1e9;
   /** Gifts the grudge's passes and settle have credited this run (its premium is paid once). */
   private grudgePaid = 0;
+  /** The grudge's settle, decided (and paid for) but held while another moment owns the race row: an
+   *  open duel, a duel result's hold, a slung or chain burst still counting, a pop's banner. The rose
+   *  banner covers the race row for 2.2 s, and on second runs it landed on the opening duel's result
+   *  and on 'Slung past Your best' in the start bunch, which then never showed. */
+  private settleWait: BeatOf<'grudgeSettled'> | null = null;
+  /** Run clock since which no duel (open, or its result's hold) holds the waiting settle. */
+  private settleFreeAt = -1e9;
+  /** Run clock until which the grudge's banner covers the race row (no duel opens, no pop goes up). */
+  private settleBannerUntil = -1e9;
   /** Your best's 'Passed Your best' after a duel resolved neck and neck (YOU_CLEAR_S). */
   private youClear: { id: number; until: number } | null = null;
   /** Your best's ghosts edged past in a muted start-line jostle: rides your own line, so the jostle at
@@ -355,7 +374,7 @@ export class Director {
       beats: this.beats,
       feel: this.feel,
       rival: null,
-      hud: { stake: 0, fuse: 0, pace: false, duel: false, bestIn: null, countdown: null },
+      hud: { stake: 0, fuse: 0, pace: false, duel: false, hold: false, bestIn: null, countdown: null },
       audio: { flow: 0, driftCharge: 0, skillMult: 1, skillChain: 0, earnedFlow: 0, race: 0, duel: 0, shoulder: null, fuse: 0, streak: 0, countIn: false, lift: 0, choir: 0, drafting: false },
     };
   }
@@ -373,9 +392,10 @@ export class Director {
   /** The grudge was settled this run (its grudgeSettled beat fired): a shown pass of it, a duel with
    *  it won or held off, or riding past where its whole run ended. The save's settlement reads this
    *  as 'passed', so the results never settle a grudge the run did not show settled (a start-line
-   *  jostle past it is no overtake). */
+   *  jostle past it is no overtake). A settle still held for its moment is not yet: the crash pushes
+   *  it first. */
   get grudgeSettled(): boolean {
-    return this.grudgeDone;
+    return this.grudgeDone && this.settleWait === null;
   }
 
   /** A results line for an event the run never reached ('The yeti was 220 m away.'), else null. */
@@ -419,6 +439,9 @@ export class Director {
     this.slungN = 0;
     this.lastSlungPassTick = -1e9;
     this.grudgePaid = 0;
+    this.settleWait = null;
+    this.settleFreeAt = -1e9;
+    this.settleBannerUntil = -1e9;
     this.youClear = null;
     this.gapRead.reset();
     this.youJostled.clear();
@@ -539,8 +562,14 @@ export class Director {
         gaps.push({ id: t.entry.id, gap: p.z - rz, live: !p.done });
       }
       // A duel's result holds the rival on its ghost (the pill's flash): the next opens once it can be named.
+      // A grudge settle waiting its turn goes first, and no duel opens under its banner.
       const holding = this.rivalHold !== null && now < this.rivalHold.until;
-      const canOpen = !holding && (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_DUEL_S : POP_BANNER_S);
+      const canOpen =
+        !holding &&
+        this.settleWait === null &&
+        now >= this.settleBannerUntil &&
+        (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) &&
+        now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_DUEL_S : POP_BANNER_S);
       for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;
@@ -554,8 +583,10 @@ export class Director {
           this.choirIds.add(d.id);
           // You beat it where it could be seen: a shown pass (missions count it).
           this.shown.add(d.id);
-          // Beating the grudge in a duel settles it (its passes were muted while the duel ran).
-          if (t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted);
+          // Beating the grudge in a duel settles it (its passes were muted while the duel ran). One
+          // moment: the banner goes up with the result, and carries its word on the sub-line (the
+          // result's own flash waits under the banner and is spent there).
+          if (t.entry.kind === 'grudge') this.settle(t, ghost, sim, haunted, d.phase === 'won' ? 'Duel won' : 'Held off', true);
           const gifts = this.extras.take(DUEL_GIFTS * (haunted ? 2 : 1));
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts }, sim);
           this.lastPassAt = now;
@@ -634,9 +665,16 @@ export class Director {
         // Passes with the duel ghost still pay a first pass but say nothing: the duel's result will (or
         // just did: the wreck of a ghost that crashed out of its duel is that result's, not a 'Beat').
         const muted = c.muted || (this.duels.open === id && !resolved.has(id)) || (wreck && this.afterDuel(id, sim.tick));
-        if (c.word === 'slung' && !muted) {
-          this.slungN = slungN;
-          this.lastSlungPassTick = sim.tick;
+        // (The burst counts before the settle below, which waits while one still counts.)
+        if (!muted) {
+          if (c.word === 'slung') {
+            this.slungN = slungN;
+            this.lastSlungPassTick = sim.tick;
+          }
+          if (liveFirst) {
+            this.chainN = chainN;
+            this.lastShownPassTick = sim.tick;
+          }
         }
         // Settled before its pass flash: the banner the pass then names (and pays: the grudge's premium
         // is paid once, by the settle, never by a start-line jostle).
@@ -661,10 +699,6 @@ export class Director {
           this.shown.add(id);
           if (!wreck) this.choirIds.add(id);
           this.lastPassAt = now;
-          if (liveFirst) {
-            this.chainN = chainN;
-            this.lastShownPassTick = sim.tick;
-          }
           passedNow = ghost;
         }
       } else if (ev.type === 'passedBy') {
@@ -685,6 +719,9 @@ export class Director {
         this.settle(t, this.ref(t, f, sim), sim, haunted);
       }
     }
+    // A settle held for its moment goes up once nothing else owns the race row; the run's end pushes
+    // it at once (its gifts, the happytime and the results' settlement all come with the beat).
+    if (this.settleWait && (!live || !this.settleHeld(sim.tick, now))) this.pushSettle(this.settleWait, sim, now);
     if (this.youClear) this.yourBestClear(f, sim, now, live, haunted);
 
     // Taking the lead: rank 1 after 10 s with 3 or more ghosts, one still riding. Once, or again after
@@ -971,6 +1008,7 @@ export class Director {
     out.hud.fuse = fuseLevel(stake, timerFrac, draining);
     out.hud.pace = this.paceDone && c.active && run !== null && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart;
     out.hud.duel = duelId !== null;
+    out.hud.hold = duelId === null && this.rivalHold !== null && rv !== null && rv.id === this.rivalHold.id;
     out.hud.bestIn = null;
     if (run && run.bestDistAtStart >= 150 && this.newGroundAt < 0 && !s.crashed) {
       const d = run.bestDistAtStart - sim.distance;
@@ -1072,9 +1110,18 @@ export class Director {
   /** The grudge settled, once per run: the banner ('Grudge settled' or 'Nemesis down'). paid is what
    *  the app credits here: the whole of grudgeTotal less what its passes already paid (a start-line
    *  jostle pays only a pass's base), so the premium is paid once. `sub` names a merged moment (its
-   *  wipeout behind you) on the beat's say, for the banner's sub-line. */
-  private settle(t: GhostTrack, ghost: GhostRef, sim: Sim, haunted: boolean, sub?: string): void {
-    if (this.grudgeDone) return;
+   *  wipeout behind you, its duel's result) on the beat's say, for the banner's sub-line. The banner
+   *  waits while another moment owns the race row (settleHeld), unless `fold`: it is that moment
+   *  itself (the grudge's own duel result), and a settle already waiting goes up with it. */
+  private settle(t: GhostTrack, ghost: GhostRef, sim: Sim, haunted: boolean, sub?: string, fold = false): void {
+    if (this.grudgeDone) {
+      const w = this.settleWait;
+      if (fold && w) {
+        if (sub) w.say = { label: sub, points: 0, tone: 'normal' };
+        this.pushSettle(w, sim, this.clock);
+      }
+      return;
+    }
     this.grudgeDone = true;
     const g = this.run?.grudgeAtStart;
     const nemesis = !!t.entry.nemesis;
@@ -1083,6 +1130,34 @@ export class Director {
     this.grudgePaid = Math.max(this.grudgePaid, total);
     const b: BeatOf<'grudgeSettled'> = { type: 'grudgeSettled', tick: sim.tick, ghost, nemesis, after: g ? (nemesis ? Math.max(g.streak, g.them) : g.them) : 1, paid };
     if (sub) b.say = { label: sub, points: 0, tone: 'normal' };
+    this.settleFreeAt = this.clock;
+    if (!fold && this.settleHeld(sim.tick, this.clock)) this.settleWait = b;
+    else this.pushSettle(b, sim, this.clock);
+  }
+
+  /** Another moment owns the race row, and the grudge's banner (over that row for 2.2 s) would hide it:
+   *  an open duel or its result's hold; then, for SETTLE_BURST_MAX_S at most, a slung or chain burst
+   *  whose latest pass still flashes (the slung burst's SLING_TICKS count, a chained pass's
+   *  BURST_FLASH_TICKS) or a pop's banner. (A chain counts on for CHAIN_TICKS, but a chained pass after
+   *  the banner went up waits under it and plays after it; held for the whole window, the banner and
+   *  the opening duel behind it came 5.5 s late.) */
+  private settleHeld(tick: number, now: number): boolean {
+    if (this.duels.open !== null || (this.rivalHold !== null && now < this.rivalHold.until)) {
+      this.settleFreeAt = now;
+      return true;
+    }
+    if (now - this.settleFreeAt >= SETTLE_BURST_MAX_S) return false;
+    return (
+      tick - this.lastSlungPassTick <= SLING_TICKS ||
+      (this.chainN >= 2 && tick - this.lastShownPassTick <= BURST_FLASH_TICKS) ||
+      now - this.lastPopAt < (this.lastPopUnlock ? UNLOCK_BANNER_S : POP_BANNER_S)
+    );
+  }
+
+  private pushSettle(b: BeatOf<'grudgeSettled'>, sim: Sim, now: number): void {
+    this.settleWait = null;
+    b.tick = sim.tick;
+    this.settleBannerUntil = now + (b.nemesis ? NEMESIS_BANNER_S : POP_BANNER_S);
     this.push(b, sim);
   }
 
@@ -1335,6 +1410,11 @@ export class Director {
       now - this.lastNewsAt >= POP_DEFER.news / 1000 &&
       // An open duel holds a pop only while it is fresh (it lives in the pill; the pop in the notice slot).
       (this.duels.open === null || now - this.duelOpenAt >= DUEL_POP_BLOCK_S) &&
+      // A duel's result keeps its flash; the grudge's banner keeps the band, and goes first once only a
+      // burst holds it back (behind a long duel, a pop goes up mid duel as before).
+      !(this.rivalHold !== null && now < this.rivalHold.until) &&
+      now >= this.settleBannerUntil &&
+      !(this.settleWait !== null && this.duels.open === null) &&
       // The start-line call goes first: a pop waits while its ghost gets ready, then while it shows.
       !(this.callWaiting && !this.callDone) &&
       !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
