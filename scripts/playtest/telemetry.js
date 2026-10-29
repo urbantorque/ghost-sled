@@ -60,7 +60,8 @@
 //     metrics; a metric the build cannot report is 'n/a' (the baseline build has no director or beats).
 //   fun fields: flow { maxShown, maxSim, in, snuff }, drift { sim: releases by tier from the sim's own
 //     events, beats: driftRelease beats by tier }, nearMiss { sim, gaps, simGrade, beats }, kickers
-//     { hit, boostPops }, landings, tricks, stompStreakPeak, hints (showings by kind), missions { met,
+//     { hit, boostPops }, drafts { seconds, slingshots }, landings, tricks, stompStreakPeak, hints
+//     (showings by kind), missions { met,
 //     popped, dropped, delays, list }, unlockPopAt, fieldGoneAt (sim s from which no riding ghost is ahead
 //     within 150 m; null while one still is at the crash), aheadAt30 / aheadAt60 ({ riding, within150 }
 //     ghosts ahead), rivalPill { ticks, done, far, frac } (ticks where the rival pill names a done ghost
@@ -86,7 +87,8 @@ async (page) => {
   // tick, before the step, and returns { steer: 0..8 (4 = centre), action }. It reads only the sim and
   // its course (plus opts.ghosts for drafting), so it runs the same in the page and in node
   // (scripts/playtest/stunt-sim.ts). Its randomness is a seeded generator: a seed and a course make the
-  // same run. opts: { seed, ghosts(tick, x, z) -> { x, z } | null (the ghost ahead to draft), err }.
+  // same run. opts: { seed, ghosts(tick, x, z) -> { x, z } | null (the ghost ahead to draft),
+  // draft(tick, x, y, z) -> bool (the run's draft probe, for the look-ahead), err (the error budget below) }.
   function makeStuntPilot(sim, opts) {
     opts = opts || {};
     const c = sim.course;
@@ -111,6 +113,8 @@ async (page) => {
     // the hands freeze on the last input.
     const E = Object.assign({ greed: 0.35, greedSd: 0.12, stompSd: 0.02, grazeSloppy: 0.3, grazeAimSd: 0.15, kickBlind: 0.1, lapsePerMin: 1, lapseAfter: 40 }, opts.err || {});
     const ghosts = typeof opts.ghosts === 'function' ? opts.ghosts : null;
+    // The run's draft probe (tick, x, y, z) -> bool, so a look-ahead drafts the field exactly as the run will.
+    const draftP = typeof opts.draft === 'function' ? opts.draft : null;
     const dbg = typeof opts.debug === 'function' ? opts.debug : null;
     const sp = sim.sled || {};
     const mp = sim.mood || {};
@@ -458,7 +462,8 @@ async (page) => {
         const inp = ctl(k);
         if (!inp) break;
         const wasGround = k.s.grounded;
-        k.step((inp.steer | 0) | (inp.action ? 16 : 0));
+        const db = draftP && draftP(k.tick, k.s.x, k.s.y, k.s.z) ? 32 : 0;
+        k.step((inp.steer | 0) | (inp.action ? 16 : 0) | db);
         stats.rollTicks++;
         res.ticks++;
         for (const e of k.events) {
@@ -553,9 +558,9 @@ async (page) => {
         return null;
       }
       const dir = bend > 0 ? 1 : -1;
-      // Aim for a tier, then look for a drift that gets there and lands clean: a pre-turn away from the
-      // bend (the flick), then the hold, its yaw factor setting the arc. One candidate is ridden on the
-      // copy per tick (from that tick's state), so the search also spreads over start points.
+      // Aim for a tier, then look for a drift that gets there and lands clean: how far to flick away from
+      // the bend (A) and the slip to hold (sig). One candidate is ridden on the copy per tick (from that
+      // tick's state), so the search also spreads over start points.
       if (!P.dq || P.dq.dir !== dir || T > P.dq.until) {
         stats.driftTries++;
         const roll = rnd();
@@ -968,6 +973,7 @@ async (page) => {
         const pose = {};
         stunt = make(sim, {
           seed,
+          draft: (tick, x, y, z) => (run.draftProbe ? run.draftProbe(tick, x, y, z) : false),
           ghosts: (tick, x, z) => {
             let best = null;
             for (const t of app.ghosts.tracks) {
@@ -985,7 +991,7 @@ async (page) => {
       // ---- Per-tick fun metrics, read from the sim's own events (both builds) and the director (newer
       // build only; every read is guarded so an older build reports n/a).
       const F = (tele.fun = {
-        simRel: [0, 0, 0, 0], simNear: 0, simGaps: [], simGrade: { whisker: 0, near: 0, unknown: 0 }, kickers: 0, boostPops: 0,
+        simRel: [0, 0, 0, 0], simNear: 0, simGaps: [], simGrade: { whisker: 0, near: 0, unknown: 0 }, kickers: 0, boostPops: 0, slingshots: 0, draftTicks: 0,
         land: { perfect: 0, clean: 0, sketchy: 0, hop: 0, late: 0 }, tricks: {}, maxSimFlow: 0, maxShown: null, flowFields: false,
         pillTicks: 0, pillDone: 0, pillFar: 0, pillOk: false, met: {}, metOk: app.missionsPopped instanceof Set, lastAheadNear: null, hadAheadNear: false,
         aheadAt30: null, aheadAt60: null, banner: { samples: 0, two: 0, overRow: 0 },
@@ -1007,6 +1013,7 @@ async (page) => {
         for (const e of sim.events) {
           if (e.type === 'drift' && e.phase === 'release') F.simRel[e.tier] = (F.simRel[e.tier] || 0) + 1;
           else if (e.type === 'style' && e.kind === 'boostPop') F.boostPops++;
+          else if (e.type === 'style' && e.kind === 'slingshot') F.slingshots++;
           else if (e.type === 'style' && e.kind === 'nearMiss') {
             F.simNear++;
             let gap = typeof e.gap === 'number' ? e.gap : null;
@@ -1030,6 +1037,7 @@ async (page) => {
         if (wasGround && !s.grounded && rampAt(s)) F.kickers++;
         wasGround = s.grounded;
         if ((s.flow ?? 0) > F.maxSimFlow) F.maxSimFlow = s.flow;
+        if (sim.stats) F.draftTicks = sim.stats.draftTicks || 0;
         const d = app.director;
         const shown = d ? d.flowShown : undefined;
         if (typeof shown === 'number') { F.flowFields = true; if (F.maxShown === null || shown > F.maxShown) F.maxShown = shown; }
@@ -1252,6 +1260,7 @@ async (page) => {
       drift: { sim: { t1: F.simRel ? F.simRel[1] : 0, t2: F.simRel ? F.simRel[2] : 0, t3: F.simRel ? F.simRel[3] : 0 }, beats: noBeats ? NA : { t1: B('driftRelease').filter((b) => b.tier === 1).length, t2: B('driftRelease').filter((b) => b.tier === 2).length, t3: B('driftRelease').filter((b) => b.tier === 3).length } },
       nearMiss: { sim: F.simNear || 0, gaps: (F.simGaps || []).slice(0, 60), simGrade: F.simGrade || NA, beats: noBeats ? NA : { whisker: nearBeats.filter((b) => b.grade === 'whisker').length, near: nearBeats.filter((b) => b.grade === 'near').length } },
       kickers: { hit: F.kickers || 0, boostPops: F.boostPops || 0 },
+      drafts: { seconds: +((F.draftTicks || 0) / 60).toFixed(1), slingshots: F.slingshots || 0 },
       landings: F.land || NA,
       tricks: F.tricks || {},
       stompStreakPeak: noBeats ? NA : streaks.length ? Math.max(...streaks) : 0,
@@ -1301,6 +1310,8 @@ async (page) => {
       kickers: sum((r) => fm(r).kickers.hit),
       runsWithKicker: runsWith((r) => fm(r).kickers.hit),
       boostPops: sum((r) => fm(r).kickers.boostPops),
+      draftSeconds: mean((r) => fm(r).drafts.seconds),
+      slingshots: sum((r) => fm(r).drafts.slingshots),
       landings: merge((r) => fm(r).landings),
       tricks: merge((r) => fm(r).tricks),
       stompStreakPeak: anyNA((r) => fm(r).stompStreakPeak) ? NA : max((r) => fm(r).stompStreakPeak),
