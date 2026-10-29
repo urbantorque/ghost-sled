@@ -15,7 +15,7 @@ import { LandingAid } from './landing';
 import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
 import { Particles, Weather } from './particles';
-import { brushPoint } from './brush';
+import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { Rider } from './rider';
@@ -723,11 +723,13 @@ export class World {
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.
-   *  Medium and High only, while the wall is within 75 m. */
+   *  Medium and High only, for the whole chase: the HUD shows the unit's glass from the chase's first
+   *  frame, and a clean rider holds the wall at 70 to 90 m (it speeds up past 70), so an inset kept to
+   *  within 75 m left that glass empty for most of a good run (decision 33: never an empty frame). */
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && gap < 75 && this.quality.tier !== 'low' ? 1 : 0;
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.tier !== 'low' ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it
@@ -835,11 +837,13 @@ export class World {
    *  the top of a desktop frame and off the side of a phone's): the burst is thrown at the rider's side
    *  on the side you shaved, a little ahead and inside the frame (brush.ts). Same powder layer (no
    *  draw call, no material), the count scaled by the tier's particle budget like every burst. A
-   *  whisker throws the full amount, an ordinary near miss about two thirds. */
+   *  whisker throws the full amount, an ordinary near miss about two thirds. Shaved in the air, a
+   *  tree's snow comes off at the rider's height up to its crown; grit stays on the snow; a rider
+   *  well clear over either throws none (brush.ts). */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
     const bough = BOUGHS.has(b.obs);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT);
+    if (brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT, bough ? BRUSH_REACH_BOUGH : 0) === 0) return;
     this.particles.brush(this.fxB, this.fxT, this.carrier(s), bough, ICY.has(b.obs), (bough ? 22 : 18) * k);
   }
 
