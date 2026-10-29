@@ -422,7 +422,7 @@ function injectStyle(): void {
   .ghost-label.dot::after, .ghost-label.dot .tag { display: none; }
   .ghost-label.rival { box-shadow: 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
   .ghost-label.marker { background: #121933; color: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 2px 6px rgba(18, 25, 51, 0.3); font-weight: 700; }
-  .ghost-label .tag { font-size: 10px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ghost-label .tag { font-size: 11px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
   .ghost-label .tw { display: none; font-style: italic; }
   .ghost-label.trick .nm, .ghost-label.trick .tag { display: none; }
   .ghost-label.trick .tw { display: inline-block; animation: ghost-trick 0.22s cubic-bezier(0.2, 0.9, 0.2, 1.1) both; }
