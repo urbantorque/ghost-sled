@@ -595,6 +595,12 @@ export class PostFX {
     this.renderer.render(this.qScene, this.qCam);
   }
 
+  /** The target the scene pass draws into (null: the canvas, with the post pass off). Shader programs
+   *  depend on it (a linear HDR buffer or the sRGB canvas), so a prewarm compiles into it. */
+  get sceneTarget(): WebGLRenderTarget | null {
+    return this.enabled ? this.sceneRT : null;
+  }
+
   render(scene: Scene, camera: Camera): void {
     const r = this.renderer;
     if (!this.enabled) {

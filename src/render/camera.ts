@@ -101,6 +101,21 @@ const ORBIT_FACE = 0.9;
 const ORBIT_EASE = 5;
 const ORBIT_SWING = 3.6;
 const ORBIT_WIND = 0.15;
+/** Facing the pack, the lens sits low (this high over the wreck, about head height over the snow
+ *  downhill of it) and looks a little over the wreck, so the slope it came down fills the frame with
+ *  the ghosts riding down it. From the orbit's usual 3.2 m, the downhill lens stood 5 m over its own
+ *  snow and looked down onto a sheet of white with the pack as specks at the top edge. */
+const ORBIT_PACK_UP = 1.3;
+const ORBIT_PACK_LOOK = 1.1;
+/** The pack lens's search for a clear spot: radii (the orbit's, then closer), turns off the set
+ *  facing (radians), and where along the line to the wreck a trunk would hide it. */
+const PACK_RADII = [ORBIT_R, 5.5, 4];
+const PACK_TURNS = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9];
+const PACK_SIGHT = [0.35, 0.65];
+/** No prop's foot this close to the pack lens (metres): props dissolve inside about 3.6 m of a lens. */
+const PACK_CLEAR = 3.4;
+/** The pack lens stays on the downhill side: at most this far (radians) off straight downhill. */
+const PACK_DOWNHILL = 1.4;
 
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
@@ -177,6 +192,14 @@ export class ChaseCamera {
   private orbitAim: number | null = null;
   private orbitR = ORBIT_R;
   private orbitUp = ORBIT_UP;
+  /** The height the orbit eases to, and the eased lift of its look point over the wreck (and its
+   *  target): low and looking up the slope while it faces the pack. */
+  private orbitUpT = ORBIT_UP;
+  private orbitLook = 0;
+  private orbitLookT = 0;
+  /** The radius the orbit eases to, and the radius packLens picked. */
+  private orbitRT = ORBIT_R;
+  private packR = ORBIT_R;
   /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
   private orbitSpin = ORBIT_SPIN;
   /** Raw events this frame that a beat may take over: a perfect landing (the stomp beat kicks by
@@ -363,6 +386,7 @@ export class ChaseCamera {
     this.freezeLeft = 0;
     this.orbitFrom = null;
     this.orbitSeeded = false;
+    this.orbitLook = this.orbitLookT = 0;
     this.pendPerfect = false;
     this.pendDriftKick = 0;
   }
@@ -560,13 +584,15 @@ export class ChaseCamera {
         desired.copy(this.pos);
         lookAt.copy(this.look);
       } else {
-        if (this.crashOrbit(t, dt, desired)) {
+        const cut = this.crashOrbit(t, dt, desired);
+        lookAt.copy(t.pos);
+        lookAt.y += this.orbitLook;
+        if (cut) {
           // A cut to face the pack: the lens stands there at once.
           this.pos.copy(desired);
-          this.look.copy(t.pos);
-          this.lookS.copy(t.pos);
+          this.look.copy(lookAt);
+          this.lookS.copy(lookAt);
         }
-        lookAt.copy(t.pos);
       }
     } else if (this.mode === 'hero') {
       this.heroShot(t, desired, lookAt, tanHalfW, travelAz);
@@ -758,20 +784,30 @@ export class ChaseCamera {
       this.orbitSpin = ORBIT_SPIN;
       this.orbitT = 0;
       this.orbitAim = null;
+      this.orbitUpT = ORBIT_UP;
+      this.orbitRT = ORBIT_R;
+      this.orbitLook = this.orbitLookT = 0;
       const from = this.feel.reduced ? null : this.orbitFrom;
-      if (from !== null) {
-        // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward
-        // +x). In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens
-        // along (sin a, cos a), so the lens opposite the ghost, facing it, is at a = -from. It stays
-        // on the downhill side (a = PI looks straight up the slope): a ghost abreast is watched
-        // across the slope as it comes down, not from deeper in the trees beside a wreck.
-        const aim = Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE);
+      // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward +x).
+      // In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens along
+      // (sin a, cos a), so the lens opposite the ghost, facing it, is at a = -from. It stays on the
+      // downhill side (a = PI looks straight up the slope): a ghost abreast is watched across the
+      // slope as it comes down, not from deeper in the trees beside a wreck. ...From a spot with no
+      // tree at the lens or across the line to the wreck: in the treeline the low lens stood among
+      // dissolving trunks, and where every spot is walled in there is no pack shot at all (the orbit
+      // drifts on from the held lens, which rode in along the open course).
+      const aim = from === null ? null : this.packLens(t.pos, Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE));
+      if (aim !== null) {
+        this.orbitUpT = ORBIT_PACK_UP;
+        this.orbitLookT = ORBIT_PACK_LOOK;
+        this.orbitRT = this.packR;
         const gap = wrapAngle(aim - this.orbitAngle);
         this.orbitSpin = ORBIT_SPIN * 0.4 * (gap < 0 ? -1 : 1);
         if (Math.abs(gap) > ORBIT_CUT) {
           this.orbitAngle = aim;
-          this.orbitR = ORBIT_R;
-          this.orbitUp = ORBIT_UP;
+          this.orbitR = this.packR;
+          this.orbitUp = ORBIT_PACK_UP;
+          this.orbitLook = ORBIT_PACK_LOOK;
           this.orbitT = ORBIT_WIND;
           cut = true;
         } else this.orbitAim = aim;
@@ -785,13 +821,51 @@ export class ChaseCamera {
       else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
     } else this.orbitAngle += dt * this.orbitSpin * wind;
     const k = 1 - Math.exp(-dt * 2.5);
-    this.orbitR += (ORBIT_R - this.orbitR) * k;
-    this.orbitUp += (ORBIT_UP - this.orbitUp) * k;
+    this.orbitR += (this.orbitRT - this.orbitR) * k;
+    this.orbitUp += (this.orbitUpT - this.orbitUp) * k;
+    this.orbitLook += (this.orbitLookT - this.orbitLook) * k;
     desired.set(t.pos.x + Math.sin(this.orbitAngle) * this.orbitR, t.pos.y + this.orbitUp, t.pos.z + Math.cos(this.orbitAngle) * this.orbitR);
     // Facing the pack can put the lens over a bank or among the trees beside the course: never in
     // the snow.
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 1);
     return cut;
+  }
+
+  /** The pack-facing lens's angle round the wreck (three.js position `w`), or null for no pack shot.
+   *  The set facing when nothing stands by the lens or across its line to the wreck; else the clear
+   *  spot nearest it, turning off the facing or round toward straight downhill (a wreck in the
+   *  treeline is watched from the open course, not from deeper in the forest), at the orbit's radius
+   *  or a step closer, never uphill of the wreck; null when every spot has a tree by the lens. Sets
+   *  packR. Asked once per crash, so its prop scan never runs per frame. */
+  private packLens(w: Vector3, face: number): number | null {
+    this.packR = ORBIT_R;
+    const blocked = this.blocked;
+    if (!blocked) return face;
+    let best = face;
+    let bestCost = Infinity;
+    for (const r of PACK_RADII) {
+      for (let i = 0; i < PACK_TURNS.length * 2; i++) {
+        // Turns off the facing first, then the same turns round straight downhill.
+        const a = (i < PACK_TURNS.length ? face : Math.PI) + PACK_TURNS[i % PACK_TURNS.length];
+        if (Math.abs(wrapAngle(a - Math.PI)) > PACK_DOWNHILL) continue;
+        const lx = w.x + Math.sin(a) * r;
+        const lz = w.z + Math.cos(a) * r;
+        // A tree by the lens is the worst (inside about 3.5 m it fills a side of the frame, dissolving);
+        // one across the line hides the wreck.
+        let cost = blocked(lx, lz, PACK_CLEAR) ? 3 : 0;
+        for (const f of PACK_SIGHT) if (blocked(w.x + (lx - w.x) * f, w.z + (lz - w.z) * f, 1.4)) cost += 1;
+        // (The set facing and the orbit's own radius win ties.)
+        cost += Math.abs(wrapAngle(a - face)) * 0.4 + (ORBIT_R - r) * 0.05;
+        if (cost === 0) return a;
+        if (cost < bestCost) {
+          bestCost = cost;
+          best = a;
+          this.packR = r;
+        }
+      }
+      if (bestCost < 1) break;
+    }
+    return bestCost < 3 ? best : null;
   }
 
   /** Sell top fix 1, put the rivals in the frame: the ghost the HUD's rival pill names used to sit

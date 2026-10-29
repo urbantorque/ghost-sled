@@ -10,6 +10,7 @@ import type { GhostKind } from '../ui/contract';
 import { ChaseCamera } from './camera';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
+import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
 import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
@@ -145,6 +146,8 @@ export class World {
   private perfectPulse = 0;
   private flash = 0;
   private punch = 0;
+  /** 1 while riding, easing to 0 through a crash: how much of the speed streaks the post pass gets. */
+  private streakK = 1;
   private sprayAcc = 0;
   private wasGrounded = true;
   private width = 1;
@@ -263,6 +266,18 @@ export class World {
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    this.prewarm();
+  }
+
+  /** Compiles every material in the scene now, the hidden ones too, into the target the scene pass
+   *  draws into. The landing ring first draws on the run's first jump and the stomp crater on its first
+   *  perfect landing: compiled there, each stalled the frame of the moment it was meant to sell. */
+  private prewarm(): void {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(this.post.sceneTarget);
+    r.compile(this.scene, this.cam.camera);
+    r.setRenderTarget(prev);
   }
 
   private configureShadow(): void {
@@ -324,11 +339,12 @@ export class World {
     this.applyWeather();
     this.lastChunkRange = '';
     this.resize();
-    // Materials recompile when the shadow define changes.
+    // Materials recompile when the shadow define changes (the hidden ones now, not on first use).
     this.scene.traverse((o) => {
       const m = (o as { material?: { needsUpdate: boolean } }).material;
       if (m) m.needsUpdate = true;
     });
+    this.prewarm();
   }
 
   setCourse(seed: number): void {
@@ -372,21 +388,18 @@ export class World {
    *  director's clusters, sim z, with a name and how many fell). Each gets a cairn on the bank beside
    *  it (Medium and High; Low keeps no mesh), on the side its hash picks, 1.4 m outside the corridor so
    *  it is never in the line. Call it at each run's start, after setCourse; an empty list clears them.
-   *  The placed spots go on to the ghost layer for its tags when it takes them (setGraveyards). */
+   *  The placed spots go on to the ghost layer for their tags ('Widow's Bend' over '4 ghosts fell
+   *  here'), which show on every tier. */
   setGraveyards(list: ReadonlyArray<{ z: number; name: string; fell: number }>): void {
-    const c = this.course;
-    const placed = list.slice(0, 4).map((g) => {
-      const side = Math.imul(Math.round(g.z * 7), 0x9e3779b1) >>> 31 ? 1 : -1;
-      const x = c.centerX(g.z) + side * (c.halfWidth(g.z) + 1.4);
-      return { name: g.name, fell: g.fell, x, z: g.z, y: c.ground(x, g.z) + 3.2 };
-    });
+    // (The tag hangs just over the marker stake's top; on Low, with no cairn, it marks the same spot.)
+    const placed = placeGraves(this.course, list);
     this.graves = placed;
     this.props.setGraveyards(placed);
-    (this.ghosts as unknown as { setGraveyards?: (l: typeof placed) => void }).setGraveyards?.(placed);
+    this.ghosts.setGraveyards(placed);
   }
 
   /** The cairns placed this run (for the ghost layer's tags and play-tests). */
-  graves: ReadonlyArray<{ name: string; fell: number; x: number; z: number; y: number }> = [];
+  graves: ReadonlyArray<GravePlace> = [];
 
   /** Clears held feel (the camera's freeze and jolts; the world's rim pulse and band flare) on revive
    *  and at a run's start. */
@@ -436,6 +449,7 @@ export class World {
     this.wasGrounded = true;
     this.flash = 0;
     this.punch = 0;
+    this.streakK = 1;
     this.flowPulseT = 9;
     this.flareT = -1;
     this.bestZ = -1;
@@ -627,7 +641,10 @@ export class World {
     const runK = v.mode === 'run' && v.sim ? Math.max(0, Math.min(1, (v.sim.tick / 60 - 1.8) / 1.6)) : 1;
     const intro = 1 - runK * runK * (3 - 2 * runK);
     this.cam.sun = this.palette.diskDir;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, mate, rival, intro }, dt);
+    // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
+    // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
+    const drifting = v.mode === 'run' && s.drifting;
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
@@ -667,7 +684,10 @@ export class World {
     // close frame where bloom washed the face and scarf out: both run with less of either.
     const tall = this.width < this.height;
     // Reduced motion halves the speed streaks and the flash and drops the punch (FOV breathing stays).
-    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) : 0;
+    // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
+    // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
+    this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
+    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,

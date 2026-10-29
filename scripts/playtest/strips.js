@@ -1,7 +1,14 @@
-// Beat strips: short frame sequences around named beats, for the play-test phase. Each strip is 4 to
-// 10 screenshots taken at fixed frame offsets after a beat lands (frame 0 is the frame the beat was
-// named in), keyed on window.__gs.director.log, plus a probe per frame (camera mode, roll, jolt,
-// crash hold, FOV, the time scale and the phase) so a strip can be read as numbers too.
+// Beat strips: short frame sequences around the game's named moments, for the play-test phase. Each
+// strip is 4 to 6 screenshots: after a director beat lands (frame 0 is the frame the beat was named
+// in, keyed on window.__gs.director.log), or, for a place you ride up to (a km arch, a graveyard
+// cairn), at set distances before and just past it. Every frame carries a probe (camera mode, roll,
+// jolt, crash hold, FOV, the time scale, the director's feel and the tags on screen), so a strip can
+// be read as numbers too.
+//
+// The default plan rides REAL runs with the merged director: pass, duel won, whisker, stomp streak,
+// drift tier 3 release, bank tier 3, km arch, graveyard, finale and the crash orbit, plus a held
+// drift's spray heating through tiers 1 to 3 and earned flow on the rider ('In the flow' when a run
+// earns it: maxPerType counts it, a run that never does leaves it unstripped).
 //
 // The game runs on a virtual clock while strips are taken: requestAnimationFrame, performance.now and
 // setTimeout are driven from here in exact 1/60 s steps, so a screenshot never costs game time and
@@ -14,53 +21,132 @@
 //   playwright-cli -s=gs run-code --filename=scripts/playtest/strips.js
 // Set window.__stripCfg on the current page first (any page of the build) to change the plan:
 //   {
-//     label: 'land',                       // file name prefix
+//     label: 'fun',                        // file name prefix
 //     base: 'http://127.0.0.1:4182/',
-//     params: 'tier=medium&m=0',           // extra URL parameters (mood=N, event=N, demo=N, ...)
+//     params: 'tier=medium&m=0&event=3',   // extra URL parameters (mood=N, event=N, demo=N, tier, m)
 //     out: 'C:/.../shots/strips',          // absolute folder for the PNGs
-//     beats: ['stomp', 'crash'],           // director.log types to strip
-//     frames: [0, 3, 6, 10, 15, 24],       // frame offsets after the beat (60 Hz frames)
-//     framesFor: { crash: [0, 2, 4, 8, 14, 22, 34, 50, 70, 100] },  // per-type override
-//     maxPerType: 1, maxSeconds: 120, after: 0,   // after: ignore beats before this run time (s)
-//     pilot: 'mid',                        // 'mid' | 'expert' | 'line' | 'none' (none: ?demo= or autoride)
+//     moments: ['pass', 'crash'],          // names from MOMENTS below (default: all of them)
+//     beats: ['stomp'],                    // also strip these raw director.log types, any entry
+//     frames: [0, 4, 10, 18, 30],          // frame offsets for the raw beats
+//     maxPerType: 1, maxSeconds: 150, after: 0,   // after: ignore beats before this run time (s)
+//     pilot: 'show',                       // 'show' | 'mid' | 'expert' | 'line' | 'none'
+//     rivals: true,                        // a seeded save: your best 330 m (the gold band), best
+//                                          // combo 1,600 (a bigger bank is a real tier 3), a nemesis
+//                                          // grudge and a friend's challenge link, all from the pool
+//     standIns: true,                      // the two paths a pilot or this tree cannot reach (below)
 //     reduced: false,                      // emulate prefers-reduced-motion: reduce
-//     synth: false,                        // stand in for director beats a tree has not wired yet (below)
-//     save: null,                          // a save object to load before the run (localStorage)
-//     runs: 1,                             // runs to ride (Run Again between them) until every type is stripped
+//     synth: false,                        // legacy stand-ins for an unmerged director (below)
+//     runs: 3,                             // runs to ride (Run Again between them) until all are stripped
 //   }
-// synth: true adds, only where the director has not named them, the beats the camera and the ghost
-// layer read: a crash beat with orbitFrom (and the crash render curve), a bump beat with its side,
-// ghostTrick beats from the ghosts' trick streams, and the drift fields on the chase camera target.
-// Returns JSON: { label, strips: [{ type, t, files, probes }] }.
+// standIns: true covers, and only until each is stripped once, the paths a scripted pilot (or this
+// tree) cannot reach: (1) the graveyards: the app does not yet cluster the pool's crashes, so the
+// script finds them (3 or more within 8 m) and calls the real world.setGraveyards at the run's start
+// when nothing placed any; (2) drift tier 3: the pilot's drifts run under a second, so while one is
+// held the sled's drift charge is topped up past tier 3's 2.4; (3) bank tier 3: the pilot's combos bank
+// under 1,500, so once a combo holds 3 skill moves its pending pool is raised to bank just over your
+// best combo. In each case the sim event, the director's beat and grading, and every consumer (HUD,
+// camera, world, sound) are real. Counts are reported in the JSON (standIns).
+// The show pilot is the expert's hands (spins, tight stomps) that also rides at the next ghost's line
+// (duels) and, until a whisker is stripped, aims to pass a hazard near the line a quarter metre off its
+// edge at speed (the sim grades the real gap).
+// synth: true adds, only where the director has not named them, a crash beat with orbitFrom (and the
+// crash render curve), a bump beat with its side and ghostTrick beats. The director now names all of
+// them, so it is off by default and kept for older trees.
+// Returns JSON: { label, counts, standIns, error, strips: [{ moment, type, t, label, files, probes }] }.
 async (page) => {
+  /** The named moments: a director.log match and frame offsets, or a place ridden up to and the
+   *  distances (metres, negative before it) at which to take each frame. */
+  const MOMENTS = {
+    pass: { type: 'pass', named: true, frames: [0, 5, 12, 22, 36] },
+    // A duel that pays: won, or held off (the ghost spent most of it behind you). Same camera nudge.
+    duelWon: { type: 'duel', grade: ['won', 'heldOff'], frames: [0, 5, 12, 22, 36] },
+    whisker: { type: 'nearMiss', grade: 'whisker', frames: [0, 2, 5, 9, 16] },
+    stompStreak: { type: 'stomp', minTier: 2, frames: [0, 3, 7, 12, 20, 32] },
+    drift3: { type: 'driftRelease', tier: 3, frames: [0, 3, 7, 12, 20, 32] },
+    // A held drift's spray heating through its tiers (the first frame each tier shows).
+    heat1: { state: 'driftTier', tier: 1, frames: [0, 4, 8] },
+    heat2: { state: 'driftTier', tier: 2, frames: [0, 4, 8] },
+    heat3: { state: 'driftTier', tier: 3, frames: [0, 4, 8] },
+    // Earned flow burning on the rider (Feel.flow past 0.6: the rim, the scarf and the wider lens),
+    // and the 'In the flow' beat itself when a run earns it.
+    flow: { state: 'flow', min: 0.6, frames: [0, 6, 12] },
+    flowIn: { type: 'flow', grade: 'in', frames: [0, 4, 9, 16, 26] },
+    bank3: { type: 'bank', tier: 3, frames: [0, 10, 24, 44, 70, 104] },
+    km: { approach: 'km', at: [-60, -38, -20, -8, 1] },
+    graveyard: { approach: 'grave', at: [-70, -45, -28, -14, -5] },
+    finale: { type: 'finale', frames: [0, 8, 24, 48, 90] },
+    // Impact, the held frame, its slow motion, just before and after the cut to the pack, the orbit.
+    crash: { type: 'crash', frames: [0, 12, 36, 47, 53, 66] },
+  };
   const defaults = {
-    label: 'strip',
+    label: 'fun',
     base: 'http://127.0.0.1:4182/',
-    params: 'tier=medium&m=0',
+    params: 'tier=medium&m=0&event=3',
     out: null,
-    beats: ['stomp', 'crash'],
-    frames: [0, 3, 6, 10, 15, 24],
-    framesFor: { crash: [0, 2, 4, 8, 14, 22, 34, 50, 70, 100] },
+    moments: Object.keys(MOMENTS),
+    beats: [],
+    frames: [0, 4, 10, 18, 30],
     maxPerType: 1,
-    maxSeconds: 120,
+    maxSeconds: 150,
     after: 0,
-    pilot: 'mid',
+    pilot: 'show',
+    rivals: true,
+    standIns: true,
     reduced: false,
     synth: false,
     save: null,
-    runs: 1,
+    runs: 3,
   };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__stripCfg).catch(() => null)) || {}) };
   const out = (cfg.out || 'shots/strips').replace(/\\/g, '/').replace(/\/$/, '');
   await page.emulateMedia({ reducedMotion: cfg.reduced ? 'reduce' : 'no-preference' });
-  const url = `${cfg.base}?platform=mock&debug&autoride=1&${cfg.params}`;
-  if (cfg.save) {
-    await page.goto(`${cfg.base}?platform=mock&debug`);
-    await page.evaluate((s) => {
-      for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
-      for (const [k, v] of Object.entries(s)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
-    }, cfg.save);
+  // Every wanted thing to strip: the named moments, then any raw beat types.
+  const wants = [
+    ...cfg.moments.filter((m) => MOMENTS[m]).map((m) => ({ key: m, ...MOMENTS[m] })),
+    ...cfg.beats.map((b) => ({ key: b, type: b, frames: cfg.frames })),
+  ];
+  let extra = '';
+  if (cfg.save || cfg.rivals) {
+    await page.goto(`${cfg.base}?platform=mock&debug&${cfg.params}`);
+    await page.waitForFunction(() => window.__gs && window.__gs.phase === 'title', null, { timeout: 30000 });
+    if (cfg.save) {
+      await page.evaluate((s) => {
+        for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
+        for (const [k, v] of Object.entries(s)) localStorage.setItem(k, typeof v === 'string' ? v : JSON.stringify(v));
+      }, cfg.save);
+    } else {
+      // The rivals save, built from this mountain's own pool: a best at 330 m with no replay (so its
+      // gold band and tag show all run), a best combo of 1,600, a grudge on a three-run streak (a
+      // nemesis) and, through the URL, a friend's challenge. Everything else is defaulted by load().
+      const link = await page.evaluate(() => {
+        const app = window.__gs;
+        const key = app.mountain.id;
+        const pool = app.poolForMountain(app.mountain).slice().sort((a, b) => a.distance - b.distance);
+        const near = (d) => pool.reduce((best, g) => (Math.abs(g.distance - d) < Math.abs(best.distance - d) ? g : best), pool[0]);
+        const grudge = near(520);
+        const friend = pool.filter((g) => g !== grudge).reduce((best, g) => (Math.abs(g.distance - 760) < Math.abs(best.distance - 760) ? g : best));
+        for (const k of Object.keys(localStorage)) if (/ghost/i.test(k)) localStorage.removeItem(k);
+        const save = {
+          v: 1,
+          name: 'Tester',
+          gifts: 120,
+          lifetimeGifts: 400,
+          ghostsPassed: 30,
+          runs: 12,
+          mountain: key,
+          best: { [key]: { score: 2500, distance: 330, record: '' } },
+          grudge: { [key]: { name: grudge.name, score: grudge.score, record: grudge.record, them: 3, streak: 3, by: 40, distance: grudge.distance } },
+          stats: { bestScore: 2500, bestCombo: 1600, longestAir: 2, perfects: 20, topSpeed: 30, yetiHops: 0, avalanches: 0 },
+          runDists: { [key]: [300, 340, 310, 360, 330] },
+        };
+        localStorage.setItem('ghostsled.save.v1', JSON.stringify(save));
+        return { c: friend.record, friend: friend.name, friendAt: Math.round(friend.distance), grudge: grudge.name, grudgeAt: Math.round(grudge.distance) };
+      });
+      extra = `&c=${encodeURIComponent(link.c)}`;
+      cfg.rivalsInfo = { friend: link.friend, friendAt: link.friendAt, grudge: link.grudge, grudgeAt: link.grudgeAt };
+    }
   }
+  const url = `${cfg.base}?platform=mock&debug&autoride=1&${cfg.params}${extra}`;
   await page.goto(url);
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 30000 });
 
@@ -83,11 +169,13 @@ async (page) => {
       vc.on = false;
       const off = orig.now() - vc.t;
       performance.now = () => orig.now() - off;
-      window.requestAnimationFrame = orig.raf;
+      // Frame timestamps stay on the same clock as performance.now (a raw browser timestamp, ahead by
+      // the time spent on the virtual clock, sent an unclamped count-up on the results card wild).
+      window.requestAnimationFrame = (cb) => orig.raf((ts) => cb(ts - off));
       window.cancelAnimationFrame = orig.caf;
       window.setTimeout = orig.st;
       window.clearTimeout = orig.ct;
-      for (const cb of vc.q) orig.raf(cb);
+      for (const cb of vc.q) window.requestAnimationFrame(cb);
       for (const x of vc.timers) orig.st(x.fn, Math.max(0, x.at - vc.t));
       vc.q = [];
       vc.timers = [];
@@ -126,7 +214,7 @@ async (page) => {
     };
   });
 
-  // Stand-ins for beats the director has not wired yet (synth: true).
+  // Legacy stand-ins for beats an unmerged director has not wired (synth: true).
   if (cfg.synth) {
     await page.evaluate(() => {
       const app = window.__gs;
@@ -156,7 +244,6 @@ async (page) => {
         for (const p of f.events) {
           const e = p.e;
           if (e.type === 'crash' && !has('crash')) {
-            // The nearest live ghost within 60 m behind or abreast: its bearing from the wreck.
             let best = null;
             for (const t of f.tracks) {
               const g = f.poses.get(t.entry.id);
@@ -179,8 +266,7 @@ async (page) => {
             log('bump');
           }
         }
-        // Ghost tricks: each track's [tick, quality, halfTurns, flips] stream, near you only.
-        if (f.phase === 'run') {
+        if (f.phase === 'run' && !has('ghostTrick')) {
           for (const t of f.tracks) {
             if (!t.ready || !t.tricks) continue;
             let c = cursors.get(t) ?? 0;
@@ -208,25 +294,63 @@ async (page) => {
         lastWhisper = -1e9;
         return beginRun(r);
       };
-      // The drift on the chase target (world.ts passes steer only until it is wired).
-      const cam = app.world.cam;
-      const up = cam.update.bind(cam);
-      cam.update = (t, dt) => {
-        const s = app.run && app.phase === 'run' ? app.run.sim.s : null;
-        if (s && t.drifting === undefined) {
-          t.drifting = s.drifting;
-          t.driftDir = s.driftDir;
-          t.slip = s.slip;
-        }
-        return up(t, dt);
-      };
     });
   }
 
+  // The page side of the plan: which moments are still wanted, the stand-ins, and the per-frame check.
+  await page.evaluate(
+    ({ wants, standIns }) => {
+      const app = window.__gs;
+      const S = (window.__strips = { wants, need: Object.fromEntries(wants.map((w) => [w.key, true])), standIns: { graves: null, drift3: 0, bank3: 0 }, done: {} });
+      const MERGE = 8;
+      // Stand-in 1: the graveyards, from the pool's crash distances (3 or more within 8 m), named
+      // from a list, placed through the real World.setGraveyards when the run has none.
+      const NAMES = ["Widow's Bend", 'The Long Drop', 'Last Pines', 'Cold Shelf'];
+      S.placeGraves = () => {
+        if (!standIns || !S.need.graveyard || app.world.graves.length) return;
+        const d = app.poolForMountain(app.mountain).map((g) => g.distance).sort((a, b) => a - b);
+        const list = [];
+        for (let i = 0; i < d.length && list.length < 4; ) {
+          let j = i;
+          while (j + 1 < d.length && d[j + 1] - d[i] <= MERGE) j++;
+          if (j - i + 1 >= 3) {
+            list.push({ z: d[Math.floor((i + j) / 2)], name: NAMES[list.length], fell: j - i + 1 });
+            i = j + 1;
+          } else i++;
+        }
+        if (list.length) {
+          app.world.setGraveyards(list);
+          S.standIns.graves = list.map((g) => ({ z: Math.round(g.z), fell: g.fell }));
+        }
+      };
+      // Where a place moment's frames are taken: the next km mark, or the next cairn ahead.
+      S.place = (w) => {
+        const z = app.run.sim.s.z;
+        if (w.approach === 'km') {
+          const k = Math.floor((z - w.at[w.at.length - 1]) / 1000) + 1;
+          const mark = k * 1000;
+          return z >= mark + w.at[0] && z < mark + w.at[1] ? { z: mark, label: `${k} km` } : null;
+        }
+        for (const g of app.world.graves) if (z >= g.z + w.at[0] && z < g.z + w.at[1]) return { z: g.z, label: `${g.name}: ${g.fell}` };
+        return null;
+      };
+      S.match = (w, e) => {
+        if (w.approach || w.state || e.type !== w.type) return false;
+        if (w.named && !e.named) return false;
+        if (w.grade !== undefined && !(Array.isArray(w.grade) ? w.grade.includes(e.grade) : e.grade === w.grade)) return false;
+        if (w.tier !== undefined && e.tier !== w.tier) return false;
+        if (w.minTier !== undefined && !((e.tier ?? 0) >= w.minTier)) return false;
+        return true;
+      };
+    },
+    { wants, standIns: cfg.standIns },
+  );
+
   const installPilot = (skill, seed) =>
-    page.evaluate(({ skill, seed }) => {
+    page.evaluate(({ skill, seed, standIns }) => {
       const app = window.__gs;
       const run = app.run;
+      window.__strips.placeGraves();
       if (!run || skill === 'none') return;
       let a = seed >>> 0;
       const rnd = () => {
@@ -238,6 +362,7 @@ async (page) => {
       };
       const sim = run.sim;
       const c = sim.course;
+      const expert = skill === 'expert' || skill === 'show';
       const P = { flight: 0, spin: 0, wasAir: false, drift: 0, bias: 0 };
       const timeToLand = (s) => {
         let y = s.y, vy = s.vy, x = s.x, z = s.z, t = 0;
@@ -260,6 +385,7 @@ async (page) => {
         }
         return null;
       };
+      const pose = {};
       const pilot = () => {
         const s = sim.s;
         const T = sim.tick / 60;
@@ -272,11 +398,11 @@ async (page) => {
             P.flight = land.t;
             const off = land.x - c.safeX(land.z);
             const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
-            P.spin = land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
-            P.bias = (rnd() - 0.5) * (skill === 'expert' ? 0.05 : 0.16);
+            P.spin = land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (expert ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
+            P.bias = (rnd() - 0.5) * (expert ? 0.05 : 0.16);
           }
           let steer = 4;
-          let goal = (skill === 'expert' && P.flight > 2.4 ? 4 : 2) * Math.PI;
+          let goal = (expert && P.flight > 2.4 ? 4 : 2) * Math.PI;
           if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
           const coast = (s.spinRate * s.spinRate) / 44;
           if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
@@ -288,14 +414,76 @@ async (page) => {
           return { steer, action: w < 0.11 && w > 0.01 };
         }
         P.wasAir = false;
+        const S = window.__strips;
+        // Stand-in 3: the pilot's combos bank under 1,500, so once a combo holds 3 skill moves its
+        // pending pool is raised to bank just over your best combo (the director grades the real bank).
+        if (standIns && S.need.bank3 && sim.combo.active && (app.director.skillChain ?? 0) >= 3 && !P.raised) {
+          const best = Math.max(1500, app.director.run ? app.director.run.bestComboAtStart : 0);
+          const mult = Math.max(1, sim.combo.multiplier);
+          if (sim.combo.pending * mult < best + 300) {
+            sim.combo.pending = Math.ceil((best + 400) / mult);
+            P.raised = true;
+            S.standIns.bank3 = (S.standIns.bank3 || 0) + 1;
+          }
+        }
+        if (!sim.combo.active) P.raised = false;
         const ramp = nextRamp(s);
         let target = (z) => c.safeX(z);
+        let lat = 0.08;
+        // The show pilot rides at the next ghost's line when it is close and on a clear line (duels).
+        if (skill === 'show' && !ramp) {
+          const st = app.ghosts.standings(sim.tick, s.z);
+          if (st.next && st.next.gap > 1 && st.next.gap < 30 && app.ghosts.pose(st.next.track, sim.tick, pose) && Math.abs(pose.x - c.safeX(pose.z)) < 1.8) target = () => pose.x;
+          // ...and, until a whisker is stripped, shaves a hazard near the line at speed: it aims to pass
+          // a quarter metre off its edge on the safe line's side (the sim grades the real gap).
+          if (S.need.whisker && s.speed >= 19) {
+            let hz = null;
+            for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 1 && !hz; k++) {
+              for (const o of c.chunk(k).obstacles) {
+                if (o.soft || o.x2 !== o.x || o.z2 !== o.z || o.z < s.z + 6 || o.z > s.z + 40) continue;
+                // (The safe lane keeps every collider 2 m or more off the safe line: one within 4.5 m
+                // of it, and well inside the corridor, is shaved and the line rejoined after.)
+                if (Math.abs(o.x - c.safeX(o.z)) - o.r > 4.5 || c.edgeExcess(o.x, o.z) > -2.5) continue;
+                hz = o;
+                break;
+              }
+            }
+            if (hz) {
+              const side = c.safeX(hz.z) >= hz.x ? 1 : -1;
+              const gx = hz.x + side * (hz.r + 0.55 + 0.22);
+              target = () => gx;
+              lat = 0;
+            }
+          }
+        }
         if (ramp) target = () => ramp.x;
         const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
         const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
-        if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) P.drift = T + 0.4 + rnd() * 0.4;
-        if (P.drift > T && (room < 4 || Math.abs(s.x - c.safeX(s.z)) > 0.8)) P.drift = T;
-        if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
+        // (Until the heat strips are taken, a drift is held a little longer for its tiers to show.)
+        const heat = standIns && (S.need.heat1 || S.need.heat2 || S.need.heat3);
+        if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) {
+          P.drift = T + (heat ? 1.0 : 0.4 + rnd() * 0.4);
+          P.driftAt = T;
+        }
+        if (P.drift > T && (room < (heat ? 3 : 4) || Math.abs(s.x - c.safeX(s.z)) > (heat ? 2 : 0.8))) P.drift = T;
+        if (P.drift > T) {
+          // Stand-in 2b: a held drift's charge is staged through tiers 1, 2 and 3 (0.62, 1.38, 2.45),
+          // a fifth of a second each, so its spray can be seen heating (the tiers and spray are real).
+          if (heat && s.drifting) {
+            const el = T - P.driftAt;
+            const want = el > 0.55 ? 2.45 : el > 0.35 ? 1.38 : el > 0.15 ? 0.62 : 0;
+            if (s.driftCharge < want) {
+              s.driftCharge = want;
+              S.standIns.heat = (S.standIns.heat || 0) + 1;
+            }
+          }
+          // Stand-in 2: a held drift is topped up past tier 3 (once, until a tier-3 release is stripped).
+          if (standIns && S.need.drift3 && s.drifting && s.driftCharge > 0.3 && s.driftCharge < 2.45 && T > P.drift - 0.25) {
+            s.driftCharge = 2.45;
+            S.standIns.drift3++;
+          }
+          return { steer: bend > 0 ? 8 : 0, action: true };
+        }
         if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
         if (P.drift < 0 && T > -P.drift) P.drift = 0;
         let action = false;
@@ -303,10 +491,10 @@ async (page) => {
           const u = (s.z - ramp.z) / ramp.len;
           action = u > -0.7 && u < 0.85;
         }
-        return { steer: steerTo(s, target, 14, ramp ? 0 : 0.08), action };
+        return { steer: steerTo(s, target, 14, ramp ? 0 : lat), action };
       };
       run.input = { sample: pilot };
-    }, { skill, seed });
+    }, { skill, seed, standIns: cfg.standIns });
 
   const probe = () =>
     page.evaluate(() => {
@@ -314,10 +502,22 @@ async (page) => {
       const cam = app.world.cam;
       const j = cam.joltNow ?? { right: 0, up: 0, back: 0 };
       const ts = app.director.time;
+      const f = app.director.feel ?? {};
       const p = cam.camera.position;
+      // The ghost layer's tags on screen right now, by kind.
+      const tags = {};
+      for (const el of document.querySelectorAll('.ghost-layer .ghost-label')) {
+        if (el.style.opacity !== '1') continue;
+        const k = el.classList.contains('grave') ? 'grave' : el.classList.contains('line') ? 'line' : el.classList.contains('marker') ? 'marker' : el.classList.contains('dot') ? 'dot' : 'ghost';
+        tags[k] = (tags[k] || 0) + 1;
+        if (el.classList.contains('duel')) tags.duelRing = 1;
+        if (el.classList.contains('trick')) tags.trick = el.textContent;
+        if (/nemesis/.test(el.textContent)) tags.nemesis = 1;
+      }
       return {
         frame: window.__vc.frames,
         t: app.run ? +(app.run.sim.tick / 60).toFixed(3) : null,
+        z: app.run ? +app.run.sim.s.z.toFixed(1) : null,
         phase: app.phase,
         mode: cam.mode,
         roll: +(cam.rollNow ?? 0).toFixed(4),
@@ -327,16 +527,23 @@ async (page) => {
         lens: [+p.x.toFixed(3), +p.y.toFixed(3), +p.z.toFixed(3)],
         feed: ts.feed,
         render: ts.render,
-        // The crash orbit's angle round the wreck and the pack's bearing it is swinging to (null once
-        // there, or with no ghost behind).
         orbit: +(cam.orbitAngle ?? 0).toFixed(3),
         orbitFrom: cam.orbitFrom ?? null,
+        feel: { reduced: f.reduced, drift: f.driftTier, charge: +(f.driftCharge ?? 0).toFixed(2), flow: +(f.flow ?? 0).toFixed(2), streak: f.streak, duel: f.duelId, best: f.bestLine ? f.bestLine.z : null, friend: f.friendLine ? f.friendLine.z : null },
+        tags,
+        // The off-screen rival chip (contract C1): the ghost it points at, its colour and text.
+        chip: (() => {
+          const g = app.world.ghosts;
+          const el = g.rivalEl;
+          return el && el.style.opacity !== '0' && el.style.opacity !== '' ? { id: g.rivalId, c: el.style.getPropertyValue('--c'), txt: g.rivalTxt, op: el.style.opacity, rival: app.director.out && app.director.out.rival ? app.director.out.rival.id : null } : null;
+        })(),
       };
     });
 
   const strips = [];
+  const runs = [];
   const counts = {};
-  const done = () => cfg.beats.every((b) => (counts[b] || 0) >= cfg.maxPerType);
+  const done = () => wants.every((w) => (counts[w.key] || 0) >= cfg.maxPerType);
   let logIdx = 0;
   let seed = 4321;
   let error = null;
@@ -355,49 +562,99 @@ async (page) => {
       // never reached the results would otherwise step forever.
       const frameCap = (await page.evaluate(() => window.__vc.frames)) + Math.ceil(cfg.maxSeconds * 60) + 1200;
       for (;;) {
+        const open = wants.filter((w) => (counts[w.key] || 0) < cfg.maxPerType);
         const res = await page.evaluate(
-          ({ want, idx, after, maxSeconds, frameCap }) => {
+          ({ open, idx, after, maxSeconds, frameCap }) => {
             const app = window.__gs;
             const vc = window.__vc;
+            const S = window.__strips;
             for (let i = 0; i < 120; i++) {
               vc.step(1);
               const log = app.director.log;
               if (log.length < idx) idx = 0;
               for (; idx < log.length; idx++) {
                 const e = log[idx];
-                if (want.includes(e.type) && e.t >= after) return { hit: { type: e.type, t: e.t, label: e.label ?? null }, idx: idx + 1 };
+                if (e.t < after) continue;
+                const w = open.find((w) => S.match(w, e));
+                if (w) return { hit: { key: w.key, type: e.type, t: e.t, label: [e.label, e.word, e.grade, e.tier !== undefined ? 'tier ' + e.tier : null].filter(Boolean).join(' ') || null }, idx: idx + 1 };
               }
-              if (app.phase === 'results' || app.phase === 'title') return { end: true, idx };
-              if (app.run && app.run.sim.tick / 60 > maxSeconds) return { end: true, idx };
-              if (vc.frames > frameCap) return { end: true, idx };
+              if (app.phase === 'run' && app.run) {
+                for (const w of open) {
+                  if (w.state === 'driftTier') {
+                    const f = app.director.feel;
+                    if (app.run.sim.s.drifting && f && f.driftTier === w.tier) return { hit: { key: w.key, type: 'driftTier', t: app.run.sim.tick / 60, label: `tier ${w.tier} charge ${f.driftCharge.toFixed(2)}` }, idx };
+                    continue;
+                  }
+                  if (w.state === 'flow') {
+                    const f = app.director.feel;
+                    if (f && f.flow >= w.min && !app.run.sim.s.crashed) return { hit: { key: w.key, type: 'flow', t: app.run.sim.tick / 60, label: `flow ${f.flow.toFixed(2)}` }, idx };
+                    continue;
+                  }
+                  if (!w.approach) continue;
+                  const at = S.place(w);
+                  if (at) return { hit: { key: w.key, type: w.approach, t: app.run.sim.tick / 60, label: at.label, z: at.z }, idx };
+                }
+              }
+              if (app.phase === 'results' || app.phase === 'title') return { end: app.phase, idx };
+              if (app.run && app.run.sim.tick / 60 > maxSeconds) return { end: 'time', idx };
+              if (vc.frames > frameCap) return { end: 'frames', idx };
             }
             return { idx };
           },
-          { want: cfg.beats.filter((b) => (counts[b] || 0) < cfg.maxPerType), idx: logIdx, after: cfg.after, maxSeconds: cfg.maxSeconds, frameCap },
+          { open, idx: logIdx, after: cfg.after, maxSeconds: cfg.maxSeconds, frameCap },
         );
         logIdx = res.idx;
-        if (res.end) break;
+        if (res.end) {
+          runs.push({ run: r + 1, end: res.end, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
+          break;
+        }
         if (!res.hit) continue;
-        const type = res.hit.type;
-        const n = (counts[type] = (counts[type] || 0) + 1);
-        const frames = (cfg.framesFor && cfg.framesFor[type]) || cfg.frames;
-        const strip = { type, t: res.hit.t, label: res.hit.label, files: [], probes: [] };
-        let at = 0;
-        for (const k of frames) {
-          if (k > at) {
-            await page.evaluate((m) => window.__vc.step(m), k - at);
-            at = k;
+        const w = wants.find((x) => x.key === res.hit.key);
+        const n = (counts[w.key] = (counts[w.key] || 0) + 1);
+        await page.evaluate((k) => (window.__strips.need[k] = false), w.key);
+        const strip = { moment: w.key, type: res.hit.type, t: res.hit.t, label: res.hit.label, files: [], probes: [] };
+        const name = (tag) => `${out}/${cfg.label}-${w.key}${n > 1 ? n : ''}-${tag}.png`;
+        if (w.approach) {
+          // A place: a frame as the sled reaches each distance from it (or wherever it crashed).
+          for (const m of w.at) {
+            const ok = await page.evaluate(
+              ({ z, cap }) => {
+                const app = window.__gs;
+                for (let i = 0; i < cap; i++) {
+                  if (!app.run || app.phase !== 'run') return false;
+                  if (app.run.sim.s.z >= z) return true;
+                  window.__vc.step(1);
+                }
+                return false;
+              },
+              { z: res.hit.z + m, cap: 600 },
+            );
+            const file = name(`${m < 0 ? 'm' : 'p'}${String(Math.abs(m)).padStart(3, '0')}`);
+            await page.screenshot({ path: file });
+            strip.files.push(file);
+            strip.probes.push({ at: m, ...(await probe()) });
+            if (!ok) break;
           }
-          const file = `${out}/${cfg.label}-${type}${n > 1 ? n : ''}-f${String(k).padStart(3, '0')}.png`;
-          await page.screenshot({ path: file });
-          strip.files.push(file);
-          strip.probes.push({ k, ...(await probe()) });
+        } else {
+          let at = 0;
+          for (const k of w.frames) {
+            if (k > at) {
+              await page.evaluate((m) => window.__vc.step(m), k - at);
+              at = k;
+            }
+            const file = name(`f${String(k).padStart(3, '0')}`);
+            await page.screenshot({ path: file });
+            strip.files.push(file);
+            strip.probes.push({ k, ...(await probe()) });
+          }
         }
         strips.push(strip);
-        if (done()) break;
         // The strip may have ridden through the results: the run is over.
         const ph = await page.evaluate(() => window.__gs.phase);
-        if (ph === 'results' || ph === 'title') break;
+        if (done() || ph === 'results' || ph === 'title') {
+          runs.push({ run: r + 1, end: done() ? 'all stripped' : ph, ...(await page.evaluate(() => { const a = window.__gs; return a.run ? { t: +(a.run.sim.tick / 60).toFixed(1), distance: Math.round(a.run.sim.distance), score: a.run.sim.score } : {}; })) });
+          break;
+        }
       }
     }
   } catch (e) {
@@ -405,6 +662,7 @@ async (page) => {
   } finally {
     await page.evaluate(() => window.__vc && window.__vc.restore()).catch(() => undefined);
   }
+  const standIns = await page.evaluate(() => window.__strips && window.__strips.standIns).catch(() => null);
   // (run-code has no file system or timers: the caller keeps the JSON, e.g. by redirecting stdout.)
-  return JSON.stringify({ label: cfg.label, reduced: cfg.reduced, counts, error, strips });
+  return JSON.stringify({ label: cfg.label, reduced: cfg.reduced, rivals: cfg.rivalsInfo ?? null, counts, standIns, runs, error, strips });
 }
