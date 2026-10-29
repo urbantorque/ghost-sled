@@ -14,7 +14,8 @@ import type { Notices } from './notices';
 //   (Whisker, Max drift, In the flow, 1 km...); Streak broken, Best combo pace, New best and a friend
 //   beaten get their own words when the director sends none.
 // - the hero stamp (fx.stomp, fx.stamp): a stomp, its title and streak line leading the landing's
-//   tricks; a finale with stamp:true ("Yeti hop").
+//   tricks; a finale with stamp:true ("Yeti hop"). A crash, a lost combo or a broken streak retires
+//   a stamp still up (fx.retireStamp), so the loss owns its beat.
 // - the cash-in (fx.cashIn) by tier, and the cracked figure of a lost combo (fx.lost).
 // - the rival pill (hud): pass words and names, "passed you", race news, duel results, the start-line
 //   call; the crown pulse when you take the lead; the stake line's pace punch; the score's New best flash.
@@ -70,12 +71,19 @@ export class BeatRouter {
           this.fx.stomp(b.title, b.lead, b.streak);
           break;
         case 'streakBroken':
+          // The loss owns its beat: the streak's stamp ("QUAD STOMP") retires before the line says so.
+          this.fx.retireStamp();
           this.say(b.say ?? { label: 'Streak broken', points: 0, tone: 'lost' });
           break;
         case 'bank':
           this.fx.cashIn(b);
           break;
+        case 'crash':
+          // No picture of its own here (the world stages it), but a stamp still up retires at once.
+          this.fx.retireStamp();
+          break;
         case 'comboLost':
+          // fx.lost retires any stamp too, then cracks the figure (or prints the line).
           this.fx.lost(b.points, b.stake, b.best, b.crack);
           break;
         case 'bestComboPace':

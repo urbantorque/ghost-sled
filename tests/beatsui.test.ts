@@ -28,7 +28,7 @@ function rig() {
     paceHit: rec('hud.paceHit'),
     flashBest: rec('hud.flashBest'),
   } as unknown as Hud;
-  const fx = { pop: rec('fx.pop'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost') } as unknown as Fx;
+  const fx = { pop: rec('fx.pop'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
   const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock') } as unknown as Notices;
   const router = new BeatRouter(hud, fx, notices);
   return { calls, router, of: (tag: string) => calls.filter((c) => c[0] === tag) };
@@ -96,6 +96,17 @@ describe('BeatRouter', () => {
     ]);
     // Their says are never printed twice.
     expect(of('fx.pop')).toHaveLength(0);
+  });
+
+  it('retires a live stamp on a crash and on a broken streak, before the loss line', () => {
+    const { router, calls } = rig();
+    router.handle([
+      { type: 'stomp', tick: 1, streak: 4, late: false, title: 'Quad stomp', lead: [{ label: '4 in a row', points: 0 }], x: 0, z: 0, heading: 0, yetiHop: false },
+      { type: 'streakBroken', tick: 2, was: 4, say: { label: 'Streak broken', points: 0, tone: 'lost' } },
+      { type: 'crash', tick: 3, cause: 'tree', stake: 900, orbitFrom: null },
+      { type: 'comboLost', tick: 3, points: 900, stake: 900, best: false, crack: true },
+    ]);
+    expect(calls.map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'fx.lost']);
   });
 
   it('flashes shown passes in the pill, keeps muted ones silent, and names a settled grudge once', () => {
