@@ -86,6 +86,13 @@ const BEST_FLASH_MS = 600;
  * chip on the duel ghost (RIVAL_HOLD_S): another ghost's word meanwhile goes to the callout line.
  */
 export const DUEL_HOLD_MS = 1500;
+/**
+ * A duel's result that has not shown this long after the duel ended is stale and dropped. It waits out
+ * a banner over the race row (it shows about 2.2 s on), or two back to back (GRUDGE SETTLED, then a
+ * mountain unlocked: about 5 s on), never a longer chain ("Held off Brave Rhea" cut at 141 and 102 ms
+ * by banner after banner, then played 6 s after the duel, far from its moment).
+ */
+export const RESULT_STALE_MS = 5500;
 /** Slung passes this close together are one slingshot burst (the director counts slungN over 90 ticks). */
 const SLUNG_BURST_MS = 1500;
 /** The side line's key for a slingshot burst: a newer "Slung past 3" replaces "Slung past 2" in place. */
@@ -192,6 +199,11 @@ export function burstName(burst: { at: number; you: string }, name: string, kind
   if (kind === 'you') burst.you = name;
   else if (burst.you !== '' && name !== owner) return { raw: burst.you, kind: 'you' };
   return { raw: name, kind };
+}
+
+/** Whether a duel's result that ended at `at` (and has not shown) has missed its moment (RESULT_STALE_MS). */
+export function resultStale(at: number, now: number): boolean {
+  return now - at > RESULT_STALE_MS;
 }
 
 /** A duel's result as a pass word: it keeps its place ahead of plain passes that wait with it. */
@@ -542,7 +554,7 @@ export class Hud {
    * A resolved duel's ghost and the end of its hold (holdDuel): the pill stays on it till then. `wait`:
    * its result has not shown yet (it waits under a banner or the stamp), and its hold starts once it does.
    */
-  private readonly held = { name: '', until: -1e9, wait: false };
+  private readonly held = { name: '', until: -1e9, wait: false, at: -1e9 };
   /**
    * The ghost the director's duel-result hold keeps out.rival on, when the model says so (its
    * nextGhost.hold), else null: other ghosts' words keep off the pill for exactly that hold.
@@ -1079,6 +1091,7 @@ export class Hud {
   holdDuel(name: string): void {
     const now = performance.now();
     this.held.name = name;
+    this.held.at = now;
     const up = this.cur !== null && this.cur.raw === name && isResult(this.cur) && this.flashUntil > now;
     this.held.until = (up ? this.flashAt : now) + DUEL_HOLD_MS;
     this.held.wait = !up;
@@ -1488,6 +1501,11 @@ export class Hud {
     // The director's duel-result hold, when the game sends it (nextGhost.hold): out.rival, the C11 ring
     // and the edge chip stay on that ghost for exactly that long, and so do the pill's words.
     this.dirHold = g !== null && (g as { hold?: boolean }).hold === true ? g.name : null;
+    // A duel's result still waiting RESULT_STALE_MS after the duel ended has missed its moment.
+    if (this.held.wait && resultStale(this.held.at, now)) {
+      this.held.wait = false;
+      for (let i = this.pend.length - 1; i >= 0; i--) if (this.heldResult(this.pend[i])) this.pend.splice(i, 1);
+    }
     // An open duel owns the pill (C1/C11): the moment one opens, a flash about another ghost (or news)
     // ends and the waiting ones go to the callout line (the start-line call keeps its turn); from then
     // on another ghost's pass and any news go to the callout line (duelRoute).

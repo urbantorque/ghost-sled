@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChaosEvent } from '../src/sim/chaos';
-import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
+import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, RESULT_STALE_MS, resultStale, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
 import { landAt, MORE_MIN_PX, moreCue, RESULTS_TIMING, stampInView, type MoreBlock } from '../src/ui/results';
 
 // The overlay's small decisions, away from the DOM: who may take the rival pill during a duel, the
@@ -61,6 +61,19 @@ describe('pillOwner', () => {
     // Without it, the wall-clock copy.
     expect(pillOwner(null, held, 1400)).toBeNull();
     expect(pillOwner('Mika', held, 1400, 'RidgeUlla')).toBe('Mika');
+  });
+});
+
+describe('resultStale', () => {
+  it("lets a duel's result wait out a banner or two back to back, never a longer chain", () => {
+    // Under GRUDGE SETTLED it showed 2.19 to 2.23 s after the duel ended; under GRUDGE SETTLED and then
+    // 'Ember Peak unlocked' it comes about 5 s on.
+    expect(resultStale(8830, 8830 + 2230)).toBe(false);
+    expect(resultStale(8150, 8150 + 4970)).toBe(false);
+    expect(resultStale(8830, 8830 + RESULT_STALE_MS)).toBe(false);
+    // Cut by banner after banner, it played 6 s after the duel: by then it is dropped.
+    expect(resultStale(8420, 8420 + 6010)).toBe(true);
+    expect(RESULT_STALE_MS).toBeLessThan(6000);
   });
 });
 
