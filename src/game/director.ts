@@ -155,6 +155,10 @@ const RIVAL_HOLD_S = 1.5;
  *  that lands under it flashes once it has gone, so its hold starts there. Held from the beat, it ended
  *  0.6 s into the flash and the grudge's banner cut 'Held off' (s109). */
 const STAMP_S = 1.5;
+/** ...and a stamp landing over a result's flash this young (s) steps the flash back to play again once
+ *  the stamp has gone (hud.ts REQUEUE_MS): its hold starts over there (s214: the banner went up over
+ *  'Duel won fox84' replaying 3.7 s late). */
+const REQUEUE_S = 0.45;
 /** Your best beaten in a duel, the crossing already behind you: its 'Passed Your best' waits this long
  *  (s) at most, once the result's hold is over, for it to be clear behind you (C12's level band).
  *  Pushed with the result, it claimed a pass at the 8 s cap that had not happened ('PASSED Your best',
@@ -1208,6 +1212,8 @@ export class Director {
     const yeti = tick - this.yetiHopTick >= 0 && tick - this.yetiHopTick <= YETI_TITLE_TICKS;
     if (motion) this.time.pulse(HITSTOP_SCALE, STOMP_STOP[Math.min(n, STOMP_STOP.length) - 1] ?? 0.13, 'feed');
     this.lastStompAt = this.clock;
+    const h = this.rivalHold;
+    if (h && this.clock - (h.until - RIVAL_HOLD_S) < REQUEUE_S) h.until = this.clock + STAMP_S + RIVAL_HOLD_S;
     const s = sim.s;
     this.push({ type: 'stomp', tick, streak: n, late, title: yeti ? 'Yeti hop' : stompTitle(n), lead, x: s.x, z: s.z, heading: s.heading, yetiHop: yeti }, sim);
   }

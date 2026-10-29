@@ -728,6 +728,38 @@ describe('the race', () => {
     expect(out().rival?.id).toBe(1001);
     r.idle(0.2);
     expect(out().hud.hold).toBe(false);
+    // A stamp 0.3 s into a result's flash steps it back to play after the stamp: the hold starts over.
+    const q = new Rig();
+    q.tracks = [track(1001), track(1002)];
+    q.sim.tick = 2000;
+    q.poses.set(1001, pose(q.sim.s.z + 0.5));
+    q.poses.set(1002, pose(q.sim.s.z + 30));
+    q.idle(1.5);
+    q.poses.set(1001, pose(q.sim.s.z - 5));
+    expect(of(q.frame(), 'duel').map((d) => d.phase)).toEqual(['won']);
+    q.idle(0.3);
+    q.frame([style('perfect', 250, 2), land('perfect')]);
+    const qo = () => (q.d as unknown as { out: { hud: { hold: boolean } } }).out.hud;
+    q.idle(2.9);
+    expect(qo().hold).toBe(true);
+    q.idle(0.2);
+    expect(qo().hold).toBe(false);
+    // An older flash has had its moment: a stamp then leaves the hold as it was.
+    const s = new Rig();
+    s.tracks = [track(1001), track(1002)];
+    s.sim.tick = 2000;
+    s.poses.set(1001, pose(s.sim.s.z + 0.5));
+    s.poses.set(1002, pose(s.sim.s.z + 30));
+    s.idle(1.5);
+    s.poses.set(1001, pose(s.sim.s.z - 5));
+    s.frame();
+    s.idle(0.8);
+    s.frame([style('perfect', 250, 2), land('perfect')]);
+    const so = () => (s.d as unknown as { out: { hud: { hold: boolean } } }).out.hud;
+    s.idle(0.6);
+    expect(so().hold).toBe(true);
+    s.idle(0.2);
+    expect(so().hold).toBe(false);
   });
 
   it('a duel about to open keeps the pill on its ghost: no third name for the quarter second before it', () => {
