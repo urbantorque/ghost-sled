@@ -672,6 +672,30 @@ describe('the race', () => {
     expect(r.d.shownPasses.has(1001)).toBe(true);
   });
 
+  it('gaps are measured against the rendered rider (riderZ), on the poses\' own render tick', () => {
+    const r = new Rig();
+    const a = track(1);
+    r.tracks = [a];
+    const step = (poseZ: number, riderZ?: number) => {
+      r.poses.set(1, pose(poseZ));
+      return r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, riderZ, standings: { next: null, rank: 1, of: 2 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival;
+    };
+    // The rider renders 0.4 m short of its integer-tick z (alpha 0.6 at 25 m/s): the pose is taken
+    // at the same render tick, so the gap is the rendered one, not 0.4 m short.
+    const z = r.sim.s.z;
+    expect(step(z + 13.1, z - 0.4)?.gap).toBeCloseTo(13.5);
+    // Without riderZ it falls back to the sim's own z.
+    expect(step(z + 13.1)?.gap).toBeCloseTo(13.1);
+    // A steady 13.5 m chase across ticks: pose and rider move together, so the gap never jumps.
+    const gaps: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      const alpha = (i % 3) / 3;
+      const rider = z + (i + alpha) * 0.4;
+      gaps.push(step(rider + 13.5, rider)!.gap);
+    }
+    expect(Math.max(...gaps) - Math.min(...gaps)).toBeLessThan(1e-9);
+  });
+
   it('a slingshot through the pack is one growing moment: Slung past, Slung past 2, 3', () => {
     const r = new Rig();
     const gs = [track(1), track(2), track(3)];

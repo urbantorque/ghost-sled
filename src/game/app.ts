@@ -1576,6 +1576,8 @@ export class App {
       race,
       tracks: this.ghosts.tracks,
       poses: this.ghostPoses,
+      // The rider as rendered, on the poses' render tick: the pill's gap no longer flickers.
+      riderZ: this.view.z,
       standings: st,
       passedThisRun: this.passedThisRun.size,
       settledPassed: this.settlement?.passed ?? 0,

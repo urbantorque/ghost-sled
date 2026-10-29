@@ -60,7 +60,13 @@ export interface DirectorFrame {
   /** This frame's race events (empty outside the run phase). */
   race: ReadonlyArray<RaceEvent>;
   tracks: ReadonlyArray<GhostTrack>;
+  /** Ghost poses at the frame's render tick (sim.tick - 1 + alpha in a run). */
   poses: ReadonlyMap<number, GhostPose | null>;
+  /** The rider's z as the app renders it this frame (lerpSnap's view.z, at the same render tick as
+   *  the poses), so every gap the director measures (the rival pill's, the duels', the choir's) is on
+   *  one time base. Omitted: sim.s.z, for poses at the integer tick. Against the integer tick the
+   *  pill's gap was biased 0.41 m and jumped by more than 0.3 m on 83% of frames ('13 m' / '14 m'). */
+  riderZ?: number;
   standings: { next: { track: GhostTrack; gap: number } | null; rank: number; of: number };
   /** passedThisRun.size after this frame's race bookkeeping. */
   passedThisRun: number;
@@ -249,6 +255,8 @@ export class Director {
   private lastSlungPassTick = -1e9;
   /** Gifts the grudge's passes and settle have credited this run (its premium is paid once). */
   private grudgePaid = 0;
+  /** The rider's z on the poses' time base this frame (DirectorFrame.riderZ, else sim.s.z). */
+  private rz = 0;
 
   // Milestones.
   private newGroundTick = -1e9;
@@ -438,6 +446,9 @@ export class Director {
     const live = f.phase === 'run' && !s.crashed;
     const haunted = run !== null && run.mood === Mood.Haunted;
     const motion = !f.reduced;
+    // Every gap to a ghost pose is taken against the rider on the poses' own time base.
+    const rz = f.riderZ !== undefined && Number.isFinite(f.riderZ) ? f.riderZ : s.z;
+    this.rz = rz;
 
     // ---- Pre-scan the batch.
     const evs = this.simEvents;
@@ -463,7 +474,7 @@ export class Director {
     if (live) {
       for (const t of f.tracks) {
         const p = f.poses.get(t.entry.id);
-        if (p && !p.done && p.z - s.z >= 2) this.ledBy2m.add(t.entry.id);
+        if (p && !p.done && p.z - rz >= 2) this.ledBy2m.add(t.entry.id);
       }
     }
 
@@ -482,7 +493,7 @@ export class Director {
         if (!t.ready) continue;
         const p = f.poses.get(t.entry.id);
         if (!p) continue;
-        gaps.push({ id: t.entry.id, gap: p.z - s.z, live: !p.done });
+        gaps.push({ id: t.entry.id, gap: p.z - rz, live: !p.done });
       }
       // A duel's result holds the rival on its ghost (the pill's flash): the next opens once it can be named.
       const holding = this.rivalHold !== null && now < this.rivalHold.until;
@@ -508,7 +519,7 @@ export class Director {
           // Your best, beaten in a duel and behind you now: 'Passed Your best' (C7) gets its moment
           // (the pass itself was muted inside the duel, and a duel with your own line runs long).
           const p = f.poses.get(d.id);
-          if (t.entry.kind === 'you' && p && p.z < s.z) {
+          if (t.entry.kind === 'you' && p && p.z < rz) {
             const ladder = ++this.ladderN;
             this.push({ type: 'pass', tick: sim.tick, ghost, word: 'yourBest', text: 'Passed', first: false, chain: 0, ladder, octave: ladderIndex(ladder).octave, gifts: 0, muted: false }, sim);
           }
@@ -532,7 +543,7 @@ export class Director {
         if (this.duels.open === id || resolved.has(id) || this.afterDuel(id, sim.tick)) continue;
         const p = f.poses.get(id);
         if (!p) continue;
-        const gap = p.z - s.z;
+        const gap = p.z - rz;
         const ghost = this.ref(t, f, sim);
         const behind = gap < 0;
         // The grudge wiping out behind you settles it, and the wipeout is the banner's sub-line: one
@@ -878,13 +889,13 @@ export class Director {
     const duelId = this.duels.open;
     const callUp = this.call && now - this.call.at < CALL_SHOW_S ? this.call.id : null;
     if (this.rivalHold && now >= this.rivalHold.until) this.rivalHold = null;
-    const steady = steadyNext(this.riderGap(this.heldNext, f, sim), this.nearestRider(f, sim), now - this.heldSince);
+    const steady = steadyNext(this.riderGap(this.heldNext, f), this.nearestRider(f), now - this.heldSince);
     const sid = steady ? steady.id : null;
     if (sid !== this.heldNext) {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    out.rival = rivalPick(steady, this.gapOf(duelId, f, sim), this.gapOf(callUp, f, sim), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f, sim));
+    out.rival = rivalPick(steady, this.gapOf(duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
 
     const timerFrac = c.window > 0 ? c.timer / c.window : 0;
     const draining = c.active && s.grounded && !s.drifting && !s.drafting;
@@ -905,14 +916,14 @@ export class Director {
     a.skillChain = this.skillChain;
     a.skillMult = skillMult(this.skillChain);
     a.earnedFlow = earned;
-    a.race = live && (duelId !== null || this.anyNear(f, sim, 8)) ? 0.06 : 0;
+    a.race = live && (duelId !== null || this.anyNear(f, 8)) ? 0.06 : 0;
     a.duel = duelId !== null ? this.duels.amount : 0;
     a.shoulder = live && !s.drafting ? this.shoulder(f, sim) : null;
     a.fuse = out.hud.fuse;
     a.streak = this.streak.n;
     a.countIn = run !== null && run.hasReveal && now < run.revealLeaveS;
     a.lift = (this.newGroundAt >= 0 ? LIFT_NEW_GROUND : 0) + (this.avalancheAt >= 0 ? LIFT_AVALANCHE * Math.max(0, 1 - (now - this.avalancheAt) / LIFT_AVALANCHE_S) : 0);
-    a.choir = live ? this.choir(f, sim) : 0;
+    a.choir = live ? this.choir(f) : 0;
     // The latest boost was a slingshot and its pool still pushes: the pack's speed, not skill.
     if (this.slingBoost && !((s.boostPool ?? 0) > 0.2)) this.slingBoost = false;
     a.drafting = s.drafting || this.slingBoost;
@@ -921,12 +932,12 @@ export class Director {
 
   /** The ghost choir: ghosts you passed this run (shown, live, or beaten in a duel) that are still
    *  riding, behind you and within CHOIR_BEHIND metres; 0..CHOIR_MAX. */
-  private choir(f: DirectorFrame, sim: Sim): number {
+  private choir(f: DirectorFrame): number {
     let n = 0;
     for (const id of this.choirIds) {
       const p = f.poses.get(id);
       if (!p || p.done) continue;
-      const back = sim.s.z - p.z;
+      const back = this.rz - p.z;
       if (back > 0 && back <= CHOIR_BEHIND && ++n >= CHOIR_MAX) break;
     }
     return n;
@@ -1059,7 +1070,7 @@ export class Director {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
       if (!p || p.done) continue;
-      const dz = p.z - s.z;
+      const dz = p.z - this.rz;
       if (dz > 3 || dz < -60) continue;
       const dx = p.x - s.x;
       const d = dx * dx + dz * dz;
@@ -1125,7 +1136,7 @@ export class Director {
         if (fired) continue;
         const p = f.poses.get(id);
         if (!p || p.done) continue;
-        const gap = p.z - sim.s.z;
+        const gap = p.z - this.rz;
         if (gap > TRICK_AHEAD || gap < -TRICK_BEHIND) continue;
         fired = true;
         this.lastWhisperAt = now;
@@ -1239,7 +1250,7 @@ export class Director {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
       if (!p || p.done) continue;
-      const back = s.z - p.z;
+      const back = this.rz - p.z;
       if (back <= 0 || back >= 6 || Math.abs(p.x - s.x) >= 4) continue;
       if (back < bg) {
         bg = back;
@@ -1257,10 +1268,10 @@ export class Director {
     return t !== undefined && tick - t <= DUEL_AFTER_TICKS;
   }
 
-  private anyNear(f: DirectorFrame, sim: Sim, m: number): boolean {
+  private anyNear(f: DirectorFrame, m: number): boolean {
     for (const t of f.tracks) {
       const p = f.poses.get(t.entry.id);
-      if (p && !p.done && Math.abs(p.z - sim.s.z) < m) return true;
+      if (p && !p.done && Math.abs(p.z - this.rz) < m) return true;
     }
     return false;
   }
@@ -1273,29 +1284,30 @@ export class Director {
     return false;
   }
 
-  private gapOf(id: number | null, f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  /** A ghost's gap (ghost minus rider, + = ahead), pose and rider on the same render tick. */
+  private gapOf(id: number | null, f: DirectorFrame): { id: number; gap: number } | null {
     if (id === null) return null;
     const p = f.poses.get(id);
-    return p ? { id, gap: p.z - sim.s.z } : null;
+    return p ? { id, gap: p.z - this.rz } : null;
   }
 
   /** A ghost the rival pill may name: still riding, and ahead or no more than RIVAL_BEHIND_M behind. */
-  private riderGap(id: number | null, f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  private riderGap(id: number | null, f: DirectorFrame): { id: number; gap: number } | null {
     if (id === null) return null;
     const p = f.poses.get(id);
     if (!p || p.done) return null;
-    const gap = p.z - sim.s.z;
+    const gap = p.z - this.rz;
     return gap >= -RIVAL_BEHIND_M ? { id, gap } : null;
   }
 
   /** The nearest riding ghost ahead, else the nearest riding ghost behind within RIVAL_BEHIND_M, else
    *  none: a wreck, or a ghost a kilometre back, is no race ('fjord348 1974 m behind'). */
-  private nearestRider(f: DirectorFrame, sim: Sim): { id: number; gap: number } | null {
+  private nearestRider(f: DirectorFrame): { id: number; gap: number } | null {
     let ahead: { id: number; gap: number } | null = null;
     let behind: { id: number; gap: number } | null = null;
     for (const t of f.tracks) {
       if (!t.ready) continue;
-      const g = this.riderGap(t.entry.id, f, sim);
+      const g = this.riderGap(t.entry.id, f);
       if (!g) continue;
       if (g.gap > 0) {
         if (!ahead || g.gap < ahead.gap) ahead = g;
