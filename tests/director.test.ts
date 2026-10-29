@@ -787,6 +787,24 @@ describe('the race', () => {
     expect(real[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
   });
 
+  it("your best passed in view before its duel: the duel's result is the moment, never a second 'Passed Your best'", () => {
+    const r = new Rig();
+    const you = track(1001, 'you', 'Rider');
+    r.tracks = [you];
+    r.sim.tick = 2000;
+    you.status = 1;
+    r.poses.set(1001, pose(r.sim.s.z - 1.6));
+    const first = of(r.frame([], { race: [{ type: 'pass', track: you, first: true }] }), 'pass');
+    expect(first[0]).toMatchObject({ word: 'yourBest', text: 'Passed', muted: false, gifts: 5 });
+    // It sticks with you: a duel, held off with it two metres back at the cap.
+    r.poses.set(1001, pose(r.sim.s.z - 1));
+    const out = r.idle(12);
+    expect(of(out, 'duel').map((d) => d.phase)).toEqual(['open', 'heldOff']);
+    expect(of(out, 'pass')).toHaveLength(0);
+    r.poses.set(1001, pose(r.sim.s.z - 2.5));
+    expect(of(r.idle(3), 'pass')).toHaveLength(0);
+  });
+
   it("neck and neck with the crossing behind you: 'Passed Your best' waits for it to fall clear and the result's hold", () => {
     const r = new Rig();
     const you = track(1001, 'you', 'Rider');

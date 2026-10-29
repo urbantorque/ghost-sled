@@ -582,6 +582,7 @@ export class Director {
           this.duelEnd.set(d.id, sim.tick);
           this.choirIds.add(d.id);
           // You beat it where it could be seen: a shown pass (missions count it).
+          const seenBefore = this.shown.has(d.id);
           this.shown.add(d.id);
           // Beating the grudge in a duel settles it (its passes were muted while the duel ran). One
           // moment: the banner goes up with the result, and carries its word on the sub-line (the
@@ -597,8 +598,9 @@ export class Director {
           // the neck-and-neck band (then 'PASSED Your best' again for real), and in the same frame it
           // took the pill from 'Held off Your best', which never showed. Only jostled at the start, its
           // first pass is this one: it pays the base, and it is spent. With the crossing still to come,
-          // the race's own first pass is the moment.
-          if (t.entry.kind === 'you' && t.status === 1) this.youClear = { id: d.id, until: now + RIVAL_HOLD_S + YOU_CLEAR_S };
+          // the race's own first pass is the moment. Passed (and shown) before its duel opened, it has had
+          // its 'Passed Your best': the result is the moment (it read 'Passed Your best' twice).
+          if (t.entry.kind === 'you' && t.status === 1 && !seenBefore) this.youClear = { id: d.id, until: now + RIVAL_HOLD_S + YOU_CLEAR_S };
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
           if (d.phase === 'lost') {
