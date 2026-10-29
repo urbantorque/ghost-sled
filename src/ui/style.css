@@ -6878,14 +6878,22 @@
     display: none;
   }
 
+  /* Its tags never spill under the best column: the medal disc drew over "Fresh rivals" and bit into
+     "Day 12". What does not fit is clipped inside this column (meta.css drops the tag first). */
   .gs-daily-txt {
     display: flex;
     align-items: center;
     gap: 8px;
+    min-width: 0;
+    overflow: hidden;
   }
 
   .gs-daily-title {
     white-space: nowrap;
+  }
+
+  .gs-daily-day {
+    flex: none;
   }
 
   .gs-daily-meta {
