@@ -28,8 +28,9 @@ describe('classifyPass precedence', () => {
     expect(c).toMatchObject({ word: 'jostle', gifts: 5, muted: true });
     // A ghost that got 2 m clear and was then caught is a real pass, even early.
     expect(classifyPass(ctx({ tick: 200, everLedBy2m: true })).word).toBe('passed');
-    // The jostle rule outranks everything, a slingshot included.
-    expect(classifyPass(ctx({ tick: 200, everLedBy2m: false, lastSlingTick: 190 })).word).toBe('jostle');
+    // A slingshot through the bunch is a real pass, even before the bunch has sorted itself out.
+    expect(classifyPass(ctx({ tick: 200, everLedBy2m: false, lastSlingTick: 190 }))).toMatchObject({ word: 'slung', muted: false });
+    expect(classifyPass(ctx({ tick: 200, everLedBy2m: false, lastSlingTick: 190, slungN: 3 })).text).toBe('Slung past 3');
   });
 
   it('a wreck is Beat, before duels and slingshots', () => {

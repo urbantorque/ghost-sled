@@ -56,8 +56,10 @@ export interface PassContext {
  */
 export function classifyPass(c: PassContext): { word: PassWord; text: string; gifts: number; extra: number; muted: boolean } {
   const base = c.first ? (c.haunted ? 2 : 1) * 5 : 0;
-  // 1. The start-line bunch: edging past a ghost that never got clear of you is no overtake.
-  if (c.tick < START_TICKS && !c.everLedBy2m) return { word: 'jostle', text: 'Passed', gifts: base, extra: 0, muted: true };
+  const slung = c.first && !c.wreck && c.tick - c.lastSlingTick >= 0 && c.tick - c.lastSlingTick <= SLING_TICKS;
+  // 1. The start-line bunch: edging past a ghost that never got clear of you is no overtake. A
+  //    slingshot out of its slipstream is: the burst through the bunch is the run's first moment.
+  if (c.tick < START_TICKS && !c.everLedBy2m && !slung) return { word: 'jostle', text: 'Passed', gifts: base, extra: 0, muted: true };
   // 2. A wreck: you rode past where it fell. Your best's wreck right on New ground is that beat's.
   if (c.wreck) {
     const muted = c.ghost.kind === 'you' && c.tick - c.newGroundTick >= 0 && c.tick - c.newGroundTick <= NEW_GROUND_MUTE_TICKS;
@@ -67,7 +69,7 @@ export function classifyPass(c: PassContext): { word: PassWord; text: string; gi
   if (c.duel === 'won') return { word: 'duelWon', text: 'Duel won', gifts: base, extra: 0, muted: false };
   if (c.duel === 'heldOff') return { word: 'heldOff', text: 'Held off', gifts: base, extra: 0, muted: false };
   // 4. Out of a slipstream: the slingshot carried you past.
-  if (c.first && c.tick - c.lastSlingTick >= 0 && c.tick - c.lastSlingTick <= SLING_TICKS) {
+  if (slung) {
     const n = Math.max(1, Math.floor(c.slungN ?? 1));
     return { word: 'slung', text: n >= 2 ? `Slung past ${n}` : 'Slung past', gifts: base, extra: SLUNG_GIFTS, muted: false };
   }
