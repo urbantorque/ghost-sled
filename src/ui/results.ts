@@ -45,6 +45,15 @@ export const RESULTS_TIMING = {
 /** When the missions land (ms after the card opens), matching the stagger in style.css. Their bars
  *  fill, each completed one's Done stamp lands 140 ms after the last, then its reward flies. */
 const MIS_STAMP_MS = 1050;
+
+/**
+ * When a mission row's reward leaves its card (ms after the card opens): just after its Done stamp
+ * (MIS_STAMP_MS plus 140 ms per row). It then flies for FLY_DUR, or, with the card or the wallet
+ * scrolled out of view (phones) or under reduced motion, lands right here.
+ */
+export function landAt(row: number): number {
+  return MIS_STAMP_MS + 420 + row * 140;
+}
 /** The finishing order shows your row, the two places above it (the next ghosts to beat) and the one
  *  below; Show All opens the rest. A field this small or smaller always shows whole. */
 const WIN_ABOVE = 2;
@@ -63,10 +72,47 @@ const MAX_STATS = 2;
 const CHAL_LOCK_MS = 1500;
 /** A lost combo from this big is named on the crash line ("with 4,960 on the line"). */
 const LOST_LINE_MIN = 1000;
+/** A rematch name this long (in characters) drops the Space keycap and, on phones, a type size. */
+const LONG_NAME = 9;
 /** Results opened this session, so the tip for next time rotates through the moves to learn. */
 let tipTurn = 0;
 
 type StatKey = keyof typeof FLOOR;
+
+/** The More cue shows only once at least this much of the body is cut off (less is the fade's job). */
+export const MORE_MIN_PX = 40;
+
+/** The results body's blocks the More cue can point at, for watchMore. */
+interface MoreParts {
+  mis: HTMLElement | null;
+  race: HTMLElement | null;
+  run: HTMLElement | null;
+  tip: HTMLElement | null;
+  /** The missions section's header row: once it is in view, the cue says "More". */
+  head: HTMLElement | null;
+}
+
+type Box = { left: number; right: number; top: number; bottom: number };
+export type MoreBlock = { key: 'mis' | 'race' | 'run' | 'tip'; r: Box };
+
+/**
+ * Where the More cue goes, from layout already read: `clip` (px of the body cut off below), the
+ * scroller's visible box (`right` inside its padding), the blocks and the missions header. Null: no
+ * cue (under MORE_MIN_PX cut, or nothing cut). The cue is centred on the column that runs on: the
+ * missions while their header is still below the fold ("Missions"), else the column cut deepest
+ * ("More"); when only the full-width tip row is cut it sits at that row's right end, off its words.
+ */
+export function moreCue(clip: number, view: { top: number; bottom: number; right: number }, blocks: readonly MoreBlock[], head: Box | null, cueW: number): { x: number; label: 'missions' | 'more' } | null {
+  if (clip < MORE_MIN_PX) return null;
+  const cut = blocks.filter((b) => b.r.bottom > view.bottom + 1);
+  if (cut.length === 0) return null;
+  const headIn = head !== null && head.top >= view.top && head.bottom <= view.bottom;
+  const mis = cut.find((b) => b.key === 'mis');
+  if (mis && !headIn) return { x: (mis.r.left + mis.r.right) / 2, label: 'missions' };
+  const cols = cut.filter((b) => b.key !== 'tip').sort((a, b) => b.r.bottom - a.r.bottom);
+  if (cols.length > 0) return { x: (cols[0].r.left + cols[0].r.right) / 2, label: 'more' };
+  return { x: view.right - cueW / 2, label: 'more' };
+}
 
 export class Results {
   readonly layer: Layer;
@@ -77,7 +123,10 @@ export class Results {
   /** Offers pressed on these results: one the game then withdraws keeps its slot as a status. */
   private pressed = new Set<string>();
   private io: IntersectionObserver | null = null;
+  private ro: ResizeObserver | null = null;
   private timers: number[] = [];
+  /** Mission rows whose reward is still on its way to the wallet (each lands, and reports, once). */
+  private readonly toLand = new Set<number>();
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
@@ -105,6 +154,7 @@ export class Results {
 
   show(m: ResultsModel): void {
     this.prev = null;
+    this.toLand.clear();
     this.pending.clear();
     this.pressed.clear();
     this.raceAll = false;
@@ -146,9 +196,12 @@ export class Results {
 
   hide(): void {
     cancelAnimationFrame(this.raf);
+    this.toLand.clear();
     this.clearTimers();
     this.io?.disconnect();
     this.io = null;
+    this.ro?.disconnect();
+    this.ro = null;
     this.layer.hide();
   }
 
@@ -189,16 +242,25 @@ export class Results {
    */
   private flyRewards(m: ResultsModel): void {
     const wins = m.missions.map((mv, i) => ({ mv, i })).filter((x) => x.mv.justCompleted && x.mv.reward > 0);
+    if (wins.length === 0) return;
+    for (const { i } of wins) this.toLand.add(i);
     const walletN = this.el.querySelector<HTMLElement>('.gs-res-wallet .gs-num');
-    if (wins.length === 0 || !walletN || reduced()) return;
+    if (!walletN || reduced()) {
+      // No flight (reduced motion, or no wallet line): the wallet already shows the total, and each
+      // reward still reports its landing on the Done stamp's beat, so its coin keeps time with it.
+      for (const { i } of wins) this.timers.push(window.setTimeout(() => this.landed(i), landAt(i)));
+      return;
+    }
     let shown = m.wallet - wins.reduce((s, x) => s + x.mv.reward, 0);
     walletN.textContent = fmt(shown);
     const cards = this.el.querySelectorAll<HTMLElement>('.gs-res-missions .gs-mis');
     for (const { mv, i } of wins) {
       const land = () => {
+        if (!this.toLand.has(i)) return;
         shown += mv.reward;
         walletN.textContent = fmt(shown);
         bump(walletN, 1.25, 340);
+        this.landed(i);
       };
       // Just after the card's Done stamp (its CSS delay is MIS_STAMP_MS plus 140 ms per row).
       const t = window.setTimeout(() => {
@@ -229,12 +291,26 @@ export class Results {
           chip.remove();
           land();
         };
-      }, MIS_STAMP_MS + 420 + i * 140);
+      }, landAt(i));
       this.timers.push(t);
     }
   }
 
+  /**
+   * A reward has landed in the wallet: the app hears it once per reward (UIHandlers.onRewardLanded,
+   * the row's index in ResultsModel.missions) and plays its coin. False if that row already landed or
+   * is not waiting.
+   */
+  private landed(row: number): boolean {
+    if (!this.toLand.delete(row)) return false;
+    this.hd.onRewardLanded?.(row);
+    return true;
+  }
+
   private render(m: ResultsModel, intro: boolean): void {
+    // A re-render (an offer answered) prints the wallet's full total at once: any reward still in
+    // flight has landed, so it reports now rather than never.
+    if (!intro) for (const row of [...this.toLand]) this.landed(row);
     this.clearTimers();
     this.prev = m;
     const ctx = this.ctx;
@@ -329,22 +405,19 @@ export class Results {
     else if (this.pressed.has('revive')) extra.append(this.spent('revive', 'Revive Used'));
     if (m.canDouble && !m.doubled) extra.append(this.rewarded('double', 'video', 'Double Gifts', true, () => this.hd.onDouble()));
     else if (this.pressed.has('double')) extra.append(this.spent('double', m.doubled ? 'Gifts Doubled' : 'No Ad Right Now'));
-    // You beat a friend's challenge: answering back is the move, so the challenge leads the offers as
-    // a filled mint Send It Back (mint: it sends your ghost), full label on every screen. Run again
-    // keeps the vermillion and the Space key.
-    const back = m.canChallenge && m.sendItBack === true;
-    if (back) {
-      const send = this.rewarded('challenge', 'link', 'Send It Back', false, () => this.hd.onChallenge());
-      send.classList.add('gs-res-send');
-      extra.prepend(send);
-    }
     // Challenge a Friend rides with Home: at the far left of that row on wide screens, and a compact
-    // glyph button beside Home on phones, so Run again carries the footer on its own.
-    const chal = m.canChallenge && !back ? this.rewarded('challenge', 'link', 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
+    // glyph button beside Home on phones, so Run again carries the footer on its own. You beat a
+    // friend's challenge: answering back is the move, so that same slot holds a filled mint Send It
+    // Back (mint: it sends your ghost) in Challenge's place. It never takes an ad-offer slot: with
+    // Revive and Double Gifts both up it pushed the footer to three rows on a phone and hid the row
+    // below yours (C6).
+    const back = m.canChallenge && m.sendItBack === true;
+    const chal = m.canChallenge ? this.rewarded('challenge', 'link', back ? 'Send It Back' : 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
     if (chal) {
       chal.classList.add('gs-res-chal');
+      if (back) chal.classList.add('gs-res-send');
       // Phones show "Challenge" under the glyph; the rest stays in the name for readers and voice.
-      chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
+      else chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
     }
     const label = m.runAgainLabel?.text ?? 'Run Again';
     const rematch = label.startsWith('Rematch ');
@@ -356,9 +429,12 @@ export class Results {
     // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
     // word stacks over the name (meta.css), so the name keeps the button's width to itself.
     if (rematch) {
-      const who = h('span', 'gs-again-who', label.slice('Rematch '.length));
+      const name = label.slice('Rematch '.length);
+      const who = h('span', 'gs-again-who', name);
       who.setAttribute('translate', 'no');
       again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
+      // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
+      if ([...name].length >= LONG_NAME) again.classList.add('is-long');
     }
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
@@ -379,8 +455,9 @@ export class Results {
     // A named region: a bare div may not carry aria-label, and readers announce the scroller by it.
     body.setAttribute('role', 'region');
     body.setAttribute('aria-label', 'Run details');
-    // Missions are what usually waits below, so the cue names them.
-    const more = h('button', 'gs-res-more', h('span', '', mis ? 'Missions' : 'More'), icon('chevR', 'gs-res-more-ico'));
+    // Missions are what usually waits below, so the cue names them (until their header is in view).
+    const moreT = h('span', 'gs-res-more-t', mis ? 'Missions' : 'More');
+    const more = h('button', 'gs-res-more', moreT, icon('chevR', 'gs-res-more-ico'));
     more.type = 'button';
     more.tabIndex = -1;
     more.setAttribute('aria-hidden', 'true');
@@ -394,21 +471,62 @@ export class Results {
     card.setAttribute('aria-labelledby', title.id);
     card.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
     this.el.replaceChildren(card);
-    this.watchMore(body, end, scroll);
+    this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
-  /** Toggles the bottom fade and More cue while the end of the body is out of view. */
-  private watchMore(body: HTMLElement, end: HTMLElement, scroll: HTMLElement): void {
+  /**
+   * Toggles the bottom fade while the end of the body is out of view, and the More cue while enough of
+   * it is (MORE_MIN_PX: a 17 px sliver is the fade's job, and a cue there floated over the tip row).
+   * The cue sits in the column whose content runs on (missions or race), or at the right end of the
+   * tip row when only that row is cut, never across the gutter; it reads "More" once the missions
+   * header is already in view. Layout is read in the observer and scroll callbacks only.
+   */
+  private watchMore(body: HTMLElement, end: HTMLElement, scroll: HTMLElement, more: HTMLElement, moreT: HTMLElement, parts: MoreParts): void {
     this.io?.disconnect();
     this.io = null;
     if (typeof IntersectionObserver === 'undefined') return;
+    let out = false;
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      if (!out || !more.isConnected) {
+        scroll.classList.remove('has-cue');
+        return;
+      }
+      const v = body.getBoundingClientRect();
+      const s = scroll.getBoundingClientRect();
+      const blocks: MoreBlock[] = [];
+      for (const key of ['mis', 'race', 'run', 'tip'] as const) {
+        const el = parts[key];
+        if (el && el.isConnected) blocks.push({ key, r: el.getBoundingClientRect() });
+      }
+      const view = { top: v.top, bottom: v.bottom, right: v.right - (parseFloat(getComputedStyle(body).paddingRight) || 0) };
+      const cue = moreCue(body.scrollHeight - body.clientHeight - body.scrollTop, view, blocks, parts.head?.getBoundingClientRect() ?? null, more.offsetWidth);
+      scroll.classList.toggle('has-cue', cue !== null);
+      if (!cue) return;
+      moreT.textContent = cue.label === 'missions' ? 'Missions' : 'More';
+      const half = more.offsetWidth / 2 + 8;
+      more.style.left = `${Math.round(Math.max(half, Math.min(s.width - half, cue.x - s.left)))}px`;
+    };
+    const ask = () => {
+      if (raf === 0) raf = requestAnimationFrame(sync);
+    };
     // The sentinel sits right under the last block (the rows have no gap; margins set the rhythm), so
     // it comes into view once that block shows whole, and a row with nothing below it is never faded
     // as if it ran on.
     this.io = new IntersectionObserver((entries) => {
-      for (const en of entries) scroll.classList.toggle('has-more', !en.isIntersecting);
+      for (const en of entries) {
+        out = !en.isIntersecting;
+        scroll.classList.toggle('has-more', out);
+      }
+      ask();
     }, { root: body, threshold: 0 });
     this.io.observe(end);
+    body.addEventListener('scroll', ask, { passive: true });
+    // Opening the missions list or Show All changes what is cut without the sentinel crossing.
+    this.ro?.disconnect();
+    this.ro = typeof ResizeObserver === 'function' ? new ResizeObserver(ask) : null;
+    for (const el of [parts.mis, parts.race]) if (el) this.ro?.observe(el);
   }
 
   /** The order shows a window around your row; this compact link under it opens the rest. */

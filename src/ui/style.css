@@ -1529,6 +1529,11 @@
   color: rgba(245, 243, 255, 0.82);
 }
 
+/* The phone's one-word event name ("Storm in 20 m"); wide screens say it in full (.gs-cd-name). */
+.gs-cd-tiny {
+  display: none;
+}
+
 /* A plain run has no mood chip at all (it would only hold empty space beside the countdown). */
 .gs-mood.is-gone {
   display: none;
@@ -4471,7 +4476,9 @@
     transform 220ms var(--out);
 }
 
-.gs-res-scroll.has-more .gs-res-more {
+/* The cue itself waits for a real overflow (MORE_MIN_PX in results.ts), and results.ts sets its left
+   edge to the column that runs on: never centred across the gutter. */
+.gs-res-scroll.has-more.has-cue .gs-res-more {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, 0);
@@ -6963,10 +6970,39 @@
 
   /* Portrait stacking: distance (with "Best in 240 m" tucked under it), then the mood chip, then the
      countdown, all in the one row under the score, so the block never reaches the race row. The
-     countdown keeps its glyph and "in 380 m"; its event's name steps out visually (screen readers keep
-     it). */
+     countdown keeps its glyph and one short word for its event ("Storm in 380 m"); the full name
+     steps out visually (screen readers keep it). */
   .gs-hud-chips {
     flex-wrap: nowrap;
+  }
+
+  /* The row never runs off a 390 px phone: with a four-digit distance, a long mood name and the
+     countdown's word ("Avalanche in 390 m"), the mood's name gives way (its glyph stays, and the
+     reveal named it), never the countdown. */
+  .gs-hud-tl {
+    max-width: calc(100vw - var(--sl) - var(--sr));
+  }
+
+  .gs-hud-sub,
+  .gs-hud-chips {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .gs-hud-chips .gs-mood {
+    flex: 0 1 auto;
+    min-width: 0;
+  }
+
+  .gs-mood-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gs-hud-chips .gs-cd {
+    flex: none;
   }
 
   .gs-best-in {
@@ -6993,12 +7029,57 @@
     white-space: nowrap;
   }
 
+  .gs-cd-tiny {
+    display: inline;
+  }
+
   /* The whole top-centre stack (race row, combo, callouts, banner, reveal) sits in the top band, about
      9 px clear of the score row (whose height follows the unit), and ends well above the horizon. A
      portrait chase docks its banner one race row lower (the avalanche unit, above). */
   .gs-hud-tc,
   .gs-notices {
     top: calc(var(--st) + 4.6 * var(--u) + 14px);
+  }
+
+  /* On the title the wordmark holds the top centre: a toast (a stale challenge link, "Challenge link
+     copied") docks just under it (--title-dock, title.ts) and draws over the title layer, where it
+     sat under the letters and could not be read. */
+  .gs-ui:has(> .gs-title:not([hidden])) > .gs-notices {
+    top: calc(var(--title-dock, 150px) + 12px);
+    z-index: 7;
+  }
+
+  /* A toast on a phone wraps to two lines rather than cutting itself off, and its reward never gives
+     way: "Mission done: Collect 20 gifts in one run" over two lines with "+25 gifts" whole beside it
+     (it read "Mission done: Collect 20 gifts in one r... +25 g..."). */
+  .gs-toast {
+    min-height: 40px;
+    padding-block: 5px;
+  }
+
+  .gs-toast-txt {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    line-height: 1.18;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .gs-toast-sub {
+    flex: none;
+    max-width: 42%;
+    line-height: 1.18;
+    white-space: normal;
+    text-align: right;
+  }
+
+  /* A word sub ("Ride it from the title") may wrap; a reward ("+25 gifts") keeps to one line. */
+  .t-mission .gs-toast-sub,
+  .t-gift .gs-toast-sub {
+    max-width: none;
+    white-space: nowrap;
   }
 
   .gs-hud-bc {

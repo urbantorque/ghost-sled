@@ -38,6 +38,9 @@ export class Title {
     this.el.setAttribute('aria-label', 'Ghost Sled');
     parent.append(this.el);
     this.layer = new Layer(this.el, 220);
+    window.addEventListener('resize', () => {
+      if (this.layer.open) this.dock();
+    });
     document.addEventListener('pointerdown', (e) => {
       if (!this.popover) return;
       const t = e.target as Node | null;
@@ -73,6 +76,20 @@ export class Title {
     }
     if (hadPopover) this.openMissions(m.missions, false);
     restoreFocus(this.el, fk);
+    this.dock();
+  }
+
+  /**
+   * Where a toast docks while the title is up (--title-dock on the UI root, used on phones held
+   * upright): just under the wordmark and its tagline, which sit at the top centre there and hid
+   * "Challenge from an older Ghost Sled" under their letters. Layout offsets, so the entrance
+   * animation's transform never moves it; read in the same layout pass as the strip's centring above.
+   */
+  private dock(): void {
+    const main = this.el.querySelector<HTMLElement>('.gs-t-main');
+    if (!main) return;
+    const bottom = this.el.offsetTop + main.offsetTop + main.offsetHeight;
+    this.el.parentElement?.style.setProperty('--title-dock', `${Math.round(bottom)}px`);
   }
 
   hide(): void {
@@ -305,8 +322,16 @@ export class Title {
       h('span', 'gs-daily-ico', icon('snowflake')),
       h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Daily Mountain'), meta),
     );
+    // Every number carries its label: with a medal the best reads "Bronze · Best 7,967", never a bare
+    // "Bronze 7,967" (the figure is the day's best score, not the medal's).
     const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
-    if (d.best > 0 || disc) b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc ?? h('span', 'gs-daily-best-l', 'Best'), d.best > 0 ? h('span', 'gs-num', fmt(d.best)) : null));
+    if (d.best > 0 || disc) {
+      const num = d.best > 0 ? h('span', 'gs-num', fmt(d.best)) : null;
+      const best = disc
+        ? [disc, num ? h('span', 'gs-daily-score', h('span', 'gs-daily-sep', '·'), h('span', 'gs-daily-best-l', 'Best'), num) : null]
+        : [h('span', 'gs-daily-best-l', 'Best'), num];
+      b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, ...best));
+    }
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
