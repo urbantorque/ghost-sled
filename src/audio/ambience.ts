@@ -14,6 +14,11 @@ import { bandComp, blockRate, clamp, smoothstep } from './voices';
 
 /** A fourth down: the flow tone bends this far when a bump snuffs it. */
 const FOURTH_DOWN = 0.7491535384383408;
+/** The shoulder hiss at full presence (a ghost on your heel and gaining). */
+const SHOULDER_GAIN = 0.8;
+/** The shoulder's level rising this fast (per second) is a ghost closing at full tilt: about 2 m/s
+ *  faster than you within the last 2 m. */
+const SHOULDER_CLOSING = 0.6;
 
 type Link = readonly [AudioNode, AudioNode | AudioParam];
 
@@ -149,6 +154,11 @@ export class Ambience {
   private readonly shoulderF: Smooth;
   private readonly shoulderG: Smooth;
   private readonly shoulderPan: Smooth | null;
+  private readonly shoulderRate: Smooth;
+  /** The shoulder's last level and time, and how fast it is closing (0..1, smoothed). */
+  private shPrev = 0;
+  private shAt = -1;
+  private shClose = 0;
   /** The wind's last centre and Q, and the snuff's bend (a fourth down, Q held) while it lasts. */
   private windNow = 500;
   private windQNow = 0.7;
@@ -313,19 +323,29 @@ export class Ambience {
     this.whineGain = whineG.gain;
     this.whineG = G(whineG.gain, [[this.whine1, whineG], [this.whine2, whine2G]]);
 
-    // Shoulder: a band of hiss over the shoulder a rival is closing on.
+    // Shoulder: a rival's runners over the shoulder it is closing on. A band of hiss above the wind's,
+    // chopped by a grain train so it reads as runners, not weather. Summed to mono before the panner:
+    // a stereo source only half pans (the far channel keeps its own side), mono pans equal-power.
     let shTail: AudioNode = this.tone;
     let pan: StereoPannerNode | null = null;
     if (typeof ctx.createStereoPanner === 'function') {
       pan = ctx.createStereoPanner();
+      pan.channelCount = 1;
+      pan.channelCountMode = 'explicit';
       pan.connect(this.tone);
       this.nodes.push(pan);
       shTail = pan;
     }
     const shG = gain(0, shTail);
-    const shBP = filter('bandpass', 1100, 3, shG);
+    // A floor under the grains keeps it continuous; the grains (at half depth, so they never spike
+    // over the bed's peaks) add the runners' chatter.
+    const shAM = gain(0.45, shG);
+    const shDepth = gain(0.55, shAM.gain);
+    const shGrains = loop(bank.grains, 1.3);
+    const shBP = filter('bandpass', 1500, 2.5, shAM);
     this.shoulderF = P(shBP.frequency, 0.02, true);
-    this.shoulderG = G(shG.gain, [[white, shBP]]);
+    this.shoulderRate = P(shGrains.playbackRate, 0.03, true);
+    this.shoulderG = G(shG.gain, [[white, shBP], [shGrains, shDepth]]);
     this.shoulderPan = pan ? P(pan.pan, 0.03) : null;
   }
 
@@ -403,13 +423,14 @@ export class Ambience {
     this.apply(CALM, now, false, null, false);
   }
 
-  update(f: AudioFrame, now: number, avalanche: boolean, key: Key): void {
+  /** shoulder: 0..1 scale on the shoulder hiss (the engine hushes it through the start-line jostle). */
+  update(f: AudioFrame, now: number, avalanche: boolean, key: Key, shoulder = 1): void {
     this.lastFrame = now;
     this.calmed = false;
-    this.apply(f, now, avalanche, key, true);
+    this.apply(f, now, avalanche, key, true, shoulder);
   }
 
-  private apply(f: AudioFrame, now: number, avalanche: boolean, key: Key | null, surface: boolean): void {
+  private apply(f: AudioFrame, now: number, avalanche: boolean, key: Key | null, surface: boolean, shoulderScale = 1): void {
     const sr = this.ctx.sampleRate;
     const sp = clamp(f.speed || 0, 0, 60);
     const s01 = clamp(sp / 46, 0, 1);
@@ -507,14 +528,31 @@ export class Ambience {
       }
     }
 
-    // Shoulder: a rival closing behind you, panned to its side. Silent while drafting (the hum owns
-    // that), in a crash and under any danger (it must never mask the avalanche).
-    const sh = surface && f.shoulder && !f.drafting && !f.crashed && !(f.danger > 0) ? f.shoulder : null;
+    // Shoulder: a rival closing behind you, panned hard to its side. Silent while drafting (the hum
+    // owns that), in a crash and under any danger (it must never mask the avalanche). It is a cue of
+    // closing: full while the ghost gains on you (its level rising), a whisper when one only sits
+    // behind you, and it rides with your speed as the wind bed does.
+    const sh = surface && shoulderScale > 0 && f.shoulder && !f.drafting && !f.crashed && !(f.danger > 0) ? f.shoulder : null;
     const amt = sh ? clamp(sh.amt, 0, 1) : 0;
-    const shf = 1100 + 900 * amt;
-    if (amt > 0) this.shoulderF.to(shf, now, 0.04);
-    if (sh && this.shoulderPan) this.shoulderPan.to(clamp(sh.pan, -0.85, 0.85), now, 0.04);
-    this.shoulderG.to(0.05 * amt * bandComp(shf, 3, sr), now, 0.04);
+    const dts = this.shAt >= 0 ? clamp(now - this.shAt, 0, 0.25) : 0;
+    if (amt === 0) this.shClose = 0;
+    else if (dts > 0) {
+      const rise = clamp((amt - this.shPrev) / dts / SHOULDER_CLOSING, 0, 1);
+      this.shClose += (rise - this.shClose) * (1 - Math.exp(-dts / 0.3));
+    }
+    this.shPrev = amt;
+    this.shAt = now;
+    const shf = 1500 + 1500 * amt;
+    if (amt > 0) {
+      this.shoulderF.to(shf, now, 0.04);
+      this.shoulderRate.to(1.1 + 0.9 * amt, now, 0.1);
+    }
+    if (sh && this.shoulderPan) {
+      const p = clamp(sh.pan, -0.85, 0.85);
+      this.shoulderPan.to(Math.sign(p) * Math.min(0.95, Math.pow(Math.abs(p), 0.7)), now, 0.04);
+    }
+    const shSpeed = 0.35 + 0.65 * smoothstep(8, 24, sp);
+    this.shoulderG.to(SHOULDER_GAIN * amt * (0.15 + 0.85 * this.shClose) * shSpeed * clamp(shoulderScale, 0, 1) * bandComp(shf, 2.5, sr), now, 0.04);
   }
 
   dispose(): void {

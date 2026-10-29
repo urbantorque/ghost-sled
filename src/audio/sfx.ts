@@ -2,6 +2,7 @@ import type { Beat, BeatOf } from '../game/beats';
 import { ChaosEvent } from '../sim/chaos';
 import type { StyleKind } from '../sim/scoring';
 import type { CrashCause, LandQuality, SimEvent, TakeoffKind } from '../sim/sim';
+import { UiOnce, bankRoll, stormCascade } from './cues';
 import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
@@ -26,24 +27,25 @@ const DEFER = 0.08;
  *  slam) are built this far ahead instead: the scheduler runs on a 25 ms main-thread timer, and a
  *  busy frame can stall it for 150 ms or more, which would play a part built at DEFER late. */
 const TIMELINE_LEAD = 0.25;
-/** A bank's roll (tiers 1 to 3), in step with the HUD (cash-in): the 'xN' chip slams on for CHIP_S,
- *  then the figure rolls for `dur` with `n` ticks climbing ladder steps lo..hi. */
-const CHIP_S = 0.12;
-const ROLL: readonly { dur: number; n: number; lo: number; hi: number }[] = [
-  { dur: 0, n: 0, lo: 0, hi: 0 },
-  { dur: 0.35, n: 6, lo: 4, hi: 9 },
-  { dur: 0.6, n: 10, lo: 3, hi: 12 },
-  { dur: 0.9, n: 14, lo: 2, hi: 15 },
+/** A bank's roll (tiers 1 to 3) climbs these pentatonic ladder steps, lo on the first count step and
+ *  hi on the last; its timing is the HUD's (cues.ts bankRoll, from src/game/stake.ts). */
+const ROLL_LADDER: readonly { lo: number; hi: number }[] = [
+  { lo: 0, hi: 0 },
+  { lo: 4, hi: 9 },
+  { lo: 3, hi: 12 },
+  { lo: 2, hi: 15 },
 ];
 /** The drop: the band cuts out this long before a big bank's slam. */
 export const DROP_S = 0.22;
+/** The roll's count steps that fall inside the drop tick this much quieter (about -12 dB). */
+const DROP_TICK = 0.25;
 /** The avalanche escape: the band drops out this long, then the fanfare and the slam land. */
 export const ESCAPE_DROP_S = 0.45;
 
-/** Seconds from a bank beat to the moment its figure lands (the slam on tiers 2 and 3). */
-export function bankLandDelay(tier: number): number {
-  const r = ROLL[tier < 0 ? 0 : tier > 3 ? 3 : Math.round(tier)];
-  return r.n > 0 ? CHIP_S + r.dur : 0;
+/** Seconds from a bank beat to the moment its figure lands (the HUD's punch; the slam on tiers 2
+ *  and 3), 0 for a bank the HUD does not roll. */
+export function bankLandDelay(b: { tier: number; points: number; mult: number; origin: number }): number {
+  return bankRoll(b).land;
 }
 
 interface Job {
@@ -67,6 +69,12 @@ export class Sfx {
   private readonly bumpSides: number[] = [];
   /** Banks a beat already voiced this frame (the raw comboBank then plays nothing). */
   private bankBeats = 0;
+  /** Ghosts whose duel result sounded this frame: their 'duelWon' pass skips its brass, and the
+   *  'pulled away' news after a lost duel stays quiet (the duel's own sigh says it). */
+  private readonly duelWon = new Set<number>();
+  private readonly duelLost = new Set<number>();
+  /** UI sounds already scheduled: the same one asked for twice at one moment plays once. */
+  private readonly once = new UiOnce();
   // Grid pulses: the last time each was scheduled.
   private fuseLast = -1;
   private heartLast = -1;
@@ -97,11 +105,14 @@ export class Sfx {
     this.nearQueue.length = 0;
     this.bumpSides.length = 0;
     this.bankBeats = 0;
+    this.duelWon.clear();
+    this.duelLost.clear();
   }
 
   /** Drops deferred parts, so a reward cut off by a mute (an ad) does not finish after it. */
   clearPending(): void {
     this.jobs.length = 0;
+    this.once.clear();
   }
 
   /** Runs fn(t) at t: now if t is close, else from a later scheduler pass (cancelled by clearPending). */
@@ -203,9 +214,12 @@ export class Sfx {
   /**
    * A UI sound at time t. One far enough ahead (the reveal and results timelines) waits in the job
    * list until its moment, so clearPending() can still drop it; `onStart` runs as it is built (the
-   * engine's music duck for the big chimes, so a cancelled sound leaves no duck behind).
+   * engine's music duck for the big chimes, so a cancelled sound leaves no duck behind). The same
+   * sound asked for again at the same moment (within UI_SAME_S: the app's own call and a cue helper's
+   * for one coin, say) plays once.
    */
   ui(name: UiSound, detail: number, t: number, onStart?: (t: number) => void): void {
+    if (!this.once.admit(name, t, this.ctx.currentTime)) return;
     const d = Number.isFinite(detail) ? Math.max(0, Math.floor(detail)) : 0;
     this.later(
       t,
@@ -783,9 +797,10 @@ export class Sfx {
   }
 
   private bump(t: number): void {
-    // The obstacle's side when the bump beat named it.
+    // The bump beat's side is the way the hit knocked you (away from the obstacle, director
+    // bumpSide), so the thud sounds on the other side: where the obstacle is.
     const side = this.bumpSides.shift();
-    const v = this.voice(t, 0.05, side === 1 || side === -1 ? side * 0.45 : rand(-0.2, 0.2));
+    const v = this.voice(t, 0.05, side === 1 || side === -1 ? -side * 0.45 : rand(-0.2, 0.2));
     thump(v, t, 95, 48, 0.3, 0.05);
     puff(v, t, 0.11, 800, 300, 0.03);
   }
@@ -1208,11 +1223,12 @@ export class Sfx {
   }
 
   /**
-   * A cash-in. Tier 0 keeps the arpeggio; tiers 1 to 3 roll instead, in step with the HUD: the
-   * origin's tock, the 'xN' chip slamming on, ticks climbing the ladder as the figure rolls (eased
-   * out like the count), then the product landing on a bell. Tiers 2 and 3 (not a bump bank) drop
-   * the band DROP_S before the landing and slam it back on the figure; tier 3 swells a cymbal into
-   * the gap.
+   * A cash-in. Tier 0 keeps the arpeggio; tiers 1 to 3 roll instead, on the HUD's clock (cues.ts
+   * bankRoll, from src/game/stake.ts): the origin's tock, the 'xN' chip slamming on, one tick per
+   * count step climbing the ladder (the steps the figure shows, in equal time), then the product
+   * landing on a bell at BANK_CHIP_MS + BANK_ROLL_MS[tier]. Tiers 2 and 3 (not a bump bank) drop the
+   * band DROP_S before the landing, so the last count steps tick on into the silence, and slam it back
+   * on the figure; tier 3 swells a cymbal into the gap. A bank the HUD does not roll lands at once.
    */
   private bankBeat(b: BeatOf<'bank'>, t: number): void {
     this.bankBeats++;
@@ -1222,26 +1238,32 @@ export class Sfx {
       if (b.points >= 1500 && this.music) this.music.duck(0.75, t, 0.3, 0.3);
       return;
     }
-    const r = ROLL[tier];
-    const land = t + CHIP_S + r.dur;
-    // A drop (tiers 2 and 3, not a bump bank): the climb tops out as the gap opens, so the last
-    // DROP_S before the landing is a breath, not more ticks. Dry-ish, so the ticks leave no tail.
-    const drop = tier >= 2 && !b.bump;
-    const span = drop ? r.dur - DROP_S : r.dur;
-    const v = this.voice(t, drop ? 0.1 : 0.25, 0, 1.4);
+    const roll = bankRoll(b);
+    const r = ROLL_LADDER[tier];
+    const land = t + roll.land;
+    // A drop needs a roll to drop into (tiers 2 and 3, not a bump bank). Its ticks run dry, so none
+    // leaves a tail in the gap.
+    const drop = tier >= 2 && !b.bump && roll.land > DROP_S;
+    const v = this.voice(t, drop ? 0.06 : 0.25, 0, 1.4);
     mallet(v, t, this.note(r.lo), 0.07, 0.08);
-    this.at(v, t + CHIP_S - 0.02, (tc) => {
-      this.knock(v, tc, 1800, 0.11);
-      thump(v, tc, 170, 90, 0.14, 0.03);
-    });
-    for (let i = 1; i <= r.n; i++) {
-      const e = i / r.n;
-      const ti = t + CHIP_S + span * (1 - Math.sqrt(1 - e));
-      const f = this.note(r.lo + Math.round(((r.hi - r.lo) * (i - 1)) / (r.n - 1)));
-      const amp = 0.04 + 0.03 * e;
-      this.at(v, ti, (tn) => {
-        ping(v, tn, f, amp, 0.035);
-        this.click(v, tn, 0.016);
+    if (roll.chip !== null) {
+      this.at(v, t + roll.chip - 0.02, (tc) => {
+        this.knock(v, tc, 1800, 0.11);
+        thump(v, tc, 170, 90, 0.14, 0.03);
+      });
+    }
+    const n = roll.ticks.length;
+    const gapAt = roll.land - DROP_S;
+    for (let i = 1; i <= n; i++) {
+      const e = i / n;
+      const f = this.note(r.lo + Math.round(((r.hi - r.lo) * (i - 1)) / Math.max(1, n - 1)));
+      // Inside the drop the count goes on ticking into the silence, a whisper of itself (no click),
+      // so the gap still reads as a gap.
+      const inGap = drop && roll.ticks[i - 1] >= gapAt - 0.005;
+      const amp = (0.04 + 0.03 * e) * (inGap ? DROP_TICK : 1);
+      this.at(v, t + roll.ticks[i - 1], (tn) => {
+        ping(v, tn, f, amp, inGap ? 0.025 : 0.035);
+        if (!inGap) this.click(v, tn, 0.016);
       });
     }
     const top = ladder(this.key(), r.hi);
@@ -1258,7 +1280,12 @@ export class Sfx {
     }
     this.chord(land, 0.08, 1 + 0.2 * tier, 5);
     if (tier === 3) this.shimmer(land + 0.05, 16, 9, 0.045);
-    if (!drop) return;
+    if (!drop) {
+      // No roll to drop into (the HUD punches the figure at once): the slam alone. A bump bank stays
+      // small, the bump owns that beat.
+      if (!b.bump) this.slam(land, tier === 3);
+      return;
+    }
     if (tier === 3) this.later(land - DROP_S - 0.5, (ts) => this.swellUp(ts, 0.5, 0.1, 0, true));
     this.later(
       land - DROP_S,
@@ -1394,6 +1421,8 @@ export class Sfx {
     fmBell(v, tb, this.note(i), 0.1, 0.4, 2, 1.1);
     ping(v, tb, this.note(i + 5), 0.03, 0.15);
     if (octave) ping(v, tb + 0.03, this.note(i + 10), 0.028, 0.25);
+    // The duel's result beat came first this frame with its own brass: the pass adds none.
+    if ((b.word === 'duelWon' || b.word === 'heldOff') && this.duelWon.has(b.ghost.id)) return;
     switch (b.word) {
       case 'slung':
         for (let j = 0; j < 3; j++) {
@@ -1450,6 +1479,8 @@ export class Sfx {
 
   /** Race news: a distant thump and a mint sigh, panned to the ghost and fading with distance. */
   private raceNews(b: BeatOf<'raceNews'>, t: number): void {
+    // 'Pulled away' always follows its lost duel in the same frame, whose sigh already says it.
+    if (b.news === 'pulledAway' && this.duelLost.has(b.ghost.id)) return;
     const g = clamp(Number.isFinite(b.gain) ? b.gain : 1, 0.15, 1);
     const pan = clamp(Number.isFinite(b.pan) ? b.pan : 0, -0.8, 0.8);
     const v = this.voice(t, 0.6, pan);
@@ -1481,11 +1512,13 @@ export class Sfx {
         break;
       case 'won':
       case 'heldOff':
+        this.duelWon.add(b.ghost.id);
         fmBell(v, t, this.note(b.phase === 'won' ? 10 : 8), 0.09, 0.5, 3.5, 1.2);
         this.brass(v, t + 0.02, [r, r + 7, r + 12], 0.3, 0.045);
         this.shimmer(t + 0.1, 6, 10, 0.03);
         break;
       case 'lost':
+        this.duelLost.add(b.ghost.id);
         fmBell(v, t, this.note(3), 0.045, 0.3, 2.4, 0.8);
         fmBell(v, t + 0.16, this.note(1), 0.04, 0.5, 2.4, 0.8);
         break;
@@ -1533,19 +1566,28 @@ export class Sfx {
   /** Event finales. The avalanche escape is the raw success event's (drop-out, then slam and
    *  fanfare); the yeti hop's brass is its style event's. */
   private finale(b: BeatOf<'finale'>, t: number): void {
-    const g = b.grade > 1 ? clamp(b.grade / 3, 0, 1) : clamp(b.grade, 0, 1);
     const r = brightRoot(this.key(), 55);
     switch (b.outcome) {
       case 'caught': {
-        // Gift Storm: a cascade whose length follows the share caught.
+        // Gift Storm, by the finale's grade (finales.ts: 0 none caught, 1 some, 2 a big haul of 36 or
+        // more, 3 the clean sweep): a cascade that grows with it, the sleigh bells from a big haul,
+        // the bright chord and a shimmer only for the sweep. None caught: a falling pair.
+        const c = stormCascade(b.grade);
         const v = this.voice(t, 0.4, 0.2, 1.2);
-        const count = 3 + Math.round(6 * g);
-        for (let j = 0; j < count; j++) {
+        if (c.falling) {
+          fmBell(v, t, this.note(4), 0.05, 0.3, 2.4, 0.8);
+          this.at(v, t + 0.16, (tn) => fmBell(v, tn, this.note(2), 0.045, 0.5, 2.4, 0.8));
+          break;
+        }
+        for (let j = 0; j < c.notes; j++) {
           const f = this.note(4 + j);
           this.at(v, t + j * 0.055, (tn) => fmBell(v, tn, f, 0.06 + 0.004 * j, 0.3, 2, 1));
         }
-        v.buffer(v.bank.jingle, t, t + 0.45, v.gain(0.16, v.out), 1, false);
-        if (g >= 0.75) this.chord(t + count * 0.055, 0.075, 1, 5);
+        if (b.grade >= 2) v.buffer(v.bank.jingle, t, t + 0.45, v.gain(0.16, v.out), 1, false);
+        if (c.chord) {
+          this.chord(t + c.notes * 0.055, 0.075, 1, 5);
+          this.shimmer(t + c.notes * 0.055 + 0.05, 12, 9, 0.04);
+        }
         break;
       }
       case 'hopped': {

@@ -6,14 +6,20 @@
 //   stress    everything at once (full band, avalanche, boost, drift whine, shoulder hiss, fuse,
 //             heartbeat and a burst of rewards every 0.25 s): peak after the limiter under -3 dBFS,
 //             and the voice-steal counters (padSteals must stay 0)
+//   shoulder  the ambience bed alone, then a ghost 2 m to the left closing from 5.5 m to 0.5 m
+//             behind, then one sitting 2 m behind: L and R per phase. The cue sits in its channel
+//             (closing L - R at least 4.5 dB) and leaves the bed alone (the far channel within
+//             1.5 dB of the bed, a sitting ghost under the closing one)
+//   layers    each music layer soloed at a cruise (0.36), a skilled drive (0.6) and the stress drive
+//             (1.0): dBFS RMS on the music bus
 //   songs     each mountain's Clear Skies song (A A B B, 4 bars each) for 20 s, past the A to B
 //             change at 17 s: one deck the whole way (no crossfade), a 16-bar loop, and a per-bar
 //             low-band reading that differs per mountain
 // It also asserts the live AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/levels.js
-// Set window.__levelsCfg = { base, kinds, seconds } on the current page first to change the plan.
+// Set window.__levelsCfg = { base, kinds, seconds, songs } on the current page first to change the plan.
 async (page) => {
-  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress'], seconds: 10, songs: true };
+  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers'], seconds: 10, songs: true };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__levelsCfg).catch(() => null)) || {}) };
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
   await page.goto(BASE + '?platform=mock&debug&m=0');
@@ -37,11 +43,15 @@ async (page) => {
     }
   }
   const songList = Object.values(songs);
+  const sh = levels.shoulder;
   const checks = {
     contextRunning: running,
     ambienceNear33: levels.ambience ? Math.abs(levels.ambience.rmsDb + 33) <= 3 : null,
     stressPeakUnder3: levels.stress ? levels.stress.peakDb < -3 : null,
     noPadSteals: levels.stress ? levels.stress.padSteals === 0 : null,
+    shoulderInItsChannel: sh ? sh.closingLR[0] - sh.closingLR[1] >= 4.5 : null,
+    shoulderLeavesTheBed: sh ? Math.abs(sh.closingLR[1] - sh.offLR[1]) <= 1.5 : null,
+    shoulderSittingQuieter: sh ? sh.sittingLR[0] < sh.closingLR[0] : null,
     songsOneDeck: songList.length ? songList.every((x) => x.decksStarted === 1 && x.cycleBars === 16) : null,
     songsDiffer: songList.length ? new Set(songList.map((x) => x.barLowHz)).size === songList.length : null,
   };

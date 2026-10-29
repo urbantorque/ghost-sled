@@ -15,19 +15,29 @@
 //   stomp     the stomp metronome (ticks 0.45 and 0.30 s out, the open note 0.15 s out) and the
 //             perfect landing it counts in: the ticks sit well under the landing chord
 //   chimes    Best combo pace, New ground and New best, 1.6 s apart (three contours)
-//   shoulder  a ghost 2 m to the left closing from 5.5 m to 0.5 m behind: the hiss sits left and
-//             rises; then the same while drafting and under danger (silent)
+//   shoulder  past the start-line jostle, a ghost 2 m to the left closing from 5.5 m to 0.5 m
+//             behind, then sitting 2 m behind: the hiss sits left while it closes (the far channel
+//             keeps the bed) and drops to a whisper when it sits; then the same while drafting and
+//             under danger (silent)
 //   results   the results card's timeline (engine.cueResults), one sound class at a time: every onset
-//             against its CSS beat (30 ms), then reduced motion (everything at t = 0)
+//             against its CSS beat (30 ms), mission and coin rows (the CSS --i), the app's own
+//             ui('coin') on top of cueResults' coin (one sound, not two), then reduced motion
+//             (everything at t = 0)
 //   reveal    the reveal timeline (engine.cueReveal): the reel ticks and the slam at T_STAMP
 //   cancel    the results timeline cut by cancelPending() at 400 ms (Run Again): nothing after
+//   roll      tier 1 and tier 2 bank rolls with the music off: one tick on each of the HUD's count
+//             steps (stake.ts BANK_CHIP_MS + k * BANK_ROLL_MS / BANK_TICKS) and the landing
+//   choir     AudioFrame.choir walked 0, 1, 2, 3, then a retake down to 2: the voices sung follow
+//             the director's count
 // Every scenario asserts the AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/audio-capture.js
 // Set window.__capCfg = { base, scenarios } on the current page first.
 async (page) => {
   const cfg = { scenarios: null, ...((await page.evaluate(() => window.__capCfg).catch(() => null)) || {}) };
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
-  const ALL = ['cruise', 'drop', 'massive', 'lost', 'escape', 'whisker', 'stomp', 'chimes', 'shoulder', 'results', 'reveal', 'cancel'];
+  const ALL = ['cruise', 'drop', 'massive', 'lost', 'escape', 'whisker', 'stomp', 'chimes', 'shoulder', 'results', 'reveal', 'cancel', 'roll', 'choir'];
+  // Mirror of stake.ts's shared cash-in timing (the HUD's roll).
+  const BANK = { CHIP_MS: 120, ROLL_MS: [0, 350, 600, 900], TICKS: [0, 6, 10, 14] };
   const list = cfg.scenarios || ALL;
   // Mirrors of reveal.ts REVEAL_TIMING and results.ts RESULTS_TIMING (the CSS beats).
   const REVEAL = { T_REEL: 80, REEL_MS: 660, T_STAMP: 740, T_RULE: 770, T_EVENT: 940, T_LEAVE: 1640, LEAVE_MS: 280 };
@@ -409,10 +419,12 @@ async (page) => {
         await page.evaluate(async () => {
           const a = window.__gs.audio;
           a.setVolumes({ master: 1, music: 0, sfx: 1 });
-          await window.__sleep(2500);
+          // Past the start-line jostle (6 s), when the hiss is hushed.
+          await window.__sleep(7500);
           const run = async (label, extra) => {
             window.__cap.mark(label + '-off');
-            window.__inject = null;
+            // The bed alone: the run's own shoulder (a pack ghost behind) held off too.
+            window.__inject = () => ({ shoulder: null, ...extra });
             await window.__sleep(1000);
             window.__cap.mark(label);
             const t0 = performance.now();
@@ -423,10 +435,17 @@ async (page) => {
             };
             await window.__sleep(3000);
             window.__cap.mark(label + '-end');
+            // Then the ghost sits 2 m behind without closing: the quieter bed of it.
+            window.__inject = () => ({ shoulder: { amt: Math.pow(1 - 2 / 6, 2), pan: -2 / 3 }, ...extra });
+            await window.__sleep(2000);
+            window.__cap.mark(label + '-sat');
           };
-          await run('plain', {});
+          // Drafting first: by the plain phase the run has settled near cruise speed, so the bed
+          // itself no longer grows under the measurement.
+          // (The run's own slipstream is overridden too: a pilot drafting a pack ghost would mute it.)
           await run('drafting', { drafting: true });
-          await run('danger', { danger: 0.6 });
+          await run('plain', { drafting: false });
+          await run('danger', { danger: 0.6, drafting: false });
           window.__inject = null;
         });
         const s = await collect();
@@ -438,7 +457,12 @@ async (page) => {
             const R = meanPowDb(windowDb(s, a, b, 'r'));
             return { lDb: L, rDb: R, lrDb: +(L - R).toFixed(1) };
           };
-          return { off: lr(off + 0.3, t), early: lr(t + 0.3, t + 1.2), close: lr(t + 2.1, t + 3) };
+          const end = mark(s, label + '-end');
+          const o = lr(off + 0.3, t);
+          const close = lr(t + 2.1, t + 3);
+          const sit = lr(end + 0.6, end + 2);
+          // The cue in its channel, the bed it leaves alone (the far channel), and the near side's rise.
+          return { off: o, early: lr(t + 0.3, t + 1.2), close, sitting: sit, closeLrDb: close.lrDb, farDeltaDb: +(close.rDb - o.rDb).toFixed(1), nearRiseDb: +(close.lDb - o.lDb).toFixed(1), sitLrDb: sit.lrDb };
         };
         results.shoulder = { running: ins.running, plain: part('plain'), drafting: part('drafting'), danger: part('danger') };
       } else if (sc === 'results' || sc === 'cancel') {
@@ -460,6 +484,9 @@ async (page) => {
           mission: [0, 1].map((i) => (R.DONE_MS + SPREAD * i) / 1000),
           coin: [0, 1].map((i) => (R.FLY_MS + R.FLY_DUR + SPREAD * i) / 1000),
           newBestChord: [R.NEW_BEST_MS / 1000],
+          // By mission row (the CSS --i), on the real steps.
+          missionRow: [(R.DONE_MS + 2 * R.DONE_STEP) / 1000],
+          coinRow: [(R.FLY_MS + R.FLY_STEP + R.FLY_DUR) / 1000],
         };
         if (sc === 'cancel') {
           await page.evaluate(async (R) => {
@@ -488,6 +515,10 @@ async (page) => {
           ['mission', { count: false, newBest: false, beats: 0, missions: 2, coins: 0, noStamp: true, spread: true }, 2800],
           ['coin', { count: false, newBest: false, beats: 0, missions: 0, coins: 2, noStamp: true, spread: true }, 3900],
           ['newBestChord', { count: false, newBest: true, beats: 0, missions: 0, coins: 0, noStamp: true }, 2000],
+          ['missionRow', { count: false, newBest: false, beats: 0, missions: [2], coins: [], noStamp: true }, 1800],
+          ['coinRow', { count: false, newBest: false, beats: 0, missions: [], coins: [1], noStamp: true }, 2800],
+          // cueResults twice and the app's own ui('coin') at the same moment: one coin.
+          ['dedupe', { count: false, newBest: false, beats: 0, missions: [], coins: [0], noStamp: true, dup: true }, 2600],
           ['reduced', { count: true, newBest: true, beats: 3, missions: 2, coins: 2, reduced: true }, 2000],
         ];
         await page.evaluate(() => window.__gs.audio.setVolumes({ master: 1, music: 0, sfx: 1 }));
@@ -503,6 +534,10 @@ async (page) => {
               if (r.noStamp) t = { ...t, PLACE_MS: 60000 };
               window.__cap.mark(label);
               a.cueResults(r, t, r.reduced === true);
+              if (r.dup) {
+                a.cueResults(r, t, false);
+                a.ui('coin', 0, (R.FLY_MS + R.FLY_DUR) / 1000);
+              }
               await window.__sleep(ms);
               a.cancelPending();
               await window.__sleep(400);
@@ -517,6 +552,16 @@ async (page) => {
           if (label === 'reduced') {
             const found = onsets(s, t0 - 0.03, t0 + ms / 1000, 6, -62);
             out.reduced = { onsetsMs: found.map((x) => Math.round((x - t0) * 1000)), allNearZero: found.length > 0 && found.every((x) => x - t0 < 0.06) };
+            continue;
+          }
+          if (label === 'dedupe') {
+            // One coin: a single onset where it lands, and the same peak as the lone coin run's.
+            const w = (R.FLY_MS + R.FLY_DUR) / 1000;
+            const found = onsets(s, t0 + w - 0.06, t0 + w + 0.5, 6, -62);
+            const one = mark(s, 'coin') + 0.006;
+            const peak = peakIn(s, t0 + w - 0.01, t0 + w + 0.4);
+            const single = peakIn(s, one + w - 0.01, one + w + 0.4);
+            out.dedupe = { onsetsMs: found.map((x) => Math.round((x - t0 - w) * 1000)), peakDb: peak, singleCoinPeakDb: single, oneSound: found.length >= 1 && found.length <= 2 && Math.abs(peak - single) < 2 };
             continue;
           }
           // Each expected beat: the sharpest attack near it. The count's ticks are 25 ms apart at
@@ -559,6 +604,71 @@ async (page) => {
           slamErrMs: slam !== null ? Math.round((slam - t0 - REVEAL.T_STAMP / 1000) * 1000) : null,
           reducedSlamErrMs: slamR !== null ? Math.round((slamR - tr - 0.2) * 1000) : null,
         };
+      } else if (sc === 'roll') {
+        const ins = await open('&autoride=1');
+        const banks = [
+          ['t1', { type: 'bank', tick: 0, points: 2400, mult: 4, origin: 600, tier: 1, header: null, bump: false }],
+          ['t2', { type: 'bank', tick: 0, points: 9000, mult: 6, origin: 1500, tier: 2, header: null, bump: false }],
+        ];
+        await page.evaluate(async (banks) => {
+          const a = window.__gs.audio;
+          a.setVolumes({ master: 1, music: 0, sfx: 1 });
+          await window.__sleep(2500);
+          for (const [label, b] of banks) {
+            window.__cap.mark(label);
+            a.__beats([b]);
+            a.__simEvent({ type: 'comboBank', points: b.points, mult: b.mult });
+            await window.__sleep(2200);
+          }
+        }, banks);
+        const s = await collect();
+        const out = { running: ins.running };
+        for (const [label, b] of banks) {
+          const t0 = mark(s, label) + 0.006;
+          const n = BANK.TICKS[b.tier];
+          const R = BANK.ROLL_MS[b.tier];
+          // Each count step: the HUD shows step k at CHIP_MS + (k - 1) * R / n (fx.ts cashIn).
+          const steps = Array.from({ length: n }, (_, k) => (BANK.CHIP_MS + (k * R) / n) / 1000);
+          const errs = steps.map((w) => {
+            const o = attackNear(s, t0 + w + 0.006, 0.012, 3);
+            return o === null ? null : Math.round((o - t0 - w) * 1000);
+          });
+          const land = (BANK.CHIP_MS + R) / 1000;
+          const lo = attackNear(s, t0 + land + 0.006, 0.02, 4);
+          const hit = errs.filter((e) => e !== null);
+          out[label] = { stepsMs: steps.map((w) => Math.round(w * 1000)), errMs: errs, found: hit.length + '/' + n, within15: hit.length > 0 && hit.every((e) => Math.abs(e) <= 15), landErrMs: lo === null ? null : Math.round((lo - t0 - land) * 1000) };
+        }
+        results.roll = out;
+      } else if (sc === 'choir') {
+        const ins = await open('&autoride=1');
+        const rows = await page.evaluate(async () => {
+          const a = window.__gs.audio;
+          await window.__sleep(2000);
+          const out = [];
+          const ghost = (id, dx) => ({ id, name: 'Probe' + id, kind: 'pool', dx });
+          for (const n of [0, 1, 2, 3]) {
+            if (n > 0) a.__beats([{ type: 'pass', tick: 0, ghost: ghost(n, 2), word: 'passed', text: 'Passed', first: true, chain: 1, ladder: n, octave: false, gifts: 5, muted: false }]);
+            window.__inject = () => ({ choir: n });
+            await window.__sleep(1300);
+            const d = a.debugLevels();
+            out.push({ frameChoir: n, sung: d.choir, fromFrame: d.choirFromFrame });
+          }
+          // Ghost 3 passes you back: the director's count drops to 2, the top voice sighs.
+          a.__beats([{ type: 'passedBy', tick: 0, ghost: ghost(3, -2), muted: false }]);
+          window.__inject = () => ({ choir: 2 });
+          await window.__sleep(1300);
+          let d = a.debugLevels();
+          out.push({ frameChoir: 2, retake: true, sung: d.choir, fromFrame: d.choirFromFrame });
+          // Without the field the 30 s proxy takes over (two passed ghosts still in its set).
+          window.__inject = () => ({ choir: undefined });
+          await window.__sleep(800);
+          d = a.debugLevels();
+          out.push({ frameChoir: null, sung: d.choir, fromFrame: d.choirFromFrame });
+          window.__inject = null;
+          return out;
+        });
+        await collect();
+        results.choir = { running: ins.running, rows, follows: rows.every((r) => r.frameChoir === null || r.sung === r.frameChoir) };
       }
     } catch (err) {
       results[sc] = { error: String(err && err.message ? err.message : err) };
