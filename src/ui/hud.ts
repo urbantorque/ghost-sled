@@ -86,6 +86,13 @@ const BEST_FLASH_MS = 600;
  * chip on the duel ghost (RIVAL_HOLD_S): another ghost's word meanwhile goes to the callout line.
  */
 export const DUEL_HOLD_MS = 1500;
+/**
+ * A duel's result that has not shown this long after the duel ended is stale and dropped. It waits out
+ * a banner over the race row (it shows about 2.2 s on), or two back to back (GRUDGE SETTLED, then a
+ * mountain unlocked: about 5 s on), never a longer chain ("Held off Brave Rhea" cut at 141 and 102 ms
+ * by banner after banner, then played 6 s after the duel, far from its moment).
+ */
+export const RESULT_STALE_MS = 5500;
 /** Slung passes this close together are one slingshot burst (the director counts slungN over 90 ticks). */
 const SLUNG_BURST_MS = 1500;
 /** The side line's key for a slingshot burst: a newer "Slung past 3" replaces "Slung past 2" in place. */
@@ -156,18 +163,63 @@ export function gapShown(a: number, last: number, age = Number.POSITIVE_INFINITY
 /**
  * Where a race-row message goes while a duel holds the pill (contracts C1/C11: the pill, the C11 ring
  * and the camera name the same ghost every frame of the duel and of its result's hold). `duel` is that
- * ghost's name, or null when no duel holds the pill. Messages about the duel ghost, and anything with
- * no duel holding, take the pill; the start-line call keeps it too. Another ghost's pass, "passed you"
- * or race news goes to the callout line under the combo meter instead.
+ * ghost's name, or null when no duel holds the pill. A pass or "passed you" about the duel ghost, and
+ * anything with no duel holding, take the pill; the start-line call keeps it too. Another ghost's pass
+ * or "passed you" goes to the callout line under the combo meter instead, and so does every news line,
+ * the duel ghost's own included: the unlock tease keyed to the duel ghost ("1 more ghost opens Ember
+ * Peak") flashed in the duel pill with no name while the ring named the duel's ghost. A lost duel's
+ * "pulled away" is its result, not news (Hud.news takes it to the pill itself).
  */
 export function duelRoute(duel: string | null, raw: string, type: 'pass' | 'lost' | 'news' | 'call'): 'pill' | 'line' {
-  if (duel === null || type === 'call' || raw === duel) return 'pill';
-  return 'line';
+  if (duel === null || type === 'call') return 'pill';
+  return type !== 'news' && raw === duel ? 'pill' : 'line';
 }
 
-/** Who holds the pill: the open duel's ghost, else a duel result's ghost for its hold, else nobody. */
-export function pillOwner(duel: string | null, held: { name: string; until: number }, now: number): string | null {
-  return duel ?? (now < held.until ? held.name : null);
+/**
+ * Who holds the pill: the open duel's ghost; else the ghost the director's duel-result hold keeps
+ * out.rival on (`dir`, from the model, when the game sends it); else a duel result's ghost while its
+ * result waits its turn (`waiting`: under a banner or the landing stamp) and for DUEL_HOLD_MS from when
+ * its flash first showed (`held.until`); else nobody.
+ */
+export function pillOwner(duel: string | null, held: { name: string; until: number }, now: number, dir: string | null = null, waiting = false): string | null {
+  if (duel !== null) return duel;
+  if (dir !== null) return dir;
+  return held.name !== '' && (waiting || now < held.until) ? held.name : null;
+}
+
+/**
+ * The ghost a slung pass names within its slingshot burst (passes SLUNG_BURST_MS apart or closer). Once
+ * the burst passed your best it names your best (C7): "SLUNG PAST 4 Your best" in gold-white, never
+ * folded into the next count under another ghost's name. The pill's owner (a duel's ghost) keeps its
+ * own pass. `burst` is the running burst (its latest slung pass, and your best's name once passed).
+ */
+export function burstName(burst: { at: number; you: string }, name: string, kind: GhostKind, now: number, owner: string | null = null): { raw: string; kind: GhostKind } {
+  if (now - burst.at >= SLUNG_BURST_MS) burst.you = '';
+  burst.at = now;
+  if (kind === 'you') burst.you = name;
+  else if (burst.you !== '' && name !== owner) return { raw: burst.you, kind: 'you' };
+  return { raw: name, kind };
+}
+
+/** Whether a duel's result that ended at `at` (and has not shown) has missed its moment (RESULT_STALE_MS). */
+export function resultStale(at: number, now: number): boolean {
+  return now - at > RESULT_STALE_MS;
+}
+
+/** A duel's result as a pass word: it keeps its place ahead of plain passes that wait with it. */
+function isResult(w: Pick<Waiting, 'type' | 'word'>): boolean {
+  return w.type === 'pass' && (w.word === 'duelWon' || w.word === 'heldOff');
+}
+
+/**
+ * The whole metres the rival pill shows for a signed `gap` (C12). The game holds the gap it sends at
+ * the source in whole metres (the edge chip rounds the same number), and the pill shows that number
+ * unchanged, so the two always read alike; a gap with a fraction is the race maths' own, and the pill
+ * holds it itself (gapShown).
+ */
+export function pillGap(gap: number, last: number, age = Number.POSITIVE_INFINITY): number {
+  const a = Math.abs(gap);
+  return Number.isInteger(gap) ? Math.max(1, a) : gapShown(a, last, age);
 }
 
 /** Whether the field's count has settled at a run's start (OF_STABLE_MS), or waited long enough. */
@@ -203,6 +255,8 @@ export interface Waiting {
   type: 'pass' | 'lost' | 'news' | 'call';
   name: string;
   word?: string;
+  /** The ghost's kind: a pass of your best ('you') is the one a banner's queue keeps (C7). */
+  kind?: GhostKind;
   at: number;
   /** It waited under a banner: its stale clock starts again once the band lets the race row back. */
   band?: boolean;
@@ -212,7 +266,9 @@ export interface Waiting {
  * A flash waits its turn. A newer slung pass is the same slingshot burst as a waiting one and takes its
  * place, so only the latest "Slung past N" plays (not 2, 3, 4 and 5 one after another behind a landing
  * stamp). Otherwise a newer flash about the same ghost replaces its older one; `max` wait at most, and
- * when one more arrives news goes first, then the oldest.
+ * when one more arrives news goes first (the newcomer too: the unlock tease arriving behind a slingshot
+ * burst under GRUDGE SETTLED pushed the burst's "Slung past 5 Your best" out), then the oldest that is
+ * neither a duel's result nor a pass of your best.
  */
 export function enqueueFlash<T extends Waiting>(pend: T[], f: T, max = 2): void {
   if (f.type === 'pass' && f.word === 'slung') {
@@ -227,19 +283,44 @@ export function enqueueFlash<T extends Waiting>(pend: T[], f: T, max = 2): void 
   pend.push(f);
   while (pend.length > max) {
     const n = pend.findIndex((q) => q.type === 'news');
-    pend.splice(n >= 0 && n < pend.length - 1 ? n : 0, 1);
+    const o = pend.findIndex((q, k) => k < pend.length - 1 && !isResult(q) && q.kind !== 'you');
+    pend.splice(n >= 0 ? n : o >= 0 ? o : 0, 1);
   }
 }
 
 /**
  * The banner over the race row has gone: the flashes that waited under it start their stale clocks
- * now. Of the passes that waited under it only the newest plays (the newest pass is the news: a
- * "Slung past 4" stepped back under an unlock toast no longer goes before the "Pass streak 5" after it).
+ * now. A duel's result that waited under it plays first ("Held off RidgeUlla" lost its turn to a later
+ * "Slung past SparkleCedar"), then one pass: the newest, or your best's if it was passed meanwhile (C7:
+ * the gold "Passed Your best" is the moment, not the plain pass after it). The newest pass is the news:
+ * a "Slung past 4" stepped back under an unlock toast no longer goes before the "Pass streak 5" after
+ * it. With a pass to play, news that waited under the banner is dropped (the unlock tease played after
+ * the banner while the pass it came with went stale).
  */
 export function releaseBand(pend: Waiting[], now: number): void {
+  let res = -1;
   let last = -1;
-  for (let i = 0; i < pend.length; i++) if (pend[i].band && pend[i].type === 'pass') last = i;
-  for (let i = pend.length - 1; i >= 0; i--) if (pend[i].band && pend[i].type === 'pass' && i !== last) pend.splice(i, 1);
+  let you = -1;
+  for (let i = 0; i < pend.length; i++) {
+    const p = pend[i];
+    if (!p.band || p.type !== 'pass') continue;
+    if (isResult(p)) res = i;
+    else {
+      last = i;
+      if (p.kind === 'you') you = i;
+    }
+  }
+  const pick = you >= 0 ? you : last;
+  const kept = res >= 0 ? pend[res] : null;
+  for (let i = pend.length - 1; i >= 0; i--) {
+    const p = pend[i];
+    if (!p.band) continue;
+    if ((p.type === 'pass' && i !== res && i !== pick) || (p.type === 'news' && (res >= 0 || pick >= 0))) pend.splice(i, 1);
+  }
+  if (kept) {
+    pend.splice(pend.indexOf(kept), 1);
+    pend.unshift(kept);
+  }
   for (const p of pend) {
     if (!p.band) continue;
     p.at = now;
@@ -291,6 +372,8 @@ interface Flash extends Waiting {
   stale: number;
   /** A news line's whole text, so it can be taken back (retract). */
   line?: string;
+  /** A lost duel's "pulled away": the duel's result, which keeps the pill though it is worded as news. */
+  result?: boolean;
 }
 
 /** A waiting flash as a race word for the callout line, worded as the pill would have said it. */
@@ -467,8 +550,18 @@ export class Hud {
   private nameShown = '';
   /** The open duel's ghost (its model name), or null: the pill stays on it (duelRoute). */
   private duelName: string | null = null;
-  /** A resolved duel's ghost and the end of its hold (holdDuel): the pill stays on it till then. */
-  private readonly held = { name: '', until: -1e9 };
+  /**
+   * A resolved duel's ghost and the end of its hold (holdDuel): the pill stays on it till then. `wait`:
+   * its result has not shown yet (it waits under a banner or the stamp), and its hold starts once it does.
+   */
+  private readonly held = { name: '', until: -1e9, wait: false, at: -1e9 };
+  /**
+   * The ghost the director's duel-result hold keeps out.rival on, when the model says so (its
+   * nextGhost.hold), else null: other ghosts' words keep off the pill for exactly that hold.
+   */
+  private dirHold: string | null = null;
+  /** The slingshot burst: its latest slung pass, and your best's name once the burst passed it (C7). */
+  private readonly burst = { at: -1e9, you: '' };
   /** The banner held the race row last frame: a flash waits under it and plays once it goes. */
   private bandWas = false;
   /** Ghosts the banners named while they held the row: their own flashes were said by the banner. */
@@ -745,6 +838,9 @@ export class Hud {
       this.nextFriend.set(false);
       this.duelName = null;
       this.held.until = -1e9;
+      this.held.wait = false;
+      this.dirHold = null;
+      this.burst.at = -1e9;
       this.bandWas = false;
       this.placeReady = false;
       this.ofFirstAt = -1;
@@ -768,6 +864,8 @@ export class Hud {
     this.cur = null;
     this.lastStrong.at = -1e9;
     this.held.until = -1e9;
+    this.held.wait = false;
+    this.dirHold = null;
     this.el.parentElement?.classList.remove('gs-night', 'gs-chase-p');
     this.onLayout();
   }
@@ -972,35 +1070,44 @@ export class Hud {
       this.lastStrong.at = now;
     }
     this.say(`${k} ${spoken}`);
-    if (duelRoute(this.owner(), name, 'pass') === 'line') {
-      this.onSideLine({ text: `${k} ${shown}`, tone: strong ? 'big' : 'normal', key: word === 'slung' ? SLUNG_KEY : name, name: shown });
+    const owner = this.owner();
+    const { raw, kind: as } = word === 'slung' ? burstName(this.burst, name, kind, performance.now(), owner) : { raw: name, kind };
+    const nm = shownName(raw, as);
+    if (duelRoute(owner, raw, 'pass') === 'line') {
+      this.onSideLine({ text: `${k} ${nm}`, tone: strong ? 'big' : 'normal', key: word === 'slung' ? SLUNG_KEY : raw, name: nm });
       return;
     }
-    this.flash({ type: 'pass', name: shown, raw: name, kind, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0, stale: PEND_MS, word });
+    this.flash({ type: 'pass', name: nm, raw, kind: as, k, tail: '', ms: strong ? STRONG_MS : FLASH_MS, strong, at: 0, stale: PEND_MS, word });
   }
 
   /**
-   * A duel just resolved (won, held off or lost; the beat router calls this before its flash). For
-   * DUEL_HOLD_MS the pill stays on that ghost, as the director keeps out.rival, the C11 ring and the
-   * edge chip there: the result keeps the pill for its whole hold, and another ghost's pass, "passed
-   * you" or news goes to the callout line, as during the duel. Nothing about another ghost waits.
+   * A duel just resolved (won, held off or lost; the beat router calls this before its flash). The
+   * pill stays on that ghost, as the director keeps out.rival, the C11 ring and the edge chip there:
+   * while its result waits its turn (under a banner or the landing stamp), then for DUEL_HOLD_MS from
+   * when the result first shows, so it keeps the pill for its whole flash. Meanwhile another ghost's
+   * pass, "passed you" or news goes to the callout line, as during the duel; nothing about another
+   * ghost waits. A result already up (its pass beat came first) counts from when it showed.
    */
   holdDuel(name: string): void {
+    const now = performance.now();
     this.held.name = name;
-    this.held.until = performance.now() + DUEL_HOLD_MS;
+    this.held.at = now;
+    const up = this.cur !== null && this.cur.raw === name && isResult(this.cur) && this.flashUntil > now;
+    this.held.until = (up ? this.flashAt : now) + DUEL_HOLD_MS;
+    this.held.wait = !up;
     this.sendAside(name);
   }
 
   /**
-   * A duel (or its result) takes the pill: the flashes still waiting about other ghosts go to the
-   * callout line while they are fresh, rather than being lost ("Passed RidgeUlla" waited behind a
-   * landing stamp, then the duel opened and it never showed).
+   * A duel (or its result) takes the pill: the flashes still waiting about other ghosts, and news,
+   * go to the callout line while they are fresh, rather than being lost ("Passed RidgeUlla" waited
+   * behind a landing stamp, then the duel opened and it never showed).
    */
   private sendAside(owner: string): void {
     const now = performance.now();
     for (let i = 0; i < this.pend.length; ) {
       const p = this.pend[i];
-      if (duelRoute(owner, p.raw, p.type) !== 'line') {
+      if (p.result || duelRoute(owner, p.raw, p.type) !== 'line') {
         i++;
         continue;
       }
@@ -1011,7 +1118,14 @@ export class Hud {
 
   /** The ghost a duel or its result holds the pill for, or null (pillOwner). */
   private owner(): string | null {
-    return pillOwner(this.duelName, this.held, performance.now());
+    // The result still waits its turn: its hold has not begun.
+    const waiting = this.held.wait && this.pend.some((p) => this.heldResult(p));
+    return pillOwner(this.duelName, this.held, performance.now(), this.dirHold, waiting);
+  }
+
+  /** Whether a flash is the held duel's result ("Held off Mila", "Duel won Mila", "Mila pulled away"). */
+  private heldResult(f: Flash): boolean {
+    return this.held.name !== '' && f.raw === this.held.name && (isResult(f) || f.result === true);
   }
 
   /**
@@ -1019,13 +1133,15 @@ export class Hud {
    * its kind colour and the rest in off-white ("Tess wiped out", "Your best wiped out", "1 more ghost
    * opens Frostfang Glacier"). It never cuts a pass, waits behind one, and is the first thing dropped.
    * `wait` is how long it may wait its turn: a line that only ever comes with a pass (the unlock
-   * tease) waits as long as a pass does, or it would always go stale behind its own pass.
+   * tease) waits as long as a pass does, or it would always go stale behind its own pass. While a duel
+   * or its result holds the pill every news line takes the callout line, except `result`: a lost
+   * duel's "pulled away", which is that duel's result.
    */
-  news(name: string, kind: GhostKind, text: string, wait = NEWS_PEND_MS): void {
+  news(name: string, kind: GhostKind, text: string, wait = NEWS_PEND_MS, result = false): void {
     const t = text.trim();
     if (t === '') return;
     this.say(t);
-    if (duelRoute(this.owner(), name, 'news') === 'line') {
+    if (!result && duelRoute(this.owner(), name, 'news') === 'line') {
       this.onSideLine({ text: t, tone: 'normal', key: newsKey(name, t), name: shownName(name, kind) });
       return;
     }
@@ -1039,7 +1155,7 @@ export class Hud {
         break;
       }
     }
-    this.flash({ type: 'news', name: lead, raw: name, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait, line: t });
+    this.flash({ type: 'news', name: lead, raw: name, kind, k: '', tail, ms: NEWS_MS, strong: false, at: 0, stale: wait, line: t, result });
   }
 
   /**
@@ -1117,11 +1233,18 @@ export class Hud {
       c.band = band;
       this.pend.unshift(c);
       if (this.pend.length > 2) this.pend.length = 2;
+      // A duel's result stepping back keeps its ghost on the pill, and its hold starts again when it plays.
+      if (this.heldResult(c)) this.held.wait = true;
     }
     this.flashUntil = now;
   }
 
   private showFlash(f: Flash, now: number): void {
+    // A duel's result: the pill stays its ghost's for DUEL_HOLD_MS from now (holdDuel).
+    if (this.held.wait && this.heldResult(f)) {
+      this.held.wait = false;
+      this.held.until = now + DUEL_HOLD_MS;
+    }
     this.cur = f;
     this.flashAt = now;
     this.flashUntil = now + f.ms;
@@ -1375,9 +1498,17 @@ export class Hud {
     // Next ghost. While a pass flashes in the pill, it holds; the target comes back after, unless a
     // pass that waited its turn (behind a landing stamp or a pass of yours) goes up next.
     const g = m.nextGhost;
-    // An open duel owns the pill (C1/C11): the moment one opens, a flash about another ghost ends and
-    // the waiting ones about other ghosts are dropped (the start-line call keeps its turn); from then
-    // on another ghost's pass or news goes to the callout line (duelRoute).
+    // The director's duel-result hold, when the game sends it (nextGhost.hold): out.rival, the C11 ring
+    // and the edge chip stay on that ghost for exactly that long, and so do the pill's words.
+    this.dirHold = g !== null && (g as { hold?: boolean }).hold === true ? g.name : null;
+    // A duel's result still waiting RESULT_STALE_MS after the duel ended has missed its moment.
+    if (this.held.wait && resultStale(this.held.at, now)) {
+      this.held.wait = false;
+      for (let i = this.pend.length - 1; i >= 0; i--) if (this.heldResult(this.pend[i])) this.pend.splice(i, 1);
+    }
+    // An open duel owns the pill (C1/C11): the moment one opens, a flash about another ghost (or news)
+    // ends and the waiting ones go to the callout line (the start-line call keeps its turn); from then
+    // on another ghost's pass and any news go to the callout line (duelRoute).
     const duelName = g !== null && g.duel === true ? g.name : null;
     if (duelName !== this.duelName) {
       this.duelName = duelName;
@@ -1409,6 +1540,10 @@ export class Hud {
     let flashing = this.flashUntil > now;
     if (!flashing && this.pend.length > 0 && !this.stampUp() && !band) {
       while (this.pend.length > 0 && now - this.pend[0].at > this.pend[0].stale) this.pend.shift();
+      // A duel's result still holds the pill: a word about another ghost that waited behind it (after a
+      // banner) takes the callout line instead.
+      const owner = this.owner();
+      if (owner !== null) this.sendAside(owner);
       const p = this.pend.shift();
       if (p) {
         this.showFlash(p, now);
@@ -1473,7 +1608,8 @@ export class Hud {
         // On a phone held upright an open duel says "level" for neck and neck: "DUEL", the name and
         // "neck and neck" left the name about 7 letters at 390 px ("DUEL MarmotM...").
         if (this.nextWord.str(side === 0 ? (duel && this.portrait ? 'level' : 'neck and neck') : side > 0 ? 'ahead' : 'behind')) moved = true;
-        const r = side === 0 ? -1 : gapShown(a, this.lastGap, now - this.gapAt);
+        // The game's held gap as it is (the edge chip's number), or the HUD's own hold on a raw gap.
+        const r = side === 0 ? -1 : pillGap(g.gap, this.lastGap, now - this.gapAt);
         if (r !== this.lastGap) {
           this.lastGap = r;
           this.gapAt = now;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admit, HOLD_MS, SAME_FRAME_MS, sideAction } from '../src/ui/fx';
+import { admit, HOLD_MS, queueFresh, raceHolds, SAME_FRAME_MS, sideAction, stepBackAt } from '../src/ui/fx';
 
 // The one-line callout slot: a payoff line that has only just landed (New ground, New best, a trick)
 // keeps the slot against a lower-ranked or 'lost' newcomer, which waits its turn instead of erasing it.
@@ -72,5 +72,34 @@ describe('sideAction', () => {
   it('goes through the line slot over anything but a young race word', () => {
     expect(sideAction(null, 'Tess', 0)).toBe('show');
     expect(sideAction({ born: 0 }, 'Tess', 10)).toBe('show');
+  });
+});
+
+describe('stepBackAt', () => {
+  it('steps a young race word back once, on the stale clock of its first arrival', () => {
+    // 'TobogganTeo wiped out' arrived at 32,820 ms and showed at 32,850; a trick lands at 33,080.
+    const word = { race: 'news\u0000TobogganTeo', born: 32850, arrived: 32820, stepped: false };
+    expect(stepBackAt(word, 33080)).toBe(32820);
+    // Back on the line after the trick (born again), a second trick on it retires it.
+    expect(stepBackAt({ ...word, born: 33700, stepped: true }, 33900)).toBeNull();
+    // Its moment had passed, or it is no race word: nothing steps back.
+    expect(stepBackAt({ ...word, born: 32850 }, 32850 + HOLD_MS)).toBeNull();
+    expect(stepBackAt({ born: 0, arrived: 0, stepped: false }, 10)).toBeNull();
+    expect(stepBackAt(undefined, 10)).toBeNull();
+  });
+
+  it('lets it go stale from its first arrival, however often it came back', () => {
+    // Before: the clock restarted at each showing, so one word printed four times over 4 s.
+    expect(queueFresh(32820, 32820 + 1000)).toBe(true);
+    expect(queueFresh(32820, 32820 + 2 * HOLD_MS + 251)).toBe(false);
+  });
+});
+
+describe('raceHolds', () => {
+  it('keeps a minor line out under a race word for its hold, as under a pass in the pill', () => {
+    expect(raceHolds({ race: 'Tess', born: 1000 }, 1200)).toBe(true);
+    expect(raceHolds({ race: 'Tess', born: 1000 }, 1000 + HOLD_MS)).toBe(false);
+    expect(raceHolds({ born: 1000 }, 1200)).toBe(false);
+    expect(raceHolds(undefined, 1200)).toBe(false);
   });
 });
