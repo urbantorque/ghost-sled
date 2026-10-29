@@ -74,7 +74,7 @@ export class FinaleTracker {
     for (const e of events) {
       if (e.type === 'style' && e.kind === 'yetiHop') {
         // The hop is a stamp of its own (the style callout is suppressed); the sim pays the 1,500.
-        push({ type: 'finale', tick: sim.tick, event: ChaosEvent.Yeti, outcome: 'hopped', text: 'Yeti hop', sub: null, gifts: 0, grade: 1, banner: false, stamp: true }, e);
+        push({ type: 'finale', tick: sim.tick, event: ChaosEvent.Yeti, outcome: 'hopped', text: 'Yeti hop', sub: '+1,500 style', gifts: 0, grade: 1, banner: false, stamp: true }, e);
         continue;
       }
       if (e.type !== 'chaos' || e.event !== this.event) continue;

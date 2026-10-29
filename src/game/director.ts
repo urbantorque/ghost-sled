@@ -203,6 +203,8 @@ export class Director {
   private leading = false;
   private call: { id: number; at: number } | null = null;
   private callDone = false;
+  /** A field is lined up for the start-line call but its ghost is not ready yet (pops wait for it). */
+  private callWaiting = false;
   /** The nearest ghost the pill named last frame (held through a bunched pack). */
   private heldNext: number | null = null;
   /** Sim tick each ghost's duel last resolved won or held off. */
@@ -316,6 +318,7 @@ export class Director {
     this.leading = false;
     this.call = null;
     this.callDone = false;
+    this.callWaiting = false;
     this.heldNext = null;
     this.duelEnd.clear();
     this.newGroundTick = -1e9;
@@ -445,7 +448,7 @@ export class Director {
         } else {
           this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
           if (d.phase === 'lost') {
-            this.push({ type: 'raceNews', tick: sim.tick, ghost, news: 'pulledAway', text: `${ghost.name} pulled away`, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: 0.6 }, sim);
+            this.push({ type: 'raceNews', tick: sim.tick, ghost, news: 'pulledAway', text: `${ghost.kind === 'you' ? 'Your best' : ghost.name} pulled away`, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: 0.6 }, sim);
             this.lastNewsAt = now;
           }
         }
@@ -628,8 +631,9 @@ export class Director {
         case 'comboBank': {
           const bump = bumpTicks.includes(p.tick);
           // Graded against your best combo at the start, or this run's best bank once one beat it (a
-          // second bank under the first is no new best).
-          const best = Math.max(run?.bestComboAtStart ?? 0, this.bestBank);
+          // second bank under the first is no new best). A save with no best combo yet grades by size
+          // alone: a first record is no news, or every bigger bank of a first run would slam tier 3.
+          const best = this.comboBest(run?.bestComboAtStart ?? 0);
           const tier = bankTier(e.points, this.skillChain, best);
           const header = bankHeader(e.points, tier, best);
           if (!bump && motion) {
@@ -656,7 +660,7 @@ export class Director {
         }
         case 'comboLost': {
           // The same measure as the banks: a combo under one this run already banked is no best.
-          const best = Math.max(run?.bestComboAtStart ?? 0, this.bestBank);
+          const best = this.comboBest(run?.bestComboAtStart ?? 0);
           const isBest = best > 0 && e.points > best;
           this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
           this.skillChain = 0;
@@ -983,23 +987,33 @@ export class Director {
     }
   }
 
+  /** The best combo a bank must beat to be news: your best at the start, raised by this run's banks;
+   *  none (0) on a save with no best combo yet. */
+  private comboBest(atStart: number): number {
+    return atStart > 0 ? Math.max(atStart, this.bestBank) : 0;
+  }
+
   /** The start-line call, on the first frame its ghost is ready (after the reveal card, if any). */
   private raceCall(f: DirectorFrame, sim: Sim, now: number): void {
     const run = this.run;
     if (this.callDone || !run) return;
     const at = run.hasReveal ? run.revealLeaveS + 0.3 : 0.6;
+    const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis }));
+    // Some ghost in the field will get the call once it is ready.
+    this.callWaiting = callPick(field.map((g) => ({ ...g, ready: true })), run.bestDistAtStart) !== null;
     if (now < at) return;
-    const pick = callPick(
-      f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis })),
-      run.bestDistAtStart,
-    );
+    const pick = callPick(field, run.bestDistAtStart);
     if (!pick) {
-      if (now > at + CALL_GIVE_UP_S) this.callDone = true;
+      if (now > at + CALL_GIVE_UP_S) {
+        this.callDone = true;
+        this.callWaiting = false;
+      }
       return;
     }
     const t = f.tracks.find((k) => k.entry.id === pick.id);
     if (!t) return;
     this.callDone = true;
+    this.callWaiting = false;
     this.call = { id: pick.id, at: now };
     const ghost = this.ref(t, f, sim);
     const name = t.entry.kind === 'you' ? 'Your best' : t.entry.name;
@@ -1045,6 +1059,8 @@ export class Director {
       now - this.lastPassAt >= POP_DEFER.pass / 1000 &&
       now - this.lastNewsAt >= POP_DEFER.news / 1000 &&
       this.duels.open === null &&
+      // The start-line call goes first: a pop waits while its ghost gets ready, then while it shows.
+      !(this.callWaiting && !this.callDone) &&
       !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
       now - this.lastFinaleAt >= FINALE_HOLD_S &&
       !this.finales.pending &&

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Beat, BeatOf } from '../src/game/beats';
+import { POP_DEFER, type Beat, type BeatOf } from '../src/game/beats';
 import { Director, type DirectorFrame, type DirectorRun } from '../src/game/director';
 import type { GhostPose, GhostTrack, RaceEvent } from '../src/game/ghosts';
 import { emptyPose } from '../src/game/ghosts';
@@ -593,8 +593,25 @@ describe('mission and unlock pops', () => {
     const out = r.idle(8);
     const pops = out.filter((b) => b.type === 'unlockPop' || b.type === 'missionPop');
     expect(pops.map((b) => b.type)).toEqual(['unlockPop', 'missionPop']);
-    // 6 s apart (POP_DEFER.spacing), the mission still inside its 8 s wait.
-    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(5.9);
+    // POP_DEFER.spacing apart, the mission still inside its 8 s wait.
+    expect((pops[1].tick - pops[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.spacing / 1000 - 0.1);
+  });
+
+  it('waits for the start-line call while its ghost gets ready, then for the call to clear', () => {
+    const { r } = popRig();
+    const g = track(1001, 'grudge');
+    g.ready = false;
+    r.tracks = [g];
+    r.poses.set(1001, pose(110));
+    // The mission is met at about 1 s; the grudge's ghost is ready only at 2.5 s.
+    const early = r.idle(2.5);
+    expect(of(early, 'missionPop')).toHaveLength(0);
+    g.ready = true;
+    const call = r.idle(0.1);
+    expect(of(call, 'raceCall')).toHaveLength(1);
+    // The call shows for POP_DEFER.call; the pop follows once it has cleared.
+    expect(of(r.idle(POP_DEFER.call / 1000 - 0.3), 'missionPop')).toHaveLength(0);
+    expect(of(r.idle(1), 'missionPop')).toHaveLength(1);
   });
 
   it('defers behind a shown pass, then shows', () => {
@@ -862,6 +879,23 @@ describe('bests within a run', () => {
     expect(b).toMatchObject({ tier: 1, header: null, origin: 500 });
     const c = of(r.frame([{ type: 'comboLost', points: 2600 }]), 'comboLost')[0];
     expect(c).toMatchObject({ best: false, crack: true, say: { label: 'Combo lost' } });
+  });
+});
+
+describe('a first record is no news', () => {
+  it('a save with no best combo grades banks by size alone, and never says best combo lost', () => {
+    const r = new Rig({ bestComboAtStart: 0 });
+    const chain = () => {
+      for (const k of ['spin', 'flip', 'nearMiss'] as const) r.frame([style(k, 100, 2)]);
+    };
+    chain();
+    expect(of(r.frame([{ type: 'comboBank', points: 1200, mult: 3 }]), 'bank')[0]).toMatchObject({ header: null });
+    chain();
+    const b = of(r.frame([{ type: 'comboBank', points: 1875, mult: 3 }]), 'bank')[0];
+    expect(b.header).toBeNull();
+    expect(b.tier).toBeLessThan(3);
+    const c = of(r.frame([{ type: 'comboLost', points: 2600 }]), 'comboLost')[0];
+    expect(c).toMatchObject({ best: false, say: { label: 'Combo lost' } });
   });
 });
 

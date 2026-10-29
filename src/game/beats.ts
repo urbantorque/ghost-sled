@@ -23,7 +23,7 @@ export const FLOW_HEX = '#FF4D2E';
 export const BEST_HEX = '#FFE08A';
 export const FRIEND_HEX = '#8FF3E4';
 /** Director-side deferral for mission and unlock pops (ms since the blocking beat). */
-export const POP_DEFER = { stomp: 1600, pass: 1400, news: 1300, call: 2600, spacing: 6000, giveUp: 3000 } as const;
+export const POP_DEFER = { stomp: 1600, pass: 1400, news: 1300, call: 2600, spacing: 3500, giveUp: 3000 } as const;
 
 // ---------- small shared shapes
 /** A callout line for the fx slot. Every number carries its label (decision 35). */
