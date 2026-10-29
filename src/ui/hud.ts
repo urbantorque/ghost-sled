@@ -1162,6 +1162,12 @@ export class Hud {
           if (animate) this.tickAt = now;
           this.tick(prev - r, animate);
         }
+      } else if (m.place.of !== this.lastOf && m.place.of >= this.lastRank) {
+        // The field's size is not a bunched rank: 'of N' follows each track that comes ready at once,
+        // so a count read before the field loaded never lingers while the start bunch swaps places.
+        this.lastOf = m.place.of;
+        this.of.str(`of ${m.place.of}`);
+        moved = true;
       }
     }
     // The lead beat's crown pulse plays once the pill shows first place (or gives up after a moment).
