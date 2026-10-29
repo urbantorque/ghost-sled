@@ -776,7 +776,12 @@ export class Director {
         this.newBestAt = bankInBatch ? now + NEW_BEST_DEFER_S : now;
       }
       // New ground just had its moment (an early save often crosses both together): New best waits.
+      // New ground less than NEW_GROUND_GAP_S of riding away holds it too, then goes first.
       if (this.newBestAt >= 0 && this.newGroundAt >= 0 && this.newBestAt - this.newGroundAt < NEW_GROUND_GAP_S) this.newBestAt = this.newGroundAt + NEW_BEST_DEFER_S;
+      else if (this.newBestAt >= 0 && now >= this.newBestAt && this.newGroundAt < 0 && run.bestDistAtStart >= 150) {
+        const left = run.bestDistAtStart - sim.distance;
+        if (left > 0 && left < Math.max(0, s.speed) * NEW_GROUND_GAP_S) this.newBestAt = now + 0.05;
+      }
       if (this.newBestAt >= 0 && now >= this.newBestAt) {
         this.newBestAt = -1;
         this.push({ type: 'newBest', tick: sim.tick, score: sim.score, say: { label: 'New best', points: 0, tone: 'best' } }, sim);

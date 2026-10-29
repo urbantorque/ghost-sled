@@ -384,6 +384,19 @@ describe('milestones', () => {
     expect(of(soon, 'newBest')).toHaveLength(0);
     const later = r.idle(0.2);
     expect(of(later, 'newBest')).toHaveLength(1);
+    // New best crossed just before New ground (0.4 s away at 20 m/s): it waits, and New ground goes first.
+    const p = new Rig({ bestDistAtStart: 330, bestScoreAtStart: 5000 });
+    p.sim.s.speed = 20;
+    p.sim.distance = 322;
+    p.sim.score = 5100;
+    expect(of(p.frame(), 'newBest')).toHaveLength(0);
+    expect(of(p.idle(0.3), 'newBest')).toHaveLength(0);
+    p.sim.distance = 331;
+    const g2 = p.frame();
+    expect(of(g2, 'newGround')).toHaveLength(1);
+    const after = p.idle(1.4);
+    expect(of(after, 'newBest')).toHaveLength(1);
+    expect((of(after, 'newBest')[0].tick - g2[0].tick) / 60).toBeGreaterThanOrEqual(1.2);
     // Far apart, New best is not held.
     const q = new Rig({ bestDistAtStart: 330, bestScoreAtStart: 5000 });
     q.sim.distance = 331;
