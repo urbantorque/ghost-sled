@@ -142,12 +142,14 @@ const NEW_BEST_DEFER_S = 1.25;
 const TRICK_AHEAD = 60;
 const TRICK_BEHIND = 20;
 const WHISPER_S = 1.5;
-/** Flow display (the sim's flow is untouched). 'In the flow' at 3.0: replaying every bundled pool run
- *  through these rules, it fires in 23 of 46 expert runs over 60 s, in no mid or novice run, and never
- *  from drafting (skill events only, 3 kinds). At 5.5 no rider ever reached it. The glow is full at
- *  FLOW_FULL (3.5), and a bump snuffs anything from 1.2 (at 2 it never happened). */
+/** Flow display (the sim's flow is untouched). Earned from skill moves only: a draft or a slingshot is
+ *  the pack's speed (a novice drafting and slinging through the start bunch reached the beat at 13.5 s
+ *  of a first run). 'In the flow' at 2.9 with 3 kinds: the shown flow approaches the sim's whole-number
+ *  targets from below, so a chain of 12 to 15 sat on 2.99999 under a 3.0 line and live skilled play
+ *  never fired it. The glow is full at FLOW_FULL (3.5). From FLOW_SNUFF_MIN shown, a bump, a sketchy
+ *  landing or a lost combo snuffs it (the flow it earned goes out; earning starts over). */
 const FLOW_SMOOTH_S = 0.2;
-const FLOW_IN_AT = 3;
+const FLOW_IN_AT = 2.9;
 const FLOW_IN_KINDS = 3;
 const FLOW_SNUFF_MIN = 1.2;
 const SNUFF_S = 0.15;
@@ -261,6 +263,8 @@ export class Director {
 
   // Flow and skill.
   private skillChain = 0;
+  /** The skill moves earning the shown flow: the combo's skill chain since its start or the last snuff. */
+  private flowChain = 0;
   private perfects = 0;
   private readonly kinds = new Set<StyleKind>();
   private earnCap = 0;
@@ -412,6 +416,7 @@ export class Director {
 
   private resetSkill(): void {
     this.skillChain = 0;
+    this.flowChain = 0;
     this.perfects = 0;
     this.kinds.clear();
     this.earnCap = 0;
@@ -697,8 +702,12 @@ export class Director {
           if (e.quality === 'perfect') break; // (its stomp came with the 'perfect' style event)
           if (e.quality === 'sketchy') {
             const r = this.streak.land('sketchy', false, p.tick);
+            // A botched landing puts out the flow it had earned: 'Flow broken' is then its line (a broken
+            // streak keeps its own, and the snuff goes without words).
+            const snuff = this.canSnuff();
             if (r.broke >= 3) this.push({ type: 'streakBroken', tick: p.tick, was: r.broke, say: { label: 'Streak broken', points: 0, tone: 'lost' } }, sim);
-            else this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
+            else if (!snuff) this.push({ type: 'callout', tick: p.tick, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } }, sim);
+            if (snuff) this.snuff(p.tick, sim, now, r.broke < 3);
           } else this.streak.land(e.quality, e.late, p.tick);
           break;
         case 'drift':
@@ -726,13 +735,10 @@ export class Director {
           this.push({ type: 'bank', tick: p.tick, points: e.points, mult: e.mult, origin: Math.round(e.points / Math.max(1, e.mult)), tier, header, bump }, sim);
           this.bestBank = Math.max(this.bestBank, e.points);
           // A bump knocked the combo out of you: the flow it earned goes out with it.
-          if (bump && this.flowShown >= FLOW_SNUFF_MIN) {
-            this.snuffAt = now;
-            this.snuffFrom = this.flowShown;
-            this.push({ type: 'flow', tick: p.tick, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } }, sim);
-          }
+          if (bump && this.canSnuff()) this.snuff(p.tick, sim, now, true);
           if (bump) this.earnCap = 0;
           this.skillChain = 0;
+          this.flowChain = 0;
           this.perfects = 0;
           break;
         }
@@ -746,7 +752,11 @@ export class Director {
           const best = this.comboBest(run?.bestComboAtStart ?? 0);
           const isBest = best > 0 && e.points > best;
           this.push({ type: 'comboLost', tick: p.tick, points: e.points, stake: e.points, best: isBest, crack: e.points >= 300, say: { label: isBest ? 'Best combo lost' : 'Combo lost', points: e.points, tone: 'lost' } }, sim);
+          // The crash took the combo, and its flow goes out with it: the glow is snuffed, but the crash
+          // and 'Combo lost' own the moment, so no 'Flow broken' beat.
+          if (this.canSnuff()) this.snuffDisplay(now);
           this.skillChain = 0;
+          this.flowChain = 0;
           this.perfects = 0;
           break;
         }
@@ -924,19 +934,47 @@ export class Director {
 
   // ------------------------------------------------------------------ pieces
 
-  /** A style event's part in the live combo's skill: drafting never counts. A new combo starts over. */
+  /** A style event's part in the live combo's skill: drafting and slingshots (the pack's speed, not a
+   *  move) never count, as a step or as a kind. A new combo starts over. */
   private skill(kind: StyleKind, chain: number): void {
     if (chain <= 1) {
       this.skillChain = 0;
+      this.flowChain = 0;
       this.perfects = 0;
       this.kinds.clear();
       this.flowInDone = false;
     }
-    if (kind === 'draft') return;
+    if (kind === 'draft' || kind === 'slingshot') return;
     this.skillChain++;
+    this.flowChain++;
     this.kinds.add(kind);
     if (kind === 'perfect') this.perfects++;
-    this.earnCap = this.skillChain / 4 + 0.5 * this.perfects;
+    this.earnCap = this.flowChain / 4 + 0.5 * this.perfects;
+  }
+
+  /** The shown flow is high enough to be put out, and no snuff is already taking it down. */
+  private canSnuff(): boolean {
+    return this.flowShown >= FLOW_SNUFF_MIN && this.snuffAt < 0;
+  }
+
+  /** The glow goes to 0 over SNUFF_S and the flow's earning starts over: the moves before it no longer
+   *  count toward the cap, the kinds or 'In the flow'. */
+  private snuffDisplay(now: number): void {
+    this.snuffAt = now;
+    this.snuffFrom = this.flowShown;
+    this.earnCap = 0;
+    this.flowChain = 0;
+    this.perfects = 0;
+    this.kinds.clear();
+    this.flowInDone = false;
+  }
+
+  /** 'Flow broken': the snuff's beat (the scarf's puff and the wind's bend), with its line when `say`. */
+  private snuff(tick: number, sim: Sim, now: number, say: boolean): void {
+    this.snuffDisplay(now);
+    const b: BeatOf<'flow'> = { type: 'flow', tick, phase: 'snuff' };
+    if (say) b.say = { label: 'Flow broken', points: 0, tone: 'normal' };
+    this.push(b, sim);
   }
 
   /** What beating the grudge is worth in all: 10, or 20 for a nemesis; x2 in Haunted Hollow. */

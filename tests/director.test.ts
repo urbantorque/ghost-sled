@@ -225,6 +225,88 @@ describe('banks, flow and lost combos', () => {
     expect(run(14).fk).toBeCloseTo(1, 3);
   });
 
+  it("'In the flow' on the 3.0 plateau: a chain of 12 with the sim's flow at 3 crosses 2.9", () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    const kinds = ['carve', 'air', 'spin', 'gate'] as const;
+    const beats: Beat[] = [];
+    for (let i = 0; i < 12; i++) beats.push(...r.frame([style(kinds[i % kinds.length], 100, i + 1)]));
+    beats.push(...r.idle(1.5));
+    // The shown flow sits just under 3 (it approaches from below) and the line is 2.9.
+    expect((r.d as unknown as { flowShown: number }).flowShown).toBeLessThan(3);
+    expect(of(beats, 'flow').filter((b) => b.phase === 'in')).toHaveLength(1);
+  });
+
+  it('a slingshot is the pack speed: no skill step and no kind', () => {
+    const r = new Rig();
+    r.sim.s.flow = 6;
+    const beats: Beat[] = [];
+    // Slingshots, a draft and two moves: never 3 kinds, and the earned cap counts the moves alone.
+    const seq = ['slingshot', 'draft', 'slingshot', 'air', 'slingshot', 'clean', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot', 'slingshot'] as const;
+    seq.forEach((k, i) => beats.push(...r.frame([style(k, 50, i + 1)])));
+    beats.push(...r.idle(1.5));
+    const d = r.d as unknown as { skillChain: number; earnCap: number; kinds: Set<string> };
+    expect(d.skillChain).toBe(2);
+    expect(d.earnCap).toBeCloseTo(0.5);
+    expect([...d.kinds].sort()).toEqual(['air', 'clean']);
+    expect(of(beats, 'flow')).toHaveLength(0);
+  });
+
+  it("a sketchy landing snuffs flow from 1.2: 'Flow broken' is its line, and the earning starts over", () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    for (let i = 0; i < 8; i++) r.frame([style(i % 2 ? 'carve' : 'air', 100, i + 1)]);
+    r.idle(1.5);
+    const a = r.frame([style('air', 60, 9), land('sketchy')]);
+    expect(of(a, 'flow')[0]).toMatchObject({ phase: 'snuff', say: { label: 'Flow broken' } });
+    // One line for the landing: no 'Sketchy' under it (the air it caught keeps its own callout).
+    expect(of(a, 'callout').map((c) => c.source)).toEqual(['air']);
+    r.idle(0.3);
+    const d = r.d as unknown as { out: { feel: { flow: number } }; earnCap: number; kinds: Set<string>; flowShown: number };
+    expect(d.out.feel.flow).toBe(0);
+    expect(d.earnCap).toBe(0);
+    expect(d.kinds.size).toBe(0);
+    // The combo rides on: the next move earns from nothing, not from the 9 before the snuff.
+    r.frame([style('spin', 100, 10)]);
+    r.idle(1);
+    expect(d.earnCap).toBeCloseTo(0.25);
+    expect(d.flowShown).toBeLessThan(0.3);
+    // A sketchy landing under 1.2 shown is just Sketchy.
+    const b = r.frame([land('sketchy')]);
+    expect(of(b, 'flow')).toHaveLength(0);
+    expect(of(b, 'callout')[0].say.label).toBe('Sketchy');
+  });
+
+  it('a sketchy landing that breaks a streak snuffs flow without a second line', () => {
+    const r = new Rig();
+    r.sim.s.flow = 3;
+    for (let i = 0; i < 3; i++) {
+      r.frame([style('perfect', 250, i * 2 + 1), land('perfect')]);
+      r.frame([style('carve', 100, i * 2 + 2)]);
+      r.idle(0.5);
+    }
+    const a = r.frame([land('sketchy')]);
+    expect(of(a, 'streakBroken')).toHaveLength(1);
+    const snuff = of(a, 'flow');
+    expect(snuff).toHaveLength(1);
+    expect(snuff[0].phase).toBe('snuff');
+    expect(snuff[0].say).toBeUndefined();
+  });
+
+  it('a lost combo (the crash) puts the glow out with no Flow broken beat', () => {
+    const r = new Rig();
+    flowUp(r);
+    const t = r.sim.tick + 1;
+    r.sim.s.crashed = true;
+    const b = r.frame([
+      { tick: t, e: { type: 'comboLost', points: 3000 } },
+      { tick: t, e: { type: 'crash', cause: 'tree' } },
+    ]);
+    expect(of(b, 'flow')).toHaveLength(0);
+    r.idle(0.2);
+    expect((r.d as unknown as { out: { feel: { flow: number } } }).out.feel.flow).toBe(0);
+  });
+
   it('a bump snuffs flow from 1.2', () => {
     const r = new Rig();
     r.sim.s.flow = 2;
