@@ -131,6 +131,10 @@ export interface GrudgeOutcome {
   rode: { distance: number; passed: boolean } | null;
   /** The results' Next row: the ghost with the smallest positive distance - youDistance. */
   next: { name: string; score: number; record: string; distance: number; kind: GhostKind } | null;
+  /** Every ghost whose whole run went further than yours (any order). A settled grudge elects its
+   *  successor from these, never itself: the grudge you just beat can still be the Next row. Without
+   *  it, only `next` is considered. */
+  ahead?: ReadonlyArray<{ name: string; score: number; record: string; distance: number; kind: GhostKind }>;
 }
 
 /** A grudge on this many wins in a row is a nemesis. */
@@ -140,11 +144,12 @@ export function isNemesis(g: Pick<Grudge, 'streak'> | null | undefined): boolean
   return !!g && (g.streak ?? 1) >= NEMESIS_STREAK;
 }
 
-/** The results line for a grudge that beat you (names only: handles carry no pronouns). */
+/** The results line for a grudge that beat you (names only: handles carry no pronouns). `by` is the
+ *  margin in metres, unrounded: under 1 m it says so, where both race rows read the same distance. */
 export function grudgeLine(name: string, streak: number, by: number): string {
   if (streak >= NEMESIS_STREAK) return `${name} beat you ${streak} runs running. Nemesis.`;
   if (streak === 2) return `${name} beat you 2 runs running.`;
-  return `${name} beat you by ${fmtM(by)}. ${name} will be waiting.`;
+  return `${name} beat you by ${by < 1 ? 'less than 1 m' : fmtM(by)}. ${name} will be waiting.`;
 }
 
 const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
@@ -155,26 +160,36 @@ const fmtM = (m: number): string => `${NF.format(Math.max(1, Math.round(m)))} m`
  * snapshot, so a revive's second settle gives the same answer.
  * - The grudge rode, finished ahead of you and was never passed: it stays, them +1, streak +1.
  * - You passed it or out-distanced it: settled (nemesisDown when its streak was 3 or more), and the
- *   Next row becomes the new grudge at 1 and 1.
+ *   nearest other ghost that went further (never the grudge just settled, even when its whole run
+ *   went further than yours) becomes the new grudge at 1 and 1.
  * - It did not ride (no grudge yet, or a record that can no longer ride): the Next row is elected.
  * A friend or your own best is never elected.
  */
 export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge: Grudge | null; settled: boolean; nemesisDown: boolean; line: string | null } {
-  const next = o.next && o.next.kind !== 'friend' && o.next.kind !== 'you' && o.next.distance > o.youDistance ? o.next : null;
-  const elect = (): Grudge | null => (next ? { name: next.name, score: next.score, record: next.record, them: 1, streak: 1, by: Math.round(next.distance - o.youDistance), distance: next.distance } : null);
+  type Cand = NonNullable<GrudgeOutcome['next']>;
+  const eligible = (c: Cand | null | undefined, skip: string | null): c is Cand => !!c && c.kind !== 'friend' && c.kind !== 'you' && c.distance > o.youDistance && c.record !== skip;
+  const pick = (skip: string | null): Cand | null => {
+    let best: Cand | null = null;
+    for (const c of o.ahead ?? (o.next ? [o.next] : [])) if (eligible(c, skip) && (!best || c.distance < best.distance)) best = c;
+    return best;
+  };
+  const elect = (skip: string | null): Grudge | null => {
+    const n = pick(skip);
+    return n ? { name: n.name, score: n.score, record: n.record, them: 1, streak: 1, by: Math.round(n.distance - o.youDistance), distance: n.distance } : null;
+  };
   if (atStart && o.rode) {
     const them = atStart.them ?? 1;
     const streak = atStart.streak ?? 1;
     if (!o.rode.passed && o.rode.distance > o.youDistance) {
-      const by = Math.round(o.rode.distance - o.youDistance);
-      const g: Grudge = { ...atStart, them: them + 1, streak: streak + 1, by, distance: o.rode.distance };
-      return { grudge: g, settled: false, nemesisDown: false, line: grudgeLine(g.name, g.streak ?? 1, by) };
+      const margin = o.rode.distance - o.youDistance;
+      const g: Grudge = { ...atStart, them: them + 1, streak: streak + 1, by: Math.round(margin), distance: o.rode.distance };
+      return { grudge: g, settled: false, nemesisDown: false, line: grudgeLine(g.name, g.streak ?? 1, margin) };
     }
     const after = them >= 2 ? ` after ${them} runs` : '';
-    return { grudge: elect(), settled: true, nemesisDown: streak >= NEMESIS_STREAK, line: `You settled it with ${atStart.name}${after}.` };
+    return { grudge: elect(atStart.record), settled: true, nemesisDown: streak >= NEMESIS_STREAK, line: `You settled it with ${atStart.name}${after}.` };
   }
-  const g = elect();
-  if (g) return { grudge: g, settled: false, nemesisDown: false, line: grudgeLine(g.name, 1, g.by ?? 0) };
+  const g = elect(null);
+  if (g) return { grudge: g, settled: false, nemesisDown: false, line: grudgeLine(g.name, 1, (g.distance ?? 0) - o.youDistance) };
   // Nothing finished ahead of you: a grudge that did not ride keeps waiting, unchanged.
   return { grudge: atStart, settled: false, nemesisDown: false, line: null };
 }

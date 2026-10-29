@@ -1,3 +1,4 @@
+import { resultsCues } from '../audio/cues';
 import { AudioEngine, AudioFrame } from '../audio/engine';
 import { ghostName } from '../bot/names';
 import { getPlatform, Platform } from '../platform/platform';
@@ -21,14 +22,15 @@ import { Director } from './director';
 import { anchorFor, pickField } from './field';
 import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose } from './ghosts';
-import { type Graveyard, graveyards } from './graveyards';
+import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
+import { HintCoach } from './hints';
 import { intensity } from './intensity';
-import { InputController } from './input';
+import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
 import { RunSummary, missionViews, unlockedBiomes } from './missions';
 import { challengeShareTitle, friendLine, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
-import { Run, emptySnap, lerpSnap } from './run';
+import { type InputSource, Run, emptySnap, lerpSnap } from './run';
 import { Grudge, SaveStore } from './save';
 import { Settlement, dailyMedalNow, dailyStreakNow, isNemesis, medalThresholds, settleGrudge, settleRun } from './settle';
 
@@ -141,6 +143,12 @@ export class App {
   private giftsPersisted = 0;
   private bestPersisted = false;
   private results: ResultsModel | null = null;
+  /** Counts results cards shown and hidden: a card's first-frame sounds skip a card already gone. */
+  private resultsSeq = 0;
+  /** Rewards landed on this card (each coin's index). */
+  private coinsLanded = 0;
+  /** Ride with a reveal card: 'go' follows the reveal's timeline from its first frame. */
+  private goAfterReveal = false;
   /** What this run has already credited to the save (a revive settles it again, by difference). */
   private settlement: Settlement | null = null;
   private passedThisRun = new Set<number>();
@@ -158,15 +166,20 @@ export class App {
   private airTicks = 0;
   private hintTimer = 0;
   private hintShown: HintKind | null = null;
-  private hintHold = 0;
+  /** Which teach-move hint shows, for how long, and the per-run caps (hints.ts). */
+  private hints = new HintCoach();
   private hintLearned = false;
   private newBestThisRun = false;
   /** The grudge on this mountain as the run started: settleGrudge reads it again after a revive. */
   private grudgeAtStart: Grudge | null = null;
-  /** The results' one rose line from the grudge settlement (null for none). */
+  /** The results' one rose line from the grudge settlement (null for none), and whether it settled
+   *  the grudge or names a nemesis (it then outranks the event note). */
   private grudgeLine: string | null = null;
+  private grudgeStrong = false;
   /** Missions already popped this run (kept across a revive; the results still credit them). */
   private missionsPopped = new Set<string>();
+  /** Missions a results card of this run already showed Done (seeded into missionsPopped on a revive). */
+  private missionsSettled = new Set<string>();
   /** The stake the crash took (results: "with 4,960 on the line"). */
   private lostCombo = 0;
   /** This mountain's graveyards (graveyards.ts): the cairns the world places and the director's beat. */
@@ -225,6 +238,7 @@ export class App {
         this.audio.unlock();
         this.audio.ui(k);
       },
+      onRewardLanded: () => this.rewardLanded(),
     });
     // Low draws no rear-view picture, so the avalanche unit closes up to its chip and meter.
     this.ui.setMirror(this.tiers.tier !== 'low');
@@ -294,9 +308,12 @@ export class App {
   // ------------------------------------------------------------------ wiring
 
   private wireInput(): void {
-    this.input.onPress(() => {
+    this.input.onPress((source, code) => {
       this.audio.unlock();
       if (this.ui.modal && this.phase !== 'results') return;
+      // On the title and the results only Space (Enter below) and a click or tap start a run: Shift is
+      // an action key in a run, and Shift+Tab there only moves focus.
+      if ((this.phase === 'title' || this.phase === 'results') && !startsFromMenu(source, code)) return;
       if (this.phase === 'title' && !this.ui.modal) this.ride();
       else if (this.phase === 'crashed' && performance.now() - this.crashTime > 350) this.showResults();
       else if (this.phase === 'results' && performance.now() - this.crashTime > 700) this.runAgain();
@@ -384,6 +401,7 @@ export class App {
 
   /** The results card goes, and any of its sounds still scheduled with it (av-sync). */
   private hideResults(): void {
+    this.resultsSeq++;
     this.ui.hideResults();
     this.audio.cancelPending();
   }
@@ -405,6 +423,13 @@ export class App {
 
   private poolForMountain(m: MountainDef): PoolGhostData[] {
     return m.id === 'daily' ? this.dailyPool : poolFor(m.id);
+  }
+
+  private graveNames: Map<string, Graveyard[]> | null = null;
+
+  /** Every bundled mountain's graveyards, named once in the mountains' order (graveyards.ts). */
+  private bundledGraves(): Map<string, Graveyard[]> {
+    return (this.graveNames ??= bundledGraveyards(MOUNTAINS.map((m) => ({ key: m.id, pool: poolFor(m.id) }))));
   }
 
   /** The title's friend line: the challenge's rider, score, distance and where (the Daily Mountain
@@ -521,9 +546,10 @@ export class App {
   private ride(): void {
     if (this.phase !== 'title') return;
     this.audio.unlock();
-    const reveal = this.startRun();
-    // With a reveal card coming, 'go' waits so it never stacks on the card's slam.
-    this.audio.ui('go', 0, reveal ? 0.9 : 0);
+    // With a reveal card coming, 'go' waits for the card's first frame (startRun) and then 0.9 s, so
+    // it never stacks on the card's slam.
+    this.goAfterReveal = true;
+    if (!this.startRun()) this.audio.ui('go', 0, 0);
   }
 
   /** The run's field (field.ts pickField), as ghost entries with their role and nemesis flags. */
@@ -566,6 +592,9 @@ export class App {
   /** Starts a run; returns whether a reveal card opens it. */
   private startRun(): boolean {
     const d = this.save.data;
+    // ('go' belongs to a Ride: only ride() sets it, just before this.)
+    const go = this.goAfterReveal;
+    this.goAfterReveal = false;
     this.ui.closeMenus();
     this.ui.hideTitle();
     // (Run Again and a new reveal both cancel any sound still scheduled by the last screen.)
@@ -590,13 +619,15 @@ export class App {
     this.world.setGhostField(this.ghostField());
     // The mountain's graveyards, from the whole pool's crashes (not the field's): cairns on the bank,
     // and a beat for riding past each alive. Set every run ([] clears the last mountain's).
-    this.graves = graveyards(this.poolForMountain(this.mountain), this.mountainKey());
+    // (The bundled mountains are named together, so no place name stands on two of them.)
+    this.graves = this.mountain.id === 'daily' ? graveyards(this.dailyPool, this.mountainKey()) : (this.bundledGraves().get(this.mountain.id) ?? []);
     this.world.setGraveyards(this.graves);
 
     this.input.releaseAll();
     // Dev demo: the rider replays an expert pool run (for capturing showcase moments).
-    let source: { sample(): { steer: number; action: boolean } } = this.input;
+    let source: InputSource = this.input;
     let sled = d.sled;
+    let demo = false;
     if (DEV_ON && DEV.has('demo')) {
       const pool = this.poolForMountain(this.mountain);
       const pick = pool[Math.max(0, pool.length - 1 - Number(DEV.get('demo')))];
@@ -604,7 +635,10 @@ export class App {
         const rec = recordFromString(pick.record);
         const log = decodeLog(rec.inputs);
         let i = 0;
-        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0 }; } };
+        // The recorded slipstream bit too: drafting this live field instead made the physics diverge
+        // (fox84's 3,584 m run hit a tree at 216 m).
+        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0 }; } };
+        demo = true;
         chaos = rec.chaos;
         this.chaos = chaos;
         sled = rec.sled;
@@ -624,7 +658,7 @@ export class App {
       }
     }
     this.run = new Run(this.mountain.seed, chaos, sled, source);
-    this.run.draftProbe = this.ghosts.draftProbe;
+    this.run.draftProbe = demo ? null : this.ghosts.draftProbe;
     this.loop = new FixedLoop(() => this.run!.tick());
     this.world.beginRun(this.run.cur, chaos.event, sled);
     this.world.resetFeel();
@@ -645,10 +679,13 @@ export class App {
     this.airTicks = 0;
     this.hintTimer = 0;
     this.hintShown = null;
+    this.hints.reset();
     this.heldLip = false;
     this.lostCombo = 0;
     this.grudgeLine = null;
+    this.grudgeStrong = false;
     this.missionsPopped.clear();
+    this.missionsSettled.clear();
     this.crashTicks = 0;
     this.renderTime = this.time;
     // A deep copy of the grudge as the run started: settleGrudge reads it again after a revive, so a
@@ -669,9 +706,16 @@ export class App {
         reel: MOODS.map((m) => m.name),
       });
       // The reveal's sounds on its own timeline (a tick per reel name, the slam on the stamp), with
-      // nothing left over from the last screen.
-      this.audio.cancelPending();
-      this.audio.cueReveal(REVEAL_TIMING, reduced());
+      // nothing left over from the last screen, from the card's first animation frame: reveal.ts
+      // starts its timers there too, so a long first frame of a run no longer runs the ticks ahead of
+      // a frozen reel. 'go' (Ride) waits on the same clock, clear of the slam.
+      const run = this.run;
+      requestAnimationFrame(() => {
+        if (this.run !== run || this.phase !== 'run') return;
+        this.audio.cancelPending();
+        this.audio.cueReveal(REVEAL_TIMING, reduced());
+        if (go) this.audio.ui('go', 0, 0.9);
+      });
     }
     this.platform.gameplayStart();
     return reveal;
@@ -779,6 +823,8 @@ export class App {
       }
       this.pacing.adShown(Date.now());
       this.hideResults();
+      // What the first results card already showed Done is not news again mid-run.
+      for (const id of this.missionsSettled) this.missionsPopped.add(id);
       this.run.revive();
       // (The director's revive also resets its time scale: no crash curve, no held pulse.)
       this.director.revive();
@@ -820,16 +866,18 @@ export class App {
     if (!this.run) return;
     const rec = this.run.toRecord(this.save.data.name);
     const link = this.platform.inviteLink({ c: recordToString(rec) });
-    const done = () => this.ui.toast('Challenge link copied', 'ghost', 'Send it to a friend to race your ghost');
     const nav = navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> };
     // Beat a friend's link and it goes back to them with the margin: "Send It Back".
     const fr = this.friendRecord();
     const dist = this.run.sim.distance;
-    const title = fr && dist > fr.distance ? challengeShareTitle(fr.name, fr.distance, this.mountain.name, Math.round(dist - fr.distance)) : challengeShareTitle(this.save.data.name, dist, this.mountain.name, null);
+    const answer = !!fr && dist > fr.distance;
+    const title = fr && answer ? challengeShareTitle(fr.name, fr.distance, this.mountain.name, Math.round(dist - fr.distance)) : challengeShareTitle(this.save.data.name, dist, this.mountain.name, null);
+    // The clipboard carries the answer back too: the same line the phone's share sheet sends, then the link.
+    const done = () => (fr && answer ? this.ui.toast(`Copied your answer to ${fr.name}`, 'ghost') : this.ui.toast('Challenge link copied', 'ghost', 'Send it to a friend to race your ghost'));
     if (this.platform.deviceType !== 'desktop' && nav.share) {
       nav.share({ title, url: link }).catch(() => undefined);
     } else if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(link).then(done, () => this.ui.toast('Could not copy the link', 'info'));
+      navigator.clipboard.writeText(answer ? `${title} ${link}` : link).then(done, () => this.ui.toast('Could not copy the link', 'info'));
     } else done();
   }
 
@@ -916,6 +964,8 @@ export class App {
     if (settled.grudge) d.grudge[key] = settled.grudge;
     else delete d.grudge[key];
     this.grudgeLine = settled.line;
+    // A settled grudge or a nemesis outranks the event note on the results; a fresh grudge does not.
+    this.grudgeStrong = settled.settled || isNemesis(settled.grudge);
     this.bestPersisted = true;
     this.save.flush();
   }
@@ -929,14 +979,19 @@ export class App {
     const g = this.grudgeAtStart;
     let rode: { distance: number; passed: boolean } | null = null;
     let next: { name: string; score: number; record: string; distance: number; kind: GhostKind } | null = null;
+    // Everyone who went further: a settled grudge's successor is elected from these, never itself.
+    const ahead: Array<{ name: string; score: number; record: string; distance: number; kind: GhostKind }> = [];
     for (const t of this.ghosts.tracks) {
       if (!t.ready) continue;
       if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, passed: this.director.grudgeSettled };
       if (t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
-      const ahead = t.distance - sim.distance;
-      if (ahead > 0 && (!next || ahead < next.distance - sim.distance)) next = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
+      const by = t.distance - sim.distance;
+      if (by <= 0) continue;
+      const row = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
+      ahead.push(row);
+      if (!next || by < next.distance - sim.distance) next = row;
     }
-    return { youDistance: sim.distance, rode, next };
+    return { youDistance: sim.distance, rode, next, ahead };
   }
 
   private finalizeRun(): void {
@@ -956,6 +1011,8 @@ export class App {
     const medals = this.mountain.id === 'daily' ? medalThresholds(this.dailyPool.map((g) => g.distance)) : null;
     const settled = settleRun(d, this.summary(), this.settlement, this.mountainKey(), medals);
     this.settlement = settled.settlement;
+    // The missions this card shows Done: a revive never pops them again mid-run.
+    for (const mv of settled.missions) if (mv.justCompleted) this.missionsSettled.add(mv.id);
     const missions = { views: settled.missions };
     const unlocked: string[] = [];
     const unlockedMountains: NonNullable<ResultsModel['unlockedMountains']> = [];
@@ -1002,9 +1059,14 @@ export class App {
       unlockedMountains,
       bestStreak: this.director.bestStreak,
       lostCombo: this.lostCombo,
-      // One race line (C6): a friend's challenge, else the grudge, else the Daily medal or the event
-      // the run never reached.
-      raceLine: resultsRaceLine(this.friendLine(sim), this.grudgeLine, settled.daily?.line ?? this.director.eventNote(sim)),
+      // One race line (C6): a friend's challenge, the Daily medal, a settled grudge or a nemesis, the
+      // event the run never reached, then any other grudge line.
+      raceLine: resultsRaceLine({
+        friend: this.friendLine(sim),
+        daily: this.mountain.id === 'daily' ? (settled.daily?.line ?? null) : null,
+        grudge: this.grudgeLine ? { text: this.grudgeLine, strong: this.grudgeStrong } : null,
+        event: this.director.eventNote(sim),
+      }),
       runAgainLabel: runAgainLabel(this.friendForLabel(sim), d.grudge[key] ? { name: d.grudge[key].name } : null),
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
@@ -1012,7 +1074,36 @@ export class App {
     this.ui.hideHud();
     this.ui.showResults(this.results);
     this.audio.setScene('results');
-    this.resultsSounds(this.results);
+    // The card's sounds start on its first painted frame, where its CSS beats start: anchored here, a
+    // long frame at open put the count-up ticks over a frozen card. Skipped if the card went meanwhile.
+    this.coinsLanded = 0;
+    const seq = ++this.resultsSeq;
+    const model = this.results;
+    const live = (): boolean => seq === this.resultsSeq && this.phase === 'results' && this.results === model;
+    requestAnimationFrame(() => {
+      if (!live()) return;
+      // The beats start when the card's CSS animations do: their start time, once it is resolved (a
+      // frame or so after the card is styled). Anchored at this frame the sounds ran about 22 ms early,
+      // and at the animations' ready promise about 33 ms late, so the cues carry the measured lag.
+      const first = document.querySelector('.gs-results')?.getAnimations?.({ subtree: true }).find((a) => a.pending);
+      let done = false;
+      const go = (): void => {
+        if (done || !live()) return;
+        done = true;
+        const st = first ? first.startTime : null;
+        this.resultsSounds(model, typeof st === 'number' ? Math.max(0, (performance.now() - st) / 1000) : 0);
+      };
+      if (!first) return go();
+      first.ready.then(go, go);
+      window.setTimeout(go, 250);
+    });
+  }
+
+  /** A results reward landed in the wallet (results.ts, flown or not): its coin, in landing order. Under
+   *  reduced motion the card lands whole and cueResults plays the one coin. */
+  private rewardLanded(): void {
+    if (this.phase !== 'results' || reduced()) return;
+    this.audio.ui('coin', this.coinsLanded++);
   }
 
   /** The friend's challenge on this mountain, for the Rematch label. */
@@ -1034,22 +1125,27 @@ export class App {
 
   /** The results card's sounds on its CSS beats (results.ts RESULTS_TIMING), laid by the engine: the
    *  count-up ticking up the ladder, the place stamp, the New best chord on its stamp, a mallet per
-   *  Beat stamp in view, a chime per mission Done stamp and a coin as each reward lands. Reduced
-   *  motion plays it all at once. (The only mission sound: settleRun credits, nothing chimes twice.) */
-  private resultsSounds(m: ResultsModel): void {
-    const done = m.missions.filter((mv) => mv.justCompleted);
+   *  Beat stamp in view and a chime per mission Done stamp, each on its own row (the stamp's --i).
+   *  Each reward's coin plays as it lands (rewardLanded, which the card calls whether it flew or
+   *  not); reduced motion plays it all at once, the coin included. (The only mission sound: settleRun
+   *  credits, nothing chimes twice.) */
+  private resultsSounds(m: ResultsModel, lagS = 0): void {
+    const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
     const ahead = m.ghosts.filter((g) => (g.distance ?? 0) > m.distance).length;
-    this.audio.cueResults(
-      {
-        count: m.score > 0,
-        newBest: m.newBest,
-        beats: beatStampsShown(m.ghosts.length, ahead),
-        missions: done.length,
-        coins: done.filter((mv) => mv.reward > 0).length,
-      },
-      RESULTS_TIMING,
-      reduced(),
-    );
+    const still = reduced();
+    const show = {
+      count: m.score > 0,
+      newBest: m.newBest,
+      beats: beatStampsShown(m.ghosts.length, ahead),
+      missions: rows((mv) => mv.justCompleted),
+      coins: still ? rows((mv) => mv.justCompleted && mv.reward > 0) : [],
+    };
+    if (lagS <= 0.001) {
+      this.audio.cueResults(show, RESULTS_TIMING, still);
+      return;
+    }
+    // The card started lagS ago: the same timeline (engine.cueResults' own cues), that much sooner.
+    for (const q of resultsCues(show, RESULTS_TIMING, still)) this.audio.ui(q.name, q.detail, Math.max(0, q.at - lagS));
   }
 
   private crashText(cause: string | null): string {
@@ -1498,6 +1594,8 @@ export class App {
           this.passBonus += b.gifts;
           break;
         case 'grudgeSettled':
+          // The grudge's premium, paid once at the settle (less what its passes already paid).
+          this.passBonus += b.paid;
           this.grudgeBeaten = true;
           this.platform.happytime();
           break;
@@ -1576,6 +1674,7 @@ export class App {
         comboMult: c.multiplier,
         intensity: intensity({
           speed: sim.s.speed,
+          drafting: a.drafting,
           mult: c.multiplier,
           skillChain: a.skillChain,
           earnedFlow: a.earnedFlow,
@@ -1658,6 +1757,7 @@ export class App {
     if (this.hintShown === k) {
       this.ui.hint(null, this.input.mode);
       this.hintShown = null;
+      this.hints.drop();
     }
   }
 
@@ -1680,50 +1780,41 @@ export class App {
     this.hintTimer += dt;
     const h = this.save.data.hints;
     const sim = this.run.sim;
-    const steered = this.input.steering;
-    let want: HintKind | null = null;
-    if ((h.steer ?? 0) < 1 && this.hintTimer > 0.6) want = 'steer';
-    if (steered && want === 'steer') {
-      h.steer = 1;
-      want = null;
-    }
-    if (!want && (h.drift ?? 0) < 2 && this.hintTimer > 6 && sim.s.grounded && !sim.s.drifting) want = 'drift';
-    if (!want && (h.pop ?? 0) < 1 && sim.s.action && sim.s.grounded && !sim.s.drifting) want = 'pop';
-    // New verbs as players reach them: a long flight teaches the spin (once the stomp is known), then
-    // the backflip (from the second run); a kicker ahead teaches the boosted pop.
+    const s = sim.s;
     const ttl = this.world.landing.timeToLand;
-    if (!want && !sim.s.grounded && this.airTicks > 6 && ttl < 5) {
-      if ((h.spin ?? 0) < 2 && (h.stomp ?? 0) >= 1 && ttl > 0.8) want = 'spin';
-      else if ((h.spin ?? 0) >= 1 && (h.flip ?? 0) < 1 && this.save.data.runs >= 2 && ttl > 0.9) want = 'flip';
+    let draftTarget = false;
+    if (this.hintTimer > 20 && (h.draft ?? 0) < 1 && this.ghosts.tracks.length) {
+      const st = this.frameStandings ?? this.ghosts.standings(sim.tick, s.z);
+      draftTarget = !!st.next && st.next.gap > 2 && st.next.gap < 25;
     }
-    if (!want && sim.s.grounded && (((h.pop ?? 0) >= 1 && (h.boostPop ?? 0) < 1) || this.heldLip) && this.kickerAhead(sim)) want = 'boostPop';
-    // The stomp cue always wins (one threshold, and it skips the hold below).
-    if (!sim.s.grounded && (h.stomp ?? 0) < 3 && ttl < 1.2) want = 'stomp';
-    if (!want && (h.draft ?? 0) < 1 && this.hintTimer > 20 && this.ghosts.tracks.length) {
-      const st = this.frameStandings ?? this.ghosts.standings(sim.tick, sim.s.z);
-      if (st.next && st.next.gap > 2 && st.next.gap < 25) want = 'draft';
-    }
-    if (sim.s.drafting) h.draft = 1;
-    // The avalanche banner, meter and rear-view mirror own the lower screen while it chases you.
-    const chased = sim.dyn.avalanche.phase === 1 || sim.dyn.avalanche.phase === 2;
-    if (chased) want = null;
-    // Hold a hint on screen for a beat so quick state changes never make it flicker.
-    this.hintHold = Math.max(0, this.hintHold - dt);
+    const hint = this.hints.step(
+      {
+        dt,
+        timer: this.hintTimer,
+        steered: this.input.steering,
+        grounded: s.grounded,
+        drifting: s.drifting,
+        action: s.action,
+        drafting: s.drafting,
+        airTicks: this.airTicks,
+        ttl,
+        runs: this.save.data.runs,
+        kickerAhead: s.grounded && (((h.pop ?? 0) >= 1 && (h.boostPop ?? 0) < 1) || this.heldLip) && this.kickerAhead(sim),
+        heldLip: this.heldLip,
+        draftTarget,
+        // The avalanche banner, meter and rear-view mirror own the lower screen while it chases you.
+        chased: sim.dyn.avalanche.phase === 1 || sim.dyn.avalanche.phase === 2,
+      },
+      h,
+    );
+    // Lessons learned by doing (steering while the steer hint is wanted; any slipstream).
+    for (const k of hint.learned) h[k] = Math.max(1, h[k] ?? 0);
     // Steered and drifted once: the touch zone outlines fade out for good (the labels stay).
     const learned = (h.steer ?? 0) >= 1 && (h.drift ?? 0) >= 1;
-    // A hint the player is already doing goes at once, without the hold: steering, or a drift that is
-    // under way (the drift is only counted on its release).
-    const doing =
-      (this.hintShown === 'steer' && steered) ||
-      (this.hintShown === 'drift' && sim.s.drifting) ||
-      // An air lesson is over on touchdown; the boosted pop's once the sled leaves the snow.
-      ((this.hintShown === 'spin' || this.hintShown === 'flip') && sim.s.grounded) ||
-      (this.hintShown === 'boostPop' && !sim.s.grounded);
-    if (want !== this.hintShown && (this.hintHold <= 0 || chased || doing || want === 'stomp' || (want === null && this.hintShown === 'stomp'))) {
-      this.hintShown = want;
-      this.hintHold = want ? 1.6 : 0;
+    if (hint.show !== undefined) {
+      this.hintShown = hint.show;
       this.hintLearned = learned;
-      this.ui.hint(want, this.input.mode, learned);
+      this.ui.hint(hint.show, this.input.mode, learned);
     } else if (learned !== this.hintLearned) {
       this.hintLearned = learned;
       this.ui.hint(this.hintShown, this.input.mode, learned);

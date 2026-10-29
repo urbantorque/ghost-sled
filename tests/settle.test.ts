@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RunSummary, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { Grudge, defaultSave } from '../src/game/save';
-import { GrudgeOutcome, dailyLine, dailyMedalNow, dailyStreakNow, medalFor, medalThresholds, prevDay, settleGrudge, settleRun } from '../src/game/settle';
+import { GrudgeOutcome, dailyLine, dailyMedalNow, grudgeLine, dailyStreakNow, medalFor, medalThresholds, prevDay, settleGrudge, settleRun } from '../src/game/settle';
 import type { GhostKind } from '../src/ui/contract';
 
 function summary(p: Partial<RunSummary> = {}): RunSummary {
@@ -166,6 +166,27 @@ describe('the grudge (settleGrudge)', () => {
     expect(r.nemesisDown).toBe(false);
     expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 60, distance: 560 });
     expect(r.line).toBe('You settled it with Mila after 2 runs.');
+  });
+
+  it('a settled grudge never elects itself again, even when its whole run went further', () => {
+    // You passed Mila live and crashed at 783 m; Mila's run went 846 m, so it is still the Next row.
+    const milaRow = { ...next('Mila', 846), record: 'rec-Mila' };
+    const tess = next('Tess', 900);
+    const r = settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow, tess] });
+    expect(r.settled).toBe(true);
+    expect(r.line).toBe('You settled it with Mila.');
+    expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 117 });
+    // Nobody else went further: no grudge rather than the one you just settled.
+    expect(settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow] }).grudge).toBeNull();
+    // An unsettled repeat winner stays, as before.
+    expect(settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: false }, next: milaRow, ahead: [milaRow, tess] }).grudge).toMatchObject({ name: 'Mila', them: 2 });
+  });
+
+  it('a margin under 1 m says so (the race rows read the same distance)', () => {
+    const r = settleGrudge(null, { youDistance: 489.3, rode: null, next: next('MarmotMateo', 489.5) });
+    expect(r.line).toBe('MarmotMateo beat you by less than 1 m. MarmotMateo will be waiting.');
+    expect(grudgeLine('Tess', 1, 1.4)).toBe('Tess beat you by 1 m. Tess will be waiting.');
+    expect(grudgeLine('Tess', 1, 0.2)).toBe('Tess beat you by less than 1 m. Tess will be waiting.');
   });
 
   it('out-distancing it settles it too', () => {

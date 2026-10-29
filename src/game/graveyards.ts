@@ -53,9 +53,11 @@ export interface Graveyard {
 /**
  * The graveyards of a pool: runs of GRAVE_MIN or more crash distances within GRAVE_SPAN metres
  * (greedy from the nearest), nearest first, at most GRAVE_MAX, each named deterministically from
- * the mountain key and its distance with no two alike.
+ * the mountain key and its distance with no two alike. `taken` holds names other mountains already
+ * gave their places (bundledGraveyards): they are skipped while the list has others left, and this
+ * mountain's names are added to it.
  */
-export function graveyards(pool: ReadonlyArray<{ distance: number; ticks?: number }>, key: string): Graveyard[] {
+export function graveyards(pool: ReadonlyArray<{ distance: number; ticks?: number }>, key: string, taken?: Set<string>): Graveyard[] {
   const d = pool
     .filter((g) => Number.isFinite(g.distance) && g.distance > 0 && !((g.ticks ?? 0) >= FINISHED_TICKS))
     .map((g) => g.distance)
@@ -74,11 +76,31 @@ export function graveyards(pool: ReadonlyArray<{ distance: number; ticks?: numbe
     let sum = 0;
     for (let j = i; j <= k; j++) sum += d[j];
     const z = Math.round((sum / n) * 10) / 10;
-    let at = hashString(`${key}:${Math.round(z)}`) % GRAVE_NAMES.length;
-    while (used.has(at)) at = (at + 1) % GRAVE_NAMES.length;
+    const N = GRAVE_NAMES.length;
+    // A per-mountain offset into the list, then the place's own hash; skip what is used here, and what
+    // another mountain took while any name is still free.
+    let at = (hashString(key) + hashString(`${key}:${Math.round(z)}`)) % N;
+    const blocked = (j: number): boolean => used.has(j) || !!taken?.has(GRAVE_NAMES[j]);
+    let tries = 0;
+    while (blocked(at) && tries++ < N) at = (at + 1) % N;
+    // (Every name taken somewhere: only this mountain's own must differ.)
+    while (used.has(at)) at = (at + 1) % N;
     used.add(at);
+    taken?.add(GRAVE_NAMES[at]);
     out.push({ z, name: GRAVE_NAMES[at], fell: n });
     i = k + 1;
   }
+  return out;
+}
+
+/**
+ * The bundled mountains' graveyards, named together in the given order with one shared set, so no
+ * name stands on two mountains ('Bonepile Bend' was both Pinecrest's 370 m cairn and Sakura's 291 m
+ * one). Deterministic: the same pools always give the same names.
+ */
+export function bundledGraveyards(mountains: ReadonlyArray<{ key: string; pool: ReadonlyArray<{ distance: number; ticks?: number }> }>): Map<string, Graveyard[]> {
+  const taken = new Set<string>();
+  const out = new Map<string, Graveyard[]>();
+  for (const m of mountains) out.set(m.key, graveyards(m.pool, m.key, taken));
   return out;
 }

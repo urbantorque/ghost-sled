@@ -35,6 +35,9 @@ export interface PassContext {
   lastShownPassTick: number;
   /** This pass's place in a chain of live first passes (1 = alone, 2 = Double, ...). */
   chainN: number;
+  /** Its place in a burst of slung passes (1 = the first; one slingshot through the pack grows the
+   *  count: 'Slung past 2', 'Slung past 3'). Omitted reads as 1. */
+  slungN?: number;
   /** The ghost passed you earlier this run. */
   passedYouBefore: boolean;
   /** A duel with this ghost resolved on this very pass. */
@@ -46,12 +49,13 @@ export interface PassContext {
 
 /**
  * What a pass is called, what it pays and whether it shows. gifts: the base pay (first passes only:
- * 5, or 10 for the grudge, doubled in Haunted Hollow), never capped. extra: the bonus for a slung or
+ * 5, doubled in Haunted Hollow), never capped; the grudge's premium is paid once, by its settle (the
+ * director), so a start-line jostle past it pays only this base. extra: the bonus for a slung or
  * chained pass, which the director caps per run (EXTRA_GIFTS_CAP). muted: no flash, no ping, no
  * camera move (the pass still counts for settlement and unlocks). First match wins.
  */
 export function classifyPass(c: PassContext): { word: PassWord; text: string; gifts: number; extra: number; muted: boolean } {
-  const base = c.first ? (c.haunted ? 2 : 1) * (c.ghost.kind === 'grudge' ? 10 : 5) : 0;
+  const base = c.first ? (c.haunted ? 2 : 1) * 5 : 0;
   // 1. The start-line bunch: edging past a ghost that never got clear of you is no overtake.
   if (c.tick < START_TICKS && !c.everLedBy2m) return { word: 'jostle', text: 'Passed', gifts: base, extra: 0, muted: true };
   // 2. A wreck: you rode past where it fell. Your best's wreck right on New ground is that beat's.
@@ -63,7 +67,10 @@ export function classifyPass(c: PassContext): { word: PassWord; text: string; gi
   if (c.duel === 'won') return { word: 'duelWon', text: 'Duel won', gifts: base, extra: 0, muted: false };
   if (c.duel === 'heldOff') return { word: 'heldOff', text: 'Held off', gifts: base, extra: 0, muted: false };
   // 4. Out of a slipstream: the slingshot carried you past.
-  if (c.first && c.tick - c.lastSlingTick >= 0 && c.tick - c.lastSlingTick <= SLING_TICKS) return { word: 'slung', text: 'Slung past', gifts: base, extra: SLUNG_GIFTS, muted: false };
+  if (c.first && c.tick - c.lastSlingTick >= 0 && c.tick - c.lastSlingTick <= SLING_TICKS) {
+    const n = Math.max(1, Math.floor(c.slungN ?? 1));
+    return { word: 'slung', text: n >= 2 ? `Slung past ${n}` : 'Slung past', gifts: base, extra: SLUNG_GIFTS, muted: false };
+  }
   // 5. Winning a place back pays nothing more, but it is news.
   if (!c.first) return { word: 'tookBack', text: 'Took back', gifts: 0, extra: 0, muted: false };
   // 6. Live first passes in quick succession.
@@ -106,13 +113,17 @@ export const DUEL_OPEN_TICKS = 60;
 export const DUEL_NEAR = 1.5;
 export const DUEL_RESOLVE = 4;
 export const DUEL_COOLDOWN_TICKS = 180;
+/** A duel resolves by who leads after this many ticks (8 s): a duel with your own best line held
+ *  within 4 m for 10 to 16 s and swallowed every other moment. */
+export const DUEL_MAX_TICKS = 480;
 
 /**
  * Neck-and-neck fights. Fed once per frame with whole sim-tick deltas (never frame counts) and every
  * ghost's signed gap (ghost minus you, + = ahead). A live ghost within 1.5 m for 60 accumulated ticks
- * opens a duel (from tick 360, one at a time, the closest wins). It resolves past 4 m: you ahead is
- * 'won', or 'heldOff' when the ghost spent most of it behind you; the ghost ahead is 'lost'; the ghost
- * crashing is 'won'. A ghost pays for one duel per run; a lost duel may reopen once; 3 s cooldown.
+ * opens a duel (from tick 360, one at a time, the closest wins). It resolves past 4 m, or after
+ * DUEL_MAX_TICKS by who leads: you ahead is 'won', or 'heldOff' when the ghost spent most of it behind
+ * you; the ghost ahead is 'lost'; the ghost crashing is 'won'. A ghost pays for one duel per run; a
+ * lost duel may reopen once; 3 s cooldown.
  */
 export class DuelTracker {
   private openId: number | null = null;
@@ -155,7 +166,7 @@ export class DuelTracker {
         if (g.gap < 0) this.behindTicks += d;
         const a = Math.abs(g.gap);
         this.amt = Math.max(0, Math.min(1, (DUEL_RESOLVE - a) / (DUEL_RESOLVE - 0.8)));
-        if (a > DUEL_RESOLVE) {
+        if (a > DUEL_RESOLVE || this.openTicks >= DUEL_MAX_TICKS) {
           this.close(id, tick);
           if (g.gap < 0) {
             this.paid.add(id);
@@ -219,23 +230,32 @@ export class DuelTracker {
 
 /**
  * The ghost the rival pill and the C1/C11 marker name, so the HUD, the ring and the camera agree: an
- * open duel, else the start-line call while it is up, else the nearest ghost ahead (standings).
+ * open duel, else a duel's result while its flash holds (`hold`), else the start-line call while it is
+ * up, else the nearest riding ghost (steadyNext).
  */
-export function rivalPick(next: { id: number; gap: number } | null, duel: { id: number; gap: number } | null, call: { id: number; gap: number } | null): { id: number; gap: number } | null {
-  return duel ?? call ?? next;
+export function rivalPick(next: { id: number; gap: number } | null, duel: { id: number; gap: number } | null, call: { id: number; gap: number } | null, hold: { id: number; gap: number } | null = null): { id: number; gap: number } | null {
+  return duel ?? hold ?? call ?? next;
 }
 
 /** The rival pill keeps the ghost it names while that one stays on the same side of you and within
  *  this many metres of the nearest: a bunched pack never flickers the name from frame to frame. */
 export const RIVAL_HOLD_M = 1;
+/** In the bunch (both within this many metres of you) the named ghost holds through gap sign flips. */
+export const RIVAL_BUNCH_M = 2;
+/** A newly named ghost stays named at least this long (s): the start bunch flapped every 50 ms. */
+export const RIVAL_DWELL_S = 0.6;
 
 /**
- * The nearest ghost (standings.next) with a little hold: `held` is the ghost named last frame, with
- * its gap now. It stays named while it is on the same side of you as the nearest and no more than
- * RIVAL_HOLD_M further; otherwise the nearest takes over.
+ * The nearest riding ghost with a hold: `held` is the ghost named last frame, with its gap now (null
+ * once it may not be named), and `heldFor` how long it has been named (s). It stays named for
+ * RIVAL_DWELL_S; then while both it and the nearest are within RIVAL_BUNCH_M of you (whichever side),
+ * or while it is on the same side of you as the nearest and no more than RIVAL_HOLD_M further;
+ * otherwise the nearest takes over.
  */
-export function steadyNext(held: { id: number; gap: number } | null, next: { id: number; gap: number } | null): { id: number; gap: number } | null {
+export function steadyNext(held: { id: number; gap: number } | null, next: { id: number; gap: number } | null, heldFor = Infinity): { id: number; gap: number } | null {
   if (!next || !held || held.id === next.id) return next;
+  if (heldFor < RIVAL_DWELL_S) return held;
+  if (Math.abs(held.gap) < RIVAL_BUNCH_M && Math.abs(next.gap) < RIVAL_BUNCH_M) return held;
   if (held.gap > 0 === next.gap > 0 && Math.abs(held.gap - next.gap) < RIVAL_HOLD_M) return held;
   return next;
 }

@@ -12,6 +12,16 @@ export type InputMode = 'keyboard' | 'mouse' | 'touch';
 const LEFT = new Set(['KeyA', 'ArrowLeft']);
 const RIGHT = new Set(['KeyD', 'ArrowRight']);
 const ACTION = new Set(['Space', 'ShiftLeft', 'ShiftRight', 'KeyS', 'ArrowDown', 'KeyW', 'ArrowUp']);
+/** The action keys that also start a run from the title or the results (the app handles Enter): the
+ *  others stay action keys in a run only. Shift fires on keydown, so Shift+Tab, moving focus back,
+ *  started a run from either screen. */
+const MENU_START = new Set(['Space']);
+
+/** Whether a fresh press may start a run from the title or the results: any click or tap, and only
+ *  Space among the keys (never Shift, S, W or the arrows). */
+export function startsFromMenu(source: InputMode, code?: string): boolean {
+  return source !== 'keyboard' || (code !== undefined && MENU_START.has(code));
+}
 
 export interface TouchVisual {
   steer: { x: number; y: number; ox: number } | null;
@@ -31,7 +41,7 @@ export class InputController {
   private actionTouches = new Map<number, { x: number; y: number }>();
   private level = STEER_CENTER;
   private listeners: Array<() => void> = [];
-  private pressCbs: Array<(source: InputMode) => void> = [];
+  private pressCbs: Array<(source: InputMode, code?: string) => void> = [];
   readonly visual: TouchVisual = { steer: null, action: null };
 
   constructor(el: HTMLElement) {
@@ -48,7 +58,7 @@ export class InputController {
       else if (RIGHT.has(e.code)) this.keysR = true;
       else if (ACTION.has(e.code)) {
         this.keyAction++;
-        this.press('keyboard');
+        this.press('keyboard', e.code);
       } else return;
       this.mode = 'keyboard';
       this.mouseActive = false;
@@ -67,13 +77,13 @@ export class InputController {
     on(el, 'contextmenu', (e) => e.preventDefault());
   }
 
-  /** Called on any fresh action press (for menus: "press anything to ride"). */
-  onPress(cb: (source: InputMode) => void): void {
+  /** Called on any fresh action press, with the key's code for a key (menus: startsFromMenu). */
+  onPress(cb: (source: InputMode, code?: string) => void): void {
     this.pressCbs.push(cb);
   }
 
-  private press(source: InputMode): void {
-    for (const cb of this.pressCbs) cb(source);
+  private press(source: InputMode, code?: string): void {
+    for (const cb of this.pressCbs) cb(source, code);
   }
 
   private pointerDown(e: PointerEvent): void {

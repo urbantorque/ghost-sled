@@ -68,11 +68,18 @@ describe('run again label', () => {
 });
 
 describe('results race line', () => {
-  it('shows one line by priority: friend, then grudge, then event note', () => {
-    expect(resultsRaceLine('You beat Mila by 120 m.', 'Tess beat you by 3 m. Tess will be waiting.', 'The yeti was 220 m away.')).toEqual({ text: 'You beat Mila by 120 m.', tone: 'friend' });
-    expect(resultsRaceLine(null, 'Tess beat you by 3 m. Tess will be waiting.', 'The yeti was 220 m away.')).toEqual({ text: 'Tess beat you by 3 m. Tess will be waiting.', tone: 'grudge' });
-    expect(resultsRaceLine(null, null, 'The yeti was 220 m away.')).toEqual({ text: 'The yeti was 220 m away.', tone: 'event' });
-    expect(resultsRaceLine(null, null, null)).toBeNull();
+  it('shows one line by priority: friend, Daily medal, settled or nemesis grudge, event note, other grudge', () => {
+    const tess = { text: 'Tess beat you by 3 m. Tess will be waiting.', strong: false };
+    const settled = { text: 'You settled it with Tess.', strong: true };
+    const daily = 'Daily: Bronze. Silver at 2,916 m.';
+    const yeti = 'The yeti was 220 m away.';
+    expect(resultsRaceLine({ friend: 'You beat Mila by 120 m.', daily, grudge: settled, event: yeti })).toEqual({ text: 'You beat Mila by 120 m.', tone: 'friend' });
+    expect(resultsRaceLine({ friend: null, daily, grudge: settled, event: yeti })).toEqual({ text: daily, tone: 'event' });
+    expect(resultsRaceLine({ friend: null, grudge: settled, event: yeti })).toEqual({ text: settled.text, tone: 'grudge' });
+    // A fresh grudge line exists after almost every run: the event note outranks it.
+    expect(resultsRaceLine({ friend: null, grudge: tess, event: yeti })).toEqual({ text: yeti, tone: 'event' });
+    expect(resultsRaceLine({ friend: null, grudge: tess, event: null })).toEqual({ text: tess.text, tone: 'grudge' });
+    expect(resultsRaceLine({ friend: null, daily: null, grudge: null, event: null })).toBeNull();
   });
 
   it('friend lines read in race-gap grammar', () => {
