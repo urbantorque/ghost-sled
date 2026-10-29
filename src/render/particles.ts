@@ -912,149 +912,79 @@ export class Particles {
     }
   }
 
-  /** Snow shaken off a tree's boughs as you shave past it (a near miss): grains and soft clumps
-   *  dropping from its lower boughs, 1.4 to 3.2 m up, on the side facing you (`pos` is the canopy's
-   *  near edge on the snow and `out` the level direction from the tree toward you), swept out toward
-   *  your line by the wind of your passing and dragged along in your wake. The tree is already a couple
-   *  of metres behind the sled when the beat lands (and dissolving before the lens), so the snow keeps
-   *  nearly the sled's speed: it hangs beside the rider, at the frame's side, as it falls. */
-  boughs(pos: Vector3, out: Vector3, carrier: Vector3, count = 16): void {
-    const n = this.n(count);
-    const car = tmpC.set(carrier.x * 0.95, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.95, carrier.z * 0.95);
-    const tx = -out.z;
-    const tz = out.x;
-    for (let i = 0; i < n; i++) {
-      const r = i % 10;
-      // Six in ten are grains, three soft clumps and one a faint veil, interleaved so even a small burst
-      // (a near miss on Low, or the share brushed past the rider) carries a clump that reads.
-      const kind = r % 3 === 1 ? puffKind() : r === 9 ? KIND_MIST : KIND_GRAIN;
-      const along = (Math.random() - 0.5) * 1.6;
-      const o = Math.random() * 0.5;
-      const push = 0.8 + Math.random() * 1.6;
-      const grain = kind === KIND_GRAIN;
-      this.powder.emit(
-        pos.x + out.x * o + tx * along,
-        pos.y + 1.4 + Math.random() * 1.8,
-        pos.z + out.z * o + tz * along,
-        car.x + out.x * push + tx * along * 0.4,
-        car.y - 0.4 + Math.random() * 0.9,
-        car.z + out.z * push + tz * along * 0.4,
-        grain ? 0.7 + Math.random() * 0.35 : 0.8 + Math.random() * 0.4,
-        grain ? 0.045 : kind === KIND_MIST ? 0.3 : 0.12,
-        grain ? 0.07 + Math.random() * 0.04 : kind === KIND_MIST ? 0.9 : 0.3 + Math.random() * 0.18,
-        POWDER,
-        POWDER,
-        POWDER,
-        grain ? 0.85 : kind === KIND_MIST ? 0.2 : 0.75,
-        grain ? 5 : 2.4,
-        1.2,
-        kind,
-        car,
-      );
-    }
-  }
-
-  /** Grit knocked off a hazard's foot as you shave past it (a near miss): dark slate chips (`ice`:
-   *  pale shards) and snow thrown out toward your line, low and quick. `pos` is the hazard's near edge
-   *  on the snow, `out` the level direction from it toward you. */
-  grit(pos: Vector3, out: Vector3, carrier: Vector3, ice: boolean, count = 8): void {
-    const n = this.n(count);
-    // (Swept along in your wake at nearly the sled's speed, like the bough snow, so it reads in frame.)
-    const car = tmpC.set(carrier.x * 0.9, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.9, carrier.z * 0.9);
-    const chipC = ice ? SHARD : SLATE;
-    for (let i = 0; i < n; i++) {
-      const chip = i % 2 === 0;
-      const s = 1.5 + Math.random() * 2.2;
-      const j = (Math.random() - 0.5) * 1.4;
-      const c = chip ? chipC : WHITE;
-      this.powder.emit(
-        pos.x + out.x * 0.2 + (Math.random() - 0.5) * 0.4,
-        pos.y + 0.1 + Math.random() * 0.4,
-        pos.z + out.z * 0.2 + (Math.random() - 0.5) * 0.4,
-        car.x + out.x * s - out.z * j,
-        car.y + 1.2 + Math.random() * 1.6,
-        car.z + out.z * s + out.x * j,
-        0.35 + Math.random() * 0.25,
-        chip ? 0.04 : 0.035,
-        chip ? 0.06 : 0.07,
-        chip ? c.r : POWDER,
-        chip ? c.g : POWDER,
-        chip ? c.b : POWDER,
-        chip ? 0.95 : 0.8,
-        9,
-        1.5,
-        KIND_GRAIN,
-        car,
-      );
-    }
-  }
-
   /** A near miss's burst where the chase lens sees it: `pos` is on the snow beside the rider on the side
    *  you shaved, a little ahead (brush.ts), `toward` the level direction from it back toward your line.
-   *  Off a tree (`bough`): snow sifting down from about head height in grains, soft clumps and a faint
-   *  veil. Off anything else: chips (`ice`: pale shards), white grains and a puff of powder kicked up
-   *  off the snow. It keeps nearly the sled's speed, so it hangs at the rider's side as it falls and
-   *  drifts back past it, gone in about a second. */
+   *  Its body is soft clumps of powder (the grains alone are specks at this distance), blooming out
+   *  away from the rider so it never buries the hero. Off a tree (`bough`): snow sifting down from
+   *  about head height, clumps, grains and a faint veil. Off anything else: a puff of powder kicked up
+   *  off the snow with chips (`ice`: pale shards) and grains in it. It keeps nearly the sled's speed,
+   *  so it hangs at the rider's side as it falls, gone in about a second. */
   brush(pos: Vector3, toward: Vector3, carrier: Vector3, bough: boolean, ice: boolean, count: number): void {
     const n = this.n(count);
     const car = tmpC.set(carrier.x * 0.97, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.97, carrier.z * 0.97);
     const f = this.forward(carrier);
+    const fx = f.x;
+    const fz = f.z;
     const chipC = ice ? SHARD : SLATE;
     for (let i = 0; i < n; i++) {
+      // Per ten, interleaved so a small burst (Low, an ordinary near miss) still carries clumps:
+      // boughs 5 clumps, 4 grains, 1 veil; grit 5 clumps, 4 chips, 1 grain.
       const r = i % 10;
-      const along = (Math.random() - 0.5) * 1.3;
-      const o = (Math.random() - 0.5) * 0.7;
-      const x = pos.x + toward.x * o + f.x * along;
-      const z = pos.z + toward.z * o + f.z * along;
+      const clump = r % 2 === 0;
+      const mist = bough && r === 9;
+      const chip = !bough && r % 2 === 1 && r !== 9;
+      const kind = clump ? puffKind() : mist ? KIND_MIST : KIND_GRAIN;
+      const along = (Math.random() - 0.5) * 1.2;
+      const o = (Math.random() - 0.5) * 0.6;
+      // Out and away from the rider's line, spreading along it.
+      const away = (bough ? 0.15 : 0.35) + Math.random() * (bough ? 0.6 : 1.1);
+      const spread = (Math.random() - 0.5) * (bough ? 0.8 : 1.4);
+      const vx = car.x - toward.x * away + fx * spread;
+      const vz = car.z - toward.z * away + fz * spread;
+      const x = pos.x + toward.x * o + fx * along;
+      const z = pos.z + toward.z * o + fz * along;
       if (bough) {
-        // Six in ten grains, three soft clumps and one veil, interleaved so a small burst (Low, or an
-        // ordinary near miss) still carries a clump that reads.
-        const kind = r % 3 === 1 ? puffKind() : r === 9 ? KIND_MIST : KIND_GRAIN;
-        const grain = kind === KIND_GRAIN;
-        const mist = kind === KIND_MIST;
-        const push = 0.3 + Math.random() * 0.8;
         this.powder.emit(
           x,
-          pos.y + 0.75 + Math.random() * 1.25,
+          pos.y + 0.9 + Math.random() * 1.2,
           z,
-          car.x + toward.x * push + f.x * along * 0.3,
-          car.y - 0.3 + Math.random() * 0.7,
-          car.z + toward.z * push + f.z * along * 0.3,
-          grain ? 0.75 + Math.random() * 0.35 : 0.85 + Math.random() * 0.4,
-          grain ? 0.045 : mist ? 0.3 : 0.14,
-          grain ? 0.07 + Math.random() * 0.04 : mist ? 0.9 : 0.34 + Math.random() * 0.2,
+          vx,
+          car.y - 0.35 + Math.random() * 0.75,
+          vz,
+          clump ? 0.85 + Math.random() * 0.4 : mist ? 1 : 0.75 + Math.random() * 0.35,
+          clump ? 0.16 : mist ? 0.35 : 0.045,
+          clump ? 0.42 + Math.random() * 0.2 : mist ? 1 : 0.07 + Math.random() * 0.04,
           POWDER,
           POWDER,
           POWDER,
-          grain ? 0.9 : mist ? 0.22 : 0.82,
-          grain ? 5 : 2.4,
+          clump ? 0.85 : mist ? 0.25 : 0.9,
+          clump ? 2.2 : mist ? 0.6 : 5,
           1.2,
           kind,
           car,
         );
         continue;
       }
-      // Grit: every other one a chip; of the rest, a puff of powder (r 1, 5, 9) or a white grain.
-      const chip = i % 2 === 0;
-      const puff = !chip && r % 4 === 1;
-      const push = 0.5 + Math.random() * 0.9;
+      // A plume of powder kicked up past knee height, with chunks of the hazard in it: small clumps in
+      // the chip colour (a grain would be a speck), thrown higher and falling hard.
+      const c = chip ? chipC : null;
       this.powder.emit(
         x,
-        pos.y + 0.1 + Math.random() * 0.35,
+        pos.y + 0.25 + Math.random() * 0.45,
         z,
-        car.x + toward.x * push + f.x * along * 0.3,
-        car.y + (puff ? 0.9 : 1.3) + Math.random() * 1.4,
-        car.z + toward.z * push + f.z * along * 0.3,
-        puff ? 0.7 + Math.random() * 0.3 : 0.45 + Math.random() * 0.3,
-        chip ? 0.05 : puff ? 0.13 : 0.04,
-        chip ? 0.07 : puff ? 0.36 + Math.random() * 0.14 : 0.08,
-        chip ? chipC.r : POWDER,
-        chip ? chipC.g : POWDER,
-        chip ? chipC.b : POWDER,
-        chip ? 0.95 : puff ? 0.8 : 0.85,
-        puff ? 3 : 9,
-        puff ? 1.4 : 1.5,
-        puff ? puffKind() : KIND_GRAIN,
+        vx,
+        car.y + (clump ? 2 : chip ? 2.4 : 1.8) + Math.random() * 1.6,
+        vz,
+        clump ? 0.8 + Math.random() * 0.35 : chip ? 0.55 + Math.random() * 0.3 : 0.45 + Math.random() * 0.3,
+        clump ? 0.18 : chip ? 0.08 : 0.04,
+        clump ? 0.55 + Math.random() * 0.25 : chip ? 0.12 : 0.08,
+        c ? c.r : POWDER,
+        c ? c.g : POWDER,
+        c ? c.b : POWDER,
+        clump ? 0.85 : chip ? 0.95 : 0.85,
+        clump ? 3 : 9,
+        clump ? 1.6 : chip ? 1 : 1.5,
+        chip ? puffKind() : kind,
         car,
       );
     }

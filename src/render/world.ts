@@ -181,7 +181,6 @@ export class World {
   private bestZ = -1;
   private fxA = new Vector3();
   private fxB = new Vector3();
-  private fxO = new Vector3();
   private fxV = new Vector3();
   private fxT = new Vector3();
   /** Projected screen position of the rider (for UI callouts). */
@@ -830,70 +829,22 @@ export class World {
     return this.fxV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz);
   }
 
-  /** A near miss shakes the hazard you shaved: snow drops off a tree's lower boughs (on the
-   *  side facing you), anything else kicks grit off its foot toward your line. Most of it is thrown
-   *  where the chase lens sees it (brush.ts): the hazard is already beside or behind the lens when the
-   *  beat lands. A whisker throws the full amount, an ordinary near miss about two thirds. */
+  /** A near miss shakes the hazard you shaved: snow drops off a tree's boughs, anything else kicks grit
+   *  and powder off its foot. The sim resolves a near miss once the sled is a radius and 1.5 m past the
+   *  hazard, so by then it stands beside or behind the chase lens (snow thrown at its own edge sat at
+   *  the top of a desktop frame and off the side of a phone's): the burst is thrown at the rider's side
+   *  on the side you shaved, a little ahead and inside the frame (brush.ts). Same powder layer (no
+   *  draw call, no material), the count scaled by the tier's particle budget like every burst. A
+   *  whisker throws the full amount, an ordinary near miss about two thirds. */
   private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
-    // The beat lands as the sled clears the hazard (it is already a metre or two past it): the level
-    // direction from the hazard's point toward the sled now, mostly across the slope, is the side you
-    // shaved. Three.js space (z flipped).
-    let ox = s.x - b.x;
-    let oz = (b.z - s.z) * 0.5;
-    let d = Math.hypot(ox, oz);
-    if (d < 0.05) {
-      ox = 1;
-      oz = 0;
-      d = 1;
-    }
-    const out = this.fxO.set(ox / d, 0, oz / d);
-    // Its near edge: the hazard's own radius out from its point (a tree's canopy, a rock's flank).
-    const r = this.hazardRadius(b);
     const bough = BOUGHS.has(b.obs);
-    const reach = bough ? r * 0.85 : r;
-    const ex = b.x + out.x * reach;
-    const ez = b.z - out.z * reach;
-    const at = this.fxA.set(ex, this.course.ground(ex, ez), -ez);
-    const vel = this.carrier(s);
     const k = b.grade === 'whisker' ? 1 : 0.68;
-    const ice = ICY.has(b.obs);
-    // A little stays on the hazard itself (it reads in the mirror and on a wide frame)...
-    if (bough) this.particles.boughs(at, out, vel, 8 * k);
-    else this.particles.grit(at, out, vel, ice, 4 * k);
-    // ...and the body of it is thrown at the rider's side on the side you shaved, a little ahead and
-    // inside the frame, so a near miss reads on a phone's narrow portrait frame too. Same powder layer
-    // (no draw call, no material), the count scaled by the tier's particle budget like every burst.
     brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT);
-    this.particles.brush(this.fxB, this.fxT, vel, bough, ice, (bough ? 16 : 13) * k);
+    this.particles.brush(this.fxB, this.fxT, this.carrier(s), bough, ICY.has(b.obs), (bough ? 22 : 18) * k);
   }
 
   /** The snow's height at a sim (x, z), for brush.ts. */
   private readonly groundAt = (x: number, z: number): number => this.course.ground(x, z);
-
-  /** The collider radius of the hazard a near-miss beat names: the obstacle of that kind whose point
-   *  lies nearest the beat's (it is on that obstacle's centre line), or a typical radius. */
-  private hazardRadius(b: BeatOf<'nearMiss'>): number {
-    let best = 0.7;
-    let bd = 4;
-    const ci = Math.floor(b.z / CHUNK_LEN);
-    for (let i = ci - 1; i <= ci + 1; i++) {
-      if (i < 0) continue;
-      for (const o of this.course.chunk(i).obstacles) {
-        if (o.kind !== b.obs) continue;
-        // Distance from the beat's point to the obstacle's segment (a circle's is its centre).
-        const sx = o.x2 - o.x;
-        const sz = o.z2 - o.z;
-        const l2 = sx * sx + sz * sz;
-        const t = l2 > 1e-6 ? Math.max(0, Math.min(1, ((b.x - o.x) * sx + (b.z - o.z) * sz) / l2)) : 0;
-        const dd = Math.hypot(b.x - (o.x + sx * t), b.z - (o.z + sz * t));
-        if (dd < bd) {
-          bd = dd;
-          best = o.r;
-        }
-      }
-    }
-    return best;
-  }
 
   /** A drift released: the post punch by tier (0.6, 0.8, 1; none under reduced motion), and at the
    *  runners tier 2's coral motes, or tier 3's crack: a ring of vermillion motes (every third

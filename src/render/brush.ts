@@ -8,9 +8,9 @@ import { Vector3, type Camera } from 'three';
 // rider until it sits inside the frame (a phone's narrow portrait frame pulls it in furthest).
 
 /** How far ahead of the sled, along its travel, the burst is set (m). */
-export const BRUSH_LEAD = 1.5;
+export const BRUSH_LEAD = 1.2;
 /** How far out to the side you shaved (m), before the frame pulls it in. */
-export const BRUSH_LAT = 1.3;
+export const BRUSH_LAT = 1.6;
 /** The closest it is pulled in (m): about the rider's own half-width plus a hand, so it never sits on it. */
 export const BRUSH_LAT_MIN = 0.7;
 /** The furthest off centre its middle may sit, in normalised device x (1 is the frame's edge). */
