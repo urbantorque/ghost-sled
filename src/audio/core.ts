@@ -3,7 +3,7 @@ import { Bank, createBank } from './buffers';
 import { Graph } from './graph';
 import { Music } from './music';
 import { Sfx } from './sfx';
-import { VoicePool } from './voices';
+import { NodeReserve, VoicePool } from './voices';
 
 /** Simultaneous one-shot sound effects; the oldest is stolen past this. */
 export const SFX_VOICES = 24;
@@ -17,6 +17,8 @@ export class Core {
   readonly graph: Graph;
   readonly sfxPool: VoicePool;
   readonly musicPool: VoicePool;
+  /** Nodes made ahead in the scheduler pass for both pools' voices (voices.ts NodeReserve). */
+  readonly reserve: NodeReserve;
   readonly music: Music;
   readonly sfx: Sfx;
   readonly ambience: Ambience;
@@ -27,8 +29,9 @@ export class Core {
   constructor(readonly ctx: BaseAudioContext) {
     this.bank = createBank(ctx);
     this.graph = new Graph(ctx, this.bank.impulse);
-    this.sfxPool = new VoicePool(ctx, this.bank, SFX_VOICES);
-    this.musicPool = new VoicePool(ctx, this.bank, MUSIC_VOICES);
+    this.reserve = new NodeReserve(ctx);
+    this.sfxPool = new VoicePool(ctx, this.bank, SFX_VOICES, this.reserve);
+    this.musicPool = new VoicePool(ctx, this.bank, MUSIC_VOICES, this.reserve);
     this.music = new Music(ctx, this.musicPool, this.graph.music);
     this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key(), this.graph.music);
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
@@ -44,6 +47,8 @@ export class Core {
     this.sfxPool.sweep(now);
     this.musicPool.sweep(now);
     this.ambience.watch(now);
+    // Between frames: the nodes the next frame's effects will take.
+    this.reserve.refill();
   }
 
   dispose(): void {
