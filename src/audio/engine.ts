@@ -41,10 +41,13 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   setTargetAtTime, and only when they moved enough to matter. A branch whose gain has sat at
  *   zero for 2 s (or 8 fade time constants, if longer) is unplugged from its noise source so it
  *   stops costing DSP.
- * - One-shots (sfx.ts) are voices in a capped pool: past 24 the oldest fades in 5 ms, and finished
- *   voices are disconnected by the scheduler sweep. Parts of a sound starting more than 80 ms
- *   ahead (shimmers, arpeggio tails) are built by a later scheduler pass, so big rewards spread
- *   their node creation over several frames.
+ * - One-shots (sfx.ts) are voices in a capped pool: past 24 one fades in 5 ms, and finished voices
+ *   are disconnected by the scheduler sweep. The one that goes is a tail already 20 dB down if
+ *   there is one, else the lowest priority times estimated level (voices.ts PRIO: gift bells, ticks
+ *   and ghost whispers first, then shimmers, then passes, payoffs last), so a fresh payoff is not
+ *   cut for an old tail. A shimmer is one voice (both sides), and a perfect landing's bloom rides on
+ *   its chord. Parts of a sound starting more than 80 ms ahead (shimmers, arpeggio tails) are built
+ *   by a later scheduler pass, so big rewards spread their node creation over several frames.
  * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
  *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
@@ -457,6 +460,8 @@ export class AudioEngine {
     out.sfxPeak = c.sfxPool.peak;
     out.musicPeak = c.musicPool.peak;
     out.sfxSteals = c.sfxPool.steals;
+    out.sfxLoudSteals = c.sfxPool.loudSteals;
+    out.sfxPayoffSteals = c.sfxPool.payoffSteals;
     out.musicSteals = c.musicPool.steals;
     out.padSteals = c.musicPool.keptSteals;
     return out;

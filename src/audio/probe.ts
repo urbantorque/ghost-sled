@@ -176,6 +176,10 @@ export interface RenderOpts {
   ceiling?: number;
   /** The mountain whose song plays (default alpine). */
   biome?: BiomeId;
+  /** The sfx pool steals its oldest voice (the old rule), to compare the steal counters against. */
+  stealOldest?: boolean;
+  /** The sfx pool's quiet-tail level (voices.ts QUIET), to tune the steal rule. */
+  quiet?: number;
 }
 
 /** The shoulder probe's timeline (s): the bed alone, a ghost 2 m to the left closing from 5.5 m to
@@ -253,6 +257,8 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   if (o.attack !== undefined) lim.attack.value = o.attack;
   if (o.release !== undefined) lim.release.value = o.release;
   if (opts.ceiling !== undefined) core.graph.ceiling.gain.value = opts.ceiling;
+  core.sfxPool.stealOldest = opts.stealOldest === true;
+  if (opts.quiet !== undefined) core.sfxPool.quiet = opts.quiet;
   core.graph.setMaster(1, 0);
   const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb' || shoulder;
   // 'song': the band alone at a cruise, to read a mountain's A A B B form (bars and decks).
@@ -335,6 +341,8 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     peakDb: db(peak),
     seconds: secs,
     sfxSteals: core.sfxPool.steals,
+    sfxLoudSteals: core.sfxPool.loudSteals,
+    sfxPayoffSteals: core.sfxPool.payoffSteals,
     musicSteals: core.musicPool.steals,
     padSteals: core.musicPool.keptSteals,
     sfxPeak: core.sfxPool.peak,

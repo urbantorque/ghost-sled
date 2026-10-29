@@ -7,7 +7,7 @@ import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
 import { BRIGHT_ARP, BRIGHT_VOICING, Key, brightRoot, fit, ladder, ladderIndexOf, mtof } from './theory';
-import { Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './voices';
+import { PRIO, Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './voices';
 
 // One-shot sound effects for sim events, the run's named moments (beats) and UI. Every tonal reward
 // is drawn from the current key's pentatonic ladder (see theory.ts), so rewards harmonise with
@@ -41,6 +41,9 @@ export const DROP_S = 0.22;
 const DROP_TICK = 0.25;
 /** The avalanche escape: the band drops out this long, then the fanfare and the slam land. */
 export const ESCAPE_DROP_S = 0.45;
+/** Your best's gold-white pair rings at most once in this long (s): a back-and-forth with your best
+ *  ghost outside a duel (whose passes are muted) does not ring it on every swap. */
+const GOLD_GAP_S = 4;
 
 /** Seconds from a bank beat to the moment its figure lands (the HUD's punch; the slam on tiers 2
  *  and 3), 0 for a bank the HUD does not roll. */
@@ -78,6 +81,8 @@ export class Sfx {
   // Grid pulses: the last time each was scheduled.
   private fuseLast = -1;
   private heartLast = -1;
+  /** When your best's gold-white pair last rang (a back-and-forth with it rings once per gap). */
+  private goldAt = -10;
   /** The ambience bed's drop (Core wires it to ambience.dip): a gap only reads as a gap when the
    *  wind goes with the band. */
   bed: ((t: number, hold: number, depth: number) => void) | null = null;
@@ -97,6 +102,7 @@ export class Sfx {
     this.streak = 1;
     this.fuseLast = -1;
     this.heartLast = -1;
+    this.goldAt = -10;
     this.frame();
   }
 
@@ -253,14 +259,14 @@ export class Sfx {
       }
       case 'reveal-tick': {
         // detail: the ladder step (the reel climbs 3 to 9 as it slows).
-        const v = this.voice(t, 0.08);
+        const v = this.voice(t, 0.08, 0, 1, PRIO.low);
         ping(v, t, this.note(Math.min(d, 14)), 0.07, 0.025);
         this.click(v, t, 0.025);
         break;
       }
       case 'results-tick': {
         // The score counting up: detail is the ladder step (0 to 9 along the count).
-        const v = this.voice(t, 0.06);
+        const v = this.voice(t, 0.06, 0, 1, PRIO.low);
         const i = Math.min(d, 14);
         ping(v, t, this.note(i), 0.05, 0.035);
         ping(v, t, this.note(i + 5), 0.014, 0.02);
@@ -274,7 +280,7 @@ export class Sfx {
         break;
       }
       case 'reveal-land': {
-        const v = this.voice(t, 0.15);
+        const v = this.voice(t, 0.15, 0, 1, PRIO.payoff);
         thump(v, t, 90, 45, 0.26, 0.07);
         whoosh(v, t, 0.3, 2600, 700, 0.05, 0.9);
         this.chord(t + 0.01, 0.07, 0.6, 4);
@@ -318,14 +324,14 @@ export class Sfx {
         this.chord(t + 0.42, 0.085, 1.0, 5);
         this.shimmer(t + 0.45, 14, 9, 0.04);
         this.later(t + 0.42, (tj) => {
-          const v = this.voice(tj, 0.3);
+          const v = this.voice(tj, 0.3, 0, 1, PRIO.payoff);
           v.buffer(v.bank.jingle, tj, tj + 0.48, v.gain(0.16, v.out), 1.05, false);
         });
         break;
       }
       case 'mission': {
         const k = d % 3;
-        const v = this.voice(t, 0.35);
+        const v = this.voice(t, 0.35, 0, 1, PRIO.payoff);
         [5, 7, 10].forEach((n, j) => {
           const f = this.note(n + k);
           this.at(v, t + j * 0.08, (tn) => fmBell(v, tn, f, 0.09, 0.4, 3.5, 1.2));
@@ -334,7 +340,7 @@ export class Sfx {
         break;
       }
       case 'unlock': {
-        const v = this.voice(t, 0.4);
+        const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
         const g = v.gain(0, v.out);
         g.gain.setValueAtTime(0, t);
         g.gain.linearRampToValueAtTime(0.15, t + 0.45);
@@ -354,7 +360,7 @@ export class Sfx {
         break;
       }
       case 'results-stamp': {
-        const v = this.voice(t, 0.12);
+        const v = this.voice(t, 0.12, 0, 1, PRIO.payoff);
         thump(v, t, 80, 40, 0.3, 0.07);
         const g = v.gain(0, v.out);
         const e = perc(g.gain, t, 0.2 * bandComp(1500, 1, this.ctx.sampleRate), 0.001, 0.025);
@@ -363,7 +369,7 @@ export class Sfx {
         break;
       }
       case 'coin': {
-        const v = this.voice(t, 0.25, 0, 1.4);
+        const v = this.voice(t, 0.25, 0, 1.4, PRIO.payoff);
         fmBell(v, t, this.note(10), 0.08, 0.1, 2, 1);
         fmBell(v, t + 0.07, this.note(12), 0.09, 0.38, 2, 1);
         break;
@@ -373,9 +379,11 @@ export class Sfx {
 
   // ---------------------------------------------------------------- helpers
 
-  /** `level` trims a whole sound: rewards sit a few dB hotter so they cut through the music. */
-  private voice(t: number, send: number, pan = 0, level = 1): Voice {
-    return this.pool.voice(t, level, this.bus.dry, this.bus.wet, send, pan);
+  /** `level` trims a whole sound: rewards sit a few dB hotter so they cut through the music. `prio`
+   *  is its steal class (voices.ts PRIO): past the pool's cap the quietest, least important voice
+   *  goes first. */
+  private voice(t: number, send: number, pan = 0, level = 1, prio: number = PRIO.normal): Voice {
+    return this.pool.voice(t, level, this.bus.dry, this.bus.wet, send, pan, prio);
   }
 
   /** Run `fn(t)` now, or from a later scheduler pass if t is far enough ahead. */
@@ -405,12 +413,13 @@ export class Sfx {
   }
 
   /** Bright major add9 bell chord, strummed upward. `shift` moves every voice that many steps up the
-   *  key's pentatonic ladder (all its tones are pentatonic), so a climbing chord stays in key. */
-  private chord(t: number, amp: number, tau: number, count: number, shift = 0): void {
+   *  key's pentatonic ladder (all its tones are pentatonic), so a climbing chord stays in key. `more`
+   *  adds parts to the chord's own voice (a perfect landing's bloom), so they cost no extra voice. */
+  private chord(t: number, amp: number, tau: number, count: number, shift = 0, more?: (v: Voice, t: number) => void): void {
     const k = this.key();
     const r = brightRoot(k, 52);
     this.later(t, (tc) => {
-      const v = this.voice(tc, 0.55);
+      const v = this.voice(tc, 0.55, 0, 1, PRIO.payoff);
       for (let i = 0; i < Math.min(count, BRIGHT_VOICING.length); i++) {
         const ti = tc + i * 0.02;
         const m = r + BRIGHT_VOICING[i];
@@ -418,6 +427,7 @@ export class Sfx {
         if (i < 2) fmBell(v, ti, f, amp * 1.15, tau * 1.2, 2, 1);
         else fmBell(v, ti, f, amp, tau, 3.5, 1.5);
       }
+      more?.(v, tc);
     });
   }
 
@@ -438,7 +448,7 @@ export class Sfx {
 
   /** The band slamming back after a drop: a deep kick, a noise crash and a body thud. */
   private slam(t: number, big: boolean): void {
-    const v = this.voice(t, 0.3, 0, 1.2);
+    const v = this.voice(t, 0.3, 0, 1.2, PRIO.payoff);
     thump(v, t, 70, 38, big ? 0.62 : 0.52, 0.14);
     const g = v.gain(0, v.out);
     const e = perc(g.gain, t, big ? 0.22 : 0.17, 0.002, 0.075);
@@ -446,17 +456,19 @@ export class Sfx {
     puff(v, t, 0.12, 2400, 500, 0.07);
   }
 
-  /** A rising spray of tiny sine grains, alternating between a left and a right voice. Each side
-   *  reuses three oscillators round-robin instead of one per grain: a slot's previous grain has
-   *  decayed by 20 dB when it is retuned, and it is faded out over a few ms first. */
+  /** A rising spray of tiny sine grains, alternating between the left and the right. One voice (a
+   *  sparkle: the first a full pool steals) with a panned branch per side; each side reuses three
+   *  oscillators round-robin instead of one per grain: a slot's previous grain has decayed by 20 dB
+   *  when it is retuned, and it is faded out over a few ms first. */
   private shimmer(t: number, count: number, from: number, amp: number): void {
     this.later(t, (ts) => {
       const end = ts + count * 0.038 + 0.7;
+      const v = this.voice(ts, 0.65, 0, 1, PRIO.sparkle);
       for (const side of [-1, 1]) {
-        const v = this.voice(ts, 0.65, side * 0.6);
+        const out = v.panner(side * 0.6, v.out);
         const slots: { g: GainNode; o: OscillatorNode }[] = [];
         for (let s = 0; s < 3; s++) {
-          const g = v.gain(0, v.out);
+          const g = v.gain(0, out);
           slots.push({ g, o: v.osc('sine', 1000, ts, end, g) });
         }
         let n = 0;
@@ -542,7 +554,7 @@ export class Sfx {
   private land(q: LandQuality, impact: number, tricks: number, late: boolean, t: number): void {
     const imp = clamp(0.55 + impact / 14, 0.5, 1.2);
     if (q === 'hop') {
-      const v = this.voice(t, 0.05);
+      const v = this.voice(t, 0.05, 0, 1, PRIO.low);
       puff(v, t, 0.14 * imp, 1300, 500, 0.04);
       return;
     }
@@ -584,32 +596,32 @@ export class Sfx {
       puff(v, t, 0.16, 3200, 800, 0.1);
       this.click(v, t, 0.1);
     }
-    // The payoff: a major add9 bell chord over a soft bloom, then a rising shimmer.
-    this.chord(t + 0.012, 0.085, 0.85, 5, shift);
+    // The payoff: a major add9 bell chord over a soft bloom (on the chord's voice; it swells in
+    // slowly, so it is built on a later scheduler pass), then a rising shimmer.
+    const r = brightRoot(this.key(), 52);
+    this.chord(t + 0.012, 0.085, 0.85, 5, shift, (bv, tc) =>
+      this.at(bv, tc + 0.078, (tb) => {
+        const bg = bv.gain(0, bv.out);
+        const be = swell(bg.gain, tb, 0.06, 0.05, 0.12, 0.45);
+        const blp = bv.filter('lowpass', 2200, 0.5, bg);
+        for (const x of [0, 7, 16]) bv.osc('triangle', mtof(r + x), tb, be, blp);
+        const sg = bv.gain(0, bv.out);
+        const se = swell(sg.gain, tb, 0.22, 0.1, 0.05, 0.22);
+        bv.buffer(bv.bank.white, tb, se, bv.filter('highpass', 6500, 0.7, sg));
+      }),
+    );
     if (n >= 3) {
       const k = this.key();
       const rb = brightRoot(k, 55);
       const notes = [0, 7, 12].map((x) => ladder(k, ladderIndexOf(k, rb + x) + shift));
-      this.later(t + 0.02, (tb) => this.brass(this.voice(tb, 0.3, 0, 1.1), tb, notes, 0.24, 0.032));
+      this.later(t + 0.02, (tb) => this.brass(this.voice(tb, 0.3, 0, 1.1, PRIO.payoff), tb, notes, 0.24, 0.032));
     }
     if (n >= 5) this.shimmer(t + 0.16, 14, 12, 0.035);
-    const r = brightRoot(this.key(), 52);
-    // The bloom swells in slowly, so it can be built on the next scheduler pass.
-    this.later(t + 0.09, (tb) => {
-      const bv = this.voice(tb, 0.5);
-      const bg = bv.gain(0, bv.out);
-      const be = swell(bg.gain, tb, 0.06, 0.05, 0.12, 0.45);
-      const blp = bv.filter('lowpass', 2200, 0.5, bg);
-      for (const x of [0, 7, 16]) bv.osc('triangle', mtof(r + x), tb, be, blp);
-      const sg = bv.gain(0, bv.out);
-      const se = swell(sg.gain, tb, 0.22, 0.1, 0.05, 0.22);
-      bv.buffer(bv.bank.white, tb, se, bv.filter('highpass', 6500, 0.7, sg));
-    });
     this.shimmer(t + 0.1, 12 + 3 * Math.min(tricks, 4), 9, 0.045);
   }
 
   private crash(cause: CrashCause, t: number): void {
-    const v = this.voice(t, 0.15);
+    const v = this.voice(t, 0.15, 0, 1, PRIO.payoff);
     thump(v, t, 85, 32, 0.38, 0.12);
     puff(v, t, 0.2, 1400, 300, 0.09);
     // Tumble: irregular thuds of snow as the rider rolls.
@@ -674,7 +686,9 @@ export class Sfx {
     // event's own side (if the sim filled it).
     const near = kind === 'nearMiss' ? this.nearQueue.shift() ?? (side === 1 || side === -1 ? { whisker: false, side } : null) : null;
     const pan = near ? near.side * (near.whisker ? 0.7 : 0.5) : rand(-0.25, 0.25);
-    const v = this.voice(t, 0.3, pan, 1.6);
+    // The breathy draft note (twice a second) and a pickup's chain note are the first a full pool
+    // gives up.
+    const v = this.voice(t, 0.3, pan, 1.6, kind === 'draft' || kind === 'gift' || kind === 'geyser' ? PRIO.low : PRIO.normal);
     switch (kind) {
       case 'nearMiss':
         if (near?.whisker) {
@@ -749,7 +763,7 @@ export class Sfx {
     const top = this.arpeggio(t, n, gap, 0.15);
     const tf = t + n * gap;
     this.later(tf, (tc) => {
-      const v = this.voice(tc, 0.45, 0.3, 1.5);
+      const v = this.voice(tc, 0.45, 0.3, 1.5, PRIO.payoff);
       fmBell(v, tc, mtof(top), 0.12, 0.7, 3.5, 1.4);
       fmBell(v, tc, mtof(fit(top, 60)), 0.07, 0.6, 2, 1);
       v.buffer(v.bank.jingle, tc, tc + 0.45, v.gain(0.14 + 0.06 * (n / 10), v.out), 1.05, false);
@@ -760,7 +774,7 @@ export class Sfx {
   /** Combo lost: a deflating downward glide with a closing wah. */
   private lost(points: number, t: number): void {
     const dur = 0.55 + Math.min(0.35, points / 20000);
-    const v = this.voice(t, 0.2);
+    const v = this.voice(t, 0.2, 0, 1, PRIO.payoff);
     const f0 = this.note(4);
     const g = v.gain(0, v.out);
     g.gain.setValueAtTime(0, t);
@@ -786,7 +800,7 @@ export class Sfx {
     this.giftStreak = t - this.lastGift < 1.2 ? this.giftStreak + 1 : 0;
     this.lastGift = t;
     const i = 6 + Math.min(this.giftStreak, 9);
-    const v = this.voice(t, 0.3, rand(-0.3, 0.3), 1.6);
+    const v = this.voice(t, 0.3, rand(-0.3, 0.3), 1.6, PRIO.low);
     fmBell(v, t, this.note(i), 0.09, 0.22, 2, 1);
     fmBell(v, t + 0.055, this.note(i + 2), 0.1, 0.42, 2, 1);
     if (value >= 5) {
@@ -814,7 +828,7 @@ export class Sfx {
 
   private drift(phase: 'start' | 'tier' | 'release' | 'end', tier: number, t: number): void {
     if (phase === 'start') {
-      whoosh(this.voice(t, 0.05), t, 0.18, 1400, 2600, 0.08, 0.8);
+      whoosh(this.voice(t, 0.05, 0, 1, PRIO.low), t, 0.18, 1400, 2600, 0.08, 0.8);
     } else if (phase === 'tier') {
       // Each tier is a short run up to a higher chime.
       const k = clamp(tier, 1, 3);
@@ -1081,7 +1095,7 @@ export class Sfx {
 
   private fanfare(t: number): void {
     const r = brightRoot(this.key(), 55);
-    const v = this.voice(t, 0.4);
+    const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
     [0, 4, 7].forEach((x, i) => this.at(v, t + i * 0.09, (tn) => this.brass(v, tn, [r + x], 0.07, 0.05)));
     this.at(v, t + 0.27, (tc) => {
       this.brass(v, tc, [r, r + 7, r + 12, r + 16], 1, 0.042);
@@ -1093,7 +1107,7 @@ export class Sfx {
   }
 
   private revive(t: number): void {
-    const v = this.voice(t, 0.5);
+    const v = this.voice(t, 0.5, 0, 1, PRIO.payoff);
     const g = v.gain(0, v.out);
     g.gain.setValueAtTime(0, t);
     g.gain.linearRampToValueAtTime(0.18, t + 0.7);
@@ -1211,7 +1225,7 @@ export class Sfx {
   private flowIn(t: number): void {
     this.swellUp(t, 0.6, 0.085);
     const k = this.key();
-    const v = this.voice(t, 0.55, 0, 1.2);
+    const v = this.voice(t, 0.55, 0, 1.2, PRIO.payoff);
     fmBell(v, t, mtof(fit(k.tonic, 79)), 0.055, 0.7, 2, 0.9);
     this.chord(t + 0.6, 0.05, 1, 5, 2);
   }
@@ -1244,7 +1258,7 @@ export class Sfx {
     // A drop needs a roll to drop into (tiers 2 and 3, not a bump bank). Its ticks run dry, so none
     // leaves a tail in the gap.
     const drop = tier >= 2 && !b.bump && roll.land > DROP_S;
-    const v = this.voice(t, drop ? 0.06 : 0.25, 0, 1.4);
+    const v = this.voice(t, drop ? 0.06 : 0.25, 0, 1.4, PRIO.payoff);
     mallet(v, t, this.note(r.lo), 0.07, 0.08);
     if (roll.chip !== null) {
       this.at(v, t + roll.chip - 0.02, (tc) => {
@@ -1268,7 +1282,7 @@ export class Sfx {
     }
     const top = ladder(this.key(), r.hi);
     this.later(land, (tc) => {
-      const fv = this.voice(tc, 0.45, 0.2, 1.5);
+      const fv = this.voice(tc, 0.45, 0.2, 1.5, PRIO.payoff);
       fmBell(fv, tc, mtof(top), 0.12, 0.7 + 0.15 * tier, 3.5, 1.4);
       fmBell(fv, tc, mtof(fit(top, 60)), 0.07, 0.6, 2, 1);
       fv.buffer(fv.bank.jingle, tc, tc + 0.45, fv.gain(0.15 + 0.03 * tier, fv.out), 1.05, false);
@@ -1303,7 +1317,7 @@ export class Sfx {
    *  comboLost's; the hard duck is the crash's.) */
   private comboLost(stake: number, t: number): void {
     const k = this.key();
-    const v = this.voice(t, 0.1, 0, 1.2);
+    const v = this.voice(t, 0.1, 0, 1.2, PRIO.payoff);
     thump(v, t, 120, 52, 0.26, 0.045);
     this.at(v, t + 0.085, (tn) => thump(v, tn, 100, 44, 0.2, 0.05));
     this.at(v, t + 0.23, (tn) => {
@@ -1345,7 +1359,7 @@ export class Sfx {
   /** 'Best combo pace': a light gold-white chime, contour A (rising 1-3-5), glassy and quick. */
   private paceChime(t: number): void {
     const r = brightRoot(this.key(), 67);
-    const v = this.voice(t, 0.45, 0.15, 1.3);
+    const v = this.voice(t, 0.45, 0.15, 1.3, PRIO.payoff);
     [0, 4, 7].forEach((x, i) =>
       this.at(v, t + i * 0.085, (tn) => {
         fmBell(v, tn, mtof(r + x), 0.08, i === 2 ? 0.55 : 0.3, 3.5, 1.2);
@@ -1359,7 +1373,7 @@ export class Sfx {
   private newGround(t: number): void {
     this.swellUp(t, 0.6, 0.08);
     const r = brightRoot(this.key(), 60);
-    const v = this.voice(t, 0.5, -0.1, 1.3);
+    const v = this.voice(t, 0.5, -0.1, 1.3, PRIO.payoff);
     for (const [x, dt] of [
       [7, 0],
       [4, 0.11],
@@ -1374,7 +1388,7 @@ export class Sfx {
   /** New best (mid-run): contour C, a two-note fanfare from the root to its octave, brass and bell. */
   private bestChime(t: number): void {
     const r = brightRoot(this.key(), 55);
-    const v = this.voice(t, 0.4, 0, 1.3);
+    const v = this.voice(t, 0.4, 0, 1.3, PRIO.payoff);
     this.brass(v, t, [r, r + 7], 0.14, 0.038);
     fmBell(v, t, mtof(r + 12), 0.08, 0.3, 3.5, 1.3);
     this.at(v, t + 0.17, (tn) => {
@@ -1385,7 +1399,10 @@ export class Sfx {
   }
 
   /** A pass, voiced by its word. The ladder note climbs per shown pass (step 5 + n - 1) and holds at
-   *  the top from the 8th, adding an octave instead of wrapping. Muted passes are silent. */
+   *  the top from the 8th, adding an octave instead of wrapping. Muted passes are silent. Overtaking
+   *  your best (its ghost, alive) crowns whatever the word plays with the gold-white bell pair: the
+   *  word is almost never 'yourBest' (a slingshot, a chain, a retake or a duel comes first in
+   *  race.ts), so the pair keys on the ghost, not the word. */
   private passBeat(b: BeatOf<'pass'>, t: number): void {
     if (b.muted || b.word === 'jostle') return;
     const n = Math.max(1, Math.round(b.ladder) || 1);
@@ -1399,7 +1416,8 @@ export class Sfx {
       fmBell(v, t + 0.06, this.note(11), 0.035, 0.45, 2.4, 0.8);
       return;
     }
-    const v = this.voice(t, 0.3, p);
+    const best = b.ghost.kind === 'you' && t - this.goldAt >= GOLD_GAP_S;
+    const v = this.voice(t, 0.3, p, 1, best ? PRIO.payoff : PRIO.normal);
     if (v.pan) {
       v.pan.setValueAtTime(p, t);
       v.pan.linearRampToValueAtTime(p * 0.4, t + 0.35);
@@ -1410,14 +1428,14 @@ export class Sfx {
       whoosh(v, t + 0.1, 0.3, 700, 2400, 0.09, 1.1);
     } else whoosh(v, t, 0.35, 700, 2400, 0.1, 1.1);
     const tb = t + 0.06;
-    if (b.word === 'yourBest') {
-      // Your best overtaken: a gold-white bell pair and a shimmer.
-      const r = brightRoot(this.key(), 67);
-      fmBell(v, tb, mtof(r), 0.1, 0.5, 3.5, 1.2);
-      fmBell(v, tb + 0.09, mtof(r + 12), 0.1, 0.8, 3.5, 1.3);
-      this.shimmer(tb + 0.12, 6, 10, 0.035);
-      return;
+    if (best) {
+      this.goldAt = t;
+      // On its own word the pair is the sound; over another word it lands after the word's figure
+      // (the slingshot's pluck run, a chain's added bells).
+      const after = b.word === 'yourBest' ? 0 : b.word === 'slung' ? 0.2 : b.word === 'double' || b.word === 'triple' || b.word === 'streak' ? 0.16 : 0.12;
+      this.goldBell(v, tb + after, b.word !== 'streak' && b.word !== 'duelWon' && b.word !== 'heldOff');
     }
+    if (b.word === 'yourBest') return;
     fmBell(v, tb, this.note(i), 0.1, 0.4, 2, 1.1);
     ping(v, tb, this.note(i + 5), 0.03, 0.15);
     if (octave) ping(v, tb + 0.03, this.note(i + 10), 0.028, 0.25);
@@ -1454,6 +1472,15 @@ export class Sfx {
     }
   }
 
+  /** Your best overtaken: the gold-white bell pair (the bright root, then its octave) on the pass's
+   *  voice, and a short shimmer unless the word already has one. */
+  private goldBell(v: Voice, t: number, sparkle: boolean): void {
+    const r = brightRoot(this.key(), 67);
+    this.at(v, t, (tn) => fmBell(v, tn, mtof(r), 0.1, 0.5, 3.5, 1.2));
+    this.at(v, t + 0.09, (tn) => fmBell(v, tn, mtof(r + 12), 0.1, 0.8, 3.5, 1.3));
+    if (sparkle) this.shimmer(t + 0.12, 6, 10, 0.035);
+  }
+
   /** A ghost overtakes you, on its side: the rush, then a falling pair. */
   private passedByBeat(b: BeatOf<'passedBy'>, t: number): void {
     if (b.muted) return;
@@ -1471,7 +1498,7 @@ export class Sfx {
   /** Into the lead: a brass 1-3-5 stab, a timpani and a high bell. */
   private leadStab(t: number): void {
     const r = brightRoot(this.key(), 55);
-    const v = this.voice(t, 0.4, 0, 1.2);
+    const v = this.voice(t, 0.4, 0, 1.2, PRIO.payoff);
     this.brass(v, t, [r, r + 4, r + 7], 0.32, 0.04);
     thump(v, t, 98, 70, 0.2, 0.15);
     fmBell(v, t + 0.02, mtof(r + 24), 0.07, 0.7, 3.5, 1.3);
@@ -1483,7 +1510,7 @@ export class Sfx {
     if (b.news === 'pulledAway' && this.duelLost.has(b.ghost.id)) return;
     const g = clamp(Number.isFinite(b.gain) ? b.gain : 1, 0.15, 1);
     const pan = clamp(Number.isFinite(b.pan) ? b.pan : 0, -0.8, 0.8);
-    const v = this.voice(t, 0.6, pan);
+    const v = this.voice(t, 0.6, pan, 1, PRIO.low);
     if (b.news === 'unlockTease') {
       fmBell(v, t, this.note(5), 0.04, 0.3, 3.5, 1);
       fmBell(v, t + 0.12, this.note(7), 0.045, 0.6, 3.5, 1.1);
@@ -1502,7 +1529,7 @@ export class Sfx {
   /** Duels: a low, tense call as one opens; brass when you win it; a sigh when it pulls away. */
   private duel(b: BeatOf<'duel'>, t: number): void {
     const p = panOf(b.ghost.dx, 3, 0) * 0.6;
-    const v = this.voice(t, 0.35, p, 1.2);
+    const v = this.voice(t, 0.35, p, 1.2, b.phase === 'won' || b.phase === 'heldOff' ? PRIO.payoff : PRIO.normal);
     const r = brightRoot(this.key(), 43);
     switch (b.phase) {
       case 'open':
@@ -1529,7 +1556,7 @@ export class Sfx {
 
   /** The start-line call: a two-note 'vs' motif, coloured by who is waiting. */
   private raceCall(word: BeatOf<'raceCall'>['word'], t: number): void {
-    const v = this.voice(t, 0.4, 0, 1.2);
+    const v = this.voice(t, 0.4, 0, 1.2, PRIO.payoff);
     const second = word === 'Nemesis' ? -1 : word === 'Racing' ? 5 : 7;
     fmBell(v, t, this.note(0), 0.06, 0.3, 2, 1);
     fmBell(v, t + 0.12, this.note(second), 0.06, 0.55, 2, 1);
@@ -1542,7 +1569,7 @@ export class Sfx {
    *  down adds brass and a shimmer. */
   private grudge(nemesis: boolean, t: number): void {
     const r = brightRoot(this.key(), 55);
-    const v = this.voice(t, 0.5, 0, 1.3);
+    const v = this.voice(t, 0.5, 0, 1.3, PRIO.payoff);
     [0, 3, 7].forEach((x, i) => fmBell(v, t + i * 0.018, mtof(r + x), 0.065, 0.3, 2, 1));
     this.at(v, t + 0.22, (tn) => {
       [0, 4, 7, 12].forEach((x, i) => fmBell(v, tn + i * 0.018, mtof(r + x), 0.08, 0.9, 2, 1.1));
@@ -1554,7 +1581,7 @@ export class Sfx {
 
   /** A friend's distance beaten: a mint chime (the ghosts' rounder bell) with sleigh bells. */
   private friendChime(t: number): void {
-    const v = this.voice(t, 0.5, 0.1, 1.3);
+    const v = this.voice(t, 0.5, 0.1, 1.3, PRIO.payoff);
     [5, 8, 10].forEach((s, i) => {
       const f = this.note(s);
       this.at(v, t + i * 0.07, (tn) => fmBell(v, tn, f, 0.085, i === 2 ? 0.8 : 0.35, 2.4, 1.1));
@@ -1573,7 +1600,7 @@ export class Sfx {
         // more, 3 the clean sweep): a cascade that grows with it, the sleigh bells from a big haul,
         // the bright chord and a shimmer only for the sweep. None caught: a falling pair.
         const c = stormCascade(b.grade);
-        const v = this.voice(t, 0.4, 0.2, 1.2);
+        const v = this.voice(t, 0.4, 0.2, 1.2, PRIO.payoff);
         if (c.falling) {
           fmBell(v, t, this.note(4), 0.05, 0.3, 2.4, 0.8);
           this.at(v, t + 0.16, (tn) => fmBell(v, tn, this.note(2), 0.045, 0.5, 2.4, 0.8));
@@ -1591,20 +1618,20 @@ export class Sfx {
         break;
       }
       case 'hopped': {
-        const v = this.voice(t, 0.3, 0, 1.2);
+        const v = this.voice(t, 0.3, 0, 1.2, PRIO.payoff);
         thump(v, t, 98, 66, 0.3, 0.22);
         this.shimmer(t + 0.08, 12, 9, 0.04);
         break;
       }
       case 'dodged': {
         // A low brass 'ha'.
-        const v = this.voice(t, 0.3, 0, 1.2);
+        const v = this.voice(t, 0.3, 0, 1.2, PRIO.payoff);
         this.brass(v, t, [r - 12, r - 5], 0.16, 0.05);
         fmBell(v, t + 0.02, mtof(r + 12), 0.06, 0.35, 3.5, 1.1);
         break;
       }
       case 'rode': {
-        const v = this.voice(t, 0.6, -0.2, 1.2);
+        const v = this.voice(t, 0.6, -0.2, 1.2, PRIO.payoff);
         this.whistle(v, t, fit(this.key().tonic, 60), this.ctx.sampleRate);
         fmBell(v, t, mtof(r + 12), 0.07, 0.8, 2.4, 1);
         fmBell(v, t + 0.12, mtof(r + 19), 0.07, 0.9, 2.4, 1);
@@ -1624,7 +1651,7 @@ export class Sfx {
   /** A kilometre arch: a milestone bell, placed on the next beat by the engine. */
   km(t: number): void {
     const r = brightRoot(this.key(), 55);
-    const v = this.voice(t, 0.6, 0, 1.2);
+    const v = this.voice(t, 0.6, 0, 1.2, PRIO.payoff);
     fmBell(v, t, mtof(r + 24), 0.085, 1.1, 3.5, 1.3);
     fmBell(v, t, mtof(r + 12), 0.06, 1.4, 2, 1);
     v.buffer(v.bank.jingle, t, t + 0.4, v.gain(0.08, v.out), 0.9, false);
@@ -1634,7 +1661,7 @@ export class Sfx {
   private ghostTrick(b: BeatOf<'ghostTrick'>, t: number): void {
     if (b.quality === 'sketchy') return;
     const p = panOf(b.ghost.dx, 8, 0);
-    const v = this.voice(t, 0.5, p);
+    const v = this.voice(t, 0.5, p, 1, PRIO.low);
     if (b.quality === 'perfect') fmBell(v, t, this.note(10), 0.03, 0.35, 2, 1);
     else if (b.word) fmBell(v, t, this.note(8), 0.02, 0.25, 2.4, 0.8);
   }
@@ -1644,11 +1671,11 @@ export class Sfx {
   private stompTick(step: number, open: boolean, t: number): void {
     const s = Number.isFinite(step) ? Math.max(0, Math.min(10, Math.round(step))) : 3;
     if (open) {
-      const v = this.voice(t, 0.12);
+      const v = this.voice(t, 0.12, 0, 1, PRIO.low);
       fmBell(v, t, this.note(s), 0.045, 0.22, 2, 1);
       return;
     }
-    const v = this.voice(t, 0.02);
+    const v = this.voice(t, 0.02, 0, 1, PRIO.low);
     ping(v, t, this.note(s), 0.03, 0.03);
     this.click(v, t, 0.015);
   }
@@ -1692,14 +1719,14 @@ export class Sfx {
   }
 
   private fuseTick(t: number, fuse: number): void {
-    const v = this.voice(t, 0.04);
+    const v = this.voice(t, 0.04, 0, 1, PRIO.low);
     ping(v, t, this.note(6 + Math.round(4 * clamp(fuse, 0, 1))), 0.026 + 0.02 * fuse, 0.022);
     this.click(v, t, 0.012 + 0.008 * fuse);
   }
 
   private heartbeat(t: number, dur: number, duel: number): void {
     const a = 0.07 * (0.6 + 0.6 * clamp(duel, 0, 1));
-    const v = this.voice(t, 0.04);
+    const v = this.voice(t, 0.04, 0, 1, PRIO.low);
     thump(v, t, 58, 44, a, 0.05);
     puff(v, t, a * 0.35, 320, 120, 0.035, v.bank.brown);
     const td = t + dur;

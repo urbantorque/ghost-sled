@@ -196,17 +196,20 @@ export const CHOIR_HOLD_S = 0.5;
 export class ChoirTracker {
   /** Passed ghosts (id to the time of the pass) that have not passed you back. */
   readonly passed = new Map<number, number>();
-  /** Voices sung now. */
+  /** Voices sung now: the count plus the drops still held. */
   n = 0;
+  /** The count last frame, and when each voice the count has dropped since is held (oldest first). */
+  private want = 0;
+  private readonly holds: number[] = [];
   private retakeAt = -1;
-  private holdAt = -1;
   private releaseAt = -1;
 
   reset(): void {
     this.passed.clear();
     this.n = 0;
+    this.want = 0;
+    this.holds.length = 0;
     this.retakeAt = -1;
-    this.holdAt = -1;
     this.releaseAt = -1;
   }
 
@@ -224,7 +227,14 @@ export class ChoirTracker {
     }
   }
 
-  /** count: AudioFrame.choir (undefined: the time-to-live proxy). */
+  /**
+   * count: AudioFrame.choir (undefined: the time-to-live proxy). Each voice the count drops is held
+   * on its own clock (two ghosts leaving a moment apart each get their full hold); a rise takes a
+   * held voice back first (a ghost that drew level and fell behind again), and a hold that runs out
+   * fades its voice. A retake sighs the newest held voice, or with none held (a full choir with more
+   * ghosts behind than voices) sighs the top voice after RETAKE_WAIT_S and lets another take its
+   * place.
+   */
   frame(count: number | undefined, now: number, crashed: boolean): { n: number; retaken: boolean } {
     if (crashed) {
       this.reset();
@@ -232,22 +242,25 @@ export class ChoirTracker {
     }
     if (!(typeof count === 'number' && Number.isFinite(count))) for (const [id, at] of this.passed) if (now - at > CHOIR_TTL_S) this.passed.delete(id);
     const want = choirSize(count, this.passed.size);
-    let n = want;
-    let retaken = false;
-    if (this.retakeAt >= 0) {
-      // The retake sighs as the count drops (or the held voice goes), or after the wait.
-      if (want < this.n || now - this.retakeAt >= RETAKE_WAIT_S) {
-        retaken = true;
-        this.retakeAt = -1;
-        this.holdAt = -1;
+    if (want < this.want) {
+      // A wipeout just released its voice: that drop is not held.
+      let k = this.want - want;
+      if (this.releaseAt >= 0 && now - this.releaseAt < CHOIR_HOLD_S) {
+        k--;
+        this.releaseAt = -1;
       }
-    } else if (want < this.n && !(this.releaseAt >= 0 && now - this.releaseAt < CHOIR_HOLD_S)) {
-      if (this.holdAt < 0) this.holdAt = now;
-      if (now - this.holdAt < CHOIR_HOLD_S) n = this.n;
-      else this.holdAt = -1;
-    } else this.holdAt = -1;
-    this.n = n;
-    return { n, retaken };
+      for (; k > 0; k--) this.holds.push(now);
+    } else for (let k = want - this.want; k > 0 && this.holds.length > 0; k--) this.holds.pop();
+    this.want = want;
+    while (this.holds.length > 0 && now - this.holds[0] >= CHOIR_HOLD_S) this.holds.shift();
+    let retaken = false;
+    if (this.retakeAt >= 0 && (this.holds.length > 0 || now - this.retakeAt >= RETAKE_WAIT_S)) {
+      this.holds.pop();
+      retaken = true;
+      this.retakeAt = -1;
+    }
+    this.n = Math.min(CHOIR_VOICES, want + this.holds.length);
+    return { n: this.n, retaken };
   }
 }
 

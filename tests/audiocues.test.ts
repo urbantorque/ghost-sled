@@ -200,6 +200,19 @@ describe('the ghost choir keeps a retake for its sigh', () => {
     expect(c.frame(0, 6.1, false)).toEqual({ n: 0, retaken: false });
   });
 
+  it('each drop is held on its own clock: a ghost leaving range, then a retake 0.5 s later, still sighs', () => {
+    // Real run (novice m=0): the count went 3 -> 2 at 33.92 s, 2 -> 1 at 34.42 s as fjord348 drew
+    // level, and its passedBy came at 34.45 s.
+    const c = new ChoirTracker();
+    c.beats([pass(1), pass(2), pass(3)], 7);
+    c.frame(3, 7.2, false);
+    expect(c.frame(2, 33.92, false).n).toBe(3);
+    // The first drop's hold runs out as the second drop starts its own: one voice fades.
+    expect(c.frame(1, 34.42, false)).toEqual({ n: 2, retaken: false });
+    c.beats([passedBy(2)], 34.45);
+    expect(c.frame(1, 34.45, false)).toEqual({ n: 1, retaken: true });
+  });
+
   it('a slow retake (0.8 m at 2 m/s, 0.4 s) is still inside the hold', () => {
     const c = new ChoirTracker();
     c.beats([pass(1)], 1);
