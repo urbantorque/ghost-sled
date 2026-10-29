@@ -76,6 +76,77 @@ export function blockRate(f: BiquadFilterNode): BiquadFilterNode {
   return f;
 }
 
+/**
+ * Fresh nodes made ahead, between frames. Making a node is the dearest call a sound makes on the
+ * main thread, and the effects make theirs inside a frame (beats() and simEvent() run in the app's
+ * frame), where a burst of them can push the frame past a vsync. The scheduler pass, which runs
+ * between frames, tops this reserve up a few nodes at a time; a voice takes its nodes from it and
+ * makes one itself only when it has run dry. A node made a moment early is the same node: nothing
+ * about it is set until the voice takes it, and a source does nothing until it is started.
+ */
+export class NodeReserve {
+  private readonly gains: GainNode[] = [];
+  private readonly oscs: OscillatorNode[] = [];
+  private readonly filters: BiquadFilterNode[] = [];
+  private readonly sources: AudioBufferSourceNode[] = [];
+  private readonly panners: StereoPannerNode[] = [];
+  /** Probe: nodes a voice had to make itself (the reserve was dry). */
+  misses = 0;
+
+  constructor(private readonly ctx: BaseAudioContext) {}
+
+  gain(): GainNode {
+    return this.gains.pop() ?? (this.misses++, this.ctx.createGain());
+  }
+
+  osc(): OscillatorNode {
+    return this.oscs.pop() ?? (this.misses++, this.ctx.createOscillator());
+  }
+
+  filter(): BiquadFilterNode {
+    return this.filters.pop() ?? (this.misses++, blockRate(this.ctx.createBiquadFilter()));
+  }
+
+  source(): AudioBufferSourceNode {
+    return this.sources.pop() ?? (this.misses++, this.ctx.createBufferSource());
+  }
+
+  /** Null where StereoPannerNode is missing (old Safari). */
+  panner(): StereoPannerNode | null {
+    if (typeof this.ctx.createStereoPanner !== 'function') return null;
+    return this.panners.pop() ?? (this.misses++, this.ctx.createStereoPanner());
+  }
+
+  /**
+   * Scheduler pass: makes up to `budget` nodes toward the reserve's size, the kind furthest below
+   * its size first. Sized for the busiest frames of a run (a perfect landing's payoff, a pass word
+   * over a pickup) at a few dozen nodes; a run uses ten to twenty a second.
+   */
+  refill(budget = 8): void {
+    const ctx = this.ctx;
+    const want: Array<[unknown[], number, () => unknown]> = [
+      [this.gains, 28, () => ctx.createGain()],
+      [this.oscs, 18, () => ctx.createOscillator()],
+      [this.filters, 6, () => blockRate(ctx.createBiquadFilter())],
+      [this.sources, 6, () => ctx.createBufferSource()],
+    ];
+    if (typeof ctx.createStereoPanner === 'function') want.push([this.panners, 4, () => ctx.createStereoPanner()]);
+    for (let made = 0; made < budget; made++) {
+      let best: [unknown[], number, () => unknown] | null = null;
+      let gap = 0;
+      for (const w of want) {
+        const g = (w[1] - w[0].length) / w[1];
+        if (g > gap) {
+          gap = g;
+          best = w;
+        }
+      }
+      if (!best) return;
+      best[0].push(best[2]());
+    }
+  }
+}
+
 export class Voice {
   readonly out: GainNode;
   /** Stereo position, automatable; null where StereoPannerNode is missing (old Safari). */
@@ -87,66 +158,80 @@ export class Voice {
   keep = false;
   /** Steal priority (PRIO): the weight this voice keeps at its attack. */
   prio: number = PRIO.normal;
-  private readonly nodes: AudioNode[] = [];
+  /** The one node wired into the shared graph (the panner, else `out`): release() unplugs only it.
+   *  Everything else in the voice only feeds it, so once it is unplugged nothing pulls the rest,
+   *  and the garbage collector takes the voice's nodes with their links. */
+  private readonly tail: AudioNode;
   private readonly srcs: AudioScheduledSourceNode[] = [];
 
   /** The latest attack built into this voice (an arpeggio or a roll keeps adding them). */
   private lastOn: number;
 
+  /**
+   * `send`: the shared reverb send for this voice's send level (VoicePool.sendFor), or null. A send
+   * is a plain gain into the wet bus, so one per level serves every voice at that level: the bus
+   * hears the same sum as with a gain per voice, and a voice costs one node less.
+   */
   constructor(
     readonly ctx: BaseAudioContext,
     readonly bank: Bank,
+    private readonly make: NodeReserve,
     readonly t0: number,
     level: number,
     dry: AudioNode,
-    wet: AudioNode | null,
-    send: number,
+    send: AudioNode | null,
     pan: number,
   ) {
     this.end = t0;
     this.lastOn = t0;
-    this.out = ctx.createGain();
-    this.out.gain.value = level;
+    this.out = make.gain();
+    // 1 is the gain's default: setting it would only add an automation event.
+    if (level !== 1) this.out.gain.value = level;
     let tail: AudioNode = this.out;
-    if (pan !== 0 && typeof ctx.createStereoPanner === 'function') {
-      const p = ctx.createStereoPanner();
+    const p = pan !== 0 ? make.panner() : null;
+    if (p) {
       p.pan.value = clamp(pan, -1, 1);
       this.out.connect(p);
-      this.nodes.push(p);
       this.pan = p.pan;
       tail = p;
     }
     tail.connect(dry);
-    if (wet && send > 0) {
-      const s = ctx.createGain();
-      s.gain.value = send;
-      tail.connect(s);
-      s.connect(wet);
-      this.nodes.push(s);
-    }
+    if (send) tail.connect(send);
+    this.tail = tail;
   }
 
   /** `dest` may be null when the caller fans the gain out to several params itself. */
   gain(value: number, dest: AudioNode | AudioParam | null): GainNode {
-    const g = this.ctx.createGain();
+    const g = this.make.gain();
     g.gain.value = value;
     if (dest) link(g, dest);
-    this.nodes.push(g);
     return g;
   }
 
+  /**
+   * The gain an instrument shapes its envelope on: a new one into `dest`, or with `dest` null the
+   * voice's own out (a voice holding a single part needs no gain of its own: the out is the part's
+   * envelope, and a steal's fade on it starts from the envelope's level). Either starts at 0, as the
+   * part's own gain did, so a fade or a sigh before the attack stays silent. Only for a voice made
+   * at level 1 (the soundtrack's): the envelope replaces the out's level.
+   */
+  envelope(dest: AudioNode | AudioParam | null): GainNode {
+    if (dest) return this.gain(0, dest);
+    this.out.gain.value = 0;
+    return this.out;
+  }
+
   filter(type: BiquadFilterType, freq: number, q: number, dest: AudioNode): BiquadFilterNode {
-    const f = blockRate(this.ctx.createBiquadFilter());
+    const f = this.make.filter();
     f.type = type;
     f.frequency.value = freq;
     f.Q.value = q;
     f.connect(dest);
-    this.nodes.push(f);
     return f;
   }
 
   osc(wave: OscillatorType | PeriodicWave, freq: number, t0: number, t1: number, dest: AudioNode | AudioParam, detune = 0): OscillatorNode {
-    const o = this.ctx.createOscillator();
+    const o = this.make.osc();
     // PeriodicWave is an empty interface in the DOM typings, so typeof cannot narrow it.
     if (typeof wave === 'string') o.type = wave as OscillatorType;
     else o.setPeriodicWave(wave);
@@ -163,10 +248,10 @@ export class Voice {
 
   /** Plays a buffer from t0 to t1. Looped noise starts at a random offset so no two hits match. */
   buffer(buf: AudioBuffer, t0: number, t1: number, dest: AudioNode | AudioParam, rate = 1, loop = true): AudioBufferSourceNode {
-    const s = this.ctx.createBufferSource();
+    const s = this.make.source();
     s.buffer = buf;
     s.loop = loop;
-    s.playbackRate.value = rate;
+    if (rate !== 1) s.playbackRate.value = rate;
     link(s, dest);
     s.start(t0, loop ? Math.random() * buf.duration * 0.9 : 0);
     s.stop(t1);
@@ -186,11 +271,10 @@ export class Voice {
   /** A stereo branch inside the voice (a shimmer's left and right grains on one voice): a panner
    *  into `dest`, or a plain gain where StereoPannerNode is missing. */
   panner(pan: number, dest: AudioNode): AudioNode {
-    if (typeof this.ctx.createStereoPanner !== 'function') return this.gain(1, dest);
-    const p = this.ctx.createStereoPanner();
+    const p = this.make.panner();
+    if (!p) return this.gain(1, dest);
     p.pan.value = clamp(pan, -1, 1);
     p.connect(dest);
-    this.nodes.push(p);
     return p;
   }
 
@@ -237,19 +321,22 @@ export class Voice {
     this.end = stop + 0.01;
   }
 
+  /** Unplugs a finished voice from the shared graph. Its sources have all stopped; the nodes behind
+   *  the tail are only linked to each other, so they need no disconnect calls of their own (each is
+   *  a trip through the audio graph's lock). */
   release(): void {
     // Deferred parts still queued for this voice must not build onto disconnected nodes.
     this.dead = true;
-    for (const n of this.srcs) n.disconnect();
-    for (const n of this.nodes) n.disconnect();
-    this.out.disconnect();
+    this.tail.disconnect();
     this.srcs.length = 0;
-    this.nodes.length = 0;
   }
 }
 
 export class VoicePool {
   private readonly list: Voice[] = [];
+  /** Reverb sends shared by every voice at one send level, per wet bus (built on first use; the
+   *  effects use about twenty levels). */
+  private readonly sends = new Map<AudioNode, Map<number, GainNode>>();
   /** Probe counters: voices stolen at the cap, how many of them were kept (pad) voices, and how many
    *  were still audible (estimated above -20 dB: a steal you might hear) and of those, payoffs. */
   steals = 0;
@@ -263,10 +350,12 @@ export class VoicePool {
   /** Probe-only: the level under which a tail is stolen first (QUIET). */
   quiet = QUIET;
 
+  /** `reserve`: where its voices take their nodes (Core shares one between both pools). */
   constructor(
     private readonly ctx: BaseAudioContext,
     private readonly bank: Bank,
     readonly max: number,
+    readonly reserve: NodeReserve = new NodeReserve(ctx),
   ) {}
 
   /**
@@ -290,11 +379,28 @@ export class VoicePool {
       if (loud && victim.prio >= PRIO.payoff) this.payoffSteals++;
       live--;
     }
-    const v = new Voice(this.ctx, this.bank, t0, level, dry, wet, send, pan);
+    const v = new Voice(this.ctx, this.bank, this.reserve, t0, level, dry, wet && send > 0 ? this.sendFor(wet, send) : null, pan);
     v.prio = prio;
     this.list.push(v);
     if (live + 1 > this.peak) this.peak = live + 1;
     return v;
+  }
+
+  /** The shared send into `wet` at level `send` (a gain made once, then reused). */
+  private sendFor(wet: AudioNode, send: number): GainNode {
+    let byLevel = this.sends.get(wet);
+    if (!byLevel) {
+      byLevel = new Map();
+      this.sends.set(wet, byLevel);
+    }
+    let s = byLevel.get(send);
+    if (!s) {
+      s = this.ctx.createGain();
+      s.gain.value = send;
+      s.connect(wet);
+      byLevel.set(send, s);
+    }
+    return s;
   }
 
   /**
@@ -370,5 +476,7 @@ export class VoicePool {
   releaseAll(): void {
     for (const v of this.list) v.release();
     this.list.length = 0;
+    for (const byLevel of this.sends.values()) for (const s of byLevel.values()) s.disconnect();
+    this.sends.clear();
   }
 }

@@ -1,7 +1,7 @@
 import { Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { Bus } from './graph';
-import { Sung, clap, fadeSung, fmBell, hat, kick, lead, mallet, pad, ping, pluck, sigh, sing } from './instruments';
+import { Formants, Sung, clap, fadeSung, fmBell, formants, hat, kick, lead, mallet, pad, ping, pluck, sigh, sing } from './instruments';
 import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, progFor, styleFor } from './theory';
 import { VoicePool, rand, smoothstep } from './voices';
 
@@ -111,6 +111,8 @@ class Deck {
   private choirN = 0;
   private sung: Sung[] = [];
   private choirChord: { chord: Chord; root: number; end: number } | null = null;
+  /** Each choir voice's vowel (instruments.formants), built the first time that voice sings. */
+  private readonly vowels: Formants[] = [];
   private arpChord: Chord | null = null;
   private arpNotes: number[] = [];
   private phrase: LeadNote[] = [];
@@ -120,7 +122,7 @@ class Deck {
   solo: string | null = null;
 
   constructor(
-    ctx: BaseAudioContext,
+    private readonly ctx: BaseAudioContext,
     private readonly pool: VoicePool,
     bus: Bus,
     readonly scene: Scene,
@@ -224,6 +226,7 @@ class Deck {
   dispose(): void {
     for (const l of LAYERS) this.fader[l].disconnect();
     for (const s of this.sends) s.disconnect();
+    for (const f of this.vowels) for (const n of f.nodes) n.disconnect();
     this.xf.disconnect();
     this.xfWet.disconnect();
   }
@@ -316,9 +319,12 @@ class Deck {
     // A triad has no extension: the third voice doubles the root an octave up instead.
     const pick = k === 0 ? tones[1] : k === 1 ? tones[2] : tones.length > 3 ? tones[tones.length - 1] : 12;
     const m = fit(root + (pick ?? 0), k === 0 ? 64 : k === 1 ? 67 : 71);
-    const v = this.pool.voice(t, 1, this.fader.choir, null, 0);
+    const bright = 0.2 + 0.3 * k;
+    // Voice k always sings the same vowel: its formants are built once and every note feeds them.
+    const vowel = (this.vowels[k] ??= formants(this.ctx, bright, this.fader.choir));
+    const v = this.pool.voice(t, 1, vowel.input, null, 0);
     v.keep = true;
-    const s = sing(v, t, mtof(m), dur, 0.2, attack, 0.2 + 0.3 * k);
+    const s = sing(v, t, mtof(m), dur, 0.2, attack, bright);
     this.sung.push(s);
   }
 
@@ -387,11 +393,13 @@ class Deck {
     const kv = st.kick[s16];
     if (L.kick > AUDIBLE && kv > 0) kick(this.pool.voice(t, 1, this.fader.kick, null, 0), t, kv, this.accent.sub ? 40 : 46);
 
+    // Every note below is one voice holding one part, so the part's envelope is the voice's out
+    // (instruments.ts: dest null) instead of a gain of its own.
     const hv = this.scene === 'results' ? ((s16 & 3) === 2 ? 0.5 : 0) : st.hat[s16];
-    if (L.hat > AUDIBLE && hv > 0) hat(this.pool.voice(t, 1, this.fader.hat, null, 0), t, hv * rand(0.85, 1), hv >= 0.75);
+    if (L.hat > AUDIBLE && hv > 0) hat(this.pool.voice(t, 1, this.fader.hat, null, 0), t, hv * rand(0.85, 1), hv >= 0.75, null);
 
     const cv = st.clap[s16];
-    if (L.clap > AUDIBLE && cv > 0) clap(this.pool.voice(t, 1, this.fader.clap, null, 0, -0.1), t, cv);
+    if (L.clap > AUDIBLE && cv > 0) clap(this.pool.voice(t, 1, this.fader.clap, null, 0, -0.1), t, cv, null);
 
     if (L.sparkle > AUDIBLE && Math.random() < st.sparkle.prob * this.accent.sparkleMul) {
       const idx = 10 + Math.floor(Math.random() * 5);
@@ -408,7 +416,7 @@ class Deck {
       // Danger: a pulsing low root that opens up as the threat closes in.
       const m = fit(root, 38) + ((s16 & 2) === 2 ? 12 : 0);
       const v = this.pool.voice(t, 1, this.fader.tension, null, 0);
-      pluck(v, t, mtof(m), (s16 & 3) === 0 ? 0.8 : 0.55, 0.09, 1.4 + this.drive.danger * 2.2, v.out, 0, false);
+      pluck(v, t, mtof(m), (s16 & 3) === 0 ? 0.8 : 0.55, 0.09, 1.4 + this.drive.danger * 2.2, null, 0, false);
     }
   }
 
@@ -445,13 +453,14 @@ class Deck {
     const v = this.pool.voice(t, 1, this.fader.pad, null, 0);
     v.keep = true;
     const p = this.style.pad;
-    pad(v, t, notes.slice(0, 5).map(mtof), dur + 0.1, 0.9, cut, p.attack, p.detune, p.wobble);
+    pad(v, t, notes.slice(0, 5).map(mtof), dur + 0.1, 0.9, cut, p.attack, p.detune, p.wobble, null);
   }
 
   private bassNote(m: number, t: number): void {
     const v = this.pool.voice(t, 1, this.fader.bass, null, 0);
     const f = mtof(m);
-    pluck(v, t, f, 0.9, this.scene === 'results' ? 0.42 : 0.2, 2.2, v.out, 0, false);
+    // With the sub under it the voice holds two parts, each with its own envelope.
+    pluck(v, t, f, 0.9, this.scene === 'results' ? 0.42 : 0.2, 2.2, this.accent.sub ? v.out : null, 0, false);
     if (this.accent.sub) ping(v, t, f, 0.32, 0.22);
   }
 
@@ -498,20 +507,21 @@ class Deck {
     const b = 1 + Math.min(this.drive.mult - 1, 9) * 0.06;
     switch (timbre) {
       case 'pluck':
-        pluck(v, t, f, 0.8 * vel, 0.2 * len, 3 * this.accent.pluckBright * b, v.out, 0, false);
+        pluck(v, t, f, 0.8 * vel, 0.2 * len, 3 * this.accent.pluckBright * b, null, 0, false);
         break;
       case 'koto':
-        pluck(v, t, f, 0.8 * vel, 0.26 * len, 4.2 * b, v.out, 0.03, false);
+        pluck(v, t, f, 0.8 * vel, 0.26 * len, 4.2 * b, null, 0.03, false);
         break;
       case 'bell':
-        fmBell(v, t, f, 0.5 * vel, 0.3 * len, 3.5, 1.1 * b);
+        fmBell(v, t, f, 0.5 * vel, 0.3 * len, 3.5, 1.1 * b, null);
         break;
       case 'box':
-        fmBell(v, t, f, 0.48 * vel, 0.25 * len, 5, 0.7);
+        fmBell(v, t, f, 0.48 * vel, 0.25 * len, 5, 0.7, null);
         break;
       case 'glass':
-        fmBell(v, t, f, 0.42 * vel, 0.3 * len, 2.76, 0.9 * b);
+        fmBell(v, t, f, 0.42 * vel, 0.3 * len, 2.76, 0.9 * b, null);
         break;
+      // A mallet is two parts (the tone and its overtone), each with its own envelope.
       case 'mallet':
         mallet(v, t, f, 0.6 * vel, 0.25 * len);
         break;
@@ -550,7 +560,7 @@ class Deck {
       }
     }
     const v = this.pool.voice(t, 1, this.fader.lead, null, 0, 0.1);
-    lead(v, t, mtof(ladder(this.key, idx)), n.len * this.stepDur * 0.92, 0.8, this.style.lead);
+    lead(v, t, mtof(ladder(this.key, idx)), n.len * this.stepDur * 0.92, 0.8, this.style.lead, null);
   }
 }
 

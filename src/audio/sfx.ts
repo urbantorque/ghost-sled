@@ -447,10 +447,11 @@ export class Sfx {
     return mtof(ladder(this.key(), i));
   }
 
+  /** A tick of noise high-passed at 4 kHz (the bank's clickNoise, filtered once, not per click). */
   private click(v: Voice, t: number, amp: number): void {
     const g = v.gain(0, v.out);
     const e = perc(g.gain, t, amp, 0.0005, 0.003);
-    v.buffer(v.bank.white, t, e, v.filter('highpass', 4000, 0.7, g));
+    v.buffer(v.bank.clickNoise, t, e, g);
   }
 
   /** Bright major add9 bell chord, strummed upward. `shift` moves every voice that many steps up the
