@@ -141,11 +141,47 @@ function moment(core: Core, kind: string, t: number): void {
     events.push({ type: 'comboLost', points: 500 }, { type: 'crash', cause: 'tree' });
   } else if (kind === 'escape') {
     events.push({ type: 'chaos', phase: 'success', event: ChaosEvent.Avalanche }, { type: 'style', kind: 'avalanche', points: 2000, chain: 1, mult: 1 });
+  } else if (kind === 'flowIn') {
+    // 'In the flow' on a skilled stretch, the wind already singing.
+    beats.push(FLOW_IN);
+  } else if (kind === 'flowStomp') {
+    // Half the flow-ins land just after a perfect landing (its +0.5 flow crosses the line).
+    beats.push({ type: 'stomp', tick: 0, streak: 1, late: false, title: 'Stomp', lead: [], x: 0, z: 0, heading: 0, yetiHop: false });
+    events.push({ type: 'style', kind: 'perfect', points: 400, chain: 9, mult: 4 }, { type: 'land', quality: 'perfect', airtime: 1.2, halfTurns: 2, flips: 0, impact: 8, late: false });
+  } else if (kind === 'snuffBank' || kind === 'bumpBank') {
+    // A bump knocks a 6,000 combo out of you (a bump bank: no drop, no slam); with the flow it had
+    // earned it is also 'Flow broken': the pfft and the wind's bend.
+    beats.push({ type: 'bump', tick: 0, side: 1, bank: true }, { type: 'bank', tick: 0, points: 6000, mult: 4, origin: 1500, tier: 2, header: null, bump: true });
+    if (kind === 'snuffBank') {
+      beats.push({ type: 'flow', tick: 0, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } });
+      core.ambience.snuff(t);
+    }
+    events.push({ type: 'bump', id: 1 }, { type: 'comboBank', points: 6000, mult: 4 });
   }
   core.sfx.frame();
   for (const b of beats) core.sfx.beat(b, t);
   for (const e of events) core.sfx.event(e, t);
+  if (kind === 'flowStomp') core.sfx.beat(FLOW_IN, t + 0.2);
 }
+
+const FLOW_IN: Beat = { type: 'flow', tick: 0, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } };
+const FLOW_KINDS = new Set(['flowIn', 'flowStomp', 'snuffBank', 'bumpBank']);
+
+/** The flow moments' feel: a skilled stretch at 30 m/s (drive 0.55) with the wind singing (flow 1)
+ *  up to the moment; a snuff takes the flow to 0 over 0.15 s (director SNUFF_S). */
+function flowFrame(f: AudioFrame, kind: string, t: number): AudioFrame {
+  f.speed = 30;
+  f.intensity = 0.55;
+  f.comboChain = 9;
+  f.comboMult = 4;
+  if (kind === 'bumpBank') f.flow = 0;
+  else if (kind === 'snuffBank') f.flow = t < MOMENT_T ? 1 : Math.max(0, 1 - (t - MOMENT_T) / 0.15);
+  else f.flow = kind === 'flowStomp' && t < MOMENT_T ? 0.8 : 1;
+  return f;
+}
+
+/** The wind tone's level by flow (ambience only, 30 m/s): flow 0, 0.5, 1 for 2 s each. */
+const WIND_STEPS = [0, 0.5, 1] as const;
 
 /** 20 ms RMS windows (dBFS) of a channel pair, optionally low-passed (one pole) first. */
 function envelope(L: Float32Array, R: Float32Array, from: number, to: number, lowHz = 0): number[] {
@@ -242,9 +278,11 @@ async function renderLayers(): Promise<Record<string, number | number[]>> {
 
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   if (kind === 'layers') return renderLayers();
-  const isMoment = kind === 'drop' || kind === 'massive' || kind === 'lost' || kind === 'escape';
+  const flow = FLOW_KINDS.has(kind);
+  const isMoment = kind === 'drop' || kind === 'massive' || kind === 'lost' || kind === 'escape' || flow;
   const shoulder = kind === 'shoulder';
-  const secs = isMoment ? 5 : shoulder ? SHOULDER.sitTo : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
+  const wind = kind === 'wind';
+  const secs = isMoment ? 5 : shoulder ? SHOULDER.sitTo : wind ? 2 + 2 * WIND_STEPS.length : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
   const core = new Core(ctx);
   // 'stress-music' and 'stress-sfx' render the stress mix with the other bus muted (diagnosis).
@@ -260,7 +298,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   core.sfxPool.stealOldest = opts.stealOldest === true;
   if (opts.quiet !== undefined) core.sfxPool.quiet = opts.quiet;
   core.graph.setMaster(1, 0);
-  const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb' || shoulder;
+  const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb' || shoulder || wind;
   // 'song': the band alone at a cruise, to read a mountain's A A B B form (bars and decks).
   const song = kind === 'song';
   const choir = kind === 'choir';
@@ -276,6 +314,11 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   const step = (t: number): void => {
     const f = stress ? stressFrame(t) : baseFrame(t);
     if (shoulder) f.shoulder = shoulderAt(t);
+    if (flow) flowFrame(f, kind, t);
+    if (wind) {
+      f.speed = 30;
+      f.flow = WIND_STEPS[Math.max(0, Math.min(WIND_STEPS.length - 1, Math.floor((t - 2) / 2)))];
+    }
     const target = Math.max(0, Math.min(1, f.intensity));
     drive += (target - drive) * (1 - Math.exp(-STEP / (target > drive ? 0.7 : 2.2)));
     core.music.setDrive(drive, f.danger, f.comboMult);
@@ -379,6 +422,17 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     };
     out.choirStepsDb = [win(2.2, 3), win(3.6, 4.5), win(5.1, 6), win(6.6, 8), win(8.6, 9.6)];
     out.musicPeakVoices = core.musicPool.peak;
+  }
+  if (wind) {
+    // The ambience bed at 30 m/s per flow step (WIND_STEPS), each after its 0.4 s glide.
+    const win = (a: number, b: number): number => {
+      let acc = 0;
+      const i0 = Math.floor(a * SR);
+      const i1 = Math.min(L.length, Math.floor(b * SR));
+      for (let i = i0; i < i1; i++) acc += (L[i] * L[i] + R[i] * R[i]) / 2;
+      return Math.round(db(Math.sqrt(acc / Math.max(1, i1 - i0))) * 10) / 10;
+    };
+    out.windStepsDb = WIND_STEPS.map((_, k) => win(2.4 + 2 * k, 4 + 2 * k));
   }
   if (song) {
     // The bass under the pad follows each chord's root: per bar, the zero-crossing rate of the

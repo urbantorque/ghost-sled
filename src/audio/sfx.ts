@@ -1221,19 +1221,27 @@ export class Sfx {
     });
   }
 
-  /** 'In the flow': a 0.6 s reverse-cymbal swell under a tone in the key, landing on a soft chord. */
+  /**
+   * 'In the flow': a 0.6 s reverse-cymbal swell under a tone in the key, landing on a soft chord over
+   * a low thump. Half the flow-ins come a moment after a perfect landing (its +0.5 flow crosses the
+   * line), so the cue sits about 4 dB over a skilled stretch's mix (it was 2 to 3 dB, and vanished
+   * under the landing's chord); at one per combo at most (about one a minute in a strong run at
+   * FLOW_IN_AT 3) it is never a repeat. The chord lands on the swell's peak, well before any bank.
+   */
   private flowIn(t: number): void {
-    this.swellUp(t, 0.6, 0.085);
+    this.swellUp(t, 0.6, 0.11);
     const k = this.key();
-    const v = this.voice(t, 0.55, 0, 1.2, PRIO.payoff);
-    fmBell(v, t, mtof(fit(k.tonic, 79)), 0.055, 0.7, 2, 0.9);
-    this.chord(t + 0.6, 0.05, 1, 5, 2);
+    const v = this.voice(t, 0.55, 0, 1.3, PRIO.payoff);
+    fmBell(v, t, mtof(fit(k.tonic, 79)), 0.07, 0.7, 2, 0.9);
+    this.at(v, t + 0.6, (tn) => thump(v, tn, 74, 40, 0.22, 0.12));
+    this.chord(t + 0.6, 0.07, 1.2, 5, 2);
   }
 
-  /** Flow snuffed by a bump: a short pfft of pink noise, low-passed. (The wind bends in ambience.) */
+  /** Flow snuffed by a bump: a pfft of pink noise, low-passed, a touch longer than a bump's own
+   *  puff so it reads over the bump bank it rides with. (The wind bends in ambience.) */
   private flowSnuff(t: number): void {
     const v = this.voice(t, 0.08);
-    puff(v, t, 0.2, 900, 300, 0.03, v.bank.pink);
+    puff(v, t, 0.28, 900, 260, 0.05, v.bank.pink);
   }
 
   /**
