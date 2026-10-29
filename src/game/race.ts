@@ -122,8 +122,8 @@ export const DUEL_COOLDOWN_TICKS = 180;
 export const DUEL_MAX_TICKS = 480;
 /** A ghost inside DUEL_NEAR this few ticks of closeness short of DUEL_OPEN_TICKS is about to open a
  *  duel (DuelTracker.soon): the rival pill stays where it is rather than naming another ghost for the
- *  last quarter second before the duel takes it back ('SparkleCedar > Your best > SparkleCedar'). */
-export const DUEL_SOON_TICKS = 30;
+ *  moment before the duel takes it back ('SparkleCedar > Your best > SparkleCedar', 0.25 to 0.53 s). */
+export const DUEL_SOON_TICKS = 40;
 
 /**
  * Neck-and-neck fights. Fed once per frame with whole sim-tick deltas (never frame counts) and every

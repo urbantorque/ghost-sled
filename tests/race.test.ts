@@ -215,7 +215,7 @@ describe('DuelTracker', () => {
     expect(d.amount).toBe(0);
   });
 
-  it('names the ghost a duel is about to open on (half a second of closeness to go), only while one may open', () => {
+  it('names the ghost a duel is about to open on (DUEL_SOON_TICKS of closeness to go), only while one may open', () => {
     const d = new DuelTracker();
     let t = 1000;
     for (let i = 0; i < DUEL_OPEN_TICKS - DUEL_SOON_TICKS - 1; i++) d.step(1, ++t, near(0.5));
@@ -228,7 +228,7 @@ describe('DuelTracker', () => {
     // Outside DUEL_NEAR it is not about to open (its closeness waits).
     d.step(1, ++t, near(2.5));
     expect(d.soon).toBeNull();
-    for (let i = 0; i < 30 && d.open === null; i++) d.step(1, ++t, near(0.5));
+    for (let i = 0; i < DUEL_OPEN_TICKS && d.open === null; i++) d.step(1, ++t, near(0.5));
     expect(d.open).toBe(7);
     expect(d.soon).toBeNull();
   });
