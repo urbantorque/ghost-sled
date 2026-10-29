@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { admit, HOLD_MS } from '../src/ui/fx';
+import { admit, HOLD_MS, SAME_FRAME_MS } from '../src/ui/fx';
 
 // The one-line callout slot: a payoff line that has only just landed (New ground, New best, a trick)
 // keeps the slot against a lower-ranked or 'lost' newcomer, which waits its turn instead of erasing it.
@@ -27,6 +27,13 @@ describe('admit', () => {
     expect(admit({ tone: 'normal', born: 0 }, 'lost', 10)).toBe('show');
     expect(admit({ tone: 'lost', born: 0 }, 'lost', 10)).toBe('show');
     expect(admit({ tone: 'best', born: 0 }, 'lost', 10, true)).toBe('show');
+  });
+
+  it('lets the later beat of one frame take the slot (a sketchy landing spin, then Streak broken)', () => {
+    const top = { tone: 'big' as const, born: 500 };
+    expect(admit(top, 'lost', 500)).toBe('show');
+    expect(admit(top, 'lost', 500 + SAME_FRAME_MS - 1)).toBe('show');
+    expect(admit(top, 'lost', 500 + SAME_FRAME_MS)).toBe('queue');
   });
 
   it('keeps the hold about 600 ms', () => {

@@ -91,6 +91,8 @@ export const HOLD_MS = 600;
 export const RETIRE_MS = 120;
 /** A loss line that has waited this long behind payoff lines is dropped. */
 const QUEUE_STALE_MS = 1100;
+/** Lines born this close together came in one frame's beats. */
+export const SAME_FRAME_MS = 24;
 
 const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5, perfect: 3 };
 
@@ -101,7 +103,10 @@ const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5,
  */
 export function admit(top: { tone: StyleTone; born: number } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
   if (force || !top || tone === 'perfect') return 'show';
-  const held = (top.tone === 'best' || top.tone === 'big') && now - top.born < HOLD_MS;
+  // A line from this same frame (a sketchy landing's own spin, then its Streak broken) has had no
+  // moment yet: the later beat of the frame takes the slot, as the director ordered them.
+  const age = now - top.born;
+  const held = (top.tone === 'best' || top.tone === 'big') && age >= SAME_FRAME_MS && age < HOLD_MS;
   return held && (tone === 'lost' || RANK[tone] < RANK[top.tone]) ? 'queue' : 'show';
 }
 
