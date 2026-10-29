@@ -194,6 +194,13 @@ export interface UIHandlers {
    * path the card took. Optional: without it the app keeps the coin on its own timeline.
    */
   onRewardLanded?(row: number): void;
+  /**
+   * A mission's Done stamp has just started on screen (its animation began with the row in view, or
+   * at once under reduced motion). `row` is its index in ResultsModel.missions. The app plays the
+   * mission chime here, so a row folded away or scrolled out of view makes no sound. Optional:
+   * without it the app keeps the chimes on its own timeline.
+   */
+  onMissionStamp?(row: number): void;
 }
 
 /** A viewport rectangle in CSS px, top-left origin. */
