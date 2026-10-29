@@ -98,6 +98,43 @@ describe('the hint coach', () => {
     expect(c.step(ground({ drafting: true }), { steer: 1, drift: 2, pop: 1 }).learned).toContain('draft');
   });
 
+  it('the stomp cue never blinks on a micro-hop: more than 6 air ticks, or 0.3 s still to fall', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1, pop: 1, drift: 2, stomp: 0 };
+    // A bump's hop: 4 ticks in the air, 0.07 s predicted at takeoff, then the snow again.
+    const hop = (i: number) => (i < 4 ? air(0.07 - i * DT, { airTicks: i + 1 }) : ground());
+    expect(play(c, h, hop, 0.5)).toEqual([]);
+    // A real flight shows it from takeoff when 0.3 s or more is left, or after 6 air ticks.
+    c.reset();
+    expect(play(c, h, (i) => air(0.6 - i * DT, { airTicks: i + 1 }), 0.1)[0]).toMatchObject({ show: 'stomp', t: 0 });
+    c.reset();
+    const late = play(c, h, (i) => air(0.25 - i * DT, { airTicks: i + 1 }), 0.15);
+    expect(late.map((x) => x.show)).toEqual(['stomp']);
+    expect(late[0].t).toBeCloseTo(6 * DT, 5);
+  });
+
+  it('a shown stomp cue holds through a quick hop and goes after 0.2 s on the snow', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1, pop: 1, drift: 2, stomp: 0 };
+    // A 0.3 s flight, 65 ms on the snow, another 0.3 s flight, then the snow for good.
+    const seq = (i: number): HintFrame => {
+      if (i < 18) return air(0.3 - i * DT, { airTicks: i + 1 });
+      if (i < 22) return ground();
+      if (i < 40) return air(0.3 - (i - 22) * DT, { airTicks: i - 21 });
+      return ground();
+    };
+    const out = play(c, h, seq, 1.5);
+    // One showing: up at takeoff, down HINT_MIN_S later or 0.2 s after the last touchdown.
+    expect(out.map((x) => x.show)).toEqual(['stomp', null]);
+    expect(out[1].t).toBeGreaterThanOrEqual(HINT_MIN_S - 1e-9);
+    expect(out[1].t).toBeLessThanOrEqual(40 * DT + 0.2 + 2 * DT);
+    // Landing after a long cue (up HINT_MIN_S or more): it goes at touchdown.
+    c.reset();
+    const long = play(c, h, (i) => (i < 66 ? air(1.1 - i * DT, { airTicks: i + 1 }) : ground()), 1.4);
+    expect(long.map((x) => x.show)).toEqual(['stomp', null]);
+    expect(long[1].t).toBeCloseTo(66 * DT, 5);
+  });
+
   it('the avalanche clears every hint', () => {
     const c = new HintCoach();
     const h: HintCounts = { steer: 1, pop: 1, stomp: 3, drift: 0 };
