@@ -999,6 +999,40 @@ describe('mission and unlock pops', () => {
     expect(gap).toBeLessThan(2.8);
   });
 
+  it('a ghost close enough to duel waits for the mission queued behind the unlock', () => {
+    let n = 0;
+    const r = new Rig({
+      lifetimePassed: 3,
+      unlockLadder: [{ id: 'frostfang', name: 'Frostfang Glacier', biome: 'glacier', need: 4 }],
+      missionsCrossed: () => (++n === 1 ? [{ id: 'pass1', text: 'Pass a ghost', reward: 25 }] : []),
+    });
+    const g = track(1001);
+    const near = track(1002);
+    r.tracks = [g, near];
+    r.poses.set(1001, pose(r.sim.s.z - 3));
+    r.poses.set(1002, pose(r.sim.s.z + 30));
+    r.sim.tick = 1000;
+    r.passed = 1;
+    const out = [...r.frame([], { race: [{ type: 'pass', track: g, first: true }] })];
+    out.push(...r.idle(1.5));
+    const unlock = of(out, 'unlockPop');
+    expect(unlock).toHaveLength(1);
+    // A ghost rides up alongside while the unlock shows: it has its 60 ticks within 1.5 m well before
+    // the unlock's banner leaves, and it is still there when the mission is due.
+    r.poses.set(1002, pose(r.sim.s.z + 0.8));
+    out.push(...r.idle(4));
+    const mission = of(out, 'missionPop');
+    const open = of(out, 'duel').filter((d) => d.phase === 'open');
+    expect(mission).toHaveLength(1);
+    expect((mission[0].tick - unlock[0].tick) / 60).toBeLessThan(2.8);
+    // The duel opens under no banner: after the mission's has had POP_BANNER_S (2.5 s).
+    expect(open).toHaveLength(0);
+    out.push(...r.idle(1.5));
+    const later = of(out, 'duel').filter((d) => d.phase === 'open');
+    expect(later).toHaveLength(1);
+    expect((later[0].tick - mission[0].tick) / 60).toBeGreaterThanOrEqual(2.5);
+  });
+
   it('two missions keep the usual spacing', () => {
     let n = 0;
     const r = new Rig({
@@ -1227,9 +1261,10 @@ describe('mission and unlock pops', () => {
     const pop = after.find((x) => x.type === 'unlockPop')!;
     const open = after.filter((x) => x.type === 'duel')[1];
     expect((pop.tick - won.tick) / 60).toBeGreaterThanOrEqual(1.35);
-    // The next duel waits out the pop's banner (it covers the race row), then opens.
-    expect((open.tick - pop.tick) / 60).toBeGreaterThanOrEqual(2.45);
-    expect((open.tick - pop.tick) / 60).toBeLessThanOrEqual(2.6);
+    // The next duel waits out the pop's banner (it covers the race row; an unlock's is up 2.6 s), then
+    // opens.
+    expect((open.tick - pop.tick) / 60).toBeGreaterThanOrEqual(2.6);
+    expect((open.tick - pop.tick) / 60).toBeLessThanOrEqual(2.85);
   });
 
   it("with nothing waiting, the next duel opens as soon as the last result's flash is over", () => {

@@ -135,6 +135,10 @@ const POP_LATE_S = 15;
  *  and missed 4 of 30 short first runs. */
 const UNLOCK_BANNER_S = 2.6;
 const AFTER_UNLOCK_S = 0.1;
+/** ...and no duel opens until a little after that, so a mission waiting behind the unlock goes up
+ *  first (a duel opening 0.1 s before it, under the unlock's 2.5 s POP_BANNER_S, held 'Pass a ghost'
+ *  a further 2.5 s on a phone run). */
+const UNLOCK_DUEL_S = UNLOCK_BANNER_S + AFTER_UNLOCK_S + 0.1;
 /** An open duel holds a waiting pop only this long (s) after it opened: the duel lives in the rival
  *  pill, the pop in the notice slot (opening duels ran 6 to 13 s and starved the first mission). */
 const DUEL_POP_BLOCK_S = 2.5;
@@ -517,7 +521,7 @@ export class Director {
       }
       // A duel's result holds the rival on its ghost (the pill's flash): the next opens once it can be named.
       const holding = this.rivalHold !== null && now < this.rivalHold.until;
-      const canOpen = !holding && (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= POP_BANNER_S;
+      const canOpen = !holding && (this.pops.length === 0 || now - this.lastDuelEndAt >= DUEL_POP_GAP_S) && now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_DUEL_S : POP_BANNER_S);
       for (const d of this.duels.step(dTicks, sim.tick, gaps, canOpen)) {
         const t = f.tracks.find((k) => k.entry.id === d.id);
         if (!t) continue;
