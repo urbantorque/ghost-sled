@@ -47,7 +47,7 @@ describe('BeatRouter', () => {
       { type: 'nearMiss', tick: 2, grade: 'near', gap: 0.8, side: -1, x: 0, z: 0, obs: 'rock', speed: 20, say: { label: 'Near miss', points: 120, tone: 'normal' } },
       { type: 'km', tick: 3, km: 1, say: { label: '1 km', points: 0, tone: 'big' } },
       { type: 'flow', tick: 4, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
-      { type: 'flow', tick: 5, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'normal' } },
+      { type: 'flow', tick: 5, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'lost' } },
       { type: 'newGround', tick: 6, z: 700, say: { label: 'New ground', points: 0, tone: 'best' } },
       { type: 'callout', tick: 7, source: 'drift', say: { label: 'Max drift', points: 300, tone: 'big' } },
       // No say, no picture: nothing.
@@ -118,6 +118,22 @@ describe('BeatRouter', () => {
       { type: 'callout', tick: 40, source: 'sketchy', say: { label: 'Sketchy', points: 0, tone: 'lost' } },
     ]);
     expect(calls.map((c) => c[0])).toEqual(['fx.stomp', 'fx.pop', 'fx.retireStamp', 'fx.pop']);
+  });
+
+  it("retires a live stamp before 'Flow broken' (a sketchy landing's line in place of Sketchy), not for a wordless snuff or In the flow", () => {
+    const { router, calls } = rig();
+    router.handle([
+      { type: 'stomp', tick: 1, streak: 2, late: false, title: 'Double stomp', lead: [{ label: '2 in a row', points: 0 }], x: 0, z: 0, heading: 0, yetiHop: false },
+      { type: 'flow', tick: 2, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
+      { type: 'flow', tick: 3, phase: 'snuff' },
+      { type: 'flow', tick: 40, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'lost' } },
+    ]);
+    expect(calls.map((c) => [c[0], c[1]])).toEqual([
+      ['fx.stomp', 'Double stomp'],
+      ['fx.pop', 'In the flow'],
+      ['fx.retireStamp', undefined],
+      ['fx.pop', 'Flow broken'],
+    ]);
   });
 
   it("holds the pill on a duel's ghost for its result (won, held off, lost), before the result's flash", () => {

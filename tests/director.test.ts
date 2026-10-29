@@ -277,7 +277,8 @@ describe('banks, flow and lost combos', () => {
     for (let i = 0; i < 8; i++) r.frame([style(i % 2 ? 'carve' : 'air', 100, i + 1)]);
     r.idle(1.5);
     const a = r.frame([style('air', 60, 9), land('sketchy')]);
-    expect(of(a, 'flow')[0]).toMatchObject({ phase: 'snuff', say: { label: 'Flow broken' } });
+    // A loss line, as the 'Sketchy' it stands in for (a plain line would stay out of the one slot).
+    expect(of(a, 'flow')[0]).toMatchObject({ phase: 'snuff', say: { label: 'Flow broken', tone: 'lost' } });
     // One line for the landing: no 'Sketchy' under it (the air it caught keeps its own callout).
     expect(of(a, 'callout').map((c) => c.source)).toEqual(['air']);
     r.idle(0.3);

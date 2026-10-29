@@ -1028,11 +1028,13 @@ export class Director {
     this.flowInDone = false;
   }
 
-  /** 'Flow broken': the snuff's beat (the scarf's puff and the wind's bend), with its line when `say`. */
+  /** 'Flow broken': the snuff's beat (the scarf's puff and the wind's bend), with its line when `say`.
+   *  The line is a loss, as the 'Sketchy' it stands in for: a plain line would be held out of the one
+   *  line slot by the landing's own trick line or a stamp still up, and never show. */
   private snuff(tick: number, sim: Sim, now: number, say: boolean): void {
     this.snuffDisplay(now);
     const b: BeatOf<'flow'> = { type: 'flow', tick, phase: 'snuff' };
-    if (say) b.say = { label: 'Flow broken', points: 0, tone: 'normal' };
+    if (say) b.say = { label: 'Flow broken', points: 0, tone: 'lost' };
     this.push(b, sim);
   }
 
