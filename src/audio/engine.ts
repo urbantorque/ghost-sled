@@ -89,7 +89,9 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
  *   -5 dBFS after the limiter.
  * - Muting: any reason muted silences output; after 1 s fully muted the context is suspended to
- *   save CPU and resumed on unmute. All calls are no-ops before unlock() or without WebAudio.
+ *   save CPU and resumed on unmute. What is asked for while it resumes (50 to 90 ms: the doubled
+ *   gifts' coin as the rewarded ad closes) plays as it starts, once, at full level; nothing the mute
+ *   cut plays after it. All calls are no-ops before unlock() or without WebAudio.
  */
 
 export interface AudioFrame {
@@ -142,6 +144,11 @@ type MuteReason = 'sdk' | 'ad' | 'hidden' | 'user';
 const TICK_MS = 25;
 const LOOKAHEAD = 0.12;
 const SUSPEND_AFTER_MS = 1000;
+/** After a resume is asked for (unlock(), or an unmute of a parked context), sounds are scheduled into
+ *  the context for this long, so they play as it starts instead of being dropped. */
+const RESUME_GRACE_MS = 600;
+/** The mute gain's time constant (s) when an unmute finds the context parked (12 ms otherwise). */
+const UNMUTE_PARKED_TAU = 0.004;
 /** A tiny lead so attacks are never scheduled in the past. */
 const START_LEAD = 0.006;
 /** The count-in: the drive is held to this while a chaos reveal is up (matches intensity.ts). */
@@ -221,7 +228,7 @@ export class AudioEngine {
       // start it.
       let resumed = false;
       if (ctx.state !== 'running' && (this.mutes.size === 0 || !this.started)) {
-        this.resumeUntil = clockMs() + 600;
+        this.resumeUntil = clockMs() + RESUME_GRACE_MS;
         quiet(ctx.resume());
         resumed = true;
         if (this.mutes.size > 0) this.armSuspend();
@@ -433,7 +440,10 @@ export class AudioEngine {
    * the opening moment with a single tick. A sound the app also asks for at the same moment
    * (ui('coin', 0, sameDelay)) plays once. When the app plays each coin as its reward lands
    * (UIHandlers.onRewardLanded: ui('coin', row) at the landing) it passes coins: [] here, and a
-   * second ask at that landing (the doubled reward's coin) is the same sound, played once.
+   * second ask at that landing (the doubled reward's coin) is the same sound, played once. The same
+   * for the Done chimes: played from UIHandlers.onMissionStamp (ui('mission', k) as each stamp starts:
+   * it sounds on the next audio block), with missions: [] here. A coin or a chime asked for again
+   * within UI_SAME_CHIME_S (60 ms: a frame or two) is one sound.
    */
   cueResults(r: ResultsShow, t: ResultsCue, reduced: boolean): void {
     for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);
@@ -630,13 +640,23 @@ export class AudioEngine {
     const c = this.core;
     if (!ctx || !c) return;
     const muted = this.mutes.size > 0;
+    const parked = ctx.state !== 'running';
     try {
-      c.graph.setMuted(muted, ctx.currentTime);
+      // A parked context opens in about 10 ms instead of 30 (it rendered nothing meanwhile, so there
+      // is nothing to click against): a coin asked for as it resumes starts 6 ms in and keeps its ting.
+      c.graph.setMuted(muted, ctx.currentTime, !muted && parked ? UNMUTE_PARKED_TAU : undefined);
       if (muted) {
         c.sfx.clearPending();
+        this.resumeUntil = 0;
         this.armSuspend();
       } else {
         this.clearSuspend();
+        // A context the mute parked takes a moment to run again (50 to 90 ms), and the sounds asked for
+        // meanwhile are the point of the unmute: the doubled gifts' coin as the rewarded ad closes. They
+        // are scheduled into the resuming context, as after unlock(), and play as it starts. Only on a
+        // context that has run: one that never started waits for a gesture (unlock()), so nothing
+        // piles up for a later tap.
+        if (parked && this.started) this.resumeUntil = clockMs() + RESUME_GRACE_MS;
         // Unconditional: a suspend() requested a moment ago can still report 'running' until it
         // settles, and resume() queued after it wins. On a running context it is a no-op.
         quiet(ctx.resume());
