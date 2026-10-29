@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXTRA_GIFTS_CAP, type GhostRef } from '../src/game/beats';
-import { DuelTracker, ExtraGifts, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
+import { DUEL_MAX_TICKS, DuelTracker, ExtraGifts, RIVAL_DWELL_S, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
 
 const ghost = (kind: GhostRef['kind'] = 'pool', name = 'Mila'): GhostRef => ({ id: 1001, name, kind, dx: 1 });
 
@@ -72,11 +72,19 @@ describe('classifyPass precedence', () => {
     expect(classifyPass(ctx())).toMatchObject({ word: 'passed', text: 'Passed', gifts: 5 });
   });
 
-  it('pays the grudge 10 and doubles in Haunted Hollow, first passes only', () => {
-    expect(classifyPass(ctx({ ghost: ghost('grudge') })).gifts).toBe(10);
-    expect(classifyPass(ctx({ ghost: ghost('grudge'), haunted: true })).gifts).toBe(20);
+  it('pays a first pass 5, doubled in Haunted Hollow; the grudge too (its premium is the settle)', () => {
+    expect(classifyPass(ctx({ ghost: ghost('grudge') })).gifts).toBe(5);
+    expect(classifyPass(ctx({ ghost: ghost('grudge'), haunted: true })).gifts).toBe(10);
+    // A start-line jostle past the grudge pays only the base.
+    expect(classifyPass(ctx({ ghost: ghost('grudge'), tick: 200, everLedBy2m: false })).gifts).toBe(5);
     expect(classifyPass(ctx({ haunted: true })).gifts).toBe(10);
     expect(classifyPass(ctx({ first: false })).gifts).toBe(0);
+  });
+
+  it('a burst of slung passes out of one slingshot counts up, at the same pay', () => {
+    expect(classifyPass(ctx({ lastSlingTick: 1990, slungN: 1 })).text).toBe('Slung past');
+    expect(classifyPass(ctx({ lastSlingTick: 1990, slungN: 2 }))).toMatchObject({ word: 'slung', text: 'Slung past 2', gifts: 5, extra: 2 });
+    expect(classifyPass(ctx({ lastSlingTick: 1990, slungN: 3 })).text).toBe('Slung past 3');
   });
 });
 
@@ -177,6 +185,25 @@ describe('DuelTracker', () => {
     expect(e.step(1, ++t, near(0.5, false))).toEqual([{ phase: 'won', id: 7 }]);
   });
 
+  it('resolves after 8 s by who leads then', () => {
+    const run = (d: DuelTracker, t: { v: number }, gap: number, n: number) => {
+      const out = [];
+      for (let i = 0; i < n; i++) out.push(...d.step(1, ++t.v, near(gap)));
+      return out.map((e) => e.phase);
+    };
+    const a = new DuelTracker();
+    const ta = { v: 1000 };
+    expect(run(a, ta, 1, 60)).toEqual(['open']);
+    // Level for 8 s, you a hand ahead at the bell: won.
+    expect(run(a, ta, -0.5, DUEL_MAX_TICKS - 1)).toEqual([]);
+    expect(run(a, ta, -0.5, 1)).toEqual(['heldOff']);
+    expect(a.open).toBeNull();
+    const b = new DuelTracker();
+    const tb = { v: 1000 };
+    expect(run(b, tb, 1, 60)).toEqual(['open']);
+    expect(run(b, tb, 0.6, DUEL_MAX_TICKS)).toEqual(['lost']);
+  });
+
   it('your crash closes it silently', () => {
     const d = new DuelTracker();
     let t = 1000;
@@ -189,11 +216,13 @@ describe('DuelTracker', () => {
 });
 
 describe('rivalPick and callPick', () => {
-  it('an open duel, then the call, override the nearest ghost ahead', () => {
+  it("an open duel, then a duel's result flash, then the call, override the nearest ghost", () => {
     const next = { id: 1, gap: 12 };
     expect(rivalPick(next, null, null)).toBe(next);
     expect(rivalPick(next, null, { id: 3, gap: -2 })).toEqual({ id: 3, gap: -2 });
     expect(rivalPick(next, { id: 2, gap: 0.4 }, { id: 3, gap: -2 })).toEqual({ id: 2, gap: 0.4 });
+    expect(rivalPick(next, null, { id: 3, gap: -2 }, { id: 4, gap: -4.2 })).toEqual({ id: 4, gap: -4.2 });
+    expect(rivalPick(next, { id: 2, gap: 0.4 }, null, { id: 4, gap: -4.2 })).toEqual({ id: 2, gap: 0.4 });
     expect(rivalPick(null, null, null)).toBeNull();
   });
 
@@ -201,10 +230,18 @@ describe('rivalPick and callPick', () => {
     // Two ghosts side by side ahead: the name the pill shows does not flip every frame.
     expect(steadyNext({ id: 1, gap: 6.4 }, { id: 2, gap: 6.1 })).toEqual({ id: 1, gap: 6.4 });
     expect(steadyNext({ id: 1, gap: 7.3 }, { id: 2, gap: 6.1 })).toEqual({ id: 2, gap: 6.1 });
-    // Passed it: the next one ahead takes over at once.
-    expect(steadyNext({ id: 1, gap: -0.2 }, { id: 2, gap: 0.5 })).toEqual({ id: 2, gap: 0.5 });
+    // In the bunch (both within 2 m) it holds through a sign flip; clear of it, the next one takes over.
+    expect(steadyNext({ id: 1, gap: -0.2 }, { id: 2, gap: 0.5 })).toEqual({ id: 1, gap: -0.2 });
+    expect(steadyNext({ id: 1, gap: -2.5 }, { id: 2, gap: 0.5 })).toEqual({ id: 2, gap: 0.5 });
     expect(steadyNext(null, { id: 2, gap: 3 })).toEqual({ id: 2, gap: 3 });
     expect(steadyNext({ id: 1, gap: 3 }, null)).toBeNull();
+  });
+
+  it('a newly named ghost stays named for 0.6 s (no 50 ms flapping)', () => {
+    expect(steadyNext({ id: 1, gap: 9 }, { id: 2, gap: 3 }, 0.1)).toEqual({ id: 1, gap: 9 });
+    expect(steadyNext({ id: 1, gap: 9 }, { id: 2, gap: 3 }, RIVAL_DWELL_S)).toEqual({ id: 2, gap: 3 });
+    // A ghost that may not be named any more (held null) gives way at once.
+    expect(steadyNext(null, { id: 2, gap: 3 }, 0.1)).toEqual({ id: 2, gap: 3 });
   });
 
   it('calls friend, nemesis, grudge, your best, then the pace ghost', () => {
