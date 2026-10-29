@@ -723,11 +723,13 @@ export class World {
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.
-   *  Medium and High only, while the wall is within 75 m. */
+   *  Medium and High only, for the whole chase: the HUD shows the unit's glass from the chase's first
+   *  frame, and a clean rider holds the wall at 70 to 90 m (it speeds up past 70), so an inset kept to
+   *  within 75 m left that glass empty for most of a good run (decision 33: never an empty frame). */
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && gap < 75 && this.quality.tier !== 'low' ? 1 : 0;
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.tier !== 'low' ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it
