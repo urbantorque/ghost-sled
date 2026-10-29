@@ -187,6 +187,13 @@ export interface UIHandlers {
   onSettings(s: Partial<SettingsModel>): void;
   /** Any UI click/tap (for audio unlock and UI sounds). */
   onUiSound(kind: 'tap' | 'confirm' | 'back'): void;
+  /**
+   * A results reward has just landed in the wallet (the fly-in arrived, or the card skipped the flight
+   * because the row or the wallet is scrolled out of view). `row` is the mission's index in
+   * ResultsModel.missions. The app plays the coin here, so the sound follows the picture whichever
+   * path the card took. Optional: without it the app keeps the coin on its own timeline.
+   */
+  onRewardLanded?(row: number): void;
 }
 
 /** A viewport rectangle in CSS px, top-left origin. */
