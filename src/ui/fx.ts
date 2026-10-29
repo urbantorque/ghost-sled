@@ -139,6 +139,26 @@ export function sideAction(top: { race?: string; born: number } | null | undefin
   return top.race === key ? 'replace' : 'queue';
 }
 
+/** Whether the line on the slot is a race word still inside its HOLD_MS (a minor line stays out). */
+export function raceHolds(top: { race?: string; born: number } | null | undefined, now: number): boolean {
+  return top !== null && top !== undefined && top.race !== undefined && now - top.born < HOLD_MS;
+}
+
+/**
+ * A trick of yours lands on the line: the race word on it steps back into the queue if it has not had
+ * its moment (younger than HOLD_MS) and has not stepped back before. Returns its stale clock (when it
+ * first arrived), or null when it is retired instead (a second trick on it, or not a young race word).
+ */
+export function stepBackAt(prev: { race?: string; born: number; arrived: number; stepped: boolean } | null | undefined, now: number): number | null {
+  if (!prev || prev.race === undefined || prev.stepped || now - prev.born >= HOLD_MS) return null;
+  return Math.min(prev.arrived, now);
+}
+
+/** Whether a waiting line (or race word) that first arrived at `at` still has its moment. */
+export function queueFresh(at: number, now: number): boolean {
+  return now - at <= QUEUE_STALE_MS;
+}
+
 /** Display names for the sim's style labels. "Draft" and "Drift" are one letter apart. */
 const SLIPSTREAM = 'Slipstream';
 const DISPLAY: Record<string, string> = { Draft: SLIPSTREAM };
@@ -159,6 +179,12 @@ interface Callout {
   /** Its points are the whole combo total printed just above it: the line shows its label alone. */
   same: boolean;
   born: number;
+  /**
+   * A race word: when it first arrived (its stale clock, kept however often it waits again), and
+   * whether a trick of yours already stepped it back off the line once (a second one retires it).
+   */
+  arrived: number;
+  stepped: boolean;
   /** performance.now() at which the callout is due to leave. */
   due: number;
   anim: Animation | null;
@@ -199,7 +225,7 @@ export class Fx {
   private banks: BankFx[] = [];
   private crack: CrackFx | null = null;
   /** Lines waiting behind a young payoff line (admit), oldest first, and the timer for the first. */
-  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number; race?: string; who?: string }> = [];
+  private readonly queued: Array<{ label: string; points: number; tone: StyleTone; at: number; race?: string; who?: string; stepped?: boolean }> = [];
   private queueTimer = 0;
   /** When the line leaving the slot finishes its exit: the next one fades in only then. */
   private exitUntil = 0;
@@ -238,17 +264,19 @@ export class Fx {
    * takes the callout line. It holds HOLD_MS against the next race word, which replaces it in place
    * when it tells the same story (sideAction) and otherwise waits its turn. It is about the race, not
    * your tricks: it is never folded into a landing stamp, and the headline gates for minor lines (a
-   * pass flashing in the pill, which here is the duel ghost's) do not hold it out.
+   * pass flashing in the pill, which here is the duel ghost's) do not hold it out. `back` is when it
+   * first arrived and `stepped` whether a trick already stepped it back once, for a word coming back
+   * from the queue: it goes stale QUEUE_STALE_MS after it first arrived, however often it waited.
    */
-  side(w: SideWord, back?: number): void {
+  side(w: SideWord, back?: number, stepped = false): void {
     const text = w.text.trim();
     if (text === '') return;
     const now = performance.now();
     const top = this.items[this.items.length - 1];
     const act = sideAction(top, w.key, now);
-    if (top && act === 'replace') this.relabel(top, text, w.tone, now, w.name);
-    else if (top && act === 'queue') this.queue(text, 0, w.tone, top.born + HOLD_MS - now, w.key, back, w.name);
-    else this.line(text, 0, w.tone, { race: w.key, back, who: w.name });
+    if (top && act === 'replace') this.relabel(top, text, w.tone, now, w.name, back ?? now);
+    else if (top && act === 'queue') this.queue(text, 0, w.tone, top.born + HOLD_MS - now, w.key, back, w.name, stepped);
+    else this.line(text, 0, w.tone, { race: w.key, back, who: w.name, stepped });
   }
 
   /**
@@ -265,9 +293,10 @@ export class Fx {
   /**
    * The line slot's one entry point. `force` (a crash's lost combo) never waits behind a payoff line;
    * `race` marks another ghost's race word (Fx.side); `again` is a line coming back from the queue,
-   * and `back` when a race word first arrived (it keeps its place and stale clock if it waits again).
+   * and `back` when a race word first arrived (it keeps its place and stale clock if it waits again);
+   * `stepped`: a trick already stepped that race word back off the line once.
    */
-  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string } = {}): void {
+  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string; stepped?: boolean } = {}): void {
     const raw = label.trim();
     if (raw === '' || raw === '0') return;
     const text = DISPLAY[raw] ?? raw;
@@ -284,13 +313,15 @@ export class Fx {
     // stays out of the stack. Its points still reach the combo total, and its running total is kept.
     // So does a slipstream tick while the Slipstream pill shows: "SLIPSTREAM +40" under it said the
     // same word twice in one glance. A race word is no minor line: the pill it stands in for is busy.
-    if (tone === 'normal' && race === undefined && (this.heroEl !== null || this.hud.passing || (text === SLIPSTREAM && this.hud.drafting))) {
+    // A race word on the line is that pill's word, so for its HOLD_MS a minor line stays out under it
+    // too ("CLEAN LANDING +80" no longer cuts "TobogganTeo wiped out" after 234 ms).
+    const top = this.items[this.items.length - 1];
+    if (tone === 'normal' && race === undefined && (this.heroEl !== null || this.hud.passing || raceHolds(top, now) || (text === SLIPSTREAM && this.hud.drafting))) {
       this.remember(text, points, 1, now);
       return;
     }
 
     // A repeat of the newest label folds into it: one line with summed points and a count pip more.
-    const top = this.items[this.items.length - 1];
     const fold = top !== undefined && top.label === text && (top.tone === 'lost') === (tone === 'lost');
     // A loss line (Sketchy, Streak broken), a second best (New best right after New ground), a race
     // word, or a payoff over a payoff (a graveyard line just after IN THE FLOW) waits behind a payoff
@@ -298,7 +329,7 @@ export class Fx {
     // its moment. Other lower-ranked plain and trick lines meet the rank gate below and stay out.
     const waits = tone === 'lost' || tone === 'best' || race !== undefined || (tone === 'big' && top?.tone === 'big' && top.race === undefined);
     if (!fold && waits && top && admit(top, tone, now, o.force) === 'queue') {
-      this.queue(text, points, tone, top.born + HOLD_MS - now, race, o.back, o.who);
+      this.queue(text, points, tone, top.born + HOLD_MS - now, race, o.back, o.who, o.stepped);
       return;
     }
     if (top && fold) {
@@ -347,16 +378,19 @@ export class Fx {
 
     const wrap = h('div', 'gs-call-wrap', inner);
     this.slot.append(wrap);
-    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, tEl, race, who: o.who, same: false, born: now, due: 0, anim: null, timer: 0 };
+    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, tEl, race, who: o.who, same: false, born: now, arrived: o.back ?? now, stepped: o.stepped === true, due: 0, anim: null, timer: 0 };
     this.fill(item);
 
     // Beyond the line limit, the lowest-ranked (then the oldest) collapses. The previous newest becomes
     // the older line and leaves early, unless it outranks the newcomer. A race word that has not had
     // its moment yet (a trick of yours landed on it: "Took back fjord348" lasted 80 ms under
-    // "SLINGSHOT +200") steps back into the queue and comes back once the trick has held.
+    // "SLINGSHOT +200") steps back into the queue and comes back once the trick has held. It keeps the
+    // stale clock of its first arrival, and steps back once: a second trick on it retires it, so one
+    // race word never prints three or four times ("TOOK BACK SparkleCedar" read as three take-backs).
     const prev = this.items[this.items.length - 1];
     const story = prev?.race;
-    if (prev && story !== undefined && race === undefined && now - prev.born < HOLD_MS && !this.queued.some((q) => q.race === story)) this.queue(prev.label, 0, prev.tone, HOLD_MS, story, Math.min(prev.born, now), prev.who);
+    const back = race === undefined ? stepBackAt(prev, now) : null;
+    if (prev && story !== undefined && back !== null && !this.queued.some((q) => q.race === story)) this.queue(prev.label, 0, prev.tone, HOLD_MS, story, back, prev.who, true);
     this.items.push(item);
     this.cap(max);
     if (prev && this.items.includes(prev) && RANK[prev.tone] <= RANK[tone]) this.arm(prev, Math.min(OLDER_MS, this.remaining(prev)));
@@ -373,11 +407,14 @@ export class Fx {
 
   /**
    * A newer race word of the same story takes the line in place ("SLUNG PAST 3 Mika" over "SLUNG PAST 2
-   * Tess", or "Tess passed you" over "Passed Tess"): a bump, and its hold starts again.
+   * Tess", or "Tess passed you" over "Passed Tess"): a bump, and its hold starts again. `arrived` is
+   * when the newer word first arrived (its stale clock, should a trick step it back).
    */
-  private relabel(c: Callout, text: string, tone: StyleTone, now: number, who?: string): void {
+  private relabel(c: Callout, text: string, tone: StyleTone, now: number, who: string | undefined, arrived: number): void {
     c.label = text;
     c.who = who;
+    c.arrived = arrived;
+    c.stepped = false;
     setLabel(c.tEl, text, who);
     if (tone !== c.tone) {
       c.inner.classList.replace(`is-${c.tone}`, `is-${tone}`);
@@ -399,9 +436,10 @@ export class Fx {
    * most, in order. A repeat of a waiting label refreshes it in place, and so does a newer race word
    * of the same story (the newer slung count). A crash's lost combo (force) or the HUD going away
    * drops them. `back` is when it first arrived (its stale clock), for one coming back from the
-   * head of the queue, which keeps its place in line.
+   * head of the queue, which keeps its place in line; `stepped`: a race word a trick already stepped
+   * back off the line once.
    */
-  private queue(label: string, points: number, tone: StyleTone, ms: number, race?: string, back?: number, who?: string): void {
+  private queue(label: string, points: number, tone: StyleTone, ms: number, race?: string, back?: number, who?: string, stepped = false): void {
     const at = back ?? performance.now();
     const same = this.queued.find((q) => (race !== undefined ? q.race === race : q.race === undefined && q.label === label));
     if (same) {
@@ -410,10 +448,11 @@ export class Fx {
       same.points = points;
       same.tone = tone;
       same.at = Math.max(same.at, at);
+      same.stepped = stepped;
     } else {
       // One back from the head of the queue (or stepping back off the line) keeps its place in line.
-      if (back !== undefined) this.queued.unshift({ label, points, tone, at, race, who });
-      else this.queued.push({ label, points, tone, at, race, who });
+      if (back !== undefined) this.queued.unshift({ label, points, tone, at, race, who, stepped });
+      else this.queued.push({ label, points, tone, at, race, who, stepped });
       // Over the limit, a news line goes first, then the oldest.
       while (this.queued.length > QUEUE_MAX) {
         const n = this.queued.findIndex((q) => isNewsKey(q.race));
@@ -432,8 +471,8 @@ export class Fx {
   private flushQueue(): void {
     const q = this.queued.shift();
     // Stale once it has waited about a second: by then the moment it named has passed.
-    if (q && performance.now() - q.at <= QUEUE_STALE_MS) {
-      if (q.race !== undefined) this.side({ text: q.label, tone: q.tone, key: q.race, name: q.who }, q.at);
+    if (q && queueFresh(q.at, performance.now())) {
+      if (q.race !== undefined) this.side({ text: q.label, tone: q.tone, key: q.race, name: q.who }, q.at, q.stepped === true);
       else this.line(q.label, q.points, q.tone, { again: true });
     }
     if (this.queued.length > 0) {
