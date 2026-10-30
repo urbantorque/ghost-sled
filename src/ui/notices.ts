@@ -102,6 +102,11 @@ export class Notices {
   /** Bumped whenever the band is claimed or released, so a stale exit's release is ignored. */
   private bandToken = 0;
   private bandH = -1;
+  /**
+   * The crash beat holds the band for the pack riding past the wreck (yieldToCrash) until the results
+   * clear it: a mission, unlock or grudge toast arriving meanwhile never goes up.
+   */
+  private crashed = false;
   /** Called when a banner or the reveal card comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
 
@@ -217,19 +222,23 @@ export class Notices {
     this.queue = [];
     this.stage.replaceChildren();
     this.bandToken++;
+    this.crashed = false;
     this.setBand(false);
   }
 
   /**
-   * The crash beat owns the race row: a mission or unlock toast over it (or waiting for it) gives the
-   * band back at once, so the place chip and the pack riding past the wreck are seen. The results card
-   * shows the same missions; race banners (a grudge settled, a finale, a warning) keep their turn.
+   * The crash beat owns the race row: a mission, unlock or grudge toast over it (or waiting for it)
+   * gives the band back at once, and one that arrives later in the crash beat (the held settle the run's
+   * end pushes) never goes up, so the place chip and the pack riding past the wreck are seen until the
+   * results clear the band. The results card shows the same missions and carries the settle on its race
+   * line, and the settle's gifts are paid with its beat all the same. A finale and an event warning keep
+   * their turn: a finale at a crash is that crash's own story.
    */
   yieldToCrash(): void {
-    const quiet = (b: Banner): boolean => b.spec.type === 'toast' && (b.spec.tone === 'mission' || b.spec.tone === 'unlock');
-    this.queue = this.queue.filter((b) => !quiet(b));
+    this.crashed = true;
+    this.queue = this.queue.filter((b) => !crashQuiet(b.spec));
     const cur = this.cur;
-    if (!cur || !quiet(cur)) {
+    if (!cur || !crashQuiet(cur.spec)) {
       // A race banner that hurried for a toast now dropped keeps its full time again.
       if (cur && cur.pri < P_ALERT && this.queue.length === 0) this.arm(cur, Math.max(cur.end, cur.shown + cur.ms));
       return;
@@ -261,6 +270,7 @@ export class Notices {
   }
 
   private push(b: Banner): void {
+    if (this.crashed && crashQuiet(b.spec)) return;
     const now = b.at;
     this.prune(now);
     const cur = this.cur;
@@ -403,6 +413,15 @@ export class Notices {
     this.parent.classList.toggle('gs-band-on', on);
     this.onLayout();
   }
+}
+
+/**
+ * The banners that give the race row back to the crash beat (Notices.yieldToCrash): mission and unlock
+ * toasts, and a grudge settled or nemesis down. The card carries all of them. A finale, an event
+ * warning and plain info keep their turn.
+ */
+function crashQuiet(s: Spec): boolean {
+  return s.type === 'toast' && (s.tone === 'mission' || s.tone === 'unlock' || s.tone === 'grudge');
 }
 
 /**

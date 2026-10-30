@@ -21,10 +21,12 @@ import type { Notices } from './notices';
 // - the cash-in (fx.cashIn) by tier, and the cracked figure of a lost combo (fx.lost).
 // - the flow state on the multiplier chip (hud.flowState): on at 'In the flow', grey and gone at a
 //   snuff, gone at once when the combo banks or is lost and at the crash (flow-in is per combo).
-// - the rival pill (hud): pass words and names, "passed you", race news, duel results, the start-line
-//   call; the crown pulse when you take the lead; the stake line's pace punch; the score's New best flash.
+// - the rival pill (hud): pass words and names, "passed you" (past your wreck, the place chip steps on
+//   the same frame), race news, duel results, the start-line call; the crown pulse when you take the
+//   lead; the stake line's pace punch; the score's New best flash.
 // - the banner band (notices), one at a time by priority: grudge settled or nemesis down, finales,
-//   mission and unlock pops.
+//   mission and unlock pops. From the crash to the results the band is the pack's: only a finale or an
+//   event warning still goes up.
 // Muted passes show nothing at all.
 
 /** Beats that draw their own picture: a `say` on them would print the same moment twice. */
@@ -88,7 +90,8 @@ export class BeatRouter {
           break;
         case 'crash':
           // No picture of its own here (the world stages it), but a stamp still up retires at once, and
-          // a mission or unlock toast hands the race row back for the pack riding past the wreck.
+          // a mission, unlock or grudge toast hands the race row back for the pack riding past the
+          // wreck (and none goes up over it until the results).
           this.fx.retireStamp();
           this.notices.yieldToCrash();
           this.hud.flowState('off');
@@ -124,7 +127,11 @@ export class BeatRouter {
           if (b.ghost.kind === 'grudge') this.notices.grudge(b.ghost.name);
           break;
         case 'passedBy':
-          if (!b.muted) this.hud.flashPass(b.ghost.name, b.ghost.kind, false);
+          if (b.muted) break;
+          // A ghost riding past your wreck: the standings crossed before the director's wreck pass, so
+          // the place chip steps now, on the pill's frame, with no settle (one picture, never two).
+          if (b.wreck) this.hud.rankNow();
+          this.hud.flashPass(b.ghost.name, b.ghost.kind, false);
           break;
         case 'lead':
           this.hud.lead();

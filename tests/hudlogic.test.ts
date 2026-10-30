@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChaosEvent } from '../src/sim/chaos';
-import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, FLOW_SNUFF_MS, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, RESULT_STALE_MS, resultStale, ScoreHold, shownScore, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
+import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, FLOW_SNUFF_MS, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, RANK_SETTLE_MS, rankSettled, releaseBand, RESULT_STALE_MS, resultStale, ScoreHold, shownScore, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
 import { landAt, MORE_MIN_PX, moreCue, RESULTS_TIMING, stampInView, type MoreBlock } from '../src/ui/results';
 
 // The overlay's small decisions, away from the DOM: who may take the rival pill during a duel, the
@@ -244,6 +244,24 @@ describe('placeSettled', () => {
     expect(placeSettled(500, 500 + OF_WAIT_MS - 20, 500 + OF_WAIT_MS - 1)).toBe(false);
     expect(placeSettled(500, 500 + OF_WAIT_MS - 20, 500 + OF_WAIT_MS)).toBe(true);
     expect(OF_WAIT_MS).toBeLessThanOrEqual(1000);
+  });
+});
+
+describe('rankSettled', () => {
+  it('holds a new place for the settle, except the first place shown', () => {
+    expect(RANK_SETTLE_MS).toBe(180);
+    // A bunched pack swaps places every frame: a new place waits until it has held.
+    expect(rankSettled(3, 1000, 1050, false)).toBe(false);
+    expect(rankSettled(3, 1000, 1000 + RANK_SETTLE_MS - 1, false)).toBe(false);
+    expect(rankSettled(3, 1000, 1000 + RANK_SETTLE_MS, false)).toBe(true);
+    expect(rankSettled(-1, 1000, 1000, false)).toBe(true);
+  });
+
+  it("steps the place on a wreck pass's frame, so the chip and the pill agree", () => {
+    // r2-rivals-05 f80: '1st of 8' beside 'SparkleCedar PASSED YOU', the chip reading '2nd' only at
+    // f96. The standings crossed a frame or two before the wreck pass: on its frame the place shows.
+    expect(rankSettled(1, 1000, 1033, true)).toBe(true);
+    expect(rankSettled(1, 1033, 1033, true)).toBe(true);
   });
 });
 

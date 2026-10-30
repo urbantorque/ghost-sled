@@ -64,7 +64,7 @@ const REQUEUE_MS = 450;
 /** How long a place change shows its arrow and count after the numeral. */
 const DELTA_MS = 1300;
 /** A rank change shows once it has held this long; rank ticks animate at most this often. */
-const RANK_SETTLE_MS = 180;
+export const RANK_SETTLE_MS = 180;
 const TICK_GAP_MS = 500;
 /** A gained place turns its numeral mint once the pill's flash thins, for this long (the colour snaps). */
 const GAIN_DELAY_MS = 200;
@@ -271,6 +271,15 @@ export class ScoreHold {
 /** Whether the field's count has settled at a run's start (OF_STABLE_MS), or waited long enough. */
 export function placeSettled(firstAt: number, changedAt: number, now: number): boolean {
   return now - changedAt >= OF_STABLE_MS || now - firstAt >= OF_WAIT_MS;
+}
+
+/**
+ * Whether a wanted place shows now: the first place shown, one that has held RANK_SETTLE_MS (a bunched
+ * pack swaps places every frame), or any on a wreck pass's frame (`wreck`, Hud.rankNow), so the chip
+ * steps with the "passed you" pill.
+ */
+export function rankSettled(lastRank: number, wantAt: number, now: number, wreck: boolean): boolean {
+  return lastRank < 0 || wreck || now - wantAt >= RANK_SETTLE_MS;
 }
 
 /** A race word for the callout line: its text, its tone, and what it is about (a ghost, or a sling burst). */
@@ -615,6 +624,8 @@ export class Hud {
   private wantNameAt = 0;
   /** Show the target's name at once (after a pass flash hands the pill back). */
   private nameNow = false;
+  /** A ghost rode past your wreck this frame (rankNow): the wanted place shows at once. */
+  private rankNowF = false;
   /**
    * The model name whose name the pill shows right now ('' while a flash holds it): the gap shown
    * beside a name is always that same ghost's gap, never the next one's while the name settles.
@@ -931,6 +942,7 @@ export class Hud {
       this.nameShown = '';
       this.leadDone = true;
       this.lastFuse = -1;
+      this.rankNowF = false;
       this.flowState('off');
       this.scoreHold.release();
       this.fit();
@@ -1159,6 +1171,16 @@ export class Hud {
     this.leadAt = performance.now();
     this.leadDone = false;
     if (this.placeFirst.on) this.playLead();
+  }
+
+  /**
+   * A ghost rode past your wreck (a wreck passedBy beat; the beat router calls this before its flash).
+   * The standings cross at 0 m, before the director's wreck pass, so the new place is already wanted:
+   * it shows in this frame's update with no RANK_SETTLE_MS, and the chip steps on the pill's frame
+   * ("2nd" beside "SparkleCedar PASSED YOU", never "1st" for a beat). One shot: the next update spends it.
+   */
+  rankNow(): void {
+    this.rankNowF = true;
   }
 
   private playLead(): void {
@@ -1637,7 +1659,7 @@ export class Hud {
         this.wantRank = r;
         this.wantAt = now;
       }
-      const settled = this.lastRank < 0 || now - this.wantAt >= RANK_SETTLE_MS;
+      const settled = rankSettled(this.lastRank, this.wantAt, now, this.rankNowF);
       if (settled && (r !== this.lastRank || m.place.of !== this.lastOf)) {
         const prev = this.lastRank;
         this.lastRank = r;
@@ -1661,6 +1683,7 @@ export class Hud {
         moved = true;
       }
     }
+    this.rankNowF = false;
     // The lead beat's crown pulse plays once the pill shows first place (or gives up after a moment).
     if (!this.leadDone) {
       if (now - this.leadAt > LEAD_WAIT_MS) this.leadDone = true;
