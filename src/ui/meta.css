@@ -602,8 +602,9 @@
     color: var(--ink);
   }
 
-  /* The daily pill is one line on a phone: with a day streak showing, it replaces the rivals tag, and
-     so does today's medal (its disc and "Bronze · Best 7,967" take that room). */
+  /* The daily pill keeps one tag on a phone: with a day streak showing, it replaces the rivals tag, and
+     so does today's medal (its disc and "Bronze · Best 7,967" take that room). On a narrow phone the
+     tag drops under "Daily Mountain" (style.css). */
   .gs-daily:not(.is-waiting) .gs-daily-meta.has-day .gs-daily-status,
   .gs-daily:not(.is-waiting):has(.gs-daily-best.has-medal) .gs-daily-status {
     display: none;

@@ -7036,11 +7036,15 @@
   }
 
   /* Its tags never spill under the best column: the medal disc drew over "Fresh rivals" and bit into
-     "Day 12". What does not fit is clipped inside this column (meta.css drops the tag first). */
+     "Day 12". A tag too wide for the row drops under "Daily Mountain" ("12 days in a row" on a 360 px
+     phone) rather than being cut mid-phrase; the clip stays as a backstop (meta.css drops the tag
+     first). */
   .gs-daily-txt {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 8px;
+    row-gap: 2px;
     min-width: 0;
     overflow: hidden;
   }
