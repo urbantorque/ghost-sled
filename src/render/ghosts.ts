@@ -51,6 +51,15 @@ export function wearsRing(id: number, rivalId: number, wreckT: number, named: bo
   return (id === rivalId || (wreckT > 0 && named)) && !done;
 }
 
+/**
+ * A ghost tag's placement priority (lowest first): a ringed tag riding past your wreck (`wreckT`
+ * seconds of its call left, the ghost the HUD's pill names now) before the rival's own ring, then the
+ * tag's own (`basePrio`).
+ */
+export function tagPrio(ringed: boolean, wreckT: number, basePrio: number): number {
+  return ringed ? (wreckT > 0 ? -2 : -1) : basePrio;
+}
+
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
 /** One floating pill: a ghost's name tag or its crash marker's tag. */
@@ -700,8 +709,16 @@ export class GhostVisuals {
       } else if (b.type === 'passedBy' && b.wreck) {
         // A ghost riding past your wreck: the HUD's pill names it, so its tag pings its ring and, for as
         // long as the call runs, counts as the rival's (ringed, placed first, pulled in from the edge).
+        // The pill names only the latest passer, so one that rode past just before gives its ring and
+        // its ping up (in a pack an earlier passer kept the slot and the named ghost's tag never showed).
+        // It shows on the pill's own frame: a tag hidden until now skips the tenth of a second a tag
+        // settles (one not placed this frame still waits, contract C8).
         const it = this.items.find((g) => g.id === b.ghost.id);
-        if (it) it.callT = it.wreckT = CALL_HOLD;
+        for (const o of this.items) if (o !== it && o.wreckT > 0) o.callT = o.wreckT = 0;
+        if (it) {
+          it.callT = it.wreckT = CALL_HOLD;
+          it.tag.held = Math.max(it.tag.held, 0.1);
+        }
       } else if (b.type === 'grudgeSettled') {
         // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
         // your wreck never contradicts the card.
@@ -1160,12 +1177,13 @@ export class GhostVisuals {
 
       // A ghost inside any of the fades shows no tag at all (with a little hysteresis). Contract C11:
       // the ghost the HUD's rival pill names keeps its tag whenever it is on screen and not sitting on
-      // you or at the lens, ringed in its kind colour and placed before every other tag.
+      // you or at the lens, ringed in its kind colour and placed before every other tag. The one riding
+      // past your wreck goes before even the HUD's rival: the pill names it now.
       if (isRival !== it.ringed) {
         it.ringed = isRival;
         it.tag.el.classList.toggle('rival', isRival);
-        it.tag.prio = isRival ? -1 : it.basePrio;
       }
+      it.tag.prio = tagPrio(isRival, it.wreckT, it.basePrio);
       // (The title reel names the ghost racing at the hero's shoulder, about the hero's size, so its
       // size-based dissolve does not hide the tag there.)
       it.tagOn = this.labels && !p.done && (isRival ? core > (it.tagOn ? 0.2 : 0.3) : vis * (this.reel ? 1 : body) > (it.tagOn ? 0.9 : 0.97));

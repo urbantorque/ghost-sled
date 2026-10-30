@@ -28,6 +28,13 @@ const MIN_MS = 900;
 /** The grudge toast and the grudge pass arrive in the same tick: within this window they merge. */
 const MERGE_MS = 400;
 const MAX_QUEUE = 3;
+/**
+ * How long the crash beat's latch keeps a mission, unlock or grudge toast off the band. The results
+ * always open within CRASH_PACK_MAX_MS (1,600 ms) of the crash and clear it there; the latch still
+ * runs out on its own, so a Run Again during the crash beat (which never passes the results) starts a
+ * run whose banners all go up.
+ */
+const CRASH_QUIET_MS = 2500;
 
 // Priorities, highest first. They index MAX_WAIT, so they stay consecutive integers.
 const P_ALERT = 4; // chaos event telegraph
@@ -104,9 +111,12 @@ export class Notices {
   private bandH = -1;
   /**
    * The crash beat holds the band for the pack riding past the wreck (yieldToCrash) until the results
-   * clear it: a mission, unlock or grudge toast arriving meanwhile never goes up.
+   * clear it: a mission, unlock or grudge toast arriving meanwhile never goes up. The latch lapses
+   * CRASH_QUIET_MS after crashedAt even if nothing clears it.
    */
   private crashed = false;
+  /** When yieldToCrash latched, in performance.now() time. */
+  private crashedAt = 0;
   /** Called when a banner or the reveal card comes or goes (the occluder cache). */
   onLayout: () => void = () => undefined;
 
@@ -236,6 +246,7 @@ export class Notices {
    */
   yieldToCrash(): void {
     this.crashed = true;
+    this.crashedAt = performance.now();
     this.queue = this.queue.filter((b) => !crashQuiet(b.spec));
     const cur = this.cur;
     if (!cur || !crashQuiet(cur.spec)) {
@@ -270,8 +281,8 @@ export class Notices {
   }
 
   private push(b: Banner): void {
-    if (this.crashed && crashQuiet(b.spec)) return;
     const now = b.at;
+    if (this.crashed && now - this.crashedAt < CRASH_QUIET_MS && crashQuiet(b.spec)) return;
     this.prune(now);
     const cur = this.cur;
     if (cur && cur.key === b.key) {

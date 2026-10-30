@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Mood } from '../src/sim/chaos';
 import type { Bank } from '../src/audio/buffers';
 import type { Bus } from '../src/audio/graph';
@@ -10,9 +10,11 @@ import { NodeReserve, Voice, VoicePool } from '../src/audio/voices';
 // Fixed one-shots rendered once (src/audio/prerender.ts) on stub contexts that count the nodes made:
 // a key renders once however often it is asked for, a voice plays its take as one source from its
 // render quantum's first frame, only where each part lands on the frame it did in the render, a take
-// that would cut its sound short is never used, the takes held stay under their cap, a take's
-// oscillators come from one shared sine wave, and a gift pickup costs its out, its panner and one
-// source once its take is ready, ending when the live parts would.
+// that would cut its sound short is never used, the takes held stay under their cap and a key let go
+// past it plays live (never rendered again), nothing renders above 48 kHz, a take's oscillators come
+// from one shared sine wave until a render finds it refused, and a gift pickup costs its out, its
+// panner and one source once its take is ready, ending when the live parts would, and makes its
+// recipe only when a render will be queued.
 
 class Param {
   value = 0;
@@ -61,8 +63,8 @@ class Node {
 
 type Counted = BaseAudioContext & { currentTime: number; made: number; sources: Node[] };
 
-function stubCtx(): Counted {
-  const ctx = { currentTime: 0, sampleRate: 48000, made: 0, sources: [] as Node[] };
+function stubCtx(sampleRate = 48000): Counted {
+  const ctx = { currentTime: 0, sampleRate, made: 0, sources: [] as Node[] };
   const make = () => {
     ctx.made++;
     return new Node();
@@ -271,7 +273,7 @@ describe('a fixed sound renders once and then plays as one source', () => {
     expect(ask(r2, ctx, 1, 1, 1, noisy, [0])).toBe(true);
   });
 
-  it('past the cap the take played longest ago goes, and renders again when asked for', async () => {
+  it('past the cap the take played longest ago goes, and its key plays live from then on', async () => {
     const ctx = stubCtx();
     const off = offlineStub();
     const r = new Prerender(ctx, bank, off.Ctor);
@@ -291,8 +293,87 @@ describe('a fixed sound renders once and then plays as one source', () => {
     expect(ask(r, ctx, 1, s)).toBe(true);
     expect(ask(r, ctx, 3, s)).toBe(true);
     expect(r.held).toBeLessThanOrEqual(TAKE_SAMPLES);
+    // 2 is not rendered again, however often it is asked for.
     r.pump();
-    expect(off.made).toHaveLength(4);
+    expect(off.made).toHaveLength(3);
+    expect(r.wants(2)).toBe(false);
+    expect(ask(r, ctx, 2, s)).toBe(false);
+    r.pump();
+    expect(off.made).toHaveLength(3);
+    expect(r.renders).toBe(3);
+  });
+
+  it('a cycle of twelve keys through a cap that holds eight renders each key once', async () => {
+    const ctx = stubCtx();
+    const off = offlineStub();
+    const r = new Prerender(ctx, bank, off.Ctor);
+    // Eight takes fit under the cap and a ninth does not. Rendering a key again once its take was let
+    // go would push out the next key asked for, and every pickup of the cycle would render.
+    const s = (TAKE_SAMPLES / 8 - 400) / 48000;
+    let hits = 0;
+    for (let round = 0; round < 5; round++) {
+      for (let k = 1; k <= 12; k++) {
+        if (ask(r, ctx, k, s)) hits++;
+        const n = off.made.length;
+        r.pump();
+        if (off.made.length > n) await off.made[n].finish();
+      }
+    }
+    expect(off.made).toHaveLength(12);
+    expect(r.renders).toBe(12);
+    expect(r.held).toBe(8 * off.made[0].length);
+    expect(r.held).toBeLessThanOrEqual(TAKE_SAMPLES);
+    // Keys 1 to 4 went to make room for 9 to 12 and play live; the other eight play their takes in
+    // each of the four later rounds.
+    expect(hits).toBe(4 * 8);
+    for (let k = 1; k <= 12; k++) expect(r.wants(k)).toBe(false);
+  });
+
+  it('above 48 kHz nothing renders and every pickup plays live', () => {
+    for (const rate of [88200, 96000, 192000]) {
+      const ctx = stubCtx(rate);
+      const off = offlineStub();
+      const r = new Prerender(ctx, bank, off.Ctor);
+      expect(r.wants(1)).toBe(false);
+      expect(ask(r, ctx, 1, 1)).toBe(false);
+      r.pump();
+      expect(off.made).toHaveLength(0);
+      expect(ask(r, ctx, 1, 1)).toBe(false);
+      expect(r.misses).toBe(2);
+      expect(r.renders).toBe(0);
+    }
+    // At 48 kHz and under, takes render.
+    for (const rate of [44100, 48000]) {
+      const ctx = stubCtx(rate);
+      const off = offlineStub();
+      const r = new Prerender(ctx, bank, off.Ctor);
+      expect(r.wants(1)).toBe(true);
+      ask(r, ctx, 1, 1);
+      r.pump();
+      expect(off.made).toHaveLength(1);
+    }
+  });
+
+  it('wants() is true only while asking would queue a render', async () => {
+    const ctx = stubCtx();
+    const off = offlineStub();
+    const r = new Prerender(ctx, bank, off.Ctor);
+    expect(r.wants(1)).toBe(true);
+    ask(r, ctx, 1, 1);
+    // Queued, rendering, then ready.
+    expect(r.wants(1)).toBe(false);
+    r.pump();
+    expect(r.wants(1)).toBe(false);
+    await off.made[0].finish();
+    expect(r.wants(1)).toBe(false);
+    // A render that failed.
+    expect(r.wants(2)).toBe(true);
+    ask(r, ctx, 2, 1);
+    r.pump();
+    await off.made[1].fail();
+    expect(r.wants(2)).toBe(false);
+    // No offline rendering at all.
+    expect(new Prerender(ctx, bank, null).wants(1)).toBe(false);
   });
 
   it('a take shorter than its sound is never made (it plays live for good), nor a stereo one', async () => {
@@ -368,14 +449,15 @@ describe('a fixed sound renders once and then plays as one source', () => {
 });
 
 describe("a take's oscillators are made from one shared sine wave", () => {
-  /** OscillatorNode constructor stubs: the options each was made with; `refuse` throws instead. */
+  /** OscillatorNode constructor stubs: the options each was made (or, with `refuse`, tried) with;
+   *  `refuse` throws instead of making one. */
   function withOscCtor<T>(refuse: boolean, fn: (made: Array<{ periodicWave?: unknown }>) => T): T {
     const g = globalThis as unknown as { OscillatorNode?: unknown };
     const prev = g.OscillatorNode;
     const made: Array<{ periodicWave?: unknown }> = [];
     g.OscillatorNode = function (_ctx: unknown, opts: { periodicWave?: unknown }) {
-      if (refuse) throw new Error('wave from another context');
       made.push(opts);
+      if (refuse) throw new Error('wave from another context');
       const n = new Node();
       n.type = 'custom';
       return n;
@@ -418,6 +500,29 @@ describe("a take's oscillators are made from one shared sine wave", () => {
       const v = new Voice(ctx, bank, reserve, 0, 1, ctx.destination as AudioNode, null, 0);
       expect((v.osc('sine', 440, 0, 1, v.out) as unknown as Node).type).toBe('sine');
     });
+  });
+
+  it('once a render finds the wave refused, later renders make plain oscillators without trying it', () => {
+    for (const refuse of [true, false]) {
+      withOscCtor(refuse, (tried) => {
+        const ctx = Object.assign(stubCtx(), { createPeriodicWave: () => wave });
+        const off = offlineStub();
+        const r = new Prerender(ctx, bank, off.Ctor);
+        ask(r, ctx, 1, 1);
+        ask(r, ctx, 2, 1);
+        r.pump();
+        expect(tried).toHaveLength(1);
+        expect(tried[0].periodicWave).toBe(wave);
+        r.pump();
+        // Refused: the second render never tries the wave. Taken: every render's oscillator has it.
+        expect(tried).toHaveLength(refuse ? 1 : 2);
+        expect(off.made).toHaveLength(2);
+        expect(r.failures).toBe(0);
+        // A refused render's oscillator came from the offline context, as did the second render's.
+        expect(off.made[0].nodes).toBe(refuse ? 2 : 1);
+        expect(off.made[1].nodes).toBe(refuse ? 2 : 1);
+      });
+    }
   });
 });
 
@@ -498,6 +603,39 @@ describe('a gift pickup from its take', () => {
     ctx.currentTime = 4;
     sfx.event(gift(1), 4.006);
     expect(renders.hits).toBe(1);
+  });
+
+  it('a live pickup makes its recipe only when a render will be queued', async () => {
+    const { sfx, ctx, off, renders } = rig();
+    const want = vi.spyOn(renders, 'want');
+    // Pickups 2 s apart, so the streak starts again and each plays the first step.
+    const made = ctx.made;
+    sfx.event(gift(1), 0.006);
+    // Built live as before (ten nodes and the pool's reverb send), and asked for once.
+    expect(ctx.made - made).toBe(11);
+    expect(want).toHaveBeenCalledTimes(1);
+    // While its render waits, and once it is ready but the pickup lands off its frames: built live,
+    // nothing asked.
+    ctx.currentTime = 2;
+    sfx.event(gift(1), 2.006);
+    renders.pump();
+    await off.made[0].finish();
+    ctx.currentTime = 4;
+    sfx.event(gift(1), 4.006 + 1 / 48000);
+    expect(renders.offGrid).toBe(1);
+    expect(want).toHaveBeenCalledTimes(1);
+    // A worth-5 pickup is another key: asked for once, and not again after its render failed.
+    ctx.currentTime = 6;
+    sfx.event(gift(5), 6.006);
+    expect(want).toHaveBeenCalledTimes(2);
+    renders.pump();
+    await off.made[1].fail();
+    ctx.currentTime = 8;
+    sfx.event(gift(5), 8.006);
+    expect(renders.failures).toBe(1);
+    expect(want).toHaveBeenCalledTimes(2);
+    expect(renders.hits).toBe(0);
+    expect(off.made).toHaveLength(2);
   });
 
   it('keys tell every note set apart', () => {

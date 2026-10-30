@@ -519,19 +519,32 @@
   }
 
   /* ...and a crash note dropped there leaves your place as you fell under the medal, so the card
-     says why the HUD's place was better ("Led at the crash" under "4th of 8"). The two together are
-     about the score's own height: the head gains no line. */
+     says why the HUD's place was better ("Led at the crash" under "4th of 8"). The medal steps down
+     to 36 px and the label to a 12 px line, so the two (49 px) stay under the score (13vw: 50.7 px
+     on a 390 px wide phone) and the head keeps its height beside it; a 360 px phone's 46.8 px score
+     lets it grow 2 px. When the side wraps (Best or the New best stamp under the medal) the head
+     does grow, by 9 px (the label's 13 px less the 4 px the medal gives up). */
+  .gs-res-placebox > .gs-res-place {
+    height: 36px;
+    line-height: 36px;
+  }
+
   .gs-res-place-at {
     display: block;
     justify-self: center;
-    margin-top: 2px;
-    color: var(--text);
+    margin-top: 1px;
+    color: rgba(245, 243, 255, 0.86);
     font-size: max(11px, 0.72em);
     font-weight: 800;
     letter-spacing: 0.01em;
-    line-height: 1;
+    line-height: 12px;
     white-space: nowrap;
-    opacity: 0.86;
+  }
+
+  /* It lands with the medal it sits under (style.css: gs-pop after 300 ms), not on the card's first
+     frame. Its quiet is in the colour's alpha, not opacity, which the pop holds at 1 once it ends. */
+  .gs-results.is-in .gs-res-place-at {
+    animation: gs-pop 320ms var(--spring) 300ms both;
   }
 
   .gs-res-line {
@@ -701,6 +714,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .gs-results.is-in .gs-nu-bar::before {
+    animation: none;
+  }
+
+  /* The place at the crash is there with the card, as the medal is (style.css). */
+  .gs-results.is-in .gs-res-place-at {
     animation: none;
   }
 }

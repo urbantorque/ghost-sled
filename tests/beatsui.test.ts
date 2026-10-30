@@ -497,4 +497,24 @@ describe('Notices at the crash', () => {
     n.toast('Mission done: Pass a ghost', 'mission');
     expect(up()).toContain('t-mission');
   });
+
+  it('lets the latch run out on its own 2,500 ms after the crash (a Run Again in the crash beat skips the results)', () => {
+    // App.runAgain also takes the crashed phase, and startRun never clears the band: with no expiry the
+    // next run would drop every mission, unlock and grudge banner it pushed.
+    const { n, up } = band();
+    n.yieldToCrash();
+    vi.advanceTimersByTime(2499);
+    n.toast('Mission done: Pass a ghost', 'mission', '+25 gifts');
+    expect(up()).toBeNull();
+    vi.advanceTimersByTime(1);
+    n.toast('Mission done: Pass a ghost', 'mission', '+25 gifts');
+    expect(up()).toContain('t-mission');
+    vi.advanceTimersByTime(3000);
+    expect(up()).toBeNull();
+    n.grudgeSettled('SparkleCedar', false, 1, 5);
+    expect(up()).toContain('k-grudge');
+    vi.advanceTimersByTime(3000);
+    n.unlock('Frostfang Glacier', 'glacier');
+    expect(up()).toContain('t-unlock');
+  });
 });

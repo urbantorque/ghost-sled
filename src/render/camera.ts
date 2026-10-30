@@ -138,6 +138,9 @@ const PACK_PAST_M = 6;
  *  PACK_LOOK_EASE per second (only once it is in front of the lens). */
 const PACK_LOOK = 0.45;
 const PACK_LOOK_EASE = 5;
+/** While that ghost rides past, the orbit's drift holds, easing in and out at this rate per second (so
+ *  when the pack clears the drift winds back up rather than restarting at full speed in one frame). */
+const PACK_HOLD_EASE = 3;
 /** ...and the lens narrows (eased in and out at PACK_ZOOM_EASE per second) until that ghost stands
  *  about PACK_TALL of the frame's height (of 1.6 widths on a phone, as the ghost layer measures
  *  size), as far as the wreck stays inside the middle 70% of the frame and the ghost inside 85%,
@@ -292,6 +295,8 @@ export class ChaseCamera {
   private packAt = new Vector3();
   private packZoom = 0;
   private packFov = 0;
+  /** The eased share of the orbit's drift held while that ghost rides past (1 holds it still). */
+  private packHold = 0;
   /** This frame's crash orbit cut to face the pack (the FOV stands at its framing at once). */
   private packCut = false;
   /** The crash lens stands on the pack tripod (at tripodAt) instead of orbiting. */
@@ -538,7 +543,7 @@ export class ChaseCamera {
     this.orbitFrom = null;
     this.orbitSeeded = false;
     this.orbitLook = this.orbitLookT = 0;
-    this.packK = this.packZoom = 0;
+    this.packK = this.packZoom = this.packHold = 0;
     this.tripod = false;
     this.pendPerfect = false;
     this.pendDriftKick = 0;
@@ -665,7 +670,7 @@ export class ChaseCamera {
     const held = this.mode === 'crash' && this.freezeLeft > 0;
     if (this.mode !== 'crash') {
       this.orbitSeeded = false;
-      this.packK = this.packZoom = 0;
+      this.packK = this.packZoom = this.packHold = 0;
     }
     // Jolts ride the chase only: elsewhere they die away at once.
     if (this.mode === 'chase' && !reduced) this.stepJolt(dt);
@@ -983,6 +988,8 @@ export class ChaseCamera {
       this.orbitRT = ORBIT_R;
       this.orbitLook = this.orbitLookT = 0;
       this.packR = ORBIT_R;
+      // (A ghost already riding past holds the drift from the orbit's first frame.)
+      this.packHold = t.pack && !this.feel.reduced ? 1 : 0;
       const from = this.feel.reduced ? null : this.orbitFrom;
       // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward +x).
       // In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens along
@@ -1021,13 +1028,15 @@ export class ChaseCamera {
     const wind = Math.min(1, this.orbitT / ORBIT_WIND);
     // While a ghost rides past the wreck (CamTarget.pack) the orbit holds its angle and comes no
     // further out than the pack lens's radius, so the wreck stays in frame as the look turns toward
-    // the passer (framePack). Reduced motion drifts on as ever.
+    // the passer (framePack). The hold eases (PACK_HOLD_EASE): when the pack clears the drift winds
+    // back up, where it restarted at full speed in one frame. Reduced motion drifts on as ever.
     const pack = !!t.pack && !this.feel.reduced;
+    this.packHold += ((pack ? 1 : 0) - this.packHold) * (1 - Math.exp(-dt * PACK_HOLD_EASE));
     if (this.orbitAim !== null) {
       const gap = wrapAngle(this.orbitAim - this.orbitAngle);
       if (Math.abs(gap) < 0.02) this.orbitAim = null;
       else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
-    } else if (!pack) this.orbitAngle += dt * this.orbitSpin * wind;
+    } else this.orbitAngle += dt * this.orbitSpin * wind * (1 - this.packHold);
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += ((pack ? Math.min(this.orbitRT, this.packR) : this.orbitRT) - this.orbitR) * k;
     this.orbitUp += (this.orbitUpT - this.orbitUp) * k;

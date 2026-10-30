@@ -1891,6 +1891,8 @@ export class Hud {
     const fuse = showStake ? (c.fuse ?? 0) : 0;
     const fb = fuse <= 0 ? 0 : fuse < 0.5 ? 1 : fuse < 0.8 ? 2 : 3;
     if (fb !== this.lastFuse) {
+      // From band 2 the stake figure grows (style.css), and the shrink-to-fit stake row with it.
+      if ((fb >= 2) !== (this.lastFuse >= 2)) moved = true;
       this.lastFuse = fb;
       this.stakeEl.dataset.fuse = String(fb);
       this.comboEl.dataset.fuse = String(fb);

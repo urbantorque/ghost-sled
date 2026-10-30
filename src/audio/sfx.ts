@@ -894,9 +894,13 @@ export class Sfx {
     const f1 = mtof(m1);
     const f2 = mtof(m2);
     const f3 = m3 > 0 ? mtof(m3) : 0;
-    giftParts(v, t, f1, f2, f3, (tn, fn) => this.at(v, tn, fn));
-    if (f3 > 0) r?.want(key, t, GIFT_BIG_S, GIFT_BIG_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
-    else r?.want(key, t, GIFT_S, GIFT_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
+    // Only a third bell is built later, and the recipe is made only when a render will be queued, so
+    // a pickup worth under 5 whose key is already asked for makes no closures.
+    giftParts(v, t, f1, f2, f3, f3 > 0 ? (tn, fn) => this.at(v, tn, fn) : null);
+    if (r && r.wants(key)) {
+      if (f3 > 0) r.want(key, t, GIFT_BIG_S, GIFT_BIG_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
+      else r.want(key, t, GIFT_S, GIFT_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
+    }
   }
 
   private bump(t: number): void {

@@ -111,7 +111,7 @@ describe('crash pack framing', () => {
     for (let i = 0; i < 40; i++) cam.update({ pos: fell, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
     cam.mode = 'crash';
     cam.beats([{ type: 'crash', tick: 0, cause: 'tree', stake: 0, orbitFrom: Math.PI }], feel);
-    const shots: { lens: Vector3; fov: number; angle: number; wreck: Vector3; ghost: Vector3 | null; px: number }[] = [];
+    const shots: { lens: Vector3; fov: number; angle: number; orbit: number; wreck: Vector3; ghost: Vector3 | null; px: number }[] = [];
     for (let i = 0; i < frames; i++) {
       const w = wreckAt(i);
       const g = ghostAt(i);
@@ -121,7 +121,8 @@ describe('crash pack framing', () => {
       const p = cam.camera.position;
       const ndc = (v: Vector3) => v.clone().project(cam.camera);
       const px = g ? ((ndc(g.clone().setY(g.y + 0.75)).y - ndc(g.clone().setY(g.y - 0.8)).y) * H) / 2 : 0;
-      shots.push({ lens: p.clone(), fov: cam.camera.fov, angle: Math.atan2(p.x - w.x, p.z - w.z), wreck: ndc(w), ghost: g ? ndc(g) : null, px });
+      const orbit = (cam as unknown as { orbitAngle: number }).orbitAngle;
+      shots.push({ lens: p.clone(), fov: cam.camera.fov, angle: Math.atan2(p.x - w.x, p.z - w.z), orbit, wreck: ndc(w), ghost: g ? ndc(g) : null, px });
     }
     return shots;
   }
@@ -160,6 +161,25 @@ describe('crash pack framing', () => {
     expect(Math.abs(wrap(none[at].angle - none[hold + 5].angle))).toBeGreaterThan(0.05);
     // The long lens only ever narrows the orbit's own.
     expect(s.fov).toBeLessThanOrEqual(none[at].fov + 1e-9);
+  });
+
+  it('winds the drift back up when the pack clears, rather than at full speed in one frame', () => {
+    // The ghost rides past and clears the window on frame `gone`.
+    const gone = 100;
+    const lanePast = lane(-3, -70);
+    const shots = run(still, (i) => (i < gone ? lanePast(i) : null), gone + 90);
+    const none = run(still, () => null, gone + 90);
+    const step = (s: typeof shots, i: number) => Math.abs(wrap(s[i].orbit - s[i - 1].orbit));
+    // The orbit's full drift per frame, as it runs with no ghost at all.
+    const full = step(none, gone + 60);
+    expect(full).toBeGreaterThan(1e-3);
+    // Held still up to the frame the pack clears.
+    expect(step(shots, gone - 1)).toBeLessThan(1e-9);
+    // Then it eases: a sliver of the drift on the first frame, rising every frame, near full after a second.
+    expect(step(shots, gone)).toBeLessThan(0.1 * full);
+    for (let i = gone + 1; i < gone + 60; i++) expect(step(shots, i)).toBeGreaterThan(step(shots, i - 1));
+    expect(step(shots, gone + 60)).toBeGreaterThan(0.9 * full);
+    expect(step(shots, gone + 60)).toBeLessThanOrEqual(full + 1e-9);
   });
 
   it('stands on a tripod beside the passer when the wreck slid far from where you fell', () => {
