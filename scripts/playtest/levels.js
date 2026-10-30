@@ -37,13 +37,21 @@
 //             'In the flow', then a sketchy landing's snuff 0.35 s later or a crash 0.4 s later,
 //             inside its 0.6 s swell: its chord must not land after the snuff (what of the flow-in
 //             sounds from the snuff + 0.2 s to + 1 s at least 12 dB under the flow-in alone)
+//   gifts     the effects alone: runs of six gift pickups, the same six each run, so the later runs
+//             play the rendered takes (src/audio/prerender.ts): takes counts them
+//   giftTakes every gift pickup's take (ladder steps 6 to 15, both kinds) against the same pickup
+//             built live, sample by sample, started on a render quantum's first frame, at the game's
+//             phases at 48 and 44.1 kHz and between two frames, and at the 48 kHz phase in eight
+//             render quanta whose start times carry different float noise: where the take plays it
+//             is the live sound (every block within 0.1 dB, the residual at least 35 dB down; a
+//             take refuses a start that would put a bell on another frame)
 // The stress mix also counts its steals: sfxLoudSteals (a victim still above -20 dB) and
 // sfxPayoffSteals (of those, payoffs; at most 2).
 // It also asserts the live AudioContext is running (a real key press unlocks it first).
 // Run against a preview build: playwright-cli -s=audio run-code --filename=scripts/playtest/levels.js
 // Set window.__levelsCfg = { base, kinds, seconds, songs } on the current page first to change the plan.
 async (page) => {
-  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers', 'wind', 'flowIn', 'flowStomp', 'snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost', 'flowSnuff', 'flowCrash'], seconds: 10, songs: true };
+  const defaults = { kinds: ['cruise', 'ambience', 'music', 'stress', 'shoulder', 'layers', 'wind', 'flowIn', 'flowStomp', 'snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost', 'flowSnuff', 'flowCrash', 'gifts', 'giftTakes'], seconds: 10, songs: true };
   const cfg = { ...defaults, ...((await page.evaluate(() => window.__levelsCfg).catch(() => null)) || {}) };
   if (!cfg.kinds) cfg.kinds = defaults.kinds;
   const BASE = cfg.base || 'http://127.0.0.1:4173/';
@@ -84,6 +92,7 @@ async (page) => {
   const fi = env('flowIn');
   const fs = env('flowStomp');
   const ws = levels.wind ? levels.wind.windStepsDb : null;
+  const gt = levels.giftTakes;
   // The flow chord at 0.6 s after the moment (flowStomp: 0.8 s), against the 0.4 s before it / its neighbours.
   const flowInLift = fi ? Math.max(...fi.slice(20 + 29, 20 + 35)) - avg(fi.slice(0, 20)) : null;
   const flowStompLift = fs ? Math.max(...fs.slice(20 + 39, 20 + 45)) - avg(fs.slice(20 + 30, 20 + 38)) : null;
@@ -109,6 +118,8 @@ async (page) => {
     snuffKeepsPayoffs: ['snuffBump', 'snuffSketchy', 'snuffBroken', 'snuffLost'].every((k) => !levels[k] || levels[k].sfxPayoffSteals === 0),
     flowInStopsAtSnuff: levels.flowSnuff ? levels.flowSnuff.chordLeftDb <= -12 : null,
     flowInStopsAtCrash: levels.flowCrash ? levels.flowCrash.chordLeftDb <= -12 : null,
+    giftsPlayTakes: levels.gifts ? levels.gifts.takes > 0 && levels.gifts.takeFailures === 0 : null,
+    giftTakesAreLive: gt ? gt.missing === 0 && gt.takeFailures === 0 && gt.pairs > gt.live && Math.max(...gt.blockDb) <= 0.1 && Math.max(...gt.residDb) <= -35 : null,
   };
   // The envelopes are long: keep the derived lifts, drop the raw windows from the report.
   for (const k of ['flowIn', 'flowStomp']) {
