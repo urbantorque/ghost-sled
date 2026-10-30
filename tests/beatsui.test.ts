@@ -1,10 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Beat, GhostRef } from '../src/game/beats';
 import { ChaosEvent } from '../src/sim/chaos';
 import { BeatRouter } from '../src/ui/beatsui';
 import type { Fx } from '../src/ui/fx';
 import type { Hud } from '../src/ui/hud';
-import { grudgeCopy, type Notices } from '../src/ui/notices';
+import { grudgeCopy, Notices } from '../src/ui/notices';
 
 // The overlay's half of the beats contract, against recording stand-ins for the HUD, the fx layer
 // and the notice band: every beat the director emits lands in exactly one picture.
@@ -29,6 +29,7 @@ function rig() {
     flashBest: rec('hud.flashBest'),
     holdDuel: rec('hud.holdDuel'),
     flowState: rec('hud.flowState'),
+    rankNow: rec('hud.rankNow'),
   } as unknown as Hud;
   const fx = { pop: rec('fx.pop'), flowIn: rec('fx.flowIn'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
   const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock'), yieldToCrash: rec('notices.yieldToCrash') } as unknown as Notices;
@@ -121,6 +122,15 @@ describe('BeatRouter', () => {
     const { router, of } = rig();
     router.handle([{ type: 'crash', tick: 3, cause: 'tree', stake: 0, orbitFrom: null }]);
     expect(of('notices.yieldToCrash')).toHaveLength(1);
+  });
+
+  it("steps the place chip on a wreck pass's frame, before its 'passed you' flash, and only then", () => {
+    const { router, calls } = rig();
+    router.handle([
+      { type: 'passedBy', tick: 3, ghost: pool, muted: false },
+      { type: 'passedBy', tick: 700, ghost: mila, muted: false, wreck: true },
+    ]);
+    expect(calls.map((c) => c.slice(0, 2))).toEqual([['hud.flashPass', 'Tess'], ['hud.rankNow'], ['hud.flashPass', 'Mila']]);
   });
 
   it('retires a live stamp on a sketchy landing before its line, and leaves it for other callouts', () => {
@@ -316,5 +326,175 @@ describe('grudgeCopy', () => {
     const c = grudgeCopy('Mila', true, 12, 1200);
     expect(c.said).toBe('Nemesis down. Beat Mila after 12 runs · +1,200 gifts');
     for (const s of [c.said, grudgeCopy('A', false, 1, 0).said]) expect(s).not.toMatch(/[–—]/);
+  });
+});
+
+/**
+ * Just enough DOM for the notice band: elements with classes, children and attributes, no layout and
+ * no element.animate (motion's play() then skips each entry and exit, so a banner goes at once).
+ */
+class FakeEl {
+  className = '';
+  textContent = '';
+  innerHTML = '';
+  translate = true;
+  parent: FakeEl | null = null;
+  readonly children: FakeEl[] = [];
+  readonly dataset: Record<string, string> = {};
+  readonly style = { setProperty: (): void => undefined };
+  private readonly attrs = new Map<string, string>();
+  readonly classList = {
+    add: (...cs: string[]): void => {
+      for (const c of cs) if (!this.has(c)) this.className = `${this.className} ${c}`.trim();
+    },
+    remove: (...cs: string[]): void => {
+      this.className = this.className
+        .split(/\s+/)
+        .filter((c) => c !== '' && !cs.includes(c))
+        .join(' ');
+    },
+    toggle: (c: string, on?: boolean): boolean => {
+      const want = on ?? !this.has(c);
+      if (want) this.classList.add(c);
+      else this.classList.remove(c);
+      return want;
+    },
+    contains: (c: string): boolean => this.has(c),
+  };
+
+  constructor(readonly tagName: string) {}
+
+  private has(c: string): boolean {
+    return this.className.split(/\s+/).includes(c);
+  }
+
+  get childElementCount(): number {
+    return this.children.length;
+  }
+
+  setAttribute(k: string, v: string): void {
+    this.attrs.set(k, v);
+  }
+
+  append(...kids: Array<FakeEl | string>): void {
+    for (const k of kids) {
+      if (typeof k === 'string') {
+        this.textContent += k;
+        continue;
+      }
+      k.remove();
+      k.parent = this;
+      this.children.push(k);
+    }
+  }
+
+  replaceChildren(): void {
+    for (const c of this.children) c.parent = null;
+    this.children.length = 0;
+  }
+
+  replaceWith(n: FakeEl): void {
+    const p = this.parent;
+    if (!p) return;
+    n.remove();
+    p.children[p.children.indexOf(this)] = n;
+    n.parent = p;
+    this.parent = null;
+  }
+
+  remove(): void {
+    const p = this.parent;
+    if (!p) return;
+    p.children.splice(p.children.indexOf(this), 1);
+    this.parent = null;
+  }
+
+  querySelector(): null {
+    return null;
+  }
+}
+
+describe('Notices at the crash', () => {
+  // The crash beat owns the race row (r2phone-fresh-06 f12 to f96: 'GRUDGE SETTLED SparkleCedar +5
+  // gifts', pushed by the run's end, covered the place chip stepping from 1st to 3rd and every wreck pass).
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
+    vi.stubGlobal('window', globalThis);
+    vi.stubGlobal('document', { createElement: (tag: string) => new FakeEl(tag) });
+    vi.stubGlobal(
+      'MutationObserver',
+      class {
+        observe(): void {}
+      },
+    );
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+
+  const band = () => {
+    const parent = new FakeEl('div');
+    const n = new Notices(parent as unknown as HTMLElement);
+    /** The banner on stage, by its class ('k-grudge', 't-mission', 'gs-fin'), or null. */
+    const up = (): string | null => (n.current as unknown as FakeEl | null)?.className ?? null;
+    return { n, up, on: () => parent.classList.contains('gs-band-on') };
+  };
+
+  it('takes a grudge settled off the stage at the crash, and gives the band back', () => {
+    const { n, up, on } = band();
+    n.grudgeSettled('SparkleCedar', false, 1, 5);
+    expect(up()).toContain('k-grudge');
+    expect(on()).toBe(true);
+    n.yieldToCrash();
+    expect(up()).toBeNull();
+    expect(on()).toBe(false);
+  });
+
+  it('drops a grudge settled waiting behind a finale, which keeps its turn', () => {
+    const { n, up, on } = band();
+    n.finale('Outran the avalanche', '+2,000 style', ChaosEvent.Avalanche);
+    n.grudgeSettled('SparkleCedar', true, 3, 20);
+    n.toast('Mission done: Pass a ghost', 'mission', '+25 gifts');
+    expect(up()).toContain('gs-fin');
+    n.yieldToCrash();
+    // The finale is that crash's own story: it stays, and keeps its full time.
+    expect(up()).toContain('gs-fin');
+    vi.advanceTimersByTime(1000);
+    expect(up()).toContain('gs-fin');
+    vi.advanceTimersByTime(2000);
+    // Nothing waited behind it any more: the band goes back to the race row.
+    expect(up()).toBeNull();
+    expect(on()).toBe(false);
+  });
+
+  it('never stages a grudge, mission or unlock toast that comes after the crash beat (the held settle)', () => {
+    const { n, up, on } = band();
+    n.yieldToCrash();
+    n.grudgeSettled('SparkleCedar', false, 2, 5);
+    n.toast('Grudge settled', 'grudge');
+    n.toast('Mission done: Ride 800 m in one run', 'mission', '+25 gifts');
+    n.unlock('Frostfang Glacier', 'glacier');
+    expect(up()).toBeNull();
+    expect(on()).toBe(false);
+    vi.advanceTimersByTime(3000);
+    expect(up()).toBeNull();
+    // An event's warning and finale still take the band.
+    n.finale('Caught 31 of 48', '+10 gifts', ChaosEvent.GiftStorm);
+    expect(up()).toContain('gs-fin');
+  });
+
+  it('reopens the band for every banner once the results clear it (a revive starts clean)', () => {
+    const { n, up } = band();
+    n.yieldToCrash();
+    n.grudgeSettled('SparkleCedar', false, 1, 5);
+    expect(up()).toBeNull();
+    n.clear();
+    n.grudgeSettled('SparkleCedar', false, 1, 5);
+    expect(up()).toContain('k-grudge');
+    n.clear();
+    n.toast('Mission done: Pass a ghost', 'mission');
+    expect(up()).toContain('t-mission');
   });
 });
