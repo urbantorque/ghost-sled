@@ -5,6 +5,10 @@ import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import { Core } from './core';
 import type { AudioFrame } from './engine';
+import { Prerender, type Recipe } from './prerender';
+import { GIFT_BIG_S, GIFT_BIG_STARTS, GIFT_S, GIFT_SECOND, GIFT_STARTS, GIFT_THIRD, giftKey, giftParts } from './sfx';
+import { ladder, mtof } from './theory';
+import { PRIO, type Voice, VoicePool } from './voices';
 
 // Probe-only offline renders of scripted mixes through the same Core the game plays (loaded on
 // demand by engine.debugRender, so it costs the game nothing). scripts/playtest/levels.js calls it to
@@ -16,6 +20,12 @@ import type { AudioFrame } from './engine';
 //             heartbeat, and a burst of rewards every quarter second (streak-5 stomps, tier-3 banks,
 //             passes, whiskers, gifts). The peak after the limiter must stay under -3 dBFS, and the
 //             voice-steal counters show the pools' headroom.
+//   gifts     the effects alone: runs of six gift pickups climbing the ladder (giftAt), the same six
+//             each run, so their rendered takes (prerender.ts) play from the second run on once
+//             ready; takes and takeMisses count them, and opts.live builds every one live to null
+//             the takes against
+//   giftTakes every gift pickup's take (ladder steps 6 to 15, both kinds) against the same pickup
+//             built live, on a voice at its level and a pan, sample by sample (renderTakes)
 // Levels are in dBFS, measured after the first 2 s (the decks fade in over 1.2 s).
 
 const SR = 48000;
@@ -121,6 +131,14 @@ function burst(core: Core, t: number, n: number): void {
   core.sfx.frame();
   for (const b of beats) core.sfx.beat(b, t);
   for (const e of events) core.sfx.event(e, t);
+}
+
+/** The 'gifts' probe's pickups (the effects alone): one every 0.35 s from 2 s, every other one worth
+ *  5, and after every sixth a 1.5 s gap that starts the streak again, so each run climbs ladder
+ *  steps 6 to 11, the odd steps worth 5 (a rendered take plays from a step's second time on). */
+function giftAt(k: number): { t: number; value: number } {
+  const run = Math.floor(k / 6);
+  return { t: 2 + run * (5 * 0.35 + 1.5) + (k % 6) * 0.35, value: k % 2 === 1 ? 5 : 1 };
 }
 
 /** One moment on the cruise mix at MOMENT_T, for the envelope probes. */
@@ -433,6 +451,8 @@ export interface RenderOpts {
   stealOldest?: boolean;
   /** The sfx pool's quiet-tail level (voices.ts QUIET), to tune the steal rule. */
   quiet?: number;
+  /** Every fixed one-shot built live, no rendered takes (prerender.ts), to null the takes against. */
+  live?: boolean;
 }
 
 /** The shoulder probe's timeline (s): the bed alone, a ghost 2 m to the left closing from 5.5 m to
@@ -493,12 +513,151 @@ async function renderLayers(): Promise<Record<string, number | number[]>> {
   return out;
 }
 
+/** 'giftTakes': where each pair starts, in frames into a render quantum: on its first frame, at a
+ *  pickup's phase in the game (currentTime plus 6 ms: 32 frames at 48 kHz, 8.6 at 44.1 kHz), and
+ *  between two frames past the middle. */
+const TAKE_PHASES = [0, 32, 8.6, 64.37];
+/** 'giftTakes': the render quanta each pair starts in (37, at 98.7 ms, for every key and phase; the
+ *  rest at the game's phase for four keys), whose start times carry different float noise. */
+const TAKE_BLOCKS = [37, 38, 100, 101, 377, 1000, 1001, 2345];
+
+/** One voice at a gift's level (0.3) and a pan (0.2) straight into a stereo destination, built by
+ *  `build` from t0, rendered. */
+async function voiceRender(t0: number, bank: Core['bank'], build: (v: Voice) => void): Promise<AudioBuffer> {
+  const ctx = new OfflineAudioContext(2, Math.ceil((t0 + GIFT_BIG_S + 0.05) * SR), SR);
+  build(new VoicePool(ctx, bank, 4).voice(t0, 0.3, ctx.destination, null, 0, 0.2, PRIO.low));
+  return ctx.startRendering();
+}
+
+/** How far `b` is from `a`: the largest block RMS difference (256 samples, blocks where either side
+ *  is above -80 dBFS) and the residual b - a against a's RMS, both in dB. */
+function nullOf(a: AudioBuffer, b: AudioBuffer): { blockDb: number; residDb: number } {
+  const B = 256;
+  const floor = B * 1e-8;
+  let worst = 0;
+  let sig = 0;
+  let res = 0;
+  for (let ch = 0; ch < a.numberOfChannels; ch++) {
+    const x = a.getChannelData(ch);
+    const y = b.getChannelData(ch);
+    for (let i = 0; i + B <= x.length; i += B) {
+      let sx = 0;
+      let sy = 0;
+      for (let j = i; j < i + B; j++) {
+        sx += x[j] * x[j];
+        sy += y[j] * y[j];
+        res += (y[j] - x[j]) ** 2;
+      }
+      sig += sx;
+      if (sx > floor || sy > floor) worst = Math.max(worst, Math.abs(10 * Math.log10((sy + 1e-30) / (sx + 1e-30))));
+    }
+  }
+  return { blockDb: worst, residDb: 10 * Math.log10((res + 1e-30) / (sig + 1e-30)) };
+}
+
+/**
+ * Every gift pickup's take, rendered and played as the game does (prerender.ts), against the same
+ * pickup built live, each on a voice at the pickup's level and a pan: ladder steps 6 to 15 of both
+ * kinds in the alpine key, at each of TAKE_PHASES in quantum 37, and at the game's phase in each of
+ * TAKE_BLOCKS for steps 6 and 11. pairs counts the starts the take played, live the ones it refused
+ * (a bell would start on another frame); blockDb and residDb (nullOf) are the worst over the pairs,
+ * per phase. forcedBlockDb and forcedResidDb are the take played anyway where it refused, and naiveBlockDb
+ * and naiveResidDb a take rendered on a block's first frame started where asked: what the frame check
+ * and the phase save.
+ */
+async function renderTakes(): Promise<Record<string, number | number[]>> {
+  const core = new Core(new OfflineAudioContext(2, SR, SR));
+  core.music.setTarget('run', Mood.None, 'alpine');
+  const k = core.music.key();
+  const n = TAKE_PHASES.length;
+  const worst = (fill: number): number[] => new Array<number>(n).fill(fill);
+  const out = { blockDb: worst(0), residDb: worst(-200), forcedBlockDb: worst(0), forcedResidDb: worst(-200), naiveBlockDb: worst(0), naiveResidDb: worst(-200) };
+  let pairs = 0;
+  let live = 0;
+  let missing = 0;
+  let renders = 0;
+  let failures = 0;
+  const up = (key: keyof typeof out, o: number, x: number): void => {
+    out[key][o] = Math.max(out[key][o], x);
+  };
+  for (let o = 0; o < n; o++) {
+    const phase = TAKE_PHASES[o];
+    // A Prerender per phase, as one run's pickups all share one.
+    const r = new Prerender(core.ctx, core.bank);
+    const takes = (r as unknown as { takes: Map<number, { buf: AudioBuffer }> }).takes;
+    for (const big of [false, true]) {
+      for (let i = 6; i <= 15; i++) {
+        const m1 = ladder(k, i);
+        const m2 = ladder(k, i + 2);
+        const m3 = big ? ladder(k, i + 4) : 0;
+        const f1 = mtof(m1);
+        const f2 = mtof(m2);
+        const f3 = big ? mtof(m3) : 0;
+        const key = giftKey(m1, m2, m3);
+        const secs = big ? GIFT_BIG_S : GIFT_S;
+        const recipe: Recipe = (v, t) => giftParts(v, t, f1, f2, f3, null);
+        const done = r.renders + r.failures;
+        r.want(key, (37 * 128 + phase) / SR, secs, big ? GIFT_BIG_STARTS : GIFT_STARTS, recipe);
+        for (let tries = 0; r.renders + r.failures === done && tries < 500; tries++) {
+          r.pump();
+          await new Promise((res) => setTimeout(res, 4));
+        }
+        const take = takes.get(key);
+        if (!take) {
+          missing++;
+          continue;
+        }
+        const blocks = phase === 32 && (i === 6 || i === 11) ? TAKE_BLOCKS : TAKE_BLOCKS.slice(0, 1);
+        for (const q of blocks) {
+          const t0 = (q * 128 + phase) / SR;
+          const on = t0 + (big ? GIFT_THIRD : GIFT_SECOND);
+          const ref = await voiceRender(t0, core.bank, (v) => recipe(v, t0));
+          let played = false;
+          const took = await voiceRender(t0, core.bank, (v) => {
+            played = r.play(v, key, t0, on);
+          });
+          if (played) {
+            pairs++;
+            const x = nullOf(ref, took);
+            up('blockDb', o, x.blockDb);
+            up('residDb', o, x.residDb);
+          } else {
+            live++;
+            const at = Math.round(t0 * SR - phase) / SR;
+            const x = nullOf(ref, await voiceRender(t0, core.bank, (v) => v.play(take.buf, at, 256 / SR, on)));
+            up('forcedBlockDb', o, x.blockDb);
+            up('forcedResidDb', o, x.residDb);
+          }
+          if (q !== 37) continue;
+          // The naive take: its parts from frame 0, started at t0.
+          const octx = new OfflineAudioContext(1, Math.ceil(secs * SR) + 1, SR);
+          recipe(new VoicePool(octx, core.bank, 1).voice(0, 1, octx.destination, null, 0), 0);
+          const naive = await octx.startRendering();
+          const x = nullOf(ref, await voiceRender(t0, core.bank, (v) => v.buffer(naive, t0, t0 + naive.duration, v.out, 1, false)));
+          up('naiveBlockDb', o, x.blockDb);
+          up('naiveResidDb', o, x.residDb);
+        }
+      }
+    }
+    renders += r.renders;
+    failures += r.failures;
+    r.dispose();
+  }
+  core.dispose();
+  const r3 = (xs: number[]): number[] => xs.map((x) => Math.round(x * 1000) / 1000);
+  const res: Record<string, number | number[]> = { pairs, live, missing, takeRenders: renders, takeFailures: failures };
+  for (const [key, xs] of Object.entries(out)) res[key] = r3(xs);
+  return res;
+}
+
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   if (kind === 'layers') return renderLayers();
+  if (kind === 'giftTakes') return renderTakes();
   const snuffK = SNUFF_KINDS[kind];
   if (snuffK && opts.part === undefined) return renderSnuff(kind, opts);
   const part: SnuffPart = opts.part ?? 'all';
-  const bare = opts.sfxOnly === true || part === 'snuff';
+  const gifts = kind === 'gifts';
+  const bare = opts.sfxOnly === true || part === 'snuff' || gifts;
   const flow = FLOW_KINDS.has(kind) || !!snuffK;
   const isMoment = kind === 'drop' || kind === 'massive' || kind === 'lost' || kind === 'escape' || flow;
   const shoulder = kind === 'shoulder';
@@ -518,6 +677,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   if (opts.ceiling !== undefined) core.graph.ceiling.gain.value = opts.ceiling;
   core.sfxPool.stealOldest = opts.stealOldest === true;
   if (opts.quiet !== undefined) core.sfxPool.quiet = opts.quiet;
+  if (opts.live) core.sfx.renders = null;
   if (opts.snuff) core.sfx.snuffTweak = opts.snuff;
   core.graph.setMaster(1, 0);
   const noMusic = kind === 'ambience' || kind === 'stress-sfx' || kind === 'stress-amb' || shoulder || wind || bare;
@@ -565,6 +725,12 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     if (stress && kind !== 'stress-amb' && t >= nextBurst) {
       burst(core, t + 0.006, n++);
       nextBurst += 0.25;
+    }
+    if (gifts) {
+      for (let g = giftAt(n); t >= g.t - 1e-6; g = giftAt(++n)) {
+        core.sfx.frame();
+        core.sfx.event({ type: 'gift', id: n, value: g.value, x: 0, y: 0, z: 0 }, t + 0.006);
+      }
     }
     if (snuffK) {
       // 'In the flow' first (the flow-then kinds), then the snuff with what broke it.
@@ -634,6 +800,10 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     sfxPeak: core.sfxPool.peak,
     musicPeak: core.musicPool.peak,
     errors,
+    takes: core.renders.hits,
+    takeMisses: core.renders.misses,
+    takeRenders: core.renders.renders,
+    takeFailures: core.renders.failures,
   };
   if (shoulder) {
     // L and R RMS (dBFS) of the bed alone, the last second of the closing (the ghost 2.2 to 0.5 m

@@ -6,7 +6,9 @@
 // raw events through simEvent(), in the app's order (beats first), so the engine path is the real one.
 //
 // Scenarios (window.__capCfg.scenarios; default: all):
-//   cruise    20 s of a live plain run under a line pilot: the mix level and the band layers over time
+//   cruise    20 s of a live plain run under a line pilot: the mix level and the band layers over time,
+//             and the gift pickups played from rendered takes (src/audio/prerender.ts): most of them
+//             once their takes are ready (the rest land a part on another frame and play live)
 //   drop      a 9,000 tier-2 bank: the band ducks into a gap before the figure lands, then the slam
 //   massive   a 24,000 tier-3 bank: the cymbal swell, the gap, the slam
 //   lost      a crash with 2,500 at stake: the stumble, the sub drop on the tonic, the hard duck
@@ -267,12 +269,13 @@ async (page) => {
             const r = window.__gs.run;
             rows.push([+(r ? r.sim.tick / 60 : 0).toFixed(1), +d.intensity.toFixed(3), +(d.bass ?? 0).toFixed(2), +(d.hat ?? 0).toFixed(2), +(r ? r.sim.s.speed : 0).toFixed(1), window.__gs.phase]);
           }
-          return rows;
+          const d = a.debugLevels();
+          return { rows, takes: { plays: d.takes, live: d.takeMisses, offGrid: d.takeOffGrid, renders: d.takeRenders, failures: d.takeFailures, samples: d.takeSamples } };
         });
         const s = await collect();
         const t0 = mark(s, 'start');
         const body = windowDb(s, t0 + 4, t0 + 20);
-        const after4 = lv.filter((r) => r[0] >= 4 && r[5] === 'run');
+        const after4 = lv.rows.filter((r) => r[0] >= 4 && r[5] === 'run');
         results.cruise = {
           running: ins.running,
           rmsDb: meanPowDb(body),
@@ -280,7 +283,9 @@ async (page) => {
           bassAudibleShare: after4.length ? +(after4.filter((r) => r[2] > 0.15).length / after4.length).toFixed(2) : null,
           hatAudibleShare: after4.length ? +(after4.filter((r) => r[3] > 0.15).length / after4.length).toFixed(2) : null,
           medianIntensity: median(after4.map((r) => r[1])),
-          levels: lv,
+          takes: lv.takes,
+          takesPlay: lv.takes.plays > 0 && lv.takes.failures === 0,
+          levels: lv.rows,
         };
       } else if (sc === 'drop' || sc === 'massive') {
         const ins = await open('&autoride=1');

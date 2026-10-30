@@ -76,6 +76,10 @@ export function blockRate(f: BiquadFilterNode): BiquadFilterNode {
   return f;
 }
 
+/** The reserve's size per node kind (NodeReserve.refill). Ten sources, where six served before a gift
+ *  pickup played its rendered take through one (prerender.ts). */
+const RESERVE = { gains: 28, oscs: 18, filters: 6, sources: 10, panners: 4 } as const;
+
 /**
  * Fresh nodes made ahead, between frames. Making a node is the dearest call a sound makes on the
  * main thread, and the effects make theirs inside a frame (beats() and simEvent() run in the app's
@@ -93,14 +97,40 @@ export class NodeReserve {
   /** Probe: nodes a voice had to make itself (the reserve was dry). */
   misses = 0;
 
-  constructor(private readonly ctx: BaseAudioContext) {}
+  /**
+   * `sineWave`: a sine PeriodicWave to make its oscillators with, for a context that has made none
+   * yet (a take's render, prerender.ts). A context builds its own sine table on its first
+   * createOscillator(), 1 ms on a desktop where the rest of a take's dozen nodes take 0.3 ms; an
+   * oscillator made with a wave skips that, and Voice.osc leaves a sine's wave alone.
+   */
+  constructor(
+    private readonly ctx: BaseAudioContext,
+    private sineWave: PeriodicWave | null = null,
+  ) {}
+
+  /** Whether its oscillators are made as sines (Voice.osc then sets no 'sine' type on them). */
+  get sine(): boolean {
+    return this.sineWave !== null;
+  }
 
   gain(): GainNode {
     return this.gains.pop() ?? (this.misses++, this.ctx.createGain());
   }
 
   osc(): OscillatorNode {
-    return this.oscs.pop() ?? (this.misses++, this.ctx.createOscillator());
+    const o = this.oscs.pop();
+    if (o) return o;
+    this.misses++;
+    if (this.sineWave) {
+      try {
+        return new OscillatorNode(this.ctx, { periodicWave: this.sineWave });
+      } catch {
+        // A wave from another context refused, or no constructor: plain ones from now on (a fresh
+        // oscillator is a sine, so a voice that skipped its type still gets one).
+        this.sineWave = null;
+      }
+    }
+    return this.ctx.createOscillator();
   }
 
   filter(): BiquadFilterNode {
@@ -124,25 +154,22 @@ export class NodeReserve {
    */
   refill(budget = 8): void {
     const ctx = this.ctx;
-    const want: Array<[unknown[], number, () => unknown]> = [
-      [this.gains, 28, () => ctx.createGain()],
-      [this.oscs, 18, () => ctx.createOscillator()],
-      [this.filters, 6, () => blockRate(ctx.createBiquadFilter())],
-      [this.sources, 6, () => ctx.createBufferSource()],
-    ];
-    if (typeof ctx.createStereoPanner === 'function') want.push([this.panners, 4, () => ctx.createStereoPanner()]);
+    const panners = typeof ctx.createStereoPanner === 'function';
+    // Runs 40 times a second, so it allocates nothing: each kind's gap below its size, the first
+    // kind at the widest gap made, in the order gains, oscillators, filters, sources, panners.
     for (let made = 0; made < budget; made++) {
-      let best: [unknown[], number, () => unknown] | null = null;
-      let gap = 0;
-      for (const w of want) {
-        const g = (w[1] - w[0].length) / w[1];
-        if (g > gap) {
-          gap = g;
-          best = w;
-        }
-      }
-      if (!best) return;
-      best[0].push(best[2]());
+      const g = (RESERVE.gains - this.gains.length) / RESERVE.gains;
+      const o = (RESERVE.oscs - this.oscs.length) / RESERVE.oscs;
+      const f = (RESERVE.filters - this.filters.length) / RESERVE.filters;
+      const s = (RESERVE.sources - this.sources.length) / RESERVE.sources;
+      const p = panners ? (RESERVE.panners - this.panners.length) / RESERVE.panners : 0;
+      const gap = Math.max(g, o, f, s, p);
+      if (!(gap > 0)) return;
+      if (g === gap) this.gains.push(ctx.createGain());
+      else if (o === gap) this.oscs.push(ctx.createOscillator());
+      else if (f === gap) this.filters.push(blockRate(ctx.createBiquadFilter()));
+      else if (s === gap) this.sources.push(ctx.createBufferSource());
+      else this.panners.push(ctx.createStereoPanner());
     }
   }
 }
@@ -232,9 +259,10 @@ export class Voice {
 
   osc(wave: OscillatorType | PeriodicWave, freq: number, t0: number, t1: number, dest: AudioNode | AudioParam, detune = 0): OscillatorNode {
     const o = this.make.osc();
-    // PeriodicWave is an empty interface in the DOM typings, so typeof cannot narrow it.
-    if (typeof wave === 'string') o.type = wave as OscillatorType;
-    else o.setPeriodicWave(wave);
+    // PeriodicWave is an empty interface in the DOM typings, so typeof cannot narrow it. An oscillator
+    // the reserve made as a sine keeps its wave (NodeReserve.sine).
+    if (typeof wave !== 'string') o.setPeriodicWave(wave);
+    else if (wave !== 'sine' || !this.make.sine) o.type = wave as OscillatorType;
     o.frequency.value = freq;
     if (detune) o.detune.value = detune;
     link(o, dest);
@@ -259,6 +287,22 @@ export class Voice {
     if (t1 > this.end) this.end = t1;
     if (t0 > this.lastOn) this.lastOn = t0;
     return s;
+  }
+
+  /** Plays a rendered take of this voice's parts (prerender.ts) from `from` s into it, at `at`, the
+   *  first frame of the render quantum its parts start in (Prerender.play): one source into the out
+   *  instead of the parts' own nodes. `on` is the latest attack inside the take, so the steal
+   *  estimate reads the voice as it would read the live parts. */
+  play(take: AudioBuffer, at: number, from: number, on: number): void {
+    const s = this.make.source();
+    s.buffer = take;
+    s.connect(this.out);
+    s.start(at, from);
+    const t1 = at + take.duration - from;
+    s.stop(t1);
+    this.srcs.push(s);
+    if (t1 > this.end) this.end = t1;
+    if (on > this.lastOn) this.lastOn = on;
   }
 
   /** Sine LFO added onto a parameter. */

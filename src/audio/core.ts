@@ -2,6 +2,7 @@ import { Ambience } from './ambience';
 import { Bank, createBank } from './buffers';
 import { Graph } from './graph';
 import { Music } from './music';
+import { Prerender } from './prerender';
 import { Sfx } from './sfx';
 import { NodeReserve, VoicePool } from './voices';
 
@@ -19,6 +20,8 @@ export class Core {
   readonly musicPool: VoicePool;
   /** Nodes made ahead in the scheduler pass for both pools' voices (voices.ts NodeReserve). */
   readonly reserve: NodeReserve;
+  /** Fixed one-shots rendered once and played as one source (prerender.ts). */
+  readonly renders: Prerender;
   readonly music: Music;
   readonly sfx: Sfx;
   readonly ambience: Ambience;
@@ -30,16 +33,18 @@ export class Core {
     this.bank = createBank(ctx);
     this.graph = new Graph(ctx, this.bank.impulse);
     this.reserve = new NodeReserve(ctx);
+    this.renders = new Prerender(ctx, this.bank);
     this.sfxPool = new VoicePool(ctx, this.bank, SFX_VOICES, this.reserve);
     this.musicPool = new VoicePool(ctx, this.bank, MUSIC_VOICES, this.reserve);
     this.music = new Music(ctx, this.musicPool, this.graph.music);
     this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key(), this.graph.music);
+    this.sfx.renders = this.renders;
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
     this.sfx.bed = (t, hold, depth) => this.ambience.dip(t, hold, depth);
   }
 
   /** One scheduler pass: fill the music lookahead, place grid pulses, build deferred effect parts,
-   *  free finished voices, settle idle ambience. */
+   *  free finished voices, settle idle ambience, start a take's render. */
   tick(now: number, lookahead: number): void {
     this.music.tick(now, now + lookahead);
     this.sfx.pulses(now, now + lookahead, this.music.grid(), this.pulse.fuse, this.pulse.duel);
@@ -47,11 +52,13 @@ export class Core {
     this.sfxPool.sweep(now);
     this.musicPool.sweep(now);
     this.ambience.watch(now);
-    // Between frames: the nodes the next frame's effects will take.
+    // Between frames: the nodes the next frame's effects will take, and a take asked for meanwhile.
     this.reserve.refill();
+    this.renders.pump();
   }
 
   dispose(): void {
+    this.renders.dispose();
     this.music.dispose();
     this.ambience.dispose();
     this.sfxPool.releaseAll();
