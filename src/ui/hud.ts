@@ -23,10 +23,11 @@ import { EVENT_ICON } from './notices';
 // other ghosts' words take the callout line under the combo meter.
 // Under the combo timer a small line names the one number at stake ("4,960 AT STAKE"); it turns
 // gold-white on your best combo's pace and throbs like a fuse while a big stake drains (the figure keeps
-// the fuse's amber on pace). In the flow, the multiplier chip wears a vermillion ring and a "Flow" tag
-// until the combo ends. The score waits for a cash-in's figure to land before it counts the bank. Top
-// left, "Best in 240 m" counts down to your best in gold-white, and a rolled event counts down in its own
-// chip beside the mood chip ("Avalanche in 380 m"), coloured by its role.
+// the fuse's amber on pace). The fuse is on the meter itself too: the timer's fill turns amber and the
+// multiplier chip throbs on the stake's beat. In the flow, the multiplier chip wears a vermillion ring
+// and a "Flow" tag until the combo ends. The score waits for a cash-in's figure to land before it
+// counts the bank. Top left, "Best in 240 m" counts down to your best in gold-white, and a rolled event
+// counts down in its own chip beside the mood chip ("Avalanche in 380 m"), coloured by its role.
 
 const CHEVRONS = 5;
 /**
@@ -65,6 +66,11 @@ const REQUEUE_MS = 450;
 const DELTA_MS = 1300;
 /** A rank change shows once it has held this long; rank ticks animate at most this often. */
 export const RANK_SETTLE_MS = 180;
+/**
+ * The drift and slipstream pills fade out over 160 ms (style.css): their rects stay in the occluders
+ * this long after they go, so a ghost's tag or the edge chip never slides onto a pill still drawn.
+ */
+export const PILL_FADE_MS = 180;
 const TICK_GAP_MS = 500;
 /** A gained place turns its numeral mint once the pill's flash thins, for this long (the colour snaps). */
 const GAIN_DELAY_MS = 200;
@@ -280,6 +286,11 @@ export function placeSettled(firstAt: number, changedAt: number, now: number): b
  */
 export function rankSettled(lastRank: number, wantAt: number, now: number, wreck: boolean): boolean {
   return lastRank < 0 || wreck || now - wantAt >= RANK_SETTLE_MS;
+}
+
+/** Whether a drift or slipstream pill that went at `goneAt` is still fading out (PILL_FADE_MS). */
+export function pillHeld(goneAt: number, now: number): boolean {
+  return now - goneAt < PILL_FADE_MS;
 }
 
 /** A race word for the callout line: its text, its tone, and what it is about (a ghost, or a sling burst). */
@@ -626,6 +637,10 @@ export class Hud {
   private nameNow = false;
   /** A ghost rode past your wreck this frame (rankNow): the wanted place shows at once. */
   private rankNowF = false;
+  /** When the drift and slipstream pills last went (PILL_FADE_MS), and whether one still fades. */
+  private driftGoneAt = -1e9;
+  private draftGoneAt = -1e9;
+  private pillFading = false;
   /**
    * The model name whose name the pill shows right now ('' while a flash holds it): the gap shown
    * beside a name is always that same ghost's gap, never the next one's while the name settles.
@@ -851,6 +866,9 @@ export class Hud {
     this.stakeOn = new Flag(this.stakeEl);
     this.stakePace = new Flag(this.stakeEl, 'is-pace');
     this.comboEl = h('div', 'gs-combo', this.comboRow, h('div', 'gs-combo-track', this.comboBar), this.stakeEl);
+    // The fuse's band, on the stake line and the meter alike (unlit until a big stake drains).
+    this.stakeEl.dataset.fuse = '0';
+    this.comboEl.dataset.fuse = '0';
     this.comboOn = new Flag(this.comboEl);
     this.comboTotal = new Flag(this.comboEl, 'has-total');
     this.comboLow = new Flag(this.comboEl, 'is-low');
@@ -943,6 +961,9 @@ export class Hud {
       this.leadDone = true;
       this.lastFuse = -1;
       this.rankNowF = false;
+      this.driftGoneAt = -1e9;
+      this.draftGoneAt = -1e9;
+      this.pillFading = false;
       this.flowState('off');
       this.scoreHold.release();
       this.fit();
@@ -1548,8 +1569,10 @@ export class Hud {
     if (this.comboOn.on && this.flowOnF.on) n = pushRect(out, n, this.flowTag);
     if (this.stakeOn.on) n = pushRect(out, n, this.stakeEl);
     for (const c of Array.from(this.calloutSlot.children)) if (!c.classList.contains('is-gone')) n = pushRect(out, n, c);
-    if (this.driftOn.on) n = pushRect(out, n, this.driftEl);
-    if (this.draftOn.on) n = pushRect(out, n, this.draftEl);
+    // A drift or slipstream pill fading out is still drawn: it keeps its rect through the fade.
+    const now = performance.now();
+    if (this.driftOn.on || pillHeld(this.driftGoneAt, now)) n = pushRect(out, n, this.driftEl);
+    if (this.draftOn.on || pillHeld(this.draftGoneAt, now)) n = pushRect(out, n, this.draftEl);
     if (this.dangerOn.on) {
       n = pushRect(out, n, this.mirrorBox);
       n = pushRect(out, n, this.dangerEl);
@@ -1851,7 +1874,9 @@ export class Hud {
 
     // The number at stake, from x2 (at x1 the total above already is it). Gold-white once it passes
     // your best combo; a fuse while a big stake drains, its throb quickening in bands as the timer runs
-    // out (bands, not a rate per frame, so the CSS loop never jumps phase every frame).
+    // out (bands, not a rate per frame, so the CSS loop never jumps phase every frame). The meter wears
+    // the same band, where the eye is: the timer's fill turns amber and the multiplier chip throbs on
+    // the stake's beat (the multiplier cashes in unless a move is added).
     const stake = Math.round(c.stake ?? 0);
     const showStake = c.active && c.mult >= 2 && stake > 0;
     if (this.stakeOn.set(showStake)) moved = true;
@@ -1868,6 +1893,7 @@ export class Hud {
     if (fb !== this.lastFuse) {
       this.lastFuse = fb;
       this.stakeEl.dataset.fuse = String(fb);
+      this.comboEl.dataset.fuse = String(fb);
     }
 
     // Your best within 250 m, under the distance.
@@ -1904,7 +1930,10 @@ export class Hud {
     // until it goes (stampLow): it was placed while they were out, in the band they share.
     const low = this.stampLow();
     const tier = Math.max(0, Math.min(3, Math.round(m.driftTier)));
-    if (this.driftOn.set(tier > 0 && !low)) moved = true;
+    if (this.driftOn.set(tier > 0 && !low)) {
+      moved = true;
+      if (!this.driftOn.on) this.driftGoneAt = now;
+    }
     if (tier > 0 && tier !== this.lastTier) {
       if (tier > this.lastTier && this.lastTier > 0) bump(this.driftEl, 1.12, 240);
       this.driftEl.dataset.tier = String(tier);
@@ -1914,11 +1943,22 @@ export class Hud {
     // Slipstream.
     const lit = m.draft > 0 ? Math.max(1, Math.min(CHEVRONS, Math.ceil(m.draft * CHEVRONS))) : 0;
     this.draftWant = lit > 0;
-    if (this.draftOn.set(lit > 0 && !low)) moved = true;
+    if (this.draftOn.set(lit > 0 && !low)) {
+      moved = true;
+      if (!this.draftOn.on) this.draftGoneAt = now;
+    }
     this.draftFull.set(m.draft >= 0.999);
     if (lit !== this.lastChev) {
       this.lastChev = lit;
       for (let i = 0; i < CHEVRONS; i++) this.chevs[i].set(i < lit);
+    }
+    // A pill that just went is still drawn while it fades, so its rect stays in the occluders (measure)
+    // until the fade has ended: the release frame took it out at once, and the edge chip landed on
+    // DRIFT. Once the last fade ends, the occluders are measured again without it.
+    const fading = (!this.driftOn.on && pillHeld(this.driftGoneAt, now)) || (!this.draftOn.on && pillHeld(this.draftGoneAt, now));
+    if (fading !== this.pillFading) {
+      this.pillFading = fading;
+      if (!fading) moved = true;
     }
 
     // Avalanche: the wall advances over the track in proportion to the gap, and the gap number rides in
