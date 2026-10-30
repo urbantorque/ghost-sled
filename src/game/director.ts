@@ -99,6 +99,9 @@ const FLIPS = ['Backflip', 'Double Backflip', 'Triple Backflip'];
 /** Stomp hit-stop by streak (1, 2, 3, 4, 5+), seconds on the sim feed at 0.35. */
 const STOMP_STOP = [0.13, 0.15, 0.17, 0.19, 0.19];
 const HITSTOP_SCALE = 0.35;
+/** A max drift's release (tier 3) freezes the feed longer than a single stomp (STOMP_STOP[0]) and
+ *  under a double: at 0.07 s it landed weaker than the stomp it outranks. Tiers 1 and 2 have none. */
+const DRIFT3_STOP = 0.14;
 /** A perfect landing this soon (ticks) after a yeti hop keeps the 'Yeti hop' title. */
 const YETI_TITLE_TICKS = 90;
 /** Wipeout news: a ghost ahead within this many metres, or behind within WIPE_BEHIND (no duel). */
@@ -376,6 +379,9 @@ export class Director {
   private lastNewsAt = -1e9;
   private lastFinaleAt = -1e9;
   private lastDuelEndAt = -1e9;
+  /** 'In the flow' was named: a pop waits POP_DEFER.flow after it (the line waits out a stamp first),
+   *  until that combo's flow is over (a new combo or a snuff). */
+  private lastFlowAt = -1e9;
 
   // Ghost tricks and the stomp metronome.
   private readonly cursors = new Map<number, number>();
@@ -507,7 +513,7 @@ export class Director {
     this.teased = false;
     this.pollAt = 0;
     this.lastPopUnlock = false;
-    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = -1e9;
+    this.lastPopAt = this.lastStompAt = this.lastPassAt = this.lastNewsAt = this.lastFinaleAt = this.lastDuelEndAt = this.lastFlowAt = -1e9;
     this.cursors.clear();
     this.lastWhisperAt = -1e9;
     this.ticked.fill(false);
@@ -549,6 +555,7 @@ export class Director {
     this.kinds.clear();
     this.earnCap = 0;
     this.flowInDone = false;
+    this.lastFlowAt = -1e9;
     this.snuffAt = -1;
   }
 
@@ -874,7 +881,7 @@ export class Director {
             this.lastReleaseTier = e.tier;
             if (e.tier >= 1) {
               const tier = Math.min(3, e.tier) as 1 | 2 | 3;
-              if (tier === 3 && motion) this.time.pulse(HITSTOP_SCALE, 0.07, 'feed');
+              if (tier === 3 && motion) this.time.pulse(HITSTOP_SCALE, DRIFT3_STOP, 'feed');
               this.push({ type: 'driftRelease', tick: p.tick, tier, x: s.x, z: s.z, heading: s.heading, driftDir: s.driftDir }, sim);
             }
           } else if (e.phase === 'start') this.lastReleaseTier = 0;
@@ -988,7 +995,6 @@ export class Director {
       this.metronome(f, sim);
       this.tricks(f, sim, now);
       this.raceCall(f, sim, now);
-      this.queuePops(f, sim, now, dt, passedNow);
     }
     if (!live) this.pops.length = 0;
 
@@ -1006,9 +1012,12 @@ export class Director {
     if (this.snuffAt >= 0) shown = Math.min(shown, Math.max(0, this.snuffFrom * (1 - (now - this.snuffAt) / SNUFF_S)));
     if (live && !this.flowInDone && shown >= FLOW_IN_AT && this.kinds.size >= FLOW_IN_KINDS && this.trickIn()) {
       this.flowInDone = true;
+      this.lastFlowAt = now;
       this.pulseAt = now;
       this.push({ type: 'flow', tick: sim.tick, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } }, sim);
     }
+    // The pops go last: one never goes up on the frame 'In the flow' is named.
+    if (live && run) this.queuePops(f, sim, now, dt, passedNow);
     const fk = Math.pow(smoothstep(0.5, FLOW_FULL, shown), 0.8);
     if (this.crashT >= 0) this.crashT += dt * this.time.render;
 
@@ -1154,6 +1163,7 @@ export class Director {
       this.perfects = 0;
       this.kinds.clear();
       this.flowInDone = false;
+      this.lastFlowAt = -1e9;
     }
     if (kind === 'draft' || kind === 'slingshot') return;
     this.skillChain++;
@@ -1184,6 +1194,7 @@ export class Director {
     this.perfects = 0;
     this.kinds.clear();
     this.flowInDone = false;
+    this.lastFlowAt = -1e9;
   }
 
   /** 'Flow broken': the snuff's beat (the scarf's puff and the wind's bend), with its line when `say`.
@@ -1513,6 +1524,8 @@ export class Director {
       now - this.lastStompAt >= POP_DEFER.stomp / 1000 &&
       now - this.lastPassAt >= POP_DEFER.pass / 1000 &&
       now - this.lastNewsAt >= POP_DEFER.news / 1000 &&
+      // 'In the flow' waits out a stamp and then has the line to itself for about a second.
+      now - this.lastFlowAt >= POP_DEFER.flow / 1000 &&
       // An open duel holds a pop only while it is fresh (it lives in the pill; the pop in the notice slot).
       (this.duels.open === null || now - this.duelOpenAt >= DUEL_POP_BLOCK_S) &&
       // A duel's result keeps its flash; the grudge's banner keeps the band, and goes first once only a

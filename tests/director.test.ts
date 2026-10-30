@@ -455,6 +455,26 @@ describe('banks, flow and lost combos', () => {
     const b = r.frame([{ type: 'drift', phase: 'release', tier: 2 }, style('drift', 350)]);
     expect(of(b, 'callout')[0].say.label).toBe('Big drift');
   });
+
+  it("a max drift's release freezes the feed longer than a single stomp; tiers 1 and 2 never, nor reduced motion", () => {
+    /** The sim feed's scale `after` seconds past the frame. */
+    const feedAfter = (events: SimEvent[], after: number, reduced = false): number => {
+      const r = new Rig();
+      r.frame(events, { reduced });
+      r.d.time.step(after);
+      r.d.time.step(1 / 600);
+      return r.d.time.feed;
+    };
+    const release = (tier: number): SimEvent => ({ type: 'drift', phase: 'release', tier });
+    // A single stomp (0.13 s) has let go by 0.135 s; the max drift still holds the feed at 0.35.
+    expect(feedAfter([style('perfect'), land('perfect')], 0.135)).toBe(1);
+    expect(feedAfter([release(3)], 0.135)).toBeCloseTo(0.35);
+    // ...and lets go before a double stomp's 0.15 s.
+    expect(feedAfter([release(3)], 0.145)).toBe(1);
+    expect(feedAfter([release(1)], 0)).toBe(1);
+    expect(feedAfter([release(2)], 0)).toBe(1);
+    expect(feedAfter([release(3)], 0, true)).toBe(1);
+  });
 });
 
 describe('milestones', () => {
@@ -1255,6 +1275,67 @@ describe('mission and unlock pops', () => {
     }
     expect(of(out, 'missionPop')).toHaveLength(0);
     expect(of(r.idle(3), 'missionPop')).toHaveLength(0);
+  });
+
+  /** One frame of a long, varied chain ending on a stomp: the sim's flow is up, so 'In the flow'
+   *  follows within a few frames. */
+  const flowStomp = (r: Rig, from = 1): Beat[] => {
+    const kinds = ['carve', 'air', 'spin', 'gate'] as const;
+    const evs: SimEvent[] = [];
+    for (let i = 0; i < 16; i++) evs.push(style(kinds[i % kinds.length], 100, from + i));
+    evs.push(style('perfect', 300, from + 16), land('perfect'));
+    r.sim.s.flow = 6;
+    return r.frame(evs);
+  };
+
+  it("waits out 'In the flow': a mission met on the stomp that names it pops POP_DEFER.flow after the flow beat", () => {
+    let met = false;
+    const r = new Rig({ missionsCrossed: () => (met ? [{ id: 'perfects', text: 'Land 2 perfect landings', reward: 30 }] : []) });
+    r.idle(1);
+    met = true;
+    const stompTick = r.sim.tick + 1;
+    const out = [...flowStomp(r), ...r.idle(5)];
+    const flow = of(out, 'flow').filter((b) => b.phase === 'in');
+    const pop = of(out, 'missionPop');
+    expect(flow).toHaveLength(1);
+    expect(pop).toHaveLength(1);
+    // The stomp alone would have let it go 1.6 s after the stomp, under the flow line's first second.
+    expect((pop[0].tick - flow[0].tick) / 60).toBeGreaterThanOrEqual(POP_DEFER.flow / 1000 - 1 / 60);
+    expect((pop[0].tick - stompTick) / 60).toBeGreaterThan(POP_DEFER.stomp / 1000 + 0.5);
+    // Never on the frame the flow is named, nor in the 0.9 s that follow.
+    expect(out.filter((b) => b.type === 'missionPop' && b.tick - flow[0].tick < 54)).toHaveLength(0);
+  });
+
+  it("a pop held by stomps and then by 'In the flow' still gives up at 8 s: the flow adds no time", () => {
+    const { r } = popRig();
+    r.idle(0.45);
+    // Stomps keep the moment busy to 6 s; the last names the flow. The stomp alone would let the pop
+    // go at 7.6 s, inside its 8 s; behind the flow it would be 8.8 s, so it gives up instead.
+    const out: Beat[] = [];
+    for (let i = 0; i < 8; i++) {
+      out.push(...r.frame([style('perfect'), land('perfect')]));
+      out.push(...r.idle(0.7));
+    }
+    out.push(...flowStomp(r, 10));
+    out.push(...r.idle(6));
+    expect(of(out, 'flow').filter((b) => b.phase === 'in')).toHaveLength(1);
+    expect(of(out, 'missionPop')).toHaveLength(0);
+  });
+
+  it("a new combo or a snuff ends the flow's hold on a pop", () => {
+    let met = false;
+    const r = new Rig({ missionsCrossed: () => (met ? [{ id: 'perfects', text: 'Land 2 perfect landings', reward: 30 }] : []) });
+    r.idle(1);
+    met = true;
+    const flowAt = r.sim.tick + 1;
+    const out = [...flowStomp(r), ...r.idle(0.5)];
+    expect(of(out, 'flow').filter((b) => b.phase === 'in')).toHaveLength(1);
+    // A sketchy landing puts the flow out ('Flow broken'): the pop then waits only for the stomp's 1.6 s.
+    out.push(...r.frame([land('sketchy')]));
+    out.push(...r.idle(2));
+    const pop = of(out, 'missionPop');
+    expect(pop).toHaveLength(1);
+    expect((pop[0].tick - flowAt) / 60).toBeLessThan(POP_DEFER.flow / 1000);
   });
 
   it('a mission met as an unlock pops as the unlock banner leaves (a fresh save)', () => {
