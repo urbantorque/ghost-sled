@@ -488,9 +488,15 @@ function greeting(text: string): HTMLElement {
 
 /** "270/800" on screen, "270 of 800" to a reader (the mission rows, and the results' folded row). */
 export function progText(n: number, of: number): HTMLElement {
+  // Progress floors (799.6 of 800 is not there yet) and keeps the target's precision ("1.2/1.5", not
+  // "1/2").
+  const dp = Number.isInteger(of) ? 0 : 1;
+  const k = 10 ** dp;
+  const v = Math.floor(n * k + 1e-9) / k;
+  const f = (x: number): string => (dp ? x.toFixed(1) : fmt(x));
   const slash = h('span', '', '/');
   slash.setAttribute('aria-hidden', 'true');
-  return h('span', '', fmt(n), slash, sr(' of '), fmt(of));
+  return h('span', '', f(v), slash, sr(' of '), f(of));
 }
 
 /**

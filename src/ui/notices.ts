@@ -220,6 +220,23 @@ export class Notices {
     this.setBand(false);
   }
 
+  /**
+   * The crash beat owns the race row: a mission or unlock toast over it (or waiting for it) gives the
+   * band back at once, so the place chip and the pack riding past the wreck are seen. The results card
+   * shows the same missions; race banners (a grudge settled, a finale, a warning) keep their turn.
+   */
+  yieldToCrash(): void {
+    const quiet = (b: Banner): boolean => b.spec.type === 'toast' && (b.spec.tone === 'mission' || b.spec.tone === 'unlock');
+    this.queue = this.queue.filter((b) => !quiet(b));
+    const cur = this.cur;
+    if (!cur || !quiet(cur)) return;
+    window.clearTimeout(this.timer);
+    this.cur = null;
+    const out = cur.el ? this.exit(cur.el, cur.spec.type, true) : null;
+    cur.el = null;
+    this.next(out);
+  }
+
   /** The banner on stage, for the occluder cache. */
   get current(): HTMLElement | null {
     return this.cur?.el ?? null;

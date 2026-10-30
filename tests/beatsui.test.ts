@@ -31,7 +31,7 @@ function rig() {
     flowState: rec('hud.flowState'),
   } as unknown as Hud;
   const fx = { pop: rec('fx.pop'), flowIn: rec('fx.flowIn'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
-  const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock') } as unknown as Notices;
+  const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock'), yieldToCrash: rec('notices.yieldToCrash') } as unknown as Notices;
   const router = new BeatRouter(hud, fx, notices);
   return { calls, router, of: (tag: string) => calls.filter((c) => c[0] === tag) };
 }
@@ -76,13 +76,13 @@ describe('BeatRouter', () => {
       ['Streak broken', 'lost'],
       ['Streak broken', 'lost'],
       ['Best combo pace', 'best'],
-      ['New best', 'best'],
+      ['New best score', 'best'],
       ['Beat Mila’s 2,340 m', 'big'],
     ]);
     // The friend's handle keeps its own case, possessive and all.
     expect(of('fx.pop')[4][4]).toBe('Mila’s');
     // The run's goal markers reach screen readers too (the callout layer is aria-hidden).
-    expect(of('hud.say').map((c) => c[1])).toEqual(expect.arrayContaining(['New best', 'Beat Mila’s 2,340 m']));
+    expect(of('hud.say').map((c) => c[1])).toEqual(expect.arrayContaining(['New best score', 'Beat Mila’s 2,340 m']));
     expect(of('hud.paceHit')).toHaveLength(1);
     expect(of('hud.flashBest')).toHaveLength(1);
   });
@@ -114,7 +114,13 @@ describe('BeatRouter', () => {
       { type: 'crash', tick: 3, cause: 'tree', stake: 900, orbitFrom: null },
       { type: 'comboLost', tick: 3, points: 900, stake: 900, best: false, crack: true },
     ]);
-    expect(calls.filter((c) => c[0] !== 'hud.flowState').map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'fx.lost']);
+    expect(calls.filter((c) => c[0] !== 'hud.flowState').map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'notices.yieldToCrash', 'fx.lost']);
+  });
+
+  it('hands the race row back to the crash beat: a mission or unlock toast over it yields', () => {
+    const { router, of } = rig();
+    router.handle([{ type: 'crash', tick: 3, cause: 'tree', stake: 0, orbitFrom: null }]);
+    expect(of('notices.yieldToCrash')).toHaveLength(1);
   });
 
   it('retires a live stamp on a sketchy landing before its line, and leaves it for other callouts', () => {
@@ -167,7 +173,7 @@ describe('BeatRouter', () => {
     ]);
     expect(b.of('hud.flowState').map((c) => c[1])).toEqual(['on', 'off', 'on', 'off', 'off']);
     // Each 'off' follows its own picture: the cash-in, the stamp's retire, the crack.
-    expect(b.calls.map((c) => c[0])).toEqual(['fx.flowIn', 'hud.flowState', 'fx.cashIn', 'hud.flowState', 'fx.flowIn', 'hud.flowState', 'fx.retireStamp', 'hud.flowState', 'fx.lost', 'hud.flowState']);
+    expect(b.calls.map((c) => c[0])).toEqual(['fx.flowIn', 'hud.flowState', 'fx.cashIn', 'hud.flowState', 'fx.flowIn', 'hud.flowState', 'fx.retireStamp', 'notices.yieldToCrash', 'hud.flowState', 'fx.lost', 'hud.flowState']);
     expect(of('fx.pop').map((c) => c[1])).toEqual(['Flow broken']);
   });
 

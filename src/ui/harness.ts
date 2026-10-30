@@ -933,7 +933,7 @@ const SCENARIOS: Record<string, () => void> = {
     titles.forEach((title, i) =>
       window.setTimeout(() => {
         const n = i + 1;
-        const lead = n === 1 ? [{ label: 'Perfect', points: 250 }] : [{ label: `${n} in a row`, points: 0 }];
+        const lead = [{ label: n === 1 ? 'Stomp' : 'Perfect', points: 250 }];
         beats(
           { type: 'callout', tick: 0, source: 'spin', say: { label: 'Spin 540', points: 450, tone: 'big' } },
           { type: 'stomp', tick: 0, streak: n, late: false, title, lead, x: 0, z: 0, heading: 0, yetiHop: false },
@@ -947,7 +947,7 @@ const SCENARIOS: Record<string, () => void> = {
     beats(
       { type: 'callout', tick: 0, source: 'flip', say: { label: 'Backflip', points: 600, tone: 'big' } },
       { type: 'callout', tick: 0, source: 'spin', say: { label: 'Spin 360', points: 300, tone: 'big' } },
-      { type: 'stomp', tick: 0, streak: 5, late: false, title: 'Stomp streak 5', lead: [{ label: '5 in a row', points: 0 }], x: 0, z: 0, heading: 0, yetiHop: false },
+      { type: 'stomp', tick: 0, streak: 5, late: false, title: 'Stomp streak 5', lead: [{ label: 'Perfect', points: 250 }], x: 0, z: 0, heading: 0, yetiHop: false },
     );
   },
 

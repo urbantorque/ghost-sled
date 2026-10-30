@@ -144,9 +144,9 @@ async (page) => {
     graveyard: { approach: 'grave', at: [-50, -28, -12, -3, 22, 34] },
     finale: { type: 'finale', frames: [0, 8, 24, 48, 90] },
     // Impact, the held frame, its slow motion, just before and after the cut to the pack, the orbit.
-    crash: { type: 'crash', frames: [0, 12, 36, 47, 53, 66] },
+    crash: { type: 'crash', frames: [0, 12, 36, 53, 80, 96] },
     // The same, only a crash with two or more ghosts riding close by (the orbit swings to the pack).
-    crashPack: { type: 'crash', pack: 2, frames: [0, 12, 36, 47, 53, 66] },
+    crashPack: { type: 'crash', pack: 2, frames: [0, 12, 36, 66, 80, 96] },
     // The results card from the frame it opens: place stamp, count-up, New best, Done stamps, gifts
     // flown into the wallet, settled (3.3 s). resultsBest: only a card with a new best.
     results: { state: 'results', frames: [0, 18, 36, 66, 110, 200] },
@@ -809,6 +809,21 @@ async (page) => {
           const shown = (el) => el && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden' && +getComputedStyle(el).opacity > 0.05;
           const all = (sel) => [...document.querySelectorAll(sel)].filter((el) => shown(el) && !el.classList.contains('gs-sr')).map(txt).filter(Boolean);
           return { race: txt(document.querySelector('.gs-race')), notices: all('.gs-notices > *'), calls: all('.gs-call-wrap'), hero: all('.gs-hero'), bank: all('.gs-bank'), crack: all('.gs-crack') };
+        })(),
+        // What the HUD's numbers and states read (the cash-in's held score, the fuse's colours, the flow
+        // tag, the crack's size), which the words alone do not show.
+        ux: (() => {
+          const q = (s) => document.querySelector(s);
+          const sn = q('.gs-stake-n');
+          const st = q('.gs-stake');
+          const cb = q('.gs-combo');
+          const crack = q('.gs-crack');
+          return {
+            score: q('.gs-score') ? q('.gs-score').textContent : null,
+            flow: !!(cb && cb.classList.contains('is-flow')),
+            stake: st && st.classList.contains('is-on') ? { pace: st.classList.contains('is-pace'), fuse: st.dataset.fuse ?? null, figure: sn ? getComputedStyle(sn).color : null } : null,
+            crack: crack ? getComputedStyle(crack).fontSize : null,
+          };
         })(),
         // Banners and stamps mid-transition in this frame: each finite animation in progress on the top
         // band (notices, the race row), a callout, a stamp, a bank or the crack, with its progress and

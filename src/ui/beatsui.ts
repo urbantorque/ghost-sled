@@ -87,8 +87,10 @@ export class BeatRouter {
           this.hud.flowState('off');
           break;
         case 'crash':
-          // No picture of its own here (the world stages it), but a stamp still up retires at once.
+          // No picture of its own here (the world stages it), but a stamp still up retires at once, and
+          // a mission or unlock toast hands the race row back for the pack riding past the wreck.
           this.fx.retireStamp();
+          this.notices.yieldToCrash();
           this.hud.flowState('off');
           break;
         case 'flow':
@@ -141,7 +143,7 @@ export class BeatRouter {
           break;
         case 'newBest': {
           // The run's goal markers are spoken too: the callout layer is hidden from screen readers.
-          const s = b.say ?? { label: 'New best', points: 0, tone: 'best' };
+          const s = b.say ?? { label: 'New best score', points: 0, tone: 'best' };
           this.say(s);
           this.hud.say(s.label);
           this.hud.flashBest();

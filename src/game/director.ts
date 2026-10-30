@@ -432,6 +432,7 @@ export class Director {
   /** A ghost that was behind you at the crash still rides within `near` metres behind the wreck, as
    *  of the last frame: the results wait for it to go by (the app caps the wait, CRASH_PACK_MAX_MS). */
   wreckPending(near = CRASH_PACK_NEAR_M): boolean {
+    if (this.wreckBehind.size === 0) return false;
     for (const gap of this.wreckBehind.values()) if (gap >= -near) return true;
     return false;
   }
@@ -1123,6 +1124,7 @@ export class Director {
       }
       return;
     }
+    if (this.wreckBehind.size === 0) return;
     for (const id of this.wreckBehind.keys()) {
       const t = f.tracks.find((k) => k.entry.id === id);
       const p = f.poses.get(id);
@@ -1296,9 +1298,10 @@ export class Director {
     const n = this.streak.land('perfect', late, tick).n;
     // 'PERFECT LANDING' over 'STOMP +250', and a streak's title over 'PERFECT +250' ('DOUBLE STOMP',
     // 'STOMP STREAK 5'): no word is said twice on one stamp, and the title alone counts the streak.
-    const lead: Array<{ label: string; points: number }> = [{ label: n >= 2 ? 'Perfect' : 'Stomp', points }];
     // A yeti hop keeps its title; its 1,500 is the hop's own finale stamp ('+1,500 style'), shown once.
+    // Inside a streak its lead carries the streak's title instead ('YETI HOP / DOUBLE STOMP +250').
     const yeti = tick - this.yetiHopTick >= 0 && tick - this.yetiHopTick <= YETI_TITLE_TICKS;
+    const lead: Array<{ label: string; points: number }> = [{ label: n >= 2 ? (yeti ? stompTitle(n) : 'Perfect') : 'Stomp', points }];
     if (motion) this.time.pulse(HITSTOP_SCALE, STOMP_STOP[Math.min(n, STOMP_STOP.length) - 1] ?? 0.13, 'feed');
     this.lastStompAt = this.clock;
     const h = this.rivalHold;

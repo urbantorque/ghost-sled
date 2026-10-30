@@ -835,7 +835,7 @@ async (page) => {
             if (name === 'beats' && Array.isArray(args[0])) {
               // Beats are logged one by one, compactly (a whole list can be long).
               for (const b of args[0]) {
-                tele.beats.push({ t, type: b.type, tone: b.say ? b.say.tone : undefined, label: b.say ? b.say.label : b.text || b.title || undefined, muted: !!b.muted, word: b.word, grade: b.grade, tier: b.tier, phase: b.phase, gifts: b.gifts, streak: b.streak, news: b.news, outcome: b.outcome, id: typeof b.id === 'string' ? b.id : undefined, gap: typeof b.gap === 'number' ? +b.gap.toFixed(2) : undefined });
+                tele.beats.push({ t, type: b.type, tone: b.say ? b.say.tone : undefined, label: b.say ? b.say.label : b.text || b.title || undefined, muted: !!b.muted, wreck: b.wreck || undefined, word: b.word, grade: b.grade, tier: b.tier, phase: b.phase, gifts: b.gifts, streak: b.streak, news: b.news, outcome: b.outcome, id: typeof b.id === 'string' ? b.id : undefined, gap: typeof b.gap === 'number' ? +b.gap.toFixed(2) : undefined });
               }
             } else {
               let s = '';
@@ -1139,7 +1139,7 @@ async (page) => {
     const count = (re) => inRun.filter((c) => re.test(c.m)).length;
     const legacy = !beats.length && inRun.some((c) => c.m === 'ui.popStyle' || c.m === 'ui.ghostPass');
     const BIG = /^(big|perfect|best)$/;
-    let shown, passedBy, banks, bigCallouts, toasts, missions, firstPass, firstNamed;
+    let shown, passedBy, wreckPassed = 0, banks, bigCallouts, toasts, missions, firstPass, firstNamed;
     if (legacy || !beats.length) {
       const passes = inRun.filter((c) => c.m === 'ui.ghostPass' && /,true]$/.test(c.a));
       shown = passes.length;
@@ -1154,7 +1154,9 @@ async (page) => {
     } else {
       const passes = beats.filter((b) => b.type === 'pass' && !b.muted);
       shown = passes.length;
-      passedBy = beats.filter((b) => b.type === 'passedBy' && !b.muted).length;
+      // Ghosts riding past your wreck after the crash are counted apart, so passedBy stays like for like.
+      passedBy = beats.filter((b) => b.type === 'passedBy' && !b.muted && !b.wreck).length;
+      wreckPassed = beats.filter((b) => b.type === 'passedBy' && b.wreck).length;
       banks = beats.filter((b) => b.type === 'bank').length;
       bigCallouts = beats.filter((b) => b.type === 'stomp' || (b.tone && BIG.test(b.tone) && b.type !== 'bank')).length;
       toasts = beats.filter((b) => ['finale', 'grudgeSettled', 'missionPop', 'unlockPop'].includes(b.type)).length + count(/^ui.toast$/);
@@ -1190,6 +1192,7 @@ async (page) => {
       passBonus: tele.crash ? tele.crash.passBonus : null,
       passes: shown,
       passedBy,
+      wreckPassed,
       firstPassAt: firstPass,
       firstNamedAt: firstNamed,
       namedMoments: named,

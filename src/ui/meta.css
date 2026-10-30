@@ -641,6 +641,28 @@
   }
 }
 
+/* A short phone (375x667, 360x640): Home moves up under Resume and the mission rows tighten, so both
+   stay on screen and only the settings scroll. */
+@media (max-aspect-ratio: 1/1) and (max-height: 760px) {
+  .gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+    grid-template-areas:
+      'title'
+      'mis'
+      'resume'
+      'home'
+      'set'
+      'key';
+  }
+
+  .gs-pause-mis .gs-missions {
+    gap: 6px;
+  }
+
+  .gs-pause-mis .gs-mis-reward {
+    display: none;
+  }
+}
+
 /* ------------------------------------------------------------------ Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {

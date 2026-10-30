@@ -543,7 +543,8 @@ export class Fx {
     // The slot is full and every line on it outranks this one (a slipstream tick under BACKFLIP): it
     // is not shown, so the bigger line keeps the moment. Its points still reach the combo meter. A
     // race word has waited out the hold instead, and takes the slot, and so does a forced line.
-    if (!o.force && tone !== 'lost' && race === undefined && this.items.length >= max && this.items.every((c) => rankOf(c) > RANK[tone])) {
+    // (By tone: the flow line's own rank only holds a newcomer back through admit, it never drops one.)
+    if (!o.force && tone !== 'lost' && race === undefined && this.items.length >= max && this.items.every((c) => RANK[c.tone] > RANK[tone])) {
       if (tone === 'normal') this.remember(text, points, 1, now);
       return;
     }
@@ -964,8 +965,11 @@ export class Fx {
     const room = this.hud.stampRoom() ?? { left: 16, right: vw - 16, top: vh * 0.26 };
     const rx = Number.isFinite(this.rx) ? this.rx : vw / 2;
     const ry = Number.isFinite(this.ry) ? this.ry : vh * 0.6;
-    const p = stampSpot(vw, vh, room, this.hud.unitPx(), rx, ry, subRows, this.hud.bottomRoom());
-    this.heroLow = p.low;
+    const bottom = this.hud.bottomRoom();
+    const p = stampSpot(vw, vh, room, this.hud.unitPx(), rx, ry, subRows, bottom);
+    // The pills wait only for a stamp seated over an empty pill row: one fitted above a showing pill
+    // leaves it on screen.
+    this.heroLow = p.low && bottom === null;
     const s = el.style;
     s.left = `${Math.round(p.cx)}px`;
     s.top = `${Math.round(p.top)}px`;

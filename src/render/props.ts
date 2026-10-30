@@ -198,6 +198,8 @@ export class Props {
       b.mesh.dispose();
     }
     this.batches.clear();
+    // Meshes queued for the old course or palette would only be made to be thrown away.
+    this.queued.clear();
     this.cache.clear();
     for (const mat of this.materials) mat.dispose();
     this.materials = [];
@@ -314,6 +316,12 @@ export class Props {
     // whenIdle), and the next mark's is queued behind it. Null while it waits.
     let archGeo: BufferGeometry | null = null;
     if (this.arches) {
+      // At the course start (a new run, with no rebuild when the mood is unchanged), the first mark's
+      // arch is queued again in case a long run evicted it.
+      if (from <= 0) {
+        const s1 = archSpan(c, 1);
+        this.queue('arch:' + s1, () => kmArchGeometry(s1));
+      }
       for (let i = Math.max(-2, from); i <= to; i++) {
         const km = kmInChunk(i);
         if (!km) continue;
@@ -402,7 +410,12 @@ export class Props {
   /** A landmark's mesh: built already, else made now (`now`) or queued for idle time (null till then). */
   private landmark(key: string, make: () => BufferGeometry, now: boolean): BufferGeometry | null {
     const have = this.landmarks.get(key);
-    if (have) return have;
+    if (have) {
+      // Most recently used last, so the keep limit drops the stalest mesh.
+      this.landmarks.delete(key);
+      this.landmarks.set(key, have);
+      return have;
+    }
     if (!now) {
       this.queue(key, make);
       return null;
