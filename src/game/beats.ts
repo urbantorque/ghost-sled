@@ -17,6 +17,11 @@ export const WHISKER_SPEED = 18; // m/s
 export const CRASH_FREEZE_S = 0.45; // chase lens holds (scaled render time)
 export const CRASH_RESULTS_MS = 1150;
 export const CRASH_RESULTS_REDUCED_MS = 950;
+// The pack past your wreck: while a ghost that was behind you at the crash still rides within
+// CRASH_PACK_NEAR_M behind the wreck, the results wait for it to go by, up to CRASH_PACK_MAX_MS after the
+// crash (reduced motion never waits).
+export const CRASH_PACK_NEAR_M = 25;
+export const CRASH_PACK_MAX_MS = 1600;
 export const EXTRA_GIFTS_CAP = 30; // per run: chains, slung, duels, finales, graveyards
 export const DRIFT_TIER_HEX = ['#FFC2A8', '#FF8A5C', '#FF4D2E'] as const;
 export const FLOW_HEX = '#FF4D2E';
@@ -64,7 +69,8 @@ export type Beat =
   | (B & { type: 'bestComboPace'; stake: number })
   /** gifts: credited by the app. muted: no flash, no ping, no camera. */
   | (B & { type: 'pass'; ghost: GhostRef; word: PassWord; text: string; first: boolean; chain: number; ladder: number; octave: boolean; gifts: number; muted: boolean })
-  | (B & { type: 'passedBy'; ghost: GhostRef; muted: boolean })
+  // wreck: a ghost riding past your wreck after the crash (said, never paid, no choir retake)
+  | (B & { type: 'passedBy'; ghost: GhostRef; muted: boolean; wreck?: boolean })
   | (B & { type: 'lead'; of: number })
   | (B & { type: 'raceNews'; ghost: GhostRef; news: RaceNews; text: string; pan: number; gain: number })
   /** gifts: credited by the app (won / heldOff only). */

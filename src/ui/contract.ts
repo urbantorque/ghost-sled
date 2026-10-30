@@ -151,7 +151,10 @@ export interface ResultsModel {
   /** The stake lost to the crash (results append " with 4,960 on the line" from 1,000). */
   lostCombo?: number;
   /** At most ONE extra race line on the card (C6 budget): friend, then grudge, then event note. */
-  raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' } | null;
+  raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' } | null;
+  /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
+   *  past."): shown in the place note's slot, unless it is the race line itself. */
+  crashNote?: string | null;
   /** The Run Again button's label ("Rematch Mila") and its accessible name. */
   runAgainLabel?: { text: string; aria: string };
   /** The next unlock to work toward, in the unlock-card slot. */
@@ -256,7 +259,8 @@ export interface GameUI {
   showResults(m: ResultsModel): void;
   updateResults(m: ResultsModel): void;
   hideResults(): void;
-  showPause(settings: SettingsModel): void;
+  /** missions: the run's live mission progress, shown on the pause card (at most 3 rows). */
+  showPause(settings: SettingsModel, missions?: MissionView[]): void;
   hidePause(): void;
   showSleds(cards: SledCard[], wallet: number): void;
   showSettings(m: SettingsModel): void;
