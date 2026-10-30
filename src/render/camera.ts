@@ -169,6 +169,10 @@ const PACK_CHEST_TOP = [0.35, 0.1];
  *  rose into the HUD's race row), and only for a crossing within TRIPOD_REACH of the wreck (a pack
  *  riding 35 m wide of a wreck in the trees left the wreck a speck past the bottom of the frame). */
 const PACK_FORE_D = 5;
+/** Off for now: standing beyond a crossing up to TRIPOD_REACH out, the tripod drew the wreck 20 to 25
+ *  px tall and the passer under 40 px (the fun panel's round 3), against 90 px for the wreck in the
+ *  pack orbit's own framing. It needs a nearer stand before it comes back. */
+const PACK_TRIPOD = false;
 const TRIPOD_BACK = [9, 11, 7];
 const TRIPOD_SIDE = 3;
 const TRIPOD_UP = 2.6;
@@ -1001,7 +1005,7 @@ export class ChaseCamera {
       // drifts on from the held lens, which rode in along the open course).
       // ...unless the ghost riding past will cross the line you fell on well clear of the wreck: then
       // the lens cuts to the pack tripod beside its line (packTripod), and stays there.
-      this.tripod = !this.feel.reduced && !!t.pack && !!t.fell && this.packTripod(t.pos, t.pack, t.fell);
+      this.tripod = PACK_TRIPOD && !this.feel.reduced && !!t.pack && !!t.fell && this.packTripod(t.pos, t.pack, t.fell);
       if (this.tripod) cut = true;
       const aim = from === null || this.tripod ? null : this.packLens(t.pos, Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE));
       if (aim !== null) {

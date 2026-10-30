@@ -182,19 +182,16 @@ describe('crash pack framing', () => {
     expect(step(shots, gone + 60)).toBeLessThanOrEqual(full + 1e-9);
   });
 
-  it('stands on a tripod beside the passer when the wreck slid far from where you fell', () => {
+  it('keeps the wreck framed when it slid far from where you fell (the pack tripod is off)', () => {
     // You fell at z -100; the wreck slid 15 m on down the slope. The ghost rides 6 m to one side.
     const slid = (i: number) => new Vector3(0, 0, -100 - Math.min(15, i * 0.4));
     for (const aspect of [16 / 9, 390 / 844]) {
       const shots = run(slid, lane(-6, -72), 110, IDLE_FEEL, aspect);
       const at = Math.ceil((100.8 - 72) * 3);
       const s = shots[at];
-      // Still: the lens stands put from the cut to the pass.
-      expect(s.lens.distanceTo(shots[hold + 2].lens)).toBeLessThan(1e-6);
-      expect(s.ghost && inFrame(s.ghost, 0.9)).toBe(true);
-      // Below the HUD's race row, and big: 60 px of a 720 px frame (on a phone, 40 of 844).
-      expect(s.ghost!.y).toBeLessThan(aspect < 1 ? 0.15 : 0.4);
-      expect(s.px).toBeGreaterThan(aspect < 1 ? (40 / 844) * H : 60);
+      // The orbit rides on with the wreck (no cut to a still lens far up its line), the wreck in the
+      // middle 70% of the frame as the ghost crosses.
+      expect(s.lens.distanceTo(shots[hold + 2].lens)).toBeGreaterThan(1e-3);
       expect(inFrame(s.wreck, 0.7)).toBe(true);
     }
   });
