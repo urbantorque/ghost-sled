@@ -479,3 +479,164 @@ Every place where I replaced, extended or interpreted the brief, and why.
     with the far rows fading into the fog, and each gift has its own small height offset, lean and
     size on top of its bob, so a row reads as placed objects rather than a fence (positions are the
     sim's and never move).
+
+## Made in the fun pass
+
+70. **No sim change this round.** The brief allowed one batched sim change (the draft chain fix, a
+    deep-carve cadence, a mitten grab, a perfect-landing decay exemption). The panel voted it down:
+    a SIM_VERSION bump drops every returning player's best ghost, grudge and challenge link, which
+    this round is the one to give meaning, and regenerating the pools would move every crash
+    distance the new field is tuned on. It is the first job of the next round, scoped and ready
+    (SIM_VERSION 4 to 5, then one pool regeneration). The leak players feel, a slipstream being
+    celebrated, is handled app-side: drafts and slingshots never count toward flow, the groove's
+    skill layers or a bank's tier. The one sim edit is a data tap: a near miss's style event now
+    carries its edge gap, side, nearest point and obstacle kind as optional, unhashed fields.
+71. **Every named moment is a beat.** The director turns the sim, the race and the save into one
+    list of beats per frame (src/game/beats.ts), and the HUD, the audio and the world all read that
+    same list. A moment that is not a beat does not get a sound, a callout or a camera move of its
+    own, so nothing celebrates twice and nothing celebrates out of step.
+72. **Time bends only at the edges.** Hitstop and slow motion scale the real-time feed into the
+    fixed loop and the render clock, never the sim. A stomp's hitstop grows with the streak (8 to 11
+    frames), a tier-3 drift release freezes briefly, a whisker gets 0.05 s, and a crash eases into a
+    slow curve. Reduced motion turns all of it off and keeps every beat.
+73. **A near miss is graded by the gap.** Under WHISKER_GAP (0.45 m, edge to edge) it is a Whisker:
+    panned to its side, a short jolt, snow off the boughs or grit off the rock beside you. About
+    one fast near miss in five grades Whisker in the pool replays. The burst sits 1.2 m ahead of the
+    sled and is pulled in until it projects on screen; airborne, a tree's burst rises with you up to
+    3.5 m and is skipped above that.
+74. **Flow is earned, and it can break.** 'In the flow' fires when the shown flow reaches 2.9 with
+    three kinds of move in the combo, one of them a spin, a flip or a gate. Shown flow is the sim's
+    flow capped by what you earned (skill moves / 4 + perfect landings / 2); drafts and slingshots
+    earn nothing. The rim and scarf glow is full at 3.5. A bump bank or a sketchy landing above 1.2
+    snuffs it with 'Flow broken' and a short pfft; a crash snuffs it without a word. Pool replay:
+    36 of 46 expert runs over 60 s reach it; the stunt pilot reaches it in 3 of 8 runs, novice
+    first runs never (0 of 8 in the final telemetry): it is a skill state, not a cruise state.
+75. **One number at stake.** The combo shows what you would bank (pending x multiplier). A fuse lights
+    from 1,500 at stake once the timer is under 40% and draining. A bank grades into tiers by points,
+    skill chain and your best combo: the chip slams, then the figure rolls up over 350, 600 or
+    900 ms. 'Best combo pace' warns mid-chain, and a lost combo of 300 or more cracks and falls. HUD
+    and audio read the same timings (stake.ts).
+76. **Stomps stack.** Perfect landings in a row read Double, Triple and Quad stomp, then 'Stomp streak
+    N', with a crater, ring, bell and hitstop that grow. A sketchy landing, a crash or a revive breaks
+    it ('Streak broken'); a hop under 0.3 s neither counts nor breaks. A single perfect reads
+    'PERFECT LANDING' over 'STOMP +250'.
+77. **The field is built around where you crash.** The anchor A is the larger of the median of your
+    last five run ends on that mountain and 0.7 of the last one (700 m with no runs). An opener at
+    0.62A, two pack ghosts at 0.85A and 1.05A, a pace rider from max(1.7A, A + 250, 1,500 m) that
+    averaged 23 m/s or more, and a stretch rider past 2.2A. A fresh Pinecrest run calls 'Chase
+    SparkleCedar', a pace rider who duels you around 30 s. Your best, the grudge and a friend's
+    challenge ride on top. In the final telemetry, novice first runs end with the race live (a ghost
+    within reach) in 3 of 8 runs before and 8 of 8 after (7 of 8 by the strict count), and the race is
+    live for 99% of a run against 70%. A skilled rider used to outrun the whole field: the stunt pilot
+    ended with the race live in 0 of 8 runs before and 4 of 8 after. Riding with the pack means more
+    slipstream, so runs are faster (novice 18.7 to 20.6 m/s) and shorter in time.
+78. **Every pass has a word.** Start-line jostles before 6 s are muted, but a slingshot through the
+    bunch is a pass and a burst reads as one growing 'Slung past N'. Then Passed, Double pass,
+    Triple pass, Pass streak N, Took back (pays nothing), Beat (a wreck), Duel won, Held off and
+    'Passed Your best'. Your best's muted jostle keeps its first pass for the real overtake. A muted
+    pass pays only its base; chain and slung extras share one cap of 30 gifts a run.
+79. **A duel is a named fight, and its result owns the pill.** Riding within 1.5 m for 1 s opens a
+    duel; 4 m clear or 8 s resolves it. For 1.5 s after the result the rival pill, the C11 ring and
+    the edge chip stay on the duel ghost and no new duel opens; other ghosts' words go to the
+    callout line under the combo. When a banner or the landing stamp covers the result, its 1.5 s
+    starts when it shows, and the next banner waits for it. The rival pill and the chip read one
+    held gap (1 m hold, 250 ms dwell) measured on the render tick, and the pill hides when no ghost
+    rides ahead or within 150 m behind.
+80. **A grudge settles only on what you saw.** A shown pass, a duel won or held off, or the grudge
+    crashing behind you settles it; a start-line jostle never does. Its premium (10 gifts, 20 for a
+    nemesis, doubled in Haunted Hollow) is paid once, at the settle, and the banner says why ('Wiped
+    out behind you'). The banner waits while a duel or a result's hold is open, and up to 3 s while a
+    slung or chained pass still flashes; when 'Passed Your best' is due at the same moment, the gold
+    pass goes first. Three wins in a row make a nemesis. A settled grudge is never elected again
+    straight away: the next is the nearest other ghost that went further than you.
+81. **Pops wait for clear air, and give up.** Missions and unlocks pop mid-run when nothing bigger is
+    on screen: the head of the queue waits up to 8 s (12 s for an unlock), nothing pops more than
+    15 s after its moment, and an open duel holds a pop only for its first 2.5 s. An unlock goes
+    first, but only after a pass you saw, and a mission earned with it follows 2.7 s later.
+82. **One race line on the results.** In order: a friend's challenge, the Daily medal on a Daily run,
+    a settled grudge or a nemesis, the event you never reached ('The yeti was 410 m away.'), then any
+    other grudge line. Under 1 m the margin reads 'by less than 1 m'.
+83. **Sound follows the picture.** The results card and the reveal cue their sounds from their first
+    painted frame, not from the call that opened them. A coin plays when its reward lands in the
+    wallet and a mission chime when its Done stamp starts on screen (UIHandlers.onRewardLanded and
+    onMissionStamp), so a row folded away on a phone makes no sound. Measured: within about 12 ms
+    on desktop and phone.
+84. **The gold band is the exception to decision 69.** Your best's line is painted on the snow as a
+    thin gold-white band (a friend's in mint), with a 'Best in N m' countdown and a New ground flare.
+    It is the one painted mark allowed, because it is a line to chase rather than decoration, and
+    it costs no draw calls.
+85. **Graveyards are places.** Where three or more pool ghosts crashed within 8 m, a cairn stands
+    with a name and 'N ghosts fell here' (up to four per mountain, no name used twice across the
+    bundled mountains). Riding 20 m past it alive says 'Survived <name>' and pays 3 gifts.
+86. **Only Space and Enter start a run from a menu.** Shift is a pop in a run, so Shift+Tab on the
+    title or results used to start one. Clicks and taps still do.
+87. **Hints teach and then stop.** The boosted-pop lesson wins over the drift lesson on a kicker
+    approach; the drift hint shows at most three times or 20 s a run, the spin hint three times;
+    air lessons need 2 s left to land while stomps are new; the stomp cue needs a real flight.
+88. **The band grooves from the first cruise.** Bass and hats come in at the run floor (2.5 s on a
+    plain run), skill moves and stomp streaks add the arp, kick and lead, and drafting alone never
+    lifts it past the arp. Ghosts you passed and who still ride close behind join as a choir (up to
+    three voices) and sigh when they take you back. When the sfx pool is full, a quiet tail is
+    stolen before a payoff.
+89. **The soundtrack makes its nodes between frames.** The fuller band costs main-thread time on a
+    weak CPU: at Low with the CPU throttled 6x the new build ran about 4 fps under the old one with
+    audio on, and level with it with audio off. Voices now take Web Audio nodes from a reserve that
+    the 25 ms scheduler tops up between frames, share one reverb send per level, unplug only their
+    tail, and hats, kick clicks and the choir use pre-filtered noise and shared formant chains
+    instead of a filter per hit. Nodes made per second at a cruise went from 107 to 78 (the old
+    build made 39), and nodes made inside a frame went to about 0. A seeded sample-level null test
+    puts every probe within 0.07 dB of before. Persistent note lanes cut further but moved the hat
+    layer by 2 dB for a reason not yet found, so they were not shipped. Gift pickups, the busiest
+    one-shot, play from takes rendered once per ladder note through an OfflineAudioContext: three
+    nodes instead of ten (sixteen for a big gift), and only where the take lands on the same frames as
+    the live pickup in Chrome's 128-frame blocks (within 0.09 dB, 0.01 dB in the null test); any other
+    pickup, and every pickup above 48 kHz, plays live. Steady cruise nodes went from 64 to 52 a second.
+    Low at 6x stays a few fps under the build before the fun pass (decision 89's cost is the band
+    itself); next round's options are a Low-tier arrangement or synthesis in an AudioWorklet.
+
+## Made in the fun panel's fix rounds
+
+90. **The pack rides past your wreck.** After a crash the race is over (no race events, no pass
+    paid, nothing a revive could replay), but the standings follow the ghosts on, so the place chip
+    steps down as they go by, and each ghost that was behind you says '<name> passed you' once as it
+    leads the wreck by 0.8 m. The results wait while one still rides within 25 m behind, and 500 ms
+    after the last goes by, up to 1.6 s after the crash (reduced motion keeps 950 ms and never
+    waits; a tap still skips). The crash beat owns the race row: mission, unlock and grudge banners give way and are held off
+    until the results (a settle still pays and its line is on the card), and the place chip steps on
+    the same frame as each wreck pass. The camera keeps the passer in frame: the crash orbit stops
+    drifting, turns toward the ghost (the wreck kept in the middle 70%), and cuts to a still tripod
+    beside the line when the ghost will cross it 5 to 24 m from the wreck; its tag wears the rival's
+    ring. The card names only the passes you saw ('You led at the crash. SparkleCedar and 2 more
+    ghosts rode on past.'), and a phone card, whose race line takes that slot, puts 'Led at the crash'
+    under the place.
+91. **Your rival is one you can catch.** The grudge goes first to the ghost nearest you at the crash
+    within 50 m either side, then to the nearest within reach (300 m or 0.6 of your distance past
+    you); the pace rider, built to finish far ahead, is never elected, and with nothing in reach no
+    grudge is. The lines say why ('SparkleCedar was 13 m ahead when you fell.'), a settle keeps its
+    tally and names the successor ('Grudge settled with Mila after 2 runs. New grudge: Tess.'), and
+    every margin is the difference of the rows as shown, so '7 m' sits under rows of 760 m and 753 m.
+    The save keeps its v1 fields.
+92. **Missions stay in sight.** The pause card lists the run's missions with their live progress
+    and Done once one popped; a results card with no mission finished names the one closest to done
+    in the folded row ('Ride 800 m in one run 753/800'), so a phone's card is no taller. Progress
+    floors and keeps the target's precision (1.2/1.5).
+93. **The cash-in is honest.** The multiplier chip is absorbed into the figure within 120 ms, so a
+    rolling figure never sits beside 'x3'; the score holds a cash-in's points back until its figure
+    lands (display only); a lost combo's crack is graded by its stake like a bank and drawn at the
+    cash-in's size, up to 1.2 s; and a draining stake on pace keeps the fuse's amber figure.
+94. **Flow gets its own moment, and the phone keeps its look-ahead.** 'In the flow' takes the line
+    alone in vermillion at 1.2x a trick's size, waits only for a stamp, and from then until it goes
+    out the multiplier chip wears a vermillion ring and a FLOW tag; a mission pop waits 2.6 s after
+    it, so the line has about a second alone. The fuse is on the chip too: a draining stake turns the
+    timer fill amber and throbs the multiplier at 500, 250 and 167 ms by band. On a phone held upright
+    the perfect-landing stamp sits under the rider, over the snow already ridden, instead of across
+    the slope ahead.
+95. **The camera answers skill.** A whisker flinches the lens 0.16 m away and tips the horizon; a
+    max drift's release outranks a stomp (a 1.0 kick against 0.9, a 0.14 s freeze against 0.13 s),
+    throws the lens back 0.35 m and knocks the horizon past level out of the lean; stomp streaks
+    shake harder (to 0.4) and knock the horizon from the third. The held crash lens, and the near
+    plane's corners, stay over the snow. Reduced motion turns all of it off.
+96. **Landmarks are made on idle time.** The kilometre arch and cairn meshes are built off the frame
+    after the first frame (and the title no longer builds every prop twice), so the first frame at
+    6x CPU throttle is level with the build before the fun pass again (1.79 s against 1.78 s, median
+    of 20 interleaved runs; 2.11 s before), with no hitch when an arch comes into range.

@@ -26,9 +26,19 @@ src/
   bot/         Bot driver that plays the real Sim with skill + human-like mistakes
   game/        Orchestration: fixed-step loop, run lifecycle, ghosts manager, draft detection,
                progression, save, quality tiers
+    director.ts  sim events + race + save -> one Beat[] per frame (the named moments)
+    beats.ts     the Beat contract the HUD, audio and world all read (frozen; orchestrator-owned)
+    race.ts      pass words, duels, the rival pill's ghost and its held gap
+    field.ts     which ghosts ride: built around where this player usually crashes
+    stake.ts, streak.ts, finales.ts, hints.ts, graveyards.ts, intensity.ts, timescale.ts
+                 bank tiers and the fuse, stomp streaks, event finales, teach-move hints, named
+                 crash spots, the band's drive, hitstop and slow motion
+    progress.ts, settle.ts  mid-run pops, the next unlock, results lines; settling a run into the save
   render/      Three.js: terrain chunks, props, rider, ghosts, trails, particles, sky, post FX, camera
   audio/       WebAudio: procedural wind/surface, reward synths, generative soundtrack
   ui/          DOM overlay screens (title, intro reveal, HUD, results, menus)
+    contract.ts  the UI facade's models and handlers (frozen; orchestrator-owned)
+    beatsui.ts   the overlay's half of the beats contract: routes each Beat to the HUD, fx or banners
   platform/    CrazyGames SDK v3 wrapper + local mock (standalone)
   workers/     ghost.worker.ts: replays ghost input logs and runs the daily bot pool
 scripts/       generate-ghosts.ts (bundled pool), package.ts (zip)
@@ -37,6 +47,14 @@ tests/         vitest: purity, determinism, fairness, encoding, scoring, chaos
 
 Dependency direction: `sim` imports nothing outside `sim`. `bot` imports `sim`. `render`, `audio`,
 `ui` read sim state but never write it. `game` is the only place that feeds inputs into a Sim.
+
+### Beats
+Every named moment (a pass, a duel and its result, a stomp streak, a bank, a whisker, flow in and
+flow broken, a mission pop, a finale) is a Beat. Once per frame the director turns the sim's events,
+the race and the save into one ordered list, and the HUD (`ui.beats`), the audio (`audio.beats`) and
+the world (`world.frame`) each read that same list. A moment that is not a beat gets no sound,
+callout or camera move of its own, so nothing celebrates twice or out of step. Beats are
+presentation only: the score stays in the sim, and any gifts a beat pays are credited by the app.
 
 ### Determinism model
 - Fixed timestep 60 Hz, tick counter is the only clock. Render interpolates between the previous and
@@ -83,6 +101,9 @@ hysteresis to stay under 2 KB. Tests assert the bound with bot runs.
 7. **Platform slice**: CrazyGames SDK v3 adapter + mock, gameplay start/stop, ads, happytime, data.
 8. **Critique loop**: 8+ screenshots rated against premium mobile games, fix anything below 8,
    performance pass until High tier holds 55+ fps; package `dist/ghost-sled.zip`.
+9. **Fun pass**: skill legibility, the race as a story, run shape, an earned soundtrack and reasons to
+   return, through the director and the beats contract (DECISIONS 70 to 89). No sim change: the one
+   batched sim change was deferred to the next round (DECISIONS 70).
 
 ## 3. Risks and mitigations
 
@@ -139,3 +160,22 @@ box limbs and the back of the head), an avalanche that reads as a wall in the wo
 the frame's edge, ghosts that read as racers on sleds rather than standing figures, and a crash
 tableau with the sled upside down beside the rider.
 
+## 6. Fun pass record
+
+The fun pass (DECISIONS 70 to 96) was judged by telemetry from scripted pilots and by a fun panel of
+six critics (game feel, race drama, the first session and the reason to return) rating beat strips
+against Alto's Odyssey, Mario Kart Tour, Tony Hawk's Pro Skater and Subway Surfers. Each panel's top
+fixes became a fix round in file-disjoint lanes, each lane checked by an adversarial verifier.
+
+| Panel | Before | Fun pass | Fix round 2 | Fix round 3 |
+| --- | --- | --- | --- | --- |
+| First | 4.02 | 6.10 | | |
+| Second | 3.93 | 5.65 | 6.14 | |
+| Third | 3.93 | | 5.94 | 6.28 |
+
+The loop stopped after the third panel: every judge still scored the new round higher, but each
+panel marked the previous build down once its defects showed beside the fixes, so the rise no longer
+clearly cleared the panel's own noise. Its open asks are the next round's list: skill, not cruising,
+building the soundtrack; one race word per beat (the see-saw of passes and take-backs); hints that
+never overprint; the start call's reason on screen and the first visit's goals; a Low-tier answer to
+the soundtrack's main-thread cost; and the one batched sim change (DECISIONS 70).
