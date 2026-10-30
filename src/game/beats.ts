@@ -28,7 +28,9 @@ export const FLOW_HEX = '#FF4D2E';
 export const BEST_HEX = '#FFE08A';
 export const FRIEND_HEX = '#8FF3E4';
 /** Director-side deferral for mission and unlock pops (ms since the blocking beat). */
-export const POP_DEFER = { stomp: 1600, pass: 1400, news: 1300, call: 2600, spacing: 3500, giveUp: 3000 } as const;
+// flow: 'In the flow' waits out a stomp's stamp (1,500 ms and its exit) and then has the line about 1 s
+// alone, so a pop waits this long after the flow beat.
+export const POP_DEFER = { stomp: 1600, pass: 1400, news: 1300, call: 2600, spacing: 3500, giveUp: 3000, flow: 2600 } as const;
 
 // ---------- small shared shapes
 /** A callout line for the fx slot. Every number carries its label (decision 35). */

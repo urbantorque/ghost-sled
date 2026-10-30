@@ -157,6 +157,9 @@ export interface ResultsModel {
   /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
    *  past."): shown in the place note's slot, unless it is the race line itself. */
   crashNote?: string | null;
+  /** Your place at the crash, when it was better than where you finished: a phone card, whose race
+   *  line takes the crash note's slot, shows it beside the place chip ("Led at the crash"). */
+  rankAtCrash?: number | null;
   /** The Run Again button's label ("Rematch Mila") and its accessible name. */
   runAgainLabel?: { text: string; aria: string };
   /** The next unlock to work toward, in the unlock-card slot. */
