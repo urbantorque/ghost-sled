@@ -91,8 +91,3 @@ export function stompTitle(n: number): string {
   if (n === 4) return 'Quad stomp';
   return `Stomp streak ${n}`;
 }
-
-/** The stamp's streak sub-line ('2 in a row', no number beside it), or null for a single stomp. */
-export function streakLine(n: number): string | null {
-  return n >= 2 ? `${n} in a row` : null;
-}

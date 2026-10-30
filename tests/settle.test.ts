@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { RunSummary, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { Grudge, defaultSave } from '../src/game/save';
-import { GrudgeOutcome, dailyLine, dailyMedalNow, grudgeLine, dailyStreakNow, medalFor, medalThresholds, prevDay, settleGrudge, settleRun } from '../src/game/settle';
+import { GrudgeOutcome, dailyLine, dailyMedalNow, grudgeLine, dailyStreakNow, medalFor, medalThresholds, prevDay, rowMargin, settleGrudge, settleRun } from '../src/game/settle';
 import type { GhostKind } from '../src/ui/contract';
 
 function summary(p: Partial<RunSummary> = {}): RunSummary {
@@ -157,15 +157,16 @@ describe('the grudge (settleGrudge)', () => {
     expect(down.settled).toBe(true);
     expect(down.nemesisDown).toBe(true);
     expect(down.grudge).toBeNull();
-    expect(down.line).toBe('You settled it with Mila after 3 runs.');
+    expect(down.line).toBe('Grudge settled with Mila after 3 runs.');
   });
 
-  it('a pass settles it and elects the Next row fresh', () => {
+  it('a pass settles it and elects the Next row fresh, named on the settled line', () => {
     const r = settleGrudge({ ...mila, them: 2, streak: 2 }, { youDistance: 500, rode: { distance: 620, passed: true }, next: next('Tess', 560) });
     expect(r.settled).toBe(true);
     expect(r.nemesisDown).toBe(false);
     expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 60, distance: 560 });
-    expect(r.line).toBe('You settled it with Mila after 2 runs.');
+    // The successor is introduced where the Rematch button will name it.
+    expect(r.line).toBe('Grudge settled with Mila. Tess is next.');
   });
 
   it('a settled grudge never elects itself again, even when its whole run went further', () => {
@@ -174,7 +175,7 @@ describe('the grudge (settleGrudge)', () => {
     const tess = next('Tess', 900);
     const r = settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow, tess] });
     expect(r.settled).toBe(true);
-    expect(r.line).toBe('You settled it with Mila.');
+    expect(r.line).toBe('Grudge settled with Mila. Tess is next.');
     expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 117 });
     // Nobody else went further: no grudge rather than the one you just settled.
     expect(settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow] }).grudge).toBeNull();
@@ -183,16 +184,67 @@ describe('the grudge (settleGrudge)', () => {
   });
 
   it('a margin under 1 m says so (the race rows read the same distance)', () => {
-    const r = settleGrudge(null, { youDistance: 489.3, rode: null, next: next('MarmotMateo', 489.5) });
+    const r = settleGrudge(null, { youDistance: 489.3, rode: null, next: next('MarmotMateo', 489.4) });
     expect(r.line).toBe('MarmotMateo beat you by less than 1 m. MarmotMateo will be waiting.');
     expect(grudgeLine('Tess', 1, 1.4)).toBe('Tess beat you by 1 m. Tess will be waiting.');
     expect(grudgeLine('Tess', 1, 0.2)).toBe('Tess beat you by less than 1 m. Tess will be waiting.');
   });
 
+  it('the margin is the rows as shown, whole metres each', () => {
+    // Rows of 490 m and 489 m: 1 m, though the raw gap is 0.2 m.
+    expect(settleGrudge(null, { youDistance: 489.3, rode: null, next: next('MarmotMateo', 489.5) }).line).toBe('MarmotMateo beat you by 1 m. MarmotMateo will be waiting.');
+    // Rows of 760 m and 753 m: 7 m, though the raw gap rounds to 8 m. The stored margin stays the raw one.
+    const r = settleGrudge(null, { youDistance: 752.5, rode: null, next: next('fjord348', 759.6) });
+    expect(r.line).toBe('fjord348 beat you by 7 m. fjord348 will be waiting.');
+    expect(r.grudge).toMatchObject({ by: 7, distance: 759.6 });
+    expect(rowMargin(759.6, 752.5)).toBe(7);
+  });
+
   it('out-distancing it settles it too', () => {
     const r = settleGrudge(mila, { youDistance: 700, rode: { distance: 458, passed: false }, next: null });
     expect(r.settled).toBe(true);
-    expect(r.line).toBe('You settled it with Mila.');
+    expect(r.line).toBe('Grudge settled with Mila.');
+  });
+
+  it('elects the rival you were racing when you fell, ahead or behind, over a far pace rider', () => {
+    const pace = { ...next('SparkleCedar', 1898), role: 'pace' as const, gapAtCrash: 13 };
+    const pack = { ...next('RidgeUlla', 820), role: 'pack' as const, gapAtCrash: -60 };
+    // SparkleCedar was 13 m ahead as you fell: elected, though its whole run went 1,145 m further.
+    const a = settleGrudge(null, { youDistance: 753, rode: null, next: pack, ahead: [pack, pace] });
+    expect(a.grudge).toMatchObject({ name: 'SparkleCedar', by: 1145, distance: 1898 });
+    expect(a.line).toBe('SparkleCedar was 13 m ahead when you fell.');
+    // The nearest at the crash wins, either side; one behind rode past your wreck.
+    const fox = { ...next('fox84', 3584), role: 'pace' as const, gapAtCrash: -8 };
+    const mid = { ...next('Brave Rhea', 2700), role: 'pack' as const, gapAtCrash: 20 };
+    const b = settleGrudge(null, { youDistance: 2562, rode: null, next: mid, ahead: [mid, fox] });
+    expect(b.grudge?.name).toBe('fox84');
+    expect(b.line).toBe('fox84 rode past your wreck.');
+    // More than 50 m away at the crash is no longer the rival you were racing.
+    const c = settleGrudge(null, { youDistance: 753, rode: null, next: pack, ahead: [{ ...pace, gapAtCrash: 51 }, { ...pack, gapAtCrash: -55 }] });
+    expect(c.grudge?.name).toBe('RidgeUlla');
+    expect(c.line).toBe('RidgeUlla beat you by 67 m. RidgeUlla will be waiting.');
+    // A settled grudge's successor is picked the same way.
+    const d = settleGrudge(mila, { youDistance: 753, rode: { distance: 600, passed: true }, next: pack, ahead: [pack, pace] });
+    expect(d.line).toBe('Grudge settled with Mila. SparkleCedar is next.');
+    // Never stored: the save's grudge keeps exactly its fields.
+    expect(Object.keys(a.grudge!).sort()).toEqual(['by', 'distance', 'name', 'record', 'score', 'streak', 'them']);
+  });
+
+  it('else the nearest within reach that is not the pace rider, and only then the nearest at all', () => {
+    const pace = { ...next('SparkleCedar', 900), role: 'pace' as const };
+    const far = { ...next('Kai_on_Tour', 1300), role: 'pack' as const };
+    const within = { ...next('RidgeUlla', 1000), role: 'pack' as const };
+    // Reach at 700 m: max(300, 0.6 x 700) = 420 m. A pack ghost within it goes before a nearer pace rider.
+    expect(settleGrudge(null, { youDistance: 700, rode: null, next: pace, ahead: [far, within, pace] }).grudge?.name).toBe('RidgeUlla');
+    // Reach grows with a long run: 0.6 x 2,000 m = 1,200 m.
+    const long = { ...next('Mila', 3100), role: 'pack' as const };
+    const longPace = { ...next('fox84', 2500), role: 'pace' as const };
+    expect(settleGrudge(null, { youDistance: 2000, rode: null, next: longPace, ahead: [longPace, long] }).grudge?.name).toBe('Mila');
+    // Reach at 600 m is 360 m: Kai_on_Tour is beyond it and SparkleCedar is the pace rider, so the
+    // nearest that went further at all is elected, pace or not.
+    expect(settleGrudge(null, { youDistance: 600, rode: null, next: pace, ahead: [far, pace] }).grudge?.name).toBe('SparkleCedar');
+    // A ghost with no role (an unplanned pick) counts as within reach like a pack ghost.
+    expect(settleGrudge(null, { youDistance: 600, rode: null, next: pace, ahead: [far, pace, next('Tess', 950)] }).grudge?.name).toBe('Tess');
   });
 
   it('a friend or your own best is never elected', () => {
@@ -206,7 +258,7 @@ describe('the grudge (settleGrudge)', () => {
     expect(r.grudge).toMatchObject({ them: 2, streak: 2, by: 50 });
     const s = settleGrudge(old, { youDistance: 500, rode: { distance: 450, passed: true }, next: null });
     expect(s.nemesisDown).toBe(false);
-    expect(s.line).toBe('You settled it with Mila.');
+    expect(s.line).toBe('Grudge settled with Mila.');
   });
 
   it('a grudge that could not ride keeps waiting when nothing finished ahead', () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLEAN_BREAK_TICKS, StompStreak, stompTitle, streakLine } from '../src/game/streak';
+import { CLEAN_BREAK_TICKS, StompStreak, stompTitle } from '../src/game/streak';
 
 describe('stomp streak', () => {
   it('counts consecutive perfect landings and keeps the best', () => {
@@ -80,11 +80,5 @@ describe('stomp titles', () => {
     expect(stompTitle(4)).toBe('Quad stomp');
     expect(stompTitle(5)).toBe('Stomp streak 5');
     expect(stompTitle(12)).toBe('Stomp streak 12');
-  });
-
-  it('the sub-line names the run, never a number beside it', () => {
-    expect(streakLine(1)).toBeNull();
-    expect(streakLine(2)).toBe('2 in a row');
-    expect(streakLine(7)).toBe('7 in a row');
   });
 });

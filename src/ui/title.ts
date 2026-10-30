@@ -299,7 +299,7 @@ export class Title {
     return b;
   }
 
-  /** The Daily card: today's best, the day streak ("Day 3") and today's medal disc (TitleModel.daily). */
+  /** The Daily card: today's best, the day streak ("3 days in a row") and today's medal disc (TitleModel.daily). */
   private dailyCard(d: TitleModel['daily']): HTMLButtonElement {
     const b = h('button', 'gs-daily');
     b.type = 'button';
@@ -313,10 +313,11 @@ export class Title {
     // The key is the UTC day ("2026-10-24"); it shows as a short date in the player's locale.
     const date = dailyDate(d.key);
     const status = d.ready ? 'Fresh rivals' : 'Finding rivals…';
-    // Days in a row with a Daily run ("Day 3", from the second day), and today's medal beside the best.
+    // Days in a row with a Daily run ("3 days in a row", from the second day: "Day 3" alone read as a
+    // date or a level), and today's medal beside the best.
     const streak = Math.floor(d.streak ?? 0);
     const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
-    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', `Day${NBSP}`, h('span', 'gs-num', String(streak))) : null;
+    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', h('span', 'gs-num', String(streak)), `${NBSP}days in a row`) : null;
     const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
     b.append(
       h('span', 'gs-daily-ico', icon('snowflake')),
@@ -335,7 +336,7 @@ export class Title {
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 ? `Day ${streak} in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
+    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 ? `${streak} days in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', d.best > 0 ? `Best ${fmt(d.best)}` : ''];
     b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!d.ready) return;
@@ -485,8 +486,8 @@ function greeting(text: string): HTMLElement {
   return h('p', 'gs-t-greet is-mission', icon('flag'), h('span', '', text.replace(/(\d) m\b/g, `$1${NBSP}m`)));
 }
 
-/** "270/800" on screen, "270 of 800" to a reader. */
-function progText(n: number, of: number): HTMLElement {
+/** "270/800" on screen, "270 of 800" to a reader (the mission rows, and the results' folded row). */
+export function progText(n: number, of: number): HTMLElement {
   const slash = h('span', '', '/');
   slash.setAttribute('aria-hidden', 'true');
   return h('span', '', fmt(n), slash, sr(' of '), fmt(of));

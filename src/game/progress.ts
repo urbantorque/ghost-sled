@@ -2,12 +2,13 @@ import type { ResultsNextUnlock } from '../ui/contract';
 import { ChaosEvent } from '../sim/chaos';
 import { MOUNTAINS, biomeForSeed, type BiomeId } from '../sim/mountains';
 import { SLEDS } from '../sim/sleds';
-import { MissionCtx, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
+import { MissionCtx, MissionResult, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
 import { isNemesis } from './settle';
 import type { SaveData } from './save';
 
-// Progress lines: mid-run mission pops, the next unlock, the title greeting, the Run Again label,
-// the results race line, the friend line, the reveal's goal line and the challenge share title.
+// Progress lines: mid-run mission pops and the pause card's live missions, the next unlock, the title
+// greeting, the Run Again label, the results race line, the crash line, the friend line, the reveal's
+// goal line and the challenge share title.
 //
 // Pure: no DOM, render or audio imports. Copy rules: names only (handles carry no pronouns), every
 // number carries its label, no em dashes.
@@ -33,6 +34,26 @@ export function missionsCrossed(s: MissionState, sum: RunSummary, popped: Readon
     if (def.biome && (def.biome !== sum.biome || !ctx.unlockedBiomes.has(def.biome))) continue;
     const t = missionTier(def, a.tier);
     if (def.metric(sum) >= t.target) out.push({ id: a.id, text: t.text, reward: t.reward });
+  }
+  return out;
+}
+
+/**
+ * The active missions as the run stands now (the pause card), in missionViews order, judged as
+ * missionsCrossed judges them: each one's progress is the better of its stored best and this run so
+ * far (a biome mission counts only on its biome), and it is done once it reaches its target or has
+ * popped this run. Display only: settleRun credits the gifts.
+ */
+export function liveMissionViews(s: MissionState, sum: RunSummary, ctx: MissionCtx, popped: ReadonlySet<string>): MissionResult[] {
+  const out: MissionResult[] = [];
+  for (const a of s.active) {
+    const def = missionDef(a.id);
+    if (!def) continue;
+    const t = missionTier(def, a.tier);
+    const applies = !def.biome || (def.biome === sum.biome && ctx.unlockedBiomes.has(def.biome));
+    const best = Math.max(a.best, applies ? def.metric(sum) : 0);
+    const done = best >= t.target || popped.has(a.id);
+    out.push({ id: def.id, text: t.text, progress: done ? t.target : Math.min(best, t.target), target: t.target, reward: t.reward, done, justCompleted: done });
   }
   return out;
 }
@@ -129,9 +150,11 @@ export interface RaceLines {
   friend: string | null;
   /** The Daily medal line, on a Daily run only ('Daily: Bronze. Silver at 2,916 m.'). */
   daily?: string | null;
-  /** The grudge settlement's line; strong when it settled ('You settled it with Mila.') or names a
+  /** The grudge settlement's line; strong when it settled ('Grudge settled with Mila.') or names a
    *  nemesis ('... 3 runs running. Nemesis.'). */
   grudge: { text: string; strong: boolean } | null;
+  /** Where you stood at the crash and who rode on past your wreck (crashLine). */
+  crash?: string | null;
   /** An event the run never reached ('The yeti was 130 m away.'). */
   event: string | null;
 }
@@ -139,22 +162,47 @@ export interface RaceLines {
 /**
  * The one extra race line on the results card (C6 budget). A grudge line exists after almost every
  * run (any ghost that went further is elected), so it ranks by what it says: friend, then the Daily
- * medal, then a settled grudge or a nemesis, then the event note, then any other grudge line.
+ * medal, then a settled grudge or a nemesis, then the crash line (why the place on the card is not
+ * the one the HUD showed), then the event note, then any other grudge line.
  */
-export function resultsRaceLine(l: RaceLines): { text: string; tone: 'friend' | 'grudge' | 'event' } | null {
+export function resultsRaceLine(l: RaceLines): { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' } | null {
   if (l.friend) return { text: l.friend, tone: 'friend' };
   if (l.daily) return { text: l.daily, tone: 'event' };
   if (l.grudge && l.grudge.strong) return { text: l.grudge.text, tone: 'grudge' };
+  if (l.crash) return { text: l.crash, tone: 'crash' };
   if (l.event) return { text: l.event, tone: 'event' };
   if (l.grudge) return { text: l.grudge.text, tone: 'grudge' };
   return null;
 }
 
-/** The friend line on the results: "You beat Mila by 120 m." or "Mila is 340 m ahead." */
+/** "1st", "2nd", "23rd". */
+function ordinal(n: number): string {
+  const t = n % 100;
+  const o = n % 10;
+  return `${n}${t >= 11 && t <= 13 ? 'th' : o === 1 ? 'st' : o === 2 ? 'nd' : o === 3 ? 'rd' : 'th'}`;
+}
+
+/**
+ * The crash line: your place as you fell and the ghosts that were behind you then but went further
+ * ('You led at the crash. SparkleCedar and RidgeUlla rode on past.', '2nd at the crash. 3 ghosts
+ * rode on past.'). Two names at most, in the order they reached the wreck, then a count; your own
+ * best reads 'Your best' (the caller names it so). Null when nobody rode past: the place held.
+ */
+export function crashLine(rankAtCrash: number, past: readonly string[]): string | null {
+  if (past.length === 0 || !(rankAtCrash >= 1)) return null;
+  const where = rankAtCrash === 1 ? 'You led at the crash.' : `${ordinal(Math.floor(rankAtCrash))} at the crash.`;
+  const who = past.length === 1 ? past[0] : past.length === 2 ? `${past[0]} and ${past[1]}` : `${past.length} ghosts`;
+  return `${where} ${who} rode on past.`;
+}
+
+/** The friend line on the results: "You beat Mila by 120 m." or "Mila beat you by 340 m." The margin
+ *  is the difference of the two rows as the race shows them (whole metres each), so the line and the
+ *  rows agree; under 1 m it says so. */
 export function friendLine(name: string, friendDistance: number, youDistance: number): string {
-  const gap = Math.round(youDistance - friendDistance);
-  if (gap > 0) return `You beat ${name} by ${m(gap)}.`;
-  return `${name} is ${m(Math.max(1, -gap))} ahead.`;
+  const gap = Math.round(youDistance) - Math.round(friendDistance);
+  const by = (v: number): string => (v >= 1 ? m(v) : 'less than 1 m');
+  if (youDistance > friendDistance) return `You beat ${name} by ${by(gap)}.`;
+  return `${name} beat you by ${by(-gap)}.`;
 }
 
 /** The friend's run, crossed alive: the callout on the friendBeaten beat. */

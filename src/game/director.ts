@@ -3,7 +3,7 @@ import type { BiomeId } from '../sim/mountains';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
-import { IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
+import { CRASH_PACK_NEAR_M, IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
 import { FinaleTracker } from './finales';
 import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
@@ -11,7 +11,7 @@ import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
 import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, LEVEL_IN_M, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
-import { StompStreak, stompTitle, streakLine } from './streak';
+import { StompStreak, stompTitle } from './streak';
 import { CRASH_CURVE, TimeScale } from './timescale';
 
 // The director: turns this frame's sim events, race events and sim state into Beats (named moments)
@@ -27,7 +27,8 @@ import { CRASH_CURVE, TimeScale } from './timescale';
 // the lead); the sim events in order (stomps, near misses, drift releases, banks, finales, the
 // crash); then the state beats (New best, Best combo pace, a friend beaten, kilometres, the stomp
 // metronome, ghosts' tricks, the start-line call, mission and unlock pops); then Feel, the HUD and
-// audio fields.
+// audio fields. After the crash the race is over (no race events), but the ghosts that were behind
+// you ride on past your wreck: each one says so once (a passedBy beat with wreck: true).
 
 export interface DirectorRun {
   mood: Mood;
@@ -217,6 +218,9 @@ const TICK_STEP = [2, 3, 4, 5];
 /** The ghost choir: passed ghosts still riding this close behind you (m) sing, at most CHOIR_MAX. */
 const CHOIR_BEHIND = 150;
 const CHOIR_MAX = 3;
+/** A ghost riding past your wreck has gone by once it leads it by this much (m): the race's own
+ *  hysteresis (ghosts.ts race), so a wreck pass reads like a live one. */
+const WRECK_PASS_M = 0.8;
 
 function styleTone(kind: string, points: number): StyleTone {
   if (kind === 'perfect') return 'perfect';
@@ -352,6 +356,12 @@ export class Director {
 
   // Crash.
   private crashT = -1;
+  /** The pack past your wreck: each ghost that was riding behind you on the first crashed frame, with
+   *  its gap to the wreck last frame (m, - = behind), until it rides past (or stops). */
+  private readonly wreckBehind = new Map<number, number>();
+  /** The first crashed frame has recorded who was behind. */
+  private wreckSeen = false;
+  private wreckN = 0;
 
   // Pops.
   private readonly pops: Pop[] = [];
@@ -414,6 +424,25 @@ export class Director {
     return this.finales.eventNote(sim);
   }
 
+  /** Ghosts that have ridden past your wreck since the crash (their passedBy beats said so). */
+  get wreckPassed(): number {
+    return this.wreckN;
+  }
+
+  /** A ghost that was behind you at the crash still rides within `near` metres behind the wreck, as
+   *  of the last frame: the results wait for it to go by (the app caps the wait, CRASH_PACK_MAX_MS). */
+  wreckPending(near = CRASH_PACK_NEAR_M): boolean {
+    for (const gap of this.wreckBehind.values()) if (gap >= -near) return true;
+    return false;
+  }
+
+  /** The results are up: the crash beat is over, and the ghosts still to ride past the wreck go by
+   *  without a word (the card owns the screen and its sounds). */
+  endCrash(): void {
+    this.wreckBehind.clear();
+    this.wreckSeen = true;
+  }
+
   beginRun(r: DirectorRun): void {
     this.run = r;
     this.log.length = 0;
@@ -471,6 +500,7 @@ export class Director {
     this.flowShown = 0;
     this.pulseAt = -1;
     this.crashT = -1;
+    this.resetWreck();
     this.pops.length = 0;
     this.unlockDone.clear();
     this.teased = false;
@@ -486,8 +516,9 @@ export class Director {
     Object.assign(this.feel, IDLE_FEEL);
   }
 
-  /** Resets the streak, the flow cap, the skill chain and the time scale (the crash curve); keeps the
-   *  run's snapshots, passes, milestones and the popped set. */
+  /** Resets the streak, the flow cap, the skill chain, the time scale (the crash curve) and the pack
+   *  past the wreck (the ghosts ride again from where they were); keeps the run's snapshots, passes,
+   *  milestones and the popped set. */
   revive(): void {
     this.streak.revive();
     this.duels.crash();
@@ -496,11 +527,18 @@ export class Director {
     this.resetSkill();
     this.flowShown = 0;
     this.crashT = -1;
+    this.resetWreck();
     this.newBestAt = -1;
     this.rivalHold = null;
     this.youClear = null;
     this.ticked.fill(false);
     this.prevTtl = NaN;
+  }
+
+  private resetWreck(): void {
+    this.wreckBehind.clear();
+    this.wreckSeen = false;
+    this.wreckN = 0;
   }
 
   private resetSkill(): void {
@@ -724,6 +762,7 @@ export class Director {
         this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(t, f, sim), muted }, sim);
       }
     }
+    if (f.phase === 'crashed') this.wreckPasses(f, sim);
 
     // A grudge you only edged past (a muted jostle, a pass inside its duel) is settled for sure once
     // you ride past where its whole run ended: it can never come back. While it still rides behind you
@@ -916,7 +955,9 @@ export class Director {
       }
       if (this.newBestAt >= 0 && now >= this.newBestAt) {
         this.newBestAt = -1;
-        this.push({ type: 'newBest', tick: sim.tick, score: sim.score, say: { label: 'New best', points: 0, tone: 'best' } }, sim);
+        // 'New best score': the score's best, never read as the distance's ('Best in 60 m' counts down
+        // to that one, and 'New ground' says when you pass it).
+        this.push({ type: 'newBest', tick: sim.tick, score: sim.score, say: { label: 'New best score', points: 0, tone: 'best' } }, sim);
       }
       if (!this.paceDone && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart) {
         this.paceDone = true;
@@ -1064,6 +1105,40 @@ export class Director {
       if (back > 0 && back <= CHOIR_BEHIND && ++n >= CHOIR_MAX) break;
     }
     return n;
+  }
+
+  /** The pack past your wreck. The first crashed frame records every ghost riding behind you; from
+   *  then on each one that leads the wreck by WRECK_PASS_M says '<name> passed you' once (a passedBy
+   *  beat with wreck: true, unmuted) and is dropped, as is one that stops riding. These beats pay
+   *  nothing and touch no race bookkeeping (no retake, no Took back after a revive): the race itself
+   *  is over, and a revive rides on from where the ghosts were. */
+  private wreckPasses(f: DirectorFrame, sim: Sim): void {
+    const rz = this.rz;
+    if (!this.wreckSeen) {
+      this.wreckSeen = true;
+      for (const t of f.tracks) {
+        if (!t.ready) continue;
+        const p = f.poses.get(t.entry.id);
+        if (p && !p.done && p.z - rz < 0) this.wreckBehind.set(t.entry.id, p.z - rz);
+      }
+      return;
+    }
+    for (const id of this.wreckBehind.keys()) {
+      const t = f.tracks.find((k) => k.entry.id === id);
+      const p = f.poses.get(id);
+      if (!t || !p || p.done) {
+        this.wreckBehind.delete(id);
+        continue;
+      }
+      const gap = p.z - rz;
+      if (gap <= WRECK_PASS_M) {
+        this.wreckBehind.set(id, gap);
+        continue;
+      }
+      this.wreckBehind.delete(id);
+      this.wreckN++;
+      this.push({ type: 'passedBy', tick: sim.tick, ghost: this.ref(t, f, sim), muted: false, wreck: true }, sim);
+    }
   }
 
   // ------------------------------------------------------------------ pieces
@@ -1219,9 +1294,9 @@ export class Director {
     let late = false;
     for (const p of f.events) if (p.tick === tick && p.e.type === 'land' && p.e.quality === 'perfect') late = p.e.late;
     const n = this.streak.land('perfect', late, tick).n;
-    const line = streakLine(n);
-    // 'PERFECT LANDING' over 'STOMP +250': the word is never said twice on one stamp.
-    const lead: Array<{ label: string; points: number }> = [line ? { label: line, points: 0 } : { label: 'Stomp', points }];
+    // 'PERFECT LANDING' over 'STOMP +250', and a streak's title over 'PERFECT +250' ('DOUBLE STOMP',
+    // 'STOMP STREAK 5'): no word is said twice on one stamp, and the title alone counts the streak.
+    const lead: Array<{ label: string; points: number }> = [{ label: n >= 2 ? 'Perfect' : 'Stomp', points }];
     // A yeti hop keeps its title; its 1,500 is the hop's own finale stamp ('+1,500 style'), shown once.
     const yeti = tick - this.yetiHopTick >= 0 && tick - this.yetiHopTick <= YETI_TITLE_TICKS;
     if (motion) this.time.pulse(HITSTOP_SCALE, STOMP_STOP[Math.min(n, STOMP_STOP.length) - 1] ?? 0.13, 'feed');
@@ -1555,6 +1630,10 @@ export class Director {
         entry.gifts = b.gifts;
         break;
       case 'passedBy':
+        entry.label = b.ghost.name;
+        // (A ghost riding past your wreck, for telemetry: the log has no field of its own for it.)
+        if (b.wreck) entry.grade = 'wreck';
+        break;
       case 'grudgeSettled':
       case 'raceCall':
         entry.label = b.ghost.name;

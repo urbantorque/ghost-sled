@@ -17,7 +17,7 @@ import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
 import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
-import { CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS } from './beats';
+import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS } from './beats';
 import { Director } from './director';
 import { anchorFor, pickField } from './field';
 import { PoolGhostData } from './ghostdata';
@@ -27,12 +27,12 @@ import { HintCoach } from './hints';
 import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
-import { RunSummary, missionViews, unlockedBiomes } from './missions';
-import { challengeShareTitle, friendLine, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
+import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
+import { challengeShareTitle, crashLine, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
 import { type InputSource, Run, emptySnap, lerpSnap } from './run';
 import { Grudge, SaveStore } from './save';
-import { Settlement, dailyMedalNow, dailyStreakNow, isNemesis, medalThresholds, settleGrudge, settleRun } from './settle';
+import { type GrudgeRow, Settlement, dailyMedalNow, dailyStreakNow, isNemesis, medalThresholds, settleGrudge, settleRun } from './settle';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
@@ -68,6 +68,11 @@ function poolFor(id: string): PoolGhostData[] {
 
 /** No race events outside the run phase. */
 const NO_RACE: readonly RaceEvent[] = [];
+
+/** A ghost that just rode past your wreck keeps the crash beat this long (ms), so its "passed you"
+ *  and the place chip's step (hud.ts settles a rank change for 180 ms) show before the results cover
+ *  them; still within CRASH_PACK_MAX_MS of the crash. */
+const PACK_SETTLE_MS = 500;
 
 /** A challenge link from an older build. Short enough for the toast pill at 390 px; the sub gives
  *  way first when space runs out. */
@@ -142,6 +147,15 @@ export class App {
   private crashTime = 0;
   /** Counts crashes, so a stale auto-results timer never opens the next crash's results early. */
   private crashSeq = 0;
+  /** The crash beat's time is up but a ghost that was behind you still rides close behind the wreck
+   *  (or has only just gone by): the results wait for it (frameRun), up to CRASH_PACK_MAX_MS after the
+   *  crash. lastWreckAt: when the latest ghost rode past the wreck. */
+  private packHold = false;
+  private lastWreckAt = -1e9;
+  /** Where you stood as you fell: your place, and each ready ghost's gap to you (m, + = ahead) on the
+   *  crash frame's poses. The results' crash line and the grudge's election read it. */
+  private rankAtCrash: number | null = null;
+  private readonly gapAtCrash = new Map<number, number>();
   private reviveUsed = false;
   private doubled = false;
   private giftsPersisted = 0;
@@ -470,7 +484,7 @@ export class App {
         tagline: m.tagline,
         biome: biomeForSeed(m.seed),
         locked: d.ghostsPassed < m.unlockGhosts,
-        unlockText: d.ghostsPassed < m.unlockGhosts ? `Pass ${m.unlockGhosts - d.ghostsPassed} more ghosts to unlock` : '',
+        unlockText: d.ghostsPassed < m.unlockGhosts ? `Pass ${m.unlockGhosts - d.ghostsPassed} more ${m.unlockGhosts - d.ghostsPassed === 1 ? 'ghost' : 'ghosts'} to unlock` : '',
         best: d.best[m.id]?.score ?? 0,
       })),
       selected: this.mountain.id,
@@ -700,6 +714,9 @@ export class App {
     this.missionsPopped.clear();
     this.missionsSettled.clear();
     this.crashTicks = 0;
+    this.packHold = false;
+    this.rankAtCrash = null;
+    this.gapAtCrash.clear();
     this.renderTime = this.time;
     // A deep copy of the grudge as the run started: settleGrudge reads it again after a revive, so a
     // second crash settles the same run the same way.
@@ -775,13 +792,27 @@ export class App {
    *  revive the run is judged against the missions it started with, as its settlement is. */
   private missionsCrossedNow(): Array<{ id: string; text: string; reward: number }> {
     if (!this.run) return [];
+    const { state, sum, ctx } = this.missionInputs();
+    const met = missionsCrossed(state, sum, this.missionsPopped, ctx);
+    for (const m of met) this.missionsPopped.add(m.id);
+    return met;
+  }
+
+  /** The pause card's missions: the run's live progress on the same terms as missionsCrossedNow, Done
+   *  for each one that popped this run. Display only. */
+  private missionsNow(): MissionResult[] {
+    if (!this.run) return [];
+    const { state, sum, ctx } = this.missionInputs();
+    return liveMissionViews(state, sum, ctx, this.missionsPopped);
+  }
+
+  /** What a run's missions are judged on mid-run: the mission state it started with, the summary so far
+   *  with shown passes only, and the open biomes. */
+  private missionInputs(): { state: MissionState; sum: RunSummary; ctx: MissionCtx } {
     const d = this.save.data;
     const sum = this.summary();
     sum.ghostsPassed = Math.min(this.passedThisRun.size, this.director.shownPasses.size);
-    const state = this.settlement ? this.settlement.missionsBefore : d.missions;
-    const met = missionsCrossed(state, sum, this.missionsPopped, { unlockedBiomes: unlockedBiomes(d.ghostsPassed) });
-    for (const m of met) this.missionsPopped.add(m.id);
-    return met;
+    return { state: this.settlement ? this.settlement.missionsBefore : d.missions, sum, ctx: { unlockedBiomes: unlockedBiomes(d.ghostsPassed) } };
   }
 
   private runAgain(): void {
@@ -813,7 +844,7 @@ export class App {
     this.input.releaseAll();
     if (p) {
       if (userInitiated) this.platform.gameplayStop();
-      this.ui.showPause(this.settingsModel());
+      this.ui.showPause(this.settingsModel(), this.missionsNow());
     } else {
       this.ui.hidePause();
       this.last = performance.now();
@@ -843,6 +874,7 @@ export class App {
       this.director.revive();
       this.world.resetFeel();
       this.crashTicks = 0;
+      this.packHold = false;
       this.phase = 'run';
       this.world.cam.mode = 'chase';
       this.last = performance.now();
@@ -937,13 +969,39 @@ export class App {
     this.crashTime = performance.now();
     this.platform.gameplayStop();
     this.ui.hint(null, this.input.mode);
+    // Where you stood as you fell, before the grudge is settled from it (persistRun): each ghost's gap
+    // on this frame's poses against the rider as rendered, and your place counted from the same gaps,
+    // so the crash line's place plus the ghosts that rode on past is the card's place.
+    this.gapAtCrash.clear();
+    let ahead = 0;
+    for (const t of this.ghosts.tracks) {
+      const p = t.ready ? this.ghostPoses.get(t.entry.id) : null;
+      if (!p) continue;
+      const gap = p.z - this.view.z;
+      this.gapAtCrash.set(t.entry.id, gap);
+      if (gap > 0) ahead++;
+    }
+    this.rankAtCrash = this.gapAtCrash.size > 0 ? ahead + 1 : null;
     this.persistRun();
-    // The crash beat (a held frame, slow motion, a still lens) plays out before the results arrive.
-    const wait = reduced() ? CRASH_RESULTS_REDUCED_MS : CRASH_RESULTS_MS;
+    // The crash beat (a held frame, slow motion, a still lens) plays out before the results arrive;
+    // with a ghost that was behind you still riding close behind the wreck, they wait for it to go by
+    // (frameRun, up to CRASH_PACK_MAX_MS). Reduced motion keeps its shorter beat and never waits.
+    const still = reduced();
+    const wait = still ? CRASH_RESULTS_REDUCED_MS : CRASH_RESULTS_MS;
     const seq = ++this.crashSeq;
+    this.packHold = false;
+    this.lastWreckAt = -1e9;
     setTimeout(() => {
-      if (this.phase === 'crashed' && seq === this.crashSeq) this.showResults();
+      if (this.phase !== 'crashed' || seq !== this.crashSeq) return;
+      if (!still && this.packWaits()) this.packHold = true;
+      else this.showResults();
     }, wait);
+  }
+
+  /** The pack past the wreck still holds the crash beat: a ghost that was behind you rides within
+   *  CRASH_PACK_NEAR_M behind it, or one went by less than PACK_SETTLE_MS ago. */
+  private packWaits(): boolean {
+    return this.director.wreckPending(CRASH_PACK_NEAR_M) || performance.now() - this.lastWreckAt < PACK_SETTLE_MS;
   }
 
   private summary(): RunSummary {
@@ -1022,16 +1080,21 @@ export class App {
   private grudgeOutcome(sim: Sim): Parameters<typeof settleGrudge>[1] {
     const g = this.grudgeAtStart;
     let rode: { distance: number; passed: boolean } | null = null;
-    let next: { name: string; score: number; record: string; distance: number; kind: GhostKind } | null = null;
-    // Everyone who went further: a settled grudge's successor is elected from these, never itself.
-    const ahead: Array<{ name: string; score: number; record: string; distance: number; kind: GhostKind }> = [];
+    let next: GrudgeRow | null = null;
+    // Everyone who went further: a settled grudge's successor is elected from these, never itself. Each
+    // row carries its field role and its gap at the crash (never stored): the election prefers the
+    // rival you were racing when you fell, then one within reach (settle.ts).
+    const ahead: GrudgeRow[] = [];
     for (const t of this.ghosts.tracks) {
       if (!t.ready) continue;
       if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, passed: this.director.grudgeSettled };
       if (t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
       const by = t.distance - sim.distance;
       if (by <= 0) continue;
-      const row = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
+      const row: GrudgeRow = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
+      if (t.entry.role) row.role = t.entry.role;
+      const gap = this.gapAtCrash.get(t.entry.id);
+      if (gap !== undefined) row.gapAtCrash = gap;
       ahead.push(row);
       if (!next || by < next.distance - sim.distance) next = row;
     }
@@ -1046,8 +1109,11 @@ export class App {
   private showResults(): void {
     if (!this.run) return;
     this.phase = 'results';
-    // The crash beat is over: no curve or pulse carries into the results scene.
+    this.packHold = false;
+    // The crash beat is over: no curve or pulse carries into the results scene, and the ghosts still to
+    // ride past the wreck go by without a word.
     this.director.time.reset();
+    this.director.endCrash();
     const d = this.save.data;
     const sim = this.run.sim;
     // A revive and a second crash settle the same run again: settleRun credits only the difference.
@@ -1077,6 +1143,15 @@ export class App {
       .filter((t) => t.ready)
       .map((t) => ({ name: t.entry.name, kind: t.entry.kind, score: t.entry.score, distance: t.distance, passed: this.passedThisRun.has(t.entry.id) }))
       .sort((a, b) => b.distance - a.distance);
+    // Why the card's place is not the one the HUD showed as you fell: the ghosts that were behind you
+    // then and whose whole run went further rode on past the wreck (nearest first, the order they
+    // reached it). Your own best is 'Your best' (C7).
+    const gapAt = (t: GhostManager['tracks'][number]): number => this.gapAtCrash.get(t.entry.id) ?? 0;
+    const past = this.ghosts.tracks
+      .filter((t) => t.ready && gapAt(t) < 0 && t.distance > sim.distance)
+      .sort((a, b) => gapAt(b) - gapAt(a))
+      .map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
+    const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past) : null;
     this.results = {
       score: sim.score,
       distance: sim.distance,
@@ -1103,14 +1178,17 @@ export class App {
       unlockedMountains,
       bestStreak: this.director.bestStreak,
       lostCombo: this.lostCombo,
-      // One race line (C6): a friend's challenge, the Daily medal, a settled grudge or a nemesis, the
-      // event the run never reached, then any other grudge line.
+      // One race line (C6): a friend's challenge, the Daily medal, a settled grudge or a nemesis, who
+      // rode on past your wreck, the event the run never reached, then any other grudge line. The crash
+      // line is also the place note's (results.ts), unless it is the race line itself.
       raceLine: resultsRaceLine({
         friend: this.friendLine(sim),
         daily: this.mountain.id === 'daily' ? (settled.daily?.line ?? null) : null,
         grudge: this.grudgeLine ? { text: this.grudgeLine, strong: this.grudgeStrong } : null,
+        crash: crashNote,
         event: this.director.eventNote(sim),
       }),
+      crashNote,
       runAgainLabel: runAgainLabel(this.friendForLabel(sim), d.grudge[key] ? { name: d.grudge[key].name } : null),
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
@@ -1172,7 +1250,7 @@ export class App {
     return !!fr && sim.distance > fr.distance;
   }
 
-  /** The friend line: 'You beat Mila by 120 m.' or 'Mila is 340 m ahead.' Names only. */
+  /** The friend line: 'You beat Mila by 120 m.' or 'Mila beat you by 340 m.' Names only. */
   private friendLine(sim: Sim): string | null {
     const fr = this.friendRecord();
     return fr ? friendLine(fr.name, fr.distance, sim.distance) : null;
@@ -1619,8 +1697,10 @@ export class App {
     const events = drained.map((p) => p.e);
     if (!sim.s.grounded) this.airTicks++;
     else this.airTicks = 0;
-    // Standings once per frame: the world's rival, the HUD pill and the hints all read these.
-    const st = this.ghosts.standings(sim.tick, sim.s.z);
+    // Standings once per frame: the world's rival, the HUD pill and the hints all read these. After the
+    // crash they run on the poses' clock, so the place steps down as the pack rides past the wreck and
+    // agrees with the rival pill (the race itself stays over: no race events, no status changes).
+    const st = this.ghosts.standings(this.phase === 'run' ? sim.tick : tick, sim.s.z);
     this.frameStandings = st;
 
     // The frame's named moments: the race's first, then the sim events' in order.
@@ -1659,6 +1739,10 @@ export class App {
           break;
         case 'crash':
           this.lostCombo = b.stake;
+          break;
+        case 'passedBy':
+          // (A ghost riding past your wreck pays nothing: the results wait a moment for its flash.)
+          if (b.wreck) this.lastWreckAt = performance.now();
           break;
         default:
           break;
@@ -1765,6 +1849,8 @@ export class App {
       this.audio.update(frame, frozen ? 0 : dt);
       if (this.phase === 'run') this.updateHints(dt);
     }
+    // The results waited for the pack past the wreck: they come once it has gone by, or at the cap.
+    if (this.packHold && this.phase === 'crashed' && (!this.packWaits() || performance.now() - this.crashTime >= CRASH_PACK_MAX_MS)) this.showResults();
   }
 
   /** Race bookkeeping only: what the director names, sounds and pays travels in its beats. (The

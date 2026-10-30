@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { challengeShareTitle, ellipsize, eventNote, friendBeatenText, friendLine, livePassed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting, unlockCrossed, unlockTease } from '../src/game/progress';
+import { challengeShareTitle, crashLine, ellipsize, eventNote, friendBeatenText, friendLine, liveMissionViews, livePassed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting, unlockCrossed, unlockTease } from '../src/game/progress';
+import type { MissionState, RunSummary } from '../src/game/missions';
 import { defaultSave } from '../src/game/save';
 import { ChaosEvent } from '../src/sim/chaos';
 
@@ -68,24 +69,107 @@ describe('run again label', () => {
 });
 
 describe('results race line', () => {
-  it('shows one line by priority: friend, Daily medal, settled or nemesis grudge, event note, other grudge', () => {
+  it('shows one line by priority: friend, Daily medal, settled or nemesis grudge, crash, event note, other grudge', () => {
     const tess = { text: 'Tess beat you by 3 m. Tess will be waiting.', strong: false };
-    const settled = { text: 'You settled it with Tess.', strong: true };
+    const settled = { text: 'Grudge settled with Tess.', strong: true };
     const daily = 'Daily: Bronze. Silver at 2,916 m.';
     const yeti = 'The yeti was 220 m away.';
-    expect(resultsRaceLine({ friend: 'You beat Mila by 120 m.', daily, grudge: settled, event: yeti })).toEqual({ text: 'You beat Mila by 120 m.', tone: 'friend' });
-    expect(resultsRaceLine({ friend: null, daily, grudge: settled, event: yeti })).toEqual({ text: daily, tone: 'event' });
-    expect(resultsRaceLine({ friend: null, grudge: settled, event: yeti })).toEqual({ text: settled.text, tone: 'grudge' });
+    const crash = 'You led at the crash. Mila rode on past.';
+    expect(resultsRaceLine({ friend: 'You beat Mila by 120 m.', daily, grudge: settled, crash, event: yeti })).toEqual({ text: 'You beat Mila by 120 m.', tone: 'friend' });
+    expect(resultsRaceLine({ friend: null, daily, grudge: settled, crash, event: yeti })).toEqual({ text: daily, tone: 'event' });
+    expect(resultsRaceLine({ friend: null, grudge: settled, crash, event: yeti })).toEqual({ text: settled.text, tone: 'grudge' });
+    // Why the card's place is not the HUD's: the crash line outranks the event note and a fresh grudge.
+    expect(resultsRaceLine({ friend: null, grudge: tess, crash, event: yeti })).toEqual({ text: crash, tone: 'crash' });
     // A fresh grudge line exists after almost every run: the event note outranks it.
-    expect(resultsRaceLine({ friend: null, grudge: tess, event: yeti })).toEqual({ text: yeti, tone: 'event' });
+    expect(resultsRaceLine({ friend: null, grudge: tess, crash: null, event: yeti })).toEqual({ text: yeti, tone: 'event' });
     expect(resultsRaceLine({ friend: null, grudge: tess, event: null })).toEqual({ text: tess.text, tone: 'grudge' });
     expect(resultsRaceLine({ friend: null, daily: null, grudge: null, event: null })).toBeNull();
   });
 
-  it('friend lines read in race-gap grammar', () => {
+  it('friend lines read in race-gap grammar, a loss in the past tense, with the rows as shown', () => {
     expect(friendLine('Mila', 2340, 2460)).toBe('You beat Mila by 120 m.');
-    expect(friendLine('Mila', 2340, 2000)).toBe('Mila is 340 m ahead.');
+    expect(friendLine('Mila', 2340, 2000)).toBe('Mila beat you by 340 m.');
+    // Rows of 760 m and 753 m: 7 m, never the raw gap's 8 m.
+    expect(friendLine('fjord348', 759.6, 752.5)).toBe('fjord348 beat you by 7 m.');
+    expect(friendLine('fjord348', 752.4, 760.4)).toBe('You beat fjord348 by 8 m.');
+    // Both rows read the same distance: less than a metre in it.
+    expect(friendLine('Mila', 500.2, 500.1)).toBe('Mila beat you by less than 1 m.');
+    expect(friendLine('Mila', 500.1, 500.3)).toBe('You beat Mila by less than 1 m.');
     expect(friendBeatenText('Mila', 2340)).toBe('Beat Mila\u2019s 2,340 m');
+  });
+});
+
+describe('the crash line', () => {
+  it('says where you stood as you fell and who rode on past: two names, then a count', () => {
+    expect(crashLine(1, ['SparkleCedar', 'RidgeUlla'])).toBe('You led at the crash. SparkleCedar and RidgeUlla rode on past.');
+    expect(crashLine(1, ['Your best'])).toBe('You led at the crash. Your best rode on past.');
+    expect(crashLine(2, ['fox84', 'Your best', 'Mila'])).toBe('2nd at the crash. 3 ghosts rode on past.');
+    expect(crashLine(3, ['Mila'])).toBe('3rd at the crash. Mila rode on past.');
+    expect(crashLine(11, ['Mila'])).toBe('11th at the crash. Mila rode on past.');
+    expect(crashLine(22, ['Mila'])).toBe('22nd at the crash. Mila rode on past.');
+  });
+
+  it('is null when nobody rode past (the place held)', () => {
+    expect(crashLine(1, [])).toBeNull();
+    expect(crashLine(4, [])).toBeNull();
+    expect(crashLine(0, ['Mila'])).toBeNull();
+  });
+});
+
+describe('live missions (the pause card)', () => {
+  const sum = (p: Partial<RunSummary> = {}): RunSummary => ({
+    mountain: 'pinecrest',
+    biome: 'alpine',
+    score: 0,
+    distance: 0,
+    gifts: 0,
+    perfects: 0,
+    maxAirtime: 0,
+    maxHalfTurns: 0,
+    flips: 0,
+    driftSeconds: 0,
+    draftSeconds: 0,
+    nearMisses: 0,
+    bestCombo: 0,
+    maxSpeed: 0,
+    smashes: 0,
+    gates: 0,
+    yetiHop: false,
+    outranAvalanche: false,
+    ghostsPassed: 0,
+    grudgeBeaten: false,
+    chaos: false,
+    ...p,
+  });
+  const state = (active: MissionState['active']): MissionState => ({ active, cursor: 3, completed: 0 });
+  const alpine = { unlockedBiomes: new Set(['alpine']) };
+
+  it('shows the active missions in order, each at the better of its stored best and this run', () => {
+    const s = state([{ id: 'dist800', best: 540 }, { id: 'perfect2', best: 1 }, { id: 'pass1', best: 0 }]);
+    const v = liveMissionViews(s, sum({ distance: 312.7, perfects: 1 }), alpine, new Set());
+    expect(v.map((x) => x.id)).toEqual(['dist800', 'perfect2', 'pass1']);
+    expect(v[0]).toMatchObject({ text: 'Ride 800 m in one run', progress: 540, target: 800, done: false });
+    expect(v[1]).toMatchObject({ progress: 1, target: 2, done: false });
+    const w = liveMissionViews(s, sum({ distance: 753, perfects: 2 }), alpine, new Set());
+    expect(w[0]).toMatchObject({ progress: 753, done: false });
+    // Reached its target this run: done.
+    expect(w[1]).toMatchObject({ progress: 2, done: true });
+    // Display only: the save's mission state is untouched.
+    expect(s.active[0].best).toBe(540);
+  });
+
+  it('marks a mission that popped this run done, and counts a biome mission only on its open biome', () => {
+    const s = state([{ id: 'pass1', best: 0 }, { id: 'smash3', best: 1 }, { id: 'gates3', best: 0 }]);
+    const v = liveMissionViews(s, sum({ smashes: 2, gates: 3 }), alpine, new Set(['pass1']));
+    expect(v[0]).toMatchObject({ id: 'pass1', done: true, progress: 1 });
+    expect(v[1]).toMatchObject({ id: 'smash3', progress: 2, done: false });
+    // Spirit gates count on the blossom mountain only: here the stored best stands.
+    expect(v[2]).toMatchObject({ id: 'gates3', progress: 0, done: false });
+    // On a locked biome its own metric does not count either.
+    const locked = liveMissionViews(s, sum({ biome: 'blossom', gates: 3 }), alpine, new Set());
+    expect(locked[2]).toMatchObject({ progress: 0, done: false });
+    const open = liveMissionViews(s, sum({ biome: 'blossom', gates: 3 }), { unlockedBiomes: new Set(['alpine', 'blossom']) }, new Set());
+    expect(open[2]).toMatchObject({ progress: 3, done: true });
   });
 });
 
