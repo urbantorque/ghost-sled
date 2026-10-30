@@ -9,8 +9,10 @@ import type { SimEvent } from '../sim/sim';
 // hero shot of the wreck.
 //
 // Weight (the fun pass): landings sink the lens and nod the horizon, a bump knocks it sideways and
-// rolls it, a whisker flinches it away, passes lean it toward the ghost, and a crash holds the lens
-// still while the rider tumbles away from it before the orbit. Knocks are jolts: a stiff spring
+// rolls it, a whisker flinches it away and tips the horizon, a max drift's release throws it back and
+// whips the horizon out of the lean, a stomp streak shakes harder and knocks the horizon side to side,
+// passes lean it toward the ghost, and a crash holds the lens still (and out of the snow) while the
+// rider tumbles away from it before the orbit. Knocks are jolts: a stiff spring
 // (omega 22, zeta 0.5) integrated exactly, so it settles alike at any frame rate. The shake runs on
 // its own clock, slowed by hit-stops and held by a held frame or a pause. Every kick, shake, jolt,
 // roll and freeze is off under reduced motion (Feel.reduced); the speed FOV breathing stays.
@@ -300,9 +302,13 @@ export class ChaseCamera {
         case 'stomp': {
           const n = Math.max(1, b.streak);
           this.kick(n <= 1 ? 0.9 : n === 2 ? 0.95 : 1);
-          this.shake(n >= 4 ? 0.35 : 0.25);
+          // The shake builds with the streak (0.25 for one, up to 0.4), since the kick is near its cap.
+          this.shake(Math.min(0.4, 0.25 + 0.03 * (n - 1)));
           // A late stomp follows a clean landing that already sank the lens.
           if (!b.late) this.jolt(0, -Math.min(0.28, 0.2 + 0.02 * (n - 1)), 0);
+          // From the third in a row the horizon knocks too, the other way each stomp, growing to 0.02
+          // rad by the fifth.
+          if (n >= 3) this.jvr += (0.02 * (n % 2 ? 1 : -1) * Math.min(1, (n - 2) / 3)) / J_PEAK;
           stomped = true;
           break;
         }
@@ -312,15 +318,24 @@ export class ChaseCamera {
           this.jvr += (0.035 * b.side) / J_PEAK;
           break;
         case 'nearMiss':
-          // A whisker flinches the lens away from the obstacle's side.
+          // A whisker flinches the lens away from the obstacle's side (side is the obstacle's) and the
+          // horizon tips away with it, as a bump's does.
           if (b.grade === 'whisker') {
-            this.jolt(-0.08 * b.side, 0, 0);
-            this.kick(0.2);
+            this.jolt(-0.16 * b.side, 0, 0);
+            this.jvr += (-0.025 * b.side) / J_PEAK;
+            this.kick(0.3);
           }
           break;
         case 'driftRelease':
           this.kick(RELEASE_KICK[b.tier] ?? 0.3);
-          if (b.tier === 3) this.jolt(0, 0, 0.25);
+          if (b.tier === 3) {
+            // A max drift's release throws the lens back and whips the horizon out of the drift's lean
+            // (a drift leans it by -driftDir; the release shoves the sled toward driftDir, and a shove
+            // to the right rolls positive, as a bump's knock does).
+            this.jolt(0, 0, 0.35);
+            this.jvr += (0.03 * Math.sign(b.driftDir)) / J_PEAK;
+            this.shake(0.2);
+          }
           released = true;
           break;
         case 'flow':
@@ -345,10 +360,12 @@ export class ChaseCamera {
           if (b.stamp) this.kick(0.6);
           break;
         case 'crash':
-          // The lens holds still while the wreck tumbles away from it, then the orbit takes over.
+          // The lens holds still while the wreck tumbles away from it, then the orbit takes over. It
+          // holds clear of the snow (once here, and the shaken lens each frame in update).
           this.freezeLeft = CRASH_FREEZE_S;
           this.orbitFrom = b.orbitFrom;
           this.orbitSeeded = false;
+          if (this.initialized) this.holdFloor();
           break;
         default:
           break;
@@ -361,6 +378,46 @@ export class ChaseCamera {
     if (this.pendDriftKick > 0 && !released) this.kick(this.pendDriftKick);
     this.pendPerfect = false;
     this.pendDriftKick = 0;
+  }
+
+  /** The crash hold's snow floor, once as the hold begins (update holds the shaken lens to it each
+   *  frame). The look point rises with the lens, so the held frame keeps its aim. */
+  private holdFloor(): void {
+    if (!this.ground) return;
+    const p = this.pos;
+    const y = Math.max(p.y, this.heldFloor(p));
+    this.look.y += y - p.y;
+    p.y = y;
+  }
+
+  /** The lowest the held crash lens may stand at `p`: over the snow under it, halfway to the held look
+   *  point (fixed, unlike the tumbling wreck), and with the near plane's lower corners (half a metre
+   *  out to each side in landscape) over the snow too, with 5 cm to spare for the held roll. Held on
+   *  the first two alone, the shake pushed a corner of the frame into a bank beside the wreck. */
+  private heldFloor(p: Vector3): number {
+    const g = this.ground!;
+    const dx = this.look.x - p.x;
+    const dz = this.look.z - p.z;
+    const hl = Math.hypot(dx, dz) || 1e-6;
+    const dl = Math.hypot(hl, this.look.y - p.y);
+    const fx = dx / hl;
+    const fz = dz / hl;
+    // The near plane's lower edge, in from the lens along the view (pitched by sp) and down its up axis.
+    const cp = hl / dl;
+    const sp = (this.look.y - p.y) / dl;
+    const near = this.camera.near;
+    const nh = near * Math.tan(MathUtils.degToRad(this.fov) / 2);
+    const nw = nh * this.aspect;
+    const ahead = near * cp + nh * sp;
+    const drop = nh * cp - near * sp + 0.05;
+    const ax = p.x + fx * ahead;
+    const az = p.z + fz * ahead;
+    return Math.max(
+      g(p.x, p.z) + 0.2,
+      g((p.x + this.look.x) * 0.5, (p.z + this.look.z) * 0.5) + 0.3,
+      g(ax - fz * nw, az + fx * nw) + drop,
+      g(ax + fz * nw, az - fx * nw) + drop,
+    );
   }
 
   /** Leans the lens a few centimetres toward a ghost just passed (once per ghost per frame). */
@@ -411,6 +468,11 @@ export class ChaseCamera {
   /** Scaled seconds the crash lens still holds (0 once the orbit has it), for probes. */
   get holdNow(): number {
     return this.freezeLeft;
+  }
+
+  /** The shake's current amplitude (0 to 1.2; the lens moves by its square), for probes. */
+  get shakeNow(): number {
+    return this.shakeAmp;
   }
 
   /** Advances the jolt spring exactly over dt (clamped to 1/30 s). */
@@ -748,7 +810,11 @@ export class ChaseCamera {
     lens.x += rx * ox;
     lens.z += rz * ox;
     lens.y += oy;
-    if (this.mode === 'chase' && this.ground) {
+    // The crash lens too: the crash's shake dipped the held lens into a mound behind the wreck, the
+    // lower third of the held frame a flat slab of terrain. While held, the floor is taken toward the
+    // held look point rather than the tumbling wreck (heldFloor), so it never moves the held lens.
+    if (held && this.ground) lens.y = Math.max(lens.y, this.heldFloor(lens));
+    else if ((this.mode === 'chase' || this.mode === 'crash') && this.ground) {
       const mx = (lens.x + t.pos.x) * 0.5;
       const mz = (lens.z + t.pos.z) * 0.5;
       lens.y = Math.max(lens.y, this.ground(lens.x, lens.z) + 0.2, this.ground(mx, mz) + 0.3);
