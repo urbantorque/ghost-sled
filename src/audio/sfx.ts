@@ -6,6 +6,7 @@ import { UiOnce, bankRoll, stormCascade } from './cues';
 import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
+import type { Prerender } from './prerender';
 import { BRIGHT_ARP, BRIGHT_VOICING, Key, brightRoot, fit, ladder, ladderIndexOf, mtof } from './theory';
 import { PRIO, Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './voices';
 
@@ -70,6 +71,41 @@ export function bankLandDelay(b: { tier: number; points: number; mult: number; o
   return bankRoll(b).land;
 }
 
+/** A gift pickup's second and third bells and its jingle start this far in (s). */
+export const GIFT_SECOND = 0.055;
+export const GIFT_THIRD = 0.11;
+const GIFT_JINGLE = 0.05;
+/** A gift's length (s): its last bell's attack and decay to -48 dB (instruments.perc), the third for a
+ *  gift worth 5 or more. */
+export const GIFT_S = GIFT_SECOND + 0.002 + 0.42 * 5.5;
+export const GIFT_BIG_S = GIFT_THIRD + 0.002 + 0.6 * 5.5;
+/** Where a gift's bells start (s): a take plays only where each lands on the frame it did in the
+ *  render (prerender.ts). */
+export const GIFT_STARTS: readonly number[] = [0, GIFT_SECOND];
+export const GIFT_BIG_STARTS: readonly number[] = [0, GIFT_SECOND, GIFT_THIRD];
+
+/** A gift pickup's take key (prerender.ts): its three MIDI notes, 7 bits each (the third 0 for a
+ *  gift worth under 5). A number, so asking for a take allocates nothing. */
+export function giftKey(m1: number, m2: number, m3: number): number {
+  return (m1 << 14) | (m2 << 7) | m3;
+}
+
+/**
+ * A gift pickup's parts: two FM bells two ladder steps apart, and for a gift worth 5 or more
+ * (f3 > 0) a third bell two steps higher and a jingle. `later` builds the third bell from a later
+ * scheduler pass on a live voice (Sfx.at); null builds it at once (a render, prerender.ts).
+ */
+export function giftParts(v: Voice, t: number, f1: number, f2: number, f3: number, later: ((t: number, fn: (t: number) => void) => void) | null): void {
+  fmBell(v, t, f1, 0.09, 0.22, 2, 1);
+  fmBell(v, t + GIFT_SECOND, f2, 0.1, 0.42, 2, 1);
+  if (f3 > 0) {
+    const third = (tn: number): void => void fmBell(v, tn, f3, 0.09, 0.6, 3.5, 1.3);
+    if (later) later(t + GIFT_THIRD, third);
+    else third(t + GIFT_THIRD);
+    v.buffer(v.bank.jingle, t + GIFT_JINGLE, t + 0.5, v.gain(0.14, v.out), 1.1, false);
+  }
+}
+
 interface Job {
   t: number;
   v: Voice | null;
@@ -117,6 +153,8 @@ export class Sfx {
   /** The ambience bed's drop (Core wires it to ambience.dip): a gap only reads as a gap when the
    *  wind goes with the band. */
   bed: ((t: number, hold: number, depth: number) => void) | null = null;
+  /** Rendered takes of fixed sounds (Core wires its Prerender): a gift pickup plays as one source. */
+  renders: Prerender | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -844,13 +882,21 @@ export class Sfx {
     this.lastGift = t;
     const i = 6 + Math.min(this.giftStreak, 9);
     const v = this.voice(t, 0.3, rand(-0.3, 0.3), 1.6, PRIO.low);
-    fmBell(v, t, this.note(i), 0.09, 0.22, 2, 1);
-    fmBell(v, t + 0.055, this.note(i + 2), 0.1, 0.42, 2, 1);
-    if (value >= 5) {
-      const f = this.note(i + 4);
-      this.at(v, t + 0.11, (tn) => fmBell(v, tn, f, 0.09, 0.6, 3.5, 1.3));
-      v.buffer(v.bank.jingle, t + 0.05, t + 0.5, v.gain(0.14, v.out), 1.1, false);
-    }
+    const k = this.key();
+    const m1 = ladder(k, i);
+    const m2 = ladder(k, i + 2);
+    const m3 = value >= 5 ? ladder(k, i + 4) : 0;
+    // Every part is fixed by the step's notes, so once rendered (prerender.ts) a pickup is its out,
+    // its panner and one source instead of ten nodes (sixteen for a gift worth 5 or more).
+    const key = giftKey(m1, m2, m3);
+    const r = this.renders;
+    if (r && r.play(v, key, t, t + (m3 > 0 ? GIFT_THIRD : GIFT_SECOND))) return;
+    const f1 = mtof(m1);
+    const f2 = mtof(m2);
+    const f3 = m3 > 0 ? mtof(m3) : 0;
+    giftParts(v, t, f1, f2, f3, (tn, fn) => this.at(v, tn, fn));
+    if (f3 > 0) r?.want(key, t, GIFT_BIG_S, GIFT_BIG_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
+    else r?.want(key, t, GIFT_S, GIFT_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
   }
 
   private bump(t: number): void {

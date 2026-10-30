@@ -510,6 +510,15 @@ export class AudioEngine {
     out.musicVoices = c.musicPool.active;
     // Nodes a voice had to make itself because the reserve was dry (inside a frame, for an effect).
     out.reserveMisses = c.reserve.misses;
+    // Fixed one-shots played from a rendered take, built live (of those, with a take ready whose
+    // parts would land on other frames), renders done and failed, and the samples the takes hold
+    // (prerender.ts).
+    out.takes = c.renders.hits;
+    out.takeMisses = c.renders.misses;
+    out.takeOffGrid = c.renders.offGrid;
+    out.takeRenders = c.renders.renders;
+    out.takeFailures = c.renders.failures;
+    out.takeSamples = c.renders.held;
     out.sfxPeak = c.sfxPool.peak;
     out.musicPeak = c.musicPool.peak;
     out.sfxSteals = c.sfxPool.steals;
