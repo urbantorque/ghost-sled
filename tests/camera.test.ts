@@ -93,3 +93,163 @@ describe('crash pack shot', () => {
     expect(Math.abs(wrap(angleOf(cam)))).toBeLessThan(0.8);
   });
 });
+
+// The held crash lens keeps out of the snow: a shelf behind the wreck stands 1.2 m over it, so the
+// chase lens rides at the shelf's floor and the crash's shake would dip it into the shelf.
+describe('crash hold snow floor', () => {
+  const SHELF = 1.2;
+  const shelf = (_x: number, z: number): number => (z > -99 ? SHELF : 0);
+  const at = (cam: ChaseCamera) => (cam as unknown as { pos: Vector3; look: Vector3 });
+
+  function held(shake: boolean, ground = shelf) {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = ground;
+    cam.beats([], IDLE_FEEL);
+    cam.mode = 'chase';
+    for (let i = 0; i < 40; i++) cam.update({ pos: WRECK, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    cam.mode = 'crash';
+    if (shake) cam.onSimEvent({ type: 'crash', cause: 'tree' });
+    cam.beats([{ type: 'crash', tick: 0, cause: 'tree', stake: 0, orbitFrom: null }], IDLE_FEEL);
+    const lens: Vector3[] = [];
+    const base: Vector3[] = [];
+    let worst = Infinity;
+    let corner = Infinity;
+    while (cam.holdNow > 0 || lens.length === 0) {
+      // The wreck tumbles away from the held lens.
+      const w = WRECK.clone().add(new Vector3(0.3, 0.4, -2).multiplyScalar(lens.length / 10));
+      cam.update({ pos: w, dir: DOWN, speed: 0, steer: 0, airborne: true, boost: 0 }, 1 / 60);
+      const p = cam.camera.position;
+      const look = at(cam).look;
+      const floor = Math.max(ground(p.x, p.z) + 0.2, ground((p.x + look.x) / 2, (p.z + look.z) / 2) + 0.3);
+      worst = Math.min(worst, p.y - floor);
+      // The near plane's lower corners, as the camera draws them.
+      cam.camera.updateMatrixWorld();
+      for (const sx of [-1, 1]) {
+        const c = new Vector3(sx, -1, -1).unproject(cam.camera);
+        corner = Math.min(corner, c.y - ground(c.x, c.z));
+      }
+      lens.push(p.clone());
+      base.push(at(cam).pos.clone());
+    }
+    const moved = (list: Vector3[]) => Math.max(...list.map((v) => v.distanceTo(list[0])));
+    return { worst, corner, lens: moved(lens), base: moved(base), frames: lens.length };
+  }
+
+  it("keeps the held frame's lower corners out of a bank rising beside the wreck", () => {
+    // The shelf, with a bank rising to the right of the lens at 1 in 1.5.
+    const banked = (x: number, z: number) => shelf(x, z) + Math.max(0, x - 0.1) / 1.5;
+    const h = held(true, banked);
+    expect(h.corner).toBeGreaterThan(0);
+    expect(h.worst).toBeGreaterThanOrEqual(-1e-9);
+    expect(h.base).toBeLessThan(0.01);
+  });
+
+  it('keeps the shaken held lens over the snow and halfway to its look point', () => {
+    const h = held(true);
+    expect(h.frames).toBeGreaterThan(20);
+    expect(h.worst).toBeGreaterThanOrEqual(-1e-9);
+    // The held lens itself never moves (only the shake does).
+    expect(h.base).toBeLessThan(0.01);
+  });
+
+  it('holds the lens still while freezeLeft lasts, with the floor on', () => {
+    const h = held(false);
+    expect(h.worst).toBeGreaterThanOrEqual(-1e-9);
+    expect(h.lens).toBeLessThan(0.01);
+  });
+});
+
+// Weight on the moments the panel found too light: a whisker's flinch and roll, a max drift's
+// release, and the stomp streak's growing shake and horizon knock.
+describe('feel kicks', () => {
+  const ride = (cam: ChaseCamera, frames: number, steer = 0) => {
+    for (let i = 0; i < frames; i++) cam.update({ pos: WRECK, dir: DOWN, speed: 24, steer, airborne: false, boost: 0 }, 1 / 60);
+  };
+  function chase(feel: Feel = IDLE_FEEL): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = () => 0;
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    ride(cam, 60);
+    cam.beats([], feel);
+    return cam;
+  }
+  /** Peaks over the next half second after `list`: the jolt's sideways offset, the roll, the shake. */
+  function after(list: Beat[], feel: Feel = IDLE_FEEL) {
+    const cam = chase(feel);
+    const fov0 = cam.camera.fov;
+    cam.beats(list, feel);
+    const shake = cam.shakeNow;
+    let right = 0;
+    let roll = 0;
+    let fov = 0;
+    for (let i = 0; i < 30; i++) {
+      ride(cam, 1);
+      cam.beats([], feel);
+      if (Math.abs(cam.joltNow.right) > Math.abs(right)) right = cam.joltNow.right;
+      if (Math.abs(cam.rollNow) > Math.abs(roll)) roll = cam.rollNow;
+      fov = Math.max(fov, cam.camera.fov - fov0);
+    }
+    return { right, roll, shake, fov, hold: cam.holdNow };
+  }
+  const whisker = (side: -1 | 1): Beat => ({ type: 'nearMiss', tick: 0, grade: 'whisker', gap: 0.1, side, x: 0, z: 100, obs: 'pine', speed: 24 });
+  const stomp = (streak: number): Beat => ({ type: 'stomp', tick: 0, streak, late: false, title: '', lead: [], x: 0, z: 100, heading: 0, yetiHop: false });
+  const release = (tier: 1 | 2 | 3, driftDir: number): Beat => ({ type: 'driftRelease', tick: 0, tier, x: 0, z: 100, heading: 0, driftDir });
+
+  it('a whisker flinches the lens at least 12 cm away from the obstacle and rolls it away too', () => {
+    // An obstacle on the +x side (screen right): the lens goes left and the horizon tips that way,
+    // the sign a bump knocked left takes.
+    const w = after([whisker(1)]);
+    expect(w.right).toBeLessThanOrEqual(-0.12);
+    expect(w.roll).toBeLessThan(-0.015);
+    const bump = after([{ type: 'bump', tick: 0, side: -1, bank: false }]);
+    expect(Math.sign(bump.roll)).toBe(Math.sign(w.roll));
+    expect(Math.sign(bump.right)).toBe(Math.sign(w.right));
+    const o = after([whisker(-1)]);
+    expect(o.right).toBeGreaterThanOrEqual(0.12);
+    expect(o.roll).toBeGreaterThan(0.015);
+  });
+
+  it("a max drift's release rolls the horizon harder than any stomp, toward the drift's side", () => {
+    const r = after([release(3, 1)]);
+    const one = after([stomp(1)]);
+    const five = after([stomp(5)]);
+    expect(Math.abs(r.roll)).toBeGreaterThan(Math.abs(one.roll));
+    expect(Math.abs(r.roll)).toBeGreaterThan(Math.abs(five.roll));
+    expect(r.roll).toBeGreaterThan(0.02);
+    expect(after([release(3, -1)]).roll).toBeLessThan(-0.02);
+    expect(r.shake).toBeGreaterThan(0.15);
+    // Tier 1 and 2 releases keep only their kick.
+    expect(after([release(2, 1)]).roll).toBe(0);
+  });
+
+  it("a stomp streak's shake grows with it, and from the third the horizon knocks, side to side", () => {
+    expect(after([stomp(1)]).shake).toBeCloseTo(0.25, 5);
+    expect(after([stomp(5)]).shake).toBeGreaterThan(after([stomp(1)]).shake);
+    expect(after([stomp(9)]).shake).toBeLessThanOrEqual(0.4 + 1e-9);
+    expect(after([stomp(1)]).roll).toBe(0);
+    expect(after([stomp(2)]).roll).toBe(0);
+    const s3 = after([stomp(3)]).roll;
+    const s4 = after([stomp(4)]).roll;
+    const s5 = after([stomp(5)]).roll;
+    expect(Math.sign(s3)).toBe(-Math.sign(s4));
+    expect(Math.abs(s5)).toBeGreaterThan(Math.abs(s3));
+    expect(Math.abs(s5)).toBeLessThanOrEqual(0.07);
+  });
+
+  it('under reduced motion nothing kicks, rolls, shakes or holds', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    // (The speed's FOV breathing stays: the same frames with no beat are the measure.)
+    const calm = after([], feel);
+    for (const list of [[whisker(1)], [release(3, 1)], [stomp(5)], [{ type: 'crash', tick: 0, cause: 'tree', stake: 0, orbitFrom: null } as Beat]]) {
+      const r = after(list, feel);
+      expect(r.right).toBe(0);
+      expect(r.roll).toBe(0);
+      expect(r.shake).toBe(0);
+      expect(r.fov).toBeCloseTo(calm.fov, 9);
+      expect(r.hold).toBe(0);
+    }
+  });
+});

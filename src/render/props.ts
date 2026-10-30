@@ -89,6 +89,28 @@ function archSpan(c: Course, km: number): number {
   return 2 * (c.halfWidth(km * 1000) + 2);
 }
 
+/** The landmark meshes (the km arches and the cairns) are made off the frame, on idle time: none
+ *  before LANDMARK_START_MS after the first frame (built in the constructor, the first arch cost
+ *  startup about 140 ms at 6x CPU throttle, for a mark no run reaches in under about 40 s), then one
+ *  per idle callback (a few ms each), each at most LANDMARK_IDLE_MS late. The next mark's arch is made
+ *  as soon as one stands. A landmark in range before its mesh is made waits unseen (it comes into
+ *  range several hundred metres out, in the fog), unless it is within LANDMARK_NOW chunks of the
+ *  player, when it is made there and then. */
+const LANDMARK_START_MS = 1500;
+const LANDMARK_IDLE_MS = 1000;
+const LANDMARK_NOW = 3;
+/** Built landmark meshes kept per kind (the arch standing, the next, and one spare; cairns per palette). */
+const LANDMARK_KEEP = 3;
+/** A landmark batch's mesh until its geometry is built (drawn with no instances meanwhile). */
+const NO_GEOMETRY = new BufferGeometry();
+
+/** Runs `fn` on idle time (requestIdleCallback, at most LANDMARK_IDLE_MS late), or soon after where
+ *  there is none (Safari). */
+function whenIdle(fn: () => void): void {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: LANDMARK_IDLE_MS });
+  else setTimeout(fn, 50);
+}
+
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h ^= h >>> 15;
@@ -113,8 +135,14 @@ export class Props {
   private tilt = new Vector3();
   private cache = new Map<number, Map<string, Float32Array>>();
   private collecting: Map<string, number[]> | null = null;
-  /** The km mark the arch geometry is built for (its posts' span is that mark's), 0 for none yet. */
-  private archKm = 0;
+  /** Built landmark meshes by key ('arch:' and the posts' span, 'cairn:' and its palette's stone
+   *  colours), oldest first; and those waiting for idle time, with how to make each. */
+  private landmarks = new Map<string, BufferGeometry>();
+  private queued = new Map<string, () => BufferGeometry>();
+  /** Idle building has begun (LANDMARK_START_MS after the first update), and a callback is pending. */
+  private idleOpen = false;
+  private idleBusy = false;
+  private started = false;
   /** This run's graveyard cairns (sim x and z on the bank), at most CAIRN_CAP. */
   private graves: Array<{ x: number; z: number }> = [];
 
@@ -238,17 +266,20 @@ export class Props {
     if (this.arches) {
       // Kilometre arches: one batch of at most two, in the plain toon material (no new shader), casting
       // no shadow. It is culled by its own bounds (update), so it costs a draw only while one is in view;
-      // its geometry is rebuilt for each mark's span as that mark comes into range.
-      this.archKm = 1;
-      add('arch', kmArchGeometry(archSpan(this.course, 1)), plain, 2, false);
+      // its geometry is each mark's own span, made on idle time (whenIdle) and put in as that mark comes
+      // into range. The first mark's is made after startup, the cairn's for this palette with it.
+      add('arch', NO_GEOMETRY, plain, 2, false);
       const arch = this.batches.get('arch')!.mesh;
       arch.frustumCulled = true;
       // Not a prop the results lens must keep clear of: its instance sits on the corridor's middle.
       arch.userData.noBlock = true;
+      const span = archSpan(this.course, 1);
+      this.queue('arch:' + span, () => kmArchGeometry(span));
       // Graveyard cairns: the same rules (one batch, at most four, plain material, no shadow, culled by
       // its bounds, so a draw only while one is in view).
-      add('cairn', cairnGeometry(p), plain, CAIRN_CAP, false);
+      add('cairn', NO_GEOMETRY, plain, CAIRN_CAP, false);
       this.batches.get('cairn')!.mesh.frustumCulled = true;
+      this.queue(this.cairnKey(), () => cairnGeometry(p));
     }
     if (p.lantern) {
       // Lantern Night: a trail lantern at the treeline every few chunks, so the far end of the corridor
@@ -265,22 +296,33 @@ export class Props {
 
   /** `nearChunk` is the player's chunk: the instances up to it are what the rear-view mirror needs. */
   update(from: number, to: number, collected: Set<number>, destroyed: Set<number>, nearChunk = to): void {
+    if (!this.started) {
+      // The first frame is drawn: idle time may start on the landmark meshes a little after it.
+      this.started = true;
+      setTimeout(() => {
+        this.idleOpen = true;
+        this.pump();
+      }, LANDMARK_START_MS);
+    }
     if (!this.dirty && from === this.range.from && to === this.range.to) return;
     this.range = { from, to };
     this.dirty = false;
     for (const b of this.batches.values()) b.count = b.near = 0;
     const c = this.course;
     for (const k of this.cache.keys()) if (k < from - 2 || k > to + 2) this.cache.delete(k);
-    // The first km mark in range gets an arch built to its own span (at most once per kilometre).
+    // The first km mark in range gets an arch built to its own span (made ahead on idle time; see
+    // whenIdle), and the next mark's is queued behind it. Null while it waits.
+    let archGeo: BufferGeometry | null = null;
     if (this.arches) {
       for (let i = Math.max(-2, from); i <= to; i++) {
         const km = kmInChunk(i);
         if (!km) continue;
-        if (km !== this.archKm) {
-          const b = this.batches.get('arch')!;
-          b.mesh.geometry.dispose();
-          b.mesh.geometry = kmArchGeometry(archSpan(c, km));
-          this.archKm = km;
+        const span = archSpan(c, km);
+        archGeo = this.landmark('arch:' + span, () => kmArchGeometry(span), i - nearChunk <= LANDMARK_NOW);
+        if (archGeo) {
+          const next = archSpan(c, km + 1);
+          this.queue('arch:' + next, () => kmArchGeometry(next));
+          this.batches.get('arch')!.mesh.geometry = archGeo;
         }
         break;
       }
@@ -324,6 +366,21 @@ export class Props {
       }
       if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;
     }
+    // A landmark whose mesh is still to be made waits unseen.
+    const ab = this.batches.get('arch');
+    if (ab && !archGeo) ab.count = ab.near = 0;
+    const cb = this.batches.get('cairn');
+    if (cb && cb.count > 0) {
+      // (Built there and then for a cairn within LANDMARK_NOW chunks.)
+      const now = this.graves.some((g) => {
+        const ci = Math.floor(g.z / CHUNK_LEN);
+        return ci >= from && ci - nearChunk <= LANDMARK_NOW;
+      });
+      const p = this.palette;
+      const geo = this.landmark(this.cairnKey(), () => cairnGeometry(p), now);
+      if (geo) cb.mesh.geometry = geo;
+      else cb.count = cb.near = 0;
+    }
     for (const b of this.batches.values()) {
       if (nearChunk >= to) b.near = b.count;
       b.mesh.count = b.count;
@@ -333,6 +390,67 @@ export class Props {
     for (const key of ['arch', 'cairn']) {
       const b = this.batches.get(key);
       if (b && b.count > 0) b.mesh.computeBoundingSphere();
+    }
+  }
+
+  /** The cairn mesh's key: its stones take the palette's low ground colours. */
+  private cairnKey(): string {
+    const p = this.palette;
+    return `cairn:${p.low.r},${p.low.g},${p.low.b},${p.lowLit.r},${p.lowLit.g},${p.lowLit.b}`;
+  }
+
+  /** A landmark's mesh: built already, else made now (`now`) or queued for idle time (null till then). */
+  private landmark(key: string, make: () => BufferGeometry, now: boolean): BufferGeometry | null {
+    const have = this.landmarks.get(key);
+    if (have) return have;
+    if (!now) {
+      this.queue(key, make);
+      return null;
+    }
+    const g = make();
+    this.queued.delete(key);
+    this.keep(key, g);
+    return g;
+  }
+
+  private queue(key: string, make: () => BufferGeometry): void {
+    if (this.landmarks.has(key) || this.queued.has(key)) return;
+    this.queued.set(key, make);
+    this.pump();
+  }
+
+  /** Makes the queued landmark meshes one per idle callback, once idle building has begun. Each one
+   *  made redraws the batches (a landmark waiting unseen shows). */
+  private pump(): void {
+    if (!this.idleOpen || this.idleBusy || this.queued.size === 0) return;
+    this.idleBusy = true;
+    whenIdle(() => {
+      this.idleBusy = false;
+      const next = this.queued.entries().next();
+      if (next.done) return;
+      const [key, make] = next.value;
+      this.queued.delete(key);
+      if (!this.landmarks.has(key)) {
+        this.keep(key, make());
+        this.dirty = true;
+      }
+      this.pump();
+    });
+  }
+
+  /** Keeps a built landmark mesh, dropping the oldest of its kind past LANDMARK_KEEP (never one a batch
+   *  still draws). */
+  private keep(key: string, g: BufferGeometry): void {
+    this.landmarks.set(key, g);
+    const kind = key.slice(0, key.indexOf(':') + 1);
+    const keys = [...this.landmarks.keys()].filter((k) => k.startsWith(kind));
+    for (let i = 0; i < keys.length - LANDMARK_KEEP; i++) {
+      const old = this.landmarks.get(keys[i])!;
+      let used = false;
+      for (const b of this.batches.values()) if (b.mesh.geometry === old) used = true;
+      if (used) continue;
+      old.dispose();
+      this.landmarks.delete(keys[i]);
     }
   }
 

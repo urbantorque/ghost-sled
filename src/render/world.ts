@@ -370,10 +370,14 @@ export class World {
   }
 
   setMood(mood: Mood): void {
+    const same = mood === this.mood;
     this.mood = mood;
     this.palette = getPalette(this.course.biome, mood);
     applyPalette(this.palette);
-    this.props.setCourse(this.course, this.palette);
+    // The props bake the palette into their meshes, and it is the same for the same mountain and
+    // mood (setCourse builds them for the mood in force): the title straight after startup and a
+    // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
+    if (!same) this.props.setCourse(this.course, this.palette);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
