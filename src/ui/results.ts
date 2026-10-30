@@ -631,7 +631,7 @@ export class Results {
     const pay = won.reduce((s, x) => s + x.reward, 0);
     const near = won.length === 0 ? closest(open) : null;
     const left = near
-      ? h('span', 'gs-res-mis-left is-next', h('span', 'gs-res-mis-next', near.text), h('span', 'gs-res-mis-prog gs-num', progText(Math.min(near.progress, near.target), near.target)))
+      ? h('span', 'gs-res-mis-left is-next', h('span', 'gs-res-mis-next', near.text), h('span', 'gs-res-mis-prog gs-num', progText(Math.min(near.progress, near.target), near.target, near.dp)))
       : open.length > 0
         ? h('span', 'gs-res-mis-left', h('span', 'gs-num', String(open.length)), ' open')
         : h('span', 'gs-res-mis-left', 'All done');

@@ -6,6 +6,14 @@ import { admit, CHIP_ABSORB_MS, CHIP_FADE_REDUCED_MS, chipFrames, CRACK_MS, crac
 // keeps the slot against a lower-ranked or 'lost' newcomer, which waits its turn instead of erasing it.
 
 describe('admit', () => {
+  it("holds 'In the flow' from its birth, even while it waits out the line it replaced", () => {
+    // Born 164 ms ahead (the replaced line's exit plus the entry slack): a big newcomer waits its turn.
+    expect(admit({ tone: 'big', born: 164, flow: true }, 'big', 10)).toBe('queue');
+    expect(admit({ tone: 'big', born: 164, flow: true }, 'best', 10)).toBe('queue');
+    // A plain big line that young has had no moment, so the later beat of the frame takes the slot.
+    expect(admit({ tone: 'big', born: 164 }, 'big', 10)).toBe('show');
+  });
+
   it('holds a young New ground against a Sketchy landing, then lets it through', () => {
     const top = { tone: 'best' as const, born: 1000 };
     expect(admit(top, 'lost', 1200)).toBe('queue');

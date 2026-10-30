@@ -658,8 +658,14 @@
     gap: 6px;
   }
 
+  /* Hidden from sight only: screen readers still hear each reward. */
   .gs-pause-mis .gs-mis-reward {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

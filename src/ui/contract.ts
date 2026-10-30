@@ -23,6 +23,8 @@ export interface MissionView {
   text: string;
   progress: number;
   target: number;
+  /** Decimal places its progress reads in: 1 for a mission in seconds ("1.9/2"), else 0. */
+  dp?: 0 | 1;
   reward: number;
   done: boolean;
   justCompleted: boolean;

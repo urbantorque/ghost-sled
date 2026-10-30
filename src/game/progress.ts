@@ -53,7 +53,7 @@ export function liveMissionViews(s: MissionState, sum: RunSummary, ctx: MissionC
     const applies = !def.biome || (def.biome === sum.biome && ctx.unlockedBiomes.has(def.biome));
     const best = Math.max(a.best, applies ? def.metric(sum) : 0);
     const done = best >= t.target || popped.has(a.id);
-    out.push({ id: def.id, text: t.text, progress: done ? t.target : Math.min(best, t.target), target: t.target, reward: t.reward, done, justCompleted: done });
+    out.push({ id: def.id, text: t.text, progress: done ? t.target : Math.min(best, t.target), target: t.target, dp: def.unit === 's' ? 1 : 0, reward: t.reward, done, justCompleted: done });
   }
   return out;
 }

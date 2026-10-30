@@ -144,9 +144,9 @@ async (page) => {
     graveyard: { approach: 'grave', at: [-50, -28, -12, -3, 22, 34] },
     finale: { type: 'finale', frames: [0, 8, 24, 48, 90] },
     // Impact, the held frame, its slow motion, just before and after the cut to the pack, the orbit.
-    crash: { type: 'crash', frames: [0, 12, 36, 53, 80, 96] },
+    crash: { type: 'crash', frames: [0, 12, 36, 47, 53, 66] },
     // The same, only a crash with two or more ghosts riding close by (the orbit swings to the pack).
-    crashPack: { type: 'crash', pack: 2, frames: [0, 12, 36, 66, 80, 96] },
+    crashPack: { type: 'crash', pack: 2, frames: [0, 12, 36, 66, 80, 90] },
     // The results card from the frame it opens: place stamp, count-up, New best, Done stamps, gifts
     // flown into the wallet, settled (3.3 s). resultsBest: only a card with a new best.
     results: { state: 'results', frames: [0, 18, 36, 66, 110, 200] },

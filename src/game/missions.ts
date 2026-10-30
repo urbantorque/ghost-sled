@@ -214,6 +214,8 @@ export interface MissionResult {
   text: string;
   progress: number;
   target: number;
+  /** 1 for a mission in seconds (its progress reads "1.9/2"), else 0. */
+  dp?: 0 | 1;
   reward: number;
   done: boolean;
   justCompleted: boolean;
@@ -233,7 +235,7 @@ export function applyRun(s: MissionState, r: RunSummary, ctx?: MissionCtx): { vi
     const value = applicable ? def.metric(r) : 0;
     a.best = Math.max(a.best, value);
     const done = a.best >= t.target;
-    views.push({ id: def.id, text: t.text, progress: Math.min(a.best, t.target), target: t.target, reward: t.reward, done, justCompleted: done });
+    views.push({ id: def.id, text: t.text, progress: Math.min(a.best, t.target), target: t.target, dp: def.unit === 's' ? 1 : 0, reward: t.reward, done, justCompleted: done });
     if (done) {
       reward += t.reward;
       s.completed++;
@@ -251,7 +253,7 @@ export function missionViews(s: MissionState): MissionResult[] {
     const def = missionDef(a.id);
     if (!def) continue;
     const t = missionTier(def, a.tier);
-    out.push({ id: def.id, text: t.text, progress: Math.min(a.best, t.target), target: t.target, reward: t.reward, done: false, justCompleted: false });
+    out.push({ id: def.id, text: t.text, progress: Math.min(a.best, t.target), target: t.target, dp: def.unit === 's' ? 1 : 0, reward: t.reward, done: false, justCompleted: false });
   }
   return out;
 }

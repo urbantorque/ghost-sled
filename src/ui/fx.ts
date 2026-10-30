@@ -141,7 +141,9 @@ export function admit(top: { tone: StyleTone; born: number; flow?: boolean } | n
   // director ordered them. A best line holds from its first frame (New ground and New best crossed in
   // one frame).
   const age = now - top.born;
-  const held = age < HOLD_MS && (top.tone === 'best' || (top.tone === 'big' && age >= SAME_FRAME_MS));
+  // 'In the flow' holds from its birth too, even while it waits out the line it replaced (born ahead
+  // of now): the director pushes it last in its frame, so no same-frame trick outranks it.
+  const held = age < HOLD_MS && (top.tone === 'best' || top.flow === true || (top.tone === 'big' && age >= SAME_FRAME_MS));
   return held && (tone === 'lost' || RANK[tone] <= rankOf(top)) ? 'queue' : 'show';
 }
 

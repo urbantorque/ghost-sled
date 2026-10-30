@@ -2,7 +2,7 @@ import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contra
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt, metres, NBSP } from './fmt';
+import { dailyDate, fmt, metres, NBSP, progFigures } from './fmt';
 import { icon } from './icons';
 import { play, reduced } from './motion';
 
@@ -487,16 +487,11 @@ function greeting(text: string): HTMLElement {
 }
 
 /** "270/800" on screen, "270 of 800" to a reader (the mission rows, and the results' folded row). */
-export function progText(n: number, of: number): HTMLElement {
-  // Progress floors (799.6 of 800 is not there yet) and keeps the target's precision ("1.2/1.5", not
-  // "1/2").
-  const dp = Number.isInteger(of) ? 0 : 1;
-  const k = 10 ** dp;
-  const v = Math.floor(n * k + 1e-9) / k;
-  const f = (x: number): string => (dp ? x.toFixed(1) : fmt(x));
+export function progText(n: number, of: number, dp?: 0 | 1): HTMLElement {
+  const [v, t] = progFigures(n, of, dp);
   const slash = h('span', '', '/');
   slash.setAttribute('aria-hidden', 'true');
-  return h('span', '', f(v), slash, sr(' of '), f(of));
+  return h('span', '', v, slash, sr(' of '), t);
 }
 
 /**
@@ -524,7 +519,7 @@ export function missionList(list: MissionView[], flashNew = false): HTMLElement 
       return;
     }
     right.append(
-      h('span', 'gs-mis-prog gs-num', progText(Math.min(mv.progress, mv.target), mv.target)),
+      h('span', 'gs-mis-prog gs-num', progText(Math.min(mv.progress, mv.target), mv.target, mv.dp)),
       h('span', 'gs-mis-reward is-quiet', icon('gift'), h('span', 'gs-num', fmt(mv.reward), sr(' gifts'))),
     );
     line.style.setProperty('--p', String(pct));

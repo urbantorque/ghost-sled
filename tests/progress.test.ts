@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { challengeShareTitle, crashLine, ellipsize, eventNote, friendBeatenText, friendLine, liveMissionViews, livePassed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting, unlockCrossed, unlockTease } from '../src/game/progress';
 import type { MissionState, RunSummary } from '../src/game/missions';
 import { defaultSave } from '../src/game/save';
+import { progFigures } from '../src/ui/fmt';
 import { ChaosEvent } from '../src/sim/chaos';
 
 function returning(p: Partial<ReturnType<typeof defaultSave>> = {}) {
@@ -227,5 +228,15 @@ describe('mid-run unlocks and event notes', () => {
     expect(eventNote(ChaosEvent.GhostTrain, 1340)).toBe('The Spirit Train was 1,340 m away.');
     expect(eventNote(ChaosEvent.None, 200)).toBeNull();
     expect(eventNote(ChaosEvent.Avalanche, 0.2)).toBeNull();
+  });
+});
+describe('mission progress figures', () => {
+  it('floors the progress and reads a mission in seconds in tenths', () => {
+    expect(progFigures(799.6, 800)).toEqual(['799', '800']);
+    expect(progFigures(1.9, 2, 1)).toEqual(['1.9', '2']);
+    expect(progFigures(1.25, 1.5)).toEqual(['1.2', '1.5']);
+    expect(progFigures(4.96, 5, 1)).toEqual(['4.9', '5']);
+    expect(progFigures(2, 2, 1)).toEqual(['2', '2']);
+    expect(progFigures(1240, 2000)).toEqual(['1,240', '2,000']);
   });
 });

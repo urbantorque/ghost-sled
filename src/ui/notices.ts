@@ -229,7 +229,11 @@ export class Notices {
     const quiet = (b: Banner): boolean => b.spec.type === 'toast' && (b.spec.tone === 'mission' || b.spec.tone === 'unlock');
     this.queue = this.queue.filter((b) => !quiet(b));
     const cur = this.cur;
-    if (!cur || !quiet(cur)) return;
+    if (!cur || !quiet(cur)) {
+      // A race banner that hurried for a toast now dropped keeps its full time again.
+      if (cur && cur.pri < P_ALERT && this.queue.length === 0) this.arm(cur, Math.max(cur.end, cur.shown + cur.ms));
+      return;
+    }
     window.clearTimeout(this.timer);
     this.cur = null;
     const out = cur.el ? this.exit(cur.el, cur.spec.type, true) : null;
