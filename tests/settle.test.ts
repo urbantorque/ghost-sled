@@ -160,13 +160,15 @@ describe('the grudge (settleGrudge)', () => {
     expect(down.line).toBe('Grudge settled with Mila after 3 runs.');
   });
 
-  it('a pass settles it and elects the Next row fresh, named on the settled line', () => {
+  it('a pass settles it and elects the Next row fresh, named on the settled line with the tally', () => {
     const r = settleGrudge({ ...mila, them: 2, streak: 2 }, { youDistance: 500, rode: { distance: 620, passed: true }, next: next('Tess', 560) });
     expect(r.settled).toBe(true);
     expect(r.nemesisDown).toBe(false);
     expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 60, distance: 560 });
-    // The successor is introduced where the Rematch button will name it.
-    expect(r.line).toBe('Grudge settled with Mila. Tess is next.');
+    // The successor is introduced where the Rematch button will name it, as the new grudge: never as
+    // 'next' (the race list's NEXT tag can sit on another row), and the tally stays.
+    expect(r.line).toBe('Grudge settled with Mila after 2 runs. New grudge: Tess.');
+    expect(settleGrudge(mila, { youDistance: 500, rode: { distance: 620, passed: true }, next: next('Tess', 560) }).line).toBe('Grudge settled with Mila. New grudge: Tess.');
   });
 
   it('a settled grudge never elects itself again, even when its whole run went further', () => {
@@ -175,7 +177,7 @@ describe('the grudge (settleGrudge)', () => {
     const tess = next('Tess', 900);
     const r = settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow, tess] });
     expect(r.settled).toBe(true);
-    expect(r.line).toBe('Grudge settled with Mila. Tess is next.');
+    expect(r.line).toBe('Grudge settled with Mila. New grudge: Tess.');
     expect(r.grudge).toMatchObject({ name: 'Tess', them: 1, streak: 1, by: 117 });
     // Nobody else went further: no grudge rather than the one you just settled.
     expect(settleGrudge(mila, { youDistance: 783, rode: { distance: 846, passed: true }, next: milaRow, ahead: [milaRow] }).grudge).toBeNull();
@@ -206,31 +208,37 @@ describe('the grudge (settleGrudge)', () => {
     expect(r.line).toBe('Grudge settled with Mila.');
   });
 
-  it('elects the rival you were racing when you fell, ahead or behind, over a far pace rider', () => {
+  it('elects the rival you were racing when you fell, ahead or behind, but never the pace rider', () => {
     const pace = { ...next('SparkleCedar', 1898), role: 'pace' as const, gapAtCrash: 13 };
     const pack = { ...next('RidgeUlla', 820), role: 'pack' as const, gapAtCrash: -60 };
-    // SparkleCedar was 13 m ahead as you fell: elected, though its whole run went 1,145 m further.
+    // SparkleCedar was 13 m ahead as you fell, but it is the pace rider (its whole run went 1,145 m
+    // further, and it pulled away all of a novice's next run): the pack ghost within reach is elected.
     const a = settleGrudge(null, { youDistance: 753, rode: null, next: pack, ahead: [pack, pace] });
-    expect(a.grudge).toMatchObject({ name: 'SparkleCedar', by: 1145, distance: 1898 });
-    expect(a.line).toBe('SparkleCedar was 13 m ahead when you fell.');
-    // The nearest at the crash wins, either side; one behind rode past your wreck.
-    const fox = { ...next('fox84', 3584), role: 'pace' as const, gapAtCrash: -8 };
+    expect(a.grudge).toMatchObject({ name: 'RidgeUlla', by: 67, distance: 820 });
+    expect(a.line).toBe('RidgeUlla beat you by 67 m. RidgeUlla will be waiting.');
+    // The nearest at the crash wins, either side; one behind rode past your wreck. The pace rider
+    // nearer still is passed over.
+    const fox = { ...next('fox84', 3584), role: 'pace' as const, gapAtCrash: -3 };
     const mid = { ...next('Brave Rhea', 2700), role: 'pack' as const, gapAtCrash: 20 };
-    const b = settleGrudge(null, { youDistance: 2562, rode: null, next: mid, ahead: [mid, fox] });
-    expect(b.grudge?.name).toBe('fox84');
-    expect(b.line).toBe('fox84 rode past your wreck.');
+    const tess = { ...next('Tess', 2650), role: 'pack' as const, gapAtCrash: -8 };
+    const b = settleGrudge(null, { youDistance: 2562, rode: null, next: mid, ahead: [mid, fox, tess] });
+    expect(b.grudge?.name).toBe('Tess');
+    expect(b.line).toBe('Tess rode past your wreck.');
+    const ahead = settleGrudge(null, { youDistance: 2562, rode: null, next: mid, ahead: [mid, fox] });
+    expect(ahead.grudge?.name).toBe('Brave Rhea');
+    expect(ahead.line).toBe('Brave Rhea was 20 m ahead when you fell.');
     // More than 50 m away at the crash is no longer the rival you were racing.
-    const c = settleGrudge(null, { youDistance: 753, rode: null, next: pack, ahead: [{ ...pace, gapAtCrash: 51 }, { ...pack, gapAtCrash: -55 }] });
-    expect(c.grudge?.name).toBe('RidgeUlla');
-    expect(c.line).toBe('RidgeUlla beat you by 67 m. RidgeUlla will be waiting.');
+    const c = settleGrudge(null, { youDistance: 753, rode: null, next: pack, ahead: [{ ...mid, distance: 800, gapAtCrash: 51 }, { ...pack, gapAtCrash: -55 }] });
+    expect(c.grudge?.name).toBe('Brave Rhea');
+    expect(c.line).toBe('Brave Rhea beat you by 47 m. Brave Rhea will be waiting.');
     // A settled grudge's successor is picked the same way.
     const d = settleGrudge(mila, { youDistance: 753, rode: { distance: 600, passed: true }, next: pack, ahead: [pack, pace] });
-    expect(d.line).toBe('Grudge settled with Mila. SparkleCedar is next.');
+    expect(d.line).toBe('Grudge settled with Mila. New grudge: RidgeUlla.');
     // Never stored: the save's grudge keeps exactly its fields.
     expect(Object.keys(a.grudge!).sort()).toEqual(['by', 'distance', 'name', 'record', 'score', 'streak', 'them']);
   });
 
-  it('else the nearest within reach that is not the pace rider, and only then the nearest at all', () => {
+  it('else the nearest within reach that is not the pace rider, and with none within reach no one', () => {
     const pace = { ...next('SparkleCedar', 900), role: 'pace' as const };
     const far = { ...next('Kai_on_Tour', 1300), role: 'pack' as const };
     const within = { ...next('RidgeUlla', 1000), role: 'pack' as const };
@@ -240,11 +248,27 @@ describe('the grudge (settleGrudge)', () => {
     const long = { ...next('Mila', 3100), role: 'pack' as const };
     const longPace = { ...next('fox84', 2500), role: 'pace' as const };
     expect(settleGrudge(null, { youDistance: 2000, rode: null, next: longPace, ahead: [longPace, long] }).grudge?.name).toBe('Mila');
-    // Reach at 600 m is 360 m: Kai_on_Tour is beyond it and SparkleCedar is the pace rider, so the
-    // nearest that went further at all is elected, pace or not.
-    expect(settleGrudge(null, { youDistance: 600, rode: null, next: pace, ahead: [far, pace] }).grudge?.name).toBe('SparkleCedar');
+    // Reach at 600 m is 360 m: Kai_on_Tour is beyond it and SparkleCedar is the pace rider, so no
+    // grudge is elected: no line, and no name for the Rematch button.
+    const none = settleGrudge(null, { youDistance: 600, rode: null, next: pace, ahead: [far, pace] });
+    expect(none).toEqual({ grudge: null, settled: false, nemesisDown: false, line: null });
+    // A grudge that did not ride keeps waiting rather than give way to one out of reach.
+    expect(settleGrudge(mila, { youDistance: 600, rode: null, next: pace, ahead: [far, pace] }).grudge).toBe(mila);
     // A ghost with no role (an unplanned pick) counts as within reach like a pack ghost.
     expect(settleGrudge(null, { youDistance: 600, rode: null, next: pace, ahead: [far, pace, next('Tess', 950)] }).grudge?.name).toBe('Tess');
+  });
+
+  it('a settled grudge with nobody within reach to follow it leaves none, and keeps its tally', () => {
+    // r2-fresh-08: SparkleCedar settled at 1,397 m; RidgeUlla's 2,299 m run is 902 m past it, beyond
+    // the 838 m reach. The button then reads Run Again.
+    const sparkle: Grudge = { name: 'SparkleCedar', score: 900, record: 'rec-SparkleCedar', them: 2, streak: 1, by: 40, distance: 1898 };
+    const ridge = { ...next('RidgeUlla', 2299), role: 'pack' as const, gapAtCrash: 337 };
+    const r = settleGrudge(sparkle, { youDistance: 1397, rode: { distance: 1898, passed: true }, next: { ...next('SparkleCedar', 1898), record: 'rec-SparkleCedar' }, ahead: [{ ...next('SparkleCedar', 1898), record: 'rec-SparkleCedar' }, ridge] });
+    expect(r).toMatchObject({ grudge: null, settled: true, line: 'Grudge settled with SparkleCedar after 2 runs.' });
+    // Within reach, the line names it as the new grudge.
+    const near = settleGrudge(sparkle, { youDistance: 1397, rode: { distance: 1898, passed: true }, next: null, ahead: [{ ...ridge, distance: 1700 }] });
+    expect(near.line).toBe('Grudge settled with SparkleCedar after 2 runs. New grudge: RidgeUlla.');
+    expect(near.grudge).toMatchObject({ name: 'RidgeUlla', them: 1, streak: 1, by: 303 });
   });
 
   it('a friend or your own best is never elected', () => {
