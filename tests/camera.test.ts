@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { ChaseCamera } from '../src/render/camera';
+import { ChaseCamera, crashPack } from '../src/render/camera';
 import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel } from '../src/game/beats';
+import { emptyPose, type GhostPose } from '../src/game/ghosts';
 
 // The crash beat's pack shot: after the held frame the lens cuts to face the pack from low downhill
 // of the wreck, and keeps clear of the trees at its spot and across its line to the wreck.
@@ -91,6 +92,102 @@ describe('crash pack shot', () => {
   it('with no ghost to face, drifts on from the held lens', () => {
     const cam = crash(null, null);
     expect(Math.abs(wrap(angleOf(cam)))).toBeLessThan(0.8);
+  });
+});
+
+// The ghost that passes your wreck: the crash orbit frames it with the wreck, and where the wreck slid
+// far down the slope from where you fell, the lens stands on a tripod beside that ghost's line.
+describe('crash pack framing', () => {
+  const H = 720;
+  /** A crash at `fell`, the wreck at wreckAt(i) and the passer's chest at ghostAt(i) each frame after
+   *  the crash beat: per frame the lens, its angle round the wreck, and where the wreck and the ghost
+   *  land on screen (NDC) with the ghost's height in pixels of a 720 px frame. */
+  function run(wreckAt: (i: number) => Vector3, ghostAt: (i: number) => Vector3 | null, frames: number, feel: Feel = IDLE_FEEL, aspect = 16 / 9, fell = WRECK) {
+    const cam = new ChaseCamera();
+    cam.setAspect(aspect);
+    cam.ground = () => 0;
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    for (let i = 0; i < 40; i++) cam.update({ pos: fell, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    cam.mode = 'crash';
+    cam.beats([{ type: 'crash', tick: 0, cause: 'tree', stake: 0, orbitFrom: Math.PI }], feel);
+    const shots: { lens: Vector3; fov: number; angle: number; wreck: Vector3; ghost: Vector3 | null; px: number }[] = [];
+    for (let i = 0; i < frames; i++) {
+      const w = wreckAt(i);
+      const g = ghostAt(i);
+      cam.update({ pos: w, dir: DOWN, speed: 0, steer: 0, airborne: true, boost: 0, pack: g, fell }, 1 / 60);
+      cam.beats([], feel);
+      cam.camera.updateMatrixWorld();
+      const p = cam.camera.position;
+      const ndc = (v: Vector3) => v.clone().project(cam.camera);
+      const px = g ? ((ndc(g.clone().setY(g.y + 0.75)).y - ndc(g.clone().setY(g.y - 0.8)).y) * H) / 2 : 0;
+      shots.push({ lens: p.clone(), fov: cam.camera.fov, angle: Math.atan2(p.x - w.x, p.z - w.z), wreck: ndc(w), ghost: g ? ndc(g) : null, px });
+    }
+    return shots;
+  }
+  const hold = Math.ceil(CRASH_FREEZE_S * 60) + 2;
+  // A ghost riding straight down at 20 m/s, 3 m to the side of the wreck, from 30 m uphill of it.
+  const lane = (x: number, from: number) => (i: number) => new Vector3(x, 0.8, from - i / 3);
+  const still = () => WRECK;
+  const inFrame = (v: Vector3, share: number) => Math.abs(v.x) <= share && Math.abs(v.y) <= share && v.z < 1;
+
+  it('crashPack takes the live ghost nearest where you fell, from 25 m behind to 6 m past', () => {
+    const pose = (x: number, z: number, done = false): GhostPose => ({ ...emptyPose(), x, y: 2, z, done });
+    const out = new Vector3();
+    const poses = new Map<number, GhostPose | null>([
+      [1, pose(0, 70)],
+      [2, pose(4, 95)],
+      [3, pose(0.5, 99, true)],
+      [4, pose(-1, 108)],
+      [5, null],
+    ]);
+    // (Sim z 100 is where you fell; 70 m is past the window, the crashed one never counts.)
+    expect(crashPack(poses, 0, 100, out)).toBe(out);
+    expect(out.toArray()).toEqual([4, 2.8, -95]);
+    expect(crashPack(new Map([[1, pose(0, 70)], [4, pose(0, 107)]]), 0, 100, out)).toBeNull();
+  });
+
+  it('holds the orbit and turns the look so the passer stays in frame with the wreck', () => {
+    const shots = run(still, lane(-3, -70), 100);
+    const none = run(still, () => null, 100);
+    // The ghost crosses the line you fell on (plus the director's 0.8 m) on this frame.
+    const at = Math.ceil((100.8 - 70) * 3);
+    const s = shots[at];
+    expect(s.ghost && inFrame(s.ghost, 0.9)).toBe(true);
+    expect(inFrame(s.wreck, 0.7)).toBe(true);
+    // The orbit stands still while the ghost rides past (it drifts on without one).
+    expect(Math.abs(wrap(s.angle - shots[hold + 5].angle))).toBeLessThan(1e-6);
+    expect(Math.abs(wrap(none[at].angle - none[hold + 5].angle))).toBeGreaterThan(0.05);
+    // The long lens only ever narrows the orbit's own.
+    expect(s.fov).toBeLessThanOrEqual(none[at].fov + 1e-9);
+  });
+
+  it('stands on a tripod beside the passer when the wreck slid far from where you fell', () => {
+    // You fell at z -100; the wreck slid 15 m on down the slope. The ghost rides 6 m to one side.
+    const slid = (i: number) => new Vector3(0, 0, -100 - Math.min(15, i * 0.4));
+    for (const aspect of [16 / 9, 390 / 844]) {
+      const shots = run(slid, lane(-6, -72), 110, IDLE_FEEL, aspect);
+      const at = Math.ceil((100.8 - 72) * 3);
+      const s = shots[at];
+      // Still: the lens stands put from the cut to the pass.
+      expect(s.lens.distanceTo(shots[hold + 2].lens)).toBeLessThan(1e-6);
+      expect(s.ghost && inFrame(s.ghost, 0.9)).toBe(true);
+      // Below the HUD's race row, and big: 60 px of a 720 px frame (on a phone, 40 of 844).
+      expect(s.ghost!.y).toBeLessThan(aspect < 1 ? 0.15 : 0.4);
+      expect(s.px).toBeGreaterThan(aspect < 1 ? (40 / 844) * H : 60);
+      expect(inFrame(s.wreck, 0.7)).toBe(true);
+    }
+  });
+
+  it('under reduced motion the crash orbit ignores the pack: the same frames as with none', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const slid = (i: number) => new Vector3(0, 0, -100 - Math.min(15, i * 0.4));
+    const a = run(slid, lane(-6, -72), 100, feel);
+    const b = run(slid, () => null, 100, feel);
+    for (let i = 0; i < a.length; i++) {
+      expect(a[i].lens.distanceTo(b[i].lens)).toBeLessThan(1e-9);
+      expect(a[i].fov).toBe(b[i].fov);
+    }
   });
 });
 

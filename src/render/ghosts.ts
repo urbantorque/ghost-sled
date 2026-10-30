@@ -18,9 +18,11 @@ import { graveCopy, type GravePlace } from './graves';
 // The fun pass: the tags react to the race. The duel ghost's ring beats at 1.2 Hz (Feel.duelId,
 // contract C11) and the start-line call pings it; a ghost that stomps a perfect landing near you rings
 // its tag once, and one that lands a trick swaps its name for the trick ('Backflip') for 0.9 s (never
-// the rival's under your own fresh stamp); a grudge on a three-run streak reads 'nemesis'; and your best
-// and a friend's line on the snow carry a tag with the distance ('Your best · 1,240 m'). A graveyard's
-// cairn on the bank carries its name over how many fell there ('4 ghosts fell here').
+// the rival's under your own fresh stamp); a ghost riding past your wreck wears the rival's ring while
+// the HUD names it; a grudge on a three-run streak reads 'nemesis', and a settled one drops the word
+// for the rest of the run; and your best and a friend's line on the snow carry a tag with the distance
+// ('Your best · 1,240 m'). A graveyard's cairn on the bank carries its name over how many fell there
+// ('4 ghosts fell here').
 
 export const GHOST_COLORS: Record<GhostKind, string> = {
   pool: '#8FF3E4',
@@ -37,6 +39,16 @@ export const GHOST_COLORS: Record<GhostKind, string> = {
  */
 export function rivalChipText(gap: number): string {
   return `${Math.max(1, Math.round(Math.abs(gap)))} m`;
+}
+
+/**
+ * Whether a ghost's tag wears the rival's ring (in its kind colour, placed before every other tag,
+ * never a dot, pulled in from the screen edge): the ghost the HUD's rival pill names (`rivalId`, -1 for
+ * none), or one riding past your wreck while its call runs (`wreckT` seconds left; the HUD's pill names
+ * it then), while the race's tags show (`named`: labels on, not the title reel) and it still rides.
+ */
+export function wearsRing(id: number, rivalId: number, wreckT: number, named: boolean, done: boolean): boolean {
+  return (id === rivalId || (wreckT > 0 && named)) && !done;
 }
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
@@ -126,6 +138,13 @@ interface Item {
   /** Seconds left of the start-line call's ring ping, and of a perfect landing's stomp ping. */
   callT: number;
   stompT: number;
+  /** Seconds left of a wreck pass's call (it rode past your wreck: the HUD's pill names it), while
+   *  which its tag counts as the rival's (ringed, placed first, never a dot). */
+  wreckT: number;
+  /** The tag's kind word ('grudge', 'nemesis', 'challenge', 'daily'), if it has one, and whether a
+   *  settled grudge has dropped it for the rest of the run. */
+  kw: HTMLSpanElement | null;
+  kwOff: boolean;
   /** The ring classes as written (duel heartbeat, call ping, stomp ping). */
   duelOn: boolean;
   callOn: boolean;
@@ -678,6 +697,16 @@ export class GhostVisuals {
       } else if (b.type === 'raceCall') {
         const it = this.items.find((g) => g.id === b.ghost.id);
         if (it) it.callT = CALL_HOLD;
+      } else if (b.type === 'passedBy' && b.wreck) {
+        // A ghost riding past your wreck: the HUD's pill names it, so its tag pings its ring and, for as
+        // long as the call runs, counts as the rival's (ringed, placed first, pulled in from the edge).
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (it) it.callT = it.wreckT = CALL_HOLD;
+      } else if (b.type === 'grudgeSettled') {
+        // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
+        // your wreck never contradicts the card.
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (it) this.dropWord(it);
       } else if (b.type === 'ghostTrick') {
         const it = this.items.find((g) => g.id === b.ghost.id);
         if (!it) continue;
@@ -712,6 +741,16 @@ export class GhostVisuals {
     t.h = t.el.offsetHeight || t.h;
     it.trickT = TRICK_HOLD;
     this.sinceTrick = 0;
+  }
+
+  /** Drops the tag's kind word for the rest of the run (a settled grudge): a trick swap on it ends
+   *  first, and the pill is measured again on its next placement. */
+  private dropWord(it: Item): void {
+    if (!it.kw || it.kwOff) return;
+    this.endTrick(it);
+    it.kw.remove();
+    it.kwOff = true;
+    it.tag.w = 0;
   }
 
   private endTrick(it: Item): void {
@@ -750,12 +789,13 @@ export class GhostVisuals {
         label.translate = false;
       }
       label.appendChild(nm);
+      let kw: HTMLSpanElement | null = null;
       if (g.kind !== 'pool' && g.kind !== 'you') {
-        const tag = document.createElement('span');
-        tag.className = 'tag';
+        kw = document.createElement('span');
+        kw.className = 'tag';
         // A grudge that has beaten you three runs running is a nemesis (rose, like any grudge).
-        tag.textContent = g.kind === 'grudge' ? (g.nemesis ? 'nemesis' : 'grudge') : g.kind === 'friend' ? 'challenge' : 'daily';
-        label.appendChild(tag);
+        kw.textContent = g.kind === 'grudge' ? (g.nemesis ? 'nemesis' : 'grudge') : g.kind === 'friend' ? 'challenge' : 'daily';
+        label.appendChild(kw);
       }
       this.layer.appendChild(label);
       this.root.add(mesh, trail.mesh);
@@ -796,6 +836,9 @@ export class GhostVisuals {
         nameH: 0,
         callT: 0,
         stompT: 0,
+        wreckT: 0,
+        kw,
+        kwOff: false,
         duelOn: false,
         callOn: false,
         stompOn: false,
@@ -897,6 +940,12 @@ export class GhostVisuals {
       this.endTrick(it);
       it.callT = 0;
       it.stompT = 0;
+      it.wreckT = 0;
+      if (it.kw && it.kwOff) {
+        it.tag.el.insertBefore(it.kw, it.tw);
+        it.kwOff = false;
+        it.tag.w = 0;
+      }
     }
     this.rivalOff = 0;
     this.runT = 0;
@@ -953,6 +1002,7 @@ export class GhostVisuals {
         it.callOn = call;
         it.tag.el.classList.toggle('call', call);
       }
+      it.wreckT = Math.max(0, it.wreckT - dt);
       it.stompT = Math.max(0, it.stompT - dt);
       const stomp = it.stompT > 0 && !call && this.labels && !this.reel;
       if (stomp !== it.stompOn) {
@@ -1007,7 +1057,8 @@ export class GhostVisuals {
       }
       it.passT = Math.max(0, it.passT - dt);
       const beat = smooth01(it.passT / 0.4);
-      const isRival = rivalId === it.id && !p.done;
+      // (A ghost riding past your wreck counts as the rival while its wreck call runs: the pill names it.)
+      const isRival = wearsRing(it.id, rivalId, it.wreckT, this.labels && !this.reel, p.done);
       // By size: from about 30% of the screen height (sooner when the frame edge cuts it) a ghost's
       // dissolve climbs from the hips toward its shoulders, so none outweighs the rider and none
       // hollows into an outline; from about 40% it goes evenly, gone by about 60% (riding beside the

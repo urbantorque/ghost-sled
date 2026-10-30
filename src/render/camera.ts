@@ -1,12 +1,13 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { WRECK_SLED } from './rider';
-import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
+import { CRASH_FREEZE_S, CRASH_PACK_NEAR_M, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
+import type { GhostPose } from '../game/ghosts';
 import type { SimEvent } from '../sim/sim';
 
 // Chase camera (ART.md section 8): leads into turns, breathes FOV with speed, rolls into carves,
-// shakes on impacts, punches on perfect landings, orbits on a crash, frames portrait screens with a
-// higher, wider view, eases a close rival into the frame, and on the results screen settles into a
-// hero shot of the wreck.
+// shakes on impacts, punches on perfect landings, orbits on a crash (holding the ghost that rides past
+// your wreck in the frame with it), frames portrait screens with a higher, wider view, eases a close
+// rival into the frame, and on the results screen settles into a hero shot of the wreck.
 //
 // Weight (the fun pass): landings sink the lens and nod the horizon, a bump knocks it sideways and
 // rolls it, a whisker flinches it away and tips the horizon, a max drift's release throws it back and
@@ -37,6 +38,12 @@ export interface CamTarget {
   rival?: Vector3 | null;
   /** Run start, 1 easing to 0: the chase rides higher and further back while the mood card shows. */
   intro?: number;
+  /** Crash only: the chest of the ghost riding past your wreck (crashPack, three.js world position),
+   *  which the crash orbit frames with the wreck; absent or null when none rides by. */
+  pack?: Vector3 | null;
+  /** Crash only: where you fell (the sim's crash spot, three.js), the line the pack's passes are told
+   *  at; absent or null outside a crash. */
+  fell?: Vector3 | null;
 }
 
 const smooth01 = (x: number) => {
@@ -103,6 +110,8 @@ const ORBIT_FACE = 0.9;
 const ORBIT_EASE = 5;
 const ORBIT_SWING = 3.6;
 const ORBIT_WIND = 0.15;
+/** The orbit rides along with a sliding wreck, winding in over this many seconds from the hold. */
+const ORBIT_CARRY_WIND = 0.4;
 /** Facing the pack, the lens sits low (this high over the wreck, about head height over the snow
  *  downhill of it) and looks a little over the wreck, so the slope it came down fills the frame with
  *  the ghosts riding down it. From the orbit's usual 3.2 m, the downhill lens stood 5 m over its own
@@ -118,6 +127,74 @@ const PACK_SIGHT = [0.35, 0.65];
 const PACK_CLEAR = 3.4;
 /** The pack lens stays on the downhill side: at most this far (radians) off straight downhill. */
 const PACK_DOWNHILL = 1.4;
+/** The ghost that passes your wreck (CamTarget.pack) is looked for from CRASH_PACK_NEAR_M behind
+ *  where you fell to this far past it (metres). */
+const PACK_PAST_M = 6;
+/** Framing it: the look eases toward the midpoint of the wreck and that ghost by up to PACK_LOOK, at
+ *  PACK_LOOK_EASE per second (only once it is in front of the lens). */
+const PACK_LOOK = 0.45;
+const PACK_LOOK_EASE = 5;
+/** ...and the lens narrows (eased in and out at PACK_ZOOM_EASE per second) until that ghost stands
+ *  about PACK_TALL of the frame's height (of 1.6 widths on a phone, as the ghost layer measures
+ *  size), as far as the wreck stays inside the middle 70% of the frame and the ghost inside 85%,
+ *  never under PACK_FOV_MIN degrees. Feet to head, a seated ghost on its sled stands PACK_GHOST_H. */
+const PACK_TALL = 0.1;
+const PACK_FOV_MIN = 40;
+const PACK_ZOOM_EASE = 4;
+const PACK_GHOST_H = 1.55;
+/** The wreck's extent over and under its middle (metres; the tumbling rider's limbs and its sled) and
+ *  the share of the frame it stays in. */
+const PACK_WRECK_UP = 0.9;
+const PACK_WRECK_DOWN = 0.6;
+const PACK_WRECK_IN = 0.7;
+const PACK_GHOST_IN = 0.85;
+/** The highest that ghost's chest sits in the frame (from the middle, 1 at the top edge: about 32% of
+ *  the height from the top on a wide screen, 45% on a phone, whose race row hangs lower). */
+const PACK_CHEST_TOP = [0.35, 0.1];
+/** The pack tripod: when the ghost riding past will cross the line you fell on more than PACK_FORE_D
+ *  metres from the wreck (the wreck slid on down the slope, or the ghost rides wide of it), the pack
+ *  lens downhill of the wreck sees it only as a speck far up the slope as the HUD names it. The lens
+ *  cuts instead to a tripod on the far side of that crossing from the wreck, TRIPOD_BACK metres out
+ *  (the first clear of the trees) and TRIPOD_SIDE to one side (toward the course's middle first, so
+ *  the ghost never hides the wreck), TRIPOD_UP over the snow: the ghost rides past the lens and on
+ *  toward your wreck, the two lined up in the frame, and it is about 10 m out as it passes you. The
+ *  lens stands over head height and looks down on it (from head height a ghost flying a kicker there
+ *  rose into the HUD's race row), and only for a crossing within TRIPOD_REACH of the wreck (a pack
+ *  riding 35 m wide of a wreck in the trees left the wreck a speck past the bottom of the frame). */
+const PACK_FORE_D = 5;
+const TRIPOD_BACK = [9, 11, 7];
+const TRIPOD_SIDE = 3;
+const TRIPOD_UP = 2.6;
+const TRIPOD_REACH = 24;
+
+/** Scratch for crashPack (Map.forEach with a module-level callback: no per-frame allocation). */
+const packScan = { x: 0, z: 0, best: Infinity, p: null as GhostPose | null };
+function scanPack(p: GhostPose | null): void {
+  if (!p || p.done) return;
+  const dz = p.z - packScan.z;
+  if (dz < -CRASH_PACK_NEAR_M || dz > PACK_PAST_M) return;
+  const dx = p.x - packScan.x;
+  const d = dx * dx + dz * dz;
+  if (d < packScan.best) {
+    packScan.best = d;
+    packScan.p = p;
+  }
+}
+
+/** The crash orbit's pack (CamTarget.pack): the chest of the live ghost nearest where you fell (sim
+ *  x and z), from CRASH_PACK_NEAR_M behind it to PACK_PAST_M past it, in three.js space into `out`;
+ *  null when none rides there. */
+export function crashPack(poses: ReadonlyMap<number, GhostPose | null>, x: number, z: number, out: Vector3): Vector3 | null {
+  packScan.x = x;
+  packScan.z = z;
+  packScan.best = Infinity;
+  packScan.p = null;
+  poses.forEach(scanPack);
+  // (Set by the callback, which the compiler's narrowing does not see.)
+  const p = packScan.p as GhostPose | null;
+  packScan.p = null;
+  return p ? out.set(p.x, p.y + 0.8, -p.z) : null;
+}
 
 export class ChaseCamera {
   readonly camera: PerspectiveCamera;
@@ -204,6 +281,18 @@ export class ChaseCamera {
   private packR = ORBIT_R;
   /** The crash orbit's drift (radians per second; its sign is the way the pack swing went). */
   private orbitSpin = ORBIT_SPIN;
+  /** Framing the ghost that passes your wreck: the eased weight of the look toward the wreck and
+   *  pack's midpoint, the last pack seen (eased out toward it), the eased share of the long lens and
+   *  the narrowest FOV (vertical degrees) it last allowed. */
+  private packK = 0;
+  private packAt = new Vector3();
+  private packZoom = 0;
+  private packFov = 0;
+  /** This frame's crash orbit cut to face the pack (the FOV stands at its framing at once). */
+  private packCut = false;
+  /** The crash lens stands on the pack tripod (at tripodAt) instead of orbiting. */
+  private tripod = false;
+  private tripodAt = new Vector3();
   /** Raw events this frame that a beat may take over: a perfect landing (the stomp beat kicks by
    *  streak) and a drift boost (the release beat kicks by tier). Settled in beats(). */
   private pendPerfect = false;
@@ -444,6 +533,8 @@ export class ChaseCamera {
     this.orbitFrom = null;
     this.orbitSeeded = false;
     this.orbitLook = this.orbitLookT = 0;
+    this.packK = this.packZoom = 0;
+    this.tripod = false;
     this.pendPerfect = false;
     this.pendDriftKick = 0;
   }
@@ -563,10 +654,14 @@ export class ChaseCamera {
     const travelAz = azimuth(this.dirS.x, this.dirS.z);
     if (this.mode !== 'hero') this.heroPicked = false;
     const reduced = this.feel.reduced;
+    this.packCut = false;
     // The crash hold lasts only while the crash orbit is the mode (a revive or the results end it).
     if (this.mode !== 'crash' || reduced || !this.initialized) this.freezeLeft = 0;
     const held = this.mode === 'crash' && this.freezeLeft > 0;
-    if (this.mode !== 'crash') this.orbitSeeded = false;
+    if (this.mode !== 'crash') {
+      this.orbitSeeded = false;
+      this.packK = this.packZoom = 0;
+    }
     // Jolts ride the chase only: elsewhere they die away at once.
     if (this.mode === 'chase' && !reduced) this.stepJolt(dt);
     else if (this.jx || this.jy || this.jz || this.jr || this.jvx || this.jvy || this.jvz || this.jvr) {
@@ -650,11 +745,37 @@ export class ChaseCamera {
         lookAt.copy(t.pos);
         lookAt.y += this.orbitLook;
         if (cut) {
-          // A cut to face the pack: the lens stands there at once.
+          // A cut to face the pack: the lens stands there at once (and its framing of the ghost riding
+          // past, below, with it).
           this.pos.copy(desired);
+          this.look.copy(lookAt);
+        } else if (!reduced) {
+          // The orbit rides along with a wreck still sliding down the slope (along the snow under it, so
+          // its bounces never bob the lens), winding in over ORBIT_CARRY_WIND: eased after it, a fast
+          // slide ran into the lens facing the pack and took the rider out of the bottom of the frame.
+          // The tripod stands still and only its look rides along (eased, the slide left it at the
+          // frame's edge).
+          const sx = t.pos.x - this.lastFocus.x;
+          const sz = t.pos.z - this.lastFocus.z;
+          if (sx * sx + sz * sz < 4) {
+            const k = this.tripod ? 1 : smooth01(this.orbitT / ORBIT_CARRY_WIND);
+            const sy = this.ground ? this.ground(t.pos.x, t.pos.z) - this.ground(this.lastFocus.x, this.lastFocus.z) : 0;
+            if (!this.tripod) {
+              this.pos.x += sx * k;
+              this.pos.y += sy * k;
+              this.pos.z += sz * k;
+            }
+            this.look.x += sx * k;
+            this.look.y += sy * k;
+            this.look.z += sz * k;
+          }
+        }
+        this.framePack(t, lookAt, dt, cut);
+        if (cut) {
           this.look.copy(lookAt);
           this.lookS.copy(lookAt);
         }
+        this.packCut = cut;
       }
     } else if (this.mode === 'hero') {
       this.heroShot(t, desired, lookAt, tanHalfW, travelAz);
@@ -748,7 +869,10 @@ export class ChaseCamera {
       baseFov = MathUtils.radToDeg(2 * Math.atan(Math.tan(hfov / 2) / Math.max(this.aspect, 0.4)));
       baseFov = Math.min(baseFov, 96);
     }
-    this.fov += (baseFov - this.fov) * (1 - Math.exp(-dt * 5));
+    // The crash orbit's long lens on the ghost that passes your wreck.
+    if (this.mode === 'crash') baseFov = this.packZoomFov(t, baseFov, held, dt);
+    if (this.packCut) this.fov = baseFov;
+    else this.fov += (baseFov - this.fov) * (1 - Math.exp(-dt * 5));
     this.camera.fov = this.fov;
     this.camera.updateProjectionMatrix();
 
@@ -853,6 +977,7 @@ export class ChaseCamera {
       this.orbitUpT = ORBIT_UP;
       this.orbitRT = ORBIT_R;
       this.orbitLook = this.orbitLookT = 0;
+      this.packR = ORBIT_R;
       const from = this.feel.reduced ? null : this.orbitFrom;
       // The ghost's bearing from the wreck is `from` (sim x and z: 0 down the course, + toward +x).
       // In three.js the ghost lies along (sin from, -cos from) and the orbit puts the lens along
@@ -862,7 +987,11 @@ export class ChaseCamera {
       // tree at the lens or across the line to the wreck: in the treeline the low lens stood among
       // dissolving trunks, and where every spot is walled in there is no pack shot at all (the orbit
       // drifts on from the held lens, which rode in along the open course).
-      const aim = from === null ? null : this.packLens(t.pos, Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE));
+      // ...unless the ghost riding past will cross the line you fell on well clear of the wreck: then
+      // the lens cuts to the pack tripod beside its line (packTripod), and stays there.
+      this.tripod = !this.feel.reduced && !!t.pack && !!t.fell && this.packTripod(t.pos, t.pack, t.fell);
+      if (this.tripod) cut = true;
+      const aim = from === null || this.tripod ? null : this.packLens(t.pos, Math.PI + MathUtils.clamp(wrapAngle(-from - Math.PI), -ORBIT_FACE, ORBIT_FACE));
       if (aim !== null) {
         this.orbitUpT = ORBIT_PACK_UP;
         this.orbitLookT = ORBIT_PACK_LOOK;
@@ -880,14 +1009,22 @@ export class ChaseCamera {
       }
     }
     this.orbitT += dt;
+    if (this.tripod) {
+      desired.copy(this.tripodAt);
+      return cut;
+    }
     const wind = Math.min(1, this.orbitT / ORBIT_WIND);
+    // While a ghost rides past the wreck (CamTarget.pack) the orbit holds its angle and comes no
+    // further out than the pack lens's radius, so the wreck stays in frame as the look turns toward
+    // the passer (framePack). Reduced motion drifts on as ever.
+    const pack = !!t.pack && !this.feel.reduced;
     if (this.orbitAim !== null) {
       const gap = wrapAngle(this.orbitAim - this.orbitAngle);
       if (Math.abs(gap) < 0.02) this.orbitAim = null;
       else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
-    } else this.orbitAngle += dt * this.orbitSpin * wind;
+    } else if (!pack) this.orbitAngle += dt * this.orbitSpin * wind;
     const k = 1 - Math.exp(-dt * 2.5);
-    this.orbitR += (this.orbitRT - this.orbitR) * k;
+    this.orbitR += ((pack ? Math.min(this.orbitRT, this.packR) : this.orbitRT) - this.orbitR) * k;
     this.orbitUp += (this.orbitUpT - this.orbitUp) * k;
     this.orbitLook += (this.orbitLookT - this.orbitLook) * k;
     desired.set(t.pos.x + Math.sin(this.orbitAngle) * this.orbitR, t.pos.y + this.orbitUp, t.pos.z + Math.cos(this.orbitAngle) * this.orbitR);
@@ -932,6 +1069,211 @@ export class ChaseCamera {
       if (bestCost < 1) break;
     }
     return bestCost < 3 ? best : null;
+  }
+
+  /** The pack tripod's spot (into tripodAt) for the wreck at `w` and the ghost riding past with its
+   *  chest at `g`, toward the line you fell on at `fell` (three.js): where it crosses that line (its
+   *  lane taken as where it rides now), more than PACK_FORE_D and at most TRIPOD_REACH from the wreck,
+   *  the lens stands on the far side of the crossing from the wreck, TRIPOD_BACK out and TRIPOD_SIDE
+   *  aside, clear of the trees at the lens and halfway to the crossing. False for no tripod: the ghost
+   *  has already crossed, it crosses near the wreck (the pack lens downhill frames that) or far wide
+   *  of it, or every spot is walled in. Asked once per crash, so its prop scan never runs per frame. */
+  private packTripod(w: Vector3, g: Vector3, fell: Vector3): boolean {
+    // (Uphill is +z in three.js: a ghost still coming rides behind the line.)
+    if (g.z < fell.z + 0.5) return false;
+    const cx = g.x;
+    const cz = fell.z;
+    let ux = cx - w.x;
+    let uz = cz - w.z;
+    const d0 = Math.hypot(ux, uz);
+    if (d0 <= PACK_FORE_D || d0 > TRIPOD_REACH) return false;
+    ux /= d0;
+    uz /= d0;
+    const nx = -uz;
+    const nz = ux;
+    // Toward the course's middle first (open snow).
+    const cor = this.corridor?.(cz);
+    const side = cor ? Math.sign((cor.x - cx) * nx) || 1 : 1;
+    const blocked = this.blocked;
+    for (const back of TRIPOD_BACK) {
+      for (let s = 0; s < 2; s++) {
+        const sd = s === 0 ? side : -side;
+        const lx = cx + ux * back + nx * sd * TRIPOD_SIDE;
+        const lz = cz + uz * back + nz * sd * TRIPOD_SIDE;
+        if (blocked && (blocked(lx, lz, PACK_CLEAR) || blocked((lx + cx) * 0.5, (lz + cz) * 0.5, 1.4))) continue;
+        const gy = this.ground ? this.ground(lx, lz) : g.y - 0.8;
+        this.tripodAt.set(lx, gy + TRIPOD_UP, lz);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Frame the ghost that passes your wreck (CamTarget.pack): once it is in front of the lens, the
+   *  look eases toward the midpoint of the wreck and that ghost, by up to PACK_LOOK, so the passer
+   *  stays in frame as it goes by (and eases back to the wreck after it). Reduced motion skips it. */
+  private framePack(t: CamTarget, lookAt: Vector3, dt: number, snap: boolean): void {
+    if (this.feel.reduced) {
+      this.packK = 0;
+      return;
+    }
+    const g = t.pack ?? null;
+    let w = 0;
+    if (g) {
+      this.packAt.copy(g);
+      const fx = this.look.x - this.pos.x;
+      const fz = this.look.z - this.pos.z;
+      const fl = Math.hypot(fx, fz) || 1;
+      const depth = ((g.x - this.pos.x) * fx + (g.z - this.pos.z) * fz) / fl;
+      // ...as far as the wreck stays inside the middle of the frame: on a phone's narrow frame the
+      // full turn toward a ghost riding wide put the wreck at its edge.
+      w = Math.min(PACK_LOOK * smooth01((depth - 1) / 2), this.packReach(t.pos, g));
+    }
+    // (On a cut the framing stands there at once, with the lens.)
+    if (snap) this.packK = w;
+    else this.packK += (w - this.packK) * (1 - Math.exp(-dt * PACK_LOOK_EASE));
+    if (this.packK < 1e-4 && w === 0) this.packK = 0;
+    if (this.packK === 0) return;
+    // The midpoint as the lens sees them: the view turns from the wreck toward the ghost by packK of
+    // the angle between them (at the wreck's distance). Halfway along the line between them, the far
+    // ghost pulled the view almost onto itself and the near wreck dropped to the foot of the frame;
+    // 0.45 of the angle is also where the long lens fits both narrowest (packFit's 70% and 85%). The
+    // pack lens's lift over the wreck gives way as it comes in: the ghost up the slope lifts the view.
+    const p = this.pos;
+    const wx = lookAt.x - p.x;
+    const wy = lookAt.y - this.orbitLook * Math.min(1, this.packK / PACK_LOOK) - p.y;
+    const wz = lookAt.z - p.z;
+    const wl = Math.hypot(wx, wy, wz);
+    const gx = this.packAt.x - p.x;
+    const gy = this.packAt.y - p.y;
+    const gz = this.packAt.z - p.z;
+    const gl = Math.hypot(gx, gy, gz);
+    if (wl < 1e-3 || gl < 1e-3) return;
+    const k = this.packK;
+    const bx = (wx / wl) * (1 - k) + (gx / gl) * k;
+    const by = (wy / wl) * (1 - k) + (gy / gl) * k;
+    const bz = (wz / wl) * (1 - k) + (gz / gl) * k;
+    const bl = Math.hypot(bx, by, bz);
+    if (bl < 1e-3) return;
+    const fx = bx / bl;
+    const fy = by / bl;
+    const fz = bz / bl;
+    // ...then tipped up until the ghost's chest sits no higher than PACK_CHEST_TOP (under the HUD's
+    // race row, which on a phone hid its tag as a ghost flew over the lens), as far as the wreck's foot
+    // stays inside the middle PACK_WRECK_IN of the frame.
+    const rl = Math.hypot(fx, fz) || 1;
+    const rx = -fz / rl;
+    const rz = fx / rl;
+    const ux = -rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy;
+    const dg = gx * fx + gy * fy + gz * fz;
+    const ex = t.pos.x - p.x;
+    const ey = t.pos.y - PACK_WRECK_DOWN - p.y;
+    const ez = t.pos.z - p.z;
+    const de = ex * fx + ey * fy + ez * fz;
+    let lift = 0;
+    if (dg > 0.3 && de > 0.3) {
+      const tanV = Math.tan(MathUtils.degToRad(this.fov) / 2);
+      const top = (this.aspect < 1 ? PACK_CHEST_TOP[1] : PACK_CHEST_TOP[0]) * tanV;
+      const yg = (gx * ux + gy * uy + gz * uz) / dg;
+      const ye = (ex * ux + ey * uy + ez * uz) / de;
+      lift = MathUtils.clamp(Math.min(yg - top, ye + PACK_WRECK_IN * tanV), 0, 1) * Math.min(1, k / PACK_LOOK);
+    }
+    const lx = fx + ux * lift;
+    const ly = fy + uy * lift;
+    const lz = fz + uz * lift;
+    const ll = Math.hypot(lx, ly, lz);
+    lookAt.set(p.x + (lx / ll) * wl, p.y + (ly / ll) * wl, p.z + (lz / ll) * wl);
+  }
+
+  /** The most of the turn toward the ghost (packK) that keeps the wreck, its middle at `w`, inside the
+   *  middle PACK_WRECK_IN of the frame with the ghost's chest at `g`, as the lens stands and looks
+   *  (measured on the view's tangent plane, where the turn moves the wreck by packK of the ghost's
+   *  offset from it). */
+  private packReach(w: Vector3, g: Vector3): number {
+    const p = this.pos;
+    let fx = this.look.x - p.x;
+    let fy = this.look.y - p.y;
+    let fz = this.look.z - p.z;
+    const fl = Math.hypot(fx, fy, fz);
+    if (fl < 1e-6) return PACK_LOOK;
+    fx /= fl;
+    fy /= fl;
+    fz /= fl;
+    // The view's right (level) and up axes.
+    const rl = Math.hypot(fx, fz) || 1;
+    const rx = -fz / rl;
+    const rz = fx / rl;
+    const ux = -rz * fy;
+    const uy = rz * fx - rx * fz;
+    const uz = rx * fy;
+    const dw = (w.x - p.x) * fx + (w.y - p.y) * fy + (w.z - p.z) * fz;
+    const dg = (g.x - p.x) * fx + (g.y - p.y) * fy + (g.z - p.z) * fz;
+    if (dw < 0.3 || dg < 0.3) return 0;
+    const sx = ((g.x - p.x) * rx + (g.z - p.z) * rz) / dg - ((w.x - p.x) * rx + (w.z - p.z) * rz) / dw;
+    const sy = ((g.x - p.x) * ux + (g.y - p.y) * uy + (g.z - p.z) * uz) / dg - ((w.x - p.x) * ux + (w.y - p.y) * uy + (w.z - p.z) * uz) / dw;
+    const tanV = Math.tan(MathUtils.degToRad(this.fov) / 2);
+    // (Vertically the wreck's own height counts too.)
+    const kx = Math.abs(sx) > 1e-6 ? (PACK_WRECK_IN * tanV * this.aspect) / Math.abs(sx) : Infinity;
+    const ky = Math.abs(sy) > 1e-6 ? Math.max(0, PACK_WRECK_IN * tanV - PACK_WRECK_UP / dw) / Math.abs(sy) : Infinity;
+    return Math.min(PACK_LOOK, kx, ky);
+  }
+
+  /** The crash orbit's long lens while a ghost rides past your wreck: the FOV eases (PACK_ZOOM_EASE)
+   *  down to what packFit allows, never wider than `base`, and back out once it has gone by. Off
+   *  while the crash lens holds and under reduced motion. */
+  private packZoomFov(t: CamTarget, base: number, held: boolean, dt: number): number {
+    const g = this.feel.reduced || held ? null : (t.pack ?? null);
+    const fov = g ? this.packFit(t.pos, g) : 0;
+    if (fov > 0) this.packFov = fov;
+    if (this.packCut && fov > 0) this.packZoom = 1;
+    else this.packZoom += ((fov > 0 ? 1 : 0) - this.packZoom) * (1 - Math.exp(-dt * PACK_ZOOM_EASE));
+    if (fov <= 0 && this.packZoom < 1e-3) this.packZoom = 0;
+    if (this.packZoom === 0) return base;
+    return base + (Math.min(base, this.packFov) - base) * this.packZoom;
+  }
+
+  /** The vertical FOV (degrees) that shows the ghost whose chest is at `g` about PACK_TALL of the frame
+   *  high, with the wreck (its middle at `w`) inside the middle PACK_WRECK_IN of the frame and the ghost
+   *  inside PACK_GHOST_IN, from the lens as it stands and looks; never under PACK_FOV_MIN. 0 while the
+   *  ghost is not in front of the lens (180 when the wreck is behind it: no long lens). */
+  private packFit(w: Vector3, g: Vector3): number {
+    const f = this.tmp3.subVectors(this.look, this.pos);
+    if (f.lengthSq() < 1e-8) return 0;
+    f.normalize();
+    // The view's right (level) and up axes.
+    const rl = Math.hypot(f.x, f.z) || 1;
+    const rx = -f.z / rl;
+    const rz = f.x / rl;
+    const u = this.tmp4.set(-rz * f.y, rz * f.x - rx * f.z, rx * f.y);
+    const gd = (g.x - this.pos.x) * f.x + (g.y - this.pos.y) * f.y + (g.z - this.pos.z) * f.z;
+    if (gd < 1) return 0;
+    const a = this.aspect;
+    const need = Math.max(
+      Math.tan(MathUtils.degToRad(PACK_FOV_MIN) / 2),
+      this.tanNeed(f, rx, rz, u, w.x, w.y + PACK_WRECK_UP, w.z, PACK_WRECK_IN, a),
+      this.tanNeed(f, rx, rz, u, w.x, w.y - PACK_WRECK_DOWN, w.z, PACK_WRECK_IN, a),
+      this.tanNeed(f, rx, rz, u, g.x, g.y + PACK_GHOST_H - 0.8, g.z, PACK_GHOST_IN, a),
+      this.tanNeed(f, rx, rz, u, g.x, g.y - 0.8, g.z, PACK_GHOST_IN, a),
+    );
+    // The size: the ghost PACK_TALL of the frame's height (of 1.6 widths on a phone).
+    const frac = PACK_TALL * (a < 1 ? Math.min(1, 1.6 * a) : 1);
+    const size = PACK_GHOST_H / (2 * frac * gd);
+    return MathUtils.radToDeg(2 * Math.atan(Math.max(need, size)));
+  }
+
+  /** The half-height tangent of the frame that keeps a point within `share` of the half frame on both
+   *  axes, seen from the lens along view axis `f` (right (rx, 0, rz), up `u`); Infinity behind it. */
+  private tanNeed(f: Vector3, rx: number, rz: number, u: Vector3, x: number, y: number, z: number, share: number, aspect: number): number {
+    const dx = x - this.pos.x;
+    const dy = y - this.pos.y;
+    const dz = z - this.pos.z;
+    const depth = dx * f.x + dy * f.y + dz * f.z;
+    if (depth < 0.3) return Infinity;
+    const tx = Math.abs(dx * rx + dz * rz) / depth;
+    const ty = Math.abs(dx * u.x + dy * u.y + dz * u.z) / depth;
+    return Math.max(ty / share, tx / (share * aspect));
   }
 
   /** Sell top fix 1, put the rivals in the frame: the ghost the HUD's rival pill names used to sit

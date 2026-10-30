@@ -7,7 +7,7 @@ import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, 
 import type { ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
-import { ChaseCamera } from './camera';
+import { ChaseCamera, crashPack } from './camera';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { placeGraves, type GravePlace } from './graves';
@@ -164,6 +164,9 @@ export class World {
   private screenProbe = new Vector3();
   /** The rival ghost's chest, handed to the chase camera. */
   private rivalAt = new Vector3();
+  /** The chest of the ghost riding past your wreck, and where you fell, handed to the crash orbit. */
+  private packAt = new Vector3();
+  private fellAt = new Vector3();
   private mirrorTick = 0;
   private lastMirror = { x: 0, y: 0, w: 0, h: 0, w0: -1, h0: -1 };
   private landG = { x: 0, z: 0 };
@@ -642,6 +645,11 @@ export class World {
     // The ghost the rival pill names, which the chase eases into the frame when it is close.
     const rp = v.mode === 'run' && v.rival ? v.ghostPoses.get(v.rival.id) : null;
     const rival = rp && !rp.done ? this.rivalAt.set(rp.x, rp.y + 0.8, -rp.z) : null;
+    // Through the crash, where you fell and the ghost riding past it (from CRASH_PACK_NEAR_M behind to
+    // a few metres past), which the crash orbit frames with the wreck.
+    const fallen = v.mode === 'run' && v.sim && this.rider.crashing ? v.sim.s : null;
+    const pack = fallen ? crashPack(v.ghostPoses, fallen.x, fallen.z, this.packAt) : null;
+    const fell = fallen ? this.fellAt.set(fallen.x, fallen.y, -fallen.z) : null;
     // The run-start reveal: the chase rides high and back for about 2 s, then pushes in.
     const runK = v.mode === 'run' && v.sim ? Math.max(0, Math.min(1, (v.sim.tick / 60 - 1.8) / 1.6)) : 1;
     const intro = 1 - runK * runK * (3 - 2 * runK);
@@ -649,7 +657,7 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro }, dt);
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
