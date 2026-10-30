@@ -147,21 +147,23 @@ export function admit(top: { tone: StyleTone; born: number; flow?: boolean } | n
 
 /** ms the cash-in's "x4" chip takes to be absorbed into the figure, from BANK_CHIP_MS (the roll's start). */
 export const CHIP_ABSORB_MS = 120;
+/** Reduced motion fades it linearly, so its fade is this short instead. */
+export const CHIP_FADE_REDUCED_MS = 40;
 
 /**
  * The cash-in chip's keyframes over a cash-in of T ms whose roll starts at C: it slams onto the origin
- * over [0, C], then is absorbed into the figure over [C, C + CHIP_ABSORB_MS], fast at first, so from
- * the roll's second tick on the rolling figure never sits beside a multiplier ("+1,755 x3" read as a
- * figure still to be multiplied).
+ * over [0, C], then is absorbed into the figure over [C, C + absorb], fast at first, so from the roll's
+ * second tick on the rolling figure never sits beside a multiplier ("+1,755 x3" read as a figure still
+ * to be multiplied).
  */
-export function chipFrames(C: number, T: number): Keyframe[] {
+export function chipFrames(C: number, T: number, absorb = CHIP_ABSORB_MS): Keyframe[] {
   const o = (ms: number) => Math.max(0, Math.min(1, ms / T));
   const gone = 'translateX(-1.6em) scale(0.25) rotate(0deg)';
   return [
     { opacity: 0, transform: 'translateX(0) scale(2.4) rotate(-12deg)', offset: 0 },
     { opacity: 1, transform: 'translateX(0) scale(0.88) rotate(0deg)', offset: o(C * 0.75), easing: SPRING },
     { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(C), easing: EASE_OUT },
-    { opacity: 0, transform: gone, offset: o(C + CHIP_ABSORB_MS) },
+    { opacity: 0, transform: gone, offset: o(C + absorb) },
     { opacity: 0, transform: gone, offset: 1 },
   ];
 }
@@ -1114,8 +1116,9 @@ export class Fx {
             ],
         { duration: T, fill: 'forwards' },
       );
-      // The chip slams onto the origin and is absorbed into the figure as the roll starts (chipFrames).
-      if (chip) play(chip, chipFrames(C, T), { duration: T, fill: 'forwards' }, true);
+      // The chip slams onto the origin and is absorbed into the figure as the roll starts (chipFrames);
+      // reduced motion fades it out there, with no travel.
+      if (chip) play(chip, chipFrames(C, T, red ? CHIP_FADE_REDUCED_MS : CHIP_ABSORB_MS), { duration: T, fill: 'forwards' }, true);
       if (head) {
         play(
           head,

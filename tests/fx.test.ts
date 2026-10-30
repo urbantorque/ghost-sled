@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BANK_CHIP_MS, BANK_MS, BANK_PEAK, BANK_ROLL_MS, BANK_T1, BANK_T2, BANK_T3, BANK_TICKS } from '../src/game/stake';
-import { admit, CHIP_ABSORB_MS, chipFrames, CRACK_MS, crackFrames, crackSnapFrames, crackTier, HOLD_MS, LOW_FLOOR, LOW_GAP, LOW_MIN, queueFresh, raceHolds, SAME_FRAME_MS, sideAction, stampSpot, stepBackAt } from '../src/ui/fx';
+import { admit, CHIP_ABSORB_MS, CHIP_FADE_REDUCED_MS, chipFrames, CRACK_MS, crackFrames, crackSnapFrames, crackTier, HOLD_MS, LOW_FLOOR, LOW_GAP, LOW_MIN, queueFresh, raceHolds, SAME_FRAME_MS, sideAction, stampSpot, stepBackAt } from '../src/ui/fx';
 
 // The one-line callout slot: a payoff line that has only just landed (New ground, New best, a trick)
 // keeps the slot against a lower-ranked or 'lost' newcomer, which waits its turn instead of erasing it.
@@ -88,6 +88,10 @@ describe('chipFrames', () => {
       // By the roll's second tick the chip is most of the way into the figure.
       const second = C + BANK_ROLL_MS[tier] / BANK_TICKS[tier];
       expect(second - C).toBeGreaterThanOrEqual(CHIP_ABSORB_MS / 3);
+      // Reduced motion fades it linearly, so it is gone by the second tick.
+      const r = chipFrames(C, T, CHIP_FADE_REDUCED_MS);
+      expect(r[3].offset).toBe((C + CHIP_FADE_REDUCED_MS) / T);
+      expect(C + CHIP_FADE_REDUCED_MS).toBeLessThanOrEqual(second);
     }
     expect(CHIP_ABSORB_MS).toBe(120);
   });
