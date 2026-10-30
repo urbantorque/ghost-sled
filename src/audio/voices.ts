@@ -97,14 +97,40 @@ export class NodeReserve {
   /** Probe: nodes a voice had to make itself (the reserve was dry). */
   misses = 0;
 
-  constructor(private readonly ctx: BaseAudioContext) {}
+  /**
+   * `sineWave`: a sine PeriodicWave to make its oscillators with, for a context that has made none
+   * yet (a take's render, prerender.ts). A context builds its own sine table on its first
+   * createOscillator(), 1 ms on a desktop where the rest of a take's dozen nodes take 0.3 ms; an
+   * oscillator made with a wave skips that, and Voice.osc leaves a sine's wave alone.
+   */
+  constructor(
+    private readonly ctx: BaseAudioContext,
+    private sineWave: PeriodicWave | null = null,
+  ) {}
+
+  /** Whether its oscillators are made as sines (Voice.osc then sets no 'sine' type on them). */
+  get sine(): boolean {
+    return this.sineWave !== null;
+  }
 
   gain(): GainNode {
     return this.gains.pop() ?? (this.misses++, this.ctx.createGain());
   }
 
   osc(): OscillatorNode {
-    return this.oscs.pop() ?? (this.misses++, this.ctx.createOscillator());
+    const o = this.oscs.pop();
+    if (o) return o;
+    this.misses++;
+    if (this.sineWave) {
+      try {
+        return new OscillatorNode(this.ctx, { periodicWave: this.sineWave });
+      } catch {
+        // A wave from another context refused, or no constructor: plain ones from now on (a fresh
+        // oscillator is a sine, so a voice that skipped its type still gets one).
+        this.sineWave = null;
+      }
+    }
+    return this.ctx.createOscillator();
   }
 
   filter(): BiquadFilterNode {
@@ -233,9 +259,10 @@ export class Voice {
 
   osc(wave: OscillatorType | PeriodicWave, freq: number, t0: number, t1: number, dest: AudioNode | AudioParam, detune = 0): OscillatorNode {
     const o = this.make.osc();
-    // PeriodicWave is an empty interface in the DOM typings, so typeof cannot narrow it.
-    if (typeof wave === 'string') o.type = wave as OscillatorType;
-    else o.setPeriodicWave(wave);
+    // PeriodicWave is an empty interface in the DOM typings, so typeof cannot narrow it. An oscillator
+    // the reserve made as a sine keeps its wave (NodeReserve.sine).
+    if (typeof wave !== 'string') o.setPeriodicWave(wave);
+    else if (wave !== 'sine' || !this.make.sine) o.type = wave as OscillatorType;
     o.frequency.value = freq;
     if (detune) o.detune.value = detune;
     link(o, dest);

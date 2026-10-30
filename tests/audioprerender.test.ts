@@ -5,13 +5,14 @@ import type { Bus } from '../src/audio/graph';
 import { Prerender, TAKE_SAMPLES } from '../src/audio/prerender';
 import { GIFT_BIG_S, GIFT_S, Sfx, giftKey } from '../src/audio/sfx';
 import { ladder, styleFor } from '../src/audio/theory';
-import { type Voice, VoicePool } from '../src/audio/voices';
+import { NodeReserve, Voice, VoicePool } from '../src/audio/voices';
 
 // Fixed one-shots rendered once (src/audio/prerender.ts) on stub contexts that count the nodes made:
-// a key renders once however often it is asked for, a voice plays its take as one source started on
-// a sample frame, a take that would cut its sound short is never used, the takes held stay under
-// their cap, and a gift pickup costs its out, its panner and one source once its take is ready,
-// ending when the live parts would.
+// a key renders once however often it is asked for, a voice plays its take as one source from its
+// render quantum's first frame, only where each part lands on the frame it did in the render, a take
+// that would cut its sound short is never used, the takes held stay under their cap, a take's
+// oscillators come from one shared sine wave, and a gift pickup costs its out, its panner and one
+// source once its take is ready, ending when the live parts would.
 
 class Param {
   value = 0;
@@ -363,6 +364,60 @@ describe('a fixed sound renders once and then plays as one source', () => {
     await off.made[0].finish();
     expect(r.held).toBe(0);
     expect(ask(r, ctx, 1, 1)).toBe(false);
+  });
+});
+
+describe("a take's oscillators are made from one shared sine wave", () => {
+  /** OscillatorNode constructor stubs: the options each was made with; `refuse` throws instead. */
+  function withOscCtor<T>(refuse: boolean, fn: (made: Array<{ periodicWave?: unknown }>) => T): T {
+    const g = globalThis as unknown as { OscillatorNode?: unknown };
+    const prev = g.OscillatorNode;
+    const made: Array<{ periodicWave?: unknown }> = [];
+    g.OscillatorNode = function (_ctx: unknown, opts: { periodicWave?: unknown }) {
+      if (refuse) throw new Error('wave from another context');
+      made.push(opts);
+      const n = new Node();
+      n.type = 'custom';
+      return n;
+    };
+    try {
+      return fn(made);
+    } finally {
+      g.OscillatorNode = prev;
+    }
+  }
+  const wave = {} as PeriodicWave;
+
+  it("with a wave, a voice's sines keep it (no 'sine' type set) and other shapes still set theirs", () => {
+    withOscCtor(false, (made) => {
+      const ctx = stubCtx();
+      const reserve = new NodeReserve(ctx, wave);
+      expect(reserve.sine).toBe(true);
+      const v = new Voice(ctx, bank, reserve, 0, 1, ctx.destination as AudioNode, null, 0);
+      const sine = v.osc('sine', 440, 0, 1, v.out) as unknown as Node;
+      const tri = v.osc('triangle', 440, 0, 1, v.out) as unknown as Node;
+      expect(made).toHaveLength(2);
+      expect(made[0].periodicWave).toBe(wave);
+      expect(sine.type).toBe('custom');
+      expect(tri.type).toBe('triangle');
+      // The live reserve makes plain oscillators and sets every type.
+      const live = new Voice(ctx, bank, new NodeReserve(ctx), 0, 1, ctx.destination as AudioNode, null, 0);
+      expect((live.osc('sine', 440, 0, 1, live.out) as unknown as Node).type).toBe('sine');
+      expect(made).toHaveLength(2);
+    });
+  });
+
+  it('where the wave is refused it falls back to plain oscillators for good', () => {
+    withOscCtor(true, () => {
+      const ctx = stubCtx();
+      const reserve = new NodeReserve(ctx, wave);
+      const made = ctx.made;
+      reserve.osc();
+      expect(ctx.made - made).toBe(1);
+      expect(reserve.sine).toBe(false);
+      const v = new Voice(ctx, bank, reserve, 0, 1, ctx.destination as AudioNode, null, 0);
+      expect((v.osc('sine', 440, 0, 1, v.out) as unknown as Node).type).toBe('sine');
+    });
   });
 });
 

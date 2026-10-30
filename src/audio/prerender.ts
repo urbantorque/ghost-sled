@@ -30,6 +30,8 @@ import { NodeReserve, Voice } from './voices';
 //     by a sample: a take played there is 40 dB under the sound, every block within 0.1 dB.
 //   - the parts go in the take's third block: a part starting between two frames renders differently
 //     in a context's first block than in any later one, and 128 frames in seconds is not exact.
+// A render's oscillators are made from one sine wave made on the live context (NodeReserve): a fresh
+// context's first oscillator builds its own sine table, three times the rest of a take's work.
 
 /** A fixed sound's parts, built onto voice `v` from time `t`: the calls a live voice makes. Its parts
  *  must be mono (oscillators and the bank's mono buffers), since a take is one channel into the
@@ -83,6 +85,9 @@ export class Prerender {
   private clock = 0;
   private disposed = false;
   private Offline: OfflineCtor | null;
+  /** The sine wave a take's oscillators are made with (NodeReserve), made once on the live context
+   *  at its rate on the first render; null where it cannot be. */
+  private sine: PeriodicWave | null | undefined = undefined;
   /** Probe counters: plays from a take, plays built live (of those, plays whose take was ready but
    *  whose parts would land on other frames), renders done and failed. */
   hits = 0;
@@ -189,7 +194,14 @@ export class Prerender {
       // the destination: the take is the parts' sum, before the live voice's level and pan. The parts
       // start at the phase in the third block, which renders them as the live block would.
       const t0 = (LEAD + phase) / sr;
-      const v = new Voice(octx, this.bank, new NodeReserve(octx), t0, 1, octx.destination, null, 0);
+      if (this.sine === undefined) {
+        try {
+          this.sine = this.ctx.createPeriodicWave(new Float32Array([0, 0]), new Float32Array([0, 1]));
+        } catch {
+          this.sine = null;
+        }
+      }
+      const v = new Voice(octx, this.bank, new NodeReserve(octx, this.sine), t0, 1, octx.destination, null, 0);
       recipe(v, t0);
       // A part running past the take would be cut: the caller's length is wrong, so play it live.
       if (v.end > t0 + seconds + 1 / sr) throw new Error(`take ${key} is ${v.end - t0} s, not ${seconds}`);
