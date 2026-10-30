@@ -149,9 +149,11 @@ export class App {
   private crashSeq = 0;
   /** The crash beat's time is up but a ghost that was behind you still rides close behind the wreck
    *  (or has only just gone by): the results wait for it (frameRun), up to CRASH_PACK_MAX_MS after the
-   *  crash. lastWreckAt: when the latest ghost rode past the wreck. */
+   *  crash. lastWreckAt: when the latest ghost rode past the wreck; wreckShown: the ghosts whose
+   *  'passed you' played at the wreck, in that order (the crash line names only these). */
   private packHold = false;
   private lastWreckAt = -1e9;
+  private readonly wreckShown: number[] = [];
   /** Where you stood as you fell: your place, and each ready ghost's gap to you (m, + = ahead) on the
    *  crash frame's poses. The results' crash line and the grudge's election read it. */
   private rankAtCrash: number | null = null;
@@ -715,6 +717,7 @@ export class App {
     this.missionsSettled.clear();
     this.crashTicks = 0;
     this.packHold = false;
+    this.wreckShown.length = 0;
     this.rankAtCrash = null;
     this.gapAtCrash.clear();
     this.renderTime = this.time;
@@ -875,6 +878,7 @@ export class App {
       this.world.resetFeel();
       this.crashTicks = 0;
       this.packHold = false;
+      this.wreckShown.length = 0;
       this.phase = 'run';
       this.world.cam.mode = 'chase';
       this.last = performance.now();
@@ -991,6 +995,7 @@ export class App {
     const seq = ++this.crashSeq;
     this.packHold = false;
     this.lastWreckAt = -1e9;
+    this.wreckShown.length = 0;
     setTimeout(() => {
       if (this.phase !== 'crashed' || seq !== this.crashSeq) return;
       if (!still && this.packWaits()) this.packHold = true;
@@ -1144,14 +1149,18 @@ export class App {
       .map((t) => ({ name: t.entry.name, kind: t.entry.kind, score: t.entry.score, distance: t.distance, passed: this.passedThisRun.has(t.entry.id) }))
       .sort((a, b) => b.distance - a.distance);
     // Why the card's place is not the one the HUD showed as you fell: the ghosts that were behind you
-    // then and whose whole run went further rode on past the wreck (nearest first, the order they
-    // reached it). Your own best is 'Your best' (C7).
+    // then and whose whole run went further rode on past the wreck. Those whose 'passed you' played
+    // come first, in the order it did, and only they are named; the rest follow nearest first (the
+    // order they reached it) and are counted. Your own best is 'Your best' (C7).
     const gapAt = (t: GhostManager['tracks'][number]): number => this.gapAtCrash.get(t.entry.id) ?? 0;
-    const past = this.ghosts.tracks
-      .filter((t) => t.ready && gapAt(t) < 0 && t.distance > sim.distance)
-      .sort((a, b) => gapAt(b) - gapAt(a))
-      .map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
-    const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past) : null;
+    const shownAt = (t: GhostManager['tracks'][number]): number => {
+      const i = this.wreckShown.indexOf(t.entry.id);
+      return i < 0 ? Infinity : i;
+    };
+    const pastTracks = this.ghosts.tracks.filter((t) => t.ready && gapAt(t) < 0 && t.distance > sim.distance).sort((a, b) => shownAt(a) - shownAt(b) || gapAt(b) - gapAt(a));
+    const past = pastTracks.map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
+    const shownPast = pastTracks.filter((t) => shownAt(t) < Infinity).length;
+    const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past, shownPast) : null;
     this.results = {
       score: sim.score,
       distance: sim.distance,
@@ -1189,6 +1198,9 @@ export class App {
         event: this.director.eventNote(sim),
       }),
       crashNote,
+      // A phone card, whose race line takes the crash note's slot, shows the place you fell in beside
+      // the finishing place (results.ts, only when it was better).
+      rankAtCrash: this.rankAtCrash,
       runAgainLabel: runAgainLabel(this.friendForLabel(sim), d.grudge[key] ? { name: d.grudge[key].name } : null),
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
@@ -1741,8 +1753,12 @@ export class App {
           this.lostCombo = b.stake;
           break;
         case 'passedBy':
-          // (A ghost riding past your wreck pays nothing: the results wait a moment for its flash.)
-          if (b.wreck) this.lastWreckAt = performance.now();
+          // (A ghost riding past your wreck pays nothing: the results wait a moment for its flash, and
+          // the crash line names it.)
+          if (b.wreck) {
+            this.lastWreckAt = performance.now();
+            this.wreckShown.push(b.ghost.id);
+          }
           break;
         default:
           break;

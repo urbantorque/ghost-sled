@@ -184,14 +184,19 @@ function ordinal(n: number): string {
 
 /**
  * The crash line: your place as you fell and the ghosts that were behind you then but went further
- * ('You led at the crash. SparkleCedar and RidgeUlla rode on past.', '2nd at the crash. 3 ghosts
- * rode on past.'). Two names at most, in the order they reached the wreck, then a count; your own
- * best reads 'Your best' (the caller names it so). Null when nobody rode past: the place held.
+ * ('You led at the crash. SparkleCedar and 2 more ghosts rode on past.'). Only a pass the HUD showed
+ * is named: `past` lists the first `shown` of them in the order their 'passed you' played, then the
+ * rest (the card opened before they reached the wreck, or reduced motion never waited), which are
+ * counted. Two names at most; your own best reads 'Your best' (the caller names it so). Null when
+ * nobody rode past: the place held.
  */
-export function crashLine(rankAtCrash: number, past: readonly string[]): string | null {
+export function crashLine(rankAtCrash: number, past: readonly string[], shown: number): string | null {
   if (past.length === 0 || !(rankAtCrash >= 1)) return null;
   const where = rankAtCrash === 1 ? 'You led at the crash.' : `${ordinal(Math.floor(rankAtCrash))} at the crash.`;
-  const who = past.length === 1 ? past[0] : past.length === 2 ? `${past[0]} and ${past[1]}` : `${past.length} ghosts`;
+  const named = past.slice(0, Math.max(0, Math.min(2, Math.floor(shown), past.length)));
+  const rest = past.length - named.length;
+  const ghosts = (n: number, more: boolean): string => `${n} ${more ? 'more ' : ''}${n === 1 ? 'ghost' : 'ghosts'}`;
+  const who = named.length === 0 ? ghosts(rest, false) : rest === 0 ? named.join(' and ') : `${named.join(', ')} and ${ghosts(rest, true)}`;
   return `${where} ${who} rode on past.`;
 }
 

@@ -395,10 +395,13 @@ export class Results {
     // Beside the score: where you finished in the race, then the new-best stamp or the best to beat.
     const side = h('div', 'gs-res-side');
     const place = finish(m);
+    const line = raceLine(m);
     if (place) {
       const chip = h('p', 'gs-res-place', sr('Finished '), h('span', 'gs-res-place-n gs-num', ordinal(place.rank)), h('span', 'gs-res-place-of gs-num', `of ${place.of}`));
       if (place.rank === 1) chip.classList.add('is-first');
-      side.append(chip);
+      // With your place as you fell under it, the two stack as one item, so a wrap moves them together.
+      const at = placeAtCrash(m, place.rank, line);
+      side.append(at ? h('div', 'gs-res-placebox', chip, at) : chip);
     }
     if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
     else if (m.best > 0) side.append(h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', fmt(m.best))));
@@ -414,8 +417,8 @@ export class Results {
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
     // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
-    // line count (C6), so your row stays in the first view under an unlock card and three offers.
-    const line = raceLine(m);
+    // line count (C6), so your row stays in the first view under an unlock card and three offers. A
+    // crash note dropped there leaves its place beside the chip ("Led at the crash", placeAtCrash).
     const note = raceNote(m);
     const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
@@ -943,6 +946,19 @@ function finish(m: ResultsModel): { rank: number; of: number } | null {
   let ahead = 0;
   for (const g of m.ghosts) if (dist(g) > m.distance) ahead++;
   return { rank: ahead + 1, of: m.ghosts.length + 1 };
+}
+
+/**
+ * Your place as you fell, beside the finishing place, when it was better and the crash note that says
+ * so gives its slot to the race line: a phone shows it (meta.css; wide screens keep the full note), so
+ * the HUD's place and the card's never disagree unexplained. "Led at the crash", "2nd at the crash".
+ * It adds no line to the head's sub block (C6). Null otherwise.
+ */
+function placeAtCrash(m: ResultsModel, rank: number, line: HTMLElement | null): HTMLElement | null {
+  const at = m.rankAtCrash;
+  if (!m.crashNote || !line || !m.raceLine || m.raceLine.text === m.crashNote) return null;
+  if (typeof at !== 'number' || !(at >= 1) || at >= rank) return null;
+  return h('span', 'gs-res-place-at', at === 1 ? 'Led at the crash' : `${ordinal(Math.floor(at))} at the crash`);
 }
 
 /**

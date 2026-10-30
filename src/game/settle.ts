@@ -153,10 +153,11 @@ export interface GrudgeOutcome {
 /** A grudge on this many wins in a row is a nemesis. */
 export const NEMESIS_STREAK = 3;
 /** The rival you were racing when you fell: a ghost this close to you at the crash (m, either side)
- *  is elected first, nearest first. */
+ *  is elected first, nearest first, unless it is the pace rider (built to finish far ahead: elected
+ *  there, it pulled away from a novice all of the next run). */
 export const GRUDGE_CRASH_M = 50;
 /** Else the nearest within reach: at most this far past your distance (m), or this share of your
- *  distance on a long run, and never the pace rider (built to finish far ahead). */
+ *  distance on a long run, and never the pace rider. Nothing within reach elects no one. */
 export const GRUDGE_REACH_M = 300;
 export const GRUDGE_REACH_FRAC = 0.6;
 
@@ -188,11 +189,14 @@ export function rowMargin(them: number, you: number): number {
  * - The grudge rode, finished ahead of you and was never passed: it stays, them +1, streak +1.
  * - You passed it or out-distanced it: settled (nemesisDown when its streak was 3 or more), and
  *   another ghost that went further (never the grudge just settled, even when its whole run went
- *   further than yours) becomes the new grudge at 1 and 1; the line names it.
+ *   further than yours) becomes the new grudge at 1 and 1; the line names it as the new grudge
+ *   ('Grudge settled with Mila after 2 runs. New grudge: Tess.'), never as 'next': the race list's
+ *   NEXT tag is the place above yours, which can be another ghost.
  * - It did not ride (no grudge yet, or a record that can no longer ride): a new one is elected.
- * The election is a rival you can catch: first the ghost you were racing when you fell (the smallest
- * gap at the crash, within GRUDGE_CRASH_M either side), then the nearest within reach that is not the
- * pace rider, and only then the nearest that went further at all. A friend or your own best is never
+ * The election is a rival you can catch, never the pace rider: first the ghost you were racing when
+ * you fell (the smallest gap at the crash, within GRUDGE_CRASH_M either side), then the nearest within
+ * reach. With nothing eligible within reach no grudge is elected (a settled grudge leaves none, and
+ * the Run Again button falls back to the friend or 'Run Again'). A friend or your own best is never
  * elected. The Grudge keeps exactly its save fields: `by` and `distance` stay the whole-run margin.
  */
 export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge: Grudge | null; settled: boolean; nemesisDown: boolean; line: string | null } {
@@ -202,11 +206,10 @@ export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge
   const pick = (skip: string | null): { row: GrudgeRow; atCrash: boolean } | null => {
     const rows = (o.ahead ?? (o.next ? [o.next] : [])).filter((c) => eligible(c, skip));
     let best: GrudgeRow | null = null;
-    for (const c of rows) if (crashGap(c) <= GRUDGE_CRASH_M && (!best || crashGap(c) < crashGap(best))) best = c;
+    for (const c of rows) if (c.role !== 'pace' && crashGap(c) <= GRUDGE_CRASH_M && (!best || crashGap(c) < crashGap(best))) best = c;
     if (best) return { row: best, atCrash: true };
     const reach = Math.max(GRUDGE_REACH_M, GRUDGE_REACH_FRAC * o.youDistance);
     for (const c of rows) if (c.role !== 'pace' && c.distance - o.youDistance <= reach && (!best || c.distance < best.distance)) best = c;
-    if (!best) for (const c of rows) if (!best || c.distance < best.distance) best = c;
     return best ? { row: best, atCrash: false } : null;
   };
   const elect = (n: GrudgeRow | null): Grudge | null =>
@@ -220,8 +223,9 @@ export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge
     }
     const next = elect(pick(atStart.record)?.row ?? null);
     const after = them >= 2 ? ` after ${them} runs` : '';
-    // The settled line names the successor, so the Rematch button's new name is introduced here.
-    const line = next ? `Grudge settled with ${atStart.name}. ${next.name} is next.` : `Grudge settled with ${atStart.name}${after}.`;
+    // The settled line keeps its tally and names the successor, so the Rematch button's new name is
+    // introduced here.
+    const line = `Grudge settled with ${atStart.name}${after}.${next ? ` New grudge: ${next.name}.` : ''}`;
     return { grudge: next, settled: true, nemesisDown: streak >= NEMESIS_STREAK, line };
   }
   const p = pick(null);
@@ -232,7 +236,7 @@ export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge
     const line = !p.atCrash ? grudgeLine(g.name, 1, rowMargin(p.row.distance, o.youDistance)) : gap > 0 ? `${g.name} was ${fmtM(gap)} ahead when you fell.` : `${g.name} rode past your wreck.`;
     return { grudge: g, settled: false, nemesisDown: false, line };
   }
-  // Nothing finished ahead of you: a grudge that did not ride keeps waiting, unchanged.
+  // Nothing within reach finished ahead of you: a grudge that did not ride keeps waiting, unchanged.
   return { grudge: atStart, settled: false, nemesisDown: false, line: null };
 }
 
