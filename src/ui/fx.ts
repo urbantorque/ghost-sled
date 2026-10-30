@@ -1,5 +1,5 @@
 import type { BankTier, StampPart } from '../game/beats';
-import { BANK_CHIP_MS, BANK_MS, BANK_PEAK, BANK_ROLL_MS, BANK_SPARKS, BANK_TICKS, rollValue } from '../game/stake';
+import { BANK_CHIP_MS, BANK_MS, BANK_PEAK, BANK_ROLL_MS, BANK_SPARKS, BANK_T1, BANK_T2, BANK_T3, BANK_TICKS, rollValue } from '../game/stake';
 import type { ScreenRect, StyleTone } from './contract';
 import { h } from './dom';
 import { fmt } from './fmt';
@@ -30,11 +30,14 @@ import { bump, EASE_IN, EASE_OUT, play, reduced, SPRING } from './motion';
 // while the Slipstream pill at the bottom names them.
 //
 // A stomp streak grows the stamp's title ("DOUBLE STOMP") and its punch, never its points; its sub-line
-// leads with "2 IN A ROW". A cash-in is graded by size (src/game/stake.ts): a plain "+80" flies into the
-// score, while a big one shows its origin, slams the "x4" chip onto it and rolls up to the product
-// before your eyes (the chip is absorbed, so the product is the one figure that lands), with off-white
-// sparks and a header from tier 3. A lost combo cracks: the figure you were protecting greys, tilts and
-// falls under the "COMBO LOST" line.
+// leads with "2 IN A ROW". On a phone held upright the stamp sits under the rider, between the sled and
+// the thumbs, so the slope ahead stays clear. A cash-in is graded by size (src/game/stake.ts): a plain
+// "+80" flies into the score, while a big one shows its origin, slams the "x4" chip onto it and rolls
+// up to the product before your eyes (the chip is absorbed as the roll starts, so a rolling figure
+// never sits beside a multiplier), with off-white sparks and a header from tier 3. The score waits for
+// the figure: it counts the bank only once the figure lands in it. A lost combo cracks: the figure you
+// were protecting punches, greys, tilts and falls under the "COMBO LOST" line, held longer the more it
+// cost. 'In the flow' is a line of its own, vermillion and a size up, that never waits behind a trick.
 
 /** A cash-in on screen: its figure, where it is anchored, and what it schedules. */
 interface BankFx {
@@ -50,12 +53,16 @@ interface BankFx {
   raf: number;
   timers: number[];
   sparks: HTMLElement[];
+  /** The score's hold on these points (Hud.holdScore) until the figure lands in it. */
+  hold: number;
 }
 
 interface CrackFx {
   el: HTMLElement;
   ax: number;
   ay: number;
+  /** The punch's peak scale: the occluder box covers it. */
+  peak: number;
   anim: Animation | null;
   timer: number;
 }
@@ -109,15 +116,25 @@ export const SAME_FRAME_MS = 8;
 const QUEUE_MAX = 2;
 
 const RANK: Record<StyleTone, number> = { lost: 0, normal: 1, big: 2, best: 2.5, perfect: 3 };
+/**
+ * 'In the flow' (a 'big' line with is-flow) ranks over your best's lines and under the stamp: New
+ * ground just after it waits out its hold instead of erasing it.
+ */
+const FLOW_RANK = 2.75;
+
+/** A line's rank on the slot: its tone's, or the flow line's own. */
+function rankOf(c: { tone: StyleTone; flow?: boolean }): number {
+  return c.flow === true ? FLOW_RANK : RANK[c.tone];
+}
 
 /**
  * Whether a newcomer may take the one-line slot now or must wait behind the line on it. A 'best' or
  * 'big' line younger than HOLD_MS holds against a 'lost', lower-ranked or equal-ranked newcomer (a
- * 'best' against a 'best', a 'big' against a 'big'); `force` (a crash's lost combo) always takes the
- * slot. Fx.line asks for 'lost', 'best' and race-word newcomers, and for a 'big' one over a 'big'
- * line; any other lower-ranked plain or trick line meets the rank gate and stays out.
+ * 'best' against a 'best', a 'big' against a 'big'); `force` (a crash's lost combo, 'In the flow')
+ * always takes the slot. Fx.line asks for 'lost', 'best' and race-word newcomers, and for a 'big' one
+ * over a 'big' line; any other lower-ranked plain or trick line meets the rank gate and stays out.
  */
-export function admit(top: { tone: StyleTone; born: number } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
+export function admit(top: { tone: StyleTone; born: number; flow?: boolean } | null | undefined, tone: StyleTone, now: number, force = false): 'show' | 'queue' {
   if (force || !top || tone === 'perfect') return 'show';
   // A trick line from this same frame (a sketchy landing's own spin, then its Streak broken; a
   // landing's two tricks) has had no moment yet: the later beat of the frame takes the slot, as the
@@ -125,7 +142,141 @@ export function admit(top: { tone: StyleTone; born: number } | null | undefined,
   // one frame).
   const age = now - top.born;
   const held = age < HOLD_MS && (top.tone === 'best' || (top.tone === 'big' && age >= SAME_FRAME_MS));
-  return held && (tone === 'lost' || RANK[tone] <= RANK[top.tone]) ? 'queue' : 'show';
+  return held && (tone === 'lost' || RANK[tone] <= rankOf(top)) ? 'queue' : 'show';
+}
+
+/** ms the cash-in's "x4" chip takes to be absorbed into the figure, from BANK_CHIP_MS (the roll's start). */
+export const CHIP_ABSORB_MS = 120;
+
+/**
+ * The cash-in chip's keyframes over a cash-in of T ms whose roll starts at C: it slams onto the origin
+ * over [0, C], then is absorbed into the figure over [C, C + CHIP_ABSORB_MS], fast at first, so from
+ * the roll's second tick on the rolling figure never sits beside a multiplier ("+1,755 x3" read as a
+ * figure still to be multiplied).
+ */
+export function chipFrames(C: number, T: number): Keyframe[] {
+  const o = (ms: number) => Math.max(0, Math.min(1, ms / T));
+  const gone = 'translateX(-1.6em) scale(0.25) rotate(0deg)';
+  return [
+    { opacity: 0, transform: 'translateX(0) scale(2.4) rotate(-12deg)', offset: 0 },
+    { opacity: 1, transform: 'translateX(0) scale(0.88) rotate(0deg)', offset: o(C * 0.75), easing: SPRING },
+    { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(C), easing: EASE_OUT },
+    { opacity: 0, transform: gone, offset: o(C + CHIP_ABSORB_MS) },
+    { opacity: 0, transform: gone, offset: 1 },
+  ];
+}
+
+/**
+ * How long a lost combo's cracked figure holds, by its stake's tier (stake.ts BANK_T1 to BANK_T3): a
+ * loss bigger than the run's whole score weighs more than a small one.
+ */
+export const CRACK_MS: readonly [number, number, number, number] = [600, 800, 1000, 1200];
+/** The crack's fall (tilting 8 degrees, down 24 px) takes the last this many ms of its life. */
+const CRACK_FALL_MS = 510;
+/** The punch takes the first this much of the crack's life; the grey and the crack snap in after it. */
+const CRACK_PUNCH = 0.15;
+/** ms the grey and the crack take to snap in (opacity only, so the colour snaps). */
+const CRACK_SNAP_MS = 24;
+
+/** A lost combo's tier, graded by its stake with the cash-in's thresholds. */
+export function crackTier(stake: number): BankTier {
+  return stake >= BANK_T3 ? 3 : stake >= BANK_T2 ? 2 : stake >= BANK_T1 ? 1 : 0;
+}
+
+/**
+ * The cracked figure's keyframes over `ms` (CRACK_MS by tier): it punches to `peak` (BANK_PEAK by tier)
+ * and shakes in the first CRACK_PUNCH of its life, holds there grey and cracked, and falls away over
+ * the last CRACK_FALL_MS (all of it after the punch at tier 0, as before).
+ */
+export function crackFrames(peak: number, ms: number): Keyframe[] {
+  const base = 'translate(-50%, -50%)';
+  const rest = `${base} translateX(0) translateY(0) rotate(0deg)`;
+  const fall = Math.max(CRACK_PUNCH, (ms - CRACK_FALL_MS) / ms);
+  const k: Keyframe[] = [
+    { transform: `${base} scale(1)`, opacity: 1, offset: 0, easing: EASE_OUT },
+    { transform: `${base} scale(${peak.toFixed(2)})`, opacity: 1, offset: 0.06, easing: EASE_IN },
+    { transform: `${base} scale(1) translateX(-4px)`, opacity: 1, offset: 0.1 },
+    { transform: `${base} translateX(3px)`, opacity: 1, offset: 0.125 },
+    { transform: rest, opacity: 1, offset: CRACK_PUNCH, easing: EASE_IN },
+  ];
+  if (fall > CRACK_PUNCH) k.push({ transform: rest, opacity: 1, offset: fall, easing: EASE_IN });
+  k.push({ transform: `${base} translateY(10px) rotate(3.5deg)`, opacity: 1, offset: Math.min(1, fall + 240 / ms), easing: EASE_IN }, { transform: `${base} translateY(24px) rotate(8deg)`, opacity: 0, offset: 1 });
+  return k;
+}
+
+/** The grey copy's and the crack's keyframes: nothing through the punch, then they snap in together. */
+export function crackSnapFrames(ms: number): Keyframe[] {
+  return [
+    { opacity: 0, offset: 0 },
+    { opacity: 0, offset: CRACK_PUNCH },
+    { opacity: 1, offset: Math.min(1, CRACK_PUNCH + CRACK_SNAP_MS / ms) },
+    { opacity: 1, offset: 1 },
+  ];
+}
+
+/** Portrait: the stamp's top sits this much of the height under the rider's head point, clear of the sled. */
+export const LOW_GAP = 0.15;
+/** Portrait: the thumbs' zone starts this far down (style.css: the bottom 22% belongs to them). */
+export const LOW_FLOOR = 0.78;
+/** px kept clear above that floor (or above the bottom-centre pills). */
+const LOW_PAD = 8;
+/** The stamp's 4 degree tilt drops its far end by about this much of its width. */
+const LOW_TILT = 0.035;
+/** Portrait: the stamp may shrink this far to fit under the rider; past that it goes back above. */
+export const LOW_MIN = 0.75;
+
+/** Where a stamp goes: its centre x, its top, its width and type size (px), and whether it sits under the rider. */
+export interface StampSpot {
+  cx: number;
+  top: number;
+  w: number;
+  f: number;
+  low: boolean;
+}
+
+/**
+ * Places a stamp with `subRows` sub-lines (0 to 2). Landscape: above the rider's head and off to its
+ * right, which keeps it off the corridor ahead and off the low sun (ahead-left of the camera, ART.md),
+ * inside the safe area and under the top-centre HUD (`room`); with no room above the head it moves
+ * beside the rider instead. Portrait (a phone held upright): above the head it covered the slope ahead
+ * and the tree the rider then hit, so it sits under the rider instead, centred on the rider, its top
+ * LOW_GAP of the height under the head point (clear of the sled) and its foot (the tilt's low end
+ * included) above the thumbs' zone and above `bottom`, the bottom-centre pills while one shows. It
+ * shrinks to LOW_MIN to fit there; with no room even then it goes back above the head at LOW_MIN.
+ * `rx`, `ry`: the rider's head point. Sizes come from the type scale, so placing reads no layout.
+ */
+export function stampSpot(vw: number, vh: number, room: { left: number; right: number; top: number }, u: number, rx: number, ry: number, subRows: number, bottom: number | null = null): StampSpot {
+  const span = room.right - room.left;
+  // "PERFECT LANDING" is about 12 em wide with its tracking: the type shrinks to fit a narrow phone.
+  // About 2.1 units tall: at 2.5 it sat on the ridge line and the head of a ghost beside you.
+  let f = Math.min(Math.max(24, 2.12 * u), 38, span / 12.4);
+  const rows = 1.1 + 0.75 * subRows;
+  const clampX = (x: number, w: number) => Math.max(room.left + w / 2, Math.min(room.right - w / 2, x));
+  if (vw < vh) {
+    const top = ry + LOW_GAP * vh;
+    const floor = Math.min(LOW_FLOOR * vh, bottom ?? Number.POSITIVE_INFINITY) - LOW_PAD;
+    // Its height plus the tilt's drop at its far end, per px of type.
+    const fit = (floor - top) / (rows + LOW_TILT * 12.4);
+    if (fit >= LOW_MIN * f) {
+      const g = Math.min(f, fit);
+      const w = 12.4 * g;
+      return { cx: clampX(rx, w), top, w, f: g, low: true };
+    }
+    f *= LOW_MIN;
+  }
+  const w = 12.4 * f;
+  const hgt = rows * f;
+  let cx = clampX(rx + 0.19 * vw, w);
+  let top = Math.max(room.top, ry - 0.13 * vh - hgt);
+  if (top + hgt > ry - 22) {
+    // No room above the head: beside the rider, at head height, if the right side has the width.
+    const left = rx + 0.05 * vw;
+    if (left + w <= room.right) {
+      cx = left + w / 2;
+      top = Math.max(room.top, ry - hgt * 0.8);
+    }
+  }
+  return { cx, top, w, f, low: false };
 }
 
 /**
@@ -178,6 +329,8 @@ interface Callout {
   who?: string;
   /** Its points are the whole combo total printed just above it: the line shows its label alone. */
   same: boolean;
+  /** 'In the flow' (Fx.flowIn): its own look and rank (FLOW_RANK). */
+  flow: boolean;
   born: number;
   /**
    * A race word: when it first arrived (its stale clock, kept however often it waits again), and
@@ -217,7 +370,13 @@ export class Fx {
   private tricks: Array<{ label: string; points: number; at: number }> = [];
   /** The live perfect-landing stamp (null once it starts to leave). */
   private heroEl: HTMLElement | null = null;
+  /** The live stamp sits under the rider (a phone held upright): the bottom-centre pills wait for it. */
+  private heroLow = false;
   private stampTimer = 0;
+  /** 'In the flow' waiting for the live stamp to go (flowIn), or null. */
+  private flowWait: string | null = null;
+  /** The last cash-in's id for the score's hold on its points (Hud.holdScore). */
+  private holdSeq = 0;
   /** The rider's projected position, updated every frame by the game. */
   private rx = Number.NaN;
   private ry = Number.NaN;
@@ -241,6 +400,7 @@ export class Fx {
     parent.append(this.el);
     this.slot = hud.calloutSlot;
     hud.stampUp = () => this.heroEl !== null;
+    hud.stampLow = () => this.heroEl !== null && this.heroLow;
   }
 
   /** The rider's projected position: the perfect-landing stamp is placed beside it when it lands. */
@@ -257,6 +417,33 @@ export class Fx {
   /** A style callout. The multiplier is not repeated per line: the combo meter carries it. */
   pop(label: string, points: number, tone: StyleTone, who?: string): void {
     this.line(label, points, tone, { who });
+  }
+
+  /**
+   * 'In the flow' (the director's flow-in beat), the run's momentum reward: its own line, vermillion
+   * (the player's colour, and flow's) at a size over a trick's, ranked over your best's lines. It never
+   * waits in the queue: with no stamp up it takes the line at once (a young Whisker on it steps aside),
+   * and while a stamp is up it waits for that stamp to go and then takes the line, so it never shares a
+   * frame with a stamp or a whisker. Once the flow it names has gone out (a snuff, a bank, the crash:
+   * Hud.flowOn), a line still waiting is dropped.
+   */
+  flowIn(label: string): void {
+    const text = label.trim() || 'In the flow';
+    if (this.heroEl) {
+      this.flowWait = text;
+      return;
+    }
+    this.flowWait = null;
+    this.line(text, 0, 'big', { force: true, flow: true });
+  }
+
+  /** The stamp has gone of itself: 'In the flow' that waited under it takes the line after its exit. */
+  private releaseFlow(): void {
+    const text = this.flowWait;
+    this.flowWait = null;
+    if (text === null || !this.hud.flowOn) return;
+    this.exitUntil = Math.max(this.exitUntil, performance.now() + STAMP_OUT_MS);
+    this.line(text, 0, 'big', { force: true, flow: true });
   }
 
   /**
@@ -294,9 +481,10 @@ export class Fx {
    * The line slot's one entry point. `force` (a crash's lost combo) never waits behind a payoff line;
    * `race` marks another ghost's race word (Fx.side); `again` is a line coming back from the queue,
    * and `back` when a race word first arrived (it keeps its place and stale clock if it waits again);
-   * `stepped`: a trick already stepped that race word back off the line once.
+   * `stepped`: a trick already stepped that race word back off the line once; `flow`: 'In the flow'
+   * (flowIn), which comes with `force`.
    */
-  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string; stepped?: boolean } = {}): void {
+  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string; stepped?: boolean; flow?: boolean } = {}): void {
     const raw = label.trim();
     if (raw === '' || raw === '0') return;
     const text = DISPLAY[raw] ?? raw;
@@ -308,7 +496,9 @@ export class Fx {
     const max = MAX_LINES;
     const now = performance.now();
     const race = o.race;
-    if (tone === 'big' && race === undefined && !o.again) this.noteTrick(text, points, now);
+    const flow = o.flow === true;
+    // 'In the flow' is no trick of this landing: a stamp never names it.
+    if (tone === 'big' && race === undefined && !o.again && !flow) this.noteTrick(text, points, now);
     // A headline (the landing stamp, or a pass flashing in the race row) owns the moment: a minor line
     // stays out of the stack. Its points still reach the combo total, and its running total is kept.
     // So does a slipstream tick while the Slipstream pill shows: "SLIPSTREAM +40" under it said the
@@ -335,7 +525,7 @@ export class Fx {
     if (top && fold) {
       top.count += 1;
       top.points += points;
-      if (RANK[tone] > RANK[top.tone]) {
+      if (RANK[tone] > rankOf(top)) {
         top.inner.classList.replace(`is-${top.tone}`, `is-${tone}`);
         top.tone = tone;
       }
@@ -350,8 +540,8 @@ export class Fx {
 
     // The slot is full and every line on it outranks this one (a slipstream tick under BACKFLIP): it
     // is not shown, so the bigger line keeps the moment. Its points still reach the combo meter. A
-    // race word has waited out the hold instead, and takes the slot.
-    if (tone !== 'lost' && race === undefined && this.items.length >= max && this.items.every((c) => RANK[c.tone] > RANK[tone])) {
+    // race word has waited out the hold instead, and takes the slot, and so does a forced line.
+    if (!o.force && tone !== 'lost' && race === undefined && this.items.length >= max && this.items.every((c) => rankOf(c) > RANK[tone])) {
       if (tone === 'normal') this.remember(text, points, 1, now);
       return;
     }
@@ -372,6 +562,7 @@ export class Fx {
     // A race word, or any long line ("Beat SparkleCedar's 1,240 m"), shrinks to fit a phone's width
     // (style.css .is-fit, --len its letter count).
     if (race !== undefined) inner.classList.add('is-race');
+    if (flow) inner.classList.add('is-flow');
     if (fits(text, race)) {
       inner.classList.add('is-fit');
       inner.style.setProperty('--len', String(text.length));
@@ -385,7 +576,7 @@ export class Fx {
 
     const wrap = h('div', 'gs-call-wrap', inner);
     this.slot.append(wrap);
-    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, tEl, race, who: o.who, same: false, born: now, arrived: o.back ?? now, stepped: o.stepped === true, due: 0, anim: null, timer: 0 };
+    const item: Callout = { wrap, inner, label: text, tone, count, points: pts, countEl, ptsEl, tEl, race, who: o.who, same: false, flow, born: now, arrived: o.back ?? now, stepped: o.stepped === true, due: 0, anim: null, timer: 0 };
     this.fill(item);
 
     // Beyond the line limit, the lowest-ranked (then the oldest) collapses. The previous newest becomes
@@ -400,14 +591,14 @@ export class Fx {
     if (prev && story !== undefined && back !== null && !this.queued.some((q) => q.race === story)) this.queue(prev.label, 0, prev.tone, HOLD_MS, story, back, prev.who, true);
     this.items.push(item);
     this.cap(max);
-    if (prev && this.items.includes(prev) && RANK[prev.tone] <= RANK[tone]) this.arm(prev, Math.min(OLDER_MS, this.remaining(prev)));
+    if (prev && this.items.includes(prev) && rankOf(prev) <= rankOf(item)) this.arm(prev, Math.min(OLDER_MS, this.remaining(prev)));
 
     // The line it replaces finishes its exit first ("BEST COMBO PACE" drew over a still-fading
     // "SLINGSHOT +240"): the newcomer holds at nothing till then, and its hold counts from there.
     const left = this.exitUntil - performance.now();
     const delay = left > 0 ? Math.round(left + ENTRY_SLACK_MS) : 0;
     item.born = now + delay;
-    item.anim = play(inner, holdFrames(tone), { duration: LIFE_MS, delay, easing: 'linear', fill: 'both' }, true);
+    item.anim = play(inner, holdFrames(tone, flow), { duration: LIFE_MS, delay, easing: 'linear', fill: 'both' }, true);
     this.arm(item, LIFE_MS + delay);
     this.onLayout();
   }
@@ -526,6 +717,7 @@ export class Fx {
    * go with it.
    */
   clear(): void {
+    this.flowWait = null;
     if (this.heroEl) this.dropStamp(this.heroEl, true);
     this.dropQueued();
     this.exitUntil = 0;
@@ -555,9 +747,9 @@ export class Fx {
     }
     const c = this.crack;
     if (c) {
-      const w = c.el.offsetWidth;
-      const hh = c.el.offsetHeight;
-      // It falls 24 px and tilts: the box covers the whole fall.
+      const w = c.el.offsetWidth * c.peak;
+      const hh = c.el.offsetHeight * c.peak;
+      // It punches, falls 24 px and tilts: the box covers the punch and the whole fall.
       n = pushBox(out, n, c.ax - w / 2 - 4, c.ay - hh / 2, c.ax + w / 2 + 4, c.ay + hh / 2 + 26);
     }
     return n;
@@ -603,7 +795,7 @@ export class Fx {
   /** The live line to drop for a newcomer: the lowest rank, the oldest among equals. */
   private weakest(except: Callout): Callout {
     let w: Callout | null = null;
-    for (const c of this.items) if (c !== except && (!w || RANK[c.tone] < RANK[w.tone])) w = c;
+    for (const c of this.items) if (c !== except && (!w || rankOf(c) < rankOf(w))) w = c;
     return w ?? this.items[0];
   }
 
@@ -700,7 +892,13 @@ export class Fx {
    * `streak` (1 for a plain stamp) deepens the slam: a streak of 5 lands from about 1.9x.
    */
   private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean, streak: number): void {
-    for (const c of this.items.slice()) if (c.tone !== 'lost') this.leave(c, true);
+    const now = performance.now();
+    for (const c of this.items.slice()) {
+      if (c.tone === 'lost') continue;
+      // 'In the flow' cut before its moment comes back once this stamp has gone.
+      if (c.flow && now - c.born < HOLD_MS) this.flowWait = c.label;
+      this.leave(c, true);
+    }
     // A trick line still waiting its turn is this stamp's to name (or past): it never prints after it.
     for (let i = this.queued.length - 1; i >= 0; i--) if (this.queued[i].tone === 'big' && this.queued[i].race === undefined) this.queued.splice(i, 1);
     if (this.heroEl) this.dropStamp(this.heroEl, true);
@@ -754,52 +952,39 @@ export class Fx {
   }
 
   /**
-   * Where the stamp goes: above the rider's head and off to its right, which keeps it off the corridor
-   * ahead and off the low sun (ahead-left of the camera, ART.md). It stays inside the safe area and
-   * under the top-centre HUD (and the avalanche unit during a chase); with no room above the head it
-   * moves beside the rider instead. Sizes come from the type scale, so placing it reads no layout.
+   * Where the stamp goes (stampSpot): beside the rider, off the corridor ahead and the low sun, inside
+   * the safe area and under the top-centre HUD (and the avalanche unit during a chase); on a phone
+   * held upright, under the rider. While it sits there the bottom-centre pills wait (Hud.stampLow).
    */
   private place(el: HTMLElement, subRows: number): void {
     const vw = window.innerWidth;
     const vh = window.innerHeight;
     const room = this.hud.stampRoom() ?? { left: 16, right: vw - 16, top: vh * 0.26 };
-    const span = room.right - room.left;
-    const u = this.hud.unitPx();
-    // "PERFECT LANDING" is about 12 em wide with its tracking: the type shrinks to fit a narrow phone.
-    // About 2.1 units tall: at 2.5 it sat on the ridge line and the head of a ghost beside you.
-    const f = Math.min(Math.max(24, 2.12 * u), 38, span / 12.4);
-    const w = 12.4 * f;
-    const hgt = (1.1 + 0.75 * subRows) * f;
     const rx = Number.isFinite(this.rx) ? this.rx : vw / 2;
     const ry = Number.isFinite(this.ry) ? this.ry : vh * 0.6;
-    const clampX = (x: number) => Math.max(room.left + w / 2, Math.min(room.right - w / 2, x));
-    let cx = clampX(rx + 0.19 * vw);
-    let top = Math.max(room.top, ry - 0.13 * vh - hgt);
-    if (top + hgt > ry - 22) {
-      // No room above the head: beside the rider, at head height, if the right side has the width.
-      const left = rx + 0.05 * vw;
-      if (left + w <= room.right) {
-        cx = left + w / 2;
-        top = Math.max(room.top, ry - hgt * 0.8);
-      }
-    }
+    const p = stampSpot(vw, vh, room, this.hud.unitPx(), rx, ry, subRows, this.hud.bottomRoom());
+    this.heroLow = p.low;
     const s = el.style;
-    s.left = `${Math.round(cx)}px`;
-    s.top = `${Math.round(top)}px`;
-    s.width = `${Math.round(w)}px`;
-    s.setProperty('--hero-f', `${f.toFixed(1)}px`);
+    s.left = `${Math.round(p.cx)}px`;
+    s.top = `${Math.round(p.top)}px`;
+    s.width = `${Math.round(p.w)}px`;
+    s.setProperty('--hero-f', `${p.f.toFixed(1)}px`);
   }
 
   /**
    * Takes a stamp off screen. Its own exit (and a fast one when a newer stamp replaces it) stays solid
    * for the first part, then snaps up and away; a loss retires it in a plain fast fade that sinks a
-   * little (RETIRE_MS), no celebratory snap.
+   * little (RETIRE_MS), no celebratory snap. 'In the flow' waiting under it plays once a stamp goes
+   * of itself; a loss that retires it takes the flow with it, and a newer stamp keeps it waiting.
    */
   private dropStamp(el: HTMLElement, fast: boolean | 'retire'): void {
     if (this.heroEl === el) {
       this.heroEl = null;
+      this.heroLow = false;
       window.clearTimeout(this.stampTimer);
       this.onLayout();
+      if (fast === false) this.releaseFlow();
+      else if (fast === 'retire') this.flowWait = null;
     }
     const inner = el.firstElementChild;
     for (const a of inner?.getAnimations() ?? []) a.cancel();
@@ -832,7 +1017,8 @@ export class Fx {
    * absorbed into it; the product punches to its peak, then flies. Tier 2 throws 12 off-white sparks,
    * tier 3 16 and a header over the figure ("NEW BEST COMBO" in gold-white, else "MASSIVE"). A bump
    * bank (the combo ended on an obstacle) rolls the same but stays small and throws no sparks: the bump
-   * owns that beat. Reduced motion: it counts up in place with no scaling, chip slam or sparks.
+   * owns that beat. Every tier holds its points out of the score until the figure lands in it (or gives
+   * way to a newer cash-in). Reduced motion: it counts up in place with no scaling, chip slam or sparks.
    */
   cashIn(b: { points: number; mult: number; origin: number; tier: BankTier; header: 'New best combo' | 'Massive' | null; bump: boolean }): void {
     // An older cash-in still on screen gives way at once.
@@ -868,10 +1054,12 @@ export class Fx {
     el.style.left = `${ax}px`;
     el.style.top = `${ay}px`;
     this.el.append(el);
-    const item: BankFx = { el, ax, ay, peak, chipW: chip ? Math.round(f * 1.9) : 0, flying: false, anim: null, raf: 0, timers: [], sparks: [] };
+    const item: BankFx = { el, ax, ay, peak, chipW: chip ? Math.round(f * 1.9) : 0, flying: false, anim: null, raf: 0, timers: [], sparks: [], hold: ++this.holdSeq };
     this.banks.push(item);
     // It holds over the combo meter until it flies: a new combo's total waits under it till then.
     this.hud.holdComboRow(fly);
+    // The sim already counts the bank in the score: the score shows it once the figure lands in it.
+    this.hud.holdScore(item.hold, b.points);
 
     const dx = Math.round(to.x - ax);
     const dy = Math.round(to.y - ay);
@@ -926,22 +1114,8 @@ export class Fx {
             ],
         { duration: T, fill: 'forwards' },
       );
-      if (chip) {
-        // The chip slams onto the origin, holds through the count, then is absorbed into the figure.
-        play(
-          chip,
-          [
-            { opacity: 0, transform: 'translateX(0) scale(2.4) rotate(-12deg)', offset: 0 },
-            { opacity: 1, transform: 'translateX(0) scale(0.88) rotate(0deg)', offset: o(C * 0.75), easing: SPRING },
-            { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(C) },
-            { opacity: 1, transform: 'translateX(0) scale(1) rotate(0deg)', offset: o(land - 20), easing: EASE_IN },
-            { opacity: 0, transform: 'translateX(-1.6em) scale(0.25) rotate(0deg)', offset: o(land + 100) },
-            { opacity: 0, transform: 'translateX(-1.6em) scale(0.25) rotate(0deg)', offset: 1 },
-          ],
-          { duration: T, fill: 'forwards' },
-          true,
-        );
-      }
+      // The chip slams onto the origin and is absorbed into the figure as the roll starts (chipFrames).
+      if (chip) play(chip, chipFrames(C, T), { duration: T, fill: 'forwards' }, true);
       if (head) {
         play(
           head,
@@ -1028,11 +1202,15 @@ export class Fx {
     }
   }
 
-  /** Takes a cash-in off screen (it landed, a newer one replaced it, or the HUD is going). */
+  /**
+   * Takes a cash-in off screen (it landed, a newer one replaced it, or the HUD is going): the score
+   * shows its points from here.
+   */
   private dropBank(b: BankFx): void {
     const i = this.banks.indexOf(b);
     if (i < 0) return;
     this.banks.splice(i, 1);
+    this.hud.releaseScore(b.hold);
     cancelAnimationFrame(b.raf);
     for (const t of b.timers) window.clearTimeout(t);
     for (const s of b.sparks) s.remove();
@@ -1043,10 +1221,13 @@ export class Fx {
 
   /**
    * A combo lost to a crash (the director's comboLost beat). With crack (a stake of 300 or more), the
-   * figure you were protecting cracks where the combo meter was: it greys, a crack runs through it, and
-   * it tilts 8 degrees and falls 24 px over 600 ms, while the callout under it reads "COMBO LOST" (or
-   * "BEST COMBO LOST"), the number shown once, on the figure. Without crack, the line alone carries the
-   * points. Reduced motion: the figure greys and fades where it is.
+   * figure you were protecting cracks where the combo meter was, at the cash-in figure's size and seated
+   * as low as a cash-in of its tier, clear of the race row: graded by its stake like a bank (crackTier),
+   * it punches to its tier's peak, greys as a crack runs through it, holds 600 to 1,200 ms by tier
+   * (CRACK_MS), then tilts 8 degrees and falls 24 px, while the callout under it reads "COMBO LOST" (or
+   * "BEST COMBO LOST"), the number shown once, on the figure. The meter goes in the same frame (no "x5"
+   * chip or stake line beside the crack). Without crack, the line alone carries the points. Reduced
+   * motion: no punch or fall, the figure greys and fades where it is.
    */
   lost(points: number, stake: number, best: boolean, crack: boolean): void {
     const label = best ? 'Best combo lost' : 'Combo lost';
@@ -1067,44 +1248,30 @@ export class Fx {
     line.innerHTML = CRACK_SVG;
     const el = h('div', 'gs-crack', h('span', 'gs-crack-n gs-num', text), grey, line);
     el.setAttribute('aria-hidden', 'true');
-    el.style.left = `${Math.round(row.x)}px`;
-    el.style.top = `${Math.round(row.y)}px`;
+    // The cash-in figure's size, seated as low as a cash-in of the same tier (its punch then clears the
+    // race row above).
+    const tier = crackTier(stake);
+    const peak = BANK_PEAK[tier];
+    const ms = CRACK_MS[tier];
+    const f = bankFont(this.hud.hudPx());
+    const ax = Math.round(row.x);
+    const ay = Math.round(row.y + Math.round(f * 0.5 * (peak - 1)));
+    el.style.left = `${ax}px`;
+    el.style.top = `${ay}px`;
+    el.style.fontSize = `${Math.round(f)}px`;
     this.el.append(el);
-    const base = 'translate(-50%, -50%)';
-    const a = play(
-      el,
-      [
-        { transform: `${base} translateX(0)`, opacity: 1, offset: 0 },
-        { transform: `${base} translateX(-4px)`, opacity: 1, offset: 0.05 },
-        { transform: `${base} translateX(3px)`, opacity: 1, offset: 0.1 },
-        { transform: `${base} translateX(0) translateY(0) rotate(0deg)`, opacity: 1, offset: 0.15, easing: EASE_IN },
-        { transform: `${base} translateY(10px) rotate(3.5deg)`, opacity: 1, offset: 0.55, easing: EASE_IN },
-        { transform: `${base} translateY(24px) rotate(8deg)`, opacity: 0, offset: 1 },
-      ],
-      { duration: 600, fill: 'forwards' },
-      true,
-    );
-    // The grey and the crack snap in together a beat after the hit (opacity only, so the colour snaps).
-    for (const part of [grey, line]) {
-      play(
-        part,
-        [
-          { opacity: 0, offset: 0 },
-          { opacity: 0, offset: 0.1 },
-          { opacity: 1, offset: 0.14 },
-          { opacity: 1, offset: 1 },
-        ],
-        { duration: 600, fill: 'forwards' },
-        true,
-      );
-    }
-    const c: CrackFx = { el, ax: Math.round(row.x), ay: Math.round(row.y), anim: a, timer: 0 };
+    // The meter it stood for goes in this same frame, its "x5" chip and stake line with it.
+    this.hud.holdComboRow(ms, true);
+    const a = play(el, crackFrames(peak, ms), { duration: ms, fill: 'forwards' }, true);
+    // The grey and the crack snap in together once the punch is spent (opacity only, so the colour snaps).
+    for (const part of [grey, line]) play(part, crackSnapFrames(ms), { duration: ms, fill: 'forwards' }, true);
+    const c: CrackFx = { el, ax, ay, peak, anim: a, timer: 0 };
     this.crack = c;
     const done = () => {
       if (this.crack === c) this.dropCrack();
     };
     if (a) a.onfinish = done;
-    else c.timer = window.setTimeout(done, 600);
+    else c.timer = window.setTimeout(done, ms);
     this.line(label, 0, 'lost', { force: true });
     this.onLayout();
   }
@@ -1147,9 +1314,10 @@ function fits(text: string, race: string | undefined): boolean {
 
 /**
  * Enter and hold: pop in, settle, hold. The exit is a separate animation. Every line is opaque within
- * a few frames (the motion is the scale), so a callout never reads as faded or disabled.
+ * a few frames (the motion is the scale), so a callout never reads as faded or disabled. 'In the flow'
+ * (`flow`) punches a little harder than a trick.
  */
-function holdFrames(tone: StyleTone): Keyframe[] {
+function holdFrames(tone: StyleTone, flow = false): Keyframe[] {
   if (tone === 'lost') {
     // Slammed down on its ink pill, then a short shake.
     return [
@@ -1162,7 +1330,7 @@ function holdFrames(tone: StyleTone): Keyframe[] {
       { opacity: 1, transform: 'translateX(0)', offset: 1 },
     ];
   }
-  const peak = tone === 'big' || tone === 'best' ? 1.12 : 1.07;
+  const peak = flow ? 1.18 : tone === 'big' || tone === 'best' ? 1.12 : 1.07;
   return [
     { opacity: 0, transform: 'translateY(-8px) scale(0.72)', offset: 0 },
     { opacity: 1, transform: 'translateY(-6px) scale(0.78)', offset: 0.03, easing: SPRING },

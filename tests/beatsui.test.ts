@@ -28,8 +28,9 @@ function rig() {
     paceHit: rec('hud.paceHit'),
     flashBest: rec('hud.flashBest'),
     holdDuel: rec('hud.holdDuel'),
+    flowState: rec('hud.flowState'),
   } as unknown as Hud;
-  const fx = { pop: rec('fx.pop'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
+  const fx = { pop: rec('fx.pop'), flowIn: rec('fx.flowIn'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
   const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock') } as unknown as Notices;
   const router = new BeatRouter(hud, fx, notices);
   return { calls, router, of: (tag: string) => calls.filter((c) => c[0] === tag) };
@@ -56,8 +57,10 @@ describe('BeatRouter', () => {
       { type: 'stompTick', tick: 10, step: 3, open: false },
     ];
     router.handle(list);
-    expect(of('fx.pop').map((c) => c[1])).toEqual(['Whisker', 'Near miss', '1 km', 'In the flow', 'Flow broken', 'New ground', 'Max drift']);
+    expect(of('fx.pop').map((c) => c[1])).toEqual(['Whisker', 'Near miss', '1 km', 'Flow broken', 'New ground', 'Max drift']);
     expect(of('fx.pop')[0]).toEqual(['fx.pop', 'Whisker', 120, 'big']);
+    // 'In the flow' is a line of its own, never a queued callout.
+    expect(of('fx.flowIn')).toEqual([['fx.flowIn', 'In the flow']]);
   });
 
   it('gives streak broken, best combo pace, new best and a friend beaten their words', () => {
@@ -111,7 +114,7 @@ describe('BeatRouter', () => {
       { type: 'crash', tick: 3, cause: 'tree', stake: 900, orbitFrom: null },
       { type: 'comboLost', tick: 3, points: 900, stake: 900, best: false, crack: true },
     ]);
-    expect(calls.map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'fx.lost']);
+    expect(calls.filter((c) => c[0] !== 'hud.flowState').map((c) => c[0])).toEqual(['fx.stomp', 'fx.retireStamp', 'fx.pop', 'fx.retireStamp', 'fx.lost']);
   });
 
   it('retires a live stamp on a sketchy landing before its line, and leaves it for other callouts', () => {
@@ -132,12 +135,40 @@ describe('BeatRouter', () => {
       { type: 'flow', tick: 3, phase: 'snuff' },
       { type: 'flow', tick: 40, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'lost' } },
     ]);
-    expect(calls.map((c) => [c[0], c[1]])).toEqual([
+    expect(calls.filter((c) => c[0] !== 'hud.flowState').map((c) => [c[0], c[1]])).toEqual([
       ['fx.stomp', 'Double stomp'],
-      ['fx.pop', 'In the flow'],
+      ['fx.flowIn', 'In the flow'],
       ['fx.retireStamp', undefined],
       ['fx.pop', 'Flow broken'],
     ]);
+  });
+
+  it('puts the flow state on the multiplier chip: on at In the flow, grey at a snuff, gone with the combo', () => {
+    const { router, calls, of } = rig();
+    router.handle([
+      { type: 'stomp', tick: 1, streak: 2, late: false, title: 'Double stomp', lead: [{ label: '2 in a row', points: 0 }], x: 0, z: 0, heading: 0, yetiHop: false },
+      // The line first (it waits out the stamp in fx), then the ring and the tag.
+      { type: 'flow', tick: 1, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
+      // A sketchy landing's 'Flow broken', then a wordless snuff (a crash's or a broken streak's).
+      { type: 'flow', tick: 2, phase: 'snuff', say: { label: 'Flow broken', points: 0, tone: 'lost' } },
+      { type: 'flow', tick: 3, phase: 'snuff' },
+    ]);
+    const order = calls.filter((c) => c[0] === 'fx.flowIn' || c[0] === 'hud.flowState').map((c) => `${c[0]}:${String(c[1])}`);
+    expect(order).toEqual(['fx.flowIn:In the flow', 'hud.flowState:on', 'hud.flowState:snuff', 'hud.flowState:snuff']);
+
+    // Flow-in is per combo: a bank, a lost combo and the crash take it at once.
+    const b = rig();
+    b.router.handle([
+      { type: 'flow', tick: 1, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
+      { type: 'bank', tick: 2, points: 9000, mult: 6, origin: 1500, tier: 2, header: null, bump: false },
+      { type: 'flow', tick: 3, phase: 'in', say: { label: 'In the flow', points: 0, tone: 'big' } },
+      { type: 'crash', tick: 4, cause: 'tree', stake: 900, orbitFrom: null },
+      { type: 'comboLost', tick: 4, points: 900, stake: 900, best: false, crack: true },
+    ]);
+    expect(b.of('hud.flowState').map((c) => c[1])).toEqual(['on', 'off', 'on', 'off', 'off']);
+    // Each 'off' follows its own picture: the cash-in, the stamp's retire, the crack.
+    expect(b.calls.map((c) => c[0])).toEqual(['fx.flowIn', 'hud.flowState', 'fx.cashIn', 'hud.flowState', 'fx.flowIn', 'hud.flowState', 'fx.retireStamp', 'hud.flowState', 'fx.lost', 'hud.flowState']);
+    expect(of('fx.pop').map((c) => c[1])).toEqual(['Flow broken']);
   });
 
   it("holds the pill on a duel's ghost for its result (won, held off, lost), before the result's flash", () => {

@@ -2226,10 +2226,23 @@
   transition: opacity 160ms ease, transform 260ms var(--spring), translate 240ms var(--out), visibility 0s;
 }
 
+/* A lost combo's crack takes the meter's place in the frame it paints (the HUD's snap): the meter goes
+   at once, with no fade, so no "x5" chip or stake line shows beside the cracked figure. */
+.gs-combo.is-snap,
+.gs-combo.is-snap * {
+  transition: none;
+}
+
+.gs-combo.is-snap {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* A fixed row height, empty or not: the avalanche unit hangs under this column and must not shift.
    The total waits (opacity only, its height kept) until it adds something over the one callout under
    it: a multiplier of x2 or a second move banked. */
 .gs-combo-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2260,6 +2273,7 @@
 /* The multiplier is what the player is protecting, so it is no footnote: its "x3" stands about the
    cap height of the total beside it, on a pill as tall as the total's numerals. */
 .gs-combo-mult {
+  position: relative;
   display: inline-flex;
   align-items: center;
   height: 1.24em;
@@ -2278,6 +2292,64 @@
 /* Nothing multiplied yet: the total stands alone over the timer, no "x1". */
 .gs-combo-mult.is-x1 {
   display: none;
+}
+
+/* In the flow (vermillion: the player's colour, and flow's): a ring round the multiplier chip, just
+   outside its ink edge, and a small FLOW tag hung off its right (out of the row's flow, so the total
+   never shifts), until the combo ends. A snuff snaps both grey and fades them out (150 ms); the flare
+   rings out once as the flow comes in (the HUD plays it, never under reduced motion). */
+.gs-combo-ring,
+.gs-combo-flare {
+  position: absolute;
+  inset: -4.5px;
+  border-radius: inherit;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-combo-ring {
+  box-shadow: inset 0 0 0 2.5px var(--signal), 0 0 0 1px rgba(18, 25, 51, 0.7), 0 0 14px 1px rgba(255, 77, 46, 0.55);
+}
+
+.gs-combo-flare {
+  box-shadow: 0 0 0 2px var(--signal), 0 0 18px 4px rgba(255, 77, 46, 0.6);
+}
+
+.gs-combo-flow {
+  position: absolute;
+  top: 50%;
+  left: 100%;
+  margin-left: 0.55em;
+  color: var(--signal);
+  font-size: clamp(13px, calc(var(--u) * 0.86), 18px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: var(--halo);
+  text-transform: uppercase;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.gs-combo.is-flow .gs-combo-ring,
+.gs-combo.is-flow .gs-combo-flow {
+  opacity: 1;
+}
+
+.gs-combo.is-flow.is-snuff .gs-combo-ring {
+  box-shadow: inset 0 0 0 2.5px #8d94b4, 0 0 0 1px rgba(18, 25, 51, 0.7);
+}
+
+.gs-combo.is-flow.is-snuff .gs-combo-flow {
+  color: #8d94b4;
+}
+
+.gs-combo.is-flow.is-snuff :is(.gs-combo-ring, .gs-combo-flow) {
+  opacity: 0;
+  transition: opacity 150ms ease;
 }
 
 /* The combo timer: an off-white fill draining from the right over a dark ink track, so the time left
@@ -2359,6 +2431,12 @@
 .gs-stake.is-pace .gs-stake-n,
 .gs-stake.is-pace .gs-stake-w {
   color: var(--you);
+}
+
+/* On pace and draining: the words keep your best's gold-white and the figure keeps the fuse's amber
+   (the pace rule above ties with the fuse rule on specificity and comes later). */
+.gs-stake.is-pace:not([data-fuse='0']) .gs-stake-n {
+  color: var(--amber);
 }
 
 /* Keyboard and mouse hints seat right under this row, so it keeps a hint's height clear below it. */
@@ -3175,6 +3253,32 @@
   font-size: clamp(18px, calc(var(--u) * 1.3), 25px);
 }
 
+/* 'In the flow', the run's momentum reward: its own line in vermillion (the player's colour, and
+   flow's), 1.2x a trick line's size, with a short underline sweeping in under the words (static under
+   reduced motion). */
+.gs-call.is-flow {
+  color: var(--signal);
+}
+
+.gs-call.is-flow .gs-call-label {
+  font-size: clamp(25px, calc(var(--u) * 1.8), 35px);
+  line-height: 1;
+}
+
+.gs-call.is-flow .gs-call-t::after {
+  content: '';
+  position: absolute;
+  right: 0.04em;
+  bottom: -0.12em;
+  left: 0.04em;
+  height: 0.11em;
+  border-radius: var(--r-pill);
+  background: var(--signal);
+  box-shadow: 0 0 0 1.5px rgba(18, 25, 51, 0.8);
+  transform-origin: left center;
+  animation: gs-sweep 360ms var(--out) 90ms both;
+}
+
 /* The perfect-landing stamp: one hero line placed by Fx beside the rider (left, top, width and
    --hero-f, once per landing), off the sky where the low sun sits. "PERFECT LANDING" is white-gold,
    white at the top of each letter to #FFE08A at the foot (never the marigold of gifts), tilted like a
@@ -3411,8 +3515,9 @@
   pointer-events: none;
 }
 
-/* A lost combo's figure: it greys (a second copy snaps in over it) and a crack runs through it as it
-   tilts and falls under the COMBO LOST line. */
+/* A lost combo's figure: it punches, greys (a second copy snaps in over it) and a crack runs through it
+   as it tilts and falls under the COMBO LOST line. Fx sets its size to the cash-in figure's (this one
+   is the fallback). */
 .gs-crack {
   position: absolute;
   top: 0;
@@ -8105,6 +8210,16 @@
   }
 }
 
+/* The 'In the flow' line's underline, drawn in from the left. */
+@keyframes gs-sweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 /* Reduced motion: every keyframe collapses to a fade, transforms snap instead of travelling. */
 
 @media (prefers-reduced-motion: reduce) {
@@ -8136,9 +8251,11 @@
     background: var(--amber);
   }
 
-  /* The fuse keeps its amber, without the throb; the duel ring stays lit instead of beating. */
+  /* The fuse keeps its amber, without the throb; the duel ring stays lit instead of beating; the flow
+     line's underline is drawn, not swept in. */
   .gs-stake .gs-stake-n,
-  .gs-next.is-duel::after {
+  .gs-next.is-duel::after,
+  .gs-call.is-flow .gs-call-t::after {
     animation: none !important;
   }
 

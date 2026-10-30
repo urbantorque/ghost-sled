@@ -22,9 +22,11 @@ import { EVENT_ICON } from './notices';
 // news is dropped first. A duel and then its result (for DUEL_HOLD_MS) keep the pill on the duel ghost:
 // other ghosts' words take the callout line under the combo meter.
 // Under the combo timer a small line names the one number at stake ("4,960 AT STAKE"); it turns
-// gold-white on your best combo's pace and throbs like a fuse while a big stake drains. Top left,
-// "Best in 240 m" counts down to your best in gold-white, and a rolled event counts down in its own chip
-// beside the mood chip ("Avalanche in 380 m"), coloured by its role.
+// gold-white on your best combo's pace and throbs like a fuse while a big stake drains (the figure keeps
+// the fuse's amber on pace). In the flow, the multiplier chip wears a vermillion ring and a "Flow" tag
+// until the combo ends. The score waits for a cash-in's figure to land before it counts the bank. Top
+// left, "Best in 240 m" counts down to your best in gold-white, and a rolled event counts down in its own
+// chip beside the mood chip ("Avalanche in 380 m"), coloured by its role.
 
 const CHEVRONS = 5;
 /**
@@ -81,6 +83,8 @@ const SAME_MS = 2000;
 const LEAD_WAIT_MS = 2000;
 /** The score flashes gold-white this long on a mid-run New best. */
 const BEST_FLASH_MS = 600;
+/** A snuffed flow's ring and tag go grey, then fade out over this long. */
+export const FLOW_SNUFF_MS = 150;
 /**
  * A duel's result keeps the pill this long, as the director keeps out.rival, the C11 ring and the edge
  * chip on the duel ghost (RIVAL_HOLD_S): another ghost's word meanwhile goes to the callout line.
@@ -225,6 +229,43 @@ function isAnyResult(w: Pick<Waiting, 'type' | 'word' | 'result'>): boolean {
 export function pillGap(gap: number, last: number, age = Number.POSITIVE_INFINITY): number {
   const a = Math.abs(gap);
   return Number.isInteger(gap) ? Math.max(1, a) : gapShown(a, last, age);
+}
+
+/**
+ * The score the HUD shows: the sim's, less the cash-in points whose figure is still on its way to it
+ * (Hud.holdScore), never below 0.
+ */
+export function shownScore(score: number, held: number): number {
+  return Math.max(0, score - held);
+}
+
+/**
+ * Cash-in points the score does not show yet, by the cash-in's id: the sim counts a bank at once, its
+ * figure takes about a second to land in the score. `held` is their sum.
+ */
+export class ScoreHold {
+  private readonly by = new Map<number, number>();
+  held = 0;
+
+  hold(id: number, points: number): void {
+    this.by.set(id, Math.max(0, points));
+    this.sum();
+  }
+
+  /** Lets one cash-in's points through (no id: all of them); false when nothing was held for it. */
+  release(id?: number): boolean {
+    if (this.by.size === 0) return false;
+    if (id === undefined) this.by.clear();
+    else if (!this.by.delete(id)) return false;
+    this.sum();
+    return true;
+  }
+
+  private sum(): void {
+    let n = 0;
+    for (const p of this.by.values()) n += p;
+    this.held = n;
+  }
 }
 
 /** Whether the field's count has settled at a run's start (OF_STABLE_MS), or waited long enough. */
@@ -404,6 +445,11 @@ export class Hud {
   onLayout: () => void = () => undefined;
   /** True while the perfect-landing stamp is up (Fx): a pass flash waits behind it. */
   stampUp: () => boolean = () => false;
+  /**
+   * True while the stamp sits under the rider (Fx, a phone held upright) in the band the bottom-centre
+   * pills share: a drift or slipstream pill waits until it has gone (one headline, never overprinted).
+   */
+  stampLow: () => boolean = () => false;
   /** The ghost the banner over the race row names (a settled grudge), or null (Notices.currentName). */
   bannerName: () => string | null = () => null;
   /** A pass of yours starts flashing (now or after waiting its turn): minor callout lines step out. */
@@ -511,7 +557,23 @@ export class Hud {
   private readonly multX1: Flag;
   /** A banked total is holding over the combo meter: the new total waits under it. */
   private readonly banking: Flag;
+  /** A lost combo's crack took the meter's place: the meter went at once, with no fade. */
+  private readonly snapped: Flag;
   private bankTimer = 0;
+  /**
+   * In the flow: the multiplier chip's vermillion ring and the "Flow" tag beside it (flowState). A
+   * snuff greys them (is-snuff) before they go; the flare rings out once as the flow comes in.
+   */
+  private readonly flowOnF: Flag;
+  private readonly flowSnuff: Flag;
+  private readonly flowTag: HTMLElement;
+  private readonly flowFlare: HTMLElement;
+  private flowTimer = 0;
+  /** Cash-in points the score does not show yet (holdScore), and the model's last score. */
+  private readonly scoreHold = new ScoreHold();
+  private lastScore = 0;
+  /** The drift and slipstream pills want to show (a low stamp may hold them back: stampLow). */
+  private draftWant = false;
   private readonly comboBar: HTMLElement;
   private readonly driftEl: HTMLElement;
   private readonly driftOn: Flag;
@@ -620,7 +682,9 @@ export class Hud {
    */
   private readonly mirror: MirrorRect = { x: 0, y: 0, w: 0, h: 0 };
   private readonly avBox: ScreenRect = { x0: 0, y0: 0, x1: 0, y1: 0 };
-  private readonly room = { left: 0, right: 0, slotTop: 0, measured: false };
+  /** bcTop: the top of the bottom-centre pill row (the drift and slipstream pills). */
+  private readonly room = { left: 0, right: 0, slotTop: 0, bcTop: 0, measured: false };
+  private readonly bc: HTMLElement;
 
   constructor(parent: HTMLElement, ctx: Ctx, hd: UIHandlers) {
     this.el = h('div', 'gs-hud');
@@ -755,12 +819,19 @@ export class Hud {
     // Tier two: the combo meter, with the trick callout slot directly under it.
     const ptsEl = h('span', 'gs-combo-pts gs-num');
     this.comboPts = new Txt(ptsEl);
-    this.multEl = h('span', 'gs-combo-mult gs-num');
-    this.mult = new Txt(this.multEl);
+    // In the flow the chip wears a vermillion ring (flowState), and the flare rings out once as it comes.
+    const multN = h('span', 'gs-combo-mult-n');
+    this.flowFlare = h('span', 'gs-combo-flare');
+    this.multEl = h('span', 'gs-combo-mult gs-num', h('span', 'gs-combo-ring'), this.flowFlare, multN);
+    this.mult = new Txt(multN);
     this.multX1 = new Flag(this.multEl, 'is-x1');
     // The timer drains left to right over a dark track, so what is left reads at a glance.
     this.comboBar = h('div', 'gs-combo-bar');
-    this.comboRow = h('div', 'gs-combo-row', ptsEl, this.multEl);
+    // The "Flow" tag hangs off the chip's right (out of the row's flow, so the total never shifts). A
+    // word, not a number, and a picture only, as the callout line is.
+    this.flowTag = h('span', 'gs-combo-flow', 'Flow');
+    this.flowTag.setAttribute('aria-hidden', 'true');
+    this.comboRow = h('div', 'gs-combo-row', ptsEl, this.multEl, this.flowTag);
     // The one number at stake (the total times the multiplier), from x2: "4,960 AT STAKE". Its row is
     // always reserved, so the callout line under it never moves when it comes and goes.
     const stakeN = h('span', 'gs-stake-n gs-num');
@@ -773,6 +844,9 @@ export class Hud {
     this.comboTotal = new Flag(this.comboEl, 'has-total');
     this.comboLow = new Flag(this.comboEl, 'is-low');
     this.banking = new Flag(this.comboEl, 'is-banking');
+    this.snapped = new Flag(this.comboEl, 'is-snap');
+    this.flowOnF = new Flag(this.comboEl, 'is-flow');
+    this.flowSnuff = new Flag(this.comboEl, 'is-snuff');
     this.calloutSlot = h('div', 'gs-callouts');
     this.calloutSlot.setAttribute('aria-hidden', 'true');
 
@@ -819,7 +893,7 @@ export class Hud {
     this.draftEl = h('div', 'gs-draft gs-panel gs-pill', chevRow, h('span', 'gs-draft-l', 'Slipstream'));
     this.draftOn = new Flag(this.draftEl);
     this.draftFull = new Flag(this.draftEl, 'is-full');
-    const bc = h('div', 'gs-hud-bc', this.driftEl, this.draftEl);
+    this.bc = h('div', 'gs-hud-bc', this.driftEl, this.draftEl);
 
     this.chased = new Flag(this.el, 'is-chased');
 
@@ -827,7 +901,7 @@ export class Hud {
     this.live.setAttribute('role', 'status');
     this.live.setAttribute('aria-live', 'polite');
 
-    this.el.append(edge, this.tl, this.tr, tc, bc, this.live);
+    this.el.append(edge, this.tl, this.tr, tc, this.bc, this.live);
     parent.append(this.el);
     window.addEventListener('resize', () => this.fit());
     this.fit();
@@ -857,6 +931,8 @@ export class Hud {
       this.nameShown = '';
       this.leadDone = true;
       this.lastFuse = -1;
+      this.flowState('off');
+      this.scoreHold.release();
       this.fit();
     }
   }
@@ -864,6 +940,9 @@ export class Hud {
   hide(): void {
     this.layer.hide();
     this.revealing = false;
+    this.flowState('off');
+    this.releaseScore();
+    this.draftWant = false;
     window.clearTimeout(this.deltaTimer);
     window.clearTimeout(this.bestTimer);
     this.scoreEl.classList.remove('is-best');
@@ -889,9 +968,46 @@ export class Hud {
     return this.nextFlash.on && (t === 'pass' || t === 'call') && this.flashUntil > performance.now();
   }
 
-  /** True while the Slipstream pill is up: it names the slipstream, so no callout repeats it. */
+  /**
+   * True while the Slipstream pill is up (or waits under a low stamp): it names the slipstream, so no
+   * callout repeats it.
+   */
   get drafting(): boolean {
-    return this.draftOn.on;
+    return this.draftOn.on || this.draftWant;
+  }
+
+  /** True from 'In the flow' until the flow goes out (flowState): a flow line still waiting may play. */
+  get flowOn(): boolean {
+    return this.flowOnF.on && !this.flowSnuff.on;
+  }
+
+  /**
+   * The flow state on the multiplier chip, from the flow beats (the beat router). 'on' ('In the flow'):
+   * a vermillion ring round the chip and a "Flow" tag beside it, the ring's flare ringing out once.
+   * 'snuff' ('Flow broken', or a wordless snuff): both snap grey and fade out over FLOW_SNUFF_MS.
+   * 'off' (the combo banked or was lost, the crash, the HUD going): both go at once. Flow-in is per
+   * combo, so the next combo starts without it. They sit on the combo row, so a banner over the race
+   * row never hides them. Reduced motion: the ring and the tag, with no flare.
+   */
+  flowState(s: 'on' | 'snuff' | 'off'): void {
+    window.clearTimeout(this.flowTimer);
+    if (s === 'on') {
+      const was = this.flowOn;
+      this.flowSnuff.set(false);
+      this.flowOnF.set(true);
+      if (!was && !reduced()) play(this.flowFlare, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.5, 1.9)' }], { duration: 620, easing: EASE_OUT });
+      this.onLayout();
+      return;
+    }
+    if (!this.flowOnF.on) return;
+    if (s === 'snuff') {
+      this.flowSnuff.set(true);
+      this.flowTimer = window.setTimeout(() => this.flowState('off'), FLOW_SNUFF_MS);
+      return;
+    }
+    this.flowOnF.set(false);
+    this.flowSnuff.set(false);
+    this.onLayout();
   }
 
   /** True while the combo total is printed over the timer (not waiting under a banked total). */
@@ -955,6 +1071,16 @@ export class Hud {
     return { left: r.left, right: r.right, top };
   }
 
+  /**
+   * The top of the bottom-centre pill row while its drift or slipstream pill shows, for a stamp placed
+   * under the rider on a phone held upright (Fx stampSpot), or null: an empty row covers nothing, and
+   * a pill that would come while the stamp sits there waits for it (stampLow).
+   */
+  bottomRoom(): number | null {
+    const r = this.room;
+    return r.measured && r.bcTop > 0 && (this.driftOn.on || this.draftOn.on) ? r.bcTop : null;
+  }
+
   /** The overlay's base type size (--u on .gs-ui in style.css): the stamp and the menus use it. */
   unitPx(): number {
     return Math.max(14, Math.min(18, 8 + 0.009 * Math.min(window.innerWidth, window.innerHeight)));
@@ -983,6 +1109,23 @@ export class Hud {
 
   bumpScore(): void {
     bump(this.scoreEl, 1.14, 300);
+  }
+
+  /**
+   * A cash-in's figure is on its way to the score (Fx.cashIn): the sim already counts its points, so the
+   * score holds them back (shownScore) until the figure lands, and the figure flies into a number that
+   * then takes it. Display only: sim.score is untouched.
+   */
+  holdScore(id: number, points: number): void {
+    this.scoreHold.hold(id, points);
+  }
+
+  /**
+   * The figure landed (or gave way to a newer cash-in, or the HUD is going): the score shows its points
+   * from this frame on, at once (the landing's bumpScore punches it). No id releases every hold.
+   */
+  releaseScore(id?: number): void {
+    if (this.scoreHold.release(id) && this.layer.open) this.score.num(shownScore(this.lastScore, this.scoreHold.held));
   }
 
   /**
@@ -1035,11 +1178,17 @@ export class Hud {
   /**
    * A banked combo's number holds where the combo meter is for `ms` before it flies to the score: a
    * new combo's total waits under it for that long, so the two numbers never print over each other.
+   * `snap` (a lost combo's crack): the whole meter goes in this same frame, with no fade, so no "x5"
+   * chip or stake line shows beside the cracked figure.
    */
-  holdComboRow(ms: number): void {
+  holdComboRow(ms: number, snap = false): void {
     this.banking.set(true);
+    this.snapped.set(snap);
     window.clearTimeout(this.bankTimer);
-    this.bankTimer = window.setTimeout(() => this.banking.set(false), ms);
+    this.bankTimer = window.setTimeout(() => {
+      this.banking.set(false);
+      this.snapped.set(false);
+    }, ms);
   }
 
   /**
@@ -1373,6 +1522,8 @@ export class Hud {
     if (this.placeOn.on && !this.bandHides()) n = pushRect(out, n, this.placeEl);
     if (this.nextOn.on && !this.bandHides()) n = pushRect(out, n, this.nextEl);
     if (this.comboOn.on) n = pushRect(out, n, this.comboEl);
+    // The "Flow" tag hangs outside the meter's box.
+    if (this.comboOn.on && this.flowOnF.on) n = pushRect(out, n, this.flowTag);
     if (this.stakeOn.on) n = pushRect(out, n, this.stakeEl);
     for (const c of Array.from(this.calloutSlot.children)) if (!c.classList.contains('is-gone')) n = pushRect(out, n, c);
     if (this.driftOn.on) n = pushRect(out, n, this.driftEl);
@@ -1385,8 +1536,9 @@ export class Hud {
   }
 
   /**
-   * Caches the mirror's rect, the unit's box and the stamp's room. The unit is laid out even while it
-   * is hidden, so the rect is ready the frame a chase starts.
+   * Caches the mirror's rect, the unit's box and the stamp's room (the bottom-centre row's top with
+   * it). The unit and the row are laid out even while hidden, so their rects are ready the frame they
+   * are needed.
    */
   private readLayout(): void {
     const m = this.mirrorBox.getBoundingClientRect();
@@ -1409,6 +1561,7 @@ export class Hud {
       this.room.left = l.left;
       this.room.right = r.right;
       this.room.slotTop = this.calloutSlot.getBoundingClientRect().top;
+      this.room.bcTop = this.bc.getBoundingClientRect().top;
       this.room.measured = true;
     }
   }
@@ -1429,7 +1582,9 @@ export class Hud {
 
   update(m: HudModel): void {
     let moved = false;
-    this.score.num(m.score);
+    // A cash-in still on its way holds its points back (holdScore): the figure lands in the score.
+    this.lastScore = m.score;
+    this.score.num(shownScore(m.score, this.scoreHold.held));
     const sLen = this.scoreEl.textContent?.length ?? 0;
     if (sLen !== this.lastScoreLen) {
       this.lastScoreLen = sLen;
@@ -1667,6 +1822,8 @@ export class Hud {
     } else {
       this.lastMult = 0;
       this.comboLow.set(false);
+      // Flow is per combo: with no combo up there is no chip to ring, and the next combo starts clean.
+      if (this.flowOnF.on) this.flowState('off');
     }
 
     // The number at stake, from x2 (at x1 the total above already is it). Gold-white once it passes
@@ -1720,9 +1877,11 @@ export class Hud {
       this.cdNear.set(cd.metres <= 100);
     }
 
-    // Drift tier.
+    // Drift tier. On a phone held upright a stamp sitting under the rider holds this row's pills back
+    // until it goes (stampLow): it was placed while they were out, in the band they share.
+    const low = this.stampLow();
     const tier = Math.max(0, Math.min(3, Math.round(m.driftTier)));
-    if (this.driftOn.set(tier > 0)) moved = true;
+    if (this.driftOn.set(tier > 0 && !low)) moved = true;
     if (tier > 0 && tier !== this.lastTier) {
       if (tier > this.lastTier && this.lastTier > 0) bump(this.driftEl, 1.12, 240);
       this.driftEl.dataset.tier = String(tier);
@@ -1731,7 +1890,8 @@ export class Hud {
 
     // Slipstream.
     const lit = m.draft > 0 ? Math.max(1, Math.min(CHEVRONS, Math.ceil(m.draft * CHEVRONS))) : 0;
-    if (this.draftOn.set(lit > 0)) moved = true;
+    this.draftWant = lit > 0;
+    if (this.draftOn.set(lit > 0 && !low)) moved = true;
     this.draftFull.set(m.draft >= 0.999);
     if (lit !== this.lastChev) {
       this.lastChev = lit;
