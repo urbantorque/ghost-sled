@@ -11,13 +11,16 @@ import type { Notices } from './notices';
 //
 // Where each beat lands:
 // - the callout slot (fx.pop): callouts, and the `say` of any beat that has no picture of its own
-//   (Whisker, Max drift, In the flow, 1 km...); Streak broken, Best combo pace, New best and a friend
-//   beaten get their own words when the director sends none.
+//   (Whisker, Max drift, 1 km...); Streak broken, Best combo pace, New best and a friend beaten get
+//   their own words when the director sends none. 'In the flow' is its own line (fx.flowIn), never
+//   queued behind a trick nor under a stamp.
 // - the hero stamp (fx.stomp, fx.stamp): a stomp, its title and streak line leading the landing's
 //   tricks; a finale with stamp:true ("Yeti hop"). A crash, a lost combo, a broken streak, a
 //   sketchy landing or 'Flow broken' retires a stamp still up (fx.retireStamp), so the loss owns
 //   its beat.
 // - the cash-in (fx.cashIn) by tier, and the cracked figure of a lost combo (fx.lost).
+// - the flow state on the multiplier chip (hud.flowState): on at 'In the flow', grey and gone at a
+//   snuff, gone at once when the combo banks or is lost and at the crash (flow-in is per combo).
 // - the rival pill (hud): pass words and names, "passed you", race news, duel results, the start-line
 //   call; the crown pulse when you take the lead; the stake line's pace punch; the score's New best flash.
 // - the banner band (notices), one at a time by priority: grudge settled or nemesis down, finales,
@@ -80,20 +83,31 @@ export class BeatRouter {
           break;
         case 'bank':
           this.fx.cashIn(b);
+          // The combo is over: its flow goes with it (the next combo earns its own 'In the flow').
+          this.hud.flowState('off');
           break;
         case 'crash':
           // No picture of its own here (the world stages it), but a stamp still up retires at once.
           this.fx.retireStamp();
+          this.hud.flowState('off');
           break;
         case 'flow':
+          if (b.phase === 'in') {
+            // Its own line, and the ring and "Flow" tag on the multiplier chip until the flow goes out.
+            this.fx.flowIn(b.say?.label ?? 'In the flow');
+            this.hud.flowState('on');
+            break;
+          }
           // 'Flow broken' is a loss line (a sketchy landing's, in place of its 'Sketchy', or a bump's):
           // a stamp still up retires first. A wordless snuff leaves that to the crash or the streak.
-          if (b.phase === 'snuff' && b.say) this.fx.retireStamp();
+          if (b.say) this.fx.retireStamp();
+          this.hud.flowState('snuff');
           if (b.say) this.say(b.say);
           break;
         case 'comboLost':
           // fx.lost retires any stamp too, then cracks the figure (or prints the line).
           this.fx.lost(b.points, b.stake, b.best, b.crack);
+          this.hud.flowState('off');
           break;
         case 'bestComboPace':
           this.say(b.say ?? { label: 'Best combo pace', points: 0, tone: 'best' });

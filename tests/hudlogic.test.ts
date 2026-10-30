@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChaosEvent } from '../src/sim/chaos';
-import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, RESULT_STALE_MS, resultStale, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
+import { burstName, DUEL_HOLD_MS, duelRoute, enqueueFlash, EVENT_TINY, FLOW_SNUFF_MS, GAP_DWELL_MS, gapShown, newsKey, OF_STABLE_MS, OF_WAIT_MS, pillGap, pillOwner, placeSettled, releaseBand, RESULT_STALE_MS, resultStale, ScoreHold, shownScore, sideWord, SLUNG_KEY, type Waiting } from '../src/ui/hud';
 import { landAt, MORE_MIN_PX, moreCue, RESULTS_TIMING, stampInView, type MoreBlock } from '../src/ui/results';
 
 // The overlay's small decisions, away from the DOM: who may take the rival pill during a duel, the
@@ -277,6 +277,42 @@ describe('gapShown', () => {
       }
     }
     expect(changes).toBe(0);
+  });
+});
+
+describe('ScoreHold', () => {
+  it("keeps a cash-in's points out of the score until its figure lands, then shows the full total", () => {
+    // bank3: 2,133 banked at a score of 2,700. The counter reads 567 until the figure lands.
+    const h = new ScoreHold();
+    h.hold(1, 2133);
+    expect(shownScore(2700, h.held)).toBe(567);
+    // The score keeps counting under the flight (the figure lands into 649, then 2,782).
+    expect(shownScore(2782, h.held)).toBe(649);
+    expect(h.release(1)).toBe(true);
+    expect(shownScore(2782, h.held)).toBe(2782);
+    // A second release, or one for a cash-in never held, changes nothing.
+    expect(h.release(1)).toBe(false);
+    expect(h.release(7)).toBe(false);
+  });
+
+  it('lets everything through at once for a newer cash-in or the HUD going, and never shows below 0', () => {
+    const h = new ScoreHold();
+    h.hold(1, 400);
+    h.hold(2, 900);
+    expect(h.held).toBe(1300);
+    h.release(1);
+    expect(h.held).toBe(900);
+    h.hold(3, 50);
+    expect(h.release()).toBe(true);
+    expect(h.held).toBe(0);
+    expect(h.release()).toBe(false);
+    h.hold(4, -20);
+    expect(h.held).toBe(0);
+    expect(shownScore(100, 300)).toBe(0);
+  });
+
+  it('greys a snuffed flow for a short beat only', () => {
+    expect(FLOW_SNUFF_MS).toBe(150);
   });
 });
 
