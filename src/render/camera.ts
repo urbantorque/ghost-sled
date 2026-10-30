@@ -10,13 +10,14 @@ import type { SimEvent } from '../sim/sim';
 // rival into the frame, and on the results screen settles into a hero shot of the wreck.
 //
 // Weight (the fun pass): landings sink the lens and nod the horizon, a bump knocks it sideways and
-// rolls it, a whisker flinches it away and tips the horizon, a max drift's release throws it back and
-// whips the horizon out of the lean, a stomp streak shakes harder and knocks the horizon side to side,
-// passes lean it toward the ghost, and a crash holds the lens still (and out of the snow) while the
-// rider tumbles away from it before the orbit. Knocks are jolts: a stiff spring
-// (omega 22, zeta 0.5) integrated exactly, so it settles alike at any frame rate. The shake runs on
-// its own clock, slowed by hit-stops and held by a held frame or a pause. Every kick, shake, jolt,
-// roll and freeze is off under reduced motion (Feel.reduced); the speed FOV breathing stays.
+// rolls it, a whisker flinches it away and tips the horizon, a max drift's release kicks harder than a
+// stomp, throws it back and whips the horizon out of the lean and past level, a stomp streak shakes
+// harder and knocks the horizon side to side, passes lean it toward the ghost, and a crash holds the
+// lens still (and out of the snow) while the rider tumbles away from it before the orbit. Knocks are
+// jolts: a stiff spring (omega 22, zeta 0.5) integrated exactly, so it settles alike at any frame
+// rate. The shake runs on its own clock, slowed by hit-stops and held by a held frame or a pause.
+// Every kick, shake, jolt, roll and freeze is off under reduced motion (Feel.reduced); the speed FOV
+// breathing stays.
 
 export interface CamTarget {
   pos: Vector3;
@@ -94,8 +95,11 @@ const ROLL_MAX = 0.07;
 const NUDGE_WORDS: ReadonlySet<PassWord> = new Set<PassWord>(['slung', 'double', 'triple', 'streak', 'duelWon', 'heldOff']);
 /** Bank kicks by tier (none for tier 0, nor for a bump bank). */
 const BANK_KICK = [0, 0.15, 0.25, 0.4];
-/** Drift release kicks by tier. */
-const RELEASE_KICK = [0, 0.3, 0.5, 0.75];
+/** Drift release kicks by tier: a max drift's outranks a single stomp's 0.9. */
+const RELEASE_KICK = [0, 0.3, 0.5, 1];
+/** A max drift's release knocks the horizon this far past level, the other way from the drift's lean
+ *  (radians, the knock's peak over the lean it cancels). */
+const RELEASE_KNOCK = 0.03;
 /** The crash orbit: radius, height over the wreck, and drift (radians per second of scaled time). */
 const ORBIT_R = 7.5;
 const ORBIT_UP = 3.2;
@@ -419,10 +423,11 @@ export class ChaseCamera {
           this.kick(RELEASE_KICK[b.tier] ?? 0.3);
           if (b.tier === 3) {
             // A max drift's release throws the lens back and whips the horizon out of the drift's lean
-            // (a drift leans it by -driftDir; the release shoves the sled toward driftDir, and a shove
-            // to the right rolls positive, as a bump's knock does).
+            // and past level (a drift leans it by -driftDir; the release shoves the sled toward
+            // driftDir, and a shove to the right rolls positive, as a bump's knock does). The knock
+            // carries the lean it cancels: 0.03 alone only levelled the horizon from a full lean.
             this.jolt(0, 0, 0.35);
-            this.jvr += (0.03 * Math.sign(b.driftDir)) / J_PEAK;
+            this.jvr += (RELEASE_KNOCK * Math.sign(b.driftDir) - this.roll) / J_PEAK;
             this.shake(0.2);
           }
           released = true;

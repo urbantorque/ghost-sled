@@ -322,6 +322,35 @@ describe('feel kicks', () => {
     expect(after([release(2, 1)]).roll).toBe(0);
   });
 
+  it("a max drift's release kicks the lens at least as hard as a single stomp", () => {
+    expect(after([release(3, 1)]).fov).toBeGreaterThanOrEqual(after([stomp(1)]).fov - 1e-9);
+    expect(after([release(3, 1)]).fov).toBeGreaterThan(after([release(2, 1)]).fov);
+  });
+
+  it("from a full drift lean, a max drift's release knocks the horizon past level the other way", () => {
+    for (const dir of [1, -1]) {
+      const cam = chase();
+      // Hold a full drift: the horizon leans by -driftDir, to ROLL_MAX.
+      for (let i = 0; i < 60; i++) {
+        cam.update({ pos: WRECK, dir: DOWN, speed: 24, steer: dir, airborne: false, boost: 0, drifting: true, driftDir: dir, slip: 0.7 }, 1 / 60);
+        cam.beats([], IDLE_FEEL);
+      }
+      const lean = cam.rollNow;
+      expect(lean * dir).toBeLessThan(-0.06);
+      cam.beats([release(3, dir)], IDLE_FEEL);
+      let peak = lean;
+      for (let i = 0; i < 30; i++) {
+        cam.update({ pos: WRECK, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+        cam.beats([], IDLE_FEEL);
+        if (cam.rollNow * dir > peak * dir) peak = cam.rollNow;
+        expect(Math.abs(cam.rollNow)).toBeLessThanOrEqual(0.07 + 1e-9);
+      }
+      // Past level toward the drift's side, not just flattened, and a swing of more than 5 degrees.
+      expect(peak * dir).toBeGreaterThan(0.025);
+      expect((peak - lean) * dir).toBeGreaterThan(0.09);
+    }
+  });
+
   it("a stomp streak's shake grows with it, and from the third the horizon knocks, side to side", () => {
     expect(after([stomp(1)]).shake).toBeCloseTo(0.25, 5);
     expect(after([stomp(5)]).shake).toBeGreaterThan(after([stomp(1)]).shake);
