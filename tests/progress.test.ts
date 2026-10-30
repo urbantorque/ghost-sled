@@ -101,19 +101,32 @@ describe('results race line', () => {
 });
 
 describe('the crash line', () => {
-  it('says where you stood as you fell and who rode on past: two names, then a count', () => {
-    expect(crashLine(1, ['SparkleCedar', 'RidgeUlla'])).toBe('You led at the crash. SparkleCedar and RidgeUlla rode on past.');
-    expect(crashLine(1, ['Your best'])).toBe('You led at the crash. Your best rode on past.');
-    expect(crashLine(2, ['fox84', 'Your best', 'Mila'])).toBe('2nd at the crash. 3 ghosts rode on past.');
-    expect(crashLine(3, ['Mila'])).toBe('3rd at the crash. Mila rode on past.');
-    expect(crashLine(11, ['Mila'])).toBe('11th at the crash. Mila rode on past.');
-    expect(crashLine(22, ['Mila'])).toBe('22nd at the crash. Mila rode on past.');
+  it('says where you stood as you fell and who rode on past: the passes shown, two names at most', () => {
+    expect(crashLine(1, ['SparkleCedar', 'RidgeUlla'], 2)).toBe('You led at the crash. SparkleCedar and RidgeUlla rode on past.');
+    expect(crashLine(1, ['Your best'], 1)).toBe('You led at the crash. Your best rode on past.');
+    expect(crashLine(3, ['Mila'], 1)).toBe('3rd at the crash. Mila rode on past.');
+    expect(crashLine(11, ['Mila'], 1)).toBe('11th at the crash. Mila rode on past.');
+    expect(crashLine(22, ['Mila'], 1)).toBe('22nd at the crash. Mila rode on past.');
+    // Three shown: two names, and the third counted.
+    expect(crashLine(2, ['fox84', 'Your best', 'Mila'], 3)).toBe('2nd at the crash. fox84, Your best and 1 more ghost rode on past.');
+  });
+
+  it('names only the passes the HUD showed and counts the rest (r2-rivals-06)', () => {
+    // One 'passed you' played before the card opened; two more rode past the wreck after it.
+    expect(crashLine(1, ['SparkleCedar', 'RidgeUlla', 'fjord348'], 1)).toBe('You led at the crash. SparkleCedar and 2 more ghosts rode on past.');
+    expect(crashLine(2, ['SparkleCedar', 'RidgeUlla'], 1)).toBe('2nd at the crash. SparkleCedar and 1 more ghost rode on past.');
+    expect(crashLine(1, ['SparkleCedar', 'RidgeUlla', 'fjord348', 'Mila'], 2)).toBe('You led at the crash. SparkleCedar, RidgeUlla and 2 more ghosts rode on past.');
+    // None shown (reduced motion opens the card at once): a count, never a name.
+    expect(crashLine(2, ['fox84', 'Your best', 'Mila'], 0)).toBe('2nd at the crash. 3 ghosts rode on past.');
+    expect(crashLine(1, ['Mila'], 0)).toBe('You led at the crash. 1 ghost rode on past.');
+    // A shown count past the list names only the list.
+    expect(crashLine(1, ['Mila'], 4)).toBe('You led at the crash. Mila rode on past.');
   });
 
   it('is null when nobody rode past (the place held)', () => {
-    expect(crashLine(1, [])).toBeNull();
-    expect(crashLine(4, [])).toBeNull();
-    expect(crashLine(0, ['Mila'])).toBeNull();
+    expect(crashLine(1, [], 0)).toBeNull();
+    expect(crashLine(4, [], 2)).toBeNull();
+    expect(crashLine(0, ['Mila'], 1)).toBeNull();
   });
 });
 
