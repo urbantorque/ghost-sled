@@ -4,6 +4,7 @@ import type {
   GhostKind,
   HintKind,
   HudModel,
+  MissionView,
   ResultsModel,
   RevealModel,
   ScreenRect,
@@ -370,8 +371,8 @@ export class UI implements GameUI {
     this.syncInert();
   }
 
-  showPause(settings: SettingsModel): void {
-    this.menus.showPause(settings);
+  showPause(settings: SettingsModel, missions?: MissionView[]): void {
+    this.menus.showPause(settings, missions);
   }
 
   hidePause(): void {

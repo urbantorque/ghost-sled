@@ -127,7 +127,15 @@ describe('stomps', () => {
     expect(of(a, 'callout')).toHaveLength(0);
     r.idle(1);
     const b = r.frame([style('perfect', 280), { type: 'boost', amount: 3, source: 'perfect' }, land('perfect')]);
-    expect(of(b, 'stomp')[0]).toMatchObject({ streak: 2, title: 'Double stomp', lead: [{ label: '2 in a row', points: 0 }] });
+    // 'DOUBLE STOMP' over 'PERFECT +280': the title counts the streak, the lead names the landing.
+    expect(of(b, 'stomp')[0]).toMatchObject({ streak: 2, title: 'Double stomp', lead: [{ label: 'Perfect', points: 280 }] });
+    for (let i = 0; i < 2; i++) {
+      r.idle(1);
+      r.frame([style('perfect', 250), land('perfect')]);
+    }
+    r.idle(1);
+    const five = of(r.frame([style('perfect', 250), land('perfect')]), 'stomp')[0];
+    expect(five).toMatchObject({ streak: 5, title: 'Stomp streak 5', lead: [{ label: 'Perfect', points: 250 }] });
   });
 
   it('a late stomp is a single stomp that counts once', () => {
@@ -469,6 +477,8 @@ describe('milestones', () => {
     expect(of(a, 'newBest')).toHaveLength(0);
     const later = r.idle(1.3);
     expect(of(later, 'newBest')).toHaveLength(1);
+    // The score's best, said so: never read as the distance's ('Best in 60 m').
+    expect(of(later, 'newBest')[0].say?.label).toBe('New best score');
     // A crash, a revive, and the score keeps climbing: no second New best.
     r.frame([{ type: 'crash', cause: 'tree' }]);
     r.d.revive();
@@ -1966,6 +1976,109 @@ describe('the crash beat', () => {
     q.frame([{ type: 'crash', cause: 'rock' }], { reduced: true });
     q.d.time.step(0.016);
     expect(q.d.time.render).toBe(1);
+  });
+});
+
+describe('the pack past your wreck', () => {
+  /** A rig with the rider at z 100 and these ghosts at their gaps (+ = ahead), then the crash frame. */
+  const crashed = (gaps: Array<number | 'done'>) => {
+    const r = new Rig();
+    gaps.forEach((g, i) => {
+      r.tracks.push(track(i + 1));
+      r.poses.set(i + 1, g === 'done' ? pose(90, 0, true) : pose(100 + g));
+    });
+    r.sim.s.crashed = true;
+    r.frame([{ type: 'crash', cause: 'tree' }]);
+    return r;
+  };
+  const move = (r: Rig, id: number, gap: number) => r.poses.set(id, pose(100 + gap));
+  const wrecks = (beats: Beat[]) => of(beats, 'passedBy').filter((b) => b.wreck);
+
+  it('each ghost behind you at the crash says it passed you once, as it leads the wreck by 0.8 m', () => {
+    // G1 and G2 ride behind, G3 is ahead, G4 crashed behind: only G1 and G2 can ride past.
+    const r = crashed([-5, -30, 5, 'done']);
+    // The first crashed frame records who is behind.
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(0);
+    move(r, 1, 0.5);
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(0);
+    move(r, 1, 0.9);
+    const a = r.frame([], { phase: 'crashed' });
+    expect(wrecks(a)).toHaveLength(1);
+    expect(wrecks(a)[0]).toMatchObject({ type: 'passedBy', muted: false, wreck: true, ghost: { id: 1, name: 'G1' } });
+    // Said, never paid: no pass beat, nothing to credit.
+    expect(of(a, 'pass')).toHaveLength(0);
+    move(r, 1, 6);
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(0);
+    move(r, 3, 12);
+    move(r, 2, 1);
+    expect(wrecks(r.frame([], { phase: 'crashed' })).map((b) => b.ghost.id)).toEqual([2]);
+    expect(r.d.wreckPassed).toBe(2);
+    // Telemetry can tell them from live passes.
+    expect(r.d.log.filter((e) => e.type === 'passedBy' && e.grade === 'wreck')).toHaveLength(2);
+  });
+
+  it('a ghost that stops riding behind the wreck is dropped unsaid', () => {
+    const r = crashed([-8]);
+    r.frame([], { phase: 'crashed' });
+    r.poses.set(1, pose(96, 0, true));
+    r.frame([], { phase: 'crashed' });
+    r.poses.set(1, pose(110, 0, false));
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(0);
+    expect(r.d.wreckPassed).toBe(0);
+  });
+
+  it('holds the results while a recorded ghost still rides within 25 m behind the wreck', () => {
+    const r = crashed([-30, -12]);
+    r.frame([], { phase: 'crashed' });
+    // G2 at 12 m back holds; G1 at 30 m does not.
+    expect(r.d.wreckPending()).toBe(true);
+    move(r, 2, 1);
+    r.frame([], { phase: 'crashed' });
+    expect(r.d.wreckPending(25)).toBe(false);
+    move(r, 1, -24);
+    r.frame([], { phase: 'crashed' });
+    expect(r.d.wreckPending(25)).toBe(true);
+    expect(r.d.wreckPending(20)).toBe(false);
+    // Gone by: the hold ends.
+    move(r, 1, 2);
+    r.frame([], { phase: 'crashed' });
+    expect(r.d.wreckPending()).toBe(false);
+  });
+
+  it('says nothing in the run, once the results are up, or after a revive', () => {
+    const live = new Rig();
+    live.tracks.push(track(1));
+    live.poses.set(1, pose(95));
+    live.frame();
+    live.poses.set(1, pose(101));
+    expect(wrecks(live.frame())).toHaveLength(0);
+
+    const r = crashed([-6, -9]);
+    r.frame([], { phase: 'crashed' });
+    move(r, 1, 1);
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(1);
+    // The results open: the rest of the pack rides by without a word, and nothing holds them.
+    r.d.endCrash();
+    expect(r.d.wreckPending()).toBe(false);
+    move(r, 2, 1);
+    expect(wrecks(r.frame([], { phase: 'crashed' }))).toHaveLength(0);
+
+    // A revive rides on from where the ghosts were: no crossings replayed, the count starts over.
+    const q = crashed([-6]);
+    q.frame([], { phase: 'crashed' });
+    q.d.revive();
+    q.sim.s.crashed = false;
+    expect(q.d.wreckPending()).toBe(false);
+    expect(q.d.wreckPassed).toBe(0);
+    move(q, 1, 3);
+    expect(wrecks(q.frame())).toHaveLength(0);
+    // The next crash records afresh.
+    move(q, 1, -4);
+    q.sim.s.crashed = true;
+    q.frame([{ type: 'crash', cause: 'rock' }]);
+    q.frame([], { phase: 'crashed' });
+    move(q, 1, 1);
+    expect(wrecks(q.frame([], { phase: 'crashed' }))).toHaveLength(1);
   });
 });
 

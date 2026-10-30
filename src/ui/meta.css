@@ -40,6 +40,13 @@
   font-weight: 750;
 }
 
+/* Who rode on past your wreck ("You led at the crash. SparkleCedar rode on past."): as quiet as an
+   event note, its ghost glyph in the line's off-white (it names the pack, not one rival). In the
+   place note's slot it reads as the note does. */
+.gs-res-line.is-crash {
+  font-weight: 750;
+}
+
 /* A big lost combo, named on the crash line: the figure carries the weight. */
 .gs-res-lost {
   color: rgba(245, 243, 255, 0.8);
@@ -49,6 +56,88 @@
 .gs-res-lost .gs-num {
   color: var(--text);
   font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ Results: the folded missions */
+
+/* With no mission finished this run, the folded row names the open mission closest to done and its
+   progress ("Ride 800 m in one run 753/800") in place of "3 open". The mission takes the label's
+   room (the flag glyph still marks the row; "Missions" stays for screen readers), its progress sits
+   at the row's end, and the words give way (an ellipsis) before the figure does, so the row keeps
+   its one line in the narrow wide-screen column and on a phone. */
+.gs-res-mis-toggle.is-next > .gs-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.gs-res-mis-toggle.is-next > .gs-res-mis-sum {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gs-res-mis-left.is-next {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gs-res-mis-next {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 750;
+  text-overflow: ellipsis;
+}
+
+.gs-res-mis-left.is-next > .gs-res-mis-prog {
+  flex: none;
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ Pause: the run's missions */
+
+/* Under the title, what the run is working toward: each mission's live progress, Done once it popped
+   this run, in the title popover's rows. Wide screens keep it in the left column over Resume, beside
+   the settings; a phone stacks it under the title (below). */
+.gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'title set'
+    'mis set'
+    'resume set'
+    'home set'
+    'key set'
+    '. set';
+}
+
+.gs-pause-mis {
+  grid-area: mis;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+
+.gs-pause-mis[hidden] {
+  display: none;
+}
+
+.gs-pause-mis-h {
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gs-pause-mis .gs-missions {
+  gap: 10px;
 }
 
 /* ------------------------------------------------------------------ Results: next unlock */
@@ -420,6 +509,18 @@
   .gs-res-line {
     grid-template-columns: 26px minmax(0, 1fr);
     font-size: 0.94em;
+  }
+
+  /* The pause card is one column here: the missions sit under the title, over Resume. */
+  .gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+    grid-template-rows: none;
+    grid-template-areas:
+      'title'
+      'mis'
+      'resume'
+      'set'
+      'home'
+      'key';
   }
 
   .gs-ul.gs-nu {

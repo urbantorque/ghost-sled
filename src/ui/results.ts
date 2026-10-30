@@ -6,7 +6,7 @@ import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
-import { missionList } from './title';
+import { missionList, progText } from './title';
 import './meta.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
@@ -406,9 +406,10 @@ export class Results {
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
     // ride again (how far short of the next place you stopped), then what the run paid: the reward
     // beat sits in the head on every screen, so a phone never folds it below the race.
-    // A big combo the crash took is named right on that line: it is what the run lost. "on the line"
-    // keeps together, so a wrap never leaves "line" alone on a row of its own.
-    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with ', h('span', 'gs-num', fmt(m.lostCombo!)), ` on${NBSP}the${NBSP}line`) : null;
+    // A big combo the crash took is named right on that line: it is what the run lost, with its label
+    // ("with a 2,085 point combo on the line"). The figure keeps its unit, and "on the line" keeps
+    // together, so a wrap never leaves "line" alone on a row of its own.
+    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with a ', h('span', 'gs-num', fmt(m.lostCombo!)), `${NBSP}point combo on${NBSP}the${NBSP}line`) : null;
     const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
@@ -619,14 +620,21 @@ export class Results {
    * race and the score carry the card. On wide screens a mission this run finished stands open under
    * that row on its own, where its Done stamp lands and its reward flies to the wallet; the row then
    * counts what is left. A phone folds even that one away (under the race), and its row shows the pay.
+   * With none finished, the row names the open mission closest to done and its progress ("Ride 800 m
+   * in one run 753/800") in place of the count: the same row, so a phone's card is no taller.
    */
   private missions(m: ResultsModel): HTMLElement {
     const list = missionList(m.missions, true);
     list.id = 'gs-res-mis-list';
     const won = m.missions.filter((x) => x.justCompleted);
-    const open = m.missions.filter((x) => !x.done).length;
+    const open = m.missions.filter((x) => !x.done);
     const pay = won.reduce((s, x) => s + x.reward, 0);
-    const left = open > 0 ? h('span', 'gs-res-mis-left', h('span', 'gs-num', String(open)), ' open') : h('span', 'gs-res-mis-left', 'All done');
+    const near = won.length === 0 ? closest(open) : null;
+    const left = near
+      ? h('span', 'gs-res-mis-left is-next', h('span', 'gs-res-mis-next', near.text), h('span', 'gs-res-mis-prog gs-num', progText(Math.min(near.progress, near.target), near.target)))
+      : open.length > 0
+        ? h('span', 'gs-res-mis-left', h('span', 'gs-num', String(open.length)), ' open')
+        : h('span', 'gs-res-mis-left', 'All done');
     const sum =
       won.length > 0
         ? h('span', 'gs-res-mis-sum is-won', h('span', 'gs-res-mis-pay', h('span', 'gs-num', `+${fmt(pay)}`), icon('gift'), sr(` gifts, ${won.length} complete`)), left)
@@ -640,6 +648,9 @@ export class Results {
       this.timers.push(window.setTimeout(() => this.stampsAtOnce(), reduced() ? 0 : 450));
     } }, sum, icon('chevR', 'gs-res-chev'));
     toggle.setAttribute('aria-controls', list.id);
+    // Naming a mission, the row gives it the label's room: the flag glyph marks the section, and the
+    // word "Missions" stays for screen readers (meta.css).
+    if (near) toggle.classList.add('is-next');
     const sec = h('section', `gs-res-missions is-fold${won.length > 0 ? ' has-new' : ''}`, h('h3', 'gs-h2 gs-res-h gs-res-mis-h', 'Missions'), toggle, list);
     sec.setAttribute('aria-label', 'Missions');
     const sync = () => {
@@ -908,6 +919,20 @@ function nextUnlockCard(m: ResultsModel): HTMLElement | null {
 
 const dist = (g: ResultsGhost): number => g.distance ?? 0;
 
+/** The open mission closest to done (the highest share of its target; the first on a tie), or null. */
+function closest(open: ResultsModel['missions']): ResultsModel['missions'][number] | null {
+  let best: ResultsModel['missions'][number] | null = null;
+  let bestK = -1;
+  for (const mv of open) {
+    const k = mv.target > 0 ? mv.progress / mv.target : 0;
+    if (k > bestK) {
+      best = mv;
+      bestK = k;
+    }
+  }
+  return best;
+}
+
 /**
  * Where you finished. The race is decided by distance, the number every row shows: your place is one
  * more than the ghosts whose run went further than yours. Passed stamps are separate (ghosts you
@@ -921,10 +946,20 @@ function finish(m: ResultsModel): { rank: number; of: number } | null {
 }
 
 /**
- * One line under the crash line, in the same terms as the order: how far short of the next place
- * you stopped, or how far clear of second you finished. Null when it would say nothing.
+ * One line under the crash line, in the same terms as the order: where you stood at the crash and who
+ * rode on past (m.crashNote: it says why the place is not the one the HUD showed, and is the more
+ * useful line), else how far short of the next place you stopped, or how far clear of second you
+ * finished. Margins are the difference of the rows as shown (whole metres each). Null when it would
+ * say nothing, or when the crash note is already the race line.
  */
 function raceNote(m: ResultsModel): HTMLElement | null {
+  if (m.crashNote) {
+    if (m.raceLine && m.raceLine.text === m.crashNote) return null;
+    const p = h('p', 'gs-res-note is-crash', m.crashNote);
+    // (Names in it are handles: auto-translate would mangle them.)
+    p.setAttribute('translate', 'no');
+    return p;
+  }
   let above = Infinity;
   let below = -Infinity;
   for (const g of m.ghosts) {
@@ -934,8 +969,8 @@ function raceNote(m: ResultsModel): HTMLElement | null {
   }
   const place = finish(m);
   if (!place) return null;
-  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, above - m.distance))), ` short of ${ordinal(place.rank - 1)} place.`);
-  const lead = m.distance - below;
+  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round(above) - Math.round(m.distance)))), ` short of ${ordinal(place.rank - 1)} place.`);
+  const lead = Math.round(m.distance) - Math.round(below);
   return Number.isFinite(lead) && lead >= 1 ? h('p', 'gs-res-note', h('span', 'gs-num', metres(lead)), ' clear of 2nd place.') : null;
 }
 
