@@ -364,6 +364,28 @@ export function lanternPostGeometry(): BufferGeometry {
 /** How high the km arch's beam rides over the snow at its posts (metres to its top). */
 export const ARCH_HEIGHT = 7;
 
+/** A km arch's paper lantern on its drop (cord, cap and globe, hanging from the origin), amber or
+ *  cream: the same on every arch, so each is built once and copied along every string. */
+const archDrops: Array<BufferGeometry | null> = [null, null];
+
+function archDrop(cream: boolean): BufferGeometry {
+  const k = cream ? 1 : 0;
+  let g = archDrops[k];
+  if (!g) {
+    const rope = new Color('#3A3046');
+    const c = cream ? new Color('#FFF1D6').multiplyScalar(2.2) : new Color('#FFB45E').multiplyScalar(2.8);
+    g = merge([
+      part(new BoxGeometry(0.03, 0.22, 0.03), rope, { pos: [0, -0.11, 0] }),
+      part(new SphereGeometry(0.19, 8, 6), c, { pos: [0, -0.42, 0], scale: [1, 1.2, 1] }),
+      part(new CylinderGeometry(0.08, 0.1, 0.07, 6), rope, { pos: [0, -0.18, 0] }),
+    ]);
+    // (Copies are only translated: no bounds to carry along.)
+    g.boundingSphere = null;
+    archDrops[k] = g;
+  }
+  return g;
+}
+
 /** A kilometre arch over the run (render only, no collider): two snow-capped timber posts `span`
  *  metres apart (centre to centre) standing just outside the corridor, a beam across with a soft
  *  drift of snow along its top, corner braces, a small evergreen wreath at its middle and a sagging
@@ -380,7 +402,6 @@ export function kmArchGeometry(span: number): BufferGeometry {
   const beamC = new Color('#7E5640');
   const rope = new Color('#3A3046');
   const lamp = new Color('#FFB45E').multiplyScalar(2.8);
-  const cream = new Color('#FFF1D6').multiplyScalar(2.2);
   const spruce = new Color('#2F6F68');
   const parts: BufferGeometry[] = [];
   for (const sx of [-1, 1]) {
@@ -411,10 +432,7 @@ export function kmArchGeometry(span: number): BufferGeometry {
     const len = Math.hypot(bx - ax, by - ay);
     parts.push(part(new BoxGeometry(len, 0.035, 0.035), rope, { pos: [(ax + bx) / 2, (ay + by) / 2, 0], rot: [0, 0, Math.atan2(by - ay, bx - ax)] }));
     if (i === 0) continue;
-    const c = i % 4 === 0 ? cream : lamp;
-    parts.push(part(new BoxGeometry(0.03, 0.22, 0.03), rope, { pos: [ax, ay - 0.11, 0] }));
-    parts.push(part(new SphereGeometry(0.19, 8, 6), c, { pos: [ax, ay - 0.42, 0], scale: [1, 1.2, 1] }));
-    parts.push(part(new CylinderGeometry(0.08, 0.1, 0.07, 6), rope, { pos: [ax, ay - 0.18, 0] }));
+    parts.push(archDrop(i % 4 === 0).clone().translate(ax, ay, 0));
   }
   return merge(parts);
 }
