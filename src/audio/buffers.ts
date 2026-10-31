@@ -7,6 +7,13 @@ export interface Bank {
   white: AudioBuffer;
   pink: AudioBuffer;
   brown: AudioBuffer;
+  /** The white bed high-passed once, for the noise parts that always sit behind the same fixed
+   *  highpass (Q 0.7): hats at 7.2 kHz, a kick's click at 2 kHz, the effects' click at 4 kHz. A
+   *  BiquadFilterNode per hit cost the main thread a node (the dearest kind to make) four times a
+   *  second at a cruise; the filter is the same one, run here instead. */
+  hatNoise: AudioBuffer;
+  kickNoise: AudioBuffer;
+  clickNoise: AudioBuffer;
   /** Unipolar train of short decaying grains (about 22 per second at rate 1). Used as an
    *  amplitude modulator, it turns steady noise into granular snow crunch. */
   grains: AudioBuffer;
@@ -85,6 +92,53 @@ function noise(ctx: BaseAudioContext, colour: NoiseColour): AudioBuffer {
   const buf = ctx.createBuffer(2, len, ctx.sampleRate);
   for (let ch = 0; ch < 2; ch++) buf.getChannelData(ch).set(noiseChannel(colour, len));
   return buf;
+}
+
+/**
+ * `src` through the highpass a BiquadFilterNode makes of (`f` Hz, Q `q`, read in dB for a highpass),
+ * with the same coefficients and the same direct form, into a buffer of the same shape. The filter
+ * first runs over the source's last samples, so the result loops as seamlessly as the source does
+ * (its start continues its end, as a live filter running across the loop would).
+ */
+export function highpassed(ctx: BaseAudioContext, src: AudioBuffer, f: number, q: number): AudioBuffer {
+  const sr = src.sampleRate;
+  const w0 = (2 * Math.PI * Math.min(f, sr / 2)) / sr;
+  const cw = Math.cos(w0);
+  const alpha = 0.5 * Math.sin(w0) * Math.pow(10, -0.05 * q);
+  const a0 = 1 + alpha;
+  const b0 = (0.5 * (1 + cw)) / a0;
+  const b1 = (-1 - cw) / a0;
+  const a1 = (-2 * cw) / a0;
+  const a2 = (1 - alpha) / a0;
+  const out = ctx.createBuffer(src.numberOfChannels, src.length, sr);
+  for (let ch = 0; ch < src.numberOfChannels; ch++) {
+    const x = src.getChannelData(ch);
+    const y = out.getChannelData(ch);
+    const n = x.length;
+    let x1 = 0;
+    let x2 = 0;
+    let y1 = 0;
+    let y2 = 0;
+    // The state settles within a few dozen samples at these corners; 2048 is far past it.
+    for (let i = Math.max(0, n - 2048); i < n; i++) {
+      const xi = x[i];
+      const yi = b0 * xi + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1;
+      x1 = xi;
+      y2 = y1;
+      y1 = yi;
+    }
+    for (let i = 0; i < n; i++) {
+      const xi = x[i];
+      const yi = b0 * xi + b1 * x1 + b0 * x2 - a1 * y1 - a2 * y2;
+      x2 = x1;
+      x1 = xi;
+      y2 = y1;
+      y1 = yi;
+      y[i] = yi;
+    }
+  }
+  return out;
 }
 
 function grains(ctx: BaseAudioContext): AudioBuffer {
@@ -200,10 +254,14 @@ function wave(ctx: BaseAudioContext, harmonics: number, amp: (n: number) => numb
 }
 
 export function createBank(ctx: BaseAudioContext): Bank {
+  const white = noise(ctx, 'white');
   return {
-    white: noise(ctx, 'white'),
+    white,
     pink: noise(ctx, 'pink'),
     brown: noise(ctx, 'brown'),
+    hatNoise: highpassed(ctx, white, 7200, 0.7),
+    kickNoise: highpassed(ctx, white, 2000, 0.7),
+    clickNoise: highpassed(ctx, white, 4000, 0.7),
     grains: grains(ctx),
     jingle: jingle(ctx),
     impulse: impulse(ctx),

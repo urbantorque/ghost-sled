@@ -39,8 +39,9 @@ export class Bus {
   }
 
   /** Dip to `depth`, hold, then recover with time constant `release`. A shallower duck never
-   *  cuts short a deeper one that is still holding. */
-  duck(depth: number, now: number, hold: number, release: number): void {
+   *  cuts short a deeper one that is still holding. `attack` is the dip's time constant: a drop
+   *  (the band cutting out under a big bank) uses a fast one so the gap reads as a gap. */
+  duck(depth: number, now: number, hold: number, release: number, attack = 0.025): void {
     if (now < this.duckUntil && depth > this.duckDepth) return;
     this.duckDepth = depth;
     this.duckUntil = now + hold;
@@ -48,9 +49,30 @@ export class Bus {
       const p = g.gain;
       p.cancelScheduledValues(now);
       p.setValueAtTime(p.value, now);
-      p.setTargetAtTime(depth, now, 0.025);
+      p.setTargetAtTime(depth, now, attack);
       p.setTargetAtTime(1, now + hold, release);
     }
+  }
+
+  /** Two stages in one schedule: dip hard to `d1` for `h1`, settle to `d2` for `h2`, then recover.
+   *  (Two duck() calls cannot do this: the second, shallower one is ignored while the first holds.) */
+  duckSeq(now: number, d1: number, h1: number, d2: number, h2: number, release: number): void {
+    if (now < this.duckUntil && Math.min(d1, d2) > this.duckDepth) return;
+    this.duckDepth = Math.max(d1, d2);
+    this.duckUntil = now + h1 + h2;
+    for (const g of [this.duckDry, this.duckWet]) {
+      const p = g.gain;
+      p.cancelScheduledValues(now);
+      p.setValueAtTime(p.value, now);
+      p.setTargetAtTime(d1, now, 0.012);
+      p.setTargetAtTime(d2, now + h1, 0.04);
+      p.setTargetAtTime(1, now + h1 + h2, release);
+    }
+  }
+
+  /** Probe: the duck gain right now (1 = open). */
+  get ducked(): number {
+    return this.duckDry.gain.value;
   }
 
   disconnect(): void {
@@ -75,16 +97,19 @@ export class Graph {
     this.master.gain.value = MASTER_TRIM;
     this.mute = ctx.createGain();
     this.limiter = ctx.createDynamicsCompressor();
-    // Gentle: the mix is levelled by design; this only catches stacked peaks.
-    this.limiter.threshold.value = -9;
-    this.limiter.knee.value = 8;
-    this.limiter.ratio.value = 6;
-    this.limiter.attack.value = 0.004;
+    // The mix is levelled by design (a cruise peaks near -12 dBFS); this is a fast, hard limiter
+    // for stacked rewards only. Tuned against the stress probe (probe.ts): threshold -10, ratio 20
+    // and a 1 ms attack hold that mix's peak near -5 dBFS (the old gentle -9, 6:1, 4 ms let it
+    // reach -1), while a cruise does not move.
+    this.limiter.threshold.value = -10;
+    this.limiter.knee.value = 4;
+    this.limiter.ratio.value = 20;
+    this.limiter.attack.value = 0.001;
     this.limiter.release.value = 0.22;
-    // Browsers add makeup gain inside the compressor; this trim keeps the busiest moments of a
-    // run peaking below -1.5 dBFS.
+    // Browsers add makeup gain inside the compressor (more with a harder ratio); this trim cancels
+    // it, so the cruise mix sits where it did (about -25 dBFS RMS, the ambience alone -33).
     this.ceiling = ctx.createGain();
-    this.ceiling.gain.value = 0.84;
+    this.ceiling.gain.value = 0.65;
     this.master.connect(this.mute).connect(this.limiter).connect(this.ceiling).connect(ctx.destination);
 
     this.reverb = ctx.createConvolver();
@@ -108,8 +133,10 @@ export class Graph {
     this.master.gain.setTargetAtTime(MASTER_TRIM * curve(v), now, 0.05);
   }
 
-  setMuted(muted: boolean, now: number): void {
-    this.mute.gain.setTargetAtTime(muted ? 0 : 1, now, 0.012);
+  /** `tau`: the ramp's time constant. A context the mute parked opens faster (it rendered nothing
+   *  meanwhile), so a sound asked for as it resumes keeps its attack. */
+  setMuted(muted: boolean, now: number, tau = 0.012): void {
+    this.mute.gain.setTargetAtTime(muted ? 0 : 1, now, tau);
   }
 
   disconnect(): void {

@@ -2,15 +2,27 @@ import { AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, 
 import { Course } from '../sim/course';
 import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
+import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
 import { ghostRiderGeometry } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Trail } from './trails';
 import { GHOST_PATH } from '../ui/icons';
+import { fmt, NBSP } from '../ui/fmt';
+import { graveCopy, type GravePlace } from './graves';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
 // floating name pill, and a lantern marker planted where they crashed (ART.md section 6).
+//
+// The fun pass: the tags react to the race. The duel ghost's ring beats at 1.2 Hz (Feel.duelId,
+// contract C11) and the start-line call pings it; a ghost that stomps a perfect landing near you rings
+// its tag once, and one that lands a trick swaps its name for the trick ('Backflip') for 0.9 s (never
+// the rival's under your own fresh stamp); a ghost riding past your wreck wears the rival's ring while
+// the HUD names it; a grudge on a three-run streak reads 'nemesis', and a settled one drops the word
+// for the rest of the run; and your best and a friend's line on the snow carry a tag with the distance
+// ('Your best · 1,240 m'). A graveyard's cairn on the bank carries its name over how many fell there
+// ('4 ghosts fell here').
 
 export const GHOST_COLORS: Record<GhostKind, string> = {
   pool: '#8FF3E4',
@@ -19,6 +31,34 @@ export const GHOST_COLORS: Record<GhostKind, string> = {
   you: '#FFE08A',
   grudge: '#FF5A7A',
 };
+
+/**
+ * The off-screen rival chip's text for the rival's gap as shown (contract C12): a positive whole number
+ * of metres, the arrow giving the side. The director holds that gap in signed whole metres (GapReadout),
+ * so this is the rival pill's number too (hud.ts pillGap).
+ */
+export function rivalChipText(gap: number): string {
+  return `${Math.max(1, Math.round(Math.abs(gap)))} m`;
+}
+
+/**
+ * Whether a ghost's tag wears the rival's ring (in its kind colour, placed before every other tag,
+ * never a dot, pulled in from the screen edge): the ghost the HUD's rival pill names (`rivalId`, -1 for
+ * none), or one riding past your wreck while its call runs (`wreckT` seconds left; the HUD's pill names
+ * it then), while the race's tags show (`named`: labels on, not the title reel) and it still rides.
+ */
+export function wearsRing(id: number, rivalId: number, wreckT: number, named: boolean, done: boolean): boolean {
+  return (id === rivalId || (wreckT > 0 && named)) && !done;
+}
+
+/**
+ * A ghost tag's placement priority (lowest first): a ringed tag riding past your wreck (`wreckT`
+ * seconds of its call left, the ghost the HUD's pill names now) before the rival's own ring, then the
+ * tag's own (`basePrio`).
+ */
+export function tagPrio(ringed: boolean, wreckT: number, basePrio: number): number {
+  return ringed ? (wreckT > 0 ? -2 : -1) : basePrio;
+}
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
@@ -51,6 +91,9 @@ interface Tag {
   dot: boolean;
   /** This frame's placement wants the dot. */
   wantDot: boolean;
+  /** Pulled in from the screen edge while its anchor is on screen, rather than hidden (a landmark on
+   *  the bank, which a phone's narrow frame puts right at its edge). */
+  pull?: boolean;
 }
 
 interface Item {
@@ -95,7 +138,41 @@ interface Item {
   sy: number;
   sr: number;
   sd: number;
+  /** The trick word swapped in for the name (created on the first swap), seconds left of the swap,
+   *  and the name pill's measured size to restore. */
+  tw: HTMLSpanElement | null;
+  trickT: number;
+  nameW: number;
+  nameH: number;
+  /** Seconds left of the start-line call's ring ping, and of a perfect landing's stomp ping. */
+  callT: number;
+  stompT: number;
+  /** Seconds left of a wreck pass's call (it rode past your wreck: the HUD's pill names it), while
+   *  which its tag counts as the rival's (ringed, placed first, never a dot). */
+  wreckT: number;
+  /** The tag's kind word ('grudge', 'nemesis', 'challenge', 'daily'), if it has one, and whether a
+   *  settled grudge has dropped it for the rest of the run. */
+  kw: HTMLSpanElement | null;
+  kwOff: boolean;
+  /** The ring classes as written (duel heartbeat, call ping, stomp ping). */
+  duelOn: boolean;
+  callOn: boolean;
+  stompOn: boolean;
 }
+
+/** How long a ghost's trick word replaces its name, and how often any tag may whisper one. */
+const TRICK_HOLD = 0.9;
+const TRICK_GAP = 1.5;
+/** A stamp this recent keeps the rival's tag as it is. */
+const STAMP_QUIET = 1.5;
+/** The start-line call's ring ping (the HUD's pill call lasts as long). */
+const CALL_HOLD = 2.6;
+/** A ghost's perfect landing near you rings its tag once (the world drops a ring of motes there). */
+const STOMP_HOLD = 0.55;
+/** The best and friend line tags show from this far (metres from the lens). */
+const LINE_RANGE = 120;
+/** A graveyard's tag shows from this far: a landmark, so further out than a single crash marker's. */
+const GRAVE_RANGE = 95;
 
 /** How long a pass beat keeps the ghost in it on screen (about as long as the HUD's pass toast). */
 const PASS_HOLD = 2.6;
@@ -382,7 +459,30 @@ function injectStyle(): void {
   .ghost-label.dot::after, .ghost-label.dot .tag { display: none; }
   .ghost-label.rival { box-shadow: 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
   .ghost-label.marker { background: #121933; color: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 2px 6px rgba(18, 25, 51, 0.3); font-weight: 700; }
-  .ghost-label .tag { font-size: 10px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.06em; }
+  .ghost-label .tag { font-size: 11px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ghost-label .tw { display: none; font-style: italic; }
+  .ghost-label.trick .nm, .ghost-label.trick .tag { display: none; }
+  .ghost-label.trick .tw { display: inline-block; animation: ghost-trick 0.22s cubic-bezier(0.2, 0.9, 0.2, 1.1) both; }
+  @keyframes ghost-trick { 0% { opacity: 0; transform: scale(0.55); } 60% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
+  @keyframes ghost-trick-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
+  .ghost-label::before { content: ''; position: absolute; inset: -5px; border-radius: 999px; border: 2px solid var(--c); opacity: 0; pointer-events: none; }
+  .ghost-label.duel::before { animation: ghost-ring 0.833s ease-out infinite; }
+  .ghost-label.call::before { animation: ghost-ring-call 0.866s ease-out 3; }
+  .ghost-label.stomp::before { animation: ghost-ring-stomp ${STOMP_HOLD}s cubic-bezier(0.2, 0.8, 0.2, 1) 1 both; }
+  .ghost-label.dot::before { display: none; }
+  @keyframes ghost-ring { 0% { opacity: 0.95; transform: scale(1); } 70% { opacity: 0; transform: scale(1.18, 1.55); } 100% { opacity: 0; transform: scale(1.18, 1.55); } }
+  @keyframes ghost-ring-call { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.32, 1.9); } }
+  @keyframes ghost-ring-stomp { 0% { opacity: 1; transform: scale(0.92); } 100% { opacity: 0; transform: scale(1.45, 2.2); } }
+  @keyframes ghost-ring-out { 0% { opacity: 1; } 100% { opacity: 0; } }
+  .ghost-label.line { background: #121933; color: var(--c); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--c), 0 2px 6px rgba(18, 25, 51, 0.35), 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
+  .ghost-label.grave { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 11px 5px; border-radius: 9px; text-align: center; }
+  .ghost-label.grave .gn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
+  .ghost-label.grave .gf { font-size: 11px; font-weight: 650; letter-spacing: 0.01em; color: #F5F3FF; }
+  @media (prefers-reduced-motion: reduce) {
+    .ghost-label.trick .tw { animation-name: ghost-trick-fade; animation-timing-function: linear; }
+    .ghost-label.duel::before, .ghost-label.call::before { animation: none; opacity: 1; transform: none; }
+    .ghost-label.stomp::before { animation: ghost-ring-out ${STOMP_HOLD}s linear 1 both; transform: none; }
+  }
   .ghost-rival { position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
   .ghost-rival .plate { display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 11px 0 7px; border-radius: 999px;
     background: #121933; color: #F5F3FF; transform-origin: 50% 50%;
@@ -545,7 +645,142 @@ export class GhostVisuals {
     }
   }
 
-  setField(list: Array<{ id: number; name: string; kind: GhostKind }>): void {
+  /** This frame's feel (the duel ghost, the best and friend lines), for update(). */
+  private feel: Feel = IDLE_FEEL;
+  /** Seconds since the last landing stamp (stomp or finale stamp), and since the last trick whisper. */
+  private sinceStamp = Infinity;
+  private sinceTrick = Infinity;
+  /** The ghost the HUD names (contract C11), as of the last update. */
+  private rivalNow = -1;
+  /** Tags for the gold-white band of your best and the mint band of a friend's line (contract C8,
+   *  priority 2 like the crash markers), created on first use. */
+  private bestTag: Tag | null = null;
+  private friendTag: Tag | null = null;
+  private bestTxt = '';
+  private friendTxt = '';
+  /** The side of the course each line tag stands on (-1 or 1): away from the rider, chosen while the
+   *  tag is hidden and kept while it shows (the rider rides the middle, where a centred tag hid). */
+  private bestSide = 1;
+  private friendSide = -1;
+  /** This run's graveyard tags over their cairns (contract C8: priority 2 like the crash markers, so
+   *  never a dot; one touching the HUD or another tag hides). Kept across setField. */
+  private graves: Array<{ tag: Tag; x: number; y: number; z: number }> = [];
+
+  /** This run's graveyards (World.setGraveyards forwards the placed cairns, sim metres, with the tag's
+   *  anchor height): a two-line tag at each, the place's name over '4 ghosts fell here', on every tier
+   *  (Low draws no cairn). An empty list clears them. */
+  setGraveyards(list: ReadonlyArray<GravePlace>): void {
+    for (const g of this.graves) g.tag.el.remove();
+    this.graves = list.map((g) => {
+      const copy = graveCopy(g.name, g.fell);
+      const l = document.createElement('div');
+      l.className = 'ghost-label marker grave';
+      l.style.setProperty('--c', GHOST_COLORS.pool);
+      const nm = document.createElement('span');
+      nm.className = 'gn';
+      nm.textContent = copy.name;
+      // A place's name is a proper noun; the count line is plain copy.
+      nm.translate = false;
+      const ln = document.createElement('span');
+      ln.className = 'gf';
+      ln.textContent = copy.line;
+      l.append(nm, ln);
+      this.layer.appendChild(l);
+      const tag = newTag(l, 2);
+      tag.pull = true;
+      return { tag, x: g.x, y: g.y, z: g.z };
+    });
+  }
+
+  /** This frame's named moments and feel: the start-line call pings its ghost's ring, a stamp quiets
+   *  the rival's tag, and a ghost's trick near you swaps its name for the trick. Never keeps the list. */
+  beats(list: readonly Beat[], feel: Feel): void {
+    this.feel = feel;
+    for (let i = 0; i < list.length; i++) {
+      const b = list[i];
+      if (b.type === 'stomp' || (b.type === 'finale' && b.stamp)) {
+        this.sinceStamp = 0;
+        // The rival's tag never changes under the stamp: a swap on it ends now.
+        const r = this.items.find((it) => it.id === this.rivalNow);
+        if (r && r.trickT > 0) this.endTrick(r);
+      } else if (b.type === 'raceCall') {
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (it) it.callT = CALL_HOLD;
+      } else if (b.type === 'passedBy' && b.wreck) {
+        // A ghost riding past your wreck: the HUD's pill names it, so its tag pings its ring and, for as
+        // long as the call runs, counts as the rival's (ringed, placed first, pulled in from the edge).
+        // The pill names only the latest passer, so one that rode past just before gives its ring and
+        // its ping up (in a pack an earlier passer kept the slot and the named ghost's tag never showed).
+        // It shows on the pill's own frame: a tag hidden until now skips the tenth of a second a tag
+        // settles (one not placed this frame still waits, contract C8).
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        for (const o of this.items) if (o !== it && o.wreckT > 0) o.callT = o.wreckT = 0;
+        if (it) {
+          it.callT = it.wreckT = CALL_HOLD;
+          it.tag.held = Math.max(it.tag.held, 0.1);
+        }
+      } else if (b.type === 'grudgeSettled') {
+        // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
+        // your wreck never contradicts the card.
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (it) this.dropWord(it);
+      } else if (b.type === 'ghostTrick') {
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (!it) continue;
+        // A perfect landing rings the tag once; a spin or a flip swaps the name for the trick. The
+        // rival's tag stays as it is under a fresh stamp.
+        if (it.id === this.rivalNow && this.sinceStamp < STAMP_QUIET) continue;
+        if (b.quality === 'perfect') it.stompT = STOMP_HOLD;
+        if (b.word) this.trick(it, b.word);
+      }
+    }
+  }
+
+  /** Swaps a ghost's name for its trick for 0.9 s: only while its full tag shows (never a dot), at
+   *  most one whisper per 1.5 s across the field, and never on the rival under a fresh stamp. */
+  private trick(it: Item, word: string): void {
+    const t = it.tag;
+    if (this.reel || !this.labels || this.sinceTrick < TRICK_GAP || it.trickT > 0) return;
+    if (!it.tagOn || t.a !== 1 || t.dot || !t.w) return;
+    if (it.id === this.rivalNow && this.sinceStamp < STAMP_QUIET) return;
+    if (!it.tw) {
+      it.tw = document.createElement('span');
+      it.tw.className = 'tw';
+      it.tw.translate = true;
+      t.el.appendChild(it.tw);
+    }
+    it.tw.textContent = word;
+    it.nameW = t.w;
+    it.nameH = t.h;
+    t.el.classList.add('trick');
+    // The pill's new size (one layout read per whisper, at most one each 1.5 s).
+    t.w = t.el.offsetWidth || t.w;
+    t.h = t.el.offsetHeight || t.h;
+    it.trickT = TRICK_HOLD;
+    this.sinceTrick = 0;
+  }
+
+  /** Drops the tag's kind word for the rest of the run (a settled grudge): a trick swap on it ends
+   *  first, and the pill is measured again on its next placement. */
+  private dropWord(it: Item): void {
+    if (!it.kw || it.kwOff) return;
+    this.endTrick(it);
+    it.kw.remove();
+    it.kwOff = true;
+    it.tag.w = 0;
+  }
+
+  private endTrick(it: Item): void {
+    it.trickT = 0;
+    if (!it.tag.el.classList.contains('trick')) return;
+    it.tag.el.classList.remove('trick');
+    if (it.nameW) {
+      it.tag.w = it.nameW;
+      it.tag.h = it.nameH;
+    }
+  }
+
+  setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
     this.clear();
     for (const g of list) {
       const color = new Color(GHOST_COLORS[g.kind]);
@@ -561,18 +796,23 @@ export class GhostVisuals {
       const label = document.createElement('div');
       label.className = 'ghost-label';
       label.style.setProperty('--c', GHOST_COLORS[g.kind]);
+      const nm = document.createElement('span');
+      nm.className = 'nm';
       // Contract C7: your own best is never named by your own name, which read as a rival wearing it.
-      if (g.kind === 'you') label.textContent = 'Your best';
+      if (g.kind === 'you') nm.textContent = 'Your best';
       else {
-        label.textContent = g.name;
+        nm.textContent = g.name;
         // Player names are proper nouns: keep auto-translate off them.
         label.translate = false;
       }
+      label.appendChild(nm);
+      let kw: HTMLSpanElement | null = null;
       if (g.kind !== 'pool' && g.kind !== 'you') {
-        const tag = document.createElement('span');
-        tag.className = 'tag';
-        tag.textContent = g.kind === 'grudge' ? 'grudge' : g.kind === 'friend' ? 'challenge' : 'daily';
-        label.appendChild(tag);
+        kw = document.createElement('span');
+        kw.className = 'tag';
+        // A grudge that has beaten you three runs running is a nemesis (rose, like any grudge).
+        kw.textContent = g.kind === 'grudge' ? (g.nemesis ? 'nemesis' : 'grudge') : g.kind === 'friend' ? 'challenge' : 'daily';
+        label.appendChild(kw);
       }
       this.layer.appendChild(label);
       this.root.add(mesh, trail.mesh);
@@ -607,6 +847,18 @@ export class GhostVisuals {
         sy: 0,
         sr: 0,
         sd: 0,
+        tw: null,
+        trickT: 0,
+        nameW: 0,
+        nameH: 0,
+        callT: 0,
+        stompT: 0,
+        wreckT: 0,
+        kw,
+        kwOff: false,
+        duelOn: false,
+        callOn: false,
+        stompOn: false,
       });
     }
     this.buildFx(list.length);
@@ -702,9 +954,20 @@ export class GhostVisuals {
       it.side = 0;
       it.passT = 0;
       it.dim = 1;
+      this.endTrick(it);
+      it.callT = 0;
+      it.stompT = 0;
+      it.wreckT = 0;
+      if (it.kw && it.kwOff) {
+        it.tag.el.insertBefore(it.kw, it.tw);
+        it.kwOff = false;
+        it.tag.w = 0;
+      }
     }
     this.rivalOff = 0;
     this.runT = 0;
+    this.sinceStamp = Infinity;
+    this.sinceTrick = Infinity;
   }
 
   update(
@@ -736,11 +999,38 @@ export class GhostVisuals {
     // The wisp fades out under the top HUD row (about 90 px).
     const top = this.wispMat.uniforms.uTop.value as Vector2;
     top.set(1 - (2 * 130) / h, 1 - (2 * 70) / h);
+    this.rivalNow = rivalId;
+    this.sinceStamp += dt;
+    this.sinceTrick += dt;
+    const duelId = this.labels && !this.reel ? this.feel.duelId : null;
     for (let i = 0; i < this.items.length; i++) {
       const it = this.items[i];
       const p = poses.get(it.id);
       it.tag.ok = false;
       if (it.markTag) it.markTag.ok = false;
+      // The tag's race state: a trick word running out, the call's ring ping, the duel's heartbeat.
+      if (it.trickT > 0) {
+        it.trickT -= dt;
+        if (it.trickT <= 0) this.endTrick(it);
+      }
+      it.callT = Math.max(0, it.callT - dt);
+      const call = it.callT > 0 && this.labels && !this.reel;
+      if (call !== it.callOn) {
+        it.callOn = call;
+        it.tag.el.classList.toggle('call', call);
+      }
+      it.wreckT = Math.max(0, it.wreckT - dt);
+      it.stompT = Math.max(0, it.stompT - dt);
+      const stomp = it.stompT > 0 && !call && this.labels && !this.reel;
+      if (stomp !== it.stompOn) {
+        it.stompOn = stomp;
+        it.tag.el.classList.toggle('stomp', stomp);
+      }
+      const duel = duelId === it.id && !!p && !p.done;
+      if (duel !== it.duelOn) {
+        it.duelOn = duel;
+        it.tag.el.classList.toggle('duel', duel);
+      }
       if (!p) {
         it.shown = 0;
         it.mesh.visible = false;
@@ -784,7 +1074,8 @@ export class GhostVisuals {
       }
       it.passT = Math.max(0, it.passT - dt);
       const beat = smooth01(it.passT / 0.4);
-      const isRival = rivalId === it.id && !p.done;
+      // (A ghost riding past your wreck counts as the rival while its wreck call runs: the pill names it.)
+      const isRival = wearsRing(it.id, rivalId, it.wreckT, this.labels && !this.reel, p.done);
       // By size: from about 30% of the screen height (sooner when the frame edge cuts it) a ghost's
       // dissolve climbs from the hips toward its shoulders, so none outweighs the rider and none
       // hollows into an outline; from about 40% it goes evenly, gone by about 60% (riding beside the
@@ -886,12 +1177,13 @@ export class GhostVisuals {
 
       // A ghost inside any of the fades shows no tag at all (with a little hysteresis). Contract C11:
       // the ghost the HUD's rival pill names keeps its tag whenever it is on screen and not sitting on
-      // you or at the lens, ringed in its kind colour and placed before every other tag.
+      // you or at the lens, ringed in its kind colour and placed before every other tag. The one riding
+      // past your wreck goes before even the HUD's rival: the pill names it now.
       if (isRival !== it.ringed) {
         it.ringed = isRival;
         it.tag.el.classList.toggle('rival', isRival);
-        it.tag.prio = isRival ? -1 : it.basePrio;
       }
+      it.tag.prio = tagPrio(isRival, it.wreckT, it.basePrio);
       // (The title reel names the ghost racing at the hero's shoulder, about the hero's size, so its
       // size-based dissolve does not hide the tag there.)
       it.tagOn = this.labels && !p.done && (isRival ? core > (it.tagOn ? 0.2 : 0.3) : vis * (this.reel ? 1 : body) > (it.tagOn ? 0.9 : 0.97));
@@ -907,6 +1199,13 @@ export class GhostVisuals {
         this.project(it.markTag, tmpP, camera, w, h, MARK_RANGE);
       }
     }
+    this.lineTags(camera, w, h, player);
+    // Graveyard tags keep to the race, like the crash markers.
+    const graves = this.labels && !this.reel;
+    for (const g of this.graves) {
+      g.tag.ok = false;
+      if (graves) this.project(g.tag, tmpP.set(g.x, g.y, -g.z), camera, w, h, GRAVE_RANGE);
+    }
     this.dimOverlaps(dt, riderDepth);
     if (this.wisp) {
       const g = this.wisp.geometry;
@@ -921,6 +1220,69 @@ export class GhostVisuals {
     this.declutter(occluders, h);
     this.animateTags(dt);
     this.placeRival(rival ?? null, poses, camera, w, h, dt, occluders);
+  }
+
+  /** The tags over the best and friend bands on the snow: 'Your best · 1,240 m' in gold-white and
+   *  'Mila · 2,340 m' in mint, standing at the band on the side of the course away from the rider
+   *  (centred, it sat behind the rider and hid). Your best's tag goes
+   *  once its ghost has crashed there (its lantern marker says it from then on). */
+  private lineTags(camera: PerspectiveCamera, w: number, h: number, player: Vector3): void {
+    const f = this.feel;
+    const on = this.labels && !this.reel;
+    const best = on ? f.bestLine : null;
+    if (this.bestTag) this.bestTag.ok = false;
+    if (best && !this.items.some((it) => it.kind === 'you' && it.marker)) {
+      const txt = `Your best${NBSP}·${NBSP}${fmt(best.distance)}${NBSP}m`;
+      const t = (this.bestTag ??= this.makeLineTag(GHOST_COLORS.you));
+      if (txt !== this.bestTxt) {
+        this.bestTxt = txt;
+        t.el.textContent = txt;
+        t.w = 0;
+      }
+      if (t.a === 0) this.bestSide = this.awaySide(best.z, player);
+      this.projectLine(t, best.z, this.bestSide, camera, w, h);
+    }
+    const friend = on ? f.friendLine : null;
+    if (this.friendTag) this.friendTag.ok = false;
+    if (friend) {
+      const txt = `${friend.name}${NBSP}·${NBSP}${fmt(friend.distance)}${NBSP}m`;
+      const t = (this.friendTag ??= this.makeLineTag(GHOST_COLORS.friend));
+      if (txt !== this.friendTxt) {
+        this.friendTxt = txt;
+        t.el.textContent = txt;
+        t.w = 0;
+      }
+      if (t.a === 0) this.friendSide = this.awaySide(friend.z, player);
+      this.projectLine(t, friend.z, this.friendSide, camera, w, h);
+    }
+  }
+
+  private makeLineTag(color: string): Tag {
+    const l = document.createElement('div');
+    l.className = 'ghost-label line';
+    l.style.setProperty('--c', color);
+    // A friend's name is a proper noun; the copy around it is plain.
+    l.translate = false;
+    this.layer.appendChild(l);
+    const t = newTag(l, 2);
+    // (A band across the snow: on a phone its tag's spot is often at the frame's edge.)
+    t.pull = true;
+    return t;
+  }
+
+  /** The side of the course at a band away from the rider (player is three.js: sim z is -z). */
+  private awaySide(z: number, player: Vector3): number {
+    const c = this.course;
+    const pz = Math.min(-player.z, z);
+    return player.x > c.centerX(pz) ? -1 : 1;
+  }
+
+  /** A line tag over the band at sim z, standing on one side of the course, halfway to its edge. */
+  private projectLine(t: Tag, z: number, side: number, camera: PerspectiveCamera, w: number, h: number): void {
+    const c = this.course;
+    const x = c.centerX(z) + side * c.halfWidth(z) * 0.45;
+    tmpP.set(x, c.ground(x, z) + 1.7, -z);
+    this.project(t, tmpP, camera, w, h, LINE_RANGE);
   }
 
   /** Where two ghosts overlap on screen, the one further from the lens dims to under half (body, rim,
@@ -997,6 +1359,23 @@ export class GhostVisuals {
     this.safe.l = parseFloat(cs.paddingLeft) || 0;
   }
 
+  /** The chip's gap text and its within-3 m pulse for the rival's shown gap (written only on change). */
+  private rivalText(gap: number): void {
+    const close = Math.abs(gap) < 3;
+    if (close !== this.rivalClose) {
+      this.rivalClose = close;
+      this.rivalEl.classList.toggle('close', close);
+    }
+    const txt = rivalChipText(gap);
+    if (txt !== this.rivalTxt) {
+      // The chip's width holds while the digit count does (tabular figures), so it is measured
+      // again only when that changes (and once per viewport).
+      if (txt.length !== this.rivalTxt.length) this.rivalW = 0;
+      this.rivalTxt = txt;
+      this.rivalGap.textContent = txt;
+    }
+  }
+
   private placeRival(
     rival: { id: number; gap: number } | null,
     poses: Map<number, GhostPose | null>,
@@ -1038,20 +1417,7 @@ export class GhostVisuals {
           this.rivalId = it.id;
           this.rivalEl.style.setProperty('--c', GHOST_COLORS[it.kind]);
         }
-        const close = Math.abs(rival!.gap) < 3;
-        if (close !== this.rivalClose) {
-          this.rivalClose = close;
-          this.rivalEl.classList.toggle('close', close);
-        }
-        // Contract C12: the gap as a positive whole number of metres (the arrow gives the side).
-        const txt = `${Math.max(1, Math.round(Math.abs(rival!.gap)))} m`;
-        if (txt !== this.rivalTxt) {
-          // The chip's width holds while the digit count does (tabular figures), so it is measured
-          // again only when that changes (and once per viewport).
-          if (txt.length !== this.rivalTxt.length) this.rivalW = 0;
-          this.rivalTxt = txt;
-          this.rivalGap.textContent = txt;
-        }
+        this.rivalText(rival!.gap);
         if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
         // Room for the arrowhead outside the chip, on whichever side it points.
         const hw = this.rivalW / 2 + 22;
@@ -1085,6 +1451,13 @@ export class GhostVisuals {
         // the safe area and the HUD moved it).
         this.rivalAng = Math.atan2(h * 0.5 + sy - y, w * 0.5 + sx - x);
       }
+    }
+    // A chip fading out (its ghost back in frame, or further back than the marker reaches) still names
+    // that ghost: its number keeps following the rival pill's (C12), not the one it had when it went
+    // ('14 m' against the pill's '15 m' as the rival dropped past 15 m behind).
+    if (!off && rival && rival.id === this.rivalId && this.rivalA > 0) {
+      this.rivalText(rival.gap);
+      if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
     }
     // Only a rival that stays out of frame for a moment earns the marker (no flicker at the edge);
     // once earned it comes in fast, so it is never caught half transparent.
@@ -1387,6 +1760,15 @@ export class GhostVisuals {
       if (it.tag.ok) (it.tag.prio <= 0 && !this.reel ? cands : pool).push(it.tag);
       if (it.markTag && it.markTag.ok) cands.push(it.markTag);
     }
+    for (const t of [this.bestTag, this.friendTag]) {
+      if (!t) continue;
+      t.want = false;
+      if (t.ok) cands.push(t);
+    }
+    for (const g of this.graves) {
+      g.tag.want = false;
+      if (g.tag.ok) cands.push(g.tag);
+    }
     pool.sort(this.byPlayer);
     for (let i = 0; i < pool.length && i < (this.reel ? 1 : POOL_TAGS); i++) cands.push(pool[i]);
     cands.sort(this.byPrio);
@@ -1429,10 +1811,10 @@ export class GhostVisuals {
       // the rider (up to about half its width) rather than up over the rider's head.
       for (let pass = 0; pass < 2 && !(canDot && busy); pass++) {
         let x = t.x;
-        // The rival's tag (contract C11), and the title's one tag, are pulled in from the screen edge
-        // rather than hidden while the ghost is on screen: a ghost racing beside you on a phone sits
-        // right at the edge.
-        if ((t.prio < 0 || this.reel) && t.x > 0 && t.x < W) x = Math.max(8 + safe.l + tw / 2, Math.min(W - 8 - safe.r - tw / 2, x));
+        // The rival's tag (contract C11), the title's one tag, a graveyard's and a line's are pulled in
+        // from the screen edge rather than hidden while what they name is on screen: a ghost racing
+        // beside you on a phone sits right at the edge, and so do a cairn on the bank and a band's tag.
+        if ((t.prio < 0 || this.reel || t.pull) && t.x > 0 && t.x < W) x = Math.max(8 + safe.l + tw / 2, Math.min(W - 8 - safe.r - tw / 2, x));
         if (pass === 1) {
           if (!(y0 < rr.y1 && y > rr.y0 && rr.x1 > rr.x0)) break;
           const slide = x >= (rr.x0 + rr.x1) / 2 ? rr.x1 + 3 - (x - tw / 2) : rr.x0 - 3 - (x + tw / 2);
@@ -1510,6 +1892,9 @@ export class GhostVisuals {
       this.animate(it.tag, dt);
       if (it.markTag) this.animate(it.markTag, dt);
     }
+    if (this.bestTag) this.animate(this.bestTag, dt);
+    if (this.friendTag) this.animate(this.friendTag, dt);
+    for (const g of this.graves) this.animate(g.tag, dt);
   }
 
   private animate(t: Tag, dt: number): void {

@@ -19,6 +19,16 @@ stylized lighting model, so the whole frame looks like a single hand-painted wor
 
 Hazards are never warm and never mint. A danger reads as a dark, hard silhouette.
 
+Skill signals live inside these roles rather than adding new ones:
+
+| Signal | Colour | Role it borrows |
+| --- | --- | --- |
+| Drift charge, tiers 1 to 3 | pale coral `#FFC2A8`, coral `#FF8A5C`, vermillion `#FF4D2E` | You: the charge heats inside your own colour (it used to borrow the hazards' ice blue and the grudge's rose) |
+| In the flow: rider rim and scarf glow | `#FF4D2E` | You |
+| Your best's band on the snow | `#FFE08A` | Gold-white |
+| A friend's band on the snow | `#8FF3E4` | Spectral mint |
+| The clock running out: the combo timer's last quarter; on a big stake the fuse (the timer fill, a throb on the multiplier chip, the stake figure) | amber `#FFB040` | None: amber means time, never a reward, and it never fills a gift or a payoff |
+
 ## 2. Lighting mood
 
 - One low key light (sun or moon) at about 12 degrees elevation, ahead-left of the camera. This gives
@@ -61,6 +71,14 @@ rounded boxes with a big bow.
   a perfect landing leaves a burst crater of displaced snow: a feathered cream-gold lip of raised
   powder, lit on the sun side and periwinkle on the other, a shaded bowl and 12 streaks, with no
   outer stroke. Ghost trails are faint luminous mint lines that show the line they took.
+- **One painted line**: your best run's line is a thin gold-white band on the snow (a friend's is
+  mint), brighter as you close on it, with a "Best in N m" countdown and a flare where it ends and
+  new ground begins. It is the one painted mark allowed, because it is a line to chase rather than
+  decoration (DECISIONS 84).
+- **A near miss shakes what you shaved**: snow sifts off a tree's boughs, or slate grit (pale shards
+  on ice) kicks off a rock's foot. The burst sits 1.2 m ahead of the sled on the shaved side,
+  blooms away from the rider so it never buries the hero, and is pulled in until it is on screen. A
+  Whisker throws the full amount, an ordinary near miss about two thirds.
 - Kickers read as built wedges: a packed, corduroyed face, darker flanks, a shaded takeoff wall, a
   contact shadow and a snow-capped board for a lip (pale ice on icy mountains).
 - The bottom edge of the frame darkens toward the mood's periwinkle, never grey, so the foreground
@@ -81,6 +99,8 @@ rounded boxes with a big bow.
   with arms up in a V on a perfect landing.
 - The wooden sled has curled vermillion runners. On the round sleds (the Whirl Saucer and the Tea
   Tray) the rider sits cross-legged and leans forward over the rim.
+- In the flow the rider's rim and scarf glow vermillion, building with the shown flow and full at
+  3.5; a snuff puts the glow out with a short puff, so the state is visible without reading the HUD.
 - After a crash the rider sits up dazed beside its upside-down sled, both in the results shot, with
   its head turned three-quarters to the lens and three gold-white stars circling the beanie.
 
@@ -102,6 +122,9 @@ rounded boxes with a big bow.
   "Your best". Your grudge ghost is rose. Pool and friend ghosts are mint.
 - Where a ghost crashed, a little lantern-headed marker stays planted in the snow with its name. At
   night it glows like a grave candle.
+- Where three or more pool ghosts fell within 8 m, a cairn stands on the bank, never in the line,
+  with a named tag over it ("Widow's Bend", "4 ghosts fell here"). Medium and High only: Low draws
+  no cairn.
 
 ## 7. Moods (each has its own palette)
 
@@ -133,6 +156,13 @@ Biome bases for Clear Skies:
 - Impact shake scales with landing impact. A perfect landing gets a short FOV kick and a thin white
   rim flash on the rider, gone in about 0.15 s.
 - Portrait framing raises the camera and widens the vertical FOV, so the corridor ahead is always visible.
+- Time bends only at the edges, never in the sim: a stomp's hitstop grows with the streak (8 to 11
+  frames), a tier-3 drift release freezes a little longer than a stomp, a Whisker gets 0.05 s, and a
+  crash eases into a slow curve. Reduced motion turns all of it off and keeps every beat.
+- After the crash's held frame the camera watches the pack ride past the wreck: the orbit stops
+  drifting and turns toward the passing ghost with the wreck kept in the middle of the frame, or
+  cuts to a still shot beside the line the ghost will cross, so the race you just left goes by in
+  view before the results.
 
 ## 9. Post-processing
 
@@ -159,6 +189,11 @@ Biome bases for Clear Skies:
   size class, and nothing in the HUD is under 11 px on a phone. A race gap is always a number and a
   word ("6 m ahead", "6 m behind"); a place change is an arrow and a count.
 - Sparks are soft round motes that stay low over the snow, never four-point stars in open air.
+- One banner at a time. A perfect landing's stamp heads its beat; a pass, a duel result or a
+  mission waits under it and plays after, and minor words go to the callout line under the combo.
+  A duel's result owns the rival pill for 1.5 s.
+- A bank's chip slams and its figure rolls up, longer for a bigger tier (350, 600 or 900 ms), and a
+  lost combo of 300 or more cracks and falls.
 
 ## 11. What makes a frame screenshot-worthy
 

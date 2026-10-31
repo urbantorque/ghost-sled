@@ -1,6 +1,7 @@
-import type { HintKind } from './contract';
+import type { HintKind, ScreenRect } from './contract';
 import type { InputMode } from '../game/input';
 import { h, kbd, kbdIcon } from './dom';
+import { pushBox } from './hud';
 import { icon } from './icons';
 import { play } from './motion';
 
@@ -15,9 +16,22 @@ const TEXT: Record<HintKind, string> = {
   crouch: 'Hold to crouch',
   drift: 'Hold while turning to drift',
   pop: 'Release to pop',
-  stomp: 'Tap just before landing',
+  // The landing ring closes as you come down (the stomp ticks count it in by ear): the words name what
+  // you see, so they hold with the sound off.
+  stomp: 'Tap as the ring closes',
   draft: 'Tuck in behind a ghost',
+  // Taught as players reach them (teach-moves): a spin is steering in the air, so it shows the steer
+  // keys (the mouse sweep, the left zone); a flip and the boosted pop are holds, so they show the hold.
+  spin: 'Steer in the air to spin',
+  flip: 'Press and hold in the air to flip',
+  boostPop: 'Hold, then let go at the lip',
 };
+
+/** A hint on screen for the occluder cache: the boxes to keep clear, and the node that animates them. */
+interface HintOcc {
+  root: HTMLElement;
+  els: Element[];
+}
 
 export class Hint {
   readonly el: HTMLElement;
@@ -26,7 +40,9 @@ export class Hint {
   private key = '';
   private zones: HTMLElement | null = null;
   private learned = false;
-  private occ: Element[] = [];
+  /** The live hint, and the one still fading out after a swap (it is on screen until it is gone). */
+  private occ: HintOcc | null = null;
+  private leaving: HintOcc[] = [];
 
   constructor(parent: HTMLElement) {
     this.el = h('div', 'gs-hintlayer');
@@ -35,9 +51,16 @@ export class Hint {
     parent.append(this.el);
   }
 
-  /** The visible hint's pill, or the zone glyphs and labels, for the occluder cache. */
-  occluders(): readonly Element[] {
-    return this.occ;
+  /**
+   * Pushes the boxes of the hint on screen into the occluder pool from index n; returns the new count.
+   * A hint entering is measured where it lands, not where its entry animation has it this frame (it
+   * rises 10 px into place), so the ghost edge chip is clear of the new hint's keys from the frame of
+   * a swap; the hint fading out after a swap counts until it has gone. Read inside the occluder pass.
+   */
+  measure(out: ScreenRect[], n: number): number {
+    for (const o of this.leaving) n = pushBoxes(out, n, o, 0);
+    if (this.occ) n = pushBoxes(out, n, this.occ, entryOffset(this.occ.root));
+    return n;
   }
 
   set(kind: HintKind | null, mode: InputMode, learned = this.learned): void {
@@ -51,13 +74,20 @@ export class Hint {
     }
     this.key = key;
     const old = Array.from(this.el.children) as HTMLElement[];
+    if (this.occ) this.leaving.push(this.occ);
     for (const o of old) {
       const a = play(o, [{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: 'ease-in', fill: 'forwards' });
-      if (a) a.onfinish = () => o.remove();
-      else o.remove();
+      const gone = () => {
+        o.remove();
+        const n = this.leaving.length;
+        this.leaving = this.leaving.filter((x) => x.root !== o);
+        if (this.leaving.length !== n) this.onLayout();
+      };
+      if (a) a.onfinish = gone;
+      else gone();
     }
     this.zones = null;
-    this.occ = [];
+    this.occ = null;
     if (!kind) {
       this.onLayout();
       return;
@@ -66,15 +96,41 @@ export class Hint {
     if (mode === 'touch' && kind !== 'draft') {
       node = touchZones(kind, learned);
       this.zones = node;
-      this.occ = Array.from(node.querySelectorAll('.gs-zone-mark, .gs-zone-txt'));
+      this.occ = { root: node, els: Array.from(node.querySelectorAll('.gs-zone-mark, .gs-zone-txt')) };
     } else {
       node = pill(kind, mode);
-      this.occ = [node];
+      this.occ = { root: node, els: [node] };
     }
     this.el.append(node);
-    play(node, [{ opacity: 0, transform: 'translateY(10px)' }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
+    play(node, [{ opacity: 0, transform: `translateY(${ENTRY_RISE}px)` }, { opacity: 1, transform: 'none' }], { duration: 240, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' });
     this.onLayout();
   }
+}
+
+/** A new hint rises this far into place as it enters. */
+const ENTRY_RISE = 10;
+
+/**
+ * How far the entry animation still has a hint below where it lands (px, from its computed
+ * transform): its rect minus this is its final rect. Zero once it has landed.
+ */
+function entryOffset(root: HTMLElement): number {
+  if (root.getAnimations().length === 0) return 0;
+  const t = getComputedStyle(root).transform;
+  if (!t || t === 'none') return 0;
+  const m = /^matrix\(([^)]+)\)$/.exec(t);
+  const ty = m ? Number(m[1].split(',')[5]) : 0;
+  return Number.isFinite(ty) ? ty : 0;
+}
+
+function pushBoxes(out: ScreenRect[], n: number, o: HintOcc, dy: number): number {
+  for (const el of o.els) {
+    if (!el.isConnected) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) continue;
+    n = pushBox(out, n, r.left, r.top - dy, r.right, r.bottom - dy);
+  }
+  return n;
 }
 
 function pill(kind: HintKind, mode: InputMode): HTMLElement {
@@ -87,9 +143,9 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
   if (kind === 'draft') {
     glyphs.append(icon('ghost', 'gs-hint-ghost'));
   } else if (mode === 'mouse') {
-    if (kind === 'steer') {
+    if (kind === 'steer' || kind === 'spin') {
       glyphs.append(icon('arrowL', 'gs-hint-arrow'), icon('mouse', 'gs-hint-mouse'), icon('arrowR', 'gs-hint-arrow'));
-      text = 'Move to steer';
+      text = kind === 'spin' ? 'Move in the air to spin' : 'Move to steer';
     } else if (kind === 'drift') {
       glyphs.append(icon('mouseHold', 'gs-hint-mouse'), plus(), icon('arrowL', 'gs-hint-arrow'), icon('arrowR', 'gs-hint-arrow'));
     } else {
@@ -97,7 +153,7 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
       if (kind === 'crouch') text = 'Hold button to crouch';
     }
   } else {
-    if (kind === 'steer') glyphs.append(...steerKeys());
+    if (kind === 'steer' || kind === 'spin') glyphs.append(...steerKeys());
     else if (kind === 'drift') glyphs.append(space(), plus(), kbd('A'), kbd('D'));
     else glyphs.append(space());
   }
@@ -111,8 +167,19 @@ const HOLD_TEXT: Record<HintKind, string> = {
   crouch: 'Hold to crouch',
   drift: 'Hold to drift',
   pop: 'Release to pop',
-  stomp: 'Tap before landing',
+  stomp: 'Tap as the ring closes',
   draft: 'Hold to drift',
+  // A spin is taught on the left (drag) zone; the hold zone keeps its plain air verb.
+  spin: 'Hold to flip',
+  flip: 'Hold in the air to flip',
+  boostPop: 'Hold, then let go at the lip',
+};
+
+/** The left (drag) zone's label when a hint is about steering. */
+const DRAG_TEXT: Partial<Record<HintKind, string>> = {
+  steer: 'Drag to steer',
+  drift: 'Drag to steer',
+  spin: 'Drag in the air to spin',
 };
 
 /**
@@ -124,10 +191,11 @@ const HOLD_TEXT: Record<HintKind, string> = {
  * this hint: on the left for steering, on the right for every hold, tap or release.
  */
 function touchZones(kind: HintKind, learned: boolean): HTMLElement {
-  const steerOn = kind === 'steer' || kind === 'drift';
-  const holdOn = kind !== 'steer';
-  const ringLeft = kind === 'steer';
-  const left = zone('l', 'drag', steerOn ? 'Drag to steer' : 'Steer', steerOn, ringLeft, !learned && kind === 'steer');
+  const drag = DRAG_TEXT[kind];
+  const steerOn = drag !== undefined;
+  const holdOn = kind !== 'steer' && kind !== 'spin';
+  const ringLeft = kind === 'steer' || kind === 'spin';
+  const left = zone('l', 'drag', drag ?? 'Steer', steerOn, ringLeft, !learned && kind === 'steer');
   const right = zone('r', 'hold', HOLD_TEXT[kind], holdOn, !ringLeft, !learned);
   return h('div', 'gs-zones', left, right);
 }

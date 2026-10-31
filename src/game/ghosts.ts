@@ -1,4 +1,5 @@
 import type { GhostKind } from '../ui/contract';
+import type { GhostRole } from './beats';
 import {
   F_AIRPITCH,
   F_AIRYAW,
@@ -29,6 +30,10 @@ export interface GhostEntry {
   kind: GhostKind;
   score: number;
   record: string;
+  /** The field's role for this ghost (field.ts pickField); absent for an unplanned pick. */
+  role?: GhostRole;
+  /** A grudge promoted to nemesis (three wins in a row). */
+  nemesis?: boolean;
 }
 
 export interface GhostTrack {
@@ -152,6 +157,14 @@ export class GhostManager {
 
   get allReady(): boolean {
     return this.tracks.every((t) => t.ready);
+  }
+
+  /** The race field with you in it: every ghost ready or still loading (a replay that failed or came
+   *  back empty is out), plus you. standings() counts only the ready ones. */
+  get fieldSize(): number {
+    let n = 1;
+    for (const t of this.tracks) if (t.ready || t.frames === null) n++;
+    return n;
   }
 
   /** Runs the bot in its own short-lived worker so race replays are never queued behind it. */

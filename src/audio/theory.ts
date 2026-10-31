@@ -37,9 +37,26 @@ export function ladderBase(k: Key): number {
 
 /** MIDI note of pentatonic ladder step i (negative steps go below the base). */
 export function ladder(k: Key, i: number): number {
+  return ladderAt(k, ladderBase(k), i);
+}
+
+/** Pentatonic step i of the key, counted from `base` (a tonic in any octave). */
+export function ladderAt(k: Key, base: number, i: number): number {
   const n = k.penta.length;
-  const oct = Math.floor(i / n);
-  return ladderBase(k) + k.penta[i - oct * n] + 12 * oct;
+  const step = Math.round(i);
+  const oct = Math.floor(step / n);
+  return base + k.penta[step - oct * n] + 12 * oct;
+}
+
+/** The ladder step of MIDI note m (the nearest step at or below it when m is off the scale). */
+export function ladderIndexOf(k: Key, m: number): number {
+  const n = k.penta.length;
+  const rel = Math.round(m) - ladderBase(k);
+  const oct = Math.floor(rel / 12);
+  const pc = rel - 12 * oct;
+  let j = 0;
+  for (let x = 0; x < n; x++) if (k.penta[x] <= pc) j = x;
+  return oct * n + j;
 }
 
 /** Root of the bright reward chord, placed at or above `lo`. */
@@ -247,6 +264,43 @@ export const STYLES: Record<Mood, Style> = {
     verb: 0.9,
   },
 };
+
+/**
+ * Clear Skies songs: each mountain has its own A and B sections (4 bars each) in the D major of
+ * Mood.None. A deck plays A A B B, so the harmony turns over every two loops inside one deck: no
+ * deck change, no crossfade, no key change. Every chord is diatonic to D major (Alpine keeps its
+ * lydian II), so the pentatonic rewards sit on all of them. Alpine's A is the original loop.
+ */
+const I9: Chord = { root: 0, tones: [0, 4, 7, 11, 14], bars: 1 };
+const Iadd9: Chord = { root: 0, tones: [0, 4, 7, 14], bars: 1 };
+const II: Chord = { root: 2, tones: [0, 4, 7, 14], bars: 1 };
+const ii7: Chord = { root: 2, tones: [0, 3, 7, 10], bars: 1 };
+const ii9: Chord = { root: 2, tones: [0, 3, 7, 10, 14], bars: 1 };
+const iii7: Chord = { root: 4, tones: [0, 3, 7, 10], bars: 1 };
+const IV9: Chord = { root: 5, tones: [0, 4, 7, 11, 14], bars: 1 };
+const IV7: Chord = { root: 5, tones: [0, 4, 7, 11], bars: 1 };
+const V: Chord = { root: 7, tones: [0, 4, 7, 14], bars: 1 };
+const Vsus: Chord = { root: 7, tones: [0, 5, 7, 14], bars: 1 };
+const vi7: Chord = { root: 9, tones: [0, 3, 7, 10], bars: 1 };
+const vi9: Chord = { root: 9, tones: [0, 3, 7, 10, 14], bars: 1 };
+
+export const SONGS: Record<BiomeId, { a: readonly Chord[]; b: readonly Chord[] }> = {
+  // Pinecrest: the lydian lift, then a vi IV I V chorus that opens up.
+  alpine: { a: [I9, II, vi7, IV9], b: [vi7, IV9, Iadd9, Vsus] },
+  // Glacier: glassy and patient, a I iii IV I verse and a minor-ninth turn into the V.
+  glacier: { a: [Iadd9, iii7, IV7, Iadd9], b: [vi9, Vsus, IV7, V] },
+  // Volcanic: starts on the relative minor and leans on the ii.
+  volcanic: { a: [vi7, IV7, Iadd9, Vsus], b: [ii7, vi7, IV9, V] },
+  // Blossom: a soft I vi ii V turnaround, then IV iii ii V.
+  blossom: { a: [I9, vi9, ii7, Vsus], b: [IV9, iii7, ii9, V] },
+};
+
+/** The progression a deck loops: a mood's own, or on Clear Skies the mountain's song (A A B B). */
+export function progFor(mood: Mood, biome: BiomeId): readonly Chord[] {
+  if (mood !== Mood.None) return styleFor(mood).prog;
+  const song = SONGS[biome] ?? SONGS.alpine;
+  return [...song.a, ...song.a, ...song.b, ...song.b];
+}
 
 /** Results scene: a gentle resolved loop on the bright (major) root of the mood's key. */
 export const RESOLVED: readonly Chord[] = [

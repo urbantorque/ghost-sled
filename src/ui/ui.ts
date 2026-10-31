@@ -4,6 +4,7 @@ import type {
   GhostKind,
   HintKind,
   HudModel,
+  MissionView,
   ResultsModel,
   RevealModel,
   ScreenRect,
@@ -15,7 +16,9 @@ import type {
   UIHandlers,
 } from './contract';
 import { ChaosEvent } from '../sim/chaos';
+import type { Beat } from '../game/beats';
 import type { InputMode, TouchVisual } from '../game/input';
+import { BeatRouter } from './beatsui';
 import { h, type Ctx, type UiSound } from './dom';
 import { Fx } from './fx';
 import { Hint } from './hint';
@@ -52,6 +55,8 @@ export class UI implements GameUI {
   private readonly hud: Hud;
   private readonly fx: Fx;
   private readonly notices: Notices;
+  /** Turns the director's beats into fx, race-row and banner calls. */
+  private readonly router: BeatRouter;
   private readonly revealer: Reveal;
   private readonly hints: Hint;
   private readonly results: Results;
@@ -134,6 +139,7 @@ export class UI implements GameUI {
     this.fx = new Fx(this.el, this.hud);
     this.hints = new Hint(this.el);
     this.notices = new Notices(this.el);
+    this.router = new BeatRouter(this.hud, this.fx, this.notices);
     this.revealer = new Reveal(this.notices.revealSlot, this.hud);
     this.menus = new Menus(this.el, ctx, hd);
     this.title = new Title(this.el, ctx, hd, {
@@ -170,6 +176,11 @@ export class UI implements GameUI {
     // A pass of yours flashing in the race row (at once, or after waiting out a landing stamp) is the
     // headline: minor callout lines roll up into the total.
     this.hud.onPassFlash = () => this.fx.yieldToPass();
+    // While a duel (or its result) holds the pill, another ghost's pass or news is a line under the
+    // combo meter.
+    this.hud.onSideLine = (w) => this.fx.side(w);
+    // A pass waiting under the banner that names its ghost ("GRUDGE SETTLED Mila") was said by it.
+    this.hud.bannerName = () => this.notices.currentName;
     this.hud.onLayout = dirty;
     this.fx.onLayout = dirty;
     this.notices.onLayout = dirty;
@@ -194,10 +205,13 @@ export class UI implements GameUI {
     if (this.hud.layer.open) {
       const stamp = this.fx.stampEl;
       if (stamp) n = pushRect(pool, n, stamp);
+      // The cash-in figure (until it flies) and a lost combo's cracked figure (contract C8).
+      n = this.fx.measure(pool, n);
       const banner = this.notices.current;
       if (banner) n = pushRect(pool, n, banner);
       for (const c of Array.from(this.notices.revealSlot.children)) n = pushRect(pool, n, c);
-      for (const c of this.hints.occluders()) n = pushRect(pool, n, c);
+      // The hint where it lands (not mid-entry), and one still fading out after a swap.
+      n = this.hints.measure(pool, n);
     }
     this.occ.length = 0;
     for (let i = 0; i < n; i++) this.occ.push(pool[i]);
@@ -309,6 +323,10 @@ export class UI implements GameUI {
     this.notices.toast(text, tone, sub);
   }
 
+  beats(list: readonly Beat[]): void {
+    if (list.length) this.router.handle(list);
+  }
+
   ghostPass(name: string, kind: GhostKind, passed: boolean): void {
     // Passes flash inside the race row. Settling the grudge is the one pass that is also a banner:
     // the game's "Grudge settled" toast from the same tick takes the ghost's name. One message per
@@ -353,8 +371,8 @@ export class UI implements GameUI {
     this.syncInert();
   }
 
-  showPause(settings: SettingsModel): void {
-    this.menus.showPause(settings);
+  showPause(settings: SettingsModel, missions?: MissionView[]): void {
+    this.menus.showPause(settings, missions);
   }
 
   hidePause(): void {

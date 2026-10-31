@@ -287,14 +287,20 @@ class Crater {
     this.geo.setAttribute('position', new BufferAttribute(this.pos, 3));
     this.geo.setAttribute('aP', new BufferAttribute(p, 2));
     this.geo.setIndex(idx);
-    this.geo.boundingSphere = new Sphere(new Vector3(), CRATER_R * 1.5);
+    // Room for the widest streak crater (1.6 times).
+    this.geo.boundingSphere = new Sphere(new Vector3(), CRATER_R * 1.6 * 1.5);
     this.mesh = new Mesh(this.geo, this.mat);
     this.mesh.renderOrder = 2;
     this.mesh.visible = false;
     this.mesh.matrixAutoUpdate = false;
   }
 
-  stamp(c: Course, x: number, z: number, fx: number, fz: number): void {
+  /** How wide this crater is pressed (1, or up to 1.6 for a stomp streak): every part of it, bowl, lip
+   *  and streaks, grows with the grid it is drawn on. */
+  private scale = 1;
+
+  stamp(c: Course, x: number, z: number, fx: number, fz: number, scale = 1): void {
+    this.scale = scale;
     this.place(c, x, z, fx, fz);
     this.mat.uniforms.uSeed.value = Math.random() * 100;
     this.mat.uniforms.uT.value = 0;
@@ -307,10 +313,11 @@ class Crater {
   place(c: Course, x: number, z: number, fx: number, fz: number): void {
     const n = CRATER_SEGS + 1;
     const p = this.geo.getAttribute('aP') as BufferAttribute;
+    const R = CRATER_R * this.scale;
     for (let k = 0; k < n * n; k++) {
       // Local x is world x, local y is three.js z (sim z is flipped).
-      const wx = x + p.getX(k) * CRATER_R;
-      const sz = z - p.getY(k) * CRATER_R;
+      const wx = x + p.getX(k) * R;
+      const sz = z - p.getY(k) * R;
       this.pos[k * 3] = wx;
       this.pos[k * 3 + 1] = c.ground(wx, sz) + 0.05;
       this.pos[k * 3 + 2] = -sz;
@@ -369,11 +376,16 @@ export class LandingAid {
     }
   }
 
-  /** Burst crater pressed into the snow on a perfect landing. */
-  pulse(x: number, z: number, heading = 0): void {
+  /** The current stomp streak (Feel.streak): the stomp window's ring opens a little wider as a streak
+   *  builds (x(1.08 + 0.04n)), so the next stomp reads as a bigger target. */
+  streak = 0;
+
+  /** Burst crater pressed into the snow on a perfect landing. `strength` is its width, 1 for a single
+   *  stomp up to 1.6 for a streak of five or more. */
+  pulse(x: number, z: number, heading = 0, strength = 1): void {
     const c = this.craters[this.next];
     this.next = (this.next + 1) % this.craters.length;
-    c.stamp(this.course, x, z, Math.sin(heading), -Math.cos(heading));
+    c.stamp(this.course, x, z, Math.sin(heading), -Math.cos(heading), Math.max(1, Math.min(1.6, strength)));
     this.clearT = 0.5;
     // The telegraph has done its job: it goes at once, so the burst reads on its own.
     this.shown = 0;
@@ -480,7 +492,7 @@ export class LandingAid {
     const n = tmpN.set(-g.x, 1, g.z).normalize();
     this.ring.position.set(px, c.ground(px, pz) + 0.05, -pz);
     this.ring.quaternion.copy(this.q.setFromUnitVectors(Z_AXIS, n));
-    this.ring.scale.setScalar(radius * (hot ? 1.08 : 1));
+    this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : 1));
     this.ringMat.uniforms.uColor.value.set(hot ? '#FFE08A' : '#F5F3FF');
     this.ringMat.uniforms.uEdge.value.copy(shared.uSnowDeep.value).multiplyScalar(0.7);
     this.ringMat.uniforms.uHot.value = hot;

@@ -1,4 +1,5 @@
-import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, Material, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector3 } from 'three';
+import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, Material, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { FLOW_HEX } from '../game/beats';
 import { Course } from '../sim/course';
 import { makeToonMaterial, shared, type ToonOptions } from './materials';
 import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat } from './meshes';
@@ -118,7 +119,13 @@ interface RiderUniforms {
   fill: { value: number };
   /** How warm a dusk the sky is (Comet Night): the ember rim on the coat, 0 to 1. */
   ember: { value: number };
+  /** Earned flow (x, 0 to 1) and the 'In the flow' rim pulse (y, 0 to 1). Declared when the materials
+   *  are made, so the first flow frame never recompiles anything. */
+  flow: { value: Vector2 };
 }
+
+/** Flow's colour is the player's own vermillion: no gold and no groove tint (decision 69). */
+const FLOW_C = new Color(FLOW_HEX);
 
 /** The shared toon material plus the rider-only terms: dark cloth keeps its ink navy in shade (the
  *  snow's periwinkle shade tint lifted the coat to a mauve-grey stump from behind, and under Comet
@@ -138,6 +145,8 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
+  m.uniforms.uFlow = u.flow;
+  m.uniforms.uFlowC = { value: FLOW_C };
   m.uniforms.uSunRim = { value: sunRim };
   m.uniforms.uHorizonRim = { value: horizonRim };
   // The toon shader dissolves whatever sits on the sight line from the camera to the rider. The
@@ -145,7 +154,7 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   // camera), so its own focus sits far overhead: that sight line runs straight up, clear of it.
   m.uniforms.uFocus = { value: new Vector3(0, 1e6, 0) };
   const before = m.fragmentShader;
-  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;');
+  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;');
   fs = fs.replace(
     'vec3 n = normalize(vNormalW);',
     `vec3 n = normalize(vNormalW);
@@ -212,6 +221,19 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // keeps its colour: over the whole body it read as bleached, and across a pale saucer's face,
         // seen edge-on from the low camera, as the sled blown out to white.
         col = mix(col, vec3(1.5), uFlash * 0.9 * smoothstep(0.74, 0.96, riderEdge) * upright);
+        // Earned flow burns in the player's own vermillion: a rim on the silhouette facets that thickens
+        // and brightens as it builds (a warm edge at 0.3, a clear rim at 0.6, a hot one at full flow,
+        // eased in so the first steps already show; the 'In the flow' pulse to full strength, past the
+        // bloom threshold on Medium and High) and a brighter scarf, which goes HDR and blooms. On Low it
+        // reads as saturated colour. Never gold and never a tint on the snow (decision 69). The results
+        // fill holds it down.
+        float flowE = pow(uFlow.x, 0.7);
+        #ifdef DOUBLE_SIDED
+          col *= 1.0 + (0.7 * flowE + 0.35 * uFlow.y) * rimCut;
+        #else
+          float flowK = 0.55 * flowE + uFlow.y;
+          col += uFlowC * smoothstep(mix(0.55, 0.38, uFlow.x), 0.94, riderEdge) * flowK * 1.7 * rimCut;
+        #endif
         `;
   const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
   fs = fs.replace(anchor, rim + anchor);
@@ -307,7 +329,7 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() } };
   private mat: ShaderMaterial;
   /** Seconds since the last perfect landing (drives the squash, the crouch and the rim flash). */
   private landT = 9;
@@ -466,6 +488,21 @@ export class Rider {
     this.landT = 0;
   }
 
+  /** Earned flow (0 to 1, the director's fk) and the 'In the flow' rim pulse (0 to 1): the vermillion
+   *  rim and the brighter scarf (uniforms only), and the scarf's tails flare up to 20% wider. */
+  setFlow(flow: number, pulse: number): void {
+    this.u.flow.value.set(Math.max(0, Math.min(1, flow)), Math.max(0, Math.min(1, pulse)));
+  }
+
+  /** A point along the long scarf tail (u: 0 at the knot, 1 at the tip), in three.js space: where
+   *  flow's motes stream off. */
+  scarfPoint(u: number, out: Vector3): Vector3 {
+    const pts = this.tails[0].pts;
+    const f = Math.max(0, Math.min(1, u)) * (TAIL_N - 1);
+    const i = Math.min(TAIL_N - 2, Math.floor(f));
+    return out.lerpVectors(pts[i], pts[i + 1], f - i);
+  }
+
   reset(pos: Vector3): void {
     this.crash = null;
     this.root.visible = true;
@@ -474,6 +511,7 @@ export class Rider {
     this.crashSled.visible = false;
     this.stars.visible = false;
     this.u.fill.value = 0;
+    this.u.flow.value.set(0, 0);
     this.mat.uniforms.uRimK.value = 0.4;
     this.landT = 9;
     // Hang the tails down the back; the first update carries them to the knot.
@@ -879,6 +917,8 @@ export class Rider {
     // scarf turned the stomp into a red blob.
     const lt = this.landT;
     const drape = lt < 0.65 ? (lt < 0.05 ? lt / 0.05 : 1 - smooth((lt - 0.3) / 0.35)) : 0;
+    // In the flow the tails stream out up to a fifth wider: the scarf is the motion indicator.
+    const flowFlare = 1 + 0.2 * this.u.flow.value.x;
     // The drag above pulls back at about 3.4 m/s^2 per m/s, so a sideways push of flare * speed
     // holds a tail at a steady angle to the track whatever the speed (about 34 degrees for the
     // long tail, 19 for the short one).
@@ -899,7 +939,7 @@ export class Rider {
         const uf = u * Math.sqrt(u);
         // (Settled in the snow, a breeze spreads the two tails apart and out across it, so they lie on
         // the snow in a fan rather than hanging down the rider's back as one stiff red slab.)
-        const lat = t.flare * this.flareSide * speed + wave * (3 + 1.1 * speed) * uf * flut + drape * 48 * this.flareSide + (this.settled ? t.sign * 4.4 + this.flareSide * 2.4 : 0);
+        const lat = t.flare * flowFlare * this.flareSide * speed + wave * (3 + 1.1 * speed) * uf * flut + drape * 48 * this.flareSide + (this.settled ? t.sign * 4.4 + this.flareSide * 2.4 : 0);
         // The cloth sags a little near the knot and the tip lifts back to about level: a gentle curve,
         // never a plank held straight out.
         const lift = liftK * (9.8 * (0.25 + 0.65 * uf) + 0.1 * speed * u * u) + wave2 * (2 + 0.6 * speed) * u * flut - 9.8 + drape * 7 * u;

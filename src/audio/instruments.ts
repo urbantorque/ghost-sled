@@ -1,13 +1,16 @@
 import type { LeadKind } from './theory';
-import { Voice, bandComp, perc, swell } from './voices';
+import { Voice, bandComp, blockRate, perc, swell } from './voices';
 
 // Instrument recipes shared by the soundtrack and the sound effects. Each one adds nodes to a voice,
 // starting at time t, and returns the time it falls silent. `amp` is roughly the peak it reaches.
+// `dest` is where the part's envelope gain feeds (the voice's out by default); null puts the envelope
+// on the voice's out itself (Voice.envelope), for a voice that holds this one part: the soundtrack's
+// notes, one voice each, so a note costs a node less.
 
 /** Two-operator FM bell. The modulation index decays faster than the tone, so the strike is
  *  bright and the tail mellow. Ratio 3.5 rings like a bell, 2 like a ding, 5 like a music box. */
-export function fmBell(v: Voice, t: number, f: number, amp: number, tau: number, ratio = 3.5, index = 1.4, dest: AudioNode = v.out): number {
-  const g = v.gain(0, dest);
+export function fmBell(v: Voice, t: number, f: number, amp: number, tau: number, ratio = 3.5, index = 1.4, dest: AudioNode | null = v.out): number {
+  const g = v.envelope(dest);
   const end = perc(g.gain, t, amp, 0.002, tau);
   const car = v.osc('sine', f, t, end, g);
   const mf = f * ratio;
@@ -29,8 +32,8 @@ export function ping(v: Voice, t: number, f: number, amp: number, tau: number, d
 /** Synth pluck: warm saws through a lowpass that snaps shut. Effects use a detuned pair; the
  *  soundtrack passes `pair = false` for one oscillator, since it plucks every 16th. `bend` starts
  *  the pitch slightly sharp and falls into tune (koto-like). */
-export function pluck(v: Voice, t: number, f: number, amp: number, tau: number, bright = 3, dest: AudioNode = v.out, bend = 0, pair = true): number {
-  const g = v.gain(0, dest);
+export function pluck(v: Voice, t: number, f: number, amp: number, tau: number, bright = 3, dest: AudioNode | null = v.out, bend = 0, pair = true): number {
+  const g = v.envelope(dest);
   const end = perc(g.gain, t, amp * (pair ? 0.55 : 0.78), 0.003, tau);
   // Capped: high combo notes would pass Nyquist, which Chrome clamps with a console warning.
   const open = Math.min(f * bright * 4, 12000);
@@ -60,8 +63,8 @@ export function mallet(v: Voice, t: number, f: number, amp: number, tau: number,
 }
 
 /** Sustained melodic voice with delayed vibrato. */
-export function lead(v: Voice, t: number, f: number, dur: number, amp: number, kind: LeadKind, dest: AudioNode = v.out): number {
-  const g = v.gain(0, dest);
+export function lead(v: Voice, t: number, f: number, dur: number, amp: number, kind: LeadKind, dest: AudioNode | null = v.out): number {
+  const g = v.envelope(dest);
   const att = kind === 'square' ? 0.02 : kind === 'flute' ? 0.05 : 0.09;
   const rel = kind === 'theremin' ? 0.16 : 0.08;
   const end = swell(g.gain, t, amp, att, Math.max(0.02, dur - att), rel);
@@ -83,28 +86,122 @@ export function lead(v: Voice, t: number, f: number, dur: number, amp: number, k
   return end;
 }
 
+/** One sung note of the ghost choir. */
+export interface Sung {
+  g: GainNode;
+  oscs: OscillatorNode[];
+  f: number;
+  end: number;
+}
+
+const clamp01 = (x: number): number => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+/** A choir voice's vowel: three fixed formant band-passes at their levels, from `input` into a dest. */
+export interface Formants {
+  readonly input: GainNode;
+  readonly nodes: readonly AudioNode[];
+}
+
+/**
+ * The vowel of a ghost choir voice: three formant band-passes ('oo' toward 'ah' as `bright` goes 0
+ * to 1) summed into `dest`. The filters never move, so one chain serves every note that voice
+ * sings, built once per deck: a note's swell feeds it (the formants ring out within 4 ms; a swell
+ * moves over a third of a second and more, so shaping the note before the formants instead of
+ * after them is the same sound), and a note costs its oscillators and its envelope only.
+ */
+export function formants(ctx: BaseAudioContext, bright: number, dest: AudioNode): Formants {
+  const b = clamp01(bright);
+  const input = ctx.createGain();
+  const nodes: AudioNode[] = [input];
+  for (const [fc, q, lvl] of [
+    [320 + 480 * b, 5, 1],
+    [800 + 400 * b, 7, 0.55],
+    [2700, 10, 0.15],
+  ] as const) {
+    const bp = blockRate(ctx.createBiquadFilter());
+    bp.type = 'bandpass';
+    bp.frequency.value = fc;
+    bp.Q.value = q;
+    input.connect(bp);
+    nodes.push(bp);
+    if (lvl === 1) bp.connect(dest);
+    else {
+      const g = ctx.createGain();
+      g.gain.value = lvl;
+      bp.connect(g);
+      g.connect(dest);
+      nodes.push(g);
+    }
+  }
+  return { input, nodes };
+}
+
+/**
+ * A sung vowel for the ghost choir: two detuned warm saws and a triangle with a slow swell and a
+ * vibrato that blooms in after the attack, on a voice whose out feeds that voice's vowel
+ * (formants(), the same `bright`: 0..1 from 'oo' toward 'ah'). The swell is the voice's out.
+ * `sigh()` bends a note down and lets it go.
+ */
+export function sing(v: Voice, t: number, f: number, dur: number, amp: number, attack: number, bright: number): Sung {
+  const g = v.envelope(null);
+  const end = swell(g.gain, t, amp, attack, Math.max(0, dur - attack), 0.35);
+  const b = clamp01(bright);
+  const vib = v.gain(0, null);
+  vib.gain.setValueAtTime(0, t);
+  vib.gain.linearRampToValueAtTime(14, t + attack + 0.6);
+  v.osc('sine', 4.6 + 0.8 * b, t, end, vib);
+  const oscs = [v.osc(v.bank.warmSaw, f, t, end, g, -6), v.osc(v.bank.warmSaw, f, t, end, g, 6), v.osc('triangle', f * 2, t, end, v.gain(0.3, g))];
+  for (const o of oscs) vib.connect(o.detune);
+  return { g, oscs, f, end };
+}
+
+/** A choir note retaken: it slides down a fourth over 0.6 s as it fades (a sigh). */
+export function sigh(s: Sung, now: number): void {
+  const t = Math.max(now, 0);
+  for (const o of s.oscs) {
+    const f0 = o.frequency.value;
+    o.frequency.cancelScheduledValues(t);
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f0 * 0.749, t + 0.6);
+  }
+  const p = s.g.gain;
+  p.cancelScheduledValues(t);
+  p.setValueAtTime(p.value, t);
+  p.setTargetAtTime(0, t + 0.12, 0.22);
+}
+
+/** A choir note leaving quietly (its ghost fell out of range or wiped out). */
+export function fadeSung(s: Sung, now: number): void {
+  const p = s.g.gain;
+  p.cancelScheduledValues(now);
+  p.setValueAtTime(p.value, now);
+  p.setTargetAtTime(0, now, 0.3);
+}
+
 /** Warm pad chord through a slowly opening lowpass: one warm saw per note, detuned alternately
- *  sharp and flat for width, plus a triangle under the root (freqs[0]) for body. */
-export function pad(v: Voice, t: number, freqs: readonly number[], dur: number, amp: number, cutoff: number, attack: number, detune: number, wobble: number, dest: AudioNode = v.out): number {
-  const g = v.gain(0, dest);
-  const end = swell(g.gain, t, amp, attack, Math.max(0, dur - attack), 0.45);
+ *  sharp and flat for width, plus a triangle under the root (freqs[0]) for body. The oscillators'
+ *  mix level (0.75 over the note count) rides on the swell: a constant gain before the lowpass is
+ *  the same as one after it, and saves a node. */
+export function pad(v: Voice, t: number, freqs: readonly number[], dur: number, amp: number, cutoff: number, attack: number, detune: number, wobble: number, dest: AudioNode | null = v.out): number {
+  const g = v.envelope(dest);
+  const end = swell(g.gain, t, amp * (0.75 / Math.max(1, freqs.length)), attack, Math.max(0, dur - attack), 0.45);
   const lp = v.filter('lowpass', cutoff * 0.55, 0.6, g);
   lp.frequency.setValueAtTime(cutoff * 0.55, t);
   lp.frequency.linearRampToValueAtTime(cutoff, t + attack + dur * 0.5);
   lp.frequency.linearRampToValueAtTime(cutoff * 0.7, end);
-  const mix = v.gain(0.75 / Math.max(1, freqs.length), lp);
   let wob: GainNode | null = null;
   if (wobble > 0) {
     // One slow LFO (in cents) bends every oscillator together: a seasick, haunted pad.
     wob = v.gain(wobble, null);
     v.osc('sine', 0.9, t, end, wob);
   }
-  const oscs = freqs.map((f, i) => v.osc(v.bank.warmSaw, f, t, end, mix, i % 2 === 0 ? -detune : detune));
-  if (freqs.length > 0) oscs.push(v.osc('triangle', freqs[0], t, end, mix, detune * 0.5));
+  const oscs = freqs.map((f, i) => v.osc(v.bank.warmSaw, f, t, end, lp, i % 2 === 0 ? -detune : detune));
+  if (freqs.length > 0) oscs.push(v.osc('triangle', freqs[0], t, end, lp, detune * 0.5));
   if (wob) for (const o of oscs) wob.connect(o.detune);
   return end;
 }
 
+/** A sine kick with a click of noise high-passed at 2 kHz (the bank's kickNoise, filtered once). */
 export function kick(v: Voice, t: number, amp: number, low = 46, dest: AudioNode = v.out): number {
   const g = v.gain(0, dest);
   const end = perc(g.gain, t, amp, 0.002, 0.085);
@@ -113,21 +210,21 @@ export function kick(v: Voice, t: number, amp: number, low = 46, dest: AudioNode
   o.frequency.exponentialRampToValueAtTime(low, t + 0.07);
   const cg = v.gain(0, dest);
   const ce = perc(cg.gain, t, amp * 0.22, 0.0008, 0.004);
-  v.buffer(v.bank.white, t, ce, v.filter('highpass', 2000, 0.7, cg));
+  v.buffer(v.bank.kickNoise, t, ce, cg);
   return end;
 }
 
-export function hat(v: Voice, t: number, amp: number, open: boolean, dest: AudioNode = v.out): number {
-  const g = v.gain(0, dest);
+/** A hi-hat: noise high-passed at 7.2 kHz (the bank's hatNoise, filtered once, not per hit). */
+export function hat(v: Voice, t: number, amp: number, open: boolean, dest: AudioNode | null = v.out): number {
+  const g = v.envelope(dest);
   const end = perc(g.gain, t, amp * 2.2, 0.001, open ? 0.06 : 0.016);
-  const hp = v.filter('highpass', 7200, 0.7, g);
-  v.buffer(v.bank.white, t, end, hp);
+  v.buffer(v.bank.hatNoise, t, end, g);
   return end;
 }
 
 /** Soft clap: three quick noise bursts and a short tail. */
-export function clap(v: Voice, t: number, amp: number, dest: AudioNode = v.out): number {
-  const g = v.gain(0, dest);
+export function clap(v: Voice, t: number, amp: number, dest: AudioNode | null = v.out): number {
+  const g = v.envelope(dest);
   const p = g.gain;
   const a = amp * bandComp(1400, 1.1, v.ctx.sampleRate) * 0.9;
   p.setValueAtTime(0, t);

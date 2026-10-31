@@ -1,0 +1,725 @@
+/* Meta's own CSS (results, title, reveal, hint and menu additions), loaded by results.ts after
+   style.css so its rules win ties without editing style.css. Tokens and roles are style.css's
+   (ART.md section 10): pills for controls and chips, 18px cards, vermillion for you and the primary
+   action, mint for ghosts, rose for the grudge only, marigold for gifts, gold-white for your best.
+
+   Timing: every results delay below mirrors RESULTS_TIMING in results.ts (the head's sub block
+   lands at 440 ms (SUB_MS), the unlock slot at 480 ms (UNLOCK_MS), the race at 620 ms, the meter
+   fill at 760 ms for 620 ms (METER_MS, METER_DUR)); the reveal's goal line lands 110 ms after
+   the event chip at REVEAL_TIMING.T_EVENT (reveal.ts drives it). */
+
+/* ------------------------------------------------------------------ Results: the race line */
+
+/* The one extra race line (C6 budget): hung under the crash line, its glyph in the crash line's
+   icon column, in its ghost's colour (rose for the grudge, mint for a friend). An event note is
+   quiet off-white. */
+.gs-res-line {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 10px;
+  color: var(--k, rgba(245, 243, 255, 0.82));
+  font-size: 1em;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.gs-res-line-t {
+  grid-column: 2;
+  text-wrap: pretty;
+}
+
+.gs-res-line-ico {
+  width: 18px;
+  height: 18px;
+  justify-self: center;
+  color: var(--k);
+}
+
+.gs-res-line.is-event {
+  font-weight: 750;
+}
+
+/* Who rode on past your wreck ("You led at the crash. SparkleCedar rode on past."): as quiet as an
+   event note, its ghost glyph in the line's off-white (it names the pack, not one rival). In the
+   place note's slot it reads as the note does. */
+.gs-res-line.is-crash {
+  font-weight: 750;
+}
+
+/* Your place as you fell, under the finishing place (results.ts placeAtCrash): only a phone shows
+   it, where the race line has taken the crash note's slot (Phones, below). Wide screens keep the
+   whole note, and the box is then the medal alone. */
+.gs-res-placebox {
+  display: grid;
+  justify-items: start;
+}
+
+.gs-res-place-at {
+  display: none;
+}
+
+/* A big lost combo, named on the crash line: the figure carries the weight. */
+.gs-res-lost {
+  color: rgba(245, 243, 255, 0.8);
+  font-weight: 750;
+}
+
+.gs-res-lost .gs-num {
+  color: var(--text);
+  font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ Results: the folded missions */
+
+/* With no mission finished this run, the folded row names the open mission closest to done and its
+   progress ("Ride 800 m in one run 753/800") in place of "3 open". The mission takes the label's
+   room (the flag glyph still marks the row; "Missions" stays for screen readers), its progress sits
+   at the row's end, and the words give way (an ellipsis) before the figure does, so the row keeps
+   its one line in the narrow wide-screen column and on a phone. */
+.gs-res-mis-toggle.is-next > .gs-btn-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.gs-res-mis-toggle.is-next > .gs-res-mis-sum {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.gs-res-mis-left.is-next {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.gs-res-mis-next {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-weight: 750;
+  text-overflow: ellipsis;
+}
+
+.gs-res-mis-left.is-next > .gs-res-mis-prog {
+  flex: none;
+  margin-left: auto;
+}
+
+/* ------------------------------------------------------------------ Pause: the run's missions */
+
+/* Under the title, what the run is working toward: each mission's live progress, Done once it popped
+   this run, in the title popover's rows. Wide screens keep it in the left column over Resume, beside
+   the settings; a phone stacks it under the title (below). */
+.gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+  grid-template-rows: auto auto auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'title set'
+    'mis set'
+    'resume set'
+    'home set'
+    'key set'
+    '. set';
+}
+
+.gs-pause-mis {
+  grid-area: mis;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 6px;
+}
+
+.gs-pause-mis[hidden] {
+  display: none;
+}
+
+.gs-pause-mis-h {
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gs-pause-mis .gs-missions {
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------------ Results: next unlock */
+
+/* The next unlock rides in the unlock card's slot: the same card family, with a hairline instead
+   of the gold-white edge (nothing is yours yet), the biome art dimmed under a lock, and a bar that
+   grows from where this run started to where it ended. */
+.gs-ul.gs-nu {
+  grid-template-columns: 76px minmax(0, 1fr);
+  padding-right: 16px;
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+}
+
+.gs-nu-art .gs-mtn-sky {
+  filter: saturate(0.6) brightness(0.78);
+}
+
+.gs-nu-lock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.82);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  transform: translate(-50%, -50%);
+}
+
+.gs-nu-lock .gs-i {
+  width: 14px;
+  height: 14px;
+}
+
+.gs-nu-sled {
+  display: grid;
+  place-items: center;
+  height: 52px;
+  border-radius: 12px;
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-nu-sled .gs-i {
+  width: 30px;
+  height: 30px;
+}
+
+.gs-nu-txt {
+  gap: 7px;
+}
+
+.gs-nu-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 10px;
+  min-width: 0;
+}
+
+.gs-nu-name {
+  font-size: 1em;
+}
+
+.gs-nu-what {
+  color: var(--dim);
+  font-size: max(12px, 0.84em);
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.gs-nu-what .gs-num {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.gs-nu-what.is-ready {
+  color: var(--gift);
+  font-weight: 850;
+}
+
+/* A real bar: the fill over a visible track, like the mission bars. Mint counts ghosts, marigold
+   counts gifts. */
+.gs-nu-bar {
+  position: relative;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.06);
+}
+
+.gs-nu-bar::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--ghost);
+  transform: scaleX(var(--p, 0));
+  transform-origin: left center;
+}
+
+.gs-nu.is-sled .gs-nu-bar::before {
+  background: var(--gift);
+}
+
+/* The run's own progress fills in after the card lands (just after the unlock slot pops in). */
+.gs-results.is-in .gs-nu-bar::before {
+  animation: gs-nu-fill 620ms var(--out) 760ms both;
+}
+
+@keyframes gs-nu-fill {
+  from {
+    transform: scaleX(var(--p0, 0));
+  }
+  to {
+    transform: scaleX(var(--p, 0));
+  }
+}
+
+/* ------------------------------------------------------------------ Results: actions */
+
+/* Send It Back: you beat a friend's challenge, so answering is the move. A filled mint pill (mint:
+   it sends your ghost); Run again keeps the vermillion and the Space key. */
+.gs-res-opt.gs-res-send {
+  background: var(--ghost);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -3px 0 rgba(0, 70, 60, 0.2),
+    0 12px 26px -14px rgba(143, 243, 228, 0.75);
+  color: var(--ink);
+  font-weight: 900;
+}
+
+.gs-res-opt.gs-res-send .gs-i {
+  color: var(--ink);
+}
+
+@media (hover: hover) {
+  .gs-res-opt.gs-res-send:hover:not(:disabled):not([aria-disabled='true']) {
+    background: #a8f6eb;
+  }
+
+  /* Locked for a moment after a tap: it keeps its rest mint on hover, so it never looks clickable. */
+  .gs-res-opt.gs-btn-soft.gs-res-send[aria-disabled='true']:hover {
+    background: var(--ghost);
+  }
+}
+
+/* "Rematch Mila": the name is the point, so a long one ellipsizes inside the button, never past it
+   (the footer row may shrink for it: min-width 0 on .gs-res-actions and .gs-res-main, style.css). */
+.gs-again.is-rematch {
+  flex: 0 1 auto;
+}
+
+.gs-again.is-rematch .gs-btn-label {
+  min-width: 0;
+  overflow: hidden;
+  /* Room under the baseline inside the clip: "nils_goes" kept its underscore ("NILS GOES" read as
+     another name). */
+  padding-block: 0.08em 0.16em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The rival's handle keeps its own case at every width ("REMATCH nils_goes", never "NILS_GOES"): it
+   is a handle. Only the "Rematch" kicker is set in caps. */
+.gs-again.is-rematch .gs-again-who {
+  text-transform: none;
+}
+
+/* A long rival name (9 to 12 letters, results.ts) takes the Space keycap's room: Space still runs
+   again (aria-keyshortcuts keeps it), and "REMATCH Amara Carver" fits whole. */
+.gs-again.is-rematch.is-long .gs-kbd {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ Results: the race */
+
+/* The friend whose challenge this was: a small mint vs badge after the name. */
+.gs-st-name.has-vs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gs-st-nm {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-st-vs {
+  flex: none;
+  height: 17px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--ghost);
+  color: var(--ghost);
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 17px;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------ Title */
+
+/* The greeting over Ride for a returning player: one line of scene text with its ink halo and a
+   glyph in the role's colour (rose for a grudge, mint for ghosts to pass, off-white for a mission). */
+.gs-t-greet {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: min(100%, 30em);
+  padding-left: 4px;
+  color: var(--text);
+  font-size: clamp(14px, calc(var(--u) * 1.06), 19px);
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: var(--halo);
+  text-wrap: balance;
+}
+
+.gs-t-greet > .gs-i {
+  flex: none;
+  width: 1.3em;
+  height: 1.3em;
+  filter: drop-shadow(0 0 2px rgba(18, 25, 51, 0.95)) drop-shadow(0 1px 3px rgba(18, 25, 51, 0.7));
+}
+
+.gs-t-greet.is-grudge > .gs-i,
+.gs-t-greet-who {
+  color: var(--grudge);
+}
+
+.gs-t-greet.is-unlock > .gs-i {
+  color: var(--ghost);
+}
+
+.gs-t-greet-who {
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-t-greet-n {
+  font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ Daily medal and streak */
+
+/* Today's Daily medal: a small struck disc in its metal, distinct from marigold (gifts) and
+   gold-white (your best, first place). Bronze is copper, silver a cool steel, gold an old amber that
+   sits redder than marigold. The disc carries a lit face and a darker rim, so it reads as a coin
+   even at 14 px. */
+.gs-medal {
+  --m: #c9d4e8;
+  --m-rim: #7c879e;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--m);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.gs-medal::before {
+  content: '';
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.78), var(--m) 46%, var(--m-rim) 100%);
+  box-shadow:
+    inset 0 0 0 1.5px var(--m-rim),
+    0 0 0 1.5px rgba(18, 25, 51, 0.9);
+}
+
+.gs-medal.m-1 {
+  --m: #e0a072;
+  --m-rim: #8a5233;
+}
+
+.gs-medal.m-2 {
+  --m: #cdd6e8;
+  --m-rim: #7c879e;
+}
+
+.gs-medal.m-3 {
+  --m: #f0a93b;
+  --m-rim: #94601a;
+}
+
+/* On the daily card the medal sits over "Best 7,967" (the figure keeps its label); where the card lays
+   the best out on one row (phones) a middle dot joins them: "Bronze · Best 7,967". */
+.gs-daily-best.has-medal .gs-medal {
+  font-size: max(11px, 0.72em);
+}
+
+.gs-daily-score {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+
+.gs-daily-sep {
+  display: none;
+  color: var(--dim);
+  font-weight: 700;
+}
+
+/* "Day 3": the run of days in an off-white tag (your own streak, not a ghost's). */
+.gs-tag.gs-daily-day {
+  background: rgba(245, 243, 255, 0.1);
+  color: var(--text);
+}
+
+/* ------------------------------------------------------------------ Reveal */
+
+/* The event's goal under its chip: what it pays and how, the figure at full weight. */
+.gs-reveal-goal {
+  color: rgba(245, 243, 255, 0.9);
+  font-size: max(13px, 0.9em);
+  font-weight: 800;
+  text-shadow: 0 1px 1px rgba(5, 9, 30, 0.95), 0 0 3px rgba(5, 9, 30, 0.9), 0 0 10px rgba(5, 9, 30, 0.6);
+}
+
+.gs-reveal-goal b {
+  color: var(--text);
+  font-weight: 900;
+}
+
+/* ------------------------------------------------------------------ Results: wide layout */
+
+/* (The wide results grid itself, rows and areas, lives in style.css with the rest of that layout.) */
+@media (min-aspect-ratio: 1/1) and (min-width: 901px) {
+  /* "Rematch FlurrySpruce" is twice "Run Again": a step smaller, so a 12 letter name fits whole
+     beside Challenge and Home before it would ellipsize. */
+  .gs-again.is-rematch .gs-btn-label {
+    font-size: 0.88em;
+  }
+}
+
+/* ------------------------------------------------------------------ Phones (portrait) */
+
+@media (max-aspect-ratio: 1/1) {
+  /* The Ride stack is centred on a phone: the greeting over it is too. */
+  .gs-t-greet {
+    justify-content: center;
+    max-width: none;
+    padding-left: 0;
+    font-size: clamp(14px, 3.7vw, 16px);
+    text-align: center;
+  }
+
+  /* C6 budget: on a phone the race line takes the place note's slot rather than adding a line, so
+     the head is as tall as it was and your row stays in the first view (the order shows the place
+     above with its distance and Next tag anyway). */
+  .gs-res-sub.has-line > .gs-res-note {
+    display: none;
+  }
+
+  /* ...and a crash note dropped there leaves your place as you fell under the medal, so the card
+     says why the HUD's place was better ("Led at the crash" under "4th of 8"). The medal steps down
+     to 36 px and the label to a 12 px line, so the two (49 px) stay under the score (13vw: 50.7 px
+     on a 390 px wide phone) and the head keeps its height beside it; a 360 px phone's 46.8 px score
+     lets it grow 2 px. When the side wraps (Best or the New best stamp under the medal) the head
+     does grow, by 9 px (the label's 13 px less the 4 px the medal gives up). */
+  .gs-res-placebox > .gs-res-place {
+    height: 36px;
+    line-height: 36px;
+  }
+
+  .gs-res-place-at {
+    display: block;
+    justify-self: center;
+    margin-top: 1px;
+    color: rgba(245, 243, 255, 0.86);
+    font-size: max(11px, 0.72em);
+    font-weight: 800;
+    letter-spacing: 0.01em;
+    line-height: 12px;
+    white-space: nowrap;
+  }
+
+  /* It lands with the medal it sits under (style.css: gs-pop after 300 ms), not on the card's first
+     frame. Its quiet is in the colour's alpha, not opacity, which the pop holds at 1 once it ends. */
+  .gs-results.is-in .gs-res-place-at {
+    animation: gs-pop 320ms var(--spring) 300ms both;
+  }
+
+  .gs-res-line {
+    grid-template-columns: 26px minmax(0, 1fr);
+    font-size: 0.94em;
+  }
+
+  /* The pause card is one column here: the missions sit under the title, over Resume. */
+  .gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+    grid-template-rows: none;
+    grid-template-areas:
+      'title'
+      'mis'
+      'resume'
+      'set'
+      'home'
+      'key';
+  }
+
+  .gs-ul.gs-nu {
+    grid-template-columns: 56px minmax(0, 1fr);
+    padding-right: 12px;
+  }
+
+  .gs-nu-sled {
+    height: 38px;
+  }
+
+  .gs-nu-sled .gs-i {
+    width: 24px;
+    height: 24px;
+  }
+
+  .gs-nu-txt {
+    gap: 5px;
+  }
+
+  .gs-nu-name {
+    font-size: 0.94em;
+  }
+
+  /* Send It Back says its whole name on phones too: it is the reason this card exists. It takes the
+     Challenge slot beside Home (results.ts), its label under the link glyph, so the footer keeps two
+     rows with Revive and Double Gifts up (C6: the row below yours stays in view). */
+  .gs-res-opt.gs-res-send {
+    font-size: 0.94em;
+  }
+
+  .gs-res-main > .gs-res-chal.gs-res-send {
+    padding-inline: 13px;
+    font-size: max(11.5px, 0.8em);
+  }
+
+  .gs-res-main > .gs-res-chal.gs-res-send .gs-i {
+    color: var(--ink);
+  }
+
+  /* The daily pill keeps one tag on a phone: with a day streak showing, it replaces the rivals tag, and
+     so does today's medal (its disc and "Bronze · Best 7,967" take that room). On a narrow phone the
+     tag drops under "Daily Mountain" (style.css). */
+  .gs-daily:not(.is-waiting) .gs-daily-meta.has-day .gs-daily-status,
+  .gs-daily:not(.is-waiting):has(.gs-daily-best.has-medal) .gs-daily-status {
+    display: none;
+  }
+
+  /* While its rivals are found, the status ("Finding rivals...") takes the line: the Day tag and the
+     medal row wait, so the dimmed pill says why it does not start yet. */
+  .gs-daily.is-waiting .gs-daily-day,
+  .gs-daily.is-waiting .gs-daily-best {
+    display: none;
+  }
+
+  /* The medal and the best share one row here: "Bronze · Best 7,967". */
+  .gs-daily-sep {
+    display: inline;
+  }
+
+  /* With a day streak beside the title that row leaves no room ("Day 12" ran under the disc): the
+     medal stacks over the best instead, as on wide screens, and the pill keeps its one line of text. */
+  .gs-daily:has(.gs-daily-day) .gs-daily-best.has-medal {
+    grid-auto-flow: row;
+    justify-items: end;
+    gap: 1px;
+  }
+
+  .gs-daily:has(.gs-daily-day) .gs-daily-sep {
+    display: none;
+  }
+
+  /* A rematch label is longer than "Run Again", and the button shares its row with Challenge and
+     Home: "Rematch" stacks as a small caps kicker over the name, which keeps its own case (it is a
+     handle) and ellipsizes inside the button if it still runs long. */
+  .gs-again.is-rematch {
+    padding-inline: 14px 16px;
+    gap: 10px;
+  }
+
+  .gs-again.is-rematch .gs-btn-label {
+    display: flex;
+    flex: 0 1 auto;
+    flex-direction: column;
+    align-items: flex-start;
+    min-width: 0;
+    line-height: 1.05;
+  }
+
+  .gs-again-k {
+    font-size: 0.6em;
+    letter-spacing: 0.12em;
+    opacity: 0.88;
+  }
+
+  .gs-again-who {
+    max-width: 100%;
+    overflow: hidden;
+    /* Descenders and underscores sit inside the clip ("nils_goes", not "nils goes"). */
+    padding-block-end: 0.14em;
+    font-size: clamp(15px, 4.2vw, 18px);
+    line-height: 1.15;
+    text-overflow: ellipsis;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  /* A 9 to 12 letter name steps down a size so the whole handle fits beside Home and Challenge
+     ("MarmotMateo", not "MarmotMa..."). */
+  .gs-again.is-rematch.is-long .gs-again-who {
+    font-size: clamp(13px, 3.5vw, 15px);
+    letter-spacing: -0.01em;
+  }
+
+  /* Beside Send It Back the button is narrower still: its own side padding gives way first. */
+  .gs-again.is-rematch.is-long {
+    padding-inline: 10px 12px;
+    gap: 8px;
+  }
+}
+
+/* A short phone (375x667, 360x640): Home moves up under Resume and the mission rows tighten, so both
+   stay on screen and only the settings scroll. */
+@media (max-aspect-ratio: 1/1) and (max-height: 760px) {
+  .gs-pause-card:has(> .gs-pause-mis:not([hidden])) {
+    grid-template-areas:
+      'title'
+      'mis'
+      'resume'
+      'home'
+      'set'
+      'key';
+  }
+
+  .gs-pause-mis .gs-missions {
+    gap: 6px;
+  }
+
+  /* Hidden from sight only: screen readers still hear each reward. */
+  .gs-pause-mis .gs-mis-reward {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* ------------------------------------------------------------------ Reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-results.is-in .gs-nu-bar::before {
+    animation: none;
+  }
+
+  /* The place at the crash is there with the card, as the medal is (style.css). */
+  .gs-results.is-in .gs-res-place-at {
+    animation: none;
+  }
+}

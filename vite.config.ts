@@ -7,7 +7,7 @@ export default defineConfig({
     outDir: 'dist/game',
     emptyOutDir: true,
     assetsInlineLimit: 0,
-    chunkSizeWarningLimit: 1200,
+    chunkSizeWarningLimit: 1400,
     reportCompressedSize: true,
   },
   worker: {

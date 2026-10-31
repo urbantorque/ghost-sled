@@ -1,8 +1,8 @@
 import { Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { Bus } from './graph';
-import { clap, fmBell, hat, kick, lead, mallet, pad, ping, pluck } from './instruments';
-import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, styleFor } from './theory';
+import { Formants, Sung, clap, fadeSung, fmBell, formants, hat, kick, lead, mallet, pad, ping, pluck, sigh, sing } from './instruments';
+import { Accent, Chord, Key, LeadKind, MAJOR_PENTA, RESOLVED, Style, Timbre, accentFor, fit, ladder, mtof, progFor, styleFor } from './theory';
 import { VoicePool, rand, smoothstep } from './voices';
 
 // Generative soundtrack. A deck is one arrangement (scene + mood + biome) with its own faders and
@@ -11,8 +11,10 @@ import { VoicePool, rand, smoothstep } from './voices';
 
 export type Scene = 'title' | 'run' | 'results';
 
-type Layer = 'pad' | 'bass' | 'arp' | 'kick' | 'hat' | 'clap' | 'sparkle' | 'lead' | 'tension';
-const LAYERS: readonly Layer[] = ['pad', 'bass', 'arp', 'kick', 'hat', 'clap', 'sparkle', 'lead', 'tension'];
+type Layer = 'pad' | 'bass' | 'arp' | 'kick' | 'hat' | 'clap' | 'sparkle' | 'lead' | 'tension' | 'choir';
+const LAYERS: readonly Layer[] = ['pad', 'bass', 'arp', 'kick', 'hat', 'clap', 'sparkle', 'lead', 'tension', 'choir'];
+/** The ghost choir: at most this many voices (one per live passed ghost behind you). */
+export const CHOIR_MAX = 3;
 
 /** Fader level of each layer at full presence. Balanced from solo renders: pad alone sits near
  *  -27 dBFS RMS and the full arrangement near -20, leaving headroom for effects on top. */
@@ -26,6 +28,7 @@ const MIX: Record<Layer, number> = {
   sparkle: 0.26,
   lead: 0.07,
   tension: 0.16,
+  choir: 0.2,
 };
 
 /** Reverb send per layer, scaled by the style's verb. */
@@ -39,6 +42,7 @@ const SEND: Record<Layer, number> = {
   sparkle: 0.65,
   lead: 0.4,
   tension: 0.1,
+  choir: 0.7,
 };
 
 const XFADE = 1.5;
@@ -69,6 +73,8 @@ export interface Drive {
   intensity: number;
   danger: number;
   mult: number;
+  /** Move the faders fast this pass (the count-in's release). */
+  snap?: boolean;
 }
 
 function deckId(scene: Scene, mood: Mood, biome: BiomeId): string {
@@ -101,14 +107,22 @@ class Deck {
   private wasEnabled = true;
   private arpCount = 0;
   private arpLast = -1;
+  /** The ghost choir: how many sing, the notes of the chord now sounding, and that chord. */
+  private choirN = 0;
+  private sung: Sung[] = [];
+  private choirChord: { chord: Chord; root: number; end: number } | null = null;
+  /** Each choir voice's vowel (instruments.formants), built the first time that voice sings. */
+  private readonly vowels: Formants[] = [];
   private arpChord: Chord | null = null;
   private arpNotes: number[] = [];
   private phrase: LeadNote[] = [];
   private walk = 5;
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  /** Probe-only (probe.ts 'layers'): one layer heard alone, the rest held at zero. */
+  solo: string | null = null;
 
   constructor(
-    ctx: BaseAudioContext,
+    private readonly ctx: BaseAudioContext,
     private readonly pool: VoicePool,
     bus: Bus,
     readonly scene: Scene,
@@ -120,7 +134,8 @@ class Deck {
     this.style = styleFor(mood);
     this.accent = accentFor(biome);
     const s = this.style;
-    let prog = s.prog;
+    // Clear Skies plays the mountain's song (A A B B, theory.ts); moods keep their own loop.
+    let prog = progFor(mood, biome);
     if (scene === 'results') {
       this.key = { tonic: s.tonic + s.bright, penta: MAJOR_PENTA, bright: 0, bpm: Math.round(s.bpm * 0.85) };
       prog = RESOLVED;
@@ -211,6 +226,7 @@ class Deck {
   dispose(): void {
     for (const l of LAYERS) this.fader[l].disconnect();
     for (const s of this.sends) s.disconnect();
+    for (const f of this.vowels) for (const n of f.nodes) n.disconnect();
     this.xf.disconnect();
     this.xfWet.disconnect();
   }
@@ -228,27 +244,98 @@ class Deck {
       L.sparkle = 0.5;
       L.hat = 0.25;
     } else {
-      // Intensity builds the arrangement: 0 pad only, 0.4 + bass and hats, 0.7 + arp and kick,
-      // 0.9 everything plus the lead counter-melody.
+      // The drive builds the arrangement (src/game/intensity.ts plus the engine's groove and accents).
+      // Played runs sit between 0.36 (a cruise) and about 0.6 (a skill chain on a stomp streak with
+      // the pack close), so the layers that say "you earned this" come in inside that band: the pad
+      // always; the bass from 0.26 (the run floor of 0.30 already has it under the pad; full at
+      // 0.40); hats from 0.28 (more than half at a 0.36 cruise, full with the pack); the arp from
+      // 0.48 and the kick from 0.54; clap and sparkle from 0.72; the lead counter-melody from 0.82.
+      // A draft boost with the pack tops out near 0.48, under the arp: drafting never builds the band.
       const i = this.drive.intensity;
-      L.bass = smoothstep(0.28, 0.42, i);
-      L.hat = smoothstep(0.3, 0.45, i);
-      L.arp = smoothstep(0.58, 0.72, i);
-      L.kick = smoothstep(0.6, 0.74, i);
-      L.clap = smoothstep(0.8, 0.9, i);
-      L.sparkle = smoothstep(0.8, 0.92, i);
-      L.lead = smoothstep(0.85, 0.95, i);
+      L.bass = smoothstep(0.26, 0.4, i);
+      L.hat = smoothstep(0.28, 0.42, i);
+      L.arp = smoothstep(0.48, 0.6, i);
+      L.kick = smoothstep(0.54, 0.66, i);
+      L.clap = smoothstep(0.72, 0.84, i);
+      L.sparkle = smoothstep(0.74, 0.86, i);
+      L.lead = smoothstep(0.82, 0.92, i);
       L.tension = smoothstep(0.05, 0.6, this.drive.danger);
+      L.choir = this.choirN > 0 ? 1 : 0;
     }
+    if (this.solo) for (const l of LAYERS) if (l !== this.solo) L[l] = 0;
   }
 
   private applyLevels(now: number): void {
+    // A snap (the band arriving on the reveal card's collapse) moves the faders in about 0.2 s.
+    const tau = this.drive.snap ? 0.06 : 0.45;
     for (const l of LAYERS) {
       const target = MIX[l] * this.level[l];
       if (Math.abs(target - this.applied[l]) < 0.004) continue;
       this.applied[l] = target;
-      this.fader[l].gain.setTargetAtTime(target, now, 0.45);
+      this.fader[l].gain.setTargetAtTime(target, now, tau);
     }
+  }
+
+  /** Probe: each layer's presence (0..1) as last computed. */
+  layerLevels(): Readonly<Record<Layer, number>> {
+    return this.level;
+  }
+
+  /**
+   * The ghost choir (run scene): n voices from now. A voice joining comes in on the chord already
+   * sounding; a retake (a ghost passed you back) sighs the top voice down a fourth, and when the
+   * choir is still full (more ghosts behind than voices) another voice takes its place.
+   */
+  setChoir(n: number, now: number, retaken: boolean): void {
+    const want = this.scene === 'run' ? Math.max(0, Math.min(CHOIR_MAX, Math.round(n))) : 0;
+    let delay = 0.02;
+    if (retaken && want >= this.choirN && this.sung.length > 0) {
+      const s = this.sung.pop();
+      if (s) sigh(s, now);
+      this.choirN = this.sung.length;
+      delay = 0.5;
+    }
+    if (want === this.choirN) return;
+    const cc = this.choirChord;
+    if (want > this.choirN && cc && cc.end - now > delay + 0.5 && now < this.stopAt && this.wasEnabled) {
+      for (let k = this.choirN; k < want; k++) this.singNote(k, cc.chord, cc.root, now + delay, cc.end - now - delay, 0.6);
+    } else if (want < this.choirN) {
+      while (this.sung.length > want) {
+        const s = this.sung.pop();
+        if (s) (retaken ? sigh : fadeSung)(s, now);
+      }
+    }
+    this.choirN = want;
+  }
+
+  /** Probe: voices singing in the choir now. */
+  get choirVoices(): number {
+    return this.choirN;
+  }
+
+  /** Choir voice k on a chord: the 3rd low, the 5th above it, then the top extension. */
+  private singNote(k: number, chord: Chord, root: number, t: number, dur: number, attack: number): void {
+    const tones = chord.tones;
+    // A triad has no extension: the third voice doubles the root an octave up instead.
+    const pick = k === 0 ? tones[1] : k === 1 ? tones[2] : tones.length > 3 ? tones[tones.length - 1] : 12;
+    const m = fit(root + (pick ?? 0), k === 0 ? 64 : k === 1 ? 67 : 71);
+    const bright = 0.2 + 0.3 * k;
+    // Voice k always sings the same vowel: its formants are built once and every note feeds them.
+    const vowel = (this.vowels[k] ??= formants(this.ctx, bright, this.fader.choir));
+    const v = this.pool.voice(t, 1, vowel.input, null, 0);
+    v.keep = true;
+    const s = sing(v, t, mtof(m), dur, 0.2, attack, bright);
+    this.sung.push(s);
+  }
+
+  /** Probe: the bar of the deck's loop being scheduled, and the loop's length in bars. */
+  position(): { bar: number; cycle: number } {
+    return { bar: (this.step >> 4) % this.cycle, cycle: this.cycle };
+  }
+
+  /** The deck's 16th-note grid: step s sounds at t0 + s * dur (before swing). */
+  grid(): { t0: number; dur: number } {
+    return { t0: this.base - this.step * this.stepDur, dur: this.stepDur };
   }
 
   private chordAt(bar: number): Placed {
@@ -271,6 +358,10 @@ class Deck {
     if (s16 === 0 && bar % this.cycle === placed.start) {
       this.arpCount = 0;
       if (step === 0) this.padChord(chord, root, t, chord.bars * 16 * sd);
+      const dur = chord.bars * 16 * sd;
+      this.choirChord = { chord, root, end: t + dur };
+      this.sung = [];
+      for (let k = 0; k < this.choirN; k++) this.singNote(k, chord, root, t, dur, 0.35);
     }
     if (s16 === 8) {
       // Build the next chord's pad half a bar early, so its oscillators do not pile onto the
@@ -302,11 +393,13 @@ class Deck {
     const kv = st.kick[s16];
     if (L.kick > AUDIBLE && kv > 0) kick(this.pool.voice(t, 1, this.fader.kick, null, 0), t, kv, this.accent.sub ? 40 : 46);
 
+    // Every note below is one voice holding one part, so the part's envelope is the voice's out
+    // (instruments.ts: dest null) instead of a gain of its own.
     const hv = this.scene === 'results' ? ((s16 & 3) === 2 ? 0.5 : 0) : st.hat[s16];
-    if (L.hat > AUDIBLE && hv > 0) hat(this.pool.voice(t, 1, this.fader.hat, null, 0), t, hv * rand(0.85, 1), hv >= 0.75);
+    if (L.hat > AUDIBLE && hv > 0) hat(this.pool.voice(t, 1, this.fader.hat, null, 0), t, hv * rand(0.85, 1), hv >= 0.75, null);
 
     const cv = st.clap[s16];
-    if (L.clap > AUDIBLE && cv > 0) clap(this.pool.voice(t, 1, this.fader.clap, null, 0, -0.1), t, cv);
+    if (L.clap > AUDIBLE && cv > 0) clap(this.pool.voice(t, 1, this.fader.clap, null, 0, -0.1), t, cv, null);
 
     if (L.sparkle > AUDIBLE && Math.random() < st.sparkle.prob * this.accent.sparkleMul) {
       const idx = 10 + Math.floor(Math.random() * 5);
@@ -323,7 +416,7 @@ class Deck {
       // Danger: a pulsing low root that opens up as the threat closes in.
       const m = fit(root, 38) + ((s16 & 2) === 2 ? 12 : 0);
       const v = this.pool.voice(t, 1, this.fader.tension, null, 0);
-      pluck(v, t, mtof(m), (s16 & 3) === 0 ? 0.8 : 0.55, 0.09, 1.4 + this.drive.danger * 2.2, v.out, 0, false);
+      pluck(v, t, mtof(m), (s16 & 3) === 0 ? 0.8 : 0.55, 0.09, 1.4 + this.drive.danger * 2.2, null, 0, false);
     }
   }
 
@@ -360,13 +453,14 @@ class Deck {
     const v = this.pool.voice(t, 1, this.fader.pad, null, 0);
     v.keep = true;
     const p = this.style.pad;
-    pad(v, t, notes.slice(0, 5).map(mtof), dur + 0.1, 0.9, cut, p.attack, p.detune, p.wobble);
+    pad(v, t, notes.slice(0, 5).map(mtof), dur + 0.1, 0.9, cut, p.attack, p.detune, p.wobble, null);
   }
 
   private bassNote(m: number, t: number): void {
     const v = this.pool.voice(t, 1, this.fader.bass, null, 0);
     const f = mtof(m);
-    pluck(v, t, f, 0.9, this.scene === 'results' ? 0.42 : 0.2, 2.2, v.out, 0, false);
+    // With the sub under it the voice holds two parts, each with its own envelope.
+    pluck(v, t, f, 0.9, this.scene === 'results' ? 0.42 : 0.2, 2.2, this.accent.sub ? v.out : null, 0, false);
     if (this.accent.sub) ping(v, t, f, 0.32, 0.22);
   }
 
@@ -413,20 +507,21 @@ class Deck {
     const b = 1 + Math.min(this.drive.mult - 1, 9) * 0.06;
     switch (timbre) {
       case 'pluck':
-        pluck(v, t, f, 0.8 * vel, 0.2 * len, 3 * this.accent.pluckBright * b, v.out, 0, false);
+        pluck(v, t, f, 0.8 * vel, 0.2 * len, 3 * this.accent.pluckBright * b, null, 0, false);
         break;
       case 'koto':
-        pluck(v, t, f, 0.8 * vel, 0.26 * len, 4.2 * b, v.out, 0.03, false);
+        pluck(v, t, f, 0.8 * vel, 0.26 * len, 4.2 * b, null, 0.03, false);
         break;
       case 'bell':
-        fmBell(v, t, f, 0.5 * vel, 0.3 * len, 3.5, 1.1 * b);
+        fmBell(v, t, f, 0.5 * vel, 0.3 * len, 3.5, 1.1 * b, null);
         break;
       case 'box':
-        fmBell(v, t, f, 0.48 * vel, 0.25 * len, 5, 0.7);
+        fmBell(v, t, f, 0.48 * vel, 0.25 * len, 5, 0.7, null);
         break;
       case 'glass':
-        fmBell(v, t, f, 0.42 * vel, 0.3 * len, 2.76, 0.9 * b);
+        fmBell(v, t, f, 0.42 * vel, 0.3 * len, 2.76, 0.9 * b, null);
         break;
+      // A mallet is two parts (the tone and its overtone), each with its own envelope.
       case 'mallet':
         mallet(v, t, f, 0.6 * vel, 0.25 * len);
         break;
@@ -465,7 +560,7 @@ class Deck {
       }
     }
     const v = this.pool.voice(t, 1, this.fader.lead, null, 0, 0.1);
-    lead(v, t, mtof(ladder(this.key, idx)), n.len * this.stepDur * 0.92, 0.8, this.style.lead);
+    lead(v, t, mtof(ladder(this.key, idx)), n.len * this.stepDur * 0.92, 0.8, this.style.lead, null);
   }
 }
 
@@ -477,6 +572,11 @@ export class Music {
   private mood = Mood.None;
   private biome: BiomeId = 'alpine';
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  /** Probe: decks started (each after the first is a crossfade). */
+  decksStarted = 0;
+  private choir = 0;
+  /** Probe-only: solo one layer on every deck (null: the whole band). */
+  solo: string | null = null;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -490,8 +590,9 @@ export class Music {
     this.biome = biome;
   }
 
-  setDrive(intensity: number, danger: number, mult: number): void {
-    this.drive = { intensity, danger, mult };
+  /** snap: move the layer faders fast on the next scheduler pass (kept until that pass runs). */
+  setDrive(intensity: number, danger: number, mult: number, snap = false): void {
+    this.drive = { intensity, danger, mult, snap: snap || this.drive.snap === true };
   }
 
   /** Key of the arrangement that is playing (or about to): every reward sound uses it. */
@@ -500,6 +601,38 @@ export class Music {
     if (top) return top.key;
     const s = styleFor(this.mood);
     return { tonic: s.tonic, penta: s.penta, bright: s.bright, bpm: s.bpm };
+  }
+
+  /** The playing arrangement's 16th-note grid, so pulses (fuse ticks, the duel heartbeat, the km
+   *  bell) land in time with the band. Null before the first deck exists. */
+  grid(): { t0: number; dur: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.grid() : null;
+  }
+
+  /** Probe: the playing deck's layer presence (0..1 each). */
+  layerLevels(): Readonly<Record<string, number>> | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.layerLevels() : null;
+  }
+
+  /** The ghost choir's size (0..3): the top deck sings it; a retake sighs. */
+  setChoir(n: number, now: number, retaken = false): void {
+    this.choir = n;
+    const top = this.decks[this.decks.length - 1];
+    top?.setChoir(n, now, retaken);
+  }
+
+  /** Probe: voices singing in the choir. */
+  choirVoices(): number {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.choirVoices : 0;
+  }
+
+  /** Probe: the playing deck's place in its loop. */
+  position(): { bar: number; cycle: number } | null {
+    const top = this.decks[this.decks.length - 1];
+    return top ? top.position() : null;
   }
 
   tick(now: number, until: number): void {
@@ -511,7 +644,9 @@ export class Music {
       if (top) top.fadeOut(now, XFADE);
       const d = new Deck(this.ctx, this.pool, this.bus, this.scene, this.mood, this.biome, now + 0.05);
       d.fadeIn(now, top ? XFADE : 1.2);
+      d.setChoir(this.choir, now, false);
       this.decks.push(d);
+      this.decksStarted++;
       // Flipping mountains on the title screen can stack decks faster than they fade; keep three
       // and fade older ones out in 40 ms (disposing a deck mid-fade would click).
       let kept = 0;
@@ -522,8 +657,10 @@ export class Music {
     }
     for (const d of this.decks) {
       d.setDrive(this.drive);
+      d.solo = this.solo;
       d.schedule(until, now, this.enabled);
     }
+    if (this.drive.snap) this.drive = { ...this.drive, snap: false };
     for (let i = this.decks.length - 1; i >= 0; i--) {
       if (now >= this.decks[i].retireAt) {
         this.decks[i].dispose();

@@ -4,10 +4,12 @@ import { makeToonMaterial, shared } from './materials';
 import {
   basaltGeometry,
   blossomGeometry,
+  cairnGeometry,
   charPineGeometry,
   gateBeamGeometry,
   giftGeometry,
   kickerLipGeometry,
+  kmArchGeometry,
   lanternPostGeometry,
   obstacleGeometry,
   obstacleModelRadius,
@@ -70,6 +72,45 @@ function haloMaterial(): ShaderMaterial {
   });
 }
 
+/** The kilometre mark (1, 2, ...) whose 1,000 m line falls in chunk `i`, or 0 for none. Static
+ *  geometry: it never depends on chaos. */
+export function kmInChunk(i: number): number {
+  const k = Math.ceil((i * CHUNK_LEN) / 1000);
+  return k >= 1 && k * 1000 < (i + 1) * CHUNK_LEN ? k : 0;
+}
+
+/** At most this many graveyard cairns a run, each built up to about 2.4 m of stones under a 3.8 m
+ *  marker, so it reads as a place from 30 m up the run. */
+export const CAIRN_CAP = 4;
+const CAIRN_SCALE = 1.7;
+
+/** Where the km arch's posts stand: 2 m outside the corridor's edge on each side, at the mark. */
+function archSpan(c: Course, km: number): number {
+  return 2 * (c.halfWidth(km * 1000) + 2);
+}
+
+/** The landmark meshes (the km arches and the cairns) are made off the frame, on idle time: none
+ *  before LANDMARK_START_MS after the first frame (built in the constructor, the first arch cost
+ *  startup about 140 ms at 6x CPU throttle, for a mark no run reaches in under about 40 s), then one
+ *  per idle callback (a few ms each), each at most LANDMARK_IDLE_MS late. The next mark's arch is made
+ *  as soon as one stands. A landmark in range before its mesh is made waits unseen (it comes into
+ *  range several hundred metres out, in the fog), unless it is within LANDMARK_NOW chunks of the
+ *  player, when it is made there and then. */
+const LANDMARK_START_MS = 1500;
+const LANDMARK_IDLE_MS = 1000;
+const LANDMARK_NOW = 3;
+/** Built landmark meshes kept per kind (the arch standing, the next, and one spare; cairns per palette). */
+const LANDMARK_KEEP = 3;
+/** A landmark batch's mesh until its geometry is built (drawn with no instances meanwhile). */
+const NO_GEOMETRY = new BufferGeometry();
+
+/** Runs `fn` on idle time (requestIdleCallback, at most LANDMARK_IDLE_MS late), or soon after where
+ *  there is none (Safari). */
+function whenIdle(fn: () => void): void {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: LANDMARK_IDLE_MS });
+  else setTimeout(fn, 50);
+}
+
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h ^= h >>> 15;
@@ -94,6 +135,16 @@ export class Props {
   private tilt = new Vector3();
   private cache = new Map<number, Map<string, Float32Array>>();
   private collecting: Map<string, number[]> | null = null;
+  /** Built landmark meshes by key ('arch:' and the posts' span, 'cairn:' and its palette's stone
+   *  colours), oldest first; and those waiting for idle time, with how to make each. */
+  private landmarks = new Map<string, BufferGeometry>();
+  private queued = new Map<string, () => BufferGeometry>();
+  /** Idle building has begun (LANDMARK_START_MS after the first update), and a callback is pending. */
+  private idleOpen = false;
+  private idleBusy = false;
+  private started = false;
+  /** This run's graveyard cairns (sim x and z on the bank), at most CAIRN_CAP. */
+  private graves: Array<{ x: number; z: number }> = [];
 
   constructor(
     private course: Course,
@@ -102,6 +153,9 @@ export class Props {
     private shadows: boolean,
     /** The scene renders to a multisampled target: near props fade through coverage, not a dither. */
     private smoothFade = false,
+    /** Landmarks: the kilometre arches and graveyard cairns (Medium and High; Low skips the meshes and
+     *  keeps their callouts, tags and sound). */
+    private arches = false,
   ) {
     // Gifts shrink away as they pass the lens (and right around the rider after a perfect landing).
     this.giftMat = makeToonMaterial({ bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2], clearFocus: true });
@@ -114,14 +168,27 @@ export class Props {
     this.build();
   }
 
-  setQuality(forestDensity: number, shadows: boolean, smoothFade = this.smoothFade): void {
+  setQuality(forestDensity: number, shadows: boolean, smoothFade = this.smoothFade, arches = this.arches): void {
     this.forestDensity = forestDensity;
     this.shadows = shadows;
     this.smoothFade = smoothFade;
+    this.arches = arches;
     this.build();
   }
 
   markDirty(): void {
+    this.dirty = true;
+  }
+
+  /** This run's graveyards (where several ghosts fell), as cairn spots on the bank in sim metres; the
+   *  list is kept on every tier (the mesh is drawn only on Medium and High) and replaced each run. Only
+   *  the chunks holding an old or new cairn are rebuilt. */
+  setGraveyards(list: ReadonlyArray<{ x: number; z: number }>): void {
+    const next = list.slice(0, CAIRN_CAP).map((g) => ({ x: g.x, z: g.z }));
+    if (next.length === this.graves.length && next.every((g, i) => g.x === this.graves[i].x && g.z === this.graves[i].z)) return;
+    for (const g of this.graves) this.cache.delete(Math.floor(g.z / CHUNK_LEN));
+    for (const g of next) this.cache.delete(Math.floor(g.z / CHUNK_LEN));
+    this.graves = next;
     this.dirty = true;
   }
 
@@ -131,6 +198,8 @@ export class Props {
       b.mesh.dispose();
     }
     this.batches.clear();
+    // Meshes queued for the old course or palette would only be made to be thrown away.
+    this.queued.clear();
     this.cache.clear();
     for (const mat of this.materials) mat.dispose();
     this.materials = [];
@@ -196,6 +265,24 @@ export class Props {
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p), plain, 60);
+    if (this.arches) {
+      // Kilometre arches: one batch of at most two, in the plain toon material (no new shader), casting
+      // no shadow. It is culled by its own bounds (update), so it costs a draw only while one is in view;
+      // its geometry is each mark's own span, made on idle time (whenIdle) and put in as that mark comes
+      // into range. The first mark's is made after startup, the cairn's for this palette with it.
+      add('arch', NO_GEOMETRY, plain, 2, false);
+      const arch = this.batches.get('arch')!.mesh;
+      arch.frustumCulled = true;
+      // Not a prop the results lens must keep clear of: its instance sits on the corridor's middle.
+      arch.userData.noBlock = true;
+      const span = archSpan(this.course, 1);
+      this.queue('arch:' + span, () => kmArchGeometry(span));
+      // Graveyard cairns: the same rules (one batch, at most four, plain material, no shadow, culled by
+      // its bounds, so a draw only while one is in view).
+      add('cairn', NO_GEOMETRY, plain, CAIRN_CAP, false);
+      this.batches.get('cairn')!.mesh.frustumCulled = true;
+      this.queue(this.cairnKey(), () => cairnGeometry(p));
+    }
     if (p.lantern) {
       // Lantern Night: a trail lantern at the treeline every few chunks, so the far end of the corridor
       // holds a few faint warm lights instead of a dead void at the vanishing point.
@@ -211,12 +298,43 @@ export class Props {
 
   /** `nearChunk` is the player's chunk: the instances up to it are what the rear-view mirror needs. */
   update(from: number, to: number, collected: Set<number>, destroyed: Set<number>, nearChunk = to): void {
+    if (!this.started) {
+      // The first frame is drawn: idle time may start on the landmark meshes a little after it.
+      this.started = true;
+      setTimeout(() => {
+        this.idleOpen = true;
+        this.pump();
+      }, LANDMARK_START_MS);
+    }
     if (!this.dirty && from === this.range.from && to === this.range.to) return;
     this.range = { from, to };
     this.dirty = false;
     for (const b of this.batches.values()) b.count = b.near = 0;
     const c = this.course;
     for (const k of this.cache.keys()) if (k < from - 2 || k > to + 2) this.cache.delete(k);
+    // The first km mark in range gets an arch built to its own span (made ahead on idle time; see
+    // whenIdle), and the next mark's is queued behind it. Null while it waits.
+    let archGeo: BufferGeometry | null = null;
+    if (this.arches) {
+      // At the course start (a new run, with no rebuild when the mood is unchanged), the first mark's
+      // arch is queued again in case a long run evicted it.
+      if (from <= 0) {
+        const s1 = archSpan(c, 1);
+        this.queue('arch:' + s1, () => kmArchGeometry(s1));
+      }
+      for (let i = Math.max(-2, from); i <= to; i++) {
+        const km = kmInChunk(i);
+        if (!km) continue;
+        const span = archSpan(c, km);
+        archGeo = this.landmark('arch:' + span, () => kmArchGeometry(span), i - nearChunk <= LANDMARK_NOW);
+        if (archGeo) {
+          const next = archSpan(c, km + 1);
+          this.queue('arch:' + next, () => kmArchGeometry(next));
+          this.batches.get('arch')!.mesh.geometry = archGeo;
+        }
+        break;
+      }
+    }
     for (let i = Math.max(-2, from); i <= to; i++) {
       // Static instances are computed once per chunk; only gifts and smashables change.
       let st = this.cache.get(i);
@@ -256,10 +374,96 @@ export class Props {
       }
       if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;
     }
+    // A landmark whose mesh is still to be made waits unseen.
+    const ab = this.batches.get('arch');
+    if (ab && !archGeo) ab.count = ab.near = 0;
+    const cb = this.batches.get('cairn');
+    if (cb && cb.count > 0) {
+      // (Built there and then for a cairn within LANDMARK_NOW chunks.)
+      const now = this.graves.some((g) => {
+        const ci = Math.floor(g.z / CHUNK_LEN);
+        return ci >= from && ci - nearChunk <= LANDMARK_NOW;
+      });
+      const p = this.palette;
+      const geo = this.landmark(this.cairnKey(), () => cairnGeometry(p), now);
+      if (geo) cb.mesh.geometry = geo;
+      else cb.count = cb.near = 0;
+    }
     for (const b of this.batches.values()) {
       if (nearChunk >= to) b.near = b.count;
       b.mesh.count = b.count;
       b.mesh.instanceMatrix.needsUpdate = true;
+    }
+    // The culled landmark batches get bounds round their instances in range.
+    for (const key of ['arch', 'cairn']) {
+      const b = this.batches.get(key);
+      if (b && b.count > 0) b.mesh.computeBoundingSphere();
+    }
+  }
+
+  /** The cairn mesh's key: its stones take the palette's low ground colours. */
+  private cairnKey(): string {
+    const p = this.palette;
+    return `cairn:${p.low.r},${p.low.g},${p.low.b},${p.lowLit.r},${p.lowLit.g},${p.lowLit.b}`;
+  }
+
+  /** A landmark's mesh: built already, else made now (`now`) or queued for idle time (null till then). */
+  private landmark(key: string, make: () => BufferGeometry, now: boolean): BufferGeometry | null {
+    const have = this.landmarks.get(key);
+    if (have) {
+      // Most recently used last, so the keep limit drops the stalest mesh.
+      this.landmarks.delete(key);
+      this.landmarks.set(key, have);
+      return have;
+    }
+    if (!now) {
+      this.queue(key, make);
+      return null;
+    }
+    const g = make();
+    this.queued.delete(key);
+    this.keep(key, g);
+    return g;
+  }
+
+  private queue(key: string, make: () => BufferGeometry): void {
+    if (this.landmarks.has(key) || this.queued.has(key)) return;
+    this.queued.set(key, make);
+    this.pump();
+  }
+
+  /** Makes the queued landmark meshes one per idle callback, once idle building has begun. Each one
+   *  made redraws the batches (a landmark waiting unseen shows). */
+  private pump(): void {
+    if (!this.idleOpen || this.idleBusy || this.queued.size === 0) return;
+    this.idleBusy = true;
+    whenIdle(() => {
+      this.idleBusy = false;
+      const next = this.queued.entries().next();
+      if (next.done) return;
+      const [key, make] = next.value;
+      this.queued.delete(key);
+      if (!this.landmarks.has(key)) {
+        this.keep(key, make());
+        this.dirty = true;
+      }
+      this.pump();
+    });
+  }
+
+  /** Keeps a built landmark mesh, dropping the oldest of its kind past LANDMARK_KEEP (never one a batch
+   *  still draws). */
+  private keep(key: string, g: BufferGeometry): void {
+    this.landmarks.set(key, g);
+    const kind = key.slice(0, key.indexOf(':') + 1);
+    const keys = [...this.landmarks.keys()].filter((k) => k.startsWith(kind));
+    for (let i = 0; i < keys.length - LANDMARK_KEEP; i++) {
+      const old = this.landmarks.get(keys[i])!;
+      let used = false;
+      for (const b of this.batches.values()) if (b.mesh.geometry === old) used = true;
+      if (used) continue;
+      old.dispose();
+      this.landmarks.delete(keys[i]);
     }
   }
 
@@ -328,6 +532,28 @@ export class Props {
       this.q.identity();
       this.v.set(x - side * 0.3, c.ground(x, z) + 2.27, -z);
       this.push('halo', this.v, this.q, this.s);
+    }
+    const km = this.arches ? kmInChunk(i) : 0;
+    if (km) {
+      // The arch stands over the 1,000 m line, its beam about 7 m over the higher of its two posts'
+      // footings (the posts reach well below the snow on the lower side).
+      const z = km * 1000;
+      const cx = c.centerX(z);
+      const half = archSpan(c, km) / 2;
+      this.q.identity();
+      this.v.set(cx, Math.max(c.ground(cx - half, z), c.ground(cx + half, z)), -z);
+      this.s.set(1, 1, 1);
+      this.push('arch', this.v, this.q, this.s);
+    }
+    if (this.arches) {
+      for (const g of this.graves) {
+        if (Math.floor(g.z / CHUNK_LEN) !== i) continue;
+        // Turned a little each its own way, and its marker leaning out over the run.
+        this.q.setFromAxisAngle(this.up, (g.x > c.centerX(g.z) ? Math.PI : 0) + (hashf(Math.round(g.z), 11, 1) - 0.5) * 0.8);
+        this.v.set(g.x, c.ground(g.x, g.z), -g.z);
+        this.s.setScalar(CAIRN_SCALE);
+        this.push('cairn', this.v, this.q, this.s);
+      }
     }
     this.forest(i);
     const out = new Map<string, Float32Array>();

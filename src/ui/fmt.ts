@@ -24,6 +24,16 @@ export function ordinal(n: number): string {
   return n + (o === 1 ? 'st' : o === 2 ? 'nd' : o === 3 ? 'rd' : 'th');
 }
 
+const NF_TENTHS = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
+
+/** A mission's progress figures, "799/800" or "1.9/2": the progress floors (799.6 of 800 is not there
+ *  yet), in tenths for a mission in seconds (dp 1), as missionProgressText says it. */
+export function progFigures(n: number, of: number, dp: 0 | 1 = Number.isInteger(of) ? 0 : 1): [string, string] {
+  const k = 10 ** dp;
+  const v = Math.floor(n * k + 1e-9) / k;
+  return dp ? [NF_TENTHS.format(v), NF_TENTHS.format(of)] : [fmt(v), fmt(of)];
+}
+
 export function seconds(s: number): string {
   return NF1.format(s) + NBSP + 's';
 }

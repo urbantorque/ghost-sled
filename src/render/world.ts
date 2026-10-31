@@ -3,15 +3,19 @@ import { ChaosEvent, Mood } from '../sim/chaos';
 import { CHUNK_LEN, Course, courseFor } from '../sim/course';
 import type { Snap } from '../game/run';
 import type { GhostPose } from '../game/ghosts';
+import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, type Feel, type GhostRole } from '../game/beats';
+import type { ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
-import { ChaseCamera } from './camera';
+import { ChaseCamera, crashPack } from './camera';
 import { ChaosVisuals } from './chaos';
-import { GhostVisuals } from './ghosts';
+import { GHOST_COLORS, GhostVisuals } from './ghosts';
+import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
-import { applyPalette, shared } from './materials';
+import { applyPalette, bands, shared } from './materials';
 import { Palette, getPalette } from './palette';
 import { Particles, Weather } from './particles';
+import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { Rider } from './rider';
@@ -76,17 +80,46 @@ export interface FrameView {
   /** Contract C2: the avalanche mirror's rect (CSS px, top-left origin) from the HUD's own layout,
    *  null while no chase is on. Absent, the renderer falls back to its built-in geometry. */
   mirror?: { x: number; y: number; w: number; h: number } | null;
+  /** This frame's named moments from the director (the same list the HUD and audio get; never kept). */
+  beats?: readonly Beat[];
+  /** This frame's continuous feel from the director; absent reads as IDLE_FEEL. */
+  feel?: Feel;
 }
+
+const NO_BEATS: readonly Beat[] = [];
 
 const tmpV = new Vector3();
 const tmpV2 = new Vector3();
 /** Event sparkles start just above the snow (particles.ts sparkle). */
 const LOW = new Vector3(0, 0.15, 0);
 const MARIGOLD = new Color('#FFD34D');
-const GOLD_WHITE = new Color('#FFE08A');
+const GOLD_WHITE = new Color(BEST_HEX);
 const BOOST_C = new Color('#FF8A5C');
-/** Drift tiers 1 to 3. */
-const DRIFT_C = [new Color('#7FD8FF'), new Color('#FFB040'), new Color('#FF5A7A')];
+/** Drift tiers 1 to 3: a ramp inside the player's own vermillion (pale coral, coral, vermillion), so a
+ *  drift's heat never borrows the hazard ice blue or the grudge rose. */
+const DRIFT_C = DRIFT_TIER_HEX.map((h) => new Color(h));
+const FLOW_C = new Color(FLOW_HEX);
+/** A snuffed flow's puff off the scarf: cold periwinkle-grey powder. */
+const SNUFF_C = new Color('#8E96C6');
+const GHOST_C: Record<GhostKind, Color> = {
+  pool: new Color(GHOST_COLORS.pool),
+  daily: new Color(GHOST_COLORS.daily),
+  friend: new Color(GHOST_COLORS.friend),
+  you: new Color(GHOST_COLORS.you),
+  grudge: new Color(GHOST_COLORS.grudge),
+};
+/** Near misses: trees drop snow off their boughs, everything else kicks grit off its foot. */
+const BOUGHS: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['pine', 'blossom', 'charpine']);
+const ICY: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['spire', 'serac', 'iceblock']);
+/** The best band's New ground flare and the 'In the flow' rim pulse, seconds. */
+const FLARE_S = 0.6;
+const FLOW_PULSE_S = 0.3;
+
+const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+const smooth01 = (x: number) => {
+  const k = clamp01(x);
+  return k * k * (3 - 2 * k);
+};
 
 export class World {
   readonly renderer: WebGLRenderer;
@@ -114,6 +147,8 @@ export class World {
   private perfectPulse = 0;
   private flash = 0;
   private punch = 0;
+  /** 1 while riding, easing to 0 through a crash: how much of the speed streaks the post pass gets. */
+  private streakK = 1;
   private sprayAcc = 0;
   private wasGrounded = true;
   private width = 1;
@@ -129,10 +164,28 @@ export class World {
   private screenProbe = new Vector3();
   /** The rival ghost's chest, handed to the chase camera. */
   private rivalAt = new Vector3();
+  /** The chest of the ghost riding past your wreck, and where you fell, handed to the crash orbit. */
+  private packAt = new Vector3();
+  private fellAt = new Vector3();
   private mirrorTick = 0;
   private lastMirror = { x: 0, y: 0, w: 0, h: 0, w0: -1, h0: -1 };
   private landG = { x: 0, z: 0 };
   private landV = new Vector3();
+  /** This frame's feel from the director (IDLE_FEEL outside a run). */
+  private feel: Feel = IDLE_FEEL;
+  /** The streak this frame's stomp beat carries (0: none): the perfect landing's crater, ring and
+   *  burst grow with it. Feel.streak stands in when the beat is not in the same frame. */
+  private stompN = 0;
+  /** Seconds since 'In the flow' (the rider's rim pulse). */
+  private flowPulseT = 9;
+  /** Seconds since New ground (the best band's flare), -1 while none. */
+  private flareT = -1;
+  /** The best band's sim z as last placed, -1 for none: the flare outlives the band being dropped. */
+  private bestZ = -1;
+  private fxA = new Vector3();
+  private fxB = new Vector3();
+  private fxV = new Vector3();
+  private fxT = new Vector3();
   /** Projected screen position of the rider (for UI callouts). */
   readonly riderScreen = { x: 0, y: 0 };
 
@@ -154,7 +207,7 @@ export class World {
     this.palette = getPalette(this.course.biome, Mood.None);
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
-    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2);
+    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.sky = new Sky(seed);
     this.sky.setPalette(this.palette);
     this.particles = new Particles(1800);
@@ -175,7 +228,8 @@ export class World {
     this.cam.blocked = (x, z, r) => {
       for (const o of this.props.root.children) {
         const im = o as unknown as { isInstancedMesh?: boolean; count: number; instanceMatrix: { array: ArrayLike<number> } };
-        if (!im.isInstancedMesh) continue;
+        // (A km arch's instance sits on the corridor's middle, its posts far out: it blocks nothing.)
+        if (!im.isInstancedMesh || o.userData.noBlock) continue;
         const a = im.instanceMatrix.array;
         for (let i = 0; i < im.count; i++) {
           const dx = a[i * 16 + 12] - x;
@@ -216,6 +270,18 @@ export class World {
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
+    this.prewarm();
+  }
+
+  /** Compiles every material in the scene now, the hidden ones too, into the target the scene pass
+   *  draws into. The landing ring first draws on the run's first jump and the stomp crater on its first
+   *  perfect landing: compiled there, each stalled the frame of the moment it was meant to sell. */
+  private prewarm(): void {
+    const r = this.renderer;
+    const prev = r.getRenderTarget();
+    r.setRenderTarget(this.post.sceneTarget);
+    r.compile(this.scene, this.cam.camera);
+    r.setRenderTarget(prev);
   }
 
   private configureShadow(): void {
@@ -269,7 +335,7 @@ export class World {
     this.sun.castShadow = q.shadows;
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
-    this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
+    this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
     const canHalf = this.renderer.capabilities.isWebGL2;
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
@@ -277,17 +343,20 @@ export class World {
     this.applyWeather();
     this.lastChunkRange = '';
     this.resize();
-    // Materials recompile when the shadow define changes.
+    // Materials recompile when the shadow define changes (the hidden ones now, not on first use).
     this.scene.traverse((o) => {
       const m = (o as { material?: { needsUpdate: boolean } }).material;
       if (m) m.needsUpdate = true;
     });
+    this.prewarm();
   }
 
   setCourse(seed: number): void {
     const c = courseFor(seed);
     if (c === this.course) return;
     this.course = c;
+    // Another mountain's graveyards never stand on this one (the next run sets its own).
+    if (this.graves.length) this.setGraveyards([]);
     this.terrain.setCourse(c);
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
@@ -304,10 +373,14 @@ export class World {
   }
 
   setMood(mood: Mood): void {
+    const same = mood === this.mood;
     this.mood = mood;
     this.palette = getPalette(this.course.biome, mood);
     applyPalette(this.palette);
-    this.props.setCourse(this.course, this.palette);
+    // The props bake the palette into their meshes, and it is the same for the same mountain and
+    // mood (setCourse builds them for the mood in force): the title straight after startup and a
+    // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
+    if (!same) this.props.setCourse(this.course, this.palette);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
@@ -315,8 +388,35 @@ export class World {
     this.lastChunkRange = '';
   }
 
-  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind }>): void {
+  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
     this.ghosts.setField(list);
+  }
+
+  /** Graveyards (stretch; a contract amendment): this run's spots where several pool ghosts fell (the
+   *  director's clusters, sim z, with a name and how many fell). Each gets a cairn on the bank beside
+   *  it (Medium and High; Low keeps no mesh), on the side its hash picks, 1.4 m outside the corridor so
+   *  it is never in the line. Call it at each run's start, after setCourse; an empty list clears them.
+   *  The placed spots go on to the ghost layer for their tags ('Widow's Bend' over '4 ghosts fell
+   *  here'), which show on every tier. */
+  setGraveyards(list: ReadonlyArray<{ z: number; name: string; fell: number }>): void {
+    // (The tag hangs just over the marker stake's top; on Low, with no cairn, it marks the same spot.)
+    const placed = placeGraves(this.course, list);
+    this.graves = placed;
+    this.props.setGraveyards(placed);
+    this.ghosts.setGraveyards(placed);
+  }
+
+  /** The cairns placed this run (for the ghost layer's tags and play-tests). */
+  graves: ReadonlyArray<GravePlace> = [];
+
+  /** Clears held feel (the camera's freeze and jolts; the world's rim pulse and band flare) on revive
+   *  and at a run's start. */
+  resetFeel(): void {
+    this.cam.resetFeel();
+    this.flowPulseT = 9;
+    this.flareT = -1;
+    this.bestZ = -1;
+    this.rider.setFlow(0, 0);
   }
 
   /** The sled shop's previews (src/render/portrait.ts): the real sled mesh, with the rider seated
@@ -357,6 +457,10 @@ export class World {
     this.wasGrounded = true;
     this.flash = 0;
     this.punch = 0;
+    this.streakK = 1;
+    this.flowPulseT = 9;
+    this.flareT = -1;
+    this.bestZ = -1;
     this.updateChunks(snap.z, true);
   }
 
@@ -399,9 +503,26 @@ export class World {
     this.flash = Math.max(0, this.flash - dt * 4);
     this.punch = Math.max(0, this.punch - dt * 2.5);
 
+    const beats = v.beats ?? NO_BEATS;
+    const feel = v.feel ?? IDLE_FEEL;
+    this.feel = feel;
+    // A stomp's style beat comes before its land event's reaction: read the streak it carries first.
+    this.stompN = 0;
+    for (const b of beats) if (b.type === 'stomp') this.stompN = Math.max(this.stompN, b.streak);
     if (v.mode === 'run') for (const e of v.events) this.onEvent(e, s);
+    // Named moments after the raw events: the camera, the ghost layer, then the world's own.
+    this.cam.beats(beats, feel);
+    this.ghosts.beats(beats, feel);
+    if (v.mode === 'run') this.onBeats(beats, v);
 
-    // Rider.
+    // Rider. Earned flow burns on it (uniforms only); 'In the flow' pulses its rim to full for 0.3 s
+    // (under reduced motion a softer fade in and out instead of the flash).
+    this.flowPulseT += dt;
+    const pt = this.flowPulseT;
+    const pulse = pt >= FLOW_PULSE_S ? 0 : feel.reduced ? 0.6 * Math.sin((Math.PI * pt) / FLOW_PULSE_S) : pt < 0.05 ? pt / 0.05 : 1 - smooth01((pt - 0.05) / (FLOW_PULSE_S - 0.05));
+    // (Only while riding: the crash owns its own beat, and the title reel's hero has earned nothing.)
+    const riding = v.mode === 'run' && !this.rider.crashing;
+    this.rider.setFlow(riding ? feel.flow : 0, riding ? Math.max(feel.flowPulse, pulse) : 0);
     const showRider = v.playerVisible;
     this.rider.setVisible(showRider);
     if (showRider && !this.rider.crashing) {
@@ -455,7 +576,11 @@ export class World {
         if (this.sprayAcc >= 1) {
           // Spray rides the slope: its carrier follows the ground under the sled (the title reel's
           // snapshot carries no vertical speed, and spray launched level floated off into the sky).
-          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce);
+          // A held drift heats it from the first tier on, inside the player's vermillion (Feel's charge
+          // and tier), and at tier 3 a fifth of its grains are hot motes.
+          const tier = s.drifting && v.mode === 'run' ? Math.min(3, feel.driftTier) : 0;
+          const heat = tier > 0 ? DRIFT_C[tier - 1] : null;
+          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce, heat, feel.driftCharge, tier >= 3 ? 0.2 : 0);
           this.sprayAcc = 0;
         }
       } else if (this.wasGrounded) this.trail.lift();
@@ -502,7 +627,8 @@ export class World {
     let chaosShake = 0;
     this.chaos.detail = this.quality.tier;
     if (v.sim) chaosShake = this.chaos.update(v.sim, v.time, this.cam.camera.position);
-    if (chaosShake > 0) this.cam.shake(chaosShake * dt * 4);
+    // Reduced motion: no rumbles (the chaos shake here, the avalanche's below).
+    if (chaosShake > 0 && !feel.reduced) this.cam.shake(chaosShake * dt * 4);
     if (v.sim && v.sim.dyn.avalanche.phase === 2 && v.mode === 'run') {
       // The chase in the main view, so it reads without the mirror: from about 60 m powder and
       // debris from the wall blast forward past the lens, a trickle at first and thickening as it
@@ -513,23 +639,33 @@ export class World {
       // The rumble: short kicks on a 6 Hz clock that the camera's own decay turns into a light
       // jitter, gentle at first and harder as the gap closes (each kick decays before the next, so
       // it never builds up).
-      if (gap < 50 && Math.floor(v.time * 6) !== Math.floor((v.time - dt) * 6)) this.cam.shake(0.08 + 0.28 * Math.pow(1 - Math.max(0, gap) / 50, 0.7));
+      if (!feel.reduced && gap < 50 && Math.floor(v.time * 6) !== Math.floor((v.time - dt) * 6)) this.cam.shake(0.08 + 0.28 * Math.pow(1 - Math.max(0, gap) / 50, 0.7));
     }
     const mate = v.mode === 'title' ? this.cam.pickMate(s, v.ghostPoses.values()) : null;
     // The ghost the rival pill names, which the chase eases into the frame when it is close.
     const rp = v.mode === 'run' && v.rival ? v.ghostPoses.get(v.rival.id) : null;
     const rival = rp && !rp.done ? this.rivalAt.set(rp.x, rp.y + 0.8, -rp.z) : null;
+    // Through the crash, where you fell and the ghost riding past it (from CRASH_PACK_NEAR_M behind to
+    // a few metres past), which the crash orbit frames with the wreck.
+    const fallen = v.mode === 'run' && v.sim && this.rider.crashing ? v.sim.s : null;
+    const pack = fallen ? crashPack(v.ghostPoses, fallen.x, fallen.z, this.packAt) : null;
+    const fell = fallen ? this.fellAt.set(fallen.x, fallen.y, -fallen.z) : null;
     // The run-start reveal: the chase rides high and back for about 2 s, then pushes in.
     const runK = v.mode === 'run' && v.sim ? Math.max(0, Math.min(1, (v.sim.tick / 60 - 1.8) / 1.6)) : 1;
     const intro = 1 - runK * runK * (3 - 2 * runK);
     this.cam.sun = this.palette.diskDir;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, mate, rival, intro }, dt);
+    // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
+    // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
+    const drifting = v.mode === 'run' && s.drifting;
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
     this.ghosts.reel = v.mode === 'title';
     this.ghosts.update(v.ghostPoses, this.cam.camera, this.width, this.height, v.time, focus, (p, c) => this.particles.sparkle(p, c, 16, 2.2, 0.55, 0.2, null, 0.6), v.occluders, v.rival);
+    this.landing.streak = v.mode === 'run' ? feel.streak : 0;
     this.landing.update(s, v.sim ? v.sim.gravity : 9.81, v.airTicks, dt, showRider && v.mode === 'run' && !this.rider.crashing);
+    this.updateBands(v, feel, s, dt);
     // While the results frame the wreck, gifts within about 3 m of it clear away (the gift shader's
     // CLEAR_FOCUS path), shrinking over a moment rather than popping.
     this.resultsClear += ((v.mode === 'results' ? 1 : 0) - this.resultsClear) * Math.min(1, dt * 5);
@@ -560,14 +696,18 @@ export class World {
     // speed smear flattened to white (its shadow pattern gone), and the results hero shot is a calm,
     // close frame where bloom washed the face and scarf out: both run with less of either.
     const tall = this.width < this.height;
-    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) : 0;
+    // Reduced motion halves the speed streaks and the flash and drops the punch (FOV breathing stays).
+    // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
+    // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
+    this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
+    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
     // smooth slope right under the results lens read as an overexposed smear).
     pp.footScale = v.mode === 'results' ? 1.8 : tall ? 1.3 : 1;
-    pp.punch = this.punch;
-    pp.flash = this.flash;
+    pp.punch = feel.reduced ? 0 : this.punch;
+    pp.flash = this.flash * (feel.reduced ? 0.5 : 1);
     pp.time = v.time;
     // The results hero shot is a calm frame: the danger grade lets go once the run is over. It
     // builds from about 60 m and eases in and out, so the wall arriving or a revive never pops it.
@@ -595,11 +735,13 @@ export class World {
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.
-   *  Medium and High only, while the wall is within 75 m. */
+   *  Medium and High only, for the whole chase: the HUD shows the unit's glass from the chase's first
+   *  frame, and a clean rider holds the wall at 70 to 90 m (it speeds up past 70), so an inset kept to
+   *  within 75 m left that glass empty for most of a good run (decision 33: never an empty frame). */
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && gap < 75 && this.quality.tier !== 'low' ? 1 : 0;
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.tier !== 'low' ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it
@@ -665,8 +807,175 @@ export class World {
     r.shadowMap.autoUpdate = autoShadow;
   }
 
+  /** The world's own reactions to named moments: motes in the two existing particle layers (budget
+   *  scaled, so Low stays inside its caps), the post punch and the rider's rim pulse. The camera's
+   *  kicks and jolts are the chase camera's (cam.beats). */
+  private onBeats(beats: readonly Beat[], v: FrameView): void {
+    if (beats.length === 0) return;
+    const s = v.snap;
+    for (const b of beats) {
+      switch (b.type) {
+        case 'nearMiss':
+          this.nearMissFx(b, s);
+          break;
+        case 'driftRelease':
+          this.releaseFx(b, s);
+          break;
+        case 'flow':
+          this.flowFx(b.phase, s);
+          break;
+        case 'newGround':
+          this.newGroundFx(b, s);
+          break;
+        case 'ghostTrick':
+          if (b.quality === 'perfect') this.ghostStompFx(b, v);
+          break;
+        default:
+          break;
+      }
+    }
+  }
+
+  /** The sled's velocity in three.js space, its vertical part following the slope under it: the
+   *  carrier that keeps a burst riding along with the sled. */
+  private carrier(s: Snap): Vector3 {
+    this.course.gradient(s.x, s.z, this.landG);
+    return this.fxV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz);
+  }
+
+  /** A near miss shakes the hazard you shaved: snow drops off a tree's boughs, anything else kicks grit
+   *  and powder off its foot. The sim resolves a near miss once the sled is a radius and 1.5 m past the
+   *  hazard, so by then it stands beside or behind the chase lens (snow thrown at its own edge sat at
+   *  the top of a desktop frame and off the side of a phone's): the burst is thrown at the rider's side
+   *  on the side you shaved, a little ahead and inside the frame (brush.ts). Same powder layer (no
+   *  draw call, no material), the count scaled by the tier's particle budget like every burst. A
+   *  whisker throws the full amount, an ordinary near miss about two thirds. Shaved in the air, a
+   *  tree's snow comes off at the rider's height up to its crown; grit stays on the snow; a rider
+   *  well clear over either throws none (brush.ts). */
+  private nearMissFx(b: BeatOf<'nearMiss'>, s: Snap): void {
+    const bough = BOUGHS.has(b.obs);
+    const k = b.grade === 'whisker' ? 1 : 0.68;
+    if (brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT, bough ? BRUSH_REACH_BOUGH : 0) === 0) return;
+    this.particles.brush(this.fxB, this.fxT, this.carrier(s), bough, ICY.has(b.obs), (bough ? 22 : 18) * k);
+  }
+
+  /** The snow's height at a sim (x, z), for brush.ts. */
+  private readonly groundAt = (x: number, z: number): number => this.course.ground(x, z);
+
+  /** A drift released: the post punch by tier (0.6, 0.8, 1; none under reduced motion), and at the
+   *  runners tier 2's coral motes, or tier 3's crack: a ring of vermillion motes (every third
+   *  snow-white) skimming out flat and a blast of powder. The kick and the jolt are the camera's. */
+  private releaseFx(b: BeatOf<'driftRelease'>, s: Snap): void {
+    const tier = Math.max(1, Math.min(3, b.tier));
+    // (The punch is dropped at the post pass under reduced motion.)
+    this.punch = Math.max(this.punch, tier === 3 ? 1 : tier === 2 ? 0.8 : 0.6);
+    if (tier < 2) return;
+    const vel = this.carrier(s);
+    const at = this.fxA.set(s.x, s.y, -s.z);
+    if (tier === 2) {
+      this.particles.sparkle(this.fxB.copy(at).add(LOW), DRIFT_C[1], 12, 2.6, 0.42, 0.19, vel);
+      return;
+    }
+    this.particles.ring(this.fxB.copy(at).add(LOW), DRIFT_C[2], 22, 5.6, vel, 3, 1.45, 0.48, 0.21);
+    // (burst() throws count x power x 1.6: about 30 grains and billows before the budget.)
+    this.particles.burst(at, 1.3, 14.4, vel);
+  }
+
+  /** Flow: going in, vermillion embers stream off the scarf with the rim pulse; snuffed out by a bump,
+   *  a cold periwinkle-grey puff comes off it (the glow itself drops with the director's cap). */
+  private flowFx(phase: 'in' | 'snuff', s: Snap): void {
+    if (this.rider.crashing) return;
+    const a = this.rider.scarfPoint(0.12, this.fxA);
+    const b = this.rider.scarfPoint(1, this.fxB);
+    const vel = this.carrier(s);
+    if (phase === 'in') {
+      this.flowPulseT = 0;
+      this.particles.scarf(a, b, FLOW_C, 12, vel, true);
+    } else {
+      this.flowPulseT = 9;
+      this.particles.scarf(a, b, SNUFF_C, 10, vel, false);
+    }
+  }
+
+  /** New ground: the best band flares (uBestK over 0.6 s) and a line of gold-white motes skims across
+   *  the snow at the sled, riding along with it a moment, kept low (decision 67). */
+  private newGroundFx(b: BeatOf<'newGround'>, s: Snap): void {
+    this.flareT = 0;
+    if (this.bestZ < 0) this.bestZ = b.z;
+    const vel = this.carrier(s);
+    const l = Math.hypot(vel.x, vel.z);
+    // Across the line of travel, 4 m either side of the sled.
+    const px = l > 0.5 ? -vel.z / l : 1;
+    const pz = l > 0.5 ? vel.x / l : 0;
+    const gy = this.course.ground(s.x, s.z);
+    const a = this.fxA.set(s.x - px * 4, gy, -s.z - pz * 4);
+    const c = this.fxB.set(s.x + px * 4, gy, -s.z + pz * 4);
+    this.particles.line(a, c, GOLD_WHITE, 24, vel, 1.35);
+  }
+
+  /** A ghost's stomp (its own perfect landing): a small ring of motes in its kind colour skimming out
+   *  round it, riding along with it (at most 4 on Low). */
+  private ghostStompFx(b: BeatOf<'ghostTrick'>, v: FrameView): void {
+    const pose = v.ghostPoses.get(b.ghost.id);
+    let vel: Vector3 | null = null;
+    if (pose && !pose.done) {
+      this.course.gradient(pose.x, pose.z, this.landG);
+      const vx = Math.sin(pose.heading) * pose.speed;
+      const vz = Math.cos(pose.heading) * pose.speed;
+      vel = this.fxV.set(vx, this.landG.x * vx + this.landG.z * vz, -vz);
+    }
+    const at = this.fxA.set(b.x, Math.max(b.y, this.course.ground(b.x, b.z)) + 0.1, -b.z);
+    this.particles.ring(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, 10, 3.6, vel, 0, 1.3, 0.4, 0.17, this.quality.tier === 'low' ? 4 : Infinity);
+  }
+
+  /** Your best and an unbeaten friend's distance, as bands the snow shader paints across the corridor
+   *  (bands in materials.ts): placed from Feel each run frame. The best band brightens over the last
+   *  80 m as you close in, and flares on New ground (a steady brighten under reduced motion). */
+  private updateBands(v: FrameView, feel: Feel, s: Snap, dt: number): void {
+    const run = v.mode !== 'title';
+    const bl = run ? feel.bestLine : null;
+    if (bl) this.bestZ = bl.z;
+    let flare = 0;
+    let ft = 0;
+    if (this.flareT >= 0) {
+      this.flareT += dt;
+      const t = this.flareT;
+      ft = t;
+      if (feel.reduced) {
+        flare = 0.6 * (t < FLARE_S ? smooth01(t / FLARE_S) : 1 - smooth01((t - FLARE_S - 0.4) / 1.2));
+        if (t > FLARE_S + 1.6) this.flareT = -1;
+      } else {
+        flare = t < 0.06 ? t / 0.06 : 1 - smooth01((t - 0.06) / (FLARE_S - 0.06));
+        if (t >= FLARE_S) this.flareT = -1;
+      }
+    }
+    const c = this.course;
+    if (run && this.bestZ >= 0 && (bl !== null || flare > 0)) {
+      const z = this.bestZ;
+      const ahead = z - s.z;
+      const near = ahead > 0 && ahead < 80 ? smooth01(1 - ahead / 80) : 0;
+      bands.uBestZ.value = -z;
+      bands.uBestX.value = c.centerX(z);
+      bands.uBestHW.value = c.halfWidth(z) + 2;
+      bands.uBestK.value = Math.max(bl ? bl.k : 0, flare, 0.4 * near);
+      // The flare's wave of light outruns the sled down the slope (none under reduced motion).
+      bands.uBestWave.value = flare > 0 && !feel.reduced ? 2 + ft * 38 : 0;
+    } else {
+      bands.uBestHW.value = 0;
+      bands.uBestWave.value = 0;
+    }
+    const fl = run ? feel.friendLine : null;
+    if (fl) {
+      bands.uFriendZ.value = -fl.z;
+      bands.uFriendX.value = c.centerX(fl.z);
+      bands.uFriendHW.value = c.halfWidth(fl.z) + 2;
+    } else bands.uFriendHW.value = 0;
+  }
+
   private onEvent(e: SimEvent, s: Snap): void {
     const pos = new Vector3(s.x, s.y, -s.z);
+    // The camera's kicks and shakes for this event (ChaseCamera.onSimEvent).
+    this.cam.onSimEvent(e);
     switch (e.type) {
       case 'land': {
         // Landing powder rides along the slope, not along the fall the sled has just ended: the snap's
@@ -675,19 +984,18 @@ export class World {
         this.course.gradient(s.x, s.z, this.landG);
         const lv = this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz);
         if (e.quality === 'perfect') {
+          // A stomp streak presses a wider crater (1, 1.15, 1.3, 1.45, then 1.6) and throws a bigger
+          // burst (up to twice the motes, through the budget).
+          const n = Math.max(1, this.stompN || this.feel.streak);
           this.perfectPulse = 1;
           this.flash = 0.3;
           this.rider.flash();
-          this.landing.pulse(s.x, s.z, s.heading);
+          this.landing.pulse(s.x, s.z, s.heading, 1 + 0.15 * Math.min(4, n - 1));
           this.punch = 1;
-          this.cam.kick(0.9);
-          this.cam.shake(0.25);
-          this.particles.perfect(pos, lv);
+          this.particles.perfect(pos, lv, Math.min(2, 1 + 0.25 * (n - 1)));
         } else if (e.quality === 'clean') {
-          this.cam.shake(Math.min(0.5, e.impact * 0.03));
           this.particles.burst(pos, 0.9, 22, lv);
         } else if (e.quality === 'sketchy') {
-          this.cam.shake(0.55);
           this.particles.burst(pos, 1.0, 26, lv);
         } else {
           this.particles.burst(pos, 0.5, 8, lv);
@@ -704,11 +1012,9 @@ export class World {
         // wall, every lens looked through a row of dissolving trunks and cones.
         if (e.cause === 'forest') this.rider.startCrash(new Vector3(Math.sign(this.course.centerX(s.z) - s.x) * 1.5, s.vy, -s.vz), 0.35);
         else this.rider.startCrash(new Vector3(s.vx, s.vy, -s.vz), 1);
-        this.cam.shake(1.1);
         this.particles.burst(pos, 2, 60);
         break;
       case 'bump':
-        this.cam.shake(0.5);
         this.particles.burst(pos, 0.8, 14);
         break;
       case 'smash':
@@ -723,7 +1029,6 @@ export class World {
         this.props.markDirty();
         break;
       case 'boost':
-        this.cam.kick(0.35);
         this.punch = Math.max(this.punch, 0.6);
         this.particles.sparkle(pos.clone().add(LOW), BOOST_C, 8, 2.4, 0.35, 0.18, this.landV.set(s.vx, 0, -s.vz));
         break;

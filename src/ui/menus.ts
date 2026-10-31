@@ -1,12 +1,14 @@
-import type { SettingsModel, SledCard, UIHandlers } from './contract';
+import type { MissionView, SettingsModel, SledCard, UIHandlers } from './contract';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
 import { fmt, percent } from './fmt';
 import { icon } from './icons';
 import { SettingsPanel } from './settings';
+import { missionList } from './title';
 
-// Pause overlay (Resume, inline settings, Home) and the two sheets: Sleds and Settings.
+// Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: Sleds and
+// Settings.
 // Escape is deliberately not bound: on CrazyGames it exits fullscreen. The game maps P to pause.
 // The Sleds sheet is a shop: a large preview of the picked sled (rider seated, what it does in one
 // plain line, its trade-offs as plus and minus bars, the one action) beside a grid of tiles that
@@ -15,6 +17,8 @@ import { SettingsPanel } from './settings';
 
 /** The sim's clean-landing yaw window in radians: a sled's landTol widens it. */
 const LAND_WINDOW = 0.62;
+/** The pause card shows at most this many missions (the save keeps three active). */
+const PAUSE_MISSIONS = 3;
 
 /**
  * The preview's backdrop, painted like the game's own Pinecrest dusk rather than card clip art: the
@@ -165,6 +169,8 @@ export class Menus {
   readonly sleds: Layer;
   readonly settings: Layer;
   private readonly pausePanel: SettingsPanel;
+  /** The run's missions on the pause card, as they stand now (hidden with none). */
+  private readonly pauseMis: HTMLElement;
   private readonly sheetPanel: SettingsPanel;
   private readonly resumeBtn: HTMLButtonElement;
   private readonly sledsBody: HTMLElement;
@@ -226,7 +232,11 @@ export class Menus {
     const title = h('h2', 'gs-pause-title', 'Paused');
     title.id = 'gs-pause-title';
     const key = h('p', 'gs-pause-key gs-kbd-only', kbd('P'), ' to resume');
-    const card = h('div', 'gs-pause-card gs-panel', title, this.resumeBtn, this.pausePanel.el, home, key);
+    // Under the title, what the run is working toward: each mission's live progress, Done once it popped.
+    this.pauseMis = h('section', 'gs-pause-mis');
+    this.pauseMis.setAttribute('aria-labelledby', 'gs-pause-mis-h');
+    this.pauseMis.hidden = true;
+    const card = h('div', 'gs-pause-card gs-panel', title, this.pauseMis, this.resumeBtn, this.pausePanel.el, home, key);
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', title.id);
@@ -298,9 +308,17 @@ export class Menus {
   /** Called after any open/close, so the UI can make everything underneath inert. */
   onChange: () => void = () => undefined;
 
-  showPause(s: SettingsModel): void {
+  showPause(s: SettingsModel, missions?: MissionView[]): void {
     this.lastSettings = { ...s };
     this.pausePanel.set(s);
+    const list = (missions ?? []).slice(0, PAUSE_MISSIONS);
+    this.pauseMis.replaceChildren();
+    if (list.length > 0) {
+      const head = h('h3', 'gs-pause-mis-h', 'Missions');
+      head.id = 'gs-pause-mis-h';
+      this.pauseMis.append(head, missionList(list));
+    }
+    this.pauseMis.hidden = list.length === 0;
     if (this.pause.show()) {
       this.rememberFocus();
       this.resumeBtn.focus({ preventScroll: true });

@@ -1,11 +1,13 @@
-import type { ResultsGhost, ResultsModel, UIHandlers, UnlockedMountain } from './contract';
+import type { ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
 import type { InputMode } from '../game/input';
+import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
-import { fmt, kindCls, metres, ordinal, seconds } from './fmt';
+import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
-import { missionList } from './title';
+import { missionList, progText } from './title';
+import './meta.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
@@ -17,9 +19,41 @@ import { missionList } from './title';
 // screens the card keeps to the right, so the live crash scene on the left is the hero shot.
 
 const COUNT_MS = 650;
+/**
+ * The card's beat timeline (ms after it opens), for sound sync (engine.ui delays). The values mirror
+ * the constants and style.css delays they are named after; they change together.
+ */
+export const RESULTS_TIMING = {
+  COUNT_MS,
+  PLACE_MS: 300,
+  NEW_BEST_MS: 560,
+  BEAT_MS: 860,
+  BEAT_STEP: 110,
+  DONE_MS: 1050,
+  DONE_STEP: 140,
+  FLY_MS: 1470,
+  FLY_STEP: 140,
+  FLY_DUR: 680,
+  /** The head's sub block (crash line, race line, gifts) steps in (style.css .gs-res-sub). */
+  SUB_MS: 440,
+  /** The unlock slot pops in: a new mountain's card, or the next-unlock meter (style.css .gs-ul). */
+  UNLOCK_MS: 480,
+  /** The next-unlock meter fills from where the run started to where it ended (meta.css). */
+  METER_MS: 760,
+  METER_DUR: 620,
+} as const;
 /** When the missions land (ms after the card opens), matching the stagger in style.css. Their bars
  *  fill, each completed one's Done stamp lands 140 ms after the last, then its reward flies. */
 const MIS_STAMP_MS = 1050;
+
+/**
+ * When a mission row's reward leaves its card (ms after the card opens): just after its Done stamp
+ * (MIS_STAMP_MS plus 140 ms per row). It then flies for FLY_DUR, or, with the card or the wallet
+ * scrolled out of view (phones) or under reduced motion, lands right here.
+ */
+export function landAt(row: number): number {
+  return MIS_STAMP_MS + 420 + row * 140;
+}
 /** The finishing order shows your row, the two places above it (the next ghosts to beat) and the one
  *  below; Show All opens the rest. A field this small or smaller always shows whole. */
 const WIN_ABOVE = 2;
@@ -31,13 +65,65 @@ const WIN_ROWS_PHONE = 3;
  * reads as a list of near misses. The air floor is the air mission's own target. A stat the game
  * flags as a personal record always shows, first, with a Record tag.
  */
-const FLOOR = { bestCombo: 1000, perfects: 1, maxAir: 1.5 } as const;
+const FLOOR = { bestCombo: 1000, perfects: 1, maxAir: 1.5, bestStreak: 3 } as const;
 /** At most this many trick stats, so the score and the race carry the card. */
 const MAX_STATS = 2;
 /** Challenge is answered by a toast, not by updateResults: it re-arms after this long. */
 const CHAL_LOCK_MS = 1500;
+/** A lost combo from this big is named on the crash line ("with 4,960 on the line"). */
+const LOST_LINE_MIN = 1000;
+/** A rematch name this long (in characters) drops the Space keycap and, on phones, a type size. */
+const LONG_NAME = 9;
+/** Results opened this session, so the tip for next time rotates through the moves to learn. */
+let tipTurn = 0;
 
 type StatKey = keyof typeof FLOOR;
+
+/** The More cue shows only once at least this much of the body is cut off (less is the fade's job). */
+export const MORE_MIN_PX = 40;
+
+/** The results body's blocks the More cue can point at, for watchMore. */
+interface MoreParts {
+  mis: HTMLElement | null;
+  race: HTMLElement | null;
+  run: HTMLElement | null;
+  tip: HTMLElement | null;
+  /** The missions section's header row: once it is in view, the cue says "More". */
+  head: HTMLElement | null;
+}
+
+type Box = { left: number; right: number; top: number; bottom: number };
+export type MoreBlock = { key: 'mis' | 'race' | 'run' | 'tip'; r: Box };
+
+/**
+ * Whether a Done stamp (its box `r`) is on screen inside the results body's visible box `view`: laid
+ * out (not folded away) and its centre inside. A stamp that starts out of view stays silent.
+ */
+export function stampInView(r: Box, view: Box): boolean {
+  if (!(r.right > r.left && r.bottom > r.top)) return false;
+  const cx = (r.left + r.right) / 2;
+  const cy = (r.top + r.bottom) / 2;
+  return cx >= view.left && cx <= view.right && cy >= view.top && cy <= view.bottom;
+}
+
+/**
+ * Where the More cue goes, from layout already read: `clip` (px of the body cut off below), the
+ * scroller's visible box (`right` inside its padding), the blocks and the missions header. Null: no
+ * cue (under MORE_MIN_PX cut, or nothing cut). The cue is centred on the column that runs on: the
+ * missions while their header is still below the fold ("Missions"), else the column cut deepest
+ * ("More"); when only the full-width tip row is cut it sits at that row's right end, off its words.
+ */
+export function moreCue(clip: number, view: { top: number; bottom: number; right: number }, blocks: readonly MoreBlock[], head: Box | null, cueW: number): { x: number; label: 'missions' | 'more' } | null {
+  if (clip < MORE_MIN_PX) return null;
+  const cut = blocks.filter((b) => b.r.bottom > view.bottom + 1);
+  if (cut.length === 0) return null;
+  const headIn = head !== null && head.top >= view.top && head.bottom <= view.bottom;
+  const mis = cut.find((b) => b.key === 'mis');
+  if (mis && !headIn) return { x: (mis.r.left + mis.r.right) / 2, label: 'missions' };
+  const cols = cut.filter((b) => b.key !== 'tip').sort((a, b) => b.r.bottom - a.r.bottom);
+  if (cols.length > 0) return { x: (cols[0].r.left + cols[0].r.right) / 2, label: 'more' };
+  return { x: view.right - cueW / 2, label: 'more' };
+}
 
 export class Results {
   readonly layer: Layer;
@@ -48,10 +134,18 @@ export class Results {
   /** Offers pressed on these results: one the game then withdraws keeps its slot as a status. */
   private pressed = new Set<string>();
   private io: IntersectionObserver | null = null;
+  private ro: ResizeObserver | null = null;
   private timers: number[] = [];
+  /** Mission rows whose reward is still on its way to the wallet (each lands, and reports, once). */
+  private readonly toLand = new Set<number>();
+  /** Mission rows whose Done stamp has started on screen on this card (onMissionStamp, once each). */
+  private readonly stamped = new Set<number>();
+  private stampRaf = 0;
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
+  /** This card's tip for next time, picked once per results (an update keeps it). */
+  private tipIx = 0;
   inputMode: InputMode = 'keyboard';
 
   constructor(
@@ -70,20 +164,30 @@ export class Results {
       const a = document.activeElement;
       if (a === null || a === document.body) this.el.querySelector<HTMLElement>('.gs-res-card')?.focus({ preventScroll: true });
     });
+    // A Done stamp's animation starting with its row in view is its chime's moment (onMissionStamp).
+    // A row folded away never animates; one scrolled out of view when it starts stays silent.
+    this.el.addEventListener('animationstart', (e) => {
+      const t = e.target;
+      if (this.layer.open && t instanceof HTMLElement && t.classList.contains('gs-mis-complete')) this.stampStarted(t);
+    });
   }
 
   show(m: ResultsModel): void {
     this.prev = null;
+    this.toLand.clear();
+    this.stamped.clear();
     this.pending.clear();
     this.pressed.clear();
     this.raceAll = false;
     // With no race to show (no ghosts rode), the missions have the room: they open from the start.
     this.misOpen = m.ghosts.length === 0;
+    this.tipIx = tipTurn++;
     this.render(m, true);
     this.layer.show();
     this.focusDefault();
     if (!reduced()) this.countUp(m.score);
     this.flyRewards(m);
+    this.stampsAtOnce();
   }
 
   update(m: ResultsModel): void {
@@ -92,6 +196,8 @@ export class Results {
     const before = this.prev;
     this.pending.clear();
     this.render(m, false);
+    // A re-render lands the card whole: a stamp that had not started shows now.
+    this.stampsAtOnce();
     if (!restoreFocus(this.el, fk)) this.focusDefault();
     if (before && !before.doubled && m.doubled) {
       const g = this.el.querySelector('.gs-res-gifts');
@@ -114,9 +220,14 @@ export class Results {
 
   hide(): void {
     cancelAnimationFrame(this.raf);
+    cancelAnimationFrame(this.stampRaf);
+    this.stampRaf = 0;
+    this.toLand.clear();
     this.clearTimers();
     this.io?.disconnect();
     this.io = null;
+    this.ro?.disconnect();
+    this.ro = null;
     this.layer.hide();
   }
 
@@ -157,16 +268,25 @@ export class Results {
    */
   private flyRewards(m: ResultsModel): void {
     const wins = m.missions.map((mv, i) => ({ mv, i })).filter((x) => x.mv.justCompleted && x.mv.reward > 0);
+    if (wins.length === 0) return;
+    for (const { i } of wins) this.toLand.add(i);
     const walletN = this.el.querySelector<HTMLElement>('.gs-res-wallet .gs-num');
-    if (wins.length === 0 || !walletN || reduced()) return;
+    if (!walletN || reduced()) {
+      // No flight (reduced motion, or no wallet line): the wallet already shows the total, and each
+      // reward still reports its landing on the Done stamp's beat, so its coin keeps time with it.
+      for (const { i } of wins) this.timers.push(window.setTimeout(() => this.landed(i), landAt(i)));
+      return;
+    }
     let shown = m.wallet - wins.reduce((s, x) => s + x.mv.reward, 0);
     walletN.textContent = fmt(shown);
     const cards = this.el.querySelectorAll<HTMLElement>('.gs-res-missions .gs-mis');
     for (const { mv, i } of wins) {
       const land = () => {
+        if (!this.toLand.has(i)) return;
         shown += mv.reward;
         walletN.textContent = fmt(shown);
         bump(walletN, 1.25, 340);
+        this.landed(i);
       };
       // Just after the card's Done stamp (its CSS delay is MIS_STAMP_MS plus 140 ms per row).
       const t = window.setTimeout(() => {
@@ -197,12 +317,65 @@ export class Results {
           chip.remove();
           land();
         };
-      }, MIS_STAMP_MS + 420 + i * 140);
+      }, landAt(i));
       this.timers.push(t);
     }
   }
 
+  /** A Done stamp's animation began: its row chimes if it is in view (once per row per card). */
+  private stampStarted(el: HTMLElement): void {
+    const li = el.closest<HTMLElement>('.gs-mis.is-new');
+    const body = this.el.querySelector<HTMLElement>('.gs-res-body');
+    if (!li || !body) return;
+    if (stampInView(el.getBoundingClientRect(), this.viewBox(body))) this.stampShown(Number(li.dataset.row));
+  }
+
+  /**
+   * With no stamp animation to wait for (reduced motion, or a re-render that lands the card whole),
+   * each Done stamp is on screen from the next frame: the rows in view then chime at once.
+   */
+  private stampsAtOnce(): void {
+    if (!reduced() && !this.el.classList.contains('is-static')) return;
+    cancelAnimationFrame(this.stampRaf);
+    this.stampRaf = requestAnimationFrame(() => {
+      this.stampRaf = 0;
+      const body = this.el.querySelector<HTMLElement>('.gs-res-body');
+      if (!this.layer.open || !body) return;
+      const view = this.viewBox(body);
+      for (const li of Array.from(this.el.querySelectorAll<HTMLElement>('.gs-res-missions .gs-mis.is-new'))) {
+        const stamp = li.querySelector<HTMLElement>('.gs-mis-complete');
+        if (stamp && stampInView(stamp.getBoundingClientRect(), view)) this.stampShown(Number(li.dataset.row));
+      }
+    });
+  }
+
+  /** The results body's visible box, inside the viewport. */
+  private viewBox(body: HTMLElement): { left: number; right: number; top: number; bottom: number } {
+    const v = body.getBoundingClientRect();
+    return { left: Math.max(0, v.left), right: Math.min(window.innerWidth, v.right), top: Math.max(0, v.top), bottom: Math.min(window.innerHeight, v.bottom) };
+  }
+
+  private stampShown(row: number): void {
+    if (!Number.isInteger(row) || row < 0 || this.stamped.has(row)) return;
+    this.stamped.add(row);
+    this.hd.onMissionStamp?.(row);
+  }
+
+  /**
+   * A reward has landed in the wallet: the app hears it once per reward (UIHandlers.onRewardLanded,
+   * the row's index in ResultsModel.missions) and plays its coin. False if that row already landed or
+   * is not waiting.
+   */
+  private landed(row: number): boolean {
+    if (!this.toLand.delete(row)) return false;
+    this.hd.onRewardLanded?.(row);
+    return true;
+  }
+
   private render(m: ResultsModel, intro: boolean): void {
+    // A re-render (an offer answered) prints the wallet's full total at once: any reward still in
+    // flight has landed, so it reports now rather than never.
+    if (!intro) for (const row of [...this.toLand]) this.landed(row);
     this.clearTimers();
     this.prev = m;
     const ctx = this.ctx;
@@ -222,10 +395,13 @@ export class Results {
     // Beside the score: where you finished in the race, then the new-best stamp or the best to beat.
     const side = h('div', 'gs-res-side');
     const place = finish(m);
+    const line = raceLine(m);
     if (place) {
       const chip = h('p', 'gs-res-place', sr('Finished '), h('span', 'gs-res-place-n gs-num', ordinal(place.rank)), h('span', 'gs-res-place-of gs-num', `of ${place.of}`));
       if (place.rank === 1) chip.classList.add('is-first');
-      side.append(chip);
+      // With your place as you fell under it, the two stack as one item, so a wrap moves them together.
+      const at = placeAtCrash(m, place.rank, line);
+      side.append(at ? h('div', 'gs-res-placebox', chip, at) : chip);
     }
     if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
     else if (m.best > 0) side.append(h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', fmt(m.best))));
@@ -233,11 +409,22 @@ export class Results {
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
     // ride again (how far short of the next place you stopped), then what the run paid: the reward
     // beat sits in the head on every screen, so a phone never folds it below the race.
-    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), m.crashCause) : null;
-    const sub = h('div', 'gs-res-sub', cause, raceNote(m), giftsRow(m));
+    // A big combo the crash took is named right on that line: it is what the run lost, with its label
+    // ("with a 2,085 point combo on the line"). The figure keeps its unit, and "on the line" keeps
+    // together, so a wrap never leaves "line" alone on a row of its own.
+    const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with a ', h('span', 'gs-num', fmt(m.lostCombo!)), `${NBSP}point combo on${NBSP}the${NBSP}line`) : null;
+    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
+    // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
+    // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
+    // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
+    // line count (C6), so your row stays in the first view under an unlock card and three offers. A
+    // crash note dropped there leaves its place beside the chip ("Led at the crash", placeAtCrash).
+    const note = raceNote(m);
+    const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
-    // wide screens and straight under it on phones, so it is never below the fold.
-    const unlock = this.unlocks(m);
+    // wide screens and straight under it on phones, so it is never below the fold. With none, the
+    // same slot holds the next unlock to ride for, with how close it is.
+    const unlock = this.unlocks(m) ?? nextUnlockCard(m);
     const subRow = unlock ? h('div', 'gs-res-subrow', sub, unlock) : sub;
     // The dialog is named by a fixed heading: the score counts up from 0 as focus lands, so naming the
     // dialog by it read "0, dialog". The score and the mountain describe it instead.
@@ -255,7 +442,7 @@ export class Results {
     const picks = notable(m);
     const showDist = m.ghosts.length === 0;
     const stats = picks.length > 0 || showDist ? h('dl', 'gs-res-stats', showDist ? stat('Distance', metres(m.distance), 'is-key') : null, ...picks) : null;
-    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m))) : null;
+    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
     const run = stats ? h('section', 'gs-res-run', stats) : null;
     run?.setAttribute('aria-label', 'Your run');
 
@@ -288,18 +475,36 @@ export class Results {
     if (m.canDouble && !m.doubled) extra.append(this.rewarded('double', 'video', 'Double Gifts', true, () => this.hd.onDouble()));
     else if (this.pressed.has('double')) extra.append(this.spent('double', m.doubled ? 'Gifts Doubled' : 'No Ad Right Now'));
     // Challenge a Friend rides with Home: at the far left of that row on wide screens, and a compact
-    // glyph button beside Home on phones, so Run again carries the footer on its own.
-    const chal = m.canChallenge ? this.rewarded('challenge', 'link', 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
+    // glyph button beside Home on phones, so Run again carries the footer on its own. You beat a
+    // friend's challenge: answering back is the move, so that same slot holds a filled mint Send It
+    // Back (mint: it sends your ghost) in Challenge's place. It never takes an ad-offer slot: with
+    // Revive and Double Gifts both up it pushed the footer to three rows on a phone and hid the row
+    // below yours (C6).
+    const back = m.canChallenge && m.sendItBack === true;
+    const chal = m.canChallenge ? this.rewarded('challenge', 'link', back ? 'Send It Back' : 'Challenge a Friend', false, () => this.hd.onChallenge()) : null;
     if (chal) {
       chal.classList.add('gs-res-chal');
+      if (back) chal.classList.add('gs-res-send');
       // Phones show "Challenge" under the glyph; the rest stays in the name for readers and voice.
-      chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
+      else chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
     }
+    const label = m.runAgainLabel?.text ?? 'Run Again';
+    const rematch = label.startsWith('Rematch ');
     const again = btn(
       ctx,
-      { cls: 'gs-btn-primary gs-btn-xl gs-again', icon: 'play', label: 'Run Again', sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
+      { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
       this.inputMode !== 'touch' ? kbd('Space') : null,
     );
+    // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
+    // word stacks over the name (meta.css), so the name keeps the button's width to itself.
+    if (rematch) {
+      const name = label.slice('Rematch '.length);
+      const who = h('span', 'gs-again-who', name);
+      who.setAttribute('translate', 'no');
+      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
+      // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
+      if ([...name].length >= LONG_NAME) again.classList.add('is-long');
+    }
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
       again.querySelector('kbd')?.setAttribute('aria-hidden', 'true');
@@ -312,15 +517,16 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}`, head, run, race, mis, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
     // A named region: a bare div may not carry aria-label, and readers announce the scroller by it.
     body.setAttribute('role', 'region');
     body.setAttribute('aria-label', 'Run details');
-    // Missions are what usually waits below, so the cue names them.
-    const more = h('button', 'gs-res-more', h('span', '', mis ? 'Missions' : 'More'), icon('chevR', 'gs-res-more-ico'));
+    // Missions are what usually waits below, so the cue names them (until their header is in view).
+    const moreT = h('span', 'gs-res-more-t', mis ? 'Missions' : 'More');
+    const more = h('button', 'gs-res-more', moreT, icon('chevR', 'gs-res-more-ico'));
     more.type = 'button';
     more.tabIndex = -1;
     more.setAttribute('aria-hidden', 'true');
@@ -334,21 +540,64 @@ export class Results {
     card.setAttribute('aria-labelledby', title.id);
     card.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
     this.el.replaceChildren(card);
-    this.watchMore(body, end, scroll);
+    this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
-  /** Toggles the bottom fade and More cue while the end of the body is out of view. */
-  private watchMore(body: HTMLElement, end: HTMLElement, scroll: HTMLElement): void {
+  /**
+   * Toggles the bottom fade while the end of the body is out of view, and the More cue while enough of
+   * it is (MORE_MIN_PX: a 17 px sliver is the fade's job, and a cue there floated over the tip row).
+   * The cue sits in the column whose content runs on (missions or race), or at the right end of the
+   * tip row when only that row is cut, never across the gutter; it reads "More" once the missions
+   * header is already in view. Layout is read in the observer and scroll callbacks only.
+   */
+  private watchMore(body: HTMLElement, end: HTMLElement, scroll: HTMLElement, more: HTMLElement, moreT: HTMLElement, parts: MoreParts): void {
     this.io?.disconnect();
     this.io = null;
     if (typeof IntersectionObserver === 'undefined') return;
+    let out = false;
+    let raf = 0;
+    const sync = () => {
+      raf = 0;
+      if (!out || !more.isConnected) {
+        scroll.classList.remove('has-cue');
+        return;
+      }
+      const v = body.getBoundingClientRect();
+      const s = scroll.getBoundingClientRect();
+      const blocks: MoreBlock[] = [];
+      for (const key of ['mis', 'race', 'run', 'tip'] as const) {
+        const el = parts[key];
+        if (el && el.isConnected) blocks.push({ key, r: el.getBoundingClientRect() });
+      }
+      const view = { top: v.top, bottom: v.bottom, right: v.right - (parseFloat(getComputedStyle(body).paddingRight) || 0) };
+      const cue = moreCue(body.scrollHeight - body.clientHeight - body.scrollTop, view, blocks, parts.head?.getBoundingClientRect() ?? null, more.offsetWidth);
+      scroll.classList.toggle('has-cue', cue !== null);
+      if (!cue) return;
+      // Written only when it changes, so an ordinary scroll frame reads a clean layout below.
+      const label = cue.label === 'missions' ? 'Missions' : 'More';
+      if (moreT.textContent !== label) moreT.textContent = label;
+      const half = more.offsetWidth / 2 + 8;
+      more.style.left = `${Math.round(Math.max(half, Math.min(s.width - half, cue.x - s.left)))}px`;
+    };
+    const ask = () => {
+      if (raf === 0) raf = requestAnimationFrame(sync);
+    };
     // The sentinel sits right under the last block (the rows have no gap; margins set the rhythm), so
     // it comes into view once that block shows whole, and a row with nothing below it is never faded
     // as if it ran on.
     this.io = new IntersectionObserver((entries) => {
-      for (const en of entries) scroll.classList.toggle('has-more', !en.isIntersecting);
+      for (const en of entries) {
+        out = !en.isIntersecting;
+        scroll.classList.toggle('has-more', out);
+      }
+      ask();
     }, { root: body, threshold: 0 });
     this.io.observe(end);
+    body.addEventListener('scroll', ask, { passive: true });
+    // Opening the missions list or Show All changes what is cut without the sentinel crossing.
+    this.ro?.disconnect();
+    this.ro = typeof ResizeObserver === 'function' ? new ResizeObserver(ask) : null;
+    for (const el of [parts.mis, parts.race]) if (el) this.ro?.observe(el);
   }
 
   /** The order shows a window around your row; this compact link under it opens the rest. */
@@ -374,14 +623,21 @@ export class Results {
    * race and the score carry the card. On wide screens a mission this run finished stands open under
    * that row on its own, where its Done stamp lands and its reward flies to the wallet; the row then
    * counts what is left. A phone folds even that one away (under the race), and its row shows the pay.
+   * With none finished, the row names the open mission closest to done and its progress ("Ride 800 m
+   * in one run 753/800") in place of the count: the same row, so a phone's card is no taller.
    */
   private missions(m: ResultsModel): HTMLElement {
     const list = missionList(m.missions, true);
     list.id = 'gs-res-mis-list';
     const won = m.missions.filter((x) => x.justCompleted);
-    const open = m.missions.filter((x) => !x.done).length;
+    const open = m.missions.filter((x) => !x.done);
     const pay = won.reduce((s, x) => s + x.reward, 0);
-    const left = open > 0 ? h('span', 'gs-res-mis-left', h('span', 'gs-num', String(open)), ' open') : h('span', 'gs-res-mis-left', 'All done');
+    const near = won.length === 0 ? closest(open) : null;
+    const left = near
+      ? h('span', 'gs-res-mis-left is-next', h('span', 'gs-res-mis-next', near.text), h('span', 'gs-res-mis-prog gs-num', progText(Math.min(near.progress, near.target), near.target, near.dp)))
+      : open.length > 0
+        ? h('span', 'gs-res-mis-left', h('span', 'gs-num', String(open.length)), ' open')
+        : h('span', 'gs-res-mis-left', 'All done');
     const sum =
       won.length > 0
         ? h('span', 'gs-res-mis-sum is-won', h('span', 'gs-res-mis-pay', h('span', 'gs-num', `+${fmt(pay)}`), icon('gift'), sr(` gifts, ${won.length} complete`)), left)
@@ -389,9 +645,15 @@ export class Results {
     const toggle = btn(this.ctx, { cls: 'gs-btn-quiet gs-res-mis-toggle', icon: 'flag', label: 'Missions', fk: 'mis-toggle', onClick: () => {
       this.misOpen = !this.misOpen;
       sync();
-      if (this.misOpen) list.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+      if (!this.misOpen) return;
+      list.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+      // Opened with no stamp animation to run: its stamps are on screen once the scroll has settled.
+      this.timers.push(window.setTimeout(() => this.stampsAtOnce(), reduced() ? 0 : 450));
     } }, sum, icon('chevR', 'gs-res-chev'));
     toggle.setAttribute('aria-controls', list.id);
+    // Naming a mission, the row gives it the label's room: the flag glyph marks the section, and the
+    // word "Missions" stays for screen readers (meta.css).
+    if (near) toggle.classList.add('is-next');
     const sec = h('section', `gs-res-missions is-fold${won.length > 0 ? ' has-new' : ''}`, h('h3', 'gs-h2 gs-res-h gs-res-mis-h', 'Missions'), toggle, list);
     sec.setAttribute('aria-label', 'Missions');
     const sync = () => {
@@ -515,13 +777,20 @@ function stat(label: string, value: string, cls = '', record = false): HTMLEleme
  */
 function notable(m: ResultsModel): HTMLElement[] {
   const rec = new Set<StatKey>(m.records ?? []);
+  const streak = m.bestStreak ?? 0;
   const all: Array<{ k: StatKey; label: string; v: number; text: string; i: number }> = [
     { k: 'bestCombo', label: 'Best combo', v: m.bestCombo, text: fmt(m.bestCombo), i: 0 },
     { k: 'perfects', label: 'Perfects', v: m.perfects, text: fmt(m.perfects), i: 1 },
-    { k: 'maxAir', label: 'Max air', v: m.maxAir, text: seconds(m.maxAir), i: 2 },
+    // A stomp streak of 3 or more is the run's rhythm: "Stomp streak 4", like its stamp read.
+    { k: 'bestStreak', label: 'Stomp streak', v: streak, text: fmt(streak), i: 2 },
+    { k: 'maxAir', label: 'Max air', v: m.maxAir, text: seconds(m.maxAir), i: 3 },
   ];
-  const rank = (s: (typeof all)[number]) => (rec.has(s.k) ? 100 : 0) + s.v / FLOOR[s.k];
+  // A streak says more than the perfects count it is made of: it takes that slot (unless the count is
+  // a record) and ranks right after records.
+  const hasStreak = streak >= FLOOR.bestStreak;
+  const rank = (s: (typeof all)[number]) => (rec.has(s.k) ? 100 : 0) + (s.k === 'bestStreak' ? 10 : 0) + s.v / FLOOR[s.k];
   return all
+    .filter((s) => !(hasStreak && s.k === 'perfects' && !rec.has('perfects')))
     .filter((s) => s.v > 0 && (rec.has(s.k) || s.v >= FLOOR[s.k]))
     .sort((a, b) => rank(b) - rank(a))
     .slice(0, MAX_STATS)
@@ -545,10 +814,11 @@ function giftsRow(m: ResultsModel): HTMLElement | null {
 }
 
 /**
- * One short tip for a run with no stat worth naming, in the onboarding hints' own words and true for
- * every input: what ended this run if a habit fixes it, otherwise the first trick to learn.
+ * One short tip for a run with no stat worth naming, in the onboarding hints' own words: what ended
+ * this run if a habit fixes it, otherwise the next move to learn, rotating card to card through the
+ * pop, the spin, the backflip and the boosted pop (touch words on touch).
  */
-function runTip(m: ResultsModel): string {
+function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
   switch (m.crashKind) {
     case 'forest':
       return 'Ride between the banks: they push you back onto the line.';
@@ -557,10 +827,114 @@ function runTip(m: ResultsModel): string {
     case 'avalanche':
       return 'Tuck in behind a ghost to draft away from the wall.';
   }
-  return 'Hold to crouch, then release to pop off a kicker.';
+  const touch = mode === 'touch';
+  const moves = [
+    'Hold to crouch, then release to pop off a kicker.',
+    touch ? 'Drag in the air to spin.' : mode === 'mouse' ? 'Move in the air to spin.' : 'Steer in the air to spin.',
+    touch ? 'Hold in the air to flip.' : 'Press and hold in the air to flip.',
+    'Hold, then let go at the lip for a boosted pop.',
+  ];
+  return moves[turn % moves.length];
+}
+
+/**
+ * The one extra race line (C6 budget: friend, then grudge, then the event note), hung under the crash
+ * line like the place note. A friend or grudge line wears its ghost's colour and a ghost glyph in the
+ * crash line's icon column; an event note stays quiet off-white.
+ */
+function raceLine(m: ResultsModel): HTMLElement | null {
+  const l = m.raceLine;
+  if (!l || !l.text) return null;
+  // The Daily medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon column.
+  const medal = l.tone === 'event' ? /^Daily: (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const rank = medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
+  const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
+  disc?.setAttribute('aria-hidden', 'true');
+  const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
+  // "85 m" never breaks between the number and its unit.
+  const text = l.text.replace(/(\d) m\b/g, `$1${NBSP}m`);
+  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
+  // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
+  if (l.tone !== 'event') p.setAttribute('translate', 'no');
+  return p;
+}
+
+/** The race line names the same margin as the place note (its first figure, "85 m"). */
+function sameMargin(line: HTMLElement, note: HTMLElement): boolean {
+  const fig = note.querySelector('.gs-num')?.textContent;
+  return !!fig && (line.textContent ?? '').includes(fig);
+}
+
+/**
+ * The next unlock, in the unlock card's slot when this run opened nothing: the next mountain with its
+ * biome art under a lock and how many ghosts open it, else the next sled and the gifts to go. The bar
+ * grows from where it stood before this run to where it stands now (reduced motion: it just shows).
+ */
+function nextUnlockCard(m: ResultsModel): HTMLElement | null {
+  const u: ResultsNextUnlock | null | undefined = m.nextUnlock;
+  if (!u) return null;
+  let art: HTMLElement;
+  let name: string;
+  let what: HTMLElement;
+  let said: string;
+  let p: number;
+  let p0: number;
+  if (u.kind === 'mountain') {
+    const sky = h('span', 'gs-mtn-sky');
+    sky.innerHTML = biomeArt(u.biome);
+    art = h('span', `gs-ul-art gs-nu-art b-${u.biome}`, sky, h('span', 'gs-nu-lock', icon('lock')));
+    name = u.name;
+    const have = Math.min(u.have, u.need);
+    what = h('span', 'gs-nu-what', h('span', 'gs-num', `${fmt(have)} of ${fmt(u.need)}`), ' ghosts');
+    said = `Next unlock: ${u.name}, ${fmt(have)} of ${fmt(u.need)} ghosts passed`;
+    p = u.need > 0 ? have / u.need : 0;
+    p0 = u.need > 0 ? Math.max(0, have - m.ghostsPassed) / u.need : 0;
+  } else {
+    const price = SLEDS.find((s) => s.name === u.name)?.price ?? 0;
+    art = h('span', 'gs-nu-sled', icon('sledBold'));
+    name = u.name;
+    what =
+      u.gifts > 0
+        ? h('span', 'gs-nu-what', h('span', 'gs-num', fmt(u.gifts)), ' gifts to go')
+        : h('span', 'gs-nu-what is-ready', 'Ready in the shop');
+    said = u.gifts > 0 ? `Next unlock: ${u.name}, ${fmt(u.gifts)} gifts to go` : `Next unlock: ${u.name}, ready in the shop`;
+    p = price > 0 ? Math.max(0, Math.min(1, (price - u.gifts) / price)) : 1;
+    p0 = price > 0 ? Math.max(0, Math.min(p, (price - u.gifts - Math.max(0, m.giftsEarned)) / price)) : p;
+  }
+  const n = h('span', 'gs-ul-name gs-nu-name', name);
+  n.setAttribute('translate', 'no');
+  const bar = h('span', 'gs-nu-bar');
+  bar.setAttribute('aria-hidden', 'true');
+  bar.style.setProperty('--p', p.toFixed(3));
+  bar.style.setProperty('--p0', p0.toFixed(3));
+  const txt = h('span', 'gs-ul-txt gs-nu-txt', h('span', 'gs-nu-row', n, what), bar);
+  txt.setAttribute('aria-hidden', 'true');
+  // The spoken copy keeps the name out of machine translation, like the visible one.
+  const i = said.indexOf(name);
+  const srName = h('span', '', name);
+  srName.setAttribute('translate', 'no');
+  const spoken = i < 0 ? sr(said) : h('span', 'gs-sr', said.slice(0, i), srName, said.slice(i + name.length));
+  const card = h('div', `gs-ul gs-nu is-${u.kind}`, art, txt, spoken);
+  card.setAttribute('role', 'group');
+  card.setAttribute('aria-label', 'Next unlock');
+  return h('div', 'gs-res-unlock', card);
 }
 
 const dist = (g: ResultsGhost): number => g.distance ?? 0;
+
+/** The open mission closest to done (the highest share of its target; the first on a tie), or null. */
+function closest(open: ResultsModel['missions']): ResultsModel['missions'][number] | null {
+  let best: ResultsModel['missions'][number] | null = null;
+  let bestK = -1;
+  for (const mv of open) {
+    const k = mv.target > 0 ? mv.progress / mv.target : 0;
+    if (k > bestK) {
+      best = mv;
+      bestK = k;
+    }
+  }
+  return best;
+}
 
 /**
  * Where you finished. The race is decided by distance, the number every row shows: your place is one
@@ -575,10 +949,33 @@ function finish(m: ResultsModel): { rank: number; of: number } | null {
 }
 
 /**
- * One line under the crash line, in the same terms as the order: how far short of the next place
- * you stopped, or how far clear of second you finished. Null when it would say nothing.
+ * Your place as you fell, beside the finishing place, when it was better and the crash note that says
+ * so gives its slot to the race line: a phone shows it (meta.css; wide screens keep the full note), so
+ * the HUD's place and the card's never disagree unexplained. "Led at the crash", "2nd at the crash".
+ * It adds no line to the head's sub block (C6). Null otherwise.
+ */
+function placeAtCrash(m: ResultsModel, rank: number, line: HTMLElement | null): HTMLElement | null {
+  const at = m.rankAtCrash;
+  if (!m.crashNote || !line || !m.raceLine || m.raceLine.text === m.crashNote) return null;
+  if (typeof at !== 'number' || !(at >= 1) || at >= rank) return null;
+  return h('span', 'gs-res-place-at', at === 1 ? 'Led at the crash' : `${ordinal(Math.floor(at))} at the crash`);
+}
+
+/**
+ * One line under the crash line, in the same terms as the order: where you stood at the crash and who
+ * rode on past (m.crashNote: it says why the place is not the one the HUD showed, and is the more
+ * useful line), else how far short of the next place you stopped, or how far clear of second you
+ * finished. Margins are the difference of the rows as shown (whole metres each). Null when it would
+ * say nothing, or when the crash note is already the race line.
  */
 function raceNote(m: ResultsModel): HTMLElement | null {
+  if (m.crashNote) {
+    if (m.raceLine && m.raceLine.text === m.crashNote) return null;
+    const p = h('p', 'gs-res-note is-crash', m.crashNote);
+    // (Names in it are handles: auto-translate would mangle them.)
+    p.setAttribute('translate', 'no');
+    return p;
+  }
   let above = Infinity;
   let below = -Infinity;
   for (const g of m.ghosts) {
@@ -588,8 +985,8 @@ function raceNote(m: ResultsModel): HTMLElement | null {
   }
   const place = finish(m);
   if (!place) return null;
-  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, above - m.distance))), ` short of ${ordinal(place.rank - 1)} place.`);
-  const lead = m.distance - below;
+  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round(above) - Math.round(m.distance)))), ` short of ${ordinal(place.rank - 1)} place.`);
+  const lead = Math.round(m.distance) - Math.round(below);
   return Number.isFinite(lead) && lead >= 1 ? h('p', 'gs-res-note', h('span', 'gs-num', metres(lead)), ' clear of 2nd place.') : null;
 }
 
@@ -647,12 +1044,17 @@ function standings(m: ResultsModel): HTMLElement {
  */
 function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement {
   // Your own best run reads as that, not as your player name repeated in a list of rivals.
-  const name = h('span', 'gs-st-name', g.kind === 'you' ? 'Your best' : g.name);
+  // The friend whose challenge this was wears a small vs badge, like their pill in the race; the name
+  // ellipsizes before the badge does.
+  const name =
+    g.kind === 'friend'
+      ? h('span', 'gs-st-name has-vs', h('span', 'gs-st-nm', g.name), hidden(h('span', 'gs-st-vs', 'vs')), sr(', challenge'))
+      : h('span', 'gs-st-name', g.kind === 'you' ? 'Your best' : g.name);
   if (g.kind !== 'you') name.setAttribute('translate', 'no');
   const beat = beatOrder >= 0;
   const li = h(
     'li',
-    `gs-st-row ${kindCls(g.kind)}${beat ? ' is-beat' : ''}`,
+    `gs-st-row ${kindCls(g.kind)}${beat ? ' is-beat' : ''}${g.kind === 'friend' ? ' is-friend' : ''}`,
     h('span', 'gs-st-rank gs-num', String(rank)),
     icon('ghost', 'gs-st-ico'),
     name,
@@ -688,4 +1090,10 @@ function causeIcon(m: ResultsModel): IconName {
   if (c.includes('yeti')) return 'yeti';
   if (c.includes('avalanche')) return 'avalanche';
   return 'impact';
+}
+
+/** Hides a visible mark from screen readers when spoken text beside it already says what it means. */
+function hidden<T extends HTMLElement>(e: T): T {
+  e.setAttribute('aria-hidden', 'true');
+  return e;
 }

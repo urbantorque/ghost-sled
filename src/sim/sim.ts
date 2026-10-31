@@ -1,5 +1,5 @@
 import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventTriggerZ, moodInfo } from './chaos';
-import { CHUNK_LEN, Course, FOREST_LIMIT, Obstacle, courseFor } from './course';
+import { CHUNK_LEN, Course, FOREST_LIMIT, Obstacle, ObstacleKind, courseFor } from './course';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
 import { MAX_RUN_TICKS, actionOf, draftOf, steerOf } from './input';
 import { Rng } from './prng';
@@ -26,7 +26,9 @@ export type SimEvent =
   | { type: 'takeoff'; kind: TakeoffKind; vy: number }
   | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean }
   | { type: 'crash'; cause: CrashCause }
-  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number }
+  /** Near-miss styles may carry the edge gap (m), the side (+1 = obstacle on the sled's +x side), the
+   *  nearest point on the obstacle (x, z), its kind and id. Optional and never hashed; filled later. */
+  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
   | { type: 'comboBank'; points: number; mult: number }
   | { type: 'comboLost'; points: number }
   | { type: 'gift'; id: number; value: number; x: number; y: number; z: number }
@@ -394,9 +396,11 @@ export class Sim {
     this.tick++;
   }
 
-  private style(kind: StyleKind, base: number): void {
+  /** `extra`: optional presentation fields spread into the event (never hashed, never scored). */
+  private style(kind: StyleKind, base: number, extra?: { gap: number; side: -1 | 1; x: number; z: number; obs: ObstacleKind; id: number }): void {
     const r = this.combo.add(kind, base);
-    this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult });
+    if (extra) this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, ...extra });
+    else this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult });
   }
 
   private turnRate(speed: number): number {
@@ -910,12 +914,26 @@ export class Sim {
   }
 
   private resolveNearMiss(o: Obstacle): void {
-    if (!this.nearMiss.has(o.id)) return;
+    // The closest approach, read before the entry goes: the event carries the edge gap, the side and
+    // the nearest point on the obstacle (a log is a segment) for the presentation. Points and call
+    // order are unchanged, and nothing here is state.
+    const d = this.nearMiss.get(o.id);
+    if (d === undefined) return;
     this.nearMiss.delete(o.id);
     if (this.resolvedObstacles.has(o.id)) return;
     this.resolvedObstacles.add(o.id);
     this.stats.nearMisses++;
-    this.style('nearMiss', 120);
+    const s = this.s;
+    let px = o.x;
+    let pz = o.z;
+    if (o.x2 !== o.x || o.z2 !== o.z) {
+      const ex = o.x2 - o.x;
+      const ez = o.z2 - o.z;
+      const t = clamp(((s.x - o.x) * ex + (s.z - o.z) * ez) / (ex * ex + ez * ez), 0, 1);
+      px = o.x + ex * t;
+      pz = o.z + ez * t;
+    }
+    this.style('nearMiss', 120, { gap: Math.max(0, d - o.r - SLED_RADIUS), side: px > s.x ? 1 : -1, x: px, z: pz, obs: o.kind, id: o.id });
   }
 
   private pickups(prevZ: number): void {
