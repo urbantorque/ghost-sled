@@ -139,8 +139,8 @@ function birdGeometry(kind: BirdKind): BufferGeometry {
     P.push(rp(new ConeGeometry(0.025, 0.2, 4), w, { pos: [0.87, 0.03, 0], rot: [0, 0, -Math.PI / 2] }, 3));
     P.push(rp(new BoxGeometry(0.55, 0.025, 0.05), w, { pos: [-0.62, -0.02, 0] }, 3));
     for (const s of [-1, 1]) {
-      P.push(rp(new BoxGeometry(0.34, 0.014, 0.62), w, { pos: [0, 0, s * 0.37] }, 1));
-      P.push(rp(new BoxGeometry(0.26, 0.014, 0.58), w, { pos: [-0.04, 0, s * 0.96], rot: [0, s * 0.12, 0] }, 2));
+      P.push(rp(new BoxGeometry(0.44, 0.014, 0.62), w, { pos: [-0.02, 0, s * 0.37] }, 1));
+      P.push(rp(new BoxGeometry(0.34, 0.014, 0.58), w, { pos: [-0.06, 0, s * 0.96], rot: [0, s * 0.12, 0] }, 2));
     }
   } else if (kind === 'owl') {
     P.push(rp(new IcosahedronGeometry(1, 0), w, { scale: [0.22, 0.16, 0.16] }, 0));
@@ -584,7 +584,11 @@ void main() {
   float lit = smoothstep(-0.25, 0.45, dot(n, uSunDir));
   // Three soft value steps, as a painter would lay them.
   lit = mix(lit, floor(lit * 3.0 + 0.5) / 3.0, 0.6);
-  vec3 col = mix(mix(uSmokeShade, uShadeTint, 0.35), uSmokeLit * mix(vec3(1.0), uSunColor, 0.6 * uDayK), lit);
+  vec3 litC = uSmokeLit * mix(vec3(1.0), uSunColor, 0.6 * uDayK);
+  vec3 col = mix(mix(uSmokeShade, uShadeTint, 0.2), litC, lit);
+  // Seen against the low sun, the thin smoke glows through (forward scatter), warmest at its edges.
+  float back = pow(max(dot(normalize(vWP - cameraPosition), uSunDir), 0.0), 3.0) * uDayK;
+  col = mix(col, litC * 1.08, back * (0.35 + 0.4 * (1.0 - nV.z)));
   col += uRim * pow(1.0 - nV.z, 3.0) * 0.18;
   col = fogged(col, vWP);
   gl_FragColor = vec4(col, a * vA * uSmokeA);
@@ -779,7 +783,8 @@ export class Life {
   private moteMat: ShaderMaterial;
   private motes: Points;
 
-  private range = '';
+  /** The chunk range last placed (from * 4096 + to), -1 to force a re-place. */
+  private range = -1;
   private lastZ = Number.NaN;
   private m = new Matrix4();
   private q = new Quaternion();
@@ -923,7 +928,7 @@ export class Life {
     this.tier = tier;
     this.plan = PLANS[tier];
     this.dens = dens;
-    this.range = '';
+    this.range = -1;
     this.lastZ = Number.NaN;
     this.applyMood();
   }
@@ -948,7 +953,7 @@ export class Life {
     this.flagMat.uniforms.uGlowK.value = this.night ? 1.6 : 0;
     this.chairMat.uniforms.uPass.value = this.night ? 0.25 : p.windStreaks > 0 ? 0.4 : 0.75;
     this.applyMood();
-    this.range = '';
+    this.range = -1;
   }
 
   private applyMood(): void {
@@ -989,7 +994,7 @@ export class Life {
     const cols = BIRD_COLORS[kind];
     const u = this.birdMat.uniforms.uBirdC.value as Color[];
     for (let i = 0; i < 4; i++) u[i].set(cols[i]);
-    this.birdSize = kind === 'crane' ? 1.5 : kind === 'owl' ? 1.6 : 1.35;
+    this.birdSize = kind === 'crane' ? 1.9 : kind === 'owl' ? 1.6 : 1.35;
     this.flapHz = kind === 'crane' ? 1.1 : kind === 'owl' ? 1.6 : 2.8;
     this.birdMat.uniforms.uFlapAmp.value = kind === 'crane' ? 0.7 : 1;
     this.birdMat.uniforms.uSoar.value = kind === 'owl' ? 0.6 : 1;
@@ -997,9 +1002,9 @@ export class Life {
 
   // ---------------------------------------------------------------- per frame
 
-  /** Moves the life on: `z` is the focus's sim z, `x` and `y` its position; `time` the shared clock.
+  /** Moves the life on: (x, z) is the focus in sim space; `time` the shared clock.
    *  Beats scatter birds (a stomp, a crash) and startle the animals near them. */
-  update(x: number, y: number, z: number, time: number, dt: number, beats: readonly Beat[], camPos: Vector3, camDir: Vector3): void {
+  update(x: number, z: number, time: number, dt: number, beats: readonly Beat[], camPos: Vector3, camDir: Vector3): void {
     // A cut (a new run, the title reel) or a revive far off: re-cast everything round the focus.
     const jump = !(Math.abs(z - this.lastZ) < 200);
     this.lastZ = z;
@@ -1012,7 +1017,7 @@ export class Life {
       const ci = Math.floor(z / CHUNK_LEN);
       const from = ci <= 0 ? -2 : ci - 1;
       const to = ci + (this.tier === 'high' ? 9 : 7);
-      const key = `${from}:${to}`;
+      const key = from * 4096 + to;
       if (key !== this.range) {
         this.range = key;
         this.place(from, to);
@@ -1028,7 +1033,6 @@ export class Life {
       (this.moteMat.uniforms.uCentre.value as Vector3).copy(camPos).addScaledVector(camDir, 16);
       this.moteMat.uniforms.uPx.value = lensPx();
     }
-    void y;
   }
 
   /** A stomp or a crash at sim (x, z): birds within about 100 m burst up and away, and the animals
@@ -1296,14 +1300,17 @@ export class Life {
   }
 
   /** A flag line sagging from a to b (two rigid lengths of cord), hung with flags or lanterns. */
-  private flagLine(a: Vector3, b: Vector3, lanterns: boolean, seed: number): void {
+  private flagLine(from: Vector3, to: Vector3, lanterns: boolean, seed: number): void {
+    // (Its own copies: the pieces below are placed through the shared temporaries.)
+    const a = this.la.copy(from);
+    const b = this.lb.copy(to);
     const SAG = 0.7;
     const mx = (a.x + b.x) / 2;
     const my = (a.y + b.y) / 2 - SAG;
     const mz = (a.z + b.z) / 2;
     this.rigid(a.x, a.y, a.z, mx, my, mz, 0.025, '#3A3550');
     this.rigid(mx, my, mz, b.x, b.y, b.z, 0.025, '#3A3550');
-    const n = lanterns ? 5 : 9;
+    const n = lanterns ? 5 : 8;
     const dx = b.x - a.x;
     const dz = b.z - a.z;
     const hl = Math.hypot(dx, dz);
@@ -1314,13 +1321,13 @@ export class Life {
       const z = a.z + dz * t;
       if (lanterns) {
         // A paper lantern on a short drop, glowing a soft peach at night.
-        this.m.makeBasis(this.v.set(0.34, 0, 0), this.v2.set(0, 0.46, 0), this.s.set(0, 0, 16));
-        this.m.setPosition(x - 0.17, y - 0.05, z);
+        this.m.makeBasis(this.v.set(0.46, 0, 0), this.v2.set(0, 0.6, 0), this.s.set(0, 0, 23));
+        this.m.setPosition(x - 0.23, y - 0.05, z);
         this.pushFlag(this.m, 3, 0, seed + k * 1.7, new Color('#F4D2C4'), 1);
       } else {
         // Each flag hangs from the cord, its face across the line.
-        this.m.makeBasis(this.v.set((dx / hl) * 0.34, 0, (dz / hl) * 0.34), this.v2.set(0, 0.42, 0), this.s.set(-dz / hl, 0, dx / hl));
-        this.m.setPosition(x - (dx / hl) * 0.17, y, z - (dz / hl) * 0.17);
+        this.m.makeBasis(this.v.set((dx / hl) * 0.44, 0, (dz / hl) * 0.44), this.v2.set(0, 0.55, 0), this.s.set(-dz / hl, 0, dx / hl));
+        this.m.setPosition(x - (dx / hl) * 0.22, y, z - (dz / hl) * 0.22);
         this.pushFlag(this.m, 0, 0.8, seed + k * 1.3, this.flagCols[k % this.flagCols.length], 0);
       }
     }
@@ -1331,19 +1338,23 @@ export class Life {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const dz = z1 - z0;
-    this.v.set(dx, dy, dz);
+    const ax = this.rx.set(dx, dy, dz);
     // Any axis across it for the thickness.
     const l = Math.hypot(dx, dy, dz);
-    if (Math.abs(dy) > 0.9 * l) this.v2.set(w, 0, 0);
-    else this.v2.set(0, w, 0);
-    this.s.crossVectors(this.v, this.v2).normalize().multiplyScalar(w / 0.02);
-    this.m.makeBasis(this.v, this.v2, this.s);
+    const ay = Math.abs(dy) > 0.9 * l ? this.ry.set(w, 0, 0) : this.ry.set(0, w, 0);
+    const az = this.rz.crossVectors(ax, ay).normalize().multiplyScalar(w / 0.02);
+    this.m.makeBasis(ax, ay, az);
     // (The panel hangs from y 0 to -1: lift the stick by half its thickness.)
-    this.m.setPosition(x0 + this.v2.x * 0.5, y0 + this.v2.y * 0.5, z0 + this.v2.z * 0.5);
+    this.m.setPosition(x0 + ay.x * 0.5, y0 + ay.y * 0.5, z0 + ay.z * 0.5);
     this.pushFlag(this.m, 2, 0, 0, this.tmpCol.set(col), 0);
   }
 
   private tmpCol = new Color();
+  private la = new Vector3();
+  private lb = new Vector3();
+  private rx = new Vector3();
+  private ry = new Vector3();
+  private rz = new Vector3();
 
   private pushFlag(m: Matrix4, kind: number, flutter: number, phase: number, col: Color, glow: number): void {
     const i = this.flagN;
@@ -1388,30 +1399,20 @@ export class Life {
       else if (f.kind === F_CAT) cats++;
       else skiers++;
     }
-    const ahead = (k: number) => z + (jump ? 30 + this.rand() * 420 : 300 + this.rand() * 180) + k;
-    // Animals stand at the treeline's foot, where the gully's walls and the bowl's cornice would hide
-    // them: those stretches are passed over.
-    const foot = (zz: number) => {
-      for (let k = 0; k < 6; k++, zz += 45) {
-        const sig = signature(this.course, zz);
-        if (!((sig.kind === 'gully' || sig.kind === 'bowl') && sig.k > 0.05)) return zz;
-      }
-      return -1;
-    };
     const ibex = this.course.biome === 'glacier' || this.course.biome === 'volcanic';
     // Deer come in small groups, standing together at the treeline's foot.
     while (deer < pl.deerGroups * 2) {
       const n = 1 + Math.floor(this.rand() * 3);
       deer += n;
-      const zz = foot(ahead(0));
+      const zz = this.foot(this.ahead(z, jump, 0));
       if (zz < 0) continue;
       const side = this.rand() < 0.5 ? -1 : 1;
       for (let k = 0; k < n; k++) this.spawn(ibex ? F_IBEX : F_DEER, side, 9.3 + this.rand() * 0.5 + k * 0.3, zz + k * 2.6 + this.rand());
     }
-    for (; hares < pl.hares; hares++) this.spawn(F_HARE, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.7, foot(ahead(0)));
-    for (; foxes < pl.foxes; foxes++) this.spawn(F_FOX, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.4, foot(ahead(0)));
-    for (; skiers < wantSkiers; skiers++) this.spawn(this.rand() < 0.35 ? F_BOARD : F_SKIER, this.rand() < 0.5 ? -1 : 1, this.farGround ? 140 + this.rand() * 280 : 15 + this.rand() * 35, ahead(-150 + this.rand() * 100));
-    for (; cats < wantCat; cats++) this.spawn(F_CAT, this.rand() < 0.5 ? -1 : 1, this.farGround ? 120 + this.rand() * 200 : 16 + this.rand() * 20, ahead(0));
+    for (; hares < pl.hares; hares++) this.spawn(F_HARE, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.7, this.foot(this.ahead(z, jump, 0)));
+    for (; foxes < pl.foxes; foxes++) this.spawn(F_FOX, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.4, this.foot(this.ahead(z, jump, 0)));
+    for (; skiers < wantSkiers; skiers++) this.spawn(this.rand() < 0.35 ? F_BOARD : F_SKIER, this.rand() < 0.5 ? -1 : 1, this.farGround ? 140 + this.rand() * 280 : 15 + this.rand() * 35, this.ahead(z, jump, -150 + this.rand() * 100));
+    for (; cats < wantCat; cats++) this.spawn(F_CAT, this.rand() < 0.5 ? -1 : 1, this.farGround ? 120 + this.rand() * 200 : 16 + this.rand() * 20, this.ahead(z, jump, 0));
 
     // Walk them on, and write each one's matrix and gait.
     const c = this.course;
@@ -1492,6 +1493,21 @@ export class Life {
     this.figMesh.instanceMatrix.needsUpdate = true;
     this.aPick.needsUpdate = true;
     this.aAnim.needsUpdate = true;
+  }
+
+  /** Where a newcomer is placed: well ahead, in the fog (anywhere in view after a cut). */
+  private ahead(z: number, jump: boolean, k: number): number {
+    return z + (jump ? 30 + this.rand() * 420 : 300 + this.rand() * 180) + k;
+  }
+
+  /** Animals stand at the treeline's foot, where the gully's walls and the bowl's cornice would hide
+   *  them: those stretches are passed over (-1: none near). */
+  private foot(z: number): number {
+    for (let k = 0; k < 6; k++, z += 45) {
+      const sig = signature(this.course, z);
+      if (!((sig.kind === 'gully' || sig.kind === 'bowl') && sig.k > 0.05)) return z;
+    }
+    return -1;
   }
 
   private spawn(kind: number, side: number, e: number, z: number): void {

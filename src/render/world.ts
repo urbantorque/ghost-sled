@@ -713,7 +713,7 @@ export class World {
     // The title reel keeps hazards out of the band right behind its hero (materials.ts uTitleClear).
     shared.uTitleClear.value = v.mode === 'title' ? 1 : 0;
     this.particles.update(dt);
-    this.life.update(s.x, s.y, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
+    this.life.update(s.x, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
 
     // Sun and shadow follow the focus.
     this.sunTarget.position.copy(focus);
@@ -840,8 +840,11 @@ export class World {
     const autoShadow = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
     if (refresh) this.props.nearOnly(true);
+    // (The ambient life stays out of the mirror: it costs draws and the inset is about the wall.)
+    this.life.root.visible = false;
     this.post.renderInset(this.scene, this.mirrorCam, x, y, mw, mh, this.mirrorFade, Math.max(0, Math.min(1, 1 - gap / 50)), refresh);
     if (refresh) this.props.nearOnly(false);
+    this.life.root.visible = true;
     r.shadowMap.autoUpdate = autoShadow;
   }
 
