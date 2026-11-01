@@ -18,6 +18,10 @@ export class Bus {
   private readonly duckWet: GainNode;
   private readonly levelDry: GainNode;
   private readonly levelWet: GainNode;
+  /** The reverb send's room: 1 as mixed; the soundscape opens it for a vista, an overlook or a
+   *  tunnel (setSpace). */
+  private readonly space: GainNode;
+  private spaceNow = 1;
   private duckDepth = 1;
   private duckUntil = 0;
 
@@ -28,8 +32,21 @@ export class Bus {
     this.duckWet = ctx.createGain();
     this.levelDry = ctx.createGain();
     this.levelWet = ctx.createGain();
+    this.space = ctx.createGain();
     this.dry.connect(this.duckDry).connect(this.levelDry).connect(master);
-    this.wet.connect(this.duckWet).connect(this.levelWet).connect(reverb);
+    this.wet.connect(this.duckWet).connect(this.levelWet).connect(this.space).connect(reverb);
+  }
+
+  /** The bus after its duck and the user's level (the dry side), for a send such as the echo. */
+  get post(): AudioNode {
+    return this.levelDry;
+  }
+
+  /** Scales the reverb send (1 as mixed), easing with time constant tau; only when it moved. */
+  setSpace(v: number, now: number, tau = 0.4): void {
+    if (Math.abs(v - this.spaceNow) < 0.02) return;
+    this.spaceNow = v;
+    this.space.gain.setTargetAtTime(v, now, tau);
   }
 
   setLevel(v: number, now: number): void {
@@ -76,7 +93,7 @@ export class Bus {
   }
 
   disconnect(): void {
-    for (const n of [this.dry, this.wet, this.duckDry, this.duckWet, this.levelDry, this.levelWet]) n.disconnect();
+    for (const n of [this.dry, this.wet, this.duckDry, this.duckWet, this.levelDry, this.levelWet, this.space]) n.disconnect();
   }
 }
 
@@ -91,6 +108,16 @@ export class Graph {
   private readonly verbHP: BiquadFilterNode;
   private readonly verbLP: BiquadFilterNode;
   private readonly verbOut: GainNode;
+  /** The enclosure echo (a gallery or a tunnel): both buses' dry output, after the user's levels,
+   *  into a short feedback delay darkened each time round, back into the master. Its taps are plugged
+   *  in only while it is wanted (setEnclosed), so in the open it costs nothing. Null without
+   *  DelayNode. */
+  private readonly echoIn: GainNode | null = null;
+  private readonly echoNodes: AudioNode[] = [];
+  private echoOn = false;
+  private echoWanted = false;
+  private echoOffAt = 0;
+  private echoNow = 0;
 
   constructor(ctx: BaseAudioContext, impulse: AudioBuffer) {
     this.master = ctx.createGain();
@@ -127,6 +154,56 @@ export class Graph {
 
     this.music = new Bus(ctx, this.master, this.reverb);
     this.sfx = new Bus(ctx, this.master, this.reverb);
+
+    if (typeof ctx.createDelay === 'function') {
+      const echoIn = ctx.createGain();
+      echoIn.gain.value = 0;
+      const delay = ctx.createDelay(0.5);
+      // About the slap of rock walls 18 m apart, darkening as it goes round and gone in about 0.6 s.
+      delay.delayTime.value = 0.105;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 2400;
+      const fb = ctx.createGain();
+      fb.gain.value = 0.42;
+      const out = ctx.createGain();
+      out.gain.value = 0.7;
+      echoIn.connect(delay).connect(lp).connect(fb).connect(delay);
+      lp.connect(out).connect(this.master);
+      this.echoIn = echoIn;
+      this.echoNodes.push(echoIn, delay, lp, fb, out);
+    }
+  }
+
+  /**
+   * How enclosed the rider is (0 open .. 1 inside a gallery or a tunnel): the echo's send. Once it
+   * has sat at zero for 2 s its taps are unplugged.
+   */
+  setEnclosed(k: number, now: number): void {
+    const e = this.echoIn;
+    if (!e) return;
+    const v = k > 0.001 ? Math.min(1, k) * 0.55 : 0;
+    const w = v > 0;
+    if (w && !this.echoOn) {
+      this.music.post.connect(e);
+      this.sfx.post.connect(e);
+      this.echoOn = true;
+    }
+    if (!w && this.echoWanted) this.echoOffAt = now + 2;
+    this.echoWanted = w;
+    if (this.echoOn && !w && now > this.echoOffAt) {
+      this.music.post.disconnect(e);
+      this.sfx.post.disconnect(e);
+      this.echoOn = false;
+    }
+    if (Math.abs(v - this.echoNow) < 0.01) return;
+    this.echoNow = v;
+    e.gain.setTargetAtTime(v, now, 0.12);
+  }
+
+  /** Probe: the echo's taps are plugged in. */
+  get echoing(): boolean {
+    return this.echoOn;
   }
 
   setMaster(v: number, now: number): void {
@@ -142,6 +219,6 @@ export class Graph {
   disconnect(): void {
     this.music.disconnect();
     this.sfx.disconnect();
-    for (const n of [this.reverb, this.verbHP, this.verbLP, this.verbOut, this.master, this.mute, this.limiter, this.ceiling]) n.disconnect();
+    for (const n of [this.reverb, this.verbHP, this.verbLP, this.verbOut, this.master, this.mute, this.limiter, this.ceiling, ...this.echoNodes]) n.disconnect();
   }
 }
