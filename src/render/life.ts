@@ -968,17 +968,21 @@ export class Life {
     if (biome === 'volcanic') kind = null;
     if (kind) this.setBirdKind(kind);
     this.birdMesh.visible = pl.birds && kind !== null;
-    // Motes: diamond dust in the clear, sunny moods; ash on Ember Peak. Medium and High.
+    // Motes: diamond dust in the clear, sunny moods; ash on Ember Peak's own dusk, sparse and pale.
+    // Dark ash against Glass Ice's bright blue read as specks of dirt on the lens, so a crisp mood
+    // on Ember gets the diamond dust instead. Medium and High.
     let mode = 0;
     if (pl.rich) {
-      if (biome === 'volcanic') mode = 2;
-      else if (this.mood === Mood.None || this.mood === Mood.GlassIce) mode = 1;
+      if (this.mood === Mood.GlassIce) mode = 1;
+      else if (biome === 'volcanic') mode = this.mood === Mood.None || this.mood === Mood.Comet ? 2 : 0;
+      else if (this.mood === Mood.None) mode = 1;
     }
     this.motes.visible = mode > 0;
     this.moteMat.uniforms.uAsh.value = mode === 2 ? 1 : 0;
     this.moteMat.blending = mode === 2 ? NormalBlending : AdditiveBlending;
-    this.moteMat.uniforms.uMoteC.value.set(mode === 2 ? '#8A8296' : '#FFF4E0');
-    this.motes.geometry.setDrawRange(0, this.tier === 'high' ? MOTE_N : Math.round(MOTE_N * 0.6));
+    this.moteMat.uniforms.uMoteC.value.set(mode === 2 ? '#B9AAB4' : '#FFF4E0');
+    const share = mode === 2 ? 0.35 : this.tier === 'high' ? 1 : 0.6;
+    this.motes.geometry.setDrawRange(0, Math.round(MOTE_N * share));
     this.lastZ = Number.NaN;
   }
 
