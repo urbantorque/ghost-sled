@@ -396,3 +396,105 @@ describe('feel kicks', () => {
     }
   });
 });
+
+// The camera and motion round: the big-air vista, the section entrance's lift, the rumble at speed.
+describe('big-air vista and section lift', () => {
+  const SLOPE = 0.3;
+  /** A plain downhill (three.js z falls as the course runs on), with the corridor's middle at x = 0. */
+  function chase(feel: Feel = IDLE_FEEL): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    return cam;
+  }
+  const at = (z: number, up = 0) => new Vector3(4, z * SLOPE + up, z);
+  /** Rides 1 s on the snow, then a flight of `flight` seconds (a ballistic arc over the slope);
+   *  returns the vista's weight and the lens's height over the rider each frame of the flight. */
+  function fly(cam: ChaseCamera, flight: number, feel: Feel = IDLE_FEEL) {
+    const v = 22;
+    let z = -100;
+    for (let i = 0; i < 60; i++) {
+      z -= v / 60;
+      cam.beats([], feel);
+      cam.update({ pos: at(z), dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0, airTime: 0, airLeft: Infinity }, 1 / 60);
+    }
+    const out: { vista: number; lift: number; left: number }[] = [];
+    const n = Math.round(flight * 60);
+    for (let i = 1; i < n; i++) {
+      z -= v / 60;
+      const t = i / 60;
+      const h = 4.9 * t * (flight - t);
+      const pos = at(z, h);
+      cam.beats([], feel);
+      cam.update({ pos, dir: DOWN, speed: v, steer: 0, airborne: true, boost: 0, airTime: t, airLeft: flight - t }, 1 / 60);
+      out.push({ vista: cam.vistaNow, lift: cam.camera.position.y - pos.y, left: flight - t });
+    }
+    return out;
+  }
+
+  it('a long flight eases the lens out and up, and has it home again by touchdown', () => {
+    const cam = chase();
+    const f = fly(cam, 2.4);
+    const peak = Math.max(...f.map((q) => q.vista));
+    expect(peak).toBeGreaterThan(0.85);
+    // Home for the stomp window: nearly all the way back with 0.15 s left.
+    const late = f.filter((q) => q.left <= 0.15);
+    for (const q of late) expect(q.vista).toBeLessThan(0.12);
+    // Mid-flight the lens stands well over the rider (the chase rides about a metre over it).
+    const mid = f[Math.floor(f.length / 2)];
+    expect(mid.lift).toBeGreaterThan(2);
+  });
+
+  it('a short hop never opens the vista', () => {
+    const f = fly(chase(), 0.8);
+    expect(Math.max(...f.map((q) => q.vista))).toBeLessThan(0.02);
+  });
+
+  it('under reduced motion the vista and the section lift stay off', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const cam = chase(feel);
+    const f = fly(cam, 2.4, feel);
+    expect(Math.max(...f.map((q) => q.vista))).toBe(0);
+    let z0 = 0;
+    cam.section = () => ({ z0, kind: 'chute' });
+    for (let i = 0; i < 30; i++) {
+      if (i === 10) z0 = 400;
+      cam.beats([], feel);
+      cam.update({ pos: at(-200 - i), dir: DOWN, speed: 22, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+      expect(cam.riseNow).toBe(0);
+    }
+  });
+
+  it('a new section coming into reach lifts the lens briefly, a cruise does not', () => {
+    for (const kind of ['bowl', 'cruise']) {
+      const cam = chase();
+      let z0 = 0;
+      cam.section = () => ({ z0, kind });
+      let peak = 0;
+      for (let i = 0; i < 240; i++) {
+        if (i === 30) z0 = 400;
+        cam.beats([], IDLE_FEEL);
+        cam.update({ pos: at(-200 - i * 0.4), dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+        peak = Math.max(peak, cam.riseNow);
+      }
+      if (kind === 'cruise') expect(peak).toBe(0);
+      else expect(peak).toBeGreaterThan(0.9);
+      // ...and it has settled again by the end.
+      expect(cam.riseNow).toBe(0);
+    }
+  });
+
+  it("the rumble at top speed rides beside the shake: a stomp's shake keeps its size", () => {
+    const cam = chase();
+    for (let i = 0; i < 60; i++) {
+      cam.beats([], IDLE_FEEL);
+      cam.update({ pos: at(-100 - i * 0.6), dir: DOWN, speed: 36, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    }
+    expect(cam.shakeNow).toBe(0);
+    cam.beats([{ type: 'stomp', tick: 0, streak: 1, late: false, title: '', lead: [], x: 0, z: 100, heading: 0, yetiHop: false }], IDLE_FEEL);
+    expect(cam.shakeNow).toBeCloseTo(0.25, 5);
+  });
+});

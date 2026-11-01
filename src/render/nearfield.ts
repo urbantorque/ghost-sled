@@ -290,12 +290,17 @@ export class NearField {
 
     // Flurries: flakes hung in the air ahead and to the sides of the lens, never on the line of sight
     // to the rider; the lens's own motion streaks them past the frame.
-    this.acc.flurry += flurryK * cap * SHARE.flurry * 2.4 * dt;
+    // From about 22 m/s a growing share of them skims just over the snow beside the sled instead (the
+    // camera and motion round): crystals the lens races over, streaking past the frame's lower corners,
+    // so the ground itself reads as rushing by at speed (and not at all at a 15 m/s cruise).
+    const skimP = reduced() ? 0 : 0.5 * smooth(22, 34, o.speed);
+    this.acc.flurry += flurryK * cap * SHARE.flurry * 2.4 * (1 + 0.5 * skimP) * dt;
     while (this.acc.flurry >= 1) {
       this.acc.flurry -= 1;
-      const ahead = 3.5 + Math.random() * 13;
+      const skim = Math.random() < skimP;
+      const ahead = skim ? 2.5 + Math.random() * 8 : 3.5 + Math.random() * 13;
       // Out to either side, or high over the lens: the middle of the frame (the rider) stays clear.
-      const side = (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 5.5);
+      const side = (Math.random() < 0.5 ? -1 : 1) * (skim ? 1.4 + Math.random() * 3.4 : 1.6 + Math.random() * 5.5);
       // Below the lens, over the snow: flakes streaking through the sky read as rain or meteors over
       // the sun (a phone's chase camera looks down, so even the lens's own height is high on its screen).
       const up = -2.2 + Math.random() * 2.2;
@@ -303,10 +308,11 @@ export class NearField {
       // runs down the fall line, so a flake hung level ahead ended up over it, in the sky.
       const fx = cam.x + f.x * ahead + rx * side;
       const fz = cam.z + f.z * ahead + rz * side;
+      const fg = c.ground(fx, -fz);
       this.emit(
         K_FLURRY,
         fx,
-        c.ground(fx, -fz) + camH + up,
+        skim ? fg + 0.06 + Math.random() * 0.4 : fg + camH + up,
         fz,
         (Math.random() - 0.5) * 1.2,
         -0.6 - Math.random() * 0.6,
