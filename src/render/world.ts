@@ -366,7 +366,7 @@ export class World {
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
     this.post.setMsaa(q.msaa);
-    this.post.shaftTaps = q.tier === 'high' ? 10 : 6;
+    this.post.shaftTaps = q.tier === 'high' ? 14 : 8;
     this.sky.setDetail(q.tier);
     this.life.setQuality(q.tier, q.forestDensity);
     setCloudShadows(q.tier !== 'low');

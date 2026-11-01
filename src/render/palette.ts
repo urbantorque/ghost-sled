@@ -65,7 +65,12 @@ export interface Palette {
   massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
-  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number };
+  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number; lens: number; focal: number; gust: number; glitter: number; focalDir?: Vector3 };
+  /** The living sky and air (sky.ts, massif.ts): crepuscular rays fanning from a low sun through the
+   *  clouds, the 22 degree halo and sun dogs of ice-crystal air, shooting stars, a snow banner blown off
+   *  the hero summit, a distant avalanche down its face, cloud shadows sweeping the panorama, the
+   *  valley mist layers drifting below the run, and how much the ground mist drifts and pools. */
+  atmo: { rays: number; halo: number; meteors: number; banner: number; slide: number; sweep: number; valley: number; valleyColor: Color; drift: number };
   /** Painted gouache clouds in the sky dome (sky.ts): low cumulus banks along the horizon and high
    *  wisps (coverage 0..1 each), their sunlit tops, shaded bodies and the low sun's rim on their edges.
    *  shadow: how strongly their slow shadows drift over the snow (materials.ts, 0 for none). */
@@ -106,6 +111,9 @@ export interface Palette {
 export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone';
 
 const c = (hex: string) => new Color(hex);
+
+/** Where Comet Night's comet hangs (sky.ts draws it; the post pass's light pass centres on it). */
+export const COMET_DIR = new Vector3(0.0, 0.165, -0.986).normalize();
 
 function sunDir(azimuthDeg: number, elevationDeg: number): Vector3 {
   // Azimuth 0 = straight down the course (-z in three.js), positive = toward +x (right).
@@ -153,8 +161,9 @@ function base(): Palette {
     mist: null,
     mistK: 0,
     massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0 },
-    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1 },
+    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
+    atmo: { rays: 1, halo: 0, meteors: 0, banner: 0.8, slide: 1, sweep: 1, valley: 0.7, valleyColor: c('#E8C4C8'), drift: 0.3 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
@@ -205,6 +214,7 @@ function biomeBase(biome: BiomeId): Palette {
       p.massif.rock = c('#34508E');
       p.ice = 0.6;
       p.clouds = { low: 0.75, high: 0.6, top: 0.3, lit: c('#FFF2E8'), shade: c('#A8B2DA'), rim: c('#FFC6AE'), shadow: 0.28 };
+      p.atmo.valleyColor = c('#DCDCEC');
       return p;
     case 'volcanic':
       p.skyZenith = c('#2A1E3A');
@@ -231,6 +241,10 @@ function biomeBase(biome: BiomeId): Palette {
       p.embers = 0.6;
       p.grade.lift = c('#14081A');
       p.clouds = { low: 0.8, high: 0.5, top: 0.3, lit: c('#FFC4A0'), shade: c('#6E4662'), rim: c('#FF8A50'), shadow: 0.3 };
+      // The volcano smokes instead of flying a snow banner; its valleys hold an ashen, ember-lit haze.
+      p.atmo.banner = 0;
+      p.atmo.slide = 0;
+      p.atmo.valleyColor = c('#C08484');
       return p;
     case 'blossom':
       p.skyZenith = c('#3A5BA8');
@@ -256,6 +270,7 @@ function biomeBase(biome: BiomeId): Palette {
       p.massif.glow = c('#FFA0B8');
       p.petals = 0.7;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
+      p.atmo.valleyColor = c('#F0CCDA');
       return p;
   }
 }
@@ -339,9 +354,12 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.windStreaks = 1;
       p.bloom = 0.8;
       p.sparkle = 0.3;
-      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14, shafts: 0 };
+      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14, shafts: 0, lens: 0, focal: 0.6, gust: 1, glitter: 0 };
       // The whiteout is its own cloud deck: no painted banks in it and no shadows sliding over the snow.
       p.clouds = { low: 0, high: 0, top: 0.1, lit: c('#F2F4F8'), shade: c('#AEB8C8'), rim: c('#F2F1EA'), shadow: 0 };
+      // Pale rays through the overcast round the hidden sun and the gusts' curtains of snow (post.ts);
+      // nothing far off shows: the whiteout hides the banner, the slides and the valley.
+      p.atmo = { rays: 0.7, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0, valleyColor: c('#DDE3EC'), drift: 0.5 };
       break;
     case Mood.Lantern:
       p.skyZenith = c('#070B22');
@@ -388,9 +406,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.snowfall = 0.15;
       p.bloom = 0.9;
       p.sparkle = 0.8;
-      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2, shafts: 0 };
+      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0.25 };
       // A low, dark bank with moonlit silver edges under the aurora, which keeps the sky above it.
       p.clouds = { low: 0.6, high: 0.18, top: 0.24, lit: c('#4A5A9C'), shade: c('#121A42'), rim: c('#C4D0FF'), shadow: 0 };
+      // Shooting stars under the aurora, and a moonlit mist lying in the valleys.
+      p.atmo = { rays: 0, halo: 0, meteors: 1, banner: 0.45, slide: 0, sweep: 0, valley: 0.9, valleyColor: c('#4A5C9E'), drift: 0.4 };
       break;
     case Mood.GlassIce:
       p.skyZenith = c('#0E6FA8');
@@ -431,9 +451,12 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.sparkle = 1.1;
       p.snowfall = 0;
       p.bloom = 0.42;
-      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24, shafts: 0.8 };
+      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24, shafts: 0.9, lens: 0.8, focal: 1, gust: 0, glitter: 0.7 };
       // Clear, cold air: only a few thin high wisps, gold where the low sun catches them.
       p.clouds = { low: 0, high: 0.4, top: 0.1, lit: c('#F4FCFF'), shade: c('#8CC8E6'), rim: c('#FFDDA0'), shadow: 0.12 };
+      // Ice-crystal air: a 22 degree halo and two sun dogs round the low sun, diamond dust glittering in
+      // it (post.ts), and air clear enough to see the far banner and slide; the valleys hold little haze.
+      p.atmo = { rays: 0.45, halo: 1, meteors: 0, banner: 1, slide: 1, sweep: 0.4, valley: 0.25, valleyColor: c('#CDEFF8'), drift: 0 };
       break;
     case Mood.Comet:
       // Night with an ember afterglow on the horizon: a deep violet zenith, stars and lavender snow.
@@ -473,9 +496,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.comet = true;
       p.snowfall = 0.05;
       p.bloom = 0.85;
-      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26, shafts: 0 };
+      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26, shafts: 0, lens: 0, focal: 1, gust: 0, glitter: 0.2, focalDir: COMET_DIR };
       // A dusk bank on the ember horizon, its undersides glowing ember; the comet keeps the sky above.
       p.clouds = { low: 0.65, high: 0.15, top: 0.2, lit: c('#5E3268'), shade: c('#2A1642'), rim: c('#FF7A4C'), shadow: 0 };
+      // The comet's company: shooting stars (its debris), and an ember-lit dusk haze in the valleys.
+      p.atmo = { rays: 0, halo: 0, meteors: 1.4, banner: 0.4, slide: 0, sweep: 0, valley: 0.8, valleyColor: c('#7E4A88'), drift: 0.3 };
       break;
     case Mood.Haunted:
       p.skyZenith = c('#0B1F1C');
@@ -511,8 +536,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.wisps = 1;
       p.snowfall = 0.1;
       p.bloom = 0.95;
-      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1, shafts: 0 };
+      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1, shafts: 0, lens: 0, focal: 1.2, gust: 0, glitter: 0 };
       p.clouds = { low: 0.5, high: 0.12, top: 0.22, lit: c('#3E7464'), shade: c('#0E2A24'), rim: c('#9CFFD8'), shadow: 0 };
+      // Ground mist drifts over the course and pools in the hollows, the valleys brim with it, a pale
+      // ring stands round the moon, and now and then a lost soul streaks across the sky.
+      p.atmo = { rays: 0, halo: 0.45, meteors: 0.5, banner: 0, slide: 0, sweep: 0, valley: 1, valleyColor: c('#4E8C78'), drift: 1 };
       break;
     case Mood.Powder:
       p.skyZenith = c('#2F7BE0');
@@ -533,10 +561,18 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.snowfall = 0.35;
       p.sparkle = 1.3;
       p.bloom = 0.5;
-      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26, shafts: 0.5 };
+      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26, shafts: 0.6, lens: 0.5, focal: 0.7, gust: 0, glitter: 1 };
       // Fair-weather puffs low on the horizon and a few high wisps, white on blue.
       p.clouds = { low: 0.4, high: 0.3, top: 0.24, lit: c('#FFFFFF'), shade: c('#B4CCEC'), rim: c('#FFFFFF'), shadow: 0.22 };
+      // Fresh snow everywhere: the air sparkles with it (post.ts), the summit flies a long banner and the
+      // fair-weather clouds' shadows race across the panorama.
+      p.atmo = { rays: 0.5, halo: 0, meteors: 0, banner: 1.2, slide: 1, sweep: 1.3, valley: 0.5, valleyColor: c('#E4F0FC'), drift: 0 };
       break;
+  }
+  // The volcano smokes (massif.ts) rather than flying a snow banner, and its ash slopes never slide.
+  if (p.massif.peak === 'volcano') {
+    p.atmo.banner = 0;
+    p.atmo.slide = 0;
   }
   // Biomes and moods author sunDir as where the disc sits; the key light is lifted from it.
   if (p.diskDir === p.sunDir || mood !== Mood.None || biome !== 'alpine') {
@@ -669,6 +705,13 @@ function journeyStop(base: Palette, s: JourneyStop, dusk: number): Palette {
   p.stars = Math.max(p.stars, 0.35 * dusk);
   p.sparkle *= 1 - 0.15 * dusk;
   p.clouds.shadow *= 1 - 0.6 * dusk;
+  // The evening's air: the rays grow as the sun sinks behind the cloud banks, the valleys fill with
+  // the cooling mist, and at blue hour the first shooting stars cross the dusk.
+  p.atmo.rays *= 1 + 0.3 * (1 - dusk);
+  p.atmo.valley = Math.min(1, p.atmo.valley + 0.25);
+  tow(p.atmo.valleyColor, s.fog, 0.5);
+  p.atmo.meteors = Math.max(p.atmo.meteors, 0.5 * dusk);
+  p.atmo.sweep *= 1 - 0.5 * dusk;
   return p;
 }
 

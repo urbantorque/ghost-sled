@@ -70,6 +70,8 @@ export const shared = {
   uFogFloor: { value: new Vector2(0, 0) },
   /** Aerial perspective: looking toward the sun the fog takes on its warmth (forward scatter). */
   uFogSun: { value: 0 },
+  /** How much the low mist drifts in banks over the course (palette atmo.drift; 0 on Low). */
+  uMistDrift: { value: 0 },
   /** 1 on Medium and High: the snow's finer painted detail (sastrugi, packed tracks, micro glitter).
    *  Low skips it (setCloudShadows carries the tier). */
   uSnowFx: { value: 1 },
@@ -79,10 +81,12 @@ export const shared = {
  *  the snow's finer painted detail (uSnowFx). */
 let cloudShadowsOn = true;
 let cloudShadowK = 0;
+let mistDriftK = 0;
 export function setCloudShadows(on: boolean): void {
   cloudShadowsOn = on;
   shared.uCloudShadow.value = on ? cloudShadowK : 0;
   shared.uSnowFx.value = on ? 1 : 0;
+  shared.uMistDrift.value = on ? mistDriftK : 0;
 }
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
@@ -137,7 +141,11 @@ export function applyPalette(p: Palette): void {
   const dense = Math.max(0, Math.min(1, (260 - p.fogFar) / 110));
   if (p.mist) shared.uMistColor.value.copy(p.mist).lerp(p.fog, 0.3);
   else shared.uMistColor.value.copy(p.fog).lerp(p.skyHorizon, 0.35).lerp(p.snowLit, 0.25);
-  shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense);
+  // A drifting mist (Haunted Hollow's above all) lies a little deeper, so its banks roll round the
+  // hazards' feet and the hollows past the banks brim with it.
+  shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense + 3 * p.atmo.drift * (p.mist ? 1 : 0.4));
+  mistDriftK = p.atmo.drift;
+  shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
   shared.uFogSun.value = (0.2 + 0.4 * shared.uDayK.value) * (1 - 0.6 * dense);
 }
@@ -207,13 +215,34 @@ uniform vec2 uMist;
 uniform vec3 uMistColor;
 uniform vec2 uFogFloor;
 uniform float uFogSun;
+uniform float uMistDrift;
 
 /** How much of the low mist lies over a point d metres from the lens: it settles on the course's floor
  *  (uFogFloor) and thins with height above it, and it only gathers with distance, so the rider and the
  *  snow round it always stay clear. */
+float mistHash(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
+float mistNoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), f.x), mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 float mistAt(vec3 wp, float d) {
   float h = wp.y - (uFogFloor.x + uFogFloor.y * wp.z);
-  return uMist.x * exp(-max(h, 0.0) / max(uMist.y, 0.5)) * smoothstep(18.0, 120.0, d);
+  float m = uMist.x * exp(-max(h, 0.0) / max(uMist.y, 0.5)) * smoothstep(18.0, 120.0, d);
+  if (uMistDrift > 0.0) {
+    // The mist drifts: banks some 30 m across roll slowly over the course on the wind, thinning to
+    // gaps between them and changing as they go. It never lies thicker than the still mist did, so a
+    // hazard in it reads no worse.
+    vec2 q = wp.xz * 0.034 + vec2(uTime * 0.11, uTime * 0.045);
+    float n = mistNoise(q) * 0.65 + mistNoise(q * 2.3 + vec2(3.1, -uTime * 0.05)) * 0.35;
+    m *= mix(1.0, 0.25 + 0.75 * n, uMistDrift);
+  }
+  return m;
 }
 
 /** The fog's colour along a sight line: toward the sun it takes on the sun's warmth (aerial

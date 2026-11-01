@@ -35,9 +35,9 @@ const HERO_AZ = 24;
 const SEA_Y = -330;
 const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3 };
 
-/** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama and the sky dome's
- *  sea of clouds. */
-const NOISE = /* glsl */ `
+/** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama, the sky dome's
+ *  sea of clouds and the valley mist (sky.ts). */
+export const NOISE = /* glsl */ `
   vec3 mm289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec2 mm289(vec2 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
   vec3 perm3(vec3 x) { return mm289(((x * 34.0) + 10.0) * x); }
@@ -361,6 +361,9 @@ const FRAG = /* glsl */ `
   uniform float uSnowY;
   uniform float uHazeDist;
   uniform float uHazeK;
+  uniform float uSweep;
+  uniform float uSlide;
+  uniform float uFaceTh;
   varying vec3 vPos;
   varying vec3 vHero;
   ${SEA_GLSL}
@@ -418,9 +421,55 @@ const FRAG = /* glsl */ `
     // snow still in the light takes the glow.
     float above = smoothstep(uGlowLine - 40.0, uGlowLine + 40.0, vPos.y + n1 * 70.0);
     float sun = lit * above;
+    #if SEA_Q > 0
+      // The clouds' shadows sweep across the panorama: broad soft patches, a couple of kilometres
+      // across, sliding over the ranges on the wind, so whole faces drop into shade and come back.
+      if (uSweep > 0.0) {
+        vec2 cp = vPos.xz * 0.00042 + vec2(uTime * 0.021, uTime * 0.008);
+        float cs = smoothstep(0.02, 0.42, snoise(cp) * 0.72 + snoise(cp * 2.3 + 4.0) * 0.28);
+        sun *= 1.0 - cs * uSweep;
+      }
+    #endif
     vec3 snowLit = mix(uSnowLit, uGlow, uGlowK * above);
     vec3 col = mix(mix(uRockShade, uRockLit, sun), mix(uSnowShade, snowLit, sun), snow);
     col = mix(col, mix(uSnowShade, mix(uIce, uGlow, uGlowK * above * 0.5), sun * 0.8 + 0.2), ice);
+    #if SEA_Q > 0
+      if (uSlide > 0.0 && layer > 2.5) {
+        // Now and then a distant avalanche pours down the hero's face toward the lens: a tongue of
+        // billowing powder, lit on its tops, sliding a kilometre and more down a couloir over about
+        // ten seconds, with the scoured track it leaves darker above it. Each one picks its own line.
+        float cyc = uTime / 29.0;
+        float sid = floor(cyc);
+        float su = fract(cyc) * 29.0 / 12.0;
+        if (su < 1.0) {
+          float hv = vHero.z;
+          float th = vHero.y * 6.2831853;
+          float line = uFaceTh + (fract(sin(sid * 12.9898 + 4.1) * 43758.5453) - 0.5) * 0.8;
+          float dth = atan(sin(th - line), cos(th - line));
+          float runV = 0.07 + su * 0.55;
+          float tailV = max(0.05, runV - 0.26);
+          // The cloud swells toward its head, which rolls on round and wide.
+          float head = smoothstep(tailV, runV, hv);
+          float wid = (0.06 + 0.3 * hv) * (0.55 + 0.75 * head);
+          float wob = snoise(vec2(th * 24.0, hv * 16.0 - uTime * 0.5)) * 0.3 * wid;
+          float q = abs(dth + wob) / wid;
+          float across = 1.0 - smoothstep(0.7, 1.0, q);
+          float body = smoothstep(tailV, tailV + 0.06, hv) * (1.0 - smoothstep(runV - 0.02 * (1.0 - q * q), runV + 0.02, hv));
+          float track = smoothstep(0.05, 0.1, hv) * (1.0 - smoothstep(tailV, tailV + 0.06, hv)) * (1.0 - smoothstep(0.5, 0.8, q));
+          float billow = snoise(vec2(dth * 34.0, hv * 24.0 - uTime * 0.9)) * 0.5 + 0.5;
+          float life = smoothstep(0.0, 0.08, su) * (1.0 - smoothstep(0.78, 1.0, su));
+          // The powder cloud stands off the slope: its billows bright cream on the side to the light,
+          // a cool shade on the other and a soft cool rim round it, where it shades the face beside it.
+          float sideL = clamp(0.5 + (dth + wob) / wid * 0.7, 0.0, 1.0);
+          vec3 powder = mix(mix(uSnowShade, uSnowLit, 0.5), uSnowLit * 1.35, smoothstep(0.3, 0.7, billow * 0.6 + sideL * 0.4));
+          float rimS = smoothstep(0.75, 1.0, q) * (1.0 - smoothstep(1.0, 1.45, q)) * body;
+          vec3 coolS = col * mix(vec3(0.7), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5);
+          col = mix(col, col * 0.78, track * life * uSlide * 0.8);
+          col = mix(col, coolS, rimS * life * uSlide * 0.8);
+          col = mix(col, powder, body * across * life * uSlide);
+        }
+      }
+    #endif
     // Aerial perspective: distance dissolves the far ranges into the haze, warmer toward the sun,
     // and the valleys fill with haze above the sea of clouds.
     float hz = (1.0 - exp(-max(dist - 1000.0, 0.0) / uHazeDist)) * (layer > 2.5 ? 0.62 : 1.0) * uHazeK;
@@ -463,11 +512,37 @@ const PLUME_FRAG = /* glsl */ `
   uniform float uLava;
   uniform float uSide;
   uniform float uAlpha;
+  uniform float uMode;
+  uniform float uBolt;
+  uniform vec3 uRim;
   varying vec2 vUv;
   ${NOISE}
   void main() {
     float y = vUv.y;
     float x = vUv.x - 0.5;
+    if (uMode > 0.5) {
+      // A snow banner: spindrift torn off the summit by the high wind, streaming away downwind in a
+      // long, thinning flag that lifts and sags with the gusts, its turbulence racing along it. Lit
+      // through by the low sun (its rim warm), the far end melting into the haze.
+      float t = x * uSide / 0.49;
+      if (t < -0.02 || t > 1.0) discard;
+      float tt = max(t, 0.0);
+      float gust = 0.65 + 0.35 * sin(uTime * 0.31 + sin(uTime * 0.13) * 2.0);
+      float yc = 0.07 + tt * (0.07 + 0.05 * gust) - tt * tt * 0.07 + 0.016 * sin(tt * 8.0 - uTime * 0.7);
+      float w = 0.02 + 0.13 * tt * (0.7 + 0.3 * gust);
+      float dy = (y - yc) / w;
+      float flow = snoise(vec2(tt * 7.0 - uTime * 0.32, y * 18.0)) * 0.6 + snoise(vec2(tt * 19.0 - uTime * 0.75, y * 41.0 + 3.0)) * 0.4;
+      float dens = exp(-dy * dy * 1.2) * (0.75 + 0.55 * flow) * pow(1.0 - tt, 0.9) * smoothstep(-0.03, 0.04, t) * gust;
+      float a = smoothstep(0.08, 0.45, dens) * uAlpha;
+      if (a <= 0.004) discard;
+      vec3 col = mix(uShade, uLit, clamp(0.55 + flow * 0.35 - dy * 0.15, 0.0, 1.0));
+      col = mix(col, uRim, 0.35 * (1.0 - smoothstep(0.3, 0.8, dens)));
+      col = mix(col, uHaze, 0.2 + 0.45 * tt);
+      gl_FragColor = vec4(col, a * 0.85);
+      #include <tonemapping_fragment>
+      #include <colorspace_fragment>
+      return;
+    }
     // The column leans downwind (away from the sun's side of the frame) and widens as it climbs.
     float cx = 0.3 * uSide * pow(y, 1.4) + 0.02 * sin(y * 7.0 - uTime * 0.25);
     float w = 0.03 + 0.17 * y;
@@ -483,6 +558,29 @@ const PLUME_FRAG = /* glsl */ `
     vec3 col = mix(uShade, uLit, st);
     col = mix(col, uHaze, 0.3 + 0.3 * y);
     col += uLavaColor * uLava * exp(-y * 9.0) * 0.8;
+    if (uBolt > 0.0) {
+      // Volcanic lightning at night: every few seconds (not every time) a jagged bolt forks through
+      // the ash column and the cloud flashes violet-white from inside, twice, then goes dark.
+      float cyc = uTime / 2.9;
+      float bid = floor(cyc);
+      float bt = fract(cyc) * 2.9;
+      float fire = step(0.55, fract(sin(bid * 78.233) * 43758.5453));
+      float flash = fire * (exp(-bt * 12.0) + 0.7 * exp(-abs(bt - 0.2) * 34.0));
+      if (flash > 0.01) {
+        // The bolt zigzags down the column from high in the ash to the crater, with a fork off it.
+        float hb = fract(sin(bid * 37.719) * 43758.5453);
+        float zig = snoise(vec2(y * 18.0, bid)) * 0.035 + snoise(vec2(y * 55.0, bid + 3.0)) * 0.012;
+        float bx = cx + (hb - 0.5) * w * 0.9 + zig;
+        float top = 0.26 + hb * 0.14;
+        float span = step(0.05, y) * (1.0 - smoothstep(top - 0.02, top, y));
+        float bd = abs(x - bx);
+        float fork = abs(x - (bx + (y - 0.17) * (hb > 0.5 ? 0.9 : -0.9) + zig * 0.6)) + step(y, 0.17) + step(0.24, y);
+        float bolt = span * (smoothstep(0.0035, 0.0008, bd) + exp(-bd / 0.008) * 0.3) + smoothstep(0.0025, 0.0006, fork) * 0.8;
+        col += vec3(0.78, 0.72, 1.0) * dens * flash * 0.45;
+        col += vec3(0.95, 0.92, 1.0) * bolt * flash * 4.0;
+        a = max(a, min(1.0, bolt * flash));
+      }
+    }
     gl_FragColor = vec4(col, a * uAlpha);
     #include <tonemapping_fragment>
     #include <colorspace_fragment>
@@ -548,6 +646,8 @@ export class Massif {
   private tier: 'low' | 'medium' | 'high' = 'high';
   private peak: HeroPeak = 'summit';
   private heroAz = 0;
+  /** The plume's strength: the volcano's always, a summit's snow banner per mood (0 hides it). */
+  private banner = 0;
 
   constructor(seed: number, readonly sea: SeaUniforms) {
     const sx = ((seed * 0.6180339) % 1) * 40 - 20;
@@ -579,6 +679,9 @@ export class Massif {
         uSnowY: { value: -250 },
         uHazeDist: { value: 5200 },
         uHazeK: { value: 1 },
+        uSweep: { value: 0 },
+        uSlide: { value: 0 },
+        uFaceTh: { value: 0 },
       },
       defines: { SEA_Q: 1 },
       vertexShader: VERT,
@@ -604,6 +707,9 @@ export class Massif {
         uLava: { value: 0 },
         uSide: { value: 1 },
         uAlpha: { value: 0.92 },
+        uMode: { value: 0 },
+        uBolt: { value: 0 },
+        uRim: { value: new Color() },
       },
       vertexShader: PLUME_VERT,
       fragmentShader: PLUME_FRAG,
@@ -662,17 +768,37 @@ export class Massif {
     (pu.uHaze.value as Color).copy(haze);
     pu.uLava.value = p.massif.lava;
     pu.uSide.value = side;
-    pu.uAlpha.value = 0.92 * (1 - p.massif.veil);
+    const volcano = this.peak === 'volcano';
+    // Off the other summits the same quad flies a snow banner instead (one draw either way).
+    pu.uMode.value = volcano ? 0 : 1;
+    this.banner = volcano ? 1 : p.atmo.banner * (1 - p.massif.veil);
+    pu.uAlpha.value = volcano ? 0.92 * (1 - p.massif.veil) : Math.min(1, this.banner);
+    if (!volcano) {
+      (pu.uLit.value as Color).copy(p.clouds.lit).lerp(p.snowLit, 0.5);
+      (pu.uShade.value as Color).copy(p.snowShade).lerp(p.clouds.shade, 0.4).lerp(haze, 0.25);
+    }
+    (pu.uRim.value as Color).copy(p.clouds.rim).lerp(p.sunColor, 0.3);
+    // Lightning only in the volcano's night plume (its crater glows brightest then).
+    pu.uBolt.value = volcano && p.massif.lava >= 0.75 ? 1 : 0;
+    // The face of the hero turned to the lens (the polar patch's angle that points back at it), where
+    // the distant avalanches run.
+    u.uFaceTh.value = Math.atan2(Math.cos(this.heroAz), -Math.sin(this.heroAz));
+    u.uSlide.value = p.atmo.slide * (1 - p.massif.veil);
+    u.uSweep.value = Math.min(0.6, p.atmo.sweep * p.clouds.shadow * 1.7);
     this.placePlume();
   }
 
+  /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1080, fang: 1150, volcano: 880, cone: 830 };
+
   private placePlume(): void {
-    const show = this.peak === 'volcano' && this.tier !== 'low';
+    const show = this.tier !== 'low' && this.banner > 0.01;
     this.plume.visible = show;
     if (!show) return;
     const hx = Math.sin(this.heroAz) * HERO_DIST;
     const hz = -Math.cos(this.heroAz) * HERO_DIST;
-    this.plume.position.set(hx, 880, hz);
+    // The volcano's column rises from the crater; a banner's quad hangs with the summit 150 m up it.
+    this.plume.position.set(hx, this.peak === 'volcano' ? 880 : Massif.SUMMIT_Y[this.peak] - 150, hz);
     // Faces the lens (at the root's origin).
     this.plume.rotation.set(0, Math.atan2(-hx, -hz), 0);
   }

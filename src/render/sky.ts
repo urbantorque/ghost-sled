@@ -1,7 +1,7 @@
-import { BackSide, Color, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
-import { Palette } from './palette';
+import { BackSide, BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
+import { COMET_DIR, Palette } from './palette';
 import { shared } from './materials';
-import { Massif, SEA_GLSL, makeSeaUniforms } from './massif';
+import { Massif, NOISE, SEA_GLSL, makeSeaUniforms } from './massif';
 
 // Sky dome (gradient, sun or moon, stars, aurora, comet, and the sea of clouds below the horizon)
 // and the mountain panorama (massif.ts). Both follow the camera so they read as infinitely far away.
@@ -11,6 +11,8 @@ export class Sky {
   private dome: Mesh;
   private domeMat: ShaderMaterial;
   private massif: Massif;
+  /** The valley mist below the run (Medium and High). */
+  private mist = new ValleyMist();
   private sea = makeSeaUniforms();
   private wisps = true;
   private highClouds = 0;
@@ -38,13 +40,16 @@ export class Sky {
         uMoonPhase: { value: 0 },
         uComet: { value: 0 },
         uTime: shared.uTime,
-        uCometDir: { value: new Vector3(0.0, 0.165, -0.986).normalize() },
+        uCometDir: { value: COMET_DIR.clone() },
         uCloudLow: { value: 0 },
         uCloudHigh: { value: 0 },
         uCloudTop: { value: 0.15 },
         uCloudLit: { value: new Color() },
         uCloudShade: { value: new Color() },
         uCloudRim: { value: new Color() },
+        uRays: { value: 0 },
+        uHalo: { value: 0 },
+        uMeteors: { value: 0 },
         ...this.sea,
       },
       defines: { CLOUD_Q: 1, SEA_Q: 1 },
@@ -100,6 +105,9 @@ export class Sky {
         uniform vec3 uCloudLit;
         uniform vec3 uCloudShade;
         uniform vec3 uCloudRim;
+        uniform float uRays;
+        uniform float uHalo;
+        uniform float uMeteors;
         varying vec3 vDir;
         varying vec4 vClip;
         varying vec4 vSunClip;
@@ -183,11 +191,14 @@ export class Sky {
           // shoulders standing on the ridges, never lenses floating in the sky): broad swells with
           // clear gaps between them, shoulders on those, and puffs bubbling the tops. (Gradient noise
           // stays close to its mean, so each octave's swing is stretched.)
+          // The banks are alive: each octave also slides through its second axis with time, so swells
+          // build and sink and the puffs on their tops bubble over a minute or so, while the whole
+          // bank drifts round the sky.
           float top = 0.8 + (uCloudLow - 0.6) * 0.8
-            + (pnoise(vec2(X * 6.0, 0.37), 6.0) - 0.5) * 2.4
-            + (pnoise(vec2(X * 15.0 + 0.5, 1.61), 15.0) - 0.5) * 1.1;
+            + (pnoise(vec2(X * 6.0, 0.37 + uTime * 0.0021), 6.0) - 0.5) * 2.4
+            + (pnoise(vec2(X * 15.0 + 0.5, 1.61 + uTime * 0.0047), 15.0) - 0.5) * 1.1;
           #if CLOUD_Q > 0
-            top += (pnoise(vec2(X * 38.0, y * 2.6 + 2.3), 38.0) - 0.5) * 0.6 + (pnoise(vec2(X * 83.0, y * 5.0 + 0.7), 83.0) - 0.5) * 0.22;
+            top += (pnoise(vec2(X * 38.0, y * 2.6 + 2.3 + uTime * 0.012), 38.0) - 0.5) * 0.6 + (pnoise(vec2(X * 83.0, y * 5.0 + 0.7 + uTime * 0.03), 83.0) - 0.5) * 0.22;
           #else
             top += (pnoise(vec2(X * 38.0, y * 2.6 + 2.3), 38.0) - 0.5) * 0.6;
           #endif
@@ -217,7 +228,7 @@ export class Sky {
           if (h < 0.16 || h > 0.56) return vec4(0.0);
           float band = smoothstep(0.16, 0.24, h) * (1.0 - smoothstep(0.42, 0.56, h));
           float X = fract(az / 6.2831853 + 0.37 + uTime * 0.0007);
-          float yy = h * 10.0;
+          float yy = h * 10.0 + uTime * 0.006;
           float warp = pnoise(vec2(X * 4.0, yy * 0.5), 4.0);
           float n = pnoise(vec2(X * 9.0 + warp * 0.8, yy + warp * 1.5), 9.0) * 0.7 + pnoise(vec2(X * 23.0, yy * 2.2 + warp * 2.0), 23.0) * 0.3;
           n += (uCloudHigh - 0.5) * 0.25;
@@ -252,9 +263,14 @@ export class Sky {
             float span = (0.06 + fk * 0.03) * (0.55 + 0.9 * swell);
             float body = smoothstep(-0.045, 0.012, above) * exp(-max(above, 0.0) / span);
             float folds = gnoise(ROT * (ring * 5.0 + vec2(fk * 7.3, above * 6.0 - uTime * 0.015)));
-            float rays = gnoise(ROT * vec2(drift * 20.0, above * 2.5 + fk * 3.1));
-            body *= arc * (0.25 + 0.75 * folds) * (0.75 + 0.25 * rays);
+            // Fine vertical rays that ripple sideways along the curtain, and slow surges of brightness
+            // running along it, so the display breathes rather than hanging still.
+            float rays = gnoise(ROT * vec2(drift * 20.0 + uTime * 0.05, above * 2.5 + fk * 3.1));
+            float surge = gnoise(vec2(drift * 2.6 - uTime * 0.09, fk * 4.7 + uTime * 0.02));
+            body *= arc * (0.25 + 0.75 * folds) * (0.5 + 0.5 * rays * rays * 1.6) * (0.55 + 0.9 * surge * surge);
             vec3 col = mix(vec3(0.3, 1.0, 0.74), vec3(0.58, 0.36, 1.0), smoothstep(0.0, span * 1.6, above));
+            // A strong display's rose fringe along the lower hem, under the green.
+            col = mix(col, vec3(1.0, 0.36, 0.62), (1.0 - smoothstep(-0.02, 0.016, above)) * 0.7 * smoothstep(0.45, 0.8, surge));
             acc += col * body * (1.0 - fk * 0.22);
           }
           return acc;
@@ -306,6 +322,26 @@ export class Sky {
             cloudA = cl.a * part;
             col = mix(col, cl.rgb, cloudA);
           }
+          #if CLOUD_Q > 0
+            // Crepuscular rays: beams of light fanning out from the sun through the gaps in the cloud
+            // banks and the ridges, between cooler beams of shadow, turning very slowly. Strongest close
+            // to the disc and thinning out across the sky; they veil the clouds only lightly.
+            if (uRays > 0.0 && h > -0.03 && sunAng < 1.5 && sunAng > 0.015) {
+              vec3 sr = normalize(uSunDir);
+              vec3 sideR = normalize(cross(sr, vec3(0.0, 1.0, 0.0)));
+              vec3 upR = cross(sideR, sr);
+              float phi = atan(dot(d, upR), dot(d, sideR));
+              vec2 rg = vec2(cos(phi), sin(phi));
+              // Behind a cloud deck the beams spread broad and soft.
+              float fq = 1.0 - 0.45 * uSunSoft;
+              float beam = gnoise(rg * 3.1 * fq + vec2(uTime * 0.009, 3.7)) * 0.66 + gnoise(rg * 7.4 * fq + vec2(-uTime * 0.014, 9.1)) * 0.34;
+              beam = smoothstep(0.34, 0.74, beam);
+              float fallR = exp(-sunAng * 1.5) * smoothstep(0.02, 0.2, sunAng);
+              vec3 rayC = mix(uSunColor, uCloudRim, 0.45);
+              col += rayC * beam * fallR * uRays * 0.11 * (1.0 - 0.5 * cloudA);
+              col *= 1.0 - (1.0 - beam) * fallR * uRays * 0.12 * (1.0 - cloudA);
+            }
+          #endif
           vec3 sunCol = uSunColor;
           if (uMoon > 0.5) {
             // Moon: crisp disc with a soft halo and a few dark maria. A second disc offset up and
@@ -337,6 +373,33 @@ export class Sky {
             col += sunCol * glow * uSunGlow * mix(1.0, 0.75, clear);
             col += sunCol * exp(-sunScr / (R * 2.4)) * 0.32 * uSunSoft * uSunGlow;
           }
+          if (uHalo > 0.0) {
+            // Ice-crystal air: the 22 degree halo, a thin ring reddish on its inner edge with the sky
+            // inside it a shade darker, brightest along its top; two sun dogs either side of the sun at
+            // its own height, red toward it with a white tail outward; and a faint parhelic line
+            // through the sun along its height.
+            vec3 sh = normalize(uSunDir);
+            float hr = (sunAng - 0.384) / 0.011;
+            float topArc = 1.0 + 0.7 * smoothstep(0.3, 0.95, normalize(d - sh * sd + vec3(0.0, 1e-5, 0.0)).y);
+            // Round a moon the ring takes the moonlight's own pale colour (Haunted Hollow's lunar halo).
+            vec3 hTint = uMoon > 0.5 ? mix(vec3(1.0), uSunColor, 0.7) : vec3(1.0);
+            vec3 hc = mix(vec3(1.0, 0.6, 0.4), vec3(0.94, 0.97, 1.0), smoothstep(-1.2, 1.4, hr + uMoon * 2.0)) * hTint;
+            col += hc * exp(-hr * hr) * 0.16 * uHalo * topArc * smoothstep(-0.03, 0.03, h) * (1.0 - 0.6 * cloudA);
+            col *= 1.0 - 0.08 * uHalo * smoothstep(0.375, 0.26, sunAng) * smoothstep(0.07, 0.2, sunAng);
+            float sEl = asin(clamp(sh.y, -1.0, 1.0));
+            float dEl = asin(clamp(d.y, -1.0, 1.0));
+            float sAz = atan(sh.x, -sh.z);
+            float dAzH = atan(sin(atan(d.x, -d.z) - sAz), cos(atan(d.x, -d.z) - sAz)) * cos(dEl);
+            float dy = (dEl - sEl) / 0.024;
+            float vert = exp(-dy * dy);
+            for (int k = 0; k < 2; k++) {
+              float dx = dAzH * (float(k) * 2.0 - 1.0) - 0.39 / max(cos(sEl), 0.5);
+              float spot = exp(-dx * dx / 0.00016) + 0.5 * step(0.0, dx) * exp(-dx / 0.06) * exp(-dy * dy * 1.2);
+              vec3 dc = mix(vec3(1.0, 0.46, 0.28), vec3(0.88, 0.94, 1.0), smoothstep(-0.006, 0.012, dx));
+              col += dc * spot * vert * 0.55 * uHalo * hTint * (1.0 - 0.7 * uMoon);
+            }
+            col += vec3(0.95, 0.97, 1.0) * exp(-dy * dy * 30.0) * 0.035 * uHalo * smoothstep(0.06, 0.35, abs(dAzH)) * exp(-abs(dAzH) * 1.4);
+          }
           if (uStars > 0.0 && h > 0.0) {
             vec3 g = d * 180.0;
             vec3 cell = floor(g);
@@ -349,9 +412,40 @@ export class Sky {
             float dark = 1.0 - smoothstep(0.06, 0.3, skyLum);
             col += vec3(0.9, 0.95, 1.0) * star * uStars * smoothstep(0.03, 0.22, h) * dark * 1.4 * (1.0 - cloudA);
           }
+          if (uMeteors > 0.0 && h > 0.06) {
+            // Shooting stars: three slots, each firing now and then (a different place and heading each
+            // time) and crossing for about a second, a hot head drawing a fading tail down the dark sky.
+            float darkM = 1.0 - smoothstep(0.08, 0.4, skyLum);
+            for (int k = 0; k < 3; k++) {
+              float fk = float(k);
+              float tt = uTime / (5.3 + fk * 3.1) + fk * 0.37;
+              float idm = floor(tt);
+              float um = fract(tt) / 0.16;
+              if (um > 1.0) continue;
+              float ha = hash2(vec2(idm, fk * 7.1 + 0.3));
+              float hb = hash2(vec2(fk * 3.3 + 0.7, idm + 0.5));
+              float hc = hash2(vec2(idm * 1.37 + 0.2, fk + 2.2));
+              float am = (ha - 0.5) * 2.2;
+              float em = 0.32 + hb * 0.42;
+              vec3 st = vec3(sin(am) * cos(em), sin(em), -cos(am) * cos(em));
+              vec3 east = normalize(cross(vec3(0.0, 1.0, 0.0), st));
+              vec3 down = normalize(vec3(0.0, -1.0, 0.0) + st * st.y);
+              vec3 tdir = normalize(down * 0.75 + east * (hc - 0.5) * 2.2);
+              float len = 0.2 + hc * 0.14;
+              vec3 head = normalize(st + tdir * len * um);
+              vec3 tail = normalize(st + tdir * len * max(um - 0.5, 0.0));
+              vec3 ba = head - tail;
+              vec3 pa = d - tail;
+              float q = clamp(dot(pa, ba) / max(dot(ba, ba), 1e-7), 0.0, 1.0);
+              float dm = length(pa - ba * q);
+              float fadeM = smoothstep(0.0, 0.12, um) * (1.0 - smoothstep(0.75, 1.0, um));
+              float core = smoothstep(0.0022, 0.0, dm) + exp(-dm / 0.0035) * 0.3;
+              col += mix(vec3(0.7, 0.82, 1.0), vec3(1.0, 0.96, 0.88), q) * core * q * q * fadeM * 1.8 * uMeteors * darkM * (1.0 - cloudA);
+            }
+          }
           if (uAurora > 0.0 && h > 0.04) {
             float az = atan(d.x, -d.z);
-            col += aurora(az, h) * uAurora * 0.62;
+            col += aurora(az, h) * uAurora * 0.72;
           }
           if (uComet > 0.0) {
             vec3 cd = normalize(uCometDir);
@@ -359,8 +453,10 @@ export class Sky {
             // A hot nucleus inside a soft coma, then the twin tail sweeping away from the sun side:
             // a long, straight, narrow ion tail in ice blue over a broader dust tail that curves away
             // from it, cream fading to rose. It is the night's hero light, so it is drawn big.
-            col += vec3(1.0, 0.97, 0.92) * smoothstep(0.013, 0.0, hd) * 2.6 * uComet;
-            col += vec3(0.92, 0.96, 1.0) * (exp(-hd * 30.0) * 0.95 + exp(-hd * 9.0) * 0.14) * uComet;
+            col += vec3(1.0, 0.97, 0.92) * smoothstep(0.016, 0.0, hd) * 2.8 * uComet;
+            col += vec3(0.92, 0.96, 1.0) * (exp(-hd * 24.0) * 1.0 + exp(-hd * 7.0) * 0.18) * uComet;
+            // A vast faint glow round the whole comet, so it lights its quarter of the sky.
+            col += vec3(0.62, 0.66, 0.95) * exp(-hd * 2.2) * 0.07 * uComet;
             // The tails fan out up and to the right, two clearly separate strokes about 35 degrees
             // long (a quarter of the sky in frame): the ion tail straight and narrow, the dust tail
             // broader, lower, curving away from it.
@@ -372,14 +468,17 @@ export class Sky {
             rel -= cd * dot(rel, cd);
             vec3 ion = normalize(side * 0.74 + upT * 0.67);
             float ia = dot(rel, ion);
-            float front = step(0.6, dot(d, cd));
-            if (front > 0.0 && ia > 0.0 && ia < 0.62) {
+            float front = step(0.3, dot(d, cd));
+            if (front > 0.0 && ia > 0.0 && ia < 0.95) {
               // The ion tail: a narrow blue streak that widens and fades softly along its length, with
-              // a soft glow either side of its core. A bright, even core read as a laser line.
-              float w = 0.005 + ia * 0.03;
+              // a soft glow either side of its core. A bright, even core read as a laser line. Long
+              // streamers ripple down it, drifting outward, so it reads as gas blown off the head.
+              float w = 0.006 + ia * 0.034;
               float ix = length(rel - ion * ia) / w;
-              float fall = pow(1.0 - ia / 0.62, 2.2) * smoothstep(0.0, 0.015, ia);
-              col += vec3(0.4, 0.74, 1.0) * (exp(-ix * ix * 0.8) * 0.85 + exp(-abs(ix) * 0.6) * 0.16) * fall * uComet;
+              float sx = dot(rel - ion * ia, normalize(cross(cd, ion))) / w;
+              float streamers = 0.7 + 0.5 * gnoise(vec2(sx * 2.2, ia * 3.0 - uTime * 0.05));
+              float fall = pow(1.0 - ia / 0.95, 2.0) * smoothstep(0.0, 0.015, ia);
+              col += vec3(0.4, 0.74, 1.0) * (exp(-ix * ix * 0.8) * 0.9 * streamers + exp(-abs(ix) * 0.6) * 0.18) * fall * uComet;
             }
             // The dust tail: broad and bright, opening about 35 degrees off the ion tail and curving
             // further away from it, cream at the head fading to rose, soft at both edges. As a faint,
@@ -387,10 +486,10 @@ export class Sky {
             vec3 dust = normalize(side * 0.995 + upT * 0.1);
             vec3 bend = normalize(upT - dust * dot(upT, dust));
             float da = dot(rel, dust);
-            if (front > 0.0 && da > 0.0 && da < 0.72) {
-              float w = 0.018 + da * 0.25;
-              float dx = length(rel - dust * da + bend * da * da * 0.7) / w;
-              float fall = pow(1.0 - da / 0.72, 1.2) * smoothstep(0.0, 0.03, da);
+            if (front > 0.0 && da > 0.0 && da < 1.02) {
+              float w = 0.02 + da * 0.27;
+              float dx = length(rel - dust * da + bend * da * da * 0.6) / w;
+              float fall = pow(1.0 - da / 1.02, 1.2) * smoothstep(0.0, 0.03, da);
               // Brightest down its leading edge (the side away from the ion tail), the way dust tails are.
               float lead = 0.8 + 0.35 * clamp(-dot(rel - dust * da, bend) / w, -1.0, 1.0);
               col += mix(vec3(1.0, 0.88, 0.72), vec3(1.0, 0.56, 0.64), smoothstep(0.0, 0.45, da)) * (exp(-dx * dx) * 0.95 * lead + exp(-abs(dx) * 1.1) * 0.2) * fall * uComet;
@@ -408,7 +507,7 @@ export class Sky {
     this.root.add(this.dome);
 
     this.massif = new Massif(seed, this.sea);
-    this.root.add(this.massif.root);
+    this.root.add(this.massif.root, this.mist.mesh);
   }
 
   setPalette(p: Palette): void {
@@ -444,7 +543,12 @@ export class Sky {
     u.uCloudShade.value.copy(p.clouds.shade);
     u.uCloudRim.value.copy(p.clouds.rim);
     this.highClouds = p.clouds.high;
+    // Rays only from a sun (a moon's fought the aurora and the comet), and only while it is low.
+    u.uRays.value = p.moon ? 0 : p.atmo.rays * (1 - Math.max(0, Math.min(1, (p.diskDir.y - 0.3) / 0.25)));
+    u.uHalo.value = p.atmo.halo;
+    u.uMeteors.value = p.atmo.meteors;
     this.massif.setPalette(p);
+    this.mist.setPalette(p);
   }
 
   /** Cloud and panorama detail by quality tier: Low keeps the horizon banks at two octaves, drops the
@@ -460,9 +564,169 @@ export class Sky {
       this.domeMat.needsUpdate = true;
     }
     this.massif.setDetail(tier);
+    this.mist.setDetail(tier);
   }
 
   follow(cam: Vector3): void {
     this.root.position.set(cam.x, cam.y, cam.z);
+  }
+}
+
+/** The valley mist's rings: three stacked layers (metres below the course's floor, and how much each
+ *  carries), so where a slope or a range's foot cuts through them the mist thins out over a height
+ *  rather than ending on one line. */
+const MIST_LAYERS = [
+  { depth: 190, k: 0.55 },
+  { depth: 225, k: 0.8 },
+  { depth: 262, k: 1 },
+];
+const MIST_SEG = 96;
+const MIST_ROWS = 20;
+/** The mist's reach round the lens (metres): it rises out of the snow's own haze, then runs on past
+ *  the mid-ground's end and into the feet of the nearest ranges before melting into the far haze. */
+const MIST_R0 = 140;
+const MIST_R1 = 2300;
+
+function mistGeometry(): BufferGeometry {
+  const verts = MIST_LAYERS.length * (MIST_SEG + 1) * (MIST_ROWS + 1);
+  const pos = new Float32Array(verts * 3);
+  const idx = new Uint16Array(MIST_LAYERS.length * MIST_SEG * MIST_ROWS * 6);
+  let v = 0;
+  let k = 0;
+  // Farthest layer first (it is the lowest), so the nearer, higher sheets draw over it.
+  for (let l = MIST_LAYERS.length - 1; l >= 0; l--) {
+    const start = v;
+    for (let j = 0; j <= MIST_ROWS; j++) {
+      const r = MIST_R0 + (MIST_R1 - MIST_R0) * Math.pow(j / MIST_ROWS, 1.6);
+      for (let i = 0; i <= MIST_SEG; i++) {
+        const a = (i / MIST_SEG) * Math.PI * 2;
+        pos[v * 3] = Math.sin(a) * r;
+        pos[v * 3 + 1] = l;
+        pos[v * 3 + 2] = -Math.cos(a) * r;
+        v++;
+      }
+    }
+    const w = MIST_SEG + 1;
+    for (let j = 0; j < MIST_ROWS; j++) {
+      for (let i = 0; i < MIST_SEG; i++) {
+        const a = start + j * w + i;
+        idx[k++] = a;
+        idx[k++] = a + 1;
+        idx[k++] = a + w;
+        idx[k++] = a + 1;
+        idx[k++] = a + w + 1;
+        idx[k++] = a + w;
+      }
+    }
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setIndex(new BufferAttribute(idx, 1));
+  return g;
+}
+
+/**
+ * Valley mist (Medium and High, one draw): sheets of drifting cloud lying in the valleys a couple of
+ * hundred metres below the run, following the course's floor down the mountain (shared.uFogFloor), so
+ * the slopes, the villages and the nearest ranges' feet rise out of it in layers and the depth of the
+ * world reads in steps. It is world-anchored (its banks drift on the wind, not with the lens), gapped so
+ * the valley floor shows through, lit on its tops and warmer toward the sun, and it melts into the
+ * haze at both ends. Depth-tested and drawn first among the see-through things, so the near world, the
+ * weather and the ghosts all stand in front of it.
+ */
+export class ValleyMist {
+  readonly mesh: Mesh;
+  private mat: ShaderMaterial;
+  private on = true;
+  private amount = 0;
+
+  constructor() {
+    this.mat = new ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      side: DoubleSide,
+      uniforms: {
+        uTime: shared.uTime,
+        uFogFloor: shared.uFogFloor,
+        uSunDir: shared.uDiskDir,
+        uSunColor: shared.uSunColor,
+        uFog: shared.uFog,
+        uLit: { value: new Color() },
+        uShade: { value: new Color() },
+        uHaze: { value: new Color() },
+        uAmount: { value: 0 },
+        uDepth: { value: new Vector3(MIST_LAYERS[0].depth, MIST_LAYERS[1].depth, MIST_LAYERS[2].depth) },
+      },
+      vertexShader: /* glsl */ `
+        uniform vec2 uFogFloor;
+        uniform vec3 uDepth;
+        varying vec3 vWorld;
+        varying float vLayer;
+        varying float vR;
+        void main() {
+          vec4 wp = modelMatrix * vec4(position.x, 0.0, position.z, 1.0);
+          vLayer = position.y;
+          float depth = position.y < 0.5 ? uDepth.x : position.y < 1.5 ? uDepth.y : uDepth.z;
+          // The course's floor, fitted over the stretch ahead, followed down past the lens.
+          wp.y = uFogFloor.x + uFogFloor.y * wp.z - depth;
+          vWorld = wp.xyz;
+          vR = length(position.xz);
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform float uTime;
+        uniform vec3 uSunDir;
+        uniform vec3 uSunColor;
+        uniform vec3 uLit;
+        uniform vec3 uShade;
+        uniform vec3 uHaze;
+        uniform float uAmount;
+        varying vec3 vWorld;
+        varying float vLayer;
+        varying float vR;
+        ${NOISE}
+        void main() {
+          // Banks a few hundred metres across, drifting slowly on the wind and changing as they go,
+          // each sheet with its own pattern so the gaps never line up.
+          vec2 p = vWorld.xz * 0.0024 + vec2(uTime * 0.006, uTime * 0.0022) + vLayer * 7.3;
+          float n = snoise(p) * 0.6 + snoise(p * 2.3 + vec2(3.1, -uTime * 0.004)) * 0.28 + snoise(p * 5.9 + 1.7) * 0.12;
+          float dens = smoothstep(-0.25, 0.55, n);
+          float a = dens * (0.18 + 0.1 * vLayer) * uAmount;
+          // Rises out of the snow's haze close in, and melts into the far haze past the nearest ranges.
+          a *= smoothstep(${MIST_R0.toFixed(1)}, ${(MIST_R0 + 260).toFixed(1)}, vR) * (1.0 - smoothstep(${(MIST_R1 - 700).toFixed(1)}, ${MIST_R1.toFixed(1)}, vR));
+          if (a < 0.004) discard;
+          // Lit tops (the densest parts of the top sheet) and cooler, shaded thin edges; toward the sun
+          // the mist glows with its warmth.
+          vec3 col = mix(uShade, uLit, smoothstep(0.25, 0.85, dens) * (0.55 + 0.2 * vLayer));
+          vec3 vd = normalize(vWorld - cameraPosition);
+          float fwd = pow(max(dot(vd, normalize(uSunDir)), 0.0), 3.0);
+          col = mix(col, max(col, uSunColor * 0.95), fwd * 0.45);
+          col = mix(col, uHaze, smoothstep(500.0, ${MIST_R1.toFixed(1)}, vR) * 0.6);
+          gl_FragColor = vec4(col, a);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+    });
+    this.mesh = new Mesh(mistGeometry(), this.mat);
+    this.mesh.frustumCulled = false;
+    // First among the see-through things (the weather, the ghosts and the life all draw over it).
+    this.mesh.renderOrder = -5;
+  }
+
+  setPalette(p: Palette): void {
+    const u = this.mat.uniforms;
+    this.amount = p.atmo.valley * (1 - p.massif.veil);
+    u.uAmount.value = this.amount;
+    (u.uLit.value as Color).copy(p.atmo.valleyColor).lerp(p.snowLit, 0.15);
+    (u.uShade.value as Color).copy(p.atmo.valleyColor).lerp(p.snowShade, 0.45).lerp(p.fog, 0.2);
+    (u.uHaze.value as Color).copy(p.fog).lerp(p.skyHorizon, 0.5);
+    this.mesh.visible = this.on && this.amount > 0.01;
+  }
+
+  setDetail(tier: 'low' | 'medium' | 'high'): void {
+    this.on = tier !== 'low';
+    this.mesh.visible = this.on && this.amount > 0.01;
   }
 }
