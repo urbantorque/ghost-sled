@@ -14,6 +14,7 @@ import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
 import { Life } from './life';
 import { applyPalette, bands, setCloudShadows, shared } from './materials';
+import { Midground } from './midground';
 import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
@@ -131,6 +132,7 @@ export class World {
   palette: Palette;
   quality: QualitySettings;
   readonly terrain: Terrain;
+  readonly midground: Midground;
   readonly props: Props;
   /** The course's set pieces and their crowds (landmarks.ts). */
   readonly setPieces: SetPieces;
@@ -216,6 +218,7 @@ export class World {
     this.palette = getPalette(this.course.biome, Mood.None);
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
+    this.midground = new Midground(this.course, this.palette, quality.tier, quality.terrain.reach);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
     this.props.siteClearings = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
@@ -230,6 +233,9 @@ export class World {
     this.chaos = new ChaosVisuals(this.course);
     this.landing = new LandingAid(this.course);
     this.life = new Life(this.course, this.palette, quality.tier, quality.forestDensity);
+    // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
+    this.life.farGround = (x, z) => this.midground.ground(x, z);
+    this.life.farChimneys = (out) => this.midground.chimneys(out);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     const cor = { x: 0, hw: 0 };
     this.cam.corridor = (z) => {
@@ -263,6 +269,7 @@ export class World {
     this.scene.add(
       this.sky.root,
       this.terrain.root,
+      this.midground.root,
       this.props.root,
       this.setPieces.root,
       this.trail.mesh,
@@ -352,6 +359,7 @@ export class World {
     this.sun.castShadow = q.shadows;
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
+    this.midground.setTier(q.tier, q.terrain.reach);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
     this.setPieces.setQuality(q.tier, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
@@ -382,6 +390,7 @@ export class World {
     this.terrain.setCourse(c);
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
+    this.midground.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
@@ -407,6 +416,7 @@ export class World {
     // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
     if (!same) this.props.setCourse(this.course, this.palette);
     if (!same) this.setPieces.setCourse(this.course, this.palette, mood);
+    this.midground.setPalette(this.palette);
     this.sky.setPalette(this.palette);
     this.life.setPalette(this.palette, mood);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -524,6 +534,7 @@ export class World {
     const to = cur + this.quality.viewChunks;
     if (prime) this.terrain.prime(from, Math.min(to, cur + 4));
     this.terrain.update(from, to);
+    this.midground.update(z, prime);
     const key = `${from}:${to}`;
     if (key !== this.lastChunkRange) {
       this.lastChunkRange = key;
