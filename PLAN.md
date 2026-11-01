@@ -14,7 +14,7 @@ src/
     dmath.ts     deterministic sin/cos/atan2/exp/sqrt built from + - * / only
     noise.ts     seeded value noise (1D/2D) for course shape
     mountains.ts mountain + biome generation parameters (pure data)
-    course.ts    Course = f(seed): centerline, width, safe line, ground height, chunks
+    course.ts    Course = f(seed): sections, centerline, width, safe line, ground height, chunks
     chunk.ts     per-chunk features: obstacles, ramps, drops, moguls, gifts (pure f(seed, index))
     sleds.ts     sled definitions and their tiny traits
     chaos.ts     chaos roll (mood + mid-run event) and their sim parameters

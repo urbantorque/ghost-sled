@@ -17,6 +17,14 @@ const ACTION = new Set(['Space', 'ShiftLeft', 'ShiftRight', 'KeyS', 'ArrowDown',
  *  started a run from either screen. */
 const MENU_START = new Set(['Space']);
 
+/** A steer key starts at this much lock and builds to full lock at KEY_RAMP per tick (about 0.2 s),
+ *  so a tap is a correction and a hold is a turn. Reversing starts over from KEY_START. */
+const KEY_START = 0.35;
+const KEY_RAMP = 0.055;
+
+/** Touch and mouse steering: fine near the centre, full lock at the end of the travel. */
+const steerCurve = (d: number): number => d * (0.45 + 0.55 * Math.abs(d));
+
 /** Whether a fresh press may start a run from the title or the results: any click or tap, and only
  *  Space among the keys (never Shift, S, W or the arrows). */
 export function startsFromMenu(source: InputMode, code?: string): boolean {
@@ -33,6 +41,8 @@ export class InputController {
   enabled = true;
   private keysL = false;
   private keysR = false;
+  /** The keys' steer, built up per sample (KEY_RAMP). */
+  private keySteer = 0;
   private keyAction = 0;
   private mouseX = 0.5;
   private mouseActive = false;
@@ -143,7 +153,7 @@ export class InputController {
   }
 
   private touchRange(): number {
-    return Math.max(48, Math.min(window.innerWidth, window.innerHeight) * 0.16);
+    return Math.max(64, Math.min(window.innerWidth, window.innerHeight) * 0.24);
   }
 
   private syncVisual(): void {
@@ -155,6 +165,7 @@ export class InputController {
 
   releaseAll(): void {
     this.keysL = this.keysR = false;
+    this.keySteer = 0;
     this.keyAction = 0;
     this.mouseDown = false;
     this.steerTouch = null;
@@ -164,18 +175,26 @@ export class InputController {
 
   /** Continuous steer value in -1..1 before quantisation. */
   private rawSteer(): number {
-    if (this.keysL || this.keysR) return (this.keysR ? 1 : 0) - (this.keysL ? 1 : 0);
+    if (this.keysL || this.keysR) return this.keySteer;
     if (this.steerTouch) {
       const d = (this.steerTouch.x - this.steerTouch.ox) / this.touchRange();
-      return Math.max(-1, Math.min(1, d));
+      return steerCurve(Math.max(-1, Math.min(1, d)));
     }
     if (this.mouseActive && this.mode === 'mouse') {
-      const d = (this.mouseX - 0.5) / 0.3;
+      const d = (this.mouseX - 0.5) / 0.36;
       const dead = 0.06;
       const m = Math.abs(d) < dead ? 0 : (Math.abs(d) - dead) / (1 - dead);
-      return Math.max(-1, Math.min(1, Math.sign(d) * m));
+      return steerCurve(Math.max(-1, Math.min(1, Math.sign(d) * m)));
     }
     return 0;
+  }
+
+  /** Builds the keys' steer once per sample: from KEY_START toward full lock, from 0 on release. */
+  private rampKeys(): void {
+    const target = (this.keysR ? 1 : 0) - (this.keysL ? 1 : 0);
+    if (target === 0) this.keySteer = 0;
+    else if (this.keySteer * target <= 0) this.keySteer = target * KEY_START;
+    else this.keySteer = target * Math.min(1, Math.abs(this.keySteer) + KEY_RAMP);
   }
 
   /** True while the player is actively steering (onboarding). */
@@ -186,6 +205,7 @@ export class InputController {
   /** Sample once per sim tick. Quantised with hysteresis so the input log stays compact. */
   sample(): { steer: number; action: boolean } {
     if (!this.enabled) return { steer: STEER_CENTER, action: false };
+    this.rampKeys();
     const raw = this.rawSteer() * 4;
     const cur = this.level - STEER_CENTER;
     if (Math.abs(raw - cur) > 0.62) this.level = STEER_CENTER + Math.round(raw);

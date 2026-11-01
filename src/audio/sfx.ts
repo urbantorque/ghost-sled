@@ -21,6 +21,13 @@ import { PRIO, Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './vo
 
 /** Style notes are spaced this far apart when several land on one tick, so they arpeggiate. */
 const STYLE_GAP = 0.06;
+/** Every one-shot sound's level (about -4 dB): the notifications sat over the band and drowned the
+ *  song. The ambience bed shares the bus but not this trim, so the wind keeps its level. */
+export const SFX_TRIM = 0.63;
+/** How deep the band dips under a perfect landing, a big bank and the other everyday rewards (1 =
+ *  no dip). The deliberate gaps (the crash, a big bank's drop, the avalanche escape) keep theirs. */
+const DUCK_STOMP = 0.82;
+const DUCK_BANK = 0.88;
 /** Parts of a sound starting further ahead than this are built by a later scheduler pass, so a
  *  big reward spreads its node creation over several frames instead of hitching one. */
 const DEFER = 0.08;
@@ -235,7 +242,7 @@ export class Sfx {
         if (this.bankBeats > 0) this.bankBeats--;
         else {
           this.bank(e.points, t);
-          if (e.points >= 1500 && this.music) this.music.duck(0.75, t, 0.3, 0.3);
+          if (e.points >= 1500 && this.music) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
         }
         break;
       case 'comboLost':
@@ -274,10 +281,10 @@ export class Sfx {
         duck.duckSeq(t, 0.12, 0.25, 0.3, 0.7, 0.9);
         break;
       case 'land':
-        if (e.quality === 'perfect') duck.duck(0.62, t, 0.18, 0.25);
+        if (e.quality === 'perfect') duck.duck(DUCK_STOMP, t, 0.18, 0.25);
         break;
       case 'chaos':
-        if (e.phase === 'warn') duck.duck(0.55, t, e.event === ChaosEvent.Avalanche ? 2.8 : 1.4, 0.6);
+        if (e.phase === 'warn') duck.duck(0.7, t, e.event === ChaosEvent.Avalanche ? 2.8 : 1.4, 0.6);
         else if (e.phase === 'success') {
           // Outran the avalanche: the band drops out (wind and the fading rumble left), then slams
           // back with the fanfare.
@@ -285,11 +292,11 @@ export class Sfx {
             duck.duck(0.02, t, ESCAPE_DROP_S, 0.04, 0.008);
             this.bed?.(t, ESCAPE_DROP_S, 0.3);
           }
-          else duck.duck(0.5, t, 1, 0.6);
+          else duck.duck(0.7, t, 1, 0.6);
         }
         break;
       case 'revive':
-        duck.duck(0.6, t, 0.8, 0.5);
+        duck.duck(0.75, t, 0.8, 0.5);
         break;
       default:
         break;
@@ -462,7 +469,7 @@ export class Sfx {
    *  is its steal class (voices.ts PRIO): past the pool's cap the quietest, least important voice
    *  goes first. */
   private voice(t: number, send: number, pan = 0, level = 1, prio: number = PRIO.normal): Voice {
-    return this.pool.voice(t, level, this.bus.dry, this.bus.wet, send, pan, prio);
+    return this.pool.voice(t, level * SFX_TRIM, this.bus.dry, this.bus.wet, send, pan, prio);
   }
 
   /** Run `fn(t)` now, or from a later scheduler pass if t is far enough ahead. */
@@ -1405,7 +1412,7 @@ export class Sfx {
     const tier = Math.max(0, Math.min(3, Math.round(b.tier)));
     if (tier === 0) {
       this.bank(b.points, t);
-      if (b.points >= 1500 && this.music) this.music.duck(0.75, t, 0.3, 0.3);
+      if (b.points >= 1500 && this.music) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
       return;
     }
     const roll = bankRoll(b);
@@ -1445,7 +1452,7 @@ export class Sfx {
     });
     const music = this.music;
     if (tier === 1) {
-      if (music) this.later(t, (td) => music.duck(0.75, td, 0.3, 0.3));
+      if (music) this.later(t, (td) => music.duck(DUCK_BANK, td, 0.3, 0.3));
       return;
     }
     this.chord(land, 0.08, 1 + 0.2 * tier, 5);
