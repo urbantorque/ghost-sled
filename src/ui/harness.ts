@@ -47,7 +47,7 @@ const missions: MissionView[] = [
   { text: 'Drift for 400 m total', progress: 120, target: 400, reward: 30, done: false, justCompleted: false },
 ];
 
-let settings: SettingsModel = { master: 0.9, music: 0.7, sfx: 1, quality: 'auto', currentTier: 'high', hints: true };
+let settings: SettingsModel = { master: 0.9, music: 0.8, sfx: 0.8, quality: 'auto', currentTier: 'high', hints: true };
 
 let wallet = 1240;
 let sleds: SledCard[] = [

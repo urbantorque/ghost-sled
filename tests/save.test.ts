@@ -61,6 +61,8 @@ describe('save migration (schema v1 forever)', () => {
     expect(d.name).toBe('Mila');
     expect(d.gifts).toBe(140);
     expect(d.runDists).toEqual({});
+    // The untouched old slider pair (music 0.7, effects 0.9) moves to the new defaults; master stays.
+    expect(d.settings).toMatchObject({ master: 0.5, music: 0.8, sfx: 0.8 });
     // The grudge keeps its record; the tally reads as 1 where it is used.
     const g = d.grudge.pinecrest;
     expect(g.name).toBe('KestrelHailstone');

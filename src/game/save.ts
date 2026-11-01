@@ -92,7 +92,7 @@ export function defaultSave(name: string): SaveData {
     best: {},
     grudge: {},
     missions: newMissionState(hashString(name), { unlockedBiomes: unlockedBiomes(0) }),
-    settings: { master: 0.9, music: 0.7, sfx: 0.9, quality: 'auto', hints: true },
+    settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true },
     stats: { bestScore: 0, bestCombo: 0, longestAir: 0, perfects: 0, topSpeed: 0, yetiHops: 0, avalanches: 0 },
     hints: {},
     daily: { key: '', best: 0, medal: 0, streak: 0, last: '' },
@@ -248,6 +248,20 @@ export function pruneDaily(d: SaveData, today: string): void {
   prune(d.runDists);
 }
 
+/** The music and effects sliders' defaults. They were 0.7 and 0.9, which set the effects about 4 dB
+ *  over the band; a save still holding exactly that pair never moved them, so it takes the new pair. */
+export const DEFAULT_MUSIC = 0.8;
+export const DEFAULT_SFX = 0.8;
+
+function loadSettings(base: Settings, p: unknown): Settings {
+  const s: Settings = { ...base, ...(isObj(p) ? (p as Partial<Settings>) : {}) };
+  if (s.music === 0.7 && s.sfx === 0.9) {
+    s.music = DEFAULT_MUSIC;
+    s.sfx = DEFAULT_SFX;
+  }
+  return s;
+}
+
 export function merge(base: SaveData, p: Partial<SaveData>, today: string): SaveData {
   const name = typeof p.name === 'string' && p.name ? p.name : base.name;
   const ghostsPassed = isNum(p.ghostsPassed) ? p.ghostsPassed : base.ghostsPassed;
@@ -257,7 +271,7 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     v: 1,
     name,
     ghostsPassed,
-    settings: { ...base.settings, ...(isObj(p.settings) ? p.settings : {}) },
+    settings: loadSettings(base.settings, p.settings),
     stats: { ...base.stats, ...(isObj(p.stats) ? p.stats : {}) },
     missions: loadMissions(p.missions, base.missions, name, ghostsPassed),
     best: loadBest(p.best),

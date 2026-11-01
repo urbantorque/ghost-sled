@@ -414,7 +414,7 @@ export class AudioEngine {
           const tq = g ? g.t0 + Math.ceil((t - g.t0) / (g.dur * 4)) * g.dur * 4 : t;
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
-        if (b.type === 'unlockPop') c.graph.music.duck(0.6, now, 0.9, 0.5);
+        if (b.type === 'unlockPop') c.graph.music.duck(0.75, now, 0.9, 0.5);
         // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
         // fourth and opens back to noise.
         else if (b.type === 'flow' && b.phase === 'snuff') c.ambience.snuff(now);
@@ -439,7 +439,7 @@ export class AudioEngine {
     try {
       const now = ctx.currentTime;
       const d = Number.isFinite(delay) ? Math.max(0, delay) : 0;
-      const duck = name === 'new-best' || name === 'unlock' ? (t: number) => c.graph.music.duck(0.6, Math.max(t - START_LEAD, ctx.currentTime), 0.9, 0.5) : undefined;
+      const duck = name === 'new-best' || name === 'unlock' ? (t: number) => c.graph.music.duck(0.75, Math.max(t - START_LEAD, ctx.currentTime), 0.9, 0.5) : undefined;
       c.sfx.ui(name, detail ?? 0, now + START_LEAD + d, duck);
     } catch (err) {
       this.warn(err);

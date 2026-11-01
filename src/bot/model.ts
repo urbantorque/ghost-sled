@@ -1,6 +1,6 @@
 import { Course } from '../sim/course';
 import { PI, TAU, approach } from '../sim/dmath';
-import { DT } from '../sim/sim';
+import { DT, FLIP_GUARD_TICKS } from '../sim/sim';
 import { Scene } from './scene';
 
 // The bot's internal model of its own body: a ballistic flight predictor and a copy of the air
@@ -95,8 +95,9 @@ export function copyRot(from: Rot, to: Rot): Rot {
   return to;
 }
 
-/** One air tick of the sim's steering smoothing, spin and flip rules. */
-export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotParams): void {
+/** One air tick of the sim's steering smoothing, spin and flip rules. `left`: steps to touchdown
+ *  (a flip does not start inside the sim's FLIP_GUARD_TICKS). */
+export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotParams, left = Infinity): void {
   const rate = Math.abs(steerTarget) < Math.abs(r.steer) || steerTarget * r.steer < 0 ? 10 : 8;
   r.steer = approach(r.steer, steerTarget, rate * DT);
   const pressed = action && !r.prev;
@@ -110,7 +111,7 @@ export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotPara
     r.yaw = approach(r.yaw, PI * Math.round(r.yaw / PI), 2.6 * DT);
   }
   r.yaw += r.spin * DT;
-  if (action && r.hold >= 7) {
+  if (action && r.hold >= 7 && (r.pr < -1 || left > FLIP_GUARD_TICKS)) {
     r.pr = approach(r.pr, -p.flipRate, 20 * DT);
   } else {
     r.pr = approach(r.pr, 0, 26 * DT);
@@ -165,7 +166,7 @@ export function runPlan(r0: Rot, plan: AirPlan, nA: number, nB: number, p: RotPa
   let vLat = 0;
   let lat = 0;
   for (let i = 0; i < nB; i++) {
-    rotStep(r, steerAt(plan, i), actionAt(plan, i), p);
+    rotStep(r, steerAt(plan, i), actionAt(plan, i), p, nB - i);
     // The sim nudges velocity sideways by steer * 2 m/s^2 in the air.
     vLat += r.steer * AIR_LATERAL * DT;
     lat += vLat * DT;
