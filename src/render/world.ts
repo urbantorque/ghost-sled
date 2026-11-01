@@ -18,6 +18,7 @@ import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
+import { SetPieces } from './landmarks';
 import { Rider } from './rider';
 import { Sky } from './sky';
 import { Terrain, TerrainDetail } from './terrain';
@@ -130,6 +131,8 @@ export class World {
   quality: QualitySettings;
   readonly terrain: Terrain;
   readonly props: Props;
+  /** The course's set pieces and their crowds (landmarks.ts). */
+  readonly setPieces: SetPieces;
   readonly sky: Sky;
   readonly rider = new Rider();
   readonly particles: Particles;
@@ -212,6 +215,7 @@ export class World {
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
+    this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.tier);
     setCloudShadows(quality.tier !== 'low');
@@ -256,6 +260,7 @@ export class World {
       this.sky.root,
       this.terrain.root,
       this.props.root,
+      this.setPieces.root,
       this.trail.mesh,
       this.landing.root,
       this.ghosts.root,
@@ -343,6 +348,7 @@ export class World {
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
+    this.setPieces.setQuality(q.tier, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
@@ -371,6 +377,7 @@ export class World {
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
     this.props.setCourse(c, this.palette);
+    this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.trail.setCourse(c);
@@ -392,6 +399,7 @@ export class World {
     // mood (setCourse builds them for the mood in force): the title straight after startup and a
     // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
     if (!same) this.props.setCourse(this.course, this.palette);
+    if (!same) this.setPieces.setCourse(this.course, this.palette, mood);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
@@ -545,6 +553,7 @@ export class World {
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
+    this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
 
     // Rider. Earned flow burns on it (uniforms only); 'In the flow' pulses its rim to full for 0.3 s
     // (under reduced motion a softer fade in and out instead of the flash).
