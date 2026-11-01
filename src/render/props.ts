@@ -175,6 +175,8 @@ export class Props {
   private started = false;
   /** This run's graveyard cairns (sim x and z on the bank), at most CAIRN_CAP. */
   private graves: Array<{ x: number; z: number }> = [];
+  /** The set pieces' footprints and crowd rows (landmarks.ts), kept clear of the forest. */
+  siteClearings: ((z0: number, z1: number, out: Clearing[]) => void) | null = null;
 
   constructor(
     private course: Course,
@@ -707,6 +709,7 @@ export class Props {
     }
     // Bank dressing and the section signatures, then the forest round the clearings they keep.
     const clear: Clearing[] = [];
+    if (this.dresser && this.siteClearings) this.siteClearings(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, clear);
     if (this.dresser) {
       this.dresser.chunk(
         i,

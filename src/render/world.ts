@@ -218,6 +218,7 @@ export class World {
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
+    this.props.siteClearings = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.tier);
     setCloudShadows(quality.tier !== 'low');

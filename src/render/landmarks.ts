@@ -5,6 +5,7 @@ import { CHUNK_LEN, Course, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry } from './crowd';
 import { Kind, Piece, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
+import type { Clearing } from './dressing';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
 
@@ -291,6 +292,24 @@ export class SitePlan {
   planTo(z: number): void {
     while (this.nextZ <= z) this.planNext();
   }
+
+  /** The forest kept clear between sim z0 and z1: a bank piece's ground and its crowd's rows on
+   *  both banks, and a span's piers. Planned as far as it needs, so the props can ask on idle time. */
+  clearings(z0: number, z1: number, out: Clearing[]): void {
+    this.planTo(z1 + 60);
+    for (const s of this.list) {
+      if (s.z < z0 - 60 || s.z > z1 + 60) continue;
+      if (s.span) {
+        for (const side of [-1, 1]) {
+          out.push({ side, e: 12, z0: s.z - 36, z1: s.z + 30, w: 3.2 });
+          out.push({ side, e: s.post - 2, z0: s.z - SPAN_DEPTH - 4, z1: s.z + SPAN_DEPTH + 4, w: 9 });
+        }
+      } else {
+        out.push({ side: s.side, e: 30, z0: s.z - 32, z1: s.z + 30, w: 21 });
+        out.push({ side: -s.side, e: 12, z0: s.z - 20, z1: s.z + 16, w: 3.2 });
+      }
+    }
+  }
 }
 
 /** The local x past which everything stands at least BANK_KEEP past the corridor's edge, over the
@@ -422,6 +441,11 @@ export class SetPieces {
     if (replan) this.plan = new SitePlan(course, mood);
     this.palette = palette;
     this.setPalette(palette);
+  }
+
+  /** The forest the props must keep clear between sim z0 and z1 (SitePlan.clearings). */
+  clearings(z0: number, z1: number, out: Clearing[]): void {
+    this.plan.clearings(z0, z1, out);
   }
 
   setQuality(tier: 'low' | 'medium' | 'high', shadows: boolean): void {

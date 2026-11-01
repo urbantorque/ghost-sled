@@ -18,6 +18,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ObstacleKind } from '../sim/course';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
+import { hazardPineGeometry } from './flora';
 import { Palette } from './palette';
 
 // Every mesh in the game is built here from primitives. Parts are flat-shaded (non-indexed) and
@@ -514,7 +515,7 @@ export function kickerLipGeometry(p?: Palette): BufferGeometry {
 export function obstacleGeometry(kind: ObstacleKind, p: Palette): BufferGeometry {
   switch (kind) {
     case 'pine':
-      return pineGeometry(p);
+      return hazardPineGeometry(p);
     case 'charpine':
       return charPineGeometry(p);
     case 'blossom':
