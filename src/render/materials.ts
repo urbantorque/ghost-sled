@@ -57,7 +57,18 @@ export const shared = {
   uHazardFog: { value: 1 },
   /** 1 in bright day moods, 0 at night (from the lit snow's luminance, as the snow shader's dayK). */
   uDayK: { value: 1 },
+  /** How deep the painted clouds' slow shadows drift over the snow (palette.clouds.shadow; 0 on Low
+   *  and in moods without sun). */
+  uCloudShadow: { value: 0 },
 };
+
+/** Cloud shadows on the snow are a Medium and High touch (world.ts turns them off on Low). */
+let cloudShadowsOn = true;
+let cloudShadowK = 0;
+export function setCloudShadows(on: boolean): void {
+  cloudShadowsOn = on;
+  shared.uCloudShadow.value = on ? cloudShadowK : 0;
+}
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
  *  corridor by the snow shader: zero draw calls on every tier and nothing extra in the mirror. Declared
@@ -86,7 +97,9 @@ export function applyPalette(p: Palette): void {
   shared.uFog.value.copy(p.fog);
   shared.uFogNear.value = p.fogNear;
   shared.uFogFar.value = p.fogFar;
-  shared.uLantern.value = p.lantern ? 1 : 0;
+  shared.uLantern.value = p.lantern ? 1 : p.lanternGlow;
+  cloudShadowK = p.clouds.shadow;
+  shared.uCloudShadow.value = cloudShadowsOn ? cloudShadowK : 0;
   shared.uSnowLit.value.copy(p.snowLit);
   shared.uSnowShade.value.copy(p.snowShade);
   shared.uSnowDeep.value.copy(p.snowDeep);
@@ -348,6 +361,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       }
       uniform vec2 uShadowScale;
       uniform float uShadowK;
+      uniform float uCloudShadow;
       vec2 vogel(int i, int count, float phi) {
         float r = sqrt((float(i) + 0.5) / float(count));
         float th = float(i) * 2.39996323 + phi;
@@ -478,6 +492,14 @@ export function makeSnowMaterial(): ShaderMaterial {
         lit *= 0.88 * mix(1.0, 0.94, dayK);
         float ndl = dot(n, uSunDir);
         float t = smoothstep(-0.12, 0.42, ndl) * mix(0.18, 1.0, shadow);
+        // The painted clouds' shadows: big, very soft, slow cool patches drifting over the slope (about
+        // 40 m across, sliding at under 2 m/s). They only take part of the light, so the sled's contact
+        // shadow and every cast shadow stay darker than they are, and the bands are laid over them.
+        if (uCloudShadow > 0.0) {
+          vec2 cp = vWorldPos.xz * vec2(0.011, 0.008) + vec2(uTime * 0.017, uTime * 0.006);
+          float cn = vnoise(cp) * 0.65 + vnoise(cp * 2.3 + 5.1) * 0.35;
+          t *= 1.0 - smoothstep(0.5, 0.74, cn) * uCloudShadow;
+        }
         // By day a low sunset sun warms lit snow to cream, never to peach: the snow takes only a
         // trace of the key's colour (the mood's grade adds warmth of its own), so the warm light reads
         // against the periwinkle shade while the snow itself stays white rather than sand. Night

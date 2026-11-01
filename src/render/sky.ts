@@ -26,6 +26,8 @@ export class Sky {
   private dome: Mesh;
   private domeMat: ShaderMaterial;
   private ridgeMats: ShaderMaterial[] = [];
+  private wisps = true;
+  private highClouds = 0;
 
   constructor(seed: number) {
     this.domeMat = new ShaderMaterial({
@@ -51,7 +53,14 @@ export class Sky {
         uComet: { value: 0 },
         uTime: shared.uTime,
         uCometDir: { value: new Vector3(0.0, 0.165, -0.986).normalize() },
+        uCloudLow: { value: 0 },
+        uCloudHigh: { value: 0 },
+        uCloudTop: { value: 0.15 },
+        uCloudLit: { value: new Color() },
+        uCloudShade: { value: new Color() },
+        uCloudRim: { value: new Color() },
       },
+      defines: { CLOUD_Q: 1 },
       // The sun and moon discs are measured on the screen plane, not by angle, so they stay round
       // near the frame edges where a wide lens stretches an angular disc into an egg.
       vertexShader: /* glsl */ `
@@ -98,6 +107,12 @@ export class Sky {
         uniform float uComet;
         uniform float uTime;
         uniform vec3 uCometDir;
+        uniform float uCloudLow;
+        uniform float uCloudHigh;
+        uniform float uCloudTop;
+        uniform vec3 uCloudLit;
+        uniform vec3 uCloudShade;
+        uniform vec3 uCloudRim;
         varying vec3 vDir;
         varying vec4 vClip;
         varying vec4 vSunClip;
@@ -142,6 +157,88 @@ export class Sky {
           vec2 gd = vec2(hash2(i + vec2(1.0, 1.0)), hash2(i + 18.31)) * 2.0 - 1.0;
           float n = mix(mix(dot(ga, f), dot(gb, f - vec2(1.0, 0.0)), u.x), mix(dot(gc, f - vec2(0.0, 1.0)), dot(gd, f - vec2(1.0, 1.0)), u.x), u.y);
           return clamp(0.5 + n, 0.0, 1.0);
+        }
+        // The same gradient noise wrapped every period cells along x, so clouds laid round the sky by
+        // azimuth close up behind the lens without a seam (the results hero shot turns right round).
+        vec2 pgrad(vec2 c) { return vec2(hash2(c), hash2(c + 17.31)) * 2.0 - 1.0; }
+        float pnoise(vec2 p, float period) {
+          vec2 i = floor(p);
+          vec2 f = fract(p);
+          vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+          // Wrapped by comparison rather than mod(): on D3D, mod() can land a hair under a whole cell
+          // and hash a different corner, which tore the clouds with vertical seams.
+          float x0 = i.x >= period - 0.5 ? i.x - period : i.x;
+          float x1 = i.x + 1.0 >= period - 0.5 ? i.x + 1.0 - period : i.x + 1.0;
+          float a = dot(pgrad(vec2(x0, i.y)), f);
+          float b = dot(pgrad(vec2(x1, i.y)), f - vec2(1.0, 0.0));
+          float c = dot(pgrad(vec2(x0, i.y + 1.0)), f - vec2(0.0, 1.0));
+          float d = dot(pgrad(vec2(x1, i.y + 1.0)), f - vec2(1.0, 1.0));
+          return clamp(0.5 + mix(mix(a, b, u.x), mix(c, d, u.x), u.y), 0.0, 1.0);
+        }
+        // Painted shading: light stepped into three flat values with short soft transitions (gouache,
+        // not a smooth photographic ramp).
+        float steps3(float l) {
+          float q = clamp(l, 0.0, 0.999) * 3.0;
+          return (floor(q) + smoothstep(0.4, 0.6, fract(q))) / 3.0;
+        }
+        // Cumulus banks along the horizon: lumpy, crisp-edged tops over a solid foot that the distant
+        // ridges hide, gaps between the banks, flat stepped shading, the edges and the side toward the
+        // sun catching its colour, and the lower cloud hazed toward the horizon. sunSide is 1 under the
+        // sun's bearing. They drift round the sky very slowly. Returns colour and coverage.
+        vec4 cloudBank(float az, float h, float sunSide, float sunBelow, float nearSun, float sunH) {
+          // Under the sun's bearing the bank dips to pass below the disc, framing it (and leaving a
+          // clear gap for it to set into once it sinks toward the ridge).
+          float y = h / mix(uCloudTop, max(sunH - 0.075, 0.012), nearSun);
+          if (y > 1.2) return vec4(0.0);
+          float X = fract(az / 6.2831853 + uTime * 0.0004);
+          // The bank is a height field rising from the horizon (so it reads as heaped towers and
+          // shoulders standing on the ridges, never lenses floating in the sky): broad swells with
+          // clear gaps between them, shoulders on those, and puffs bubbling the tops. (Gradient noise
+          // stays close to its mean, so each octave's swing is stretched.)
+          float top = 0.8 + (uCloudLow - 0.6) * 0.8
+            + (pnoise(vec2(X * 6.0, 0.37), 6.0) - 0.5) * 2.4
+            + (pnoise(vec2(X * 15.0 + 0.5, 1.61), 15.0) - 0.5) * 1.1;
+          #if CLOUD_Q > 0
+            top += (pnoise(vec2(X * 38.0, y * 2.6 + 2.3), 38.0) - 0.5) * 0.6 + (pnoise(vec2(X * 83.0, y * 5.0 + 0.7), 83.0) - 0.5) * 0.22;
+          #else
+            top += (pnoise(vec2(X * 38.0, y * 2.6 + 2.3), 38.0) - 0.5) * 0.6;
+          #endif
+          // Towers round off under the top of the band rather than being cut flat.
+          top = min(top, 1.05 - 0.25 * smoothstep(0.8, 1.4, top));
+          float dens = top - y;
+          float a = smoothstep(0.0, 0.025, dens);
+          if (a <= 0.0) return vec4(0.0);
+          // 0 on the silhouette, 1 deep inside the bank: the heaped tops catch the light, the body
+          // under them sits in shade, in three flat values.
+          float depth = clamp(dens / 0.42, 0.0, 1.0);
+          float l = (1.0 - depth) * 0.7 + clamp(y, 0.0, 1.0) * 0.3;
+          vec3 col = mix(uCloudShade, uCloudLit, steps3(l));
+          // The side toward the sun is warmer and brighter (smoothly: stepped, its contours ran as
+          // vertical seams down the bank), with a thin rim on the silhouette there; and where the sun
+          // has sunk below the tops it lights the bank's underside.
+          col = mix(col, uCloudLit, sunSide * 0.3);
+          float edge = 1.0 - smoothstep(0.04, 0.2, depth);
+          col = mix(col, uCloudRim, edge * (0.12 + 0.78 * sunSide));
+          col = mix(col, uCloudRim, sunSide * sunBelow * (1.0 - smoothstep(0.0, 0.55, y)) * 0.6);
+          // Aerial haze toward the foot of the bank.
+          col = mix(col, uHorizon, (1.0 - clamp(y, 0.0, 1.0)) * 0.28);
+          return vec4(col, a * min(1.0, uCloudLow * 1.5));
+        }
+        // High wisps: long thin strokes stretched along the horizon, pale with their sun side warm.
+        vec4 cloudWisps(float az, float h, float sunSide) {
+          if (h < 0.16 || h > 0.56) return vec4(0.0);
+          float band = smoothstep(0.16, 0.24, h) * (1.0 - smoothstep(0.42, 0.56, h));
+          float X = fract(az / 6.2831853 + 0.37 + uTime * 0.0007);
+          float yy = h * 10.0;
+          float warp = pnoise(vec2(X * 4.0, yy * 0.5), 4.0);
+          float n = pnoise(vec2(X * 9.0 + warp * 0.8, yy + warp * 1.5), 9.0) * 0.7 + pnoise(vec2(X * 23.0, yy * 2.2 + warp * 2.0), 23.0) * 0.3;
+          n += (uCloudHigh - 0.5) * 0.25;
+          float a = smoothstep(0.6, 0.64, n) * band;
+          if (a <= 0.0) return vec4(0.0);
+          float depth = smoothstep(0.6, 0.76, n);
+          vec3 col = mix(uCloudLit, mix(uCloudShade, uCloudLit, 0.5), steps3(depth) * 0.8);
+          col = mix(col, uCloudRim, sunSide * (1.0 - depth * 0.6) * 0.75);
+          return vec4(col, a * min(1.0, uCloudHigh * 1.6) * 0.62);
         }
         // Three long curtains, each a soft ribbon whose bright lower hem snakes across the sky and
         // whose height swells and thins along it, fading upward from mint at the hem to violet. The
@@ -194,6 +291,28 @@ export class Sky {
           float edge = mix(0.0035 * uSunSize, R * 0.85, uSunSoft);
           float disc = smoothstep(R + edge, R - edge, sunScr);
           float glow = exp(-sunAng * 8.0) * 0.45 * (1.0 - 0.6 * uSunSoft) + exp(-sunAng * 2.6) * 0.14 + exp(-sunAng * 4.5) * 0.3 * uSunSoft;
+          // Painted clouds, under the sun and moon: they part round the disc (its core is never
+          // covered) and only veil the corona, which shines on over them.
+          float cloudA = 0.0;
+          if ((uCloudLow > 0.0 || uCloudHigh > 0.0) && h > -0.01 && h < 0.56) {
+            vec3 sdn = normalize(uSunDir);
+            float az = atan(d.x, -d.z);
+            float dAz = acos(clamp(cos(az - atan(sdn.x, -sdn.z)), -1.0, 1.0));
+            float sunSide = pow(max(cos(dAz), 0.0), 5.0) * smoothstep(-0.05, 0.05, sdn.y) * (uMoon > 0.5 ? 0.6 : 1.0);
+            float nearSun = (1.0 - smoothstep(0.1, 0.42, dAz)) * step(0.01, uSunDisc) * step(sdn.y, uCloudTop + 0.08);
+            float sunBelow = smoothstep(uCloudTop * 1.1, uCloudTop * 0.4, sdn.y);
+            float part = mix(1.0, smoothstep(R * 1.02, R * 1.75, sunScr), step(0.01, uSunDisc) * (1.0 - uSunSoft));
+            vec4 cl = vec4(0.0);
+            if (uCloudLow > 0.0 && h < uCloudTop * 1.2) cl = cloudBank(az, max(h, 0.0), sunSide, sunBelow, nearSun, sdn.y);
+            #if CLOUD_Q > 0
+              if (uCloudHigh > 0.0 && cl.a < 0.99) {
+                vec4 w = cloudWisps(az, h, sunSide);
+                cl = vec4(mix(w.rgb, cl.rgb, cl.a > 0.0 ? cl.a / max(cl.a + w.a * (1.0 - cl.a), 0.001) : 0.0), cl.a + w.a * (1.0 - cl.a));
+              }
+            #endif
+            cloudA = cl.a * part;
+            col = mix(col, cl.rgb, cloudA);
+          }
           vec3 sunCol = uSunColor;
           if (uMoon > 0.5) {
             // Moon: crisp disc with a soft halo and a few dark maria. A second disc offset up and
@@ -221,7 +340,7 @@ export class Sky {
             vec3 face = mix(corona * 1.35, vec3(2.3, 2.15, 1.95), smoothstep(R * 0.85, R * 0.2, sunScr));
             col = mix(col, face, disc * min(uSunDisc, 1.0) * clear);
             float out0 = max(sunScr - R, 0.0);
-            col += corona * (exp(-out0 / (R * 0.8)) * 0.3 + exp(-out0 / (R * 3.0)) * 0.1) * (1.0 - disc) * uSunDisc * clear;
+            col += corona * (exp(-out0 / (R * 0.8)) * 0.3 + exp(-out0 / (R * 3.0)) * 0.1) * (1.0 - disc) * uSunDisc * clear * (1.0 - 0.45 * cloudA);
             col += sunCol * glow * uSunGlow * mix(1.0, 0.75, clear);
             col += sunCol * exp(-sunScr / (R * 2.4)) * 0.32 * uSunSoft * uSunGlow;
           }
@@ -235,7 +354,7 @@ export class Sky {
             float star = step(0.985, s) * smoothstep(0.14, 0.0, dist) * tw;
             // Stars live in the dark upper band and fade out where the horizon glow is bright.
             float dark = 1.0 - smoothstep(0.06, 0.3, skyLum);
-            col += vec3(0.9, 0.95, 1.0) * star * uStars * smoothstep(0.03, 0.22, h) * dark * 1.4;
+            col += vec3(0.9, 0.95, 1.0) * star * uStars * smoothstep(0.03, 0.22, h) * dark * 1.4 * (1.0 - cloudA);
           }
           if (uAurora > 0.0 && h > 0.04) {
             float az = atan(d.x, -d.z);
@@ -429,6 +548,13 @@ export class Sky {
     u.uMoon.value = p.moon ? 1 : 0;
     u.uMoonPhase.value = p.moon ? p.moonPhase : 0;
     u.uComet.value = p.comet ? 1 : 0;
+    u.uCloudLow.value = p.clouds.low;
+    u.uCloudHigh.value = this.wisps ? p.clouds.high : 0;
+    u.uCloudTop.value = p.clouds.top;
+    u.uCloudLit.value.copy(p.clouds.lit);
+    u.uCloudShade.value.copy(p.clouds.shade);
+    u.uCloudRim.value.copy(p.clouds.rim);
+    this.highClouds = p.clouds.high;
     this.ridgeMats.forEach((m, i) => {
       const mu = m.uniforms;
       const haze = (mu.uHaze.value as Color).copy(p.fog).lerp(p.skyHorizon, 0.5);
@@ -438,6 +564,18 @@ export class Sky {
       (mu.uMist.value as Color).copy(p.mist ?? p.fog);
       mu.uMistK.value = p.mist ? MIST[i] * p.mistK : 0;
     });
+  }
+
+  /** Cloud detail by quality tier: Low keeps the horizon banks at two octaves and drops the high
+   *  wisps (no extra pass on any tier: the clouds are part of the dome's own shader). */
+  setDetail(tier: 'low' | 'medium' | 'high'): void {
+    const q = tier === 'low' ? 0 : 1;
+    this.wisps = q > 0;
+    this.domeMat.uniforms.uCloudHigh.value = this.wisps ? this.highClouds : 0;
+    if (this.domeMat.defines.CLOUD_Q !== q) {
+      this.domeMat.defines.CLOUD_Q = q;
+      this.domeMat.needsUpdate = true;
+    }
   }
 
   follow(cam: Vector3): void {
