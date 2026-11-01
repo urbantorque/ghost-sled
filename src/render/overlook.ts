@@ -484,6 +484,11 @@ export class Overlooks {
     return this.enabled ? this.plan.open(z) : 0;
   }
 
+  /** How open the view is at sim z, 0..1 (OverlookPlan.openness); zero on a tier without overlooks. */
+  openness(z: number): number {
+    return this.enabled ? this.plan.openness(z) : 0;
+  }
+
   /** Metres the visual snow is lowered (see OverlookPlan.drop); zero on a tier without overlooks. */
   drop(z: number, side: number, e: number): number {
     return this.enabled ? this.plan.drop(z, side, e) : 0;
