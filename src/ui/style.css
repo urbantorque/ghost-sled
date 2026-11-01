@@ -1703,15 +1703,17 @@
 }
 
 /* Top centre, two tiers at most: the race row (where passes flash), then the combo meter with the
-   one trick callout slot directly under it. A banner docks over the race row (which fades under it)
-   and the second tier steps down only by the banner's extra height. */
+   one trick callout slot directly under it, packed tight so a cruise with a combo running ends above
+   the sky's middle band (about 18% of a 16:9 frame), where the low sun sits behind the rider. A banner
+   docks over the race row (which fades under it) and the second tier steps down only by the banner's
+   extra height. */
 .gs-hud-tc {
   position: absolute;
   top: var(--st);
   left: 50%;
   display: grid;
   justify-items: center;
-  gap: 8px;
+  gap: 5px;
   width: max-content;
   transform: translateX(-50%);
 }
@@ -2212,7 +2214,7 @@
 .gs-combo {
   display: grid;
   justify-items: center;
-  gap: 6px;
+  gap: 3px;
   opacity: 0;
   visibility: hidden;
   transform: translateY(-6px) scale(0.94);
@@ -2610,59 +2612,50 @@
 }
 
 /* The avalanche unit (contract C2): the WebGL rear-view mirror with an AVALANCHE tab on its top edge
-   and the danger meter set into its bottom edge, one compact cold unit hung top-centre right under
-   the race row, high in the sky above the rider so the horizon and the sun stay open (the combo meter
-   and callout line move under it for the chase). On a phone held upright the meter rides in the race
-   row in the rival pill's place and the mirror, about 25% smaller, hangs under it alone, so the top
-   HUD keeps to about a fifth of the height. --av-w, --av-mh, --av-bar, --avm-w, --av-tab and --av-tick
-   come from the HUD; the world draws the mirror into .gs-av-mirror's rect, which is otherwise empty.
-   Out of a chase the unit waits, unseen, at exactly the spot it takes in one (absolute, a race row and
-   a gap below the top), so the rect the world reads from the telegraph on never jumps when the chase
-   starts. */
+   and the danger meter set into its bottom edge, one compact cold unit hung in the top-right corner
+   under the gifts and pause, off the centre column: there the rider meets the low sun, and the
+   mirror sat right over it. On a phone held upright the meter rides in the race row in the rival
+   pill's place and the mirror, about a third smaller, sits in the top row left of the gifts (the HUD
+   moves it there), right above the meter, so the top HUD keeps to its top eighth. --av-w, --av-mh,
+   --av-bar, --avm-w, --av-tab and --av-tick come from the HUD; the world draws the mirror into
+   .gs-av-mirror's rect, which is otherwise empty. Out of a chase the unit waits, unseen, at exactly
+   the spot it takes in one, so the rect the world reads from the telegraph on never jumps when the
+   chase starts. Banners dock top-centre, so they never move it. */
 .gs-av {
   --av-beat: 1500ms;
   --av-glow: 0.34;
   position: absolute;
-  top: calc(var(--race-h) + 8px);
-  left: 50%;
+  top: calc(var(--st) + 52px);
+  right: var(--sr);
   display: grid;
   width: var(--av-w, 240px);
-  margin-left: calc(var(--av-w, 240px) / -2);
   padding-top: calc(var(--av-tab, 28px) / 2);
   pointer-events: none;
 }
 
-/* Portrait hangs the mirror 6 px under the race row (the column's gap during the chase), so the
-   whole top HUD keeps to about a fifth of a phone's height. */
+/* Portrait: in the top row's flex, left of the gifts and level with the pause disc. Out of a chase it
+   takes no room there (the row would otherwise reach across the top). */
 .gs-hud.is-portrait .gs-av {
-  top: calc(var(--race-h) + 6px);
+  position: relative;
+  top: auto;
+  right: auto;
+  display: none;
   padding-top: 0;
 }
 
-.gs-hud.is-portrait.is-chased .gs-hud-tc {
-  gap: 6px;
+.gs-hud.is-portrait.is-chased .gs-av {
+  display: grid;
 }
 
-.gs-hud.is-chased .gs-av {
-  position: relative;
-  top: auto;
-  left: auto;
-  order: 1;
-  margin-left: 0;
+.gs-hud.is-portrait.gs-no-mirror .gs-av {
+  display: none;
 }
 
-.gs-hud.is-chased .gs-combo {
-  order: 2;
-}
-
-.gs-hud.is-chased .gs-callouts {
-  order: 3;
-}
-
-/* A banner over the race row pushes the whole column down by its extra height. The unit moves with
-   no transition, so the mirror's rect never lags the meter. */
-.gs-band-on .gs-av {
-  translate: 0 max(0px, calc(var(--band-h, 0px) - var(--race-h)));
+/* In a landscape chase the race row never reaches under the unit in the corner: it keeps to the
+   width between the two corners, and a long rival name gives way first (an ellipsis), as it does on
+   a narrow phone. */
+.gs-hud.is-chased:not(.is-portrait) .gs-race {
+  max-width: calc(100vw - 2 * (var(--av-w, 240px) + var(--sr) + 10px));
 }
 
 /* Portrait chase: the meter takes the rival pill's place in the race row (the HUD moves it there).
@@ -2684,7 +2677,7 @@
   transition: opacity 160ms ease, visibility 0s;
 }
 
-.gs-chase-p.gs-band-on :is(.gs-av, .gs-combo, .gs-callouts) {
+.gs-chase-p.gs-band-on :is(.gs-combo, .gs-callouts) {
   translate: 0 calc(var(--band-h, 0px) + 6px);
 }
 
@@ -2798,10 +2791,6 @@
    portrait, where the meter is in the race row, to nothing). */
 .gs-hud.gs-no-mirror .gs-av-mirror {
   height: calc(var(--av-tab, 28px) / 2 + var(--av-bar, 32px) / 2 + 4px);
-}
-
-.gs-hud.is-portrait.gs-no-mirror .gs-av-mirror {
-  height: 0;
 }
 
 .gs-hud.gs-no-mirror .gs-av-mirror::before,
@@ -3141,14 +3130,22 @@
    stack). One line at a time, "BACKFLIP +600" or "SLIPSTREAM ••• +28"; the multiplier lives on the
    combo meter only. A line a newcomer replaces rises into the total while its grid row eases to
    zero, so the new line slides up into place. Perfect landings are a stamp (below). The slot's box
-   is one line tall: the avalanche unit hangs right under that line, so it never moves as lines come
-   and go. */
+   is one line tall, so nothing under it moves as lines come and go. */
 .gs-callouts {
   display: grid;
   justify-items: center;
   height: calc(var(--u) * 1.68 + 2px);
-  transition: translate 240ms var(--out);
+  transition: translate 240ms var(--out), filter 0s;
   contain: layout;
+}
+
+/* Hush: in the air with nothing new, the callout line and the stake fade back to a trace (a filter,
+   so their own opacity fades never fight it), easing out over a third of a second, so the jump against
+   the sun is the picture. Any new beat brings them back at once (no transition on the way back). */
+.gs-hud.is-hush .gs-callouts,
+.gs-hud.is-hush .gs-stake {
+  filter: opacity(0.3);
+  transition: translate 240ms var(--out), opacity 140ms ease, filter 360ms ease, visibility 0s;
 }
 
 /* A leaving line collapses its row (grid-template-rows) so the line under it closes up instead of

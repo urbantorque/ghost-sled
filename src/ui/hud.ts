@@ -5,14 +5,17 @@ import { kindCls, NBSP, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, EASE_OUT, play, reduced, SPRING } from './motion';
 import { EVENT_ICON } from './notices';
+import { ride } from './presence';
 
 // In-run HUD. updateHud runs every frame: nodes are built once and each value is diffed, so a
 // frame where nothing changed touches no DOM at all. The top-centre stack is two tiers at most: the
 // race row (rank and next ghost, where passes flash), then the combo meter with the one trick callout
-// slot under it. During an avalanche chase the mirror unit hangs right under the race row, high in the
-// sky above the rider (the combo meter and callout slot move under it), so the horizon and the sun
-// stay open. On a phone held upright the chase's meter takes the rival pill's place in the race row
-// and the mirror hangs under it alone, so the stack stays short. The centre of the screen stays empty.
+// slot under it, packed tight so the stack ends above the sky's middle band, where the low sun sits.
+// During an avalanche chase the mirror unit hangs in the top-right corner under the gifts and pause,
+// off the centre column, so the rider against the sun stays the picture. On a phone held upright the
+// chase's meter takes the rival pill's place in the race row and the mirror sits beside the gifts at
+// the very top. The centre of the screen stays empty. While the rider is in the air and nothing new
+// is happening, the stack's secondary parts (the callout line, the stake) quiet down (hush).
 //
 // The rival pill is also where the race talks: a pass flashes its word and the name ("DOUBLE PASS
 // Mika", "SLUNG PAST Mika"), being passed is a quiet "Mika PASSED YOU", race news is a quieter line
@@ -48,6 +51,11 @@ const DANGER_BANDS = [60, 44, 32, DANGER_URGENT, 12];
 const EDGE_BAND = 5;
 /** Metres between the meter's tick marks. */
 const TICK_M = 10;
+/**
+ * Airborne and nothing new for this long: the callout line and the stake fade back (hush), so the jump
+ * against the sun is the picture. Any new beat brings them back at once.
+ */
+export const HUSH_AFTER_MS = 450;
 /** The mirror's rect outlives the chase by the world's fade-out, and goes out with the telegraph. */
 const MIRROR_HOLD_MS = 900;
 const WARN_HOLD_MS = 4500;
@@ -618,6 +626,13 @@ export class Hud {
   private readonly avEl: HTMLElement;
   private readonly mirrorBox: HTMLElement;
   private readonly avDodge: Flag;
+  /** The stack's secondary parts are quiet (hush): airborne, nothing new. */
+  private readonly hush: Flag;
+  /** The last new beat on the stack (a callout, a pass, a multiplier step, a stamp). */
+  private beatAt = -1e9;
+  /** When the rider last left the snow (ride.air going true), or -1 on the ground. */
+  private airAt = -1;
+  private lastChain = -1;
   private lastBand = -1;
   private readonly live: HTMLElement;
   /** Lines said in this task, written to the live region together (say). */
@@ -879,9 +894,9 @@ export class Hud {
     this.calloutSlot = h('div', 'gs-callouts');
     this.calloutSlot.setAttribute('aria-hidden', 'true');
 
-    // Avalanche unit (contract C2 with the WebGL rear-view mirror): it hangs top-centre right under
-    // the race row in both orientations, in the open sky above the rider, with the combo meter and the
-    // callout line moving under it for the chase. One compact block: an AVALANCHE tab on the mirror's
+    // Avalanche unit (contract C2 with the WebGL rear-view mirror): it hangs in the top-right corner,
+    // under the gifts and pause in landscape and beside them on a phone held upright, off the centre
+    // column where the rider meets the low sun. One compact block: an AVALANCHE tab on the mirror's
     // top edge (the rival name's size), and the meter set into its bottom edge. The mirror box is empty:
     // the world draws the inset into its rect (mirrorRect()). The meter is a proportional bar: from the
     // hazard (an ink disc at the left end) the wall, a dark fill with an icy front, advances over a
@@ -905,7 +920,7 @@ export class Hud {
     this.avEl = h('div', 'gs-av', this.mirrorBox, this.dangerEl);
     this.avEl.setAttribute('aria-hidden', 'true');
     this.avDodge = new Flag(this.avEl, 'is-dodge');
-    const tc = h('div', 'gs-hud-tc', this.race, this.comboEl, this.calloutSlot, this.avEl);
+    const tc = h('div', 'gs-hud-tc', this.race, this.comboEl, this.calloutSlot);
     const edge = h('div', 'gs-av-edge');
     this.edgeOn = new Flag(edge);
 
@@ -925,12 +940,13 @@ export class Hud {
     this.bc = h('div', 'gs-hud-bc', this.driftEl, this.draftEl);
 
     this.chased = new Flag(this.el, 'is-chased');
+    this.hush = new Flag(this.el, 'is-hush');
 
     this.live = h('div', 'gs-sr');
     this.live.setAttribute('role', 'status');
     this.live.setAttribute('aria-live', 'polite');
 
-    this.el.append(edge, this.tl, this.tr, tc, this.bc, this.live);
+    this.el.append(edge, this.tl, this.tr, tc, this.avEl, this.bc, this.live);
     parent.append(this.el);
     window.addEventListener('resize', () => this.fit());
     this.fit();
@@ -1099,9 +1115,10 @@ export class Hud {
     const r = this.room;
     if (!r.measured) return null;
     const line = 1.68 * this.hudPx() + 2;
-    // In a chase the unit hangs right under the race row, and the combo and callout line under it.
-    const top = this.chased.on ? Math.max(this.avBox.y1 + 10, r.slotTop + line + 8) : r.slotTop + 2 * line + 8;
-    return { left: r.left, right: r.right, top };
+    const top = r.slotTop + 2 * line + 8;
+    // In a landscape chase the unit hangs in the top-right corner: a stamp reaching that high keeps left of it.
+    const right = this.chased.on && !this.portrait && this.avBox.y1 > top && this.avBox.x0 > r.left ? Math.min(r.right, this.avBox.x0 - 8) : r.right;
+    return { left: r.left, right, top };
   }
 
   /**
@@ -1127,6 +1144,15 @@ export class Hud {
     const w = window.innerWidth;
     const hh = window.innerHeight;
     return w >= hh ? Math.max(14, Math.min(22, 7.5 + 0.0125 * hh)) : this.unitPx();
+  }
+
+  /**
+   * A new beat on the top-centre stack (a callout line, a pass, a stamp, a cash-in): the hushed parts
+   * come back at once, and stay up until the beat has had its moment.
+   */
+  beat(): void {
+    this.beatAt = performance.now();
+    this.hush.set(false);
   }
 
   /** While the reveal card is up, the mood chip waits so the card can collapse into it. */
@@ -1449,6 +1475,7 @@ export class Hud {
   }
 
   private showFlash(f: Flash, now: number): void {
+    this.beat();
     // A duel's result: the pill stays its ghost's for DUEL_HOLD_MS from now (holdDuel).
     if (this.held.wait && this.heldResult(f)) {
       this.held.wait = false;
@@ -1512,7 +1539,7 @@ export class Hud {
     const portrait = w < window.innerHeight;
     const u = this.hudPx();
     // At least 196 px in landscape: on a phone held sideways 19% left the meter's track about 80 px long.
-    const W = Math.round(portrait ? Math.min(0.33 * w, 143) : Math.min(Math.max(0.187 * w, 196), 246));
+    const W = Math.round(portrait ? Math.min(0.31 * w, 124) : Math.min(Math.max(0.187 * w, 196), 246));
     // In portrait the meter is the race row's height (--race-h in style.css: 2.5 units, at least 36 px).
     const bar = portrait ? Math.round(Math.max(36, 2.5 * u)) : 34;
     const meter = portrait ? Math.round(Math.min(0.56 * w, 236)) : W - 16;
@@ -1530,6 +1557,10 @@ export class Hud {
       this.portrait = portrait;
       this.el.classList.toggle('is-portrait', portrait);
       (portrait ? this.race : this.avEl).append(this.dangerEl);
+      // Portrait: the mirror sits in the top row, left of the gifts (it moves with that pill); landscape:
+      // the unit hangs in the top-right corner under them.
+      if (portrait) this.tr.prepend(this.avEl);
+      else this.tr.after(this.avEl);
     }
     this.el.parentElement?.classList.toggle('gs-chase-p', portrait && this.chased.on);
     this.el.style.setProperty('--av-w', `${W}px`);
@@ -1853,7 +1884,10 @@ export class Hud {
       if (this.comboPts.num(c.pending, '', '+')) moved = true;
       if (this.multX1.set(c.mult < 2)) moved = true;
       if (this.mult.str('x' + c.mult)) {
-        if (c.mult > this.lastMult && this.lastMult > 0) bump(this.multEl, 1.25, 280);
+        if (c.mult > this.lastMult && this.lastMult > 0) {
+          bump(this.multEl, 1.25, 280);
+          this.beat();
+        }
         this.lastMult = c.mult;
       }
       const t = Math.max(0, Math.min(1, c.timer));
@@ -1995,6 +2029,18 @@ export class Hud {
       this.lastBand = -1;
       this.lastDanger = -1;
     }
+
+    // Hush: in the air with nothing new, the callout line and the stake fade back (opacity only, never
+    // their layout), so the jump against the sun is the picture. A new trick in the chain, a stamp, a
+    // pass or a callout brings them back at once (beat).
+    if (c.active && c.chain !== this.lastChain) {
+      if (this.lastChain >= 0 && c.chain > this.lastChain) this.beat();
+      this.lastChain = c.chain;
+    } else if (!c.active) this.lastChain = -1;
+    if (ride.air) {
+      if (this.airAt < 0) this.airAt = now;
+    } else this.airAt = -1;
+    this.hush.set(this.airAt >= 0 && now - this.airAt > 250 && now - this.beatAt > HUSH_AFTER_MS && !this.stampUp());
 
     if (moved) this.onLayout();
   }
