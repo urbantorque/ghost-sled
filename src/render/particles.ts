@@ -1,5 +1,6 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, NormalBlending, Points, ShaderMaterial, Vector3 } from 'three';
-import { shared } from './materials';
+import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, Object3D, Points, ShaderMaterial, Vector3 } from 'three';
+import { makeToonMaterial, shared } from './materials';
+import { giftGeometry } from './meshes';
 
 // CPU-simulated point particles in two blend layers (powder and glow), plus a GPU-animated
 // weather volume that follows the camera (snowfall, blizzard streaks, petals, embers, wisps).
@@ -15,6 +16,13 @@ const KIND_MIST = 2;
 /** Billows carry a per-particle seed (for their lumpy outline) in the fraction: 3 to 3.9. */
 const KIND_PUFF = 3;
 const puffKind = () => KIND_PUFF + Math.random() * 0.9;
+/** Shaped bits that tumble (their seed in the fraction, as billows): in the powder layer a ribbon of
+ *  confetti or a coin, in the glow layer a petal of spectral glass or a soft flare of light. */
+const KIND_CONFETTI = 5;
+const KIND_COIN = 6;
+const KIND_PETAL = 5;
+const KIND_FLARE = 6;
+const seeded = (k: number) => k + Math.random() * 0.95;
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -124,6 +132,7 @@ class Layer {
         uLanternPos: shared.uLanternPos,
         uLanternColor: shared.uLanternColor,
         uLantern: shared.uLantern,
+        uTime: shared.uTime,
       },
       defines: additive ? { ADD: 1 } : {},
       vertexShader: /* glsl */ `
@@ -140,6 +149,7 @@ class Layer {
         uniform float uLantern;
         uniform float uFogNear;
         uniform float uFogFar;
+        uniform float uTime;
         varying vec3 vColor;
         varying float vAlpha;
         varying float vFog;
@@ -149,6 +159,7 @@ class Layer {
         varying vec3 vSun;
         varying float vLamp;
         varying vec2 vLampDir;
+        varying float vFlip;
         void main() {
           vColor = aColor;
           vKind = aKind;
@@ -156,12 +167,18 @@ class Layer {
           float depth = max(-mv.z, 0.05);
           vFog = smoothstep(uFogNear, uFogFar, depth);
           float size = aSize * uScale / max(depth, 0.5);
+          // Shaped bits (confetti, coins, glass petals, a flare) tumble: each spins on screen at its own
+          // rate and flips through its face (vFlip: 1 face on, 0 edge on), from its seed.
+          bool shaped = aKind > 4.5;
+          float sd = fract(aKind);
+          float spin = sd * 6.2832 + uTime * (4.0 + sd * 6.0) * (sd > 0.47 ? 1.0 : -1.0);
+          vFlip = abs(cos(uTime * (6.0 + sd * 8.0) + sd * 19.0));
           // Nothing blurs into a bokeh blob right in front of the lens. Mist puffs fade out sooner,
           // over the near half of the way to the rider (so a closer chase camera keeps the plume
           // around the rider in full); grains and billows hold until about a third of the way.
           vec4 rv = viewMatrix * vec4(uFocus, 1.0);
           float zr = max(-rv.z, 3.0);
-          float a = aAlpha * (aKind > 1.5 && aKind < 2.5 ? smoothstep(zr * 0.4, zr * 0.75, depth) : aKind < 0.5 ? smoothstep(zr * 0.22, zr * 0.55, depth) : aKind > 2.5 ? smoothstep(zr * 0.48, zr * 0.82, depth) : smoothstep(1.2, 3.4, depth));
+          float a = aAlpha * (shaped ? smoothstep(zr * 0.3, zr * 0.6, depth) : aKind > 1.5 && aKind < 2.5 ? smoothstep(zr * 0.4, zr * 0.75, depth) : aKind < 0.5 ? smoothstep(zr * 0.22, zr * 0.55, depth) : aKind > 2.5 ? smoothstep(zr * 0.48, zr * 0.82, depth) : smoothstep(1.2, 3.4, depth));
           // Never a veil over the hero: powder between the lens and the rider, over the rider's outline
           // on screen (sled to beanie, about 0.6 m either side of its middle), thins to a fifth. Beside
           // the rider it keeps its full strength (a 3D radius here hid the whole rooster tail), and
@@ -181,19 +198,29 @@ class Layer {
           vSun = vec3(0.0, 0.0, 1.0);
           vLamp = 0.0;
           vLampDir = vec2(0.0, 1.0);
+          if (shaped) {
+            vAxis = vec2(cos(spin), sin(spin));
+            // A petal is a slim pointed leaf, a confetti ribbon a narrow strip; a coin is a disc that
+            // thins to its edge as it flips.
+            vRatio = aKind > 5.5 ? max(0.16, vFlip) : 0.34;
+          }
           #ifdef ADD
-            // Motes stay small: a big additive sprite near the lens is a blot of light, not a glint.
-            size = min(size, uScale * 0.032);
-            // Sparkles stay out of the rider's silhouette.
-            a *= 1.0 - 0.7 * over;
+            // Motes stay small: a big additive sprite near the lens is a blot of light, not a glint. A
+            // glass petal may be a little bigger, and a flare is a soft burst of light round a moment.
+            size = min(size, uScale * (shaped ? (aKind > 5.5 ? 0.2 : 0.05) : 0.032));
+            // Sparkles stay out of the rider's silhouette (petals and flares wholly: contract C10).
+            a *= 1.0 - (shaped ? 0.97 : 0.7) * over;
+            // Petals and flares stay down by the snow: above the lens's own height they hang in the sky,
+            // where a glass petal read as a stray glyph and a flare as a second sun.
+            if (shaped) a *= 1.0 - smoothstep(cameraPosition.y - 0.5, cameraPosition.y, position.y);
           #else
-            a *= 1.0 - 0.8 * over;
+            a *= 1.0 - (shaped ? 0.95 : 0.8) * over;
             // Billows belong to the burst or plume round the rider: one that has drifted a few metres off
             // (a drift carried it out over the slope) thins away rather than hanging in the air.
-            if (aKind > 2.5) a *= 1.0 - smoothstep(2.5, 4.8, distance(position, uFocus));
+            if (aKind > 2.5 && !shaped) a *= 1.0 - smoothstep(2.5, 4.8, distance(position, uFocus));
             // Grains stay crisp specks and billows small clumps; only mist and steam grow into soft puffs.
-            size = min(size, uScale * (aKind > 2.5 ? 0.075 : aKind > 0.5 ? 0.085 : 0.032));
-            if (aKind > 2.5) {
+            size = min(size, uScale * (shaped ? 0.04 : aKind > 2.5 ? 0.075 : aKind > 0.5 ? 0.085 : 0.032));
+            if (aKind > 2.5 && !shaped) {
               size *= mix(1.0, 0.55, beside);
               a *= mix(1.0, 0.4, beside);
             }
@@ -267,6 +294,7 @@ class Layer {
         varying vec3 vSun;
         varying float vLamp;
         varying vec2 vLampDir;
+        varying float vFlip;
         float hash2(vec2 p) {
           vec3 p3 = fract(vec3(p.xyx) * 0.1031);
           p3 += dot(p3, p3.yzx + 33.33);
@@ -281,6 +309,30 @@ class Layer {
         void main() {
           vec2 c = gl_PointCoord - 0.5;
           #ifdef ADD
+            if (vKind > 5.5) {
+              // A flare: a soft round bloom of light with a hot heart and no rays, gone in a blink.
+              float fd = length(c) * 2.0;
+              float fa = (exp(-fd * fd * 5.0) * 0.85 + (1.0 - smoothstep(0.2, 1.0, fd)) * 0.18) * vAlpha;
+              if (fa < 0.01) discard;
+              gl_FragColor = vec4(vColor * fa, fa);
+              #include <colorspace_fragment>
+              return;
+            }
+            if (vKind > 4.5) {
+              // A petal of spectral glass: a pointed leaf with a bright rim and a faint tinted core,
+              // its rim catching the light as it tumbles (glass, never a solid flake).
+              vec2 pp = vec2(-vAxis.y, vAxis.x);
+              vec2 q = vec2(dot(c, vAxis), dot(c, pp)) * 2.0;
+              float edge = vRatio * (1.0 - q.x * q.x);
+              float din = edge - abs(q.y);
+              if (din <= 0.0) discard;
+              float rim = 1.0 - smoothstep(0.0, 0.09 + 0.1 * vRatio, din);
+              float pa = (0.22 + rim * (0.7 + 0.6 * vFlip)) * vAlpha * smoothstep(0.0, 0.04, din);
+              if (pa < 0.01) discard;
+              gl_FragColor = vec4(vColor * pa, pa);
+              #include <colorspace_fragment>
+              return;
+            }
             // A glinting mote of light: a hot core in a soft round halo, with no rays. Four-point star
             // sprites hanging in the air read as stock clip-art twinkles pasted over the painting;
             // the snow keeps its own rayed glints (materials.ts).
@@ -314,7 +366,25 @@ class Layer {
             float a;
             // How much of this fragment faces the sled lantern (Lantern Night), set per kind below.
             float lampK = 0.5;
-            if (vKind > 2.5) {
+            if (vKind > 4.5) {
+              // A tumbling ribbon of confetti (a strip) or a coin (a disc thinning to its edge as it
+              // flips): its face flashes as it turns to the light and dims edge on, shaded a little
+              // cooler on its far side like everything else in the painting.
+              vec2 pp = vec2(-vAxis.y, vAxis.x);
+              vec2 q = vec2(dot(c, vAxis), dot(c, pp)) * 2.0;
+              float coin = step(5.5, vKind);
+              float ins = coin > 0.5
+                ? 1.0 - smoothstep(0.82, 1.0, length(vec2(q.x, q.y / vRatio)))
+                : (1.0 - smoothstep(0.84, 1.0, abs(q.x))) * (1.0 - smoothstep(vRatio * 0.7, vRatio, abs(q.y)));
+              a = vAlpha * ins;
+              if (a < 0.01) discard;
+              float face = mix(0.5, 1.12, vFlip);
+              col = mix(vColor * mix(uSnowShade, vec3(1.0), 0.55), vColor * uSunColor * 1.1, smoothstep(0.25, 0.85, vFlip)) * face;
+              // A coin's rim is a darker gold ring, and face on it glints white-gold.
+              float cr = length(vec2(q.x, q.y / vRatio));
+              col *= mix(1.0, 0.72, coin * smoothstep(0.55, 0.85, cr));
+              col += vec3(1.0, 0.92, 0.7) * coin * pow(vFlip, 10.0) * 0.9 * (1.0 - smoothstep(0.2, 0.7, cr));
+            } else if (vKind > 2.5) {
               // A billow of thrown powder, lit like a small cloud: its crest (the top and the sun side)
               // catches the light a step above the lit snow it flies over, its underside falls into the
               // mood's periwinkle shade (moon blue at night), and a sunlit rim runs round its sunward
@@ -509,6 +579,12 @@ class Layer {
 const WHITE = new Color('#FFFFFF');
 const ICE = new Color('#DDF6FF');
 const GOLD = new Color('#FFE08A');
+/** A gift's colours (marigold, its role): the flare, the confetti of its wrap and ribbon (and a golden
+ *  gift's gold-white and mint), and the coins. */
+const MARIGOLD_C = new Color('#FFD34D');
+const CONFETTI = [new Color('#FFD34D'), new Color('#FF4D2E'), new Color('#FFF1D6'), new Color('#FFB82E')];
+const CONFETTI_GOLD = [new Color('#FFE08A'), new Color('#8FF3E4'), new Color('#FFF6DA'), new Color('#FFD34D')];
+const COIN = new Color('#FFC83A');
 /** Grit knocked off a hazard's foot: dark slate chips (as the avalanche's debris), or ice shards. */
 const SLATE = new Color(0.3, 0.34, 0.5);
 const SHARD = new Color(0.78, 0.92, 1.05);
@@ -519,9 +595,91 @@ const tmpF = new Vector3();
 const tmpS = new Vector3();
 const tmpC = new Vector3();
 
+/** How long a picked-up gift takes to squash and pop (s). */
+const POP_S = 0.26;
+
+/** A picked-up gift's last moment: the box squashes flat, springs up tall and pops away, carried along
+ *  with the sled. A few plain meshes, each drawn only while it pops (no draw call at rest). */
+class GiftPops {
+  readonly meshes: Mesh[] = [];
+  private t: number[] = [];
+  private vel: Vector3[] = [];
+  private base: Vector3[] = [];
+  private spin: number[] = [];
+  private next = 0;
+
+  constructor() {
+    const mat = makeToonMaterial({ coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.35 });
+    const geos = [giftGeometry(false), giftGeometry(true)];
+    for (let i = 0; i < 4; i++) {
+      const m = new Mesh(geos[i % 2], mat);
+      m.visible = false;
+      m.frustumCulled = false;
+      m.renderOrder = 2;
+      this.meshes.push(m);
+      this.t.push(-1);
+      this.vel.push(new Vector3());
+      this.base.push(new Vector3());
+      this.spin.push(0);
+    }
+  }
+
+  pop(pos: Vector3, carrier: Vector3, golden: boolean): void {
+    // Slots 0 and 2 hold plain boxes, 1 and 3 golden ones.
+    let i = this.next * 2 + (golden ? 1 : 0);
+    this.next = (this.next + 1) % 2;
+    if (this.t[i] >= 0 && this.t[i ^ 2] < 0) i ^= 2;
+    this.t[i] = 0;
+    this.base[i].copy(pos);
+    this.vel[i].copy(carrier).multiplyScalar(0.92);
+    this.spin[i] = Math.random() * Math.PI * 2;
+    this.meshes[i].visible = true;
+  }
+
+  update(dt: number): void {
+    for (let i = 0; i < this.meshes.length; i++) {
+      if (this.t[i] < 0) continue;
+      const t = (this.t[i] += dt);
+      const m = this.meshes[i];
+      if (t >= POP_S) {
+        this.t[i] = -1;
+        m.visible = false;
+        continue;
+      }
+      this.base[i].addScaledVector(this.vel[i], dt);
+      // Squash (0 to 0.06 s), then stretch up tall while it shrinks to nothing.
+      let sxz: number;
+      let sy: number;
+      let lift = 0;
+      if (t < 0.06) {
+        const u = t / 0.06;
+        sxz = 1 + 0.32 * u;
+        sy = 1 - 0.42 * u;
+      } else {
+        const u = (t - 0.06) / (POP_S - 0.06);
+        const gone = Math.pow(1 - u, 1.4);
+        sxz = (1.32 - 0.6 * Math.min(1, u * 2.5)) * gone;
+        sy = (0.58 + 0.95 * Math.sin(Math.min(1, u * 2.2) * Math.PI * 0.5)) * gone;
+        lift = 0.55 * u;
+      }
+      m.position.copy(this.base[i]).setY(this.base[i].y + lift);
+      m.rotation.set(0, this.spin[i] + t * 9, 0);
+      m.scale.set(sxz, sy, sxz);
+    }
+  }
+
+  clear(): void {
+    for (let i = 0; i < this.meshes.length; i++) {
+      this.t[i] = -1;
+      this.meshes[i].visible = false;
+    }
+  }
+}
+
 export class Particles {
   readonly powder: Layer;
   readonly glow: Layer;
+  private pops = new GiftPops();
   private budget = 1;
 
   constructor(cap: number) {
@@ -529,8 +687,8 @@ export class Particles {
     this.glow = new Layer(Math.round(cap * 0.6), true);
   }
 
-  get objects(): Points[] {
-    return [this.powder.points, this.glow.points];
+  get objects(): Object3D[] {
+    return [this.powder.points, this.glow.points, ...this.pops.meshes];
   }
 
   setQuality(budget: number, viewportHeight: number): void {
@@ -546,11 +704,13 @@ export class Particles {
   update(dt: number): void {
     this.powder.update(dt);
     this.glow.update(dt);
+    this.pops.update(dt);
   }
 
   clear(): void {
     this.powder.clear();
     this.glow.clear();
+    this.pops.clear();
   }
 
   private n(count: number): number {
@@ -973,6 +1133,185 @@ export class Particles {
         2.6,
         KIND_GRAIN,
         car,
+      );
+    }
+  }
+
+  /** A gift opening (the pickup): a soft marigold flare at the box, a fountain of ribbon confetti and
+   *  a spray of tumbling gold coins thrown up and out to the sides (none ahead over the line or back
+   *  at the lens), riding along with the sled for their moment, and a few glints skimming the snow.
+   *  A golden gift throws more coins and its confetti runs gold-white and mint. */
+  giftPop(pos: Vector3, carrier: Vector3, golden: boolean): void {
+    this.pops.pop(pos, carrier, golden);
+    const f = this.forward(carrier);
+    const hs = Math.hypot(carrier.x, carrier.z);
+    const car = tmpC.set(carrier.x * 0.86, Math.max(carrier.y, -hs * 0.7) * 0.86, carrier.z * 0.86);
+    const k = golden ? 1.5 : 1;
+    const flare = golden ? GOLD : MARIGOLD_C;
+    this.glow.emit(pos.x, pos.y + 0.1, pos.z, car.x, car.y + 0.4, car.z, 0.2, 0.25, 1.15 * k, flare.r * 1.5, flare.g * 1.5, flare.b * 1.5, 1, 0, 0, seeded(KIND_FLARE), car);
+    const ribbon = golden ? CONFETTI_GOLD : CONFETTI;
+    const nc = this.n(12 * k);
+    for (let i = 0; i < nc; i++) {
+      // Out to either side (50 to 150 degrees off the line of travel) and up.
+      const a = (i % 2 ? 1 : -1) * (0.9 + Math.random() * 1.7);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const dx = f.x * ca - f.z * sa;
+      const dz = f.z * ca + f.x * sa;
+      const out = 0.9 + Math.random() * 1.5;
+      const c = ribbon[i % ribbon.length];
+      this.powder.emit(pos.x + dx * 0.2, pos.y + 0.25, pos.z + dz * 0.2, car.x + dx * out, car.y + 2.6 + Math.random() * 2.4, car.z + dz * out, 0.7 + Math.random() * 0.35, 0.15, 0.12, c.r, c.g, c.b, 1, 6.5, 2.8, seeded(KIND_CONFETTI), car);
+    }
+    const coins = this.n(golden ? 7 : 4);
+    for (let i = 0; i < coins; i++) {
+      const a = (i % 2 ? 1 : -1) * (1.0 + Math.random() * 1.3);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const dx = f.x * ca - f.z * sa;
+      const dz = f.z * ca + f.x * sa;
+      const out = 0.9 + Math.random() * 1.6;
+      this.powder.emit(pos.x + dx * 0.15, pos.y + 0.3, pos.z + dz * 0.15, car.x + dx * out, car.y + 3.4 + Math.random() * 1.8, car.z + dz * out, 0.65 + Math.random() * 0.25, 0.13, 0.11, COIN.r * 1.15, COIN.g * 1.15, COIN.b * 1.15, 1, 10, 1.2, seeded(KIND_COIN), car);
+    }
+    this.ring(tmpS.copy(pos).setY(pos.y - 0.2), golden ? GOLD : MARIGOLD_C, 8 * k, 3.2, carrier, 3, 1.4, 0.36, 0.15);
+  }
+
+  /** One marigold glint flashing on a gift ahead (gold-white on a golden one): a soft round mote that
+   *  swells and is gone in about a third of a second. */
+  glint(pos: Vector3, golden: boolean): void {
+    const c = golden ? GOLD : MARIGOLD_C;
+    this.glow.emit(pos.x, pos.y, pos.z, 0, 0.2, 0, 0.3 + Math.random() * 0.15, 0.05, 0.26, c.r * 1.7, c.g * 1.7, c.b * 1.7, 1, 0, 0, KIND_GRAIN);
+  }
+
+  /** You pass a ghost: its glass shatters into spectral petals that burst out round it and hang back
+   *  as you race on (riding at the ghost's own pace, so they fall behind the rider), with a soft flare
+   *  of its kind colour at its heart. Petals and flare stay off the rider's silhouette (contract C10). */
+  shatter(pos: Vector3, color: Color, carrier: Vector3 | null, count: number): void {
+    const car = carrier ? tmpC.set(carrier.x * 0.78, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.78, carrier.z * 0.78) : null;
+    const cx = car ? car.x : 0;
+    const cy = car ? car.y : 0;
+    const cz = car ? car.z : 0;
+    this.glow.emit(pos.x, pos.y, pos.z, cx, cy, cz, 0.24, 0.3, 1.1, color.r * 1.3, color.g * 1.3, color.b * 1.3, 0.75, 0, 0, seeded(KIND_FLARE), car);
+    const n = this.n(count);
+    const a0 = Math.random() * Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      // Round the ghost, out and a little up, falling back onto the snow (never up into the sky).
+      const a = a0 + (i / Math.max(1, n)) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+      const up = -0.1 + Math.random() * 0.8;
+      const s = 2.0 + Math.random() * 2.4;
+      const hot = 1.25 + Math.random() * 0.4;
+      this.glow.emit(
+        pos.x + Math.cos(a) * 0.25,
+        pos.y + up * 0.4,
+        pos.z + Math.sin(a) * 0.25,
+        cx + Math.cos(a) * s,
+        cy + up * s * 0.45 + 0.5,
+        cz + Math.sin(a) * s,
+        0.55 + Math.random() * 0.4,
+        0.2 + Math.random() * 0.1,
+        0.1,
+        color.r * hot,
+        color.g * hot,
+        color.b * hot,
+        1,
+        4.5,
+        2.4,
+        seeded(KIND_PETAL),
+        car,
+      );
+    }
+  }
+
+  /** Snow kicked up off both runners at speed (`k` 0 to 1): fine grains flicked up and back off the
+   *  runners' tails, low over the snow, the ground's speed made visible right under the sled. */
+  kick(pos: Vector3, heading: number, vel: Vector3, k: number, ice: boolean): void {
+    const n = this.n(2.4 * k);
+    if (n === 0) return;
+    const f = this.forward(vel);
+    const rx = Math.cos(heading);
+    const rz = Math.sin(heading);
+    const hs = Math.hypot(vel.x, vel.z);
+    // (Riding on most of the sled's speed, so the kick hangs about the runners and thins out there,
+    // rather than streaming back into the lens as clumps.)
+    const car = tmpC.set(vel.x * 0.86, Math.max(vel.y, -hs * 0.7) * 0.86, vel.z * 0.86);
+    const c = ice ? ICE : WHITE;
+    for (let i = 0; i < n; i++) {
+      const sx = i % 2 ? 0.28 : -0.28;
+      const out = (Math.random() - 0.5) * 1.2 + sx * 2.5;
+      this.powder.emit(
+        pos.x + rx * sx - f.x * 0.7,
+        pos.y + 0.04,
+        pos.z + rz * sx - f.z * 0.7,
+        car.x + rx * out - f.x * Math.random() * 1.5,
+        car.y + 0.6 + Math.random() * 1.1,
+        car.z + rz * out - f.z * Math.random() * 1.5,
+        0.22 + Math.random() * 0.2,
+        0.03,
+        0.05,
+        POWDER * c.r,
+        POWDER * c.g,
+        POWDER * c.b,
+        0.55 + Math.random() * 0.3,
+        7,
+        2,
+        KIND_GRAIN,
+        car,
+      );
+    }
+    // And a low, small puff off a runner's tail now and then: the snow the runners churn, the body of
+    // the kick (the grains alone are specks at the chase lens's distance).
+    const puffs = this.n(0.7 * k);
+    for (let i = 0; i < puffs; i++) {
+      const sx = Math.random() < 0.5 ? 0.28 : -0.28;
+      const out = sx * (1.2 + Math.random() * 1.6);
+      this.powder.emit(
+        pos.x + rx * sx - f.x * 0.75,
+        pos.y + 0.05,
+        pos.z + rz * sx - f.z * 0.75,
+        car.x + rx * out - f.x * (0.5 + Math.random()),
+        car.y + 0.5 + Math.random() * 0.6,
+        car.z + rz * out - f.z * (0.5 + Math.random()),
+        0.2 + Math.random() * 0.14,
+        0.05,
+        0.12 + Math.random() * 0.07,
+        c.r,
+        c.g,
+        c.b,
+        0.65,
+        3,
+        2.4,
+        puffKind(),
+        car,
+      );
+    }
+  }
+
+  /** The slipstream you ride in behind a ghost (`k` 0 to 1): motes of its kind colour streaming back
+   *  past the rider low along both runners, as if the air the ghost tore through were still glowing. */
+  wake(pos: Vector3, vel: Vector3, color: Color, k: number): void {
+    const n = this.n(2.6 * k);
+    if (n === 0) return;
+    const f = this.forward(vel);
+    for (let i = 0; i < n; i++) {
+      const side = (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.45);
+      const ahead = 0.6 + Math.random() * 2.2;
+      const hot = 1.2 + Math.random() * 0.3;
+      this.glow.emit(
+        pos.x - f.z * side + f.x * ahead,
+        pos.y + 0.12 + Math.random() * 0.35,
+        pos.z + f.x * side + f.z * ahead,
+        vel.x * 0.55,
+        vel.y * 0.55,
+        vel.z * 0.55,
+        0.4 + Math.random() * 0.25,
+        0.17,
+        0.06,
+        color.r * hot,
+        color.g * hot,
+        color.b * hot,
+        0.9,
+        0,
+        0,
+        KIND_GRAIN,
       );
     }
   }

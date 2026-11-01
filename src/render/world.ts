@@ -4,7 +4,7 @@ import { CHUNK_LEN, Course, courseFor } from '../sim/course';
 import type { Snap } from '../game/run';
 import type { GhostPose } from '../game/ghosts';
 import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, type Feel, type GhostRole } from '../game/beats';
-import type { ObstacleKind } from '../sim/course';
+import type { Gift, ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
 import { ChaseCamera, crashPack } from './camera';
@@ -95,7 +95,8 @@ const tmpV = new Vector3();
 const tmpV2 = new Vector3();
 /** Event sparkles start just above the snow (particles.ts sparkle). */
 const LOW = new Vector3(0, 0.15, 0);
-const MARIGOLD = new Color('#FFD34D');
+/** A whisker's glints: snow-white with a breath of ice. */
+const WHISKER_C = new Color('#F2F8FF');
 const GOLD_WHITE = new Color(BEST_HEX);
 const BOOST_C = new Color('#FF8A5C');
 /** Drift tiers 1 to 3: a ramp inside the player's own vermillion (pale coral, coral, vermillion), so a
@@ -161,6 +162,8 @@ export class World {
   private width = 1;
   private height = 1;
   private ventAcc = 0;
+  /** Seconds since the last glint on a gift ahead. */
+  private glintAcc = 0;
   private resultsClear = 0;
   private danger = 0;
   readonly onResize: Array<(w: number, h: number) => void> = [];
@@ -631,21 +634,45 @@ export class World {
           const c = this.cam.camera.position;
           toward = (c.x - pos.x) * Math.cos(s.heading) + (c.z - pos.z) * Math.sin(s.heading) >= 0 ? 1 : -1;
         }
+        // From about 16 m/s the runners kick fine snow up off their tails, building to full by 30 m/s.
+        const kick = smooth01((s.speed - 16) / 14);
+        if (kick > 0) this.particles.kick(pos, s.heading, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), kick * Math.min(2, dt * 60), s.onIce);
         this.sprayAcc += sprayAmt * dt * 60 * 1.6;
         if (this.sprayAcc >= 1) {
           // Spray rides the slope: its carrier follows the ground under the sled (the title reel's
           // snapshot carries no vertical speed, and spray launched level floated off into the sky).
           // A held drift heats it from the first tier on, inside the player's vermillion (Feel's charge
-          // and tier), and at tier 3 a fifth of its grains are hot motes.
+          // and tier), and from tier 2 its grains include hot motes skittering off the runner (a tenth,
+          // then a quarter at tier 3): drift sparks in the charge's own ramp.
           const tier = s.drifting && v.mode === 'run' ? Math.min(3, feel.driftTier) : 0;
           const heat = tier > 0 ? DRIFT_C[tier - 1] : null;
-          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce, heat, feel.driftCharge, tier >= 3 ? 0.2 : 0);
+          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce, heat, feel.driftCharge, tier >= 3 ? 0.26 : tier === 2 ? 0.1 : 0);
           this.sprayAcc = 0;
         }
       } else if (this.wasGrounded) this.trail.lift();
       this.wasGrounded = s.grounded;
     }
     this.trail.flush();
+
+    // Gifts ahead twinkle: every few frames a marigold glint flashes on one of the gifts 5 to 45 m down
+    // the line, so a line of gifts reads as a trail of lights to follow (Medium and High).
+    this.glintAcc += dt;
+    if (v.mode === 'run' && this.quality.tier !== 'low' && this.glintAcc > 0.06) {
+      this.glintAcc = 0;
+      let pick: Gift | null = null;
+      let seen = 0;
+      for (let k = Math.max(0, ci); k <= ci + 1; k++) {
+        for (const gf of this.course.chunk(k).gifts) {
+          const ahead = gf.z - s.z;
+          if (ahead < 5 || ahead > 45 || v.collected.has(gf.id)) continue;
+          if (Math.random() * ++seen < 1) pick = gf;
+        }
+      }
+      if (pick) {
+        const gy = this.course.ground(pick.x, pick.z) + pick.hover;
+        this.particles.glint(this.fxA.set(pick.x + (Math.random() - 0.5) * 0.5, gy + Math.random() * 0.45, -pick.z + (Math.random() - 0.5) * 0.5), pick.value > 1);
+      }
+    }
 
     // Vents breathe steam.
     this.ventAcc += dt;
@@ -721,7 +748,10 @@ export class World {
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
     this.ghosts.reel = v.mode === 'title';
+    this.ghosts.drafting = v.mode === 'run' && s.drafting && !s.crashed;
     this.ghosts.update(v.ghostPoses, this.cam.camera, this.width, this.height, v.time, focus, (p, c) => this.particles.sparkle(p, c, 16, 2.2, 0.55, 0.2, null, 0.6), v.occluders, v.rival);
+    // The slipstream you ride in: motes of the drafted ghost's colour stream back past the runners.
+    if (this.ghosts.wakeK > 0.05 && s.grounded) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
     this.landing.streak = v.mode === 'run' ? feel.streak : 0;
     this.landing.update(s, v.sim ? v.sim.gravity : 9.81, v.airTicks, dt, showRider && v.mode === 'run' && !this.rider.crashing);
     this.updateBands(v, feel, s, dt);
@@ -898,6 +928,9 @@ export class World {
         case 'ghostTrick':
           if (b.quality === 'perfect') this.ghostStompFx(b, v);
           break;
+        case 'pass':
+          this.passFx(b, v);
+          break;
         default:
           break;
       }
@@ -925,6 +958,8 @@ export class World {
     const k = b.grade === 'whisker' ? 1 : 0.68;
     if (brushPoint(s, b.x, b.z, this.groundAt, this.cam.camera, this.fxB, this.fxT, bough ? BRUSH_REACH_BOUGH : 0) === 0) return;
     this.particles.brush(this.fxB, this.fxT, this.carrier(s), bough, ICY.has(b.obs), (bough ? 22 : 18) * k);
+    // A whisker also strikes a quick ring of white glints off the snow where you shaved it.
+    if (b.grade === 'whisker') this.particles.ring(this.fxB, WHISKER_C, 9, 3.4, this.carrier(s), 0, 1.3, 0.3, 0.13);
   }
 
   /** The snow's height at a sim (x, z), for brush.ts. */
@@ -994,6 +1029,24 @@ export class World {
     }
     const at = this.fxA.set(b.x, Math.max(b.y, this.course.ground(b.x, b.z)) + 0.1, -b.z);
     this.particles.ring(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, 10, 3.6, vel, 0, 1.3, 0.4, 0.17, this.quality.tier === 'low' ? 4 : Infinity);
+  }
+
+  /** You passed a ghost: its glass shatters into petals of its kind colour with a flare at its heart,
+   *  riding at its pace so they fall back behind you (ghosts.ts drops its name pill back). Low throws
+   *  a few. */
+  private passFx(b: BeatOf<'pass'>, v: FrameView): void {
+    const pose = v.ghostPoses.get(b.ghost.id);
+    if (!pose || pose.done) return;
+    this.course.gradient(pose.x, pose.z, this.landG);
+    const vx = Math.sin(pose.heading) * pose.speed;
+    const vz = Math.cos(pose.heading) * pose.speed;
+    const vel = this.fxV.set(vx, this.landG.x * vx + this.landG.z * vz, -vz);
+    // The race's pass rule fires with the ghost 0.8 m behind you, between the rider and the lens: the
+    // burst goes off at its side of the run level with the rider and a little ahead, low, so it plays
+    // out beside the hero and falls back past it (thrown where the ghost was, it filled the lens).
+    const z = Math.max(pose.z, v.snap.z + 0.9);
+    const at = this.fxA.set(pose.x, this.course.ground(pose.x, z) + 0.6, -z);
+    this.particles.shatter(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, vel, this.quality.tier === 'low' ? 10 : 28);
   }
 
   /** Your best and an unbeaten friend's distance, as bands the snow shader paints across the corridor
@@ -1092,8 +1145,9 @@ export class World {
       case 'gift':
         // A brief, low burst at the gift that rides along with the sled for its moment and settles
         // on the snow: thrown up and left behind, it floated up the frame as a column of stars.
+        // The box squashes and pops, a flare of marigold, ribbon confetti and coins (particles.ts giftPop).
         this.course.gradient(s.x, s.z, this.landG);
-        this.particles.sparkle(new Vector3(e.x, e.y - 0.15, -e.z), e.value > 1 ? GOLD_WHITE : MARIGOLD, e.value > 1 ? 16 : 9, 2.2, 0.4, 0.18, this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz));
+        this.particles.giftPop(this.fxA.set(e.x, e.y, -e.z), this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz), e.value > 1);
         this.props.markDirty();
         break;
       case 'boost':
