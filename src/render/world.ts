@@ -12,6 +12,7 @@ import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
+import { Life } from './life';
 import { applyPalette, bands, setCloudShadows, shared } from './materials';
 import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
 import { Particles, Weather } from './particles';
@@ -141,6 +142,7 @@ export class World {
   readonly ghosts: GhostVisuals;
   readonly chaos: ChaosVisuals;
   readonly landing: LandingAid;
+  readonly life: Life;
   readonly post: PostFX;
   readonly sun = new DirectionalLight(0xffffff, 1);
   private sunTarget = new Object3D();
@@ -226,6 +228,7 @@ export class World {
     this.ghosts = new GhostVisuals(this.course, container);
     this.chaos = new ChaosVisuals(this.course);
     this.landing = new LandingAid(this.course);
+    this.life = new Life(this.course, this.palette, quality.tier, quality.forestDensity);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     const cor = { x: 0, hw: 0 };
     this.cam.corridor = (z) => {
@@ -265,6 +268,7 @@ export class World {
       this.landing.root,
       this.ghosts.root,
       this.chaos.root,
+      this.life.root,
       ...this.rider.objects,
       ...this.particles.objects,
       this.weather.points,
@@ -355,6 +359,7 @@ export class World {
     this.post.setMsaa(q.msaa);
     this.post.shaftTaps = q.tier === 'high' ? 10 : 6;
     this.sky.setDetail(q.tier);
+    this.life.setQuality(q.tier, q.forestDensity);
     setCloudShadows(q.tier !== 'low');
     this.applyWeather();
     this.lastChunkRange = '';
@@ -384,6 +389,7 @@ export class World {
     this.ghosts.setCourse(c);
     this.chaos.setCourse(c);
     this.landing.setCourse(c);
+    this.life.setCourse(c, this.palette, this.mood);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
     this.lastChunkRange = '';
@@ -401,6 +407,7 @@ export class World {
     if (!same) this.props.setCourse(this.course, this.palette);
     if (!same) this.setPieces.setCourse(this.course, this.palette, mood);
     this.sky.setPalette(this.palette);
+    this.life.setPalette(this.palette, mood);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
@@ -716,6 +723,7 @@ export class World {
     // The title reel keeps hazards out of the band right behind its hero (materials.ts uTitleClear).
     shared.uTitleClear.value = v.mode === 'title' ? 1 : 0;
     this.particles.update(dt);
+    this.life.update(s.x, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
 
     // Sun and shadow follow the focus.
     this.sunTarget.position.copy(focus);
@@ -842,8 +850,11 @@ export class World {
     const autoShadow = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
     if (refresh) this.props.nearOnly(true);
+    // (The ambient life stays out of the mirror: it costs draws and the inset is about the wall.)
+    this.life.root.visible = false;
     this.post.renderInset(this.scene, this.mirrorCam, x, y, mw, mh, this.mirrorFade, Math.max(0, Math.min(1, 1 - gap / 50)), refresh);
     if (refresh) this.props.nearOnly(false);
+    this.life.root.visible = true;
     r.shadowMap.autoUpdate = autoShadow;
   }
 

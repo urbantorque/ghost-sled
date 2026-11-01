@@ -684,3 +684,40 @@ export function wallThinning(kind: SectionKind, k: number): number {
 }
 
 export { FOREST_LIMIT };
+
+// ---------------------------------------------------------------- read-only views (life.ts)
+
+/** The lift towers' spacing and crossarm height, for what rides the cables (life.ts). */
+export const LIFT_STEP = TOWER_STEP;
+export const LIFT_TOP = TOWER_TOP;
+
+/** A section's lift line (sim z, the bank side and edge excess), or null: the same line the dressing
+ *  stands its towers on. */
+export function liftLine(sec: Section): { side: number; e: number; z0: number; z1: number } | null {
+  return liftOf(sec);
+}
+
+/** Where chunk i's cabin on `side` stands, if it has one (three.js position of its foot and its
+ *  yaw): the same spot Dresser.cabin picks, with the same hashes and density, so its chimney can
+ *  smoke. Pure; it places nothing. */
+export function cabinSpot(c: Course, i: number, side: number, dens: number): { x: number; y: number; z: number; yaw: number } | null {
+  const z0 = i * CHUNK_LEN;
+  if (z0 + CHUNK_LEN < 60) return null;
+  const secs: Section[] = [];
+  for (let z = z0; z < z0 + CHUNK_LEN; z += 8) {
+    const s = c.section(z);
+    if (!secs.includes(s)) secs.push(s);
+  }
+  const sd = side < 0 ? 0 : 1;
+  const wide = secs.some((s) => s.kind === 'bowl' || s.kind === 'split');
+  if (hashf(i, sd, 51) > (wide ? 0.26 : 0.09) * dens) return null;
+  const z = z0 + 12 + hashf(i, sd, 52) * 40;
+  const e = 14 + hashf(i, sd, 53) * 6;
+  for (const s of secs) {
+    const l = liftOf(s);
+    if (l && l.side === side && Math.abs(l.e - e) < 9 && z > l.z0 - 10 && z < l.z1 + 10) return null;
+  }
+  const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+  const yaw = (side < 0 ? Math.PI / 2 : -Math.PI / 2) + (hashf(i, sd, 54) - 0.5) * 0.5;
+  return { x, y: c.ground(x, z) - 0.35, z: -z, yaw };
+}
