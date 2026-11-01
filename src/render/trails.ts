@@ -6,9 +6,10 @@ import { LANTERN_POOL_GLSL, shared } from './materials';
 // snow, a runner's width apart. A deep carve presses a wide periwinkle floor between them and throws
 // up a broken, noisy lip on the outside (bright on the sun side), and a drift scrubs a wide fan of
 // parallel scratches. The groove runs all the way down to the bottom of the frame, thinning a little
-// near the lens, so the line you carved is written across the foreground. Ghost trails are one thin, crisp line each (about 15 cm, in the
-// ghost's colour), normally blended at low alpha and fading with age and near the camera, so a pack
-// of them reads as a few drawn lines, never a pastel band.
+// near the lens, so the line you carved is written across the foreground. Ghosts leave two thin
+// luminous runner lines each (GhostTrails, the whole field in one mesh), normally blended at low
+// alpha and fading with age and near the camera, so a pack of them reads as a few sled tracks drawn
+// in light, never a pastel band. (Trail's 'ghost' style, one line, is kept for any single trail.)
 
 export type TrailStyle = 'groove' | 'ghost';
 
@@ -404,6 +405,241 @@ export class Trail {
     (this.geo.getAttribute('aPerp') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aFan') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aHw') as BufferAttribute).needsUpdate = true;
+  }
+
+  dispose(): void {
+    this.geo.dispose();
+    this.mat.dispose();
+  }
+}
+
+/** Half-width of a ghost's runner ribbon: both runner lines and their glow. */
+const GHOST_RUNNERS_HW = RUNNER + 0.12;
+
+/**
+ * Every ghost's runner lines in one mesh (one draw call for the whole field, where each ghost used to
+ * draw its own trail): two thin luminous lines in the ghost's kind colour, a runner's width apart, so
+ * the snow behind a ghost reads as a sled's track rather than one painted stripe. Each line is a crisp
+ * core in a soft glow; by day the colour deepens so it shows on bright snow, at night it glows (past
+ * the bloom threshold on Medium and High). They fade with age, with distance, and before they reach
+ * the lens, as the single lines did.
+ */
+export class GhostTrails {
+  readonly mesh: Mesh;
+  private geo: BufferGeometry;
+  private pos: Float32Array;
+  private born: Float32Array;
+  private heads: Int32Array;
+  private counts: Int32Array;
+  private lastX: Float64Array;
+  private lastZ: Float64Array;
+  private broken: Uint8Array;
+  private segStart: Uint8Array;
+  private dirtyFlag = false;
+  private mat: ShaderMaterial;
+
+  constructor(
+    private course: Course,
+    private n: number,
+    private max: number,
+    colors: Color[],
+  ) {
+    const verts = n * max * 2;
+    this.pos = new Float32Array(verts * 3);
+    this.born = new Float32Array(verts);
+    const across = new Float32Array(verts);
+    const col = new Float32Array(verts * 3);
+    for (let g = 0; g < n; g++) {
+      const c = colors[g];
+      for (let k = 0; k < max * 2; k++) {
+        const v = g * max * 2 + k;
+        across[v] = k % 2 ? 1 : -1;
+        col.set([c.r, c.g, c.b], v * 3);
+      }
+    }
+    this.heads = new Int32Array(n);
+    this.counts = new Int32Array(n);
+    this.lastX = new Float64Array(n).fill(NaN);
+    this.lastZ = new Float64Array(n).fill(NaN);
+    this.broken = new Uint8Array(n).fill(1);
+    this.segStart = new Uint8Array(n * max);
+    this.geo = new BufferGeometry();
+    this.geo.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aAcross', new BufferAttribute(across, 1));
+    this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aCol', new BufferAttribute(col, 3));
+    this.geo.setIndex(new BufferAttribute(new Uint32Array(Math.max(1, n * (max - 1) * 6)), 1).setUsage(DynamicDrawUsage));
+    this.geo.setDrawRange(0, 0);
+    this.mat = new ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
+      blending: NormalBlending,
+      uniforms: {
+        uTime: shared.uTime,
+        uLit: shared.uSnowLit,
+        uFog: shared.uFog,
+        uFogNear: shared.uFogNear,
+        uFogFar: shared.uFogFar,
+        uFocus: shared.uFocus,
+        uLife: { value: 7 },
+      },
+      vertexShader: /* glsl */ `
+        attribute float aAcross;
+        attribute float aBorn;
+        attribute vec3 aCol;
+        uniform float uTime;
+        varying float vAcross;
+        varying float vAge;
+        varying vec3 vCol;
+        varying vec3 vWorldPos;
+        void main() {
+          vAcross = aAcross;
+          vAge = uTime - aBorn;
+          vCol = aCol;
+          vec4 wp = modelMatrix * vec4(position, 1.0);
+          vWorldPos = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform vec3 uLit;
+        uniform vec3 uFog;
+        uniform float uFogNear;
+        uniform float uFogFar;
+        uniform vec3 uFocus;
+        uniform float uLife;
+        varying float vAcross;
+        varying float vAge;
+        varying vec3 vCol;
+        varying vec3 vWorldPos;
+        float line(float x, float hw, float px) {
+          float w = max(hw, px * 0.6);
+          return smoothstep(w + px * 0.75, w - px * 0.75, abs(x)) * (hw / w);
+        }
+        void main() {
+          float fade = clamp(1.0 - vAge / uLife, 0.0, 1.0);
+          float d = length(cameraPosition - vWorldPos);
+          float fogF = smoothstep(uFogNear, uFogFar, d);
+          float zf = -(viewMatrix * vec4(vWorldPos, 1.0)).z;
+          float zr = max(-(viewMatrix * vec4(uFocus - vec3(0.0, 0.9, 0.0), 1.0)).z, 0.0);
+          float x = vAcross * ${GHOST_RUNNERS_HW.toFixed(2)};
+          float px = max(fwidth(x), 0.0005);
+          // Distance across from the nearer runner's line.
+          float r = abs(abs(x) - ${RUNNER.toFixed(2)});
+          float core = line(r, 0.026, px);
+          // The glow round each line; far off, where a pixel spans more than the gap, it is all glow.
+          float glow = exp(-r * r / 0.0045) * (1.0 - smoothstep(0.02, 0.06, px));
+          float day = smoothstep(0.25, 0.65, dot(uLit, vec3(0.2126, 0.7152, 0.0722)));
+          vec3 col = mix(vCol * 1.6, pow(vCol, vec3(1.7)) * 0.85, day * 0.6);
+          // Shown from just behind the rider onward, gone before the lens (the lower third is the snow's).
+          float nearK = zr > 1.0 ? smoothstep(zr * 0.7, zr * 1.35, zf) : 1.0;
+          float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, 0.5, smoothstep(25.0, 80.0, d));
+          col = mix(col, uFog, fogF * 0.5);
+          gl_FragColor = vec4(col, alpha);
+          #include <colorspace_fragment>
+        }
+      `,
+    });
+    this.mesh = new Mesh(this.geo, this.mat);
+    this.mesh.frustumCulled = false;
+    this.mesh.renderOrder = 1;
+  }
+
+  setCourse(course: Course): void {
+    this.course = course;
+    this.clear();
+  }
+
+  clear(): void {
+    this.heads.fill(0);
+    this.counts.fill(0);
+    this.broken.fill(1);
+    this.lastX.fill(NaN);
+    this.lastZ.fill(NaN);
+    this.geo.setDrawRange(0, 0);
+  }
+
+  /** End ghost i's current stroke (it went airborne). */
+  lift(i: number): void {
+    this.broken[i] = 1;
+  }
+
+  /** Add a sample for ghost i at sim coordinates, every 0.6 m. */
+  add(i: number, x: number, z: number, time: number): void {
+    const lx0 = this.lastX[i];
+    const lz0 = this.lastZ[i];
+    let tx = 0;
+    let tz = 1;
+    if (!Number.isNaN(lx0)) {
+      const dx = x - lx0;
+      const dz = z - lz0;
+      const l2 = dx * dx + dz * dz;
+      if (l2 < 0.36) return;
+      const l = Math.sqrt(l2);
+      tx = dx / l;
+      tz = dz / l;
+      // A jump (a new run, the reel changing leads) starts a new stroke.
+      if (l2 > 64) this.broken[i] = 1;
+    }
+    this.lastX[i] = x;
+    this.lastZ[i] = z;
+    const k = this.heads[i];
+    const s = i * this.max + k;
+    this.segStart[s] = this.broken[i];
+    this.broken[i] = 0;
+    const hw = GHOST_RUNNERS_HW;
+    const px = tz;
+    const pz = -tx;
+    const c = this.course;
+    const o = s * 6;
+    const ax = x - px * hw;
+    const az = z - pz * hw;
+    const bx = x + px * hw;
+    const bz = z + pz * hw;
+    this.pos[o] = ax;
+    this.pos[o + 1] = c.ground(ax, az) + 0.04;
+    this.pos[o + 2] = -az;
+    this.pos[o + 3] = bx;
+    this.pos[o + 4] = c.ground(bx, bz) + 0.04;
+    this.pos[o + 5] = -bz;
+    this.born[s * 2] = this.born[s * 2 + 1] = time;
+    this.heads[i] = (k + 1) % this.max;
+    this.counts[i] = Math.min(this.counts[i] + 1, this.max);
+    this.dirtyFlag = true;
+  }
+
+  flush(): void {
+    if (!this.dirtyFlag) return;
+    this.dirtyFlag = false;
+    const idx = this.geo.index as BufferAttribute;
+    const arr = idx.array as Uint32Array;
+    const max = this.max;
+    let q = 0;
+    for (let g = 0; g < this.n; g++) {
+      const n = this.counts[g];
+      const start = (this.heads[g] - n + max) % max;
+      const base = g * max;
+      for (let k = 0; k < n - 1; k++) {
+        const a = (start + k) % max;
+        const b = (a + 1) % max;
+        if (this.segStart[base + b]) continue;
+        const a0 = (base + a) * 2;
+        const b0 = (base + b) * 2;
+        arr[q++] = a0;
+        arr[q++] = a0 + 1;
+        arr[q++] = b0;
+        arr[q++] = a0 + 1;
+        arr[q++] = b0 + 1;
+        arr[q++] = b0;
+      }
+    }
+    idx.needsUpdate = true;
+    this.geo.setDrawRange(0, q);
+    (this.geo.getAttribute('position') as BufferAttribute).needsUpdate = true;
+    (this.geo.getAttribute('aBorn') as BufferAttribute).needsUpdate = true;
   }
 
   dispose(): void {
