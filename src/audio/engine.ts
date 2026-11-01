@@ -6,6 +6,7 @@ import { RUN_FLOOR } from '../game/intensity';
 import { START_TICKS } from '../game/race';
 import { Core } from './core';
 import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, floorDrive, grooveLift, resultsCues, revealCues } from './cues';
+import { Listener, type ListenSources, newView } from './listen';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
 
@@ -19,6 +20,9 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   one-shot voices (sfx pool, 24) ---dry---> sfx.dry ----> duck -> level ---------+
  *                                  \--send-> sfx.wet ----> duck -> level --+      |
  *   ambience (wind, snow, hum, rumble) -----> sfx.dry / sfx.wet            |      |
+ *   soundscape (crowds, life, places, mood beds; 6 take lanes) -> sfx.dry / sfx.wet
+ *   both buses' level outs -> enclosure echo (delay 105 ms, fb 0.42, LP 2.4 kHz) -> master, only
+ *     plugged in inside a gallery or a tunnel; each bus's reverb send has a "space" gain
  *                                                                          v      |
  *   music decks (music pool, 32)                                    ConvolverNode |
  *     layer faders: pad bass arp kick hat clap sparkle lead tension     (noise IR,|
@@ -96,6 +100,13 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   dBFS RMS (peaks near -12), its ambience alone -33, full arrangement about -21, style notes
  *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
  *   -5 dBFS after the limiter.
+ * - The soundscape (scape.ts, listen.ts, takes.ts): each run frame the world's read-only view
+ *   (AudioFrame.world, World.listenSources) is reduced to a few numbers (the nearest crowd, flock,
+ *   lift line and village, how exposed and how enclosed the rider is, the camera's vista) that move
+ *   a fixed graph's parameters; its one-shots are takes synthesized once in JS on the title, in
+ *   slices, and played as one buffer source each into six long-lived lanes. A vista or an overlook
+ *   (openness()) lifts the drive by up to 0.12 and opens the reverb send. Low hears the birds, the
+ *   wind and the mood's bed only, at about half the rate.
  * - Muting: any reason muted silences output; after 1 s fully muted the context is suspended to
  *   save CPU and resumed on unmute. A UI sound asked for while it resumes (50 to 90 ms on a desktop,
  *   about 200 on a phone: the doubled gifts' coin as the rewarded ad closes), and the Revive ad's
@@ -128,6 +139,11 @@ export interface AudioFrame {
   streak?: number; // current stomp streak
   countIn?: boolean; // the run-start reveal is up (chaos runs): intensity is held low
   choir?: number; // 0..3 ghosts you passed still riding within 150 m behind (absent: the TTL proxy)
+  // The world, for the soundscape (all optional; without them it stays quiet).
+  world?: ListenSources | null; // World.listenSources(): the places and the life near the rider
+  x?: number; // the rider's sim x and z
+  z?: number;
+  height?: number; // metres over the snow
 }
 
 export type UiSound =
@@ -232,6 +248,13 @@ export class AudioEngine {
   private groove = 0;
   /** Seconds of run (real time, crashes excluded) since the run scene began. */
   private runT = 0;
+  /** The soundscape's reading of the world (listen.ts), and the band's lift for a vista or an
+   *  overlook in this frame's drive (probe). */
+  private readonly listener = new Listener();
+  private readonly heard = newView();
+  private lift = 0;
+  private tier: 'low' | 'medium' | 'high' = 'high';
+  private openK = 0;
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -290,6 +313,8 @@ export class AudioEngine {
       this.avalanche = false;
       this.groove = 0;
       this.runT = 0;
+      this.lift = 0;
+      this.listener.reset();
     }
     this.choirs.reset();
     const c = this.core;
@@ -303,6 +328,7 @@ export class AudioEngine {
       c.music.setTarget(this.scene, this.mood, this.biome);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
+      c.scape.setScene(scene, ctx.currentTime);
     } catch (err) {
       this.warn(err);
     }
@@ -312,6 +338,24 @@ export class AudioEngine {
     this.mood = mood;
     this.biome = biome;
     this.core?.music.setTarget(this.scene, this.mood, this.biome);
+    this.core?.scape.setMood(mood, biome);
+  }
+
+  /** The render tier: Low hears a reduced soundscape (no crowds, lifts, villages or snowcat, and
+   *  its ambient sounds about half as often). */
+  setQuality(tier: 'low' | 'medium' | 'high'): void {
+    this.tier = tier;
+    this.core?.scape.setTier(tier);
+  }
+
+  /**
+   * How open the view is where the rider is (0..1): an overlook where one bank opens to the valley.
+   * A broad gust of wind as it opens, airier wind and a lift in the band while it lasts. Call every
+   * run frame (or whenever it changes); it eases on its own.
+   */
+  openness(k: number): void {
+    this.openK = clamp01(k);
+    this.core?.scape.setOpenness(this.openK);
   }
 
   /** Called every render frame during a run. */
@@ -355,7 +399,15 @@ export class AudioEngine {
         this.accent = Math.min(ACCENT_MAX, this.accent + a.amt);
       }
       if (crashed) this.accent = 0;
-      c.music.setDrive(clamp01(this.intensity + this.accent), clamp01(frame.danger), frame.comboMult || 1, snap);
+      // The world: what the rider hears of it, and the band opening up under a vista or an overlook
+      // (a layer's worth at the most).
+      const w = frame.world;
+      if (w && Number.isFinite(frame.x) && Number.isFinite(frame.z)) {
+        const v = this.listener.hear(w, frame.x as number, frame.z as number, Number.isFinite(frame.height) ? (frame.height as number) : 0, this.heard);
+        c.scape.update(v, frame, now, d);
+        this.lift = crashed || countIn ? 0 : 0.12 * Math.max(v.vista, c.scape.openness);
+      } else this.lift = 0;
+      c.music.setDrive(clamp01(this.intensity + this.accent + this.lift), clamp01(frame.danger), frame.comboMult || 1, snap);
       if (!crashed) this.runT += d;
       c.ambience.update(frame, now, this.avalanche, c.music.key(), clamp01(this.runT - SHOULDER_FROM_S));
       this.choir(frame, now, crashed, c);
@@ -406,6 +458,8 @@ export class AudioEngine {
       for (const b of list) this.accentFor(b, now);
       if (list.length > 0) this.choirs.beats(list, now);
       if (!ctx || !c || !this.live(ctx) || list.length === 0) return;
+      // The crowds cheer and the birds scatter (scape.ts).
+      c.scape.beats(list, now);
       const t = now + START_LEAD;
       for (const b of list) {
         if (b.type === 'km') {
@@ -526,7 +580,28 @@ export class AudioEngine {
     out.sfxPayoffSteals = c.sfxPool.payoffSteals;
     out.musicSteals = c.musicPool.steals;
     out.padSteals = c.musicPool.keptSteals;
+    // The soundscape: one-shots played and dropped, takes made, the band's lift, and what it hears.
+    out.scapeShots = c.scape.stats.shots;
+    out.scapeDropped = c.scape.stats.dropped;
+    out.scapeTakesDone = c.scape.takes.done ? 1 : 0;
+    out.scapeLift = this.lift;
+    out.echo = c.graph.echoing ? 1 : 0;
+    const h = this.heard;
+    out.hearCrowd = h.crowd;
+    out.hearFlock = h.flock;
+    out.hearLift = h.lift;
+    out.hearVillage = h.village;
+    out.hearExposure = h.exposure;
+    out.hearEnclosed = h.enclosed;
+    out.hearVista = h.vista;
     return out;
+  }
+
+  /** Probe-only: the soundscape's counters (plays per take, whooshes, gusts) and what it hears. */
+  debugScape(): { played: Record<string, number>; stats: Record<string, number>; heard: Record<string, unknown> } | null {
+    const c = this.core;
+    if (!c) return null;
+    return { played: { ...c.scape.played }, stats: { ...c.scape.stats }, heard: { ...this.heard } };
   }
 
   /** Probe-only: the context and the master's last node before the speakers, for a capture tap. */
@@ -638,6 +713,10 @@ export class AudioEngine {
     core.graph.mute.gain.value = this.mutes.size > 0 ? 0 : 1;
     core.music.setTarget(this.scene, this.mood, this.biome);
     core.ambience.setScene(this.scene, ctx.currentTime);
+    core.scape.setTier(this.tier);
+    core.scape.setMood(this.mood, this.biome);
+    core.scape.setScene(this.scene, ctx.currentTime);
+    core.scape.setOpenness(this.openK);
     // The moment a parked context runs again, the UI sounds asked for while it resumed play (the
     // scheduler tick does the same, for a browser without the event).
     if (typeof ctx.addEventListener === 'function') ctx.addEventListener('statechange', () => this.flushResumed());

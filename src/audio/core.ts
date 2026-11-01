@@ -3,6 +3,7 @@ import { Bank, createBank } from './buffers';
 import { Graph } from './graph';
 import { Music } from './music';
 import { Prerender } from './prerender';
+import { Soundscape } from './scape';
 import { Sfx } from './sfx';
 import { NodeReserve, VoicePool } from './voices';
 
@@ -25,6 +26,8 @@ export class Core {
   readonly music: Music;
   readonly sfx: Sfx;
   readonly ambience: Ambience;
+  /** The world heard: crowds, life, places and the mood's bed (scape.ts). */
+  readonly scape: Soundscape;
   /** Grid pulses the scheduler keeps in time with the band: the fuse on a draining stake and the
    *  duel heartbeat (0..1 each; set every frame by the engine). */
   readonly pulse = { fuse: 0, duel: 0 };
@@ -41,6 +44,7 @@ export class Core {
     this.sfx.renders = this.renders;
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
     this.sfx.bed = (t, hold, depth) => this.ambience.dip(t, hold, depth);
+    this.scape = new Soundscape(ctx, this.bank, this.graph, this.ambience);
   }
 
   /** One scheduler pass: fill the music lookahead, place grid pulses, build deferred effect parts,
@@ -52,6 +56,8 @@ export class Core {
     this.sfxPool.sweep(now);
     this.musicPool.sweep(now);
     this.ambience.watch(now);
+    // The world's ambient one-shots, and a slice of the takes still being made.
+    this.scape.tick(now);
     // Between frames: the nodes the next frame's effects will take, and a take asked for meanwhile.
     this.reserve.refill();
     this.renders.pump();
@@ -60,6 +66,7 @@ export class Core {
   dispose(): void {
     this.renders.dispose();
     this.music.dispose();
+    this.scape.dispose();
     this.ambience.dispose();
     this.sfxPool.releaseAll();
     this.musicPool.releaseAll();

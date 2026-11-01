@@ -240,8 +240,10 @@ export class App {
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
+    this.audio.setQuality(this.tiers.tier);
     this.tiers.onChange = (t: Tier) => {
       this.world.setQuality(qualityFor(t));
+      this.audio.setQuality(t);
       this.ui.setMirror(t !== 'low');
     };
     // The shop shows the real sled meshes, rendered once each by the main renderer.
@@ -1878,6 +1880,10 @@ export class App {
         streak: a.streak,
         countIn: a.countIn,
         choir: a.choir,
+        world: this.world.listenSources(sim.s.z),
+        x: sim.s.x,
+        z: sim.s.z,
+        height: sim.s.y - this.world.course.ground(sim.s.x, sim.s.z),
       };
       this.audio.update(frame, frozen ? 0 : dt);
       if (this.phase === 'run') this.updateHints(dt);

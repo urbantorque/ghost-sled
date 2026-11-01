@@ -7,7 +7,9 @@ import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, 
 import type { Gift, ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
+import type { ListenSources } from '../audio/listen';
 import { ChaseCamera, crashPack } from './camera';
+import { liftLine } from './dressing';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { placeGraves, type GravePlace } from './graves';
@@ -446,6 +448,56 @@ export class World {
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
   }
+
+  /**
+   * What the soundscape hears of the world near sim z (audio/listen.ts), refreshed in place: the
+   * set-piece plan, the bird flocks, the lift lines, the villages' chimneys, the vista, the dusk.
+   * Read-only; it allocates nothing after the first call.
+   */
+  listenSources(z: number): ListenSources {
+    // (The plan, the flocks and the bird kind are the systems' own private state, read as they are.)
+    const life = this.life as unknown as { flocks: ListenSources['flocks']; birdKind: ListenSources['birds']; plan: { rich: boolean }; birdMesh: { visible: boolean } };
+    const plan = (this.setPieces as unknown as { plan: { planned: ListenSources['sites'] } }).plan;
+    const src = (this.listenSrc ??= {
+      course: this.course,
+      biome: this.course.biome,
+      mood: this.mood,
+      tier: this.quality.tier,
+      sites: plan.planned,
+      crowds: false,
+      flocks: life.flocks,
+      birds: null,
+      lifts: false,
+      lift: liftLine,
+      chimneys: this.listenChimneys,
+      chimneyCount: 0,
+      vista: 0,
+      dusk: 0,
+      night: false,
+    });
+    const night = this.mood === Mood.Lantern || this.mood === Mood.Comet || this.mood === Mood.Haunted;
+    // The sun's journey on Clear Skies (palette.ts journeyWeights, inline so it allocates nothing).
+    const ag = Math.max(0, Math.min(1, (z - 200) / 1800));
+    const bl = Math.max(0, Math.min(1, (z - 3000) / 1000));
+    const journey = 0.45 * ag * ag * (3 - 2 * ag) + bl * bl * (3 - 2 * bl);
+    src.course = this.course;
+    src.biome = this.course.biome;
+    src.mood = this.mood;
+    src.tier = this.quality.tier;
+    src.sites = plan.planned;
+    src.crowds = this.quality.tier !== 'low';
+    src.flocks = life.flocks;
+    src.birds = life.birdMesh.visible ? life.birdKind : null;
+    src.lifts = life.plan.rich;
+    src.chimneyCount = this.midground.chimneys(this.listenChimneys);
+    src.vista = this.cam.vistaNow;
+    src.dusk = night ? 1 : this.mood === Mood.None ? Math.min(1, journey) : 0;
+    src.night = night;
+    return src;
+  }
+
+  private listenSrc: ListenSources | null = null;
+  private listenChimneys = Array.from({ length: 6 }, () => new Vector3());
 
   setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.ghosts.setField(list);

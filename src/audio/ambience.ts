@@ -20,14 +20,14 @@ const SHOULDER_GAIN = 0.8;
  *  faster than you within the last 2 m. */
 const SHOULDER_CLOSING = 0.6;
 
-type Link = readonly [AudioNode, AudioNode | AudioParam];
+export type Link = readonly [AudioNode, AudioNode | AudioParam];
 
-function connect([a, b]: Link): void {
+export function connect([a, b]: Link): void {
   if (b instanceof AudioNode) a.connect(b);
   else a.connect(b);
 }
 
-function disconnect([a, b]: Link): void {
+export function disconnect([a, b]: Link): void {
   if (b instanceof AudioNode) a.disconnect(b);
   else a.disconnect(b);
 }
@@ -36,7 +36,7 @@ function disconnect([a, b]: Link): void {
  *  and the fade has died away (at least 2 s, or 8 time constants: -70 dB, so slow fades such as
  *  the post-crash rumble are not cut short) the branch input is unplugged, and it is plugged back
  *  in as soon as the target rises again. */
-class Gate {
+export class Gate {
   private on = true;
   private wanted = false;
   private offAt = 2;
@@ -63,7 +63,7 @@ class Gate {
 
 /** setTargetAtTime only when the value moved enough to matter, so the automation timeline does
  *  not grow by a dozen events every frame. */
-class Smooth {
+export class Smooth {
   private last = NaN;
 
   constructor(
@@ -114,6 +114,11 @@ export class Ambience {
   private lastFrame = -1;
   private calmed = false;
   private readonly gates: Gate[] = [];
+  /** The bed's three looping noise sources, shared with the soundscape (scape.ts) so it adds none. */
+  readonly noise: { white: AudioBufferSourceNode; pink: AudioBufferSourceNode; brown: AudioBufferSourceNode };
+  /** How exposed the rider is (0..1, set by the soundscape: open banks, height, an overlook): the
+   *  wind blows up to half again as hard, and a little higher. */
+  exposure = 0;
   /** The pocket wide open; kept under Nyquist, which Chrome would clamp with a warning. */
   private readonly open: number;
 
@@ -226,6 +231,7 @@ export class Ambience {
     const white = loop(bank.white);
     const pink = loop(bank.pink);
     const brown = loop(bank.brown);
+    this.noise = { white, pink, brown };
 
     // Wind: everything here passes the drafting pocket, a lowpass that closes in a slipstream.
     const pocket = filter('lowpass', this.open, 0.5, this.out);
@@ -444,7 +450,8 @@ export class Ambience {
     // narrows the band and pulls it onto a note in the song's key, so the wind sings.
     const fk = surface && key ? clamp(f.flow ?? 0, 0, 1) * live : 0;
     const w = smoothstep(6, 40, sp);
-    const wNoise = (260 + sp * 26) * (air ? 1.3 : 1);
+    const ex = surface ? clamp(this.exposure, 0, 1) : 0;
+    const wNoise = (260 + sp * 26) * (air ? 1.3 : 1) * (1 + 0.25 * ex);
     const wq0 = air ? 0.45 : 0.7;
     let wf = fk > 0 ? Math.exp(Math.log(wNoise) * (1 - fk) + Math.log(mtof(fit(tonic, 79))) * fk) : wNoise;
     let wq = wq0 + (7 - wq0) * fk;
@@ -458,7 +465,7 @@ export class Ambience {
     this.windNow = wf;
     this.windQNow = wq;
     this.windQ.to(wq, now, now < this.snuffUntil ? 0.05 : 0.2);
-    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk);
+    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk) * (1 + 0.5 * ex);
     this.windG.to(wind * bandComp(wf, wq, sr) * 0.5, now, 0.15 * slow);
     this.roarG.to(0.42 * smoothstep(24, 44, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
     const whf = 1500 + sp * 38 + (air ? 900 : 0);
