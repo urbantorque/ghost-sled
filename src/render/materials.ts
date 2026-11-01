@@ -459,22 +459,27 @@ export function makeSnowMaterial(): ShaderMaterial {
           // and a texture read inside a per-pixel loop with branches makes D3D's compiler warn that
           // its derivatives are undefined.
           // Look for casters over the widest penumbra; most of the snow is in open sun and stops here.
-          // Each caster found is asked again 7 m nearer the light: what share of them still
-          // cast the shadow there says how far away its caster stands (0 near, 1 far).
           float nb = 1.0 - textureLod(directionalShadowMap[0], sc.xyz, 0.0);
-          float nf = nb > 0.0 ? 1.0 - textureLod(directionalShadowMap[0], vec3(sc.xy, sc.z - uShadowScale.y * 7.0), 0.0) : 0.0;
           vec2 o;
-          float b;
           #pragma unroll_loop_start
           for ( int i = 0; i < 4; i ++ ) {
             o = sc.xy + vogel(UNROLLED_LOOP_INDEX, 4, phi) * tx * 0.5;
-            b = 1.0 - textureLod(directionalShadowMap[0], vec3(o, sc.z), 0.0);
-            nb += b;
-            if (b > 0.0) nf += 1.0 - textureLod(directionalShadowMap[0], vec3(o, sc.z - uShadowScale.y * 7.0), 0.0);
+            nb += 1.0 - textureLod(directionalShadowMap[0], vec3(o, sc.z), 0.0);
           }
           #pragma unroll_loop_end
           if (nb < 0.01) return 1.0;
-          float far = clamp(nf / nb, 0.0, 1.0);
+          // How far away the caster stands (0 near, 1 far): the shadow is asked again at four steps
+          // between 1.5 and 9.5 m nearer the light, the steps dithered per pixel, and the share still
+          // shadowed is the answer. One yes-or-no ask at 7 m stepped the penumbra and the thinning at
+          // a hard line across a lone caster's long shadow (a pale band in it, cut square).
+          float jit = fract(phi * 0.1591549);
+          float far = 0.0;
+          #pragma unroll_loop_start
+          for ( int i = 0; i < 4; i ++ ) {
+            far += 1.0 - textureLod(directionalShadowMap[0], vec3(sc.xy, sc.z - uShadowScale.y * (1.5 + 2.0 * (float(UNROLLED_LOOP_INDEX) + jit))), 0.0);
+          }
+          #pragma unroll_loop_end
+          far = smoothstep(0.0, 1.0, far * 0.25);
           // A few centimetres of penumbra at the caster, a third of a metre at the far end, where the
           // shadow also thins out: a long shadow tapers away instead of ending in a stencilled edge.
           // Blizzard's diffuse light (uShadowK under 1) widens every penumbra too.
