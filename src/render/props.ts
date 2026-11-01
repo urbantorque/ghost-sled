@@ -296,14 +296,15 @@ export class Props {
       for (const set of ['a', 'b'] as const) {
         const k = prefix + set;
         const pick = new InstancedBufferAttribute(new Float32Array(cap), 1);
-        const src = sets.get(set === 'a' ? fKeyA : fKeyB);
+        const src = this.arches ? sets.get(set === 'a' ? fKeyA : fKeyB) : undefined;
         let geo: BufferGeometry;
         if (src) geo = variantView(src, pick);
         else {
-          // Until the variant set is made on idle time, both picks draw the original tree.
+          // Until the variant set is made on idle time, both picks draw the original tree. Low keeps
+          // just the original (every pick 0): a set's second variant doubles the forest's vertices.
           if (!base) {
             const b0 = forestBase(biome, p);
-            base = { a: variantSet([b0.a, b0.a]), b: variantSet([b0.b, b0.b]) };
+            base = this.arches ? { a: variantSet([b0.a, b0.a]), b: variantSet([b0.b, b0.b]) } : { a: variantSet([b0.a]), b: variantSet([b0.b]) };
             this.owned.push(base.a, base.b);
           }
           geo = variantView(set === 'a' ? base.a : base.b, pick);
@@ -321,7 +322,7 @@ export class Props {
     const keep = new Set<string>([fKeyA, fKeyB]);
     for (const set of ['a', 'b'] as const) {
       const fKey = set === 'a' ? fKeyA : fKeyB;
-      if (sets.has(fKey)) continue;
+      if (sets.has(fKey) || !this.arches) continue;
       this.stage(forestSteps(biome, p, set), (made) => {
         sets.set(fKey, made);
         for (const k of ['fw:' + set, 'fo:' + set]) {
@@ -768,7 +769,7 @@ export class Props {
    *  It takes the set's variant with chance `share`, a colour a step off its neighbours' (value and a
    *  trace of warm or cool), and one upright tree in eight leans a little. */
   private tree(b: string, set: 'a' | 'b', share: number, i: number, k: number, x: number, z: number, scale: number, rot: number, tall: number): void {
-    const pick = hashf(i, k, 14) < share ? 1 : 0;
+    const pick = this.arches && hashf(i, k, 14) < share ? 1 : 0;
     this.q.setFromAxisAngle(this.up, rot);
     if (hashf(i, k, 15) < 0.125 && canLean(this.course.biome, set, pick)) {
       const a = hashf(i, k, 16) * 6.28;

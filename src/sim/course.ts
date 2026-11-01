@@ -255,6 +255,14 @@ function smax(a: number, b: number, k: number): number {
   return -smin(-a, -b, k);
 }
 
+/** The last two z values a z-only function was asked for, and its answers (most recent first). */
+interface Memo {
+  a: number;
+  va: number;
+  b: number;
+  vb: number;
+}
+
 const slopeOf = (s: SectionShape): number => s.slope;
 const freqOf = (s: SectionShape): number => 1 / (300 * s.wave);
 
@@ -272,6 +280,13 @@ export class Course {
   private readonly sections: Section[] = [];
   private lastSection = 0;
   private readonly shapeTmp: ShapeAt = { ...SHAPES.cruise, splitSigned: 0 };
+  // Two-entry memos for the z-only functions: the terrain asks for a whole row of x at one z (and its
+  // slope at z + 0.25), and ground(), edgeExcess() and safeX() each ask again, so most calls repeat.
+  private shapeZ = NaN;
+  private readonly mcenterX: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly mhalfWidth: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly msafeX: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly mbaseY: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -348,6 +363,8 @@ export class Course {
 
   /** The blended section shape at z (the returned object is reused: copy what you keep). */
   shapeAt(z: number): ShapeAt {
+    if (z === this.shapeZ) return this.shapeTmp;
+    this.shapeZ = z;
     const sec = this.section(z);
     const cur = SHAPES[sec.kind];
     const out = this.shapeTmp;
@@ -370,6 +387,18 @@ export class Course {
   }
 
   centerX(z: number): number {
+    const m = this.mcenterX;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.centerXAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private centerXAt(z: number): number {
     const amp = this.params.wander * (0.35 + 0.65 * this.difficulty(z)) * smoothstep(0, 220, z);
     // Each section bends at its own wavelength. The bend's phase is the integral of its frequency,
     // so a change of wavelength speeds the bends up or slows them down without a kink.
@@ -379,6 +408,18 @@ export class Course {
   }
 
   halfWidth(z: number): number {
+    const m = this.mhalfWidth;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.halfWidthAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private halfWidthAt(z: number): number {
     const p = this.params;
     const base = lerp(p.halfWidthStart, p.halfWidthEnd, this.difficulty(z)) + 2.5 * noise1(this.sW, z / 180);
     // The terrain mesh is fine out to halfWidthStart + 12.6 m: a wide section stays inside it. The
@@ -389,6 +430,18 @@ export class Course {
 
   /** The guaranteed passable line: no collider comes within SAFE_LANE of it. */
   safeX(z: number): number {
+    const m = this.msafeX;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.safeXAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private safeXAt(z: number): number {
     const hw = this.halfWidth(z);
     const sh = this.shapeAt(z);
     const span = Math.max(0, hw - 4.2) * 0.8 * sh.span * smoothstep(0, 120, z);
@@ -396,6 +449,18 @@ export class Course {
   }
 
   baseY(z: number): number {
+    const m = this.mbaseY;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.baseYAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private baseYAt(z: number): number {
     const sec = this.section(z);
     const drop = z <= 0 ? z : sec.drop0 + this.sectionInt(sec, z - sec.z0, slopeOf);
     const roller = this.shapeAt(z).roller;

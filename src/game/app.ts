@@ -754,15 +754,32 @@ export class App {
     return reveal;
   }
 
-  /** The ghost layer's field: each track's id, name and kind, with its role and nemesis flags. */
-  private ghostField(): Array<{ id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean }> {
+  /** The ghost layer's field: each track's id, name, kind and the sled it rode, with its role and
+   *  nemesis flags. */
+  private ghostField(): Array<{ id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean; sled?: number }> {
     return this.ghosts.tracks.map((t) => {
-      const g: { id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean } = { id: t.entry.id, name: t.entry.name, kind: t.entry.kind };
+      const g: { id: number; name: string; kind: GhostKind; role?: GhostEntry['role']; nemesis?: boolean; sled?: number } = { id: t.entry.id, name: t.entry.name, kind: t.entry.kind };
+      const sled = this.ghostSled(t.entry);
+      if (sled !== undefined) g.sled = sled;
       if (t.entry.role) g.role = t.entry.role;
       if (t.entry.nemesis) g.nemesis = true;
       return g;
     });
   }
+
+  /** The sled a ghost's record rode (decoded once per entry); undefined for a record that will not decode. */
+  private ghostSled(e: GhostEntry): number | undefined {
+    if (this.sledOf.has(e)) return this.sledOf.get(e);
+    let sled: number | undefined;
+    try {
+      sled = recordFromString(e.record).sled;
+    } catch {
+      sled = undefined;
+    }
+    this.sledOf.set(e, sled);
+    return sled;
+  }
+  private readonly sledOf = new WeakMap<GhostEntry, number | undefined>();
 
   /** Hands the director this run's snapshots (taken before the run can change the save). */
   private beginDirector(chaos: ChaosRoll): void {

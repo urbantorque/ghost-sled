@@ -417,7 +417,7 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
   }
 
-  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
+  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.ghosts.setField(list);
   }
 
