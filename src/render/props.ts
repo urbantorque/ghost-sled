@@ -1,11 +1,10 @@
-import { AdditiveBlending, BufferGeometry, Color, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
+import { Clearing, Dresser, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
+import { VARIANT_SHARE, canLean, forestBase, forestSteps, variantDepthMaterial, variantMaterial, variantSet, variantView } from './flora';
 import { makeToonMaterial, shared } from './materials';
 import {
-  basaltGeometry,
-  blossomGeometry,
   cairnGeometry,
-  charPineGeometry,
   gateBeamGeometry,
   giftGeometry,
   kickerLipGeometry,
@@ -13,9 +12,6 @@ import {
   lanternPostGeometry,
   obstacleGeometry,
   obstacleModelRadius,
-  pineGeometry,
-  seracGeometry,
-  spireGeometry,
   ventGeometry,
 } from './meshes';
 import { Palette } from './palette';
@@ -31,7 +27,34 @@ interface Batch {
   count: number;
   /** Instances in the chunks up to the player's (they are packed in chunk order). */
   near: number;
+  /** Variant batches (flora.ts): each instance's variant, and its colour (instanceColor). */
+  pick?: InstancedBufferAttribute;
+  /** A dressing batch waits unseen until its kit is made on idle time. */
+  waiting?: boolean;
+  /** A bank dressing batch (left out of the rear-view mirror). */
+  dress?: boolean;
 }
+
+/** One chunk's static instances for a batch: matrices, and each one's variant and colour. */
+interface Packed {
+  m: Float32Array;
+  p: Float32Array;
+  c: Float32Array;
+}
+
+/** The variant sets (forest and dressing kits) made for the last palette, kept across rebuilds so a
+ *  quality change or a new run on the same mountain and mood shows them at once. */
+const sets = new Map<string, BufferGeometry>();
+
+/** The palette colours a variant set is built from. */
+function paletteKey(biome: string, p: Palette): string {
+  const cs = [p.tall, p.tallDark, p.low, p.lowLit, p.accentProp, p.snowShade];
+  return biome + ':' + cs.map((c) => c.getHexString()).join(',');
+}
+
+/** Dressing caps (instances in the visible window): bank clutter and poles, and the big pieces. */
+const DRESS_SMALL_CAP = 900;
+const DRESS_LARGE_CAP = 420;
 
 /** The soft amber halo round a trail lantern's lamp (Lantern Night): a camera-facing glow about
  *  1.4 m across up close that never shrinks below about a hundredth of the screen height far away, so
@@ -133,8 +156,15 @@ export class Props {
   private up = new Vector3(0, 1, 0);
   private xAxis = new Vector3(1, 0, 0);
   private tilt = new Vector3();
-  private cache = new Map<number, Map<string, Float32Array>>();
-  private collecting: Map<string, number[]> | null = null;
+  private lean = new Quaternion();
+  private cache = new Map<number, Map<string, Packed>>();
+  private collecting: Map<string, { m: number[]; p: number[]; c: number[] }> | null = null;
+  /** Bank dressing and section signatures (Medium and High, with the landmarks). */
+  private dresser: Dresser | null = null;
+  /** Variant sets and kits waiting for idle time (run before the landmark meshes). */
+  private jobs: Array<() => void> = [];
+  /** Per-batch geometries this build made (views and placeholders), disposed on the next. */
+  private owned: BufferGeometry[] = [];
   /** Built landmark meshes by key ('arch:' and the posts' span, 'cairn:' and its palette's stone
    *  colours), oldest first; and those waiting for idle time, with how to make each. */
   private landmarks = new Map<string, BufferGeometry>();
@@ -200,6 +230,9 @@ export class Props {
     this.batches.clear();
     // Meshes queued for the old course or palette would only be made to be thrown away.
     this.queued.clear();
+    this.jobs = [];
+    for (const g of this.owned) g.dispose();
+    this.owned = [];
     this.cache.clear();
     for (const mat of this.materials) mat.dispose();
     this.materials = [];
@@ -238,28 +271,110 @@ export class Props {
       const mat = k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
       add('ob:' + k, obstacleGeometry(k, p), mat, k === 'pine' || k === 'rock' ? 700 : 300);
     }
-    // Decorative forest: biome-appropriate silhouettes.
+    // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
+    // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
+    // crystal mound; a burnt-out snag, broken basalt stubs; a pale spreading blossom), so a treeline
+    // is no longer a wall of copies, at no extra draw call. Their own copies of the forest materials
+    // (patched to pick a variant per instance), so the run's obstacles keep theirs untouched.
     const forestCap = Math.round(2200 * this.forestDensity) + 10;
+    const vFor = (opts: Parameters<typeof makeToonMaterial>[0]) => {
+      const m = variantMaterial(makeToonMaterial(opts));
+      this.materials.push(m);
+      return m;
+    };
+    const glacier = biome === 'glacier';
+    const vol = biome === 'volcanic';
+    const wallMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier });
+    const farMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier, aerial: true });
+    const key = paletteKey(biome, p);
+    const fKeyA = 'flora:a:' + key;
+    const fKeyB = 'flora:b:' + key;
+    let base: { a: BufferGeometry; b: BufferGeometry } | null = null;
     // The treeline wall casts the long bank shadows; the far forest never reaches the shadow
     // frustum, so it skips the (instanced, uncullable) shadow pass entirely.
     const forestPair = (prefix: string, cast: boolean, cap: number, far: boolean) => {
-      const fol = far ? farFoliage : foliage;
-      if (biome === 'alpine') {
-        add(prefix + 'a', pineGeometry(p, 1), fol, cap, cast);
-        add(prefix + 'b', pineGeometry(p, 2), fol, cap, cast);
-      } else if (biome === 'glacier') {
-        add(prefix + 'a', spireGeometry(p), far ? farIce : ice, cap, cast);
-        add(prefix + 'b', seracGeometry(p), far ? farIce : ice, cap, cast);
-      } else if (biome === 'volcanic') {
-        add(prefix + 'a', charPineGeometry(p), far ? farToon : toon, cap, cast);
-        add(prefix + 'b', basaltGeometry(p), far ? farToon : toon, cap, cast);
-      } else {
-        add(prefix + 'a', blossomGeometry(p), fol, cap, cast);
-        add(prefix + 'b', pineGeometry(p, 3), fol, cap, cast);
+      for (const set of ['a', 'b'] as const) {
+        const k = prefix + set;
+        const pick = new InstancedBufferAttribute(new Float32Array(cap), 1);
+        const src = sets.get(set === 'a' ? fKeyA : fKeyB);
+        let geo: BufferGeometry;
+        if (src) geo = variantView(src, pick);
+        else {
+          // Until the variant set is made on idle time, both picks draw the original tree.
+          if (!base) {
+            const b0 = forestBase(biome, p);
+            base = { a: variantSet([b0.a, b0.a]), b: variantSet([b0.b, b0.b]) };
+            this.owned.push(base.a, base.b);
+          }
+          geo = variantView(set === 'a' ? base.a : base.b, pick);
+        }
+        this.owned.push(geo);
+        add(k, geo, far ? farMat : wallMat, cap, cast);
+        const b = this.batches.get(k)!;
+        b.pick = pick;
+        b.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
+        if (cast) b.mesh.customDepthMaterial = variantDepthMaterial();
       }
     };
     forestPair('fw:', true, Math.round(forestCap * 0.45) + 10, false);
     forestPair('fo:', false, forestCap, true);
+    const keep = new Set<string>([fKeyA, fKeyB]);
+    for (const set of ['a', 'b'] as const) {
+      const fKey = set === 'a' ? fKeyA : fKeyB;
+      if (sets.has(fKey)) continue;
+      this.stage(forestSteps(biome, p, set), (made) => {
+        sets.set(fKey, made);
+        for (const k of ['fw:' + set, 'fo:' + set]) {
+          const b = this.batches.get(k);
+          if (!b || !b.pick) continue;
+          const v = variantView(made, b.pick);
+          this.owned.push(v);
+          b.mesh.geometry = v;
+        }
+      });
+    }
+    this.dresser = null;
+    if (this.arches) {
+      // Bank dressing and the sections' signatures: two kits, one draw call each (Medium and High;
+      // Low draws none). Their pieces are made on idle time and the batches wait unseen till then.
+      this.dresser = new Dresser(this.course, p, this.forestDensity);
+      const dressMat = vFor({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf });
+      for (const [k, cap, steps] of [
+        ['dr:s', DRESS_SMALL_CAP, smallKitSteps],
+        ['dr:l', DRESS_LARGE_CAP, largeKitSteps],
+      ] as const) {
+        const skey = 'kit:' + k + ':' + key;
+        keep.add(skey);
+        const pick = new InstancedBufferAttribute(new Float32Array(cap), 1);
+        const src = sets.get(skey);
+        const geo = src ? variantView(src, pick) : NO_GEOMETRY;
+        if (src) this.owned.push(geo);
+        add(k, geo, dressMat, cap, false);
+        const b = this.batches.get(k)!;
+        b.pick = pick;
+        b.waiting = !src;
+        b.dress = true;
+        b.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
+        if (!src) {
+          this.stage(steps(biome, p), (g) => {
+            sets.set(skey, g);
+            const bb = this.batches.get(k);
+            if (!bb || !bb.pick) return;
+            const v = variantView(g, bb.pick);
+            this.owned.push(v);
+            bb.mesh.geometry = v;
+            bb.waiting = false;
+          });
+        }
+      }
+    }
+    // Sets made for another palette are dropped (their buffers freed).
+    for (const [k, g] of sets) {
+      if (keep.has(k)) continue;
+      g.dispose();
+      sets.delete(k);
+    }
+    this.pump();
     add('gift', giftGeometry(false), this.giftMat, 900, false);
     add('gift5', giftGeometry(true), this.giftMat, 200, false);
     add('lip', kickerLipGeometry(p), plain, 120, false);
@@ -342,12 +457,18 @@ export class Props {
         st = this.buildStatic(i);
         this.cache.set(i, st);
       }
-      for (const [key, arr] of st) {
+      for (const [key, pk] of st) {
         const b = this.batches.get(key);
         if (!b) continue;
+        const arr = pk.m;
         const room = b.mesh.instanceMatrix.count - b.count;
         const n = Math.min(room, arr.length / 16);
         (b.mesh.instanceMatrix.array as Float32Array).set(n * 16 === arr.length ? arr : arr.subarray(0, n * 16), b.count * 16);
+        if (b.pick) {
+          (b.pick.array as Float32Array).set(n === pk.p.length ? pk.p : pk.p.subarray(0, n), b.count);
+          const ic = b.mesh.instanceColor;
+          if (ic) (ic.array as Float32Array).set(n * 3 === pk.c.length ? pk.c : pk.c.subarray(0, n * 3), b.count * 3);
+        }
         b.count += n;
       }
       const chunk = c.chunk(i);
@@ -390,9 +511,15 @@ export class Props {
       else cb.count = cb.near = 0;
     }
     for (const b of this.batches.values()) {
+      // A dressing kit still to be made waits unseen.
+      if (b.waiting) b.count = b.near = 0;
       if (nearChunk >= to) b.near = b.count;
       b.mesh.count = b.count;
       b.mesh.instanceMatrix.needsUpdate = true;
+      if (b.pick) {
+        b.pick.needsUpdate = true;
+        if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+      }
     }
     // The culled landmark batches get bounds round their instances in range.
     for (const key of ['arch', 'cairn']) {
@@ -426,6 +553,18 @@ export class Props {
     return g;
   }
 
+  /** Makes a variant set on idle time, one variant per idle callback (each a few ms; a whole set at
+   *  once ran past a frame at 6x CPU throttle), then merges it and hands it to `done`. */
+  private stage(steps: Array<() => BufferGeometry>, done: (g: BufferGeometry) => void): void {
+    const made: BufferGeometry[] = [];
+    for (const s of steps) this.jobs.push(() => made.push(s()));
+    this.jobs.push(() => {
+      const g = variantSet(made);
+      for (const m of made) m.dispose();
+      done(g);
+    });
+  }
+
   private queue(key: string, make: () => BufferGeometry): void {
     if (this.landmarks.has(key) || this.queued.has(key)) return;
     this.queued.set(key, make);
@@ -435,10 +574,18 @@ export class Props {
   /** Makes the queued landmark meshes one per idle callback, once idle building has begun. Each one
    *  made redraws the batches (a landmark waiting unseen shows). */
   private pump(): void {
-    if (!this.idleOpen || this.idleBusy || this.queued.size === 0) return;
+    if (!this.idleOpen || this.idleBusy || (this.queued.size === 0 && this.jobs.length === 0)) return;
     this.idleBusy = true;
     whenIdle(() => {
       this.idleBusy = false;
+      // The forest's variant sets and the dressing kits first: one per idle callback.
+      const job = this.jobs.shift();
+      if (job) {
+        job();
+        this.dirty = true;
+        this.pump();
+        return;
+      }
       const next = this.queued.entries().next();
       if (next.done) return;
       const [key, make] = next.value;
@@ -473,10 +620,12 @@ export class Props {
    * this the mirror paid the vertex cost of every tree downhill too.
    */
   nearOnly(on: boolean): void {
-    for (const b of this.batches.values()) b.mesh.count = on ? b.near : b.count;
+    // (The bank dressing stays out of the mirror: it adds nothing to the avalanche behind you and
+    // would cost the inset two more draws.)
+    for (const b of this.batches.values()) b.mesh.count = on ? (b.dress ? 0 : b.near) : b.count;
   }
 
-  private buildStatic(i: number): Map<string, Float32Array> {
+  private buildStatic(i: number): Map<string, Packed> {
     const c = this.course;
     const chunk = c.chunk(i);
     this.collecting = new Map();
@@ -555,26 +704,48 @@ export class Props {
         this.push('cairn', this.v, this.q, this.s);
       }
     }
-    this.forest(i);
-    const out = new Map<string, Float32Array>();
-    for (const [k, arr] of this.collecting) out.set(k, Float32Array.from(arr));
+    // Bank dressing and the section signatures, then the forest round the clearings they keep.
+    const clear: Clearing[] = [];
+    if (this.dresser) {
+      this.dresser.chunk(
+        i,
+        (key, m, pick, r, g, b) => this.pushM(key, m, pick, r, g, b),
+        clear,
+      );
+    }
+    this.forest(i, clear);
+    const out = new Map<string, Packed>();
+    for (const [k, arr] of this.collecting) out.set(k, { m: Float32Array.from(arr.m), p: Float32Array.from(arr.p), c: Float32Array.from(arr.c) });
     this.collecting = null;
     return out;
   }
 
-  private forest(i: number): void {
+  /** The decorative forest. Where a tree stands is unchanged from before the variants (the same
+   *  hashes); each now also picks its variant, colour and lean. With the dressing on (Medium and
+   *  High), a section's signature takes part of the treeline wall (the gully's rock walls stand there)
+   *  and clearings (a cabin's, a lift line's cut) stay open. */
+  private forest(i: number, clear: Clearing[]): void {
     const c = this.course;
-    const a = 'fo:a';
-    const bb = 'fo:b';
     const dens = this.forestDensity;
     const z0 = i * CHUNK_LEN;
+    const share = VARIANT_SHARE[c.biome];
+    const dress = !!this.dresser;
     let k = 0;
     for (let side = -1; side <= 1; side += 2) {
       // A dense wall right at the treeline so the forest limit reads clearly.
       for (let z = z0; z < z0 + CHUNK_LEN; z += 3.4 / Math.max(0.35, dens)) {
         const jz = z + (hashf(i, k, 1) - 0.5) * 2.5;
         const e = FOREST_LIMIT + 0.6 + hashf(i, k, 2) * 3.2;
-        this.tree(hashf(i, k, 3) < 0.7 ? 'fw:a' : 'fw:b', c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.9 + hashf(i, k, 4) * 0.6, hashf(i, k, 5) * 6.28, 0.75 + 0.5 * hashf(i, k, 11));
+        if (dress) {
+          const sig = signature(c, jz);
+          const thin = wallThinning(sig.kind, sig.k);
+          if ((thin > 0 && hashf(i, k, 13) < thin) || (clear.length > 0 && inClearing(clear, side, e, jz))) {
+            k++;
+            continue;
+          }
+        }
+        const set = hashf(i, k, 3) < 0.7 ? 'a' : 'b';
+        this.tree('fw:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.9 + hashf(i, k, 4) * 0.6, hashf(i, k, 5) * 6.28, 0.75 + 0.5 * hashf(i, k, 11));
         k++;
       }
       // Sparser forest further out.
@@ -582,30 +753,56 @@ export class Props {
       for (let t = 0; t < n; t++) {
         const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
         const e = FOREST_LIMIT + 4 + Math.pow(hashf(i, k, 7), 1.6) * 75;
-        this.tree(hashf(i, k, 8) < 0.6 ? a : bb, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.8 + hashf(i, k, 9) * 0.9, hashf(i, k, 10) * 6.28, 0.75 + 0.5 * hashf(i, k, 12));
+        if (dress && clear.length > 0 && inClearing(clear, side, e, jz)) {
+          k++;
+          continue;
+        }
+        const set = hashf(i, k, 8) < 0.6 ? 'a' : 'b';
+        this.tree('fo:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.8 + hashf(i, k, 9) * 0.9, hashf(i, k, 10) * 6.28, 0.75 + 0.5 * hashf(i, k, 12));
         k++;
       }
     }
   }
 
-  /** One forest tree; `tall` stretches it (about +-25%), so no two neighbours stand the same height. */
-  private tree(b: string, x: number, z: number, scale: number, rot: number, tall = 1): void {
+  /** One forest tree; `tall` stretches it (about +-25%), so no two neighbours stand the same height.
+   *  It takes the set's variant with chance `share`, a colour a step off its neighbours' (value and a
+   *  trace of warm or cool), and one upright tree in eight leans a little. */
+  private tree(b: string, set: 'a' | 'b', share: number, i: number, k: number, x: number, z: number, scale: number, rot: number, tall: number): void {
+    const pick = hashf(i, k, 14) < share ? 1 : 0;
     this.q.setFromAxisAngle(this.up, rot);
+    if (hashf(i, k, 15) < 0.125 && canLean(this.course.biome, set, pick)) {
+      const a = hashf(i, k, 16) * 6.28;
+      this.tilt.set(Math.cos(a), 0, Math.sin(a));
+      this.lean.setFromAxisAngle(this.tilt, 0.06 + 0.11 * hashf(i, k, 17));
+      this.q.premultiply(this.lean);
+    }
     this.v.set(x, this.course.ground(x, z) - 0.1, -z);
     this.s.set(scale, scale * tall, scale);
-    this.push(b, this.v, this.q, this.s);
+    const v = 0.9 + 0.11 * hashf(i, k, 18);
+    const w = (hashf(i, k, 19) - 0.5) * 0.09;
+    this.push(b, this.v, this.q, this.s, pick, v * (1 + w), v, v * (1 - w));
   }
 
-  private push(key: string, pos: Vector3, q: Quaternion, s: Vector3): void {
+  private push(key: string, pos: Vector3, q: Quaternion, s: Vector3, pick = 0, r = 1, g = 1, bl = 1): void {
     this.m.compose(pos, q, s);
+    this.pushM(key, this.m, pick, r, g, bl);
+  }
+
+  private pushM(key: string, m: Matrix4, pick = 0, r = 1, g = 1, bl = 1): void {
     if (this.collecting) {
       let arr = this.collecting.get(key);
-      if (!arr) this.collecting.set(key, (arr = []));
-      for (let k = 0; k < 16; k++) arr.push(this.m.elements[k]);
+      if (!arr) this.collecting.set(key, (arr = { m: [], p: [], c: [] }));
+      for (let k = 0; k < 16; k++) arr.m.push(m.elements[k]);
+      arr.p.push(pick);
+      arr.c.push(r, g, bl);
       return;
     }
     const b = this.batches.get(key);
     if (!b || b.count >= b.mesh.instanceMatrix.count) return;
-    b.mesh.setMatrixAt(b.count++, this.m);
+    if (b.pick) {
+      b.pick.setX(b.count, pick);
+      b.mesh.instanceColor?.setXYZ(b.count, r, g, bl);
+    }
+    b.mesh.setMatrixAt(b.count++, m);
   }
 }
