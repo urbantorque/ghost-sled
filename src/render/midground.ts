@@ -3,6 +3,7 @@ import { Course } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { noise1, noise2 } from '../sim/noise';
 import { LIGHT_GLSL, shared } from './materials';
+import { LIP_FROM, WIDE, flankMode, type OverlookPlan, type Overlooks } from './overlook';
 import { Palette } from './palette';
 import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type VillageBuild, type VillageLight } from './village';
 
@@ -25,6 +26,8 @@ import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type Vil
 // own descent), so each village sits on level ground and the valley never drifts away from the run.
 // Rows are built on a time slice and villages on idle time, never in a hitch at run start. High and
 // Medium draw it all (Medium with fewer trees); Low draws the shoulders alone, forest-tinted.
+// On an overlook (overlook.ts) the open side always takes the valley form: its edge follows the
+// terrain's lowered lip exactly, and the fall carries on from the face's own slope down to the floor.
 
 /** Metres between shoulder rows (down the course). */
 const ROW = 16;
@@ -121,11 +124,22 @@ interface SideInfo {
   vil: Village | null;
   /** The hamlet on this flank nearby, if any. */
   ham: Village | null;
+  /** How fully the land past an overlook's lip falls away on this side (0..1), and the face's slope
+   *  at the reference edge (metres down per metre out), which the fall carries on from. */
+  ov: number;
+  s0: number;
+  /** How fully the side takes an overlook's valley form (OverlookPlan.wide). */
+  wk: number;
 }
 
 function newSide(side: number): SideInfo {
-  return { side, yE: 0, xE: 0, cx: 0, cs: 0, k: 0, yF: 0, wall: 0, spur: 0, vil: null, ham: null };
+  return { side, yE: 0, xE: 0, cx: 0, cs: 0, k: 0, yF: 0, wall: 0, spur: 0, vil: null, ham: null, ov: 0, s0: 0, wk: 0 };
 }
+
+/** An overlook's fall past the reference edge: how far the slope it starts at carries on (metres),
+ *  and the slope the open side falls at beyond the lip's own stretch. */
+const OV_FALL = 190;
+const OV_SLOPE = 1.8;
 
 /** Where the streamed shoulders begin behind and end ahead (three.js z), shared by every midground
  *  material. A fully fogged mountain still cuts a silhouette out of a sky bluer than the fog, so the
@@ -150,6 +164,10 @@ uniform vec2 uRing;
 vec3 midAerial(vec3 col, vec3 wp, float e) {
   float d = length(wp - cameraPosition);
   float fT = smoothstep(uFogNear, uFogFar, d);
+  // Near the edge, the terrain's own low mist too (materials.ts fogged): where an overlook's face falls
+  // on past the terrain's edge, far under the course's floor, the two meet without a seam. It thins
+  // out across the valley, whose own haze is below.
+  col = mix(col, uMistColor, mistAt(wp, d) * (1.0 - fT) * (1.0 - smoothstep(0.0, 160.0, e)));
   float far2 = uFogFar * mix(1.15, 3.1, smoothstep(250.0, 480.0, uFogFar));
   float fE = smoothstep(uFogNear * 1.5, far2, d);
   fE = pow(fE, 1.5) * 0.82;
@@ -526,6 +544,9 @@ export class Midground {
   private grad = { x: 0, z: 0 };
   /** Main-thread milliseconds per frame allowed for building rows. */
   budgetMs = 1.2;
+  /** The course's overlooks (null: none): their open sides take the valley form. */
+  overlooks: Overlooks | null = null;
+  private plan: OverlookPlan | null = null;
 
   constructor(course: Course, palette: Palette, tier: 'low' | 'medium' | 'high', reach: number) {
     this.course = course;
@@ -756,15 +777,13 @@ export class Midground {
    *  sides opposed (one falls away while the other climbs; both climb a little where it is near zero),
    *  so the run nearly always has a mountain wall on at least one hand. */
   private modeRaw(z: number, side: number): number {
-    const seed = this.course.seed;
-    const a = noise1(seed ^ 0x51ed, z / 820) * 0.7 + noise1(seed ^ 0x2a17, z / 330) * 0.3;
-    const m = side * a * 1.6 + 0.12 + noise1(seed ^ (side > 0 ? 0x77a1 : 0x19c3), z / 600) * 0.35;
-    return smooth(-0.35, 0.35, m);
+    return flankMode(this.course.seed, z, side);
   }
 
-  /** modeRaw, and always a valley round a valley village. */
+  /** modeRaw, and always a valley round a valley village and on an overlook's open side. */
   private modeK(z: number, side: number): number {
     let k = this.modeRaw(z, side);
+    if (this.plan) k *= 1 - this.plan.wide(z, side);
     const k0 = Math.floor(z / STAIR);
     for (let j = k0 - 1; j <= k0 + 1; j++) {
       const v = this.village(j);
@@ -790,9 +809,24 @@ export class Midground {
     const uRef = c.params.halfWidthStart + 2.6 + REF_REACH;
     out.xE = out.cx + side * uRef;
     out.yE = c.ground(out.xE, z);
+    out.ov = 0;
+    out.s0 = 0;
+    if (this.plan) {
+      // An overlook: the reference edge on the terrain's lowered lip, and the face's slope there.
+      out.ov = this.plan.fall(z, side);
+      if (out.ov > 0) {
+        const eRef = uRef - c.halfWidth(z);
+        out.yE -= this.plan.drop(z, side, eRef);
+        out.s0 = (this.plan.drop(z, side, eRef + 1) - this.plan.drop(z, side, eRef - 1)) / 2 / out.ov;
+      }
+    }
     out.k = this.modeK(z, side);
+    // Past an overlook the valley's far wall stands lower, so the view goes on over the sea of clouds
+    // to the panorama and the hero peak.
+    const wk = this.plan ? this.plan.wide(z, side) : 0;
+    out.wk = wk;
     out.yF = c.baseY(this.stairZ(z)) - VALLEY_DEPTH;
-    out.wall = 640 + 170 * noise1(seed ^ (side > 0 ? 0x3bd : 0x91f), z / 520);
+    out.wall = (640 + 170 * noise1(seed ^ (side > 0 ? 0x3bd : 0x91f), z / 520)) * (1 - 0.72 * wk);
     out.spur = 340 + 150 * noise1(seed ^ (side > 0 ? 0x6c1 : 0x4e3), z / 430);
     out.vil = null;
     out.ham = null;
@@ -819,8 +853,21 @@ export class Midground {
   /** Height `e` metres past the reference edge, at world x (for the detail noise). */
   private height(s: SideInfo, e: number, x: number, z: number): number {
     const seed = this.course.seed;
-    // The bank's crest carries on a little past the edge (more where a spur climbs from it).
-    const near = s.yE + (6 + 16 * s.k) * (1 - Math.exp(-e / 60));
+    // The bank's crest carries on a little past the edge (more where a spur climbs from it). On an
+    // overlook the face carries straight on down from the lip, at its own slope, easing out onto the
+    // valley floor; either side of it, where the bank still stands, the mountain drops away as
+    // steeply from the bank's edge, so the open side is one long fall and the view down the fall line
+    // is never cut off by a wall where the bank stands back up.
+    let near = s.yE + (6 + 16 * s.k) * (1 - Math.exp(-e / 60));
+    const fk = Math.max(s.ov, s.wk);
+    if (fk > 0) {
+      const slope = Math.max(s.s0 * s.ov, OV_SLOPE * s.wk);
+      const fall = s.yE - slope * OV_FALL * (1 - Math.exp(-e / OV_FALL));
+      // (A soft floor a little over the valley's, so the face never digs a moat at its foot.)
+      const f0 = s.yF + 12;
+      const ov = fall > f0 + 40 ? fall : f0 + 40 * Math.exp((fall - f0 - 40) / 40);
+      near += (ov - near) * fk;
+    }
     const fall = smooth(30, 360, e);
     // Across the valley floor the far side climbs into the next mountain wall, its crest the skyline
     // seen over the bank from the run.
@@ -902,6 +949,8 @@ export class Midground {
         // end of the streamed terrain, in the haze, and stays under the deepest drop).
         x = cx + u;
         y = kind === 3 ? by - 14 : c.ground(x, z) - (kind === 2 ? 2.5 : 0);
+        // (On an overlook, the terrain's lowered lip, and the bank carrying on down its face.)
+        if (kind !== 3 && this.plan) y -= this.plan.drop(z, u < 0 ? -1 : 1, Math.abs(u) - c.halfWidth(z));
       }
       xs[i] = x;
       ys[i] = y;
@@ -931,7 +980,15 @@ export class Midground {
       const kind = this.colKind[i];
       if (kind === 0) continue;
       if (kind === 3) g.x = g.z = 0;
-      else c.gradient(xs[i], z, g);
+      else {
+        c.gradient(xs[i], z, g);
+        const u = this.colU[i];
+        const e = Math.abs(u) - c.halfWidth(z);
+        if (this.plan && e > LIP_FROM) {
+          const side = u < 0 ? -1 : 1;
+          g.x -= side * (this.plan.drop(z, side, e + 0.5) - this.plan.drop(z, side, e - 0.5));
+        }
+      }
       const inv = 1 / Math.sqrt(g.x * g.x + 1 + g.z * g.z);
       const p = (base + i) * 3;
       this.nrm[p] = -g.x * inv;
@@ -1091,6 +1148,14 @@ export class Midground {
   /** Keep the rows round sim z built (nearest first, on a time slice; `prime`, at run start, allows a
    *  few milliseconds more), the villages in range standing, and the lights' glow in step with the light. */
   update(z: number, prime = false): void {
+    // A new overlook plan (another mountain or mood, or a tier without them) rebuilds every row.
+    const ov = this.overlooks;
+    const plan = ov && ov.open && ov.plan.course === this.course ? ov.plan : null;
+    if (plan !== this.plan) {
+      this.plan = plan;
+      this.hamlets.clear();
+      this.clear();
+    }
     const cur = Math.floor(z / ROW);
     const r0 = Math.floor((z - BEHIND) / ROW);
     const r1 = r0 + this.nRows - 2;
@@ -1104,6 +1169,8 @@ export class Midground {
         if (r < r0 || r > r1) continue;
         const slot = ((r % this.nRows) + this.nRows) % this.nRows;
         if (this.slotRow[slot] === r) continue;
+        // (Rows past where the overlooks are planned wait for it: planned on idle time, never here.)
+        if (this.plan && r * ROW > this.plan.reach - WIDE - 20) continue;
         this.buildRow(r);
         builtRows = true;
         if (performance.now() > deadline) {

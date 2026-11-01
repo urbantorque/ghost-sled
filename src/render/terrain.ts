@@ -1,11 +1,19 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
 import { makeSnowMaterial, shared } from './materials';
+import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
 
 // Terrain chunks that bend with the corridor: each row of vertices is laid out relative to the
 // centreline at that z, so the playable lane gets dense vertices and the far forest floor is
 // coarse. Heights come straight from the sim's ground function, so what you see is what you ride.
 // Chunk builds are time-sliced across frames so streaming the course never hitches.
+// On an overlook (overlook.ts) the snow past the lip rolls over and falls away; inside LIP_FROM it is
+// untouched, so the corridor, its banks and the shelf the dressing stands on are still the sim's.
+
+const smooth = (a: number, b: number, x: number): number => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 export interface TerrainDetail {
   /** Lateral vertex spacing inside the corridor, metres. */
@@ -82,6 +90,11 @@ export function snowDrift(x: number, z: number, edge: number, out: [number, numb
   return out;
 }
 
+/** The snow's lift past the treeline on an overlook opened by `w`, from the drifts' own `lift`. */
+function overLip(lift: number, e: number, w: number): number {
+  return lift * (1 - w * smooth(LIP - 2, LIP + 8, e)) - w * lipDrop(e);
+}
+
 /** The same offsets for every chunk of a course, so neighbouring chunks share edge vertices
  *  exactly and no cracks open between them. */
 function lateralOffsets(course: Course, d: TerrainDetail): number[] {
@@ -137,6 +150,8 @@ class ChunkJob {
     readonly course: Course,
     readonly index: number,
     d: TerrainDetail,
+    /** The overlooks' plan (null: none), read once per row. */
+    readonly ov: OverlookPlan | null = null,
   ) {
     this.zRows = rowPositions(course, index, d);
     this.offs = lateralOffsets(course, d);
@@ -176,6 +191,9 @@ class ChunkJob {
         if (k < 0) continue;
         for (const r of c.zones(k).ramps) if (z > r.z - 0.6 && z < r.z + r.len + 3) ramps.push(r);
       }
+      // How fully the land past the lip falls away on each side of this row (an overlook).
+      const wl = this.ov ? this.ov.fall(z, -1) : 0;
+      const wr = this.ov ? this.ov.fall(z, 1) : 0;
       let p = this.row * cols;
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
@@ -186,10 +204,18 @@ class ChunkJob {
         this.snow[p * 2] = this.offs[col];
         if (ed > DRIFT_FROM) {
           // Past the treeline: the drifts lift the snow, and their slope bends the normal too.
-          const lift = snowDrift(x, z, ed, this.drift)[0];
+          let lift = snowDrift(x, z, ed, this.drift)[0];
           this.snow[p * 2 + 1] = this.drift[1];
-          const lx = snowDrift(x + e, z, c.edgeExcess(x + e, z), this.drift)[0];
-          const lz = snowDrift(x, z + e, c.edgeExcess(x, z + e), this.drift)[0];
+          let lx = snowDrift(x + e, z, c.edgeExcess(x + e, z), this.drift)[0];
+          let lz = snowDrift(x, z + e, c.edgeExcess(x, z + e), this.drift)[0];
+          const w = this.offs[col] < 0 ? wl : wr;
+          if (w > 0 && ed > LIP_FROM - 1) {
+            // An overlook: the cornice's crest, then the lip rolls over, and the drifts thin out down
+            // its face (so the edge meets the mid-ground's fall cleanly).
+            lift = overLip(lift, ed, w);
+            lx = overLip(lx, c.edgeExcess(x + e, z), w);
+            lz = overLip(lz, c.edgeExcess(x, z + e), w);
+          }
           gx = (c.ground(x + e, z) + lx - y - lift) / e;
           gz = (c.ground(x, z + e) + lz - y - lift) / e;
           y += lift;
@@ -263,8 +289,8 @@ class ChunkJob {
   }
 }
 
-export function buildTerrainGeometry(course: Course, index: number, d: TerrainDetail): BufferGeometry {
-  const job = new ChunkJob(course, index, d);
+export function buildTerrainGeometry(course: Course, index: number, d: TerrainDetail, ov: OverlookPlan | null = null): BufferGeometry {
+  const job = new ChunkJob(course, index, d, ov);
   job.step(Infinity);
   return job.geometry();
 }
@@ -277,6 +303,9 @@ export class Terrain {
   private fogCourse: Course | null = null;
   /** Main-thread milliseconds per frame allowed for streaming terrain. */
   budgetMs = 2.5;
+  /** The course's overlooks (null: none). Chunks built for another plan are rebuilt. */
+  overlooks: Overlooks | null = null;
+  private plan: OverlookPlan | null = null;
 
   constructor(
     private course: Course,
@@ -325,6 +354,7 @@ export class Terrain {
 
   /** Keep chunks [from, to] built, streaming at most budgetMs of work per call. */
   update(from: number, to: number): void {
+    this.syncPlan();
     this.fitFogFloor(from);
     for (const [i, m] of this.meshes) {
       if (i < from - 1 || i > to + 1) {
@@ -346,7 +376,7 @@ export class Terrain {
           }
         }
         if (next < 0) return;
-        this.job = new ChunkJob(this.course, next, this.detail);
+        this.job = new ChunkJob(this.course, next, this.detail, this.plan);
       }
       this.job.step(deadline);
       if (this.job.done) {
@@ -358,11 +388,21 @@ export class Terrain {
 
   /** Build everything in range immediately (run start). */
   prime(from: number, to: number): void {
+    this.syncPlan();
     for (let i = Math.max(-2, from); i <= to; i++) {
       if (this.meshes.has(i)) continue;
       if (this.job?.index === i) this.job = null;
-      this.add(i, buildTerrainGeometry(this.course, i, this.detail));
+      this.add(i, buildTerrainGeometry(this.course, i, this.detail, this.plan));
     }
+  }
+
+  /** The overlooks' plan in force (none on a tier without them); a new one rebuilds every chunk. */
+  private syncPlan(): void {
+    const ov = this.overlooks;
+    const plan = ov && ov.open && ov.plan.course === this.course ? ov.plan : null;
+    if (plan === this.plan) return;
+    this.plan = plan;
+    this.clear();
   }
 
   private add(i: number, geo: BufferGeometry): void {

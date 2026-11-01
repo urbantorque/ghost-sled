@@ -498,3 +498,66 @@ describe('big-air vista and section lift', () => {
     expect(cam.shakeNow).toBeCloseTo(0.25, 5);
   });
 });
+
+describe('overlook lean', () => {
+  const SLOPE = 0.3;
+  function chase(feel: Feel = IDLE_FEEL): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    return cam;
+  }
+  /** Rides `secs` seconds down a plain slope with the overlook signal `open` from `from` seconds on;
+   *  returns the look's heading (+ toward +x), the roll and the reveal each frame. */
+  function ride(cam: ChaseCamera, open: number, secs: number, feel: Feel = IDLE_FEEL, from = 0.5) {
+    const v = 22;
+    let z = -100;
+    const out: { yaw: number; roll: number; reveal: number; open: number }[] = [];
+    const dir = new Vector3();
+    for (let i = 0; i < secs * 60; i++) {
+      z -= v / 60;
+      cam.beats([], feel);
+      cam.update({ pos: new Vector3(0, z * SLOPE, z), dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0, open: i / 60 >= from ? open : 0 }, 1 / 60);
+      cam.camera.getWorldDirection(dir);
+      out.push({ yaw: Math.atan2(dir.x, -dir.z), roll: cam.rollNow, reveal: cam.revealNow, open: cam.openNow });
+    }
+    return out;
+  }
+
+  it('turns the look and leans the horizon toward the open side, keeping the run ahead in frame', () => {
+    const right = ride(chase(), 1, 6);
+    const left = ride(chase(), -1, 6);
+    const none = ride(chase(), 0, 6);
+    const end = right.length - 1;
+    expect(right[end].yaw - none[end].yaw).toBeGreaterThan(0.08);
+    expect(right[end].yaw - none[end].yaw).toBeLessThan(0.2);
+    expect(left[end].yaw - none[end].yaw).toBeLessThan(-0.08);
+    // The horizon dips toward the drop (as a carve toward it would), within the roll's limit.
+    expect(right[end].roll).toBeLessThan(-0.015);
+    expect(left[end].roll).toBeGreaterThan(0.015);
+    for (const q of right) expect(Math.abs(q.roll)).toBeLessThanOrEqual(0.07 + 1e-9);
+  });
+
+  it('opens with a reveal once, then settles to the lean', () => {
+    const f = ride(chase(), 1, 6);
+    const peak = Math.max(...f.map((q) => q.reveal));
+    expect(peak).toBeGreaterThan(0.9);
+    expect(f[f.length - 1].reveal).toBe(0);
+    // Still open, no second reveal.
+    expect(f.slice(Math.round(4.5 * 60)).every((q) => q.reveal === 0)).toBe(true);
+  });
+
+  it('under reduced motion nothing turns, leans or reveals', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const open = ride(chase(feel), 1, 4, feel);
+    const none = ride(chase(feel), 0, 4, feel);
+    for (let i = 0; i < open.length; i++) {
+      expect(open[i].yaw).toBeCloseTo(none[i].yaw, 9);
+      expect(open[i].roll).toBe(0);
+      expect(open[i].reveal).toBe(0);
+    }
+  });
+});
