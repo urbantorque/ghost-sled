@@ -1,31 +1,17 @@
-import { BackSide, BufferAttribute, DoubleSide, BufferGeometry, Color, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
+import { BackSide, Color, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
 import { Palette } from './palette';
 import { shared } from './materials';
+import { Massif, SEA_GLSL, makeSeaUniforms } from './massif';
 
-// Sky dome (gradient, sun or moon, stars, aurora, comet) and three layers of distant ridges.
-// Both follow the camera so they read as infinitely far away.
-
-/** Ridge layers, nearest first. Each is a ring of peaks; y is the base relative to the camera, so
- *  the crests climb from just under the horizon (near) to well above it (far). */
-const LAYERS = [
-  { r: 1400, h: 150, y: -110, seg: 200, rough: 0.06, sharp: 1.25, detail: 0.05 },
-  { r: 2300, h: 210, y: -45, seg: 240, rough: 0.1, sharp: 1.6, detail: 0.08 },
-  { r: 3200, h: 380, y: 30, seg: 300, rough: 0.14, sharp: 2.1, detail: 0.11 },
-];
-/** How far each layer leans toward the horizon haze (atmospheric perspective). */
-const AERIAL = [0, 0.12, 0.3];
-/** How strongly each layer's crest catches the sun right under the disc. Only the nearest range
- *  keeps a rim: on the far ones a bright crest line read as a cut-out halo round a paper layer. */
-const RIM = [0.6, 0, 0];
-/** How much moonlit mist pools in the valley at the foot of each layer (night moods), nearest first:
- *  the far ranges stand out of it, so the three-layer depth holds when the sky is dark. */
-const MIST = [0.35, 0.7, 0.8];
+// Sky dome (gradient, sun or moon, stars, aurora, comet, and the sea of clouds below the horizon)
+// and the mountain panorama (massif.ts). Both follow the camera so they read as infinitely far away.
 
 export class Sky {
   readonly root = new Object3D();
   private dome: Mesh;
   private domeMat: ShaderMaterial;
-  private ridgeMats: ShaderMaterial[] = [];
+  private massif: Massif;
+  private sea = makeSeaUniforms();
   private wisps = true;
   private highClouds = 0;
 
@@ -59,8 +45,9 @@ export class Sky {
         uCloudLit: { value: new Color() },
         uCloudShade: { value: new Color() },
         uCloudRim: { value: new Color() },
+        ...this.sea,
       },
-      defines: { CLOUD_Q: 1 },
+      defines: { CLOUD_Q: 1, SEA_Q: 1 },
       // The sun and moon discs are measured on the screen plane, not by angle, so they stay round
       // near the frame edges where a wide lens stretches an angular disc into an egg.
       vertexShader: /* glsl */ `
@@ -118,6 +105,7 @@ export class Sky {
         varying vec4 vSunClip;
         varying vec4 vShadowClip;
         varying vec2 vTan;
+        ${SEA_GLSL}
         // Distance from this pixel to a projected direction on the screen plane, in units of the
         // view's tangent (radians at the centre of the frame); far away when it is behind the lens.
         float screenDist(vec4 c) {
@@ -281,6 +269,11 @@ export class Sky {
             col = mix(col, uHorizon * 1.08, exp(-h * 28.0) * 0.6);
           } else {
             col = mix(uHorizon, uBelow, clamp(-h * 6.0, 0.0, 1.0));
+            // The sea of clouds far below, which the ranges rise out of.
+            if (uSea > 0.0) {
+              vec4 sea = seaOfClouds(d);
+              col = mix(col, sea.rgb, sea.a);
+            }
           }
           float skyLum = dot(col, vec3(0.2126, 0.7152, 0.0722));
           float sd = dot(d, normalize(uSunDir));
@@ -414,112 +407,8 @@ export class Sky {
     this.dome.renderOrder = -10;
     this.root.add(this.dome);
 
-    // Ridges.
-    let s = seed >>> 0;
-    const rand = () => {
-      s = (s + 0x6d2b79f5) >>> 0;
-      let t = s;
-      t = Math.imul(t ^ (t >>> 15), t | 1);
-      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-    LAYERS.forEach((L, li) => {
-      const seg = L.seg;
-      const peaks: number[] = [];
-      const p1 = rand() * 6.28;
-      const p2 = rand() * 6.28;
-      const p3 = rand() * 6.28;
-      const p4 = rand() * 6.28;
-      for (let i = 0; i <= seg; i++) {
-        const a = (i / seg) * Math.PI * 2;
-        let v = 0.55 + 0.25 * Math.sin(a * 3 + p1) + 0.15 * Math.sin(a * 7 + p2) + 0.08 * Math.sin(a * 17 + p3) + L.detail * Math.sin(a * 41 + p4);
-        v += (rand() - 0.5) * 2 * L.rough;
-        // Sharpen into peaks: the far range is jagged, the near hills rounded.
-        v = Math.pow(Math.max(0.05, v), L.sharp);
-        peaks.push(i === seg ? peaks[0] : v);
-      }
-      const pos: number[] = [];
-      const uv: number[] = [];
-      const depth: number[] = [];
-      for (let i = 0; i <= seg; i++) {
-        const a = (i / seg) * Math.PI * 2;
-        const x = Math.sin(a) * L.r;
-        const z = -Math.cos(a) * L.r;
-        const top = L.y + peaks[i] * L.h;
-        pos.push(x, L.y - 600, z, x, top, z);
-        uv.push(i / seg, 0, i / seg, 1);
-        depth.push(top - (L.y - 600), 0);
-      }
-      const idx: number[] = [];
-      for (let i = 0; i < seg; i++) {
-        const a = i * 2;
-        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
-      }
-      const g = new BufferGeometry();
-      g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
-      g.setAttribute('uv', new BufferAttribute(new Float32Array(uv), 2));
-      g.setAttribute('aDepth', new BufferAttribute(new Float32Array(depth), 1));
-      g.setIndex(idx);
-      const mat = new ShaderMaterial({
-        side: DoubleSide,
-        depthWrite: false,
-        uniforms: {
-          uColor: { value: new Color() },
-          uHaze: { value: new Color() },
-          uRimColor: { value: new Color() },
-          uSunDir: shared.uSunDir,
-          uHazeDepth: { value: L.r * 0.06 },
-          uRimWidth: { value: L.r * 0.0035 },
-          uRimK: { value: RIM[li] },
-          uMist: { value: new Color() },
-          uMistK: { value: 0 },
-        },
-        vertexShader: /* glsl */ `
-          attribute float aDepth;
-          varying float vDepth;
-          varying vec3 vDir;
-          void main() {
-            vDepth = aDepth;
-            vDir = normalize(position);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: /* glsl */ `
-          uniform vec3 uColor;
-          uniform vec3 uHaze;
-          uniform vec3 uRimColor;
-          uniform vec3 uSunDir;
-          uniform float uHazeDepth;
-          uniform float uRimWidth;
-          uniform float uRimK;
-          uniform vec3 uMist;
-          uniform float uMistK;
-          varying float vDepth;
-          varying vec3 vDir;
-          void main() {
-            // Each layer is darkest at its crest and sinks into valley haze below, so every crest line
-            // stands out against the paler mist of the range behind it.
-            float haze = 1.0 - exp(-vDepth / uHazeDepth);
-            vec3 col = mix(uColor, uHaze, haze * 0.72);
-            // At night a moonlit mist pools in the valley at the foot of each range, so the crest of the
-            // range in front stands dark against the mist behind it instead of navy on navy.
-            col = mix(col, uMist, uMistK * smoothstep(uHazeDepth * 0.35, uHazeDepth * 2.4, vDepth));
-            // The nearest crests catch a warm rim right under the disc, and only there.
-            float facing = max(dot(normalize(vDir.xz), normalize(uSunDir.xz)), 0.0);
-            float rim = exp(-vDepth / uRimWidth) * pow(facing, 14.0) * 0.8 * uRimK;
-            col = mix(col, uRimColor, min(rim, 1.0));
-            gl_FragColor = vec4(col, 1.0);
-            #include <tonemapping_fragment>
-            #include <colorspace_fragment>
-          }
-        `,
-      });
-      const m = new Mesh(g, mat);
-      m.frustumCulled = false;
-      m.renderOrder = -9 + (2 - li);
-      this.ridgeMats.push(mat);
-      this.root.add(m);
-    });
+    this.massif = new Massif(seed, this.sea);
+    this.root.add(this.massif.root);
   }
 
   setPalette(p: Palette): void {
@@ -555,27 +444,22 @@ export class Sky {
     u.uCloudShade.value.copy(p.clouds.shade);
     u.uCloudRim.value.copy(p.clouds.rim);
     this.highClouds = p.clouds.high;
-    this.ridgeMats.forEach((m, i) => {
-      const mu = m.uniforms;
-      const haze = (mu.uHaze.value as Color).copy(p.fog).lerp(p.skyHorizon, 0.5);
-      // Nearest layer takes the deepest colour; farther layers lean into the haze.
-      (mu.uColor.value as Color).copy(p.ridge[2 - i]).lerp(haze, AERIAL[i]);
-      (mu.uRimColor.value as Color).copy(p.sunColor).lerp(p.skyHorizon, 0.45).multiplyScalar(p.moon ? 0.5 : 1);
-      (mu.uMist.value as Color).copy(p.mist ?? p.fog);
-      mu.uMistK.value = p.mist ? MIST[i] * p.mistK : 0;
-    });
+    this.massif.setPalette(p);
   }
 
-  /** Cloud detail by quality tier: Low keeps the horizon banks at two octaves and drops the high
-   *  wisps (no extra pass on any tier: the clouds are part of the dome's own shader). */
+  /** Cloud and panorama detail by quality tier: Low keeps the horizon banks at two octaves, drops the
+   *  high wisps and the sea of clouds' fine octave (no extra pass on any tier: the clouds are part of
+   *  the dome's own shader), and draws one coarse range (massif.ts). */
   setDetail(tier: 'low' | 'medium' | 'high'): void {
     const q = tier === 'low' ? 0 : 1;
     this.wisps = q > 0;
     this.domeMat.uniforms.uCloudHigh.value = this.wisps ? this.highClouds : 0;
     if (this.domeMat.defines.CLOUD_Q !== q) {
       this.domeMat.defines.CLOUD_Q = q;
+      this.domeMat.defines.SEA_Q = q;
       this.domeMat.needsUpdate = true;
     }
+    this.massif.setDetail(tier);
   }
 
   follow(cam: Vector3): void {

@@ -57,6 +57,12 @@ export interface Palette {
    *  dense it is. Null for none. */
   mist: Color | null;
   mistK: number;
+  /** The mountain panorama (massif.ts): the biome's hero peak, the colour of its bare rock, the
+   *  alpenglow that paints the snow on the summits (its colour, how strongly, and the height in metres
+   *  relative to the lens above which the peaks still catch the light: the valleys sink into shade
+   *  first), how much of the panorama a mood veils (Blizzard hides it), how full the sea of clouds
+   *  below the horizon is, and the volcano's crater glow. */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number };
@@ -94,6 +100,10 @@ export interface Palette {
   hazardFog: number;
   exposure: number;
 }
+
+/** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
+ *  smoking volcano or a symmetrical snow-capped cone. */
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone';
 
 const c = (hex: string) => new Color(hex);
 
@@ -142,6 +152,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     lanternGlow: 0,
@@ -190,6 +201,8 @@ function biomeBase(biome: BiomeId): Palette {
       p.low = c('#9FD6EE');
       p.lowLit = c('#D8F6FF');
       p.ridge = [c('#D0DAF0'), c('#9CB2DE'), c('#6886C4')];
+      p.massif.peak = 'fang';
+      p.massif.rock = c('#34508E');
       p.ice = 0.6;
       p.clouds = { low: 0.75, high: 0.6, top: 0.3, lit: c('#FFF2E8'), shade: c('#A8B2DA'), rim: c('#FFC6AE'), shadow: 0.28 };
       return p;
@@ -212,6 +225,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#6A4B52');
       p.accentProp = c('#FF6A2A');
       p.ridge = [c('#A06878'), c('#6E465E'), c('#40284A')];
+      p.massif.peak = 'volcano';
+      p.massif.rock = c('#3A2A3C');
+      p.massif.lava = 0.45;
       p.embers = 0.6;
       p.grade.lift = c('#14081A');
       p.clouds = { low: 0.8, high: 0.5, top: 0.3, lit: c('#FFC4A0'), shade: c('#6E4662'), rim: c('#FF8A50'), shadow: 0.3 };
@@ -235,6 +251,9 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#A79CBB');
       p.accentProp = c('#E8473F');
       p.ridge = [c('#DEC6E6'), c('#B29BD0'), c('#8070B4')];
+      p.massif.peak = 'cone';
+      p.massif.rock = c('#6A5A86');
+      p.massif.glow = c('#FFA0B8');
       p.petals = 0.7;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
       return p;
@@ -312,6 +331,10 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
         p.lowLit = c('#5E7296');
       }
       p.ridge = [c('#BCC6D4'), c('#A8B4C6'), c('#93A2B8')];
+      // The whiteout swallows the panorama: at most a ghost of the nearest range shows through.
+      p.massif.veil = 0.86;
+      p.massif.sea = 0;
+      p.massif.lava = 0;
       p.snowfall = 1;
       p.windStreaks = 1;
       p.bloom = 0.8;
@@ -354,6 +377,10 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.ridge = [c('#3C4D8A'), c('#29376F'), c('#19234F')];
       p.mist = c('#5568AE');
       p.mistK = 0.6;
+      // Moonlit snow on dark rock over a silver sea of clouds; the crater glows brighter in the dark.
+      p.massif.rock = c('#161C3C');
+      p.massif.sea = 0.85;
+      p.massif.lava = p.massif.lava > 0 ? 1 : 0;
       p.stars = 1;
       p.aurora = 1;
       p.moon = true;
@@ -394,6 +421,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
         p.lowLit = c('#3E78AA');
       }
       p.ridge = [c('#A6DCF0'), c('#5EA8D2'), c('#2A72A8')];
+      // Clear, cold air: glassy blue rock over a broken sea of clouds.
+      p.massif.rock = c('#2E5E8E');
+      p.massif.sea = 0.75;
       p.ice = 1;
       // Pines and crystals in the cyan light sat close to the #7FC6DF shade snow: a quarter darker,
       // they read as hard dark silhouettes again.
@@ -433,6 +463,10 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.fogFar = 420;
       p.hemiSky = c('#6A4EA8');
       p.ridge = [c('#A0587E'), c('#64366E'), c('#341E52')];
+      p.massif.rock = c('#2A1A44');
+      p.massif.glow = c('#FF8C8C');
+      p.massif.sea = 0.8;
+      p.massif.lava = p.massif.lava > 0 ? 1 : 0;
       p.stars = 1;
       p.moon = true;
       p.moonPhase = 0.72;
@@ -467,6 +501,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.ridge = [c('#3A6A5E'), c('#244A42'), c('#132C28')];
       p.mist = c('#4E8C78');
       p.mistK = 0.45;
+      p.massif.rock = c('#0E2622');
+      p.massif.sea = 0.9;
+      p.massif.lava = p.massif.lava > 0 ? 0.8 : 0;
       p.stars = 0.4;
       // A pale green full moon, not a sun: it is a night mood.
       p.moon = true;
@@ -491,6 +528,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.fog = c('#D6E8FA');
       p.hemiSky = c('#A8CCF4');
       p.ridge = [c('#CCE0F6'), c('#A2C2EA'), c('#759EDA')];
+      p.massif.rock = c('#56689A');
+      p.massif.sea = 0.9;
       p.snowfall = 0.35;
       p.sparkle = 1.3;
       p.bloom = 0.5;
@@ -562,6 +601,8 @@ interface JourneyStop {
   snowLit: string; litK: number; snowShade: string; shadeK: number; snowDeep: string; deepK: number;
   rim: string; rimK: number; fog: string; fogK: number; hemi: string; hemiK: number;
   ridge: [string, string, string]; ridgeK: number;
+  /** The alpenglow on the peaks' snow (palette massif.glowK) and the height it has climbed to. */
+  glowK: number; glowLine: number;
   gain: string; gainK: number; lift: string; liftK: number;
   cloudLit: string; cloudShade: string; cloudRim: string; cloudK: number;
 }
@@ -574,6 +615,7 @@ const ALPENGLOW: JourneyStop = {
   snowLit: '#FFF0E4', litK: 0.5, snowShade: '#8A84D8', shadeK: 0.3, snowDeep: '#4A4AB0', deepK: 0.2,
   rim: '#FFAE8C', rimK: 0.5, fog: '#E8A2A4', fogK: 0.45, hemi: '#9A98E2', hemiK: 0.3,
   ridge: ['#D6A8CA', '#9C7CBA', '#5E5296'], ridgeK: 0.45,
+  glowK: 1, glowLine: -120,
   gain: '#FFF0E0', gainK: 0.6, lift: '#120E30', liftK: 0.3,
   cloudLit: '#FFD2B4', cloudShade: '#9A7AB4', cloudRim: '#FF946A', cloudK: 0.55,
 };
@@ -586,6 +628,7 @@ const BLUE_HOUR: JourneyStop = {
   snowLit: '#DCDCF4', litK: 0.6, snowShade: '#6870C6', shadeK: 0.5, snowDeep: '#363C96', deepK: 0.5,
   rim: '#D4AEF0', rimK: 0.45, fog: '#8C86BA', fogK: 0.55, hemi: '#6E7CC8', hemiK: 0.5,
   ridge: ['#9C8CC4', '#6A5C9E', '#3C3878'], ridgeK: 0.6,
+  glowK: 0.75, glowLine: 520,
   gain: '#EAECFF', gainK: 0.45, lift: '#0A0C30', liftK: 0.5,
   cloudLit: '#B8A0D0', cloudShade: '#4E4A8E', cloudRim: '#FF9C7C', cloudK: 0.7,
 };
@@ -609,6 +652,8 @@ function journeyStop(base: Palette, s: JourneyStop, dusk: number): Palette {
   tow(p.fog, s.fog, s.fogK);
   tow(p.hemiSky, s.hemi, s.hemiK);
   p.ridge.forEach((r, i) => tow(r, s.ridge[i], s.ridgeK));
+  p.massif.glowK = s.glowK;
+  p.massif.glowLine = s.glowLine;
   tow(p.grade.gain, s.gain, s.gainK);
   tow(p.grade.lift, s.lift, s.liftK);
   tow(p.clouds.lit, s.cloudLit, s.cloudK);
