@@ -290,10 +290,10 @@ export class NearField {
 
     // Flurries: flakes hung in the air ahead and to the sides of the lens, never on the line of sight
     // to the rider; the lens's own motion streaks them past the frame.
-    // From about 22 m/s a growing share of them skims just over the snow beside the sled instead (the
+    // From about 18 m/s a growing share of them skims just over the snow beside the sled instead (the
     // camera and motion round): crystals the lens races over, streaking past the frame's lower corners,
     // so the ground itself reads as rushing by at speed (and not at all at a 15 m/s cruise).
-    const skimP = reduced() ? 0 : 0.5 * smooth(22, 34, o.speed);
+    const skimP = reduced() ? 0 : 0.55 * smooth(18, 32, o.speed);
     this.acc.flurry += flurryK * cap * SHARE.flurry * 2.4 * (1 + 0.5 * skimP) * dt;
     while (this.acc.flurry >= 1) {
       this.acc.flurry -= 1;

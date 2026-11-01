@@ -1,6 +1,7 @@
 import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, Material, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { FLOW_HEX } from '../game/beats';
 import { Course } from '../sim/course';
+import { reduced } from '../ui/motion';
 import { makeToonMaterial, shared, type ToonOptions } from './materials';
 import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
@@ -377,6 +378,16 @@ export class Rider {
   private mat: ShaderMaterial;
   /** Seconds since the last perfect landing (drives the squash, the crouch and the rim flash). */
   private landT = 9;
+  /** The body's own secondary motion (tickBody): the carve lean it is carried into on a spring (it
+   *  lags the sled's bank and settles a touch past it), the height it soaks a bump or a landing up by
+   *  (metres, negative compressed) and its rate, and the speed tuck (0 to 1). */
+  private leanS = 0;
+  private leanV = 0;
+  private bobY = 0;
+  private bobV = 0;
+  private bodyVy = 0;
+  private tuckK = 0;
+  private chatY = 0;
   /** The upper body's eased turn toward the direction of travel while the sled slides sideways. */
   private twist = 0;
   /** How the rider sits the current sled, and the two body meshes it can wear. */
@@ -558,6 +569,7 @@ export class Rider {
     this.u.flow.value.set(0, 0);
     this.mat.uniforms.uRimK.value = 0.4;
     this.landT = 9;
+    this.leanS = this.leanV = this.bobY = this.bobV = this.tuckK = this.chatY = 0;
     // Hang the tails down the back; the first update carries them to the knot.
     this.anchor.copy(pos).add(this.vA.set(0, 0.85, 0.35));
     this.anchorPrev.copy(this.anchor);
@@ -611,7 +623,11 @@ export class Rider {
     const sq = lt < 0.15 ? 1 : 1 - smooth((lt - 0.15) / 0.1);
     const rebound = lt > 0.15 && lt < 0.42 ? Math.sin((Math.PI * (lt - 0.15)) / 0.27) : 0;
     const stomp = lt < 0.9 ? (lt < 0.05 ? lt / 0.05 : 1 - smooth((lt - 0.3) / 0.6)) : 0;
-    const crouch = Math.max(p.crouch, stomp * 0.85);
+    this.tickBody(p, dt, time);
+    const lean = this.leanS;
+    const bob = this.bobY + this.chatY;
+    const speedTuck = this.tuckK;
+    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62);
     const tuck = p.airborne && p.crouch > 0.5 ? 1 : 0;
     // Drifting, the sled slides sideways while the rider keeps its chest to the way it is going, as a
     // rider does: crouched over a sled turned across the view, it read from the chase camera as a
@@ -623,9 +639,13 @@ export class Rider {
     }
     this.twist += (twist - this.twist) * Math.min(1, dt * 8);
     // The crouch sinks more than it pitches: a deep forward pitch on top of a carve lean read as a fall.
-    const pitch = -0.15 - this.seat.lean - crouch * 0.3 - tuck * 0.35 - stomp * 0.2;
-    this.bodyPivot.rotation.set(pitch, -this.twist, -p.lean * 0.26);
-    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - stomp * 0.05;
+    // (The body's weight shift lags the sled's bank a little and settles past it, and a bump or a
+    // landing it soaks up pitches it forward over its knees for a moment.)
+    const pitch = -0.15 - this.seat.lean - crouch * 0.3 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 + Math.min(0, bob) * 1.6;
+    this.bodyPivot.rotation.set(pitch, -this.twist, -lean * 0.26);
+    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - stomp * 0.05 + bob;
+    // The hips slide a little to the inside of the carve: the weight goes where the turn is.
+    this.bodyPivot.position.x = Math.max(-0.05, Math.min(0.05, lean * 0.045));
     const sx = 1 + sq * 0.25 - rebound * 0.04;
     const sy = 1 - sq * 0.3 + rebound * 0.08;
     this.bodyPivot.scale.set(sx, sy, sx);
@@ -643,11 +663,15 @@ export class Rider {
     // read as stiff T-pose sticks.
     // (On a stomp the raised arms swing back against the torso's forward pitch, more on a saucer where
     // it pitches furthest, so they point up out of the squash rather than out at the snow ahead.)
-    const armX = 0.72 - flail * 0.57 + tuck * 0.38 + stomp * (this.seat.crossLegged ? 0.6 : 0.35);
+    // A speed tuck draws the arms in to the knees; a bump the body soaks up flicks them out for balance.
+    const armX = 0.72 - flail * 0.57 + tuck * 0.38 + stomp * (this.seat.crossLegged ? 0.6 : 0.35) + speedTuck * 0.3;
     // Seated cross-legged on a tray the mitts rest on the knees, close in.
-    const armOut = (this.seat.crossLegged ? 0.14 : 0.3) + flail * 0.88 - tuck * 0.12 + stomp * (2.25 - flail * 0.88);
-    this.armL.rotation.set(armX + armSwing, 0, -armOut + p.lean * 0.15);
-    this.armR.rotation.set(armX - armSwing, 0, armOut + p.lean * 0.15);
+    const armOut = (this.seat.crossLegged ? 0.14 : 0.3) + flail * 0.88 - tuck * 0.12 + stomp * (2.25 - flail * 0.88) - speedTuck * 0.14 + Math.min(0.35, Math.abs(this.bobV) * 0.9) * (1 - stomp);
+    // Balancing a carve: the outside arm reaches out and up, the inside one tucks in, more while the
+    // body is still catching up with the sled's bank (the lag between them).
+    const bal = Math.max(-1, Math.min(1, lean * 0.9 + (p.lean - lean) * 1.4)) * (1 - air) * (1 - stomp);
+    this.armL.rotation.set(armX + armSwing, 0, -armOut + p.lean * 0.15 - Math.max(0, bal) * 0.5);
+    this.armR.rotation.set(armX - armSwing, 0, armOut + p.lean * 0.15 - Math.min(0, bal) * 0.5);
 
     this.root.updateMatrixWorld(true);
     const roll = p.airborne ? 0 : this.capLean(p.heading + p.airYaw);
@@ -679,6 +703,36 @@ export class Rider {
     this.bodyPivot.rotation.z += roll > 0 ? roll - MAX_ROLL : roll + MAX_ROLL;
     this.bodyPivot.updateMatrixWorld(true);
     return roll > 0 ? MAX_ROLL : -MAX_ROLL;
+  }
+
+  /** The body rides its sled rather than being bolted to it. Its carve lean follows the sled's on a
+   *  spring (about 3 Hz, a little under-damped), so a turn in is a weight shift that lags and settles
+   *  and a quick flick back swings through. A sudden change of vertical speed (a landing, a bump, a
+   *  pop) drops it into its knees, and it springs back up (about 4 Hz); at speed the snow's chatter
+   *  runs through it. From about 22 m/s on a straight line it folds into a real tuck: lower, pitched
+   *  over its knees, arms in. All of it is presentation only, eased so a frame hitch never kicks it. */
+  private tickBody(p: RiderPose, dt: number, time: number): void {
+    const h = Math.min(dt, 1 / 30);
+    if (h <= 0) return;
+    const dvy = Math.max(-12, Math.min(12, p.vel.y - this.bodyVy));
+    this.bodyVy = p.vel.y;
+    // A landing (vertical speed jumping up) or a bump throws the body down into its knees.
+    if (!p.airborne) this.bobV -= Math.max(0, dvy) * 0.22 + Math.max(0, -dvy) * 0.05;
+    const sub = Math.ceil(h * 240);
+    const s = h / sub;
+    for (let i = 0; i < sub; i++) {
+      this.leanV += (-(this.leanS - p.lean) * 340 - this.leanV * 20) * s;
+      this.leanS += this.leanV * s;
+      this.bobV += (-this.bobY * 620 - this.bobV * 22) * s;
+      this.bobY += this.bobV * s;
+    }
+    this.bobY = Math.max(-0.1, Math.min(0.04, this.bobY));
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    // The snow's chatter under the runners at speed: a fine, uneven shiver.
+    // (Reduced motion keeps the body still on the snow: the springs stay, the shiver goes.)
+    this.chatY = p.airborne || reduced() ? 0 : (Math.sin(time * 41) * 0.6 + Math.sin(time * 67 + 1.3) * 0.4) * 0.006 * smooth((speed - 14) / 16);
+    const want = p.airborne || p.drifting ? 0 : smooth((speed - 22) / 9) * (1 - smooth((Math.abs(p.lean) - 0.15) / 0.35));
+    this.tuckK += (want - this.tuckK) * Math.min(1, dt * 3.5);
   }
 
   /** The perfect landing's white rim: a thin line that burns for a moment on touchdown and is gone

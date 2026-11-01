@@ -234,6 +234,21 @@ function craterMaterial(): ShaderMaterial {
         float kk = smoothstep(-1.15, -0.55, q) * (1.0 - smoothstep(0.4, 1.5, q)) * 0.96;
         P = lipCol * kk + P * (1.0 - kk);
         A = kk + A * (1.0 - kk);
+        // The shockwave: a ring of displaced powder racing out over the snow from the lip in the first
+        // third of a second, a sunlit crest with a periwinkle trough dragged behind it, thinning and
+        // widening as it runs out (displaced snow, never a painted ring).
+        float sw = clamp(t / 0.34, 0.0, 1.0);
+        float Rs = R0 + M(0.25) + M(2.2) * (1.0 - pow(1.0 - sw, 2.2));
+        float sq = (r - Rs) / M(0.14 + 0.26 * sw);
+        float swK = (1.0 - sw) * (1.0 - sw) * smoothstep(0.0, 0.025, t);
+        float faceW = smoothstep(-0.6, 0.6, -sq * sunward + 0.2);
+        float kt = exp(-(sq + 1.7) * (sq + 1.7) * 1.4) * swK * 0.5;
+        P = shadeP * kt + P * (1.0 - kt);
+        A = kt + A * (1.0 - kt);
+        float kc = exp(-sq * sq * 2.4) * swK * 0.9;
+        vec3 crestC = mix(mix(shadeP, powder * 1.1, 0.55 + 0.45 * faceW), vec3(1.2, 1.12, 0.98), flash * 0.7);
+        P = crestC * kc + P * (1.0 - kc);
+        A = kc + A * (1.0 - kc);
         float life = 1.0 - smoothstep(${CRATER_LIFE - 2}.0, ${CRATER_LIFE}.0, t);
         float d = length(cameraPosition - vWorldPos);
         float fogF = smoothstep(uFogNear, uFogFar, d);
