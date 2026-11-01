@@ -229,6 +229,7 @@ export class World {
       cor.hw = this.course.halfWidth(-z);
       return cor;
     };
+    this.cam.section = (z) => this.course.section(-z);
     // The results hero shot never sets its lens among the props: a tree within a few metres fills
     // the frame with a cone (or a dithered one). Only asked while it picks a framing.
     this.cam.blocked = (x, z, r) => {
@@ -687,7 +688,7 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell }, dt);
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;

@@ -15,6 +15,10 @@ const KIND_MIST = 2;
 /** Billows carry a per-particle seed (for their lumpy outline) in the fraction: 3 to 3.9. */
 const KIND_PUFF = 3;
 const puffKind = () => KIND_PUFF + Math.random() * 0.9;
+const smooth = (a: number, b: number, x: number): number => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
 
 /** The chase camera's velocity, so sprites stretch along motion as seen through the lens. */
 const camVel = new Vector3();
@@ -579,9 +583,14 @@ export class Particles {
     // falls back from the sled at about 3 m/s, so it streams past the lens in about half a second.
     const fall = Math.max(vel.y, -Math.hypot(vel.x, vel.z) * 0.7);
     const car = tmpC.set(vel.x * 0.85, fall * 0.85, vel.z * 0.85);
-    const count = this.n(amount * 3.6);
+    // At speed a hard carve or drift throws a real rooster tail (the camera and motion round): higher,
+    // wider and fuller with speed (hard: 0 at a 12 m/s cruise, 1 from about 28 m/s with a full carve
+    // or drift), its billows swelling into a plume whose crest catches the low sun.
+    const hs = Math.hypot(vel.x, vel.z);
+    const hard = Math.min(1, amount) * smooth(12, 28, hs);
+    const count = this.n(amount * (3.6 + 2.2 * hard));
     for (let i = 0; i < count; i++) {
-      const s = 1.3 + Math.random() * (1.2 + 1.4 * amount);
+      const s = (1.3 + Math.random() * (1.2 + 1.4 * amount)) * (1 + 0.4 * hard);
       const back = 0.1 + Math.random() * 0.5;
       const j = (Math.random() - 0.5) * 1.6;
       const big = Math.random();
@@ -614,7 +623,7 @@ export class Particles {
         pos.y + 0.08,
         pos.z + side.z * 0.4 - f.z * back + (Math.random() - 0.5) * 0.16,
         car.x + side.x * s + f.x * j,
-        car.y + 1.4 + Math.random() * (1.2 + 1.0 * amount),
+        car.y + (1.4 + Math.random() * (1.2 + 1.0 * amount)) * (1 + 0.75 * hard),
         car.z + side.z * s + f.z * j,
         // Short-lived: spray fades in the air, never lying about on the snow as white pellets.
         0.3 + Math.random() * 0.28,
@@ -632,9 +641,10 @@ export class Particles {
     }
     // Billows: the body of the rooster tail, lumps of powder that rise off the runner, swell and
     // hang for a moment, crest lit and belly in shade.
-    const puffs = this.n(amount * 1.2);
+    // (A hard one throws more and bigger of them, higher, hanging a little longer: the plume.)
+    const puffs = this.n(amount * (1.2 + 2.2 * hard));
     for (let i = 0; i < puffs; i++) {
-      const s = 0.8 + Math.random() * (0.9 + 0.8 * amount);
+      const s = (0.8 + Math.random() * (0.9 + 0.8 * amount)) * (1 + 0.4 * hard);
       const back = 0.15 + Math.random() * 0.45;
       const big = Math.random();
       this.powder.emit(
@@ -642,11 +652,11 @@ export class Particles {
         pos.y + 0.12,
         pos.z + side.z * 0.45 - f.z * back,
         car.x + side.x * s,
-        car.y + 1.1 + Math.random() * (0.8 + 0.6 * amount),
+        car.y + (1.1 + Math.random() * (0.8 + 0.6 * amount)) * (1 + 0.9 * hard),
         car.z + side.z * s,
-        0.26 + Math.random() * 0.22,
+        0.26 + Math.random() * 0.22 + 0.2 * hard,
         0.09 + big * 0.05,
-        0.16 + big * big * 0.26 * (0.6 + 0.4 * amount),
+        (0.16 + big * big * 0.26 * (0.6 + 0.4 * amount)) * (1 + 0.8 * hard),
         tint.r,
         tint.g,
         tint.b,
@@ -735,6 +745,45 @@ export class Particles {
         puff ? 3 : 2.2,
         puff ? puffKind() : KIND_GRAIN,
       );
+    }
+    // A landing with weight (a clean or sketchy one, power 0.9 and up) also slumps a skirt of heavy
+    // billows out low to both sides, riding on most of the sled's velocity (as the perfect landing's
+    // do), so the hit plays out round the rider instead of being left behind the lens in a blink (the
+    // billows fade within a few metres of it). They hug the slope (thrown back toward the lens is
+    // thrown uphill, so they climb with it a little).
+    if (vel && power >= 0.85) {
+      const nk = this.n(12 * Math.min(1.6, power));
+      const hs = Math.hypot(vel.x, vel.z);
+      const car = tmpC.set(vel.x * 0.8, Math.max(vel.y, -hs * 0.7) * 0.8, vel.z * 0.8);
+      for (let i = 0; i < nk; i++) {
+        // Out to the sides (70 to 130 degrees off the line of travel), never ahead over the landing.
+        const a = (i % 2 ? 1 : -1) * (1.22 + Math.random() * 1.05);
+        const ca = Math.cos(a);
+        const sa = Math.sin(a);
+        const dx = fx * ca - fz * sa;
+        const dz = fz * ca + fx * sa;
+        const out = (2.6 + Math.random() * 2.4) * power;
+        const climb = 0.3 * out * Math.max(0, -(dx * fx + dz * fz));
+        this.powder.emit(
+          pos.x + dx * 0.7,
+          pos.y + 0.12,
+          pos.z + dz * 0.7,
+          car.x + dx * out,
+          car.y + 0.6 + Math.random() * 0.8 + climb,
+          car.z + dz * out,
+          0.5 + Math.random() * 0.3,
+          0.2 + Math.random() * 0.06,
+          0.48 + Math.random() * 0.3 + Math.min(0.2, hs * 0.006),
+          tint.r,
+          tint.g,
+          tint.b,
+          0.82,
+          2,
+          3.4,
+          puffKind(),
+          car,
+        );
+      }
     }
   }
 
