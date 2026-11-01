@@ -59,7 +59,14 @@ export interface Palette {
   mistK: number;
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
-  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number };
+  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number };
+  /** Painted gouache clouds in the sky dome (sky.ts): low cumulus banks along the horizon and high
+   *  wisps (coverage 0..1 each), their sunlit tops, shaded bodies and the low sun's rim on their edges.
+   *  shadow: how strongly their slow shadows drift over the snow (materials.ts, 0 for none). */
+  clouds: { low: number; high: number; top: number; lit: Color; shade: Color; rim: Color; shadow: number };
+  /** A sled lantern short of Lantern Night's (0..1): blue hour lights a soft one at the end of a long
+   *  Clear Skies run. Lantern Night's own lantern (lantern: true) is always full. */
+  lanternGlow: number;
   bloom: number;
   stars: number;
   aurora: number;
@@ -135,7 +142,9 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3 },
+    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1 },
+    clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
+    lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
     aurora: 0,
@@ -182,6 +191,7 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#D8F6FF');
       p.ridge = [c('#D0DAF0'), c('#9CB2DE'), c('#6886C4')];
       p.ice = 0.6;
+      p.clouds = { low: 0.75, high: 0.6, top: 0.3, lit: c('#FFF2E8'), shade: c('#A8B2DA'), rim: c('#FFC6AE'), shadow: 0.28 };
       return p;
     case 'volcanic':
       p.skyZenith = c('#2A1E3A');
@@ -204,6 +214,7 @@ function biomeBase(biome: BiomeId): Palette {
       p.ridge = [c('#A06878'), c('#6E465E'), c('#40284A')];
       p.embers = 0.6;
       p.grade.lift = c('#14081A');
+      p.clouds = { low: 0.8, high: 0.5, top: 0.3, lit: c('#FFC4A0'), shade: c('#6E4662'), rim: c('#FF8A50'), shadow: 0.3 };
       return p;
     case 'blossom':
       p.skyZenith = c('#3A5BA8');
@@ -225,6 +236,7 @@ function biomeBase(biome: BiomeId): Palette {
       p.accentProp = c('#E8473F');
       p.ridge = [c('#DEC6E6'), c('#B29BD0'), c('#8070B4')];
       p.petals = 0.7;
+      p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
       return p;
   }
 }
@@ -304,7 +316,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.windStreaks = 1;
       p.bloom = 0.8;
       p.sparkle = 0.3;
-      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14 };
+      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14, shafts: 0 };
+      // The whiteout is its own cloud deck: no painted banks in it and no shadows sliding over the snow.
+      p.clouds = { low: 0, high: 0, top: 0.1, lit: c('#F2F4F8'), shade: c('#AEB8C8'), rim: c('#F2F1EA'), shadow: 0 };
       break;
     case Mood.Lantern:
       p.skyZenith = c('#070B22');
@@ -347,7 +361,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.snowfall = 0.15;
       p.bloom = 0.9;
       p.sparkle = 0.8;
-      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2 };
+      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2, shafts: 0 };
+      // A low, dark bank with moonlit silver edges under the aurora, which keeps the sky above it.
+      p.clouds = { low: 0.6, high: 0.18, top: 0.24, lit: c('#4A5A9C'), shade: c('#121A42'), rim: c('#C4D0FF'), shadow: 0 };
       break;
     case Mood.GlassIce:
       p.skyZenith = c('#0E6FA8');
@@ -385,7 +401,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.sparkle = 1.1;
       p.snowfall = 0;
       p.bloom = 0.42;
-      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24 };
+      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24, shafts: 0.8 };
+      // Clear, cold air: only a few thin high wisps, gold where the low sun catches them.
+      p.clouds = { low: 0, high: 0.4, top: 0.1, lit: c('#F4FCFF'), shade: c('#8CC8E6'), rim: c('#FFDDA0'), shadow: 0.12 };
       break;
     case Mood.Comet:
       // Night with an ember afterglow on the horizon: a deep violet zenith, stars and lavender snow.
@@ -421,7 +439,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.comet = true;
       p.snowfall = 0.05;
       p.bloom = 0.85;
-      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26 };
+      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26, shafts: 0 };
+      // A dusk bank on the ember horizon, its undersides glowing ember; the comet keeps the sky above.
+      p.clouds = { low: 0.65, high: 0.15, top: 0.2, lit: c('#5E3268'), shade: c('#2A1642'), rim: c('#FF7A4C'), shadow: 0 };
       break;
     case Mood.Haunted:
       p.skyZenith = c('#0B1F1C');
@@ -454,7 +474,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.wisps = 1;
       p.snowfall = 0.1;
       p.bloom = 0.95;
-      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1 };
+      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1, shafts: 0 };
+      p.clouds = { low: 0.5, high: 0.12, top: 0.22, lit: c('#3E7464'), shade: c('#0E2A24'), rim: c('#9CFFD8'), shadow: 0 };
       break;
     case Mood.Powder:
       p.skyZenith = c('#2F7BE0');
@@ -473,7 +494,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.snowfall = 0.35;
       p.sparkle = 1.3;
       p.bloom = 0.5;
-      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26 };
+      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26, shafts: 0.5 };
+      // Fair-weather puffs low on the horizon and a few high wisps, white on blue.
+      p.clouds = { low: 0.4, high: 0.3, top: 0.24, lit: c('#FFFFFF'), shade: c('#B4CCEC'), rim: c('#FFFFFF'), shadow: 0.22 };
       break;
   }
   // Biomes and moods author sunDir as where the disc sits; the key light is lifted from it.
@@ -483,4 +506,155 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   }
   p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
   return p;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Palette blending and the sun's journey over a run.
+
+type Field = Palette[keyof Palette];
+
+function lerpField(a: unknown, b: unknown, t: number, o: unknown): unknown {
+  if (a instanceof Color && b instanceof Color) {
+    const oc = o instanceof Color && o !== b ? o : new Color();
+    return oc.copy(a).lerp(b, t);
+  }
+  if (a instanceof Vector3 && b instanceof Vector3) {
+    const ov = o instanceof Vector3 && o !== b ? o : new Vector3();
+    return ov.copy(a).lerp(b, t).normalize();
+  }
+  if (typeof a === 'number' && typeof b === 'number') return a + (b - a) * t;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    const oa = Array.isArray(o) && o !== b ? o : [];
+    for (let i = 0; i < a.length; i++) oa[i] = lerpField(a[i], b[i], t, oa[i]);
+    return oa;
+  }
+  if (a && b && typeof a === 'object' && typeof b === 'object') {
+    const oo = (o && typeof o === 'object' && o !== b ? o : {}) as Record<string, unknown>;
+    const ar = a as Record<string, unknown>;
+    const br = b as Record<string, unknown>;
+    for (const k of Object.keys(ar)) oo[k] = lerpField(ar[k], br[k], t, oo[k]);
+    return oo;
+  }
+  // Flags (and a null sky mid against a colour) switch over at the halfway point; a colour is copied,
+  // never shared, so a later blend cannot write into the palette it came from.
+  const pick = t < 0.5 ? a : b;
+  return pick instanceof Color ? (o instanceof Color && o !== a && o !== b ? o.copy(pick) : pick.clone()) : pick;
+}
+
+/** Blends palette a toward b by t into out, reusing out's colours and vectors (out may be a, never b).
+ *  Directions are blended and renormalised; flags switch over halfway. */
+export function lerpPalette(a: Palette, b: Palette, t: number, out: Palette): Palette {
+  const o = out as unknown as Record<string, Field>;
+  const ar = a as unknown as Record<string, Field>;
+  const br = b as unknown as Record<string, Field>;
+  for (const k of Object.keys(ar)) o[k] = lerpField(ar[k], br[k], t, o[k]) as Field;
+  return out;
+}
+
+const DEG = Math.PI / 180;
+const elevationOf = (v: Vector3) => Math.asin(Math.max(-1, Math.min(1, v.y))) / DEG;
+/** The same bearing at another elevation (degrees). */
+const atElevation = (v: Vector3, el: number) => sunDir(Math.atan2(v.x, -v.z) / DEG, el);
+
+interface JourneyStop {
+  zenith: string; mid: string; horizon: string; below: string; sky: number;
+  sun: string; sunK: number; discEl: number; lightEl: number; shadowMinEl: number;
+  snowLit: string; litK: number; snowShade: string; shadeK: number; snowDeep: string; deepK: number;
+  rim: string; rimK: number; fog: string; fogK: number; hemi: string; hemiK: number;
+  ridge: [string, string, string]; ridgeK: number;
+  gain: string; gainK: number; lift: string; liftK: number;
+  cloudLit: string; cloudShade: string; cloudRim: string; cloudK: number;
+}
+
+/** About 2 km in: deeper alpenglow. The sun sits lower and warmer, the horizon burns coral, the zenith
+ *  deepens and the snow's shade leans violet, with longer shadows. */
+const ALPENGLOW: JourneyStop = {
+  zenith: '#22357E', mid: '#C27A9C', horizon: '#FF946C', below: '#C7A2D2', sky: 0.5,
+  sun: '#FFD0A4', sunK: 0.55, discEl: -3.5, lightEl: -4, shadowMinEl: 11,
+  snowLit: '#FFF0E4', litK: 0.5, snowShade: '#8A84D8', shadeK: 0.3, snowDeep: '#4A4AB0', deepK: 0.2,
+  rim: '#FFAE8C', rimK: 0.5, fog: '#E8A2A4', fogK: 0.45, hemi: '#9A98E2', hemiK: 0.3,
+  ridge: ['#D6A8CA', '#9C7CBA', '#5E5296'], ridgeK: 0.45,
+  gain: '#FFF0E0', gainK: 0.6, lift: '#120E30', liftK: 0.3,
+  cloudLit: '#FFD2B4', cloudShade: '#9A7AB4', cloudRim: '#FF946A', cloudK: 0.55,
+};
+
+/** From about 3.5 km: blue hour. The sky cools to deep blue over a dusky rose horizon, the sun sinks to
+ *  touch the ridge, the snow turns periwinkle, and gifts, ghosts and a sled lantern glow stronger. */
+const BLUE_HOUR: JourneyStop = {
+  zenith: '#111A4C', mid: '#5E5AA0', horizon: '#EE9A86', below: '#8A84B8', sky: 0.72,
+  sun: '#FFC0A0', sunK: 0.6, discEl: -7.6, lightEl: -7, shadowMinEl: 8,
+  snowLit: '#DCDCF4', litK: 0.6, snowShade: '#6870C6', shadeK: 0.5, snowDeep: '#363C96', deepK: 0.5,
+  rim: '#D4AEF0', rimK: 0.45, fog: '#8C86BA', fogK: 0.55, hemi: '#6E7CC8', hemiK: 0.5,
+  ridge: ['#9C8CC4', '#6A5C9E', '#3C3878'], ridgeK: 0.6,
+  gain: '#EAECFF', gainK: 0.45, lift: '#0A0C30', liftK: 0.5,
+  cloudLit: '#B8A0D0', cloudShade: '#4E4A8E', cloudRim: '#FF9C7C', cloudK: 0.7,
+};
+
+function journeyStop(base: Palette, s: JourneyStop, dusk: number): Palette {
+  const p = lerpPalette(base, base, 0, getPaletteShell());
+  const tow = (col: Color, hex: string, k: number) => col.lerp(c(hex), k);
+  tow(p.skyZenith, s.zenith, s.sky);
+  if (p.skyMid) tow(p.skyMid, s.mid, s.sky);
+  tow(p.skyHorizon, s.horizon, s.sky * 0.85);
+  tow(p.skyBelow, s.below, s.sky * 0.7);
+  tow(p.sunColor, s.sun, s.sunK);
+  p.diskDir = atElevation(p.diskDir, Math.max(3.4, elevationOf(p.diskDir) + s.discEl));
+  p.sunDir = atElevation(p.sunDir, Math.max(17, elevationOf(p.sunDir) + s.lightEl));
+  p.shadowMinEl = s.shadowMinEl;
+  p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
+  tow(p.snowLit, s.snowLit, s.litK);
+  tow(p.snowShade, s.snowShade, s.shadeK);
+  tow(p.snowDeep, s.snowDeep, s.deepK);
+  tow(p.rim, s.rim, s.rimK);
+  tow(p.fog, s.fog, s.fogK);
+  tow(p.hemiSky, s.hemi, s.hemiK);
+  p.ridge.forEach((r, i) => tow(r, s.ridge[i], s.ridgeK));
+  tow(p.grade.gain, s.gain, s.gainK);
+  tow(p.grade.lift, s.lift, s.liftK);
+  tow(p.clouds.lit, s.cloudLit, s.cloudK);
+  tow(p.clouds.shade, s.cloudShade, s.cloudK);
+  tow(p.clouds.rim, s.cloudRim, s.cloudK);
+  // Dusk: the glows the dark brings out (the gift, ghost and lantern signals keep their own colours).
+  p.sunSize *= 1 + 0.15 * dusk;
+  p.sunGlow *= 1 + 0.25 * dusk;
+  p.bloom += 0.16 * dusk;
+  p.giftGlow = Math.max(p.giftGlow, 0.45 * dusk);
+  p.ghostGlow += 0.25 * dusk;
+  p.lanternGlow = Math.max(p.lanternGlow, 0.5 * dusk);
+  p.stars = Math.max(p.stars, 0.35 * dusk);
+  p.sparkle *= 1 - 0.15 * dusk;
+  p.clouds.shadow *= 1 - 0.6 * dusk;
+  return p;
+}
+
+/** A blank palette for lerpPalette to fill (it creates every field on the first blend). */
+function getPaletteShell(): Palette {
+  return {} as Palette;
+}
+
+const STOPS = new Map<BiomeId, [Palette, Palette, Palette]>();
+
+/** How far along the journey a run is, as the weights of its two later stops: golden at the start,
+ *  full alpenglow by about 2 km, blue hour from about 3.5 km (full by 4 km). Smooth, so no step shows. */
+export function journeyWeights(metres: number): { alpenglow: number; blue: number } {
+  const s = (x: number) => {
+    const k = Math.max(0, Math.min(1, x));
+    return k * k * (3 - 2 * k);
+  };
+  return { alpenglow: s((metres - 200) / 1800), blue: s((metres - 3000) / 1000) };
+}
+
+/** Clear Skies' palette `metres` into a run, written into out (which must not be one of the cached
+ *  stops). Chaos moods keep their own palette: the caller only calls this for Mood.None. */
+export function journeyPalette(biome: BiomeId, metres: number, out: Palette): Palette {
+  let st = STOPS.get(biome);
+  if (!st) {
+    const g = getPalette(biome, Mood.None);
+    st = [g, journeyStop(g, ALPENGLOW, 0), journeyStop(g, BLUE_HOUR, 1)];
+    STOPS.set(biome, st);
+  }
+  const w = journeyWeights(metres);
+  lerpPalette(st[0], st[1], w.alpenglow, out);
+  if (w.blue > 0) lerpPalette(out, st[2], w.blue, out);
+  return out;
 }

@@ -14,6 +14,7 @@ import {
   UnsignedByteType,
   UnsignedInt101111Type,
   Vector2,
+  Vector3,
   WebGLRenderTarget,
   WebGLRenderer,
 } from 'three';
@@ -44,7 +45,11 @@ export interface GradeParams {
   grain?: number;
   /** How much the bottom edge of the frame darkens and cools, so the foreground snow keeps form. */
   foot?: number;
+  /** Light shafts from a low sun in view (0 for none: night, overcast and high-sun moods). */
+  shafts?: number;
 }
+
+const sunProbe = new Vector3();
 
 export class PostFX {
   private sceneRT: WebGLRenderTarget;
@@ -64,6 +69,9 @@ export class PostFX {
   private moodGrain = 1;
   private moodBloom = 0.55;
   private moodFoot = 0;
+  private moodShafts = 0;
+  /** Taps per pixel for the light shafts: 10 on High, 6 on Medium (Low has no post pass at all). */
+  shaftTaps: number;
   enabled = true;
   bloomEnabled = true;
   /** bloomScale tames the bloom (portrait run, results hero shot); feetY is the sled's height on screen and vpX, vpY the
@@ -78,6 +86,7 @@ export class PostFX {
     levels = 5,
   ) {
     this.levels = levels;
+    this.shaftTaps = levels >= 5 ? 10 : 6;
     const type = renderer.capabilities.isWebGL2 ? HalfFloatType : UnsignedByteType;
     // The HDR scene buffer is R11G11B10F where float colour buffers are renderable: half the bytes
     // per (MSAA) sample of RGBA16F, which matters on integrated GPUs, and nothing reads its alpha.
@@ -194,6 +203,10 @@ export class PostFX {
         uPowLit: shared.uSnowLit,
         uPowShade: shared.uSnowShade,
         uPowDeep: shared.uSnowDeep,
+        uSunUv: { value: new Vector2(0.5, 0.8) },
+        uShaft: { value: 0 },
+        uShaftTaps: { value: 8 },
+        uShaftColor: shared.uSunColor,
       },
       fragmentShader: /* glsl */ `
         uniform sampler2D tScene;
@@ -222,6 +235,10 @@ export class PostFX {
         uniform vec3 uPowLit;
         uniform vec3 uPowShade;
         uniform vec3 uPowDeep;
+        uniform vec2 uSunUv;
+        uniform float uShaft;
+        uniform float uShaftTaps;
+        uniform vec3 uShaftColor;
         varying vec2 vUv;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         // A lattice hash without sin: the sine hash amplifies a one-ulp difference between two
@@ -318,6 +335,32 @@ export class PostFX {
             col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
           }
           if (uUseBloom > 0.5) col += texture2D(tBloom, uv).rgb * uBloom;
+          // Light shafts: while a low sun is in view, warm rays fan out from it through the gaps in the
+          // treeline and the ridges. Each pixel near the sun looks back along the line to it for bright
+          // sky; what stands in the way (a trunk, a crest) leaves a cool gap between the rays. Taps
+          // crowd toward the sun, where the light is, and the rays never fall over the rider.
+          if (uShaft > 0.001) {
+            vec2 toS = uSunUv - uv;
+            float dS = length(toS * vec2(uAspect, 1.0));
+            if (dS < 0.62) {
+              float j = hash(gl_FragCoord.xy);
+              float acc = 0.0;
+              for (int i = 0; i < 10; i++) {
+                if (float(i) >= uShaftTaps) break;
+                float f = (float(i) + j) / uShaftTaps;
+                vec3 s = texture2D(tScene, uSunUv - toS * (f * f * 0.92)).rgb;
+                acc += smoothstep(0.55, 1.5, dot(s, vec3(0.2126, 0.7152, 0.0722)));
+              }
+              acc /= uShaftTaps;
+              float ang = atan(toS.y, toS.x * uAspect);
+              float rays = 0.45 + 0.55 * vnoise(vec2(ang * 11.0, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0, 3.1));
+              float fall = exp(-dS * 3.4) * (1.0 - smoothstep(0.42, 0.62, dS));
+              vec2 rq = (uv - uRider + vec2(0.0, 0.06)) * vec2(uAspect, 0.62);
+              float clearRider = smoothstep(0.09, 0.17, length(rq));
+              vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.5);
+              col += warm * acc * rays * fall * clearRider * uShaft * 0.3;
+            }
+          }
           // Grade: lift / gain, saturation, contrast around mid grey.
           col = col * uGain + uLift * (1.0 - col);
           float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -587,6 +630,26 @@ export class PostFX {
     this.moodBloom = g.bloom;
     this.moodGrain = g.grain ?? 1;
     this.moodFoot = g.foot ?? 0;
+    this.moodShafts = g.shafts ?? 0;
+  }
+
+  /** How strong the light shafts are this frame, and where the sun sits on screen: only for a low,
+   *  clear sun (shared.uDiskDir) inside or just off the frame, fading out as it climbs or leaves. */
+  private aimShafts(camera: Camera): void {
+    const u = this.composite.uniforms;
+    let k = this.moodShafts;
+    const dir = shared.uDiskDir.value;
+    if (k > 0) k *= 1 - Math.max(0, Math.min(1, (dir.y - 0.2) / 0.12));
+    if (k > 0) {
+      // Behind the lens, project() mirrors the point back into the frame: no shafts then.
+      const ahead = sunProbe.copy(dir).transformDirection(camera.matrixWorldInverse).z < 0 ? 1 : 0;
+      const p = sunProbe.copy(camera.position).addScaledVector(dir, 1000).project(camera);
+      const off = Math.max(Math.abs(p.x), Math.abs(p.y));
+      k *= ahead * (1 - Math.max(0, Math.min(1, (off - 1) / 0.25)));
+      u.uSunUv.value.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);
+    }
+    u.uShaft.value = k;
+    u.uShaftTaps.value = this.shaftTaps;
   }
 
   private pass(mat: ShaderMaterial, target: WebGLRenderTarget | null): void {
@@ -646,6 +709,7 @@ export class PostFX {
     u.uFeet.value = this.params.feetY;
     u.uVp.value.set(this.params.vpX, this.params.vpY);
     u.uStreakFoot.value = this.params.streakFoot;
+    this.aimShafts(camera);
     this.pass(this.composite, null);
   }
 
