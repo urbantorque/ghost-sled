@@ -8,15 +8,18 @@ import {
   Euler,
   IcosahedronGeometry,
   InstancedBufferAttribute,
+  LatheGeometry,
   Matrix4,
   MeshDepthMaterial,
+  OctahedronGeometry,
   Quaternion,
   ShaderMaterial,
+  Vector2,
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeId } from '../sim/mountains';
-import { basaltGeometry, blossomGeometry, charPineGeometry, pineGeometry, seracGeometry, spireGeometry } from './meshes';
+import { basaltGeometry, blossomGeometry, charPineGeometry, seracGeometry, spireGeometry } from './meshes';
 import { Palette } from './palette';
 
 // Forest variety without extra draw calls. A batch's geometry holds several variants merged into one
@@ -201,48 +204,235 @@ export function variantDepthMaterial(): MeshDepthMaterial {
 
 // ---------------------------------------------------------------- tree variants
 
-/** A snow-laden spruce: broad, a little shorter, its tiers bowed under thick caps and pillows. */
-export function heavyPineGeometry(p: Palette): BufferGeometry {
-  reseed(121);
-  const tall = shade(p.tall, 0.92);
-  const parts: BufferGeometry[] = [part(new CylinderGeometry(0.2, 0.28, 1.2, 6), WOOD, { pos: [0, 0.6, 0] })];
-  const tiers = [
-    { r: 1.65, h: 2.3, y: 1.75 },
-    { r: 1.28, h: 2.0, y: 3.0 },
-    { r: 0.86, h: 1.75, y: 4.1 },
+interface BoughTier {
+  /** Height of the tier's tip, its depth (tip to bough ends) and its reach (radius at the bough ends). */
+  top: number;
+  h: number;
+  r: number;
+}
+
+/** How a bough pine is built: its tiers, its trunk, how far down each tier the snow lies (0..1 of the
+ *  upper face), and how many clumps of snow sit out on the bough tips. */
+interface BoughSpec {
+  seed: number;
+  tiers: BoughTier[];
+  trunk: number;
+  trunkR: number;
+  snow: number;
+  clumps: number;
+  /** Value multiplier on the needles (the young trees are a step lighter, the heavy ones darker). */
+  tone: number;
+}
+
+/** Bough segments round a tier: even ones are bough tips, odd ones the gaps between them (four
+ *  boughs; the small top tier has three). */
+const BOUGH_SEGS = 8;
+
+/** One drooping tier of boughs, faceted: a lathe from the tip out over the shoulder to the bough ends
+ *  and back in underneath, its outer ring scalloped into hanging bough tips with gaps between
+ *  them. Coloured per facet: the upper face carries a snow cap whose lower edge is ragged (deeper on
+ *  the boughs, shallower in the gaps), snow runs out along the tops of the boughs, the needles darken
+ *  toward the skirt, and the underside is the darkest value on the tree. */
+function boughTier(t: BoughTier, needle: Color, under: Color, snowK: number, twist: number, segs: number): BufferGeometry {
+  const { top, h, r } = t;
+  // Profile: tip, shoulder, bough end (the droop), underside back toward the trunk.
+  const prof = [
+    new Vector2(0.001, top),
+    new Vector2(r * 0.5, top - h * 0.46),
+    new Vector2(r, top - h),
+    new Vector2(r * 0.26, top - h * 0.7),
   ];
-  tiers.forEach((t, i) => {
-    const yb = t.y - t.h / 2;
-    const cone = part(new ConeGeometry(t.r, t.h, 7, 1), i % 2 ? shade(tall, 0.84) : tall, { pos: [0, t.y, 0], rot: [0, rnd() * 3, 0], jitter: 0.14 });
-    parts.push(paint(cone, yb, yb + t.h, 0.72 + i * 0.1, 1.0 + i * 0.08, 0.14));
-    // Thick snow most of the way down each tier.
-    parts.push(part(new ConeGeometry(t.r * 0.86, t.h * 0.6, 7, 1), SNOW, { pos: [0, t.y + t.h * 0.2, 0], rot: [0, rnd() * 3, 0], jitter: 0.08 }));
-    // Pillows of snow sitting on the lower skirts.
-    for (let k = 0; k < (i < 2 ? 2 : 0); k++) {
-      const a = rnd() * 6.28;
-      parts.push(part(new IcosahedronGeometry(0.34, 0), SNOW, { pos: [Math.cos(a) * t.r * 0.66, yb + 0.32, Math.sin(a) * t.r * 0.66], scale: [1.3, 0.55, 1.1], jitter: 0.08 }));
+  const lathe = new LatheGeometry(prof, segs);
+  const pos = lathe.getAttribute('position') as BufferAttribute;
+  const P = prof.length;
+  for (let i = 0; i <= segs; i++) {
+    const seg = i % segs;
+    const tip = seg % 2 === 0;
+    // The seam vertex repeats the first, so it takes the same jitter.
+    reseed(9000 + Math.round(twist * 1000) + seg * 7);
+    const jr = 0.92 + rnd() * 0.16;
+    const jy = (rnd() - 0.5) * 0.12 * h;
+    for (let j = 1; j < P; j++) {
+      const k = i * P + j;
+      let x = pos.getX(k);
+      let y = pos.getY(k);
+      let z = pos.getZ(k);
+      if (j === 1) {
+        // The shoulder: a little lumpy, so the snow line wanders.
+        x *= jr;
+        z *= jr;
+        y += jy;
+      } else {
+        // Bough tips hang lower and reach further; the gaps between them tuck in and up.
+        const s = (tip ? 1.04 : 0.74) * jr;
+        x *= s;
+        z *= s;
+        y += (tip ? -0.13 : 0.09) * h * (j === 2 ? 1 : 0.6);
+      }
+      const ca = Math.cos(twist);
+      const sa = Math.sin(twist);
+      pos.setXYZ(k, x * ca - z * sa, y, x * sa + z * ca);
+    }
+  }
+  const g = lathe.toNonIndexed();
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  const gp = g.getAttribute('position') as BufferAttribute;
+  const gn = g.getAttribute('normal') as BufferAttribute;
+  const col = new Float32Array(gp.count * 3);
+  const c = new Color();
+  for (let f = 0; f < gp.count; f += 3) {
+    const ny = gn.getY(f);
+    let ym = 0;
+    let rm = 0;
+    for (let j = f; j < f + 3; j++) {
+      ym += gp.getY(j) / 3;
+      rm += Math.hypot(gp.getX(j), gp.getZ(j)) / 3;
+    }
+    // 0 at the tip, 1 at the bough ends.
+    const down = Math.max(0, Math.min(1, (top - ym) / h));
+    const facet = 1 + (rnd() - 0.5) * 0.16;
+    if (ny < -0.05) {
+      // The underside, in its own shade: the darkest value on the tree, so each tier stands off the next.
+      c.copy(under).multiplyScalar(facet);
+    } else if (down < snowK * (0.75 + 0.5 * rnd()) || (ny > 0.62 && rm > r * 0.6 && rnd() < 0.7 * snowK + 0.2)) {
+      // The snow cap and the snow lying along the bough tops (a step cooler where it hangs lower).
+      c.copy(SNOW).multiplyScalar((1 - down * 0.12) * (0.97 + rnd() * 0.05));
+    } else {
+      // Needles: lighter up the tier, darker toward its skirt (painted value structure).
+      c.copy(needle).multiplyScalar((1.08 - down * 0.32) * facet);
+    }
+    for (let j = f; j < f + 3; j++) col.set([c.r, c.g, c.b], j * 3);
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3));
+  return g;
+}
+
+/** A tree well: the hollow the snow leaves round a trunk under the boughs, with a soft rim, faceted;
+ *  its floor in the snow's shade (it reads as a dip even in full sun), the rim lit snow that runs on
+ *  under the slope. */
+function treeWell(r: number, shadeC: Color): BufferGeometry {
+  const prof = [new Vector2(r * 1.45, -0.3), new Vector2(r, 0.12), new Vector2(0.2, -0.04)];
+  const g = new LatheGeometry(prof, 6).toNonIndexed();
+  g.deleteAttribute('uv');
+  g.computeVertexNormals();
+  const gp = g.getAttribute('position') as BufferAttribute;
+  const col = new Float32Array(gp.count * 3);
+  const dip = SNOW.clone().lerp(shadeC, 0.55);
+  for (let f = 0; f < gp.count; f += 3) {
+    let rm = 0;
+    for (let j = f; j < f + 3; j++) rm += Math.hypot(gp.getX(j), gp.getZ(j)) / 3;
+    const c = rm < r * 0.8 ? dip : SNOW;
+    for (let j = f; j < f + 3; j++) col.set([c.r, c.g, c.b], j * 3);
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3));
+  return g;
+}
+
+/** A painterly spruce (the forest's pine, ART.md section 3): tiers of drooping, scalloped boughs
+ *  instead of stacked cones, each with a ragged snow cap, snow along the bough tops and clumps out on
+ *  the tips, a dark underside under every tier, and a tree well at its foot. Faceted and flat-shaded,
+ *  so the low sun splits it into a lit side and a cool shade side. About the old pine's footprint (it
+ *  stands where that one stood). */
+function boughPine(p: Palette, s: BoughSpec): BufferGeometry {
+  reseed(s.seed);
+  const needle = shade(p.tall, s.tone);
+  const under = shade(p.tallDark.clone().lerp(p.tall, 0.3), 0.62 * s.tone);
+  const parts: BufferGeometry[] = [part(new CylinderGeometry(s.trunkR * 0.65, s.trunkR, s.trunk, 5, 1, true), WOOD, { pos: [0, s.trunk / 2, 0] })];
+  s.tiers.forEach((t, i) => {
+    const twist = rnd() * 6.28;
+    const top = i === s.tiers.length - 1 && i > 2;
+    parts.push(boughTier(t, i % 2 ? shade(needle, 0.9) : needle, under, s.snow * (1 - i * 0.08), twist, top ? 6 : BOUGH_SEGS));
+    // Snow clumps out on bough tips of the lower tiers (placed as the lathe lays its tips out, then
+    // turned by the tier's twist).
+    if (i < 2) {
+      for (let k = 0; k < s.clumps; k++) {
+        const phi = ((k * 2 + i * 2) * Math.PI * 2) / BOUGH_SEGS;
+        const rr = t.r * 0.9;
+        const x0 = Math.sin(phi) * rr;
+        const z0 = Math.cos(phi) * rr;
+        const x = x0 * Math.cos(twist) - z0 * Math.sin(twist);
+        const z = x0 * Math.sin(twist) + z0 * Math.cos(twist);
+        parts.push(part(new OctahedronGeometry(0.2 + 0.05 * rnd(), 0), SNOW, { pos: [x, t.top - t.h * 1.06 + 0.12, z], scale: [1.5, 0.62, 1.2], rot: [0, Math.atan2(x, z), 0], jitter: 0.05 }));
+      }
     }
   });
+  parts.push(treeWell(Math.max(0.7, s.tiers[0].r * 0.62), p.snowShade));
   return merge(parts);
 }
 
-/** A young spruce: two small tiers on a thin stem, about half a grown tree's height. */
-export function youngPineGeometry(p: Palette): BufferGeometry {
-  reseed(131);
-  const tall = shade(p.tall, 1.06);
-  const parts: BufferGeometry[] = [part(new CylinderGeometry(0.09, 0.13, 0.8, 5), WOOD, { pos: [0, 0.4, 0] })];
-  const tiers = [
-    { r: 0.92, h: 1.7, y: 1.3 },
-    { r: 0.6, h: 1.45, y: 2.3 },
-  ];
-  tiers.forEach((t, i) => {
-    const yb = t.y - t.h / 2;
-    const cone = part(new ConeGeometry(t.r, t.h, 6, 1), i ? shade(tall, 0.86) : tall, { pos: [0, t.y, 0], rot: [0, rnd() * 3, 0], jitter: 0.08 });
-    parts.push(paint(cone, yb, yb + t.h, 0.78, 1.08, 0.12));
-    parts.push(part(new ConeGeometry(t.r * 0.6, t.h * 0.4, 6, 1), SNOW, { pos: [0, t.y + t.h * 0.3, 0], rot: [0, rnd() * 3, 0], jitter: 0.05 }));
+/** The forest's spruce, in its plain and blossom-ridge colourings (variant reseeds it). */
+export function boughPineGeometry(p: Palette, variant = 0): BufferGeometry {
+  return boughPine(p, {
+    seed: 501 + variant,
+    trunk: 1.3,
+    trunkR: 0.24,
+    snow: 0.42,
+    clumps: 1,
+    tone: 1,
+    tiers: [
+      { top: 2.95, h: 2.05, r: 1.5 },
+      { top: 3.9, h: 1.85, r: 1.18 },
+      { top: 4.75, h: 1.55, r: 0.88 },
+      { top: 5.5, h: 1.2, r: 0.56 },
+    ],
   });
-  parts.push(part(new IcosahedronGeometry(0.55, 0), SNOW, { pos: [0, 0.02, 0], scale: [1.2, 0.3, 1.1], jitter: 0.08 }));
-  return merge(parts);
+}
+
+/** The run's own pine hazard in the bough style (for meshes.ts obstacleGeometry 'pine'): the forest
+ *  spruce with less snow on it, so it stays the dark, hard silhouette a hazard must be (ART.md section
+ *  1), and a bottom tier as wide as the old pine's (1.35 m; colliders are 0.7 to 0.95 m), so it looks
+ *  at least as wide as it collides. */
+export function hazardPineGeometry(p: Palette): BufferGeometry {
+  return boughPine(p, {
+    seed: 511,
+    trunk: 1.3,
+    trunkR: 0.24,
+    snow: 0.3,
+    clumps: 1,
+    tone: 0.96,
+    tiers: [
+      { top: 2.95, h: 2.05, r: 1.45 },
+      { top: 3.9, h: 1.85, r: 1.15 },
+      { top: 4.75, h: 1.55, r: 0.86 },
+      { top: 5.5, h: 1.2, r: 0.55 },
+    ],
+  });
+}
+
+/** A snow-laden spruce: broad, a little shorter, its boughs bowed under deep caps and clumps. */
+export function heavyPineGeometry(p: Palette): BufferGeometry {
+  return boughPine(p, {
+    seed: 121,
+    trunk: 1.1,
+    trunkR: 0.27,
+    snow: 0.7,
+    clumps: 2,
+    tone: 0.9,
+    tiers: [
+      { top: 2.75, h: 2.1, r: 1.68 },
+      { top: 3.7, h: 1.9, r: 1.32 },
+      { top: 4.5, h: 1.55, r: 0.95 },
+      { top: 5.15, h: 1.15, r: 0.58 },
+    ],
+  });
+}
+
+/** A young spruce: three small tiers on a thin stem, about half a grown tree's height. */
+export function youngPineGeometry(p: Palette): BufferGeometry {
+  return boughPine(p, {
+    seed: 131,
+    trunk: 0.7,
+    trunkR: 0.12,
+    snow: 0.36,
+    clumps: 1,
+    tone: 1.06,
+    tiers: [
+      { top: 1.95, h: 1.45, r: 0.95 },
+      { top: 2.65, h: 1.2, r: 0.68 },
+      { top: 3.2, h: 0.85, r: 0.4 },
+    ],
+  });
 }
 
 /** A dead snag: a bare, broken grey trunk with a few stub branches, snow on its stubs and foot. */
@@ -347,10 +537,10 @@ export function paleBlossomGeometry(p: Palette): BufferGeometry {
  *  instance picks one (see props.ts forest()). */
 export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b'): Array<() => BufferGeometry> {
   const a = set === 'a';
-  if (biome === 'alpine') return a ? [() => pineGeometry(p, 1), () => heavyPineGeometry(p)] : [() => youngPineGeometry(p), () => snagGeometry()];
+  if (biome === 'alpine') return a ? [() => boughPineGeometry(p, 1), () => heavyPineGeometry(p)] : [() => youngPineGeometry(p), () => snagGeometry()];
   if (biome === 'glacier') return a ? [() => spireGeometry(p), () => brokenSpireGeometry(p)] : [() => seracGeometry(p), () => iceMoundGeometry(p)];
   if (biome === 'volcanic') return a ? [() => charPineGeometry(p), () => charSnagGeometry(p)] : [() => basaltGeometry(p), () => basaltStubGeometry(p)];
-  return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => pineGeometry(p, 3), () => youngPineGeometry(p)];
+  return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3), () => youngPineGeometry(p)];
 }
 
 /** A forest set made at once (tests and probes; the game makes it a variant per idle callback). */
@@ -360,10 +550,10 @@ export function forestSet(biome: BiomeId, p: Palette, set: 'a' | 'b'): BufferGeo
 
 /** The first variant of each set, for the first frames before the sets are made on idle time. */
 export function forestBase(biome: BiomeId, p: Palette): { a: BufferGeometry; b: BufferGeometry } {
-  if (biome === 'alpine') return { a: pineGeometry(p, 1), b: youngPineGeometry(p) };
+  if (biome === 'alpine') return { a: boughPineGeometry(p, 1), b: youngPineGeometry(p) };
   if (biome === 'glacier') return { a: spireGeometry(p), b: seracGeometry(p) };
   if (biome === 'volcanic') return { a: charPineGeometry(p), b: basaltGeometry(p) };
-  return { a: blossomGeometry(p), b: pineGeometry(p, 3) };
+  return { a: blossomGeometry(p), b: boughPineGeometry(p, 3) };
 }
 
 /** Chance an instance of set 'a' or 'b' takes the variant (pick 1) rather than the original. */

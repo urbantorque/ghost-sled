@@ -47,6 +47,11 @@ export interface GradeParams {
   foot?: number;
   /** Light shafts from a low sun in view (0 for none: night, overcast and high-sun moods). */
   shafts?: number;
+  /** The filmic finish (0..1, default 1): the lit snow leans to the light's warmth and the shade to the
+   *  mood's periwinkle, with a soft S-curve and vibrance in the mid-tones. */
+  film?: number;
+  /** How far the bloom leans to the light's own colour (0..1, default 0.4). */
+  bloomWarm?: number;
 }
 
 const sunProbe = new Vector3();
@@ -207,6 +212,8 @@ export class PostFX {
         uShaft: { value: 0 },
         uShaftTaps: { value: 8 },
         uShaftColor: shared.uSunColor,
+        uFilm: { value: 1 },
+        uBloomWarm: { value: 0.4 },
       },
       fragmentShader: /* glsl */ `
         uniform sampler2D tScene;
@@ -239,6 +246,8 @@ export class PostFX {
         uniform float uShaft;
         uniform float uShaftTaps;
         uniform vec3 uShaftColor;
+        uniform float uFilm;
+        uniform float uBloomWarm;
         varying vec2 vUv;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         // A lattice hash without sin: the sine hash amplifies a one-ulp difference between two
@@ -334,7 +343,15 @@ export class PostFX {
             col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
             col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
           }
-          if (uUseBloom > 0.5) col += texture2D(tBloom, uv).rgb * uBloom;
+          // The light's own hue, at full value: what the bloom and the lit snow lean toward.
+          vec3 lightHue = uShaftColor / max(max(uShaftColor.r, uShaftColor.g), max(uShaftColor.b, 0.001));
+          if (uUseBloom > 0.5) {
+            // A warm bloom: the glow round the sun and the glints on the snow takes on the light's colour
+            // (a moon's is cool), so it reads as light in the air rather than a grey haze.
+            vec3 bl = texture2D(tBloom, uv).rgb;
+            float bL = dot(bl, vec3(0.2126, 0.7152, 0.0722));
+            col += mix(bl, bL * mix(lightHue, vec3(1.0, 0.74, 0.5), 0.3) * 1.1, uBloomWarm) * uBloom;
+          }
           // Light shafts: while a low sun is in view, warm rays fan out from it through the gaps in the
           // treeline and the ridges. Each pixel near the sun looks back along the line to it for bright
           // sky; what stands in the way (a trunk, a crest) leaves a cool gap between the rays. Taps
@@ -366,6 +383,26 @@ export class PostFX {
           float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l), col, uSat);
           col = (col - 0.18) * uContrast + 0.18;
+          if (uFilm > 0.0) {
+            // The filmic finish: lit values lean a touch to the light's warmth and shaded ones to the
+            // mood's own periwinkle (split toning, so the frame pops on light against shade without
+            // moving any colour role), a soft S-curve on the value, and vibrance that lifts muted
+            // colours more than already saturated ones (the vermillion, marigold and mint hold).
+            col = max(col, 0.0);
+            float lg = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            vec3 coolHue = uPowShade / max(dot(uPowShade, vec3(0.2126, 0.7152, 0.0722)), 0.05);
+            float hiK = smoothstep(0.3, 0.9, lg);
+            float loK = 1.0 - smoothstep(0.04, 0.4, lg);
+            col *= mix(vec3(1.0), mix(vec3(1.0), lightHue, 0.5), hiK * 0.1 * uFilm);
+            col *= mix(vec3(1.0), mix(vec3(1.0), coolHue, 0.5), loK * 0.16 * uFilm);
+            float lc = min(lg, 1.0);
+            float s = lc + (lc * lc * (3.0 - 2.0 * lc) - lc) * 0.38 * uFilm;
+            col *= mix(1.0, s / max(lc, 0.001), step(lg, 1.0));
+            float mx = max(col.r, max(col.g, col.b));
+            float sat = (mx - min(col.r, min(col.g, col.b))) / max(mx, 0.001);
+            float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            col = max(mix(vec3(l2), col, 1.0 + 0.25 * uFilm * (1.0 - sat)), 0.0);
+          }
           // Soft tone curve so highlights roll off instead of clipping.
           col = col / (1.0 + max(col - 0.85, 0.0) * 0.6);
           col += uFlash * 0.35;
@@ -631,6 +668,8 @@ export class PostFX {
     this.moodGrain = g.grain ?? 1;
     this.moodFoot = g.foot ?? 0;
     this.moodShafts = g.shafts ?? 0;
+    u.uFilm.value = g.film ?? 1;
+    u.uBloomWarm.value = g.bloomWarm ?? 0.4;
   }
 
   /** How strong the light shafts are this frame, and where the sun sits on screen: only for a low,

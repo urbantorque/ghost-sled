@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
-import { makeSnowMaterial } from './materials';
+import { makeSnowMaterial, shared } from './materials';
 
 // Terrain chunks that bend with the corridor: each row of vertices is laid out relative to the
 // centreline at that z, so the playable lane gets dense vertices and the far forest floor is
@@ -17,6 +17,70 @@ export interface TerrainDetail {
 }
 
 const OUTER_STEPS = [12, 16, 22, 30, 42, 58, 80, 110];
+/** Medium and High: about twice the outer columns, so the drifts past the treeline have vertices to
+ *  sit on. */
+const OUTER_STEPS_FINE = [11.5, 13, 14.5, 16, 18, 20, 22, 24.5, 27, 30, 34, 38, 42, 47, 52, 58, 66, 74, 80, 92, 110];
+
+// ---------------------------------------------------------------- drifts past the treeline
+//
+// Visual-only snow relief, laid only where no sled can ride: from just past FOREST_LIMIT (10 m past
+// the corridor edge, where the sim's forest crash begins) outward. Inside that the mesh is the sim's
+// ground to the millimetre. Two layers: soft drift dunes (long swells lying across the wind, their
+// crests narrow and their troughs broad) and a pillowed rim where the banks meet the trees. The lift is
+// never negative, so a tree or a bank piece placed on course.ground() can sink into a drift but never
+// float over a hollow.
+
+function hash2(ix: number, iz: number, salt: number): number {
+  let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263) + Math.imul(salt, 1442695041)) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967296;
+}
+
+function vnoise2(x: number, z: number, salt: number): number {
+  const ix = Math.floor(x);
+  const iz = Math.floor(z);
+  let fx = x - ix;
+  let fz = z - iz;
+  fx = fx * fx * (3 - 2 * fx);
+  fz = fz * fz * (3 - 2 * fz);
+  const a = hash2(ix, iz, salt);
+  const b = hash2(ix + 1, iz, salt);
+  const c = hash2(ix, iz + 1, salt);
+  const d = hash2(ix + 1, iz + 1, salt);
+  return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
+}
+
+/** Metres past the corridor edge where the drifts begin, and where they reach full height. */
+export const DRIFT_FROM = 10.5;
+const DRIFT_FULL = 22;
+
+/** The drift field at sim (x, z), `edge` metres past the corridor edge (course.edgeExcess): out[0] is
+ *  the lift in metres (never negative), out[1] how near a swell's crest this is (0..1), so the snow
+ *  shader can catch the sun on it. Zero everywhere a sled can ride. */
+export function snowDrift(x: number, z: number, edge: number, out: [number, number]): [number, number] {
+  if (edge <= DRIFT_FROM) {
+    out[0] = 0;
+    out[1] = 0;
+    return out;
+  }
+  const ramp = Math.min(1, (edge - DRIFT_FROM) / (DRIFT_FULL - DRIFT_FROM));
+  const rk = ramp * ramp * (3 - 2 * ramp);
+  // Swells lie across a wind blowing about 25 degrees off the fall line: long along the crest, short
+  // across it, with a slow warp so the crests wander instead of ruling the slope.
+  const u = x * 0.906 + z * 0.423;
+  const v = -x * 0.423 + z * 0.906;
+  const warp = vnoise2(u * 0.02, v * 0.02, 7) * 3.2;
+  const swell = vnoise2(v * 0.07 + warp, u * 0.02, 3) * 0.7 + vnoise2(v * 0.15 + warp, u * 0.05, 5) * 0.3;
+  // Drifts pile up: a sharpened swell, so crests are narrow and the troughs broad and soft.
+  const crest = Math.max(0, swell - 0.3) / 0.7;
+  const pile = crest * crest;
+  // The pillowed rim where the banks meet the treeline: soft mounds a few metres across.
+  const rim = Math.exp(-((edge - 13) * (edge - 13)) / 10) * vnoise2(x * 0.3, z * 0.22, 11);
+  out[0] = rk * (pile * 1.7 + 0.3 * vnoise2(x * 0.06, z * 0.06, 13)) + rim * 0.45 * Math.min(1, (edge - DRIFT_FROM) * 0.6);
+  out[1] = rk * crest;
+  return out;
+}
 
 /** The same offsets for every chunk of a course, so neighbouring chunks share edge vertices
  *  exactly and no cracks open between them. */
@@ -25,7 +89,8 @@ function lateralOffsets(course: Course, d: TerrainDetail): number[] {
   const inner = hw + 10;
   const n = Math.ceil((inner * 2) / d.inner);
   const out: number[] = [];
-  for (const s of OUTER_STEPS) if (s > 10 && s <= d.reach) out.push(-(hw + s), hw + s);
+  // Low (reach 60) keeps the original coarse columns.
+  for (const s of d.reach > 60 ? OUTER_STEPS_FINE : OUTER_STEPS) if (s > 10 && s <= d.reach) out.push(-(hw + s), hw + s);
   for (let k = 0; k <= n; k++) out.push(-inner + (k * inner * 2) / n);
   out.sort((a, b) => a - b);
   return out;
@@ -61,7 +126,11 @@ class ChunkJob {
    *  to 0 off its flanks), how far up the face (0 at its foot, 1 at the lip), metres across from the
    *  ramp's middle and metres past the lip. (0, -1, 0, -10) away from any kicker. */
   readonly kick: Float32Array;
+  /** Per vertex: metres across from the corridor's centreline (the packed sled lane down its middle)
+   *  and how near a drift's crest it lies (0..1; snow shader). */
+  readonly snow: Float32Array;
   private ramps: Ramp[] = [];
+  private drift: [number, number] = [0, 0];
   row = 0;
 
   constructor(
@@ -77,6 +146,7 @@ class ChunkJob {
     this.edge = new Float32Array(n);
     this.ice = new Float32Array(n);
     this.kick = new Float32Array(n * 4);
+    this.snow = new Float32Array(n * 2);
   }
 
   get done(): boolean {
@@ -109,9 +179,25 @@ class ChunkJob {
       let p = this.row * cols;
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
-        const y = c.ground(x, z);
-        const gx = (c.ground(x + e, z) - y) / e;
-        const gz = (c.ground(x, z + e) - y) / e;
+        const ed = Math.abs(this.offs[col]) - hw;
+        let y = c.ground(x, z);
+        let gx: number;
+        let gz: number;
+        this.snow[p * 2] = this.offs[col];
+        if (ed > DRIFT_FROM) {
+          // Past the treeline: the drifts lift the snow, and their slope bends the normal too.
+          const lift = snowDrift(x, z, ed, this.drift)[0];
+          this.snow[p * 2 + 1] = this.drift[1];
+          const lx = snowDrift(x + e, z, c.edgeExcess(x + e, z), this.drift)[0];
+          const lz = snowDrift(x, z + e, c.edgeExcess(x, z + e), this.drift)[0];
+          gx = (c.ground(x + e, z) + lx - y - lift) / e;
+          gz = (c.ground(x, z + e) + lz - y - lift) / e;
+          y += lift;
+        } else {
+          this.snow[p * 2 + 1] = 0;
+          gx = (c.ground(x + e, z) - y) / e;
+          gz = (c.ground(x, z + e) - y) / e;
+        }
         this.pos[p * 3] = x;
         this.pos[p * 3 + 1] = y;
         this.pos[p * 3 + 2] = -z;
@@ -119,7 +205,7 @@ class ChunkJob {
         this.nrm[p * 3] = -gx * inv;
         this.nrm[p * 3 + 1] = inv;
         this.nrm[p * 3 + 2] = gz * inv;
-        this.edge[p] = Math.abs(this.offs[col]) - hw;
+        this.edge[p] = ed;
         this.ice[p] = iceRow && c.surface(x, z).ice ? 1 : 0;
         const kq = p * 4;
         this.kick[kq] = 0;
@@ -169,6 +255,7 @@ class ChunkJob {
     geo.setAttribute('aEdge', new BufferAttribute(this.edge, 1));
     geo.setAttribute('aIce', new BufferAttribute(this.ice, 1));
     geo.setAttribute('aKick', new BufferAttribute(this.kick, 4));
+    geo.setAttribute('aSnow', new BufferAttribute(this.snow, 2));
     geo.setIndex(new BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
@@ -187,6 +274,7 @@ export class Terrain {
   readonly material: ShaderMaterial;
   private meshes = new Map<number, Mesh>();
   private job: ChunkJob | null = null;
+  private fogCourse: Course | null = null;
   /** Main-thread milliseconds per frame allowed for streaming terrain. */
   budgetMs = 2.5;
 
@@ -220,8 +308,24 @@ export class Terrain {
     this.job = null;
   }
 
+  /** Fits the floor the low mist settles on (shared.uFogFloor) to the course's base height over the
+   *  stretch ahead of chunk `from`, easing toward it as the window moves (a jump snaps). */
+  private fitFogFloor(from: number): void {
+    const z0 = Math.max(0, from + 1) * CHUNK_LEN;
+    const z1 = z0 + 4 * CHUNK_LEN;
+    const y0 = this.course.baseY(z0);
+    const k = (this.course.baseY(z1) - y0) / (z1 - z0);
+    // Three.js z is the sim's z negated: y = y0 + k * (simZ - z0) = (y0 - k * z0) - k * z.
+    const a = y0 - k * z0;
+    const f = shared.uFogFloor.value;
+    if (Math.abs(f.x - a) > 25 || this.fogCourse !== this.course) f.set(a, -k);
+    else f.set(f.x + (a - f.x) * 0.04, f.y + (-k - f.y) * 0.04);
+    this.fogCourse = this.course;
+  }
+
   /** Keep chunks [from, to] built, streaming at most budgetMs of work per call. */
   update(from: number, to: number): void {
+    this.fitFogFloor(from);
     for (const [i, m] of this.meshes) {
       if (i < from - 1 || i > to + 1) {
         m.geometry.dispose();
