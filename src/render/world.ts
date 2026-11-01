@@ -15,6 +15,7 @@ import { LandingAid } from './landing';
 import { Life } from './life';
 import { applyPalette, bands, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
+import { Overlooks } from './overlook';
 import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
@@ -136,6 +137,8 @@ export class World {
   readonly props: Props;
   /** The course's set pieces and their crowds (landmarks.ts). */
   readonly setPieces: SetPieces;
+  /** Where one bank opens over the valley (overlook.ts); the terrain, mid-ground and forest read it. */
+  readonly overlooks: Overlooks;
   readonly sky: Sky;
   readonly rider = new Rider();
   readonly particles: Particles;
@@ -221,7 +224,12 @@ export class World {
     this.midground = new Midground(this.course, this.palette, quality.tier, quality.terrain.reach);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
-    this.props.siteClearings = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
+    this.overlooks = new Overlooks(this.course, this.palette, quality.tier);
+    this.terrain.overlooks = this.midground.overlooks = this.overlooks;
+    this.props.siteClearings = (z0, z1, out) => {
+      this.setPieces.clearings(z0, z1, out);
+      this.overlooks.clearings(z0, z1, out);
+    };
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.tier);
     setCloudShadows(quality.tier !== 'low');
@@ -270,6 +278,7 @@ export class World {
       this.sky.root,
       this.terrain.root,
       this.midground.root,
+      this.overlooks.root,
       this.props.root,
       this.setPieces.root,
       this.trail.mesh,
@@ -360,6 +369,7 @@ export class World {
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
     this.midground.setTier(q.tier, q.terrain.reach);
+    this.overlooks.setTier(q.tier);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
     this.setPieces.setQuality(q.tier, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
@@ -391,6 +401,7 @@ export class World {
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
     this.midground.setCourse(c, this.palette);
+    this.overlooks.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
@@ -417,6 +428,7 @@ export class World {
     if (!same) this.props.setCourse(this.course, this.palette);
     if (!same) this.setPieces.setCourse(this.course, this.palette, mood);
     this.midground.setPalette(this.palette);
+    this.overlooks.setPalette(this.palette);
     this.sky.setPalette(this.palette);
     this.life.setPalette(this.palette, mood);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -532,6 +544,7 @@ export class World {
     // Two chunks behind the start too, so the title camera never sees the edge of the world.
     const from = cur === 0 ? -2 : cur - 1;
     const to = cur + this.quality.viewChunks;
+    this.overlooks.update(z);
     if (prime) this.terrain.prime(from, Math.min(to, cur + 4));
     this.terrain.update(from, to);
     this.midground.update(z, prime);
@@ -716,7 +729,7 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity }, dt);
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0 }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
