@@ -497,6 +497,8 @@ export class Fx {
       this.perfect(text, points);
       return;
     }
+    // Something new on the stack: a hushed callout line and stake come back at once (Hud.beat).
+    this.hud.beat();
     const max = MAX_LINES;
     const now = performance.now();
     const race = o.race;
@@ -897,6 +899,7 @@ export class Fx {
    * `streak` (1 for a plain stamp) deepens the slam: a streak of 5 lands from about 1.9x.
    */
   private showStamp(text: string, parts: ReadonlyArray<[string, number]>, split: boolean, streak: number): void {
+    this.hud.beat();
     const now = performance.now();
     for (const c of this.items.slice()) {
       if (c.tone === 'lost') continue;
@@ -1029,6 +1032,7 @@ export class Fx {
    * way to a newer cash-in). Reduced motion: it counts up in place with no scaling, chip slam or sparks.
    */
   cashIn(b: { points: number; mult: number; origin: number; tier: BankTier; header: 'New best combo' | 'Massive' | null; bump: boolean }): void {
+    this.hud.beat();
     // An older cash-in still on screen gives way at once.
     for (const o of this.banks.slice()) this.dropBank(o);
     const tier = b.tier;

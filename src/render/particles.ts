@@ -19,6 +19,17 @@ const puffKind = () => KIND_PUFF + Math.random() * 0.9;
 /** The chase camera's velocity, so sprites stretch along motion as seen through the lens. */
 const camVel = new Vector3();
 
+/** The chase camera's velocity (read-only), for other lens-space sprites (nearfield.ts). */
+export function cameraVelocity(): Vector3 {
+  return camVel;
+}
+
+/** Point-size scale in device pixels (the viewport height times the pixel ratio, times 0.9). */
+let lensScale = 600;
+export function lensPx(): number {
+  return lensScale;
+}
+
 const ATTRS = ['position', 'aVel', 'aColor', 'aSize', 'aAlpha', 'aKind'] as const;
 
 class Layer {
@@ -189,6 +200,10 @@ class Layer {
               size = minPx;
             }
             if (aKind < 0.5) {
+              // Dark grit (a hazard's slate chips, the avalanche's debris flecks) stays down on the snow:
+              // above the lens's own height it is up against the sky, where a dark fleck read as a flying
+              // disc (a phone's chase camera looks down, so that is high on its screen).
+              if (dot(aColor, vec3(0.3, 0.59, 0.11)) < 0.6) a *= 1.0 - smoothstep(cameraPosition.y - 0.9, cameraPosition.y - 0.2, position.y);
               // Stretch along the motion relative to the lens over a short virtual shutter. Only
               // fast, fresh spray streaks: powder that has settled stays a speck rather than smearing
               // into a flat disc as the camera races past it.
@@ -519,6 +534,7 @@ export class Particles {
     this.powder.setCap(Math.round(1700 * budget));
     this.glow.setCap(Math.round(900 * budget));
     const scale = viewportHeight * 0.9;
+    lensScale = scale;
     this.powder.setScale(scale);
     this.glow.setScale(scale);
   }
