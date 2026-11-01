@@ -530,6 +530,11 @@ interface Fig {
   live: boolean;
   /** Rides the mid-ground (farGround) rather than the course's banks. */
   far: boolean;
+  /** A far rider's last ground height and the frames until it is asked again (the mid-ground's
+   *  height query is the costly part of a frame's walk; 150 m out, a height three frames old is
+   *  centimetres off). */
+  gy: number;
+  gk: number;
 }
 
 // ---------------------------------------------------------------- smoke
@@ -855,7 +860,7 @@ export class Life {
     this.figMesh = new InstancedMesh(fg, this.figMat, FIG_CAP);
     this.figMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.figMesh.count = 0;
-    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false });
+    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0 });
 
     // Smoke.
     this.smokeGeo = new InstancedBufferGeometry();
@@ -1466,7 +1471,15 @@ export class Life {
       // World position and heading.
       const hw = c.halfWidth(f.z);
       const x = c.centerX(f.z) + f.side * (hw + f.e);
-      const gy = f.far && this.farGround ? this.farGround(x, f.z) : c.ground(x, f.z);
+      let gy: number;
+      if (f.far && this.farGround) {
+        if (f.gk <= 0) {
+          f.gy = this.farGround(x, f.z);
+          f.gk = 3;
+        }
+        f.gk--;
+        gy = f.gy;
+      } else gy = c.ground(x, f.z);
       if (!(gy > -1e6)) {
         f.live = false;
         continue;
@@ -1523,6 +1536,7 @@ export class Life {
     f.gait = this.rand() * 6.28;
     f.tint = Math.floor(this.rand() * JACKETS.length);
     f.far = kind >= F_SKIER && this.farGround !== null;
+    f.gk = 0;
     if (kind === F_DEER || kind === F_IBEX) {
       // Standing turned toward the run, a little off square.
       f.dir = side * (-1.3 + this.rand() * 0.8);

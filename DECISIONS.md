@@ -735,3 +735,57 @@ Every place where I replaced, extended or interpreted the brief, and why.
     look up a section and blend twelve fields on every call, and the terrain asks for a whole row of
     x at one z (and its slope at z + 0.25). A two-entry memo per function answers most calls; the
     values are the same, so the sim and every replay are unchanged.
+110. **The horizon is a real mountain panorama.** Three faceted ranges and a hero peak per biome
+    (Pinecrest's snow summit, Frostfang's ice fang, Ember Peak's smoking volcano, Sakura Ridge's
+    cone) replace the three paper ridge ribbons, in one draw: a polar grid raised in the vertex
+    shader with ridged noise stretched round the ring, so crests read side-on rather than as a field
+    of spires. The panorama has its own key light swung off the sun's bearing, so faces toward the
+    lens split into lit and shade instead of all being backlit. The near ranges part down the fall
+    line to keep the sky over the rider clear, crests under the sun stop below the disc, and a sea of
+    clouds 330 m below the lens is painted by one function in both the dome and the ranges' feet,
+    so the two never show a seam. Alpenglow climbs the peaks over the sun's journey. Low draws one
+    range and the hero. Net draw calls fall by two on every tier.
+111. **The middle distance is built, and it passes by.** A world-anchored, streamed mid-ground
+    (`midground.ts`) carries the mountain on from the terrain's edge to about 1.15 km: one side falls
+    to a stepped valley floor, the other climbs into a forested, craggy flank. From the chase lens
+    the banks hide everything below their crest, so the climbing side is what reads while riding and
+    hamlets sit on the flanks; valley villages (church and frozen lake, research huts and a mast,
+    stone lodges by a lava river, a pagoda town) show from the title, jumps and the crash shots. Its
+    ends and outer edge sink into the haze in the vertex shader, since fully fogged geometry still
+    cuts a silhouette from a bluer sky. Windows and lamps light from dusk. +3 draw calls on High
+    and Medium (+4 at night), +1 on Low (shoulders only).
+112. **The run passes set pieces, and the crowd reacts.** Every 500 to 900 m the course runs under,
+    beside or past one big place (`landmarks.ts`): gates, footbridges, ice and basalt arches and a
+    torii over the run; huts, towers, a ski jump, frozen falls, an observatory, guardians and a pagoda
+    beside it. A span's lowest point clears by 6 m the highest air any sled could reach under it (every
+    pop, kicker and vent up to 380 m up the slope flown at the fastest speed there, in the mood's
+    gravity); where that needs more than 56 m it becomes a bank piece. Everything else stands 9.2 m
+    or more past the corridor edge, and a test checks every vertex on all four mountains. The forest
+    keeps each piece's ground and its crowd's rows clear (`Props.siteClearings`). Toy spectators line
+    the banks at gates and huts, turn to follow the rider, and cheer the beats made near them: the
+    world answers the player without a sim change.
+113. **The mountain is inhabited.** `life.ts` adds six instanced systems, one draw each: birds that
+    wheel and scatter from a stomp or a crash, chairs running the dressing's real lift cables, deer,
+    ibex, hares and foxes at the treeline that only ever bolt away from the run, skiers and a night
+    snowcat on the mid-ground's flanks, chimney smoke from the cabins and the hamlets, flags and
+    lantern strings, and diamond dust in the sunbeams. Motion is in vertex shaders off the shared
+    clock; the CPU walks about 22 figure matrices a frame. Low keeps the birds.
+114. **The camera directs the big moments.** A flight predicted at 1 s or more pulls the lens out, up
+    and to the open side (full at 1.9 s) so the valley opens under the rider, keeps the landing spot
+    in frame, and is home 0.35 s before touchdown so the stomp is judged from the familiar framing.
+    Speed reads above 15 m/s through the FOV, a speed-scaled carve tilt, a low lens into fast carves,
+    a fine rumble from 24 m/s (kept apart from the beat shakes so their sizes hold) and flurries
+    skimming the snow. A hard carve at speed throws a real rooster tail; clean landings slump heavy
+    billows to the sides that travel with the sled. The desktop title cranes from a wide shot of the
+    world into the hero shot. Reduced motion turns all the new motion off.
+115. **The near world is painted, not plain.** Drift dunes and pillowed treeline mounds exist only
+    past FOREST_LIMIT and never lower the snow, so the sim's ground and every placed prop stay honest;
+    everything inside the corridor (a packed centre lane with old runner tracks, sastrugi patches,
+    broad warm and cool tone patches, round pin-point glints) is shader-only. Pines are drooping,
+    scalloped bough tiers with ragged snow caps and a tree well, the hazard pine included, about 230
+    triangles each. A low mist settles on the course floor ahead, the fog warms toward the sun, hazards
+    darken at their foot, and a gentle filmic split tone separates lit snow from shade.
+116. **A shadow's softness is graded, not switched.** The snow judged how far a shadow's caster stood
+    by asking the shadow map once, 7 m nearer the light; on a lone caster's long shadow that flipped
+    the penumbra and the thinning at one line, a pale band cut square across it. It now asks at four
+    steps between 1.5 and 9.5 m, dithered per pixel, for the same number of reads.

@@ -141,6 +141,23 @@ High's triangles doubled because each forest batch carries two tree variants and
 unused one in the vertex shader (DECISIONS 106); Low keeps one variant. The course's z functions are
 memoised (DECISIONS 109), which paid for the new effects' extra ground queries on throttled CPUs.
 
+The world-scale round (DECISIONS 110 to 116: the mountain panorama, the mid-ground and its
+villages, set pieces and crowds, ambient life, the directing camera, painted snow and bough pines)
+was measured the same way against the build before it, in two interleaved rounds:
+
+| Check | Before the world-scale round | After |
+| --- | --- | --- |
+| High tier at 1x: plain run and Lantern Night | 60 fps, p90 17 ms | 60 fps, p90 17 ms |
+| Medium tier at 1x, plain run | 60 fps | 60 fps |
+| Low tier, CPU throttled 6x | 18 and 19 fps | 27 and 21 fps |
+| High tier through an avalanche chase, CPU throttled 4x | 45 and 47 fps | 28 and 40 fps |
+| Draw calls, High / Medium / Low | 73 / 69 / 41 to 43 | 80 / 76 / 41 |
+| Triangles, High / Medium / Low | 752k / 514k / 113k to 117k | 1.2M / 809k / 169k |
+
+The throttled avalanche chase is the one regression: frame CPU rises about 12% across the new
+systems and draw submission. The quality manager steps such a machine down to Medium, which holds
+60 fps at 1x. The mirror inset leaves the mid-ground, set pieces and life out.
+
 High renders into an R11G11B10F buffer with 2x MSAA; Medium and Low use FXAA in the composite
 pass instead. The tier is chosen automatically, first from the GPU name and then from measured
 frame times (`src/game/quality.ts`): it steps down when frames run long or judder and back up when
@@ -162,6 +179,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 
 | Script | What it does |
 | --- | --- |
+| `vista.js` | The world-scale set: the title, then a replayed best run (`?demo=0`) down each mountain, shot at 300, 1500, 2600 and 3900 m |
 | `shots.js` | The critique set (title, overtake, perfect landing, chaos reveal, four moods, results) with frame stats |
 | `carve.js` | Holds the line, then throws a hard carve into a drift |
 | `avalanche.js`, `perf-avalanche.js` | Outruns an avalanche and shoots the mirror, or records frame times on High at 4x CPU throttle |

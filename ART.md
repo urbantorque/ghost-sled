@@ -243,3 +243,42 @@ Biome bases for Clear Skies:
 4. Powder spray catching the light, with layers of paler ridges behind.
 
 If a frame has those four things and the HUD stays out of the way, it sells the game.
+
+## 12. The world at scale
+
+The run is high on a real mountain, in a world that goes on past the banks and is lived in.
+
+- **The panorama.** Faceted ranges in three depth steps, each paler and hazier with distance and
+  warmer toward the sun, rise out of a sunlit sea of clouds drifting below the horizon. Snow holds
+  on gentler faces above a ragged snow line and steep faces show the biome's rock; the sun side is
+  warm, the shade side takes the mood's cool shade. Each biome has a hero to the side of the fall
+  line, away from the sun: Pinecrest's massive snow summit, Frostfang's ice fang over glacier
+  tongues, Ember Peak's smoking volcano with a crater glow at night, Sakura Ridge's snow-capped cone.
+  On a Clear Skies run the alpenglow climbs the peaks: pink-coral snow over shaded valleys by 2 km,
+  only the summit tips lit at blue hour. Blizzard veils it all to ghosts.
+- **The middle distance.** Past the banks one side usually falls to a valley floor far below and the
+  other climbs into a flank, forested low down and bare above the treeline, with crags, gullies and
+  wind-drifted snowfields, faceted like the hazards. Hamlets perch on the flanks and villages sit on
+  the valley floor (chalets round a church and a frozen lake, red research huts and a radio mast,
+  stone lodges by a glowing lava river, a pagoda town with lanterns). Windows and lamps glow warm
+  from dusk and hold through the haze as points of light.
+- **Set pieces.** Every 500 to 900 m a place 15 to 50 m tall stands over or beside the run, readable
+  far down the fall line: timber gates and trestles, an ice arch, a basalt gateway with lava-lit
+  braziers, a torii in deep plum lacquer (never the player's vermillion), and huts, towers, a ski
+  jump, frozen falls, an observatory, guardians and a pagoda. Toy spectators in the rider's
+  proportions, coats in cool and muted colours and never a signal colour, line the banks, turn to
+  follow the rider and throw their arms up when a moment is made near them.
+- **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
+  owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
+  three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
+  small warm-brown deer, ibex, hares and foxes stand at the treeline and bolt away as you come. Far
+  skiers carve S-turns on the flanks. Life is small, soft and moves away from the run: never in the
+  corridor, never a signal colour.
+- **Snow and trees.** Past the treeline snow heaps into drift dunes, crests catching the sun and
+  troughs holding cold blue; the banks carry sastrugi in patches; the corridor's middle is a packed
+  lane, a step cooler, with faint old tracks. Pines are tiers of drooping, scalloped boughs with
+  ragged snow caps, a dark underside under each tier and a tree well at the foot. A low mist settles
+  on the course floor in the distance and the fog warms toward the sun.
+- **The lens.** Big air opens out into a vista and is home before the stomp; speed reads through the
+  lens between 15 and 36 m/s; a hard carve at speed throws a rooster tail of gouache billows, rim-lit
+  when backlit. The title cranes in from a wide shot of the whole world.

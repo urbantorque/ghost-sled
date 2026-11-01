@@ -862,11 +862,16 @@ export class World {
     const autoShadow = r.shadowMap.autoUpdate;
     r.shadowMap.autoUpdate = false;
     if (refresh) this.props.nearOnly(true);
-    // (The ambient life stays out of the mirror: it costs draws and the inset is about the wall.)
+    // (The ambient life, the mid-ground and the set pieces stay out of the mirror: they cost draws
+    // and CPU on the chase's busiest frames, and the inset is about the wall.)
     this.life.root.visible = false;
+    this.midground.root.visible = false;
+    this.setPieces.root.visible = false;
     this.post.renderInset(this.scene, this.mirrorCam, x, y, mw, mh, this.mirrorFade, Math.max(0, Math.min(1, 1 - gap / 50)), refresh);
     if (refresh) this.props.nearOnly(false);
     this.life.root.visible = true;
+    this.midground.root.visible = true;
+    this.setPieces.root.visible = true;
     r.shadowMap.autoUpdate = autoShadow;
   }
 
