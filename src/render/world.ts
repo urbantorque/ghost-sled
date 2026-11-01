@@ -863,6 +863,10 @@ export class World {
     pp.footScale = v.mode === 'results' ? 1.8 : tall ? 1.3 : 1;
     pp.punch = feel.reduced ? 0 : this.punch;
     pp.flash = this.flash * (feel.reduced ? 0.5 : 1);
+    // An enclosed run (landmarks.ts): its dark at the frame's edges, the strobe and the way out's flash.
+    const encl = this.setPieces.light;
+    pp.flash = Math.max(pp.flash, encl.flash * (feel.reduced ? 0.4 : 1));
+    pp.vignette = 1 + encl.shade * 1.5;
     pp.time = v.time;
     // The results hero shot is a calm frame: the danger grade lets go once the run is over. It
     // builds from about 60 m and eases in and out, so the wall arriving or a revive never pops it.
