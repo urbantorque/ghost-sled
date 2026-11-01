@@ -1,4 +1,4 @@
-import { clamp, dcos, dsin, lerp, smoothstep } from './dmath';
+import { TAU, clamp, dcos, dsin, lerp, smoothstep } from './dmath';
 import { BiomeId, MountainParams, paramsForSeed } from './mountains';
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
@@ -13,6 +13,8 @@ export const SAFE_LANE = 2.45;
 /** Distance up the bank (past the corridor edge) where the treeline crashes you. */
 export const FOREST_LIMIT = 10;
 export const START_CLEAR_Z = 150;
+/** Extra room (m) obstacles leave beside the safe lane at difficulty 0, shrinking to none at 1. */
+const EARLY_MARGIN = 1.5;
 
 export type ObstacleKind =
   | 'pine'
@@ -157,6 +159,113 @@ function bank(e: number): number {
   return 10.3 + 0.2 * (e - 12);
 }
 
+/**
+ * Sections give a course its shape. Each is 200 to 500 m of one kind, drawn per seed from the biome's
+ * deck, and blends into the next over SECTION_BLEND metres:
+ *   cruise       the plain corridor
+ *   chute        steeper, narrower and straighter: speed, fewer kickers
+ *   bowl         a wide, gentler basin, open, with kickers and moguls
+ *   switchbacks  tight S-bends at a shorter wavelength
+ *   benches      flatter terraces over rollers (they lift a boosted sled off the crests)
+ *   gully        narrow between high banks, few obstacles
+ *   split        wide, with a line of trees down the middle: the safe line takes one side
+ */
+export type SectionKind = 'cruise' | 'chute' | 'bowl' | 'switchbacks' | 'benches' | 'gully' | 'split';
+export const SECTION_KINDS: readonly SectionKind[] = ['cruise', 'chute', 'bowl', 'switchbacks', 'benches', 'gully', 'split'];
+export const SECTION_BLEND = 140;
+
+/** What a section does to the course; every field is a multiplier (1 = the plain corridor) except
+ *  `width` (metres added to the half-width), `split` (share of the half-width the safe line moves to
+ *  one side) and `roller` (roller height, metres). */
+export interface SectionShape {
+  slope: number;
+  width: number;
+  wander: number;
+  wave: number;
+  span: number;
+  split: number;
+  roller: number;
+  obstacles: number;
+  kickers: number;
+  moguls: number;
+  drops: number;
+}
+
+const SHAPES: Record<SectionKind, SectionShape> = {
+  cruise: { slope: 1, width: 0, wander: 1, wave: 1, span: 1, split: 0, roller: 0, obstacles: 1, kickers: 1, moguls: 1, drops: 1 },
+  chute: { slope: 1.3, width: -3, wander: 0.4, wave: 1.4, span: 0.6, split: 0, roller: 0, obstacles: 0.75, kickers: 0.5, moguls: 0.5, drops: 1.6 },
+  bowl: { slope: 0.88, width: 7, wander: 0.45, wave: 1.2, span: 0.8, split: 0, roller: 0, obstacles: 0.55, kickers: 1.8, moguls: 1.6, drops: 0.5 },
+  switchbacks: { slope: 1, width: -1, wander: 0.62, wave: 0.55, span: 0.45, split: 0, roller: 0, obstacles: 0.85, kickers: 0.8, moguls: 0.8, drops: 0.5 },
+  benches: { slope: 0.9, width: 2, wander: 0.8, wave: 1, span: 0.9, split: 0, roller: 1.6, obstacles: 0.8, kickers: 1.2, moguls: 0.3, drops: 0 },
+  gully: { slope: 1.1, width: -4.5, wander: 0.85, wave: 0.9, span: 0.5, split: 0, roller: 0, obstacles: 0.6, kickers: 0.6, moguls: 1, drops: 0.6 },
+  split: { slope: 1, width: 6, wander: 0.55, wave: 1.2, span: 0.35, split: 0.42, roller: 0, obstacles: 0.6, kickers: 0.7, moguls: 0.5, drops: 0 },
+};
+
+/** Section length range (m) per kind. */
+const SECTION_LEN: Record<SectionKind, readonly [number, number]> = {
+  cruise: [300, 480],
+  chute: [200, 320],
+  bowl: [220, 360],
+  switchbacks: [300, 440],
+  benches: [240, 380],
+  gully: [200, 300],
+  split: [220, 320],
+};
+
+/** Each biome's deck, in SECTION_KINDS order: its signature kinds come up most. */
+const SECTION_DECK: Record<BiomeId, readonly number[]> = {
+  alpine: [3, 1, 2, 3, 2, 1, 2.5],
+  glacier: [2, 3, 3, 1, 1, 1.2, 1],
+  volcanic: [2, 2, 1, 1.5, 1, 3, 2],
+  blossom: [2, 1, 1.2, 2, 4, 1, 1.2],
+};
+
+/** Chutes and gullies are the hard sections: none before this distance, and never two in a row. */
+const HARD_FROM = 900;
+const HARD: ReadonlySet<SectionKind> = new Set(['chute', 'gully']);
+/** The first section is a cruise at least this long, so the start is always the plain corridor. */
+const FIRST_SECTION = 450;
+const ROLLER_WAVE = 80;
+
+export interface Section {
+  kind: SectionKind;
+  z0: number;
+  z1: number;
+  /** The side the safe line takes in a split (+1 right, -1 left). */
+  side: 1 | -1;
+  /** Slope-weighted descent from z = 0 to z0, in units of the mountain's slope. */
+  drop0: number;
+  /** The centre line's bend phase at z0 (the integral of 1 / (300 x wave)). */
+  phase0: number;
+  prev: Section | null;
+}
+
+/** A blended shape at one z, written into by Course.shapeAt. */
+export interface ShapeAt extends SectionShape {
+  /** The split offset with its side (split x side, blended). */
+  splitSigned: number;
+}
+
+/** Rounded min and max: within k of each other they blend along a parabola (no corner). */
+function smin(a: number, b: number, k: number): number {
+  const h = Math.max(k - Math.abs(a - b), 0) / k;
+  return Math.min(a, b) - (h * h * k) / 4;
+}
+function smax(a: number, b: number, k: number): number {
+  return -smin(-a, -b, k);
+}
+
+/** The last two z values a z-only function was asked for, and its answers (most recent first). */
+interface Memo {
+  a: number;
+  va: number;
+  b: number;
+  vb: number;
+}
+
+const slopeOf = (s: SectionShape): number => s.slope;
+const freqOf = (s: SectionShape): number => 1 / (300 * s.wave);
+
 export class Course {
   readonly seed: number;
   readonly params: MountainParams;
@@ -168,6 +277,16 @@ export class Course {
   private zoneCache = new Map<number, Zones>();
   private featureCache = new Map<number, Zones>();
   private chunkCache = new Map<number, Chunk>();
+  private readonly sections: Section[] = [];
+  private lastSection = 0;
+  private readonly shapeTmp: ShapeAt = { ...SHAPES.cruise, splitSigned: 0 };
+  // Two-entry memos for the z-only functions: the terrain asks for a whole row of x at one z (and its
+  // slope at z + 0.25), and ground(), edgeExcess() and safeX() each ask again, so most calls repeat.
+  private shapeZ = NaN;
+  private readonly mcenterX: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly mhalfWidth: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly msafeX: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
+  private readonly mbaseY: Memo = { a: NaN, va: 0, b: NaN, vb: 0 };
 
   constructor(seed: number) {
     this.seed = seed >>> 0;
@@ -183,30 +302,170 @@ export class Course {
     return this.params.biome;
   }
 
-  /** 0 at the top, 1 once the ramp distance is reached. */
+  /** 0 at the top, 1 once the ramp distance is reached. It eases in: the first kilometre stays
+   *  close to the start's open corridor, and most of the climb comes in the middle of the ramp. */
   difficulty(z: number): number {
     const t = clamp((z - START_CLEAR_Z) / (this.params.rampDistance - START_CLEAR_Z), 0, 1);
-    return 1 - (1 - t) * (1 - t);
+    return t * t * (3 - 2 * t);
+  }
+
+  /** The section that holds z (z < 0 reads as the first). */
+  section(z: number): Section {
+    const list = this.sections;
+    if (list.length === 0) this.pushSection();
+    while (list[list.length - 1].z1 <= z) this.pushSection();
+    let i = this.lastSection;
+    if (i >= list.length) i = list.length - 1;
+    while (i > 0 && list[i].z0 > z) i--;
+    while (list[i].z1 <= z) i++;
+    this.lastSection = i;
+    return list[i];
+  }
+
+  /** Sections are drawn in order, each from its own hash, so the list is a pure function of the
+   *  seed whatever order it is read in. */
+  private pushSection(): void {
+    const list = this.sections;
+    const i = list.length;
+    const prev = i > 0 ? list[i - 1] : null;
+    const rng = new Rng(hash32(this.seed, i, 0x5ec7));
+    let kind: SectionKind = 'cruise';
+    let len = rng.range(FIRST_SECTION, FIRST_SECTION + 120);
+    if (prev) {
+      const deck = SECTION_DECK[this.params.biome];
+      const weights = SECTION_KINDS.map((k, n) => {
+        if (k === prev.kind) return 0;
+        if (HARD.has(k) && (prev.z1 < HARD_FROM || HARD.has(prev.kind))) return 0;
+        return deck[n];
+      });
+      kind = SECTION_KINDS[rng.weighted(weights)];
+      const [lo, hi] = SECTION_LEN[kind];
+      len = rng.range(lo, hi);
+    }
+    const z0 = prev ? prev.z1 : 0;
+    const drop0 = prev ? prev.drop0 + this.sectionInt(prev, prev.z1 - prev.z0, slopeOf) : 0;
+    const phase0 = prev ? prev.phase0 + this.sectionInt(prev, prev.z1 - prev.z0, freqOf) : 0;
+    list.push({ kind, z0, z1: z0 + len, side: rng.chance(0.5) ? 1 : -1, drop0, phase0, prev });
+  }
+
+  /** The integral of a section field over the first `d` metres of a section, the field easing in
+   *  from the previous section's value over SECTION_BLEND (the integral of the smoothstep blend). */
+  private sectionInt(sec: Section, d: number, field: (s: SectionShape) => number): number {
+    const b = field(SHAPES[sec.kind]);
+    const a = sec.prev ? field(SHAPES[sec.prev.kind]) : b;
+    const B = SECTION_BLEND;
+    if (d < B) {
+      const u = d / B;
+      return a * d + (b - a) * B * (u * u * u - (u * u * u * u) / 2);
+    }
+    return a * B + 0.5 * (b - a) * B + b * (d - B);
+  }
+
+  /** The blended section shape at z (the returned object is reused: copy what you keep). */
+  shapeAt(z: number): ShapeAt {
+    if (z === this.shapeZ) return this.shapeTmp;
+    this.shapeZ = z;
+    const sec = this.section(z);
+    const cur = SHAPES[sec.kind];
+    const out = this.shapeTmp;
+    const prevSec = sec.prev;
+    const w = prevSec ? smoothstep(sec.z0, sec.z0 + SECTION_BLEND, z) : 1;
+    const pre = prevSec ? SHAPES[prevSec.kind] : cur;
+    out.slope = lerp(pre.slope, cur.slope, w);
+    out.width = lerp(pre.width, cur.width, w);
+    out.wander = lerp(pre.wander, cur.wander, w);
+    out.wave = lerp(pre.wave, cur.wave, w);
+    out.span = lerp(pre.span, cur.span, w);
+    out.split = lerp(pre.split, cur.split, w);
+    out.roller = lerp(pre.roller, cur.roller, w);
+    out.obstacles = lerp(pre.obstacles, cur.obstacles, w);
+    out.kickers = lerp(pre.kickers, cur.kickers, w);
+    out.moguls = lerp(pre.moguls, cur.moguls, w);
+    out.drops = lerp(pre.drops, cur.drops, w);
+    out.splitSigned = lerp(prevSec ? pre.split * prevSec.side : 0, cur.split * sec.side, w);
+    return out;
   }
 
   centerX(z: number): number {
+    const m = this.mcenterX;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.centerXAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private centerXAt(z: number): number {
     const amp = this.params.wander * (0.35 + 0.65 * this.difficulty(z)) * smoothstep(0, 220, z);
-    return amp * fbm1(this.sC, z / 300);
+    // Each section bends at its own wavelength. The bend's phase is the integral of its frequency,
+    // so a change of wavelength speeds the bends up or slows them down without a kink.
+    const sec = this.section(z);
+    const phase = z <= 0 ? z / 300 : sec.phase0 + this.sectionInt(sec, z - sec.z0, freqOf);
+    return amp * this.shapeAt(z).wander * fbm1(this.sC, phase);
   }
 
   halfWidth(z: number): number {
+    const m = this.mhalfWidth;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.halfWidthAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private halfWidthAt(z: number): number {
     const p = this.params;
-    return lerp(p.halfWidthStart, p.halfWidthEnd, this.difficulty(z)) + 2.5 * noise1(this.sW, z / 180);
+    const base = lerp(p.halfWidthStart, p.halfWidthEnd, this.difficulty(z)) + 2.5 * noise1(this.sW, z / 180);
+    // The terrain mesh is fine out to halfWidthStart + 12.6 m: a wide section stays inside it. The
+    // caps are rounded, so the width (and the safe line, which follows it) never turns a corner.
+    const w = smax(base + this.shapeAt(z).width, Math.min(base, 8.5), 3);
+    return smin(w, p.halfWidthStart + 3, 4);
   }
 
   /** The guaranteed passable line: no collider comes within SAFE_LANE of it. */
   safeX(z: number): number {
-    const span = Math.max(0, this.halfWidth(z) - 4.2) * 0.8 * smoothstep(0, 120, z);
-    return this.centerX(z) + span * fbm1(this.sS, z / 150);
+    const m = this.msafeX;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.safeXAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private safeXAt(z: number): number {
+    const hw = this.halfWidth(z);
+    const sh = this.shapeAt(z);
+    const span = Math.max(0, hw - 4.2) * 0.8 * sh.span * smoothstep(0, 120, z);
+    return this.centerX(z) + sh.splitSigned * hw + span * fbm1(this.sS, z / 150);
   }
 
   baseY(z: number): number {
-    return -this.params.slope * z + 10 * noise1(this.sY, z / 260) * smoothstep(0, 300, z);
+    const m = this.mbaseY;
+    if (z === m.a) return m.va;
+    if (z === m.b) return m.vb;
+    const v = this.baseYAt(z);
+    m.b = m.a;
+    m.vb = m.va;
+    m.a = z;
+    m.va = v;
+    return v;
+  }
+
+  private baseYAt(z: number): number {
+    const sec = this.section(z);
+    const drop = z <= 0 ? z : sec.drop0 + this.sectionInt(sec, z - sec.z0, slopeOf);
+    const roller = this.shapeAt(z).roller;
+    const roll = roller > 0 ? roller * dsin((TAU * z) / ROLLER_WAVE) : 0;
+    return -this.params.slope * drop + 10 * noise1(this.sY, z / 260) * smoothstep(0, 300, z) + roll;
   }
 
   /** Distance past the corridor edge (negative inside the corridor). */
@@ -294,7 +553,8 @@ export class Course {
   /** Pure per-index decision used to keep drops apart without recursion. */
   private wantsDrop(i: number): boolean {
     if (i < 5) return false;
-    return hash32(this.seed, i, 0xd409) / 4294967296 < this.params.dropChance * (0.6 + 0.6 * this.difficulty(i * CHUNK_LEN));
+    const mid = i * CHUNK_LEN + CHUNK_LEN / 2;
+    return hash32(this.seed, i, 0xd409) / 4294967296 < this.params.dropChance * this.shapeAt(mid).drops * (0.6 + 0.6 * this.difficulty(i * CHUNK_LEN));
   }
 
   /** Terrain features (drops, kickers, moguls, ice) and their keep-out boxes. Pure per index. */
@@ -312,6 +572,9 @@ export class Course {
     const rng = new Rng(hash32(this.seed, i, 0x20e5));
     const z0 = i * CHUNK_LEN;
     const diff = this.difficulty(z0);
+    const sh = this.shapeAt(z0 + CHUNK_LEN / 2);
+    const kickMul = sh.kickers;
+    const mogulMul = sh.moguls;
     const zn: Zones = { ramps: [], drops: [], moguls: [], ice: [], vents: [], keepOut: [] };
     if (z0 < START_CLEAR_Z - CHUNK_LEN) return zn;
 
@@ -323,7 +586,7 @@ export class Course {
       zn.keepOut.push({ z0: dz - 22, z1: dz + d.len + 52, x0: -1e9, x1: 1e9 });
     }
 
-    if (!drop && rng.chance(p.kickerChance * (0.75 + 0.5 * diff))) {
+    if (!drop && rng.chance(p.kickerChance * kickMul * (0.75 + 0.5 * diff))) {
       const count = diff > 0.55 && rng.chance(0.35) ? 2 : 1;
       for (let k = 0; k < count; k++) {
         const rz = z0 + rng.range(8, 36) + k * 22;
@@ -360,7 +623,8 @@ export class Course {
       }
     }
 
-    if (!drop && rng.chance(p.mogulChance * (0.6 + 0.8 * diff))) {
+    // No moguls in the first 300 m: a new rider stomping into them is thrown straight back up.
+    if (!drop && rng.chance(p.mogulChance * mogulMul * (0.6 + 0.8 * diff)) && z0 >= 300) {
       const mz = z0 + rng.range(0, 24);
       zn.moguls.push({ z0: mz, z1: mz + rng.range(28, 48), amp: lerp(0.32, 0.55, diff), phase: rng.range(0, 6.28), wave: rng.range(2.6, 3.4) });
     }
@@ -433,7 +697,8 @@ export class Course {
 
     const clearOf = (x: number, z: number, r: number): boolean => {
       if (z - r < START_CLEAR_Z) return false;
-      if (Math.abs(x - this.safeX(z)) < r + SAFE_LANE) return false;
+      // Early on the lane is wider than promised: a rider still learning to hold a bend has room.
+      if (Math.abs(x - this.safeX(z)) < r + SAFE_LANE + EARLY_MARGIN * (1 - diff)) return false;
       if (this.edgeExcess(x, z) > 1.5 - r) return false;
       if (this.inKeepOut(x, z, r, i)) return false;
       for (const o of obs) {
@@ -473,7 +738,8 @@ export class Course {
     const lowKinds = LOW[p.biome];
     const template = rng.weighted([1, 1.25, 0.9, 1.4]); // open, forest, rocks, mixed
     const templateMul = [0.45, 1.3, 1.15, 1.0][template];
-    const target = Math.round((3 + 13 * diff) * p.density * templateMul * (1 + beyond));
+    const obsMul = this.shapeAt(z0 + CHUNK_LEN / 2).obstacles;
+    const target = Math.round((3 + 13 * diff) * p.density * templateMul * obsMul * (1 + beyond));
 
     const placeOne = (kind: ObstacleKind, x: number, z: number): boolean => {
       switch (kind) {
@@ -534,6 +800,17 @@ export class Course {
       }
     };
 
+    // Soft snowmen: smash for points, slow you a little. Placed first, so the fill cannot crowd
+    // Pinecrest's signature out.
+    if (rng.chance(p.snowmanChance)) {
+      const n = rng.int(1, 3);
+      for (let k = 0; k < n; k++) {
+        const z = z0 + rng.next() * CHUNK_LEN;
+        const x = this.centerX(z) + rng.signed() * this.halfWidth(z) * 0.8;
+        if (clearOf(x, z, 0.65)) add('snowman', x, z, 0.65, 1.7, true);
+      }
+    }
+
     if (template === 1) {
       // Forest slalom: staggered rows of tall obstacles leaving the lane open.
       let z = z0 + rng.range(2, 8);
@@ -567,14 +844,11 @@ export class Course {
       if (placeOne(kind, x, z)) placed++;
     }
 
-    // Soft snowmen: smash for points, slow you a little.
-    if (rng.chance(p.snowmanChance)) {
-      const n = rng.int(1, 3);
-      for (let k = 0; k < n; k++) {
-        const z = z0 + rng.next() * CHUNK_LEN;
-        const x = this.centerX(z) + rng.signed() * this.halfWidth(z) * 0.8;
-        if (clearOf(x, z, 0.65)) add('snowman', x, z, 0.65, 1.7, true);
-      }
+    // A split: a line of trees down the middle. The safe line keeps to one side; the other side is
+    // a second way down, open but not promised.
+    for (let z = z0 + rng.range(1, 5); z < z1; z += rng.range(4.5, 7)) {
+      if (this.shapeAt(z).split < 0.3) continue;
+      placeOne(rng.pick(tallKinds), this.centerX(z) + rng.range(-1.6, 1.6), z);
     }
 
     // Spirit gates: two pillars straddling the safe line.
@@ -612,6 +886,8 @@ export class Course {
     // Lines: one follows the safe line, another (later) tempts you off it.
     const lines = rng.int(1, 2);
     for (let l = 0; l < lines; l++) {
+      // The line that tempts you off the safe one waits until 400 m: a first run learns the line first.
+      if (l > 0 && chunk.z0 < 400) break;
       const startZ = chunk.z0 + rng.range(4, 30);
       const n = rng.int(5, 8);
       const risky = l > 0 || rng.chance(0.35 * diff);

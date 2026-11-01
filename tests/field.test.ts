@@ -94,10 +94,13 @@ describe('pickField on the bundled pools at A = 420', () => {
     });
   }
 
-  it('keeps Frostfang honest: no plain opener in [210, 315], so the opener is flagged widened', () => {
-    const out = pickField(input(POOLS.frostfang));
-    const opener = out.find((p) => p.role === 'opener')!;
-    expect(opener.widened).toBe(true);
+  it('flags the opener widened exactly when no plain pool ghost sits in its window', () => {
+    const [lo, hi] = WIN.opener;
+    for (const m of MOUNTAINS) {
+      const opener = pickField(input(POOLS[m])).find((p) => p.role === 'opener')!;
+      const plain = POOLS[m].some((g) => g.mood === Mood.None && g.event === ChaosEvent.None && g.distance >= lo && g.distance <= hi);
+      expect(opener.widened === true, m).toBe(!plain);
+    }
   });
 
   it('keeps every pick 25 m from where your best crashed', () => {
@@ -251,11 +254,10 @@ describe('pickField: the fresh-save race (anchor 700 m, no history)', () => {
         const out = fresh(m, { seed });
         expect(out.map((p) => p.role)).toEqual(['opener', 'pack', 'pack', 'pace', 'pace']);
         for (const p of out) {
-          // Frostfang's twin 856 m wrecks leave its second pack slot to a widened window.
+          // A role whose window holds no usable pool ghost takes a widened one, and says so.
           const [lo, hi] = W[p.role!];
           const inside = p.distance! >= lo && p.distance! <= hi;
           expect(inside || p.widened === true, `${m} ${p.role} ${p.distance}`).toBe(true);
-          if (p.role !== 'pack' || m !== 'frostfang') expect(inside, `${m} ${p.role} ${p.distance}`).toBe(true);
         }
         expect(spacedOk(out)).toBe(true);
       }

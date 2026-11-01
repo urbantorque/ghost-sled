@@ -14,20 +14,17 @@ const sakura = 'sakura';
 const at = (d: number, ticks = 600) => ({ distance: d, ticks });
 
 describe('graveyards', () => {
-  it('finds the bundled clusters: Pinecrest 2, Frostfang none, Ember 1, Sakura 4 with 4 at 395 m', () => {
+  it('finds the bundled clusters: Pinecrest 1, Frostfang 1, Ember 1, Sakura 2', () => {
     const p = graveyards(pool(pinecrest), 'pinecrest');
     expect(p.map((g) => [Math.round(g.z), g.fell])).toEqual([
-      [370, 3],
-      [605, 3],
+      [2757, 3],
     ]);
-    expect(graveyards(pool(frostfang), 'frostfang')).toEqual([]);
-    expect(graveyards(pool(ember), 'ember').map((g) => [Math.round(g.z), g.fell])).toEqual([[350, 3]]);
+    expect(graveyards(pool(frostfang), 'frostfang').map((g) => [Math.round(g.z), g.fell])).toEqual([[890, 4]]);
+    expect(graveyards(pool(ember), 'ember').map((g) => [Math.round(g.z), g.fell])).toEqual([[548, 3]]);
     const s = graveyards(pool(sakura), 'sakura');
     expect(s.map((g) => [Math.round(g.z), g.fell])).toEqual([
-      [216, 3],
-      [291, 3],
-      [395, 4],
-      [1729, 3],
+      [2635, 3],
+      [3983, 4],
     ]);
   });
 
@@ -48,7 +45,7 @@ describe('graveyards', () => {
     const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
-    expect(names.length).toBe(7);
+    expect(names.length).toBe(5);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
     // The clusters are the same ones the per-mountain call finds.

@@ -12,8 +12,8 @@ import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
-import { applyPalette, bands, shared } from './materials';
-import { Palette, getPalette } from './palette';
+import { applyPalette, bands, setCloudShadows, shared } from './materials';
+import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
@@ -188,6 +188,10 @@ export class World {
   private fxT = new Vector3();
   /** Projected screen position of the rider (for UI callouts). */
   readonly riderScreen = { x: 0, y: 0 };
+  /** The sun's journey (palette.ts journeyPalette): the weights last applied, -1 to force a refresh. */
+  private journeyKey = -1;
+  /** Play-tests: ride the journey at this many metres instead of the run's distance (null: off). */
+  journeyAt: number | null = null;
 
   constructor(container: HTMLElement, seed: number, quality: QualitySettings) {
     this.quality = quality;
@@ -209,6 +213,8 @@ export class World {
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.sky = new Sky(seed);
+    this.sky.setDetail(quality.tier);
+    setCloudShadows(quality.tier !== 'low');
     this.sky.setPalette(this.palette);
     this.particles = new Particles(1800);
     this.weather = new Weather(3200);
@@ -340,6 +346,9 @@ export class World {
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
     this.post.setMsaa(q.msaa);
+    this.post.shaftTaps = q.tier === 'high' ? 10 : 6;
+    this.sky.setDetail(q.tier);
+    setCloudShadows(q.tier !== 'low');
     this.applyWeather();
     this.lastChunkRange = '';
     this.resize();
@@ -370,6 +379,7 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
     this.lastChunkRange = '';
+    this.journeyKey = -1;
   }
 
   setMood(mood: Mood): void {
@@ -386,9 +396,28 @@ export class World {
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
     this.lastChunkRange = '';
+    this.journeyKey = -1;
   }
 
-  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
+  /** The sun's journey over a Clear Skies run: golden at the start, deep alpenglow by about 2 km, blue
+   *  hour from about 3.5 km, keyed off the distance ridden (the title reel stays at its start). It is
+   *  re-blended into the live palette only while the weights move, a few times a second at most; the
+   *  props keep their baked colours and take the light through the shared uniforms. Chaos moods keep
+   *  their own palette. */
+  private journey(metres: number): void {
+    if (this.mood !== Mood.None) return;
+    const w = journeyWeights(metres);
+    const key = Math.round(w.alpenglow * 400) + Math.round(w.blue * 400) * 1000;
+    if (key === this.journeyKey) return;
+    this.journeyKey = key;
+    journeyPalette(this.course.biome, metres, this.palette);
+    applyPalette(this.palette);
+    this.sky.setPalette(this.palette);
+    this.ghosts.setGlow(this.palette.ghostGlow);
+    this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+  }
+
+  setGhostField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.ghosts.setField(list);
   }
 
@@ -489,6 +518,7 @@ export class World {
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
+    this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
     this.updateChunks(s.z);
     const ci = Math.floor(s.z / CHUNK_LEN);
     this.props.update(ci <= 0 ? -2 : ci - 1, ci + this.quality.viewChunks, v.collected, v.destroyed, ci);

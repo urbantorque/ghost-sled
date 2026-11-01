@@ -9,11 +9,13 @@ import { SledDef, sledById } from './sleds';
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 4;
+export const SIM_VERSION = 5;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
 export const MAX_SPEED = 46;
+/** No flip starts this close to touchdown (a full flip takes about 55 ticks, so none is lost). */
+export const FLIP_GUARD_TICKS = 20;
 const G = 9.81;
 const CD = 0.0047;
 const MU = 0.035;
@@ -682,7 +684,9 @@ export class Sim {
       s.airYaw = approach(s.airYaw, nearest, 2.6 * DT);
     }
     s.airYaw += s.spinRate * DT;
-    if (action && s.airHold >= 7) {
+    // A flip never starts in the last FLIP_GUARD_TICKS before touchdown: a stomp held a little too
+    // long used to tip the rider into the snow. One already under way carries on.
+    if (action && s.airHold >= 7 && (s.pitchRate < -1 || !this.landingWithin(FLIP_GUARD_TICKS))) {
       s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin, 20 * DT);
     } else {
       s.pitchRate = approach(s.pitchRate, 0, 26 * DT);
@@ -703,6 +707,18 @@ export class Sim {
       s.y = gy;
       this.land(gy);
     }
+  }
+
+  /** Whether a ballistic flight from here touches down within `ticks`, the ground sampled every 4
+   *  ticks along the way (one sample at the end misses a mogul crest in between). */
+  private landingWithin(ticks: number): boolean {
+    const s = this.s;
+    for (let k = 4; k <= ticks; k += 4) {
+      const t = k * DT;
+      const y = s.y + s.vy * t - 0.5 * this.gravity * t * t;
+      if (y <= this.course.ground(s.x + s.vx * t, s.z + s.vz * t)) return true;
+    }
+    return false;
   }
 
   private land(gy: number): void {

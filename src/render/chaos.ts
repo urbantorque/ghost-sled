@@ -25,6 +25,8 @@ import { Course } from '../sim/course';
 import type { Sim } from '../sim/sim';
 import { makeGhostMaterial, makeToonMaterial, shared } from './materials';
 import { ghostRiderGeometry, giftGeometry } from './meshes';
+import { NearField } from './nearfield';
+import { ride } from '../ui/presence';
 import type { Tier } from './world';
 
 // Visuals for the mid-run events. Each one is telegraphed well before it can hurt you.
@@ -203,6 +205,19 @@ function chunkGeometry(): BufferGeometry {
 
 const PUFFS = 96;
 const CHUNKS = 52;
+/**
+ * The chase in the world (main view), on top of the wall itself: the cloud's flank racing along both
+ * banks with its crest over the ridge line at the frame's sides, and debris slabs overtaking along
+ * the corridor's edges (the powder shaken off the treeline tops is the near field's, nearfield.ts). Budgets per tier; Low has none
+ * (its CPU has no headroom; the bottom-edge wall and the rush still carry the chase there).
+ */
+const FLANK: Record<Tier, { puffs: number; chunks: number }> = {
+  low: { puffs: 0, chunks: 0 },
+  medium: { puffs: 12, chunks: 8 },
+  high: { puffs: 24, chunks: 14 },
+};
+const PUFFS_MAX = PUFFS + FLANK.high.puffs;
+const CHUNKS_MAX = CHUNKS + FLANK.high.chunks;
 const FOOTPRINTS = 16;
 const AXIS_Y = new Vector3(0, 1, 0);
 
@@ -213,6 +228,11 @@ const AV_DETAIL: Record<Tier, { puffs: number; chunks: number }> = {
   high: { puffs: PUFFS, chunks: CHUNKS },
 };
 
+const smooth = (a: number, b: number, x: number): number => {
+  const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
 export class ChaosVisuals {
   readonly root = new Object3D();
   private event: ChaosEvent = ChaosEvent.None;
@@ -221,8 +241,8 @@ export class ChaosVisuals {
   private puffs: InstancedMesh;
   private puffSeeds: Float32Array;
   /** Per puff this frame: x, y, z, size, height up the wall. Drawn far to near (sorted in place). */
-  private puffData = new Float32Array(PUFFS * 5);
-  private puffDist = new Float32Array(PUFFS);
+  private puffData = new Float32Array(PUFFS_MAX * 5);
+  private puffDist = new Float32Array(PUFFS_MAX);
   private puffOrder: number[] = [];
   private debris: InstancedMesh;
   private chunkSeeds: Float32Array;
@@ -238,26 +258,31 @@ export class ChaosVisuals {
   private storm5: InstancedMesh;
   private sleigh: Mesh;
   private spirits: Mesh[] = [];
+  /** The near field's speed (flurries, spindrift) and the avalanche's breath past the lens. */
+  private near = new NearField();
+  /** How close the chasing wall is, eased (0 far or none, 1 at your back), as the world's danger grade. */
+  private danger = 0;
+  private lastTime = -1;
   private m = new Matrix4();
   private q = new Quaternion();
   private v = new Vector3();
   private s = new Vector3();
 
   constructor(private course: Course) {
-    this.puffs = new InstancedMesh(new PlaneGeometry(1, 1), puffMaterial(), PUFFS);
+    this.puffs = new InstancedMesh(new PlaneGeometry(1, 1), puffMaterial(), PUFFS_MAX);
     this.puffs.frustumCulled = false;
     this.puffs.renderOrder = 6;
-    this.puffSeeds = new Float32Array(PUFFS * 4);
-    for (let i = 0; i < PUFFS * 4; i++) this.puffSeeds[i] = Math.random();
-    for (let i = 0; i < PUFFS; i++) this.puffOrder.push(i);
+    this.puffSeeds = new Float32Array(PUFFS_MAX * 4);
+    for (let i = 0; i < PUFFS_MAX * 4; i++) this.puffSeeds[i] = Math.random();
+    for (let i = 0; i < PUFFS_MAX; i++) this.puffOrder.push(i);
     // Debris is lit like every other hazard (toon, flat facets, cool rim) and dissolves near the lens.
     // A cool tint keeps the debris cold even under an ember or golden sun.
-    this.debris = new InstancedMesh(chunkGeometry(), makeToonMaterial({ coolShade: 0.6, rim: 0.4, tint: new Color(0.8, 0.9, 1.25) }), CHUNKS);
+    this.debris = new InstancedMesh(chunkGeometry(), makeToonMaterial({ coolShade: 0.6, rim: 0.4, tint: new Color(0.8, 0.9, 1.25) }), CHUNKS_MAX);
     this.debris.frustumCulled = false;
-    this.chunkSeeds = new Float32Array(CHUNKS * 4);
-    for (let i = 0; i < CHUNKS * 4; i++) this.chunkSeeds[i] = Math.random();
+    this.chunkSeeds = new Float32Array(CHUNKS_MAX * 4);
+    for (let i = 0; i < CHUNKS_MAX * 4; i++) this.chunkSeeds[i] = Math.random();
     const tint = new Color();
-    for (let i = 0; i < CHUNKS; i++) this.debris.setColorAt(i, tint.setScalar(0.78 + this.chunkSeeds[i * 4 + 3] * 0.4));
+    for (let i = 0; i < CHUNKS_MAX; i++) this.debris.setColorAt(i, tint.setScalar(0.78 + this.chunkSeeds[i * 4 + 3] * 0.4));
 
     const toon = makeToonMaterial({ coolShade: 0.4 });
     const yg = yetiGeometry();
@@ -300,7 +325,7 @@ export class ChaosVisuals {
       m.scale.setScalar(1.15);
       this.spirits.push(m);
     }
-    this.root.add(this.debris, this.puffs, this.yeti, this.prints, this.storm, this.storm5, this.sleigh, ...this.spirits);
+    this.root.add(this.debris, this.puffs, this.yeti, this.prints, this.storm, this.storm5, this.sleigh, ...this.spirits, this.near.points);
     this.hideAll();
   }
 
@@ -311,6 +336,8 @@ export class ChaosVisuals {
   begin(event: ChaosEvent): void {
     this.event = event;
     this.avBuriedAt = -1;
+    this.danger = 0;
+    this.near.clear();
     this.hideAll();
   }
 
@@ -329,6 +356,28 @@ export class ChaosVisuals {
     const d = sim.dyn;
     const c = this.course;
     let shake = 0;
+    const dt = this.lastTime < 0 ? 0 : Math.max(0, Math.min(0.1, time - this.lastTime));
+    this.lastTime = time;
+    // The chase's closeness, eased as the world eases its danger grade (world.ts): 0 from 60 m out.
+    const av = d.avalanche;
+    const chasing = this.event === ChaosEvent.Avalanche && av.phase === 2 && !sim.s.crashed;
+    const dangerTo = chasing ? Math.max(0, Math.min(1, 1 - (sim.s.z - av.z - 4) / 56)) : 0;
+    this.danger += (dangerTo - this.danger) * Math.min(1, dt * 3);
+    if (this.danger < 0.002) this.danger = 0;
+    // The HUD quiets its stack while the rider is in the air (Hud hush; the HUD model has no air flag).
+    ride.air = !sim.s.grounded && !sim.s.crashed;
+    this.near.update({
+      course: c,
+      camPos,
+      x: sim.s.x,
+      z: sim.s.z,
+      speed: sim.s.speed,
+      boost: sim.s.boostGlow,
+      danger: this.danger,
+      live: !sim.s.crashed,
+      dt,
+      tier: this.detail,
+    });
     switch (this.event) {
       case ChaosEvent.Avalanche: {
         const a = d.avalanche;
@@ -346,7 +395,7 @@ export class ChaosVisuals {
             this.avFront = a.z + Math.min(time - this.avBuriedAt, 1.2) * 14;
             shake = 0.35;
           }
-          this.updateAvalanche(this.avFront, time, camPos);
+          this.updateAvalanche(this.avFront, time, camPos, a.phase === 2 ? sim.s : null);
         }
         break;
       }
@@ -440,9 +489,18 @@ export class ChaosVisuals {
    *  grinding along the foot and rolling over the face like a breaking wave, smaller chunks thrown
    *  over the lip that bounce ahead until the front swallows them again, and a churning cloud with a
    *  dark underside climbing behind. It spans the corridor and both banks, so there is no way round. */
-  private updateAvalanche(front: number, time: number, camPos: Vector3): void {
+  private updateAvalanche(front: number, time: number, camPos: Vector3, rider: { x: number; z: number } | null): void {
     const c = this.course;
     const det = AV_DETAIL[this.detail];
+    // The flank and the overtaking slabs show only while the wall chases you (scaled by
+    // how close it is); over a buried rider the wall alone rolls on.
+    const fl = FLANK[this.detail];
+    const dk = rider ? smooth(0.04, 0.45, this.danger) : 0;
+    const nFlankP = dk > 0 ? fl.puffs : 0;
+    const nEdgeC = dk > 0 ? fl.chunks : 0;
+    // On a tall phone the lens sees little of the banks beside it: the flank has to run further ahead.
+    const tall = typeof window !== 'undefined' && window.innerWidth < window.innerHeight;
+    const camZ = -camPos.z;
     const cx = c.centerX(front);
     const hw = c.halfWidth(front) + 9;
     const nChunks = det.chunks;
@@ -492,7 +550,31 @@ export class ChaosVisuals {
       this.m.compose(this.v, this.q, this.s.set(g * (0.9 + s2 * 0.3), g * (0.8 + s1 * 0.3), g));
       this.debris.setMatrixAt(i, this.m);
     }
-    this.debris.count = nChunks;
+    // Slabs overtaking along the corridor's edges: thrown ahead of the wall, they roll and bounce past
+    // you down both sides of the corridor (dark, hard silhouettes at the frame's lower edges), more and
+    // bigger as the wall closes, and shrink away well ahead.
+    for (let k = 0; k < nEdgeC; k++) {
+      const i = nChunks + k;
+      const s0 = this.chunkSeeds[i * 4];
+      const s1 = this.chunkSeeds[i * 4 + 1];
+      const s2 = this.chunkSeeds[i * 4 + 2];
+      const sgn = k % 2 === 0 ? -1 : 1;
+      const ph = (time / (2.6 + s1 * 1.4) + s2) % 1;
+      const z = camZ - 7 + ph * (34 + s0 * 14);
+      const x = c.centerX(z) + sgn * (c.halfWidth(z) - 1.5 + s0 * 4.5);
+      const size = (0.55 + s1 * 1.1) * (0.55 + 0.45 * this.danger);
+      const bounce = Math.abs(Math.sin(ph * Math.PI * (4 + Math.floor(s2 * 3))));
+      this.v.set(x, c.ground(x, z) + size * 0.55 + bounce * (0.6 + s0 * 1.2) * (1 - ph * 0.6), -z);
+      this.q.setFromEuler(this.e.set(-time * (3 + s2 * 3) - s0 * 9, s1 * 6.283, s0 * 0.8));
+      // Only some of them while the wall is far, all of them once it is close; never across the rider.
+      let grow = (s1 < 0.25 + 0.75 * dk ? 1 : 0) * Math.min(1, ph / 0.08) * Math.min(1, (1 - ph) / 0.25);
+      if (rider && Math.abs(x - rider.x) < 2.6 && z > camZ - 1 && z < rider.z + 3) grow = 0;
+      if (this.v.distanceToSquared(camPos) < (size + 2.5) * (size + 2.5)) grow = 0;
+      const g = size * grow;
+      this.m.compose(this.v, this.q, this.s.set(g * (1 + s2 * 0.4), g * (0.7 + s1 * 0.3), g));
+      this.debris.setMatrixAt(i, this.m);
+    }
+    this.debris.count = nChunks + nEdgeC;
     this.debris.instanceMatrix.needsUpdate = true;
 
     const nPuffs = det.puffs;
@@ -529,14 +611,59 @@ export class ChaosVisuals {
       pd[i * 5 + 4] = plume ? 1.5 + rise * 0.45 : Math.min(1, Math.max(0.02, (y - gy) / (top + 2)));
       this.puffDist[i] = dist;
     }
+    // The flank: the cloud racing down both banks ahead of its front, a rolling bank rooted on each
+    // bank's slope with its crest rising over the ridge line at the frame's sides (never over the
+    // corridor, so the sky and the sun keep the middle). Columns of two overlapping billows (a dark
+    // churn at the foot, powder above) so it reads as one mass, not floating blobs; its tip runs from
+    // just behind the lens (far) to well past you (close), tapering to a low tongue. Only the part
+    // near the lens is drawn: the rest is behind it.
+    // A phone held upright sees the banks only well ahead (a narrow, lowered gaze), so there the flank
+    // runs further on and starts further out.
+    const lead = tall ? 14 + 48 * this.danger : 4 + 36 * this.danger;
+    const tip = camZ + lead;
+    const from = Math.max(front, camZ + (tall ? 8 : 3));
+    const cols = nFlankP >> 2;
+    let np = nPuffs;
+    for (let k = 0; k < nFlankP; k++, np++) {
+      const s0 = this.puffSeeds[np * 4];
+      const s1 = this.puffSeeds[np * 4 + 1];
+      const s2 = this.puffSeeds[np * 4 + 2];
+      const s3 = this.puffSeeds[np * 4 + 3];
+      const sgn = k & 1 ? 1 : -1;
+      const upper = (k & 2) !== 0;
+      const col = k >> 2;
+      const t = Math.min(1, (col + 0.5 + (s1 - 0.5) * 0.5) / Math.max(1, cols));
+      const th = s2 * 6.283 - time * (1.1 + s3 * 0.6);
+      const z = from + (tip - from) * t - Math.cos(th) * 0.8;
+      const x = c.centerX(z) + sgn * (c.halfWidth(z) + 5.5 + s0 * 3.5);
+      const gy = c.ground(x, z);
+      // Tallest at the back, a low tongue at the tip; bigger as the wall closes.
+      const taper = (1 - 0.55 * t) * (0.65 + 0.35 * this.danger);
+      const base = (7 + s2 * 3) * taper;
+      let size = (upper ? base * (0.75 + 0.2 * s3) : base) + Math.sin(time * 1.9 + s0 * 13) * 0.4;
+      const y = gy + base * 0.28 + (upper ? base * (0.55 + 0.15 * s3) : 0) + Math.sin(th) * 0.5;
+      size *= dk * (tip > from ? 1 : 0);
+      const dx = x - camPos.x;
+      const dy = y - camPos.y;
+      const dz = -z - camPos.z;
+      const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (dist < size * 0.8 + 2) size = 0;
+      pd[np * 5] = x;
+      pd[np * 5 + 1] = y;
+      pd[np * 5 + 2] = -z;
+      pd[np * 5 + 3] = Math.max(0, size);
+      pd[np * 5 + 4] = upper ? 0.88 : 0.5;
+      this.puffDist[np] = dist;
+    }
+    const nAll = np;
     // Far to near, so the near lumps paint over the far ones (insertion sort: nearly sorted already).
     const order = this.puffOrder;
-    if (order.length !== nPuffs) {
+    if (order.length !== nAll) {
       order.length = 0;
-      for (let i = 0; i < nPuffs; i++) order.push(i);
+      for (let i = 0; i < nAll; i++) order.push(i);
     }
     const dist = this.puffDist;
-    for (let i = 1; i < nPuffs; i++) {
+    for (let i = 1; i < nAll; i++) {
       const k = order[i];
       const dk = dist[k];
       let j = i - 1;
@@ -547,13 +674,13 @@ export class ChaosVisuals {
       order[j + 1] = k;
     }
     this.q.identity();
-    for (let n = 0; n < nPuffs; n++) {
+    for (let n = 0; n < nAll; n++) {
       const k = order[n] * 5;
       this.v.set(pd[k], pd[k + 1], pd[k + 2]);
       this.m.compose(this.v, this.q, this.s.set(pd[k + 3], pd[k + 3], pd[k + 4]));
       this.puffs.setMatrixAt(n, this.m);
     }
-    this.puffs.count = nPuffs;
+    this.puffs.count = nAll;
     this.puffs.instanceMatrix.needsUpdate = true;
   }
 }

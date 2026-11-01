@@ -42,6 +42,19 @@ Skill signals live inside these roles rather than adding new ones:
 - Fake contact shadows (soft dark-blue blobs) under every prop and the sled. They are cheap and readable,
   and they matter: the sled's shadow is what you judge jumps by.
 
+- **Painted skies.** Every mood but Blizzard has gouache clouds in the dome: heaped cumulus banks
+  rising from the ridges, flat three-step shading with a rim on the sun side, and a few high wisps.
+  They dip under the sun's bearing to frame the disc and never cover its core; they sit under the
+  aurora and the comet, and the stars hide behind them. Low draws the banks only.
+- **Light shafts** fan from a low sun in view (Medium and High), cut by trunks and crests, and never
+  over the rider. Night moods have none.
+- **Cloud shadows**: soft, slow cool patches drift over the snow in sunny moods (at most 30% off the
+  light, never on the contact shadow or the painted bands). Medium and High.
+- **The sun's journey.** Clear Skies is an evening passing: golden to 200 m, full alpenglow by 2 km
+  (a lower sun, longer shadows, warmer coral light), then blue hour from 3 km, full by 4 km (the sun
+  on the ridge, a cooler sky, faint stars, stronger gift and ghost glow, a soft sled lantern). The
+  title stays at the start; chaos moods keep their own light.
+
 ## 3. Shape language
 
 | Thing | Shape | Why |
@@ -104,6 +117,12 @@ rounded boxes with a big bow.
 - After a crash the rider sits up dazed beside its upside-down sled, both in the results shot, with
   its head turned three-quarters to the lens and three gold-white stars circling the beanie.
 
+- The limbs are tapered capsules with domed ends, the coat one lathed form that flares at the hem and
+  nips in at the waist, with rounded mitts and soft boots. The back of the head carries the detail,
+  because the chase camera only ever sees it: a ribbed cuff, a seam up the crown, a cream knit stripe,
+  a fluffy pom-pom and a scalloped chestnut bob. The pom-pom springs on landings and the hem flutters
+  with speed (in the vertex shader). After a crash the upside-down sled rests just past the boots.
+
 ## 6. Ghosts
 
 - The same rider silhouette in spectral glass (no face, goggles or scarf): fresnel edge glow in the
@@ -118,6 +137,10 @@ rounded boxes with a big bow.
   rider or as it nears the lens.
 - A tapering wisp ribbon trails each ghost, narrow at the root and fading over its last 60%, and a
   small floating name pill sits above it. The ghost the HUD names gets its pill first, with a ring.
+- Every ghost rides a faint glass sled of the sled it raced, in its kind colour, with glowing
+  runners and a soft glass lap of legs joining the dissolving body to it. It sits on the sled like
+  the rider, banks a little and leans into its carve, a short scarf wisp at its neck, and two thin
+  luminous runner lines follow it over the snow. Within about 3 m of the lens the sled fades out.
 - Your best run is gold-white glass (a pale gold inside and a warm amber rim) and is always labelled
   "Your best". Your grudge ghost is rose. Pool and friend ghosts are mint.
 - Where a ghost crashed, a little lantern-headed marker stays planted in the snow with its name. At
@@ -125,6 +148,14 @@ rounded boxes with a big bow.
 - Where three or more pool ghosts fell within 8 m, a cairn stands on the bank, never in the line,
   with a named tag over it ("Widow's Bend", "4 ghosts fell here"). Medium and High only: Low draws
   no cairn.
+
+Each biome's decorative forest mixes variants (Pinecrest: classic, snow-laden, young pines and a dead
+snag; Frostfang: spires, snapped spires, seracs, crystal mounds; Ember: charred pines, snags, basalt
+clusters and stubs; Sakura: blossom, pale spreading blossom and pines), with a small colour shift per
+tree and the odd lean. Medium and High also dress the banks, always at least 9.2 m past the corridor
+edge (bushes, stumps, fences, slalom poles, cabins, lift towers and cables, per-biome pieces), and
+each course section reads before it plays: chute rock bands and blue-violet slalom flags, a bowl's
+cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost.
 
 ## 7. Moods (each has its own palette)
 
@@ -164,6 +195,12 @@ Biome bases for Clear Skies:
   cuts to a still shot beside the line the ghost will cross, so the race you just left goes by in
   view before the results.
 
+- While the avalanche chases, it is in the world: its cloud's flank rolls down both banks ahead of
+  the front in rooted billows, dark slabs roll past along the corridor edges (never between the lens
+  and the rider), and powder gusts and grit overtake the lens from behind. Fine flurries streak past
+  the lens at speed and spindrift blows off the bank crests (Medium and High; reduced motion turns
+  the flurries off).
+
 ## 9. Post-processing
 
 | Effect | High | Medium | Low |
@@ -189,6 +226,9 @@ Biome bases for Clear Skies:
   size class, and nothing in the HUD is under 11 px on a phone. A race gap is always a number and a
   word ("6 m ahead", "6 m behind"); a place change is an arrow and a count.
 - Sparks are soft round motes that stay low over the snow, never four-point stars in open air.
+- The sky's centre stays clear: the avalanche mirror and its meter hang top-right under the gifts in
+  landscape (beside the gifts on a phone held upright, the meter in the race row), the top-centre
+  stack is short, and while the rider is airborne with nothing new the callout and stake fade to 30%.
 - One banner at a time. A perfect landing's stamp heads its beat; a pass, a duel result or a
   mission waits under it and plays after, and minor words go to the callout line under the combo.
   A duel's result owns the rival pill for 1.5 s.

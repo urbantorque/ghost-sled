@@ -1,12 +1,12 @@
-import { AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, Mesh, MeshBasicMaterial, NormalBlending, Object3D, PerspectiveCamera, ShaderMaterial, SphereGeometry, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, Mesh, MeshBasicMaterial, NormalBlending, Object3D, PerspectiveCamera, Quaternion, ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4 } from 'three';
 import { Course } from '../sim/course';
 import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
 import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
-import { ghostRiderGeometry } from './meshes';
+import { RIDER_COLORS, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { Trail } from './trails';
+import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
 import { graveCopy, type GravePlace } from './graves';
@@ -103,7 +103,17 @@ interface Item {
   mesh: Mesh;
   mat: ShaderMaterial;
   depth: ShaderMaterial;
-  trail: Trail;
+  /** The sled this ghost rode (meshes.ts sledGeometryFor id), how it sits it, its glass sled's
+   *  vertices in the field's merged sled mesh (first vertex, count), and the eased tilt to the
+   *  snow's slope under it. */
+  sled: number;
+  seat: SledSeat;
+  sv0: number;
+  svN: number;
+  tilt: Quaternion;
+  /** This frame's sled pose (world), for its glass sled. */
+  sledQ: Quaternion;
+  sledP: Vector3;
   tag: Tag;
   marker: Object3D | null;
   markTag: Tag | null;
@@ -179,17 +189,166 @@ const PASS_HOLD = 2.6;
 
 // Smooth normals make the fresnel glow read as soft spectral light instead of glass facets. Two
 // groups over the same triangles: the depth prepass (material 0) draws right before the glass
-// (material 1), so each ghost is one silhouette while ghosts behind it still show through.
-const riderGeo = (() => {
-  const geo = ghostRiderGeometry();
-  geo.deleteAttribute('color');
-  geo.deleteAttribute('normal');
-  const merged = mergeVertices(geo, 0.02);
-  merged.computeVertexNormals();
-  merged.addGroup(0, Infinity, 0);
-  merged.addGroup(0, Infinity, 1);
+// (material 1), so each ghost is one silhouette while ghosts behind it still show through. The body
+// rides without its sled (each ghost's glass sled is drawn apart, below), seated as the rider sits
+// that sled: legs out on a deck, cross-legged on a saucer or a tray. Built on first use.
+const bodyGeos: Array<BufferGeometry | null> = [null, null];
+function ghostBodyGeometry(seat: SledSeat): BufferGeometry {
+  const k = seat.crossLegged ? 1 : 0;
+  let merged = bodyGeos[k];
+  if (!merged) {
+    const geo = ghostRiderGeometry(false, seat);
+    geo.deleteAttribute('color');
+    geo.deleteAttribute('normal');
+    geo.deleteAttribute('aSway');
+    merged = mergeVertices(geo, 0.02);
+    merged.computeVertexNormals();
+    merged.addGroup(0, Infinity, 0);
+    merged.addGroup(0, Infinity, 1);
+    bodyGeos[k] = merged;
+  }
   return merged;
-})();
+}
+
+/** A ghost's glass sled, in the sled's own frame: positions, flat normals, and how much each vertex
+ *  glows (the runners and their curls, a saucer's or a tray's rim, the vermillion trim: whatever is
+ *  the sled's accent, plus everything within a few centimetres of the snow). Cached per sled id. */
+interface SledSource {
+  pos: Float32Array;
+  nrm: Float32Array;
+  glow: Float32Array;
+  count: number;
+}
+const sledSources = new Map<number, SledSource>();
+/** How many ghosts' sleds the sled mesh's uniforms hold. */
+const MAX_SLEDS = 24;
+function sledSource(id: number): SledSource {
+  let s = sledSources.get(id);
+  if (!s) {
+    const sled = sledGeometryFor(id);
+    const sn = sled.getAttribute('position').count;
+    // The ghost's legs ride along as a faint glass lap (glow -1): the body's glass dissolves from the
+    // chest down, and without them the head and shoulders floated a body length over an empty sled.
+    const legs = ghostLegsGeometry(sledSeat(id));
+    legs.deleteAttribute('aSway');
+    const g = mergeGeometries([sled, legs])!;
+    const pos = g.getAttribute('position');
+    const col = g.getAttribute('color');
+    const glow = new Float32Array(pos.count);
+    const hot = [RIDER_COLORS.accent, new Color('#BFF8EE'), new Color('#B9C1CF')];
+    for (let i = 0; i < pos.count; i++) {
+      if (i >= sn) {
+        glow[i] = -1;
+        continue;
+      }
+      const r = col.getX(i);
+      const gg = col.getY(i);
+      const b = col.getZ(i);
+      const accent = hot.some((c) => Math.abs(c.r - r) + Math.abs(c.g - gg) + Math.abs(c.b - b) < 0.03);
+      glow[i] = accent ? 1 : pos.getY(i) < 0.06 ? 0.75 : 0;
+    }
+    s = { pos: pos.array as Float32Array, nrm: g.getAttribute('normal').array as Float32Array, glow, count: pos.count };
+    sledSources.set(id, s);
+  }
+  return s;
+}
+
+/** The ghosts' glass sleds (one merged mesh for the field, rebuilt in world space each frame): faint
+ *  tinted glass in the kind colour with a brighter fresnel edge, and glowing runners that read as
+ *  the sled's line on the snow, so a ghost is a racer on a sled rather than a figure floating over
+ *  the snow. Like every ghost layer it never draws on the rider's pixels (contract C10). Glowing
+ *  moods run the runners hot enough to bloom. */
+function sledGlassMaterial(): ShaderMaterial {
+  return withStencil(new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: NormalBlending,
+    premultipliedAlpha: true,
+    uniforms: {
+      uTime: shared.uTime,
+      uSnowLit: shared.uSnowLit,
+      uFog: shared.uFog,
+      uFogNear: shared.uFogNear,
+      uFogFar: shared.uFogFar,
+      uGlow: { value: 1 },
+      uMood: { value: 0 },
+      // Per ghost: its sled's turn (a quaternion) and its place (xyz) and strength (w).
+      uQ: { value: Array.from({ length: MAX_SLEDS }, () => new Vector4(0, 0, 0, 1)) },
+      uP: { value: Array.from({ length: MAX_SLEDS }, () => new Vector4()) },
+    },
+    vertexShader: /* glsl */ `
+      attribute vec3 aCol;
+      attribute float aGlow;
+      attribute float aIdx;
+      uniform vec4 uQ[${MAX_SLEDS}];
+      uniform vec4 uP[${MAX_SLEDS}];
+      varying vec3 vN;
+      varying vec4 vCol;
+      varying float vGlow;
+      varying vec3 vWorldPos;
+      vec3 turn(vec4 q, vec3 v) {
+        return v + 2.0 * cross(q.xyz, cross(q.xyz, v) + q.w * v);
+      }
+      void main() {
+        int i = int(aIdx + 0.5);
+        vec4 q = uQ[i];
+        vec4 p = uP[i];
+        vN = turn(q, normal);
+        vCol = vec4(aCol, p.w);
+        vGlow = aGlow;
+        vWorldPos = turn(q, position) + p.xyz;
+        // A hidden sled collapses to a point (no fragments at all).
+        gl_Position = p.w > 0.004 ? projectionMatrix * viewMatrix * vec4(vWorldPos, 1.0) : vec4(0.0, 0.0, -2.0, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uTime;
+      uniform vec3 uSnowLit;
+      uniform vec3 uFog;
+      uniform float uFogNear;
+      uniform float uFogFar;
+      uniform float uGlow;
+      uniform float uMood;
+      varying vec3 vN;
+      varying vec4 vCol;
+      varying float vGlow;
+      varying vec3 vWorldPos;
+      ${GHOST_MOOD_GLSL}
+      void main() {
+        vec3 n = normalize(vN);
+        vec3 v = normalize(cameraPosition - vWorldPos);
+        float fres = 1.0 - abs(dot(n, v));
+        float day = ghostDay(uSnowLit);
+        float glowK = max(ghostBlaze(uGlow), uMood);
+        vec3 kc = ghostSat(vCol.rgb);
+        // Deep tinted glass inside a brighter edge, like the body's lower half; by day deeper still,
+        // so it holds against bright snow and never reads as cream.
+        vec3 deep = kc * kc * 0.42;
+        float rim = smoothstep(0.3, 0.9, fres);
+        vec3 col = mix(mix(deep, kc * 0.7, 0.45 - 0.2 * day), kc * mix(1.35, 1.08, day), rim);
+        // Runners: a hot line of the kind colour, past the bloom threshold at night and in the glow.
+        // (By day a touch deeper, so the gold runs amber rather than lemon and the mint stays mint.)
+        vec3 hot = mix(kc * (1.7 + 1.6 * glowK), mix(kc, kc * kc * 1.1, 0.35) * (1.1 + 0.5 * glowK), day);
+        float g = max(vGlow, 0.0);
+        col = mix(col, hot, g);
+        float shimmer = 0.88 + 0.12 * sin(vWorldPos.y * 9.0 + (vWorldPos.x + vWorldPos.z) * 2.0 - uTime * 4.5);
+        float a = mix((mix(0.2, 0.3, day) + mix(0.32, 0.45, day) * rim) * shimmer, mix(0.5, 0.66, day), g);
+        // The lap (legs): a soft fill with only a breath of edge, so the limbs never draw their own
+        // outlines (an x-ray tangle) and the lower body reads as the glass thinning into the sled.
+        if (vGlow < -0.5) {
+          col = mix(mix(deep, kc * 0.75, 0.5), kc, 0.3 * rim);
+          a = (mix(0.1, 0.16, day) + 0.1 * rim) * shimmer;
+        }
+        a *= vCol.a;
+        float d = length(cameraPosition - vWorldPos);
+        float fogF = smoothstep(uFogNear, uFogFar * 1.4, d) * (1.0 - 0.92 * glowK);
+        col = mix(col, uFog, fogF * 0.2);
+        a *= (1.0 - fogF * 0.6) * smoothstep(0.5, 1.6, d);
+        gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a * mix(0.72, 1.0, day));
+      }
+    `,
+  }));
+}
 let markerGeo: BufferGeometry | null = null;
 
 function markerGeometry(): BufferGeometry {
@@ -512,6 +671,12 @@ const tmpP = new Vector3();
 const tmpF = new Vector3();
 const tmpA = new Vector3();
 const UP = new Vector3(0, 1, 0);
+const AX = new Vector3(1, 0, 0);
+const AZ = new Vector3(0, 0, 1);
+const tmpN = new Vector3();
+const hip = new Vector3();
+const tmpQ = new Quaternion();
+const sledQ = new Quaternion();
 const grad = { x: 0, z: 0 };
 
 const smooth01 = (x: number) => {
@@ -538,9 +703,13 @@ export class GhostVisuals {
   private wispMat = wispMaterial();
   private shadowMat = shadowMaterial();
   private auraMat = auraMaterial();
+  private sledMat = sledGlassMaterial();
   private wisp: Mesh | null = null;
   private shadow: Mesh | null = null;
   private aura: Mesh | null = null;
+  /** Every ghost's glass sled in one mesh, and every ghost's runner lines in one more. */
+  private sleds: Mesh | null = null;
+  private trails: GhostTrails | null = null;
   /** 0 to 1: how much brighter ghosts glow in this mood (night, a dark dusk sky, the whiteout). */
   private mood = 0;
   private lastTime = NaN;
@@ -622,7 +791,7 @@ export class GhostVisuals {
 
   setCourse(course: Course): void {
     this.course = course;
-    for (const it of this.items) it.trail.setCourse(course);
+    this.trails?.setCourse(course);
   }
 
   /** Blizzard makes ghosts blaze so they can guide you through the white. Called after the mood's
@@ -639,6 +808,8 @@ export class GhostVisuals {
     this.wispMat.uniforms.uMood.value = this.mood;
     this.auraMat.uniforms.uGlow.value = g;
     this.auraMat.uniforms.uMood.value = this.mood;
+    this.sledMat.uniforms.uGlow.value = g;
+    this.sledMat.uniforms.uMood.value = this.mood;
     for (const it of this.items) {
       it.mat.uniforms.uGlow.value = g;
       it.mat.uniforms.uMood.value = this.mood;
@@ -780,7 +951,9 @@ export class GhostVisuals {
     }
   }
 
-  setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean }>): void {
+  /** The field's ghosts. `sled` is the sled each rode (a pool record's sled id; absent, the wooden
+   *  sled): its glass sled takes that shape, and the ghost sits it as the rider would. */
+  setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.clear();
     for (const g of list) {
       const color = new Color(GHOST_COLORS[g.kind]);
@@ -789,10 +962,11 @@ export class GhostVisuals {
       mat.uniforms.uGlow.value = this.glow;
       mat.uniforms.uMood.value = this.mood;
       const depth = makeDepthMaterial();
-      const mesh = new Mesh(riderGeo, [depth, mat]);
+      const sled = g.sled !== undefined && g.sled >= 0 && g.sled <= 5 ? Math.floor(g.sled) : 0;
+      const seat = sledSeat(sled);
+      const mesh = new Mesh(ghostBodyGeometry(seat), [depth, mat]);
       mesh.frustumCulled = false;
       mesh.renderOrder = 5;
-      const trail = new Trail(this.course, 360, 'ghost', color);
       const label = document.createElement('div');
       label.className = 'ghost-label';
       label.style.setProperty('--c', GHOST_COLORS[g.kind]);
@@ -815,7 +989,7 @@ export class GhostVisuals {
         label.appendChild(kw);
       }
       this.layer.appendChild(label);
-      this.root.add(mesh, trail.mesh);
+      this.root.add(mesh);
       const special = g.kind === 'you' || g.kind === 'grudge' || g.kind === 'friend';
       this.items.push({
         id: g.id,
@@ -824,7 +998,13 @@ export class GhostVisuals {
         mesh,
         mat,
         depth,
-        trail,
+        sled,
+        seat,
+        sv0: 0,
+        svN: 0,
+        tilt: new Quaternion(),
+        sledQ: new Quaternion(),
+        sledP: new Vector3(),
         tag: newTag(label, special ? 0 : 1),
         marker: null,
         markTag: null,
@@ -864,16 +1044,18 @@ export class GhostVisuals {
     this.buildFx(list.length);
   }
 
-  /** One merged mesh for every wisp tail and one for every shadow: two draw calls for the field. */
+  /** One merged mesh each for every wisp (the tails and the scarf wisps), every shadow, every halo,
+   *  every glass sled and every pair of runner lines: five draw calls for the field. */
   private buildFx(n: number): void {
     if (n === 0) return;
-    const wv = n * WISP_PTS * 2;
+    // Two ribbons per ghost: its wisp tail (slot 2i) and its short scarf wisp (slot 2i + 1).
+    const wv = n * 2 * WISP_PTS * 2;
     const wgeo = new BufferGeometry();
     wgeo.setAttribute('position', new BufferAttribute(new Float32Array(wv * 3), 3).setUsage(DynamicDrawUsage));
     wgeo.setAttribute('aCol', new BufferAttribute(new Float32Array(wv * 4), 4).setUsage(DynamicDrawUsage));
     const wuv = new Float32Array(wv * 2);
     const widx: number[] = [];
-    for (let g = 0; g < n; g++) {
+    for (let g = 0; g < n * 2; g++) {
       for (let k = 0; k < WISP_PTS; k++) {
         const v = (g * WISP_PTS + k) * 2;
         wuv.set([k / WISP_SEG, -1, k / WISP_SEG, 1], v * 2);
@@ -917,13 +1099,49 @@ export class GhostVisuals {
     this.aura = new Mesh(ageo, this.auraMat);
     this.aura.frustumCulled = false;
     this.aura.renderOrder = 6;
-    this.root.add(this.wisp, this.shadow, this.aura);
+
+    // The glass sleds: each ghost's sled shape laid end to end in its own frame, built once; the
+    // vertex shader places each by its ghost's uniforms (one draw, nothing uploaded per frame but
+    // two vec4s a ghost). A field past MAX_SLEDS leaves the rest without (none is that big).
+    let total = 0;
+    this.items.forEach((it, i) => {
+      it.sv0 = total;
+      it.svN = i < MAX_SLEDS ? sledSource(it.sled).count : 0;
+      total += it.svN;
+    });
+    const lpos = new Float32Array(total * 3);
+    const lnrm = new Float32Array(total * 3);
+    const lcol = new Float32Array(total * 3);
+    const lglow = new Float32Array(total);
+    const lidx = new Float32Array(total);
+    this.items.forEach((it, i) => {
+      if (!it.svN) return;
+      const src = sledSource(it.sled);
+      lpos.set(src.pos, it.sv0 * 3);
+      lnrm.set(src.nrm, it.sv0 * 3);
+      lglow.set(src.glow, it.sv0);
+      lidx.fill(i, it.sv0, it.sv0 + it.svN);
+      for (let v = it.sv0; v < it.sv0 + it.svN; v++) lcol.set([it.col.r, it.col.g, it.col.b], v * 3);
+    });
+    const lgeo = new BufferGeometry();
+    lgeo.setAttribute('position', new BufferAttribute(lpos, 3));
+    lgeo.setAttribute('normal', new BufferAttribute(lnrm, 3));
+    lgeo.setAttribute('aCol', new BufferAttribute(lcol, 3));
+    lgeo.setAttribute('aGlow', new BufferAttribute(lglow, 1));
+    lgeo.setAttribute('aIdx', new BufferAttribute(lidx, 1));
+    for (const p of this.sledMat.uniforms.uP.value as Vector4[]) p.w = 0;
+    this.sleds = new Mesh(lgeo, this.sledMat);
+    this.sleds.frustumCulled = false;
+    // Under the bodies: their glass draws over the sled they sit on.
+    this.sleds.renderOrder = 4;
+
+    this.trails = new GhostTrails(this.course, n, 360, this.items.map((it) => it.col));
+    this.root.add(this.wisp, this.shadow, this.aura, this.sleds, this.trails.mesh);
   }
 
   clear(): void {
     for (const it of this.items) {
-      this.root.remove(it.mesh, it.trail.mesh);
-      it.trail.dispose();
+      this.root.remove(it.mesh);
       it.mat.dispose();
       it.depth.dispose();
       it.tag.el.remove();
@@ -931,18 +1149,23 @@ export class GhostVisuals {
       it.markTag?.el.remove();
     }
     this.items = [];
-    for (const m of [this.wisp, this.shadow, this.aura]) {
+    for (const m of [this.wisp, this.shadow, this.aura, this.sleds]) {
       if (!m) continue;
       this.root.remove(m);
       m.geometry.dispose();
     }
-    this.wisp = this.shadow = this.aura = null;
+    this.wisp = this.shadow = this.aura = this.sleds = null;
+    if (this.trails) {
+      this.root.remove(this.trails.mesh);
+      this.trails.dispose();
+      this.trails = null;
+    }
   }
 
   /** Restart trails and markers for a new run on the same field. */
   resetRun(): void {
+    this.trails?.clear();
     for (const it of this.items) {
-      it.trail.clear();
       if (it.marker) this.root.remove(it.marker);
       it.marker = null;
       it.markTag?.el.remove();
@@ -1044,11 +1267,7 @@ export class GhostVisuals {
         it.fade = Math.max(0, 1 - p.sinceDone / 0.6);
         if (!it.marker) this.plantMarker(it, pos);
       } else it.fade = 1;
-      it.mesh.position.copy(pos);
-      it.mesh.rotation.set(0, 0, 0);
-      it.mesh.rotateY(-(p.heading + p.airYaw));
-      it.mesh.rotateX(-p.airPitch);
-      it.mesh.rotateZ(-p.lean * 0.35);
+      this.poseGhost(it, p, pos, dt);
       // A ghost fades only where it would hide or tint the rider, or fill the lens; anywhere else in
       // the frame it is a glass spirit, head and shoulders solid and dissolving into its wisp (the
       // overtake beside you is the duel the game is about, and a ghost thinned to a few mint hairlines
@@ -1160,12 +1379,16 @@ export class GhostVisuals {
       // clean mint edge. A faint ghost (beside you, passing the lens, poofing) draws after every solid
       // ghost and wisp instead, so its depth never hard-cuts anything behind it along its outline.
       it.mesh.renderOrder = vis > 0.6 ? 5 : 7;
-      if (!p.done) {
-        if (p.grounded) it.trail.add(p.x, p.z, 0.26 + p.carve * 0.2, 1.1, time);
-        else if (it.wasGrounded) it.trail.lift();
+      if (!p.done && this.trails) {
+        if (p.grounded) this.trails.add(i, p.x, p.z, time);
+        else if (it.wasGrounded) this.trails.lift(i);
         it.wasGrounded = p.grounded;
       }
-      it.trail.flush();
+      // Its glass sled goes as its lower body does (a ghost grown big on screen is a head and
+      // shoulders over its wisp), dims with it, and keeps a breath of itself in a pass beat.
+      // Near the lens it goes sooner than the body (whose glass there is a faint veil of head and
+      // shoulders): bright runners at the bottom of the frame read as scribbles on the snow.
+      this.updateSled(i, it, vis * body * mix01(0.45, 1, it.dim) * smooth01((camD - 2.4) / 3));
       // Near the lens the wisp shortens with the fade, so a tail never sweeps a lower corner; a big
       // ghost keeps half its wisp (the tail streams on from the dissolving waist), and the one further
       // back of an overlapping pair dims with its body.
@@ -1207,6 +1430,7 @@ export class GhostVisuals {
       if (graves) this.project(g.tag, tmpP.set(g.x, g.y, -g.z), camera, w, h, GRAVE_RANGE);
     }
     this.dimOverlaps(dt, riderDepth);
+    this.trails?.flush();
     if (this.wisp) {
       const g = this.wisp.geometry;
       g.getAttribute('position').needsUpdate = true;
@@ -1495,11 +1719,44 @@ export class GhostVisuals {
     }
   }
 
+  /** Seats the ghost on its sled as rider.ts seats the rider: the sled tilts to the slope under it
+   *  (eased, level in the air), turns to its heading and air yaw, pitches with a flip and banks a
+   *  little into the carve; the body leans further into the carve about its hips, so the ghost bends
+   *  into the turn over its sled rather than tipping over with it as one rigid block. */
+  private poseGhost(it: Item, p: GhostPose, pos: Vector3, dt: number): void {
+    if (p.grounded) {
+      this.course.gradient(p.x, p.z, grad);
+      tmpN.set(-grad.x, 1, grad.z).normalize();
+    } else tmpN.copy(UP);
+    tmpQ.setFromUnitVectors(UP, tmpN);
+    // (The first frame of a run snaps.)
+    it.tilt.slerp(tmpQ, dt === 0 ? 1 : Math.min(1, dt * (p.grounded ? 14 : 4)));
+    const q = it.mesh.quaternion;
+    sledQ.copy(it.tilt).multiply(tmpQ.setFromAxisAngle(UP, -(p.heading + p.airYaw)));
+    sledQ.multiply(tmpQ.setFromAxisAngle(AX, -p.airPitch)).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.2));
+    q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.28));
+    // Turned about the hips: position = pos + sled * hips - body * hips.
+    hip.set(0, it.seat.y, it.seat.z);
+    it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
+    it.sledQ.copy(sledQ);
+    it.sledP.copy(pos);
+  }
+
+  /** Places ghost i's glass sled (its sled pose, at strength `a`) through the sled mesh's uniforms. */
+  private updateSled(i: number, it: Item, a: number): void {
+    if (i >= MAX_SLEDS) return;
+    const u = this.sledMat.uniforms;
+    const q = it.sledQ;
+    (u.uQ.value as Vector4[])[i].set(q.x, q.y, q.z, q.w);
+    (u.uP.value as Vector4[])[i].set(it.sledP.x, it.sledP.y, it.sledP.z, a < 0.004 ? 0 : a);
+  }
+
   private hideFx(i: number): void {
     if (this.wisp) {
       const col = this.wisp.geometry.getAttribute('aCol').array as Float32Array;
-      for (let v = i * WISP_PTS * 2; v < (i + 1) * WISP_PTS * 2; v++) col[v * 4 + 3] = 0;
+      for (let v = i * 2 * WISP_PTS * 2; v < (i + 1) * 2 * WISP_PTS * 2; v++) col[v * 4 + 3] = 0;
     }
+    if (i < MAX_SLEDS) (this.sledMat.uniforms.uP.value as Vector4[])[i].w = 0;
     for (const m of [this.shadow, this.aura]) {
       if (!m) continue;
       const col = m.geometry.getAttribute('aCol').array as Float32Array;
@@ -1556,9 +1813,6 @@ export class GhostVisuals {
       it.hHead = (it.hHead + 1) % HIST;
       it.hCount = Math.min(HIST, it.hCount + 1);
     }
-    const posA = this.wisp.geometry.getAttribute('position').array as Float32Array;
-    const colA = this.wisp.geometry.getAttribute('aCol').array as Float32Array;
-    const base = i * WISP_PTS * 2;
     // Length grows with speed; walk back along the recorded path (newest first) by horizontal arc
     // length. Height is left out on purpose: a ghost dropping from a jump or mid-flip would otherwise
     // trail a vertical column up into the sky.
@@ -1574,9 +1828,6 @@ export class GhostVisuals {
     // Longer in the glowing moods, where the trail is how you find the ghost ahead.
     const len = Math.min(avail, Math.max(1.2, Math.min(WISP_MAX, 1.5 + (p.speed - 10) * 0.05 + this.mood * 0.4)) * (0.35 + 0.65 * lenK));
     const strength = len > 0.3 ? vis * Math.min(1, len / 1.0) : 0;
-    const cx = camera.position.x;
-    const cy = camera.position.y;
-    const cz = camera.position.z;
     let acc = 0;
     let k = 0;
     let seg = 0;
@@ -1628,6 +1879,41 @@ export class GhostVisuals {
       wc[o + 2] = z + tx * fl;
       k++;
     }
+    this.ribbon(i * 2, it.col, strength, camera, false);
+
+    // The scarf wisp: a short, narrow streamer of the kind colour from the back of the neck, trailing
+    // off the other shoulder from the tail (the rider's scarf without its red), fluttering harder with
+    // speed. It is built straight back from the body each frame (no history: it is short).
+    const knot = tmpA.set(0, it.seat.y + 0.58, it.seat.z + 0.24).applyQuaternion(it.mesh.quaternion).add(it.mesh.position);
+    const hx = Math.sin(p.heading);
+    const hz = -Math.cos(p.heading);
+    const sl2 = Math.min(1, p.speed / 20);
+    const slen = 0.45 + 0.4 * sl2;
+    const t1 = this.lastTime * 13 + i * 2.3;
+    for (let q = 0; q < WISP_PTS; q++) {
+      const t = q / WISP_SEG;
+      const back = t * slen;
+      const lat = -side * (0.22 * t + Math.sin(t * 6.5 - t1) * (0.04 + 0.05 * sl2) * t);
+      const o = q * 3;
+      wc[o] = knot.x - hx * back - hz * lat;
+      wc[o + 1] = knot.y - 0.1 * t * (1 - 0.5 * sl2) + Math.sin(t * 5 - t1 * 0.8) * 0.035 * t;
+      wc[o + 2] = knot.z - hz * back + hx * lat;
+    }
+    this.ribbon(i * 2 + 1, it.col, vis * 0.9, camera, true);
+  }
+
+  /** Writes ribbon `slot` of the wisp mesh along this.wc, camera-facing, with the tail's flame profile
+   *  or the scarf's narrow one. */
+  private ribbon(slot: number, col: Color, strength: number, camera: PerspectiveCamera, scarf: boolean): void {
+    if (!this.wisp) return;
+    const wc = this.wc;
+    const posA = this.wisp.geometry.getAttribute('position').array as Float32Array;
+    const colA = this.wisp.geometry.getAttribute('aCol').array as Float32Array;
+    const base = slot * WISP_PTS * 2;
+    const cx = camera.position.x;
+    const cy = camera.position.y;
+    const cz = camera.position.z;
+    let k = 0;
     // Camera-facing width from the tangent of the curled centre line itself. Where the tail points
     // into the lens the cross product with the view vanishes and its sign is noise, so each step
     // keeps the previous side's orientation and leans on it when the cross product gets short.
@@ -1672,7 +1958,8 @@ export class GhostVisuals {
       const t = k / WISP_SEG;
       // A flame profile: narrow where it leaves the waist, fullest about a quarter of the way, then a
       // point (as wide as the waist at the root, it read as a blade cut from the body).
-      const hw = 0.03 + 0.3 * (1 - t) ** 1.3 * (0.22 + 0.78 * smooth01(t / 0.3));
+      // (The scarf: a ribbon about 9 cm wide at its fullest, tapering to its tip.)
+      const hw = scarf ? 0.012 + 0.04 * (1 - t) * smooth01(t / 0.2) : 0.03 + 0.3 * (1 - t) ** 1.3 * (0.22 + 0.78 * smooth01(t / 0.3));
       const v = (base + k * 2) * 3;
       posA[v] = wc[o] - ux * hw;
       posA[v + 1] = wc[o + 1] - uy * hw;
@@ -1681,9 +1968,9 @@ export class GhostVisuals {
       posA[v + 4] = wc[o + 1] + uy * hw;
       posA[v + 5] = wc[o + 2] + uz * hw;
       const c = (base + k * 2) * 4;
-      colA[c] = colA[c + 4] = it.col.r;
-      colA[c + 1] = colA[c + 5] = it.col.g;
-      colA[c + 2] = colA[c + 6] = it.col.b;
+      colA[c] = colA[c + 4] = col.r;
+      colA[c + 1] = colA[c + 5] = col.g;
+      colA[c + 2] = colA[c + 6] = col.b;
       colA[c + 3] = colA[c + 7] = strength;
     }
   }

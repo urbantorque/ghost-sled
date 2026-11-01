@@ -2,7 +2,7 @@ import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, 
 import { FLOW_HEX } from '../game/beats';
 import { Course } from '../sim/course';
 import { makeToonMaterial, shared, type ToonOptions } from './materials';
-import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat } from './meshes';
+import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -92,8 +92,10 @@ function starGeometry(): BufferGeometry {
 /** Results hero shot: where the overturned sled comes to rest beside the seated wreck, in the
  *  hero camera's frame (metres to the right of the rider on screen, and away from the lens; `side`
  *  -1 when it lies on the rider's left instead, downhill on a steep bank). The camera frames the
- *  pair between them, so both read and neither is cut by the frame edge. */
-export const WRECK_SLED = { right: 0.68, away: 0.45, side: 1 };
+ *  pair between them, so both read and neither is cut by the frame edge. It lies just past the boots
+ *  and a little beyond them: nearer, the outstretched legs lay across it and the two halves of the
+ *  wreck merged into one heap. */
+export const WRECK_SLED = { right: 0.9, away: 0.72, side: 1 };
 
 const smooth = (x: number) => {
   const k = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -122,6 +124,39 @@ interface RiderUniforms {
   /** Earned flow (x, 0 to 1) and the 'In the flow' rim pulse (y, 0 to 1). Declared when the materials
    *  are made, so the first flow frame never recompiles anything. */
   flow: { value: Vector2 };
+  /** The pom-pom's bounce (metres, roughly head space) and the coat hem's flutter (0 to 1). */
+  pom: { value: Vector3 };
+  hem: { value: number };
+}
+
+/** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
+ *  meshes.ts's aSway take the pom-pom's spring offset (x) and the coat hem's flutter (y). The hem
+ *  flares a little and ripples round its rim, more at the back, so at speed the coat reads as cloth
+ *  in the wind rather than a moulded shell. */
+function addSway(m: ShaderMaterial, u: RiderUniforms): void {
+  m.uniforms.uPom = u.pom;
+  m.uniforms.uHem = u.hem;
+  const at = '#include <begin_vertex>';
+  if (!m.vertexShader.includes(at)) {
+    console.warn('rider material: vertex anchor not found, secondary motion disabled');
+    return;
+  }
+  m.vertexShader =
+    'attribute vec2 aSway;\nuniform vec3 uPom;\nuniform float uHem;\n' +
+    m.vertexShader.replace(
+      at,
+      /* glsl */ `${at}
+        transformed += aSway.x * uPom;
+        if (aSway.y > 0.0) {
+          float hemA = atan(transformed.x, transformed.z);
+          float rip = 0.6 * sin(hemA * 5.0 - uTime * 17.0) + 0.4 * sin(hemA * 3.0 + uTime * 11.0);
+          float back = 0.45 + 0.55 * smoothstep(-0.15, 0.2, transformed.z);
+          float hk = aSway.y * uHem * back;
+          transformed.xz *= 1.0 + hk * (0.06 + 0.045 * rip);
+          transformed.z += hk * 0.035 * (0.6 + 0.4 * rip);
+          transformed.y += hk * 0.018 * rip;
+        }`,
+    );
 }
 
 /** Flow's colour is the player's own vermillion: no gold and no groove tint (decision 69). */
@@ -137,11 +172,12 @@ const FLOW_C = new Color(FLOW_HEX);
  *  a fill from the lens side in the results hero shot, which also holds the rims down there (backlit,
  *  the wreck read milky); a thin white rim flash on a perfect landing; and, for the double-sided
  *  scarf, back faces that flip their normal and sit a shade darker so every twist of the ribbon reads. */
-function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number): ShaderMaterial {
+function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false): ShaderMaterial {
   // Props dissolve within about 3 m of the lens; the chase camera now rides closer than that on a
   // hard landing, which screen-doored the whole rider. The rider only gives way to a lens inside it.
   const m = makeToonMaterial({ nearFade: [0.25, 0.45], ...opts });
   riderStencil(m);
+  if (sway) addSway(m, u);
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
@@ -329,7 +365,15 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 } };
+  /** The pom-pom's spring: offset (m) and velocity (m/s), up/down and side to side; and last frame's
+   *  vertical speed and lean, whose changes kick it. */
+  private pomY = 0;
+  private pomVY = 0;
+  private pomX = 0;
+  private pomVX = 0;
+  private lastVy = 0;
+  private lastLean = 0;
   private mat: ShaderMaterial;
   /** Seconds since the last perfect landing (drives the squash, the crouch and the rim flash). */
   private landT = 9;
@@ -350,9 +394,9 @@ export class Rider {
   private settled = false;
 
   constructor() {
-    const mat = riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75);
+    const mat = riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true);
     this.mat = mat;
-    this.sled = new Mesh(sledGeometry(), mat);
+    this.sled = new Mesh(withSway(sledGeometry()), mat);
     this.sitGeo = riderTorsoGeometry();
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
@@ -459,7 +503,7 @@ export class Rider {
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = sledGeometryFor(id);
+    const geo = withSway(sledGeometryFor(id));
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;
@@ -528,6 +572,7 @@ export class Rider {
   update(p: RiderPose, dt: number, time: number): void {
     this.tickFlash(dt);
     this.tickEmber();
+    this.tickSway(p, dt);
     if (this.crash) {
       this.crashBody.updateMatrixWorld();
       this.anchor.copy(SCARF_KNOT).applyMatrix4(this.crashBody.matrixWorld);
@@ -642,6 +687,40 @@ export class Rider {
     this.landT += dt;
     const lt = this.landT;
     this.u.flash.value = lt < 0.03 ? 1 : lt < 0.15 ? 1 - smooth((lt - 0.03) / 0.12) : 0;
+  }
+
+  /** Secondary motion: the pom-pom rides a damped spring that a landing, a bump or a pop kicks (any
+   *  sudden change of vertical speed, capped so a hard landing is a bounce, not a launch) and a
+   *  change of lean swings sideways; the coat hem flutters harder with speed and in the air. A
+   *  wreck's pom settles and its hem stills. */
+  private tickSway(p: RiderPose, dt: number): void {
+    const h = Math.min(dt, 1 / 30);
+    const live = !this.crash;
+    if (live && h > 0) {
+      const dvy = Math.max(-14, Math.min(14, p.vel.y - this.lastVy));
+      // A landing (vertical speed jumping up) throws the pom down into the beanie, then it springs.
+      this.pomVY -= dvy * 0.12;
+      this.pomVX += Math.max(-0.5, Math.min(0.5, p.lean - this.lastLean)) * 1.6;
+    }
+    this.lastVy = p.vel.y;
+    this.lastLean = p.lean;
+    if (h > 0) {
+      // About 3 Hz, settling in about half a second.
+      const sub = Math.ceil(h * 240);
+      const s = h / sub;
+      for (let i = 0; i < sub; i++) {
+        this.pomVY += (-360 * this.pomY - 11 * this.pomVY) * s;
+        this.pomVX += (-300 * this.pomX - 10 * this.pomVX) * s;
+        this.pomY += this.pomVY * s;
+        this.pomX += this.pomVX * s;
+      }
+      this.pomY = Math.max(-0.06, Math.min(0.05, this.pomY));
+      this.pomX = Math.max(-0.05, Math.min(0.05, this.pomX));
+    }
+    this.u.pom.value.set(this.pomX, this.pomY, 0);
+    const speed = Math.hypot(p.vel.x, p.vel.z);
+    const want = live ? smooth((speed - 4) / 18) * (p.airborne ? 1 : 0.8) : 0;
+    this.u.hem.value += (want - this.u.hem.value) * Math.min(1, dt * 4);
   }
 
   /** How warm a dusk the mood's sky is: a dark zenith over a warm horizon (Comet Night) lays an ember

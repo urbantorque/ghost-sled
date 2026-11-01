@@ -200,7 +200,7 @@ Every place where I replaced, extended or interpreted the brief, and why.
     mirror own the lower screen.
 36. **The mirror and the danger meter are one cold unit.** The hazard accent is ice blue (#6FC3FF),
     never the player's vermillion or a warm amber: ART.md keeps hazards cold and hard, and warm
-    colours for you, gifts and the sun. The unit hangs top-centre in both orientations, right under
+    colours for you, gifts and the sun. The unit hangs top-centre in both orientations (top-right since decision 108), right under
     the race row (the combo meter and callout line move under it for the chase), in the open sky
     above the rider. A bottom mirror
     covered the sled in portrait (the rider sits just below mid-screen and the bottom of a phone
@@ -640,3 +640,98 @@ Every place where I replaced, extended or interpreted the brief, and why.
     after the first frame (and the title no longer builds every prop twice), so the first frame at
     6x CPU throttle is level with the build before the fun pass again (1.79 s against 1.78 s, median
     of 20 interleaved runs; 2.11 s before), with no hitch when an arch comes into range.
+
+## Made in the shape and feel round
+
+97. **Courses are built from sections (SIM_VERSION 5).** Every course used one recipe: a single
+    noise wiggle on a 300 m wavelength, a width that narrowed evenly and a constant slope, so the four
+    mountains differed only in amplitudes and props. A course is now a run of sections, 200 to 500 m
+    each, drawn per seed from the biome's deck and blended over 140 m: cruise, chute (steeper,
+    narrower, straighter), bowl (wide, gentler, open, more kickers and moguls), switchbacks (bends at
+    about half the wavelength), benches (flatter terraces over 1.6 m rollers that lift a boosted sled
+    off the crests), gully (narrow between high banks, few obstacles) and split (wide, with a line of
+    trees down the middle; the safe line keeps to one side and the other is a second way down, open
+    but not promised). Decks give each mountain a character: Pinecrest switchbacks and splits,
+    Frostfang chutes and bowls, Ember gullies, Sakura benches. The first section is always a cruise
+    of at least 450 m, and chutes and gullies never come before 900 m or twice in a row. The bend's
+    phase and the height are integrals of each section's frequency and slope, and the width's caps
+    are rounded, so no blend turns a corner: the safe line's worst curvature across the fairness
+    seeds is 0.0145 against the 0.018 limit. Over the first 4 km the spread of bend strength, width
+    and slope roughly doubles (widths 17 to 48 m against 21 to 38). The pools were regenerated; the
+    scoring change DECISIONS 70 deferred is still open and will take the next version.
+98. **Difficulty eases in.** The ramp was 1 - (1 - t)^2, which climbs fastest at the very start:
+    at 1 km a mountain was already 38% of the way to full density and narrowing, exactly where new
+    players are. It is now a smoothstep (11% at 1 km, 44% at 2 km, 78% at 3 km), so the full density
+    still arrives by the ramp distance. Snowmen are placed before the obstacle fill, so Pinecrest's
+    signature is no longer crowded out. The start got three more allowances, each found in the
+    regenerated pools or the telemetry:
+    - Obstacles keep an extra 1.5 m from the safe lane at difficulty 0, shrinking to none at full
+      difficulty. Riders of every skill lagged an early bend and drifted 3.5 m into a rock that was
+      legally 3.4 m off the line; 7 of Pinecrest's 36 pool ghosts died on it at 232 m.
+    - No moguls before 300 m. The mid pilot stomped into a field at 137 m, was thrown straight back
+      up and crashed, four runs out of four.
+    - The gift line that tempts you off the safe one starts at 400 m.
+99. **No flip starts in the last 20 ticks before touchdown.** Holding the one button for 7 ticks in
+    the air starts a backflip, and a stomp is a press in the last 9: a stomp held a little long tipped
+    the rider into the snow. A flip already turning carries on, and a full flip takes about 55 ticks,
+    so no flip that could land is lost. Touchdown is predicted from the ground sampled every 4 ticks
+    along the flight (one sample at the end missed a mogul crest in between). The bot's air model
+    mirrors the guard.
+100. **Steering is graded, not all or nothing.** A steer key starts at 35% lock and builds to full
+    lock over about 0.2 s (12 ticks), so a tap is a correction and a hold is a turn; reversing starts
+    over. Touch full lock moved from 16% to 24% of the short screen side (62 px to 94 px on a 390 px
+    phone), and touch and mouse share a curve that is fine near the centre. All of this is input
+    shaping in src/game/input.ts: the input log records the levels, so replays are unchanged.
+101. **The effects sit with the band, not over it.** With both sliders full, a run of gift pickups
+    alone measured -22.5 dBFS RMS against the whole soundtrack's -25.4, and the default sliders (music
+    0.7, effects 0.9) tilted it another 4.4 dB. Every one-shot sound now takes a -4 dB trim
+    (SFX_TRIM; the wind and snow bed keep their level), the everyday ducks are lighter (a stomp dips
+    the band to 0.82 instead of 0.62, a big bank to 0.88 instead of 0.75, warnings, finales, a revive
+    and an unlock less), and the defaults are music 0.8 and effects 0.8. A save still holding the old
+    untouched pair takes the new one. The crash, a big bank's drop and the avalanche escape keep
+    their deliberate gaps.
+
+## Made in the visual round
+
+102. **Clouds live in the sky dome.** The banks are a height field rising from the horizon, so they
+    read as heaped towers, never floating lenses. They dip under the sun's bearing to frame the disc,
+    never cover its core, draw under the aurora and comet, and cost no extra pass (Low draws the
+    banks only). The dome's hash noise wraps by comparison, not mod(): on D3D, mod() can land a hair
+    under a whole cell and tore the clouds into vertical seams.
+103. **The sun travels with the run.** Clear Skies blends from golden to alpenglow by 2 km and to
+    blue hour from 3 km (full by 4 km), keyed off distance, so a long run reads as an evening passing
+    and its best frames come late. It re-blends only when the weights move (about 8 times a second).
+    The title reel stays at the start and chaos moods keep their own light. Light shafts come only
+    from a low sun in view, on Medium and High, masked round the rider; a moon's rays fought the
+    aurora and the comet.
+104. **The rider is rounded, and the back of the head carries the detail.** Capsule limbs, a lathed
+    coat, mitts and soft boots replace the box limbs the critics flagged in every round. The chase
+    camera only sees the back, so that is where the knit cuff, seam, stripe, pom-pom and scalloped bob
+    are; five lighter locks read as teeth, so the fringe is in the hair's own colour. The pom-pom
+    spring and hem flutter run in the vertex shader from per-vertex weights, at no draw-call cost.
+105. **Ghosts ride glass sleds.** A faint tinted sled of the sled the ghost raced (read from its
+    record), glowing runners and a soft glass lap of legs, drawn in one mesh placed by per-ghost
+    uniforms, so a ghost reads as a racer on a sled while its body still dissolves from the chest
+    down (C10 holds). Its runner lines are two thin lines a runner's width apart, the whole field in
+    one mesh; draw calls go from 3N + 3 to 2N + 5. Within about 3 m of the lens the sled fades out:
+    bright runners at the bottom of the frame read as scribbles.
+106. **Forest variety comes from variant sets.** One instanced batch holds two trees; each instance
+    picks one in the vertex shader and the other collapses to a point. It costs vertices instead of
+    draw calls, so Medium and High get it; Low keeps the original tree alone (a second variant
+    doubled the forest's vertices there) but keeps the per-tree tint and lean. Variant sets and the
+    dressing kits are made one piece per idle callback: a whole set in one callback took 10 to 85 ms.
+107. **The banks are dressed, and each section reads before it plays.** Two instanced kits (Medium and
+    High, +2 draw calls, none on Low), always at least 9.2 m past the corridor edge so nothing
+    decorative stands where a sled can still ride: chute flags and rock bands, a bowl's cornice, bench
+    fences, gully walls, a split's signpost. Cruise and switchbacks keep the default forest.
+108. **The avalanche is in the world, and the sky is clear of HUD.** The wall's flank rolls down the
+    banks ahead of its front in rooted, overlapping billows (free billows read as blue blobs), dark
+    slabs roll past along the corridor edges, and gusts overtake the lens. Near-field flakes hang at
+    the lens's height above their own snow (hung level ahead, the descending camera passed under
+    them and they streaked across the sky like meteors). The mirror unit moved to the top-right
+    corner, amending decision 36's top-centre (one cold unit and its contract hold), the top-centre
+    stack is shorter, and its secondary parts fade while the rider is airborne and return on any beat.
+109. **The course's z functions are memoised.** The sections made centerX, halfWidth, safeX and baseY
+    look up a section and blend twelve fields on every call, and the terrain asks for a whole row of
+    x at one z (and its slope at z + 0.25). A two-entry memo per function answers most calls; the
+    values are the same, so the sim and every replay are unchanged.

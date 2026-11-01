@@ -124,6 +124,23 @@ moment has its own sound. Voices make their nodes between frames and gift pickup
 pre-rendered takes (DECISIONS 89), but on a CPU throttled 6x the Low tier still runs a few frames a
 second under the build before the fun pass; without audio the two are level.
 
+The visual round (DECISIONS 102 to 109: painted skies, the sun's journey, the rounded rider, ghosts
+on glass sleds, forest variants and bank dressing, the avalanche in the world) was measured the
+same way against the build before it, over four interleaved rounds. The laptop ran slower that day
+than the figures above, so again only the side-by-side figures compare:
+
+| Check | Before the visual round | After |
+| --- | --- | --- |
+| High tier at 1x: plain run, Lantern Night, Glass Ice | 60 fps, p90 17 ms | 60 fps, p90 17 ms |
+| High tier through an avalanche chase, CPU throttled 4x (median of 4) | 28.5 fps | 29 fps |
+| Low tier, CPU throttled 6x (median of 4) | 17 fps | 17.5 fps |
+| Draw calls, High / Low | 73 / 44 | 73 / 41 |
+| Triangles, High / Low | 351k / 108k | 752k / 113k |
+
+High's triangles doubled because each forest batch carries two tree variants and collapses the
+unused one in the vertex shader (DECISIONS 106); Low keeps one variant. The course's z functions are
+memoised (DECISIONS 109), which paid for the new effects' extra ground queries on throttled CPUs.
+
 High renders into an R11G11B10F buffer with 2x MSAA; Medium and Low use FXAA in the composite
 pass instead. The tier is chosen automatically, first from the GPU name and then from measured
 frame times (`src/game/quality.ts`): it steps down when frames run long or judder and back up when
