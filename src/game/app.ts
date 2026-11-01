@@ -1885,6 +1885,8 @@ export class App {
         z: sim.s.z,
         height: sim.s.y - this.world.course.ground(sim.s.x, sim.s.z),
       };
+      // An overlook opening a bank to the valley: the wind blows wide and the band lifts.
+      this.audio.openness(this.world.overlooks.openness(sim.s.z));
       this.audio.update(frame, frozen ? 0 : dt);
       if (this.phase === 'run') this.updateHints(dt);
     }

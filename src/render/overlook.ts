@@ -358,6 +358,11 @@ export class OverlookPlan {
     const r = this.weight(z, 1);
     return r - l;
   }
+
+  /** How open the view is at sim z, 0..1, either bank (a ridge counts: the soundscape's wind). */
+  openness(z: number): number {
+    return Math.max(this.weight(z, -1), this.weight(z, 1));
+  }
 }
 
 // ---------------------------------------------------------------- the rail and the lip's rocks
