@@ -13,6 +13,7 @@ import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
 import { applyPalette, bands, setCloudShadows, shared } from './materials';
+import { Midground } from './midground';
 import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
@@ -129,6 +130,7 @@ export class World {
   palette: Palette;
   quality: QualitySettings;
   readonly terrain: Terrain;
+  readonly midground: Midground;
   readonly props: Props;
   readonly sky: Sky;
   readonly rider = new Rider();
@@ -211,6 +213,7 @@ export class World {
     this.palette = getPalette(this.course.biome, Mood.None);
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
+    this.midground = new Midground(this.course, this.palette, quality.tier, quality.terrain.reach);
     this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.tier);
@@ -254,6 +257,7 @@ export class World {
     this.scene.add(
       this.sky.root,
       this.terrain.root,
+      this.midground.root,
       this.props.root,
       this.trail.mesh,
       this.landing.root,
@@ -341,6 +345,7 @@ export class World {
     this.sun.castShadow = q.shadows;
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
+    this.midground.setTier(q.tier, q.terrain.reach);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
     const canHalf = this.renderer.capabilities.isWebGL2;
     this.post.enabled = q.post && canHalf;
@@ -369,6 +374,7 @@ export class World {
     this.terrain.setCourse(c);
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
+    this.midground.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -391,6 +397,7 @@ export class World {
     // mood (setCourse builds them for the mood in force): the title straight after startup and a
     // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
     if (!same) this.props.setCourse(this.course, this.palette);
+    this.midground.setPalette(this.palette);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
@@ -507,6 +514,7 @@ export class World {
     const to = cur + this.quality.viewChunks;
     if (prime) this.terrain.prime(from, Math.min(to, cur + 4));
     this.terrain.update(from, to);
+    this.midground.update(z, prime);
     const key = `${from}:${to}`;
     if (key !== this.lastChunkRange) {
       this.lastChunkRange = key;
