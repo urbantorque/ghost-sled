@@ -3,6 +3,8 @@ import type { BiomeId } from '../sim/mountains';
 import { flagColors } from './dressing';
 import { SNOW, merge, paint, part, reseed, shade, softPart } from './flora';
 import type { Palette } from './palette';
+// (town.ts uses this file's helpers only inside its builders, so the two may import each other.)
+import { galleryPiece, iceTunnelPiece, lavaTunnelPiece, toriiRowPiece, villagePiece } from './town';
 
 // The course's set pieces, modelled at scale (15 to 40 m) in the same parts style as the props:
 // flat-shaded, vertex-coloured parts merged into one mesh per piece. Each is built in its site's own
@@ -27,9 +29,45 @@ export type Kind =
   | 'falls'
   | 'dome'
   | 'guardian'
-  | 'pagoda';
+  | 'pagoda'
+  // A stretch of the run (town.ts): a village street, and the enclosed runs.
+  | 'village'
+  | 'gallery'
+  | 'icetunnel'
+  | 'lavatunnel'
+  | 'toriirow';
 
 export const SPANS: ReadonlySet<Kind> = new Set<Kind>(['gate', 'bridge', 'arch', 'basalt', 'torii']);
+/** Kinds roofed over the run for their whole length. */
+export const ENCLOSED: ReadonlySet<Kind> = new Set<Kind>(['gallery', 'icetunnel', 'lavatunnel', 'toriirow']);
+/** Kinds that run along the course for a stretch (a rail frame rather than a point). */
+export const LONG: ReadonlySet<Kind> = new Set<Kind>(['village', 'gallery', 'icetunnel', 'lavatunnel', 'toriirow']);
+
+/** A point along a long site's stretch of run, in the site frame. */
+export interface RailPt {
+  x: number;
+  z: number;
+  /** The ground there (local y). */
+  y: number;
+  /** A yaw that turns a part's own +z to face the run (on a bank), or up the run's line (on it). */
+  yaw: number;
+  /** The corridor's half-width there. */
+  hw: number;
+}
+
+/** A long site's stretch of run (landmarks.ts makes it from the course): `dz` is sim metres down the
+ *  run from the site's z, so the stretch is dz in [-len, len]. */
+export interface Rail {
+  len: number;
+  /** The point on bank side s (+1 right, 0 the centre line) at edge excess e, dz down the run. */
+  at(dz: number, s: number, e: number): RailPt;
+  /** The run's smooth floor under its centre line (the course's base height, local y). */
+  floor(dz: number): number;
+  /** The highest any sled can fly over dz in [a, b] (local y; -Infinity where nothing flies). */
+  air(a: number, b: number): number;
+  /** Edge excess of a site-local point. */
+  edge(lx: number, lz: number): number;
+}
 
 /** What a builder knows about its site. */
 export interface SiteCtx {
@@ -39,13 +77,16 @@ export interface SiteCtx {
   gy(x: number, z: number): number;
   /** Local x where the corridor's edge plus the dressing margin lies (posts stand outside it). */
   post: number;
-  /** The lowest local height anything over the corridor may reach. */
+  /** The lowest local height anything over the corridor may reach (a long enclosed site: over its
+   *  floor, rail.floor). */
   clear: number;
   /** The bank side a bank piece stands on (+1 right). */
   side: number;
   /** A night mood: windows and lamps are lit. */
   night: boolean;
   seed: number;
+  /** A long site's stretch of run. */
+  rail?: Rail;
 }
 
 /** A crowd spot in the site frame: position and the yaw a figure there faces. */
@@ -54,41 +95,54 @@ export interface Spot {
   y: number;
   z: number;
   yaw: number;
+  /** Holds a little flag up (crowd.ts). */
+  flag?: boolean;
+}
+
+/** A warm pool of lamplight on the snow (site frame): its centre and radius. */
+export interface Glow {
+  x: number;
+  z: number;
+  r: number;
 }
 
 export interface Piece {
   /** Steps that each make a few parts; the piece is their merge. */
   steps: Array<() => BufferGeometry[]>;
-  /** Figures standing on the piece itself (a bridge's deck, a terrace). */
+  /** Figures standing on the piece itself (a bridge's deck, a terrace), or a village's street crowd. */
   spots: Spot[];
   /** Translucent ice (the ice material). */
   ice: boolean;
+  /** Lamplight pools on the snow, lit at night (a village's lamps and shop windows). */
+  glows?: Glow[];
+  /** Where steam rises (site frame: a hot spring's pools). */
+  steam?: V3[];
 }
 
 // ---------------------------------------------------------------- helpers
 
-type V3 = [number, number, number];
+export type V3 = [number, number, number];
 const UP = new Vector3(0, 1, 0);
 const tq = new Quaternion();
 const tv = new Vector3();
 const tm = new Matrix4();
 
 let rs = 1;
-function rnd(): number {
+export function rnd(): number {
   rs = (rs * 1664525 + 1013904223) >>> 0;
   return rs / 4294967296;
 }
-function seed(s: number): void {
+export function seed(s: number): void {
   rs = s >>> 0 || 1;
   reseed(s);
 }
 
-function box(w: number, h: number, d: number, col: Color, pos: V3, rot?: V3): BufferGeometry {
+export function box(w: number, h: number, d: number, col: Color, pos: V3, rot?: V3): BufferGeometry {
   return part(new BoxGeometry(w, h, d), col, { pos, rot });
 }
 
 /** A timber or rod from a to b (square, or `sides` round). */
-function seg(a: V3, b: V3, r: number, col: Color, sides = 4): BufferGeometry {
+export function seg(a: V3, b: V3, r: number, col: Color, sides = 4): BufferGeometry {
   tv.set(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   const len = Math.max(0.01, tv.length());
   const g = new CylinderGeometry(r, r, len, sides);
@@ -100,41 +154,41 @@ function seg(a: V3, b: V3, r: number, col: Color, sides = 4): BufferGeometry {
 }
 
 /** A flat slab (a deck) from (x0, y0) to (x1, y1) in the x-y plane, its underside on that line. */
-function slab(x0: number, y0: number, x1: number, y1: number, w: number, t: number, col: Color): BufferGeometry {
+export function slab(x0: number, y0: number, x1: number, y1: number, w: number, t: number, col: Color): BufferGeometry {
   const len = Math.hypot(x1 - x0, y1 - y0);
   const a = Math.atan2(y1 - y0, x1 - x0);
   return box(len + 0.05, t, w, col, [(x0 + x1) / 2 - Math.sin(a) * (t / 2), (y0 + y1) / 2 + Math.cos(a) * (t / 2), 0], [0, 0, a]);
 }
 
 /** A chunky faceted rock or ice mass. */
-function crag(col: Color, pos: V3, scale: V3, jitter = 0.32): BufferGeometry {
+export function crag(col: Color, pos: V3, scale: V3, jitter = 0.32): BufferGeometry {
   return part(new IcosahedronGeometry(1, 0), col, { pos, scale, rot: [rnd() * 0.5, rnd() * 6.28, rnd() * 0.5], jitter });
 }
 
 /** A lumpy drift of snow. */
-function drift(pos: V3, scale: V3): BufferGeometry {
+export function drift(pos: V3, scale: V3): BufferGeometry {
   return part(new IcosahedronGeometry(1, 1), SNOW, { pos, scale, rot: [0, rnd() * 3, 0], jitter: 0.1 });
 }
 
 /** A lamp: its colour pushed past 1, so it blooms on Medium and High in the plain toon material. */
-function lampColor(night: boolean, hex = '#FFB45E'): Color {
+export function lampColor(night: boolean, hex = '#FFB45E'): Color {
   return new Color(hex).multiplyScalar(night ? 2.8 : 1.5);
 }
 
 /** A window: dark glass by day, warm light at night. */
-function windowColor(night: boolean): Color {
+export function windowColor(night: boolean): Color {
   return night ? new Color('#FFC27A').multiplyScalar(1.9) : new Color('#2A2D48');
 }
 
 /** Moves a list of parts from a piece's own frame (facing +z) into the site frame. */
-function place(parts: BufferGeometry[], x: number, y: number, z: number, yaw: number): BufferGeometry[] {
+export function place(parts: BufferGeometry[], x: number, y: number, z: number, yaw: number): BufferGeometry[] {
   tm.makeRotationY(yaw).setPosition(x, y, z);
   for (const g of parts) g.applyMatrix4(tm);
   return parts;
 }
 
 /** A sub-frame for a bank piece: its centre, yaw, and ground under it in its own coordinates. */
-class Sub {
+export class Sub {
   readonly c: number;
   readonly s: number;
   constructor(
@@ -180,25 +234,25 @@ function bankFrame(ctx: SiteCtx, off: number, zOff = 0, turn = 0.55): Sub {
 }
 
 /** Paints a part's vertices from k0 at y0 to k1 at y1 (value gradient up a post or wall). */
-function grade(g: BufferGeometry, y0: number, y1: number, k0: number, k1: number, facet = 0.06): BufferGeometry {
+export function grade(g: BufferGeometry, y0: number, y1: number, k0: number, k1: number, facet = 0.06): BufferGeometry {
   return paint(g, y0, y1, k0, k1, facet);
 }
 
 // ---------------------------------------------------------------- colours
 
-const TIMBER = new Color('#6E4A36');
-const TIMBER_DARK = new Color('#4E3428');
-const TIMBER_LIGHT = new Color('#8A6248');
-const CREAM = new Color('#F0E6D2');
-const INK = new Color('#2A2D48');
-const ROPE = new Color('#3A3046');
+export const TIMBER = new Color('#6E4A36');
+export const TIMBER_DARK = new Color('#4E3428');
+export const TIMBER_LIGHT = new Color('#8A6248');
+export const CREAM = new Color('#F0E6D2');
+export const INK = new Color('#2A2D48');
+export const ROPE = new Color('#3A3046');
 
-function stone(p: Palette, k = 1): Color {
+export function stone(p: Palette, k = 1): Color {
   return p.low.clone().lerp(new Color('#9A94A8'), 0.45).multiplyScalar(k);
 }
 
 /** Banner colours: the mood's blue-violets (as the chute flags), cream and a deep teal. */
-function banners(p: Palette): Color[] {
+export function banners(p: Palette): Color[] {
   const [a, b] = flagColors(p);
   return [a, CREAM, b, new Color('#2F6E78'), CREAM];
 }
@@ -237,7 +291,7 @@ function latticeTower(ctx: SiteCtx, cx: number, cz: number, w: number, top: numb
 }
 
 /** Bunting: a string sagging from a to b with triangular pennants hanging under it. */
-function bunting(a: V3, b: V3, sag: number, cols: Color[], size = 0.9): BufferGeometry[] {
+export function bunting(a: V3, b: V3, sag: number, cols: Color[], size = 0.9): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   const n = Math.max(4, Math.round(len / (size * 1.5)));
@@ -659,7 +713,7 @@ export function toriiPiece(ctx: SiteCtx): Piece {
 // ---------------------------------------------------------------- bank pieces
 
 /** A pagoda-style roof: a wide square slab with its corners swept up and a snow layer. */
-function sweptRoof(w: number, y: number, slate: Color, trim: Color): BufferGeometry[] {
+export function sweptRoof(w: number, y: number, slate: Color, trim: Color): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   parts.push(part(new ConeGeometry(w * 0.74, w * 0.28, 4, 1), slate, { pos: [0, y + w * 0.12, 0], rot: [0, Math.PI / 4, 0] }));
   parts.push(box(w, 0.45, w, slate, [0, y, 0]));
@@ -1158,6 +1212,16 @@ export function pieceFor(kind: Kind, ctx: SiteCtx): Piece {
       return guardianPiece(ctx);
     case 'pagoda':
       return pagodaPiece(ctx);
+    case 'village':
+      return villagePiece(ctx);
+    case 'gallery':
+      return galleryPiece(ctx);
+    case 'icetunnel':
+      return iceTunnelPiece(ctx);
+    case 'lavatunnel':
+      return lavaTunnelPiece(ctx);
+    case 'toriirow':
+      return toriiRowPiece(ctx);
   }
 }
 

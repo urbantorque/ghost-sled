@@ -1,4 +1,4 @@
-import { BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, IcosahedronGeometry, ShaderMaterial, SphereGeometry, Vector3, Vector4 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, OctahedronGeometry, ShaderMaterial, SphereGeometry, Vector3, Vector4 } from 'three';
 import type { BiomeId } from '../sim/mountains';
 import { makeToonMaterial } from './materials';
 import { merge, part, softPart } from './flora';
@@ -24,6 +24,7 @@ const SLOT_FIXED = 0;
 const SLOT_COAT = 1;
 const SLOT_HAT = 2;
 const SLOT_LAMP = 3;
+const SLOT_FLAG = 4;
 
 /** Tags every vertex of a part with its slot and arm (-1 left, 1 right, 0 body). */
 function tag(g: BufferGeometry, slot: number, arm: number): BufferGeometry {
@@ -33,7 +34,9 @@ function tag(g: BufferGeometry, slot: number, arm: number): BufferGeometry {
   return g;
 }
 
-/** One spectator, standing on the origin and facing +z. White parts take the instance's colours. */
+/** One spectator, standing on the origin and facing +z. White parts take the instance's colours. A
+ *  village's street holds hundreds at once, so every part is as plain as it can be and still read: about
+ *  320 triangles (open-ended legs and arms, eight-faced eyes, mitts and pom-pom). */
 export function figureGeometry(): BufferGeometry {
   const white = new Color('#FFFFFF');
   const skin = new Color('#F2C9A8');
@@ -42,34 +45,38 @@ export function figureGeometry(): BufferGeometry {
   const ink = new Color('#1E2238');
   const parts: BufferGeometry[] = [
     // The contact shadow: a soft dark-blue blob on the snow (ART.md section 2).
-    tag(softPart(new CylinderGeometry(0.34, 0.34, 0.02, 8, 1, true), new Color('#5A6496'), { pos: [0, 0.01, 0], scale: [1, 1, 0.8] }), SLOT_FIXED, 0),
+    tag(softPart(new CylinderGeometry(0.34, 0.34, 0.02, 7, 1, true), new Color('#5A6496'), { pos: [0, 0.01, 0], scale: [1, 1, 0.8] }), SLOT_FIXED, 0),
     // Boots and legs.
-    tag(part(new CylinderGeometry(0.07, 0.085, 0.42, 5), boot, { pos: [-0.1, 0.2, 0] }), SLOT_FIXED, 0),
-    tag(part(new CylinderGeometry(0.07, 0.085, 0.42, 5), boot, { pos: [0.1, 0.2, 0] }), SLOT_FIXED, 0),
+    tag(part(new CylinderGeometry(0.07, 0.085, 0.42, 5, 1, true), boot, { pos: [-0.1, 0.2, 0] }), SLOT_FIXED, 0),
+    tag(part(new CylinderGeometry(0.07, 0.085, 0.42, 5, 1, true), boot, { pos: [0.1, 0.2, 0] }), SLOT_FIXED, 0),
     // The chunky coat: a lathed bell, wider at the hem, tapering to the shoulders.
     tag(softPart(new CylinderGeometry(0.2, 0.27, 0.62, 8, 1, true), white, { pos: [0, 0.68, 0] }), SLOT_COAT, 0),
-    tag(softPart(new SphereGeometry(0.205, 8, 3, 0, Math.PI * 2, 0, Math.PI / 2), white, { pos: [0, 0.99, 0], scale: [1, 0.5, 1] }), SLOT_COAT, 0),
+    tag(softPart(new SphereGeometry(0.205, 8, 2, 0, Math.PI * 2, 0, Math.PI / 2), white, { pos: [0, 0.99, 0], scale: [1, 0.5, 1] }), SLOT_COAT, 0),
     // The scarf: a thick ring at the neck and a tail down the front.
     tag(softPart(new CylinderGeometry(0.15, 0.17, 0.11, 8, 1, true), white, { pos: [0, 1.06, 0] }), SLOT_HAT, 0),
     tag(part(new BoxGeometry(0.1, 0.3, 0.05), white, { pos: [0.09, 0.88, 0.15], rot: [0.15, 0, 0.1], scale: [1, 1, 0.55] }), SLOT_HAT, 0),
     // The head: a big round toy head, a third of the height.
-    tag(softPart(new SphereGeometry(0.235, 9, 6), skin, { pos: [0, 1.32, 0] }), SLOT_FIXED, 0),
+    tag(softPart(new SphereGeometry(0.235, 8, 5), skin, { pos: [0, 1.32, 0] }), SLOT_FIXED, 0),
     // Two dark eyes on the face.
-    tag(softPart(new IcosahedronGeometry(0.036, 0), ink, { pos: [-0.085, 1.33, 0.212] }), SLOT_FIXED, 0),
-    tag(softPart(new IcosahedronGeometry(0.036, 0), ink, { pos: [0.085, 1.33, 0.212] }), SLOT_FIXED, 0),
+    tag(softPart(new OctahedronGeometry(0.038, 0), ink, { pos: [-0.085, 1.33, 0.212] }), SLOT_FIXED, 0),
+    tag(softPart(new OctahedronGeometry(0.038, 0), ink, { pos: [0.085, 1.33, 0.212] }), SLOT_FIXED, 0),
     // The beanie: a dome over the crown, a cuff, and the pom-pom.
-    tag(softPart(new SphereGeometry(0.248, 9, 3, 0, Math.PI * 2, 0, Math.PI * 0.52), white, { pos: [0, 1.36, -0.01] }), SLOT_HAT, 0),
-    tag(softPart(new CylinderGeometry(0.252, 0.252, 0.08, 9, 1, true), white, { pos: [0, 1.37, -0.01] }), SLOT_HAT, 0),
-    tag(part(new IcosahedronGeometry(0.09, 0), white, { pos: [0, 1.65, -0.02] }), SLOT_HAT, 0),
+    tag(softPart(new SphereGeometry(0.248, 8, 2, 0, Math.PI * 2, 0, Math.PI * 0.52), white, { pos: [0, 1.36, -0.01] }), SLOT_HAT, 0),
+    tag(softPart(new CylinderGeometry(0.252, 0.252, 0.08, 8, 1, true), white, { pos: [0, 1.37, -0.01] }), SLOT_HAT, 0),
+    tag(part(new OctahedronGeometry(0.1, 0), white, { pos: [0, 1.65, -0.02] }), SLOT_HAT, 0),
   ];
   // The arms hang from the shoulders (the vertex shader swings them up), each ending in a mitt.
   for (const s of [-1, 1]) {
     parts.push(tag(part(new CylinderGeometry(0.06, 0.075, 0.42, 5, 1, true), white, { pos: [s * SHOULDER_X, SHOULDER_Y - 0.22, 0], rot: [0, 0, s * 0.12] }), SLOT_COAT, s));
-    parts.push(tag(softPart(new IcosahedronGeometry(0.08, 0), mitt, { pos: [s * (SHOULDER_X + 0.05), SHOULDER_Y - 0.45, 0] }), SLOT_FIXED, s));
+    parts.push(tag(softPart(new OctahedronGeometry(0.085, 0), mitt, { pos: [s * (SHOULDER_X + 0.05), SHOULDER_Y - 0.45, 0] }), SLOT_FIXED, s));
   }
   // A lantern held in the right mitt, shown only for the lamp holders on a night mood.
   parts.push(tag(part(new CylinderGeometry(0.008, 0.008, 0.14, 3), ink, { pos: [SHOULDER_X + 0.05, SHOULDER_Y - 0.54, 0.02] }), SLOT_LAMP, 1));
-  parts.push(tag(part(new IcosahedronGeometry(0.07, 0), new Color('#FFB45E').multiplyScalar(2.6), { pos: [SHOULDER_X + 0.05, SHOULDER_Y - 0.66, 0.02] }), SLOT_LAMP, 1));
+  parts.push(tag(part(new OctahedronGeometry(0.075, 0), new Color('#FFB45E').multiplyScalar(2.6), { pos: [SHOULDER_X + 0.05, SHOULDER_Y - 0.66, 0.02] }), SLOT_LAMP, 1));
+  // A little flag on a stick in the left mitt, shown only for the flag wavers (a village's crowd): the
+  // stick runs on down the arm's line, so with the arm thrown up it stands over the head.
+  parts.push(tag(part(new CylinderGeometry(0.012, 0.012, 0.62, 3), ink, { pos: [-SHOULDER_X - 0.06, SHOULDER_Y - 0.72, 0.03] }), SLOT_FLAG, -1));
+  parts.push(tag(part(new BoxGeometry(0.3, 0.2, 0.012), white, { pos: [-SHOULDER_X - 0.22, SHOULDER_Y - 0.92, 0.03] }), SLOT_FLAG, -1));
   // (Keep the custom attributes through the merge: every part carries them.)
   return merge(parts);
 }
@@ -94,6 +101,9 @@ export interface CrowdUniforms {
   uRider: { value: Vector3 };
   /** Lamps lit (night moods): 1 shows the lamp holders' lanterns. */
   uLamps: { value: number };
+  /** 0 to 1 while the rider rides a village's street: the crowd does a wave that runs down the run
+   *  alongside the rider. */
+  uWave: { value: number };
 }
 
 const ATTRS = /* glsl */ `
@@ -105,9 +115,10 @@ const ATTRS = /* glsl */ `
   uniform vec4 uCheer;
   uniform vec3 uRider;
   uniform float uLamps;
+  uniform float uWave;
 `;
 
-// aSeed: x phase (0..1), y temperament (0..1: above 0.62 waves at rest), z lamp holder (1), w height scale.
+// aSeed: x phase (0..1), y temperament (0..1: above 0.62 waves at rest), z lamp holder (1), w flag waver (1).
 const ANIMATE = /* glsl */ `#include <begin_vertex>
   {
     vec3 ip = instanceMatrix[3].xyz;
@@ -120,15 +131,22 @@ const ANIMATE = /* glsl */ `#include <begin_vertex>
     float dC = distance(ip.xz, uCheer.xy);
     float tc = uTime - uCheer.z - dC / 40.0;
     float cheer = uCheer.w * smoothstep(0.0, 0.1, tc) * (1.0 - smoothstep(1.3, 2.8, tc)) * (1.0 - smoothstep(60.0, 120.0, dC));
-    float ex = clamp(max(cheer, nearK * 0.4), 0.0, 1.0);
+    // The street's wave: a band of raised arms running down the run at about a rider's speed (52 m
+    // apart), over the stretch round the rider.
+    float wv = sin(-ip.z * 0.12 - uTime * 3.2);
+    float waveK = uWave * pow(max(wv, 0.0), 6.0) * (1.0 - smoothstep(60.0, 140.0, dR));
+    float ex = clamp(max(max(cheer, nearK * 0.4), waveK), 0.0, 1.0);
     float wave = sin(uTime * (4.0 + aSeed.y * 3.0) + ph);
-    if (aSlot > 2.5 && (uLamps < 0.5 || aSeed.z < 0.5)) transformed *= 0.0;
+    if (aSlot > 2.5 && aSlot < 3.5 && (uLamps < 0.5 || aSeed.z < 0.5)) transformed *= 0.0;
+    if (aSlot > 3.5 && aSeed.w < 0.5) transformed *= 0.0;
     if (aArm != 0.0) {
       // Arms: hang a little out at rest; a waver swings one high; a cheer throws both up in a V.
       float rest = 0.18 + 0.06 * sin(uTime * 1.3 + ph);
       if (aSeed.y > 0.62 && aArm > 0.0) rest = 2.35 + 0.42 * wave;
       // A lamp holder keeps the lamp hand low.
       if (aSeed.z > 0.5 && uLamps > 0.5 && aArm > 0.0) rest = 0.5 + 0.08 * wave;
+      // A flag waver holds it up and swings it.
+      if (aSeed.w > 0.5 && aArm < 0.0) rest = 2.45 + 0.45 * sin(uTime * 5.5 + ph);
       float up = 2.55 + 0.3 * sin(uTime * 9.0 + ph + aArm);
       float a = mix(rest, up, ex) * aArm;
       vec2 q = transformed.xy - vec2(aArm * ${SHOULDER_X.toFixed(3)}, ${SHOULDER_Y.toFixed(3)});
@@ -148,14 +166,15 @@ const ANIMATE = /* glsl */ `#include <begin_vertex>
       transformed.xz = vec2(transformed.x * cy + transformed.z * sy, -transformed.x * sy + transformed.z * cy);
       objectNormal.xz = vec2(objectNormal.x * cy + objectNormal.z * sy, -objectNormal.x * sy + objectNormal.z * cy);
       transformed.x += sway * transformed.y;
-      float hop = cheer * abs(sin(uTime * 7.5 + ph)) * 0.42 + nearK * 0.08 * abs(sin(uTime * 6.0 + ph));
+      float hop = cheer * abs(sin(uTime * 7.5 + ph)) * 0.42 + nearK * 0.08 * abs(sin(uTime * 6.0 + ph)) + waveK * 0.3;
       transformed.y += 0.03 * sin(uTime * 2.2 + ph) + hop;
     }
   }`;
 
 const COLOUR = /* glsl */ `vColor = color;
   if (aSlot > 0.5 && aSlot < 1.5) vColor = aCoat;
-  else if (aSlot > 1.5 && aSlot < 2.5) vColor = aHat;`;
+  else if (aSlot > 1.5 && aSlot < 2.5) vColor = aHat;
+  else if (aSlot > 3.5) vColor = aHat;`;
 
 /** The crowd's material: the shared toon model, patched to colour and animate each figure. */
 export function crowdMaterial(u: CrowdUniforms): ShaderMaterial {
