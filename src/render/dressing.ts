@@ -445,9 +445,17 @@ export class Dresser {
     this.flags = flagColors(p);
   }
 
-  /** Places chunk i's dressing through `put`, and lists the clearings the forest must keep. */
-  chunk(i: number, put: Put, clear: Clearing[]): void {
+  /** Places chunk i's dressing through `put`, and lists the clearings the forest must keep. Nothing
+   *  stands in `keep` (a village's houses, a set piece's ground and crowd), but a lift line runs on:
+   *  it cannot lose a tower, and the long sites plan round the lift lines. */
+  chunk(i: number, put0: Put, clear: Clearing[], keep: Clearing[] = []): void {
     const c = this.c;
+    const put: Put = keep.length === 0 ? put0 : (key, m, pick, r, g, b) => {
+      if (key === 'dr:l' && (pick === L_TOWER || pick === L_CABLE)) return put0(key, m, pick, r, g, b);
+      const z = -m.elements[14];
+      const off = m.elements[12] - c.centerX(z);
+      if (!inClearing(keep, off < 0 ? -1 : 1, Math.abs(off) - c.halfWidth(z), z)) put0(key, m, pick, r, g, b);
+    };
     const z0 = i * CHUNK_LEN;
     const z1 = z0 + CHUNK_LEN;
     if (z1 < 60) return;

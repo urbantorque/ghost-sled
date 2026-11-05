@@ -5,7 +5,7 @@ import { CHUNK_LEN, Course, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry } from './crowd';
 import { ENCLOSED, Kind, Piece, Rail, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
-import type { Clearing } from './dressing';
+import { inClearing, liftLine, type Clearing } from './dressing';
 import { makeToonMaterial, shared } from './materials';
 import type { Palette } from './palette';
 
@@ -308,6 +308,12 @@ export function siteToWorld(s: { x: number; y: number; z: number; yaw: number },
   return out.set(s.x + lx * cy + lz * sy, s.y + ly, -s.z - lx * sy + lz * cy);
 }
 
+/** Whether a lift line runs at sim z: a long site's houses and walls would stand among its towers. */
+function onLift(c: Course, z: number): boolean {
+  const l = liftLine(c.section(z));
+  return !!l && z > l.z0 - 30 && z < l.z1 + 30;
+}
+
 /** The deterministic list of a course's sites (planned lazily, in order). */
 export class SitePlan {
   private list: Site[] = [];
@@ -403,7 +409,7 @@ export class SitePlan {
     for (let zt = base; zt < base + 600 && Number.isNaN(zc); zt += 20) {
       if (!this.offKm(zt - len, zt + len)) continue;
       let ok = true;
-      for (let q = zt - len - 20; q <= zt + len + 20 && ok; q += 20) ok = !VILLAGE_SHUNS.has(c.section(q).kind);
+      for (let q = zt - len - 20; q <= zt + len + 20 && ok; q += 20) ok = !VILLAGE_SHUNS.has(c.section(q).kind) && !onLift(c, q);
       if (ok) zc = zt;
     }
     if (Number.isNaN(zc)) {
@@ -804,6 +810,7 @@ export class SetPieces {
   private v = new Vector3();
   private s = new Vector3();
   private up = new Vector3(0, 1, 0);
+  private keepBuf: Clearing[] = [];
 
   constructor(
     private course: Course,
@@ -907,6 +914,17 @@ export class SetPieces {
   /** The forest the props must keep clear between sim z0 and z1 (SitePlan.clearings). */
   clearings(z0: number, z1: number, out: Clearing[]): void {
     this.plan.clearings(z0, z1, out);
+  }
+
+  /** Whether a set piece keeps the bank clear at world x and sim z (a cabin's smoke asks: the dressing
+   *  drops a cabin there). */
+  keeps(x: number, z: number): boolean {
+    const c = this.course;
+    const list = this.keepBuf;
+    list.length = 0;
+    this.plan.clearings(z - 1, z + 1, list);
+    const off = x - c.centerX(z);
+    return inClearing(list, off < 0 ? -1 : 1, Math.abs(off) - c.halfWidth(z), z);
   }
 
   setQuality(tier: 'low' | 'medium' | 'high', shadows: boolean): void {

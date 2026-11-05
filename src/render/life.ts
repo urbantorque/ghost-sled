@@ -756,6 +756,12 @@ export class Life {
   /** Optional, wired by the world: far chimney tops (a valley village's, world space) to smoke as
    *  well; writes up to out.length points and returns how many. */
   farChimneys: ((out: Vector3[]) => number) | null = null;
+  /** Optional, wired by the world: whether a set piece keeps the bank clear at world x and sim z
+   *  (the dressing drops a cabin there, so no chimney smokes). */
+  kept: ((x: number, z: number) => boolean) | null = null;
+  /** Optional, wired by the world: metres the snow is lowered at sim z, side and edge excess (an
+   *  overlook's lip): a fleeing animal pulls up at the edge instead of running out over the drop. */
+  dropAt: ((z: number, side: number, e: number) => number) | null = null;
   private chimBuf: Vector3[] = Array.from({ length: 6 }, () => new Vector3());
   private course: Course;
   private plan: Plan;
@@ -1266,7 +1272,7 @@ export class Life {
     for (let i = Math.max(0, from); i <= to; i++) {
       for (let side = -1; side <= 1; side += 2) {
         const sp = cabinSpot(c, i, side, this.dens);
-        if (!sp) continue;
+        if (!sp || this.kept?.(sp.x, -sp.z)) continue;
         const cs = Math.cos(sp.yaw);
         const sn = Math.sin(sp.yaw);
         // The cabin's local point (lx, ly, lz) in the world.
@@ -1471,9 +1477,12 @@ export class Life {
           const target = f.kind === F_HARE ? 0.9 + 0.5 * Math.sin(t * 5) : f.kind === F_FOX ? 1.15 : 0.95;
           f.dir += (target * f.side - f.dir) * Math.min(1, dt * 6);
           const sp = Math.min(1, t * 3) * f.speed;
-          f.e += Math.sin(Math.abs(f.dir)) * sp * dt;
-          f.z += Math.cos(f.dir) * sp * dt;
-          move = 1;
+          const edge = this.dropAt !== null && this.dropAt(f.z, f.side, f.e + 1.5) > 0.05;
+          if (!edge) {
+            f.e += Math.sin(Math.abs(f.dir)) * sp * dt;
+            f.z += Math.cos(f.dir) * sp * dt;
+          }
+          move = edge ? 0 : 1;
           rate = f.kind === F_HARE ? 4.2 : f.kind === F_FOX ? 3.4 : 2.3;
           hop = f.kind === F_HARE ? 0.32 : f.kind === F_FOX ? 0.08 : 0.55;
           if (t > 9) f.live = false;

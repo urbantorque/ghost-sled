@@ -25,7 +25,7 @@ import type { Tier } from './world';
 // Safety (ART.md section 10 and the lane rules): the snow is lowered only past LIP - 6 m of edge
 // excess, so the corridor and its banks out to the forest limit, and every prop the dressing sets on
 // the shelf (clutter out to 27.5 m, cabins to 23 m), stand on the sim's own ground. Nothing new
-// stands within 9.2 m of the corridor's edge. Overlooks keep 150 m from every set piece in every
+// stands within 9.2 m of the corridor's edge. Overlooks keep 120 m from every set piece's ends in every
 // mood (their outer stretches 110 m) and clear of the dressing's lift lines; the forest keeps clear
 // of them through Props.siteClearings.
 //
@@ -72,7 +72,7 @@ const GAP_SPREAD = 340;
 const FIRST_Z = 90;
 const FIRST_BY = 600;
 /** Every set piece (any kind, present or future) keeps this far from an overlook. */
-const SITE_KEEP = 150;
+const SITE_KEEP = 120;
 /** One overlook in this many opens both banks (a ridge), never the first. */
 const RIDGE_CHANCE = 0.2;
 /** The sections an overlook prefers: the open, flowing ones. */
@@ -85,7 +85,7 @@ const RAIL_LEN = 6;
 /** Whether Low opens its overlooks too (the rail alone, one draw). Off until props.ts keeps the forest
  *  out of Props.siteClearings on Low as well: today it asks for them only with its dressing (Medium
  *  and High), and Low's far forest would stand in the air over the drop. */
-export const LOW_OPENS = false;
+export const LOW_OPENS = true;
 /** How far ahead of the rider (metres) the plan is kept on idle time. */
 const PLAN_AHEAD = 2400;
 

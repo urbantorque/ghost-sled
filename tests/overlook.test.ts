@@ -31,14 +31,14 @@ describe('overlook plan', () => {
       for (let i = 1; i < list.length; i++) expect(list[i].z0).toBeGreaterThan(list[i - 1].z1 + 250);
     });
 
-    it(`${c.biome}: keeps 150 m from every set piece in every mood, and its outer fall 110 m`, () => {
+    it(`${c.biome}: keeps 120 m from every set piece's ends in every mood, and its outer fall 110 m`, () => {
       for (const mood of [Mood.None, Mood.Comet, Mood.Powder]) {
         const sites = new SitePlan(c, mood);
         sites.planTo(RUN + 1000);
         for (const o of list) {
           for (const s of sites.planned) {
-            const d = s.z < o.z0 ? o.z0 - s.z : s.z > o.z1 ? s.z - o.z1 : 0;
-            expect(d).toBeGreaterThanOrEqual(150);
+            const d = s.z < o.z0 ? o.z0 - s.z - s.len : s.z > o.z1 ? s.z - s.len - o.z1 : 0;
+            expect(d).toBeGreaterThanOrEqual(120);
             const od = s.z < o.oz0 ? o.oz0 - s.z : s.z > o.oz1 ? s.z - o.oz1 : 0;
             expect(od).toBeGreaterThanOrEqual(110);
             // (No fall at all at the set piece's own spot.)

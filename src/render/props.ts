@@ -213,6 +213,8 @@ export class Props {
   private graves: Array<{ x: number; z: number }> = [];
   /** The set pieces' footprints and crowd rows (landmarks.ts), kept clear of the forest. */
   siteClearings: ((z0: number, z1: number, out: Clearing[]) => void) | null = null;
+  /** Ground no dressing stands on either: the set pieces' footprints and crowd rows (landmarks.ts). */
+  siteKeep: ((z0: number, z1: number, out: Clearing[]) => void) | null = null;
 
   constructor(
     private course: Course,
@@ -798,13 +800,16 @@ export class Props {
       }
     }
     // Bank dressing and the section signatures, then the forest round the clearings they keep.
-    const clear: Clearing[] = [];
-    if (this.dresser && this.siteClearings) this.siteClearings(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, clear);
+    const keep: Clearing[] = [];
+    if (this.siteKeep) this.siteKeep(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, keep);
+    const clear: Clearing[] = keep.slice();
+    if (this.siteClearings) this.siteClearings(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, clear);
     if (this.dresser) {
       this.dresser.chunk(
         i,
         (key, m, pick, r, g, b) => this.pushM(key === 'dr:l' && pick >= L_ROCKBAND ? 'dr:w' : key, m, pick, r, g, b),
         clear,
+        keep,
       );
     }
     this.forest(i, clear);
@@ -830,9 +835,9 @@ export class Props {
       for (let z = z0; z < z0 + CHUNK_LEN; z += 3.4 / Math.max(0.35, dens)) {
         const jz = z + (hashf(i, k, 1) - 0.5) * 2.5;
         const e = FOREST_LIMIT + 0.6 + hashf(i, k, 2) * 3.2;
-        if (dress) {
+        if (dress || clear.length > 0) {
           const sig = signature(c, jz);
-          const thin = wallThinning(sig.kind, sig.k);
+          const thin = dress ? wallThinning(sig.kind, sig.k) : 0;
           if ((thin > 0 && hashf(i, k, 13) < thin) || (clear.length > 0 && inClearing(clear, side, e, jz))) {
             k++;
             continue;
@@ -847,7 +852,7 @@ export class Props {
       for (let t = 0; t < n; t++) {
         const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
         const e = FOREST_LIMIT + 4 + Math.pow(hashf(i, k, 7), 1.6) * 75;
-        if (dress && clear.length > 0 && inClearing(clear, side, e, jz)) {
+        if (clear.length > 0 && inClearing(clear, side, e, jz)) {
           k++;
           continue;
         }

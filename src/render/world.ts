@@ -231,10 +231,8 @@ export class World {
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
     this.overlooks = new Overlooks(this.course, this.palette, quality.tier);
     this.terrain.overlooks = this.midground.overlooks = this.overlooks;
-    this.props.siteClearings = (z0, z1, out) => {
-      this.setPieces.clearings(z0, z1, out);
-      this.overlooks.clearings(z0, z1, out);
-    };
+    this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
+    this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.tier);
     setCloudShadows(quality.tier !== 'low');
@@ -249,6 +247,8 @@ export class World {
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
+    this.life.kept = (x, z) => this.setPieces.keeps(x, z);
+    this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     const cor = { x: 0, hw: 0 };
     this.cam.corridor = (z) => {
