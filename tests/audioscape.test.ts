@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Listener, type ListenSources, PLACES, newView } from '../src/audio/listen';
-import { TAKE_NAMES, TAKE_RATE, synthesize } from '../src/audio/takes';
+import { LOW_TAKES, TAKE_NAMES, TAKE_RATE, TakeBank, synthesize } from '../src/audio/takes';
 import { Mood } from '../src/sim/chaos';
 import type { Section } from '../src/sim/course';
 
@@ -98,6 +98,17 @@ class CountingCtx {
 }
 
 describe('the takes', () => {
+  it('Low makes only what it hears, and nothing on a zero budget', () => {
+    const bank = new TakeBank(new CountingCtx() as unknown as BaseAudioContext);
+    bank.pump(0, LOW_TAKES);
+    expect(bank.samples).toBe(0);
+    for (let k = 0; k < 4000; k++) bank.pump(5, LOW_TAKES);
+    expect(TAKE_NAMES.slice(0, LOW_TAKES).every((n) => bank.get(n) !== null)).toBe(true);
+    expect(bank.get('cheer')).toBeNull();
+    expect(bank.get('cowbell')).toBeNull();
+    expect(bank.done).toBe(false);
+  });
+
   it('every take is finite, audible, under its peak and ends without a click', () => {
     for (const name of TAKE_NAMES) {
       const d = synthesize(name);

@@ -789,3 +789,67 @@ Every place where I replaced, extended or interpreted the brief, and why.
     by asking the shadow map once, 7 m nearer the light; on a lone caster's long shadow that flipped
     the penumbra and the thinning at one line, a pale band cut square across it. It now asks at four
     steps between 1.5 and 9.5 m, dithered per pixel, for the same number of reads.
+117. **The banks open now and then.** Stretches of 120 to 300 m (about one or two a kilometre, the
+    first by 600 m, preferring cruise, benches and switchbacks, 120 m clear of every set piece's ends
+    in every mood and clear of lift lines) are overlooks. On the valley side the forest stands back, a
+    timber rail marks the forest limit, a snow shelf runs to a cornice, and past edge excess 25 m the
+    terrain rolls over and falls about 100 m; the mid-ground carries the fall on, with a lower far
+    wall. One in five is a ridge, open both ways. Nothing inside 25 m moves, so the corridor, the banks
+    and the dressing stand on the sim's ground. The sim's own bank is 9.5 m high at the forest limit,
+    so from the chase lens what opens is the sky over the rail and the long view down the fall line,
+    not the valley floor; the lens leans 0.12 rad toward the open side, with a 3.2 s reveal as it
+    opens. Fleeing animals pull up at the lip. The plan does not depend on the mood, so a mood never
+    rebuilds the terrain.
+118. **The course changes character: villages to ride through, and runs under a roof.** Every 1.5 to
+    2.5 km the run becomes a village's street for 150 to 250 m (`town.ts`): houses, shops, a church or
+    temple and a hotel face the run from 13.6 m past its edge, a dense crowd lines both crests and does
+    the wave, and strings and banners hang across from tall masts. Anything over the run clears the
+    highest air there by 6 m, from `airProfile`, which bins the same flights as `airCeiling` every 2 m.
+    Kickers fly 30 to 70 m and bump pops about 20 m, so masts stand tall and an enclosed run (gallery,
+    ice tunnel, lava tunnel, torii corridor) can only go where nothing launches under it: about once
+    per 7 km per mountain, the rule kept rather than the frequency. Inside, the post darkens the
+    frame's edges, strobes past the pillars and flashes on the way out. The figure was cut to 310
+    triangles to pay for the crowd. Villages plan round lift lines, since a tower cannot be dropped
+    from a line; enclosures need not (they stand within 23 m, and the one overlap in 12 km of the
+    mountains is a lift 37 m out).
+119. **One gate keeps the dressing out of set pieces.** `Props.siteKeep` (set pieces) is ground nothing
+    stands on, `Props.siteClearings` (overlooks) only keeps the forest back, so a shelf keeps its hut.
+    The dresser checks each piece by its position at one `put`, not in its four placement passes, and a
+    cabin dropped there drops its chimney smoke too (`SetPieces.keeps`). Clearings now apply on Low,
+    which is what let overlooks open there.
+120. **The world is heard.** A soundscape reads the world each run frame (`World.listenSources`, then
+    `listen.ts`) as a few numbers: the nearest crowd, flock, lift line and village, how exposed and how
+    enclosed the rider is, the camera's vista and an overlook's openness. Those move a fixed graph
+    built once and unplugged while silent; places are keyed by kind, so a new kind needs one line.
+    Every one-shot is a seeded take synthesized in JS in sliced steps and played as one buffer source
+    into eight long-lived lanes. A cruise costs about 1.2 nodes/s on High and 0.1 on Low, which hears
+    only birds, wind and the mood's bed. Alone it sits about 10 dB under the band; the mix rises 0.5 dB
+    on average and up to 2 dB at a crowd, with peaks under -7.5 dBFS. Its node budget is tested on the
+    mean of seeded cruises: the ambient calls are random, and one sample failed one full run in five.
+121. **The moments the player watches every second are made, not only marked.** A gift is a rounded,
+    striped, foil-glinting box with a satin ribbon painted into its wrap; a pickup squashes and pops
+    with confetti, coins and a flare, and gifts ahead glint so a line reads as a trail. A pass shatters
+    the ghost into glass petals that burst level with the rider and fall back, never above the lens or
+    over the rider (C10). The ghost you draft lays its slipstream on the snow as a sheet with chevrons,
+    in the existing runner-line mesh. A stomp's shockwave lives in the crater decal. The rider's weight
+    shift, absorption, balance and tuck run on springs on the CPU. Draw calls are unchanged at rest; the
+    pop meshes draw only while popping.
+122. **The air is alive, and every mood has its own light.** The dome paints crepuscular rays, clouds
+    that change as they drift, a 22 degree halo with sun dogs (Glass Ice, and round the moon in Haunted
+    Hollow), shooting stars, a richer aurora and a bigger comet, all in its existing pass. The panorama
+    takes sweeping cloud shadows and, every half minute or so, a distant avalanche down the hero's
+    face; the plume quad flies a spindrift banner off the other summits and forks with lightning at
+    night on Ember. One world-anchored draw of mist lies in the valleys below the run. A lens streak and
+    ghosts show only while the sun's disc is open to the lens. Blizzard gusts sweep curtains of snow,
+    Powder Day and Glass Ice glitter, and a per-mood light pass lifts the frame round its key light, as
+    a value shift only, so the colour roles hold.
+123. **Far things cost less, and the throttled chase stays where it was.** Past three chunks (two on
+    Low) the forest and gifts draw far builds, wall and far-row trees share one batch, variant batches
+    narrow their draw range to the picks in view, and signature bank pieces became their own batch. It
+    pays for the round's additions on triangles but not for the 4x-throttled avalanche chase, whose
+    cost is mostly per-draw CPU and the mirror. The auto tier's windows are now time-based and a tier
+    left for running long is not returned to, so a machine that cannot carry the new world leaves High
+    sooner (README has the measured figures).
+124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
+    Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
+    Night, a third as dense and paler; Glass Ice gets diamond dust there.

@@ -6,7 +6,7 @@ import type { Bank } from './buffers';
 import type { Graph } from './graph';
 import { type ScapeView, newView } from './listen';
 import type { Scene } from './music';
-import { TakeBank, type TakeName } from './takes';
+import { LOW_TAKES, TakeBank, type TakeName } from './takes';
 import { bandComp, blockRate, clamp, rand } from './voices';
 
 // The soundscape: the world the run passes through, heard. Crowds at the set pieces roar as you come
@@ -403,8 +403,11 @@ export class Soundscape {
    *  branches unplugged, and the beds hushed if the frames stopped (paused). */
   tick(now: number): void {
     // The takes are made on the title (about 0.2 s of work on a desktop, in 1.5 ms slices); a run
-    // started before they are done carries on in thinner slices.
-    this.takes.pump(this.scene === 'run' ? 0.4 : 1.5);
+    // started before they are done carries on in thinner slices. Low makes only what it hears, and
+    // never during a run: on a weak CPU the slices cost more than the sound is worth, and a bird
+    // that is not made yet just does not call.
+    if (this.tier === 'low') this.takes.pump(this.scene === 'run' ? 0 : 1.5, LOW_TAKES);
+    else this.takes.pump(this.scene === 'run' ? 0.4 : 1.5);
     for (const g of this.gates) g.tick(now);
     if (this.scene !== 'run') return;
     if (!this.hushed && now - this.lastFrame > 0.35) this.hush(now);

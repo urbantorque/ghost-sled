@@ -496,24 +496,27 @@ function* slough(seed: number): Gen {
   return finish(d, 0.8);
 }
 
-/** Every take's recipe, in the order they are made (the ones a plain alpine run needs first). */
+/** How many of the recipes below Low hears: the birds and the mood and mountain beds. */
+export const LOW_TAKES = 9;
+
+/** Every take's recipe, in the order they are made: Low's first, the crowd's and the lifts' after. */
 const RECIPES: ReadonlyArray<readonly [TakeName, () => Gen]> = [
   ['caw', () => calls(11, 1.4, 3, 520, 0.24, 0.12, 'caw')],
   ['flaps', () => flaps(12)],
-  ['cheer', () => cheer(13)],
-  ['cowbell', () => cowbell(14)],
-  ['whistle', () => whistle(15)],
-  ['clack', () => clack(16)],
-  ['church', () => bell(17, 5, 311, [[0.5, 0.5, 2.6], [1, 0.8, 1.6], [1.19, 0.5, 1.1], [1.5, 0.3, 0.9], [2, 0.45, 0.8], [2.51, 0.2, 0.5], [3.01, 0.15, 0.35]], 0.25)],
   ['owl', () => owl(18)],
-  ['diesel', () => diesel(19)],
+  ['crane', () => calls(26, 1.4, 2, 380, 0.42, 0.18, 'crane')],
   ['slough', () => slough(20)],
   ['creak', () => creak(21)],
   ['crackle', () => crackle(22)],
   ['rumble', () => rumble(23)],
   ['chimes', () => chimes(24)],
+  ['cheer', () => cheer(13)],
+  ['cowbell', () => cowbell(14)],
+  ['whistle', () => whistle(15)],
+  ['clack', () => clack(16)],
+  ['church', () => bell(17, 5, 311, [[0.5, 0.5, 2.6], [1, 0.8, 1.6], [1.19, 0.5, 1.1], [1.5, 0.3, 0.9], [2, 0.45, 0.8], [2.51, 0.2, 0.5], [3.01, 0.15, 0.35]], 0.25)],
+  ['diesel', () => diesel(19)],
   ['taiko', () => taiko(25)],
-  ['crane', () => calls(26, 1.4, 2, 380, 0.42, 0.18, 'crane')],
   ['temple', () => bell(27, 6, 196, [[0.5, 0.6, 3.2], [1, 0.8, 2.4], [1.21, 0.4, 1.6], [1.53, 0.3, 1.2], [2.02, 0.35, 0.9], [2.77, 0.15, 0.5]], 0.15)],
 ];
 
@@ -539,12 +542,14 @@ export class TakeBank {
     return this.next >= RECIPES.length && this.gen === null;
   }
 
-  /** Synthesizes for about `budgetMs` (the scheduler pass, between frames). */
-  pump(budgetMs: number): void {
-    if (this.done) return;
+  /** Synthesizes for about `budgetMs` (the scheduler pass, between frames), stopping at the first
+   *  `upto` recipes. */
+  pump(budgetMs: number, upto = RECIPES.length): void {
+    if (this.done || budgetMs <= 0 || (this.next >= upto && this.gen === null)) return;
     const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
     const until = clock() + budgetMs;
     do {
+      if (this.next >= upto && this.gen === null) return;
       if (!this.step()) return;
     } while (clock() < until);
   }

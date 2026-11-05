@@ -282,3 +282,39 @@ The run is high on a real mountain, in a world that goes on past the banks and i
 - **The lens.** Big air opens out into a vista and is home before the stomp; speed reads through the
   lens between 15 and 36 m/s; a hard carve at speed throws a rooster tail of gouache billows, rim-lit
   when backlit. The title cranes in from a wide shot of the whole world.
+
+- **Overlooks.** Now and then one bank opens. The treeline steps back, a low timber rail (larch, pale
+  boards, charred posts or lacquer by biome) runs along the forest limit, a bare snow shelf runs out to
+  a rounded cornice with dark rock breaking through, and beyond it the mountain falls away. Down the
+  fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens
+  leans toward the open side and takes a breath as it opens. Sometimes both sides open and the run
+  rides a ridge.
+- **Towns and enclosed runs.** Every couple of kilometres the run becomes a village's street: an alpine
+  village, a red-and-ochre research station with ice-fishing shanties, a basalt hot-spring town with
+  steaming pools, a lacquered temple town. A church, radome, bathhouse or temple hall rises over the
+  roofs, a hotel's balconies look down, striped masts carry bunting and lantern strings high across, and
+  the crowd packs the crests three deep, flags up, doing the wave as the rider passes. At night every
+  window glows and warm light spills down the banks toward the street. Where the air allows, the run
+  goes under a roof: a tall avalanche gallery whose pillars throw bars of light across the snow, an ice
+  vault, a basalt tunnel with glowing cracks, a corridor of wine-lacquer torii. The frame darkens at
+  its edges inside and bursts with light on the way out.
+- **The sound of the world.** Crowds roar from their bank, swell as you come and cheer what you do near
+  them: cowbells and whistles in the Alps, taiko under Sakura's gates. Crows argue over the treeline and
+  burst up from a stomp. Chairlifts clack through their towers, valley churches toll in the alpenglow,
+  owls call at night. Open bowls and overlooks blow wide and airy; galleries and tunnels close in with a
+  slap of echo. Big air opens the band out with a deep whoosh. Each weather has its own floor. All of it
+  stays under the band and never covers a hazard's telegraph.
+- **The moments.** Gifts are rounded, glossy boxes in two tones of marigold stripes with foil glints and
+  a satin bow; a pickup pops in ribbon confetti and tumbling coins, and gifts down the line twinkle. A
+  passed ghost shatters into petals of spectral glass in its kind colour, kept low and off the rider;
+  the ghost you draft lays a sheet of its light with chevrons over its track. A stomp's shockwave runs
+  out through the snow. The rider's lean lags the sled and settles, it soaks up bumps, its outside arm
+  balances a carve and it tucks at speed.
+- **The sky moves and the light is a moment.** A low sun throws crepuscular rays through the cloud gaps;
+  shafts hang in the air, never on the near snow. Clouds build and sink, their shadows sweep the far
+  ranges, a powder avalanche now and then pours down the hero's face, and summits fly spindrift
+  banners. Valleys hold drifting mist. Glass Ice wears a 22 degree halo with sun dogs, Haunted Hollow a
+  pale green lunar ring, night moods bring shooting stars, Blizzard gusts sweep curtains of snow, and
+  Ember's volcano flashes with lightning at night.
+- **Far trees** keep the same tiers, height, reach and snow caps with fewer segments. Stand 128 m or more
+  away and the forest should read the same: a far tree that reads differently from a near one is a bug.
