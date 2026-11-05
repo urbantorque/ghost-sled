@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Listener, type ListenSources, PLACES, newView } from '../src/audio/listen';
 import { TAKE_NAMES, TAKE_RATE, synthesize } from '../src/audio/takes';
 import { Mood } from '../src/sim/chaos';
@@ -312,9 +312,34 @@ describe('the soundscape costs under a node or two a second', () => {
     return { perSecond: (ctx.total() - before) / seconds, inFrames, built };
   }
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  /** The mean of several seeded cruises: the ambient calls are random, so one 40 s sample can land
+   *  over a budget that holds on average (it failed about one full run in five). */
+  async function mean(tier: 'low' | 'high'): Promise<{ perSecond: number; inFrames: number; built: number }> {
+    const out = { perSecond: 0, inFrames: 0, built: 0 };
+    const seeds = 6;
+    for (let k = 0; k < seeds; k++) {
+      let x = (k + 1) * 0x9e3779b9;
+      vi.spyOn(Math, 'random').mockImplementation(() => {
+        x = (x + 0x6d2b79f5) | 0;
+        let t = Math.imul(x ^ (x >>> 15), x | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      });
+      const r = await cruise(tier, 40);
+      out.perSecond += r.perSecond / seeds;
+      out.inFrames += r.inFrames / seeds;
+      out.built = r.built;
+    }
+    return out;
+  }
+
   it('a night cruise past a gate, a lift, a hut and a town', async () => {
-    const high = await cruise('high', 40);
-    const low = await cruise('low', 40);
+    const high = await mean('high');
+    const low = await mean('low');
     // Built once: about sixty nodes, the diesel loop's four among them.
     expect(high.built).toBeLessThan(70);
     expect(high.perSecond).toBeLessThan(2);
