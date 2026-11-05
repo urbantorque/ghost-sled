@@ -158,6 +158,26 @@ The throttled avalanche chase is the one regression: frame CPU rises about 12% a
 systems and draw submission. The quality manager steps such a machine down to Medium, which holds
 60 fps at 1x. The mirror inset leaves the mid-ground, set pieces and life out.
 
+The second world-scale round (DECISIONS 117 to 124: overlooks, ride-through villages and enclosed
+runs, the soundscape, hero moments, a living sky, forest LOD) was measured against the build before
+it on a quiet machine, interleaved run for run. High and Medium rode 75 s, far enough to reach a
+village:
+
+| Check | Before round two | After |
+| --- | --- | --- |
+| High tier at 1x: plain run and Lantern Night | 60 fps, p90 17 ms | 60 fps, p90 17 ms |
+| Medium tier at 1x, plain run | 60 fps | 60 fps |
+| High tier through an avalanche chase, CPU throttled 4x (2 runs) | 37 and 56 fps | 43 and 53 fps |
+| Low tier, CPU throttled 6x (median of 5, range) | 51 fps (26 to 55) | 43 fps (28 to 56) |
+| Draw calls, High / Medium / Low | 80 / 76 / 43 | 89 / 84 / 45 |
+| Triangles, High / Medium / Low | 1.21M / 809k / 173k | 780k / 526k / 125k |
+| Build size, unpacked | 1.57 MB at the fun pass | 2.0 MB |
+
+The forest's LOD paid for the round's geometry and more. Low at 6x throttle swings from about 26 to
+56 fps on both builds from run to run, with every system slowing together in the slow runs, so the
+difference is inside its noise; the systems the round added cost about 3% of Low's frame CPU. Low
+makes only the soundscape's takes it plays, and none during a run.
+
 High renders into an R11G11B10F buffer with 2x MSAA; Medium and Low use FXAA in the composite
 pass instead. The tier is chosen automatically, first from the GPU name and then from measured
 frame times (`src/game/quality.ts`): it steps down when frames run long or judder and back up when
@@ -179,6 +199,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 
 | Script | What it does |
 | --- | --- |
+| `towns.js`, `towns-cost.js` | Rides into each mountain's first village and enclosed run (pinned to the safe line) and shoots the approach, the inside and the way out; or measures what they cost |
 | `vista.js` | The world-scale set: the title, then a replayed best run (`?demo=0`) down each mountain, shot at 300, 1500, 2600 and 3900 m |
 | `shots.js` | The critique set (title, overtake, perfect landing, chaos reveal, four moods, results) with frame stats |
 | `carve.js` | Holds the line, then throws a hard carve into a drift |
