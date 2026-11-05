@@ -467,15 +467,14 @@ export class World {
    * Read-only; it allocates nothing after the first call.
    */
   listenSources(z: number): ListenSources {
-    // (The plan, the flocks and the bird kind are the systems' own private state, read as they are.)
+    // (The flocks and the bird kind are life's own private state, read as they are.)
     const life = this.life as unknown as { flocks: ListenSources['flocks']; birdKind: ListenSources['birds']; plan: { rich: boolean }; birdMesh: { visible: boolean } };
-    const plan = (this.setPieces as unknown as { plan: { planned: ListenSources['sites'] } }).plan;
     const src = (this.listenSrc ??= {
       course: this.course,
       biome: this.course.biome,
       mood: this.mood,
       tier: this.quality.tier,
-      sites: plan.planned,
+      sites: this.setPieces.planned,
       crowds: false,
       flocks: life.flocks,
       birds: null,
@@ -496,7 +495,7 @@ export class World {
     src.biome = this.course.biome;
     src.mood = this.mood;
     src.tier = this.quality.tier;
-    src.sites = plan.planned;
+    src.sites = this.setPieces.planned;
     src.crowds = this.quality.tier !== 'low';
     src.flocks = life.flocks;
     src.birds = life.birdMesh.visible ? life.birdKind : null;

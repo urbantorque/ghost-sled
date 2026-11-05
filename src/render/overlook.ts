@@ -213,7 +213,8 @@ export class OverlookPlan {
     // (A span can move up to 140 m back from where it was due, so plan well past.)
     for (const sp of this.sites) {
       sp.planTo(z + SITE_KEEP + 160);
-      for (const s of sp.planned) if (Math.abs(s.z - z) < SITE_KEEP + 10) return false;
+      // (A long site, a village or an enclosed run, keeps the distance from its own ends.)
+      for (const s of sp.planned) if (Math.abs(s.z - z) < SITE_KEEP + 10 + s.len) return false;
     }
     return true;
   }
@@ -269,8 +270,8 @@ export class OverlookPlan {
     for (const sp of this.sites) {
       sp.planTo(b + OUTER_SITE + 160);
       for (const st of sp.planned) {
-        if (st.z < o.z0 && st.z > a - OUTER_SITE) a = Math.max(a, st.z + OUTER_SITE);
-        if (st.z > o.z1 && st.z < b + OUTER_SITE) b = Math.min(b, st.z - OUTER_SITE);
+        if (st.z < o.z0 && st.z + st.len > a - OUTER_SITE) a = Math.max(a, st.z + st.len + OUTER_SITE);
+        if (st.z > o.z1 && st.z - st.len < b + OUTER_SITE) b = Math.min(b, st.z - st.len - OUTER_SITE);
       }
     }
     const c = this.course;
