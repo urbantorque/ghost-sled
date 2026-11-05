@@ -24,14 +24,15 @@ export const S_FENCE = 2;
 export const S_POLE = 3;
 export const S_BIO1 = 4;
 export const S_BIO2 = 5;
-/** Large kit pieces. */
+/** Large kit pieces. The section signatures' bank pieces come last: props.ts draws them as a batch of
+ *  their own, its draw range only the pieces in view (most often one: a run of cornice, of rock wall). */
 export const L_CABIN = 0;
 export const L_TOWER = 1;
 export const L_CABLE = 2;
-export const L_ROCKBAND = 3;
-export const L_CORNICE = 4;
-export const L_WALL = 5;
-export const L_SIGN = 6;
+export const L_SIGN = 3;
+export const L_ROCKBAND = 4;
+export const L_CORNICE = 5;
+export const L_WALL = 6;
 
 /** Fence and bank pieces are modelled this long along local x. */
 const FENCE_LEN = 6;
@@ -346,7 +347,7 @@ function signpost(): BufferGeometry {
 
 /** The large kit (cabin, lift tower and cable, and the section signatures), as one variant set. */
 export function largeKitSteps(biome: BiomeId, p: Palette): Array<() => BufferGeometry> {
-  return [() => cabin(biome, p), tower, cable, () => rockBand(p), () => cornice(p), () => rockWall(p), signpost];
+  return [() => cabin(biome, p), tower, cable, signpost, () => rockBand(p), () => cornice(p), () => rockWall(p)];
 }
 
 export function largeKit(biome: BiomeId, p: Palette): BufferGeometry {

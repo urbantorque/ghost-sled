@@ -535,6 +535,26 @@ interface Fig {
    *  centimetres off). */
   gy: number;
   gk: number;
+  /** The corridor where it walks, as a line: centre and half width at sim z `cz` and their slopes
+   *  per metre (re-read from the course every CORRIDOR_STEP metres; NaN: not yet). Each figure asked
+   *  the course for its centre and width at two z every frame, which missed the course's two-entry
+   *  memos every time (every figure stands at its own z). */
+  cz: number;
+  cx: number;
+  dcx: number;
+  hw: number;
+  dhw: number;
+}
+
+/** How far a figure walks on its corridor line before it is read again (the course's curvature is
+ *  small: over 1.5 m the line is off by millimetres). */
+const CORRIDOR_STEP = 1.5;
+
+/** Marks the first `n` values of an attribute for upload this frame (not its whole cap). */
+function uploadFirst(a: BufferAttribute, n: number): void {
+  a.clearUpdateRanges();
+  a.addUpdateRange(0, n);
+  a.needsUpdate = true;
 }
 
 // ---------------------------------------------------------------- smoke
@@ -759,6 +779,7 @@ export class Life {
 
   // Chairs.
   private chairGeo: InstancedBufferGeometry;
+  private chairMesh: Mesh;
   private chairMat: ShaderMaterial;
   private aA: InstancedBufferAttribute;
   private aB: InstancedBufferAttribute;
@@ -773,6 +794,7 @@ export class Life {
 
   // Smoke.
   private smokeGeo: InstancedBufferGeometry;
+  private smokeMesh: Mesh;
   private smokeMat: ShaderMaterial;
   private aSrc: InstancedBufferAttribute;
 
@@ -839,7 +861,7 @@ export class Life {
       vertexShader: CHAIR_VERT,
       fragmentShader: SOLID_FRAG,
     });
-    const chairs = new Mesh(this.chairGeo, this.chairMat);
+    const chairs = (this.chairMesh = new Mesh(this.chairGeo, this.chairMat));
 
     // Figures.
     const fg = figureSet();
@@ -860,7 +882,7 @@ export class Life {
     this.figMesh = new InstancedMesh(fg, this.figMat, FIG_CAP);
     this.figMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.figMesh.count = 0;
-    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0 });
+    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
 
     // Smoke.
     this.smokeGeo = new InstancedBufferGeometry();
@@ -877,7 +899,7 @@ export class Life {
       vertexShader: SMOKE_VERT,
       fragmentShader: SMOKE_FRAG,
     });
-    const smoke = new Mesh(this.smokeGeo, this.smokeMat);
+    const smoke = (this.smokeMesh = new Mesh(this.smokeGeo, this.smokeMat));
     smoke.renderOrder = 2;
 
     // Flags.
@@ -1038,6 +1060,11 @@ export class Life {
       this.flagMesh.count = 0;
       this.figMesh.count = 0;
     }
+    // A layer with nothing out is hidden, so it binds no program in the frame.
+    this.chairMesh.visible = this.chairGeo.instanceCount > 0;
+    this.smokeMesh.visible = this.smokeGeo.instanceCount > 0;
+    this.flagMesh.visible = this.flagMesh.count > 0;
+    this.figMesh.visible = this.figMesh.count > 0;
     if (this.motes.visible) {
       (this.moteMat.uniforms.uCentre.value as Vector3).copy(camPos).addScaledVector(camDir, 16);
       this.moteMat.uniforms.uPx.value = lensPx();
@@ -1472,9 +1499,16 @@ export class Life {
         lean = -f.amp * w * w * s * f.side * 0.05;
       }
       f.gait += dt * rate * 2 * Math.PI;
-      // World position and heading.
-      const hw = c.halfWidth(f.z);
-      const x = c.centerX(f.z) + f.side * (hw + f.e);
+      // World position and heading, off the figure's corridor line (read again every CORRIDOR_STEP m).
+      if (!(Math.abs(f.z - f.cz) < CORRIDOR_STEP)) {
+        f.cz = f.z;
+        f.cx = c.centerX(f.z);
+        f.hw = c.halfWidth(f.z);
+        f.dcx = (c.centerX(f.z + 2) - f.cx) / 2;
+        f.dhw = (c.halfWidth(f.z + 2) - f.hw) / 2;
+      }
+      const dz = f.z - f.cz;
+      const x = f.cx + f.dcx * dz + f.side * (f.hw + f.dhw * dz + f.e);
       let gy: number;
       if (f.far && this.farGround) {
         if (f.gk <= 0) {
@@ -1489,8 +1523,7 @@ export class Life {
         continue;
       }
       // The run's own direction here, and the heading off it.
-      const cx2 = c.centerX(f.z + 2) + f.side * (c.halfWidth(f.z + 2) + f.e);
-      const run = Math.atan2(cx2 - x, 2);
+      const run = Math.atan(f.dcx + f.side * f.dhw);
       const head = run + f.dir;
       // Sim heading (from +z toward +x) to a yaw about three's up: local +x along (sin h, -cos h).
       const yaw = Math.atan2(Math.cos(head), Math.sin(head));
@@ -1507,9 +1540,11 @@ export class Life {
       n++;
     }
     this.figMesh.count = n;
-    this.figMesh.instanceMatrix.needsUpdate = true;
-    this.aPick.needsUpdate = true;
-    this.aAnim.needsUpdate = true;
+    // (Only the figures out go up to the GPU.)
+    if (n === 0) return;
+    uploadFirst(this.figMesh.instanceMatrix, n * 16);
+    uploadFirst(this.aPick, n);
+    uploadFirst(this.aAnim, n * 4);
   }
 
   /** Where a newcomer is placed: well ahead, in the fog (anywhere in view after a cut). */
@@ -1541,6 +1576,7 @@ export class Life {
     f.tint = Math.floor(this.rand() * JACKETS.length);
     f.far = kind >= F_SKIER && this.farGround !== null;
     f.gk = 0;
+    f.cz = Number.NaN;
     if (kind === F_DEER || kind === F_IBEX) {
       // Standing turned toward the run, a little off square.
       f.dir = side * (-1.3 + this.rand() * 0.8);
