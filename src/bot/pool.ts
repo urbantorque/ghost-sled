@@ -1,7 +1,7 @@
 import { ChaosEvent, ChaosRoll, Mood, rollChaos } from '../sim/chaos';
 import { clamp } from '../sim/dmath';
 import { Rng, hash32 } from '../sim/prng';
-import { RunRecord, recordToString } from '../sim/replay';
+import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
 import { runBot } from './bot';
 import { uniqueGhostName } from './names';
@@ -20,6 +20,9 @@ export interface PoolGhost {
   sled: number;
   mood: number;
   event: number;
+  /** Where the rider really went down, metres down the run, nearest first: every tumble, and the
+   *  wreck that ended the run if one did (graveyards.ts clusters them). Empty for a clean run. */
+  falls: number[];
   /** recordToString of the full run record. */
   record: string;
 }
@@ -51,6 +54,17 @@ function chaosFor(rng: Rng, seed: number, salt: number, i: number): ChaosRoll {
   // About 60% plain; the rest are real chaos rolls (which can still come up plain).
   if (rng.chance(0.6)) return { mood: Mood.None, event: ChaosEvent.None, seed: s };
   return rollChaos(s, 1 + rng.int(0, 5));
+}
+
+/** Where a run went down, read off a replay of its record: the sim says so in its events, and a replay
+ *  changes nothing about the run. The whole metre is close enough for a cairn and costs a pool almost
+ *  nothing. */
+export function fallsOf(record: RunRecord): number[] {
+  const falls: number[] = [];
+  replayRecord(record, (sim) => {
+    for (const e of sim.events) if (e.type === 'crash' || (e.type === 'tumble' && e.phase === 'start')) falls.push(Math.round(sim.s.z));
+  });
+  return falls;
 }
 
 export function generatePool(seed: number, count: number, salt: number, opts: PoolOptions = {}): PoolGhost[] {
@@ -95,6 +109,7 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       sled: record.sled,
       mood: record.chaos.mood,
       event: record.chaos.event,
+      falls: fallsOf(record),
       record: recordToString(record),
     };
   });

@@ -32,6 +32,9 @@ export interface PoolGhostData {
   sled: number;
   mood: number;
   event: number;
+  /** Where the rider went down, metres down the run: every tumble and any wreck. A pool from before
+   *  these were recorded has none, and its graveyards fall back on where its runs ended. */
+  falls?: number[];
   record: string;
 }
 

@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isValidGhostName } from '../src/bot/names';
-import { PoolGhost } from '../src/bot/pool';
+import { PoolGhost, fallsOf } from '../src/bot/pool';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { recordFromString, replayRecord } from '../src/sim/replay';
 import { SIM_VERSION } from '../src/sim/sim';
@@ -68,6 +68,7 @@ describe('bundled ghost pools', () => {
           expect(r.ticks).toBe(g.ticks);
           expect(r.score).toBe(g.score);
           expect(r.distance).toBe(g.distance);
+          expect(g.falls, g.name).toEqual(fallsOf(r));
           const sim = replayRecord(r);
           expect(sim.tick, g.name).toBe(g.ticks);
           expect(sim.score, g.name).toBe(g.score);
