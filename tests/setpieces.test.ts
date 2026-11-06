@@ -15,8 +15,10 @@ import { OverlookPlan } from '../src/render/overlook';
 // enclosure's roof, a town's strings and banners) higher than any sled can fly by the margin.
 
 const MOODS = [Mood.None, Mood.Comet];
-/** The longest a run may go between places, overlooks counted. */
-const BARE_MOST = 330;
+/** The longest a mountain may go between places, overlooks counted. */
+const BARE_MOST = 282;
+/** A daily's the same, but for the odd stretch its dealt sections leave. */
+const BARE_DAILY = 330;
 
 const flown = (c: Course, mood: Mood): SitePlan => {
   const plan = new SitePlan(c, mood);
@@ -88,10 +90,10 @@ describe('the plan is the course', () => {
         expect(repeats).toBeLessThanOrEqual(1);
       });
 
-      it(`${m.name} (${Mood[mood]}): no bare stretch runs past about 300 m`, () => {
+      it(`${m.name} (${Mood[mood]}): no bare stretch runs past 282 m`, () => {
         const c = courseFor(m.seed);
         const { gap, at } = longestBare(c, flown(c, mood).planned);
-        expect(gap, `bare from ${Math.round(at)}`).toBeLessThanOrEqual(BARE_MOST);
+        expect(gap, `bare from ${Math.round(at)}`).toBeLessThanOrEqual(BARE_MOST + 0.5);
       });
     }
   }
@@ -111,7 +113,7 @@ describe('the plan is the course', () => {
       expect(plan.planned.length).toBeGreaterThan(9);
       const list = plan.planned;
       for (let i = 1; i < list.length; i++) expect(list[i].z - list[i].len, day).toBeGreaterThan(list[i - 1].z + list[i - 1].len);
-      expect(longestBare(c, plan.planned).gap, day).toBeLessThanOrEqual(BARE_MOST);
+      expect(longestBare(c, plan.planned).gap, day).toBeLessThanOrEqual(BARE_DAILY);
     }
   });
 

@@ -37,7 +37,7 @@ import { journeyDusk, type Palette } from './palette';
 // never at a run's start.
 
 /** A stretch of run longer than this gets a piece, or leaves room for an overlook. */
-const BARE_MAX = 285;
+const BARE_MAX = 282;
 /** The start's stretch of ramp (sim z): crowd, barriers and the start gate. */
 const START_FROM = -8;
 const START_TO = 118;
@@ -53,7 +53,9 @@ const TOWN_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['chute', '
  *  fits between it and the start's crowd (the first one opens by 600 m). */
 const LIFT_FIRST = 505;
 const LIFT_LEAD = 120;
-const LIFT_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['bowl', 'split', 'benches', 'lake', 'cruise']);
+const LIFT_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['bowl', 'split', 'benches', 'lake', 'cruise', 'switchbacks']);
+/** The second lift line keeps this far from the first: it is the one near the middle, not a neighbour. */
+const LIFT_APART = 900;
 /** An overlook keeps this far from a piece's centre (overlook.ts SITE_KEEP and its margin). */
 const SITE_ROOM = 130;
 /** A piece moved off a kilometre arch keeps this far from the one before it. */
@@ -534,7 +536,8 @@ export class SitePlan {
       const side: 1 | -1 = l ? (l.side > 0 ? -1 : 1) : hashf(c.seed, n, 61) < 0.5 ? -1 : 1;
       drafts.push({ kind: 'lift', z, len: 0, span: true, side });
     };
-    put(Math.max(LIFT_FIRST, firstLip - LIFT_LEAD), 1);
+    const first = Math.max(LIFT_FIRST, firstLip - LIFT_LEAD);
+    put(first, 1);
     let best: Section | null = null;
     let score = -Infinity;
     for (const sec of secs) {
@@ -542,7 +545,7 @@ export class SitePlan {
       const body = sec.z0 + sec.blend;
       if (sec.z1 - body < 90) continue;
       const mid = (body + sec.z1) / 2;
-      if (drafts.some((d) => mid > startOf(d) - 130 && mid < endOf(d) + 130)) continue;
+      if (Math.abs(mid - first) < LIFT_APART || drafts.some((d) => mid > startOf(d) - 130 && mid < endOf(d) + 130)) continue;
       const k = (sec.kind === 'bowl' ? 300 : 0) - Math.abs(mid - c.finishZ * 0.55);
       if (k > score) {
         score = k;
@@ -591,7 +594,9 @@ export class SitePlan {
     const spread = (from: number, to: number, salt: number) => {
       for (let k = 0, at = from; to - at > BARE_MAX; k++) {
         const parts = Math.ceil((to - at) / BARE_MAX);
-        at = add(at + (to - at) / parts + (hashf(seed, salt, k + 7) - 0.5) * 24, at);
+        const z = at + (to - at) / parts + (hashf(seed, salt, k + 7) - 0.5) * 24;
+        // (The wander stops where a stretch either side of it would run past the limit.)
+        at = add(Math.max(to - (parts - 1) * BARE_MAX, Math.min(at + BARE_MAX, z)), at);
       }
     };
     for (let i = 0; i + 1 < drafts.length; i++) {

@@ -1,6 +1,6 @@
 import { BoxGeometry, BufferGeometry, Color, CylinderGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Object3D, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { MOODS } from '../sim/chaos';
-import { Course, FOREST_LIMIT, type Section, type SectionKind } from '../sim/course';
+import { Course, FOREST_LIMIT, RUN_OUT, type Section, type SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { noise1 } from '../sim/noise';
 import { signature, type Clearing } from './dressing';
@@ -12,7 +12,7 @@ import type { Tier } from './world';
 
 // Overlooks: now and then one bank opens. From the chase lens the run is a trough between two banks,
 // so the valley, its villages, the sea of clouds and the panorama hide behind the treeline most of the
-// way down. On an overlook (120 to 300 m, one or two a kilometre, the first inside the first 600 m)
+// way down. On an overlook (120 to 300 m, at least three a descent, the first inside the first 1.5 km)
 // the forest on one side stands back, a timber rail marks the forest limit (where the sim still
 // crashes a sled), a bare snow shelf runs out to a cornice lip with rocks breaking through it, and
 // past the lip the mountain falls away: the terrain rolls over into a steepening face and the
@@ -27,7 +27,9 @@ import type { Tier } from './world';
 // the shelf (clutter out to 27.5 m, cabins to 23 m), stand on the sim's own ground. Nothing new
 // stands within 9.2 m of the corridor's edge. Overlooks keep 120 m from every set piece's ends in every
 // mood (their outer stretches 110 m) and clear of the dressing's lift lines; the forest keeps clear
-// of them through Props.siteClearings.
+// of them through Props.siteClearings. Open ground is scarce on a written descent, so where those rules
+// leave too few, the ones still wanted come as close as the fixed pieces allow (TIGHT_KEEP): an
+// overlook's fall is gone at its own ends, so what stands past them stands on the sim's ground.
 //
 // From the chase lens the sim's own bank (9.5 m high at the forest limit) still hides what lies just
 // past it: what opens is the sky band over the rail and the long view down the fall line on that side.
@@ -73,6 +75,14 @@ const FIRST_Z = 90;
 const FIRST_BY = 600;
 /** Every set piece (any kind, present or future) keeps this far from an overlook. */
 const SITE_KEEP = 120;
+/** The fewest overlooks a descent has, and by how far down the first has ended. */
+const LOOKS_MIN = 3;
+const FIRST_END = 1500;
+/** What the course fixes cannot make way, so an overlook the plain rules could not fit keeps only this
+ *  far from it: the piece's footprint and room for the eye to take in one thing, then the next. A lift
+ *  line is a thin thing across the run, and keeps less. */
+const TIGHT_KEEP = 60;
+const TIGHT_LIFT = 30;
 /** One overlook in this many opens both banks (a ridge), never the first. */
 const RIDGE_CHANCE = 0.2;
 /** The sections an overlook prefers: the open, flowing ones. */
@@ -83,21 +93,16 @@ const NARROW: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'treeru
 /** Caps: rail sections and lip rocks alive at once (two or three overlooks in range, ridges both sides). */
 const RAIL_CAP = 260;
 const ROCK_CAP = 320;
+/** How far ahead of the rider (metres) an overlook's rail and rocks stand: as far as they can be told
+ *  from the snow. Their two draws are paid only while one is in range, and with three a descent that was
+ *  most of a run. */
+const STAND_AHEAD = 420;
 /** Rail sections are modelled this long. */
 const RAIL_LEN = 6;
 /** Whether Low opens its overlooks too (the rail alone, one draw). Off until props.ts keeps the forest
  *  out of Props.siteClearings on Low as well: today it asks for them only with its dressing (Medium
  *  and High), and Low's far forest would stand in the air over the drop. */
 export const LOW_OPENS = true;
-/** How far ahead of the rider (metres) the plan is kept on idle time. */
-const PLAN_AHEAD = 2400;
-
-/** Runs fn on idle time (at most a second late), or soon after where there is none (Safari). */
-function whenIdle(fn: () => void): void {
-  if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 1000 });
-  else setTimeout(fn, 50);
-}
-
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -145,7 +150,8 @@ function liftOf(sec: Section): { side: number; z0: number; z1: number } | null {
 }
 
 /** One overlook: sim z0..z1, and the side that opens (0: both, a ridge); oz0..oz1, the stretch
- *  round it where the mountain past the lip falls away behind the treeline too. */
+ *  round it where the mountain past the lip falls away behind the treeline too. `tight`: placed on
+ *  the closer keep (TIGHT_KEEP), the plain rules having left too few. */
 export interface Overlook {
   n: number;
   z0: number;
@@ -153,14 +159,17 @@ export interface Overlook {
   side: -1 | 0 | 1;
   oz0: number;
   oz1: number;
+  tight: boolean;
 }
 
-/** The deterministic list of a course's overlooks (planned lazily, in order). The same for every mood:
- *  the set pieces move with a mood's gravity and pop, so an overlook keeps clear of where they stand
- *  in each (and a mood change at a run's start never rebuilds the terrain). */
+/** The deterministic list of a course's overlooks, all of it planned at the first asking: whether a
+ *  descent is short of them is only known at its end. The same for every mood: the set pieces move with
+ *  a mood's gravity and pop, so an overlook keeps clear of where they stand in each (and a mood change
+ *  at a run's start never rebuilds the terrain). */
 export class OverlookPlan {
   private list: Overlook[] = [];
   private nextZ = FIRST_Z;
+  private done = false;
   /** The set pieces' plan for each distinct gravity and pop among the moods. */
   private sites: SitePlan[] = [];
 
@@ -179,34 +188,24 @@ export class OverlookPlan {
     return this.list;
   }
 
-  /** How far the plan is final (sim z): every overlook starting before it is planned. */
+  /** How far the plan is final (sim z). */
   get reach(): number {
-    return this.nextZ;
+    return this.done ? Infinity : 0;
   }
 
-  /** One small step of planning toward sim z, for idle time: one set piece in one mood (the costly
-   *  part, up to about 20 ms for a span), else the overlooks themselves. False once it is there. */
-  prefetch(z: number): boolean {
-    const need = z + LEN_MAX + OUTER_AFTER + OUTER_SITE + 170;
-    let low: SitePlan | null = null;
-    for (const sp of this.sites) if (sp.reach <= need && (!low || sp.reach < low.reach)) low = sp;
-    if (low) {
-      low.planNext();
-      return true;
-    }
-    if (this.nextZ > z) return false;
-    this.planNext();
-    return true;
-  }
-
-  /** Plans every overlook starting before sim z. */
-  planTo(z: number): void {
-    while (this.nextZ <= z) this.planNext();
+  /** Plans the course's overlooks, if that is still to do: a few ms, and only the first asking pays. */
+  planTo(_z: number): void {
+    if (this.done) return;
+    this.done = true;
+    const end = this.course.finishZ + RUN_OUT;
+    while (this.nextZ <= end) this.planNext(end);
+    this.close(end);
   }
 
   /** Whether an overlook may stand at sim z on `side` (0: both), in a section `pick` allows (0: the
-   *  preferred ones, otherwise any open one: never a narrow place or a ledge's section). */
-  private ok(z: number, side: number, pick: number): boolean {
+   *  preferred ones, otherwise any open one: never a narrow place or a ledge's section), keeping the
+   *  plain distance from the set pieces, or the `tight` one. */
+  private ok(z: number, side: number, pick: number, tight = false): boolean {
     const c = this.course;
     const sec = c.section(z);
     if (pick === 0 && !PREFERRED.has(sec.kind)) return false;
@@ -217,28 +216,33 @@ export class OverlookPlan {
     for (const sp of this.sites) {
       sp.planTo(z + SITE_KEEP + 160);
       // (A long site, a village or an enclosed run, keeps the distance from its own ends.)
-      for (const s of sp.planned) if (Math.abs(s.z - z) < SITE_KEEP + 10 + s.len) return false;
+      for (const s of sp.planned) if (Math.abs(s.z - z) < (tight ? (s.kind === 'lift' ? TIGHT_LIFT : TIGHT_KEEP) : SITE_KEEP) + 10 + s.len) return false;
     }
     return true;
   }
 
   /** The first stretch from z0 to z1 that fits (at least LEN_MIN, up to `want` metres), or null. */
-  private find(n: number, z0: number, z1: number, want: number, pick: number, ridge: boolean): Overlook | null {
+  private find(n: number, z0: number, z1: number, want: number, pick: number, ridge: boolean, tight = false): Overlook | null {
     const seed = this.course.seed;
     for (let z = z0; z <= z1; z += 10) {
-      // The side that falls away there (the valley side), or both on a ridge.
+      // The side that falls away there (the valley side), or both on a ridge. Short of ground, the other
+      // bank will do: the mid-ground takes the valley form on an open side whichever it is.
       const zm = z + want / 2;
-      const side: -1 | 0 | 1 = ridge ? 0 : flankMode(seed, zm, -1) <= flankMode(seed, zm, 1) ? -1 : 1;
-      if (!this.ok(z, side, pick)) continue;
+      let side: -1 | 0 | 1 = ridge ? 0 : flankMode(seed, zm, -1) <= flankMode(seed, zm, 1) ? -1 : 1;
+      if (!this.ok(z, side, pick, tight)) {
+        if (!tight || side === 0) continue;
+        side = side > 0 ? -1 : 1;
+        if (!this.ok(z, side, pick, tight)) continue;
+      }
       let e = z;
-      while (e - z < want && this.ok(e + 10, side, pick)) e += 10;
-      if (e - z >= LEN_MIN) return { n, z0: z, z1: e, side, oz0: z, oz1: e };
+      while (e - z < want && this.ok(e + 10, side, pick, tight)) e += 10;
+      if (e - z >= LEN_MIN) return { n, z0: z, z1: e, side, oz0: z, oz1: e, tight };
       z = e;
     }
     return null;
   }
 
-  private planNext(): void {
+  private planNext(end: number): void {
     const c = this.course;
     const n = this.list.length;
     const want = LEN_MIN + hashf(c.seed, n, 71) * (LEN_MAX - LEN_MIN);
@@ -253,7 +257,7 @@ export class OverlookPlan {
     } else {
       // A preferred section within the next 700 m, else (to keep one or two a kilometre) any open one.
       const ridge = hashf(c.seed, n, 72) < RIDGE_CHANCE;
-      placed = this.find(n, this.nextZ, this.nextZ + 700, want, 0, ridge) ?? this.find(n, this.nextZ, this.nextZ + 3000, want, 1, ridge);
+      placed = this.find(n, this.nextZ, Math.min(end, this.nextZ + 700), want, 0, ridge) ?? this.find(n, this.nextZ, Math.min(end, this.nextZ + 3000), want, 1, ridge);
       if (!placed) {
         this.nextZ += 3000;
         return;
@@ -262,6 +266,39 @@ export class OverlookPlan {
     this.outer(placed);
     this.list.push(placed);
     this.nextZ = placed.z1 + GAP_MIN + hashf(c.seed, n, 73) * GAP_SPREAD;
+  }
+
+  /** What the plain rules left short: one inside the first FIRST_END metres if none opened there, and
+   *  on up to LOOKS_MIN, each in the widest room left between the others, on the tight keep. The pieces
+   *  that fill the bare stretches keep off these like any other (SitePlan.fill), so a plan laid with
+   *  those pieces lands on the same ground as the one laid without them. */
+  private close(end: number): void {
+    const c = this.course;
+    const list = this.list;
+    let early = list.length === 0 || list[0].z1 > FIRST_END;
+    while (early || list.length < LOOKS_MIN) {
+      // The room left: where an overlook may start and stay GAP_MIN from its neighbours.
+      let rooms: Array<[number, number]> = [];
+      let from = FIRST_Z;
+      for (const o of list) {
+        rooms.push([from, o.z0 - GAP_MIN - LEN_MIN]);
+        from = o.z1 + GAP_MIN;
+      }
+      rooms.push([from, end - LEN_MIN]);
+      if (early) rooms = [[rooms[0][0], Math.min(rooms[0][1], FIRST_END - LEN_MIN)]];
+      rooms.sort((a, b) => b[1] - b[0] - (a[1] - a[0]) || a[0] - b[0]);
+      const n = list.length;
+      const want = LEN_MIN + hashf(c.seed, n, 71) * (LEN_MAX - LEN_MIN);
+      let placed: Overlook | null = null;
+      for (const [a, b] of rooms) if ((placed = this.find(n, a, b, want, 1, false, true))) break;
+      if (!placed && !early) return;
+      early = false;
+      if (!placed) continue;
+      this.outer(placed);
+      list.push(placed);
+      list.sort((p, q) => p.z0 - q.z0);
+      list.forEach((o, i) => (o.n = i));
+    }
   }
 
   /** The stretch round an overlook where the land past the lip falls away behind the treeline as well
@@ -412,8 +449,6 @@ function rockGeometry(p: Palette): BufferGeometry {
 export class Overlooks {
   readonly root = new Object3D();
   plan: OverlookPlan;
-  /** Idle planning is queued. */
-  private waiting = false;
   private mat: ShaderMaterial;
   private rails: InstancedMesh;
   private rocks: InstancedMesh;
@@ -506,17 +541,7 @@ export class Overlooks {
       return;
     }
     const lo = z - 260;
-    const hi = z + 900;
-    // Planned well ahead on idle time (the terrain and the mid-ground ask up to about 1.5 km on); what
-    // they ask for before that is planned on the spot.
-    if (!this.waiting && this.plan.reach < z + PLAN_AHEAD) {
-      this.waiting = true;
-      const plan = this.plan;
-      whenIdle(() => {
-        this.waiting = false;
-        if (plan === this.plan) plan.prefetch(z + PLAN_AHEAD);
-      });
-    }
+    const hi = z + STAND_AHEAD;
     this.plan.planTo(hi);
     let key = '';
     for (const o of this.plan.planned) if (o.z1 > lo && o.z0 < hi) key += o.n + ',';

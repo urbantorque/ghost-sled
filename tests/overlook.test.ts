@@ -1,17 +1,27 @@
+import { Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { Mood } from '../src/sim/chaos';
-import { courseFor, FOREST_LIMIT } from '../src/sim/course';
-import { MOUNTAINS } from '../src/sim/mountains';
-import { SitePlan } from '../src/render/landmarks';
-import { LIP, LIP_FROM, OverlookPlan, lipDrop } from '../src/render/overlook';
+import { Course, courseFor, FOREST_LIMIT } from '../src/sim/course';
+import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
+import { Site, SitePlan, pieceCtx, siteToWorld } from '../src/render/landmarks';
+import { mergePiece, pieceFor } from '../src/render/landmarkKit';
+import { LIP, LIP_FROM, Overlook, OverlookPlan, lipDrop } from '../src/render/overlook';
+import { getPalette } from '../src/render/palette';
 import { buildTerrainGeometry } from '../src/render/terrain';
 
 // Overlooks: deterministic stretches where one bank opens over the valley. The corridor, its banks and
-// the shelf the dressing stands on keep the sim's ground; the first comes in the first 600 m; none
-// comes near a set piece.
+// the shelf the dressing stands on keep the sim's ground; a descent has at least three, the first in
+// its first 1.5 km; none comes near a set piece, unless it had to, and then only so near.
 
 const RUN = 5000;
 const MOUNTAIN_SEEDS = MOUNTAINS.filter((m) => m.id !== 'daily').map((m) => m.seed);
+
+/** How far a piece keeps from an overlook. A tight one (the plain rules left too few) comes closer to
+ *  what the course fixes, which cannot make way: its long sites, leaps, lifts and ravine spans. */
+function keepOf(c: Course, o: Overlook, s: Site): number {
+  const fixed = s.len > 0 || s.kind === 'lip' || s.kind === 'lift' || c.section(s.z).kind === 'ravine';
+  return !o.tight || !fixed ? 120 : s.kind === 'lift' ? 40 : 70;
+}
 
 describe('overlook plan', () => {
   for (const seed of MOUNTAIN_SEEDS) {
@@ -20,13 +30,10 @@ describe('overlook plan', () => {
     plan.planTo(RUN);
     const list = plan.planned.filter((o) => o.z0 < RUN);
 
-    it(`${c.biome}: wherever the open ground allows, 120 to 300 m long, the first inside 600 m`, () => {
-      // (Open ground is about a quarter of a descent, and places and set pieces take most of that: the big
-      // views are the leaps' now.)
-      expect(list.length).toBeGreaterThanOrEqual(1);
+    it(`${c.biome}: at least three a descent, 120 to 300 m long, the first inside 1.5 km`, () => {
+      expect(list.length).toBeGreaterThanOrEqual(3);
       expect(list.length).toBeLessThanOrEqual(10);
-      // (Frostfang's first 500 m stand wide open anyway, and its next open ground is its third stage.)
-      if (c.biome !== 'glacier') expect(list[0].z1).toBeLessThanOrEqual(600);
+      expect(list[0].z1).toBeLessThanOrEqual(1500);
       for (const o of list) {
         expect(o.z1 - o.z0).toBeGreaterThanOrEqual(120);
         expect(o.z1 - o.z0).toBeLessThanOrEqual(300);
@@ -34,20 +41,41 @@ describe('overlook plan', () => {
       for (let i = 1; i < list.length; i++) expect(list[i].z0).toBeGreaterThan(list[i - 1].z1 + 250);
     });
 
-    it(`${c.biome}: keeps 120 m from every set piece's ends in every mood, and its outer fall 110 m`, () => {
+    it(`${c.biome}: keeps 120 m from every set piece's ends in every mood, or what it must, and its outer fall 110 m`, () => {
       for (const mood of [Mood.None, Mood.Comet, Mood.Powder]) {
         const sites = new SitePlan(c, mood);
         sites.planTo(RUN + 1000);
         for (const o of list) {
           for (const s of sites.planned) {
             const d = s.z < o.z0 ? o.z0 - s.z - s.len : s.z > o.z1 ? s.z - s.len - o.z1 : 0;
-            expect(d).toBeGreaterThanOrEqual(120);
+            expect(d, `${s.kind} at ${Math.round(s.z)}`).toBeGreaterThanOrEqual(keepOf(c, o, s));
+            // (A tight one has no outer fall to speak of: near a piece it stops at its own ends.)
             const od = s.z < o.oz0 ? o.oz0 - s.z : s.z > o.oz1 ? s.z - o.oz1 : 0;
-            expect(od).toBeGreaterThanOrEqual(110);
+            expect(od).toBeGreaterThanOrEqual(keepOf(c, o, s) - 10);
             // (No fall at all at the set piece's own spot.)
             expect(plan.fall(s.z, -1) + plan.fall(s.z, 1)).toBe(0);
           }
         }
+      }
+    });
+
+    it(`${c.biome}: leaves every piece standing on the ground it was built on`, () => {
+      const pal = getPalette(c.biome, Mood.None);
+      const sites = new SitePlan(c, Mood.None);
+      sites.flyTo(c.finishZ);
+      const w = new Vector3();
+      for (const s of sites.planned) {
+        if (!list.some((o) => o.tight && s.z + s.len > o.z0 - 140 && s.z - s.len < o.z1 + 140)) continue;
+        const g = mergePiece(pieceFor(s.kind, pieceCtx(c, s, pal, false, false)).steps.flatMap((f) => f()));
+        const pos = g.getAttribute('position');
+        for (let i = 0; i < pos.count; i += 7) {
+          siteToWorld(s, pos.getX(i), pos.getY(i), pos.getZ(i), w);
+          const sz = -w.z;
+          if (sz < 0 || sz > c.finishZ) continue;
+          const side = w.x > c.centerX(sz) ? 1 : -1;
+          expect(plan.drop(sz, side, c.edgeExcess(w.x, sz)), `${s.kind} at ${Math.round(s.z)}`).toBeLessThanOrEqual(0.01);
+        }
+        g.dispose();
       }
     });
 
@@ -62,6 +90,15 @@ describe('overlook plan', () => {
       expect(again.planned.filter((o) => o.z0 < RUN)).toEqual(list);
     });
   }
+
+  it('gives a daily two or more, in the first 1.5 km too, though its open ground can be scarcer', () => {
+    for (const day of ['2026-10-24', '2026-11-06', '2026-12-25', '2027-02-14', '2027-07-04']) {
+      const plan = new OverlookPlan(courseFor(dailySeed(day)));
+      plan.planTo(RUN);
+      expect(plan.planned.length, day).toBeGreaterThanOrEqual(2);
+      expect(plan.planned[0].z1, day).toBeLessThanOrEqual(1500);
+    }
+  });
 
   it('lowers nothing inside the lip, and never lifts the cornice more than a metre', () => {
     for (let e = 0; e <= LIP_FROM; e += 0.25) expect(lipDrop(e)).toBe(0);
