@@ -538,6 +538,11 @@ export class Midground {
   private sideB = newSide(1);
   private sideN = newSide(1);
   private sideG = newSide(1);
+  /** The rows either side of the one being planted, read once a tree needs them. */
+  private sideUp = newSide(-1);
+  private sideDn = newSide(-1);
+  private readUp = NaN;
+  private readDn = NaN;
   private lastT = 0;
   private rowY = new Float32Array(0);
   private rowX = new Float32Array(0);
@@ -1070,6 +1075,30 @@ export class Midground {
           T[q * 4 + 3] = 0;
           continue;
         }
+        // A tree scattered along z stands between two rows, where the mesh is their lerp: on the row's
+        // own height it stood on air wherever the mountain falls away down the run, by as much as 45 m
+        // past a shelf's edge. A face too steep along z for a tree is a cliff too.
+        const down = zz >= z;
+        const zn = down ? z + ROW : z - ROW;
+        const key = zn * 2 + side;
+        const nb = down ? this.sideDn : this.sideUp;
+        if ((down ? this.readDn : this.readUp) !== key) {
+          this.sideInfo(zn, side, nb);
+          if (down) this.readDn = key;
+          else this.readUp = key;
+        }
+        const e0 = this.colE[i0];
+        const e1 = this.colE[i1];
+        const yn0 = this.height(nb, e0, this.colX(nb, e0), zn);
+        const yn1 = this.height(nb, e1, this.colX(nb, e1), zn);
+        const yn = yn0 + (yn1 - yn0) * t;
+        if (Math.abs(yn - y) / ROW > 1.15) {
+          T[q * 4 + 3] = 0;
+          continue;
+        }
+        const along = Math.abs(zz - z) / ROW;
+        const xStand = x + (this.colX(nb, e) - x) * along;
+        const yStand = y + (yn - y) * along;
         // Bigger than life further out (they are specks at a kilometre), never bigger than the bank's
         // own pines right at the edge.
         const hv = hashf(seed, r * 131 + j, side + 41);
@@ -1096,8 +1125,8 @@ export class Midground {
           }
           alt = pick > 0.8;
         }
-        T[q * 4] = x;
-        T[q * 4 + 1] = y - 1.5;
+        T[q * 4] = xStand;
+        T[q * 4 + 1] = yStand - 1.5;
         this.aB[q] = this.rowBase - 1.5;
         T[q * 4 + 2] = -zz;
         T[q * 4 + 3] = h;
