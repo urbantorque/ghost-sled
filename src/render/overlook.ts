@@ -93,10 +93,11 @@ const NARROW: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'treeru
 /** Caps: rail sections and lip rocks alive at once (two or three overlooks in range, ridges both sides). */
 const RAIL_CAP = 260;
 const ROCK_CAP = 320;
-/** How far ahead of the rider (metres) an overlook's rail and rocks stand: as far as they can be told
- *  from the snow. Their two draws are paid only while one is in range, and with three a descent that was
- *  most of a run. */
+/** How far ahead of the rider and behind it (metres) an overlook's rail and rocks stand: as far as they can
+ *  be told from the snow, and no further back than the lens looks. Their two draws are paid only while
+ *  one is in range, and with three a descent that was most of a run. */
 const STAND_AHEAD = 420;
+const STAND_BEHIND = 80;
 /** Rail sections are modelled this long. */
 const RAIL_LEN = 6;
 /** Whether Low opens its overlooks too (the rail alone, one draw). Off until props.ts keeps the forest
@@ -540,7 +541,7 @@ export class Overlooks {
       this.rails.visible = this.rocks.visible = false;
       return;
     }
-    const lo = z - 260;
+    const lo = z - STAND_BEHIND;
     const hi = z + STAND_AHEAD;
     this.plan.planTo(hi);
     let key = '';

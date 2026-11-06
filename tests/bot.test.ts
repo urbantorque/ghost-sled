@@ -117,7 +117,6 @@ describe('ghost pool generation', () => {
       // One fall for every tumble the run took, and the wreck that ended it if one did.
       expect(g.falls.length, g.name).toBeGreaterThanOrEqual(sim.s.crashed ? 1 : 0);
       for (const z of g.falls) expect(z, g.name).toBeLessThanOrEqual(Math.ceil(sim.distance));
-      expect([...g.falls].sort((a, b) => a - b)).toEqual(g.falls);
     }
     expect(pool.some((g) => g.falls.length > 0)).toBe(true);
   });

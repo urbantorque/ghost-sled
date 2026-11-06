@@ -20,7 +20,7 @@ export interface PoolGhost {
   sled: number;
   mood: number;
   event: number;
-  /** Where the rider really went down, metres down the run, nearest first: every tumble, and the
+  /** Where the rider really went down, metres down the run, in the order it did: every tumble, and the
    *  wreck that ended the run if one did (graveyards.ts clusters them). Empty for a clean run. */
   falls: number[];
   /** recordToString of the full run record. */

@@ -91,6 +91,14 @@ describe('overlook plan', () => {
     });
   }
 
+  it('leaves the first bowl to the view: the second lift line is the one near the middle', () => {
+    for (const seed of MOUNTAIN_SEEDS) {
+      const lifts = new SitePlan(courseFor(seed), Mood.None).planned.filter((s) => s.kind === 'lift');
+      expect(lifts.length).toBeGreaterThanOrEqual(1);
+      for (let i = 1; i < lifts.length; i++) expect(lifts[i].z - lifts[i - 1].z).toBeGreaterThanOrEqual(900);
+    }
+  });
+
   it('gives a daily two or more, in the first 1.5 km too, though its open ground can be scarcer', () => {
     for (const day of ['2026-10-24', '2026-11-06', '2026-12-25', '2027-02-14', '2027-07-04']) {
       const plan = new OverlookPlan(courseFor(dailySeed(day)));
