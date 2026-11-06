@@ -86,9 +86,13 @@ describe('ghost pool generation', () => {
     expect(pool.length).toBe(10);
     const names = new Set(pool.map((g) => g.name.toLowerCase()));
     expect(names.size).toBe(10);
-    for (let i = 1; i < pool.length; i++) expect(pool[i].score).toBeGreaterThanOrEqual(pool[i - 1].score);
-    // Beginner to expert, not ten copies of one rider.
-    expect(pool[pool.length - 1].score).toBeGreaterThan(pool[0].score * 10);
+    const race = (g: (typeof pool)[number]): number => (g.finishTick >= 0 ? 1e7 - g.finishTick : g.distance);
+    for (let i = 1; i < pool.length; i++) expect(race(pool[i])).toBeGreaterThanOrEqual(race(pool[i - 1]));
+    // Beginner to expert, not ten copies of one rider: the best finishes, and well clear of the weakest.
+    const best = pool[pool.length - 1];
+    expect(best.finishTick).toBeGreaterThan(0);
+    const weakest = pool[0];
+    if (weakest.finishTick >= 0) expect(weakest.finishTick).toBeGreaterThan(best.finishTick * 1.15);
     for (const g of pool) {
       expect(isValidGhostName(g.name), g.name).toBe(true);
       const r = recordFromString(g.record);

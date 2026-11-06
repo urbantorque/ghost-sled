@@ -21,6 +21,8 @@ export interface BotProfile {
   seed: number;
   sled: number;
   name: string;
+  /** Forces a fork's route (left out, the bot's own nerve decides). */
+  bold?: boolean;
 }
 
 interface Traits {
@@ -276,10 +278,12 @@ class Bot {
     profile: BotProfile,
   ) {
     this.course = sim.course;
-    this.lines = new Lines(sim.course);
     this.scene = new Scene(sim.course);
     this.rng = new Rng(hash32(profile.seed, 0xb07));
     this.t = traitsFor(profile.skill, this.rng);
+    // The ambitious take a fork's risk route, so ghosts show the player it exists.
+    const bold = this.rng.chance(this.t.ambition * (0.2 + 0.8 * this.t.skill));
+    this.lines = new Lines(sim.course, profile.bold ?? bold);
     this.key = hash32(profile.seed, 0x5ee);
     this.rotP = { spinMax: 9 * sim.sled.spin * sim.mood.spin, flipRate: 6.8 * sim.sled.flip * sim.mood.spin };
     this.nextThink = this.rng.int(2, 12);

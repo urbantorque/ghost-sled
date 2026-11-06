@@ -368,7 +368,7 @@ const RIDGE_H = 3.2;
 const RIDGE_CREST = 0.6;
 const RIDGE_RUN = 5.4;
 /** The ice strip down the fork's risk channel, half-width in metres. */
-const STRIP = 3;
+const STRIP = 4.2;
 
 const SHAPES: Record<SectionKind, SectionShape> = {
   cruise: shaped({}),
@@ -1144,13 +1144,16 @@ export class Course {
     });
   }
 
-  /** The risk line's obstacles: there is no lane down it. */
+  /** The risk line's obstacles stand either side of the strip's middle, so a lane weaves between them.
+   *  It is threadable at full speed, and the ice is what makes it hard: nothing here is a wall. */
   private layFork(sec: Section, rng: Rng): void {
     const body = sec.z0 + sec.blend;
-    const n = rng.int(2, 3);
+    const n = rng.int(3, 4);
+    let side = rng.chance(0.5) ? 1 : -1;
     for (let i = 0; i < n; i++) {
       const u = (i + 0.3 + 0.4 * rng.next()) / n;
-      this.plan.risks.push({ z: body + (sec.z1 - body) * u, off: rng.range(-1.1, 1.1), tall: rng.chance(0.4) });
+      this.plan.risks.push({ z: body + (sec.z1 - body) * u, off: side * rng.range(2.3, 3.1), tall: rng.chance(0.4) });
+      side = -side;
     }
   }
 
@@ -1855,8 +1858,15 @@ export class Course {
     const obs = chunk.obstacles;
     let nextId = i * 256;
 
+    // While the risk route's own obstacles go down: everything else keeps off its strip.
+    let laying = false;
     const clearOf = (x: number, z: number, r: number): boolean => {
       if (z - r < START_CLEAR_Z) return false;
+      // A fork's risk strip keeps its own few obstacles (risk: true places them).
+      if (!laying) {
+        const strip = this.altX(z);
+        if (strip !== null && Math.abs(x - strip) < STRIP + r) return false;
+      }
       // Early on the lane is wider than promised: a rider still learning to hold a bend has room.
       if (Math.abs(x - this.safeX(z)) < r + SAFE_LANE + EARLY_MARGIN * (1 - diff) + this.shapeAt(z).lane) return false;
       if (this.edgeExcess(x, z) > 1.5 - r) return false;
@@ -2048,7 +2058,9 @@ export class Course {
       const alt = this.altX(r.z);
       if (alt === null) continue;
       const kind = r.tall ? rng.pick(tallKinds) : lowKinds.filter((k) => k !== 'log')[0];
+      laying = true;
       placeOne(kind, alt + r.off, r.z);
+      laying = false;
     }
 
     // Spirit gates: two pillars straddling the safe line.
