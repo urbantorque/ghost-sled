@@ -1,3 +1,4 @@
+import { paceOf } from './slowriders';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
 import type { Standing } from './standing';
@@ -43,6 +44,8 @@ export interface GhostTrack {
   entry: GhostEntry;
   ready: boolean;
   frames: Float32Array | null;
+  /** The rate its run plays at: 1, or under it for a slow rider (slowriders.ts). */
+  pace: number;
   samples: number;
   ticks: number;
   crashTick: number;
@@ -115,14 +118,17 @@ export class GhostManager {
       if (gen !== this.generation) return;
       const t = this.tracks.find((k) => k.entry.id === m.id);
       if (!t) return;
+      // A slow rider's run plays at its pace, so every time the worker read off it scales with it.
+      const p = t.pace;
+      const at = (tick: number): number => (tick < 0 ? tick : Math.round(tick / p));
       t.frames = m.frames;
       t.samples = m.samples;
-      t.ticks = m.ticks;
-      t.crashTick = m.crashTick;
-      t.finishTick = m.finishTick;
-      t.stageTicks = m.stageTicks;
+      t.ticks = at(m.ticks);
+      t.crashTick = at(m.crashTick);
+      t.finishTick = at(m.finishTick);
+      t.stageTicks = p === 1 ? m.stageTicks : m.stageTicks.map(at);
       t.distance = m.distance;
-      t.tricks = m.tricks;
+      t.tricks = p === 1 ? m.tricks : m.tricks.map((v, i) => (i % 4 === 0 ? at(v) : v));
       t.ready = m.samples > 0;
       if (this.tracks.every((k) => k.ready)) this.onReady?.();
     } else if (m.type === 'pool') {
@@ -145,6 +151,7 @@ export class GhostManager {
     this.generation++;
     this.tracks = entries.map((e, i) => ({
       entry: { ...e, id: this.generation * 1000 + i },
+      pace: paceOf(e.record),
       ready: false,
       frames: null,
       samples: 0,
@@ -214,7 +221,7 @@ export class GhostManager {
   pose(t: GhostTrack, tick: number, out: GhostPose): boolean {
     if (!t.ready || !t.frames || t.samples === 0) return false;
     const f = t.frames;
-    const pos = tick / SAMPLE_EVERY - 1;
+    const pos = (tick * t.pace) / SAMPLE_EVERY - 1;
     const last = t.samples - 1;
     let i0 = Math.floor(pos);
     let a = pos - i0;
@@ -229,7 +236,7 @@ export class GhostManager {
       i0 = last;
       a = 0;
       out.done = true;
-      out.sinceDone = (tick - (last + 1) * SAMPLE_EVERY) / 60;
+      out.sinceDone = (tick - ((last + 1) * SAMPLE_EVERY) / t.pace) / 60;
     }
     const i1 = Math.min(last, i0 + 1);
     const o0 = i0 * FRAME_STRIDE;
@@ -245,7 +252,7 @@ export class GhostManager {
     out.airYaw = sameAir ? l(F_AIRYAW) : f[o1 + F_AIRYAW];
     out.airPitch = sameAir ? l(F_AIRPITCH) : f[o1 + F_AIRPITCH];
     out.lean = l(F_LEAN);
-    out.speed = l(F_SPEED);
+    out.speed = l(F_SPEED) * t.pace;
     out.carve = l(F_CARVE);
     out.grounded = (flags1 & FLAG_GROUNDED) !== 0;
     out.drifting = (flags1 & FLAG_DRIFTING) !== 0;
@@ -255,7 +262,7 @@ export class GhostManager {
   /** Course progress (z) of a ghost at a tick: where it stopped once it is done. */
   zAt(t: GhostTrack, tick: number): number {
     if (!t.ready || !t.frames) return 0;
-    let i = Math.round(tick / SAMPLE_EVERY - 1);
+    let i = Math.round((tick * t.pace) / SAMPLE_EVERY - 1);
     if (i < 0) i = 0;
     if (i >= t.samples) i = t.samples - 1;
     return t.frames[i * FRAME_STRIDE + F_Z];
@@ -283,7 +290,7 @@ export class GhostManager {
     for (const t of this.tracks) {
       if (!t.ready) continue;
       const gz = this.zAt(t, tick);
-      const done = tick >= (t.samples + 1) * SAMPLE_EVERY - 1;
+      const done = tick * t.pace >= (t.samples + 1) * SAMPLE_EVERY - 1;
       // (A ghost that crashed, was revived and finished never wrecked for good.)
       if (done && !t.crashSeen && t.crashTick >= 0 && t.finishTick < 0) {
         t.crashSeen = true;

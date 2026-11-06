@@ -1,3 +1,4 @@
+import { withSlowRiders } from './slowriders';
 import { resultsCues } from '../audio/cues';
 import { AudioEngine, AudioFrame, type UiSound } from '../audio/engine';
 import { ghostName } from '../bot/names';
@@ -66,9 +67,17 @@ function reelSpacing(): void {
 
 const pools = import.meta.glob('../data/ghosts/*.json', { eager: true, import: 'default' }) as Record<string, { mountain: string; ghosts: PoolGhostData[] }>;
 
+const fullPools = new Map<string, PoolGhostData[]>();
+
+/** A bundled mountain's pool with its slow riders (made once). */
 function poolFor(id: string): PoolGhostData[] {
-  for (const [path, data] of Object.entries(pools)) if (path.endsWith(`/${id}.json`)) return data.ghosts ?? [];
-  return [];
+  let full = fullPools.get(id);
+  if (!full) {
+    full = [];
+    for (const [path, data] of Object.entries(pools)) if (path.endsWith(`/${id}.json`)) full = withSlowRiders(data.ghosts ?? [], id);
+    fullPools.set(id, full);
+  }
+  return full;
 }
 
 
@@ -328,7 +337,7 @@ export class App {
     void this.ghosts.generatePool(daily.seed, 10, hashString(daily.tagline), 16, 60 * 60 * 3.5).then((g) => {
       // A tab left open past UTC midnight may have moved on to the next day's mountain meanwhile.
       if (daily !== this.daily) return;
-      this.dailyPool = g;
+      this.dailyPool = withSlowRiders(g, daily.tagline);
       this.dailyReady = true;
       if (this.phase === 'title') this.refreshTitle();
       this.generateCup();
@@ -343,7 +352,7 @@ export class App {
     this.cupAsked = cup.tagline;
     void this.ghosts.generatePool(cup.seed, 10, hashString(cup.tagline), 16, 60 * 60 * 3.5).then((g) => {
       if (cup !== this.cup) return;
-      this.cupPool = g;
+      this.cupPool = withSlowRiders(g, cup.tagline);
       this.cupReady = g.length > 0;
       if (this.phase === 'title') this.refreshTitle();
     });
