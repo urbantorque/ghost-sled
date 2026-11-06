@@ -7,17 +7,16 @@ import { FINISH_Z } from './standing';
 // Bend' and 3 gifts inside the run's extras cap (the app credits them into passBonus).
 //
 // Clusters come from the FULL pool (not the run's field, whose 25 m spacing splits these pairs): the
-// pool riders' run-end distances, minus everyone who never crashed: a rider who reached the finish
-// line ended there on purpose, and a line of finishers is no graveyard. Pinecrest has two
-// (365 to 372 m and 604 m), Ember one (350 m), Sakura four (216, 291, 395 with 4 riders, 1,728 m).
+// Tumbles forgive most hits now, so few ghosts really crash: two falling within 40 m make a place, and the
+// bundled pools give Pinecrest one (4,040 m) and Sakura two (2,489 and 3,227 m).
 // Names are picked from a short list by mountain key and distance, so a mountain always calls the
 // same place by the same name. Nothing here touches the sim: the cairns stand off the corridor.
 //
 // Pure: no DOM, render or audio imports.
 
 /** Riders that make a graveyard, and how close (metres, first to last) their crashes sit. */
-export const GRAVE_MIN = 3;
-export const GRAVE_SPAN = 8;
+export const GRAVE_MIN = 2;
+export const GRAVE_SPAN = 40;
 /** At most this many per mountain (the world's cairn batch cap). */
 export const GRAVE_MAX = 4;
 /** Ride this far past a graveyard alive (metres) to survive it. */

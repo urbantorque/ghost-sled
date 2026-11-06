@@ -1348,7 +1348,7 @@ class Bot {
 }
 
 /** Ticks a run keeps recording past the finish line: the coast through the square. */
-const COAST_TICKS = 240;
+const COAST_TICKS = 480;
 
 /** Plays one bot run on the real Sim and also returns the finished Sim (for stats). */
 export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6): { record: RunRecord; sim: Sim } {

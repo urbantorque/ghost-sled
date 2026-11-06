@@ -1095,7 +1095,8 @@ export class Sim {
   private coast(): void {
     const s = this.s;
     const c = this.course;
-    s.speed = approach(s.speed * (1 - 0.55 * DT), 0, 3.5 * DT);
+    // A long, easy stop: the square is the climax, so the sled runs on through most of it.
+    s.speed = approach(s.speed, 0, (2.4 + s.speed * 0.055) * DT);
     const look = s.z + 6 + s.speed * 0.4;
     const want = datan2(c.safeX(look) - s.x, look - s.z);
     s.heading = approach(s.heading, want, 1.2 * DT);
