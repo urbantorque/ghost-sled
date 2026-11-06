@@ -69,6 +69,7 @@ Skill signals live inside these roles rather than adding new ones:
 | --- | --- | --- |
 | Snow, terrain, drifts | Broad, soft, rounded, smooth gradients | Safe space reads calm |
 | Hazards (trees, rocks, spires, basalt) | Faceted, flat-shaded, sharp crisp silhouettes | Danger reads hard |
+| Bare ground (walls, faces, ridges) | Flat planes, hard edges, three values, no noise | The mountain's bones |
 | Rewards (gifts, gates) | Round, bouncy, bobbing, puffy bows | Good things feel friendly |
 | Ghosts | Flowing, tapered, ribbon tails, slightly blurred edges | Spirits feel fast and unreal |
 
@@ -105,6 +106,33 @@ rounded boxes with a big bow.
 - The bottom edge of the frame darkens toward the mood's periwinkle, never grey, so the foreground
   has depth.
 - Ice patches are glazed: a cooler tint, a long specular streak, less sparkle.
+- **Bare ground.** Where something shaped the ground it shows the mountain's own material, never a
+  snowy hill: a ravine's walls, a tunnel's approach, a leap's and a terrace's faces, the gorge under a
+  bridge, the outcrops along a fork's ridge. It follows what made the ground, not its slope alone (a
+  plain bank is as steep as a ravine's foot and stays snow), and it is never on a line a sled rides.
+  The snow gives way along the facets' edges, and what lies flat holds snow, ash or moss.
+
+  | Mountain | Cut | Reads as |
+  | --- | --- | --- |
+  | Pinecrest | faceted strata, grey-plum, dipping a little | snow lying on every other shelf |
+  | Frostfang | tall shards of crevasse ice | pale where it meets the light, down through cobalt to near black, pale fractures in it |
+  | Ember Peak | basalt columns, two faces each | ash on their broken tops; about one joint in ten holds a thin, dim, breathing line of lava. Thin, or it is a warm wash over a hazard's dark |
+  | Sakura Ridge | dressed stone in courses, each block a little pillowed | moss in patches along the tops; never mint |
+
+  Past a section's `edgeLimit` a wall stands up into low-poly rock with a jagged crest, the forest
+  behind it, and its shadow crosses the floor, so a ravine is a slot with a strip of light in it.
+- **The frozen lake.** Black ice over deep water, and a mirror: the real sky and peaks, the banks and
+  their treeline standing in it with jagged tips, and the rider upside down under the sled, leaving
+  the ice when the sled does. Long white fractures run through the sheet; closer cracks and bubbles
+  lie deeper and slide under the surface as you ride, and that is how a mirror shows speed. Blown snow
+  lies in long feathered tongues about 25 degrees off the fall line, thickest toward a soft, wandering
+  shore, and spindrift runs across the ice in thin wisps (held still under reduced motion, as are
+  Ember's cracks).
+- **A leap's landing is groomed**: corduroy across the fall line and broad swaths of it, so from the
+  air the face has a grain to judge by. Flags stand down both its sides. It is snow, not a painted mark
+  (section 4's one painted line stands).
+- **The fork's strip** is clear blue ice with a scribed bright edge and hard points of light that wink
+  on any bearing to the sun; it holds its colour where a plain mirror would go white.
 
 ## 5. The rider
 
@@ -152,7 +180,8 @@ rounded boxes with a big bow.
 - Your best run is gold-white glass (a pale gold inside and a warm amber rim) and is always labelled
   "Your best". Your grudge ghost is rose. Pool and friend ghosts are mint.
 - Where a ghost crashed, a little lantern-headed marker stays planted in the snow with its name. At
-  night it glows like a grave candle.
+  night it glows like a grave candle. A ghost that finished leaves none: it rides on into the square,
+  easing up, and fades.
 - Where three or more pool ghosts fell within 8 m, a cairn stands on the bank, never in the line,
   with a named tag over it ("Widow's Bend", "4 ghosts fell here"). Medium and High only: Low draws
   no cairn.
@@ -163,7 +192,23 @@ clusters and stubs; Sakura: blossom, pale spreading blossom and pines), with a s
 tree and the odd lean. Medium and High also dress the banks, always at least 9.2 m past the corridor
 edge (bushes, stumps, fences, slalom poles, cabins, lift towers and cables, per-biome pieces), and
 each course section reads before it plays: chute rock bands and blue-violet slalom flags, a bowl's
-cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost.
+cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost, crags along
+a ravine's crest, boulders and bushes round a lake's shore. Trees and dressing never stand on a wall,
+a ledge's face or the ice. A tree run's wall closes in to its own limit with a taller rank crowded
+behind it, and the light on its floor comes through the boughs in soft pools.
+
+The course's own marks are on every tier, Low included, in one draw:
+
+- **Leaps.** Fins of the mountain's rock stand either side of the lip, off the line, and two lines of
+  flags in the slalom blue-violets close on it, so the eye is led to the gap and the sky past it. A
+  wind-torn cornice runs across the brow, flush with it, hanging out over the drop. Nothing on the line
+  looks like a hazard.
+- **Rails** rise out of a mound of snow at the low end and run on over plumb posts, in the mountain's
+  own timber, steel, iron or lacquer, a pale strip along the top catching the light.
+- **The fork** is announced by a gantry across the corridor before the ridge stands up, a board over
+  each channel so the two read either side of the rider from 150 m: the calm route pale with a
+  blue-violet disc, the bold route dark with a white diamond and a marigold band for the gifts down
+  it. The rider hides the vanishing point, so a sign on the centre line is the one place it cannot go.
 
 ## 7. Moods (each has its own palette)
 
@@ -345,7 +390,7 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   gifts' marigold, cream and the snow's periwinkle, never lit like a hazard and never mint. Confetti
   cannons fire in over the rider and ribbons drift down through the frame while the crowd roars.
 
-- **Overlooks.** Now and then one bank opens. The treeline steps back, a low timber rail (larch, pale
+- **Overlooks.** Now and then, on open ground only, one bank opens. The treeline steps back, a low timber rail (larch, pale
   boards, charred posts or lacquer by biome) runs along the forest limit, a bare snow shelf runs out to
   a rounded cornice with dark rock breaking through, and beyond it the mountain falls away. Down the
   fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens

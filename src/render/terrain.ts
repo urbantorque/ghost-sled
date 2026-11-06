@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
+import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
 
@@ -9,6 +10,8 @@ import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './ove
 // Chunk builds are time-sliced across frames so streaming the course never hitches.
 // On an overlook (overlook.ts) the snow past the lip rolls over and falls away; inside LIP_FROM it is
 // untouched, so the corridor, its banks and the shelf the dressing stands on are still the sim's.
+// Past a section's edgeLimit a wall stands up into rock (ground.ts), and round a ledge the outer columns
+// ease onto the mid-ground's rows, so the terrain's edge never stands clear of it at the step.
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -37,27 +40,6 @@ const OUTER_STEPS_FINE = [11.5, 13, 14.5, 16, 18, 20, 22, 24.5, 27, 30, 34, 38, 
 // crests narrow and their troughs broad) and a pillowed rim where the banks meet the trees. The lift is
 // never negative, so a tree or a bank piece placed on course.ground() can sink into a drift but never
 // float over a hollow.
-
-function hash2(ix: number, iz: number, salt: number): number {
-  let h = (Math.imul(ix, 374761393) + Math.imul(iz, 668265263) + Math.imul(salt, 1442695041)) | 0;
-  h = Math.imul(h ^ (h >>> 13), 1274126177);
-  h ^= h >>> 16;
-  return (h >>> 0) / 4294967296;
-}
-
-function vnoise2(x: number, z: number, salt: number): number {
-  const ix = Math.floor(x);
-  const iz = Math.floor(z);
-  let fx = x - ix;
-  let fz = z - iz;
-  fx = fx * fx * (3 - 2 * fx);
-  fz = fz * fz * (3 - 2 * fz);
-  const a = hash2(ix, iz, salt);
-  const b = hash2(ix + 1, iz, salt);
-  const c = hash2(ix, iz + 1, salt);
-  const d = hash2(ix + 1, iz + 1, salt);
-  return a + (b - a) * fx + (c - a) * fz + (a - b - c + d) * fx * fz;
-}
 
 /** Metres past the corridor edge where the drifts begin, and where they reach full height. */
 export const DRIFT_FROM = 10.5;
@@ -142,6 +124,13 @@ class ChunkJob {
   /** Per vertex: metres across from the corridor's centreline (the packed sled lane down its middle)
    *  and how near a drift's crest it lies (0..1; snow shader). */
   readonly snow: Float32Array;
+  /** Per vertex: how bare the ground is (0 snow, 1 rock), its height over the floor and metres along the
+   *  face (what the snow shader lays its strata on), and the crest of the wall standing here, metres
+   *  over the floor (0 for none), whose shadow crosses the floor. */
+  readonly rock: Float32Array;
+  /** Per vertex: the lake (1 on the sheet), the fork's strip, a leap's groomed landing and a tree run's
+   *  canopy, each 0..1. */
+  readonly paint: Float32Array;
   private ramps: Ramp[] = [];
   private drift: [number, number] = [0, 0];
   row = 0;
@@ -162,6 +151,8 @@ class ChunkJob {
     this.ice = new Float32Array(n);
     this.kick = new Float32Array(n * 4);
     this.snow = new Float32Array(n * 2);
+    this.rock = new Float32Array(n * 4);
+    this.paint = new Float32Array(n * 4);
   }
 
   get done(): boolean {
@@ -177,6 +168,34 @@ class ChunkJob {
       const z = this.zRows[this.row];
       const cx = c.centerX(z);
       const hw = c.halfWidth(z);
+      // What shapes this row (read now: the shape is a reused object).
+      const sh = c.shapeAt(z);
+      const wall = sh.wall;
+      const ridge = sh.ridge;
+      const fall = sh.fall;
+      const limit = sh.limit;
+      const wk = wallK(wall);
+      const crestH = wk > 0 ? wk * (wall + 16) : 0;
+      const lakeK = smoothK(0.3, 0.7, sh.ice);
+      const by = c.baseY(z);
+      const sec = c.section(z);
+      const body = sec.z0 + sec.blend;
+      const canopy = sec.kind === 'treerun' ? smoothK(sec.z0 + sec.blend * 0.3, body, z) * (1 - smoothK(sec.z1 - 24, sec.z1, z)) : 0;
+      // A ledge's face has its strata laid across the run.
+      const led = ledgeAt(c, z, 1);
+      const lipY = led ? c.baseY(led.z) : 0;
+      let groom = 0;
+      for (const l of sec.ledges) {
+        if (l.kind === 'leap' && z > l.foot) groom = smoothK(l.foot, l.land0, z) * (1 - smoothK(l.land1 - 24, l.land1, z));
+      }
+      const alt = ridge >= 1.6 ? c.altX(z) : null;
+      const stripK = alt === null ? 0 : smoothK(1.6, 2.4, ridge);
+      // Between two mid-ground rows a ledge steps in, the outer columns take the rows' straight line.
+      const hand = handoverRow(c, z);
+      const za = Math.floor(z / MID_ROW) * MID_ROW;
+      const zb = za + MID_ROW;
+      const cxA = hand ? c.centerX(za) : 0;
+      const cxB = hand ? c.centerX(zb) : 0;
       // Only rows near an ice patch need the per-vertex surface test.
       let iceRow = false;
       const ci = Math.floor(z / CHUNK_LEN);
@@ -198,10 +217,17 @@ class ChunkJob {
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
         const ed = Math.abs(this.offs[col]) - hw;
-        let y = c.ground(x, z);
-        let gx: number;
-        let gz: number;
-        this.snow[p * 2] = this.offs[col];
+        const off = this.offs[col];
+        const side = off < 0 ? -1 : 1;
+        const y0 = c.ground(x, z);
+        let y = y0;
+        const yx = c.ground(x + e, z);
+        const yz = c.ground(x, z + e);
+        const sx = (yx - y0) / e;
+        const sz = (yz - y0) / e;
+        let gx = sx;
+        let gz = sz;
+        this.snow[p * 2] = off;
         if (ed > DRIFT_FROM) {
           // Past the treeline: the drifts lift the snow, and their slope bends the normal too.
           let lift = snowDrift(x, z, ed, this.drift)[0];
@@ -216,13 +242,25 @@ class ChunkJob {
             lx = overLip(lx, c.edgeExcess(x + e, z), w);
             lz = overLip(lz, c.edgeExcess(x, z + e), w);
           }
-          gx = (c.ground(x + e, z) + lx - y - lift) / e;
-          gz = (c.ground(x, z + e) + lz - y - lift) / e;
+          gx = (yx + lx - y - lift) / e;
+          gz = (yz + lz - y - lift) / e;
           y += lift;
         } else {
           this.snow[p * 2 + 1] = 0;
-          gx = (c.ground(x + e, z) - y) / e;
-          gz = (c.ground(x, z + e) - y) / e;
+        }
+        if (hand && ed > HANDOVER_FROM) {
+          const ya = c.ground(cxA + off, za);
+          const yb = c.ground(cxB + off, zb);
+          const w = smoothK(HANDOVER_FROM, HANDOVER_TO, ed);
+          y += (ya + ((yb - ya) * (z - za)) / MID_ROW - y0) * w;
+          gz += ((yb - ya) / MID_ROW - gz) * w;
+        }
+        if (wk > 0 && ed > limit) {
+          // Past the limit a wall stands up into rock, its planes and crest the sim never rides.
+          const r = rampart(z, ed, side, wk, limit);
+          gx += (rampart(z, c.edgeExcess(x + e, z), side, wk, limit) - r) / e;
+          gz += (rampart(z + e, c.edgeExcess(x, z + e), side, wk, limit) - r) / e;
+          y += r;
         }
         this.pos[p * 3] = x;
         this.pos[p * 3 + 1] = y;
@@ -232,7 +270,8 @@ class ChunkJob {
         this.nrm[p * 3 + 1] = inv;
         this.nrm[p * 3 + 2] = gz * inv;
         this.edge[p] = ed;
-        this.ice[p] = iceRow && c.surface(x, z).ice ? 1 : 0;
+        // (The lake is painted from its own weight, its shoreline softened in the shader.)
+        this.ice[p] = iceRow && lakeK === 0 && c.surface(x, z).ice ? 1 : 0;
         const kq = p * 4;
         this.kick[kq] = 0;
         this.kick[kq + 1] = -1;
@@ -248,6 +287,15 @@ class ChunkJob {
           this.kick[kq + 3] = z - r.z - r.len;
           break;
         }
+        const rq = p * 4;
+        this.rock[rq] = rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0);
+        this.rock[rq + 1] = led ? y - lipY : y - by;
+        this.rock[rq + 2] = led ? x : z;
+        this.rock[rq + 3] = crestH;
+        this.paint[rq] = lakeK;
+        this.paint[rq + 1] = alt === null ? 0 : stripK * (1 - smoothK(2.3, 3.1, Math.abs(x - alt)));
+        this.paint[rq + 2] = groom;
+        this.paint[rq + 3] = canopy;
         p++;
       }
       this.row++;
@@ -282,6 +330,8 @@ class ChunkJob {
     geo.setAttribute('aIce', new BufferAttribute(this.ice, 1));
     geo.setAttribute('aKick', new BufferAttribute(this.kick, 4));
     geo.setAttribute('aSnow', new BufferAttribute(this.snow, 2));
+    geo.setAttribute('aRock', new BufferAttribute(this.rock, 4));
+    geo.setAttribute('aPaint', new BufferAttribute(this.paint, 4));
     geo.setIndex(new BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
