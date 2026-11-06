@@ -1,8 +1,9 @@
 # Ghost Sled
 
-An endless downhill sled run for the browser. You carve, drift, pop and trick your way down a
-procedural mountain while racing the translucent ghosts of other players' best runs. Every run rolls
-a little controlled chaos (a mood, maybe an event), so no two runs feel the same.
+A downhill sled race for the browser. You carve, drift, pop and trick your way down a 4.5 km descent,
+through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
+other riders to a finish town. Every run rolls a little controlled chaos (a mood, maybe an event), so
+no two runs feel the same.
 
 Built with Vite + TypeScript + three.js. Every mesh, texture, sound and note of music is generated
 in code; there are no asset files.
@@ -68,12 +69,16 @@ npm test
 | Suite | What it guarantees |
 | --- | --- |
 | `purity` | `src/sim` and `src/bot` never touch Math.random, engine-dependent Math, DOM, timers or rendering |
-| `determinism` | A recorded run replays bit-identically through the real fixed-step loop at 60, 144 and 37 Hz; challenge links round-trip; chaos never moves static geometry |
-| `fairness` | Across ~16 km per seed on every mountain and several daily seeds, a lane around the safe line is clear of colliders, ramps and vents, stays in the corridor, is smooth enough to follow at top speed, and a simple driver survives it on the real sim |
+| `determinism` | A recorded run replays bit-identically through the real fixed-step loop at 60, 144 and 37 Hz, and however the course is read between ticks; a course is the same in any read order; every seed builds a descent; challenge links round-trip; chaos never moves static geometry |
+| `fairness` | On every mountain and several daily seeds, to the finish and through the run-out, a lane around the safe line is clear of colliders, ramps and vents, stays in the corridor and is smooth enough to follow at top speed, each promise of a shape holds (a leap's height and landing, a ravine's walls, a lake's flatness, a bridge's fall, a tunnel's clear air, a fork's ridge and rejoin), and a simple driver gets down it on the real sim |
 | `encoding` | Input logs and run records round-trip; 3-minute runs stay under 2 KB |
 | `scoring`, `chaos`, `dmath` | Combo rules, chaos budget (about a third plain, never in a session's first run), deterministic math accuracy |
 | `bot`, `ghostpool` | Bots are deterministic and compact; every bundled ghost replays to its stored score |
 | `platform` | Ad pacing, idempotent gameplay start/stop, invite links |
+| `migration` | A save and a link from an older sim lose nothing: replays move byte for byte to an archive, old bests show without blocking new ones, a grudge's tally survives, an old link is a target to beat |
+| `standing`, `finishflow`, `field` | Race order by time, the finish flow, and a field built around your pace |
+| `ladder`, `cup`, `rivalry`, `slowriders` | Ladder ranks and stage medals, the weekly Cup, the run's rival, and the paced riders that fill the slow end of the race |
+| `ground`, `setpieces`, `overlook`, `midground`, `palette`, `feel` | World rules: nothing stands in the run, no stretch stays bare past about 300 m, the forest stands on the ground it is drawn over, each mountain keeps its own light, and the speed curves reach the cap |
 
 ## Generate ghosts
 
@@ -82,7 +87,9 @@ npm run generate-ghosts
 ```
 
 Runs the bot (`src/bot`) on the real simulation at a spread of skill levels, with human-like
-mistakes, and writes `src/data/ghosts/<mountain>.json`. Re-run it whenever simulation behaviour
+mistakes, and writes `src/data/ghosts/<mountain>.json` in race order, with each ghost's stage splits.
+The slowest bots finish in about 2:30, so `src/game/slowriders.ts` fills the race down to 5:00 at load
+with real runs played at a slower pace. Re-run it whenever simulation behaviour
 changes (bump `SIM_VERSION` in `src/sim/sim.ts`; the ghost pool test fails on stale pools). The Daily
 Mountain's pool is generated at load by the same bot in a Web Worker.
 
@@ -212,7 +219,14 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `avalanche-portrait.js`, `results-phone.js` | The avalanche chase and the results screen at phone size (portrait or landscape, from the session's viewport) |
 | `feel.js`, `kicker.js`, `events.js` | Feel tuning, kicker pops and landings, every mid-run event |
 | `perf.js` | The performance table's probes (forced tier, CPU throttle, mood, event) with draw calls and triangles |
-| `telemetry.js` | Fun telemetry: scripted runs at five skill levels (novice, mid, expert, line, stunt) logging passes, duels, named moments per minute, the time to the first pass, whether the race is live at the crash, music intensity, flow, drift tiers, near-miss grades, stomp streaks, mission pops and banner overlaps |
+| `lab.ts` | The pilot lab: rides clumsy, novice, mid, expert, line and stunt pilots and scripted bad input on the real sim in node, across all four mountains and several seeds. `--root <checkout>` loads the sim from another checkout, so one plan rides two builds |
+| `anatomy.ts` | What a course is: each mountain's sections, widths, slopes, cliffs, and the longest plain stretch |
+| `forks.ts` | Rides each fork both ways with bots of one skill, to show whether the risk route pays on the real sim |
+| `tour.js`, `sweep.js`, `sheet.mjs` | Fixed comparison frames: a clumsy first run, a skilled run on every mountain to the finish, and a pinned sweep of any stretch, laid out as contact sheets (two builds side by side with `--vs`) |
+| `migrate.js` | The clean break end to end: a real save and link from one build, carried to another, checked byte for byte |
+| `moments.js`, `readability.js` | Beat strips of tumbles, grinds, wall rides, leaps and the finish; how far ahead the road reads at speed |
+| `places.js`, `places-cost.js`, `descent.js`, `finish.js` | Rides each street, bridge, tunnel and finish town and shoots or costs them |
+| `telemetry.js`, `tele-digest.mjs` | Fun telemetry: scripted runs at six skill levels (clumsy, novice, mid, expert, line, stunt) logging passes, duels, named moments per minute, the time to the first pass, whether the race is live at the crash, music intensity, flow, drift tiers, near-miss grades, stomp streaks, mission pops and banner overlaps |
 | `strips.js` | Beat strips: 4 to 6 frame-exact screenshots after each named moment, on a virtual clock, with a probe per frame (plans `fresh`, `rivals`, `flow`, `stunt`, `avalanche`, `giftStorm`) |
 | `levels.js`, `audio-capture.js` | Mix levels from offline renders of the shipped DSP, and the live master tapped per frame (onsets, sync to the picture, the choir) |
 | `stunt-sim.ts` | The stunt pilot in node, without a browser: `npx tsx scripts/playtest/stunt-sim.ts [runsPerMountain] [firstSeed] [mood]` |
