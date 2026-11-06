@@ -9,8 +9,8 @@ import { FINISH_Z } from './standing';
 // Clusters come from the FULL pool (not the run's field, whose 25 m spacing splits these pairs): the
 // pool riders' run-end distances, minus everyone who never crashed: a rider who reached the finish
 // line ended there on purpose, and a line of finishers is no graveyard. Tumbles forgive most hits, so
-// few ghosts really crash, which is why two make a place: the bundled pools give Pinecrest one
-// (4,040 m) and Sakura two (2,489 and 3,227 m).
+// few ghosts really crash, which is why two make a place: the bundled pools give Sakura three (3,507,
+// 4,110 and 4,178 m) and the other mountains none. The Daily's own pool makes its own.
 // Names are picked from a short list by mountain key and distance, so a mountain always calls the
 // same place by the same name. Nothing here touches the sim: the cairns stand off the corridor.
 //

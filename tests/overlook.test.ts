@@ -21,8 +21,9 @@ describe('overlook plan', () => {
     const list = plan.planned.filter((o) => o.z0 < RUN);
 
     it(`${c.biome}: wherever the open ground allows, 120 to 300 m long, the first inside 600 m`, () => {
-      // (Open ground is about a quarter of a descent, and set pieces take some of that.)
-      expect(list.length).toBeGreaterThanOrEqual(2);
+      // (Open ground is about a quarter of a descent, and places and set pieces take most of that: the big
+      // views are the leaps' now.)
+      expect(list.length).toBeGreaterThanOrEqual(1);
       expect(list.length).toBeLessThanOrEqual(10);
       expect(list[0].z1).toBeLessThanOrEqual(600);
       for (const o of list) {

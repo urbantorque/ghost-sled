@@ -81,8 +81,11 @@ describe('the plan is the course', () => {
         }
         // A point piece keeps off the kilometre arches (a leap's lip is where it is).
         for (const s of list) if (s.len === 0 && s.kind !== 'lip' && s.z > 500) expect(Math.abs(s.z - Math.round(s.z / 1000) * 1000)).toBeGreaterThanOrEqual(89);
-        // The same fills from one to the next rarely repeat a kind.
-        for (let i = 1; i < list.length; i++) if (list[i].len === 0 && list[i].kind !== 'lip' && list[i].kind !== 'lift') expect(list[i].kind).not.toBe(list[i - 1].kind);
+        // The same fills from one to the next rarely repeat a kind (Comet flies higher, so a span can drop
+        // to the bank piece beside another).
+        let repeats = 0;
+        for (let i = 1; i < list.length; i++) if (list[i].len === 0 && list[i].kind !== 'lip' && list[i].kind !== 'lift' && list[i].kind === list[i - 1].kind) repeats++;
+        expect(repeats).toBeLessThanOrEqual(1);
       });
 
       it(`${m.name} (${Mood[mood]}): no bare stretch runs past about 300 m`, () => {

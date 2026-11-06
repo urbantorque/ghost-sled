@@ -561,21 +561,21 @@ const SCRIPTS: Record<BiomeId, readonly [Act, Act, Act]> = {
   alpine: [
     { name: 'Timberline Glades', blocks: [['treerun'], ['fork']] },
     { name: 'Mirror Lake', blocks: [['chute|gully'], ['lake'], ['bowl|cruise'], ['treerun'], ['leap'], ['benches']] },
-    { name: 'Old Town Run', blocks: [['switchbacks|split'], ['street'], ['chute'], ['leap'], ['treerun|split']] },
+    { name: 'Old Town Run', blocks: [['switchbacks|split'], ['bridge'], ['street'], ['chute'], ['leap']] },
   ],
   glacier: [
-    { name: 'Serac Gate', blocks: [['ravine'], ['bridge'], ['cruise']] },
+    { name: 'Serac Gate', blocks: [['ravine'], ['bridge'], ['street']] },
     { name: 'The Crevasse Fields', blocks: [['chute'], ['leap'], ['ravine'], ['bridge'], ['fork']] },
-    { name: 'The Fang', blocks: [['switchbacks|bowl'], ['ravine'], ['bridge'], ['chute'], ['leap']] },
+    { name: 'The Fang', blocks: [['switchbacks|bowl'], ['tunnel'], ['bridge'], ['chute'], ['leap']] },
   ],
   volcanic: [
     { name: 'Cinder Gate', blocks: [['ravine'], ['tunnel']] },
     { name: 'Ash Caldera', blocks: [['chute'], ['bridge'], ['fork'], ['leap'], ['ravine']] },
-    { name: 'Basalt Halls', blocks: [['cruise|bowl'], ['tunnel'], ['bridge'], ['switchbacks|gully'], ['leap']] },
+    { name: 'Basalt Halls', blocks: [['cruise|bowl'], ['tunnel'], ['bridge'], ['street'], ['leap']] },
   ],
   blossom: [
     { name: 'Petal Steps', blocks: [['terraces'], ['street']] },
-    { name: 'The Thousand Torii', blocks: [['chute'], ['tunnel'], ['cruise'], ['fork'], ['leap']] },
+    { name: 'The Thousand Torii', blocks: [['chute'], ['tunnel'], ['bridge'], ['fork'], ['leap']] },
     { name: 'Temple Town', blocks: [['benches'], ['terraces'], ['bowl|cruise'], ['leap'], ['street']] },
   ],
 };
@@ -777,7 +777,11 @@ export class Course {
 
   /** The acts of this seed's descent, in order. A named mountain rides them as written; a daily deals
    *  its biome's three in the seed's order. */
+  /** The deal compose fell back to, when the seed's own would not fit. */
+  private dealt: readonly number[] | null = null;
+
   private actOrder(): readonly number[] {
+    if (this.dealt) return this.dealt;
     const order = [0, 1, 2];
     if (isNamedSeed(this.seed)) return order;
     const rng = new Rng(hash32(this.seed, 0xac75));
@@ -793,6 +797,8 @@ export class Course {
   /** The descent's stages, in order. */
   get stages(): readonly Stage[] {
     if (!this.stageList) {
+      // The stages are named by the deal the descent was built on, so that comes first.
+      if (this.sections.length === 0) this.section(0);
       const list: Stage[] = [];
       const acts = this.actOrder();
       let z = 0;
@@ -932,9 +938,15 @@ export class Course {
     const openLen = beats.reduce((sum, b) => sum + b.len, 0);
     const caps = [STAGE_LENGTHS[0] - openLen, STAGE_LENGTHS[1], STAGE_LENGTHS[2] - FINISH_SQUARE];
     const slots = acts.map((a) => a.slice());
-    const first = slots[0].findIndex((k) => PLACES.has(k) && legalPair('leap', k));
+    // The first place past the first leap comes up to meet it, and what it leaves behind must still meet.
+    const open = slots[0];
+    const first = open.findIndex((k, i) => {
+      if (!PLACES.has(k) || !legalPair('leap', k)) return false;
+      if (i > 0 && !legalPair(k, open[0])) return false;
+      return i === 0 || i + 1 >= open.length || i === 1 || legalPair(open[i - 1], open[i + 1]);
+    });
     if (first < 0) return null;
-    slots[0].unshift(slots[0].splice(first, 1)[0]);
+    open.unshift(open.splice(first, 1)[0]);
     const must = SIGNATURES[this.biome];
     let before: SectionKind = 'leap';
     for (let n = 0; n < slots.length; n++) {
@@ -947,9 +959,15 @@ export class Course {
           slots[n + 1].unshift(k);
           continue;
         }
-        // Nowhere left to hand it on: the last beat nothing promises goes.
+        // Nowhere left to hand it on: the last beat nothing promises goes, so long as what it stood between
+        // may meet.
         let spare = list.length - 1;
-        while (spare >= 0 && (list[spare] === 'leap' || must.includes(list[spare]))) spare--;
+        const free = (i: number): boolean => {
+          if (list[i] === 'leap' || must.includes(list[i])) return false;
+          const a = i > 0 ? list[i - 1] : before;
+          return i + 1 >= list.length || legalPair(a, list[i + 1]);
+        };
+        while (spare >= 0 && !free(spare)) spare--;
         if (spare < 0) return null;
         list.splice(spare, 1);
       }
@@ -993,6 +1011,21 @@ export class Course {
         rng,
       );
       if (seq) return seq;
+    }
+    // This deal of the acts will not fit: the others, then the script as written. Every seed must have a
+    // descent: a Daily Mountain that cannot build is a mountain that cannot load.
+    const deals = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+    for (const deal of deals) {
+      for (let tries = 0; tries < 24; tries++) {
+        const seq = this.pour(
+          deal.map((a) => this.drawAct(script[a], rng)),
+          rng,
+        );
+        if (seq) {
+          this.dealt = deal;
+          return seq;
+        }
+      }
     }
     const authored = this.pour(
       script.map((a) => this.drawAct(a, null)),

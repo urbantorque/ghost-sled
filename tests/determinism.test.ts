@@ -3,8 +3,8 @@ import { FixedLoop } from '../src/game/loop';
 import { Run } from '../src/game/run';
 import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, actionOf, decodeLog, draftOf, packInput } from '../src/sim/input';
-import { MOUNTAINS } from '../src/sim/mountains';
-import { Rng } from '../src/sim/prng';
+import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
+import { Rng, hash32 } from '../src/sim/prng';
 import { CHUNK_LEN, Course, type Obstacle, courseFor } from '../src/sim/course';
 import { RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
 import { Sim } from '../src/sim/sim';
@@ -216,6 +216,20 @@ describe('determinism', () => {
       const forward: string[] = [];
       for (let i = 0; i < n; i++) forward.push(list(a, i));
       for (let i = n - 1; i >= 0; i--) expect(list(b, i), `${m.id} chunk ${i}`).toBe(forward[i]);
+    }
+  });
+
+  it('every seed builds a descent, named the same whichever is read first', () => {
+    // A Daily Mountain that cannot build is a mountain that cannot load.
+    const day0 = Date.UTC(2026, 0, 1);
+    for (let i = 0; i < 700; i++) {
+      const seed = i % 2 ? dailySeed(new Date(day0 + i * 86400000).toISOString().slice(0, 10)) : hash32(i, 91);
+      const a = new Course(seed);
+      const names = a.stages.map((s) => s.name);
+      const b = new Course(seed);
+      expect(b.section(4000).kind.length).toBeGreaterThan(0);
+      expect(b.stages.map((s) => s.name)).toEqual(names);
+      expect(b.finishZ).toBe(a.finishZ);
     }
   });
 });

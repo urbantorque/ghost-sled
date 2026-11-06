@@ -26,14 +26,15 @@ describe('graveyards and the finish line', () => {
 });
 
 describe('graveyards', () => {
-  it('finds the bundled clusters: Pinecrest 1, Sakura 2, and none where hardly anyone crashes', () => {
+  it('finds the bundled clusters: three on Sakura, and none where hardly anyone crashes', () => {
     const at = (key: string) => graveyards(pool(key), key).map((g) => [Math.round(g.z), g.fell]);
-    expect(at(pinecrest)).toEqual([[4040, 3]]);
+    expect(at(pinecrest)).toEqual([]);
     expect(at(frostfang)).toEqual([]);
     expect(at(ember)).toEqual([]);
     expect(at(sakura)).toEqual([
-      [2489, 2],
-      [3227, 2],
+      [3507, 2],
+      [4110, 2],
+      [4178, 2],
     ]);
   });
 
