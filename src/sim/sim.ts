@@ -482,7 +482,8 @@ export class Sim {
     const s = this.s;
     const c = this.course;
     const look = 9 + s.speed * 0.45;
-    return datan2(c.centerX(s.z + look) - c.centerX(s.z), look);
+    // (In a fork, the channel the sled is in, never toward the ridge between them.)
+    return datan2(c.backX(s.z + look, s.x) - c.backX(s.z, s.x), look);
   }
 
   private groundStep(action: boolean, pressed: boolean, released: boolean): void {
@@ -533,7 +534,9 @@ export class Sim {
 
     const cx = c.centerX(s.z);
     const hw = c.halfWidth(s.z);
-    const off = hw > 0 ? (s.x - cx) / hw : 0;
+    const home = c.backX(s.z, s.x);
+    const span = hw - Math.abs(home - cx);
+    const off = span > 1 ? (s.x - home) / span : 0;
     const e = Math.abs(s.x - cx) - hw;
     // Let go and the sled runs out of its turn: the nose eases back to the corridor's direction, and
     // leans toward the middle once it is well off it. Never a pull while the player is steering.
