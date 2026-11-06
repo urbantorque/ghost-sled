@@ -148,7 +148,11 @@ export class Title {
     const verb = m.challenge ? 'Accept' : 'Ride';
     const where = m.challenge ? m.challenge.mountain : (picked ?? sel?.name ?? '');
     const aim = m.challenge || m.firstVisit || picked ? null : (m.nextRung ?? null);
-    const subline = aim ?? (m.challenge || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where));
+    // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
+    // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
+    const waiting = !!m.challenge?.waiting;
+    const status = 'Finding rivals…';
+    const subline = waiting ? status : (aim ?? (m.challenge || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
     if (subline === where || aim) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
@@ -156,15 +160,18 @@ export class Title {
       {
         cls: 'gs-btn-primary gs-ride',
         icon: 'play',
-        sound: 'confirm',
+        sound: waiting ? 'tap' : 'confirm',
         gameKey: true,
         fk: 'ride',
-        onClick: () => this.hd.onRide(),
+        onClick: () => {
+          if (!waiting) this.hd.onRide();
+        },
       },
       h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
       showKey ? kbd('Space', 'gs-ride-key') : null,
     );
-    rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}${aim ? `. ${aim}` : ''}` : verb);
+    rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}${aim ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
+    if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
     // A brand-new player learns the loop before the first tap: what the ghosts are for.
@@ -580,7 +587,8 @@ function ghostsPassed(m: TitleModel): number {
 /**
  * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on
  * Pinecrest" (how far a run that did not finish went). A run on today's Daily Mountain reads "on the
- * Daily Mountain"; one on another day's Daily (no mountain named) shows the first line alone. Links
+ * Daily Mountain" and one on this week's Cup "on the Weekly Cup"; one on another day's Daily or another
+ * week's Cup (no mountain named) shows the first line alone. Links
  * from before distances were carried keep the score: "Beat a score of 12,480 on Pinecrest". A link from
  * an older course has no ghost to race, only a distance to pass: "Mila rode 2,340 m on the old
  * Pinecrest. Beat it." No live role: it sits right above the Accept button, read in context, and the

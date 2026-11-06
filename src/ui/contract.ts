@@ -82,8 +82,9 @@ export interface TitleModel {
   sledName: string;
   /** A friend's challenge link was opened. distance: how far their run went; time: its finish in
    *  seconds, when it finished; daily: it was on a Daily Mountain; old: it was ridden on an old course,
-   *  so `distance` is a target and no ghost rides. */
-  challenge: { name: string; score: number; mountain: string; distance?: number; time?: number | null; daily?: boolean; old?: boolean } | null;
+   *  so `distance` is a target and no ghost rides; waiting: its mountain's rivals are still being
+   *  generated, so Ride cannot start yet. */
+  challenge: { name: string; score: number; mountain: string; distance?: number; time?: number | null; daily?: boolean; old?: boolean; waiting?: boolean } | null;
   missions: MissionView[];
   inputMode: InputMode;
   firstVisit: boolean;

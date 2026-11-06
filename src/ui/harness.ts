@@ -464,6 +464,8 @@ const SCENARIOS: Record<string, () => void> = {
     window.setTimeout(() => document.querySelector<HTMLElement>('[data-fk="medals"]')?.click(), 300);
   },
   'title-challenge': () => goTitle({ challenge: { name: 'Mika', score: 15420, mountain: 'Frostfang' } }),
+  'title-challenge-cup': () => goTitle({ selected: 'cup', challenge: { name: 'Mika', score: 15420, mountain: 'the Weekly Cup', distance: 4500, time: 171.4 } }),
+  'title-challenge-cup-waiting': () => goTitle({ selected: 'cup', challenge: { name: 'Mika', score: 15420, mountain: 'the Weekly Cup', distance: 4500, time: 171.4, waiting: true } }),
   'title-missions': () => {
     goTitle();
     window.setTimeout(() => (document.querySelector('[data-fk="missions"]') as HTMLElement | null)?.click(), 450);
@@ -1312,7 +1314,7 @@ panel.append(head);
 const groups = document.createElement('div');
 groups.className = 'groups';
 const GROUPS: Record<string, string[]> = {
-  title: ['title', 'title-first', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-missions', 'title-touch', 'title-long', 'loading'],
+  title: ['title', 'title-first', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-challenge-cup', 'title-challenge-cup-waiting', 'title-missions', 'title-touch', 'title-long', 'loading'],
   hud: ['hud', 'hud-live', 'hud-grudge', 'hud-you', 'hud-you-named', 'hud-even', 'hud-behind', 'hud-long', 'rank-gain', 'rank-swing', 'rank-first', 'rank-first-you', 'combo-single', 'draft-pill', 'night-pills', 'touch', 'danger-far', 'danger-mid', 'danger-near', 'danger-urgent', 'danger-chase'],
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
