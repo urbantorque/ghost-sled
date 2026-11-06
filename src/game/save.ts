@@ -1,7 +1,9 @@
+import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
+import { SIM_VERSION } from '../sim/sim';
 
 // Persistent progress. Stored as one JSON blob through the platform storage (the CrazyGames data
 // module when available, localStorage otherwise). Writes are debounced.
@@ -14,7 +16,8 @@ import { recordFromString } from '../sim/replay';
 // A new course is a clean break that erases nothing. A best or grudge whose replay no longer rides
 // moves, exactly as it was, into `archive` (never pruned, never rewritten): the best's slot then
 // clears so a new one can be set, and the mountain card shows the old figures as 'Old best' until it
-// is; a grudge keeps its name and tally and stops claiming a rematch.
+// is; a grudge keeps its name and tally and stops claiming a rematch. A mountain's Climb (rung, medals)
+// was earned against one pool, so it names the sim version and moves to the archive the same way.
 
 export const SAVE_KEY = 'ghostsled.save.v1';
 
@@ -51,10 +54,26 @@ export interface Grudge {
   time?: number;
 }
 
+/** What you have earned on a mountain's ladder and lines (ladder.ts). Each part pays gifts once, so it
+ *  only ever rises. Absent until it holds something. */
+export interface Climb {
+  /** The sim version of the pool this was earned against. */
+  v: number;
+  /** The best rank paid for (1 is the top). */
+  rung?: number;
+  /** You have beaten the top of this ladder. */
+  top?: boolean;
+  /** Your best medal on each stage, 0 none, 1 bronze, 2 silver, 3 gold. */
+  stages?: number[];
+  /** Your best whole-run medal here. */
+  medal?: number;
+}
+
 /** Records a rule change retired, each exactly as it was saved. Never pruned, never rewritten. */
 export interface Archive {
   best: Record<string, Record<string, unknown>>;
   grudge: Record<string, Record<string, unknown>>;
+  climb?: Record<string, Record<string, unknown>>;
 }
 
 export interface Settings {
@@ -97,6 +116,10 @@ export interface SaveData {
   /** Your last predicted finish times per mountain key, seconds (field.ts anchorFor). */
   runTimes?: Record<string, number[]>;
   archive?: Archive;
+  /** Your Climb on each named mountain, by its id. */
+  climb?: Record<string, Climb>;
+  /** This week's Cup, in the Daily's shape: best is a finish time in seconds, medal the week's best. */
+  cup?: DailyRecord;
 }
 
 export function defaultSave(name: string): SaveData {
@@ -223,7 +246,9 @@ function loadArchive(p: unknown): Archive {
     if (isObj(v)) for (const [k, e] of Object.entries(v)) if (isObj(e)) out[k] = e;
     return out;
   };
-  return { ...(isObj(p) ? p : {}), best: side(isObj(p) ? p.best : null), grudge: side(isObj(p) ? p.grudge : null) };
+  const out: Archive = { ...(isObj(p) ? p : {}), best: side(isObj(p) ? p.best : null), grudge: side(isObj(p) ? p.grudge : null) };
+  if (isObj(p) && isObj(p.climb)) out.climb = side(p.climb);
+  return out;
 }
 
 /** A record's worth keeping: it has a replay or a score to its name. */
@@ -290,6 +315,39 @@ export function oldBest(d: SaveData, key: string): { score: number; distance: nu
   return { score: isNum(a.score) ? a.score : 0, distance: isNum(a.distance) ? a.distance : 0 };
 }
 
+/** A medal as it may stand in a save: 0 to 3 whatever is there. */
+const medalNum = (v: unknown): number => (isNum(v) ? Math.max(0, Math.min(3, Math.floor(v))) : 0);
+
+/** Each mountain's Climb. One earned on another sim version was earned against a pool that is gone: it
+ *  moves to the archive whole, and that mountain starts clean. Unknown fields are kept. */
+function loadClimb(p: unknown, archive: Archive): Record<string, Climb> {
+  const out: Record<string, Climb> = {};
+  if (!isObj(p)) return out;
+  for (const [k, v] of Object.entries(p)) {
+    if (!isObj(v)) continue;
+    if (v.v !== SIM_VERSION) {
+      archiveEntry((archive.climb ??= {}), k, v);
+      continue;
+    }
+    const c: Climb = { ...(v as object), v: SIM_VERSION };
+    if (isNum(v.rung) && v.rung >= 1) c.rung = Math.floor(v.rung);
+    else delete c.rung;
+    if (v.top !== true) delete c.top;
+    if (Array.isArray(v.stages)) c.stages = v.stages.map(medalNum);
+    else delete c.stages;
+    if (medalNum(v.medal) > 0) c.medal = medalNum(v.medal);
+    else delete c.medal;
+    out[k] = c;
+  }
+  return out;
+}
+
+/** This week's Cup record, or nothing: last week's goes the way the Daily's old entries go. */
+function loadCup(p: unknown, week: string): DailyRecord | null {
+  if (!isObj(p) || p.key !== week) return null;
+  return { ...(p as object), key: week, best: isNum(p.best) && p.best > 0 ? p.best : 0, medal: medalNum(p.medal) };
+}
+
 function loadRunList(p: unknown): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   if (!isObj(p)) return out;
@@ -324,13 +382,14 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
   return s;
 }
 
-/** Drops Daily Mountain entries ('daily:<day>') other than today's from best, grudge and the run
- *  lists. The archive is never pruned. */
+/** Drops Daily Mountain entries ('daily:<day>') other than today's, and Cup entries ('cup:<week>')
+ *  other than this week's, from best, grudge and the run lists. The archive is never pruned. */
 export function pruneDaily(d: SaveData, today: string): void {
   const keep = `daily:${today}`;
+  const week = `cup:${weekOfDay(today)}`;
   const prune = (rec: Record<string, unknown> | undefined): void => {
     if (!rec) return;
-    for (const k of Object.keys(rec)) if (k.startsWith('daily:') && k !== keep) delete rec[k];
+    for (const k of Object.keys(rec)) if ((k.startsWith('daily:') && k !== keep) || (k.startsWith('cup:') && k !== week)) delete rec[k];
   };
   prune(d.best);
   prune(d.grudge);
@@ -375,8 +434,14 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     runTimes: loadRunList(p.runTimes),
   };
   // (Written only when it holds something: a save with nothing retired keeps its shape.)
-  if (Object.keys(archive.best).length > 0 || Object.keys(archive.grudge).length > 0) d.archive = archive;
+  const climb = loadClimb(p.climb, archive);
+  if (Object.keys(archive.best).length > 0 || Object.keys(archive.grudge).length > 0 || Object.keys(archive.climb ?? {}).length > 0) d.archive = archive;
   else delete d.archive;
+  if (Object.keys(climb).length > 0) d.climb = climb;
+  else delete d.climb;
+  const cup = loadCup(p.cup, weekOfDay(today));
+  if (cup) d.cup = cup;
+  else delete d.cup;
   pruneDaily(d, today);
   return d;
 }

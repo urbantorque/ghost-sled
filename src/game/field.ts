@@ -50,6 +50,9 @@ export interface FieldInput {
   you: { name: string; score: number; distance: number; record: string } | null;
   grudge: { name: string; score: number; record: string; distance?: number; nemesis?: boolean } | null;
   friend: { name: string; score: number; record: string } | null;
+  /** The rider the last results promised by name (the Run Again button): it rides next, whatever the
+   *  mood, and it is the rival. The app promises nobody while an unbeaten friend or a grudge rides. */
+  promised?: { name: string; score: number; record: string } | null;
 }
 
 export interface FieldPick {
@@ -65,6 +68,8 @@ export interface FieldPick {
   /** Its role window was widened to find it. */
   widened?: boolean;
   nemesis?: boolean;
+  /** Your rival for the run: one rider, named at the start and on every stage line. */
+  rival?: boolean;
 }
 
 /** The anchor's bounds (seconds). */
@@ -313,8 +318,51 @@ export function pickField(i: FieldInput): FieldPick[] {
       } else tail = g;
     }
   }
+  // The promised rider rides like a grudge: its own record, in the pack slot nearest its pace.
+  const promisedRec = i.promised ? check(i.promised.record) : null;
+  const promised = i.promised && promisedRec && i.promised.record !== you?.record ? i.promised : null;
+  if (promised && !out.some((p) => p.record === promised.record)) {
+    let at = -1;
+    let best = Infinity;
+    out.forEach((p, k) => {
+      if (p.role !== 'pack' || p.time === undefined) return;
+      const gap = Math.abs(p.time - promisedRec!.time);
+      if (gap < best) {
+        best = gap;
+        at = k;
+      }
+    });
+    const g: FieldPick = { name: promised.name, kind, score: promised.score, record: promised.record, distance: promisedRec!.distance, time: promisedRec!.time, role: 'pack' };
+    if (at >= 0) out[at] = g;
+    else out.push(g);
+  }
   if (you) out.push({ name: you.name, kind: 'you', score: you.score, record: you.record, distance: you.distance, time: youRec!.time });
   if (tail) out.push(tail);
   if (friend) out.push({ name: friend.name, kind: 'friend', score: friend.score, record: friend.record, distance: friendRec!.distance, time: friendRec!.time });
+  const rival = rivalOf(out, a, promised?.record ?? null);
+  if (rival) rival.rival = true;
   return out;
+}
+
+/**
+ * The run's rival: the rider the results promised by name, else the friend who challenged you, else
+ * your grudge, else the field ghost right ahead of you: the one just quicker than your anchor. A
+ * finisher goes first, so the rival is still there at the last line. With nobody quicker, the quickest
+ * rider in the field. Never your own best: that has its own figure.
+ */
+export function rivalOf(field: FieldPick[], anchor: number, promised: string | null = null): FieldPick | null {
+  const named = promised ? field.find((f) => f.record === promised) : undefined;
+  if (named) return named;
+  const friend = field.find((p) => p.kind === 'friend');
+  if (friend) return friend;
+  const grudge = field.find((p) => p.kind === 'grudge');
+  if (grudge) return grudge;
+  const rows = field.filter((p) => p.kind !== 'you' && typeof p.time === 'number');
+  const riders = rows.filter((p) => (p.distance ?? 0) >= FINISH_Z);
+  const from = riders.length > 0 ? riders : rows;
+  let best: FieldPick | null = null;
+  for (const p of from) if (p.time! < anchor && (!best || p.time! > best.time!)) best = p;
+  if (best) return best;
+  for (const p of from) if (!best || p.time! < best.time!) best = p;
+  return best;
 }

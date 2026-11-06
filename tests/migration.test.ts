@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { oldLinkLine, readChallengeLink, targetZ } from '../src/game/challenge';
 import { anchorFor, pickField } from '../src/game/field';
 import { runAgainLabel } from '../src/game/progress';
-import { SAVE_KEY, type SaveData, SaveStore, oldBest, recordOk, retireGrudge, rideableGrudge } from '../src/game/save';
+import { boardOf, medalsHeld, spotOn } from '../src/game/ladder';
+import { SAVE_KEY, type Climb, type SaveData, SaveStore, oldBest, recordOk, retireGrudge, rideableGrudge } from '../src/game/save';
 import { settleBest, settleGrudge, settleRun, topScore } from '../src/game/settle';
 import { FINISH_Z } from '../src/game/standing';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
@@ -265,6 +266,74 @@ describe('what stays where it was', () => {
     expect(d.grudge.pinecrest).toEqual({ name: 'Bo', score: 700, record, them: 2, streak: 2, time: 180 });
     expect(d.archive).toBeUndefined();
     expect(recordOk(record)).toBe(true);
+  });
+});
+
+describe('ladders, medals and the Cup on an old save', () => {
+  it('loads a save from before them with nothing invented and nothing lost', () => {
+    const d = load();
+    expect(d.climb).toBeUndefined();
+    expect(d.cup).toBeUndefined();
+    expect(d.gifts).toBe(412);
+    expect(d.daily).toMatchObject({ medal: 2, streak: 6 });
+  });
+
+  it('a save with nothing earned keeps its shape: no empty climb or cup written back', () => {
+    const once = JSON.parse(cycle(v5Save(), 1)) as Record<string, unknown>;
+    expect('climb' in once).toBe(false);
+    expect('cup' in once).toBe(false);
+  });
+
+  it('reads no medals and no rung for a mountain with no Climb', () => {
+    expect(medalsHeld(load().climb?.pinecrest)).toEqual({ stages: [0, 0, 0], run: 0 });
+  });
+
+  const climb: Climb = { v: SIM_VERSION, rung: 19, top: true, stages: [3, 2, 0], medal: 1 };
+
+  it('round-trips a Climb and a Cup record exactly', () => {
+    const week = '2026-W45';
+    const s = new MemStorage({ ...v5Save(), climb: { pinecrest: climb }, cup: { key: week, best: 140.5, medal: 2 } });
+    new SaveStore(s, 'Fallback', TODAY).flush();
+    const d = new SaveStore(s, 'Fallback', TODAY).data;
+    expect(d.climb).toEqual({ pinecrest: climb });
+    expect(d.cup).toEqual({ key: week, best: 140.5, medal: 2 });
+  });
+
+  it('keeps fields a later build wrote on a Climb', () => {
+    expect((load({ ...v5Save(), climb: { pinecrest: { ...climb, future: 'kept' } } }).climb!.pinecrest as unknown as Record<string, unknown>).future).toBe('kept');
+  });
+
+  it('moves a Climb from an old course to the archive whole, and that mountain starts clean', () => {
+    const old = { v: OLD_VERSION, rung: 2, top: true, stages: [3, 3, 3], medal: 3 };
+    const d = load({ ...v5Save(), climb: { pinecrest: old, ember: climb } });
+    expect(d.climb).toEqual({ ember: climb });
+    expect(d.archive!.climb!.pinecrest).toEqual(old);
+  });
+
+  it('never loses the archive\'s Climbs, and a second load changes nothing', () => {
+    const old = { v: OLD_VERSION, rung: 2, stages: [1, 0, 0] };
+    const once = cycle({ ...v5Save(), climb: { pinecrest: old } }, 1);
+    expect(cycle(JSON.parse(once), 3)).toBe(once);
+    expect((JSON.parse(once) as SaveData).archive!.climb!.pinecrest).toEqual(old);
+  });
+
+  it('reads junk as nothing, clamps what it can, and never throws', () => {
+    for (const junk of [null, 7, 'x', [], { pinecrest: 3 }, { pinecrest: null }, { pinecrest: [] }]) expect(() => load({ ...v5Save(), climb: junk })).not.toThrow();
+    const d = load({ ...v5Save(), climb: { pinecrest: { v: SIM_VERSION, rung: -4, top: 'yes', stages: [9, -1, 'gold', 2.7], medal: 'gold' } } });
+    expect(d.climb!.pinecrest).toEqual({ v: SIM_VERSION, stages: [3, 0, 0, 2] });
+  });
+
+  it('a Climb with no sim version is from no pool it can vouch for', () => {
+    const d = load({ ...v5Save(), climb: { pinecrest: { rung: 2 } } });
+    expect(d.climb).toBeUndefined();
+    expect(d.archive!.climb!.pinecrest).toEqual({ rung: 2 });
+  });
+
+  it('an old best on the new course holds no rank until a new one exists', () => {
+    const d = load();
+    const b = boardOf([{ name: 'Mila', score: 1, distance: FINISH_Z + 9, ticks: 9000, finishTick: 7200, sled: 0, mood: 0, event: 0, record: 'x' }]);
+    expect(d.best.pinecrest).toBeUndefined();
+    expect(spotOn(b, null).rank).toBeNull();
   });
 });
 

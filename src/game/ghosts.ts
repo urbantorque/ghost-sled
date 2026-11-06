@@ -35,6 +35,8 @@ export interface GhostEntry {
   role?: GhostRole;
   /** A grudge promoted to nemesis (three wins in a row). */
   nemesis?: boolean;
+  /** Your rival for the run (field.ts rivalOf). */
+  rival?: boolean;
 }
 
 export interface GhostTrack {
