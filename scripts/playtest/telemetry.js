@@ -25,7 +25,7 @@
 //   lean        true drops the per-run call and beat logs (calls, beatLog) from the output
 // PLAN STEP
 //   { skill, runs, fresh, m, tier, mood, event, demo }
-//   skill  'novice' | 'mid' | 'expert' | 'line' | 'stunt'
+//   skill  'clumsy' | 'novice' | 'mid' | 'expert' | 'line' | 'stunt'
 //   runs   how many runs this step rides
 //   fresh  true: clear the save and reload before every run of the step. false: only the first run of
 //          the step clears the save and loads the page; the rest go through Run Again (window.__gs.runAgain)
@@ -35,6 +35,9 @@
 // PILOTS
 // The pilot runs inside the page, once per sim tick, as the run's input source (analog steering like
 // the fairness test's driver): round trips through page.evaluate were too slow to hold a line.
+// clumsy is a first-timer on a keyboard, the same pilot as scripts/playtest/lab.ts: it reacts late to the
+// corridor rather than the safe line, holds keys far too long, overcorrects, mashes the action and sometimes
+// holds a key for 2 s for no reason, through src/game/input.ts's key ramp and quantiser.
 // novice, mid, expert and line are frozen (before/after comparability across builds):
 //   novice: wobbly line, slow hands, lapses, stray action taps, sloppy stomps, no kickers or tricks
 //   mid:    drafts, spins long flights, short drifts on long bends, stomps with timing noise (its kicker
@@ -896,9 +899,42 @@ async (page) => {
         }
         return null;
       };
+      const C = { key: 0, keyUntil: 0, nextThink: 0.4 + rnd() * 0.5, act: false, actUntil: 0, nextAct: 1 + rnd() * 3, keySteer: 0, level: 4 };
+      const clumsy = () => {
+        const s = sim.s;
+        const T = sim.tick / 60;
+        if (T >= C.keyUntil) C.key = 0;
+        if (T >= C.nextThink && !s.crashed) {
+          C.nextThink = T + 0.35 + rnd() * 0.45;
+          const look = s.z + 9 + rnd() * 6;
+          const off = c.centerX(look) + (rnd() - 0.5) * 5 - s.x;
+          if (C.key === 0) {
+            if (rnd() < 0.12) {
+              C.key = rnd() < 0.5 ? 1 : -1;
+              C.keyUntil = T + 1.6 + rnd() * 0.8;
+            } else if (Math.abs(off) > 2.2) {
+              C.key = off > 0 ? 1 : -1;
+              C.keyUntil = T + 0.5 + rnd() * 1.1;
+            }
+          }
+        }
+        if (T >= C.nextAct) {
+          C.nextAct = T + 1.5 + rnd() * 4;
+          C.act = true;
+          C.actUntil = T + 0.2 + rnd() * 0.9;
+        }
+        if (T >= C.actUntil) C.act = false;
+        if (C.key === 0) C.keySteer = 0;
+        else if (C.keySteer * C.key <= 0) C.keySteer = C.key * 0.35;
+        else C.keySteer = C.key * Math.min(1, Math.abs(C.keySteer) + 0.055);
+        const raw = C.keySteer * 4;
+        if (Math.abs(raw - (C.level - 4)) > 0.62) C.level = 4 + Math.round(raw);
+        return { steer: C.level, action: C.act };
+      };
       const pilot = () => {
         const s = sim.s;
         const T = sim.tick / 60;
+        if (skill === 'clumsy') return clumsy();
         if (s.crashed) return { steer: 4, action: false };
         if (!s.grounded) {
           if (!P.wasAir) {
@@ -1077,7 +1113,7 @@ async (page) => {
           });
           tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, gifts: (r.sim.gifts || 0) + (app.passBonus || 0), passBonus: app.passBonus || 0, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
         }
-        return { phase: app.phase, crashed: s.crashed, t: T };
+        return { phase: app.phase, crashed: s.crashed, finished: !!s.finished, t: T };
       };
       const sampleLive = () => {
         const r = app.run;
@@ -1124,7 +1160,7 @@ async (page) => {
     const t0 = Date.now();
     while (Date.now() - t0 < maxMs) {
       const d = await page.evaluate(() => window.__poll());
-      if (d.crashed) break;
+      if (d.crashed || d.finished) break;
       if (d.t > cfg.maxSeconds) break;
       await page.waitForTimeout(400);
     }
