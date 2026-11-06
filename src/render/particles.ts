@@ -1,6 +1,7 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, Object3D, Points, ShaderMaterial, Vector3 } from 'three';
 import { makeToonMaterial, shared } from './materials';
 import { giftGeometry } from './meshes';
+import { roosterK } from './speedfeel';
 
 // CPU-simulated point particles in two blend layers (powder and glow), plus a GPU-animated
 // weather volume that follows the camera (snowfall, blizzard streaks, petals, embers, wisps).
@@ -16,6 +17,9 @@ const KIND_MIST = 2;
 /** Billows carry a per-particle seed (for their lumpy outline) in the fraction: 3 to 3.9. */
 const KIND_PUFF = 3;
 const puffKind = () => KIND_PUFF + Math.random() * 0.9;
+/** A dab of gouache: a billow's shading, but it may hang far from the rider, up in the sky, and paint
+ *  large (a firework's bloom over the square). Its seed is in the fraction too: 4 to 4.4. */
+const dabKind = () => 4 + Math.random() * 0.4;
 /** Shaped bits that tumble (their seed in the fraction, as billows): in the powder layer a ribbon of
  *  confetti or a coin, in the glow layer a petal of spectral glass or a soft flare of light. */
 const KIND_CONFETTI = 5;
@@ -170,6 +174,7 @@ class Layer {
           // Shaped bits (confetti, coins, glass petals, a flare) tumble: each spins on screen at its own
           // rate and flips through its face (vFlip: 1 face on, 0 edge on), from its seed.
           bool shaped = aKind > 4.5;
+          bool dab = aKind > 3.95 && aKind < 4.5;
           float sd = fract(aKind);
           float spin = sd * 6.2832 + uTime * (4.0 + sd * 6.0) * (sd > 0.47 ? 1.0 : -1.0);
           vFlip = abs(cos(uTime * (6.0 + sd * 8.0) + sd * 19.0));
@@ -217,10 +222,10 @@ class Layer {
             a *= 1.0 - (shaped ? 0.95 : 0.8) * over;
             // Billows belong to the burst or plume round the rider: one that has drifted a few metres off
             // (a drift carried it out over the slope) thins away rather than hanging in the air.
-            if (aKind > 2.5 && !shaped) a *= 1.0 - smoothstep(2.5, 4.8, distance(position, uFocus));
+            if (aKind > 2.5 && !shaped && !dab) a *= 1.0 - smoothstep(2.5, 4.8, distance(position, uFocus));
             // Grains stay crisp specks and billows small clumps; only mist and steam grow into soft puffs.
-            size = min(size, uScale * (shaped ? 0.04 : aKind > 2.5 ? 0.075 : aKind > 0.5 ? 0.085 : 0.032));
-            if (aKind > 2.5 && !shaped) {
+            size = min(size, uScale * (shaped ? 0.04 : dab ? 0.17 : aKind > 2.5 ? 0.075 : aKind > 0.5 ? 0.085 : 0.032));
+            if (aKind > 2.5 && !shaped && !dab) {
               size *= mix(1.0, 0.55, beside);
               a *= mix(1.0, 0.4, beside);
             }
@@ -584,6 +589,9 @@ const GOLD = new Color('#FFE08A');
 const MARIGOLD_C = new Color('#FFD34D');
 const CONFETTI = [new Color('#FFD34D'), new Color('#FF4D2E'), new Color('#FFF1D6'), new Color('#FFB82E')];
 const CONFETTI_GOLD = [new Color('#FFE08A'), new Color('#8FF3E4'), new Color('#FFF6DA'), new Color('#FFD34D')];
+/** The finish's ribbons: the player's vermillion and the gifts' marigold on cream, with periwinkle. */
+const CREAM_BLOOM = new Color('#FFF1D6');
+const CONFETTI_FINISH = [new Color('#FF4D2E'), new Color('#FFD34D'), new Color('#FFF1D6'), new Color('#AEB6EE'), new Color('#FF8A5C')];
 const COIN = new Color('#FFC83A');
 /** Grit knocked off a hazard's foot: dark slate chips (as the avalanche's debris), or ice shards. */
 const SLATE = new Color(0.3, 0.34, 0.5);
@@ -748,9 +756,11 @@ export class Particles {
     // or drift), its billows swelling into a plume whose crest catches the low sun.
     const hs = Math.hypot(vel.x, vel.z);
     const hard = Math.min(1, amount) * smooth(12, 28, hs);
-    const count = this.n(amount * (3.6 + 2.2 * hard));
+    // ...and it goes on growing to the cap: a hard carve at 46 m/s stands half as high again as at 28.
+    const over = Math.min(1, amount) * roosterK(hs);
+    const count = this.n(amount * (3.6 + 2.2 * hard + 2 * over));
     for (let i = 0; i < count; i++) {
-      const s = (1.3 + Math.random() * (1.2 + 1.4 * amount)) * (1 + 0.4 * hard);
+      const s = (1.3 + Math.random() * (1.2 + 1.4 * amount)) * (1 + 0.4 * hard + 0.3 * over);
       const back = 0.1 + Math.random() * 0.5;
       const j = (Math.random() - 0.5) * 1.6;
       const big = Math.random();
@@ -783,7 +793,7 @@ export class Particles {
         pos.y + 0.08,
         pos.z + side.z * 0.4 - f.z * back + (Math.random() - 0.5) * 0.16,
         car.x + side.x * s + f.x * j,
-        car.y + (1.4 + Math.random() * (1.2 + 1.0 * amount)) * (1 + 0.75 * hard),
+        car.y + (1.4 + Math.random() * (1.2 + 1.0 * amount)) * (1 + 0.75 * hard + 0.6 * over),
         car.z + side.z * s + f.z * j,
         // Short-lived: spray fades in the air, never lying about on the snow as white pellets.
         0.3 + Math.random() * 0.28,
@@ -802,9 +812,9 @@ export class Particles {
     // Billows: the body of the rooster tail, lumps of powder that rise off the runner, swell and
     // hang for a moment, crest lit and belly in shade.
     // (A hard one throws more and bigger of them, higher, hanging a little longer: the plume.)
-    const puffs = this.n(amount * (1.2 + 2.2 * hard));
+    const puffs = this.n(amount * (1.2 + 2.2 * hard + 1.4 * over));
     for (let i = 0; i < puffs; i++) {
-      const s = (0.8 + Math.random() * (0.9 + 0.8 * amount)) * (1 + 0.4 * hard);
+      const s = (0.8 + Math.random() * (0.9 + 0.8 * amount)) * (1 + 0.4 * hard + 0.3 * over);
       const back = 0.15 + Math.random() * 0.45;
       const big = Math.random();
       this.powder.emit(
@@ -812,11 +822,11 @@ export class Particles {
         pos.y + 0.12,
         pos.z + side.z * 0.45 - f.z * back,
         car.x + side.x * s,
-        car.y + (1.1 + Math.random() * (0.8 + 0.6 * amount)) * (1 + 0.9 * hard),
+        car.y + (1.1 + Math.random() * (0.8 + 0.6 * amount)) * (1 + 0.9 * hard + 0.6 * over),
         car.z + side.z * s,
         0.26 + Math.random() * 0.22 + 0.2 * hard,
         0.09 + big * 0.05,
-        (0.16 + big * big * 0.26 * (0.6 + 0.4 * amount)) * (1 + 0.8 * hard),
+        (0.16 + big * big * 0.26 * (0.6 + 0.4 * amount)) * (1 + 0.8 * hard + 0.5 * over),
         tint.r,
         tint.g,
         tint.b,
@@ -1234,15 +1244,17 @@ export class Particles {
     // rather than streaming back into the lens as clumps.)
     const car = tmpC.set(vel.x * 0.86, Math.max(vel.y, -hs * 0.7) * 0.86, vel.z * 0.86);
     const c = ice ? ICE : WHITE;
+    // At the top of the range the runners throw it higher and wider off their tails.
+    const over = 1 + roosterK(hs);
     for (let i = 0; i < n; i++) {
       const sx = i % 2 ? 0.28 : -0.28;
-      const out = (Math.random() - 0.5) * 1.2 + sx * 2.5;
+      const out = ((Math.random() - 0.5) * 1.2 + sx * 2.5) * over;
       this.powder.emit(
         pos.x + rx * sx - f.x * 0.7,
         pos.y + 0.04,
         pos.z + rz * sx - f.z * 0.7,
         car.x + rx * out - f.x * Math.random() * 1.5,
-        car.y + 0.6 + Math.random() * 1.1,
+        car.y + (0.6 + Math.random() * 1.1) * over,
         car.z + rz * out - f.z * Math.random() * 1.5,
         0.22 + Math.random() * 0.2,
         0.03,
@@ -1282,6 +1294,156 @@ export class Particles {
         puffKind(),
         car,
       );
+    }
+  }
+
+  /** A big drop's touchdown (and a wipeout's first hit): a bow wave of billows rolling out low to both
+   *  sides and back, keeping the rider clear, with grains thrown up off its crest. `k` about 0.6 to 1.5. */
+  wave(pos: Vector3, vel: Vector3, k: number, keep = 0.62): void {
+    const f = this.forward(vel);
+    const hs = Math.hypot(vel.x, vel.z);
+    const car = tmpC.set(vel.x * keep, Math.max(vel.y, -hs * 0.7) * keep, vel.z * keep);
+    const puffs = this.n(30 * k);
+    for (let i = 0; i < puffs; i++) {
+      const a = (i % 2 ? 1 : -1) * (0.7 + Math.random() * 1.55);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const dx = f.x * ca - f.z * sa;
+      const dz = f.z * ca + f.x * sa;
+      const out = (5.5 + Math.random() * 6.5) * Math.sqrt(k);
+      const big = Math.random();
+      this.powder.emit(pos.x + dx * 0.9, pos.y + 0.18, pos.z + dz * 0.9, car.x + dx * out, car.y + 0.8 + Math.random() * 2.2 * k, car.z + dz * out, 0.55 + Math.random() * 0.5, 0.3, (0.75 + big * 0.9) * k, 1, 1, 1, 0.9, 3.2, 1.5, puffKind(), car);
+    }
+    const grains = this.n(44 * k);
+    for (let i = 0; i < grains; i++) {
+      const a = (i % 2 ? 1 : -1) * (0.5 + Math.random() * 1.9);
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const dx = f.x * ca - f.z * sa;
+      const dz = f.z * ca + f.x * sa;
+      const out = 4 + Math.random() * 9;
+      this.powder.emit(pos.x + dx * 0.6, pos.y + 0.1, pos.z + dz * 0.6, car.x + dx * out, car.y + 2 + Math.random() * 4.5 * k, car.z + dz * out, 0.35 + Math.random() * 0.4, 0.06, 0.11, POWDER, POWDER, POWDER, 0.9, 8, 1.6, KIND_GRAIN, car);
+    }
+    const mist = this.n(9 * k);
+    for (let i = 0; i < mist; i++) {
+      const a = (i % 2 ? 1 : -1) * (1 + Math.random() * 1.2);
+      const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
+      const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
+      this.powder.emit(pos.x + dx * 1.2, pos.y + 0.2, pos.z + dz * 1.2, car.x + dx * 4, car.y + 0.4, car.z + dz * 4, 0.8 + Math.random() * 0.5, 0.4, 2.2 * k, 1, 1, 1, 0.2, 1.4, 2.4, KIND_MIST);
+    }
+  }
+
+  /** Riding the wall: snow thrown up it, grains and billows off the sled's outer side, on the bank's
+   *  rise (`side` is the bank's, + toward three.js +x). */
+  wallSpray(pos: Vector3, side: number, vel: Vector3, k: number): void {
+    const hs = Math.hypot(vel.x, vel.z);
+    const car = tmpC.set(vel.x * 0.8, Math.max(vel.y, -hs * 0.7) * 0.8, vel.z * 0.8);
+    const grains = this.n(3.6 * k);
+    for (let i = 0; i < grains; i++) {
+      const s = 1.5 + Math.random() * 3.6;
+      this.powder.emit(pos.x + side * 0.35, pos.y + 0.08, pos.z + (Math.random() - 0.5) * 0.7, car.x + side * s, car.y + 3 + Math.random() * 4, car.z + (Math.random() - 0.5) * 2, 0.26 + Math.random() * 0.26, 0.05, 0.11, POWDER, POWDER, POWDER, 0.85, 8, 1.8, KIND_GRAIN, car);
+    }
+    const puffs = this.n(1.2 * k);
+    for (let i = 0; i < puffs; i++) {
+      const s = 1 + Math.random() * 2.2;
+      this.powder.emit(pos.x + side * 0.4, pos.y + 0.12, pos.z - 0.2, car.x + side * s, car.y + 2 + Math.random() * 2.4, car.z, 0.3 + Math.random() * 0.24, 0.12, 0.42 + Math.random() * 0.3, 1, 1, 1, 0.85, 3.4, 2.2, puffKind(), car);
+    }
+  }
+
+  /** Sparks along a rail under the runners: hot motes in the player's own ramp (`a` to `b`), low and
+   *  short-lived, falling back behind the sled. */
+  railSparks(pos: Vector3, vel: Vector3, a: Color, b: Color, k: number): void {
+    const f = this.forward(vel);
+    const car = tmpC.set(vel.x * 0.72, vel.y * 0.72, vel.z * 0.72);
+    const n = this.n(3.4 * k);
+    for (let i = 0; i < n; i++) {
+      const c = i % 3 === 0 ? b : a;
+      const hot = 1.5 + Math.random() * 0.4;
+      const back = 0.5 + Math.random() * 4.5;
+      const sx = (Math.random() - 0.5) * 3.2;
+      this.glow.emit(pos.x - f.x * 0.5, pos.y, pos.z - f.z * 0.5, car.x - f.x * back - f.z * sx, car.y + 0.5 + Math.random() * 2.2, car.z - f.z * back + f.x * sx, 0.16 + Math.random() * 0.2, 0.12, 0.03, c.r * hot, c.g * hot, c.b * hot, 1, 9, 1.4, KIND_GRAIN, car);
+    }
+  }
+
+  /** A shell over the square, painted rather than lit: a soft flare at its heart, a globe of tinted
+   *  gouache billows swelling out and sagging as they thin, and a few bright motes in it. */
+  firework(pos: Vector3, a: Color, b: Color): void {
+    // (A dab, not a flare: flares keep below the lens, and this hangs in the sky.)
+    this.powder.emit(pos.x, pos.y, pos.z, 0, 0, 0, 0.42, 4, 11, CREAM_BLOOM.r, CREAM_BLOOM.g, CREAM_BLOOM.b, 1, 0, 0, dabKind());
+    const n = this.n(44);
+    const gold = Math.PI * (3 - Math.sqrt(5));
+    for (let i = 0; i < n; i++) {
+      const y = 1 - ((i + 0.5) / n) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const th = i * gold;
+      const c = i % 3 === 0 ? b : a;
+      const sp = 27 + Math.random() * 8;
+      this.powder.emit(pos.x, pos.y, pos.z, Math.cos(th) * r * sp, y * sp, Math.sin(th) * r * sp, 1.4 + Math.random() * 0.9, 2, 8.5 + Math.random() * 3, c.r, c.g, c.b, 1, 2.4, 2.8, dabKind());
+    }
+    const motes = this.n(34);
+    for (let i = 0; i < motes; i++) {
+      const y = Math.random() * 2 - 1;
+      const r = Math.sqrt(1 - y * y);
+      const th = Math.random() * Math.PI * 2;
+      const c = i % 2 ? a : b;
+      const sp = 18 + Math.random() * 9;
+      this.glow.emit(pos.x, pos.y, pos.z, Math.cos(th) * r * sp, y * sp, Math.sin(th) * r * sp, 0.8 + Math.random() * 0.7, 0.8, 0.22, c.r * 1.4, c.g * 1.4, c.b * 1.4, 1, 3, 2.4, KIND_GRAIN);
+    }
+  }
+
+  /** A shell climbing to its burst: a bright mote on a thin rising trail (`s` seconds up). */
+  riser(from: Vector3, to: Vector3, s: number, c: Color): void {
+    const n = this.n(9);
+    for (let i = 0; i < n; i++) {
+      const lag = (i / Math.max(1, n)) * 0.3 * s;
+      const k = 1 / s;
+      this.glow.emit(from.x, from.y, from.z, (to.x - from.x) * k, (to.y - from.y) * k, (to.z - from.z) * k, s - lag, 0.42 - i * 0.03, 0.12, c.r * 1.4, c.g * 1.4, c.b * 1.4, 1 - i / (n + 2), 0, 0, KIND_GRAIN);
+    }
+  }
+
+  /** The cloud round a rolling rider: billows that keep nearly its pace, so they stay on it. */
+  tumblePuff(pos: Vector3, vel: Vector3, k: number): void {
+    const hs = Math.hypot(vel.x, vel.z);
+    const car = tmpC.set(vel.x * 0.88, Math.max(vel.y, -hs * 0.7) * 0.88, vel.z * 0.88);
+    const n = this.n(7 * k);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const o = 0.4 + Math.random() * 0.9;
+      const big = Math.random();
+      this.powder.emit(pos.x + Math.cos(a) * o, pos.y + 0.15 + Math.random() * 0.4, pos.z + Math.sin(a) * o, car.x + Math.cos(a) * (1 + Math.random() * 3), car.y + 1 + Math.random() * 2.6, car.z + Math.sin(a) * (1 + Math.random() * 3), 0.34 + Math.random() * 0.3, 0.3, 1 + big * 0.9, 1, 1, 1, 0.9, 3.4, 2.2, dabKind(), car);
+    }
+    const grains = this.n(10 * k);
+    for (let i = 0; i < grains; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const s = 2 + Math.random() * 5;
+      this.powder.emit(pos.x, pos.y + 0.2, pos.z, car.x + Math.cos(a) * s, car.y + 1.5 + Math.random() * 4, car.z + Math.sin(a) * s, 0.26 + Math.random() * 0.26, 0.05, 0.1, POWDER, POWDER, POWDER, 0.9, 8, 1.6, KIND_GRAIN, car);
+    }
+  }
+
+  /** A confetti cannon: ribbons fired along `dir`, hanging in the air and fluttering down. */
+  confetti(pos: Vector3, dir: Vector3, count: number, carrier: Vector3): void {
+    const n = this.n(count);
+    const car = tmpC.set(carrier.x * 0.25, 0, carrier.z * 0.25);
+    for (let i = 0; i < n; i++) {
+      const c = CONFETTI_FINISH[i % CONFETTI_FINISH.length];
+      const k = 0.5 + Math.random() * 0.8;
+      this.powder.emit(pos.x, pos.y, pos.z, car.x + dir.x * k + (Math.random() - 0.5) * 4, dir.y * k + Math.random() * 3, car.z + dir.z * k + (Math.random() - 0.5) * 4, 2.2 + Math.random() * 1.4, 0.44, 0.36, c.r, c.g, c.b, 1, 2.6, 1.2, seeded(KIND_CONFETTI));
+    }
+  }
+
+  /** One ribbon drifting down through the frame. */
+  confettiFall(pos: Vector3): void {
+    if (this.n(1) === 0) return;
+    const c = CONFETTI_FINISH[Math.floor(Math.random() * CONFETTI_FINISH.length)];
+    this.powder.emit(pos.x, pos.y, pos.z, (Math.random() - 0.5) * 2.4, -1.3 - Math.random(), (Math.random() - 0.5) * 2.4, 2.4 + Math.random() * 1.2, 0.34, 0.28, c.r, c.g, c.b, 1, 0.3, 0.4, seeded(KIND_CONFETTI));
+  }
+
+  /** Powder coming off a slough's front as it slides (sloughs.ts). */
+  sloughPuff(pos: Vector3, vx: number, vz: number): void {
+    const n = this.n(2.4);
+    for (let i = 0; i < n; i++) {
+      // (Dabs: a bank is further from the rider than a billow may hang.)
+      this.powder.emit(pos.x + (Math.random() - 0.5) * 1.6, pos.y + Math.random() * 0.4, pos.z + (Math.random() - 0.5) * 1.6, vx * 0.7 + (Math.random() - 0.5) * 1.5, 0.9 + Math.random() * 1.4, -vz + (Math.random() - 0.5) * 1.5, 0.42 + Math.random() * 0.34, 0.4, 1.3 + Math.random() * 0.9, 1, 1, 1, 0.8, 1.6, 2, dabKind());
     }
   }
 

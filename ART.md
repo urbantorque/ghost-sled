@@ -180,9 +180,17 @@ Biome bases for Clear Skies:
 
 ## 8. Camera and motion
 
-- A low chase camera about 2.2 m behind and 1 m up, so the rider holds the lower middle of the
-  frame. It looks ahead of the sled and leads into turns, and turns a little to frame a close rival.
-- FOV breathes from 62 to 78 degrees with speed, plus a punch on boosts.
+- A chase camera close behind the rider, so the rider holds the lower middle of the frame. It looks
+  ahead of the sled, turns toward the road 1.5 s down the run, and turns a little to frame a close
+  rival. Below about 15 m/s it rides low, about 1 m over the sled.
+- Speed lifts the lens, it never drops it into the snow. From about 28 m/s it stands clear of the slope
+  (1.5 m over the snow at 30 m/s, 1.7 m at 44), the rider sinks a little in the frame, and the road
+  spreads down the screen above the rider's head. A player needs to see a hazard about 1.5 s out: 45 m
+  at 30 m/s, 66 m at 44. `scripts/playtest/readability.js` measures it.
+- Speed reads across the whole range and every curve lives in `src/render/speedfeel.ts`: 28 m/s already
+  feels fast and 46 m/s is the edge of control. Nothing runs out early. The FOV breathes from 62 degrees
+  to 79 at the cap, plus a boost and a punch; streaks, the lens's rumble, flakes and kicked snow all
+  climb to the cap, and past 36 m/s the horizon shivers and the corners close in a little.
 - The camera rolls up to 4 degrees into carves.
 - Impact shake scales with landing impact. A perfect landing gets a short FOV kick and a thin white
   rim flash on the rider, gone in about 0.15 s.
@@ -190,6 +198,15 @@ Biome bases for Clear Skies:
 - Time bends only at the edges, never in the sim: a stomp's hitstop grows with the streak (8 to 11
   frames), a tier-3 drift release freezes a little longer than a stomp, a Whisker gets 0.05 s, and a
   crash eases into a slow curve. Reduced motion turns all of it off and keeps every beat.
+- A wipeout the run survives: the lens drops and shakes, then eases out and up and holds the rolling
+  rider in the middle of the frame until it is back on the line. A scrape knocks it off the edge. A wall
+  ride leans the horizon and steps the lens in off the bank.
+- Big air holds up for flights of 2 to 3.5 s and more: the lens stays out with the valley under the
+  rider and is home 0.35 s before touchdown. A touchdown after 1.5 s or more throws a powder wave.
+- The finish: render time eases to 0.38 and back over about 2 s (the sim never slows), and the lens
+  swings round the coasting rider to a three-quarter front, low and wide, the rider low in the frame
+  with its arms up and the sky over the slope above it, where the shells burst. It holds there, creeping
+  on, and moves the rider aside for the results card. Reduced motion never swings and never eases.
 - After the crash's held frame the camera watches the pack ride past the wreck: the orbit stops
   drifting and turns toward the passing ghost with the wreck kept in the middle of the frame, or
   cuts to a still shot beside the line the ghost will cross, so the race you just left goes by in
@@ -280,8 +297,25 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   ragged snow caps, a dark underside under each tier and a tree well at the foot. A low mist settles
   on the course floor in the distance and the fog warms toward the sun.
 - **The lens.** Big air opens out into a vista and is home before the stomp; speed reads through the
-  lens between 15 and 36 m/s; a hard carve at speed throws a rooster tail of gouache billows, rim-lit
-  when backlit. The title cranes in from a wide shot of the whole world.
+  lens from 15 m/s all the way to the cap at 46; a hard carve at speed throws a rooster tail of gouache
+  billows, rim-lit when backlit, and it goes on growing to the cap. The title cranes in from a wide shot
+  of the whole world.
+- **Close to the lens.** Slim markers stand along both corridor edges, 0.8 to 3 m past them and 10 to
+  18 m apart, for a strobe of parallax: stakes, tall banded poles, slalom flags flapping harder with
+  speed, and roped fence posts down one bank. Birch and sky blue in the Alps, ice wands with lilac tags
+  on the glacier, ash-pale stakes on the volcano, cream bamboo and paper on Sakura. They are markers, not
+  hazards: pale, slim, a little light of their own so a low sun never drops them to a silhouette, never a
+  signal colour, and they fold away round a rider who wall-rides through them. No post stands where the
+  ground past the edge falls away or short of something solid at the edge. Snow kicked off the runners
+  falls back past the lens's lower corners, flakes hang further ahead the faster you go, and a fast
+  carve's edges stretch into long streaks.
+- **The world answers skill.** A stomp or a big landing near a bank sends a tongue of soft lumps sliding
+  down it with powder off its front, ahead of the sled, gone before the edge of the run. A max drift or
+  a passed ghost near a crowd lifts them onto their toes. A rival beaten shakes powder off the treeline
+  and the banks: down both of them for a grudge, in its rose, and down one for a duel.
+- **The finish.** Shells rise from the snow and bloom as dabs of gouache in the player's vermillion, the
+  gifts' marigold, cream and the snow's periwinkle, never lit like a hazard and never mint. Confetti
+  cannons fire in over the rider and ribbons drift down through the frame while the crowd roars.
 
 - **Overlooks.** Now and then one bank opens. The treeline steps back, a low timber rail (larch, pale
   boards, charred posts or lacquer by biome) runs along the forest limit, a bare snow shelf runs out to

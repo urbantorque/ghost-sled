@@ -287,6 +287,48 @@ export function floorDrive(drive: number, target: number, floored: boolean, held
   return drive < RUN_FLOOR ? RUN_FLOOR : drive;
 }
 
+/** Landing airtime (s) from which a touchdown is a big drop: a powder wave and the heavy sound. */
+export const BIG_DROP_S = 1.5;
+
+/** The band's build down the descent: the drive's lift per stage, on top of whatever the rider earns.
+ *  A plain cruise holds at about 0.36, so stage 1 is bass and hats, stage 2 has the hats full and the
+ *  arp at the door, and stage 3 climbs through the arp into the kick; the skill on top reaches the
+ *  clap, the sparkle and the lead. */
+export const STAGE_LIFT = [0, 0.07, 0.15] as const;
+/** The last stage's climb on top of that, from CLIMAX_FROM of the way through it to the line. */
+export const CLIMAX_LIFT = 0.13;
+export const CLIMAX_FROM = 0.3;
+
+type StageLine = { readonly z0: number; readonly z1: number };
+
+/** Which stage holds z (0 before the first line; past the finish, the last). */
+export function stageIndex(z: number, stages: readonly StageLine[]): number {
+  for (let i = 0; i < stages.length; i++) if (z < stages[i].z1) return i;
+  return Math.max(0, stages.length - 1);
+}
+
+/** 0 until CLIMAX_FROM of the way through the last stage, 1 at the finish line. */
+export function climaxK(z: number, stages: readonly StageLine[]): number {
+  if (stages.length === 0) return 0;
+  const s = stages[stages.length - 1];
+  const t = Math.max(0, Math.min(1, ((z - s.z0) / (s.z1 - s.z0) - CLIMAX_FROM) / (1 - CLIMAX_FROM)));
+  return t * t * (3 - 2 * t);
+}
+
+/** The lift the descent adds to the drive. */
+export function buildLift(stage: number, climax: number): number {
+  return STAGE_LIFT[clampInt(stage, 0, STAGE_LIFT.length - 1)] + CLIMAX_LIFT * climax;
+}
+
+/** How far the band opens up (0..1): a stomp streak of 3 starts it and 5 opens it fully, and earned
+ *  flow (0..1) opens it on its own. A wider room and the upper layers, on top of the groove's drive. */
+export function openUp(flow: number | undefined, streak: number | undefined): number {
+  const f = Number.isFinite(flow) ? (flow as number) : 0;
+  const st = clampInt(streak ?? 0, 0, 5);
+  const k = st >= 5 ? 1 : st === 4 ? 0.8 : st === 3 ? 0.55 : 0;
+  return Math.max(k, Math.max(0, Math.min(1, (f - 0.15) / 0.55)));
+}
+
 /** Two requests for the same UI sound this close together (s) are one sound (the app and a cue
  *  helper both scheduling the same coin, say). The closest real pair, the count's first ticks, sit
  *  22 ms apart. */

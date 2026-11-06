@@ -93,6 +93,10 @@ export function crowdColors(biome: BiomeId, p: Palette): { coats: Color[]; hats:
   return { coats: base.map((h) => new Color(h).multiplyScalar(k)), hats: hats.map((h) => new Color(h).multiplyScalar(k)) };
 }
 
+/** The crowds' roar, 0 to 1: a sustained lift over the moment's cheer, every figure near the rider up
+ *  on its toes with its arms in the air (moments.ts: a max drift, a passed ghost, the finish). */
+export const crowdRoar = { value: 0 };
+
 /** The crowd's cheer and the rider, shared by every figure (world coordinates). */
 export interface CrowdUniforms {
   /** x, z where the moment was made, the time it was, and its strength (0..1). */
@@ -116,6 +120,7 @@ const ATTRS = /* glsl */ `
   uniform vec3 uRider;
   uniform float uLamps;
   uniform float uWave;
+  uniform float uRoar;
 `;
 
 // aSeed: x phase (0..1), y temperament (0..1: above 0.62 waves at rest), z lamp holder (1), w flag waver (1).
@@ -135,7 +140,9 @@ const ANIMATE = /* glsl */ `#include <begin_vertex>
     // apart), over the stretch round the rider.
     float wv = sin(-ip.z * 0.12 - uTime * 3.2);
     float waveK = uWave * pow(max(wv, 0.0), 6.0) * (1.0 - smoothstep(60.0, 140.0, dR));
-    float ex = clamp(max(max(cheer, nearK * 0.4), waveK), 0.0, 1.0);
+    // The roar: everyone within about 120 m, each going up at its own moment.
+    float roarK = uRoar * (1.0 - smoothstep(110.0, 220.0, dR)) * (0.75 + 0.25 * sin(uTime * 2.6 + ph * 2.0));
+    float ex = clamp(max(max(cheer, nearK * 0.4), max(waveK, roarK)), 0.0, 1.0);
     float wave = sin(uTime * (4.0 + aSeed.y * 3.0) + ph);
     if (aSlot > 2.5 && aSlot < 3.5 && (uLamps < 0.5 || aSeed.z < 0.5)) transformed *= 0.0;
     if (aSlot > 3.5 && aSeed.w < 0.5) transformed *= 0.0;
@@ -166,7 +173,7 @@ const ANIMATE = /* glsl */ `#include <begin_vertex>
       transformed.xz = vec2(transformed.x * cy + transformed.z * sy, -transformed.x * sy + transformed.z * cy);
       objectNormal.xz = vec2(objectNormal.x * cy + objectNormal.z * sy, -objectNormal.x * sy + objectNormal.z * cy);
       transformed.x += sway * transformed.y;
-      float hop = cheer * abs(sin(uTime * 7.5 + ph)) * 0.42 + nearK * 0.08 * abs(sin(uTime * 6.0 + ph)) + waveK * 0.3;
+      float hop = max(cheer, roarK) * abs(sin(uTime * 7.5 + ph)) * 0.42 + nearK * 0.08 * abs(sin(uTime * 6.0 + ph)) + waveK * 0.3;
       transformed.y += 0.03 * sin(uTime * 2.2 + ph) + hop;
     }
   }`;
@@ -181,7 +188,7 @@ export function crowdMaterial(u: CrowdUniforms): ShaderMaterial {
   const m = makeToonMaterial({ coolShade: 0.4, rim: 0.42, nearFade: [1.8, 3.6] });
   if (!m.vertexShader.includes('#include <begin_vertex>') || !m.vertexShader.includes('vColor = color;')) throw new Error('crowdMaterial: shader hooks missing');
   m.vertexShader = ATTRS + m.vertexShader.replace('vColor = color;', COLOUR).replace('#include <begin_vertex>', ANIMATE);
-  Object.assign(m.uniforms, u);
+  Object.assign(m.uniforms, u, { uRoar: crowdRoar });
   return m;
 }
 

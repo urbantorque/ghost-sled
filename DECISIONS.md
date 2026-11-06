@@ -853,3 +853,77 @@ Every place where I replaced, extended or interpreted the brief, and why.
 124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
     Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
     Night, a third as dense and paler; Glass Ice gets diamond dust there.
+
+## Made in the wow pass
+
+125. **Speed reads off one range.** Cruise rose to about 30 m/s with peaks at 41 to 46, and the FOV was
+    full at 36, the rumble at 38, the near field at 36, the streaks at 44: a run sat on the end stop.
+    Every curve now reads off `src/render/speedfeel.ts`: `fastK` is 0.6 by 28 m/s (already fast) and only
+    reaches 1 at the cap, and a test holds every curve still climbing between 44 and 46. FOV 62 to 79,
+    streaks from 24, rumble from 22 to 0.03 m, and from 36 the horizon shivers and the corners close in.
+    Flakes are hung half a second ahead of the lens (a fixed 16 m was gone in a third of a second) and a
+    flake the lens has passed gives its slot back, so density rises with speed where it used to fall.
+126. **The lens rises with speed, and height is read against the slope.** At 1.05 m over the sled, 4.5 m
+    up a falling slope, the lens rode about 0.45 m over the snow: the road from 25 m on was a few rows of
+    pixels hidden behind the rider, and that was the real hazard read at speed (usable road 24 m at 30
+    m/s and at 44). The lens now stands 1.5 to 1.7 m clear of the slope from 28 m/s, the rider sinks to
+    about 65% of the height and the look turns toward the road 1.5 s ahead. Measured by
+    `scripts/playtest/readability.js` at 720p on all four mountains: usable road 73 to 74 m at 30 m/s (2.4 s) and 65 to 66 m at 44 (1.5 s); a 6.5 m tree 45 m ahead stands
+    60 to 63 px and 55 to 57 px (62 and 57 before: the wider FOV is paid for by the closer lens); the
+    rider 118 to 127 px and 87 to 103 px (131 and 100 before). A crest can still hide the road for a moment:
+    the worst sample was 27 m at 30 and 8 m at 44, on Sakura's rollers. Lag stays at
+    speed / 9 so a boost still surges away from the lens; the set point closes in to pay for it, which
+    keeps the rider from shrinking further than it did.
+127. **Speed posts are markers, never hazards and never colliders.** One instanced draw on Medium and
+    High, none on Low: stakes, banded poles, slalom flags and roped fence posts, 0.8 to 3 m past each
+    edge and 10 to 18 m apart, chosen per 96 m stretch and per biome. The sim never hears of them. They
+    read the corridor through centerX, halfWidth, edgeExcess and edgeLimit and the ground, so a ravine, a
+    bridge or a street needs no change here: a post stops short of something solid and none stands where
+    the ground past the edge falls away. Pale and slim with a little light of their own: backlit by a
+    low sun a plain stick dropped to the hazards' dark. They fold into the snow inside about 2 m of the
+    rider, and stay out of the avalanche mirror.
+128. **The snow reads speed close up.** Kicked snow comes off the runners keeping about 70% of the sled's
+    speed, so it falls back past the lens's lower corners, the one thing allowed nearer than a flake. A
+    rooster tail stands half as high again at the cap as at 28 m/s, and a groove's broken edges run
+    along an arc length divided by speed, so a fast line reads as long streaks. The near field's budget
+    rose from 520 to 780 points on High and 260 to 400 on Medium, still one draw and none on Low.
+129. **The picture acts out what the sim decides, and reads it from public state.** `src/render/moments.ts`
+    reads s.tumble, s.grinding, s.wallTicks and s.finished and the beat list; nothing is written back. A
+    tumble rolls the whole rig twice (a whole number, so it lands upright) with the lens eased out and
+    up; a tumble's bounce is not air, so it gets no vista and no landing ring. Reduced motion curls the
+    rider up with no spin, no swing and no ease; every beat still lands. On a rail the sled turns off
+    the line with sparks in the player's own ramp. Courses have no rails on this branch, so the pose and
+    sparks were checked on a rail put into a zone by the strip script, and nothing draws a rail yet.
+130. **The finish eases the picture, not the sim.** Past the line the world records the coast the sim is
+    already running and plays it back through a clock that dips to 0.38 and returns over about 2 s, so
+    it ends on the same spot a little later, with no change to the sim, the feed or the game clock. The
+    lens swings to a three-quarter front at 60 degrees with the rider low in the frame: aimed straight at
+    the rider it saw only the snow it came down, and every shell burst over the top of the frame. Shells
+    are placed from the lens as they go up, so they land in whatever sky it sees, chase or swung, with a
+    square or without one. They are dabs of gouache (a billow's shading, allowed to hang far from the
+    rider and paint large). The game lane still has to open the results off the finish beat; the shot
+    holds until it does, and moves the rider aside for the card. Reduced motion takes none of it: the
+    chase follows the rider to a stop, arms up, and the shells still burst.
+131. **The world answers skill in the world.** A stomp or a big landing near a bank sheds a slough
+    (`src/render/sloughs.ts`, 56 lumps, one draw while one slides, Medium and High), started ahead of the
+    sled so the lens sees it come down, and only off a real bank. A max drift, a shown pass and 'In the
+    flow' lift the crowds' roar, a uniform on the one crowd draw. `grudgeSettled` shakes powder off the
+    treeline, sends snow down both banks and rings in rose; `Duel won` does the same on the ghost's side.
+    Crows take a stomp as they always did: scaring them on a grudge would need a change in life.ts.
+132. **The band builds down the mountain.** The drive takes +0.07 and +0.15 per stage and +0.13 over the
+    last stage's climb to the line, so a plain cruise goes from bass and hats through the arp into the
+    kick; skill still owns the clap, sparkle and lead until the climb brings them in part way. The band
+    quickens 2.5% then 5% on bar lines, the last stage thickens the bass and hats and lifts a whole tone
+    on a chord change. The lift is decided half a bar ahead, with the next pad, or the pad would ring in
+    the old key under the new one. A stomp streak of 3 or more or earned flow opens the band up: upper
+    layers over the drive, every second arp note an octave over itself, wider pads and a wider room.
+    The finish cue resolves onto a bright chord as the results deck comes up under it, in the key the
+    band climbed to. All of it is voices and a fixed graph: nothing is rendered in a run, on any tier.
+    The `descent` probe (`debugRender('descent')`) reads the music bus at a plain cruise: -25.1, -24.0,
+    -22.7 and at the line -21.3 dBFS, 3, 4, 4 and 7 layers; opened up, +2 dB and +3 dB over 2 kHz. None of
+    it has been heard.
+133. **Perf probes on two origins compare two saves.** A build served on a port that has run strips keeps
+    a save with a best, a grudge and a friend, and their ghosts' tags cost five times what a fresh save's
+    do: it read as a 25% loss on throttled Low, and two rounds of changes were wrong before a variant on a
+    fresh port gave it away. Clear localStorage on each origin, and clear any `emulateMedia` left on the
+    session: a reduced-motion strip leaves the whole page reduced for every probe after it.

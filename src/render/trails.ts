@@ -17,6 +17,11 @@ export type TrailStyle = 'groove' | 'ghost';
 const RUNNER = 0.28;
 /** Half-width of a ghost trail ribbon: room for the 15 cm line plus its anti-aliased edge. */
 const GHOST_HW = 0.13;
+/** How far a groove's broken edges stretch along the track at speed: the snow's noise runs this many
+ *  times longer at the cap, so a fast line reads as long streaks where a slow one reads as clumps. */
+const STRETCH = 4.5;
+const STRETCH_FROM = 14;
+const STRETCH_TO = 46;
 
 export class Trail {
   readonly mesh: Mesh;
@@ -28,6 +33,9 @@ export class Trail {
   private perp: Float32Array;
   private fan: Float32Array;
   private hw: Float32Array;
+  /** Metres along the track, stretched by speed (the groove's noise runs along this). */
+  private arc: Float32Array;
+  private arcNow = 0;
   private head = 0;
   private count = 0;
   private lastX = NaN;
@@ -54,6 +62,7 @@ export class Trail {
     this.perp = new Float32Array(max * 2 * 2);
     this.fan = new Float32Array(max * 2);
     this.hw = new Float32Array(max * 2);
+    this.arc = new Float32Array(max * 2);
     for (let i = 0; i < max; i++) {
       this.across[i * 2] = -1;
       this.across[i * 2 + 1] = 1;
@@ -65,6 +74,7 @@ export class Trail {
     this.geo.setAttribute('aPerp', new BufferAttribute(this.perp, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aFan', new BufferAttribute(this.fan, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aHw', new BufferAttribute(this.hw, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 1).setUsage(DynamicDrawUsage));
     const idx = new Uint32Array((max - 1) * 6);
     this.geo.setIndex(new BufferAttribute(idx, 1).setUsage(DynamicDrawUsage));
     this.mat = new ShaderMaterial({
@@ -101,6 +111,7 @@ export class Trail {
         attribute vec2 aPerp;
         attribute float aFan;
         attribute float aHw;
+        attribute float aArc;
         uniform float uTime;
         uniform vec3 uSunDir;
         varying float vAcross;
@@ -110,6 +121,7 @@ export class Trail {
         varying float vFan;
         varying float vAge;
         varying float vHw;
+        varying float vArc;
         varying vec3 vWorldPos;
         // How far up the screen this point sits, from the bottom edge (0) to the sled (1), so the groove
         // fades by where it lands in the frame, whatever the lens: a tall phone camera sees far more of
@@ -126,6 +138,7 @@ export class Trail {
           vDepth = aDepth;
           vFan = aFan;
           vHw = aHw;
+          vArc = aArc;
           vAge = uTime - aBorn;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorldPos = wp.xyz;
@@ -157,6 +170,7 @@ export class Trail {
         varying float vFan;
         varying float vAge;
         varying float vHw;
+        varying float vArc;
         varying vec3 vWorldPos;
         varying float vScreenK;
         ${LANTERN_POOL_GLSL}
@@ -214,8 +228,10 @@ export class Trail {
             float a = abs(x);
             float deep = vDepth;
             // Edges and the lip wander with the snow, never a ruled line.
-            float nz = vnoise(vWorldPos.xz * 2.7) - 0.5;
-            float nz2 = vnoise(vWorldPos.xz * 7.3 + 17.0) - 0.5;
+            // (The noise runs along the track, stretched by the speed it was cut at.)
+            vec2 tq = vec2(x, vArc);
+            float nz = vnoise(tq * 2.7) - 0.5;
+            float nz2 = vnoise(tq * 7.3 + 17.0) - 0.5;
             float an = a + nz * 0.07 * (0.4 + deep);
             // Toward the lens the marks soften (a wider feather, a little less contrast), so up close
             // they read as carved snow under raking light, never as two hard stripes of road paint.
@@ -322,8 +338,8 @@ export class Trail {
     this.broken = true;
   }
 
-  /** Add a sample at sim coordinates. Width in metres, depth 0..1. */
-  add(x: number, z: number, width: number, depth: number, time: number): void {
+  /** Add a sample at sim coordinates. Width in metres, depth 0..1, and the speed it was cut at. */
+  add(x: number, z: number, width: number, depth: number, time: number, speed = 0): void {
     if (!Number.isNaN(this.lastX)) {
       const dx = x - this.lastX;
       const dz = z - this.lastZ;
@@ -337,6 +353,8 @@ export class Trail {
       const l = Math.sqrt(dx * dx + dz * dz) || 1;
       tx = dx / l;
       tz = dz / l;
+      const st = Math.max(0, Math.min(1, (speed - STRETCH_FROM) / (STRETCH_TO - STRETCH_FROM)));
+      this.arcNow += l / (1 + (STRETCH - 1) * st);
     }
     const startNew = this.broken;
     this.lastX = x;
@@ -370,6 +388,7 @@ export class Trail {
     this.perp[i * 4 + 1] = this.perp[i * 4 + 3] = -pz;
     this.fan[i * 2] = this.fan[i * 2 + 1] = fan;
     this.hw[i * 2] = this.hw[i * 2 + 1] = hw;
+    this.arc[i * 2] = this.arc[i * 2 + 1] = this.arcNow;
     this.segStart[i] = startNew ? 1 : 0;
     this.head = (this.head + 1) % this.max;
     this.count = Math.min(this.count + 1, this.max);
@@ -405,6 +424,7 @@ export class Trail {
     (this.geo.getAttribute('aPerp') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aFan') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aHw') as BufferAttribute).needsUpdate = true;
+    (this.geo.getAttribute('aArc') as BufferAttribute).needsUpdate = true;
   }
 
   dispose(): void {

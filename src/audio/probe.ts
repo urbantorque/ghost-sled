@@ -4,6 +4,7 @@ import { ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import { Core } from './core';
+import { buildLift } from './cues';
 import type { AudioFrame } from './engine';
 import { Listener, type ListenSources, newView } from './listen';
 import type { Section } from '../sim/course';
@@ -518,6 +519,70 @@ async function renderLayers(): Promise<Record<string, number | number[]>> {
   return out;
 }
 
+/** 'descent': the band at a plain cruise at each point of the run, and opened up. Each row is a drive
+ *  (the cruise's 0.36 plus what the descent lifts it by), a stage, a climb and an opening. */
+const DESCENT_ROWS: readonly (readonly [string, number, number, number])[] = [
+  ['stage1', 0, 0, 0],
+  ['stage2', 1, 0, 0],
+  ['stage3', 2, 0, 0],
+  ['climax', 2, 1, 0],
+  ['stage1.open', 0, 0, 1],
+];
+
+/** The music bus through the descent (dBFS RMS after the limiter), with how much of its energy sits
+ *  over 2 kHz (dB against the whole), bars per minute and the layers in: what is measurable of the
+ *  band rising, since nobody hears a headless run. */
+async function renderDescent(): Promise<Record<string, number | number[]>> {
+  const out: Record<string, number | number[]> = {};
+  for (const [label, stage, climax, open] of DESCENT_ROWS) {
+    const secs = 12;
+    const ctx = new OfflineAudioContext(2, SR * secs, SR);
+    const core = new Core(ctx);
+    core.graph.setMaster(1, 0);
+    core.graph.sfx.setLevel(0, 0);
+    core.music.setTarget('run', Mood.None, 'alpine');
+    const drive = Math.min(1, 0.36 + buildLift(stage, climax));
+    core.music.setBuild(stage, climax, open);
+    core.music.setDrive(drive, 0, 1, true);
+    core.tick(0, LOOKAHEAD);
+    for (let k = 1; k * STEP < secs - 0.05; k++) {
+      const t = k * STEP;
+      ctx.suspend(t).then(
+        () => {
+          core.music.setBuild(stage, climax, open);
+          core.music.setDrive(drive, 0, 1);
+          core.tick(ctx.currentTime, LOOKAHEAD);
+          void ctx.resume();
+        },
+        () => undefined,
+      );
+    }
+    const buf = await ctx.startRendering();
+    const L = buf.getChannelData(0);
+    const R = buf.getChannelData(1);
+    // A first difference as a plain high-pass: what is left is the top of the band.
+    let all = 0;
+    let top = 0;
+    const from = 3 * SR;
+    const lp = Math.exp((-2 * Math.PI * 2000) / SR);
+    let y = 0;
+    for (let i = from; i < L.length; i++) {
+      const m = (L[i] + R[i]) * 0.5;
+      y = lp * y + (1 - lp) * m;
+      const h = m - y;
+      all += (L[i] * L[i] + R[i] * R[i]) / 2;
+      top += h * h;
+    }
+    const n = Math.max(1, L.length - from);
+    out[`${label}.rms`] = Math.round(db(Math.sqrt(all / n)) * 10) / 10;
+    out[`${label}.top`] = Math.round((db(Math.sqrt(top / n)) - db(Math.sqrt(all / n))) * 10) / 10;
+    const lv = core.music.layerLevels() ?? {};
+    out[`${label}.layers`] = Object.values(lv).filter((v) => v > 0.05).length;
+    core.dispose();
+  }
+  return out;
+}
+
 /** 'giftTakes': where each pair starts, in frames into a render quantum: on its first frame, at a
  *  pickup's phase in the game (currentTime plus 6 ms: 32 frames at 48 kHz, 8.6 at 44.1 kHz), and
  *  between two frames past the middle. */
@@ -657,6 +722,7 @@ async function renderTakes(): Promise<Record<string, number | number[]>> {
 
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   if (kind === 'layers') return renderLayers();
+  if (kind === 'descent') return renderDescent();
   if (kind === 'scape' || kind === 'scapeOnly' || kind === 'scapeMusic') return renderScape(kind, seconds, opts);
   if (kind === 'giftTakes') return renderTakes();
   const snuffK = SNUFF_KINDS[kind];

@@ -51,15 +51,20 @@ function cheerOf(b: Beat): number {
     case 'stomp':
     case 'grudgeSettled':
     case 'finale':
+    case 'finish':
       return 1;
     case 'pass':
       return b.muted ? 0 : 1;
+    case 'duel':
+      return b.phase === 'won' || b.phase === 'heldOff' ? 1 : 0;
+    case 'stage':
+      return 0.8;
     case 'bank':
       return 0.45 + 0.18 * b.tier;
     case 'nearMiss':
       return b.grade === 'whisker' ? 0.7 : 0;
     case 'driftRelease':
-      return b.tier >= 3 ? 0.8 : b.tier === 2 ? 0.5 : 0;
+      return b.tier >= 3 ? 1 : b.tier === 2 ? 0.5 : 0;
     case 'flow':
       return b.phase === 'in' ? 0.75 : 0;
     case 'newGround':
@@ -302,6 +307,9 @@ export class Soundscape {
     this.tier = tier;
   }
 
+  /** How far the band has opened up (0..1): its reverb room widens with it (engine.ts). */
+  bandOpen = 0;
+
   /** The overlook hook (0..1): one bank opens to a view. A broad gust as it opens, the airy wind and
    *  the band's lift while it lasts (the engine reads `openness`). */
   setOpenness(k: number): void {
@@ -359,7 +367,7 @@ export class Soundscape {
     this.enclosedWas = v.enclosed;
     // The room opens for the vista and the overlook, and closes in, ringing, under a roof.
     const space = Math.max(v.vista, 0.7 * this.open);
-    this.graph.music.setSpace(1 + 1.2 * space + 0.8 * v.enclosed, now);
+    this.graph.music.setSpace(1 + 1.2 * space + 0.8 * v.enclosed + 0.9 * this.bandOpen, now);
     this.graph.sfx.setSpace(1 + 0.4 * space + 1.2 * v.enclosed, now);
 
     // A lift's cable, a snowcat at night, Ember Peak's rumble.

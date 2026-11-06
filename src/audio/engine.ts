@@ -5,7 +5,7 @@ import type { Beat } from '../game/beats';
 import { RUN_FLOOR } from '../game/intensity';
 import { START_TICKS } from '../game/race';
 import { Core } from './core';
-import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, floorDrive, grooveLift, resultsCues, revealCues } from './cues';
+import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, openUp, resultsCues, revealCues, stageIndex } from './cues';
 import { Listener, type ListenSources, newView } from './listen';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
@@ -77,6 +77,13 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   about 0.12 over the 0.7 s rise, so the bass is in a breath after Ride on plain runs too (2.55 s;
  *   it was 4.6 to 4.9 s). Drafting earns none of it: a draft boost with the pack peaks under the
  *   arp.
+ * - The descent (cues.ts, music.ts): the drive takes a lift per stage (+0.07, +0.15) and a climb over
+ *   the last stage to the line (+0.13), so a plain cruise goes from bass and hats through the arp into
+ *   the kick, and the arp holds a floor from the second stage. The band runs 2.5% then 5% quicker from bar lines, the last stage thickens the bass and
+ *   hats and is lifted a whole tone on a chord change, and the clap and a lead come in on the climb.
+ *   A stomp streak or 'In the flow' opens it up (cues.ts openUp): the upper layers come in over the
+ *   drive, every second arp note rings an octave over itself, the pads bloom and the room widens.
+ *   The finish cue resolves onto a bright chord as the results deck's loop crossfades in under it.
  * - Beats (src/game/beats.ts) arrive before the frame's raw sim events: sfx.ts voices every named
  *   moment (pass words, chimes, stings, the bank roll and drop) and keeps the context the raw
  *   sounds read (the stomp streak, a near miss's side and grade). Grid pulses (the fuse on a big
@@ -97,7 +104,7 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  * - Filters automate at k-rate (once per 128 samples); a-rate biquad automation recomputes
  *   coefficients per sample and costs several times more.
  * - Levels (offline renders, sliders at 1; scripts/playtest/levels.js): a novice cruise about -25
- *   dBFS RMS (peaks near -12), its ambience alone -33, full arrangement about -21, style notes
+ *   dBFS RMS (peaks near -12), its ambience alone -36 (the wind now climbs all the way to 46 m/s), full arrangement about -21, style notes
  *   peak near -22, and the stress mix (everything at once, a reward burst every 0.25 s) peaks near
  *   -5 dBFS after the limiter.
  * - The soundscape (scape.ts, listen.ts, takes.ts): each run frame the world's read-only view
@@ -246,6 +253,14 @@ export class AudioEngine {
   private choirFromFrame = false;
   /** The groove lift in this frame's target (probe). */
   private groove = 0;
+  /** The descent's lift in this frame's drive, its stage and climb, and how far the band has opened
+   *  (probes). */
+  private build = 0;
+  private stage = 0;
+  private climax = 0;
+  private bandOpen = 0;
+  /** Over the line: the band has gone to the resolved deck. */
+  private finished = false;
   /** Seconds of run (real time, crashes excluded) since the run scene began. */
   private runT = 0;
   /** The soundscape's reading of the world (listen.ts), and the band's lift for a vista or an
@@ -314,6 +329,9 @@ export class AudioEngine {
       this.groove = 0;
       this.runT = 0;
       this.lift = 0;
+      this.build = this.climax = this.bandOpen = 0;
+      this.stage = 0;
+      this.finished = false;
       this.listener.reset();
     }
     this.choirs.reset();
@@ -325,6 +343,9 @@ export class AudioEngine {
       c.music.setChoir(0, ctx.currentTime);
       c.pulse.fuse = 0;
       c.pulse.duel = 0;
+      c.ambience.setRail(false);
+      c.music.setBuild(0, 0, 0);
+      c.scape.bandOpen = 0;
       c.music.setTarget(this.scene, this.mood, this.biome);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
@@ -407,7 +428,19 @@ export class AudioEngine {
         c.scape.update(v, frame, now, d);
         this.lift = crashed || countIn ? 0 : 0.12 * Math.max(v.vista, c.scape.openness);
       } else this.lift = 0;
-      c.music.setDrive(clamp01(this.intensity + this.accent + this.lift), clamp01(frame.danger), frame.comboMult || 1, snap);
+      // The descent: the band rises stage by stage to the line, whatever the rider is doing. A stomp
+      // streak or 'In the flow' opens it up on top (quick to open, slow to close).
+      const stages = w?.course?.stages;
+      if (stages && Number.isFinite(frame.z)) {
+        this.stage = stageIndex(frame.z as number, stages);
+        this.climax = climaxK(frame.z as number, stages);
+      }
+      this.build = crashed || countIn ? 0 : buildLift(this.stage, this.climax);
+      const open = crashed || countIn ? 0 : openUp(frame.flow, frame.streak);
+      this.bandOpen += (open - this.bandOpen) * (1 - Math.exp(-d / (open > this.bandOpen ? 0.5 : 2.4)));
+      c.music.setBuild(this.stage, this.climax, this.bandOpen);
+      c.scape.bandOpen = this.bandOpen;
+      c.music.setDrive(clamp01(this.intensity + this.accent + this.lift + this.build), clamp01(frame.danger), frame.comboMult || 1, snap);
       if (!crashed) this.runT += d;
       c.ambience.update(frame, now, this.avalanche, c.music.key(), clamp01(this.runT - SHOULDER_FROM_S));
       this.choir(frame, now, crashed, c);
@@ -468,6 +501,14 @@ export class AudioEngine {
           const tq = g ? g.t0 + Math.ceil((t - g.t0) / (g.dur * 4)) * g.dur * 4 : t;
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
+        if (b.type === 'grind') c.ambience.setRail(b.phase === 'start');
+        else if (b.type === 'tumble' && b.phase === 'start') c.ambience.setRail(false);
+        else if (b.type === 'finish') {
+          // Resolved: the band goes to the results deck's bright loop, under the finish cue.
+          this.finished = true;
+          c.ambience.setRail(false);
+          c.music.setTarget('results', this.mood, this.biome);
+        }
         if (b.type === 'unlockPop') c.graph.music.duck(0.75, now, 0.9, 0.5);
         // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
         // fourth and opens back to noise.
@@ -544,7 +585,7 @@ export class AudioEngine {
   /** Probe-only readout of the mix: the drive (smoothed intensity, its target and the accent), each
    *  music layer's presence, the music duck and both voice pools. */
   debugLevels(): Record<string, number> {
-    const out: Record<string, number> = { intensity: this.intensity, target: this.target, accent: this.accent, groove: this.groove, drive: clamp01(this.intensity + this.accent), choirFromFrame: this.choirFromFrame ? 1 : 0 };
+    const out: Record<string, number> = { intensity: this.intensity, target: this.target, accent: this.accent, groove: this.groove, drive: clamp01(this.intensity + this.accent), build: this.build, stage: this.stage, climax: this.climax, bandOpen: this.bandOpen, finished: this.finished ? 1 : 0, choirFromFrame: this.choirFromFrame ? 1 : 0 };
     const c = this.core;
     const ctx = this.ctx;
     out.running = ctx && ctx.state === 'running' ? 1 : 0;
@@ -652,6 +693,18 @@ export class AudioEngine {
         break;
       case 'km':
         amt = 0.06;
+        break;
+      case 'stage':
+        amt = 0.12;
+        break;
+      case 'flow':
+        if (b.phase === 'in') amt = 0.1;
+        break;
+      case 'duel':
+        if (b.phase === 'won') amt = 0.08;
+        break;
+      case 'grudgeSettled':
+        amt = 0.12;
         break;
       default:
         break;

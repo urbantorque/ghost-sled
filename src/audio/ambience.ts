@@ -134,6 +134,9 @@ export class Ambience {
   private readonly boostG: Smooth;
   private readonly hissF: Smooth;
   private readonly hissG: Smooth;
+  /** A rail under the runners: a high band of metal hiss, plugged in only while grinding. */
+  private readonly railG: Smooth;
+  private railOn = false;
   private readonly crunchRate: Smooth;
   private readonly crunchF: Smooth;
   private readonly crunchG: Smooth;
@@ -279,6 +282,10 @@ export class Ambience {
     this.hissF = P(hissBP.frequency, 0.015, true);
     this.hissG = G(hissG.gain, [[white, hissBP]]);
 
+    const railG = gain(0, surf);
+    const railBP = filter('bandpass', 4700, 2.4, railG);
+    this.railG = G(railG.gain, [[white, railBP]]);
+
     const crunchG = gain(0, surf);
     const crunchAM = gain(0, crunchG);
     const crunchGrains = loop(bank.grains);
@@ -375,6 +382,11 @@ export class Ambience {
     this.whineNote = -1;
   }
 
+  /** On a rail or off it: the metal hiss under the runners. */
+  setRail(on: boolean): void {
+    this.railOn = on;
+  }
+
   /** Flow snuffed by a bump: the wind tone bends down a fourth over 0.25 s, then opens back to noise. */
   snuff(now: number): void {
     this.snuffUntil = now + 0.3;
@@ -449,7 +461,8 @@ export class Ambience {
     // Wind: quiet below 8 m/s, roaring past 35. Airborne opens it up and thins it out. Earned flow
     // narrows the band and pulls it onto a note in the song's key, so the wind sings.
     const fk = surface && key ? clamp(f.flow ?? 0, 0, 1) * live : 0;
-    const w = smoothstep(6, 40, sp);
+    // (All of it climbs to the cap: the wind ran out at 40 m/s and the roar at 44.)
+    const w = smoothstep(6, 46, sp);
     const ex = surface ? clamp(this.exposure, 0, 1) : 0;
     const wNoise = (260 + sp * 26) * (air ? 1.3 : 1) * (1 + 0.25 * ex);
     const wq0 = air ? 0.45 : 0.7;
@@ -467,10 +480,10 @@ export class Ambience {
     this.windQ.to(wq, now, now < this.snuffUntil ? 0.05 : 0.2);
     const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk) * (1 + 0.5 * ex);
     this.windG.to(wind * bandComp(wf, wq, sr) * 0.5, now, 0.15 * slow);
-    this.roarG.to(0.42 * smoothstep(24, 44, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
+    this.roarG.to(0.48 * smoothstep(22, 46, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
     const whf = 1500 + sp * 38 + (air ? 900 : 0);
     this.whistleF.to(whf, now, 0.25);
-    this.whistleG.to((air && surface ? 0.15 : 0.03) * smoothstep(8, 40, sp) * live * bandComp(whf, 7, sr) * 0.5, now, air ? 0.12 : 0.3);
+    this.whistleG.to((air && surface ? 0.15 : 0.03) * smoothstep(8, 46, sp) * live * bandComp(whf, 7, sr) * 0.5, now, air ? 0.12 : 0.3);
     this.pocketF.to(f.drafting && live ? 700 : this.open, now, f.drafting ? 0.12 : 0.25);
 
     if (surface) {
@@ -492,12 +505,14 @@ export class Ambience {
     const st = ground ? 0.03 : 0.05;
     const hf = Math.min(1800 + sp * 90, 7500);
     this.hissF.to(hf, now, 0.15);
-    this.hissG.to(ground * 0.26 * smoothstep(2, 30, sp) * (f.onIce ? 0.5 : 1) * bandComp(hf, 0.6, sr) * 0.5, now, st);
+    // The runners' hiss is there from the start and goes on rising to the cap.
+    this.hissG.to(ground * (0.2 * smoothstep(2, 26, sp) + 0.13 * smoothstep(22, 46, sp)) * (f.onIce ? 0.5 : 1) * bandComp(hf, 0.6, sr) * 0.5, now, st);
+    this.railG.to(this.railOn && surface && !f.crashed ? 0.34 * (0.6 + 0.4 * s01) * bandComp(4700, 2.4, sr) * 0.5 : 0, now, 0.02);
     const carve = clamp(f.carve, 0, 1);
     this.crunchRate.to(0.55 + carve * 1.6 + sp / 30, now, 0.1);
     const cf = 900 + carve * 900 + sp * 15;
     this.crunchF.to(cf, now, 0.12);
-    const crunch = 0.07 * smoothstep(3, 25, sp) + 0.45 * carve * smoothstep(5, 30, sp);
+    const crunch = 0.07 * smoothstep(3, 34, sp) + 0.45 * carve * smoothstep(5, 40, sp);
     this.crunchG.to(ground * crunch * (f.onIce ? 0.2 : 1) * (f.drifting ? 0.6 : 1) * bandComp(cf, 0.9, sr) * 0.5, now, st);
 
     const slip = Math.min(Math.abs(f.slip || 0), 0.9);
