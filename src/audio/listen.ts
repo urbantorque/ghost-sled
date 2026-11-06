@@ -91,7 +91,7 @@ export const PLACES: Readonly<Record<string, PlaceSound>> = {
 };
 
 /** How open a section's banks are: a bowl or benches open to the sky, a gully shelters you. */
-const OPEN: Readonly<Record<SectionKind, number>> = { bowl: 1, benches: 0.8, cruise: 0.55, split: 0.5, switchbacks: 0.45, chute: 0.3, gully: 0.1 };
+const OPEN: Readonly<Record<SectionKind, number>> = { bowl: 1, benches: 0.8, cruise: 0.55, split: 0.5, switchbacks: 0.45, chute: 0.3, gully: 0.1, start: 0.6, ravine: 0.05, treerun: 0.2, lake: 1, fork: 0.4, street: 0.25, bridge: 0.9, tunnel: 0, terraces: 0.7, leap: 0.8, finish: 0.5 };
 
 /** The longest half length a long site is looked for at (a site may give its own up to this). */
 const LONG_MAX = 120;
