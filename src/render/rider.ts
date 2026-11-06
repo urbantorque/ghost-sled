@@ -2,6 +2,7 @@ import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, 
 import { FLOW_HEX } from '../game/beats';
 import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
+import { inRock, visualGround } from './ground';
 import { makeToonMaterial, shared, type ToonOptions } from './materials';
 import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
@@ -919,8 +920,18 @@ export class Rider {
     this.mat.uniforms.uRimK.value = 0.4 * (1 - 0.6 * fill);
     const step = (pos: Vector3, vel: Vector3, obj: Object3D, spin: Vector3, r: number) => {
       vel.y -= 14 * dt;
+      const fromX = pos.x;
+      const fromZ = pos.z;
       pos.addScaledVector(vel, dt);
-      const gy = course.ground(pos.x, -pos.z) + r;
+      // The sim's ground runs on under a wall's rock, so a wreck thrown that way came to rest inside it,
+      // where no lens could find it. It stops at the rock's face and drops to its foot.
+      if (inRock(course, pos.x, pos.y - r, -pos.z)) {
+        pos.x = fromX;
+        pos.z = fromZ;
+        vel.x *= -0.2;
+        vel.z *= -0.2;
+      }
+      const gy = visualGround(course, pos.x, -pos.z) + r;
       if (pos.y < gy) {
         pos.y = gy;
         if (vel.y < 0) vel.y = -vel.y * 0.35;
@@ -937,10 +948,16 @@ export class Rider {
       // Slide to a stop and settle onto the seat, facing right of the view and half round toward the lens.
       const damp = Math.exp(-dt * 4);
       c.bodyVel.set(c.bodyVel.x * damp, 0, c.bodyVel.z * damp);
+      const fromX = c.bodyPos.x;
+      const fromZ = c.bodyPos.z;
       c.bodyPos.x += c.bodyVel.x * dt + c.clearX * (k - c.clearK);
       c.bodyPos.z += c.bodyVel.z * dt + c.clearZ * (k - c.clearK);
+      if (inRock(course, c.bodyPos.x, c.bodyPos.y - 0.1, -c.bodyPos.z)) {
+        c.bodyPos.x = fromX;
+        c.bodyPos.z = fromZ;
+      }
       c.clearK = k;
-      const gy = course.ground(c.bodyPos.x, -c.bodyPos.z) + 0.1;
+      const gy = visualGround(course, c.bodyPos.x, -c.bodyPos.z) + 0.1;
       c.bodyPos.y = c.restY + (gy - c.restY) * k;
       this.crashBody.position.copy(c.bodyPos);
       // The snow under the wreck, which the scarf's tails settle onto (hanging free behind the seated
@@ -976,7 +993,7 @@ export class Rider {
       // uphill end), so it still reads as a sled upside down beside the rider: laid flat on the bank's
       // face it read as standing on its side up the slope.
       const steep = Math.hypot(this.slopeG.x, this.slopeG.z);
-      spot.y = course.ground(spot.x, -spot.z) + 0.3 + 0.3 * Math.min(1, steep);
+      spot.y = visualGround(course, spot.x, -spot.z) + 0.3 + 0.3 * Math.min(1, steep);
       c.sledPos.lerpVectors(c.sledFrom, spot, k);
       c.sledVel.set(0, 0, 0);
       this.crashSled.position.copy(c.sledPos);

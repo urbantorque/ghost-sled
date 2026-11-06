@@ -4,7 +4,8 @@ import { Mood } from '../src/sim/chaos';
 import { Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { getPalette } from '../src/render/palette';
-import { SPAN_MARGIN, Site, SitePlan, airCeiling, pieceCtx, siteAir, siteRail, siteToWorld } from '../src/render/landmarks';
+import { Listener, type ListenSources, newView } from '../src/audio/listen';
+import { SPAN_MARGIN, Site, SitePlan, airCeiling, pieceCtx, siteAir, siteRail, siteToWorld, underRoof } from '../src/render/landmarks';
 import { ENCLOSED, LONG, mergePiece, pieceFor } from '../src/render/landmarkKit';
 import { CHAIR_DROP, LINE_Z, liftLayout } from '../src/render/liftline';
 import { OverlookPlan } from '../src/render/overlook';
@@ -95,6 +96,35 @@ describe('the plan is the course', () => {
       });
     }
   }
+
+  it("the echo and the frame's dark read one truth: an enclosure rings and darkens only under a roof that stands", () => {
+    const heard = (c: Course, mood: Mood, sites: readonly Site[]): ListenSources => ({ course: c, biome: c.biome, mood, tier: 'high', sites, crowds: false, flocks: [], birds: null, lifts: false, lift: () => null, chimneys: [], chimneyCount: 0, vista: 0, dusk: 0, night: false });
+    let roofed = 0;
+    let open = 0;
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      for (const mood of MOODS) {
+        const list = flown(c, mood).planned;
+        const src = heard(c, mood, list);
+        const l = new Listener();
+        const v = newView();
+        for (const s of list) {
+          if (!ENCLOSED.has(s.kind)) continue;
+          for (const z of [s.z - s.len * 0.5, s.z, s.z + s.len * 0.5]) {
+            l.hear(src, c.centerX(z), z, 0, v);
+            const dark = underRoof(s, z);
+            expect(v.enclosed > 0).toBe(dark > 0);
+            if (mood === Mood.Comet) expect(dark).toBe(0);
+            if (dark > 0) roofed++;
+            else open++;
+          }
+        }
+      }
+    }
+    // Low gravity takes every roof off; a plain day has roofs to ride under.
+    expect(roofed).toBeGreaterThan(0);
+    expect(open).toBeGreaterThan(0);
+  });
 
   it('where things stand does not depend on the mood; how high they stand does', () => {
     for (const m of MOUNTAINS) {

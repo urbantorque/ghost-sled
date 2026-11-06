@@ -252,6 +252,16 @@
   cursor: default;
 }
 
+/* Ride with a link's mountain still finding its rivals (aria-disabled, so it keeps focus). */
+.gs-ride[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.gs-ride.gs-btn[aria-disabled='true']:active {
+  transform: none;
+}
+
 .gs-btn .gs-i {
   width: 1.2em;
   height: 1.2em;
@@ -320,7 +330,7 @@
 }
 
 @media (hover: hover) {
-  .gs-btn-primary:hover:not(:disabled) {
+  .gs-btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
     background: #ff6143;
   }
 

@@ -269,6 +269,14 @@ export function siteSpan(s: Site): [number, number] {
   return [s.z - s.len, s.z + s.len];
 }
 
+/** How far under a site's roof sim z is, 0 outside to 1 inside, eased over its mouths: always 0 for a
+ *  site with no roof over the run, or one whose roof could not clear this mood's air and has only its
+ *  walls. The frame's dark and strobe read this; the echo reads the same `clear` (audio/listen.ts). */
+export function underRoof(s: Pick<Site, 'kind' | 'clear' | 'z' | 'len'>, z: number): number {
+  if (!ENCLOSED.has(s.kind) || s.clear <= 0 || z < s.z - s.len - 10 || z > s.z + s.len + 10) return 0;
+  return smooth01((z - (s.z - s.len)) / 10) * (1 - smooth01((z - (s.z + s.len - 6)) / 6));
+}
+
 /** The highest air over sim z in [a, b] from a long site's profile (world y). */
 export function siteAir(s: Site, a: number, b: number): number {
   if (!s.air) return -Infinity;
@@ -1247,10 +1255,9 @@ export class SetPieces {
     let strobe = 0;
     let site: Site | null = null;
     for (const s of this.plan.planned) {
-      // (A site whose roof could not clear this mood's air has only its walls.)
-      if (!ENCLOSED.has(s.kind) || s.clear <= 0 || z < s.z - s.len - 10 || z > s.z + s.len + 10) continue;
+      const k = underRoof(s, z);
+      if (k <= 0) continue;
       const a = s.z - s.len;
-      const k = smooth01((z - a) / 10) * (1 - smooth01((z - (s.z + s.len - 6)) / 6));
       if (k > into) {
         into = k;
         site = s;

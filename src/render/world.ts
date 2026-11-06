@@ -13,7 +13,7 @@ import { ChaseCamera, crashPack } from './camera';
 import { liftLine } from './dressing';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
-import { standable } from './ground';
+import { standable, visualGround } from './ground';
 import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
 import { LakeMirror } from './lakemirror';
@@ -275,6 +275,7 @@ export class World {
     this.sloughs = new Sloughs(this.course, quality.tier, this.particles);
     this.moments = new Moments(this);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
+    this.cam.surface = (x, z) => visualGround(this.course, x, -z);
     const cor = { x: 0, hw: 0 };
     this.cam.corridor = (z) => {
       cor.x = this.course.centerX(-z);
