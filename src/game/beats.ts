@@ -88,6 +88,14 @@ export type Beat =
   | (B & { type: 'missionPop'; id: string; text: string; reward: number })
   | (B & { type: 'unlockPop'; id: string; name: string; biome: BiomeId })
   | (B & { type: 'crash'; cause: CrashCause; stake: number; orbitFrom: number | null })
+  /** A wipeout the run survives. left: wipeouts the run can still take. 'end': back on the line. */
+  | (B & { type: 'tumble'; phase: 'start' | 'end'; cause: CrashCause; left: number; x: number; z: number })
+  /** Turned back by something solid at the corridor's edge. */
+  | (B & { type: 'scrape'; side: -1 | 1; speed: number })
+  /** A stage line crossed. The finish crosses the last one, then 'finish' follows. */
+  | (B & { type: 'stage'; index: number; name: string; last: boolean })
+  | (B & { type: 'finish'; bonus: number; seconds: number })
+  | (B & { type: 'grind'; phase: 'start' | 'end'; id: number })
   | (B & { type: 'km'; km: number })
   | (B & { type: 'ghostTrick'; ghost: GhostRef; quality: 'clean' | 'perfect' | 'sketchy'; word: string | null; x: number; y: number; z: number })
   | (B & { type: 'stompTick'; step: number; open: boolean })
@@ -98,7 +106,7 @@ export type BeatType = Beat['type'];
 export type BeatOf<T extends BeatType> = Extract<Beat, { type: T }>;
 
 /** Beat types that count as a named moment in telemetry (pass/passedBy only when !muted). */
-export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'km', 'graveyard']);
+export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'tumble', 'stage', 'finish', 'km', 'graveyard']);
 
 // ---------- continuous state, computed before any consumer runs this frame
 export interface Feel {

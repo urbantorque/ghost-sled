@@ -935,6 +935,23 @@ export class Director {
           this.crashT = 0;
           this.push({ type: 'crash', tick: p.tick, cause: e.cause, stake: lostStake, orbitFrom: this.orbitFrom(f, sim) }, sim);
           break;
+        case 'tumble':
+          this.push({ type: 'tumble', tick: p.tick, phase: e.phase, cause: e.cause, left: e.left, x: sim.s.x, z: sim.s.z }, sim);
+          break;
+        case 'scrape':
+          this.push({ type: 'scrape', tick: p.tick, side: e.side, speed: e.speed }, sim);
+          break;
+        case 'stage': {
+          const st = sim.course.stages;
+          this.push({ type: 'stage', tick: p.tick, index: e.index, name: st[e.index].name, last: e.index === st.length - 1 }, sim);
+          break;
+        }
+        case 'finish':
+          this.push({ type: 'finish', tick: p.tick, bonus: e.bonus, seconds: e.tick / 60 }, sim);
+          break;
+        case 'grind':
+          this.push({ type: 'grind', tick: p.tick, phase: e.phase, id: e.id }, sim);
+          break;
         default:
           break;
       }
