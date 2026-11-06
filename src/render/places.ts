@@ -335,6 +335,15 @@ export function viaductPiece(ctx: SiteCtx): Piece {
 
 // ---------------------------------------------------------------- the finish town
 
+/** The checker painted across the line: its rows, a check's width and its length down the run (long, as
+ *  road paint is: the lens sees the snow at a couple of degrees, and that foreshortens it square), the
+ *  cells a check's side is cut into and how far the paint lies over the snow. */
+export const LINE_ROWS = 4;
+const LINE_CHECK = 3;
+export const LINE_DEPTH = 4.5;
+const LINE_CELLS = 3;
+export const LINE_LIFT = 0.14;
+
 /** A hot-air balloon tethered over the town, visible from the last leap: where the run is going. */
 function balloon(x: number, y: number, z: number, g: number, cols: Color[]): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
@@ -463,6 +472,32 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   return f.out(parts);
 }
 
+/** The line's paint: rows of big checks in both colours, barrier to barrier, so it never leans on the
+ *  snow to read and stays a checker from the lens at speed: three rows a metre deep were a broken dashed
+ *  line from 30 m. Each check is a few cells, so it lies on the ground up the banks, a hand over the
+ *  snow, where no tier's coarser terrain comes up through it. */
+function finishLine(f: Sub, hw: number): BufferGeometry[] {
+  const n = Math.round((2 * hw) / LINE_CHECK);
+  const w = (2 * hw) / n;
+  const y = (u: number, v: number) => f.gy(u, v) + LINE_LIFT;
+  const line: BufferGeometry[] = [];
+  for (let r = 0; r < LINE_ROWS; r++) {
+    for (let i = 0; i < n; i++) {
+      const col = (i + r) & 1 ? CREAM : INK;
+      for (let a = 0; a < LINE_CELLS; a++) {
+        const u0 = -hw + (i + a / LINE_CELLS) * w;
+        const u1 = -hw + (i + (a + 1) / LINE_CELLS) * w;
+        for (let b = 0; b < LINE_CELLS; b++) {
+          const v0 = (r - LINE_ROWS / 2 + b / LINE_CELLS) * LINE_DEPTH;
+          const v1 = (r - LINE_ROWS / 2 + (b + 1) / LINE_CELLS) * LINE_DEPTH;
+          line.push(quad([u0, y(u0, v0), v0], [u0, y(u0, v1), v1], [u1, y(u1, v1), v1], [u1, y(u1, v0), v0], col));
+        }
+      }
+    }
+  }
+  return line;
+}
+
 /** A grandstand down one bank from dz a to b: rows of seats stepping up the bank, a near crowd that
  *  moves and far rows that stand still, masts and banners along its back. */
 function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: number, spots: Spot[], still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }>, glows: Glow[]): { seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> } {
@@ -578,22 +613,7 @@ export function finishPiece(ctx: SiteCtx): Piece {
     const parts = finishArch(ctx, rail, F);
     const c = rail.at(F, 0, 0);
     const f = new Sub(ctx, c.x, c.z, c.yaw);
-    const hw = c.hw + 0.4;
-    const CH = 1.2;
-    const n = Math.round((2 * hw) / CH);
-    const gy = (u: number, v: number) => f.gy(u, v) + 0.15;
-    const line: BufferGeometry[] = [];
-    for (let r = 0; r < 3; r++) {
-      for (let i = 0; i < n; i++) {
-        if ((i + r) & 1) continue;
-        const u0 = -hw + i * CH;
-        const u1 = u0 + CH;
-        const v0 = -CH * 1.5 + r * CH;
-        const v1 = v0 + CH;
-        line.push(quad([u0, gy(u0, v0), v0], [u0, gy(u0, v1), v1], [u1, gy(u1, v1), v1], [u1, gy(u1, v0), v0], INK));
-      }
-    }
-    return [...parts, ...f.out(line)];
+    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F)))];
   });
   // The square's great buildings, on the crests behind the stands.
   for (const s of [-1, 1]) {

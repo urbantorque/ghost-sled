@@ -1121,6 +1121,8 @@ export class SetPieces {
     if (!b) b = { site, piece: pieceFor(site.kind, this.ctxFor(site)), made: [], step: 0 };
     while (b.step < b.piece.steps.length) b.made.push(...b.piece.steps[b.step++]());
     this.queue = this.queue.filter((q) => q !== b);
+    // (A slot may already hold this site, shown empty: the idle path redraws them for the same reason.)
+    this.shown = this.shown.map(() => null);
     return this.finish(b);
   }
 

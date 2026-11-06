@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { Mood } from '../src/sim/chaos';
-import { Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
+import { CHUNK_LEN, Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { getPalette } from '../src/render/palette';
 import { SPAN_MARGIN, Site, SitePlan, airCeiling, pieceCtx, siteAir, siteRail, siteToWorld } from '../src/render/landmarks';
 import { ENCLOSED, LONG, mergePiece, pieceFor } from '../src/render/landmarkKit';
 import { CHAIR_DROP, LINE_Z, liftLayout } from '../src/render/liftline';
+import { LINE_DEPTH, LINE_LIFT, LINE_ROWS } from '../src/render/places';
+import { buildTerrainGeometry } from '../src/render/terrain';
 import { OverlookPlan } from '../src/render/overlook';
 
 // The course's sections are the plan: a street is a town, a tunnel an enclosure, a bridge a bridge, and
@@ -193,7 +195,7 @@ describe('what stands near the run keeps out of it', () => {
               // Past the run-out a sled never comes: the hall that closes the view stands there.
               if (sz > end) continue;
               // The painted line lies on the snow.
-              if (s.kind === 'finish' && Math.abs(sz - c.finishZ) < 3 && w.y - c.ground(w.x, sz) < 0.2) continue;
+              if (s.kind === 'finish' && Math.abs(sz - c.finishZ) < (LINE_ROWS * LINE_DEPTH) / 2 + 1 && w.y - c.ground(w.x, sz) < 0.2) continue;
               if (s.len > 0) {
                 // A long site's overhead parts: over the air in the bin they hang in (and its
                 // neighbours), and never low over the snow where nothing flies.
@@ -242,6 +244,36 @@ describe('what stands near the run keeps out of it', () => {
       }
     });
   }
+});
+
+describe('the finish line', () => {
+  it('lies over the snow on every tier: no terrain comes up through the paint', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const F = c.finishZ;
+      for (const detail of [{ inner: 1.6, row: 3, reach: 60 }, { inner: 1.1, row: 2.2, reach: 90 }, { inner: 0.85, row: 2, reach: 110 }]) {
+        let over = -Infinity;
+        for (let k = Math.floor((F - 12) / CHUNK_LEN); k <= Math.floor((F + 12) / CHUNK_LEN); k++) {
+          const t = buildTerrainGeometry(c, k, detail);
+          const p = t.getAttribute('position');
+          const idx = t.getIndex()!;
+          // Each triangle's corners and the middles of its sides: where a coarse mesh stands off the ground.
+          for (let i = 0; i + 2 < idx.count; i += 3) {
+            const v = [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)];
+            for (const [a, b] of [[0, 0], [1, 1], [2, 2], [0, 1], [1, 2], [2, 0]]) {
+              const x = (p.getX(v[a]) + p.getX(v[b])) / 2;
+              const y = (p.getY(v[a]) + p.getY(v[b])) / 2;
+              const z = -(p.getZ(v[a]) + p.getZ(v[b])) / 2;
+              if (Math.abs(z - F) > (LINE_ROWS * LINE_DEPTH) / 2 || c.edgeExcess(x, z) > c.edgeLimit(z)) continue;
+              over = Math.max(over, y - c.ground(x, z));
+            }
+          }
+          t.dispose();
+        }
+        expect(over, `${m.name} row ${detail.row}`).toBeLessThan(LINE_LIFT - 0.03);
+      }
+    }
+  });
 });
 
 describe('the budget', () => {
