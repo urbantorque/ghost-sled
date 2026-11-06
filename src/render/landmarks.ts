@@ -112,7 +112,7 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
   blossom: ['toriirow', 'gallery'],
 };
 /** How likely a section is to carry a span: narrow ones mostly, wide ones mostly a bank piece. */
-const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3 };
+const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, start: 0, ravine: 0, treerun: 0, lake: 0, fork: 0, street: 0, bridge: 0, tunnel: 0, terraces: 0, leap: 0, finish: 0 };
 /** Kinds that gather a crowd on the banks (both banks for spans, mostly their own side otherwise). */
 const CROWDED: ReadonlySet<Kind> = new Set<Kind>(['gate', 'torii', 'basalt', 'bridge', 'hut', 'jump', 'pagoda', 'village']);
 

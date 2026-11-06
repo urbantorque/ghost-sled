@@ -853,3 +853,66 @@ Every place where I replaced, extended or interpreted the brief, and why.
 124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
     Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
     Night, a third as dense and paler; Glass Ice gets diamond dust there.
+
+## Made in the wow pass
+
+125. **The descent is written, not dealt.** A course was a deck of sections drawn at random for as long
+    as a run lasted. It is now a fixed 4.5 km in three stages, each mountain's written as three acts of
+    beats (`SCRIPTS`). The seed picks alternatives, shuffles beats inside a block and draws lengths inside
+    each kind's range, so every course keeps its planned rhythm and no two dailies match; a daily also
+    deals its biome's three acts in the seed's order. Beats that overflow a stage move to the next, and
+    a stage that falls short takes the next stage's first beat or a filler, so a section boundary always
+    lands on a stage line (over 200 dailies). A descent is retried until it meets `legalPair` and holds
+    its signature kinds; the authored order always does. The first minute is the same everywhere: the
+    0.5 start ramp, a wide run-in with a swinging gift line, a small kicker at about 300 m, a first leap
+    at 590 to 670 m, a first place by 900. `rampDistance` is now the finish.
+126. **A section carries its own numbers, and the line blends in metres.** Sections now hold their own
+    shape and blend, so a ravine can come in over 90 m and a body can be measured from z0 + blend. `pin`
+    says how much of the plain corridor a section replaces, which makes authored widths exact and lets
+    them pass the old hs + 3 cap (only the lake needs to). `split` and `span` stayed shares, but the safe
+    line reads them as metres (`shift`, `reach`) worked out once per section: as shares of a width that
+    was itself blending they multiplied into a bend at the blend's end, 0.0239 against the 0.018 limit.
+    The limit is unchanged, and steep ground now has a tighter one of 0.0135.
+127. **A ledge is one thing, in baseY.** A leap's cliff, a terrace's step and a lake's outlet are the
+    same piece: a brow, a face and what the ground does next. The ground stays down because each section
+    carries the metres fallen above it. `terrain.ts` needed no change: a ledge adds a Drop of depth 0, which
+    costs `ground` nothing and asks the terrain for its fine rows at the lip. (`landmarks.ts` and the bot
+    read that drop too, and both are right to: it is a drop.)
+128. **A leap's landing cannot be soft, so it is steep.** Nothing lands softer than a free fall off the
+    cliff, sqrt(2 g h): 15 m/s off 12 m, 22 off 25, whatever the shape below. What a shape can do is keep
+    the ground falling under the sled and hold every speed near that floor. A lip slope of 0.27 and a face
+    that steepens from about 0.3 to 0.8 over 100 m does: at 18 to 44 m/s every landing is on 0.35 to 0.8
+    of slope, at no worse than that floor plus 1 m/s. It suits the sim, which pays speed for a landing on a
+    falling slope. It is expensive in height, about 65 m a leap and 200 m a descent, and in length: a
+    leap's section runs 220 m past the lip, the 44 m/s flight coming down at about 175 m. Cliffs start at
+    13.5 m because 12.6 m gave 1.98 s at 28 m/s on the real sim, and the promise is 2.
+129. **A flight needs a straight line under it.** A flight is straight, and a line bending by only 0.0005
+    is 9 m away by the end of 190 m. Leaps and terraces freeze the bend's phase and drop the line's own
+    wander, so a sled comes down on the line (within 1.5 m at every speed). An on-line kicker only stands
+    where the line holds within 3.6 m of its flight. Landing zones stay clear 40 m past the section, since
+    a sled that spun drifts about 10 m in the air and lands wide at full speed.
+130. **Kickers fly by what they are for.** A ramp's lift is speed times face slope, so at the new cruise
+    the faces were cut from their height. Each face is now solved for the flight it should give at 30 m/s,
+    over the real ground (ripple at the lip alone moves a flight by 9 m) and a tenth long, since a real
+    sled sheds speed on the face. On the sim they land 40 to 66 m out, and landing boxes run 1.5 times the
+    flight. Most riders never jumped because every kicker stood off the line, so the script now puts them
+    on it where the landing runs clear, ravines and fork channels included. Moguls and kickers keep apart:
+    a field that landed on a kicker threw the sled before the lip, and flew it 77 m.
+131. **The fork's risk route is ice.** Two channels 9 m either side of a 3.2 m ridge. `altX` is the line
+    `safeX` did not take; it has an ice strip with drag 0.25, gold gifts and two or three obstacles, no
+    promised lane, and saves 1.6 to 1.9 s from 30 m/s (by the sim's drag, on the four mountains). `backX`
+    names the channel a sled belongs to and equals `centerX` outside a fork. Steeper troughs were
+    the other idea, but a trough has to climb back out to rejoin and pays nothing.
+132. **Places keep the world out, and open ground gets it.** Ravines have no obstacles: their walls are
+    the hazard, and a rock at a wall's foot kills the sled the wall has just turned back. What used to
+    spread over a whole course now gathers on the quarter that is open. Vents also take ravines and forks,
+    and every bowl has an authored mogul field. Scattered drops all but went: a dip with 120 m of recovery
+    rarely fits, and the ledges have taken over their job. Ember holds only a couple of off-line kickers,
+    its open ground being scarce, and its 21 vents stand in for them.
+133. **Rails go where a rider is.** Along streets and tree runs and by lakes, 3.4 to 4.6 m off the line.
+    Frostfang and Ember have too little of that, so a stage short of them takes open sections next and
+    then bridges, ravines, tunnels and forks: a bridge's rail is a grindable parapet. Rails are never
+    colliders, so they only keep obstacles out of their own footprint.
+134. **`shapeAt` has two entries.** `ground()` now reads the shape on every call, and the terrain's rows
+    alternate z and z + 0.25, which missed a one-entry memo every time: `ground()` cost 55% more.
+    Two entries, and a body that needs no copying, bring it back level with the old cost.
