@@ -23,6 +23,8 @@ async (page) => {
   for (const p of cfg.probes) {
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
     const q = `?platform=mock&debug&fps&autoride=1&m=${p.m ?? 0}&tier=${p.tier}` + (p.mood ? `&mood=${p.mood}` : '') + (p.event ? `&event=${p.event}` : '');
+    // A save from an earlier probe brings extra ghosts along, which reads as a slower build.
+    await page.evaluate(() => { try { localStorage.clear(); } catch {} }).catch(() => {});
     await page.goto(BASE + q);
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run', null, { timeout: 30000 });
     await page.evaluate(() => {
@@ -62,6 +64,7 @@ async (page) => {
     const samples = [];
     const t0 = Date.now();
     let info = null;
+    let peak = { calls: 0, tris: 0 };
     while (Date.now() - t0 < p.seconds * 1000) {
       const d = await page.evaluate(() => {
         const a = window.__gs;
@@ -74,6 +77,7 @@ async (page) => {
       });
       if (d.done) break;
       if (!info && Date.now() - t0 > 3000) info = { calls: d.calls, tris: d.tris };
+      if (Date.now() - t0 > 3000) peak = { calls: Math.max(peak.calls, d.calls), tris: Math.max(peak.tris, d.tris) };
       if (!p.chaseOnly || d.chase) samples.push(d);
       await page.waitForTimeout(1000);
     }
@@ -92,6 +96,8 @@ async (page) => {
       tier: samples.length ? samples[samples.length - 1].stats.tier : null,
       calls: info?.calls ?? null,
       tris: info?.tris ?? null,
+      callsPeak: peak.calls,
+      trisPeak: peak.tris,
     });
   }
   return JSON.stringify(out);

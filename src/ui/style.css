@@ -1499,6 +1499,7 @@
   background: var(--text);
   transform: scaleX(0);
   transform-origin: left center;
+  will-change: transform;
 }
 
 .gs-wipe {
@@ -1766,6 +1767,8 @@
   color: var(--gift);
   font-size: 1.05em;
   font-weight: 900;
+  /* It bumps for most of a good run: a layer of its own, rather than a new one for every gift. */
+  will-change: transform;
 }
 
 .gs-gifts .gs-i {
@@ -2450,6 +2453,8 @@
   border-radius: inherit;
   background: var(--text);
   transform-origin: left center;
+  /* It moves on most frames of a combo: on its own layer that costs the page no repaint. */
+  will-change: transform;
 }
 
 .gs-combo.is-low .gs-combo-bar {

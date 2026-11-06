@@ -467,6 +467,11 @@ export function sideWord(f: Pick<Flash, 'type' | 'name' | 'raw' | 'k' | 'tail' |
   return { text, tone: 'normal', key: newsKey(f.raw, text), name: f.name || undefined };
 }
 
+/** How often the running figures may change. A changed digit costs the page a style, layout and paint,
+ *  and at 30 m/s the metres alone change on every second frame. Landing together on a 20 Hz beat leaves
+ *  two frames in three with no page work at all, and nobody reads a units digit any faster: decision 205. */
+const FIGURES_MS = 48;
+
 export class Hud {
   readonly layer: Layer;
   readonly el: HTMLElement;
@@ -711,6 +716,8 @@ export class Hud {
   private lastChev = -1;
   private lastDanger = -1;
   private lastScoreLen = 0;
+  /** When the running figures last changed (FIGURES_MS). */
+  private figuresAt = -Infinity;
   private lastGapLen = 0;
   private revealing = false;
   private moodWanted = false;
@@ -1689,14 +1696,19 @@ export class Hud {
     let moved = false;
     // A cash-in still on its way holds its points back (holdScore): the figure lands in the score.
     this.lastScore = m.score;
-    this.score.num(shownScore(m.score, this.scoreHold.held));
-    const sLen = this.scoreEl.textContent?.length ?? 0;
-    if (sLen !== this.lastScoreLen) {
-      this.lastScoreLen = sLen;
-      moved = true;
+    const now = performance.now();
+    const beat = now - this.figuresAt >= FIGURES_MS;
+    if (beat) {
+      this.figuresAt = now;
+      this.score.num(shownScore(m.score, this.scoreHold.held));
+      const sLen = this.scoreEl.textContent?.length ?? 0;
+      if (sLen !== this.lastScoreLen) {
+        this.lastScoreLen = sLen;
+        moved = true;
+      }
+      this.dist.num(m.distance, NBSP + 'm');
+      this.clockT.str(clock(m.clock));
     }
-    this.dist.num(m.distance, NBSP + 'm');
-    this.clockT.str(clock(m.clock));
     if (m.stage) this.stageLine(m.stage);
     if (this.wipeOn.set(m.wipeouts !== null)) moved = true;
     if (m.wipeouts) this.wipePips(m.wipeouts);
@@ -1719,14 +1731,13 @@ export class Hud {
     // place only while a reveal is about to collapse into it).
     if (this.moodGone.set(!this.moodWanted)) moved = true;
 
-    if (this.gifts.num(m.gifts)) {
+    if (beat && this.gifts.num(m.gifts)) {
       if (this.lastGifts >= 0 && m.gifts > this.lastGifts) bump(this.giftsEl, 1.1, 240);
       this.lastGifts = m.gifts;
     }
 
     // Race position. A new rank must hold for a moment before it shows (ghosts bunched at the start
     // swap places every frame), then it ticks: a gain rolls the new place up in mint, a loss drops it in.
-    const now = performance.now();
     // At a run's start the pill waits for the field's count to settle, so its first numbers are the
     // field's ("6th of 6"), never "1st of 2", "of 4", "of 5", "of 6" as each track comes ready.
     const field = m.place.of > 1;
