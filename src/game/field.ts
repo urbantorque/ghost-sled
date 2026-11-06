@@ -70,6 +70,8 @@ export interface FieldPick {
   nemesis?: boolean;
   /** Your rival for the run: one rider, named at the start and on every stage line. */
   rival?: boolean;
+  /** It reads your pace as you ride: a very first run on a bundled mountain (pacer.ts). */
+  reads?: boolean;
 }
 
 /** The anchor's bounds (seconds). */
@@ -344,6 +346,8 @@ export function pickField(i: FieldInput): FieldPick[] {
   if (friend) out.push({ name: friend.name, kind: 'friend', score: friend.score, record: friend.record, distance: friendRec!.distance, time: friendRec!.time });
   const rival = rivalOf(out, a, promised?.record ?? null);
   if (rival) rival.rival = true;
+  // Only here: the Daily and the Cup share their field, and a named rider is a promise.
+  if (first && i.kind === 'pool') for (const p of out) if (p.kind === 'pool' && p.role && p.record !== promised?.record) p.reads = true;
   return out;
 }
 

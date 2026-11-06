@@ -110,6 +110,23 @@ describe('the field at every skill', () => {
     });
   }
 
+  it('lets the riders of a very first run read you, on a bundled mountain only', () => {
+    const first = pickField(input(POOL, { anchor: 0 }));
+    expect(first.length).toBeGreaterThan(0);
+    for (const p of first) expect(p.reads).toBe(true);
+    // A second run rides the riders as they are, and a Daily or a Cup shares its field with everyone.
+    for (const p of pickField(input(POOL, { anchor: 150 }))) expect(p.reads).toBeUndefined();
+    for (const p of pickField(input(POOL, { anchor: 0, kind: 'daily' }))) expect(p.reads).toBeUndefined();
+  });
+
+  it('never lets a promised rider read you', () => {
+    const friend = { name: 'Fr', score: 9, record: rec(4500, 9000) };
+    const out = pickField(input(POOL, { anchor: 0, friend }));
+    const f = out.find((p) => p.kind === 'friend');
+    expect(f).toBeDefined();
+    expect(f?.reads).toBeUndefined();
+  });
+
   it('rides where most riders land with no runs, with beginners far behind', () => {
     const out = pickField(input(POOL, { anchor: 0 }));
     const pack = out.filter((p) => p.role === 'pack').map((p) => p.time!);

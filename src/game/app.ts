@@ -696,6 +696,7 @@ export class App {
       if (g.role) e.role = g.role;
       if (g.nemesis) e.nemesis = true;
       if (g.rival) e.rival = true;
+      if (g.reads) e.reads = true;
       return e;
     });
   }
@@ -1974,6 +1975,7 @@ export class App {
     const tick = riding ? sim.tick - 1 + alpha : sim.tick + this.crashTicks;
 
     // Ghost poses and race events.
+    this.ghosts.pace(tick, sim.s.z, this.phase === 'run' && !sim.finished && !sim.s.crashed);
     this.ghostPoses.clear();
     for (const t of this.ghosts.tracks) {
       const p = emptyPose();

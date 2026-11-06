@@ -1,7 +1,8 @@
 import { paceOf } from './slowriders';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
-import type { Standing } from './standing';
+import { AIR_RATE, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
+import { FINISH_Z, type Standing } from './standing';
 import {
   F_AIRPITCH,
   F_AIRYAW,
@@ -38,6 +39,24 @@ export interface GhostEntry {
   nemesis?: boolean;
   /** Your rival for the run (field.ts rivalOf). */
   rival?: boolean;
+  /** It reads your pace as you ride (pacer.ts). */
+  reads?: boolean;
+}
+
+/** A rider reading you: its clock from here on, in its own ticks. */
+export interface Warp {
+  from: number;
+  at: number;
+  rate: number;
+}
+
+/** What the worker read off a run, in the run's own ticks: a rider reading you moves on from these. */
+interface OwnRun {
+  ticks: number;
+  crashTick: number;
+  finishTick: number;
+  stageTicks: number[];
+  tricks: Int32Array;
 }
 
 export interface GhostTrack {
@@ -50,6 +69,13 @@ export interface GhostTrack {
   swing: number;
   /** The played tick its surges end on: its finish, or the end of its run. */
   swingEnd: number;
+  /** A slow rider's race tick at each sample, flying near true speed (pacer.ts slowMap), else null. */
+  map: Float32Array | null;
+  /** Set once a rider reading you has been read: its clock from then on. */
+  warp: Warp | null;
+  /** The rate a rider reading you rides at, under the air's. */
+  rate: number;
+  own: OwnRun | null;
   samples: number;
   ticks: number;
   crashTick: number;
@@ -106,15 +132,19 @@ let nextReq = 1;
 const PACK_SWING = 0.018;
 const SWINGS = 3;
 
+type Clocked = Pick<GhostTrack, 'pace' | 'swing' | 'swingEnd'> & Partial<Pick<GhostTrack, 'map' | 'warp'>>;
+
 /** A track's place in its own run at a tick of this race. */
-export function clock(t: Pick<GhostTrack, 'pace' | 'swing' | 'swingEnd'>, tick: number): number {
+export function clock(t: Clocked, tick: number): number {
+  if (t.warp) return t.warp.at + (tick - t.warp.from) * t.warp.rate;
   const played = t.swing !== 0 && tick > 0 && tick < t.swingEnd ? tick + t.swing * Math.sin((Math.PI * SWINGS * tick) / t.swingEnd) : tick;
-  return played * t.pace;
+  return t.map ? ownOnMap(t.map, played, t.pace) : played * t.pace;
 }
 
 /** The tick of this race a track reaches a place in its own run: the inverse of clock. */
-export function unclock(t: Pick<GhostTrack, 'pace' | 'swing' | 'swingEnd'>, at: number): number {
-  const flat = at / t.pace;
+export function unclock(t: Clocked, at: number): number {
+  if (t.warp) return Math.round(t.warp.from + (at - t.warp.at) / t.warp.rate);
+  const flat = t.map ? playedOnMap(t.map, at, t.pace) : at / t.pace;
   if (t.swing === 0) return Math.round(flat);
   const reach = Math.abs(t.swing) + 2;
   let lo = flat - reach;
@@ -132,6 +162,12 @@ export class GhostManager {
   private worker: Worker | null = null;
   private poolWaiters = new Map<number, (g: PoolGhostData[]) => void>();
   private generation = 0;
+  /** Reading your pace (pacer.ts): the next reading's tick, your place and speed at the last one. */
+  private paceAt = PACE_FROM;
+  private paceZ = 0;
+  private paceTick = 0;
+  private paceV = 0;
+  private readers = 0;
   onReady: (() => void) | null = null;
 
   constructor() {
@@ -154,6 +190,7 @@ export class GhostManager {
       t.frames = m.frames;
       t.samples = m.samples;
       const end = m.finishTick >= 0 ? m.finishTick : m.ticks;
+      t.map = slowMap(m.frames, m.samples, t.pace, end);
       t.swingEnd = Math.round(end / t.pace);
       if (t.entry.kind === 'pool' && t.entry.role) t.swing = PACK_SWING * t.swingEnd * (t.entry.id % 2 === 0 ? 1 : -1);
       const at = (tick: number): number => (tick < 0 ? tick : unclock(t, tick));
@@ -163,6 +200,7 @@ export class GhostManager {
       t.stageTicks = m.stageTicks.map(at);
       t.distance = m.distance;
       t.tricks = t.pace === 1 && t.swing === 0 ? m.tricks : m.tricks.map((v, i) => (i % 4 === 0 ? at(v) : v));
+      if (t.entry.reads) t.own = { ticks: m.ticks, crashTick: m.crashTick, finishTick: m.finishTick, stageTicks: m.stageTicks, tricks: m.tricks };
       t.ready = m.samples > 0;
       if (this.tracks.every((k) => k.ready)) this.onReady?.();
     } else if (m.type === 'pool') {
@@ -188,6 +226,10 @@ export class GhostManager {
       pace: paceOf(e.record),
       swing: 0,
       swingEnd: 0,
+      map: null,
+      warp: null,
+      rate: paceOf(e.record),
+      own: null,
       ready: false,
       frames: null,
       samples: 0,
@@ -202,6 +244,11 @@ export class GhostManager {
       passedTimes: 0,
       crashSeen: false,
     }));
+    this.paceAt = PACE_FROM;
+    this.paceZ = 0;
+    this.paceTick = 0;
+    this.paceV = 0;
+    this.readers = this.tracks.filter((t) => t.entry.reads).length;
     const msg: WorkerIn = { type: 'replay', jobs: this.tracks.map((t) => ({ id: t.entry.id, record: t.entry.record })) };
     if (this.worker && this.tracks.length) this.worker.postMessage(msg);
   }
@@ -272,7 +319,7 @@ export class GhostManager {
       i0 = last;
       a = 0;
       out.done = true;
-      out.sinceDone = (tick - ((last + 1) * SAMPLE_EVERY) / t.pace) / 60;
+      out.sinceDone = (tick - unclock(t, (last + 1) * SAMPLE_EVERY)) / 60;
     }
     const i1 = Math.min(last, i0 + 1);
     const o0 = i0 * FRAME_STRIDE;
@@ -288,7 +335,7 @@ export class GhostManager {
     out.airYaw = sameAir ? l(F_AIRYAW) : f[o1 + F_AIRYAW];
     out.airPitch = sameAir ? l(F_AIRPITCH) : f[o1 + F_AIRPITCH];
     out.lean = l(F_LEAN);
-    out.speed = l(F_SPEED) * t.pace;
+    out.speed = l(F_SPEED) * (t.warp ? t.warp.rate : t.map ? SAMPLE_EVERY / (t.map[i1 + 1] - t.map[i1]) : t.pace);
     out.carve = l(F_CARVE);
     out.grounded = (flags1 & FLAG_GROUNDED) !== 0;
     out.drifting = (flags1 & FLAG_DRIFTING) !== 0;
@@ -302,6 +349,57 @@ export class GhostManager {
     if (i < 0) i = 0;
     if (i >= t.samples) i = t.samples - 1;
     return t.frames[i * FRAME_STRIDE + F_Z];
+  }
+
+  /** A first run's riders read you (pacer.ts). Cheap and rare: once a quarter of a second, and never
+   *  with no rider reading. riding is false once your run is over: they ride on at the rate they had. */
+  pace(tick: number, z: number, riding: boolean): void {
+    if (this.readers === 0 || tick < this.paceAt) return;
+    this.paceAt = tick + PACE_EVERY;
+    this.paceV = easeSpeed(this.paceV, z, this.paceZ, tick - this.paceTick);
+    this.paceZ = z;
+    this.paceTick = tick;
+    const reads = riding && reading(z, FINISH_Z);
+    const aim = z + (this.paceV * PACE_AIM) / 60;
+    let i = 0;
+    for (const t of this.tracks) {
+      if (!t.entry.reads) continue;
+      const k = i++;
+      if (!t.ready || !t.frames || !t.own) continue;
+      const own = clock(t, tick);
+      const end = t.own.finishTick >= 0 ? t.own.finishTick : t.own.ticks;
+      if (own >= end) continue;
+      const s = Math.max(0, Math.min(t.samples - 1, Math.round(own / SAMPLE_EVERY - 1)));
+      if (reads) t.rate = paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z), s) - own) / PACE_AIM);
+      const flying = (t.frames[s * FRAME_STRIDE + F_FLAGS] & FLAG_GROUNDED) === 0;
+      t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, AIR_RATE) : t.rate };
+      t.swing = 0;
+      this.retime(t, t.own, t.warp);
+    }
+  }
+
+  /** The tick of its own run a rider reaches z, looking on from sample s. */
+  private ownAt(t: GhostTrack, z: number, s: number): number {
+    const f = t.frames!;
+    let lo = s;
+    let hi = t.samples - 1;
+    while (hi - lo > 1) {
+      const m = (lo + hi) >> 1;
+      if (f[m * FRAME_STRIDE + F_Z] < z) lo = m;
+      else hi = m;
+    }
+    return (hi + 1) * SAMPLE_EVERY;
+  }
+
+  /** What still lies ahead of a rider reading you moves with its clock. What it has done stands. */
+  private retime(t: GhostTrack, o: OwnRun, w: Warp): void {
+    const ahead = (v: number): number => Math.round(w.from + (v - w.at) / w.rate);
+    if (o.ticks > w.at) t.ticks = ahead(o.ticks);
+    if (o.crashTick > w.at) t.crashTick = ahead(o.crashTick);
+    if (o.finishTick > w.at) t.finishTick = ahead(o.finishTick);
+    for (let i = 0; i < o.stageTicks.length; i++) if (o.stageTicks[i] > w.at) t.stageTicks[i] = ahead(o.stageTicks[i]);
+    const tr = t.tricks;
+    if (tr) for (let i = 0; i < o.tricks.length; i += 4) if (o.tricks[i] > w.at) tr[i] = ahead(o.tricks[i]);
   }
 
   private poseTmp = emptyPose();

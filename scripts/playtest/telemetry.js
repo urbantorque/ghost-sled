@@ -72,6 +72,13 @@
 //     { shown, muted }, banners { samples, two, overRow } (100 ms DOM samples with two banners drawn at
 //     once, or a banner drawn over the race row), pilot (the stunt pilot's own counters).
 async (page) => {
+  // The rates a first run's riders rode at: the middle of them, and how much of the run they sat at a limit.
+  const rateStats = (xs) => {
+    if (!xs || !xs.length) return null;
+    const s = xs.slice().sort((a, b) => a - b);
+    const at = (q) => +s[Math.floor(q * (s.length - 1))].toFixed(2);
+    return { p5: at(0.05), p50: at(0.5), p95: at(0.95), atMin: +(xs.filter((v) => v <= 0.451).length / xs.length).toFixed(2), atMax: +(xs.filter((v) => v >= 1.119).length / xs.length).toFixed(2) };
+  };
   const defaults = {
     label: 'run',
     plan: [
@@ -1131,6 +1138,9 @@ async (page) => {
           nearest = Math.min(nearest, Math.abs(gap));
         }
         tele.live.push([+T.toFixed(2), near, riding, nearest === 1e9 ? -1 : +nearest.toFixed(1)]);
+        // A first run's riders read you (pacer.ts): the rates they ride at, and your place as it stands.
+        for (const t of app.ghosts.tracks) if (t.entry.reads) (tele.rates = tele.rates || []).push(t.rate);
+        if (app.frameStandings) tele.place = [app.frameStandings.rank, app.frameStandings.of];
         if (tele.firstPassAt === null && app.passedThisRun && app.passedThisRun.size > 0) tele.firstPassAt = +T.toFixed(2);
         if (ahead150 > 0) { F.lastAheadNear = +T.toFixed(2); F.hadAheadNear = true; }
         F.lastLiveT = +T.toFixed(2);
@@ -1247,6 +1257,8 @@ async (page) => {
       liveNearAtCrash: tele.crash ? tele.crash.liveNear : null,
       ridingAtCrash: tele.crash ? tele.crash.riding : null,
       raceLiveFraction: +liveFrac.toFixed(2),
+      place: tele.place ?? null,
+      rates: rateStats(tele.rates),
       intensity: { mean: +meanI.toFixed(3), at10: iAt(10), at30: iAt(30), at60: iAt(60), max: I.length ? Math.max(...I.map((v) => v[1])) : 0 },
       crashField: tele.crash ? tele.crash.ghosts : null,
       fun,

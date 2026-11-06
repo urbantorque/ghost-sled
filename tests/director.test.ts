@@ -64,7 +64,7 @@ function runOf(over: Partial<DirectorRun> = {}): DirectorRun {
 }
 
 function track(id: number, kind: GhostTrack['entry']['kind'] = 'pool', name = `G${id}`): GhostTrack {
-  return { entry: { id, name, kind, score: 0, record: '' }, ready: true, frames: null, pace: 1, swing: 0, swingEnd: 0, samples: 1, ticks: 0, crashTick: -1, finishTick: -1, stageTicks: [], distance: 0, tricks: null, status: 0, passed: false, passedTimes: 0, crashSeen: false };
+  return { entry: { id, name, kind, score: 0, record: '' }, ready: true, frames: null, pace: 1, swing: 0, swingEnd: 0, map: null, warp: null, rate: 1, own: null, samples: 1, ticks: 0, crashTick: -1, finishTick: -1, stageTicks: [], distance: 0, tricks: null, status: 0, passed: false, passedTimes: 0, crashSeen: false };
 }
 
 function pose(z: number, x = 0, done = false): GhostPose {
