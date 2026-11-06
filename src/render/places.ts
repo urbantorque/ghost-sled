@@ -15,7 +15,8 @@ import { AIR_MARGIN, barrier, frontAt, house, kerbAt, landmark, lantern, streetP
 //    over the line, past the biggest buildings the mountain has, and the run-out carries on through it
 //    to a hall that closes the view. A sled stops about 35 to 60 m past the line (sim.ts coast), so
 //    the square is built round that spot, for a held shot.
-//  - the start: the first frame is a place. A gate high over the ramp, huts, barriers and a crowd.
+//  - the start: the first frame is an occasion. A gate high over the ramp, grandstands packed down both
+//    banks, the huts behind them, barriers and flags.
 //  - a leap's watching crowd, on rock shoulders either side of the lip.
 //  - a lift line crossing overhead (liftline.ts), and its station close beside the run.
 
@@ -335,6 +336,15 @@ export function viaductPiece(ctx: SiteCtx): Piece {
 
 // ---------------------------------------------------------------- the finish town
 
+/** The checker painted across the line: its rows, a check's width and its length down the run (long, as
+ *  road paint is: the lens sees the snow at a couple of degrees, and that foreshortens it square), the
+ *  cells a check's side is cut into and how far the paint lies over the snow. */
+export const LINE_ROWS = 4;
+const LINE_CHECK = 3;
+export const LINE_DEPTH = 4.5;
+const LINE_CELLS = 3;
+export const LINE_LIFT = 0.14;
+
 /** A hot-air balloon tethered over the town, visible from the last leap: where the run is going. */
 function balloon(x: number, y: number, z: number, g: number, cols: Color[]): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
@@ -463,9 +473,36 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   return f.out(parts);
 }
 
+/** The line's paint: rows of big checks in both colours, barrier to barrier, so it never leans on the
+ *  snow to read and stays a checker from the lens at speed: three rows a metre deep were a broken dashed
+ *  line from 30 m. Each check is a few cells, so it lies on the ground up the banks, a hand over the
+ *  snow, where no tier's coarser terrain comes up through it. */
+function finishLine(f: Sub, hw: number): BufferGeometry[] {
+  const n = Math.round((2 * hw) / LINE_CHECK);
+  const w = (2 * hw) / n;
+  const y = (u: number, v: number) => f.gy(u, v) + LINE_LIFT;
+  const line: BufferGeometry[] = [];
+  for (let r = 0; r < LINE_ROWS; r++) {
+    for (let i = 0; i < n; i++) {
+      const col = (i + r) & 1 ? CREAM : INK;
+      for (let a = 0; a < LINE_CELLS; a++) {
+        const u0 = -hw + (i + a / LINE_CELLS) * w;
+        const u1 = -hw + (i + (a + 1) / LINE_CELLS) * w;
+        for (let b = 0; b < LINE_CELLS; b++) {
+          const v0 = (r - LINE_ROWS / 2 + b / LINE_CELLS) * LINE_DEPTH;
+          const v1 = (r - LINE_ROWS / 2 + (b + 1) / LINE_CELLS) * LINE_DEPTH;
+          line.push(quad([u0, y(u0, v0), v0], [u0, y(u0, v1), v1], [u1, y(u1, v1), v1], [u1, y(u1, v0), v0], col));
+        }
+      }
+    }
+  }
+  return line;
+}
+
 /** A grandstand down one bank from dz a to b: rows of seats stepping up the bank, a near crowd that
- *  moves and far rows that stand still, masts and banners along its back. */
-function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: number, spots: Spot[], still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }>, glows: Glow[]): { seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> } {
+ *  moves and far rows that stand still, masts and banners along its back. On a bank that gives it no
+ *  height of its own (the start's stands, behind the crest) each row stands `rise` metres over the last. */
+function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: number, spots: Spot[], still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }>, glows: Glow[], rise = 0): { seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> } {
   const { p, biome } = ctx;
   const { coats, hats } = crowdColors(biome, p);
   const seats: BufferGeometry[] = [];
@@ -475,7 +512,7 @@ function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: 
   const RUN = 0.95;
   const yAt = (dz: number, r: number): number => {
     const e = kerbAt(rail, dz) + 0.6 + r * RUN;
-    return Math.max(rail.at(dz, s, e).y, rail.at(dz, s, e + RUN).y) + 0.2;
+    return Math.max(rail.at(dz, s, e).y, rail.at(dz, s, e + RUN).y) + 0.2 + r * rise;
   };
   for (let r = 0; r < rows; r++) {
     const inner: V3[] = [];
@@ -520,6 +557,25 @@ function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: 
   return { seats, masts };
 }
 
+/** The masts along a stand's back on side s: long banners, a pennant each, and strings between them. */
+function standMasts(ctx: SiteCtx, masts: ReadonlyArray<{ pos: V3; dz: number }>, s: number): BufferGeometry[] {
+  const cols = banners(ctx.p);
+  const parts: BufferGeometry[] = [];
+  for (const { pos, dz } of masts) {
+    const top = pos[1] + 13 + (Math.round(dz) & 3);
+    parts.push(grade(seg([pos[0], pos[1] - 1, pos[2]], [pos[0], top, pos[2]], 0.15, ctx.biome === 'blossom' ? C('#93405A') : TIMBER_DARK, 5), pos[1], top, 0.8, 1.05));
+    parts.push(box(1.5, 7.5, 0.08, cols[(Math.round(dz / 13) & 1) * 2], [pos[0], top - 4.6, pos[2] + 1]));
+    parts.push(box(1.5, 0.3, 0.1, CREAM, [pos[0], top - 8.3, pos[2] + 1]));
+    parts.push(pennant([pos[0], top, pos[2]], s, cols[0]));
+  }
+  for (let i = 0; i + 1 < masts.length; i++) {
+    const a = masts[i].pos;
+    const b = masts[i + 1].pos;
+    parts.push(...bunting([a[0], a[1] + 12, a[2]], [b[0], b[1] + 12, b[2]], 1.4, cols, 1.0));
+  }
+  return parts;
+}
+
 /** The finish town (see the file's head). The street comes in down the blend, the square holds the line
  *  and the spot sleds stop on, and the run-out street ends at the great hall. */
 export function finishPiece(ctx: SiteCtx): Piece {
@@ -549,23 +605,7 @@ export function finishPiece(ctx: SiteCtx): Piece {
   // Masts, long banners and strings along the backs of the stands.
   steps.push(() => {
     seed(ctx.seed + 711);
-    const parts: BufferGeometry[] = [];
-    made.forEach((m, k) => {
-      const s = k ? 1 : -1;
-      for (const { pos, dz } of m.masts) {
-        const top = pos[1] + 13 + (Math.round(dz) & 3);
-        parts.push(grade(seg([pos[0], pos[1] - 1, pos[2]], [pos[0], top, pos[2]], 0.15, biome === 'blossom' ? C('#93405A') : TIMBER_DARK, 5), pos[1], top, 0.8, 1.05));
-        parts.push(box(1.5, 7.5, 0.08, cols[(Math.round(dz / 13) & 1) * 2], [pos[0], top - 4.6, pos[2] + 1]));
-        parts.push(box(1.5, 0.3, 0.1, CREAM, [pos[0], top - 8.3, pos[2] + 1]));
-        parts.push(pennant([pos[0], top, pos[2]], s, cols[0]));
-      }
-      for (let i = 0; i + 1 < m.masts.length; i++) {
-        const a = m.masts[i].pos;
-        const b = m.masts[i + 1].pos;
-        parts.push(...bunting([a[0], a[1] + 12, a[2]], [b[0], b[1] + 12, b[2]], 1.4, cols, 1.0));
-      }
-    });
-    return parts;
+    return made.flatMap((m, k) => standMasts(ctx, m.masts, k ? 1 : -1));
   });
   // The streets' barrier, carried through the square.
   steps.push(() => {
@@ -578,22 +618,7 @@ export function finishPiece(ctx: SiteCtx): Piece {
     const parts = finishArch(ctx, rail, F);
     const c = rail.at(F, 0, 0);
     const f = new Sub(ctx, c.x, c.z, c.yaw);
-    const hw = c.hw + 0.4;
-    const CH = 1.2;
-    const n = Math.round((2 * hw) / CH);
-    const gy = (u: number, v: number) => f.gy(u, v) + 0.15;
-    const line: BufferGeometry[] = [];
-    for (let r = 0; r < 3; r++) {
-      for (let i = 0; i < n; i++) {
-        if ((i + r) & 1) continue;
-        const u0 = -hw + i * CH;
-        const u1 = u0 + CH;
-        const v0 = -CH * 1.5 + r * CH;
-        const v1 = v0 + CH;
-        line.push(quad([u0, gy(u0, v0), v0], [u0, gy(u0, v1), v1], [u1, gy(u1, v1), v1], [u1, gy(u1, v0), v0], INK));
-      }
-    }
-    return [...parts, ...f.out(line)];
+    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F)))];
   });
   // The square's great buildings, on the crests behind the stands.
   for (const s of [-1, 1]) {
@@ -669,13 +694,28 @@ export function finishPiece(ctx: SiteCtx): Piece {
 
 // ---------------------------------------------------------------- the start
 
+/** The start's grandstands (metres from the site's start, either side of the gate), their rows and the
+ *  height each row stands over the last. The rows stand past the bank's crest, 10 m out, where flat rows
+ *  would show as a line of heads over the barrier. */
+const START_STANDS: ReadonlyArray<readonly [number, number]> = [
+  [2, 30],
+  [38, 114],
+];
+const START_ROWS = 9;
+const START_ROWS_LOW = 5;
+const START_RISE = 0.62;
+/** Steps the stands' still rows are baked over, 500 figures to a step. */
+const START_STILL_STEPS = 4;
+/** How far past the street's fronts the huts stand: behind the stands, looking over them. */
+const HUT_BACK = 14;
+
 /** A start hut and its banner, facing the ramp from the bank. */
 function startHut(ctx: SiteCtx, rail: Rail, s: number, dz: number, w: number): BufferGeometry[] {
   const { p, biome, night } = ctx;
   const t = townStyle(biome, p);
   const cols = banners(p);
   const stoneC = biome === 'volcanic' ? shade(p.low, 0.55) : stone(p, 0.85);
-  const pt = rail.at(dz, s, frontAt(rail, dz) + 5);
+  const pt = rail.at(dz, s, frontAt(rail, dz) + HUT_BACK);
   const f = new Sub(ctx, pt.x, pt.z, pt.yaw + s * 0.45);
   const [lo, hi] = f.range(w / 2 + 0.6, 5.6);
   const F = hi + 0.4;
@@ -693,11 +733,29 @@ export function startPiece(ctx: SiteCtx): Piece {
   const { p, biome, night } = ctx;
   const t = townStyle(biome, p);
   const cols = banners(p);
-  const base = streetPiece(ctx, { runs: [[-rail.len + 2, rail.len]], houses: false, hotel: false, mark: false, gates: false });
+  const low = !!ctx.low;
+  const runs = START_STANDS.map(([a, b]) => [-rail.len + a, -rail.len + b] as const);
+  const base = streetPiece(ctx, { runs: [[-rail.len + 2, rail.len]], houses: false, hotel: false, mark: false, gates: false, stands: runs, standBack: 6.5 });
   const steps = base.steps;
   /** Sim z of the gate over the ramp, and of the huts, from the site's start. */
   const GATE = 34;
   const HUT = 50;
+  // The grandstands: the near rows move, the rest are baked in, so the crowd costs no draw of its own.
+  // Worked out in a step of their own, on idle time: a site's plan runs on the frame that asks for it,
+  // here a run's first, and 1,800 spots on the ground is 30 ms.
+  // (No lamplight: a pool of it at night would be a draw the start has never had.)
+  const still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }> = [];
+  let made: Array<{ s: number; seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> }> = [];
+  steps.push(() => {
+    seed(ctx.seed + 791);
+    made = [-1, 1].flatMap((s) => runs.map(([a, b]) => ({ s, ...stand(ctx, rail, s, a, b, low ? START_ROWS_LOW : START_ROWS, base.spots, still, [], START_RISE) })));
+    return made.flatMap((m) => m.seats);
+  });
+  for (let k = 0; k < START_STILL_STEPS; k++) steps.push(() => (still.length > k * 500 ? [stillCrowd(still.slice(k * 500, (k + 1) * 500))] : []));
+  steps.push(() => {
+    seed(ctx.seed + 793);
+    return made.flatMap((m) => standMasts(ctx, m.masts, m.s));
+  });
   steps.push(() => {
     seed(ctx.seed + 801);
     const dz = -rail.len + GATE;

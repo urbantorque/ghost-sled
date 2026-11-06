@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { Mood } from '../src/sim/chaos';
-import { Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
+import { CHUNK_LEN, Course, RUN_OUT, Section, courseFor } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { getPalette } from '../src/render/palette';
 import { Listener, type ListenSources, newView } from '../src/audio/listen';
 import { SPAN_MARGIN, Site, SitePlan, airCeiling, pieceCtx, siteAir, siteRail, siteToWorld, underRoof } from '../src/render/landmarks';
 import { ENCLOSED, LONG, mergePiece, pieceFor } from '../src/render/landmarkKit';
 import { CHAIR_DROP, LINE_Z, liftLayout } from '../src/render/liftline';
+import { LINE_DEPTH, LINE_LIFT, LINE_ROWS } from '../src/render/places';
+import { buildTerrainGeometry } from '../src/render/terrain';
 import { OverlookPlan } from '../src/render/overlook';
 
 // The course's sections are the plan: a street is a town, a tunnel an enclosure, a bridge a bridge, and
@@ -16,8 +18,10 @@ import { OverlookPlan } from '../src/render/overlook';
 // enclosure's roof, a town's strings and banners) higher than any sled can fly by the margin.
 
 const MOODS = [Mood.None, Mood.Comet];
-/** The longest a run may go between places, overlooks counted. */
-const BARE_MOST = 330;
+/** The longest a mountain may go between places, overlooks counted. */
+const BARE_MOST = 282;
+/** A daily's the same, but for the odd stretch its dealt sections leave. */
+const BARE_DAILY = 330;
 
 const flown = (c: Course, mood: Mood): SitePlan => {
   const plan = new SitePlan(c, mood);
@@ -89,10 +93,10 @@ describe('the plan is the course', () => {
         expect(repeats).toBeLessThanOrEqual(1);
       });
 
-      it(`${m.name} (${Mood[mood]}): no bare stretch runs past about 300 m`, () => {
+      it(`${m.name} (${Mood[mood]}): no bare stretch runs past 282 m`, () => {
         const c = courseFor(m.seed);
         const { gap, at } = longestBare(c, flown(c, mood).planned);
-        expect(gap, `bare from ${Math.round(at)}`).toBeLessThanOrEqual(BARE_MOST);
+        expect(gap, `bare from ${Math.round(at)}`).toBeLessThanOrEqual(BARE_MOST + 0.5);
       });
     }
   }
@@ -141,7 +145,7 @@ describe('the plan is the course', () => {
       expect(plan.planned.length).toBeGreaterThan(9);
       const list = plan.planned;
       for (let i = 1; i < list.length; i++) expect(list[i].z - list[i].len, day).toBeGreaterThan(list[i - 1].z + list[i - 1].len);
-      expect(longestBare(c, plan.planned).gap, day).toBeLessThanOrEqual(BARE_MOST);
+      expect(longestBare(c, plan.planned).gap, day).toBeLessThanOrEqual(BARE_DAILY);
     }
   });
 
@@ -221,7 +225,7 @@ describe('what stands near the run keeps out of it', () => {
               // Past the run-out a sled never comes: the hall that closes the view stands there.
               if (sz > end) continue;
               // The painted line lies on the snow.
-              if (s.kind === 'finish' && Math.abs(sz - c.finishZ) < 3 && w.y - c.ground(w.x, sz) < 0.2) continue;
+              if (s.kind === 'finish' && Math.abs(sz - c.finishZ) < (LINE_ROWS * LINE_DEPTH) / 2 + 1 && w.y - c.ground(w.x, sz) < 0.2) continue;
               if (s.len > 0) {
                 // A long site's overhead parts: over the air in the bin they hang in (and its
                 // neighbours), and never low over the snow where nothing flies.
@@ -270,6 +274,76 @@ describe('what stands near the run keeps out of it', () => {
       }
     });
   }
+});
+
+describe('the finish line', () => {
+  it('lies over the snow on every tier: no terrain comes up through the paint', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const F = c.finishZ;
+      for (const detail of [{ inner: 1.6, row: 3, reach: 60 }, { inner: 1.1, row: 2.2, reach: 90 }, { inner: 0.85, row: 2, reach: 110 }]) {
+        let over = -Infinity;
+        for (let k = Math.floor((F - 12) / CHUNK_LEN); k <= Math.floor((F + 12) / CHUNK_LEN); k++) {
+          const t = buildTerrainGeometry(c, k, detail);
+          const p = t.getAttribute('position');
+          const idx = t.getIndex()!;
+          // Each triangle's corners and the middles of its sides: where a coarse mesh stands off the ground.
+          for (let i = 0; i + 2 < idx.count; i += 3) {
+            const v = [idx.getX(i), idx.getX(i + 1), idx.getX(i + 2)];
+            for (const [a, b] of [[0, 0], [1, 1], [2, 2], [0, 1], [1, 2], [2, 0]]) {
+              const x = (p.getX(v[a]) + p.getX(v[b])) / 2;
+              const y = (p.getY(v[a]) + p.getY(v[b])) / 2;
+              const z = -(p.getZ(v[a]) + p.getZ(v[b])) / 2;
+              if (Math.abs(z - F) > (LINE_ROWS * LINE_DEPTH) / 2 || c.edgeExcess(x, z) > c.edgeLimit(z)) continue;
+              over = Math.max(over, y - c.ground(x, z));
+            }
+          }
+          t.dispose();
+        }
+        expect(over, `${m.name} row ${detail.row}`).toBeLessThan(LINE_LIFT - 0.03);
+      }
+    }
+  });
+});
+
+describe('the start', () => {
+  it('is an occasion on every tier: packed stands down both banks, at the cost of triangles alone', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const p = getPalette(c.biome, Mood.None);
+      const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
+      for (const low of [false, true]) {
+        const piece = pieceFor('start', pieceCtx(c, s, p, false, low));
+        // (Its first frames pay for none of it: the stands are worked out on idle time.)
+        const asked = piece.spots.length;
+        const g = mergePiece(piece.steps.flatMap((f) => f()));
+        const tris = g.getAttribute('position').count / 3;
+        // The near rows move on Medium and High; on Low the still rows are the whole crowd.
+        if (!low) {
+          expect(piece.spots.length, m.name).toBeGreaterThan(420);
+          expect(piece.spots.length).toBeGreaterThan(asked);
+        }
+        // Two boxes a still figure, eight triangles each: over 800 figures even on Low.
+        expect(tris, `${m.name} low ${low}`).toBeGreaterThan(18000);
+        expect(tris, `${m.name} low ${low}`).toBeLessThanOrEqual(low ? 24000 : 42000);
+        g.dispose();
+      }
+    }
+  });
+
+  it('stands its crowd past the limit and its stands clear of the run, either side of the gate', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
+      const piece = pieceFor('start', pieceCtx(c, s, getPalette(c.biome, Mood.None), false, false));
+      piece.steps.forEach((f) => f());
+      const w = new Vector3();
+      for (const sp of piece.spots) {
+        siteToWorld(s, sp.x, sp.y, sp.z, w);
+        expect(c.edgeExcess(w.x, -w.z)).toBeGreaterThanOrEqual(c.edgeLimit(-w.z));
+      }
+    }
+  });
 });
 
 describe('the budget', () => {

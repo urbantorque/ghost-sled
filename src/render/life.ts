@@ -28,6 +28,7 @@ import { CHUNK_LEN, Course } from '../sim/course';
 import type { Beat } from '../game/beats';
 import { LIFT_STEP, LIFT_TOP, cabinSpot, flagColors, liftLine, signature } from './dressing';
 import { merge, part } from './flora';
+import { openFoot, standable, visualGround } from './ground';
 import { LIGHT_GLSL, shared } from './materials';
 import type { Palette } from './palette';
 import { lensPx } from './particles';
@@ -521,6 +522,8 @@ interface Fig {
   age: number;
   fled: number;
   gait: number;
+  /** An animal's way out: the edge excess a fright carries it to before rock or a set piece stops it. */
+  eMax: number;
   /** Its heading in (edge excess, z) space, radians from +z toward +e. */
   dir: number;
   speed: number;
@@ -549,6 +552,11 @@ interface Fig {
 /** How far a figure walks on its corridor line before it is read again (the course's curvature is
  *  small: over 1.5 m the line is off by millimetres). */
 const CORRIDOR_STEP = 1.5;
+/** How far a fox trots down the bank before the rider comes, and how far and in what steps a fright's
+ *  way out is walked when an animal is placed (metres). */
+const FOX_TROT = 20;
+const FLEE_REACH = 45;
+const FLEE_STEP = 3;
 
 /** Marks the first `n` values of an attribute for upload this frame (not its whole cap). */
 function uploadFirst(a: BufferAttribute, n: number): void {
@@ -888,7 +896,7 @@ export class Life {
     this.figMesh = new InstancedMesh(fg, this.figMat, FIG_CAP);
     this.figMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.figMesh.count = 0;
-    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
+    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, eMax: Infinity, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
 
     // Smoke.
     this.smokeGeo = new InstancedBufferGeometry();
@@ -1477,7 +1485,7 @@ export class Life {
           const target = f.kind === F_HARE ? 0.9 + 0.5 * Math.sin(t * 5) : f.kind === F_FOX ? 1.15 : 0.95;
           f.dir += (target * f.side - f.dir) * Math.min(1, dt * 6);
           const sp = Math.min(1, t * 3) * f.speed;
-          const edge = this.dropAt !== null && this.dropAt(f.z, f.side, f.e + 1.5) > 0.05;
+          const edge = f.e + 1.5 > f.eMax || (this.dropAt !== null && this.dropAt(f.z, f.side, f.e + 1.5) > 0.05);
           if (!edge) {
             f.e += Math.sin(Math.abs(f.dir)) * sp * dt;
             f.z += Math.cos(f.dir) * sp * dt;
@@ -1526,7 +1534,7 @@ export class Life {
         }
         f.gk--;
         gy = f.gy;
-      } else gy = c.ground(x, f.z);
+      } else gy = visualGround(c, x, f.z);
       if (!(gy > -1e6)) {
         f.live = false;
         continue;
@@ -1561,6 +1569,13 @@ export class Life {
     return z + (jump ? 30 + this.rand() * 420 : 300 + this.rand() * 180) + k;
   }
 
+  /** Nothing keeps a figure off the ground `e` past the edge on `side` at sim z: no rock or ledge, no
+   *  set piece. */
+  private free(side: number, e: number, z: number): boolean {
+    const c = this.course;
+    return standable(c, z, e) && !this.kept?.(c.centerX(z) + side * (c.halfWidth(z) + e), z);
+  }
+
   /** Animals stand at the treeline's foot, where the gully's walls and the bowl's cornice would hide
    *  them: those stretches are passed over (-1: none near). */
   private foot(z: number): number {
@@ -1574,11 +1589,25 @@ export class Life {
   private spawn(kind: number, side: number, e: number, z: number): void {
     const f = this.figs.find((g) => !g.live);
     if (!f || z < 0) return;
+    z = Math.max(80, z);
+    f.eMax = Infinity;
+    if (kind <= F_FOX) {
+      // An animal stands only where the ground is open, and the slot waits for the next one if it is not.
+      if (!openFoot(this.course, z, e) || !this.free(side, e, z)) return;
+      // (A fox trots down the bank until something startles it: not into what stands further down.)
+      if (kind === F_FOX && (!openFoot(this.course, z + FOX_TROT, e) || !this.free(side, e, z + FOX_TROT))) return;
+      // Its way out, up the bank and a little down the slope: it pulls up short of what stands there.
+      for (let t = FLEE_STEP; t <= FLEE_REACH; t += FLEE_STEP) {
+        if (this.free(side, e + t * 0.8, z + t * 0.6)) continue;
+        f.eMax = e + (t - FLEE_STEP) * 0.8;
+        break;
+      }
+    }
     f.live = true;
     f.kind = kind;
     f.side = side;
     f.e0 = f.e = e;
-    f.z0 = f.z = Math.max(80, z);
+    f.z0 = f.z = z;
     f.age = this.rand() * 10;
     f.fled = -1;
     f.gait = this.rand() * 6.28;

@@ -10,6 +10,9 @@ import { SIM_VERSION, TICK_RATE } from '../src/sim/sim';
 // Builds the bundled ghost pools: src/data/ghosts/<mountain>.json for every mountain.
 // Run with: npx tsx scripts/generate-ghosts.ts
 //
+// Each ghost carries where it fell (PoolGhost.falls, what the graveyards stand on). A bot run is seeded by
+// its mountain, so regenerating gives back the same records; if a run's record ever changes, the sim did.
+//
 // With --splits it only adds each ghost's stageTicks to the pools already on disk, from a replay of its
 // own record (about a second a pool, and nothing else in the file changes). The stage medals read them
 // (src/game/ladder.ts), so a pool that comes in without them needs this and no more.

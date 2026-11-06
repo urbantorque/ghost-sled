@@ -603,6 +603,10 @@ export interface StreetSpec {
   hotel: boolean;
   mark: boolean;
   gates: boolean;
+  /** Grandstands stand along these stretches of dz (places.ts stand): no crowd of the street's own there,
+   *  and its masts stand behind them, past the fronts by `standBack` metres. */
+  stands?: ReadonlyArray<readonly [number, number]>;
+  standBack?: number;
 }
 
 /** The floor of a lot: a street's front row sits at the snow under its front (its back is in the bank);
@@ -770,7 +774,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
       strings[strings.length - 2].banner = true;
     }
   });
-  const poleE = (dz: number) => frontAt(rail, dz) - 0.45;
+  const poleE = (dz: number) => frontAt(rail, dz) - 0.45 + (spec.standBack ?? 0);
   for (const st of strings) {
     const a = rail.at(st.dz, -1, poleE(st.dz));
     const b = rail.at(st.dz, 1, poleE(st.dz));
@@ -794,7 +798,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
           if (rnd() < 0.12 + r * 0.06) continue;
           const jz = dz + (rnd() - 0.5) * 0.5;
           const e = kerbAt(rail, jz) + 0.5 + r * 0.6 + (rnd() - 0.5) * 0.14;
-          if (blocked(s, jz, e)) continue;
+          if (blocked(s, jz, e) || spec.stands?.some(([p, q]) => jz > p && jz < q)) continue;
           const pt = rail.at(jz, s, e);
           spots.push({ x: pt.x, y: pt.y - 0.03, z: pt.z, yaw: pt.yaw + s * 0.6 + (rnd() - 0.5) * 0.6, flag: rnd() < 0.2 });
         }

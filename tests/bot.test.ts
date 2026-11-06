@@ -108,6 +108,19 @@ describe('ghost pool generation', () => {
     }
   });
 
+  it('records where each rider fell, off a replay, and leaves the record alone', () => {
+    const pool = generatePool(MOUNTAINS[3].seed, 6, 77, { budgetRuns: 8, maxTicks: 60 * 60 * 3 });
+    for (const g of pool) {
+      const rec = recordFromString(g.record);
+      const sim = replayRecord(rec);
+      expect(sim.score, g.name).toBe(g.score);
+      // One fall for every tumble the run took, and the wreck that ended it if one did.
+      expect(g.falls.length, g.name).toBeGreaterThanOrEqual(sim.s.crashed ? 1 : 0);
+      for (const z of g.falls) expect(z, g.name).toBeLessThanOrEqual(Math.ceil(sim.distance));
+    }
+    expect(pool.some((g) => g.falls.length > 0)).toBe(true);
+  });
+
   it('is deterministic and handles an empty request', () => {
     const a = generatePool(MOUNTAINS[1].seed, 4, 99, { budgetRuns: 5, maxTicks: 60 * 60 });
     const b = generatePool(MOUNTAINS[1].seed, 4, 99, { budgetRuns: 5, maxTicks: 60 * 60 });

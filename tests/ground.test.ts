@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CHUNK_LEN, courseFor, type Course, type Section, type SectionKind } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { coastOn, rodeHome } from '../src/render/ghosts';
-import { HANDOVER_TO, MID_ROW, crestE, facetNoise, handoverRow, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
+import { HANDOVER_TO, MID_ROW, crestE, facetNoise, handoverRow, openFoot, rampart, rockWeight, standable, visualGround, wallK } from '../src/render/ground';
 import { buildTerrainGeometry } from '../src/render/terrain';
 
 // What the ground is: rock where something shaped it, snow everywhere a sled rides, the terrain's edge
@@ -151,5 +151,42 @@ describe('a ghost that finished', () => {
     const far = coastOn(30, 100);
     expect(coastOn(30, 200)).toBe(far);
     expect(far).toBeLessThan(80);
+  });
+});
+
+describe('an animal at the treeline', () => {
+  /** Where Life stands them: about 9.3 to 10 m past the edge. */
+  const EDGES = [9.3, 9.8, 10.2];
+
+  it('never stands in rock, in a street, or over a gorge, on any mountain', () => {
+    for (const seed of SEEDS) {
+      const c = courseFor(seed);
+      let open = 0;
+      for (let z = 80; z < c.finishZ; z += 3) {
+        for (const e of EDGES) {
+          if (!openFoot(c, z, e)) continue;
+          open++;
+          for (const side of [-1, 1]) {
+            const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+            expect(visualGround(c, x, z) - c.ground(x, z), `rock over it at ${z}`).toBeLessThan(0.3);
+          }
+          // (shapeAt hands back a shared object: read it last.)
+          const sh = c.shapeAt(z);
+          expect(sh.limit, `inside what bounds the run at ${z}`).toBeGreaterThan(e - 1);
+          expect(sh.fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+      }
+      // ...and there is still plenty of treeline to stand at.
+      expect(open).toBeGreaterThan(500);
+    }
+  });
+
+  it('keeps out of every wall, and of the houses and gorges past a small limit', () => {
+    for (const seed of SEEDS) {
+      const c = courseFor(seed);
+      for (const kind of ['ravine', 'tunnel', 'street', 'bridge'] as const) {
+        for (const s of sections(c, kind)) for (let z = s.z0 + s.blend; z < s.z1; z += 5) for (const e of EDGES) expect(openFoot(c, z, e), `${kind} at ${z}`).toBe(false);
+      }
+    }
   });
 });
