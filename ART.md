@@ -421,8 +421,8 @@ The run is high on a real mountain, in a world that goes on past the banks and i
 - **Bridges.** The run crosses a chasm on a deck 11 m wide with the ground falling 34 m past its rails.
   Frostfang's is an ice span, two great ribs of blue ice with icicles along them and a parapet of ice
   blocks. Ember's is an iron through-truss on basalt piers with braziers on the portals, lanterns along
-  the top chord and a lava river crossing under it. Pinecrest's would be a timber truss and Sakura's a
-  lacquered arch, though neither script holds a bridge yet. Raked legs and struts reach down round
+  the top chord and a lava river crossing under it. Pinecrest's is a dark timber truss between two
+  lamp-eyed towers, and Sakura's a span of oxblood lacquer on tall red towers. Raked legs and struts reach down round
   the ridge of ground under the deck, and the rails stand where the sim turns a sled back.
 - **Tunnels.** Where a script says tunnel the run goes under a roof at the section's whole length: a tall
   avalanche gallery whose pillars throw bars of light across the snow, an ice vault, a basalt tunnel

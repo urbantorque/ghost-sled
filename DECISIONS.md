@@ -1268,8 +1268,9 @@ Every place where I replaced, extended or interpreted the brief, and why.
     and costs about 20 as flat panels; a street holds hundreds of them and only their
     faces are seen. That paid for a second row of roofs: a street is 43 to 48k triangles against the
     old village's 55 to 72k.
-187. **The finish town is built round where a sled stops.** A sled used to stop 35 m past the line, and `Sim.coast` now runs it on through the square at about 4 m/s^2; `Sim.coast` stopped a sled 35 m past the line
-    from 30 m/s and 60 from 46, so the square runs from 72 m before the line to 118 m past it. The
+187. **The finish town is built round where a sled stops.** A sled over the line runs on through the square on a long, easy brake (`Sim.coast`): it stops about
+    130 m past the line from 30 m/s and 265 m from 46, on the run-out street if it came in flat out. The
+    square itself runs from 72 m before the line to 118 m past it. The
     biggest crowd in the game is 560 animated figures (the instancing cap, unchanged) in the near two
     rows, and about 1,500 still ones baked into the stands: two boxes each, four faces a box, no draw of
     their own. The run-out street ends at a hall just past the end of RUN_OUT, standing across the

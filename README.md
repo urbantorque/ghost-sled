@@ -185,6 +185,41 @@ The forest's LOD paid for the round's geometry and more. Low at 6x throttle swin
 difference is inside its noise; the systems the round added cost about 3% of Low's frame CPU. Low
 makes only the soundscape's takes it plays, and none during a run.
 
+The wow pass (DECISIONS 125 to 205: real places on a 4.5 km course, 30 m/s, three stages, a finish town)
+was measured against the build before it (3565a14) on a quiet machine, interleaved in fresh sessions (old,
+new, new, old) with saves cleared between probes. High and Medium rode a whole descent, so the heaviest
+places are in the sample. The new build's frame bars were then run again on the final commit:
+
+| Check | Before the wow pass | After |
+| --- | --- | --- |
+| First rendered frame, CPU throttled 6x (median of 6) | 2.85 s | 2.63 s |
+| High tier at 1x, whole descent, Pinecrest and Frostfang | 60 fps, worst second 59, p90 16.8 ms | 60 fps, worst second 59, p90 16.8 ms |
+| High tier at 1x, Lantern Night on Sakura | 60 fps, p90 16.8 ms | 60 fps, p90 16.8 ms |
+| Medium tier at 1x, whole descent, Pinecrest and Ember | 60 fps, worst second 60 | 60 fps, worst second 60 |
+| Phone layout, Medium and Low tiers | 60 fps | 60 fps, worst second 59 on Low |
+| Phone layout, avalanche chase | 60 fps | 60 fps |
+| High tier through an avalanche chase, CPU throttled 4x (4 runs) | 58 to 59 fps, p90 16.8 ms | 52 fps, p90 33.3 ms |
+| Low tier, CPU throttled 6x, three mountains (median of 6, range) | 49.5 fps (40 to 54) | 48.5 fps (45 to 52) |
+| Low tier, CPU throttled 6x, worst second | 35 to 40 fps | 30 to 34 fps |
+| Draw calls settled, High / Medium / Low | 89 / 84 to 87 / 45 to 48 | 89 to 91 / 84 to 86 / 42 to 47 |
+| Draw calls at the peak: a whole descent on High, a chase | 93, 128 | 98, 134 |
+| Triangles settled, High / Medium / Low | 780k / 526k / 124k | 913k / 640k / 155k |
+| Triangles at the peak: a whole descent on High, a chase | 1.1M, 1.13M | 1.13M, 1.33M |
+| Build size, unpacked | 2.0 MB | 2.2 MB |
+| Build size, zipped | 607 KB | 678 KB |
+
+Low's median holds, but only since a fix. The first interleaved run had it at 41 to 45 fps against 44 to
+52: the frame's JS was up 10%, and a trace found as much again outside the frame callback, in the page's own
+style, layout and paint (DECISIONS 205). It is still rougher at its worst: the slowest second dropped about
+6 fps, and Sakura sits 4 to 5 fps under its old figure while Pinecrest sits above its own. The 4x chase is
+the one measured loss I could not buy back. Frame JS there is up only 0.6 ms; the rest is a heavier scene on a
+CPU slowed fourfold. It is above what every earlier round measured for this probe, and at 1x it holds 60.
+
+The build grew by 218 KB, past the 2.0 MB the brief asked to hold near, and I think it is worth it: about
+183 KB of code in the main bundle for the authored stages, places, moments, ladder and results, 24 KB in the
+ghost worker (which carries its own copy of the sim and course), 10 KB of CSS and the rest in longer ghost
+pools. There are no asset files in it. It stays under half the 5 MB limit.
+
 High renders into an R11G11B10F buffer with 2x MSAA; Medium and Low use FXAA in the composite
 pass instead. The tier is chosen automatically, first from the GPU name and then from measured
 frame times (`src/game/quality.ts`): it steps down when frames run long or judder and back up when
@@ -218,7 +253,8 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `mobile.js` | Phone portrait with real touch drags (open the session with `.playwright/mobile-headless.config.json`) |
 | `avalanche-portrait.js`, `results-phone.js` | The avalanche chase and the results screen at phone size (portrait or landscape, from the session's viewport) |
 | `feel.js`, `kicker.js`, `events.js` | Feel tuning, kicker pops and landings, every mid-run event |
-| `perf.js` | The performance table's probes (forced tier, CPU throttle, mood, event) with draw calls and triangles |
+| `perf.js`, `perf-ab.sh` | The performance table's probes (forced tier, CPU throttle, mood, event) with draw calls and triangles, peaks included; two builds interleaved, old, new, new, old, then the phone |
+| `profile.js` | A CPU profile of a forced-tier run summed by function, per frame and per 100 m of course, for an unminified build (`npx vite build --minify false --outDir ...`); with `event: 1` it waits for a chase |
 | `lab.ts` | The pilot lab: rides clumsy, novice, mid, expert, line and stunt pilots and scripted bad input on the real sim in node, across all four mountains and several seeds. `--root <checkout>` loads the sim from another checkout, so one plan rides two builds |
 | `anatomy.ts` | What a course is: each mountain's sections, widths, slopes, cliffs, and the longest plain stretch |
 | `forks.ts` | Rides each fork both ways with bots of one skill, to show whether the risk route pays on the real sim |
@@ -267,6 +303,69 @@ side by side; the fix rounds between them came from the panel before:
 Every judge scored each round above the one before, but each panel also marked the previous build
 down once its defects showed beside the fixes, so the third round's rise (+0.34 paired) did not
 clearly clear the panel's own noise, and the loop stopped there.
+
+## Wow pass play-test
+
+Rounds 1 and 2 changed the picture. This one changed the sim (SIM_VERSION 6): the course became a fixed
+4.5 km descent in three stages with real places in it, cruise rose from about 21 to 30 m/s, and a hit
+costs time rather than the run. Everything below rides scripted pilots. No human has played this build.
+
+The pilot lab (`lab.ts`) rides the real sim in node: six seeds a mountain for the skill pilots, one for the
+scripted bad inputs. Ranges are the spread of the four mountains' medians. Before this pass a run had no
+finish and the lab stopped it at 4 min.
+
+| Pilot | Time before | Time after | Distance before | Distance after | Mean m/s before | Mean m/s after | Finished after |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Clumsy (new) | 13 to 15 s | 71 to 159 s | 110 to 155 m | 1.2 to 1.9 km | 11 to 12.5 | 15 to 18 | 0 of 24 |
+| Novice | 97 to 123 s | 146 to 164 s | 1.9 to 2.3 km | 4.5 km | 19 to 20 | 28 to 32 | 22 of 24 |
+| Mid | 151 to 240 s | 144 to 156 s | 3.3 to 5.1 km | 4.5 km | 21 to 22 | 29 to 32 | 20 of 24 |
+| Expert | 169 to 240 s | 144 to 154 s | 3.6 to 5.3 km | 4.5 km | 21 to 22 | 29 to 32 | 23 of 24 |
+| Safe line | 240 s (the cap) | 151 to 167 s | 4.9 to 5.1 km | 4.5 km | 20 to 21 | 29 to 30 | 24 of 24 |
+| Stunt | 103 to 167 s | 137 to 149 s | 2.2 to 3.7 km | 3.9 to 4.5 km | 22 to 23 | 30 to 31 | 14 of 24 |
+| Hands off | 10 to 42 s | 100 to 155 s | 153 to 771 m | 3.0 to 4.5 km | 15 to 18 | 27 to 31 | 2 of 4 |
+| A key held 2 s, right | 5 to 17 s | 146 to 159 s | 24 to 131 m | 3.5 to 4.5 km | 8 to 10 | 24 to 29 | 3 of 4 |
+| A key held 2 s, left | 5 s | 141 to 161 s | 24 to 26 m | 3.4 to 4.5 km | 9 | 25 to 30 | 3 of 4 |
+| A key held for ever | 9 to 18 s | 91 to 300 s | 21 to 33 m | 1.1 to 2.3 km | 3 to 5 | 7 to 14 | 0 of 4 |
+| Zigzag | 6 s | 99 to 146 s | 40 to 45 m | 1.5 to 2.3 km | 9 to 10 | 14 to 18 | 0 of 4 |
+
+Mean speed over a run's first 15 s rose from 12 to about 20 m/s for the clumsy pilot and from 15 to 25
+for the novice. Skilled pilots now reach the 46 m/s cap, where the fastest reached 35 before. Stomps a
+minute rose from 6.1 to 8.6 for the stunt pilot and from about 2.4 to 7.5 for mid and expert.
+
+The game in the browser, on the real build (`telemetry.js`): 8 first runs a pilot on Pinecrest, same plan
+on both builds. Passes and named moments are per minute.
+
+| Pilot | Run before | Run after | Mean m/s before | Mean m/s after | Passes before | Passes after | Named moments after | Race live before | Race live after |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Clumsy | 6 s, 52 m | 111 s, 1,564 m | 9.5 | 16.1 | 1.7 | 0.3 | 14.6 | 0.99 | 0.33 |
+| Novice | 73 s, 1,456 m | 143 s, finish | 19.2 | 31.0 | 7.8 | 1.7 | 16.5 | 0.81 | 0.44 |
+| Mid | 175 s, 3,596 m | 137 s, finish | 23.0 | 33.0 | 2.1 | 1.6 | 20.5 | 0.48 | 0.38 |
+| Expert | 163 s, 3,743 m | 142 s, finish | 23.7 | 31.7 | 2.3 | 1.9 | 20.3 | 0.57 | 0.52 |
+| Stunt | 82 s, 1,799 m | 139 s, finish | 21.8 | 32.0 | 5.3 | 1.9 | 25.3 | 0.70 | 0.42 |
+
+The race is the part that got worse on a first run. "Before" per-minute figures are flattered by short
+runs, but a first run really does hold fewer passes and spend less of itself near a rival: with no history
+the game has to guess who you are, so it spreads the field wide. From the second run the field reads your
+pace (DECISIONS 201): over runs 2 to 4, in one save per pilot, passes a minute are 0.8 to 2.4 for the clumsy
+pilot, 2.5 to 4.2 for the novice, 2.6 to 5.2 for mid and 3.4 to 4.5 for stunt, and the race is live for
+0.79 to 0.93, 0.36 to 0.73, 0.84 to 0.96 and 0.63 to 0.91 of the run.
+
+| Other checks | Result |
+| --- | --- |
+| Road you can read ahead at speed (`readability.js`) | 24 m before, 73 m at 30 m/s, 65 m at 44 m/s |
+| Fork's bold route (`forks.ts`) | Saves up to 1.9 s for a clean rider, costs mid-skill bots a hit |
+| Clean break across two real builds (`migrate.js`) | Archive byte-identical, gifts and run counts unchanged, stable across reloads, old link opens as a target to beat |
+| Every seed builds (a test holds 700) | 9,660 seeds, ten years of dailies among them |
+| Floating trees (the review's finding 8) | 21% of sampled spots on early Pinecrest floated, worst by 25.7 m; fixed, a test holds it |
+| Console across tours, strips and migration | No errors |
+
+Comparison frames, contact sheets and beat strips (`tour.js`, `sweep.js`, `moments.js`, `sheet.mjs`) were
+read for every mountain and mood. They live in `shots/`, which is not in git.
+
+What this does not show. Every number above is a script. Whether a tumble feels fair, whether 30 m/s feels
+fast rather than busy, whether the medals and the ladder pull you back, and how any of it sounds are all
+unmeasured. The audio has not been heard. Pilots do not grind: rails were only checked on an injected
+approach. All tuning of medals, ladders and gifts is unproven with people.
 
 ## Layout
 
