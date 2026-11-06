@@ -88,15 +88,27 @@ describe('results race line', () => {
   });
 
   it('friend lines read in race-gap grammar, a loss in the past tense, with the rows as shown', () => {
-    expect(friendLine('Mila', 2340, 2460)).toBe('You beat Mila by 120 m.');
-    expect(friendLine('Mila', 2340, 2000)).toBe('Mila beat you by 340 m.');
+    const fell = (distance: number) => ({ time: null, distance });
+    expect(friendLine('Mila', fell(2340), fell(2460))).toBe('You beat Mila by 120 m.');
+    expect(friendLine('Mila', fell(2340), fell(2000))).toBe('Mila beat you by 340 m.');
     // Rows of 760 m and 753 m: 7 m, never the raw gap's 8 m.
-    expect(friendLine('fjord348', 759.6, 752.5)).toBe('fjord348 beat you by 7 m.');
-    expect(friendLine('fjord348', 752.4, 760.4)).toBe('You beat fjord348 by 8 m.');
+    expect(friendLine('fjord348', fell(759.6), fell(752.5))).toBe('fjord348 beat you by 7 m.');
+    expect(friendLine('fjord348', fell(752.4), fell(760.4))).toBe('You beat fjord348 by 8 m.');
     // Both rows read the same distance: less than a metre in it.
-    expect(friendLine('Mila', 500.2, 500.1)).toBe('Mila beat you by less than 1 m.');
-    expect(friendLine('Mila', 500.1, 500.3)).toBe('You beat Mila by less than 1 m.');
-    expect(friendBeatenText('Mila', 2340)).toBe('Beat Mila\u2019s 2,340 m');
+    expect(friendLine('Mila', fell(500.2), fell(500.1))).toBe('Mila beat you by less than 1 m.');
+    expect(friendLine('Mila', fell(500.1), fell(500.3))).toBe('You beat Mila by less than 1 m.');
+    expect(friendBeatenText('Mila', fell(2340))).toBe('Beat Mila\u2019s 2,340 m');
+  });
+
+  it('a finish is decided on the clock, whoever stopped further down the square', () => {
+    const done = (time: number, distance: number) => ({ time, distance });
+    // You were faster and stopped short of where the friend stopped: you won.
+    expect(friendLine('Mila', done(172, 4720), done(170.8, 4560))).toBe('You beat Mila by 1.2 s.');
+    expect(friendLine('Mila', done(170.8, 4560), done(172, 4720))).toBe('Mila beat you by 1.2 s.');
+    expect(friendLine('Mila', done(170, 4600), { time: null, distance: 4100 })).toBe('Mila beat you to the finish.');
+    expect(friendLine('Mila', { time: null, distance: 4100 }, done(170, 4600))).toBe('You beat Mila to the finish.');
+    expect(friendLine('Mila', done(170, 4600), done(170, 4620))).toBe('Dead level with Mila.');
+    expect(friendBeatenText('Mila', done(151.4, 4600))).toBe('Beat Mila\u2019s 2:31.4');
   });
 });
 
@@ -132,6 +144,12 @@ describe('the crash line', () => {
 
 describe('live missions (the pause card)', () => {
   const sum = (p: Partial<RunSummary> = {}): RunSummary => ({
+    seconds: 0,
+    finished: false,
+    finishSeconds: 0,
+    tumbles: 0,
+    wallRides: 0,
+    grinds: 0,
     mountain: 'pinecrest',
     biome: 'alpine',
     score: 0,
@@ -199,10 +217,13 @@ describe('next unlock', () => {
 
 describe('challenge share title and reveal goal', () => {
   it('answers a friend back, or opens a challenge', () => {
-    expect(challengeShareTitle('Mila', 2340, 'Pinecrest', 120)).toBe('Mila, I beat your 2,340 m on Pinecrest by 120 m. Your move.');
-    expect(challengeShareTitle('Me', 1810, 'Frostfang Glacier', null)).toBe('Beat my 1,810 m on Frostfang Glacier in Ghost Sled');
-    expect(challengeShareTitle('Mila', 900, 'Daily Mountain', 40)).toBe('Mila, I beat your 900 m on the Daily Mountain by 40 m. Your move.');
-    expect(challengeShareTitle('Me', 0, 'Pinecrest', null)).toBe('Beat my Ghost Sled run');
+    const fell = (distance: number) => ({ time: null, distance });
+    expect(challengeShareTitle('Mila', fell(2340), 'Pinecrest', 'by 120 m')).toBe('Mila, I beat your 2,340 m on Pinecrest by 120 m. Your move.');
+    expect(challengeShareTitle('Me', fell(1810), 'Frostfang Glacier', null)).toBe('Beat my 1,810 m on Frostfang Glacier in Ghost Sled');
+    expect(challengeShareTitle('Mila', fell(900), 'Daily Mountain', 'by 40 m')).toBe('Mila, I beat your 900 m on the Daily Mountain by 40 m. Your move.');
+    expect(challengeShareTitle('Me', fell(0), 'Pinecrest', null)).toBe('Beat my Ghost Sled run');
+    expect(challengeShareTitle('Mila', { time: 151.4, distance: 4600 }, 'Pinecrest', 'by 1.2 s')).toBe('Mila, I beat your 2:31.4 on Pinecrest by 1.2 s. Your move.');
+    expect(challengeShareTitle('Me', { time: 151.4, distance: 4600 }, 'Pinecrest', null)).toBe('Beat my 2:31.4 on Pinecrest in Ghost Sled');
   });
 
   it('names what each event pays', () => {

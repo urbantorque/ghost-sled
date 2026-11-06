@@ -8,26 +8,36 @@ import { recordFromString } from '../sim/replay';
 //
 // Schema v1 forever: every field added since is optional or defaulted here at load (merge), so an old
 // save keeps working. Load never throws on a strange save: a part it cannot read falls back to its
-// default and the rest is kept. A best or grudge whose replay was recorded on another sim version
-// loses only its record (its score, distance and tally stay), and Daily Mountain entries other than
-// today's are pruned so they stop piling up.
+// default and the rest is kept, and Daily Mountain entries other than today's are pruned so they stop
+// piling up.
+//
+// A new course is a clean break that erases nothing. A best or grudge whose replay no longer rides
+// moves, exactly as it was, into `archive` (never pruned, never rewritten): the best's slot then
+// clears so a new one can be set, and the mountain card shows the old figures as 'Old best' until it
+// is; a grudge keeps its name and tally and stops claiming a rematch.
 
 export const SAVE_KEY = 'ghostsled.save.v1';
 
-/** Run-end distances kept per mountain key (field.ts anchorFor reads the median). */
-export const RUN_DISTS_KEEP = 5;
+/** Predicted finish times kept per mountain key (field.ts anchorFor reads the median). */
+export const RUN_TIMES_KEEP = 5;
 
+/** Your best run on a mountain, in race order: its ghost, and what it did. */
 export interface BestRun {
   score: number;
   distance: number;
-  /** The replay; empty when it was recorded on another sim version (it can no longer ride). */
   record: string;
+  /** Finish time in seconds; absent for a best that did not finish. */
+  time?: number;
+  /** The clock at each stage line, seconds. */
+  splits?: number[];
+  /** Your highest style score here, whichever run set it (`score` is the best run's own). */
+  topScore?: number;
 }
 
 export interface Grudge {
   name: string;
   score: number;
-  /** The replay; empty when it was recorded on another sim version (the tally is kept). */
+  /** The replay; empty when it no longer rides (the tally is kept, and `archive` holds the record). */
   record: string;
   /** Head-to-head tally: runs this ghost has beaten you in (old saves read as 1). */
   them?: number;
@@ -37,6 +47,14 @@ export interface Grudge {
   by?: number;
   /** How far its whole run went, in metres. */
   distance?: number;
+  /** Its finish time in seconds, when it finished. */
+  time?: number;
+}
+
+/** Records a rule change retired, each exactly as it was saved. Never pruned, never rewritten. */
+export interface Archive {
+  best: Record<string, Record<string, unknown>>;
+  grudge: Record<string, Record<string, unknown>>;
 }
 
 export interface Settings {
@@ -74,8 +92,11 @@ export interface SaveData {
   stats: { bestScore: number; bestCombo: number; longestAir: number; perfects: number; topSpeed: number; yetiHops: number; avalanches: number };
   hints: Record<string, number>;
   daily: DailyRecord;
-  /** The last few run-end distances per mountain key (field.ts anchorFor). */
+  /** Run-end distances from before runs had a finish. Kept, and read by nothing: see runTimes. */
   runDists?: Record<string, number[]>;
+  /** Your last predicted finish times per mountain key, seconds (field.ts anchorFor). */
+  runTimes?: Record<string, number[]>;
+  archive?: Archive;
 }
 
 export function defaultSave(name: string): SaveData {
@@ -97,6 +118,7 @@ export function defaultSave(name: string): SaveData {
     hints: {},
     daily: { key: '', best: 0, medal: 0, streak: 0, last: '' },
     runDists: {},
+    runTimes: {},
   };
 }
 
@@ -176,38 +198,104 @@ export function recordOk(r: unknown): r is string {
   }
 }
 
-function loadBest(p: unknown): Record<string, BestRun> {
+/**
+ * Adds an entry to one side of the archive, never touching what is there: an entry already held is
+ * left alone (so this is idempotent across loads), and a different one under a taken key gets the
+ * next free 'key#2'. A blanked entry naming the same rider is the archived one after it lost its
+ * record: nothing new.
+ */
+function archiveEntry(side: Record<string, Record<string, unknown>>, key: string, v: Record<string, unknown>): void {
+  const text = JSON.stringify(v);
+  for (let i = 1; ; i++) {
+    const k = i === 1 ? key : `${key}#${i}`;
+    const held = side[k];
+    if (held === undefined) {
+      side[k] = v;
+      return;
+    }
+    if (JSON.stringify(held) === text || (!v.record && held.name !== undefined && held.name === v.name)) return;
+  }
+}
+
+function loadArchive(p: unknown): Archive {
+  const side = (v: unknown): Record<string, Record<string, unknown>> => {
+    const out: Record<string, Record<string, unknown>> = {};
+    if (isObj(v)) for (const [k, e] of Object.entries(v)) if (isObj(e)) out[k] = e;
+    return out;
+  };
+  return { ...(isObj(p) ? p : {}), best: side(isObj(p) ? p.best : null), grudge: side(isObj(p) ? p.grudge : null) };
+}
+
+/** A record's worth keeping: it has a replay or a score to its name. */
+const worthKeeping = (v: Record<string, unknown>): boolean => (typeof v.record === 'string' && v.record !== '') || (isNum(v.score) && v.score > 0);
+
+function loadBest(p: unknown, archive: Archive): Record<string, BestRun> {
   const out: Record<string, BestRun> = {};
   if (!isObj(p)) return out;
   for (const [k, v] of Object.entries(p)) {
     if (!isObj(v)) continue;
-    out[k] = { ...(v as object), score: isNum(v.score) ? v.score : 0, distance: isNum(v.distance) ? v.distance : 0, record: recordOk(v.record) ? v.record : '' };
+    // A best that can no longer ride moves to the archive whole, and its slot clears.
+    if (!recordOk(v.record)) {
+      if (worthKeeping(v)) archiveEntry(archive.best, k, v);
+      continue;
+    }
+    const b: BestRun = { ...(v as object), score: isNum(v.score) ? v.score : 0, distance: isNum(v.distance) ? v.distance : 0, record: v.record };
+    if (!isNum(v.time) || v.time <= 0) delete b.time;
+    if (!Array.isArray(v.splits) || !v.splits.every(isNum)) delete b.splits;
+    if (!isNum(v.topScore)) delete b.topScore;
+    out[k] = b;
   }
   return out;
 }
 
-function loadGrudges(p: unknown): Record<string, Grudge> {
+function loadGrudges(p: unknown, archive: Archive): Record<string, Grudge> {
   const out: Record<string, Grudge> = {};
   if (!isObj(p)) return out;
   for (const [k, v] of Object.entries(p)) {
     if (!isObj(v) || typeof v.name !== 'string' || !v.name) continue;
-    const g: Grudge = { name: v.name, score: isNum(v.score) ? v.score : 0, record: recordOk(v.record) ? v.record : '' };
+    const ok = recordOk(v.record);
+    if (!ok) archiveEntry(archive.grudge, k, v);
+    const g: Grudge = { name: v.name, score: isNum(v.score) ? v.score : 0, record: ok ? (v.record as string) : '' };
     // The tally survives a stale record: the history is the point.
     if (isNum(v.them) && v.them >= 1) g.them = Math.floor(v.them);
     if (isNum(v.streak) && v.streak >= 1) g.streak = Math.floor(v.streak);
     if (isNum(v.by) && v.by >= 0) g.by = v.by;
     if (isNum(v.distance) && v.distance >= 0) g.distance = v.distance;
+    if (isNum(v.time) && v.time > 0) g.time = v.time;
     out[k] = g;
   }
   return out;
 }
 
-function loadRunDists(p: unknown): Record<string, number[]> {
+/** A grudge replaced before it was settled: its tally goes to the archive with its replay. One that
+ *  no longer rides is there already, moved at load. */
+export function retireGrudge(d: SaveData, key: string, g: Grudge): void {
+  if (!recordOk(g.record)) return;
+  const a = (d.archive ??= { best: {}, grudge: {} });
+  archiveEntry(a.grudge, key, { ...g });
+}
+
+/** The grudge on a mountain if its ghost will ride: one whose record is stale keeps its name and tally,
+ *  and claims no rematch. */
+export function rideableGrudge(d: SaveData, key: string): Grudge | null {
+  const g = d.grudge[key];
+  return g && recordOk(g.record) ? g : null;
+}
+
+/** The old figures a mountain's card shows until a new best exists, else null. */
+export function oldBest(d: SaveData, key: string): { score: number; distance: number } | null {
+  if (d.best[key]) return null;
+  const a = d.archive?.best[key];
+  if (!a) return null;
+  return { score: isNum(a.score) ? a.score : 0, distance: isNum(a.distance) ? a.distance : 0 };
+}
+
+function loadRunList(p: unknown): Record<string, number[]> {
   const out: Record<string, number[]> = {};
   if (!isObj(p)) return out;
   for (const [k, v] of Object.entries(p)) {
     if (!Array.isArray(v)) continue;
-    const list = v.filter((x): x is number => isNum(x) && x >= 0).slice(-RUN_DISTS_KEEP);
+    const list = v.filter((x): x is number => isNum(x) && x >= 0).slice(-RUN_TIMES_KEEP);
     if (list.length) out[k] = list;
   }
   return out;
@@ -236,7 +324,8 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
   return s;
 }
 
-/** Drops Daily Mountain entries ('daily:<day>') other than today's from best, grudge and runDists. */
+/** Drops Daily Mountain entries ('daily:<day>') other than today's from best, grudge and the run
+ *  lists. The archive is never pruned. */
 export function pruneDaily(d: SaveData, today: string): void {
   const keep = `daily:${today}`;
   const prune = (rec: Record<string, unknown> | undefined): void => {
@@ -246,6 +335,7 @@ export function pruneDaily(d: SaveData, today: string): void {
   prune(d.best);
   prune(d.grudge);
   prune(d.runDists);
+  prune(d.runTimes);
 }
 
 /** The music and effects sliders' defaults. They were 0.7 and 0.9, which set the effects about 4 dB
@@ -265,6 +355,7 @@ function loadSettings(base: Settings, p: unknown): Settings {
 export function merge(base: SaveData, p: Partial<SaveData>, today: string): SaveData {
   const name = typeof p.name === 'string' && p.name ? p.name : base.name;
   const ghostsPassed = isNum(p.ghostsPassed) ? p.ghostsPassed : base.ghostsPassed;
+  const archive = loadArchive(p.archive);
   const d: SaveData = {
     ...base,
     ...p,
@@ -274,14 +365,18 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     settings: loadSettings(base.settings, p.settings),
     stats: { ...base.stats, ...(isObj(p.stats) ? p.stats : {}) },
     missions: loadMissions(p.missions, base.missions, name, ghostsPassed),
-    best: loadBest(p.best),
-    grudge: loadGrudges(p.grudge),
+    best: loadBest(p.best, archive),
+    grudge: loadGrudges(p.grudge, archive),
     hints: isObj(p.hints) ? (p.hints as Record<string, number>) : {},
     // Shallow merge: new daily fields get their defaults and unknown ones are kept.
     daily: { ...base.daily, ...(isObj(p.daily) ? p.daily : {}) },
     ownedSleds: Array.isArray(p.ownedSleds) && p.ownedSleds.length ? p.ownedSleds : [0],
-    runDists: loadRunDists(p.runDists),
+    runDists: loadRunList(p.runDists),
+    runTimes: loadRunList(p.runTimes),
   };
+  // (Written only when it holds something: a save with nothing retired keeps its shape.)
+  if (Object.keys(archive.best).length > 0 || Object.keys(archive.grudge).length > 0) d.archive = archive;
+  else delete d.archive;
   pruneDaily(d, today);
   return d;
 }

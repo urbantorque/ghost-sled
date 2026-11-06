@@ -1,5 +1,6 @@
 import { MOUNTAINS, biomeForSeed } from '../sim/mountains';
 import { Rng, hash32 } from '../sim/prng';
+import { FINISH_Z, clock } from './standing';
 
 // Rotating missions: three active at a time, each a one-run goal. Completing one pays gifts and
 // the slot rolls to the next mission in the rotation. The rotation is a seeded shuffle per cycle
@@ -31,6 +32,15 @@ export interface RunSummary {
   ghostsPassed: number;
   grudgeBeaten: boolean;
   chaos: boolean;
+  /** How long the run has lasted, seconds. */
+  seconds: number;
+  /** Over the finish line, and the time it took (0 until then). */
+  finished: boolean;
+  finishSeconds: number;
+  /** Wipeouts this run, free or not. */
+  tumbles: number;
+  wallRides: number;
+  grinds: number;
 }
 
 /** How a progress figure reads: metres, seconds, m/s, spin degrees (half turns x 180) or a count. */
@@ -58,9 +68,11 @@ const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 });
 /** 1600 -> "1,600"; 1.5 -> "1.5"; 2 -> "2". */
 const n = (v: number): string => NF.format(v);
 const plural = (v: number, one: string, many: string): string => (v === 1 ? one : many);
+/** A finish faster than `s` seconds: met or not (a slower time is no progress toward it). */
+const under = (s: number) => (r: RunSummary): number => (r.finished && r.finishSeconds < s ? 1 : 0);
 
 const DEFS: MissionDef[] = [
-  { id: 'dist800', text: '', target: 800, reward: 25, metric: (r) => r.distance, grow: 'x2', cap: 6000, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
+  { id: 'dist800', text: '', target: 800, reward: 25, metric: (r) => r.distance, grow: 'x2', cap: FINISH_Z, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
   { id: 'perfect2', text: '', target: 2, reward: 30, metric: (r) => r.perfects, grow: 1, unit: 'n', say: (t) => `Land ${n(t)} perfect landings` },
   { id: 'pass1', text: '', target: 1, reward: 25, metric: (r) => r.ghostsPassed, grow: 1, unit: 'n', say: (t) => (t === 1 ? 'Pass a ghost' : `Pass ${n(t)} ghosts in one run`) },
   { id: 'gifts20', text: '', target: 20, reward: 25, metric: (r) => r.gifts, grow: 10, unit: 'n', say: (t) => `Collect ${n(t)} gifts in one run` },
@@ -69,20 +81,27 @@ const DEFS: MissionDef[] = [
   { id: 'near4', text: '', target: 4, reward: 35, metric: (r) => r.nearMisses, grow: 1, unit: 'n', say: (t) => `Get ${n(t)} near misses in one run` },
   { id: 'spin360', text: '', target: 2, reward: 35, metric: (r) => r.maxHalfTurns, grow: 1, unit: 'deg', say: (t) => `Land a ${n(t * 180)} spin` },
   { id: 'draft4', text: '', target: 4, reward: 35, metric: (r) => r.draftSeconds, grow: 2, unit: 's', say: (t) => `Draft ghosts for ${n(t)} seconds` },
+  { id: 'finish1', text: '', target: 1, reward: 40, metric: (r) => (r.finished ? 1 : 0), grow: 0, unit: 'n', say: () => 'Finish a mountain' },
+  { id: 'wall1', text: '', target: 1, reward: 35, metric: (r) => r.wallRides, grow: 1, unit: 'n', say: (t) => (t === 1 ? 'Ride a wall' : `Ride ${n(t)} walls in one run`) },
   { id: 'combo3k', text: '', target: 3000, reward: 40, metric: (r) => r.bestCombo, grow: 'x2', cap: 40000, unit: 'n', say: (t) => `Bank a ${n(t)} point combo` },
-  { id: 'dist2000', text: '', target: 2000, reward: 45, metric: (r) => r.distance, grow: 'x2', cap: 6000, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
+  { id: 'dist2000', text: '', target: 2000, reward: 45, metric: (r) => r.distance, grow: 'x2', cap: FINISH_Z, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
   { id: 'flip1', text: '', target: 1, reward: 50, metric: (r) => r.flips, grow: 1, unit: 'n', say: (t) => (t === 1 ? 'Land a backflip' : `Land ${n(t)} backflips in one run`) },
   { id: 'pass3', text: '', target: 3, reward: 50, metric: (r) => r.ghostsPassed, grow: 1, unit: 'n', say: (t) => `Pass ${n(t)} ghosts in one run` },
   { id: 'speed36', text: '', target: 36, reward: 40, metric: (r) => r.maxSpeed, grow: 2, cap: 42, unit: 'm/s', say: (t) => `Hit ${n(t)} m/s` },
   { id: 'perfect5', text: '', target: 5, reward: 55, metric: (r) => r.perfects, grow: 1, unit: 'n', say: (t) => `Land ${n(t)} perfect landings` },
   { id: 'smash3', text: '', target: 3, reward: 35, metric: (r) => r.smashes, biome: 'alpine', grow: 1, unit: 'n', say: (t) => `Smash ${n(t)} snowmen` },
+  { id: 'grind2', text: '', target: 2, reward: 45, metric: (r) => r.grinds, grow: 1, unit: 'n', say: (t) => `Grind ${n(t)} rails in one run` },
+  { id: 'clean1', text: '', target: 1, reward: 55, metric: (r) => (r.finished && r.tumbles === 0 ? 1 : 0), grow: 0, unit: 'n', say: () => 'Finish with no wipeouts' },
+  { id: 'time210', text: '', target: 1, reward: 50, metric: under(210), grow: 0, unit: 'n', say: () => `Finish in under ${clock(210).slice(0, -2)}` },
   { id: 'gates3', text: '', target: 3, reward: 40, metric: (r) => r.gates, biome: 'blossom', grow: 1, unit: 'n', say: (t) => `Ride through ${n(t)} spirit gates` },
   { id: 'score12k', text: '', target: 12000, reward: 60, metric: (r) => r.score, grow: 'x2', cap: 100000, unit: 'n', say: (t) => `Score ${n(t)} in one run` },
   { id: 'spin720', text: '', target: 4, reward: 70, metric: (r) => r.maxHalfTurns, grow: 1, unit: 'deg', say: (t) => `Land a ${n(t * 180)}` },
   { id: 'grudge', text: '', target: 1, reward: 60, metric: (r) => (r.grudgeBeaten ? 1 : 0), grow: 0, unit: 'n', say: () => 'Beat your grudge ghost' },
   { id: 'combo10k', text: '', target: 10000, reward: 80, metric: (r) => r.bestCombo, grow: 'x2', cap: 40000, unit: 'n', say: (t) => `Bank a ${n(t)} point combo` },
-  { id: 'dist4000', text: '', target: 4000, reward: 90, metric: (r) => r.distance, grow: 'x2', cap: 6000, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
+  { id: 'dist4000', text: '', target: 4000, reward: 90, metric: (r) => r.distance, grow: 'x2', cap: FINISH_Z, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
   { id: 'score40k', text: '', target: 40000, reward: 120, metric: (r) => r.score, grow: 'x2', cap: 100000, unit: 'n', say: (t) => `Score ${n(t)} in one run` },
+  { id: 'time185', text: '', target: 1, reward: 80, metric: under(185), grow: 0, unit: 'n', say: () => `Finish in under ${clock(185).slice(0, -2)}` },
+  { id: 'time160', text: '', target: 1, reward: 120, metric: under(160), grow: 0, unit: 'n', say: () => `Finish in under ${clock(160).slice(0, -2)}` },
 ];
 
 export const MISSIONS: readonly MissionDef[] = DEFS.map((d) => ({ ...d, text: d.say(d.target) }));
@@ -92,9 +111,9 @@ export const MISSIONS: readonly MissionDef[] = DEFS.map((d) => ({ ...d, text: d.
  *  perfects and passes a ghost first. */
 const BANDS: ReadonlyArray<readonly [number, number]> = [
   [0, 3],
-  [3, 9],
-  [9, 16],
-  [16, MISSIONS.length],
+  [3, 11],
+  [11, 21],
+  [21, MISSIONS.length],
 ];
 
 const ROMAN = ['', '', ' (II)', ' (III)'];

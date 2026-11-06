@@ -234,7 +234,8 @@ Every place where I replaced, extended or interpreted the brief, and why.
     Your own best is gold-white glass, and it is always "Your best", never your name (the
     tag, the crash marker, the rival pill and every banner: "Passed Your best", "Your best passed
     you").
-38. **The finishing order is by distance, and the results speak only in its terms.** Every row shows
+38. **The finishing order is by distance, and the results speak only in its terms.** (Replaced in the
+    wow pass: the race is by time, then distance. What it says of stamps and the list still stands.) Every row shows
     how far that run went, and your place is one more than the ghosts that went further. A
     passes-based order read as fair but disagreed with the metres printed on each row. The header
     reads "Beat N of M", only the rows you finished ahead of carry a Beat stamp, and one line under
@@ -520,7 +521,8 @@ Every place where I replaced, extended or interpreted the brief, and why.
     N', with a crater, ring, bell and hitstop that grow. A sketchy landing, a crash or a revive breaks
     it ('Streak broken'); a hop under 0.3 s neither counts nor breaks. A single perfect reads
     'PERFECT LANDING' over 'STOMP +250'.
-77. **The field is built around where you crash.** The anchor A is the larger of the median of your
+77. **The field is built around where you crash.** (Replaced in the wow pass: it is built around your
+    predicted finish time.) The anchor A is the larger of the median of your
     last five run ends on that mountain and 0.7 of the last one (700 m with no runs). An opener at
     0.62A, two pack ghosts at 0.85A and 1.05A, a pace rider from max(1.7A, A + 250, 1,500 m) that
     averaged 23 m/s or more, and a stretch rider past 2.2A. A fresh Pinecrest run calls 'Chase
@@ -853,3 +855,79 @@ Every place where I replaced, extended or interpreted the brief, and why.
 124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
     Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
     Night, a third as dense and paler; Glass Ice gets diamond dust there.
+
+## Made in the wow pass
+
+125. **A run is a descent with a goal, and the race is by time (replaces decision 38).** Finish it,
+    or wreck trying. Finishers rank by finish time, then riders who did not finish rank by distance.
+    Distance is max z, so everyone over the line ties on it: `standing.ts` is the one order, and every
+    comparator, row and line of copy goes through it. A row reads in its own terms ("2:31.4" for a
+    finisher, "3,212 m" for the rest), and a margin is the difference of the two rows as they read
+    ("1.2 s", "85 m"). A time and a distance share no unit, so a finisher over a rider who did not
+    finish is "to the finish" ("Mila beat you to the finish", "1,288 m short of the finish"), never an
+    invented number. A dead heat gives nobody the lead. The rest of decision 38 stands: Beat stamps
+    on the rows you finished ahead of, a Next tag, the windowed list, no Passed stamps.
+126. **A finish is not a crash.** The `finish` beat ends the race and opens its own door
+    (`crossedLine`), never `crashed()`: no crash beat, no revive, no cause. The sim ticks on through the
+    coast (phase 'finished'), the banner holds the time and place, and the results open 3 s later, or
+    on a tap from 500 ms in (so a press held over from the last jump never skips by accident). The run
+    is saved on the line and again when the card opens, with the coast in it. A live record's header
+    carries the finish in `ticks` (its log runs on), so a link says when its rider finished without a
+    replay. The finished card leads with the time, then place, medal, your best and the style score,
+    then the splits; a wreck keeps its card.
+127. **A ghost over the line has left the race, and it won.** It stays ahead wherever it stopped, and
+    rolling past where it stands is no pass: no gifts, no unlock credit, no choir, no slipstream, no
+    rival pill, no grudge settled. A ghost reaching the line mid duel is a lost duel ("Mila finished
+    first"), where a wreck is a won one. Your place on the line counts only the ghosts already over it,
+    so the coast cannot change it. The worker reports `finishTick` and `stageTicks`, and `crashTick`
+    stays the only way into the wreck path. Graveyards take crashes only: a line of finishers is no
+    place of the dead.
+128. **The field is built around when you would finish (replaces decision 77).** The anchor is your
+    predicted time: the median of your last five, a finish or a pace carried to the line, or 1.1 times
+    the last when that is quicker; a new mountain reads 1.1 times your others; with no runs, a mid-pack
+    time from the pool. An opener in 1.05 to 1.22 A, two pack ghosts around you, pace in 0.88 to
+    0.97 A, a stretch rider in 0.75 to 0.9 A. Spacing is 1 s on the clock, and 25 m only between two
+    who crashed: spaced by distance, every finisher looks like one rider. Pace and stretch no longer
+    need to be long runners: on a course with a line, a time says what a distance could not. The
+    pool needs `finishTick`: the bot rides on past the line, so a finisher's `ticks` is no finish time.
+129. **Your best is your best run in race order.** It is the ghost you race, and it is measured
+    against the best you started with, so saving a run twice settles the same way. A finish beats
+    any distance, on any score, and a dead heat keeps the higher score. Your highest style score is
+    kept apart (`topScore`), so 'New best score' still means what it says. A best that finished is a
+    time: its band, 'Best in 240 m' and 'New ground' stand down.
+130. **Medals are times, and every one stays reachable.** Bronze beats 60% of the pool's way down,
+    silver 30%, gold 10%, on predicted times, and only a finish earns one. Each sits at least 1 s
+    under the last, so a pool of ties still has three to reach: on distance, finishers tying set
+    silver and gold past the end of the course. Every mountain's finish shows its medal; the Daily
+    alone puts it on the save.
+131. **A new course is a clean break that erases nothing.** A best or grudge whose replay cannot ride
+    moves, exactly as it was, to `archive` (never pruned, never rewritten, idempotent; a second record
+    under a taken key gets `key#2`). The best's slot clears, so a stale score blocks nothing, and the
+    card shows 'Old best' until a new one exists. A grudge keeps its name and tally and claims no
+    rematch, and electing over it keeps its tally. `runDists` stays on the save and feeds nothing:
+    predicted times live in `runTimes`. Daily medal, streak and last day, gifts, sleds, stats, passes and
+    missions are untouched. This supersedes the part of decision 26 that kept a stale score in place.
+132. **An old challenge link is a target, not an error.** Bytes 0 to 27 of a record keep their layout,
+    so a header-only reader still says whose run it was, where and how far. It opens on its mountain
+    with 'Mila rode 2,340 m on the old Pinecrest. Beat it.', a friend band at that distance (clamped to
+    the finish) and `friendBeaten` when you pass it. No toast, and no ghost, so never a rematch.
+133. **A wipeout is one short line.** 'Wipeout' on the free stretch, 'Wipeout. 1 left' after it, and
+    pips from the moment the first is spent (until then there is nothing to count). No banner, no
+    results. A tumble teaches nothing: no hint shows while you roll, airborne or not.
+134. **The clock leads the left block.** Clock, then distance a step quieter, then a thin stage line
+    ('Stage 2 of 3', one hairline a stage). On a phone they share the row under the score, so the top
+    HUD is no taller; for a countdown's 400 m the distance and the stage's words step out for its chip. A stage line is a
+    banner over the race row: the stage, the clock, and the split in the race-gap grammar, a number and
+    a word in the rider's colour ('1.2 s behind Mila', '0.8 s ahead of your best'), never a bare sign.
+    The split is against the ghost just ahead there, or in the lead the one just behind; your best has
+    its own figure. Splits are the clock at each line, the same on the banner and the card.
+135. **The first minute is taught in order, and nothing waits for a miss.** Steer at once; on the first
+    kicker in reach 'Hold, release at the lip', which takes the slot even from a rider who has not
+    steered; the ring on that flight; the air on the first leap after it, once the ring has shown
+    rather than once a stomp has landed. The drift nag keeps off a first run until 800 m. Kickers are
+    read from `zones.ramps`, whoever put them there, within 3 m of a rider's reach. This relaxes
+    decision 87's air lesson to 1.7 s left to land.
+136. **Missions fit the course.** Every distance target is capped at the finish, so no slot can stick
+    on a ride that does not exist. New: finish a mountain, finish with no wipeouts (a free one counts
+    against it), ride a wall, grind rails, finish under 3:30, 3:05 and 2:40. The times are three flat
+    missions rather than a growing one: a slower finish is no progress toward a faster one.

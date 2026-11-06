@@ -120,14 +120,23 @@ describe('save migration (schema v1 forever)', () => {
 });
 
 describe('old records and save hygiene', () => {
-  it('a best or grudge recorded on another sim version keeps its score, distance and tally', () => {
+  it('a best or grudge recorded on another sim version moves to the archive whole', () => {
     const raw = oldSave();
-    raw.best = { pinecrest: { score: 5400, distance: 1240, record: staleRecord('Mila') }, ember: { score: 10, distance: 20, record: 'garbage!' } };
-    raw.grudge = { pinecrest: { name: 'Tess', score: 3000, record: staleRecord('Tess'), them: 3, streak: 3, by: 42, distance: 1300 } };
+    const mila = staleRecord('Mila');
+    const tess = staleRecord('Tess');
+    raw.best = { pinecrest: { score: 5400, distance: 1240, record: mila }, ember: { score: 10, distance: 20, record: 'garbage!' } };
+    raw.grudge = { pinecrest: { name: 'Tess', score: 3000, record: tess, them: 3, streak: 3, by: 42, distance: 1300 } };
     const d = new SaveStore(new MemStorage(raw), 'Fallback', TODAY).data;
-    expect(d.best.pinecrest).toEqual({ score: 5400, distance: 1240, record: '' });
-    expect(d.best.ember).toEqual({ score: 10, distance: 20, record: '' });
+    expect(d.best).toEqual({});
+    expect(d.archive!.best.pinecrest).toEqual({ score: 5400, distance: 1240, record: mila });
+    expect(d.archive!.best.ember).toEqual({ score: 10, distance: 20, record: 'garbage!' });
+    // The grudge keeps its name and tally, with no replay to claim a rematch on.
     expect(d.grudge.pinecrest).toEqual({ name: 'Tess', score: 3000, record: '', them: 3, streak: 3, by: 42, distance: 1300 });
+    expect(d.archive!.grudge.pinecrest).toEqual({ name: 'Tess', score: 3000, record: tess, them: 3, streak: 3, by: 42, distance: 1300 });
+  });
+
+  it('a save with nothing retired has no archive', () => {
+    expect('archive' in new SaveStore(new MemStorage(oldSave()), 'Fallback', TODAY).data).toBe(false);
   });
 
   it('prunes Daily Mountain entries other than today', () => {

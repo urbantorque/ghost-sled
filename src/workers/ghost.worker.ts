@@ -1,5 +1,5 @@
 /// <reference lib="webworker" />
-import { generatePool } from '../bot/pool';
+import { generatePool, type PoolRun } from '../bot/pool';
 import { recordFromString, replayRecord } from '../sim/replay';
 import {
   F_AIRPITCH,
@@ -38,8 +38,13 @@ function replay(id: number, recordStr: string): void {
     let n = 0;
     const tricks: number[] = [];
     let crashTick = -1;
+    const stageTicks: number[] = [];
+    let finishTick = -1;
     const sim = replayRecord(rec, (s) => {
       for (const e of s.events) {
+        // A ghost that finished is over the line, not wrecked there: the crash door stays shut for it.
+        if (e.type === 'stage') stageTicks.push(e.tick);
+        if (e.type === 'finish') finishTick = e.tick;
         if (e.type === 'land' && (e.quality === 'perfect' || e.halfTurns > 0 || e.flips > 0)) {
           tricks.push(s.tick, e.quality === 'perfect' ? 1 : e.quality === 'sketchy' ? 2 : 0, e.halfTurns, e.flips);
         }
@@ -75,6 +80,8 @@ function replay(id: number, recordStr: string): void {
         samples: n,
         ticks: sim.tick,
         crashTick: crashTick >= 0 ? crashTick : sim.s.crashed ? sim.s.crashTick : -1,
+        finishTick,
+        stageTicks,
         score: sim.score,
         distance: sim.distance,
         tricks: tr,
@@ -92,8 +99,11 @@ ctx.onmessage = (ev: MessageEvent<WorkerIn>) => {
     for (const job of msg.jobs) replay(job.id, job.record);
   } else if (msg.type === 'pool') {
     try {
-      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks });
-      post({ type: 'pool', reqId: msg.reqId, ghosts });
+      let runs: PoolRun[] = [];
+      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks, report: (r) => (runs = r) });
+      // The bot rides on past the line, so a pool ghost's `ticks` is no finish time: its Sim knows.
+      const finish = new Map(runs.filter((r) => r.sim.finished).map((r) => [r.record.name, r.sim.s.finishTick]));
+      post({ type: 'pool', reqId: msg.reqId, ghosts: ghosts.map((g) => ({ ...g, ...(finish.has(g.name) ? { finishTick: finish.get(g.name) } : {}) })) });
     } catch (err) {
       post({ type: 'error', id: -msg.reqId, message: String(err) });
     }

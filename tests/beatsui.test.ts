@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Beat, GhostRef } from '../src/game/beats';
 import { ChaosEvent } from '../src/sim/chaos';
-import { BeatRouter } from '../src/ui/beatsui';
+import { BeatRouter, splitWords } from '../src/ui/beatsui';
 import type { Fx } from '../src/ui/fx';
 import type { Hud } from '../src/ui/hud';
 import { grudgeCopy, Notices } from '../src/ui/notices';
@@ -32,12 +32,55 @@ function rig() {
     rankNow: rec('hud.rankNow'),
   } as unknown as Hud;
   const fx = { pop: rec('fx.pop'), flowIn: rec('fx.flowIn'), stomp: rec('fx.stomp'), stamp: rec('fx.stamp'), cashIn: rec('fx.cashIn'), lost: rec('fx.lost'), retireStamp: rec('fx.retireStamp') } as unknown as Fx;
-  const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock'), yieldToCrash: rec('notices.yieldToCrash') } as unknown as Notices;
+  const notices = { toast: rec('notices.toast'), grudge: rec('notices.grudge'), grudgeSettled: rec('notices.grudgeSettled'), finale: rec('notices.finale'), unlock: rec('notices.unlock'), yieldToCrash: rec('notices.yieldToCrash'), stageLine: rec('notices.stageLine'), finish: rec('notices.finish') } as unknown as Notices;
   const router = new BeatRouter(hud, fx, notices);
   return { calls, router, of: (tag: string) => calls.filter((c) => c[0] === tag) };
 }
 
 const mila: GhostRef = { id: 3, name: 'Mila', kind: 'grudge', dx: 1 };
+
+describe('the new moments of a descent', () => {
+  const base = { tick: 1 };
+
+  it('a tumble is one short line and nothing else', () => {
+    const r = rig();
+    r.router.handle([{ ...base, type: 'tumble', phase: 'start', cause: 'tree', left: 1, free: false, x: 0, z: 900, say: { label: 'Wipeout. 1 left', points: 0, tone: 'lost' } }]);
+    expect(r.of('fx.pop').map((c) => c[1])).toEqual(['Wipeout. 1 left']);
+    expect(r.of('fx.retireStamp')).toHaveLength(1);
+    expect(r.of('notices.yieldToCrash')).toHaveLength(0);
+    r.router.handle([{ ...base, type: 'tumble', phase: 'end', cause: 'tree', left: 1, free: false, x: 0, z: 900 }]);
+    expect(r.of('fx.pop')).toHaveLength(1);
+  });
+
+  it('a stage line flashes its clock and both splits, in the race-gap grammar', () => {
+    const r = rig();
+    r.router.handle([{ ...base, type: 'stage', index: 0, name: 'Stage 1', last: false, seconds: 72.46, vsGhost: { name: 'Mila', kind: 'pool', delta: 1.24 }, vsBest: -0.85 }]);
+    expect(r.of('notices.stageLine')).toEqual([['notices.stageLine', 'Stage 1', '1:12.4', { text: '1.2\u00a0s behind Mila', kind: 'pool' }, '0.9\u00a0s ahead of your best']]);
+  });
+
+  it('flashes with nothing to compare, and leaves the last line to the finish', () => {
+    const r = rig();
+    r.router.handle([{ ...base, type: 'stage', index: 0, name: 'Stage 1', last: false, seconds: 70, vsGhost: null, vsBest: null }]);
+    expect(r.of('notices.stageLine')[0].slice(3)).toEqual([null, null]);
+    r.router.handle([{ ...base, type: 'stage', index: 2, name: 'Stage 3', last: true, seconds: 170, vsGhost: null, vsBest: 1 }]);
+    expect(r.of('notices.stageLine')).toHaveLength(1);
+  });
+
+  it('the finish shows the time and the place', () => {
+    const r = rig();
+    r.router.handle([{ ...base, type: 'finish', bonus: 1400, seconds: 151.46, rank: 3, of: 6 }]);
+    expect(r.of('notices.finish')).toEqual([['notices.finish', '2:31.4', 3, 6]]);
+    // The banner band speaks for itself: said twice, it reads twice.
+    expect(r.of('hud.say')).toHaveLength(0);
+  });
+
+  it('splits read as a number and a word, never a bare sign', () => {
+    expect(splitWords(72.46, 1.24, 'Mila')).toBe('1.2\u00a0s behind Mila');
+    expect(splitWords(72.46, -0.85, 'your best')).toBe('0.9\u00a0s ahead of your best');
+    expect(splitWords(72.46, 0.04, 'Mila')).toBe('Level with Mila');
+    expect(splitWords(72.46, -0.02, 'Mila')).toBe('Level with Mila');
+  });
+});
 const you: GhostRef = { id: 9, name: 'Noor Frostberg', kind: 'you', dx: -1 };
 const pool: GhostRef = { id: 4, name: 'Tess', kind: 'pool', dx: 2 };
 

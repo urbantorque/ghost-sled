@@ -514,6 +514,12 @@
   /* C6 budget: on a phone the race line takes the place note's slot rather than adding a line, so
      the head is as tall as it was and your row stays in the first view (the order shows the place
      above with its distance and Next tag anyway). */
+  /* The splits are this card's story, and your row in the race has to stay in the first view: the
+     trick stats step aside for them on a phone. */
+  .gs-res-splits + .gs-res-stats {
+    display: none;
+  }
+
   .gs-res-sub.has-line > .gs-res-note {
     display: none;
   }

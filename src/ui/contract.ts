@@ -17,6 +17,10 @@ export interface MountainCard {
   /** e.g. "Pass 4 ghosts to unlock" */
   unlockText: string;
   best: number;
+  /** Your best finish time here, seconds (0 for none): the card reads it before the score. */
+  bestTime?: number;
+  /** The old course's best, shown as "Old best" until a new one exists (0 for none). */
+  oldBest?: number;
 }
 
 export interface MissionView {
@@ -46,10 +50,16 @@ export interface TitleModel {
   /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row. */
   daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number };
   best: number;
+  /** Your best finish time on the selected mountain, seconds (0 for none). */
+  bestTime?: number;
+  /** The selected mountain's old best, until a new one exists (0 for none). */
+  oldBest?: number;
   wallet: number;
   sledName: string;
-  /** A friend's challenge link was opened. distance: how far their run went; daily: it was on a Daily Mountain. */
-  challenge: { name: string; score: number; mountain: string; distance?: number; daily?: boolean } | null;
+  /** A friend's challenge link was opened. distance: how far their run went; time: its finish in
+   *  seconds, when it finished; daily: it was on a Daily Mountain; old: it was ridden on an old course,
+   *  so `distance` is a target and no ghost rides. */
+  challenge: { name: string; score: number; mountain: string; distance?: number; time?: number | null; daily?: boolean; old?: boolean } | null;
   missions: MissionView[];
   inputMode: InputMode;
   firstVisit: boolean;
@@ -64,6 +74,12 @@ export interface TitleModel {
 export interface HudModel {
   score: number;
   distance: number;
+  /** The run clock, seconds. It stops on the finish line. */
+  clock: number;
+  /** The stage you are riding (0 based), of how many, and how far down the whole descent (0..1). */
+  stage: { index: number; of: number; progress: number } | null;
+  /** Wipeouts the run can still take, of how many; null until the first is spent. */
+  wipeouts: { left: number; of: number } | null;
   gifts: number;
   /**
    * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
@@ -103,13 +119,34 @@ export interface ResultsGhost {
   name: string;
   kind: GhostKind;
   score: number;
+  /** Its finish time in seconds; null or absent for a run that did not finish. */
+  time?: number | null;
   /**
-   * How far its whole run went, in metres. The race is ranked by distance, so this is the number the
-   * finishing order shows (a missing value reads as 0).
+   * How far its whole run went, in metres. Finishers rank by time, then the rest by this, the number
+   * their rows show (a missing value reads as 0).
    */
   distance?: number;
   /** You overtook it at least once during the run (its Passed stamp). */
   passed: boolean;
+}
+
+/** The clock at a stage line. vsBest: seconds against your best there, + = behind; null with none. */
+export interface ResultsSplit {
+  name: string;
+  seconds: number;
+  vsBest: number | null;
+}
+
+/** A run that reached the finish line: the card's finished variant. */
+export interface ResultsFinish {
+  seconds: number;
+  /** 0 none, 1 bronze, 2 silver, 3 gold. */
+  medal: number;
+  splits: ResultsSplit[];
+  /** Your best time before this run, seconds; null with none. */
+  bestTime: number | null;
+  /** This run's time beat it (or is your first). */
+  newBest: boolean;
 }
 
 /** A mountain this run unlocked, for the results reveal card. */
@@ -123,6 +160,10 @@ export interface UnlockedMountain {
 export interface ResultsModel {
   score: number;
   distance: number;
+  /** Set when the run reached the line. Without it, the wreck's card. */
+  finish?: ResultsFinish | null;
+  /** The finish line, metres ("85 m short of the finish"). */
+  finishZ?: number;
   best: number;
   newBest: boolean;
   giftsEarned: number;
@@ -130,6 +171,7 @@ export interface ResultsModel {
   ghosts: ResultsGhost[];
   ghostsPassed: number;
   missions: MissionView[];
+  /** How the run ended ('' for a finish). */
   crashCause: string;
   /** What ended the run, for the crash line's glyph. */
   crashKind?: CrashCause | null;

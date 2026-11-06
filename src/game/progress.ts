@@ -5,6 +5,7 @@ import { SLEDS } from '../sim/sleds';
 import { MissionCtx, MissionResult, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
 import { isNemesis } from './settle';
 import type { SaveData } from './save';
+import { type Standing, aheadOf, figure, marginPhrase } from './standing';
 
 // Progress lines: mid-run mission pops and the pause card's live missions, the next unlock, the title
 // greeting, the Run Again label, the results race line, the crash line, the friend line, the reveal's
@@ -200,19 +201,18 @@ export function crashLine(rankAtCrash: number, past: readonly string[], shown: n
   return `${where} ${who} rode on past.`;
 }
 
-/** The friend line on the results: "You beat Mila by 120 m." or "Mila beat you by 340 m." The margin
- *  is the difference of the two rows as the race shows them (whole metres each), so the line and the
- *  rows agree; under 1 m it says so. */
-export function friendLine(name: string, friendDistance: number, youDistance: number): string {
-  const gap = Math.round(youDistance) - Math.round(friendDistance);
-  const by = (v: number): string => (v >= 1 ? m(v) : 'less than 1 m');
-  if (youDistance > friendDistance) return `You beat ${name} by ${by(gap)}.`;
-  return `${name} beat you by ${by(-gap)}.`;
+/** The friend line on the results, in the race's terms: "You beat Mila by 1.2 s.", "Mila beat you by
+ *  340 m.", "You beat Mila to the finish." The margin is the difference of the two rows as the race
+ *  shows them, so the line and the rows agree; under a tenth or a metre it says so. */
+export function friendLine(name: string, friend: Standing, you: Standing): string {
+  if (aheadOf(you, friend)) return `You beat ${name} ${marginPhrase(you, friend)}.`;
+  if (aheadOf(friend, you)) return `${name} beat you ${marginPhrase(friend, you)}.`;
+  return `Dead level with ${name}.`;
 }
 
-/** The friend's run, crossed alive: the callout on the friendBeaten beat. */
-export function friendBeatenText(name: string, distance: number): string {
-  return `Beat ${name}\u2019s ${m(distance)}`;
+/** The friend's run beaten: the callout on the friendBeaten beat ("Beat Mila's 2,340 m"). */
+export function friendBeatenText(name: string, friend: Standing): string {
+  return `Beat ${name}\u2019s ${figure(friend)}`;
 }
 
 /** Where a challenge was ridden, for copy: a Daily Mountain reads "the Daily Mountain". */
@@ -221,15 +221,15 @@ function placeName(mountain: string): string {
 }
 
 /**
- * The share sheet's title for a challenge link. With `by` (you beat a friend's challenge): addressed
- * back to them, "Mila, I beat your 2,340 m on Pinecrest by 120 m. Your move." `name` is the friend and
- * `distance` their run. Without: an open challenge for your own run, "Beat my 2,340 m on Pinecrest
- * in Ghost Sled" (`name` unused, `distance` yours).
+ * The share sheet's title for a challenge link. With `by` (you beat a friend's challenge, marginPhrase's
+ * words): addressed back to them, "Mila, I beat your 2:31.4 on Pinecrest by 1.2 s. Your move." `name`
+ * is the friend and `run` theirs. Without: an open challenge for your own run, "Beat my 2:31.4 on
+ * Pinecrest in Ghost Sled" (`name` unused, `run` yours).
  */
-export function challengeShareTitle(name: string, distance: number, mountain: string, by: number | null): string {
+export function challengeShareTitle(name: string, run: Standing, mountain: string, by: string | null): string {
   const where = placeName(mountain);
-  if (by !== null && name) return `${name}, I beat your ${m(distance)} on ${where} by ${m(Math.max(1, by))}. Your move.`;
-  if (distance > 0) return `Beat my ${m(distance)} on ${where} in Ghost Sled`;
+  if (by !== null && name) return `${name}, I beat your ${figure(run)} on ${where} ${by}. Your move.`;
+  if (run.time !== null || run.distance > 0) return `Beat my ${figure(run)} on ${where} in Ghost Sled`;
   return 'Beat my Ghost Sled run';
 }
 

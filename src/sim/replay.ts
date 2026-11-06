@@ -11,6 +11,8 @@ export interface RunRecord {
   sled: number;
   /** Encoded input log (see input.ts). */
   inputs: Uint8Array;
+  /** The run's length in ticks. A live run that finished records the tick it crossed the line here
+   *  (its log runs on through the coast), so a link's header says when it finished. */
   ticks: number;
   score: number;
   distance: number;
@@ -95,6 +97,29 @@ export function decodeRecord(data: Uint8Array): RunRecord {
   };
 }
 
+/** A record's fixed header: readable on any sim version (bytes 0 to 27 keep their layout). */
+export interface RecordHeader {
+  simVersion: number;
+  seed: number;
+  ticks: number;
+  score: number;
+  distance: number;
+  name: string;
+}
+
+/** Reads a record's header without its log. Unlike decodeRecord it takes any sim version, so a link
+ *  from an older build still says whose run it was, where, and how far. Throws on what is no record. */
+export function readHeader(data: Uint8Array): RecordHeader {
+  if (data.length < 28 || data[0] !== MAGIC0 || data[1] !== MAGIC1) throw new Error('not a run record');
+  if (data[2] !== VERSION) throw new Error('unsupported run record version');
+  const u32 = (o: number) => (data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24)) >>> 0;
+  const nameLen = data[27];
+  if (28 + nameLen > data.length) throw new Error('run record truncated');
+  let name = '';
+  for (let i = 0; i < nameLen; i++) name += String.fromCharCode(data[28 + i]);
+  return { simVersion: data[3], seed: u32(4), ticks: u32(15), score: u32(19), distance: u32(23) / 10, name: sanitizeName(name) };
+}
+
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
 export function toBase64Url(data: Uint8Array): string {
@@ -142,6 +167,10 @@ export function recordToString(r: RunRecord): string {
 
 export function recordFromString(s: string): RunRecord {
   return decodeRecord(fromBase64Url(s));
+}
+
+export function headerFromString(s: string): RecordHeader {
+  return readHeader(fromBase64Url(s));
 }
 
 /** Replay a record to completion (crash or end of log). Calls onTick after each tick. */

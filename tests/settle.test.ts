@@ -3,6 +3,7 @@ import { RunSummary, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { Grudge, defaultSave } from '../src/game/save';
 import { GrudgeOutcome, dailyLine, dailyMedalNow, grudgeLine, dailyStreakNow, medalFor, medalThresholds, prevDay, rowMargin, settleGrudge, settleRun } from '../src/game/settle';
+import { FINISH_Z } from '../src/game/standing';
 import type { GhostKind } from '../src/ui/contract';
 
 function summary(p: Partial<RunSummary> = {}): RunSummary {
@@ -28,6 +29,12 @@ function summary(p: Partial<RunSummary> = {}): RunSummary {
     ghostsPassed: 0,
     grudgeBeaten: false,
     chaos: false,
+    seconds: 0,
+    finished: false,
+    finishSeconds: 0,
+    tumbles: 0,
+    wallRides: 0,
+    grinds: 0,
     ...p,
   };
 }
@@ -87,37 +94,100 @@ describe('settling a run (revive guard)', () => {
   });
 });
 
-describe('run-end distances (runDists)', () => {
+describe('predicted finish times (runTimes)', () => {
+  /** A finish in `time` seconds. */
+  const done = (time: number) => summary({ distance: FINISH_Z + 80, seconds: time + 3, finished: true, finishSeconds: time });
+
   it('pushes on the first settle, replaces on a re-settle, keeps the last 5', () => {
     const d = defaultSave('Test');
-    delete d.runDists;
-    let s = settleRun(d, summary({ distance: 400 }), null, 'pinecrest');
-    expect(d.runDists).toEqual({ pinecrest: [400] });
-    s = settleRun(d, summary({ distance: 650.25 }), s.settlement, 'pinecrest');
-    expect(d.runDists!.pinecrest).toEqual([650.3]);
-    for (const dist of [100, 200, 300, 500, 600]) settleRun(d, summary({ distance: dist }), null, 'pinecrest');
-    expect(d.runDists!.pinecrest).toEqual([100, 200, 300, 500, 600]);
-    const last = settleRun(d, summary({ distance: 700 }), null, 'pinecrest');
-    expect(d.runDists!.pinecrest).toEqual([200, 300, 500, 600, 700]);
-    settleRun(d, summary({ distance: 720 }), last.settlement, 'pinecrest');
-    expect(d.runDists!.pinecrest).toEqual([200, 300, 500, 600, 720]);
+    delete d.runTimes;
+    let s = settleRun(d, done(200), null, 'pinecrest');
+    expect(d.runTimes).toEqual({ pinecrest: [200] });
+    s = settleRun(d, done(195.26), s.settlement, 'pinecrest');
+    expect(d.runTimes!.pinecrest).toEqual([195.3]);
+    for (const t of [201, 202, 203, 204, 205]) settleRun(d, done(t), null, 'pinecrest');
+    expect(d.runTimes!.pinecrest).toEqual([201, 202, 203, 204, 205]);
+    const last = settleRun(d, done(206), null, 'pinecrest');
+    expect(d.runTimes!.pinecrest).toEqual([202, 203, 204, 205, 206]);
+    settleRun(d, done(190), last.settlement, 'pinecrest');
+    expect(d.runTimes!.pinecrest).toEqual([202, 203, 204, 205, 190]);
+  });
+
+  it("carries a run that did not finish to the line at its own pace", () => {
+    const d = defaultSave('Test');
+    settleRun(d, summary({ distance: FINISH_Z / 2, seconds: 110 }), null, 'pinecrest');
+    expect(d.runTimes!.pinecrest).toEqual([220]);
+  });
+
+  it('never touches the distances an old save holds', () => {
+    const d = defaultSave('Test');
+    d.runDists = { pinecrest: [1200] };
+    settleRun(d, done(200), null, 'pinecrest');
+    expect(d.runDists).toEqual({ pinecrest: [1200] });
   });
 
   it('keys a daily run by its day and prunes the other days', () => {
     const d = defaultSave('Test');
-    d.runDists = { 'daily:2026-10-20': [300], pinecrest: [500] };
+    d.runTimes = { 'daily:2026-10-20': [300], pinecrest: [250] };
     d.best['daily:2026-10-20'] = { score: 10, distance: 300, record: '' };
     d.grudge['daily:2026-10-20'] = { name: 'Old', score: 1, record: '' };
-    settleRun(d, summary({ mountain: 'daily', distance: 800 }), null, 'daily:2026-10-26');
-    expect(d.runDists).toEqual({ pinecrest: [500], 'daily:2026-10-26': [800] });
+    settleRun(d, { ...done(210), mountain: 'daily' }, null, 'daily:2026-10-26');
+    expect(d.runTimes).toEqual({ pinecrest: [250], 'daily:2026-10-26': [210] });
     expect(d.best['daily:2026-10-20']).toBeUndefined();
     expect(d.grudge['daily:2026-10-20']).toBeUndefined();
   });
 
   it('falls back to the summary mountain with no key', () => {
     const d = defaultSave('Test');
-    settleRun(d, summary({ mountain: 'frostfang', distance: 321 }), null);
-    expect(d.runDists!.frostfang).toEqual([321]);
+    settleRun(d, { ...done(321), mountain: 'frostfang' }, null);
+    expect(d.runTimes!.frostfang).toEqual([321]);
+  });
+});
+
+describe('the grudge on a course with a finish', () => {
+  const start: Grudge = { name: 'Mila', score: 900, record: 'mila', them: 2, streak: 2, distance: 4600 };
+  const row = (name: string, time: number | null, distance = 4600): GrudgeOutcome['next'] => ({ name, score: 800, record: name, distance, time, kind: 'pool' });
+
+  it('stays when it finished first, even though you coasted further', () => {
+    const out = settleGrudge(start, { youDistance: 4720, youTime: 172, rode: { distance: 4600, time: 170, passed: false }, next: null });
+    expect(out.settled).toBe(false);
+    expect(out.grudge).toMatchObject({ name: 'Mila', them: 3, streak: 3 });
+    expect(out.line).toBe('Mila beat you 3 runs running. Nemesis.');
+  });
+
+  it('says the margin in time', () => {
+    const fresh: Grudge = { ...start, them: 1, streak: 0 };
+    expect(settleGrudge(fresh, { youDistance: 4720, youTime: 172, rode: { distance: 4600, time: 170.8, passed: false }, next: null }).line).toBe('Mila beat you by 1.2 s. Mila will be waiting.');
+  });
+
+  it('settles when you finished first, wherever each of you stopped', () => {
+    const out = settleGrudge(start, { youDistance: 4560, youTime: 165, rode: { distance: 4700, time: 170, passed: false }, next: null });
+    expect(out.settled).toBe(true);
+    expect(out.grudge).toBeNull();
+  });
+
+  it('beat you to the finish when you never reached it', () => {
+    const fresh: Grudge = { ...start, them: 1, streak: 0 };
+    const out = settleGrudge(fresh, { youDistance: 3200, rode: { distance: 4600, time: 170, passed: false }, next: null });
+    expect(out.line).toBe('Mila beat you to the finish. Mila will be waiting.');
+  });
+
+  it('elects by the race order, and names no wreck over the line', () => {
+    const out = settleGrudge(null, { youDistance: 4700, youTime: 172, rode: null, next: null, ahead: [row('Tess', 171)!, row('Bo', 165)!] });
+    expect(out.grudge).toMatchObject({ name: 'Tess', time: 171 });
+    expect(out.line).toBe('Tess beat you by 1.0 s. Tess will be waiting.');
+  });
+
+  it('elects no one who rode slower than you, though their whole run went further', () => {
+    const out = settleGrudge(null, { youDistance: 4560, youTime: 165, rode: null, next: null, ahead: [row('Tess', 171, 4800)!] });
+    expect(out.grudge).toBeNull();
+  });
+
+  it('keeps the tally of a grudge that could not ride when another is elected', () => {
+    const stale: Grudge = { name: 'Mila', score: 900, record: '', them: 4, streak: 3, distance: 2100 };
+    const out = settleGrudge(stale, { youDistance: 1000, rode: null, next: row('Tess', null, 1100) });
+    expect(out.grudge?.name).toBe('Tess');
+    expect(out.retired).toEqual(stale);
   });
 });
 
@@ -294,53 +364,68 @@ describe('the grudge (settleGrudge)', () => {
 
 describe('the daily medal and streak (stretch)', () => {
   const day = 'daily:2026-10-26';
-  // Ten pool runs from 100 m to 1,000 m: bronze at the 40th percentile, silver the 70th, gold the 90th.
-  const pool = [100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
+  // Ten pool times from 150 s to 240 s: bronze beats 60% of the way down, silver 30%, gold 10%.
+  const pool = [150, 160, 170, 180, 190, 200, 210, 220, 230, 240];
   const t = medalThresholds(pool)!;
+  /** A Daily finish in `time` seconds. */
+  const finished = (time: number) => summary({ mountain: 'daily', distance: FINISH_Z + 80, seconds: time, finished: true, finishSeconds: time });
 
-  it('thresholds sit at the 40th, 70th and 90th percentile of the pool distances', () => {
-    expect(t).toEqual([460, 730, 910]);
+  it('thresholds sit at the 60th, 30th and 10th percentile of the pool times', () => {
+    expect(t).toEqual([204, 177, 159]);
     expect(medalThresholds([])).toBeNull();
-    // A flat pool still gives three rising thresholds.
-    const flat = medalThresholds([500, 500, 500])!;
-    expect(flat[0]).toBeLessThan(flat[1]);
-    expect(flat[1]).toBeLessThan(flat[2]);
-    expect(medalFor(459, t)).toBe(0);
-    expect(medalFor(460, t)).toBe(1);
-    expect(medalFor(800, t)).toBe(2);
-    expect(medalFor(2000, t)).toBe(3);
+    expect(medalFor(204.1, t)).toBe(0);
+    expect(medalFor(204, t)).toBe(1);
+    expect(medalFor(170, t)).toBe(2);
+    expect(medalFor(150, t)).toBe(3);
+  });
+
+  it('only a finish earns a medal', () => {
+    expect(medalFor(null, t)).toBe(0);
+    const d = defaultSave('Test');
+    expect(settleRun(d, summary({ mountain: 'daily', distance: 4400, seconds: 170 }), null, day, t).daily).toMatchObject({ medal: 0 });
+  });
+
+  it('keeps every medal reachable, however the pool ties', () => {
+    // Finishers used to tie on distance, which set silver and gold past the end of the course.
+    const flat = medalThresholds([180, 180, 180])!;
+    expect(flat[0]).toBeGreaterThan(flat[1]);
+    expect(flat[1]).toBeGreaterThan(flat[2]);
+    expect(flat[2]).toBeGreaterThan(0);
+    expect(medalFor(flat[2], flat)).toBe(3);
+    const one = medalThresholds([180])!;
+    expect(one[0]).toBeGreaterThan(one[2]);
   });
 
   it('reads as one results line with the next medal to ride for', () => {
-    expect(dailyLine(2, [460, 2410, 2900])).toBe('Daily: Silver. Gold at 2,900 m.');
-    expect(dailyLine(1, [460, 2410, 2900])).toBe('Daily: Bronze. Silver at 2,410 m.');
-    expect(dailyLine(0, [1180, 2410, 2900])).toBe('Daily: Bronze at 1,180 m.');
+    expect(dailyLine(2, [204, 177, 159])).toBe('Daily: Silver. Gold at 2:39.0.');
+    expect(dailyLine(1, [204, 177, 159])).toBe('Daily: Bronze. Silver at 2:57.0.');
+    expect(dailyLine(0, [204, 177, 159])).toBe('Daily: Bronze at 3:24.0.');
     expect(dailyLine(3, t)).toBe('Daily: Gold.');
   });
 
   it('is credited once across a revive', () => {
     const d = defaultSave('Test');
-    const first = settleRun(d, summary({ mountain: 'daily', distance: 500 }), null, day, t);
-    expect(first.daily).toEqual({ medal: 1, best: 1, streak: 1, line: 'Daily: Bronze. Silver at 730 m.' });
-    const again = settleRun(d, summary({ mountain: 'daily', distance: 800 }), first.settlement, day, t);
+    const first = settleRun(d, finished(200), null, day, t);
+    expect(first.daily).toEqual({ medal: 1, best: 1, streak: 1, line: 'Daily: Bronze. Silver at 2:57.0.' });
+    const again = settleRun(d, finished(170), first.settlement, day, t);
     expect(again.daily).toMatchObject({ medal: 2, best: 2, streak: 1 });
     expect(again.settlement.medal).toBe(2);
     expect(d.daily).toMatchObject({ medal: 2, streak: 1, last: '2026-10-26' });
     // A second run the same day keeps the streak and the better medal.
-    settleRun(d, summary({ mountain: 'daily', distance: 200 }), null, day, t);
+    settleRun(d, finished(230), null, day, t);
     expect(d.daily).toMatchObject({ medal: 2, streak: 1 });
   });
 
   it('the streak grows day to day and resets after a missed day', () => {
     const d = defaultSave('Test');
-    settleRun(d, summary({ mountain: 'daily', distance: 950 }), null, 'daily:2026-10-24', t);
-    settleRun(d, summary({ mountain: 'daily', distance: 100 }), null, 'daily:2026-10-25', t);
+    settleRun(d, finished(150), null, 'daily:2026-10-24', t);
+    settleRun(d, finished(235), null, 'daily:2026-10-25', t);
     expect(d.daily).toMatchObject({ streak: 2, medal: 0, last: '2026-10-25' });
     expect(dailyStreakNow(d.daily, '2026-10-26')).toBe(2);
     expect(dailyMedalNow(d.daily, '2026-10-26')).toBe(0);
     // 26 skipped: the 27th starts over.
     expect(dailyStreakNow(d.daily, '2026-10-27')).toBe(0);
-    settleRun(d, summary({ mountain: 'daily', distance: 950 }), null, 'daily:2026-10-27', t);
+    settleRun(d, finished(150), null, 'daily:2026-10-27', t);
     expect(d.daily).toMatchObject({ streak: 1, medal: 3 });
     expect(dailyMedalNow(d.daily, '2026-10-27')).toBe(3);
   });

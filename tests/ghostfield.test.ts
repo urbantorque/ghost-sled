@@ -16,7 +16,7 @@ function field(n: number): GhostManager {
 
 function reply(gm: GhostManager, i: number, samples: number): void {
   const id = gm.tracks[i].entry.id;
-  (gm as unknown as Inbox).onMessage({ type: 'trajectory', id, frames: new Float32Array(samples * 12), samples, ticks: samples * 4, crashTick: -1, score: 0, distance: 0, tricks: new Int32Array(0) });
+  (gm as unknown as Inbox).onMessage({ type: 'trajectory', id, frames: new Float32Array(samples * 12), samples, ticks: samples * 4, crashTick: -1, finishTick: -1, stageTicks: [], score: 0, distance: 0, tricks: new Int32Array(0) });
 }
 
 afterEach(() => {

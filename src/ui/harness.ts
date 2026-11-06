@@ -85,6 +85,9 @@ function hudModel(over: Partial<HudModel> = {}): HudModel {
   return {
     score: 12480,
     distance: 1284,
+    clock: 71.4,
+    stage: { index: 0, of: 3, progress: 0.285 },
+    wipeouts: null,
     gifts: 37,
     combo: { active: true, pending: 1240, mult: 4, chain: 5, timer: 0.62 },
     speed: 21,
@@ -544,6 +547,64 @@ const SCENARIOS: Record<string, () => void> = {
     window.setTimeout(() => ui.toast('No ad available right now', 'info'), 300);
   },
   'results-doubled': () => showResults({ doubled: true, canDouble: false, giftsEarned: 76, canRevive: false }),
+  // A finish: the time is the hero, with the place, the medal, the style score and the splits, and the
+  // order reads times for finishers and metres for the rest.
+  'results-finish': () =>
+    showResults({
+      score: 15862,
+      distance: 4612,
+      finishZ: 4500,
+      finish: {
+        seconds: 171.45,
+        medal: 2,
+        bestTime: 174.3,
+        newBest: true,
+        splits: [
+          { name: 'Stage 1', seconds: 54.2, vsBest: -0.8 },
+          { name: 'Stage 2', seconds: 111.6, vsBest: 1.2 },
+          { name: 'Stage 3', seconds: 171.45, vsBest: -2.85 },
+        ],
+      },
+      crashCause: '',
+      crashKind: null,
+      canRevive: false,
+      ghosts: [
+        { name: 'Rook', kind: 'pool', score: 17320, distance: 4630, time: 166.8, passed: false },
+        { name: 'Ansel', kind: 'pool', score: 16700, distance: 4598, time: 170.3, passed: false },
+        { name: 'Your best', kind: 'you', score: 14280, distance: 4588, time: 174.3, passed: true },
+        { name: 'Juniper', kind: 'grudge', score: 15990, distance: 4621, time: 178.9, passed: true },
+        { name: 'Mika', kind: 'pool', score: 15420, distance: 3120, passed: true },
+        { name: 'Tove', kind: 'friend', score: 13010, distance: 2460, passed: true },
+      ],
+    }),
+  // A finish with no field: the card stands on its own.
+  'results-finish-solo': () =>
+    showResults({
+      score: 15862,
+      distance: 4612,
+      finishZ: 4500,
+      finish: { seconds: 171.45, medal: 0, bestTime: null, newBest: true, splits: [{ name: 'Stage 1', seconds: 54.2, vsBest: null }, { name: 'Stage 2', seconds: 111.6, vsBest: null }, { name: 'Stage 3', seconds: 171.45, vsBest: null }] },
+      crashCause: '',
+      crashKind: null,
+      canRevive: false,
+      ghosts: [],
+    }),
+  // Wrecked behind a finisher: rows read a time above you and metres beside you.
+  'results-short': () =>
+    showResults({
+      score: 9120,
+      distance: 3212,
+      finishZ: 4500,
+      newBest: false,
+      canRevive: false,
+      crashCause: 'Hugged a tree',
+      crashKind: 'tree',
+      ghosts: [
+        { name: 'Rook', kind: 'pool', score: 17320, distance: 4630, time: 166.8, passed: false },
+        { name: 'Mika', kind: 'pool', score: 8420, distance: 2980, passed: true },
+        { name: 'Tove', kind: 'friend', score: 7010, distance: 2460, passed: true },
+      ],
+    }),
   pass: () => {
     staticHud({ combo: { active: false, pending: 0, mult: 1, chain: 0, timer: 0 }, danger: null });
     ui.ghostPass('Mika', 'pool', true);
@@ -1150,7 +1211,7 @@ const GROUPS: Record<string, string[]> = {
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
   hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-learn'],
-  menus: ['results', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
+  menus: ['results', 'results-finish', 'results-finish-solo', 'results-short', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
   cash: ['bank-tiers', 'bank-t0', 'bank-t1', 'bank-t2', 'bank-t3', 'bank-best', 'bank-draft', 'bank-bump', 'stake', 'stake-fuse', 'stake-held', 'lost-crack', 'lost-best', 'lost-small', 'chase-stake'],
   beats: ['streak', 'streak-5', 'pass-words', 'pass-streak', 'race-news', 'race-queue', 'race-call', 'race-call-grudge', 'race-call-you', 'duel', 'duel-lost', 'lead', 'grudge-settled', 'nemesis-down', 'finale-avalanche', 'finale-storm', 'finale-train', 'finale-yeti', 'finale-dodged', 'pops', 'pop-mission', 'pop-unlock', 'new-best', 'friend-beaten', 'says', 'countdown', 'countdown-storm', 'countdown-plain', 'countdown-yeti'],
 };
