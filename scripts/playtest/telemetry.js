@@ -412,7 +412,11 @@ async (page) => {
       k.maxZ = sim.maxZ;
       k.gifts = sim.gifts;
       k.giftScore = sim.giftScore;
-      for (const f of ['prevAction', 'coyote', 'coyoteRamp', 'airPressed', 'ventCooldown']) if (f in sim) k[f] = sim[f];
+      for (const f of ['prevAction', 'coyote', 'coyoteRamp', 'airPressed', 'ventCooldown', 'rail', 'railU', 'railTicks', 'tumbleCause', 'finishBonus']) if (f in sim) k[f] = sim[f];
+      if (k.stageTicks && sim.stageTicks) {
+        k.stageTicks.length = 0;
+        k.stageTicks.push(...sim.stageTicks);
+      }
       if (sim.lateTricks) k.lateTricks = Object.assign({}, sim.lateTricks);
       const a = k.combo;
       const b = sim.combo;

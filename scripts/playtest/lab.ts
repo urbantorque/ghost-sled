@@ -308,7 +308,7 @@ function ride(pilotName: string, m: number, seed: number): Ride {
         r.landings[e.quality] = (r.landings[e.quality] || 0) + 1;
         if (e.quality === 'perfect') r.stomps++;
       } else if (e.type === 'bump') r.bumps++;
-      else if (e.type === 'rescue') r.rescues++;
+      else if (e.type === 'tumble' && e.phase === 'start') r.rescues++;
       else if (e.type === 'stage') r.stages++;
     }
   }

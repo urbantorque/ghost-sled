@@ -1,5 +1,5 @@
 import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventTriggerZ, moodInfo } from './chaos';
-import { CHUNK_LEN, Course, FOREST_LIMIT, Obstacle, ObstacleKind, courseFor } from './course';
+import { CHUNK_LEN, Course, Obstacle, ObstacleKind, Rail, courseFor } from './course';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
 import { MAX_RUN_TICKS, actionOf, draftOf, steerOf } from './input';
 import { Rng } from './prng';
@@ -9,7 +9,7 @@ import { SledDef, sledById } from './sleds';
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 5;
+export const SIM_VERSION = 6;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -17,10 +17,31 @@ export const MAX_SPEED = 46;
 /** No flip starts this close to touchdown (a full flip takes about 55 ticks, so none is lost). */
 export const FLIP_GUARD_TICKS = 20;
 const G = 9.81;
-const CD = 0.0047;
-const MU = 0.035;
+/** Air drag: cruise on the base slope is about 30 m/s, so a good run lives near 30 and peaks at the cap. */
+const CD = 0.0027;
+const MU = 0.03;
+/** A rider starts moving: the start ramp is steep and a first-timer should be flying within seconds. */
+const START_SPEED = 14;
+/** A wipeout's tumble, in ticks: the rider bounces back to the line, the run goes on, the time is lost. */
+export const TUMBLE_TICKS = 66;
+/** Wipeouts a run forgives after the free stretch; the next one ends it. */
+export const TUMBLES = 2;
+/** Before this distance a wipeout is always free: nobody's first minute ends in a wreck. */
+export const FREE_TUMBLE_Z = 700;
+/** Past the corridor's edge by this much a sled counts as riding the wall. */
+const WALL_RIDE_E = 1.2;
+const WALL_RIDE_TICKS = 30;
+/** The ground heading limit either side of the corridor's own direction, and where it starts to bite. */
+const CARVE_LIMIT = 1.05;
+const CARVE_SOFT = 0.82;
+/** Ticks before touchdown the rider sets for the landing: steering stops adding spin and the sled swings
+ *  to the nearest straight line. Stomp timing stays the skill, not surviving your own thumbs. */
+const LAND_SET_TICKS = 14;
+/** Par for the time bonus: the finish reached at this speed earns nothing. */
+const PAR_SPEED = 24;
 
 export type CrashCause = 'tree' | 'rock' | 'forest' | 'landing' | 'yeti' | 'avalanche' | 'daylight';
+export type TumbleCause = Exclude<CrashCause, 'avalanche' | 'daylight'>;
 export type TakeoffKind = 'lip' | 'pop' | 'geyser';
 export type LandQuality = 'perfect' | 'clean' | 'sketchy' | 'hop';
 
@@ -28,6 +49,15 @@ export type SimEvent =
   | { type: 'takeoff'; kind: TakeoffKind; vy: number }
   | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean }
   | { type: 'crash'; cause: CrashCause }
+  /** A wipeout the run survives: 'start' as the rider goes down, 'end' back on the line. */
+  | { type: 'tumble'; phase: 'start' | 'end'; cause: TumbleCause; left: number }
+  /** Turned back by something solid at the corridor's edge. */
+  | { type: 'scrape'; side: -1 | 1; speed: number }
+  /** A stage line crossed: its index and the tick. */
+  | { type: 'stage'; index: number; tick: number }
+  /** The finish line crossed. */
+  | { type: 'finish'; tick: number; bonus: number }
+  | { type: 'grind'; phase: 'start' | 'end'; id: number }
   /** Near-miss styles may carry the edge gap (m), the side (+1 = obstacle on the sled's +x side), the
    *  nearest point on the obstacle (x, z), its kind and id. Optional and never hashed; filled later. */
   | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
@@ -95,6 +125,17 @@ export interface SledState {
   crashCause: CrashCause | null;
   crashTick: number;
   onIce: boolean;
+  /** Ticks left in a wipeout's tumble (0 when riding). */
+  tumble: number;
+  /** Wipeouts spent from the run's allowance. */
+  tumbles: number;
+  /** Over the finish line (the sled coasts on, the run is decided). */
+  finished: boolean;
+  finishTick: number;
+  /** Ticks in a row riding the wall. */
+  wallTicks: number;
+  /** On a rail. */
+  grinding: boolean;
 }
 
 export interface AvalancheState {
@@ -164,6 +205,8 @@ export interface RunStats {
 }
 
 const vec = { x: 0, z: 0 };
+/** The drift's release pays more speed at the new cruise, by tier. */
+const DRIFT_BOOST = [0, 4.5, 7.5, 11];
 
 export class Sim {
   readonly config: SimConfig;
@@ -195,16 +238,17 @@ export class Sim {
     this.chaosRng = new Rng(config.chaos.seed ^ 0x51ed);
     const z0 = 2;
     const x0 = this.course.safeX(z0);
+    const v0 = START_SPEED;
     this.s = {
       x: x0,
       y: this.course.ground(x0, z0),
       z: z0,
       vx: 0,
       vy: 0,
-      vz: 7,
+      vz: v0,
       heading: 0,
       velHeading: 0,
-      speed: 7,
+      speed: v0,
       steer: 0,
       lean: 0,
       grounded: true,
@@ -239,6 +283,12 @@ export class Sim {
       crashCause: null,
       crashTick: -1,
       onIce: false,
+      tumble: 0,
+      tumbles: 0,
+      finished: false,
+      finishTick: -1,
+      wallTicks: 0,
+      grinding: false,
     };
     this.course.gradient(x0, z0, vec);
     this.s.vy = vec.z * this.s.vz;
@@ -277,9 +327,17 @@ export class Sim {
 
   /** Small direct score from gifts (gifts are mainly currency, not combo fuel). */
   giftScore = 0;
+  /** The finish's bonus: flat, plus what the run beat par by. */
+  finishBonus = 0;
+  /** The tick each stage line was crossed. */
+  readonly stageTicks: number[] = [];
 
   get score(): number {
-    return Math.floor(this.maxZ) + this.combo.banked + this.giftScore;
+    return Math.floor(this.maxZ) + this.combo.banked + this.giftScore + this.finishBonus;
+  }
+
+  get finished(): boolean {
+    return this.s.finished;
   }
 
   get distance(): number {
@@ -334,6 +392,10 @@ export class Sim {
     s.crashed = false;
     s.crashCause = null;
     s.flow = 0;
+    s.tumble = 0;
+    s.tumbles = Math.max(0, TUMBLES - 1);
+    s.wallTicks = 0;
+    this.endGrind();
     this.stats.revived = true;
     const d = this.dyn;
     if (d.avalanche.phase === 1 || d.avalanche.phase === 2) {
@@ -371,17 +433,22 @@ export class Sim {
     s.steer = approach(s.steer, steerTarget, rate * DT);
 
     const prevZ = s.z;
-    if (s.grounded) this.groundStep(action, pressed, released);
+    if (s.finished) this.coast();
+    else if (s.tumble > 0) this.tumbleStep();
+    else if (s.grinding) this.grindStep(action, released);
+    else if (s.grounded) this.groundStep(action, pressed, released);
     else this.airStep(action, pressed, released);
 
-    if (!s.crashed) this.collide(prevZ);
-    if (!s.crashed) this.pickups(prevZ);
-    if (!s.crashed && this.course.edgeExcess(s.x, s.z) > FOREST_LIMIT) this.crash('forest');
-    if (!s.crashed && this.tick >= MAX_RUN_TICKS - 1) this.crash('daylight');
-    this.chaos();
-    this.draft(draftOf(input));
+    const riding = !s.finished && s.tumble === 0;
+    if (riding && !s.crashed && !s.grinding) this.collide(prevZ);
+    if (riding && !s.crashed) this.pickups(prevZ);
+    if (riding && !s.crashed) this.edge();
+    if (riding && !s.crashed) this.lines();
+    if (!s.crashed && !s.finished && this.tick >= MAX_RUN_TICKS - 1) this.crash('daylight');
+    if (!s.finished) this.chaos();
+    if (!s.finished) this.draft(draftOf(input));
 
-    const hold = !s.grounded || s.drifting || s.drafting;
+    const hold = !s.grounded || s.drifting || s.drafting || s.grinding || s.wallTicks > 0;
     const bankedNow = this.combo.tick(hold);
     if (bankedNow > 0) this.events.push({ type: 'comboBank', points: bankedNow, mult: this.combo.lastMult });
 
@@ -406,7 +473,16 @@ export class Sim {
   }
 
   private turnRate(speed: number): number {
-    return 2.5 / (1 + speed / 16);
+    const r = 2.5 / (1 + speed / 16);
+    return r < 1.45 ? r : 1.45;
+  }
+
+  /** The way the corridor runs here, as a heading: what a sled eases back to when it is let go. */
+  private lineHeading(): number {
+    const s = this.s;
+    const c = this.course;
+    const look = 9 + s.speed * 0.45;
+    return datan2(c.centerX(s.z + look) - c.centerX(s.z), look);
   }
 
   private groundStep(action: boolean, pressed: boolean, released: boolean): void {
@@ -444,8 +520,43 @@ export class Sim {
     if (s.wobble > 0) turn *= 0.55;
     // While drifting the direction is locked; steering only tightens or widens the arc.
     const yawInput = s.drifting ? s.driftDir * (0.2 + 0.8 * (s.steer * s.driftDir + 1) * 0.5) : s.steer;
-    s.heading += yawInput * turn * DT;
+    const line = this.lineHeading();
+    const relNow = s.heading - line;
+    let authority = 1;
+    if (!s.drifting && relNow * yawInput > 0) {
+      // A turn runs out of bite as it gets across the slope, so a held key carves hard, not sideways.
+      const over = (Math.abs(relNow) - CARVE_SOFT) / (CARVE_LIMIT - CARVE_SOFT);
+      if (over > 0) authority = over >= 1 ? 0 : 1 - over;
+    }
+    s.heading += yawInput * turn * authority * DT;
     if (s.wobble > 0) s.heading += dsin(s.wobble * 0.7) * 0.012;
+
+    const cx = c.centerX(s.z);
+    const hw = c.halfWidth(s.z);
+    const off = hw > 0 ? (s.x - cx) / hw : 0;
+    const e = Math.abs(s.x - cx) - hw;
+    // Let go and the sled runs out of its turn: the nose eases back to the corridor's direction, and
+    // leans toward the middle once it is well off it. Never a pull while the player is steering.
+    if (!s.drifting) {
+      const free = 1 - Math.abs(s.steer) / 0.3;
+      if (free > 0) {
+        const near = clamp((Math.abs(off) - 0.5) / 0.5, 0, 1) * 0.42;
+        const target = line - (off > 0 ? near : -near);
+        s.heading += clamp(target - s.heading, -1, 1) * 1.6 * free * DT;
+      }
+    }
+    // The banks really are berms: past the edge the wall turns the sled back, harder the higher it goes,
+    // and whatever the hands are doing by about 6 m up.
+    if (e > 0) {
+      const k = e >= 6 ? 1 : e / 6;
+      s.heading += (off > 0 ? -1 : 1) * k * (1.5 + s.speed / 18) * DT;
+    }
+    // Wall rides: up the berm at speed and back down, on purpose.
+    if (e > WALL_RIDE_E && s.speed > 15 && !s.drifting) {
+      s.wallTicks++;
+      if (s.wallTicks === WALL_RIDE_TICKS) this.style('wallRide', 220);
+      else if (s.wallTicks > WALL_RIDE_TICKS && (s.wallTicks - WALL_RIDE_TICKS) % 36 === 0) this.style('wallRide', 90);
+    } else s.wallTicks = 0;
 
     // Low speed: swing the nose back toward the fall line so the sled can never get stuck.
     if (s.speed < 3) {
@@ -457,7 +568,8 @@ export class Sim {
     let slip = wrapAngle(s.heading - s.velHeading);
     if (slip > maxSlip) s.heading = s.velHeading + maxSlip;
     else if (slip < -maxSlip) s.heading = s.velHeading - maxSlip;
-    s.heading = clamp(s.heading, -1.35, 1.35);
+    const limit = s.drifting ? CARVE_LIMIT + 0.25 : CARVE_LIMIT;
+    s.heading = clamp(s.heading, line - limit, line + limit);
     slip = wrapAngle(s.heading - s.velHeading);
 
     // Grip turns velocity toward the heading.
@@ -496,7 +608,8 @@ export class Sim {
     // Drag and boosts.
     const flowDrag = 1 / (1 + 0.055 * s.flow);
     let cd = CD * this.sled.drag * this.mood.drag * surf.drag * flowDrag;
-    if (action && Math.abs(s.steer) < 0.3 && !s.drifting) cd *= 0.9;
+    // The tuck: the crouch on a straight line is worth about 3 m/s at cruise.
+    if (action && Math.abs(s.steer) < 0.3 && !s.drifting) cd *= 0.82;
     s.speed -= (cd * s.speed * s.speed + MU * g) * DT;
     if (s.speed < 0) s.speed = 0;
     this.applyBoost();
@@ -556,7 +669,7 @@ export class Sim {
     // Release: pay out drift charge, then pop.
     if (released && s.grounded) {
       if (s.driftTier > 0) {
-        const boost = [0, 3.5, 6, 9][s.driftTier];
+        const boost = DRIFT_BOOST[s.driftTier];
         s.boostPool += boost;
         this.events.push({ type: 'drift', phase: 'release', tier: s.driftTier });
         this.events.push({ type: 'boost', amount: boost, source: 'drift' });
@@ -572,6 +685,7 @@ export class Sim {
       s.driftCharge = 0;
       s.driftTier = 0;
     }
+    if (s.grounded) this.tryRail();
   }
 
   private pop(): void {
@@ -592,7 +706,7 @@ export class Sim {
   private latePop(): void {
     const s = this.s;
     if (s.driftTier > 0) {
-      const boost = [0, 3.5, 6, 9][s.driftTier];
+      const boost = DRIFT_BOOST[s.driftTier];
       s.boostPool += boost;
       this.events.push({ type: 'drift', phase: 'release', tier: s.driftTier });
       this.events.push({ type: 'boost', amount: boost, source: 'drift' });
@@ -666,7 +780,7 @@ export class Sim {
     s.vy -= this.gravity * DT;
 
     // Air control: a gentle lateral nudge.
-    const lat = s.steer * 2.0 * DT;
+    const lat = s.steer * 3.0 * DT;
     s.vx += lat * dcos(s.velHeading);
     s.vz -= lat * dsin(s.velHeading);
     s.vx *= 1 - 0.015 * DT;
@@ -676,7 +790,10 @@ export class Sim {
 
     // Spins from steering (with a dead zone), flips from holding the action.
     const spinMax = 9 * this.sled.spin * this.mood.spin;
-    if (Math.abs(s.steer) > 0.3) {
+    if (s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS)) {
+      s.spinRate = approach(s.spinRate, 0, 40 * DT);
+      s.airYaw = approach(s.airYaw, PI * Math.round(s.airYaw / PI), 4 * DT);
+    } else if (Math.abs(s.steer) > 0.3) {
       s.spinRate = approach(s.spinRate, s.steer * spinMax, 34 * DT);
     } else {
       s.spinRate = approach(s.spinRate, 0, 22 * DT);
@@ -728,6 +845,7 @@ export class Sim {
     const vyFollow = vec.x * s.vx + vec.z * s.vz;
     const impact = vyFollow - s.vy;
     const airtime = s.airTicks / TICK_RATE;
+    const vyAtTouch = s.vy;
     const tol = this.sled.landTol + this.mood.landTol;
     const yawErr = Math.abs(wrapAngle(s.airYaw - PI * Math.round(s.airYaw / PI)));
     const pitchErr = Math.abs(wrapAngle(s.airPitch));
@@ -748,10 +866,12 @@ export class Sim {
       return;
     }
 
-    if (pitchErr > 1.35 + tol || yawErr > 1.2 + tol) {
+    // A short flight never wrecks: nobody meant that. Commit to a real one and land it wrong, and you go.
+    const committed = airtime >= 0.75;
+    if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol)) {
       s.airYaw = 0;
       s.airPitch = 0;
-      this.crash('landing');
+      this.wipeout('landing');
       return;
     }
 
@@ -780,8 +900,8 @@ export class Sim {
     if (sketchy) {
       quality = 'sketchy';
       this.stats.sketchies++;
-      s.speed *= 0.78;
-      s.wobble = 32;
+      s.speed *= committed ? 0.8 : 0.97;
+      s.wobble = committed ? 32 : 8;
     } else if (stomp) {
       quality = 'perfect';
       this.perfectLanding(halfTurns, flips, trickPts);
@@ -796,7 +916,14 @@ export class Sim {
       s.lateStompTicks = airtime >= 0.4 ? 5 : 0;
       this.lateTricks = { halfTurns, flips, trickPts, cleanPts, cleanBoost };
     }
-    if (quality !== 'perfect' && impact > 9) s.speed *= 0.93;
+    if (quality !== 'perfect' && impact > 12) s.speed *= 0.93;
+    // Touching down on a falling slope turns the drop into speed: a cliff landed well pays.
+    if (quality !== 'sketchy' && s.speed > 1) {
+      const m = vyFollow / s.speed;
+      const along = (s.speed + vyAtTouch * m) / (1 + m * m);
+      if (along > s.speed) s.speed += Math.min(8, (along - s.speed) * 1.5);
+      if (s.speed > MAX_SPEED) s.speed = MAX_SPEED;
+    }
     s.vx = s.speed * dsin(s.velHeading);
     s.vz = s.speed * dcos(s.velHeading);
     this.events.push({ type: 'land', quality, airtime, halfTurns, flips, impact, late: false });
@@ -828,9 +955,242 @@ export class Sim {
   private applyBoost(): void {
     const s = this.s;
     if (s.boostPool <= 0) return;
-    const add = Math.min(s.boostPool, 14 * DT);
+    const add = Math.min(s.boostPool, 16 * DT);
     s.speed += add;
     s.boostPool -= add;
+  }
+
+  /** A hard hit. The run forgives a couple of these (every one in the first stretch) as a tumble back
+   *  to the line, which costs the combo and a few seconds; the one after that is the wreck. */
+  private wipeout(cause: TumbleCause): void {
+    const s = this.s;
+    if (s.tumble > 0 || s.crashed) return;
+    const free = s.z < FREE_TUMBLE_Z;
+    if (!free && s.tumbles >= TUMBLES) {
+      this.crash(cause);
+      return;
+    }
+    if (!free) s.tumbles++;
+    s.tumble = TUMBLE_TICKS;
+    this.tumbleCause = cause;
+    s.drifting = false;
+    s.driftCharge = 0;
+    s.driftTier = 0;
+    s.boostPool = 0;
+    s.carveTicks = 0;
+    s.wallTicks = 0;
+    s.flow = 0;
+    s.draftTicks = 0;
+    s.draftCharge = 0;
+    s.airYaw = 0;
+    s.airPitch = 0;
+    s.spinRate = 0;
+    s.pitchRate = 0;
+    this.endGrind();
+    const lost = this.combo.lose();
+    if (lost > 0) this.events.push({ type: 'comboLost', points: lost });
+    this.events.push({ type: 'tumble', phase: 'start', cause, left: Math.max(0, TUMBLES - s.tumbles) });
+  }
+
+  private tumbleCause: TumbleCause = 'landing';
+
+  /** Rolling back to the line: momentum bleeds off, and the snow carries the rider home. */
+  private tumbleStep(): void {
+    const s = this.s;
+    const c = this.course;
+    s.tumble--;
+    s.speed *= 0.982;
+    const u = 1 - s.tumble / TUMBLE_TICKS;
+    const pull = u * u * 0.09;
+    s.vx = 0;
+    s.vz = s.speed;
+    s.z += s.vz * DT;
+    s.x += (c.safeX(s.z) - s.x) * pull;
+    const gy = c.ground(s.x, s.z);
+    s.vy -= this.gravity * DT;
+    s.y += s.vy * DT;
+    if (s.y <= gy) {
+      s.y = gy;
+      s.vy = 0;
+      s.grounded = true;
+    } else s.grounded = false;
+    if (s.tumble > 0) return;
+    const line = this.lineHeading();
+    s.x = c.safeX(s.z);
+    s.y = c.ground(s.x, s.z);
+    const floor = 0.55 * this.cruiseSpeed();
+    if (s.speed < floor) s.speed = floor;
+    s.heading = line;
+    s.velHeading = line;
+    s.vx = s.speed * dsin(line);
+    s.vz = s.speed * dcos(line);
+    c.gradient(s.x, s.z, vec);
+    s.vy = vec.x * s.vx + vec.z * s.vz;
+    s.grounded = true;
+    s.invuln = 110;
+    s.wobble = 0;
+    s.steer = 0;
+    this.prevAction = s.action;
+    s.groundHold = 0;
+    s.pressStartedGrounded = false;
+    this.coyote = 0;
+    this.airPressed = false;
+    this.nearMiss.clear();
+    this.events.push({ type: 'tumble', phase: 'end', cause: this.tumbleCause, left: Math.max(0, TUMBLES - s.tumbles) });
+  }
+
+  /** Something solid at the corridor's edge turns a sled back: it costs speed and the combo, never the run. */
+  private edge(): void {
+    const s = this.s;
+    const c = this.course;
+    const limit = c.edgeLimit(s.z);
+    const e = c.edgeExcess(s.x, s.z);
+    if (e <= limit) return;
+    const side: -1 | 1 = s.x > c.centerX(s.z) ? 1 : -1;
+    s.x -= side * (e - limit + 0.02);
+    const out = s.vx * side;
+    if (out > 0) s.vx -= side * out * 1.5;
+    const sp = Math.sqrt(s.vx * s.vx + s.vz * s.vz) * (out > 3 ? 0.93 : 0.985);
+    s.velHeading = datan2(s.vx, s.vz);
+    s.heading = s.velHeading;
+    s.speed = sp;
+    s.vx = sp * dsin(s.velHeading);
+    s.vz = sp * dcos(s.velHeading);
+    if (out > 3) {
+      s.wobble = 14;
+      const banked = this.combo.bank();
+      if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+      this.events.push({ type: 'scrape', side, speed: sp });
+    }
+  }
+
+  /** Stage lines and the finish. */
+  private lines(): void {
+    const s = this.s;
+    const st = this.course.stages;
+    const i = this.stageTicks.length;
+    if (i >= st.length || s.z < st[i].z1) return;
+    this.stageTicks.push(this.tick);
+    this.events.push({ type: 'stage', index: i, tick: this.tick });
+    if (i < st.length - 1) return;
+    s.finished = true;
+    s.finishTick = this.tick;
+    s.drifting = false;
+    s.drafting = false;
+    s.boostPool = 0;
+    s.wallTicks = 0;
+    this.endGrind();
+    const banked = this.combo.bank();
+    if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+    const par = (this.course.finishZ / PAR_SPEED) * TICK_RATE;
+    const under = (par - this.tick) / TICK_RATE;
+    this.finishBonus = 1000 + (under > 0 ? Math.round(under * 300) : 0);
+    this.events.push({ type: 'finish', tick: this.tick, bonus: this.finishBonus });
+  }
+
+  /** Over the line the sled runs on through the square and stops: no hands, nothing to hit. */
+  private coast(): void {
+    const s = this.s;
+    const c = this.course;
+    s.speed = approach(s.speed * (1 - 0.55 * DT), 0, 3.5 * DT);
+    const look = s.z + 6 + s.speed * 0.4;
+    const want = datan2(c.safeX(look) - s.x, look - s.z);
+    s.heading = approach(s.heading, want, 1.2 * DT);
+    s.velHeading = s.heading;
+    s.vx = s.speed * dsin(s.heading);
+    s.vz = s.speed * dcos(s.heading);
+    s.x += s.vx * DT;
+    s.z += s.vz * DT;
+    s.y = c.ground(s.x, s.z);
+    s.vy = 0;
+    s.grounded = true;
+    s.steer = 0;
+    s.lean = approach(s.lean, 0, 2 * DT);
+    s.carve = approach(s.carve, 0, 3 * DT);
+  }
+
+  // ---------------------------------------------------------------- rails
+
+  private rail: Rail | null = null;
+  private railU = 0;
+  private railTicks = 0;
+
+  /** A sled meeting a rail's low end, running with it, rides up it. */
+  private tryRail(): void {
+    const s = this.s;
+    const ci = Math.floor(s.z / CHUNK_LEN);
+    for (let k = ci - 1; k <= ci; k++) {
+      if (k < 0) continue;
+      for (const r of this.course.zones(k).rails) {
+        const d = s.z - r.z0;
+        if (d < 0 || d > 1.4) continue;
+        const len = r.z1 - r.z0;
+        if (len <= 0) continue;
+        const rx = r.x0 + ((r.x1 - r.x0) * d) / len;
+        if (Math.abs(s.x - rx) > 0.7 || s.speed < 9 || s.velHeading < -0.6 || s.velHeading > 0.6) continue;
+        this.rail = r;
+        this.railU = d / len;
+        this.railTicks = 0;
+        s.grinding = true;
+        s.drifting = false;
+        s.wallTicks = 0;
+        this.events.push({ type: 'grind', phase: 'start', id: r.id });
+        this.style('grind', 180);
+        return;
+      }
+    }
+  }
+
+  private endGrind(): void {
+    const s = this.s;
+    if (!s.grinding) return;
+    s.grinding = false;
+    if (this.rail) this.events.push({ type: 'grind', phase: 'end', id: this.rail.id });
+    this.rail = null;
+  }
+
+  private grindStep(action: boolean, released: boolean): void {
+    const s = this.s;
+    const r = this.rail;
+    if (!r) {
+      s.grinding = false;
+      return;
+    }
+    const c = this.course;
+    const len = r.z1 - r.z0;
+    const dir = datan2(r.x1 - r.x0, len);
+    s.speed -= (0.6 * s.speed * s.speed * CD + 0.2 * MU * this.gravity) * DT;
+    s.speed += 0.6 * DT;
+    if (s.speed > MAX_SPEED) s.speed = MAX_SPEED;
+    this.railU += (s.speed * dcos(dir) * DT) / len;
+    const u = this.railU;
+    const x = r.x0 + (r.x1 - r.x0) * u;
+    const z = r.z0 + len * u;
+    const y = c.ground(x, z) + r.h * clamp(u * 3, 0, 1);
+    s.vy = (y - s.y) / DT;
+    s.x = x;
+    s.z = z;
+    s.y = y;
+    s.heading = dir;
+    s.velHeading = dir;
+    s.vx = s.speed * dsin(dir);
+    s.vz = s.speed * dcos(dir);
+    s.groundHold = action ? s.groundHold + 1 : 0;
+    s.lean = approach(s.lean, 0, 5 * DT);
+    this.railTicks++;
+    if (this.railTicks % 24 === 0) this.style('grind', 60);
+    const off = Math.abs(s.steer) > 0.7 && this.railTicks > 12;
+    if (u < 1 && !off && !released) return;
+    const popped = released;
+    this.endGrind();
+    if (off) {
+      s.vx += s.steer * 4;
+      s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
+      s.velHeading = datan2(s.vx, s.vz);
+      s.heading = s.velHeading;
+    }
+    s.vy = popped ? Math.max(s.vy, 0) + (3 + 2.6 * clamp(this.lastHold / 36, 0, 1)) * this.sled.pop * this.mood.pop : Math.max(s.vy, 0) + 1.5;
+    this.takeoff(popped ? 'pop' : 'lip');
   }
 
   private crash(cause: CrashCause): void {
@@ -900,8 +1260,8 @@ export class Sim {
             continue;
           }
           const vn = -(s.vx * hit.nx + s.vz * hit.nz);
-          if (s.invuln === 0 && (vn > 8 || (vn > 4.5 && s.speed > 18))) {
-            this.crash(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : 'rock');
+          if (s.invuln === 0 && (vn > 9 || (vn > 6 && s.speed > 24))) {
+            this.wipeout(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : 'rock');
             return;
           }
           // Glancing blow: push out, deflect, wobble, bank the combo.
@@ -1023,7 +1383,7 @@ export class Sim {
       this.stats.draftTicks++;
       s.draftCharge = Math.min(1, s.draftTicks / 90);
       if (s.speed < MAX_SPEED - 2) {
-        s.speed += 2.6 * this.sled.draft * this.mood.draft * DT;
+        s.speed += 1.5 * this.sled.draft * this.mood.draft * DT;
         s.vx = s.speed * dsin(s.velHeading);
         s.vz = s.speed * dcos(s.velHeading);
       }
@@ -1177,7 +1537,7 @@ export class Sim {
             this.style('yetiHop', 1500);
           }
         } else if (s.invuln === 0) {
-          this.crash('yeti');
+          this.wipeout('yeti');
         }
       }
     }
@@ -1280,6 +1640,10 @@ export class Sim {
     mixF(this.tick);
     mixF(this.gifts);
     mixF(s.crashed ? 1 : 0);
+    mixF(s.tumble);
+    mixF(s.tumbles);
+    mixF(s.finished ? 1 : 0);
+    mixF(s.grinding ? this.railU : -1);
     return h >>> 0;
   }
 }

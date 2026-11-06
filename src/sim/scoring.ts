@@ -23,7 +23,9 @@ export type StyleKind =
   | 'geyser'
   | 'yetiHop'
   | 'avalanche'
-  | 'boostPop';
+  | 'boostPop'
+  | 'wallRide'
+  | 'grind';
 
 export const STYLE_LABEL: Record<StyleKind, string> = {
   carve: 'Deep carve',
@@ -44,6 +46,8 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   yetiHop: 'Yeti hop',
   avalanche: 'Outran the avalanche',
   boostPop: 'Boosted pop',
+  wallRide: 'Wall ride',
+  grind: 'Rail grind',
 };
 
 export const COMBO_WINDOW_TICKS = 156; // 2.6 s at 60 Hz

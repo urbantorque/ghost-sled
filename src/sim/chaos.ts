@@ -97,7 +97,7 @@ export const MOODS: readonly MoodInfo[] = [
     key: 'comet',
     name: 'Comet Night',
     rule: 'Low gravity. Huge air, faster spins, softer landings',
-    params: { ...NEUTRAL, gravity: 0.62, spin: 1.15, landTol: 0.12, pop: 0.9 },
+    params: { ...NEUTRAL, gravity: 0.62, drag: 0.62, spin: 1.15, landTol: 0.12, pop: 0.9 },
   },
   {
     id: Mood.Haunted,
