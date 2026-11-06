@@ -110,12 +110,14 @@ describe('the field at every skill', () => {
     });
   }
 
-  it('rides a mid-pack time with no runs', () => {
+  it('rides where most riders land with no runs, with beginners far behind', () => {
     const out = pickField(input(POOL, { anchor: 0 }));
-    const mid = [...POOL.map(poolTime)].sort((x, y) => x - y)[POOL.length >> 1];
     const pack = out.filter((p) => p.role === 'pack').map((p) => p.time!);
     expect(pack.length).toBe(2);
-    for (const t of pack) expect(Math.abs(t - mid) / mid).toBeLessThan(0.08);
+    for (const t of pack) expect(Math.abs(t - ANCHOR_DEFAULT) / ANCHOR_DEFAULT).toBeLessThan(0.08);
+    // Nobody knows yet how a first run will go, so someone is near whoever it turns out to be.
+    const slowest = Math.max(...out.map((p) => p.time!));
+    expect(slowest).toBeGreaterThan(ANCHOR_DEFAULT * 1.25);
   });
 
   it('takes the nearest available when the pool holds nothing near you, and says so', () => {

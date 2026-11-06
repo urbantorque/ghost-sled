@@ -75,8 +75,9 @@ export interface FieldPick {
 /** The anchor's bounds (seconds). */
 export const ANCHOR_MIN = 100;
 export const ANCHOR_MAX = 420;
-/** Who a first run rides with: nobody knows yet how it will go, so about 22 m/s, and one true beginner. */
-export const ANCHOR_DEFAULT = 200;
+/** Who a first run rides with: nobody knows yet how it will go, so a pack where most riders land (about
+ *  2:30) and two true beginners far behind it. Anyone finds a rider near them. */
+export const ANCHOR_DEFAULT = 150;
 /** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
 /** One quick run pulls the next anchor to this multiple of it at most (anchorFor). */
@@ -147,8 +148,8 @@ function roles(a: number, count: number, first: boolean): Role[] {
     first ? { role: 'opener', target: 1.45 * a, lo: 1.25 * a, hi: 1.6 * a } : opener(1.07),
     { role: 'pace', target: 0.95 * a, lo: 0.9 * a, hi: 0.98 * a },
     pack(0.985),
-    // The stretch rider.
-    { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
+    // The stretch rider, or on a first run the slowest beginner.
+    first ? { role: 'opener', target: 1.9 * a, lo: 1.6 * a, hi: 2.1 * a } : { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
     // Haunted Hollow's four extra ghosts.
     opener(1.14),
     pack(0.97),

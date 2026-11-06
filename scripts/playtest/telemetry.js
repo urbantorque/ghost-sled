@@ -1390,6 +1390,8 @@ async (page) => {
         await page.goto(BASE + `?platform=mock&debug&tier=${tier}&m=${step.m ?? 0}&autoride=1${demo}${dev}`);
         await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run', null, { timeout: 30000 });
       } else {
+        // The results open after the crash beat or the coast through the town.
+        await page.waitForFunction(() => window.__gs.phase === 'results', null, { timeout: 30000, polling: 100 }).catch(() => {});
         await page.evaluate(() => window.__gs.runAgain());
         await page.waitForFunction(() => window.__gs.phase === 'run', null, { timeout: 30000 });
       }
