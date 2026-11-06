@@ -79,6 +79,17 @@ export interface IcePatch {
   rz: number;
 }
 
+/** A rail a sled can grind: a straight bar, rising from the snow at (x0, z0), h metres over it at the far
+ *  end. Decorative until the sim rides it; never a collider. */
+export interface Rail {
+  id: number;
+  x0: number;
+  z0: number;
+  x1: number;
+  z1: number;
+  h: number;
+}
+
 export interface Vent {
   id: number;
   x: number;
@@ -116,6 +127,7 @@ export interface Zones {
   moguls: Moguls[];
   ice: IcePatch[];
   vents: Vent[];
+  rails: Rail[];
   keepOut: Box[];
 }
 
@@ -134,6 +146,19 @@ export interface Surface {
   drag: number;
   ice: boolean;
 }
+
+/** A run has an end. Stages are the descent's chapters; the last one ends on the finish line. */
+export interface Stage {
+  index: number;
+  name: string;
+  z0: number;
+  z1: number;
+}
+
+/** The descent's length: the stages' metres in order (the finish line is at their sum). */
+export const STAGE_LENGTHS: readonly number[] = [1450, 1500, 1550];
+/** Easy ground past the finish line, where a sled coasts to a stop in the town square. */
+export const RUN_OUT = 260;
 
 const TALL: Record<BiomeId, ObstacleKind[]> = {
   alpine: ['pine', 'pine', 'pine'],
@@ -300,6 +325,41 @@ export class Course {
 
   get biome(): BiomeId {
     return this.params.biome;
+  }
+
+  private stageList: Stage[] | null = null;
+
+  /** The descent's stages, in order. */
+  get stages(): readonly Stage[] {
+    if (!this.stageList) {
+      const list: Stage[] = [];
+      let z = 0;
+      STAGE_LENGTHS.forEach((len, index) => {
+        list.push({ index, name: `Stage ${index + 1}`, z0: z, z1: z + len });
+        z += len;
+      });
+      this.stageList = list;
+    }
+    return this.stageList;
+  }
+
+  /** The finish line. */
+  get finishZ(): number {
+    const st = this.stages;
+    return st[st.length - 1].z1;
+  }
+
+  /** The stage that holds z (past the finish, the last). */
+  stageAt(z: number): Stage {
+    const st = this.stages;
+    for (const s of st) if (z < s.z1) return s;
+    return st[st.length - 1];
+  }
+
+  /** Metres past the corridor's edge at which something solid stands: the treeline by default, much
+   *  nearer in a ravine, on a bridge or along a street. A sled is turned back there, never crashed. */
+  edgeLimit(_z: number): number {
+    return FOREST_LIMIT;
   }
 
   /** 0 at the top, 1 once the ramp distance is reached. It eases in: the first kilometre stays
@@ -575,7 +635,7 @@ export class Course {
     const sh = this.shapeAt(z0 + CHUNK_LEN / 2);
     const kickMul = sh.kickers;
     const mogulMul = sh.moguls;
-    const zn: Zones = { ramps: [], drops: [], moguls: [], ice: [], vents: [], keepOut: [] };
+    const zn: Zones = { ramps: [], drops: [], moguls: [], ice: [], vents: [], rails: [], keepOut: [] };
     if (z0 < START_CLEAR_Z - CHUNK_LEN) return zn;
 
     const drop = this.wantsDrop(i) && !this.wantsDrop(i - 1) && !this.wantsDrop(i - 2);
