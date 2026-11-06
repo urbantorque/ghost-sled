@@ -77,6 +77,9 @@ const SITE_KEEP = 120;
 const RIDGE_CHANCE = 0.2;
 /** The sections an overlook prefers: the open, flowing ones. */
 const PREFERRED: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'benches', 'switchbacks']);
+/** Where none opens at all: the places with walls or a kerb of their own, and the ledges, whose ground
+ *  falls away already. */
+const NARROW: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'treerun', 'street', 'bridge', 'tunnel', 'gully', 'leap', 'terraces', 'lake', 'fork', 'finish']);
 /** Caps: rail sections and lip rocks alive at once (two or three overlooks in range, ridges both sides). */
 const RAIL_CAP = 260;
 const ROCK_CAP = 320;
@@ -202,12 +205,12 @@ export class OverlookPlan {
   }
 
   /** Whether an overlook may stand at sim z on `side` (0: both), in a section `pick` allows (0: the
-   *  preferred ones, 1: any but a gully, 2: any). */
+   *  preferred ones, otherwise any open one: never a narrow place or a ledge's section). */
   private ok(z: number, side: number, pick: number): boolean {
     const c = this.course;
     const sec = c.section(z);
     if (pick === 0 && !PREFERRED.has(sec.kind)) return false;
-    if (pick === 1 && sec.kind === 'gully') return false;
+    if (NARROW.has(sec.kind)) return false;
     const lift = liftOf(sec);
     if (lift && (side === 0 || lift.side === side) && z > lift.z0 - 40 && z < lift.z1 + 40) return false;
     // (A span can move up to 140 m back from where it was due, so plan well past.)

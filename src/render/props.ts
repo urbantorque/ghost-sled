@@ -1,6 +1,7 @@
 import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
+import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
 import { makeToonMaterial, shared } from './materials';
 import {
@@ -834,7 +835,14 @@ export class Props {
       // A dense wall right at the treeline so the forest limit reads clearly.
       for (let z = z0; z < z0 + CHUNK_LEN; z += 3.4 / Math.max(0.35, dens)) {
         const jz = z + (hashf(i, k, 1) - 0.5) * 2.5;
-        const e = FOREST_LIMIT + 0.6 + hashf(i, k, 2) * 3.2;
+        const sh = c.shapeAt(jz);
+        // A tree run's wall closes in to its own limit; a wall's forest stands back behind its crest.
+        const inner = sh.limit < FOREST_LIMIT && c.section(jz).kind === 'treerun' ? sh.limit : sh.wall > 0.3 ? crestE(sh.limit) + 5 : FOREST_LIMIT;
+        const e = inner + 0.6 + hashf(i, k, 2) * 3.2;
+        if (!standable(c, jz, e)) {
+          k++;
+          continue;
+        }
         if (dress || clear.length > 0) {
           const sig = signature(c, jz);
           const thin = dress ? wallThinning(sig.kind, sig.k) : 0;
@@ -852,12 +860,31 @@ export class Props {
       for (let t = 0; t < n; t++) {
         const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
         const e = FOREST_LIMIT + 4 + Math.pow(hashf(i, k, 7), 1.6) * 75;
-        if (clear.length > 0 && inClearing(clear, side, e, jz)) {
+        if ((clear.length > 0 && inClearing(clear, side, e, jz)) || !standable(c, jz, e)) {
           k++;
           continue;
         }
         const set = hashf(i, k, 8) < 0.6 ? 'a' : 'b';
         this.tree('fo:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.8 + hashf(i, k, 9) * 0.9, hashf(i, k, 10) * 6.28, 0.75 + 0.5 * hashf(i, k, 12));
+        k++;
+      }
+      // A tree run is a forest you ride through: a second, taller rank right behind the wall, crowded
+      // close, so the run has a dark mass either side and tops closing over it.
+      for (let t = 0; t < 22; t++) {
+        const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
+        const sec = c.section(jz);
+        const sh = c.shapeAt(jz);
+        if (sec.kind !== 'treerun' || jz < sec.z0 + sec.blend * 0.5 || jz > sec.z1 - 8) {
+          k++;
+          continue;
+        }
+        const e = sh.limit + 0.8 + hashf(i, k, 7) * 7;
+        if (clear.length > 0 && inClearing(clear, side, e, jz)) {
+          k++;
+          continue;
+        }
+        const set = hashf(i, k, 8) < 0.75 ? 'a' : 'b';
+        this.tree('fw:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 1.25 + hashf(i, k, 9) * 0.7, hashf(i, k, 10) * 6.28, 0.95 + 0.4 * hashf(i, k, 12));
         k++;
       }
     }
@@ -875,7 +902,7 @@ export class Props {
       this.lean.setFromAxisAngle(this.tilt, 0.06 + 0.11 * hashf(i, k, 17));
       this.q.premultiply(this.lean);
     }
-    this.v.set(x, this.course.ground(x, z) - 0.1, -z);
+    this.v.set(x, visualGround(this.course, x, z) - 0.1, -z);
     this.s.set(scale, scale * tall, scale);
     const v = 0.9 + 0.11 * hashf(i, k, 18);
     const w = (hashf(i, k, 19) - 0.5) * 0.09;

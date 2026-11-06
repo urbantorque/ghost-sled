@@ -5,6 +5,7 @@ import { noise1, noise2 } from '../sim/noise';
 import { LIGHT_GLSL, shared } from './materials';
 import { LIP_FROM, WIDE, flankMode, type OverlookPlan, type Overlooks } from './overlook';
 import { Palette } from './palette';
+import { MID_ROW } from './ground';
 import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type VillageBuild, type VillageLight } from './village';
 
 // The middle of the world: the mountainside from the edge of the terrain mesh out to about a
@@ -30,7 +31,7 @@ import { VILLAGE_SLOTS, buildHamlet, buildVillage, makeVillageMaterial, type Vil
 // terrain's lowered lip exactly, and the fall carries on from the face's own slope down to the floor.
 
 /** Metres between shoulder rows (down the course). */
-const ROW = 16;
+const ROW = MID_ROW;
 /** Rows kept behind the rider (the title camera and the crash orbit look back up the slope). */
 const BEHIND = 192;
 /** Lateral reference: heights are measured from the High tier's terrain edge, so the geography is

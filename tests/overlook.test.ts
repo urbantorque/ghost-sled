@@ -20,8 +20,9 @@ describe('overlook plan', () => {
     plan.planTo(RUN);
     const list = plan.planned.filter((o) => o.z0 < RUN);
 
-    it(`${c.biome}: one or two a kilometre, 120 to 300 m long, the first inside 600 m`, () => {
-      expect(list.length).toBeGreaterThanOrEqual(5);
+    it(`${c.biome}: wherever the open ground allows, 120 to 300 m long, the first inside 600 m`, () => {
+      // (Open ground is about a quarter of a descent, and set pieces take some of that.)
+      expect(list.length).toBeGreaterThanOrEqual(2);
       expect(list.length).toBeLessThanOrEqual(10);
       expect(list[0].z1).toBeLessThanOrEqual(600);
       for (const o of list) {
@@ -46,6 +47,11 @@ describe('overlook plan', () => {
           }
         }
       }
+    });
+
+    it(`${c.biome}: opens only on open ground, never beside a wall, a kerb or a ledge`, () => {
+      const narrow = new Set(['ravine', 'treerun', 'street', 'bridge', 'tunnel', 'gully', 'leap', 'terraces', 'lake', 'fork', 'finish']);
+      for (const o of list) for (let z = o.z0; z <= o.z1; z += 10) expect(narrow.has(c.section(z).kind)).toBe(false);
     });
 
     it(`${c.biome}: is the same every time`, () => {

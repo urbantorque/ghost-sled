@@ -13,10 +13,12 @@ import { ChaseCamera, crashPack } from './camera';
 import { liftLine } from './dressing';
 import { ChaosVisuals } from './chaos';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
+import { standable } from './ground';
 import { placeGraves, type GravePlace } from './graves';
 import { LandingAid } from './landing';
+import { LakeMirror } from './lakemirror';
 import { Life } from './life';
-import { applyPalette, bands, setCloudShadows, shared } from './materials';
+import { applyPalette, bands, lake, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
 import { Overlooks } from './overlook';
 import { Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } from './palette';
@@ -25,6 +27,7 @@ import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { SetPieces } from './landmarks';
+import { Rails } from './rails';
 import { Rider } from './rider';
 import { Sky } from './sky';
 import { Terrain, TerrainDetail } from './terrain';
@@ -143,6 +146,8 @@ export class World {
   readonly setPieces: SetPieces;
   /** Where one bank opens over the valley (overlook.ts); the terrain, mid-ground and forest read it. */
   readonly overlooks: Overlooks;
+  /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
+  readonly rails: Rails;
   readonly sky: Sky;
   readonly rider = new Rider();
   readonly particles: Particles;
@@ -153,6 +158,8 @@ export class World {
   readonly landing: LandingAid;
   readonly life: Life;
   readonly post: PostFX;
+  /** What a frozen lake mirrors (lakemirror.ts): baked only when one is near. */
+  private lakeMirror: LakeMirror;
   readonly sun = new DirectionalLight(0xffffff, 1);
   private sunTarget = new Object3D();
   private mood: Mood = Mood.None;
@@ -234,6 +241,7 @@ export class World {
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
     this.overlooks = new Overlooks(this.course, this.palette, quality.tier);
     this.terrain.overlooks = this.midground.overlooks = this.overlooks;
+    this.rails = new Rails(this.course, this.palette, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
     this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
     this.sky = new Sky(seed);
@@ -250,7 +258,8 @@ export class World {
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
-    this.life.kept = (x, z) => this.setPieces.keeps(x, z);
+    // (A cabin the dressing would not stand on a wall or a ledge smokes no chimney either.)
+    this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     const cor = { x: 0, hw: 0 };
@@ -287,6 +296,7 @@ export class World {
       this.terrain.root,
       this.midground.root,
       this.overlooks.root,
+      this.rails.root,
       this.props.root,
       this.setPieces.root,
       this.trail.mesh,
@@ -308,6 +318,7 @@ export class World {
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
     this.resize();
     window.addEventListener('resize', () => this.resize());
@@ -378,6 +389,7 @@ export class World {
     this.terrain.setDetail(q.terrain, q.shadows);
     this.midground.setTier(q.tier, q.terrain.reach);
     this.overlooks.setTier(q.tier);
+    this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
     this.setPieces.setQuality(q.tier, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
@@ -410,6 +422,7 @@ export class World {
     applyPalette(this.palette);
     this.midground.setCourse(c, this.palette);
     this.overlooks.setCourse(c, this.palette);
+    this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
@@ -434,6 +447,7 @@ export class World {
     // mood (setCourse builds them for the mood in force): the title straight after startup and a
     // plain run's start skip a full rebuild (at startup it repeated the constructor's whole build).
     if (!same) this.props.setCourse(this.course, this.palette);
+    if (!same) this.rails.setCourse(this.course, this.palette);
     if (!same) this.setPieces.setCourse(this.course, this.palette, mood);
     this.midground.setPalette(this.palette);
     this.overlooks.setPalette(this.palette);
@@ -441,6 +455,7 @@ export class World {
     this.life.setPalette(this.palette, mood);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    this.lakeMirror.invalidate();
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
@@ -606,6 +621,7 @@ export class World {
     if (prime) this.terrain.prime(from, Math.min(to, cur + 4));
     this.terrain.update(from, to);
     this.midground.update(z, prime);
+    this.rails.update(Math.max(0, from), to);
     const key = `${from}:${to}`;
     if (key !== this.lastChunkRange) {
       this.lastChunkRange = key;
@@ -617,6 +633,7 @@ export class World {
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
+    lake.uGroundTime.value = reduced() ? 0 : v.time;
     this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
     this.sky.setStill(this.mood === Mood.None && reduced());
     this.updateChunks(s.z);
@@ -892,6 +909,7 @@ export class World {
         pp.vpY = Math.max(0.5, Math.min(1.1, vp.y * 0.5 + 0.5));
       }
     }
+    this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
   }
@@ -970,11 +988,13 @@ export class World {
     this.life.root.visible = false;
     this.midground.root.visible = false;
     this.setPieces.root.visible = false;
+    this.rails.root.visible = false;
     this.post.renderInset(this.scene, this.mirrorCam, x, y, mw, mh, this.mirrorFade, Math.max(0, Math.min(1, 1 - gap / 50)), refresh);
     if (refresh) this.props.nearOnly(false);
     this.life.root.visible = true;
     this.midground.root.visible = true;
     this.setPieces.root.visible = true;
+    this.rails.root.visible = true;
     r.shadowMap.autoUpdate = autoShadow;
   }
 

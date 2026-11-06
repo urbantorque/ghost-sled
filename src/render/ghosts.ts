@@ -699,6 +699,23 @@ function newTag(el: HTMLDivElement, prio: number): Tag {
   return { el, prio, x: 0, y: 0, scale: 1, d: 0, dp: 0, ok: false, want: false, held: 0, a: 0, w: 0, h: 0, op: '0', tx: -1e9, ty: -1e9, ts: -1e9, stacked: false, dot: false, wantDot: false };
 }
 
+/** A ghost whose track ran out at or past the finish line finished its run; anywhere else it crashed
+ *  (GhostPose.done says only that the track has ended). */
+export function rodeHome(z: number, finishZ: number): boolean {
+  return z >= finishZ - 0.5;
+}
+
+/** Seconds a finished ghost takes to fade, riding on into the square, and how hard it eases up. */
+const HOME_FADE_S = 2.6;
+const HOME_BRAKE = 7;
+
+/** Metres a finished ghost has ridden on, `t` seconds after its track ended at `speed`. */
+export function coastOn(speed: number, t: number): number {
+  const stop = speed / HOME_BRAKE;
+  const s = Math.min(Math.max(0, t), stop);
+  return speed * s - 0.5 * HOME_BRAKE * s * s;
+}
+
 export class GhostVisuals {
   readonly root = new Object3D();
   readonly layer: HTMLDivElement;
@@ -1312,7 +1329,14 @@ export class GhostVisuals {
         continue;
       }
       const pos = tmp.set(p.x, p.y, -p.z);
-      if (p.done) {
+      if (p.done && rodeHome(p.z, this.course.finishZ)) {
+        // It finished: no wreck and no lantern. It rides on into the square, easing up, and fades.
+        const d = coastOn(p.speed, p.sinceDone);
+        const z = p.z + Math.cos(p.heading) * d;
+        const x = p.x + Math.sin(p.heading) * d;
+        pos.set(x, this.course.ground(x, z), -z);
+        it.fade = Math.max(0, 1 - p.sinceDone / HOME_FADE_S);
+      } else if (p.done) {
         // Crashed: fade out with a poof, leave a lantern marker.
         if (it.fade === 1) onPoof(pos.clone().add(new Vector3(0, 0.8, 0)), it.col.clone());
         it.fade = Math.max(0, 1 - p.sinceDone / 0.6);

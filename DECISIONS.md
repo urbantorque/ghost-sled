@@ -973,3 +973,61 @@ Every place where I replaced, extended or interpreted the brief, and why.
     cost off it and interleaved (A, B, B, A), because a before-then-after run measured a 25% drop on
     every mountain that was not there; and compare draw calls at the same distance from a clean save,
     because two builds on two ports keep different saves and so race different ghosts.
+143. **Bare ground comes from what made it.** Slope alone cannot say where rock goes: a plain bank's foot
+    reaches 1.6, as steep as a ravine's, and must stay snow. So `rockWeight` (ground.ts) reads the shape:
+    a wall from its foot to its crest, the fork's ridge, a bridge's gorge and a ledge's face, the last
+    from the down-run slope, which nothing else on a course reaches (a kicker's built wall is excluded by
+    name). It rides a per-vertex attribute, as the kicker weights do, and the shader draws it in cells:
+    a few hashes a pixel and no search, because a Voronoi over a third of the screen was the obvious way
+    and the wrong cost. Pixels that are all rock skip the snow's dunes, ripples and sastrugi, which pays
+    for most of it. Colours are per mountain in materials.ts, chosen by `massif.peak`, so a mood's light
+    falls on them without touching palette.ts.
+144. **Past its limit a wall may leave the sim's ground.** A sled is turned back at `edgeLimit`, so what
+    stands past it is the painter's. `rampart` raises the wall from the limit up, using noise that is
+    flat on every triangle of a coarse lattice, so a fine mesh draws planes and creases where smooth
+    noise drew a hill, and the crest is jagged against the sky. Inside the limit the mesh is the sim's
+    to the millimetre, and a test holds it there. The terrain casts no shadow, so the wall's own shadow
+    on the floor is worked out in the shader from the height of the crest across from it: no pass,
+    and on Low too. It stops at 72% of the light, or Frostfang's low sun leaves the floor one flat blue.
+145. **A lake mirrors a picture, not a pass.** The sky and the peaks follow the lens, so they are as good
+    as at infinity and one picture holds for any lens on the lake. `LakeMirror` draws them into a
+    768 by 200 target looking down the fall line when a lake is within 480 m and every 3.5 s while one
+    is near, and the shader looks its reflected ray up in it. A real mirror pass would have redrawn the
+    sky every frame for one section. Everything near is worked out from the ray instead: the banks and
+    treeline from where it crosses their plane, and the rider from how close it passes an upright figure
+    at uFocus, so the reflection falls where a reflection falls and leaves the ice with an airborne sled,
+    for no draw at all. Without a bake (the first frames, a lost target) it falls back on the
+    procedural ridge line Glass Ice uses, which is the same path. Low keeps the mirror, the near
+    cracks and the blown snow and drops the long fractures, the deep layer, the bubbles and the wisps:
+    those were a third more on a Low lake at 1440p.
+146. **One draw furnishes the course, on every tier.** Rails needed a draw on Low, and Low has no
+    dressing at all, so its leaps and forks had nothing to read by. `Rails` is one variant set holding
+    the rail lengths, flags, shoulders, cornices and both forms of the fork's gantry: +1 draw in the scene
+    and +1 in the shadow pass, where there is one. A variant set runs every variant's vertices for every
+    instance, so the kit is kept small and the gantries sit last, outside the draw range away from a fork. A rail is laid in short lengths along what the sim
+    grinds (rising over its first third, then level with the ground), because the bar has to meet the
+    sled. Everything is laid as it comes into range: reading the ground builds a chunk's zones.
+147. **The fork's sign is a gantry.** The split's post stands on the centre line, and from 150 m that is
+    exactly behind the rider's head: it was there and could not be seen. Boards high over each channel
+    read either side of the rider instead. Bold is a dark board with a white diamond, the skier's
+    own word for it, and a marigold band, because marigold means gifts and the gifts are down there.
+148. **At a ledge the terrain goes to the mid-ground, not the other way.** The mid-ground's rows are 16 m
+    apart and a ledge steps 15 to 25 m in 4, so between two rows the two surfaces parted by half the step
+    and the mid-ground's edge stood out of the terrain as a wedge. Refining the rows would have cost a
+    ring buffer's worth of memory for a few metres of course. Instead, on those rows only, the terrain's
+    columns ease from 24 m past the edge onto the straight line between the two rows, and a prop
+    reads `visualGround` to stand on what is drawn. Past 24 m nobody rides.
+149. **A leap's landing is groomed, not marked.** The face had nothing to judge from the air, and decision
+    84 allows one painted mark. Corduroy and broad swaths are what a groomer leaves, so they are
+    snow, with flags down both sides for the scale.
+150. **Trees and dressing ask if they can stand.** `standable` keeps them off walls and ledge faces; a
+    wall's forest stands behind its crest, a tree run's wall closes to its own limit with a taller rank
+    behind it, and everything past the corridor stands on `visualGround`. Life's animals still stand on
+    the sim's ground: that file is not this lane's, and one on a ravine's rampart will stand in rock.
+151. **Overlooks keep to open ground.** They were allowed into any section but a gully, which on the new
+    course put them beside walls and kerbs. They now keep out of every narrow place and every ledge's
+    section. That leaves two to four a descent rather than one or two a kilometre: open ground is about a
+    quarter of a run and set pieces take some of it. The test now says so.
+152. **A ghost that finished is not a wreck.** `GhostPose.done` says only that a track has ended, and the
+    game's side is another lane's, so the render tells the two apart by where the track ended: at the
+    finish line it rode home. It coasts on into the square and fades, with no poof and no lantern.
