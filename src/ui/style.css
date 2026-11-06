@@ -330,7 +330,7 @@
 }
 
 @media (hover: hover) {
-  .gs-btn-primary:hover:not(:disabled) {
+  .gs-btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
     background: #ff6143;
   }
 
