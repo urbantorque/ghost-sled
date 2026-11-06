@@ -753,7 +753,7 @@ export class App {
     this.promised = null;
     this.ghosts.setField(field);
     this.world.setGhostField(this.ghostField());
-    // The mountain's graveyards, from the whole pool's crashes (not the field's): cairns on the bank,
+    // The mountain's graveyards, from where the whole pool fell (not the field's): cairns on the bank,
     // and a beat for riding past each alive. Set every run ([] clears the last mountain's).
     // (The bundled mountains are named together, so no place name stands on two of them.)
     this.graves = this.mountain.id === 'daily' || this.mountain.id === 'cup' ? graveyards(this.poolForMountain(this.mountain), this.mountainKey()) : (this.bundledGraves().get(this.mountain.id) ?? []);
