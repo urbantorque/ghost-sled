@@ -31,8 +31,8 @@ const med = (a: number[]): string => {
 };
 for (const [id, seed] of [...MOUNTAINS.map((m) => [m.id, m.seed] as const), ['daily', dailySeed('2026-11-06')] as const]) {
   for (const skill of [0.6, 0.95]) {
-    const a = [];
-    const b = [];
+    const a: ReturnType<typeof run>[] = [];
+    const b: ReturnType<typeof run>[] = [];
     for (let i = 0; i < RUNS; i++) {
       a.push(run(seed, false, skill, 500 + i * 3));
       b.push(run(seed, true, skill, 500 + i * 3));
