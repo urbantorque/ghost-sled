@@ -543,7 +543,7 @@ export class Sim {
     if (!s.drifting) {
       const free = 1 - Math.abs(s.steer) / 0.3;
       if (free > 0) {
-        const near = clamp((Math.abs(off) - 0.5) / 0.5, 0, 1) * 0.42;
+        const near = clamp((Math.abs(off) - 0.68) / 0.32, 0, 1) * 0.36;
         const target = line - (off > 0 ? near : -near);
         s.heading += clamp(target - s.heading, -1, 1) * 1.6 * free * DT;
       }

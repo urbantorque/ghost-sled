@@ -374,7 +374,7 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   cruise: shaped({}),
   start: shaped({ wander: 0.3, span: 0.35, obstacles: 0, ...BARE }),
   chute: shaped({ slope: 1.55, width: -4, wander: 0.35, wave: 1.7, span: 0.5, obstacles: 0.75, kickers: 0.4, moguls: 0.4, drops: 1.4 }),
-  bowl: shaped({ slope: 0.66, width: 8, wander: 0.4, wave: 1.3, span: 0.8, obstacles: 0.55, kickers: 1.7, moguls: 1.5, drops: 0.3 }),
+  bowl: shaped({ slope: 0.66, width: 8, wander: 0.4, wave: 1.3, span: 0.8, obstacles: 0.8, kickers: 1.7, moguls: 1.5, drops: 0.3 }),
   switchbacks: shaped({ slope: 0.92, width: -1, wander: 0.62, wave: 0.55, span: 0.45, obstacles: 0.85, kickers: 0.8, moguls: 0.8, drops: 0.4 }),
   benches: shaped({ slope: 0.72, width: 2, wander: 0.7, span: 0.9, roller: 1.1, obstacles: 0.8, kickers: 1.2, moguls: 0.3, drops: 0, relief: 0.65 }),
   gully: shaped({ slope: 1.28, width: -5.5, wander: 0.6, span: 0.5, obstacles: 0.6, kickers: 0.5, drops: 0.6 }),
@@ -589,6 +589,8 @@ const SIGNATURES: Record<BiomeId, readonly SectionKind[]> = {
 };
 
 const ROLLER_WAVE = 80;
+/** Where the corridor's middle starts to fill up. */
+const PICKETS_FROM = 900;
 
 /** The run-in's gift line: where it starts, how long, its spacing and its swing. */
 const GIFT_RUN_Z = 130;
@@ -1897,7 +1899,9 @@ export class Course {
     const template = rng.weighted([1, 1.25, 0.9, 1.4]); // open, forest, rocks, mixed
     const templateMul = [0.45, 1.3, 1.15, 1.0][template];
     const obsMul = this.shapeAt(z0 + CHUNK_LEN / 2).obstacles;
-    const target = Math.round((3 + 13 * diff) * p.density * templateMul * obsMul * (1 + beyond));
+    // Hazards ask for the steering at 30 m/s: even the first kilometre has something to read every
+    // second or so, and the last stage has the most.
+    const target = Math.round((7 + 15 * diff) * p.density * templateMul * obsMul * (1 + beyond));
 
     const placeOne = (kind: ObstacleKind, x: number, z: number): boolean => {
       switch (kind) {
@@ -2000,6 +2004,15 @@ export class Course {
       else if (template === 1) kind = roll < 0.75 ? rng.pick(tallKinds) : rng.pick(lowKinds);
       else kind = roll < 0.55 ? rng.pick(tallKinds) : rng.pick(lowKinds);
       if (placeOne(kind, x, z)) placed++;
+    }
+
+    // Pickets down the corridor's middle: the safe line weaves past them, so nobody finishes by letting go.
+    // Nothing here before the first leap has been ridden: the first minute stays open.
+    if (z0 >= PICKETS_FROM && obsMul >= 0.5) {
+      for (let z = z0 + rng.range(4, 20); z < z1 - 1; z += rng.range(26, 40) - diff * 10) {
+        const roll = rng.next();
+        placeOne(roll < 0.6 ? rng.pick(tallKinds) : rng.pick(lowKinds), this.centerX(z) + rng.range(-2.6, 2.6), z);
+      }
     }
 
     // A split: a line of trees down the middle. The safe line keeps to one side; the other side is
