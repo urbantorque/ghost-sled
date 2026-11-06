@@ -22,6 +22,9 @@ export interface SiteLike {
   readonly z: number;
   readonly x: number;
   readonly len?: number;
+  /** How high its roof stands over the run, where the plan has flown one: 0 is a roof this mood's air
+   *  took off, only the walls standing (landmarks.ts). */
+  readonly clear?: number;
 }
 
 /** A bird flock (life.ts): the sim z it wheels over, its bank side, its size and whether it is the
@@ -198,7 +201,9 @@ export class Listener {
       const out1 = Math.max(0, Math.abs(dz) - half);
       if (out1 > 200) continue;
       const past = -(dz + half);
-      if (p.roof) out.enclosed = Math.max(out.enclosed, p.roof * within(Math.abs(dz), half - 3, half + 3));
+      // (The kind says it is roofed. The plan says whether the roof stands, which low gravity's air
+      // forbids: Comet Night's tunnels are open to the sky, and ring no more than the walls beside them.)
+      if (p.roof && s.clear !== 0) out.enclosed = Math.max(out.enclosed, p.roof * within(Math.abs(dz), half - 3, half + 3));
       if (p.bustle) out.bustle = Math.max(out.bustle, p.bustle * within(out1, 0, 140));
       if (p.bell && !this.rung.has(s.n) && dz - half < 140 && past < 0) {
         this.rung.add(s.n);

@@ -217,6 +217,20 @@ describe('the listener puts each place where it stands', () => {
     expect(v.enclosed).toBeCloseTo(PLACES.toriirow.roof ?? 0, 5);
   });
 
+  it('a roof the plan took off rings no more than open air: the walls stand, and only the walls', () => {
+    const l = new Listener();
+    const v = newView();
+    const site = { n: 0, kind: 'gallery', span: false, side: 1 as const, z: 200, x: 0, len: 30 };
+    l.hear(sources({ course: course('bowl'), sites: [{ ...site, clear: 24 }] }), 0, 200, 0, v);
+    expect(v.enclosed).toBe(1);
+    expect(v.exposure).toBe(0);
+    l.hear(sources({ course: course('bowl'), sites: [{ ...site, clear: 0 }] }), 0, 200, 0, v);
+    expect(v.enclosed).toBe(0);
+    expect(v.exposure).toBeGreaterThan(0.5);
+    l.hear(sources({ sites: [{ ...site, kind: 'toriirow', clear: 0 }] }), 0, 200, 0, v);
+    expect(v.enclosed).toBe(0);
+  });
+
   it("a village street bustles and its crowd lines both sides; its bell rings once as you come, again next run", () => {
     const l = new Listener();
     const v = newView();
