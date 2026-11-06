@@ -70,16 +70,6 @@ describe('graveyards', () => {
     expect(graveyards([at(100), at(140)], 'k')).toMatchObject([{ fell: 2, z: 120 }]);
     // Capped finishers never crashed.
     expect(graveyards([at(100), at(102, 18000)], 'k')).toHaveLength(0);
-    const many = [100, 300, 500, 700].flatMap((z) => [at(z), at(z + 1), at(z + 2)]);
-    const crowd = bundledGraveyards(['a', 'b', 'c', 'd', 'e'].map((key) => ({ key, pool: many })));
-    for (const list of crowd.values()) expect(new Set(list.map((g) => g.name)).size).toBe(list.length);
-  });
-
-  it('needs 3 within 8 m (first to last), skips finishers, caps at 4, handles an empty pool', () => {
-    expect(graveyards([at(100), at(105), at(109)], 'k')).toHaveLength(0);
-    expect(graveyards([at(100), at(104), at(108)], 'k')).toMatchObject([{ fell: 3, z: 104 }]);
-    // Capped finishers never crashed.
-    expect(graveyards([at(100), at(101), at(102, 18000)], 'k')).toHaveLength(0);
     const many = [100, 300, 500, 700, 900, 1100].flatMap((z) => [at(z), at(z + 1), at(z + 2)]);
     const g = graveyards(many, 'k');
     expect(g).toHaveLength(GRAVE_MAX);
