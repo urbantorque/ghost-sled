@@ -10,6 +10,7 @@ import { Course, type Ledge } from '../sim/course';
 //   rampart     the rock a ravine's wall stands up into past the limit: low-poly, jagged along its crest
 //   handover    the terrain's outer columns easing onto the mid-ground's rows round a ledge
 //   standable   whether a tree or a piece of dressing can stand here at all
+//   openFoot    whether an animal can stand here, in front of whatever bounds the run
 // Terrain, the forest, the dressing and the rails all read these, so a prop stands on what is drawn.
 
 /** The mid-ground's row spacing (midground.ts): its surface runs straight between two rows. */
@@ -24,6 +25,8 @@ const WALL_FULL = 5;
 /** How far past the sim's `limit` the rock climbs, and how far back it stands before it dies away. */
 const RAMPART_RISE = 4.5;
 const RAMPART_BACK = 15;
+/** How far past `limit` an animal can stand before it stands in what the limit means. */
+const FOOT_SLACK = 0.6;
 /** The fork's ridge: the half-width of its rocky spine, metres. */
 const SPINE = 2.2;
 /** A bridge's gorge wall is bare from this slope across the fall. */
@@ -178,4 +181,12 @@ export function standable(c: Course, z: number, e: number): boolean {
   const sh = c.shapeAt(z);
   if (sh.wall > 0.3 && e < crestE(sh.limit) + 6) return false;
   return ledgeAt(c, z, 2.5) === null;
+}
+
+/** Whether an animal can stand `e` past the edge at sim z: in front of the treeline, or of whatever else
+ *  bounds the run there. `limit` is where something solid stands, so past it lie a ravine's rock, a
+ *  street's houses and a bridge's gorge. */
+export function openFoot(c: Course, z: number, e: number): boolean {
+  const sh = c.shapeAt(z);
+  return sh.fall < 1 && e <= sh.limit + FOOT_SLACK && standable(c, z, e);
 }
