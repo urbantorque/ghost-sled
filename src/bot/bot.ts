@@ -126,7 +126,8 @@ function traitsFor(skill: number, rng: Rng): Traits {
 
 /** The bot's feel for how fast the sled yaws at a given speed (the sim's turn-rate rule). */
 function turnRate(speed: number): number {
-  return 2.5 / (1 + speed / 16);
+  const r = 2.5 / (1 + speed / 16);
+  return r < 1.45 ? r : 1.45;
 }
 
 function level(steer: number): number {
@@ -1342,12 +1343,15 @@ class Bot {
   }
 }
 
+/** Ticks a run keeps recording past the finish line: the coast through the square. */
+const COAST_TICKS = 240;
+
 /** Plays one bot run on the real Sim and also returns the finished Sim (for stats). */
 export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6): { record: RunRecord; sim: Sim } {
   const sim = new Sim({ seed, chaos, sled: profile.sled });
   const bot = new Bot(sim, profile);
   const rec = new InputRecorder();
-  while (sim.tick < maxTicks && !sim.s.crashed) {
+  while (sim.tick < maxTicks && !sim.s.crashed && !(sim.finished && sim.tick >= sim.s.finishTick + COAST_TICKS)) {
     const input = bot.input();
     rec.push(input);
     sim.step(input);

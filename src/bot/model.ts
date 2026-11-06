@@ -1,6 +1,6 @@
 import { Course } from '../sim/course';
 import { PI, TAU, approach } from '../sim/dmath';
-import { DT, FLIP_GUARD_TICKS } from '../sim/sim';
+import { DT, FLIP_GUARD_TICKS, LAND_SET_TICKS } from '../sim/sim';
 import { Scene } from './scene';
 
 // The bot's internal model of its own body: a ballistic flight predictor and a copy of the air
@@ -104,7 +104,11 @@ export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotPara
   r.prev = action;
   if (pressed) r.armed = true;
   r.hold = action && r.armed ? r.hold + 1 : 0;
-  if (Math.abs(r.steer) > 0.3) {
+  // (The sim samples the ground every 4 ticks, so its set starts 2 ticks short of the limit.)
+  if (left <= LAND_SET_TICKS - 2) {
+    r.spin = approach(r.spin, 0, 40 * DT);
+    r.yaw = approach(r.yaw, PI * Math.round(r.yaw / PI), 4 * DT);
+  } else if (Math.abs(r.steer) > 0.3) {
     r.spin = approach(r.spin, r.steer * p.spinMax, 34 * DT);
   } else {
     r.spin = approach(r.spin, 0, 22 * DT);
@@ -143,7 +147,7 @@ export function actionAt(p: AirPlan, i: number): boolean {
   return (i >= p.f0 && i < p.f1) || (p.stomp >= 0 && i >= p.stomp);
 }
 
-const AIR_LATERAL = 2.0;
+const AIR_LATERAL = 3.0;
 
 const tmp: Rot = { steer: 0, spin: 0, yaw: 0, pr: 0, pitch: 0, hold: 0, armed: false, prev: false };
 

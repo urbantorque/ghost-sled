@@ -36,7 +36,7 @@ const CARVE_LIMIT = 1.05;
 const CARVE_SOFT = 0.82;
 /** Ticks before touchdown the rider sets for the landing: steering stops adding spin and the sled swings
  *  to the nearest straight line. Stomp timing stays the skill, not surviving your own thumbs. */
-const LAND_SET_TICKS = 14;
+export const LAND_SET_TICKS = 14;
 /** Par for the time bonus: the finish reached at this speed earns nothing. */
 const PAR_SPEED = 24;
 
