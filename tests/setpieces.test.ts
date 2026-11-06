@@ -276,6 +276,46 @@ describe('the finish line', () => {
   });
 });
 
+describe('the start', () => {
+  it('is an occasion on every tier: packed stands down both banks, at the cost of triangles alone', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const p = getPalette(c.biome, Mood.None);
+      const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
+      for (const low of [false, true]) {
+        const piece = pieceFor('start', pieceCtx(c, s, p, false, low));
+        // (Its first frames pay for none of it: the stands are worked out on idle time.)
+        const asked = piece.spots.length;
+        const g = mergePiece(piece.steps.flatMap((f) => f()));
+        const tris = g.getAttribute('position').count / 3;
+        // The near rows move on Medium and High; on Low the still rows are the whole crowd.
+        if (!low) {
+          expect(piece.spots.length, m.name).toBeGreaterThan(420);
+          expect(piece.spots.length).toBeGreaterThan(asked);
+        }
+        // Two boxes a still figure, eight triangles each: over 800 figures even on Low.
+        expect(tris, `${m.name} low ${low}`).toBeGreaterThan(18000);
+        expect(tris, `${m.name} low ${low}`).toBeLessThanOrEqual(low ? 24000 : 42000);
+        g.dispose();
+      }
+    }
+  });
+
+  it('stands its crowd past the limit and its stands clear of the run, either side of the gate', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const s = flown(c, Mood.None).planned.find((q) => q.kind === 'start')!;
+      const piece = pieceFor('start', pieceCtx(c, s, getPalette(c.biome, Mood.None), false, false));
+      piece.steps.forEach((f) => f());
+      const w = new Vector3();
+      for (const sp of piece.spots) {
+        siteToWorld(s, sp.x, sp.y, sp.z, w);
+        expect(c.edgeExcess(w.x, -w.z)).toBeGreaterThanOrEqual(c.edgeLimit(-w.z));
+      }
+    }
+  });
+});
+
 describe('the budget', () => {
   it('holds a street to the old village, and the finish to the biggest thing in the game', () => {
     for (const m of MOUNTAINS) {

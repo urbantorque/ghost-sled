@@ -709,7 +709,7 @@ export class SitePlan {
       } else if (s.len > 0) {
         for (const side of [-1, 1]) {
           if (s.kind === 'village' || s.kind === 'finish') out.push({ side, e: 26, z0: a - 12, z1: b + 12, w: 26 });
-          else if (s.kind === 'start') out.push({ side, e: 16, z0: a - 12, z1: b + 12, w: 8 });
+          else if (s.kind === 'start') out.push({ side, e: 24, z0: a - 12, z1: b + 12, w: 16 });
           else if (s.kind === 'viaduct') out.push({ side, e: 14, z0: a - 8, z1: b + 8, w: 14 });
           else out.push({ side, e: 9, z0: a - 8, z1: b + 8, w: 9 });
         }
