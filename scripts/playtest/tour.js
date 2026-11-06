@@ -66,6 +66,19 @@ async (page) => {
         await page.screenshot({ path: OUT + `m${m}-${String(at).padStart(4, '0')}.png` });
         report.push({ part: 'mountain', m, at, st });
       }
+      // The end of the run: the last stretch, the line, the coast through the town and the results.
+      if (cfg.finish) {
+        const done = await page.waitForFunction(() => { const r = window.__gs.run; return !r || r.sim.s.crashed || r.sim.finished || r.sim.distance >= 4380 || window.__gs.phase !== 'run'; }, null, { timeout: 240000, polling: 50 }).then(() => true, () => false);
+        if (done) await page.screenshot({ path: OUT + `m${m}-end-a-approach.png` });
+        await page.waitForFunction(() => { const r = window.__gs.run; return !r || r.sim.s.crashed || r.sim.finished || window.__gs.phase !== 'run'; }, null, { timeout: 60000, polling: 50 }).catch(() => {});
+        const st = await probe();
+        report.push({ part: 'finish', m, st });
+        for (const [i, wait] of [[1, 250], [2, 900], [3, 1300], [4, 1600], [5, 2500]]) {
+          await page.waitForTimeout(wait);
+          await page.screenshot({ path: OUT + `m${m}-end-${i}.png` });
+        }
+        report.push({ part: 'finish-after', m, st: await probe() });
+      }
     }
   }
 

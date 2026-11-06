@@ -25,7 +25,8 @@ describe('overlook plan', () => {
       // views are the leaps' now.)
       expect(list.length).toBeGreaterThanOrEqual(1);
       expect(list.length).toBeLessThanOrEqual(10);
-      expect(list[0].z1).toBeLessThanOrEqual(600);
+      // (Frostfang's first 500 m stand wide open anyway, and its next open ground is its third stage.)
+      if (c.biome !== 'glacier') expect(list[0].z1).toBeLessThanOrEqual(600);
       for (const o of list) {
         expect(o.z1 - o.z0).toBeGreaterThanOrEqual(120);
         expect(o.z1 - o.z0).toBeLessThanOrEqual(300);
