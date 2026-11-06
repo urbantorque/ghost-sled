@@ -31,9 +31,11 @@ Skill signals live inside these roles rather than adding new ones:
 
 ## 2. Lighting mood
 
-- One low key light (sun or moon) at about 12 degrees elevation, ahead-left of the camera. This gives
-  long shadows that streak toward the viewer and rim-lights the powder spray. The sun disc has a white
-  core, a `#FFE3B0` rim and a warm corona.
+- One key light (sun or moon), off to one side of the fall line, whose height and colour belong to the
+  mountain or the mood (section 7). A low one gives long shadows that streak toward the viewer and
+  rim-lights the powder spray. The disc sits lower than the light that shades the snow, which never
+  drops under 17 degrees (DECISIONS 27). By default the sun has a white core, a `#FFE3B0` rim and a warm
+  corona; Clear Skies colours its own, so Frostfang's is lemon and Ember's a dim orange through the smoke.
 - Two-tone wrap lighting: `mix(shade, lit, smoothstep(-0.25, 0.6, N.L))`. Shade is a saturated cool
   colour, never grey or black.
 - A fresnel rim in the horizon colour on every object, so silhouettes separate from the snow.
@@ -50,10 +52,16 @@ Skill signals live inside these roles rather than adding new ones:
   over the rider. Night moods have none.
 - **Cloud shadows**: soft, slow cool patches drift over the snow in sunny moods (at most 30% off the
   light, never on the contact shadow or the painted bands). Medium and High.
-- **The sun's journey.** Clear Skies is an evening passing: golden to 200 m, full alpenglow by 2 km
-  (a lower sun, longer shadows, warmer coral light), then blue hour from 3 km, full by 4 km (the sun
-  on the ridge, a cooler sky, faint stars, stronger gift and ghost glow, a soft sled lantern). The
-  title stays at the start; chaos moods keep their own light.
+- **Each mountain's journey.** On Clear Skies the light or the weather changes down a run, differently
+  on each mountain (section 7): Pinecrest's cloud builds and it goes golden, Frostfang's sun sinks and
+  the aurora arrives, Ember's ash thickens toward a glowing dusk, Sakura's mist lifts off the cone. All
+  of it is keyed in metres in one table (`JOURNEY` in palette.ts). The title stays at the start; chaos
+  moods keep their own light.
+- **A smoke deck.** A ceiling of cloud across the dome, in its existing pass: billows in three flat
+  values crowding toward the horizon, the undersides taking the glow low in the sky and strongest
+  toward the hero. Ember Peak's Clear Skies alone; Low drops its fine octave. Reduced motion holds the
+  deck and Frostfang's aurora still on Clear Skies, and a plain run never flashes: Ember's lightning
+  stays a night-mood thing.
 
 ## 3. Shape language
 
@@ -161,7 +169,7 @@ cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed
 
 | Mood | Sky zenith -> horizon | Light | Snow lit / shade | Signature |
 | --- | --- | --- | --- | --- |
-| Clear Skies (biome base) | per biome | low warm sun | per biome | long shadows |
+| Clear Skies | per mountain, below | each mountain's own, below | per mountain | one frame tells you which mountain you are on |
 | Blizzard | `#6D7C93` -> `#C9D2DE` | flat diffuse; a dim, soft sun behind the cloud; faint, soft shadows, but a clear contact shadow under the sled | `#EEF2F7` / `#8A97AE` | dense fog, sideways snow streaks, big flakes past the lens, ghosts and gifts blaze; UI accent steel |
 | Lantern Night | `#070B22` -> `#1E2B5E` | low moon + warm sled lantern: a soft, round, desaturated-amber pool about 3.5 to 4 m across under the sled that also warms the rider's legs and sled | `#7E92CC` / `#3B4A86` | stars, aurora ribbons, moonlit sparkle outside the pool, trail lanterns down the corridor, glowing gifts; UI accent moon blue `#B4C4FF` |
 | Glass Ice | `#0E6FA8` -> `#BDF6FF` | low pale-gold sun ahead-left, warm rims on cold ice | `#E6FDFF` / `#7FC6DF` | glazed snow that mirrors the sky, a gold sun path, scratch glints toward the sun, ice spires from deep blue to white-cyan tips; UI accent aqua |
@@ -169,14 +177,34 @@ cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed
 | Haunted Hollow | `#0B1F1C` -> `#3E7F6B` | pale green | `#CFE9DE` / `#4F7F78` | green mist, drifting wisp lights; UI accent green |
 | Powder Day | `#2F7BE0` -> `#CDE8FF` | bright high sun | `#FFFFFF` / `#B9D3F2` | huge powder plumes; UI accent azure |
 
-Biome bases for Clear Skies:
+Clear Skies, mountain by mountain. Each row is the start of a run and the title; the chaos moods build
+on their own base and see none of it.
 
-| Biome | Zenith -> horizon | Snow shade | Props |
-| --- | --- | --- | --- |
-| Pinecrest (alpine) | `#2B4C9B` -> `#FFB38A` | `#9DB2EC` | spruce teal pines, plum-slate rocks, snowmen |
-| Frostfang (glacier) | `#2B5FA8` -> `#FFD9C4` | `#88B6E8` | translucent cyan spires, seracs, ice sheets |
-| Ember Peak (volcanic) | `#2A1E3A` -> `#FF8A50` | `#8C7FA6` | basalt columns, ash-tinted snow, lava glow far below, steam vents |
-| Sakura Ridge (blossom) | `#3A5BA8` -> `#FFC4D6` | `#A9B4E6` | blossom trees, vermillion spirit gates, drifting petals |
+| Mountain | Zenith -> horizon | Sun (bearing, disc, key light) | Snow lit / shade | Silhouette | Reads as |
+| --- | --- | --- | --- | --- | --- |
+| Pinecrest (alpine) | `#123F9E` -> `#CBE8F8` | white, 31 right, 24, 44 | `#FFFFFF` / `#7CA6EC` | a broad crown of three summits, left; a saw of peaks behind | a bright ski day: deep teal pines, sharp blue shadows |
+| Frostfang (glacier) | `#0A2470` -> `#A6C6EE`, thin lemon band `#FFF0A0` | lemon, 35 left, 5.5, 23 | `#D4E4FA` / `#4C76C4` | a curved needle fang, right, over a field of needles | polar blue hour: long steel-blue light, glazed snow, the town lit |
+| Ember Peak (volcanic) | `#1C1316` -> `#D8602C` under the smoke deck | dim orange, 34 right, 15, 30 | `#CFC8CC` / `#54465E` | a huge dark cone dead ahead, its rim blown out toward you, over low shields | under ash: warmth in the sky, ash on the snow, lava threads |
+| Sakura Ridge (blossom) | `#9CCFC2` -> `#FFF1DA` | soft cream, 24 left, 19, 29 | `#FFFBF4` / `#BFC6E2` | one perfect long-skirted cone, right, over soft low hills | a spring morning: peach mist, low contrast, blossom the hero |
+
+Each mountain's run (metres are tunable, in `JOURNEY`):
+
+| Mountain | First | Then |
+| --- | --- | --- |
+| Pinecrest | 500 to 1700: cumulus and high cloud build, and their shadows sweep the snow | 2300 to 3500: gold over blue under the cloud, cream snow, the peaks glowing. Never the old lilac |
+| Frostfang | 700 to 1900: the sun sinks onto the band, stars come out | 2400 to 3400: polar night, the aurora arrives, the glacier holds the light, a soft sled lantern |
+| Ember Peak | 500 to 1800: the deck closes, the disc dims, the air draws in, embers thicken | 2300 to 3400: a glowing dusk, lava lighting the smoke and running down the cone. No lightning |
+| Sakura Ridge | 400 to 1600: the mist lifts off the cone and the sun climbs out of it | 2400 to 3400: a clear spring day with the wind in the blossom |
+
+The baked props never change during a run. A late stop dims hazards through `hazardDim`, and the sky
+stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.test.ts`).
+
+| Biome | Props |
+| --- | --- |
+| Pinecrest | deep teal pines, slate rocks, snowmen |
+| Frostfang | deep ice-blue spires, seracs, ice sheets |
+| Ember Peak | basalt columns, ash-grey snow, lava glow far below, steam vents |
+| Sakura Ridge | blossom trees, vermillion spirit gates, drifting petals |
 
 ## 8. Camera and motion
 
@@ -251,11 +279,11 @@ The run is high on a real mountain, in a world that goes on past the banks and i
 - **The panorama.** Faceted ranges in three depth steps, each paler and hazier with distance and
   warmer toward the sun, rise out of a sunlit sea of clouds drifting below the horizon. Snow holds
   on gentler faces above a ragged snow line and steep faces show the biome's rock; the sun side is
-  warm, the shade side takes the mood's cool shade. Each biome has a hero to the side of the fall
-  line, away from the sun: Pinecrest's massive snow summit, Frostfang's ice fang over glacier
-  tongues, Ember Peak's smoking volcano with a crater glow at night, Sakura Ridge's snow-capped cone.
-  On a Clear Skies run the alpenglow climbs the peaks: pink-coral snow over shaded valleys by 2 km,
-  only the summit tips lit at blue hour. Blizzard veils it all to ghosts.
+  warm, the shade side takes the mood's cool shade. Each biome has a hero: Pinecrest's crown of three
+  summits, Frostfang's curved needle fang over glacier tongues, Ember Peak's smoking volcano with a
+  crater glow, Sakura Ridge's long-skirted cone. Each has its own ranges too: a saw of peaks, a field of
+  needles, low shields, soft hills. On Clear Skies the hero stands where the mountain puts it and stays
+  there all run; in chaos moods it stands away from the sun. Blizzard veils it all to ghosts.
 - **The middle distance.** Past the banks one side usually falls to a valley floor far below and the
   other climbs into a flank, forested low down and bare above the treeline, with crags, gullies and
   wind-drifted snowfields, faceted like the hazards. Hamlets perch on the flanks and villages sit on

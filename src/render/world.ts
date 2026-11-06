@@ -7,6 +7,7 @@ import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, 
 import type { Gift, ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
+import { reduced } from '../ui/motion';
 import type { ListenSources } from '../audio/listen';
 import { ChaseCamera, crashPack } from './camera';
 import { liftLine } from './dressing';
@@ -18,7 +19,7 @@ import { Life } from './life';
 import { applyPalette, bands, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
 import { Overlooks } from './overlook';
-import { Palette, getPalette, journeyPalette, journeyWeights } from './palette';
+import { Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
@@ -205,6 +206,8 @@ export class World {
   readonly riderScreen = { x: 0, y: 0 };
   /** The sun's journey (palette.ts journeyPalette): the weights last applied, -1 to force a refresh. */
   private journeyKey = -1;
+  /** The weather's density last set by the journey, in steps. */
+  private journeyFall = -1;
   /** Play-tests: ride the journey at this many metres instead of the run's distance (null: off). */
   journeyAt: number | null = null;
 
@@ -443,22 +446,27 @@ export class World {
     this.journeyKey = -1;
   }
 
-  /** The sun's journey over a Clear Skies run: golden at the start, deep alpenglow by about 2 km, blue
-   *  hour from about 3.5 km, keyed off the distance ridden (the title reel stays at its start). It is
-   *  re-blended into the live palette only while the weights move, a few times a second at most; the
-   *  props keep their baked colours and take the light through the shared uniforms. Chaos moods keep
-   *  their own palette. */
+  /** Each mountain's journey over a Clear Skies run (palette.ts JOURNEY, keyed off the distance ridden;
+   *  the title reel stays at the start). It is re-blended into the live palette only while the light
+   *  moves, a few times a second at most; the props keep their baked colours and take the light through
+   *  the shared uniforms. Chaos moods keep their own palette. */
   private journey(metres: number): void {
     if (this.mood !== Mood.None) return;
-    const w = journeyWeights(metres);
-    const key = Math.round(w.alpenglow * 400) + Math.round(w.blue * 400) * 1000;
+    const biome = this.course.biome;
+    const key = Math.round(journeyProgress(biome, metres) * 400);
     if (key === this.journeyKey) return;
     this.journeyKey = key;
-    journeyPalette(this.course.biome, metres, this.palette);
-    applyPalette(this.palette);
-    this.sky.setPalette(this.palette);
-    this.ghosts.setGlow(this.palette.ghostGlow);
-    this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    const p = journeyPalette(biome, metres, this.palette);
+    applyPalette(p);
+    this.sky.setPalette(p);
+    this.ghosts.setGlow(p.ghostGlow);
+    this.post.setGrade({ ...p.grade, bloom: p.bloom });
+    // The falling weather thickens in coarse steps (configuring it is not free).
+    const fall = Math.round((p.embers + p.petals + p.snowfall) * 20);
+    if (fall !== this.journeyFall) {
+      this.journeyFall = fall;
+      this.applyWeather();
+    }
   }
 
   /**
@@ -487,10 +495,6 @@ export class World {
       night: false,
     });
     const night = this.mood === Mood.Lantern || this.mood === Mood.Comet || this.mood === Mood.Haunted;
-    // The sun's journey on Clear Skies (palette.ts journeyWeights, inline so it allocates nothing).
-    const ag = Math.max(0, Math.min(1, (z - 200) / 1800));
-    const bl = Math.max(0, Math.min(1, (z - 3000) / 1000));
-    const journey = 0.45 * ag * ag * (3 - 2 * ag) + bl * bl * (3 - 2 * bl);
     src.course = this.course;
     src.biome = this.course.biome;
     src.mood = this.mood;
@@ -502,7 +506,7 @@ export class World {
     src.lifts = life.plan.rich;
     src.chimneyCount = this.midground.chimneys(this.listenChimneys);
     src.vista = this.cam.vistaNow;
-    src.dusk = night ? 1 : this.mood === Mood.None ? Math.min(1, journey) : 0;
+    src.dusk = night ? 1 : this.mood === Mood.None ? journeyDusk(this.course.biome, z) : 0;
     src.night = night;
     return src;
   }
@@ -555,9 +559,9 @@ export class World {
       // A hard crosswind: streaks race sideways across the frame rather than falling.
       this.weather.configure({ density: cap, kind: 0, color: new Color('#FFFFFF'), streak: 0.8, size: 0.09, alpha: 0.85, fall: new Vector3(16, -3, 2), additive: false });
     } else if (p.petals > 0) {
-      this.weather.configure({ density: cap * 0.35, kind: 1, color: new Color('#FFB3CC'), streak: 0, size: 0.13, alpha: 0.9, fall: new Vector3(1.4, -1.2, 0.6), additive: false });
+      this.weather.configure({ density: cap * 0.5 * p.petals, kind: 1, color: new Color('#FFB3CC'), streak: 0, size: 0.13, alpha: 0.9, fall: new Vector3(1.4, -1.2, 0.6), additive: false });
     } else if (p.embers > 0) {
-      this.weather.configure({ density: cap * 0.22, kind: 2, color: new Color('#FF8A40'), streak: 0, size: 0.08, alpha: 0.9, fall: new Vector3(0.6, 1.1, 0.4), additive: true });
+      this.weather.configure({ density: (cap * 0.22 * p.embers) / 0.6, kind: 2, color: new Color('#FF8A40'), streak: 0, size: 0.08, alpha: 0.9, fall: new Vector3(0.6, 1.1, 0.4), additive: true });
     } else if (p.wisps > 0) {
       this.weather.configure({ density: cap * 0.12, kind: 3, color: p.ghost, streak: 0, size: 0.18, alpha: 0.7, fall: new Vector3(0.4, 0.3, 0.2), additive: true });
     } else {
@@ -614,6 +618,7 @@ export class World {
     const dt = v.dt;
     shared.uTime.value = v.time;
     this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
+    this.sky.setStill(this.mood === Mood.None && reduced());
     this.updateChunks(s.z);
     const ci = Math.floor(s.z / CHUNK_LEN);
     this.props.update(ci <= 0 ? -2 : ci - 1, ci + this.quality.viewChunks, v.collected, v.destroyed, ci);

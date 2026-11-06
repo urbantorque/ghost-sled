@@ -853,3 +853,63 @@ Every place where I replaced, extended or interpreted the brief, and why.
 124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
     Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
     Night, a third as dense and paler; Glass Ice gets diamond dust there.
+
+## Made in the wow pass
+
+125. **Every mountain has its own Clear Skies, and the chaos moods never see them.** Pinecrest, Frostfang
+    and Sakura were one lilac-pink sunset, with the sun low and dead centre; Ember was a redder copy.
+    Each now has its own light, palette and sun bearing: a bright ski day, polar blue hour, under ash, a
+    spring morning (ART.md section 7). They live in `clearSkies()`, over `biomeBase()` rather than in
+    it, because every chaos mood is built on `biomeBase()` and keeps whatever it does not set: repainting
+    the base would have repainted all six. Every new field defaults to the old look. All 24 mountain and
+    mood palettes were diffed against the pre-pass build, field by field, and none changed.
+126. **The journey is one table, per mountain, in metres.** The shared ALPENGLOW and BLUE_HOUR stops are
+    gone, with their offsets and the 3.4 and 17 degree floors hard-coded beside them. `JOURNEY` in
+    palette.ts holds every stop of every mountain, each a `from`, an `at` and an edit on the stop before,
+    so retuning for a new run length touches one table. Stops place the sun absolutely, which lets a sun
+    rise (Sakura) as well as set. The floor is now a test: the key light stays at 17 degrees or more at
+    every stop (decision 27). The soundscape's dusk reads the same table (`journeyDusk`) instead of
+    repeating its old distances, so the bell keeps following the light. This replaces the distances in
+    decision 103; its rules stand (keyed off distance, re-blended only while the light moves, the title
+    at the start, chaos moods untouched).
+127. **Clear Skies pins the hero.** The hero stood opposite the sun, chosen from the sun's side every
+    time the palette was applied, so a sun crossing the fall line would have thrown the mountain across
+    the sky mid-run. `massif.heroAz` now pins it per mountain. It is 0 in the chaos moods, which keep the
+    old rule.
+128. **The silhouette belongs to the mountain, in every mood.** Each hero was reshaped (a crown of three
+    summits, a needle that curves over like a tooth, a wide cone with its rim blown out toward the lens,
+    one long-skirted cone) and each mountain's ranges got their own height, sharpness and grain, so
+    Frostfang stands in needles and Sakura's cone stands alone over soft hills. This is the one thing the
+    chaos moods do pick up: a mountain does not change shape with the weather. Their colours and light
+    stay exactly as they were.
+129. **The horizon band is not the horizon.** A lemon `skyHorizon` turned Frostfang's far ranges and its
+    glazed corridor olive-grey, because that colour also feeds the haze, the sea of clouds and the ice's
+    sky mirror. The bright band low on the sky is now its own `skyBand`, so the lemon is in the sky alone.
+    Likewise `sunCore` and `sunTint` colour the disc and its corona, because Ember's snow takes the key
+    light's full colour: an orange key turned the snow to sand, so the key stays close to neutral and the
+    orange is in the disc and the sky. Warmth in the sky, ash on the ground, and the vermillion and the
+    marigold still stand out.
+130. **The smoke deck is part of the dome.** Ember's overcast is painted in the sky's existing pass, with
+    no new draw on any tier: billows on a ceiling, lit from below toward the volcano, costing two noise
+    samples on Low and six on Medium and High, and only while `deck.k` is over 0. Clear Skies keeps
+    `massif.lava` under the 0.75 that wakes the night moods' lightning, so nothing strobes on a plain
+    run. Under reduced motion the deck and Frostfang's aurora hold still on Clear Skies (`Sky.setStill`):
+    they are decorative loops this pass brought to plain runs. The chaos moods keep their own motion.
+131. **Late light has to reach baked colours some other way.** Props and the mid-ground bake their start
+    colours and take the journey only through shared uniforms, so a stop must never recolour `tall` or
+    `low`: Frostfang's night dims hazards with `hazardDim` and cools its key light so the town's walls go
+    down with the sky. Frostfang's `stars` start at 0.55 because the set pieces read over 0.5 as a night
+    palette, which lights its windows from the first frame of its blue hour. Sakura's `snowDeep` leans
+    pink because shaded props take that tint, and periwinkle turned shaded blossom to a dusty mauve. Its
+    late sky leans blue because a greener one came close enough to the ghosts' mint to lose them in the
+    air; a test now holds every sky at every stop clear of mint.
+132. **A hero stops at the sea of clouds.** The panorama draws before the world, so a wide skirt under the
+    sea is shaded and then painted over. Widening Sakura's cone to a 4.3 km radius brought that skirt
+    within 100 m of the lens and cost about 11% at 2560x1440. `HERO_REACH` now ends each patch just under
+    the sea, near the ranges' own feet; the silhouette does not change, the rows left sit closer
+    together, and Sakura matched the old build's best again. The one net draw this pass adds is
+    Frostfang's village halos, which its low sun lights from the start (Medium and High, and only with
+    a village in view). Two lessons for reading these numbers: 60 fps is the vsync ceiling, so compare
+    cost off it and interleaved (A, B, B, A), because a before-then-after run measured a 25% drop on
+    every mountain that was not there; and compare draw calls at the same distance from a clean save,
+    because two builds on two ports keep different saves and so race different ghosts.

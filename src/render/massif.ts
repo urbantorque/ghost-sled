@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, PlaneGeometry, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, PlaneGeometry, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { HeroPeak, Palette } from './palette';
 import { shared } from './materials';
 
@@ -34,6 +34,21 @@ const HERO_AZ = 24;
 /** The sea of clouds' level relative to the lens (metres). */
 const SEA_Y = -330;
 const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3 };
+/** How much of each hero's patch is ever above the sea of clouds (see the hero in VERT). */
+const HERO_REACH: Record<HeroPeak, number> = { summit: 0.86, fang: 0.6, volcano: 0.72, cone: 0.56 };
+/** How far Frostfang's needle curves over at its tip (metres), away from the sun's side. */
+const FANG_LEAN = 360;
+/** How each mountain's ranges stand round its hero: crest height, how sharply the peaks rise out of
+ *  the ridges, the feature size and how much weight the finer octaves carry. Pinecrest is a saw of
+ *  broad peaks, Frostfang a field of needles, Ember Peak low dark shields under its volcano and Sakura
+ *  Ridge soft, low, rolling hills that leave its cone alone in the sky. The shape is the mountain's in
+ *  every mood. */
+const RANGE: Record<HeroPeak, [number, number, number, number]> = {
+  summit: [1.1, 1.3, 1, 0.4],
+  fang: [1.5, 2.1, 0.55, 0.5],
+  volcano: [0.62, 0.9, 1.25, 0.34],
+  cone: [0.5, 0.85, 1.5, 0.22],
+};
 
 /** 2D simplex noise (Ashima Arts / Stefan Gustavson, MIT), shared by the panorama, the sky dome's
  *  sea of clouds and the valley mist (sky.ts). */
@@ -150,6 +165,8 @@ const VERT = /* glsl */ `
   uniform float uSunCap;
   uniform float uHeroAz;
   uniform float uPeak;
+  uniform vec4 uRange;
+  uniform float uReach;
   varying vec3 vPos;
   varying vec3 vHero;
   ${NOISE}
@@ -231,7 +248,7 @@ const VERT = /* glsl */ `
       w = clamp(n * 1.5, 0.0, 1.0);
       s += n * a;
       p = p * 2.03 + vec3(1.7, 9.2, 3.3);
-      a *= 0.4;
+      a *= uRange.w;
     }
     return s;
   }
@@ -245,7 +262,7 @@ const VERT = /* glsl */ `
       // Distance band, foot (just under the sea of clouds, so there is never a gap under a range), crest
       // height (metres relative to the lens), feature size.
       vec4 L = layer < 0.5 ? vec4(1350.0, 2400.0, -420.0, 230.0) : layer < 1.5 ? vec4(2150.0, 3500.0, -430.0, 520.0) : vec4(3200.0, 5000.0, -440.0, 1050.0);
-      float scale = layer < 0.5 ? 640.0 : layer < 1.5 ? 900.0 : 1250.0;
+      float scale = (layer < 0.5 ? 640.0 : layer < 1.5 ? 900.0 : 1250.0) * uRange.z;
       float r = mix(L.x, L.y, v);
       vec2 dir = vec2(sin(az), -cos(az));
       vec2 p = dir * r;
@@ -267,7 +284,7 @@ const VERT = /* glsl */ `
       float rmid = 0.5 * (L.x + L.y);
       float rg = ridged3(vec3(ring * rmid / scale + uSeed, r / (scale * 0.7) + layer * 17.0));
       // Sharpened, so a few big peaks stand out of lower ridges.
-      float h = L.z + (L.w - L.z) * clamp(pow(clamp(rg, 0.0, 1.2), 1.3) * env, 0.0, 1.35) * rise;
+      float h = L.z + (L.w * uRange.x - L.z) * clamp(pow(clamp(rg, 0.0, 1.2), uRange.y) * env, 0.0, 1.35) * rise;
       // Under the sun's bearing the crests stay below the disc, so it sets onto a ridge, never
       // behind a peak in the middle of the sky.
       float w = (1.0 - smoothstep(0.05, 0.2, angDiff(az, uSunAz))) * step(0.0, uSunCap);
@@ -276,9 +293,11 @@ const VERT = /* glsl */ `
       P = vec3(p.x, h, p.y);
       vHero = vec3(layer, position.x, v);
     } else {
-      // The hero: a polar patch round its summit, denser near the top.
+      // The hero: a polar patch round its summit, denser near the top, stopping just under the sea of
+      // clouds. (The panorama draws before the world, so a skirt below the sea would only be shaded to
+      // be painted over.)
       float th = position.x * TAU;
-      float v = position.y;
+      float v = position.y * uReach;
       vec2 hd = vec2(sin(uHeroAz), -cos(uHeroAz));
       // Across the view, pointing away from the sun's side of the frame.
       vec2 right = vec2(-hd.y, hd.x) * sign(uHeroAz);
@@ -289,45 +308,53 @@ const VERT = /* glsl */ `
       float f;
       vec2 p;
       if (uPeak < 0.5) {
-        // Pinecrest: a massive summit on three aretes, the faces between them hollowed into couloirs,
-        // and a shoulder on the side away from the sun.
-        R = 2900.0;
-        top = 1080.0;
+        // Pinecrest: a broad crown of three summits on a long ridge, the highest on three aretes, the
+        // faces between them hollowed into couloirs.
+        R = 3400.0;
+        top = 1500.0;
         p = C + off * v * R;
         float ar = pow(0.5 + 0.5 * cos(3.0 * th + 0.7), 2.0);
-        f = pow(1.0 - v, 1.3) - (1.0 - ar) * 0.16 * v * (1.0 - v) * 4.0;
+        f = pow(1.0 - v, 1.3) - (1.0 - ar) * 0.2 * v * (1.0 - v) * 4.0;
         vec2 lp = off * v - (right * 0.3 + hd * 0.08);
-        f = max(f, 0.74 * pow(max(1.0 - length(lp) / 0.55, 0.0), 1.5));
-        f += (ridged((p - C) / 340.0 + uSeed) - 0.5) * 0.09 * smoothstep(0.0, 0.3, v);
+        vec2 lq = off * v + right * 0.26 - hd * 0.05;
+        f = max(f, 0.8 * pow(max(1.0 - length(lp) / 0.5, 0.0), 1.45));
+        f = max(f, 0.66 * pow(max(1.0 - length(lq) / 0.46, 0.0), 1.45));
+        f += (ridged((p - C) / 340.0 + uSeed) - 0.5) * 0.1 * smoothstep(0.0, 0.3, v);
       } else if (uPeak < 1.5) {
         // Frostfang: a jagged ice fang, a lesser fang at its shoulder, standing on a broad glaciated
         // pedestal whose gentle flanks carry the glacier tongues.
         R = 2700.0;
-        top = 1300.0;
+        top = 2150.0;
         p = C + off * v * R;
-        float ped = 0.4 * pow(1.0 - v, 1.2);
-        float sp = max(1.0 - length(off * v + right * 0.03) / 0.3, 0.0);
-        float sp2 = max(1.0 - length(off * v - (right * 0.2 + hd * 0.05)) / 0.15, 0.0);
-        f = ped + max(0.6 * pow(sp, 1.25), 0.36 * pow(sp2, 1.2));
-        f += (ridged((p - C) / 210.0 + uSeed) - 0.5) * (0.05 + 0.2 * sqrt(sp));
+        float ped = 0.27 * pow(1.0 - v, 1.2);
+        float sp = max(1.0 - length(off * v + right * 0.03) / 0.2, 0.0);
+        float sp2 = max(1.0 - length(off * v - (right * 0.19 + hd * 0.05)) / 0.11, 0.0);
+        float sp3 = max(1.0 - length(off * v + right * 0.21 - hd * 0.03) / 0.08, 0.0);
+        f = ped + max(0.74 * pow(sp, 1.55), max(0.42 * pow(sp2, 1.4), 0.3 * pow(sp3, 1.3)));
+        f += (ridged((p - C) / 190.0 + uSeed) - 0.5) * (0.04 + 0.16 * sqrt(sp));
+        // The fang curves over like a tooth.
+        p += right * ${FANG_LEAN.toFixed(1)} * f * f;
       } else if (uPeak < 2.5) {
         // Ember Peak: a broad, concave volcanic cone with a notched crater rim, scored by radial gullies.
-        R = 3000.0;
-        top = 900.0;
+        R = 3700.0;
+        top = 1360.0;
         p = C + off * v * R;
         float rc = 0.075;
         f = pow(1.0 - max(v, rc), 1.75) / pow(1.0 - rc, 1.75);
         f -= 0.05 * (1.0 - smoothstep(0.0, rc, v));
         f += 0.015 * snoise(off * 0.9 + 1.3) * (1.0 - smoothstep(rc, rc * 2.5, v));
+        // The rim is blown out on the side toward the lens, so the lava shows.
+        f -= 0.07 * smoothstep(0.72, 1.0, dot(off, -hd)) * (1.0 - smoothstep(rc, rc * 3.0, v));
         float g = abs(snoise(off * 7.5 + vec2(0.0, v * 2.5)));
-        f -= 0.045 * smoothstep(0.08, 0.3, v) * (1.0 - v) * (1.0 - g);
+        // (They thin out low down, where the grid's wide rows would turn them into long pale slabs.)
+        f -= 0.045 * smoothstep(0.08, 0.3, v) * (1.0 - smoothstep(0.34, 0.62, v)) * (1.0 - v) * (1.0 - g);
       } else {
         // Sakura Ridge: a symmetrical cone, steepening toward a small flat-topped crater.
-        R = 3300.0;
-        top = 830.0;
+        R = 4300.0;
+        top = 1300.0;
         p = C + off * v * R;
-        float rc = 0.045;
-        f = pow(1.0 - max(v, rc), 2.15) / pow(1.0 - rc, 2.15);
+        float rc = 0.035;
+        f = pow(1.0 - max(v, rc), 2.7) / pow(1.0 - rc, 2.7);
         f -= 0.02 * (1.0 - smoothstep(0.0, rc, v));
         float g = abs(snoise(off * 10.5 + vec2(0.0, v * 3.0)));
         f -= 0.02 * smoothstep(0.1, 0.4, v) * (1.0 - v) * (1.0 - g);
@@ -356,6 +383,7 @@ const FRAG = /* glsl */ `
   uniform float uGlowLine;
   uniform float uVeil;
   uniform float uLava;
+  uniform float uFlow;
   uniform vec3 uLavaColor;
   uniform float uPeak;
   uniform float uSnowY;
@@ -408,15 +436,24 @@ const FRAG = /* glsl */ `
         // The volcano: snow only in streaks down the upper gullies, none in the warm crater.
         float streak = snoise(ring * 14.5 + vec2(0.0, hv * 1.5)) * 0.08 + snoise(ring * 3.7 + 2.0) * 0.06;
         snow = step(hv, 0.3 + streak) * step(0.11, hv) * smoothstep(0.25, 0.35, slope + n2 * 0.2);
+        // Under its own ash (uFlow) there is no snow left: the cone is a dark shape on the sky.
+        if (uFlow > 0.0) snow = 0.0;
         crater = 1.0 - smoothstep(0.05, 0.085, hv);
+        // Lava runs down the flanks in thin, broken threads.
+        if (uFlow > 0.0) {
+          float rill = abs(snoise(ring * 6.5 + vec2(hv * 3.0, 0.0)) + 0.18 * n1);
+          float run = (1.0 - smoothstep(0.015, 0.05, rill)) * smoothstep(0.05, 0.09, hv) * (1.0 - smoothstep(0.26, 0.5, hv + n1 * 0.08));
+          crater = max(crater, run * uFlow * 0.85);
+        }
       } else {
         // The cone: a clean snow cap whose lower edge runs down the gullies in long streaks.
         float streak = snoise(ring * 11.0 + 0.5) * 0.05 + snoise(ring * 30.0 + 1.5) * 0.025;
-        snow = step(hv, 0.21 + streak);
+        snow = step(hv, 0.17 + streak);
       }
     }
     float wrap = smoothstep(-0.25, 0.6, dot(N, uLight));
-    float lit = steps3(wrap);
+    // Stepped, the volcano's bare ash broke into pale radial slabs along its gullies.
+    float lit = uFlow > 0.0 && uPeak > 1.5 && uPeak < 2.5 && layer > 2.5 ? wrap * 0.6 : steps3(wrap);
     // Alpenglow: as the sun sinks the shadow climbs the ranges, the valleys go to shade first and the
     // snow still in the light takes the glow.
     float above = smoothstep(uGlowLine - 40.0, uGlowLine + 40.0, vPos.y + n1 * 70.0);
@@ -433,6 +470,8 @@ const FRAG = /* glsl */ `
     vec3 snowLit = mix(uSnowLit, uGlow, uGlowK * above);
     vec3 col = mix(mix(uRockShade, uRockLit, sun), mix(uSnowShade, snowLit, sun), snow);
     col = mix(col, mix(uSnowShade, mix(uIce, uGlow, uGlowK * above * 0.5), sun * 0.8 + 0.2), ice);
+    // On Frostfang's Clear Skies the glacier holds the light after the rock has lost it.
+    col += uIce * ice * uFlow * 0.4;
     #if SEA_Q > 0
       if (uSlide > 0.0 && layer > 2.5) {
         // Now and then a distant avalanche pours down the hero's face toward the lens: a tongue of
@@ -662,6 +701,8 @@ export class Massif {
         uSunCap: { value: 0.1 },
         uHeroAz: { value: 0.4 },
         uPeak: { value: 0 },
+        uRange: { value: new Vector4(...RANGE.summit) },
+        uReach: { value: 1 },
         uLight: { value: new Vector3(0, 1, 0) },
         uSnowLit: { value: new Color() },
         uSnowShade: { value: new Color() },
@@ -675,6 +716,7 @@ export class Massif {
         uGlowLine: { value: -6000 },
         uVeil: { value: 0 },
         uLava: { value: 0 },
+        uFlow: { value: 0 },
         uLavaColor: { value: new Color('#FF6A2A') },
         uSnowY: { value: -250 },
         uHazeDist: { value: 5200 },
@@ -731,12 +773,16 @@ export class Massif {
     u.uSunAz.value = sunAz;
     // Crests under the disc stay about 2.5 degrees below its centre (no cap when there is no disc).
     u.uSunCap.value = p.sunDisc > 0 || p.moon ? Math.tan(Math.max(0.3 * (Math.PI / 180), sunEl - 2.5 * (Math.PI / 180))) : -1;
-    // The hero stands on the far side of the fall line from the sun.
-    const side = sunAz >= 0 ? -1 : 1;
-    this.heroAz = side * HERO_AZ * (Math.PI / 180);
+    // The hero stands on the far side of the fall line from the sun, unless the palette pins it: a sun
+    // that moves over a run must not make the mountain jump across the sky.
+    const heroDeg = p.massif.heroAz || (sunAz >= 0 ? -HERO_AZ : HERO_AZ);
+    const side = heroDeg < 0 ? -1 : 1;
+    this.heroAz = heroDeg * (Math.PI / 180);
     u.uHeroAz.value = this.heroAz;
     this.peak = p.massif.peak;
     u.uPeak.value = PEAK_ID[this.peak];
+    (u.uRange.value as Vector4).set(...RANGE[this.peak]);
+    u.uReach.value = HERO_REACH[this.peak];
     // The panorama's own light: the sun's bearing swung out to the side and lifted, so the faces
     // turned toward the lens are split into a lit and a shaded side instead of all backlit.
     const laz = sunAz - side * 1.0;
@@ -759,6 +805,7 @@ export class Massif {
     // At night the silhouettes hold: the ranges keep more of their dark value against the horizon glow.
     u.uHazeK.value = p.moon ? 0.6 : 1;
     u.uLava.value = p.massif.lava;
+    u.uFlow.value = p.massif.flow;
     u.uSnowY.value = this.peak === 'volcano' ? -60 : this.peak === 'fang' ? -380 : -260;
     paletteSea(this.sea, p);
 
@@ -789,7 +836,7 @@ export class Massif {
   }
 
   /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
-  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1080, fang: 1150, volcano: 880, cone: 830 };
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: 1340, cone: 1300 };
 
   private placePlume(): void {
     const show = this.tier !== 'low' && this.banner > 0.01;
@@ -797,8 +844,10 @@ export class Massif {
     if (!show) return;
     const hx = Math.sin(this.heroAz) * HERO_DIST;
     const hz = -Math.cos(this.heroAz) * HERO_DIST;
+    // The fang's tip leans out from over its foot, and its banner leaves from the tip.
+    const lean = this.peak === 'fang' ? FANG_LEAN * Math.sign(this.heroAz) : 0;
     // The volcano's column rises from the crater; a banner's quad hangs with the summit 150 m up it.
-    this.plume.position.set(hx, this.peak === 'volcano' ? 880 : Massif.SUMMIT_Y[this.peak] - 150, hz);
+    this.plume.position.set(hx + Math.cos(this.heroAz) * lean, this.peak === 'volcano' ? Massif.SUMMIT_Y.volcano : Massif.SUMMIT_Y[this.peak] - 150, hz + Math.sin(this.heroAz) * lean);
     // Faces the lens (at the root's origin).
     this.plume.rotation.set(0, Math.atan2(-hx, -hz), 0);
   }
