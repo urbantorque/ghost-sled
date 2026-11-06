@@ -25,6 +25,9 @@ export class Sky {
         uZenith: { value: new Color() },
         uHorizon: { value: new Color() },
         uMid: { value: new Color() },
+        uBand: { value: new Color() },
+        uBandFade: { value: 28 },
+        uBandK: { value: 0.6 },
         uSpread: { value: 1 },
         uCurve: { value: 0.5 },
         uBelow: { value: new Color() },
@@ -34,6 +37,8 @@ export class Sky {
         uSunGlow: { value: 1 },
         uSunDisc: { value: 1 },
         uSunSoft: { value: 0 },
+        uSunCore: { value: new Color() },
+        uSunTint: { value: 0.2 },
         uStars: { value: 0 },
         uAurora: { value: 0 },
         uMoon: { value: 0 },
@@ -47,6 +52,12 @@ export class Sky {
         uCloudLit: { value: new Color() },
         uCloudShade: { value: new Color() },
         uCloudRim: { value: new Color() },
+        uDeck: { value: 0 },
+        uDeckLit: { value: new Color() },
+        uDeckShade: { value: new Color() },
+        uDeckGlow: { value: new Color() },
+        uDeckAz: { value: 0 },
+        uStill: { value: 0 },
         uRays: { value: 0 },
         uHalo: { value: 0 },
         uMeteors: { value: 0 },
@@ -83,6 +94,9 @@ export class Sky {
         uniform vec3 uZenith;
         uniform vec3 uHorizon;
         uniform vec3 uMid;
+        uniform vec3 uBand;
+        uniform float uBandFade;
+        uniform float uBandK;
         uniform float uSpread;
         uniform float uCurve;
         uniform vec3 uBelow;
@@ -92,6 +106,8 @@ export class Sky {
         uniform float uSunGlow;
         uniform float uSunDisc;
         uniform float uSunSoft;
+        uniform vec3 uSunCore;
+        uniform float uSunTint;
         uniform float uStars;
         uniform float uAurora;
         uniform float uMoon;
@@ -105,6 +121,12 @@ export class Sky {
         uniform vec3 uCloudLit;
         uniform vec3 uCloudShade;
         uniform vec3 uCloudRim;
+        uniform float uDeck;
+        uniform vec3 uDeckLit;
+        uniform vec3 uDeckShade;
+        uniform vec3 uDeckGlow;
+        uniform float uDeckAz;
+        uniform float uStill;
         uniform float uRays;
         uniform float uHalo;
         uniform float uMeteors;
@@ -223,6 +245,37 @@ export class Sky {
           col = mix(col, uHorizon, (1.0 - clamp(y, 0.0, 1.0)) * 0.28);
           return vec4(col, a * min(1.0, uCloudLow * 1.5));
         }
+        // A ceiling of cloud across the whole dome: billows on a plane overhead, crowding together toward
+        // the horizon where they melt into the sky's own glow. Three flat values like the banks; the
+        // undersides take uDeckGlow, low in the sky and strongest toward the hero. Under a cover of 1 it
+        // is unbroken, below that it tears into rafts. Low drops the fine octave and the light sample.
+        float deckBillow(vec2 q) {
+          float n = snoise(q) * 0.62 + snoise(q * 2.3 + 5.2) * 0.3;
+          #if CLOUD_Q > 0
+            n += snoise(q * 5.4 + 1.7) * 0.14;
+          #endif
+          return n;
+        }
+        vec4 cloudDeck(vec3 d, float h) {
+          float T = uTime * (1.0 - uStill);
+          vec2 q = (d.xz / (h + 0.09)) * 0.5 + vec2(T * 0.012, T * 0.005);
+          float n = deckBillow(q);
+          float cov = smoothstep(-0.34, -0.06, n + (uDeck - 0.72) * 1.7);
+          if (cov <= 0.0) return vec4(0.0);
+          #if CLOUD_Q > 0
+            float under = clamp(0.5 + (deckBillow(q + vec2(0.0, 0.16)) - n) * 2.4, 0.0, 1.0);
+          #else
+            float under = 0.5;
+          #endif
+          float l = seaSteps(clamp(0.5 + n * 0.55, 0.0, 1.0) * 0.65 + (1.0 - under) * 0.35);
+          vec3 col = mix(uDeckShade, uDeckLit, l);
+          float az = atan(d.x, -d.z);
+          float toward = pow(max(cos(az - uDeckAz) * 0.5 + 0.5, 0.0), 3.0);
+          float low = 1.0 - smoothstep(0.02, 0.42, h);
+          col = mix(col, uDeckGlow, clamp(low * low * (0.35 + 0.65 * toward) * (0.45 + 0.75 * under) * 1.25, 0.0, 0.92));
+          // The far deck melts into the horizon rather than ending on a line.
+          return vec4(col, cov * smoothstep(0.0, 0.06, h));
+        }
         // High wisps: long thin strokes stretched along the horizon, pale with their sun side warm.
         vec4 cloudWisps(float az, float h, float sunSide) {
           if (h < 0.16 || h > 0.56) return vec4(0.0);
@@ -244,29 +297,30 @@ export class Sky {
         // folds drift slowly; the noise runs in a rotated domain so no lattice line lines up with
         // the sky.
         vec3 aurora(float az, float h) {
+          float T = uTime * (1.0 - uStill);
           vec3 acc = vec3(0.0);
           const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
           for (int k = 0; k < 3; k++) {
             float fk = float(k);
             // Each ribbon spans an arc of the sky (centred near the view down the course), never a ring.
-            float centre = (fk - 0.8) * 0.95 + 0.25 * sin(uTime * 0.02 + fk * 4.0);
+            float centre = (fk - 0.8) * 0.95 + 0.25 * sin(T * 0.02 + fk * 4.0);
             float off = acos(clamp(cos(az - centre), -1.0, 1.0));
             float arc = smoothstep(1.4 - fk * 0.2, 0.3, off);
             if (arc <= 0.0) continue;
-            float hem = 0.12 + fk * 0.085 + 0.05 * sin(az * 2.0 + fk * 2.3 + uTime * 0.035) + 0.02 * sin(az * 5.0 - fk * 1.7 - uTime * 0.06);
+            float hem = 0.12 + fk * 0.085 + 0.05 * sin(az * 2.0 + fk * 2.3 + T * 0.035) + 0.02 * sin(az * 5.0 - fk * 1.7 - T * 0.06);
             float above = h - hem;
             // Skip below the hem and where even the tallest swell has faded out (most of the sky).
             if (above < -0.05 || above > (0.06 + fk * 0.03) * 6.7) continue;
-            float drift = az - uTime * 0.012 * (1.0 + fk);
+            float drift = az - T * 0.012 * (1.0 + fk);
             vec2 ring = vec2(cos(drift), sin(drift));
-            float swell = gnoise(ROT * (ring * 2.2 + vec2(fk * 5.1, uTime * 0.01)));
+            float swell = gnoise(ROT * (ring * 2.2 + vec2(fk * 5.1, T * 0.01)));
             float span = (0.06 + fk * 0.03) * (0.55 + 0.9 * swell);
             float body = smoothstep(-0.045, 0.012, above) * exp(-max(above, 0.0) / span);
-            float folds = gnoise(ROT * (ring * 5.0 + vec2(fk * 7.3, above * 6.0 - uTime * 0.015)));
+            float folds = gnoise(ROT * (ring * 5.0 + vec2(fk * 7.3, above * 6.0 - T * 0.015)));
             // Fine vertical rays that ripple sideways along the curtain, and slow surges of brightness
             // running along it, so the display breathes rather than hanging still.
-            float rays = gnoise(ROT * vec2(drift * 20.0 + uTime * 0.05, above * 2.5 + fk * 3.1));
-            float surge = gnoise(vec2(drift * 2.6 - uTime * 0.09, fk * 4.7 + uTime * 0.02));
+            float rays = gnoise(ROT * vec2(drift * 20.0 + T * 0.05, above * 2.5 + fk * 3.1));
+            float surge = gnoise(vec2(drift * 2.6 - T * 0.09, fk * 4.7 + T * 0.02));
             body *= arc * (0.25 + 0.75 * folds) * (0.5 + 0.5 * rays * rays * 1.6) * (0.55 + 0.9 * surge * surge);
             vec3 col = mix(vec3(0.3, 1.0, 0.74), vec3(0.58, 0.36, 1.0), smoothstep(0.0, span * 1.6, above));
             // A strong display's rose fringe along the lower hem, under the green.
@@ -282,7 +336,7 @@ export class Sky {
           if (h >= 0.0) {
             col = gradient(h);
             // A warm band hugging the horizon.
-            col = mix(col, uHorizon * 1.08, exp(-h * 28.0) * 0.6);
+            col = mix(col, uBand, exp(-h * uBandFade) * uBandK);
           } else {
             col = mix(uHorizon, uBelow, clamp(-h * 6.0, 0.0, 1.0));
             // The sea of clouds far below, which the ranges rise out of.
@@ -303,6 +357,12 @@ export class Sky {
           // Painted clouds, under the sun and moon: they part round the disc (its core is never
           // covered) and only veil the corona, which shines on over them.
           float cloudA = 0.0;
+          float deckA = 0.0;
+          if (uDeck > 0.0 && h > 0.0) {
+            vec4 dk = cloudDeck(d, h);
+            col = mix(col, dk.rgb, dk.a);
+            deckA = dk.a;
+          }
           if ((uCloudLow > 0.0 || uCloudHigh > 0.0) && h > -0.01 && h < 0.56) {
             vec3 sdn = normalize(uSunDir);
             float az = atan(d.x, -d.z);
@@ -322,6 +382,7 @@ export class Sky {
             cloudA = cl.a * part;
             col = mix(col, cl.rgb, cloudA);
           }
+          cloudA = max(cloudA, deckA);
           #if CLOUD_Q > 0
             // Crepuscular rays: beams of light fanning out from the sun through the gaps in the cloud
             // banks and the ridges, between cooler beams of shadow, turning very slowly. Strongest close
@@ -364,14 +425,18 @@ export class Sky {
             // cloud deck (uSunSoft) there is no disc at all, only a wide, dim, diffused glow.
             // The limb and corona stay under the bloom threshold and the tone curve's knee, which would
             // otherwise bleach them white; only the core is hot enough to bloom.
-            vec3 corona = vec3(1.0, 0.77, 0.43) * mix(vec3(1.0), sunCol / max(max(sunCol.r, sunCol.g), max(sunCol.b, 0.001)), 0.2);
+            // uSunTint hands the corona and the glow over to the core's own colour.
+            vec3 coreC = uSunCore / max(max(uSunCore.r, uSunCore.g), uSunCore.b);
+            float own = (uSunTint - 0.2) / 0.8;
+            vec3 corona = mix(vec3(1.0, 0.77, 0.43) * mix(vec3(1.0), sunCol / max(max(sunCol.r, sunCol.g), max(sunCol.b, 0.001)), 0.2), coreC, own);
             float clear = 1.0 - uSunSoft;
-            vec3 face = mix(corona * 1.35, vec3(2.3, 2.15, 1.95), smoothstep(R * 0.85, R * 0.2, sunScr));
+            vec3 face = mix(corona * 1.35, uSunCore, smoothstep(R * 0.85, R * 0.2, sunScr));
             col = mix(col, face, disc * min(uSunDisc, 1.0) * clear);
             float out0 = max(sunScr - R, 0.0);
             col += corona * (exp(-out0 / (R * 0.8)) * 0.3 + exp(-out0 / (R * 3.0)) * 0.1) * (1.0 - disc) * uSunDisc * clear * (1.0 - 0.45 * cloudA);
-            col += sunCol * glow * uSunGlow * mix(1.0, 0.75, clear);
-            col += sunCol * exp(-sunScr / (R * 2.4)) * 0.32 * uSunSoft * uSunGlow;
+            vec3 glowC = mix(sunCol, coreC, own);
+            col += glowC * glow * uSunGlow * mix(1.0, 0.75, clear);
+            col += glowC * exp(-sunScr / (R * 2.4)) * 0.32 * uSunSoft * uSunGlow;
           }
           if (uHalo > 0.0) {
             // Ice-crystal air: the 22 degree halo, a thin ring reddish on its inner edge with the sky
@@ -523,6 +588,10 @@ export class Sky {
       const avg = (a: number, b: number) => ((Math.sqrt(a) + Math.sqrt(b)) / 2) ** 2;
       mid.setRGB(avg(z.r, hz.r), avg(z.g, hz.g), avg(z.b, hz.b));
     }
+    if (p.skyBand.color) u.uBand.value.copy(p.skyBand.color);
+    else u.uBand.value.copy(p.skyHorizon).multiplyScalar(1.08);
+    u.uBandFade.value = p.skyBand.fade;
+    u.uBandK.value = p.skyBand.k;
     u.uSpread.value = p.skySpread;
     u.uCurve.value = p.skyCurve;
     u.uBelow.value.copy(p.skyBelow);
@@ -531,6 +600,8 @@ export class Sky {
     u.uSunGlow.value = p.sunGlow;
     u.uSunDisc.value = p.sunDisc;
     u.uSunSoft.value = p.sunSoft;
+    u.uSunCore.value.copy(p.sunCore);
+    u.uSunTint.value = p.sunTint;
     u.uStars.value = p.stars;
     u.uAurora.value = p.aurora;
     u.uMoon.value = p.moon ? 1 : 0;
@@ -542,6 +613,11 @@ export class Sky {
     u.uCloudLit.value.copy(p.clouds.lit);
     u.uCloudShade.value.copy(p.clouds.shade);
     u.uCloudRim.value.copy(p.clouds.rim);
+    u.uDeck.value = p.deck.k;
+    u.uDeckLit.value.copy(p.deck.lit);
+    u.uDeckShade.value.copy(p.deck.shade);
+    u.uDeckGlow.value.copy(p.deck.glow);
+    u.uDeckAz.value = (p.massif.heroAz * Math.PI) / 180;
     this.highClouds = p.clouds.high;
     // Rays only from a sun (a moon's fought the aurora and the comet), and only while it is low.
     u.uRays.value = p.moon ? 0 : p.atmo.rays * (1 - Math.max(0, Math.min(1, (p.diskDir.y - 0.3) / 0.25)));
@@ -549,6 +625,12 @@ export class Sky {
     u.uMeteors.value = p.atmo.meteors;
     this.massif.setPalette(p);
     this.mist.setPalette(p);
+  }
+
+  /** Holds the two motions Clear Skies adds to the sky, the smoke deck's drift and the aurora's
+   *  rippling, for players who asked for reduced motion (the chaos moods keep their own). */
+  setStill(still: boolean): void {
+    this.domeMat.uniforms.uStill.value = still ? 1 : 0;
   }
 
   /** Cloud and panorama detail by quality tier: Low keeps the horizon banks at two octaves, drops the
