@@ -23,7 +23,7 @@ export interface Settlement {
   perfects: number;
   yetiHop: boolean;
   outranAvalanche: boolean;
-  /** The Daily medal this run has credited (0 none). */
+  /** The Daily or Cup medal this run has credited (0 none). */
   medal?: number;
 }
 
@@ -37,6 +37,8 @@ export interface SettleResult {
   /** A Daily Mountain run: the medal it earned, today's best medal, the day streak and the results
    *  line ("Daily: Silver. Gold at 2:31.4.", null without thresholds). */
   daily?: DailyOutcome;
+  /** A Cup run: the medal it earned, the week's best medal and the results line. (streak: unused, 0.) */
+  cup?: DailyOutcome;
 }
 
 // ---------- Daily medal and streak (stretch)
@@ -60,18 +62,21 @@ export interface DailyOutcome {
   line: string | null;
 }
 
+/** The value a share p of a sorted list sits at, between its neighbours. */
+export function pctAt(xs: readonly number[], p: number): number {
+  const i = p * (xs.length - 1);
+  const lo = Math.floor(i);
+  const hi = Math.min(xs.length - 1, lo + 1);
+  return xs[lo] + (xs[hi] - xs[lo]) * (i - lo);
+}
+
 /** The bronze, silver and gold times for a pool's predicted finish times (seconds, to the tenth, so
  *  a line reads the time it means), or null for an empty pool. Every medal stays reachable: however
  *  the pool ties, each sits MEDAL_GAP_S under the last, never over a time nobody can beat. */
 export function medalThresholds(times: readonly number[]): MedalThresholds | null {
   const xs = times.filter((v) => Number.isFinite(v) && v > 0).sort((a, b) => a - b);
   if (xs.length === 0) return null;
-  const at = (p: number): number => {
-    const i = p * (xs.length - 1);
-    const lo = Math.floor(i);
-    const hi = Math.min(xs.length - 1, lo + 1);
-    return Math.round((xs[lo] + (xs[hi] - xs[lo]) * (i - lo)) * 10) / 10;
-  };
+  const at = (p: number): number => Math.round(pctAt(xs, p) * 10) / 10;
   const b = at(MEDAL_PCT[0]);
   const s = Math.min(b - MEDAL_GAP_S, at(MEDAL_PCT[1]));
   return [b, s, Math.min(s - MEDAL_GAP_S, at(MEDAL_PCT[2]))];
@@ -85,11 +90,12 @@ export function medalFor(time: number | null, t: MedalThresholds): number {
   return medal;
 }
 
-/** "Daily: Silver. Gold at 2:31.4.", "Daily: Gold.", or "Daily: Bronze at 3:02.0." with none yet. */
-export function dailyLine(medal: number, t: MedalThresholds): string {
-  if (medal >= 3) return 'Daily: Gold.';
-  if (medal <= 0) return `Daily: Bronze at ${clock(t[0])}.`;
-  return `Daily: ${MEDAL_NAMES[medal]}. ${MEDAL_NAMES[medal + 1]} at ${clock(t[medal])}.`;
+/** "Daily: Silver. Gold at 2:31.4.", "Daily: Gold.", or "Daily: Bronze at 3:02.0." with none yet. The
+ *  Cup says the same with its own name. */
+export function dailyLine(medal: number, t: MedalThresholds, label: 'Daily' | 'Cup' = 'Daily'): string {
+  if (medal >= 3) return `${label}: Gold.`;
+  if (medal <= 0) return `${label}: Bronze at ${clock(t[0])}.`;
+  return `${label}: ${MEDAL_NAMES[medal]}. ${MEDAL_NAMES[medal + 1]} at ${clock(t[medal])}.`;
 }
 
 /** The UTC day before a 'YYYY-MM-DD' key ('' when the key is not a day). */
@@ -127,6 +133,22 @@ function settleDaily(d: SaveData, day: string, time: number | null, t: MedalThre
     dr.last = day;
   }
   return { medal, best: dr.medal ?? 0, streak: dr.streak, line: t ? dailyLine(medal, t) : null };
+}
+
+/** This week's best medal (0 when the record is another week's). */
+export function cupMedalNow(cup: DailyRecord | null | undefined, week: string): number {
+  return cup?.key === week ? (cup.medal ?? 0) : 0;
+}
+
+/** Credits a Cup run to the week: the week's best time and medal. Pure in the record, so settling
+ *  twice gives the same answer. There is no streak: a Cup is a week's best, not a habit. */
+function settleCup(d: SaveData, week: string, time: number | null, t: MedalThresholds | null | undefined): DailyOutcome {
+  const c: DailyRecord = d.cup?.key === week ? d.cup : { key: week, best: 0, medal: 0 };
+  const medal = t ? medalFor(time, t) : 0;
+  c.medal = Math.max(c.medal ?? 0, medal);
+  if (time !== null && (c.best <= 0 || time < c.best)) c.best = time;
+  d.cup = c;
+  return { medal, best: c.medal ?? 0, streak: 0, line: t ? dailyLine(medal, t, 'Cup') : null };
 }
 
 function clone<T>(v: T): T {
@@ -309,11 +331,11 @@ export function settleGrudge(atStart: Grudge | null, o: GrudgeOutcome): { grudge
 }
 
 /**
- * `key` is the save key of the mountain (daily runs use `daily:<day>`): the run's predicted finish
- * time is pushed to runTimes[key] (capped at 5; a re-settle replaces the entry the first settle
- * pushed), and a daily settle prunes the other days' entries. A daily settle also credits the day
- * streak and the medal against `medals` (medalThresholds of the day's pool times; without them only
- * the streak counts).
+ * `key` is the save key of the mountain (daily runs use `daily:<day>`, Cup runs `cup:<week>`): the
+ * run's predicted finish time is pushed to runTimes[key] (capped at 5; a re-settle replaces the entry
+ * the first settle pushed), and a daily settle prunes the other days' entries. A daily settle also
+ * credits the day streak and the medal against `medals` (medalThresholds of the day's pool times;
+ * without them only the streak counts), and a Cup settle the week's time and medal.
  */
 export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null, key?: string, medals?: MedalThresholds | null): SettleResult {
   if (!prior) d.runs++;
@@ -338,10 +360,11 @@ export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null
   else if (time > 0) list.push(time);
   times[k] = list.slice(-RUN_TIMES_KEEP);
   let daily: DailyOutcome | undefined;
+  let cup: DailyOutcome | undefined;
   if (k.startsWith('daily:')) {
     pruneDaily(d, k.slice(6));
     daily = settleDaily(d, k.slice(6), sum.finished ? sum.finishSeconds : null, medals);
-  }
+  } else if (k.startsWith('cup:')) cup = settleCup(d, k.slice(4), sum.finished ? sum.finishSeconds : null, medals);
 
   return {
     settlement: {
@@ -351,11 +374,12 @@ export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null
       perfects: Math.max(sum.perfects, prior?.perfects ?? 0),
       yetiHop: sum.yetiHop || !!prior?.yetiHop,
       outranAvalanche: sum.outranAvalanche || !!prior?.outranAvalanche,
-      medal: Math.max(daily?.medal ?? 0, prior?.medal ?? 0),
+      medal: Math.max(daily?.medal ?? cup?.medal ?? 0, prior?.medal ?? 0),
     },
     missions: m.views,
     missionReward,
     passedBefore,
     daily,
+    cup,
   };
 }

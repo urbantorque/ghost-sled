@@ -7378,7 +7378,8 @@
 
   .gs-t-bar {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
   }
 
   .gs-t-bar > .gs-btn {
@@ -7601,6 +7602,7 @@
       'run'
       'race'
       'mis'
+      'stg'
       'tip';
     gap: 0;
   }
@@ -8037,7 +8039,7 @@
 /* Narrow phones in portrait (360 to 420 px wide) */
 
 @media (max-aspect-ratio: 1/1) and (max-width: 420px) {
-  /* Three menu buttons share one row: glyph above the label, the mission count as a corner badge. */
+  /* The menu buttons share one row: glyph above the label, the mission count as a corner badge. */
   .gs-t-bar > .gs-btn {
     flex-direction: column;
     gap: 4px;

@@ -81,6 +81,66 @@ function titleModel(over: Partial<TitleModel> = {}): TitleModel {
   };
 }
 
+/** A returning player's title: ranks, medals, the name above you and the week's Cup. */
+function ladderTitle(over: Partial<TitleModel> = {}): Partial<TitleModel> {
+  return {
+    mountains: titleModel().mountains.map((m) =>
+      m.id === 'pinecrest'
+        ? { ...m, bestTime: 141.3, rank: 19, rankOf: 37, medals: { stages: [3, 2, 1], run: 1 } }
+        : m.id === 'frostfang'
+          ? { ...m, bestTime: 109.8, rank: 1, rankOf: 37, top: true, medals: { stages: [3, 3, 3], run: 3 } }
+          : m,
+    ),
+    nextRung: 'Next: SparkleCedar, 2:11.4, 1.6 s up',
+    daily: { key: '2026-10-24', best: 8420, ready: true, medal: 2, streak: 3 },
+    cup: { key: '2026-W45', week: 45, ready: true, mood: 'Blizzard', event: 'Yeti Crossing', best: 142.6, medal: 2 },
+    ...over,
+  };
+}
+
+const LADDER: NonNullable<ResultsModel['ladder']> = { rank: 19, of: 37, top: false, next: 'Next: SparkleCedar, 2:11.4, 1.6 s up', up: 0, medals: { stages: [3, 2, 0], run: 1 }, fresh: [], moment: null, topNow: false, gifts: 0 };
+const STAGES: NonNullable<ResultsModel['stages']> = {
+  rival: { name: 'Juniper', kind: 'grudge' },
+  best: true,
+  line: 'You lost 2.1 s to Juniper in Stage 2.',
+  rows: [
+    { name: 'Stage 1', seconds: 54.2, medal: 3, rival: 54.9, best: 55.0 },
+    { name: 'Stage 2', seconds: 57.4, medal: 2, rival: 55.3, best: 55.4 },
+    { name: 'Stage 3', seconds: 59.85, medal: 0, rival: 61.2, best: 63.9 },
+  ],
+};
+/** A finish as the app sends it now, with the ladder and the stage table. */
+const FINISH: Partial<ResultsModel> = {
+  score: 15862,
+  distance: 4612,
+  finishZ: 4500,
+  finish: {
+    seconds: 171.45,
+    medal: 2,
+    bestTime: 174.3,
+    newBest: true,
+    splits: [
+      { name: 'Stage 1', seconds: 54.2, vsBest: -0.8 },
+      { name: 'Stage 2', seconds: 111.6, vsBest: 1.2 },
+      { name: 'Stage 3', seconds: 171.45, vsBest: -2.85 },
+    ],
+  },
+  crashCause: '',
+  crashKind: null,
+  canRevive: false,
+  ghosts: [
+    { name: 'Rook', kind: 'pool', score: 17320, distance: 4630, time: 166.8, passed: false },
+    { name: 'Ansel', kind: 'pool', score: 16700, distance: 4598, time: 170.3, passed: false },
+    { name: 'Your best', kind: 'you', score: 14280, distance: 4588, time: 174.3, passed: true },
+    { name: 'Juniper', kind: 'grudge', score: 15990, distance: 4621, time: 178.9, passed: true },
+    { name: 'Mika', kind: 'pool', score: 15420, distance: 3120, passed: true },
+    { name: 'Tove', kind: 'friend', score: 13010, distance: 2460, passed: true },
+  ],
+  ladder: LADDER,
+  stages: STAGES,
+  runAgainLabel: { text: 'Rematch Ansel', aria: 'Rematch Ansel, run again' },
+};
+
 function hudModel(over: Partial<HudModel> = {}): HudModel {
   return {
     score: 12480,
@@ -192,6 +252,7 @@ const handlers: UIHandlers & UIMenuHandlers = {
     ui.showTitle(titleModel());
   },
   onDaily: () => log('onDaily'),
+  onCup: () => log('onCup'),
   onSelectSled: (id) => {
     log(`onSelectSled(${id})`);
     sleds = sleds.map((s) => ({ ...s, equipped: s.id === id }));
@@ -393,6 +454,15 @@ function cashIn(m: HudModel, b: Beat, at: number): void {
 const SCENARIOS: Record<string, () => void> = {
   title: () => goTitle(),
   'title-first': () => goTitle({ firstVisit: true }),
+  // A returning player: ranks and medals on the cards, the name above you on Ride, the Cup by the Daily.
+  'title-ladder': () => goTitle(ladderTitle()),
+  'title-cup-waiting': () => goTitle(ladderTitle({ cup: { key: '2026-W45', week: 45, ready: false, mood: 'Blizzard', event: null, best: 0, medal: 0 } })),
+  'title-cup-picked': () => goTitle(ladderTitle({ selected: 'cup', nextRung: null, cup: { key: '2026-W45', week: 45, ready: true, mood: 'Glass Ice', event: 'Spirit Train', best: 0, medal: 0 } })),
+  // The medal wall, opened.
+  'title-medals': () => {
+    goTitle(ladderTitle());
+    window.setTimeout(() => document.querySelector<HTMLElement>('[data-fk="medals"]')?.click(), 300);
+  },
   'title-challenge': () => goTitle({ challenge: { name: 'Mika', score: 15420, mountain: 'Frostfang' } }),
   'title-missions': () => {
     goTitle();
@@ -576,6 +646,42 @@ const SCENARIOS: Record<string, () => void> = {
         { name: 'Mika', kind: 'pool', score: 15420, distance: 3120, passed: true },
         { name: 'Tove', kind: 'friend', score: 13010, distance: 2460, passed: true },
       ],
+    }),
+  // The ladder beside the card, and the stage table folded under the race.
+  'results-ladder': () => showResults(FINISH),
+  // Climbing: the name beaten, the new rank, what it paid, and a medal landing.
+  'results-climb': () =>
+    showResults({
+      ...FINISH,
+      ladder: { ...LADDER, rank: 16, up: 3, fresh: [0], medals: { stages: [3, 2, 0], run: 1 }, moment: 'Beat KestrelHailstone and 2 more. Gold on Stage 1.', gifts: 40 },
+      raceLine: { text: '0.4 s from gold in Stage 2.', tone: 'medal' },
+    }),
+  // The top of the ladder: the real achievement.
+  'results-top': () =>
+    showResults({
+      ...FINISH,
+      ladder: { ...LADDER, rank: 1, top: true, next: null, up: 1, medals: { stages: [3, 3, 3], run: 3 }, fresh: [2, 3], moment: 'Top of the Pinecrest ladder. All 36 riders beaten.', topNow: true, gifts: 175 },
+      runAgainLabel: { text: 'Rematch your best', aria: 'Rematch your best, run again' },
+    }),
+  // A wreck that still took a stage gold: the card is a wreck's, the strip says what it earned.
+  'results-wreck-medal': () =>
+    showResults({
+      score: 9120,
+      distance: 3212,
+      finishZ: 4500,
+      newBest: false,
+      canRevive: false,
+      crashCause: 'Hugged a tree',
+      crashKind: 'tree',
+      ghosts: [
+        { name: 'Rook', kind: 'pool', score: 17320, distance: 4630, time: 166.8, passed: false },
+        { name: 'Mika', kind: 'pool', score: 8420, distance: 2980, passed: true },
+        { name: 'Tove', kind: 'friend', score: 13010, distance: 2460, passed: true },
+      ],
+      raceLine: { text: 'You lost 2.1 s to Rook in Stage 1.', tone: 'rung' },
+      ladder: { ...LADDER, rank: 33, next: 'Next: ida_runs, 2:29.7', fresh: [0], medals: { stages: [3, 0, 0], run: 0 }, moment: 'Gold on Stage 1.', gifts: 50 },
+      stages: { rival: { name: 'Rook', kind: 'pool' }, best: false, line: 'You lost 2.1 s to Rook in Stage 1.', rows: [{ name: 'Stage 1', seconds: 54.2, medal: 3, rival: 52.1, best: null }] },
+      runAgainLabel: { text: 'Race ida_runs', aria: 'Race ida_runs, run again' },
     }),
   // A finish with no field: the card stands on its own.
   'results-finish-solo': () =>
@@ -1206,7 +1312,7 @@ panel.append(head);
 const groups = document.createElement('div');
 groups.className = 'groups';
 const GROUPS: Record<string, string[]> = {
-  title: ['title', 'title-first', 'title-zero', 'title-challenge', 'title-missions', 'title-touch', 'title-long', 'loading'],
+  title: ['title', 'title-first', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-missions', 'title-touch', 'title-long', 'loading'],
   hud: ['hud', 'hud-live', 'hud-grudge', 'hud-you', 'hud-you-named', 'hud-even', 'hud-behind', 'hud-long', 'rank-gain', 'rank-swing', 'rank-first', 'rank-first-you', 'combo-single', 'draft-pill', 'night-pills', 'touch', 'danger-far', 'danger-mid', 'danger-near', 'danger-urgent', 'danger-chase'],
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],

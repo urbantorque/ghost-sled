@@ -339,15 +339,16 @@ export class GapReadout {
 }
 
 /**
- * The start-line call: friend 'Racing', nemesis 'Nemesis', grudge 'Rematch', your best (150 m or
- * more) 'Chase', otherwise the pace ghost 'Chase'. The best candidate in the field is chosen whether
- * or not its track is ready; until it is, there is no call yet (null), so a later frame calls it
- * rather than settling for a lesser one.
+ * The start-line call: friend 'Racing', nemesis 'Nemesis', grudge 'Rematch', the run's rival 'Chase',
+ * your best (150 m or more) 'Chase', otherwise the pace ghost 'Chase'. The best candidate in the field
+ * is chosen whether or not its track is ready; until it is, there is no call yet (null), so a later
+ * frame calls it rather than settling for a lesser one.
  */
-export function callPick(c: ReadonlyArray<{ id: number; kind: GhostKind; role?: GhostRole; ready: boolean; nemesis?: boolean }>, bestDist: number): { id: number; word: 'Racing' | 'Nemesis' | 'Rematch' | 'Chase' } | null {
+export function callPick(c: ReadonlyArray<{ id: number; kind: GhostKind; role?: GhostRole; ready: boolean; nemesis?: boolean; rival?: boolean }>, bestDist: number): { id: number; word: 'Racing' | 'Nemesis' | 'Rematch' | 'Chase' } | null {
   const rank = (g: (typeof c)[number]): number => {
     if (g.kind === 'friend') return 5;
     if (g.kind === 'grudge') return g.nemesis ? 4 : 3;
+    if (g.rival) return 2.5;
     if (g.kind === 'you' && bestDist >= 150) return 2;
     if (g.role === 'pace' && g.kind !== 'you') return 1;
     return 0;

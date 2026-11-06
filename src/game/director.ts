@@ -1237,9 +1237,13 @@ export class Director {
     return fr.distance > 0 && (distance > fr.distance || finished);
   }
 
-  /** A stage line's split against the ghost just ahead of you there, or, in the lead, the one just
-   *  behind (your best has its own figure). Ghosts that never reached this line are out of it. */
+  /** A stage line's split against your rival, while it reached this line; else the ghost just ahead
+   *  of you there, or, in the lead, the one just behind (your best has its own figure). Ghosts that
+   *  never reached this line are out of it. */
   private splitGhost(f: DirectorFrame, index: number, tick: number): BeatOf<'stage'>['vsGhost'] {
+    const rival = f.tracks.find((t) => t.entry.rival && t.ready);
+    const line = rival?.stageTicks?.[index];
+    if (rival && line !== undefined) return { name: rival.entry.name, kind: rival.entry.kind, delta: (tick - line) / 60 };
     let ahead: GhostTrack | null = null;
     let behind: GhostTrack | null = null;
     for (const t of f.tracks) {
@@ -1551,7 +1555,7 @@ export class Director {
     const run = this.run;
     if (this.callDone || !run) return;
     const at = run.hasReveal ? run.revealLeaveS + 0.3 : 0.6;
-    const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis }));
+    const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis, rival: t.entry.rival }));
     if (this.fieldReadyAt < 0 && field.some((g) => g.ready)) this.fieldReadyAt = now;
     // Some ghost in the field will get the call once it is ready: pops wait for it, though not past the
     // usual give-up while no track has loaded at all (the call itself may still come late).
@@ -1575,6 +1579,7 @@ export class Director {
     const name = t.entry.kind === 'you' ? 'Your best' : t.entry.name;
     let sr = `${pick.word} ${name}.`;
     const g = run.grudgeAtStart;
+    if (t.entry.rival) sr += ' Your rival this run.';
     if (t.entry.kind === 'friend' && run.friend) sr += ` ${name} rode ${figure({ time: run.friend.time ?? null, distance: run.friend.distance })}.`;
     else if (t.entry.kind === 'grudge' && g) sr += g.streak >= 2 ? ` ${name} beat you ${g.streak} runs running.` : ` ${name} beat you last time.`;
     else if (t.entry.kind === 'you') sr += ` ${figure({ time: run.bestTimeAtStart ?? null, distance: run.bestDistAtStart })}.`;

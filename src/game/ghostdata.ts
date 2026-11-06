@@ -26,6 +26,9 @@ export interface PoolGhostData {
   /** The tick it crossed the finish line, when it did. `ticks` runs on through the coast, up to the
    *  generator's cap, so it is no finish time. */
   finishTick?: number;
+  /** The tick it crossed each stage line it reached. The bundled pools carry them (the stage medals
+   *  read them); a pool generated in the worker does not, and needs no stage medals. */
+  stageTicks?: number[];
   sled: number;
   mood: number;
   event: number;

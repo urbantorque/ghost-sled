@@ -1,4 +1,4 @@
-import type { ResultsFinish, ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
+import type { ResultsFinish, ResultsGhost, ResultsLadder, ResultsModel, ResultsNextUnlock, ResultsStages, UIHandlers, UnlockedMountain } from './contract';
 import type { InputMode } from '../game/input';
 import { type Standing, aheadOf, byStanding, clock, gapSeconds, margin, splitGap, timeGap } from '../game/standing';
 import { SLEDS } from '../sim/sleds';
@@ -7,7 +7,7 @@ import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
-import { missionList, progText } from './title';
+import { medalDots, missionList, progText } from './title';
 import './meta.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
@@ -19,7 +19,9 @@ import './meta.css';
 // variant: its time is the hero number, with the place, the medal and the style score beside it, and
 // the stage splits against your best under it. Run again is the default focus and
 // the only loud button; rewarded options sit beside it at Home size, easy to skip. On wide landscape
-// screens the card keeps to the right, so the live crash scene on the left is the hero shot.
+// screens the card keeps to the right, so the live crash scene on the left is the hero shot. Your
+// place on the mountain's ladder sits beside the card, in space the card never used, so the card's
+// first view is the same with it or without.
 
 const COUNT_MS = 650;
 /**
@@ -147,6 +149,7 @@ export class Results {
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
+  private stagesOpen = false;
   /** This card's tip for next time, picked once per results (an update keeps it). */
   private tipIx = 0;
   inputMode: InputMode = 'keyboard';
@@ -182,6 +185,7 @@ export class Results {
     this.pending.clear();
     this.pressed.clear();
     this.raceAll = false;
+    this.stagesOpen = false;
     // With no race to show (no ghosts rode), the missions have the room: they open from the start.
     this.misOpen = m.ghosts.length === 0;
     this.tipIx = tipTurn++;
@@ -390,9 +394,11 @@ export class Results {
     // Head: where, the score with your place beside it, and how the run ended.
     const mtnName = h('span', '', m.mountain);
     mtnName.setAttribute('translate', 'no');
-    const where = h('p', 'gs-res-where', mtnName);
+    const where = h('div', 'gs-res-where', mtnName);
     where.id = 'gs-res-where';
     if (m.mood) where.append(h('span', 'gs-res-mood', m.mood));
+    // Where a screen has no room beside the card, your place on the ladder rides in this line (meta.css).
+    if (m.ladder) where.append(ladderStrip(m.ladder, 'is-inline'));
     // The visible figure counts up from 0 as focus lands, so readers get a fixed copy instead. A finish
     // leads with its time: that is what the race was decided on.
     const fin = m.finish ?? null;
@@ -479,6 +485,11 @@ export class Results {
       race = h('section', 'gs-res-race', h('h3', 'gs-h2 gs-res-h', 'Race', meta), list, all);
     }
     const mis = m.missions.length > 0 ? this.missions(m) : null;
+    // What decided it: in the race's column on wide screens, which has the room, and on a phone under
+    // the Missions row, so the first view is the card it always was.
+    const stg = race && m.stages ? this.stagesFold(m.stages, m) : null;
+    const stacked = window.matchMedia?.('(max-aspect-ratio: 1/1)').matches === true;
+    if (stg && !stacked) race?.append(stg);
 
     // Actions. In portrait the "Watch Ad:" prefix is read but not shown (the video glyph carries it),
     // so the offers stay one-line pills.
@@ -505,7 +516,9 @@ export class Results {
       else chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
     }
     const label = m.runAgainLabel?.text ?? 'Run Again';
-    const rematch = label.startsWith('Rematch ');
+    // "Rematch Mila", or "Race Mila" for a rider new to you: Run Again names who is about to ride.
+    const named = /^(Rematch|Race) (.+)$/.exec(label);
+    const rematch = named !== null;
     const again = btn(
       ctx,
       { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
@@ -513,11 +526,11 @@ export class Results {
     );
     // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
     // word stacks over the name (meta.css), so the name keeps the button's width to itself.
-    if (rematch) {
-      const name = label.slice('Rematch '.length);
+    if (named) {
+      const name = named[2];
       const who = h('span', 'gs-again-who', name);
       who.setAttribute('translate', 'no');
-      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
+      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', `${named[1]} `), who);
       // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
       if ([...name].length >= LONG_NAME) again.classList.add('is-long');
     }
@@ -533,7 +546,7 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, stacked ? stg : null, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
@@ -555,7 +568,9 @@ export class Results {
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', title.id);
     card.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
-    this.el.replaceChildren(card);
+    // The strip sits outside the card: over its top edge in portrait (the wreck's band), in the free
+    // corner beside it on wide screens. The card itself is laid out as if it were not there.
+    this.el.replaceChildren(...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), card);
     this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
@@ -632,6 +647,34 @@ export class Results {
     };
     sync();
     return b;
+  }
+
+  /**
+   * What decided it, folded into one row under the race, so a phone's first view is the card it always
+   * was: the row reads the line, and opens each stage in its own time against your rival and your best.
+   * (The splits row above is the clock at each line; these are the stages themselves.) When the race
+   * line is already saying it, the row says who it is against instead.
+   */
+  private stagesFold(s: ResultsStages, m: ResultsModel): HTMLElement | null {
+    if (s.rows.length === 0 || (!s.rival && !s.best && s.rows.every((r) => r.medal === 0))) return null;
+    const table = stageTable(s);
+    table.id = 'gs-res-stg-table';
+    const said = s.line && m.raceLine?.text !== s.line ? s.line : s.rival ? `Against ${s.rival.name}` : 'Against your best';
+    const sum = h('span', 'gs-res-mis-sum', h('span', 'gs-res-mis-left gs-res-stg-sum', said));
+    sum.setAttribute('translate', 'no');
+    const toggle = btn(this.ctx, { cls: 'gs-btn-quiet gs-res-mis-toggle is-next gs-res-stg-toggle', icon: 'timer', label: 'Stages', fk: 'stg-toggle', onClick: () => {
+      this.stagesOpen = !this.stagesOpen;
+      sync();
+      if (this.stagesOpen) table.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+    } }, sum, icon('chevR', 'gs-res-chev'));
+    toggle.setAttribute('aria-controls', table.id);
+    const sec = h('div', 'gs-res-stages', toggle, table);
+    const sync = () => {
+      sec.classList.toggle('is-open', this.stagesOpen);
+      toggle.setAttribute('aria-expanded', String(this.stagesOpen));
+    };
+    sync();
+    return sec;
   }
 
   /**
@@ -786,6 +829,67 @@ export class Results {
 /** The medals, by the number the game sends. */
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
 
+/**
+ * Your place on the mountain's ladder, the one thing the card never had room for: your rank and what
+ * you hold, the name above you and what to beat, and over them whatever this run climbed. Laid out
+ * beside the card, so the card's own first view is unchanged. An arrow and a count for a rank that
+ * moved, in the place chip's grammar. Gifts it paid are already in the wallet.
+ */
+function ladderStrip(l: ResultsLadder, place: 'is-band' | 'is-inline'): HTMLElement {
+  const rank = l.top ? 'Top of the ladder' : l.rank !== null ? `Rank ${l.rank} of ${l.of}` : 'No rank yet';
+  const up = l.up > 0 && !l.top ? h('span', 'gs-lad-up gs-num', icon('tri', 'gs-lad-tri'), String(l.up), sr(l.up === 1 ? ' place up' : ' places up')) : null;
+  const moment = l.moment
+    ? h(
+        'div',
+        `gs-lad-moment${l.topNow ? ' is-top' : ''}`,
+        h('span', 'gs-lad-moment-t', l.moment),
+        l.gifts > 0 ? h('span', 'gs-lad-pay', h('span', 'gs-num', `+${fmt(l.gifts)}`), icon('gift'), sr(' gifts')) : null,
+      )
+    : null;
+  moment?.setAttribute('translate', 'no');
+  const next = l.next ? h('div', 'gs-lad-next', l.next.replace(/(\d) ([ms])\b/g, `$1${NBSP}$2`)) : null;
+  next?.setAttribute('translate', 'no');
+  const box = h('div', `gs-lad ${place}${l.top ? ' is-top' : ''}`, moment, h('div', 'gs-lad-main', h('span', 'gs-lad-rank gs-num', rank), up, medalDots(l.medals, l.fresh)), next);
+  // The band sits outside the modal dialog, where a reader never goes: the copy in the mountain line
+  // is the one it hears, whichever of the two shows.
+  if (place === 'is-band') box.setAttribute('aria-hidden', 'true');
+  else {
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', 'Ladder');
+  }
+  return box;
+}
+
+/** A stage's gap to a time beside it, in the race-gap grammar: a number and a word, never a sign. */
+function stageGap(you: number, them: number | null): HTMLElement {
+  if (them === null) return h('td', 'gs-stg-gap is-none', '');
+  const gap = timeGap(you, them);
+  const ahead = you < them;
+  return h('td', `gs-stg-gap gs-num${gap >= 1 && ahead ? ' is-ahead' : ''}`, gap < 1 ? 'Level' : `${noteGap(gapSeconds(gap))} ${ahead ? 'ahead' : 'behind'}`);
+}
+
+/** Each stage in its own time, with this run's medal, against your rival and, when it rode, your best. */
+function stageTable(s: ResultsStages): HTMLElement {
+  const th = (t: string, cls = ''): HTMLElement => {
+    const e = h('th', cls, t);
+    e.setAttribute('scope', 'col');
+    return e;
+  };
+  const who = s.rival ? th('', `gs-stg-who ${kindCls(s.rival.kind)}`) : null;
+  who?.append(h('span', 'gs-stg-name', s.rival?.name));
+  who?.setAttribute('translate', 'no');
+  const head = h('tr', '', th('Stage'), th('Time'), who, s.best ? th('Your best', 'gs-stg-who k-you') : null);
+  const body = h('tbody', '');
+  for (const r of s.rows) {
+    const name = h('th', '', r.medal > 0 ? h('span', `gs-mdot m-${r.medal}`) : null, r.name, r.medal > 0 ? sr(`, ${MEDAL[r.medal].toLowerCase()}`) : null);
+    name.setAttribute('scope', 'row');
+    body.append(h('tr', '', name, h('td', 'gs-num', clock(r.seconds)), s.rival ? stageGap(r.seconds, r.rival) : null, s.best ? stageGap(r.seconds, r.best) : null));
+  }
+  const t = h('table', 'gs-stg', h('thead', '', head), body);
+  t.setAttribute('aria-label', 'Stage by stage');
+  return t;
+}
+
 /** The finished card's line under the time: how it stands against your best. */
 function finishLine(f: ResultsFinish): HTMLElement {
   let text = 'First finish here.';
@@ -893,15 +997,16 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
 function raceLine(m: ResultsModel): HTMLElement | null {
   const l = m.raceLine;
   if (!l || !l.text) return null;
-  // The Daily medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon column.
-  const medal = l.tone === 'event' ? /^Daily: (Bronze|Silver|Gold)\./.exec(l.text) : null;
-  const rank = medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
+  // The Daily or Cup medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon
+  // column, and a stage gold almost had wears the gold it almost was.
+  const medal = l.tone === 'event' ? /^(?:Daily|Cup): (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const rank = l.tone === 'medal' ? 3 : medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');
-  const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
+  const glyph = l.tone === 'event' || l.tone === 'medal' ? disc : icon('ghost', 'gs-res-line-ico');
   // "85 m" and "1.2 s" never break between the number and the unit.
   const text = l.text.replace(/(\d) ([ms])\b/g, `$1${NBSP}$2`);
-  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
+  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' || l.tone === 'rung' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
   // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
   if (l.tone !== 'event') p.setAttribute('translate', 'no');
   return p;

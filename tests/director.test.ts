@@ -2201,6 +2201,26 @@ describe('a descent with a finish', () => {
     expect(s.vsBest).toBeCloseTo(3, 6);
   });
 
+  it('a stage line splits against your rival, ahead of you or not, while it reached that line', () => {
+    const r = new Rig();
+    r.tracks = [track(1, 'pool', 'Near'), track(2, 'pool', 'Rival')];
+    r.tracks[0].stageTicks = [4300];
+    r.tracks[1].entry.rival = true;
+    r.tracks[1].stageTicks = [4500];
+    const s = of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0];
+    expect(s.vsGhost?.name).toBe('Rival');
+    expect(s.vsGhost!.delta).toBeCloseTo(-2, 6);
+  });
+
+  it('a rival that never reached the line gives way to the ghost just ahead', () => {
+    const r = new Rig();
+    r.tracks = [track(1, 'pool', 'Near'), track(2, 'pool', 'Rival')];
+    r.tracks[0].stageTicks = [4300];
+    r.tracks[1].entry.rival = true;
+    r.tracks[1].stageTicks = [];
+    expect(of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0].vsGhost?.name).toBe('Near');
+  });
+
   it('in the lead it splits against the ghost just behind', () => {
     const r = new Rig();
     r.tracks = [track(1), track(2, 'pool', 'Bo')];

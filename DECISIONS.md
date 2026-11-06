@@ -1177,3 +1177,75 @@ Every place where I replaced, extended or interpreted the brief, and why.
 173. **A ghost that finished is not a wreck.** `GhostPose.done` says only that a track has ended, and the
     game's side is another lane's, so the render tells the two apart by where the track ended: at the
     finish line it rode home. It coasts on into the square and fades, with no poof and no lantern.
+174. **A mountain is a ladder, and you are on it.** Its pool, in race order, is a rank to climb, and
+    your rank is your best run's: every rider ahead of you in `standing.ts`'s one order, plus one. A
+    rider who has not finished sits below every finisher, and a dead heat leaves you level. The ladder
+    has you on it, so 36 riders make 'Rank 19 of 37', not '36': the last place is a real place, and
+    'Rank 37 of 36' is what the shorter figure would have said there. No run is no rank. The name above
+    you and what to beat is always in sight ('Next: SparkleCedar, 2:11.4, 1.6 s up'): a rider who has
+    not finished gets the name and the time alone, because a time and a distance share no unit. A rung
+    pays 5 gifts once, the top pays 100 and says so, and the card shows it from then on, in gold-white
+    with the trophy. The Daily and the Cup have no ladder: ten riders is a field, not a climb.
+175. **Stage medals are kinder than the whole run's, on purpose.** Gold is the pool's median on that
+    stage, silver its 85th percentile, bronze its slowest with a quarter in hand, each 1 s under the
+    last. A rider who cannot hold a descent together can still gold Stage 1, and on Pinecrest a stage
+    gold (0:46.1) comes well before a whole-run bronze (2:16.6). A wreck earns them too: a stage is
+    finished at its line. They are graded as the clock reads them, so 0:46.14 is gold at a 0:46.1
+    line and no card can disagree with its figure. A stage pays 10, 15 and 25 and the whole run 20, 30
+    and 50, each once (a first gold pays all three). A whole mountain is worth 530 gifts.
+176. **What a run earns pays once, by value.** A `Climb` holds a rung, a top, and a medal per stage
+    and for the run, and only ever rises. What it has earned has a value in gifts, and settling
+    pays the change in that value, so the coast and a revive's second crash cost nothing to get right.
+    With no Climb yet, the rank your best already holds is where it starts: an old save is neither
+    paid for a rank it never climbed on this screen nor told 'Beat X and 17 more' on a run that beat
+    nobody. A Climb names its sim version, so a new course moves it to the archive whole (149), and
+    the save only takes one once a run has earned something.
+177. **Splits come from replaying the records.** `npm run generate-ghosts` now writes each ghost's
+    `stageTicks`, and `-- --splits` adds them to the pools on disk from a replay of each record, about
+    a second a pool, with no call into `src/bot`: replaying is what the worker does, so the medals rest
+    on exactly what the race shows. Regenerating the bundled pools is byte-identical but for the new
+    field. A pool without splits has no stage medals and nothing breaks; a test holds every bundled
+    pool to them. The Daily's and Cup's pools have none and need none.
+178. **One rival for the run.** The rider Run Again promised, else the friend who challenged you, else
+    your grudge, else the field ghost right ahead of you: the finisher just quicker than your anchor.
+    Never your own best, which has its own figure. It takes the start-line call (over your best and
+    the pace rider), it is the split on every stage line while it reached that line, and on the results
+    it is what decided it ('You lost 2.1 s to Mila in Stage 2', or 'You took 2.1 s from Mila in
+    Stage 2' if you won), the stage you lost or took most in, in the stages' own times. A race line
+    can only say one thing, so a row folded past the first view opens every stage against your rival
+    and, when it rode, your best: stage time here, the clock at each line in the splits row above.
+179. **Run Again always names who is about to ride, so that rider has to ride.** An unbeaten friend,
+    your grudge, else the ghost just ahead of you in this run ('Rematch'), else the next rider up the
+    ladder ('Race', since you have not met), and at the very top your own best. 'Run Again' is left
+    for a run with nobody to name. A name on the button is a promise: `pickField` seats a promised
+    rider like a grudge, whatever the run's mood rolls, and it is the rival.
+180. **The weekly Cup is the Daily's shape with a week's key.** Seed, mood, event and placement are
+    pure functions of the ISO week (`cup.ts`), and needed nothing from the sim: a seed is all it reads of
+    a mountain, so the game layer widens the mountain's id rather than teach the sim about weeks.
+    A Cup always has a mood, because that is what makes the week a week. The field is the week's: no
+    anchor of yours picks it, and your best joins after, since a pick keeps its distance from your
+    best and that would move the field. The pool is the Daily's generation with its own worker, after
+    the Daily's, so a phone runs one bot pool at a time. Best time and medal for the week, in the
+    Daily's save shape, pruned as the Daily's are. No streak, and no ladder: a Cup is a week's best.
+181. **The next-run hook is the race line, not a second line (extends 82).** Friend, the Daily or Cup
+    medal, a settled grudge or a nemesis; then a rung missed by under 2 s, a stage gold missed by a
+    second or less; the crash line, the event note; what decided it, standing in for the plain grudge
+    line it says more than; the plain grudge line; and last today's Daily, with the streak on it. One
+    slot, so a hook takes it or gives way.
+182. **The ladder sits beside the card, not in it.** The results' first view was already full, and on
+    a phone it may not get taller or busier. So the strip is the card's sibling: at the foot of the band
+    contract C6 keeps over the card in portrait, under the wreck, and in the free corner on wide
+    screens. The card is laid out as if it were not there. Short landscape has neither, so a second copy
+    rides the mountain line. That copy also stays in the tree everywhere else, off screen, because
+    the band sits outside the modal dialog where a screen reader never goes. On a phone the stage row
+    goes under Missions, or it would push Missions out of a wreck's first view.
+183. **On the title, the new things took old slots.** Ride's subline carries the name above you, which
+    is more to the point there than the mountain's tagline. A card's second line is your rank (the
+    locked cards still count ghosts), and four small discs ride its art. The Daily and the Cup share the
+    Daily's row on a phone, each a name over its best, so the title is no taller; on wide screens the
+    Cup stacks over it in free space. A fourth menu button takes the medal wall, a popover in the
+    missions' slot. The landscape menu row may run into the empty column so it never wraps. Picking the
+    Daily or the Cup now shows on its card and names it on Ride, which used to go on saying Pinecrest.
+184. **A gold medal is marigold.** The medal's old amber sat so near its copper bronze that at 11 px
+    the two were one disc. Gold now takes the art bible's marigold and bronze goes a shade darker, so
+    a medal and a gift are the same good news, and your best's gold-white stays apart.
