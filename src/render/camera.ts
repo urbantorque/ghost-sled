@@ -100,6 +100,12 @@ const HERO_BACKS = [1, 1.6, 2.2];
 const TREELINE = 10.3;
 /** A hero framing that cannot see the wreck at all. */
 const HERO_BLOCKED = 99;
+/** Walled in on every framing above (a wreck at a ravine's foot, a tunnel's wall): every way round it,
+ *  before the lens gives up on standing level with it. */
+const HERO_ROUND = [Math.PI, 1.2, -1.2, 2, -2, 2.6, -2.6];
+/** A lens keeps this far clear of a wall's drawn rock, and a sight line clears it by this much: the
+ *  terrain's facets cut across the rock's jagged noise between vertices. */
+const ROCK_CLEAR = 0.6;
 
 // The jolt spring: omega 22 rad/s, zeta 0.5, integrated exactly (closed form per frame).
 const J_OMEGA = 22;
@@ -150,6 +156,9 @@ const PACK_TURNS = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9];
 const PACK_SIGHT = [0.35, 0.65];
 /** No prop's foot this close to the pack lens (metres): props dissolve inside about 3.6 m of a lens. */
 const PACK_CLEAR = 3.4;
+/** The drifting orbit's search for open air when it starts walled in, each way round from the lens
+ *  (radians). */
+const ORBIT_SCAN = 0.3;
 /** The pack lens stays on the downhill side: at most this far (radians) off straight downhill. */
 const PACK_DOWNHILL = 1.4;
 /** The ghost that passes your wreck (CamTarget.pack) is looked for from CRASH_PACK_NEAR_M behind
@@ -452,6 +461,10 @@ export class ChaseCamera {
   private lookT = new Vector3();
   /** Terrain height at a three.js (x, z), so low title shots never sink into a bank. */
   ground: ((x: number, z: number) => number) | null = null;
+  /** Height of what is drawn at a three.js (x, z), a wall's rock included (ground.ts visualGround).
+   *  `ground` says what a sled rides, which stops short of the rock; this says what a lens can stand
+   *  in or be hidden behind. The crash lenses read it, and only while they frame the wreck. */
+  surface: ((x: number, z: number) => number) | null = null;
   /** The course corridor at a three.js z: its centre x and half width (the results shot of a wreck
    *  in the trees is taken from the open course side). */
   corridor: ((z: number) => { x: number; hw: number }) | null = null;
@@ -1459,6 +1472,15 @@ export class ChaseCamera {
           this.orbitT = ORBIT_WIND;
           cut = true;
         } else this.orbitAim = aim;
+      } else if (!this.tripod && !this.orbitOpen(t.pos, this.orbitAngle, Math.max(this.orbitR, ORBIT_R), ORBIT_UP)) {
+        // The way out from the held lens runs into a wall: the drift starts from the nearest open
+        // angle, or, with none (or no swinging, under reduced motion), stays at the lens's own distance.
+        const open = this.feel.reduced ? null : this.openAngle(t.pos, this.orbitAngle, ORBIT_R, ORBIT_UP);
+        if (open !== null) this.orbitAim = open;
+        else {
+          this.orbitRT = this.orbitR;
+          this.orbitUpT = this.orbitUp;
+        }
       }
     }
     this.orbitT += dt;
@@ -1477,7 +1499,15 @@ export class ChaseCamera {
       const gap = wrapAngle(this.orbitAim - this.orbitAngle);
       if (Math.abs(gap) < 0.02) this.orbitAim = null;
       else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
-    } else this.orbitAngle += dt * this.orbitSpin * wind * (1 - this.packHold);
+    } else {
+      // The drift turns back at a wall rather than carrying the lens into the rock.
+      const was = this.orbitAngle;
+      this.orbitAngle += dt * this.orbitSpin * wind * (1 - this.packHold);
+      if (!this.orbitOpen(t.pos, this.orbitAngle, Math.max(this.orbitR, this.orbitRT), Math.min(this.orbitUp, this.orbitUpT))) {
+        this.orbitAngle = was;
+        this.orbitSpin = -this.orbitSpin;
+      }
+    }
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += ((pack ? Math.min(this.orbitRT, this.packR) : this.orbitRT) - this.orbitR) * k;
     this.orbitUp += (this.orbitUpT - this.orbitUp) * k;
@@ -1489,16 +1519,61 @@ export class ChaseCamera {
     return cut;
   }
 
+  /** A lens at (x, y, z) would stand inside a wall's rock, or too near its face. A wall is not snow to
+   *  be climbed: a lens lifted over it would look down from the crest, or see nothing past it. */
+  private inRock(x: number, y: number, z: number): boolean {
+    const s = this.surface;
+    if (!s || !this.ground) return false;
+    const top = s(x, z);
+    return top - this.ground(x, z) > 0.02 && y < top + ROCK_CLEAR;
+  }
+
+  /** What is drawn stands across the line from (x, y, z) to (tx, ty, tz). The ends are left out: the
+   *  snow a low lens or the wreck itself sits on is never in the way. */
+  private rockBetween(x: number, y: number, z: number, tx: number, ty: number, tz: number): boolean {
+    const s = this.surface;
+    if (!s || !this.ground) return false;
+    for (let k = 1; k < 12; k++) {
+      const f = k / 12;
+      const px = x + (tx - x) * f;
+      const pz = z + (tz - z) * f;
+      const top = s(px, pz);
+      if (top - this.ground(px, pz) > 0.02 && top + ROCK_CLEAR > y + (ty - y) * f) return true;
+    }
+    return false;
+  }
+
+  /** The orbit's lens at this angle, radius and height stands in the open with the wreck in sight. */
+  private orbitOpen(w: Vector3, a: number, r: number, up: number): boolean {
+    if (!this.surface || !this.ground) return true;
+    const x = w.x + Math.sin(a) * r;
+    const z = w.z + Math.cos(a) * r;
+    const y = Math.max(w.y + up, this.ground(x, z) + 1);
+    return !this.inRock(x, y, z) && !this.rockBetween(x, y, z, w.x, w.y + 0.4, w.z);
+  }
+
+  /** The open angle nearest `from` round the wreck, or null with rock on every side. */
+  private openAngle(w: Vector3, from: number, r: number, up: number): number | null {
+    const n = Math.floor(Math.PI / ORBIT_SCAN);
+    for (let i = 1; i <= n; i++) {
+      for (const s of [1, -1]) {
+        const a = from + s * i * ORBIT_SCAN;
+        if (this.orbitOpen(w, a, r, up)) return a;
+      }
+    }
+    return null;
+  }
+
   /** The pack-facing lens's angle round the wreck (three.js position `w`), or null for no pack shot.
    *  The set facing when nothing stands by the lens or across its line to the wreck; else the clear
    *  spot nearest it, turning off the facing or round toward straight downhill (a wreck in the
    *  treeline is watched from the open course, not from deeper in the forest), at the orbit's radius
-   *  or a step closer, never uphill of the wreck; null when every spot has a tree by the lens. Sets
-   *  packR. Asked once per crash, so its prop scan never runs per frame. */
+   *  or a step closer, never uphill of the wreck; null when every spot has a tree by the lens, or
+   *  stands in or behind a wall's rock. Sets packR. Asked once per crash, so its prop scan never runs
+   *  per frame. */
   private packLens(w: Vector3, face: number): number | null {
     this.packR = ORBIT_R;
     const blocked = this.blocked;
-    if (!blocked) return face;
     let best = face;
     let bestCost = Infinity;
     for (const r of PACK_RADII) {
@@ -1506,12 +1581,13 @@ export class ChaseCamera {
         // Turns off the facing first, then the same turns round straight downhill.
         const a = (i < PACK_TURNS.length ? face : Math.PI) + PACK_TURNS[i % PACK_TURNS.length];
         if (Math.abs(wrapAngle(a - Math.PI)) > PACK_DOWNHILL) continue;
+        if (!this.orbitOpen(w, a, r, ORBIT_PACK_UP)) continue;
         const lx = w.x + Math.sin(a) * r;
         const lz = w.z + Math.cos(a) * r;
         // A tree by the lens is the worst (inside about 3.5 m it fills a side of the frame, dissolving);
         // one across the line hides the wreck.
-        let cost = blocked(lx, lz, PACK_CLEAR) ? 3 : 0;
-        for (const f of PACK_SIGHT) if (blocked(w.x + (lx - w.x) * f, w.z + (lz - w.z) * f, 1.4)) cost += 1;
+        let cost = blocked?.(lx, lz, PACK_CLEAR) ? 3 : 0;
+        if (blocked) for (const f of PACK_SIGHT) if (blocked(w.x + (lx - w.x) * f, w.z + (lz - w.z) * f, 1.4)) cost += 1;
         // (The set facing and the orbit's own radius win ties.)
         cost += Math.abs(wrapAngle(a - face)) * 0.4 + (ORBIT_R - r) * 0.05;
         if (cost === 0) return a;
@@ -1557,6 +1633,8 @@ export class ChaseCamera {
         const lz = cz + uz * back + nz * sd * TRIPOD_SIDE;
         if (blocked && (blocked(lx, lz, PACK_CLEAR) || blocked((lx + cx) * 0.5, (lz + cz) * 0.5, 1.4))) continue;
         const gy = this.ground ? this.ground(lx, lz) : g.y - 0.8;
+        // (Rock at its spot, or across the line to the wreck or to where the ghost will cross.)
+        if (this.inRock(lx, gy + TRIPOD_UP, lz) || this.rockBetween(lx, gy + TRIPOD_UP, lz, w.x, w.y + 0.4, w.z) || this.rockBetween(lx, gy + TRIPOD_UP, lz, cx, g.y, cz)) continue;
         this.tripodAt.set(lx, gy + TRIPOD_UP, lz);
         return true;
       }
@@ -1792,8 +1870,8 @@ export class ChaseCamera {
    *  rider and its overturned sled are framed as a pair (rider.ts lays the sled beside the rider,
    *  toward the middle of the frame). A crash usually ends against a bank or in the trees, where the
    *  set framing can look into the snow or a trunk: then the shot swings round, climbs and stands
-   *  back until it sees the wreck with no tree in its near frame, and holds that framing while it
-   *  stays clear so it never hunts. */
+   *  back until it sees the wreck with no tree in its near frame and no rock around or before the
+   *  lens, and holds that framing while it stays clear so it never hunts. */
   private heroShot(t: CamTarget, desired: Vector3, lookAt: Vector3, tanHalfW: number, travelAz: number): void {
     const portrait = this.aspect < 1;
     const cor = this.corridor?.(t.pos.z);
@@ -1856,6 +1934,21 @@ export class ChaseCamera {
           }
         }
       }
+      // Nothing from where the shot wants to stand: any way round the wreck, before the crane.
+      for (let m = 0; m < HERO_BACKS.length && best >= HERO_BLOCKED; m++) {
+        for (let i = 0; i < ups.length && best >= HERO_BLOCKED; i++) {
+          if (ups[i] > 5) continue;
+          for (let j = 0; j < HERO_ROUND.length && best >= HERO_BLOCKED; j++) {
+            const cost = this.heroCost(t.pos, base + HERO_ROUND[j], off, ups[i], r * HERO_BACKS[m], desired, aim, tanHalfW);
+            if (cost < best) {
+              best = cost;
+              this.heroYaw = HERO_ROUND[j];
+              this.heroUp = ups[i];
+              this.heroBack = HERO_BACKS[m];
+            }
+          }
+        }
+      }
       // Walled in on every side: the highest straight shot, looking down onto the wreck.
       if (best >= HERO_BLOCKED) {
         this.heroYaw = 0;
@@ -1863,6 +1956,8 @@ export class ChaseCamera {
         this.heroBack = 1;
       }
       this.heroPlace(t.pos, base + this.heroYaw, off, this.heroUp, r * this.heroBack, desired, aim);
+      // (That last one looks down from over whatever it stands above, rock too.)
+      if (best >= HERO_BLOCKED && this.surface) desired.y = Math.max(desired.y, this.surface(desired.x, desired.z) + ROCK_CLEAR);
     }
     const yaw = base + this.heroYaw;
     this.heroAz = yaw;
@@ -1923,7 +2018,8 @@ export class ChaseCamera {
   /** Puts the hero camera (into `desired`) looking along compass `yaw`, `r` metres from the wreck
    *  and `up` metres above it, with the pair (the seated rider and the sled laid beside it, whose
    *  middle goes into `aim`) `off` left of centre; true when nothing but air lies between the lens
-   *  and `aim` (and, `strict`, no prop stands right by the lens). */
+   *  and `aim` (and, `strict`, no prop stands right by the lens). A wall's rock counts: it is drawn
+   *  past where the sim's ground stops, so the lens may stand neither in it nor behind it. */
   private heroPlace(focus: Vector3, yaw: number, off: number, up: number, r: number, desired: Vector3, aim: Vector3, strict = false): boolean {
     const fx = Math.sin(yaw);
     const fz = -Math.cos(yaw);
@@ -1939,6 +2035,7 @@ export class ChaseCamera {
     // it saw two boot soles in the lens).
     if (this.aspect < 1) desired.y = this.ground(desired.x, desired.z) + 0.5 + up * 0.3;
     desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + (this.aspect < 1 ? 0.3 : 0.35));
+    if (this.inRock(desired.x, desired.y, desired.z)) return false;
     // Below the canopy, a lens inside the forest wall sees only the trunks around it.
     const cor = up < 5 ? this.corridor?.(desired.z) : null;
     if (cor && Math.abs(desired.x - cor.x) - cor.hw > TREELINE) return false;
@@ -1956,7 +2053,7 @@ export class ChaseCamera {
       const rz = desired.z + (focus.z - desired.z) * f;
       if (this.ground(rx, rz) + 0.15 > desired.y + (cy - desired.y) * f) return false;
     }
-    return true;
+    return !this.rockBetween(desired.x, desired.y, desired.z, aim.x, aim.y, aim.z) && !this.rockBetween(desired.x, desired.y, desired.z, focus.x, cy, focus.z);
   }
 
   /** Phone title (contract C5): the logo owns the top fifth of a tall screen and the Ride button

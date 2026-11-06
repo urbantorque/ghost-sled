@@ -146,6 +146,14 @@ export function visualGround(c: Course, x: number, z: number): number {
   return y;
 }
 
+/** Whether something at sim (x, z) and height y stands inside a wall's drawn rock: under what is drawn
+ *  there, where that stands over the sim's own ground. The sim stops short of the rock, so only what the
+ *  render moves by itself (a thrown wreck) needs to ask. */
+export function inRock(c: Course, x: number, y: number, z: number): boolean {
+  const top = visualGround(c, x, z);
+  return top - c.ground(x, z) > 0.02 && y < top;
+}
+
 /** How bare the ground is at a vertex, 0 (snow) to 1 (rock). `e` is metres past the edge (negative
  *  inside), `off` metres across from the centreline, (gx, gz) the sim ground's gradient there, `kick`
  *  whether a kicker's wedge lies here (its takeoff wall is built snow). */

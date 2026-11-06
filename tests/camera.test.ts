@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { ChaseCamera, crashPack } from '../src/render/camera';
+import { visualGround } from '../src/render/ground';
+import { courseFor } from '../src/sim/course';
+import { MOUNTAINS } from '../src/sim/mountains';
 import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel } from '../src/game/beats';
 import { emptyPose, type GhostPose } from '../src/game/ghosts';
 
@@ -393,6 +396,103 @@ describe('feel kicks', () => {
       expect(r.shake).toBe(0);
       expect(r.fov).toBeCloseTo(calm.fov, 9);
       expect(r.hold).toBe(0);
+    }
+  });
+});
+
+// A wall's rock is drawn past where the sim's ground stops, so `ground` cannot see it. A crash lens must
+// not stand in it, or behind it with the wreck on the far side.
+describe('crash lenses and a wall of rock', () => {
+  const R = 5; // The rock stands past x = R, drawn, where the ground stays flat.
+  const STILL = { dir: DOWN, speed: 0, steer: 0, airborne: true, boost: 0 };
+
+  function lens(aspect: number, surface: ChaseCamera['surface'], wreck: Vector3, orbitFrom: number | null, ground: ChaseCamera['ground'] = () => 0, corridor?: ChaseCamera['corridor']) {
+    const cam = new ChaseCamera();
+    cam.setAspect(aspect);
+    cam.ground = ground;
+    cam.surface = surface;
+    if (corridor) cam.corridor = corridor;
+    cam.beats([], IDLE_FEEL);
+    cam.mode = 'chase';
+    for (let i = 0; i < 40; i++) cam.update({ pos: wreck, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    cam.mode = 'crash';
+    cam.beats([{ type: 'crash', tick: 0, cause: 'landing', stake: 0, orbitFrom }], IDLE_FEEL);
+    const orbit: Vector3[] = [];
+    const frames = Math.ceil(CRASH_FREEZE_S * 60) + 400;
+    for (let i = 0; i < frames; i++) {
+      cam.update({ pos: wreck, ...STILL }, 1 / 60);
+      orbit.push(cam.camera.position.clone());
+    }
+    cam.mode = 'hero';
+    for (let i = 0; i < 300; i++) cam.update({ pos: wreck, ...STILL }, 1 / 60);
+    return { orbit, hero: cam.camera.position.clone() };
+  }
+
+  const WRECK_AT_WALL = new Vector3(3.5, 0.3, -100);
+  const wall = (x: number) => (x > R ? 16 : 0);
+
+  it('the orbit turns back at the wall, whichever way it was drifting', () => {
+    for (const from of [null, Math.PI, 2.2, -2.2]) {
+      const { orbit } = lens(16 / 9, (x) => wall(x), WRECK_AT_WALL, from);
+      for (const p of orbit) expect(p.x).toBeLessThan(R);
+    }
+  });
+
+  it('the orbit still moves: a wall bounds its drift, it does not freeze it', () => {
+    const { orbit } = lens(16 / 9, (x) => wall(x), WRECK_AT_WALL, null);
+    const tail = orbit.slice(-300);
+    const span = Math.max(...tail.map((p) => p.x)) - Math.min(...tail.map((p) => p.x));
+    expect(span).toBeGreaterThan(1);
+  });
+
+  it('the hero shot stands clear of the rock, wide and tall', () => {
+    for (const aspect of [16 / 9, 9 / 19]) {
+      const { hero } = lens(aspect, (x) => wall(x), WRECK_AT_WALL, null);
+      expect(hero.x).toBeLessThan(R);
+    }
+  });
+
+  it('with rock on both sides both lenses keep to the gap between them', () => {
+    // A slot 8 m wide, the wreck against one side.
+    const slot = (x: number) => (Math.abs(x) > 4 ? 16 : 0);
+    const { hero, orbit } = lens(16 / 9, slot, new Vector3(2.8, 0.3, -100), Math.PI);
+    expect(Math.abs(hero.x)).toBeLessThan(4);
+    for (const p of orbit) expect(Math.abs(p.x)).toBeLessThan(4);
+  });
+
+  it('walled in on every side the hero shot looks down from above the rock, never from inside it', () => {
+    const well = (x: number, z: number) => (Math.hypot(x, z + 100) > 1.5 ? 12 : 0);
+    const { hero } = lens(16 / 9, well, new Vector3(0, 0.3, -100), null);
+    expect(hero.y).toBeGreaterThan(well(hero.x, hero.z));
+  });
+
+  it('with no rock the crash lenses stand exactly where they always did', () => {
+    const plain = lens(16 / 9, null, WRECK_AT_WALL, Math.PI);
+    const same = lens(16 / 9, () => 0, WRECK_AT_WALL, Math.PI);
+    expect(same.hero.distanceTo(plain.hero)).toBeLessThan(1e-6);
+    expect(same.orbit[same.orbit.length - 1].distanceTo(plain.orbit[plain.orbit.length - 1])).toBeLessThan(1e-6);
+  });
+
+  it('holds on a real ravine, against the surface the player sees', () => {
+    const c = courseFor(MOUNTAINS[1].seed);
+    let z0 = 0;
+    for (let z = 0; z < c.finishZ && !z0; z += 10) if (c.section(z).kind === 'ravine' && c.shapeAt(z).wall >= 12) z0 = z;
+    expect(z0).toBeGreaterThan(0);
+    const cor = { x: 0, hw: 0 };
+    const corridor = (z: number) => {
+      cor.x = c.centerX(-z);
+      cor.hw = c.halfWidth(-z);
+      return cor;
+    };
+    for (let z = z0 + 10; z < z0 + 110; z += 25) {
+      for (const side of [-1, 1]) {
+        const x = c.centerX(z) + side * (c.halfWidth(z) + 3);
+        const w = new Vector3(x, c.ground(x, z) + 0.3, -z);
+        const shot = lens(16 / 9, (px, pz) => visualGround(c, px, -pz), w, Math.PI, (px, pz) => c.ground(px, -pz), corridor);
+        const clear = (p: Vector3) => p.y > visualGround(c, p.x, -p.z);
+        expect(clear(shot.hero)).toBe(true);
+        for (const p of shot.orbit) expect(clear(p)).toBe(true);
+      }
     }
   });
 });
