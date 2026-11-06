@@ -875,30 +875,6 @@ async (page) => {
       const run = app.run;
       const sim = run.sim;
       const c = sim.course;
-      const P = { airStart: -1, flight: 0, spin: 0, stompTry: false, stompBias: 0, away: 0, tap: 0, drift: 0, wob: rnd() * 6.28, lvl: 4, nextThink: 0, wasAir: false };
-      const timeToLand = (s) => {
-        let y = s.y, vy = s.vy, x = s.x, z = s.z, t = 0;
-        while (t < 4) { vy -= sim.gravity / 60; y += vy / 60; x += s.vx / 60; z += s.vz / 60; t += 1 / 60; if (y <= c.ground(x, z)) break; }
-        return { t, x, z };
-      };
-      const steerTo = (s, target, gain, lateralGain) => {
-        const look = s.z + 4 + s.speed * 0.35;
-        const desired = Math.atan2(target(look) - s.x, look - s.z);
-        const err = desired - s.velHeading + (c.safeX(s.z) - s.x) * lateralGain;
-        return Math.max(0, Math.min(8, Math.round(4 + err * gain)));
-      };
-      const nextRamp = (s) => {
-        for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 2; k++) {
-          for (const rr of c.zones(k).ramps) {
-            if (rr.z + rr.len > s.z + 1 && rr.z - s.z < 70) {
-              // Kickers near the bank are skipped: their flight carries into the treeline.
-              if (Math.abs(rr.x - c.centerX(rr.z)) > c.halfWidth(rr.z) - 4 || Math.abs(rr.x - c.safeX(rr.z + rr.len)) > 2.5) return null;
-              return rr;
-            }
-          }
-        }
-        return null;
-      };
       const C = { key: 0, keyUntil: 0, nextThink: 0.4 + rnd() * 0.5, act: false, actUntil: 0, nextAct: 1 + rnd() * 3, keySteer: 0, level: 4 };
       const clumsy = () => {
         const s = sim.s;
@@ -931,10 +907,33 @@ async (page) => {
         if (Math.abs(raw - (C.level - 4)) > 0.62) C.level = 4 + Math.round(raw);
         return { steer: C.level, action: C.act };
       };
+      const P = { airStart: -1, flight: 0, spin: 0, stompTry: false, stompBias: 0, away: 0, tap: 0, drift: 0, wob: rnd() * 6.28, lvl: 4, nextThink: 0, wasAir: false };
+      const timeToLand = (s) => {
+        let y = s.y, vy = s.vy, x = s.x, z = s.z, t = 0;
+        while (t < 4) { vy -= sim.gravity / 60; y += vy / 60; x += s.vx / 60; z += s.vz / 60; t += 1 / 60; if (y <= c.ground(x, z)) break; }
+        return { t, x, z };
+      };
+      const steerTo = (s, target, gain, lateralGain) => {
+        const look = s.z + 4 + s.speed * 0.35;
+        const desired = Math.atan2(target(look) - s.x, look - s.z);
+        const err = desired - s.velHeading + (c.safeX(s.z) - s.x) * lateralGain;
+        return Math.max(0, Math.min(8, Math.round(4 + err * gain)));
+      };
+      const nextRamp = (s) => {
+        for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 2; k++) {
+          for (const rr of c.zones(k).ramps) {
+            if (rr.z + rr.len > s.z + 1 && rr.z - s.z < 70) {
+              // Kickers near the bank are skipped: their flight carries into the treeline.
+              if (Math.abs(rr.x - c.centerX(rr.z)) > c.halfWidth(rr.z) - 4 || Math.abs(rr.x - c.safeX(rr.z + rr.len)) > 2.5) return null;
+              return rr;
+            }
+          }
+        }
+        return null;
+      };
       const pilot = () => {
         const s = sim.s;
         const T = sim.tick / 60;
-        if (skill === 'clumsy') return clumsy();
         if (s.crashed) return { steer: 4, action: false };
         if (!s.grounded) {
           if (!P.wasAir) {
