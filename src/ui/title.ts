@@ -145,14 +145,17 @@ export class Title {
     const picked = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : null;
     const passed = m.firstVisit ? 0 : ghostsPassed(m);
     const bare = !picked && !!sel && !sel.locked && sel.best <= 0 && !sel.oldBest && passed <= 0;
-    const verb = m.challenge ? 'Accept' : 'Ride';
-    const where = m.challenge ? m.challenge.mountain : (picked ?? sel?.name ?? '');
-    const aim = m.challenge || m.firstVisit || picked ? null : (m.nextRung ?? null);
+    // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
+    // button is the plain one. The banner says so rather than promising a ghost that will not ride.
+    const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
+    const verb = raced ? 'Accept' : 'Ride';
+    const where = raced ? raced.mountain : (picked ?? sel?.name ?? '');
+    const aim = raced || m.firstVisit || picked ? null : (m.nextRung ?? null);
     // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
     // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
     const waiting = !!m.challenge?.waiting;
     const status = 'Finding rivals…';
-    const subline = waiting ? status : (aim ?? (m.challenge || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
+    const subline = waiting ? status : (aim ?? (raced || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
     if (subline === where || aim) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
@@ -587,8 +590,8 @@ function ghostsPassed(m: TitleModel): number {
 /**
  * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on
  * Pinecrest" (how far a run that did not finish went). A run on today's Daily Mountain reads "on the
- * Daily Mountain" and one on this week's Cup "on the Weekly Cup"; one on another day's Daily or another
- * week's Cup (no mountain named) shows the first line alone. Links
+ * Daily Mountain" and one on this week's Cup "on the Weekly Cup". One on another day's Daily or another
+ * week's Cup has no course left and no ghost to ride (no mountain named): "Mila's race has closed". Links
  * from before distances were carried keep the score: "Beat a score of 12,480 on Pinecrest". A link from
  * an older course has no ghost to race, only a distance to pass: "Mila rode 2,340 m on the old
  * Pinecrest. Beat it." No live role: it sits right above the Accept button, read in context, and the
@@ -604,7 +607,7 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
   // Player and mountain names are proper nouns: keep auto-translate off them.
   const who = h('span', '', `${c.name}\u2019s`);
   who.setAttribute('translate', 'no');
-  const k = h('span', 'gs-challenge-k', 'Racing ', who, ' ghost');
+  const k = c.mountain ? h('span', 'gs-challenge-k', 'Racing ', who, ' ghost') : h('span', 'gs-challenge-k', who, ' race has closed');
   const where = c.daily ? (c.mountain ? 'the Daily Mountain' : '') : c.mountain;
   let v: HTMLElement | null = null;
   if (where) {

@@ -21,16 +21,19 @@ import { FLAG_GROUNDED, FRAME_STRIDE, F_FLAGS, SAMPLE_EVERY } from './ghostdata'
 
 /** Ticks between readings of your pace. */
 export const PACE_EVERY = 15;
-/** No reading before this tick: the start-line bunch is still sorting itself out. */
-export const PACE_FROM = 120;
+/** The first reading. Soon: a rider who has already left you can only come back at the difference in
+ *  speed, and a first-timer who tumbles early never saw the pack again. */
+export const PACE_FROM = 30;
 /** How far ahead a rider aims, in ticks. Shorter chases every wobble, longer lets you get away. */
 export const PACE_AIM = 240;
 /** The rates a rider reading you may play its run at. The top end is what holds a rider to a strong
  *  first run for most of it; past that you really do ride away from it. */
-export const PACE_MIN = 0.45;
+export const PACE_MIN = 0.35;
 export const PACE_MAX = 1.12;
-/** Most a rate moves in one reading: from flat out to its slowest in about six seconds. */
+/** Most a rate moves in one reading. Up gently, so nobody rockets past; down twice as fast, because a
+ *  rider easing off ahead of you is what lets you back into the race after a tumble. */
 export const PACE_SLEW = 0.03;
+export const PACE_EASE = 0.06;
 /** How fast a rider flies, however slowly it rides: gravity reads as the square of this. */
 export const AIR_RATE = 0.85;
 /** Metres before the line where the riders stop reading you. */
@@ -66,7 +69,7 @@ export function reading(z: number, finishZ: number): boolean {
 
 /** The next rate from the current one and the rate that would land a rider on its place. */
 export function paceRate(cur: number, want: number): number {
-  const step = Math.max(-PACE_SLEW, Math.min(PACE_SLEW, want - cur));
+  const step = Math.max(-PACE_EASE, Math.min(PACE_SLEW, want - cur));
   return Math.max(PACE_MIN, Math.min(PACE_MAX, cur + step));
 }
 

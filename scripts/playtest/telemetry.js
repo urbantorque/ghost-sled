@@ -77,7 +77,7 @@ async (page) => {
     if (!xs || !xs.length) return null;
     const s = xs.slice().sort((a, b) => a - b);
     const at = (q) => +s[Math.floor(q * (s.length - 1))].toFixed(2);
-    return { p5: at(0.05), p50: at(0.5), p95: at(0.95), atMin: +(xs.filter((v) => v <= 0.451).length / xs.length).toFixed(2), atMax: +(xs.filter((v) => v >= 1.119).length / xs.length).toFixed(2) };
+    return { p5: at(0.05), p50: at(0.5), p95: at(0.95), atMin: +(xs.filter((v) => v <= 0.351).length / xs.length).toFixed(2), atMax: +(xs.filter((v) => v >= 1.119).length / xs.length).toFixed(2) };
   };
   const defaults = {
     label: 'run',

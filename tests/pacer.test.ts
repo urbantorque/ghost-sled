@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FLAG_GROUNDED, FRAME_STRIDE, F_FLAGS, F_Z, SAMPLE_EVERY } from '../src/game/ghostdata';
 import { GhostManager, clock, unclock, type GhostEntry } from '../src/game/ghosts';
-import { AIR_RATE, PACE_FROM, PACE_MAX, PACE_MIN, PACE_OPEN, PACE_SLEW, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from '../src/game/pacer';
+import { AIR_RATE, PACE_EASE, PACE_FROM, PACE_MAX, PACE_MIN, PACE_OPEN, PACE_SLEW, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from '../src/game/pacer';
 import { FINISH_Z } from '../src/game/standing';
 
 /** A straight run at `speed` m/s, flying over [airFrom, airTo) of its samples. */
@@ -55,7 +55,8 @@ describe('the string a first run rides on', () => {
 
   it('keeps a rate moving gently and inside what a rider can ride', () => {
     expect(paceRate(1, 3)).toBeCloseTo(1 + PACE_SLEW);
-    expect(paceRate(1, 0)).toBeCloseTo(1 - PACE_SLEW);
+    expect(paceRate(1, 0)).toBeCloseTo(1 - PACE_EASE);
+    expect(PACE_EASE).toBeGreaterThan(PACE_SLEW);
     expect(paceRate(PACE_MAX, 3)).toBe(PACE_MAX);
     expect(paceRate(PACE_MIN, 0)).toBe(PACE_MIN);
   });

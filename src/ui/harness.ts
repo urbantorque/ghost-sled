@@ -464,6 +464,7 @@ const SCENARIOS: Record<string, () => void> = {
     window.setTimeout(() => document.querySelector<HTMLElement>('[data-fk="medals"]')?.click(), 300);
   },
   'title-challenge': () => goTitle({ challenge: { name: 'Mika', score: 15420, mountain: 'Frostfang' } }),
+  'title-challenge-closed': () => goTitle({ challenge: { name: 'Mika', score: 15420, mountain: '', daily: true } }),
   'title-challenge-cup': () => goTitle({ selected: 'cup', challenge: { name: 'Mika', score: 15420, mountain: 'the Weekly Cup', distance: 4500, time: 171.4 } }),
   'title-challenge-cup-waiting': () => goTitle({ selected: 'cup', challenge: { name: 'Mika', score: 15420, mountain: 'the Weekly Cup', distance: 4500, time: 171.4, waiting: true } }),
   'title-missions': () => {
