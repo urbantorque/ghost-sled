@@ -1,9 +1,10 @@
-import { BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
+import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import type { BiomeId } from '../sim/mountains';
 import { flagColors } from './dressing';
 import { SNOW, merge, paint, part, reseed, shade, softPart } from './flora';
 import type { Palette } from './palette';
 // (town.ts uses this file's helpers only inside its builders, so the two may import each other.)
+import { finishPiece, lipPiece, liftPiece, startPiece, viaductPiece } from './places';
 import { galleryPiece, iceTunnelPiece, lavaTunnelPiece, toriiRowPiece, villagePiece } from './town';
 
 // The course's set pieces, modelled at scale (15 to 40 m) in the same parts style as the props:
@@ -35,13 +36,20 @@ export type Kind =
   | 'gallery'
   | 'icetunnel'
   | 'lavatunnel'
-  | 'toriirow';
+  | 'toriirow'
+  // Places the course's own sections ask for (places.ts): a bridge over a chasm, the finish town, the
+  // start, a leap's watching crowd, and a lift line crossing the run with its station.
+  | 'viaduct'
+  | 'finish'
+  | 'start'
+  | 'lip'
+  | 'lift';
 
-export const SPANS: ReadonlySet<Kind> = new Set<Kind>(['gate', 'bridge', 'arch', 'basalt', 'torii']);
+export const SPANS: ReadonlySet<Kind> = new Set<Kind>(['gate', 'bridge', 'arch', 'basalt', 'torii', 'lift']);
 /** Kinds roofed over the run for their whole length. */
 export const ENCLOSED: ReadonlySet<Kind> = new Set<Kind>(['gallery', 'icetunnel', 'lavatunnel', 'toriirow']);
 /** Kinds that run along the course for a stretch (a rail frame rather than a point). */
-export const LONG: ReadonlySet<Kind> = new Set<Kind>(['village', 'gallery', 'icetunnel', 'lavatunnel', 'toriirow']);
+export const LONG: ReadonlySet<Kind> = new Set<Kind>(['village', 'gallery', 'icetunnel', 'lavatunnel', 'toriirow', 'viaduct', 'finish', 'start']);
 
 /** A point along a long site's stretch of run, in the site frame. */
 export interface RailPt {
@@ -63,6 +71,8 @@ export interface Rail {
   at(dz: number, s: number, e: number): RailPt;
   /** The run's smooth floor under its centre line (the course's base height, local y). */
   floor(dz: number): number;
+  /** Metres past the edge at which the sim turns a sled back, dz down the run (Course.edgeLimit). */
+  limit(dz: number): number;
   /** The highest any sled can fly over dz in [a, b] (local y; -Infinity where nothing flies). */
   air(a: number, b: number): number;
   /** Edge excess of a site-local point. */
@@ -87,6 +97,11 @@ export interface SiteCtx {
   seed: number;
   /** A long site's stretch of run. */
   rail?: Rail;
+  /** The Low tier: everything one step plainer. */
+  low?: boolean;
+  /** Sim metres from the site's z to the finish line, and to the end of the run-out. */
+  line?: number;
+  lastZ?: number;
 }
 
 /** A crowd spot in the site frame: position and the yaw a figure there faces. */
@@ -180,6 +195,37 @@ export function windowColor(night: boolean): Color {
   return night ? new Color('#FFC27A').multiplyScalar(1.9) : new Color('#2A2D48');
 }
 
+/** One flat quad a, b, c, d, wound as given. */
+export function quad(a: V3, b: V3, c: V3, d: V3, col: Color): BufferGeometry {
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(new Float32Array([...a, ...b, ...c, ...a, ...c, ...d]), 3));
+  return part(g, col);
+}
+
+/** A strip of quads between two lines of points (a[i] to b[i]), flat-shaded, wound so its face looks
+ *  along (a[i + 1] - a[i]) x (b[i] - a[i]). */
+export function ribbon(a: readonly V3[], b: readonly V3[], col: Color): BufferGeometry {
+  const n = a.length - 1;
+  const arr = new Float32Array(n * 18);
+  let o = 0;
+  const put = (v: V3) => {
+    arr[o++] = v[0];
+    arr[o++] = v[1];
+    arr[o++] = v[2];
+  };
+  for (let i = 0; i < n; i++) {
+    put(a[i]);
+    put(a[i + 1]);
+    put(b[i + 1]);
+    put(a[i]);
+    put(b[i + 1]);
+    put(b[i]);
+  }
+  const g = new BufferGeometry();
+  g.setAttribute('position', new BufferAttribute(arr, 3));
+  return part(g, col);
+}
+
 /** Moves a list of parts from a piece's own frame (facing +z) into the site frame. */
 export function place(parts: BufferGeometry[], x: number, y: number, z: number, yaw: number): BufferGeometry[] {
   tm.makeRotationY(yaw).setPosition(x, y, z);
@@ -260,7 +306,7 @@ export function banners(p: Palette): Color[] {
 // ---------------------------------------------------------------- spans
 
 /** A lattice tower of four timber legs, braced at every level, from its footing to `top`. */
-function latticeTower(ctx: SiteCtx, cx: number, cz: number, w: number, top: number, wood: Color, dark: Color): BufferGeometry[] {
+export function latticeTower(ctx: SiteCtx, cx: number, cz: number, w: number, top: number, wood: Color, dark: Color): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const h = w / 2;
   const t = w * 0.36;
@@ -301,13 +347,13 @@ export function bunting(a: V3, b: V3, sag: number, cols: Color[], size = 0.9): B
     const p1 = pt((i + 1) / n);
     parts.push(seg(p0, p1, 0.04, ROPE, 3));
     if (i === 0) continue;
-    // A pennant: a flat triangle, point down.
-    const g = new ConeGeometry(size * 0.45, size, 3);
-    g.rotateX(Math.PI);
-    g.scale(1, 1, 0.08);
-    g.rotateY(Math.atan2(-(b[2] - a[2]), b[0] - a[0]));
-    g.translate(p0[0], p0[1] - size * 0.5, p0[2]);
-    parts.push(part(g, cols[i % cols.length]));
+    // A pennant: a flat triangle, point down, one each way so it shows from both sides.
+    const ax = (a[0] === b[0] && a[2] === b[2] ? 1 : (b[0] - a[0]) / Math.hypot(b[0] - a[0], b[2] - a[2])) * size * 0.45;
+    const az = (a[0] === b[0] && a[2] === b[2] ? 0 : (b[2] - a[2]) / Math.hypot(b[0] - a[0], b[2] - a[2])) * size * 0.45;
+    const q = new BufferGeometry();
+    const tip: V3 = [p0[0], p0[1] - size, p0[2]];
+    q.setAttribute('position', new BufferAttribute(new Float32Array([p0[0] - ax, p0[1], p0[2] - az, tip[0], tip[1], tip[2], p0[0] + ax, p0[1], p0[2] + az, p0[0] + ax, p0[1], p0[2] + az, tip[0], tip[1], tip[2], p0[0] - ax, p0[1], p0[2] - az]), 3));
+    parts.push(part(q, cols[i % cols.length]));
   }
   return parts;
 }
@@ -1009,63 +1055,65 @@ export function jumpPiece(ctx: SiteCtx): Piece {
   return { steps: steps.map((s) => () => f.out(s())), spots: [], ice: false };
 }
 
-/** A tall cliff on the bank with a waterfall frozen down its face (Glacier: blue ice, the ice
- *  material) or a lava fall glowing down it (Ember), and a fan of ice or a lava pool at its foot. */
+/** A tall cliff on the bank with a waterfall frozen down its face (Frostfang) or a lava fall glowing down
+ *  it (Ember), and a fan of ice or a lava pool at its foot. The cliff is long uneven strata of dark rock,
+ *  in the plain material: a grid of even facets lit as ice was a blue honeycomb from anywhere near it.
+ *  It stands well back from the run, and never behind a ravine's rim (SitePlan.nextBank). */
 export function fallsPiece(ctx: SiteCtx): Piece {
   const { p, biome } = ctx;
   const lava = biome === 'volcanic';
-  const f = bankFrame(ctx, 26, 0, 0.62);
+  const f = bankFrame(ctx, 34, 0, 0.62);
   const [lo, hi] = f.range(22, 6);
   const top = hi + 30;
-  const rock = lava ? [shade(p.low, 0.48), shade(p.low, 0.6), shade(p.low, 0.4)] : [new Color('#55689A'), new Color('#6E86B4'), new Color('#46578A')];
+  const rock = lava ? [shade(p.low, 0.48), shade(p.low, 0.6), shade(p.low, 0.4)] : [new Color('#46506E'), new Color('#566282'), new Color('#3A4460')];
+  const fall = lava ? [lampColor(true, '#FF8A3C'), lampColor(true, '#FFB050'), new Color('#3A2A30')] : [new Color('#CFEFFF'), new Color('#F0FAFF'), new Color('#A8DCF4')];
   const steps: Array<() => BufferGeometry[]> = [];
   for (const half of [-1, 1]) {
     steps.push(() => {
       seed(ctx.seed + 91 + half);
       const parts: BufferGeometry[] = [];
-      for (let row = 0; row < 4; row++) {
-        for (let k = 0; k < 4; k++) {
-          const x = half * (4 + k * 5.2 + rnd() * 1.5);
-          const y = lo + 2 + row * ((top - lo) / 4) + rnd() * 2;
-          const sc = 4.6 + rnd() * 1.6 - row * 0.3;
-          parts.push(crag(rock[(row + k) % 3], [x, y, -2 - row * 0.8 - k * 0.6], [sc * 1.25, sc * 1.35, 5.5], 0.3));
-          if (rnd() < 0.55) parts.push(drift([x, y + sc * 1.25, -1.2 - row * 0.8], [sc * 0.8, 0.5, 2.0]));
-        }
+      // The cliff's strata: long slabs of uneven depth, each stepped a little back from the one under it.
+      const rows = 7;
+      for (let r = 0; r < rows; r++) {
+        const t = r / rows;
+        const y = lo + t * (top - lo);
+        const h = ((top - lo) / rows) * (0.75 + rnd() * 0.5);
+        const reach = 12 + rnd() * 6 - t * 5;
+        const x = half * (8.2 + reach / 2 + (rnd() - 0.5) * 2);
+        parts.push(grade(box(reach + 3, h, 8 + rnd() * 3, rock[r % 3], [x, y + h / 2, -5 - r * 0.9 - rnd()], [0, (rnd() - 0.5) * 0.14, (rnd() - 0.5) * 0.05 * half]), y, y + h, 0.78, 1.04));
+        if (rnd() < 0.7) parts.push(box(reach * 0.8, 0.36, 2.2, SNOW, [x, y + h + 0.1, -2.6 - r * 0.9]));
       }
-      // The cliff's body behind the faces, so the ledges read as one wall, not a stack.
-      for (let row = 0; row < 3; row++) parts.push(crag(rock[row % 3], [half * 11, lo + 4 + row * ((top - lo) / 3), -7 - row], [13, (top - lo) / 3.2, 6], 0.22));
       // The lip's overhang over the fall.
-      parts.push(crag(rock[1], [half * 3.2, top + 0.5, -1.5], [4.5, 2.6, 4.5], 0.25));
-      parts.push(drift([half * 3.2, top + 2.8, -1.8], [4.2, 0.9, 3.8]));
+      parts.push(crag(rock[1], [half * 5.4, top + 0.5, -2], [5, 2.2, 4], 0.22));
+      parts.push(drift([half * 5.4, top + 2.6, -2.2], [4.6, 0.8, 3.6]));
       return parts;
     });
   }
   steps.push(() => {
     seed(ctx.seed + 95);
     const parts: BufferGeometry[] = [];
-    const fall = lava ? [lampColor(true, '#FF8A3C'), lampColor(true, '#FFB050'), new Color('#3A2A30')] : [new Color('#BFEAFF'), new Color('#E2F6FF'), new Color('#8FD0F0')];
-    // The fall: columns from the lip to the foot, widening toward the bottom.
-    for (let k = 0; k < 16; k++) {
-      const t = k / 15;
-      const x = (rnd() - 0.5) * (3 + t * 7);
-      const y0 = top - t * (top - lo) * 0.25;
-      const h = (top - lo) * (0.55 + rnd() * 0.4);
-      const r = 0.8 + rnd() * 1.1;
-      const g = new CylinderGeometry(r * 0.75, r, h, 7, 3);
-      parts.push(part(g, fall[k % 3 === 2 && lava ? 0 : k % 3], { pos: [x, y0 - h / 2, 1.2 + rnd() * 1.4], jitter: 0.35 }));
+    // The back of the fall, so no rock shows between its columns.
+    parts.push(box(15, top - lo, 3, lava ? rock[0] : new Color('#7FB4DA'), [0, (top + lo) / 2, -2.4]));
+    // The fall: close fluted columns from the lip to the foot, widening toward the bottom.
+    for (let k = 0; k < 26; k++) {
+      const x = -8.4 + (16.8 * (k + rnd() * 0.6)) / 26;
+      const h = (top - lo) * (0.62 + rnd() * 0.38);
+      const y0 = top + 1 - (1 - Math.abs(x) / 9) * 1.5 - rnd() * 4;
+      const r = 0.7 + rnd() * 0.75;
+      parts.push(part(new CylinderGeometry(r * 0.55, r * 1.1, h, 6, 2), fall[k % 3 === 2 && lava ? 0 : k % 3], { pos: [x, y0 - h / 2, -0.6 + rnd() * 1.4], jitter: 0.16 }));
     }
     // An icicle curtain (or lava drips) along the lip.
-    for (let k = 0; k < 12; k++) {
+    for (let k = 0; k < 14; k++) {
       const len = 1.5 + rnd() * 3;
-      parts.push(part(new ConeGeometry(0.3 + rnd() * 0.3, len, 5), fall[1], { pos: [-7 + k * 1.3, top - len / 2 - 0.3, 1.8], rot: [Math.PI, 0, 0] }));
+      parts.push(part(new ConeGeometry(0.28 + rnd() * 0.26, len, 5), fall[1], { pos: [-8 + k * 1.25, top - len / 2 + 0.2, 1.1], rot: [Math.PI, 0, 0] }));
     }
     // The fan of ice, or the glowing pool, at the foot.
     for (let k = 0; k < 6; k++) {
-      parts.push(part(new IcosahedronGeometry(1, 1), fall[k % 2], { pos: [(rnd() - 0.5) * 12, lo + 0.8, 3 + rnd() * 3], scale: [3.5 + rnd() * 2, 1.4, 2.6], jitter: 0.2 }));
+      parts.push(part(new IcosahedronGeometry(1, 1), fall[k % 2], { pos: [(rnd() - 0.5) * 14, lo + 0.8, 2 + rnd() * 3], scale: [3.5 + rnd() * 2, 1.4, 2.6], jitter: 0.2 }));
     }
     return parts;
   });
-  return { steps: steps.map((s) => () => f.out(s())), spots: [], ice: !lava };
+  return { steps: steps.map((s) => () => f.out(s())), spots: [], ice: false };
 }
 
 /** A giant stone guardian on a stepped plinth: a hooded, robed figure with its hands folded on a
@@ -1150,39 +1198,35 @@ export function pagodaPiece(ctx: SiteCtx): Piece {
   const f = bankFrame(ctx, 18, 0, 0.5);
   const [lo, hi] = f.range(7, 7);
   const b = hi + 1.5;
-  const steps: Array<() => BufferGeometry[]> = [];
+  return { steps: [() => f.out(pagodaParts(night, b, lo, p))], spots: [], ice: false };
+}
+
+/** A five-storey pagoda on its plinth, in its own frame, its first floor at b. */
+export function pagodaParts(night: boolean, b: number, lo: number, p: Palette): BufferGeometry[] {
   const slate = new Color('#3E3A50');
   const trim = new Color('#5A2F42');
   const wall = new Color('#EDE4D8');
   const bronze = new Color('#5E5468');
-  steps.push(() => {
-    seed(ctx.seed + 111);
-    const parts: BufferGeometry[] = [];
-    parts.push(grade(box(13, b - lo + 2, 13, stone(p, 0.85), [0, (b + lo - 2) / 2, 0]), lo - 2, b, 0.7, 1.0));
-    parts.push(box(13.2, 0.3, 13.2, SNOW, [0, b + 0.05, 0]));
-    let y = b;
-    for (let i = 0; i < 5; i++) {
-      const w = 8.6 - i * 1.15;
-      const h = i === 0 ? 4.4 : 3.2;
-      parts.push(grade(box(w, h, w, wall, [0, y + h / 2, 0]), y, y + h, 0.9, 1.03));
-      for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.35, h, 0.35, trim, [(sx * w) / 2, y + h / 2, (sz * w) / 2]));
-      const win = night ? lampColor(true, '#FFC27A') : new Color('#3A2A36');
-      for (const a of [0, Math.PI / 2, -Math.PI / 2]) parts.push(box(w * 0.32, h * 0.45, 0.2, win, [Math.sin(a) * (w / 2 + 0.02), y + h * 0.5, Math.cos(a) * (w / 2 + 0.02)], [0, a, 0]));
-      y += h;
-      parts.push(...place(sweptRoof(w + 4.2, 0, slate, trim), 0, y + 0.1, 0, 0));
-      y += 1.6;
-    }
-    return parts;
-  });
-  steps.push(() => {
-    const parts: BufferGeometry[] = [];
-    const y = b + 4.4 + 4 * 3.2 + 5 * 1.6 + 1.2;
-    parts.push(seg([0, y - 1, 0], [0, y + 8, 0], 0.32, bronze, 8));
-    for (let k = 0; k < 7; k++) parts.push(part(new TorusGeometry(0.75 - k * 0.05, 0.16, 5, 12), bronze, { pos: [0, y + 1.5 + k * 0.8, 0], rot: [Math.PI / 2, 0, 0] }));
-    parts.push(part(new SphereGeometry(0.55, 10, 8), bronze, { pos: [0, y + 8.3, 0] }));
-    return parts;
-  });
-  return { steps: steps.map((s) => () => f.out(s())), spots: [], ice: false };
+  const parts: BufferGeometry[] = [];
+  parts.push(grade(box(13, b - lo + 2, 13, stone(p, 0.85), [0, (b + lo - 2) / 2, 0]), lo - 2, b, 0.7, 1.0));
+  parts.push(box(13.2, 0.3, 13.2, SNOW, [0, b + 0.05, 0]));
+  let y = b;
+  for (let i = 0; i < 5; i++) {
+    const w = 8.6 - i * 1.15;
+    const h = i === 0 ? 4.4 : 3.2;
+    parts.push(grade(box(w, h, w, wall, [0, y + h / 2, 0]), y, y + h, 0.9, 1.03));
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.35, h, 0.35, trim, [(sx * w) / 2, y + h / 2, (sz * w) / 2]));
+    const win = night ? lampColor(true, '#FFC27A') : new Color('#3A2A36');
+    for (const a of [0, Math.PI / 2, -Math.PI / 2]) parts.push(box(w * 0.32, h * 0.45, 0.2, win, [Math.sin(a) * (w / 2 + 0.02), y + h * 0.5, Math.cos(a) * (w / 2 + 0.02)], [0, a, 0]));
+    y += h;
+    parts.push(...place(sweptRoof(w + 4.2, 0, slate, trim), 0, y + 0.1, 0, 0));
+    y += 1.6;
+  }
+  const t = b + 4.4 + 4 * 3.2 + 5 * 1.6 + 1.2;
+  parts.push(seg([0, t - 1, 0], [0, t + 8, 0], 0.32, bronze, 8));
+  for (let k = 0; k < 7; k++) parts.push(part(new TorusGeometry(0.75 - k * 0.05, 0.16, 5, 12), bronze, { pos: [0, t + 1.5 + k * 0.8, 0], rot: [Math.PI / 2, 0, 0] }));
+  parts.push(part(new SphereGeometry(0.55, 10, 8), bronze, { pos: [0, t + 8.3, 0] }));
+  return parts;
 }
 
 /** The piece for a kind. */
@@ -1222,6 +1266,16 @@ export function pieceFor(kind: Kind, ctx: SiteCtx): Piece {
       return lavaTunnelPiece(ctx);
     case 'toriirow':
       return toriiRowPiece(ctx);
+    case 'viaduct':
+      return viaductPiece(ctx);
+    case 'finish':
+      return finishPiece(ctx);
+    case 'start':
+      return startPiece(ctx);
+    case 'lip':
+      return lipPiece(ctx);
+    case 'lift':
+      return liftPiece(ctx);
   }
 }
 

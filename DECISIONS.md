@@ -973,3 +973,73 @@ Every place where I replaced, extended or interpreted the brief, and why.
     cost off it and interleaved (A, B, B, A), because a before-then-after run measured a 25% drop on
     every mountain that was not there; and compare draw calls at the same distance from a clean save,
     because two builds on two ports keep different saves and so race different ghosts.
+143. **The course's sections are the plan.** The old planners picked places on their own rules (a village
+    every 1.5 to 2.5 km, an enclosure wherever nothing launched), tuned to a course that no longer
+    exists. Now a `street` is a town, a `tunnel` an enclosure, a `bridge` a bridge and the `finish` the
+    finish town, each at its section's real length; every leap gets a crowd and z = 0 a start. Where
+    things stand is laid out once per course from sections and hashes, no flying needed, and is the
+    same in every mood, so chunks and overlooks never wait for a flight. How high they stand is flown
+    per mood, one site per idle job: `spanNeed`, `roofNeed` and `quiet` stay as the validators, and what
+    cannot clear the air comes down (a span to a bank piece, a roof to its walls). Frostfang and Ember have
+    no `street` in their scripts, so each keeps one town beside the run, in its longest open stretch.
+144. **A street is measured from the limit, not the crest.** Everything hangs off `rail.limit`: the
+    barrier 0.25 m past the sim's limit, where a sled is turned back, the crowd behind it, fronts 1.75 m
+    behind that. So one layout is a street at a limit of 2 m and a town beside the run at 10. Houses are
+    cut into the bank, floors at the snow under their fronts, because a level floor on the highest
+    ground would put a ground floor 10 m over the street. The bank that holds them is the sim's, and
+    the stepped rows of the crowd come free with it. Lots stand off the edge's nearest point: a lot is
+    one straight block and in a blend the edge narrows under it. A window cost 60 triangles as boxes
+    and costs about 20 as flat panels; a street holds hundreds of them and only their
+    faces are seen. That paid for a second row of roofs: a street is 43 to 48k triangles against the
+    old village's 55 to 72k.
+145. **The finish town is built round where a sled stops.** `Sim.coast` stops a sled 35 m past the line
+    from 30 m/s and 60 from 46, so the square runs from 72 m before the line to 118 m past it. The
+    biggest crowd in the game is 560 animated figures (the instancing cap, unchanged) in the near two
+    rows, and about 1,500 still ones baked into the stands: two boxes each, four faces a box, no draw of
+    their own. The run-out street ends at a hall just past the end of RUN_OUT, standing across the
+    corridor where no sled can reach. The finish town keeps a slot from as far off as it can be seen.
+    It is 100 to 118k triangles. On this branch a finished run does not reach the results screen yet, so
+    the stationary frame was checked from the chase lens at rest, not from the results' hero shot.
+146. **A bridge cannot be hollow.** The corridor over a chasm is a ridge of ground: it falls 34 m past the
+    edge, so nothing can stand under the deck. The rider cannot tell. From the lens the deck's own edge
+    hides the floor out to about 70 m past it, so what says bridge is the rails, whipping past where the
+    sim turns a sled back, and what rises past them: ribs, a truss. The legs under the deck rake out
+    round the ridge, there for the rim and the air. For the same reason Ember's lava is a river running
+    away across the chasm, not a pool under the deck, where it would never be seen. Styles exist for all
+    four mountains, but only Frostfang and Ember have a `bridge` beat: Pinecrest's and Sakura's have
+    never been drawn, and Sakura's overhead lacquered footbridge is the old `bridge` span.
+147. **A roof follows the air.** The air over a tunnel is highest at its mouth (a pop from the steep ground
+    above flies far over it: 27 to 33 m over the floor, falling to about 20 inside), so one roof height
+    cleared by the mouth stood 33 to 40 m high all the way, or failed the old limit of 33 and came off.
+    Each bay now clears its own air, the roof coming down at most 1.2 m a bay, and ENC_MAX applies at the
+    mouth, at 42 m. A tunnel's mouth is rock masses of very different sizes round a great mass over the
+    vault: even ones in rows, seen from outside, were the same honeycomb as the falls below. Low
+    gravity still takes every roof off: Comet Night rides between walls, or an avenue of torii pillars.
+148. **A lift line is a span with chairs.** It crosses at a height `spanNeed` sets, with a chair's drop on top,
+    from a station on the bank to a tower on the far one and on up over two more. The chairs are a batch of
+    their own, a few dozen matrices written a frame, Medium and High. The station stands where a tower
+    would, tall where the air is high, so the line needs no tower on its own side. One goes just above
+    the first leap on every mountain, one near the middle, on a bowl if it can.
+149. **Overlooks are worked out first.** They keep 120 m from every piece, so filling every stretch to 300 m
+    would have left none, and they are places too. So the plan asks the overlook plan where it would go
+    against only what the sections fix, then fills round those. The real plan lands on the same
+    stretches, since it looks in the same order and the pieces only take ground it had passed over.
+    The longest bare stretch is 260 to 282 m on the four mountains, overlooks counted, in every mood.
+    One thing that number hides: an overlook in a ravine is invisible behind its wall, so a ravine gets
+    a span near its end, which leaves room for the overlook the test still asks for. (Five per 5 km.)
+150. **The honeycomb was the frozen falls.** Its cliff was four rows of even crags in the ice material, and
+    from anywhere near it those facets read as a blue lattice, worst behind a ravine's rim where it
+    rears over the run. It is now long uneven strata in the plain material, with a fall of 26 fluted
+    columns that is the palest thing in it, set further back and kept out of walled sections.
+151. **Three slots, two shadows.** Sites come every 200 to 300 m now, so two piece meshes could not hold
+    what is in view. A third adds a draw on every tier; only the nearest two cast, since the third is
+    past the shadow map. What is behind the rider gives up its slot first, and sites stay made until
+    they are behind, however many are ahead. Made on the frame only once idle time has opened, so a run's
+    first frames make nothing. Windows light by the journey's dusk at the site's own distance, and
+    lamplight pools at dusk at less than half of night's strength: at full strength on shaded snow
+    they went pink.
+    Measured against the build before, interleaved at the same distances: a street costs +3 draws on High
+    (84 to 87), +1 on Medium and 0 to +1 on Low, and 150k, 110k and 19k more triangles, with the figure
+    budget unchanged; the finish town costs no more draws on High or Medium, +1 to +2 on Low, and 220k,
+    100k and 44k more triangles. Both builds sat on the 60 fps ceiling in the quiet runs, so those
+    runs show it holds there, not what it costs under it.

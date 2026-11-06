@@ -22,6 +22,7 @@ import {
   grade,
   lampColor,
   place,
+  quad,
   rnd,
   seed,
   seg,
@@ -33,25 +34,28 @@ import type { Palette } from './palette';
 
 // The course's long places, each a stretch of the run 100 to 250 m long built along the course's own
 // line (the site's rail) rather than round one point:
-//  - a ride-through village: the run becomes the street. Chalets, shops, a church or temple and a
-//    hotel with balconies line both banks, their fronts to the run; stalls, lamps, snowmen and parked
-//    sleds stand before them, a dense crowd lines the bank crests, and bunting, lantern strings and
-//    banners hang high across. Pinecrest an alpine village, Frostfang a research station and
-//    ice-fishing camp, Ember Peak a stone hot-spring town, Sakura Ridge a temple town.
+//  - a ride-through town: the run is the street. House fronts stand 2 to 4 m past the corridor's edge,
+//    cut into the bank with their floors at the snow; upper storeys, balconies and awnings lean out
+//    over the barrier, a second row of roofs stands on the crest behind, and a crowd packs the strip
+//    between the barrier and the fronts. Strings, lanterns and banners hang high across from tall masts.
+//    Pinecrest an alpine village, Frostfang a research station and ice-fishing camp, Ember Peak a stone
+//    hot-spring town, Sakura Ridge a temple town. Where a script holds no street the same town stands
+//    beside the run, measured from the bank's limit of 10 m.
 //  - an enclosed run: an avalanche gallery (a roof over the run on pillars, a wall up the slope side,
 //    open toward the light), Frostfang's ice tunnel, Ember's lava-rock tunnel and Sakura's corridor of
-//    torii.
-// Safety is the set pieces' (landmarkKit.ts): everything stands at least 9.45 m past the corridor's
-// edge, except what hangs over the run, whose lowest point keeps above the highest air any sled can
-// reach under it by the margin (rail.air). An enclosure's roof stands `clear` over the run's floor
-// for its whole length; the plan (landmarks.ts) puts one only where nothing launches under it.
+//    torii. In a mood whose air no roof can clear the walls and pillars stand alone.
+// Safety: everything stands past the course's own edge limit there (rail.limit), except what hangs over
+// the run, whose lowest point keeps above the highest air any sled can reach under it by the margin
+// (rail.air). An enclosure's roof stands `clear` over the run's floor for its whole length.
 //
 // Every builder makes its layout when called (cheap) and its parts in steps, one per idle callback.
 
-/** Nothing decorative nearer the corridor's edge than this (the rule is 9.2 m; a margin for facets). */
-const KEEP = 9.45;
 /** Metres of clear air over the highest sled for anything hung across the run. */
-const AIR_MARGIN = 6.3;
+export const AIR_MARGIN = 6.3;
+/** An enclosure's walls where its roof has come off (see the file's head): how high they stand. */
+const OPEN_WALL = 13;
+/** The most a roof steps down from one bay to the next. */
+const ROOF_STEP = 1.2;
 
 const C = (h: string) => new Color(h);
 
@@ -88,7 +92,7 @@ function gable(L: number, D: number, y: number, rise: number, over: number, roof
 
 /** A heap of snow that keeps its axes (drift() turns at random, so a long heap by the keep line could
  *  swing its length across it). */
-function heap(pos: V3, scale: V3): BufferGeometry {
+export function heap(pos: V3, scale: V3): BufferGeometry {
   return part(new IcosahedronGeometry(1, 1), SNOW, { pos, scale, jitter: 0.1 });
 }
 
@@ -101,42 +105,53 @@ function BoxGeometry2(w: number, h: number, d: number): BufferGeometry {
   return g;
 }
 
-/** A window with its frame (and shutters, when given) on a face: `face` is the axis it faces. */
+/** A flat panel facing +z (axis z) or along x by dir (axis x), at (x, y, z): w across, h tall. */
+function pane(x: number, y: number, z: number, w: number, h: number, col: Color, axis: 'x' | 'z', dir: number): BufferGeometry {
+  const hw = w / 2;
+  const hh = h / 2;
+  if (axis === 'z') return quad([x - hw, y - hh, z], [x + hw, y - hh, z], [x + hw, y + hh, z], [x - hw, y + hh, z], col);
+  const s0 = z + dir * hw;
+  const s1 = z - dir * hw;
+  return quad([x, y - hh, s0], [x, y - hh, s1], [x, y + hh, s1], [x, y + hh, s0], col);
+}
+
+/** A window with its frame (and shutters, when given) on a face: `axis` is the axis it faces. Flat
+ *  panels: a street holds hundreds, and nothing but their faces is ever seen. */
 function windowAt(parts: BufferGeometry[], x: number, y: number, z: number, w: number, h: number, glass: Color, frame: Color, axis: 'x' | 'z', dir: number, shutter?: Color): void {
   if (axis === 'z') {
-    parts.push(box(w + 0.3, h + 0.3, 0.12, frame, [x, y, z]));
-    parts.push(box(w, h, 0.14, glass, [x, y, z + dir * 0.03]));
+    parts.push(pane(x, y, z + 0.02, w + 0.3, h + 0.3, frame, 'z', 1));
+    parts.push(pane(x, y, z + 0.05, w, h, glass, 'z', 1));
     parts.push(box(w + 0.5, 0.16, 0.34, SNOW, [x, y - h / 2 - 0.2, z + dir * 0.12]));
-    if (shutter) for (const sx of [-1, 1]) parts.push(box(w * 0.48, h + 0.1, 0.1, shutter, [x + sx * (w * 0.74 + 0.1), y, z + dir * 0.06]));
+    if (shutter) for (const sx of [-1, 1]) parts.push(pane(x + sx * (w * 0.74 + 0.1), y, z + 0.08, w * 0.48, h + 0.1, shutter, 'z', 1));
   } else {
-    parts.push(box(0.12, h + 0.3, w + 0.3, frame, [x, y, z]));
-    parts.push(box(0.14, h, w, glass, [x + dir * 0.03, y, z]));
-    parts.push(box(0.34, 0.16, w + 0.5, SNOW, [x + dir * 0.12, y - h / 2 - 0.2, z]));
-    if (shutter) for (const sz of [-1, 1]) parts.push(box(0.1, h + 0.1, w * 0.48, shutter, [x + dir * 0.06, y, z + sz * (w * 0.74 + 0.1)]));
+    parts.push(pane(x + dir * 0.02, y, z, w + 0.3, h + 0.3, frame, 'x', dir));
+    parts.push(pane(x + dir * 0.05, y, z, w, h, glass, 'x', dir));
+    if (shutter) for (const sz of [-1, 1]) parts.push(pane(x + dir * 0.08, y, z + sz * (w * 0.74 + 0.1), w * 0.48, h + 0.1, shutter, 'x', dir));
   }
 }
 
-/** A balcony along a front (+z face at z0): a deck, posts, a rail, and snow along it. */
+/** A balcony along a front (+z face at z0): a deck, a boarded front on a few posts, and snow along it. */
 function balcony(parts: BufferGeometry[], w: number, y: number, z0: number, depth: number, wood: Color): void {
   parts.push(box(w, 0.3, depth, wood, [0, y, z0 + depth / 2]));
-  for (let x = -w / 2 + 0.15; x <= w / 2 - 0.1; x += 0.55) parts.push(box(0.09, 1.0, 0.09, wood, [x, y + 0.65, z0 + depth - 0.1]));
-  parts.push(box(w, 0.14, 0.18, wood, [0, y + 1.15, z0 + depth - 0.1]));
-  parts.push(box(w + 0.1, 0.16, 0.34, SNOW, [0, y + 1.3, z0 + depth - 0.1]));
+  parts.push(pane(0, y + 0.62, z0 + depth - 0.06, w, 0.94, shade(wood, 1.25), 'z', 1));
+  for (let x = -w / 2 + 0.1; x <= w / 2; x += w / 4 - 0.05) parts.push(box(0.1, 1.1, 0.1, wood, [x, y + 0.65, z0 + depth - 0.02]));
+  parts.push(box(w + 0.1, 0.16, 0.34, SNOW, [0, y + 1.28, z0 + depth - 0.08]));
   parts.push(box(w, 0.1, depth - 0.2, SNOW, [0, y + 0.2, z0 + depth / 2]));
 }
 
 /** A hanging paper lantern (lit warm at night, a soft glow by day). */
-function lantern(parts: BufferGeometry[], x: number, y: number, z: number, r: number, night: boolean, hex = '#FFB45E'): void {
-  parts.push(part(new SphereGeometry(r, 8, 6), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.3, 1] }));
+export function lantern(parts: BufferGeometry[], x: number, y: number, z: number, r: number, night: boolean, hex = '#FFB45E'): void {
+  parts.push(part(new SphereGeometry(r, 6, 4), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.3, 1] }));
+  if (r < 0.4) return;
   parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y + r * 1.3, z]));
   parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y - r * 1.3, z]));
 }
 
 /** A string of lanterns sagging from a to b. */
-function lanternString(a: V3, b: V3, sag: number, night: boolean, hex: string): BufferGeometry[] {
+export function lanternString(a: V3, b: V3, sag: number, night: boolean, hex: string): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
-  const n = Math.max(4, Math.round(len / 2.6));
+  const n = Math.max(4, Math.round(len / 3.4));
   const pt = (t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
   for (let i = 0; i < n; i++) {
     parts.push(seg(pt(i / n), pt((i + 1) / n), 0.04, INK, 3));
@@ -150,7 +165,7 @@ function lanternString(a: V3, b: V3, sag: number, night: boolean, hex: string): 
 
 // ---------------------------------------------------------------- per-biome town styles
 
-interface Town {
+export interface Town {
   /** Ground-floor walls, upper-storey walls (one picked per house). */
   lower: Color[];
   upper: Color[];
@@ -162,7 +177,7 @@ interface Town {
   lampAlways: boolean;
 }
 
-function townStyle(biome: BiomeId, p: Palette): Town {
+export function townStyle(biome: BiomeId, p: Palette): Town {
   switch (biome) {
     case 'alpine':
       return { lower: [C('#ECE4D6'), C('#E4DACA'), C('#D9CDBB')], upper: [TIMBER, C('#7A5440'), C('#8A5E44'), C('#5E4032')], roof: C('#3A3448'), trim: TIMBER_DARK, shutters: [C('#3F6A6E'), C('#6A3A48'), C('#3E5A8A'), C('#4A6A48')], lamp: '#FFB45E', lampAlways: false };
@@ -185,105 +200,146 @@ interface HouseOpts {
   balconies: boolean;
   /** The bank side: its up-slope face is own +x times this. */
   s: number;
+  /** Metres each storey leans out over the one under it. */
+  jet?: number;
+  /** The eaves' reach past the top storey's front. */
+  eave?: number;
+  /** The free metres in front of the ground floor: nothing reaches further over the run. */
+  room?: number;
+  /** The second row, seen only from afar. */
+  back?: boolean;
+  /** Low tier: a window is its glass. */
+  low?: boolean;
+  /** Cut into the bank: no snow plate round its foot. */
+  sunk?: boolean;
 }
+
+/** The height of a storey. */
+const STOREY = 3.3;
 
 /** A house in its own frame (front at +z, d/2), its floor at F. Each biome's own: an alpine chalet
  *  (plaster under timber, the gable to the street, balconies and shutters), a Frostfang station hut
  *  (panelled, on stilts, a flat roof deep in snow), an Ember lodge (basalt under timber, ember-lit
  *  windows), a Sakura townhouse (dark lattice under plaster, low swept eaves, lanterns). */
-function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color): BufferGeometry[] {
+export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const { w, d, storeys, s } = o;
+  const jet = o.jet ?? 0;
+  const eave = o.eave ?? 1.3;
+  const room = o.room ?? 3;
+  const plain = !!o.back || !!o.low;
   const lower = t.lower[Math.floor(rnd() * t.lower.length)];
   const upper = t.upper[Math.floor(rnd() * t.upper.length)];
   const shutter = t.shutters[Math.floor(rnd() * t.shutters.length)];
   const glass = biome === 'volcanic' ? lampColor(true, '#FF9A50').multiplyScalar(night ? 1 : 0.55) : windowColor(night);
-  const SH = 3.3;
+  const SH = STOREY;
   const top = F + storeys * SH;
-  const zf = d / 2;
+  // How far the top storey has leant out, which the roof has to cover.
+  const zr = (storeys - 1) * jet;
+  const win = (x: number, y: number, z: number, wd: number, h: number, axis: 'x' | 'z', dir: number, shut?: Color) => {
+    if (o.low) parts.push(axis === 'z' ? box(wd, h, 0.14, glass, [x, y, z]) : box(0.14, h, wd, glass, [x, y, z]));
+    else windowAt(parts, x, y, z, wd, h, glass, t.trim, axis, dir, shut);
+  };
   // The plinth down the slope.
   if (biome === 'glacier') {
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(seg([sx * (w / 2 - 0.5), lo - 1, sz * (d / 2 - 0.5)], [sx * (w / 2 - 0.5), F, sz * (d / 2 - 0.5)], 0.22, t.trim, 5));
     parts.push(box(w + 0.2, 0.35, d + 0.2, t.trim, [0, F - 0.15, 0]));
   } else {
-    parts.push(grade(box(w + 1.2, F - lo + 1.5, d + 1.2, stoneC, [0, (F + lo - 1.5) / 2, 0]), lo - 1.5, F, 0.68, 0.95));
-    parts.push(box(w + 1.4, 0.22, d + 1.4, SNOW, [0, F + 0.02, 0]));
+    parts.push(grade(box(w + 0.4, F - lo + 1.5, d + 0.2, stoneC, [0, (F + lo - 1.5) / 2, 0]), lo - 1.5, F, 0.68, 0.95));
+    if (!o.sunk) parts.push(box(w + 1.4, 0.22, d + 1.4, SNOW, [0, F + 0.02, 0]));
   }
   // Storeys.
   for (let k = 0; k < storeys; k++) {
     const y0 = F + k * SH;
     const col = k === 0 ? lower : upper;
-    parts.push(grade(box(w, SH, d, col, [0, y0 + SH / 2, 0]), y0, y0 + SH, 0.86, 1.03));
-    if (biome === 'glacier') for (let x = -w / 2 + 1.2; x < w / 2; x += 1.2) parts.push(box(0.08, SH - 0.2, 0.06, shade(col, 0.82), [x, y0 + SH / 2, zf + 0.02]));
-    if (biome === 'blossom' && k === 0) {
+    const out = k * jet;
+    const zf = d / 2 + out;
+    parts.push(grade(box(w, SH, d + out, col, [0, y0 + SH / 2, out / 2]), y0, y0 + SH, 0.86, 1.03));
+    if (biome === 'glacier' && !plain) for (let x = -w / 2 + 1.2; x < w / 2; x += 2.4) parts.push(pane(x, y0 + SH / 2, zf + 0.02, 0.1, SH - 0.2, shade(col, 0.82), 'z', 1));
+    if (biome === 'blossom' && k === 0 && !plain) {
       // The lattice front: close dark slats.
-      for (let x = -w / 2 + 0.25; x < w / 2; x += 0.42) parts.push(box(0.12, SH - 0.5, 0.1, shade(t.trim, 1.3), [x, y0 + SH / 2, zf + 0.06]));
+      for (let x = -w / 2 + 0.25; x < w / 2; x += 0.42) parts.push(pane(x, y0 + SH / 2, zf + 0.06, 0.14, SH - 0.5, shade(t.trim, 1.3), 'z', 1));
     }
-    // Windows: the front, and the side up the slope.
-    const n = Math.max(2, Math.floor(w / 2.7));
+    // Windows: the front, and the side up the slope. (Low: two bands of glass a storey.)
+    const n = o.low ? 0 : Math.max(2, Math.floor(w / 2.7));
+    if (o.low && !(k === 0 && (o.shop || biome === 'blossom'))) for (const sx of [-1, 1]) parts.push(pane(sx * w * 0.24, y0 + SH * 0.52, zf + 0.04, w * 0.36, 1.2, glass, 'z', 1));
     for (let i = 0; i < n; i++) {
       const x = -w / 2 + ((i + 0.5) * w) / n;
       if (k === 0 && o.shop && Math.abs(x) < w * 0.3) continue;
       if (k === 0 && !o.shop && i === Math.floor(n / 2)) continue;
       if (biome === 'blossom' && k === 0) continue;
-      windowAt(parts, x, y0 + SH * 0.52, zf + 0.04, biome === 'glacier' ? 1.6 : 1.15, biome === 'glacier' ? 0.8 : 1.35, glass, t.trim, 'z', 1, biome === 'alpine' ? shutter : undefined);
+      win(x, y0 + SH * 0.52, zf + 0.04, biome === 'glacier' ? 1.6 : 1.15, biome === 'glacier' ? 0.8 : 1.35, 'z', 1, biome === 'alpine' ? shutter : undefined);
     }
-    const m = Math.max(1, Math.floor(d / 3.2));
-    for (let i = 0; i < m; i++) {
-      const z = -d / 2 + ((i + 0.5) * d) / m;
-      windowAt(parts, s * (w / 2 + 0.04), y0 + SH * 0.52, z, 1.1, 1.3, glass, t.trim, 'x', s, biome === 'alpine' ? shutter : undefined);
+    if (!plain && !o.sunk) {
+      const m = Math.max(1, Math.floor(d / 3.2));
+      for (let i = 0; i < m; i++) {
+        const z = -d / 2 + ((i + 0.5) * d) / m;
+        win(s * (w / 2 + 0.04), y0 + SH * 0.52, z, 1.1, 1.3, 'x', s, biome === 'alpine' ? shutter : undefined);
+      }
     }
     // Storey bands.
-    if (k > 0) parts.push(box(w + 0.15, 0.22, d + 0.15, t.trim, [0, y0, 0]));
-    if (o.balconies && k > 0) balcony(parts, w * 0.86, y0 - 0.05, zf, 1.4, biome === 'blossom' ? t.trim : TIMBER_DARK);
+    if (k > 0) parts.push(box(w + 0.15, 0.22, d + out + 0.15, t.trim, [0, y0, out / 2]));
+    const reach = Math.min(1.4, room - 0.2 - out);
+    if (o.balconies && k > 0 && reach > 0.7 && !o.low) balcony(parts, w * 0.86, y0 - 0.05, zf, reach, biome === 'blossom' ? t.trim : TIMBER_DARK);
   }
   // The door, or a shop's wide window and its awning and sign.
+  const zf = d / 2;
   if (o.shop) {
     const sw = w * 0.56;
     parts.push(box(sw + 0.3, 2.3, 0.14, t.trim, [0, F + 1.45, zf + 0.04]));
     parts.push(box(sw, 2.0, 0.16, night ? lampColor(true, '#FFC27A') : C('#3A3650'), [0, F + 1.45, zf + 0.07]));
     const cols = [C('#3E5A9A'), CREAM, C('#2F6E78'), C('#6A4C86')];
     const ac = cols[Math.floor(rnd() * cols.length)];
-    for (let i = 0; i < 6; i++) parts.push(box(sw / 6 + 0.02, 0.12, 1.5, i % 2 ? CREAM : ac, [-sw / 2 + (i + 0.5) * (sw / 6), F + 2.95, zf + 0.75], [0.35, 0, 0]));
-    parts.push(box(sw + 0.1, 0.14, 1.3, SNOW, [0, F + 3.12, zf + 0.72], [0.35, 0, 0]));
-    // A hanging sign on a bracket at the corner.
-    parts.push(seg([-w / 2 + 0.4, F + 3.6, zf], [-w / 2 + 0.4, F + 3.6, zf + 1.4], 0.05, INK, 4));
-    parts.push(box(0.1, 0.8, 1.0, ac, [-w / 2 + 0.4, F + 3.05, zf + 0.95]));
+    if (!o.low) {
+      const reach = Math.min(1.5, room - 0.2);
+      for (let i = 0; i < 6; i++) parts.push(box(sw / 6 + 0.02, 0.12, reach, i % 2 ? CREAM : ac, [-sw / 2 + (i + 0.5) * (sw / 6), F + 2.95, zf + reach / 2], [0.35, 0, 0]));
+      parts.push(box(sw + 0.1, 0.14, reach - 0.2, SNOW, [0, F + 3.12, zf + reach / 2], [0.35, 0, 0]));
+      // A hanging sign on a bracket at the corner.
+      parts.push(seg([-w / 2 + 0.4, F + 3.6, zf], [-w / 2 + 0.4, F + 3.6, zf + reach - 0.1], 0.05, INK, 4));
+      parts.push(box(0.1, 0.8, reach * 0.66, ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+    }
   } else {
     parts.push(box(1.3, 2.3, 0.16, t.trim, [0, F + 1.15, zf + 0.05]));
-    if (biome === 'blossom') {
+    if (biome === 'blossom' && !plain) {
       // A noren curtain over the door.
       parts.push(box(1.7, 0.9, 0.06, C('#2E3A66'), [0, F + 2.05, zf + 0.16]));
     }
   }
   // The door's lamp or a lantern.
-  if (biome === 'blossom' || biome === 'volcanic') lantern(parts, w / 2 - 0.9, F + 2.4, zf + 0.5, 0.32, night || t.lampAlways, t.lamp);
-  else parts.push(part(new SphereGeometry(0.22, 8, 6), lampColor(night, t.lamp), { pos: [0.95, F + 2.5, zf + 0.25] }));
+  if (!o.back) {
+    if (biome === 'blossom' || biome === 'volcanic') lantern(parts, w / 2 - 0.9, F + 2.4, zf + 0.3, 0.3, night || t.lampAlways, t.lamp);
+    else parts.push(part(new SphereGeometry(0.22, 8, 6), lampColor(night, t.lamp), { pos: [0.95, F + 2.5, zf + 0.25] }));
+  }
   // The roof.
   if (biome === 'alpine') {
-    parts.push(...gable(w, d, top, w * 0.3, 1.3, t.roof, upper));
+    parts.push(...place(gable(w, d + zr, 0, w * 0.3, eave, t.roof, upper), 0, top, zr / 2, 0));
     // Carved gable boards and a chimney.
-    parts.push(box(0.3, 1.8, 0.3, TIMBER_DARK, [0, top + w * 0.3 - 1.1, zf + 1.1]));
+    if (!plain) parts.push(box(0.3, 1.8, 0.3, TIMBER_DARK, [0, top + w * 0.3 - 1.1, zf + zr + Math.min(1.1, eave)]));
     const cx = (rnd() - 0.5) * w * 0.4;
     parts.push(box(1.0, 3.0, 1.0, stoneC, [cx, top + w * 0.2 + 0.8, -d * 0.2]));
     parts.push(box(1.3, 0.4, 1.3, SNOW, [cx, top + w * 0.2 + 2.4, -d * 0.2]));
   } else if (biome === 'glacier') {
-    parts.push(box(w + 0.8, 0.5, d + 0.8, t.roof, [0, top + 0.25, 0]));
-    parts.push(part(BoxGeometry2(w + 1.0, 1.2, d + 1.0), SNOW, { pos: [0, top + 1.0, 0], jitter: 0.12 }));
+    parts.push(box(w + 0.8, 0.5, d + zr + 2 * Math.min(0.4, eave), t.roof, [0, top + 0.25, zr / 2]));
+    parts.push(part(BoxGeometry2(w + 1.0, 1.2, d + zr + 2 * Math.min(0.5, eave)), SNOW, { pos: [0, top + 1.0, zr / 2], jitter: 0.12 }));
     // A stovepipe and an antenna.
     parts.push(seg([w / 3, top + 0.5, -d / 4], [w / 3, top + 3.2, -d / 4], 0.16, INK, 6));
-    parts.push(seg([-w / 3, top + 0.5, 0], [-w / 3, top + 5.5, 0], 0.05, INK, 4));
-    parts.push(seg([-w / 3 - 0.7, top + 4.6, 0], [-w / 3 + 0.7, top + 4.6, 0], 0.04, INK, 4));
+    if (!plain) {
+      parts.push(seg([-w / 3, top + 0.5, 0], [-w / 3, top + 5.5, 0], 0.05, INK, 4));
+      parts.push(seg([-w / 3 - 0.7, top + 4.6, 0], [-w / 3 + 0.7, top + 4.6, 0], 0.04, INK, 4));
+    }
   } else if (biome === 'volcanic') {
-    parts.push(...place(gable(d, w, 0, w * 0.22, 1.2, t.roof, upper), 0, top, 0, Math.PI / 2));
+    parts.push(...place(gable(d + zr, w, 0, w * 0.22, Math.min(1.2, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
     // A stone chimney.
     parts.push(box(1.2, 3.2, 1.2, stoneC, [-w * 0.25, top + 2.4, -d * 0.15]));
   } else {
     // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice.
-    parts.push(...place(gable(d, w, 0, d * 0.24, 1.6, t.roof, upper), 0, top, 0, Math.PI / 2));
-    parts.push(box(w + 0.6, 0.3, 1.6, t.roof, [0, F + SH + 0.15, zf + 0.7], [0.32, 0, 0]));
-    parts.push(box(w + 0.6, 0.22, 1.4, SNOW, [0, F + SH + 0.42, zf + 0.68], [0.32, 0, 0]));
-    for (const sx of [-1, 1]) parts.push(seg([sx * (w / 2 + 0.6), top + 0.3, zf + 1.6], [sx * (w / 2 + 1.4), top + 1.1, zf + 2.0], 0.16, t.trim));
+    parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
+    if (eave > 0.55) {
+      const pent = Math.min(1.6, eave + 0.3);
+      parts.push(box(w + 0.6, 0.3, pent, t.roof, [0, F + SH + 0.15, zf + pent * 0.44], [0.32, 0, 0]));
+      if (!plain) parts.push(box(w + 0.6, 0.22, pent - 0.2, SNOW, [0, F + SH + 0.42, zf + pent * 0.42], [0.32, 0, 0]));
+    }
+    if (!plain && eave >= 1) for (const sx of [-1, 1]) parts.push(seg([sx * (w / 2 + 0.6), top + 0.3, zf + zr + eave * 0.7], [sx * (w / 2 + 1.4), top + 1.1, zf + zr + eave * 0.9], 0.16, t.trim));
   }
   return parts;
 }
@@ -291,7 +347,7 @@ function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o
 /** The village's own landmark in its frame (front +z): Pinecrest's church and steeple, Frostfang's
  *  radome and mast, Ember's bathhouse and its tall stack, Sakura's temple hall. Returns the parts and
  *  the height its top reaches. */
-function landmark(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, p: Palette, s: number): BufferGeometry[] {
+export function landmark(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, p: Palette, s: number): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const stoneC = stone(p, 0.95);
   const glass = windowColor(night);
@@ -373,7 +429,7 @@ function landmark(t: Town, biome: BiomeId, night: boolean, F: number, lo: number
 
 /** A street lamp at (0, gy) in its own frame, the head toward +z: an iron post (Pinecrest, Frostfang),
  *  a stone lantern (Sakura) or a brazier on a column (Ember). */
-function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, stoneC: Color): BufferGeometry[] {
+export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, stoneC: Color): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const lit = lampColor(night || t.lampAlways, t.lamp);
   if (biome === 'blossom') {
@@ -488,16 +544,47 @@ function shanty(gy: number, col: Color): BufferGeometry[] {
   return parts;
 }
 
-// ---------------------------------------------------------------- the village
+// ---------------------------------------------------------------- the street
+
+/** The barrier stands this far past the sim's own limit: a sled turned back there touches it. */
+export const KERB = 0.25;
+
+/** The metres between the barrier and the fronts: 1.75 at a street's limit of 2 m, wider with the limit. */
+function walkAt(limit: number): number {
+  return Math.min(3.4, 1.75 + (limit - 2) * 0.65);
+}
+
+/** Edge excess of the barrier at dz. */
+export function kerbAt(rail: Rail, dz: number): number {
+  return rail.limit(dz) + KERB;
+}
+
+/** Edge excess of the house fronts at dz. */
+export function frontAt(rail: Rail, dz: number): number {
+  const l = rail.limit(dz);
+  return l + KERB + walkAt(l);
+}
 
 interface Lot {
   s: number;
   dz: number;
   w: number;
   d: number;
+  /** Edge excess of its front. */
   e: number;
   kind: 'house' | 'shop' | 'hotel' | 'landmark';
   storeys: number;
+  /** Metres each storey leans out over the one under it. */
+  jet: number;
+  /** The eaves' reach past the top storey's front. */
+  eave: number;
+  /** The free metres in front of its ground floor. */
+  room: number;
+  balconies: boolean;
+  /** The second row, up on the crest behind the street: one step simpler. */
+  back: boolean;
+  /** Its floor is the street's: it stands cut into the bank. */
+  sunk: boolean;
 }
 
 interface Prop {
@@ -507,120 +594,238 @@ interface Prop {
   kind: 'lamp' | 'stall' | 'snowman' | 'sled' | 'wood' | 'tree' | 'pool' | 'shanty' | 'pole';
 }
 
-/** The street's crowd rows (edge excess) along each bank crest. */
-const ROWS = [9.75, 10.95, 12.15];
+/** What a stretch of barriers, crowd and houses holds. */
+export interface StreetSpec {
+  /** The stretches of dz it fills. */
+  runs: ReadonlyArray<readonly [number, number]>;
+  /** Houses, or only the barrier, the crowd and the masts. */
+  houses: boolean;
+  hotel: boolean;
+  mark: boolean;
+  gates: boolean;
+}
 
-/** A ride-through village along the site's rail (see the file's head). */
-export function villagePiece(ctx: SiteCtx): Piece {
+/** The floor of a lot: a street's front row sits at the snow under its front (its back is in the bank);
+ *  anything else stands level on its highest ground. */
+function floorOf(f: Sub, l: Lot, hi: number): number {
+  if (!l.sunk) return hi + 0.4;
+  return Math.max(f.gy(-l.w / 2, l.d / 2), f.gy(0, l.d / 2), f.gy(l.w / 2, l.d / 2)) + 0.2;
+}
+
+/** The race barrier down both sides: posts and alternating boards that face the run, standing where the
+ *  sim turns a sled back. At speed the boards are what says how close the wall is. */
+export function barrier(rail: Rail, a: number, b: number, cols: Color[]): BufferGeometry[] {
+  const parts: BufferGeometry[] = [];
+  const STEP = 3.2;
+  const paint = [cols[0], CREAM, cols[2], CREAM];
+  for (const s of [-1, 1]) {
+    let prev: V3 | null = null;
+    let i = Math.round(rnd() * 8);
+    for (let dz = a; dz <= b; dz += STEP, i++) {
+      const pt = rail.at(dz, s, kerbAt(rail, dz));
+      const here: V3 = [pt.x, pt.y, pt.z];
+      parts.push(box(0.14, 1.32, 0.14, INK, [pt.x, pt.y + 0.55, pt.z]));
+      if (prev) {
+        // Facing the run: wound clockwise from the bank's side.
+        const c = paint[i % paint.length];
+        const y0 = 0.18;
+        const y1 = 1.08;
+        const p0: V3 = [prev[0], prev[1] + y0, prev[2]];
+        const p1: V3 = [here[0], here[1] + y0, here[2]];
+        const q0: V3 = [prev[0], prev[1] + y1, prev[2]];
+        const q1: V3 = [here[0], here[1] + y1, here[2]];
+        parts.push(s > 0 ? quad(p1, p0, q0, q1, c) : quad(p0, p1, q1, q0, c));
+        parts.push(seg([prev[0], prev[1] + 1.2, prev[2]], [here[0], here[1] + 1.2, here[2]], 0.05, INK, 3));
+      }
+      prev = here;
+    }
+  }
+  return parts;
+}
+
+/** A stretch of the run lined with barriers and a crowd, with fronts and a second row of roofs where
+ *  it has houses, masts and strings high across (see the file's head). Everything is measured from the
+ *  section's own limit, so one layout is a street where that is 2 m and a town beside the run where it
+ *  is 10 m. */
+export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
   const rail = ctx.rail;
-  if (!rail) throw new Error('villagePiece: no rail');
+  if (!rail) throw new Error('streetPiece: no rail');
   const { p, biome, night } = ctx;
+  const low = !!ctx.low;
   const t = townStyle(biome, p);
   const stoneC = biome === 'volcanic' ? shade(p.low, 0.55) : stone(p, 0.85);
   const cols = banners(p);
-  const L = rail.len;
   seed(ctx.seed + 201);
-  // Lay the lots out down each bank: houses and shops, a landmark on one side, the hotel across.
   const lots: Lot[] = [];
   const props: Prop[] = [];
   const markSide = ctx.side;
-  const markAt = (rnd() - 0.5) * L * 0.5;
-  const hotelAt = (rnd() - 0.5) * L * 0.6;
-  for (const s of [-1, 1]) {
-    let dz = -L + 4 + rnd() * 5;
-    let k = 0;
-    let markDone = false;
-    let hotelDone = false;
-    while (dz < L - 8) {
-      let kind: Lot['kind'] = rnd() < 0.42 ? 'shop' : 'house';
-      let w = 9 + rnd() * 4.5;
-      let d = 8.5 + rnd() * 2.5;
-      let storeys = biome === 'glacier' ? 1 + (rnd() < 0.5 ? 1 : 0) : 2 + (rnd() < 0.45 ? 1 : 0);
-      let e = 13.6 + rnd() * 1.2;
-      if (s === markSide && !markDone && dz + 10 > markAt) {
-        kind = 'landmark';
-        w = 21;
-        d = 15;
-        e = 14.4;
-        markDone = true;
-      } else if (s !== markSide && !hotelDone && dz + 10 > hotelAt) {
-        kind = 'hotel';
-        w = 19 + rnd() * 3;
-        d = 11;
-        storeys = biome === 'glacier' ? 3 : 4 + (rnd() < 0.5 ? 1 : 0);
-        e = 14;
-        hotelDone = true;
+  for (const [a, b] of spec.runs) {
+    const L = (b - a) / 2;
+    const mid = (a + b) / 2;
+    const narrowAll = rail.limit(mid) < 6;
+    const markAt = mid + (rnd() - 0.5) * L * 0.5;
+    const hotelAt = mid + (rnd() - 0.5) * L * 0.6;
+    for (const s of spec.houses ? [-1, 1] : []) {
+      let dz = a + 1 + rnd() * 4;
+      let k = 0;
+      let markDone = !spec.mark || narrowAll;
+      let hotelDone = !spec.hotel;
+      while (dz < b - 4) {
+        const narrow = rail.limit(dz + 5) < 6;
+        let kind: Lot['kind'] = rnd() < 0.42 ? 'shop' : 'house';
+        let w = narrow ? 7.5 + rnd() * 4 : 9 + rnd() * 4.5;
+        let d = narrow ? 7 + rnd() * 1.5 : 8.5 + rnd() * 2.5;
+        let storeys = biome === 'glacier' ? (narrow ? 2 : 1) + (rnd() < 0.5 ? 1 : 0) : (narrow ? 3 : 2) + (rnd() < 0.42 ? 1 : 0);
+        let e = 0;
+        if (s === markSide && !markDone && dz + 10 > markAt) {
+          kind = 'landmark';
+          w = 21;
+          d = 15;
+          e = 0.8;
+          markDone = true;
+        } else if (s !== markSide && !hotelDone && dz + 10 > hotelAt) {
+          kind = 'hotel';
+          w = 17 + rnd() * 4;
+          d = narrow ? 8.5 : 11;
+          storeys = biome === 'glacier' ? 3 : narrow ? 5 + (rnd() < 0.4 ? 1 : 0) : 4 + (rnd() < 0.5 ? 1 : 0);
+          e = 0.3;
+          hotelDone = true;
+        }
+        if (dz + w > b - 1) break;
+        // A lot is one straight block on an edge that may narrow under it (a section's blend): its front
+        // stands off the edge's nearest point.
+        const hwAt = (q: number) => rail.at(q, 0, 0).hw;
+        const skew = Math.max(Math.abs(hwAt(dz) - hwAt(dz + w / 2)), Math.abs(hwAt(dz + w) - hwAt(dz + w / 2)));
+        const limit = Math.max(rail.limit(dz), rail.limit(dz + w / 2), rail.limit(dz + w)) + skew;
+        const front = Math.max(frontAt(rail, dz), frontAt(rail, dz + w / 2), frontAt(rail, dz + w)) + skew;
+        // Now and then a house stands on the barrier itself: no pavement, no crowd, a wall at the lens.
+        const jut = narrow && kind !== 'hotel' && kind !== 'landmark' && k > 0 && rnd() < 0.24;
+        if (jut) kind = 'house';
+        const fe = jut ? limit + KERB + 0.65 : front + (narrow ? rnd() * 0.3 : e + rnd() * 1.2);
+        const room = fe - limit - KERB - 0.1;
+        const lean = narrow && !jut && kind !== 'hotel' && kind !== 'landmark' && rnd() < 0.55;
+        const eave = jut ? 0.2 : lean ? 0.6 : Math.min(1.3, room - 0.55);
+        const jet = lean ? Math.min(0.5, Math.max(0, room - 0.7 - eave) / Math.max(1, storeys - 1)) : 0;
+        const balconies = kind === 'hotel' || (biome === 'alpine' && !jut && !lean && rnd() < 0.6);
+        lots.push({ s, dz: dz + w / 2, w, d, e: fe, kind, storeys, jet, eave, room, balconies, back: false, sunk: narrow && kind !== 'landmark' });
+        // A lane every few lots: a stall, a tree or a pool in the gap.
+        k++;
+        let gap = narrow ? 0.3 + rnd() * 0.9 : 1.6 + rnd() * 2.2;
+        if (k % 3 === 0 && dz + w + 8 < b - 6 && !low) {
+          gap = narrow ? 4 + rnd() * 2 : 7 + rnd() * 2;
+          const lane = dz + w + gap / 2;
+          const what: Prop['kind'] = biome === 'blossom' ? 'tree' : biome === 'volcanic' ? 'pool' : biome === 'glacier' ? 'shanty' : rnd() < 0.5 ? 'stall' : 'wood';
+          props.push({ s, dz: lane, e: frontAt(rail, lane) + (what === 'shanty' ? 2.8 : 2.2), kind: what });
+        }
+        dz += w + gap;
       }
-      if (dz + w > L - 4) break;
-      lots.push({ s, dz: dz + w / 2, w, d, e, kind, storeys });
-      // A lane every few lots: a stall, a tree or a pool in the gap.
-      k++;
-      let gap = 1.6 + rnd() * 2.2;
-      if (k % 3 === 0 && dz + w + 8 < L - 8) {
-        gap = 7 + rnd() * 2;
-        const lane = dz + w + gap / 2;
-        const what: Prop['kind'] = biome === 'blossom' ? 'tree' : biome === 'volcanic' ? 'pool' : biome === 'glacier' ? 'shanty' : rnd() < 0.5 ? 'stall' : 'wood';
-        props.push({ s, dz: lane, e: what === 'shanty' ? 16 : 15.5, kind: what });
+      // The second row, on the crest behind the fronts: more roofs over them.
+      if (narrowAll && !low) {
+        let dz2 = a + 6 + rnd() * 8;
+        let bk = 0;
+        let mark2 = !spec.mark || s !== markSide;
+        while (dz2 < b - 6) {
+          let w = 9 + rnd() * 4.5;
+          let d = 8 + rnd() * 2.5;
+          let kind: Lot['kind'] = 'house';
+          let eb = 13.2 + rnd() * 1.4;
+          if (!mark2 && dz2 + 10 > markAt) {
+            kind = 'landmark';
+            w = 21;
+            d = 15;
+            eb = 14.4;
+            mark2 = true;
+          }
+          if (dz2 + w > b - 2) break;
+          lots.push({ s, dz: dz2 + w / 2, w, d, e: eb, kind, storeys: biome === 'glacier' ? 1 + (rnd() < 0.6 ? 1 : 0) : 2 + (rnd() < 0.5 ? 1 : 0), jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });
+          bk++;
+          dz2 += w + 2.5 + rnd() * 4 + (bk % 3 === 0 ? 5 : 0);
+        }
+      } else if (narrowAll && s === markSide && spec.mark) {
+        lots.push({ s, dz: markAt, w: 21, d: 15, e: 14.4, kind: 'landmark', storeys: 1, jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });
       }
-      dz += w + gap;
     }
-    // Lamps down the crest, and stalls, snowmen and sleds before the fronts.
-    for (let lz = -L + 8 + (s > 0 ? 7 : 0); lz < L - 6; lz += 15 + rnd() * 4) props.push({ s, dz: lz, e: 10.6, kind: 'lamp' });
-    for (let sz = -L + 14 + rnd() * 10; sz < L - 10; sz += 18 + rnd() * 14) {
-      const r = rnd();
-      props.push({ s, dz: sz, e: 13.0, kind: r < 0.45 ? 'stall' : r < 0.75 ? 'snowman' : 'sled' });
+    for (const s of [-1, 1]) {
+      // Lamps down the barrier, and stalls, snowmen and sleds where there is room before the fronts.
+      if (!spec.houses) continue;
+      for (let lz = a + 6 + (s > 0 ? 7 : 0); lz < b - 4; lz += 15 + rnd() * 4) props.push({ s, dz: lz, e: kerbAt(rail, lz) + 1.15, kind: 'lamp' });
+      if (narrowAll) continue;
+      for (let sz = a + 12 + rnd() * 10; sz < b - 8; sz += 18 + rnd() * 14) {
+        const r = rnd();
+        props.push({ s, dz: sz, e: frontAt(rail, sz) - 0.6, kind: r < 0.45 ? 'stall' : r < 0.75 ? 'snowman' : 'sled' });
+      }
     }
   }
-  // Festival masts in pairs down the crests every 14 to 20 m. Strings hang across the street from their
+  // Festival masts in pairs down the fronts every 14 to 20 m. Strings hang across the street from their
   // tops (bunting, or lanterns in Sakura and Ember) and two banners, each only as high as it must to
   // clear the highest air there (a pop off a bump at full speed flies 20 m: the masts stand tall);
-  // lower strings run along each crest from mast to mast at street height.
-  const strings: Array<{ dz: number; banner: boolean; across: boolean; yA: number; gA: number; gB: number }> = [];
-  for (let sz = -L + 6 + rnd() * 4; sz < L - 4; sz += 14 + rnd() * 6) strings.push({ dz: sz, banner: false, across: false, yA: 0, gA: 0, gB: 0 });
-  if (strings.length > 4) {
-    strings[1].banner = true;
-    strings[strings.length - 2].banner = true;
-  }
-  const POLE_E = 12.9;
+  // lower strings run along each side from mast to mast at street height.
+  const strings: Array<{ dz: number; banner: boolean; across: boolean; yA: number; run: number }> = [];
+  spec.runs.forEach(([a, b], run) => {
+    const first = strings.length;
+    const every = !spec.houses ? 34 : low ? 22 : 14;
+    for (let sz = a + 6 + rnd() * 4; sz < b - 4; sz += every + rnd() * 6) strings.push({ dz: sz, banner: false, across: false, yA: 0, run });
+    if (strings.length - first > 4) {
+      strings[first + 1].banner = true;
+      strings[strings.length - 2].banner = true;
+    }
+  });
+  const poleE = (dz: number) => frontAt(rail, dz) - 0.45;
   for (const st of strings) {
-    const a = rail.at(st.dz, -1, POLE_E);
-    const b = rail.at(st.dz, 1, POLE_E);
-    st.gA = a.y;
-    st.gB = b.y;
+    const a = rail.at(st.dz, -1, poleE(st.dz));
+    const b = rail.at(st.dz, 1, poleE(st.dz));
     const hang = (st.banner ? 2.6 : 1.3) + 1.2;
     const need = rail.air(st.dz - 4, st.dz + 4) + AIR_MARGIN + hang;
     const g = Math.max(a.y, b.y);
-    st.across = need < g + 26;
-    st.yA = st.across ? Math.max(g + 9, need) : g + 9;
-    for (const s of [-1, 1]) props.push({ s, dz: st.dz, e: POLE_E, kind: 'pole' });
+    st.across = need < g + 28;
+    st.yA = st.across ? Math.max(g + 11, need) : g + 11;
+    for (const s of [-1, 1]) props.push({ s, dz: st.dz, e: poleE(st.dz), kind: 'pole' });
   }
   const keepStrings = strings;
-  // The crowd: three dense rows down each crest, gaps where a lamp, a pole or a stall stands.
+  // The crowd behind the barrier, gaps where a lamp, a mast or a house on the barrier stands.
   const spots: Spot[] = [];
-  const blocked = (s: number, dz: number, e: number) => props.some((q) => q.s === s && Math.abs(q.dz - dz) < (q.kind === 'stall' ? 2.4 : 1.1) && Math.abs(q.e - e) < (q.kind === 'stall' ? 1.4 : 0.9));
-  for (const s of [-1, 1]) {
-    for (let r = 0; r < ROWS.length; r++) {
-      for (let dz = -L + 3 + r * 0.6; dz < L - 3; dz += 1.3) {
-        if (rnd() < 0.14 + r * 0.06) continue;
-        const e = ROWS[r] + (rnd() - 0.5) * 0.3;
-        const jz = dz + (rnd() - 0.5) * 0.5;
-        if (blocked(s, jz, e)) continue;
-        const pt = rail.at(jz, s, e);
-        spots.push({ x: pt.x, y: pt.y - 0.03, z: pt.z, yaw: pt.yaw + s * 0.6 + (rnd() - 0.5) * 0.6, flag: rnd() < 0.2 });
+  const front = lots.filter((l) => !l.back);
+  const blocked = (s: number, dz: number, e: number) => props.some((q) => q.s === s && Math.abs(q.dz - dz) < (q.kind === 'stall' ? 2.4 : 0.9) && Math.abs(q.e - e) < (q.kind === 'stall' ? 1.4 : 0.8)) || front.some((l) => l.s === s && Math.abs(l.dz - dz) < l.w / 2 + 0.4 && e > l.e - 0.45);
+  for (const [a, b] of spec.runs) {
+    for (const s of [-1, 1]) {
+      const rows = Math.min(3, Math.floor(walkAt(rail.limit((a + b) / 2)) / 0.58));
+      for (let r = 0; r < rows; r++) {
+        for (let dz = a + 1 + r * 0.6; dz < b - 1; dz += 1.25) {
+          if (rnd() < 0.12 + r * 0.06) continue;
+          const jz = dz + (rnd() - 0.5) * 0.5;
+          const e = kerbAt(rail, jz) + 0.5 + r * 0.6 + (rnd() - 0.5) * 0.14;
+          if (blocked(s, jz, e)) continue;
+          const pt = rail.at(jz, s, e);
+          spots.push({ x: pt.x, y: pt.y - 0.03, z: pt.z, yaw: pt.yaw + s * 0.6 + (rnd() - 0.5) * 0.6, flag: rnd() < 0.2 });
+        }
       }
     }
   }
-  // Light: a pool under every lamp spilling down the bank toward the street, and before lit shops.
+  // Figures on the hotel's balconies, looking down on the run.
+  for (const l of front) {
+    if (l.kind !== 'hotel' || low) continue;
+    const pt = rail.at(l.dz, l.s, l.e + l.d / 2);
+    const f = new Sub(ctx, pt.x, pt.z, pt.yaw);
+    const F = floorOf(f, l, f.range(l.w / 2 + 0.6, l.d / 2 + 0.6)[1]);
+    for (let k = 1; k < l.storeys; k++) {
+      for (let u = -l.w * 0.38; u < l.w * 0.4; u += 1.7 + rnd() * 1.2) {
+        if (rnd() < 0.3) continue;
+        const sp = f.spot(u, F + k * STOREY + 0.2, l.d / 2 + 0.7, (rnd() - 0.5) * 0.7);
+        spots.push({ ...sp, flag: rnd() < 0.3 });
+      }
+    }
+  }
+  // Light: a pool under every lamp spilling down the bank and over the run's edge, and before lit shops.
   const glows: Glow[] = [];
   for (const q of props) {
     if (q.kind !== 'lamp') continue;
-    const pt = rail.at(q.dz, q.s, 7.9);
+    const pt = rail.at(q.dz, q.s, q.e - 2.2);
     glows.push({ x: pt.x, z: pt.z, r: 3.9 });
   }
   for (const l of lots) {
-    if (l.kind !== 'shop' && l.kind !== 'hotel') continue;
-    const pt = rail.at(l.dz, l.s, l.e - 1.6);
-    glows.push({ x: pt.x, z: pt.z, r: 2.6 });
+    if (l.back || (l.kind !== 'shop' && l.kind !== 'hotel')) continue;
+    const pt = rail.at(l.dz, l.s, l.e - 1.8);
+    glows.push({ x: pt.x, z: pt.z, r: 2.8 });
   }
   // Steam off the hot springs and the bathhouse's stack (Ember).
   const steam: V3[] = [];
@@ -642,78 +847,88 @@ export function villagePiece(ctx: SiteCtx): Piece {
     }
   }
   const steps: Array<() => BufferGeometry[]> = [];
-  // The lots, one to a step (a hotel or the landmark is a few ms on its own).
-  for (let i = 0; i < lots.length; i++) {
+  // The lots, a couple to a step (a hotel or the landmark is a few ms on its own).
+  const LOTS = low ? 4 : 2;
+  for (let i = 0; i < lots.length; i += LOTS) {
     steps.push(() => {
       seed(ctx.seed + 211 + i);
       const parts: BufferGeometry[] = [];
-      for (const l of lots.slice(i, i + 1)) {
+      for (const l of lots.slice(i, i + LOTS)) {
         const pt = rail.at(l.dz, l.s, l.e + l.d / 2);
         const f = new Sub(ctx, pt.x, pt.z, pt.yaw);
         const [lo, hi] = f.range(l.w / 2 + 0.6, l.d / 2 + 0.6);
-        const F = hi + 0.4;
+        const F = floorOf(f, l, hi);
         if (l.kind === 'landmark') parts.push(...f.out(landmark(t, biome, night, F, lo, p, l.s)));
         else {
-          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.kind === 'hotel' || (biome === 'alpine' && rnd() < 0.5), s: l.s }, stoneC)));
+          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.balconies, s: l.s, jet: l.jet, eave: l.eave, room: l.room, back: l.back, low, sunk: l.sunk }, stoneC)));
           // A parked sled or a woodpile against some fronts.
-          if (rnd() < 0.35) parts.push(...f.out(place(rnd() < 0.5 ? parkedSled(F, cols[Math.floor(rnd() * cols.length)]) : woodpile(F), (rnd() - 0.5) * l.w * 0.7, 0, l.d / 2 + 0.3, 0)));
+          if (!low && !l.back && l.room > 1 && rnd() < 0.3) parts.push(...f.out(place(rnd() < 0.5 ? parkedSled(F, cols[Math.floor(rnd() * cols.length)]) : woodpile(F), (rnd() - 0.5) * l.w * 0.7, 0, l.d / 2 + 0.3, 0)));
         }
       }
       return parts;
     });
   }
+  // The barriers.
+  spec.runs.forEach(([a, b], r) => {
+    steps.push(() => {
+      seed(ctx.seed + 261 + r);
+      return barrier(rail, a, b, cols);
+    });
+  });
   // The props and the masts, ten to a step.
-  for (let j = 0; j < props.length; j += 10) steps.push(() => {
-    seed(ctx.seed + 271 + j);
-    const parts: BufferGeometry[] = [];
-    for (const q of props.slice(j, j + 10)) {
-      const pt = rail.at(q.dz, q.s, q.e);
-      const f = new Sub(ctx, pt.x, pt.z, pt.yaw);
-      const gy = f.gy(0, 0);
-      switch (q.kind) {
-        case 'lamp':
-          parts.push(...f.out(streetLamp(t, biome, night, gy, stoneC)));
-          break;
-        case 'stall':
-          parts.push(...f.out(stall(t, night, gy, cols)));
-          break;
-        case 'snowman':
-          parts.push(...f.out(snowman(gy, cols[Math.floor(rnd() * cols.length)])));
-          break;
-        case 'sled':
-          parts.push(...f.out(parkedSled(gy, cols[Math.floor(rnd() * cols.length)])));
-          break;
-        case 'wood':
-          parts.push(...f.out(woodpile(gy)));
-          break;
-        case 'tree':
-          parts.push(...f.out(blossomTree(gy)));
-          break;
-        case 'shanty':
-          parts.push(...f.out(shanty(gy, t.lower[Math.floor(rnd() * t.lower.length)])));
-          break;
-        case 'pool':
-          parts.push(...f.out(springPool(gy, p)));
-          break;
-        case 'pole': {
-          // A festival mast: banded in the mood's colours, a gilt finial and a long pennant streaming.
-          const st = keepStrings.find((x) => x.dz === q.dz);
-          const top = st ? st.yA + 0.6 : gy + 9;
-          const mast = biome === 'blossom' ? C('#93405A') : TIMBER_DARK;
-          parts.push(grade(seg([pt.x, gy - 0.5, pt.z], [pt.x, top, pt.z], 0.17, mast, 6), gy, top, 0.8, 1.05));
-          for (let y = gy + 3, k = 0; y < top - 1; y += 2.4, k++) parts.push(part(new CylinderGeometry(0.2, 0.2, 0.7, 6), k % 2 ? CREAM : cols[0], { pos: [pt.x, y, pt.z] }));
-          parts.push(heap([pt.x, gy, pt.z], [0.55, 0.25, 0.55]));
-          parts.push(part(new SphereGeometry(0.28, 6, 5), C('#C9A867'), { pos: [pt.x, top + 0.2, pt.z] }));
-          const pen = new ConeGeometry(0.5, 3.2, 3);
-          pen.rotateZ(-q.s * Math.PI / 2);
-          pen.scale(1, 1, 0.12);
-          parts.push(part(pen, cols[(Math.round(q.dz) & 1) * 2], { pos: [pt.x + q.s * 1.6, top - 0.6, pt.z] }));
-          break;
+  for (let j = 0; j < props.length; j += 10) {
+    steps.push(() => {
+      seed(ctx.seed + 271 + j);
+      const parts: BufferGeometry[] = [];
+      for (const q of props.slice(j, j + 10)) {
+        const pt = rail.at(q.dz, q.s, q.e);
+        const f = new Sub(ctx, pt.x, pt.z, pt.yaw);
+        const gy = f.gy(0, 0);
+        switch (q.kind) {
+          case 'lamp':
+            parts.push(...f.out(streetLamp(t, biome, night, gy, stoneC)));
+            break;
+          case 'stall':
+            parts.push(...f.out(stall(t, night, gy, cols)));
+            break;
+          case 'snowman':
+            parts.push(...f.out(snowman(gy, cols[Math.floor(rnd() * cols.length)])));
+            break;
+          case 'sled':
+            parts.push(...f.out(parkedSled(gy, cols[Math.floor(rnd() * cols.length)])));
+            break;
+          case 'wood':
+            parts.push(...f.out(woodpile(gy)));
+            break;
+          case 'tree':
+            parts.push(...f.out(blossomTree(gy)));
+            break;
+          case 'shanty':
+            parts.push(...f.out(shanty(gy, t.lower[Math.floor(rnd() * t.lower.length)])));
+            break;
+          case 'pool':
+            parts.push(...f.out(springPool(gy, p)));
+            break;
+          case 'pole': {
+            // A festival mast: banded in the mood's colours, a gilt finial and a long pennant streaming.
+            const st = keepStrings.find((x) => x.dz === q.dz);
+            const top = st ? st.yA + 0.6 : gy + 9;
+            const mast = biome === 'blossom' ? C('#93405A') : TIMBER_DARK;
+            parts.push(grade(seg([pt.x, gy - 0.5, pt.z], [pt.x, top, pt.z], 0.17, mast, 6), gy, top, 0.8, 1.05));
+            for (let y = gy + 3, k = 0; y < top - 1 && !low; y += 3.2, k++) parts.push(part(new CylinderGeometry(0.2, 0.2, 0.7, 4, 1, true), k % 2 ? CREAM : cols[0], { pos: [pt.x, y, pt.z] }));
+            parts.push(heap([pt.x, gy, pt.z], [0.45, 0.2, 0.45]));
+            parts.push(part(new SphereGeometry(0.28, 4, 3), C('#C9A867'), { pos: [pt.x, top + 0.2, pt.z] }));
+            const pen = new ConeGeometry(0.5, 3.2, 3);
+            pen.rotateZ((q.s * Math.PI) / 2);
+            pen.scale(1, 1, 0.12);
+            parts.push(part(pen, cols[(Math.round(q.dz) & 1) * 2], { pos: [pt.x + q.s * 1.6, top - 0.6, pt.z] }));
+            break;
+          }
         }
       }
-    }
-    return parts;
-  });
+      return parts;
+    });
+  }
   // The strings and banners overhead.
   steps.push(() => {
     seed(ctx.seed + 281);
@@ -721,8 +936,8 @@ export function villagePiece(ctx: SiteCtx): Piece {
     const lanterns = biome === 'blossom' || biome === 'volcanic';
     for (const st of keepStrings) {
       if (!st.across) continue;
-      const a = rail.at(st.dz, -1, POLE_E);
-      const b = rail.at(st.dz, 1, POLE_E);
+      const a = rail.at(st.dz, -1, poleE(st.dz));
+      const b = rail.at(st.dz, 1, poleE(st.dz));
       const A: V3 = [a.x, st.yA, a.z];
       const B: V3 = [b.x, st.yA, b.z];
       if (st.banner) {
@@ -745,75 +960,88 @@ export function villagePiece(ctx: SiteCtx): Piece {
       } else if (lanterns) parts.push(...lanternString(A, B, 1.0, night || t.lampAlways, t.lamp));
       else parts.push(...bunting(A, B, 1.0, cols, 0.95));
     }
-    // Bunting down each crest from mast to mast at street height, along the street.
-    for (const s of [-1, 1]) {
-      for (let i = 0; i + 1 < keepStrings.length; i++) {
-        const a = rail.at(keepStrings[i].dz, s, POLE_E);
-        const b = rail.at(keepStrings[i + 1].dz, s, POLE_E);
-        const ya = a.y + 6.2;
-        const yb = b.y + 6.2;
-        if (lanterns) parts.push(...lanternString([a.x, ya, a.z], [b.x, yb, b.z], 1.4, night || t.lampAlways, t.lamp));
-        else parts.push(...bunting([a.x, ya, a.z], [b.x, yb, b.z], 1.6, cols, 0.8));
+    // Strings down each side from mast to mast at street height, along the fronts.
+    if (!low && spec.houses) {
+      for (const s of [-1, 1]) {
+        for (let i = (s + 1) / 2; i + 1 < keepStrings.length; i += 2) {
+          if (keepStrings[i].run !== keepStrings[i + 1].run) continue;
+          const a = rail.at(keepStrings[i].dz, s, poleE(keepStrings[i].dz));
+          const b = rail.at(keepStrings[i + 1].dz, s, poleE(keepStrings[i + 1].dz));
+          const ya = a.y + 6.6;
+          const yb = b.y + 6.6;
+          if (lanterns) parts.push(...lanternString([a.x, ya, a.z], [b.x, yb, b.z], 1.2, night || t.lampAlways, t.lamp));
+          else parts.push(...bunting([a.x, ya, a.z], [b.x, yb, b.z], 1.4, cols, 0.8));
+        }
       }
     }
     return parts;
   });
-  // The entry gates at each end: two posts at the crest, a name board high across.
-  for (const end of [-1, 1]) {
-    steps.push(() => {
-      seed(ctx.seed + 291 + end);
-      const dz = end * (L - 2);
-      const need = rail.air(dz - 5, dz + 5) + AIR_MARGIN;
-      const c = rail.at(dz, 0, 0);
-      const f = new Sub(ctx, c.x, c.z, c.yaw);
-      const X = c.hw + KEEP + 1.2;
-      const gL = f.gy(-X, 0);
-      const gR = f.gy(X, 0);
-      const H = Math.max(need, Math.max(gL, gR) + 7, rail.floor(dz) + 16);
-      if (H - Math.max(gL, gR) > 26) return [];
-      const parts: BufferGeometry[] = [];
-      const blossom = biome === 'blossom';
-      const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : TIMBER;
-      for (const sx of [-1, 1]) {
-        const g = sx < 0 ? gL : gR;
-        if (blossom) parts.push(grade(part(new CylinderGeometry(0.75, 0.9, H + 3 - g + 1.5, 10), post, { pos: [sx * X, (H + 3 + g - 1.5) / 2, 0] }), g, H + 3, 0.75, 1.05));
-        else parts.push(grade(box(1.2, H + 3 - g + 1.5, 1.2, post, [sx * X, (H + 3 + g - 1.5) / 2, 0]), g, H + 3, 0.75, 1.05));
-        parts.push(heap([sx * (X + 0.3), g, 0], [0.9, 0.4, 0.9]));
-        lantern(parts, sx * X, H - 2.0, 1.0, 0.5, night || t.lampAlways, t.lamp);
-      }
-      const W = 2 * X + 3;
-      if (blossom) {
-        // A torii: the nuki, and the kasagi curving up toward its ends.
-        parts.push(box(W - 1, 1.0, 0.8, post, [0, H + 0.5, 0]));
-        const n = 10;
-        for (let i = 0; i < n; i++) {
-          const x0 = -W / 2 - 1 + ((W + 2) * i) / n;
-          const x1 = -W / 2 - 1 + ((W + 2) * (i + 1)) / n;
-          const lift = (x: number) => 1.4 * Math.pow(Math.abs(x) / (W / 2 + 1), 2.6);
-          parts.push(seg([x0, H + 3.2 + lift(x0), 0], [x1, H + 3.2 + lift(x1), 0], 0.7, C('#24202E'), 4));
-          parts.push(seg([x0, H + 3.85 + lift(x0), 0], [x1, H + 3.85 + lift(x1), 0], 0.35, SNOW, 4));
+  // The entry gates at each end: two posts past the barrier, a name board high across.
+  if (spec.gates) {
+    const [a0, b0] = [spec.runs[0][0], spec.runs[spec.runs.length - 1][1]];
+    for (const end of [-1, 1]) {
+      steps.push(() => {
+        seed(ctx.seed + 291 + end);
+        const dz = end < 0 ? a0 + 2 : b0 - 2;
+        const need = rail.air(dz - 5, dz + 5) + AIR_MARGIN;
+        const c = rail.at(dz, 0, 0);
+        const f = new Sub(ctx, c.x, c.z, c.yaw);
+        const X = c.hw + kerbAt(rail, dz) + 1.4;
+        const gL = f.gy(-X, 0);
+        const gR = f.gy(X, 0);
+        const H = Math.max(need, Math.max(gL, gR) + 7, rail.floor(dz) + 16);
+        if (H - Math.max(gL, gR) > 26) return [];
+        const parts: BufferGeometry[] = [];
+        const blossom = biome === 'blossom';
+        const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : TIMBER;
+        for (const sx of [-1, 1]) {
+          const g = sx < 0 ? gL : gR;
+          if (blossom) parts.push(grade(part(new CylinderGeometry(0.75, 0.9, H + 3 - g + 1.5, 10), post, { pos: [sx * X, (H + 3 + g - 1.5) / 2, 0] }), g, H + 3, 0.75, 1.05));
+          else parts.push(grade(box(1.2, H + 3 - g + 1.5, 1.2, post, [sx * X, (H + 3 + g - 1.5) / 2, 0]), g, H + 3, 0.75, 1.05));
+          parts.push(heap([sx * (X + 0.3), g, 0], [0.9, 0.4, 0.9]));
+          lantern(parts, sx * X, H - 2.0, 1.0, 0.5, night || t.lampAlways, t.lamp);
         }
-        parts.push(box(2.2, 2.0, 0.3, C('#24202E'), [0, H + 2.0, 0.3]));
-        parts.push(box(1.7, 1.5, 0.32, C('#C9A867'), [0, H + 2.0, 0.32]));
-      } else {
-        parts.push(grade(box(W, 0.8, 0.9, post, [0, H + 0.4, 0]), H, H + 0.8, 0.85, 1.05));
-        parts.push(box(W, 0.6, 0.9, post, [0, H + 3.1, 0]));
-        parts.push(box(W + 0.3, 0.35, 1.1, SNOW, [0, H + 3.55, 0]));
-        // The name board: cream with two of the mood's stripes and a badge with a peak.
-        const bw = Math.min(W * 0.45, 13);
-        parts.push(box(bw, 2.0, 0.25, CREAM, [0, H + 1.75, 0.5]));
-        parts.push(box(bw, 0.32, 0.27, cols[0], [0, H + 2.45, 0.52]));
-        parts.push(box(bw, 0.32, 0.27, cols[2], [0, H + 1.05, 0.52]));
-        const disc = new CylinderGeometry(0.75, 0.75, 0.2, 14);
-        disc.rotateX(Math.PI / 2);
-        parts.push(part(disc, INK, { pos: [0, H + 1.75, 0.64] }));
-        parts.push(part(new ConeGeometry(0.5, 0.65, 3).scale(1, 1, 0.1), CREAM, { pos: [0, H + 1.8, 0.75] }));
-        parts.push(...bunting([-X, H + 3.0, 0.5], [X, H + 3.0, 0.5], 0.4, cols, 0.7));
-      }
-      return f.out(parts);
-    });
+        const W = 2 * X + 3;
+        if (blossom) {
+          // A torii: the nuki, and the kasagi curving up toward its ends.
+          parts.push(box(W - 1, 1.0, 0.8, post, [0, H + 0.5, 0]));
+          const n = 10;
+          for (let i = 0; i < n; i++) {
+            const x0 = -W / 2 - 1 + ((W + 2) * i) / n;
+            const x1 = -W / 2 - 1 + ((W + 2) * (i + 1)) / n;
+            const lift = (x: number) => 1.4 * Math.pow(Math.abs(x) / (W / 2 + 1), 2.6);
+            parts.push(seg([x0, H + 3.2 + lift(x0), 0], [x1, H + 3.2 + lift(x1), 0], 0.7, C('#24202E'), 4));
+            parts.push(seg([x0, H + 3.85 + lift(x0), 0], [x1, H + 3.85 + lift(x1), 0], 0.35, SNOW, 4));
+          }
+          parts.push(box(2.2, 2.0, 0.3, C('#24202E'), [0, H + 2.0, 0.3]));
+          parts.push(box(1.7, 1.5, 0.32, C('#C9A867'), [0, H + 2.0, 0.32]));
+        } else {
+          parts.push(grade(box(W, 0.8, 0.9, post, [0, H + 0.4, 0]), H, H + 0.8, 0.85, 1.05));
+          parts.push(box(W, 0.6, 0.9, post, [0, H + 3.1, 0]));
+          parts.push(box(W + 0.3, 0.35, 1.1, SNOW, [0, H + 3.55, 0]));
+          // The name board: cream with two of the mood's stripes and a badge with a peak.
+          const bw = Math.min(W * 0.45, 13);
+          parts.push(box(bw, 2.0, 0.25, CREAM, [0, H + 1.75, 0.5]));
+          parts.push(box(bw, 0.32, 0.27, cols[0], [0, H + 2.45, 0.52]));
+          parts.push(box(bw, 0.32, 0.27, cols[2], [0, H + 1.05, 0.52]));
+          const disc = new CylinderGeometry(0.75, 0.75, 0.2, 14);
+          disc.rotateX(Math.PI / 2);
+          parts.push(part(disc, INK, { pos: [0, H + 1.75, 0.64] }));
+          parts.push(part(new ConeGeometry(0.5, 0.65, 3).scale(1, 1, 0.1), CREAM, { pos: [0, H + 1.8, 0.75] }));
+          parts.push(...bunting([-X, H + 3.0, 0.5], [X, H + 3.0, 0.5], 0.4, cols, 0.7));
+        }
+        return f.out(parts);
+      });
+    }
   }
   return { steps, spots, ice: false, glows, steam };
+}
+
+/** A ride-through town along the site's rail (see the file's head). */
+export function villagePiece(ctx: SiteCtx): Piece {
+  const rail = ctx.rail;
+  if (!rail) throw new Error('villagePiece: no rail');
+  return streetPiece(ctx, { runs: [[-rail.len, rail.len]], houses: true, hotel: true, mark: true, gates: true });
 }
 
 // ---------------------------------------------------------------- enclosed runs
@@ -823,7 +1051,7 @@ export function villagePiece(ctx: SiteCtx): Piece {
 interface Bay {
   f: Sub;
   dz: number;
-  /** Half the span to the inner face of anything standing: corridor half-width, drift and KEEP. */
+  /** Half the span to the inner face of anything standing: corridor half-width, drift and the limit. */
   X: number;
   R: number;
   pitch: number;
@@ -841,14 +1069,25 @@ function bays(ctx: SiteCtx, rail: Rail, B: number, from = -rail.len, to = rail.l
     const sy = Math.sin(c.yaw);
     let drift = 0;
     let hw = c.hw;
+    let keep = rail.limit(dz);
     for (const o of [-step / 2 - 0.5, step / 2 + 0.5]) {
       const q = rail.at(dz + o, 0, 0);
       drift = Math.max(drift, Math.abs((q.x - c.x) * cy - (q.z - c.z) * sy));
       hw = Math.max(hw, q.hw);
+      keep = Math.max(keep, rail.limit(dz + o));
     }
-    const R = rail.floor(dz) + ctx.clear;
+    // The roof clears the air over its bay, or stands as low as a roof may.
+    const R = ctx.clear > 0 ? Math.max(rail.floor(dz) + ctx.clear, rail.air(dz - step - 4, dz + step + 4) + AIR_MARGIN + 0.7) : rail.floor(dz) + OPEN_WALL;
     const up = (rail.floor(dz - step / 2) - rail.floor(dz + step / 2)) / step;
-    out.push({ f: new Sub(ctx, c.x, c.z, c.yaw), dz, X: hw + drift + KEEP, R, pitch: -Math.atan(up), hw });
+    out.push({ f: new Sub(ctx, c.x, c.z, c.yaw), dz, X: hw + drift + keep + 0.45, R, pitch: -Math.atan(up), hw });
+  }
+  // Over its floor the roof comes down by at most ROOF_STEP a bay, so it steps and never jumps.
+  for (let pass = 0; pass < 2; pass++) {
+    const list = pass ? out.slice().reverse() : out;
+    for (let i = 1; i < list.length; i++) {
+      const prev = list[i - 1].R - rail.floor(list[i - 1].dz);
+      list[i].R = Math.max(list[i].R, rail.floor(list[i].dz) + prev - ROOF_STEP);
+    }
   }
   return out;
 }
@@ -887,6 +1126,7 @@ export function galleryPiece(ctx: SiteCtx): Piece {
   const cols = banners(p);
   const steps: Array<() => BufferGeometry[]> = [];
   const P = 0.6;
+  const lid = ctx.clear > 0;
   for (let i0 = 0; i0 < list.length; i0 += 4) {
     steps.push(() => {
       seed(ctx.seed + 301 + i0);
@@ -897,14 +1137,17 @@ export function galleryPiece(ctx: SiteCtx): Piece {
         const W = b.X * 2 + 2 * P + 3.4;
         const xc = os * 0.8;
         const roof: BufferGeometry[] = [];
-        roof.push(grade(box(W, 0.9, timber ? 0.6 : 0.85, bodyD, [xc, 0.45, 0]), 0, 0.9, 0.8, 1.0));
-        roof.push(box(W, timber ? 0.45 : 0.7, B + 0.06, body, [xc, 0.9 + (timber ? 0.22 : 0.35), 0]));
-        if (timber) for (let k = -2; k <= 2; k++) roof.push(box(W, 0.12, 0.25, bodyD, [xc, 1.42, k * 1.2]));
-        roof.push(part(BoxGeometry2(W + 0.6, 1.3, B + 0.2), SNOW, { pos: [xc - os * 0.3, 2.1, 0], jitter: 0.16 }));
-        // A cornice of snow curling over the open edge.
-        roof.push(softPart(new CylinderGeometry(0.8, 0.8, B + 0.1, 8), SNOW, { pos: [xc + os * (W / 2 + 0.1), 1.8, 0], rot: [Math.PI / 2, 0, 0], scale: [1.2, 1, 0.9] }));
-        // Light bars: two lamps on each beam's up-slope face.
-        for (const lx of [-0.42, 0.42]) roof.push(box(2.2, 0.28, 0.12, lamp, [lx * b.hw, 0.5, (timber ? 0.3 : 0.425) + 0.05]));
+        if (!lid) roof.push(box(1.1, 0.7, B + 0.06, bodyD, [xo, 0.5, 0]), box(1.1, 0.7, B + 0.06, bodyD, [xw, 0.5, 0]));
+        else roof.push(grade(box(W, 0.9, timber ? 0.6 : 0.85, bodyD, [xc, 0.45, 0]), 0, 0.9, 0.8, 1.0));
+        if (lid) {
+          roof.push(box(W, timber ? 0.45 : 0.7, B + 0.06, body, [xc, 0.9 + (timber ? 0.22 : 0.35), 0]));
+          if (timber) for (let k = -2; k <= 2; k++) roof.push(box(W, 0.12, 0.25, bodyD, [xc, 1.42, k * 1.2]));
+          roof.push(part(BoxGeometry2(W + 0.6, 1.3, B + 0.2), SNOW, { pos: [xc - os * 0.3, 2.1, 0], jitter: 0.16 }));
+          // A cornice of snow curling over the open edge.
+          roof.push(softPart(new CylinderGeometry(0.8, 0.8, B + 0.1, 8), SNOW, { pos: [xc + os * (W / 2 + 0.1), 1.8, 0], rot: [Math.PI / 2, 0, 0], scale: [1.2, 1, 0.9] }));
+          // Light bars: two lamps on each beam's up-slope face.
+          for (const lx of [-0.42, 0.42]) roof.push(box(2.2, 0.28, 0.12, lamp, [lx * b.hw, 0.5, (timber ? 0.3 : 0.425) + 0.05]));
+        }
         parts.push(...b.f.out(pitched(b, roof)));
         // The open side's pillar, from the bank to the beam.
         const yTop = b.R + 0.9;
@@ -936,14 +1179,16 @@ export function galleryPiece(ctx: SiteCtx): Piece {
       const zf = face * (B / 2 + 0.5);
       const W = b.X * 2 + 2 * P + 4.2;
       const parts: BufferGeometry[] = [];
-      const head: BufferGeometry[] = [];
-      head.push(grade(box(W, 3.6, 1.2, body, [os * 0.8, 1.8, zf]), 0, 3.6, 0.8, 1.02));
-      // Warning chevrons in cream and ink along the lintel's face.
-      const n = Math.round(W / 1.6);
-      for (let k = 0; k < n; k++) head.push(box(0.8, 0.9, 0.08, k % 2 ? INK : CREAM, [os * 0.8 - W / 2 + (k + 0.5) * (W / n), 0.85, zf + face * 0.62], [0, 0, 0.5]));
-      head.push(box(W * 0.3, 1.2, 0.1, cols[0], [os * 0.8, 2.5, zf + face * 0.62]));
-      head.push(part(BoxGeometry2(W + 0.5, 1.6, 2.4), SNOW, { pos: [os * 0.8, 4.1, zf], jitter: 0.2 }));
-      parts.push(...b.f.out(pitched(b, head)));
+      if (lid) {
+        const head: BufferGeometry[] = [];
+        head.push(grade(box(W, 3.6, 1.2, body, [os * 0.8, 1.8, zf]), 0, 3.6, 0.8, 1.02));
+        // Warning chevrons in cream and ink along the lintel's face.
+        const n = Math.round(W / 1.6);
+        for (let k = 0; k < n; k++) head.push(box(0.8, 0.9, 0.08, k % 2 ? INK : CREAM, [os * 0.8 - W / 2 + (k + 0.5) * (W / n), 0.85, zf + face * 0.62], [0, 0, 0.5]));
+        head.push(box(W * 0.3, 1.2, 0.1, cols[0], [os * 0.8, 2.5, zf + face * 0.62]));
+        head.push(part(BoxGeometry2(W + 0.5, 1.6, 2.4), SNOW, { pos: [os * 0.8, 4.1, zf], jitter: 0.2 }));
+        parts.push(...b.f.out(pitched(b, head)));
+      }
       // Wing walls down into each bank, and a lamp on each.
       for (const sx of [-1, 1]) {
         const x = sx * (b.X + 1.1);
@@ -963,27 +1208,56 @@ function rock(col: Color, pos: V3, scale: V3, jitter = 0.28): BufferGeometry {
   return part(new IcosahedronGeometry(1, 0), col, { pos, scale, jitter });
 }
 
-/** The vault of a rock or ice tunnel, bay by bay: wall masses standing on each bank past the keep
- *  line, roof masses over the run whose lowest facet stays above the clearance, and the snow on top.
- *  `hole` leaves a gap in the open side's wall every few bays for a shaft of light. */
-function vault(b: Bay, cols: Color[], os: number, hole: boolean, parts: BufferGeometry[]): void {
-  const roof: BufferGeometry[] = [];
+/** The vault of a rock or ice tunnel, bay by bay: wall masses standing on each bank past the limit, roof
+ *  masses over the run whose lowest facet stays above the clearance, and the snow on top. Masses of
+ *  very different sizes: rows of even ones read as a honeycomb. `hole` leaves a gap in the open side's
+ *  wall every few bays for a shaft of light. */
+function vault(b: Bay, cols: Color[], os: number, hole: boolean, lid: boolean, parts: BufferGeometry[]): void {
   const X = b.X;
-  // Roof masses across the span.
-  const n = Math.ceil((2 * X + 6) / 4.2);
-  for (let k = 0; k < n; k++) {
-    const x = -X - 3 + ((k + 0.5) * (2 * X + 6)) / n;
-    const sy = 1.5 + rnd() * 0.8;
-    roof.push(rock(cols[k % cols.length], [x, sy * 1.3 + 0.12, (rnd() - 0.5) * 1.2], [2.6 + rnd() * 0.6, sy, 3.6 + rnd() * 0.6]));
+  if (lid) {
+    const roof: BufferGeometry[] = [];
+    // Roof masses across the span.
+    for (let x = -X - 3; x < X + 3; ) {
+      const w = 2.2 + rnd() * 3.4;
+      const sy = 1.2 + rnd() * 1.5;
+      roof.push(rock(cols[Math.floor(rnd() * cols.length)], [x + w * 0.7, sy * 1.3 + 0.12, (rnd() - 0.5) * 1.4], [w, sy, 3 + rnd() * 1.6], 0.34));
+      x += w * 1.3;
+    }
+    roof.push(drift([0, 5, 0], [X + 4, 1.1, 3.4]));
+    parts.push(...b.f.out(pitched(b, roof)));
   }
-  roof.push(drift([0, 4.6, 0], [X + 4, 1.1, 3.4]));
-  parts.push(...b.f.out(pitched(b, roof)));
   // The walls: masses stacked from each bank up to the roof.
   for (const sx of [-1, 1]) {
     if (hole && sx === os) continue;
-    const xw = sx * (X + 2.45);
-    const g = b.f.gy(xw, 0);
-    for (let y = g - 1; y < b.R + 1.5; y += 2.8) parts.push(...b.f.out([rock(cols[(Math.round(y) + 7) % cols.length], [xw + sx * rnd() * 0.6, y + 1.2, (rnd() - 0.5) * 1.5], [1.85, 1.9, 3.4], 0.24)]));
+    for (let y = b.f.gy(sx * (X + 2.4), 0) - 1; y < b.R + 1.5; ) {
+      const r = 1.5 + rnd() * 1.5;
+      const xw = sx * (X + 0.2 + r * 1.26);
+      parts.push(...b.f.out([rock(cols[Math.floor(rnd() * cols.length)], [xw, y + r * 0.7, (rnd() - 0.5) * 1.6], [r, r * (0.8 + rnd() * 0.5), 3 + rnd() * 1.2], 0.24)]));
+      y += r * 1.5;
+    }
+  }
+}
+
+/** The mountain a tunnel's mouth goes into: great masses over the vault and down both flanks, so from
+ *  outside it is a hole in a rock and not the end of a pipe. */
+function mouth(b: Bay, cols: Color[], parts: BufferGeometry[]): void {
+  const X = b.X;
+  const over: BufferGeometry[] = [];
+  for (let x = -X - 8; x < X + 8; ) {
+    const w = 5 + rnd() * 4;
+    over.push(rock(cols[Math.floor(rnd() * cols.length)], [x + w / 2, 6.6 + rnd() * 2, (rnd() - 0.5) * 3], [w, 5 + rnd() * 3, 6], 0.3));
+    x += w * 1.25;
+  }
+  over.push(drift([0, 13, 0], [X + 9, 2, 6]));
+  parts.push(...b.f.out(pitched(b, over)));
+  for (const sx of [-1, 1]) {
+    const x = sx * (X + 6.2);
+    const g = b.f.gy(x, 0);
+    for (let y = g; y < b.R + 3; ) {
+      const r = 3.6 + rnd() * 2;
+      parts.push(...b.f.out([rock(cols[Math.floor(rnd() * cols.length)], [x + sx * (r - 3.4), y + r * 0.6, (rnd() - 0.5) * 2], [r, r, 5.4], 0.28)]));
+      y += r * 1.4;
+    }
   }
 }
 
@@ -1001,10 +1275,10 @@ export function iceTunnelPiece(ctx: SiteCtx): Piece {
       seed(ctx.seed + 401 + i0);
       const parts: BufferGeometry[] = [];
       list.slice(i0, i0 + 4).forEach((b, j) => {
-        vault(b, cols, os, (i0 + j) % 3 === 1, parts);
+        vault(b, cols, os, (i0 + j) % 3 === 1, ctx.clear > 0, parts);
         // Icicles hung from the vault, their tips over the clearance.
         const ic: BufferGeometry[] = [];
-        for (let k = 0; k < 5; k++) {
+        for (let k = 0; k < 5 && ctx.clear > 0; k++) {
           const len = 0.8 + rnd() * 1.1;
           ic.push(part(new ConeGeometry(0.16 + rnd() * 0.14, len, 5), new Color('#E4F6FF'), { pos: [(rnd() - 0.5) * 2 * b.hw, 0.5 + len / 2 + 0.05, (rnd() - 0.5) * 3], rot: [Math.PI, 0, 0] }));
         }
@@ -1012,6 +1286,16 @@ export function iceTunnelPiece(ctx: SiteCtx): Piece {
       });
       return parts;
     });
+  }
+  if (ctx.clear > 0) {
+    for (const b of [list[0], list[list.length - 1]]) {
+      steps.push(() => {
+        seed(ctx.seed + 491 + b.dz);
+        const parts: BufferGeometry[] = [];
+        mouth(b, cols, parts);
+        return parts;
+      });
+    }
   }
   return { steps, spots: [], ice: true };
 }
@@ -1031,10 +1315,10 @@ export function lavaTunnelPiece(ctx: SiteCtx): Piece {
       seed(ctx.seed + 451 + i0);
       const parts: BufferGeometry[] = [];
       list.slice(i0, i0 + 4).forEach((b, j) => {
-        vault(b, cols, os, (i0 + j) % 4 === 2, parts);
+        vault(b, cols, os, (i0 + j) % 4 === 2, ctx.clear > 0, parts);
         // Seams of magma along the vault's underside and down the walls.
         const seam: BufferGeometry[] = [];
-        for (let k = 0; k < 3; k++) seam.push(box(0.3, 0.3, 1.6 + rnd() * 2, fire, [(rnd() - 0.5) * 2 * b.hw, 0.35, (rnd() - 0.5) * 2], [0, rnd() - 0.5, 0]));
+        for (let k = 0; k < 3 && ctx.clear > 0; k++) seam.push(box(0.3, 0.3, 1.6 + rnd() * 2, fire, [(rnd() - 0.5) * 2 * b.hw, 0.35, (rnd() - 0.5) * 2], [0, rnd() - 0.5, 0]));
         parts.push(...b.f.out(pitched(b, seam)));
         // Short glowing cracks down each wall, a zig-zag of three strokes.
         for (const sx of [-1, 1]) {
@@ -1054,11 +1338,12 @@ export function lavaTunnelPiece(ctx: SiteCtx): Piece {
       return parts;
     });
   }
-  // Braziers at both mouths, on the banks.
+  // The rock over both mouths, and braziers on the banks.
   steps.push(() => {
     seed(ctx.seed + 499);
     const parts: BufferGeometry[] = [];
     for (const b of [list[0], list[list.length - 1]]) {
+      if (ctx.clear > 0) mouth(b, cols, parts);
       for (const sx of [-1, 1]) {
         const x = sx * (b.X + 1.4);
         const g = b.f.gy(x, 0);
@@ -1104,7 +1389,7 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
         const beam: BufferGeometry[] = [];
         const W = 2 * X + 2.4;
         beam.push(grade(box(W - 1.2, 0.9, 0.7, lac, [0, 0.45, 0]), 0, 0.9, 0.85, 1.05));
-        const n = 8;
+        const n = ctx.low ? 4 : 8;
         for (let k = 0; k < n; k++) {
           const x0 = -W / 2 - 1 + ((W + 2) * k) / n;
           const x1 = -W / 2 - 1 + ((W + 2) * (k + 1)) / n;
@@ -1115,9 +1400,10 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
         }
         beam.push(box(0.6, 2.0, 0.5, lacD, [0, 1.95, 0]));
         if (i % 3 === 0) for (const x of [-0.45, 0, 0.45]) lantern(beam, x * b.hw, 1.75, 0.6, 0.42, true, '#FFB45E');
-        // (Gates are thin frames: built level, each standing plumb at its own underside.)
+        // (Gates are thin frames: built level, each standing plumb at its own underside. Without a roof
+        // over the run its pillars stand in two rows, an avenue.)
         for (const g of beam) g.translate(0, b.R, 0);
-        parts.push(...b.f.out(beam));
+        if (ctx.clear > 0) parts.push(...b.f.out(beam));
         // A stone lantern on the bank by every fourth gate.
         if (i % 4 === 2) {
           for (const sx of [-1, 1]) {

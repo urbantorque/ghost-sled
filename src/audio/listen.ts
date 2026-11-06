@@ -88,6 +88,11 @@ export const PLACES: Readonly<Record<string, PlaceSound>> = {
   lavatunnel: { roof: 1, half: 40 },
   tunnel: { roof: 1, half: 40 },
   toriirow: { roof: 0.35, half: 50, bell: 'temple' },
+  finish: { crowd: 1, bustle: 1, bell: 'church', half: 270 },
+  start: { crowd: 0.7, half: 60 },
+  lip: { crowd: 0.7 },
+  lift: { crowd: 0.3 },
+  viaduct: { half: 50 },
 };
 
 /** How open a section's banks are: a bowl or benches open to the sky, a gully shelters you. */

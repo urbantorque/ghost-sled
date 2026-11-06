@@ -290,12 +290,18 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   the valley floor (chalets round a church and a frozen lake, red research huts and a radio mast,
   stone lodges by a glowing lava river, a pagoda town with lanterns). Windows and lamps glow warm
   from dusk and hold through the haze as points of light.
-- **Set pieces.** Every 500 to 900 m a place 15 to 50 m tall stands over or beside the run, readable
-  far down the fall line: timber gates and trestles, an ice arch, a basalt gateway with lava-lit
-  braziers, a torii in deep plum lacquer (never the player's vermillion), and huts, towers, a ski
-  jump, frozen falls, an observatory, guardians and a pagoda. Toy spectators in the rider's
-  proportions, coats in cool and muted colours and never a signal colour, line the banks, turn to
-  follow the rider and throw their arms up when a moment is made near them.
+- **Places.** No stretch of a run goes much past 300 m without one. The course says where: a street is a
+  town you ride through, a tunnel a roof, a bridge a bridge, the finish a town worth arriving at. Between
+  them a place 15 to 50 m tall stands over or beside the run, readable far down the fall line: timber
+  gates and trestles, an ice arch, a basalt gateway with lava-lit braziers, a torii in deep plum lacquer
+  (never the player's vermillion), and huts, towers, a ski jump, frozen falls, an observatory, guardians
+  and a pagoda. A ravine's walls hide its banks, so what a ravine holds is a span across its slot.
+  Lift lines cross overhead at real height with chairs moving, from a station close beside the run; a
+  red ropeway house at Frostfang, a basalt mine head with ore skips at Ember, a lacquered cableway at
+  Sakura. Toy spectators in the rider's proportions, coats in cool and muted colours and never a signal
+  colour, turn to follow the rider and throw their arms up when a moment is made near them. Every run
+  starts in a place: a gate high over the steep ramp with the word on it, two huts, barriers and a
+  crowd. Every leap has a crowd on the rock shoulders either side of its lip.
 - **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
   owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
   three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
@@ -317,15 +323,34 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens
   leans toward the open side and takes a breath as it opens. Sometimes both sides open and the run
   rides a ridge.
-- **Towns and enclosed runs.** Every couple of kilometres the run becomes a village's street: an alpine
-  village, a red-and-ochre research station with ice-fishing shanties, a basalt hot-spring town with
-  steaming pools, a lacquered temple town. A church, radome, bathhouse or temple hall rises over the
-  roofs, a hotel's balconies look down, striped masts carry bunting and lantern strings high across, and
-  the crowd packs the crests three deep, flags up, doing the wave as the rider passes. At night every
-  window glows and warm light spills down the banks toward the street. Where the air allows, the run
-  goes under a roof: a tall avalanche gallery whose pillars throw bars of light across the snow, an ice
-  vault, a basalt tunnel with glowing cracks, a corridor of wine-lacquer torii. The frame darkens at
-  its edges inside and bursts with light on the way out.
+- **Towns.** A street puts walls at the lens. Fronts stand 2 to 4 m past the run's edge, cut into the bank
+  with their floors at the snow: alpine chalets, a red-and-ochre research station, basalt hot-spring
+  lodges, a lacquered temple town. Upper storeys lean out, balconies and awnings reach toward the
+  run, a house now and then stands right on the barrier, and a second row of roofs climbs the crest
+  behind. Painted barriers run where the sim turns a sled back, in boards that blur at speed, and a
+  crowd packs the strip behind them, flags up, doing the wave. A hotel's balconies look down.
+  Banners, bunting and lantern strings hang high across from tall masts, only as low as the highest
+  air allows. Windows glow from dusk and warm light spills over the run's edge; at night the
+  shop fronts bloom. A mountain with no street in its script has its town beside the run instead.
+- **The finish.** Each mountain's biggest place. The street opens into a square of grandstands cut into
+  both banks, the near rows alive and the far rows a packed still crowd, under masts and long banners.
+  A real arch stands over a checkered line, the word on its board, the mountain's own crown on each
+  tower. The square is built round where a sled stops, 35 to 60 m past the line, so the stationary
+  frame holds it all. The run-out carries on through the town to a great hall that closes the view, and
+  over the hall stands the mark you can see from the last leap: a steeple, a radome and mast, a
+  lit stack, a pagoda. Balloons are tethered over the roofs.
+- **Bridges.** The run crosses a chasm on a deck 11 m wide with the ground falling 34 m past its rails.
+  Frostfang's is an ice span, two great ribs of blue ice with icicles along them and a parapet of ice
+  blocks. Ember's is an iron through-truss on basalt piers with braziers on the portals, lanterns along
+  the top chord and a lava river crossing under it. Pinecrest's would be a timber truss and Sakura's a
+  lacquered arch, though neither script holds a bridge yet. Raked legs and struts reach down round
+  the ridge of ground under the deck, and the rails stand where the sim turns a sled back.
+- **Tunnels.** Where a script says tunnel the run goes under a roof at the section's whole length: a tall
+  avalanche gallery whose pillars throw bars of light across the snow, an ice vault, a basalt tunnel
+  with glowing cracks whose mouth is a hole in a great rock mass, a corridor of wine-lacquer torii. The
+  roof follows the air down the stretch: the mouth stands tallest and it comes down inside. The frame
+  darkens at its edges inside and bursts with light on the way out. Where low gravity flies over any
+  roof the walls and pillars stand alone.
 - **The sound of the world.** Crowds roar from their bank, swell as you come and cheer what you do near
   them: cowbells and whistles in the Alps, taiko under Sakura's gates. Crows argue over the treeline and
   burst up from a stomp. Chairlifts clack through their towers, valley churches toll in the alpenglow,

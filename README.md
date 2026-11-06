@@ -199,7 +199,10 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 
 | Script | What it does |
 | --- | --- |
-| `towns.js`, `towns-cost.js` | Rides into each mountain's first village and enclosed run (pinned to the safe line) and shoots the approach, the inside and the way out; or measures what they cost |
+| `places.js`, `sheets.sh` | Rides any mountain on the safe line at a set speed and shoots a list of distances, or every site of the kinds named; the contact sheets of every street, bridge, tunnel and finish |
+| `places-cost.js`, `cost-run.sh` | Draw calls, triangles and frame times riding through a place; compare two builds interleaved |
+| `places-plan.ts` | What stands where on each mountain, by mood, the longest bare stretch and what each piece costs, without a browser |
+| `descent.js`, `finish.js` | A whole descent without a teleport (are pieces made ahead of the rider?), and the last leap, the line and the stop |
 | `vista.js` | The world-scale set: the title, then a replayed best run (`?demo=0`) down each mountain, shot at 300, 1500, 2600 and 3900 m |
 | `shots.js` | The critique set (title, overtake, perfect landing, chaos reveal, four moods, results) with frame stats |
 | `carve.js` | Holds the line, then throws a hard carve into a drift |
