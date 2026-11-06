@@ -128,7 +128,7 @@ describe('determinism', () => {
     // A rider who aims at whatever stands ahead: nothing short of that ends a run this early, since the
     // corridor's edge turns a sled back and two wipeouts are forgiven past the free stretch.
     const hunter = {
-      sample: () => {
+      sample: (): { steer: number; action: boolean } => {
         const s = run.sim.s;
         const k = Math.floor(s.z / CHUNK_LEN);
         let best: Obstacle | null = null;
@@ -142,7 +142,7 @@ describe('determinism', () => {
         return { steer: d > 0.4 ? 8 : d < -0.4 ? 0 : 4, action: false };
       },
     };
-    const run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, hunter);
+    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, hunter);
     const loop = new FixedLoop(() => run.tick());
     const kinds: string[] = [];
     while (!run.crashed && t++ < 60 * 120) loop.advance(1 / 60);

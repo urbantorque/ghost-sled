@@ -1,14 +1,16 @@
 import { hashString } from '../sim/prng';
 import { FINISH_Z } from './standing';
 
-// Graveyards: the mountain's named dangerous places. Where 3 or more of the bundled (or Daily) pool's
-// riders crashed within 8 m of each other, a cairn stands on the bank (world.setGraveyards) with a tag
+// Graveyards: the mountain's named dangerous places. Where 2 or more of the bundled (or Daily) pool's
+// riders crashed within 40 m of each other, a cairn stands on the bank (world.setGraveyards) with a tag
 // ('Widow's Bend: 4 fell here'), and riding 20 m past it alive is a graveyard beat: 'Survived Widow's
 // Bend' and 3 gifts inside the run's extras cap (the app credits them into passBonus).
 //
 // Clusters come from the FULL pool (not the run's field, whose 25 m spacing splits these pairs): the
-// Tumbles forgive most hits now, so few ghosts really crash: two falling within 40 m make a place, and the
-// bundled pools give Pinecrest one (4,040 m) and Sakura two (2,489 and 3,227 m).
+// pool riders' run-end distances, minus everyone who never crashed: a rider who reached the finish
+// line ended there on purpose, and a line of finishers is no graveyard. Tumbles forgive most hits, so
+// few ghosts really crash, which is why two make a place: the bundled pools give Pinecrest one
+// (4,040 m) and Sakura two (2,489 and 3,227 m).
 // Names are picked from a short list by mountain key and distance, so a mountain always calls the
 // same place by the same name. Nothing here touches the sim: the cairns stand off the corridor.
 //
