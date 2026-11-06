@@ -14,8 +14,8 @@ import type { PoolGhostData } from './ghostdata';
 // all tell riders apart by record, need to know nothing about any of this. A saved grudge comes back to
 // its pace because the same pool always makes the same riders.
 
-/** Each slow rider's time is this much over the next one's. */
-const STEP = 1.07;
+/** Each slow rider's time is this much over the next one's: close enough to fill a pack at any pace. */
+const STEP = 1.035;
 /** The slowest time a slow rider rides, seconds: past this nobody is racing. */
 const SLOWEST = 300;
 /** Runs the slow riders are made from: the pool's slowest finishers, so they ride like beginners. */

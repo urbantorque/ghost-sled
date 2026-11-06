@@ -46,6 +46,10 @@ export interface GhostTrack {
   frames: Float32Array | null;
   /** The rate its run plays at: 1, or under it for a slow rider (slowriders.ts). */
   pace: number;
+  /** How far ahead of its own pace a pack rider surges, in played ticks (negative: it fades first). */
+  swing: number;
+  /** The played tick its surges end on: its finish, or the end of its run. */
+  swingEnd: number;
   samples: number;
   ticks: number;
   crashTick: number;
@@ -95,6 +99,34 @@ export function trackStanding(t: Pick<GhostTrack, 'finishTick' | 'distance'>): S
 
 let nextReq = 1;
 
+/** A pack rider's surge, as a share of its run: over three swings that is about 17% either side of its
+ *  own speed, or 2.5 s at a two-minute pace. A field spaced by finish time only ever drifts apart, so the
+ *  riders around you trade places instead. They still finish on their real time, and your best, your
+ *  grudge and a friend are never touched: those are promises. */
+const PACK_SWING = 0.018;
+const SWINGS = 3;
+
+/** A track's place in its own run at a tick of this race. */
+export function clock(t: Pick<GhostTrack, 'pace' | 'swing' | 'swingEnd'>, tick: number): number {
+  const played = t.swing !== 0 && tick > 0 && tick < t.swingEnd ? tick + t.swing * Math.sin((Math.PI * SWINGS * tick) / t.swingEnd) : tick;
+  return played * t.pace;
+}
+
+/** The tick of this race a track reaches a place in its own run: the inverse of clock. */
+export function unclock(t: Pick<GhostTrack, 'pace' | 'swing' | 'swingEnd'>, at: number): number {
+  const flat = at / t.pace;
+  if (t.swing === 0) return Math.round(flat);
+  const reach = Math.abs(t.swing) + 2;
+  let lo = flat - reach;
+  let hi = flat + reach;
+  for (let i = 0; i < 24; i++) {
+    const m = (lo + hi) / 2;
+    if (clock(t, m) < at) lo = m;
+    else hi = m;
+  }
+  return Math.round((lo + hi) / 2);
+}
+
 export class GhostManager {
   tracks: GhostTrack[] = [];
   private worker: Worker | null = null;
@@ -118,17 +150,19 @@ export class GhostManager {
       if (gen !== this.generation) return;
       const t = this.tracks.find((k) => k.entry.id === m.id);
       if (!t) return;
-      // A slow rider's run plays at its pace, so every time the worker read off it scales with it.
-      const p = t.pace;
-      const at = (tick: number): number => (tick < 0 ? tick : Math.round(tick / p));
+      // A ghost's run plays at its own clock, so every time the worker read off it moves with that.
       t.frames = m.frames;
       t.samples = m.samples;
+      const end = m.finishTick >= 0 ? m.finishTick : m.ticks;
+      t.swingEnd = Math.round(end / t.pace);
+      if (t.entry.kind === 'pool' && t.entry.role) t.swing = PACK_SWING * t.swingEnd * (t.entry.id % 2 === 0 ? 1 : -1);
+      const at = (tick: number): number => (tick < 0 ? tick : unclock(t, tick));
       t.ticks = at(m.ticks);
       t.crashTick = at(m.crashTick);
       t.finishTick = at(m.finishTick);
-      t.stageTicks = p === 1 ? m.stageTicks : m.stageTicks.map(at);
+      t.stageTicks = m.stageTicks.map(at);
       t.distance = m.distance;
-      t.tricks = p === 1 ? m.tricks : m.tricks.map((v, i) => (i % 4 === 0 ? at(v) : v));
+      t.tricks = t.pace === 1 && t.swing === 0 ? m.tricks : m.tricks.map((v, i) => (i % 4 === 0 ? at(v) : v));
       t.ready = m.samples > 0;
       if (this.tracks.every((k) => k.ready)) this.onReady?.();
     } else if (m.type === 'pool') {
@@ -152,6 +186,8 @@ export class GhostManager {
     this.tracks = entries.map((e, i) => ({
       entry: { ...e, id: this.generation * 1000 + i },
       pace: paceOf(e.record),
+      swing: 0,
+      swingEnd: 0,
       ready: false,
       frames: null,
       samples: 0,
@@ -221,7 +257,7 @@ export class GhostManager {
   pose(t: GhostTrack, tick: number, out: GhostPose): boolean {
     if (!t.ready || !t.frames || t.samples === 0) return false;
     const f = t.frames;
-    const pos = (tick * t.pace) / SAMPLE_EVERY - 1;
+    const pos = clock(t, tick) / SAMPLE_EVERY - 1;
     const last = t.samples - 1;
     let i0 = Math.floor(pos);
     let a = pos - i0;
@@ -262,7 +298,7 @@ export class GhostManager {
   /** Course progress (z) of a ghost at a tick: where it stopped once it is done. */
   zAt(t: GhostTrack, tick: number): number {
     if (!t.ready || !t.frames) return 0;
-    let i = Math.round((tick * t.pace) / SAMPLE_EVERY - 1);
+    let i = Math.round(clock(t, tick) / SAMPLE_EVERY - 1);
     if (i < 0) i = 0;
     if (i >= t.samples) i = t.samples - 1;
     return t.frames[i * FRAME_STRIDE + F_Z];
@@ -290,7 +326,7 @@ export class GhostManager {
     for (const t of this.tracks) {
       if (!t.ready) continue;
       const gz = this.zAt(t, tick);
-      const done = tick * t.pace >= (t.samples + 1) * SAMPLE_EVERY - 1;
+      const done = clock(t, tick) >= (t.samples + 1) * SAMPLE_EVERY - 1;
       // (A ghost that crashed, was revived and finished never wrecked for good.)
       if (done && !t.crashSeen && t.crashTick >= 0 && t.finishTick < 0) {
         t.crashSeen = true;

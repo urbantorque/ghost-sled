@@ -75,7 +75,7 @@ export interface FieldPick {
 /** The anchor's bounds (seconds). */
 export const ANCHOR_MIN = 100;
 export const ANCHOR_MAX = 420;
-/** Used only with no runs and an empty pool to read a mid-pack time from. */
+/** Who a first run rides with: nobody knows yet how it will go, so about 22 m/s, and one true beginner. */
 export const ANCHOR_DEFAULT = 200;
 /** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
@@ -137,21 +137,23 @@ interface Role {
 }
 
 /** The roles in priority order (a field shorter than 5 keeps the first ones). */
-function roles(a: number, count: number): Role[] {
-  const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.93 * a, hi: 1.07 * a });
-  const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 1.05 * a, hi: 1.22 * a });
+function roles(a: number, count: number, first: boolean): Role[] {
+  // The pack rides close: at 30 m/s a pack 7% apart is 200 m apart by the finish, and nobody races that.
+  const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.96 * a, hi: 1.04 * a });
+  const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 1.03 * a, hi: 1.2 * a });
   const all: Role[] = [
-    pack(1.03),
-    opener(1.1),
-    { role: 'pace', target: 0.93 * a, lo: 0.88 * a, hi: 0.97 * a },
-    pack(0.98),
+    pack(1.02),
+    // A first run has no pace to read, so someone rides at a beginner's.
+    first ? { role: 'opener', target: 1.45 * a, lo: 1.25 * a, hi: 1.6 * a } : opener(1.07),
+    { role: 'pace', target: 0.95 * a, lo: 0.9 * a, hi: 0.98 * a },
+    pack(0.985),
     // The stretch rider.
-    { role: 'pace', target: 0.85 * a, lo: 0.75 * a, hi: 0.9 * a },
+    { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
     // Haunted Hollow's four extra ghosts.
-    opener(1.16),
-    pack(0.96),
+    opener(1.14),
+    pack(0.97),
     pack(1.0),
-    pack(1.05),
+    pack(1.04),
   ];
   // Any further ghosts join the pack around the anchor.
   const more = [1.0, 1.02, 0.97, 1.04, 0.95];
@@ -235,8 +237,8 @@ export function pickField(i: FieldInput): FieldPick[] {
   const cands = fieldCandidates(i.pool, i.mood, i.event, count + 3)
     .filter((g) => g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
     .sort((x, y) => timeOf(x) - timeOf(y));
-  // With no runs to go on, the pack rides at a mid-pack time.
-  const a = Number.isFinite(i.anchor) && i.anchor > 0 ? i.anchor : cands.length ? median(cands.map(timeOf)) : ANCHOR_DEFAULT;
+  const first = !(Number.isFinite(i.anchor) && i.anchor > 0);
+  const a = first ? ANCHOR_DEFAULT : i.anchor;
 
   const wreckOf = (distance: number): number | null => (distance >= FINISH_Z ? null : distance);
   const used = new Set<PoolGhostData>();
@@ -249,7 +251,7 @@ export function pickField(i: FieldInput): FieldPick[] {
   };
 
   const picks: Array<{ g: PoolGhostData; role: GhostRole; widened: boolean }> = [];
-  for (const r of roles(a, count)) {
+  for (const r of roles(a, count, first)) {
     const fits = (g: PoolGhostData) => !used.has(g) && spaced(g);
     let found: PoolGhostData | null = null;
     let widened = false;

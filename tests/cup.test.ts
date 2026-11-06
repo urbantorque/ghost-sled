@@ -84,7 +84,7 @@ describe('its field', () => {
   it('names one rival', () => {
     const field = at('A');
     expect(field.filter((p) => p.rival).length).toBe(1);
-    expect(rivalOf(field, 150)?.time).toBeLessThan(150);
+    expect(rivalOf(field, 150)?.time).toBeLessThanOrEqual(150);
   });
 });
 

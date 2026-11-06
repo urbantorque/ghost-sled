@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { poolTime } from '../src/game/field';
 import type { PoolGhostData } from '../src/game/ghostdata';
+import { clock, unclock } from '../src/game/ghosts';
 import { paceOf, withSlowRiders } from '../src/game/slowriders';
 import { recordFromString, replayRecord } from '../src/sim/replay';
 
@@ -55,5 +56,45 @@ describe('slow riders', () => {
   it('leaves a pool with no finishers alone', () => {
     const none: PoolGhostData[] = [{ name: 'a', score: 1, distance: 100, ticks: 300, finishTick: -1, sled: 0, mood: 0, event: 0, record: 'x' }];
     expect(withSlowRiders(none, 'k')).toEqual(none);
+  });
+});
+
+describe('a pack rider surges and fades', () => {
+  const t = { pace: 1, swing: 0.018 * 8000, swingEnd: 8000 };
+
+  it('finishes on its real time, always moving forward', () => {
+    expect(clock(t, 0)).toBe(0);
+    expect(clock(t, 8000)).toBe(8000);
+    let prev = -1;
+    for (let tick = 0; tick <= 8200; tick += 5) {
+      const at = clock(t, tick);
+      expect(at).toBeGreaterThan(prev);
+      prev = at;
+    }
+  });
+
+  it('really leaves its own pace, and comes back through it', () => {
+    let crossings = 0;
+    let last = 0;
+    for (let tick = 1; tick < 8000; tick += 10) {
+      const d = clock(t, tick) - tick;
+      if (d * last < 0) crossings++;
+      if (d !== 0) last = d;
+    }
+    expect(crossings).toBeGreaterThanOrEqual(2);
+    expect(Math.max(...[1000, 1300, 1400].map((k) => Math.abs(clock(t, k) - k)))).toBeGreaterThan(100);
+  });
+
+  it('inverts exactly, at any pace', () => {
+    for (const pace of [1, 0.8, 0.55]) {
+      const p = { ...t, pace };
+      for (let tick = 0; tick <= 8000; tick += 137) expect(Math.abs(unclock(p, clock(p, tick)) - tick)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('leaves an untouched rider untouched', () => {
+    const plain = { pace: 1, swing: 0, swingEnd: 8000 };
+    expect(clock(plain, 1234)).toBe(1234);
+    expect(unclock(plain, 1234)).toBe(1234);
   });
 });

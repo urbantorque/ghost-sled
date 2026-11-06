@@ -1094,7 +1094,7 @@ async (page) => {
         if (F.metOk) for (const id of app.missionsPopped) if (!(id in F.met)) F.met[id] = +(sim.tick / 60).toFixed(2);
       };
       tele.trace = [];
-      const source = stunt ? stunt.sample : pilot;
+      const source = stunt ? stunt.sample : skill === 'clumsy' ? clumsy : pilot;
       run.input = { sample: () => { try { tickHook(); } catch {} const o = source(); const s = sim.s; tele.trace.push([sim.tick, +s.z.toFixed(1), +s.x.toFixed(2), s.grounded ? 1 : 0, +s.airYaw.toFixed(2), +s.airPitch.toFixed(2), o.steer, o.action ? 1 : 0, +(s.y - c.ground(s.x, s.z)).toFixed(2)]); if (tele.trace.length > 200) tele.trace.shift(); return o; } };
 
       // Race-live samples every 0.25 s and the crash snapshot, polled from the node side.
@@ -1112,6 +1112,7 @@ async (page) => {
           });
           tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, gifts: (r.sim.gifts || 0) + (app.passBonus || 0), passBonus: app.passBonus || 0, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
         }
+        if (s.finished && !tele.finish) tele.finish = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score };
         return { phase: app.phase, crashed: s.crashed, finished: !!s.finished, t: T };
       };
       const sampleLive = () => {
@@ -1224,7 +1225,7 @@ async (page) => {
     return {
       ...extra,
       seconds: +runT.toFixed(1),
-      distance: tele.crash ? tele.crash.distance : null,
+      distance: tele.crash ? tele.crash.distance : tele.finish ? tele.finish.distance : null,
       score: tele.crash ? tele.crash.score : null,
       cause: tele.crash ? tele.crash.cause : 'timeout',
       gifts: tele.crash ? tele.crash.gifts : null,
