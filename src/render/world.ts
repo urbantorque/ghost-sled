@@ -25,8 +25,12 @@ import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
 import { Props } from './props';
 import { SetPieces } from './landmarks';
+import { Moments } from './moments';
 import { Rider } from './rider';
 import { Sky } from './sky';
+import { Sloughs } from './sloughs';
+import { edgeK, kickK, roosterK, streakK } from './speedfeel';
+import { SpeedPosts } from './speedposts';
 import { Terrain, TerrainDetail } from './terrain';
 import { Trail } from './trails';
 
@@ -152,6 +156,11 @@ export class World {
   readonly chaos: ChaosVisuals;
   readonly landing: LandingAid;
   readonly life: Life;
+  /** Markers strobing past along the corridor's edges, a slough of snow off a bank, and the moments the
+   *  sim hands the picture (speedposts.ts, sloughs.ts, moments.ts). */
+  readonly speedPosts: SpeedPosts;
+  readonly sloughs: Sloughs;
+  readonly moments: Moments;
   readonly post: PostFX;
   readonly sun = new DirectionalLight(0xffffff, 1);
   private sunTarget = new Object3D();
@@ -252,6 +261,10 @@ export class World {
     this.life.farChimneys = (out) => this.midground.chimneys(out);
     this.life.kept = (x, z) => this.setPieces.keeps(x, z);
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
+    this.speedPosts = new SpeedPosts(this.course, quality.tier);
+    this.speedPosts.kept = (x, z) => this.setPieces.keeps(x, z);
+    this.sloughs = new Sloughs(this.course, quality.tier, this.particles);
+    this.moments = new Moments(this);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     const cor = { x: 0, hw: 0 };
     this.cam.corridor = (z) => {
@@ -294,6 +307,8 @@ export class World {
       this.ghosts.root,
       this.chaos.root,
       this.life.root,
+      this.speedPosts.mesh,
+      this.sloughs.mesh,
       ...this.rider.objects,
       ...this.particles.objects,
       this.weather.points,
@@ -387,6 +402,8 @@ export class World {
     this.post.shaftTaps = q.tier === 'high' ? 14 : 8;
     this.sky.setDetail(q.tier);
     this.life.setQuality(q.tier, q.forestDensity);
+    this.speedPosts.setTier(q.tier);
+    this.sloughs.setTier(q.tier);
     setCloudShadows(q.tier !== 'low');
     this.applyWeather();
     this.lastChunkRange = '';
@@ -418,6 +435,8 @@ export class World {
     this.ghosts.setCourse(c);
     this.chaos.setCourse(c);
     this.landing.setCourse(c);
+    this.speedPosts.setCourse(c);
+    this.sloughs.setCourse(c);
     this.life.setCourse(c, this.palette, this.mood);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
@@ -574,6 +593,8 @@ export class World {
     this.rider.setSled(sled);
     this.trail.clear();
     this.particles.clear();
+    this.sloughs.clear();
+    this.moments.reset();
     this.ghosts.resetRun();
     this.chaos.begin(event);
     tmpV.set(snap.x, snap.y, -snap.z);
@@ -614,6 +635,8 @@ export class World {
   }
 
   frame(v: FrameView): void {
+    // (Over the finish line the picture runs on its own eased clock: moments.ts.)
+    this.moments.ease(v);
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
@@ -622,6 +645,7 @@ export class World {
     this.updateChunks(s.z);
     const ci = Math.floor(s.z / CHUNK_LEN);
     this.props.update(ci <= 0 ? -2 : ci - 1, ci + this.quality.viewChunks, v.collected, v.destroyed, ci);
+    this.speedPosts.update(s.z);
 
     const pos = tmpV.set(s.x, s.y, -s.z);
     const vel = tmpV2.set(s.vx, s.vy, -s.vz);
@@ -644,6 +668,8 @@ export class World {
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
+    if (v.mode === 'run') this.moments.beats(beats, s);
+    this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
 
     // Rider. Earned flow burns on it (uniforms only); 'In the flow' pulses its rim to full for 0.3 s
@@ -673,6 +699,7 @@ export class World {
           wobble: s.wobble,
           vel,
           perfectPulse: this.perfectPulse,
+          act: this.moments.act,
         },
         dt,
         v.time,
@@ -689,12 +716,14 @@ export class World {
 
     // Trail and spray.
     if (showRider && !s.crashed && v.mode !== 'results') {
-      if (s.grounded) {
+      // (A tumbling rider cuts no groove and throws no spray: its bursts are moments.ts's.)
+      if (this.moments.tumbling) this.trail.lift();
+      else if (s.grounded) {
         const depth = Math.max(0.12, s.carve);
         // The groove widens with carve depth; a drift scrubs a wide fan.
         const width = s.drifting ? 1.0 + Math.abs(s.slip) * 1.3 : 0.42 + s.carve * 0.72;
-        this.trail.add(s.x, s.z, width, depth, v.time);
-        let sprayAmt = s.drifting ? 1 : Math.max(0, s.carve - 0.35) * 1.4 + (s.speed > 30 ? 0.15 : 0);
+        this.trail.add(s.x, s.z, width, depth, v.time, s.speed);
+        let sprayAmt = s.drifting ? 1 : Math.max(0, s.carve - 0.35) * 1.4 + (s.speed > 30 ? 0.15 + 0.25 * roosterK(s.speed) : 0);
         let toward = s.drifting ? -s.driftDir : -Math.sign(s.steer || 1);
         if (v.mode === 'title' && s.speed > 8) {
           // The title reel's hero always throws a light plume off the runner nearer the lens, so the key
@@ -703,8 +732,8 @@ export class World {
           const c = this.cam.camera.position;
           toward = (c.x - pos.x) * Math.cos(s.heading) + (c.z - pos.z) * Math.sin(s.heading) >= 0 ? 1 : -1;
         }
-        // From about 16 m/s the runners kick fine snow up off their tails, building to full by 30 m/s.
-        const kick = smooth01((s.speed - 16) / 14);
+        // From about 16 m/s the runners kick fine snow up off their tails, and it goes on building to the cap.
+        const kick = kickK(s.speed);
         if (kick > 0) this.particles.kick(pos, s.heading, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), kick * Math.min(2, dt * 60), s.onIce);
         this.sprayAcc += sprayAmt * dt * 60 * 1.6;
         if (this.sprayAcc >= 1) {
@@ -776,9 +805,10 @@ export class World {
     // panel. Contract C6: on a portrait screen the card leaves the top ~28% (plus the safe-area
     // inset) open, and the hero shot centres the wreck in that band. Narrow landscape screens keep
     // the drift around it under a full-screen panel.
-    const hero = v.mode === 'results' && ((this.width > 900 && this.width > this.height) || this.width < this.height);
-    if (hero && this.width < this.height) this.cam.heroBand = Math.min(0.4, 0.28 + this.ghosts.safeTop / this.height);
-    this.cam.mode = v.mode === 'title' ? 'orbit' : hero ? 'hero' : this.rider.crashing ? 'crash' : 'chase';
+    const hero = v.mode === 'results' && !this.moments.finishing && ((this.width > 900 && this.width > this.height) || this.width < this.height);
+    if ((hero || this.moments.finishing) && this.width < this.height) this.cam.heroBand = Math.min(0.4, 0.28 + this.ghosts.safeTop / this.height);
+    // (Reduced motion never swings: the chase follows the rider to a stop.)
+    this.cam.mode = v.mode === 'title' ? 'orbit' : this.moments.finishing && !feel.reduced ? 'finish' : hero ? 'hero' : this.rider.crashing ? 'crash' : 'chase';
     let chaosShake = 0;
     this.chaos.detail = this.quality.tier;
     if (v.sim) chaosShake = this.chaos.update(v.sim, v.time, this.cam.camera.position);
@@ -812,7 +842,7 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0 }, dt);
+    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
@@ -822,7 +852,7 @@ export class World {
     // The slipstream you ride in: motes of the drafted ghost's colour stream back past the runners.
     if (this.ghosts.wakeK > 0.05 && s.grounded) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
     this.landing.streak = v.mode === 'run' ? feel.streak : 0;
-    this.landing.update(s, v.sim ? v.sim.gravity : 9.81, v.airTicks, dt, showRider && v.mode === 'run' && !this.rider.crashing);
+    this.landing.update(s, v.sim ? v.sim.gravity : 9.81, v.airTicks, dt, showRider && v.mode === 'run' && !this.rider.crashing && !this.moments.tumbling);
     this.updateBands(v, feel, s, dt);
     // While the results frame the wreck, gifts within about 3 m of it clear away (the gift shader's
     // CLEAR_FOCUS path), shrinking over a moment rather than popping.
@@ -833,6 +863,7 @@ export class World {
     shared.uResults.value = this.resultsClear;
     // The title reel keeps hazards out of the band right behind its hero (materials.ts uTitleClear).
     shared.uTitleClear.value = v.mode === 'title' ? 1 : 0;
+    this.sloughs.update(dt);
     this.particles.update(dt);
     this.life.update(s.x, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
 
@@ -859,7 +890,7 @@ export class World {
     // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
     // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
     this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
-    pp.speed = v.mode === 'run' ? Math.max(0, Math.min(1, (s.speed - 28) / 16)) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
+    pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
@@ -870,7 +901,8 @@ export class World {
     // An enclosed run (landmarks.ts): its dark at the frame's edges, the strobe and the way out's flash.
     const encl = this.setPieces.light;
     pp.flash = Math.max(pp.flash, encl.flash * (feel.reduced ? 0.4 : 1));
-    pp.vignette = 1 + encl.shade * 1.5;
+    // (On the edge of control the frame's corners close in a little.)
+    pp.vignette = 1 + encl.shade * 1.5 + (v.mode === 'run' ? 0.3 * edgeK(s.speed) * this.streakK : 0);
     pp.time = v.time;
     // The results hero shot is a calm frame: the danger grade lets go once the run is over. It
     // builds from about 60 m and eases in and out, so the wall arriving or a revive never pops it.
@@ -970,11 +1002,13 @@ export class World {
     this.life.root.visible = false;
     this.midground.root.visible = false;
     this.setPieces.root.visible = false;
+    this.speedPosts.mesh.visible = false;
     this.post.renderInset(this.scene, this.mirrorCam, x, y, mw, mh, this.mirrorFade, Math.max(0, Math.min(1, 1 - gap / 50)), refresh);
     if (refresh) this.props.nearOnly(false);
     this.life.root.visible = true;
     this.midground.root.visible = true;
     this.setPieces.root.visible = true;
+    this.speedPosts.mesh.visible = this.quality.tier !== 'low';
     r.shadowMap.autoUpdate = autoShadow;
   }
 
@@ -1194,6 +1228,7 @@ export class World {
         } else {
           this.particles.burst(pos, 0.5, 8, lv);
         }
+        this.moments.landed(e, s);
         break;
       }
       case 'takeoff':

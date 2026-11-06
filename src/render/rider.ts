@@ -27,6 +27,20 @@ export interface RiderPose {
   /** World velocity (three.js space) for the scarf and crash tumble. */
   vel: Vector3;
   perfectPulse: number;
+  /** What the rider is acting out (moments.ts); absent reads as just riding. */
+  act?: RiderAct;
+}
+
+/** The moments that take over the rider's pose. */
+export interface RiderAct {
+  /** A wipeout's roll: 0 riding, else 0 to 1 through it. */
+  tumble: number;
+  /** On a rail. */
+  grind: boolean;
+  /** Riding the wall: + the bank on three.js +x, - on -x, 0 none. */
+  wall: number;
+  /** Over the line, arms up. */
+  finish: boolean;
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -60,6 +74,11 @@ const COLLIDERS: Array<[Vector3, number]> = [
   [new Vector3(0, 0.34, 0.02), 0.27],
   [new Vector3(0, 0.86 - RIDER_NECK.y, 0), 0.3],
 ];
+/** A tumble's turns of the whole rig (a whole number, so it ends upright) and how high it bounces. */
+const TUMBLE_TURNS = 2;
+const TUMBLE_BOUNCE = 0.85;
+/** How far a rail turns the sled off the line, for the slide. */
+const GRIND_YAW = 0.42;
 /** Torso roll off vertical, at most (radians): about 35 degrees. */
 const MAX_ROLL = 0.61;
 /** Results only: dazed stars orbiting the beanie (neck space), and how many. */
@@ -388,6 +407,10 @@ export class Rider {
   private bodyVy = 0;
   private tuckK = 0;
   private chatY = 0;
+  /** The eased weights of a rail, a wall ride (signed) and the arms-up finish. */
+  private grindK = 0;
+  private wallS = 0;
+  private finK = 0;
   /** The upper body's eased turn toward the direction of travel while the sled slides sideways. */
   private twist = 0;
   /** How the rider sits the current sled, and the two body meshes it can wear. */
@@ -570,6 +593,7 @@ export class Rider {
     this.mat.uniforms.uRimK.value = 0.4;
     this.landT = 9;
     this.leanS = this.leanV = this.bobY = this.bobV = this.tuckK = this.chatY = 0;
+    this.grindK = this.wallS = this.finK = 0;
     // Hang the tails down the back; the first update carries them to the knot.
     this.anchor.copy(pos).add(this.vA.set(0, 0.85, 0.35));
     this.anchorPrev.copy(this.anchor);
@@ -602,16 +626,28 @@ export class Rider {
     }
     this.settled = false;
     this.root.position.copy(p.pos);
+    // The moments (moments.ts): a tumble rolls the whole rig forward twice and it bounces, losing height
+    // as it slows; under reduced motion the rider only curls up, with no spin.
+    const calm = reduced();
+    this.grindK += ((p.act?.grind ? 1 : 0) - this.grindK) * Math.min(1, dt * 14);
+    this.wallS += ((p.act?.wall ?? 0) - this.wallS) * Math.min(1, dt * 8);
+    this.finK += ((p.act?.finish ? 1 : 0) - this.finK) * Math.min(1, dt * (calm ? 8 : 3.2));
+    const tumble = p.act?.tumble ?? 0;
+    const spun = tumble > 0 && !calm ? tumble : 0;
+    const rollEase = 1 - (1 - spun) * (1 - spun);
+    const rollSin = Math.sin(Math.PI * spun);
+    if (spun > 0) this.root.position.y += Math.abs(Math.sin(Math.PI * 2.5 * spun)) * (1 - spun) * TUMBLE_BOUNCE;
     // Tilt the whole rig to the ground normal when grounded; level out in the air.
     const n = p.airborne ? UP : p.normal;
     this.tmpQ.setFromUnitVectors(UP, n);
     this.tilt.quaternion.slerp(this.tmpQ, Math.min(1, dt * (p.airborne ? 4 : 14)));
-    this.yaw.rotation.set(0, -(p.heading + p.airYaw), 0);
+    this.yaw.rotation.set(0, -(p.heading + p.airYaw) + rollSin * 1.3 + this.grindK * GRIND_YAW, 0);
     const wob = p.wobble > 0 ? Math.sin(time * 38) * 0.08 * Math.min(1, p.wobble / 20) : 0;
-    this.flip.rotation.set(-p.airPitch, 0, 0);
+    this.flip.rotation.set(-p.airPitch - rollEase * Math.PI * 2 * TUMBLE_TURNS, 0, 0);
     // The sled banks a little; most of the carve lean comes from the hips (below), so the rider bends
     // into the turn rather than tipping over as one rigid block with its sled.
-    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob);
+    // (A rail's balance sways it side to side; a tumble throws it over.)
+    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK));
 
     // Body pose. A perfect landing squashes the torso and legs flat on touchdown (0.7 tall, 1.25
     // wide) and holds it for about 150 ms, springs back through a stretch, and rides the landing out
@@ -624,10 +660,12 @@ export class Rider {
     const rebound = lt > 0.15 && lt < 0.42 ? Math.sin((Math.PI * (lt - 0.15)) / 0.27) : 0;
     const stomp = lt < 0.9 ? (lt < 0.05 ? lt / 0.05 : 1 - smooth((lt - 0.3) / 0.6)) : 0;
     this.tickBody(p, dt, time);
-    const lean = this.leanS;
+    // Riding the wall the body leans in toward it, over the sled's own tilt up the bank.
+    const lean = this.leanS + this.wallS * 0.85;
     const bob = this.bobY + this.chatY;
     const speedTuck = this.tuckK;
-    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62);
+    const fin = this.finK;
+    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62, this.grindK * 0.8, tumble > 0 && calm ? 1 : 0) * (1 - fin);
     const tuck = p.airborne && p.crouch > 0.5 ? 1 : 0;
     // Drifting, the sled slides sideways while the rider keeps its chest to the way it is going, as a
     // rider does: crouched over a sled turned across the view, it read from the chase camera as a
@@ -641,9 +679,11 @@ export class Rider {
     // The crouch sinks more than it pitches: a deep forward pitch on top of a carve lean read as a fall.
     // (The body's weight shift lags the sled's bank a little and settles past it, and a bump or a
     // landing it soaks up pitches it forward over its knees for a moment.)
-    const pitch = -0.15 - this.seat.lean - crouch * 0.3 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 + Math.min(0, bob) * 1.6;
-    this.bodyPivot.rotation.set(pitch, -this.twist, -lean * 0.26);
-    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - stomp * 0.05 + bob;
+    // (Over the line it sits up tall.)
+    const pitch = (-0.15 - this.seat.lean - crouch * 0.3 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 + Math.min(0, bob) * 1.6) * (1 - fin * 0.85);
+    this.bodyPivot.rotation.set(pitch + rollSin * 0.5, -this.twist - this.grindK * GRIND_YAW * 0.7, -lean * 0.26);
+    // (A tumble throws the body up off the sled.)
+    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - stomp * 0.05 + bob + rollSin * 0.2 + (calm ? 0 : fin * Math.abs(Math.sin(time * 3.4)) * 0.05);
     // The hips slide a little to the inside of the carve: the weight goes where the turn is.
     this.bodyPivot.position.x = Math.max(-0.05, Math.min(0.05, lean * 0.045));
     const sx = 1 + sq * 0.25 - rebound * 0.04;
@@ -664,9 +704,18 @@ export class Rider {
     // (On a stomp the raised arms swing back against the torso's forward pitch, more on a saucer where
     // it pitches furthest, so they point up out of the squash rather than out at the snow ahead.)
     // A speed tuck draws the arms in to the knees; a bump the body soaks up flicks them out for balance.
-    const armX = 0.72 - flail * 0.57 + tuck * 0.38 + stomp * (this.seat.crossLegged ? 0.6 : 0.35) + speedTuck * 0.3;
+    let armX = 0.72 - flail * 0.57 + tuck * 0.38 + stomp * (this.seat.crossLegged ? 0.6 : 0.35) + speedTuck * 0.3 - this.grindK * 0.4;
     // Seated cross-legged on a tray the mitts rest on the knees, close in.
-    const armOut = (this.seat.crossLegged ? 0.14 : 0.3) + flail * 0.88 - tuck * 0.12 + stomp * (2.25 - flail * 0.88) - speedTuck * 0.14 + Math.min(0.35, Math.abs(this.bobV) * 0.9) * (1 - stomp);
+    let armOut = (this.seat.crossLegged ? 0.14 : 0.3) + flail * 0.88 - tuck * 0.12 + stomp * (2.25 - flail * 0.88) - speedTuck * 0.14 + Math.min(0.35, Math.abs(this.bobV) * 0.9) * (1 - stomp) + this.grindK * 0.85;
+    // Over the line both arms go up in a V and pump; a tumble windmills them.
+    if (fin > 0.001) {
+      armX += (0.38 - armX) * fin;
+      armOut += (2.5 + (calm ? 0 : Math.sin(time * 6.5) * 0.24) - armOut) * fin;
+    }
+    if (spun > 0) {
+      armX += Math.sin(time * 19) * 1.1;
+      armOut += 0.9 + Math.sin(time * 15) * 0.7;
+    }
     // Balancing a carve: the outside arm reaches out and up, the inside one tucks in, more while the
     // body is still catching up with the sled's bank (the lag between them).
     const bal = Math.max(-1, Math.min(1, lean * 0.9 + (p.lean - lean) * 1.4)) * (1 - air) * (1 - stomp);

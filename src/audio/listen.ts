@@ -34,7 +34,7 @@ export interface FlockLike {
 }
 
 export interface ListenSources {
-  course: Pick<Course, 'centerX' | 'halfWidth' | 'section'> & { readonly params: { readonly halfWidthStart: number } };
+  course: Pick<Course, 'centerX' | 'halfWidth' | 'section'> & { readonly params: { readonly halfWidthStart: number }; readonly stages?: readonly { readonly z0: number; readonly z1: number }[] };
   biome: BiomeId;
   mood: Mood;
   tier: 'low' | 'medium' | 'high';

@@ -77,6 +77,25 @@ export interface Drive {
   snap?: boolean;
 }
 
+/** Where the run stands in the descent and how far the band has opened (cues.ts). */
+export interface Build {
+  /** Stage, 0 to 2. */
+  stage: number;
+  /** The last stage's climb to the line, 0 to 1. */
+  climax: number;
+  /** A stomp streak or 'In the flow' opening the band up, 0 to 1. */
+  open: number;
+}
+
+const NO_BUILD: Build = { stage: 0, climax: 0, open: 0 };
+/** The arp's floor per stage: a plain cruise reaches the arp's door only in the last stage, and a
+ *  second stage with nothing new in it was a stage nobody could hear. */
+const STAGE_ARP = [0, 0.4, 0.7] as const;
+/** The band's tempo per stage: a touch quicker each time, changed on a bar line. */
+const STAGE_TEMPO = [1, 1.025, 1.05] as const;
+/** The last stage is lifted a whole tone, on a chord change: the oldest climax in the book. */
+const LAST_STAGE_LIFT = 2;
+
 function deckId(scene: Scene, mood: Mood, biome: BiomeId): string {
   return `${scene}|${mood}|${biome}`;
 }
@@ -85,14 +104,20 @@ const clampLead = (i: number): number => (i < LEAD_LO ? LEAD_LO : i > LEAD_HI ? 
 
 class Deck {
   readonly id: string;
-  readonly key: Key;
+  key: Key;
   retireAt = Infinity;
   cutShort = false;
   private readonly style: Style;
   private readonly accent: Accent;
   private readonly placed: Placed[] = [];
   private readonly cycle: number;
-  private readonly stepDur: number;
+  private stepDur: number;
+  private readonly bpm: number;
+  /** Semitones the key stands over its own (the last stage's lift), and what the next chord change
+   *  takes it to: the next chord's pad is built half a bar ahead, so the lift is decided there. */
+  private keyLift = 0;
+  private keyNext = 0;
+  private build: Build = NO_BUILD;
   private readonly fader = {} as Record<Layer, GainNode>;
   private readonly sends: GainNode[] = [];
   private readonly xf: GainNode;
@@ -146,6 +171,7 @@ class Deck {
       bar += chord.bars;
     }
     this.cycle = bar;
+    this.bpm = this.key.bpm;
     this.stepDur = 60 / this.key.bpm / 4;
     this.base = start;
 
@@ -200,6 +226,24 @@ class Deck {
     this.drive = d;
   }
 
+  /** (The descent is the run deck's: a resolved or a title deck plays as it always has.) */
+  setBuild(b: Build): void {
+    if (this.scene === 'run') this.build = b;
+  }
+
+  /** Semitones this deck stands over its own key (the last stage's lift). */
+  get lift(): number {
+    return this.keyLift;
+  }
+
+  /** A deck taking over from a lifted band starts in the key it finds: the finish resolves in the key
+   *  the band climbed to, not a tone under it. */
+  liftKey(n: number): void {
+    if (n === this.keyLift) return;
+    this.key = { ...this.key, tonic: this.key.tonic + n - this.keyLift };
+    this.keyLift = this.keyNext = n;
+  }
+
   schedule(until: number, now: number, enabled: boolean): void {
     this.levels();
     this.applyLevels(now);
@@ -216,6 +260,8 @@ class Deck {
     // slider) can leave the current chord without its bed until the next chord.
     if (gap && enabled && this.base < this.stopAt) this.repad(now);
     while (this.base < until && this.base < this.stopAt) {
+      // The band's tempo moves on a bar line only, so every grid pulse stays on it.
+      if (this.scene === 'run' && (this.step & 15) === 0) this.stepDur = 60 / (this.bpm * STAGE_TEMPO[Math.min(2, this.build.stage)]) / 4;
       const t = this.base + (this.step & 1 ? this.style.swing * this.stepDur : 0);
       if (enabled) this.play(this.step, Math.max(t, now));
       this.base += this.stepDur;
@@ -261,6 +307,13 @@ class Deck {
       L.lead = smoothstep(0.82, 0.92, i);
       L.tension = smoothstep(0.05, 0.6, this.drive.danger);
       L.choir = this.choirN > 0 ? 1 : 0;
+      // A stomp streak or 'In the flow' opens the band up: the upper layers come in over whatever the
+      // drive holds. The climb to the finish brings the clap and a lead in regardless.
+      const { open, climax, stage } = this.build;
+      L.arp = Math.max(L.arp, 0.85 * open, STAGE_ARP[Math.min(2, stage)]);
+      L.sparkle = Math.max(L.sparkle, 0.75 * open);
+      L.lead = Math.max(L.lead, 0.7 * smoothstep(0.55, 1, open), 0.6 * smoothstep(0.45, 1, climax));
+      L.clap = Math.max(L.clap, 0.7 * smoothstep(0.55, 1, climax));
     }
     if (this.solo) for (const l of LAYERS) if (l !== this.solo) L[l] = 0;
   }
@@ -350,6 +403,10 @@ class Deck {
     const bar = step >> 4;
     const placed = this.chordAt(bar);
     const chord = placed.chord;
+    if (s16 === 0 && bar % this.cycle === placed.start && this.keyNext !== this.keyLift) {
+      this.key = { ...this.key, tonic: this.key.tonic + this.keyNext - this.keyLift };
+      this.keyLift = this.keyNext;
+    }
     const root = this.key.tonic + chord.root;
     const st = this.style;
     const L = this.level;
@@ -369,13 +426,21 @@ class Deck {
       const next = this.chordAt(bar + 1);
       const tp = t + 8 * sd;
       if ((bar + 1) % this.cycle === next.start && tp < this.stopAt) {
-        this.padChord(next.chord, this.key.tonic + next.chord.root, tp, next.chord.bars * 16 * sd);
+        // The last stage's lift lands on a chord change: this pad is the first of it.
+        if (this.scene === 'run') this.keyNext = this.build.stage >= 2 ? LAST_STAGE_LIFT : 0;
+        this.padChord(next.chord, this.key.tonic + (this.keyNext - this.keyLift) + next.chord.root, tp, next.chord.bars * 16 * sd);
       }
     }
 
+    // The last stage thickens the rhythm section: the bass doubles at the octave on the strong beats
+    // and the hats fill in the off 16ths.
+    const last = this.scene === 'run' && this.build.stage >= 2;
     if (L.bass > AUDIBLE) {
       const off = this.scene === 'results' ? (s16 === 0 ? 0 : s16 === 8 ? 7 : null) : st.bass[s16];
-      if (off !== null && off !== undefined) this.bassNote(fit(root, 36) + off, t);
+      if (off !== null && off !== undefined) {
+        this.bassNote(fit(root, 36) + off, t);
+        if (last && (s16 & 7) === 0) this.bassNote(fit(root, 36) + off + 12, t);
+      }
     }
 
     const rate = this.scene === 'title' ? st.arp.rate * 2 : this.scene === 'results' ? Math.max(2, st.arp.rate) : st.arp.rate;
@@ -386,6 +451,8 @@ class Deck {
         const m = notes[this.arpIndex(n, notes.length)];
         const vel = (n % 4 === 0 ? 1 : 0.78) * rand(0.9, 1);
         this.tone('arp', this.arpTimbre(), t, m, vel, rand(-0.35, 0.35));
+        // Opened up, every second note rings an octave over itself, out to one side.
+        if (this.build.open > 0.5 && n % 2 === 0) this.tone('arp', this.arpTimbre(), t, m + 12, vel * 0.42 * this.build.open, n % 4 === 0 ? -0.55 : 0.55);
         if (this.accent.shimmer && n % 4 === 0) this.tone('arp', 'glass', t, m + 12, vel * 0.3, rand(-0.6, 0.6), 0.7);
       }
     }
@@ -395,7 +462,8 @@ class Deck {
 
     // Every note below is one voice holding one part, so the part's envelope is the voice's out
     // (instruments.ts: dest null) instead of a gain of its own.
-    const hv = this.scene === 'results' ? ((s16 & 3) === 2 ? 0.5 : 0) : st.hat[s16];
+    const hv0 = this.scene === 'results' ? ((s16 & 3) === 2 ? 0.5 : 0) : st.hat[s16];
+    const hv = last && hv0 === 0 ? 0.24 : hv0;
     if (L.hat > AUDIBLE && hv > 0) hat(this.pool.voice(t, 1, this.fader.hat, null, 0), t, hv * rand(0.85, 1), hv >= 0.75, null);
 
     const cv = st.clap[s16];
@@ -449,7 +517,8 @@ class Deck {
       const m = fit(root + x, x >= 12 ? 62 : 55);
       if (!notes.includes(m)) notes.push(m);
     }
-    const cut = this.style.pad.cutoff * this.accent.padCut * (this.scene === 'title' ? 0.85 : 1) * (1 - 0.25 * this.drive.danger);
+    // (An opened band's pads bloom: the filter stands wider for the next chord on.)
+    const cut = this.style.pad.cutoff * this.accent.padCut * (this.scene === 'title' ? 0.85 : 1) * (1 - 0.25 * this.drive.danger) * (1 + 0.9 * this.build.open);
     const v = this.pool.voice(t, 1, this.fader.pad, null, 0);
     v.keep = true;
     const p = this.style.pad;
@@ -572,6 +641,7 @@ export class Music {
   private mood = Mood.None;
   private biome: BiomeId = 'alpine';
   private drive: Drive = { intensity: 0, danger: 0, mult: 1 };
+  private build: Build = NO_BUILD;
   /** Probe: decks started (each after the first is a crossfade). */
   decksStarted = 0;
   private choir = 0;
@@ -593,6 +663,14 @@ export class Music {
   /** snap: move the layer faders fast on the next scheduler pass (kept until that pass runs). */
   setDrive(intensity: number, danger: number, mult: number, snap = false): void {
     this.drive = { intensity, danger, mult, snap: snap || this.drive.snap === true };
+  }
+
+  /** Where the run stands in the descent, and how far the band has opened (engine.ts, each frame). */
+  setBuild(stage: number, climax: number, open: number): void {
+    const b = this.build === NO_BUILD ? (this.build = { ...NO_BUILD }) : this.build;
+    b.stage = stage;
+    b.climax = climax;
+    b.open = open;
   }
 
   /** Key of the arrangement that is playing (or about to): every reward sound uses it. */
@@ -643,6 +721,7 @@ export class Music {
     if (!top || top.id !== id) {
       if (top) top.fadeOut(now, XFADE);
       const d = new Deck(this.ctx, this.pool, this.bus, this.scene, this.mood, this.biome, now + 0.05);
+      if (top && this.scene === 'results') d.liftKey(top.lift);
       d.fadeIn(now, top ? XFADE : 1.2);
       d.setChoir(this.choir, now, false);
       this.decks.push(d);
@@ -657,6 +736,7 @@ export class Music {
     }
     for (const d of this.decks) {
       d.setDrive(this.drive);
+      d.setBuild(this.build);
       d.solo = this.solo;
       d.schedule(until, now, this.enabled);
     }
