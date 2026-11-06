@@ -22,6 +22,10 @@ export const CRASH_RESULTS_REDUCED_MS = 950;
 // crash (reduced motion never waits).
 export const CRASH_PACK_NEAR_M = 25;
 export const CRASH_PACK_MAX_MS = 1600;
+/** Over the line the results wait this long, through the coast into the town square; a tap skips it,
+ *  from FINISH_SKIP_MS on (so a press held over from the run's last jump never skips by accident). */
+export const FINISH_RESULTS_MS = 3000;
+export const FINISH_SKIP_MS = 500;
 export const EXTRA_GIFTS_CAP = 30; // per run: chains, slung, duels, finales, graveyards
 export const DRIFT_TIER_HEX = ['#FFC2A8', '#FF8A5C', '#FF4D2E'] as const;
 export const FLOW_HEX = '#FF4D2E';
@@ -75,8 +79,8 @@ export type Beat =
   | (B & { type: 'passedBy'; ghost: GhostRef; muted: boolean; wreck?: boolean })
   | (B & { type: 'lead'; of: number })
   | (B & { type: 'raceNews'; ghost: GhostRef; news: RaceNews; text: string; pan: number; gain: number })
-  /** gifts: credited by the app (won / heldOff only). */
-  | (B & { type: 'duel'; phase: 'open' | 'won' | 'heldOff' | 'lost' | 'closed'; ghost: GhostRef; gifts: number })
+  /** gifts: credited by the app (won / heldOff only). over: lost with the ghost over the finish line. */
+  | (B & { type: 'duel'; phase: 'open' | 'won' | 'heldOff' | 'lost' | 'closed'; ghost: GhostRef; gifts: number; over?: boolean })
   | (B & { type: 'raceCall'; ghost: GhostRef; word: 'Racing' | 'Nemesis' | 'Rematch' | 'Chase'; sr: string })
   /** paid: display only (the same gifts ride on the grudge's pass beat). App calls happytime here. */
   | (B & { type: 'grudgeSettled'; ghost: GhostRef; nemesis: boolean; after: number; paid: number })
@@ -88,13 +92,17 @@ export type Beat =
   | (B & { type: 'missionPop'; id: string; text: string; reward: number })
   | (B & { type: 'unlockPop'; id: string; name: string; biome: BiomeId })
   | (B & { type: 'crash'; cause: CrashCause; stake: number; orbitFrom: number | null })
-  /** A wipeout the run survives. left: wipeouts the run can still take. 'end': back on the line. */
-  | (B & { type: 'tumble'; phase: 'start' | 'end'; cause: CrashCause; left: number; x: number; z: number })
+  /** A wipeout the run survives. left: wipeouts the run can still take. free: it cost none of them.
+   *  'end': back on the line. */
+  | (B & { type: 'tumble'; phase: 'start' | 'end'; cause: CrashCause; left: number; free: boolean; x: number; z: number })
   /** Turned back by something solid at the corridor's edge. */
   | (B & { type: 'scrape'; side: -1 | 1; speed: number })
-  /** A stage line crossed. The finish crosses the last one, then 'finish' follows. */
-  | (B & { type: 'stage'; index: number; name: string; last: boolean })
-  | (B & { type: 'finish'; bonus: number; seconds: number })
+  /** A stage line crossed. The finish crosses the last one, then 'finish' follows. seconds: the run
+   *  clock at the line. vsGhost: against the ghost just ahead, or in the lead the one just behind.
+   *  vsGhost.delta and vsBest are seconds, + = you are behind it; null with nothing to compare. */
+  | (B & { type: 'stage'; index: number; name: string; last: boolean; seconds: number; vsGhost: { name: string; kind: GhostKind; delta: number } | null; vsBest: number | null })
+  /** Over the line: the race ends here. rank and of: your place (only ghosts already over it lead you). */
+  | (B & { type: 'finish'; bonus: number; seconds: number; rank: number; of: number })
   | (B & { type: 'grind'; phase: 'start' | 'end'; id: number })
   | (B & { type: 'km'; km: number })
   | (B & { type: 'ghostTrick'; ghost: GhostRef; quality: 'clean' | 'perfect' | 'sketchy'; word: string | null; x: number; y: number; z: number })
@@ -132,8 +140,10 @@ export interface Feel {
   duelId: number | null;
   /** Scaled seconds since the crash beat; -1 when not crashed. */
   crashT: number;
+  /** Scaled seconds since the finish line; -1 until then. */
+  finishT: number;
 }
-export const IDLE_FEEL: Feel = { reduced: false, flow: 0, flowPulse: 0, driftCharge: 0, driftTier: 0, streak: 0, timeFeed: 1, timeRender: 1, shakeScale: 1, bestLine: null, friendLine: null, duelId: null, crashT: -1 };
+export const IDLE_FEEL: Feel = { reduced: false, flow: 0, flowPulse: 0, driftCharge: 0, driftTier: 0, streak: 0, timeFeed: 1, timeRender: 1, shakeScale: 1, bestLine: null, friendLine: null, duelId: null, crashT: -1, finishT: -1 };
 
 /** Telemetry ring (window.__gs.director.log), cleared on beginRun. */
 export interface BeatLogEntry { t: number; type: BeatType; named: boolean; label?: string; word?: PassWord; tier?: number; grade?: string; gifts?: number }

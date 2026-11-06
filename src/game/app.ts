@@ -7,9 +7,9 @@ import { World, qualityFor, Tier } from '../render/world';
 import { ChaosEvent, ChaosRoll, EVENTS, MOODS, Mood, eventInfo, moodInfo, rollChaos } from '../sim/chaos';
 import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '../sim/mountains';
 import { Rng, hashString } from '../sim/prng';
-import { RunRecord, fromBase64Url, recordFromString, recordToString } from '../sim/replay';
+import { RunRecord, recordFromString, recordToString } from '../sim/replay';
 import { decodeLog } from '../sim/input';
-import { Sim, SimEvent } from '../sim/sim';
+import { Sim, SimEvent, TUMBLES } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { UI } from '../ui/ui';
 import { reduced } from '../ui/motion';
@@ -17,11 +17,12 @@ import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
 import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
-import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS } from './beats';
+import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS } from './beats';
+import { type OldLink, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
-import { anchorFor, pickField } from './field';
+import { anchorFor, pickField, poolTime } from './field';
 import { PoolGhostData } from './ghostdata';
-import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose } from './ghosts';
+import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, trackStanding } from './ghosts';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -31,13 +32,16 @@ import { type MissionCtx, type MissionResult, type MissionState, RunSummary, mis
 import { challengeShareTitle, crashLine, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
 import { type InputSource, Run, emptySnap, lerpSnap } from './run';
-import { Grudge, SaveStore } from './save';
-import { type GrudgeRow, Settlement, dailyMedalNow, dailyStreakNow, isNemesis, medalThresholds, settleGrudge, settleRun } from './settle';
+import { type BestRun, Grudge, SaveStore, oldBest, retireGrudge, rideableGrudge } from './save';
+import { type GrudgeRow, Settlement, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
+import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFinish, recordStanding } from './standing';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
 
-type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'results';
+/** 'crashed' is the crash beat before its results; 'finished' the coast through the town square before
+ *  its results (the sim still ticks). A finish is never a crash: only `crashed()` opens the first. */
+type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results';
 
 /** Dev-only overrides for play-tests and screenshots: ?mood=3&event=1&m=2&autoride=1. */
 const DEV = new URLSearchParams(location.search);
@@ -74,9 +78,11 @@ const NO_RACE: readonly RaceEvent[] = [];
  *  them; still within CRASH_PACK_MAX_MS of the crash. */
 const PACK_SETTLE_MS = 500;
 
-/** A challenge link from an older build. Short enough for the toast pill at 390 px; the sub gives
- *  way first when space runs out. */
-const STALE_LINK = { text: 'Challenge from an older Ghost Sled', sub: 'Ride it fresh' } as const;
+/** The lip lesson shows this long ahead of a kicker (s), or at least this far (m), for a rider within
+ *  KICK_SIDE_M of its edge: a beat to get on it, hold and let go, and a miss needs no second telling. */
+const KICK_LOOK_S = 2.2;
+const KICK_LOOK_M = 40;
+const KICK_SIDE_M = 3;
 
 /** A saved or shared record that still replays on this build (a stale one degrades to no ghost). */
 function validRecord(r: string | undefined | null): boolean {
@@ -86,17 +92,6 @@ function validRecord(r: string | undefined | null): boolean {
     return true;
   } catch {
     return false;
-  }
-}
-
-/** The mountain seed of a record that no longer decodes (an older build's link), when it reads. */
-function rawSeed(raw: string): number | null {
-  try {
-    const b = fromBase64Url(raw);
-    if (b.length < 8 || b[0] !== 0x47 || b[1] !== 0x53) return null;
-    return (b[4] | (b[5] << 8) | (b[6] << 16) | (b[7] << 24)) >>> 0;
-  } catch {
-    return null;
   }
 }
 
@@ -141,9 +136,11 @@ export class App {
   private dailyPool: PoolGhostData[] = [];
   private dailyReady = false;
   private challenge: Challenge | null = null;
+  private oldLink: OldLink | null = null;
   private sessionRuns = 0;
   private lastMood: Mood = Mood.None;
   private chaos: ChaosRoll = { mood: Mood.None, event: ChaosEvent.None, seed: 0 };
+  /** When the run ended, at a crash or on the line. */
   private crashTime = 0;
   /** Counts crashes, so a stale auto-results timer never opens the next crash's results early. */
   private crashSeq = 0;
@@ -162,6 +159,15 @@ export class App {
   private doubled = false;
   private giftsPersisted = 0;
   private bestPersisted = false;
+  /** Your best as the run started: what this run is measured against, however often it persists. */
+  private bestAtStart: BestRun | null = null;
+  /** This run's time beat your best time. */
+  private newBestTime = false;
+  /** This run's wipeouts (free ones too), wall rides and rails, for its missions. */
+  private tumbles = 0;
+  private wallRides = 0;
+  private lastWallTick = -1e9;
+  private grinds = 0;
   private results: ResultsModel | null = null;
   /** Counts results cards shown and hidden: a card's first-frame sounds skip a card already gone. */
   private resultsSeq = 0;
@@ -290,22 +296,11 @@ export class App {
     this.applyAudioSettings();
     const user = await this.platform.getUser().catch(() => null);
     if (user?.username && this.save.data.runs === 0) this.save.data.name = user.username.slice(0, 16);
-    const stale = this.readChallenge();
+    this.readChallenge();
     this.adblock = await this.platform.hasAdblock().catch(() => false);
     this.ui.setLoading(null);
     this.platform.loadingStop();
     this.refreshTitle();
-    // Said once the title is up and painting (its first frames compile shaders and can hold the
-    // main thread for a second or more), so the toast's whole time on screen can be read.
-    if (stale) {
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
-          window.setTimeout(() => {
-            if (this.phase === 'title') this.ui.toast(STALE_LINK.text, 'info', STALE_LINK.sub);
-          }, 600);
-        }),
-      );
-    }
     // Once the title has settled, the shop's portraits are drawn in the background (title only).
     window.setTimeout(() => prewarmSledPortraits(SLEDS.map((s) => s.id), this.save.data.sled, () => this.phase === 'title'), 1200);
     if (DEV_ON && DEV.has('autoride')) this.ride();
@@ -347,6 +342,7 @@ export class App {
       if ((this.phase === 'title' || this.phase === 'results') && !startsFromMenu(source, code)) return;
       if (this.phase === 'title' && !this.ui.modal) this.ride();
       else if (this.phase === 'crashed' && performance.now() - this.crashTime > 350) this.showResults();
+      else if (this.phase === 'finished' && performance.now() - this.crashTime > FINISH_SKIP_MS) this.showResults();
       else if (this.phase === 'results' && performance.now() - this.crashTime > 700) this.runAgain();
     });
     window.addEventListener('keydown', (e) => {
@@ -384,32 +380,24 @@ export class App {
     this.audio.setVolumes({ master: s.master, music: s.music, sfx: s.sfx });
   }
 
-  /** Reads the challenge link; true when it was made on an older build (the caller says so). */
-  private readChallenge(): boolean {
+  /** Reads the challenge link, through either path to it (the SDK's invite param, or `?c=`). A link
+   *  from an older build still counts: its rider's distance is the target on its mountain. */
+  private readChallenge(): void {
     const raw = this.platform.getInviteParam('c') ?? new URLSearchParams(location.search).get('c');
-    if (!raw) return false;
+    if (!raw) return;
     const before = this.mountain;
-    let stale = false;
-    try {
-      const rec = recordFromString(raw);
-      this.challenge = { record: rec, attempts: 0 };
-      const m = MOUNTAINS.find((mm) => mm.seed === rec.seed);
-      if (m) this.mountain = m;
-    } catch {
-      // A link made on an older build (or mangled in transit): say so, and still open on its
-      // mountain when its seed can be read.
-      const seed = rawSeed(raw);
-      const m = seed !== null ? MOUNTAINS.find((mm) => mm.seed === seed) : undefined;
-      if (m) this.mountain = m;
-      stale = true;
-    }
+    const link = readChallengeLink(raw);
+    if (link?.ghost) this.challenge = { record: link.ghost, attempts: 0 };
+    if (link?.old) this.oldLink = link.old;
+    const seed = link?.ghost?.seed ?? link?.old?.seed;
+    const m = MOUNTAINS.find((mm) => mm.seed === seed);
+    if (m) this.mountain = m;
     // The title was built before the link was read: rebuild its course and reel on the link's mountain.
     if (this.mountain !== before && this.phase === 'title') {
       this.world.setCourse(this.mountain.seed);
       this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed));
       this.setAttractField();
     }
-    return stale;
   }
 
   // ------------------------------------------------------------------ title
@@ -466,12 +454,15 @@ export class App {
   /** The title's friend line: the challenge's rider, score, distance and where (the Daily Mountain
    *  only for today's; another day's daily hides the distance). */
   private challengeModel(): TitleModel['challenge'] {
+    const o = this.oldLink;
+    if (o) return { name: o.name, score: o.score, mountain: o.mountain, distance: o.distance, old: true };
     const c = this.challenge;
     if (!c) return null;
     const rec = c.record;
+    const time = recordStanding(rec).time;
     const named = MOUNTAINS.find((m) => m.seed === rec.seed);
-    if (named) return { name: rec.name, score: rec.score, mountain: named.name, distance: rec.distance };
-    if (rec.seed === this.daily.seed) return { name: rec.name, score: rec.score, mountain: 'the Daily Mountain', distance: rec.distance, daily: true };
+    if (named) return { name: rec.name, score: rec.score, mountain: named.name, distance: rec.distance, time };
+    if (rec.seed === this.daily.seed) return { name: rec.name, score: rec.score, mountain: 'the Daily Mountain', distance: rec.distance, time, daily: true };
     // Another day's Daily Mountain: no mountain named, so the title shows the first line alone.
     return { name: rec.name, score: rec.score, mountain: '', daily: true };
   }
@@ -489,11 +480,15 @@ export class App {
         biome: biomeForSeed(m.seed),
         locked: d.ghostsPassed < m.unlockGhosts,
         unlockText: d.ghostsPassed < m.unlockGhosts ? `Pass ${m.unlockGhosts - d.ghostsPassed} more ${m.unlockGhosts - d.ghostsPassed === 1 ? 'ghost' : 'ghosts'} to unlock` : '',
-        best: d.best[m.id]?.score ?? 0,
+        best: topScore(d.best[m.id]),
+        bestTime: d.best[m.id]?.time ?? 0,
+        oldBest: oldBest(d, m.id)?.score ?? 0,
       })),
       selected: this.mountain.id,
       daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: dailyStreakNow(d.daily, today) },
-      best: d.best[this.mountain.id]?.score ?? 0,
+      best: topScore(d.best[this.mountain.id]),
+      bestTime: d.best[this.mountain.id]?.time ?? 0,
+      oldBest: oldBest(d, this.mountain.id)?.score ?? 0,
       wallet: d.gifts,
       sledName: sledById(d.sled).name,
       challenge: this.challengeModel(),
@@ -600,7 +595,7 @@ export class App {
       mood: chaos.mood,
       event: chaos.event,
       count: 5 + moodInfo(chaos.mood).params.extraGhosts,
-      anchor: anchorFor(d.runDists ?? {}, key),
+      anchor: anchorFor(d.runTimes ?? {}, key),
       seed: chaos.seed,
       bestScore: ownRec?.score ?? 0,
       you: own?.record ? { name: d.name, score: own.score, distance: own.distance, record: own.record } : null,
@@ -700,6 +695,13 @@ export class App {
     this.giftsPersisted = 0;
     this.bestPersisted = false;
     this.newBestThisRun = false;
+    this.newBestTime = false;
+    const had = d.best[this.mountainKey()];
+    this.bestAtStart = had ? { ...had } : null;
+    this.tumbles = 0;
+    this.wallRides = 0;
+    this.lastWallTick = -1e9;
+    this.grinds = 0;
     this.recordsThisRun.clear();
     this.passedThisRun.clear();
     this.passBonus = 0;
@@ -788,7 +790,7 @@ export class App {
     const d = this.save.data;
     const key = this.mountainKey();
     const g = d.grudge[key];
-    const friend = this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
+    const goal = this.friendGoal();
     const reveal = chaos.mood !== Mood.None || chaos.event !== ChaosEvent.None;
     this.director.beginRun({
       mood: chaos.mood,
@@ -797,10 +799,12 @@ export class App {
       hasReveal: reveal,
       revealLeaveS: reveal ? REVEAL_TIMING.T_LEAVE / 1000 : 0,
       bestDistAtStart: d.best[key]?.distance ?? 0,
-      bestScoreAtStart: d.best[key]?.score ?? 0,
+      bestTimeAtStart: d.best[key]?.time ?? null,
+      bestSplitsAtStart: d.best[key]?.splits ?? null,
+      bestScoreAtStart: topScore(d.best[key]),
       bestComboAtStart: d.stats.bestCombo,
       grudgeAtStart: g ? { name: g.name, record: g.record, them: g.them ?? 1, streak: g.streak ?? 1 } : null,
-      friend: friend ? { name: friend.name, distance: friend.distance } : null,
+      friend: goal ? { name: goal.name, distance: goal.standing.distance, time: goal.standing.time } : null,
       lifetimePassed: d.ghostsPassed,
       unlockLadder: MOUNTAINS.filter((m) => m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
       missionsCrossed: () => this.missionsCrossedNow(),
@@ -967,10 +971,10 @@ export class App {
     const link = this.platform.inviteLink({ c: recordToString(rec) });
     const nav = navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> };
     // Beat a friend's link and it goes back to them with the margin: "Send It Back".
-    const fr = this.friendRecord();
-    const dist = this.run.sim.distance;
-    const answer = !!fr && dist > fr.distance;
-    const title = fr && answer ? challengeShareTitle(fr.name, fr.distance, this.mountain.name, Math.round(dist - fr.distance)) : challengeShareTitle(this.save.data.name, dist, this.mountain.name, null);
+    const fr = this.friendGoal();
+    const you = this.youStanding(this.run.sim);
+    const answer = !!fr && aheadOf(you, fr.standing);
+    const title = fr && answer ? challengeShareTitle(fr.name, fr.standing, this.mountain.name, marginPhrase(you, fr.standing)) : challengeShareTitle(this.save.data.name, you, this.mountain.name, null);
     // The clipboard carries the answer back too: the same line the phone's share sheet sends, then the link.
     const done = () => (fr && answer ? this.ui.toast(`Copied your answer to ${fr.name}`, 'ghost') : this.ui.toast('Challenge link copied', 'ghost', 'Send it to a friend to race your ghost'));
     if (this.platform.deviceType !== 'desktop' && nav.share) {
@@ -987,14 +991,27 @@ export class App {
     return this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
   }
 
-  private crashed(): void {
-    this.phase = 'crashed';
-    this.crashTime = performance.now();
-    this.platform.gameplayStop();
-    this.ui.hint(null, this.input.mode);
-    // Where you stood as you fell, before the grudge is settled from it (persistRun): each ghost's gap
-    // on this frame's poses against the rider as rendered, and your place counted from the same gaps,
-    // so the crash line's place plus the ghosts that rode on past is the card's place.
+  /** The friend's run to beat on this mountain: their ghost's, or an old link's distance, clamped to
+   *  the finish (it can be further than this course goes), else null. */
+  private friendGoal(): { name: string; standing: Standing } | null {
+    const fr = this.friendRecord();
+    if (fr) {
+      const t = this.ghosts.tracks.find((k) => k.entry.kind === 'friend' && k.ready);
+      return { name: fr.name, standing: t ? trackStanding(t) : recordStanding(fr) };
+    }
+    const old = this.oldLink;
+    return old && old.seed === this.mountain.seed ? { name: old.name, standing: { time: null, distance: targetZ(old) } } : null;
+  }
+
+  /** This run's place in the race order. */
+  private youStanding(sim: Sim): Standing {
+    return { time: sim.finished ? sim.s.finishTick / 60 : null, distance: sim.distance };
+  }
+
+  /** Each ghost's gap to you on this frame's poses, against the rider as rendered, and your place
+   *  counted from the same gaps: where you stood as the run ended, before the grudge is settled from it
+   *  (persistRun). */
+  private noteGaps(): void {
     this.gapAtCrash.clear();
     let ahead = 0;
     for (const t of this.ghosts.tracks) {
@@ -1005,6 +1022,32 @@ export class App {
       if (gap > 0) ahead++;
     }
     this.rankAtCrash = this.gapAtCrash.size > 0 ? ahead + 1 : null;
+  }
+
+  /** The finish line. The race is over and the run is safe in the save; the sled coasts on through the
+   *  town square, and the results open after FINISH_RESULTS_MS (a tap skips). Never a crash: nothing
+   *  here passes through crashed(), and a wreck's note, revive and cause do not apply. */
+  private crossedLine(): void {
+    this.phase = 'finished';
+    this.crashTime = performance.now();
+    this.platform.gameplayStop();
+    this.ui.hint(null, this.input.mode);
+    this.noteGaps();
+    this.rankAtCrash = null;
+    this.persistRun();
+    const seq = ++this.crashSeq;
+    setTimeout(() => {
+      if (this.phase === 'finished' && seq === this.crashSeq) this.showResults();
+    }, FINISH_RESULTS_MS);
+  }
+
+  private crashed(): void {
+    this.phase = 'crashed';
+    this.crashTime = performance.now();
+    this.platform.gameplayStop();
+    this.ui.hint(null, this.input.mode);
+    // (So the crash line's place plus the ghosts that rode on past is the card's place.)
+    this.noteGaps();
     this.persistRun();
     // The crash beat (a held frame, slow motion, a still lens) plays out before the results arrive;
     // with a ghost that was behind you still riding close behind the wreck, they wait for it to go by
@@ -1053,6 +1096,12 @@ export class App {
       ghostsPassed: this.passedThisRun.size,
       grudgeBeaten: this.grudgeBeaten,
       chaos: this.chaos.mood !== Mood.None || this.chaos.event !== ChaosEvent.None,
+      seconds: sim.tick / 60,
+      finished: sim.finished,
+      finishSeconds: sim.finished ? sim.s.finishTick / 60 : 0,
+      tumbles: this.tumbles,
+      wallRides: this.wallRides,
+      grinds: this.grinds,
     };
   }
 
@@ -1069,12 +1118,14 @@ export class App {
     d.lifetimeGifts += delta;
     this.giftsPersisted = giftsNow;
     const score = sim.score;
-    const prev = d.best[key]?.score ?? 0;
-    if (score > prev) {
-      d.best[key] = { score, distance: sim.distance, record: recordToString(this.run.toRecord(d.name)) };
-      if (prev > 0 && !this.newBestThisRun) this.platform.happytime();
-      this.newBestThisRun = true;
-    }
+    const run = this.run;
+    const at = this.bestAtStart;
+    const best = settleBest(d, key, at, { score, distance: sim.distance, time: this.youStanding(sim).time, splits: sim.stageTicks.map((t) => t / 60), record: () => recordToString(run.toRecord(d.name)) });
+    // (Once a run, and only for a best there was one to beat: a first record is no news.)
+    const beatOld = (best.newTop && topScore(at) > 0) || (best.newTime && at?.time !== undefined);
+    if (beatOld && !this.newBestThisRun && !this.newBestTime) this.platform.happytime();
+    if (best.newTop) this.newBestThisRun = true;
+    if (best.newTime) this.newBestTime = true;
     // (Spread, so fields a later build adds to the daily record survive this write.)
     if (this.mountain.id === 'daily') d.daily = { ...d.daily, key: this.daily.tagline, best: Math.max(d.daily.key === this.daily.tagline ? d.daily.best : 0, score) };
     d.stats.bestScore = Math.max(d.stats.bestScore, score);
@@ -1087,6 +1138,7 @@ export class App {
     // The grudge, settled from the snapshot taken at the start (so a revive's second crash gives the
     // same answer): it stays and its tally grows, or you beat it and the Next row takes its place.
     const settled = settleGrudge(this.grudgeAtStart, this.grudgeOutcome(sim));
+    if (settled.retired) retireGrudge(d, key, settled.retired);
     if (settled.grudge) d.grudge[key] = settled.grudge;
     else delete d.grudge[key];
     this.grudgeLine = settled.line;
@@ -1097,32 +1149,34 @@ export class App {
   }
 
   /** How the run ended against its grudge: did the grudge ride, was it passed, and the results'
-   *  Next row (the nearest ghost whose whole run went further than yours; never 'you' or a friend).
+   *  Next row (the ghost in the place right above yours; never 'you' or a friend).
    *  'Passed' is the director's verdict (its grudgeSettled beat fired: a shown pass, a duel beaten, or
    *  riding past where it ended), so the results settle exactly what the run showed settled: a
    *  start-line jostle past it is no overtake. */
   private grudgeOutcome(sim: Sim): Parameters<typeof settleGrudge>[1] {
     const g = this.grudgeAtStart;
-    let rode: { distance: number; passed: boolean } | null = null;
+    const you = this.youStanding(sim);
+    let rode: { distance: number; time: number | null; passed: boolean } | null = null;
     let next: GrudgeRow | null = null;
-    // Everyone who went further: a settled grudge's successor is elected from these, never itself. Each
+    // Everyone who beat you: a settled grudge's successor is elected from these, never itself. Each
     // row carries its field role and its gap at the crash (never stored): the election prefers the
     // rival you were racing when you fell, then one within reach (settle.ts).
     const ahead: GrudgeRow[] = [];
+    const place = (r: GrudgeRow): Standing => ({ time: r.time ?? null, distance: r.distance });
     for (const t of this.ghosts.tracks) {
       if (!t.ready) continue;
-      if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, passed: this.director.grudgeSettled };
+      const st = trackStanding(t);
+      if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, time: st.time, passed: this.director.grudgeSettled };
       if (t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
-      const by = t.distance - sim.distance;
-      if (by <= 0) continue;
-      const row: GrudgeRow = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, kind: t.entry.kind };
+      if (!aheadOf(st, you)) continue;
+      const row: GrudgeRow = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, time: st.time, kind: t.entry.kind };
       if (t.entry.role) row.role = t.entry.role;
       const gap = this.gapAtCrash.get(t.entry.id);
       if (gap !== undefined) row.gapAtCrash = gap;
       ahead.push(row);
-      if (!next || by < next.distance - sim.distance) next = row;
+      if (!next || aheadOf(place(next), st)) next = row;
     }
-    return { youDistance: sim.distance, rode, next, ahead };
+    return { youDistance: sim.distance, youTime: you.time, rode, next, ahead };
   }
 
   private finalizeRun(): void {
@@ -1132,6 +1186,13 @@ export class App {
 
   private showResults(): void {
     if (!this.run) return;
+    const sim = this.run.sim;
+    // Over the line the card opens on a fresh guard (a tap that skips the coast is not Run Again), and
+    // what the save holds of this run takes in the coast it just rode.
+    if (sim.finished) {
+      this.crashTime = performance.now();
+      this.persistRun();
+    }
     this.phase = 'results';
     this.packHold = false;
     // The crash beat is over: no curve or pulse carries into the results scene, and the ghosts still to
@@ -1139,10 +1200,10 @@ export class App {
     this.director.time.reset();
     this.director.endCrash();
     const d = this.save.data;
-    const sim = this.run.sim;
     // A revive and a second crash settle the same run again: settleRun credits only the difference.
-    // A Daily run is graded against the day's pool (bronze, silver and gold distances).
-    const medals = this.mountain.id === 'daily' ? medalThresholds(this.dailyPool.map((g) => g.distance)) : null;
+    // A finish is graded against its mountain's pool (bronze, silver and gold times); the Daily's medal
+    // goes on the save.
+    const medals = medalThresholds(this.poolForMountain(this.mountain).map(poolTime));
     const settled = settleRun(d, this.summary(), this.settlement, this.mountainKey(), medals);
     this.settlement = settled.settlement;
     // The missions this card shows Done: a revive never pops them again mid-run.
@@ -1161,12 +1222,13 @@ export class App {
     }
     this.save.flush();
     const key = this.mountain.id === 'daily' ? `daily:${this.daily.tagline}` : this.mountain.id;
-    // The race is decided by distance: each ghost carries how far its whole run went (the replay
-    // worker reports it), and the Passed stamps are exactly the overtakes counted this run.
+    // The race is decided by time, then distance (standing.ts): each ghost carries its whole run (the
+    // replay worker reports it), and the Passed stamps are exactly the overtakes counted this run.
+    const you = this.youStanding(sim);
     const ghosts = this.ghosts.tracks
       .filter((t) => t.ready)
-      .map((t) => ({ name: t.entry.name, kind: t.entry.kind, score: t.entry.score, distance: t.distance, passed: this.passedThisRun.has(t.entry.id) }))
-      .sort((a, b) => b.distance - a.distance);
+      .map((t) => ({ name: t.entry.name, kind: t.entry.kind, score: t.entry.score, distance: t.distance, time: trackStanding(t).time, passed: this.passedThisRun.has(t.entry.id) }))
+      .sort((a, b) => byStanding({ time: a.time, distance: a.distance }, { time: b.time, distance: b.distance }));
     // Why the card's place is not the one the HUD showed as you fell: the ghosts that were behind you
     // then and whose whole run went further rode on past the wreck. Those whose 'passed you' played
     // come first, in the order it did, and only they are named; the rest follow nearest first (the
@@ -1176,21 +1238,37 @@ export class App {
       const i = this.wreckShown.indexOf(t.entry.id);
       return i < 0 ? Infinity : i;
     };
-    const pastTracks = this.ghosts.tracks.filter((t) => t.ready && gapAt(t) < 0 && t.distance > sim.distance).sort((a, b) => shownAt(a) - shownAt(b) || gapAt(b) - gapAt(a));
+    const pastTracks = sim.finished ? [] : this.ghosts.tracks.filter((t) => t.ready && gapAt(t) < 0 && aheadOf(trackStanding(t), you)).sort((a, b) => shownAt(a) - shownAt(b) || gapAt(b) - gapAt(a));
     const past = pastTracks.map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
     const shownPast = pastTracks.filter((t) => shownAt(t) < Infinity).length;
     const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past, shownPast) : null;
+    const at = this.bestAtStart;
+    const finish: ResultsModel['finish'] =
+      you.time === null
+        ? null
+        : {
+            seconds: you.time,
+            medal: medals ? medalFor(you.time, medals) : 0,
+            splits: sim.stageTicks.map((t, i) => {
+              const best = at?.splits?.[i];
+              return { name: sim.course.stages[i].name, seconds: t / 60, vsBest: best === undefined ? null : t / 60 - best };
+            }),
+            bestTime: at?.time ?? null,
+            newBest: this.newBestTime,
+          };
     this.results = {
       score: sim.score,
       distance: sim.distance,
-      best: d.best[key]?.score ?? sim.score,
+      finish,
+      finishZ: FINISH_Z,
+      best: topScore(d.best[key]) || sim.score,
       newBest: this.newBestThisRun,
       giftsEarned: sim.gifts + this.passBonus,
       wallet: d.gifts,
       ghosts,
       ghostsPassed: ghosts.filter((g) => g.passed).length,
       missions: missions.views,
-      crashCause: this.crashText(sim.s.crashCause),
+      crashCause: sim.finished ? '' : this.crashText(sim.s.crashCause),
       crashKind: sim.s.crashCause,
       bestCombo: sim.stats.bestCombo,
       perfects: sim.stats.perfects,
@@ -1198,7 +1276,7 @@ export class App {
       records: [...this.recordsThisRun],
       mountain: this.mountain.name,
       mood: moodInfo(this.chaos.mood).name,
-      canRevive: !this.reviveUsed && this.platform.adsAvailable && !this.adblock && sim.distance > 120,
+      canRevive: sim.s.crashed && !this.reviveUsed && this.platform.adsAvailable && !this.adblock && sim.distance > 120,
       canDouble: this.platform.adsAvailable && !this.adblock && sim.gifts + this.passBonus > 0,
       doubled: false,
       canChallenge: sim.score > 0,
@@ -1214,13 +1292,14 @@ export class App {
         daily: this.mountain.id === 'daily' ? (settled.daily?.line ?? null) : null,
         grudge: this.grudgeLine ? { text: this.grudgeLine, strong: this.grudgeStrong } : null,
         crash: crashNote,
-        event: this.director.eventNote(sim),
+        event: sim.finished ? null : this.director.eventNote(sim),
       }),
       crashNote,
       // A phone card, whose race line takes the crash note's slot, shows the place you fell in beside
       // the finishing place (results.ts, only when it was better).
       rankAtCrash: this.rankAtCrash,
-      runAgainLabel: runAgainLabel(this.friendForLabel(sim), d.grudge[key] ? { name: d.grudge[key].name } : null),
+      // Only a ghost that will ride: a stale grudge keeps its name and tally, and no rematch.
+      runAgainLabel: runAgainLabel(this.friendForLabel(sim), rideableGrudge(d, key)),
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
     };
@@ -1270,21 +1349,22 @@ export class App {
     this.resultsSound('mission', this.chimesLanded++);
   }
 
-  /** The friend's challenge on this mountain, for the Rematch label. */
+  /** The friend's challenge on this mountain, for the Rematch label: only a ghost that will ride (an
+   *  old link's rider is a distance, never a rematch). */
   private friendForLabel(sim: Sim): { name: string; beaten: boolean } | null {
     const fr = this.friendRecord();
-    return fr ? { name: fr.name, beaten: sim.distance > fr.distance } : null;
+    return fr ? { name: fr.name, beaten: this.friendBeaten(sim) } : null;
   }
 
   private friendBeaten(sim: Sim): boolean {
-    const fr = this.friendRecord();
-    return !!fr && sim.distance > fr.distance;
+    const fr = this.friendGoal();
+    return !!fr && aheadOf(this.youStanding(sim), fr.standing);
   }
 
-  /** The friend line: 'You beat Mila by 120 m.' or 'Mila beat you by 340 m.' Names only. */
+  /** The friend line: 'You beat Mila by 1.2 s.' or 'Mila beat you by 340 m.' Names only. */
   private friendLine(sim: Sim): string | null {
-    const fr = this.friendRecord();
-    return fr ? friendLine(fr.name, fr.distance, sim.distance) : null;
+    const fr = this.friendGoal();
+    return fr ? friendLine(fr.name, fr.standing, this.youStanding(sim)) : null;
   }
 
   /** The results card's sounds on its CSS beats (results.ts RESULTS_TIMING), laid by the engine: the
@@ -1296,7 +1376,8 @@ export class App {
    *  twice.) */
   private resultsSounds(m: ResultsModel, lagS = 0): void {
     const rows = (pred: (mv: ResultsModel['missions'][number]) => boolean): number[] => m.missions.flatMap((mv, i) => (pred(mv) ? [i] : []));
-    const ahead = m.ghosts.filter((g) => (g.distance ?? 0) > m.distance).length;
+    const youAt: Standing = { time: m.finish?.seconds ?? null, distance: m.distance };
+    const ahead = m.ghosts.filter((g) => aheadOf({ time: g.time ?? null, distance: g.distance ?? 0 }, youAt)).length;
     const still = reduced();
     const show = {
       count: m.score > 0,
@@ -1327,6 +1408,8 @@ export class App {
         return 'Met the yeti';
       case 'avalanche':
         return 'Buried by the avalanche';
+      case 'daylight':
+        return 'Out of daylight';
       default:
         return 'Wipeout';
     }
@@ -1704,7 +1787,9 @@ export class App {
     // loop is scaled, so the simulation itself stays tick-exact.
     const time = this.director.time;
     time.step(frozen ? 0 : dt);
-    if (!frozen && this.phase === 'run') alpha = this.loop.advance(dt * time.feed);
+    // (Over the line the sim ticks on: the coast through the square is riding, not a held crash.)
+    const riding = this.phase === 'run' || this.phase === 'finished';
+    if (!frozen && riding) alpha = this.loop.advance(dt * time.feed);
     lerpSnap(run.prev, run.cur, alpha, this.view);
     const sim = run.sim;
     // Render time runs at the director's render scale: a held frame also holds the shader bobs.
@@ -1712,8 +1797,8 @@ export class App {
     this.renderTime += renderDt;
     // Ghosts keep riding past you while you tumble and read the results, on the scaled clock, so the
     // pack slows and holds with the crash beat and never jumps.
-    if (this.phase !== 'run') this.crashTicks += renderDt * 60;
-    const tick = this.phase === 'run' ? sim.tick - 1 + alpha : sim.tick + this.crashTicks;
+    if (!riding) this.crashTicks += renderDt * 60;
+    const tick = riding ? sim.tick - 1 + alpha : sim.tick + this.crashTicks;
 
     // Ghost poses and race events.
     this.ghostPoses.clear();
@@ -1731,12 +1816,14 @@ export class App {
     // Standings once per frame: the world's rival, the HUD pill and the hints all read these. After the
     // crash they run on the poses' clock, so the place steps down as the pack rides past the wreck and
     // agrees with the rival pill (the race itself stays over: no race events, no status changes).
+    // Over the line your place is settled: only a ghost already over it leads you, wherever it stopped.
     const st = this.ghosts.standings(this.phase === 'run' ? sim.tick : tick, sim.s.z);
+    if (sim.finished) Object.assign(st, placeAtFinish(this.ghosts.tracks, sim.s.finishTick));
     this.frameStandings = st;
 
     // The frame's named moments: the race's first, then the sim events' in order.
     const out = this.director.step({
-      phase: this.phase === 'run' ? 'run' : 'crashed',
+      phase: this.phase === 'run' ? 'run' : sim.finished ? 'finished' : 'crashed',
       dt: frozen ? 0 : dt,
       sim,
       events: drained,
@@ -1815,7 +1902,7 @@ export class App {
     this.ui.setRiderScreen(this.world.riderScreen.x, this.world.riderScreen.y);
     this.ui.touchVisual(this.input.visual, this.input.mode === 'touch' && this.phase === 'run');
 
-    if (this.phase === 'run' || this.phase === 'crashed') {
+    if (riding || this.phase === 'crashed') {
       const c = sim.combo;
       const av = sim.dyn.avalanche;
       const rv = out.rival;
@@ -1824,10 +1911,14 @@ export class App {
       // gap: the director's held C12 number, the edge chip's too. hold: a duel's result holds the pill
       // on this ghost on the director's clock (RIVAL_HOLD_S), so the HUD gates other ghosts' flashes
       // on it (HudModel.nextGhost.hold, a contract amendment the HUD reads once it lands).
-      const next: (NonNullable<HudModel['nextGhost']> & { hold?: boolean }) | null = rv && rt ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel, hold: hm.hold } : null;
+      const next: (NonNullable<HudModel['nextGhost']> & { hold?: boolean }) | null = rv && rt && this.phase !== 'finished' ? { name: rt.entry.name, kind: rt.entry.kind, gap: rv.gap, duel: hm.duel, hold: hm.hold } : null;
+      const stages = sim.course.stages;
       this.ui.updateHud({
         score: sim.score,
         distance: sim.distance,
+        clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
+        stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
+        wipeouts: sim.s.tumbles > 0 ? { left: Math.max(0, TUMBLES - sim.s.tumbles), of: TUMBLES } : null,
         gifts: sim.gifts + this.passBonus,
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
@@ -1837,12 +1928,12 @@ export class App {
         place: { rank: st.rank, of: st.of > 1 ? Math.max(st.of, this.ghosts.fieldSize) : st.of },
         draft: sim.s.drafting ? sim.s.draftCharge : 0,
         driftTier: sim.s.drifting ? sim.s.driftTier : 0,
-        danger: av.phase === 2 ? { kind: 'avalanche', gap: sim.s.z - av.z } : null,
+        danger: av.phase === 2 && !sim.finished ? { kind: 'avalanche', gap: sim.s.z - av.z } : null,
         mood: this.chaos.mood,
         bestIn: hm.bestIn,
         countdown: hm.countdown,
       });
-      const danger = av.phase === 2 ? Math.max(0, 1 - (sim.s.z - av.z) / 60) : sim.dyn.yeti.phase === 2 ? 0.5 : 0;
+      const danger = sim.finished ? 0 : av.phase === 2 ? Math.max(0, 1 - (sim.s.z - av.z) / 60) : sim.dyn.yeti.phase === 2 ? 0.5 : 0;
       const a = out.audio;
       const frame: AudioFrame = {
         speed: sim.s.speed,
@@ -1922,6 +2013,20 @@ export class App {
           this.markHint('boostPop');
           this.heldLip = false;
         }
+        // (A long wall ride pays every 36 ticks: one ride, however long.)
+        if (e.kind === 'wallRide' && this.run) {
+          if (this.run.sim.tick - this.lastWallTick > 40) this.wallRides++;
+          this.lastWallTick = this.run.sim.tick;
+        }
+        break;
+      case 'tumble':
+        if (e.phase === 'start') this.tumbles++;
+        break;
+      case 'grind':
+        if (e.phase === 'start') this.grinds++;
+        break;
+      case 'finish':
+        this.crossedLine();
         break;
       case 'chaos':
         if (e.phase === 'warn') {
@@ -1952,15 +2057,16 @@ export class App {
     }
   }
 
-  /** A kicker's lip ahead on the line, within 1.2 s at this speed and inside its width. */
+  /** A kicker's lip within reach ahead (KICK_LOOK_S, KICK_LOOK_M) and within a rider's reach of it
+   *  across the slope. Reads every ramp in the course's zones, whoever put it there. */
   private kickerAhead(sim: Sim): boolean {
     const s = sim.s;
-    const reach = s.speed * 1.2;
+    const reach = Math.max(KICK_LOOK_M, s.speed * KICK_LOOK_S);
     const ci = Math.floor(s.z / 64);
-    for (let k = ci; k <= ci + 1; k++) {
+    for (let k = ci; k <= ci + 2; k++) {
       for (const r of sim.course.zones(k).ramps) {
         const lip = r.z + r.len - s.z;
-        if (lip > 0 && lip <= reach && Math.abs(s.x - r.x) < r.w / 2) return true;
+        if (lip > 0 && lip <= reach && Math.abs(s.x - r.x) < r.w / 2 + KICK_SIDE_M) return true;
       }
     }
     return false;
@@ -1990,11 +2096,13 @@ export class App {
         airTicks: this.airTicks,
         ttl,
         runs: this.save.data.runs,
-        kickerAhead: s.grounded && (((h.pop ?? 0) >= 1 && (h.boostPop ?? 0) < 1) || this.heldLip) && this.kickerAhead(sim),
+        z: s.z,
+        kickerAhead: s.grounded && ((h.boostPop ?? 0) < 1 || this.heldLip) && this.kickerAhead(sim),
         heldLip: this.heldLip,
         draftTarget,
         // The avalanche banner, meter and rear-view mirror own the lower screen while it chases you.
         chased: sim.dyn.avalanche.phase === 1 || sim.dyn.avalanche.phase === 2,
+        tumbling: s.tumble > 0,
       },
       h,
     );

@@ -34,6 +34,8 @@ export interface Snap {
   drafting: boolean;
   onIce: boolean;
   crashed: boolean;
+  /** Over the finish line, coasting. */
+  finished: boolean;
 }
 
 export function emptySnap(): Snap {
@@ -64,6 +66,7 @@ export function emptySnap(): Snap {
     drafting: false,
     onIce: false,
     crashed: false,
+    finished: false,
   };
 }
 
@@ -94,6 +97,7 @@ export function copySnap(s: SledState, o: Snap): void {
   o.drafting = s.drafting;
   o.onIce = s.onIce;
   o.crashed = s.crashed;
+  o.finished = s.finished;
 }
 
 export function lerpSnap(a: Snap, b: Snap, t: number, o: Snap): void {
@@ -126,6 +130,7 @@ export function lerpSnap(a: Snap, b: Snap, t: number, o: Snap): void {
   o.drafting = b.drafting;
   o.onIce = b.onIce;
   o.crashed = b.crashed;
+  o.finished = b.finished;
 }
 
 export interface InputSource {
@@ -161,7 +166,13 @@ export class Run {
     return this.sim.s.crashed;
   }
 
-  /** One fixed tick. Returns false when the run should stop advancing (crashed or paused). */
+  /** Over the finish line. The run is decided, and it keeps ticking: the sled coasts on. */
+  get finished(): boolean {
+    return this.sim.finished;
+  }
+
+  /** One fixed tick. Returns false when the run should stop advancing (crashed or paused). A finished
+   *  run keeps advancing through its coast. */
   tick(): boolean {
     if (this.paused) return false;
     if (this.pendingRevive) {
@@ -199,7 +210,8 @@ export class Run {
       chaos: this.chaos,
       sled: this.sled,
       inputs: this.recorder.encode(),
-      ticks: this.recorder.tickCount,
+      // (A finished run's header carries its finish; the log runs on through the coast.)
+      ticks: this.sim.finished ? this.sim.s.finishTick : this.recorder.tickCount,
       score: this.sim.score,
       distance: this.sim.distance,
       name,

@@ -1,5 +1,6 @@
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
+import type { Standing } from './standing';
 import {
   F_AIRPITCH,
   F_AIRYAW,
@@ -43,6 +44,10 @@ export interface GhostTrack {
   samples: number;
   ticks: number;
   crashTick: number;
+  /** The tick it crossed the finish line, -1 for a run that did not finish. */
+  finishTick: number;
+  /** The tick it crossed each stage line it reached. */
+  stageTicks: number[];
   distance: number;
   tricks: Int32Array | null;
   /** +1 player ahead, -1 ghost ahead, 0 undecided. */
@@ -64,16 +69,23 @@ export interface GhostPose {
   carve: number;
   grounded: boolean;
   drifting: boolean;
-  /** Past the end of its run: crashed (or finished) at the last sample. */
+  /** Past the end of its run: crashed (or stopped past the line) at the last sample. */
   done: boolean;
   /** Seconds since it crashed, for the fade-out. */
   sinceDone: number;
+  /** Over the finish line at this tick: a run that ended well (no wreck to mark). */
+  finished: boolean;
 }
 
 export type RaceEvent = { type: 'pass'; track: GhostTrack; first: boolean } | { type: 'passedBy'; track: GhostTrack } | { type: 'crashed'; track: GhostTrack };
 
 export function emptyPose(): GhostPose {
-  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, done: false, sinceDone: 0 };
+  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, done: false, sinceDone: 0, finished: false };
+}
+
+/** A track's place in the race order. */
+export function trackStanding(t: Pick<GhostTrack, 'finishTick' | 'distance'>): Standing {
+  return { time: t.finishTick >= 0 ? t.finishTick / 60 : null, distance: t.distance };
 }
 
 let nextReq = 1;
@@ -105,6 +117,8 @@ export class GhostManager {
       t.samples = m.samples;
       t.ticks = m.ticks;
       t.crashTick = m.crashTick;
+      t.finishTick = m.finishTick;
+      t.stageTicks = m.stageTicks;
       t.distance = m.distance;
       t.tricks = m.tricks;
       t.ready = m.samples > 0;
@@ -134,6 +148,8 @@ export class GhostManager {
       samples: 0,
       ticks: 0,
       crashTick: -1,
+      finishTick: -1,
+      stageTicks: [],
       distance: 0,
       tricks: null,
       status: 0,
@@ -206,6 +222,7 @@ export class GhostManager {
     }
     out.done = false;
     out.sinceDone = 0;
+    out.finished = t.finishTick >= 0 && tick >= t.finishTick;
     if (i0 >= last) {
       i0 = last;
       a = 0;
@@ -233,7 +250,7 @@ export class GhostManager {
     return true;
   }
 
-  /** Course progress (z) of a ghost at a tick: its crash spot once it is done. */
+  /** Course progress (z) of a ghost at a tick: where it stopped once it is done. */
   zAt(t: GhostTrack, tick: number): number {
     if (!t.ready || !t.frames) return 0;
     let i = Math.round(tick / SAMPLE_EVERY - 1);
@@ -247,7 +264,7 @@ export class GhostManager {
   /** Is the player in a live ghost's slipstream at this tick? */
   draftProbe = (tick: number, x: number, y: number, z: number): boolean => {
     for (const t of this.tracks) {
-      if (!this.pose(t, tick, this.poseTmp) || this.poseTmp.done) continue;
+      if (!this.pose(t, tick, this.poseTmp) || this.poseTmp.done || this.poseTmp.finished) continue;
       const p = this.poseTmp;
       const ahead = p.z - z;
       if (ahead < 1.5 || ahead > 14) continue;
@@ -265,9 +282,16 @@ export class GhostManager {
       if (!t.ready) continue;
       const gz = this.zAt(t, tick);
       const done = tick >= (t.samples + 1) * SAMPLE_EVERY - 1;
-      if (done && !t.crashSeen && t.crashTick >= 0) {
+      // (A ghost that crashed, was revived and finished never wrecked for good.)
+      if (done && !t.crashSeen && t.crashTick >= 0 && t.finishTick < 0) {
         t.crashSeen = true;
         out.push({ type: 'crashed', track: t });
+      }
+      // Over the line it has beaten you to it: it stays ahead wherever it stopped, and rolling past
+      // where it stands is no pass (no gifts, no unlock credit).
+      if (t.finishTick >= 0 && tick >= t.finishTick) {
+        t.status = -1;
+        continue;
       }
       const d = playerZ - gz;
       // Hysteresis so jostling side by side does not spam events.

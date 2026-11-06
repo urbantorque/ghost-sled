@@ -110,7 +110,8 @@ export class ExtraGifts {
   }
 }
 
-export type DuelEvent = { phase: 'open' | 'won' | 'heldOff' | 'lost' | 'closed'; id: number };
+/** over: a lost duel ended with the ghost over the finish line. */
+export type DuelEvent = { phase: 'open' | 'won' | 'heldOff' | 'lost' | 'closed'; id: number; over?: boolean };
 
 /** Ticks spent within DUEL_NEAR that open a duel. */
 export const DUEL_OPEN_TICKS = 60;
@@ -130,7 +131,8 @@ export const DUEL_SOON_TICKS = 40;
  * ghost's signed gap (ghost minus you, + = ahead). A live ghost within 1.5 m for 60 accumulated ticks
  * opens a duel (from tick 360, one at a time, the closest wins). It resolves past 4 m, or after
  * DUEL_MAX_TICKS by who leads: you ahead is 'won', or 'heldOff' when the ghost spent most of it behind
- * you; the ghost ahead is 'lost'; the ghost crashing is 'won'. A ghost pays for one duel per run; a
+ * you; the ghost ahead is 'lost'; the ghost crashing is 'won', and the ghost crossing the finish line
+ * is 'lost': a rider gone from the race that way beat you to it. A ghost pays for one duel per run; a
  * lost duel may reopen once; 3 s cooldown.
  */
 export class DuelTracker {
@@ -162,7 +164,7 @@ export class DuelTracker {
 
   /** Advance by whole sim ticks with each ghost's signed gap. canOpen false holds a new duel back for
    *  now (closeness still accrues; an open duel runs on as usual). */
-  step(dTicks: number, tick: number, gaps: ReadonlyArray<{ id: number; gap: number; live: boolean }>, canOpen = true): DuelEvent[] {
+  step(dTicks: number, tick: number, gaps: ReadonlyArray<{ id: number; gap: number; live: boolean; over?: boolean }>, canOpen = true): DuelEvent[] {
     const out: DuelEvent[] = [];
     const d = Math.max(0, Math.floor(dTicks));
     this.soonId = null;
@@ -172,6 +174,11 @@ export class DuelTracker {
       if (!g) {
         this.close(id, tick);
         out.push({ phase: 'closed', id });
+      } else if (g.over) {
+        // It got to the line first: a stopped ghost is not a beaten one.
+        this.close(id, tick);
+        this.lost.set(id, (this.lost.get(id) ?? 0) + 1);
+        out.push({ phase: 'lost', id, over: true });
       } else if (!g.live) {
         // It crashed while you fought it out: yours.
         this.close(id, tick);

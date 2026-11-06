@@ -1,4 +1,6 @@
 import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contract';
+import { oldLinkLine } from '../game/challenge';
+import { clock } from '../game/standing';
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -134,7 +136,7 @@ export class Title {
     // half would stand empty), and the button names it instead.
     const sel = m.mountains.find((x) => x.id === m.selected) ?? m.mountains[0];
     const passed = m.firstVisit ? 0 : ghostsPassed(m);
-    const bare = !!sel && !sel.locked && sel.best <= 0 && passed <= 0;
+    const bare = !!sel && !sel.locked && sel.best <= 0 && !sel.oldBest && passed <= 0;
     const verb = m.challenge ? 'Accept' : 'Ride';
     const where = m.challenge ? m.challenge.mountain : (sel?.name ?? '');
     const subline = m.challenge || m.firstVisit || bare ? where : (sel?.tagline ?? where);
@@ -170,7 +172,8 @@ export class Title {
     // Wallet + best. A zero is left out (a returning player who sees "0 / Best 0" reads it as lost
     // progress), and with both at zero the pill is not drawn at all.
     const gifts = m.wallet > 0 ? h('span', 'gs-stat gs-stat-gift', icon('gift'), h('span', 'gs-num', fmt(m.wallet)), sr(' gifts')) : null;
-    const best = m.best > 0 ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', 'Best'), h('span', 'gs-num', fmt(m.best))) : null;
+    const rec = record(m);
+    const best = rec ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', rec.label), h('span', 'gs-num', rec.value)) : null;
     if (gifts || best) el.append(h('div', 'gs-t-stats gs-panel gs-pill gs-t-anim', gifts, gifts && best ? h('span', 'gs-stat-sep') : null, best));
 
     // Mountains + daily.
@@ -232,7 +235,8 @@ export class Title {
     // The picked card carries the player's own record in its lower half: the best there and the
     // ghosts passed so far (what unlocks the next mountain), each only once it is more than zero.
     const mine = selected && !c.locked;
-    const said = c.locked ? `Locked. ${c.unlockText}` : [c.best > 0 ? `Best ${fmt(c.best)}` : '', mine && passed > 0 ? `${fmt(passed)} ghosts passed` : ''].filter(Boolean).join('. ') || c.tagline;
+    const best = record(c);
+    const said = c.locked ? `Locked. ${c.unlockText}` : [best ? `${best.label} ${best.value}` : '', mine && passed > 0 ? `${fmt(passed)} ghosts passed` : ''].filter(Boolean).join('. ') || c.tagline;
     b.setAttribute('aria-label', `${c.name}. ${said}`);
     const sky = h('span', 'gs-mtn-sky');
     sky.innerHTML = biomeArt(c.biome);
@@ -248,14 +252,16 @@ export class Title {
     // the card keeps the part that tells you how), or your best there; the picked one shows your best
     // and ghosts passed on two. What a mountain is like rides on the Ride button's subline.
     if (c.locked) body.append(h('span', 'gs-mtn-meta', c.unlockText.replace(/\s+to unlock\.?$/i, '')));
-    else if (mine && (c.best > 0 || passed > 0)) {
+    else if (mine && (best || passed > 0)) {
       const rec = h('span', 'gs-mtn-rec');
       rec.setAttribute('aria-hidden', 'true');
-      if (c.best > 0) rec.append(h('span', 'gs-mtn-recl', icon('trophy'), h('span', 'gs-num', fmt(c.best)), h('span', 'gs-mtn-recu', 'best')));
+      // (The trophy is a live record's: an old best gives its width to its label.)
+      const live = best?.label === 'Best';
+      if (best) rec.append(h('span', 'gs-mtn-recl', live ? icon('trophy') : null, h('span', 'gs-num', best.value), h('span', 'gs-mtn-recu', best.label.toLowerCase())));
       if (passed > 0) rec.append(h('span', 'gs-mtn-recl is-ghost', icon('ghost'), h('span', 'gs-num', fmt(passed)), h('span', 'gs-mtn-recu', 'passed')));
       body.append(rec);
     } else if (mine) body.append(h('span', 'gs-mtn-meta is-about', c.tagline));
-    else if (c.best > 0) body.append(h('span', 'gs-mtn-meta', 'Best ', h('span', 'gs-num', fmt(c.best))));
+    else if (best) body.append(h('span', 'gs-mtn-meta', `${best.label} `, h('span', 'gs-num', best.value)));
     b.append(art, body);
     b.addEventListener('click', () => {
       if (c.locked) {
@@ -438,13 +444,21 @@ function ghostsPassed(m: TitleModel): number {
 }
 
 /**
- * A friend's challenge: "Racing Mila's ghost" over "2,340 m on Pinecrest" (how far their run went).
- * A run on today's Daily Mountain reads "on the Daily Mountain"; one on another day's Daily (no
- * mountain named) shows the first line alone. Links from before distances were carried keep the
- * score: "Beat a score of 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
- * context, and the title re-renders often.
+ * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on
+ * Pinecrest" (how far a run that did not finish went). A run on today's Daily Mountain reads "on the
+ * Daily Mountain"; one on another day's Daily (no mountain named) shows the first line alone. Links
+ * from before distances were carried keep the score: "Beat a score of 12,480 on Pinecrest". A link from
+ * an older course has no ghost to race, only a distance to pass: "Mila rode 2,340 m on the old
+ * Pinecrest. Beat it." No live role: it sits right above the Accept button, read in context, and the
+ * title re-renders often.
  */
 function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
+  if (c.old) {
+    // (Names in it are handles and places: auto-translate stays off the short line.)
+    const line = h('span', 'gs-challenge-k', oldLinkLine({ name: c.name, distance: c.distance ?? 0, mountain: c.mountain }));
+    line.setAttribute('translate', 'no');
+    return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', line));
+  }
   // Player and mountain names are proper nouns: keep auto-translate off them.
   const who = h('span', '', `${c.name}\u2019s`);
   who.setAttribute('translate', 'no');
@@ -456,10 +470,18 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
     place.setAttribute('translate', 'no');
     v =
       typeof c.distance === 'number' && c.distance > 0
-        ? h('span', 'gs-challenge-v', h('span', 'gs-num', metres(c.distance)), ' on ', place)
+        ? h('span', 'gs-challenge-v', h('span', 'gs-num', typeof c.time === 'number' ? clock(c.time) : metres(c.distance)), ' on ', place)
         : h('span', 'gs-challenge-v', 'Beat a score of ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
   }
   return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
+}
+
+/** The record a card or the stats pill shows: your best time, else your best score, else the old
+ *  course's best until a new one exists; null with nothing to show. */
+function record(c: { best: number; bestTime?: number; oldBest?: number }): { label: string; value: string } | null {
+  if (c.bestTime && c.bestTime > 0) return { label: 'Best', value: clock(c.bestTime) };
+  if (c.best > 0) return { label: 'Best', value: fmt(c.best) };
+  return c.oldBest && c.oldBest > 0 ? { label: 'Old best', value: fmt(c.oldBest) } : null;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { GhostKind, HudModel, MirrorRect, ScreenRect, StyleTone, UIHandlers } from './contract';
 import { ChaosEvent, eventInfo, Mood, moodInfo } from '../sim/chaos';
 import { btn, Flag, h, Layer, sr, Txt, type Ctx } from './dom';
+import { clock } from '../game/standing';
 import { kindCls, NBSP, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, EASE_OUT, play, reduced, SPRING } from './motion';
@@ -31,6 +32,11 @@ import { ride } from './presence';
 // and a "Flow" tag until the combo ends. The score waits for a cash-in's figure to land before it
 // counts the bank. Top left, "Best in 240 m" counts down to your best in gold-white, and a rolled event
 // counts down in its own chip beside the mood chip ("Avalanche in 380 m"), coloured by its role.
+//
+// A run is a descent with a goal, so the left block leads with the clock, then how far you have come,
+// and a thin stage line ("Stage 2 of 3", a hairline for each stage that fills as you ride it). Beside
+// the stage line, small pips show the wipeouts a run can still take, from the moment the first one is
+// spent: until then there is nothing to count.
 
 const CHEVRONS = 5;
 /**
@@ -492,6 +498,16 @@ export class Hud {
   private readonly tr: HTMLElement;
   private readonly score: Txt;
   private readonly dist: Txt;
+  private readonly clockT: Txt;
+  private readonly legEl: HTMLElement;
+  private readonly legT: Txt;
+  private readonly legBar: HTMLElement;
+  private legSegs: HTMLElement[] = [];
+  /** The stage line's fill as last written (whole stages, in fiftieths): it moves about every 30 m. */
+  private legFill = -1;
+  private readonly wipeEl: HTMLElement;
+  private readonly wipeOn: Flag;
+  private lastWipe = -1;
   private readonly moodIco: HTMLElement;
   private readonly moodTxt: Txt;
   private readonly moodOn: Flag;
@@ -736,6 +752,17 @@ export class Hud {
     this.score = new Txt(this.scoreEl);
     const distEl = h('div', 'gs-dist gs-num');
     this.dist = new Txt(distEl);
+    const clockEl = h('div', 'gs-clock gs-num');
+    this.clockT = new Txt(clockEl);
+    // The stage line: its words, and one hairline per stage (built with the first model).
+    const legTxt = h('span', 'gs-leg-t');
+    this.legT = new Txt(legTxt);
+    this.legBar = h('span', 'gs-leg-bar');
+    this.legBar.setAttribute('aria-hidden', 'true');
+    this.wipeEl = h('span', 'gs-wipe');
+    this.wipeEl.setAttribute('role', 'img');
+    this.wipeOn = new Flag(this.wipeEl);
+    this.legEl = h('div', 'gs-leg', legTxt, this.legBar, this.wipeEl);
     this.moodIco = h('span', 'gs-mood-ico');
     const moodName = h('span', 'gs-mood-name');
     this.moodTxt = new Txt(moodName);
@@ -767,7 +794,7 @@ export class Hud {
       'gs-hud-tl',
       sr('Score'),
       this.scoreEl,
-      h('div', 'gs-hud-sub', h('div', 'gs-hud-dist', distEl, this.bestInEl), h('div', 'gs-hud-chips', this.moodEl, this.cdEl)),
+      h('div', 'gs-hud-sub', h('div', 'gs-hud-run', clockEl, h('div', 'gs-hud-dist', distEl, this.bestInEl)), this.legEl, h('div', 'gs-hud-chips', this.moodEl, this.cdEl)),
     );
 
     // Top right: gifts, pause.
@@ -955,6 +982,8 @@ export class Hud {
   show(): void {
     if (this.layer.show()) {
       this.lastGifts = -1;
+      this.lastWipe = -1;
+      this.legFill = -1;
       this.lastMult = 0;
       this.lastRank = -1;
       this.wantRank = -1;
@@ -1667,6 +1696,10 @@ export class Hud {
       moved = true;
     }
     this.dist.num(m.distance, NBSP + 'm');
+    this.clockT.str(clock(m.clock));
+    if (m.stage) this.stageLine(m.stage);
+    if (this.wipeOn.set(m.wipeouts !== null)) moved = true;
+    if (m.wipeouts) this.wipePips(m.wipeouts);
 
     if (m.mood !== this.lastMood) {
       this.lastMood = m.mood;
@@ -2065,6 +2098,40 @@ export class Hud {
       this.gapX = cx;
       this.dangerGapEl.style.transform = `translate3d(${cx}px, 0, 0) translateX(-50%)`;
     }
+  }
+
+  /** The stage line: its words, and each stage's hairline filled as far as you have ridden it. */
+  private stageLine(s: NonNullable<HudModel['stage']>): void {
+    this.legT.str(`Stage ${s.index + 1} of ${s.of}`);
+    if (this.legSegs.length !== s.of) {
+      this.legSegs = [];
+      this.legBar.replaceChildren();
+      for (let i = 0; i < s.of; i++) {
+        const fill = h('i', 'gs-leg-fill');
+        this.legSegs.push(fill);
+        this.legBar.append(h('span', 'gs-leg-seg', fill));
+      }
+      this.legFill = -1;
+    }
+    const f = Math.round(s.progress * s.of * 50) / 50;
+    if (f === this.legFill) return;
+    this.legFill = f;
+    this.legSegs.forEach((e, i) => {
+      e.style.transform = `scaleX(${Math.max(0, Math.min(1, f - i)).toFixed(2)})`;
+    });
+  }
+
+  /** The wipeouts a run can still take: one pip each, hollow once spent, and a small dip as one goes. */
+  private wipePips(w: NonNullable<HudModel['wipeouts']>): void {
+    const key = w.of * 16 + w.left;
+    if (key === this.lastWipe) return;
+    const spent = this.lastWipe >= 0;
+    this.lastWipe = key;
+    const pips: HTMLElement[] = [];
+    for (let i = 0; i < w.of; i++) pips.push(h('i', `gs-wipe-pip${i < w.left ? ' is-left' : ''}`));
+    this.wipeEl.replaceChildren(...pips);
+    this.wipeEl.setAttribute('aria-label', w.left === 1 ? '1 wipeout left' : w.left === 0 ? 'No wipeouts left' : `${w.left} wipeouts left`);
+    if (spent) bump(this.wipeEl, 1.35, 320);
   }
 
   /**

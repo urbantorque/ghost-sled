@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DRIFT_SHOWS, DRIFT_UP_S, HINT_MIN_S, HintCoach, SPIN_SHOWS, type HintCounts, type HintFrame } from '../src/game/hints';
+import { AIR_LESSON_S, DRIFT_AFTER_Z, DRIFT_SHOWS, DRIFT_UP_S, HINT_MIN_S, HintCoach, LIP_SHOWS, RING_AFTER_Z, SPIN_SHOWS, type HintCounts, type HintFrame } from '../src/game/hints';
 import type { HintKind } from '../src/ui/contract';
 
 // Teach-move hints: what shows, for how long, and the per-run caps on the nags.
@@ -16,6 +16,7 @@ const ground = (o: Partial<HintFrame> = {}): HintFrame => ({
   airTicks: 0,
   ttl: Infinity,
   runs: 3,
+  z: 2000,
   kickerAhead: false,
   heldLip: false,
   draftTarget: false,
@@ -33,6 +34,85 @@ function play(c: HintCoach, h: HintCounts, frames: (i: number) => HintFrame, sec
   }
   return out;
 }
+
+describe('the taught first minute', () => {
+  const first = (o: Partial<HintFrame> = {}): HintFrame => ground({ runs: 0, timer: 8, z: 100, ...o });
+
+  it('teaches steering at once', () => {
+    const c = new HintCoach();
+    expect(c.step(first({ timer: 0, z: 0 }), {}).show).toBe('steer');
+  });
+
+  it('runs in order: steer, the lip, the ring, the air', () => {
+    const c = new HintCoach();
+    const h: HintCounts = {};
+    const seen: Array<HintKind | null> = [];
+    const go = (f: (i: number) => HintFrame, secs: number) => {
+      for (const x of play(c, h, f, secs)) if (x.show) seen.push(x.show);
+    };
+    // The first seconds: only steering, and the drift nag keeps off.
+    go(() => first({ timer: 1, z: 20 }), 2);
+    h.steer = 1;
+    go(() => first({ steered: true, timer: 8, z: 150 }), 1);
+    go(() => first({ timer: 9, z: 250 }), 2);
+    // About 300 m: the first kicker, with nothing failed yet.
+    go(() => first({ timer: 12, z: 290, kickerAhead: true }), 1.7);
+    // Off its lip: a flight, the ring as it comes down.
+    go((i) => air(1.15 - i * DT, { runs: 0, timer: 14, z: 330 }), 1.1);
+    go(() => first({ timer: 16, z: 400 }), 1);
+    // The first leap by about 700 m: the air. No stomp landed yet: the lesson does not wait for one.
+    go((i) => air(2.6 - i * DT, { runs: 0, timer: 26, z: 690 }), 2.5);
+    expect(seen.slice(0, 4)).toEqual(['steer', 'boostPop', 'stomp', 'spin']);
+  });
+
+  it('never waits for a failed kicker: the lip is taught on a first approach', () => {
+    const c = new HintCoach();
+    expect(c.step(first({ kickerAhead: true }), { steer: 1 }).show).toBe('boostPop');
+  });
+
+  it('never waits for steering either: a kicker in reach takes the slot', () => {
+    const c = new HintCoach();
+    expect(c.step(first({ timer: 1, z: 20 }), {}).show).toBe('steer');
+    const out = play(c, {}, () => first({ timer: 3, z: 280, kickerAhead: true }), 2);
+    expect(out.map((x) => x.show)).toEqual(['boostPop']);
+  });
+
+  it('teaches nothing in a tumble, airborne or not', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1, pop: 1, drift: 2, boostPop: 1 };
+    expect(play(c, h, (i) => air(0.9 - i * DT, { tumbling: true }), 0.5)).toEqual([]);
+    // Already up, it goes at once.
+    expect(c.step(air(0.9), h).show).toBe('stomp');
+    expect(c.step(air(0.88, { tumbling: true }), h).show).toBeNull();
+  });
+
+  it('keeps the drift nag off the first run until the air is taught', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1 };
+    expect(play(c, h, () => first({ z: DRIFT_AFTER_Z - 1 }), 3).map((x) => x.show)).not.toContain('drift');
+    expect(play(c, h, () => first({ z: DRIFT_AFTER_Z }), 1).map((x) => x.show)).toContain('drift');
+  });
+
+  it('holds the ring for the lip, but not past the first stretch with no kicker in reach', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1 };
+    expect(play(c, h, (i) => air(0.9 - i * DT, { runs: 0, z: 100 }), 0.5)).toEqual([]);
+    c.reset();
+    expect(play(c, h, (i) => air(0.9 - i * DT, { runs: 0, z: RING_AFTER_Z }), 0.5).map((x) => x.show)).toEqual(['stomp']);
+  });
+
+  it('stops teaching the lip after a few kickers', () => {
+    const c = new HintCoach();
+    const h: HintCounts = { steer: 1, drift: 2 };
+    let shows = 0;
+    for (let k = 0; k < 6; k++) {
+      shows += play(c, h, () => ground({ kickerAhead: true }), 2).filter((x) => x.show === 'boostPop').length;
+      play(c, h, () => air(0.2, { airTicks: 3 }), 0.3);
+      play(c, h, () => ground(), 2);
+    }
+    expect(shows).toBe(LIP_SHOWS);
+  });
+});
 
 describe('the hint coach', () => {
   it('a kicker ahead teaches the boosted pop before the drift nag on that approach', () => {
@@ -68,11 +148,11 @@ describe('the hint coach', () => {
     expect(play(c, h, () => ground(), 1)[0].show).toBe('drift');
   });
 
-  it('while the stomp is being learned, the spin lesson needs 2 s left and holds 0.8 s before the stomp cue', () => {
+  it('while the stomp is being learned, the spin lesson needs room and holds 0.8 s before the stomp cue', () => {
     const c = new HintCoach();
     const h: HintCounts = { steer: 1, pop: 1, drift: 2, stomp: 1, spin: 0 };
-    // A 1.9 s flight: too short to read the spin lesson before the stomp cue: no spin at all.
-    const short = play(c, h, (i) => air(1.9 - i * DT), 1.9);
+    // A short flight: too short to read the spin lesson before the stomp cue: no spin at all.
+    const short = play(c, h, (i) => air(AIR_LESSON_S - 0.1 - i * DT), AIR_LESSON_S - 0.1);
     expect(short.map((x) => x.show)).toEqual(['stomp']);
     c.reset();
     // A 2.5 s flight: the spin lesson shows, holds its 0.8 s, then the stomp cue takes over.

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { EXTRA_GIFTS_CAP, type GhostRef } from '../src/game/beats';
-import { DUEL_MAX_TICKS, DUEL_OPEN_TICKS, DUEL_SOON_TICKS, DuelTracker, ExtraGifts, GapReadout, RIVAL_DWELL_S, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type PassContext } from '../src/game/race';
+import { DUEL_MAX_TICKS, DUEL_OPEN_TICKS, DUEL_SOON_TICKS, DuelTracker, ExtraGifts, GapReadout, RIVAL_DWELL_S, callPick, classifyPass, ladderIndex, rivalPick, steadyNext, type DuelEvent, type PassContext } from '../src/game/race';
 
 const ghost = (kind: GhostRef['kind'] = 'pool', name = 'Mila'): GhostRef => ({ id: 1001, name, kind, dx: 1 });
 
@@ -316,5 +316,35 @@ describe('ladderIndex', () => {
     expect(ladderIndex(8)).toEqual({ step: 12, octave: true });
     expect(ladderIndex(20)).toEqual({ step: 12, octave: true });
     expect(ladderIndex(0)).toEqual({ step: 5, octave: false });
+  });
+});
+
+describe('a duel that reaches the finish line', () => {
+  /** A duel open on ghost 1. */
+  function open(): DuelTracker {
+    const d = new DuelTracker();
+    let tick = 400;
+    for (let i = 0; i < DUEL_OPEN_TICKS + 2; i++) d.step(1, tick++, [{ id: 1, gap: 0.5, live: true }]);
+    expect(d.open).toBe(1);
+    return d;
+  }
+
+  it('is lost when the ghost gets there first: a ghost that stopped is not a beaten one', () => {
+    const d = open();
+    expect(d.step(1, 600, [{ id: 1, gap: 0.5, live: false, over: true }])).toEqual([{ phase: 'lost', id: 1, over: true }]);
+    expect(d.open).toBeNull();
+  });
+
+  it('is still won when the ghost wrecks', () => {
+    const d = open();
+    expect(d.step(1, 600, [{ id: 1, gap: 0.5, live: false }]).map((e) => e.phase)).toEqual(['won']);
+  });
+
+  it('opens on no ghost over the line', () => {
+    const d = new DuelTracker();
+    let out: DuelEvent[] = [];
+    for (let i = 0; i < 90; i++) out = out.concat(d.step(1, 400 + i, [{ id: 1, gap: 0.5, live: false, over: true }]));
+    expect(out).toEqual([]);
+    expect(d.open).toBeNull();
   });
 });

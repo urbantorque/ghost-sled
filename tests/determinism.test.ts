@@ -124,8 +124,10 @@ describe('determinism', () => {
 
   it('a live revive through Run delivers no stale crash event and records a replayable log', () => {
     let t = 0;
-    const steerRight = { sample: () => ({ steer: 8, action: false }) };
-    const run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, steerRight);
+    // Hands off: a held turn no longer crashes (the corridor's edge turns a sled back and wipeouts are
+    // forgiven), but a sled left to itself still runs out of luck about 2 km down.
+    const handsOff = { sample: () => ({ steer: 4, action: false }) };
+    const run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, handsOff);
     const loop = new FixedLoop(() => run.tick());
     const kinds: string[] = [];
     while (!run.crashed && t++ < 60 * 120) loop.advance(1 / 60);

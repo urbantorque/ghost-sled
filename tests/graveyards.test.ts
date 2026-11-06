@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { GRAVE_MAX, GRAVE_NAMES, bundledGraveyards, graveyards } from '../src/game/graveyards';
 import type { PoolGhostData } from '../src/game/ghostdata';
+import { FINISH_Z } from '../src/game/standing';
 
 // Graveyards from the bundled pools: where 3 or more riders crashed within 8 m, named per mountain.
 
@@ -12,6 +13,17 @@ const frostfang = 'frostfang';
 const ember = 'ember';
 const sakura = 'sakura';
 const at = (d: number, ticks = 600) => ({ distance: d, ticks });
+
+describe('graveyards and the finish line', () => {
+  it('never forms at the line: reaching it is no crash', () => {
+    const finishers = [FINISH_Z, FINISH_Z + 2, FINISH_Z + 3, FINISH_Z + 4, FINISH_Z + 6].map((d) => at(d, 11000));
+    expect(graveyards(finishers, 'pinecrest')).toEqual([]);
+  });
+
+  it('still forms where riders crashed just short of it', () => {
+    expect(graveyards([at(FINISH_Z - 8), at(FINISH_Z - 6), at(FINISH_Z - 3)], 'pinecrest').map((g) => g.fell)).toEqual([3]);
+  });
+});
 
 describe('graveyards', () => {
   it('finds the bundled clusters: Pinecrest 1, Frostfang 1, Ember 1, Sakura 2', () => {

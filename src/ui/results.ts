@@ -1,5 +1,6 @@
-import type { ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
+import type { ResultsFinish, ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
 import type { InputMode } from '../game/input';
+import { type Standing, aheadOf, byStanding, clock, gapSeconds, margin, splitGap, timeGap } from '../game/standing';
 import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -12,9 +13,11 @@ import './meta.css';
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
 // score with your finishing place, how the run ended, how far the next place was and the gifts it
-// earned; under it the run's best stats (only those worth naming), the race (the finishing order
-// by distance, windowed around you), missions folded to one row, and a tip for next time when the
-// run had nothing to show. Run again is the default focus and
+// earned; under it the run's best stats (only those worth naming), the race (the finishing order:
+// finishers by time, then the rest by distance, windowed around you), missions folded to one row, and
+// a tip for next time when the run had nothing to show. A run that reached the line gets the finished
+// variant: its time is the hero number, with the place, the medal and the style score beside it, and
+// the stage splits against your best under it. Run again is the default focus and
 // the only loud button; rewarded options sit beside it at Home size, easy to skip. On wide landscape
 // screens the card keeps to the right, so the live crash scene on the left is the hero shot.
 
@@ -185,7 +188,10 @@ export class Results {
     this.render(m, true);
     this.layer.show();
     this.focusDefault();
-    if (!reduced()) this.countUp(m.score);
+    if (!reduced()) {
+      if (m.finish) this.countUp(m.finish.seconds, clock);
+      else this.countUp(m.score, fmt);
+    }
     this.flyRewards(m);
     this.stampsAtOnce();
   }
@@ -241,15 +247,15 @@ export class Results {
     target?.focus({ preventScroll: true });
   }
 
-  private countUp(target: number): void {
+  private countUp(target: number, show: (v: number) => string): void {
     const el = this.el.querySelector<HTMLElement>('.gs-res-score');
     if (!el || target <= 0) return;
     const t0 = performance.now();
-    el.textContent = '0';
+    el.textContent = show(0);
     const step = (now: number) => {
       const t = Math.min(1, (now - t0) / COUNT_MS);
       const e = 1 - Math.pow(1 - t, 3);
-      el.textContent = fmt(target * e);
+      el.textContent = show(target * e);
       if (t < 1) this.raf = requestAnimationFrame(step);
     };
     cancelAnimationFrame(this.raf);
@@ -387,10 +393,12 @@ export class Results {
     const where = h('p', 'gs-res-where', mtnName);
     where.id = 'gs-res-where';
     if (m.mood) where.append(h('span', 'gs-res-mood', m.mood));
-    // The visible score counts up from 0 as focus lands, so readers get a fixed copy instead.
-    const score = h('div', 'gs-res-score gs-num', fmt(m.score));
+    // The visible figure counts up from 0 as focus lands, so readers get a fixed copy instead. A finish
+    // leads with its time: that is what the race was decided on.
+    const fin = m.finish ?? null;
+    const score = h('div', `gs-res-score gs-num${fin ? ' is-time' : ''}`, fin ? clock(fin.seconds) : fmt(m.score));
     score.setAttribute('aria-hidden', 'true');
-    const scoreSr = sr(`Score ${fmt(m.score)}`);
+    const scoreSr = sr(fin ? `Finish time ${clock(fin.seconds)}. Style score ${fmt(m.score)}` : `Score ${fmt(m.score)}`);
     scoreSr.id = 'gs-res-score';
     // Beside the score: where you finished in the race, then the new-best stamp or the best to beat.
     const side = h('div', 'gs-res-side');
@@ -403,7 +411,13 @@ export class Results {
       const at = placeAtCrash(m, place.rank, line);
       side.append(at ? h('div', 'gs-res-placebox', chip, at) : chip);
     }
-    if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
+    if (fin) {
+      // The medal stands with the place; your best time and the style score share the row under them.
+      if (fin.medal > 0) side.append(h('span', `gs-medal m-${fin.medal} gs-res-medal`, MEDAL[fin.medal]));
+      const style = h('span', `gs-res-style${m.newBest ? ' is-best' : ''}`, 'Style ', h('span', 'gs-num', fmt(m.score)));
+      const low = fin.newBest ? h('span', 'gs-stamp gs-res-newbest', 'New best') : fin.bestTime !== null ? h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', clock(fin.bestTime))) : null;
+      side.append(h('div', 'gs-res-siderow', low, style));
+    } else if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
     else if (m.best > 0) side.append(h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', fmt(m.best))));
     const scoreRow = h('div', 'gs-res-scorerow', scoreSr, score, side.childElementCount > 0 ? side : null);
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
@@ -413,7 +427,7 @@ export class Results {
     // ("with a 2,085 point combo on the line"). The figure keeps its unit, and "on the line" keeps
     // together, so a wrap never leaves "line" alone on a row of its own.
     const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with a ', h('span', 'gs-num', fmt(m.lostCombo!)), `${NBSP}point combo on${NBSP}the${NBSP}line`) : null;
-    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
+    const cause = fin ? finishLine(fin) : m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
     // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
@@ -440,20 +454,22 @@ export class Results {
     // the buttons: inside the left column it either left that column ending early beside a full race
     // or pushed the missions down past the race's end.
     const picks = notable(m);
-    const showDist = m.ghosts.length === 0;
+    const showDist = m.ghosts.length === 0 && !fin;
     const stats = picks.length > 0 || showDist ? h('dl', 'gs-res-stats', showDist ? stat('Distance', metres(m.distance), 'is-key') : null, ...picks) : null;
-    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
-    const run = stats ? h('section', 'gs-res-run', stats) : null;
+    const tip = picks.length === 0 && !fin ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
+    const splits = fin ? splitRow(fin) : null;
+    const run = stats || splits ? h('section', 'gs-res-run', splits, stats) : null;
     run?.setAttribute('aria-label', 'Your run');
 
-    // The race tells one story, the finishing order by distance: the head counts the ghosts you
+    // The race tells one story, the finishing order: the head counts the ghosts you
     // beat (finished ahead of) and only those rows wear a Beat stamp; the row just above yours wears
     // a Next tag, and the line in the card's head says how far that place was. A run that beat nobody
     // leaves the count out: "Beat 0 of 6" in bold caps only read as a verdict. Overtakes are
     // celebrated during the run, where they happen.
     let race: HTMLElement | null = null;
     if (m.ghosts.length > 0) {
-      const beat = m.ghosts.filter((g) => dist(g) <= m.distance).length;
+      const me = youAt(m);
+      const beat = m.ghosts.filter((g) => !aheadOf(ghostAt(g), me)).length;
       const list = standings(m);
       const all = list.querySelector('.is-far, .is-far-p') ? this.showAll(list, m.ghosts.length + 1) : null;
       // A field only the phone window folds needs the link on phones alone.
@@ -767,6 +783,38 @@ export class Results {
   }
 }
 
+/** The medals, by the number the game sends. */
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
+/** The finished card's line under the time: how it stands against your best. */
+function finishLine(f: ResultsFinish): HTMLElement {
+  let text = 'First finish here.';
+  if (f.bestTime !== null) {
+    const gap = timeGap(f.seconds, f.bestTime);
+    const by = noteGap(gapSeconds(gap));
+    text = gap < 1 ? 'Level with your best.' : f.newBest ? `${by} faster than your best.` : `${by} off your best.`;
+  }
+  return h('p', 'gs-res-cause is-finish', icon('flag', 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', text));
+}
+
+/**
+ * The stage splits: the clock at each line, and under it where that left you against your best there,
+ * in the race-gap grammar (a number and a word, never a bare sign). Gold-white where you were ahead,
+ * your best's own colour; quiet where you were behind.
+ */
+function splitRow(f: ResultsFinish): HTMLElement | null {
+  if (f.splits.length === 0) return null;
+  const cells = f.splits.map((s) => {
+    const g = s.vsBest === null ? null : splitGap(s.seconds, s.vsBest);
+    const ahead = s.vsBest !== null && s.vsBest < 0;
+    const vs = s.vsBest === null ? null : h('span', `gs-res-split-vs${ahead ? ' is-ahead' : ''}`, g === null ? 'Level' : `${noteGap(g)} ${ahead ? 'ahead' : 'behind'}`);
+    return h('div', 'gs-res-split', h('dt', '', s.name), h('dd', 'gs-num', clock(s.seconds), vs));
+  });
+  const dl = h('dl', 'gs-res-splits', ...cells);
+  dl.setAttribute('aria-label', f.bestTime !== null ? 'Stage splits against your best' : 'Stage splits');
+  return dl;
+}
+
 function stat(label: string, value: string, cls = '', record = false): HTMLElement {
   return h('div', `gs-res-stat${cls ? ' ' + cls : ''}`, h('dt', '', label), h('dd', 'gs-num', value, record ? h('span', 'gs-res-rec', sr(', '), 'Record') : null));
 }
@@ -832,7 +880,7 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
     'Hold to crouch, then release to pop off a kicker.',
     touch ? 'Drag in the air to spin.' : mode === 'mouse' ? 'Move in the air to spin.' : 'Steer in the air to spin.',
     touch ? 'Hold in the air to flip.' : 'Press and hold in the air to flip.',
-    'Hold, then let go at the lip for a boosted pop.',
+    'Hold, release at the lip for a boosted pop.',
   ];
   return moves[turn % moves.length];
 }
@@ -851,8 +899,8 @@ function raceLine(m: ResultsModel): HTMLElement | null {
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');
   const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
-  // "85 m" never breaks between the number and its unit.
-  const text = l.text.replace(/(\d) m\b/g, `$1${NBSP}m`);
+  // "85 m" and "1.2 s" never break between the number and the unit.
+  const text = l.text.replace(/(\d) ([ms])\b/g, `$1${NBSP}$2`);
   const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
   // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
   if (l.tone !== 'event') p.setAttribute('translate', 'no');
@@ -921,6 +969,13 @@ function nextUnlockCard(m: ResultsModel): HTMLElement | null {
 }
 
 const dist = (g: ResultsGhost): number => g.distance ?? 0;
+/** Where you and a ghost stand in the race order (standing.ts), the one order every row follows. */
+const youAt = (m: ResultsModel): Standing => ({ time: m.finish?.seconds ?? null, distance: m.distance });
+const ghostAt = (g: ResultsGhost): Standing => ({ time: g.time ?? null, distance: dist(g) });
+/** What a row shows: a time for a finisher, metres for the rest. */
+const rowFigure = (s: Standing): string => (s.time !== null ? clock(s.time) : metres(s.distance));
+/** A margin as the note shows it: "85 m" and "1.2 s" keep together, as the race line's do. */
+const noteGap = (g: string): string => g.replace(/(\d) ([ms])$/, `$1${NBSP}$2`);
 
 /** The open mission closest to done (the highest share of its target; the first on a tie), or null. */
 function closest(open: ResultsModel['missions']): ResultsModel['missions'][number] | null {
@@ -937,14 +992,15 @@ function closest(open: ResultsModel['missions']): ResultsModel['missions'][numbe
 }
 
 /**
- * Where you finished. The race is decided by distance, the number every row shows: your place is one
- * more than the ghosts whose run went further than yours. Passed stamps are separate (ghosts you
- * overtook at some point), so a ghost you passed that kept going after your crash still ranks above.
+ * Where you finished. Finishers rank by time, then the rest by distance, the figure every row shows:
+ * your place is one more than the ghosts ahead of you in that order. Passed stamps are separate (ghosts
+ * you overtook at some point), so a ghost you passed that kept going after your crash still ranks above.
  */
 function finish(m: ResultsModel): { rank: number; of: number } | null {
   if (m.ghosts.length === 0) return null;
+  const me = youAt(m);
   let ahead = 0;
-  for (const g of m.ghosts) if (dist(g) > m.distance) ahead++;
+  for (const g of m.ghosts) if (aheadOf(ghostAt(g), me)) ahead++;
   return { rank: ahead + 1, of: m.ghosts.length + 1 };
 }
 
@@ -965,8 +1021,9 @@ function placeAtCrash(m: ResultsModel, rank: number, line: HTMLElement | null): 
  * One line under the crash line, in the same terms as the order: where you stood at the crash and who
  * rode on past (m.crashNote: it says why the place is not the one the HUD showed, and is the more
  * useful line), else how far short of the next place you stopped, or how far clear of second you
- * finished. Margins are the difference of the rows as shown (whole metres each). Null when it would
- * say nothing, or when the crash note is already the race line.
+ * finished. Margins are the difference of the rows as shown ("1.2 s" between finishers, "85 m" between
+ * the rest); a time and a distance share no unit, so a rider short of a finisher above is told how far
+ * short of the line. Null when it would say nothing, or when the crash note is already the race line.
  */
 function raceNote(m: ResultsModel): HTMLElement | null {
   if (m.crashNote) {
@@ -976,40 +1033,45 @@ function raceNote(m: ResultsModel): HTMLElement | null {
     p.setAttribute('translate', 'no');
     return p;
   }
-  let above = Infinity;
-  let below = -Infinity;
-  for (const g of m.ghosts) {
-    const d = dist(g);
-    if (d > m.distance) above = Math.min(above, d);
-    else below = Math.max(below, d);
-  }
   const place = finish(m);
   if (!place) return null;
-  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round(above) - Math.round(m.distance)))), ` short of ${ordinal(place.rank - 1)} place.`);
-  const lead = Math.round(m.distance) - Math.round(below);
-  return Number.isFinite(lead) && lead >= 1 ? h('p', 'gs-res-note', h('span', 'gs-num', metres(lead)), ' clear of 2nd place.') : null;
+  const me = youAt(m);
+  const order = m.ghosts.map(ghostAt).sort(byStanding);
+  if (place.rank > 1) {
+    const above = order[place.rank - 2];
+    const gap = margin(above, me);
+    if (gap === null) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round((m.finishZ ?? above.distance) - m.distance)))), ' short of the finish.');
+    return h('p', 'gs-res-note', h('span', 'gs-num', noteGap(gap.replace(/^less than /, ''))), ` short of ${ordinal(place.rank - 1)} place.`);
+  }
+  const below = order[0];
+  if (!below) return null;
+  const gap = margin(me, below);
+  if (gap === null) return h('p', 'gs-res-note', 'The only finisher.');
+  return gap.startsWith('less') ? null : h('p', 'gs-res-note', h('span', 'gs-num', noteGap(gap)), ' clear of 2nd place.');
 }
 
 /**
- * The finishing order: everyone by distance, furthest first, you among them. The ghosts below your
- * row are the ones you beat, so they (and only they) wear a Beat stamp. Rows outside the window
- * around yours are marked far and fold behind Show All, so the race reads as your next targets.
+ * The finishing order: finishers by time, then the rest by distance, you among them. Each row reads in
+ * its own terms, a time or metres. The ghosts below your row are the ones you beat, so they (and only
+ * they) wear a Beat stamp. Rows outside the window around yours are marked far and fold behind Show
+ * All, so the race reads as your next targets.
  */
 function standings(m: ResultsModel): HTMLElement {
-  const sorted = [...m.ghosts].sort((a, b) => dist(b) - dist(a));
+  const sorted = [...m.ghosts].sort((a, b) => byStanding(ghostAt(a), ghostAt(b)));
+  const me = youAt(m);
   const n = sorted.length + 1;
   const long = m.ghosts.length > 6;
   const ol = h('ol', `gs-standings${long ? ' is-long' : ''}`);
-  ol.setAttribute('aria-label', 'Finishing order by distance');
+  ol.setAttribute('aria-label', 'Finishing order');
   // The two places above yours and the one below, slid to stay inside the list (first place shows
   // the three it beat). Folding a single row would cost as much as the link that opens it. Phones
   // keep three of those rows (is-far-p folds the fourth): the next place, you and the one you beat,
   // so your row stays in the first view under the stats line and the footer's offers.
-  const youAt = sorted.filter((g) => dist(g) > m.distance).length;
+  const yourRow = sorted.filter((g) => aheadOf(ghostAt(g), me)).length;
   const windowed = n > WIN_ROWS + 1;
-  const lo = Math.max(0, Math.min(youAt - WIN_ABOVE, n - WIN_ROWS));
+  const lo = Math.max(0, Math.min(yourRow - WIN_ABOVE, n - WIN_ROWS));
   const windowedP = n > WIN_ROWS_PHONE + 1;
-  const loP = Math.max(0, Math.min(youAt - 1, n - WIN_ROWS_PHONE));
+  const loP = Math.max(0, Math.min(yourRow - 1, n - WIN_ROWS_PHONE));
   let i = 0;
   let stamp = 0;
   const add = (li: HTMLElement) => {
@@ -1018,29 +1080,29 @@ function standings(m: ResultsModel): HTMLElement {
     i++;
     ol.append(li);
   };
-  const youRow = () => {
-    const you = h('li', 'gs-st-row is-you', h('span', 'gs-st-rank gs-num', String(i + 1)), icon('rider', 'gs-st-ico'), h('span', 'gs-st-name', 'You'), h('span', 'gs-st-val gs-num', metres(m.distance)));
+  const youRowAdd = () => {
+    const you = h('li', 'gs-st-row is-you', h('span', 'gs-st-rank gs-num', String(i + 1)), icon('rider', 'gs-st-ico'), h('span', 'gs-st-name', 'You'), h('span', 'gs-st-val gs-num', rowFigure(me)));
     you.setAttribute('aria-current', 'true');
     add(you);
   };
   for (let k = 0; k < sorted.length; k++) {
-    if (k === youAt) youRow();
-    const beat = k >= youAt;
+    if (k === yourRow) youRowAdd();
+    const beat = k >= yourRow;
     const row = ghostRow(sorted[k], i + 1, beat ? stamp++ : -1);
     // The place right above yours is the one to chase next: a quiet outlined tag in the stamp column.
-    if (k === youAt - 1) {
+    if (k === yourRow - 1) {
       row.classList.add('is-next');
       row.append(h('span', 'gs-st-next', 'Next', sr(' place to beat')));
     }
     add(row);
   }
-  if (youAt === sorted.length) youRow();
+  if (yourRow === sorted.length) youRowAdd();
   return ol;
 }
 
 /**
  * One ghost's row. A ghost you beat wears its kind colour and a Beat stamp; the stamp has a column
- * of its own after the distance (every row keeps it, stamped or not), so it never lands on a number.
+ * of its own after the figure (every row keeps it, stamped or not), so it never lands on a number.
  */
 function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement {
   // Your own best run reads as that, not as your player name repeated in a list of rivals.
@@ -1058,7 +1120,7 @@ function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement
     h('span', 'gs-st-rank gs-num', String(rank)),
     icon('ghost', 'gs-st-ico'),
     name,
-    h('span', 'gs-st-val gs-num', metres(dist(g))),
+    h('span', 'gs-st-val gs-num', rowFigure(ghostAt(g))),
   );
   if (beat) {
     const s = h('span', 'gs-st-stamp', 'Beat');

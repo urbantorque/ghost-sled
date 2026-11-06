@@ -23,6 +23,9 @@ export interface PoolGhostData {
   score: number;
   distance: number;
   ticks: number;
+  /** The tick it crossed the finish line, when it did. `ticks` runs on through the coast, up to the
+   *  generator's cap, so it is no finish time. */
+  finishTick?: number;
   sled: number;
   mood: number;
   event: number;
@@ -41,6 +44,10 @@ export type WorkerOut =
       samples: number;
       ticks: number;
       crashTick: number;
+      /** The tick it crossed the finish line, -1 for a run that did not finish. */
+      finishTick: number;
+      /** The tick it crossed each stage line it reached. */
+      stageTicks: number[];
       score: number;
       distance: number;
       /** Flattened [tick, quality(0 clean,1 perfect,2 sketchy), halfTurns, flips] per notable landing. */

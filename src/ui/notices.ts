@@ -1,7 +1,7 @@
-import type { MountainCard, ToastTone } from './contract';
+import type { GhostKind, MountainCard, ToastTone } from './contract';
 import { ChaosEvent, eventInfo } from '../sim/chaos';
 import { h, type Kid } from './dom';
-import { fmt } from './fmt';
+import { fmt, kindCls, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
 import { EASE_OUT, play, reduced, SPRING } from './motion';
 
@@ -17,12 +17,19 @@ import { EASE_OUT, play, reduced, SPRING } from './motion';
 // A finale is the round an event ends on ("Outran the avalanche +2,000 style", "Caught 31 of 48"): a
 // card in the event's own role colour with the payoff beside it, ranked above missions and unlocks, so
 // a mission pop waits for it and can never push it out of the queue.
+//
+// A stage line is a quiet card: the stage, the clock, and the split against the ghost just ahead and
+// your best in their own colours (the race-gap grammar, a number and a word). The finish is the band's
+// biggest card and outranks everything but a telegraph: the time and your place, up until the results.
 
 const TOAST_MS = 2200;
 const GRUDGE_MS = 2000;
 const NEMESIS_MS = 2600;
 const FINALE_MS = 2600;
 const WARN_MS = 2600;
+const STAGE_MS = 2400;
+/** The finish card holds until the results cover it (FINISH_RESULTS_MS). */
+const FINISH_MS = 3400;
 /** Shortest time a banner stays up once shown, even with others waiting. */
 const MIN_MS = 900;
 /** The grudge toast and the grudge pass arrive in the same tick: within this window they merge. */
@@ -79,7 +86,9 @@ export const EVENT_ICON: Record<ChaosEvent, IconName> = {
 type Spec =
   | { type: 'toast'; text: string; tone: ToastTone; sub?: string; name?: string; note?: string; why?: string; biome?: MountainCard['biome']; nemesis?: boolean; said?: string }
   | { type: 'warn'; text: string; event: ChaosEvent }
-  | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent };
+  | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent }
+  | { type: 'stage'; name: string; time: string; ghost: { text: string; kind: GhostKind } | null; best: string | null }
+  | { type: 'finish'; time: string; rank: number; of: number };
 
 interface Banner {
   spec: Spec;
@@ -218,6 +227,17 @@ export class Notices {
   unlock(name: string, biome: MountainCard['biome']): void {
     const text = `${name} unlocked`;
     this.push({ spec: { type: 'toast', text, tone: 'unlock', name, sub: 'Ride it from the title', biome }, pri: P_CELEBRATE, key: `t:unlock:${text}`, ms: TOAST_MS + 400, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
+  /** A stage line crossed: the stage, the clock, and its splits ("1.2 s behind Mila"). */
+  stageLine(name: string, time: string, ghost: { text: string; kind: GhostKind } | null, best: string | null): void {
+    this.push({ spec: { type: 'stage', name, time, ghost, best }, pri: P_CELEBRATE, key: `s:${name}`, ms: STAGE_MS, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
+  /** Over the line: the time and your place. Nothing else is news now: the queue goes with it. */
+  finish(time: string, rank: number, of: number): void {
+    this.queue = [];
+    this.push({ spec: { type: 'finish', time, rank, of }, pri: P_FINALE, key: 'finish', ms: FINISH_MS, at: performance.now(), el: null, shown: 0, end: 0 });
   }
 
   /** Mid-run event telegraph: big banner with a pulsing border for about 2.6 s. */
@@ -432,7 +452,7 @@ export class Notices {
  * warning and plain info keep their turn.
  */
 function crashQuiet(s: Spec): boolean {
-  return s.type === 'toast' && (s.tone === 'mission' || s.tone === 'unlock' || s.tone === 'grudge');
+  return s.type === 'stage' || (s.type === 'toast' && (s.tone === 'mission' || s.tone === 'unlock' || s.tone === 'grudge'));
 }
 
 /**
@@ -452,6 +472,16 @@ export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: 
 }
 
 function render(s: Spec): HTMLElement {
+  if (s.type === 'stage') {
+    const gaps: HTMLElement[] = [];
+    if (s.ghost) gaps.push(h('span', `gs-line-gap ${kindCls(s.ghost.kind)}`, s.ghost.text));
+    if (s.best) gaps.push(h('span', 'gs-line-gap k-you', s.best));
+    return h('div', 'gs-line', h('span', 'gs-line-top', h('span', 'gs-line-k', s.name), h('span', 'gs-line-t gs-num', s.time)), gaps.length ? h('span', 'gs-line-gaps', ...gaps) : null);
+  }
+  if (s.type === 'finish') {
+    const place = s.of > 1 ? h('span', `gs-done-place gs-num${s.rank === 1 ? ' is-first' : ''}`, ordinal(s.rank), h('span', 'gs-done-of', ` of ${s.of}`)) : null;
+    return h('div', 'gs-done', icon('flag', 'gs-done-ico'), h('span', 'gs-done-k', 'Finish'), h('span', 'gs-done-t gs-num', s.time), place);
+  }
   if (s.type === 'warn') {
     const key = eventInfo(s.event).key;
     const el = h('div', `gs-warn gs-panel e-${key}`, h('span', 'gs-warn-ico', icon(EVENT_ICON[s.event] ?? 'alert')), h('span', 'gs-warn-txt', s.text));
@@ -541,6 +571,24 @@ function reward(sub: string): HTMLElement {
 }
 
 function enter(el: HTMLElement, s: Spec): void {
+  if (s.type === 'finish') {
+    // The biggest card there is: slammed down onto the band, as a finale is, with one gold-white ring.
+    play(
+      el,
+      [
+        { opacity: 0, transform: 'scale(1.3)' },
+        { opacity: 1, transform: 'scale(0.96)', offset: 0.55, easing: SPRING },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: 420, easing: 'ease-in' },
+    );
+    if (!reduced()) {
+      const ring = h('span', 'gs-fin-ring');
+      el.append(ring);
+      play(ring, [{ opacity: 0.95, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.08, 1.4)' }], { duration: 760, delay: 200, easing: EASE_OUT, fill: 'both' });
+    }
+    return;
+  }
   if (s.type === 'warn') {
     play(el, [{ opacity: 0, transform: 'translateY(-12px) scale(0.9)' }, { opacity: 1, transform: 'none' }], { duration: 300, easing: SPRING });
     return;
@@ -563,7 +611,7 @@ function enter(el: HTMLElement, s: Spec): void {
     }
     return;
   }
-  if (s.tone === 'grudge' && s.name) {
+  if (s.type === 'toast' && s.tone === 'grudge' && s.name) {
     play(el, [{ opacity: 0, transform: 'scale(0.82)' }, { opacity: 1, transform: 'scale(1.05)', offset: 0.6 }, { opacity: 1, transform: 'scale(1)' }], { duration: 320, easing: 'ease-out' });
     // The ghost you settled with falls behind: it slips out of its badge to the left (clipped there).
     const trail = el.querySelector('.gs-pass-trail');

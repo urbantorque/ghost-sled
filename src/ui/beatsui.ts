@@ -1,5 +1,6 @@
 import type { Beat, Say, StampPart } from '../game/beats';
-import { fmt } from './fmt';
+import { clock, splitGap } from '../game/standing';
+import { fmt, NBSP } from './fmt';
 import type { Fx } from './fx';
 import type { Hud } from './hud';
 import type { Notices } from './notices';
@@ -25,8 +26,9 @@ import type { Notices } from './notices';
 //   the same frame), race news, duel results, the start-line call; the crown pulse when you take the
 //   lead; the stake line's pace punch; the score's New best flash.
 // - the banner band (notices), one at a time by priority: grudge settled or nemesis down, finales,
-//   mission and unlock pops. From the crash to the results the band is the pack's: only a finale or an
-//   event warning still goes up.
+//   mission and unlock pops, a stage line's split and the finish. From the crash to the results the
+//   band is the pack's: only a finale or an event warning still goes up.
+// - a wipeout the run survives is one short line, and nothing else: no crash, no results.
 // Muted passes show nothing at all.
 
 /** Beats that draw their own picture: a `say` on them would print the same moment twice. */
@@ -167,6 +169,27 @@ export class BeatRouter {
         case 'finale':
           this.finale(b);
           break;
+        case 'tumble':
+          // Down in the snow: a stamp still up retires (the loss owns its beat), then its line.
+          if (b.phase !== 'start') break;
+          this.fx.retireStamp();
+          this.hud.flowState('off');
+          if (b.say) this.say(b.say);
+          this.hud.say(b.say?.label ?? 'Wipeout');
+          break;
+        case 'stage': {
+          // The last line's moment is the finish, a frame later.
+          if (b.last) break;
+          const ghost = b.vsGhost ? { text: splitWords(b.seconds, b.vsGhost.delta, b.vsGhost.name), kind: b.vsGhost.kind } : null;
+          const best = b.vsBest === null ? null : splitWords(b.seconds, b.vsBest, 'your best');
+          this.notices.stageLine(b.name, clock(b.seconds), ghost, best);
+          break;
+        }
+        case 'finish':
+          this.fx.retireStamp();
+          // (The banner band is a polite live region: this says itself.)
+          this.notices.finish(clock(b.seconds), b.rank, b.of);
+          break;
         case 'missionPop': {
           const text = /^mission/i.test(b.text) ? b.text : `Mission done: ${b.text}`;
           this.notices.toast(text, 'mission', b.reward > 0 ? `+${fmt(b.reward)} gifts` : undefined);
@@ -230,7 +253,7 @@ export class BeatRouter {
         this.lostDuel.id = g.id;
         this.lostDuel.at = performance.now();
         // The duel's result, worded as news: it keeps the pill (other news goes to the line meanwhile).
-        this.hud.news(g.name, g.kind, `${g.kind === 'you' ? 'Your best' : g.name} pulled away`, undefined, true);
+        this.hud.news(g.name, g.kind, `${g.kind === 'you' ? 'Your best' : g.name} ${b.over ? 'finished first' : 'pulled away'}`, undefined, true);
         break;
       default:
         break;
@@ -250,6 +273,16 @@ export class BeatRouter {
       this.say(b.say ?? { label: b.text, points: 0, tone: 'big' });
     }
   }
+}
+
+/**
+ * A split in the race-gap grammar (contract C12): a positive number with a word, never a bare sign.
+ * `seconds` is your clock at the line, `delta` how far it is from theirs (+ = you are behind): "1.2 s
+ * behind Mila", "0.8 s ahead of your best", "Level with Mila" under a tenth.
+ */
+export function splitWords(seconds: number, delta: number, who: string): string {
+  const g = splitGap(seconds, delta)?.replace(' ', NBSP) ?? null;
+  return g === null ? `Level with ${who}` : delta > 0 ? `${g} behind ${who}` : `${g} ahead of ${who}`;
 }
 
 /**

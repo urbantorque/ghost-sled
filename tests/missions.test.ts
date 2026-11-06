@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MISSIONS, MissionState, RunSummary, applyRun, cycleOrder, missionDef, missionTier, missionViews, newMissionState, topUp, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { SaveStore, defaultSave } from '../src/game/save';
+import { FINISH_Z } from '../src/game/standing';
 import { hashString } from '../src/sim/prng';
 
 function summary(p: Partial<RunSummary> = {}): RunSummary {
@@ -27,6 +28,12 @@ function summary(p: Partial<RunSummary> = {}): RunSummary {
     ghostsPassed: 0,
     grudgeBeaten: false,
     chaos: false,
+    seconds: 0,
+    finished: false,
+    finishSeconds: 0,
+    tumbles: 0,
+    wallRides: 0,
+    grinds: 0,
     ...p,
   };
 }
@@ -189,7 +196,9 @@ describe('mission tiers', () => {
     expect(missionTier(def('spin360'), 2)).toMatchObject({ text: 'Land a 540 spin (II)', target: 3 });
     expect(missionTier(def('air15'), 2)).toMatchObject({ text: 'Get 2 seconds of air (II)', target: 2 });
     // Ceilings keep a tier III ridable.
-    expect(missionTier(def('dist4000'), 3)).toMatchObject({ target: 6000, text: 'Ride 6,000 m in one run (III)' });
+    // The course ends at 4,500 m: no distance tier asks for a run nobody can ride.
+    expect(missionTier(def('dist4000'), 3)).toMatchObject({ target: 4500, text: 'Ride 4,500 m in one run (III)' });
+    for (const m of MISSIONS) if (m.unit === 'm') for (const t of [1, 2, 3]) expect(missionTier(m, t).target, m.id).toBeLessThanOrEqual(FINISH_Z);
     expect(missionTier(def('score40k'), 3).target).toBe(100000);
     // The grudge mission cannot grow, so it stays tier I.
     expect(missionTier(def('grudge'), 3)).toEqual({ tier: 1, text: 'Beat your grudge ghost', target: 1, reward: 60 });
@@ -235,5 +244,57 @@ describe('mid-run mission pops (missionsCrossed)', () => {
     const before = JSON.stringify(s);
     missionsCrossed(s, summary({ distance: 5000, perfects: 9, ghostsPassed: 9 }), new Set(), { unlockedBiomes: unlockedBiomes(0) });
     expect(JSON.stringify(s)).toBe(before);
+  });
+});
+
+describe('missions for a descent with a finish', () => {
+  const done = (time: number, p: Partial<RunSummary> = {}) => summary({ distance: FINISH_Z + 60, seconds: time + 3, finished: true, finishSeconds: time, ...p });
+  const met = (id: string, r: RunSummary) => missionDef(id)!.metric(r) >= missionDef(id)!.target;
+
+  it('finish a mountain', () => {
+    expect(met('finish1', done(200))).toBe(true);
+    expect(met('finish1', summary({ distance: 4400 }))).toBe(false);
+  });
+
+  it('finish with no wipeouts: a free one counts against it too', () => {
+    expect(met('clean1', done(200))).toBe(true);
+    expect(met('clean1', done(200, { tumbles: 1 }))).toBe(false);
+    expect(met('clean1', summary())).toBe(false);
+  });
+
+  it('a wall ride and rail grinds', () => {
+    expect(met('wall1', summary({ wallRides: 1 }))).toBe(true);
+    expect(met('wall1', summary())).toBe(false);
+    expect(met('grind2', summary({ grinds: 2 }))).toBe(true);
+    expect(met('grind2', summary({ grinds: 1 }))).toBe(false);
+  });
+
+  it('beat a time: a faster finish, and a run that did not finish never counts', () => {
+    expect(missionDef('time210')!.text).toBe('Finish in under 3:30');
+    expect(missionDef('time185')!.text).toBe('Finish in under 3:05');
+    expect(missionDef('time160')!.text).toBe('Finish in under 2:40');
+    expect(met('time210', done(209))).toBe(true);
+    expect(met('time210', done(210))).toBe(false);
+    expect(met('time160', summary({ seconds: 100 }))).toBe(false);
+  });
+
+  it('every mission reaches the rotation, and each one can be met on the course', () => {
+    const seen = new Set<string>();
+    for (const i of cycleOrder(7, 0)) seen.add(MISSIONS[i].id);
+    expect(seen.size).toBe(L);
+    expect(seen.has('finish1')).toBe(true);
+  });
+
+  it('a slot asking for the whole course frees on a finish', () => {
+    const s: MissionState = { active: [{ id: 'dist4000', best: 0, tier: 3 }], cursor: L * 2, completed: 0, seed: 3 };
+    const r = applyRun(s, done(200));
+    expect(r.views[0]).toMatchObject({ id: 'dist4000', done: true });
+    expect(s.active.some((a) => a.id === 'dist4000')).toBe(false);
+  });
+
+  it('keeps an old save whose mission ids are all still here', () => {
+    const d = defaultSave('Old');
+    for (const id of ['dist800', 'dist2000', 'dist4000', 'pass3', 'score40k']) expect(missionDef(id), id).toBeDefined();
+    expect(d.missions.active).toHaveLength(3);
   });
 });

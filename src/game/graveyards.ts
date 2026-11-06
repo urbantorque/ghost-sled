@@ -1,4 +1,5 @@
 import { hashString } from '../sim/prng';
+import { FINISH_Z } from './standing';
 
 // Graveyards: the mountain's named dangerous places. Where 3 or more of the bundled (or Daily) pool's
 // riders crashed within 8 m of each other, a cairn stands on the bank (world.setGraveyards) with a tag
@@ -6,7 +7,8 @@ import { hashString } from '../sim/prng';
 // Bend' and 3 gifts inside the run's extras cap (the app credits them into passBonus).
 //
 // Clusters come from the FULL pool (not the run's field, whose 25 m spacing splits these pairs): the
-// pool riders' run-end distances, minus capped finishers (they never crashed). Pinecrest has two
+// pool riders' run-end distances, minus everyone who never crashed: a rider who reached the finish
+// line ended there on purpose, and a line of finishers is no graveyard. Pinecrest has two
 // (365 to 372 m and 604 m), Ember one (350 m), Sakura four (216, 291, 395 with 4 riders, 1,728 m).
 // Names are picked from a short list by mountain key and distance, so a mountain always calls the
 // same place by the same name. Nothing here touches the sim: the cairns stand off the corridor.
@@ -22,8 +24,8 @@ export const GRAVE_MAX = 4;
 export const GRAVE_PAST = 20;
 /** What surviving one pays (gifts, inside EXTRA_GIFTS_CAP). */
 export const GRAVE_GIFTS = 3;
-/** A pool ghost that rode this long finished the generator's run: it never crashed (field.ts FINISH_TICKS). */
-const FINISHED_TICKS = 18000;
+/** A pool ghost that rode this long reached the generator's cap: it never crashed. */
+const CAPPED_TICKS = 18000;
 
 /** Short place names (proper nouns, no pronouns, typographic apostrophes), at most 14 characters so
  *  'Name: 4 fell here' fits a phone tag. */
@@ -59,7 +61,7 @@ export interface Graveyard {
  */
 export function graveyards(pool: ReadonlyArray<{ distance: number; ticks?: number }>, key: string, taken?: Set<string>): Graveyard[] {
   const d = pool
-    .filter((g) => Number.isFinite(g.distance) && g.distance > 0 && !((g.ticks ?? 0) >= FINISHED_TICKS))
+    .filter((g) => Number.isFinite(g.distance) && g.distance > 0 && g.distance < FINISH_Z && !((g.ticks ?? 0) >= CAPPED_TICKS))
     .map((g) => g.distance)
     .sort((a, b) => a - b);
   const out: Graveyard[] = [];
