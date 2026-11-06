@@ -1,46 +1,65 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide, InstancedBufferAttribute, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3, Vector4 } from 'three';
 import type { Beat } from '../game/beats';
 import { MOODS, Mood } from '../sim/chaos';
-import { CHUNK_LEN, Course, SectionKind } from '../sim/course';
+import { CHUNK_LEN, Course, RUN_OUT, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry } from './crowd';
-import { ENCLOSED, Kind, Piece, Rail, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
+import { ENCLOSED, Kind, Piece, Rail, SPANS, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
 import { inClearing, liftLine, type Clearing } from './dressing';
+import { Chairs } from './liftline';
 import { makeToonMaterial, shared } from './materials';
-import type { Palette } from './palette';
+import { OverlookPlan } from './overlook';
+import { journeyDusk, type Palette } from './palette';
 
-// Set pieces: every 500 to 900 m the course runs past, beside or under one big, memorable place (a
-// start gate high over the run, a trestle footbridge, an ice arch, a basalt gateway, a giant torii;
-// a mountain hut, a ruined watchtower, a ski jump, a frozen waterfall, an observatory, a stone
-// guardian, a pagoda), so a run is a sequence of places down the fall line instead of one corridor.
-// Where they are and what they are is deterministic per course (and mood: low gravity needs more
-// headroom), keyed to the section each stands in. Crowds of toy spectators line the banks at the
-// gates and huts and cheer the rider's moments.
+// Places: a run is a sequence of places down the fall line instead of one corridor. The course says where
+// (SitePlan): a `street` section is a town you ride through, a `tunnel` an enclosed run, a `bridge` a
+// bridge over the chasm, the `finish` the finish town, a leap has a crowd on its shoulders, z = 0 is the
+// start, and between them lift lines and the point pieces (a gate high over the run, an ice arch, a
+// basalt gateway, a giant torii; a mountain hut, a ruined watchtower, a ski jump, a frozen waterfall, an
+// observatory, a stone guardian, a pagoda) close every stretch to about 300 m. Which piece is
+// deterministic per course; how high it stands depends on the mood (low gravity needs more headroom).
+// Crowds of toy spectators line the barriers and cheer the rider's moments.
 //
-// Safety (ART.md and the lane rules): nothing stands in the corridor or within 9.2 m of its edge
-// except high overhead, and a span's lowest point clears the highest air any sled can reach under it
-// (airCeiling: every launch up the slope, kickers and vents included, at the fastest speed there, in
-// this mood's gravity) by SPAN_MARGIN; a span that would have to stand over SPAN_MAX is swapped for
-// a bank piece.
+// Safety (ART.md and the lane rules): nothing stands in the corridor or inside the course's own edge
+// limit (edgeLimit: 9.2 m on plain ground, 2 m in a street, 0.8 m on a bridge) except high overhead, and
+// what hangs over the run clears the highest air any sled can reach under it (airCeiling: every launch
+// up the slope, kickers and vents included, at the fastest speed there, in this mood's gravity) by
+// SPAN_MARGIN. A span that would have to stand over SPAN_MAX is swapped for a bank piece; a roof over
+// ENC_MAX or over a launch comes off, and its walls stand alone. Long sites are built along the course's
+// own line (a rail) and hang nothing lower than airProfile: the same flights, binned along the run.
+// Inside an enclosure the frame darkens at its edges and the way out flashes (`light`, which world.ts
+// hands to the post).
 //
-// Between them, every 1.5 to 2.5 km the run becomes a village's street for 150 to 250 m, and every
-// 1.1 to 1.9 km (where nothing launches under it) it runs enclosed for 70 to 120 m: an avalanche
-// gallery, an ice or lava-rock tunnel, a corridor of torii (town.ts). These long sites are built along
-// the course's own line (a rail) and hang nothing over the run lower than the highest air there plus
-// the margin (airProfile: the same flights as airCeiling, binned along the run). Inside an enclosure
-// the frame darkens at its edges and the way out flashes (`light`, which world.ts hands to the post).
-//
-// Cost: two piece meshes (each drawn only while in view) and one crowd batch: +3 draws on Medium and
-// High (+2 in the shadow pass while a piece is in the shadow frustum), and in a village at night its
-// lamplight pools (+1) and in Ember's its steam (+1); Low draws the spans and the long sites' shells
-// and buildings, +2 at most. Pieces are made on idle time, a few parts per callback, never at a run's
-// start.
+// Cost: three piece meshes (each drawn only while in view) and one crowd batch, +1 for the lift chairs,
+// so +4 draws on Medium and High (+3 in the shadow pass while a piece is in the shadow frustum), and in
+// a town at night its lamplight pools (+1) and in Ember's its steam (+1); Low draws the spans, the
+// long sites and their shells, +3 at most. Pieces are made on idle time, a few parts per callback,
+// never at a run's start.
 
-/** The first site's distance range, and the spacing after it. */
-const FIRST_Z = 380;
-const FIRST_SPREAD = 180;
-const STEP_MIN = 500;
-const STEP_SPREAD = 400;
+/** A stretch of run longer than this gets a piece, or leaves room for an overlook. */
+const BARE_MAX = 285;
+/** The start's stretch of ramp (sim z): crowd, barriers and the start gate. */
+const START_FROM = -8;
+const START_TO = 118;
+/** The share of a street's or finish's blend its town reaches back up: the outskirts, standing back. */
+const STREET_LEAD = 0.4;
+/** Metres of finish town past the end of the run-out (the hall that closes the view). */
+const FINISH_TAIL = 34;
+/** A town beside the run where a script holds no street: how far down at least, and the room it needs. */
+const TOWN_FROM = 900;
+const TOWN_MIN = 110;
+const TOWN_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['chute', 'cruise', 'switchbacks', 'benches', 'split']);
+/** The first lift line: at least this far down, and this far above the first leap's lip, so an overlook
+ *  fits between it and the start's crowd (the first one opens by 600 m). */
+const LIFT_FIRST = 505;
+const LIFT_LEAD = 120;
+const LIFT_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['bowl', 'split', 'benches', 'lake', 'cruise']);
+/** An overlook keeps this far from a piece's centre (overlook.ts SITE_KEEP and its margin). */
+const SITE_ROOM = 130;
+/** A piece moved off a kilometre arch keeps this far from the one before it. */
+const FILL_GAP = 100;
+/** How far before a ravine's end its span stands. */
+const RAVINE_SPAN = 50;
 /** Sites keep this far from a kilometre arch. */
 const KM_KEEP = 90;
 /** Metres of clear air between the highest sled and a span's lowest point. */
@@ -53,42 +72,34 @@ const SPAN_MAX = 56;
 const REACH = 380;
 /** Half the depth (along the run) of the span's footprint the air is checked over. */
 const SPAN_DEPTH = 7;
-/** The dressing rule: nothing decorative within this edge excess. */
+/** The dressing rule on plain ground: nothing decorative within this edge excess. */
 const BANK_KEEP = 9.4;
 /** Idle building: none before this after the first frame, each callback at most this late. */
 const IDLE_START_MS = 900;
 const IDLE_MS = 1000;
+/** Nothing is made on a frame until this long after idle time opens. */
+const IDLE_GRACE_MS = 1800;
+/** Piece meshes drawn at once. */
+const SLOTS = 3;
+/** Made pieces kept round the rider, and how far past the view pieces are made ahead. */
+const KEEP_BUILT = 6;
+const QUEUE_AHEAD = 500;
 /** Crowd instances in view at once (High; Medium draws the nearest CROWD_MED). */
 const CROWD_CAP = 560;
 const CROWD_MED = 380;
-/** The village crowd drawn round the rider: from this far behind to this far ahead (sim metres). */
+/** A street's crowd drawn round the rider: from this far behind to this far ahead (sim metres). */
 const WINDOW_BACK = 25;
 const WINDOW_AHEAD = 150;
+/** How far behind the rider a site stays drawn, and how far once something ahead wants its slot. */
+const BEHIND = 160;
+const BEHIND_SHORT = 30;
+/** How much of the day must have gone for the windows to glow (journeyDusk). */
+const DUSK_LIT = 0.45;
 
-/** Villages: the first, and the spacing after it (centre to centre); half their length. */
-const VILLAGE_FIRST = 820;
-const VILLAGE_FIRST_SPREAD = 380;
-const VILLAGE_STEP = 1500;
-const VILLAGE_SPREAD = 1000;
-const VILLAGE_HALF: readonly [number, number] = [75, 125];
-/** Enclosed runs: the first, and the spacing after it; half their length by kind. */
-const ENC_FIRST = 1350;
-const ENC_FIRST_SPREAD = 450;
-const ENC_STEP = 1100;
-const ENC_SPREAD = 800;
-const ENC_HALF: Partial<Record<Kind, readonly [number, number]>> = { gallery: [36, 55], icetunnel: [32, 46], lavatunnel: [32, 46], toriirow: [40, 60] };
 /** An enclosure's roof stands at least this high over its floor (it reads as a roof, not a lid), and
- *  where it would have to stand higher than ENC_MAX the stretch is passed over. */
+ *  where it would have to stand higher than ENC_MAX, over its mouth, it comes off. */
 const ENC_MIN: Partial<Record<Kind, number>> = { gallery: 13.5, icetunnel: 12.5, lavatunnel: 12.5, toriirow: 11.5 };
-const ENC_MAX = 33;
-/** Sections an enclosure can roof: not the wide ones, nor a gully (its rock walls stand at the keep line). */
-const ENC_SECTIONS: ReadonlySet<SectionKind> = new Set<SectionKind>(['chute', 'cruise', 'switchbacks', 'benches']);
-/** Sections a village keeps out of: their cornices and rock walls own the crest (dressing.ts). */
-const VILLAGE_SHUNS: ReadonlySet<SectionKind> = new Set<SectionKind>(['bowl', 'gully']);
-/** Metres kept clear between a long site's ends and its neighbours. */
-const LONG_GAP = 300;
-/** ...but a village and an enclosed run may follow each other closer: out of the street into the shed. */
-const LONG_PAIR = 100;
+const ENC_MAX = 42;
 /** The air profile's bin, metres. */
 const AIR_BIN = 2;
 
@@ -111,10 +122,17 @@ const ENC_KINDS: Record<BiomeId, Kind[]> = {
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
 };
-/** How likely a section is to carry a span: narrow ones mostly, wide ones mostly a bank piece. */
-const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, start: 0, ravine: 0, treerun: 0, lake: 0, fork: 0, street: 0, bridge: 0, tunnel: 0, terraces: 0, leap: 0, finish: 0 };
+/** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
+ *  its banks), wide ones mostly a bank piece. */
+const SPAN_CHANCE: Record<SectionKind, number> = { chute: 0.8, gully: 0.85, ravine: 1, treerun: 0.7, cruise: 0.55, switchbacks: 0.5, benches: 0.35, bowl: 0.3, split: 0.3, fork: 0.3, lake: 0.15, terraces: 0.2, leap: 0.15, start: 0, street: 0, bridge: 0, tunnel: 0, finish: 0 };
+/** Sections whose walls stand close: a tall bank piece behind one rears over the run. */
+const WALLED: ReadonlySet<SectionKind> = new Set<SectionKind>(['ravine', 'gully', 'tunnel', 'treerun']);
 /** Kinds that gather a crowd on the banks (both banks for spans, mostly their own side otherwise). */
-const CROWDED: ReadonlySet<Kind> = new Set<Kind>(['gate', 'torii', 'basalt', 'bridge', 'hut', 'jump', 'pagoda', 'village']);
+const CROWDED: ReadonlySet<Kind> = new Set<Kind>(['gate', 'torii', 'basalt', 'bridge', 'hut', 'jump', 'pagoda', 'village', 'finish', 'start', 'lip', 'lift']);
+/** Kinds whose whole crowd is the piece's own spots. */
+const OWN_CROWD: ReadonlySet<Kind> = new Set<Kind>(['village', 'finish', 'start', 'lip', 'lift']);
+/** Kinds whose crowd is long: drawn in a window round the rider. */
+const STREETS: ReadonlySet<Kind> = new Set<Kind>(['village', 'finish', 'start']);
 
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
@@ -192,7 +210,9 @@ function flights(c: Course, za: number, zb: number, gravity: number, popK: numbe
     }
   };
   const z0 = Math.max(0, za - REACH);
-  for (let zl = z0; pops && zl <= zb; zl += 5) {
+  // (Past the finish a sled coasts: nothing leaves the ground there.)
+  const zEnd = Math.min(zb, c.finishZ);
+  for (let zl = z0; pops && zl <= zEnd; zl += 5) {
     const x = c.centerX(zl);
     const vmax = speedCap(zl);
     const gz = (c.ground(x, zl + 0.6) - c.ground(x, zl - 0.6)) / 1.2;
@@ -240,6 +260,8 @@ export interface Site {
   /** A long site's air profile (world y per AIR_BIN metres from airZ), or null. */
   air: Float32Array | null;
   airZ: number;
+  /** Its air has been flown in this plan's mood: `clear`, `post` and a span's kind are final. */
+  flown: boolean;
 }
 
 /** A site's first and last sim z. */
@@ -283,6 +305,7 @@ export function siteRail(c: Course, s: Site): Rail {
       return { x: lx(x, z), z: lz(x, z), y: c.ground(x, z) - s.y, yaw: Math.atan2(fx, fz), hw };
     },
     floor: (dz) => c.baseY(s.z + dz) - s.y,
+    limit: (dz) => c.edgeLimit(s.z + dz),
     air: (a, b) => siteAir(s, s.z + a, s.z + b) - s.y,
     edge(x, z) {
       return c.edgeExcess(s.x + x * cy + z * sy, s.z + x * sy - z * cy);
@@ -308,25 +331,47 @@ export function siteToWorld(s: { x: number; y: number; z: number; yaw: number },
   return out.set(s.x + lx * cy + lz * sy, s.y + ly, -s.z - lx * sy + lz * cy);
 }
 
-/** Whether a lift line runs at sim z: a long site's houses and walls would stand among its towers. */
-function onLift(c: Course, z: number): boolean {
+/** A lift line of the dressing's at sim z, or null. */
+function liftAt(c: Course, z: number): { side: number; e: number; z0: number; z1: number } | null {
   const l = liftLine(c.section(z));
-  return !!l && z > l.z0 - 30 && z < l.z1 + 30;
+  return l && z > l.z0 - 40 && z < l.z1 + 40 ? l : null;
 }
 
-/** The deterministic list of a course's sites (planned lazily, in order). */
+/** Set while a plan works out its overlooks: the plans they read lay only what the sections fix. */
+let probing = false;
+/** A course's layout, and how far its round of bank pieces had got. */
+const LAID = new WeakMap<Course, { drafts: Draft[]; bankI: number }>();
+
+/** A site as the script lays it, before any air is flown. */
+interface Draft {
+  kind: Kind;
+  z: number;
+  len: number;
+  span: boolean;
+  side: 1 | -1;
+}
+
+const startOf = (d: Draft): number => d.z - d.len;
+const endOf = (d: Draft): number => d.z + d.len;
+
+/**
+ * A course's sites. The course's own sections are the plan: a `street` is a town, a `tunnel` an
+ * enclosure, a `bridge` a bridge, the `finish` the finish town, every leap a crowd on its shoulders, and
+ * z = 0 the start. What is left is filled with lift lines, overlooks and point pieces so no bare stretch
+ * runs past BARE_MAX. All of that is known at once, from the sections
+ * and hashes alone, and is the same in every mood (`planned`, `clearings`). What depends on the mood is
+ * how high things stand: `flyNext` flies a site's air on idle time, and a span or a roof that cannot
+ * clear it in this mood's gravity comes down (spanNeed, roofNeed, quiet).
+ */
 export class SitePlan {
   private list: Site[] = [];
-  private nextZ: number;
+  private laid = false;
+  private next = 0;
   private gravity: number;
   private pop: number;
   private spanI = 0;
   private bankI = 0;
-  private encI = 0;
-  /** Where the next village and the next enclosed run are due (sim z). */
-  private nextVillage: number;
-  private nextEnc: number;
-  /** Play-tests: the longest planNext, ms. */
+  /** Play-tests: the longest flight of one site, ms. */
   readonly stats = { maxPlanMs: 0 };
 
   constructor(
@@ -336,17 +381,261 @@ export class SitePlan {
     const mp = (MOODS[mood] ?? MOODS[0]).params;
     this.gravity = mp.gravity;
     this.pop = mp.pop;
-    this.nextZ = FIRST_Z + hashf(course.seed, 1, 1) * FIRST_SPREAD;
-    this.nextVillage = VILLAGE_FIRST + hashf(course.seed, 2, 21) * VILLAGE_FIRST_SPREAD;
-    this.nextEnc = ENC_FIRST + hashf(course.seed, 3, 22) * ENC_FIRST_SPREAD;
   }
 
-  /** Whether a stretch is clear of kilometre arches. */
-  private offKm(z0: number, z1: number): boolean {
-    for (let km = Math.max(1, Math.ceil((z0 - KM_KEEP) / 1000)); km * 1000 <= z1 + KM_KEEP; km++) {
-      if (km * 1000 > z0 - 40 && km * 1000 < z1 + 40) return false;
+  /** Every site on the course, in z order, flown or not. */
+  get planned(): readonly Site[] {
+    this.lay();
+    return this.list;
+  }
+
+  /** How far the plan reaches: all of the course, from the start (see the class's head). */
+  get reach(): number {
+    return Infinity;
+  }
+
+  /** (The positions are all known: what keeps clear of them has nothing to wait for.) */
+  planNext(): void {
+    this.lay();
+  }
+
+  planTo(_z: number): void {
+    this.lay();
+  }
+
+  /** The start of the next site still to fly (Infinity once all are). */
+  get flownTo(): number {
+    this.lay();
+    const s = this.list[this.next];
+    return s ? s.z - s.len : Infinity;
+  }
+
+  /** Flies the next site: a few ms for a span, more for a long site. */
+  flyNext(): void {
+    this.lay();
+    const s = this.list[this.next];
+    if (!s) return;
+    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+    this.fly(s);
+    this.next++;
+    if (t0) this.stats.maxPlanMs = Math.max(this.stats.maxPlanMs, performance.now() - t0);
+  }
+
+  /** Flies every site that starts before sim z. */
+  flyTo(z: number): void {
+    while (this.flownTo <= z) this.flyNext();
+  }
+
+  /** A kind list walked round from a per-course start, so a run sees every piece its mountain has
+   *  before one repeats. */
+  private round(list: readonly Kind[], salt: number, i: number, avoid: Kind | null): Kind {
+    // (Spans start from the mountain's signature, the first in its list.)
+    const start = salt === 4 ? 0 : Math.floor(hashf(this.course.seed, salt, 9) * list.length);
+    const k = list[(start + i) % list.length];
+    return k === avoid && list.length > 1 ? list[(start + i + 1) % list.length] : k;
+  }
+
+  /** The next bank piece that suits the section at z: a frozen fall stands only where it stands well
+   *  back from the run, never behind a ravine's rim, where it rears right over the lens. */
+  private nextBank(z: number, avoid: Kind | null): Kind {
+    const banks = BANK_KINDS[this.course.biome];
+    const walled = WALLED.has(this.course.section(z).kind);
+    for (let t = 0; t <= banks.length; t++) {
+      const k = this.round(banks, 5, this.bankI++, avoid);
+      if (!(walled && k === 'falls')) return k;
     }
-    return true;
+    return banks[0];
+  }
+
+  /** The sections' sites, then the lift lines, then a piece in every stretch still too long. */
+  private lay(): void {
+    if (this.laid) return;
+    this.laid = true;
+    const c = this.course;
+    // (Where things stand is the same in every mood, so a course lays it out once.)
+    const done = probing ? undefined : LAID.get(c);
+    const drafts = done ? done.drafts : this.layout();
+    if (!done && !probing) LAID.set(c, { drafts, bankI: this.bankI });
+    if (done) this.bankI = done.bankI;
+    drafts.forEach((d, n) => {
+      const x = c.centerX(d.z);
+      const dx = (c.centerX(d.z + 1) - c.centerX(d.z - 1)) / 2;
+      this.list.push({ n, kind: d.kind, span: d.span, side: d.side, z: d.z, x, y: c.ground(x, d.z), yaw: -Math.atan(dx), post: c.halfWidth(d.z) + BANK_KEEP, clear: 0, len: d.len, air: null, airZ: 0, flown: false });
+    });
+  }
+
+  /** Where everything stands (see the class's head). */
+  private layout(): Draft[] {
+    const c = this.course;
+    const end = c.finishZ + RUN_OUT;
+    const seed = c.seed;
+    const secs: Section[] = [];
+    for (let z = 0; z < end; ) {
+      const sec = c.section(z);
+      secs.push(sec);
+      z = sec.z1;
+    }
+    const sideOf = (n: number): 1 | -1 => (hashf(seed, n, 6) < 0.5 ? -1 : 1);
+    const long = (kind: Kind, a: number, b: number, n: number): Draft => ({ kind, z: (a + b) / 2, len: (b - a) / 2, span: false, side: sideOf(n) });
+    const drafts: Draft[] = [long('start', START_FROM, START_TO, 0)];
+    let encI = 0;
+    secs.forEach((sec, i) => {
+      const body = sec.z0 + sec.blend;
+      if (sec.kind === 'street') drafts.push(long('village', sec.z0 + sec.blend * STREET_LEAD, sec.z1 - 1, i));
+      else if (sec.kind === 'tunnel') {
+        const kinds = ENC_KINDS[c.biome];
+        drafts.push(long(kinds[encI++ % kinds.length], body + 1, sec.z1 - 1, i));
+      } else if (sec.kind === 'bridge') drafts.push(long('viaduct', body, sec.z1, i));
+      else if (sec.kind === 'finish') drafts.push(long('finish', sec.z0 + sec.blend * STREET_LEAD, end + FINISH_TAIL, i));
+      else if (sec.kind === 'leap') drafts.push({ kind: 'lip', z: sec.ledges[0].z, len: 0, span: false, side: sideOf(i) });
+      // A ravine's walls hide anything on its banks: what it holds is a span across its slot, near its end.
+      else if (sec.kind === 'ravine') {
+        const prev = drafts[drafts.length - 1];
+        const kind = this.round(SPAN_KINDS[c.biome], 4, this.spanI++, prev.span ? prev.kind : null);
+        drafts.push({ kind, z: this.offKm(sec.z1 - RAVINE_SPAN, Infinity), len: 0, span: true, side: sideOf(i) });
+      }
+    });
+    // A mountain whose script holds no street still has a town beside the run, in the stretch that suits
+    // it best: where the banks stand open and the run is narrow enough to feel the houses.
+    if (!secs.some((s) => s.kind === 'street')) {
+      let best: Section | null = null;
+      for (const sec of secs) {
+        const room = sec.z1 - sec.z0 - sec.blend;
+        if (sec.z0 < TOWN_FROM || !TOWN_SECTIONS.has(sec.kind) || room < TOWN_MIN) continue;
+        if (!best || room > best.z1 - best.z0 - best.blend) best = sec;
+      }
+      if (best) drafts.push(long('village', best.z0 + best.blend, best.z1 - 2, 99));
+    }
+    drafts.sort((a, b) => a.z - b.z);
+    this.addLifts(secs, drafts);
+    if (!probing) this.fill(drafts);
+    drafts.sort((a, b) => a.z - b.z);
+    // Filled round the fixed pieces, two of a kind can still meet: the second moves on a kind.
+    for (let i = 1; i < drafts.length; i++) {
+      const d = drafts[i];
+      if (d.kind !== drafts[i - 1].kind || d.len > 0 || d.kind === 'lip' || d.kind === 'lift') continue;
+      if (d.span) {
+        const list = SPAN_KINDS[c.biome];
+        d.kind = list[(list.indexOf(d.kind) + 1) % list.length];
+      } else d.kind = this.nextBank(d.z, d.kind);
+    }
+    return drafts;
+  }
+
+  /** Lift lines over the wide ground: one just ahead of the first leap, one wherever the wide sections
+   *  are about halfway down. */
+  private addLifts(secs: readonly Section[], drafts: Draft[]): void {
+    const c = this.course;
+    const firstLip = c.leaps.length > 0 ? c.leaps[0].z : 620;
+    const put = (z0: number, n: number) => {
+      const z = this.offKm(z0);
+      // (The station keeps off the bank the dressing's own lift line runs on.)
+      const l = liftAt(c, z);
+      const side: 1 | -1 = l ? (l.side > 0 ? -1 : 1) : hashf(c.seed, n, 61) < 0.5 ? -1 : 1;
+      drafts.push({ kind: 'lift', z, len: 0, span: true, side });
+    };
+    put(Math.max(LIFT_FIRST, firstLip - LIFT_LEAD), 1);
+    let best: Section | null = null;
+    let score = -Infinity;
+    for (const sec of secs) {
+      if (!LIFT_SECTIONS.has(sec.kind)) continue;
+      const body = sec.z0 + sec.blend;
+      if (sec.z1 - body < 90) continue;
+      const mid = (body + sec.z1) / 2;
+      if (drafts.some((d) => mid > startOf(d) - 130 && mid < endOf(d) + 130)) continue;
+      const k = (sec.kind === 'bowl' ? 300 : 0) - Math.abs(mid - c.finishZ * 0.55);
+      if (k > score) {
+        score = k;
+        best = sec;
+      }
+    }
+    if (best) put(Math.round((best.z0 + best.blend + best.z1) / 2), 2);
+    drafts.sort((a, b) => a.z - b.z);
+  }
+
+  /** z moved off a kilometre arch's stretch, if it stands in one: on past it if that stays within
+   *  BARE_MAX of `after`, else back up the run. */
+  private offKm(z: number, after = -Infinity): number {
+    const km = Math.round(z / 1000);
+    if (km < 1 || Math.abs(z - km * 1000) >= KM_KEEP) return z;
+    const on = km * 1000 + KM_KEEP;
+    const back = km * 1000 - KM_KEEP;
+    return on - after <= BARE_MAX || back - after < FILL_GAP ? on : back;
+  }
+
+  /** A piece in every stretch longer than BARE_MAX, keeping off the overlooks, which are places too.
+   *  Overlooks keep 120 m from every piece and are planned round them, so they would never find room
+   *  if the pieces came first. So the overlooks are worked out first, against what the sections fix
+   *  alone, and the pieces fill round them: the real overlook plan then lands on the same stretches,
+   *  because it looks in the same order and the pieces only take ground it had already passed over. */
+  private fill(drafts: Draft[]): void {
+    const c = this.course;
+    const seed = c.seed;
+    const end = c.finishZ + RUN_OUT;
+    probing = true;
+    const looks = new OverlookPlan(c);
+    looks.planTo(end);
+    probing = false;
+    const out: Draft[] = [];
+    let n = 0;
+    const add = (z0: number, after: number): number => {
+      const z = this.offKm(z0, after);
+      const span = SPAN_CHANCE[c.section(z).kind] > hashf(seed, n + 100, 3);
+      const prev = out.length > 0 ? out[out.length - 1].kind : null;
+      const kind = span ? this.round(SPAN_KINDS[c.biome], 4, this.spanI++, prev) : this.nextBank(z, prev);
+      out.push({ kind, z, len: 0, span, side: hashf(seed, n + 100, 6) < 0.5 ? -1 : 1 });
+      n++;
+      return z;
+    };
+    /** Evenly from one spot to the next, each measured from the last as it landed. */
+    const spread = (from: number, to: number, salt: number) => {
+      for (let k = 0, at = from; to - at > BARE_MAX; k++) {
+        const parts = Math.ceil((to - at) / BARE_MAX);
+        at = add(at + (to - at) / parts + (hashf(seed, salt, k + 7) - 0.5) * 24, at);
+      }
+    };
+    for (let i = 0; i + 1 < drafts.length; i++) {
+      const b = startOf(drafts[i + 1]);
+      let at = endOf(drafts[i]);
+      for (const v of looks.planned) {
+        if (v.z1 < at || v.z0 > b) continue;
+        // A piece up to the overlook's keep at each end, where the stretch still needs one.
+        const head = v.z0 - SITE_ROOM - 1;
+        if (v.z0 - at > BARE_MAX) {
+          spread(at, head, i + v.n * 100);
+          add(head, -Infinity);
+        }
+        at = v.z1;
+        const tail = at + SITE_ROOM + 1;
+        if (b - tail > BARE_MAX - SITE_ROOM) at = add(tail, Infinity);
+      }
+      spread(at, b, i);
+    }
+    drafts.push(...out);
+  }
+
+  /** Flies a site: how high what stands over the run must stand in this mood, or that it cannot. */
+  private fly(s: Site): void {
+    const c = this.course;
+    s.flown = true;
+    if (s.len > 0) {
+      s.airZ = s.z - s.len - 8;
+      s.air = airProfile(c, s.airZ, s.z + s.len + 8, this.gravity, this.pop);
+      if (ENCLOSED.has(s.kind)) {
+        // (Low gravity flies every launch far over any roof: the walls stand, the roof does not.)
+        const [air, least] = this.roofNeed(s, s.kind);
+        s.clear = this.gravity >= 0.95 && air <= ENC_MAX && this.quiet(s.z - s.len, s.z + s.len) ? least : 0;
+      }
+      return;
+    }
+    s.post = postLine(c, s);
+    if (!s.span) return;
+    const need = this.spanNeed(s.z);
+    if (need > SPAN_MAX) {
+      // The air here in this mood is too high for it: a bank piece instead.
+      s.span = false;
+      s.kind = this.nextBank(s.z, s.n > 0 ? this.list[s.n - 1].kind : null);
+    } else s.clear = need;
   }
 
   /** Nothing launches under the stretch: no kicker, drop or vent under it or just above its mouth
@@ -360,126 +649,26 @@ export class SitePlan {
       for (const d of zn.drops) if (d.z + d.len + d.rec > z0 - 10 && d.z < z1 + 6) return false;
       for (const v of zn.vents) if (v.z + v.r > z0 - 20 && v.z - v.r < z1 + 6) return false;
     }
-    for (let z = z0; z <= z1; z += 20) if (!ENC_SECTIONS.has(c.section(z).kind) || c.halfWidth(z) > 17) return false;
     return true;
   }
 
-  /** Whether the last site planned is a long one (a village or an enclosure). */
-  private afterLong(): boolean {
-    const n = this.list.length;
-    return n > 0 && this.list[n - 1].len > 0;
-  }
-
-  /** A long site centred at z with half length `len`, its air profile flown. */
-  private longSite(n: number, kind: Kind, z: number, len: number): Site {
+  /** What an enclosure's roof must clear over its floor: the highest air over the stretch plus the margin,
+   *  and the least it may stand anywhere, ENC_MIN over the corridor's highest ground (each plus a metre
+   *  for the roof's pitch). The roof follows the air down the stretch (town.ts bays): a run's air is at
+   *  its highest over a tunnel's mouth, so the mouth stands tallest and the roof comes down inside. */
+  private roofNeed(s: Site, kind: Kind): [number, number] {
     const c = this.course;
-    const dx = (c.centerX(z + 1) - c.centerX(z - 1)) / 2;
-    const side: 1 | -1 = hashf(c.seed, n, 6) < 0.5 ? -1 : 1;
-    const airZ = z - len - 8;
-    const air = airProfile(c, airZ, z + len + 8, this.gravity, this.pop);
-    const site: Site = { n, kind, span: false, side, z, x: c.centerX(z), y: c.ground(c.centerX(z), z), yaw: -Math.atan(dx), post: 0, clear: 0, len, air, airZ };
-    site.post = c.halfWidth(z) + BANK_KEEP;
-    return site;
-  }
-
-  /** An enclosure's roof over its floor: the highest air over the stretch plus the margin, and at
-   *  least ENC_MIN over the corridor's highest ground (plus a metre for the roof's pitch). */
-  private roofNeed(s: Site, kind: Kind): number {
-    const c = this.course;
-    let need = 0;
+    let air = 0;
+    let least = 0;
     for (let dz = -s.len - 6; dz <= s.len + 6; dz += AIR_BIN) {
       const z = s.z + dz;
       const base = c.baseY(z);
-      need = Math.max(need, siteAir(s, z - 2 * AIR_BIN, z + 2 * AIR_BIN) + SPAN_MARGIN - base);
+      air = Math.max(air, siteAir(s, z - 2 * AIR_BIN, z + 2 * AIR_BIN) + SPAN_MARGIN - base);
       const cx = c.centerX(z);
       const hw = c.halfWidth(z);
-      for (let k = -4; k <= 4; k++) need = Math.max(need, c.ground(cx + (k / 4) * hw, z) - base + (ENC_MIN[kind] ?? 13));
+      for (let k = -4; k <= 4; k++) least = Math.max(least, c.ground(cx + (k / 4) * hw, z) - base + (ENC_MIN[kind] ?? 13));
     }
-    return need + 1;
-  }
-
-  /** Plans a village at or after z, or null where it cannot go. */
-  private planVillage(n: number, z: number, prevEnd: number): Site | null {
-    const c = this.course;
-    const len = VILLAGE_HALF[0] + hashf(c.seed, n, 23) * (VILLAGE_HALF[1] - VILLAGE_HALF[0]);
-    // The nearest stretch off the kilometre arches and clear of a bowl or a gully (whose cornices and
-    // rock walls own the crest the crowd stands on); none within 600 m tries again 300 m on.
-    const base = this.afterLong() ? prevEnd + LONG_PAIR + len : Math.max(z, prevEnd + LONG_GAP + len);
-    let zc = NaN;
-    for (let zt = base; zt < base + 600 && Number.isNaN(zc); zt += 20) {
-      if (!this.offKm(zt - len, zt + len)) continue;
-      let ok = true;
-      for (let q = zt - len - 20; q <= zt + len + 20 && ok; q += 20) ok = !VILLAGE_SHUNS.has(c.section(q).kind) && !onLift(c, q);
-      if (ok) zc = zt;
-    }
-    if (Number.isNaN(zc)) {
-      this.nextVillage = z + 300;
-      return null;
-    }
-    const site = this.longSite(n, 'village', zc, len);
-    this.nextVillage = zc + VILLAGE_STEP + hashf(c.seed, n, 24) * VILLAGE_SPREAD;
-    return site;
-  }
-
-  /** Plans an enclosed run near z, or null where none fits (no quiet stretch, or the air too high). */
-  private planEnclosed(n: number, z: number, prevEnd: number): Site | null {
-    const c = this.course;
-    const kinds = ENC_KINDS[c.biome];
-    const kind = kinds[this.encI % kinds.length];
-    const [a, b] = ENC_HALF[kind] ?? [40, 50];
-    const len = a + hashf(c.seed, n, 25) * (b - a);
-    const base = this.afterLong() ? prevEnd + LONG_PAIR + len : Math.max(z - 150, prevEnd + LONG_GAP + len);
-    // (Low gravity flies every launch far over any roof: no enclosures there.)
-    if (this.gravity < 0.95) return null;
-    // Every stretch in reach with nothing launching under it and no kicker in the 220 m above it (whose
-    // flights would carry far over its roof), nearest first; the air is flown for at most five, and
-    // a search that finds none waits 500 m before the next.
-    let tries = 0;
-    let lastTry = -Infinity;
-    for (let zc = base; zc < base + 1200 && tries < 5; zc += 20) {
-      if (zc - lastTry < 60 || !this.offKm(zc - len, zc + len) || !this.quiet(zc - len, zc + len) || this.kicksOver(zc - len - 6, zc + len + 6, kind)) continue;
-      lastTry = zc;
-      tries++;
-      const site = this.longSite(n, kind, zc, len);
-      const need = this.roofNeed(site, kind);
-      if (need <= ENC_MAX) {
-        site.clear = need;
-        this.encI++;
-        this.nextEnc = zc + ENC_STEP + hashf(c.seed, n, 26) * ENC_SPREAD;
-        return site;
-      }
-    }
-    this.nextEnc = z + 500;
-    return null;
-  }
-
-  /** Whether a kicker's or a vent's flight from up the slope passes too high over [z0, z1] for any
-   *  roof (a few flights: the cheap look before the whole profile). */
-  private kicksOver(z0: number, z1: number, kind: Kind): boolean {
-    const c = this.course;
-    let over = false;
-    flights(
-      c,
-      z0,
-      z1,
-      this.gravity,
-      this.pop,
-      (z, y) => {
-        if (!over && y + SPAN_MARGIN + 0.5 - c.baseY(z) > ENC_MAX) over = true;
-      },
-      false,
-    );
-    return over || (ENC_MIN[kind] ?? 13) > ENC_MAX;
-  }
-
-  /** Sites planned so far. */
-  get planned(): readonly Site[] {
-    return this.list;
-  }
-
-  /** How far the plan reaches (the next site's z). */
-  get reach(): number {
-    return this.nextZ;
+    return [air + 1, least + 1];
   }
 
   /** How high a span at sim z must stand over its origin's floor. */
@@ -497,121 +686,54 @@ export class SitePlan {
     return Math.max(air + SPAN_MARGIN, floor + SPAN_MIN) - c.ground(c.centerX(z), z);
   }
 
-  /** Plans the next site. Each kind list is walked round from a per-course start, so a run sees every
-   *  piece its mountain has before one repeats; a span looks up to 90 m either way for the quietest
-   *  air (the lowest it can stand), and a stretch where none fits gets a bank piece instead. */
-  planNext(): Site {
-    const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-    const site = this.planOne();
-    if (t0) this.stats.maxPlanMs = Math.max(this.stats.maxPlanMs, performance.now() - t0);
-    return site;
-  }
-
-  private planOne(): Site {
-    const c = this.course;
-    const n = this.list.length;
-    const prevZ = n > 0 ? this.list[n - 1].z : -Infinity;
-    const prevEnd = n > 0 ? this.list[n - 1].z + this.list[n - 1].len : -Infinity;
-    const offKm = (z: number) => {
-      const km = Math.round(z / 1000);
-      return km >= 1 && Math.abs(z - km * 1000) < KM_KEEP ? km * 1000 + KM_KEEP : z;
-    };
-    let z = offKm(this.nextZ);
-    // A village when one is due, else an enclosed run when one is due and fits (never right before a
-    // village); the next site after either keeps LONG_GAP past its end.
-    if (n > 0) {
-      let long: Site | null = null;
-      if (z >= this.nextVillage) long = this.planVillage(n, z, prevEnd);
-      else if (z >= this.nextEnc && this.nextVillage - z > 350) long = this.planEnclosed(n, z, prevEnd);
-      if (long) {
-        this.nextZ = long.z + long.len + LONG_GAP + hashf(c.seed, n + 2, 2) * 300;
-        this.list.push(long);
-        return long;
-      }
-    }
-    const biome = c.biome;
-    const prev = n > 0 ? this.list[n - 1].kind : null;
-    const spans = SPAN_KINDS[biome];
-    const banks = BANK_KINDS[biome];
-    const next = (list: Kind[], salt: number, i: number): Kind => {
-      // (Spans start from the mountain's signature, the first in its list.)
-      const start = list === spans ? 0 : Math.floor(hashf(c.seed, salt, 9) * list.length);
-      let k = list[(start + i) % list.length];
-      if (k === prev && list.length > 1) k = list[(start + i + 1) % list.length];
-      return k;
-    };
-    const sec = c.section(z);
-    let span = hashf(c.seed, n, 3) < SPAN_CHANCE[sec.kind];
-    // Never three of a sort in a row: after two bank pieces try a span, after two spans a bank piece.
-    if (n >= 2 && this.list[n - 1].span === this.list[n - 2].span) span = !this.list[n - 1].span;
-    let kind: Kind = span ? next(spans, 4, this.spanI) : next(banks, 5, this.bankI);
-    // A gully's high banks carry a bridge where there is one.
-    if (sec.kind === 'gully' && spans.includes('bridge') && prev !== 'bridge') {
-      span = true;
-      kind = 'bridge';
-    }
-    let clear = 0;
-    if (span) {
-      let best = Infinity;
-      let bz = z;
-      for (const dz of [0, -45, 45, -90, 90, -140, 140]) {
-        const zc = offKm(z + dz);
-        // (After a long site the gap counts from its end.)
-        const gap = zc - prevEnd;
-        if (gap < (prevEnd > prevZ ? LONG_GAP : STEP_MIN) || gap > STEP_MIN + STEP_SPREAD + KM_KEEP) continue;
-        const need = this.spanNeed(zc);
-        if (need < best) {
-          best = need;
-          bz = zc;
-        }
-        if (best <= SPAN_MIN + 6) break;
-      }
-      if (best > SPAN_MAX) {
-        span = false;
-        kind = next(banks, 5, this.bankI);
-      } else {
-        z = bz;
-        clear = best;
-      }
-    }
-    // (A gully's bridge is extra: the round of spans carries on where it was.)
-    if (span && !(kind === 'bridge' && sec.kind === 'gully')) this.spanI++;
-    else this.bankI++;
-    this.nextZ = z + STEP_MIN + hashf(c.seed, n + 2, 2) * STEP_SPREAD;
-    const side: 1 | -1 = hashf(c.seed, n, 6) < 0.5 ? -1 : 1;
-    const dx = (c.centerX(z + 1) - c.centerX(z - 1)) / 2;
-    const site: Site = { n, kind, span, side, z, x: c.centerX(z), y: c.ground(c.centerX(z), z), yaw: -Math.atan(dx), post: 0, clear, len: 0, air: null, airZ: 0 };
-    site.post = postLine(c, site);
-    this.list.push(site);
-    return site;
-  }
-
-  /** Plans up to sim z. */
-  planTo(z: number): void {
-    while (this.nextZ <= z) this.planNext();
-  }
-
-  /** The forest kept clear between sim z0 and z1: a bank piece's ground and its crowd's rows on
-   *  both banks, and a span's piers. Planned as far as it needs, so the props can ask on idle time. */
+  /** The ground kept clear between sim z0 and z1, of the forest and of the dressing. Positions only, so a
+   *  chunk being made never waits for a flight: a span's piers and the bank piece that replaces it
+   *  where it cannot stand are both kept. */
   clearings(z0: number, z1: number, out: Clearing[]): void {
-    this.planTo(z1 + 60);
+    this.lay();
     for (const s of this.list) {
       if (s.z + s.len < z0 - 60 || s.z - s.len > z1 + 60) continue;
-      if (s.len > 0) {
-        // A village clears both banks deep for its houses; an enclosure its walls and pillars.
-        const [a, b] = siteSpan(s);
-        for (const side of [-1, 1]) out.push(s.kind === 'village' ? { side, e: 35, z0: a - 12, z1: b + 12, w: 26 } : { side, e: 16, z0: a - 8, z1: b + 8, w: 7 });
-      } else if (s.span) {
+      const [a, b] = siteSpan(s);
+      if (s.kind === 'lip') {
+        for (const side of [-1, 1]) out.push({ side, e: 16, z0: s.z - 26, z1: s.z + 20, w: 7 });
+      } else if (s.kind === 'lift') {
+        // The station's ground, and the cut the far towers stand in.
+        out.push({ side: s.side, e: 26, z0: s.z - 20, z1: s.z + 20, w: 17 });
+        out.push({ side: -s.side, e: 56, z0: s.z - 9, z1: s.z + 9, w: 48 });
+        for (const side of [-1, 1]) out.push({ side, e: 12, z0: s.z - 12, z1: s.z + 12, w: 3.2 });
+      } else if (s.len > 0) {
         for (const side of [-1, 1]) {
-          out.push({ side, e: 12, z0: s.z - 36, z1: s.z + 30, w: 3.2 });
-          out.push({ side, e: s.post - 2, z0: s.z - SPAN_DEPTH - 4, z1: s.z + SPAN_DEPTH + 4, w: 9 });
+          if (s.kind === 'village' || s.kind === 'finish') out.push({ side, e: 26, z0: a - 12, z1: b + 12, w: 26 });
+          else if (s.kind === 'start') out.push({ side, e: 16, z0: a - 12, z1: b + 12, w: 8 });
+          else if (s.kind === 'viaduct') out.push({ side, e: 14, z0: a - 8, z1: b + 8, w: 14 });
+          else out.push({ side, e: 9, z0: a - 8, z1: b + 8, w: 9 });
         }
       } else {
+        for (const side of [-1, 1]) out.push({ side, e: 12, z0: s.z - 36, z1: s.z + 30, w: 3.2 });
         out.push({ side: s.side, e: 30, z0: s.z - 32, z1: s.z + 30, w: 21 });
         out.push({ side: -s.side, e: 12, z0: s.z - 20, z1: s.z + 16, w: 3.2 });
+        if (SPANS.has(s.kind)) for (const side of [-1, 1]) out.push({ side, e: BANK_KEEP + 4, z0: s.z - SPAN_DEPTH - 4, z1: s.z + SPAN_DEPTH + 4, w: 9 });
       }
     }
   }
+}
+
+/** What a site's builder knows. */
+export function pieceCtx(c: Course, s: Site, p: Palette, night: boolean, low: boolean): SiteCtx {
+  return {
+    p,
+    biome: c.biome,
+    gy: siteGround(c, s),
+    post: s.post,
+    clear: s.clear,
+    side: s.side,
+    night,
+    seed: (c.seed ^ (s.n * 7919)) >>> 0,
+    rail: s.len > 0 ? siteRail(c, s) : undefined,
+    low,
+    line: c.finishZ - s.z,
+    lastZ: c.finishZ + RUN_OUT - s.z,
+  };
 }
 
 /** The local x past which everything stands at least BANK_KEEP past the corridor's edge, over the
@@ -667,6 +789,9 @@ interface Figure {
 const POOL_CAP = 160;
 const POOL_SEG = 10;
 const POOL_V = 1 + 2 * POOL_SEG;
+/** Their strength at night, and where only the journey's dusk has lit them. */
+const POOL_NIGHT = 0.8;
+const POOL_DUSK = 0.3;
 const STEAM_CAP = 72;
 const STEAM_PER = 4;
 
@@ -762,7 +887,7 @@ export class SetPieces {
   readonly root = new Object3D();
   private plan: SitePlan;
   private slots: Mesh[] = [];
-  private shown: Array<Site | null> = [null, null];
+  private shown: Array<Site | null> = new Array<Site | null>(SLOTS).fill(null);
   private plain: ShaderMaterial;
   private iceMat: ShaderMaterial;
   private crowdMat: ShaderMaterial;
@@ -770,6 +895,8 @@ export class SetPieces {
   private aCoat: InstancedBufferAttribute;
   private aHat: InstancedBufferAttribute;
   private aSeed: InstancedBufferAttribute;
+  /** The lift lines' chairs, on the lines in view (Medium and High). */
+  private chairs: Chairs;
   /** A village's lamplight on the snow (night, Medium and High) and Ember's steam. */
   private pools: Mesh;
   private poolPos: BufferAttribute;
@@ -792,6 +919,7 @@ export class SetPieces {
   /** The village crowd's window: the rider's sim z it was last filled round. */
   private windowZ = -1e9;
   private idleOpen = false;
+  private madeOpen = false;
   private idleBusy = false;
   private started = false;
   private tier: 'low' | 'medium' | 'high';
@@ -811,6 +939,8 @@ export class SetPieces {
   private s = new Vector3();
   private up = new Vector3(0, 1, 0);
   private keepBuf: Clearing[] = [];
+  private nearBuf: Site[] = [];
+  private riderZ = 0;
 
   constructor(
     private course: Course,
@@ -825,7 +955,7 @@ export class SetPieces {
     const near: [number, number] = [1.8, 3.6];
     this.plain = makeToonMaterial({ coolShade: 0.5, nearFade: near });
     this.iceMat = makeToonMaterial({ coolShade: 0.5, nearFade: near, ice: true });
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < SLOTS; i++) {
       const mesh = new Mesh(new BufferGeometry(), this.plain);
       mesh.visible = false;
       mesh.matrixAutoUpdate = false;
@@ -844,6 +974,8 @@ export class SetPieces {
     this.crowd.count = 0;
     this.crowd.castShadow = false;
     this.root.add(this.crowd);
+    this.chairs = new Chairs(this.plain, course.biome);
+    this.root.add(this.chairs.mesh);
     // The pools: a fixed buffer of discs (world coordinates), refilled when the shown sites change.
     const pg = new BufferGeometry();
     this.poolPos = new BufferAttribute(new Float32Array(POOL_CAP * POOL_V * 3), 3);
@@ -902,6 +1034,7 @@ export class SetPieces {
     this.course = course;
     this.mood = mood;
     if (replan) this.plan = new SitePlan(course, mood);
+    this.chairs.setBiome(course.biome);
     this.palette = palette;
     this.setPalette(palette);
   }
@@ -928,10 +1061,11 @@ export class SetPieces {
   }
 
   setQuality(tier: 'low' | 'medium' | 'high', shadows: boolean): void {
+    // (What is made stays as it is: a tier that changes mid-run must not rebuild the street in view.)
     this.tier = tier;
     this.shadows = shadows;
     this.crowdKey = '';
-    this.shown = [null, null];
+    this.shown = this.shown.map(() => null);
   }
 
   /** Every made piece bakes the palette's colours: drop them all and make them again. */
@@ -950,26 +1084,21 @@ export class SetPieces {
     this.queue = [];
     this.figures.clear();
     this.crowdKey = '';
-    this.shown = [null, null];
+    this.shown = this.shown.map(() => null);
+  }
+
+  /** Windows lit at this site: a night mood, or where the journey's light has gone by. */
+  private litAt(z: number): boolean {
+    return this.night || (this.mood === Mood.None && journeyDusk(this.course.biome, z) >= DUSK_LIT);
   }
 
   private ctxFor(site: Site): SiteCtx {
-    return {
-      p: this.palette,
-      biome: this.course.biome,
-      gy: siteGround(this.course, site),
-      post: site.post,
-      clear: site.clear,
-      side: site.side,
-      night: this.night,
-      seed: (this.course.seed ^ (site.n * 7919)) >>> 0,
-      rail: site.len > 0 ? siteRail(this.course, site) : undefined,
-    };
+    return pieceCtx(this.course, site, this.palette, this.litAt(site.z), this.tier === 'low');
   }
 
   /** Whether this tier draws a site (Low: the spans and the long sites' shells and buildings). */
   private drawn(site: Site): boolean {
-    return this.tier !== 'low' || site.span || site.len > 0;
+    return site.flown && (this.tier !== 'low' || site.span || site.len > 0);
   }
 
   /** Queues a site's piece for idle time. */
@@ -997,10 +1126,11 @@ export class SetPieces {
     this.pieceIce.set(b.site.n, b.piece.ice);
     this.extras.set(b.site.n, { glows: b.piece.glows, steam: b.piece.steam, spots: b.piece.spots });
     // Keep the pieces round the rider; drop the oldest.
-    if (this.built.size > 4) {
+    if (this.built.size > KEEP_BUILT) {
+      const list = this.plan.planned;
       for (const [n, old] of this.built) {
-        if (this.built.size <= 4) break;
-        if (this.shown.some((s) => s && s.n === n)) continue;
+        if (this.built.size <= KEEP_BUILT) break;
+        if (this.shown.some((s) => s && s.n === n) || list[n].z + list[n].len > this.riderZ - BEHIND) continue;
         old.dispose();
         this.built.delete(n);
         this.pieceIce.delete(n);
@@ -1014,7 +1144,7 @@ export class SetPieces {
   /** Idle jobs (as many as each idle period has room for): plan the next site ahead, or make one
    *  step of the nearest queued piece. */
   private pump(): void {
-    if (!this.idleOpen || this.idleBusy || (this.queue.length === 0 && this.plan.reach >= this.wantReach)) return;
+    if (!this.idleOpen || this.idleBusy || (this.queue.length === 0 && this.plan.flownTo >= this.wantReach)) return;
     this.idleBusy = true;
     whenIdle((deadline) => {
       this.idleBusy = false;
@@ -1023,13 +1153,13 @@ export class SetPieces {
         const t0 = performance.now();
         const b = this.queue[0];
         // A piece already in view is made before the plan reaches further ahead.
-        if (this.plan.reach < this.wantReach && !(b && b.site.z - b.site.len < this.viewEnd)) this.plan.planNext();
+        if (this.plan.flownTo < this.wantReach && !(b && b.site.z - b.site.len < this.viewEnd)) this.plan.flyNext();
         else if (b) {
           if (b.step < b.piece.steps.length) b.made.push(...b.piece.steps[b.step++]());
           else {
             this.queue.shift();
             this.finish(b);
-            this.shown = [null, null];
+            this.shown = this.shown.map(() => null);
           }
         } else break;
         const ms = performance.now() - t0;
@@ -1053,44 +1183,60 @@ export class SetPieces {
         this.idleOpen = true;
         this.pump();
       }, IDLE_START_MS);
+      // (The start stands where the rider does: idle time gets its chance to make it first.)
+      setTimeout(() => {
+        this.madeOpen = true;
+      }, IDLE_START_MS + IDLE_GRACE_MS);
     }
     const dt = Math.max(0, Math.min(0.1, time - this.lastT));
     this.lastT = time;
     this.uniforms.uRider.value.copy(rider);
     for (const b of beats) this.cheer(b, rider, time);
+    this.riderZ = z;
     const plan = this.plan;
-    // Plan a site or two past the view on idle time (planning a span flies its launches: a few ms),
-    // and only what is already in view there and then.
+    // A site's air is flown on idle time (a few ms each), a site or two past the view, and only one about
+    // to be made here and now: never a whole view's worth on the frames a run starts on.
     this.wantReach = z + ahead + 1400;
     this.viewEnd = z + ahead + 60;
-    plan.planTo(this.viewEnd);
+    plan.flyTo(z + 3 * CHUNK_LEN + 60);
     this.pump();
-    // The sites in view, nearest first, at most two.
-    let k = 0;
-    const want: Array<Site | null> = [null, null];
-    let village: Site | null = null;
+    this.uniforms.uLamps.value = this.litAt(z) ? 1 : 0;
+    // The sites in view, nearest first.
+    const near = this.nearBuf;
+    near.length = 0;
     for (const s of plan.planned) {
-      if (s.z + s.len < z - 160 || s.z - s.len > z + ahead + 60 || !this.drawn(s)) continue;
-      // Queue it for idle time as soon as it is planned; a site within 3 chunks unmade is made now.
+      if (s.z + s.len < z - BEHIND || s.z - s.len > z + ahead + 60 || !this.drawn(s)) continue;
+      // Queue it for idle time as soon as it is flown; a site within 3 chunks unmade is made now.
       if (!this.built.has(s.n)) {
-        if (s.z - s.len - z < 3 * CHUNK_LEN + 60) {
+        if (s.z - s.len - z < 3 * CHUNK_LEN + 60 && this.madeOpen) {
           this.makeNow(s);
           this.stats.madeNow++;
         } else this.enqueue(s);
       }
-      if (k < 2) {
-        want[k++] = s;
-        if (s.kind === 'village') village = s;
-      }
+      near.push(s);
+    }
+    // Too many for the slots: what is behind the rider goes first, then the furthest ahead, but the
+    // finish town stays from as far off as it can be seen: it is where the run is going.
+    while (near.length > SLOTS && near[0].z + near[0].len < z - BEHIND_SHORT) near.shift();
+    const last = near[near.length - 1];
+    while (near.length > SLOTS) near.splice(SLOTS - 1, 1);
+    if (last && near.length === SLOTS && near[SLOTS - 1] !== last && last.kind === 'finish') near[SLOTS - 1] = last;
+    const want: Array<Site | null> = new Array<Site | null>(SLOTS).fill(null);
+    let village = null as Site | null;
+    for (let k = 0; k < near.length; k++) {
+      const s = near[k];
+      want[k] = s;
+      if (STREETS.has(s.kind) && (!village || s.kind !== 'start')) village = s;
     }
     // The next site past the view is queued ahead.
-    for (const s of plan.planned) if (s.z - s.len > this.viewEnd && s.z - s.len < z + ahead + 1000 && this.drawn(s)) this.enqueue(s);
-    if (want[0] !== this.shown[0] || want[1] !== this.shown[1]) this.show(want, z);
-    // A village's crowd is drawn round the rider: refilled every 12 m down the street.
+    for (const s of plan.planned) if (s.z - s.len > this.viewEnd && s.z - s.len < z + ahead + QUEUE_AHEAD && this.drawn(s)) this.enqueue(s);
+    if (want.some((s, k) => s !== this.shown[k])) this.show(want, z);
+    // A street's crowd is drawn round the rider: refilled every 12 m down it.
     else if (village && Math.abs(z - this.windowZ) > 12) this.fillCrowd(want, z);
-    // In a village the street does the wave alongside the rider.
+    // In a street the crowd does the wave alongside the rider.
     const inVillage = village && z > village.z - village.len - 30 && z < village.z + village.len ? 1 : 0;
     this.uniforms.uWave.value += (inVillage - this.uniforms.uWave.value) * Math.min(1, dt * 2);
+    this.chairs.update(time);
     this.enclosure(z, dt);
   }
 
@@ -1101,7 +1247,8 @@ export class SetPieces {
     let strobe = 0;
     let site: Site | null = null;
     for (const s of this.plan.planned) {
-      if (!ENCLOSED.has(s.kind) || z < s.z - s.len - 10 || z > s.z + s.len + 10) continue;
+      // (A site whose roof could not clear this mood's air has only its walls.)
+      if (!ENCLOSED.has(s.kind) || s.clear <= 0 || z < s.z - s.len - 10 || z > s.z + s.len + 10) continue;
       const a = s.z - s.len;
       const k = smooth01((z - a) / 10) * (1 - smooth01((z - (s.z + s.len - 6)) / 6));
       if (k > into) {
@@ -1131,7 +1278,8 @@ export class SetPieces {
     let np = 0;
     let ns = 0;
     const w = this.v;
-    for (let i = 0; i < 2; i++) {
+    this.chairs.clear();
+    for (let i = 0; i < SLOTS; i++) {
       const s = want[i];
       const mesh = this.slots[i];
       const g = s ? this.built.get(s.n) : undefined;
@@ -1145,13 +1293,15 @@ export class SetPieces {
       mesh.quaternion.setFromAxisAngle(this.up, s.yaw);
       mesh.updateMatrix();
       mesh.updateMatrixWorld(true);
-      // Spans and enclosures cast (the dark of a gallery is its shadow); a village's houses on High.
-      mesh.castShadow = this.shadows && (s.span || ENCLOSED.has(s.kind) || (s.kind === 'village' && this.tier === 'high'));
+      // Spans and enclosures cast (the dark of a gallery is its shadow); a town's houses on High.
+      // (Only the nearest two: the third is too far for the shadow map to reach.)
+      mesh.castShadow = this.shadows && i < 2 && ((s.span && s.kind !== 'lift') || ENCLOSED.has(s.kind) || ((s.kind === 'village' || s.kind === 'finish' || s.kind === 'viaduct') && this.tier === 'high'));
       mesh.visible = true;
+      if (s.kind === 'lift' && this.tier !== 'low') this.chairs.add(this.course, s);
       const ex = this.extras.get(s.n);
       if (!ex) continue;
       // Lamplight pools, laid on the snow vertex by vertex.
-      if (ex.glows && this.night && this.tier !== 'low') {
+      if (ex.glows && this.litAt(s.z) && this.tier !== 'low') {
         const gy = siteGround(this.course, s);
         const arr = this.poolPos.array as Float32Array;
         for (const gl of ex.glows) {
@@ -1188,6 +1338,7 @@ export class SetPieces {
         }
       }
     }
+    (this.pools.material as ShaderMaterial).uniforms.uK.value = this.night ? POOL_NIGHT : POOL_DUSK;
     this.poolPos.needsUpdate = true;
     this.pools.geometry.setDrawRange(0, np * POOL_SEG * 9);
     this.pools.visible = np > 0;
@@ -1200,7 +1351,7 @@ export class SetPieces {
 
   /** The crowd batch: every figure at the shown sites (Medium and High), a village's round the rider. */
   private fillCrowd(want: Array<Site | null>, rz: number): void {
-    const village = want.some((s) => s && s.kind === 'village');
+    const village = want.some((s) => s && STREETS.has(s.kind));
     const key = want.map((s) => (s && this.built.has(s.n) ? s.n : -1)).join(',') + this.tier + (village ? ':' + Math.round(rz / 12) : '');
     if (key === this.crowdKey) return;
     this.crowdKey = key;
@@ -1213,11 +1364,12 @@ export class SetPieces {
         const list = this.figuresFor(s);
         // (A village's list is sorted down the run: the window is the run of it round the rider.)
         let i0 = 0;
-        if (s.kind === 'village') while (i0 < list.length && -list[i0].z < rz - WINDOW_BACK) i0++;
+        const street = STREETS.has(s.kind);
+        if (street) while (i0 < list.length && -list[i0].z < rz - WINDOW_BACK) i0++;
         for (let i = i0; i < list.length; i++) {
           const f = list[i];
           if (n >= cap) break;
-          if (s.kind === 'village' && -f.z > rz + WINDOW_AHEAD) break;
+          if (street && -f.z > rz + WINDOW_AHEAD) break;
           this.q.setFromAxisAngle(this.up, f.yaw);
           this.v.set(f.x, f.y, f.z);
           this.s.setScalar(f.scale);
@@ -1264,7 +1416,7 @@ export class SetPieces {
         });
         k++;
       };
-      const sides = site.kind === 'village' ? [] : site.span ? [-1, 1] : [site.side, -site.side];
+      const sides = OWN_CROWD.has(site.kind) ? [] : site.span ? [-1, 1] : [site.side, -site.side];
       for (const side of sides) {
         const own = site.span || side === site.side;
         for (let row = 0; row < 2; row++) {
@@ -1287,7 +1439,7 @@ export class SetPieces {
         const w = siteToWorld(site, sp.x, sp.y, sp.z, this.v);
         add(w.x, w.y, w.z, sp.yaw + site.yaw, sp.flag);
       }
-      if (site.kind === 'village') list.sort((a, b) => b.z - a.z);
+      if (STREETS.has(site.kind)) list.sort((a, b) => b.z - a.z);
     }
     this.figures.set(site.n, list);
     return list;
