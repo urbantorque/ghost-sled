@@ -77,8 +77,9 @@ export interface FieldPick {
 /** The anchor's bounds (seconds). */
 export const ANCHOR_MIN = 100;
 export const ANCHOR_MAX = 420;
-/** Who a first run rides with: nobody knows yet how it will go, so a pack where most riders land (about
- *  2:30) and two true beginners far behind it. Anyone finds a rider near them. */
+/** Who a first run rides with: a pack where most riders land (about 2:30). On a bundled mountain they
+ *  read you (pacer.ts). A Daily or a Cup shares its field, so two true beginners ride far behind it there,
+ *  and anyone finds a rider near them. */
 export const ANCHOR_DEFAULT = 150;
 /** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
@@ -140,18 +141,18 @@ interface Role {
 }
 
 /** The roles in priority order (a field shorter than 5 keeps the first ones). */
-function roles(a: number, count: number, first: boolean): Role[] {
+function roles(a: number, count: number, beginners: boolean): Role[] {
   // The pack rides close: at 30 m/s a pack 7% apart is 200 m apart by the finish, and nobody races that.
   const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.96 * a, hi: 1.04 * a });
   const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 1.03 * a, hi: 1.2 * a });
   const all: Role[] = [
     pack(1.02),
-    // A first run has no pace to read, so someone rides at a beginner's.
-    first ? { role: 'opener', target: 1.45 * a, lo: 1.25 * a, hi: 1.6 * a } : opener(1.07),
+    // A shared first run has no pace to read, so someone rides at a beginner's.
+    beginners ? { role: 'opener', target: 1.45 * a, lo: 1.25 * a, hi: 1.6 * a } : opener(1.07),
     { role: 'pace', target: 0.95 * a, lo: 0.9 * a, hi: 0.98 * a },
     pack(0.985),
-    // The stretch rider, or on a first run the slowest beginner.
-    first ? { role: 'opener', target: 1.9 * a, lo: 1.6 * a, hi: 2.1 * a } : { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
+    // The stretch rider, or the slowest beginner.
+    beginners ? { role: 'opener', target: 1.9 * a, lo: 1.6 * a, hi: 2.1 * a } : { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
     // Haunted Hollow's four extra ghosts.
     opener(1.14),
     pack(0.97),
@@ -254,7 +255,7 @@ export function pickField(i: FieldInput): FieldPick[] {
   };
 
   const picks: Array<{ g: PoolGhostData; role: GhostRole; widened: boolean }> = [];
-  for (const r of roles(a, count, first)) {
+  for (const r of roles(a, count, first && i.kind !== 'pool')) {
     const fits = (g: PoolGhostData) => !used.has(g) && spaced(g);
     let found: PoolGhostData | null = null;
     let widened = false;

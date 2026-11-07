@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FLAG_GROUNDED, FRAME_STRIDE, F_FLAGS, F_Z, SAMPLE_EVERY } from '../src/game/ghostdata';
-import { GhostManager, clock, unclock, type GhostEntry } from '../src/game/ghosts';
-import { AIR_RATE, PACE_EASE, PACE_FROM, PACE_MAX, PACE_MIN, PACE_OPEN, PACE_SLEW, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from '../src/game/pacer';
+import { GhostManager, clock, realStanding, trackStanding, unclock, type GhostEntry } from '../src/game/ghosts';
+import { AIR_RATE, PACE_EASE, PACE_FROM, PACE_MAX, PACE_MIN, PACE_OPEN, PACE_SLEW, inReach, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from '../src/game/pacer';
 import { FINISH_Z } from '../src/game/standing';
 
 /** A straight run at `speed` m/s, flying over [airFrom, airTo) of its samples. */
@@ -86,6 +86,22 @@ describe('a rider reading you', () => {
       g.pace(tick, (tick / 60) * 18, true);
       expect(Math.abs(clock(t, tick) - was)).toBeLessThan(1e-6);
     }
+  });
+
+  it('keeps its real run for a grudge or a rematch, whatever it rode against you', () => {
+    const g = field([{ reads: true }, {}], frames, samples, end);
+    const [t, plain] = g.tracks;
+    for (let tick = PACE_FROM; tick < 60 * 40; tick += 15) g.pace(tick, (tick / 60) * 15, true);
+    expect(trackStanding(t).time!).toBeGreaterThan(end / 60 + 20);
+    expect(realStanding(t).time).toBeCloseTo(end / 60, 3);
+    expect(realStanding(plain)).toEqual(trackStanding(plain));
+  });
+
+  it('promises a rider who read you only if its real run is a race for you', () => {
+    expect(inReach(145, 150)).toBe(true);
+    expect(inReach(135, 150)).toBe(true);
+    expect(inReach(150, 300)).toBe(false);
+    expect(inReach(null, 150)).toBe(false);
   });
 
   it('leaves what it has already done alone', () => {

@@ -123,6 +123,12 @@ export function trackStanding(t: Pick<GhostTrack, 'finishTick' | 'distance'>): S
   return { time: t.finishTick >= 0 ? t.finishTick / 60 : null, distance: t.distance };
 }
 
+/** A track's real run, whatever it rode against you. A rider reading you finishes where your race took it,
+ *  which your results show, but a grudge or a rematch rides this. */
+export function realStanding(t: Pick<GhostTrack, 'own' | 'pace' | 'finishTick' | 'distance'>): Standing {
+  return t.own ? { time: t.own.finishTick >= 0 ? t.own.finishTick / t.pace / 60 : null, distance: t.distance } : trackStanding(t);
+}
+
 let nextReq = 1;
 
 /** A pack rider's surge, as a share of its run: over three swings that is about 17% either side of its

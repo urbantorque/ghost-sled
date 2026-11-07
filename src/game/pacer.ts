@@ -13,6 +13,10 @@ import { FLAG_GROUNDED, FRAME_STRIDE, F_FLAGS, SAMPLE_EVERY } from './ghostdata'
 // is a real race: nothing changes under you when it matters. Your best, a grudge and a friend never read
 // you, and neither does anyone from the second run on, or on a Daily or a Cup, whose field is shared.
 //
+// What such a rider did in your race stands in your results, but a grudge or a rematch rides its real run,
+// so those are decided on that (ghosts.ts realStanding). The rider beside you at the crash may be a 2:30
+// rider who was only waiting for you, and it would come back 1.7 km up the road.
+//
 // The second is a slow rider in the air. A rider slowed to half speed flew at half speed, and a jump at
 // half speed has a quarter of its gravity. So a slower rider's time is taken back on the ground: it flies
 // near true speed (slowMap) and still reaches the line on its real time.
@@ -38,6 +42,9 @@ export const PACE_EASE = 0.06;
 export const AIR_RATE = 0.85;
 /** Metres before the line where the riders stop reading you. */
 export const PACE_OPEN = 800;
+/** A rider who read you can be promised next only if its real time is this share of yours or slower:
+ *  beyond that the rematch is a rider you never see again. */
+const REACH = 0.88;
 /** Your speed is read through this share of each new reading. */
 const SPEED_EASE = 0.15;
 /** The string: its back and front in metres off your position, how far it opens over a run, how far a
@@ -60,6 +67,11 @@ export function stringOffset(i: number, n: number, z: number, finishZ: number): 
   const wander = WANDER * Math.sin((2 * Math.PI * z) / (WANDER_LEN + WANDER_STEP * i) + 1.9 * i);
   const tight = Math.min(1, Math.max(0, z / STRING_TIGHT));
   return tight * (place + wander) - STRING_OPENS * Math.min(1, Math.max(0, z / finishZ));
+}
+
+/** A real time (seconds) a rider who read you can be raced on, against your time or your pace to the line. */
+export function inReach(real: number | null, yours: number): boolean {
+  return real !== null && real >= yours * REACH;
 }
 
 /** The riders are still reading you at z. */

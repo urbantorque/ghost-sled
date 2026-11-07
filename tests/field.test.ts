@@ -127,8 +127,13 @@ describe('the field at every skill', () => {
     expect(f?.reads).toBeUndefined();
   });
 
-  it('rides where most riders land with no runs, with beginners far behind', () => {
+  it('leaves the beginners out of a first run whose riders read you', () => {
     const out = pickField(input(POOL, { anchor: 0 }));
+    expect(Math.max(...out.map((p) => p.time!))).toBeLessThan(ANCHOR_DEFAULT * 1.25);
+  });
+
+  it('rides where most riders land with no runs, with beginners far behind on a shared field', () => {
+    const out = pickField(input(POOL, { anchor: 0, kind: 'daily' }));
     const pack = out.filter((p) => p.role === 'pack').map((p) => p.time!);
     expect(pack.length).toBe(2);
     for (const t of pack) expect(Math.abs(t - ANCHOR_DEFAULT) / ANCHOR_DEFAULT).toBeLessThan(0.08);

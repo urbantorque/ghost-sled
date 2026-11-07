@@ -23,7 +23,7 @@ import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from
 import { Director } from './director';
 import { anchorFor, pickField, poolTime } from './field';
 import { PoolGhostData } from './ghostdata';
-import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, trackStanding } from './ghosts';
+import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding, trackStanding } from './ghosts';
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { HintCoach } from './hints';
@@ -37,7 +37,8 @@ import { type InputSource, Run, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SaveStore, oldBest, retireGrudge, rideableGrudge } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
-import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFinish, recordStanding } from './standing';
+import { inReach } from './pacer';
+import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
@@ -1280,13 +1281,16 @@ export class App {
       const st = trackStanding(t);
       if (g && t.entry.kind === 'grudge' && t.entry.record === g.record) rode = { distance: t.distance, time: st.time, passed: this.director.grudgeSettled };
       if (t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
-      if (!aheadOf(st, you)) continue;
-      const row: GrudgeRow = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, time: st.time, kind: t.entry.kind };
+      // A grudge rides its real run, so a rider who read you is judged on that, and being beside you
+      // when you fell says nothing about it.
+      const real = realStanding(t);
+      if (!aheadOf(real, you)) continue;
+      const row: GrudgeRow = { name: t.entry.name, score: t.entry.score, record: t.entry.record, distance: t.distance, time: real.time, kind: t.entry.kind };
       if (t.entry.role) row.role = t.entry.role;
       const gap = this.gapAtCrash.get(t.entry.id);
-      if (gap !== undefined) row.gapAtCrash = gap;
+      if (gap !== undefined && !t.entry.reads) row.gapAtCrash = gap;
       ahead.push(row);
-      if (!next || aheadOf(place(next), st)) next = row;
+      if (!next || aheadOf(place(next), real)) next = row;
     }
     return { youDistance: sim.distance, youTime: you.time, rode, next, ahead };
   }
@@ -1529,9 +1533,13 @@ export class App {
    */
   private promiseNext(you: Standing, key: string, spot: Spot | null): { name: string; rode: boolean } | null {
     let ahead: GhostManager['tracks'][number] | null = null;
+    // A rematch rides a rider's real run: one who read you is promised only if that is a race for you.
+    const pace = you.time ?? predictedTime(you.distance, (this.run?.sim.tick ?? 0) / 60);
     for (const t of this.ghosts.tracks) {
-      if (!t.ready || t.entry.kind === 'you' || t.entry.kind === 'friend' || !aheadOf(trackStanding(t), you)) continue;
-      if (!ahead || aheadOf(trackStanding(ahead), trackStanding(t))) ahead = t;
+      if (!t.ready || t.entry.kind === 'you' || t.entry.kind === 'friend') continue;
+      const real = realStanding(t);
+      if (!aheadOf(real, you) || (t.entry.reads && !inReach(real.time, pace))) continue;
+      if (!ahead || aheadOf(realStanding(ahead), real)) ahead = t;
     }
     const best = this.save.data.best[key];
     const rider = ahead ? { name: ahead.entry.name, score: ahead.entry.score, record: ahead.entry.record } : spot?.next ? { name: spot.next.name, score: spot.next.score, record: spot.next.record } : null;
