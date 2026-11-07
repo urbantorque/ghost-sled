@@ -27,6 +27,9 @@ async (page) => {
     await page.evaluate(() => { try { localStorage.clear(); } catch {} }).catch(() => {});
     await page.goto(BASE + q);
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run', null, { timeout: 30000 });
+    // A cleared save is a very first run, whose riders read you and stay in frame (pacer.ts). noread
+    // turns that off, to tell what that costs from what the world costs.
+    if (p.noread) await page.evaluate(() => { const g = window.__gs.ghosts; for (const t of g.tracks) t.entry.reads = false; g.readers = 0; });
     await page.evaluate(() => {
       const app = window.__gs;
       // Draw calls and triangles summed over every render pass of a frame (renderer.info resets per

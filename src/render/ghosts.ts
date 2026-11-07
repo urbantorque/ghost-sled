@@ -9,6 +9,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
+import { pageBeat } from '../ui/pagebeat';
 import { graveCopy, type GravePlace } from './graves';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
@@ -605,6 +606,8 @@ function auraMaterial(): ShaderMaterial {
   }));
 }
 
+/** A frame longer than this, read steadily, is one where labels wait for the page's beat: 50 fps. */
+const LABEL_FRAME_S = 0.02;
 const STYLE_ID = 'ghost-label-style';
 function injectStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -1237,6 +1240,12 @@ export class GhostVisuals {
     this.sinceTrick = Infinity;
   }
 
+  /** Low tier: labels may wait for the page's beat when frames run long. */
+  onBeat = false;
+  /** The frame time, read steadily, and whether labels move this frame. */
+  private frameS = 0;
+  private labelsMove = true;
+
   update(
     poses: Map<number, GhostPose | null>,
     camera: PerspectiveCamera,
@@ -1251,6 +1260,10 @@ export class GhostVisuals {
     const dt = Number.isNaN(this.lastTime) ? 0 : Math.max(0, Math.min(0.1, time - this.lastTime));
     this.lastTime = time;
     this.dt = dt;
+    // Labels move on every frame, except on a Low frame short of 50 fps: there they wait for the page's
+    // beat, because a rider's name in the frame all run costs as much page work as the HUD (decision 217).
+    this.frameS += (dt - this.frameS) * 0.1;
+    this.labelsMove = !this.onBeat || this.frameS < LABEL_FRAME_S || pageBeat();
     this.viewW = w;
     this.runT += dt;
     this.syncView(w, h);
@@ -1773,6 +1786,7 @@ export class GhostVisuals {
       this.rivalEl.style.opacity = op;
     }
     if (this.rivalA === 0) return;
+    if (!this.labelsMove) return;
     const m = this.rivalM;
     if (Math.abs(this.rivalX - m[0]) > 0.05 || Math.abs(this.rivalY - m[1]) > 0.05) {
       m[0] = this.rivalX;
@@ -2274,7 +2288,8 @@ export class GhostVisuals {
       t.ts = -1;
     }
     const scale = t.dot ? 1 : t.scale;
-    if (t.want && (Math.abs(t.x - t.tx) > 0.05 || Math.abs(t.y - t.ty) > 0.05 || Math.abs(scale - t.ts) > 0.002)) {
+    // (A tag coming on is placed at once: it must not show where it last stood.)
+    if (t.want && (this.labelsMove || t.op !== '1') && (Math.abs(t.x - t.tx) > 0.05 || Math.abs(t.y - t.ty) > 0.05 || Math.abs(scale - t.ts) > 0.002)) {
       t.tx = t.x;
       t.ty = t.y;
       t.ts = scale;

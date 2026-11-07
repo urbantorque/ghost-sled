@@ -6,6 +6,7 @@ import { kindCls, NBSP, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, EASE_OUT, play, reduced, SPRING } from './motion';
 import { EVENT_ICON } from './notices';
+import { pageBeat } from './pagebeat';
 import { ride } from './presence';
 
 // In-run HUD. updateHud runs every frame: nodes are built once and each value is diffed, so a
@@ -467,11 +468,6 @@ export function sideWord(f: Pick<Flash, 'type' | 'name' | 'raw' | 'k' | 'tail' |
   return { text, tone: 'normal', key: newsKey(f.raw, text), name: f.name || undefined };
 }
 
-/** How often the running figures may change. A changed digit costs the page a style, layout and paint,
- *  and at 30 m/s the metres alone change on every second frame. Landing together on a 20 Hz beat leaves
- *  two frames in three with no page work at all, and nobody reads a units digit any faster: decision 205. */
-const FIGURES_MS = 48;
-
 export class Hud {
   readonly layer: Layer;
   readonly el: HTMLElement;
@@ -716,8 +712,8 @@ export class Hud {
   private lastChev = -1;
   private lastDanger = -1;
   private lastScoreLen = 0;
-  /** When the running figures last changed (FIGURES_MS). */
-  private figuresAt = -Infinity;
+  /** The running figures have been drawn once: the first never waits for the beat. */
+  private figured = false;
   private lastGapLen = 0;
   private revealing = false;
   private moodWanted = false;
@@ -1697,9 +1693,9 @@ export class Hud {
     // A cash-in still on its way holds its points back (holdScore): the figure lands in the score.
     this.lastScore = m.score;
     const now = performance.now();
-    const beat = now - this.figuresAt >= FIGURES_MS;
+    const beat = pageBeat() || !this.figured;
     if (beat) {
-      this.figuresAt = now;
+      this.figured = true;
       this.score.num(shownScore(m.score, this.scoreHold.held));
       const sLen = this.scoreEl.textContent?.length ?? 0;
       if (sLen !== this.lastScoreLen) {
