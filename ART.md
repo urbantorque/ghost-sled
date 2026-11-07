@@ -362,12 +362,11 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   red ropeway house at Frostfang, a basalt mine head with ore skips at Ember, a lacquered cableway at
   Sakura. Toy spectators in the rider's proportions, coats in cool and muted colours and never a signal
   colour, turn to follow the rider and throw their arms up when a moment is made near them. Every run
-  starts in a place: a gate high over the steep ramp with the word on it, two huts, barriers and a
-  crowd. Every leap has a crowd on the rock shoulders either side of its lip.
+  starts at an occasion: a gate high over the steep ramp with the word on it, packed grandstands down both banks with flags up, two huts looking over them, and barriers. Every leap has a crowd on the rock shoulders either side of its lip.
 - **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
   owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
   three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
-  small warm-brown deer, ibex, hares and foxes stand at the treeline and bolt away as you come. Far
+  small warm-brown deer, ibex, hares and foxes stand at the treeline, only on open ground, never in rock, a street or over a gorge, and bolt away as you come, pulling up short of rock. Far
   skiers carve S-turns on the flanks. Life is small, soft and moves away from the run: never in the
   corridor, never a signal colour.
 - **Snow and trees.** Past the treeline snow heaps into drift dunes, crests catching the sun and
@@ -396,7 +395,7 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   gifts' marigold, cream and the snow's periwinkle, never lit like a hazard and never mint. Confetti
   cannons fire in over the rider and ribbons drift down through the frame while the crowd roars.
 
-- **Overlooks.** Now and then, on open ground only, one bank opens. The treeline steps back, a low timber rail (larch, pale
+- **Overlooks.** At least three times a descent, the first inside 1.5 km, on open ground only, one bank opens. The treeline steps back, a low timber rail (larch, pale
   boards, charred posts or lacquer by biome) runs along the forest limit, a bare snow shelf runs out to
   a rounded cornice with dark rock breaking through, and beyond it the mountain falls away. Down the
   fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens
@@ -413,8 +412,9 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   shop fronts bloom. A mountain with no street in its script has its town beside the run instead.
 - **The finish.** Each mountain's biggest place. The street opens into a square of grandstands cut into
   both banks, the near rows alive and the far rows a packed still crowd, under masts and long banners.
-  A real arch stands over a checkered line, the word on its board, the mountain's own crown on each
-  tower. The square is built round where a sled stops, 35 to 60 m past the line, so the stationary
+  A real arch stands over the line, the word on its board, the mountain's own crown on each tower. The
+  line is paint: four rows of big checks in ink and cream, barrier to barrier and up the banks, long down
+  the run so the lens sees them square. The square runs from 72 m before the line to 118 m past it, so a sled rolls the length of it as it stops, about 130 m past the line from cruise, and the stationary
   frame holds it all. The run-out carries on through the town to a great hall that closes the view, and
   over the hall stands the mark you can see from the last leap: a steeple, a radome and mast, a
   lit stack, a pagoda. Balloons are tethered over the roofs.
