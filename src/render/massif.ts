@@ -88,6 +88,7 @@ export const NOISE = /* glsl */ `
 export const SEA_GLSL = /* glsl */ `
   uniform float uSeaY;
   uniform float uSea;
+  uniform float uSeaIce;
   uniform vec3 uSeaLit;
   uniform vec3 uSeaShade;
   uniform vec3 uSeaRim;
@@ -126,7 +127,30 @@ export const SEA_GLSL = /* glsl */ `
     col = mix(col, uSeaRim, sunSide * (0.25 + 0.5 * smoothstep(0.6, 0.9, l)));
     // Gaps between the billows look down into the deep valley (fewer as the sea fills).
     float cov = smoothstep(-0.62, -0.48, n + (uSea - 1.0) * 1.2);
-    col = mix(uSeaDeep, col, cov);
+    if (uSeaIce > 0.0) {
+      // Where the sea is a snowfield (uSeaIce), its openings are frozen lakes. They hold still in the
+      // world (their noise is anchored where the lens is, not drifting with the billows), each with a
+      // shore of drifted snow feathered into it, a body of pale ice under the sky's haze with long
+      // tongues of blown snow over it, and a sheen toward the sun.
+      vec2 pw = p + cameraPosition.xz;
+      vec2 lq = pw * 0.0008 + vec2(4.7, -2.3);
+      float ln = snoise(lq) * 0.66 + snoise(lq * 2.7 + 1.9) * 0.34;
+      #if SEA_Q > 0
+        ln += snoise(pw * 0.005 + 9.1) * 0.07 * detail;
+      #endif
+      float lv = ln + (uSea - 1.0) * 1.2;
+      float lake = 1.0 - smoothstep(-0.6, -0.5, lv);
+      float shore = (1.0 - smoothstep(-0.5, -0.32, lv)) * (1.0 - lake);
+      vec3 ice = mix(uSeaDeep, uSeaHaze, 0.5);
+      float tongue = smoothstep(0.35, 0.75, snoise(vec2(pw.x * 0.0035 + pw.y * 0.0012, pw.y * 0.0009) + 5.0));
+      ice = mix(ice, mix(uSeaLit, uSeaShade, 0.35), tongue * 0.4);
+      float sheen = pow(max(dot(normalize(d.xz), sxz), 0.0), 14.0) * smoothstep(-0.05, 0.05, uSeaSun.y);
+      ice = mix(ice, mix(uSeaRim, vec3(1.0), 0.6), sheen * 0.8);
+      vec3 field = mix(col, mix(uSeaLit, uSeaShade, 0.18), shore * 0.85);
+      col = mix(mix(uSeaDeep, col, cov), mix(field, ice, lake), uSeaIce);
+    } else {
+      col = mix(uSeaDeep, col, cov);
+    }
     // Aerial perspective: the far sea melts into the horizon.
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
@@ -138,6 +162,7 @@ export function makeSeaUniforms() {
   return {
     uSeaY: { value: SEA_Y },
     uSea: { value: 1 },
+    uSeaIce: { value: 0 },
     uSeaLit: { value: new Color() },
     uSeaShade: { value: new Color() },
     uSeaRim: { value: new Color() },
@@ -151,6 +176,7 @@ export type SeaUniforms = ReturnType<typeof makeSeaUniforms>;
 /** Sets the shared sea colours from a palette. */
 export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSea.value = p.massif.sea;
+  u.uSeaIce.value = p.massif.seaIce;
   u.uSeaLit.value.copy(p.clouds.lit).lerp(p.snowLit, 0.25);
   u.uSeaShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.2);
   u.uSeaRim.value.copy(p.clouds.rim).lerp(p.sunColor, 0.3);

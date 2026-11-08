@@ -73,8 +73,10 @@ export interface Palette {
    *  below the horizon is, the volcano's crater glow, the hero's own light (flow: lava streams down the
    *  volcano, glacier ice lit from within on the fang), and its bearing in degrees (0: the far side of
    *  the fall line from the sun, as chaos moods have it. Clear Skies pins it per mountain, so a sun
-   *  moving through a run never makes the mountain jump sides). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number };
+   *  moving through a run never makes the mountain jump sides). seaIce 1 reads the sea's white as a
+   *  snowfield on the valley floor and its openings as frozen lakes that hold still (Pinecrest's Clear
+   *  Skies); 0 keeps them gaps in a sea of cloud. */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number; lens: number; focal: number; gust: number; glitter: number; focalDir?: Vector3 };
@@ -178,7 +180,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -696,6 +698,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glow = c('#FFD9A0');
       p.massif.heroAz = -21;
       p.massif.sea = 0.7;
+      // The valley floor's white is snow on Pinecrest's Clear Skies, and its openings frozen lakes.
+      p.massif.seaIce = 1;
       p.grade = { lift: c('#040E28'), gain: c('#FFFFFF'), saturation: 1.12, contrast: 1.08, grain: 0.7, foot: 0.26, shafts: 0, lens: 0.25, focal: 0.45, gust: 0, glitter: 0.55 };
       p.clouds = { low: 0.5, high: 0.4, top: 0.2, lit: c('#FFFFFF'), shade: c('#A8C4EA'), rim: c('#FFFFFF'), shadow: 0.22 };
       p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#E8F3FC'), drift: 0 };
@@ -914,7 +918,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   glacier: [
     {
       // The sun sinks onto the band.
-      from: 700, at: 1900, dusk: 0.5,
+      from: 600, at: 1450, dusk: 0.5,
       edit: (p) => {
         setSun(p, -40, 3.4, 19, 8);
         p.sunColor = c('#FFE9B8');
@@ -930,8 +934,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
     {
-      // Polar night comes on and the aurora arrives.
-      from: 2400, at: 3400, dusk: 1,
+      // Polar night comes on, and the aurora is at its strongest over the Crevasse Fields in the middle
+      // of the run.
+      from: 1700, at: 2250, dusk: 1,
       edit: (p) => {
         setSun(p, -44, 3, 18, 8);
         p.sunColor = c('#B8C4EC');
@@ -948,13 +953,70 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowDeep = c('#132A6C');
         p.fog = c('#2E4E94');
         p.hemiSky = c('#4E78CC');
-        p.aurora = 0.9;
+        p.aurora = 1;
         p.stars = 1;
         p.massif.flow = 1;
         p.bloom = 0.7;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.7;
         p.lanternGlow = 0.55;
+      },
+    },
+    {
+      // The deep of the night on the way to the Fang: the aurora past its crest, the band gone, the
+      // glacier holding what light there is. It is darkest at the Ice Cavern's mouth.
+      from: 2700, at: 3180, dusk: 1,
+      edit: (p) => {
+        p.sunDisc = 0.1;
+        p.skyZenith = c('#030A30');
+        p.skyMid = c('#102E74');
+        p.skyHorizon = c('#3A68AC');
+        p.skyBand.k = 0.35;
+        p.snowLit = c('#93ACE2');
+        p.aurora = 0.75;
+        p.lanternGlow = 0.6;
+      },
+    },
+    {
+      // Out of the cavern into the dawn: the sun comes up beside the Fang (it crosses the sky ahead while
+      // the rider is under the ice, so the far mouth opens onto it), rose gold on the snow and the peaks,
+      // the stars and the aurora fading out of a lightening sky.
+      from: 3300, at: 3580, dusk: 1,
+      edit: (p) => {
+        setSun(p, 30, 3.6, 20, 9);
+        p.sunColor = c('#FFC8A4');
+        p.sunCore.setRGB(2.9, 2.1, 1.5);
+        p.sunDisc = 1;
+        p.sunGlow = 1.2;
+        p.sunSize = 1.05;
+        p.hazardDim = 0.88;
+        p.skyZenith = c('#1A3A86');
+        p.skyMid = c('#7678C4');
+        p.skyHorizon = c('#F2B49A');
+        p.skyBand.color = c('#FFB884');
+        p.skyBand.k = 1;
+        p.skyBelow = c('#B88EB4');
+        p.snowLit = c('#F0DDEA');
+        p.snowShade = c('#5A6CB8');
+        p.snowDeep = c('#26388C');
+        p.rim = c('#FFD2B4');
+        p.fog = c('#A69CCC');
+        p.hemiSky = c('#8A98DC');
+        p.clouds.lit = c('#FFD8C4');
+        p.clouds.shade = c('#6A6AB4');
+        p.clouds.rim = c('#FFBC8C');
+        p.massif.glow = c('#FFB4A4');
+        p.massif.glowK = 0.85;
+        p.massif.glowLine = -40;
+        p.aurora = 0.12;
+        p.stars = 0.15;
+        p.atmo.rays = 0.8;
+        p.grade.shafts = 0.75;
+        p.grade.gain = c('#FFF4EE');
+        p.bloom = 0.6;
+        p.giftGlow = 0.3;
+        p.ghostGlow = 1.45;
+        p.lanternGlow = 0.25;
       },
     },
   ],

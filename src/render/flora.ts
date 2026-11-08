@@ -19,7 +19,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeId } from '../sim/mountains';
-import { basaltGeometry, blossomGeometry, charPineGeometry, seracGeometry, spireGeometry } from './meshes';
+import { blossomGeometry, charPineGeometry, seracGeometry, spireGeometry } from './meshes';
 import { Palette } from './palette';
 
 // Forest variety without extra draw calls. A batch's geometry holds several variants merged into one
@@ -581,21 +581,70 @@ export function charSnagGeometry(p: Palette): BufferGeometry {
   return merge(parts);
 }
 
-/** Ember Peak: a stand of short broken basalt columns, one fallen against the rest. */
-export function basaltStubGeometry(p: Palette): BufferGeometry {
-  reseed(818);
+/** One basalt column: a hexagonal prism, open at the foot (it stands in the snow), graded dark at the
+ *  foot to its own value at the top, and a low cap of ash on its cut top. 18 triangles. */
+function basaltColumn(parts: BufferGeometry[], col: Color, r: number, h: number, x: number, z: number, lean: [number, number] = [0, 0], cap = true): void {
+  const side = paint(part(new CylinderGeometry(r * 0.97, r * 1.03, h, 6, 1, true), col, { pos: [0, h / 2, 0], rot: [0, rnd() * 0.3, 0] }), 0, h, 0.7, 1.08, 0.12);
+  const top = part(new ConeGeometry(r * 1.0, 0.16, 6, 1, true), ASH_TOP, { pos: [0, h + 0.07, 0] });
+  for (const g of cap ? [side, top] : [side]) {
+    g.applyMatrix4(new Matrix4().compose(new Vector3(x, 0, z), new Quaternion().setFromEuler(new Euler(lean[0], 0, lean[1])), new Vector3(1, 1, 1)));
+    parts.push(g);
+  }
+}
+
+/** Ash and old snow on Ember's broken tops: the snow's white a step toward the ash. */
+const ASH_TOP = SNOW.clone().lerp(new Color('#B9AEB6'), 0.3);
+
+/** Ember Peak: an organ-pipe outcrop. Two ranks of hexagonal columns packed shoulder to shoulder, graded
+ *  in height to a peak a third of the way along (so its silhouette leans, as a jointed flow cooled), a
+ *  few broken drums lying at its foot and ash drifted against it. Its broad face looks along +z. About
+ *  280 triangles: basalt country's formation, stood on crests and shoulders, never scattered. */
+export function organPipeGeometry(p: Palette): BufferGeometry {
+  reseed(828);
   const parts: BufferGeometry[] = [];
-  const cols = [
-    [0, 0, 0.66, 2.4],
-    [0.88, 0.28, 0.5, 1.6],
-    [-0.62, 0.55, 0.48, 1.1],
+  const r = 0.5;
+  const dx = r * 1.74;
+  const front = [3.0, 4.4, 6.2, 8.0, 9.2, 8.4, 6.8, 5.0, 3.4];
+  front.forEach((h, k) => basaltColumn(parts, k % 2 ? p.tallDark : p.tall, r, h * (0.94 + rnd() * 0.12), (k - 4) * dx, 0.35));
+  const back = [3.8, 5.6, 7.2, 7.8, 6.2, 4.2];
+  back.forEach((h, k) => basaltColumn(parts, k % 2 ? p.tall : p.tallDark, r, h * (0.94 + rnd() * 0.12), (k - 2.5) * dx - dx * 0.5, -r * 1.5 + 0.35));
+  // Broken drums at the foot, fallen off the face.
+  for (const [x, z, a] of [[-2.2, 1.5, 0.4], [1.3, 1.7, -0.9], [2.8, 1.1, 1.3]]) {
+    parts.push(part(new CylinderGeometry(r * 0.95, r * 0.95, 1.0 + rnd() * 0.5, 6), shade(p.tallDark, 0.95), { pos: [x, r * 0.8, z], rot: [Math.PI / 2, a, 0.15] }));
+  }
+  // Ash and snow drifted against the foot, longest along the face.
+  parts.push(part(new IcosahedronGeometry(1, 0), SNOW, { pos: [0, 0.05, 0.6], scale: [4.6, 0.42, 1.9], jitter: 0.12 }));
+  return merge(parts);
+}
+
+/** Ember Peak: a cluster of four columns of mixed height, one snapped and one fallen against the rest:
+ *  what stands round a formation's foot. */
+export function basaltClusterGeometry(p: Palette): BufferGeometry {
+  reseed(838);
+  const parts: BufferGeometry[] = [];
+  const cols: Array<[number, number, number, number]> = [
+    [0, 0, 0.5, 4.2],
+    [0.86, 0.2, 0.46, 2.9],
+    [-0.8, 0.35, 0.44, 2.2],
+    [0.2, -0.82, 0.48, 3.4],
   ];
-  cols.forEach(([x, z, r, h], i) => {
-    parts.push(part(new CylinderGeometry(r, r * 1.05, h, 6), i % 2 ? p.tallDark : p.tall, { pos: [x, h / 2, z], rot: [0, rnd(), 0] }));
-    parts.push(part(new CylinderGeometry(r * 0.95, r, 0.12, 6), SNOW, { pos: [x, h + 0.06, z] }));
-  });
-  parts.push(part(new CylinderGeometry(0.42, 0.44, 2.6, 6), p.tallDark, { pos: [-0.3, 1.0, -0.95], rot: [0.62, 0.2, 0] }));
-  parts.push(part(new IcosahedronGeometry(1.1, 0), SNOW, { pos: [0, 0.02, 0], scale: [1.4, 0.24, 1.3], jitter: 0.16 }));
+  cols.forEach(([x, z, r, h], i) => basaltColumn(parts, i % 2 ? p.tallDark : p.tall, r, h, x, z, [0.03 * (i - 1.5), 0.02 * i]));
+  parts.push(part(new CylinderGeometry(0.42, 0.44, 2.6, 6, 1, true), p.tallDark, { pos: [-0.5, 0.9, 1.0], rot: [1.05, 0.3, 0] }));
+  parts.push(part(new IcosahedronGeometry(1, 0), SNOW, { pos: [0, 0.03, 0.2], scale: [1.9, 0.3, 1.6], jitter: 0.14 }));
+  return merge(parts);
+}
+
+/** Ember Peak: a sentinel, one tall column standing alone with a shorter one at its foot, set where it
+ *  frames a view (either side of a leap's approach). Its top is snapped on a slant. */
+export function basaltSentinelGeometry(p: Palette): BufferGeometry {
+  reseed(848);
+  const parts: BufferGeometry[] = [];
+  basaltColumn(parts, p.tall, 0.62, 9.5, 0, 0, [0, 0], false);
+  parts.push(part(new ConeGeometry(0.62, 0.9, 6, 1, true), p.tallDark, { pos: [0, 9.95, 0], rot: [0, 0, 0.5], scale: [1, 1, 1] }));
+  parts.push(part(new ConeGeometry(0.5, 0.14, 6, 1, true), ASH_TOP, { pos: [0.1, 10.25, 0], rot: [0, 0, 0.5] }));
+  basaltColumn(parts, p.tallDark, 0.5, 3.6, 0.95, 0.4);
+  basaltColumn(parts, p.tall, 0.42, 1.8, -0.6, 0.8);
+  parts.push(part(new IcosahedronGeometry(1, 0), SNOW, { pos: [0.2, 0.03, 0.3], scale: [1.7, 0.3, 1.4], jitter: 0.12 }));
   return merge(parts);
 }
 
@@ -627,7 +676,9 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   const a = set === 'a';
   if (biome === 'alpine') return a ? [() => boughPineGeometry(p, 1, lod), () => heavyPineGeometry(p, lod)] : [() => youngPineGeometry(p, lod), () => snagGeometry(lod)];
   if (biome === 'glacier') return a ? [() => spireGeometry(p), () => brokenSpireGeometry(p)] : [() => seracGeometry(p), () => iceMoundGeometry(p)];
-  if (biome === 'volcanic') return a ? [() => charPineGeometry(p), () => charSnagGeometry(p)] : [() => basaltGeometry(p), () => basaltStubGeometry(p)];
+  // Ember's second set is its basalt in formations (groves.ts): the organ pipes first (Low's one
+  // piece), then the clusters round their feet and the sentinels that frame a leap.
+  if (biome === 'volcanic') return a ? [() => charPineGeometry(p), () => charSnagGeometry(p)] : [() => organPipeGeometry(p), () => basaltClusterGeometry(p), () => basaltSentinelGeometry(p)];
   return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3, lod), () => youngPineGeometry(p, lod)];
 }
 

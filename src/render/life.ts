@@ -716,11 +716,13 @@ varying float vA;
 varying vec3 vWP;
 varying float vSeed;
 void main() {
-  // aSrc.w: the puff's phase, plus 2 for a far chimney (a village's), whose smoke is drawn larger.
+  // aSrc.w: the puff's phase, plus 1 for a town's chimney (a fuller plume, rising slower) or 2 for a
+  // far chimney (a village's), whose smoke is drawn larger still.
   float far = step(1.5, aSrc.w);
+  float town = step(0.999, aSrc.w) * (1.0 - far);
   float ph = fract(aSrc.w);
-  float age = fract(uTime * mix(0.07, 0.035, far) + ph);
-  float k = 1.0 + 3.0 * far;
+  float age = fract(uTime * mix(mix(0.07, 0.055, town), 0.035, far) + ph);
+  float k = 1.0 + 3.0 * far + 0.7 * town;
   vec3 c = aSrc.xyz + (vec3(0.0, age * 13.0, 0.0) + uWind * (age * age * 9.0 + age * 1.5)) * k;
   c.x += sin(age * 5.0 + ph * 40.0) * 0.5 * age * k;
   c.z += cos(age * 4.0 + ph * 30.0) * 0.4 * age * k;
@@ -872,7 +874,10 @@ const BIRD_CAP = 96;
 const CHAIR_CAP = 192;
 const FIG_CAP = 56;
 const SMOKE_PER = 10;
-const SMOKE_CAP = 22 * SMOKE_PER;
+/** A town chimney's puffs, and how many town chimneys smoke at once. */
+const TOWN_PER = 8;
+const TOWN_CHIMNEYS = 22;
+const SMOKE_CAP = 22 * SMOKE_PER + TOWN_CHIMNEYS * TOWN_PER;
 const FLAG_CAP = 420;
 const MOTE_N = 700;
 
@@ -911,6 +916,12 @@ export class Life {
   /** Optional, wired by the world: far chimney tops (a valley village's, world space) to smoke as
    *  well; writes up to out.length points and returns how many. */
   farChimneys: ((out: Vector3[]) => number) | null = null;
+  /** Optional, wired by the world: the smoking chimney tops of the towns in view (world space) between
+   *  sim z0 and z1, and a key that changes when they do (set pieces come into view on their own time). */
+  townChimneys: ((out: Vector3[], z0: number, z1: number) => number) | null = null;
+  townKey: (() => number) | null = null;
+  private lastTownKey = -1;
+  private townBuf: Vector3[] = Array.from({ length: TOWN_CHIMNEYS }, () => new Vector3());
   /** Optional, wired by the world: whether a set piece keeps the bank clear at world x and sim z
    *  (the dressing drops a cabin there, so no chimney smokes). */
   kept: ((x: number, z: number) => boolean) | null = null;
@@ -1218,7 +1229,9 @@ export class Life {
       const from = ci <= 0 ? -2 : ci - 1;
       const to = ci + (this.tier === 'high' ? 9 : 7);
       const key = from * 4096 + to;
-      if (key !== this.range) {
+      const tk = this.townKey ? this.townKey() : 0;
+      if (key !== this.range || tk !== this.lastTownKey) {
+        this.lastTownKey = tk;
         this.range = key;
         this.place(from, to);
       }
@@ -1543,6 +1556,23 @@ export class Life {
         this.v2.set(px, py + 3.4, pz);
         this.flagLine(this.v, this.v2, blossom, i * 7 + side);
         this.rigid(px, py, pz, px, py + 3.6, pz, 0.09, '#5E4E56');
+      }
+    }
+    // The towns' chimneys: soft puffs over the roofs, lit warm on the sun side and drifting with the
+    // wind like a cabin's, a few to a chimney (one draw with the rest).
+    if (this.townChimneys) {
+      const n = this.townChimneys(this.townBuf, z0, z1);
+      for (let k = 0; k < n; k++) {
+        const ch = this.townBuf[k];
+        const ph = (k * 0.618) % 1;
+        for (let j = 0; j < TOWN_PER && ns < SMOKE_CAP; j++) {
+          const o = ns * 4;
+          S[o] = ch.x;
+          S[o + 1] = ch.y;
+          S[o + 2] = ch.z;
+          S[o + 3] = 1 + ((j / TOWN_PER + ph) % 1);
+          ns++;
+        }
       }
     }
     if (this.farChimneys) {

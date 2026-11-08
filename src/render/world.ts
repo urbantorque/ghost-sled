@@ -130,6 +130,9 @@ const GHOST_C: Record<GhostKind, Color> = {
 /** Near misses: trees drop snow off their boughs, everything else kicks grit off its foot. */
 const BOUGHS: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['pine', 'blossom', 'charpine']);
 const ICY: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['spire', 'serac', 'iceblock']);
+/** A forest tree passed within this many metres of its trunk, at this speed or more, sheds its snow. */
+const SHED_R = 2.5;
+const SHED_SPEED = 18;
 /** The best band's New ground flare and the 'In the flow' rim pulse, seconds. */
 const FLARE_S = 0.6;
 const FLOW_PULSE_S = 0.3;
@@ -276,6 +279,8 @@ export class World {
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
+    this.life.townChimneys = (out, z0, z1) => this.setPieces.chimneys(out, z0, z1);
+    this.life.townKey = () => this.setPieces.chimneyKey;
     // (A cabin the dressing would not stand on a wall or a ledge smokes no chimney either.)
     this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
@@ -910,6 +915,7 @@ export class World {
     shared.uResults.value = this.resultsClear;
     // The title reel keeps hazards out of the band right behind its hero (materials.ts uTitleClear).
     shared.uTitleClear.value = v.mode === 'title' ? 1 : 0;
+    if (v.mode === 'run') this.shedSnow(s, v.time);
     this.sloughs.update(dt);
     this.particles.update(dt);
     this.life.update(s.x, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
@@ -1118,6 +1124,38 @@ export class World {
     // A whisker also strikes a quick ring of white glints off the snow where you shaved it.
     if (b.grade === 'whisker') this.particles.ring(this.fxB, WHISKER_C, 9, 3.4, this.carrier(s), 0, 1.3, 0.3, 0.13);
   }
+
+  /** Trees near the corridor's edge shed snow as a rider passes close at speed: a forest tree in the near
+   *  rows (a tree run's wall, the treeline, an orchard's first rows) passed within SHED_R of its trunk at
+   *  SHED_SPEED or more lets a sift fall off its boughs, the near miss's own (the same burst, placed by
+   *  brush.ts on the side you passed it, about two thirds of an ordinary near miss's count), once a tree.
+   *  Every tier: it reads the chunks' packed forest (no draw, nothing made), the particle budget scales
+   *  it as it does every burst, and on Low, whose budget is 0.45, a shed is six or seven grains. */
+  private shedSnow(s: Snap, time: number): void {
+    if (s.crashed || s.speed < SHED_SPEED) return;
+    // A new run (or a revive far off) forgets which trees have shed.
+    if (!(Math.abs(s.z - this.shedZ) < 120) || time < this.shedT) {
+      this.shedKeys.clear();
+      this.shedT = -1;
+    }
+    this.shedZ = s.z;
+    const n = this.props.treesNear(s.x, s.z, SHED_R, 1.5, this.shedBuf);
+    for (let k = 0; k < n; k++) {
+      const key = this.shedBuf[k * 3];
+      // (Scraping along a tree run's wall, a sift every 0.15 s at most: discrete falls, not a stream.)
+      if (this.shedKeys.has(key) || time - this.shedT < 0.15) continue;
+      this.shedKeys.add(key);
+      if (this.shedKeys.size > 256) this.shedKeys.delete(this.shedKeys.values().next().value as number);
+      if (brushPoint(s, this.shedBuf[k * 3 + 1], this.shedBuf[k * 3 + 2], this.groundAt, this.cam.camera, this.fxB, this.fxT, BRUSH_REACH_BOUGH) === 0) continue;
+      this.particles.brush(this.fxB, this.fxT, this.carrier(s), true, false, 15);
+      this.shedT = time;
+    }
+  }
+
+  private shedKeys = new Set<number>();
+  private shedBuf: number[] = new Array(24).fill(0);
+  private shedZ = Number.NaN;
+  private shedT = -1;
 
   /** The snow's height at a sim (x, z), for brush.ts. */
   private readonly groundAt = (x: number, z: number): number => this.course.ground(x, z);
