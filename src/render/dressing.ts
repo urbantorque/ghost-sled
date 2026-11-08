@@ -23,7 +23,9 @@ import { Palette } from './palette';
 //   fork, leap, terraces: their marks are rails.ts's, on every tier; their banks keep the default forest
 //   bridge, tunnel, street, finish: the places lane's; clutter only where there is ground to stand on
 //   switchbacks, cruise, start: the default forest
-// Wide sections may carry a distant lift line (towers and a cable) and a cabin in a clearing.
+// Wide sections may carry a distant lift line (towers and a cable) and a cabin in a clearing. On an alpine
+// course a telegraph line runs from the first leap's landing down to the first lake (Dresser.wire), and on
+// Ember the clutter belongs to its groves (groves.ts).
 
 /** Small kit pieces. */
 export const S_BUSH = 0;
