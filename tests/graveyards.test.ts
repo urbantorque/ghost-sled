@@ -40,10 +40,10 @@ describe('graveyards', () => {
       [3834, 5],
     ]);
     expect(at(frostfang)).toEqual([
-      [556, 2],
+      [552, 3],
       [730, 2],
       [1919, 2],
-      [3115, 14],
+      [3118, 16],
     ]);
     expect(at(ember)).toEqual([
       [1380, 2],

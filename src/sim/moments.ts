@@ -184,12 +184,15 @@ export interface MomentPlay extends MomentSpec {
  *  cruise loses it by a little; a rider who keeps the speed up (a tuck, a drift's release, a dash) wins. */
 export const RACE_PACE: Record<string, number> = { mirror: 34, crevasse: 37, cindergate: 36, default: 35 };
 export const RACE_LEAD = 16;
-/** The machine leaves at this share of its pace and arrives at (2 - it): it pulls away, then the rider closes. */
-const RACE_V0 = 0.8;
-/** The collapse: the fall's pace and how far behind the rider it starts. Ride on at a cruise and it stays
- *  behind; slow down, drift wide or wipe out on the span and it takes the snow from under you. */
+/** The machine leaves at this share of its pace and eases to (2 - it) as it comes into its far station: it
+ *  pulls away first, and a rider at its pace closes on it at the end, so a race is decided late. */
+const RACE_V0 = 1.25;
+/** The collapse: the fall's least pace, the share of the rider's speed onto the span it runs at when that is
+ *  faster, and how far behind the rider it starts. A span is flat, so a sled slows on it: hold your speed (a
+ *  tuck, no drift, no wall) and the fall stays at your heels; bleed it and it takes the snow from under you. */
 export const COLLAPSE_PACE = 30;
-export const COLLAPSE_HEAD = 20;
+export const COLLAPSE_SHARE = 0.86;
+export const COLLAPSE_HEAD = 18;
 /** Lantern gates: how far apart (a street is ridden fast, often straight off a leap or a dash, so its gates
  *  stand further apart than a cavern's), half-width of the opening, and how far off the line. */
 const GATE_STEP: Partial<Record<SectionKind, number>> = { street: 40, tunnel: 32 };
@@ -292,7 +295,7 @@ function ringsFor(course: Course, m: MomentSpec, side: 1 | -1): SkyGate[] {
 }
 
 /** The race's machine: metres down the course `ticks` after it left (it leaves as the rider reaches z0).
- *  It runs at RACE_V0 of its pace and speeds up evenly to (2 - RACE_V0), so its average is the pace. */
+ *  It runs at RACE_V0 of its pace and changes speed evenly to (2 - RACE_V0), so its average is the pace. */
 export function machineZ(p: MomentPlay, ticks: number): number {
   const D = p.z1 - p.z0 - p.lead;
   const v0 = RACE_V0 * p.pace;
@@ -303,7 +306,13 @@ export function machineZ(p: MomentPlay, ticks: number): number {
   return p.z0 + p.lead + (d < D ? d : D);
 }
 
-/** The collapse's fall: metres down the course `ticks` after the rider reached z0. */
-export function fallZ(p: MomentPlay, ticks: number): number {
-  return p.z0 - p.lead + (p.pace * ticks) / 60;
+/** The fall's pace for a rider who came onto the span at `v` m/s. */
+export function fallPace(p: MomentPlay, v: number): number {
+  const k = COLLAPSE_SHARE * v;
+  return k > p.pace ? k : p.pace;
+}
+
+/** The collapse's fall: metres down the course `ticks` after the rider reached z0 at its `pace`. */
+export function fallZ(p: MomentPlay, ticks: number, pace: number): number {
+  return p.z0 - p.lead + (pace * ticks) / 60;
 }

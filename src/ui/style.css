@@ -8817,6 +8817,61 @@
   box-shadow: inset 0 0 0 2px #ffd34d, 0 0 18px rgba(255, 211, 77, 0.35), var(--shadow);
 }
 
+/* While its verb plays the card is the set piece's chip: the name steps down a size and the count under it
+   reads in the HUD's off-white with tabular figures, so "Gate 3 of 6" never jitters as it counts. */
+.gs-mq.is-live {
+  padding: 6px 18px 7px;
+}
+
+.gs-mq.is-live .gs-mq-k,
+.gs-mq.is-won .gs-mq-k,
+.gs-mq.is-lost .gs-mq-k {
+  font-size: clamp(14px, calc(var(--u) * 0.95), 20px);
+  letter-spacing: 0.1em;
+  opacity: 0.86;
+}
+
+.gs-mq.is-live .gs-mq-l {
+  color: var(--text);
+  font-size: clamp(17px, calc(var(--u) * 1.2), 26px);
+  font-style: italic;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Won: the lantern's marigold, rimmed and glowing (a whole lantern lit). Lost: said plainly, no colour. */
+.gs-mq.is-won {
+  box-shadow: inset 0 0 0 2px #ffd34d, 0 0 22px rgba(255, 211, 77, 0.45), var(--shadow);
+}
+
+.gs-mq.is-won .gs-mq-l {
+  color: var(--gift);
+  font-size: clamp(17px, calc(var(--u) * 1.2), 26px);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-mq.is-lost .gs-mq-l {
+  color: var(--text);
+  opacity: 0.8;
+}
+
+/* A set piece holds the top centre on a phone: the stake and the minor callout line wait under its chip,
+   so its card, the combo and a callout never stack (DECISIONS 240). */
+@media (max-aspect-ratio: 1/1) {
+  .gs-moment-on .gs-stake,
+  .gs-moment-on .gs-callouts {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* A cash-in owns the second tier while it holds over the combo row: its figure reaches down over the
+   callout line, so the line waits until the figure flies into the score. */
+.gs-combo.is-banking ~ .gs-callouts {
+  opacity: 0;
+}
+
 /* A signature rider's word on the result: its line in quotes, its name, a rule in its own colour. */
 .gs-res-quote {
   display: flex;

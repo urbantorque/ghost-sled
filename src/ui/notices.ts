@@ -28,6 +28,9 @@ const NEMESIS_MS = 2600;
 const FINALE_MS = 2600;
 const WARN_MS = 2600;
 const STAGE_MS = 2400;
+/** A set piece's chip holds the band while its verb plays (a race, the longest, runs about 12 s); its result after. */
+const LIVE_MS = 30000;
+const RESULT_MS = 1800;
 /** The finish card holds until the results cover it (FINISH_RESULTS_MS). */
 const FINISH_MS = 3400;
 /** Shortest time a banner stays up once shown, even with others waiting. */
@@ -89,7 +92,7 @@ type Spec =
   | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent }
   | { type: 'stage'; name: string; time: string; ghost: { text: string; kind: GhostKind } | null; best: string | null }
   /** A marquee moment: its title as it comes up with the line to play, or its score as it is ridden out. */
-  | { type: 'marquee'; name: string; line: string; score: string | null; clean: boolean }
+  | { type: 'marquee'; name: string; line: string; score: string | null; clean: boolean; live?: boolean; won?: boolean }
   | { type: 'finish'; time: string; rank: number; of: number };
 
 interface Banner {
@@ -237,6 +240,58 @@ export class Notices {
     this.push({ spec: { type: 'marquee', name, line, score, clean }, pri: P_CELEBRATE, key: `m:${name}:${score ? 'out' : 'in'}`, ms: score ? STAGE_MS - 400 : STAGE_MS + 300, at: performance.now(), el: null, shown: 0, end: 0 });
   }
 
+  /**
+   * The set piece is under way: its card becomes its chip, the progress of its verb under its name ("Gate 3
+   * of 6", "You lead the cable car"), held over the race row until it is decided. Nothing waiting hurries
+   * the chip or goes stale under it: a mission pop plays after it. A new line only rewrites the chip's
+   * text, so it never enters again.
+   */
+  momentLive(name: string, text: string): void {
+    const key = `m:${name}:in`;
+    const cur = this.cur;
+    if (cur && cur.key === key && cur.spec.type === 'marquee') {
+      cur.spec.line = text;
+      cur.spec.live = true;
+      cur.pri = P_FINALE;
+      if (cur.el) {
+        cur.el.classList.add('is-live');
+        const l = cur.el.querySelector('.gs-mq-l');
+        if (l && l.textContent !== text) l.textContent = text;
+      }
+      this.arm(cur, performance.now() + LIVE_MS);
+      this.syncLive();
+      return;
+    }
+    this.push({ spec: { type: 'marquee', name, line: text, score: null, clean: false, live: true }, pri: P_FINALE, key, ms: LIVE_MS, at: performance.now(), el: null, shown: 0, end: 0 });
+    this.syncLive();
+  }
+
+  /** The set piece decided: its chip shows the result ("Beat the cable car", "4 of 6 gates") and goes. */
+  momentDone(name: string, text: string, won: boolean): void {
+    const key = `m:${name}:in`;
+    const cur = this.cur;
+    if (cur && cur.key === key && cur.spec.type === 'marquee') {
+      cur.spec.line = text;
+      cur.spec.live = false;
+      cur.spec.won = won;
+      cur.pri = P_CELEBRATE;
+      if (cur.el) {
+        cur.el.classList.remove('is-live');
+        cur.el.classList.add(won ? 'is-won' : 'is-lost');
+        const l = cur.el.querySelector('.gs-mq-l');
+        if (l) l.textContent = text;
+        if (won) play(cur.el, [{ transform: 'scale(1)' }, { transform: 'scale(1.08)', offset: 0.35 }, { transform: 'scale(1)' }], { duration: 360, easing: SPRING });
+      }
+      const now = performance.now();
+      this.arm(cur, now + RESULT_MS);
+      this.hurry(now);
+      this.syncLive();
+      return;
+    }
+    this.queue = this.queue.filter((q) => q.key !== key);
+    this.push({ spec: { type: 'marquee', name, line: text, score: null, clean: won, won }, pri: P_CELEBRATE, key: `m:${name}:out`, ms: RESULT_MS, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
   stageLine(name: string, time: string, ghost: { text: string; kind: GhostKind } | null, best: string | null): void {
     this.push({ spec: { type: 'stage', name, time, ghost, best }, pri: P_CELEBRATE, key: `s:${name}`, ms: STAGE_MS, at: performance.now(), el: null, shown: 0, end: 0 });
   }
@@ -261,6 +316,7 @@ export class Notices {
     this.bandToken++;
     this.crashed = false;
     this.setBand(false);
+    this.syncLive();
   }
 
   /**
@@ -343,6 +399,18 @@ export class Notices {
   }
 
   /** Priority order, first come first served within a priority; `front` jumps its own priority class. */
+  /** A set piece's chip is on stage while its verb plays. */
+  private liveChip(): boolean {
+    const s = this.cur?.spec;
+    return !!s && s.type === 'marquee' && s.live === true;
+  }
+
+  /** The overlay knows a set piece holds the top centre (gs-moment-on): on a phone the stake and the minor
+   *  callouts wait under it, so the card, the combo and a callout never stack. */
+  private syncLive(): void {
+    this.parent.classList.toggle('gs-moment-on', this.liveChip());
+  }
+
   private enqueue(b: Banner, front = false): void {
     let i = this.queue.findIndex((q) => (front ? q.pri <= b.pri : q.pri < b.pri));
     if (i < 0) i = this.queue.length;
@@ -351,6 +419,11 @@ export class Notices {
   }
 
   private prune(now: number): void {
+    // Under a set piece's live chip nothing waiting goes stale: it plays once the chip has gone.
+    if (this.liveChip()) {
+      for (const q of this.queue) q.at = Math.max(q.at, now - 400);
+      return;
+    }
     this.queue = this.queue.filter((q) => now - q.at <= MAX_WAIT[q.pri]);
   }
 
@@ -365,7 +438,7 @@ export class Notices {
    */
   private hurry(now: number): void {
     const cur = this.cur;
-    if (!cur || cur.pri >= P_ALERT || this.queue.length === 0) return;
+    if (!cur || cur.pri >= P_ALERT || this.queue.length === 0 || this.liveChip()) return;
     const end = Math.max(now, cur.shown + MIN_MS);
     if (end < cur.end) this.arm(cur, end);
   }
@@ -382,6 +455,7 @@ export class Notices {
     const out = cur?.el ? this.exit(cur.el, cur.spec.type, false) : null;
     if (cur) cur.el = null;
     this.next(out);
+    this.syncLive();
   }
 
   /**
@@ -422,6 +496,7 @@ export class Notices {
     this.hurry(now);
     this.bandToken++;
     this.setBand(true);
+    this.syncLive();
   }
 
   /**
@@ -481,7 +556,8 @@ export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: 
 function render(s: Spec): HTMLElement {
   if (s.type === 'marquee') {
     // The set piece's title over the race row, its line in the lantern's marigold; on the way out, the score.
-    return h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
+    const state = s.live ? ' is-live' : s.won === true ? ' is-won' : s.won === false ? ' is-lost' : '';
+    return h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}${state}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
   }
   if (s.type === 'stage') {
     const gaps: HTMLElement[] = [];

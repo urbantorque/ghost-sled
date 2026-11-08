@@ -5,7 +5,7 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
-import { type MomentPlay, fallZ, machineZ, momentPlays } from './moments';
+import { type MomentPlay, fallPace, fallZ, machineZ, momentPlays } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
@@ -284,6 +284,8 @@ export interface MomentState {
   /** Gates and rings: the next one down the run. Steps: whether every landing so far was perfect. */
   at: number;
   ok: boolean;
+  /** Collapse: the fall's pace, from the rider's speed onto the span (moments.ts fallPace). */
+  pace: number;
 }
 
 const vec = { x: 0, z: 0 };
@@ -428,7 +430,7 @@ export class Sim {
   /** The course's set pieces and what their verbs hold (moments.ts). */
   readonly plays: readonly MomentPlay[];
   /** The set piece being played (public: the renderer reads the race's machine and the collapse's fall). */
-  readonly mo: MomentState = { active: -1, next: 0, t0: 0, n: 0, of: 0, ahead: false, close: false, at: 0, ok: true };
+  readonly mo: MomentState = { active: -1, next: 0, t0: 0, n: 0, of: 0, ahead: false, close: false, at: 0, ok: true, pace: 0 };
 
   /** Small direct score from spirit lights (they are the lantern's fuel, not combo fuel). */
   lightScore = 0;
@@ -1350,6 +1352,7 @@ export class Sim {
       mo.close = false;
       mo.at = 0;
       mo.ok = true;
+      mo.pace = p.verb === 'collapse' ? fallPace(p, s.speed) : p.pace;
       mo.of = p.verb === 'gates' ? p.gates.length : p.verb === 'rings' ? p.rings.length : p.verb === 'steps' ? p.steps.length : 1;
       this.events.push({ type: 'moment', index: p.index, phase: 'start', n: 0, of: mo.of });
     }
@@ -1368,7 +1371,7 @@ export class Sim {
         break;
       }
       case 'collapse': {
-        const gap = s.z - fallZ(p, ticks);
+        const gap = s.z - fallZ(p, ticks, mo.pace);
         if (!mo.close && gap < COLLAPSE_CLOSE) {
           mo.close = true;
           this.events.push({ type: 'moment', index: p.index, phase: 'close', n: 0, of: 1 });
@@ -2055,6 +2058,7 @@ export class Sim {
     mixF(this.mo.active);
     mixF(this.mo.n);
     mixF(this.mo.at);
+    mixF(this.mo.pace);
     mixF(this.stats.momentMask);
     return h >>> 0;
   }

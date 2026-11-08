@@ -35,6 +35,7 @@ import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
+import { MarqueeWorld } from './marqueeworld';
 import { Terrain, TerrainDetail } from './terrain';
 import { Trail } from './trails';
 
@@ -155,6 +156,8 @@ export class World {
   readonly overlooks: Overlooks;
   /** The lantern in the world: sky gates, a dash's trail, a ward's light, ghosts' dashes. */
   private readonly spirit: SpiritFx;
+  /** The set pieces' own world: race machines, lantern gates, a falling span (round 6). */
+  private readonly marquee: MarqueeWorld;
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
   readonly sky: Sky;
@@ -313,8 +316,11 @@ export class World {
 
     this.spirit = new SpiritFx(this.particles);
     this.spirit.setCourse(this.course);
+    this.marquee = new MarqueeWorld(this.particles);
+    this.marquee.setCourse(this.course);
     this.scene.add(
       this.spirit.root,
+      this.marquee.root,
       this.sky.root,
       this.terrain.root,
       this.midground.root,
@@ -453,6 +459,7 @@ export class World {
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.spirit.setCourse(c);
+    this.marquee.setCourse(c);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -623,6 +630,7 @@ export class World {
     this.sloughs.clear();
     this.moments.reset();
     this.spirit.reset();
+    this.marquee.reset();
     this.ghosts.resetRun();
     this.chaos.begin(event);
     tmpV.set(snap.x, snap.y, -snap.z);
@@ -698,12 +706,14 @@ export class World {
       this.spirit.onEvent(e, s);
     }
     this.spirit.update(dt, v.time, v.mode, s, v.sim, v.ghostPoses, this.quality.tier === 'low');
+    this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.tier === 'low');
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
     if (v.mode === 'run') this.moments.beats(beats, s);
     this.spirit.beats(beats);
+    if (v.mode === 'run') this.marquee.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);

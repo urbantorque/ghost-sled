@@ -363,7 +363,7 @@ export class Director {
   /** Wards and wipeouts this run (a clean finish has none). */
   falls = 0;
   /** What each moment came to this run, for the results and mastery. */
-  readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean }> = [];
+  readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean; won: boolean }> = [];
   private avalancheAt = -1;
   private bestBank = 0;
   /** Run clock until which a bank's cash-in is on screen (New best waits for it). */
@@ -488,8 +488,9 @@ export class Director {
       if (sim.distance >= m.z1 || s.finished) {
         const took = sim.stats.lights - this.mqLights;
         const clean = this.hits === this.mqHits;
-        this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean });
-        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean, won: (sim.stats.momentMask & (1 << m.index)) !== 0 }, sim);
+        const won = (sim.stats.momentMask & (1 << m.index)) !== 0;
+        this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean, won });
+        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean, won }, sim);
         this.mqIn = -1;
       }
       return;
