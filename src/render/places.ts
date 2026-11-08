@@ -644,7 +644,7 @@ export function finishPiece(ctx: SiteCtx): Piece {
       return parts;
     });
   }
-  return { steps, spots, ice: false, glows, steam: base.steam };
+  return { steps, spots, ice: false, glows, steam: base.steam, chimneys: base.chimneys };
 }
 
 // ---------------------------------------------------------------- the start

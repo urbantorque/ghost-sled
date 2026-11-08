@@ -28,6 +28,8 @@ import {
   seed,
   seg,
   stone,
+  stringFree,
+  sway,
   sweptRoof,
   windowColor,
 } from './landmarkKit';
@@ -148,17 +150,25 @@ export function lantern(parts: BufferGeometry[], x: number, y: number, z: number
   parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y - r * 1.3, z]));
 }
 
-/** A string of lanterns sagging from a to b. */
+/** A string of lanterns sagging from a to b. The string swings in the wind, held at its masts, and each
+ *  lantern swings with the string under it as one piece. */
 export function lanternString(a: V3, b: V3, sag: number, night: boolean, hex: string): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
   const n = Math.max(4, Math.round(len / 3.4));
   const pt = (t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
   for (let i = 0; i < n; i++) {
-    parts.push(seg(pt(i / n), pt((i + 1) / n), 0.04, INK, 3));
+    const f0 = stringFree(i / n);
+    const f1 = stringFree((i + 1) / n);
+    const p0 = pt(i / n);
+    const p1 = pt((i + 1) / n);
+    const seglen = Math.max(1e-6, Math.hypot(p1[0] - p0[0], p1[2] - p0[2]));
+    parts.push(sway(seg(p0, p1, 0.04, INK, 3), (x, _y, z) => 0.3 * (f0 + ((f1 - f0) * Math.hypot(x - p0[0], z - p0[2])) / seglen)));
     if (i > 0) {
       const p = pt(i / n);
+      const from = parts.length;
       lantern(parts, p[0], p[1] - 0.75, p[2], 0.36, night, hex);
+      for (let k = from; k < parts.length; k++) sway(parts[k], () => 0.75 * f0);
     }
   }
   return parts;
@@ -222,7 +232,7 @@ const STOREY = 3.3;
  *  (plaster under timber, the gable to the street, balconies and shutters), a Frostfang station hut
  *  (panelled, on stilts, a flat roof deep in snow), an Ember lodge (basalt under timber, ember-lit
  *  windows), a Sakura townhouse (dark lattice under plaster, low swept eaves, lanterns). */
-export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color): BufferGeometry[] {
+export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color, chim?: V3[]): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const { w, d, storeys, s } = o;
   const jet = o.jet ?? 0;
@@ -291,13 +301,25 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     parts.push(box(sw, 2.0, 0.16, night ? lampColor(true, '#FFC27A') : C('#3A3650'), [0, F + 1.45, zf + 0.07]));
     const cols = [C('#3E5A9A'), CREAM, C('#2F6E78'), C('#6A4C86')];
     const ac = cols[Math.floor(rnd() * cols.length)];
+    // The shop's sign: a board with its lettering's dark bar across it, painted cream by day and lit
+    // from within from dusk (the night flag is the journey's dusk too), so a street's fronts glow in a
+    // row at the lens's height. On the awning's front edge, or flat over the window where there is none.
+    const lit = lampColor(true, '#FFE0A8').multiplyScalar(0.85);
+    const signW = Math.min(sw * 0.8, 4.2);
     if (!o.low) {
       const reach = Math.min(1.5, room - 0.2);
       for (let i = 0; i < 6; i++) parts.push(box(sw / 6 + 0.02, 0.12, reach, i % 2 ? CREAM : ac, [-sw / 2 + (i + 0.5) * (sw / 6), F + 2.95, zf + reach / 2], [0.35, 0, 0]));
       parts.push(box(sw + 0.1, 0.14, reach - 0.2, SNOW, [0, F + 3.12, zf + reach / 2], [0.35, 0, 0]));
-      // A hanging sign on a bracket at the corner.
+      const vz = zf + reach - 0.12;
+      parts.push(box(signW + 0.16, 0.56, 0.08, t.trim, [0, F + 2.43, vz]));
+      parts.push(box(signW, 0.42, 0.1, night ? lit : CREAM, [0, F + 2.43, vz + 0.02]));
+      parts.push(box(signW * 0.62, 0.09, 0.12, INK, [0, F + 2.43, vz + 0.03]));
+      // A hanging sign on a bracket at the corner, its blade lit in its own colour after dark.
       parts.push(seg([-w / 2 + 0.4, F + 3.6, zf], [-w / 2 + 0.4, F + 3.6, zf + reach - 0.1], 0.05, INK, 4));
-      parts.push(box(0.1, 0.8, reach * 0.66, ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+      parts.push(box(0.1, 0.8, reach * 0.66, night ? ac.clone().multiplyScalar(2.1) : ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+    } else {
+      parts.push(box(signW, 0.5, 0.12, night ? lit : CREAM, [0, F + 2.85, zf + 0.1]));
+      parts.push(box(signW * 0.62, 0.1, 0.14, INK, [0, F + 2.85, zf + 0.11]));
     }
   } else {
     parts.push(box(1.3, 2.3, 0.16, t.trim, [0, F + 1.15, zf + 0.05]));
@@ -319,11 +341,13 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     const cx = (rnd() - 0.5) * w * 0.4;
     parts.push(box(1.0, 3.0, 1.0, stoneC, [cx, top + w * 0.2 + 0.8, -d * 0.2]));
     parts.push(box(1.3, 0.4, 1.3, SNOW, [cx, top + w * 0.2 + 2.4, -d * 0.2]));
+    chim?.push([cx, top + w * 0.2 + 2.7, -d * 0.2]);
   } else if (biome === 'glacier') {
     parts.push(box(w + 0.8, 0.5, d + zr + 2 * Math.min(0.4, eave), t.roof, [0, top + 0.25, zr / 2]));
     parts.push(part(BoxGeometry2(w + 1.0, 1.2, d + zr + 2 * Math.min(0.5, eave)), SNOW, { pos: [0, top + 1.0, zr / 2], jitter: 0.12 }));
     // A stovepipe and an antenna.
     parts.push(seg([w / 3, top + 0.5, -d / 4], [w / 3, top + 3.2, -d / 4], 0.16, INK, 6));
+    chim?.push([w / 3, top + 3.4, -d / 4]);
     if (!plain) {
       parts.push(seg([-w / 3, top + 0.5, 0], [-w / 3, top + 5.5, 0], 0.05, INK, 4));
       parts.push(seg([-w / 3 - 0.7, top + 4.6, 0], [-w / 3 + 0.7, top + 4.6, 0], 0.04, INK, 4));
@@ -332,6 +356,7 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     parts.push(...place(gable(d + zr, w, 0, w * 0.22, Math.min(1.2, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
     // A stone chimney.
     parts.push(box(1.2, 3.2, 1.2, stoneC, [-w * 0.25, top + 2.4, -d * 0.15]));
+    chim?.push([-w * 0.25, top + 4.2, -d * 0.15]);
   } else {
     // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice.
     parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
@@ -852,6 +877,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
     }
   }
   const steps: Array<() => BufferGeometry[]> = [];
+  const chimneys: V3[] = [];
   // Low draws no animated crowd: the street's is baked, fewer and bolder, posed (crowd.ts).
   if (low) steps.push(() => lowCrowd(spots, biome, p));
   // The lots, a couple to a step (a hotel or the landmark is a few ms on its own).
@@ -867,7 +893,16 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         const F = floorOf(f, l, hi);
         if (l.kind === 'landmark') parts.push(...f.out(landmark(t, biome, night, F, lo, p, l.s)));
         else {
-          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.balconies, s: l.s, jet: l.jet, eave: l.eave, room: l.room, back: l.back, low, sunk: l.sunk }, stoneC)));
+          // About half the hearths are lit: their chimneys smoke (life.ts), the front rows' and the
+          // roofs behind them alike, so smoke stands over the whole town.
+          const ch: V3[] = [];
+          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.balconies, s: l.s, jet: l.jet, eave: l.eave, room: l.room, back: l.back, low, sunk: l.sunk }, stoneC, ch)));
+          if (rnd() < 0.55) {
+            for (const [u, y, v] of ch) {
+              const w = f.spot(u, y, v, 0);
+              chimneys.push([w.x, w.y, w.z]);
+            }
+          }
           // A parked sled or a woodpile against some fronts.
           if (!low && !l.back && l.room > 1 && rnd() < 0.3) parts.push(...f.out(place(rnd() < 0.5 ? parkedSled(F, cols[Math.floor(rnd() * cols.length)]) : woodpile(F), (rnd() - 0.5) * l.w * 0.7, 0, l.d / 2 + 0.3, 0)));
         }
@@ -963,6 +998,8 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         bp.push(part(disc, INK, { pos: [0, -1.25, 0.06] }));
         bp.push(part(new ConeGeometry(0.55, 0.7, 3).scale(1, 1, 0.1), CREAM, { pos: [0, -1.2, 0.14] }));
         for (const sx of [-1, 1]) bp.push(seg([sx * bw * 0.5, 0, 0], [sx * bw * 0.5, -0.05, 0], 0.04, INK, 3));
+        // The cloth billows from its ropes, freest at its foot.
+        for (const g of bp) sway(g, (_x, y) => 0.2 + 0.4 * Math.min(1, -y / 2.5));
         parts.push(...place(bp, mx, st.yA - 0.02, mz, yaw));
       } else if (lanterns) parts.push(...lanternString(A, B, 1.0, night || t.lampAlways, t.lamp));
       else parts.push(...bunting(A, B, 1.0, cols, 0.95));
@@ -1041,7 +1078,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
       });
     }
   }
-  return { steps, spots, ice: false, glows, steam };
+  return { steps, spots, ice: false, glows, steam, chimneys };
 }
 
 /** A ride-through town along the site's rail (see the file's head). */

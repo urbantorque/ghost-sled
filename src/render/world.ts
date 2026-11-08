@@ -273,6 +273,8 @@ export class World {
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
+    this.life.townChimneys = (out, z0, z1) => this.setPieces.chimneys(out, z0, z1);
+    this.life.townKey = () => this.setPieces.chimneyKey;
     // (A cabin the dressing would not stand on a wall or a ledge smokes no chimney either.)
     this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);

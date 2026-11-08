@@ -919,7 +919,7 @@ export class SetPieces {
   /** Made pieces by site, and the ones being made (one step per idle callback). */
   private built = new Map<number, BufferGeometry>();
   private pieceIce = new Map<number, boolean>();
-  private extras = new Map<number, Pick<Piece, 'glows' | 'steam' | 'spots'>>();
+  private extras = new Map<number, Pick<Piece, 'glows' | 'steam' | 'spots' | 'chimneys'>>();
   private queue: Build[] = [];
   /** How far ahead the plan should reach (planned on idle time). */
   private wantReach = 0;
@@ -966,7 +966,8 @@ export class SetPieces {
     this.shadows = shadows;
     this.plan = new SitePlan(course, mood);
     const near: [number, number] = [1.8, 3.6];
-    this.plain = makeToonMaterial({ coolShade: 0.5, nearFade: near });
+    // (Cloth: the bunting, banners and lantern strings swing in the wind, set per mood in setPalette.)
+    this.plain = makeToonMaterial({ coolShade: 0.5, nearFade: near, cloth: true });
     this.iceMat = makeToonMaterial({ coolShade: 0.5, nearFade: near, ice: true });
     for (let i = 0; i < SLOTS; i++) {
       const mesh = new Mesh(new BufferGeometry(), this.plain);
@@ -1062,6 +1063,34 @@ export class SetPieces {
     this.plan.clearings(z0, z1, out);
   }
 
+  /** Bumped whenever the pieces in view change (a town comes into view, or is made): the chimneys' smoke
+   *  is placed again when it moves (life.ts). */
+  chimneyKey = 0;
+
+  /** The smoking chimney tops of the towns in view (world space), between sim z0 and z1, nearest the
+   *  start of the range first; writes up to out.length and returns how many. */
+  chimneys(out: Vector3[], z0: number, z1: number): number {
+    // Counted first, then taken at a stride, so a town with more than out.length smoking keeps smoke
+    // down both sides and its whole length.
+    let m = 0;
+    for (let pass = 0, n = 0, k = 0; pass < 2; pass++) {
+      const stride = Math.max(1, Math.ceil(m / out.length));
+      for (const s of this.shown) {
+        if (!s || !this.built.has(s.n)) continue;
+        const list = this.extras.get(s.n)?.chimneys;
+        if (!list) continue;
+        for (const c of list) {
+          const w = siteToWorld(s, c[0], c[1], c[2], this.v);
+          if (-w.z < z0 || -w.z > z1) continue;
+          if (pass === 0) m++;
+          else if (k++ % stride === 0 && n < out.length) out[n++].copy(w);
+        }
+      }
+      if (pass === 1) return n;
+    }
+    return 0;
+  }
+
   /** Whether a set piece keeps the bank clear at world x and sim z (a cabin's smoke asks: the dressing
    *  drops a cabin there). */
   keeps(x: number, z: number): boolean {
@@ -1086,6 +1115,8 @@ export class SetPieces {
     this.palette = p;
     this.night = isNight(p);
     this.uniforms.uLamps.value = this.night ? 1 : 0;
+    // The wind in the cloth: hard in a blowing mood, a breeze by day, near still at night (as life.ts flags).
+    this.plain.uniforms.uCloth.value = p.windStreaks > 0 ? 0.6 : this.night ? 0.22 : 0.36;
     for (const s of this.slots) {
       s.visible = false;
       s.geometry = new BufferGeometry();
@@ -1141,7 +1172,7 @@ export class SetPieces {
     b.made = [];
     this.built.set(b.site.n, g);
     this.pieceIce.set(b.site.n, b.piece.ice);
-    this.extras.set(b.site.n, { glows: b.piece.glows, steam: b.piece.steam, spots: b.piece.spots });
+    this.extras.set(b.site.n, { glows: b.piece.glows, steam: b.piece.steam, spots: b.piece.spots, chimneys: b.piece.chimneys });
     // Keep the pieces round the rider; drop the oldest.
     if (this.built.size > KEEP_BUILT) {
       const list = this.plan.planned;
@@ -1291,6 +1322,7 @@ export class SetPieces {
 
   private show(want: Array<Site | null>, z: number): void {
     this.shown = want;
+    this.chimneyKey++;
     let np = 0;
     let ns = 0;
     const w = this.v;
