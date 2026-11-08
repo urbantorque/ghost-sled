@@ -18,6 +18,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ObstacleKind } from '../sim/course';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
+import { hazardPineGeometry } from './flora';
 import { Palette } from './palette';
 
 // Every mesh in the game is built here from primitives. Parts are flat-shaded (non-indexed) and
@@ -334,18 +335,110 @@ export function snowmanGeometry(): BufferGeometry {
   ]);
 }
 
+/** A rounded box of half extents (hx, hy, hz) and corner radius r, `segs` facets a side, with exact
+ *  smooth normals over its rounded edges (a gift's wrap reads soft and glossy, not as a cardboard
+ *  crate). Each triangle takes one colour from `paint`, given its centre on the unrounded box in grid
+ *  units across its face (u, v), the face's axis (0 x, 1 y, 2 z) and its band index along the
+ *  facet diagonals, so patterns are crisp and straight-edged on the facet grid. */
+function roundedBox(hx: number, hy: number, hz: number, r: number, segs: number, paint: (x: number, y: number, z: number, axis: number, band: number) => Color): BufferGeometry {
+  const g = new BoxGeometry(hx * 2, hy * 2, hz * 2, segs, segs, segs).toNonIndexed();
+  g.deleteAttribute('uv');
+  const p = g.getAttribute('position') as BufferAttribute;
+  const nrm = g.getAttribute('normal') as BufferAttribute;
+  const col = new Float32Array(p.count * 3);
+  const h = [hx, hy, hz];
+  const v = [0, 0, 0];
+  for (let i = 0; i < p.count; i += 3) {
+    const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3;
+    const cy = (p.getY(i) + p.getY(i + 1) + p.getY(i + 2)) / 3;
+    const cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+    const axis = Math.abs(nrm.getY(i)) > 0.5 ? 1 : Math.abs(nrm.getX(i)) > 0.5 ? 0 : 2;
+    // The face's own two axes, in grid units from its corner.
+    const ua = axis === 0 ? 2 : 0;
+    const va = axis === 1 ? 2 : 1;
+    const grid = (j: number, a: number) => ((a === 0 ? p.getX(j) : a === 1 ? p.getY(j) : p.getZ(j)) + h[a]) / ((2 * h[a]) / segs);
+    // The triangle's long edge (the facet diagonal) runs along (1, 1) or (1, -1): bands lie between
+    // neighbouring diagonals, so each is a clean straight strip.
+    let best = -1;
+    let du = 0;
+    let dv = 0;
+    for (let e = 0; e < 3; e++) {
+      const a = i + e;
+      const b = i + ((e + 1) % 3);
+      const eu = grid(b, ua) - grid(a, ua);
+      const ev = grid(b, va) - grid(a, va);
+      if (eu * eu + ev * ev > best) {
+        best = eu * eu + ev * ev;
+        du = eu;
+        dv = ev;
+      }
+    }
+    v[0] = cx;
+    v[1] = cy;
+    v[2] = cz;
+    const U = (v[ua] + h[ua]) / ((2 * h[ua]) / segs);
+    const V = (v[va] + h[va]) / ((2 * h[va]) / segs);
+    const band = Math.floor(du * dv > 0 ? U - V + 64 : U + V);
+    const c = paint(cx, cy, cz, axis, band);
+    for (let j = i; j < i + 3; j++) col.set([c.r, c.g, c.b], j * 3);
+  }
+  // Round it: every vertex is pulled onto a radius-r shell round the inner box, its normal the
+  // direction out from that box.
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const qx = Math.max(-hx + r, Math.min(hx - r, x));
+    const qy = Math.max(-hy + r, Math.min(hy - r, y));
+    const qz = Math.max(-hz + r, Math.min(hz - r, z));
+    const l = Math.hypot(x - qx, y - qy, z - qz) || 1;
+    p.setXYZ(i, qx + ((x - qx) / l) * r, qy + ((y - qy) / l) * r, qz + ((z - qz) / l) * r);
+    nrm.setXYZ(i, (x - qx) / l, (y - qy) / l, (z - qz) / l);
+  }
+  g.setAttribute('color', new BufferAttribute(col, 3));
+  return g;
+}
+
+/** A gift (ART.md sections 1 and 3): treasure, not a cardboard box. A rounded, glossy box in its
+ *  marigold role wrapped in two tones of diagonal stripes with a few foil facets bright enough to catch
+ *  the bloom, a satin ribbon round it (painted into the wrap so it follows the rounded edges), a plump bow of two leaning loops and two tails, and a knot
+ *  that glows. A golden gift is gold-white with a mint ribbon. About 640 triangles (the old box was 450). */
 export function giftGeometry(golden: boolean): BufferGeometry {
-  const box = golden ? new Color('#FFE38A') : new Color('#FFD34D');
-  const ribbon = golden ? new Color('#8FF3E4') : new Color('#FF4D2E');
+  reseed(golden ? 3131 : 3030);
   const s = golden ? 1.35 : 1;
+  const deep = golden ? new Color('#FFD86A') : new Color('#FFBE2E');
+  const pale = golden ? new Color('#FFF2C4') : new Color('#FFE27A');
+  const foil = golden ? new Color('#FFF6DA').multiplyScalar(1.6) : new Color('#FFE9A0').multiplyScalar(1.55);
+  const ribbon = golden ? new Color('#8FF3E4') : new Color('#FF4D2E');
+  const sheen = golden ? new Color('#C8FFF6') : new Color('#FF6A4A');
+  const ribbonDeep = shade(ribbon, 0.78);
+  const hx = 0.31 * s;
+  const hy = 0.28 * s;
+  const cell = (2 * hx) / 5;
+  const box = roundedBox(hx, hy, hx, 0.07 * s, 5, (x, _y, z, axis, band) => {
+    // The ribbon: the middle facet column of each face, crossing on the lid, where the satin catches
+    // the light (one facet of each pair a sheen, so it reads as a soft fold).
+    const ax = Math.abs(x);
+    const az = Math.abs(z);
+    const w = cell * 0.5;
+    const onRib = axis === 1 ? ax < w || az < w : axis === 0 ? az < w : ax < w;
+    if (onRib) return axis === 1 && ax < w && az < w ? sheen : band % 2 === 0 ? ribbon : ribbonDeep;
+    if (band % 2 === 0) return deep;
+    return rnd() < 0.18 ? foil : pale;
+  });
+  const knot = ribbon.clone().multiplyScalar(1.45);
+  const top = hy + 0.01 * s;
   return merge([
-    part(new BoxGeometry(0.62 * s, 0.56 * s, 0.62 * s), box),
-    part(new BoxGeometry(0.66 * s, 0.58 * s, 0.14 * s), ribbon),
-    part(new BoxGeometry(0.14 * s, 0.58 * s, 0.66 * s), ribbon),
-    // A big puffy bow (ART.md section 3): two plump loops leaning out from a round knot.
-    part(new TorusGeometry(0.14 * s, 0.06 * s, 7, 12), ribbon, { pos: [-0.13 * s, 0.36 * s, 0], rot: [0, Math.PI / 2, 0.62] }),
-    part(new TorusGeometry(0.14 * s, 0.06 * s, 7, 12), ribbon, { pos: [0.13 * s, 0.36 * s, 0], rot: [0, Math.PI / 2, -0.62] }),
-    part(new SphereGeometry(0.075 * s, 8, 6), ribbon, { pos: [0, 0.31 * s, 0] }),
+    box,
+    // The bow: two plump satin loops leaning out from the knot and a little back, flattened like
+    // ribbon, open to the sides so they read as loops from any side (edge on they read as ears).
+    smoothPart(new TorusGeometry(0.14 * s, 0.042 * s, 5, 12), ribbon, { pos: [-0.13 * s, top + 0.075 * s, 0], rot: [0.35, 0.55, 0.42], scale: [1.15, 0.8, 0.6] }),
+    smoothPart(new TorusGeometry(0.14 * s, 0.042 * s, 5, 12), ribbon, { pos: [0.13 * s, top + 0.075 * s, 0], rot: [0.35, -0.55, -0.42], scale: [1.15, 0.8, 0.6] }),
+    // Two tails falling from the knot across the lid, toward the lens and away from it.
+    part(new BoxGeometry(0.075 * s, 0.014 * s, 0.2 * s), ribbonDeep, { pos: [0.05 * s, top + 0.012 * s, 0.1 * s], rot: [0.12, 0.3, 0] }),
+    part(new BoxGeometry(0.075 * s, 0.014 * s, 0.2 * s), ribbonDeep, { pos: [-0.05 * s, top + 0.012 * s, -0.1 * s], rot: [-0.12, 0.3, 0] }),
+    // The knot glows a little (bright enough to bloom on Medium and High).
+    smoothPart(new SphereGeometry(0.068 * s, 8, 6), knot, { pos: [0, top + 0.035 * s, 0], scale: [1.15, 0.9, 1] }),
   ]);
 }
 
@@ -514,7 +607,7 @@ export function kickerLipGeometry(p?: Palette): BufferGeometry {
 export function obstacleGeometry(kind: ObstacleKind, p: Palette): BufferGeometry {
   switch (kind) {
     case 'pine':
-      return pineGeometry(p);
+      return hazardPineGeometry(p);
     case 'charpine':
       return charPineGeometry(p);
     case 'blossom':
@@ -583,20 +676,46 @@ export const RIDER_COLORS = {
   woodDark: new Color('#B07840'),
 };
 
+/** The steel shoe under a wooden sled's runners: pale, so it catches the light along the snow. */
+const STEEL = new Color('#B9C3D8');
+
 /** Where the scarf is knotted at the back of the neck (body pivot space); its tails stream from here. */
 export const SCARF_KNOT = new Vector3(0, 0.6, 0.245);
 
-/** Sled: deck along -z (forward), runners curling up at the front. */
+/** Wood grain in a part's vertex colours: fine streaks along z (its length) that wander a little in
+ *  value, each facet its own, a few darker knots, and ends a step darker where the end grain shows.
+ *  The chase lens looks down the deck from behind, so the grain runs the way it looks. */
+function grain(g: BufferGeometry, z0: number, z1: number): BufferGeometry {
+  const pos = g.getAttribute('position') as BufferAttribute;
+  const col = g.getAttribute('color') as BufferAttribute;
+  for (let i = 0; i < pos.count; i += 3) {
+    const cx = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3;
+    const cz = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+    const streak = Math.sin(cx * 160 + Math.sin(cz * 5.3) * 1.6) * 0.5 + 0.5;
+    let k = 0.9 + 0.13 * streak + (rnd() - 0.5) * 0.06;
+    if (rnd() < 0.035) k *= 0.72;
+    const end = Math.min(cz - z0, z1 - cz);
+    if (end < 0.05) k *= 0.82;
+    for (let j = i; j < i + 3; j++) col.setXYZ(j, col.getX(j) * k, col.getY(j) * k, col.getZ(j) * k);
+  }
+  return g;
+}
+
+/** Sled: deck along -z (forward), runners curling up at the front. The slats carry their grain and
+ *  the runners a pale steel shoe that catches the light along the snow. */
 export function sledGeometry(runner: Color = RIDER_COLORS.accent): BufferGeometry {
   const C = RIDER_COLORS;
+  reseed(5150);
   const parts: BufferGeometry[] = [];
   for (let i = 0; i < 4; i++) {
-    parts.push(part(new BoxGeometry(0.14, 0.06, 1.25), i % 2 ? C.woodDark : C.wood, { pos: [-0.24 + i * 0.16, 0.2, 0.05] }));
+    const z = 0.05;
+    parts.push(grain(part(new BoxGeometry(0.14, 0.06, 1.25, 3, 1, 12), i % 2 ? C.woodDark : C.wood, { pos: [-0.24 + i * 0.16, 0.2, z] }), z - 0.625, z + 0.625));
   }
-  parts.push(part(new BoxGeometry(0.62, 0.05, 0.1), C.woodDark, { pos: [0, 0.17, -0.42] }));
-  parts.push(part(new BoxGeometry(0.62, 0.05, 0.1), C.woodDark, { pos: [0, 0.17, 0.5] }));
+  parts.push(grain(part(new BoxGeometry(0.62, 0.05, 0.1, 6, 1, 1), C.woodDark, { pos: [0, 0.17, -0.42] }), -0.47, -0.37));
+  parts.push(grain(part(new BoxGeometry(0.62, 0.05, 0.1, 6, 1, 1), C.woodDark, { pos: [0, 0.17, 0.5] }), 0.45, 0.55));
   for (const sx of [-0.28, 0.28]) {
     parts.push(part(new BoxGeometry(0.05, 0.05, 1.5), runner, { pos: [sx, 0.03, 0.05] }));
+    parts.push(part(new BoxGeometry(0.036, 0.016, 1.46), STEEL, { pos: [sx, 0.0, 0.05] }));
     parts.push(part(new TorusGeometry(0.16, 0.026, 5, 10, Math.PI), runner, { pos: [sx, 0.19, -0.7], rot: [0, Math.PI / 2, 0] }));
     parts.push(part(new BoxGeometry(0.04, 0.16, 0.04), runner, { pos: [sx, 0.11, 0.35] }));
     parts.push(part(new BoxGeometry(0.04, 0.16, 0.04), runner, { pos: [sx, 0.11, -0.3] }));
@@ -905,6 +1024,16 @@ function coatGeometry(): BufferGeometry {
         { pos: [0, 0, 0.02], scale: [1, 1, 0.9] },
       ),
     ),
+    // A puffer's quilting: two stitched seams round the body above the hem, a seam up the middle of
+    // the back and a small cream maker's tag between the shoulder blades, so from the chase lens
+    // the back reads as a padded coat rather than a moulded navy shell.
+    ...[
+      [0.31, 0.216],
+      [0.41, 0.24],
+    ].map(([y, r]) => sway(part(new TorusGeometry(r, 0.008, 3, 20), shade(C.coat, 0.72), { pos: [0, y, 0.02], rot: [Math.PI / 2, 0, 0], scale: [1, 0.9, 1] }))),
+    sway(part(new BoxGeometry(0.014, 0.27, 0.012), shade(C.coat, 0.72), { pos: [0, 0.36, 0.232], rot: [0.13, 0, 0] })),
+    sway(part(new BoxGeometry(0.075, 0.045, 0.012), new Color('#F2E6D2'), { pos: [0, 0.465, 0.249], rot: [0.16, 0, 0] })),
+    sway(part(new BoxGeometry(0.03, 0.022, 0.006), C.accent, { pos: [0, 0.466, 0.256], rot: [0.16, 0, 0] })),
   ]);
 }
 

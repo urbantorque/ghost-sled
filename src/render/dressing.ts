@@ -2,6 +2,7 @@ import { BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, Ico
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { BARK, SNOW, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
+import { crestE, ledgeAt, standable, visualGround } from './ground';
 import { Palette } from './palette';
 
 // Bank set dressing and the course sections' signatures: decorative pieces on and beyond the banks,
@@ -14,7 +15,12 @@ import { Palette } from './palette';
 //   benches      fence rails along the terraces
 //   gully        steep, icicled rock walls on both banks
 //   split        a signpost with two arrows at the head of the tree island
-//   switchbacks, cruise: the default forest
+//   ravine       crags and shards along the crest of its walls, and nothing on them
+//   treerun      the forest's floor crowded right up to the trees
+//   lake         boulders and bushes along the shore, snow-heaped, none on the ice
+//   fork, leap, terraces: their marks are rails.ts's, on every tier; their banks keep the default forest
+//   bridge, tunnel, street, finish: the places lane's; clutter only where there is ground to stand on
+//   switchbacks, cruise, start: the default forest
 // Wide sections may carry a distant lift line (towers and a cable) and a cabin in a clearing.
 
 /** Small kit pieces. */
@@ -24,14 +30,15 @@ export const S_FENCE = 2;
 export const S_POLE = 3;
 export const S_BIO1 = 4;
 export const S_BIO2 = 5;
-/** Large kit pieces. */
+/** Large kit pieces. The section signatures' bank pieces come last: props.ts draws them as a batch of
+ *  their own, its draw range only the pieces in view (most often one: a run of cornice, of rock wall). */
 export const L_CABIN = 0;
 export const L_TOWER = 1;
 export const L_CABLE = 2;
-export const L_ROCKBAND = 3;
-export const L_CORNICE = 4;
-export const L_WALL = 5;
-export const L_SIGN = 6;
+export const L_SIGN = 3;
+export const L_ROCKBAND = 4;
+export const L_CORNICE = 5;
+export const L_WALL = 6;
 
 /** Fence and bank pieces are modelled this long along local x. */
 const FENCE_LEN = 6;
@@ -346,7 +353,7 @@ function signpost(): BufferGeometry {
 
 /** The large kit (cabin, lift tower and cable, and the section signatures), as one variant set. */
 export function largeKitSteps(biome: BiomeId, p: Palette): Array<() => BufferGeometry> {
-  return [() => cabin(biome, p), tower, cable, () => rockBand(p), () => cornice(p), () => rockWall(p), signpost];
+  return [() => cabin(biome, p), tower, cable, signpost, () => rockBand(p), () => cornice(p), () => rockWall(p)];
 }
 
 export function largeKit(biome: BiomeId, p: Palette): BufferGeometry {
@@ -406,6 +413,27 @@ const TALL_KINDS: ReadonlySet<ObstacleKind> = new Set(['pine', 'spire', 'basalt'
 /** How far a tall obstacle's canopy reaches up the run at a signpost's board height (model metres). */
 const CANOPY: Partial<Record<ObstacleKind, number>> = { pine: 1.15, blossom: 2.3, charpine: 0.9, spire: 1.0, basalt: 1.2, pillar: 0.6 };
 
+/** Where a split's island or a fork's ridge starts: its first tree, and how far uphill of it a sign
+ *  stands clear of the canopy, so close to the trunk that a sled passing the post is already on the tree. */
+export function ridgeHead(c: Course, sec: Section): { x: number; z: number; clear: number } | null {
+  let zs = -1;
+  for (let z = sec.z0; z < sec.z1; z += 2) {
+    if (c.shapeAt(z).split >= 0.3) {
+      zs = z;
+      break;
+    }
+  }
+  if (zs < 0) return null;
+  let best: { x: number; z: number; clear: number } | null = null;
+  for (let k = Math.floor(zs / CHUNK_LEN); k <= Math.floor(zs / CHUNK_LEN) + 1; k++) {
+    for (const o of c.chunk(k).obstacles) {
+      if (o.soft || !TALL_KINDS.has(o.kind) || o.z < zs - 1 || Math.abs(o.x - c.centerX(o.z)) > 1.7) continue;
+      if (!best || o.z < best.z) best = { x: o.x, z: o.z, clear: Math.max(o.r + 0.5, (CANOPY[o.kind] ?? 1) * o.scale) };
+    }
+  }
+  return best;
+}
+
 /** A lift line on a section: wide sections (bowl, split) often carry one, a cruise now and then. */
 function liftOf(sec: Section): { side: number; e: number; z0: number; z1: number } | null {
   const h = hashf(Math.round(sec.z0), 0x11f7, 1);
@@ -444,9 +472,21 @@ export class Dresser {
     this.flags = flagColors(p);
   }
 
-  /** Places chunk i's dressing through `put`, and lists the clearings the forest must keep. */
-  chunk(i: number, put: Put, clear: Clearing[]): void {
+  /** Places chunk i's dressing through `put`, and lists the clearings the forest must keep. Nothing
+   *  stands in `keep` (a village's houses, a set piece's ground and crowd), but a lift line runs on:
+   *  it cannot lose a tower, and the long sites plan round the lift lines. */
+  chunk(i: number, put0: Put, clear: Clearing[], keep: Clearing[] = []): void {
     const c = this.c;
+    const put: Put = (key, m, pick, r, g, b) => {
+      if (key === 'dr:l' && (pick === L_TOWER || pick === L_CABLE)) return put0(key, m, pick, r, g, b);
+      const z = -m.elements[14];
+      const off = m.elements[12] - c.centerX(z);
+      const e = Math.abs(off) - c.halfWidth(z);
+      // Nothing stands on a wall or a ledge's face, or (a crest's own pieces apart) past the limit of a
+      // narrow place's walls, whatever asked for it.
+      if ((!(key === 'dr:l' && pick >= L_ROCKBAND) && !standable(c, z, e)) || ledgeAt(c, z, 2.5)) return;
+      if (keep.length === 0 || !inClearing(keep, off < 0 ? -1 : 1, e, z)) put0(key, m, pick, r, g, b);
+    };
     const z0 = i * CHUNK_LEN;
     const z1 = z0 + CHUNK_LEN;
     if (z1 < 60) return;
@@ -463,6 +503,7 @@ export class Dresser {
     }
     for (let side = -1; side <= 1; side += 2) {
       this.signatures(i, side, put);
+      this.shore(i, side, put);
       this.cabin(i, side, put, clear, secs);
       this.clutter(i, side, put);
     }
@@ -472,7 +513,7 @@ export class Dresser {
   private bankPoint(side: number, e: number, z: number, out: Vector3): Vector3 {
     const c = this.c;
     const x = c.centerX(z) + side * (c.halfWidth(z) + e);
-    return out.set(x, c.ground(x, z), -z);
+    return out.set(x, visualGround(c, x, z), -z);
   }
 
   /** A piece laid along the bank: centred at z, its local x along the run, local +z facing the
@@ -510,6 +551,11 @@ export class Dresser {
       const h = hashf(i, n * 2 + sd, 22);
       if (sig.kind === 'gully') {
         put('dr:l', this.alongBank(side, 9.9 + h * 0.5, z, 5, 1.0 + h * 0.12, 0.9 + 0.45 * hashf(i, n * 2 + sd, 23), 1, 0.6), L_WALL, 1, 1, 1);
+      } else if (sig.kind === 'ravine' || sig.kind === 'tunnel') {
+        // Crags along the crest, a jagged skyline over the walls, one in two or so.
+        if (h > 0.55) continue;
+        const e = crestE(sig.sec.shape.limit) - 0.5 + h * 3;
+        put('dr:l', this.alongBank(side, e, z, 5, 1.1 + h * 0.5, 1.2 + 1.3 * hashf(i, n * 2 + sd, 23), 1.4, 1), L_WALL, 1, 1, 1);
       } else if (sig.kind === 'bowl') {
         put('dr:l', this.alongBank(side, 10.2, z, 5, 0.95 + h * 0.15, 0.85 + 0.45 * hashf(i, n * 2 + sd, 23), 1, 0.25), L_CORNICE, 1, 1, 1);
       }
@@ -541,13 +587,27 @@ export class Dresser {
     }
   }
 
+  /** The lake's shore: snow-heaped boulders and bushes just off the ice. */
+  private shore(i: number, side: number, put: Put): void {
+    const c = this.c;
+    const sd = side < 0 ? 0 : 1;
+    for (let n = 0; n < 8; n++) {
+      const z = i * CHUNK_LEN + hashf(i, n * 2 + sd, 71) * CHUNK_LEN;
+      const sig = signature(c, z);
+      if (sig.kind !== 'lake' || sig.k < 0.5 || hashf(i, n * 2 + sd, 72) > 0.6) continue;
+      const p = this.bankPoint(side, 1.2 + hashf(i, n * 2 + sd, 73) * 5, z, this.v);
+      const rock = hashf(i, n * 2 + sd, 74) < 0.6;
+      put('dr:s', this.upright(p.x, p.y - 0.1, p.z, hashf(i, n * 2 + sd, 75) * 6.28, rock ? 1.1 + hashf(i, n * 2 + sd, 76) * 1.1 : 1.1), rock ? S_BIO1 : S_BUSH, 1, 1, 1);
+    }
+  }
+
   /** The split's signpost, facing up the run, on the island's line just uphill of its first tree:
    *  clear of the canopy (inside it the boards were hidden), so close to the trunk that a sled
    *  passing the thin post is already on the tree. The boards ride above a rider's head. */
   private splitHead(i: number, sec: Section, put: Put): void {
     let head = this.heads.get(sec.z0);
     if (head === undefined) {
-      head = this.findHead(sec);
+      head = ridgeHead(this.c, sec);
       this.heads.set(sec.z0, head);
     }
     if (!head) return;
@@ -555,26 +615,6 @@ export class Dresser {
     if (Math.floor(z / CHUNK_LEN) !== i) return;
     const c = this.c;
     put('dr:l', this.upright(head.x, c.ground(head.x, z) - 0.25, -z, 0, 1.4), L_SIGN, 1, 1, 1);
-  }
-
-  private findHead(sec: Section): { x: number; z: number; clear: number } | null {
-    const c = this.c;
-    let zs = -1;
-    for (let z = sec.z0; z < sec.z1; z += 2) {
-      if (c.shapeAt(z).split >= 0.3) {
-        zs = z;
-        break;
-      }
-    }
-    if (zs < 0) return null;
-    let best: { x: number; z: number; clear: number } | null = null;
-    for (let k = Math.floor(zs / CHUNK_LEN); k <= Math.floor(zs / CHUNK_LEN) + 1; k++) {
-      for (const o of c.chunk(k).obstacles) {
-        if (o.soft || !TALL_KINDS.has(o.kind) || o.z < zs - 1 || Math.abs(o.x - c.centerX(o.z)) > 1.7) continue;
-        if (!best || o.z < best.z) best = { x: o.x, z: o.z, clear: Math.max(o.r + 0.5, (CANOPY[o.kind] ?? 1) * o.scale) };
-      }
-    }
-    return best;
   }
 
   private lift(i: number, l: { side: number; e: number; z0: number; z1: number }, put: Put, clear: Clearing[]): void {
@@ -645,8 +685,8 @@ export class Dresser {
       const k = t * 2 + sd;
       const z = z0 + hashf(i, k, 62) * CHUNK_LEN;
       const sig = signature(c, z);
-      // The gully's walls and the bowl's cornice own the treeline's foot.
-      const foot = hashf(i, k, 63) < 0.6 && !((sig.kind === 'gully' || sig.kind === 'bowl') && sig.k > 0.2);
+      // The gully's walls and the bowl's cornice own the treeline's foot, and the lake's shore its own.
+      const foot = hashf(i, k, 63) < 0.6 && !((sig.kind === 'gully' || sig.kind === 'bowl' || sig.kind === 'lake') && sig.k > 0.2);
       const e = foot ? 9.3 + hashf(i, k, 64) * 1.1 : 11.5 + hashf(i, k, 64) * 16;
       const r = hashf(i, k, 65);
       let pick: number;
@@ -680,7 +720,45 @@ export function wallThinning(kind: SectionKind, k: number): number {
   if (kind === 'gully') return 0.8 * k;
   if (kind === 'chute') return 0.3 * k;
   if (kind === 'bowl') return 0.35 * k;
+  // (A ravine's forest stands back behind its crest instead: props.ts.)
   return 0;
 }
 
 export { FOREST_LIMIT };
+
+// ---------------------------------------------------------------- read-only views (life.ts)
+
+/** The lift towers' spacing and crossarm height, for what rides the cables (life.ts). */
+export const LIFT_STEP = TOWER_STEP;
+export const LIFT_TOP = TOWER_TOP;
+
+/** A section's lift line (sim z, the bank side and edge excess), or null: the same line the dressing
+ *  stands its towers on. */
+export function liftLine(sec: Section): { side: number; e: number; z0: number; z1: number } | null {
+  return liftOf(sec);
+}
+
+/** Where chunk i's cabin on `side` stands, if it has one (three.js position of its foot and its
+ *  yaw): the same spot Dresser.cabin picks, with the same hashes and density, so its chimney can
+ *  smoke. Pure; it places nothing. */
+export function cabinSpot(c: Course, i: number, side: number, dens: number): { x: number; y: number; z: number; yaw: number } | null {
+  const z0 = i * CHUNK_LEN;
+  if (z0 + CHUNK_LEN < 60) return null;
+  const secs: Section[] = [];
+  for (let z = z0; z < z0 + CHUNK_LEN; z += 8) {
+    const s = c.section(z);
+    if (!secs.includes(s)) secs.push(s);
+  }
+  const sd = side < 0 ? 0 : 1;
+  const wide = secs.some((s) => s.kind === 'bowl' || s.kind === 'split');
+  if (hashf(i, sd, 51) > (wide ? 0.26 : 0.09) * dens) return null;
+  const z = z0 + 12 + hashf(i, sd, 52) * 40;
+  const e = 14 + hashf(i, sd, 53) * 6;
+  for (const s of secs) {
+    const l = liftOf(s);
+    if (l && l.side === side && Math.abs(l.e - e) < 9 && z > l.z0 - 10 && z < l.z1 + 10) return null;
+  }
+  const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+  const yaw = (side < 0 ? Math.PI / 2 : -Math.PI / 2) + (hashf(i, sd, 54) - 0.5) * 0.5;
+  return { x, y: visualGround(c, x, z) - 0.35, z: -z, yaw };
+}

@@ -20,14 +20,14 @@ const SHOULDER_GAIN = 0.8;
  *  faster than you within the last 2 m. */
 const SHOULDER_CLOSING = 0.6;
 
-type Link = readonly [AudioNode, AudioNode | AudioParam];
+export type Link = readonly [AudioNode, AudioNode | AudioParam];
 
-function connect([a, b]: Link): void {
+export function connect([a, b]: Link): void {
   if (b instanceof AudioNode) a.connect(b);
   else a.connect(b);
 }
 
-function disconnect([a, b]: Link): void {
+export function disconnect([a, b]: Link): void {
   if (b instanceof AudioNode) a.disconnect(b);
   else a.disconnect(b);
 }
@@ -36,7 +36,7 @@ function disconnect([a, b]: Link): void {
  *  and the fade has died away (at least 2 s, or 8 time constants: -70 dB, so slow fades such as
  *  the post-crash rumble are not cut short) the branch input is unplugged, and it is plugged back
  *  in as soon as the target rises again. */
-class Gate {
+export class Gate {
   private on = true;
   private wanted = false;
   private offAt = 2;
@@ -63,7 +63,7 @@ class Gate {
 
 /** setTargetAtTime only when the value moved enough to matter, so the automation timeline does
  *  not grow by a dozen events every frame. */
-class Smooth {
+export class Smooth {
   private last = NaN;
 
   constructor(
@@ -114,6 +114,11 @@ export class Ambience {
   private lastFrame = -1;
   private calmed = false;
   private readonly gates: Gate[] = [];
+  /** The bed's three looping noise sources, shared with the soundscape (scape.ts) so it adds none. */
+  readonly noise: { white: AudioBufferSourceNode; pink: AudioBufferSourceNode; brown: AudioBufferSourceNode };
+  /** How exposed the rider is (0..1, set by the soundscape: open banks, height, an overlook): the
+   *  wind blows up to half again as hard, and a little higher. */
+  exposure = 0;
   /** The pocket wide open; kept under Nyquist, which Chrome would clamp with a warning. */
   private readonly open: number;
 
@@ -129,6 +134,9 @@ export class Ambience {
   private readonly boostG: Smooth;
   private readonly hissF: Smooth;
   private readonly hissG: Smooth;
+  /** A rail under the runners: a high band of metal hiss, plugged in only while grinding. */
+  private readonly railG: Smooth;
+  private railOn = false;
   private readonly crunchRate: Smooth;
   private readonly crunchF: Smooth;
   private readonly crunchG: Smooth;
@@ -226,6 +234,7 @@ export class Ambience {
     const white = loop(bank.white);
     const pink = loop(bank.pink);
     const brown = loop(bank.brown);
+    this.noise = { white, pink, brown };
 
     // Wind: everything here passes the drafting pocket, a lowpass that closes in a slipstream.
     const pocket = filter('lowpass', this.open, 0.5, this.out);
@@ -272,6 +281,10 @@ export class Ambience {
     const hissBP = filter('bandpass', 3000, 0.6, hissG);
     this.hissF = P(hissBP.frequency, 0.015, true);
     this.hissG = G(hissG.gain, [[white, hissBP]]);
+
+    const railG = gain(0, surf);
+    const railBP = filter('bandpass', 4700, 2.4, railG);
+    this.railG = G(railG.gain, [[white, railBP]]);
 
     const crunchG = gain(0, surf);
     const crunchAM = gain(0, crunchG);
@@ -369,6 +382,11 @@ export class Ambience {
     this.whineNote = -1;
   }
 
+  /** On a rail or off it: the metal hiss under the runners. */
+  setRail(on: boolean): void {
+    this.railOn = on;
+  }
+
   /** Flow snuffed by a bump: the wind tone bends down a fourth over 0.25 s, then opens back to noise. */
   snuff(now: number): void {
     this.snuffUntil = now + 0.3;
@@ -443,8 +461,10 @@ export class Ambience {
     // Wind: quiet below 8 m/s, roaring past 35. Airborne opens it up and thins it out. Earned flow
     // narrows the band and pulls it onto a note in the song's key, so the wind sings.
     const fk = surface && key ? clamp(f.flow ?? 0, 0, 1) * live : 0;
-    const w = smoothstep(6, 40, sp);
-    const wNoise = (260 + sp * 26) * (air ? 1.3 : 1);
+    // (All of it climbs to the cap: the wind ran out at 40 m/s and the roar at 44.)
+    const w = smoothstep(6, 46, sp);
+    const ex = surface ? clamp(this.exposure, 0, 1) : 0;
+    const wNoise = (260 + sp * 26) * (air ? 1.3 : 1) * (1 + 0.25 * ex);
     const wq0 = air ? 0.45 : 0.7;
     let wf = fk > 0 ? Math.exp(Math.log(wNoise) * (1 - fk) + Math.log(mtof(fit(tonic, 79))) * fk) : wNoise;
     let wq = wq0 + (7 - wq0) * fk;
@@ -458,12 +478,12 @@ export class Ambience {
     this.windNow = wf;
     this.windQNow = wq;
     this.windQ.to(wq, now, now < this.snuffUntil ? 0.05 : 0.2);
-    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk);
+    const wind = (0.03 + 0.55 * Math.pow(w, 1.5)) * (f.crashed ? 0.35 : 1) * (f.drafting ? 0.7 : 1) * (1 + 0.5 * fk) * (1 + 0.5 * ex);
     this.windG.to(wind * bandComp(wf, wq, sr) * 0.5, now, 0.15 * slow);
-    this.roarG.to(0.42 * smoothstep(24, 44, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
+    this.roarG.to(0.48 * smoothstep(22, 46, sp) * (f.crashed ? 0.2 : 1), now, 0.25 * slow);
     const whf = 1500 + sp * 38 + (air ? 900 : 0);
     this.whistleF.to(whf, now, 0.25);
-    this.whistleG.to((air && surface ? 0.15 : 0.03) * smoothstep(8, 40, sp) * live * bandComp(whf, 7, sr) * 0.5, now, air ? 0.12 : 0.3);
+    this.whistleG.to((air && surface ? 0.15 : 0.03) * smoothstep(8, 46, sp) * live * bandComp(whf, 7, sr) * 0.5, now, air ? 0.12 : 0.3);
     this.pocketF.to(f.drafting && live ? 700 : this.open, now, f.drafting ? 0.12 : 0.25);
 
     if (surface) {
@@ -485,12 +505,14 @@ export class Ambience {
     const st = ground ? 0.03 : 0.05;
     const hf = Math.min(1800 + sp * 90, 7500);
     this.hissF.to(hf, now, 0.15);
-    this.hissG.to(ground * 0.26 * smoothstep(2, 30, sp) * (f.onIce ? 0.5 : 1) * bandComp(hf, 0.6, sr) * 0.5, now, st);
+    // The runners' hiss is there from the start and goes on rising to the cap.
+    this.hissG.to(ground * (0.2 * smoothstep(2, 26, sp) + 0.13 * smoothstep(22, 46, sp)) * (f.onIce ? 0.5 : 1) * bandComp(hf, 0.6, sr) * 0.5, now, st);
+    this.railG.to(this.railOn && surface && !f.crashed ? 0.34 * (0.6 + 0.4 * s01) * bandComp(4700, 2.4, sr) * 0.5 : 0, now, 0.02);
     const carve = clamp(f.carve, 0, 1);
     this.crunchRate.to(0.55 + carve * 1.6 + sp / 30, now, 0.1);
     const cf = 900 + carve * 900 + sp * 15;
     this.crunchF.to(cf, now, 0.12);
-    const crunch = 0.07 * smoothstep(3, 25, sp) + 0.45 * carve * smoothstep(5, 30, sp);
+    const crunch = 0.07 * smoothstep(3, 34, sp) + 0.45 * carve * smoothstep(5, 40, sp);
     this.crunchG.to(ground * crunch * (f.onIce ? 0.2 : 1) * (f.drifting ? 0.6 : 1) * bandComp(cf, 0.9, sr) * 0.5, now, st);
 
     const slip = Math.min(Math.abs(f.slip || 0), 0.9);

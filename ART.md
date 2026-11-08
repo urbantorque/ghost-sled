@@ -31,9 +31,11 @@ Skill signals live inside these roles rather than adding new ones:
 
 ## 2. Lighting mood
 
-- One low key light (sun or moon) at about 12 degrees elevation, ahead-left of the camera. This gives
-  long shadows that streak toward the viewer and rim-lights the powder spray. The sun disc has a white
-  core, a `#FFE3B0` rim and a warm corona.
+- One key light (sun or moon), off to one side of the fall line, whose height and colour belong to the
+  mountain or the mood (section 7). A low one gives long shadows that streak toward the viewer and
+  rim-lights the powder spray. The disc sits lower than the light that shades the snow, which never
+  drops under 17 degrees (DECISIONS 27). By default the sun has a white core, a `#FFE3B0` rim and a warm
+  corona; Clear Skies colours its own, so Frostfang's is lemon and Ember's a dim orange through the smoke.
 - Two-tone wrap lighting: `mix(shade, lit, smoothstep(-0.25, 0.6, N.L))`. Shade is a saturated cool
   colour, never grey or black.
 - A fresnel rim in the horizon colour on every object, so silhouettes separate from the snow.
@@ -50,10 +52,16 @@ Skill signals live inside these roles rather than adding new ones:
   over the rider. Night moods have none.
 - **Cloud shadows**: soft, slow cool patches drift over the snow in sunny moods (at most 30% off the
   light, never on the contact shadow or the painted bands). Medium and High.
-- **The sun's journey.** Clear Skies is an evening passing: golden to 200 m, full alpenglow by 2 km
-  (a lower sun, longer shadows, warmer coral light), then blue hour from 3 km, full by 4 km (the sun
-  on the ridge, a cooler sky, faint stars, stronger gift and ghost glow, a soft sled lantern). The
-  title stays at the start; chaos moods keep their own light.
+- **Each mountain's journey.** On Clear Skies the light or the weather changes down a run, differently
+  on each mountain (section 7): Pinecrest's cloud builds and it goes golden, Frostfang's sun sinks and
+  the aurora arrives, Ember's ash thickens toward a glowing dusk, Sakura's mist lifts off the cone. All
+  of it is keyed in metres in one table (`JOURNEY` in palette.ts). The title stays at the start; chaos
+  moods keep their own light.
+- **A smoke deck.** A ceiling of cloud across the dome, in its existing pass: billows in three flat
+  values crowding toward the horizon, the undersides taking the glow low in the sky and strongest
+  toward the hero. Ember Peak's Clear Skies alone; Low drops its fine octave. Reduced motion holds the
+  deck and Frostfang's aurora still on Clear Skies, and a plain run never flashes: Ember's lightning
+  stays a night-mood thing.
 
 ## 3. Shape language
 
@@ -61,6 +69,7 @@ Skill signals live inside these roles rather than adding new ones:
 | --- | --- | --- |
 | Snow, terrain, drifts | Broad, soft, rounded, smooth gradients | Safe space reads calm |
 | Hazards (trees, rocks, spires, basalt) | Faceted, flat-shaded, sharp crisp silhouettes | Danger reads hard |
+| Bare ground (walls, faces, ridges) | Flat planes, hard edges, three values, no noise | The mountain's bones |
 | Rewards (gifts, gates) | Round, bouncy, bobbing, puffy bows | Good things feel friendly |
 | Ghosts | Flowing, tapered, ribbon tails, slightly blurred edges | Spirits feel fast and unreal |
 
@@ -97,6 +106,33 @@ rounded boxes with a big bow.
 - The bottom edge of the frame darkens toward the mood's periwinkle, never grey, so the foreground
   has depth.
 - Ice patches are glazed: a cooler tint, a long specular streak, less sparkle.
+- **Bare ground.** Where something shaped the ground it shows the mountain's own material, never a
+  snowy hill: a ravine's walls, a tunnel's approach, a leap's and a terrace's faces, the gorge under a
+  bridge, the outcrops along a fork's ridge. It follows what made the ground, not its slope alone (a
+  plain bank is as steep as a ravine's foot and stays snow), and it is never on a line a sled rides.
+  The snow gives way along the facets' edges, and what lies flat holds snow, ash or moss.
+
+  | Mountain | Cut | Reads as |
+  | --- | --- | --- |
+  | Pinecrest | faceted strata, grey-plum, dipping a little | snow lying on every other shelf |
+  | Frostfang | tall shards of crevasse ice | pale where it meets the light, down through cobalt to near black, pale fractures in it |
+  | Ember Peak | basalt columns, two faces each | ash on their broken tops; about one joint in ten holds a thin, dim, breathing line of lava. Thin, or it is a warm wash over a hazard's dark |
+  | Sakura Ridge | dressed stone in courses, each block a little pillowed | moss in patches along the tops; never mint |
+
+  Past a section's `edgeLimit` a wall stands up into low-poly rock with a jagged crest, the forest
+  behind it, and its shadow crosses the floor, so a ravine is a slot with a strip of light in it.
+- **The frozen lake.** Black ice over deep water, and a mirror: the real sky and peaks, the banks and
+  their treeline standing in it with jagged tips, and the rider upside down under the sled, leaving
+  the ice when the sled does. Long white fractures run through the sheet; closer cracks and bubbles
+  lie deeper and slide under the surface as you ride, and that is how a mirror shows speed. Blown snow
+  lies in long feathered tongues about 25 degrees off the fall line, thickest toward a soft, wandering
+  shore, and spindrift runs across the ice in thin wisps (held still under reduced motion, as are
+  Ember's cracks).
+- **A leap's landing is groomed**: corduroy across the fall line and broad swaths of it, so from the
+  air the face has a grain to judge by. Flags stand down both its sides. It is snow, not a painted mark
+  (section 4's one painted line stands).
+- **The fork's strip** is clear blue ice with a scribed bright edge and hard points of light that wink
+  on any bearing to the sun; it holds its colour where a plain mirror would go white.
 
 ## 5. The rider
 
@@ -144,7 +180,8 @@ rounded boxes with a big bow.
 - Your best run is gold-white glass (a pale gold inside and a warm amber rim) and is always labelled
   "Your best". Your grudge ghost is rose. Pool and friend ghosts are mint.
 - Where a ghost crashed, a little lantern-headed marker stays planted in the snow with its name. At
-  night it glows like a grave candle.
+  night it glows like a grave candle. A ghost that finished leaves none: it rides on into the square,
+  easing up, and fades.
 - Where three or more pool ghosts fell within 8 m, a cairn stands on the bank, never in the line,
   with a named tag over it ("Widow's Bend", "4 ghosts fell here"). Medium and High only: Low draws
   no cairn.
@@ -155,13 +192,29 @@ clusters and stubs; Sakura: blossom, pale spreading blossom and pines), with a s
 tree and the odd lean. Medium and High also dress the banks, always at least 9.2 m past the corridor
 edge (bushes, stumps, fences, slalom poles, cabins, lift towers and cables, per-biome pieces), and
 each course section reads before it plays: chute rock bands and blue-violet slalom flags, a bowl's
-cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost.
+cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost, crags along
+a ravine's crest, boulders and bushes round a lake's shore. Trees and dressing never stand on a wall,
+a ledge's face or the ice. A tree run's wall closes in to its own limit with a taller rank crowded
+behind it, and the light on its floor comes through the boughs in soft pools.
+
+The course's own marks are on every tier, Low included, in one draw:
+
+- **Leaps.** Fins of the mountain's rock stand either side of the lip, off the line, and two lines of
+  flags in the slalom blue-violets close on it, so the eye is led to the gap and the sky past it. A
+  wind-torn cornice runs across the brow, flush with it, hanging out over the drop. Nothing on the line
+  looks like a hazard.
+- **Rails** rise out of a mound of snow at the low end and run on over plumb posts, in the mountain's
+  own timber, steel, iron or lacquer, a pale strip along the top catching the light.
+- **The fork** is announced by a gantry across the corridor before the ridge stands up, a board over
+  each channel so the two read either side of the rider from 150 m: the calm route pale with a
+  blue-violet disc, the bold route dark with a white diamond and a marigold band for the gifts down
+  it. The rider hides the vanishing point, so a sign on the centre line is the one place it cannot go.
 
 ## 7. Moods (each has its own palette)
 
 | Mood | Sky zenith -> horizon | Light | Snow lit / shade | Signature |
 | --- | --- | --- | --- | --- |
-| Clear Skies (biome base) | per biome | low warm sun | per biome | long shadows |
+| Clear Skies | per mountain, below | each mountain's own, below | per mountain | one frame tells you which mountain you are on |
 | Blizzard | `#6D7C93` -> `#C9D2DE` | flat diffuse; a dim, soft sun behind the cloud; faint, soft shadows, but a clear contact shadow under the sled | `#EEF2F7` / `#8A97AE` | dense fog, sideways snow streaks, big flakes past the lens, ghosts and gifts blaze; UI accent steel |
 | Lantern Night | `#070B22` -> `#1E2B5E` | low moon + warm sled lantern: a soft, round, desaturated-amber pool about 3.5 to 4 m across under the sled that also warms the rider's legs and sled | `#7E92CC` / `#3B4A86` | stars, aurora ribbons, moonlit sparkle outside the pool, trail lanterns down the corridor, glowing gifts; UI accent moon blue `#B4C4FF` |
 | Glass Ice | `#0E6FA8` -> `#BDF6FF` | low pale-gold sun ahead-left, warm rims on cold ice | `#E6FDFF` / `#7FC6DF` | glazed snow that mirrors the sky, a gold sun path, scratch glints toward the sun, ice spires from deep blue to white-cyan tips; UI accent aqua |
@@ -169,20 +222,48 @@ cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed
 | Haunted Hollow | `#0B1F1C` -> `#3E7F6B` | pale green | `#CFE9DE` / `#4F7F78` | green mist, drifting wisp lights; UI accent green |
 | Powder Day | `#2F7BE0` -> `#CDE8FF` | bright high sun | `#FFFFFF` / `#B9D3F2` | huge powder plumes; UI accent azure |
 
-Biome bases for Clear Skies:
+Clear Skies, mountain by mountain. Each row is the start of a run and the title; the chaos moods build
+on their own base and see none of it.
 
-| Biome | Zenith -> horizon | Snow shade | Props |
-| --- | --- | --- | --- |
-| Pinecrest (alpine) | `#2B4C9B` -> `#FFB38A` | `#9DB2EC` | spruce teal pines, plum-slate rocks, snowmen |
-| Frostfang (glacier) | `#2B5FA8` -> `#FFD9C4` | `#88B6E8` | translucent cyan spires, seracs, ice sheets |
-| Ember Peak (volcanic) | `#2A1E3A` -> `#FF8A50` | `#8C7FA6` | basalt columns, ash-tinted snow, lava glow far below, steam vents |
-| Sakura Ridge (blossom) | `#3A5BA8` -> `#FFC4D6` | `#A9B4E6` | blossom trees, vermillion spirit gates, drifting petals |
+| Mountain | Zenith -> horizon | Sun (bearing, disc, key light) | Snow lit / shade | Silhouette | Reads as |
+| --- | --- | --- | --- | --- | --- |
+| Pinecrest (alpine) | `#123F9E` -> `#CBE8F8` | white, 31 right, 24, 44 | `#FFFFFF` / `#7CA6EC` | a broad crown of three summits, left; a saw of peaks behind | a bright ski day: deep teal pines, sharp blue shadows |
+| Frostfang (glacier) | `#0A2470` -> `#A6C6EE`, thin lemon band `#FFF0A0` | lemon, 35 left, 5.5, 23 | `#D4E4FA` / `#4C76C4` | a curved needle fang, right, over a field of needles | polar blue hour: long steel-blue light, glazed snow, the town lit |
+| Ember Peak (volcanic) | `#1C1316` -> `#D8602C` under the smoke deck | dim orange, 34 right, 15, 30 | `#CFC8CC` / `#54465E` | a huge dark cone dead ahead, its rim blown out toward you, over low shields | under ash: warmth in the sky, ash on the snow, lava threads |
+| Sakura Ridge (blossom) | `#9CCFC2` -> `#FFF1DA` | soft cream, 24 left, 19, 29 | `#FFFBF4` / `#BFC6E2` | one perfect long-skirted cone, right, over soft low hills | a spring morning: peach mist, low contrast, blossom the hero |
+
+Each mountain's run (metres are tunable, in `JOURNEY`):
+
+| Mountain | First | Then |
+| --- | --- | --- |
+| Pinecrest | 500 to 1700: cumulus and high cloud build, and their shadows sweep the snow | 2300 to 3500: gold over blue under the cloud, cream snow, the peaks glowing. Never the old lilac |
+| Frostfang | 700 to 1900: the sun sinks onto the band, stars come out | 2400 to 3400: polar night, the aurora arrives, the glacier holds the light, a soft sled lantern |
+| Ember Peak | 500 to 1800: the deck closes, the disc dims, the air draws in, embers thicken | 2300 to 3400: a glowing dusk, lava lighting the smoke and running down the cone. No lightning |
+| Sakura Ridge | 400 to 1600: the mist lifts off the cone and the sun climbs out of it | 2400 to 3400: a clear spring day with the wind in the blossom |
+
+The baked props never change during a run. A late stop dims hazards through `hazardDim`, and the sky
+stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.test.ts`).
+
+| Biome | Props |
+| --- | --- |
+| Pinecrest | deep teal pines, slate rocks, snowmen |
+| Frostfang | deep ice-blue spires, seracs, ice sheets |
+| Ember Peak | basalt columns, ash-grey snow, lava glow far below, steam vents |
+| Sakura Ridge | blossom trees, vermillion spirit gates, drifting petals |
 
 ## 8. Camera and motion
 
-- A low chase camera about 2.2 m behind and 1 m up, so the rider holds the lower middle of the
-  frame. It looks ahead of the sled and leads into turns, and turns a little to frame a close rival.
-- FOV breathes from 62 to 78 degrees with speed, plus a punch on boosts.
+- A chase camera close behind the rider, so the rider holds the lower middle of the frame. It looks
+  ahead of the sled, turns toward the road 1.5 s down the run, and turns a little to frame a close
+  rival. Below about 15 m/s it rides low, about 1 m over the sled.
+- Speed lifts the lens, it never drops it into the snow. From about 28 m/s it stands clear of the slope
+  (1.5 m over the snow at 30 m/s, 1.7 m at 44), the rider sinks a little in the frame, and the road
+  spreads down the screen above the rider's head. A player needs to see a hazard about 1.5 s out: 45 m
+  at 30 m/s, 66 m at 44. `scripts/playtest/readability.js` measures it.
+- Speed reads across the whole range and every curve lives in `src/render/speedfeel.ts`: 28 m/s already
+  feels fast and 46 m/s is the edge of control. Nothing runs out early. The FOV breathes from 62 degrees
+  to 79 at the cap, plus a boost and a punch; streaks, the lens's rumble, flakes and kicked snow all
+  climb to the cap, and past 36 m/s the horizon shivers and the corners close in a little.
 - The camera rolls up to 4 degrees into carves.
 - Impact shake scales with landing impact. A perfect landing gets a short FOV kick and a thin white
   rim flash on the rider, gone in about 0.15 s.
@@ -190,6 +271,15 @@ Biome bases for Clear Skies:
 - Time bends only at the edges, never in the sim: a stomp's hitstop grows with the streak (8 to 11
   frames), a tier-3 drift release freezes a little longer than a stomp, a Whisker gets 0.05 s, and a
   crash eases into a slow curve. Reduced motion turns all of it off and keeps every beat.
+- A wipeout the run survives: the lens drops and shakes, then eases out and up and holds the rolling
+  rider in the middle of the frame until it is back on the line. A scrape knocks it off the edge. A wall
+  ride leans the horizon and steps the lens in off the bank.
+- Big air holds up for flights of 2 to 3.5 s and more: the lens stays out with the valley under the
+  rider and is home 0.35 s before touchdown. A touchdown after 1.5 s or more throws a powder wave.
+- The finish: render time eases to 0.38 and back over about 2 s (the sim never slows), and the lens
+  swings round the coasting rider to a three-quarter front, low and wide, the rider low in the frame
+  with its arms up and the sky over the slope above it, where the shells burst. It holds there, creeping
+  on, and moves the rider aside for the results card. Reduced motion never swings and never eases.
 - After the crash's held frame the camera watches the pack ride past the wreck: the orbit stops
   drifting and turns toward the passing ghost with the wreck kept in the middle of the frame, or
   cuts to a still shot beside the line the ghost will cross, so the race you just left goes by in
@@ -243,3 +333,120 @@ Biome bases for Clear Skies:
 4. Powder spray catching the light, with layers of paler ridges behind.
 
 If a frame has those four things and the HUD stays out of the way, it sells the game.
+
+## 12. The world at scale
+
+The run is high on a real mountain, in a world that goes on past the banks and is lived in.
+
+- **The panorama.** Faceted ranges in three depth steps, each paler and hazier with distance and
+  warmer toward the sun, rise out of a sunlit sea of clouds drifting below the horizon. Snow holds
+  on gentler faces above a ragged snow line and steep faces show the biome's rock; the sun side is
+  warm, the shade side takes the mood's cool shade. Each biome has a hero: Pinecrest's crown of three
+  summits, Frostfang's curved needle fang over glacier tongues, Ember Peak's smoking volcano with a
+  crater glow, Sakura Ridge's long-skirted cone. Each has its own ranges too: a saw of peaks, a field of
+  needles, low shields, soft hills. On Clear Skies the hero stands where the mountain puts it and stays
+  there all run; in chaos moods it stands away from the sun. Blizzard veils it all to ghosts.
+- **The middle distance.** Past the banks one side usually falls to a valley floor far below and the
+  other climbs into a flank, forested low down and bare above the treeline, with crags, gullies and
+  wind-drifted snowfields, faceted like the hazards. Hamlets perch on the flanks and villages sit on
+  the valley floor (chalets round a church and a frozen lake, red research huts and a radio mast,
+  stone lodges by a glowing lava river, a pagoda town with lanterns). Windows and lamps glow warm
+  from dusk and hold through the haze as points of light.
+- **Places.** No stretch of a run goes much past 300 m without one. The course says where: a street is a
+  town you ride through, a tunnel a roof, a bridge a bridge, the finish a town worth arriving at. Between
+  them a place 15 to 50 m tall stands over or beside the run, readable far down the fall line: timber
+  gates and trestles, an ice arch, a basalt gateway with lava-lit braziers, a torii in deep plum lacquer
+  (never the player's vermillion), and huts, towers, a ski jump, frozen falls, an observatory, guardians
+  and a pagoda. A ravine's walls hide its banks, so what a ravine holds is a span across its slot.
+  Lift lines cross overhead at real height with chairs moving, from a station close beside the run; a
+  red ropeway house at Frostfang, a basalt mine head with ore skips at Ember, a lacquered cableway at
+  Sakura. Toy spectators in the rider's proportions, coats in cool and muted colours and never a signal
+  colour, turn to follow the rider and throw their arms up when a moment is made near them. Every run
+  starts at an occasion: a gate high over the steep ramp with the word on it, packed grandstands down both banks with flags up, two huts looking over them, and barriers. Every leap has a crowd on the rock shoulders either side of its lip.
+- **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
+  owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
+  three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
+  small warm-brown deer, ibex, hares and foxes stand at the treeline, only on open ground, never in rock, a street or over a gorge, and bolt away as you come, pulling up short of rock. Far
+  skiers carve S-turns on the flanks. Life is small, soft and moves away from the run: never in the
+  corridor, never a signal colour.
+- **Snow and trees.** Past the treeline snow heaps into drift dunes, crests catching the sun and
+  troughs holding cold blue; the banks carry sastrugi in patches; the corridor's middle is a packed
+  lane, a step cooler, with faint old tracks. Pines are tiers of drooping, scalloped boughs with
+  ragged snow caps, a dark underside under each tier and a tree well at the foot. A low mist settles
+  on the course floor in the distance and the fog warms toward the sun.
+- **The lens.** Big air opens out into a vista and is home before the stomp; speed reads through the
+  lens from 15 m/s all the way to the cap at 46; a hard carve at speed throws a rooster tail of gouache
+  billows, rim-lit when backlit, and it goes on growing to the cap. The title cranes in from a wide shot
+  of the whole world.
+- **Close to the lens.** Slim markers stand along both corridor edges, 0.8 to 3 m past them and 10 to
+  18 m apart, for a strobe of parallax: stakes, tall banded poles, slalom flags flapping harder with
+  speed, and roped fence posts down one bank. Birch and sky blue in the Alps, ice wands with lilac tags
+  on the glacier, ash-pale stakes on the volcano, cream bamboo and paper on Sakura. They are markers, not
+  hazards: pale, slim, a little light of their own so a low sun never drops them to a silhouette, never a
+  signal colour, and they fold away round a rider who wall-rides through them. No post stands where the
+  ground past the edge falls away or short of something solid at the edge. Snow kicked off the runners
+  falls back past the lens's lower corners, flakes hang further ahead the faster you go, and a fast
+  carve's edges stretch into long streaks.
+- **The world answers skill.** A stomp or a big landing near a bank sends a tongue of soft lumps sliding
+  down it with powder off its front, ahead of the sled, gone before the edge of the run. A max drift or
+  a passed ghost near a crowd lifts them onto their toes. A rival beaten shakes powder off the treeline
+  and the banks: down both of them for a grudge, in its rose, and down one for a duel.
+- **The finish.** Shells rise from the snow and bloom as dabs of gouache in the player's vermillion, the
+  gifts' marigold, cream and the snow's periwinkle, never lit like a hazard and never mint. Confetti
+  cannons fire in over the rider and ribbons drift down through the frame while the crowd roars.
+
+- **Overlooks.** At least three times a descent, the first inside 1.5 km, on open ground only, one bank opens. The treeline steps back, a low timber rail (larch, pale
+  boards, charred posts or lacquer by biome) runs along the forest limit, a bare snow shelf runs out to
+  a rounded cornice with dark rock breaking through, and beyond it the mountain falls away. Down the
+  fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens
+  leans toward the open side and takes a breath as it opens. Sometimes both sides open and the run
+  rides a ridge.
+- **Towns.** A street puts walls at the lens. Fronts stand 2 to 4 m past the run's edge, cut into the bank
+  with their floors at the snow: alpine chalets, a red-and-ochre research station, basalt hot-spring
+  lodges, a lacquered temple town. Upper storeys lean out, balconies and awnings reach toward the
+  run, a house now and then stands right on the barrier, and a second row of roofs climbs the crest
+  behind. Painted barriers run where the sim turns a sled back, in boards that blur at speed, and a
+  crowd packs the strip behind them, flags up, doing the wave. A hotel's balconies look down.
+  Banners, bunting and lantern strings hang high across from tall masts, only as low as the highest
+  air allows. Windows glow from dusk and warm light spills over the run's edge; at night the
+  shop fronts bloom. A mountain with no street in its script has its town beside the run instead.
+- **The finish.** Each mountain's biggest place. The street opens into a square of grandstands cut into
+  both banks, the near rows alive and the far rows a packed still crowd, under masts and long banners.
+  A real arch stands over the line, the word on its board, the mountain's own crown on each tower. The
+  line is paint: four rows of big checks in ink and cream, barrier to barrier and up the banks, long down
+  the run so the lens sees them square. The square runs from 72 m before the line to 118 m past it, so a sled rolls the length of it as it stops, about 130 m past the line from cruise, and the stationary
+  frame holds it all. The run-out carries on through the town to a great hall that closes the view, and
+  over the hall stands the mark you can see from the last leap: a steeple, a radome and mast, a
+  lit stack, a pagoda. Balloons are tethered over the roofs.
+- **Bridges.** The run crosses a chasm on a deck 11 m wide with the ground falling 34 m past its rails.
+  Frostfang's is an ice span, two great ribs of blue ice with icicles along them and a parapet of ice
+  blocks. Ember's is an iron through-truss on basalt piers with braziers on the portals, lanterns along
+  the top chord and a lava river crossing under it. Pinecrest's is a dark timber truss between two
+  lamp-eyed towers, and Sakura's a span of oxblood lacquer on tall red towers. Raked legs and struts reach down round
+  the ridge of ground under the deck, and the rails stand where the sim turns a sled back.
+- **Tunnels.** Where a script says tunnel the run goes under a roof at the section's whole length: a tall
+  avalanche gallery whose pillars throw bars of light across the snow, an ice vault, a basalt tunnel
+  with glowing cracks whose mouth is a hole in a great rock mass, a corridor of wine-lacquer torii. The
+  roof follows the air down the stretch: the mouth stands tallest and it comes down inside. The frame
+  darkens at its edges inside and bursts with light on the way out. Where low gravity flies over any
+  roof the walls and pillars stand alone.
+- **The sound of the world.** Crowds roar from their bank, swell as you come and cheer what you do near
+  them: cowbells and whistles in the Alps, taiko under Sakura's gates. Crows argue over the treeline and
+  burst up from a stomp. Chairlifts clack through their towers, valley churches toll in the alpenglow,
+  owls call at night. Open bowls and overlooks blow wide and airy; galleries and tunnels close in with a
+  slap of echo. Big air opens the band out with a deep whoosh. Each weather has its own floor. All of it
+  stays under the band and never covers a hazard's telegraph.
+- **The moments.** Gifts are rounded, glossy boxes in two tones of marigold stripes with foil glints and
+  a satin bow; a pickup pops in ribbon confetti and tumbling coins, and gifts down the line twinkle. A
+  passed ghost shatters into petals of spectral glass in its kind colour, kept low and off the rider;
+  the ghost you draft lays a sheet of its light with chevrons over its track. A stomp's shockwave runs
+  out through the snow. The rider's lean lags the sled and settles, it soaks up bumps, its outside arm
+  balances a carve and it tucks at speed.
+- **The sky moves and the light is a moment.** A low sun throws crepuscular rays through the cloud gaps;
+  shafts hang in the air, never on the near snow. Clouds build and sink, their shadows sweep the far
+  ranges, a powder avalanche now and then pours down the hero's face, and summits fly spindrift
+  banners. Valleys hold drifting mist. Glass Ice wears a 22 degree halo with sun dogs, Haunted Hollow a
+  pale green lunar ring, night moods bring shooting stars, Blizzard gusts sweep curtains of snow, and
+  Ember's volcano flashes with lightning at night.
+- **Far trees** keep the same tiers, height, reach and snow caps with fewer segments. Stand 128 m or more
+  away and the forest should read the same: a far tree that reads differently from a near one is a bug.

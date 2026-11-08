@@ -16,8 +16,9 @@ interface FakeSim {
   distance: number;
   s: {
     x: number; y: number; z: number; heading: number; speed: number; grounded: boolean; drifting: boolean; driftCharge: number; driftTier: number;
-    driftDir: number; drafting: boolean; flow: number; crashed: boolean;
+    driftDir: number; drafting: boolean; flow: number; crashed: boolean; finished: boolean; finishTick: number;
   };
+  course: { stages: Array<{ index: number; name: string; z0: number; z1: number }>; chunk: () => { obstacles: never[] } };
   combo: { active: boolean; pending: number; multiplier: number; window: number; timer: number };
   dyn: {
     triggerZ: number;
@@ -35,7 +36,8 @@ function fakeSim(): FakeSim {
     tick: 1000,
     score: 0,
     distance: 100,
-    s: { x: 0, y: 0, z: 100, heading: 0, speed: 20, grounded: true, drifting: false, driftCharge: 0, driftTier: 0, driftDir: 0, drafting: false, flow: 0, crashed: false },
+    s: { x: 0, y: 0, z: 100, heading: 0, speed: 20, grounded: true, drifting: false, driftCharge: 0, driftTier: 0, driftDir: 0, drafting: false, flow: 0, crashed: false, finished: false, finishTick: -1 },
+    course: { stages: [{ index: 0, name: 'Stage 1', z0: 0, z1: 1450 }, { index: 1, name: 'Stage 2', z0: 1450, z1: 2950 }, { index: 2, name: 'Stage 3', z0: 2950, z1: 4500 }], chunk: () => ({ obstacles: [] }) },
     combo: { active: false, pending: 0, multiplier: 1, window: 156, timer: 0 },
     dyn: { triggerZ: Infinity, avalanche: { phase: 0 }, yeti: { phase: 0, hopped: false }, storm: [], stormPhase: 0, trainPhase: 0 },
     stats: { yetiHop: false, draftTicks: 0 },
@@ -62,7 +64,7 @@ function runOf(over: Partial<DirectorRun> = {}): DirectorRun {
 }
 
 function track(id: number, kind: GhostTrack['entry']['kind'] = 'pool', name = `G${id}`): GhostTrack {
-  return { entry: { id, name, kind, score: 0, record: '' }, ready: true, frames: null, samples: 1, ticks: 0, crashTick: -1, distance: 0, tricks: null, status: 0, passed: false, passedTimes: 0, crashSeen: false };
+  return { entry: { id, name, kind, score: 0, record: '' }, ready: true, frames: null, pace: 1, swing: 0, swingEnd: 0, map: null, warp: null, rate: 1, own: null, samples: 1, ticks: 0, crashTick: -1, finishTick: -1, stageTicks: [], distance: 0, tricks: null, status: 0, passed: false, passedTimes: 0, crashSeen: false };
 }
 
 function pose(z: number, x = 0, done = false): GhostPose {
@@ -85,7 +87,7 @@ class Rig {
     this.d.beginRun(runOf(run));
   }
   /** One frame: advance `ticks`, drain `events` (all at the frame's last tick unless given). */
-  frame(events: Array<SimEvent | { tick: number; e: SimEvent }> = [], o: { ticks?: number; dt?: number; race?: RaceEvent[]; phase?: 'run' | 'crashed'; reduced?: boolean; timeToLand?: number; airTicks?: number } = {}): Beat[] {
+  frame(events: Array<SimEvent | { tick: number; e: SimEvent }> = [], o: { ticks?: number; dt?: number; race?: RaceEvent[]; phase?: DirectorFrame['phase']; reduced?: boolean; timeToLand?: number; airTicks?: number } = {}): Beat[] {
     this.sim.tick += o.ticks ?? 1;
     const f: DirectorFrame = {
       phase: o.phase ?? 'run',
@@ -2160,6 +2162,186 @@ describe('the pack past your wreck', () => {
     q.frame([], { phase: 'crashed' });
     move(q, 1, 1);
     expect(wrecks(q.frame([], { phase: 'crashed' }))).toHaveLength(1);
+  });
+});
+
+describe('a descent with a finish', () => {
+  const finish = (r: Rig, tick = r.sim.tick + 1): SimEvent => {
+    r.sim.s.finished = true;
+    r.sim.s.finishTick = tick;
+    return { type: 'finish', tick, bonus: 1400 };
+  };
+
+  it('a survived wipeout is one short line, saying what it cost', () => {
+    const r = new Rig();
+    r.sim.s.z = 300;
+    const free = of(r.frame([{ type: 'tumble', phase: 'start', cause: 'tree', left: 2 }]), 'tumble')[0];
+    expect(free).toMatchObject({ phase: 'start', free: true, left: 2, say: { label: 'Wipeout', tone: 'lost' } });
+    r.sim.s.z = 1200;
+    expect(of(r.frame([{ type: 'tumble', phase: 'start', cause: 'rock', left: 1 }]), 'tumble')[0].say?.label).toBe('Wipeout. 1 left');
+    expect(of(r.frame([{ type: 'tumble', phase: 'start', cause: 'rock', left: 0 }]), 'tumble')[0].say?.label).toBe('Wipeout. None left');
+    // Back on the line says nothing, and none of it is a crash.
+    const end = r.frame([{ type: 'tumble', phase: 'end', cause: 'rock', left: 0 }]);
+    expect(of(end, 'tumble')[0].say).toBeUndefined();
+    expect(of(end, 'crash')).toHaveLength(0);
+  });
+
+  it('a stage line splits against the ghost just ahead and your best', () => {
+    const r = new Rig({ bestSplitsAtStart: [70, 140, 210] });
+    r.tracks = [track(1), track(2, 'grudge', 'Mila'), track(3), track(4, 'you', 'Me')];
+    r.tracks[0].stageTicks = [4000];
+    r.tracks[1].stageTicks = [4300];
+    r.tracks[2].stageTicks = [4700];
+    r.tracks[3].stageTicks = [4340];
+    const s = of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0];
+    expect(s).toMatchObject({ name: 'Stage 1', last: false, vsGhost: { name: 'Mila', kind: 'grudge' } });
+    expect(s.seconds).toBeCloseTo(73, 6);
+    // 80 ticks behind Mila; 3 s behind your best, which never stands in for the ghost.
+    expect(s.vsGhost!.delta).toBeCloseTo(80 / 60, 6);
+    expect(s.vsBest).toBeCloseTo(3, 6);
+  });
+
+  it('a stage line splits against your rival, ahead of you or not, while it reached that line', () => {
+    const r = new Rig();
+    r.tracks = [track(1, 'pool', 'Near'), track(2, 'pool', 'Rival')];
+    r.tracks[0].stageTicks = [4300];
+    r.tracks[1].entry.rival = true;
+    r.tracks[1].stageTicks = [4500];
+    const s = of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0];
+    expect(s.vsGhost?.name).toBe('Rival');
+    expect(s.vsGhost!.delta).toBeCloseTo(-2, 6);
+  });
+
+  it('a rival that never reached the line gives way to the ghost just ahead', () => {
+    const r = new Rig();
+    r.tracks = [track(1, 'pool', 'Near'), track(2, 'pool', 'Rival')];
+    r.tracks[0].stageTicks = [4300];
+    r.tracks[1].entry.rival = true;
+    r.tracks[1].stageTicks = [];
+    expect(of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0].vsGhost?.name).toBe('Near');
+  });
+
+  it('in the lead it splits against the ghost just behind', () => {
+    const r = new Rig();
+    r.tracks = [track(1), track(2, 'pool', 'Bo')];
+    r.tracks[0].stageTicks = [5000];
+    r.tracks[1].stageTicks = [4500];
+    const s = of(r.frame([{ type: 'stage', index: 0, tick: 4380 }]), 'stage')[0];
+    expect(s.vsGhost?.name).toBe('Bo');
+    expect(s.vsGhost!.delta).toBeCloseTo(-2, 6);
+    expect(s.vsBest).toBeNull();
+  });
+
+  it('a ghost that never reached the line is no split', () => {
+    const r = new Rig();
+    r.tracks = [track(1)];
+    expect(of(r.frame([{ type: 'stage', index: 1, tick: 9000 }]), 'stage')[0].vsGhost).toBeNull();
+  });
+
+  it('the finish names your place: only a ghost already over the line leads you', () => {
+    const r = new Rig();
+    r.tracks = [track(1), track(2), track(3)];
+    r.tracks[0].finishTick = 9000;
+    r.tracks[1].finishTick = 11000;
+    const b = of(r.frame([finish(r, 10000)]), 'finish')[0];
+    expect(b).toMatchObject({ rank: 2, of: 4, bonus: 1400 });
+    expect(b.seconds).toBeCloseTo(10000 / 60, 6);
+  });
+
+  it('feels the time since the line, and it is no crash', () => {
+    const r = new Rig();
+    expect(of(r.frame([finish(r)]), 'crash')).toHaveLength(0);
+    r.frame([], { phase: 'finished', dt: 0.5 });
+    const f: DirectorFrame = { phase: 'finished', dt: 0.5, sim: r.sim as unknown as Sim, events: [], race: [], tracks: [], poses: r.poses, standings: { next: null, rank: 1, of: 1 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false };
+    const feel = r.d.step(f).feel;
+    expect(feel.finishT).toBeGreaterThan(0.9);
+    expect(feel.crashT).toBe(-1);
+  });
+
+  it('the race ends on the line: an open duel closes with no result', () => {
+    const q = new Rig();
+    q.tracks = [track(5)];
+    q.poses.set(5, pose(100.6));
+    q.sim.tick = 1000;
+    for (let i = 0; i < 90; i++) q.frame();
+    const after = q.frame([finish(q)]);
+    expect(of(after, 'duel').filter((d) => d.phase === 'won' || d.phase === 'lost')).toHaveLength(0);
+    q.poses.set(5, pose(90));
+    expect(of(q.frame([], { phase: 'finished' }), 'duel')).toHaveLength(0);
+  });
+
+  it('beats a grudge still riding to the line, in plain sight, and settles it', () => {
+    const q = new Rig({ grudgeAtStart: { name: 'Mila', record: 'r', them: 2, streak: 2 } });
+    q.tracks = [track(7, 'grudge', 'Mila')];
+    q.tracks[0].finishTick = 12000;
+    q.poses.set(7, pose(90));
+    const beats = q.frame([finish(q, 10000)]);
+    q.frame([], { phase: 'finished' });
+    expect(q.d.grudgeSettled).toBe(true);
+    expect(of(beats, 'grudgeSettled')).toHaveLength(1);
+  });
+
+  it('never settles a grudge that finished first, wherever it stopped', () => {
+    const q = new Rig({ grudgeAtStart: { name: 'Mila', record: 'r', them: 2, streak: 2 } });
+    q.tracks = [track(7, 'grudge', 'Mila')];
+    q.tracks[0].finishTick = 9000;
+    q.tracks[0].distance = 4510;
+    const done = pose(4510, 0, true);
+    q.poses.set(7, done);
+    // Riding on toward the line, past where it stopped...
+    q.sim.s.z = 4505;
+    q.sim.distance = 4520;
+    q.frame();
+    // ...and over it.
+    q.frame([finish(q, 10000)]);
+    q.frame([], { phase: 'finished' });
+    expect(q.d.grudgeSettled).toBe(false);
+  });
+
+  it('an old link\'s band is passed for a friend beaten, clamped right at the finish', () => {
+    const q = new Rig({ friend: { name: 'Mila', distance: 4500, time: null } });
+    q.sim.s.z = 4400;
+    q.sim.distance = 4400;
+    q.frame();
+    q.sim.s.z = 4500;
+    q.sim.distance = 4500;
+    const beats = q.frame([finish(q)]);
+    expect(of(beats, 'friendBeaten')).toHaveLength(1);
+    expect(of(beats, 'friendBeaten')[0].say?.label).toBe('Beat Mila\u2019s 4,500 m');
+  });
+
+  it('marks an old link at its distance with the friend band', () => {
+    const q = new Rig({ friend: { name: 'Mila', distance: 2340, time: null } });
+    const out = q.d.step({ phase: 'run', dt: 1 / 60, sim: q.sim as unknown as Sim, events: [], race: [], tracks: [], poses: q.poses, standings: { next: null, rank: 1, of: 1 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false });
+    expect(out.feel.friendLine).toEqual({ z: 2340, name: 'Mila', distance: 2340 });
+  });
+
+  it('a friend who finished is a time: no band, and beaten only over the line and faster', () => {
+    const q = new Rig({ friend: { name: 'Mila', distance: 4620, time: 170 } });
+    q.sim.s.z = 4619;
+    q.sim.distance = 4630;
+    expect(of(q.frame(), 'friendBeaten')).toHaveLength(0);
+    const slow = q.frame([finish(q, 11000)]);
+    expect(of(slow, 'friendBeaten')).toHaveLength(0);
+    const w = new Rig({ friend: { name: 'Mila', distance: 4620, time: 170 } });
+    expect(of(w.frame([finish(w, 9000)]), 'friendBeaten')[0].say?.label).toBe('Beat Mila\u2019s 2:50.0');
+  });
+
+  it('a best that finished is a time: no band, no New ground', () => {
+    const q = new Rig({ bestDistAtStart: 4620, bestTimeAtStart: 170 });
+    q.sim.s.z = 4700;
+    q.sim.distance = 4700;
+    expect(of(q.frame(), 'newGround')).toHaveLength(0);
+    const out = q.d.step({ phase: 'run', dt: 1 / 60, sim: q.sim as unknown as Sim, events: [], race: [], tracks: [], poses: q.poses, standings: { next: null, rank: 1, of: 1 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false });
+    expect(out.feel.bestLine).toBeNull();
+    expect(out.hud.bestIn).toBeNull();
+  });
+
+  it('a best that did not finish keeps its band and its New ground', () => {
+    const q = new Rig({ bestDistAtStart: 3000, bestTimeAtStart: null });
+    q.sim.s.z = 3001;
+    q.sim.distance = 3001;
+    expect(of(q.frame(), 'newGround')).toHaveLength(1);
   });
 });
 

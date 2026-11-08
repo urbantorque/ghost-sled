@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
 import { ChaseCamera, crashPack } from '../src/render/camera';
+import { visualGround } from '../src/render/ground';
+import { courseFor } from '../src/sim/course';
+import { MOUNTAINS } from '../src/sim/mountains';
 import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel } from '../src/game/beats';
 import { emptyPose, type GhostPose } from '../src/game/ghosts';
 
@@ -393,6 +396,268 @@ describe('feel kicks', () => {
       expect(r.shake).toBe(0);
       expect(r.fov).toBeCloseTo(calm.fov, 9);
       expect(r.hold).toBe(0);
+    }
+  });
+});
+
+// A wall's rock is drawn past where the sim's ground stops, so `ground` cannot see it. A crash lens must
+// not stand in it, or behind it with the wreck on the far side.
+describe('crash lenses and a wall of rock', () => {
+  const R = 5; // The rock stands past x = R, drawn, where the ground stays flat.
+  const STILL = { dir: DOWN, speed: 0, steer: 0, airborne: true, boost: 0 };
+
+  function lens(aspect: number, surface: ChaseCamera['surface'], wreck: Vector3, orbitFrom: number | null, ground: ChaseCamera['ground'] = () => 0, corridor?: ChaseCamera['corridor']) {
+    const cam = new ChaseCamera();
+    cam.setAspect(aspect);
+    cam.ground = ground;
+    cam.surface = surface;
+    if (corridor) cam.corridor = corridor;
+    cam.beats([], IDLE_FEEL);
+    cam.mode = 'chase';
+    for (let i = 0; i < 40; i++) cam.update({ pos: wreck, dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    cam.mode = 'crash';
+    cam.beats([{ type: 'crash', tick: 0, cause: 'landing', stake: 0, orbitFrom }], IDLE_FEEL);
+    const orbit: Vector3[] = [];
+    const frames = Math.ceil(CRASH_FREEZE_S * 60) + 400;
+    for (let i = 0; i < frames; i++) {
+      cam.update({ pos: wreck, ...STILL }, 1 / 60);
+      orbit.push(cam.camera.position.clone());
+    }
+    cam.mode = 'hero';
+    for (let i = 0; i < 300; i++) cam.update({ pos: wreck, ...STILL }, 1 / 60);
+    return { orbit, hero: cam.camera.position.clone() };
+  }
+
+  const WRECK_AT_WALL = new Vector3(3.5, 0.3, -100);
+  const wall = (x: number) => (x > R ? 16 : 0);
+
+  it('the orbit turns back at the wall, whichever way it was drifting', () => {
+    for (const from of [null, Math.PI, 2.2, -2.2]) {
+      const { orbit } = lens(16 / 9, (x) => wall(x), WRECK_AT_WALL, from);
+      for (const p of orbit) expect(p.x).toBeLessThan(R);
+    }
+  });
+
+  it('the orbit still moves: a wall bounds its drift, it does not freeze it', () => {
+    const { orbit } = lens(16 / 9, (x) => wall(x), WRECK_AT_WALL, null);
+    const tail = orbit.slice(-300);
+    const span = Math.max(...tail.map((p) => p.x)) - Math.min(...tail.map((p) => p.x));
+    expect(span).toBeGreaterThan(1);
+  });
+
+  it('the hero shot stands clear of the rock, wide and tall', () => {
+    for (const aspect of [16 / 9, 9 / 19]) {
+      const { hero } = lens(aspect, (x) => wall(x), WRECK_AT_WALL, null);
+      expect(hero.x).toBeLessThan(R);
+    }
+  });
+
+  it('with rock on both sides both lenses keep to the gap between them', () => {
+    // A slot 8 m wide, the wreck against one side.
+    const slot = (x: number) => (Math.abs(x) > 4 ? 16 : 0);
+    const { hero, orbit } = lens(16 / 9, slot, new Vector3(2.8, 0.3, -100), Math.PI);
+    expect(Math.abs(hero.x)).toBeLessThan(4);
+    for (const p of orbit) expect(Math.abs(p.x)).toBeLessThan(4);
+  });
+
+  it('walled in on every side the hero shot looks down from above the rock, never from inside it', () => {
+    const well = (x: number, z: number) => (Math.hypot(x, z + 100) > 1.5 ? 12 : 0);
+    const { hero } = lens(16 / 9, well, new Vector3(0, 0.3, -100), null);
+    expect(hero.y).toBeGreaterThan(well(hero.x, hero.z));
+  });
+
+  it('with no rock the crash lenses stand exactly where they always did', () => {
+    const plain = lens(16 / 9, null, WRECK_AT_WALL, Math.PI);
+    const same = lens(16 / 9, () => 0, WRECK_AT_WALL, Math.PI);
+    expect(same.hero.distanceTo(plain.hero)).toBeLessThan(1e-6);
+    expect(same.orbit[same.orbit.length - 1].distanceTo(plain.orbit[plain.orbit.length - 1])).toBeLessThan(1e-6);
+  });
+
+  it('holds on a real ravine, against the surface the player sees', () => {
+    const c = courseFor(MOUNTAINS[1].seed);
+    let z0 = 0;
+    for (let z = 0; z < c.finishZ && !z0; z += 10) if (c.section(z).kind === 'ravine' && c.shapeAt(z).wall >= 12) z0 = z;
+    expect(z0).toBeGreaterThan(0);
+    const cor = { x: 0, hw: 0 };
+    const corridor = (z: number) => {
+      cor.x = c.centerX(-z);
+      cor.hw = c.halfWidth(-z);
+      return cor;
+    };
+    for (let z = z0 + 10; z < z0 + 110; z += 25) {
+      for (const side of [-1, 1]) {
+        const x = c.centerX(z) + side * (c.halfWidth(z) + 3);
+        const w = new Vector3(x, c.ground(x, z) + 0.3, -z);
+        const shot = lens(16 / 9, (px, pz) => visualGround(c, px, -pz), w, Math.PI, (px, pz) => c.ground(px, -pz), corridor);
+        const clear = (p: Vector3) => p.y > visualGround(c, p.x, -p.z);
+        expect(clear(shot.hero)).toBe(true);
+        for (const p of shot.orbit) expect(clear(p)).toBe(true);
+      }
+    }
+  });
+});
+
+// The camera and motion round: the big-air vista, the section entrance's lift, the rumble at speed.
+describe('big-air vista and section lift', () => {
+  const SLOPE = 0.3;
+  /** A plain downhill (three.js z falls as the course runs on), with the corridor's middle at x = 0. */
+  function chase(feel: Feel = IDLE_FEEL): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    return cam;
+  }
+  const at = (z: number, up = 0) => new Vector3(4, z * SLOPE + up, z);
+  /** Rides 1 s on the snow, then a flight of `flight` seconds (a ballistic arc over the slope);
+   *  returns the vista's weight and the lens's height over the rider each frame of the flight. */
+  function fly(cam: ChaseCamera, flight: number, feel: Feel = IDLE_FEEL) {
+    const v = 22;
+    let z = -100;
+    for (let i = 0; i < 60; i++) {
+      z -= v / 60;
+      cam.beats([], feel);
+      cam.update({ pos: at(z), dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0, airTime: 0, airLeft: Infinity }, 1 / 60);
+    }
+    const out: { vista: number; lift: number; left: number }[] = [];
+    const n = Math.round(flight * 60);
+    for (let i = 1; i < n; i++) {
+      z -= v / 60;
+      const t = i / 60;
+      const h = 4.9 * t * (flight - t);
+      const pos = at(z, h);
+      cam.beats([], feel);
+      cam.update({ pos, dir: DOWN, speed: v, steer: 0, airborne: true, boost: 0, airTime: t, airLeft: flight - t }, 1 / 60);
+      out.push({ vista: cam.vistaNow, lift: cam.camera.position.y - pos.y, left: flight - t });
+    }
+    return out;
+  }
+
+  it('a long flight eases the lens out and up, and has it home again by touchdown', () => {
+    const cam = chase();
+    const f = fly(cam, 2.4);
+    const peak = Math.max(...f.map((q) => q.vista));
+    expect(peak).toBeGreaterThan(0.85);
+    // Home for the stomp window: nearly all the way back with 0.15 s left.
+    const late = f.filter((q) => q.left <= 0.15);
+    for (const q of late) expect(q.vista).toBeLessThan(0.12);
+    // Mid-flight the lens stands well over the rider (the chase rides about a metre over it).
+    const mid = f[Math.floor(f.length / 2)];
+    expect(mid.lift).toBeGreaterThan(2);
+  });
+
+  it('a short hop never opens the vista', () => {
+    const f = fly(chase(), 0.8);
+    expect(Math.max(...f.map((q) => q.vista))).toBeLessThan(0.02);
+  });
+
+  it('under reduced motion the vista and the section lift stay off', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const cam = chase(feel);
+    const f = fly(cam, 2.4, feel);
+    expect(Math.max(...f.map((q) => q.vista))).toBe(0);
+    let z0 = 0;
+    cam.section = () => ({ z0, kind: 'chute' });
+    for (let i = 0; i < 30; i++) {
+      if (i === 10) z0 = 400;
+      cam.beats([], feel);
+      cam.update({ pos: at(-200 - i), dir: DOWN, speed: 22, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+      expect(cam.riseNow).toBe(0);
+    }
+  });
+
+  it('a new section coming into reach lifts the lens briefly, a cruise does not', () => {
+    for (const kind of ['bowl', 'cruise']) {
+      const cam = chase();
+      let z0 = 0;
+      cam.section = () => ({ z0, kind });
+      let peak = 0;
+      for (let i = 0; i < 240; i++) {
+        if (i === 30) z0 = 400;
+        cam.beats([], IDLE_FEEL);
+        cam.update({ pos: at(-200 - i * 0.4), dir: DOWN, speed: 24, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+        peak = Math.max(peak, cam.riseNow);
+      }
+      if (kind === 'cruise') expect(peak).toBe(0);
+      else expect(peak).toBeGreaterThan(0.9);
+      // ...and it has settled again by the end.
+      expect(cam.riseNow).toBe(0);
+    }
+  });
+
+  it("the rumble at top speed rides beside the shake: a stomp's shake keeps its size", () => {
+    const cam = chase();
+    for (let i = 0; i < 60; i++) {
+      cam.beats([], IDLE_FEEL);
+      cam.update({ pos: at(-100 - i * 0.6), dir: DOWN, speed: 36, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    }
+    expect(cam.shakeNow).toBe(0);
+    cam.beats([{ type: 'stomp', tick: 0, streak: 1, late: false, title: '', lead: [], x: 0, z: 100, heading: 0, yetiHop: false }], IDLE_FEEL);
+    expect(cam.shakeNow).toBeCloseTo(0.25, 5);
+  });
+});
+
+describe('overlook lean', () => {
+  const SLOPE = 0.3;
+  function chase(feel: Feel = IDLE_FEEL): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    return cam;
+  }
+  /** Rides `secs` seconds down a plain slope with the overlook signal `open` from `from` seconds on;
+   *  returns the look's heading (+ toward +x), the roll and the reveal each frame. */
+  function ride(cam: ChaseCamera, open: number, secs: number, feel: Feel = IDLE_FEEL, from = 0.5) {
+    const v = 22;
+    let z = -100;
+    const out: { yaw: number; roll: number; reveal: number; open: number }[] = [];
+    const dir = new Vector3();
+    for (let i = 0; i < secs * 60; i++) {
+      z -= v / 60;
+      cam.beats([], feel);
+      cam.update({ pos: new Vector3(0, z * SLOPE, z), dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0, open: i / 60 >= from ? open : 0 }, 1 / 60);
+      cam.camera.getWorldDirection(dir);
+      out.push({ yaw: Math.atan2(dir.x, -dir.z), roll: cam.rollNow, reveal: cam.revealNow, open: cam.openNow });
+    }
+    return out;
+  }
+
+  it('turns the look and leans the horizon toward the open side, keeping the run ahead in frame', () => {
+    const right = ride(chase(), 1, 6);
+    const left = ride(chase(), -1, 6);
+    const none = ride(chase(), 0, 6);
+    const end = right.length - 1;
+    expect(right[end].yaw - none[end].yaw).toBeGreaterThan(0.08);
+    expect(right[end].yaw - none[end].yaw).toBeLessThan(0.2);
+    expect(left[end].yaw - none[end].yaw).toBeLessThan(-0.08);
+    // The horizon dips toward the drop (as a carve toward it would), within the roll's limit.
+    expect(right[end].roll).toBeLessThan(-0.015);
+    expect(left[end].roll).toBeGreaterThan(0.015);
+    for (const q of right) expect(Math.abs(q.roll)).toBeLessThanOrEqual(0.07 + 1e-9);
+  });
+
+  it('opens with a reveal once, then settles to the lean', () => {
+    const f = ride(chase(), 1, 6);
+    const peak = Math.max(...f.map((q) => q.reveal));
+    expect(peak).toBeGreaterThan(0.9);
+    expect(f[f.length - 1].reveal).toBe(0);
+    // Still open, no second reveal.
+    expect(f.slice(Math.round(4.5 * 60)).every((q) => q.reveal === 0)).toBe(true);
+  });
+
+  it('under reduced motion nothing turns, leans or reveals', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const open = ride(chase(feel), 1, 4, feel);
+    const none = ride(chase(feel), 0, 4, feel);
+    for (let i = 0; i < open.length; i++) {
+      expect(open[i].yaw).toBeCloseTo(none[i].yaw, 9);
+      expect(open[i].roll).toBe(0);
+      expect(open[i].reveal).toBe(0);
     }
   });
 });

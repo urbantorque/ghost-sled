@@ -1,24 +1,28 @@
 import { ChaosEvent, ChaosRoll, Mood, rollChaos } from '../sim/chaos';
 import { clamp } from '../sim/dmath';
 import { Rng, hash32 } from '../sim/prng';
-import { RunRecord, recordToString } from '../sim/replay';
+import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
 import { runBot } from './bot';
 import { uniqueGhostName } from './names';
 
-// Ghost pools: run bots across the skill range on one mountain, then keep a spread of results whose
-// scores climb roughly log-uniformly from beginner to expert. Picking by score (not by skill) keeps
-// the spread right even after the physics is retuned. No Node APIs: this also runs in a worker for
-// the Daily Mountain.
+// Ghost pools: run bots across the skill range on one mountain, then keep a spread of results from the
+// weakest in the race to the best. Picking by result (not by skill) keeps the spread right even after
+// the physics is retuned. No Node APIs: this also runs in a worker for the Daily Mountain.
 
 export interface PoolGhost {
   name: string;
   score: number;
   distance: number;
   ticks: number;
+  /** Tick the finish line was crossed, or -1 for a rider who never reached it. */
+  finishTick: number;
   sled: number;
   mood: number;
   event: number;
+  /** Where the rider really went down, metres down the run, in the order it did: every tumble, and the
+   *  wreck that ended the run if one did (graveyards.ts clusters them). Empty for a clean run. */
+  falls: number[];
   /** recordToString of the full run record. */
   record: string;
 }
@@ -40,34 +44,9 @@ export interface PoolOptions {
   report?: (runs: PoolRun[]) => void;
 }
 
-const LN2 = 0.6931471805599453;
-/** Where the score targets start: a beginner who crashed early. */
-const MIN_SCORE = 250;
-
-/** Natural log from + - * / only (the bot code avoids engine-dependent Math functions). */
-function ln(x: number): number {
-  if (!(x > 0)) return -Infinity;
-  // Halving Infinity never gets below 2, so it would spin forever.
-  if (x === Infinity) return Infinity;
-  let e = 0;
-  while (x >= 2) {
-    x /= 2;
-    e++;
-  }
-  while (x < 1) {
-    x *= 2;
-    e--;
-  }
-  // ln(m) = 2 atanh((m - 1) / (m + 1)), |y| <= 1/3 so the series converges quickly.
-  const y = (x - 1) / (x + 1);
-  const y2 = y * y;
-  let term = y;
-  let sum = 0;
-  for (let n = 1; n <= 31; n += 2) {
-    sum += term / n;
-    term *= y2;
-  }
-  return 2 * sum + e * LN2;
+/** A run's place in the race: higher is better. */
+function raceKey(r: PoolRun): number {
+  return r.sim.s.finished ? 1e7 - r.sim.s.finishTick : r.record.distance;
 }
 
 function chaosFor(rng: Rng, seed: number, salt: number, i: number): ChaosRoll {
@@ -75,6 +54,17 @@ function chaosFor(rng: Rng, seed: number, salt: number, i: number): ChaosRoll {
   // About 60% plain; the rest are real chaos rolls (which can still come up plain).
   if (rng.chance(0.6)) return { mood: Mood.None, event: ChaosEvent.None, seed: s };
   return rollChaos(s, 1 + rng.int(0, 5));
+}
+
+/** Where a run went down, read off a replay of its record: the sim says so in its events, and a replay
+ *  changes nothing about the run. The whole metre is close enough for a cairn and costs a pool almost
+ *  nothing. */
+export function fallsOf(record: RunRecord): number[] {
+  const falls: number[] = [];
+  replayRecord(record, (sim) => {
+    for (const e of sim.events) if (e.type === 'crash' || (e.type === 'tumble' && e.phase === 'start')) falls.push(Math.round(sim.s.z));
+  });
+  return falls;
 }
 
 export function generatePool(seed: number, count: number, salt: number, opts: PoolOptions = {}): PoolGhost[] {
@@ -94,39 +84,16 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
     runs.push({ skill, record, sim, selected: false });
   }
 
-  // Log-spaced score targets from a beginner's few hundred points (or the weakest run, if better) up
-  // to the best run, each filled by the closest unused run. The top target is filled first so the
-  // pool always contains the best run.
-  let lo = Infinity;
-  let hi = 0;
-  for (const r of runs) {
-    lo = Math.min(lo, Math.max(1, r.record.score));
-    hi = Math.max(hi, r.record.score);
-  }
-  lo = Math.max(lo, Math.min(MIN_SCORE, hi));
-  const lnLo = ln(lo);
-  const lnHi = ln(Math.max(hi, lo + 1));
+  // Race order, weakest first: riders who never finished by distance, then finishers by time. The pool
+  // steps evenly through that order, and always keeps the best run, so every pace has a rival near it.
+  runs.sort((a, b) => raceKey(a) - raceKey(b));
   const n = Math.min(count, runs.length);
   const picked: PoolRun[] = [];
-  for (let j = n - 1; j >= 0; j--) {
-    const target = n === 1 ? lnHi : lnLo + ((lnHi - lnLo) * j) / (n - 1);
-    let best: PoolRun | null = null;
-    let bestD = Infinity;
-    for (const r of runs) {
-      if (r.selected) continue;
-      let d = Math.abs(ln(Math.max(1, r.record.score)) - target);
-      // Two ghosts with the same score usually crashed into the same tree; prefer variety.
-      for (const q of picked) if (Math.abs(q.record.score - r.record.score) <= 2 + q.record.score * 0.002) d += 1;
-      if (d < bestD) {
-        bestD = d;
-        best = r;
-      }
-    }
-    if (!best) break;
-    best.selected = true;
-    picked.push(best);
+  for (let j = 0; j < n; j++) {
+    const at = n === 1 ? runs.length - 1 : Math.round((j * (runs.length - 1)) / (n - 1));
+    runs[at].selected = true;
+    picked.push(runs[at]);
   }
-  picked.sort((a, b) => a.record.score - b.record.score || a.record.ticks - b.record.ticks);
 
   const names = new Rng(hash32(seed, salt, 0x4a3e));
   const taken = new Set<string>();
@@ -138,9 +105,11 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       score: record.score,
       distance: Math.round(record.distance * 10) / 10,
       ticks: record.ticks,
+      finishTick: r.sim.s.finishTick,
       sled: record.sled,
       mood: record.chaos.mood,
       event: record.chaos.event,
+      falls: fallsOf(record),
       record: recordToString(record),
     };
   });

@@ -405,12 +405,488 @@
   font-weight: 900;
 }
 
+/* ------------------------------------------------------------------ Stage medals and the ladder */
+
+/* A mountain's medals: a disc per stage, a hairline, then the larger whole-run disc, struck like the
+   Daily's coin. One you do not hold is an empty ring, so the row also says what is left to take. */
+.gs-mdots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.gs-mdot {
+  flex: none;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.34);
+}
+
+.gs-mdot.m-1,
+.gs-mdot.m-2,
+.gs-mdot.m-3 {
+  background: radial-gradient(circle at 34% 30%, rgba(255, 255, 255, 0.78), var(--m) 46%, var(--m-rim) 100%);
+  box-shadow: inset 0 0 0 1.5px var(--m-rim);
+}
+
+.gs-mdot.is-run {
+  width: 14px;
+  height: 14px;
+}
+
+.gs-mdots-sep {
+  width: 1px;
+  height: 11px;
+  margin-inline: 2px;
+  background: var(--hair-2);
+}
+
+/* On a mountain card the row rides the art's lower edge, on its own ink so the sky never eats a ring. */
+.gs-mtn-art > .gs-mdots {
+  position: absolute;
+  bottom: 6px;
+  left: 8px;
+  padding: 3px 6px;
+  border-radius: var(--r-pill);
+  background: rgba(11, 16, 38, 0.66);
+}
+
+.gs-mtn-recl.is-rank {
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-mtn-recl.is-rank.is-top {
+  color: var(--you);
+  font-weight: 850;
+}
+
+/* Your place on the ladder, beside the card rather than in it: over its top edge in portrait, in the
+   free corner on wide screens. An ink panel like the rest; the name beaten is mint (ghost news), the
+   pay marigold, and first place gold-white. */
+.gs-lad {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 12px 8px;
+  border-radius: var(--r-card);
+  background: rgba(18, 25, 51, 0.86);
+  box-shadow: inset 0 0 0 1px var(--hair), var(--shadow);
+  font-size: max(13px, 0.94em);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+/* (Off screen, not gone: it is the copy a reader hears, inside the dialog.) */
+.gs-lad.is-inline {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  background: none;
+  box-shadow: none;
+  white-space: nowrap;
+}
+
+.gs-lad-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.gs-lad-rank {
+  font-weight: 900;
+}
+
+.gs-lad.is-top {
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 138, 0.6), var(--shadow);
+}
+
+.gs-lad.is-top .gs-lad-rank {
+  color: var(--you);
+}
+
+.gs-lad-up {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--ghost);
+}
+
+.gs-lad-tri {
+  width: 0.72em;
+  height: 0.72em;
+}
+
+.gs-lad-main .gs-mdots {
+  margin-left: auto;
+}
+
+.gs-lad-next {
+  overflow: hidden;
+  color: var(--dim);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-lad-moment {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--ghost);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-lad-moment.is-top {
+  color: var(--you);
+}
+
+.gs-lad-moment-t {
+  min-width: 0;
+  text-wrap: pretty;
+}
+
+.gs-lad-pay {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  color: var(--gift);
+  font-style: normal;
+}
+
+.gs-lad-pay .gs-i {
+  width: 1.05em;
+  height: 1.05em;
+}
+
+.gs-results.is-in .gs-lad.is-band {
+  animation: gs-pop 320ms var(--spring) 360ms both;
+}
+
+.gs-results.is-in .gs-mdot.is-new {
+  animation: gs-pop 360ms var(--spring) 720ms both;
+}
+
+/* A re-render (an offer answered) lands the card whole, and the strip with it. */
+.gs-results.is-static .gs-lad.is-band,
+.gs-results.is-static .gs-mdot.is-new {
+  animation: none;
+}
+
+/* Portrait: the band over the card (contract C6) keeps the wreck; the strip sits at its foot, under
+   the rider, where the scrim has already begun, and the card below it does not move. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-lad.is-band {
+    grid-row: 1;
+    grid-column: 1;
+    align-self: end;
+    margin-bottom: 8px;
+  }
+}
+
+/* Wide landscape: the corner under the hero shot, level with the foot of the card. */
+@media (min-aspect-ratio: 1/1) and (min-width: 901px) {
+  .gs-lad.is-band {
+    position: absolute;
+    bottom: calc(var(--sb) + 18px);
+    left: calc(var(--sl) + 18px);
+    width: min(34vw, 380px);
+  }
+}
+
+/* Small landscape: the card fills the screen, so the ladder rides its mountain line. */
+@media (min-aspect-ratio: 1/1) and (max-width: 900px) {
+  .gs-lad.is-band {
+    display: none;
+  }
+
+  /* Its rows join the mountain line itself, so the rank shares that row and only Next takes another. */
+  .gs-lad.is-inline {
+    position: static;
+    display: contents;
+  }
+
+  .gs-lad.is-inline .gs-lad-main {
+    margin-left: auto;
+  }
+
+  .gs-lad.is-inline .gs-lad-next {
+    flex-basis: 100%;
+  }
+
+  .gs-lad.is-inline .gs-lad-moment {
+    display: none;
+  }
+}
+
+/* What decided it: a folded row, and each stage in its own time under that. It sits under the race on
+   wide screens, in the room that column has; a phone puts it under the Missions row, past the first
+   view (results.ts), which it would otherwise push off the card. */
+.gs-res-stages {
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.gs-res-body > .gs-res-stages {
+  grid-area: stg;
+}
+
+.gs-res-stages > .gs-res-stg-toggle {
+  display: flex;
+}
+
+.gs-res-stg-sum {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-res-stages:not(.is-open) > .gs-stg {
+  display: none;
+}
+
+.gs-stg {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+  font-size: max(12px, 0.86em);
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+}
+
+.gs-stg th,
+.gs-stg td {
+  padding: 4px 0 4px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.gs-stg th:first-child {
+  padding-left: 0;
+  font-weight: 800;
+  text-align: left;
+}
+
+.gs-stg thead th {
+  color: var(--dim);
+  font-size: max(11px, 0.8em);
+  font-weight: 750;
+}
+
+.gs-stg thead .gs-stg-who {
+  color: var(--k, var(--dim));
+}
+
+/* A cell ignores max-width, so the rider's name is cut on a box inside it. */
+.gs-stg-name {
+  display: inline-block;
+  max-width: 7.5em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+}
+
+.gs-stg tbody .gs-mdot {
+  display: inline-block;
+  margin-right: 5px;
+  vertical-align: -1px;
+}
+
+.gs-stg-gap {
+  color: var(--dim);
+}
+
+.gs-stg-gap.is-ahead {
+  color: var(--text);
+}
+
+/* The medal wall: a popover in the missions' slot, one row a mountain. */
+.gs-wall-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+}
+
+.gs-wall-n {
+  color: var(--dim);
+  font-size: max(11px, 0.86em);
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.gs-wall-n .gs-num {
+  color: var(--text);
+}
+
+.gs-wall-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-wall-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 76px;
+  align-items: center;
+  gap: 10px;
+  min-height: 30px;
+}
+
+.gs-wall-row .gs-mdots {
+  justify-self: end;
+}
+
+.gs-wall-name {
+  overflow: hidden;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-wall-rank {
+  color: var(--dim);
+  font-size: max(12px, 0.86em);
+  font-weight: 750;
+}
+
+.gs-wall-row.is-locked .gs-wall-name {
+  color: var(--dim);
+}
+
+.gs-wall-row.is-top .gs-wall-rank {
+  color: var(--you);
+  font-weight: 850;
+}
+
+.gs-wall-key {
+  margin: 0;
+  color: var(--dim);
+  font-size: max(11px, 0.8em);
+  font-weight: 700;
+}
+
+/* Landscape: the menu row may run on into the empty column, so a fourth button does not wrap it. */
+@media (min-aspect-ratio: 1/1) {
+  .gs-title > .gs-t-bar {
+    grid-column: 1 / span 2;
+  }
+}
+
+/* The picked one of the Daily and the Cup, as a picked mountain reads. */
+.gs-daily.is-sel {
+  box-shadow: inset 0 0 0 2px var(--text), var(--shadow);
+}
+
+.gs-t-daily.has-cup {
+  gap: 8px;
+}
+
+.gs-ride-mtn {
+  font-variant-numeric: tabular-nums;
+}
+
+.gs-cup-ev {
+  white-space: pre;
+}
+
+/* A phone keeps one row: the Daily and the Cup share the Daily's height, each a name over its best,
+   so the title is no taller and the row says no more than it did. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-t-daily.has-cup {
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  }
+
+  .gs-t-daily.has-cup .gs-daily {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 0 6px;
+    padding: 4px 4px 4px 14px;
+  }
+
+  .gs-t-daily.has-cup .gs-cup {
+    order: 1;
+  }
+
+  .gs-t-daily.has-cup .gs-daily-txt {
+    grid-column: 1;
+    display: grid;
+    gap: 1px;
+    align-self: end;
+    overflow: hidden;
+  }
+
+  .gs-t-daily.has-cup .gs-daily-best {
+    grid-column: 1;
+    grid-row: 2;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 5px;
+    align-self: start;
+    min-width: 0;
+    font-size: max(12px, 0.84em);
+  }
+
+  .gs-t-daily.has-cup .gs-daily-go {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    width: 40px;
+    height: 40px;
+  }
+
+  .gs-t-daily.has-cup .gs-daily-title {
+    overflow: hidden;
+    font-size: max(13px, 0.92em);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .gs-t-daily.has-cup .gs-daily-date,
+  .gs-t-daily.has-cup .gs-cup-ev,
+  .gs-t-daily.has-cup .gs-daily-sep,
+  .gs-t-daily.has-cup .gs-medal-n,
+  .gs-t-daily.has-cup .gs-daily-day {
+    display: none;
+  }
+
+  .gs-t-daily.has-cup .gs-daily .gs-daily-best.has-medal {
+    gap: 5px;
+    justify-items: start;
+  }
+
+  /* (A pill still finding its rivals hides its best and says so: its status keeps the line.) */
+  .gs-t-daily.has-cup .gs-daily:not(.is-waiting):has(.gs-daily-best) .gs-daily-meta {
+    display: none;
+  }
+
+  .gs-t-daily.has-cup .gs-daily-status {
+    max-width: 100%;
+    overflow: hidden;
+    padding: 0;
+    background: none;
+    text-overflow: ellipsis;
+  }
+}
+
 /* ------------------------------------------------------------------ Daily medal and streak */
 
-/* Today's Daily medal: a small struck disc in its metal, distinct from marigold (gifts) and
-   gold-white (your best, first place). Bronze is copper, silver a cool steel, gold an old amber that
-   sits redder than marigold. The disc carries a lit face and a darker rim, so it reads as a coin
-   even at 14 px. */
+/* A medal: a small struck disc in its metal. Bronze is a dark copper, silver a cool steel, and gold is
+   the art bible's marigold, so a medal and a gift are the same good news; the gold-white of your best
+   and first place stays apart. The disc carries a lit face and a darker rim, so it reads as a coin
+   even at 11 px, where gold and bronze must not meet. */
 .gs-medal {
   --m: #c9d4e8;
   --m-rim: #7c879e;
@@ -434,19 +910,22 @@
     0 0 0 1.5px rgba(18, 25, 51, 0.9);
 }
 
-.gs-medal.m-1 {
-  --m: #e0a072;
-  --m-rim: #8a5233;
+.gs-medal.m-1,
+.gs-mdot.m-1 {
+  --m: #c98a5e;
+  --m-rim: #7a4a2c;
 }
 
-.gs-medal.m-2 {
+.gs-medal.m-2,
+.gs-mdot.m-2 {
   --m: #cdd6e8;
   --m-rim: #7c879e;
 }
 
-.gs-medal.m-3 {
-  --m: #f0a93b;
-  --m-rim: #94601a;
+.gs-medal.m-3,
+.gs-mdot.m-3 {
+  --m: var(--gift);
+  --m-rim: #a8791a;
 }
 
 /* On the daily card the medal sits over "Best 7,967" (the figure keeps its label); where the card lays
@@ -514,6 +993,12 @@
   /* C6 budget: on a phone the race line takes the place note's slot rather than adding a line, so
      the head is as tall as it was and your row stays in the first view (the order shows the place
      above with its distance and Next tag anyway). */
+  /* The splits are this card's story, and your row in the race has to stay in the first view: the
+     trick stats step aside for them on a phone. */
+  .gs-res-splits + .gs-res-stats {
+    display: none;
+  }
+
   .gs-res-sub.has-line > .gs-res-note {
     display: none;
   }
@@ -714,6 +1199,11 @@
 /* ------------------------------------------------------------------ Reduced motion */
 
 @media (prefers-reduced-motion: reduce) {
+  .gs-results.is-in .gs-lad.is-band,
+  .gs-results.is-in .gs-mdot.is-new {
+    animation: none;
+  }
+
   .gs-results.is-in .gs-nu-bar::before {
     animation: none;
   }

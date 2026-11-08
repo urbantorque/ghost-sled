@@ -3,12 +3,13 @@ import { recordFromString } from '../sim/replay';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
 import type { PoolGhostData } from './ghostdata';
+import { FINISH_Z, predictedTime, recordStanding } from './standing';
 
-// The race field: which ghosts ride a run. It is built around where this player usually crashes
-// (the anchor, anchorFor): an opener to pass early, a pack fighting right where you tend to fall, a
-// pace rider who leaves the start with you and goes on ahead, and a stretch rider who keeps going
-// long past it, so whether you crash at 300 m or ride on for kilometres, ghosts are still racing
-// just ahead and just behind you. Your best, the grudge and a friend's challenge ride on top.
+// The race field: which ghosts ride a run. A run has an end now, so the field is built around when
+// this player would reach it (the anchor, anchorFor: their predicted finish time) rather than where
+// they crash: an opener a bit slower than you, a pack around you, a pace rider a bit faster and a
+// stretch rider beyond that. Whether you take 150 s or five minutes, ghosts are racing just ahead and
+// just behind you all the way down. Your best, the grudge and a friend's challenge ride on top.
 //
 // The app gathers the inputs (the bundled or Daily pool, the run's chaos, your best, the grudge and
 // a friend's challenge) and maps the picks to GhostEntry.
@@ -19,25 +20,17 @@ import type { PoolGhostData } from './ghostdata';
 // recorded chaos, so a Comet ghost would float visibly wrong through a plain run): a field rides
 // short instead.
 //
-// Roles (A the anchor; a ghost's speed is its distance over its ride time): opener in [0.5, 0.75]A
-// aiming at 0.62A; two pack ghosts in [0.8, 1.3]A aiming at 0.85 and 1.05A; pace, a long runner at
-// P = max(1.7A, A + 250, 1,500 m) or more that averaged 23 m/s or more when there is one; and the
-// stretch rider (role pace too) at max(2.2A, P + 25) or more, of any speed. Haunted Hollow's four
-// extra ghosts add an opener at 0.55A and pack at 0.95, 1.15 and 1.25A. Within a window the pick
-// nearest its target wins (pace looks among its fast riders first); candidates within 30 m of the
-// target tie, and a generator seeded with the run's chaos seed picks among them. An empty window
-// widens by 25% up to three times (flagged widened), then the nearest unused candidate is taken.
-// Capped 18,000-tick finishers ride only as pace or stretch. Every pick sits 25 m or more from every
-// other pick and from the spot where your best crashed (twin wrecks like Pinecrest's 604.4 and
-// 604.4 m never ride together).
-//
-// Why pace and stretch are long runners whatever the anchor (measured on fresh saves with the
-// novice pilot): every pool ghost covers about the same 140 m in its first 10 s, so the field rides
-// bunched and a novice gets past all of it within about 6 s; and the bots that crash before 1 km
-// also ride slower than a novice afterwards, so a field picked by distance alone was behind you or
-// wrecked by 40 s, and a durable run rode on alone for minutes. A pace rider at 23 m/s or more
-// (about a mid player's long-run average) keeps coming back past a novice who drafts it: neck and
-// neck at 30 s, ahead at 60 s. The stretch rider, a little slower, is still near after that.
+// Every ghost has a predicted time (poolTime): its finish, or its pace carried to the line. Roles
+// (A the anchor, in seconds): opener in [1.05, 1.22]A aiming at 1.1A; two pack ghosts in [0.93, 1.07]A
+// aiming at 0.98 and 1.03A; pace in [0.88, 0.97]A aiming at 0.93A; and the stretch rider (role pace
+// too) in [0.75, 0.9]A aiming at 0.85A. Haunted Hollow's four extra ghosts add an opener at 1.16A and
+// pack at 0.96, 1.0 and 1.05A. Within a window the pick nearest its target wins; candidates within
+// FIELD_TIE_S of the target tie, and a generator seeded with the run's chaos seed picks among them. An
+// empty window widens by 25% up to three times (flagged widened), then the nearest unused candidate
+// is taken. Every pick sits FIELD_SPACING_S or more from every other pick and from your best, and two
+// riders who crashed sit FIELD_SPACING metres apart as well (twin wrecks like Pinecrest's 604.4 and
+// 604.4 m never ride together). Finishers are spaced by time alone: they all end at the same line, so
+// spacing them by distance rode one.
 //
 // Pure: no DOM, render or audio imports.
 
@@ -48,15 +41,18 @@ export interface FieldInput {
   event: ChaosEvent;
   /** Pool ghosts to pick: 5 plus the mood's extra ghosts. */
   count: number;
-  /** Where this player usually crashes, in metres (anchorFor). */
+  /** Your predicted finish time in seconds (anchorFor), or 0 with no runs: a mid-pack time. */
   anchor: number;
   /** chaos.seed, for reproducible tie-breaks. */
   seed: number;
-  /** Your best score on this mountain key (0 for none). Kept for the app's call; the field is built by distance. */
+  /** Your best score on this mountain key (0 for none). Kept for the app's call; the field is built by time. */
   bestScore: number;
   you: { name: string; score: number; distance: number; record: string } | null;
   grudge: { name: string; score: number; record: string; distance?: number; nemesis?: boolean } | null;
   friend: { name: string; score: number; record: string } | null;
+  /** The rider the last results promised by name (the Run Again button): it rides next, whatever the
+   *  mood, and it is the rival. The app promises nobody while an unbeaten friend or a grudge rides. */
+  promised?: { name: string; score: number; record: string } | null;
 }
 
 export interface FieldPick {
@@ -67,36 +63,45 @@ export interface FieldPick {
   role?: GhostRole;
   /** How far its whole run went, in metres, when known. */
   distance?: number;
+  /** Its predicted finish time, seconds. */
+  time?: number;
   /** Its role window was widened to find it. */
   widened?: boolean;
   nemesis?: boolean;
+  /** Your rival for the run: one rider, named at the start and on every stage line. */
+  rival?: boolean;
+  /** It reads your pace as you ride: a very first run on a bundled mountain (pacer.ts). */
+  reads?: boolean;
 }
 
-/** The anchor with no runs anywhere yet, and its bounds (metres). A brand-new player's runs swing
- *  widely: fresh novice runs on Pinecrest end anywhere from 215 m to 2.7 km (median about 400 m, a
- *  third past 750 m). At 700 m the pack rides the first 35 to 40 s, through most of those crashes,
- *  and pace and stretch carry the long ones. */
-export const ANCHOR_DEFAULT = 700;
-export const ANCHOR_MIN = 200;
-export const ANCHOR_MAX = 5000;
-/** Run-end distances the anchor reads per key (the most recent). */
+/** The anchor's bounds (seconds). */
+export const ANCHOR_MIN = 100;
+export const ANCHOR_MAX = 420;
+/** Who a first run rides with: a pack where most riders land (about 2:30). On a bundled mountain they
+ *  read you (pacer.ts). A Daily or a Cup shares its field, so two true beginners ride far behind it there,
+ *  and anyone finds a rider near them. */
+export const ANCHOR_DEFAULT = 150;
+/** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
-/** One long run lifts the next anchor to this share of it at least (anchorFor). */
-export const ANCHOR_LAST = 0.7;
-/** Metres every pick keeps from every other pick and from your best's crash spot. */
+/** One quick run pulls the next anchor to this multiple of it at most (anchorFor). */
+export const ANCHOR_LAST = 1.1;
+/** A mountain you have not ridden: your other mountains' median, this much slower. */
+export const ANCHOR_NEW = 1.1;
+/** Seconds every pick keeps from every other pick and from your best. */
+export const FIELD_SPACING_S = 1;
+/** Metres two riders who crashed keep between their wrecks. */
 export const FIELD_SPACING = 25;
-/** Candidates this close to a role's target tie, and the seeded generator picks. */
-export const FIELD_TIE = 30;
-/** A pool ghost that rode this long finished (the generator's cap): pace or stretch only. */
-export const FINISH_TICKS = 18000;
-/** The pace rider is a long runner: its window starts here at the least (metres). */
-export const PACE_MIN = 1500;
-/** The pace rider looks first among ghosts that averaged this speed or more (m/s). */
-export const PACE_SPEED = 23;
+/** Candidates this close to a role's target (seconds) tie, and the seeded generator picks. */
+export const FIELD_TIE_S = 1.5;
 
-/** A pool ghost's average speed over its whole ride, in m/s. */
-export function poolSpeed(g: Pick<PoolGhostData, 'distance' | 'ticks'>): number {
-  return g.ticks > 0 ? g.distance / (g.ticks / 60) : 0;
+/**
+ * A pool ghost's predicted finish time in seconds: its finish tick when the pool says, else its pace
+ * carried to the line. (A pool that does not record finishTick reads a finisher's `ticks`, which
+ * includes however long the generator kept the run going past the line.)
+ */
+export function poolTime(g: Pick<PoolGhostData, 'distance' | 'ticks' | 'finishTick'>): number {
+  if (typeof g.finishTick === 'number' && g.finishTick > 0) return g.finishTick / 60;
+  return predictedTime(g.distance, g.ticks / 60);
 }
 
 function median(xs: number[]): number {
@@ -112,20 +117,20 @@ function runs(xs: unknown): number[] {
   return out;
 }
 
-/** The distance a field is built around for this mountain key: the median of its last 5 run-end
- *  distances, or 0.7 times the last one when that is more (one long run lifts the next field right
- *  away); with none, 0.8 times the median of every other key's; else 700 m. Clamped to 200 to
- *  5,000 m. */
-export function anchorFor(runDists: Readonly<Record<string, number[]>>, key: string): number {
-  const own = runs(runDists?.[key]).slice(-ANCHOR_RUNS);
-  let a = ANCHOR_DEFAULT;
-  if (own.length) a = Math.max(median(own), ANCHOR_LAST * own[own.length - 1]);
+/** The time a field is built around for this mountain key: the median of its last 5 predicted finish
+ *  times, or 1.1 times the last one when that is quicker (one good run lifts the next field right
+ *  away); with none, 1.1 times the median of every other key's; else 0, and pickField reads a mid-pack
+ *  time from the pool. Clamped to 100 to 420 s. */
+export function anchorFor(runTimes: Readonly<Record<string, number[]>>, key: string): number {
+  const own = runs(runTimes?.[key]).slice(-ANCHOR_RUNS);
+  let a = 0;
+  if (own.length) a = Math.min(median(own), ANCHOR_LAST * own[own.length - 1]);
   else {
     const others: number[] = [];
-    for (const k of Object.keys(runDists ?? {})) if (k !== key) others.push(...runs(runDists[k]).slice(-ANCHOR_RUNS));
-    if (others.length) a = 0.8 * median(others);
+    for (const k of Object.keys(runTimes ?? {})) if (k !== key) others.push(...runs(runTimes[k]).slice(-ANCHOR_RUNS));
+    if (others.length) a = ANCHOR_NEW * median(others);
   }
-  return Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, a));
+  return a > 0 ? Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, a)) : 0;
 }
 
 interface Role {
@@ -133,46 +138,39 @@ interface Role {
   target: number;
   lo: number;
   hi: number;
-  /** Look first among candidates at this average speed or more (pace). */
-  fast?: number;
 }
 
 /** The roles in priority order (a field shorter than 5 keeps the first ones). */
-function roles(a: number, count: number): Role[] {
-  const pace = Math.max(1.7 * a, a + 250, PACE_MIN);
-  const stretch = Math.max(2.2 * a, pace + FIELD_SPACING);
-  const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.8 * a, hi: 1.3 * a });
-  const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 0.5 * a, hi: 0.75 * a });
+function roles(a: number, count: number, beginners: boolean): Role[] {
+  // The pack rides close: at 30 m/s a pack 7% apart is 200 m apart by the finish, and nobody races that.
+  const pack = (k: number): Role => ({ role: 'pack', target: k * a, lo: 0.96 * a, hi: 1.04 * a });
+  const opener = (k: number): Role => ({ role: 'opener', target: k * a, lo: 1.03 * a, hi: 1.2 * a });
   const all: Role[] = [
-    pack(1.05),
-    opener(0.62),
-    { role: 'pace', target: pace, lo: pace, hi: Infinity, fast: PACE_SPEED },
-    pack(0.85),
-    // The stretch rider.
-    { role: 'pace', target: stretch, lo: stretch, hi: Infinity },
+    pack(1.02),
+    // A shared first run has no pace to read, so someone rides at a beginner's.
+    beginners ? { role: 'opener', target: 1.45 * a, lo: 1.25 * a, hi: 1.6 * a } : opener(1.07),
+    { role: 'pace', target: 0.95 * a, lo: 0.9 * a, hi: 0.98 * a },
+    pack(0.985),
+    // The stretch rider, or the slowest beginner.
+    beginners ? { role: 'opener', target: 1.9 * a, lo: 1.6 * a, hi: 2.1 * a } : { role: 'pace', target: 0.88 * a, lo: 0.8 * a, hi: 0.93 * a },
     // Haunted Hollow's four extra ghosts.
-    opener(0.55),
-    pack(0.95),
-    pack(1.15),
-    pack(1.25),
+    opener(1.14),
+    pack(0.97),
+    pack(1.0),
+    pack(1.04),
   ];
   // Any further ghosts join the pack around the anchor.
-  const more = [1.0, 0.9, 1.1, 1.2, 0.8];
+  const more = [1.0, 1.02, 0.97, 1.04, 0.95];
   for (let i = 0; all.length < count; i++) all.push(pack(more[i % more.length]));
   const out = all.slice(0, Math.max(0, count));
   // Filled from the start line down: openers, then the pack, then pace and stretch.
   const order: Record<GhostRole, number> = { opener: 0, pack: 1, pace: 2 };
-  return out.sort((x, y) => order[x.role] - order[y.role] || x.target - y.target);
+  return out.sort((x, y) => order[x.role] - order[y.role] || y.target - x.target);
 }
 
-/** The window after k widenings: 25% wider each time about its middle; a pace window opens downward
- *  toward the pack's top edge. */
-function widen(r: Role, k: number, a: number): { lo: number; hi: number } {
+/** The window after k widenings: 25% wider each time about its middle. */
+function widen(r: Role, k: number): { lo: number; hi: number } {
   if (k === 0) return { lo: r.lo, hi: r.hi };
-  if (r.hi === Infinity) {
-    const floor = Math.min(r.lo, 1.3 * a);
-    return { lo: r.lo - Math.min(1, 0.25 * k) * (r.lo - floor), hi: Infinity };
-  }
   const mid = (r.lo + r.hi) / 2;
   const half = ((r.hi - r.lo) / 2) * Math.pow(1.25, k);
   return { lo: mid - half, hi: mid + half };
@@ -190,12 +188,13 @@ function rng(seed: number): () => number {
   };
 }
 
-/** A record that still decodes on this game version (its distance), or null for a stale one. */
-function check(record: string | undefined | null): { distance: number } | null {
+/** A record that still decodes on this game version (its distance and predicted time), or null for a
+ *  stale one. */
+function check(record: string | undefined | null): { distance: number; time: number } | null {
   if (!record) return null;
   try {
     const r = recordFromString(record);
-    return { distance: r.distance };
+    return { distance: r.distance, time: recordStanding(r).time ?? predictedTime(r.distance, r.ticks / 60) };
   } catch {
     return null;
   }
@@ -213,8 +212,13 @@ export function fieldCandidates(pool: readonly PoolGhostData[], mood: Mood, even
   return c;
 }
 
+/** Where a rider sits for spacing: its time, and where it crashed (null for a finisher). */
+interface Spot {
+  time: number;
+  wreck: number | null;
+}
+
 export function pickField(i: FieldInput): FieldPick[] {
-  const a = Number.isFinite(i.anchor) && i.anchor > 0 ? i.anchor : ANCHOR_DEFAULT;
   const count = Math.max(0, Math.floor(i.count));
   const kind: GhostKind = i.kind === 'daily' ? 'daily' : 'pool';
   const rand = rng(i.seed);
@@ -222,38 +226,46 @@ export function pickField(i: FieldInput): FieldPick[] {
   // Your best, the grudge and the friend ride only on records this version still replays (a stale one
   // is dropped silently). The friend wins a record the grudge shares, so one line never carries two
   // ghosts that pay twice.
-  const you = i.you && check(i.you.record) ? i.you : null;
+  const youRec = i.you ? check(i.you.record) : null;
+  const you = i.you && youRec ? i.you : null;
   const friendRec = i.friend ? check(i.friend.record) : null;
   const friend = i.friend && friendRec ? i.friend : null;
   const grudgeRec = i.grudge ? check(i.grudge.record) : null;
   const grudge = i.grudge && grudgeRec && i.grudge.record !== friend?.record && i.grudge.record !== you?.record ? i.grudge : null;
 
-  // The pool's candidates (your best and the friend never ride twice; the grudge may be picked here).
+  // The pool's candidates (your best and the friend never ride twice; the grudge may be picked here),
+  // fastest first, each with its predicted time.
+  const times = new Map<PoolGhostData, number>();
+  for (const g of i.pool) times.set(g, poolTime(g));
+  const timeOf = (g: PoolGhostData): number => times.get(g) ?? 0;
   const cands = fieldCandidates(i.pool, i.mood, i.event, count + 3)
-    .filter((g) => g.record !== you?.record && g.record !== friend?.record)
-    .sort((x, y) => x.distance - y.distance);
+    .filter((g) => g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
+    .sort((x, y) => timeOf(x) - timeOf(y));
+  const first = !(Number.isFinite(i.anchor) && i.anchor > 0);
+  const a = first ? ANCHOR_DEFAULT : i.anchor;
+
+  const wreckOf = (distance: number): number | null => (distance >= FINISH_Z ? null : distance);
   const used = new Set<PoolGhostData>();
-  const spots: number[] = [];
-  if (you) spots.push(you.distance);
-  const spaced = (d: number) => spots.every((s) => Math.abs(s - d) >= FIELD_SPACING);
+  const spots: Spot[] = [];
+  if (you && youRec) spots.push({ time: youRec.time, wreck: wreckOf(you.distance) });
+  const spaced = (g: PoolGhostData): boolean => {
+    const t = timeOf(g);
+    const w = wreckOf(g.distance);
+    return spots.every((s) => Math.abs(s.time - t) >= FIELD_SPACING_S && (s.wreck === null || w === null || Math.abs(s.wreck - w) >= FIELD_SPACING));
+  };
 
   const picks: Array<{ g: PoolGhostData; role: GhostRole; widened: boolean }> = [];
-  for (const r of roles(a, count)) {
-    const fits = (g: PoolGhostData) => !used.has(g) && (r.role === 'pace' || g.ticks < FINISH_TICKS) && spaced(g.distance);
+  for (const r of roles(a, count, first && i.kind !== 'pool')) {
+    const fits = (g: PoolGhostData) => !used.has(g) && spaced(g);
     let found: PoolGhostData | null = null;
     let widened = false;
     for (let k = 0; k <= 3 && !found; k++) {
-      const w = widen(r, k, a);
-      let inside = cands.filter((g) => g.distance >= w.lo && g.distance <= w.hi && fits(g));
+      const w = widen(r, k);
+      const inside = cands.filter((g) => timeOf(g) >= w.lo && timeOf(g) <= w.hi && fits(g));
       if (!inside.length) continue;
-      // Pace looks among its fast riders first, then takes whoever the window holds.
-      if (r.fast) {
-        const quick = inside.filter((g) => poolSpeed(g) >= r.fast!);
-        if (quick.length) inside = quick;
-      }
-      const ties = inside.filter((g) => Math.abs(g.distance - r.target) <= FIELD_TIE);
+      const ties = inside.filter((g) => Math.abs(timeOf(g) - r.target) <= FIELD_TIE_S);
       if (ties.length > 1) found = ties[Math.min(ties.length - 1, Math.floor(rand() * ties.length))];
-      else found = inside.reduce((b, g) => (Math.abs(g.distance - r.target) < Math.abs(b.distance - r.target) ? g : b));
+      else found = inside.reduce((b, g) => (Math.abs(timeOf(g) - r.target) < Math.abs(timeOf(b) - r.target) ? g : b));
       widened = k > 0;
     }
     if (!found) {
@@ -261,7 +273,7 @@ export function pickField(i: FieldInput): FieldPick[] {
       let best = Infinity;
       for (const g of cands) {
         if (!fits(g)) continue;
-        const d = Math.abs(g.distance - r.target);
+        const d = Math.abs(timeOf(g) - r.target);
         if (d < best) {
           best = d;
           found = g;
@@ -271,12 +283,12 @@ export function pickField(i: FieldInput): FieldPick[] {
     }
     if (!found) continue; // the field rides short
     used.add(found);
-    spots.push(found.distance);
+    spots.push({ time: timeOf(found), wreck: wreckOf(found.distance) });
     picks.push({ g: found, role: r.role, widened });
   }
 
   const out: FieldPick[] = picks.map(({ g, role, widened }) => {
-    const p: FieldPick = { name: g.name, kind, score: g.score, record: g.record, role, distance: g.distance };
+    const p: FieldPick = { name: g.name, kind, score: g.score, record: g.record, role, distance: g.distance, time: timeOf(g) };
     if (widened) p.widened = true;
     return p;
   });
@@ -291,16 +303,15 @@ export function pickField(i: FieldInput): FieldPick[] {
       mine.kind = 'grudge';
       if (nemesis) mine.nemesis = true;
     } else {
-      const g: FieldPick = { name: grudge.name, kind: 'grudge', score: grudge.score, record: grudge.record, distance: grudge.distance ?? grudgeRec!.distance };
+      const g: FieldPick = { name: grudge.name, kind: 'grudge', score: grudge.score, record: grudge.record, distance: grudge.distance ?? grudgeRec!.distance, time: grudgeRec!.time };
       if (nemesis) g.nemesis = true;
-      const d = grudge.distance;
       let at = -1;
-      if (typeof d === 'number' && Number.isFinite(d)) {
-        // It takes the pack slot nearest where it crashed.
+      if (typeof grudge.distance === 'number' && Number.isFinite(grudge.distance)) {
+        // It takes the pack slot nearest its own pace.
         let best = Infinity;
         out.forEach((p, k) => {
-          if (p.role !== 'pack' || p.distance === undefined) return;
-          const gap = Math.abs(p.distance - d);
+          if (p.role !== 'pack' || p.time === undefined) return;
+          const gap = Math.abs(p.time - grudgeRec!.time);
           if (gap < best) {
             best = gap;
             at = k;
@@ -313,8 +324,53 @@ export function pickField(i: FieldInput): FieldPick[] {
       } else tail = g;
     }
   }
-  if (you) out.push({ name: you.name, kind: 'you', score: you.score, record: you.record, distance: you.distance });
+  // The promised rider rides like a grudge: its own record, in the pack slot nearest its pace.
+  const promisedRec = i.promised ? check(i.promised.record) : null;
+  const promised = i.promised && promisedRec && i.promised.record !== you?.record ? i.promised : null;
+  if (promised && !out.some((p) => p.record === promised.record)) {
+    let at = -1;
+    let best = Infinity;
+    out.forEach((p, k) => {
+      if (p.role !== 'pack' || p.time === undefined) return;
+      const gap = Math.abs(p.time - promisedRec!.time);
+      if (gap < best) {
+        best = gap;
+        at = k;
+      }
+    });
+    const g: FieldPick = { name: promised.name, kind, score: promised.score, record: promised.record, distance: promisedRec!.distance, time: promisedRec!.time, role: 'pack' };
+    if (at >= 0) out[at] = g;
+    else out.push(g);
+  }
+  if (you) out.push({ name: you.name, kind: 'you', score: you.score, record: you.record, distance: you.distance, time: youRec!.time });
   if (tail) out.push(tail);
-  if (friend) out.push({ name: friend.name, kind: 'friend', score: friend.score, record: friend.record, distance: friendRec!.distance });
+  if (friend) out.push({ name: friend.name, kind: 'friend', score: friend.score, record: friend.record, distance: friendRec!.distance, time: friendRec!.time });
+  const rival = rivalOf(out, a, promised?.record ?? null);
+  if (rival) rival.rival = true;
+  // Only here: the Daily and the Cup share their field, and a named rider is a promise.
+  if (first && i.kind === 'pool') for (const p of out) if (p.kind === 'pool' && p.role && p.record !== promised?.record) p.reads = true;
   return out;
+}
+
+/**
+ * The run's rival: the rider the results promised by name, else the friend who challenged you, else
+ * your grudge, else the field ghost right ahead of you: the one just quicker than your anchor. A
+ * finisher goes first, so the rival is still there at the last line. With nobody quicker, the quickest
+ * rider in the field. Never your own best: that has its own figure.
+ */
+export function rivalOf(field: FieldPick[], anchor: number, promised: string | null = null): FieldPick | null {
+  const named = promised ? field.find((f) => f.record === promised) : undefined;
+  if (named) return named;
+  const friend = field.find((p) => p.kind === 'friend');
+  if (friend) return friend;
+  const grudge = field.find((p) => p.kind === 'grudge');
+  if (grudge) return grudge;
+  const rows = field.filter((p) => p.kind !== 'you' && typeof p.time === 'number');
+  const riders = rows.filter((p) => (p.distance ?? 0) >= FINISH_Z);
+  const from = riders.length > 0 ? riders : rows;
+  let best: FieldPick | null = null;
+  for (const p of from) if (p.time! < anchor && (!best || p.time! > best.time!)) best = p;
+  if (best) return best;
+  for (const p of from) if (!best || p.time! < best.time!) best = p;
+  return best;
 }

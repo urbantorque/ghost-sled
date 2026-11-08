@@ -2,7 +2,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isValidGhostName } from '../src/bot/names';
-import { PoolGhost } from '../src/bot/pool';
+import { PoolGhost, fallsOf } from '../src/bot/pool';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { recordFromString, replayRecord } from '../src/sim/replay';
 import { SIM_VERSION } from '../src/sim/sim';
@@ -46,11 +46,15 @@ describe('bundled ghost pools', () => {
         expect(pool.ghosts.length).toBeGreaterThan(0);
       });
 
-      it('has unique names and is sorted by score', () => {
+      it('has unique names and runs in race order, weakest first', () => {
         const names = pool.ghosts.map((g) => g.name.toLowerCase());
         expect(new Set(names).size).toBe(names.length);
         for (const g of pool.ghosts) expect(isValidGhostName(g.name), g.name).toBe(true);
-        for (let i = 1; i < pool.ghosts.length; i++) expect(pool.ghosts[i].score).toBeGreaterThanOrEqual(pool.ghosts[i - 1].score);
+        const race = (g: (typeof pool.ghosts)[number]): number => (g.finishTick >= 0 ? 1e7 - g.finishTick : g.distance);
+        for (let i = 1; i < pool.ghosts.length; i++) expect(race(pool.ghosts[i])).toBeGreaterThanOrEqual(race(pool.ghosts[i - 1]));
+        // Every pace has company: a real spread of finish times, and some who never got there.
+        const times = pool.ghosts.filter((g) => g.finishTick >= 0).map((g) => g.finishTick);
+        expect(Math.max(...times) / Math.min(...times)).toBeGreaterThan(1.2);
       });
 
       it('every record decodes and replays to its stored score and distance', () => {
@@ -64,9 +68,11 @@ describe('bundled ghost pools', () => {
           expect(r.ticks).toBe(g.ticks);
           expect(r.score).toBe(g.score);
           expect(r.distance).toBe(g.distance);
+          expect(g.falls, g.name).toEqual(fallsOf(r));
           const sim = replayRecord(r);
           expect(sim.tick, g.name).toBe(g.ticks);
           expect(sim.score, g.name).toBe(g.score);
+          expect(sim.s.finishTick, g.name).toBe(g.finishTick);
           expect(Math.round(sim.distance * 10) / 10, g.name).toBe(g.distance);
         }
       });

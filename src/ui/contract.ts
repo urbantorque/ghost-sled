@@ -17,6 +17,34 @@ export interface MountainCard {
   /** e.g. "Pass 4 ghosts to unlock" */
   unlockText: string;
   best: number;
+  /** Your best finish time here, seconds (0 for none): the card reads it before the score. */
+  bestTime?: number;
+  /** The old course's best, shown as "Old best" until a new one exists (0 for none). */
+  oldBest?: number;
+  /** Your rank on this mountain's ladder of rankOf places (null with no run here). */
+  rank?: number | null;
+  rankOf?: number;
+  /** You have beaten the top of this ladder. */
+  top?: boolean;
+  medals?: MedalSet;
+}
+
+/** Your medals on a mountain: 0 none, 1 bronze, 2 silver, 3 gold, one per stage and the whole run. */
+export interface MedalSet {
+  stages: number[];
+  run: number;
+}
+
+/** The weekly Cup on the title. best: your best time this week, seconds (0 for none). */
+export interface TitleCup {
+  key: string;
+  week: number;
+  ready: boolean;
+  /** The week's mood and event, as the reveal names them. */
+  mood: string;
+  event: string | null;
+  best: number;
+  medal: number;
 }
 
 export interface MissionView {
@@ -46,10 +74,17 @@ export interface TitleModel {
   /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row. */
   daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number };
   best: number;
+  /** Your best finish time on the selected mountain, seconds (0 for none). */
+  bestTime?: number;
+  /** The selected mountain's old best, until a new one exists (0 for none). */
+  oldBest?: number;
   wallet: number;
   sledName: string;
-  /** A friend's challenge link was opened. distance: how far their run went; daily: it was on a Daily Mountain. */
-  challenge: { name: string; score: number; mountain: string; distance?: number; daily?: boolean } | null;
+  /** A friend's challenge link was opened. distance: how far their run went; time: its finish in
+   *  seconds, when it finished; daily: it was on a Daily Mountain; old: it was ridden on an old course,
+   *  so `distance` is a target and no ghost rides; waiting: its mountain's rivals are still being
+   *  generated, so Ride cannot start yet. */
+  challenge: { name: string; score: number; mountain: string; distance?: number; time?: number | null; daily?: boolean; old?: boolean; waiting?: boolean } | null;
   missions: MissionView[];
   inputMode: InputMode;
   firstVisit: boolean;
@@ -59,11 +94,21 @@ export interface TitleModel {
   ghostsPassed?: number;
   /** A one-line greeting over the Ride button (progress.titleGreeting), or none. */
   greet?: string | null;
+  /** The name above you on the selected mountain's ladder ("Next: SparkleCedar, 2:11.4, 1.6 s up"). */
+  nextRung?: string | null;
+  /** The weekly Cup, when there is one to show. */
+  cup?: TitleCup | null;
 }
 
 export interface HudModel {
   score: number;
   distance: number;
+  /** The run clock, seconds. It stops on the finish line. */
+  clock: number;
+  /** The stage you are riding (0 based), of how many, and how far down the whole descent (0..1). */
+  stage: { index: number; of: number; progress: number } | null;
+  /** Wipeouts the run can still take, of how many; null until the first is spent. */
+  wipeouts: { left: number; of: number } | null;
   gifts: number;
   /**
    * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
@@ -103,13 +148,34 @@ export interface ResultsGhost {
   name: string;
   kind: GhostKind;
   score: number;
+  /** Its finish time in seconds; null or absent for a run that did not finish. */
+  time?: number | null;
   /**
-   * How far its whole run went, in metres. The race is ranked by distance, so this is the number the
-   * finishing order shows (a missing value reads as 0).
+   * How far its whole run went, in metres. Finishers rank by time, then the rest by this, the number
+   * their rows show (a missing value reads as 0).
    */
   distance?: number;
   /** You overtook it at least once during the run (its Passed stamp). */
   passed: boolean;
+}
+
+/** The clock at a stage line. vsBest: seconds against your best there, + = behind; null with none. */
+export interface ResultsSplit {
+  name: string;
+  seconds: number;
+  vsBest: number | null;
+}
+
+/** A run that reached the finish line: the card's finished variant. */
+export interface ResultsFinish {
+  seconds: number;
+  /** 0 none, 1 bronze, 2 silver, 3 gold. */
+  medal: number;
+  splits: ResultsSplit[];
+  /** Your best time before this run, seconds; null with none. */
+  bestTime: number | null;
+  /** This run's time beat it (or is your first). */
+  newBest: boolean;
 }
 
 /** A mountain this run unlocked, for the results reveal card. */
@@ -123,6 +189,10 @@ export interface UnlockedMountain {
 export interface ResultsModel {
   score: number;
   distance: number;
+  /** Set when the run reached the line. Without it, the wreck's card. */
+  finish?: ResultsFinish | null;
+  /** The finish line, metres ("85 m short of the finish"). */
+  finishZ?: number;
   best: number;
   newBest: boolean;
   giftsEarned: number;
@@ -130,6 +200,7 @@ export interface ResultsModel {
   ghosts: ResultsGhost[];
   ghostsPassed: number;
   missions: MissionView[];
+  /** How the run ended ('' for a finish). */
   crashCause: string;
   /** What ended the run, for the crash line's glyph. */
   crashKind?: CrashCause | null;
@@ -153,7 +224,7 @@ export interface ResultsModel {
   /** The stake lost to the crash (results append " with 4,960 on the line" from 1,000). */
   lostCombo?: number;
   /** At most ONE extra race line on the card (C6 budget): friend, then grudge, then event note. */
-  raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' } | null;
+  raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' | 'rung' | 'medal' } | null;
   /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
    *  past."): shown in the place note's slot, unless it is the race line itself. */
   crashNote?: string | null;
@@ -166,6 +237,50 @@ export interface ResultsModel {
   nextUnlock?: ResultsNextUnlock | null;
   /** You beat the friend's challenge: Challenge becomes the primary "Send It Back". */
   sendItBack?: boolean;
+  /** Your place on the mountain's ladder (a named mountain only). */
+  ladder?: ResultsLadder | null;
+  /** The stage table (a run that crossed a stage line). */
+  stages?: ResultsStages | null;
+}
+
+/** Your place on this mountain's ladder as the run left it, and what the run earned on it. */
+export interface ResultsLadder {
+  rank: number | null;
+  of: number;
+  top: boolean;
+  /** "Next: SparkleCedar, 2:11.4, 1.6 s up"; null at the top. */
+  next: string | null;
+  /** Places this run climbed. */
+  up: number;
+  medals: MedalSet;
+  /** Medals this run raised: 0 to 2 for a stage, 3 for the whole run. */
+  fresh: number[];
+  /** The climbing moment ("Beat SparkleCedar and 2 more."), null for a run that climbed nothing. */
+  moment: string | null;
+  /** This run took the top of the ladder. */
+  topNow: boolean;
+  /** Gifts it paid: already in the wallet, and never doubled. */
+  gifts: number;
+}
+
+/** One stage of a run, in its own time: you, and your rival and your best on the same stretch. */
+export interface ResultsStageRow {
+  name: string;
+  seconds: number;
+  /** The medal this run earned here (0 none). */
+  medal: number;
+  rival: number | null;
+  best: number | null;
+}
+
+/** The stage table: what decided it, stage by stage. */
+export interface ResultsStages {
+  rival: { name: string; kind: GhostKind } | null;
+  /** Your own best rode, so its splits show. */
+  best: boolean;
+  /** "You lost 2.1 s to Mila in Stage 2." */
+  line: string | null;
+  rows: ResultsStageRow[];
 }
 
 /** The next unlock on the results card: a mountain by ghosts passed, else a sled by gifts. */
@@ -190,6 +305,8 @@ export interface UIHandlers {
   onPause(paused: boolean): void;
   onSelectMountain(id: string): void;
   onDaily(): void;
+  /** Select the weekly Cup. */
+  onCup?(): void;
   onSelectSled(id: number): void;
   onBuySled(id: number): void;
   onSettings(s: Partial<SettingsModel>): void;

@@ -14,14 +14,18 @@ export class Lines {
   private readonly cx = new Float64Array(SIZE);
   private readonly hw = new Float64Array(SIZE);
 
-  constructor(private readonly course: Course) {}
+  /** bold: the rider takes a fork's risk route rather than the safe line. */
+  constructor(
+    private readonly course: Course,
+    readonly bold = false,
+  ) {}
 
   private slot(i: number): number {
     const k = i & MASK;
     if (this.key[k] !== i) {
       const c = this.course;
       this.key[k] = i;
-      this.sx[k] = c.safeX(i);
+      this.sx[k] = this.bold ? (c.altX(i) ?? c.safeX(i)) : c.safeX(i);
       this.cx[k] = c.centerX(i);
       this.hw[k] = c.halfWidth(i);
     }

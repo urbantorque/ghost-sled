@@ -5,6 +5,7 @@ import { SLEDS } from '../sim/sleds';
 import { MissionCtx, MissionResult, MissionState, RunSummary, missionDef, missionProgressText, missionTier } from './missions';
 import { isNemesis } from './settle';
 import type { SaveData } from './save';
+import { type Standing, aheadOf, figure, marginPhrase } from './standing';
 
 // Progress lines: mid-run mission pops and the pause card's live missions, the next unlock, the title
 // greeting, the Run Again label, the results race line, the crash line, the friend line, the reveal's
@@ -109,7 +110,7 @@ export function eventNote(event: ChaosEvent, metresAway: number): string | null 
  */
 export function titleGreeting(d: SaveData, key: string, mountainName: string): string | null {
   if (d.runs <= 0) return null;
-  const where = key.startsWith('daily') ? 'the Daily Mountain' : mountainName;
+  const where = key.startsWith('daily') ? 'the Daily Mountain' : key.startsWith('cup') ? 'the Weekly Cup' : mountainName;
   const g = d.grudge[key];
   if (g && g.name && g.record) return isNemesis(g) ? `Your nemesis ${g.name} is waiting on ${where}` : `${g.name} is waiting on ${where}`;
   const u = nextUnlock(d);
@@ -137,11 +138,17 @@ export function ellipsize(name: string, max = LABEL_NAME_MAX): string {
   return chars.length > max ? chars.slice(0, max - 1).join('') + '…' : name;
 }
 
-/** The Run Again button's label and accessible name: an unbeaten friend, else the grudge, by name. */
-export function runAgainLabel(friend: { name: string; beaten: boolean } | null, grudge: { name: string } | null): { text: string; aria: string } {
+/**
+ * The Run Again button's label and accessible name. It always names who is about to ride: an unbeaten
+ * friend, else the grudge, else `next`, the rider the app has promised the next field (a rematch when
+ * it rode this run, a race when it is new to you). 'Run Again' only with nobody to name.
+ */
+export function runAgainLabel(friend: { name: string; beaten: boolean } | null, grudge: { name: string } | null, next?: { name: string; rode: boolean } | null): { text: string; aria: string } {
   const name = friend && !friend.beaten ? friend.name : grudge ? grudge.name : '';
-  if (!name) return { text: 'Run Again', aria: 'Run Again' };
-  return { text: `Rematch ${ellipsize(name)}`, aria: `Rematch ${name}, run again` };
+  if (name) return { text: `Rematch ${ellipsize(name)}`, aria: `Rematch ${name}, run again` };
+  if (!next) return { text: 'Run Again', aria: 'Run Again' };
+  const word = next.rode ? 'Rematch' : 'Race';
+  return { text: `${word} ${ellipsize(next.name)}`, aria: `${word} ${next.name}, run again` };
 }
 
 /** What may fill the results card's one race line. */
@@ -157,22 +164,43 @@ export interface RaceLines {
   crash?: string | null;
   /** An event the run never reached ('The yeti was 130 m away.'). */
   event: string | null;
+  /** A rung this run just missed ('1.6 s from SparkleCedar and Rank 18.', ladder.ts rungHook). */
+  rung?: string | null;
+  /** A stage gold this run almost had ('0.4 s from gold in Stage 2.', ladder.ts goldHook). */
+  gold?: string | null;
+  /** What decided it against your rival ('You lost 2.1 s to Mila in Stage 2.'), and who that is. */
+  decided?: { text: string; grudge: boolean; friend: boolean } | null;
+  /** The Daily, when today's is still to ride (dailyHook). */
+  dailyOpen?: string | null;
 }
 
 /**
- * The one extra race line on the results card (C6 budget). A grudge line exists after almost every
- * run (any ghost that went further is elected), so it ranks by what it says: friend, then the Daily
- * medal, then a settled grudge or a nemesis, then the crash line (why the place on the card is not
- * the one the HUD showed), then the event note, then any other grudge line.
+ * The one extra race line on the results card (C6 budget), which is also where the next-run hook lives:
+ * a hook takes this slot or gives way, and never stacks. A grudge line exists after almost every run
+ * (any ghost that went further is elected), so it ranks by what it says: friend, then the Daily or Cup
+ * medal, then a settled grudge or a nemesis, then a rung just missed and a stage gold almost had (the
+ * reasons to go again now), then the crash line (why the place on the card is not the one the HUD
+ * showed), the event note, what decided it against your rival (which says more than the plain grudge
+ * line it stands in for), any other grudge line, and last the Daily still open today.
  */
-export function resultsRaceLine(l: RaceLines): { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' } | null {
+export function resultsRaceLine(l: RaceLines): { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' | 'rung' | 'medal' } | null {
   if (l.friend) return { text: l.friend, tone: 'friend' };
   if (l.daily) return { text: l.daily, tone: 'event' };
   if (l.grudge && l.grudge.strong) return { text: l.grudge.text, tone: 'grudge' };
+  if (l.rung) return { text: l.rung, tone: 'rung' };
+  if (l.gold) return { text: l.gold, tone: 'medal' };
   if (l.crash) return { text: l.crash, tone: 'crash' };
   if (l.event) return { text: l.event, tone: 'event' };
+  if (l.decided) return { text: l.decided.text, tone: l.decided.grudge ? 'grudge' : l.decided.friend ? 'friend' : 'rung' };
   if (l.grudge) return { text: l.grudge.text, tone: 'grudge' };
+  if (l.dailyOpen) return { text: l.dailyOpen, tone: 'event' };
   return null;
+}
+
+/** The last hook: today's Daily, still open, and the streak riding on it. Null once you have ridden it. */
+export function dailyHook(streak: number, riddenToday: boolean): string | null {
+  if (riddenToday) return null;
+  return streak >= 2 ? `Ride today's Daily to keep your ${streak} day streak.` : "Today's Daily is still open.";
 }
 
 /** "1st", "2nd", "23rd". */
@@ -200,19 +228,18 @@ export function crashLine(rankAtCrash: number, past: readonly string[], shown: n
   return `${where} ${who} rode on past.`;
 }
 
-/** The friend line on the results: "You beat Mila by 120 m." or "Mila beat you by 340 m." The margin
- *  is the difference of the two rows as the race shows them (whole metres each), so the line and the
- *  rows agree; under 1 m it says so. */
-export function friendLine(name: string, friendDistance: number, youDistance: number): string {
-  const gap = Math.round(youDistance) - Math.round(friendDistance);
-  const by = (v: number): string => (v >= 1 ? m(v) : 'less than 1 m');
-  if (youDistance > friendDistance) return `You beat ${name} by ${by(gap)}.`;
-  return `${name} beat you by ${by(-gap)}.`;
+/** The friend line on the results, in the race's terms: "You beat Mila by 1.2 s.", "Mila beat you by
+ *  340 m.", "You beat Mila to the finish." The margin is the difference of the two rows as the race
+ *  shows them, so the line and the rows agree; under a tenth or a metre it says so. */
+export function friendLine(name: string, friend: Standing, you: Standing): string {
+  if (aheadOf(you, friend)) return `You beat ${name} ${marginPhrase(you, friend)}.`;
+  if (aheadOf(friend, you)) return `${name} beat you ${marginPhrase(friend, you)}.`;
+  return `Dead level with ${name}.`;
 }
 
-/** The friend's run, crossed alive: the callout on the friendBeaten beat. */
-export function friendBeatenText(name: string, distance: number): string {
-  return `Beat ${name}\u2019s ${m(distance)}`;
+/** The friend's run beaten: the callout on the friendBeaten beat ("Beat Mila's 2,340 m"). */
+export function friendBeatenText(name: string, friend: Standing): string {
+  return `Beat ${name}\u2019s ${figure(friend)}`;
 }
 
 /** Where a challenge was ridden, for copy: a Daily Mountain reads "the Daily Mountain". */
@@ -221,15 +248,15 @@ function placeName(mountain: string): string {
 }
 
 /**
- * The share sheet's title for a challenge link. With `by` (you beat a friend's challenge): addressed
- * back to them, "Mila, I beat your 2,340 m on Pinecrest by 120 m. Your move." `name` is the friend and
- * `distance` their run. Without: an open challenge for your own run, "Beat my 2,340 m on Pinecrest
- * in Ghost Sled" (`name` unused, `distance` yours).
+ * The share sheet's title for a challenge link. With `by` (you beat a friend's challenge, marginPhrase's
+ * words): addressed back to them, "Mila, I beat your 2:31.4 on Pinecrest by 1.2 s. Your move." `name`
+ * is the friend and `run` theirs. Without: an open challenge for your own run, "Beat my 2:31.4 on
+ * Pinecrest in Ghost Sled" (`name` unused, `run` yours).
  */
-export function challengeShareTitle(name: string, distance: number, mountain: string, by: number | null): string {
+export function challengeShareTitle(name: string, run: Standing, mountain: string, by: string | null): string {
   const where = placeName(mountain);
-  if (by !== null && name) return `${name}, I beat your ${m(distance)} on ${where} by ${m(Math.max(1, by))}. Your move.`;
-  if (distance > 0) return `Beat my ${m(distance)} on ${where} in Ghost Sled`;
+  if (by !== null && name) return `${name}, I beat your ${figure(run)} on ${where} ${by}. Your move.`;
+  if (run.time !== null || run.distance > 0) return `Beat my ${figure(run)} on ${where} in Ghost Sled`;
   return 'Beat my Ghost Sled run';
 }
 

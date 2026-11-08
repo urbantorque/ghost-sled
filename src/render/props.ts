@@ -1,7 +1,8 @@
-import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
-import { Clearing, Dresser, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
-import { VARIANT_SHARE, canLean, forestBase, forestSteps, variantDepthMaterial, variantMaterial, variantSet, variantView } from './flora';
+import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
+import { crestE, standable, visualGround } from './ground';
+import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
 import { makeToonMaterial, shared } from './materials';
 import {
   cairnGeometry,
@@ -29,6 +30,8 @@ interface Batch {
   near: number;
   /** Variant batches (flora.ts): each instance's variant, and its colour (instanceColor). */
   pick?: InstancedBufferAttribute;
+  /** A forest batch: the key of the variant set it draws (swapped in when made on idle time). */
+  setKey?: string;
   /** A dressing batch waits unseen until its kit is made on idle time. */
   waiting?: boolean;
   /** A bank dressing batch (left out of the rear-view mirror). */
@@ -51,6 +54,12 @@ function paletteKey(biome: string, p: Palette): string {
   const cs = [p.tall, p.tallDark, p.low, p.lowLit, p.accentProp, p.snowShade];
   return biome + ':' + cs.map((c) => c.getHexString()).join(',');
 }
+
+/** The forest's and the gifts' detail range: chunks this many past the player's (128 to 192 m ahead
+ *  and on) draw the far trees and far gifts (flora.ts Lod 2), where a tree stands a few dozen pixels
+ *  tall and a gift a few. Nearer chunks draw the full trees (Low's own cheaper ones on Low, whose
+ *  detail range ends a chunk sooner: 64 to 128 m ahead). */
+export const LOD_AHEAD = 3;
 
 /** Dressing caps (instances in the visible window): bank clutter and poles, and the big pieces. */
 const DRESS_SMALL_CAP = 900;
@@ -134,6 +143,28 @@ function whenIdle(fn: () => void): void {
   else setTimeout(fn, 50);
 }
 
+/** Marks the first `n` values of an instance attribute for upload (the rest of its cap stays). */
+function upload(a: InstancedBufferAttribute, n: number): void {
+  a.clearUpdateRanges();
+  a.addUpdateRange(0, n);
+  a.needsUpdate = true;
+}
+
+/** A gift past the detail range (meshes.ts giftGeometry, a few pixels across there): the box, its two
+ *  ribbons, and the bow's two loops as flattened diamonds leaning out from the knot. */
+function farGiftGeometry(golden: boolean): BufferGeometry {
+  const box = golden ? new Color('#FFE38A') : new Color('#FFD34D');
+  const ribbon = golden ? new Color('#8FF3E4') : new Color('#FF4D2E');
+  const s = golden ? 1.35 : 1;
+  return merge([
+    part(new BoxGeometry(0.62 * s, 0.56 * s, 0.62 * s), box),
+    part(new BoxGeometry(0.66 * s, 0.58 * s, 0.14 * s), ribbon),
+    part(new BoxGeometry(0.14 * s, 0.58 * s, 0.66 * s), ribbon),
+    part(new OctahedronGeometry(0.17 * s, 0), ribbon, { pos: [-0.13 * s, 0.36 * s, 0], rot: [0, 0, 0.62], scale: [0.45, 1, 1] }),
+    part(new OctahedronGeometry(0.17 * s, 0), ribbon, { pos: [0.13 * s, 0.36 * s, 0], rot: [0, 0, -0.62], scale: [0.45, 1, 1] }),
+  ]);
+}
+
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h ^= h >>> 15;
@@ -147,6 +178,12 @@ export class Props {
   private batches = new Map<string, Batch>();
   private materials: ShaderMaterial[] = [];
   private giftMat: ShaderMaterial;
+  /** The far gifts' material (the gift's, drawing one of two variants: plain or golden). */
+  private giftFarMat: ShaderMaterial;
+  /** The far gifts' variant set, made once. */
+  private giftFarGeo: BufferGeometry | null = null;
+  /** A chunk's forest batch key to its batch in the detail range and past it (build). */
+  private route = new Map<string, [string, string]>();
   private range = { from: -1, to: -1 };
   private dirty = true;
   private m = new Matrix4();
@@ -175,6 +212,10 @@ export class Props {
   private started = false;
   /** This run's graveyard cairns (sim x and z on the bank), at most CAIRN_CAP. */
   private graves: Array<{ x: number; z: number }> = [];
+  /** The set pieces' footprints and crowd rows (landmarks.ts), kept clear of the forest. */
+  siteClearings: ((z0: number, z1: number, out: Clearing[]) => void) | null = null;
+  /** Ground no dressing stands on either: the set pieces' footprints and crowd rows (landmarks.ts). */
+  siteKeep: ((z0: number, z1: number, out: Clearing[]) => void) | null = null;
 
   constructor(
     private course: Course,
@@ -188,7 +229,9 @@ export class Props {
     private arches = false,
   ) {
     // Gifts shrink away as they pass the lens (and right around the rider after a perfect landing).
-    this.giftMat = makeToonMaterial({ bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2], clearFocus: true });
+    const giftOpts = { bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
+    this.giftMat = makeToonMaterial(giftOpts);
+    this.giftFarMat = variantMaterial(makeToonMaterial(giftOpts));
     this.build();
   }
 
@@ -277,75 +320,101 @@ export class Props {
     // is no longer a wall of copies, at no extra draw call. Their own copies of the forest materials
     // (patched to pick a variant per instance), so the run's obstacles keep theirs untouched.
     const forestCap = Math.round(2200 * this.forestDensity) + 10;
-    const vFor = (opts: Parameters<typeof makeToonMaterial>[0]) => {
-      const m = variantMaterial(makeToonMaterial(opts));
+    const vFor = (opts: Parameters<typeof makeToonMaterial>[0], aerialPick = false) => {
+      const m = variantMaterial(makeToonMaterial(opts), aerialPick);
       this.materials.push(m);
       return m;
     };
     const glacier = biome === 'glacier';
     const vol = biome === 'volcanic';
     const wallMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier });
-    const farMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier, aerial: true });
+    // The far rows lean into the fog with distance, the treeline wall does not: one material for both,
+    // each instance's pick saying which it is (flora.ts AERIAL_PICK).
+    const farMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier, aerial: true }, true);
     const key = paletteKey(biome, p);
-    const fKeyA = 'flora:a:' + key;
-    const fKeyB = 'flora:b:' + key;
-    let base: { a: BufferGeometry; b: BufferGeometry } | null = null;
-    // The treeline wall casts the long bank shadows; the far forest never reaches the shadow
-    // frustum, so it skips the (instanced, uncullable) shadow pass entirely.
-    const forestPair = (prefix: string, cast: boolean, cap: number, far: boolean) => {
+    // Medium and High draw the full trees in the detail range, Low its own cheaper ones; past it every
+    // tier draws the far trees. A set with no cheaper build shares the full set's buffers.
+    const nearLod: Lod = this.arches ? 0 : 1;
+    const setKey = (set: 'a' | 'b', lod: Lod) => 'flora:' + set + ':' + (hasLod(biome, set) ? lod : 0) + ':' + key;
+    const bases = new Map<string, BufferGeometry>();
+    // Until a variant set is made on idle time, both picks draw the original tree. Low keeps just the
+    // original (every pick 0): a set's second variant doubles the forest's vertices.
+    const baseFor = (set: 'a' | 'b', lod: Lod) => {
+      const sk = setKey(set, lod);
+      let g = bases.get(sk);
+      if (!g) {
+        const b0 = forestSteps(biome, p, set, lod)[0]();
+        g = this.arches ? variantSet([b0, b0]) : variantSet([b0]);
+        b0.dispose();
+        bases.set(sk, g);
+        this.owned.push(g);
+      }
+      return g;
+    };
+    // In the detail range the treeline wall casts the long bank shadows (Medium and High); the far
+    // rows never reach the shadow frustum, nor does anything past the detail range, so those skip the
+    // (instanced, uncullable) shadow pass entirely. Without shadows (Low) the wall rides with the far
+    // rows in one batch.
+    const forestPair = (prefix: string, cast: boolean, cap: number, mat: ShaderMaterial, lod: Lod) => {
       for (const set of ['a', 'b'] as const) {
         const k = prefix + set;
         const pick = new InstancedBufferAttribute(new Float32Array(cap), 1);
-        const src = this.arches ? sets.get(set === 'a' ? fKeyA : fKeyB) : undefined;
-        let geo: BufferGeometry;
-        if (src) geo = variantView(src, pick);
-        else {
-          // Until the variant set is made on idle time, both picks draw the original tree. Low keeps
-          // just the original (every pick 0): a set's second variant doubles the forest's vertices.
-          if (!base) {
-            const b0 = forestBase(biome, p);
-            base = this.arches ? { a: variantSet([b0.a, b0.a]), b: variantSet([b0.b, b0.b]) } : { a: variantSet([b0.a]), b: variantSet([b0.b]) };
-            this.owned.push(base.a, base.b);
-          }
-          geo = variantView(set === 'a' ? base.a : base.b, pick);
-        }
+        const sk = setKey(set, lod);
+        const src = this.arches ? sets.get(sk) : undefined;
+        const geo = variantView(src ?? baseFor(set, lod), pick);
         this.owned.push(geo);
-        add(k, geo, far ? farMat : wallMat, cap, cast);
+        add(k, geo, mat, cap, cast);
         const b = this.batches.get(k)!;
         b.pick = pick;
+        b.setKey = sk;
         b.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
         if (cast) b.mesh.customDepthMaterial = variantDepthMaterial();
       }
     };
-    forestPair('fw:', true, Math.round(forestCap * 0.45) + 10, false);
-    forestPair('fo:', false, forestCap, true);
-    const keep = new Set<string>([fKeyA, fKeyB]);
+    const wall = this.shadows;
+    if (wall) forestPair('fw:', true, Math.round(forestCap * 0.25) + 10, wallMat, nearLod);
+    forestPair('fo:', false, Math.round(forestCap * 0.5) + 10, farMat, nearLod);
+    forestPair('fl:', false, forestCap, farMat, 2);
+    // Where each chunk's forest goes: the wall's own batch or the far rows' in the detail range, the
+    // far trees' past it (no strings made per frame).
+    this.route.clear();
     for (const set of ['a', 'b'] as const) {
-      const fKey = set === 'a' ? fKeyA : fKeyB;
-      if (sets.has(fKey) || !this.arches) continue;
-      this.stage(forestSteps(biome, p, set), (made) => {
-        sets.set(fKey, made);
-        for (const k of ['fw:' + set, 'fo:' + set]) {
-          const b = this.batches.get(k);
-          if (!b || !b.pick) continue;
-          const v = variantView(made, b.pick);
-          this.owned.push(v);
-          b.mesh.geometry = v;
-        }
-      });
+      this.route.set('fw:' + set, [wall ? 'fw:' + set : 'fo:' + set, 'fl:' + set]);
+      this.route.set('fo:' + set, ['fo:' + set, 'fl:' + set]);
+    }
+    const keep = new Set<string>();
+    for (const set of ['a', 'b'] as const) {
+      for (const lod of [nearLod, 2] as const) {
+        const sk = setKey(set, lod);
+        if (keep.has(sk)) continue;
+        keep.add(sk);
+        if (sets.has(sk) || !this.arches) continue;
+        this.stage(forestSteps(biome, p, set, lod), (made) => {
+          sets.set(sk, made);
+          for (const b of this.batches.values()) {
+            if (b.setKey !== sk || !b.pick) continue;
+            const v = variantView(made, b.pick);
+            this.owned.push(v);
+            b.mesh.geometry = v;
+          }
+        });
+      }
     }
     this.dresser = null;
     if (this.arches) {
-      // Bank dressing and the sections' signatures: two kits, one draw call each (Medium and High;
-      // Low draws none). Their pieces are made on idle time and the batches wait unseen till then.
+      // Bank dressing and the sections' signatures: two kits, three draw calls (Medium and High; Low
+      // draws none). The large kit's signature pieces (rock bands, cornices, rock walls) are their own
+      // batch on the same set, so each batch's draw range holds only the pieces in view (a variant
+      // set's instances otherwise run every piece's vertices). Their pieces are made on idle time and
+      // the batches wait unseen till then.
       this.dresser = new Dresser(this.course, p, this.forestDensity);
       const dressMat = vFor({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf });
-      for (const [k, cap, steps] of [
-        ['dr:s', DRESS_SMALL_CAP, smallKitSteps],
-        ['dr:l', DRESS_LARGE_CAP, largeKitSteps],
+      for (const [k, cap, steps, kit] of [
+        ['dr:s', DRESS_SMALL_CAP, smallKitSteps, 'dr:s'],
+        ['dr:l', DRESS_LARGE_CAP, largeKitSteps, 'dr:l'],
+        ['dr:w', DRESS_LARGE_CAP, largeKitSteps, 'dr:l'],
       ] as const) {
-        const skey = 'kit:' + k + ':' + key;
-        keep.add(skey);
+        const skey = 'kit:' + kit + ':' + key;
         const pick = new InstancedBufferAttribute(new Float32Array(cap), 1);
         const src = sets.get(skey);
         const geo = src ? variantView(src, pick) : NO_GEOMETRY;
@@ -353,20 +422,23 @@ export class Props {
         add(k, geo, dressMat, cap, false);
         const b = this.batches.get(k)!;
         b.pick = pick;
+        b.setKey = skey;
         b.waiting = !src;
         b.dress = true;
         b.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(cap * 3).fill(1), 3);
-        if (!src) {
+        if (!src && !keep.has(skey)) {
           this.stage(steps(biome, p), (g) => {
             sets.set(skey, g);
-            const bb = this.batches.get(k);
-            if (!bb || !bb.pick) return;
-            const v = variantView(g, bb.pick);
-            this.owned.push(v);
-            bb.mesh.geometry = v;
-            bb.waiting = false;
+            for (const bb of this.batches.values()) {
+              if (bb.setKey !== skey || !bb.pick) continue;
+              const v = variantView(g, bb.pick);
+              this.owned.push(v);
+              bb.mesh.geometry = v;
+              bb.waiting = false;
+            }
           });
         }
+        keep.add(skey);
       }
     }
     // Sets made for another palette are dropped (their buffers freed).
@@ -378,6 +450,16 @@ export class Props {
     this.pump();
     add('gift', giftGeometry(false), this.giftMat, 900, false);
     add('gift5', giftGeometry(true), this.giftMat, 200, false);
+    // Past the detail range a gift is a few pixels: the box and its ribbons with a two-lobed bow, plain
+    // and golden in one batch (a ninth of the full gift's triangles, whose bow loops are tori).
+    this.giftFarGeo ??= variantSet([farGiftGeometry(false), farGiftGeometry(true)]);
+    const gPick = new InstancedBufferAttribute(new Float32Array(900), 1);
+    const gView = variantView(this.giftFarGeo, gPick);
+    this.owned.push(gView);
+    add('giftL', gView, this.giftFarMat, 900, false);
+    const gb = this.batches.get('giftL')!;
+    gb.pick = gPick;
+    gb.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(900 * 3).fill(1), 3);
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p), plain, 60);
@@ -458,8 +540,10 @@ export class Props {
         st = this.buildStatic(i);
         this.cache.set(i, st);
       }
+      const far = i >= nearChunk + (this.arches ? LOD_AHEAD : LOD_AHEAD - 1);
       for (const [key, pk] of st) {
-        const b = this.batches.get(key);
+        const r = this.route.get(key);
+        const b = this.batches.get(r ? r[far ? 1 : 0] : key);
         if (!b) continue;
         const arr = pk.m;
         const room = b.mesh.instanceMatrix.count - b.count;
@@ -492,7 +576,8 @@ export class Props {
         this.q.setFromAxisAngle(this.tilt, (h1 - 0.5) * 0.32);
         this.v.set(g.x, c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.22, -g.z);
         this.s.setScalar(gs * (0.9 + 0.2 * hashf(g.id, 7, 4)));
-        this.push(g.value > 1 ? 'gift5' : 'gift', this.v, this.q, this.s);
+        if (far) this.push('giftL', this.v, this.q, this.s, g.value > 1 ? 1 : 0);
+        else this.push(g.value > 1 ? 'gift5' : 'gift', this.v, this.q, this.s);
       }
       if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;
     }
@@ -516,10 +601,17 @@ export class Props {
       if (b.waiting) b.count = b.near = 0;
       if (nearChunk >= to) b.near = b.count;
       b.mesh.count = b.count;
-      b.mesh.instanceMatrix.needsUpdate = true;
+      // An empty batch is hidden: three still binds its program and uploads its uniforms otherwise
+      // (in every pass: the scene, the shadow map, the mirror).
+      b.mesh.visible = b.count > 0;
+      // Only the instances in use go up to the GPU.
+      if (b.count === 0) continue;
+      upload(b.mesh.instanceMatrix, b.count * 16);
       if (b.pick) {
-        b.pick.needsUpdate = true;
-        if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+        upload(b.pick, b.count);
+        if (b.mesh.instanceColor) upload(b.mesh.instanceColor, b.count * 3);
+        // Only the variants its instances pick are drawn.
+        variantRange(b.mesh.geometry, b.pick, b.count);
       }
     }
     // The culled landmark batches get bounds round their instances in range.
@@ -623,7 +715,10 @@ export class Props {
   nearOnly(on: boolean): void {
     // (The bank dressing stays out of the mirror: it adds nothing to the avalanche behind you and
     // would cost the inset two more draws.)
-    for (const b of this.batches.values()) b.mesh.count = on ? (b.dress ? 0 : b.near) : b.count;
+    for (const b of this.batches.values()) {
+      b.mesh.count = on ? (b.dress ? 0 : b.near) : b.count;
+      b.mesh.visible = b.mesh.count > 0;
+    }
   }
 
   private buildStatic(i: number): Map<string, Packed> {
@@ -706,12 +801,16 @@ export class Props {
       }
     }
     // Bank dressing and the section signatures, then the forest round the clearings they keep.
-    const clear: Clearing[] = [];
+    const keep: Clearing[] = [];
+    if (this.siteKeep) this.siteKeep(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, keep);
+    const clear: Clearing[] = keep.slice();
+    if (this.siteClearings) this.siteClearings(i * CHUNK_LEN, (i + 1) * CHUNK_LEN, clear);
     if (this.dresser) {
       this.dresser.chunk(
         i,
-        (key, m, pick, r, g, b) => this.pushM(key, m, pick, r, g, b),
+        (key, m, pick, r, g, b) => this.pushM(key === 'dr:l' && pick >= L_ROCKBAND ? 'dr:w' : key, m, pick, r, g, b),
         clear,
+        keep,
       );
     }
     this.forest(i, clear);
@@ -736,10 +835,17 @@ export class Props {
       // A dense wall right at the treeline so the forest limit reads clearly.
       for (let z = z0; z < z0 + CHUNK_LEN; z += 3.4 / Math.max(0.35, dens)) {
         const jz = z + (hashf(i, k, 1) - 0.5) * 2.5;
-        const e = FOREST_LIMIT + 0.6 + hashf(i, k, 2) * 3.2;
-        if (dress) {
+        const sh = c.shapeAt(jz);
+        // A tree run's wall closes in to its own limit; a wall's forest stands back behind its crest.
+        const inner = sh.limit < FOREST_LIMIT && c.section(jz).kind === 'treerun' ? sh.limit : sh.wall > 0.3 ? crestE(sh.limit) + 5 : FOREST_LIMIT;
+        const e = inner + 0.6 + hashf(i, k, 2) * 3.2;
+        if (!standable(c, jz, e)) {
+          k++;
+          continue;
+        }
+        if (dress || clear.length > 0) {
           const sig = signature(c, jz);
-          const thin = wallThinning(sig.kind, sig.k);
+          const thin = dress ? wallThinning(sig.kind, sig.k) : 0;
           if ((thin > 0 && hashf(i, k, 13) < thin) || (clear.length > 0 && inClearing(clear, side, e, jz))) {
             k++;
             continue;
@@ -754,12 +860,31 @@ export class Props {
       for (let t = 0; t < n; t++) {
         const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
         const e = FOREST_LIMIT + 4 + Math.pow(hashf(i, k, 7), 1.6) * 75;
-        if (dress && clear.length > 0 && inClearing(clear, side, e, jz)) {
+        if ((clear.length > 0 && inClearing(clear, side, e, jz)) || !standable(c, jz, e)) {
           k++;
           continue;
         }
         const set = hashf(i, k, 8) < 0.6 ? 'a' : 'b';
         this.tree('fo:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 0.8 + hashf(i, k, 9) * 0.9, hashf(i, k, 10) * 6.28, 0.75 + 0.5 * hashf(i, k, 12));
+        k++;
+      }
+      // A tree run is a forest you ride through: a second, taller rank right behind the wall, crowded
+      // close, so the run has a dark mass either side and tops closing over it.
+      for (let t = 0; t < 22; t++) {
+        const jz = z0 + hashf(i, k, 6) * CHUNK_LEN;
+        const sec = c.section(jz);
+        const sh = c.shapeAt(jz);
+        if (sec.kind !== 'treerun' || jz < sec.z0 + sec.blend * 0.5 || jz > sec.z1 - 8) {
+          k++;
+          continue;
+        }
+        const e = sh.limit + 0.8 + hashf(i, k, 7) * 7;
+        if (clear.length > 0 && inClearing(clear, side, e, jz)) {
+          k++;
+          continue;
+        }
+        const set = hashf(i, k, 8) < 0.75 ? 'a' : 'b';
+        this.tree('fw:' + set, set, share[set], i, k, c.centerX(jz) + side * (c.halfWidth(jz) + e), jz, 1.25 + hashf(i, k, 9) * 0.7, hashf(i, k, 10) * 6.28, 0.95 + 0.4 * hashf(i, k, 12));
         k++;
       }
     }
@@ -777,11 +902,12 @@ export class Props {
       this.lean.setFromAxisAngle(this.tilt, 0.06 + 0.11 * hashf(i, k, 17));
       this.q.premultiply(this.lean);
     }
-    this.v.set(x, this.course.ground(x, z) - 0.1, -z);
+    this.v.set(x, visualGround(this.course, x, z) - 0.1, -z);
     this.s.set(scale, scale * tall, scale);
     const v = 0.9 + 0.11 * hashf(i, k, 18);
     const w = (hashf(i, k, 19) - 0.5) * 0.09;
-    this.push(b, this.v, this.q, this.s, pick, v * (1 + w), v, v * (1 - w));
+    // (A far row's tree is marked to lean into the fog, wherever its chunk's batch is.)
+    this.push(b, this.v, this.q, this.s, b.startsWith('fo:') ? pick + AERIAL_PICK : pick, v * (1 + w), v, v * (1 - w));
   }
 
   private push(key: string, pos: Vector3, q: Quaternion, s: Vector3, pick = 0, r = 1, g = 1, bl = 1): void {

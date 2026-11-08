@@ -9,6 +9,7 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
+import { pageBeat } from '../ui/pagebeat';
 import { graveCopy, type GravePlace } from './graves';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
@@ -168,6 +169,10 @@ interface Item {
   duelOn: boolean;
   callOn: boolean;
   stompOn: boolean;
+  /** Seconds left of the drop-back when you pass it (its pill flashes and falls back), and whether
+   *  the class is written. */
+  dropT: number;
+  dropOn: boolean;
 }
 
 /** How long a ghost's trick word replaces its name, and how often any tag may whisper one. */
@@ -186,6 +191,8 @@ const GRAVE_RANGE = 95;
 
 /** How long a pass beat keeps the ghost in it on screen (about as long as the HUD's pass toast). */
 const PASS_HOLD = 2.6;
+/** A passed ghost's pill flashes, drops back and shrinks, then settles (s). */
+const DROP_HOLD = 0.9;
 
 // Smooth normals make the fresnel glow read as soft spectral light instead of glass facets. Two
 // groups over the same triangles: the depth prepass (material 0) draws right before the glass
@@ -599,6 +606,8 @@ function auraMaterial(): ShaderMaterial {
   }));
 }
 
+/** A frame longer than this, read steadily, is one where labels wait for the page's beat: 50 fps. */
+const LABEL_FRAME_S = 0.02;
 const STYLE_ID = 'ghost-label-style';
 function injectStyle(): void {
   if (document.getElementById(STYLE_ID)) return;
@@ -629,6 +638,9 @@ function injectStyle(): void {
   .ghost-label.call::before { animation: ghost-ring-call 0.866s ease-out 3; }
   .ghost-label.stomp::before { animation: ghost-ring-stomp ${STOMP_HOLD}s cubic-bezier(0.2, 0.8, 0.2, 1) 1 both; }
   .ghost-label.dot::before { display: none; }
+  .ghost-label.passed { animation: ghost-drop ${DROP_HOLD}s cubic-bezier(0.2, 0.7, 0.2, 1) 1 both; }
+  @keyframes ghost-drop { 0% { translate: 0 0; scale: 1; } 12% { translate: 0 -5px; scale: 1.14; }
+    55% { translate: 0 15px; scale: 0.8; } 100% { translate: 0 0; scale: 1; } }
   @keyframes ghost-ring { 0% { opacity: 0.95; transform: scale(1); } 70% { opacity: 0; transform: scale(1.18, 1.55); } 100% { opacity: 0; transform: scale(1.18, 1.55); } }
   @keyframes ghost-ring-call { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.32, 1.9); } }
   @keyframes ghost-ring-stomp { 0% { opacity: 1; transform: scale(0.92); } 100% { opacity: 0; transform: scale(1.45, 2.2); } }
@@ -641,6 +653,7 @@ function injectStyle(): void {
     .ghost-label.trick .tw { animation-name: ghost-trick-fade; animation-timing-function: linear; }
     .ghost-label.duel::before, .ghost-label.call::before { animation: none; opacity: 1; transform: none; }
     .ghost-label.stomp::before { animation: ghost-ring-out ${STOMP_HOLD}s linear 1 both; transform: none; }
+    .ghost-label.passed { animation: none; }
   }
   .ghost-rival { position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
   .ghost-rival .plate { display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 11px 0 7px; border-radius: 999px;
@@ -689,6 +702,23 @@ function newTag(el: HTMLDivElement, prio: number): Tag {
   return { el, prio, x: 0, y: 0, scale: 1, d: 0, dp: 0, ok: false, want: false, held: 0, a: 0, w: 0, h: 0, op: '0', tx: -1e9, ty: -1e9, ts: -1e9, stacked: false, dot: false, wantDot: false };
 }
 
+/** A ghost whose track ran out at or past the finish line finished its run; anywhere else it crashed
+ *  (GhostPose.done says only that the track has ended). */
+export function rodeHome(z: number, finishZ: number): boolean {
+  return z >= finishZ - 0.5;
+}
+
+/** Seconds a finished ghost takes to fade, riding on into the square, and how hard it eases up. */
+const HOME_FADE_S = 2.6;
+const HOME_BRAKE = 7;
+
+/** Metres a finished ghost has ridden on, `t` seconds after its track ended at `speed`. */
+export function coastOn(speed: number, t: number): number {
+  const stop = speed / HOME_BRAKE;
+  const s = Math.min(Math.max(0, t), stop);
+  return speed * s - 0.5 * HOME_BRAKE * s * s;
+}
+
 export class GhostVisuals {
   readonly root = new Object3D();
   readonly layer: HTMLDivElement;
@@ -697,6 +727,14 @@ export class GhostVisuals {
   labels = true;
   /** The title's attract reel: ghosts may race closer beside the hero before they fade. */
   reel = false;
+  /** The rider is in a slipstream this frame (the sim's drafting): the ghost it rides behind lays a
+   *  mint wake on the snow (trails.ts) and glows a little brighter. */
+  drafting = false;
+  /** The wake's eased strength (0 to 1) and its ghost's linear kind colour (world.ts streams motes of
+   *  it past the runners). */
+  wakeK = 0;
+  readonly wakeCol = new Color();
+  private wakeIdx = -1;
   private lanternMat = withStencil(new MeshBasicMaterial({ color: '#8FF3E4', transparent: true, blending: AdditiveBlending, depthWrite: false }));
   private markerMat = makeToonMaterial({ coolShade: 0.5 });
   private lanternGeo = new SphereGeometry(0.16, 10, 8);
@@ -890,6 +928,11 @@ export class GhostVisuals {
           it.callT = it.wreckT = CALL_HOLD;
           it.tag.held = Math.max(it.tag.held, 0.1);
         }
+      } else if (b.type === 'pass') {
+        // You passed it: its pill flashes, drops back and shrinks, then settles (the world shatters
+        // its glass into petals, world.ts passFx).
+        const it = this.items.find((g) => g.id === b.ghost.id);
+        if (it && !this.reel) it.dropT = DROP_HOLD;
       } else if (b.type === 'grudgeSettled') {
         // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
         // your wreck never contradicts the card.
@@ -1039,6 +1082,8 @@ export class GhostVisuals {
         duelOn: false,
         callOn: false,
         stompOn: false,
+        dropT: 0,
+        dropOn: false,
       });
     }
     this.buildFx(list.length);
@@ -1189,9 +1234,17 @@ export class GhostVisuals {
     }
     this.rivalOff = 0;
     this.runT = 0;
+    this.wakeK = 0;
+    this.wakeIdx = -1;
     this.sinceStamp = Infinity;
     this.sinceTrick = Infinity;
   }
+
+  /** Low tier: labels may wait for the page's beat when frames run long. */
+  onBeat = false;
+  /** The frame time, read steadily, and whether labels move this frame. */
+  private frameS = 0;
+  private labelsMove = true;
 
   update(
     poses: Map<number, GhostPose | null>,
@@ -1207,6 +1260,10 @@ export class GhostVisuals {
     const dt = Number.isNaN(this.lastTime) ? 0 : Math.max(0, Math.min(0.1, time - this.lastTime));
     this.lastTime = time;
     this.dt = dt;
+    // Labels move on every frame, except on a Low frame short of 50 fps: there they wait for the page's
+    // beat, because a rider's name in the frame all run costs as much page work as the HUD (decision 217).
+    this.frameS += (dt - this.frameS) * 0.1;
+    this.labelsMove = !this.onBeat || this.frameS < LABEL_FRAME_S || pageBeat();
     this.viewW = w;
     this.runT += dt;
     this.syncView(w, h);
@@ -1226,6 +1283,24 @@ export class GhostVisuals {
     this.sinceStamp += dt;
     this.sinceTrick += dt;
     const duelId = this.labels && !this.reel ? this.feel.duelId : null;
+    // The slipstream: the nearest ghost 1 to 26 m ahead and roughly in line (the sim's own draft cone
+    // is wider, but the wake belongs to the one you are tucked behind).
+    let wakeBest = -1;
+    let wakeLead = Infinity;
+    for (let i = 0; i < this.items.length && this.drafting && !this.reel; i++) {
+      const p = poses.get(this.items[i].id);
+      if (!p || p.done) continue;
+      const lead = p.z + player.z;
+      if (lead > 1 && lead < 26 && lead < wakeLead && Math.abs(p.x - player.x) < 1.6 + lead * 0.05) {
+        wakeLead = lead;
+        wakeBest = i;
+      }
+    }
+    if (wakeBest >= 0 && (this.wakeK < 0.05 || wakeBest === this.wakeIdx)) this.wakeIdx = wakeBest;
+    this.wakeK += ((wakeBest >= 0 && wakeBest === this.wakeIdx ? 1 : 0) - this.wakeK) * Math.min(1, dt * 5);
+    if (this.wakeK < 0.01) this.wakeK = 0;
+    if (this.wakeIdx >= 0 && this.wakeIdx < this.items.length) this.wakeCol.copy(this.items[this.wakeIdx].col);
+    this.trails?.setWake(this.wakeIdx, this.wakeK);
     for (let i = 0; i < this.items.length; i++) {
       const it = this.items[i];
       const p = poses.get(it.id);
@@ -1249,6 +1324,12 @@ export class GhostVisuals {
         it.stompOn = stomp;
         it.tag.el.classList.toggle('stomp', stomp);
       }
+      it.dropT = Math.max(0, it.dropT - dt);
+      const drop = it.dropT > 0 && this.labels;
+      if (drop !== it.dropOn) {
+        it.dropOn = drop;
+        it.tag.el.classList.toggle('passed', drop);
+      }
       const duel = duelId === it.id && !!p && !p.done;
       if (duel !== it.duelOn) {
         it.duelOn = duel;
@@ -1261,7 +1342,14 @@ export class GhostVisuals {
         continue;
       }
       const pos = tmp.set(p.x, p.y, -p.z);
-      if (p.done) {
+      if (p.done && rodeHome(p.z, this.course.finishZ)) {
+        // It finished: no wreck and no lantern. It rides on into the square, easing up, and fades.
+        const d = coastOn(p.speed, p.sinceDone);
+        const z = p.z + Math.cos(p.heading) * d;
+        const x = p.x + Math.sin(p.heading) * d;
+        pos.set(x, this.course.ground(x, z), -z);
+        it.fade = Math.max(0, 1 - p.sinceDone / HOME_FADE_S);
+      } else if (p.done) {
         // Crashed: fade out with a poof, leave a lantern marker.
         if (it.fade === 1) onPoof(pos.clone().add(new Vector3(0, 0.8, 0)), it.col.clone());
         it.fade = Math.max(0, 1 - p.sinceDone / 0.6);
@@ -1396,7 +1484,9 @@ export class GhostVisuals {
       this.updateWisp(i, it, pos, p, fx, camera, nearCam);
       this.updateShadow(i, it, p, vis * body);
       // The halo stays off a ghost right by you: around your silhouette it read as an outline ring.
-      this.updateAura(i, it, pos, fx * body * smooth01((dPlayer - 1.2) / 1.0), camera);
+      // (The ghost you are drafting glows a little brighter: the slipstream is its light.)
+      const wakeGlow = i === this.wakeIdx ? 1 + 0.7 * this.wakeK : 1;
+      this.updateAura(i, it, pos, fx * body * smooth01((dPlayer - 1.2) / 1.0) * wakeGlow, camera);
 
       // A ghost inside any of the fades shows no tag at all (with a little hysteresis). Contract C11:
       // the ghost the HUD's rival pill names keeps its tag whenever it is on screen and not sitting on
@@ -1696,6 +1786,7 @@ export class GhostVisuals {
       this.rivalEl.style.opacity = op;
     }
     if (this.rivalA === 0) return;
+    if (!this.labelsMove) return;
     const m = this.rivalM;
     if (Math.abs(this.rivalX - m[0]) > 0.05 || Math.abs(this.rivalY - m[1]) > 0.05) {
       m[0] = this.rivalX;
@@ -2197,7 +2288,8 @@ export class GhostVisuals {
       t.ts = -1;
     }
     const scale = t.dot ? 1 : t.scale;
-    if (t.want && (Math.abs(t.x - t.tx) > 0.05 || Math.abs(t.y - t.ty) > 0.05 || Math.abs(scale - t.ts) > 0.002)) {
+    // (A tag coming on is placed at once: it must not show where it last stood.)
+    if (t.want && (this.labelsMove || t.op !== '1') && (Math.abs(t.x - t.tx) > 0.05 || Math.abs(t.y - t.ty) > 0.05 || Math.abs(scale - t.ts) > 0.002)) {
       t.tx = t.x;
       t.ty = t.y;
       t.ts = scale;

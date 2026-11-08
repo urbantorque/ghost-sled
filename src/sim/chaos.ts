@@ -90,14 +90,14 @@ export const MOODS: readonly MoodInfo[] = [
     key: 'glassice',
     name: 'Glass Ice',
     rule: 'Slick and fast. Less grip, drifts charge 60% faster',
-    params: { ...NEUTRAL, grip: 0.62, driftCharge: 1.6, drag: 0.9 },
+    params: { ...NEUTRAL, grip: 0.68, driftCharge: 1.6, drag: 0.9 },
   },
   {
     id: Mood.Comet,
     key: 'comet',
     name: 'Comet Night',
     rule: 'Low gravity. Huge air, faster spins, softer landings',
-    params: { ...NEUTRAL, gravity: 0.62, spin: 1.15, landTol: 0.12, pop: 0.9 },
+    params: { ...NEUTRAL, gravity: 0.62, drag: 0.62, spin: 1.15, landTol: 0.12, pop: 0.9 },
   },
   {
     id: Mood.Haunted,

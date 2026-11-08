@@ -9,6 +9,10 @@ export interface Palette {
   skyHorizon: Color;
   /** Colour the gradient passes through halfway up; null blends zenith and horizon evenly. */
   skyMid: Color | null;
+  /** The bright band hugging the horizon: its colour (null: the horizon's own, a shade brighter), how
+   *  fast it fades upward (higher is thinner) and how strong it is. Apart from skyHorizon because that
+   *  colour also feeds the haze, the sea and the glazed snow's mirror. */
+  skyBand: { color: Color | null; fade: number; k: number };
   /** Sine of the elevation where the zenith colour is reached (lower = the zenith comes down sooner). */
   skySpread: number;
   /** Gradient curve: below 1 holds the zenith colour longer, above 1 holds the horizon colour. */
@@ -35,6 +39,11 @@ export interface Palette {
   sunDisc: number;
   /** 0 is a crisp disc in a clear sky, 1 a sun diffused behind a cloud deck: soft-edged and wide. */
   sunSoft: number;
+  /** The disc's hot core (values over 1 bloom). White-hot by default; Clear Skies colours its own suns,
+   *  so Frostfang's reads lemon and Ember's a dim orange through the smoke. */
+  sunCore: Color;
+  /** How much of the sun's own colour the corona takes, over its stock warm gold (0..1). */
+  sunTint: number;
   snowLit: Color;
   snowShade: Color;
   snowDeep: Color;
@@ -57,13 +66,30 @@ export interface Palette {
    *  dense it is. Null for none. */
   mist: Color | null;
   mistK: number;
+  /** The mountain panorama (massif.ts): the biome's hero peak, the colour of its bare rock, the
+   *  alpenglow that paints the snow on the summits (its colour, how strongly, and the height in metres
+   *  relative to the lens above which the peaks still catch the light: the valleys sink into shade
+   *  first), how much of the panorama a mood veils (Blizzard hides it), how full the sea of clouds
+   *  below the horizon is, the volcano's crater glow, the hero's own light (flow: lava streams down the
+   *  volcano, glacier ice lit from within on the fang), and its bearing in degrees (0: the far side of
+   *  the fall line from the sun, as chaos moods have it. Clear Skies pins it per mountain, so a sun
+   *  moving through a run never makes the mountain jump sides). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
-  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number };
+  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number; lens: number; focal: number; gust: number; glitter: number; focalDir?: Vector3 };
+  /** The living sky and air (sky.ts, massif.ts): crepuscular rays fanning from a low sun through the
+   *  clouds, the 22 degree halo and sun dogs of ice-crystal air, shooting stars, a snow banner blown off
+   *  the hero summit, a distant avalanche down its face, cloud shadows sweeping the panorama, the
+   *  valley mist layers drifting below the run, and how much the ground mist drifts and pools. */
+  atmo: { rays: number; halo: number; meteors: number; banner: number; slide: number; sweep: number; valley: number; valleyColor: Color; drift: number };
   /** Painted gouache clouds in the sky dome (sky.ts): low cumulus banks along the horizon and high
    *  wisps (coverage 0..1 each), their sunlit tops, shaded bodies and the low sun's rim on their edges.
    *  shadow: how strongly their slow shadows drift over the snow (materials.ts, 0 for none). */
   clouds: { low: number; high: number; top: number; lit: Color; shade: Color; rim: Color; shadow: number };
+  /** A ceiling of cloud across the whole dome (sky.ts): k is its cover (0 none, 1 unbroken), lit and
+   *  shade its billows, glow the light on its underside, strongest low in the sky toward the hero. */
+  deck: { k: number; lit: Color; shade: Color; glow: Color };
   /** A sled lantern short of Lantern Night's (0..1): blue hour lights a soft one at the end of a long
    *  Clear Skies run. Lantern Night's own lantern (lantern: true) is always full. */
   lanternGlow: number;
@@ -95,7 +121,14 @@ export interface Palette {
   exposure: number;
 }
 
+/** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
+ *  smoking volcano or a symmetrical snow-capped cone. */
+export type HeroPeak = 'summit' | 'fang' | 'volcano' | 'cone';
+
 const c = (hex: string) => new Color(hex);
+
+/** Where Comet Night's comet hangs (sky.ts draws it; the post pass's light pass centres on it). */
+export const COMET_DIR = new Vector3(0.0, 0.165, -0.986).normalize();
 
 function sunDir(azimuthDeg: number, elevationDeg: number): Vector3 {
   // Azimuth 0 = straight down the course (-z in three.js), positive = toward +x (right).
@@ -109,6 +142,7 @@ function base(): Palette {
     skyZenith: c('#2B4C9B'),
     skyHorizon: c('#FFB38A'),
     skyMid: c('#B88EB4'),
+    skyBand: { color: null, fade: 28, k: 0.6 },
     skySpread: 0.68,
     skyCurve: 0.6,
     skyBelow: c('#C9B7E0'),
@@ -123,6 +157,8 @@ function base(): Palette {
     sunGlow: 1,
     sunDisc: 1,
     sunSoft: 0,
+    sunCore: new Color(2.3, 2.15, 1.95),
+    sunTint: 0.2,
     snowLit: c('#FFF8F2'),
     snowShade: c('#7E92DA'),
     snowDeep: c('#4757B2'),
@@ -142,8 +178,11 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0 },
+    grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
+    deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
+    atmo: { rays: 1, halo: 0, meteors: 0, banner: 0.8, slide: 1, sweep: 1, valley: 0.7, valleyColor: c('#E8C4C8'), drift: 0.3 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
@@ -167,6 +206,8 @@ function base(): Palette {
   };
 }
 
+/** What the chaos moods are built on. Their looks depend on every field of this that they do not set,
+ *  so a change here changes all six: Clear Skies' own light is clearSkies(), over the top of this. */
 function biomeBase(biome: BiomeId): Palette {
   const p = base();
   switch (biome) {
@@ -190,8 +231,11 @@ function biomeBase(biome: BiomeId): Palette {
       p.low = c('#9FD6EE');
       p.lowLit = c('#D8F6FF');
       p.ridge = [c('#D0DAF0'), c('#9CB2DE'), c('#6886C4')];
+      p.massif.peak = 'fang';
+      p.massif.rock = c('#34508E');
       p.ice = 0.6;
       p.clouds = { low: 0.75, high: 0.6, top: 0.3, lit: c('#FFF2E8'), shade: c('#A8B2DA'), rim: c('#FFC6AE'), shadow: 0.28 };
+      p.atmo.valleyColor = c('#DCDCEC');
       return p;
     case 'volcanic':
       p.skyZenith = c('#2A1E3A');
@@ -212,9 +256,16 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#6A4B52');
       p.accentProp = c('#FF6A2A');
       p.ridge = [c('#A06878'), c('#6E465E'), c('#40284A')];
+      p.massif.peak = 'volcano';
+      p.massif.rock = c('#3A2A3C');
+      p.massif.lava = 0.45;
       p.embers = 0.6;
       p.grade.lift = c('#14081A');
       p.clouds = { low: 0.8, high: 0.5, top: 0.3, lit: c('#FFC4A0'), shade: c('#6E4662'), rim: c('#FF8A50'), shadow: 0.3 };
+      // The volcano smokes instead of flying a snow banner; its valleys hold an ashen, ember-lit haze.
+      p.atmo.banner = 0;
+      p.atmo.slide = 0;
+      p.atmo.valleyColor = c('#C08484');
       return p;
     case 'blossom':
       p.skyZenith = c('#3A5BA8');
@@ -235,8 +286,12 @@ function biomeBase(biome: BiomeId): Palette {
       p.lowLit = c('#A79CBB');
       p.accentProp = c('#E8473F');
       p.ridge = [c('#DEC6E6'), c('#B29BD0'), c('#8070B4')];
+      p.massif.peak = 'cone';
+      p.massif.rock = c('#6A5A86');
+      p.massif.glow = c('#FFA0B8');
       p.petals = 0.7;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
+      p.atmo.valleyColor = c('#F0CCDA');
       return p;
   }
 }
@@ -267,6 +322,7 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   const p = biomeBase(biome);
   switch (mood) {
     case Mood.None:
+      clearSkies(p, biome);
       break;
     case Mood.Blizzard:
       p.skyZenith = c('#6D7C93');
@@ -312,13 +368,20 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
         p.lowLit = c('#5E7296');
       }
       p.ridge = [c('#BCC6D4'), c('#A8B4C6'), c('#93A2B8')];
+      // The whiteout swallows the panorama: at most a ghost of the nearest range shows through.
+      p.massif.veil = 0.86;
+      p.massif.sea = 0;
+      p.massif.lava = 0;
       p.snowfall = 1;
       p.windStreaks = 1;
       p.bloom = 0.8;
       p.sparkle = 0.3;
-      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14, shafts: 0 };
+      p.grade = { lift: c('#20283A'), gain: c('#F2F6FF'), saturation: 0.85, contrast: 1.04, grain: 0.8, foot: 0.14, shafts: 0, lens: 0, focal: 0.6, gust: 1, glitter: 0 };
       // The whiteout is its own cloud deck: no painted banks in it and no shadows sliding over the snow.
       p.clouds = { low: 0, high: 0, top: 0.1, lit: c('#F2F4F8'), shade: c('#AEB8C8'), rim: c('#F2F1EA'), shadow: 0 };
+      // Pale rays through the overcast round the hidden sun and the gusts' curtains of snow (post.ts);
+      // nothing far off shows: the whiteout hides the banner, the slides and the valley.
+      p.atmo = { rays: 0.7, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0, valley: 0, valleyColor: c('#DDE3EC'), drift: 0.5 };
       break;
     case Mood.Lantern:
       p.skyZenith = c('#070B22');
@@ -354,6 +417,10 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.ridge = [c('#3C4D8A'), c('#29376F'), c('#19234F')];
       p.mist = c('#5568AE');
       p.mistK = 0.6;
+      // Moonlit snow on dark rock over a silver sea of clouds; the crater glows brighter in the dark.
+      p.massif.rock = c('#161C3C');
+      p.massif.sea = 0.85;
+      p.massif.lava = p.massif.lava > 0 ? 1 : 0;
       p.stars = 1;
       p.aurora = 1;
       p.moon = true;
@@ -361,9 +428,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.snowfall = 0.15;
       p.bloom = 0.9;
       p.sparkle = 0.8;
-      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2, shafts: 0 };
+      p.grade = { lift: c('#03061A'), gain: c('#E8ECFF'), saturation: 1.05, contrast: 1.06, grain: 0.4, foot: 0.2, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0.25 };
       // A low, dark bank with moonlit silver edges under the aurora, which keeps the sky above it.
       p.clouds = { low: 0.6, high: 0.18, top: 0.24, lit: c('#4A5A9C'), shade: c('#121A42'), rim: c('#C4D0FF'), shadow: 0 };
+      // Shooting stars under the aurora, and a moonlit mist lying in the valleys.
+      p.atmo = { rays: 0, halo: 0, meteors: 1, banner: 0.45, slide: 0, sweep: 0, valley: 0.9, valleyColor: c('#4A5C9E'), drift: 0.4 };
       break;
     case Mood.GlassIce:
       p.skyZenith = c('#0E6FA8');
@@ -394,6 +463,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
         p.lowLit = c('#3E78AA');
       }
       p.ridge = [c('#A6DCF0'), c('#5EA8D2'), c('#2A72A8')];
+      // Clear, cold air: glassy blue rock over a broken sea of clouds.
+      p.massif.rock = c('#2E5E8E');
+      p.massif.sea = 0.75;
       p.ice = 1;
       // Pines and crystals in the cyan light sat close to the #7FC6DF shade snow: a quarter darker,
       // they read as hard dark silhouettes again.
@@ -401,9 +473,12 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.sparkle = 1.1;
       p.snowfall = 0;
       p.bloom = 0.42;
-      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24, shafts: 0.8 };
+      p.grade = { lift: c('#021624'), gain: c('#FFFCF4'), saturation: 1.1, contrast: 1.08, grain: 1, foot: 0.24, shafts: 0.9, lens: 0.8, focal: 1, gust: 0, glitter: 0.7 };
       // Clear, cold air: only a few thin high wisps, gold where the low sun catches them.
       p.clouds = { low: 0, high: 0.4, top: 0.1, lit: c('#F4FCFF'), shade: c('#8CC8E6'), rim: c('#FFDDA0'), shadow: 0.12 };
+      // Ice-crystal air: a 22 degree halo and two sun dogs round the low sun, diamond dust glittering in
+      // it (post.ts), and air clear enough to see the far banner and slide; the valleys hold little haze.
+      p.atmo = { rays: 0.45, halo: 1, meteors: 0, banner: 1, slide: 1, sweep: 0.4, valley: 0.25, valleyColor: c('#CDEFF8'), drift: 0 };
       break;
     case Mood.Comet:
       // Night with an ember afterglow on the horizon: a deep violet zenith, stars and lavender snow.
@@ -433,15 +508,21 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.fogFar = 420;
       p.hemiSky = c('#6A4EA8');
       p.ridge = [c('#A0587E'), c('#64366E'), c('#341E52')];
+      p.massif.rock = c('#2A1A44');
+      p.massif.glow = c('#FF8C8C');
+      p.massif.sea = 0.8;
+      p.massif.lava = p.massif.lava > 0 ? 1 : 0;
       p.stars = 1;
       p.moon = true;
       p.moonPhase = 0.72;
       p.comet = true;
       p.snowfall = 0.05;
       p.bloom = 0.85;
-      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26, shafts: 0 };
+      p.grade = { lift: c('#0E0420'), gain: c('#FAF0FF'), saturation: 1.0, contrast: 1.07, grain: 0.45, foot: 0.26, shafts: 0, lens: 0, focal: 1, gust: 0, glitter: 0.2, focalDir: COMET_DIR };
       // A dusk bank on the ember horizon, its undersides glowing ember; the comet keeps the sky above.
       p.clouds = { low: 0.65, high: 0.15, top: 0.2, lit: c('#5E3268'), shade: c('#2A1642'), rim: c('#FF7A4C'), shadow: 0 };
+      // The comet's company: shooting stars (its debris), and an ember-lit dusk haze in the valleys.
+      p.atmo = { rays: 0, halo: 0, meteors: 1.4, banner: 0.4, slide: 0, sweep: 0, valley: 0.8, valleyColor: c('#7E4A88'), drift: 0.3 };
       break;
     case Mood.Haunted:
       p.skyZenith = c('#0B1F1C');
@@ -467,6 +548,9 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.ridge = [c('#3A6A5E'), c('#244A42'), c('#132C28')];
       p.mist = c('#4E8C78');
       p.mistK = 0.45;
+      p.massif.rock = c('#0E2622');
+      p.massif.sea = 0.9;
+      p.massif.lava = p.massif.lava > 0 ? 0.8 : 0;
       p.stars = 0.4;
       // A pale green full moon, not a sun: it is a night mood.
       p.moon = true;
@@ -474,8 +558,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.wisps = 1;
       p.snowfall = 0.1;
       p.bloom = 0.95;
-      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1, shafts: 0 };
+      p.grade = { lift: c('#03100C'), gain: c('#E8FFF4'), saturation: 0.95, contrast: 1.08, grain: 0.45, foot: 0.1, shafts: 0, lens: 0, focal: 1.2, gust: 0, glitter: 0 };
       p.clouds = { low: 0.5, high: 0.12, top: 0.22, lit: c('#3E7464'), shade: c('#0E2A24'), rim: c('#9CFFD8'), shadow: 0 };
+      // Ground mist drifts over the course and pools in the hollows, the valleys brim with it, a pale
+      // ring stands round the moon, and now and then a lost soul streaks across the sky.
+      p.atmo = { rays: 0, halo: 0.45, meteors: 0.5, banner: 0, slide: 0, sweep: 0, valley: 1, valleyColor: c('#4E8C78'), drift: 1 };
       break;
     case Mood.Powder:
       p.skyZenith = c('#2F7BE0');
@@ -491,16 +578,27 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.fog = c('#D6E8FA');
       p.hemiSky = c('#A8CCF4');
       p.ridge = [c('#CCE0F6'), c('#A2C2EA'), c('#759EDA')];
+      p.massif.rock = c('#56689A');
+      p.massif.sea = 0.9;
       p.snowfall = 0.35;
       p.sparkle = 1.3;
       p.bloom = 0.5;
-      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26, shafts: 0.5 };
+      p.grade = { lift: c('#061430'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.02, grain: 1, foot: 0.26, shafts: 0.6, lens: 0.5, focal: 0.7, gust: 0, glitter: 1 };
       // Fair-weather puffs low on the horizon and a few high wisps, white on blue.
       p.clouds = { low: 0.4, high: 0.3, top: 0.24, lit: c('#FFFFFF'), shade: c('#B4CCEC'), rim: c('#FFFFFF'), shadow: 0.22 };
+      // Fresh snow everywhere: the air sparkles with it (post.ts), the summit flies a long banner and the
+      // fair-weather clouds' shadows race across the panorama.
+      p.atmo = { rays: 0.5, halo: 0, meteors: 0, banner: 1.2, slide: 1, sweep: 1.3, valley: 0.5, valleyColor: c('#E4F0FC'), drift: 0 };
       break;
   }
-  // Biomes and moods author sunDir as where the disc sits; the key light is lifted from it.
-  if (p.diskDir === p.sunDir || mood !== Mood.None || biome !== 'alpine') {
+  // The volcano smokes (massif.ts) rather than flying a snow banner, and its ash slopes never slide.
+  if (p.massif.peak === 'volcano') {
+    p.atmo.banner = 0;
+    p.atmo.slide = 0;
+  }
+  // Moods author sunDir as where the disc sits, and the key light is lifted from it. Clear Skies sets
+  // both itself (setSun).
+  if (mood !== Mood.None) {
     p.diskDir = p.sunDir.clone();
     p.sunDir = liftLight(p.diskDir, p.lightMin);
   }
@@ -551,110 +649,440 @@ export function lerpPalette(a: Palette, b: Palette, t: number, out: Palette): Pa
   return out;
 }
 
-const DEG = Math.PI / 180;
-const elevationOf = (v: Vector3) => Math.asin(Math.max(-1, Math.min(1, v.y))) / DEG;
-/** The same bearing at another elevation (degrees). */
-const atElevation = (v: Vector3, el: number) => sunDir(Math.atan2(v.x, -v.z) / DEG, el);
+// ---------------------------------------------------------------------------------------------------
+// Clear Skies: each mountain's own light, and how it changes over a run.
 
-interface JourneyStop {
-  zenith: string; mid: string; horizon: string; below: string; sky: number;
-  sun: string; sunK: number; discEl: number; lightEl: number; shadowMinEl: number;
-  snowLit: string; litK: number; snowShade: string; shadeK: number; snowDeep: string; deepK: number;
-  rim: string; rimK: number; fog: string; fogK: number; hemi: string; hemiK: number;
-  ridge: [string, string, string]; ridgeK: number;
-  gain: string; gainK: number; lift: string; liftK: number;
-  cloudLit: string; cloudShade: string; cloudRim: string; cloudK: number;
+/** Places the sun: its bearing, how high the disc sits, how high the key light is (decision 27: well
+ *  above the slope, or every downhill face falls into shade) and the lowest the shadow light drops. */
+function setSun(p: Palette, az: number, disc: number, light: number, shadowEl: number): void {
+  p.diskDir = sunDir(az, disc);
+  p.sunDir = sunDir(az, light);
+  p.shadowMinEl = shadowEl;
 }
 
-/** About 2 km in: deeper alpenglow. The sun sits lower and warmer, the horizon burns coral, the zenith
- *  deepens and the snow's shade leans violet, with longer shadows. */
-const ALPENGLOW: JourneyStop = {
-  zenith: '#22357E', mid: '#C27A9C', horizon: '#FF946C', below: '#C7A2D2', sky: 0.5,
-  sun: '#FFD0A4', sunK: 0.55, discEl: -3.5, lightEl: -4, shadowMinEl: 11,
-  snowLit: '#FFF0E4', litK: 0.5, snowShade: '#8A84D8', shadeK: 0.3, snowDeep: '#4A4AB0', deepK: 0.2,
-  rim: '#FFAE8C', rimK: 0.5, fog: '#E8A2A4', fogK: 0.45, hemi: '#9A98E2', hemiK: 0.3,
-  ridge: ['#D6A8CA', '#9C7CBA', '#5E5296'], ridgeK: 0.45,
-  gain: '#FFF0E0', gainK: 0.6, lift: '#120E30', liftK: 0.3,
-  cloudLit: '#FFD2B4', cloudShade: '#9A7AB4', cloudRim: '#FF946A', cloudK: 0.55,
+/** Each mountain's light at the start of a run, which is also the title's. Over biomeBase(), so the
+ *  chaos moods never see any of it. */
+function clearSkies(p: Palette, biome: BiomeId): void {
+  switch (biome) {
+    case 'alpine':
+      // A bright ski day: a high white sun off to the right, deep cobalt over pale blue, teal pines and
+      // short, sharp blue shadows.
+      setSun(p, 31, 24, 44, 24);
+      p.sunColor = c('#FFF7EA');
+      p.sunCore = new Color(3, 2.95, 2.8);
+      p.sunTint = 0.9;
+      p.sunSize = 0.82;
+      p.sunGlow = 0.75;
+      p.skyZenith = c('#123F9E');
+      p.skyMid = c('#3E86DC');
+      p.skyHorizon = c('#CBE8F8');
+      p.skyBelow = c('#BAD7EF');
+      p.skySpread = 0.62;
+      p.skyCurve = 0.72;
+      p.snowLit = c('#FFFFFF');
+      p.snowShade = c('#7CA6EC');
+      p.snowDeep = c('#2F62C8');
+      p.rim = c('#DCEEFF');
+      p.fog = c('#CDE3F6');
+      p.fogNear = 70;
+      p.fogFar = 640;
+      p.hemiSky = c('#86B6F2');
+      p.tall = c('#0E5A5C');
+      p.tallDark = c('#07343C');
+      p.low = c('#3C4864');
+      p.lowLit = c('#6C7C9C');
+      p.ridge = [c('#CFE3F7'), c('#94BCE8'), c('#5A8AD0')];
+      p.massif.rock = c('#46587E');
+      p.massif.glow = c('#FFD9A0');
+      p.massif.heroAz = -21;
+      p.massif.sea = 0.7;
+      p.grade = { lift: c('#040E28'), gain: c('#FFFFFF'), saturation: 1.12, contrast: 1.08, grain: 0.7, foot: 0.26, shafts: 0, lens: 0.25, focal: 0.45, gust: 0, glitter: 0.55 };
+      p.clouds = { low: 0.5, high: 0.4, top: 0.2, lit: c('#FFFFFF'), shade: c('#A8C4EA'), rim: c('#FFFFFF'), shadow: 0.22 };
+      p.atmo = { rays: 0, halo: 0, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#E8F3FC'), drift: 0 };
+      p.bloom = 0.3;
+      p.snowfall = 0.02;
+      p.sparkle = 1.25;
+      return;
+    case 'glacier':
+      // Polar blue hour: deep cobalt down to a thin lemon band, a low cold sun off to the left, long
+      // steel-blue light and glazed snow. Hazards are a deep ice blue so they stay darker than the snow.
+      setSun(p, -35, 5.5, 23, 9);
+      p.sunColor = c('#FFF2C4');
+      p.sunCore = new Color(2.5, 2.4, 1.5);
+      p.sunTint = 0.85;
+      p.sunSize = 0.9;
+      p.sunGlow = 0.7;
+      p.skyZenith = c('#0A2470');
+      p.skyMid = c('#2E67BE');
+      p.skyHorizon = c('#A6C6EE');
+      p.skyBand = { color: c('#FFF0A0'), fade: 30, k: 0.95 };
+      p.skyBelow = c('#6E92CC');
+      p.skySpread = 0.62;
+      p.skyCurve = 0.44;
+      p.snowLit = c('#D4E4FA');
+      p.snowShade = c('#4C76C4');
+      p.snowDeep = c('#1C3C8C');
+      p.rim = c('#FFF2BE');
+      p.fog = c('#7FA4DC');
+      p.fogNear = 50;
+      p.fogFar = 470;
+      p.hemiSky = c('#6A9CEC');
+      p.tall = c('#2C8CCC');
+      p.tallDark = c('#114A8A');
+      p.low = c('#1E3A6E');
+      p.lowLit = c('#3E6AA4');
+      p.hazardDim = 0.9;
+      p.ridge = [c('#6F95D4'), c('#3F66B4'), c('#1F3C8A')];
+      p.massif.rock = c('#1A2E68');
+      p.massif.glow = c('#FFEFB0');
+      p.massif.heroAz = 17;
+      p.massif.sea = 0.8;
+      p.massif.flow = 0.35;
+      p.ice = 0.6;
+      p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.08, grain: 0.7, foot: 0.3, shafts: 0.55, lens: 0.5, focal: 1, gust: 0, glitter: 0.45 };
+      p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#BCD2F2'), shade: c('#3A5EAC'), rim: c('#FFF3BE'), shadow: 0.08 };
+      p.atmo = { rays: 0.55, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6C92D2'), drift: 0.1 };
+      p.stars = 0.55;
+      p.bloom = 0.5;
+      p.sparkle = 1;
+      p.snowfall = 0.03;
+      p.giftGlow = 0.2;
+      p.ghostGlow = 1.35;
+      p.lanternGlow = 0.2;
+      return;
+    case 'volcanic':
+      // Under ash: a heavy overcast of smoke lit from below, a dim orange disc, ash-grey snow, and the
+      // volcano dead ahead at the end of the valley. Warmth stays in the sky so the snow still sets off
+      // the rider's vermillion and the gifts' marigold.
+      setSun(p, 34, 15, 30, 15);
+      p.sunColor = c('#E8E0DC');
+      p.sunCore = new Color(1.7, 0.62, 0.16);
+      p.sunTint = 0.85;
+      p.sunSize = 1.15;
+      p.sunGlow = 0.5;
+      p.sunDisc = 0.85;
+      p.sunSoft = 0.25;
+      p.skyZenith = c('#1C1316');
+      p.skyMid = c('#4C2B2A');
+      p.skyHorizon = c('#D8602C');
+      p.skyBelow = c('#3C1E1E');
+      p.skySpread = 0.5;
+      p.skyCurve = 0.7;
+      p.snowLit = c('#CFC8CC');
+      p.snowShade = c('#54465E');
+      p.snowDeep = c('#2A2038');
+      p.rim = c('#FF8A50');
+      p.fog = c('#54383C');
+      p.fogNear = 40;
+      p.fogFar = 420;
+      p.hemiSky = c('#6E5866');
+      p.low = c('#2E272E');
+      p.lowLit = c('#5A4248');
+      p.ridge = [c('#7A4638'), c('#4A2A2C'), c('#2A181E')];
+      p.massif.rock = c('#1C1418');
+      p.massif.glow = c('#FF7A3A');
+      p.massif.heroAz = 7;
+      p.massif.sea = 0.55;
+      p.massif.lava = 0.6;
+      p.massif.flow = 0.5;
+      p.deck = { k: 0.85, lit: c('#54403E'), shade: c('#241A20'), glow: c('#FF6A28') };
+      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#6A4A44'), shade: c('#2A1C22'), rim: c('#FF7A38'), shadow: 0 };
+      p.shadowK = 0.7;
+      p.grade = { lift: c('#120A10'), gain: c('#FFF4EA'), saturation: 1.06, contrast: 1.06, grain: 0.8, foot: 0.3, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0 };
+      p.atmo = { rays: 0.25, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.2, valley: 0.8, valleyColor: c('#8A4A38'), drift: 0.4 };
+      p.bloom = 0.5;
+      p.sparkle = 0.35;
+      p.snowfall = 0;
+      p.giftGlow = 0.3;
+      p.ghostGlow = 1.45;
+      return;
+    case 'blossom':
+      // A soft spring morning: a pale celadon sky over cream, peach mist, low contrast, and the blossom
+      // the one saturated thing against the pale air. The mist hides the cone at first.
+      setSun(p, -24, 19, 29, 17);
+      p.sunColor = c('#FFF4E2');
+      p.sunCore = new Color(2.6, 2.4, 2.1);
+      p.sunTint = 0.7;
+      p.sunSize = 1.2;
+      p.sunGlow = 0.6;
+      p.sunDisc = 0.75;
+      p.sunSoft = 0.55;
+      p.skyZenith = c('#9CCFC2');
+      p.skyMid = c('#D6E8D4');
+      p.skyHorizon = c('#FFF1DA');
+      p.skyBelow = c('#FBE6D4');
+      p.skySpread = 0.8;
+      p.skyCurve = 0.95;
+      p.snowLit = c('#FFFBF4');
+      p.snowShade = c('#A5ACDC');
+      p.snowDeep = c('#9674BC');
+      p.rim = c('#FFE2D0');
+      p.fog = c('#FFE6D2');
+      p.fogNear = 85;
+      p.fogFar = 520;
+      p.hemiSky = c('#D2E2DC');
+      p.tall = c('#F88CBC');
+      p.tallDark = c('#D65290');
+      p.low = c('#454159');
+      p.lowLit = c('#76728E');
+      p.ridge = [c('#F2E8DC'), c('#DCE0D2'), c('#BCCDC6')];
+      p.massif.rock = c('#8492A8');
+      p.massif.glow = c('#FFC8B4');
+      p.massif.heroAz = 27;
+      p.massif.veil = 0.3;
+      p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFF8EE'), shade: c('#E4DCCF'), rim: c('#FFDCC4'), shadow: 0.1 };
+      p.shadowK = 0.82;
+      p.grade = { lift: c('#22282E'), gain: c('#FFFDF8'), saturation: 1.06, contrast: 1.03, grain: 0.5, foot: 0.14, shafts: 0.7, lens: 0.3, focal: 0.5, gust: 0, glitter: 0.1 };
+      p.atmo = { rays: 0.8, halo: 0, meteors: 0, banner: 0.3, slide: 0, sweep: 0.2, valley: 1, valleyColor: c('#FFE4D2'), drift: 0.7 };
+      p.bloom = 0.22;
+      p.sparkle = 0.6;
+      p.snowfall = 0;
+      p.giftGlow = 0.2;
+      p.ghostGlow = 1.5;
+      return;
+  }
+}
+
+/** One change of light on a mountain's run. */
+export interface JourneyStop {
+  /** Metres where the light starts to leave the stop before. */
+  from: number;
+  /** Metres where this stop is full. Stops run in order and never overlap. */
+  at: number;
+  /** How much of the day has gone, 0..1 (the soundscape's valley bell, in place of an evening's dusk). */
+  dusk: number;
+  /** What changes from the stop before. Anything live through the shared uniforms or the sky can change
+   *  here; the props and the mid-ground keep their baked colours (tall, low), so a late stop keeps
+   *  hazards dark with hazardDim rather than recolouring them. */
+  edit: (p: Palette) => void;
+}
+
+/** The journey of every mountain, in metres. RETUNE HERE when run lengths change: every distance in the
+ *  sun's journey is in this table and nowhere else. */
+export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
+  alpine: [
+    {
+      // The cloud builds through the afternoon.
+      from: 500, at: 1700, dusk: 0,
+      edit: (p) => {
+        setSun(p, 38, 17, 36, 18);
+        p.sunColor = c('#FFF0D8');
+        p.skyZenith = c('#184A9E');
+        p.skyMid = c('#6FA2D8');
+        p.skyHorizon = c('#EDE8DC');
+        p.fogFar = 600;
+        p.clouds.low = 0.95;
+        p.clouds.high = 0.8;
+        p.clouds.top = 0.3;
+        p.clouds.shadow = 0.34;
+        p.clouds.lit = c('#FFF8EC');
+        p.clouds.shade = c('#8FA6CE');
+      },
+    },
+    {
+      // It goes golden under the cloud: gold against blue, never the old lilac.
+      from: 2300, at: 3500, dusk: 0.55,
+      edit: (p) => {
+        setSun(p, 46, 9, 28, 13);
+        p.sunColor = c('#FFE4BC');
+        p.sunCore.setRGB(3, 2.5, 1.7);
+        p.sunTint = 0.6;
+        p.sunSize = 1.1;
+        p.sunGlow = 1.1;
+        p.skyZenith = c('#1E4A96');
+        p.skyMid = c('#A8BCCB');
+        p.skyHorizon = c('#FFC98A');
+        p.skyBelow = c('#E8C8A8');
+        p.snowLit = c('#FFF9F0');
+        p.snowShade = c('#6E90DC');
+        p.snowDeep = c('#2C56BA');
+        p.rim = c('#FFD2A0');
+        p.fog = c('#F2D4B0');
+        p.hemiSky = c('#8AA8E0');
+        p.clouds.lit = c('#FFE0B4');
+        p.clouds.shade = c('#7E8CB8');
+        p.clouds.rim = c('#FFB86C');
+        p.massif.glowK = 0.7;
+        p.massif.glowLine = -60;
+        p.atmo.rays = 0.6;
+        p.grade.gain = c('#FFF9F0');
+        p.grade.shafts = 0.7;
+        p.giftGlow = 0.2;
+      },
+    },
+  ],
+  glacier: [
+    {
+      // The sun sinks onto the band.
+      from: 700, at: 1900, dusk: 0.5,
+      edit: (p) => {
+        setSun(p, -40, 3.4, 19, 8);
+        p.sunColor = c('#FFE9B8');
+        p.skyZenith = c('#071C5C');
+        p.skyMid = c('#2553A8');
+        p.skyHorizon = c('#8CAEE0');
+        p.skyBand.color = c('#FFD97A');
+        p.snowLit = c('#BCCFF2');
+        p.stars = 0.8;
+        p.giftGlow = 0.35;
+        p.ghostGlow = 1.5;
+        p.lanternGlow = 0.35;
+      },
+    },
+    {
+      // Polar night comes on and the aurora arrives.
+      from: 2400, at: 3400, dusk: 1,
+      edit: (p) => {
+        setSun(p, -44, 3, 18, 8);
+        p.sunColor = c('#B8C4EC');
+        p.sunDisc = 0.25;
+        p.hazardDim = 0.78;
+        p.skyZenith = c('#040E3C');
+        p.skyMid = c('#143A8A');
+        p.skyHorizon = c('#4A7EC0');
+        p.skyBand.color = c('#7FC4D0');
+        p.skyBand.k = 0.6;
+        p.skyBelow = c('#2E4E94');
+        p.snowLit = c('#9DB6EA');
+        p.snowShade = c('#34569E');
+        p.snowDeep = c('#132A6C');
+        p.fog = c('#2E4E94');
+        p.hemiSky = c('#4E78CC');
+        p.aurora = 0.9;
+        p.stars = 1;
+        p.massif.flow = 1;
+        p.bloom = 0.7;
+        p.giftGlow = 0.6;
+        p.ghostGlow = 1.7;
+        p.lanternGlow = 0.55;
+      },
+    },
+  ],
+  volcanic: [
+    {
+      // The ash thickens: the deck closes, the disc dims and the air draws in.
+      from: 500, at: 1800, dusk: 0.4,
+      edit: (p) => {
+        setSun(p, 42, 11, 27, 14);
+        p.sunDisc = 0.5;
+        p.sunSoft = 0.6;
+        p.skyZenith = c('#150E12');
+        p.skyHorizon = c('#C84E22');
+        p.snowLit = c('#BCB2B6');
+        p.snowShade = c('#4A3C54');
+        p.fogFar = 340;
+        p.deck.k = 1;
+        p.embers = 1;
+      },
+    },
+    {
+      // A glowing dusk: the sky goes dark, and the lava lights what is left of it.
+      from: 2300, at: 3400, dusk: 1,
+      edit: (p) => {
+        setSun(p, 48, 6, 24, 13);
+        p.sunDisc = 0.25;
+        p.skyZenith = c('#0E0A0E');
+        p.skyMid = c('#36181C');
+        p.skyHorizon = c('#E8481A');
+        p.snowLit = c('#9A8E96');
+        p.snowShade = c('#382C46');
+        p.snowDeep = c('#1E1634');
+        p.fog = c('#40222A');
+        // Under the 0.75 that wakes the night moods' lightning: nothing strobes on a Clear Skies run.
+        p.massif.lava = 0.7;
+        p.massif.flow = 1;
+        p.deck.glow = c('#FF5A1E');
+        p.embers = 1.3;
+        p.bloom = 0.7;
+        p.giftGlow = 0.6;
+        p.ghostGlow = 1.75;
+        p.lanternGlow = 0.5;
+      },
+    },
+  ],
+  blossom: [
+    {
+      // The mist lifts off the cone and the sun climbs out of it.
+      from: 400, at: 1600, dusk: 0,
+      edit: (p) => {
+        setSun(p, -28, 27, 36, 19);
+        p.sunDisc = 1;
+        p.sunSoft = 0.2;
+        p.skyZenith = c('#90C4CC');
+        p.skyMid = c('#C6E2D8');
+        p.skyHorizon = c('#FFF4E2');
+        p.fogNear = 120;
+        p.fogFar = 720;
+        p.massif.veil = 0;
+        p.shadowK = 0.95;
+        p.atmo.valley = 0.55;
+        p.atmo.drift = 0.15;
+        p.grade.contrast = 1.06;
+      },
+    },
+    {
+      // A clear spring day with the wind in the blossom.
+      from: 2400, at: 3400, dusk: 0.5,
+      edit: (p) => {
+        p.sunColor = c('#FFF8EE');
+        p.skyZenith = c('#7FB4D0');
+        p.skyMid = c('#BCDCE0');
+        p.clouds.low = 0.5;
+        p.clouds.high = 0.5;
+        p.petals = 1.1;
+      },
+    },
+  ],
 };
 
-/** From about 3.5 km: blue hour. The sky cools to deep blue over a dusky rose horizon, the sun sinks to
- *  touch the ridge, the snow turns periwinkle, and gifts, ghosts and a sled lantern glow stronger. */
-const BLUE_HOUR: JourneyStop = {
-  zenith: '#111A4C', mid: '#5E5AA0', horizon: '#EE9A86', below: '#8A84B8', sky: 0.72,
-  sun: '#FFC0A0', sunK: 0.6, discEl: -7.6, lightEl: -7, shadowMinEl: 8,
-  snowLit: '#DCDCF4', litK: 0.6, snowShade: '#6870C6', shadeK: 0.5, snowDeep: '#363C96', deepK: 0.5,
-  rim: '#D4AEF0', rimK: 0.45, fog: '#8C86BA', fogK: 0.55, hemi: '#6E7CC8', hemiK: 0.5,
-  ridge: ['#9C8CC4', '#6A5C9E', '#3C3878'], ridgeK: 0.6,
-  gain: '#EAECFF', gainK: 0.45, lift: '#0A0C30', liftK: 0.5,
-  cloudLit: '#B8A0D0', cloudShade: '#4E4A8E', cloudRim: '#FF9C7C', cloudK: 0.7,
-};
+const copyOf = (p: Palette): Palette => lerpPalette(p, p, 0, {} as Palette);
 
-function journeyStop(base: Palette, s: JourneyStop, dusk: number): Palette {
-  const p = lerpPalette(base, base, 0, getPaletteShell());
-  const tow = (col: Color, hex: string, k: number) => col.lerp(c(hex), k);
-  tow(p.skyZenith, s.zenith, s.sky);
-  if (p.skyMid) tow(p.skyMid, s.mid, s.sky);
-  tow(p.skyHorizon, s.horizon, s.sky * 0.85);
-  tow(p.skyBelow, s.below, s.sky * 0.7);
-  tow(p.sunColor, s.sun, s.sunK);
-  p.diskDir = atElevation(p.diskDir, Math.max(3.4, elevationOf(p.diskDir) + s.discEl));
-  p.sunDir = atElevation(p.sunDir, Math.max(17, elevationOf(p.sunDir) + s.lightEl));
-  p.shadowMinEl = s.shadowMinEl;
-  p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
-  tow(p.snowLit, s.snowLit, s.litK);
-  tow(p.snowShade, s.snowShade, s.shadeK);
-  tow(p.snowDeep, s.snowDeep, s.deepK);
-  tow(p.rim, s.rim, s.rimK);
-  tow(p.fog, s.fog, s.fogK);
-  tow(p.hemiSky, s.hemi, s.hemiK);
-  p.ridge.forEach((r, i) => tow(r, s.ridge[i], s.ridgeK));
-  tow(p.grade.gain, s.gain, s.gainK);
-  tow(p.grade.lift, s.lift, s.liftK);
-  tow(p.clouds.lit, s.cloudLit, s.cloudK);
-  tow(p.clouds.shade, s.cloudShade, s.cloudK);
-  tow(p.clouds.rim, s.cloudRim, s.cloudK);
-  // Dusk: the glows the dark brings out (the gift, ghost and lantern signals keep their own colours).
-  p.sunSize *= 1 + 0.15 * dusk;
-  p.sunGlow *= 1 + 0.25 * dusk;
-  p.bloom += 0.16 * dusk;
-  p.giftGlow = Math.max(p.giftGlow, 0.45 * dusk);
-  p.ghostGlow += 0.25 * dusk;
-  p.lanternGlow = Math.max(p.lanternGlow, 0.5 * dusk);
-  p.stars = Math.max(p.stars, 0.35 * dusk);
-  p.sparkle *= 1 - 0.15 * dusk;
-  p.clouds.shadow *= 1 - 0.6 * dusk;
-  return p;
+const STOPS = new Map<BiomeId, Palette[]>();
+
+/** A mountain's palettes at the start and at each stop of its journey, built on first use. */
+function journeyStops(biome: BiomeId): Palette[] {
+  let st = STOPS.get(biome);
+  if (!st) {
+    st = [getPalette(biome, Mood.None)];
+    for (const stop of JOURNEY[biome]) {
+      const p = copyOf(st[st.length - 1]);
+      stop.edit(p);
+      p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
+      st.push(p);
+    }
+    STOPS.set(biome, st);
+  }
+  return st;
 }
 
-/** A blank palette for lerpPalette to fill (it creates every field on the first blend). */
-function getPaletteShell(): Palette {
-  return {} as Palette;
-}
-
-const STOPS = new Map<BiomeId, [Palette, Palette, Palette]>();
-
-/** How far along the journey a run is, as the weights of its two later stops: golden at the start,
- *  full alpenglow by about 2 km, blue hour from about 3.5 km (full by 4 km). Smooth, so no step shows. */
-export function journeyWeights(metres: number): { alpenglow: number; blue: number } {
-  const s = (x: number) => {
-    const k = Math.max(0, Math.min(1, x));
-    return k * k * (3 - 2 * k);
-  };
-  return { alpenglow: s((metres - 200) / 1800), blue: s((metres - 3000) / 1000) };
+/** How far along its journey a run is: 0 at the start, n at the n-th stop, smooth between, flat where
+ *  the light holds (so the world re-blends only while it moves). */
+export function journeyProgress(biome: BiomeId, metres: number): number {
+  const stops = JOURNEY[biome];
+  let at = 0;
+  for (let i = 0; i < stops.length; i++) {
+    const k = Math.max(0, Math.min(1, (metres - stops[i].from) / (stops[i].at - stops[i].from)));
+    if (k <= 0) break;
+    at = i + k * k * (3 - 2 * k);
+  }
+  return at;
 }
 
 /** Clear Skies' palette `metres` into a run, written into out (which must not be one of the cached
  *  stops). Chaos moods keep their own palette: the caller only calls this for Mood.None. */
 export function journeyPalette(biome: BiomeId, metres: number, out: Palette): Palette {
-  let st = STOPS.get(biome);
-  if (!st) {
-    const g = getPalette(biome, Mood.None);
-    st = [g, journeyStop(g, ALPENGLOW, 0), journeyStop(g, BLUE_HOUR, 1)];
-    STOPS.set(biome, st);
-  }
-  const w = journeyWeights(metres);
-  lerpPalette(st[0], st[1], w.alpenglow, out);
-  if (w.blue > 0) lerpPalette(out, st[2], w.blue, out);
-  return out;
+  const st = journeyStops(biome);
+  const at = journeyProgress(biome, metres);
+  const i = Math.min(Math.floor(at), st.length - 2);
+  return lerpPalette(st[i], st[i + 1], at - i, out);
+}
+
+/** How much of the day has gone `metres` into a run, 0..1. Allocates nothing (the soundscape asks
+ *  every frame). */
+export function journeyDusk(biome: BiomeId, metres: number): number {
+  const stops = JOURNEY[biome];
+  const at = journeyProgress(biome, metres);
+  const i = Math.min(Math.floor(at), stops.length - 1);
+  const a = i > 0 ? stops[i - 1].dusk : 0;
+  return a + (stops[i].dusk - a) * (at - i);
 }

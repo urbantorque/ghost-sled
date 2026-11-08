@@ -2,7 +2,7 @@ import type { Beat, BeatOf } from '../game/beats';
 import { ChaosEvent } from '../sim/chaos';
 import type { StyleKind } from '../sim/scoring';
 import type { CrashCause, LandQuality, SimEvent, TakeoffKind } from '../sim/sim';
-import { UiOnce, bankRoll, stormCascade } from './cues';
+import { BIG_DROP_S, UiOnce, bankRoll, stormCascade } from './cues';
 import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
@@ -230,6 +230,7 @@ export class Sfx {
         break;
       case 'land':
         this.land(e.quality, e.impact, e.halfTurns + e.flips * 2, e.late, t);
+        if (e.airtime >= BIG_DROP_S) this.bigDrop(e.airtime, e.impact, t);
         break;
       case 'crash':
         this.crash(e.cause, t);
@@ -282,6 +283,7 @@ export class Sfx {
         break;
       case 'land':
         if (e.quality === 'perfect') duck.duck(DUCK_STOMP, t, 0.18, 0.25);
+        else if (e.airtime >= BIG_DROP_S) duck.duck(0.72, t, 0.2, 0.35);
         break;
       case 'chaos':
         if (e.phase === 'warn') duck.duck(0.7, t, e.event === ChaosEvent.Avalanche ? 2.8 : 1.4, 0.6);
@@ -1221,6 +1223,93 @@ export class Sfx {
     this.shimmer(t + 0.8, 10, 9, 0.04);
   }
 
+  // ---------------------------------------------------------------- the descent's moments
+
+  /** A big drop's touchdown: the ground takes it (a deep thud with a sub drop), and the powder wave
+   *  rolls away from it. Layered over the landing's own sound. */
+  private bigDrop(airtime: number, impact: number, t: number): void {
+    const k = clamp(0.7 + (airtime - BIG_DROP_S) * 0.25 + Math.max(0, impact - 8) * 0.02, 0.7, 1.2);
+    const v = this.voice(t, 0.25, 0, 1, PRIO.payoff);
+    thump(v, t, 84, 30, 0.6 * k, 0.24);
+    puff(v, t, 0.26 * k, 900, 180, 0.3, v.bank.brown);
+    whoosh(v, t + 0.03, 0.8, 2000, 260, 0.14 * k, 0.7, v.bank.pink);
+    crumble(v, t + 0.05, 0.12 * k, 1100, 0.9, 2, 0.2);
+  }
+
+  /** A wipeout: the heavy thud of going down and the roll's next beats on the snow, each lighter. */
+  private tumbleDown(t: number): void {
+    const v = this.voice(t, 0.2, 0, 1.2, PRIO.payoff);
+    thump(v, t, 96, 34, 0.64, 0.17);
+    puff(v, t, 0.3, 1900, 320, 0.17);
+    crumble(v, t, 0.15, 900, 0.9, 2, 0.18);
+    this.at(v, t + 0.34, (tn) => {
+      thump(v, tn, 88, 40, 0.3, 0.09);
+      puff(v, tn, 0.13, 1500, 400, 0.08);
+    });
+    this.at(v, t + 0.66, (tn) => {
+      thump(v, tn, 80, 44, 0.16, 0.07);
+      puff(v, tn, 0.08, 1300, 500, 0.07);
+    });
+    this.music?.duck(0.62, t, 0.35, 0.4);
+  }
+
+  /** Back on the line: a soft puff and a small note up, in key. */
+  private tumbleUp(t: number): void {
+    const v = this.voice(t, 0.2, 0, 1, PRIO.low);
+    puff(v, t, 0.1, 2600, 900, 0.07);
+    fmBell(v, t + 0.02, this.note(5), 0.035, 0.18, 2, 0.8);
+  }
+
+  /** Turned back by the edge: a scrape of snow and grit along it, and a knock. */
+  private scrape(side: number, speed: number, t: number): void {
+    const sr = this.ctx.sampleRate;
+    const k = clamp(0.6 + speed / 60, 0.6, 1.2);
+    const v = this.voice(t, 0.1, side * 0.65);
+    const g = v.gain(0, v.out);
+    const e = perc(g.gain, t, 0.28 * k * bandComp(1500, 1.4, sr), 0.004, 0.09);
+    const am = v.gain(0.5, g);
+    v.lfo(31, 0.5, am.gain, t, e, 'square');
+    v.buffer(v.bank.pink, t, e, v.filter('bandpass', 1500, 1.4, am));
+    thump(v, t, 150, 70, 0.22 * k, 0.05);
+  }
+
+  /** Onto a rail: a bright clank; off it, a lighter one. The hiss between is the ambience's. */
+  private rail(start: boolean, t: number): void {
+    const v = this.voice(t, 0.3, 0);
+    const f = start ? 1560 : 1240;
+    fmBell(v, t, f, start ? 0.07 : 0.04, 0.09, 3.1, 2.2);
+    this.knock(v, t, 2100, start ? 0.14 : 0.08);
+  }
+
+  /** A stage line crossed: a quick rising pair of bells and a short rush of air into the band's lift. */
+  private stageCue(t: number): void {
+    const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
+    whoosh(v, t, 0.5, 700, 2600, 0.08, 0.8, v.bank.pink);
+    fmBell(v, t, this.note(7), 0.07, 0.3, 2.4, 1.1);
+    const hi = this.note(10);
+    this.at(v, t + 0.11, (tn) => fmBell(v, tn, hi, 0.08, 0.5, 2.4, 1.2));
+    this.chord(t + 0.11, 0.045, 0.55, 4);
+  }
+
+  /** The finish line: the band slams, the fanfare rises and resolves onto a bright add9 chord that
+   *  rings on over the crowd's roar. The results deck's resolved loop comes up under it. */
+  private finishCue(t: number): void {
+    this.cutFlow();
+    this.music?.duck(0.55, t, 0.5, 0.8);
+    this.slam(t, true);
+    this.fanfare(t + 0.04);
+    this.chord(t + 1.05, 0.09, 1.5, 5);
+    this.shimmer(t + 1.1, 18, 8, 0.05);
+    // The crowd: a broad band of noise swelling up, a slow surge in it, carried on every tier.
+    const sr = this.ctx.sampleRate;
+    const v = this.voice(t, 0.5, 0, 1, PRIO.payoff);
+    const g = v.gain(0, v.out);
+    const end = swell(g.gain, t + 0.05, 0.55 * bandComp(1000, 0.7, sr), 0.5, 2.2, 0.9);
+    const am = v.gain(0.72, g);
+    v.lfo(1.7, 0.2, am.gain, t, end);
+    v.buffer(v.bank.pink, t, end, v.filter('bandpass', 1000, 0.7, am));
+  }
+
   // ---------------------------------------------------------------- beats (named moments)
 
   /** One beat's sound at t. Beats that only leave context (stomp, near miss, bump, bank count) are
@@ -1306,6 +1395,22 @@ export class Sfx {
         break;
       case 'graveyard':
         this.graveyard(t);
+        break;
+      case 'tumble':
+        if (b.phase === 'start') this.tumbleDown(t);
+        else this.tumbleUp(t);
+        break;
+      case 'scrape':
+        this.scrape(b.side, b.speed, t);
+        break;
+      case 'grind':
+        this.rail(b.phase === 'start', t);
+        break;
+      case 'stage':
+        if (!b.last) this.stageCue(t);
+        break;
+      case 'finish':
+        this.finishCue(t);
         break;
       default:
         break;

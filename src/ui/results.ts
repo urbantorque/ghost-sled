@@ -1,22 +1,27 @@
-import type { ResultsGhost, ResultsModel, ResultsNextUnlock, UIHandlers, UnlockedMountain } from './contract';
+import type { ResultsFinish, ResultsGhost, ResultsLadder, ResultsModel, ResultsNextUnlock, ResultsStages, UIHandlers, UnlockedMountain } from './contract';
 import type { InputMode } from '../game/input';
+import { type Standing, aheadOf, byStanding, clock, gapSeconds, margin, splitGap, timeGap } from '../game/standing';
 import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
-import { missionList, progText } from './title';
+import { medalDots, missionList, progText } from './title';
 import './meta.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
 // score with your finishing place, how the run ended, how far the next place was and the gifts it
-// earned; under it the run's best stats (only those worth naming), the race (the finishing order
-// by distance, windowed around you), missions folded to one row, and a tip for next time when the
-// run had nothing to show. Run again is the default focus and
+// earned; under it the run's best stats (only those worth naming), the race (the finishing order:
+// finishers by time, then the rest by distance, windowed around you), missions folded to one row, and
+// a tip for next time when the run had nothing to show. A run that reached the line gets the finished
+// variant: its time is the hero number, with the place, the medal and the style score beside it, and
+// the stage splits against your best under it. Run again is the default focus and
 // the only loud button; rewarded options sit beside it at Home size, easy to skip. On wide landscape
-// screens the card keeps to the right, so the live crash scene on the left is the hero shot.
+// screens the card keeps to the right, so the live crash scene on the left is the hero shot. Your
+// place on the mountain's ladder sits beside the card, in space the card never used, so the card's
+// first view is the same with it or without.
 
 const COUNT_MS = 650;
 /**
@@ -144,6 +149,7 @@ export class Results {
   /** Phone disclosures, kept across re-renders of the same results (an ad answered, gifts doubled). */
   private raceAll = false;
   private misOpen = false;
+  private stagesOpen = false;
   /** This card's tip for next time, picked once per results (an update keeps it). */
   private tipIx = 0;
   inputMode: InputMode = 'keyboard';
@@ -179,13 +185,17 @@ export class Results {
     this.pending.clear();
     this.pressed.clear();
     this.raceAll = false;
+    this.stagesOpen = false;
     // With no race to show (no ghosts rode), the missions have the room: they open from the start.
     this.misOpen = m.ghosts.length === 0;
     this.tipIx = tipTurn++;
     this.render(m, true);
     this.layer.show();
     this.focusDefault();
-    if (!reduced()) this.countUp(m.score);
+    if (!reduced()) {
+      if (m.finish) this.countUp(m.finish.seconds, clock);
+      else this.countUp(m.score, fmt);
+    }
     this.flyRewards(m);
     this.stampsAtOnce();
   }
@@ -241,15 +251,15 @@ export class Results {
     target?.focus({ preventScroll: true });
   }
 
-  private countUp(target: number): void {
+  private countUp(target: number, show: (v: number) => string): void {
     const el = this.el.querySelector<HTMLElement>('.gs-res-score');
     if (!el || target <= 0) return;
     const t0 = performance.now();
-    el.textContent = '0';
+    el.textContent = show(0);
     const step = (now: number) => {
       const t = Math.min(1, (now - t0) / COUNT_MS);
       const e = 1 - Math.pow(1 - t, 3);
-      el.textContent = fmt(target * e);
+      el.textContent = show(target * e);
       if (t < 1) this.raf = requestAnimationFrame(step);
     };
     cancelAnimationFrame(this.raf);
@@ -384,13 +394,17 @@ export class Results {
     // Head: where, the score with your place beside it, and how the run ended.
     const mtnName = h('span', '', m.mountain);
     mtnName.setAttribute('translate', 'no');
-    const where = h('p', 'gs-res-where', mtnName);
+    const where = h('div', 'gs-res-where', mtnName);
     where.id = 'gs-res-where';
     if (m.mood) where.append(h('span', 'gs-res-mood', m.mood));
-    // The visible score counts up from 0 as focus lands, so readers get a fixed copy instead.
-    const score = h('div', 'gs-res-score gs-num', fmt(m.score));
+    // Where a screen has no room beside the card, your place on the ladder rides in this line (meta.css).
+    if (m.ladder) where.append(ladderStrip(m.ladder, 'is-inline'));
+    // The visible figure counts up from 0 as focus lands, so readers get a fixed copy instead. A finish
+    // leads with its time: that is what the race was decided on.
+    const fin = m.finish ?? null;
+    const score = h('div', `gs-res-score gs-num${fin ? ' is-time' : ''}`, fin ? clock(fin.seconds) : fmt(m.score));
     score.setAttribute('aria-hidden', 'true');
-    const scoreSr = sr(`Score ${fmt(m.score)}`);
+    const scoreSr = sr(fin ? `Finish time ${clock(fin.seconds)}. Style score ${fmt(m.score)}` : `Score ${fmt(m.score)}`);
     scoreSr.id = 'gs-res-score';
     // Beside the score: where you finished in the race, then the new-best stamp or the best to beat.
     const side = h('div', 'gs-res-side');
@@ -403,7 +417,13 @@ export class Results {
       const at = placeAtCrash(m, place.rank, line);
       side.append(at ? h('div', 'gs-res-placebox', chip, at) : chip);
     }
-    if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
+    if (fin) {
+      // The medal stands with the place; your best time and the style score share the row under them.
+      if (fin.medal > 0) side.append(h('span', `gs-medal m-${fin.medal} gs-res-medal`, MEDAL[fin.medal]));
+      const style = h('span', `gs-res-style${m.newBest ? ' is-best' : ''}`, 'Style ', h('span', 'gs-num', fmt(m.score)));
+      const low = fin.newBest ? h('span', 'gs-stamp gs-res-newbest', 'New best') : fin.bestTime !== null ? h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', clock(fin.bestTime))) : null;
+      side.append(h('div', 'gs-res-siderow', low, style));
+    } else if (m.newBest) side.append(h('span', 'gs-stamp gs-res-newbest', 'New best'));
     else if (m.best > 0) side.append(h('span', 'gs-res-best', icon('trophy'), 'Best ', h('span', 'gs-num', fmt(m.best))));
     const scoreRow = h('div', 'gs-res-scorerow', scoreSr, score, side.childElementCount > 0 ? side : null);
     // How the run ended is the lesson: an icon line in full off-white. Straight under it, the hook to
@@ -413,7 +433,7 @@ export class Results {
     // ("with a 2,085 point combo on the line"). The figure keeps its unit, and "on the line" keeps
     // together, so a wrap never leaves "line" alone on a row of its own.
     const lost = (m.lostCombo ?? 0) >= LOST_LINE_MIN ? h('span', 'gs-res-lost', ' with a ', h('span', 'gs-num', fmt(m.lostCombo!)), `${NBSP}point combo on${NBSP}the${NBSP}line`) : null;
-    const cause = m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
+    const cause = fin ? finishLine(fin) : m.crashCause ? h('p', 'gs-res-cause', icon(causeIcon(m), 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', m.crashCause, lost)) : null;
     // When the race line already names the margin to the place above ("Brave Rhea beat you by 85 m."
     // is the Next row's 85 m), the place note would say the same number twice: the line takes its slot.
     // On a phone the race line always takes the note's slot (meta.css, has-line): the head keeps its
@@ -440,20 +460,22 @@ export class Results {
     // the buttons: inside the left column it either left that column ending early beside a full race
     // or pushed the missions down past the race's end.
     const picks = notable(m);
-    const showDist = m.ghosts.length === 0;
+    const showDist = m.ghosts.length === 0 && !fin;
     const stats = picks.length > 0 || showDist ? h('dl', 'gs-res-stats', showDist ? stat('Distance', metres(m.distance), 'is-key') : null, ...picks) : null;
-    const tip = picks.length === 0 ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
-    const run = stats ? h('section', 'gs-res-run', stats) : null;
+    const tip = picks.length === 0 && !fin ? h('p', 'gs-res-tip', h('span', 'gs-res-tip-k', 'Next time', sr(':')), h('span', 'gs-res-tip-t', runTip(m, this.tipIx, this.inputMode))) : null;
+    const splits = fin ? splitRow(fin) : null;
+    const run = stats || splits ? h('section', 'gs-res-run', splits, stats) : null;
     run?.setAttribute('aria-label', 'Your run');
 
-    // The race tells one story, the finishing order by distance: the head counts the ghosts you
+    // The race tells one story, the finishing order: the head counts the ghosts you
     // beat (finished ahead of) and only those rows wear a Beat stamp; the row just above yours wears
     // a Next tag, and the line in the card's head says how far that place was. A run that beat nobody
     // leaves the count out: "Beat 0 of 6" in bold caps only read as a verdict. Overtakes are
     // celebrated during the run, where they happen.
     let race: HTMLElement | null = null;
     if (m.ghosts.length > 0) {
-      const beat = m.ghosts.filter((g) => dist(g) <= m.distance).length;
+      const me = youAt(m);
+      const beat = m.ghosts.filter((g) => !aheadOf(ghostAt(g), me)).length;
       const list = standings(m);
       const all = list.querySelector('.is-far, .is-far-p') ? this.showAll(list, m.ghosts.length + 1) : null;
       // A field only the phone window folds needs the link on phones alone.
@@ -463,6 +485,11 @@ export class Results {
       race = h('section', 'gs-res-race', h('h3', 'gs-h2 gs-res-h', 'Race', meta), list, all);
     }
     const mis = m.missions.length > 0 ? this.missions(m) : null;
+    // What decided it: in the race's column on wide screens, which has the room, and on a phone under
+    // the Missions row, so the first view is the card it always was.
+    const stg = race && m.stages ? this.stagesFold(m.stages, m) : null;
+    const stacked = window.matchMedia?.('(max-aspect-ratio: 1/1)').matches === true;
+    if (stg && !stacked) race?.append(stg);
 
     // Actions. In portrait the "Watch Ad:" prefix is read but not shown (the video glyph carries it),
     // so the offers stay one-line pills.
@@ -489,7 +516,9 @@ export class Results {
       else chal.querySelector('.gs-btn-label')?.replaceChildren('Challenge', h('span', 'gs-res-chal-tail', ' a Friend'));
     }
     const label = m.runAgainLabel?.text ?? 'Run Again';
-    const rematch = label.startsWith('Rematch ');
+    // "Rematch Mila", or "Race Mila" for a rider new to you: Run Again names who is about to ride.
+    const named = /^(Rematch|Race) (.+)$/.exec(label);
+    const rematch = named !== null;
     const again = btn(
       ctx,
       { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
@@ -497,11 +526,11 @@ export class Results {
     );
     // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
     // word stacks over the name (meta.css), so the name keeps the button's width to itself.
-    if (rematch) {
-      const name = label.slice('Rematch '.length);
+    if (named) {
+      const name = named[2];
       const who = h('span', 'gs-again-who', name);
       who.setAttribute('translate', 'no');
-      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', 'Rematch '), who);
+      again.querySelector('.gs-btn-label')?.replaceChildren(h('span', 'gs-again-k', `${named[1]} `), who);
       // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
       if ([...name].length >= LONG_NAME) again.classList.add('is-long');
     }
@@ -517,7 +546,7 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, stacked ? stg : null, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
@@ -539,7 +568,9 @@ export class Results {
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', title.id);
     card.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
-    this.el.replaceChildren(card);
+    // The strip sits outside the card: over its top edge in portrait (the wreck's band), in the free
+    // corner beside it on wide screens. The card itself is laid out as if it were not there.
+    this.el.replaceChildren(...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), card);
     this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
@@ -616,6 +647,34 @@ export class Results {
     };
     sync();
     return b;
+  }
+
+  /**
+   * What decided it, folded into one row under the race, so a phone's first view is the card it always
+   * was: the row reads the line, and opens each stage in its own time against your rival and your best.
+   * (The splits row above is the clock at each line; these are the stages themselves.) When the race
+   * line is already saying it, the row says who it is against instead.
+   */
+  private stagesFold(s: ResultsStages, m: ResultsModel): HTMLElement | null {
+    if (s.rows.length === 0 || (!s.rival && !s.best && s.rows.every((r) => r.medal === 0))) return null;
+    const table = stageTable(s);
+    table.id = 'gs-res-stg-table';
+    const said = s.line && m.raceLine?.text !== s.line ? s.line : s.rival ? `Against ${s.rival.name}` : 'Against your best';
+    const sum = h('span', 'gs-res-mis-sum', h('span', 'gs-res-mis-left gs-res-stg-sum', said));
+    sum.setAttribute('translate', 'no');
+    const toggle = btn(this.ctx, { cls: 'gs-btn-quiet gs-res-mis-toggle is-next gs-res-stg-toggle', icon: 'timer', label: 'Stages', fk: 'stg-toggle', onClick: () => {
+      this.stagesOpen = !this.stagesOpen;
+      sync();
+      if (this.stagesOpen) table.scrollIntoView({ block: 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+    } }, sum, icon('chevR', 'gs-res-chev'));
+    toggle.setAttribute('aria-controls', table.id);
+    const sec = h('div', 'gs-res-stages', toggle, table);
+    const sync = () => {
+      sec.classList.toggle('is-open', this.stagesOpen);
+      toggle.setAttribute('aria-expanded', String(this.stagesOpen));
+    };
+    sync();
+    return sec;
   }
 
   /**
@@ -767,6 +826,99 @@ export class Results {
   }
 }
 
+/** The medals, by the number the game sends. */
+const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
+/**
+ * Your place on the mountain's ladder, the one thing the card never had room for: your rank and what
+ * you hold, the name above you and what to beat, and over them whatever this run climbed. Laid out
+ * beside the card, so the card's own first view is unchanged. An arrow and a count for a rank that
+ * moved, in the place chip's grammar. Gifts it paid are already in the wallet.
+ */
+function ladderStrip(l: ResultsLadder, place: 'is-band' | 'is-inline'): HTMLElement {
+  const rank = l.top ? 'Top of the ladder' : l.rank !== null ? `Rank ${l.rank} of ${l.of}` : 'No rank yet';
+  const up = l.up > 0 && !l.top ? h('span', 'gs-lad-up gs-num', icon('tri', 'gs-lad-tri'), String(l.up), sr(l.up === 1 ? ' place up' : ' places up')) : null;
+  const moment = l.moment
+    ? h(
+        'div',
+        `gs-lad-moment${l.topNow ? ' is-top' : ''}`,
+        h('span', 'gs-lad-moment-t', l.moment),
+        l.gifts > 0 ? h('span', 'gs-lad-pay', h('span', 'gs-num', `+${fmt(l.gifts)}`), icon('gift'), sr(' gifts')) : null,
+      )
+    : null;
+  moment?.setAttribute('translate', 'no');
+  const next = l.next ? h('div', 'gs-lad-next', l.next.replace(/(\d) ([ms])\b/g, `$1${NBSP}$2`)) : null;
+  next?.setAttribute('translate', 'no');
+  const box = h('div', `gs-lad ${place}${l.top ? ' is-top' : ''}`, moment, h('div', 'gs-lad-main', h('span', 'gs-lad-rank gs-num', rank), up, medalDots(l.medals, l.fresh)), next);
+  // The band sits outside the modal dialog, where a reader never goes: the copy in the mountain line
+  // is the one it hears, whichever of the two shows.
+  if (place === 'is-band') box.setAttribute('aria-hidden', 'true');
+  else {
+    box.setAttribute('role', 'group');
+    box.setAttribute('aria-label', 'Ladder');
+  }
+  return box;
+}
+
+/** A stage's gap to a time beside it, in the race-gap grammar: a number and a word, never a sign. */
+function stageGap(you: number, them: number | null): HTMLElement {
+  if (them === null) return h('td', 'gs-stg-gap is-none', '');
+  const gap = timeGap(you, them);
+  const ahead = you < them;
+  return h('td', `gs-stg-gap gs-num${gap >= 1 && ahead ? ' is-ahead' : ''}`, gap < 1 ? 'Level' : `${noteGap(gapSeconds(gap))} ${ahead ? 'ahead' : 'behind'}`);
+}
+
+/** Each stage in its own time, with this run's medal, against your rival and, when it rode, your best. */
+function stageTable(s: ResultsStages): HTMLElement {
+  const th = (t: string, cls = ''): HTMLElement => {
+    const e = h('th', cls, t);
+    e.setAttribute('scope', 'col');
+    return e;
+  };
+  const who = s.rival ? th('', `gs-stg-who ${kindCls(s.rival.kind)}`) : null;
+  who?.append(h('span', 'gs-stg-name', s.rival?.name));
+  who?.setAttribute('translate', 'no');
+  const head = h('tr', '', th('Stage'), th('Time'), who, s.best ? th('Your best', 'gs-stg-who k-you') : null);
+  const body = h('tbody', '');
+  for (const r of s.rows) {
+    const name = h('th', '', r.medal > 0 ? h('span', `gs-mdot m-${r.medal}`) : null, r.name, r.medal > 0 ? sr(`, ${MEDAL[r.medal].toLowerCase()}`) : null);
+    name.setAttribute('scope', 'row');
+    body.append(h('tr', '', name, h('td', 'gs-num', clock(r.seconds)), s.rival ? stageGap(r.seconds, r.rival) : null, s.best ? stageGap(r.seconds, r.best) : null));
+  }
+  const t = h('table', 'gs-stg', h('thead', '', head), body);
+  t.setAttribute('aria-label', 'Stage by stage');
+  return t;
+}
+
+/** The finished card's line under the time: how it stands against your best. */
+function finishLine(f: ResultsFinish): HTMLElement {
+  let text = 'First finish here.';
+  if (f.bestTime !== null) {
+    const gap = timeGap(f.seconds, f.bestTime);
+    const by = noteGap(gapSeconds(gap));
+    text = gap < 1 ? 'Level with your best.' : f.newBest ? `${by} faster than your best.` : `${by} off your best.`;
+  }
+  return h('p', 'gs-res-cause is-finish', icon('flag', 'gs-res-cause-ico'), h('span', 'gs-res-cause-t', text));
+}
+
+/**
+ * The stage splits: the clock at each line, and under it where that left you against your best there,
+ * in the race-gap grammar (a number and a word, never a bare sign). Gold-white where you were ahead,
+ * your best's own colour; quiet where you were behind.
+ */
+function splitRow(f: ResultsFinish): HTMLElement | null {
+  if (f.splits.length === 0) return null;
+  const cells = f.splits.map((s) => {
+    const g = s.vsBest === null ? null : splitGap(s.seconds, s.vsBest);
+    const ahead = s.vsBest !== null && s.vsBest < 0;
+    const vs = s.vsBest === null ? null : h('span', `gs-res-split-vs${ahead ? ' is-ahead' : ''}`, g === null ? 'Level' : `${noteGap(g)} ${ahead ? 'ahead' : 'behind'}`);
+    return h('div', 'gs-res-split', h('dt', '', s.name), h('dd', 'gs-num', clock(s.seconds), vs));
+  });
+  const dl = h('dl', 'gs-res-splits', ...cells);
+  dl.setAttribute('aria-label', f.bestTime !== null ? 'Stage splits against your best' : 'Stage splits');
+  return dl;
+}
+
 function stat(label: string, value: string, cls = '', record = false): HTMLElement {
   return h('div', `gs-res-stat${cls ? ' ' + cls : ''}`, h('dt', '', label), h('dd', 'gs-num', value, record ? h('span', 'gs-res-rec', sr(', '), 'Record') : null));
 }
@@ -832,7 +984,7 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
     'Hold to crouch, then release to pop off a kicker.',
     touch ? 'Drag in the air to spin.' : mode === 'mouse' ? 'Move in the air to spin.' : 'Steer in the air to spin.',
     touch ? 'Hold in the air to flip.' : 'Press and hold in the air to flip.',
-    'Hold, then let go at the lip for a boosted pop.',
+    'Hold, release at the lip for a boosted pop.',
   ];
   return moves[turn % moves.length];
 }
@@ -845,15 +997,16 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
 function raceLine(m: ResultsModel): HTMLElement | null {
   const l = m.raceLine;
   if (!l || !l.text) return null;
-  // The Daily medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon column.
-  const medal = l.tone === 'event' ? /^Daily: (Bronze|Silver|Gold)\./.exec(l.text) : null;
-  const rank = medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
+  // The Daily or Cup medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon
+  // column, and a stage gold almost had wears the gold it almost was.
+  const medal = l.tone === 'event' ? /^(?:Daily|Cup): (Bronze|Silver|Gold)\./.exec(l.text) : null;
+  const rank = l.tone === 'medal' ? 3 : medal ? ['Bronze', 'Silver', 'Gold'].indexOf(medal[1]) + 1 : 0;
   const disc = rank > 0 ? h('span', `gs-medal m-${rank} gs-res-line-ico`) : null;
   disc?.setAttribute('aria-hidden', 'true');
-  const glyph = l.tone === 'event' ? disc : icon('ghost', 'gs-res-line-ico');
-  // "85 m" never breaks between the number and its unit.
-  const text = l.text.replace(/(\d) m\b/g, `$1${NBSP}m`);
-  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
+  const glyph = l.tone === 'event' || l.tone === 'medal' ? disc : icon('ghost', 'gs-res-line-ico');
+  // "85 m" and "1.2 s" never break between the number and the unit.
+  const text = l.text.replace(/(\d) ([ms])\b/g, `$1${NBSP}$2`);
+  const p = h('p', `gs-res-line is-${l.tone}${l.tone === 'grudge' ? ' k-grudge' : l.tone === 'friend' || l.tone === 'rung' ? ' k-ghost' : ''}`, glyph, h('span', 'gs-res-line-t', text));
   // Names in it are handles: auto-translate would mangle them, and the rest is a short plain line.
   if (l.tone !== 'event') p.setAttribute('translate', 'no');
   return p;
@@ -921,6 +1074,13 @@ function nextUnlockCard(m: ResultsModel): HTMLElement | null {
 }
 
 const dist = (g: ResultsGhost): number => g.distance ?? 0;
+/** Where you and a ghost stand in the race order (standing.ts), the one order every row follows. */
+const youAt = (m: ResultsModel): Standing => ({ time: m.finish?.seconds ?? null, distance: m.distance });
+const ghostAt = (g: ResultsGhost): Standing => ({ time: g.time ?? null, distance: dist(g) });
+/** What a row shows: a time for a finisher, metres for the rest. */
+const rowFigure = (s: Standing): string => (s.time !== null ? clock(s.time) : metres(s.distance));
+/** A margin as the note shows it: "85 m" and "1.2 s" keep together, as the race line's do. */
+const noteGap = (g: string): string => g.replace(/(\d) ([ms])$/, `$1${NBSP}$2`);
 
 /** The open mission closest to done (the highest share of its target; the first on a tie), or null. */
 function closest(open: ResultsModel['missions']): ResultsModel['missions'][number] | null {
@@ -937,14 +1097,15 @@ function closest(open: ResultsModel['missions']): ResultsModel['missions'][numbe
 }
 
 /**
- * Where you finished. The race is decided by distance, the number every row shows: your place is one
- * more than the ghosts whose run went further than yours. Passed stamps are separate (ghosts you
- * overtook at some point), so a ghost you passed that kept going after your crash still ranks above.
+ * Where you finished. Finishers rank by time, then the rest by distance, the figure every row shows:
+ * your place is one more than the ghosts ahead of you in that order. Passed stamps are separate (ghosts
+ * you overtook at some point), so a ghost you passed that kept going after your crash still ranks above.
  */
 function finish(m: ResultsModel): { rank: number; of: number } | null {
   if (m.ghosts.length === 0) return null;
+  const me = youAt(m);
   let ahead = 0;
-  for (const g of m.ghosts) if (dist(g) > m.distance) ahead++;
+  for (const g of m.ghosts) if (aheadOf(ghostAt(g), me)) ahead++;
   return { rank: ahead + 1, of: m.ghosts.length + 1 };
 }
 
@@ -965,8 +1126,9 @@ function placeAtCrash(m: ResultsModel, rank: number, line: HTMLElement | null): 
  * One line under the crash line, in the same terms as the order: where you stood at the crash and who
  * rode on past (m.crashNote: it says why the place is not the one the HUD showed, and is the more
  * useful line), else how far short of the next place you stopped, or how far clear of second you
- * finished. Margins are the difference of the rows as shown (whole metres each). Null when it would
- * say nothing, or when the crash note is already the race line.
+ * finished. Margins are the difference of the rows as shown ("1.2 s" between finishers, "85 m" between
+ * the rest); a time and a distance share no unit, so a rider short of a finisher above is told how far
+ * short of the line. Null when it would say nothing, or when the crash note is already the race line.
  */
 function raceNote(m: ResultsModel): HTMLElement | null {
   if (m.crashNote) {
@@ -976,40 +1138,45 @@ function raceNote(m: ResultsModel): HTMLElement | null {
     p.setAttribute('translate', 'no');
     return p;
   }
-  let above = Infinity;
-  let below = -Infinity;
-  for (const g of m.ghosts) {
-    const d = dist(g);
-    if (d > m.distance) above = Math.min(above, d);
-    else below = Math.max(below, d);
-  }
   const place = finish(m);
   if (!place) return null;
-  if (place.rank > 1) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round(above) - Math.round(m.distance)))), ` short of ${ordinal(place.rank - 1)} place.`);
-  const lead = Math.round(m.distance) - Math.round(below);
-  return Number.isFinite(lead) && lead >= 1 ? h('p', 'gs-res-note', h('span', 'gs-num', metres(lead)), ' clear of 2nd place.') : null;
+  const me = youAt(m);
+  const order = m.ghosts.map(ghostAt).sort(byStanding);
+  if (place.rank > 1) {
+    const above = order[place.rank - 2];
+    const gap = margin(above, me);
+    if (gap === null) return h('p', 'gs-res-note', h('span', 'gs-num', metres(Math.max(1, Math.round((m.finishZ ?? above.distance) - m.distance)))), ' short of the finish.');
+    return h('p', 'gs-res-note', h('span', 'gs-num', noteGap(gap.replace(/^less than /, ''))), ` short of ${ordinal(place.rank - 1)} place.`);
+  }
+  const below = order[0];
+  if (!below) return null;
+  const gap = margin(me, below);
+  if (gap === null) return h('p', 'gs-res-note', 'The only finisher.');
+  return gap.startsWith('less') ? null : h('p', 'gs-res-note', h('span', 'gs-num', noteGap(gap)), ' clear of 2nd place.');
 }
 
 /**
- * The finishing order: everyone by distance, furthest first, you among them. The ghosts below your
- * row are the ones you beat, so they (and only they) wear a Beat stamp. Rows outside the window
- * around yours are marked far and fold behind Show All, so the race reads as your next targets.
+ * The finishing order: finishers by time, then the rest by distance, you among them. Each row reads in
+ * its own terms, a time or metres. The ghosts below your row are the ones you beat, so they (and only
+ * they) wear a Beat stamp. Rows outside the window around yours are marked far and fold behind Show
+ * All, so the race reads as your next targets.
  */
 function standings(m: ResultsModel): HTMLElement {
-  const sorted = [...m.ghosts].sort((a, b) => dist(b) - dist(a));
+  const sorted = [...m.ghosts].sort((a, b) => byStanding(ghostAt(a), ghostAt(b)));
+  const me = youAt(m);
   const n = sorted.length + 1;
   const long = m.ghosts.length > 6;
   const ol = h('ol', `gs-standings${long ? ' is-long' : ''}`);
-  ol.setAttribute('aria-label', 'Finishing order by distance');
+  ol.setAttribute('aria-label', 'Finishing order');
   // The two places above yours and the one below, slid to stay inside the list (first place shows
   // the three it beat). Folding a single row would cost as much as the link that opens it. Phones
   // keep three of those rows (is-far-p folds the fourth): the next place, you and the one you beat,
   // so your row stays in the first view under the stats line and the footer's offers.
-  const youAt = sorted.filter((g) => dist(g) > m.distance).length;
+  const yourRow = sorted.filter((g) => aheadOf(ghostAt(g), me)).length;
   const windowed = n > WIN_ROWS + 1;
-  const lo = Math.max(0, Math.min(youAt - WIN_ABOVE, n - WIN_ROWS));
+  const lo = Math.max(0, Math.min(yourRow - WIN_ABOVE, n - WIN_ROWS));
   const windowedP = n > WIN_ROWS_PHONE + 1;
-  const loP = Math.max(0, Math.min(youAt - 1, n - WIN_ROWS_PHONE));
+  const loP = Math.max(0, Math.min(yourRow - 1, n - WIN_ROWS_PHONE));
   let i = 0;
   let stamp = 0;
   const add = (li: HTMLElement) => {
@@ -1018,29 +1185,29 @@ function standings(m: ResultsModel): HTMLElement {
     i++;
     ol.append(li);
   };
-  const youRow = () => {
-    const you = h('li', 'gs-st-row is-you', h('span', 'gs-st-rank gs-num', String(i + 1)), icon('rider', 'gs-st-ico'), h('span', 'gs-st-name', 'You'), h('span', 'gs-st-val gs-num', metres(m.distance)));
+  const youRowAdd = () => {
+    const you = h('li', 'gs-st-row is-you', h('span', 'gs-st-rank gs-num', String(i + 1)), icon('rider', 'gs-st-ico'), h('span', 'gs-st-name', 'You'), h('span', 'gs-st-val gs-num', rowFigure(me)));
     you.setAttribute('aria-current', 'true');
     add(you);
   };
   for (let k = 0; k < sorted.length; k++) {
-    if (k === youAt) youRow();
-    const beat = k >= youAt;
+    if (k === yourRow) youRowAdd();
+    const beat = k >= yourRow;
     const row = ghostRow(sorted[k], i + 1, beat ? stamp++ : -1);
     // The place right above yours is the one to chase next: a quiet outlined tag in the stamp column.
-    if (k === youAt - 1) {
+    if (k === yourRow - 1) {
       row.classList.add('is-next');
       row.append(h('span', 'gs-st-next', 'Next', sr(' place to beat')));
     }
     add(row);
   }
-  if (youAt === sorted.length) youRow();
+  if (yourRow === sorted.length) youRowAdd();
   return ol;
 }
 
 /**
  * One ghost's row. A ghost you beat wears its kind colour and a Beat stamp; the stamp has a column
- * of its own after the distance (every row keeps it, stamped or not), so it never lands on a number.
+ * of its own after the figure (every row keeps it, stamped or not), so it never lands on a number.
  */
 function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement {
   // Your own best run reads as that, not as your player name repeated in a list of rivals.
@@ -1058,7 +1225,7 @@ function ghostRow(g: ResultsGhost, rank: number, beatOrder: number): HTMLElement
     h('span', 'gs-st-rank gs-num', String(rank)),
     icon('ghost', 'gs-st-ico'),
     name,
-    h('span', 'gs-st-val gs-num', metres(dist(g))),
+    h('span', 'gs-st-val gs-num', rowFigure(ghostAt(g))),
   );
   if (beat) {
     const s = h('span', 'gs-st-stamp', 'Beat');

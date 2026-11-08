@@ -251,7 +251,7 @@ async (page) => {
             best: { [key]: own ? { score: Math.min(2500, own.score), distance: own.distance, record: own.record } : { score: 2500, distance: 330, record: '' } },
             grudge: { [key]: { name: grudge.name, score: grudge.score, record: grudge.record, them: 3, streak: 3, by: 40, distance: grudge.distance } },
             stats: { bestScore: 2500, bestCombo: 1600, longestAir: 2, perfects: 20, topSpeed: 30, yetiHops: 0, avalanches: 0 },
-            runDists: { [key]: [300, 340, 310, 360, 330] },
+            runTimes: { [key]: [150, 146, 152, 140, 148] },
           };
           localStorage.setItem('ghostsled.save.v1', JSON.stringify(save));
           return { c: friend.record, friend: friend.name, friendAt: Math.round(friend.distance), grudge: grudge.name, grudgeAt: Math.round(grudge.distance), bestAt: own ? Math.round(own.distance) : 330, bestReplay: !!own };

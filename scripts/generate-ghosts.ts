@@ -1,14 +1,21 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PoolRun, generatePool } from '../src/bot/pool';
+import { PoolGhost, PoolRun, generatePool } from '../src/bot/pool';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { hashString } from '../src/sim/prng';
-import { replayRecord } from '../src/sim/replay';
+import { recordFromString, replayRecord } from '../src/sim/replay';
 import { SIM_VERSION, TICK_RATE } from '../src/sim/sim';
 
 // Builds the bundled ghost pools: src/data/ghosts/<mountain>.json for every mountain.
 // Run with: npx tsx scripts/generate-ghosts.ts
+//
+// Each ghost carries where it fell (PoolGhost.falls, what the graveyards stand on). A bot run is seeded by
+// its mountain, so regenerating gives back the same records; if a run's record ever changes, the sim did.
+//
+// With --splits it only adds each ghost's stageTicks to the pools already on disk, from a replay of its
+// own record (about a second a pool, and nothing else in the file changes). The stage medals read them
+// (src/game/ladder.ts), so a pool that comes in without them needs this and no more.
 
 const COUNT = 36;
 const BUDGET = 110;
@@ -54,11 +61,26 @@ function causes(runs: PoolRun[]): string {
     .join(', ');
 }
 
+/** The tick each ghost crossed each stage line, from a replay: what the race will show of it. */
+function withSplits<G extends Pick<PoolGhost, 'record'>>(ghosts: readonly G[]): Array<G & { stageTicks: number[] }> {
+  return ghosts.map((g) => ({ ...g, stageTicks: [...replayRecord(recordFromString(g.record)).stageTicks] }));
+}
+
+if (process.argv.includes('--splits')) {
+  for (const m of MOUNTAINS) {
+    const path = join(outDir, `${m.id}.json`);
+    const pool = JSON.parse(readFileSync(path, 'utf8')) as { ghosts: PoolGhost[] };
+    writeFileSync(path, JSON.stringify({ ...pool, ghosts: withSplits(pool.ghosts) }));
+    console.log(`${m.name}: stage splits added to ${pool.ghosts.length} ghosts`);
+  }
+  process.exit(0);
+}
+
 let total = 0;
 for (const m of MOUNTAINS) {
   const t0 = performance.now();
   let runs: PoolRun[] = [];
-  const ghosts = generatePool(m.seed, COUNT, hashString('bundled/' + m.id), { budgetRuns: BUDGET, report: (r) => (runs = r) });
+  const ghosts = withSplits(generatePool(m.seed, COUNT, hashString('bundled/' + m.id), { budgetRuns: BUDGET, report: (r) => (runs = r) }));
   const json = JSON.stringify({ version: 1, simVersion: SIM_VERSION, mountain: m.id, seed: m.seed, ghosts });
   writeFileSync(join(outDir, `${m.id}.json`), json);
   total += json.length;

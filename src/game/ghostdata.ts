@@ -23,9 +23,18 @@ export interface PoolGhostData {
   score: number;
   distance: number;
   ticks: number;
+  /** The tick it crossed the finish line, when it did. `ticks` runs on through the coast, up to the
+   *  generator's cap, so it is no finish time. */
+  finishTick?: number;
+  /** The tick it crossed each stage line it reached. The bundled pools carry them (the stage medals
+   *  read them); a pool generated in the worker does not, and needs no stage medals. */
+  stageTicks?: number[];
   sled: number;
   mood: number;
   event: number;
+  /** Where the rider went down, metres down the run: every tumble and any wreck. A pool from before
+   *  these were recorded has none, and its graveyards fall back on where its runs ended. */
+  falls?: number[];
   record: string;
 }
 
@@ -41,6 +50,10 @@ export type WorkerOut =
       samples: number;
       ticks: number;
       crashTick: number;
+      /** The tick it crossed the finish line, -1 for a run that did not finish. */
+      finishTick: number;
+      /** The tick it crossed each stage line it reached. */
+      stageTicks: number[];
       score: number;
       distance: number;
       /** Flattened [tick, quality(0 clean,1 perfect,2 sketchy), halfTurns, flips] per notable landing. */

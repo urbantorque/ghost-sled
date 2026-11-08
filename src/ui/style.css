@@ -252,6 +252,16 @@
   cursor: default;
 }
 
+/* Ride with a link's mountain still finding its rivals (aria-disabled, so it keeps focus). */
+.gs-ride[aria-disabled='true'] {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.gs-ride.gs-btn[aria-disabled='true']:active {
+  transform: none;
+}
+
 .gs-btn .gs-i {
   width: 1.2em;
   height: 1.2em;
@@ -320,7 +330,7 @@
 }
 
 @media (hover: hover) {
-  .gs-btn-primary:hover:not(:disabled) {
+  .gs-btn-primary:hover:not(:disabled):not([aria-disabled='true']) {
     background: #ff6143;
   }
 
@@ -1440,10 +1450,87 @@
   justify-items: start;
 }
 
+/* The clock leads: the race is decided on it. Distance sits beside it, a step quieter. */
+.gs-hud-run {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
 /* The distance, and under it "Best in 240 m" while your best is within 250 m. */
 .gs-hud-dist {
   display: grid;
   justify-items: start;
+}
+
+.gs-clock {
+  margin-top: 2px;
+  color: var(--text);
+  font-size: clamp(18px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+  text-shadow: var(--halo);
+}
+
+/* The stage line: its words, a hairline per stage that fills as you ride it, and the wipeout pips. */
+.gs-leg {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 3px;
+  color: rgba(245, 243, 255, 0.86);
+  font-size: max(11px, calc(var(--u) * 0.72));
+  font-weight: 800;
+  line-height: 1.2;
+  text-shadow: var(--halo);
+  white-space: nowrap;
+}
+
+.gs-leg-bar {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.gs-leg-seg {
+  position: relative;
+  width: clamp(14px, calc(var(--u) * 1.3), 26px);
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.62);
+  box-shadow: 0 0 0 1px rgba(245, 243, 255, 0.28);
+}
+
+.gs-leg-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+.gs-wipe {
+  display: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.gs-wipe.is-on {
+  display: inline-flex;
+}
+
+.gs-wipe-pip {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.72), 0 0 0 1px rgba(18, 25, 51, 0.6);
+}
+
+.gs-wipe-pip.is-left {
+  background: var(--text);
 }
 
 /* The mood chip and the event countdown chip, side by side (the countdown never takes the mood's place). */
@@ -1550,11 +1637,11 @@
   transform-origin: left center;
 }
 
-/* Distance is what the race is ranked by: about 60% of the score's size, never a footnote. */
+/* Distance ranks the riders who do not finish: a step under the clock, never a footnote. */
 .gs-dist {
   margin-top: 2px;
-  color: rgba(245, 243, 255, 0.94);
-  font-size: clamp(18px, calc(var(--u) * 1.6), 30px);
+  color: rgba(245, 243, 255, 0.86);
+  font-size: clamp(15px, calc(var(--u) * 1.2), 23px);
   font-style: italic;
   font-weight: 850;
   line-height: 1.1;
@@ -1690,6 +1777,8 @@
   color: var(--gift);
   font-size: 1.05em;
   font-weight: 900;
+  /* It bumps for most of a good run: a layer of its own, rather than a new one for every gift. */
+  will-change: transform;
 }
 
 .gs-gifts .gs-i {
@@ -2374,6 +2463,8 @@
   border-radius: inherit;
   background: var(--text);
   transform-origin: left center;
+  /* It moves on most frames of a combo: on its own layer that costs the page no repaint. */
+  will-change: transform;
 }
 
 .gs-combo.is-low .gs-combo-bar {
@@ -3464,6 +3555,12 @@
   }
 }
 
+/* A cash-in under a banner stands where the combo stepped down to: the finish banks your last combo on
+   the very frame its banner goes up. */
+.gs-band-on .gs-bank {
+  translate: 0 max(0px, calc(var(--band-h, 0px) - max(36px, calc(var(--u, 16px) * 2.5))));
+}
+
 .gs-bank {
   position: absolute;
   top: 0;
@@ -3871,6 +3968,119 @@
   align-self: center;
   width: 1.4em;
   height: 1.4em;
+}
+
+/* A stage line: the stage and the clock, then its splits in their own colours (a number and a word:
+   the race-gap grammar). Two rows at most, so the card stands no taller than a finale. */
+.gs-line {
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: 1px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  padding: 6px 18px 7px;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+}
+
+.gs-line-top {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.gs-line-k {
+  font-size: 0.86em;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.gs-line-t {
+  font-size: clamp(18px, calc(var(--u) * 1.3), 26px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.gs-line-gaps {
+  display: flex;
+  justify-content: center;
+  gap: 0 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.gs-line-gap {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--k);
+  font-size: max(11px, 0.84em);
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The finish: the band's biggest card, in gold-white (first place's and your best's colour). */
+.gs-done {
+  --e: var(--you);
+  --e-a: rgba(255, 224, 138, 0.6);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  min-height: 60px;
+  padding: 8px 22px 8px 10px;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1.5px var(--e-a), 0 0 22px -6px var(--e-a), var(--shadow);
+}
+
+.gs-done-ico {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  padding: 9px;
+  border-radius: var(--r-pill);
+  background: var(--e);
+  color: var(--ink);
+}
+
+.gs-done-k {
+  color: var(--e);
+  font-size: 0.92em;
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.gs-done-t {
+  padding-right: 0.06em;
+  font-size: clamp(28px, calc(var(--u) * 2.1), 44px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+}
+
+.gs-done-place {
+  font-size: clamp(16px, calc(var(--u) * 1.15), 24px);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-done-place.is-first {
+  color: var(--you);
+}
+
+.gs-done-of {
+  color: var(--dim);
+  font-size: 0.72em;
+  font-weight: 800;
 }
 
 .gs-fin-ring {
@@ -4828,6 +5038,81 @@
   background: rgba(245, 243, 255, 0.1);
   box-shadow: inset 0 0 0 1px var(--hair-2);
   color: var(--text);
+}
+
+/* The finished card: under the place, your best time (or the stamp) and the style score on one row. */
+.gs-res-siderow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
+}
+
+.gs-res-medal {
+  font-size: 0.96em;
+  font-style: italic;
+}
+
+.gs-res-style {
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-res-style .gs-num {
+  color: var(--text);
+}
+
+.gs-res-style.is-best .gs-num {
+  color: var(--you);
+}
+
+.gs-res-cause.is-finish .gs-res-cause-ico {
+  background: rgba(255, 224, 138, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 138, 0.5);
+  color: var(--you);
+}
+
+/* The clock at each stage line, and where that left you against your best. */
+.gs-res-splits {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 clamp(10px, 1.6vw, 20px);
+}
+
+.gs-res-split {
+  display: grid;
+  align-content: start;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-res-split dt {
+  color: var(--dim);
+  font-size: max(11px, 0.82em);
+  font-weight: 750;
+}
+
+.gs-res-split dd {
+  display: grid;
+  gap: 1px;
+  font-size: 1.1em;
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-res-split-vs {
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gs-res-split-vs.is-ahead {
+  color: var(--you);
+}
+
+.gs-res-splits + .gs-res-stats {
+  margin-top: 10px;
 }
 
 .gs-res-best {
@@ -7108,7 +7393,8 @@
 
   .gs-t-bar {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
   }
 
   .gs-t-bar > .gs-btn {
@@ -7178,6 +7464,29 @@
 
   .gs-hud-chips .gs-cd {
     flex: none;
+  }
+
+  /* The row holds the clock, the distance, the stage line and the chips. With a countdown in it, for
+     its 400 m, the distance and the stage's words step out and the clock and hairlines stay: what is
+     coming is the news, and "Avalanche in 380 m" ran 49 px off a 360 px phone beside them. */
+  .gs-hud-sub:has(.gs-cd.is-on) .gs-leg-t,
+  .gs-hud-sub:has(.gs-cd.is-on) .gs-hud-dist {
+    display: none;
+  }
+
+  .gs-leg {
+    flex: none;
+    margin-top: 0;
+    gap: 6px;
+  }
+
+  .gs-leg-seg {
+    width: 16px;
+  }
+
+  .gs-hud-run {
+    flex: none;
+    gap: 0.45em;
   }
 
   .gs-best-in {
@@ -7308,6 +7617,7 @@
       'run'
       'race'
       'mis'
+      'stg'
       'tip';
     gap: 0;
   }
@@ -7744,7 +8054,7 @@
 /* Narrow phones in portrait (360 to 420 px wide) */
 
 @media (max-aspect-ratio: 1/1) and (max-width: 420px) {
-  /* Three menu buttons share one row: glyph above the label, the mission count as a corner badge. */
+  /* The menu buttons share one row: glyph above the label, the mission count as a corner badge. */
   .gs-t-bar > .gs-btn {
     flex-direction: column;
     gap: 4px;

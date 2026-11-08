@@ -17,6 +17,11 @@ export type TrailStyle = 'groove' | 'ghost';
 const RUNNER = 0.28;
 /** Half-width of a ghost trail ribbon: room for the 15 cm line plus its anti-aliased edge. */
 const GHOST_HW = 0.13;
+/** How far a groove's broken edges stretch along the track at speed: the snow's noise runs this many
+ *  times longer at the cap, so a fast line reads as long streaks where a slow one reads as clumps. */
+const STRETCH = 4.5;
+const STRETCH_FROM = 14;
+const STRETCH_TO = 46;
 
 export class Trail {
   readonly mesh: Mesh;
@@ -28,6 +33,9 @@ export class Trail {
   private perp: Float32Array;
   private fan: Float32Array;
   private hw: Float32Array;
+  /** Metres along the track, stretched by speed (the groove's noise runs along this). */
+  private arc: Float32Array;
+  private arcNow = 0;
   private head = 0;
   private count = 0;
   private lastX = NaN;
@@ -54,6 +62,7 @@ export class Trail {
     this.perp = new Float32Array(max * 2 * 2);
     this.fan = new Float32Array(max * 2);
     this.hw = new Float32Array(max * 2);
+    this.arc = new Float32Array(max * 2);
     for (let i = 0; i < max; i++) {
       this.across[i * 2] = -1;
       this.across[i * 2 + 1] = 1;
@@ -65,6 +74,7 @@ export class Trail {
     this.geo.setAttribute('aPerp', new BufferAttribute(this.perp, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aFan', new BufferAttribute(this.fan, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aHw', new BufferAttribute(this.hw, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 1).setUsage(DynamicDrawUsage));
     const idx = new Uint32Array((max - 1) * 6);
     this.geo.setIndex(new BufferAttribute(idx, 1).setUsage(DynamicDrawUsage));
     this.mat = new ShaderMaterial({
@@ -101,6 +111,7 @@ export class Trail {
         attribute vec2 aPerp;
         attribute float aFan;
         attribute float aHw;
+        attribute float aArc;
         uniform float uTime;
         uniform vec3 uSunDir;
         varying float vAcross;
@@ -110,6 +121,7 @@ export class Trail {
         varying float vFan;
         varying float vAge;
         varying float vHw;
+        varying float vArc;
         varying vec3 vWorldPos;
         // How far up the screen this point sits, from the bottom edge (0) to the sled (1), so the groove
         // fades by where it lands in the frame, whatever the lens: a tall phone camera sees far more of
@@ -126,6 +138,7 @@ export class Trail {
           vDepth = aDepth;
           vFan = aFan;
           vHw = aHw;
+          vArc = aArc;
           vAge = uTime - aBorn;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorldPos = wp.xyz;
@@ -157,6 +170,7 @@ export class Trail {
         varying float vFan;
         varying float vAge;
         varying float vHw;
+        varying float vArc;
         varying vec3 vWorldPos;
         varying float vScreenK;
         ${LANTERN_POOL_GLSL}
@@ -214,8 +228,10 @@ export class Trail {
             float a = abs(x);
             float deep = vDepth;
             // Edges and the lip wander with the snow, never a ruled line.
-            float nz = vnoise(vWorldPos.xz * 2.7) - 0.5;
-            float nz2 = vnoise(vWorldPos.xz * 7.3 + 17.0) - 0.5;
+            // (The noise runs along the track, stretched by the speed it was cut at.)
+            vec2 tq = vec2(x, vArc);
+            float nz = vnoise(tq * 2.7) - 0.5;
+            float nz2 = vnoise(tq * 7.3 + 17.0) - 0.5;
             float an = a + nz * 0.07 * (0.4 + deep);
             // Toward the lens the marks soften (a wider feather, a little less contrast), so up close
             // they read as carved snow under raking light, never as two hard stripes of road paint.
@@ -322,8 +338,8 @@ export class Trail {
     this.broken = true;
   }
 
-  /** Add a sample at sim coordinates. Width in metres, depth 0..1. */
-  add(x: number, z: number, width: number, depth: number, time: number): void {
+  /** Add a sample at sim coordinates. Width in metres, depth 0..1, and the speed it was cut at. */
+  add(x: number, z: number, width: number, depth: number, time: number, speed = 0): void {
     if (!Number.isNaN(this.lastX)) {
       const dx = x - this.lastX;
       const dz = z - this.lastZ;
@@ -337,6 +353,8 @@ export class Trail {
       const l = Math.sqrt(dx * dx + dz * dz) || 1;
       tx = dx / l;
       tz = dz / l;
+      const st = Math.max(0, Math.min(1, (speed - STRETCH_FROM) / (STRETCH_TO - STRETCH_FROM)));
+      this.arcNow += l / (1 + (STRETCH - 1) * st);
     }
     const startNew = this.broken;
     this.lastX = x;
@@ -370,6 +388,7 @@ export class Trail {
     this.perp[i * 4 + 1] = this.perp[i * 4 + 3] = -pz;
     this.fan[i * 2] = this.fan[i * 2 + 1] = fan;
     this.hw[i * 2] = this.hw[i * 2 + 1] = hw;
+    this.arc[i * 2] = this.arc[i * 2 + 1] = this.arcNow;
     this.segStart[i] = startNew ? 1 : 0;
     this.head = (this.head + 1) % this.max;
     this.count = Math.min(this.count + 1, this.max);
@@ -405,6 +424,7 @@ export class Trail {
     (this.geo.getAttribute('aPerp') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aFan') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aHw') as BufferAttribute).needsUpdate = true;
+    (this.geo.getAttribute('aArc') as BufferAttribute).needsUpdate = true;
   }
 
   dispose(): void {
@@ -415,6 +435,9 @@ export class Trail {
 
 /** Half-width of a ghost's runner ribbon: both runner lines and their glow. */
 const GHOST_RUNNERS_HW = RUNNER + 0.12;
+/** The strip is laid wider than the runner lines, so the ghost you draft can spread its slipstream
+ *  over it (each edge sits on the snow under it; the lines alone draw for every other ghost). */
+const GHOST_STRIP_HW = GHOST_RUNNERS_HW + 0.7;
 
 /**
  * Every ghost's runner lines in one mesh (one draw call for the whole field, where each ghost used to
@@ -449,12 +472,14 @@ export class GhostTrails {
     this.born = new Float32Array(verts);
     const across = new Float32Array(verts);
     const col = new Float32Array(verts * 3);
+    const gi = new Float32Array(verts);
     for (let g = 0; g < n; g++) {
       const c = colors[g];
       for (let k = 0; k < max * 2; k++) {
         const v = g * max * 2 + k;
         across[v] = k % 2 ? 1 : -1;
         col.set([c.r, c.g, c.b], v * 3);
+        gi[v] = g;
       }
     }
     this.heads = new Int32Array(n);
@@ -468,6 +493,7 @@ export class GhostTrails {
     this.geo.setAttribute('aAcross', new BufferAttribute(across, 1));
     this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aCol', new BufferAttribute(col, 3));
+    this.geo.setAttribute('aG', new BufferAttribute(gi, 1));
     this.geo.setIndex(new BufferAttribute(new Uint32Array(Math.max(1, n * (max - 1) * 6)), 1).setUsage(DynamicDrawUsage));
     this.geo.setDrawRange(0, 0);
     this.mat = new ShaderMaterial({
@@ -485,20 +511,27 @@ export class GhostTrails {
         uFogFar: shared.uFogFar,
         uFocus: shared.uFocus,
         uLife: { value: 7 },
+        uWake: { value: 0 },
+        uWakeG: { value: -1 },
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
         attribute float aBorn;
         attribute vec3 aCol;
+        attribute float aG;
         uniform float uTime;
+        uniform float uWake;
+        uniform float uWakeG;
         varying float vAcross;
         varying float vAge;
         varying vec3 vCol;
         varying vec3 vWorldPos;
+        varying float vWake;
         void main() {
           vAcross = aAcross;
           vAge = uTime - aBorn;
           vCol = aCol;
+          vWake = abs(aG - uWakeG) < 0.5 ? uWake : 0.0;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorldPos = wp.xyz;
           gl_Position = projectionMatrix * viewMatrix * wp;
@@ -515,6 +548,7 @@ export class GhostTrails {
         varying float vAge;
         varying vec3 vCol;
         varying vec3 vWorldPos;
+        varying float vWake;
         float line(float x, float hw, float px) {
           float w = max(hw, px * 0.6);
           return smoothstep(w + px * 0.75, w - px * 0.75, abs(x)) * (hw / w);
@@ -525,7 +559,7 @@ export class GhostTrails {
           float fogF = smoothstep(uFogNear, uFogFar, d);
           float zf = -(viewMatrix * vec4(vWorldPos, 1.0)).z;
           float zr = max(-(viewMatrix * vec4(uFocus - vec3(0.0, 0.9, 0.0), 1.0)).z, 0.0);
-          float x = vAcross * ${GHOST_RUNNERS_HW.toFixed(2)};
+          float x = vAcross * ${GHOST_STRIP_HW.toFixed(2)};
           float px = max(fwidth(x), 0.0005);
           // Distance across from the nearer runner's line.
           float r = abs(abs(x) - ${RUNNER.toFixed(2)});
@@ -537,6 +571,20 @@ export class GhostTrails {
           // Shown from just behind the rider onward, gone before the lens (the lower third is the snow's).
           float nearK = zr > 1.0 ? smoothstep(zr * 0.7, zr * 1.35, zf) : 1.0;
           float alpha = (core * mix(0.62, 0.5, day) + glow * mix(0.3, 0.14, day)) * fade * sqrt(fade) * nearK * (1.0 - fogF) * mix(1.0, 0.5, smoothstep(25.0, 80.0, d));
+          if (vWake > 0.0) {
+            // The slipstream you ride in behind this ghost: a soft sheet of its light over its track,
+            // densest just behind it and reaching back under your sled, with chevrons of brighter light
+            // riding along with it (like a boat's wake), and a hot seam down each runner line.
+            float ax = abs(x);
+            float sheet = exp(-ax * ax / 0.32);
+            float reach = smoothstep(0.0, 0.06, vAge) * (1.0 - smoothstep(0.9, 2.0, vAge));
+            float chev = smoothstep(0.62, 1.0, 0.5 + 0.5 * sin((vAge * 7.0 + ax * 1.6) * 6.2832));
+            float nearW = zr > 1.0 ? smoothstep(zr * 0.3, zr * 0.75, zf) : 1.0;
+            float wa = min(0.85, vWake * reach * nearW * (1.0 - fogF) * (sheet * (0.3 + 0.45 * chev) + core * 0.5));
+            col = mix(col, mix(vCol * 1.5, pow(vCol, vec3(1.4)) * 1.05, day * 0.5), wa / max(alpha + wa, 0.001));
+            alpha = alpha + wa * (1.0 - alpha);
+          }
+          if (alpha < 0.003) discard;
           col = mix(col, uFog, fogF * 0.5);
           gl_FragColor = vec4(col, alpha);
           #include <colorspace_fragment>
@@ -560,6 +608,12 @@ export class GhostTrails {
     this.lastX.fill(NaN);
     this.lastZ.fill(NaN);
     this.geo.setDrawRange(0, 0);
+  }
+
+  /** The ghost whose slipstream you ride (-1 none) and its strength, 0 to 1. */
+  setWake(i: number, k: number): void {
+    this.mat.uniforms.uWakeG.value = i;
+    this.mat.uniforms.uWake.value = k;
   }
 
   /** End ghost i's current stroke (it went airborne). */
@@ -590,7 +644,7 @@ export class GhostTrails {
     const s = i * this.max + k;
     this.segStart[s] = this.broken[i];
     this.broken[i] = 0;
-    const hw = GHOST_RUNNERS_HW;
+    const hw = GHOST_STRIP_HW;
     const px = tz;
     const pz = -tx;
     const c = this.course;

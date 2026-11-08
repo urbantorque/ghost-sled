@@ -1,7 +1,7 @@
 import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
-import type { Sim, SimEvent } from '../sim/sim';
+import { FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
 import { CRASH_PACK_NEAR_M, IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
 import { FinaleTracker } from './finales';
@@ -9,6 +9,7 @@ import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
+import { figure, placeAtFinish } from './standing';
 import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, LEVEL_IN_M, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle } from './streak';
@@ -28,7 +29,8 @@ import { CRASH_CURVE, TimeScale } from './timescale';
 // crash); then the state beats (New best, Best combo pace, a friend beaten, kilometres, the stomp
 // metronome, ghosts' tricks, the start-line call, mission and unlock pops); then Feel, the HUD and
 // audio fields. After the crash the race is over (no race events), but the ghosts that were behind
-// you ride on past your wreck: each one says so once (a passedBy beat with wreck: true).
+// you ride on past your wreck: each one says so once (a passedBy beat with wreck: true). The finish
+// line ends the race too: its frame is the race's last, and the coast after it is a lap of honour.
 
 export interface DirectorRun {
   mood: Mood;
@@ -38,10 +40,16 @@ export interface DirectorRun {
   /** Seconds of run time until the reveal card leaves. */
   revealLeaveS: number;
   bestDistAtStart: number;
+  /** Your best's finish time, seconds (null or absent: it did not finish). With one there is no
+   *  distance to beat: the best's band and 'New ground' stand down, and your best is a time. */
+  bestTimeAtStart?: number | null;
+  /** The clock at each stage line on your best, seconds. */
+  bestSplitsAtStart?: readonly number[] | null;
   bestScoreAtStart: number;
   bestComboAtStart: number;
   grudgeAtStart: { name: string; record: string; them: number; streak: number } | null;
-  friend: { name: string; distance: number } | null;
+  /** time: their finish in seconds; absent, they did not finish, and `distance` is the target. */
+  friend: { name: string; distance: number; time?: number | null } | null;
   lifetimePassed: number;
   unlockLadder: Array<{ id: string; name: string; biome: BiomeId; need: number }>;
   /** Called at 2 Hz; returns missions newly met (progress.missionsCrossed). */
@@ -52,7 +60,8 @@ export interface DirectorRun {
 }
 
 export interface DirectorFrame {
-  phase: 'run' | 'crashed';
+  /** 'finished': over the line, coasting (the results may be up). */
+  phase: 'run' | 'crashed' | 'finished';
   /** Real seconds this frame (0 while frozen). */
   dt: number;
   sim: Sim;
@@ -236,8 +245,10 @@ function smoothstep(a: number, b: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-function fmtInt(n: number): string {
-  return Math.round(n).toLocaleString('en-US');
+/** A survived wipeout's one short line: what it cost. The free stretch costs nothing. */
+export function tumbleText(free: boolean, left: number): string {
+  if (free) return 'Wipeout';
+  return left <= 0 ? 'Wipeout. None left' : `Wipeout. ${left} left`;
 }
 
 function trickWord(halfTurns: number, flips: number): string | null {
@@ -359,6 +370,9 @@ export class Director {
 
   // Crash.
   private crashT = -1;
+  /** The line has been crossed: the race ended on that frame. */
+  private lineCrossed = false;
+  private finishT = -1;
   /** The pack past your wreck: each ghost that was riding behind you on the first crashed frame, with
    *  its gap to the wreck last frame (m, - = behind), until it rides past (or stops). */
   private readonly wreckBehind = new Map<number, number>();
@@ -507,6 +521,8 @@ export class Director {
     this.flowShown = 0;
     this.pulseAt = -1;
     this.crashT = -1;
+    this.lineCrossed = false;
+    this.finishT = -1;
     this.resetWreck();
     this.pops.length = 0;
     this.unlockDone.clear();
@@ -603,21 +619,23 @@ export class Director {
     }
 
     // ---- New ground first: the 'you' wreck that sits right on it is then muted (it owns the beat).
-    if (live && run && this.newGroundAt < 0 && run.bestDistAtStart >= 150 && sim.distance > run.bestDistAtStart) {
+    const line = this.bestLine();
+    if (live && run && this.newGroundAt < 0 && line >= 150 && sim.distance > line) {
       this.newGroundAt = now;
       this.newGroundTick = sim.tick;
-      this.push({ type: 'newGround', tick: sim.tick, z: run.bestDistAtStart, say: { label: 'New ground', points: 0, tone: 'best' } }, sim);
+      this.push({ type: 'newGround', tick: sim.tick, z: line, say: { label: 'New ground', points: 0, tone: 'best' } }, sim);
     }
 
     // ---- Duels, stepped with whole sim ticks.
     const resolved = new Map<number, 'won' | 'heldOff'>();
     if (live) {
-      const gaps: Array<{ id: number; gap: number; live: boolean }> = [];
+      const gaps: Array<{ id: number; gap: number; live: boolean; over: boolean }> = [];
       for (const t of f.tracks) {
         if (!t.ready) continue;
         const p = f.poses.get(t.entry.id);
         if (!p) continue;
-        gaps.push({ id: t.entry.id, gap: p.z - rz, live: !p.done });
+        // Over the finish line it is out of the fight, and it won: a duel never reads that as a wreck.
+        gaps.push({ id: t.entry.id, gap: p.z - rz, live: !p.done && !p.finished, over: p.finished });
       }
       // A duel's result holds the rival on its ghost (the pill's flash): the next opens once it can be named.
       // A grudge settle waiting its turn goes first, and no duel opens under its banner.
@@ -663,9 +681,11 @@ export class Director {
           // its 'Passed Your best': the result is the moment (it read 'Passed Your best' twice).
           if (t.entry.kind === 'you' && t.status === 1 && !seenBefore) this.youClear = { id: d.id, until: now + RIVAL_HOLD_S + YOU_CLEAR_S };
         } else {
-          this.push({ type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 }, sim);
+          const b: BeatOf<'duel'> = { type: 'duel', tick: sim.tick, phase: d.phase, ghost, gifts: 0 };
+          if (d.over) b.over = true;
+          this.push(b, sim);
           if (d.phase === 'lost') {
-            this.push({ type: 'raceNews', tick: sim.tick, ghost, news: 'pulledAway', text: `${ghost.kind === 'you' ? 'Your best' : ghost.name} pulled away`, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: 0.6 }, sim);
+            this.push({ type: 'raceNews', tick: sim.tick, ghost, news: 'pulledAway', text: `${ghost.kind === 'you' ? 'Your best' : ghost.name} ${d.over ? 'finished first' : 'pulled away'}`, pan: Math.max(-0.7, Math.min(0.7, ghost.dx / 10)), gain: 0.6 }, sim);
             this.lastNewsAt = now;
           }
         }
@@ -772,12 +792,26 @@ export class Director {
     }
     if (f.phase === 'crashed') this.wreckPasses(f, sim);
 
+    // The race ends on the line. An open duel closes with no result (the time is the result), and a
+    // grudge that had not reached the line by now has been beaten to it, in plain sight.
+    if (live && s.finished && !this.lineCrossed) {
+      this.lineCrossed = true;
+      this.duels.crash();
+      if (!this.grudgeDone) {
+        for (const t of f.tracks) {
+          if (t.entry.kind !== 'grudge' || !t.ready || (t.finishTick >= 0 && t.finishTick < s.finishTick)) continue;
+          this.settle(t, this.ref(t, f, sim), sim, haunted, 'Beaten to the line');
+        }
+      }
+    }
+
     // A grudge you only edged past (a muted jostle, a pass inside its duel) is settled for sure once
     // you ride past where its whole run ended: it can never come back. While it still rides behind you
-    // (off screen), the settle waits for its wipeout (above), so the banner lands on something.
+    // (off screen), the settle waits for its wipeout (above), so the banner lands on something. One
+    // that finished has no wreck to pass: it stays ahead wherever it stopped.
     if (live && !this.grudgeDone) {
       for (const t of f.tracks) {
-        if (t.entry.kind !== 'grudge' || !t.ready || t.distance <= 0 || sim.distance <= t.distance) continue;
+        if (t.entry.kind !== 'grudge' || !t.ready || t.distance <= 0 || t.finishTick >= 0 || sim.distance <= t.distance) continue;
         const p = f.poses.get(t.entry.id);
         if (p && !p.done) continue;
         this.settle(t, this.ref(t, f, sim), sim, haunted);
@@ -785,7 +819,7 @@ export class Director {
     }
     // A settle held for its moment goes up once nothing else owns the race row; the run's end pushes
     // it at once (its gifts, the happytime and the results' settlement all come with the beat).
-    if (this.settleWait && (!live || !this.settleHeld(sim.tick, now))) this.pushSettle(this.settleWait, sim, now);
+    if (this.settleWait && (!live || s.finished || !this.settleHeld(sim.tick, now))) this.pushSettle(this.settleWait, sim, now);
     if (this.youClear) this.yourBestClear(f, sim, now, live, haunted);
 
     // Taking the lead: rank 1 after 10 s with 3 or more ghosts, one still riding. Once, or again after
@@ -935,6 +969,39 @@ export class Director {
           this.crashT = 0;
           this.push({ type: 'crash', tick: p.tick, cause: e.cause, stake: lostStake, orbitFrom: this.orbitFrom(f, sim) }, sim);
           break;
+        case 'tumble': {
+          const free = s.z < FREE_TUMBLE_Z;
+          // Down in the snow: a stomp streak ends here, as it does at a crash. One short line says what
+          // it cost; the run goes on, so no crash beat follows.
+          if (e.phase === 'start') this.streak.crash();
+          const b: BeatOf<'tumble'> = { type: 'tumble', tick: p.tick, phase: e.phase, cause: e.cause, left: e.left, free, x: sim.s.x, z: sim.s.z };
+          if (e.phase === 'start') b.say = { label: tumbleText(free, e.left), points: 0, tone: 'lost' };
+          this.push(b, sim);
+          break;
+        }
+        case 'scrape':
+          this.push({ type: 'scrape', tick: p.tick, side: e.side, speed: e.speed }, sim);
+          break;
+        case 'stage': {
+          const st = sim.course.stages;
+          const last = e.index === st.length - 1;
+          const seconds = e.tick / 60;
+          const best = run?.bestSplitsAtStart?.[e.index];
+          this.push({ type: 'stage', tick: p.tick, index: e.index, name: st[e.index].name, last, seconds, vsGhost: this.splitGhost(f, e.index, e.tick), vsBest: best === undefined ? null : seconds - best }, sim);
+          // Its flash is a banner over the race row: no duel opens under it, and pops wait it out. The
+          // last line's moment is the finish.
+          if (!last) this.settleBannerUntil = Math.max(this.settleBannerUntil, now + POP_BANNER_S);
+          break;
+        }
+        case 'finish': {
+          const place = placeAtFinish(f.tracks, e.tick);
+          this.finishT = 0;
+          this.push({ type: 'finish', tick: p.tick, bonus: e.bonus, seconds: e.tick / 60, rank: place.rank, of: place.of }, sim);
+          break;
+        }
+        case 'grind':
+          this.push({ type: 'grind', tick: p.tick, phase: e.phase, id: e.id }, sim);
+          break;
         default:
           break;
       }
@@ -957,8 +1024,8 @@ export class Director {
       // New ground just had its moment (an early save often crosses both together): New best waits.
       // New ground less than NEW_GROUND_GAP_S of riding away holds it too, then goes first.
       if (this.newBestAt >= 0 && this.newGroundAt >= 0 && this.newBestAt - this.newGroundAt < NEW_GROUND_GAP_S) this.newBestAt = this.newGroundAt + NEW_BEST_DEFER_S;
-      else if (this.newBestAt >= 0 && now >= this.newBestAt && this.newGroundAt < 0 && run.bestDistAtStart >= 150) {
-        const left = run.bestDistAtStart - sim.distance;
+      else if (this.newBestAt >= 0 && now >= this.newBestAt && this.newGroundAt < 0 && line >= 150) {
+        const left = line - sim.distance;
         if (left > 0 && left < Math.max(0, s.speed) * NEW_GROUND_GAP_S) this.newBestAt = now + 0.05;
       }
       if (this.newBestAt >= 0 && now >= this.newBestAt) {
@@ -972,9 +1039,10 @@ export class Director {
         this.push({ type: 'bestComboPace', tick: sim.tick, stake, say: { label: 'Best combo pace', points: 0, tone: 'best' } }, sim);
       }
       const fr = run.friend;
-      if (fr && !this.friendDone && fr.distance > 0 && sim.distance > fr.distance) {
+      if (fr && !this.friendDone && this.friendPast(fr, s.finished, s.finishTick, sim.distance)) {
         this.friendDone = true;
-        this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: friendBeatenText(fr.name, fr.distance), points: 0, tone: 'big' } }, sim);
+        const standing = { time: fr.time ?? null, distance: fr.distance };
+        this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: friendBeatenText(fr.name, standing), points: 0, tone: 'big' } }, sim);
       }
       const km = Math.floor(sim.distance / 1000);
       if (km > this.kmDone) {
@@ -1020,6 +1088,7 @@ export class Director {
     if (live && run) this.queuePops(f, sim, now, dt, passedNow);
     const fk = Math.pow(smoothstep(0.5, FLOW_FULL, shown), 0.8);
     if (this.crashT >= 0) this.crashT += dt * this.time.render;
+    if (this.finishT >= 0) this.finishT += dt * this.time.render;
 
     feel.reduced = f.reduced;
     feel.flow = fk;
@@ -1031,17 +1100,19 @@ export class Director {
     feel.timeRender = this.time.render;
     feel.shakeScale = this.time.shake;
     feel.crashT = this.crashT;
+    feel.finishT = this.finishT;
     feel.duelId = this.duels.open;
-    if (run && run.bestDistAtStart >= 150) {
+    if (run && line >= 150) {
       const k = this.newGroundAt >= 0 ? Math.max(0, 1 - (now - this.newGroundAt) / 0.6) : 0;
       const bl = feel.bestLine;
-      if (bl && bl.distance === run.bestDistAtStart) {
-        bl.z = run.bestDistAtStart;
+      if (bl && bl.distance === line) {
+        bl.z = line;
         bl.k = k;
-      } else feel.bestLine = { z: run.bestDistAtStart, k, distance: run.bestDistAtStart };
+      } else feel.bestLine = { z: line, k, distance: line };
     } else feel.bestLine = null;
     const fr = run?.friend;
-    if (fr && fr.distance > 0 && !this.friendDone) {
+    // A friend who finished is a time to beat: there is no spot on the snow to mark.
+    if (fr && fr.distance > 0 && !this.friendDone && typeof fr.time !== 'number') {
       if (!feel.friendLine || feel.friendLine.name !== fr.name || feel.friendLine.distance !== fr.distance) feel.friendLine = { z: fr.distance, name: fr.name, distance: fr.distance };
     } else feel.friendLine = null;
 
@@ -1078,8 +1149,8 @@ export class Director {
     out.hud.duel = duelId !== null;
     out.hud.hold = duelId === null && this.rivalHold !== null && rv !== null && rv.id === this.rivalHold.id;
     out.hud.bestIn = null;
-    if (run && run.bestDistAtStart >= 150 && this.newGroundAt < 0 && !s.crashed) {
-      const d = run.bestDistAtStart - sim.distance;
+    if (run && line >= 150 && this.newGroundAt < 0 && !s.crashed) {
+      const d = line - sim.distance;
       if (d > 0 && d <= 250) out.hud.bestIn = Math.max(10, Math.ceil(d / 10) * 10);
     }
     out.hud.countdown = this.finales.countdown(sim);
@@ -1110,7 +1181,7 @@ export class Director {
     let n = 0;
     for (const id of this.choirIds) {
       const p = f.poses.get(id);
-      if (!p || p.done) continue;
+      if (!p || p.done || p.finished) continue;
       const back = this.rz - p.z;
       if (back > 0 && back <= CHOIR_BEHIND && ++n >= CHOIR_MAX) break;
     }
@@ -1153,6 +1224,38 @@ export class Director {
   }
 
   // ------------------------------------------------------------------ pieces
+
+  /** The distance your best set out to beat, or 0: a best that finished is a time, not a spot. */
+  private bestLine(): number {
+    const run = this.run;
+    return run && typeof run.bestTimeAtStart !== 'number' ? run.bestDistAtStart : 0;
+  }
+
+  /** You have beaten the friend's run: past a distance, or over the line ahead of their time. */
+  private friendPast(fr: NonNullable<DirectorRun['friend']>, finished: boolean, finishTick: number, distance: number): boolean {
+    if (typeof fr.time === 'number') return finished && finishTick / 60 < fr.time;
+    return fr.distance > 0 && (distance > fr.distance || finished);
+  }
+
+  /** A stage line's split against your rival, while it reached this line; else the ghost just ahead
+   *  of you there, or, in the lead, the one just behind (your best has its own figure). Ghosts that
+   *  never reached this line are out of it. */
+  private splitGhost(f: DirectorFrame, index: number, tick: number): BeatOf<'stage'>['vsGhost'] {
+    const rival = f.tracks.find((t) => t.entry.rival && t.ready);
+    const line = rival?.stageTicks?.[index];
+    if (rival && line !== undefined) return { name: rival.entry.name, kind: rival.entry.kind, delta: (tick - line) / 60 };
+    let ahead: GhostTrack | null = null;
+    let behind: GhostTrack | null = null;
+    for (const t of f.tracks) {
+      const k = t.stageTicks?.[index];
+      if (!t.ready || t.entry.kind === 'you' || k === undefined) continue;
+      if (k <= tick) {
+        if (!ahead || k > ahead.stageTicks[index]) ahead = t;
+      } else if (!behind || k < behind.stageTicks[index]) behind = t;
+    }
+    const t = ahead ?? behind;
+    return t ? { name: t.entry.name, kind: t.entry.kind, delta: (tick - t.stageTicks[index]) / 60 } : null;
+  }
 
   /** A style event's part in the live combo's skill: drafting and slingshots (the pack's speed, not a
    *  move) never count, as a step or as a kind. A new combo starts over. */
@@ -1452,7 +1555,7 @@ export class Director {
     const run = this.run;
     if (this.callDone || !run) return;
     const at = run.hasReveal ? run.revealLeaveS + 0.3 : 0.6;
-    const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis }));
+    const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis, rival: t.entry.rival }));
     if (this.fieldReadyAt < 0 && field.some((g) => g.ready)) this.fieldReadyAt = now;
     // Some ghost in the field will get the call once it is ready: pops wait for it, though not past the
     // usual give-up while no track has loaded at all (the call itself may still come late).
@@ -1476,9 +1579,10 @@ export class Director {
     const name = t.entry.kind === 'you' ? 'Your best' : t.entry.name;
     let sr = `${pick.word} ${name}.`;
     const g = run.grudgeAtStart;
-    if (t.entry.kind === 'friend' && run.friend) sr += ` ${name} rode ${fmtInt(run.friend.distance)} m.`;
+    if (t.entry.rival) sr += ' Your rival this run.';
+    if (t.entry.kind === 'friend' && run.friend) sr += ` ${name} rode ${figure({ time: run.friend.time ?? null, distance: run.friend.distance })}.`;
     else if (t.entry.kind === 'grudge' && g) sr += g.streak >= 2 ? ` ${name} beat you ${g.streak} runs running.` : ` ${name} beat you last time.`;
-    else if (t.entry.kind === 'you') sr += ` ${fmtInt(run.bestDistAtStart)} m.`;
+    else if (t.entry.kind === 'you') sr += ` ${figure({ time: run.bestTimeAtStart ?? null, distance: run.bestDistAtStart })}.`;
     this.push({ type: 'raceCall', tick: sim.tick, ghost, word: pick.word, sr }, sim);
   }
 
@@ -1597,11 +1701,12 @@ export class Director {
     return p ? { id, gap: p.z - this.rz } : null;
   }
 
-  /** A ghost the rival pill may name: still riding, and ahead or no more than RIVAL_BEHIND_M behind. */
+  /** A ghost the rival pill may name: still riding (a ghost over the line has left the race), and ahead
+   *  or no more than RIVAL_BEHIND_M behind. */
   private riderGap(id: number | null, f: DirectorFrame): { id: number; gap: number } | null {
     if (id === null) return null;
     const p = f.poses.get(id);
-    if (!p || p.done) return null;
+    if (!p || p.done || p.finished) return null;
     const gap = p.z - this.rz;
     return gap >= -RIVAL_BEHIND_M ? { id, gap } : null;
   }

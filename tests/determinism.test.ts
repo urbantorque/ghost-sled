@@ -3,8 +3,9 @@ import { FixedLoop } from '../src/game/loop';
 import { Run } from '../src/game/run';
 import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, actionOf, decodeLog, draftOf, packInput } from '../src/sim/input';
-import { MOUNTAINS } from '../src/sim/mountains';
-import { Rng } from '../src/sim/prng';
+import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
+import { Rng, hash32 } from '../src/sim/prng';
+import { CHUNK_LEN, Course, type Obstacle, courseFor } from '../src/sim/course';
 import { RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
 import { Sim } from '../src/sim/sim';
 
@@ -124,8 +125,24 @@ describe('determinism', () => {
 
   it('a live revive through Run delivers no stale crash event and records a replayable log', () => {
     let t = 0;
-    const steerRight = { sample: () => ({ steer: 8, action: false }) };
-    const run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, steerRight);
+    // A rider who aims at whatever stands ahead: nothing short of that ends a run this early, since the
+    // corridor's edge turns a sled back and two wipeouts are forgiven past the free stretch.
+    const hunter = {
+      sample: (): { steer: number; action: boolean } => {
+        const s = run.sim.s;
+        const k = Math.floor(s.z / CHUNK_LEN);
+        let best: Obstacle | null = null;
+        for (let i = k; i <= k + 1; i++) {
+          for (const o of run.sim.course.chunk(i).obstacles) {
+            if (o.soft || o.z < s.z + 2 || o.z > s.z + 45) continue;
+            if (!best || o.z < best.z) best = o;
+          }
+        }
+        const d = best ? best.x - s.x : 0;
+        return { steer: d > 0.4 ? 8 : d < -0.4 ? 0 : 4, action: false };
+      },
+    };
+    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, hunter);
     const loop = new FixedLoop(() => run.tick());
     const kinds: string[] = [];
     while (!run.crashed && t++ < 60 * 120) loop.advance(1 / 60);
@@ -157,5 +174,62 @@ describe('determinism', () => {
   it('a 3-minute scripted run log stays under 2 KB', () => {
     const rec = recordScriptedRun(MOUNTAINS[1].seed, 5, 0, 60 * 180);
     expect(rec.inputs.length).toBeLessThan(2048);
+  });
+
+  it('a run replays the same however the course is read between ticks', () => {
+    for (const m of MOUNTAINS) {
+      const rec = recordScriptedRun(m.seed, 7, 0, 60 * 60);
+      const clean = replayRecord(rec).hash();
+      const rng = new Rng(m.seed);
+      const course = courseFor(m.seed);
+      const noisy = replayRecord(rec, (sim) => {
+        // What the renderer, the ghosts and the bot ask for between steps, at places far from the rider.
+        for (let i = 0; i < 6; i++) {
+          const z = rng.next() * (course.finishZ + 200) - 20;
+          const x = course.centerX(z) + (rng.next() - 0.5) * 60;
+          course.ground(x, z);
+          course.safeX(z);
+          course.altX(z);
+          course.backX(z, x);
+          course.edgeLimit(z);
+          course.shapeAt(z);
+          course.section(z);
+          course.surface(x, z);
+          course.edgeExcess(x, z);
+          course.chunk(Math.floor(Math.max(0, z) / CHUNK_LEN));
+        }
+        void sim;
+      });
+      expect(noisy.hash(), m.id).toBe(clean);
+    }
+  });
+
+  it('a course is the same whatever order its chunks are read in', () => {
+    for (const m of MOUNTAINS) {
+      const a = new Course(m.seed);
+      const b = new Course(m.seed);
+      const n = Math.ceil(a.finishZ / CHUNK_LEN) + 4;
+      const list = (c: Course, i: number): string => {
+        const ch = c.chunk(i);
+        return JSON.stringify([ch.obstacles.map((o) => [o.id, o.x, o.z, o.r]), ch.gifts.map((g) => [g.id, g.x, g.z]), ch.zones.ramps, ch.zones.rails, ch.zones.drops]);
+      };
+      const forward: string[] = [];
+      for (let i = 0; i < n; i++) forward.push(list(a, i));
+      for (let i = n - 1; i >= 0; i--) expect(list(b, i), `${m.id} chunk ${i}`).toBe(forward[i]);
+    }
+  });
+
+  it('every seed builds a descent, named the same whichever is read first', () => {
+    // A Daily Mountain that cannot build is a mountain that cannot load.
+    const day0 = Date.UTC(2026, 0, 1);
+    for (let i = 0; i < 700; i++) {
+      const seed = i % 2 ? dailySeed(new Date(day0 + i * 86400000).toISOString().slice(0, 10)) : hash32(i, 91);
+      const a = new Course(seed);
+      const names = a.stages.map((s) => s.name);
+      const b = new Course(seed);
+      expect(b.section(4000).kind.length).toBeGreaterThan(0);
+      expect(b.stages.map((s) => s.name)).toEqual(names);
+      expect(b.finishZ).toBe(a.finishZ);
+    }
   });
 });

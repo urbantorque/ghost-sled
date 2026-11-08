@@ -44,6 +44,8 @@ export interface StuntRide {
   flips: number;
   maxSimFlow: number;
   bestCombo: number;
+  /** Wipeouts the run survived, or that ended it. */
+  tumbles: number;
   pilot: StuntPilot['stats'];
   /** The packed input bytes, for determinism checks. */
   inputs: number[];
@@ -53,7 +55,7 @@ export interface StuntRide {
 export function rideStunt(make: MakeStunt, m: number, seed: number, maxSeconds = 180, mood = 0): StuntRide {
   const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: mood as Mood, event: ChaosEvent.None, seed: 0 }, sled: 0 });
   const pilot = make(sim, { seed });
-  const r: StuntRide = { m, seed, seconds: 0, distance: 0, cause: null, kickers: 0, boostPops: 0, drift: [0, 0, 0], driftHolds: [], nearMiss: 0, whisker: 0, gaps: [], perfect: 0, clean: 0, sketchy: 0, spins: 0, flips: 0, maxSimFlow: 0, bestCombo: 0, pilot: pilot.stats, inputs: [] };
+  const r: StuntRide = { m, seed, seconds: 0, distance: 0, cause: null, kickers: 0, boostPops: 0, drift: [0, 0, 0], driftHolds: [], nearMiss: 0, whisker: 0, gaps: [], perfect: 0, clean: 0, sketchy: 0, spins: 0, flips: 0, maxSimFlow: 0, bestCombo: 0, tumbles: 0, pilot: pilot.stats, inputs: [] };
   let wasGround = true;
   let driftStart = -1;
   const onRamp = (): boolean => {
@@ -67,13 +69,14 @@ export function rideStunt(make: MakeStunt, m: number, seed: number, maxSeconds =
     }
     return false;
   };
-  while (!sim.s.crashed && sim.tick < maxSeconds * 60) {
+  while (!sim.s.crashed && !sim.finished && sim.tick < maxSeconds * 60) {
     const o = pilot.sample();
     const byte = (o.steer | 0) | (o.action ? 16 : 0);
     r.inputs.push(byte);
     sim.step(byte);
     const s = sim.s;
     for (const e of sim.events) {
+      if ((e.type === 'tumble' && e.phase === 'start') || e.type === 'crash') r.tumbles++;
       if (e.type === 'drift' && e.phase === 'start') driftStart = sim.tick;
       else if (e.type === 'drift' && e.phase === 'release' && e.tier > 0) {
         r.drift[e.tier - 1]++;

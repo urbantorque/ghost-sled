@@ -24,7 +24,7 @@ const TEXT: Record<HintKind, string> = {
   // keys (the mouse sweep, the left zone); a flip and the boosted pop are holds, so they show the hold.
   spin: 'Steer in the air to spin',
   flip: 'Press and hold in the air to flip',
-  boostPop: 'Hold, then let go at the lip',
+  boostPop: 'Hold, release at the lip',
 };
 
 /** A hint on screen for the occluder cache: the boxes to keep clear, and the node that animates them. */
@@ -172,7 +172,7 @@ const HOLD_TEXT: Record<HintKind, string> = {
   // A spin is taught on the left (drag) zone; the hold zone keeps its plain air verb.
   spin: 'Hold to flip',
   flip: 'Hold in the air to flip',
-  boostPop: 'Hold, then let go at the lip',
+  boostPop: 'Hold, release at the lip',
 };
 
 /** The left (drag) zone's label when a hint is about steering. */

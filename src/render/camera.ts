@@ -1,5 +1,6 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { WRECK_SLED } from './rider';
+import { TOP_SPEED, chaseBack, chaseFov, chaseRow, chaseUp, edgeK, fastK, lookLead, lookReach, rumbleK, speedK } from './speedfeel';
 import { CRASH_FREEZE_S, CRASH_PACK_NEAR_M, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
 import type { GhostPose } from '../game/ghosts';
 import type { SimEvent } from '../sim/sim';
@@ -18,6 +19,12 @@ import type { SimEvent } from '../sim/sim';
 // rate. The shake runs on its own clock, slowed by hit-stops and held by a held frame or a pause.
 // Every kick, shake, jolt, roll and freeze is off under reduced motion (Feel.reduced); the speed FOV
 // breathing stays.
+//
+// Speed (speedfeel.ts): the lens climbs with speed rather than dropping into the snow. Height is read
+// against the slope, not the sled: from 1.05 m over the sled on a falling slope the lens rode about
+// 0.45 m over the snow, the road from 25 m on squeezed into a few rows of pixels behind the rider. At
+// speed it stands clear of the slope, the rider sinks a little in the frame and the look reaches 1.5 s
+// down the road, so what is coming is on the screen in time to steer round it.
 
 export interface CamTarget {
   pos: Vector3;
@@ -45,6 +52,20 @@ export interface CamTarget {
   /** Crash only: where you fell (the sim's crash spot, three.js), the line the pack's passes are told
    *  at; absent or null outside a crash. */
   fell?: Vector3 | null;
+  /** Run only: seconds in the air so far (0 on the snow), for the big-air vista. */
+  airTime?: number;
+  /** Run only: the landing aid's predicted seconds to touchdown (Infinity on the snow or unknown). */
+  airLeft?: number;
+  /** Run only: an overlook's open side and how fully it is open (overlook.ts): + toward three.js +x,
+   *  - toward -x, 0 none (or a ridge, open both ways). The chase leans its look and roll toward it. */
+  open?: number;
+  /** Run only: a wipeout's tumble, 0 riding, 1 from the first frame of one to the last: the lens eases
+   *  out and up and holds the rolling rider in the middle. */
+  tumble?: number;
+  /** Run only: a wall ride, + on the +x bank, - on the -x bank, 0 none: the horizon leans with it. */
+  wall?: number;
+  /** Finish only: the results card is up, so the held shot makes room for it. */
+  results?: boolean;
 }
 
 const smooth01 = (x: number) => {
@@ -52,7 +73,7 @@ const smooth01 = (x: number) => {
   return k * k * (3 - 2 * k);
 };
 
-export type CamMode = 'chase' | 'crash' | 'orbit' | 'hero';
+export type CamMode = 'chase' | 'crash' | 'orbit' | 'hero' | 'finish';
 
 /** Compass angle of a horizontal direction: 0 straight down the course (-z), positive toward +x. */
 function azimuth(x: number, z: number): number {
@@ -79,6 +100,12 @@ const HERO_BACKS = [1, 1.6, 2.2];
 const TREELINE = 10.3;
 /** A hero framing that cannot see the wreck at all. */
 const HERO_BLOCKED = 99;
+/** Walled in on every framing above (a wreck at a ravine's foot, a tunnel's wall): every way round it,
+ *  before the lens gives up on standing level with it. */
+const HERO_ROUND = [Math.PI, 1.2, -1.2, 2, -2, 2.6, -2.6];
+/** A lens keeps this far clear of a wall's drawn rock, and a sight line clears it by this much: the
+ *  terrain's facets cut across the rock's jagged noise between vertices. */
+const ROCK_CLEAR = 0.6;
 
 // The jolt spring: omega 22 rad/s, zeta 0.5, integrated exactly (closed form per frame).
 const J_OMEGA = 22;
@@ -129,6 +156,9 @@ const PACK_TURNS = [0, 0.3, -0.3, 0.6, -0.6, 0.9, -0.9];
 const PACK_SIGHT = [0.35, 0.65];
 /** No prop's foot this close to the pack lens (metres): props dissolve inside about 3.6 m of a lens. */
 const PACK_CLEAR = 3.4;
+/** The drifting orbit's search for open air when it starts walled in, each way round from the lens
+ *  (radians). */
+const ORBIT_SCAN = 0.3;
 /** The pack lens stays on the downhill side: at most this far (radians) off straight downhill. */
 const PACK_DOWNHILL = 1.4;
 /** The ghost that passes your wreck (CamTarget.pack) is looked for from CRASH_PACK_NEAR_M behind
@@ -177,6 +207,82 @@ const TRIPOD_BACK = [9, 11, 7];
 const TRIPOD_SIDE = 3;
 const TRIPOD_UP = 2.6;
 const TRIPOD_REACH = 24;
+
+/** The big-air vista (camera and motion round): a flight predicted to last VISTA_FROM seconds or
+ *  more starts to open the lens out, fully from VISTA_FULL. It eases out over the first half second
+ *  of air and is back in VISTA_BACK seconds before the predicted touchdown, so the landing ring's
+ *  stomp window is judged from the usual chase framing. At full weight the lens stands VISTA_OUT
+ *  metres further back, VISTA_UP higher and VISTA_SIDE to one side (toward the course's middle),
+ *  with VISTA_FOV degrees more lens, and lets the view look further down so the valley opens under
+ *  the rider. */
+const VISTA_FROM = 1.0;
+const VISTA_FULL = 1.9;
+const VISTA_BACK = 0.35;
+const VISTA_OUT = 2.6;
+const VISTA_UP = 2.1;
+const VISTA_SIDE = 1.7;
+const VISTA_FOV = 6;
+/** The predicted landing spot is kept above this share of the frame's lower half (NDC). */
+const VISTA_RING_NDC = -0.78;
+/** The chase's follow: the lens trails its set point by speed / FOLLOW_RATE metres, so a boost surges
+ *  away from it. Speed sensation lives in speedfeel.ts; from 22 m/s the lens rumbles over the snow
+ *  (RUMBLE_Y metres at most, only at the cap), and from 36 m/s it trembles (EDGE_ROLL radians at most)
+ *  on the edge of control. */
+const FOLLOW_RATE = 9;
+const RUMBLE_Y = 0.03;
+const EDGE_ROLL = 0.0035;
+/** Looking down the slope, the lens stands chaseUp metres clear of the snow from about this speed. */
+const CLEAR_FROM = 15;
+const CLEAR_FULL = 28;
+/** The widest the chase breathes, whatever piles up on top of the speed (degrees). */
+const CHASE_FOV_MAX = 96;
+/** The look's turn toward the road ahead, at most (radians). */
+const LEAD_MAX = 0.28;
+/** A wipeout's tumble: how far the lens eases back and up, and how high in the frame the rider rolls. */
+const TUMBLE_OUT = 1.3;
+const TUMBLE_UP = 0.8;
+const TUMBLE_NDC = -0.08;
+/** A wall ride's lean of the horizon (radians) and the lens's step in off the bank (metres). */
+const WALL_ROLL = 0.03;
+const WALL_IN = 0.5;
+/** The finish: seconds of render time the lens takes swinging round to the rider's front, the angle it
+ *  stops short of head-on (a three-quarter view), and where it comes to rest. */
+const FINISH_SWING_S = 2.5;
+const FINISH_SHORT = 0.55;
+const FINISH_R = 5.2;
+const FINISH_R_PORTRAIT = 6.6;
+const FINISH_UP = 0.95;
+/** Its lens, and where the rider sits (NDC): low in a wide frame, the sky over the slope above it, where
+ *  the shells burst. A lens straight at the rider saw only the snow it came down. */
+const FINISH_FOV = 60;
+const FINISH_NDC = -0.38;
+/** Held on the rider, it creeps on round this fast (radians per second), so the hold is never a still. */
+const FINISH_CREEP = 0.035;
+/** Section entrances: the kind of course RISE_AHEAD metres ahead changing (into anything but a
+ *  cruise) lifts the lens RISE_UP metres and back RISE_OUT over RISE_S seconds, then settles. */
+const RISE_AHEAD = 34;
+const RISE_UP = 0.55;
+const RISE_OUT = 0.5;
+const RISE_S = 2.2;
+/** The desktop title's crane: one cycle of TITLE_CYCLE seconds from a wide establishing shot high
+ *  over the course (the panorama, the valley, the low sun) down into the close hero shot and back. */
+const TITLE_CYCLE = 34;
+/** Overlooks (overlook.ts): while one bank stands open the chase turns its look OPEN_YAW radians
+ *  toward it (the rider moves about 5% of the width off centre, the run ahead stays in frame), leans
+ *  the horizon OPEN_ROLL toward the drop and rises OPEN_UP metres to see over the lip, easing in and
+ *  out over about OPEN_EASE seconds. A phone takes half. It gives way to the big-air vista, and is off
+ *  under reduced motion. */
+const OPEN_YAW = 0.12;
+const OPEN_ROLL = 0.024;
+const OPEN_UP = 0.35;
+const OPEN_EASE = 1.4;
+/** The reveal: as an overlook opens the lens takes a breath for REVEAL_S seconds, rising REVEAL_UP
+ *  metres and back REVEAL_OUT, turning a further REVEAL_YAW toward the drop and letting the rider sink
+ *  a little in the frame, then settles to the lean. Once per overlook. */
+const REVEAL_S = 3.2;
+const REVEAL_UP = 0.9;
+const REVEAL_OUT = 0.7;
+const REVEAL_YAW = 0.07;
 
 /** Scratch for crashPack (Map.forEach with a module-level callback: no per-frame allocation). */
 const packScan = { x: 0, z: 0, best: Infinity, p: null as GhostPose | null };
@@ -249,6 +355,43 @@ export class ChaseCamera {
   /** Eased 0 to 1: airborne, and a chaser close behind in your lane (the lens eases back for each). */
   private airK = 0;
   private chaseK = 0;
+  /** The big-air vista's eased weight (0 to 1), the side it swings to (eased, + to the right of
+   *  travel) and the side picked for this flight (0 until one is). */
+  private vistaK = 0;
+  private vistaS = 0;
+  /** An overlook's eased lean (signed, + toward three.js +x; OPEN_YAW and friends), its reveal's
+   *  seconds left and side, and whether the next overlook may start one. */
+  private openK = 0;
+  private revealLeft = 0;
+  private revealSide = 0;
+  private revealArmed = true;
+  private vistaPick = 0;
+  /** The predicted landing spot (three.js), kept in the vista's frame. */
+  private landAt = new Vector3();
+  /** The rumble's own clock (scaled like the shake's) and its eased weight. */
+  private rumbleT = 0;
+  private rumbleK = 0;
+  /** The slope's eased fall along the lens's line (metres per metre), the look's eased turn toward the
+   *  road ahead (radians) and the eased weights of a tumble and a wall ride. */
+  private fallS = 0;
+  private leadYaw = 0;
+  private tumbleK = 0;
+  private wallK = 0;
+  /** The finish shot: render seconds into it, the swing's start (azimuth, radius, height), which way it
+   *  goes round, and the eased weight of the room it makes for the results card. */
+  private finT = 0;
+  private finSeeded = false;
+  private finAz = 0;
+  private finR = 0;
+  private finUp = 0;
+  private finSide = 1;
+  private finRes = 0;
+  /** Section entrances: the section ahead last seen (its start, sim z) and the rise's seconds left. */
+  private riseFrom = NaN;
+  private riseLeft = 0;
+  /** The desktop title crane's clock (seconds) and its eased weight (1 is the wide shot). */
+  private titleT = 0;
+  private craneK = 1;
   private tmp = new Vector3();
   private tmp2 = new Vector3();
   private tmp3 = new Vector3();
@@ -318,6 +461,10 @@ export class ChaseCamera {
   private lookT = new Vector3();
   /** Terrain height at a three.js (x, z), so low title shots never sink into a bank. */
   ground: ((x: number, z: number) => number) | null = null;
+  /** Height of what is drawn at a three.js (x, z), a wall's rock included (ground.ts visualGround).
+   *  `ground` says what a sled rides, which stops short of the rock; this says what a lens can stand
+   *  in or be hidden behind. The crash lenses read it, and only while they frame the wreck. */
+  surface: ((x: number, z: number) => number) | null = null;
   /** The course corridor at a three.js z: its centre x and half width (the results shot of a wreck
    *  in the trees is taken from the open course side). */
   corridor: ((z: number) => { x: number; hw: number }) | null = null;
@@ -326,6 +473,9 @@ export class ChaseCamera {
   blocked: ((x: number, z: number, r: number) => boolean) | null = null;
   /** Where the sun disc sits (unit, three.js space): the phone title turns toward it. */
   sun: Vector3 | null = null;
+  /** The course section at a three.js z (Course.section: its start in sim z and its kind), for the
+   *  section entrance's lift; null leaves it off. */
+  section: ((z: number) => { readonly z0: number; readonly kind: string }) | null = null;
 
   constructor() {
     this.camera = new PerspectiveCamera(64, 16 / 9, 0.3, 5200);
@@ -414,6 +564,32 @@ export class ChaseCamera {
           stomped = true;
           break;
         }
+        case 'tumble':
+          if (b.phase === 'start') {
+            // A heavy hit: the lens drops, the frame shakes, and it holds on the roll (tumbleK).
+            this.shake(0.85);
+            this.jolt(0, -0.26, 0.2);
+            this.jvr += (0.05 * (b.x > 0 ? 1 : -1)) / J_PEAK;
+          } else this.jolt(0, 0.08, 0);
+          break;
+        case 'scrape':
+          // Turned back by the edge: the lens is knocked away from it and the horizon tips.
+          this.shake(0.3);
+          this.jolt(-0.24 * b.side, -0.04, 0);
+          this.jvr += (-0.04 * b.side) / J_PEAK;
+          break;
+        case 'grind':
+          if (b.phase === 'start') {
+            this.shake(0.14);
+            this.jolt(0, -0.08, 0);
+          }
+          break;
+        case 'stage':
+          if (!b.last) this.kick(0.3);
+          break;
+        case 'finish':
+          this.kick(0.5);
+          break;
         case 'bump':
           // Knocked away from the obstacle (side is the way away), and the horizon tips with it.
           this.jolt(0.22 * b.side, -0.05, 0);
@@ -551,6 +727,14 @@ export class ChaseCamera {
     this.tripod = false;
     this.pendPerfect = false;
     this.pendDriftKick = 0;
+    this.vistaK = this.vistaS = this.vistaPick = 0;
+    this.openK = this.revealLeft = this.revealSide = 0;
+    this.revealArmed = true;
+    this.riseFrom = NaN;
+    this.riseLeft = 0;
+    this.tumbleK = this.wallK = this.leadYaw = 0;
+    this.finSeeded = false;
+    this.finRes = 0;
   }
 
   private calm(): void {
@@ -578,6 +762,180 @@ export class ChaseCamera {
   /** The shake's current amplitude (0 to 1.2; the lens moves by its square), for probes. */
   get shakeNow(): number {
     return this.shakeAmp;
+  }
+
+  /** The big-air vista's current weight (0 to 1), for probes. */
+  get vistaNow(): number {
+    return this.vistaK;
+  }
+
+  /** Render seconds into the finish shot (0 before it), for probes. */
+  get finishNow(): number {
+    return this.finSeeded ? this.finT : 0;
+  }
+
+  /** The overlook lean's current weight (signed, + toward three.js +x), for probes. */
+  get openNow(): number {
+    return this.openK;
+  }
+
+  /** The overlook reveal's current weight (0 to 1), for probes. */
+  get revealNow(): number {
+    return this.revealK();
+  }
+
+  /** The reveal's weight: a rise over its first 40% and a slow settle, as the section lift. */
+  private revealK(): number {
+    if (this.revealLeft <= 0) return 0;
+    const p = 1 - this.revealLeft / REVEAL_S;
+    return smooth01(p / 0.4) * (1 - smooth01((p - 0.45) / 0.55));
+  }
+
+  /** Eases the overlook lean toward the open side, and starts the reveal as one opens (chase only, off
+   *  under reduced motion; the vista takes over in a long flight). */
+  private stepOpen(t: CamTarget, dt: number, reduced: boolean): void {
+    this.revealLeft = Math.max(0, this.revealLeft - dt);
+    const want = !reduced && this.mode === 'chase' ? MathUtils.clamp(t.open ?? 0, -1, 1) : 0;
+    this.openK = reduced ? 0 : this.openK + (want - this.openK) * (1 - Math.exp((-dt * 3) / OPEN_EASE));
+    if (reduced || this.mode !== 'chase') {
+      this.revealLeft = 0;
+      return;
+    }
+    if (Math.abs(want) < 0.2) this.revealArmed = true;
+    else if (this.revealArmed && Math.abs(want) > 0.6 && (t.intro ?? 0) < 0.05) {
+      this.revealArmed = false;
+      this.revealLeft = REVEAL_S;
+      this.revealSide = Math.sign(want);
+    }
+  }
+
+  /** The section entrance lift's current weight (0 to 1), for probes. */
+  get riseNow(): number {
+    return this.riseK();
+  }
+
+  /** The big-air vista (chase only, off under reduced motion): eases its weight toward what this
+   *  flight earns (a long one, past its first moments and not yet near touchdown), picks the side it
+   *  swings to once per flight, and notes the predicted landing spot it keeps in frame. */
+  private stepVista(t: CamTarget, dt: number, reduced: boolean): void {
+    const air = t.airborne ? (t.airTime ?? 0) : 0;
+    // (The landing aid looks 5 s ahead at most: a flight past that reads as 5 s left, once under way.)
+    const left = !t.airborne || t.airLeft === undefined ? 0 : Number.isFinite(t.airLeft) ? t.airLeft : air > 0.2 ? 5 : 0;
+    let want = 0;
+    if (!reduced && this.mode === 'chase' && t.airborne && left > 0) {
+      const big = smooth01((air + left - VISTA_FROM) / (VISTA_FULL - VISTA_FROM));
+      const into = smooth01((air - 0.08) / 0.5);
+      const out = smooth01((left - VISTA_BACK) / 0.75);
+      want = big * Math.min(into, out);
+    }
+    if (want > 0.02 && this.vistaPick === 0) {
+      // Toward the course's middle (the open side, away from the treeline), else away from the steer.
+      const cor = this.corridor?.(t.pos.z);
+      const lat = cor ? cor.x - t.pos.x : 0;
+      // The course's middle lies `lat` metres along +x; the right of travel is (-dir.z, dir.x).
+      const rightX = -this.dirS.z;
+      const toMid = lat * rightX;
+      this.vistaPick = Math.abs(lat) > 2 && Math.abs(rightX) > 0.05 ? Math.sign(toMid) : -Math.sign(t.steer) || 1;
+    }
+    if (!t.airborne && this.vistaK < 0.02) this.vistaPick = 0;
+    // In over about a third of a second, back out a little faster so it is home before the stomp.
+    const rate = want > this.vistaK ? 3.2 : 6;
+    this.vistaK = reduced ? 0 : this.vistaK + (want - this.vistaK) * (1 - Math.exp(-dt * rate));
+    this.vistaS += (this.vistaPick - this.vistaS) * (1 - Math.exp(-dt * 2.5));
+    if (left > 0) {
+      // Straight on along the flight (dir is level, speed nearly all of it is level in the air).
+      this.landAt.copy(t.pos).addScaledVector(t.dir, t.speed * left);
+      this.landAt.y = this.ground ? this.ground(this.landAt.x, this.landAt.z) : t.pos.y;
+    }
+  }
+
+  /** The slope's eased fall along the lens's line: how much higher the snow stands at the lens than
+   *  under the rider, per metre. Eased, so a mogul or a kicker's lip never bobs the lens. */
+  private stepFall(t: CamTarget, dt: number): void {
+    if (!this.ground) return;
+    const fall = (this.ground(t.pos.x - this.dirS.x * 6, t.pos.z - this.dirS.z * 6) - this.ground(t.pos.x, t.pos.z)) / 6;
+    this.fallS += (MathUtils.clamp(fall, 0, 0.6) - this.fallS) * (1 - Math.exp(-dt * 2.5));
+  }
+
+  /** Eases the look's turn toward the road 1.5 s ahead (lookReach): at speed the corner coming is on
+   *  the screen before it arrives. Off in the air (the landing has the lens), under reduced motion and
+   *  without a corridor. */
+  private stepLead(t: CamTarget, yaw: number, dt: number, reduced: boolean): void {
+    let want = 0;
+    if (!reduced && this.corridor && !t.airborne && (t.intro ?? 0) < 0.05) {
+      const reach = lookReach(t.speed);
+      const z = this.pos.z + this.dirS.z * reach;
+      const dx = this.corridor(z).x - this.pos.x;
+      const dz = z - this.pos.z;
+      want = MathUtils.clamp(wrapAngle(azimuth(dx, dz) - yaw) * lookLead(t.speed), -LEAD_MAX, LEAD_MAX);
+    }
+    this.leadYaw += (want - this.leadYaw) * (1 - Math.exp(-dt * 2.4));
+  }
+
+  /** The finish: from wherever the chase lens stood it swings round the coasting rider to a three-quarter
+   *  front, down to chest height, then holds on it with its arms up and creeps on, so the results come
+   *  up over a live shot. It goes round the side of the course's middle, unless a tree stands where it
+   *  would stop. dt is the world's eased render time, so the swing keeps the ease's pace. Under reduced
+   *  motion the world never asks for it: the chase follows the rider to a stop. */
+  private finishShot(t: CamTarget, desired: Vector3, lookAt: Vector3, tanHalfW: number, dt: number): void {
+    const portrait = this.aspect < 1;
+    const end = portrait ? FINISH_R_PORTRAIT : FINISH_R;
+    if (!this.finSeeded) {
+      this.finSeeded = true;
+      this.finT = 0;
+      const dx = this.pos.x - t.pos.x;
+      const dz = this.pos.z - t.pos.z;
+      this.finAz = Math.atan2(dx, dz);
+      this.finR = Math.max(1, Math.hypot(dx, dz));
+      this.finUp = this.pos.y - t.pos.y;
+      const cor = this.corridor?.(t.pos.z);
+      // Round through the course's middle: the side the sled has room on.
+      this.finSide = cor && t.pos.x > cor.x ? 1 : -1;
+      if (this.blocked) {
+        const stop = (side: number) => this.finAz + side * (Math.PI - FINISH_SHORT);
+        const clear = (side: number) => !this.blocked!(t.pos.x + Math.sin(stop(side)) * end, t.pos.z + Math.cos(stop(side)) * end, 3.4);
+        if (!clear(this.finSide) && clear(-this.finSide)) this.finSide = -this.finSide;
+      }
+    }
+    this.finT += dt;
+    const u = smooth01(this.finT / FINISH_SWING_S);
+    const e = u * u * (3 - 2 * u);
+    const az = this.finAz + this.finSide * ((Math.PI - FINISH_SHORT) * e + FINISH_CREEP * Math.max(0, this.finT - FINISH_SWING_S));
+    const r = MathUtils.lerp(this.finR, end, e);
+    desired.set(t.pos.x + Math.sin(az) * r, t.pos.y + MathUtils.lerp(this.finUp, FINISH_UP, e), t.pos.z + Math.cos(az) * r);
+    if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.45);
+    // The results card takes the right of a wide screen (the rider moves to the left column, as the
+    // results hero shot does) and the lower part of a phone's (the rider moves up into the open band).
+    this.finRes += ((t.results ? 1 : 0) - this.finRes) * (1 - Math.exp(-dt * 3));
+    const toward = azimuth(t.pos.x - desired.x, t.pos.z - desired.z);
+    const off = portrait ? 0 : Math.atan(0.5 * tanHalfW) * this.finRes;
+    const elev = Math.atan2(t.pos.y + 0.7 - desired.y, Math.hypot(t.pos.x - desired.x, t.pos.z - desired.z));
+    const ndc = portrait ? MathUtils.lerp(-0.2, 1 - this.heroBand * 1.14, this.finRes) : MathUtils.lerp(FINISH_NDC, -0.14, this.finRes);
+    this.aimAt(lookAt, desired, toward + off, elev, ndc);
+  }
+
+  /** The section entrance lift's weight: a quick rise and a slow settle over RISE_S seconds. */
+  private riseK(): number {
+    if (this.riseLeft <= 0) return 0;
+    const p = 1 - this.riseLeft / RISE_S;
+    return smooth01(p / 0.3) * (1 - smooth01((p - 0.4) / 0.6));
+  }
+
+  /** Watches the section RISE_AHEAD metres ahead: when a new one (not a cruise) comes into reach, the
+   *  lens lifts to frame it (chase only, never in the air, off under reduced motion). */
+  private stepRise(t: CamTarget, dt: number, reduced: boolean): void {
+    this.riseLeft = Math.max(0, this.riseLeft - dt);
+    if (!this.section || this.mode !== 'chase' || reduced) {
+      this.riseFrom = NaN;
+      this.riseLeft = 0;
+      return;
+    }
+    const sec = this.section(t.pos.z - RISE_AHEAD);
+    if (sec.z0 !== this.riseFrom) {
+      // (The first section seen, at a run's start, is only noted.)
+      if (!Number.isNaN(this.riseFrom) && sec.kind !== 'cruise' && !t.airborne && (t.intro ?? 0) < 0.05) this.riseLeft = RISE_S;
+      this.riseFrom = sec.z0;
+    }
   }
 
   /** Advances the jolt spring exactly over dt (clamped to 1/30 s). */
@@ -658,7 +1016,7 @@ export class ChaseCamera {
 
   update(t: CamTarget, dt: number): void {
     const portrait = this.aspect < 1;
-    const speedK = MathUtils.clamp((t.speed - 8) / 30, 0, 1);
+    const spK = speedK(t.speed);
     // Smooth the travel direction so the camera leads gently.
     this.dirS.lerp(t.dir, 1 - Math.exp(-dt * 3.2)).normalize();
     const desired = this.tmp;
@@ -677,11 +1035,27 @@ export class ChaseCamera {
       this.packK = this.packZoom = this.packHold = 0;
     }
     // Jolts ride the chase only: elsewhere they die away at once.
+    if (this.mode !== 'finish') this.finSeeded = false;
     if (this.mode === 'chase' && !reduced) this.stepJolt(dt);
     else if (this.jx || this.jy || this.jz || this.jr || this.jvx || this.jvy || this.jvz || this.jvr) {
       this.jx = this.jy = this.jz = this.jr = 0;
       this.jvx = this.jvy = this.jvz = this.jvr = 0;
     }
+    this.stepVista(t, dt, reduced);
+    this.stepRise(t, dt, reduced);
+    this.stepOpen(t, dt, reduced);
+    const vista = this.vistaK;
+    const rise = this.riseK();
+    // The overlook lean and its reveal, giving way to the vista (and the reveal to a section's lift).
+    const open = this.openK * (1 - vista);
+    const reveal = this.revealK() * (1 - vista) * (1 - rise);
+    const openYaw = open * OPEN_YAW + this.revealSide * reveal * REVEAL_YAW;
+    // How fast this feels: calm at 15 m/s, fast from 28, and still climbing at the cap (the FOV, the
+    // carve's dutch, the rumble).
+    const fast = fastK(t.speed);
+    // A tumble and a wall ride, eased in and out (none under reduced motion).
+    this.tumbleK += ((reduced ? 0 : (t.tumble ?? 0)) - this.tumbleK) * (1 - Math.exp(-dt * ((t.tumble ?? 0) > this.tumbleK ? 7 : 3)));
+    this.wallK += ((reduced ? 0 : (t.wall ?? 0)) - this.wallK) * (1 - Math.exp(-dt * 5));
 
     if (this.mode === 'chase' && portrait) {
       // Portrait (contract C3): close behind and high, so the rider is big enough to read its pose
@@ -690,10 +1064,14 @@ export class ChaseCamera {
       // goes to the corridor ahead rather than to sky.
       // The eased follow trails the set point by speed / 9 m; most of that is led back in, or at
       // speed the rider would shrink and the horizon climb back up the screen.
-      const back = 3.5 + speedK * 0.4 - Math.min(t.speed, 45) * 0.083;
-      const up = 3.0 + speedK * 0.2 + (t.airborne ? 0.4 : 0);
+      // (The big-air vista and a section's lift open it out too, by half as much: the phone's frame
+      // is already high and its rider must keep its size.)
+      const back = 3.5 + spK * 0.4 - Math.min(t.speed, TOP_SPEED) * 0.083 + vista * VISTA_OUT * 0.5 + rise * RISE_OUT * 0.5 + reveal * REVEAL_OUT * 0.5;
+      const up = 3.0 + spK * 0.2 + (t.airborne ? 0.4 : 0) + vista * VISTA_UP * 0.5 + rise * RISE_UP * 0.5 + (Math.abs(open) * OPEN_UP + reveal * REVEAL_UP) * 0.5;
       desired.copy(t.pos).addScaledVector(this.dirS, -back);
       desired.y += up;
+      desired.x += -this.dirS.z * this.vistaS * vista * VISTA_SIDE * 0.5;
+      desired.z += this.dirS.x * this.vistaS * vista * VISTA_SIDE * 0.5;
       this.aimAt(lookAt, desired, travelAz, Math.atan2(t.pos.y + 0.55 - desired.y, back), -0.16);
       // (Re-aimed from the eased position below.)
     } else if (this.mode === 'chase') {
@@ -721,10 +1099,22 @@ export class ChaseCamera {
         chaseT = smooth01((-along - 0.4) / 1.2) * (1 - smooth01((-along - 5) / 3)) * (1 - smooth01((Math.abs(lat) - 2.4) / 1.2));
       }
       this.chaseK += (chaseT - this.chaseK) * (1 - Math.exp(-dt * 1.5));
-      const back = 2.2 - Math.min(t.speed, 45) * 0.026 + intro * 1.1 + this.airK * 0.7 + this.chaseK * 0.6;
-      const up = 1.05 + speedK * 0.2 + this.airK * 0.05 + intro * 1.0 + this.chaseK * 0.3;
+      // A long flight opens out into the vista (out, up and a little aside, so the jump reads as big
+      // and the valley opens under the rider), and a section coming into reach lifts the lens to
+      // frame it. A hard carve at speed drops the lens a little toward the snow (with the dutch roll
+      // below, the carve reads as low and fast).
+      const carveLow = this.airK < 0.5 ? Math.min(1, Math.abs(t.steer)) * fast * 0.14 * (1 - intro) : 0;
+      const tumble = this.tumbleK;
+      const back = chaseBack(t.speed) + intro * 1.1 + this.airK * 0.7 + this.chaseK * 0.6 + vista * VISTA_OUT + rise * RISE_OUT + reveal * REVEAL_OUT + tumble * TUMBLE_OUT;
+      // Height is read against the slope, not the sled: the lens stands behind the rider, up the fall
+      // line, where the snow is that much higher. From about 28 m/s all of that is made up.
+      this.stepFall(t, dt);
+      const clear = this.fallS * (back + t.speed / FOLLOW_RATE) * smooth01((t.speed - CLEAR_FROM) / (CLEAR_FULL - CLEAR_FROM));
+      const up = chaseUp(t.speed) + clear + this.airK * 0.05 + intro * 1.0 + this.chaseK * 0.3 + vista * VISTA_UP + rise * RISE_UP + Math.abs(open) * OPEN_UP + reveal * REVEAL_UP + tumble * TUMBLE_UP - carveLow;
       desired.copy(t.pos).addScaledVector(this.dirS, -back);
       desired.y += up;
+      desired.x += -this.dirS.z * this.vistaS * vista * VISTA_SIDE;
+      desired.z += this.dirS.x * this.vistaS * vista * VISTA_SIDE;
       // ...and a little to one side: from straight behind, the far end of the corridor sat right
       // behind the rider's back however high the lens rode.
       desired.x += -this.dirS.z * intro * 1.0;
@@ -745,7 +1135,9 @@ export class ChaseCamera {
       this.slipX += (slipT - this.slipX) * (1 - Math.exp(-dt * 2));
       desired.x += -this.dirS.z * this.slipX;
       desired.z += this.dirS.x * this.slipX;
-      lookAt.copy(t.pos).addScaledVector(this.dirS, 6.5 + speedK * 5);
+      // A wall ride steps the lens in off the bank, so the rider stands out against the snow behind it.
+      desired.x -= this.wallK * WALL_IN;
+      lookAt.copy(t.pos).addScaledVector(this.dirS, 6.5 + spK * 9);
       lookAt.y += 0.25;
     } else if (this.mode === 'crash') {
       if (held) {
@@ -793,8 +1185,11 @@ export class ChaseCamera {
       }
     } else if (this.mode === 'hero') {
       this.heroShot(t, desired, lookAt, tanHalfW, travelAz);
+    } else if (this.mode === 'finish') {
+      this.finishShot(t, desired, lookAt, tanHalfW, dt);
     } else {
       this.orbitAngle += dt * 0.16;
+      this.titleT += dt;
       if (portrait) this.phoneTitle(t, desired, lookAt, dt, tanHalfW, travelAz);
       else this.desktopTitle(t, desired, lookAt, dt, tanHalfW, travelAz);
     }
@@ -814,8 +1209,9 @@ export class ChaseCamera {
       }
     }
     this.lastFocus.copy(t.pos);
-    const kPos = 1 - Math.exp(-dt * (this.mode === 'chase' ? 9 : this.mode === 'orbit' ? 7 : 2.5));
-    const kLook = 1 - Math.exp(-dt * (this.mode === 'chase' ? 14 : 3));
+    // (The finish swings exactly where it says: its path starts from wherever the chase lens stood.)
+    const kPos = this.mode === 'finish' ? 1 : 1 - Math.exp(-dt * (this.mode === 'chase' ? FOLLOW_RATE : this.mode === 'orbit' ? 7 : 2.5));
+    const kLook = 1 - Math.exp(-dt * (this.mode === 'chase' ? 14 : this.mode === 'finish' ? 5 + 30 * smooth01(this.finT / 0.9) : 3));
     const y0 = this.pos.y;
     this.pos.lerp(desired, kPos);
     // The chase height follows faster than the trail: dropping out of a jump, the rider would
@@ -825,7 +1221,7 @@ export class ChaseCamera {
     // (The hero shot keeps its own clearance: on a phone it lies low on the snow downhill of the wreck,
     // and held 0.8 m over the wreck it looked down onto blank snow.)
     // (Held still on the crash beat, whatever the tumbling wreck does.)
-    if (this.pos.y < t.pos.y + 0.8 && this.mode !== 'orbit' && this.mode !== 'hero' && !held) this.pos.y = t.pos.y + 0.8;
+    if (this.pos.y < t.pos.y + 0.8 && this.mode !== 'orbit' && this.mode !== 'hero' && this.mode !== 'finish' && !held) this.pos.y = t.pos.y + 0.8;
     // Nor into the snow under the lens or halfway to the rider: just past a kicker or a bank lip the
     // mound behind the rider can stand higher than the rider itself, and the lens sank into it, the
     // lower frame a flat slab of terrain with its dark underside showing.
@@ -842,7 +1238,7 @@ export class ChaseCamera {
       const hx = t.pos.x - this.pos.x;
       const hz = t.pos.z - this.pos.z;
       this.frameRival(t, travelAz, dt);
-      this.aimAt(this.look, this.pos, travelAz + this.rivalYaw, Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz)), -0.16);
+      this.aimAt(this.look, this.pos, travelAz + this.rivalYaw + openYaw * 0.5, Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz)), -0.16);
     } else if (this.mode === 'chase') {
       // The eased look point leads into turns; the pitch is set from where the camera actually is,
       // so the rider's middle holds about 61% of the height (its base clear of the hint and chip
@@ -858,7 +1254,31 @@ export class ChaseCamera {
       // During the reveal the view also pitches up about 4 degrees (the rider sits a little lower), so
       // the mood's sky signature (the moon, the aurora, the comet) frames the mood card instead of
       // being cropped by the top edge.
-      this.aimAt(this.look, this.pos, yaw + this.rivalYaw, Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz)), -0.22 - 0.13 * intro, 0.22 - 0.05 * intro);
+      const elev = Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz));
+      // A section's lift lets the rider sink a little, so more of what is coming fills the frame, and
+      // speed does the same: the road ahead comes clear of the rider. A tumble rolls higher in the frame.
+      let ndc = MathUtils.lerp(chaseRow(t.speed) - 0.13 * intro - 0.06 * rise - 0.06 * reveal, TUMBLE_NDC, this.tumbleK);
+      // The vista looks down further (the horizon may climb to 12% from the top), and never so little
+      // that the predicted landing spot drops out of the bottom of the frame: the rider rises in the
+      // frame instead, at most to a little over the middle.
+      let horizon = 0.22 - 0.05 * intro - 0.1 * vista;
+      if (vista > 0.001) {
+        const lx = this.landAt.x - this.pos.x;
+        const lz = this.landAt.z - this.pos.z;
+        const ld = lx * Math.sin(yaw) - lz * Math.cos(yaw);
+        if (ld > 1) {
+          const tanHalfNow = Math.tan(MathUtils.degToRad(this.fov) / 2);
+          const elevL = Math.atan2(this.landAt.y - this.pos.y, ld);
+          const pitchMax = elevL - Math.atan(VISTA_RING_NDC * tanHalfNow);
+          const need = Math.tan(elev - pitchMax) / tanHalfNow;
+          if (need > ndc) {
+            ndc += (Math.min(need, 0.12) - ndc) * vista;
+            horizon = Math.max(0.04, horizon - 0.08 * vista);
+          }
+        }
+      }
+      this.stepLead(t, yaw, dt, reduced);
+      this.aimAt(this.look, this.pos, yaw + this.rivalYaw + openYaw + this.leadYaw, elev, ndc, horizon);
     } else {
       this.look.lerp(lookAt, kLook);
       this.lookS.copy(this.look);
@@ -869,8 +1289,16 @@ export class ChaseCamera {
     // (the chase only; the kick and the flow are off under reduced motion, the breathing stays).
     this.punch = reduced ? 0 : Math.max(0, this.punch - dt * 2.4);
     const flowFov = this.mode === 'chase' && !reduced ? 2.5 * MathUtils.clamp(this.feel.flow, 0, 1) : 0;
-    let baseFov = 62 + speedK * 14 + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (this.mode === 'chase' && this.aspect >= 1 ? this.airK * 4 : 0);
-    if (this.mode === 'hero') {
+    // The breathing is mostly on fastK, so 15 m/s sits at the calm 62 degrees, 28 m/s has opened the lens
+    // out and it goes on opening to the cap (speedfeel.ts chaseFov).
+    // (The title crane widens a little for its establishing shot.)
+    const chaseWide = this.mode === 'chase' && this.aspect >= 1;
+    let baseFov = chaseFov(t.speed) + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (chaseWide ? this.airK * 4 + vista * VISTA_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
+    if (chaseWide) baseFov = Math.min(baseFov, CHASE_FOV_MAX);
+    if (this.mode === 'finish') {
+      // Into a longer lens as the swing comes round: the rider and the square behind it, undistorted.
+      baseFov = portrait ? 74 : FINISH_FOV;
+    } else if (this.mode === 'hero') {
       // A longer lens for the still hero shot: less distortion, a bigger sun. A phone's band is short
       // and narrow, so there the lens is wider: at 50 degrees it was a close-up of the rider alone.
       baseFov = portrait ? 72 : 50;
@@ -898,7 +1326,12 @@ export class ChaseCamera {
     let rollT = 0;
     if (this.mode === 'chase' && !reduced) {
       if (t.drifting) rollT = -(t.driftDir ?? 0) * (0.035 + 0.035 * Math.min(1, Math.abs(t.slip ?? 0) / 0.7));
-      else rollT = -t.steer * 0.05 * (0.4 + speedK);
+      // A carve's dutch builds with speed: barely a tilt at a 15 m/s cruise, a low lean into a carve
+      // from 30 m/s.
+      else rollT = -t.steer * (0.026 + 0.026 * spK + 0.03 * fast);
+      // An overlook leans the horizon down toward the drop (a carve toward it adds to that).
+      rollT -= open * OPEN_ROLL * (portrait ? 0.5 : 1);
+      rollT -= this.wallK * WALL_ROLL;
       rollT = MathUtils.clamp(rollT, -ROLL_MAX, ROLL_MAX);
     }
     if (reduced) this.roll = 0;
@@ -914,8 +1347,25 @@ export class ChaseCamera {
     this.shakeAmp = reduced ? 0 : Math.max(0, this.shakeAmp - dt * 2.2);
     const sh = this.shakeAmp * this.shakeAmp;
     const time = this.shakeT;
-    const ox = Math.sin(time * 47) * sh * 0.25 + Math.sin(time * 23) * sh * 0.12;
-    const oy = Math.cos(time * 41) * sh * 0.2;
+    let ox = Math.sin(time * 47) * sh * 0.25 + Math.sin(time * 23) * sh * 0.12;
+    let oy = Math.cos(time * 41) * sh * 0.2;
+    // The rumble over the snow at top speed: a fine, uneven judder on the chase lens (incommensurate
+    // sines, mostly vertical, a couple of centimetres at most), on the shake's clock so a hit-stop
+    // slows it and a held frame stills it. Never in the air (it eases out over a jump's take-off) and
+    // off under reduced motion. It rides beside the shake, not in it: the beats' shakes keep their size.
+    const rumbleT = this.mode === 'chase' && !reduced && !t.airborne ? rumbleK(t.speed) : 0;
+    this.rumbleK += (rumbleT - this.rumbleK) * (1 - Math.exp(-dt * 6));
+    if (reduced) this.rumbleK = 0;
+    this.rumbleT += realDt * this.feel.shakeScale;
+    if (this.rumbleK > 1e-3) {
+      const r = this.rumbleT;
+      const k = this.rumbleK * RUMBLE_Y;
+      oy += (Math.sin(r * 61) * 0.55 + Math.sin(r * 97 + 1.3) * 0.3 + Math.sin(r * 23 + 0.4) * 0.35) * k;
+      ox += (Math.sin(r * 73 + 2.1) * 0.4 + Math.sin(r * 31) * 0.25) * k;
+      // On the edge of control the horizon trembles too: a fine, uneven shiver past 36 m/s.
+      const edge = edgeK(t.speed) * this.rumbleK;
+      if (edge > 1e-3) this.rollOut = MathUtils.clamp(this.rollOut + (Math.sin(r * 53 + 0.7) * 0.6 + Math.sin(r * 83) * 0.4) * EDGE_ROLL * edge, -ROLL_MAX, ROLL_MAX);
+    }
 
     // The lens: the eased position plus the jolt and the shake in camera-local axes (right is level,
     // up is the world's, back is away from the look point), then held clear of the snow again, so a
@@ -1022,6 +1472,15 @@ export class ChaseCamera {
           this.orbitT = ORBIT_WIND;
           cut = true;
         } else this.orbitAim = aim;
+      } else if (!this.tripod && !this.orbitOpen(t.pos, this.orbitAngle, Math.max(this.orbitR, ORBIT_R), ORBIT_UP)) {
+        // The way out from the held lens runs into a wall: the drift starts from the nearest open
+        // angle, or, with none (or no swinging, under reduced motion), stays at the lens's own distance.
+        const open = this.feel.reduced ? null : this.openAngle(t.pos, this.orbitAngle, ORBIT_R, ORBIT_UP);
+        if (open !== null) this.orbitAim = open;
+        else {
+          this.orbitRT = this.orbitR;
+          this.orbitUpT = this.orbitUp;
+        }
       }
     }
     this.orbitT += dt;
@@ -1040,7 +1499,15 @@ export class ChaseCamera {
       const gap = wrapAngle(this.orbitAim - this.orbitAngle);
       if (Math.abs(gap) < 0.02) this.orbitAim = null;
       else this.orbitAngle += MathUtils.clamp(gap * (1 - Math.exp(-dt * ORBIT_EASE)), -dt * ORBIT_SWING, dt * ORBIT_SWING) * wind;
-    } else this.orbitAngle += dt * this.orbitSpin * wind * (1 - this.packHold);
+    } else {
+      // The drift turns back at a wall rather than carrying the lens into the rock.
+      const was = this.orbitAngle;
+      this.orbitAngle += dt * this.orbitSpin * wind * (1 - this.packHold);
+      if (!this.orbitOpen(t.pos, this.orbitAngle, Math.max(this.orbitR, this.orbitRT), Math.min(this.orbitUp, this.orbitUpT))) {
+        this.orbitAngle = was;
+        this.orbitSpin = -this.orbitSpin;
+      }
+    }
     const k = 1 - Math.exp(-dt * 2.5);
     this.orbitR += ((pack ? Math.min(this.orbitRT, this.packR) : this.orbitRT) - this.orbitR) * k;
     this.orbitUp += (this.orbitUpT - this.orbitUp) * k;
@@ -1052,16 +1519,61 @@ export class ChaseCamera {
     return cut;
   }
 
+  /** A lens at (x, y, z) would stand inside a wall's rock, or too near its face. A wall is not snow to
+   *  be climbed: a lens lifted over it would look down from the crest, or see nothing past it. */
+  private inRock(x: number, y: number, z: number): boolean {
+    const s = this.surface;
+    if (!s || !this.ground) return false;
+    const top = s(x, z);
+    return top - this.ground(x, z) > 0.02 && y < top + ROCK_CLEAR;
+  }
+
+  /** What is drawn stands across the line from (x, y, z) to (tx, ty, tz). The ends are left out: the
+   *  snow a low lens or the wreck itself sits on is never in the way. */
+  private rockBetween(x: number, y: number, z: number, tx: number, ty: number, tz: number): boolean {
+    const s = this.surface;
+    if (!s || !this.ground) return false;
+    for (let k = 1; k < 12; k++) {
+      const f = k / 12;
+      const px = x + (tx - x) * f;
+      const pz = z + (tz - z) * f;
+      const top = s(px, pz);
+      if (top - this.ground(px, pz) > 0.02 && top + ROCK_CLEAR > y + (ty - y) * f) return true;
+    }
+    return false;
+  }
+
+  /** The orbit's lens at this angle, radius and height stands in the open with the wreck in sight. */
+  private orbitOpen(w: Vector3, a: number, r: number, up: number): boolean {
+    if (!this.surface || !this.ground) return true;
+    const x = w.x + Math.sin(a) * r;
+    const z = w.z + Math.cos(a) * r;
+    const y = Math.max(w.y + up, this.ground(x, z) + 1);
+    return !this.inRock(x, y, z) && !this.rockBetween(x, y, z, w.x, w.y + 0.4, w.z);
+  }
+
+  /** The open angle nearest `from` round the wreck, or null with rock on every side. */
+  private openAngle(w: Vector3, from: number, r: number, up: number): number | null {
+    const n = Math.floor(Math.PI / ORBIT_SCAN);
+    for (let i = 1; i <= n; i++) {
+      for (const s of [1, -1]) {
+        const a = from + s * i * ORBIT_SCAN;
+        if (this.orbitOpen(w, a, r, up)) return a;
+      }
+    }
+    return null;
+  }
+
   /** The pack-facing lens's angle round the wreck (three.js position `w`), or null for no pack shot.
    *  The set facing when nothing stands by the lens or across its line to the wreck; else the clear
    *  spot nearest it, turning off the facing or round toward straight downhill (a wreck in the
    *  treeline is watched from the open course, not from deeper in the forest), at the orbit's radius
-   *  or a step closer, never uphill of the wreck; null when every spot has a tree by the lens. Sets
-   *  packR. Asked once per crash, so its prop scan never runs per frame. */
+   *  or a step closer, never uphill of the wreck; null when every spot has a tree by the lens, or
+   *  stands in or behind a wall's rock. Sets packR. Asked once per crash, so its prop scan never runs
+   *  per frame. */
   private packLens(w: Vector3, face: number): number | null {
     this.packR = ORBIT_R;
     const blocked = this.blocked;
-    if (!blocked) return face;
     let best = face;
     let bestCost = Infinity;
     for (const r of PACK_RADII) {
@@ -1069,12 +1581,13 @@ export class ChaseCamera {
         // Turns off the facing first, then the same turns round straight downhill.
         const a = (i < PACK_TURNS.length ? face : Math.PI) + PACK_TURNS[i % PACK_TURNS.length];
         if (Math.abs(wrapAngle(a - Math.PI)) > PACK_DOWNHILL) continue;
+        if (!this.orbitOpen(w, a, r, ORBIT_PACK_UP)) continue;
         const lx = w.x + Math.sin(a) * r;
         const lz = w.z + Math.cos(a) * r;
         // A tree by the lens is the worst (inside about 3.5 m it fills a side of the frame, dissolving);
         // one across the line hides the wreck.
-        let cost = blocked(lx, lz, PACK_CLEAR) ? 3 : 0;
-        for (const f of PACK_SIGHT) if (blocked(w.x + (lx - w.x) * f, w.z + (lz - w.z) * f, 1.4)) cost += 1;
+        let cost = blocked?.(lx, lz, PACK_CLEAR) ? 3 : 0;
+        if (blocked) for (const f of PACK_SIGHT) if (blocked(w.x + (lx - w.x) * f, w.z + (lz - w.z) * f, 1.4)) cost += 1;
         // (The set facing and the orbit's own radius win ties.)
         cost += Math.abs(wrapAngle(a - face)) * 0.4 + (ORBIT_R - r) * 0.05;
         if (cost === 0) return a;
@@ -1120,6 +1633,8 @@ export class ChaseCamera {
         const lz = cz + uz * back + nz * sd * TRIPOD_SIDE;
         if (blocked && (blocked(lx, lz, PACK_CLEAR) || blocked((lx + cx) * 0.5, (lz + cz) * 0.5, 1.4))) continue;
         const gy = this.ground ? this.ground(lx, lz) : g.y - 0.8;
+        // (Rock at its spot, or across the line to the wreck or to where the ghost will cross.)
+        if (this.inRock(lx, gy + TRIPOD_UP, lz) || this.rockBetween(lx, gy + TRIPOD_UP, lz, w.x, w.y + 0.4, w.z) || this.rockBetween(lx, gy + TRIPOD_UP, lz, cx, g.y, cz)) continue;
         this.tripodAt.set(lx, gy + TRIPOD_UP, lz);
         return true;
       }
@@ -1355,8 +1870,8 @@ export class ChaseCamera {
    *  rider and its overturned sled are framed as a pair (rider.ts lays the sled beside the rider,
    *  toward the middle of the frame). A crash usually ends against a bank or in the trees, where the
    *  set framing can look into the snow or a trunk: then the shot swings round, climbs and stands
-   *  back until it sees the wreck with no tree in its near frame, and holds that framing while it
-   *  stays clear so it never hunts. */
+   *  back until it sees the wreck with no tree in its near frame and no rock around or before the
+   *  lens, and holds that framing while it stays clear so it never hunts. */
   private heroShot(t: CamTarget, desired: Vector3, lookAt: Vector3, tanHalfW: number, travelAz: number): void {
     const portrait = this.aspect < 1;
     const cor = this.corridor?.(t.pos.z);
@@ -1419,6 +1934,21 @@ export class ChaseCamera {
           }
         }
       }
+      // Nothing from where the shot wants to stand: any way round the wreck, before the crane.
+      for (let m = 0; m < HERO_BACKS.length && best >= HERO_BLOCKED; m++) {
+        for (let i = 0; i < ups.length && best >= HERO_BLOCKED; i++) {
+          if (ups[i] > 5) continue;
+          for (let j = 0; j < HERO_ROUND.length && best >= HERO_BLOCKED; j++) {
+            const cost = this.heroCost(t.pos, base + HERO_ROUND[j], off, ups[i], r * HERO_BACKS[m], desired, aim, tanHalfW);
+            if (cost < best) {
+              best = cost;
+              this.heroYaw = HERO_ROUND[j];
+              this.heroUp = ups[i];
+              this.heroBack = HERO_BACKS[m];
+            }
+          }
+        }
+      }
       // Walled in on every side: the highest straight shot, looking down onto the wreck.
       if (best >= HERO_BLOCKED) {
         this.heroYaw = 0;
@@ -1426,6 +1956,8 @@ export class ChaseCamera {
         this.heroBack = 1;
       }
       this.heroPlace(t.pos, base + this.heroYaw, off, this.heroUp, r * this.heroBack, desired, aim);
+      // (That last one looks down from over whatever it stands above, rock too.)
+      if (best >= HERO_BLOCKED && this.surface) desired.y = Math.max(desired.y, this.surface(desired.x, desired.z) + ROCK_CLEAR);
     }
     const yaw = base + this.heroYaw;
     this.heroAz = yaw;
@@ -1486,7 +2018,8 @@ export class ChaseCamera {
   /** Puts the hero camera (into `desired`) looking along compass `yaw`, `r` metres from the wreck
    *  and `up` metres above it, with the pair (the seated rider and the sled laid beside it, whose
    *  middle goes into `aim`) `off` left of centre; true when nothing but air lies between the lens
-   *  and `aim` (and, `strict`, no prop stands right by the lens). */
+   *  and `aim` (and, `strict`, no prop stands right by the lens). A wall's rock counts: it is drawn
+   *  past where the sim's ground stops, so the lens may stand neither in it nor behind it. */
   private heroPlace(focus: Vector3, yaw: number, off: number, up: number, r: number, desired: Vector3, aim: Vector3, strict = false): boolean {
     const fx = Math.sin(yaw);
     const fz = -Math.cos(yaw);
@@ -1502,6 +2035,7 @@ export class ChaseCamera {
     // it saw two boot soles in the lens).
     if (this.aspect < 1) desired.y = this.ground(desired.x, desired.z) + 0.5 + up * 0.3;
     desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + (this.aspect < 1 ? 0.3 : 0.35));
+    if (this.inRock(desired.x, desired.y, desired.z)) return false;
     // Below the canopy, a lens inside the forest wall sees only the trunks around it.
     const cor = up < 5 ? this.corridor?.(desired.z) : null;
     if (cor && Math.abs(desired.x - cor.x) - cor.hw > TREELINE) return false;
@@ -1519,7 +2053,7 @@ export class ChaseCamera {
       const rz = desired.z + (focus.z - desired.z) * f;
       if (this.ground(rx, rz) + 0.15 > desired.y + (cy - desired.y) * f) return false;
     }
-    return true;
+    return !this.rockBetween(desired.x, desired.y, desired.z, aim.x, aim.y, aim.z) && !this.rockBetween(desired.x, desired.y, desired.z, focus.x, cy, focus.z);
   }
 
   /** Phone title (contract C5): the logo owns the top fifth of a tall screen and the Ride button
@@ -1568,10 +2102,18 @@ export class ChaseCamera {
    *  whichever side puts it there. */
   private desktopTitle(t: CamTarget, desired: Vector3, lookAt: Vector3, dt: number, tanHalfW: number, travelAz: number): void {
     const side = this.tmp3.set(-this.dirS.z, 0, this.dirS.x);
+    // The crane (the camera and motion round): the attract loop opens on a wide establishing shot
+    // high over the course, the low sun, the panorama and the valley laid out beyond the hero, then
+    // cranes down over about eight seconds into the close hero shot, holds it, and rises again. Under
+    // reduced motion it stays on the hero shot.
+    const ph = (this.titleT / TITLE_CYCLE) * Math.PI * 2;
+    const craneT = this.feel.reduced ? 0 : smooth01((0.5 + 0.5 * Math.cos(ph) - 0.45) / 0.45);
+    this.craneK = this.initialized ? this.craneK + (craneT - this.craneK) * (1 - Math.exp(-dt * 1.2)) : craneT;
+    const crane = this.craneK;
     // Far enough back (and low) that the hero and its streaming scarf stand against the open sky
     // right of the menu cards, with the ghost racing it in the same shot at about two thirds of its
     // size: at 3.2 m the hero filled the frame behind the cards and the ghost read as a bystander.
-    const r = 4.7;
+    const r = 4.7 + crane * 6.5;
     // Seen from sweep s the hero lies s radians left of the course, so the sweep rocks about the one
     // that puts the low sun a little right of the hero: the bloomed disc and the paling ridges hang
     // in the open sky over its shoulder (the frame ART.md section 11 asks for), not behind the
@@ -1599,11 +2141,13 @@ export class ChaseCamera {
       .copy(t.pos)
       .addScaledVector(this.dirS, -Math.cos(sweep) * r)
       .addScaledVector(side, Math.sin(sweep) * r);
-    desired.y = t.pos.y + 1.0 + Math.sin(this.orbitAngle * 0.7) * 0.15;
+    desired.y = t.pos.y + 1.0 + crane * 4.4 + Math.sin(this.orbitAngle * 0.7) * 0.15;
     // Behind the hero is uphill: on a steep pitch that height alone would sink into the slope.
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.85);
-    lookAt.copy(t.pos).addScaledVector(this.dirS, 5);
-    lookAt.y += 1.25;
+    // The crane looks far down the course at about the hero's height, so the horizon, the ridges and
+    // the low sun stand over the slope falling away below.
+    lookAt.copy(t.pos).addScaledVector(this.dirS, 5 + crane * 40);
+    lookAt.y += 1.25 + crane * 0.5;
     // As the sweep swings, the hero drifts sideways in the frame. Turn just enough to keep it
     // between about 57 and 63% of the width: clear of the menu column on the left (the logo, and
     // for a returning player the mountain cards beside Ride, out to about 38%), its scarf included.

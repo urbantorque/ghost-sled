@@ -47,9 +47,26 @@ export interface GradeParams {
   foot?: number;
   /** Light shafts from a low sun in view (0 for none: night, overcast and high-sun moods). */
   shafts?: number;
+  /** The filmic finish (0..1, default 1): the lit snow leans to the light's warmth and the shade to the
+   *  mood's periwinkle, with a soft S-curve and vibrance in the mid-tones. */
+  film?: number;
+  /** How far the bloom leans to the light's own colour (0..1, default 0.4). */
+  bloomWarm?: number;
+  /** Lens character round a low sun in view (an anamorphic streak and a few soft ghosts), 0 for none. */
+  lens?: number;
+  /** The mood's final light pass: the frame lifts and warms round its key light and settles away
+   *  from it, so every frame has one clear focal light (0 for none). */
+  focal?: number;
+  /** Where that key light is when it is not the sun or moon disc (the comet). */
+  focalDir?: Vector3;
+  /** Blizzard gusts: curtains of snow sweeping across the frame (0 for none). */
+  gust?: number;
+  /** Glittering air: diamond dust and fresh powder twinkling in the light (0 for none). */
+  glitter?: number;
 }
 
 const sunProbe = new Vector3();
+const lookProbe = new Vector3();
 
 export class PostFX {
   private sceneRT: WebGLRenderTarget;
@@ -70,7 +87,10 @@ export class PostFX {
   private moodBloom = 0.55;
   private moodFoot = 0;
   private moodShafts = 0;
-  /** Taps per pixel for the light shafts: 10 on High, 6 on Medium (Low has no post pass at all). */
+  private moodLens = 0;
+  private moodFocal = 0;
+  private focalDir: Vector3 | null = null;
+  /** Taps per pixel for the light shafts: 14 on High, 8 on Medium (Low has no post pass at all). */
   shaftTaps: number;
   enabled = true;
   bloomEnabled = true;
@@ -86,7 +106,7 @@ export class PostFX {
     levels = 5,
   ) {
     this.levels = levels;
-    this.shaftTaps = levels >= 5 ? 10 : 6;
+    this.shaftTaps = levels >= 5 ? 14 : 8;
     const type = renderer.capabilities.isWebGL2 ? HalfFloatType : UnsignedByteType;
     // The HDR scene buffer is R11G11B10F where float colour buffers are renderable: half the bytes
     // per (MSAA) sample of RGBA16F, which matters on integrated GPUs, and nothing reads its alpha.
@@ -207,6 +227,14 @@ export class PostFX {
         uShaft: { value: 0 },
         uShaftTaps: { value: 8 },
         uShaftColor: shared.uSunColor,
+        uFilm: { value: 1 },
+        uBloomWarm: { value: 0.4 },
+        uHorizon: { value: 0.6 },
+        uLens: { value: 0 },
+        uFocal: { value: 0 },
+        uFocalUv: { value: new Vector2(0.5, 0.7) },
+        uGust: { value: 0 },
+        uGlitter: { value: 0 },
       },
       fragmentShader: /* glsl */ `
         uniform sampler2D tScene;
@@ -239,6 +267,14 @@ export class PostFX {
         uniform float uShaft;
         uniform float uShaftTaps;
         uniform vec3 uShaftColor;
+        uniform float uFilm;
+        uniform float uBloomWarm;
+        uniform float uHorizon;
+        uniform float uLens;
+        uniform float uFocal;
+        uniform vec2 uFocalUv;
+        uniform float uGust;
+        uniform float uGlitter;
         varying vec2 vUv;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         // A lattice hash without sin: the sine hash amplifies a one-ulp difference between two
@@ -334,38 +370,145 @@ export class PostFX {
             col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
             col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
           }
-          if (uUseBloom > 0.5) col += texture2D(tBloom, uv).rgb * uBloom;
+          // The light's own hue, at full value: what the bloom and the lit snow lean toward.
+          vec3 lightHue = uShaftColor / max(max(uShaftColor.r, uShaftColor.g), max(uShaftColor.b, 0.001));
+          if (uUseBloom > 0.5) {
+            // A warm bloom: the glow round the sun and the glints on the snow takes on the light's colour
+            // (a moon's is cool), so it reads as light in the air rather than a grey haze.
+            vec3 bl = texture2D(tBloom, uv).rgb;
+            float bL = dot(bl, vec3(0.2126, 0.7152, 0.0722));
+            col += mix(bl, bL * mix(lightHue, vec3(1.0, 0.74, 0.5), 0.3) * 1.1, uBloomWarm) * uBloom;
+          }
           // Light shafts: while a low sun is in view, warm rays fan out from it through the gaps in the
           // treeline and the ridges. Each pixel near the sun looks back along the line to it for bright
           // sky; what stands in the way (a trunk, a crest) leaves a cool gap between the rays. Taps
           // crowd toward the sun, where the light is, and the rays never fall over the rider.
+          vec2 rq = (uv - uRider + vec2(0.0, 0.06)) * vec2(uAspect, 0.62);
+          float clearRider = smoothstep(0.09, 0.17, length(rq));
           if (uShaft > 0.001) {
             vec2 toS = uSunUv - uv;
             float dS = length(toS * vec2(uAspect, 1.0));
-            if (dS < 0.62) {
+            if (dS < 0.95) {
               float j = hash(gl_FragCoord.xy);
               float acc = 0.0;
-              for (int i = 0; i < 10; i++) {
+              for (int i = 0; i < 16; i++) {
                 if (float(i) >= uShaftTaps) break;
                 float f = (float(i) + j) / uShaftTaps;
-                vec3 s = texture2D(tScene, uSunUv - toS * (f * f * 0.92)).rgb;
-                acc += smoothstep(0.55, 1.5, dot(s, vec3(0.2126, 0.7152, 0.0722)));
+                vec3 s = texture2D(tScene, uSunUv - toS * (f * f * 0.94)).rgb;
+                acc += smoothstep(0.5, 1.4, dot(s, vec3(0.2126, 0.7152, 0.0722)));
               }
               acc /= uShaftTaps;
+              // Light in the air, not on the ground: the beams are full over the sky and the far
+              // ranges, cross the distant snow and the treeline more faintly, and barely touch the near
+              // slope under the lens, so they read as depth between the rider and the light.
+              float air = mix(0.3, 1.0, smoothstep(uHorizon - 0.3, uHorizon + 0.02, uv.y));
               float ang = atan(toS.y, toS.x * uAspect);
-              float rays = 0.45 + 0.55 * vnoise(vec2(ang * 11.0, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0, 3.1));
-              float fall = exp(-dS * 3.4) * (1.0 - smoothstep(0.42, 0.62, dS));
-              vec2 rq = (uv - uRider + vec2(0.0, 0.06)) * vec2(uAspect, 0.62);
-              float clearRider = smoothstep(0.09, 0.17, length(rq));
+              float rays = 0.35 + 0.65 * vnoise(vec2(ang * 11.0 + uTime * 0.03, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0 - uTime * 0.05, 3.1));
+              float fall = (exp(-dS * 2.7) + 0.12 * exp(-dS * 0.9)) * (1.0 - smoothstep(0.6, 0.95, dS));
               vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.5);
-              col += warm * acc * rays * fall * clearRider * uShaft * 0.3;
+              col += warm * acc * rays * fall * clearRider * air * uShaft * 0.42;
             }
+          }
+          if (uLens > 0.001) {
+            // Lens character, only while the sun's disc itself is open to the lens (a peak or a trunk
+            // across it puts it out): a thin anamorphic streak through the disc and a few soft ghosts
+            // strung along the line from it through the frame's centre, faint and in the light's hue.
+            float vis = 0.0;
+            vis += dot(texture2D(tScene, uSunUv).rgb, vec3(0.2126, 0.7152, 0.0722));
+            vis += dot(texture2D(tScene, uSunUv + vec2(0.006, 0.0)).rgb, vec3(0.2126, 0.7152, 0.0722));
+            vis += dot(texture2D(tScene, uSunUv - vec2(0.006, 0.0)).rgb, vec3(0.2126, 0.7152, 0.0722));
+            vis = smoothstep(1.1, 1.9, vis / 3.0) * uLens;
+            if (vis > 0.001) {
+              vec2 ds = (uv - uSunUv) * vec2(uAspect, 1.0);
+              vec3 lensC = mix(lightHue, vec3(1.0, 0.82, 0.62), 0.4);
+              col += lensC * exp(-abs(ds.y) * 150.0) * exp(-abs(ds.x) * 1.5) * 0.16 * vis;
+              vec2 axis = vec2(0.5) - uSunUv;
+              for (int k = 0; k < 4; k++) {
+                float fk = float(k);
+                float at = k == 0 ? 0.55 : k == 1 ? 0.95 : k == 2 ? 1.4 : 1.75;
+                float rad = k == 0 ? 0.022 : k == 1 ? 0.05 : k == 2 ? 0.03 : 0.085;
+                vec3 gc = k == 0 ? vec3(1.0, 0.72, 0.42) : k == 1 ? vec3(0.66, 0.58, 1.0) : k == 2 ? vec3(1.0, 0.86, 0.6) : vec3(0.6, 0.72, 1.0);
+                float gr = length((uv - (uSunUv + axis * at * 2.0)) * vec2(uAspect, 1.0));
+                float disc = smoothstep(rad, rad * 0.55, gr) * 0.5 + exp(-pow((gr - rad) / (rad * 0.12), 2.0)) * 0.5;
+                col += gc * disc * (0.045 - fk * 0.006) * vis * clearRider;
+              }
+            }
+          }
+          if (uGlitter > 0.001) {
+            // Glittering air: diamond dust and fresh powder hanging in the light, two layers of tiny
+            // round motes drifting down at different speeds (the nearer bigger and faster), each
+            // twinkling briefly as it catches the light, most of them toward the sun.
+            float gsum = 0.0;
+            for (int L = 0; L < 2; L++) {
+              float fl = float(L);
+              float cell = 24.0 + 22.0 * fl;
+              vec2 pp = (uv / uTexel + vec2(uTime * (5.0 + 9.0 * fl), -uTime * (9.0 + 16.0 * fl))) / cell;
+              vec2 ci = floor(pp);
+              float hs = hashL(ci + fl * 17.0);
+              if (hs > 0.74) {
+                vec2 off = vec2(hashL(ci + 3.1), hashL(ci + 7.7)) * 0.7 + 0.15;
+                vec2 dd = (fract(pp) - off) * cell;
+                float tw = pow(max(sin(uTime * (1.5 + hs * 3.0) + hs * 70.0), 0.0), 6.0);
+                float sz = 0.9 + 0.8 * fl;
+                gsum += exp(-dot(dd, dd) / (sz * sz)) * tw;
+              }
+            }
+            float toward = 0.45 + 1.6 * exp(-length((uv - uSunUv) * vec2(uAspect, 1.0)) * 2.2) * step(0.001, uShaft + uLens);
+            col += mix(vec3(1.0), lightHue, 0.35) * gsum * uGlitter * toward * clearRider * 2.6;
+          }
+          if (uGust > 0.001) {
+            // Blizzard gusts: every several seconds the wind rises and sweeps curtains of snow sideways
+            // across the course, broad soft sheets with fine streaks inside them, nearer sheets bigger
+            // and faster, thickest low over the snow and thinner over the rider; at a gust's peak the
+            // whole frame whites out a little. Hazards stay dark through it (the sheets only veil).
+            float env = 0.2 + 0.8 * pow(0.5 + 0.5 * sin(uTime * 0.43 + 1.7 * sin(uTime * 0.13)), 2.0);
+            vec2 q = vec2(uv.x * uAspect, uv.y);
+            float sweep = uTime * 0.6;
+            float c1 = fbm3(vec2(q.x * 1.2 - sweep + q.y * 0.7, q.y * 2.0 + uTime * 0.05));
+            float c2 = fbm3(vec2(q.x * 2.7 - sweep * 2.1 + q.y * 1.2, q.y * 4.6 - uTime * 0.1) + 9.0);
+            float sheet = smoothstep(0.4, 0.72, c1) * 0.7 + smoothstep(0.46, 0.78, c2) * 0.6;
+            float fine = smoothstep(0.55, 0.95, vnoise(vec2(q.x * 3.0 - uTime * 2.8, q.y * 85.0)));
+            float amt = sheet * (0.7 + 0.6 * fine) * env;
+            amt *= mix(0.55, 1.0, 1.0 - smoothstep(0.25, 0.8, uv.y)) * mix(0.4, 1.0, clearRider);
+            vec3 snowC = mix(uPowLit, vec3(1.0), 0.3);
+            col = mix(col, snowC, clamp(amt, 0.0, 1.0) * 0.5 * uGust);
+            col = mix(col, uPowLit * 0.95, env * env * 0.1 * uGust);
           }
           // Grade: lift / gain, saturation, contrast around mid grey.
           col = col * uGain + uLift * (1.0 - col);
           float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l), col, uSat);
           col = (col - 0.18) * uContrast + 0.18;
+          if (uFilm > 0.0) {
+            // The filmic finish: lit values lean a touch to the light's warmth and shaded ones to the
+            // mood's own periwinkle (split toning, so the frame pops on light against shade without
+            // moving any colour role), a soft S-curve on the value, and vibrance that lifts muted
+            // colours more than already saturated ones (the vermillion, marigold and mint hold).
+            col = max(col, 0.0);
+            float lg = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            vec3 coolHue = uPowShade / max(dot(uPowShade, vec3(0.2126, 0.7152, 0.0722)), 0.05);
+            float hiK = smoothstep(0.3, 0.9, lg);
+            float loK = 1.0 - smoothstep(0.04, 0.4, lg);
+            col *= mix(vec3(1.0), mix(vec3(1.0), lightHue, 0.5), hiK * 0.1 * uFilm);
+            col *= mix(vec3(1.0), mix(vec3(1.0), coolHue, 0.5), loK * 0.16 * uFilm);
+            float lc = min(lg, 1.0);
+            float s = lc + (lc * lc * (3.0 - 2.0 * lc) - lc) * 0.38 * uFilm;
+            col *= mix(1.0, s / max(lc, 0.001), step(lg, 1.0));
+            float mx = max(col.r, max(col.g, col.b));
+            float sat = (mx - min(col.r, min(col.g, col.b))) / max(mx, 0.001);
+            float l2 = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            col = max(mix(vec3(l2), col, 1.0 + 0.25 * uFilm * (1.0 - sat)), 0.0);
+          }
+          if (uFocal > 0.001) {
+            // The mood's light pass: round its key light (the sun, the moon or the comet) the frame
+            // lifts and takes the light's hue, and away from it the values settle a step, so the eye
+            // goes to the light and then down the run to the rider. Colour roles hold: it is a gentle
+            // value shift, never a new hue on the rider or the gifts.
+            float fr = length((uv - uFocalUv) * vec2(uAspect, 1.0));
+            float lift = exp(-fr * 2.3);
+            col *= 1.0 + uFocal * 0.13 * lift * mix(vec3(1.0), lightHue, 0.55);
+            col *= 1.0 - uFocal * 0.1 * smoothstep(0.55, 1.5, fr);
+          }
           // Soft tone curve so highlights roll off instead of clipping.
           col = col / (1.0 + max(col - 0.85, 0.0) * 0.6);
           col += uFlash * 0.35;
@@ -631,25 +774,46 @@ export class PostFX {
     this.moodGrain = g.grain ?? 1;
     this.moodFoot = g.foot ?? 0;
     this.moodShafts = g.shafts ?? 0;
+    this.moodLens = g.lens ?? 0;
+    this.moodFocal = g.focal ?? 0;
+    this.focalDir = g.focalDir ?? null;
+    u.uGust.value = g.gust ?? 0;
+    u.uGlitter.value = g.glitter ?? 0;
+    u.uFilm.value = g.film ?? 1;
+    u.uBloomWarm.value = g.bloomWarm ?? 0.4;
   }
 
   /** How strong the light shafts are this frame, and where the sun sits on screen: only for a low,
    *  clear sun (shared.uDiskDir) inside or just off the frame, fading out as it climbs or leaves. */
   private aimShafts(camera: Camera): void {
     const u = this.composite.uniforms;
-    let k = this.moodShafts;
     const dir = shared.uDiskDir.value;
+    // Where the horizon straight ahead crosses the frame: the shafts fade below it, onto the near snow.
+    const e = camera.matrixWorld.elements;
+    lookProbe.set(-e[8], 0, -e[10]);
+    if (lookProbe.lengthSq() < 1e-8) lookProbe.set(0, 0, -1);
+    lookProbe.normalize();
+    const hp = sunProbe.copy(camera.position).addScaledVector(lookProbe, 1000).project(camera);
+    u.uHorizon.value = hp.y * 0.5 + 0.5;
+    const sunIn = this.onScreen(camera, dir, 0.25, u.uSunUv.value);
+    let k = this.moodShafts;
     if (k > 0) k *= 1 - Math.max(0, Math.min(1, (dir.y - 0.2) / 0.12));
-    if (k > 0) {
-      // Behind the lens, project() mirrors the point back into the frame: no shafts then.
-      const ahead = sunProbe.copy(dir).transformDirection(camera.matrixWorldInverse).z < 0 ? 1 : 0;
-      const p = sunProbe.copy(camera.position).addScaledVector(dir, 1000).project(camera);
-      const off = Math.max(Math.abs(p.x), Math.abs(p.y));
-      k *= ahead * (1 - Math.max(0, Math.min(1, (off - 1) / 0.25)));
-      u.uSunUv.value.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);
-    }
-    u.uShaft.value = k;
+    u.uShaft.value = k * sunIn;
     u.uShaftTaps.value = this.shaftTaps;
+    u.uLens.value = this.moodLens * sunIn;
+    // The focal light may sit a little further off the frame and still steer it.
+    u.uFocal.value = this.moodFocal > 0 ? this.moodFocal * this.onScreen(camera, this.focalDir ?? dir, 0.6, u.uFocalUv.value) : 0;
+  }
+
+  /** How far a sky direction is inside the frame (1 inside, fading to 0 by `margin` past the edge, 0
+   *  behind the lens), writing its uv (origin bottom left) into `uv`. */
+  private onScreen(camera: Camera, dir: Vector3, margin: number, uv: Vector2): number {
+    // Behind the lens, project() mirrors the point back into the frame.
+    if (sunProbe.copy(dir).transformDirection(camera.matrixWorldInverse).z >= 0) return 0;
+    const p = sunProbe.copy(camera.position).addScaledVector(dir, 1000).project(camera);
+    uv.set(p.x * 0.5 + 0.5, p.y * 0.5 + 0.5);
+    const off = Math.max(Math.abs(p.x), Math.abs(p.y));
+    return 1 - Math.max(0, Math.min(1, (off - 1) / margin));
   }
 
   private pass(mat: ShaderMaterial, target: WebGLRenderTarget | null): void {

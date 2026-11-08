@@ -21,6 +21,8 @@ export interface BotProfile {
   seed: number;
   sled: number;
   name: string;
+  /** Forces a fork's route (left out, the bot's own nerve decides). */
+  bold?: boolean;
 }
 
 interface Traits {
@@ -126,7 +128,8 @@ function traitsFor(skill: number, rng: Rng): Traits {
 
 /** The bot's feel for how fast the sled yaws at a given speed (the sim's turn-rate rule). */
 function turnRate(speed: number): number {
-  return 2.5 / (1 + speed / 16);
+  const r = 2.5 / (1 + speed / 16);
+  return r < 1.45 ? r : 1.45;
 }
 
 function level(steer: number): number {
@@ -275,10 +278,12 @@ class Bot {
     profile: BotProfile,
   ) {
     this.course = sim.course;
-    this.lines = new Lines(sim.course);
     this.scene = new Scene(sim.course);
     this.rng = new Rng(hash32(profile.seed, 0xb07));
     this.t = traitsFor(profile.skill, this.rng);
+    // The ambitious take a fork's risk route, so ghosts show the player it exists.
+    const bold = this.rng.chance(this.t.ambition * (0.2 + 0.8 * this.t.skill));
+    this.lines = new Lines(sim.course, profile.bold ?? bold);
     this.key = hash32(profile.seed, 0x5ee);
     this.rotP = { spinMax: 9 * sim.sled.spin * sim.mood.spin, flipRate: 6.8 * sim.sled.flip * sim.mood.spin };
     this.nextThink = this.rng.int(2, 12);
@@ -1342,12 +1347,15 @@ class Bot {
   }
 }
 
+/** Ticks a run keeps recording past the finish line: the coast through the square. */
+const COAST_TICKS = 480;
+
 /** Plays one bot run on the real Sim and also returns the finished Sim (for stats). */
 export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6): { record: RunRecord; sim: Sim } {
   const sim = new Sim({ seed, chaos, sled: profile.sled });
   const bot = new Bot(sim, profile);
   const rec = new InputRecorder();
-  while (sim.tick < maxTicks && !sim.s.crashed) {
+  while (sim.tick < maxTicks && !sim.s.crashed && !(sim.finished && sim.tick >= sim.s.finishTick + COAST_TICKS)) {
     const input = bot.input();
     rec.push(input);
     sim.step(input);

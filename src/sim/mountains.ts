@@ -35,6 +35,9 @@ export interface MountainDef {
   unlockGhosts: number;
 }
 
+/** The descent's length, metres (the sum of course.ts's STAGE_LENGTHS): difficulty arrives at the finish. */
+const DESCENT = 4500;
+
 const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
   alpine: {
     biome: 'alpine',
@@ -50,7 +53,7 @@ const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
     ventChance: 0,
     gateChance: 0,
     snowmanChance: 0.35,
-    rampDistance: 4200,
+    rampDistance: DESCENT,
   },
   glacier: {
     biome: 'glacier',
@@ -66,7 +69,7 @@ const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
     ventChance: 0,
     gateChance: 0,
     snowmanChance: 0,
-    rampDistance: 3800,
+    rampDistance: DESCENT,
   },
   volcanic: {
     biome: 'volcanic',
@@ -82,7 +85,7 @@ const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
     ventChance: 0.42,
     gateChance: 0,
     snowmanChance: 0,
-    rampDistance: 3600,
+    rampDistance: DESCENT,
   },
   blossom: {
     biome: 'blossom',
@@ -98,7 +101,7 @@ const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
     ventChance: 0,
     gateChance: 0.38,
     snowmanChance: 0,
-    rampDistance: 4000,
+    rampDistance: DESCENT,
   },
 };
 
@@ -117,6 +120,11 @@ const BIOME_BY_SEED = new Map<number, BiomeId>([
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];
+
+/** Whether a seed is one of the four named mountains (the rest are dailies). */
+export function isNamedSeed(seed: number): boolean {
+  return BIOME_BY_SEED.has(seed >>> 0);
+}
 
 export function biomeForSeed(seed: number): BiomeId {
   return BIOME_BY_SEED.get(seed >>> 0) ?? BIOMES[hash32(seed, 0xb10e) % BIOMES.length];

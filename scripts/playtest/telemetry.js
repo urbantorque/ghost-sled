@@ -25,7 +25,7 @@
 //   lean        true drops the per-run call and beat logs (calls, beatLog) from the output
 // PLAN STEP
 //   { skill, runs, fresh, m, tier, mood, event, demo }
-//   skill  'novice' | 'mid' | 'expert' | 'line' | 'stunt'
+//   skill  'clumsy' | 'novice' | 'mid' | 'expert' | 'line' | 'stunt'
 //   runs   how many runs this step rides
 //   fresh  true: clear the save and reload before every run of the step. false: only the first run of
 //          the step clears the save and loads the page; the rest go through Run Again (window.__gs.runAgain)
@@ -35,6 +35,9 @@
 // PILOTS
 // The pilot runs inside the page, once per sim tick, as the run's input source (analog steering like
 // the fairness test's driver): round trips through page.evaluate were too slow to hold a line.
+// clumsy is a first-timer on a keyboard, the same pilot as scripts/playtest/lab.ts: it reacts late to the
+// corridor rather than the safe line, holds keys far too long, overcorrects, mashes the action and sometimes
+// holds a key for 2 s for no reason, through src/game/input.ts's key ramp and quantiser.
 // novice, mid, expert and line are frozen (before/after comparability across builds):
 //   novice: wobbly line, slow hands, lapses, stray action taps, sloppy stomps, no kickers or tricks
 //   mid:    drafts, spins long flights, short drifts on long bends, stomps with timing noise (its kicker
@@ -69,6 +72,13 @@
 //     { shown, muted }, banners { samples, two, overRow } (100 ms DOM samples with two banners drawn at
 //     once, or a banner drawn over the race row), pilot (the stunt pilot's own counters).
 async (page) => {
+  // The rates a first run's riders rode at: the middle of them, and how much of the run they sat at a limit.
+  const rateStats = (xs) => {
+    if (!xs || !xs.length) return null;
+    const s = xs.slice().sort((a, b) => a - b);
+    const at = (q) => +s[Math.floor(q * (s.length - 1))].toFixed(2);
+    return { p5: at(0.05), p50: at(0.5), p95: at(0.95), atMin: +(xs.filter((v) => v <= 0.351).length / xs.length).toFixed(2), atMax: +(xs.filter((v) => v >= 1.119).length / xs.length).toFixed(2) };
+  };
   const defaults = {
     label: 'run',
     plan: [
@@ -412,7 +422,11 @@ async (page) => {
       k.maxZ = sim.maxZ;
       k.gifts = sim.gifts;
       k.giftScore = sim.giftScore;
-      for (const f of ['prevAction', 'coyote', 'coyoteRamp', 'airPressed', 'ventCooldown']) if (f in sim) k[f] = sim[f];
+      for (const f of ['prevAction', 'coyote', 'coyoteRamp', 'airPressed', 'ventCooldown', 'rail', 'railU', 'railTicks', 'tumbleCause', 'finishBonus']) if (f in sim) k[f] = sim[f];
+      if (k.stageTicks && sim.stageTicks) {
+        k.stageTicks.length = 0;
+        k.stageTicks.push(...sim.stageTicks);
+      }
       if (sim.lateTricks) k.lateTricks = Object.assign({}, sim.lateTricks);
       const a = k.combo;
       const b = sim.combo;
@@ -868,6 +882,38 @@ async (page) => {
       const run = app.run;
       const sim = run.sim;
       const c = sim.course;
+      const C = { key: 0, keyUntil: 0, nextThink: 0.4 + rnd() * 0.5, act: false, actUntil: 0, nextAct: 1 + rnd() * 3, keySteer: 0, level: 4 };
+      const clumsy = () => {
+        const s = sim.s;
+        const T = sim.tick / 60;
+        if (T >= C.keyUntil) C.key = 0;
+        if (T >= C.nextThink && !s.crashed) {
+          C.nextThink = T + 0.35 + rnd() * 0.45;
+          const look = s.z + 9 + rnd() * 6;
+          const off = c.centerX(look) + (rnd() - 0.5) * 5 - s.x;
+          if (C.key === 0) {
+            if (rnd() < 0.12) {
+              C.key = rnd() < 0.5 ? 1 : -1;
+              C.keyUntil = T + 1.6 + rnd() * 0.8;
+            } else if (Math.abs(off) > 2.2) {
+              C.key = off > 0 ? 1 : -1;
+              C.keyUntil = T + 0.5 + rnd() * 1.1;
+            }
+          }
+        }
+        if (T >= C.nextAct) {
+          C.nextAct = T + 1.5 + rnd() * 4;
+          C.act = true;
+          C.actUntil = T + 0.2 + rnd() * 0.9;
+        }
+        if (T >= C.actUntil) C.act = false;
+        if (C.key === 0) C.keySteer = 0;
+        else if (C.keySteer * C.key <= 0) C.keySteer = C.key * 0.35;
+        else C.keySteer = C.key * Math.min(1, Math.abs(C.keySteer) + 0.055);
+        const raw = C.keySteer * 4;
+        if (Math.abs(raw - (C.level - 4)) > 0.62) C.level = 4 + Math.round(raw);
+        return { steer: C.level, action: C.act };
+      };
       const P = { airStart: -1, flight: 0, spin: 0, stompTry: false, stompBias: 0, away: 0, tap: 0, drift: 0, wob: rnd() * 6.28, lvl: 4, nextThink: 0, wasAir: false };
       const timeToLand = (s) => {
         let y = s.y, vy = s.vy, x = s.x, z = s.z, t = 0;
@@ -1055,7 +1101,7 @@ async (page) => {
         if (F.metOk) for (const id of app.missionsPopped) if (!(id in F.met)) F.met[id] = +(sim.tick / 60).toFixed(2);
       };
       tele.trace = [];
-      const source = stunt ? stunt.sample : pilot;
+      const source = stunt ? stunt.sample : skill === 'clumsy' ? clumsy : pilot;
       run.input = { sample: () => { try { tickHook(); } catch {} const o = source(); const s = sim.s; tele.trace.push([sim.tick, +s.z.toFixed(1), +s.x.toFixed(2), s.grounded ? 1 : 0, +s.airYaw.toFixed(2), +s.airPitch.toFixed(2), o.steer, o.action ? 1 : 0, +(s.y - c.ground(s.x, s.z)).toFixed(2)]); if (tele.trace.length > 200) tele.trace.shift(); return o; } };
 
       // Race-live samples every 0.25 s and the crash snapshot, polled from the node side.
@@ -1073,7 +1119,8 @@ async (page) => {
           });
           tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, gifts: (r.sim.gifts || 0) + (app.passBonus || 0), passBonus: app.passBonus || 0, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
         }
-        return { phase: app.phase, crashed: s.crashed, t: T };
+        if (s.finished && !tele.finish) tele.finish = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score };
+        return { phase: app.phase, crashed: s.crashed, finished: !!s.finished, t: T };
       };
       const sampleLive = () => {
         const r = app.run;
@@ -1091,6 +1138,9 @@ async (page) => {
           nearest = Math.min(nearest, Math.abs(gap));
         }
         tele.live.push([+T.toFixed(2), near, riding, nearest === 1e9 ? -1 : +nearest.toFixed(1)]);
+        // A first run's riders read you (pacer.ts): the rates they ride at, and your place as it stands.
+        for (const t of app.ghosts.tracks) if (t.entry.reads) (tele.rates = tele.rates || []).push(t.rate);
+        if (app.frameStandings) tele.place = [app.frameStandings.rank, app.frameStandings.of];
         if (tele.firstPassAt === null && app.passedThisRun && app.passedThisRun.size > 0) tele.firstPassAt = +T.toFixed(2);
         if (ahead150 > 0) { F.lastAheadNear = +T.toFixed(2); F.hadAheadNear = true; }
         F.lastLiveT = +T.toFixed(2);
@@ -1120,7 +1170,7 @@ async (page) => {
     const t0 = Date.now();
     while (Date.now() - t0 < maxMs) {
       const d = await page.evaluate(() => window.__poll());
-      if (d.crashed) break;
+      if (d.crashed || d.finished) break;
       if (d.t > cfg.maxSeconds) break;
       await page.waitForTimeout(400);
     }
@@ -1185,7 +1235,7 @@ async (page) => {
     return {
       ...extra,
       seconds: +runT.toFixed(1),
-      distance: tele.crash ? tele.crash.distance : null,
+      distance: tele.crash ? tele.crash.distance : tele.finish ? tele.finish.distance : null,
       score: tele.crash ? tele.crash.score : null,
       cause: tele.crash ? tele.crash.cause : 'timeout',
       gifts: tele.crash ? tele.crash.gifts : null,
@@ -1207,6 +1257,8 @@ async (page) => {
       liveNearAtCrash: tele.crash ? tele.crash.liveNear : null,
       ridingAtCrash: tele.crash ? tele.crash.riding : null,
       raceLiveFraction: +liveFrac.toFixed(2),
+      place: tele.place ?? null,
+      rates: rateStats(tele.rates),
       intensity: { mean: +meanI.toFixed(3), at10: iAt(10), at30: iAt(30), at60: iAt(60), max: I.length ? Math.max(...I.map((v) => v[1])) : 0 },
       crashField: tele.crash ? tele.crash.ghosts : null,
       fun,
@@ -1350,6 +1402,8 @@ async (page) => {
         await page.goto(BASE + `?platform=mock&debug&tier=${tier}&m=${step.m ?? 0}&autoride=1${demo}${dev}`);
         await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run', null, { timeout: 30000 });
       } else {
+        // The results open after the crash beat or the coast through the town.
+        await page.waitForFunction(() => window.__gs.phase === 'results', null, { timeout: 30000, polling: 100 }).catch(() => {});
         await page.evaluate(() => window.__gs.runAgain());
         await page.waitForFunction(() => window.__gs.phase === 'run', null, { timeout: 30000 });
       }

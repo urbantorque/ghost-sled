@@ -234,7 +234,8 @@ Every place where I replaced, extended or interpreted the brief, and why.
     Your own best is gold-white glass, and it is always "Your best", never your name (the
     tag, the crash marker, the rival pill and every banner: "Passed Your best", "Your best passed
     you").
-38. **The finishing order is by distance, and the results speak only in its terms.** Every row shows
+38. **The finishing order is by distance, and the results speak only in its terms.** (Replaced in the
+    wow pass: the race is by time, then distance. What it says of stamps and the list still stands.) Every row shows
     how far that run went, and your place is one more than the ghosts that went further. A
     passes-based order read as fair but disagreed with the metres printed on each row. The header
     reads "Beat N of M", only the rows you finished ahead of carry a Beat stamp, and one line under
@@ -520,7 +521,8 @@ Every place where I replaced, extended or interpreted the brief, and why.
     N', with a crater, ring, bell and hitstop that grow. A sketchy landing, a crash or a revive breaks
     it ('Streak broken'); a hop under 0.3 s neither counts nor breaks. A single perfect reads
     'PERFECT LANDING' over 'STOMP +250'.
-77. **The field is built around where you crash.** The anchor A is the larger of the median of your
+77. **The field is built around where you crash.** (Replaced in the wow pass: it is built around your
+    predicted finish time.) The anchor A is the larger of the median of your
     last five run ends on that mountain and 0.7 of the last one (700 m with no runs). An opener at
     0.62A, two pack ghosts at 0.85A and 1.05A, a pace rider from max(1.7A, A + 250, 1,500 m) that
     averaged 23 m/s or more, and a stretch rider past 2.2A. A fresh Pinecrest run calls 'Chase
@@ -735,3 +737,624 @@ Every place where I replaced, extended or interpreted the brief, and why.
     look up a section and blend twelve fields on every call, and the terrain asks for a whole row of
     x at one z (and its slope at z + 0.25). A two-entry memo per function answers most calls; the
     values are the same, so the sim and every replay are unchanged.
+110. **The horizon is a real mountain panorama.** Three faceted ranges and a hero peak per biome
+    (Pinecrest's snow summit, Frostfang's ice fang, Ember Peak's smoking volcano, Sakura Ridge's
+    cone) replace the three paper ridge ribbons, in one draw: a polar grid raised in the vertex
+    shader with ridged noise stretched round the ring, so crests read side-on rather than as a field
+    of spires. The panorama has its own key light swung off the sun's bearing, so faces toward the
+    lens split into lit and shade instead of all being backlit. The near ranges part down the fall
+    line to keep the sky over the rider clear, crests under the sun stop below the disc, and a sea of
+    clouds 330 m below the lens is painted by one function in both the dome and the ranges' feet,
+    so the two never show a seam. Alpenglow climbs the peaks over the sun's journey. Low draws one
+    range and the hero. Net draw calls fall by two on every tier.
+111. **The middle distance is built, and it passes by.** A world-anchored, streamed mid-ground
+    (`midground.ts`) carries the mountain on from the terrain's edge to about 1.15 km: one side falls
+    to a stepped valley floor, the other climbs into a forested, craggy flank. From the chase lens
+    the banks hide everything below their crest, so the climbing side is what reads while riding and
+    hamlets sit on the flanks; valley villages (church and frozen lake, research huts and a mast,
+    stone lodges by a lava river, a pagoda town) show from the title, jumps and the crash shots. Its
+    ends and outer edge sink into the haze in the vertex shader, since fully fogged geometry still
+    cuts a silhouette from a bluer sky. Windows and lamps light from dusk. +3 draw calls on High
+    and Medium (+4 at night), +1 on Low (shoulders only).
+112. **The run passes set pieces, and the crowd reacts.** Every 500 to 900 m the course runs under,
+    beside or past one big place (`landmarks.ts`): gates, footbridges, ice and basalt arches and a
+    torii over the run; huts, towers, a ski jump, frozen falls, an observatory, guardians and a pagoda
+    beside it. A span's lowest point clears by 6 m the highest air any sled could reach under it (every
+    pop, kicker and vent up to 380 m up the slope flown at the fastest speed there, in the mood's
+    gravity); where that needs more than 56 m it becomes a bank piece. Everything else stands 9.2 m
+    or more past the corridor edge, and a test checks every vertex on all four mountains. The forest
+    keeps each piece's ground and its crowd's rows clear (`Props.siteClearings`). Toy spectators line
+    the banks at gates and huts, turn to follow the rider, and cheer the beats made near them: the
+    world answers the player without a sim change.
+113. **The mountain is inhabited.** `life.ts` adds six instanced systems, one draw each: birds that
+    wheel and scatter from a stomp or a crash, chairs running the dressing's real lift cables, deer,
+    ibex, hares and foxes at the treeline that only ever bolt away from the run, skiers and a night
+    snowcat on the mid-ground's flanks, chimney smoke from the cabins and the hamlets, flags and
+    lantern strings, and diamond dust in the sunbeams. Motion is in vertex shaders off the shared
+    clock; the CPU walks about 22 figure matrices a frame. Low keeps the birds.
+114. **The camera directs the big moments.** A flight predicted at 1 s or more pulls the lens out, up
+    and to the open side (full at 1.9 s) so the valley opens under the rider, keeps the landing spot
+    in frame, and is home 0.35 s before touchdown so the stomp is judged from the familiar framing.
+    Speed reads above 15 m/s through the FOV, a speed-scaled carve tilt, a low lens into fast carves,
+    a fine rumble from 24 m/s (kept apart from the beat shakes so their sizes hold) and flurries
+    skimming the snow. A hard carve at speed throws a real rooster tail; clean landings slump heavy
+    billows to the sides that travel with the sled. The desktop title cranes from a wide shot of the
+    world into the hero shot. Reduced motion turns all the new motion off.
+115. **The near world is painted, not plain.** Drift dunes and pillowed treeline mounds exist only
+    past FOREST_LIMIT and never lower the snow, so the sim's ground and every placed prop stay honest;
+    everything inside the corridor (a packed centre lane with old runner tracks, sastrugi patches,
+    broad warm and cool tone patches, round pin-point glints) is shader-only. Pines are drooping,
+    scalloped bough tiers with ragged snow caps and a tree well, the hazard pine included, about 230
+    triangles each. A low mist settles on the course floor ahead, the fog warms toward the sun, hazards
+    darken at their foot, and a gentle filmic split tone separates lit snow from shade.
+116. **A shadow's softness is graded, not switched.** The snow judged how far a shadow's caster stood
+    by asking the shadow map once, 7 m nearer the light; on a lone caster's long shadow that flipped
+    the penumbra and the thinning at one line, a pale band cut square across it. It now asks at four
+    steps between 1.5 and 9.5 m, dithered per pixel, for the same number of reads.
+117. **The banks open now and then.** Stretches of 120 to 300 m (about one or two a kilometre, the
+    first by 600 m, preferring cruise, benches and switchbacks, 120 m clear of every set piece's ends
+    in every mood and clear of lift lines) are overlooks. On the valley side the forest stands back, a
+    timber rail marks the forest limit, a snow shelf runs to a cornice, and past edge excess 25 m the
+    terrain rolls over and falls about 100 m; the mid-ground carries the fall on, with a lower far
+    wall. One in five is a ridge, open both ways. Nothing inside 25 m moves, so the corridor, the banks
+    and the dressing stand on the sim's ground. The sim's own bank is 9.5 m high at the forest limit,
+    so from the chase lens what opens is the sky over the rail and the long view down the fall line,
+    not the valley floor; the lens leans 0.12 rad toward the open side, with a 3.2 s reveal as it
+    opens. Fleeing animals pull up at the lip. The plan does not depend on the mood, so a mood never
+    rebuilds the terrain.
+118. **The course changes character: villages to ride through, and runs under a roof.** Every 1.5 to
+    2.5 km the run becomes a village's street for 150 to 250 m (`town.ts`): houses, shops, a church or
+    temple and a hotel face the run from 13.6 m past its edge, a dense crowd lines both crests and does
+    the wave, and strings and banners hang across from tall masts. Anything over the run clears the
+    highest air there by 6 m, from `airProfile`, which bins the same flights as `airCeiling` every 2 m.
+    Kickers fly 30 to 70 m and bump pops about 20 m, so masts stand tall and an enclosed run (gallery,
+    ice tunnel, lava tunnel, torii corridor) can only go where nothing launches under it: about once
+    per 7 km per mountain, the rule kept rather than the frequency. Inside, the post darkens the
+    frame's edges, strobes past the pillars and flashes on the way out. The figure was cut to 310
+    triangles to pay for the crowd. Villages plan round lift lines, since a tower cannot be dropped
+    from a line; enclosures need not (they stand within 23 m, and the one overlap in 12 km of the
+    mountains is a lift 37 m out).
+119. **One gate keeps the dressing out of set pieces.** `Props.siteKeep` (set pieces) is ground nothing
+    stands on, `Props.siteClearings` (overlooks) only keeps the forest back, so a shelf keeps its hut.
+    The dresser checks each piece by its position at one `put`, not in its four placement passes, and a
+    cabin dropped there drops its chimney smoke too (`SetPieces.keeps`). Clearings now apply on Low,
+    which is what let overlooks open there.
+120. **The world is heard.** A soundscape reads the world each run frame (`World.listenSources`, then
+    `listen.ts`) as a few numbers: the nearest crowd, flock, lift line and village, how exposed and how
+    enclosed the rider is, the camera's vista and an overlook's openness. Those move a fixed graph
+    built once and unplugged while silent; places are keyed by kind, so a new kind needs one line.
+    Every one-shot is a seeded take synthesized in JS in sliced steps and played as one buffer source
+    into eight long-lived lanes. A cruise costs about 1.2 nodes/s on High and 0.1 on Low, which hears
+    only birds, wind and the mood's bed. Alone it sits about 10 dB under the band; the mix rises 0.5 dB
+    on average and up to 2 dB at a crowd, with peaks under -7.5 dBFS. Its node budget is tested on the
+    mean of seeded cruises: the ambient calls are random, and one sample failed one full run in five.
+121. **The moments the player watches every second are made, not only marked.** A gift is a rounded,
+    striped, foil-glinting box with a satin ribbon painted into its wrap; a pickup squashes and pops
+    with confetti, coins and a flare, and gifts ahead glint so a line reads as a trail. A pass shatters
+    the ghost into glass petals that burst level with the rider and fall back, never above the lens or
+    over the rider (C10). The ghost you draft lays its slipstream on the snow as a sheet with chevrons,
+    in the existing runner-line mesh. A stomp's shockwave lives in the crater decal. The rider's weight
+    shift, absorption, balance and tuck run on springs on the CPU. Draw calls are unchanged at rest; the
+    pop meshes draw only while popping.
+122. **The air is alive, and every mood has its own light.** The dome paints crepuscular rays, clouds
+    that change as they drift, a 22 degree halo with sun dogs (Glass Ice, and round the moon in Haunted
+    Hollow), shooting stars, a richer aurora and a bigger comet, all in its existing pass. The panorama
+    takes sweeping cloud shadows and, every half minute or so, a distant avalanche down the hero's
+    face; the plume quad flies a spindrift banner off the other summits and forks with lightning at
+    night on Ember. One world-anchored draw of mist lies in the valleys below the run. A lens streak and
+    ghosts show only while the sun's disc is open to the lens. Blizzard gusts sweep curtains of snow,
+    Powder Day and Glass Ice glitter, and a per-mood light pass lifts the frame round its key light, as
+    a value shift only, so the colour roles hold.
+123. **Far things cost less, and the throttled chase stays where it was.** Past three chunks (two on
+    Low) the forest and gifts draw far builds, wall and far-row trees share one batch, variant batches
+    narrow their draw range to the picks in view, and signature bank pieces became their own batch. It
+    pays for the round's additions on triangles but not for the 4x-throttled avalanche chase, whose
+    cost is mostly per-draw CPU and the mirror. The auto tier's windows are now time-based and a tier
+    left for running long is not returned to, so a machine that cannot carry the new world leaves High
+    sooner (README has the measured figures).
+124. **Ash is for Ember's own dusk.** Falling ash ran in every mood on Ember Peak, and against Glass
+    Ice's bright sky the dark flakes read as dirt on the lens. It now falls in Clear Skies and Comet
+    Night, a third as dense and paler; Glass Ice gets diamond dust there.
+
+## Made in the wow pass
+
+125. **The descent is written, not dealt.** A course was a deck of sections drawn at random for as long
+    as a run lasted. It is now a fixed 4.5 km in three stages, each mountain's written as three acts of
+    beats (`SCRIPTS`). The seed picks alternatives, shuffles beats inside a block and draws lengths inside
+    each kind's range, so every course keeps its planned rhythm and no two dailies match; a daily also
+    deals its biome's three acts in the seed's order. Beats that overflow a stage move to the next, and
+    a stage that falls short takes the next stage's first beat or a filler, so a section boundary always
+    lands on a stage line (over 200 dailies). A descent is retried until it meets `legalPair` and holds
+    its signature kinds; the authored order always does. The first minute is the same everywhere: the
+    0.5 start ramp, a wide run-in with a swinging gift line, a small kicker at about 300 m, a first leap
+    at 590 to 670 m, a first place by 900. `rampDistance` is now the finish.
+126. **A section carries its own numbers, and the line blends in metres.** Sections now hold their own
+    shape and blend, so a ravine can come in over 90 m and a body can be measured from z0 + blend. `pin`
+    says how much of the plain corridor a section replaces, which makes authored widths exact and lets
+    them pass the old hs + 3 cap (only the lake needs to). `split` and `span` stayed shares, but the safe
+    line reads them as metres (`shift`, `reach`) worked out once per section: as shares of a width that
+    was itself blending they multiplied into a bend at the blend's end, 0.0239 against the 0.018 limit.
+    The limit is unchanged, and steep ground now has a tighter one of 0.0135.
+127. **A ledge is one thing, in baseY.** A leap's cliff, a terrace's step and a lake's outlet are the
+    same piece: a brow, a face and what the ground does next. The ground stays down because each section
+    carries the metres fallen above it. `terrain.ts` needed no change: a ledge adds a Drop of depth 0, which
+    costs `ground` nothing and asks the terrain for its fine rows at the lip. (`landmarks.ts` and the bot
+    read that drop too, and both are right to: it is a drop.)
+128. **A leap's landing cannot be soft, so it is steep.** Nothing lands softer than a free fall off the
+    cliff, sqrt(2 g h): 15 m/s off 12 m, 22 off 25, whatever the shape below. What a shape can do is keep
+    the ground falling under the sled and hold every speed near that floor. A lip slope of 0.27 and a face
+    that steepens from about 0.3 to 0.8 over 100 m does: at 18 to 44 m/s every landing is on 0.35 to 0.8
+    of slope, at no worse than that floor plus 1 m/s. It suits the sim, which pays speed for a landing on a
+    falling slope. It is expensive in height, about 65 m a leap and 200 m a descent, and in length: a
+    leap's section runs 220 m past the lip, the 44 m/s flight coming down at about 175 m. Cliffs start at
+    13.5 m because 12.6 m gave 1.98 s at 28 m/s on the real sim, and the promise is 2.
+129. **A flight needs a straight line under it.** A flight is straight, and a line bending by only 0.0005
+    is 9 m away by the end of 190 m. Leaps and terraces freeze the bend's phase and drop the line's own
+    wander, so a sled comes down on the line (within 1.5 m at every speed). An on-line kicker only stands
+    where the line holds within 3.6 m of its flight. Landing zones stay clear 40 m past the section, since
+    a sled that spun drifts about 10 m in the air and lands wide at full speed.
+130. **Kickers fly by what they are for.** A ramp's lift is speed times face slope, so at the new cruise
+    the faces were cut from their height. Each face is now solved for the flight it should give at 30 m/s,
+    over the real ground (ripple at the lip alone moves a flight by 9 m) and a tenth long, since a real
+    sled sheds speed on the face. On the sim they land 40 to 66 m out, and landing boxes run 1.5 times the
+    flight. Most riders never jumped because every kicker stood off the line, so the script now puts them
+    on it where the landing runs clear, ravines and fork channels included. Moguls and kickers keep apart:
+    a field that landed on a kicker threw the sled before the lip, and flew it 77 m.
+131. **The fork's risk route is ice.** Two channels 9 m either side of a 3.2 m ridge. `altX` is the line
+    `safeX` did not take; it has an ice strip with drag 0.25, gold gifts and two or three obstacles, no
+    promised lane, and saves 1.6 to 1.9 s from 30 m/s (by the sim's drag, on the four mountains). `backX`
+    names the channel a sled belongs to and equals `centerX` outside a fork. Steeper troughs were
+    the other idea, but a trough has to climb back out to rejoin and pays nothing.
+132. **Places keep the world out, and open ground gets it.** Ravines have no obstacles: their walls are
+    the hazard, and a rock at a wall's foot kills the sled the wall has just turned back. What used to
+    spread over a whole course now gathers on the quarter that is open. Vents also take ravines and forks,
+    and every bowl has an authored mogul field. Scattered drops all but went: a dip with 120 m of recovery
+    rarely fits, and the ledges have taken over their job. Ember holds only a couple of off-line kickers,
+    its open ground being scarce, and its 21 vents stand in for them.
+133. **Rails go where a rider is.** Along streets and tree runs and by lakes, 3.4 to 4.6 m off the line.
+    Frostfang and Ember have too little of that, so a stage short of them takes open sections next and
+    then bridges, ravines, tunnels and forks: a bridge's rail is a grindable parapet. Rails are never
+    colliders, so they only keep obstacles out of their own footprint.
+134. **`shapeAt` has two entries.** `ground()` now reads the shape on every call, and the terrain's rows
+    alternate z and z + 0.25, which missed a one-entry memo every time: `ground()` cost 55% more.
+    Two entries, and a body that needs no copying, bring it back level with the old cost.
+135. **Every mountain has its own Clear Skies, and the chaos moods never see them.** Pinecrest, Frostfang
+    and Sakura were one lilac-pink sunset, with the sun low and dead centre; Ember was a redder copy.
+    Each now has its own light, palette and sun bearing: a bright ski day, polar blue hour, under ash, a
+    spring morning (ART.md section 7). They live in `clearSkies()`, over `biomeBase()` rather than in
+    it, because every chaos mood is built on `biomeBase()` and keeps whatever it does not set: repainting
+    the base would have repainted all six. Every new field defaults to the old look. All 24 mountain and
+    mood palettes were diffed against the pre-pass build, field by field, and none changed.
+136. **The journey is one table, per mountain, in metres.** The shared ALPENGLOW and BLUE_HOUR stops are
+    gone, with their offsets and the 3.4 and 17 degree floors hard-coded beside them. `JOURNEY` in
+    palette.ts holds every stop of every mountain, each a `from`, an `at` and an edit on the stop before,
+    so retuning for a new run length touches one table. Stops place the sun absolutely, which lets a sun
+    rise (Sakura) as well as set. The floor is now a test: the key light stays at 17 degrees or more at
+    every stop (decision 27). The soundscape's dusk reads the same table (`journeyDusk`) instead of
+    repeating its old distances, so the bell keeps following the light. This replaces the distances in
+    decision 103; its rules stand (keyed off distance, re-blended only while the light moves, the title
+    at the start, chaos moods untouched).
+137. **Clear Skies pins the hero.** The hero stood opposite the sun, chosen from the sun's side every
+    time the palette was applied, so a sun crossing the fall line would have thrown the mountain across
+    the sky mid-run. `massif.heroAz` now pins it per mountain. It is 0 in the chaos moods, which keep the
+    old rule.
+138. **The silhouette belongs to the mountain, in every mood.** Each hero was reshaped (a crown of three
+    summits, a needle that curves over like a tooth, a wide cone with its rim blown out toward the lens,
+    one long-skirted cone) and each mountain's ranges got their own height, sharpness and grain, so
+    Frostfang stands in needles and Sakura's cone stands alone over soft hills. This is the one thing the
+    chaos moods do pick up: a mountain does not change shape with the weather. Their colours and light
+    stay exactly as they were.
+139. **The horizon band is not the horizon.** A lemon `skyHorizon` turned Frostfang's far ranges and its
+    glazed corridor olive-grey, because that colour also feeds the haze, the sea of clouds and the ice's
+    sky mirror. The bright band low on the sky is now its own `skyBand`, so the lemon is in the sky alone.
+    Likewise `sunCore` and `sunTint` colour the disc and its corona, because Ember's snow takes the key
+    light's full colour: an orange key turned the snow to sand, so the key stays close to neutral and the
+    orange is in the disc and the sky. Warmth in the sky, ash on the ground, and the vermillion and the
+    marigold still stand out.
+140. **The smoke deck is part of the dome.** Ember's overcast is painted in the sky's existing pass, with
+    no new draw on any tier: billows on a ceiling, lit from below toward the volcano, costing two noise
+    samples on Low and six on Medium and High, and only while `deck.k` is over 0. Clear Skies keeps
+    `massif.lava` under the 0.75 that wakes the night moods' lightning, so nothing strobes on a plain
+    run. Under reduced motion the deck and Frostfang's aurora hold still on Clear Skies (`Sky.setStill`):
+    they are decorative loops this pass brought to plain runs. The chaos moods keep their own motion.
+141. **Late light has to reach baked colours some other way.** Props and the mid-ground bake their start
+    colours and take the journey only through shared uniforms, so a stop must never recolour `tall` or
+    `low`: Frostfang's night dims hazards with `hazardDim` and cools its key light so the town's walls go
+    down with the sky. Frostfang's `stars` start at 0.55 because the set pieces read over 0.5 as a night
+    palette, which lights its windows from the first frame of its blue hour. Sakura's `snowDeep` leans
+    pink because shaded props take that tint, and periwinkle turned shaded blossom to a dusty mauve. Its
+    late sky leans blue because a greener one came close enough to the ghosts' mint to lose them in the
+    air; a test now holds every sky at every stop clear of mint.
+142. **A hero stops at the sea of clouds.** The panorama draws before the world, so a wide skirt under the
+    sea is shaded and then painted over. Widening Sakura's cone to a 4.3 km radius brought that skirt
+    within 100 m of the lens and cost about 11% at 2560x1440. `HERO_REACH` now ends each patch just under
+    the sea, near the ranges' own feet; the silhouette does not change, the rows left sit closer
+    together, and Sakura matched the old build's best again. The one net draw this pass adds is
+    Frostfang's village halos, which its low sun lights from the start (Medium and High, and only with
+    a village in view). Two lessons for reading these numbers: 60 fps is the vsync ceiling, so compare
+    cost off it and interleaved (A, B, B, A), because a before-then-after run measured a 25% drop on
+    every mountain that was not there; and compare draw calls at the same distance from a clean save,
+    because two builds on two ports keep different saves and so race different ghosts.
+143. **A run is a descent with a goal, and the race is by time (replaces decision 38).** Finish it,
+    or wreck trying. Finishers rank by finish time, then riders who did not finish rank by distance.
+    Distance is max z, so everyone over the line ties on it: `standing.ts` is the one order, and every
+    comparator, row and line of copy goes through it. A row reads in its own terms ("2:31.4" for a
+    finisher, "3,212 m" for the rest), and a margin is the difference of the two rows as they read
+    ("1.2 s", "85 m"). A time and a distance share no unit, so a finisher over a rider who did not
+    finish is "to the finish" ("Mila beat you to the finish", "1,288 m short of the finish"), never an
+    invented number. A dead heat gives nobody the lead. The rest of decision 38 stands: Beat stamps
+    on the rows you finished ahead of, a Next tag, the windowed list, no Passed stamps.
+144. **A finish is not a crash.** The `finish` beat ends the race and opens its own door
+    (`crossedLine`), never `crashed()`: no crash beat, no revive, no cause. The sim ticks on through the
+    coast (phase 'finished'), the banner holds the time and place, and the results open 3 s later, or
+    on a tap from 500 ms in (so a press held over from the last jump never skips by accident). The run
+    is saved on the line and again when the card opens, with the coast in it. A live record's header
+    carries the finish in `ticks` (its log runs on), so a link says when its rider finished without a
+    replay. The finished card leads with the time, then place, medal, your best and the style score,
+    then the splits; a wreck keeps its card.
+145. **A ghost over the line has left the race, and it won.** It stays ahead wherever it stopped, and
+    rolling past where it stands is no pass: no gifts, no unlock credit, no choir, no slipstream, no
+    rival pill, no grudge settled. A ghost reaching the line mid duel is a lost duel ("Mila finished
+    first"), where a wreck is a won one. Your place on the line counts only the ghosts already over it,
+    so the coast cannot change it. The worker reports `finishTick` and `stageTicks`, and `crashTick`
+    stays the only way into the wreck path. Graveyards take crashes only: a line of finishers is no
+    place of the dead.
+146. **The field is built around when you would finish (replaces decision 77).** The anchor is your
+    predicted time: the median of your last five, a finish or a pace carried to the line, or 1.1 times
+    the last when that is quicker; a new mountain reads 1.1 times your others; with no runs, a mid-pack
+    time from the pool. An opener in 1.05 to 1.22 A, two pack ghosts around you, pace in 0.88 to
+    0.97 A, a stretch rider in 0.75 to 0.9 A. Spacing is 1 s on the clock, and 25 m only between two
+    who crashed: spaced by distance, every finisher looks like one rider. Pace and stretch no longer
+    need to be long runners: on a course with a line, a time says what a distance could not. The
+    pool needs `finishTick`: the bot rides on past the line, so a finisher's `ticks` is no finish time.
+147. **Your best is your best run in race order.** It is the ghost you race, and it is measured
+    against the best you started with, so saving a run twice settles the same way. A finish beats
+    any distance, on any score, and a dead heat keeps the higher score. Your highest style score is
+    kept apart (`topScore`), so 'New best score' still means what it says. A best that finished is a
+    time: its band, 'Best in 240 m' and 'New ground' stand down.
+148. **Medals are times, and every one stays reachable.** Bronze beats 60% of the pool's way down,
+    silver 30%, gold 10%, on predicted times, and only a finish earns one. Each sits at least 1 s
+    under the last, so a pool of ties still has three to reach: on distance, finishers tying set
+    silver and gold past the end of the course. Every mountain's finish shows its medal; the Daily
+    alone puts it on the save.
+149. **A new course is a clean break that erases nothing.** A best or grudge whose replay cannot ride
+    moves, exactly as it was, to `archive` (never pruned, never rewritten, idempotent; a second record
+    under a taken key gets `key#2`). The best's slot clears, so a stale score blocks nothing, and the
+    card shows 'Old best' until a new one exists. A grudge keeps its name and tally and claims no
+    rematch, and electing over it keeps its tally. `runDists` stays on the save and feeds nothing:
+    predicted times live in `runTimes`. Daily medal, streak and last day, gifts, sleds, stats, passes and
+    missions are untouched. This supersedes the part of decision 26 that kept a stale score in place.
+150. **An old challenge link is a target, not an error.** Bytes 0 to 27 of a record keep their layout,
+    so a header-only reader still says whose run it was, where and how far. It opens on its mountain
+    with 'Mila rode 2,340 m on the old Pinecrest. Beat it.', a friend band at that distance (clamped to
+    the finish) and `friendBeaten` when you pass it. No toast, and no ghost, so never a rematch.
+151. **A wipeout is one short line.** 'Wipeout' on the free stretch, 'Wipeout. 1 left' after it, and
+    pips from the moment the first is spent (until then there is nothing to count). No banner, no
+    results. A tumble teaches nothing: no hint shows while you roll, airborne or not.
+152. **The clock leads the left block.** Clock, then distance a step quieter, then a thin stage line
+    ('Stage 2 of 3', one hairline a stage). On a phone they share the row under the score, so the top
+    HUD is no taller; for a countdown's 400 m the distance and the stage's words step out for its chip. A stage line is a
+    banner over the race row: the stage, the clock, and the split in the race-gap grammar, a number and
+    a word in the rider's colour ('1.2 s behind Mila', '0.8 s ahead of your best'), never a bare sign.
+    The split is against the ghost just ahead there, or in the lead the one just behind; your best has
+    its own figure. Splits are the clock at each line, the same on the banner and the card.
+153. **The first minute is taught in order, and nothing waits for a miss.** Steer at once; on the first
+    kicker in reach 'Hold, release at the lip', which takes the slot even from a rider who has not
+    steered; the ring on that flight; the air on the first leap after it, once the ring has shown
+    rather than once a stomp has landed. The drift nag keeps off a first run until 800 m. Kickers are
+    read from `zones.ramps`, whoever put them there, within 3 m of a rider's reach. This relaxes
+    decision 87's air lesson to 1.7 s left to land.
+154. **Missions fit the course.** Every distance target is capped at the finish, so no slot can stick
+    on a ride that does not exist. New: finish a mountain, finish with no wipeouts (a free one counts
+    against it), ride a wall, grind rails, finish under 3:30, 3:05 and 2:40. The times are three flat
+    missions rather than a growing one: a slower finish is no progress toward a faster one.
+155. **Speed reads off one range.** Cruise rose to about 30 m/s with peaks at 41 to 46, and the FOV was
+    full at 36, the rumble at 38, the near field at 36, the streaks at 44: a run sat on the end stop.
+    Every curve now reads off `src/render/speedfeel.ts`: `fastK` is 0.6 by 28 m/s (already fast) and only
+    reaches 1 at the cap, and a test holds every curve still climbing between 44 and 46. FOV 62 to 79,
+    streaks from 24, rumble from 22 to 0.03 m, and from 36 the horizon shivers and the corners close in.
+    Flakes are hung half a second ahead of the lens (a fixed 16 m was gone in a third of a second) and a
+    flake the lens has passed gives its slot back, so density rises with speed where it used to fall.
+156. **The lens rises with speed, and height is read against the slope.** At 1.05 m over the sled, 4.5 m
+    up a falling slope, the lens rode about 0.45 m over the snow: the road from 25 m on was a few rows of
+    pixels hidden behind the rider, and that was the real hazard read at speed (usable road 24 m at 30
+    m/s and at 44). The lens now stands 1.5 to 1.7 m clear of the slope from 28 m/s, the rider sinks to
+    about 65% of the height and the look turns toward the road 1.5 s ahead. Measured by
+    `scripts/playtest/readability.js` at 720p on all four mountains: usable road 73 to 74 m at 30 m/s (2.4 s) and 65 to 66 m at 44 (1.5 s); a 6.5 m tree 45 m ahead stands
+    60 to 63 px and 55 to 57 px (62 and 57 before: the wider FOV is paid for by the closer lens); the
+    rider 118 to 127 px and 87 to 103 px (131 and 100 before). A crest can still hide the road for a moment:
+    the worst sample was 27 m at 30 and 8 m at 44, on Sakura's rollers. Lag stays at
+    speed / 9 so a boost still surges away from the lens; the set point closes in to pay for it, which
+    keeps the rider from shrinking further than it did.
+157. **Speed posts are markers, never hazards and never colliders.** One instanced draw on Medium and
+    High, none on Low: stakes, banded poles, slalom flags and roped fence posts, 0.8 to 3 m past each
+    edge and 10 to 18 m apart, chosen per 96 m stretch and per biome. The sim never hears of them. They
+    read the corridor through centerX, halfWidth, edgeExcess and edgeLimit and the ground, so a ravine, a
+    bridge or a street needs no change here: a post stops short of something solid and none stands where
+    the ground past the edge falls away. Pale and slim with a little light of their own: backlit by a
+    low sun a plain stick dropped to the hazards' dark. They fold into the snow inside about 2 m of the
+    rider, and stay out of the avalanche mirror.
+158. **The snow reads speed close up.** Kicked snow comes off the runners keeping about 70% of the sled's
+    speed, so it falls back past the lens's lower corners, the one thing allowed nearer than a flake. A
+    rooster tail stands half as high again at the cap as at 28 m/s, and a groove's broken edges run
+    along an arc length divided by speed, so a fast line reads as long streaks. The near field's budget
+    rose from 520 to 780 points on High and 260 to 400 on Medium, still one draw and none on Low.
+159. **The picture acts out what the sim decides, and reads it from public state.** `src/render/moments.ts`
+    reads s.tumble, s.grinding, s.wallTicks and s.finished and the beat list; nothing is written back. A
+    tumble rolls the whole rig twice (a whole number, so it lands upright) with the lens eased out and
+    up; a tumble's bounce is not air, so it gets no vista and no landing ring. Reduced motion curls the
+    rider up with no spin, no swing and no ease; every beat still lands. On a rail the sled turns off
+    the line with sparks in the player's own ramp. Courses have no rails on this branch, so the pose and
+    sparks were checked on a rail put into a zone by the strip script, and nothing draws a rail yet.
+160. **The finish eases the picture, not the sim.** Past the line the world records the coast the sim is
+    already running and plays it back through a clock that dips to 0.38 and returns over about 2 s, so
+    it ends on the same spot a little later, with no change to the sim, the feed or the game clock. The
+    lens swings to a three-quarter front at 60 degrees with the rider low in the frame: aimed straight at
+    the rider it saw only the snow it came down, and every shell burst over the top of the frame. Shells
+    are placed from the lens as they go up, so they land in whatever sky it sees, chase or swung, with a
+    square or without one. They are dabs of gouache (a billow's shading, allowed to hang far from the
+    rider and paint large). The game lane still has to open the results off the finish beat; the shot
+    holds until it does, and moves the rider aside for the card. Reduced motion takes none of it: the
+    chase follows the rider to a stop, arms up, and the shells still burst.
+161. **The world answers skill in the world.** A stomp or a big landing near a bank sheds a slough
+    (`src/render/sloughs.ts`, 56 lumps, one draw while one slides, Medium and High), started ahead of the
+    sled so the lens sees it come down, and only off a real bank. A max drift, a shown pass and 'In the
+    flow' lift the crowds' roar, a uniform on the one crowd draw. `grudgeSettled` shakes powder off the
+    treeline, sends snow down both banks and rings in rose; `Duel won` does the same on the ghost's side.
+    Crows take a stomp as they always did: scaring them on a grudge would need a change in life.ts.
+162. **The band builds down the mountain.** The drive takes +0.07 and +0.15 per stage and +0.13 over the
+    last stage's climb to the line, so a plain cruise goes from bass and hats through the arp into the
+    kick; skill still owns the clap, sparkle and lead until the climb brings them in part way. The band
+    quickens 2.5% then 5% on bar lines, the last stage thickens the bass and hats and lifts a whole tone
+    on a chord change. The lift is decided half a bar ahead, with the next pad, or the pad would ring in
+    the old key under the new one. A stomp streak of 3 or more or earned flow opens the band up: upper
+    layers over the drive, every second arp note an octave over itself, wider pads and a wider room.
+    The finish cue resolves onto a bright chord as the results deck comes up under it, in the key the
+    band climbed to. All of it is voices and a fixed graph: nothing is rendered in a run, on any tier.
+    The `descent` probe (`debugRender('descent')`) reads the music bus at a plain cruise: -25.1, -24.0,
+    -22.7 and at the line -21.3 dBFS, 3, 4, 4 and 7 layers; opened up, +2 dB and +3 dB over 2 kHz. None of
+    it has been heard.
+163. **Perf probes on two origins compare two saves.** A build served on a port that has run strips keeps
+    a save with a best, a grudge and a friend, and their ghosts' tags cost five times what a fresh save's
+    do: it read as a 25% loss on throttled Low, and two rounds of changes were wrong before a variant on a
+    fresh port gave it away. Clear localStorage on each origin, and clear any `emulateMedia` left on the
+    session: a reduced-motion strip leaves the whole page reduced for every probe after it.
+164. **Bare ground comes from what made it.** Slope alone cannot say where rock goes: a plain bank's foot
+    reaches 1.6, as steep as a ravine's, and must stay snow. So `rockWeight` (ground.ts) reads the shape:
+    a wall from its foot to its crest, the fork's ridge, a bridge's gorge and a ledge's face, the last
+    from the down-run slope, which nothing else on a course reaches (a kicker's built wall is excluded by
+    name). It rides a per-vertex attribute, as the kicker weights do, and the shader draws it in cells:
+    a few hashes a pixel and no search, because a Voronoi over a third of the screen was the obvious way
+    and the wrong cost. Pixels that are all rock skip the snow's dunes, ripples and sastrugi, which pays
+    for most of it. Colours are per mountain in materials.ts, chosen by `massif.peak`, so a mood's light
+    falls on them without touching palette.ts.
+165. **Past its limit a wall may leave the sim's ground.** A sled is turned back at `edgeLimit`, so what
+    stands past it is the painter's. `rampart` raises the wall from the limit up, using noise that is
+    flat on every triangle of a coarse lattice, so a fine mesh draws planes and creases where smooth
+    noise drew a hill, and the crest is jagged against the sky. Inside the limit the mesh is the sim's
+    to the millimetre, and a test holds it there. The terrain casts no shadow, so the wall's own shadow
+    on the floor is worked out in the shader from the height of the crest across from it: no pass,
+    and on Low too. It stops at 72% of the light, or Frostfang's low sun leaves the floor one flat blue.
+166. **A lake mirrors a picture, not a pass.** The sky and the peaks follow the lens, so they are as good
+    as at infinity and one picture holds for any lens on the lake. `LakeMirror` draws them into a
+    768 by 200 target looking down the fall line when a lake is within 480 m and every 3.5 s while one
+    is near, and the shader looks its reflected ray up in it. A real mirror pass would have redrawn the
+    sky every frame for one section. Everything near is worked out from the ray instead: the banks and
+    treeline from where it crosses their plane, and the rider from how close it passes an upright figure
+    at uFocus, so the reflection falls where a reflection falls and leaves the ice with an airborne sled,
+    for no draw at all. Without a bake (the first frames, a lost target) it falls back on the
+    procedural ridge line Glass Ice uses, which is the same path. Low keeps the mirror, the near
+    cracks and the blown snow and drops the long fractures, the deep layer, the bubbles and the wisps:
+    those were a third more on a Low lake at 1440p.
+167. **One draw furnishes the course, on every tier.** Rails needed a draw on Low, and Low has no
+    dressing at all, so its leaps and forks had nothing to read by. `Rails` is one variant set holding
+    the rail lengths, flags, shoulders, cornices and both forms of the fork's gantry: +1 draw in the scene
+    and +1 in the shadow pass, where there is one. A variant set runs every variant's vertices for every
+    instance, so the kit is kept small and the gantries sit last, outside the draw range away from a fork. A rail is laid in short lengths along what the sim
+    grinds (rising over its first third, then level with the ground), because the bar has to meet the
+    sled. Everything is laid as it comes into range: reading the ground builds a chunk's zones.
+168. **The fork's sign is a gantry.** The split's post stands on the centre line, and from 150 m that is
+    exactly behind the rider's head: it was there and could not be seen. Boards high over each channel
+    read either side of the rider instead. Bold is a dark board with a white diamond, the skier's
+    own word for it, and a marigold band, because marigold means gifts and the gifts are down there.
+169. **At a ledge the terrain goes to the mid-ground, not the other way.** The mid-ground's rows are 16 m
+    apart and a ledge steps 15 to 25 m in 4, so between two rows the two surfaces parted by half the step
+    and the mid-ground's edge stood out of the terrain as a wedge. Refining the rows would have cost a
+    ring buffer's worth of memory for a few metres of course. Instead, on those rows only, the terrain's
+    columns ease from 24 m past the edge onto the straight line between the two rows, and a prop
+    reads `visualGround` to stand on what is drawn. Past 24 m nobody rides.
+170. **A leap's landing is groomed, not marked.** The face had nothing to judge from the air, and decision
+    84 allows one painted mark. Corduroy and broad swaths are what a groomer leaves, so they are
+    snow, with flags down both sides for the scale.
+171. **Trees and dressing ask if they can stand.** `standable` keeps them off walls and ledge faces; a
+    wall's forest stands behind its crest, a tree run's wall closes to its own limit with a taller rank
+    behind it, and everything past the corridor stands on `visualGround`. Life's animals still stand on
+    the sim's ground: that file is not this lane's, and one on a ravine's rampart will stand in rock.
+172. **Overlooks keep to open ground.** They were allowed into any section but a gully, which on the new
+    course put them beside walls and kerbs. They now keep out of every narrow place and every ledge's
+    section. That leaves two to four a descent rather than one or two a kilometre: open ground is about a
+    quarter of a run and set pieces take some of it. The test now says so.
+173. **A ghost that finished is not a wreck.** `GhostPose.done` says only that a track has ended, and the
+    game's side is another lane's, so the render tells the two apart by where the track ended: at the
+    finish line it rode home. It coasts on into the square and fades, with no poof and no lantern.
+174. **A mountain is a ladder, and you are on it.** Its pool, in race order, is a rank to climb, and
+    your rank is your best run's: every rider ahead of you in `standing.ts`'s one order, plus one. A
+    rider who has not finished sits below every finisher, and a dead heat leaves you level. The ladder
+    has you on it, so 36 riders make 'Rank 19 of 37', not '36': the last place is a real place, and
+    'Rank 37 of 36' is what the shorter figure would have said there. No run is no rank. The name above
+    you and what to beat is always in sight ('Next: SparkleCedar, 2:11.4, 1.6 s up'): a rider who has
+    not finished gets the name and the time alone, because a time and a distance share no unit. A rung
+    pays 5 gifts once, the top pays 100 and says so, and the card shows it from then on, in gold-white
+    with the trophy. The Daily and the Cup have no ladder: ten riders is a field, not a climb.
+175. **Stage medals are kinder than the whole run's, on purpose.** Gold is the pool's median on that
+    stage, silver its 85th percentile, bronze its slowest with a quarter in hand, each 1 s under the
+    last. A rider who cannot hold a descent together can still gold Stage 1, and on Pinecrest a stage
+    gold (0:46.1) comes well before a whole-run bronze (2:16.6). A wreck earns them too: a stage is
+    finished at its line. They are graded as the clock reads them, so 0:46.14 is gold at a 0:46.1
+    line and no card can disagree with its figure. A stage pays 10, 15 and 25 and the whole run 20, 30
+    and 50, each once (a first gold pays all three). A whole mountain is worth 530 gifts.
+176. **What a run earns pays once, by value.** A `Climb` holds a rung, a top, and a medal per stage
+    and for the run, and only ever rises. What it has earned has a value in gifts, and settling
+    pays the change in that value, so the coast and a revive's second crash cost nothing to get right.
+    With no Climb yet, the rank your best already holds is where it starts: an old save is neither
+    paid for a rank it never climbed on this screen nor told 'Beat X and 17 more' on a run that beat
+    nobody. A Climb names its sim version, so a new course moves it to the archive whole (149), and
+    the save only takes one once a run has earned something.
+177. **Splits come from replaying the records.** `npm run generate-ghosts` now writes each ghost's
+    `stageTicks`, and `-- --splits` adds them to the pools on disk from a replay of each record, about
+    a second a pool, with no call into `src/bot`: replaying is what the worker does, so the medals rest
+    on exactly what the race shows. Regenerating the bundled pools is byte-identical but for the new
+    field. A pool without splits has no stage medals and nothing breaks; a test holds every bundled
+    pool to them. The Daily's and Cup's pools have none and need none.
+178. **One rival for the run.** The rider Run Again promised, else the friend who challenged you, else
+    your grudge, else the field ghost right ahead of you: the finisher just quicker than your anchor.
+    Never your own best, which has its own figure. It takes the start-line call (over your best and
+    the pace rider), it is the split on every stage line while it reached that line, and on the results
+    it is what decided it ('You lost 2.1 s to Mila in Stage 2', or 'You took 2.1 s from Mila in
+    Stage 2' if you won), the stage you lost or took most in, in the stages' own times. A race line
+    can only say one thing, so a row folded past the first view opens every stage against your rival
+    and, when it rode, your best: stage time here, the clock at each line in the splits row above.
+179. **Run Again always names who is about to ride, so that rider has to ride.** An unbeaten friend,
+    your grudge, else the ghost just ahead of you in this run ('Rematch'), else the next rider up the
+    ladder ('Race', since you have not met), and at the very top your own best. 'Run Again' is left
+    for a run with nobody to name. A name on the button is a promise: `pickField` seats a promised
+    rider like a grudge, whatever the run's mood rolls, and it is the rival.
+180. **The weekly Cup is the Daily's shape with a week's key.** Seed, mood, event and placement are
+    pure functions of the ISO week (`cup.ts`), and needed nothing from the sim: a seed is all it reads of
+    a mountain, so the game layer widens the mountain's id rather than teach the sim about weeks.
+    A Cup always has a mood, because that is what makes the week a week. The field is the week's: no
+    anchor of yours picks it, and your best joins after, since a pick keeps its distance from your
+    best and that would move the field. The pool is the Daily's generation with its own worker, after
+    the Daily's, so a phone runs one bot pool at a time. Best time and medal for the week, in the
+    Daily's save shape, pruned as the Daily's are. No streak, and no ladder: a Cup is a week's best.
+181. **The next-run hook is the race line, not a second line (extends 82).** Friend, the Daily or Cup
+    medal, a settled grudge or a nemesis; then a rung missed by under 2 s, a stage gold missed by a
+    second or less; the crash line, the event note; what decided it, standing in for the plain grudge
+    line it says more than; the plain grudge line; and last today's Daily, with the streak on it. One
+    slot, so a hook takes it or gives way.
+182. **The ladder sits beside the card, not in it.** The results' first view was already full, and on
+    a phone it may not get taller or busier. So the strip is the card's sibling: at the foot of the band
+    contract C6 keeps over the card in portrait, under the wreck, and in the free corner on wide
+    screens. The card is laid out as if it were not there. Short landscape has neither, so a second copy
+    rides the mountain line. That copy also stays in the tree everywhere else, off screen, because
+    the band sits outside the modal dialog where a screen reader never goes. On a phone the stage row
+    goes under Missions, or it would push Missions out of a wreck's first view.
+183. **On the title, the new things took old slots.** Ride's subline carries the name above you, which
+    is more to the point there than the mountain's tagline. A card's second line is your rank (the
+    locked cards still count ghosts), and four small discs ride its art. The Daily and the Cup share the
+    Daily's row on a phone, each a name over its best, so the title is no taller; on wide screens the
+    Cup stacks over it in free space. A fourth menu button takes the medal wall, a popover in the
+    missions' slot. The landscape menu row may run into the empty column so it never wraps. Picking the
+    Daily or the Cup now shows on its card and names it on Ride, which used to go on saying Pinecrest.
+184. **A gold medal is marigold.** The medal's old amber sat so near its copper bronze that at 11 px
+    the two were one disc. Gold now takes the art bible's marigold and bronze goes a shade darker, so
+    a medal and a gift are the same good news, and your best's gold-white stays apart.
+185. **The course's sections are the plan.** The old planners picked places on their own rules (a village
+    every 1.5 to 2.5 km, an enclosure wherever nothing launched), tuned to a course that no longer
+    exists. Now a `street` is a town, a `tunnel` an enclosure, a `bridge` a bridge and the `finish` the
+    finish town, each at its section's real length; every leap gets a crowd and z = 0 a start. Where
+    things stand is laid out once per course from sections and hashes, no flying needed, and is the
+    same in every mood, so chunks and overlooks never wait for a flight. How high they stand is flown
+    per mood, one site per idle job: `spanNeed`, `roofNeed` and `quiet` stay as the validators, and what
+    cannot clear the air comes down (a span to a bank piece, a roof to its walls). Frostfang and Ember have
+    no `street` in their scripts, so each keeps one town beside the run, in its longest open stretch.
+186. **A street is measured from the limit, not the crest.** Everything hangs off `rail.limit`: the
+    barrier 0.25 m past the sim's limit, where a sled is turned back, the crowd behind it, fronts 1.75 m
+    behind that. So one layout is a street at a limit of 2 m and a town beside the run at 10. Houses are
+    cut into the bank, floors at the snow under their fronts, because a level floor on the highest
+    ground would put a ground floor 10 m over the street. The bank that holds them is the sim's, and
+    the stepped rows of the crowd come free with it. Lots stand off the edge's nearest point: a lot is
+    one straight block and in a blend the edge narrows under it. A window cost 60 triangles as boxes
+    and costs about 20 as flat panels; a street holds hundreds of them and only their
+    faces are seen. That paid for a second row of roofs: a street is 43 to 48k triangles against the
+    old village's 55 to 72k.
+187. **The finish town is built round where a sled stops.** A sled over the line runs on through the square on a long, easy brake (`Sim.coast`): it stops about
+    130 m past the line from 30 m/s and 265 m from 46, on the run-out street if it came in flat out. The
+    square itself runs from 72 m before the line to 118 m past it. The
+    biggest crowd in the game is 560 animated figures (the instancing cap, unchanged) in the near two
+    rows, and about 1,500 still ones baked into the stands: two boxes each, four faces a box, no draw of
+    their own. The run-out street ends at a hall just past the end of RUN_OUT, standing across the
+    corridor where no sled can reach. The finish town keeps a slot from as far off as it can be seen.
+    It is 100 to 118k triangles. On this branch a finished run does not reach the results screen yet, so
+    the stationary frame was checked from the chase lens at rest, not from the results' hero shot.
+188. **A bridge cannot be hollow.** The corridor over a chasm is a ridge of ground: it falls 34 m past the
+    edge, so nothing can stand under the deck. The rider cannot tell. From the lens the deck's own edge
+    hides the floor out to about 70 m past it, so what says bridge is the rails, whipping past where the
+    sim turns a sled back, and what rises past them: ribs, a truss. The legs under the deck rake out
+    round the ridge, there for the rim and the air. For the same reason Ember's lava is a river running
+    away across the chasm, not a pool under the deck, where it would never be seen. Styles exist for all
+    four mountains, but only Frostfang and Ember have a `bridge` beat: Pinecrest's and Sakura's have
+    never been drawn, and Sakura's overhead lacquered footbridge is the old `bridge` span.
+189. **A roof follows the air.** The air over a tunnel is highest at its mouth (a pop from the steep ground
+    above flies far over it: 27 to 33 m over the floor, falling to about 20 inside), so one roof height
+    cleared by the mouth stood 33 to 40 m high all the way, or failed the old limit of 33 and came off.
+    Each bay now clears its own air, the roof coming down at most 1.2 m a bay, and ENC_MAX applies at the
+    mouth, at 42 m. A tunnel's mouth is rock masses of very different sizes round a great mass over the
+    vault: even ones in rows, seen from outside, were the same honeycomb as the falls below. Low
+    gravity still takes every roof off: Comet Night rides between walls, or an avenue of torii pillars.
+190. **A lift line is a span with chairs.** It crosses at a height `spanNeed` sets, with a chair's drop on top,
+    from a station on the bank to a tower on the far one and on up over two more. The chairs are a batch of
+    their own, a few dozen matrices written a frame, Medium and High. The station stands where a tower
+    would, tall where the air is high, so the line needs no tower on its own side. One goes just above
+    the first leap on every mountain, one near the middle, on a bowl if it can.
+191. **Overlooks are worked out first.** They keep 120 m from every piece, so filling every stretch to 300 m
+    would have left none, and they are places too. So the plan asks the overlook plan where it would go
+    against only what the sections fix, then fills round those. The real plan lands on the same
+    stretches, since it looks in the same order and the pieces only take ground it had passed over.
+    The longest bare stretch is 260 to 282 m on the four mountains, overlooks counted, in every mood.
+    One thing that number hides: an overlook in a ravine is invisible behind its wall, so a ravine gets
+    a span near its end, which leaves room for the overlook the test still asks for. (Five per 5 km.)
+192. **The honeycomb was the frozen falls.** Its cliff was four rows of even crags in the ice material, and
+    from anywhere near it those facets read as a blue lattice, worst behind a ravine's rim where it
+    rears over the run. It is now long uneven strata in the plain material, with a fall of 26 fluted
+    columns that is the palest thing in it, set further back and kept out of walled sections.
+193. **Three slots, two shadows.** Sites come every 200 to 300 m now, so two piece meshes could not hold
+    what is in view. A third adds a draw on every tier; only the nearest two cast, since the third is
+    past the shadow map. What is behind the rider gives up its slot first, and sites stay made until
+    they are behind, however many are ahead. Made on the frame only once idle time has opened, so a run's
+    first frames make nothing. Windows light by the journey's dusk at the site's own distance, and
+    lamplight pools at dusk at less than half of night's strength: at full strength on shaded snow
+    they went pink.
+    Measured against the build before, interleaved at the same distances: a street costs +3 draws on High
+    (84 to 87), +1 on Medium and 0 to +1 on Low, and 150k, 110k and 19k more triangles, with the figure
+    budget unchanged; the finish town costs no more draws on High or Medium, +1 to +2 on Low, and 220k,
+    100k and 44k more triangles. Both builds sat on the 60 fps ceiling in the quiet runs, so those
+    runs show it holds there, not what it costs under it.
+
+194. **The sled runs out of its turn, and banks really are berms (SIM_VERSION 6).** Heading only ever changed by steering, and grip pins velocity to heading, so nothing could turn a sled back: a 2 s key hold ended the run at about 25 m after 5 s on three mountains. Let go now and the nose eases to the corridor's direction, leaning home only from the outer third of the width (at half the width a sled let go finished most mountains). Past the edge the wall turns the sled back, harder as it climbs, past the hands by about 6 m up. A held key carves to about 1 rad off the corridor's line and no further. In a fork all of this reads the channel the sled is in (`Course.backX`), never the ridge.
+195. **A hit costs the run's time, and only the third ends it.** A hard hit is a 1.1 s tumble back to the safe line: the combo goes, the sled comes back at 55% of cruise. Every wipeout before 700 m is free, two are forgiven after that, and the next is the wreck the game was built around. Solid edges (`edgeLimit`) turn a sled back and never crash it. It needs no log event: the rule is the sim's, so ghosts replay it.
+196. **Thirty is the new twenty-two.** Air drag fell from 0.0047 to 0.0027, so cruise is about 30 m/s on the base slope; the tuck, drift boosts and landings pay more of it; drafting fell from 2.6 to 1.5 m/s^2, or it would hold a pack at 43 m/s. Skilled riders now reach the 46 cap on steep faces. A landing on a falling slope turns the drop into speed, up to 8 m/s: what makes a cliff worth taking. Comet Night's drag falls with its gravity, so it keeps its cruise (it was the slowest mood by far at 16 m/s), and Glass Ice's grip rose from 0.62 to 0.68.
+197. **A short flight never wrecks, and the rider sets for touchdown.** Only a flight of 0.75 s or more can crash a landing: nobody meant the rest. In the last 14 ticks steering stops adding spin and the sled swings to the nearest straight line. Stomp timing stays the skill, not surviving your own thumbs. This was the clumsy pilot's main killer.
+198. **New moves come from the world, not a new button.** Up a wall at speed is a wall ride; a sled meeting a rail's low end rides it, and release pops off its end. Both hold the combo. One-button controls stay (decision 5).
+199. **Hazards ask for the steering.** Obstacles had fallen to 14 to 24 a kilometre early on, about one every 1.7 s at speed, and a rider letting go finished every mountain but one. The base count doubles and pickets fill the corridor's middle past 900 m, so the safe line weaves. Hands off still finishes two mountains of four: tumbles are generous, and that rider comes last.
+200. **A risk route is proved by riding it.** The first rides showed the fork's risk route cost time and a hit a run, where a drag model had promised 1.7 s: trees stood on the line in a 6 m strip, and riders spent 15 to 30% of it on the ice. The strip is 8.4 m wide, keeps clear of scatter, and its 3 or 4 obstacles alternate sides so a lane weaves through. It now saves up to 1.9 s, and mid-skill riders pay in hits (`forks.ts`). Bold bots ride it, so a ghost shows it exists.
+201. **The race is run on what a player can catch.** On a 4.5 km course at 30 m/s a field spaced by finish time only drifts apart: passes fell for novice and stunt pilots, and a clumsy rider made none. Three things, none of them in the sim. Slow riders fill the race down to 5:00: a real finisher's run played at a steady slower pace, since a bot made to ride badly only crashes (`slowriders.ts`; weaving was tried and measured). The pack rides within about 4% of your pace. (A very first run goes further: 206.) And pool riders surge and fade around their own pace, about 17% either side of it, and still finish on their real time, so you trade places. Your best, a grudge and a friend are exact replays, always: those are promises.
+202. **Every mountain has a town to ride through and every style of place is ridden.** The scripts left Frostfang and Ember with no street, so their towns still stood beside the run, the exact complaint. Frostfang gets a street and a tunnel, Ember a street, Pinecrest and Sakura a bridge. Once the scripts were full a third of Frostfang's dailies could not build at all, which would stop that mountain loading: an act's first place may only move up if what it leaves can meet, a dropped beat must leave a legal pair, and every deal of the acts is tried. 9,660 seeds, ten years of dailies among them, all build; a test holds 700.
+203. **The clean break erases nothing.** Any sim change makes old replays useless on new courses. The owner chose: replays move byte for byte to an archive that is never pruned, old scores show as "Old best" and stop blocking a new one, a grudge's tally survives, and an old link opens as a target to beat. No option could race an old ghost on a new course, and keeping the old sim would have added about 180 KB and a Classic mode for ever. `migrate.js` proves it across two real builds. Classic can still be built later, because the replays survive.
+204. **Sakura's mist gives the snow its form back.** A soft spring morning at first flattened the snow and took the hazards' edge at speed. Fog starts further out, shade and shadows run deeper and the blossom and rocks darker, and it still reads as one.
+
+205. **The running figures change together, twenty times a second.** The wow pass cost Low 7 to 13% at 6x throttle and the frame's JS only explained half of it. A trace found the rest outside the frame callback: the page's own lifecycle rose from 5.2 to 8.0 ms a throttled frame, because at 30 m/s the metres change on every second frame, the new clock adds its own changes, and each one is a style, a layout and a paint. Score, metres, clock and gifts now land on one 48 ms beat, the combo bar, the stage hairlines and the gift panel (which bumps through most of a good run) stay on layers of their own, and two frames in three do no layout. Nobody reads a units digit at 30 Hz, and it moved Low's median to within a frame of the build before it with no change to the picture. A cash-in still lands in the score at once. What the fix could not buy back: the throttled chase on High, where the extra cost is the scene (the README's table).
+
+206. **A very first run's riders read you.** The field is picked before you ride, and with no history it can only guess who you are, so a first run was the worst race in the game: live for a third to a half of it, with fewer passes than a second run. So on a very first run on a bundled mountain the pool riders aim at places on a string through your position, inside rates of 0.35 to 1.12 of their own run, and the string opens as you go so the riders ahead come back to be caught. 800 m from the line they stop reading you and ride on at the rate they had, so the end is a real race: a rider faster than about 34 m/s rides clear, and over 40 scripted runs places spread from 1st to 6th of 6, the skilled pilots mostly 1st to 3rd and the clumsy pilot 3rd to 6th, where it had been last almost every time. Your best, a grudge and a friend never read you, and neither does anyone from the second run on, or on a Daily or a Cup, whose field is shared. The sim never sees any of this: where a ghost is at a tick was always presentation, and the logged draft bit is the only way a ghost reaches it. On the finished build, over 40 scripted first runs, the race is live for 0.76 of a clumsy run against 0.33 before and 0.89 to 0.96 of the others' against 0.38 to 0.52, with 2.8 to 3.6 passes a minute against 0.3 to 1.9. It costs finishes: riders near you mean twice the slipstream, and the four skilled pilots finished 21 to 24 of 32 over three samples, against 27 before. The novice, the nearest to a first-timer, did not change. What such a rider did stands in your results, but a grudge or a rematch rides its real run, so those are decided on that (`realStanding`), and only a rider really ahead of you and within reach is promised. Without that it leaked into the second run: the rider beside a clumsy first run was a real 2:30 rider waiting for it, and came back as a grudge 1.7 km up the road. A first run's two beginners were there to give anyone company, which reading does now, so they ride only on a Daily or a Cup.
+
+207. **A slow rider flies near true speed.** A rider slowed to half speed flew at half speed, which is a quarter of its gravity, and it looked it. A slower rider now flies at 0.85 at least and takes the time back on the ground, eased over a quarter of a second so it does not snap between speeds on a lip, and reaches the line on its real time. The cost is a rider who visibly quickens over a jump: a burst is easier to believe than a float.
+
+208. **A link opens what it was ridden on, ahead of its rivals.** A link only matched the four named mountains, so a Cup or Daily run named the right place and rode the wrong one with no ghost. It now opens today's Daily or this week's Cup at once, and Ride waits for the pool (a Cup link makes the Cup's pool first). If the pool cannot be made the title falls back and offers nothing. The friend line stands only while Ride would ride it: pick another mountain and it goes. A link to a day or a week that has gone says the race has closed over the plain Ride button: it used to promise a ghost that would not ride.
+
+209. **A crash lens reads what is drawn, and a wreck stops at it.** The rock of a wall stands past where the sim's ground ends, so the crash lenses could stand in it or behind it, and a wreck bounced on the sim's ground came to rest inside it, worst at low frame rates. The camera now takes the drawn surface as well as the ground: the hero shot and pack lens reject rock, the drift turns back at a wall, and the wreck stops at the face. The chase lens stays on the sim's ground, because inside the limit they are the same. Over 1,104 replayed walled crashes at 60 fps, buried wrecks fell from 66 to 0 and hero lenses in rock from 9 to 0. One crash still has its orbit in rock for about 0.3 s.
+
+210. **The echo asks the plan whether the roof stands.** A place's kind says it is roofed. The plan's `clear` says whether the roof survived this mood's air. Comet Night's tunnels rang at full strength with open sky above them. The echo and the frame's dark now read the same truth, and a test walks every enclosed stretch to hold them together.
+
+211. **Rails are proved by a pilot, and some sit under a flight.** `--pilots rails` rides the safe line and steers onto each rail, reading the course as a rider does. All 24 runs finished, with 5 to 8 grinds a run, and 72 of 80 rails mount cleanly: 38 in a full ride, 34 more tried alone. Eight have no clean mount, at least three of them under a kicker's flight: `railAt` keeps 14 m past a kicker, and a flight carries about 50. Fixing that changes course generation, so it is cheapest before the build ships: afterwards it is another clean break.
+
+212. **A graveyard stands where riders fell, not where runs ended.** Tumbles forgive most hits, so run-end crashes gave Sakura three places and the others none, while riders went down in the same spots all along: 14 of 36 at one bend on Frostfang. The generator reads every tumble and wreck off a replay (`PoolGhost.falls`, whole metres, 2.3 KB over four pools, every record byte-identical). `fell` counts riders, and a slow rider is a real run under a second name, so it counts once. There are more places than cairns, so the deadliest stand, nearest first on a tie, 150 m apart so one "Survived" does not land on the last. An older pool still works from where its runs ended.
+
+213. **Three overlooks a descent, and the keep gives way to what cannot move (extends 172, 191).** One walk down the course with a 130 m keep landed 3, 1, 1, 1. The second lift now keeps 900 m from the first, and where the walk leaves too few, or none in the first 1.5 km, a second pass uses the widest room left, 70 m from what the course fixes and 40 m from a lift line, on either bank. An overlook's fall is gone at its own ends, so nothing past them floats. Whether a descent is short is only known at its end, so the plan is whole-course, a few ms at first ask. The longest bare stretch on the four mountains is now 282 m and tested. Dailies have less open ground: 31% keep two. Rail and rocks stand 420 m ahead and 80 m behind, so three a descent do not keep their two draws on for most of a run.
+
+214. **An animal stands in front of what bounds the run.** A fixed 9.3 m past the edge put 24 to 50% of them inside a ravine's rock, a street, a tree rank or over a gorge. `limit` is where something solid stands, so `openFoot` asks for that, and a spawn that fails is skipped. A fox is checked where it will trot, and a fright's way out is walked at placement, so it pulls up at rock as it does at an overlook's lip.
+
+215. **The line is painted for the lens.** The lens sees the snow at a couple of degrees, so 1.2 m rows were a broken dashed line by 30 m. Four rows in both colours, barrier to barrier, each check 3 m wide and 4.5 m long as road paint is, foreshorten square. It reads clearly from about 30 m and the banks carry it further. Also: a piece made on the frame now redraws the slots, or a queued site stayed an empty slot with its crowd standing in the air.
+
+216. **The start has grandstands.** Past the crest, 10 m out, three rows were heads over the boards, and Low had nothing. The finish's stands now run down both banks either side of the gate, each row 0.62 m over the last since the ground gives them no height. The near rows move and the rest are baked in, so it costs triangles and no draw. They are worked out on idle time, because a piece's plan runs on the frame that asks, here a run's first.
+
+217. **Rider labels wait for the page's beat when Low runs short, and that was not enough.** With riders in frame all run, a Low frame at 6x throttle took 4.5 ms longer, and only 1.6 ms of that was the frame's own JS. Hiding the labels, the rival chip, the race pill and the draft pill together recovered all of it, so the cost is page work, not the scene. No one of them explained it, and neither did the looping pulses. Everything that changes often now shares one beat (`pagebeat.ts`, on the frame's timestamp, so all callers land together), and on Low under 50 fps labels and the chip move on it. A Low phone holding 60 fps keeps smooth labels. A trace gave back about a third of the page work and 8% more frames, but the probe's frame rate did not clearly move: a very first run on Low at 6x is 41 to 45 fps against 45 to 55. Hiding labels and chip outright gives 6 to 15% more frames on a struggling device, at the cost of the names, and that is the owner's call: the HUD's race pill still names the next rider. A returning run, with riders out of frame, is 47 to 50.

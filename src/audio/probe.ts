@@ -4,7 +4,10 @@ import { ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { SimEvent } from '../sim/sim';
 import { Core } from './core';
+import { buildLift } from './cues';
 import type { AudioFrame } from './engine';
+import { Listener, type ListenSources, newView } from './listen';
+import type { Section } from '../sim/course';
 import { Prerender, type Recipe } from './prerender';
 import { GIFT_BIG_S, GIFT_BIG_STARTS, GIFT_S, GIFT_SECOND, GIFT_STARTS, GIFT_THIRD, giftKey, giftParts } from './sfx';
 import { ladder, mtof } from './theory';
@@ -453,6 +456,9 @@ export interface RenderOpts {
   quiet?: number;
   /** Every fixed one-shot built live, no rendered takes (prerender.ts), to null the takes against. */
   live?: boolean;
+  /** The soundscape probes: the mood (default Clear Skies) and the tier (default high). */
+  mood?: Mood;
+  tier?: 'low' | 'medium' | 'high';
 }
 
 /** The shoulder probe's timeline (s): the bed alone, a ghost 2 m to the left closing from 5.5 m to
@@ -509,6 +515,70 @@ async function renderLayers(): Promise<Record<string, number | number[]>> {
       out[`${label}.${layer}`] = Math.round(db(Math.sqrt(acc / Math.max(1, L.length - from))) * 10) / 10;
       core.dispose();
     }
+  }
+  return out;
+}
+
+/** 'descent': the band at a plain cruise at each point of the run, and opened up. Each row is a drive
+ *  (the cruise's 0.36 plus what the descent lifts it by), a stage, a climb and an opening. */
+const DESCENT_ROWS: readonly (readonly [string, number, number, number])[] = [
+  ['stage1', 0, 0, 0],
+  ['stage2', 1, 0, 0],
+  ['stage3', 2, 0, 0],
+  ['climax', 2, 1, 0],
+  ['stage1.open', 0, 0, 1],
+];
+
+/** The music bus through the descent (dBFS RMS after the limiter), with how much of its energy sits
+ *  over 2 kHz (dB against the whole), bars per minute and the layers in: what is measurable of the
+ *  band rising, since nobody hears a headless run. */
+async function renderDescent(): Promise<Record<string, number | number[]>> {
+  const out: Record<string, number | number[]> = {};
+  for (const [label, stage, climax, open] of DESCENT_ROWS) {
+    const secs = 12;
+    const ctx = new OfflineAudioContext(2, SR * secs, SR);
+    const core = new Core(ctx);
+    core.graph.setMaster(1, 0);
+    core.graph.sfx.setLevel(0, 0);
+    core.music.setTarget('run', Mood.None, 'alpine');
+    const drive = Math.min(1, 0.36 + buildLift(stage, climax));
+    core.music.setBuild(stage, climax, open);
+    core.music.setDrive(drive, 0, 1, true);
+    core.tick(0, LOOKAHEAD);
+    for (let k = 1; k * STEP < secs - 0.05; k++) {
+      const t = k * STEP;
+      ctx.suspend(t).then(
+        () => {
+          core.music.setBuild(stage, climax, open);
+          core.music.setDrive(drive, 0, 1);
+          core.tick(ctx.currentTime, LOOKAHEAD);
+          void ctx.resume();
+        },
+        () => undefined,
+      );
+    }
+    const buf = await ctx.startRendering();
+    const L = buf.getChannelData(0);
+    const R = buf.getChannelData(1);
+    // A first difference as a plain high-pass: what is left is the top of the band.
+    let all = 0;
+    let top = 0;
+    const from = 3 * SR;
+    const lp = Math.exp((-2 * Math.PI * 2000) / SR);
+    let y = 0;
+    for (let i = from; i < L.length; i++) {
+      const m = (L[i] + R[i]) * 0.5;
+      y = lp * y + (1 - lp) * m;
+      const h = m - y;
+      all += (L[i] * L[i] + R[i] * R[i]) / 2;
+      top += h * h;
+    }
+    const n = Math.max(1, L.length - from);
+    out[`${label}.rms`] = Math.round(db(Math.sqrt(all / n)) * 10) / 10;
+    out[`${label}.top`] = Math.round((db(Math.sqrt(top / n)) - db(Math.sqrt(all / n))) * 10) / 10;
+    const lv = core.music.layerLevels() ?? {};
+    out[`${label}.layers`] = Object.values(lv).filter((v) => v > 0.05).length;
+    core.dispose();
   }
   return out;
 }
@@ -652,6 +722,8 @@ async function renderTakes(): Promise<Record<string, number | number[]>> {
 
 export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}): Promise<Record<string, number | number[]>> {
   if (kind === 'layers') return renderLayers();
+  if (kind === 'descent') return renderDescent();
+  if (kind === 'scape' || kind === 'scapeOnly' || kind === 'scapeMusic') return renderScape(kind, seconds, opts);
   if (kind === 'giftTakes') return renderTakes();
   const snuffK = SNUFF_KINDS[kind];
   if (snuffK && opts.part === undefined) return renderSnuff(kind, opts);
@@ -892,6 +964,151 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     out.env = envelope(L, R, a, b);
     out.subEnv = envelope(L, R, a, b, 100);
   }
+  core.dispose();
+  return out;
+}
+
+/**
+ * The soundscape along a scripted stretch of course at 22 m/s (scape.ts, listen.ts), from a sim z of
+ * 0 at 1 s: a flock over the left bank (110 m), a gate with its crowd over the run (200 m) and a
+ * stomp under it with a second flock near (230 m), an overlook opening (13 to 16 s), a lift line on
+ * the right (280 to 420 m) with a hut and its crowd beside it (330 m) and a pass made there, a long
+ * air into the vista (21 to 23.8 s), a gallery (560 m, 46 m long), and a valley village to the left
+ * at dusk. 'scape' is the whole mix, 'scapeMusic' the same without the soundscape (the baseline),
+ * 'scapeOnly' the soundscape alone. secDb and secPk: the RMS and peak of each second (dBFS); secLR
+ * its left minus right (dB).
+ */
+async function renderScape(kind: string, seconds: number, opts: RenderOpts): Promise<Record<string, number | number[]>> {
+  const secs = Math.max(4, Math.min(40, Number.isFinite(seconds) && seconds > 10 ? seconds : 30));
+  const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
+  const core = new Core(ctx);
+  const only = kind === 'scapeOnly';
+  const none = kind === 'scapeMusic';
+  const mood = opts.mood ?? Mood.None;
+  const biome = opts.biome ?? 'alpine';
+  const tier = opts.tier ?? 'high';
+  const night = mood === Mood.Lantern || mood === Mood.Comet || mood === Mood.Haunted;
+  core.graph.setMaster(1, 0);
+  core.graph.music.setLevel(only ? 0 : 1, 0);
+  core.graph.sfx.setLevel(1, 0);
+  core.music.enabled = !only;
+  core.music.setTarget('run', mood, biome);
+  core.ambience.setScene('run', 0);
+  core.scape.prepare();
+  core.scape.setTier(tier);
+  core.scape.setMood(mood, biome);
+  core.scape.setScene('run', 0);
+  const scapeOut = (core.scape as unknown as { out: GainNode }).out.gain;
+  const amb = core.ambience as unknown as { out: GainNode; tone: GainNode };
+  for (const g of only ? [amb.out.gain, amb.tone.gain] : none ? [scapeOut] : []) {
+    g.cancelScheduledValues(0);
+    g.setValueAtTime(0, 0);
+  }
+  const section = (z: number) => ({ kind: z < 300 ? 'cruise' : z < 450 ? 'bowl' : 'chute', z0: 0, z1: 1e9 }) as unknown as Section;
+  const src: ListenSources = {
+    course: { centerX: () => 0, halfWidth: () => 9, section, params: { halfWidthStart: 9 } } as unknown as ListenSources['course'],
+    biome,
+    mood,
+    tier,
+    sites: [
+      { n: 0, kind: 'gate', span: true, side: 1, z: 200, x: 0 },
+      { n: 1, kind: 'hut', span: false, side: 1, z: 330, x: 0 },
+      { n: 2, kind: 'gallery', span: false, side: 1, z: 560, x: 0, len: 23 },
+    ],
+    crowds: tier !== 'low',
+    flocks: [
+      { z: 110, side: -1, n: 7, cross: false },
+      { z: 230, side: 1, n: 6, cross: false },
+    ],
+    birds: night ? 'owl' : biome === 'blossom' ? 'crane' : 'crow',
+    lifts: tier !== 'low',
+    lift: () => ({ side: 1, e: 14, z0: 280, z1: 420 }),
+    chimneys: [{ x: -520, z: -500 }],
+    chimneyCount: tier !== 'low' ? 1 : 0,
+    vista: 0,
+    dusk: night ? 1 : 0.6,
+    night,
+  };
+  const listener = new Listener();
+  const view = newView();
+  const beat = (type: string, extra: Record<string, unknown> = {}) => ({ type, ...extra }) as unknown as Beat;
+  let drive = 0;
+  let stomped = false;
+  let passed = false;
+  const step = (t: number): void => {
+    const f = baseFrame(t);
+    f.speed = 22;
+    const z = 22 * Math.max(0, t - 1);
+    const air = t > 21 && t < 23.8;
+    f.grounded = !air;
+    const height = air ? 7 * Math.sin((Math.PI * (t - 21)) / 2.8) : 0;
+    src.vista = air ? Math.min(1, (t - 21) / 0.8) * Math.max(0, Math.min(1, (23.6 - t) / 0.35)) : 0;
+    core.scape.setOpenness(t > 13 && t < 16 ? 1 : 0);
+    listener.hear(src, 0, z, height, view);
+    core.scape.update(view, f, t, STEP);
+    const lift = 0.12 * Math.max(view.vista, core.scape.openness);
+    const target = Math.max(0, Math.min(1, f.intensity));
+    drive += (target - drive) * (1 - Math.exp(-STEP / (target > drive ? 0.7 : 2.2)));
+    core.music.setDrive(Math.min(1, drive + lift), 0, 1);
+    core.ambience.update(f, t, false, core.music.key());
+    if (!stomped && t >= 10.2) {
+      stomped = true;
+      core.scape.beats([beat('stomp', { streak: 2, x: 0, z })], t);
+    }
+    if (!passed && t >= 16) {
+      passed = true;
+      core.scape.beats([beat('pass', { muted: false })], t);
+    }
+    core.tick(t, LOOKAHEAD);
+  };
+  core.tick(0, LOOKAHEAD);
+  for (let k = 1; k * STEP < secs - 0.05; k++) {
+    const t = k * STEP;
+    ctx.suspend(t).then(
+      () => {
+        try {
+          step(ctx.currentTime);
+        } finally {
+          void ctx.resume();
+        }
+      },
+      () => undefined,
+    );
+  }
+  const buf = await ctx.startRendering();
+  const L = buf.getChannelData(0);
+  const R = buf.getChannelData(1);
+  const secDb: number[] = [];
+  const secPk: number[] = [];
+  const secLR: number[] = [];
+  let all = 0;
+  let peak = 0;
+  for (let s = 0; s < Math.floor(secs); s++) {
+    let l = 0;
+    let r = 0;
+    let pk = 0;
+    for (let i = s * SR; i < Math.min(L.length, (s + 1) * SR); i++) {
+      l += L[i] * L[i];
+      r += R[i] * R[i];
+      pk = Math.max(pk, Math.abs(L[i]), Math.abs(R[i]));
+    }
+    if (s >= 2) all += l + r;
+    if (s >= 1) peak = Math.max(peak, pk);
+    secDb.push(Math.round(db(Math.sqrt((l + r) / (2 * SR))) * 10) / 10);
+    secPk.push(Math.round(db(pk) * 10) / 10);
+    secLR.push(Math.round((db(Math.sqrt(l / SR)) - db(Math.sqrt(r / SR))) * 10) / 10);
+  }
+  const out: Record<string, number | number[]> = {
+    rmsDb: db(Math.sqrt(all / (2 * Math.max(1, L.length - 2 * SR)))),
+    peakDb: db(peak),
+    seconds: secs,
+    secDb,
+    secPk,
+    secLR,
+    shots: core.scape.stats.shots,
+    dropped: core.scape.stats.dropped,
+    takeSamples: core.scape.takes.samples,
+  };
   core.dispose();
   return out;
 }

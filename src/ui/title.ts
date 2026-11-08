@@ -1,4 +1,6 @@
-import type { MissionView, MountainCard, TitleModel, UIHandlers } from './contract';
+import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, UIHandlers } from './contract';
+import { oldLinkLine } from '../game/challenge';
+import { clock } from '../game/standing';
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -7,8 +9,9 @@ import { icon } from './icons';
 import { play, reduced } from './motion';
 
 // Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
-// them, then the menu row; wallet and the daily card keep to the right, and the 3D scene owns the
-// middle. Portrait: stacked, with Ride in the thumb zone.
+// them, then the menu row; wallet and the daily and Cup cards keep to the right, and the 3D scene owns
+// the middle. Portrait: stacked, with Ride in the thumb zone. Each mountain card carries your rank and
+// medals on it, and Ride names the rider above you.
 
 export interface TitleMenuHooks {
   openSleds(): void;
@@ -22,7 +25,9 @@ export class Title {
   readonly layer: Layer;
   private readonly el: HTMLElement;
   private popover: HTMLElement | null = null;
+  private popKind: 'missions' | 'medals' = 'missions';
   private missionsBtn: HTMLButtonElement | null = null;
+  private medalsBtn: HTMLButtonElement | null = null;
   private io: IntersectionObserver | null = null;
   /** The first-visit sound toggle: muted here, and the master volume it gives back. */
   private muted = false;
@@ -44,7 +49,7 @@ export class Title {
     document.addEventListener('pointerdown', (e) => {
       if (!this.popover) return;
       const t = e.target as Node | null;
-      if (t && (this.popover.contains(t) || this.missionsBtn?.contains(t))) return;
+      if (t && (this.popover.contains(t) || this.missionsBtn?.contains(t) || this.medalsBtn?.contains(t))) return;
       this.closeMissions();
     });
   }
@@ -59,6 +64,7 @@ export class Title {
     const oldTrack = this.el.querySelector<HTMLElement>('.gs-mtns');
     const keepScroll = !fresh && oldTrack ? oldTrack.scrollLeft : -1;
     const hadPopover = !fresh && this.popover !== null;
+    const popKind = this.popKind;
     // A refresh while open (mountain picked, daily ready) swaps content in place: no entrance replay.
     this.el.classList.toggle('is-static', !fresh);
     this.render(m);
@@ -74,7 +80,8 @@ export class Title {
         if (sel) track.scrollLeft = Math.max(0, sel.offsetLeft - track.clientWidth / 2 + sel.offsetWidth / 2);
       }
     }
-    if (hadPopover) this.openMissions(m.missions, false);
+    if (hadPopover && popKind === 'medals') this.openMedals(m, false);
+    else if (hadPopover) this.openMissions(m.missions, false);
     restoreFocus(this.el, fk);
     this.dock();
   }
@@ -132,28 +139,42 @@ export class Title {
     // name and a lock line; a first visit has no cards, so it names the mountain, as does a challenge.
     // A picked mountain with no record of yours yet wears what it is like on its own card (its lower
     // half would stand empty), and the button names it instead.
+    // The Daily and the Cup are picked from cards of their own, so the button names those itself.
+    // With a ladder to climb it carries the name above you: what the next run is for.
     const sel = m.mountains.find((x) => x.id === m.selected) ?? m.mountains[0];
+    const picked = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : null;
     const passed = m.firstVisit ? 0 : ghostsPassed(m);
-    const bare = !!sel && !sel.locked && sel.best <= 0 && passed <= 0;
-    const verb = m.challenge ? 'Accept' : 'Ride';
-    const where = m.challenge ? m.challenge.mountain : (sel?.name ?? '');
-    const subline = m.challenge || m.firstVisit || bare ? where : (sel?.tagline ?? where);
+    const bare = !picked && !!sel && !sel.locked && sel.best <= 0 && !sel.oldBest && passed <= 0;
+    // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
+    // button is the plain one. The banner says so rather than promising a ghost that will not ride.
+    const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
+    const verb = raced ? 'Accept' : 'Ride';
+    const where = raced ? raced.mountain : (picked ?? sel?.name ?? '');
+    const aim = raced || m.firstVisit || picked ? null : (m.nextRung ?? null);
+    // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
+    // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
+    const waiting = !!m.challenge?.waiting;
+    const status = 'Finding rivals…';
+    const subline = waiting ? status : (aim ?? (raced || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
-    if (subline === where) mtn?.setAttribute('translate', 'no');
+    if (subline === where || aim) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
       ctx,
       {
         cls: 'gs-btn-primary gs-ride',
         icon: 'play',
-        sound: 'confirm',
+        sound: waiting ? 'tap' : 'confirm',
         gameKey: true,
         fk: 'ride',
-        onClick: () => this.hd.onRide(),
+        onClick: () => {
+          if (!waiting) this.hd.onRide();
+        },
       },
       h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
       showKey ? kbd('Space', 'gs-ride-key') : null,
     );
-    rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}` : verb);
+    rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}${aim ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
+    if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
     // A brand-new player learns the loop before the first tap: what the ghosts are for.
@@ -170,7 +191,8 @@ export class Title {
     // Wallet + best. A zero is left out (a returning player who sees "0 / Best 0" reads it as lost
     // progress), and with both at zero the pill is not drawn at all.
     const gifts = m.wallet > 0 ? h('span', 'gs-stat gs-stat-gift', icon('gift'), h('span', 'gs-num', fmt(m.wallet)), sr(' gifts')) : null;
-    const best = m.best > 0 ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', 'Best'), h('span', 'gs-num', fmt(m.best))) : null;
+    const rec = record(m);
+    const best = rec ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', rec.label), h('span', 'gs-num', rec.value)) : null;
     if (gifts || best) el.append(h('div', 'gs-t-stats gs-panel gs-pill gs-t-anim', gifts, gifts && best ? h('span', 'gs-stat-sep') : null, best));
 
     // Mountains + daily.
@@ -193,7 +215,7 @@ export class Title {
       { passive: false },
     );
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
-    el.append(side, h('div', 'gs-t-daily gs-t-anim', this.dailyCard(m.daily)));
+    el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup') : null, this.dailyCard(m.daily, m.selected === 'daily')));
     this.watchEnds(track, prev, next, strip);
 
     // Secondary row.
@@ -219,7 +241,10 @@ export class Title {
     // aria-controls is set while the popover exists (it must point at a live element).
     mb.setAttribute('aria-expanded', 'false');
     this.missionsBtn = mb;
-    bar.append(mb, btn(ctx, { cls: 'gs-btn-soft', icon: 'gear', label: 'Settings', fk: 'settings', onClick: () => this.hooks.openSettings() }));
+    const md = btn(ctx, { cls: 'gs-btn-soft', icon: 'trophy', label: 'Medals', fk: 'medals', onClick: () => (this.popover && this.popKind === 'medals' ? this.closeMissions() : this.openMedals(m, true)) });
+    md.setAttribute('aria-expanded', 'false');
+    this.medalsBtn = md;
+    bar.append(mb, md, btn(ctx, { cls: 'gs-btn-soft', icon: 'gear', label: 'Settings', fk: 'settings', onClick: () => this.hooks.openSettings() }));
     el.append(bar);
   }
 
@@ -232,7 +257,10 @@ export class Title {
     // The picked card carries the player's own record in its lower half: the best there and the
     // ghosts passed so far (what unlocks the next mountain), each only once it is more than zero.
     const mine = selected && !c.locked;
-    const said = c.locked ? `Locked. ${c.unlockText}` : [c.best > 0 ? `Best ${fmt(c.best)}` : '', mine && passed > 0 ? `${fmt(passed)} ghosts passed` : ''].filter(Boolean).join('. ') || c.tagline;
+    const best = record(c);
+    const rung = rankText(c);
+    const held = c.medals && !c.locked && hasMedal(c.medals) ? medalWords(c.medals) : '';
+    const said = c.locked ? `Locked. ${c.unlockText}` : [best ? `${best.label} ${best.value}` : '', rung ?? '', held, mine && passed > 0 ? `${fmt(passed)} ghosts passed` : ''].filter(Boolean).join('. ') || c.tagline;
     b.setAttribute('aria-label', `${c.name}. ${said}`);
     const sky = h('span', 'gs-mtn-sky');
     sky.innerHTML = biomeArt(c.biome);
@@ -241,6 +269,8 @@ export class Title {
     // the picked card wears a check on its far corner.
     if (c.locked) art.append(h('span', 'gs-mtn-lockico', icon('lock')));
     else if (selected) art.append(h('span', 'gs-mtn-check', icon('check')));
+    // What you hold here: three stages, then the whole run. Empty rings are what is left to take.
+    if (!c.locked && c.medals) art.append(medalDots(c.medals, [], true));
     const name = h('span', 'gs-mtn-name', c.name);
     name.setAttribute('translate', 'no');
     const body = h('span', 'gs-mtn-body', name);
@@ -248,14 +278,22 @@ export class Title {
     // the card keeps the part that tells you how), or your best there; the picked one shows your best
     // and ghosts passed on two. What a mountain is like rides on the Ride button's subline.
     if (c.locked) body.append(h('span', 'gs-mtn-meta', c.unlockText.replace(/\s+to unlock\.?$/i, '')));
-    else if (mine && (c.best > 0 || passed > 0)) {
+    else if (mine && (best || passed > 0 || rung)) {
       const rec = h('span', 'gs-mtn-rec');
       rec.setAttribute('aria-hidden', 'true');
-      if (c.best > 0) rec.append(h('span', 'gs-mtn-recl', icon('trophy'), h('span', 'gs-num', fmt(c.best)), h('span', 'gs-mtn-recu', 'best')));
-      if (passed > 0) rec.append(h('span', 'gs-mtn-recl is-ghost', icon('ghost'), h('span', 'gs-num', fmt(passed)), h('span', 'gs-mtn-recu', 'passed')));
+      // (The trophy is a live record's: an old best gives its width to its label.)
+      const live = best?.label === 'Best';
+      if (best) rec.append(h('span', 'gs-mtn-recl', live ? icon('trophy') : null, h('span', 'gs-num', best.value), h('span', 'gs-mtn-recu', best.label.toLowerCase())));
+      // Your rank takes the second line once there is one: the locked cards still say how close the
+      // next mountain is, in ghosts.
+      if (rung) rec.append(rankRow(c, rung));
+      else if (passed > 0) rec.append(h('span', 'gs-mtn-recl is-ghost', icon('ghost'), h('span', 'gs-num', fmt(passed)), h('span', 'gs-mtn-recu', 'passed')));
       body.append(rec);
     } else if (mine) body.append(h('span', 'gs-mtn-meta is-about', c.tagline));
-    else if (c.best > 0) body.append(h('span', 'gs-mtn-meta', 'Best ', h('span', 'gs-num', fmt(c.best))));
+    else if (best) {
+      body.append(h('span', 'gs-mtn-meta', `${best.label} `, h('span', 'gs-num', best.value)));
+      if (rung) body.append(h('span', 'gs-mtn-rec', rankRow(c, rung)));
+    } else if (rung) body.append(h('span', 'gs-mtn-rec', rankRow(c, rung)));
     b.append(art, body);
     b.addEventListener('click', () => {
       if (c.locked) {
@@ -300,10 +338,11 @@ export class Title {
   }
 
   /** The Daily card: today's best, the day streak ("3 days in a row") and today's medal disc (TitleModel.daily). */
-  private dailyCard(d: TitleModel['daily']): HTMLButtonElement {
-    const b = h('button', 'gs-daily');
+  private dailyCard(d: TitleModel['daily'], selected: boolean): HTMLButtonElement {
+    const b = h('button', `gs-daily${selected ? ' is-sel' : ''}`);
     b.type = 'button';
     b.dataset.fk = 'daily';
+    b.setAttribute('aria-pressed', String(selected));
     // Not `disabled` while its rivals are generated: that would drop it from the tab order, and
     // keyboard and screen-reader players could not find the mode or hear its status.
     if (!d.ready) {
@@ -346,6 +385,41 @@ export class Title {
     return b;
   }
 
+  /**
+   * The week's Cup, the Daily's sibling: the same card, marigold-free (a Cup medal is the disc), with
+   * the week's mood and event where the Daily says what day it is, and your best time this week.
+   */
+  private cupCard(c: TitleCup, selected: boolean): HTMLButtonElement {
+    const b = h('button', `gs-daily gs-cup${selected ? ' is-sel' : ''}`);
+    b.type = 'button';
+    b.dataset.fk = 'cup';
+    b.setAttribute('aria-pressed', String(selected));
+    if (!c.ready) {
+      b.setAttribute('aria-disabled', 'true');
+      b.classList.add('is-waiting');
+    }
+    const medal = Math.max(0, Math.min(3, Math.floor(c.medal)));
+    const what = c.ready ? [c.mood, c.event].filter(Boolean).join(', ') : 'Finding rivals…';
+    // (A phone's half-width card keeps the mood: the reveal names the event.)
+    const tag = h('span', 'gs-tag gs-daily-status', c.ready ? c.mood : what, c.ready && c.event ? h('span', 'gs-cup-ev', `, ${c.event}`) : null);
+    const meta = h('span', 'gs-daily-meta', h('span', 'gs-daily-date gs-num', `Week ${c.week}`), tag);
+    b.append(h('span', 'gs-daily-ico', icon('trophy')), h('span', 'gs-daily-txt', h('span', 'gs-daily-title', 'Weekly Cup'), meta));
+    const disc = medal > 0 ? h('span', `gs-medal m-${medal}`, h('span', 'gs-medal-n', MEDAL[medal])) : null;
+    if (c.best > 0 || disc) {
+      const num = c.best > 0 ? h('span', 'gs-num', clock(c.best)) : null;
+      b.append(h('span', `gs-daily-best${disc ? ' has-medal' : ''}`, disc, num ? h('span', 'gs-daily-score', h('span', 'gs-daily-best-l', 'Best'), num) : null));
+    }
+    b.append(h('span', 'gs-daily-go', icon('play')));
+    const said = [`Weekly Cup, week ${c.week}`, what.replace(/…$/, ''), medal > 0 ? `${MEDAL[medal]} medal this week` : '', c.best > 0 ? `Best ${clock(c.best)}` : ''];
+    b.setAttribute('aria-label', said.filter(Boolean).join('. '));
+    b.addEventListener('click', () => {
+      if (!c.ready) return;
+      this.ctx.sound('confirm');
+      this.hd.onCup?.();
+    });
+    return b;
+  }
+
   private page(track: HTMLElement, dir: number): void {
     const card = track.querySelector<HTMLElement>('.gs-mtn');
     const stepW = card ? card.offsetWidth + 10 : 160;
@@ -382,6 +456,42 @@ export class Title {
     for (const c of cards) this.io.observe(c);
   }
 
+  /**
+   * The medal wall: every mountain's rank and what you hold, the week's Cup under them. A popover like
+   * the missions' (they share the slot), so it stays small and there is no sheet to dismiss.
+   */
+  private openMedals(m: TitleModel, animate: boolean): void {
+    this.closeMissions();
+    const bar = this.el.querySelector('.gs-t-bar');
+    if (!bar || !this.medalsBtn) return;
+    const pop = h('div', 'gs-pop gs-panel gs-wall');
+    pop.id = 'gs-medals-pop';
+    pop.setAttribute('role', 'region');
+    pop.setAttribute('aria-label', 'Medals');
+    const open = m.mountains.filter((c) => !c.locked);
+    const gold = open.reduce((n, c) => n + (c.medals ? c.medals.stages.filter((x) => x >= 3).length + (c.medals.run >= 3 ? 1 : 0) : 0), 0);
+    pop.append(h('h2', 'gs-h2 gs-wall-h', 'Medals', h('span', 'gs-wall-n', h('span', 'gs-num', `${gold} of ${m.mountains.length * 4}`), ' gold')));
+    const list = h('ul', 'gs-wall-list');
+    for (const c of m.mountains) {
+      const rung = rankText(c);
+      const name = h('span', 'gs-wall-name', c.name);
+      name.setAttribute('translate', 'no');
+      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet')), !c.locked && c.medals ? medalDots(c.medals) : null);
+      list.append(li);
+    }
+    if (m.cup) {
+      const c = m.cup;
+      list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${c.week} Cup`), h('span', 'gs-wall-rank gs-num', c.best > 0 ? clock(c.best) : 'No run yet'), medalDots({ stages: [], run: c.medal })));
+    }
+    pop.append(list, h('p', 'gs-wall-key', 'Three stages, then the whole run.'));
+    bar.append(pop);
+    if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
+    this.popover = pop;
+    this.popKind = 'medals';
+    this.medalsBtn.setAttribute('aria-expanded', 'true');
+    this.medalsBtn.setAttribute('aria-controls', pop.id);
+  }
+
   private openMissions(list: MissionView[], animate: boolean): void {
     this.closeMissions();
     const bar = this.el.querySelector('.gs-t-bar');
@@ -395,6 +505,7 @@ export class Title {
     bar.append(pop);
     if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
     this.popover = pop;
+    this.popKind = 'missions';
     this.missionsBtn.setAttribute('aria-expanded', 'true');
     this.missionsBtn.setAttribute('aria-controls', pop.id);
   }
@@ -404,7 +515,46 @@ export class Title {
     this.popover = null;
     this.missionsBtn?.setAttribute('aria-expanded', 'false');
     this.missionsBtn?.removeAttribute('aria-controls');
+    this.medalsBtn?.setAttribute('aria-expanded', 'false');
+    this.medalsBtn?.removeAttribute('aria-controls');
   }
+}
+
+/** The card's rank: "Rank 19 of 37", "Top of the ladder" once you have beaten it, null with no run. */
+function rankText(c: Pick<MountainCard, 'rank' | 'rankOf' | 'top'>): string | null {
+  if (c.top) return 'Top of the ladder';
+  return typeof c.rank === 'number' ? `Rank ${c.rank} of ${c.rankOf ?? c.rank}` : null;
+}
+
+/** A card's rank line. A narrow card has no room for "Top of the ladder": the top wears the trophy and
+ *  your best's gold-white on its own figures, and the card's name for a reader still says it. */
+function rankRow(c: Pick<MountainCard, 'rank' | 'rankOf' | 'top'>, text: string): HTMLElement {
+  return h('span', `gs-mtn-recl is-rank${c.top ? ' is-top' : ''}`, c.top ? icon('trophy') : null, h('span', 'gs-num', c.top ? `Rank ${c.rank ?? 1} of ${c.rankOf ?? 1}` : text));
+}
+
+const hasMedal = (m: MedalSet): boolean => m.run > 0 || m.stages.some((x) => x > 0);
+
+/** What a row of medals says to a reader: "Stage 1 gold, whole run bronze", only what you hold. */
+function medalWords(m: MedalSet): string {
+  const parts = m.stages.flatMap((x, i) => (x > 0 ? [`Stage ${i + 1} ${MEDAL[x].toLowerCase()}`] : []));
+  if (m.run > 0) parts.push(`whole run ${MEDAL[m.run].toLowerCase()}`);
+  return parts.length > 0 ? `Medals: ${parts.join(', ')}` : 'No medals yet';
+}
+
+/**
+ * A row of medal discs: one per stage, a hairline, then the larger whole-run disc. A disc you do not
+ * hold is an empty ring. `fresh` lands those this run raised (0 to 2 a stage, 3 the whole run); `quiet`
+ * leaves the words to its parent, whose own name says them.
+ */
+export function medalDots(m: MedalSet, fresh: readonly number[] = [], quiet = false): HTMLElement {
+  const dot = (v: number, at: number, run: boolean): HTMLElement => h('span', `gs-mdot m-${Math.max(0, Math.min(3, Math.floor(v)))}${run ? ' is-run' : ''}${fresh.includes(at) ? ' is-new' : ''}`);
+  const row = h('span', 'gs-mdots', ...m.stages.map((v, i) => dot(v, i, false)), m.stages.length > 0 ? h('span', 'gs-mdots-sep') : null, dot(m.run, 3, true));
+  if (quiet) row.setAttribute('aria-hidden', 'true');
+  else {
+    row.setAttribute('role', 'img');
+    row.setAttribute('aria-label', medalWords(m));
+  }
+  return row;
 }
 
 /** The speaker glyph struck out, in the icon family's 2 px round strokes. */
@@ -438,17 +588,26 @@ function ghostsPassed(m: TitleModel): number {
 }
 
 /**
- * A friend's challenge: "Racing Mila's ghost" over "2,340 m on Pinecrest" (how far their run went).
- * A run on today's Daily Mountain reads "on the Daily Mountain"; one on another day's Daily (no
- * mountain named) shows the first line alone. Links from before distances were carried keep the
- * score: "Beat a score of 12,480 on Pinecrest". No live role: it sits right above the Accept button, read in
- * context, and the title re-renders often.
+ * A friend's challenge: "Racing Mila's ghost" over "2:31.4 on Pinecrest" (their finish), or "2,340 m on
+ * Pinecrest" (how far a run that did not finish went). A run on today's Daily Mountain reads "on the
+ * Daily Mountain" and one on this week's Cup "on the Weekly Cup". One on another day's Daily or another
+ * week's Cup has no course left and no ghost to ride (no mountain named): "Mila's race has closed". Links
+ * from before distances were carried keep the score: "Beat a score of 12,480 on Pinecrest". A link from
+ * an older course has no ghost to race, only a distance to pass: "Mila rode 2,340 m on the old
+ * Pinecrest. Beat it." No live role: it sits right above the Accept button, read in context, and the
+ * title re-renders often.
  */
 function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
+  if (c.old) {
+    // (Names in it are handles and places: auto-translate stays off the short line.)
+    const line = h('span', 'gs-challenge-k', oldLinkLine({ name: c.name, distance: c.distance ?? 0, mountain: c.mountain }));
+    line.setAttribute('translate', 'no');
+    return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', line));
+  }
   // Player and mountain names are proper nouns: keep auto-translate off them.
   const who = h('span', '', `${c.name}\u2019s`);
   who.setAttribute('translate', 'no');
-  const k = h('span', 'gs-challenge-k', 'Racing ', who, ' ghost');
+  const k = c.mountain ? h('span', 'gs-challenge-k', 'Racing ', who, ' ghost') : h('span', 'gs-challenge-k', who, ' race has closed');
   const where = c.daily ? (c.mountain ? 'the Daily Mountain' : '') : c.mountain;
   let v: HTMLElement | null = null;
   if (where) {
@@ -456,10 +615,18 @@ function challengeBanner(c: NonNullable<TitleModel['challenge']>): HTMLElement {
     place.setAttribute('translate', 'no');
     v =
       typeof c.distance === 'number' && c.distance > 0
-        ? h('span', 'gs-challenge-v', h('span', 'gs-num', metres(c.distance)), ' on ', place)
+        ? h('span', 'gs-challenge-v', h('span', 'gs-num', typeof c.time === 'number' ? clock(c.time) : metres(c.distance)), ' on ', place)
         : h('span', 'gs-challenge-v', 'Beat a score of ', h('span', 'gs-num', fmt(c.score)), ' on ', place);
   }
   return h('div', 'gs-challenge', icon('ghost', 'gs-challenge-ico'), h('div', 'gs-challenge-txt', k, v));
+}
+
+/** The record a card or the stats pill shows: your best time, else your best score, else the old
+ *  course's best until a new one exists; null with nothing to show. */
+function record(c: { best: number; bestTime?: number; oldBest?: number }): { label: string; value: string } | null {
+  if (c.bestTime && c.bestTime > 0) return { label: 'Best', value: clock(c.bestTime) };
+  if (c.best > 0) return { label: 'Best', value: fmt(c.best) };
+  return c.oldBest && c.oldBest > 0 ? { label: 'Old best', value: fmt(c.oldBest) } : null;
 }
 
 /**

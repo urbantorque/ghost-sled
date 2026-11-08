@@ -3,11 +3,14 @@ import type { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { shared } from './materials';
 import { cameraVelocity, lensPx } from './particles';
+import { flurryReach, kickK, nearK, skimShare } from './speedfeel';
 import type { Tier } from './world';
 
 // The near field's sense of speed, in one capped point cloud (one draw call, none on Low):
 //  - flurries: fine flakes hanging in the air around the lens, which the chase camera's own motion
 //    stretches into short streaks flying past the frame (denser at speed and on a boost);
+//  - the kick: snow thrown up off the runners that falls back past the lens's lower corners, the
+//    snow itself streaking by close up;
 //  - spindrift: sunlit powder blown off the bank crests ahead in long soft wisps;
 //  - the avalanche's breath: cold powder gusts and dark grit overtaking the lens from behind along
 //    the frame's lower edges, and powder shaken off the treeline tops ahead of it, sifting down off
@@ -19,12 +22,29 @@ const K_FLURRY = 0;
 const K_DRIFT = 1;
 const K_GUST = 2;
 const K_GRIT = 3;
+/** Kicked snow: a flurry in every way but how close it may come (the shader reads it as 0.25). */
+const K_KICK = 4;
 
 /** Point budget per tier: Low draws none (its CPU has no headroom), Medium about half. */
-const CAP: Record<Tier, number> = { low: 0, medium: 260, high: 520 };
+const CAP: Record<Tier, number> = { low: 0, medium: 400, high: 780 };
 const MAX = CAP.high;
-/** Shares of the cap: flurries, spindrift, avalanche gusts and grit. */
-const SHARE = { flurry: 0.5, drift: 0.28, gust: 0.22 };
+/** Shares of the cap: flurries, the kick, spindrift, and avalanche gusts and grit. */
+const SHARE = { flurry: 0.42, kick: 0.2, drift: 0.2, gust: 0.18 };
+/** Render seconds the treeline still shakes (shakeCrowns), and how hard. */
+let crownLeft = 0;
+let crownK = 0;
+
+/** Whether the runners are on the snow (they kick nothing in the air): moments.ts, each frame. */
+let onSnow = true;
+export function runnersOnSnow(v: boolean): void {
+  onSnow = v;
+}
+
+/** The world answering a rival beaten: powder comes off the treeline's crowns for a moment. */
+export function shakeCrowns(k: number): void {
+  crownLeft = 0.9;
+  crownK = k;
+}
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -67,7 +87,7 @@ export class NearField {
   private vel = new Float32Array(MAX * 3);
   private attr = new Float32Array(MAX * 3);
   private attrs: BufferAttribute[];
-  private acc = { flurry: 0, drift: 0, gust: 0, tree: 0 };
+  private acc = { flurry: 0, kick: 0, drift: 0, gust: 0, tree: 0 };
   private fwd = new Vector3(0, 0, -1);
   /** Fades everything out over a quarter second once the run is over (a crash, the results). */
   private fade = 1;
@@ -88,6 +108,7 @@ export class NearField {
       blending: NormalBlending,
       uniforms: {
         uScale: { value: 600 },
+        uFast: { value: 0 },
         uCamVel: { value: cameraVelocity() },
         uMainCam: { value: new Vector3() },
         uFocus: shared.uFocus,
@@ -104,6 +125,7 @@ export class NearField {
         attribute vec3 aVel;
         attribute vec3 aAttr;
         uniform float uScale;
+        uniform float uFast;
         uniform vec3 uCamVel;
         uniform vec3 uMainCam;
         uniform vec3 uFocus;
@@ -125,7 +147,8 @@ export class NearField {
           float a = aAttr.z * (1.0 - step(0.75, distance(cameraPosition, uMainCam)));
           // Nothing grows into a blot right at the lens: flakes fade in from about a metre and a half,
           // the avalanche's gusts and grit (which overtake the lens itself) from a few metres.
-          a *= vKind > 1.5 ? smoothstep(2.2, 5.0, depth) : smoothstep(1.1, 2.6, depth);
+          // (Kicked snow passes closest of all: it is the lens's own wake.)
+          a *= vKind > 1.5 ? smoothstep(2.2, 5.0, depth) : vKind > 0.1 && vKind < 0.5 ? smoothstep(0.4, 1.1, depth) : smoothstep(1.1, 2.6, depth);
           // The avalanche's breath stays low on the snow, never up against the sky (particles.ts grit).
           if (vKind > 1.5) a *= 1.0 - smoothstep(cameraPosition.y - 1.0, cameraPosition.y - 0.3, position.y);
           // Never a veil over the hero (particles.ts): over the rider's outline on screen, between the
@@ -152,7 +175,8 @@ export class NearField {
             vec2 dpx = (c1.xy / c1.w - c0.xy / c0.w) * vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0) * uScale * 0.5;
             float len = length(dpx);
             if (len > 0.5) vAxis = vec2(dpx.x, -dpx.y) / len;
-            float lmax = (vKind < 0.5 ? 84.0 : vKind > 2.5 ? 26.0 : 70.0) * px720;
+            // (A flake's streak goes on growing to the cap: it ran out at about 36 m/s.)
+            float lmax = (vKind < 0.5 ? 84.0 + 66.0 * uFast : vKind > 2.5 ? 26.0 : 70.0) * px720;
             float l = clamp(size + len, size, max(wisp ? size * 2.4 : lmax, size));
             vRatio = clamp(size / l, 0.04, 1.0);
             // A streak is a thin smear, thinner than the fleck it smears out.
@@ -227,7 +251,7 @@ export class NearField {
 
   clear(): void {
     this.n = 0;
-    this.acc.flurry = this.acc.drift = this.acc.gust = this.acc.tree = 0;
+    this.acc.flurry = this.acc.kick = this.acc.drift = this.acc.gust = this.acc.tree = 0;
     this.fade = 1;
     this.geo.setDrawRange(0, 0);
     this.points.visible = false;
@@ -259,6 +283,7 @@ export class NearField {
     const cam = o.camPos;
     this.mat.uniforms.uMainCam.value.copy(cam);
     this.mat.uniforms.uScale.value = lensPx();
+    this.mat.uniforms.uFast.value = nearK(o.speed);
     const cv = cameraVelocity();
     const hs = Math.hypot(cv.x, cv.z);
     if (hs > 2) this.fwd.set(cv.x / hs, 0, cv.z / hs);
@@ -281,21 +306,28 @@ export class NearField {
     }
 
     // Spawn rates (per second) from speed, boost and danger.
-    const fast = smooth(15, 36, o.speed);
-    const flurryK = live * (reduced() ? 0 : Math.min(1.25, fast * (0.7 + 0.55 * o.boost) + 0.3 * o.boost * fast));
+    const fast = nearK(o.speed);
+    const flurryK = live * (reduced() ? 0 : Math.min(1.25, fast * (0.85 + 0.55 * o.boost) + 0.3 * o.boost * fast));
     const driftK = live * (0.35 + 0.65 * fast) * (reduced() ? 0.5 : 1);
     const gustK = live * o.danger * o.danger * (reduced() ? 0.5 : 1);
     const capF = cap * SHARE.flurry;
-    const capD = cap * (SHARE.flurry + SHARE.drift);
+    const capK = cap * (SHARE.flurry + SHARE.kick);
+    const capD = cap * (SHARE.flurry + SHARE.kick + SHARE.drift);
+    const reach = flurryReach(o.speed);
 
     // Flurries: flakes hung in the air ahead and to the sides of the lens, never on the line of sight
     // to the rider; the lens's own motion streaks them past the frame.
-    this.acc.flurry += flurryK * cap * SHARE.flurry * 2.4 * dt;
+    // From about 18 m/s a growing share of them skims just over the snow beside the sled instead (the
+    // camera and motion round): crystals the lens races over, streaking past the frame's lower corners,
+    // so the ground itself reads as rushing by at speed (and not at all at a 15 m/s cruise).
+    const skimP = reduced() ? 0 : skimShare(o.speed);
+    this.acc.flurry += flurryK * cap * SHARE.flurry * 2.4 * (1 + 0.5 * skimP) * dt;
     while (this.acc.flurry >= 1) {
       this.acc.flurry -= 1;
-      const ahead = 3.5 + Math.random() * 13;
+      const skim = Math.random() < skimP;
+      const ahead = skim ? 2.5 + Math.random() * reach * 0.62 : 3.5 + Math.random() * reach;
       // Out to either side, or high over the lens: the middle of the frame (the rider) stays clear.
-      const side = (Math.random() < 0.5 ? -1 : 1) * (1.6 + Math.random() * 5.5);
+      const side = (Math.random() < 0.5 ? -1 : 1) * (skim ? 1.4 + Math.random() * 3.4 : 1.6 + Math.random() * 5.5);
       // Below the lens, over the snow: flakes streaking through the sky read as rain or meteors over
       // the sun (a phone's chase camera looks down, so even the lens's own height is high on its screen).
       const up = -2.2 + Math.random() * 2.2;
@@ -303,10 +335,11 @@ export class NearField {
       // runs down the fall line, so a flake hung level ahead ended up over it, in the sky.
       const fx = cam.x + f.x * ahead + rx * side;
       const fz = cam.z + f.z * ahead + rz * side;
+      const fg = c.ground(fx, -fz);
       this.emit(
         K_FLURRY,
         fx,
-        c.ground(fx, -fz) + camH + up,
+        skim ? fg + 0.06 + Math.random() * 0.4 : fg + camH + up,
         fz,
         (Math.random() - 0.5) * 1.2,
         -0.6 - Math.random() * 0.6,
@@ -316,6 +349,22 @@ export class NearField {
         0.7 + 0.3 * Math.random(),
         this.n < capF ? cap : 0,
       );
+    }
+
+    // The kick: snow off the runners' tails, thrown up and out, keeping most of the sled's speed so it
+    // falls back past the lens low and to the sides. Streaks the lens's lower corners at speed.
+    this.acc.kick += live * (reduced() || !onSnow ? 0 : kickK(o.speed)) * cap * SHARE.kick * 2.6 * dt;
+    while (this.acc.kick >= 1) {
+      this.acc.kick -= 1;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const sx = side * 0.3;
+      const px = o.x + rx * sx;
+      const pz = -o.z + rz * sx;
+      const out = side * (1.2 + Math.random() * 3.4);
+      const keep = 0.66 + Math.random() * 0.12;
+      const fg = c.ground(px, -pz);
+      const up = 1.2 + Math.random() * 3.2;
+      this.emit(K_KICK, px, fg + 0.06, pz, cv.x * keep + rx * out, cv.y * keep + up, cv.z * keep + rz * out, 0.45 + Math.random() * 0.4, 0.024 + Math.random() * 0.03, 0.75 + 0.25 * Math.random(), this.n < capK ? cap : 0);
     }
 
     // Spindrift off both bank crests ahead: a sunny wind lifts powder off the lip in long wisps that
@@ -379,7 +428,9 @@ export class NearField {
 
     // The treeline shaking ahead of the wall: powder sifting off the pine crowns along both forest
     // edges, in short bursts that sink as they thin (spindrift's soft wisps, falling).
-    this.acc.tree += live * smooth(0.1, 0.6, o.danger) * cap * 0.5 * dt * (reduced() ? 0.5 : 1);
+    // (The same powder comes off them when the world answers a rival beaten: shakeCrowns.)
+    if (crownLeft > 0) crownLeft -= dt;
+    this.acc.tree += live * (smooth(0.1, 0.6, o.danger) + (crownLeft > 0 ? 1.6 * crownK : 0)) * cap * 0.5 * dt * (reduced() ? 0.5 : 1);
     let burst = 0;
     let bx = 0;
     let by = 0;
@@ -416,7 +467,10 @@ export class NearField {
     let i = 0;
     while (i < this.n) {
       this.life[i] += dt;
-      if (this.life[i] >= this.max[i]) {
+      // (A flake the lens has passed is done: a slot held behind it is a flake missing from the frame,
+      // and at the cap's speed they outlived their use by half a second.)
+      const passed = this.kind[i] !== K_GUST && this.kind[i] !== K_GRIT && (this.x[i] - cam.x) * f.x + (this.z[i] - cam.z) * f.z < -0.5;
+      if (this.life[i] >= this.max[i] || passed) {
         const j = --this.n;
         if (i !== j) this.move(j, i);
         continue;
@@ -424,6 +478,8 @@ export class NearField {
       this.x[i] += this.vx[i] * dt;
       this.y[i] += this.vy[i] * dt;
       this.z[i] += this.vz[i] * dt;
+      // (The kick falls back to the snow.)
+      if (this.kind[i] === K_KICK) this.vy[i] -= 9 * dt;
       i++;
     }
     const n = this.n;
@@ -439,7 +495,7 @@ export class NearField {
       vel[j3] = this.vx[j];
       vel[j3 + 1] = this.vy[j];
       vel[j3 + 2] = this.vz[j];
-      at[j3] = this.kind[j];
+      at[j3] = this.kind[j] === K_KICK ? 0.25 : this.kind[j];
       // Wisps swell as they blow out; flakes and grit keep their size.
       at[j3 + 1] = this.size[j] * (this.kind[j] === K_DRIFT || this.kind[j] === K_GUST ? 0.7 + 0.8 * t : 1);
       at[j3 + 2] = this.peak[j] * Math.min(1, t / 0.15) * (1 - smooth(0.55, 1, t)) * this.fade;
