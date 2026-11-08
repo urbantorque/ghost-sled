@@ -405,10 +405,12 @@ export class Notices {
     return !!s && s.type === 'marquee' && s.live === true;
   }
 
-  /** The overlay knows a set piece holds the top centre (gs-moment-on): on a phone the stake and the minor
-   *  callouts wait under it, so the card, the combo and a callout never stack. */
+  /** The overlay knows a set piece holds the top centre (gs-moment-on), from its title card through its chip
+   *  to its result: on a phone the stake and the minor callouts wait under it, so the card, the combo and a
+   *  callout never stack. */
   private syncLive(): void {
-    this.parent.classList.toggle('gs-moment-on', this.liveChip());
+    const s = this.cur?.spec;
+    this.parent.classList.toggle('gs-moment-on', !!s && s.type === 'marquee' && !s.score);
   }
 
   private enqueue(b: Banner, front = false): void {

@@ -316,7 +316,7 @@ const MOTOR = 2;
 /** Collider id the bot uses for the yeti. */
 const YETI = -7;
 
-class Bot {
+export class Bot {
   private readonly course: Course;
   private readonly lines: Lines;
   private readonly scene: Scene;
@@ -362,6 +362,8 @@ class Bot {
   private lastTrick = -1;
   private groundLevel = 4;
   private reflex = false;
+  /** Riding a set piece's gates (momentOff): no detours, a nearer look. */
+  private inGates = false;
 
   constructor(
     private readonly sim: Sim,
@@ -520,12 +522,48 @@ class Bot {
 
   /** Heading toward the look-ahead point on the planned path, never far across the fall line. */
   private desired(xp: number, zp: number, look = 0): number {
-    const L = Math.max(this.sim.s.speed * this.t.lookTime + 3, look);
+    // Down a slalom of gates the rider looks nearer, so it swings in time for the next one.
+    const L = Math.max(this.sim.s.speed * (this.inGates ? Math.min(this.t.lookTime, 0.32) : this.t.lookTime) + 3, look);
     const dir = this.lines.dir(zp);
     return dir + clamp(wrapAngle(datan2(this.pathX(zp + L) - xp, L) - dir), -0.45, 0.45);
   }
 
+  /**
+   * A set piece played as a person who tries it plays it (round 6): through each lantern gate on its inside
+   * half, onto a ring line's lip in line with the rings. Whether this rider tries a given set piece is its own,
+   * from its key (likelier the more skilled), so a pool shows some riders who play it and some who do not.
+   * The line it asks for still has to clear the path check (planPath), or the rider rides its own.
+   */
+  private momentOff(): number | null {
+    const sim = this.sim;
+    const mo = sim.mo;
+    if (!mo || mo.active < 0) return null;
+    const p = sim.plays[mo.active];
+    if (hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill) return null;
+    const z = sim.s.z;
+    if (p.verb === 'gates') {
+      const g = p.gates.find((q) => q.z > z + 1);
+      if (!g || g.z - z > 50) return null;
+      const off = g.x - this.lines.safeX(g.z);
+      return off - (off > 0 ? 1 : -1) * g.hw * 0.45;
+    }
+    if (p.verb === 'rings' && p.rings.length > 0 && z < p.rings[0].z - 14) return p.rings[0].x - this.lines.safeX(p.rings[0].z);
+    return null;
+  }
+
   private updateWander(now: number): void {
+    const mOff = this.momentOff();
+    this.inGates = mOff !== null && this.sim.plays[this.sim.mo.active]?.verb === 'gates';
+    if (mOff !== null) {
+      // A gate a beat away needs the line moved now, not a third of a metre a thought, and no detour after a
+      // light takes the rider off the gates' line.
+      if (this.inGates) this.goal = null;
+      this.offTarget = mOff;
+      const d = mOff - this.off;
+      this.off += d > 1.4 ? 1.4 : d < -1.4 ? -1.4 : d;
+      this.offRetarget = now + 30;
+      return;
+    }
     if (now >= this.offRetarget) {
       this.offTarget = this.rng.signed() * this.t.wander * clamp(22 / Math.max(1, this.sim.s.speed), 0.4, 1);
       this.offRetarget = now + this.rng.int(120, 300);
@@ -564,7 +602,7 @@ class Bot {
       this.offTarget = bestOff;
       this.offRetarget = now + 90;
     }
-    if (!this.goal && !this.cooling && this.thinks % 2 === 0) this.lookForGoals(zp, speed, zEnd);
+    if (!this.goal && !this.cooling && !this.inGates && this.thinks % 2 === 0) this.lookForGoals(zp, speed, zEnd);
   }
 
   private lookForGoals(zp: number, speed: number, zEnd: number): void {
