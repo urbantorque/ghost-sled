@@ -48,9 +48,10 @@ describe('graveyards', () => {
       [3052, 5],
     ]);
     expect(at(sakura)).toEqual([
-      [1453, 2],
-      [2136, 6],
-      [3417, 2],
+      [2137, 4],
+      [2966, 2],
+      [3425, 4],
+      [3617, 2],
     ]);
   });
 
@@ -131,7 +132,7 @@ describe('graveyards', () => {
     const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
-    expect(names.length).toBe(11);
+    expect(names.length).toBe(12);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
     // The clusters are the same ones the per-mountain call finds.

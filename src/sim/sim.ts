@@ -1414,7 +1414,10 @@ export class Sim {
       case 'steps': {
         for (const e of this.events) {
           if (e.type !== 'land' || e.airtime < 0.2) continue;
-          if (e.quality === 'perfect') {
+          // Every step landed clean or better (a stomp scores more, as anywhere): a sketchy landing or a
+          // hop fails it. All four stomped was the first rule, and no pilot in the lab, expert included,
+          // managed it in 24 runs.
+          if (e.quality === 'perfect' || e.quality === 'clean') {
             mo.n++;
             this.events.push({ type: 'moment', index: p.index, phase: 'step', n: mo.n, of: mo.of });
           } else if (mo.ok) {

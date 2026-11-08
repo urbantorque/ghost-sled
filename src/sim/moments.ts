@@ -9,7 +9,7 @@ import { MOUNTAINS } from './mountains';
 //             through every one in order
 //   rings     three rings of light along a big leap's flight; hit the lip in line and at speed
 //   collapse  the snow and ice of a span fall in behind the rider; stay ahead of the fall
-//   steps     a terrace's steps; land every one perfectly
+//   steps     a terrace's steps; land every one clean
 // This file names them and says where they are. What happens in them is the sim's (sim.ts).
 //
 // Pure: no DOM, render or audio imports.
@@ -55,7 +55,7 @@ const AUTHORED: Record<string, readonly Def[]> = {
     { key: 'emberstreet', name: 'Ash Market', verb: 'gates', kind: 'street', nth: 0, cam: 'low', light: 'lanterns', line: 'Thread the lantern gates to the line' },
   ],
   sakura: [
-    { key: 'petals', name: 'Petal Steps', verb: 'steps', kind: 'terraces', nth: 0, cam: 'wide', light: 'petals', line: 'Stomp every step' },
+    { key: 'petals', name: 'Petal Steps', verb: 'steps', kind: 'terraces', nth: 0, cam: 'wide', light: 'petals', line: 'Land every step clean' },
     { key: 'blossomleap', name: 'The Blossom Leap', verb: 'rings', kind: 'leap', nth: 1, cam: 'wide', light: 'petals', line: 'Fly all three rings over the orchards' },
     { key: 'temple', name: 'Temple Town', verb: 'gates', kind: 'street', nth: 1, cam: 'low', light: 'lanterns', line: 'Thread the lantern gates to the square' },
   ],
@@ -68,7 +68,7 @@ const PICK: ReadonlyArray<{ kind: SectionKind; verb: MomentVerb; cam: MomentCam;
   { kind: 'leap', verb: 'rings', cam: 'wide', light: null, name: 'The Big Leap', line: 'Fly all three rings' },
   { kind: 'bridge', verb: 'collapse', cam: 'side', light: null, name: 'The Span', line: 'Outrun the span as it falls' },
   { kind: 'tunnel', verb: 'gates', cam: 'low', light: 'dawn', name: 'The Tunnel', line: 'Follow the lanterns out to the light' },
-  { kind: 'terraces', verb: 'steps', cam: 'wide', light: null, name: 'The Terraces', line: 'Stomp every step' },
+  { kind: 'terraces', verb: 'steps', cam: 'wide', light: null, name: 'The Terraces', line: 'Land every step clean' },
 ];
 
 export interface MomentSpec {

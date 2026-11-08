@@ -50,9 +50,9 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
     case 'steps':
       if (phase === 'start') return `Step 0 of ${of}`;
       if (phase === 'step') return `Step ${n} of ${of}`;
-      if (phase === 'miss') return 'Not a stomp';
-      if (phase === 'won') return 'Every step stomped';
-      if (phase === 'lost') return `${n} of ${of} stomped`;
+      if (phase === 'miss') return 'A sketchy landing';
+      if (phase === 'won') return 'Every step, clean';
+      if (phase === 'lost') return `${n} of ${of} clean`;
       return null;
   }
 }
