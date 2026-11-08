@@ -74,11 +74,11 @@ interface Tag {
   fine?: boolean;
 }
 
-/** Tags every vertex of a part: aPart = (slot, arm -1/0/1, group, variant + 10 if fine). */
+/** Tags every vertex of a part: aPart = (slot, arm -1/0/1, group, variant + 1, plus 20 if fine). */
 function tag(g: BufferGeometry, slot: number, o: Tag = {}): BufferGeometry {
   const n = g.getAttribute('position').count;
   const a = new Float32Array(n * 4);
-  const w = (o.v ?? -1) + (o.fine ? 10 : 0);
+  const w = (o.v ?? -1) + 1 + (o.fine ? 20 : 0);
   for (let i = 0; i < n; i++) {
     a[i * 4] = slot;
     a[i * 4 + 1] = o.arm ?? 0;
@@ -551,8 +551,8 @@ const ANIMATE = /* glsl */ `#include <begin_vertex>
     float slot = aPart.x;
     float arm = aPart.y;
     float grp = aPart.z;
-    float fine = step(9.5, aPart.w);
-    float vari = aPart.w - 10.0 * fine;
+    float fine = step(19.5, aPart.w);
+    float vari = aPart.w - 20.0 * fine - 1.0;
     bool flagger = aSeed.w > 0.5;
     bool lamper = aSeed.z > 0.5 && uLamps > 0.5;
     // A fifth are kids (the short ones the site placed, and more): they cheer, wave and clap.
