@@ -3,6 +3,7 @@ import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind, Section, SectionKind } f
 import type { BiomeId } from '../sim/mountains';
 import { BARK, SNOW, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
 import { crestE, ledgeAt, standable, visualGround } from './ground';
+import { emberSlot, emberSlotAt } from './groves';
 import { Palette } from './palette';
 
 // Bank set dressing and the course sections' signatures: decorative pieces on and beyond the banks,
@@ -675,9 +676,34 @@ export class Dresser {
     put('dr:s', this.upright(sp.x, sp.y - 0.05, sp.z, hashf(i, sd, 55) * 6.28, 1), S_STUMP, 1, 1, 1);
   }
 
+  /** Ember's clutter belongs to its groves (groves.ts): a pair of columns at a formation's foot, a burnt
+   *  stump at a stand's edge, and a steaming fissure out in the clear snow between, where the ground is
+   *  warm. No bushes or fences: in basalt country they read as debris. */
+  private emberClutter(i: number, side: number, put: Put): void {
+    const sd = side < 0 ? 0 : 1;
+    const z0 = i * CHUNK_LEN;
+    for (let j = emberSlotAt(z0); j <= emberSlotAt(z0 + CHUNK_LEN - 0.01); j++) {
+      const kind = emberSlot(j, side);
+      const z = (j + 0.5) * 28 + (hashf(j, sd, 81) - 0.5) * 16;
+      if (z < z0 || z >= z0 + CHUNK_LEN) continue;
+      const h = hashf(j, sd, 82);
+      if (kind === 'formation') {
+        const p = this.bankPoint(side, 9.4 + h * 0.8, z + 3, this.v);
+        put('dr:s', this.upright(p.x, p.y - 0.08, p.z, h * 6.28, 0.9 + 0.4 * h), S_BIO2, 1, 1, 1);
+      } else if (kind === 'stand') {
+        if (h > 0.5) continue;
+        const p = this.bankPoint(side, 9.5 + h * 2, z - 7, this.v);
+        put('dr:s', this.upright(p.x, p.y - 0.05, p.z, h * 9.1, 1), S_STUMP, 1, 1, 1);
+      } else if (h < 0.5) {
+        put('dr:s', this.alongBank(side, 11 + h * 12, z, 2.4, 1 + h * 0.6, 1, 1 + h * 0.4, 0.05), S_BIO1, 1, 1, 1);
+      }
+    }
+  }
+
   /** Sparse clutter at the treeline's foot and among the trees past it. */
   private clutter(i: number, side: number, put: Put): void {
     const c = this.c;
+    if (c.biome === 'volcanic') return this.emberClutter(i, side, put);
     const sd = side < 0 ? 0 : 1;
     const n = Math.round((3 + 2 * hashf(i, sd, 61)) * this.dens);
     const z0 = i * CHUNK_LEN;

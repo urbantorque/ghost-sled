@@ -3,6 +3,7 @@ import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
+import { Plant, emberGrove, hasGrove, orchard } from './groves';
 import { makeToonMaterial, shared } from './materials';
 import {
   cairnGeometry,
@@ -820,6 +821,11 @@ export class Props {
   private forest(i: number, clear: Clearing[]): void {
     const c = this.course;
     const dens = this.forestDensity;
+    // Ember's basalt country and Sakura's orchards are laid out as places, not scattered (groves.ts).
+    if (hasGrove(c.biome)) {
+      (c.biome === 'volcanic' ? emberGrove : orchard)(c, i, dens, this.arches, clear, this.plantFn);
+      return;
+    }
     const z0 = i * CHUNK_LEN;
     const share = VARIANT_SHARE[c.biome];
     const dress = !!this.dresser;
@@ -902,6 +908,23 @@ export class Props {
     // (A far row's tree is marked to lean into the fog, wherever its chunk's batch is.)
     this.push(b, this.v, this.q, this.s, b.startsWith('fo:') ? pick + AERIAL_PICK : pick, v * (1 + w), v, v * (1 - w));
   }
+
+  /** One grove piece (groves.ts): its variant is the grove's choice (Low draws each set's first only), its
+   *  colour a step off its neighbours' as a forest tree's, and it never leans (a formation stands plumb,
+   *  an orchard is planted straight). */
+  private readonly plantFn: Plant = (near, set, pick, side, e, z, scale, yaw, tall) => {
+    const c = this.course;
+    const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+    const zi = Math.round(z * 8);
+    this.q.setFromAxisAngle(this.up, yaw);
+    this.v.set(x, visualGround(c, x, z) - 0.1, -z);
+    this.s.set(scale, scale * tall, scale);
+    const v = 0.9 + 0.11 * hashf(zi, side, 18);
+    const w = (hashf(zi, side, 19) - 0.5) * 0.09;
+    const b = (near ? 'fw:' : 'fo:') + set;
+    const p = this.arches ? pick : 0;
+    this.push(b, this.v, this.q, this.s, near ? p : p + AERIAL_PICK, v * (1 + w), v, v * (1 - w));
+  };
 
   private push(key: string, pos: Vector3, q: Quaternion, s: Vector3, pick = 0, r = 1, g = 1, bl = 1): void {
     this.m.compose(pos, q, s);
