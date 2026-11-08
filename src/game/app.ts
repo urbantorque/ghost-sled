@@ -1113,6 +1113,9 @@ export class App {
     copySnap(sim.s, cur);
     this.homeRide = { sim, prev, cur, acc: 0, t: 0 };
     this.ui.hideResults();
+    // The world forgets the wreck: the rider up on its sled, the lens behind it, nothing of the run's trail.
+    lerpSnap(prev, cur, 1, this.view);
+    this.world.beginRun(this.view, ChaosEvent.None, run.sled);
     this.world.cam.mode = 'chase';
     this.phase = 'home';
     this.audio.setScene('run');
