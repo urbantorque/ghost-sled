@@ -181,6 +181,28 @@ describe('an animal at the treeline', () => {
     }
   });
 
+  it('nor does the life lower on the bank: perched flocks, kids sledding and a drop-in', () => {
+    // (Life asks openFoot a little further out than each stands: 4.5 to 8.4 m, plus up to 1.5.)
+    for (const seed of SEEDS) {
+      const c = courseFor(seed);
+      let open = 0;
+      for (let z = 80; z < c.finishZ; z += 3) {
+        for (const e of [3.6, 4.6, 6.4, 8.4]) {
+          if (!openFoot(c, z, e + 1.5)) continue;
+          open++;
+          for (const side of [-1, 1]) {
+            const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+            expect(visualGround(c, x, z) - c.ground(x, z), `rock over it at ${z}`).toBeLessThan(0.3);
+          }
+          const sh = c.shapeAt(z);
+          expect(sh.limit, `inside what bounds the run at ${z}`).toBeGreaterThan(e);
+          expect(sh.fall, `over a gorge at ${z}`).toBeLessThan(1);
+        }
+      }
+      expect(open).toBeGreaterThan(500);
+    }
+  });
+
   it('keeps out of every wall, and of the houses and gorges past a small limit', () => {
     for (const seed of SEEDS) {
       const c = courseFor(seed);

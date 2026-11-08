@@ -56,15 +56,109 @@ async (page) => {
         const o = window.__camOverride;
         const run = window.__gs.run;
         if (o && run && camera && camera.isPerspectiveCamera) {
+          // (Round the rider, or round a target found by `find` when `tcam` set one.)
           const s = run.sim.s;
-          camera.position.set(s.x + o[0], s.y + o[1], -s.z + o[2]);
-          camera.lookAt(s.x + o[3], s.y + o[4], -s.z + o[5]);
+          const t = window.__camTarget || { x: s.x, y: s.y, z: -s.z };
+          camera.position.set(t.x + o[0], t.y + o[1], t.z + o[2]);
+          camera.lookAt(t.x + o[3], t.y + o[4], t.z + o[5]);
           camera.updateMatrixWorld();
         }
         orig(scene, camera);
       };
     }, job.cam);
-    const list = job.at.slice().sort((a, b) => a - b);
+    // `find`: jump to `from`, pick the nearest of that kind of life ahead (herd, fox, rock fox,
+    // perch, sled, drop), and shoot as the rider comes within each of `dists` metres of it, then
+    // `after` ms (each a step) past the last. The shots are frame-exact: the page runs on a virtual
+    // clock in 1/60 s steps while they are taken (as strips.js does), so a busy machine moves nothing.
+    if (job.find) {
+      await page.evaluate((zz) => { window.__gs.run.sim.s.z = zz; }, job.from);
+      await page.waitForTimeout(900);
+      // (Looked for until one is out, up to `settle` ms: a drop-in comes a few hundred metres on.)
+      let target = null;
+      for (let tries = 0; !target && tries * 250 < (job.settle ?? 0) + 1; tries++) {
+        if (tries) await page.waitForTimeout(250);
+        target = await page.evaluate(([kind, zr]) => {
+        const life = window.__gs.world.life;
+        const z = window.__gs.run.sim.s.z;
+        const ahead = (q) => q.z > z + (zr ?? 90);
+        let list = [];
+        if (kind === 'perch') list = life.flocks.filter((f) => f.perch && f.off === Infinity && ahead(f));
+        else {
+          const want = { herd: [0, 1], fox: [3], sitfox: [3], sled: [8], drop: [5] }[kind];
+          list = life.figs.filter((f) => f.live && want.includes(f.kind) && ahead(f) && (kind !== 'sitfox' || f.sit) && (kind !== 'drop' || f.drop === 1));
+        }
+        list.sort((a, b) => a.z - b.z);
+        if (!list.length) return null;
+        const q = list[0];
+        const c = window.__gs.run.sim.course;
+        // Its place in the world: a flock's first bird, or the figure.
+        let w;
+        if (kind === 'perch') { const o = life.aOrbit.array; w = { x: o[q.first * 4], y: o[q.first * 4 + 1], z: o[q.first * 4 + 2] }; }
+        else { const x = c.centerX(q.z) + q.side * (c.halfWidth(q.z) + q.e); w = { x, y: c.ground(x, q.z), z: -q.z }; }
+        return { z: q.z, side: q.side, e: q.e ?? null, w };
+        }, [job.find, job.ahead]);
+      }
+      report.push({ find: job.find, from: job.from, target });
+      if (target && job.tcam) {
+        // A lens near the target: mirrored to its bank (offsets in x flip with the side).
+        const o = job.tcam.slice();
+        o[0] *= target.side;
+        o[3] *= target.side;
+        await page.evaluate(([t, oo]) => { window.__camTarget = t; window.__camOverride = oo; }, [target.w, o]);
+      }
+      if (target) {
+        await page.evaluate(() => {
+          const orig = { now: performance.now.bind(performance), raf: window.requestAnimationFrame.bind(window), caf: window.cancelAnimationFrame.bind(window), st: window.setTimeout.bind(window), ct: window.clearTimeout.bind(window) };
+          const vc = { t: performance.now(), q: [], timers: [], id: 1 };
+          window.__vc = vc;
+          performance.now = () => vc.t;
+          window.requestAnimationFrame = (cb) => { vc.q.push(cb); return vc.id++; };
+          window.cancelAnimationFrame = () => {};
+          window.setTimeout = (fn, ms, ...a) => { const id = vc.id++; vc.timers.push({ id, at: vc.t + (Number(ms) || 0), fn: typeof fn === 'function' ? () => fn(...a) : () => {} }); return id; };
+          window.clearTimeout = (id) => { vc.timers = vc.timers.filter((x) => x.id !== id); };
+          vc.step = () => {
+            vc.t += 1000 / 60;
+            const due = vc.timers.filter((x) => x.at <= vc.t);
+            if (due.length) vc.timers = vc.timers.filter((x) => x.at > vc.t);
+            for (const x of due) { try { x.fn(); } catch (e) { console.error(e); } }
+            const q = vc.q;
+            vc.q = [];
+            for (const cb of q) cb(vc.t);
+          };
+          // Back to the browser's clock, carrying on from the virtual time, frames and timers handed over.
+          vc.restore = () => {
+            const off = orig.now() - vc.t;
+            performance.now = () => orig.now() - off;
+            window.requestAnimationFrame = (cb) => orig.raf((ts) => cb(ts - off));
+            window.cancelAnimationFrame = orig.caf;
+            window.setTimeout = orig.st;
+            window.clearTimeout = orig.ct;
+            for (const cb of vc.q) window.requestAnimationFrame(cb);
+            for (const x of vc.timers) orig.st(x.fn, Math.max(0, x.at - vc.t));
+          };
+        });
+        try {
+          for (const d of job.dists || [60, 40, 25]) {
+            await page.evaluate((zz) => { for (let k = 0; k < 1800 && window.__gs.run && window.__gs.run.sim.s.z < zz; k++) window.__vc.step(); }, target.z - d);
+            const name = `${c.tag}m${job.m}-${tier}-${job.find}-d${d}.png`;
+            await page.screenshot({ path: c.out + name });
+            report.push(name);
+          }
+          let ms = 0;
+          for (const dt of job.after || []) {
+            ms += dt;
+            await page.evaluate((n) => { for (let k = 0; k < n; k++) window.__vc.step(); }, Math.round(dt / (1000 / 60)));
+            const name = `${c.tag}m${job.m}-${tier}-${job.find}-t${ms}.png`;
+            await page.screenshot({ path: c.out + name });
+            report.push(name);
+          }
+        } finally {
+          await page.evaluate(() => window.__vc.restore());
+        }
+      }
+    }
+    await page.evaluate(() => { window.__camTarget = null; });
+    const list = (job.at || []).slice().sort((a, b) => a - b);
     let last = -1e9;
     for (const z of list) {
       if (z - last > 160) {
