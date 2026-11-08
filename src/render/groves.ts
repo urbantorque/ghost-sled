@@ -128,7 +128,8 @@ export function emberGrove(c: Course, i: number, dens: number, rich: boolean, cl
             const t = Math.sqrt((k + 0.5) / n);
             const a = k * 2.39996 + h(40 + ci);
             const hk = hashf(j * 31 + k, sd + 2 * ci, 450);
-            const e = ec + Math.cos(a) * rad * t * 0.75 + (hk - 0.5) * 0.8;
+            // (Never in front of the treeline's foot: a clump by the run is cut off flat on its near side.)
+            const e = Math.max(e0 + 0.6 + hk * 0.6, ec + Math.cos(a) * rad * t * 0.75 + (hk - 0.5) * 0.8);
             const z = zcl + Math.sin(a) * rad * t * 1.3;
             // The outer ring stands dead, as a burn leaves a stand's edge.
             const snag = rich && t > 0.78 && hashf(j * 31 + k, sd, 451) < 0.55;
@@ -226,8 +227,8 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
             const e = inner + 1.2 + r * ROW_GAP + (hashf(k, sd, 510) - 0.5) * 0.5;
             // An old tree gone from the row now and then: an orchard, not a wallpaper.
             if (hashf(k, sd, 511) < 0.07 + r * 0.03) continue;
-            if (!standable(c, z, e) || (clear.length > 0 && inClearing(clear, side, e, z))) continue;
             const zz = z + (hashf(k, sd, 512) - 0.5) * 0.6;
+            if (!standable(c, zz, e) || (clear.length > 0 && inClearing(clear, side, e, zz))) continue;
             plant(r < 2, 'a', b.pale && rich ? 1 : 0, side, e, zz, 0.86 + hashf(k, sd, 513) * 0.18, anyWay(hashf(k, sd, 514)), 0.92 + hashf(k, sd, 515) * 0.16);
           }
         }
