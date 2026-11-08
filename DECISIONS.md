@@ -1536,3 +1536,15 @@ Every place where I replaced, extended or interpreted the brief, and why.
 235. **Animals watch, then go.** Deer and ibex come in herds of three to six (they were one to three), graze, then lift their heads and turn them on the neck toward the rider from about 120 m, and bolt one after another as it comes within 44 to 54 m, fanning out. A fox trots the forest edge, or two times in three sits up on a rock (its own figure, in the mountain's stone, which stays) and follows the rider with its head until it hops down at 22 to 30 m. Heads turn in the vertex shader against the rider's position; the CPU carries only how alert each one is.
 236. **Kids sled the bank, and a snowboarder drops in.** Medium and High: two or three kids slide down the bank on toboggans 5 to 7.5 m past the edge and wave as the rider passes. Every 650 to 1,100 m, where the bank stays open for 200 m, a snowboarder waits 8.4 m up it, drops down to about 4.6 m as the rider comes within 40 m, rides alongside about 18 m ahead for five and a half seconds, carving, then sits back and lets the rider go. It reads the rider's speed from the run, never the sim's state, and asks every 2 m that the bank ahead is open (no rock, wall, set piece or overlook's lip), so it never crosses anything; nothing on the bank is a collider. Rejected: a boarder that crosses the run (it would read as a hazard), and kids sledding down toward the run (life moves away from the run).
 237. **What was left out.** Chimney smoke over a street's houses (the town's chimneys have no way to reach the smoke system short of a new field on every piece, and the steam path is the wrong look), signs and further building texture, and trees that shed snow as the rider passes close (a near miss already does). The crowd ignores reduced motion as it always has: none of its motion moves the lens or flashes.
+
+238. **What the round measured, and what it did not reach.** The skill spread widened: in the lab the novice and
+    the expert are 18 s apart where they were 5, against a seed-to-seed spread of 6 to 9 s, and the careful line and
+    hands-off ride at the novice's pace (README, "Round 5 play-test"). Three things did not land. Low at 6x on a very
+    first run did not win back the last round's loss and sits within about 10% of the old build either way, under on
+    Pinecrest and Ember; a bisect put the lantern and the riders' lane inside the noise and the gap after the living
+    world and the signature-rider field came in, without pinning it. A skilled first-timer now rides clear of the
+    riders who read them (they ride at most 1.12 times their own run, and a pilot dashing at 34 m/s outruns that):
+    the expert's first race is live for 0.41 of the run against 0.89, and it wins every time. Raising that cap would
+    keep the race but fake it harder; leaving it rewards skill on the first run; that is the owner's call. And the
+    returning race is no livelier (mid's runs 2 to 4 are live for 0.44 to 0.62 against 0.50 to 0.72), and the clumsy
+    pilot still finishes nothing in the race; it rides home as a spirit instead.

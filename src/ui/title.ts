@@ -476,9 +476,10 @@ export class Title {
       const rung = rankText(c);
       const name = h('span', 'gs-wall-name', c.name);
       name.setAttribute('translate', 'no');
-      const stars = !c.locked && c.stars ? h('span', 'gs-wall-stars gs-num', `★ ${c.stars.got}/${c.stars.of}`) : null;
-      stars?.setAttribute('aria-label', `Mastery ${c.stars?.got} of ${c.stars?.of} stars`);
-      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet')), !c.locked && c.medals ? medalDots(c.medals) : null, stars);
+      // Mastery's stars ride in the rank's cell, so the row keeps its three columns.
+      const stars = !c.locked && c.stars ? h('span', 'gs-wall-stars', ` · ★ ${c.stars.got}/${c.stars.of}`) : null;
+      stars?.setAttribute('aria-label', `, mastery ${c.stars?.got} of ${c.stars?.of} stars`);
+      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet'), stars), !c.locked && c.medals ? medalDots(c.medals) : null);
       list.append(li);
     }
     if (m.cup) {

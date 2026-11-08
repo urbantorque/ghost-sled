@@ -111,9 +111,14 @@ function sledStats(id: number): StatRow[] {
     { label: 'Turning', pct: (d.turn - 1) * 100 },
     { label: 'Drift charge', pct: (d.driftCharge - 1) * 100 },
     { label: 'Slipstream', pct: (d.draft - 1) * 100 },
-    { label: 'Gift pull', pct: (d.magnet - 1) * 100 },
+    { label: 'Light pull', pct: (d.magnet - 1) * 100 },
     { label: 'Combo time', pct: (d.comboWindow - 1) * 100 },
     { label: 'Pop', pct: (d.pop - 1) * 100 },
+    // The lantern (round 5): what lights it, and what a dash and a ward do with it.
+    { label: 'Lights', pct: (d.lightGain - 1) * 100 },
+    { label: 'Trick light', pct: (d.skillGain - 1) * 100 },
+    { label: 'Dash', pct: (d.dashLen - 1) * 100 },
+    { label: 'Ward', pct: (d.wardKeep - 1) * 100 },
   ];
   return rows.filter((r) => Math.abs(r.pct) >= 0.5).sort((a, b) => b.pct - a.pct);
 }
@@ -128,7 +133,11 @@ const EFFECT: Record<string, [(p: number) => string, (p: number) => string]> = {
   Turning: [(p) => `turns ${p}% sharper`, (p) => `turns ${p}% slower`],
   'Drift charge': [(p) => `drifts charge ${p}% faster`, (p) => `drifts charge ${p}% slower`],
   Slipstream: [(p) => `drafts ${p}% stronger`, (p) => `drafts ${p}% weaker`],
-  'Gift pull': [(p) => `${p}% stronger gift pull`, (p) => `${p}% weaker gift pull`],
+  'Light pull': [(p) => `${p}% stronger light pull`, (p) => `${p}% weaker light pull`],
+  Lights: [(p) => `lights fill the lantern ${p}% more`, (p) => `lights fill the lantern ${p}% less`],
+  'Trick light': [(p) => `skill fills the lantern ${p}% more`, (p) => `skill fills the lantern ${p}% less`],
+  Dash: [(p) => `dashes last ${p}% longer`, (p) => `dashes run ${p}% shorter`],
+  Ward: [(p) => `wards keep ${p}% more speed`, (p) => `wards keep ${p}% less speed`],
   'Combo time': [(p) => `combos last ${p}% longer`, (p) => `combos last ${p}% shorter`],
   Pop: [(p) => `${p}% higher pop`, (p) => `${p}% lower pop`],
 };
