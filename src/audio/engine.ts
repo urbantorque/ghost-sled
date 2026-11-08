@@ -19,28 +19,37 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
 /*
  * Ghost Sled audio: fully procedural WebAudio. No files, no fetches; every sound is synthesized.
  *
- * Signal graph
+ * Signal graph (round 6)
  *
- *   one-shot voices (sfx pool, 24) ---dry---> sfx.dry ----> duck -> level ---------+
- *                                  \--send-> sfx.wet ----> duck -> level --+      |
- *   ambience (wind, snow, hum, rumble) -----> sfx.dry / sfx.wet            |      |
- *   soundscape (crowds, life, places, mood beds; 6 take lanes) -> sfx.dry / sfx.wet
- *   both buses' level outs -> enclosure echo (delay 105 ms, fb 0.42, LP 2.4 kHz) -> master, only
- *     plugged in inside a gallery or a tunnel; each bus's reverb send has a "space" gain
- *                                                                          v      |
- *   music decks (music pool, 32)                                    ConvolverNode |
- *     layer faders: pad bass arp kick hat clap sparkle lead tension     (noise IR,|
- *       -> deck crossfade ----> music.dry -> duck -> level ---------+   1.9 s RT) |
- *       -> layer sends -> xf -> music.wet -> duck -> level -> conv  |      |      |
- *                                                                   |   HP 220 Hz |
- *                                                                   |   LP 7.5 kHz|
- *                                                                   v      v      v
- *                                          master gain (volume) <-----------------+
- *                                               -> mute gain (stackable reasons, 12 ms ramp)
- *                                               -> DynamicsCompressor (fast limiter for stacked peaks)
- *                                               -> ceiling trim (absorbs the compressor's makeup gain)
- *                                               -> destination
+ *   one-shot voices (sfx pool, 24) -> sfx.shots -+-> sfx.dry -> duck -> level ------------------+
+ *                                               +-> key (x the effects level) -> [gs-duck] ---+ |
+ *                                  \--send-> sfx.wet -> duck -> level -> space --+            | |
+ *   ambience, soundscape (wind, snow, sled sound, crowds, places) -> sfx.dry / sfx.wet           | |
+ *                                                                               v            | |
+ *   music decks: lanes (bass, melody, arp, drums,   ConvolverNode (noise IR, 1.9 s)          | |
+ *     riser) and voices (pads, choir, bells,          -> HP 220 -> LP 7.5k -> master          | |
+ *     sparkle, danger), layer faders, the kick's                                              | |
+ *     pump on pad and bass, deck crossfade                                                     | |
+ *       -> music.dry -> glue (2.2:1) -> trim x gain -> side <-------- control (0..1) ---------+ |
+ *            -> duck -> level -> master                                                          |
+ *       -> music.wet -> gain -> side -> duck -> level -> space -> reverb                         |
+ *   both buses' level outs -> enclosure echo (105 ms, only in a gallery or a tunnel) -> master    |
+ *                                                                                                 v
+ *   master gain (volume) <-----------------------------------------------------------------------+
+ *     -> mute gain (stackable reasons, 12 ms ramp) -> highpass 25 Hz
+ *     -> [gs-limiter] true-peak limiter, -1.2 dBTP, 1.3 ms lookahead (AudioWorklet; until it loads, or
+ *        where AudioWorklet is missing, the old fast DynamicsCompressor and its trim)
+ *     -> output gain -> destination
  *
+ * - The master chain (master.ts): two AudioWorklet processors inlined as a blob module. gs-limiter reads
+ *   the peaks 4x oversampled and holds the gain for its lookahead, so nothing passes -1.2 dBTP. gs-duck is
+ *   the sidechain: a power follower on the one-shot effects at the user's effects level, whose gain (at most
+ *   5 dB down) drives the music bus's side gains, so the music gives way to the effects by as much as they
+ *   are loud; with it live the everyday ducks (a stomp, a big bank) are left to it. The deliberate gaps
+ *   (the crash, a big bank's drop, the avalanche escape, a set piece won) still duck by hand.
+ * - The loudness target: about -16 LUFS integrated over a run at the default sliders (music 0.8, effects
+ *   0.8), true peak at or under -1 dBTP, the music within a loudness unit of the effects
+ *   (scripts/playtest/loudness.js; the numbers are in notes/r6-music.md).
  * - Buses: "level" is the user's volume (squared slider curve), "duck" dips music under crashes,
  *   stingers and big rewards. Both buses feed one shared reverb.
  * - Buffers (white/pink/brown stereo noise, grain train, sleigh bell, impulse, and the white noise
@@ -64,7 +73,11 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   cut for an old tail. A shimmer is one voice (both sides), and a perfect landing's bloom rides on
  *   its chord. Parts of a sound starting more than 80 ms ahead (shimmers, arpeggio tails) are built
  *   by a later scheduler pass, so big rewards spread their node creation over several frames.
- * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
+ * - Music (music.ts, score.ts, form.ts, lanes.ts, drums.ts): written songs (a hook, an answer, borrowed
+ *   chords) per mountain in its own key and tempo, arranged in sections (intro, verse, chorus, bridge,
+ *   finale); set pieces, stage lines and the finish land drops on the beat nearest the rider's arrival
+ *   (engine.approach reads the course's landmarks and the speed; a bar is cut to 2/4 or 3/4 when that
+ *   meets the picture). A lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
  *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
  *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.28 (cruising sits at 0.36), the arp
@@ -696,6 +709,12 @@ export class AudioEngine {
     if (eta > markWindow(m.kind) || eta < 0.15) return;
     if (m.kind === 'drop' && now - c.music.landedAt < 3) return;
     c.music.land(now + eta, m.kind, now);
+  }
+
+  /** Probe-only: the true-peak limiter's and the sidechain's deepest gain since the last ask (1 = untouched;
+   *  null on the fallback chain). */
+  debugMaster(): Promise<{ limiter: number; side: number } | null> {
+    return this.core ? this.core.graph.debugGain() : Promise.resolve(null);
   }
 
   /** Debug-only (the jukebox): hold the band in a section and a stage (null lets it go). */

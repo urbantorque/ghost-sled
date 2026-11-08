@@ -7,20 +7,20 @@ const MASTER_TRIM = 0.9;
 const CEILING_FALLBACK = 0.65;
 /**
  * The true-peak limiter's ceiling, linear: -1.2 dBTP, under the -1 dBTP target with room for a decoder's
- * overshoot. And the gain after it that keeps the mix where the loudness target puts it (round 6: about -16
+ * overshoot. And the gain in front of it that keeps the mix where the loudness target puts it (round 6: about -16
  * LUFS integrated over a run at the default sliders, against -18.2 before): the old chain netted +2 dB under
  * its threshold (its makeup over the 0.65 trim), and the new one lifts the whole mix 2 dB more on top of
  * that, which the limiter's ceiling now has room for.
  */
 const TP_CEILING = 0.871;
-const TP_GAIN = 1.26;
+const TP_GAIN = 1.3;
 /** The music bus's glue compressor adds its own makeup gain (Chrome, Firefox and Safari share the
  *  algorithm: (1 / full-range gain)^0.6); this cancels it, so the glue only shapes. */
 const GLUE_TRIM = 0.52;
 /** The music brought up to sit with the effects, not under them (2.8 LU under them in round 5). */
-const MUSIC_GAIN = 1.35;
+const MUSIC_GAIN = 1.6;
 /** The sidechain: how far the music gives way under the one-shot effects (dB at most), and where. */
-const DUCK = { threshold: -34, ratio: 2.5, range: 5, attack: 0.005, release: 0.22 } as const;
+const DUCK = { threshold: -20, ratio: 2.5, range: 5, attack: 0.005, release: 0.22 } as const;
 
 /** Perceptual slider curve: half way on a slider sounds roughly half as loud. */
 const curve = (v: number): number => {
@@ -178,6 +178,8 @@ export class Graph {
   readonly ready: Promise<boolean>;
   /** The true-peak limiter and the sidechain, once loaded. */
   tp: AudioWorkletNode | null = null;
+  /** The gain in front of the true-peak limiter (the loudness target's lift). */
+  private drive: GainNode | null = null;
   side: AudioWorkletNode | null = null;
   private readonly lowcut: BiquadFilterNode | null = null;
   private readonly verbHP: BiquadFilterNode;
@@ -264,11 +266,15 @@ export class Graph {
       const side = new AudioWorkletNode(ctx, 'gs-duck', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1] });
       const P = (k: keyof typeof DUCK): AudioParam => side.parameters.get(k) as AudioParam;
       for (const k of Object.keys(DUCK) as (keyof typeof DUCK)[]) P(k).value = DUCK[k];
+      // The mix's gain goes in front of the limiter, so nothing it lifts can pass the ceiling.
       const pre = this.lowcut ?? this.mute;
+      const drive = ctx.createGain();
+      drive.gain.value = TP_GAIN;
       pre.disconnect(this.limiter);
       this.limiter.disconnect();
-      pre.connect(tp).connect(this.ceiling);
-      this.ceiling.gain.value = TP_GAIN;
+      pre.connect(drive).connect(tp).connect(this.ceiling);
+      this.ceiling.gain.value = 1;
+      this.drive = drive;
       const key = this.sfx.key;
       const sd = this.music.sideDry;
       const sw = this.music.sideWet;
@@ -344,6 +350,7 @@ export class Graph {
     this.sfx.disconnect();
     for (const n of [this.reverb, this.verbHP, this.verbLP, this.verbOut, this.master, this.mute, this.limiter, this.ceiling, ...this.echoNodes]) n.disconnect();
     this.lowcut?.disconnect();
+    this.drive?.disconnect();
     this.tp?.disconnect();
     this.side?.disconnect();
   }

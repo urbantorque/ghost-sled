@@ -1438,7 +1438,7 @@ export class Sfx {
 
   /**
    * When a moment the band lands on sounds: on the landing if one is planned within `ahead` seconds (the
-   * band's drop and the cue are one hit), at once if the band landed a moment ago, else on the next beat
+   * band's drop and the cue are one hit), on the next 16th if the band landed a moment ago, else on the next beat
    * (within `wait`).
    */
   private onLanding(t: number, ahead: number, wait: number): { t: number; landed: boolean } {
@@ -1446,7 +1446,7 @@ export class Sfx {
     if (!band) return { t, landed: false };
     const l = band.landing();
     if (l && l.t >= t - 0.02 && l.t - t <= ahead) return { t: Math.max(t, l.t), landed: true };
-    if (t - band.landedAt < 0.45) return { t, landed: true };
+    if (t - band.landedAt < 0.45) return { t: this.onGrid(t, 1, 0.15), landed: true };
     return { t: this.onGrid(t, 4, wait), landed: false };
   }
 

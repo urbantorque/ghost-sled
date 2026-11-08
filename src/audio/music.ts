@@ -62,6 +62,9 @@ const SEND: Record<Layer, number> = {
 };
 
 const XFADE = 1.5;
+/** Each section's level on the run (the arrangement's dynamics: a chorus over a verse, a bridge a breath under
+ *  both), so the run's loudness moves with its form. */
+const SECTION_GAIN: Record<SectionName, number> = { intro: 0.85, verse: 0.89, chorus: 1, bridge: 0.72, finale: 1.06 };
 const AUDIBLE = 0.02;
 const BOX = [0, 2, 4, 3, 4, 2, 1, 2];
 
@@ -135,6 +138,8 @@ class Deck {
   private readonly fader = {} as Record<Layer, GainNode>;
   /** The kick's pump on the pad and the bass (a sidechain by automation: a dip at each kick). */
   private readonly pump: GainNode;
+  /** The section's level (SECTION_GAIN), between the faders and the crossfade. */
+  private readonly sectG: GainNode;
   private readonly sends: GainNode[] = [];
   private readonly xf: GainNode;
   private readonly xfWet: GainNode;
@@ -213,12 +218,15 @@ class Deck {
     this.xfWet = ctx.createGain();
     this.xfWet.gain.value = 0;
     this.xfWet.connect(bus.wet);
+    this.sectG = ctx.createGain();
+    this.sectG.gain.value = scene === 'run' ? SECTION_GAIN.intro : 1;
+    this.sectG.connect(this.xf);
     this.pump = ctx.createGain();
-    this.pump.connect(this.xf);
+    this.pump.connect(this.sectG);
     for (const l of LAYERS) {
       const f = ctx.createGain();
       f.gain.value = 0;
-      f.connect(l === 'pad' || l === 'bass' ? this.pump : this.xf);
+      f.connect(l === 'pad' || l === 'bass' ? this.pump : this.sectG);
       const snd = ctx.createGain();
       snd.gain.value = SEND[l] * s.verb;
       f.connect(snd);
@@ -370,6 +378,7 @@ class Deck {
     for (const ln of this.lanes.values()) ln.dispose();
     this.lanes.clear();
     this.pump.disconnect();
+    this.sectG.disconnect();
     this.xf.disconnect();
     this.xfWet.disconnect();
   }
@@ -639,7 +648,7 @@ class Deck {
     const landed = this.advance(step);
     const root = this.key.tonic + this.chord.root;
     this.arpCount = 0;
-    if (this.padFor !== step) this.padChord(this.chord, root, t, this.barDur(), step);
+    if (this.padFor !== step && !(this.sec.name === 'finale' && this.padEnd > t + 0.3)) this.padChord(this.chord, root, t, this.barDur(), step);
     const dur = this.barDur() * (this.sec.name === 'finale' && this.sec.bar === 0 ? 2 : 1);
     this.choirChord = { chord: this.chord, root, end: t + dur };
     this.sung = [];
@@ -648,6 +657,7 @@ class Deck {
       // The section's own levels arrive on its downbeat, not on the faders' slow drift.
       this.levels();
       this.applyLevels(t, 0.03);
+      if (this.scene === 'run') this.sectG.gain.setTargetAtTime(SECTION_GAIN[this.sec.name], t, landed ? 0.01 : 0.12);
     }
     if (landed) {
       this.landedAt = t;
@@ -672,7 +682,8 @@ class Deck {
     if (next - step <= 8 && this.padFor !== next) {
       const p = this.peek(next);
       const tp = t + (next - step) * this.stepDur;
-      if (tp < this.stopAt) this.padChord(p.chord, this.key.tonic + (p.lift - this.keyLift) + p.chord.root, tp, this.barDur() * (p.sec.name === 'finale' ? 2 : 1), next);
+      // (The finale's tonic rings two bars on one pad.)
+      if (tp < this.stopAt && !(p.sec.name === 'finale' && this.padEnd > tp + 0.3)) this.padChord(p.chord, this.key.tonic + (p.lift - this.keyLift) + p.chord.root, tp, this.barDur() * (p.sec.name === 'finale' ? 2 : 1), next);
     }
 
     const name = this.sec.name;

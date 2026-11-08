@@ -63,8 +63,18 @@ async (page) => {
       sp.connect(sink).connect(ctx.destination);
       // From the run's start (the count-in included) for `seconds`, or to the results.
       const start = performance.now();
+      // Round 6 on: the true-peak limiter's and the sidechain's deepest gain each quarter second.
+      const lim = [];
+      const side = [];
       while (performance.now() - start < seconds * 1000) {
         await new Promise((r) => setTimeout(r, 250));
+        if (a.debugMaster) {
+          const m = await a.debugMaster();
+          if (m) {
+            lim.push(m.limiter);
+            side.push(m.side);
+          }
+        }
         if (g.phase === 'results' && performance.now() - start > 8000) {
           await new Promise((r) => setTimeout(r, 4000));
           break;
@@ -194,6 +204,17 @@ async (page) => {
         corr: Math.round((slr / Math.sqrt(sl * sr2 + 1e-30)) * 100) / 100,
         monoLoss: r1(full.lufs - monoM.lufs),
         phoneLoss: r1(full.lufs - phoneM.lufs),
+        // The limiter's deepest gain reduction (dB), and the share of quarter seconds it took more than 1 dB and
+        // more than 3 dB; the sidechain's deepest duck and the share it ducked the music more than 1 dB.
+        ...(lim.length
+          ? {
+              limMaxDb: r1(-20 * Math.log10(Math.max(1e-6, Math.min(...lim)))),
+              lim1: Math.round((lim.filter((g) => g < 0.891).length / lim.length) * 1000) / 1000,
+              lim3: Math.round((lim.filter((g) => g < 0.708).length / lim.length) * 1000) / 1000,
+              sideMaxDb: r1(-20 * Math.log10(Math.max(1e-6, Math.min(...side)))),
+              side1: Math.round((side.filter((g) => g < 0.891).length / side.length) * 1000) / 1000,
+            }
+          : {}),
       };
     }, [p.part, seconds]);
     out.push({ m: p.m, ...res });
