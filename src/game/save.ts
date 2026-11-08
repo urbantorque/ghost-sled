@@ -1,5 +1,6 @@
 import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
+import { type MasteryRecord, readMastery } from './mastery';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
@@ -120,6 +121,9 @@ export interface SaveData {
   climb?: Record<string, Climb>;
   /** This week's Cup, in the Daily's shape: best is a finish time in seconds, medal the week's best. */
   cup?: DailyRecord;
+  /** Each named mountain's mastery board, what you hold of it (mastery.ts). Kept across a clean break:
+   *  the gates, set pieces and riders are each mountain's own. */
+  mastery?: Record<string, MasteryRecord>;
 }
 
 export function defaultSave(name: string): SaveData {
@@ -450,6 +454,13 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const cup = loadCup(p.cup, weekOfDay(today));
   if (cup) d.cup = cup;
   else delete d.cup;
+  // Mastery, a record per named mountain (only those): sanitised, and written only when it holds some.
+  if (p.mastery && typeof p.mastery === 'object') {
+    const ms: Record<string, MasteryRecord> = {};
+    for (const [k, v] of Object.entries(p.mastery as Record<string, unknown>)) if (/^[a-z]+$/.test(k)) ms[k] = readMastery(v);
+    if (Object.keys(ms).length) d.mastery = ms;
+    else delete d.mastery;
+  } else delete d.mastery;
   pruneDaily(d, today);
   return d;
 }

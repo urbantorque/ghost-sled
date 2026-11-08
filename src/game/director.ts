@@ -360,6 +360,8 @@ export class Director {
   private mqHits = 0;
   /** Hits so far this run: wards, wipeouts and bumps (a moment is clean with none inside it). */
   private hits = 0;
+  /** Wards and wipeouts this run (a clean finish has none). */
+  falls = 0;
   /** What each moment came to this run, for the results and mastery. */
   readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean }> = [];
   private avalancheAt = -1;
@@ -555,6 +557,7 @@ export class Director {
     this.mqNext = 0;
     this.mqIn = -1;
     this.hits = 0;
+    this.falls = 0;
     this.marqueeDone.length = 0;
     this.avalancheAt = -1;
     this.bestBank = 0;
@@ -894,6 +897,7 @@ export class Director {
     };
     for (const p of f.events) {
       if (p.e.type === 'bump' || p.e.type === 'ward' || (p.e.type === 'tumble' && p.e.phase === 'start')) this.hits++;
+      if (p.e.type === 'ward' || (p.e.type === 'tumble' && p.e.phase === 'start')) this.falls++;
       const e = p.e;
       switch (e.type) {
         case 'chaos':

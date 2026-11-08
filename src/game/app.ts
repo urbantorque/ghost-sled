@@ -27,6 +27,8 @@ import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { planMarquee } from './marquee';
+import { ROSTER, riderByName } from '../bot/roster';
+import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { courseFor } from '../sim/course';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -213,6 +215,10 @@ export class App {
   private passedThisRun = new Set<number>();
   /** Gifts earned for passing ghosts (kept out of the sim so live state matches replays). */
   private passBonus = 0;
+  /** Mastery stars this run earned (shown on the card; each paid once). */
+  private masteryFresh: string[] = [];
+  /** Sky gates flown this run (mastery). */
+  private gatesThisRun: number[] = [];
   private grudgeBeaten = false;
   private paused = false;
   private adPlaying = false;
@@ -574,6 +580,10 @@ export class App {
           rankOf: spot.of,
           top: spot.top,
           medals: medalsHeld(d.climb?.[m.id]),
+          stars: (() => {
+            const b = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery?.[m.id]), d.climb?.[m.id]?.medal ?? 0);
+            return { got: b.filter((s) => s.done).length, of: b.length };
+          })(),
         };
       }),
       selected: this.mountain.id,
@@ -821,6 +831,8 @@ export class App {
     this.recordsThisRun.clear();
     this.passedThisRun.clear();
     this.passBonus = 0;
+    this.gatesThisRun = [];
+    this.masteryFresh = [];
     this.grudgeBeaten = false;
     this.passedAtStart = d.ghostsPassed;
     this.settlement = null;
@@ -1337,6 +1349,28 @@ export class App {
     const you = this.youStanding(sim);
     const board = MOUNTAINS.some((m) => m === this.mountain) ? this.boardFor(this.mountain.id) : null;
     const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks }) : null;
+    // A named mountain's mastery board: what this run added, each new star paid once.
+    let mastery: ResultsModel['mastery'] = null;
+    const mi = MOUNTAINS.indexOf(this.mountain as (typeof MOUNTAINS)[number]);
+    if (mi >= 0) {
+      d.mastery ??= {};
+      const rec = readMastery(d.mastery[key]);
+      const pool = poolFor(key);
+      const riderTimes = new Map(ROSTER.filter((r) => r.home === mi).map((r) => {
+        const g = pool.find((p) => p.name === r.name);
+        return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
+      }));
+      const course = courseFor(this.mountain.seed);
+      const fresh = settleMastery(course, key, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
+      d.mastery[key] = rec;
+      if (fresh.length) {
+        d.gifts += STAR_GIFTS * fresh.length;
+        d.lifetimeGifts += STAR_GIFTS * fresh.length;
+        this.masteryFresh.push(...fresh);
+      }
+      const board = masteryBoard(course, key, rec, d.climb?.[key]?.medal ?? 0);
+      mastery = { got: board.filter((s) => s.done).length, of: board.length, fresh: [...this.masteryFresh] };
+    }
     // The missions this card shows Done: a revive never pops them again mid-run.
     for (const mv of settled.missions) if (mv.justCompleted) this.missionsSettled.add(mv.id);
     const missions = { views: settled.missions };
@@ -1371,6 +1405,13 @@ export class App {
     const past = pastTracks.map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
     const shownPast = pastTracks.filter((t) => shownAt(t) < Infinity).length;
     const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past, shownPast) : null;
+    // A signature rider has the last word: the one just ahead of you, else the one you just beat.
+    const sig = ghosts.filter((g) => g.kind === 'pool' && riderByName(g.name));
+    const over = sig.filter((g) => aheadOf({ time: g.time ?? null, distance: g.distance }, you));
+    const under = sig.filter((g) => !aheadOf({ time: g.time ?? null, distance: g.distance }, you));
+    const said = over.length ? { r: riderByName(over[over.length - 1].name)!, won: true } : under.length ? { r: riderByName(under[0].name)!, won: false } : null;
+    const lines = said ? (said.won ? said.r.says.won : said.r.says.lost) : [];
+    const quote = said && lines.length ? { name: said.r.name, text: lines[(this.save.data.runs + said.r.key.length) % lines.length], accent: said.r.accent } : null;
     const at = this.bestAtStart;
     const decided = this.decided(sim, you);
     const today = this.daily.tagline;
@@ -1424,6 +1465,8 @@ export class App {
       // One race line (C6): a friend's challenge, the Daily medal, a settled grudge or a nemesis, who
       // rode on past your wreck, the event the run never reached, then any other grudge line. The crash
       // line is also the place note's (results.ts), unless it is the race line itself.
+      quote,
+      mastery,
       raceLine: resultsRaceLine({
         friend: this.friendLine(sim),
         daily: settled.daily?.line ?? settled.cup?.line ?? null,
@@ -2019,6 +2062,7 @@ export class App {
 
     const drained = run.drain();
     const events = drained.map((p) => p.e);
+    for (const e of events) if (e.type === 'skyGate') this.gatesThisRun.push(e.id);
     if (!sim.s.grounded) this.airTicks++;
     else this.airTicks = 0;
     // Standings once per frame: the world's rival, the HUD pill and the hints all read these. After the

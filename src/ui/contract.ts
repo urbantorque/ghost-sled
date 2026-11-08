@@ -27,6 +27,8 @@ export interface MountainCard {
   /** You have beaten the top of this ladder. */
   top?: boolean;
   medals?: MedalSet;
+  /** Mastery stars held of the mountain's board. */
+  stars?: { got: number; of: number };
 }
 
 /** Your medals on a mountain: 0 none, 1 bronze, 2 silver, 3 gold, one per stage and the whole run. */
@@ -231,6 +233,11 @@ export interface ResultsModel {
   lostCombo?: number;
   /** At most ONE extra race line on the card (C6 budget): friend, then grudge, then event note. */
   raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' | 'rung' | 'medal' } | null;
+  /** A signature rider's word on the result (round 5): the one just ahead of you, else the one you just
+   *  beat. Its accent is its own colour (roster.ts). */
+  quote?: { name: string; text: string; accent: string } | null;
+  /** A named mountain's mastery: stars held of the board, and the ones this run earned (each pays 10). */
+  mastery?: { got: number; of: number; fresh: string[] } | null;
   /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
    *  past."): shown in the place note's slot, unless it is the race line itself. */
   crashNote?: string | null;

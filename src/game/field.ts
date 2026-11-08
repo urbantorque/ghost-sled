@@ -1,3 +1,4 @@
+import { riderByName } from '../bot/roster';
 import { ChaosEvent, Mood } from '../sim/chaos';
 import { recordFromString } from '../sim/replay';
 import type { GhostKind } from '../ui/contract';
@@ -261,8 +262,12 @@ export function pickField(i: FieldInput): FieldPick[] {
     let widened = false;
     for (let k = 0; k <= 3 && !found; k++) {
       const w = widen(r, k);
-      const inside = cands.filter((g) => timeOf(g) >= w.lo && timeOf(g) <= w.hi && fits(g));
-      if (!inside.length) continue;
+      const all = cands.filter((g) => timeOf(g) >= w.lo && timeOf(g) <= w.hi && fits(g));
+      if (!all.length) continue;
+      // A signature rider in the window rides before the crowd (round 5): the race is people you come to
+      // know. Only inside the role's own window, so the pace of the field is unchanged.
+      const named = all.filter((g) => riderByName(g.name) !== null);
+      const inside = named.length ? named : all;
       const ties = inside.filter((g) => Math.abs(timeOf(g) - r.target) <= FIELD_TIE_S);
       if (ties.length > 1) found = ties[Math.min(ties.length - 1, Math.floor(rand() * ties.length))];
       else found = inside.reduce((b, g) => (Math.abs(timeOf(g) - r.target) < Math.abs(timeOf(b) - r.target) ? g : b));

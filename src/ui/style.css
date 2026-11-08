@@ -8816,3 +8816,61 @@
 .gs-mq.is-clean {
   box-shadow: inset 0 0 0 2px #ffd34d, 0 0 18px rgba(255, 211, 77, 0.35), var(--shadow);
 }
+
+/* A signature rider's word on the result: its line in quotes, its name, a rule in its own colour. */
+.gs-res-quote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 2px 0 0;
+  padding-left: 10px;
+  border-left: 3px solid var(--accent, #8ff3e4);
+  font-size: 0.86em;
+}
+
+.gs-res-quote-t {
+  font-style: italic;
+  font-weight: 800;
+}
+
+.gs-res-quote-n {
+  opacity: 0.72;
+  font-weight: 700;
+}
+
+/* Mastery on the results and the medal wall: stars held of a mountain's board, new ones in marigold. */
+.gs-res-mastery {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  margin: 2px 0 0;
+  font-size: 0.86em;
+  font-weight: 800;
+}
+
+.gs-res-mastery-k {
+  opacity: 0.72;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.86em;
+}
+
+.gs-res-mastery-new,
+.gs-res-mastery-pay {
+  color: var(--gift);
+}
+
+.gs-res-mastery-new .gs-i {
+  width: 1em;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: -0.12em;
+}
+
+.gs-wall-stars {
+  color: var(--gift);
+  font-weight: 900;
+  white-space: nowrap;
+}

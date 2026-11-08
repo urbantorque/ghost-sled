@@ -440,7 +440,7 @@ export class Results {
     // line count (C6), so your row stays in the first view under an unlock card and three offers. A
     // crash note dropped there leaves its place beside the chip ("Led at the crash", placeAtCrash).
     const note = raceNote(m);
-    const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, giftsRow(m));
+    const sub = h('div', `gs-res-sub${line ? ' has-line' : ''}`, cause, line && note && sameMargin(line, note) ? null : note, line, quoteLine(m), masteryRow(m), giftsRow(m));
     // A newly unlocked mountain is the run's reveal: it rides in the head, beside the crash line on
     // wide screens and straight under it on phones, so it is never below the fold. With none, the
     // same slot holds the next unlock to ride for, with how close it is.
@@ -994,6 +994,25 @@ function runTip(m: ResultsModel, turn: number, mode: InputMode): string {
  * line like the place note. A friend or grudge line wears its ghost's colour and a ghost glyph in the
  * crash line's icon column; an event note stays quiet off-white.
  */
+/** The mountain's mastery: stars held of its board, and what this run earned. */
+function masteryRow(m: ResultsModel): HTMLElement | null {
+  const ms = m.mastery;
+  if (!ms) return null;
+  const got = h('span', 'gs-res-mastery-n gs-num', `★ ${ms.got} of ${ms.of}`);
+  const fresh = ms.fresh.length ? h('span', 'gs-res-mastery-new', ms.fresh.length === 1 ? `New: ${ms.fresh[0]}` : `${ms.fresh.length} new stars`, h('span', 'gs-res-mastery-pay gs-num', ` +${ms.fresh.length * 10}`), icon('gift')) : null;
+  return h('p', `gs-res-mastery${fresh ? ' is-new' : ''}`, h('span', 'gs-res-mastery-k', 'Mastery'), got, fresh);
+}
+
+/** A signature rider's word on the result: the line in quotes, the name after it, a rule in its colour. */
+function quoteLine(m: ResultsModel): HTMLElement | null {
+  const q = m.quote;
+  if (!q) return null;
+  const p = h('p', 'gs-res-quote', h('span', 'gs-res-quote-t', `“${q.text}”`), h('span', 'gs-res-quote-n', q.name));
+  p.style.setProperty('--accent', q.accent);
+  p.setAttribute('translate', 'no');
+  return p;
+}
+
 function raceLine(m: ResultsModel): HTMLElement | null {
   const l = m.raceLine;
   if (!l || !l.text) return null;
