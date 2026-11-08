@@ -36,6 +36,22 @@ export const CRASH_CURVE: readonly TimeKey[] = [
   { at: 0.6, scale: 1 },
 ];
 
+/** A ward's beat (round 6): as the lantern cracks open round the rider, the picture eases into slow
+ *  motion (0.3 by 50 ms), holds it to 0.3 s and eases back to full speed by 0.52 s (smoothstep, sampled
+ *  into keys). Played on both channels, as a stomp's hit-stop is on the feed: the rider, the pack and the
+ *  lantern's shards all slow together, while the sim stays tick-exact (only how much real time is fed to
+ *  the fixed loop changes, so a replay and every ghost are untouched). Reduced motion plays none of it. */
+export const WARD_CURVE: readonly TimeKey[] = [
+  { at: 0, scale: 1 },
+  { at: 0.025, scale: 0.55 },
+  { at: 0.05, scale: 0.3 },
+  { at: 0.3, scale: 0.3 },
+  { at: 0.355, scale: 0.406 },
+  { at: 0.41, scale: 0.65 },
+  { at: 0.465, scale: 0.894 },
+  { at: 0.52, scale: 1 },
+];
+
 /** Live pulses kept per channel (a beat never needs more: the weakest is dropped when full). */
 const SLOTS = 4;
 

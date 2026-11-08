@@ -1,4 +1,4 @@
-import type { MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
+import type { GarageCard, GarageShelf, GarageShelfId, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -6,14 +6,16 @@ import { fmt, percent } from './fmt';
 import { icon } from './icons';
 import { SettingsPanel } from './settings';
 import { missionList } from './title';
+import { hatArt, paintArt, scarfArt, soundArt, trailArt } from './garageart';
 
-// Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: Sleds and
+// Pause overlay (Resume, the run's missions, inline settings, Home) and the two sheets: the Garage and
 // Settings.
 // Escape is deliberately not bound: on CrazyGames it exits fullscreen. The game maps P to pause.
-// The Sleds sheet is a shop: a large preview of the picked sled (rider seated, what it does in one
-// plain line, its trade-offs as plus and minus bars, the one action) beside a grid of tiles that
-// pick what the preview shows. The sleds are renders of the real in-game meshes when the game hands
-// over a portrait source; without one they fall back to the flat vector art.
+// The Garage is a shop in tabs (round 6): Sleds, Paint, Scarves, Hats, Trails and Sounds. Each tab is a
+// large preview of the picked item (what it is in one plain line, the one action) beside a grid of tiles
+// that pick what the preview shows. The sleds are renders of the real in-game meshes when the game hands
+// over a portrait source, with the flat vector art as the fallback; the looks are drawn from the numbers
+// the game builds them from (garageart.ts). Buying is two taps everywhere: Buy arms, Confirm spends.
 
 /** The sim's clean-landing yaw window in radians: a sled's landTol widens it. */
 const LAND_WINDOW = 0.62;
@@ -173,6 +175,33 @@ function statRow(r: StatRow): HTMLElement {
   return h('li', `gs-stat-row ${up ? 'is-up' : 'is-down'}`, icon(up ? 'plus' : 'minus', 'gs-stat-sign'), name, sr(` ${up ? 'plus' : 'minus'} ${Math.abs(v)} percent`), bar, val);
 }
 
+/** The garage's tabs: the sleds, their paints, and the round 6 shelves. */
+type GarageTab = 'sleds' | 'paint' | GarageShelfId;
+const SHELF_ORDER: readonly GarageShelfId[] = ['scarf', 'hat', 'trail', 'sound'];
+const TAB_LABEL: Record<GarageTab, string> = { sleds: 'Sleds', paint: 'Paint', scarf: 'Scarves', hat: 'Hats', trail: 'Trails', sound: 'Sounds' };
+/** What an item already on says, by shelf. */
+const ON_WORD: Record<Exclude<GarageTab, 'sleds'>, string> = { paint: 'On your sled', scarf: 'Wearing', hat: 'Wearing', trail: 'On your sled', sound: 'On your sled' };
+/** One plain line under each shelf's preview: what the look touches, and that it is only a look. */
+const NOTE: Record<Exclude<GarageTab, 'sleds'>, string> = {
+  paint: 'A look only: every sled rides the same in any paint.',
+  scarf: 'A look only. Your scarf stays vermillion, so you always know which rider is you.',
+  hat: 'Seen from behind, as you see it on the run. A look only.',
+  trail: 'What your sled leaves in the snow. A look only.',
+  sound: 'How your own runners sound. Cues that tell you something never change.',
+};
+
+/** A look shelf's item as the garage draws it (a paint or a garage card, with its preview). */
+interface LookItem {
+  id: string;
+  name: string;
+  blurb: string;
+  price: number;
+  owned: boolean;
+  on: boolean;
+  affordable: boolean;
+  art: string;
+}
+
 export class Menus {
   readonly pause: Layer;
   readonly sleds: Layer;
@@ -191,7 +220,11 @@ export class Menus {
   private homeArmed = 0;
   /** Last data the game gave us, so the title buttons can reopen a sheet without a round trip. */
   lastSettings: SettingsModel | null = null;
-  lastSleds: { cards: SledCard[]; wallet: number; paints?: PaintCard[] } | null = null;
+  lastSleds: { cards: SledCard[]; wallet: number; paints?: PaintCard[]; shelves?: GarageShelf[] } | null = null;
+  /** The garage's open tab, and the item each look shelf's preview shows. */
+  private tab: GarageTab = 'sleds';
+  private itemPick: Partial<Record<GarageTab, string>> = {};
+  private itemShown = '';
   /** The sled the shop preview shows. */
   private sledPick = 0;
   private heroShown = -1;
@@ -256,7 +289,7 @@ export class Menus {
     // Sleds sheet.
     this.sledsWallet = h('span', 'gs-num');
     this.sledsBody = h('div', 'gs-sheet-body');
-    const sledsHead = this.sheetHead('Sleds', 'gs-sleds-title', () => this.closeSheet(this.sleds), h('span', 'gs-wallet gs-panel gs-pill', icon('gift'), this.sledsWallet, sr(' gifts')));
+    const sledsHead = this.sheetHead('Garage', 'gs-sleds-title', () => this.closeSheet(this.sleds), h('span', 'gs-wallet gs-panel gs-pill', icon('gift'), this.sledsWallet, sr(' gifts')));
     this.sledsSheet = this.sheet('gs-sheet-sleds', 'gs-sleds-title', sledsHead, this.sledsBody);
     const sledsWrap = this.wrap(this.sledsSheet, () => this.closeSheet(this.sleds));
     this.sleds = new Layer(sledsWrap, 200);
@@ -363,11 +396,14 @@ export class Menus {
     this.onChange();
   }
 
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void {
-    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet, paints: paints?.map((p) => ({ ...p })) };
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void {
+    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet, paints: paints?.map((p) => ({ ...p })), shelves: shelves?.map((s) => ({ id: s.id, items: s.items.map((i) => ({ ...i })) })) };
     const fresh = !this.sleds.open;
-    // A fresh open previews the equipped sled; a refresh (bought, equipped) keeps the pick.
+    // A fresh open previews the equipped sled and what is worn on every shelf; a refresh (bought,
+    // equipped) keeps the picks and the tab.
     if (fresh || !cards.some((c) => c.id === this.sledPick)) this.sledPick = (cards.find((c) => c.equipped) ?? cards[0])?.id ?? 0;
+    if (fresh) this.itemPick = {};
+    if (!this.tabs().includes(this.tab)) this.tab = 'sleds';
     this.renderShop(fresh);
     if (this.sleds.show()) {
       this.rememberFocus();
@@ -377,7 +413,17 @@ export class Menus {
     this.onChange();
   }
 
-  /** Builds the shop from lastSleds, keeping focus and scroll when it is already open. */
+  /** The garage's tabs the game handed data for, in their order. */
+  private tabs(): GarageTab[] {
+    const last = this.lastSleds;
+    const out: GarageTab[] = ['sleds'];
+    if (last?.paints?.length) out.push('paint');
+    for (const id of SHELF_ORDER) if (last?.shelves?.some((s) => s.id === id && s.items.length)) out.push(id);
+    return out;
+  }
+
+  /** Builds the garage from lastSleds (its tabs, then the open tab's preview and tiles), keeping focus and
+   *  scroll when it is already open. */
   private renderShop(fresh: boolean): void {
     const last = this.lastSleds;
     if (!last) return;
@@ -385,39 +431,198 @@ export class Menus {
     const fk = fresh ? null : captureFocus(this.sledsSheet);
     const scroll = this.sledsBody.scrollTop;
     this.sledsWallet.textContent = fmt(wallet);
-    const pick = cards.find((c) => c.id === this.sledPick) ?? cards[0];
-    const grid = h('div', 'gs-shop-grid');
-    grid.setAttribute('role', 'group');
-    grid.setAttribute('aria-label', 'All sleds');
-    for (const c of cards) grid.append(this.sledTile(c, c === pick, wallet));
-    const shop = h('div', 'gs-shop', pick ? this.sledHero(pick, wallet, fresh) : null, grid, last.paints ? this.paintRow(last.paints) : null);
-    this.sledsBody.replaceChildren(shop);
+    const tabs = this.tabs();
+    const bar = tabs.length > 1 ? this.tabBar(tabs) : null;
+    let panel: HTMLElement;
+    if (this.tab === 'sleds') {
+      const pick = cards.find((c) => c.id === this.sledPick) ?? cards[0];
+      const grid = h('div', 'gs-shop-grid');
+      grid.setAttribute('role', 'group');
+      grid.setAttribute('aria-label', 'All sleds');
+      for (const c of cards) grid.append(this.sledTile(c, c === pick, wallet));
+      panel = h('div', 'gs-shop', pick ? this.sledHero(pick, wallet, fresh) : null, grid);
+    } else {
+      panel = this.lookPanel(this.tab, wallet, fresh);
+    }
+    panel.id = 'gs-garage-panel';
+    if (bar) {
+      panel.setAttribute('role', 'tabpanel');
+      panel.setAttribute('aria-labelledby', `gs-gtab-${this.tab}`);
+    }
+    this.sledsBody.replaceChildren(...(bar ? [bar] : []), panel);
+    // On a phone the tabs scroll sideways: keep the open one in view (set directly, so the sheet's own
+    // scroll never moves with it).
+    const on = bar?.querySelector<HTMLElement>('.gs-gtab.is-on');
+    if (bar && on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
     if (!fresh) {
       this.sledsBody.scrollTop = scroll;
       if (!restoreFocus(this.sledsSheet, fk)) this.sledsSheet.querySelector<HTMLElement>('[data-fk="sled-act"]')?.focus({ preventScroll: true });
     }
   }
 
-  /** The garage's paint shelf: a swatch each, its price until it is yours, a ring on the one on the sled.
-   *  A paint is a look, never an edge; the trim and the rider's scarf stay vermillion. */
-  private paintRow(paints: PaintCard[]): HTMLElement {
-    const row = h('div', 'gs-paints');
-    row.setAttribute('role', 'group');
-    row.setAttribute('aria-label', 'Sled paint');
-    for (const p of paints) {
-      const sw = h('span', 'gs-paint-sw');
-      sw.style.background = p.hex || 'linear-gradient(135deg, #e0a060, #b07840)';
-      const tag = p.owned ? (p.on ? h('span', 'gs-paint-on', 'On') : null) : h('span', `gs-paint-price${p.affordable ? '' : ' is-short'}`, icon('gift'), h('span', 'gs-num', fmt(p.price)));
-      const b = h('button', `gs-paint${p.on ? ' is-on' : ''}${!p.owned && !p.affordable ? ' is-locked' : ''}`, sw, h('span', 'gs-paint-name', p.name), tag) as HTMLButtonElement;
+  /** The garage's tabs: a row of pills, one per shelf (arrow keys move between them, as tabs do). */
+  private tabBar(tabs: GarageTab[]): HTMLElement {
+    const bar = h('div', 'gs-gtabs');
+    bar.setAttribute('role', 'tablist');
+    bar.setAttribute('aria-label', 'Garage shelves');
+    const pick = (t: GarageTab, focus: boolean) => {
+      if (t === this.tab) return;
+      this.ctx.sound('tap');
+      this.tab = t;
+      this.renderShop(false);
+      if (focus) this.sledsSheet.querySelector<HTMLElement>(`[data-fk="gtab-${t}"]`)?.focus({ preventScroll: true });
+    };
+    for (const t of tabs) {
+      const on = t === this.tab;
+      const b = h('button', `gs-gtab${on ? ' is-on' : ''}`, TAB_LABEL[t]);
       b.type = 'button';
-      b.dataset.fk = `paint-${p.id}`;
-      b.setAttribute('aria-pressed', p.on ? 'true' : 'false');
-      b.setAttribute('aria-label', p.owned ? `${p.name} paint${p.on ? ', on your sled' : ''}` : `${p.name} paint, ${p.price} gifts${p.affordable ? '' : ', not enough gifts'}`);
-      if (!p.owned && !p.affordable) b.disabled = true;
-      b.addEventListener('click', () => this.hd.onPaint?.(p.id));
-      row.append(b);
+      b.id = `gs-gtab-${t}`;
+      b.dataset.fk = `gtab-${t}`;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('aria-controls', 'gs-garage-panel');
+      b.tabIndex = on ? 0 : -1;
+      b.addEventListener('click', () => pick(t, true));
+      b.addEventListener('keydown', (e) => {
+        const i = tabs.indexOf(t);
+        const to = e.key === 'ArrowRight' ? tabs[(i + 1) % tabs.length] : e.key === 'ArrowLeft' ? tabs[(i - 1 + tabs.length) % tabs.length] : e.key === 'Home' ? tabs[0] : e.key === 'End' ? tabs[tabs.length - 1] : null;
+        if (!to) return;
+        e.preventDefault();
+        pick(to, true);
+      });
+      bar.append(b);
     }
-    return h('section', 'gs-paints-wrap', h('h3', 'gs-paints-h', 'Paint'), row);
+    return bar;
+  }
+
+  /** A look shelf's items, paints included, in the one shape the preview and the tiles draw. */
+  private lookItems(tab: Exclude<GarageTab, 'sleds'>): LookItem[] {
+    const last = this.lastSleds;
+    if (tab === 'paint') {
+      return (last?.paints ?? []).map((p) => ({ id: p.id, name: p.name, blurb: p.hex ? 'Recolours the deck; the grain and the vermillion trim stay' : "The sled's own wood", price: p.price, owned: p.owned, on: p.on, affordable: p.affordable, art: paintArt(p.hex) }));
+    }
+    const shelf = last?.shelves?.find((s) => s.id === tab);
+    const art = (c: GarageCard) => (tab === 'scarf' ? scarfArt(c.id) : tab === 'hat' ? hatArt(c.id) : tab === 'trail' ? trailArt(c.id) : soundArt(c.id));
+    return (shelf?.items ?? []).map((c) => ({ ...c, art: art(c) }));
+  }
+
+  /** A look shelf (paint, scarf, hat, trail or sound): the picked item's preview and its one action beside
+   *  a grid of tiles that pick what the preview shows, as the sleds do. */
+  private lookPanel(tab: Exclude<GarageTab, 'sleds'>, wallet: number, fresh: boolean): HTMLElement {
+    const items = this.lookItems(tab);
+    const picked = items.find((i) => i.id === this.itemPick[tab]) ?? items.find((i) => i.on) ?? items[0];
+    if (picked) this.itemPick[tab] = picked.id;
+    const grid = h('div', `gs-shop-grid gs-looks is-${tab}`);
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-label', `All ${TAB_LABEL[tab].toLowerCase()}`);
+    for (const it of items) grid.append(this.lookTile(tab, it, it === picked, wallet));
+    return h('div', 'gs-shop gs-look-shop', picked ? this.lookHero(tab, picked, wallet, fresh) : null, grid);
+  }
+
+  private lookTile(tab: Exclude<GarageTab, 'sleds'>, it: LookItem, picked: boolean, wallet: number): HTMLButtonElement {
+    const short = !it.owned && !it.affordable;
+    const b = h('button', `gs-look${picked ? ' is-pick' : ''}${it.on ? ' is-on' : ''}${short ? ' is-short' : ''}${!it.owned && it.affordable ? ' is-buy' : ''}`);
+    b.type = 'button';
+    b.dataset.fk = `look-${tab}-${it.id}`;
+    b.setAttribute('aria-pressed', String(picked));
+    const art = h('span', `gs-look-art is-${tab}`);
+    art.innerHTML = it.art;
+    const name = h('span', 'gs-look-name', it.name);
+    // Item names are names, like the sleds': auto-translate stays off them.
+    name.setAttribute('translate', 'no');
+    let foot: HTMLElement;
+    let state: string;
+    if (it.on) {
+      foot = h('span', 'gs-look-foot is-on', icon('check'), ON_WORD[tab]);
+      state = ON_WORD[tab];
+    } else if (it.owned) {
+      foot = h('span', 'gs-look-foot', 'Owned');
+      state = 'Owned';
+    } else {
+      const need = Math.max(1, it.price - wallet);
+      foot = h('span', `gs-look-foot is-price${short ? ' is-short' : ''}`, icon('gift'), h('span', 'gs-num', fmt(it.price)));
+      state = short ? `${fmt(it.price)} gifts, ${fmt(need)} more to go` : `${fmt(it.price)} gifts`;
+    }
+    b.append(art, name, foot);
+    b.setAttribute('aria-label', `${it.name}. ${state}`);
+    b.addEventListener('click', () => {
+      if (this.itemPick[tab] === it.id) return;
+      this.ctx.sound('tap');
+      this.itemPick[tab] = it.id;
+      this.renderShop(false);
+    });
+    return b;
+  }
+
+  /** The picked item large on the shop's dusk stage, what it is in one line, and its one action: Equip,
+   *  Buy (two taps, as a sled), what it still needs, or a chip when it is already on. */
+  private lookHero(tab: Exclude<GarageTab, 'sleds'>, it: LookItem, wallet: number, fresh: boolean): HTMLElement {
+    const sky = h('span', 'gs-shop-sky');
+    sky.innerHTML = STAGE_SVG;
+    const art = h('span', `gs-look-big is-${tab}`);
+    art.innerHTML = it.art;
+    const stage = h('div', `gs-shop-stage gs-look-stage is-${tab}`, sky, art);
+    const key = `${tab}:${it.id}`;
+    if (!fresh && this.itemShown !== key) stage.classList.add('is-new');
+    this.itemShown = key;
+    const name = h('h3', 'gs-shop-name', it.name);
+    name.setAttribute('translate', 'no');
+    name.id = 'gs-look-name';
+    const blurb = h('p', 'gs-shop-effect', it.blurb);
+    const note = h('p', 'gs-look-note', NOTE[tab]);
+    const act = h('div', 'gs-shop-act');
+    const apply = () => (tab === 'paint' ? this.hd.onPaint?.(it.id) : this.hd.onGarage?.(tab, it.id));
+    if (it.on) {
+      const st = h('span', 'gs-sled-state', icon('check'), ON_WORD[tab]);
+      st.tabIndex = -1;
+      st.dataset.fk = 'sled-act';
+      act.append(st);
+    } else if (it.owned) {
+      const b = btn(this.ctx, { cls: 'gs-btn-primary gs-btn-lg gs-shop-btn', icon: 'check', label: 'Equip', fk: 'sled-act', onClick: apply });
+      b.setAttribute('aria-label', `Equip ${it.name}`);
+      act.append(b);
+    } else if (it.affordable) {
+      let armed = 0;
+      const price = h('span', 'gs-shop-price', icon('gift'), h('span', 'gs-num', fmt(it.price)));
+      const b = btn(
+        this.ctx,
+        {
+          cls: 'gs-btn-primary gs-btn-lg gs-shop-btn gs-shop-buy',
+          label: 'Buy',
+          fk: 'sled-act',
+          onClick: () => {
+            const label = b.querySelector('.gs-btn-label');
+            if (armed) {
+              window.clearTimeout(armed);
+              armed = 0;
+              this.ctx.sound('confirm');
+              apply();
+              return;
+            }
+            if (label) label.textContent = 'Confirm';
+            b.classList.add('is-armed');
+            b.setAttribute('aria-label', `Confirm: spend ${fmt(it.price)} gifts on ${it.name}`);
+            armed = window.setTimeout(() => {
+              armed = 0;
+              if (label) label.textContent = 'Buy';
+              b.classList.remove('is-armed');
+              b.setAttribute('aria-label', `Buy ${it.name} for ${fmt(it.price)} gifts`);
+            }, 3000);
+          },
+        },
+        price,
+      );
+      b.setAttribute('aria-label', `Buy ${it.name} for ${fmt(it.price)} gifts`);
+      act.append(b);
+    } else {
+      const need = Math.max(0, it.price - wallet);
+      const b = btn(this.ctx, { cls: 'gs-btn-quiet gs-btn-lg gs-shop-btn', icon: 'lock', fk: 'sled-act', disabled: true, onClick: () => undefined }, h('span', 'gs-need', h('span', 'gs-num', fmt(need)), ' gifts to go'));
+      b.setAttribute('aria-label', `${it.name} costs ${fmt(it.price)} gifts. You need ${fmt(need)} more`);
+      act.append(b);
+    }
+    const hero = h('section', 'gs-shop-hero', stage, h('div', 'gs-shop-info', h('div', 'gs-shop-title', name, blurb), note, act));
+    hero.setAttribute('aria-labelledby', name.id);
+    return hero;
   }
 
   /**

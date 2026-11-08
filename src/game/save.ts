@@ -1,6 +1,7 @@
 import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
 import { type MasteryRecord, readMastery } from './mastery';
+import { type ShelfId, freeItem, isItem } from './garage';
 import { PAINTS } from './paints';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
@@ -128,6 +129,33 @@ export interface SaveData {
   /** Sled paints owned (game/paints.ts ids) and the one on the sled. */
   paints?: string[];
   paint?: string;
+  /** The garage's shelves (round 6, garage.ts): what is owned on each and what is worn. The free item on a
+   *  shelf is never stored, so a save that bought nothing keeps its shape. */
+  scarves?: string[];
+  scarf?: string;
+  hats?: string[];
+  hat?: string;
+  trails?: string[];
+  trail?: string;
+  sounds?: string[];
+  sound?: string;
+}
+
+/** Where each garage shelf keeps what is owned, and what is worn, in the save. */
+export const SHELF_KEYS: Readonly<Record<ShelfId, { owned: 'scarves' | 'hats' | 'trails' | 'sounds'; on: 'scarf' | 'hat' | 'trail' | 'sound' }>> = {
+  scarf: { owned: 'scarves', on: 'scarf' },
+  hat: { owned: 'hats', on: 'hat' },
+  trail: { owned: 'trails', on: 'trail' },
+  sound: { owned: 'sounds', on: 'sound' },
+};
+
+/** What a shelf holds on this save: the owned ids (the free one included) and the one worn. */
+export function shelfState(d: SaveData, shelf: ShelfId): { owned: string[]; on: string } {
+  const k = SHELF_KEYS[shelf];
+  const free = freeItem(shelf);
+  const owned = [free, ...(d[k.owned] ?? []).filter((id) => id !== free)];
+  const on = d[k.on];
+  return { owned, on: on && owned.includes(on) ? on : free };
 }
 
 export function defaultSave(name: string): SaveData {
@@ -427,6 +455,20 @@ function loadSettings(base: Settings, p: unknown): Settings {
   return s;
 }
 
+/** One garage shelf, sanitised in place: a strange value is dropped and the shelf reads as the free item. */
+function loadShelf(d: SaveData, p: Partial<SaveData>, shelf: ShelfId): void {
+  const k = SHELF_KEYS[shelf];
+  const free = freeItem(shelf);
+  const raw: unknown = p[k.owned];
+  const owned: string[] = [];
+  if (Array.isArray(raw)) for (const x of raw) if (isItem(shelf, x) && x !== free && !owned.includes(x)) owned.push(x);
+  if (owned.length) d[k.owned] = owned;
+  else delete d[k.owned];
+  const on: unknown = p[k.on];
+  if (typeof on === 'string' && on !== free && owned.includes(on)) d[k.on] = on;
+  else delete d[k.on];
+}
+
 export function merge(base: SaveData, p: Partial<SaveData>, today: string): SaveData {
   const name = typeof p.name === 'string' && p.name ? p.name : base.name;
   const ghostsPassed = isNum(p.ghostsPassed) ? p.ghostsPassed : base.ghostsPassed;
@@ -464,6 +506,8 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   else delete d.paints;
   if (typeof p.paint === 'string' && owned.includes(p.paint)) d.paint = p.paint;
   else delete d.paint;
+  // The garage's shelves: known ids only, once each, the free one never stored; the worn one must be owned.
+  for (const shelf of Object.keys(SHELF_KEYS) as ShelfId[]) loadShelf(d, p, shelf);
   // Mastery, a record per named mountain (only those): sanitised, and written only when it holds some.
   if (p.mastery && typeof p.mastery === 'object') {
     const ms: Record<string, MasteryRecord> = {};

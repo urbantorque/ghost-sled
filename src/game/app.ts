@@ -17,7 +17,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import type { GarageShelf, GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -30,6 +30,8 @@ import { planMarquee } from './marquee';
 import { ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { PAINTS, paintById } from './paints';
+import { SHELVES, type ShelfId, hatById, scarfById, soundById, trailById } from './garage';
+import { WARD_CURVE } from './timescale';
 import { courseFor } from '../sim/course';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -40,7 +42,7 @@ import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews
 import { TierController, guessTier } from './quality';
 import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
-import { type BestRun, type Climb, Grudge, SaveStore, oldBest, retireGrudge, rideableGrudge } from './save';
+import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
 import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
@@ -280,6 +282,7 @@ export class App {
     this.cup = cupMountain(weekKey(new Date()));
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
     this.world.rider.setPaint(paintById(this.save.data.paint).hex);
+    this.applyLook();
     this.audio.setQuality(this.tiers.tier);
     this.tiers.onChange = (t: Tier) => {
       this.world.setQuality(qualityFor(t));
@@ -296,6 +299,7 @@ export class App {
       onDouble: () => this.doubleGifts(),
       onChallenge: () => this.shareChallenge(),
       onPaint: (id) => this.paint(id),
+      onGarage: (shelf, id) => this.garage(shelf, id),
       onRideHome: () => this.rideHome(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
@@ -306,7 +310,7 @@ export class App {
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
-      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards()),
+      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves()),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -330,6 +334,9 @@ export class App {
     await this.platform.init();
     this.platform.loadingStart();
     this.save.rebind(this.platform.storage);
+    // The platform's save may differ from the local one: wear what it says (paint, hat, scarf, trail, sound).
+    this.world.rider.setPaint(paintById(this.save.data.paint).hex);
+    this.applyLook();
     if (this.platform.muteAudio) this.audio.setMuted('sdk', true);
     this.applyAudioSettings();
     const user = await this.platform.getUser().catch(() => null);
@@ -642,7 +649,7 @@ export class App {
     if (!this.save.data.ownedSleds.includes(id)) return;
     this.save.data.sled = id;
     this.save.save();
-    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards());
+    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves());
     this.refreshTitle();
   }
 
@@ -662,7 +669,46 @@ export class App {
     else d.paint = p.id;
     this.save.flush();
     this.world.rider.setPaint(p.hex);
-    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
+  }
+
+  /** A garage item (round 6): bought with gifts the first time, then worn. A look or a sound, never an edge:
+   *  nothing here reaches the sim, a sled or the lantern. */
+  private garage(shelf: ShelfId, id: string): void {
+    const item = SHELVES[shelf].find((i) => i.id === id);
+    if (!item) return;
+    const d = this.save.data;
+    const k = SHELF_KEYS[shelf];
+    const owned = shelfState(d, shelf).owned.includes(id);
+    if (!owned) {
+      if (d.gifts < item.price) return;
+      d.gifts -= item.price;
+      d[k.owned] = [...(d[k.owned] ?? []), id];
+      this.audio.ui('unlock');
+      this.ui.toast(item.name, 'gift', shelf === 'sound' ? 'On your sled' : shelf === 'trail' ? 'On your sled' : 'Wearing it');
+    }
+    if (item.price === 0) delete d[k.on];
+    else d[k.on] = id;
+    this.save.flush();
+    this.applyLook();
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
+  }
+
+  /** Puts on what the save says is worn: the rider's hat and scarf, the sled's trail and its sound. */
+  private applyLook(): void {
+    const d = this.save.data;
+    this.world.rider.setHat(hatById(shelfState(d, 'hat').on).id);
+    this.world.rider.setScarf(scarfById(shelfState(d, 'scarf').on));
+    this.world.setTrail(trailById(shelfState(d, 'trail').on));
+    this.audio.setSledSound(soundById(shelfState(d, 'sound').on).id);
+  }
+
+  garageShelves(): GarageShelf[] {
+    const d = this.save.data;
+    return (['scarf', 'hat', 'trail', 'sound'] as const).map((shelf) => {
+      const st = shelfState(d, shelf);
+      return { id: shelf, items: SHELVES[shelf].map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, price: i.price, owned: st.owned.includes(i.id), on: st.on === i.id, affordable: d.gifts >= i.price })) };
+    });
   }
 
   paintCards(): PaintCard[] {
@@ -681,7 +727,7 @@ export class App {
     this.save.flush();
     this.audio.ui('unlock');
     this.ui.toast(`${def.name} unlocked`, 'gift', def.trait);
-    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
     this.refreshTitle();
   }
 
@@ -2171,7 +2217,11 @@ export class App {
 
     const drained = run.drain();
     const events = drained.map((p) => p.e);
-    for (const e of events) if (e.type === 'skyGate') this.gatesThisRun.push(e.id);
+    for (const e of events) {
+      if (e.type === 'skyGate') this.gatesThisRun.push(e.id);
+      // A ward cracks the lantern open with a beat of slow motion (round 6): the picture's clock only.
+      else if (e.type === 'ward') time.curve(WARD_CURVE, 'both');
+    }
     if (!sim.s.grounded) this.airTicks++;
     else this.airTicks = 0;
     // Standings once per frame: the world's rival, the HUD pill and the hints all read these. After the

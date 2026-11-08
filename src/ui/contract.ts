@@ -70,6 +70,27 @@ export interface PaintCard {
   affordable: boolean;
 }
 
+/** A garage shelf (round 6, game/garage.ts): scarves, hats, trails or sled sounds. */
+export type GarageShelfId = 'scarf' | 'hat' | 'trail' | 'sound';
+
+/** One item on a garage shelf, as the shop shows it. */
+export interface GarageCard {
+  id: string;
+  name: string;
+  /** One plain line on what it looks or sounds like. */
+  blurb: string;
+  price: number;
+  owned: boolean;
+  /** Worn (or, for a sound, the one your runners make). */
+  on: boolean;
+  affordable: boolean;
+}
+
+export interface GarageShelf {
+  id: GarageShelfId;
+  items: GarageCard[];
+}
+
 export interface SledCard {
   id: number;
   name: string;
@@ -340,6 +361,8 @@ export interface UIHandlers {
   onBuySled(id: number): void;
   /** A sled paint: buy it (if not owned) and put it on. */
   onPaint?(id: string): void;
+  /** A garage item (scarf, hat, trail or sled sound): buy it (if not owned) and wear it. */
+  onGarage?(shelf: GarageShelfId, id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
   /** Any UI click/tap (for audio unlock and UI sounds). */
   onUiSound(kind: 'tap' | 'confirm' | 'back'): void;
@@ -415,7 +438,8 @@ export interface GameUI {
   /** missions: the run's live mission progress, shown on the pause card (at most 3 rows). */
   showPause(settings: SettingsModel, missions?: MissionView[]): void;
   hidePause(): void;
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void;
+  /** The garage: sleds, then (when given) paints and the round 6 shelves. */
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void;
   showSettings(m: SettingsModel): void;
   closeMenus(): void;
   touchVisual(v: TouchVisual, visible: boolean): void;

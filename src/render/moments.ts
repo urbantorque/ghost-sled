@@ -7,6 +7,7 @@ import { TUMBLE_TICKS, type Sim, type SimEvent } from '../sim/sim';
 import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
 import { runnersOnSnow, shakeCrowns } from './nearfield';
+import { FW_PAIRS, type Fireworks, type ShellKind } from './fireworks';
 import type { Particles } from './particles';
 import type { RiderAct } from './rider';
 import { nearBank, type Sloughs } from './sloughs';
@@ -30,6 +31,8 @@ export interface MomentView {
 /** What moments.ts needs of the world. */
 export interface MomentWorld {
   readonly particles: Particles;
+  /** The finish's shells (round 6: streaks that rise, burst, droop and crackle). */
+  readonly fireworks: Fireworks;
   readonly sloughs: Sloughs;
   readonly cam: ChaseCamera;
   readonly course: Course;
@@ -54,17 +57,12 @@ const SPARK = new Color(DRIFT_TIER_HEX[1]);
 const HOT = new Color(DRIFT_TIER_HEX[0]);
 const CREAM = new Color('#FFF1D6');
 const ROSE = new Color('#FF5A7A');
-const VERMILLION = new Color('#FF4D2E');
-const MARIGOLD = new Color('#FFD34D');
-const PERIWINKLE = new Color('#AEB6EE');
-/** The finish's sky: the player's and the gifts' colours on cream, with the snow's own periwinkle for
- *  depth. Warm is safe here: nothing that bursts over the square is a hazard, and no hazard is warm. */
-const SHELLS: readonly (readonly [Color, Color])[] = [
-  [VERMILLION, CREAM],
-  [MARIGOLD, CREAM],
-  [PERIWINKLE, CREAM],
-  [VERMILLION, MARIGOLD],
-];
+/** The finish's sky (round 6): the rider's warm colours and the lantern's (fireworks.ts FW_PAIRS:
+ *  vermillion, coral, marigold, white-gold), never mint or rose. Warm is safe here: nothing that bursts
+ *  over the square is a hazard, and no hazard is warm. (Round 5's periwinkle shell is gone: the brief's
+ *  four colours read as one family.) */
+const SHELLS = FW_PAIRS;
+const SHELL_KINDS: readonly ShellKind[] = ['peony', 'chrysanthemum', 'ring', 'crackle', 'willow', 'peony', 'crackle', 'chrysanthemum', 'ring', 'willow', 'crackle'];
 
 /** One shell: render seconds past the line it bursts, where in the frame (NDC) and how far off. Placed
  *  from the lens as it goes up, so the sky over whatever the lens is looking at takes it, chase or
@@ -76,6 +74,7 @@ interface Shell {
   d: number;
   a: Color;
   b: Color;
+  kind: ShellKind;
   up: boolean;
   x: number;
   y: number;
@@ -83,7 +82,7 @@ interface Shell {
 }
 
 /** Seconds a shell climbs before it bursts. */
-const SHELL_RISE = 0.5;
+const SHELL_RISE = 0.55;
 /** The show: [burst time, ndc x, ndc y, metres off]. */
 const SHOW: readonly (readonly [number, number, number, number])[] = [
   [0.55, -0.5, 0.62, 84],
@@ -390,7 +389,7 @@ export class Moments {
     this.shellNext = 0;
     SHOW.forEach(([t, nx, ny, d], i) => {
       const [a, b] = SHELLS[i % SHELLS.length];
-      this.shells.push({ t, nx, ny, d, a, b, up: false, x: 0, y: 0, z: 0 });
+      this.shells.push({ t, nx, ny, d, a, b, kind: SHELL_KINDS[i % SHELL_KINDS.length], up: false, x: 0, y: 0, z: 0 });
     });
     // The cannons at the line: either side of the rider and a little ahead, firing in over it.
     const p = this.world.particles;
@@ -414,7 +413,9 @@ export class Moments {
     sh.y = Math.max(p.y, g + 12);
     sh.z = p.z;
     sh.up = true;
-    w.particles.riser(this.a.set(p.x, g + 1, p.z), this.b.set(sh.x, sh.y, sh.z), SHELL_RISE, sh.a);
+    // The shell climbs on its trail and bursts into streaks (fireworks.ts); the old particle riser and
+    // dab burst remain on the particles for anything else that wants them.
+    w.fireworks.shell(this.a.set(p.x + (Math.random() - 0.5) * 4, g + 1, p.z + (Math.random() - 0.5) * 4), this.b.set(sh.x, sh.y, sh.z), SHELL_RISE, sh.a, sh.b, sh.kind);
   }
 
   /** Per frame (after the rider's update): the acting, the running effects and the finish's sky. */
@@ -484,10 +485,8 @@ export class Moments {
       const sh = this.shells[i];
       if (!sh.up && sh.t - SHELL_RISE <= this.finT) this.launch(sh);
     }
-    while (this.shellNext < this.shells.length && this.shells[this.shellNext].t <= this.finT) {
-      const sh = this.shells[this.shellNext++];
-      if (sh.up) p.firework(this.a.set(sh.x, sh.y, sh.z), sh.a, sh.b);
-    }
+    // (Each shell bursts on its own once it has climbed: fireworks.ts.)
+    while (this.shellNext < this.shells.length && this.shells[this.shellNext].t <= this.finT) this.shellNext++;
     // Ribbons drift down over the rider while it coasts and for a little after.
     if (this.finT < 5.5) {
       this.confettiAcc += dt * 30;
