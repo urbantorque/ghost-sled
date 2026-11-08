@@ -238,6 +238,8 @@ export interface ResultsModel {
   quote?: { name: string; text: string; accent: string } | null;
   /** A named mountain's mastery: stars held of the board, and the ones this run earned (each pays 10). */
   mastery?: { got: number; of: number; fresh: string[] } | null;
+  /** A wreck short of the town: the rider may ride the rest home as a spirit, outside the race. */
+  canRideHome?: boolean;
   /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
    *  past."): shown in the place note's slot, unless it is the race line itself. */
   crashNote?: string | null;
@@ -314,6 +316,8 @@ export interface UIHandlers {
   onRevive(): void;
   onDouble(): void;
   onChallenge(): void;
+  /** Ride home as a spirit after a wreck (round 5): outside the race, to the finish town. */
+  onRideHome?(): void;
   onHome(): void;
   onPause(paused: boolean): void;
   /** The lantern button (touch, or a click on it): a dash, if one is lit. */

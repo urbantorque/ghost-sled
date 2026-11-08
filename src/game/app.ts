@@ -9,7 +9,7 @@ import { ChaosEvent, ChaosRoll, EVENTS, MOODS, Mood, eventInfo, moodInfo, rollCh
 import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '../sim/mountains';
 import { Rng, hashString } from '../sim/prng';
 import { RunRecord, recordFromString, recordToString } from '../sim/replay';
-import { decodeLog } from '../sim/input';
+import { decodeLog, packInput } from '../sim/input';
 import { SIM_VERSION, Sim, SimEvent, TUMBLES } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { UI } from '../ui/ui';
@@ -18,7 +18,7 @@ import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
 import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
-import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS } from './beats';
+import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
 import { anchorFor, pickField, poolTime } from './field';
@@ -37,7 +37,7 @@ import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
 import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
-import { type InputSource, Run, emptySnap, lerpSnap } from './run';
+import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SaveStore, oldBest, retireGrudge, rideableGrudge } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
@@ -49,7 +49,7 @@ import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFini
 
 /** 'crashed' is the crash beat before its results; 'finished' the coast through the town square before
  *  its results (the sim still ticks). A finish is never a crash: only `crashed()` opens the first. */
-type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results';
+type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results' | 'home';
 
 /** Dev-only overrides for play-tests and screenshots: ?mood=3&event=1&m=2&autoride=1. */
 const DEV = new URLSearchParams(location.search);
@@ -293,6 +293,7 @@ export class App {
       onRevive: () => this.revive(),
       onDouble: () => this.doubleGifts(),
       onChallenge: () => this.shareChallenge(),
+      onRideHome: () => this.rideHome(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
       onSpirit: () => this.input.spiritTap(),
@@ -424,6 +425,8 @@ export class App {
     window.addEventListener('keydown', (e) => {
       this.audio.unlock();
       if (e.code === 'KeyP' && (this.phase === 'run' || this.paused)) this.setPaused(!this.paused);
+      // Riding home: Escape (or P) goes straight back to the card.
+      if ((e.code === 'Escape' || e.code === 'KeyP') && this.phase === 'home') this.endHome();
       if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) {
         if (this.phase === 'title' && !this.ui.modal) this.ride();
         else if (this.phase === 'results') this.runAgain();
@@ -1095,6 +1098,79 @@ export class App {
     this.uiWaiting.push({ name, detail });
   }
 
+  /** The ride home (round 5): after a wreck, the rest of the descent as a spirit, outside the race. A sim
+   *  of its own from the wreck (Sim.homewardFrom), stepped here and never recorded, so the run, its
+   *  record, its place and its results are exactly what they were; the card comes back at the town. */
+  private homeRide: { sim: Sim; prev: ReturnType<typeof emptySnap>; cur: ReturnType<typeof emptySnap>; acc: number; t: number } | null = null;
+
+  private rideHome(): void {
+    const run = this.run;
+    if (!run || !run.sim.s.crashed || run.sim.finished || this.phase !== 'results' || this.homeRide) return;
+    const sim = Sim.homewardFrom(run.sim);
+    const prev = emptySnap();
+    const cur = emptySnap();
+    copySnap(sim.s, prev);
+    copySnap(sim.s, cur);
+    this.homeRide = { sim, prev, cur, acc: 0, t: 0 };
+    this.ui.hideResults();
+    this.world.cam.mode = 'chase';
+    this.phase = 'home';
+    this.audio.setScene('run');
+    this.ui.toast('Riding home as a spirit', 'ghost', 'Out of the race. The town is waiting.');
+  }
+
+  private endHome(): void {
+    if (!this.homeRide) return;
+    this.homeRide = null;
+    this.phase = 'results';
+    this.audio.setScene('results');
+    if (this.results) this.ui.showResults({ ...this.results, canRideHome: false });
+  }
+
+  private frameHome(dt: number): void {
+    const h = this.homeRide;
+    if (!h) return;
+    const sim = h.sim;
+    h.acc += this.paused ? 0 : dt;
+    while (h.acc >= 1 / 60) {
+      h.acc -= 1 / 60;
+      const inp = this.input.sample();
+      copySnap(sim.s, h.prev);
+      sim.step(packInput(inp.steer, inp.action, false, false));
+      copySnap(sim.s, h.cur);
+    }
+    h.t += dt;
+    lerpSnap(h.prev, h.cur, h.acc * 60, this.view);
+    this.renderTime += dt;
+    const tick = sim.tick;
+    this.ghostPoses.clear();
+    for (const t of this.ghosts.tracks) {
+      const p = emptyPose();
+      this.ghostPoses.set(t.entry.id, this.ghosts.pose(t, tick, p) ? p : null);
+    }
+    this.world.frame({
+      mode: 'run',
+      labels: false,
+      snap: this.view,
+      dt,
+      time: this.renderTime,
+      events: [],
+      collected: sim.collected,
+      destroyed: sim.destroyed,
+      sim,
+      airTicks: 0,
+      ghostPoses: this.ghostPoses,
+      playerVisible: true,
+      occluders: this.ui.occluders(),
+      mirror: null,
+      rival: null,
+      beats: [],
+      feel: IDLE_FEEL,
+    });
+    // Over the line, a few seconds in the square, then the card again.
+    if (sim.finished && sim.tick - sim.s.finishTick > 240) this.endHome();
+  }
+
   private shareChallenge(): void {
     if (!this.run) return;
     const rec = this.run.toRecord(this.save.data.name);
@@ -1500,6 +1576,7 @@ export class App {
           }
         : null,
       stages: this.stageTable(sim, decided?.text ?? null, climb),
+      canRideHome: sim.s.crashed && !sim.finished && sim.distance < sim.course.finishZ - 300 && !this.homeRide,
     };
     this.ui.hideHud();
     this.ui.showResults(this.results);
@@ -1684,6 +1761,7 @@ export class App {
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
     if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
+    else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
   }
 

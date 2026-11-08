@@ -540,6 +540,8 @@ export class Results {
       again.setAttribute('aria-keyshortcuts', 'Space');
     }
     const home = btn(ctx, { cls: 'gs-btn-soft gs-res-home', icon: 'back', label: 'Home', sound: 'back', fk: 'home', onClick: () => this.hd.onHome() });
+    // A wreck short of the town: ride the rest home as a spirit, outside the race (never recorded).
+    if (m.canRideHome) extra.append(btn(ctx, { cls: 'gs-btn-soft gs-res-homeward', icon: 'ghost', label: 'Ride home as a spirit', sound: 'tap', fk: 'homeward', onClick: () => this.hd.onRideHome?.() }));
     const actions = h('div', 'gs-res-actions', extra.childElementCount > 0 ? extra : null, h('div', `gs-res-main${chal ? ' has-chal' : ''}`, chal, home, again));
 
     // The body scrolls on short screens. A sentinel at its end drives a bottom fade and a More cue,
