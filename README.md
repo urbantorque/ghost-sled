@@ -43,6 +43,7 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?mood=N`, `?event=N` | Force a chaos mood or mid-run event |
 | `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
 | `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
+| `?jukebox` | The music jukebox over the title: the main theme, each mountain's music by stage and section, the drops, the lift, the finale, the results reprise and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
 
 ## Controls
 
@@ -292,6 +293,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `places.js`, `places-cost.js`, `descent.js`, `finish.js` | Rides each street, bridge, tunnel and finish town and shoots or costs them |
 | `telemetry.js`, `tele-digest.mjs` | Fun telemetry: scripted runs at six skill levels (clumsy, novice, mid, expert, line, stunt) logging passes, duels, named moments per minute, the time to the first pass, whether the race is live at the crash, music intensity, flow, drift tiers, near-miss grades, stomp streaks, mission pops and banner overlaps |
 | `strips.js` | Beat strips: 4 to 6 frame-exact screenshots after each named moment, on a virtual clock, with a probe per frame (plans `fresh`, `rivals`, `flow`, `stunt`, `avalanche`, `giftStorm`) |
+| `audiocpu.js`, `arrange.js`, `render.js` | The audio engine's main-thread milliseconds and nodes a second (`engine.debugCpu`); every stage line, set piece and finish against the drop the band landed on a live run; one offline render for an A/B |
 | `levels.js`, `audio-capture.js` | Mix levels from offline renders of the shipped DSP, and the live master tapped per frame (onsets, sync to the picture, the choir) |
 | `stunt-sim.ts` | The stunt pilot in node, without a browser: `npx tsx scripts/playtest/stunt-sim.ts [runsPerMountain] [firstSeed] [mood]` |
 | `feelfx.js`, `fireworks.js`, `garage-tris.ts` | Each dash, ward, a sky gate from 60 m and the finish off a replayed run (a garage look worn and reduced motion as options); a synthetic street or win show mid-run; the hats' and effects' triangle counts |
