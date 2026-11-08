@@ -9,6 +9,7 @@ import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, buildL
 import { Listener, type ListenSources, newView } from './listen';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
+import type { SledSoundId } from './sledsounds';
 
 export type { ResultsCue, ResultsShow, RevealCue } from './cues';
 
@@ -300,6 +301,12 @@ export class AudioEngine {
     } catch (err) {
       this.warn(err);
     }
+  }
+
+  /** The garage's sled sound (sledsounds.ts): the timbre of your own runners, landings and carves. */
+  sledSound: SledSoundId = 'runners';
+  setSledSound(id: SledSoundId): void {
+    this.sledSound = id;
   }
 
   setVolumes(v: { master: number; music: number; sfx: number }): void {
