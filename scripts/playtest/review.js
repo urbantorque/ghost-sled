@@ -44,6 +44,16 @@ async (page) => {
   await page.waitForTimeout(2500);
   await shot('07-title-returning');
   notes.push(await page.evaluate(() => document.body.innerText.slice(0, 900)));
+  // The medal wall (mastery stars beside the medals, since round 5).
+  const medals = page.getByRole('button', { name: /^medals/i }).first();
+  if (await medals.count()) {
+    await medals.click();
+    await page.waitForTimeout(700);
+    await shot('07b-medal-wall');
+    await page.keyboard.press('Escape');
+    await medals.click().catch(() => {});
+    await page.waitForTimeout(300);
+  }
   // The sled shop with gifts to spend.
   await page.evaluate(() => { const k = 'ghostsled.save.v1'; const d = JSON.parse(localStorage.getItem(k) || 'null'); if (d) { d.gifts = Math.max(d.gifts, 420); localStorage.setItem(k, JSON.stringify(d)); } });
   await page.goto(cfg.base + q);
@@ -54,8 +64,14 @@ async (page) => {
     await sleds.click();
     await page.waitForTimeout(900);
     await shot('08-shop');
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(400);
+    // The paint shelf under the tiles (round 5).
+    await page.evaluate(() => { const b = document.querySelector('.gs-paints-wrap'); b?.scrollIntoView({ block: 'center' }); });
+    await page.waitForTimeout(500);
+    await shot('08b-shop-paints');
+    const back = page.locator('[data-fk^="close-"]').first();
+    if (await back.count()) await back.click().catch(() => {});
+    else await page.keyboard.press('Escape');
+    await page.waitForTimeout(600);
   } else notes.push('no sled button');
   const daily = page.getByRole('button', { name: /daily/i }).first();
   if (await daily.count()) {

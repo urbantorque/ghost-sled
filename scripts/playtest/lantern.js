@@ -18,7 +18,19 @@ async (page) => {
   const log = [];
   let shots = 0;
   const name = (k) => `${cfg.out}/${dev}-m${cfg.m}${cfg.tag}-${k}.png`;
-  const at = cfg.at.slice();
+  // Every marquee moment: a frame as its title shows and one in its middle.
+  const mq = cfg.marquee ? await page.evaluate(() => (window.__gs.director.run?.marquee ?? []).map((m) => ({ key: m.key, z0: m.z0, z1: m.z1 }))) : [];
+  // Each sky gate about a second before it is flown (gates: true).
+  const gates = cfg.gates ? await page.evaluate(() => window.__gs.run.sim.course.skyGates.map((g) => ({ id: g.id, z: g.z }))) : [];
+  const marks = [...cfg.at.map((z) => ({ z, k: `z${z}` })), ...mq.flatMap((m) => [{ z: m.z0 - 45, k: `mq-${m.key}-in` }, { z: (m.z0 + m.z1) / 2, k: `mq-${m.key}-mid` }]), ...gates.map((g) => ({ z: g.z - 38, k: `gate${g.id}-ahead` }))].sort((a, b) => a.z - b.z);
+  // A tap of a steer key teaches the steer lesson, so the dash lesson can show when a lantern lights.
+  if (cfg.tapSteer) {
+    await page.keyboard.down('ArrowLeft');
+    await page.waitForTimeout(250);
+    await page.keyboard.up('ArrowLeft');
+  }
+  const at = marks.map((m) => m.z);
+  const atK = marks.map((m) => m.k);
   const seen = { dash: 0, ward: 0, skyGate: 0, lantern: 0 };
   for (let i = 0; i < 2400; i++) {
     const st = await page.evaluate(() => {
@@ -29,12 +41,22 @@ async (page) => {
       const st = r.sim.stats;
       return { phase: g.phase, z: Math.round(s.z), t: +(r.sim.tick / 60).toFixed(1), lantern: Math.round(s.lantern), dash: s.dash, dashes: st.dashes, wards: st.wards, gates: st.skyGates, lights: st.lights, finished: r.sim.finished };
     });
-    if (st.phase !== 'run' || st.finished) { log.push(st); break; }
+    if (st.phase !== 'run' || st.finished) {
+      log.push(st);
+      // Over the line: the square (and fireworks, on a win).
+      if ((st.finished || st.phase === 'finished') && cfg.finish !== false) {
+        await page.waitForTimeout(900);
+        await page.screenshot({ path: name('finish') });
+        await page.waitForTimeout(1200);
+        await page.screenshot({ path: name('finish-2') });
+      }
+      break;
+    }
     let why = null;
     if (st.dashes > seen.dash) { seen.dash = st.dashes; if (seen.dash <= 2) why = `dash${seen.dash}`; }
     else if (st.wards > seen.ward) { seen.ward = st.wards; if (seen.ward <= 2) why = `ward${seen.ward}`; }
     else if (st.gates > seen.skyGate) { seen.skyGate = st.gates; why = `skygate${seen.skyGate}`; }
-    else if (at.length && st.z >= at[0]) why = `z${at.shift()}`;
+    else if (at.length && st.z >= at[0]) { at.shift(); why = atK.shift(); }
     if (why && shots < cfg.maxShots) {
       if (why.startsWith('ward') || why.startsWith('skygate')) await page.waitForTimeout(120);
       await page.screenshot({ path: name(why) });

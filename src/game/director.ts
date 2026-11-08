@@ -898,6 +898,8 @@ export class Director {
     for (const p of f.events) {
       if (p.e.type === 'bump' || p.e.type === 'ward' || (p.e.type === 'tumble' && p.e.phase === 'start')) this.hits++;
       if (p.e.type === 'ward' || (p.e.type === 'tumble' && p.e.phase === 'start')) this.falls++;
+      // A ward is the lantern taking a hit: said once, quietly, in the callout slot.
+      if (p.e.type === 'ward') this.push({ type: 'callout', tick: p.tick, source: 'note', say: { label: 'Warded', points: 0, tone: 'normal' } }, sim);
       const e = p.e;
       switch (e.type) {
         case 'chaos':
