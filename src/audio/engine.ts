@@ -214,6 +214,26 @@ const clockMs = (): number => (typeof performance !== 'undefined' ? performance.
 
 type AudioContextCtor = new (options?: AudioContextOptions) => AudioContext;
 
+/** The context factories a sound can call (debugCpu counts each call). */
+const FACTORIES = ['createGain', 'createOscillator', 'createBiquadFilter', 'createBufferSource', 'createStereoPanner', 'createConstantSource', 'createWaveShaper', 'createDelay', 'createConvolver', 'createDynamicsCompressor', 'createPanner', 'createAnalyser', 'createIIRFilter'] as const;
+
+/** Probe-only bookkeeping of the engine's main-thread cost (debugCpu). */
+interface CpuMeter {
+  since: number;
+  /** Milliseconds spent in the frame's calls (update, beats, simEvent, ui) and in scheduler passes. */
+  frameMs: number;
+  tickMs: number;
+  frames: number;
+  ticks: number;
+  /** Nodes made, and of those made inside a frame's call. */
+  nodes: number;
+  nodesInFrame: number;
+  /** The worst single frame call and scheduler pass (ms). */
+  frameMax: number;
+  tickMax: number;
+  depth: number;
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private core: Core | null = null;
@@ -388,6 +408,11 @@ export class AudioEngine {
 
   /** Called every render frame during a run. */
   update(frame: AudioFrame, dt: number): void {
+    if (this.cpu) this.metered(true, () => this.updateNow(frame, dt));
+    else this.updateNow(frame, dt);
+  }
+
+  private updateNow(frame: AudioFrame, dt: number): void {
     const ctx = this.ctx;
     const c = this.core;
     if (!ctx || !c || ctx.state !== 'running') return;
@@ -460,6 +485,11 @@ export class AudioEngine {
 
   /** Called for every sim event during a run. */
   simEvent(e: SimEvent): void {
+    if (this.cpu) this.metered(true, () => this.simEventNow(e));
+    else this.simEventNow(e);
+  }
+
+  private simEventNow(e: SimEvent): void {
     // Chaos bookkeeping happens even while muted, so the avalanche rumble is right on unmute.
     if (e.type === 'chaos' && e.event === ChaosEvent.Avalanche) {
       if (e.phase === 'start') this.avalanche = true;
@@ -490,6 +520,11 @@ export class AudioEngine {
    * simEvent(e) calls so their data is known when the raw sounds play. Never keeps the list.
    */
   beats(list: readonly Beat[]): void {
+    if (this.cpu) this.metered(true, () => this.beatsNow(list));
+    else this.beatsNow(list);
+  }
+
+  private beatsNow(list: readonly Beat[]): void {
     const ctx = this.ctx;
     const c = this.core;
     try {
@@ -645,6 +680,91 @@ export class AudioEngine {
     return out;
   }
 
+  /**
+   * Probe-only: the engine's main-thread cost since the meter started (the first call starts it;
+   * reset starts it again). Times every frame call (update, beats, simEvent) and every scheduler pass
+   * with performance.now(), and counts every node the context makes, and how many of those were made
+   * inside a frame's call (DECISIONS 89 and 205: on a throttled CPU a node is the dear part). Per
+   * second of wall clock. Costs nothing until it is called.
+   */
+  debugCpu(reset = false): Record<string, number> | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    if (!this.cpu || reset) {
+      if (!this.cpuWrapped) {
+        this.cpuWrapped = true;
+        const self = this;
+        const raw = ctx as unknown as Record<string, unknown>;
+        for (const name of FACTORIES) {
+          const f = raw[name];
+          if (typeof f !== 'function') continue;
+          raw[name] = function wrapped(this: unknown, ...args: unknown[]): unknown {
+            const m = self.cpu;
+            if (m) {
+              m.nodes++;
+              if (m.depth > 0 && self.cpuInFrame) m.nodesInFrame++;
+            }
+            return (f as (...a: unknown[]) => unknown).apply(ctx, args);
+          };
+        }
+      }
+      this.cpu = { since: clockMs(), frameMs: 0, tickMs: 0, frames: 0, ticks: 0, nodes: 0, nodesInFrame: 0, frameMax: 0, tickMax: 0, depth: 0 };
+      return { started: 1 };
+    }
+    const m = this.cpu;
+    const s = Math.max(1e-3, (clockMs() - m.since) / 1000);
+    const r = (v: number, k = 100): number => Math.round(v * k) / k;
+    return {
+      seconds: r(s, 10),
+      frameMsPerS: r(m.frameMs / s, 1000),
+      tickMsPerS: r(m.tickMs / s, 1000),
+      msPerS: r((m.frameMs + m.tickMs) / s, 1000),
+      nodesPerS: r(m.nodes / s),
+      nodesInFramePerS: r(m.nodesInFrame / s),
+      frameCallsPerS: r(m.frames / s, 10),
+      ticksPerS: r(m.ticks / s, 10),
+      frameMaxMs: r(m.frameMax, 1000),
+      tickMaxMs: r(m.tickMax, 1000),
+      musicVoices: this.core ? this.core.musicPool.active : 0,
+      sfxVoices: this.core ? this.core.sfxPool.active : 0,
+    };
+  }
+
+  private cpu: CpuMeter | null = null;
+  private cpuWrapped = false;
+  private cpuInFrame = false;
+
+  private metered(frame: boolean, fn: () => void): void {
+    const m = this.cpu;
+    if (!m) {
+      fn();
+      return;
+    }
+    const outer = m.depth === 0;
+    const was = this.cpuInFrame;
+    if (outer) this.cpuInFrame = frame;
+    m.depth++;
+    const t0 = performance.now();
+    try {
+      fn();
+    } finally {
+      const ms = performance.now() - t0;
+      m.depth--;
+      if (outer) {
+        if (frame) {
+          m.frameMs += ms;
+          m.frames++;
+          if (ms > m.frameMax) m.frameMax = ms;
+        } else {
+          m.tickMs += ms;
+          m.ticks++;
+          if (ms > m.tickMax) m.tickMax = ms;
+        }
+        this.cpuInFrame = was;
+      }
+    }
+  }
+
   /** Probe-only: the soundscape's counters (plays per take, whooshes, gusts) and what it hears. */
   debugScape(): { played: Record<string, number>; stats: Record<string, number>; heard: Record<string, unknown> } | null {
     const c = this.core;
@@ -790,6 +910,11 @@ export class AudioEngine {
   }
 
   private tick(): void {
+    if (this.cpu) this.metered(false, () => this.tickNow());
+    else this.tickNow();
+  }
+
+  private tickNow(): void {
     const ctx = this.ctx;
     const c = this.core;
     if (!ctx || !c || ctx.state !== 'running') return;
