@@ -1,8 +1,10 @@
 # Round 6, the world lane: notes for the main lane to fold in
 
-Branch `r6-world`, cut from `round-6` at d8aae90. Five commits, render only: nothing in `src/sim` or
+Branch `r6-world`, cut from `round-6` at d8aae90. Render only: nothing in `src/sim` or
 `src/bot`, no collider added or moved, nothing on a line a sled rides (the `ground`, `setpieces`,
-`overlook`, `palette` and `flora` tests hold, unchanged).
+`overlook`, `palette` and `flora` tests hold, unchanged; a new `groves` test holds the groves). A replayed
+run (`?demo=0`) reaches every marquee frame on the same metre, score and clock as before on all four
+mountains: the sim is untouched.
 
 ## Decisions (numbered from 241; renumber as you fold them in)
 
