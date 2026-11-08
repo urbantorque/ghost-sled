@@ -159,7 +159,7 @@ export function figureGeometry(biome: BiomeId = 'alpine'): BufferGeometry {
   add(part(new CylinderGeometry(0.012, 0.012, 0.62, 3), ink, { pos: [-HAND_X - 0.01, SHOULDER_Y - 0.72, 0.03] }), S_STICK, { arm: -1 });
   add(part(new BoxGeometry(0.3, 0.2, 0.012), white, { pos: [-SHOULDER_X - 0.22, SHOULDER_Y - 0.92, 0.03] }), S_FLAG, { arm: -1 });
   // A snowball, flown by the shader from the right hand toward the run.
-  add(part(new OctahedronGeometry(0.075, 0), new Color('#F6F8FF'), {}), S_BALL, { grp: G_BALL });
+  add(part(new OctahedronGeometry(0.11, 1), new Color('#F6F8FF'), {}), S_BALL, { grp: G_BALL });
 
   if (biome === 'alpine') {
     // A knit scarf: a thick ring at the neck and a tail down the front; a belt that nips the coat in.
@@ -474,9 +474,9 @@ export function stillCrowd(list: ReadonlyArray<StillFigure>, biome: BiomeId, bol
 export const LOW_BOLD = 1.16;
 const LOW_KEEP = 0.5;
 
-/** Low's crowd at a site: the spots the animated crowd would fill (a street's barrier, a leap's rock
- *  shoulders), thinned and baked as still figures in the culture's dress, each facing the way its spot
- *  does. Nothing on Medium and High. */
+/** Low's crowd in a street: the spots the animated crowd would fill behind the barrier, thinned and
+ *  baked as still figures in the culture's dress, each facing the way its spot does. (Low draws no
+ *  bank piece, so a leap's shoulders have no crowd to bake.) Nothing on Medium and High. */
 export function lowCrowd(spots: ReadonlyArray<{ x: number; y: number; z: number; yaw: number }>, biome: BiomeId, p: Palette): BufferGeometry[] {
   const { coats, hats } = crowdColors(biome, p);
   const list: StillFigure[] = [];

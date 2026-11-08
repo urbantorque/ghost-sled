@@ -1,6 +1,6 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
-import { StillFigure, crowdColors, lowCrowd, stillCrowd } from './crowd';
+import { StillFigure, crowdColors, stillCrowd } from './crowd';
 import { SNOW, part, shade } from './flora';
 import { LINE_Z, liftLayout } from './liftline';
 import { CREAM, Glow, INK, Piece, Rail, ROPE, SiteCtx, Spot, Sub, TIMBER, TIMBER_DARK, TIMBER_LIGHT, V3, banners, box, bunting, crag, drift, grade, lampColor, latticeTower, pagodaParts, place, quad, ribbon, rnd, seed, seg, stone, windowColor } from './landmarkKit';
@@ -773,8 +773,6 @@ export function lipPiece(ctx: SiteCtx): Piece {
       }
     }
   }
-  // Low draws no animated crowd: its watchers are baked, fewer and bolder (crowd.ts).
-  if (low) steps.push(() => lowCrowd(spots, biome, p));
   for (const { s, y, x } of tops) {
     steps.push(() => {
       seed(ctx.seed + 903 + s);

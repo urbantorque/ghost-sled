@@ -669,6 +669,11 @@ interface Fig {
    *  centimetres off). */
   gy: number;
   gk: number;
+  /** Where its ground was last read (a figure standing still reads it once), and where its way ahead
+   *  was last found open (a sled or a drop-in asks every couple of metres, not every frame). */
+  gz: number;
+  ge: number;
+  okZ: number;
   /** The corridor where it walks, as a line: centre and half width at sim z `cz` and their slopes
    *  per metre (re-read from the course every CORRIDOR_STEP metres; NaN: not yet). Each figure asked
    *  the course for its centre and width at two z every frame, which missed the course's two-entry
@@ -1041,7 +1046,7 @@ export class Life {
     this.figMesh = new InstancedMesh(fg, this.figMat, FIG_CAP);
     this.figMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.figMesh.count = 0;
-    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, eMax: Infinity, dir: 0, trig: 48, alert: 0, sit: false, drop: 0, t0: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
+    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, eMax: Infinity, dir: 0, trig: 48, alert: 0, sit: false, drop: 0, t0: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, gz: Number.NaN, ge: Number.NaN, okZ: Number.NaN, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
 
     // Smoke.
     this.smokeGeo = new InstancedBufferGeometry();
@@ -1767,7 +1772,7 @@ export class Life {
         const w = (2 * Math.PI) / f.period;
         const nz = f.z + f.speed * dt;
         const ne = f.e0 + f.amp * Math.sin(f.age * w);
-        if (f.speed > 0 && this.open(f.side, ne, nz + 2)) {
+        if (f.speed > 0 && this.openAhead(f, ne, nz, 2)) {
           f.z = nz;
           f.e = ne;
           f.dir = Math.atan2(f.amp * w * Math.cos(f.age * w) * f.side, f.speed);
@@ -1803,7 +1808,14 @@ export class Life {
         }
         f.gk--;
         gy = f.gy;
-      } else gy = visualGround(c, x, f.z);
+      } else {
+        if (f.z !== f.gz || f.e !== f.ge) {
+          f.gy = visualGround(c, x, f.z);
+          f.gz = f.z;
+          f.ge = f.e;
+        }
+        gy = f.gy;
+      }
       if (!(gy > -1e6)) {
         f.live = false;
         continue;
@@ -1838,6 +1850,14 @@ export class Life {
    *  (no rock, ledge, set piece or overlook's lip): where a sled or a board may go. */
   private open(side: number, e: number, z: number): boolean {
     return openFoot(this.course, z, e + 1) && this.free(side, e, z) && !(this.dropAt !== null && this.dropAt(z, side, e + 1.5) > 0.05);
+  }
+
+  /** Whether f's way on at (e, z) is open `lead` metres ahead, asked again every 2 m it travels. */
+  private openAhead(f: Fig, e: number, z: number, lead: number): boolean {
+    if (Math.abs(z - f.okZ) < 2) return true;
+    if (!this.open(f.side, e, z + lead) || !this.open(f.side, e, z + lead + 2)) return false;
+    f.okZ = z;
+    return true;
   }
 
   /** A snowboarder waits on the bank ahead where it stays open for 200 m, a few metres past the edge. */
@@ -1887,7 +1907,7 @@ export class Life {
     // (Down off the top of the bank in its first second and a half, then carving.)
     const drop = f.drop === 2 ? Math.min(1, t / 1.5) : 1;
     const ne = DROP_TOP + (f.e0 - DROP_TOP) * drop * drop * (3 - 2 * drop) + 0.9 * k * Math.sin(t * w);
-    if (this.open(f.side, ne, nz + 3)) {
+    if (this.openAhead(f, ne, nz, 3)) {
       f.z = nz;
       f.e = ne;
     } else {
@@ -1952,6 +1972,8 @@ export class Life {
     f.tint = Math.floor(this.rand() * JACKETS.length);
     f.far = kind >= F_SKIER && kind <= F_CAT && this.farGround !== null;
     f.gk = 0;
+    f.gz = Number.NaN;
+    f.okZ = Number.NaN;
     f.cz = Number.NaN;
     f.trig = Math.abs(trig);
     f.alert = 0;
@@ -1985,6 +2007,7 @@ export class Life {
           r.fled = -1;
           r.far = false;
           r.cz = Number.NaN;
+          r.gz = Number.NaN;
           r.drop = 0;
           r.sit = false;
           r.amp = 0;
