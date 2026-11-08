@@ -1545,6 +1545,7 @@ Every place where I replaced, extended or interpreted the brief, and why.
     world and the signature-rider field came in, without pinning it. A skilled first-timer now rides clear of the
     riders who read them (they ride at most 1.12 times their own run, and a pilot dashing at 34 m/s outruns that):
     the expert's first race is live for 0.41 of the run against 0.89, and it wins every time. Raising that cap would
-    keep the race but fake it harder; leaving it rewards skill on the first run; that is the owner's call. And the
+    keep the race but fake it harder; leaving it rewards skill on the first run. The owner chose to
+    leave it: a skilled first-timer rides clear and wins. And the
     returning race is no livelier (mid's runs 2 to 4 are live for 0.44 to 0.62 against 0.50 to 0.72), and the clumsy
     pilot still finishes nothing in the race; it rides home as a spirit instead.
