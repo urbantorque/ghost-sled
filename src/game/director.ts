@@ -489,7 +489,7 @@ export class Director {
         const took = sim.stats.lights - this.mqLights;
         const clean = this.hits === this.mqHits;
         this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean });
-        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean, won: false }, sim);
+        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean, won: (sim.stats.momentMask & (1 << m.index)) !== 0 }, sim);
         this.mqIn = -1;
       }
       return;
@@ -902,6 +902,12 @@ export class Director {
       if (p.e.type === 'ward') this.push({ type: 'callout', tick: p.tick, source: 'note', say: { label: 'Warded', points: 0, tone: 'normal' } }, sim);
       const e = p.e;
       switch (e.type) {
+        case 'moment': {
+          // A set piece's verb as the sim plays it (src/sim/moments.ts).
+          const m = this.run?.marquee?.find((q) => q.index === e.index);
+          if (m) this.push({ type: 'moment', tick: p.tick, key: m.key, verb: m.verb, phase: e.phase, n: e.n, of: e.of }, sim);
+          break;
+        }
         case 'chaos':
           placeFinales(e);
           break;

@@ -50,7 +50,8 @@ describe('telemetry pilots', () => {
     // Drift holds stay in a human range (tier 3 on plain snow needs the longest).
     for (const r of runs) for (const h of r.driftHolds) expect(h).toBeLessThan(3.6);
     // Not invincible, not hopeless: it wipes out now and then, and it still gets down.
-    expect(sum((r) => r.tumbles)).toBeGreaterThanOrEqual(4);
+    // (A set piece won lights a lantern, and a kept lantern wards a hit: count those hits too.)
+    expect(sum((r) => r.tumbles + r.wards)).toBeGreaterThanOrEqual(4);
     const secs = runs.map((r) => r.seconds).sort((a, b) => a - b);
     expect(secs[secs.length >> 1]).toBeGreaterThan(30);
   });

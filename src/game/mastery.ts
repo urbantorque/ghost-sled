@@ -51,7 +51,7 @@ const STAGE_WORD = ['first', 'second', 'third'];
 export function masteryBoard(course: Course, mountainId: string, rec: MasteryRecord, runMedal: number): Star[] {
   const m = MOUNTAINS.findIndex((q) => q.id === mountainId);
   const stars: Star[] = MEDAL.map((name, i) => ({ key: `medal${i + 1}`, label: `${name} medal`, group: 'medal' as const, done: runMedal >= i + 1 }));
-  for (const g of course.skyGates) stars.push({ key: `gate${g.id}`, label: `Fly the ${STAGE_WORD[g.stage] ?? ''} stage's sky gate`.replace('  ', ' '), group: 'gate', done: rec.gates.includes(g.id) });
+  for (const g of course.stageGates) stars.push({ key: `gate${g.id}`, label: `Fly the ${STAGE_WORD[g.stage] ?? ''} stage's sky gate`.replace('  ', ' '), group: 'gate', done: rec.gates.includes(g.id) });
   for (const mq of planMarquee(course, mountainId)) stars.push({ key: `mq:${mq.key}`, label: `Sweep ${mq.name} clean`, group: 'moment', done: rec.moments.includes(mq.key) });
   for (const r of ROSTER) if (r.home === m) stars.push({ key: `rider:${r.key}`, label: `Beat ${r.name} to the line`, group: 'rider', done: rec.riders.includes(r.key) });
   stars.push({ key: 'clean', label: 'Finish with no wipeout and no ward', group: 'clean', done: rec.clean });

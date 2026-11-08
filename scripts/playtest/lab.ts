@@ -166,6 +166,20 @@ function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim, seed:
     }
     return null;
   };
+  /** A set piece being played (SIM_VERSION 8): where a rider who tries it aims. Gates: the next gate. Rings:
+   *  the line the rings hang on, up to the lip. Null on an older sim or between set pieces. */
+  const goal = (s: AnySim): number | null => {
+    const mo = sim.mo;
+    if (!mo || mo.active < 0 || skill === 'line') return null;
+    const p = sim.plays[mo.active];
+    if (p.verb === 'gates') {
+      const g = p.gates.find((q: AnySim) => q.z > s.z + 1);
+      // Cut the inside of each gate, as a rider who knows the line does: half its opening toward the line.
+      return g && g.z - s.z < 45 ? g.x - Math.sign(g.x - c.safeX(g.z)) * g.hw * 0.5 : null;
+    }
+    if (p.verb === 'rings' && p.rings.length && s.z < p.rings[0].z - 14) return p.rings[0].x;
+    return null;
+  };
   return () => {
     const s = sim.s;
     const T = sim.tick / 60;
@@ -205,7 +219,8 @@ function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim, seed:
       if (T >= P.nextThink) {
         P.nextThink = T + 0.08 + rnd() * 0.08;
         const wob = 0.45 * Math.sin(T * 0.7 + P.wob) + 0.25 * Math.sin(T * 1.9 + P.wob * 2);
-        P.lvl = steerTo(s, (z) => c.safeX(z) + wob, 10, 0.06);
+        const gx = goal(s);
+        P.lvl = gx !== null ? steerTo(s, () => gx + wob, 10, 0) : steerTo(s, (z) => c.safeX(z) + wob, 10, 0.06);
       }
       if (P.tap <= T && rnd() < 1 / (60 * 8)) P.tap = T + 0.3 + rnd() * 0.4;
       return { steer: P.lvl, action: P.tap > T };
@@ -215,9 +230,11 @@ function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim, seed:
       P.away = T + 0.4 + rnd() * 0.4;
       return { steer: 4, action: false };
     }
-    const ramp = nextRamp(s);
+    const gx = goal(s);
+    const ramp = gx === null ? nextRamp(s) : null;
     let target = (z: number) => c.safeX(z);
     if (ramp) target = () => ramp.x;
+    else if (gx !== null) target = () => gx;
     const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
     const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
     if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) P.drift = T + 0.3 + rnd() * 0.25;
@@ -225,7 +242,7 @@ function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim, seed:
     if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
     if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
     if (P.drift < 0 && T > -P.drift) P.drift = 0;
-    const lvl = steerTo(s, target, 14, ramp ? 0 : 0.08);
+    const lvl = steerTo(s, target, 14, ramp || gx !== null ? 0 : 0.08);
     let action = false;
     if (ramp) {
       const u = (s.z - ramp.z) / ramp.len;
@@ -553,6 +570,9 @@ interface Ride {
   wards: number;
   gates: number;
   phased: number;
+  /** Set pieces (SIM_VERSION 8; none on older sims): each one met, its verb, outcome and count, the speed coming
+   *  in and the seconds it took. */
+  moments: { index: number; won: boolean; n: number; of: number; v0: number; secs: number }[];
 }
 
 function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null): Ride {
@@ -561,7 +581,8 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   const pilot = pilotFor(pilotName, sim, seed, passes, alone);
   const spend = spenderFor(pilotName, sim, seed);
   const speeds: number[] = [];
-  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0 };
+  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [] };
+  const mStart = new Map<number, { tick: number; v: number }>();
   let bankTicks = 0;
   let airTicks = 0;
   let grindTicks = 0;
@@ -588,6 +609,11 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
       }
       else if (e.type === 'stage') r.stages++;
       else if (e.type === 'grind' && e.phase === 'start') r.grinds++;
+      else if (e.type === 'moment' && e.phase === 'start') mStart.set(e.index, { tick: sim.tick, v: s.speed });
+      else if (e.type === 'moment' && (e.phase === 'won' || e.phase === 'lost')) {
+        const st0 = mStart.get(e.index);
+        r.moments.push({ index: e.index, won: e.phase === 'won', n: e.n, of: e.of, v0: st0?.v ?? 0, secs: st0 ? (sim.tick - st0.tick) / 60 : 0 });
+      }
     }
     // (A rail tried alone is over once its low end has gone by.)
     if (alone && passes.length) break;
@@ -664,6 +690,33 @@ for (const p of PILOTS) {
   }
 }
 if (PILOTS.includes('rails')) railTable(all.filter((r) => r.pilot === 'rails'));
+momentTable(all.filter((r) => r.pilot !== 'rails'));
+
+/** The set pieces: per mountain and set piece, each pilot's wins of the runs that met it, the median count, the
+ *  speed coming in and the seconds it took. */
+function momentTable(rides: Ride[]): void {
+  if (!rides.some((r) => r.moments && r.moments.length)) return;
+  console.log('\nset piece                  pilot      met  won   n/of(med)  in m/s  secs(med)');
+  for (let m = 0; m < MOUNTAINS.length; m++) {
+    const plays = (new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 }) as AnySim).plays ?? [];
+    for (const p of plays) {
+      for (const pilot of PILOTS) {
+        const met = rides.filter((r) => r.m === m && r.pilot === pilot).flatMap((r) => r.moments.filter((q) => q.index === p.index));
+        if (!met.length) continue;
+        const won = met.filter((q) => q.won).length;
+        console.log(
+          `${MOUNTAINS[m].id.slice(0, 6)} ${p.key} ${p.verb}`.padEnd(26),
+          pilot.padEnd(10),
+          String(met.length).padStart(3),
+          String(won).padStart(4),
+          `${med(met.map((q) => q.n))}/${met[0].of}`.padStart(10),
+          fmt(med(met.map((q) => q.v0))),
+          fmt(med(met.map((q) => q.secs))),
+        );
+      }
+    }
+  }
+}
 
 /** What the rail pilot proved: per mountain, then every rail no seed mounted, retried on its own. */
 function railTable(rides: Ride[]): void {

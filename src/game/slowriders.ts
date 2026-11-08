@@ -20,6 +20,8 @@ const STEP = 1.035;
 const SLOWEST = 300;
 /** Runs the slow riders are made from: the pool's slowest finishers, so they ride like beginners. */
 const BASES = 6;
+/** A gap in the pool's own finish times this wide or wider (one time over the next) is filled too. */
+const HOLE = 1.07;
 
 const paces = new Map<string, number>();
 
@@ -39,9 +41,23 @@ export function withSlowRiders(pool: readonly PoolGhostData[], salt: string): Po
   const taken = new Set(pool.map((g) => g.name.toLowerCase()));
   const rows: PoolGhostData[] = [];
   const bases = finishers.slice(0, BASES);
-  let target = (finishers[0].finishTick! / 60) * STEP;
-  for (let i = 0; target <= SLOWEST; i++, target *= STEP) {
-    const base = bases[i % bases.length];
+  const secs = (g: PoolGhostData): number => g.finishTick! / 60;
+  // Where the pool's own slow end has a hole (a beginner bot that tumbled twice finishes well behind the
+  // next), slow riders fill it too, each made from the slowest finisher still faster than it.
+  const targets: number[] = [];
+  const fastest = [...finishers].reverse();
+  for (let i = 1; i < fastest.length; i++) {
+    const a = secs(fastest[i - 1]);
+    const b = secs(fastest[i]);
+    if (b / a < HOLE) continue;
+    for (let t = a * STEP; t < b / 1.02; t *= STEP) targets.push(t);
+  }
+  for (let t = secs(finishers[0]) * STEP; t <= SLOWEST; t *= STEP) targets.push(t);
+  for (let i = 0; i < targets.length; i++) {
+    const target = targets[i];
+    const under = finishers.filter((g) => secs(g) < target * 0.999);
+    const base = target > secs(finishers[0]) ? bases[i % bases.length] : under[0];
+    if (!base) continue;
     const pace = base.finishTick! / 60 / target;
     let rec;
     try {

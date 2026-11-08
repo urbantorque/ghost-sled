@@ -1,4 +1,4 @@
-import type { Course, SectionKind } from './course';
+import type { Course, SectionKind, SkyGate } from './course';
 import { MOUNTAINS } from './mountains';
 
 // Set pieces (round 6): each mountain's three biggest places, one a stage, each with a verb of its own that
@@ -153,4 +153,157 @@ export function planMoments(course: Course): MomentSpec[] {
   out.sort((a, b) => a.z0 - b.z0);
   out.forEach((m, i) => (m.index = i));
   return out;
+}
+
+// ---------------------------------------------------------------- what each verb holds
+
+/** A lantern gate: two posts across the run at z, threaded when the sled's middle passes within hw of x. */
+export interface MomentGate {
+  z: number;
+  x: number;
+  hw: number;
+}
+
+/** A set piece with what its verb needs. Pure geometry and numbers, the same for every rider. */
+export interface MomentPlay extends MomentSpec {
+  /** race: the machine's average pace over its trip (m/s); collapse: the fall's pace. */
+  pace: number;
+  /** race: metres the machine stands ahead of z0 as it leaves; collapse: metres behind z0 the fall starts. */
+  lead: number;
+  /** race: the side of the run its machine travels (+1 right of the line). */
+  side: 1 | -1;
+  /** gates: in order down the run. */
+  gates: MomentGate[];
+  /** rings: three along the flight, in order (also in Course.skyGates, tagged with this moment). */
+  rings: SkyGate[];
+  /** steps: each step's lip, in order. */
+  steps: number[];
+}
+
+/** The race: the machine's average pace over its trip, and how far ahead of the rider it leaves. A plain
+ *  cruise loses it by a little; a rider who keeps the speed up (a tuck, a drift's release, a dash) wins. */
+export const RACE_PACE: Record<string, number> = { mirror: 34, crevasse: 37, cindergate: 36, default: 35 };
+export const RACE_LEAD = 16;
+/** The machine leaves at this share of its pace and arrives at (2 - it): it pulls away, then the rider closes. */
+const RACE_V0 = 0.8;
+/** The collapse: the fall's pace and how far behind the rider it starts. Ride on at a cruise and it stays
+ *  behind; slow down, drift wide or wipe out on the span and it takes the snow from under you. */
+export const COLLAPSE_PACE = 30;
+export const COLLAPSE_HEAD = 20;
+/** Lantern gates: how far apart (a street is ridden fast, often straight off a leap or a dash, so its gates
+ *  stand further apart than a cavern's), half-width of the opening, and how far off the line. */
+const GATE_STEP: Partial<Record<SectionKind, number>> = { street: 40, tunnel: 32 };
+const GATE_HW = 2;
+const GATE_OFF = 2.6;
+/** Rings: the takeoff speed the line is set for, when along the flight they hang, their radius, and how far
+ *  off the safe line the lip must be taken. */
+export const RING_V = 34;
+const RING_T = [0.4, 0.85, 1.3] as const;
+export const RING_R = 3;
+const RING_OFF = 2.2;
+/** First id of a set piece's rings in Course.skyGates (the stage gates are 0 to 2). */
+export const RING_ID0 = 100;
+
+const playCache = new WeakMap<Course, MomentPlay[]>();
+
+/** Each set piece with what its verb holds, worked out once per course. */
+export function momentPlays(course: Course): readonly MomentPlay[] {
+  const hit = playCache.get(course);
+  if (hit) return hit;
+  const out: MomentPlay[] = planMoments(course).map((m) => {
+    const p: MomentPlay = { ...m, pace: 0, lead: 0, side: m.index % 2 === 0 ? 1 : -1, gates: [], rings: [], steps: [] };
+    if (m.verb === 'race') {
+      p.pace = RACE_PACE[m.key] ?? RACE_PACE.default;
+      p.lead = RACE_LEAD;
+    } else if (m.verb === 'collapse') {
+      p.pace = COLLAPSE_PACE;
+      p.lead = COLLAPSE_HEAD;
+    } else if (m.verb === 'gates') {
+      p.gates = gatesFor(course, m, p.side);
+    } else if (m.verb === 'rings') {
+      p.rings = ringsFor(course, m, p.side);
+    } else if (m.verb === 'steps') {
+      for (const l of course.ledges) if (l.kind === 'step' && l.z >= m.z0 && l.z < m.z1) p.steps.push(l.z);
+    }
+    return p;
+  });
+  playCache.set(course, out);
+  return out;
+}
+
+/** Gates on alternate sides of the safe line, about two beats apart, each where nothing stands in its
+ *  opening; a gate that would sit on something moves down the run a little or is left out. */
+function gatesFor(course: Course, m: MomentSpec, first: 1 | -1): MomentGate[] {
+  const out: MomentGate[] = [];
+  const blocked = (x: number, z: number): boolean => {
+    if (course.edgeExcess(x, z) > -0.4) return true;
+    const ci = Math.floor(z / 64);
+    for (let k = ci - 1; k <= ci + 1; k++) {
+      if (k < 0) continue;
+      for (const o of course.chunk(k).obstacles) {
+        const dx = o.x - x;
+        const dz = o.z - z;
+        if (dx * dx + dz * dz < (o.r + GATE_HW + 0.4) * (o.r + GATE_HW + 0.4)) return true;
+      }
+    }
+    return false;
+  };
+  let side = first;
+  for (let z = m.z0 + 26; z < m.z1 - 18; ) {
+    // Gates hang in a street or a tube, never out on a span (a bridge's rails stand too close).
+    const kind = course.section(z).kind;
+    const step = GATE_STEP[kind];
+    if (!step) {
+      z += 8;
+      continue;
+    }
+    z += step;
+    if (z >= m.z1 - 18) break;
+    let placed = false;
+    for (const dz of [0, 4, -4, 8]) {
+      const zz = z + dz;
+      const room = Math.max(0, course.halfWidth(zz) - GATE_HW - 0.6);
+      const x = course.safeX(zz) + side * Math.min(GATE_OFF, room);
+      if (blocked(x, zz)) continue;
+      out.push({ z: zz, x, hw: GATE_HW });
+      placed = true;
+      break;
+    }
+    if (placed) side = side === 1 ? -1 : 1;
+  }
+  return out;
+}
+
+/** Three rings along the flight off a leap's lip, taken RING_OFF to one side at RING_V with no pop. */
+function ringsFor(course: Course, m: MomentSpec, side: 1 | -1): SkyGate[] {
+  const lip = course.leaps.find((l) => l.z >= m.z0 && l.z < m.z1);
+  if (!lip) return [];
+  const x0 = course.safeX(lip.z) + side * RING_OFF;
+  const lean = (course.safeX(lip.z + 1) - course.safeX(lip.z - 1)) / 2;
+  const y0 = course.ground(x0, lip.z - 0.05);
+  const slope = y0 - course.ground(x0, lip.z - 1.05);
+  const vy = RING_V * slope;
+  const out: SkyGate[] = [];
+  RING_T.forEach((t, k) => {
+    const z = lip.z + RING_V * t;
+    out.push({ id: RING_ID0 + m.index * 4 + k, stage: m.stage, x: x0 + lean * RING_V * t, y: y0 + vy * t - 0.5 * 9.81 * t * t + 0.5, z, r: RING_R, moment: m.index });
+  });
+  return out;
+}
+
+/** The race's machine: metres down the course `ticks` after it left (it leaves as the rider reaches z0).
+ *  It runs at RACE_V0 of its pace and speeds up evenly to (2 - RACE_V0), so its average is the pace. */
+export function machineZ(p: MomentPlay, ticks: number): number {
+  const D = p.z1 - p.z0 - p.lead;
+  const v0 = RACE_V0 * p.pace;
+  const v1 = (2 - RACE_V0) * p.pace;
+  const a = (v1 * v1 - v0 * v0) / (2 * D);
+  const t = ticks / 60;
+  const d = v0 * t + 0.5 * a * t * t;
+  return p.z0 + p.lead + (d < D ? d : D);
+}
+
+/** The collapse's fall: metres down the course `ticks` after the rider reached z0. */
+export function fallZ(p: MomentPlay, ticks: number): number {
+  return p.z0 - p.lead + (p.pace * ticks) / 60;
 }

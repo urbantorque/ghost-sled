@@ -112,12 +112,13 @@ export type Beat =
   /** A marquee moment (marquee.ts): 'enter' as it comes up (its title, its line, its camera and light),
    *  'exit' as it is ridden out (the lights taken of its total, and clean: no hit, ward or wipeout in it). */
   | (B & { type: 'marquee'; phase: 'enter' | 'exit'; key: string; name: string; verb: MomentVerb; line: string; cam: MarqueeCam; light: MarqueeLight; took: number; total: number; clean: boolean; won: boolean })
-  /** A set piece's verb as it plays (src/sim/moments.ts; the sim decides, every rider alike): 'step' as a
+  /** A set piece's verb as it plays (src/sim/moments.ts; the sim decides, every rider alike): 'start' as the
+   *  rider reaches its first metre, 'miss' as a gate or ring is missed or a step not stomped, 'step' as a
    *  gate is threaded, a ring flown or a step stomped (n of `of` so far), 'lead' as the rider passes the race's
    *  machine and 'trail' as it passes back, 'close' as a collapse's fall comes within a few metres; 'won' or
    *  'lost' as it is decided (a win lights a lantern). A run that fails a step keeps going: n counts the
    *  chain, so a gate missed sets it back to 0. */
-  | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'step' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number });
+  | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number });
 
 export type BeatType = Beat['type'];
 import type { MarqueeCam, MarqueeLight, MomentVerb } from './marquee';
