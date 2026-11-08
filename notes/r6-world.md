@@ -3,8 +3,8 @@
 Branch `r6-world`, cut from `round-6` at d8aae90. Render only: nothing in `src/sim` or
 `src/bot`, no collider added or moved, nothing on a line a sled rides (the `ground`, `setpieces`,
 `overlook`, `palette` and `flora` tests hold, unchanged; a new `groves` test holds the groves). A replayed
-run (`?demo=0`) reaches every marquee frame on the same metre, score and clock as before on all four
-mountains: the sim is untouched.
+run (`?demo=0`) finishes on the same clock as before on all four mountains (1:47.5, 1:49.2, 1:48.8 and
+1:48.0): the sim is untouched. Frostfang's finish now comes in at dawn.
 
 ## Decisions (numbered from 241; renumber as you fold them in)
 
