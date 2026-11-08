@@ -42,18 +42,19 @@ const SECTIONS: ReadonlyArray<{ s: SectionName; name: string }> = [
 ];
 
 const CSS = `
-.gs-jb { position: fixed; top: 12px; right: 12px; z-index: 2147483000; width: min(380px, calc(100vw - 24px));
+.gs-jb { position: fixed; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); color-scheme: dark; z-index: 2147483000; width: min(380px, calc(100vw - 24px));
   max-height: calc(100dvh - 24px); overflow: auto; overscroll-behavior: contain; box-sizing: border-box;
   padding: 14px 14px 16px; border-radius: 18px; background: rgb(18 25 51 / 0.86);
   box-shadow: inset 0 0 0 1px rgb(245 243 255 / 0.14); color: #F5F3FF;
   font: 600 13px/1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-variant-numeric: tabular-nums; }
-.gs-jb h2 { margin: 0 0 2px; font-size: 15px; font-weight: 900; letter-spacing: 0.01em; }
-.gs-jb h3 { margin: 14px 0 6px; font-size: 13px; font-weight: 800; }
+.gs-jb h2 { margin: 0 0 2px; font-size: 15px; font-weight: 900; letter-spacing: 0.01em; text-wrap: balance; }
+.gs-jb h3 { margin: 14px 0 6px; font-size: 13px; font-weight: 800; text-wrap: balance; }
 .gs-jb p { margin: 0; color: rgb(245 243 255 / 0.72); font-weight: 600; }
 .gs-jb .row { display: flex; flex-wrap: wrap; gap: 6px; }
 .gs-jb button { appearance: none; border: 0; border-radius: 999px; padding: 6px 11px; min-height: 30px;
   background: transparent; color: #F5F3FF; box-shadow: inset 0 0 0 1px rgb(245 243 255 / 0.28);
-  font: inherit; font-weight: 800; cursor: pointer; touch-action: manipulation; }
+  font: inherit; font-weight: 800; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.gs-jb button:active { transform: translateY(1px); }
 .gs-jb button:hover { box-shadow: inset 0 0 0 1px rgb(245 243 255 / 0.6); }
 .gs-jb button:focus-visible { outline: 2px solid #F5F3FF; outline-offset: 2px; }
 .gs-jb button[aria-pressed='true'] { background: #F5F3FF; color: #121933; box-shadow: none; }
@@ -111,47 +112,47 @@ export function openJukebox(app: unknown): void {
   el.className = 'gs-jb';
   el.setAttribute('aria-label', 'Jukebox');
   el.innerHTML = `
-    <div class="top"><div><h2>Jukebox</h2><p>The score on demand. Debug only.</p></div>
+    <div class="top"><div><h2>Jukebox</h2><p>The score on demand. Debug builds only.</p></div>
       <button type="button" data-act="fold" aria-expanded="true">Hide</button></div>
     <div class="body">
       <h3>Title</h3>
-      <div class="row"><button type="button" class="primary" data-act="title">Main theme</button>
-        <button type="button" data-act="results">Results reprise</button>
-        <button type="button" data-act="stop">Stop the band</button></div>
+      <div class="row"><button type="button" class="primary" data-act="title">Main Theme</button>
+        <button type="button" data-act="results">Results Reprise</button>
+        <button type="button" data-act="stop">Silence the Band</button></div>
       <h3>Mountain</h3>
       <div class="row" data-group="biome">${MOUNTAINS.map((m) => `<button type="button" data-biome="${m.biome}" aria-pressed="${m.biome === biome}">${m.name}</button>`).join('')}</div>
-      <label>Mood<select data-act="mood">${MOODS.map((m) => `<option value="${m.mood}">${m.name}</option>`).join('')}</select></label>
+      <label>Mood<select name="mood" autocomplete="off" data-act="mood">${MOODS.map((m) => `<option value="${m.mood}">${m.name}</option>`).join('')}</select></label>
       <h3>Stage</h3>
       <div class="row" data-group="stage">${[0, 1, 2].map((s) => `<button type="button" data-stage="${s}" aria-pressed="${s === stage}">Stage ${s + 1}</button>`).join('')}</div>
-      <h3>Run music by section</h3>
+      <h3>Run Music by Section</h3>
       <div class="row">${SECTIONS.map((s) => `<button type="button" data-sec="${s.s}">${s.name}</button>`).join('')}
-        <button type="button" data-act="flow">Let it flow</button></div>
+        <button type="button" data-act="flow">Let It Flow</button></div>
       <h3>Landings</h3>
-      <div class="row"><button type="button" data-land="drop">Build into a drop</button>
-        <button type="button" data-land="lift">Lift a key</button>
-        <button type="button" data-land="finish">Finish line</button>
-        <button type="button" data-act="breakdown">Break down</button></div>
-      <label>Drive <span data-out="drive">0.36</span><input type="range" min="0" max="1" step="0.01" value="0.36" data-act="drive"></label>
-      <h3>Set pieces</h3>
-      <div class="row"><button type="button" data-cue="enter">Card call</button>
+      <div class="row"><button type="button" data-land="drop">Build into a Drop</button>
+        <button type="button" data-land="lift">Lift a Key</button>
+        <button type="button" data-land="finish">Finish Line</button>
+        <button type="button" data-act="breakdown">Break Down</button></div>
+      <label>Drive <span data-out="drive">0.36</span><input type="range" name="drive" min="0" max="1" step="0.01" value="0.36" data-act="drive"></label>
+      <h3>Set Pieces</h3>
+      <div class="row"><button type="button" data-cue="enter">Card Call</button>
         <button type="button" data-cue="gates">Gates</button>
         <button type="button" data-cue="rings">Rings</button>
         <button type="button" data-cue="steps">Steps</button>
-        <button type="button" data-cue="miss">A miss</button>
-        <button type="button" data-cue="lead">Race lead</button>
-        <button type="button" data-cue="trail">Race trail</button>
-        <button type="button" data-cue="close">Collapse close</button>
+        <button type="button" data-cue="miss">A Miss</button>
+        <button type="button" data-cue="lead">Race Lead</button>
+        <button type="button" data-cue="trail">Race Trail</button>
+        <button type="button" data-cue="close">Collapse Closing</button>
         <button type="button" data-cue="won">Won</button>
         <button type="button" data-cue="lost">Lost</button></div>
-      <h3>Cues in the score</h3>
-      <div class="row"><button type="button" data-cue="lantern">Lantern lit</button>
+      <h3>Cues in the Score</h3>
+      <div class="row"><button type="button" data-cue="lantern">Lantern Lit</button>
         <button type="button" data-cue="dash">Dash</button>
         <button type="button" data-cue="ward">Ward</button>
-        <button type="button" data-cue="gate">Sky gate</button>
+        <button type="button" data-cue="gate">Sky Gate</button>
         <button type="button" data-cue="pass">Pass</button>
-        <button type="button" data-cue="stage">Stage line</button></div>
-      <label>Sled sound<select data-act="sled">${SLED_SOUNDS.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}</select></label>
-      <div class="now" role="status" aria-live="polite" data-out="now">Press a button to start the audio.</div>
+        <button type="button" data-cue="stage">Stage Line</button></div>
+      <label>Sled Sound<select name="sled" autocomplete="off" data-act="sled">${SLED_SOUNDS.map((s) => `<option value="${s.id}">${s.name}</option>`).join('')}</select></label>
+      <div class="now" aria-live="off" data-out="now">Press a button to start the audio.</div>
     </div>`;
   document.body.appendChild(el);
 
@@ -194,7 +195,7 @@ export function openJukebox(app: unknown): void {
     const act = b.dataset.act;
     if (act === 'fold') {
       const closed = el.classList.toggle('closed');
-      b.textContent = closed ? 'Jukebox' : 'Hide';
+      b.textContent = closed ? 'Show Jukebox' : 'Hide';
       b.setAttribute('aria-expanded', String(!closed));
       return;
     }
@@ -337,10 +338,10 @@ export function openJukebox(app: unknown): void {
     if (!out || el.classList.contains('closed')) return;
     const lv = engine.debugLevels();
     if (!lv.running) return;
-    const tap = engine.debugTap();
     const key = (engine as unknown as { core?: { music: { key(): { tonic: number; bpm: number } } } }).core?.music.key();
     const sec = sections[lv.section as number] ?? '';
     const land = (lv.landingIn as number) >= 0 ? `, drop in ${(lv.landingIn as number).toFixed(1)} s` : '';
-    out.textContent = `${scene === 'idle' ? 'Title screen' : scene[0].toUpperCase() + scene.slice(1)}: ${sec} bar ${(lv.bar as number) + 1} of ${lv.cycleBars}${land}. ${key ? `${NAMES[key.tonic % 12]}, ${key.bpm} bpm` : ''}. Drive ${(lv.drive as number).toFixed(2)}${muted ? ', band silenced' : ''}${tap ? '' : ''}.`;
+    const text = `${scene === 'idle' ? 'Title screen' : scene[0].toUpperCase() + scene.slice(1)}: ${sec} bar ${(lv.bar as number) + 1} of ${lv.cycleBars}${land}. ${key ? `${NAMES[key.tonic % 12]}, ${key.bpm} bpm` : ''}. Drive ${(lv.drive as number).toFixed(2)}${muted ? ', band silenced' : ''}.`;
+    if (out.textContent !== text) out.textContent = text;
   }, 250);
 }

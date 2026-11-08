@@ -284,6 +284,16 @@ export function headOf(song: Song): Note[] {
   return song.hook.filter((n) => n.s < 16);
 }
 
+/** A line by step: the note starting at each of its 128 steps (or null) and its length cut where the next
+ *  starts, made once per deck so the scheduler looks a note up instead of scanning the line. */
+export type LineIndex = ReadonlyArray<{ n: Note; len: number } | null>;
+
+export function indexLine(xs: readonly Note[]): LineIndex {
+  const out: Array<{ n: Note; len: number } | null> = new Array(128).fill(null);
+  for (const n of xs) if (n.s >= 0 && n.s < 128 && !out[n.s]) out[n.s] = { n, len: lengthAt(xs, n) };
+  return out;
+}
+
 /** The notes of a line that start at step s (0..127). */
 export function notesAt(xs: readonly Note[], s: number): Note[] {
   const out: Note[] = [];

@@ -12,28 +12,28 @@ mountain, the second on the run clock and what you heard; that is enough to find
 ## The jukebox (`?debug&jukebox`)
 
 Open the game with `?debug&jukebox` (for example `http://127.0.0.1:4401/?debug&jukebox`). A panel sits top
-right over the title screen; Hide folds it. The line at its foot says what is playing: section, bar, key, tempo.
+right over the title screen; Hide folds it, and Silence the Band mutes the music until the next button. The line at its foot says what is playing: section, bar, key, tempo.
 
 | Button | What it plays |
 | --- | --- |
-| Main theme | The title's music: the main theme in D major at 88 bpm, A then B, 16 bars a time round |
-| Results reprise | The theme again, slower, in the key the run ends in (on Clear Skies a run that never lifted) |
+| Main Theme | The title's music: the main theme in D major at 88 bpm, A then B, 16 bars a time round |
+| Results Reprise | The theme again, slower, in the key the run ends in (on Clear Skies a run that never lifted) |
 | Mountain, Mood, Stage | Which song, in which mood's colours, and which stage's tempo, floor and lift |
-| Intro, Verse, Chorus (hook), Bridge | Holds the run music in that section; "Let it flow" lets the form run on its own |
-| Build into a drop | A riser and a snare roll, then the drop on a downbeat 2.4 s later (a crash, a boom, the chorus from its top) |
-| Lift a key | The same, with the chorus a whole tone up: what the line into the last stage does |
-| Finish line | A longer build, the finale (the main theme's opening bar on the melody, a bright chord), the slam and fanfare in unison, then the results reprise |
-| Break down | A wipeout: the band breaks down to the bridge at the end of the phrase |
+| Intro, Verse, Chorus (hook), Bridge | Holds the run music in that section; "Let It Flow" lets the form run on its own |
+| Build into a Drop | A riser and a snare roll, then the drop on a downbeat 2.4 s later (a crash, a boom, the chorus from its top) |
+| Lift a Key | The same, with the chorus a whole tone up: what the line into the last stage does |
+| Finish Line | A longer build, the finale (the main theme's opening bar on the melody, a bright chord), the slam and fanfare in unison, then the results reprise |
+| Break Down | A wipeout: the band breaks down to the bridge at the end of the phrase |
 | Drive | How hard the run is being ridden (0.36 is a plain cruise, 0.6 a skilled stretch, 0.9 and up a streak) |
-| Set pieces | Each verb's cue on its own: the card's call, six gates a second apart, three rings, four steps two seconds apart, a miss, a race lead and trail, a collapse closing in, won, lost |
-| Cues in the score | The lantern lighting, a dash, a ward, a sky gate, a pass, a stage line |
-| Sled sound | The garage's five runner sounds (they play under a run frame: start any run section first) |
+| Set Pieces | Each verb's cue on its own: the card's call, six gates a second apart, three rings, four steps two seconds apart, a miss, a race lead and trail, a collapse closing in, won, lost |
+| Cues in the Score | The lantern lighting, a dash, a ward, a sky gate, a pass, a stage line |
+| Sled Sound | The garage's five runner sounds (they play under a run frame: start any run section first) |
 
 ## The route
 
 ### 1. The title (2 minutes): is there a theme?
 
-Load the game, tap once, wait on the title. Then the jukebox's Main theme.
+Load the game, tap once, wait on the title. Then the jukebox's Main Theme.
 
 - **Good:** a melody you could hum back after two times round: a held high note, a step down, then a slow climb
   back up; the A half (8 bars) ends turning through two borrowed chords (Bb then C in D major) into home;
@@ -105,7 +105,7 @@ A set piece won ends on a stinger: the band stops for a moment and the hook's fi
 bells a whole tone up, ending on a bright chord. Lost: three soft bells falling to the tonic.
 
 The step, lead, trail, close, won and lost cues sound from the director's `moment` beats, which the main
-lane's set-piece sim pushes. On a build without them, hear them from the jukebox's Set pieces row; the drops,
+lane's set-piece sim pushes. On a build without them, hear them from the jukebox's Set Pieces row; the drops,
 the card's call, the breakdowns and the finish work on any build (they read the course and the card).
 
 ### 5. A mood (2 minutes)
@@ -116,14 +116,14 @@ Wrong: the hook unrecognisable, or harmony that sounds broken rather than dark.
 
 ### 6. The cues in the score (2 minutes)
 
-In the jukebox, with a section playing, press each of: Lantern lit, Dash, Ward, Sky gate, Pass, Stage line.
+In the jukebox, with a section playing, press each of: Lantern Lit, Dash, Ward, Sky Gate, Pass, Stage Line.
 Their rush of air or thud is on the press; their notes land on the band's next 16th and are tones of the chord
 playing. **Good:** they sound like part of the music. **Wrong:** a cue that feels late to the action (more than a
 16th: 134 ms at 112 bpm), or sour against the chord.
 
 ### 7. The sled sounds (1 minute)
 
-Press Verse, then switch the Sled sound: Steel Runners (the hiss as before), Sleigh Bells (bells shaken harder
+Press Verse, then switch the Sled Sound: Steel Runners (the hiss as before), Sleigh Bells (bells shaken harder
 the harder you carve), Old Timber (a creak of boards, a wooden knock on a landing), Glass Chime (a rubbed glass
 singing the key's tonic and fifth), Lantern Song (a warm hum on the tonic that brightens with each full lantern).
 They are under your own runners only. **Wrong:** one that is louder than the music, or that sounds like a cue.

@@ -119,7 +119,8 @@ export class LeadLane extends Lane {
   private readonly depth: number;
   private last = -1;
 
-  constructor(ctx: BaseAudioContext, bank: Bank, dest: AudioNode, readonly kind: LeadKind, pan = 0) {
+  /** `plain`: Low's lead, no breath and no vibrato (fewer automation calls a note). */
+  constructor(ctx: BaseAudioContext, bank: Bank, dest: AudioNode, readonly kind: LeadKind, pan = 0, private readonly plain = false) {
     super(ctx);
     const out = this.pan(pan, dest);
     this.env = this.gain(0, out);
@@ -132,7 +133,7 @@ export class LeadLane extends Lane {
       this.oscs.push(this.osc(bank.hollow, 440, lp));
       this.oscs.push(this.osc(bank.warmSaw, 440, this.gain(0.28, lp)));
       this.oscs[1].detune.value = 7;
-    } else if (kind === 'flute') {
+    } else if (kind === 'flute' && !plain) {
       this.oscs.push(this.osc('triangle', 440, lp));
       this.oscs.push(this.osc('sine', 880, this.gain(0.18, lp)));
       // Breath: white noise in a band at twice the note, under the tone.
@@ -167,8 +168,8 @@ export class LeadLane extends Lane {
     p.setTargetAtTime(amp * 0.82, t + this.att * 2, 0.25);
     p.setTargetAtTime(0, t + Math.max(this.att * 2, dur), this.rel / 3);
     const v = this.vib.gain;
-    v.setTargetAtTime(0, t, 0.01);
-    if (dur > 0.22) v.setTargetAtTime(this.depth, t + Math.min(0.28, dur * 0.45), 0.12);
+    if (!this.plain) v.setTargetAtTime(0, t, 0.01);
+    if (dur > 0.22 && !this.plain) v.setTargetAtTime(this.depth, t + Math.min(0.28, dur * 0.45), 0.12);
     if (this.breath && this.breathBP) {
       this.breathBP.frequency.setValueAtTime(f * 2, t);
       const b = this.breath.gain;
@@ -255,6 +256,7 @@ export class ArpLanes {
  *  at the hit (hits on one lane hardly overlap, and a new transient masks the step in the old tail). */
 export class DrumLane extends Lane {
   readonly out: GainNode;
+  private vel = -1;
 
   constructor(ctx: BaseAudioContext, dest: AudioNode, pan = 0, private readonly take?: () => AudioBufferSourceNode) {
     super(ctx);
@@ -264,12 +266,14 @@ export class DrumLane extends Lane {
   hit(buf: AudioBuffer, t: number, vel: number, rate = 1): void {
     const s = this.take ? this.take() : this.ctx.createBufferSource();
     s.buffer = buf;
-    s.loop = false;
     if (rate !== 1) s.playbackRate.value = rate;
     s.connect(this.out);
-    this.out.gain.setValueAtTime(vel, t);
+    // A source that does not loop stops at its buffer's end on its own: no stop() to schedule.
+    if (vel !== this.vel) {
+      this.out.gain.setValueAtTime(vel, t);
+      this.vel = vel;
+    }
     s.start(t);
-    s.stop(t + buf.duration / rate + 0.01);
   }
 }
 

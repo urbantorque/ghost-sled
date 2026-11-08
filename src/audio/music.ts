@@ -5,7 +5,7 @@ import { type Sec, type SectionName, LAND_MIN_STEPS, cutTo, landingStep, nextSec
 import type { Bus } from './graph';
 import { Formants, Sung, fadeSung, fmBell, formants, pad, pluck, sigh, sing } from './instruments';
 import { type ArpTone, ArpLanes, BassLane, DrumLane, LeadLane, RiserLane } from './lanes';
-import { type ChordSpec, MODES, type Note, type Song, THEME, headOf, lengthAt, notePitch, notesAt, realize, songFor } from './score';
+import { type ChordSpec, type LineIndex, MODES, type Note, type Song, THEME, headOf, indexLine, notePitch, realize, songFor } from './score';
 import { type Accent, type Chord, type DeckScene, type Key, MAJOR_PENTA, type Style, accentFor, deckStyle, fit, ladder, mtof } from './theory';
 import { type Voice, VoicePool, rand, smoothstep, swell } from './voices';
 
@@ -110,6 +110,7 @@ export interface Force {
 const NO_BUILD: Build = { stage: 0, climax: 0, open: 0 };
 /** The finale (the finish line's drop) quotes the main theme's opening bar. */
 const FINALE_QUOTE: readonly Note[] = THEME.answer.filter((n) => n.s < 16);
+const FINALE_AT: LineIndex = indexLine(FINALE_QUOTE);
 /** The arp's floor per stage: a plain cruise reaches the arp's door only in the last stage. */
 const STAGE_ARP = [0, 0.4, 0.7] as const;
 /** The band's tempo per stage: a touch quicker each time, changed on a bar line. */
@@ -129,6 +130,9 @@ class Deck {
   private readonly style: Style;
   private readonly accent: Accent;
   private readonly song: Song;
+  /** The song's lines by step (score.ts indexLine), and the finale's quote. */
+  private readonly hookAt: LineIndex;
+  private readonly answerAt: LineIndex;
   private readonly mode: readonly number[];
   private stepDur: number;
   private readonly bpm: number;
@@ -208,6 +212,8 @@ class Deck {
       this.sec = sec('intro', -1);
     }
     this.chord = realize(this.mode, this.song.intro[0]);
+    this.hookAt = indexLine(this.song.hook);
+    this.answerAt = indexLine(this.song.answer);
     this.bpm = this.key.bpm;
     this.stepDur = 60 / this.key.bpm / 4;
     this.base = start;
@@ -407,7 +413,7 @@ class Deck {
         made = new BassLane(ctx, bank, this.fader.bass, s.kit.kick === 'deep' ? 1.3 : 1);
         break;
       case 'lead':
-        made = new LeadLane(ctx, bank, this.fader.lead, s.lead, 0);
+        made = new LeadLane(ctx, bank, this.fader.lead, s.lead, 0, this.lite);
         break;
       case 'leadHi':
         made = new LeadLane(ctx, bank, this.fader.lead, s.lead, 0.35);
@@ -533,7 +539,7 @@ class Deck {
   private applyLevels(at: number, tau: number): void {
     for (const l of LAYERS) {
       const target = MIX[l] * this.level[l];
-      if (Math.abs(target - this.applied[l]) < 0.004) continue;
+      if (Math.abs(target - this.applied[l]) < 0.008) continue;
       this.applied[l] = target;
       this.fader[l].gain.setTargetAtTime(target, at, tau);
     }
@@ -720,7 +726,7 @@ class Deck {
     }
 
     // ---- arp
-    const rate = this.scene === 'title' ? st.arp.rate * 2 : this.scene === 'results' ? Math.max(2, st.arp.rate) : name === 'bridge' ? st.arp.rate * 2 : st.arp.rate;
+    const rate = (this.scene === 'title' ? st.arp.rate * 2 : this.scene === 'results' ? Math.max(2, st.arp.rate) : name === 'bridge' ? st.arp.rate * 2 : st.arp.rate) * (this.lite ? 2 : 1);
     if (L.arp > AUDIBLE && name !== 'finale' && step % rate === 0) {
       const arp = this.lane('arp');
       const n = this.arpCount++;
@@ -740,7 +746,7 @@ class Deck {
     if (L.kick > AUDIBLE && kickOk && (kv > 0 || (name === 'finale' && s16 === 0))) {
       this.lane('kick')?.hit(kit.kick[st.kit.kick], t, Math.max(kv, name === 'finale' ? 1 : 0));
       // The kick pumps the pad and the bass: a dip to (1 - pump) and back in a tenth of a second.
-      const depth = st.kit.pump * (kv >= 0.75 ? 1 : 0.5);
+      const depth = this.lite ? 0 : st.kit.pump * (kv >= 0.75 ? 1 : 0.5);
       if (depth > 0.01) {
         const p = this.pump.gain;
         p.setTargetAtTime(1 - depth, t, 0.004);
@@ -757,6 +763,7 @@ class Deck {
         buf = kit.shaker;
       }
       if (building) hv = Math.max(hv, 0.25 + 0.4 * (1 - left / 16));
+      if (this.lite && (s16 & 1) === 1) hv = 0;
       if (hv > 0) {
         const open = hv >= 0.75 && name !== 'bridge';
         const lane = open ? this.lane('open') : (s16 & 2) === 0 ? this.lane('hatL') : this.lane('hatR');
@@ -798,55 +805,52 @@ class Deck {
   }
 
   /** The line a section sings, and how loud. */
-  private lineFor(): { notes: readonly Note[]; amp: number } | null {
+  /** The line a section sings (by step), and how loud; null for none. */
+  private lineFor(): LineIndex | null {
     const name = this.sec.name;
-    if (this.scene === 'title') return name === 'verse' ? { notes: this.song.answer, amp: 0.85 } : name === 'chorus' ? { notes: this.song.hook, amp: 0.85 } : null;
-    if (this.scene === 'results') return name === 'verse' ? { notes: this.song.answer, amp: 0.7 } : { notes: this.song.hook, amp: 0.7 };
-    if (name === 'chorus') return { notes: this.song.hook, amp: 0.9 };
-    if (name === 'verse') return { notes: this.song.answer, amp: 0.7 };
-    if (name === 'finale') return this.sec.bar === 0 ? { notes: FINALE_QUOTE, amp: 1 } : null;
-    return null;
+    if (name === 'finale') return this.sec.bar === 0 ? FINALE_AT : null;
+    if (this.scene !== 'run') return name === 'verse' ? this.answerAt : name === 'chorus' ? this.hookAt : null;
+    return name === 'chorus' ? this.hookAt : name === 'verse' ? this.answerAt : null;
+  }
+
+  private lineAmp(): number {
+    const name = this.sec.name;
+    if (name === 'finale') return 1;
+    if (this.scene === 'title') return 0.85;
+    if (this.scene === 'results') return 0.7;
+    return name === 'chorus' ? 0.9 : 0.7;
   }
 
   private melody(step: number, t: number): void {
     const line = this.lineFor();
     if (!line) return;
-    const at = (Math.max(0, this.sec.bar) % 8) * 16 + (step & 15);
-    const notes = notesAt(line.notes, at);
-    if (notes.length === 0) return;
+    const hit = line[(Math.max(0, this.sec.bar) % 8) * 16 + (step & 15)];
+    if (!hit) return;
     const lead = this.lane('lead');
     if (!lead) return;
-    const base = fit(this.key.tonic, 60);
-    const n = notes[0];
-    const m = notePitch(this.mode, base, n);
-    const dur = lengthAt(line.notes, n) * this.stepDur * 0.94;
-    lead.note(t, mtof(m), dur, line.amp);
+    const amp = this.lineAmp();
+    const m = notePitch(this.mode, fit(this.key.tonic, 60), hit.n);
+    const dur = hit.len * this.stepDur * 0.94;
+    lead.note(t, mtof(m), dur, amp);
     // Doubled an octave up when the band opens, the climb nears the line, or in the last stage's choruses.
     const run = this.scene === 'run';
     const dbl = run && !this.lite && this.sec.name === 'chorus' ? Math.max(0.6 * smoothstep(0.55, 1, this.build.open), 0.5 * this.build.climax, this.stageNow() >= 2 ? 0.45 : 0, 0.5 * smoothstep(0.8, 0.92, this.drive.intensity)) : 0;
-    if (dbl > 0.05) this.lane('leadHi')?.note(t, mtof(m + 12), dur, line.amp * 0.45 * dbl);
+    if (dbl > 0.05) this.lane('leadHi')?.note(t, mtof(m + 12), dur, amp * 0.45 * dbl);
   }
 
   private bells(step: number, t: number): void {
     const name = this.sec.name;
     const s16 = step & 15;
-    let notes: Note[] | null = null;
-    let at = 0;
-    if (name === 'intro') {
-      // The run opens on the hook's head, rung on bells, in both intro bars.
-      notes = headOf(this.song);
-      at = s16;
-    } else if (name === 'bridge' && (this.sec.bar & 1) === 0) {
-      notes = this.song.hook.filter((n) => n.s < 32);
-      at = (this.sec.bar & 2 ? 16 : 0) + s16;
-    }
-    if (!notes) return;
-    const base = fit(this.key.tonic, 60) + 12;
-    for (const n of notes) {
-      if (n.s !== at) continue;
-      const v = this.pool.voice(t, 1, this.fader.bell, null, 0, (n.s & 4) === 0 ? -0.35 : 0.35);
-      fmBell(v, t, mtof(notePitch(this.mode, base, n)), 0.45, 0.5, 3.5, 1.1, null);
-    }
+    // The run opens on the hook's head, rung on bells, in both intro bars; the bridge recalls its first two
+    // bars, a bar each, every other bar.
+    let at = -1;
+    if (name === 'intro') at = s16;
+    else if (name === 'bridge' && (this.sec.bar & 1) === 0) at = (this.sec.bar & 2 ? 16 : 0) + s16;
+    const hit = at >= 0 ? this.hookAt[at] : null;
+    if (!hit) return;
+    const n = hit.n;
+    const v = this.pool.voice(t, 1, this.fader.bell, null, 0, (n.s & 4) === 0 ? -0.35 : 0.35);
+    fmBell(v, t, mtof(notePitch(this.mode, fit(this.key.tonic, 60) + 12, n)), 0.45, 0.5, 3.5, 1.1, null);
   }
 
   private arpNote(arp: ArpLanes, t: number, m: number, vel: number): void {
