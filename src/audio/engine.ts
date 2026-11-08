@@ -5,7 +5,10 @@ import type { Beat } from '../game/beats';
 import { RUN_FLOOR } from '../game/intensity';
 import { START_TICKS } from '../game/race';
 import { Core } from './core';
-import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, openUp, resultsCues, revealCues, stageIndex } from './cues';
+import type { Course } from '../sim/course';
+import { planMoments } from '../sim/moments';
+import { ChoirTracker, type Mark, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, marksOf, markWindow, openUp, resultsCues, revealCues, stageIndex } from './cues';
+import type { Force } from './music';
 import { Listener, type ListenSources, newView } from './listen';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
@@ -16,28 +19,37 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
 /*
  * Ghost Sled audio: fully procedural WebAudio. No files, no fetches; every sound is synthesized.
  *
- * Signal graph
+ * Signal graph (round 6)
  *
- *   one-shot voices (sfx pool, 24) ---dry---> sfx.dry ----> duck -> level ---------+
- *                                  \--send-> sfx.wet ----> duck -> level --+      |
- *   ambience (wind, snow, hum, rumble) -----> sfx.dry / sfx.wet            |      |
- *   soundscape (crowds, life, places, mood beds; 6 take lanes) -> sfx.dry / sfx.wet
- *   both buses' level outs -> enclosure echo (delay 105 ms, fb 0.42, LP 2.4 kHz) -> master, only
- *     plugged in inside a gallery or a tunnel; each bus's reverb send has a "space" gain
- *                                                                          v      |
- *   music decks (music pool, 32)                                    ConvolverNode |
- *     layer faders: pad bass arp kick hat clap sparkle lead tension     (noise IR,|
- *       -> deck crossfade ----> music.dry -> duck -> level ---------+   1.9 s RT) |
- *       -> layer sends -> xf -> music.wet -> duck -> level -> conv  |      |      |
- *                                                                   |   HP 220 Hz |
- *                                                                   |   LP 7.5 kHz|
- *                                                                   v      v      v
- *                                          master gain (volume) <-----------------+
- *                                               -> mute gain (stackable reasons, 12 ms ramp)
- *                                               -> DynamicsCompressor (fast limiter for stacked peaks)
- *                                               -> ceiling trim (absorbs the compressor's makeup gain)
- *                                               -> destination
+ *   one-shot voices (sfx pool, 24) -> sfx.shots -+-> sfx.dry -> duck -> level ------------------+
+ *                                               +-> key (x the effects level) -> [gs-duck] ---+ |
+ *                                  \--send-> sfx.wet -> duck -> level -> space --+            | |
+ *   ambience, soundscape (wind, snow, sled sound, crowds, places) -> sfx.dry / sfx.wet           | |
+ *                                                                               v            | |
+ *   music decks: lanes (bass, melody, arp, drums,   ConvolverNode (noise IR, 1.9 s)          | |
+ *     riser) and voices (pads, choir, bells,          -> HP 220 -> LP 7.5k -> master          | |
+ *     sparkle, danger), layer faders, the kick's                                              | |
+ *     pump on pad and bass, deck crossfade                                                     | |
+ *       -> music.dry -> glue (2.2:1) -> trim x gain -> side <-------- control (0..1) ---------+ |
+ *            -> duck -> level -> master                                                          |
+ *       -> music.wet -> gain -> side -> duck -> level -> space -> reverb                         |
+ *   both buses' level outs -> enclosure echo (105 ms, only in a gallery or a tunnel) -> master    |
+ *                                                                                                 v
+ *   master gain (volume) <-----------------------------------------------------------------------+
+ *     -> mute gain (stackable reasons, 12 ms ramp) -> highpass 25 Hz
+ *     -> [gs-limiter] true-peak limiter, -1.2 dBTP, 1.3 ms lookahead (AudioWorklet; until it loads, or
+ *        where AudioWorklet is missing, the old fast DynamicsCompressor and its trim)
+ *     -> output gain -> destination
  *
+ * - The master chain (master.ts): two AudioWorklet processors inlined as a blob module. gs-limiter reads
+ *   the peaks 4x oversampled and holds the gain for its lookahead, so nothing passes -1.2 dBTP. gs-duck is
+ *   the sidechain: a power follower on the one-shot effects at the user's effects level, whose gain (at most
+ *   5 dB down) drives the music bus's side gains, so the music gives way to the effects by as much as they
+ *   are loud; with it live the everyday ducks (a stomp, a big bank) are left to it. The deliberate gaps
+ *   (the crash, a big bank's drop, the avalanche escape, a set piece won) still duck by hand.
+ * - The loudness target: about -16 LUFS integrated over a run at the default sliders (music 0.8, effects
+ *   0.8), true peak at or under -1 dBTP, the music within a loudness unit of the effects
+ *   (scripts/playtest/loudness.js; the numbers are in notes/r6-music.md).
  * - Buses: "level" is the user's volume (squared slider curve), "duck" dips music under crashes,
  *   stingers and big rewards. Both buses feed one shared reverb.
  * - Buffers (white/pink/brown stereo noise, grain train, sleigh bell, impulse, and the white noise
@@ -61,7 +73,11 @@ export type { ResultsCue, ResultsShow, RevealCue } from './cues';
  *   cut for an old tail. A shimmer is one voice (both sides), and a perfect landing's bloom rides on
  *   its chord. Parts of a sound starting more than 80 ms ahead (shimmers, arpeggio tails) are built
  *   by a later scheduler pass, so big rewards spread their node creation over several frames.
- * - Music (music.ts): a lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
+ * - Music (music.ts, score.ts, form.ts, lanes.ts, drums.ts): written songs (a hook, an answer, borrowed
+ *   chords) per mountain in its own key and tempo, arranged in sections (intro, verse, chorus, bridge,
+ *   finale); set pieces, stage lines and the finish land drops on the beat nearest the rider's arrival
+ *   (engine.approach reads the course's landmarks and the speed; a bar is cut to 2/4 or 3/4 when that
+ *   meets the picture). A lookahead scheduler (25 ms timer, 0.12 s ahead on AudioContext time)
  *   steps 16th notes. A deck is one arrangement (scene + mood + biome); any change starts a new
  *   deck and crossfades over 1.5 s. The drive fades layers in: the pad always, the bass from 0.26
  *   (the run floor of 0.30 holds it from 2.5 s), hats from 0.28 (cruising sits at 0.36), the arp
@@ -214,6 +230,26 @@ const clockMs = (): number => (typeof performance !== 'undefined' ? performance.
 
 type AudioContextCtor = new (options?: AudioContextOptions) => AudioContext;
 
+/** The context factories a sound can call (debugCpu counts each call). */
+const FACTORIES = ['createGain', 'createOscillator', 'createBiquadFilter', 'createBufferSource', 'createStereoPanner', 'createConstantSource', 'createWaveShaper', 'createDelay', 'createConvolver', 'createDynamicsCompressor', 'createPanner', 'createAnalyser', 'createIIRFilter'] as const;
+
+/** Probe-only bookkeeping of the engine's main-thread cost (debugCpu). */
+interface CpuMeter {
+  since: number;
+  /** Milliseconds spent in the frame's calls (update, beats, simEvent, ui) and in scheduler passes. */
+  frameMs: number;
+  tickMs: number;
+  frames: number;
+  ticks: number;
+  /** Nodes made, and of those made inside a frame's call. */
+  nodes: number;
+  nodesInFrame: number;
+  /** The worst single frame call and scheduler pass (ms). */
+  frameMax: number;
+  tickMax: number;
+  depth: number;
+}
+
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private core: Core | null = null;
@@ -271,6 +307,17 @@ export class AudioEngine {
   private lift = 0;
   private tier: 'low' | 'medium' | 'high' = 'high';
   private openK = 0;
+  /** The run's landmarks (stage lines, set pieces, the finish: cues.ts marksOf), the course they were read
+   *  from, the next one ahead, and the rider's speed down the course (m/s, smoothed) to time them. */
+  private marks: Mark[] = [];
+  private marksFor: unknown = null;
+  private markIx = 0;
+  private zPrev = Number.NaN;
+  private vz = 0;
+  /** Its rate of change (m/s2, smoothed): a rider slowing into a line arrives later than the speed says. */
+  private az = 0;
+  /** Full lanterns (0 to 3), from the sim's lantern, dash and ward events: the Lantern Song sled sound. */
+  private cells = 0;
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -307,6 +354,12 @@ export class AudioEngine {
   sledSound: SledSoundId = 'runners';
   setSledSound(id: SledSoundId): void {
     this.sledSound = id;
+    try {
+      this.core?.ambience.setSled(id);
+      if (this.core) this.core.sfx.sled = id;
+    } catch (err) {
+      this.warn(err);
+    }
   }
 
   setVolumes(v: { master: number; music: number; sfx: number }): void {
@@ -340,6 +393,11 @@ export class AudioEngine {
       this.stage = 0;
       this.finished = false;
       this.listener.reset();
+      this.markIx = 0;
+      this.zPrev = Number.NaN;
+      this.vz = 0;
+      this.az = 0;
+      this.cells = 0;
     }
     this.choirs.reset();
     const c = this.core;
@@ -353,6 +411,7 @@ export class AudioEngine {
       c.ambience.setRail(false);
       c.music.setBuild(0, 0, 0);
       c.scape.bandOpen = 0;
+      c.ambience.setCells(0);
       c.music.setTarget(this.scene, this.mood, this.biome);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
@@ -374,6 +433,7 @@ export class AudioEngine {
   setQuality(tier: 'low' | 'medium' | 'high'): void {
     this.tier = tier;
     this.core?.scape.setTier(tier);
+    if (this.core) this.core.music.lite = tier === 'low';
   }
 
   /**
@@ -388,6 +448,11 @@ export class AudioEngine {
 
   /** Called every render frame during a run. */
   update(frame: AudioFrame, dt: number): void {
+    if (this.cpu) this.metered(true, () => this.updateNow(frame, dt));
+    else this.updateNow(frame, dt);
+  }
+
+  private updateNow(frame: AudioFrame, dt: number): void {
     const ctx = this.ctx;
     const c = this.core;
     if (!ctx || !c || ctx.state !== 'running') return;
@@ -443,6 +508,7 @@ export class AudioEngine {
         this.climax = climaxK(frame.z as number, stages);
       }
       this.build = crashed || countIn ? 0 : buildLift(this.stage, this.climax);
+      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, c);
       const open = crashed || countIn ? 0 : openUp(frame.flow, frame.streak);
       this.bandOpen += (open - this.bandOpen) * (1 - Math.exp(-d / (open > this.bandOpen ? 0.5 : 2.4)));
       c.music.setBuild(this.stage, this.climax, this.bandOpen);
@@ -460,6 +526,11 @@ export class AudioEngine {
 
   /** Called for every sim event during a run. */
   simEvent(e: SimEvent): void {
+    if (this.cpu) this.metered(true, () => this.simEventNow(e));
+    else this.simEventNow(e);
+  }
+
+  private simEventNow(e: SimEvent): void {
     // Chaos bookkeeping happens even while muted, so the avalanche rumble is right on unmute.
     if (e.type === 'chaos' && e.event === ChaosEvent.Avalanche) {
       if (e.phase === 'start') this.avalanche = true;
@@ -473,6 +544,10 @@ export class AudioEngine {
       // still resuming: it plays the moment it runs (like the doubled gifts' coin).
       this.reviveWaiting = clockMs();
       return;
+    }
+    if (e.type === 'lantern' || e.type === 'dash' || e.type === 'ward') {
+      this.cells = Math.max(0, Math.min(3, e.cells));
+      c.ambience.setCells(this.cells);
     }
     if (!this.live(ctx)) return;
     try {
@@ -490,6 +565,11 @@ export class AudioEngine {
    * simEvent(e) calls so their data is known when the raw sounds play. Never keeps the list.
    */
   beats(list: readonly Beat[]): void {
+    if (this.cpu) this.metered(true, () => this.beatsNow(list));
+    else this.beatsNow(list);
+  }
+
+  private beatsNow(list: readonly Beat[]): void {
     const ctx = this.ctx;
     const c = this.core;
     try {
@@ -509,12 +589,22 @@ export class AudioEngine {
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
         if (b.type === 'grind') c.ambience.setRail(b.phase === 'start');
-        else if (b.type === 'tumble' && b.phase === 'start') c.ambience.setRail(false);
+        else if (b.type === 'tumble' && b.phase === 'start') {
+          c.ambience.setRail(false);
+          c.music.breakdown();
+        } else if (b.type === 'crash') c.music.breakdown();
         else if (b.type === 'finish') {
-          // Resolved: the band goes to the results deck's bright loop, under the finish cue.
+          // Over the line: the band's finale (its landing, planned as the line came up) rings, then the
+          // results deck's reprise comes in under it.
           this.finished = true;
           c.ambience.setRail(false);
-          c.music.setTarget('results', this.mood, this.biome);
+          c.music.finish(now);
+        } else if (b.type === 'marquee') {
+          if (b.phase === 'enter') {
+            // Without a course to read (a probe, an old frame) the drop is planned from the card itself: it
+            // comes up about 2.2 s before the place.
+            if (!c.music.landing() && now - c.music.landedAt > 1.5) c.music.land(now + 2.2, 'drop', now);
+          } else c.music.breakdown();
         }
         if (b.type === 'unlockPop') c.graph.music.duck(0.75, now, 0.9, 0.5);
         // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
@@ -589,6 +679,68 @@ export class AudioEngine {
     for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);
   }
 
+  /**
+   * The band's landings for the course's landmarks (cues.ts marksOf: stage lines, set pieces, the finish):
+   * each frame, the next one ahead and how soon the rider gets there at their speed down the course; inside
+   * its window (3.4 s, the finish 4.6 s) the band plans its drop on the beat nearest that moment (music.ts
+   * plan; it re-plans as the speed changes until the drop's pad is built). A drop is never planned within
+   * 3 s of the last: a set piece just past a stage line is one drop.
+   */
+  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, c: Core): void {
+    if (course !== this.marksFor) {
+      this.marksFor = course;
+      let moments: { z0: number }[] = [];
+      const full = course as Course;
+      try {
+        if (typeof full.stageAt === 'function' && Array.isArray(full.leaps) && Number.isFinite(full.finishZ)) moments = planMoments(full);
+      } catch {
+        moments = [];
+      }
+      this.marks = marksOf(stages, moments);
+      this.markIx = 0;
+      this.zPrev = Number.NaN;
+    }
+    if (dt > 0 && Number.isFinite(this.zPrev)) {
+      const v = (z - this.zPrev) / dt;
+      if (Number.isFinite(v) && v >= 0 && v < 90) {
+        const before = this.vz;
+        this.vz += (v - this.vz) * (1 - Math.exp(-dt / 0.2));
+        const a = (this.vz - before) / dt;
+        if (Number.isFinite(a)) this.az += (Math.max(-10, Math.min(6, a)) - this.az) * (1 - Math.exp(-dt / 0.5));
+      }
+    }
+    this.zPrev = z;
+    while (this.markIx < this.marks.length && this.marks[this.markIx].z <= z) this.markIx++;
+    const m = this.marks[this.markIx];
+    if (!m || held || this.vz < 3) return;
+    // Distance at the speed and its change: the root of rem = v t + a t^2 / 2 (constant speed when it has none).
+    const rem = m.z - z;
+    const a = this.az;
+    const disc = this.vz * this.vz + 2 * a * rem;
+    const eta = Math.abs(a) > 0.05 && disc > 0 ? (Math.sqrt(disc) - this.vz) / a : rem / this.vz;
+    if (eta > markWindow(m.kind) || eta < 0.15) return;
+    if (m.kind === 'drop' && now - c.music.landedAt < 3) return;
+    c.music.land(now + eta, m.kind, now);
+  }
+
+  /** Probe-only: the true-peak limiter's and the sidechain's deepest gain since the last ask (1 = untouched;
+   *  null on the fallback chain). */
+  debugMaster(): Promise<{ limiter: number; side: number } | null> {
+    return this.core ? this.core.graph.debugGain() : Promise.resolve(null);
+  }
+
+  /** Debug-only (the jukebox): hold the band in a section and a stage (null lets it go). */
+  debugMusic(force: Force | null): void {
+    if (this.core) this.core.music.force = force;
+  }
+
+  /** Debug-only (the jukebox): ask the band for a landing `inS` seconds from now. */
+  debugLand(inS: number, kind: 'drop' | 'lift' | 'finish'): number | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.core) return null;
+    return this.core.music.land(ctx.currentTime + inS, kind, ctx.currentTime);
+  }
+
   /** Probe-only readout of the mix: the drive (smoothed intensity, its target and the accent), each
    *  music layer's presence, the music duck and both voice pools. */
   debugLevels(): Record<string, number> {
@@ -606,6 +758,18 @@ export class AudioEngine {
       out.cycleBars = pos.cycle;
     }
     out.decksStarted = c.music.decksStarted;
+    const sections = ['intro', 'verse', 'chorus', 'bridge', 'finale'];
+    out.section = pos ? sections.indexOf(pos.section) : -1;
+    out.landings = c.music.landings;
+    const l = c.music.landing();
+    out.landingIn = l && ctx ? l.t - ctx.currentTime : -1;
+    out.landedAgo = ctx ? ctx.currentTime - c.music.landedAt : -1;
+    out.sidechain = c.graph.side ? 1 : 0;
+    out.truePeak = c.graph.tp ? 1 : 0;
+    out.lite = c.music.lite ? 1 : 0;
+    out.marks = this.marks.length;
+    out.markIx = this.markIx;
+    out.vz = this.vz;
     out.choir = c.music.choirVoices();
     out.duck = c.graph.music.ducked;
     out.sfxVoices = c.sfxPool.active;
@@ -643,6 +807,91 @@ export class AudioEngine {
     out.hearEnclosed = h.enclosed;
     out.hearVista = h.vista;
     return out;
+  }
+
+  /**
+   * Probe-only: the engine's main-thread cost since the meter started (the first call starts it;
+   * reset starts it again). Times every frame call (update, beats, simEvent) and every scheduler pass
+   * with performance.now(), and counts every node the context makes, and how many of those were made
+   * inside a frame's call (DECISIONS 89 and 205: on a throttled CPU a node is the dear part). Per
+   * second of wall clock. Costs nothing until it is called.
+   */
+  debugCpu(reset = false): Record<string, number> | null {
+    const ctx = this.ctx;
+    if (!ctx) return null;
+    if (!this.cpu || reset) {
+      if (!this.cpuWrapped) {
+        this.cpuWrapped = true;
+        const self = this;
+        const raw = ctx as unknown as Record<string, unknown>;
+        for (const name of FACTORIES) {
+          const f = raw[name];
+          if (typeof f !== 'function') continue;
+          raw[name] = function wrapped(this: unknown, ...args: unknown[]): unknown {
+            const m = self.cpu;
+            if (m) {
+              m.nodes++;
+              if (m.depth > 0 && self.cpuInFrame) m.nodesInFrame++;
+            }
+            return (f as (...a: unknown[]) => unknown).apply(ctx, args);
+          };
+        }
+      }
+      this.cpu = { since: clockMs(), frameMs: 0, tickMs: 0, frames: 0, ticks: 0, nodes: 0, nodesInFrame: 0, frameMax: 0, tickMax: 0, depth: 0 };
+      return { started: 1 };
+    }
+    const m = this.cpu;
+    const s = Math.max(1e-3, (clockMs() - m.since) / 1000);
+    const r = (v: number, k = 100): number => Math.round(v * k) / k;
+    return {
+      seconds: r(s, 10),
+      frameMsPerS: r(m.frameMs / s, 1000),
+      tickMsPerS: r(m.tickMs / s, 1000),
+      msPerS: r((m.frameMs + m.tickMs) / s, 1000),
+      nodesPerS: r(m.nodes / s),
+      nodesInFramePerS: r(m.nodesInFrame / s),
+      frameCallsPerS: r(m.frames / s, 10),
+      ticksPerS: r(m.ticks / s, 10),
+      frameMaxMs: r(m.frameMax, 1000),
+      tickMaxMs: r(m.tickMax, 1000),
+      musicVoices: this.core ? this.core.musicPool.active : 0,
+      sfxVoices: this.core ? this.core.sfxPool.active : 0,
+    };
+  }
+
+  private cpu: CpuMeter | null = null;
+  private cpuWrapped = false;
+  private cpuInFrame = false;
+
+  private metered(frame: boolean, fn: () => void): void {
+    const m = this.cpu;
+    if (!m) {
+      fn();
+      return;
+    }
+    const outer = m.depth === 0;
+    const was = this.cpuInFrame;
+    if (outer) this.cpuInFrame = frame;
+    m.depth++;
+    const t0 = performance.now();
+    try {
+      fn();
+    } finally {
+      const ms = performance.now() - t0;
+      m.depth--;
+      if (outer) {
+        if (frame) {
+          m.frameMs += ms;
+          m.frames++;
+          if (ms > m.frameMax) m.frameMax = ms;
+        } else {
+          m.tickMs += ms;
+          m.ticks++;
+          if (ms > m.tickMax) m.tickMax = ms;
+        }
+        this.cpuInFrame = was;
+      }
+    }
   }
 
   /** Probe-only: the soundscape's counters (plays per take, whooshes, gusts) and what it hears. */
@@ -790,6 +1039,11 @@ export class AudioEngine {
   }
 
   private tick(): void {
+    if (this.cpu) this.metered(false, () => this.tickNow());
+    else this.tickNow();
+  }
+
+  private tickNow(): void {
     const ctx = this.ctx;
     const c = this.core;
     if (!ctx || !c || ctx.state !== 'running') return;

@@ -397,7 +397,7 @@ export class VoicePool {
   /** `reserve`: where its voices take their nodes (Core shares one between both pools). */
   constructor(
     private readonly ctx: BaseAudioContext,
-    private readonly bank: Bank,
+    readonly bank: Bank,
     readonly max: number,
     readonly reserve: NodeReserve = new NodeReserve(ctx),
   ) {}

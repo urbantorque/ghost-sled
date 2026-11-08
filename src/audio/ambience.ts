@@ -3,6 +3,7 @@ import type { AudioFrame } from './engine';
 import type { Bus } from './graph';
 import type { Scene } from './music';
 import { type Key, fit, ladderAt, mtof } from './theory';
+import type { SledSoundId } from './sledsounds';
 import { bandComp, blockRate, clamp, smoothstep } from './voices';
 
 // Continuous layers: wind and snow surface, plus three voices that read the run's feel: the wind
@@ -174,6 +175,20 @@ export class Ambience {
   private snuffF = 500;
   private snuffQ = 0.7;
   private readonly windParam: AudioParam;
+  /** The garage's sled sound (sledsounds.ts): a small fixed graph under your own runners, built when it is
+   *  chosen (in the garage, never in a run frame) and moved by automation only, like the rest of the bed. */
+  private sledId: SledSoundId = 'runners';
+  private sledG: Smooth | null = null;
+  private sledF: Smooth | null = null;
+  private sledRate: Smooth | null = null;
+  private sledOscs: OscillatorNode[] = [];
+  private sledNodes: AudioNode[] = [];
+  private sledNote = -1;
+  /** A link into the shared noise the timber's creak takes (undone when the sound changes). */
+  private sledLink: [AudioNode, AudioNode] | null = null;
+  private cells = 0;
+  private readonly bankRef: Bank;
+  private readonly surfOut: GainNode;
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -276,6 +291,8 @@ export class Ambience {
 
     // Surface.
     const surf = gain(1, this.out);
+    this.surfOut = surf;
+    this.bankRef = bank;
 
     const hissG = gain(0, surf);
     const hissBP = filter('bandpass', 3000, 0.6, hissG);
@@ -360,6 +377,143 @@ export class Ambience {
     this.shoulderRate = P(shGrains.playbackRate, 0.03, true);
     this.shoulderG = G(shG.gain, [[white, shBP], [shGrains, shDepth]]);
     this.shoulderPan = pan ? P(pan.pan, 0.03) : null;
+  }
+
+  /** Full lanterns (0 to 3): the Lantern Song brightens as they fill. */
+  setCells(n: number): void {
+    this.cells = clamp(n, 0, 3);
+  }
+
+  /**
+   * The sled sound under your runners. Steel Runners is the bed as it was; the others add one small voice:
+   * Sleigh Bells a string of bells shaken harder the harder you carve, Old Timber a creak of boards in the
+   * crunch, Glass Chime a rubbed glass singing the key's tonic and its fifth, Lantern Song a warm hum on the
+   * tonic whose lowpass opens a step for each full lantern. Only your own runners: no cue, no ghost.
+   */
+  setSled(id: SledSoundId): void {
+    if (id === this.sledId) return;
+    for (const o of this.sledOscs) {
+      try {
+        o.stop();
+      } catch {
+        // Already stopped.
+      }
+    }
+    for (const n of this.sledNodes) n.disconnect();
+    if (this.sledLink) {
+      try {
+        this.sledLink[0].disconnect(this.sledLink[1]);
+      } catch {
+        // Already gone.
+      }
+      this.sledLink = null;
+    }
+    this.sledOscs = [];
+    this.sledNodes = [];
+    this.sledG = this.sledF = this.sledRate = null;
+    this.sledNote = -1;
+    this.sledId = id;
+    if (id === 'runners') return;
+    const ctx = this.ctx;
+    const t = ctx.currentTime;
+    const node = <T extends AudioNode>(n: T): T => {
+      this.sledNodes.push(n);
+      return n;
+    };
+    const g = node(ctx.createGain());
+    g.gain.value = 0;
+    g.connect(this.surfOut);
+    this.sledG = new Smooth(g.gain, 0.002);
+    if (id === 'bells') {
+      const src = node(ctx.createBufferSource());
+      src.buffer = this.bankRef.jingle;
+      src.loop = true;
+      const hp = node(blockRate(ctx.createBiquadFilter()));
+      hp.type = 'highpass';
+      hp.frequency.value = 2500;
+      src.connect(hp).connect(g);
+      src.start(t, Math.random() * this.bankRef.jingle.duration * 0.9);
+      this.sledOscs.push(src as unknown as OscillatorNode);
+      this.sledRate = new Smooth(src.playbackRate, 0.02, true);
+    } else if (id === 'timber') {
+      const bp = node(blockRate(ctx.createBiquadFilter()));
+      bp.type = 'bandpass';
+      bp.frequency.value = 240;
+      bp.Q.value = 7;
+      const am = node(ctx.createGain());
+      am.gain.value = 0;
+      const grains = node(ctx.createBufferSource());
+      grains.buffer = this.bankRef.grains;
+      grains.loop = true;
+      grains.playbackRate.value = 0.6;
+      grains.connect(am.gain);
+      grains.start(t);
+      this.sledOscs.push(grains as unknown as OscillatorNode);
+      this.noise.brown.connect(am);
+      this.sledLink = [this.noise.brown, am];
+      am.connect(bp).connect(g);
+      this.sledNodes.push(am);
+      this.sledF = new Smooth(bp.frequency, 0.02, true);
+      this.sledRate = new Smooth(grains.playbackRate, 0.03, true);
+    } else {
+      const lp = node(blockRate(ctx.createBiquadFilter()));
+      lp.type = 'lowpass';
+      lp.frequency.value = id === 'glass' ? 6000 : 700;
+      lp.Q.value = 0.7;
+      lp.connect(g);
+      for (const [type, lvl] of id === 'glass' ? ([['sine', 1], ['sine', 0.5]] as const) : ([['sine', 1], ['triangle', 0.4]] as const)) {
+        const o = ctx.createOscillator();
+        o.type = type;
+        o.frequency.value = 220;
+        const og = node(ctx.createGain());
+        og.gain.value = lvl;
+        o.connect(og).connect(lp);
+        o.start(t);
+        this.sledOscs.push(o);
+        this.sledNodes.push(o);
+      }
+      if (id === 'lantern') this.sledF = new Smooth(lp.frequency, 0.02, true);
+    }
+  }
+
+  /** The sled sound's voice each frame: its level with your speed and carve, its pitch on the key's tonic. */
+  private sledFrame(f: AudioFrame, now: number, ground: number, key: Key | null): void {
+    const g = this.sledG;
+    if (!g) return;
+    const sp = clamp(f.speed || 0, 0, 60);
+    const s01 = smoothstep(2, 30, sp);
+    const carve = clamp(f.carve, 0, 1);
+    const live = f.crashed ? 0 : 1;
+    switch (this.sledId) {
+      case 'bells':
+        g.to(ground * live * (0.05 + 0.4 * carve) * s01 * 0.55, now, 0.05);
+        this.sledRate?.to(0.85 + 0.35 * s01 + 0.2 * carve, now, 0.1);
+        break;
+      case 'timber':
+        g.to(ground * live * (0.12 + 0.5 * carve) * s01 * bandComp(240, 7, this.ctx.sampleRate) * 0.25, now, 0.05);
+        this.sledF?.to(200 + 110 * carve + sp * 1.5, now, 0.1);
+        this.sledRate?.to(0.45 + 0.9 * carve + sp / 60, now, 0.1);
+        break;
+      case 'glass':
+      case 'lantern': {
+        if (key) {
+          const m = this.sledId === 'glass' ? fit(key.tonic, 76) : fit(key.tonic, 45);
+          if (m !== this.sledNote) {
+            this.sledNote = m;
+            const [o1, o2] = this.sledOscs;
+            o1?.frequency.setTargetAtTime(mtof(m), now, 0.2);
+            // A hair off the fifth (glass) or the octave (the hum), so it beats slowly as a rubbed rim does.
+            o2?.frequency.setTargetAtTime(this.sledId === 'glass' ? mtof(m + 7) * 1.003 : mtof(m + 12) * 1.002, now, 0.2);
+          }
+        }
+        const lvl = this.sledId === 'glass' ? (0.012 + 0.03 * s01) * (f.onIce ? 1.6 : 1) : 0.018 + 0.022 * s01;
+        g.to(ground * live * lvl, now, 0.12);
+        if (this.sledId === 'lantern') this.sledF?.to(600 + 650 * this.cells, now, 0.3);
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   /** A drift released: the whine whips up an octave in 0.08 s as it falls away. */
@@ -522,6 +676,7 @@ export class Ambience {
     this.scrapeF.to(scf, now, 0.08);
     this.scrapeRate.to(2 + slip * 2.2, now, 0.1);
     this.scrapeG.to(ground * drift * 0.3 * Math.min(1, slip / 0.6 + 0.2) * bandComp(scf, 2.2, sr) * 0.5, now, 0.06);
+    this.sledFrame(f, now, ground, key);
     const ice = f.onIce ? 1 : 0;
     this.iceG.to(ground * ice * (0.1 + 0.24 * s01 + drift * 0.12), now, 0.08);
     this.ringG.to(ground * ice * (0.025 + 0.04 * s01) * bandComp(3300, 16, sr) * 0.5, now, 0.1);
@@ -578,6 +733,7 @@ export class Ambience {
   }
 
   dispose(): void {
+    this.setSled('runners');
     for (const s of this.srcs) {
       try {
         s.stop();
