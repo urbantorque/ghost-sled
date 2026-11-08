@@ -441,7 +441,7 @@ export class MarqueeWorld {
       const ahead = this.cableAt(c, p.side, z + 4, ts);
       m.cabin.rotation.set(0, Math.atan2(ahead.x - tv.x, ahead.z - tv.z), sway);
     }
-    if (this.pillars && this.lanterns && c) {
+    if (this.pillars && this.lanterns && c && this.pillars.visible) {
       let dirty = false;
       for (const g of this.gates) {
         g.play.gates.forEach((q, i) => {
