@@ -356,7 +356,9 @@ describe('the budget', () => {
         for (const low of [false, true]) {
           const g = mergePiece(pieceFor(s.kind, pieceCtx(c, s, p, true, low)).steps.flatMap((f) => f()));
           const tris = g.getAttribute('position').count / 3;
-          const most = s.kind === 'finish' ? (low ? 70000 : 130000) : low ? 28000 : 60000;
+          // (Low's streets carry their own crowd now, baked and posed, since Low draws no animated one:
+          // +2k on a street, +8k on the finish's two.)
+          const most = s.kind === 'finish' ? (low ? 78000 : 130000) : low ? 30000 : 60000;
           expect(tris, `${m.name} ${s.kind} low ${low}`).toBeLessThanOrEqual(most);
           g.dispose();
         }
