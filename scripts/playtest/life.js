@@ -58,6 +58,10 @@ async (page) => {
         if (o && run && camera && camera.isPerspectiveCamera) {
           // (Round the rider, or round a target found by `find` when `tcam` set one.)
           const s = run.sim.s;
+          // (A figure found by `find` is followed as it moves.)
+          const f = window.__camFig;
+          const cc = run.sim.course;
+          if (f) { const fx = cc.centerX(f.z) + f.side * (cc.halfWidth(f.z) + f.e); window.__camTarget = { x: fx, y: cc.ground(fx, f.z), z: -f.z }; }
           const t = window.__camTarget || { x: s.x, y: s.y, z: -s.z };
           camera.position.set(t.x + o[0], t.y + o[1], t.z + o[2]);
           camera.lookAt(t.x + o[3], t.y + o[4], t.z + o[5]);
@@ -90,6 +94,7 @@ async (page) => {
         list.sort((a, b) => a.z - b.z);
         if (!list.length) return null;
         const q = list[0];
+        window.__camFig = kind === 'perch' ? null : q;
         const c = window.__gs.run.sim.course;
         // Its place in the world: a flock's first bird, or the figure.
         let w;
@@ -99,6 +104,7 @@ async (page) => {
         }, [job.find, job.ahead]);
       }
       report.push({ find: job.find, from: job.from, target });
+      if (!job.tcam) await page.evaluate(() => { window.__camFig = null; });
       if (target && job.tcam) {
         // A lens near the target: mirrored to its bank (offsets in x flip with the side).
         const o = job.tcam.slice();
@@ -157,7 +163,7 @@ async (page) => {
         }
       }
     }
-    await page.evaluate(() => { window.__camTarget = null; });
+    await page.evaluate(() => { window.__camTarget = null; window.__camFig = null; });
     const list = (job.at || []).slice().sort((a, b) => a - b);
     let last = -1e9;
     for (const z of list) {

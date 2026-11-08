@@ -624,7 +624,8 @@ void main() {
   lp.y += hop;
   vec4 wp = modelMatrix * instanceMatrix * vec4(lp, 1.0);
   vCol = color;
-  if (tag > 4.5 && tag < 5.5) vCol = uJackets[int(mod(aAnim.w, 8.0))] * color;
+  // (A kid's waving arm is in its snowsuit too.)
+  if ((tag > 4.5 && tag < 5.5) || (tag > 8.5 && tag < 9.5)) vCol = uJackets[int(mod(aAnim.w, 8.0))] * color;
   else if (tag > 7.5 && tag < 8.5) vCol = uRockC * color;
   vGlow = tag > 6.5 && tag < 7.5 ? uLamps : 0.0;
   vWP = wp.xyz;
