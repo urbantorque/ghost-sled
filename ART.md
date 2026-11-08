@@ -10,7 +10,7 @@ stylized lighting model, so the whole frame looks like a single hand-painted wor
 | Role | Meaning | Base value |
 | --- | --- | --- |
 | Signal vermillion | You: your scarf, beanie, sled runners, primary buttons | `#FF4D2E` |
-| Marigold | Gifts and currency | `#FFD34D` |
+| Marigold | Spirit lights and the lantern (the course's fuel), gifts and currency (the menus'): a good thing you take | `#FFD34D` |
 | Spectral mint | Ghosts, their trails, everything ghost-related in UI | `#8FF3E4` |
 | Rose | Your grudge ghost only | `#FF5A7A` |
 | Gold-white | Your own best-run ghost, and first place in the race | `#FFE08A` |
@@ -450,3 +450,33 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   Ember's volcano flashes with lightning at night.
 - **Far trees** keep the same tiers, height, reach and snow caps with fewer segments. Stand 128 m or more
   away and the forest should read the same: a far tree that reads differently from a near one is a bug.
+
+## 13. The lantern, the set pieces and the riders (round 5)
+
+- **Spirit lights** are small marigold flames: a lathed teardrop, round at the foot and drawn to a point, its
+  core paler than its skin so it reads as light rather than paint, upright and bobbing. A spark is 0.8 m tall; a
+  great light is 1.2 m, wears a thin ring of light at its waist and carries a second small flame beside it, so the
+  two are told apart at 30 m/s. Past the detail range a light is a drawn-out diamond. Taking one throws a soft
+  flare of marigold motes that rides with the sled: no confetti and never red (the rider owns vermillion).
+- **The lantern** on the HUD is three small lanterns where the gifts' counter stood: ink cells with a marigold
+  rim that fill from the bottom with a cream-to-marigold gradient, glow when full, and burn white for a dash. On
+  touch it is a 78 px round button above the right thumb's zone.
+- **A dash** is the rider as a spirit for 1.4 s: the lens punches out, white-gold motes trail behind the sled, and
+  a pale shimmer rides the sound. **A ward** breaks into marigold light and a puff of white where the hit was.
+  A dashing ghost trails pale mint-white light; a warded ghost breaks into marigold for a moment.
+- **Sky gates** are rings of marigold light (a torus 2.4 m in radius, its tube 0.14 m) hung over a kicker's flight,
+  breathing a little and turning slowly about their own axis; one draw for all of them, on every tier. Flying
+  through one bursts it into white-gold.
+- **Set pieces** carry their own air for as long as they last: Ember's embers (`#FF9A4A`), Sakura's petals
+  (`#FFC9DA`), a festival street's lantern glow (`#FFE29A`), and out of a tube a burst of warm light on the post
+  pass. Their title card is the stage line's card set larger and wider, with the line to play in marigold and a
+  marigold hairline; a clean sweep on the way out gets a marigold rim.
+- **Fireworks** over the square for a win use the rider's own warm colours and the lantern's (vermillion, coral,
+  marigold, white-gold), never mint or rose.
+- **Signature riders** keep the spectral body (mint, rose for a grudge, gold-white for your best) and carry their
+  identity in silhouette: twelve hats in the same glass (a felt hood, antlers, a topknot, a wide brim, a stovepipe,
+  a giant bobble, a beak hood, a lantern on a headband, curled horns, an aviator cap, fox ears, a crown). Their own
+  accent colour appears in three places only: the emblem disc before the name on the tag, a thin inner edge on the
+  tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
+- **Sled paints** recolour a sled's body and wood at their own value, so the grain and the hull's shading stay; the
+  trim stays vermillion, and so do the scarf and beanie. No paint uses a locked role's colour.

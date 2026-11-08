@@ -1429,3 +1429,101 @@ Every place where I replaced, extended or interpreted the brief, and why.
     four already has stretches the moments and the living world fix; the four deepen first. A starting lantern for
     every rider: tried, it rescued none of the clumsy pilot's 24 runs and made letting go stronger. A second fork on
     Frostfang: its third act cannot hold one without dropping its tunnel, the ice cavern.
+
+220. **Spirit lights charge a lantern, and the plain line carries almost none (SIM_VERSION 7).** Presents on the
+    course became spirit lights (`Course.lights`): a spark lights 6 of a lantern's 100, a great light 25, and the
+    sled holds three. Skill lights it too (`skillCharge` in sim.ts): a stomp 16, a whisker 12 and a plain near miss
+    5, a slingshot 18, a drift's release 4, 8 or 14 by tier, a grind 6 and then 3 a beat, a wall ride 10, a clean
+    trick 5 plus 4 a spin and 8 a flip; a sky gate, a yeti hopped and an avalanche outrun light a whole lantern.
+    Where lights sit is the point: the run-in's swing (it teaches steering and lights most of a first lantern), a
+    boosted pop's arc over every online kicker (a plain flight passes under it), a leap's flight with a great light
+    near its top, the fork's ice with a great light at its middle, three over each rail's top (only a grinding sled
+    reaches them), up the outside berm of a long bend, a great light in a squeeze between two trunks, a line that
+    tempts you wide past 400 m, and a line through each place (a weave down a street, a thread down a tunnel to a
+    great light at its mouth, an S across a lake, a line along a bridge, a swing through a ravine). Over a run the
+    lab's pilots light 4 lanterns holding the safe line, 8.6 as the novice and 11 to 11.6 as mid, expert and stunt.
+    Lights are marigold flames (ART.md 1): gold stays "a good thing you take", now the course's fuel as well as
+    the menus' gifts. Drawn at a gift box's size they vanished at speed; at 0.8 m tall (a great light 1.2 m, with a
+    ring and a second flame) they read down a ravine.
+221. **A lantern is a dash or a ward: spend it or keep it.** One new input, the spirit button (input bit 6; E, Q or
+    Enter, the right mouse button, or the HUD's lantern on touch), and only its press counts. A dash spends a full
+    lantern: 1.4 s as a spirit, 7 m/s of boost, 45% less drag, the cap 4 m/s higher while it lasts (eased back off
+    at 6 m/s a second, never a step), and through any tree, rock or log in the way (not the walls: `edge()` still
+    turns a sled back). A lantern kept is a ward: the next hit that would be a wipeout keeps 84% of the speed,
+    banks the combo instead of losing it, and the sled passes through what it hit for half a second. The first
+    version left the sled inside the rock with its velocity still into it, and the glancing push then pinned it at
+    0.2 m/s in a fork's channel for the rest of the run. Now it passes through, and any sled held under 2.5 m/s for a
+    second is set back on its way along the line, slipping past whatever held it. Spend now (about 1 to 1.5 s gained
+    a dash) or keep insurance (a wipeout costs about 4 s and, after 700 m, one of two forgiven): a decision every few
+    seconds, and it lands differently for different riders. Self-only: nothing touches a ghost, and a ghost's dashes
+    and wards are in its own record. The worker flags them (`FLAG_DASHING`, `FLAG_WARDED`), and a dashing ghost
+    trails pale light, a warded one breaks into marigold, so you see why it surged.
+222. **Route depth comes from lines, gates and two more forks.** One sky gate a stage (`Course.skyGates`), a ring of
+    light hung 22 m past the most open online kicker of the stage, set for a 70% boosted pop at 30 m/s and 4.6 m over
+    a plain flight's path, 2.4 m in radius: Pinecrest and Frostfang have three, Ember and Sakura two. A second fork on
+    Pinecrest (Old Town Run) and Sakura (Temple Town), written as `fork|split` and `cruise|fork` options so the
+    dailies keep their variety (over 40 orders in 60). Frostfang's third act cannot hold one without dropping its
+    tunnel, and Ember's cost it an overlook (two, against the three the overlook plan promises), so both keep one.
+    The rail fix: `railAt` keeps out from under every flight on the line and every ledge's landing, not 14 m past a
+    kicker; a stage short of rails gets a second, closer look, and one daily stage in 64 still holds two (the test
+    now allows two). Wall lines up a bend's berm are rarer than planned: most open sections bend too little.
+223. **Events are choices now.** The yeti hopped lights a whole lantern (going round it is safe and pays nothing). The
+    Gift Storm is the Light Storm: 48 lights, one in four great, swung across 95% of the corridor's width, so chasing
+    it is a line choice that leaves the safe lane. The Spirit Train's wake lights the lantern by 1 a tick while you
+    draft it. A dash breaks away from the avalanche as well as a clean line does, and outrunning it lights a lantern.
+224. **Gifts are the menus' currency, and the run's HUD shows the lantern.** A run pays 5 gifts a stage line and 15
+    for the finish (`runPay`); passes, duels, finales, graveyards, missions, ladder rungs, medals and mastery stars
+    pay the rest. Two hands-off runs used to pay 1,074; a finished run now pays about 30 to 60 before missions. The
+    counter left the run's top right for the lantern. "Collect 20 gifts" retired: its successor "Take 20 spirit
+    lights" takes its slot and tier with its best at 0 (11 gifts are not 11 lights). New missions teach the new
+    verbs: dash twice, dash through a tree or rock, fly a sky gate.
+225. **Sleds are lantern sidegrades.** Each trait trades something: Whirl Saucer's tricks light 15% more and its
+    lights 10% less; Lodge Toboggan's wards keep 10% more speed and its dashes run 15% shorter; Comet Bob's skill
+    lights 10% less; Tea Tray's dashes last 25% longer for an 8% lower pop and 10% less from lights. Wisp keeps its
+    slipstream for a weaker light pull. Bought with gifts, which skill does not buy faster: no sled is a better sled.
+226. **The ghosts are twelve signature riders and a crowd.** `src/bot/roster.ts`: a name, a hat silhouette, an emblem,
+    an accent, a sled, a style and a few lines each. Every bundled pool is 30 crowd runs and one run by each rider at
+    its own level (a touch better at home), ridden by the bot with its style's traits, so the style is in the record:
+    a dasher spends every lantern (Suki Ember dashes 8 times on Pinecrest), a hoarder never dashes and rides through
+    hits on wards (Old Wren: no dashes, 3 wards). The Hollow King first rode as a liner and came in mid-pack, against
+    the bio that says it tops every ladder; it rides as a master now. A pool cannot draft or grind (it is ridden alone,
+    and the bot leaves rails), so no rider claims to; those styles stay in the type for later. Daily and Cup fields
+    take three riders each. Inside each role's window the field takes a signature rider over the crowd, so the race
+    is people you come to know without moving its pace; the one just ahead of you, or the one you just beat, has the
+    last word on the results. The riders lane gave each its hat on the ghost (part of the body's glass, so C10 and
+    the fades hold), its emblem on the tag and a speech chip on passes, and the player's rider its anticipation,
+    reactions and finish (see the riders lane's commits).
+227. **Marquee moments: each mountain's biggest places, played as set pieces.** `src/game/marquee.ts` names four on each
+    named mountain from its own sections (Pinecrest: The First Drop, Mirror Lake, Old Town, The Valley Leap.
+    Frostfang: Serac Gate, The Crevasse Fields, The Ice Cavern, Aurora Straight. Ember: Cinder Gate, The Caldera Leap,
+    Basalt Halls, Ash Market. Sakura: Petal Steps, The Thousand Torii, The Blossom Leap, Temple Town). A Daily or Cup
+    takes its biggest places about a kilometre apart. Each is a director beat: about two seconds out, its title card
+    and the line to play, a camera beat that never takes the steering (out and up over a drop, low and close down a
+    street or a tube, aside across a span), a swell in the band (+0.16 drive and a three-bell call over a held chord),
+    and the air of the place (embers, petals, lantern light, a burst of light out of a tube). On the way out it scores
+    itself: lights taken of its total, and clean if nothing hit you in it. A win lights fireworks over the square in
+    the player's and the lantern's colours. A Pinecrest run meets one at about 15, 50, 95 and 110 s and the finish at
+    about 125: every 15 to 45 s, denser than the brief's 45 to 60, because the places were already there.
+228. **Mastery: a board per mountain that teaches it.** Stars for a bronze, silver and gold, each sky gate flown, each
+    set piece swept (every light in it, and clean), each signature rider who calls the mountain home beaten to the
+    line, and one finish with no wipeout and no ward: 13 to 15 a mountain, 10 gifts each, once. The medal wall shows
+    the stars beside the medals; the results show what a run added. Kept across clean breaks: it is the mountain's.
+229. **The garage opens with paints; the rest of it waits.** Eight procedural sled paints (`src/game/paints.ts`), 60 to
+    220 gifts, recolour a sled's body and wood under its grain; the trim and the rider's scarf and beanie stay
+    vermillion. Scarves, hats, trails and sled sounds were in the brief and are not built: the rider's colours would
+    have to come from the save rather than meshes.ts, and its scarf and beanie keep the player's signal while they
+    change. That is the next round's work.
+230. **A struggling rider rides home as a spirit.** Wards let a rider survive hits it could not before (hands-off
+    finishes all four mountains instead of two), but the clumsy pilot still wrecks in 24 of 24 lab runs: it hits
+    something every 300 to 400 m, more than any fair supply of wards. So a wreck short of the town offers "Ride home as
+    a spirit": a sim of its own from the wreck (`Sim.homewardFrom`), never recorded, with nothing to hit and nothing to
+    score, down to the square, then the same results card. Fair by construction: the run, its record, its place, its
+    ladder and its medals are exactly what they were at the wreck, so it cannot change any standing. Tested end to end
+    on Pinecrest from wrecks at 1,309 m and 1,451 m: about 85 s home, and the card unchanged.
+231. **The clean break, for the record.** SIM_VERSION 7. Saves keep gifts, sleds, stats, passes, missions (with 224's
+    rename), runs and the Climb's paid medals as before (decisions 149, 203); bests, grudges and links from version 6
+    move to the archive. Graveyards count a ward as a fall the lantern took (the place is as deadly), read again off
+    the records with `generate-ghosts -- --falls`; their pinned values in the tests were updated, and an older pool's
+    fallback is now tested on made-up runs, since the new pools hardly wreck. The 2 KB log test's scripted run, whose
+    input changes every 5 to 30 ticks, now rides all 3 minutes where it used to wreck at 2:42: the same rate, about
+    700 bytes a minute, so its bound is 2.2 KB.
