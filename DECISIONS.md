@@ -1358,3 +1358,74 @@ Every place where I replaced, extended or interpreted the brief, and why.
 216. **The start has grandstands.** Past the crest, 10 m out, three rows were heads over the boards, and Low had nothing. The finish's stands now run down both banks either side of the gate, each row 0.62 m over the last since the ground gives them no height. The near rows move and the rest are baked in, so it costs triangles and no draw. They are worked out on idle time, because a piece's plan runs on the frame that asks, here a run's first.
 
 217. **Rider labels wait for the page's beat when Low runs short, and that was not enough.** With riders in frame all run, a Low frame at 6x throttle took 4.5 ms longer, and only 1.6 ms of that was the frame's own JS. Hiding the labels, the rival chip, the race pill and the draft pill together recovered all of it, so the cost is page work, not the scene. No one of them explained it, and neither did the looping pulses. Everything that changes often now shares one beat (`pagebeat.ts`, on the frame's timestamp, so all callers land together), and on Low under 50 fps labels and the chip move on it. A Low phone holding 60 fps keeps smooth labels. A trace gave back about a third of the page work and 8% more frames, but the probe's frame rate did not clearly move: a very first run on Low at 6x is 41 to 45 fps against 45 to 55. Hiding labels and chip outright gives 6 to 15% more frames on a struggling device, at the cost of the names, and that is the owner's call: the HUD's race pill still names the next rider. A returning run, with riders out of frame, is 47 to 50.
+
+## Round 5: depth, wonder and scale
+
+218. **The player review, before anything changed.** I played the wow-pass build (3331717) as a player would, in
+    headless Chrome on the real GPU: a very first run on every mountain, runs 2 to 4 on Pinecrest, the title, the
+    sled shop and the results, at 1280x720 and on a 390x844 phone. The scripted pilots gave the numbers
+    (`lab.ts` six seeds a mountain, `telemetry.js` four runs in one save per pilot on Low); I read the frames myself.
+
+    *Wonderful.* The first minute: the grandstands, the swinging line of gifts that teaches steering, the first
+    leap, 30 m/s that reads as speed. The places are real: Frostfang's ice ravine, Pinecrest's covered bridge into
+    a lit old town, Ember's red sky over the caldera, Sakura's lift line and blossom. A very first run is a race:
+    riders read you and someone is always in reach. The results card is rich and honest.
+
+    *Flat.* Riding well barely beats not riding. A rider who never touches the controls (`autoride`) finished
+    Pinecrest in 2:21.6, **2nd of 6 with a bronze medal**, unlocked Frostfang, and on its second run set a new best
+    and unlocked Ember Peak. In the lab hands-off finishes Pinecrest in 155 s and the expert pilot in 144 s, 7%
+    apart; the careful line pilot is slower than hands-off (161 s). Every verb (drift, trick, grind, wall ride) is
+    optional for time. Gifts: two hands-off runs paid 1,074, enough for four of the six sleds; after that the second
+    most visible number on screen means nothing, and the gift lines sit on the safe line, so collecting is never a
+    choice. Ghosts are usernames on identical mint glass ("vik_rides", "Yusuf42"): nobody to hate or chase. Events
+    happen to you: the avalanche is outrun by holding the line, the gift storm is more currency, the train is free
+    speed. Between places the course is a white groove with scenery beside it.
+
+    *Runs 2 to 4.* Same mountain, one save per pilot. The race thins after the first run: the stunt pilot's race is
+    live for 0.79 of run 1 and 0.36 to 0.73 after; mid's falls from 0.61 to 0.50 by run 4; the clumsy pilot finishes
+    none of four, places 5th to 7th. Passes stay at 1 to 4 a minute.
+
+    *Where a player stops.* Somewhere between run 3 and run 6: the sleds are bought, the mountains are unlocked by
+    passing ghosts, and the tenth run plays like the second because nothing a player gets better at changes the
+    clock much. A clumsy player stops sooner, at a third wreck around 1.2 to 1.9 km, never having seen a town.
+
+219. **The round's plan: eight changes, biggest lift first.** All sim work goes into one clean break (SIM_VERSION 7).
+    1. **Spirit lights and the lantern** (replaces presents on the course). Lights charge a three-lantern meter on
+       the sled; skill charges it too (a stomp, a whisker, a slingshot, a grind, a wall ride, a drift's release; a
+       sky gate, a yeti hopped and an avalanche outrun are worth a whole lantern). Lights sit on choices: a boosted
+       pop's arc over every kicker, a leap's apex, the fork's ice, a rail's top, a wall's berm, a squeeze, a line
+       through each place; the plain safe line carries almost none. Gifts stay as the meta currency (missions,
+       medals, ladder, passes, mastery) and leave the run's HUD; the lantern takes their place.
+    2. **Dash and Ward, one new button.** Spend a full lantern to Dash: 1.4 s as a spirit, faster, most of the
+       drag gone, and through any tree or rock in the way (never the walls). Or keep it, and it Wards the next
+       hit: no tumble, 84% of the speed kept. Spend now or keep insurance is the decision every few seconds. Self-
+       only, so a ghost is never touched; ghosts dash and ward in their own records, and you see them do it.
+    3. **Route depth.** A second fork on Pinecrest, Ember and Sakura (Frostfang's script has no room without losing
+       its tunnel), a sky gate over one kicker a stage (only a boosted pop goes through), light lines that need a
+       wall ride, a grind or a squeeze, and the open rail fix: rails keep out from under every flight.
+    4. **Events become choices.** The yeti hopped lights a lantern; the gift storm becomes a Light Storm spread wide
+       across the corridor (chase it or hold the line); the train's wake charges the lantern; a dash breaks away from
+       the avalanche, and outrunning it pays a lantern.
+    5. **Marquee moments.** Each mountain's places become authored set pieces, about one every 45 to 60 s: a name, a
+       camera beat that frames it without taking the steering, a music swell, and a line of lights to play through
+       it; the finish town erupts for a winner.
+    6. **Signature riders.** Twelve characters (`src/bot/roster.ts`) with a hat silhouette, an emblem, an accent, a
+       sled and a riding style the bot really rides (a dasher spends every lantern; a hoarder never does and rides
+       through what floors anyone else), each with a run on every mountain and a few short lines. Rivals and grudges
+       become people.
+    7. **Mastery and the garage.** A board of goals per mountain (medals, its sky gates, its places, its signature
+       riders) that teaches the mountain; gifts buy procedural cosmetics; sleds retuned as sidegrades around the
+       lantern.
+    8. **The struggling rider and the returning race.** Wards let a struggling rider survive hits it could not; a
+       wrecked rider can ride home as a spirit, outside the race, to the finish town; the returning field is picked
+       around your level with signature riders in it.
+    Two lanes run beside the main one in worktrees: the living world (crowds, villagers, animals that react, built
+    detail, the Low look) and the riders (the twelve silhouettes on the ghosts, the player's anticipation, reactions
+    and finish celebration).
+
+    *Rejected.* Random item boxes: the winner would be luck. Anything that touches another rider: ghosts are replays.
+    A second button for tricks (decision 5 stands; the new button only spends). A fifth mountain: a biome is a
+    full art set (palette, massif, flora, materials, town, landmarks) and weeks of tuning, while every run on the
+    four already has stretches the moments and the living world fix; the four deepen first. A starting lantern for
+    every rider: tried, it rescued none of the clumsy pilot's 24 runs and made letting go stronger. A second fork on
+    Frostfang: its third act cannot hold one without dropping its tunnel, the ice cavern.

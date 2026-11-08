@@ -31,7 +31,7 @@ import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
-import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
+import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
 import { type InputSource, Run, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
@@ -287,6 +287,7 @@ export class App {
       onChallenge: () => this.shareChallenge(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
+      onSpirit: () => this.input.spiritTap(),
       onSelectMountain: (id) => this.selectMountain(id),
       onDaily: () => this.selectMountain('daily'),
       onCup: () => this.selectMountain('cup'),
@@ -774,7 +775,7 @@ export class App {
         let i = 0;
         // The recorded slipstream bit too: drafting this live field instead made the physics diverge
         // (fox84's 3,584 m run hit a tree at 216 m).
-        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0 }; } };
+        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0, spirit: (b & 64) !== 0 }; } };
         demo = true;
         chaos = rec.chaos;
         this.chaos = chaos;
@@ -1034,7 +1035,7 @@ export class App {
       }
       this.pacing.adShown(Date.now());
       this.doubled = true;
-      const bonus = this.run.sim.gifts + this.passBonus;
+      const bonus = runPay(this.run.sim) + this.passBonus;
       this.save.data.gifts += bonus;
       this.save.data.lifetimeGifts += bonus;
       this.save.flush();
@@ -1192,7 +1193,12 @@ export class App {
       biome: biomeForSeed(this.mountain.seed),
       score: sim.score,
       distance: sim.distance,
-      gifts: sim.gifts,
+      gifts: runPay(sim),
+      lights: st.lights,
+      dashes: st.dashes,
+      phased: st.phased,
+      skyGates: st.skyGates,
+      wards: st.wards,
       perfects: st.perfects,
       maxAirtime: st.maxAirtime,
       maxHalfTurns: st.maxHalfTurns,
@@ -1225,7 +1231,7 @@ export class App {
     const d = this.save.data;
     const sim = this.run.sim;
     const key = this.mountainKey();
-    const giftsNow = sim.gifts + this.passBonus;
+    const giftsNow = runPay(sim) + this.passBonus;
     const delta = giftsNow - this.giftsPersisted;
     d.gifts += delta;
     d.lifetimeGifts += delta;
@@ -1390,7 +1396,7 @@ export class App {
       finishZ: FINISH_Z,
       best: topScore(d.best[key]) || sim.score,
       newBest: this.newBestThisRun,
-      giftsEarned: sim.gifts + this.passBonus,
+      giftsEarned: runPay(sim) + this.passBonus,
       wallet: d.gifts,
       ghosts,
       ghostsPassed: ghosts.filter((g) => g.passed).length,
@@ -1404,7 +1410,7 @@ export class App {
       mountain: this.mountain.name,
       mood: moodInfo(this.chaos.mood).name,
       canRevive: sim.s.crashed && !this.reviveUsed && this.platform.adsAvailable && !this.adblock && sim.distance > 120,
-      canDouble: this.platform.adsAvailable && !this.adblock && sim.gifts + this.passBonus > 0,
+      canDouble: this.platform.adsAvailable && !this.adblock && runPay(sim) + this.passBonus > 0,
       doubled: false,
       canChallenge: sim.score > 0,
       unlocked,
@@ -2117,7 +2123,8 @@ export class App {
         clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
         stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
         wipeouts: sim.s.tumbles > 0 ? { left: Math.max(0, TUMBLES - sim.s.tumbles), of: TUMBLES } : null,
-        gifts: sim.gifts + this.passBonus,
+        gifts: runPay(sim) + this.passBonus,
+        lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes },
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
         nextGhost: next,
@@ -2301,6 +2308,8 @@ export class App {
         // The avalanche banner, meter and rear-view mirror own the lower screen while it chases you.
         chased: sim.dyn.avalanche.phase === 1 || sim.dyn.avalanche.phase === 2,
         tumbling: s.tumble > 0,
+        lit: s.lantern >= 100,
+        dashed: sim.stats.dashes > 0,
       },
       h,
     );

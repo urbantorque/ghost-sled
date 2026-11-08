@@ -359,16 +359,24 @@ function loadRunList(p: unknown): Record<string, number[]> {
   return out;
 }
 
-/** Missions: unknown ids (retired missions) and duplicates dropped, bad tiers read as I, the shuffle
- *  seed captured now if the save predates it (from the save's name, once), and free slots refilled. */
+/** A retired mission's successor: its slot and tier carry over, its best starts again (gifts taken and spirit
+ *  lights taken are not the same count). */
+const RENAMED: Readonly<Record<string, string>> = { gifts20: 'lights20' };
+
+/** Missions: unknown ids (retired missions) and duplicates dropped, a renamed one carried to its successor,
+ *  bad tiers read as I, the shuffle seed captured now if the save predates it (from the save's name, once),
+ *  and free slots refilled. */
 function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPassed: number): MissionState {
   if (!isObj(p) || !Array.isArray(p.active)) return fallback;
   const seen = new Set<string>();
   const active: MissionState['active'] = [];
   for (const a of p.active) {
-    if (!isObj(a) || typeof a.id !== 'string' || seen.has(a.id) || !missionDef(a.id)) continue;
-    seen.add(a.id);
-    const e: MissionState['active'][number] = { id: a.id, best: isNum(a.best) && a.best > 0 ? a.best : 0 };
+    if (!isObj(a) || typeof a.id !== 'string') continue;
+    const renamed = RENAMED[a.id];
+    const id = renamed ?? a.id;
+    if (seen.has(id) || !missionDef(id)) continue;
+    seen.add(id);
+    const e: MissionState['active'][number] = { id, best: !renamed && isNum(a.best) && a.best > 0 ? a.best : 0 };
     if (a.tier === 2 || a.tier === 3) e.tier = a.tier;
     active.push(e);
   }

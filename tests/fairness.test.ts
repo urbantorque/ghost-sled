@@ -326,8 +326,8 @@ describe('the descent', () => {
         expect(zn.vents.filter((v) => v.z < START_CLEAR_Z)).toEqual([]);
       }
       for (let z = 130; z < 280; z += 10) expect(c.halfWidth(z)).toBeGreaterThan(16);
-      // The gift line swings across the safe line.
-      const line = [c.chunk(2), c.chunk(3), c.chunk(4)].flatMap((k) => k.gifts).filter((g) => g.z >= 130 && g.z < 290);
+      // The run-in's light line swings across the safe line.
+      const line = [c.chunk(2), c.chunk(3), c.chunk(4)].flatMap((k) => k.lights).filter((g) => g.z >= 130 && g.z < 290);
       expect(line.some((g) => g.x - c.safeX(g.z) > 3)).toBe(true);
       expect(line.some((g) => g.x - c.safeX(g.z) < -3)).toBe(true);
       const first = zonesAt(c, 150, 500).flatMap((z) => z.ramps).filter((r) => r.online);
@@ -445,9 +445,12 @@ describe('the descent', () => {
           const a = c.altX(z);
           if (a !== null) expect(Math.abs(a - c.centerX(z))).toBeLessThan(c.halfWidth(z) - 1);
         }
-        // Golden gifts and at least one obstacle sit on the risk line, and it holds no guaranteed lane.
-        const gifts = zonesAt(c, s.z0, s.z1).length ? Array.from({ length: Math.ceil((s.z1 - s.z0) / CHUNK_LEN) + 1 }, (_, i) => c.chunk(Math.floor(s.z0 / CHUNK_LEN) + i)).flatMap((k) => k.gifts) : [];
-        expect(gifts.filter((q) => q.value >= 5 && q.z >= s.z0 && q.z < s.z1 && c.altX(q.z) !== null && Math.abs(q.x - c.altX(q.z)!) < 1.5).length).toBeGreaterThanOrEqual(3);
+        // Spirit lights (a great one among them) and at least one obstacle sit on the risk line, and it holds
+        // no guaranteed lane.
+        const lights = zonesAt(c, s.z0, s.z1).length ? Array.from({ length: Math.ceil((s.z1 - s.z0) / CHUNK_LEN) + 1 }, (_, i) => c.chunk(Math.floor(s.z0 / CHUNK_LEN) + i)).flatMap((k) => k.lights) : [];
+        const onRisk = lights.filter((q) => q.z >= s.z0 && q.z < s.z1 && c.altX(q.z) !== null && Math.abs(q.x - c.altX(q.z)!) < 1.5);
+        expect(onRisk.length).toBeGreaterThanOrEqual(6);
+        expect(onRisk.some((q) => q.value === 3)).toBe(true);
         const blocks = obstaclesAt(c, s.z0, s.z1).filter((o) => {
           const a = c.altX(o.z);
           return a !== null && Math.abs(o.x - a) < 2.2 + o.r;
@@ -703,8 +706,9 @@ describe('the descent', () => {
         online += zn.ramps.filter((r) => r.online).length;
       }
       stages.forEach((n, i) => {
-        // (A stage of tight places can come up one short: 2 stages in 1,000 dailies.)
-        if (n < 3 || n > 8) bad.push(`${seed.toString(16)} stage ${i} has ${n} rails`);
+        // (A stage of tight places can come up short: rails keep out from under every flight since the
+        // lantern round, and one daily stage in 64 holds only two.)
+        if (n < 2 || n > 8) bad.push(`${seed.toString(16)} stage ${i} has ${n} rails`);
       });
       if (online < 3 || online + c.ledges.length < 7) bad.push(`${seed.toString(16)} leaves the ground on the line only ${online} + ${c.ledges.length} times`);
     }

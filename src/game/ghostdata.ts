@@ -17,6 +17,10 @@ export const F_CARVE = 9;
 export const FLAG_GROUNDED = 1;
 export const FLAG_DRIFTING = 2;
 export const FLAG_CRASHED = 4;
+/** Dashing: a lantern spent, riding as a spirit (SIM_VERSION 7). */
+export const FLAG_DASHING = 8;
+/** A ward has just taken a hit (the half second the sled passes through what it hit). */
+export const FLAG_WARDED = 16;
 
 export interface PoolGhostData {
   name: string;

@@ -13,8 +13,10 @@ import {
   F_Y,
   F_Z,
   FLAG_CRASHED,
+  FLAG_DASHING,
   FLAG_DRIFTING,
   FLAG_GROUNDED,
+  FLAG_WARDED,
   FRAME_STRIDE,
   SAMPLE_EVERY,
   WorkerIn,
@@ -66,7 +68,7 @@ function replay(id: number, recordStr: string): void {
       frames[o + F_AIRPITCH] = st.airPitch;
       frames[o + F_LEAN] = st.lean;
       frames[o + F_SPEED] = st.speed;
-      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0);
+      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0) | (st.dash > 0 ? FLAG_DASHING : 0) | (st.ghost > 0 && st.dash === 0 ? FLAG_WARDED : 0);
       frames[o + F_CARVE] = st.carve;
       n++;
     });
@@ -100,7 +102,8 @@ ctx.onmessage = (ev: MessageEvent<WorkerIn>) => {
   } else if (msg.type === 'pool') {
     try {
       let runs: PoolRun[] = [];
-      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks, report: (r) => (runs = r) });
+      // Three signature riders join every Daily and Cup field, the same three for everyone on that course.
+      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks, riders: 3, report: (r) => (runs = r) });
       // The bot rides on past the line, so a pool ghost's `ticks` is no finish time: its Sim knows.
       const finish = new Map(runs.filter((r) => r.sim.finished).map((r) => [r.record.name, r.sim.s.finishTick]));
       post({ type: 'pool', reqId: msg.reqId, ghosts: ghosts.map((g) => ({ ...g, ...(finish.has(g.name) ? { finishTick: finish.get(g.name) } : {}) })) });

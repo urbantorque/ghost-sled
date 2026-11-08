@@ -8681,3 +8681,101 @@
     }
   }
 }
+
+/* ---- The lantern (round 5): three lanterns of spirit light where the gifts' counter stood. A lit one is
+   a dash or, kept, a ward. Marigold is the course's fuel as well as the menus' gifts: gold is a good thing
+   you take (ART.md section 1). Fills move on transform only, on the page's beat. */
+.gs-lantern {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px 0 12px;
+  border: 0;
+  color: var(--gift);
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  will-change: transform;
+}
+
+.gs-lan-cells {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 5px;
+}
+
+.gs-lan-cell {
+  position: relative;
+  width: 14px;
+  height: 22px;
+  border-radius: 7px 7px 5px 5px;
+  background: rgba(18, 25, 51, 0.72);
+  box-shadow: inset 0 0 0 2px rgba(255, 211, 77, 0.38);
+  overflow: hidden;
+}
+
+.gs-lan-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 100%;
+  transform: scaleY(0);
+  background: linear-gradient(180deg, #fff3c4 0%, #ffd34d 55%, #ffb83a 100%);
+  will-change: transform;
+}
+
+.gs-lan-cell.is-full {
+  box-shadow: inset 0 0 0 2px #fff0b8, 0 0 10px rgba(255, 211, 77, 0.75);
+}
+
+.gs-lan-key {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: rgba(245, 243, 255, 0.14);
+  color: var(--txt, #f5f3ff);
+  font-size: 0.72em;
+  font-weight: 900;
+  line-height: 20px;
+  text-align: center;
+  opacity: 0.5;
+}
+
+.gs-lantern.is-ready .gs-lan-key {
+  background: #ffd34d;
+  color: #121933;
+  opacity: 1;
+}
+
+.gs-lantern.is-ready {
+  box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.55), 0 0 18px rgba(255, 211, 77, 0.35);
+}
+
+/* A dash: the lanterns burn white for its length. */
+.gs-lantern.is-dash .gs-lan-cell {
+  box-shadow: inset 0 0 0 2px #ffffff, 0 0 14px rgba(255, 246, 216, 0.9);
+}
+
+/* Touch: the lantern is the spirit button, round and big by the right thumb, above the zone labels. */
+.gs-touch-mode .gs-lantern {
+  position: fixed;
+  right: calc(var(--sr) + 6px);
+  bottom: calc(22% + 92px);
+  width: 78px;
+  height: 78px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
+
+.gs-touch-mode .gs-lantern .gs-lan-key {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-lan-fill {
+    will-change: auto;
+  }
+}

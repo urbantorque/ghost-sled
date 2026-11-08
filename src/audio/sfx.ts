@@ -249,8 +249,22 @@ export class Sfx {
       case 'comboLost':
         this.lost(e.points, t);
         break;
-      case 'gift':
-        this.gift(e.value, t);
+      case 'light':
+        // A spirit light rings the same climbing ladder a gift did; a great one adds its third bell.
+        this.gift(e.value >= 3 ? 5 : 1, t);
+        break;
+      case 'lantern':
+        this.lanternLit(e.cells, t);
+        break;
+      case 'dash':
+        if (e.phase === 'start') this.dashStart(t);
+        else this.dashEnd(t);
+        break;
+      case 'ward':
+        this.ward(t);
+        break;
+      case 'skyGate':
+        this.skyGate(t);
         break;
       case 'bump':
         this.bump(t);
@@ -778,7 +792,7 @@ export class Sfx {
     const pan = near ? near.side * (near.whisker ? 0.7 : 0.5) : rand(-0.25, 0.25);
     // The breathy draft note (twice a second) and a pickup's chain note are the first a full pool
     // gives up.
-    const v = this.voice(t, 0.3, pan, 1.6, kind === 'draft' || kind === 'gift' || kind === 'geyser' ? PRIO.low : PRIO.normal);
+    const v = this.voice(t, 0.3, pan, 1.6, kind === 'draft' || kind === 'geyser' ? PRIO.low : PRIO.normal);
     switch (kind) {
       case 'nearMiss':
         if (near?.whisker) {
@@ -794,7 +808,6 @@ export class Sfx {
           ping(v, t + 0.03, f * 2, 0.05, 0.015);
         }
         break;
-      case 'gift':
       case 'geyser':
         fmBell(v, t, f, 0.12 * vel, 0.45, 2, 1.2);
         ping(v, t, f * 2, 0.035, 0.12);
@@ -910,6 +923,46 @@ export class Sfx {
       if (f3 > 0) r.want(key, t, GIFT_BIG_S, GIFT_BIG_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
       else r.want(key, t, GIFT_S, GIFT_STARTS, (rv, rt) => giftParts(rv, rt, f1, f2, f3, null));
     }
+  }
+
+  /** A whole lantern lights: a warm two-note swell, a step higher for each lantern now lit, so three lit
+   *  is heard as full without a look at the HUD. */
+  private lanternLit(cells: number, t: number): void {
+    const v = this.voice(t, 0.35, 0, 1.4);
+    const step = Math.max(0, Math.min(2, cells - 1)) * 2;
+    fmBell(v, t, this.note(7 + step), 0.07, 0.9, 2, 0.8);
+    fmBell(v, t + 0.07, this.note(11 + step), 0.06, 1.1, 2, 0.8);
+    ping(v, t + 0.07, this.note(18 + step), 0.025, 0.4);
+  }
+
+  /** A dash: the air tears open (a rising rush) and a glass shimmer rides on it for the dash's length. */
+  private dashStart(t: number): void {
+    const v = this.voice(t, 0.4, 0, 1.5);
+    whoosh(v, t, 0.5, 500, 5200, 0.22, 1.1);
+    whoosh(v, t + 0.05, 1.3, 2600, 7000, 0.05, 2.5, v.bank.white);
+    for (const [i, d] of [[12, 0], [16, 0.06], [19, 0.12]] as const) fmBell(v, t + d, this.note(i), 0.05, 1.2, 3.5, 1.1);
+  }
+
+  /** Solid again: the shimmer folds back down. */
+  private dashEnd(t: number): void {
+    const v = this.voice(t, 0.3, 0, 1.2, PRIO.low);
+    whoosh(v, t, 0.35, 3800, 900, 0.05, 1.2);
+    ping(v, t, this.note(7), 0.03, 0.25);
+  }
+
+  /** A ward takes a hit: the thud of what would have floored you, and a lantern breaking into light. */
+  private ward(t: number): void {
+    const v = this.voice(t, 0.45, 0, 1.6);
+    thump(v, t, 110, 50, 0.28, 0.06);
+    puff(v, t, 0.1, 1400, 500, 0.05);
+    for (const [i, d] of [[19, 0.02], [14, 0.07], [10, 0.13]] as const) fmBell(v, t + d, this.note(i), 0.06, 0.7, 5.1, 1.6);
+  }
+
+  /** Through a sky gate: a bright open chord, high and wide. */
+  private skyGate(t: number): void {
+    const v = this.voice(t, 0.5, 0, 1.6);
+    whoosh(v, t, 0.6, 1200, 6000, 0.08, 1.2);
+    for (const [i, d] of [[7, 0], [11, 0.04], [14, 0.08], [19, 0.12]] as const) fmBell(v, t + d, this.note(i), 0.07, 1.4, 2, 1);
   }
 
   private bump(t: number): void {

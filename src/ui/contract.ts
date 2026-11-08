@@ -109,7 +109,13 @@ export interface HudModel {
   stage: { index: number; of: number; progress: number } | null;
   /** Wipeouts the run can still take, of how many; null until the first is spent. */
   wipeouts: { left: number; of: number } | null;
+  /** Gifts this run (shown on the results; the run HUD shows the lantern instead). */
   gifts: number;
+  /**
+   * The lantern: charge 0..300 (100 a lantern), how many are lit, whether a dash is on, and ward/dash/lit
+   * counters that tick up when one happens (so the HUD can flash on a change it did not see happen).
+   */
+  lantern: { charge: number; cells: number; dashing: boolean; wards: number; dashes: number };
   /**
    * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
    * (stake.fuseLevel); pace: the stake has passed your lifetime best combo this run.
@@ -303,6 +309,8 @@ export interface UIHandlers {
   onChallenge(): void;
   onHome(): void;
   onPause(paused: boolean): void;
+  /** The lantern button (touch, or a click on it): a dash, if one is lit. */
+  onSpirit?(): void;
   onSelectMountain(id: string): void;
   onDaily(): void;
   /** Select the weekly Cup. */
@@ -346,7 +354,7 @@ export interface MirrorRect {
 
 export type StyleTone = 'normal' | 'big' | 'perfect' | 'lost' | 'best';
 export type ToastTone = 'ghost' | 'mission' | 'gift' | 'warn' | 'info' | 'grudge' | 'finale' | 'unlock';
-export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop';
+export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop' | 'dash';
 
 export interface GameUI {
   showTitle(m: TitleModel): void;

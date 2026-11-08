@@ -1,4 +1,4 @@
-import { AdditiveBlending, BoxGeometry, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
@@ -7,7 +7,7 @@ import { makeToonMaterial, shared } from './materials';
 import {
   cairnGeometry,
   gateBeamGeometry,
-  giftGeometry,
+  lightGeometry,
   kickerLipGeometry,
   kmArchGeometry,
   lanternPostGeometry,
@@ -150,18 +150,13 @@ function upload(a: InstancedBufferAttribute, n: number): void {
   a.needsUpdate = true;
 }
 
-/** A gift past the detail range (meshes.ts giftGeometry, a few pixels across there): the box, its two
- *  ribbons, and the bow's two loops as flattened diamonds leaning out from the knot. */
-function farGiftGeometry(golden: boolean): BufferGeometry {
-  const box = golden ? new Color('#FFE38A') : new Color('#FFD34D');
-  const ribbon = golden ? new Color('#8FF3E4') : new Color('#FF4D2E');
-  const s = golden ? 1.35 : 1;
+/** A spirit light past the detail range (meshes.ts lightGeometry, a few pixels across there): a drawn-out
+ *  diamond of marigold with a pale core, and for a great light a wider one. */
+function farLightGeometry(great: boolean): BufferGeometry {
+  const s = great ? 2.5 : 1.7;
   return merge([
-    part(new BoxGeometry(0.62 * s, 0.56 * s, 0.62 * s), box),
-    part(new BoxGeometry(0.66 * s, 0.58 * s, 0.14 * s), ribbon),
-    part(new BoxGeometry(0.14 * s, 0.58 * s, 0.66 * s), ribbon),
-    part(new OctahedronGeometry(0.17 * s, 0), ribbon, { pos: [-0.13 * s, 0.36 * s, 0], rot: [0, 0, 0.62], scale: [0.45, 1, 1] }),
-    part(new OctahedronGeometry(0.17 * s, 0), ribbon, { pos: [0.13 * s, 0.36 * s, 0], rot: [0, 0, -0.62], scale: [0.45, 1, 1] }),
+    part(new OctahedronGeometry(0.2 * s, 0), new Color('#FFC94A'), { scale: [1, 1.9, 1], pos: [0, 0.1 * s, 0] }),
+    part(new OctahedronGeometry(0.12 * s, 0), new Color('#FFF6D8').multiplyScalar(1.4), { scale: [1, 1.9, 1], pos: [0, 0.08 * s, 0.06 * s] }),
   ]);
 }
 
@@ -228,8 +223,9 @@ export class Props {
      *  keeps their callouts, tags and sound). */
     private arches = false,
   ) {
-    // Gifts shrink away as they pass the lens (and right around the rider after a perfect landing).
-    const giftOpts = { bob: true, coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.12, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
+    // Spirit lights glow (they are light, not paint), and shrink away as they pass the lens (and right around
+    // the rider after a perfect landing).
+    const giftOpts = { bob: true, coolShade: 0.1, emissive: new Color('#FFD34D'), emissiveStrength: 0.62, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
     this.giftMat = makeToonMaterial(giftOpts);
     this.giftFarMat = variantMaterial(makeToonMaterial(giftOpts));
     this.build();
@@ -448,11 +444,10 @@ export class Props {
       sets.delete(k);
     }
     this.pump();
-    add('gift', giftGeometry(false), this.giftMat, 900, false);
-    add('gift5', giftGeometry(true), this.giftMat, 200, false);
-    // Past the detail range a gift is a few pixels: the box and its ribbons with a two-lobed bow, plain
-    // and golden in one batch (a ninth of the full gift's triangles, whose bow loops are tori).
-    this.giftFarGeo ??= variantSet([farGiftGeometry(false), farGiftGeometry(true)]);
+    add('gift', lightGeometry(false), this.giftMat, 900, false);
+    add('gift5', lightGeometry(true), this.giftMat, 200, false);
+    // Past the detail range a light is a few pixels: a drawn-out diamond, sparks and great lights in one batch.
+    this.giftFarGeo ??= variantSet([farLightGeometry(false), farLightGeometry(true)]);
     const gPick = new InstancedBufferAttribute(new Float32Array(900), 1);
     const gView = variantView(this.giftFarGeo, gPick);
     this.owned.push(gView);
@@ -564,17 +559,15 @@ export class Props {
         this.s.setScalar(o.scale);
         this.push('ob:' + o.kind, this.v, this.q, this.s);
       }
-      // In low visibility (Blizzard) gifts grow by a fifth, so the marigold trail reads through the fog.
+      // In low visibility (Blizzard) lights grow by a fifth, so the marigold trail reads through the fog.
       const gs = 1 + 0.2 * Math.min(1, this.palette.giftGlow);
-      for (const g of chunk.gifts) {
+      for (const g of chunk.lights) {
         if (collected.has(g.id)) continue;
-        // Each gift sits a little higher or lower, leans a little and is its own size (where it is stays
-        // the sim's), so a row reads as presents set out on the snow rather than a ruled fence.
+        // Each light stands upright (a flame), sways a little and is its own size (where it is stays the
+        // sim's), so a line reads as lights left along a way, not a ruled fence.
         const h1 = hashf(g.id, 7, 1);
-        const h2 = hashf(g.id, 7, 2);
-        this.tilt.set(Math.cos(h2 * 6.28), 0, Math.sin(h2 * 6.28));
-        this.q.setFromAxisAngle(this.tilt, (h1 - 0.5) * 0.32);
-        this.v.set(g.x, c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.22, -g.z);
+        this.q.setFromAxisAngle(this.up, h1 * 6.28);
+        this.v.set(g.x, c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.18, -g.z);
         this.s.setScalar(gs * (0.9 + 0.2 * hashf(g.id, 7, 4)));
         if (far) this.push('giftL', this.v, this.q, this.s, g.value > 1 ? 1 : 0);
         else this.push(g.value > 1 ? 'gift5' : 'gift', this.v, this.q, this.s);

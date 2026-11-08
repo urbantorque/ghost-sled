@@ -14,7 +14,14 @@ export interface RunSummary {
   biome: string;
   score: number;
   distance: number;
+  /** What the run itself paid in gifts (stage lines and the finish; passes are paid apart). */
   gifts: number;
+  /** Spirit lights taken, lanterns spent on dashes, obstacles ridden through, sky gates flown, wards taken. */
+  lights: number;
+  dashes: number;
+  phased: number;
+  skyGates: number;
+  wards: number;
   perfects: number;
   maxAirtime: number;
   maxHalfTurns: number;
@@ -75,7 +82,8 @@ const DEFS: MissionDef[] = [
   { id: 'dist800', text: '', target: 800, reward: 25, metric: (r) => r.distance, grow: 'x2', cap: FINISH_Z, unit: 'm', say: (t) => `Ride ${n(t)} m in one run` },
   { id: 'perfect2', text: '', target: 2, reward: 30, metric: (r) => r.perfects, grow: 1, unit: 'n', say: (t) => `Land ${n(t)} perfect landings` },
   { id: 'pass1', text: '', target: 1, reward: 25, metric: (r) => r.ghostsPassed, grow: 1, unit: 'n', say: (t) => (t === 1 ? 'Pass a ghost' : `Pass ${n(t)} ghosts in one run`) },
-  { id: 'gifts20', text: '', target: 20, reward: 25, metric: (r) => r.gifts, grow: 10, unit: 'n', say: (t) => `Collect ${n(t)} gifts in one run` },
+  { id: 'lights20', text: '', target: 20, reward: 25, metric: (r) => r.lights, grow: 10, unit: 'n', say: (t) => `Take ${n(t)} spirit lights in one run` },
+  { id: 'dash2', text: '', target: 2, reward: 30, metric: (r) => r.dashes, grow: 2, unit: 'n', say: (t) => `Dash ${n(t)} times in one run` },
   { id: 'drift5', text: '', target: 5, reward: 30, metric: (r) => r.driftSeconds, grow: 2, unit: 's', say: (t) => `Drift for ${n(t)} seconds in one run` },
   { id: 'air15', text: '', target: 1.5, reward: 25, metric: (r) => r.maxAirtime, grow: 0.5, unit: 's', say: (t) => `Get ${n(t)} ${plural(t, 'second', 'seconds')} of air` },
   { id: 'near4', text: '', target: 4, reward: 35, metric: (r) => r.nearMisses, grow: 1, unit: 'n', say: (t) => `Get ${n(t)} near misses in one run` },
@@ -90,6 +98,8 @@ const DEFS: MissionDef[] = [
   { id: 'speed36', text: '', target: 36, reward: 40, metric: (r) => r.maxSpeed, grow: 2, cap: 42, unit: 'm/s', say: (t) => `Hit ${n(t)} m/s` },
   { id: 'perfect5', text: '', target: 5, reward: 55, metric: (r) => r.perfects, grow: 1, unit: 'n', say: (t) => `Land ${n(t)} perfect landings` },
   { id: 'smash3', text: '', target: 3, reward: 35, metric: (r) => r.smashes, biome: 'alpine', grow: 1, unit: 'n', say: (t) => `Smash ${n(t)} snowmen` },
+  { id: 'phase1', text: '', target: 1, reward: 45, metric: (r) => r.phased, grow: 2, unit: 'n', say: (t) => (t === 1 ? 'Dash through a tree or a rock' : `Dash through ${n(t)} trees or rocks in one run`) },
+  { id: 'skygate1', text: '', target: 1, reward: 50, metric: (r) => r.skyGates, grow: 1, unit: 'n', say: (t) => (t === 1 ? 'Fly through a sky gate' : `Fly through ${n(t)} sky gates in one run`) },
   { id: 'grind2', text: '', target: 2, reward: 45, metric: (r) => r.grinds, grow: 1, unit: 'n', say: (t) => `Grind ${n(t)} rails in one run` },
   { id: 'clean1', text: '', target: 1, reward: 55, metric: (r) => (r.finished && r.tumbles === 0 ? 1 : 0), grow: 0, unit: 'n', say: () => 'Finish with no wipeouts' },
   { id: 'time210', text: '', target: 1, reward: 50, metric: under(210), grow: 0, unit: 'n', say: () => `Finish in under ${clock(210).slice(0, -2)}` },
@@ -111,9 +121,9 @@ export const MISSIONS: readonly MissionDef[] = DEFS.map((d) => ({ ...d, text: d.
  *  perfects and passes a ghost first. */
 const BANDS: ReadonlyArray<readonly [number, number]> = [
   [0, 3],
-  [3, 11],
-  [11, 21],
-  [21, MISSIONS.length],
+  [3, 12],
+  [12, 24],
+  [24, MISSIONS.length],
 ];
 
 const ROMAN = ['', '', ' (II)', ' (III)'];

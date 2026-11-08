@@ -14,7 +14,9 @@ import {
   F_X,
   F_Y,
   F_Z,
+  FLAG_DASHING,
   FLAG_DRIFTING,
+  FLAG_WARDED,
   FLAG_GROUNDED,
   FRAME_STRIDE,
   PoolGhostData,
@@ -104,6 +106,9 @@ export interface GhostPose {
   carve: number;
   grounded: boolean;
   drifting: boolean;
+  /** Spending a lantern: a dash (its record says so), and a ward's moment after a hit. */
+  dashing: boolean;
+  warded: boolean;
   /** Past the end of its run: crashed (or stopped past the line) at the last sample. */
   done: boolean;
   /** Seconds since it crashed, for the fade-out. */
@@ -115,7 +120,7 @@ export interface GhostPose {
 export type RaceEvent = { type: 'pass'; track: GhostTrack; first: boolean } | { type: 'passedBy'; track: GhostTrack } | { type: 'crashed'; track: GhostTrack };
 
 export function emptyPose(): GhostPose {
-  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, done: false, sinceDone: 0, finished: false };
+  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, dashing: false, warded: false, done: false, sinceDone: 0, finished: false };
 }
 
 /** A track's place in the race order. */
@@ -345,6 +350,8 @@ export class GhostManager {
     out.carve = l(F_CARVE);
     out.grounded = (flags1 & FLAG_GROUNDED) !== 0;
     out.drifting = (flags1 & FLAG_DRIFTING) !== 0;
+    out.dashing = (flags1 & FLAG_DASHING) !== 0;
+    out.warded = (flags1 & FLAG_WARDED) !== 0;
     return true;
   }
 

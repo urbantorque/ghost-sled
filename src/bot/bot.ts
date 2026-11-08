@@ -4,8 +4,9 @@ import { clamp, datan2, dcos, dsin, lerp, wrapAngle } from '../sim/dmath';
 import { InputRecorder, packInput } from '../sim/input';
 import { Rng, hash32, hashFloat } from '../sim/prng';
 import { RunRecord } from '../sim/replay';
-import { DT, Sim, TICK_RATE } from '../sim/sim';
+import { DT, LANTERN, Sim, TICK_RATE } from '../sim/sim';
 import { Lines } from './lines';
+import type { RideStyle } from './roster';
 import { AirPlan, Flight, PlanResult, Rot, RotParams, predictFlight, runPlan, solveFlip, solveSpin } from './model';
 import { Scene } from './scene';
 
@@ -23,6 +24,8 @@ export interface BotProfile {
   name: string;
   /** Forces a fork's route (left out, the bot's own nerve decides). */
   bold?: boolean;
+  /** A signature rider's way of riding (roster.ts): it shapes the traits, so it shows in the record. */
+  style?: RideStyle;
 }
 
 interface Traits {
@@ -78,6 +81,12 @@ interface Traits {
   squeeze: number;
   /** Favourite spin and drift direction. */
   favDir: number;
+  /** Full lanterns kept back as wards before any is spent on a dash. */
+  dashKeep: number;
+  /** Dashes a second, roughly, when a lantern is spare and the line is open. */
+  dashRate: number;
+  /** Chance of dashing through a line that has closed ahead instead of swerving. */
+  dashPhase: number;
 }
 
 /** Roughly normal, unit variance, from four uniforms (no transcendental functions). */
@@ -85,7 +94,84 @@ function gauss(rng: Rng): number {
   return (rng.next() + rng.next() + rng.next() + rng.next() - 2) * 1.7320508075688772;
 }
 
-function traitsFor(skill: number, rng: Rng): Traits {
+function traitsFor(skill: number, rng: Rng, style?: RideStyle): Traits {
+  const t = baseTraits(skill, rng);
+  if (style) styleTraits(t, style);
+  return t;
+}
+
+/** A signature rider's style, laid over the traits its skill gives. */
+function styleTraits(t: Traits, style: RideStyle): void {
+  switch (style) {
+    case 'master':
+      t.lateRate *= 0.3;
+      t.lapsePerMin *= 0.4;
+      t.blunder *= 0.4;
+      t.dashKeep = 0;
+      t.dashRate = 0.45;
+      t.dashPhase = 0.85;
+      break;
+    case 'liner':
+      // Never wastes a metre: no detours, few tricks, and a spare lantern goes on the next straight.
+      t.ambition *= 0.45;
+      t.greed *= 0.3;
+      t.wander *= 0.35;
+      t.popRate *= 0.4;
+      t.driftRate *= 0.6;
+      t.lateRate *= 0.5;
+      t.dashKeep = 1;
+      t.dashRate = 0.35;
+      t.dashPhase = 0.1;
+      break;
+    case 'dasher':
+      t.dashKeep = 0;
+      t.dashRate = 0.6;
+      t.dashPhase = 0.9;
+      t.greed = Math.min(1, t.greed + 0.3);
+      break;
+    case 'stunt':
+      t.ambition = Math.min(1, t.ambition + 0.35);
+      t.popRate *= 1.6;
+      t.maxHalfTurns = Math.min(5, t.maxHalfTurns + 1);
+      t.maxFlips = Math.min(2, t.maxFlips + 1);
+      t.dashKeep = 1;
+      break;
+    case 'hoarder':
+      t.dashKeep = 3;
+      t.dashRate = 0;
+      t.dashPhase = 0;
+      t.greed = Math.min(1, t.greed + 0.25);
+      t.ambition *= 0.7;
+      break;
+    case 'collector':
+      t.greed = 1;
+      t.wander = Math.min(2.8, t.wander + 1);
+      t.dashKeep = 0;
+      t.dashRate = 0.25;
+      break;
+    case 'sky':
+    case 'bold':
+      t.ambition = Math.min(1, t.ambition + 0.4);
+      t.popRate *= 1.3;
+      t.greed = Math.min(1, t.greed + 0.2);
+      t.squeeze *= 2;
+      break;
+    case 'grinder':
+    case 'drafter':
+      break;
+    case 'wild':
+      t.ambition = 1;
+      t.lapsePerMin *= 1.8;
+      t.blunder *= 3;
+      t.margin *= 0.7;
+      t.dashKeep = 0;
+      t.dashRate = 0.5;
+      t.dashPhase = 0.6;
+      break;
+  }
+}
+
+function baseTraits(skill: number, rng: Rng): Traits {
   const s = clamp(skill, 0, 1);
   const vary = (v: number, sd: number, lo: number, hi: number) => clamp(v + gauss(rng) * sd, lo, hi);
   const ambition = vary(lerp(0.3, 0.85, s), 0.18, 0.05, 1);
@@ -123,6 +209,10 @@ function traitsFor(skill: number, rng: Rng): Traits {
     chain: ambition * s,
     squeeze: lerp(0.02, 0.0007, s) * (0.5 + greed),
     favDir: rng.chance(0.5) ? 1 : -1,
+    // Beginners keep a lantern as a ward and barely know the button; the skilled spend theirs.
+    dashKeep: s < 0.35 ? 1 : s < 0.7 ? (rng.chance(0.5) ? 1 : 0) : 0,
+    dashRate: lerp(0.03, 0.3, s),
+    dashPhase: lerp(0, 0.6, s),
   };
 }
 
@@ -178,7 +268,7 @@ class Channel {
 
 type Mode = 'ride' | 'crouch' | 'drift' | 'land' | 'air';
 type Purpose = 'pop' | 'kicker' | 'hop' | 'drift';
-type GoalKind = 'gift' | 'kicker' | 'smash' | 'hop';
+type GoalKind = 'light' | 'kicker' | 'smash' | 'hop';
 
 /** A detour: ride straight into (xIn, zIn), on to (xOut, zOut), then ease back onto the line. */
 interface Goal {
@@ -280,7 +370,7 @@ class Bot {
     this.course = sim.course;
     this.scene = new Scene(sim.course);
     this.rng = new Rng(hash32(profile.seed, 0xb07));
-    this.t = traitsFor(profile.skill, this.rng);
+    this.t = traitsFor(profile.skill, this.rng, profile.style);
     // The ambitious take a fork's risk route, so ghosts show the player it exists.
     const bold = this.rng.chance(this.t.ambition * (0.2 + 0.8 * this.t.skill));
     this.lines = new Lines(sim.course, profile.bold ?? bold);
@@ -297,7 +387,25 @@ class Bot {
     const was = this.act.value;
     this.act.apply(now);
     if (this.act.value === 1 && was === 0 && !this.sim.s.grounded) this.armed = true;
-    return packInput(this.steer.value, this.act.value === 1, false);
+    return packInput(this.steer.value, this.act.value === 1, false, now < this.spiritUntil);
+  }
+
+  private spiritUntil = -1;
+
+  /** Spend a lantern on a dash, as a person would: only with one to spare over the wards this rider keeps,
+   *  on the ground and out of a trick's set-up, either on an open straight (by temperament) or to ride as a
+   *  spirit through a line that has closed ahead. */
+  private maybeDash(now: number, blocked: boolean): void {
+    const s = this.sim.s;
+    const t = this.t;
+    if (s.dash > 0 || now < this.spiritUntil + 40 || !s.grounded || this.mode !== 'ride' || s.tumble > 0) return;
+    if (Math.floor(s.lantern / LANTERN) <= t.dashKeep) return;
+    if (blocked) {
+      if (this.rng.chance(t.dashPhase)) this.spiritUntil = now + 3;
+      return;
+    }
+    if (this.goal || !this.openAhead(s.z, s.speed, 1.6)) return;
+    if (this.rng.chance((t.dashRate * this.interval) / TICK_RATE)) this.spiritUntil = now + 3;
   }
 
   /** Read what happened on the tick just simulated. */
@@ -482,11 +590,12 @@ class Bot {
     const k0 = Math.floor(zMin / CHUNK_LEN);
     const k1 = Math.floor((zp + Math.min(t.vision, 95)) / CHUNK_LEN);
     for (let k = k0; k <= k1; k++) {
-      for (const gf of c.chunk(k).gifts) {
+      for (const gf of c.chunk(k).lights) {
         if (gf.z < zMin || gf.z > zMax || gf.hover > 2 || sim.collected.has(gf.id)) continue;
         const dev = Math.abs(gf.x - this.lineX(gf.z));
         if (dev < 1 || dev > 9) continue;
-        consider(t.greed * (gf.value > 1 ? 2.4 : 0.55) - dev * 0.05, 'gift', gf.z, gf.x, gf.z, gf.x, speed * 1.1, null, -1, false);
+        // Lights are the lantern's fuel: a great one is worth a detour, a spark a small one.
+        consider(t.greed * (gf.value > 1 ? 2.8 : 0.7) - dev * 0.05, 'light', gf.z, gf.x, gf.z, gf.x, speed * 1.1, null, -1, false);
       }
       for (const r of c.zones(k).ramps) {
         if (r.z < zp + speed * 1.1 || r.z > zp + Math.min(t.vision, 95)) continue;
@@ -592,7 +701,10 @@ class Bot {
     let pulse = false;
     if (this.mode !== 'drift') {
       const dodge = this.swerve();
-      if (dodge !== 0) {
+      this.maybeDash(now, dodge !== 0);
+      if (dodge !== 0 && now < this.spiritUntil) {
+        // Riding through it as a spirit: hold the line.
+      } else if (dodge !== 0) {
         pulse = true;
         cmd = dodge * lerp(0.6, 1, t.skill);
         if (this.mode === 'crouch' && now >= this.pressAt) {

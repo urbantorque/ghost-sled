@@ -70,6 +70,9 @@ export interface HintFrame {
   chased: boolean;
   /** Rolling through a wipeout: airborne or not, there is nothing to teach until you are back up. */
   tumbling?: boolean;
+  /** A whole lantern is lit (a dash to spend), and the run has dashed at least once. */
+  lit?: boolean;
+  dashed?: boolean;
 }
 
 export interface HintStep {
@@ -150,6 +153,9 @@ export class HintCoach {
     const stompBack = this.shown === 'stomp' || this.sinceStomp >= STOMP_GROUND_S;
     const lipFirst = this.lipShows > 0 || n('boostPop') >= 1 || n('pop') >= 1 || f.runs > 0 || f.z >= RING_AFTER_Z;
     if (!f.grounded && n('stomp') < 3 && f.ttl < STOMP_CUE_S && realFlight && stompBack && lipFirst) want = 'stomp';
+    // The lantern: the first time one is lit (on the snow, out of a drift), what the button does with it.
+    if (!want && n('dash') < 2 && f.lit && f.grounded && !f.drifting && n('steer') >= 1) want = 'dash';
+    if (f.dashed && n('dash') < 2) learned.push('dash');
     if (!want && n('draft') < 1 && f.timer > 20 && f.draftTarget) want = 'draft';
     if (f.drafting && n('draft') < 1) learned.push('draft');
     if (f.chased || f.tumbling) want = null;
@@ -171,6 +177,7 @@ export class HintCoach {
       (this.shown === 'steer' && f.steered) ||
       (this.shown === 'drift' && f.drifting) ||
       ((this.shown === 'spin' || this.shown === 'flip') && f.grounded) ||
+      (this.shown === 'dash' && (f.dashed || !f.lit)) ||
       (this.shown === 'boostPop' && !f.grounded);
     const stompIn = want === 'stomp' && (this.shown === null || this.up >= HINT_MIN_S);
     // A stomp cue goes once it has had HINT_MIN_S (at touchdown, usually), or at once after

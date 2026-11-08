@@ -403,6 +403,37 @@ function roundedBox(hx: number, hy: number, hz: number, r: number, segs: number,
  *  marigold role wrapped in two tones of diagonal stripes with a few foil facets bright enough to catch
  *  the bloom, a satin ribbon round it (painted into the wrap so it follows the rounded edges), a plump bow of two leaning loops and two tails, and a knot
  *  that glows. A golden gift is gold-white with a mint ribbon. About 640 triangles (the old box was 450). */
+/** A spirit light: a small flame of marigold light, round at its foot and drawn to a point, its core paler
+ *  than its skin so it reads as glowing, not painted. A great light is half again as big, wears a thin ring
+ *  of light around its waist and carries a second, smaller flame beside it, so a great one is told from a
+ *  spark at a glance, at speed. The flame stands upright and bobs (the material's bob). */
+export function lightGeometry(great: boolean): BufferGeometry {
+  // (A flame reads at 30 m/s only at about a box's size: 0.8 m tall, a great one 1.2 m.)
+  const s = great ? 2.5 : 1.7;
+  const skin = great ? new Color('#FFD86A') : new Color('#FFC94A');
+  const core = new Color('#FFF6D8').multiplyScalar(1.5);
+  const flame = (k: number, x: number, y: number, col: Color): BufferGeometry =>
+    lathe(
+      [
+        [0, -0.2 * k],
+        [0.13 * k, -0.15 * k],
+        [0.2 * k, -0.02 * k],
+        [0.17 * k, 0.14 * k],
+        [0.09 * k, 0.3 * k],
+        [0, 0.46 * k],
+      ],
+      9,
+      col,
+      { pos: [x, y, 0] },
+    );
+  const parts = [flame(s, 0, 0, skin), flame(s * 0.62, 0, -0.02 * s, core)];
+  if (great) {
+    parts.push(part(new TorusGeometry(0.34 * s, 0.025 * s, 4, 18), core.clone().multiplyScalar(0.8), { rot: [Math.PI / 2, 0, 0], pos: [0, 0.02 * s, 0] }));
+    parts.push(flame(0.42, 0.42 * s, 0.22 * s, skin));
+  }
+  return merge(parts);
+}
+
 export function giftGeometry(golden: boolean): BufferGeometry {
   reseed(golden ? 3131 : 3030);
   const s = golden ? 1.35 : 1;

@@ -135,7 +135,7 @@ export function lerpSnap(a: Snap, b: Snap, t: number, o: Snap): void {
 
 export interface InputSource {
   /** draft: a recorded slipstream bit (a replayed run); when given, the live draftProbe is not asked. */
-  sample(): { steer: number; action: boolean; draft?: boolean };
+  sample(): { steer: number; action: boolean; draft?: boolean; spirit?: boolean };
 }
 
 export type DraftProbe = (tick: number, x: number, y: number, z: number) => boolean;
@@ -185,7 +185,7 @@ export class Run {
     const s = this.sim.s;
     const inp = this.input.sample();
     const draft = inp.draft ?? (this.draftProbe ? this.draftProbe(this.sim.tick, s.x, s.y, s.z) : false);
-    const byte = packInput(inp.steer, inp.action, draft);
+    const byte = packInput(inp.steer, inp.action, draft, inp.spirit === true);
     this.recorder.push(byte);
     copySnap(s, this.prev);
     this.sim.step(byte);

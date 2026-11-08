@@ -25,14 +25,16 @@ export type Emblem = 'snowflake' | 'leaf' | 'flame' | 'petal' | 'bell' | 'star' 
 
 /** How a rider rides, which the bot's traits carry into the record (see `styleTraits`). */
 export type RideStyle =
-  | 'liner' // the cleanest line on the mountain, few tricks, rarely falls
+  | 'master' // everything, cleanly: every lantern spent where it pays, every line taken
+  | 'liner' // the cleanest line on the mountain, few tricks, rarely falls, spends only spare lanterns on straights
   | 'dasher' // spends every lantern the moment it lights
   | 'stunt' // spins and flips everything with air under it
   | 'hoarder' // keeps its lanterns as wards and rides through what would floor anyone else
   | 'collector' // chases every light, wide and greedy
-  | 'drafter' // sits in slipstreams and slingshots past
-  | 'grinder' // takes every rail
-  | 'bold' // the fork's risk route, the sky gates, the long way up the wall
+  | 'sky' // pops every kicker for the lights up high and the sky gates
+  | 'drafter' // sits in slipstreams and slingshots past (no pool rider yet: a pool is ridden alone)
+  | 'grinder' // takes every rail (no pool rider yet: the bot leaves rails alone)
+  | 'bold' // the fork's risk route, the squeezes, the long way round
   | 'wild'; // very fast and falls a lot
 
 export interface Rider {
@@ -59,7 +61,7 @@ export interface Rider {
 
 export const ROSTER: readonly Rider[] = [
   {
-    key: 'crown', name: 'The Hollow King', hat: 'crown', emblem: 'crown', accent: '#E8D9FF', sled: 3, style: 'liner', skill: 1, home: 0,
+    key: 'crown', name: 'The Hollow King', hat: 'crown', emblem: 'crown', accent: '#E8D9FF', sled: 3, style: 'master', skill: 1, home: 0,
     bio: 'Holds the top of every ladder and has never been seen to fall.',
     says: { pass: ['Kneel, little sled.', 'Make way.'], passed: ['Bold.', 'Enjoy the view.'], won: ['As it always is.'], lost: ['Again. Tomorrow.'] },
   },
@@ -75,7 +77,7 @@ export const ROSTER: readonly Rider[] = [
   },
   {
     key: 'ivo', name: 'Ivo Crag', hat: 'horns', emblem: 'fang', accent: '#F2C18D', sled: 1, style: 'bold', skill: 0.82, home: 2,
-    bio: 'Takes the ice, the sky gates and the wall. Every time.',
+    bio: 'Takes the fork\'s ice and the narrowest squeeze. Every time.',
     says: { pass: ['Long way round!', 'Up here!'], passed: ['Lucky line.', 'Grr.'], won: ['Fortune and the brave.'], lost: ['Next time the ice.'] },
   },
   {
@@ -89,14 +91,14 @@ export const ROSTER: readonly Rider[] = [
     says: { pass: ['Slow and lit.', 'Steady now.'], passed: ['Go on then.'], won: ['Patience, child.'], lost: ['Ha. Well done.'] },
   },
   {
-    key: 'tavi', name: 'Tavi Rook', hat: 'beak', emblem: 'feather', accent: '#C7D0FF', sled: 4, style: 'drafter', skill: 0.7, home: 1,
-    bio: 'Sits in your wake, then slingshots past at the worst moment.',
-    says: { pass: ['Thanks for the tow!', 'Caw.'], passed: ['Lead on.'], won: ['Wake rider wins.'], lost: ['Couldn\'t catch your tail.'] },
+    key: 'tavi', name: 'Tavi Rook', hat: 'beak', emblem: 'feather', accent: '#C7D0FF', sled: 4, style: 'sky', skill: 0.7, home: 1,
+    bio: 'Pops every kicker for the lights up high. Knows every sky gate.',
+    says: { pass: ['Up here!', 'Caw.'], passed: ['Ground\'s overrated.'], won: ['Sky line wins.'], lost: ['Should have flown.'] },
   },
   {
-    key: 'nessa', name: 'Nessa Lumen', hat: 'lantern', emblem: 'moon', accent: '#FFE7A8', sled: 5, style: 'grinder', skill: 0.64, home: 3,
-    bio: 'Every rail on the mountain, all the way to its end.',
-    says: { pass: ['Rail line!', 'Sparks!'], passed: ['Light the way.'], won: ['Followed the rails home.'], lost: ['Bright run.'] },
+    key: 'nessa', name: 'Nessa Lumen', hat: 'lantern', emblem: 'moon', accent: '#FFE7A8', sled: 5, style: 'bold', skill: 0.64, home: 3,
+    bio: 'Carries her own lantern, and takes the ice, the squeeze and the long way round.',
+    says: { pass: ['This way\'s brighter!', 'Through here!'], passed: ['Light the way.'], won: ['Followed the lights home.'], lost: ['Bright run.'] },
   },
   {
     key: 'juno', name: 'Juno Vale', hat: 'bobble', emblem: 'star', accent: '#FFD1F0', sled: 0, style: 'collector', skill: 0.56, home: 0,

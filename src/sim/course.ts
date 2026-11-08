@@ -107,13 +107,30 @@ export interface Gate {
   z: number;
 }
 
-export interface Gift {
+/** A spirit light: what charges the lantern. Sparks are small and many; a great light sits where only a
+ *  brave line goes (the top of a boosted pop, a flight's apex, the fork's ice, a squeeze). */
+export interface Light {
   id: number;
   x: number;
   z: number;
   /** Height above the ground at x, z. */
   hover: number;
+  /** 1 a spark, 3 a great light. */
   value: number;
+}
+
+/** A sky gate: a ring of light in the air over a kicker's flight, where only a boosted pop goes. One a stage.
+ *  Riding through its middle lights a whole lantern. */
+export interface SkyGate {
+  id: number;
+  /** Which stage it belongs to. */
+  stage: number;
+  x: number;
+  /** World height of its centre. */
+  y: number;
+  z: number;
+  /** Radius a sled's middle must be inside. */
+  r: number;
 }
 
 interface Box {
@@ -142,7 +159,7 @@ export interface Chunk {
   zones: Zones;
   obstacles: Obstacle[];
   gates: Gate[];
-  gifts: Gift[];
+  lights: Light[];
 }
 
 export interface Surface {
@@ -532,6 +549,17 @@ const VENT_KINDS: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'bo
 /** Where rails go, and where they go when a stage has too little of that. */
 const RAIL_KINDS: ReadonlySet<SectionKind> = new Set<SectionKind>(['street', 'treerun', 'lake']);
 const RAIL_SPARE: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'bowl', 'benches', 'split', 'switchbacks']);
+/** A place's own line of lights: its spacing, how far across the room it swings, the swing's length, and
+ *  whether a great light sits part way along (one always ends it). */
+const PLACE_LINES: Partial<Record<SectionKind, { step: number; amp: number; wave: number; great: boolean }>> = {
+  street: { step: 9, amp: 0.55, wave: 64, great: true },
+  tunnel: { step: 10, amp: 0.45, wave: 90, great: false },
+  bridge: { step: 8, amp: 0.4, wave: 56, great: false },
+  lake: { step: 11, amp: 0.7, wave: 100, great: true },
+  ravine: { step: 10, amp: 0.5, wave: 76, great: false },
+};
+/** Where a wall line may run: open sections whose banks are berms. */
+const WALL_KINDS: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'bowl', 'benches', 'switchbacks', 'gully', 'chute']);
 const RAIL_LAST: ReadonlySet<SectionKind> = new Set<SectionKind>(['bridge', 'ravine', 'tunnel', 'fork', 'chute', 'gully']);
 /** Pads an act out when its beats cannot fill the stage. */
 const FILLERS: readonly SectionKind[] = ['cruise', 'bowl', 'chute'];
@@ -561,7 +589,7 @@ const SCRIPTS: Record<BiomeId, readonly [Act, Act, Act]> = {
   alpine: [
     { name: 'Timberline Glades', blocks: [['treerun'], ['fork']] },
     { name: 'Mirror Lake', blocks: [['chute|gully'], ['lake'], ['bowl|cruise'], ['treerun'], ['leap'], ['benches']] },
-    { name: 'Old Town Run', blocks: [['switchbacks|split'], ['bridge'], ['street'], ['chute'], ['leap']] },
+    { name: 'Old Town Run', blocks: [['fork|split'], ['bridge'], ['street'], ['chute'], ['leap']] },
   ],
   glacier: [
     { name: 'Serac Gate', blocks: [['ravine'], ['bridge'], ['street']] },
@@ -571,12 +599,12 @@ const SCRIPTS: Record<BiomeId, readonly [Act, Act, Act]> = {
   volcanic: [
     { name: 'Cinder Gate', blocks: [['ravine'], ['tunnel']] },
     { name: 'Ash Caldera', blocks: [['chute'], ['bridge'], ['fork'], ['leap'], ['ravine']] },
-    { name: 'Basalt Halls', blocks: [['cruise|bowl'], ['tunnel'], ['bridge'], ['street'], ['leap']] },
+    { name: 'Basalt Halls', blocks: [['fork|bowl'], ['tunnel'], ['bridge'], ['street'], ['leap']] },
   ],
   blossom: [
     { name: 'Petal Steps', blocks: [['terraces'], ['street']] },
     { name: 'The Thousand Torii', blocks: [['chute'], ['tunnel'], ['bridge'], ['fork'], ['leap']] },
-    { name: 'Temple Town', blocks: [['benches'], ['terraces'], ['bowl|cruise'], ['leap'], ['street']] },
+    { name: 'Temple Town', blocks: [['benches'], ['terraces'], ['cruise|fork'], ['leap'], ['street']] },
   ],
 };
 
@@ -592,11 +620,19 @@ const ROLLER_WAVE = 80;
 /** Where the corridor's middle starts to fill up. */
 const PICKETS_FROM = 900;
 
-/** The run-in's gift line: where it starts, how long, its spacing and its swing. */
-const GIFT_RUN_Z = 130;
-const GIFT_RUN_LEN = 160;
-const GIFT_RUN_STEP = 5;
-const GIFT_RUN_WAVE = 110;
+/** The run-in's light line: where it starts, how long, its spacing and its swing. */
+const LIGHT_RUN_Z = 130;
+const LIGHT_RUN_LEN = 160;
+const LIGHT_RUN_STEP = 8;
+const LIGHT_RUN_WAVE = 110;
+/** A sky gate's ring: how far past the lip it hangs, the pop it is set for, and its radius. */
+const GATE_REACH = 22;
+const GATE_CHARGE = 0.7;
+const GATE_R = 2.4;
+/** A boosted pop's lift at full charge (sim.ts pop(): (3 + 2.6) x 1.3 on a kicker's top). */
+const POP_BASE = 3;
+const POP_CHARGE = 2.6;
+const POP_RAMP = 1.3;
 
 export interface Section {
   kind: SectionKind;
@@ -1307,6 +1343,17 @@ export class Course {
         break;
       }
     }
+    // Every descent rides at least one field: where the kickers' flights took every bowl, the first open
+    // section with room has one.
+    if (plan.fields.length > 0) return;
+    for (const sec of this.sections) {
+      if (sec.z0 < 800 || sec.z0 >= this.finishZ || !(MOGUL_KINDS.has(sec.kind) || sec.kind === 'bowl' || sec.kind === 'chute')) continue;
+      for (let z = sec.z0 + sec.blend * 0.5; z + 36 < sec.z1; z += 4) {
+        if (this.busy(z - 8, z + 44) || this.hits(plan.fields, z - 8, z + 44)) continue;
+        plan.fields.push({ z0: z, z1: z + 32 });
+        return;
+      }
+    }
   }
 
   /** Whether the safe line holds true over a kicker at z and the flight off it, so the sled comes down on it. */
@@ -1332,14 +1379,16 @@ export class Course {
       const rng = new Rng(hash32(this.seed, stage.index, 0x4a11));
       const target = rng.int(4, 8);
       let made = 0;
-      for (const kinds of [RAIL_KINDS, RAIL_SPARE, RAIL_LAST]) {
+      for (const [kinds, close] of [[RAIL_KINDS, false], [RAIL_SPARE, false], [RAIL_LAST, false], [RAIL_SPARE, true], [RAIL_LAST, true]] as const) {
+        // (The close look only for a stage the flights have left short: rails keep out from under them.)
+        if (close && made >= 4) break;
         const sites: { z: number; side: 1 | -1 }[] = [];
         for (const sec of this.sections) {
           if (sec.z0 >= stage.z1 || sec.z1 <= stage.z0 || !kinds.has(sec.kind)) continue;
           const z0 = Math.max(sec.z0 + sec.blend + 4, stage.z0);
           const z1 = Math.min(sec.z1 - 26, stage.z1 - 34);
           let side: 1 | -1 = rng.chance(0.5) ? 1 : -1;
-          for (let z = z0 + rng.range(0, 8); z < z1; z += rng.range(40, 52)) {
+          for (let z = z0 + rng.range(0, 8); z < z1; z += close ? rng.range(18, 26) : rng.range(40, 52)) {
             sites.push({ z, side });
             side = side > 0 ? -1 : 1;
           }
@@ -1378,7 +1427,10 @@ export class Course {
       const d = Math.abs(x - this.safeX(zz));
       if (d < 3 || d > 5 || this.edgeExcess(x, zz) > -0.4) return null;
     }
-    for (const k of this.plan.kicks) if (z < k.z + 14 && end > k.z - 6) return null;
+    // Out from under every flight on the line (a kicker's carries about 50 m, a leap's or a ledge's to its
+    // landing): a rail under a flight is a rail nobody can meet at its low end.
+    for (const b of this.plan.flights) if (z < b.z1 + 4 && end > b.z0) return null;
+    for (const l of this.plan.ledges) if (z < l.land1 + 4 && end > l.z - 12) return null;
     return { id: 0, x0, z0: z, x1, z1: end, h: 1.1 };
   }
 
@@ -1884,7 +1936,7 @@ export class Course {
     const zones = this.zones(i);
     const z0 = i * CHUNK_LEN;
     const z1 = z0 + CHUNK_LEN;
-    const chunk: Chunk = { index: i, z0, z1, zones, obstacles: [], gates: [], gifts: [] };
+    const chunk: Chunk = { index: i, z0, z1, zones, obstacles: [], gates: [], lights: [] };
     const rng = new Rng(hash32(this.seed, i, 0x0b57));
     const diff = this.difficulty(z0);
     const beyond = clamp((z0 - p.rampDistance) / 4000, 0, 0.5);
@@ -2111,12 +2163,71 @@ export class Course {
       }
     }
 
-    this.placeGifts(chunk, rng, diff);
+    this.placeLights(chunk, rng, diff);
     return chunk;
   }
 
-  private placeGifts(chunk: Chunk, rng: Rng, diff: number): void {
-    const gifts = chunk.gifts;
+  /** The sky gates, one a stage: over the stage's most open online kicker past the first 800 m, set for a
+   *  boosted pop at 30 m/s, where a plain flight passes about 2 m under its rim. Worked out once,
+   *  whole-course (a few chunks' features), on first ask. */
+  get skyGates(): readonly SkyGate[] {
+    if (this.gateList) return this.gateList;
+    this.section(0);
+    const out: SkyGate[] = [];
+    for (const st of this.stages) {
+      let best: { r: Ramp; room: number } | null = null;
+      for (const k of this.plan.kicks) {
+        if (k.z < Math.max(800, st.z0) || k.z >= st.z1 - 80) continue;
+        const r = this.zones(Math.floor(k.z / CHUNK_LEN)).ramps.find((q) => q.online && Math.abs(q.z - k.z) < 0.01);
+        if (!r) continue;
+        const room = k.flight + (k.big ? 20 : 0);
+        if (!best || room > best.room) best = { r, room };
+      }
+      if (!best) continue;
+      const r = best.r;
+      const lipZ = r.z + r.len;
+      const lipY = this.ground(r.x, lipZ - 0.05);
+      const face = (2 * r.h) / r.len + (this.baseY(lipZ) - this.baseY(lipZ - 1));
+      const t = GATE_REACH / KICK_V;
+      const vy = KICK_V * face + (POP_BASE + POP_CHARGE * GATE_CHARGE) * POP_RAMP;
+      const lean = (this.safeX(lipZ + 1) - this.safeX(lipZ - 1)) / 2;
+      out.push({ id: st.index, stage: st.index, x: r.x + lean * GATE_REACH, y: lipY + vy * t - 0.5 * G * t * t, z: lipZ + GATE_REACH, r: GATE_R });
+    }
+    this.gateList = out;
+    return out;
+  }
+
+  private gateList: SkyGate[] | null = null;
+
+  /** Wall lines: a run of sparks up the outside berm of a long bend, where a sled riding the wall goes and
+   *  nobody else does. One in most open sections that bend enough, whole-course, on first ask. */
+  get wallLines(): readonly { z0: number; side: 1 | -1 }[] {
+    if (this.walls) return this.walls;
+    this.section(0);
+    const out: { z0: number; side: 1 | -1 }[] = [];
+    const rng = new Rng(hash32(this.seed, 0x3a11));
+    for (const sec of this.sections) {
+      if (sec.z0 < 500 || sec.z1 > this.finishZ - 60 || !WALL_KINDS.has(sec.kind)) continue;
+      let pick: { z: number; bend: number } | null = null;
+      for (let z = sec.z0 + sec.blend; z < sec.z1 - 40; z += 6) {
+        if (this.hits(this.plan.busy, z - 4, z + 34) || this.edgeLimit(z) < 4) continue;
+        const bend = this.centerX(z + 30) + this.centerX(z - 30) - 2 * this.centerX(z);
+        if (Math.abs(bend) > 0.12 && (!pick || Math.abs(bend) > Math.abs(pick.bend))) pick = { z, bend };
+      }
+      if (pick && rng.chance(0.85)) out.push({ z0: pick.z, side: pick.bend > 0 ? -1 : 1 });
+    }
+    this.walls = out;
+    return out;
+  }
+
+  private walls: { z0: number; side: 1 | -1 }[] | null = null;
+
+  /** The lights that charge the lantern. Every one sits on a choice: the run-in's swing teaches steering; the
+   *  rest are where only a brave or a skilled line goes (a boosted pop's arc and its sky gate, a leap's apex,
+   *  the fork's ice, a rail's top, a wall's berm, a squeeze between two trunks, a line that tempts you wide).
+   *  The plain safe line carries almost none: holding it is safe, not charged. */
+  private placeLights(chunk: Chunk, rng: Rng, diff: number): void {
+    const lights = chunk.lights;
     let id = chunk.index * 64;
     const blocked = (x: number, z: number): boolean => {
       for (const o of chunk.obstacles) {
@@ -2126,25 +2237,31 @@ export class Course {
       }
       return this.edgeExcess(x, z) > 0.5;
     };
+    const inChunk = (z: number): boolean => z >= chunk.z0 && z < chunk.z1;
     if (chunk.z0 < 40 || chunk.z0 >= this.finishZ) return;
 
-    // The run-in's gift line swings side to side across the safe line: a first run learns to steer on it.
-    for (let k = 0; k * GIFT_RUN_STEP < GIFT_RUN_LEN; k++) {
-      const z = GIFT_RUN_Z + k * GIFT_RUN_STEP;
-      if (z < chunk.z0 || z >= chunk.z1) continue;
-      const u = (k * GIFT_RUN_STEP) / GIFT_RUN_WAVE;
-      gifts.push({ id: id++, x: this.safeX(z) + 3.6 * dsin(TAU * u), z, hover: 0.8, value: 1 });
+    // The run-in's light line swings side to side across the safe line: a first run learns to steer on it,
+    // and lights most of its first lantern doing so.
+    for (let k = 0; k * LIGHT_RUN_STEP < LIGHT_RUN_LEN; k++) {
+      const z = LIGHT_RUN_Z + k * LIGHT_RUN_STEP;
+      if (!inChunk(z)) continue;
+      const u = (k * LIGHT_RUN_STEP) / LIGHT_RUN_WAVE;
+      lights.push({ id: id++, x: this.safeX(z) + 3.6 * dsin(TAU * u), z, hover: 0.8, value: 1 });
     }
 
-    // Golden gifts down the fork's risk line, the pay for taking it.
-    for (let z = chunk.z0 + 8; z < chunk.z1; z += 22) {
+    // Down the fork's risk line: sparks on the ice and a great light at its middle, the pay for taking it.
+    for (let z = chunk.z0 + 5; z < chunk.z1; z += 11) {
       const sh = this.shapeAt(z);
       if (sh.ridge < 0.8 * RIDGE_H) continue;
       const alt = this.altX(z);
-      if (alt !== null && !blocked(alt, z)) gifts.push({ id: id++, x: alt, z, hover: 0.8, value: 5 });
+      if (alt === null || blocked(alt, z)) continue;
+      const sec = this.section(z);
+      const mid = Math.abs(z - (sec.z0 + sec.blend + sec.z1) / 2) < 6;
+      lights.push({ id: id++, x: alt, z, hover: 0.8, value: mid ? 3 : 1 });
     }
 
-    // Gifts along a leap's flight at 30 m/s.
+    // Along a leap's flight at 30 m/s, with a great light near its top: everybody flies a leap, and the one
+    // who holds a straight line through the air takes all of it.
     for (const l of this.plan.leaps) {
       if (l.z + 66 < chunk.z0 || l.z >= chunk.z1) continue;
       const lipY = this.baseY(l.z);
@@ -2153,52 +2270,90 @@ export class Course {
       for (let k = 1; k <= 6; k++) {
         const t = k * 0.34;
         const z = l.z + 30 * t;
-        if (z < chunk.z0 || z >= chunk.z1) continue;
+        if (!inChunk(z)) continue;
         const y = lipY - LIP_SLOPE * 30 * t - 4.9 * t * t;
         const x = sx + lean * 30 * t;
-        gifts.push({ id: id++, x, z, hover: y - this.ground(x, z), value: k === 3 ? 5 : 1 });
+        lights.push({ id: id++, x, z, hover: y - this.ground(x, z), value: k === 2 ? 3 : 1 });
       }
     }
 
-    // Lines: one follows the safe line, another (later) tempts you off it.
-    const lines = rng.int(1, 2);
-    for (let l = 0; l < lines; l++) {
-      // The line that tempts you off the safe one waits until 400 m: a first run learns the line first.
-      if (l > 0 && chunk.z0 < 400) break;
-      const startZ = chunk.z0 + rng.range(4, 30);
-      const n = rng.int(5, 8);
-      const risky = l > 0 || rng.chance(0.35 * diff);
-      const off = risky ? rng.signed() * this.halfWidth(startZ) * 0.6 : rng.range(-0.8, 0.8);
-      const sway = rng.range(-0.08, 0.08);
-      for (let k = 0; k < n; k++) {
-        const z = startZ + k * 3.4;
-        const x = (risky ? this.centerX(z) : this.safeX(z)) + off + sway * k * 3.4;
-        if (blocked(x, z)) continue;
-        gifts.push({ id: id++, x, z, hover: 0.8, value: 1 });
-      }
-    }
-
-    // Arcs over kickers at a typical takeoff speed.
+    // The high line over every online kicker: the arc of a boosted pop, well over a plain flight. Over the
+    // stage's sky gate the arc leads into the ring instead.
     for (const r of chunk.zones.ramps) {
-      const v = lerp(27, 31, diff);
+      if (!r.online) continue;
       const lipZ = r.z + r.len;
       const lipY = this.ground(r.x, lipZ - 0.05);
-      const faceSlope = (2 * r.h) / r.len + (this.baseY(lipZ) - this.baseY(lipZ - 1));
-      const vy = v * faceSlope;
-      const count = 5;
-      for (let k = 1; k <= count; k++) {
-        const t = k * 0.22;
+      const face = (2 * r.h) / r.len + (this.baseY(lipZ) - this.baseY(lipZ - 1));
+      const v = lerp(28, 31, diff);
+      const vy = v * face + (POP_BASE + POP_CHARGE * 0.55) * POP_RAMP;
+      const lean = (this.safeX(lipZ + 1) - this.safeX(lipZ - 1)) / 2;
+      const gated = this.skyGates.some((g) => Math.abs(g.z - (lipZ + GATE_REACH)) < 1);
+      for (let k = 1; k <= 5; k++) {
+        const t = k * (gated ? 0.12 : 0.2);
         const z = lipZ + v * t;
+        const x = r.x + lean * v * t;
         const y = lipY + vy * t - 4.9 * t * t;
-        const hover = y - this.ground(r.x, z);
-        if (hover < 0.8) break;
-        const golden = k === 3 && rng.chance(0.3 + diff * 0.3);
-        gifts.push({ id: id++, x: r.x, z, hover: Math.min(hover, 9), value: golden ? 5 : 1 });
+        const hover = y - this.ground(x, z);
+        if (hover < 2.2 || !inChunk(z)) continue;
+        lights.push({ id: id++, x, z, hover: Math.min(hover, 11), value: k === 3 && !gated ? 3 : 1 });
       }
     }
 
-    // A rare golden gift squeezed between obstacles.
-    if (chunk.obstacles.length >= 2 && rng.chance(0.12 + 0.12 * diff)) {
+    // On a rail's top, only for a sled grinding it (a sled on the snow beside it passes under).
+    for (const rl of this.plan.rails) {
+      for (const u of [0.5, 0.72, 0.94]) {
+        const z = rl.z0 + (rl.z1 - rl.z0) * u;
+        if (!inChunk(z)) continue;
+        lights.push({ id: id++, x: rl.x0 + (rl.x1 - rl.x0) * u, z, hover: rl.h + 1.3, value: 1 });
+      }
+    }
+
+    // Through each place, a line of its own: a weave between a street's lanterns, a thread down a tunnel to
+    // a great light at its mouth, an S across a lake's ice, a line along a bridge's edge, a swing through a
+    // ravine. Off the safe line by design, so taking it is a choice made at speed, beside the walls.
+    for (const sec of this.sections) {
+      const look = PLACE_LINES[sec.kind];
+      if (!look || sec.z1 < chunk.z0 || sec.z0 + sec.blend > chunk.z1) continue;
+      const body = sec.z0 + sec.blend;
+      const last = sec.z1 - 12;
+      const n = Math.floor((last - body) / look.step);
+      const side = hash32(this.seed, Math.round(body)) & 1 ? 1 : -1;
+      for (let k = 0; k <= n; k++) {
+        const z = body + k * look.step;
+        if (!inChunk(z)) continue;
+        const room = Math.max(0, this.halfWidth(z) - 1.6);
+        const x = this.safeX(z) + side * room * look.amp * dsin((TAU * (z - body)) / look.wave);
+        if (blocked(x, z)) continue;
+        lights.push({ id: id++, x, z, hover: 0.8, value: k === n || (look.great && k === Math.round(n * 0.6)) ? 3 : 1 });
+      }
+    }
+
+    // Up the outside berm of a long bend: a wall ride's line.
+    for (const w of this.wallLines) {
+      for (let k = 0; k < 6; k++) {
+        const z = w.z0 + k * 5.5;
+        if (!inChunk(z)) continue;
+        const x = this.centerX(z) + w.side * (this.halfWidth(z) + 2.1);
+        lights.push({ id: id++, x, z, hover: 0.9, value: k === 5 ? 3 : 1 });
+      }
+    }
+
+    // A line that tempts you off the safe one, past the first 400 m: a first run learns the line first.
+    if (chunk.z0 >= 400 && rng.chance(0.55)) {
+      const startZ = chunk.z0 + rng.range(4, 30);
+      const n = rng.int(4, 6);
+      const off = rng.signed() * this.halfWidth(startZ) * 0.62;
+      const sway = rng.range(-0.08, 0.08);
+      for (let k = 0; k < n; k++) {
+        const z = startZ + k * 3.6;
+        const x = this.centerX(z) + off + sway * k * 3.6;
+        if (blocked(x, z)) continue;
+        lights.push({ id: id++, x, z, hover: 0.8, value: 1 });
+      }
+    }
+
+    // A great light squeezed between two obstacles: a whisker's line.
+    if (chunk.obstacles.length >= 2 && rng.chance(0.2 + 0.2 * diff)) {
       const a = rng.pick(chunk.obstacles);
       let best: Obstacle | null = null;
       let bestD = 1e9;
@@ -2215,7 +2370,7 @@ export class Course {
       if (best && bestD < 64) {
         const x = (a.x + best.x) / 2;
         const z = (a.z + best.z) / 2;
-        if (!blocked(x, z)) gifts.push({ id: id++, x, z, hover: 0.9, value: 5 });
+        if (!blocked(x, z)) lights.push({ id: id++, x, z, hover: 0.9, value: 3 });
       }
     }
   }
