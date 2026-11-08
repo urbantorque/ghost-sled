@@ -177,6 +177,14 @@ export class BeatRouter {
           if (b.say) this.say(b.say);
           this.hud.say(b.say?.label ?? 'Wipeout');
           break;
+        case 'marquee': {
+          if (b.phase === 'enter') this.notices.marquee(b.name, b.line, null, false);
+          else if (b.total > 0 || !b.clean) {
+            const lit = b.total > 0 ? `${b.took} of ${b.total} lights` : '';
+            this.notices.marquee(b.name, '', b.clean ? (lit ? `${lit} · Clean` : 'Clean') : lit || 'Ridden', b.clean);
+          }
+          break;
+        }
         case 'stage': {
           // The last line's moment is the finish, a frame later.
           if (b.last) break;

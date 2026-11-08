@@ -1335,6 +1335,19 @@ export class Sfx {
   }
 
   /** A stage line crossed: a quick rising pair of bells and a short rush of air into the band's lift. */
+  /** A marquee moment comes up: a long swell of air under a rising three-bell call and a held chord, the
+   *  band lifting under it (engine.ts accent). A clean sweep of its lights on the way out rings a chord. */
+  private marqueeCue(t: number): void {
+    const v = this.voice(t, 0.55, 0, 1, PRIO.payoff);
+    whoosh(v, t, 1.4, 300, 3200, 0.1, 0.7, v.bank.pink);
+    fmBell(v, t + 0.05, this.note(4), 0.06, 0.6, 2, 0.9);
+    const b2 = this.note(7);
+    const b3 = this.note(11);
+    this.at(v, t + 0.24, (tn) => fmBell(v, tn, b2, 0.07, 0.7, 2, 1));
+    this.at(v, t + 0.46, (tn) => fmBell(v, tn, b3, 0.08, 1.1, 2, 1.1));
+    this.chord(t + 0.46, 0.05, 1.4, 4);
+  }
+
   private stageCue(t: number): void {
     const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
     whoosh(v, t, 0.5, 700, 2600, 0.08, 0.8, v.bank.pink);
@@ -1461,6 +1474,10 @@ export class Sfx {
         break;
       case 'stage':
         if (!b.last) this.stageCue(t);
+        break;
+      case 'marquee':
+        if (b.phase === 'enter') this.marqueeCue(t);
+        else if (b.clean && b.total > 0 && b.took >= b.total) this.chord(t, 0.05, 0.9, 5);
         break;
       case 'finish':
         this.finishCue(t);

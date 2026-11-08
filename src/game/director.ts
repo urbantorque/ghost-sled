@@ -7,6 +7,7 @@ import { CRASH_PACK_NEAR_M, IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SP
 import { FinaleTracker } from './finales';
 import type { GhostPose, GhostTrack, RaceEvent } from './ghosts';
 import { GRAVE_GIFTS, GRAVE_PAST, type Graveyard } from './graveyards';
+import type { Marquee } from './marquee';
 import { FLOW_FULL, skillMult } from './intensity';
 import { friendBeatenText } from './progress';
 import { figure, placeAtFinish } from './standing';
@@ -57,6 +58,8 @@ export interface DirectorRun {
   /** The mountain's graveyards (graveyards.ts, the cairns the world placed): ridden 20 m past alive,
    *  each is a graveyard beat once per run. */
   graveyards?: ReadonlyArray<Graveyard>;
+  /** The run's marquee moments (marquee.ts), in order down the course. */
+  marquee?: ReadonlyArray<Marquee>;
 }
 
 export interface DirectorFrame {
@@ -350,6 +353,15 @@ export class Director {
   private paceDone = false;
   private friendDone = false;
   private kmDone = 0;
+  /** The next marquee moment, the one being ridden (-1 none), and what stood at its start. */
+  private mqNext = 0;
+  private mqIn = -1;
+  private mqLights = 0;
+  private mqHits = 0;
+  /** Hits so far this run: wards, wipeouts and bumps (a moment is clean with none inside it). */
+  private hits = 0;
+  /** What each moment came to this run, for the results and mastery. */
+  readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean }> = [];
   private avalancheAt = -1;
   private bestBank = 0;
   /** Run clock until which a bank's cash-in is on screen (New best waits for it). */
@@ -464,6 +476,32 @@ export class Director {
     this.wreckSeen = true;
   }
 
+  /** Marquee moments: the title as one comes up (about two seconds out), the score as it is ridden out. */
+  private marqueeStep(sim: Sim): void {
+    const list = this.run?.marquee;
+    if (!list) return;
+    const s = sim.s;
+    if (this.mqIn >= 0) {
+      const m = list[this.mqIn];
+      if (sim.distance >= m.z1 || s.finished) {
+        const took = sim.stats.lights - this.mqLights;
+        const clean = this.hits === this.mqHits;
+        this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean });
+        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean }, sim);
+        this.mqIn = -1;
+      }
+      return;
+    }
+    const m = list[this.mqNext];
+    if (!m || s.finished) return;
+    if (sim.distance >= m.z0 - Math.max(20, s.speed * 2.2)) {
+      this.mqIn = this.mqNext++;
+      this.mqLights = sim.stats.lights;
+      this.mqHits = this.hits;
+      this.push({ type: 'marquee', tick: sim.tick, phase: 'enter', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took: 0, total: m.total, clean: true }, sim);
+    }
+  }
+
   beginRun(r: DirectorRun): void {
     this.run = r;
     this.log.length = 0;
@@ -514,6 +552,10 @@ export class Director {
     this.paceDone = false;
     this.friendDone = false;
     this.kmDone = 0;
+    this.mqNext = 0;
+    this.mqIn = -1;
+    this.hits = 0;
+    this.marqueeDone.length = 0;
     this.avalancheAt = -1;
     this.bestBank = 0;
     this.bankUntil = -1;
@@ -851,6 +893,7 @@ export class Director {
       }
     };
     for (const p of f.events) {
+      if (p.e.type === 'bump' || p.e.type === 'ward' || (p.e.type === 'tumble' && p.e.phase === 'start')) this.hits++;
       const e = p.e;
       switch (e.type) {
         case 'chaos':
@@ -1044,6 +1087,7 @@ export class Director {
         const standing = { time: fr.time ?? null, distance: fr.distance };
         this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: friendBeatenText(fr.name, standing), points: 0, tone: 'big' } }, sim);
       }
+      this.marqueeStep(sim);
       const km = Math.floor(sim.distance / 1000);
       if (km > this.kmDone) {
         this.kmDone = km;

@@ -8779,3 +8779,40 @@
     will-change: auto;
   }
 }
+
+/* A marquee moment's title card (round 5): the set piece's name, larger and wider-set than a stage line,
+   over the line to play in the lantern's marigold; on the way out the line becomes the score. */
+.gs-mq {
+  display: inline-grid;
+  justify-items: center;
+  gap: 2px;
+  max-width: calc(100vw - var(--sl) - var(--sr));
+  padding: 8px 22px 9px;
+  border-radius: var(--r-card);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px rgba(255, 211, 77, 0.45), var(--shadow);
+}
+
+.gs-mq-k {
+  font-size: clamp(19px, calc(var(--u) * 1.45), 30px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+
+.gs-mq-l {
+  color: var(--gift);
+  font-size: 0.84em;
+  font-weight: 800;
+  text-wrap: balance;
+}
+
+.gs-mq.is-out .gs-mq-k {
+  font-size: clamp(15px, calc(var(--u) * 1.05), 22px);
+}
+
+.gs-mq.is-clean {
+  box-shadow: inset 0 0 0 2px #ffd34d, 0 0 18px rgba(255, 211, 77, 0.35), var(--shadow);
+}

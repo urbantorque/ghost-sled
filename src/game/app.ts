@@ -26,6 +26,8 @@ import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding, trackStanding } from './ghosts';
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
+import { planMarquee } from './marquee';
+import { courseFor } from '../sim/course';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
@@ -923,6 +925,8 @@ export class App {
       unlockLadder: MOUNTAINS.filter((m) => m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
+      // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
+      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id),
     });
     this.director.time.reset();
   }

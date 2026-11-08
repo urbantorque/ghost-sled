@@ -108,13 +108,17 @@ export type Beat =
   | (B & { type: 'ghostTrick'; ghost: GhostRef; quality: 'clean' | 'perfect' | 'sketchy'; word: string | null; x: number; y: number; z: number })
   | (B & { type: 'stompTick'; step: number; open: boolean })
   /** gifts: credited by the app (stretch). */
-  | (B & { type: 'graveyard'; name: string; fell: number; gifts: number });
+  | (B & { type: 'graveyard'; name: string; fell: number; gifts: number })
+  /** A marquee moment (marquee.ts): 'enter' as it comes up (its title, its line, its camera and light),
+   *  'exit' as it is ridden out (the lights taken of its total, and clean: no hit, ward or wipeout in it). */
+  | (B & { type: 'marquee'; phase: 'enter' | 'exit'; key: string; name: string; line: string; cam: MarqueeCam; light: MarqueeLight; took: number; total: number; clean: boolean });
 
 export type BeatType = Beat['type'];
+import type { MarqueeCam, MarqueeLight } from './marquee';
 export type BeatOf<T extends BeatType> = Extract<Beat, { type: T }>;
 
 /** Beat types that count as a named moment in telemetry (pass/passedBy only when !muted). */
-export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'tumble', 'stage', 'finish', 'km', 'graveyard']);
+export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'tumble', 'stage', 'finish', 'km', 'graveyard', 'marquee']);
 
 // ---------- continuous state, computed before any consumer runs this frame
 export interface Feel {

@@ -703,6 +703,8 @@ export class World {
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
     if (v.mode === 'run') this.moments.beats(beats, s);
+    this.spirit.beats(beats);
+    this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
 

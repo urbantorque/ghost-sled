@@ -1,5 +1,7 @@
 import { Color, InstancedMesh, Matrix4, Object3D, Quaternion, TorusGeometry, Vector3 } from 'three';
+import type { Beat } from '../game/beats';
 import type { GhostPose } from '../game/ghosts';
+import type { MarqueeLight } from '../game/marquee';
 import type { Snap } from '../game/run';
 import type { Course, SkyGate } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
@@ -16,6 +18,12 @@ const LIGHT = new Color('#FFD34D');
 const WHITE_GOLD = new Color('#FFF3C4');
 const GHOST_DASH = new Color('#D9FFF8');
 const MAX_GATES = 4;
+/** A set piece's air: embers off Ember's caldera, petals over Sakura, lantern light down a festival street. */
+const EMBER = new Color('#FF9A4A');
+const PETAL = new Color('#FFC9DA');
+const LANTERN_GLOW = new Color('#FFE29A');
+/** Fireworks over the square for a win: the rider's own warm colours and the lantern's, never mint. */
+const FIREWORK = [new Color('#FF4D2E'), new Color('#FFD34D'), new Color('#FFF3C4'), new Color('#FF8A5C')];
 
 export class SpiritFx {
   readonly root = new Object3D();
@@ -30,6 +38,32 @@ export class SpiritFx {
   private trailAcc = 0;
   private ghostAcc = 0;
   private spin = 0;
+  private air: MarqueeLight = null;
+  private airAcc = 0;
+  private fireworks = 0;
+  private fireAcc = 0;
+  private fireN = 0;
+  private flashOut = 0;
+
+  /** A light beat's flash for the post pass (taken once): a burst of morning light out of a tube. */
+  takeFlash(): number {
+    const f = this.flashOut;
+    this.flashOut = 0;
+    return f;
+  }
+
+  /** The director's beats: a set piece's air comes and goes with it, and a win lights the square. */
+  beats(list: readonly Beat[]): void {
+    for (const b of list) {
+      if (b.type === 'marquee') {
+        this.air = b.phase === 'enter' ? b.light : null;
+        if (b.phase === 'exit' && b.light === 'dawn') this.flashOut = 0.45;
+      } else if (b.type === 'finish' && b.rank === 1) {
+        this.fireworks = 3.4;
+        this.fireN = 0;
+      }
+    }
+  }
 
   constructor(private readonly particles: Particles) {
     // One draw for every gate on the course, on every tier: a sky gate is a line to fly, so Low keeps it.
@@ -48,6 +82,8 @@ export class SpiritFx {
 
   /** A new run on the same course: every gate hangs again. */
   reset(): void {
+    this.air = null;
+    this.fireworks = 0;
     this.passed.clear();
     this.layout(0);
   }
@@ -99,6 +135,26 @@ export class SpiritFx {
     if (mode === 'run' && sim && sim.s.dash > 0 && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
       this.particles.sparkle(this.v.set(s.x, s.y + 0.5, -s.z + 0.8), WHITE_GOLD, low ? 2 : 3, 0.9, 0.55, 0.2, this.carry.set(s.vx * 0.6, 0, -s.vz * 0.6), 0.15);
+    }
+    // A set piece's air drifts past the lens while it lasts.
+    this.airAcc += dt;
+    if (mode === 'run' && this.air && this.air !== 'dawn' && this.air !== 'aurora' && this.airAcc > (low ? 0.16 : 0.08)) {
+      this.airAcc = 0;
+      const c = this.air === 'embers' ? EMBER : this.air === 'petals' ? PETAL : LANTERN_GLOW;
+      const ahead = 10 + Math.random() * 18;
+      this.particles.sparkle(this.v.set(s.x + (Math.random() - 0.5) * 14, s.y + 1.5 + Math.random() * 4, -s.z - ahead), c, low ? 2 : 4, 0.8, 1.1, 0.22, null, -0.4);
+    }
+    // A win: fireworks burst over the square, a few at a time, then fewer.
+    if (this.fireworks > 0) {
+      this.fireworks -= dt;
+      this.fireAcc += dt;
+      if (this.fireAcc > 0.32) {
+        this.fireAcc = 0;
+        const n = this.fireN++;
+        const c = FIREWORK[n % FIREWORK.length];
+        const side = n % 2 === 0 ? 1 : -1;
+        this.particles.sparkle(this.v.set(s.x + side * (6 + (n % 3) * 5), s.y + 16 + (n % 4) * 3, -s.z - 34 - (n % 5) * 6), c, low ? 24 : 46, 7, 1.1, 0.34, null, -0.6);
+      }
     }
     this.ghostAcc += dt;
     if (this.ghostAcc > (low ? 0.12 : 0.06)) {

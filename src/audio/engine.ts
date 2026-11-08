@@ -697,6 +697,10 @@ export class AudioEngine {
       case 'stage':
         amt = 0.12;
         break;
+      case 'marquee':
+        // The band swells into a set piece (and a little out of a clean one).
+        amt = b.phase === 'enter' ? 0.16 : b.clean ? 0.08 : 0;
+        break;
       case 'flow':
         if (b.phase === 'in') amt = 0.1;
         break;

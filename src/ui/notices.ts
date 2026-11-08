@@ -88,6 +88,8 @@ type Spec =
   | { type: 'warn'; text: string; event: ChaosEvent }
   | { type: 'finale'; text: string; sub: string | null; event: ChaosEvent }
   | { type: 'stage'; name: string; time: string; ghost: { text: string; kind: GhostKind } | null; best: string | null }
+  /** A marquee moment: its title as it comes up with the line to play, or its score as it is ridden out. */
+  | { type: 'marquee'; name: string; line: string; score: string | null; clean: boolean }
   | { type: 'finish'; time: string; rank: number; of: number };
 
 interface Banner {
@@ -230,6 +232,11 @@ export class Notices {
   }
 
   /** A stage line crossed: the stage, the clock, and its splits ("1.2 s behind Mila"). */
+  /** A marquee moment's title card, or its score on the way out ("9 of 11 lights · Clean"). */
+  marquee(name: string, line: string, score: string | null, clean: boolean): void {
+    this.push({ spec: { type: 'marquee', name, line, score, clean }, pri: P_CELEBRATE, key: `m:${name}:${score ? 'out' : 'in'}`, ms: score ? STAGE_MS - 400 : STAGE_MS + 300, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
   stageLine(name: string, time: string, ghost: { text: string; kind: GhostKind } | null, best: string | null): void {
     this.push({ spec: { type: 'stage', name, time, ghost, best }, pri: P_CELEBRATE, key: `s:${name}`, ms: STAGE_MS, at: performance.now(), el: null, shown: 0, end: 0 });
   }
@@ -472,6 +479,10 @@ export function grudgeCopy(name: string, nemesis: boolean, after: number, paid: 
 }
 
 function render(s: Spec): HTMLElement {
+  if (s.type === 'marquee') {
+    // The set piece's title over the race row, its line in the lantern's marigold; on the way out, the score.
+    return h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
+  }
   if (s.type === 'stage') {
     const gaps: HTMLElement[] = [];
     if (s.ghost) gaps.push(h('span', `gs-line-gap ${kindCls(s.ghost.kind)}`, s.ghost.text));
