@@ -254,6 +254,9 @@ export class Notices {
       cur.spec.live = true;
       cur.pri = P_FINALE;
       if (cur.el) {
+        // The count is for the eye: the card was read as it came up, and the result is said (BeatRouter),
+        // so the polite stage does not read "Gate 1 of 6", "Gate 2 of 6" every second.
+        cur.el.setAttribute('aria-hidden', 'true');
         cur.el.classList.add('is-live');
         const l = cur.el.querySelector('.gs-mq-l');
         if (l && l.textContent !== text) l.textContent = text;
@@ -559,7 +562,9 @@ function render(s: Spec): HTMLElement {
   if (s.type === 'marquee') {
     // The set piece's title over the race row, its line in the lantern's marigold; on the way out, the score.
     const state = s.live ? ' is-live' : s.won === true ? ' is-won' : s.won === false ? ' is-lost' : '';
-    return h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}${state}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
+    const mq = h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}${state}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
+    if (s.live || s.won !== undefined) mq.setAttribute('aria-hidden', 'true');
+    return mq;
   }
   if (s.type === 'stage') {
     const gaps: HTMLElement[] = [];
