@@ -161,6 +161,13 @@ function farLightGeometry(great: boolean): BufferGeometry {
   ]);
 }
 
+/** Whether a forest pick carries snow on its boughs to shake off (Props.treesNear). */
+function boughs(biome: string, set: 'a' | 'b', pick: number): boolean {
+  if (biome === 'alpine') return !(set === 'b' && pick === 1);
+  if (biome === 'volcanic') return set === 'a' && pick === 0;
+  return biome === 'blossom';
+}
+
 function hashf(a: number, b: number, c: number): number {
   let h = Math.imul(a ^ 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x632be5ab, 0xc2b2ae35) ^ Math.imul(c + 0x27d4eb2f, 0x165667b1);
   h ^= h >>> 15;
@@ -907,6 +914,41 @@ export class Props {
     const w = (hashf(i, k, 19) - 0.5) * 0.09;
     // (A far row's tree is marked to lean into the fog, wherever its chunk's batch is.)
     this.push(b, this.v, this.q, this.s, b.startsWith('fo:') ? pick + AERIAL_PICK : pick, v * (1 + w), v, v * (1 - w));
+  }
+
+  /**
+   * The near rows' trees with snow on their boughs (a pine, a blossom, a charred pine; never a snag, a
+   * spire or a basalt formation) standing within `r` metres of sim (x, z) across the run and within
+   * `ahead` metres down it: what a rider passing close shakes snow from (world.ts). Writes triples (a key
+   * that names the tree for this course, its sim x and z) into out and returns how many trees. Reads the
+   * chunks' packed batches: nothing is made.
+   */
+  treesNear(x: number, z: number, r: number, ahead: number, out: number[]): number {
+    const biome = this.course.biome;
+    if (biome === 'glacier') return 0;
+    let n = 0;
+    for (let i = Math.floor((z - 1) / CHUNK_LEN); i <= Math.floor((z + ahead) / CHUNK_LEN); i++) {
+      const packed = this.cache.get(i);
+      if (!packed) continue;
+      for (let s = 0; s < 2; s++) {
+        const set = s === 0 ? 'a' : 'b';
+        const b = packed.get(s === 0 ? 'fw:a' : 'fw:b');
+        if (!b) continue;
+        for (let k = 0; k < b.p.length; k++) {
+          const pick = b.p[k] >= AERIAL_PICK - 0.5 ? b.p[k] - AERIAL_PICK : b.p[k];
+          if (!boughs(biome, set, pick)) continue;
+          const tx = b.m[k * 16 + 12];
+          const tz = -b.m[k * 16 + 14];
+          if (Math.abs(tx - x) > r || tz < z - 1 || tz > z + ahead) continue;
+          if (n * 3 + 2 >= out.length) return n;
+          out[n * 3] = i * 65536 + s * 32768 + k;
+          out[n * 3 + 1] = tx;
+          out[n * 3 + 2] = tz;
+          n++;
+        }
+      }
+    }
+    return n;
   }
 
   /** One grove piece (groves.ts): its variant is the grove's choice (Low draws each set's first only), its
