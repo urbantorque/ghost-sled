@@ -21,7 +21,8 @@ async (page) => {
   const out = [];
   let cdp = null;
   for (const p of passes) {
-    await page.goto(cfg.base + '?platform=mock');
+    const base = p.base || cfg.base;
+    await page.goto(base + '?platform=mock');
     await page.evaluate(() => { try { localStorage.clear(); } catch {} });
     if (p.throttle && p.throttle > 1) {
       cdp = cdp || (await page.context().newCDPSession(page));
@@ -29,7 +30,7 @@ async (page) => {
     }
     // demo: null rides hands off (a plain cruise); a number replays that pool run.
     const demo = p.demo !== undefined ? p.demo : cfg.demo;
-    await page.goto(cfg.base + `?platform=mock&debug&tier=${p.tier}&m=${p.m}&autoride=1` + (demo === null ? '' : `&demo=${demo}`));
+    await page.goto(base + `?platform=mock&debug&tier=${p.tier}&m=${p.m}&autoride=1` + (demo === null ? '' : `&demo=${demo}`));
     await page.waitForFunction(() => window.__gs && window.__gs.audio, null, { timeout: 60000 });
     await page.keyboard.press('q');
     const res = await page.evaluate(async ([from, seconds]) => {
@@ -53,10 +54,11 @@ async (page) => {
       }
       const cpu = a.debugCpu();
       const lv = a.debugLevels();
-      return { ...cpu, drive: layers, phase: g.phase, musicPeak: lv.musicPeak, reserveMisses: lv.reserveMisses };
+      const mean = layers.length ? Math.round((layers.reduce((a2, b2) => a2 + b2, 0) / layers.length) * 100) / 100 : 0;
+      return { ...cpu, drive: mean, phase: g.phase, musicPeak: lv.musicPeak, reserveMisses: lv.reserveMisses };
     }, [cfg.from, p.seconds || cfg.seconds]);
     if (cdp) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 });
-    out.push({ tier: p.tier, m: p.m, demo: p.demo !== undefined ? p.demo : cfg.demo, throttle: p.throttle || 1, ...res });
+    out.push({ build: p.label || base, tier: p.tier, m: p.m, demo: p.demo !== undefined ? p.demo : cfg.demo, throttle: p.throttle || 1, ...res });
   }
   await page.goto('about:blank');
   return JSON.stringify({ errors, out }, null, 0);

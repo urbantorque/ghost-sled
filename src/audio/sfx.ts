@@ -1441,12 +1441,12 @@ export class Sfx {
    * band's drop and the cue are one hit), on the next 16th if the band landed a moment ago, else on the next beat
    * (within `wait`).
    */
-  private onLanding(t: number, ahead: number, wait: number): { t: number; landed: boolean } {
+  private onLanding(t: number, ahead: number, wait: number, grid = true): { t: number; landed: boolean } {
     const band = this.band;
     if (!band) return { t, landed: false };
     const l = band.landing();
     if (l && l.t >= t - 0.02 && l.t - t <= ahead) return { t: Math.max(t, l.t), landed: true };
-    if (t - band.landedAt < 0.45) return { t: this.onGrid(t, 1, 0.15), landed: true };
+    if (t - band.landedAt < 0.45) return { t: grid ? this.onGrid(t, 1, 0.15) : t, landed: true };
     return { t: this.onGrid(t, 4, wait), landed: false };
   }
 
@@ -1483,7 +1483,8 @@ export class Sfx {
    *  landing when it has one: the band's own hit is the moment, so the band is not ducked under it. */
   private finishCue(t0: number, rank = 1, of = 1): void {
     this.cutFlow();
-    const { t, landed } = this.onLanding(t0, 0.5, 0.3);
+    // (The band landed a moment early: the slam is the line itself, at once.)
+    const { t, landed } = this.onLanding(t0, 0.5, 0.3, false);
     if (!landed) this.music?.duck(0.55, t, 0.5, 0.8);
     this.slam(t, true);
     const theme = this.band?.theme() ?? [];

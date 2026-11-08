@@ -314,6 +314,8 @@ export class AudioEngine {
   private markIx = 0;
   private zPrev = Number.NaN;
   private vz = 0;
+  /** Its rate of change (m/s2, smoothed): a rider slowing into a line arrives later than the speed says. */
+  private az = 0;
   /** Full lanterns (0 to 3), from the sim's lantern, dash and ward events: the Lantern Song sled sound. */
   private cells = 0;
 
@@ -394,6 +396,7 @@ export class AudioEngine {
       this.markIx = 0;
       this.zPrev = Number.NaN;
       this.vz = 0;
+      this.az = 0;
       this.cells = 0;
     }
     this.choirs.reset();
@@ -699,13 +702,22 @@ export class AudioEngine {
     }
     if (dt > 0 && Number.isFinite(this.zPrev)) {
       const v = (z - this.zPrev) / dt;
-      if (Number.isFinite(v) && v >= 0 && v < 90) this.vz += (v - this.vz) * (1 - Math.exp(-dt / 0.3));
+      if (Number.isFinite(v) && v >= 0 && v < 90) {
+        const before = this.vz;
+        this.vz += (v - this.vz) * (1 - Math.exp(-dt / 0.2));
+        const a = (this.vz - before) / dt;
+        if (Number.isFinite(a)) this.az += (Math.max(-10, Math.min(6, a)) - this.az) * (1 - Math.exp(-dt / 0.5));
+      }
     }
     this.zPrev = z;
     while (this.markIx < this.marks.length && this.marks[this.markIx].z <= z) this.markIx++;
     const m = this.marks[this.markIx];
     if (!m || held || this.vz < 3) return;
-    const eta = (m.z - z) / this.vz;
+    // Distance at the speed and its change: the root of rem = v t + a t^2 / 2 (constant speed when it has none).
+    const rem = m.z - z;
+    const a = this.az;
+    const disc = this.vz * this.vz + 2 * a * rem;
+    const eta = Math.abs(a) > 0.05 && disc > 0 ? (Math.sqrt(disc) - this.vz) / a : rem / this.vz;
     if (eta > markWindow(m.kind) || eta < 0.15) return;
     if (m.kind === 'drop' && now - c.music.landedAt < 3) return;
     c.music.land(now + eta, m.kind, now);

@@ -77,10 +77,10 @@ run takes longer, and the music keeps to the rider, not the clock).
 | 19 to 25 s | Rings: each ring flown rings a bell that holds, building a chord (root, third, fifth and octave) | A chord assembling in time, not three dings |
 | after the place | The band breaks down at the end of the hook's phrase: bells and a shaker for four bars | A breath, not an interruption mid-melody |
 | about 40 s | Stage line: a drop on the line itself (measured within 0.3 s of the crossing), two rising bells | The line lands on the beat |
-| about 42 s | Mirror Lake: the race. The drop lifts the chorus to its second phrase (it does not restart) | One continuous lift, not a hiccup |
+| about 44 s | Mirror Lake (its card at 42 s): the race. Its drop lifts the chorus to its second phrase (it does not restart) | One continuous lift, not a hiccup |
 | race | Passing the machine: a rising brass stab; losing the lead: a falling pair | Short and in key |
 | about 75 s | The line into the last stage: the riser, and the chorus lands a whole tone higher | The oldest trick in pop, and it should feel earned; the band is also 5% quicker now |
-| about 80 s | Old Town: lantern gates; each gate threaded plays the next note up the scale, on the band's 16ths | A ladder climbing in time; a full chain ends on a chord |
+| about 82 s | Old Town (its card at 80 s): lantern gates; each gate threaded plays the next note up the scale, on the band's 16ths | A ladder climbing in time; a full chain ends on a chord |
 | last 4 s | The finish builds: a two-bar riser and roll | Tension rising to the line |
 | the line | The finale lands on the line (measured 0.01 s from the crossing): crash, boom, the main theme's first bar on the melody and on brass in unison, the slam, the crowd's roar (louder for a win) | The run's biggest moment, by a clear margin |
 | about 2 s later | The results reprise fades in under it | Home |
@@ -100,6 +100,15 @@ Pinecrest; each mountain's set pieces have their own verbs:
   Market (gates under fireworks).
 - **Sakura Ridge:** Petal Steps (four steps about two seconds apart, each a taiko hit on the band's eighth,
   rising), the Blossom Leap (rings), Temple Town (gates).
+
+Where the drops come on the best pool runs (run clock, seconds; a first run is later, and the music follows the
+rider, not the clock):
+
+| Mountain | First set piece drop | Stage line 1 | Second set piece drop | The lift (stage line 2) | Third set piece drop | The finish |
+| --- | --- | --- | --- | --- | --- | --- |
+| Frostfang | 34 (Serac Gate) | 39 | 56 (Crevasse Fields) | 74 | 79 (Ice Cavern) | 112 |
+| Ember Peak | 33 (Cinder Gate) | 39 | 59 (Caldera Leap) | 73 | 91 (Ash Market) | 111 |
+| Sakura Ridge | 26 (Petal Steps) | 40 | 63 (Blossom Leap) | 74 | 98 (Temple Town) | 110 |
 
 A set piece won ends on a stinger: the band stops for a moment and the hook's first bar plays on brass and
 bells a whole tone up, ending on a bright chord. Lost: three soft bells falling to the tonic.

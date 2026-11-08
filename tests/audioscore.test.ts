@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MARK_MERGE_M, marksOf } from '../src/audio/cues';
-import { CUT_PENALTY_S, LAND_MIN_STEPS, cutTo, landingStep, nextSec, sec } from '../src/audio/form';
+import { CUT_PENALTY_S, CUT_SHORT_PENALTY_S, LAND_BEATS, LAND_MIN_STEPS, cutTo, landingStep, nextSec, sec } from '../src/audio/form';
 import { MODES, SONGS, THEME, type Song, degree, headOf, lengthAt, realize } from '../src/audio/score';
 import { CLEAR, TITLE_STYLE } from '../src/audio/theory';
 
@@ -84,17 +84,17 @@ describe('the form', () => {
     expect(nextSec(sec('finale', 2), true).name).toBe('finale');
   });
 
-  it('lands on the beat nearest the target, past what is scheduled, on a downbeat or beat 3 or 4', () => {
+  it('lands on the beat nearest the target, past what is scheduled, on a downbeat or a cut beat', () => {
     const dur = 60 / 112 / 4;
     for (const target of [1.4, 1.9, 2.2, 2.6, 3.1, 3.9]) {
       const p = landingStep(5, 0, dur, target);
       expect(p.step - 5).toBeGreaterThanOrEqual(LAND_MIN_STEPS);
-      expect([0, 8, 12]).toContain(p.step & 15);
+      expect(LAND_BEATS).toContain(p.step & 15);
       expect(p.t).toBeCloseTo((p.step - 5) * dur, 9);
       // No allowed beat is nearer by more than the cut's penalty.
       for (let s = 5 + LAND_MIN_STEPS; s < 5 + 48; s += 4) {
-        if (![0, 8, 12].includes(s & 15)) continue;
-        expect(Math.abs((s - 5) * dur - target) + CUT_PENALTY_S).toBeGreaterThan(Math.abs(p.t - target) - 1e-9);
+        if (!LAND_BEATS.includes(s & 15)) continue;
+        expect(Math.abs((s - 5) * dur - target) + Math.max(CUT_PENALTY_S, CUT_SHORT_PENALTY_S)).toBeGreaterThan(Math.abs(p.t - target) - 1e-9);
       }
     }
     expect(cutTo(40)).toBe(48);
