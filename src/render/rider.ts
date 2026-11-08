@@ -837,7 +837,7 @@ export class Rider {
       arm[o + 1] += (1.45 - arm[o + 1]) * dk;
     }
     this.cueArms(arm, calm, (1 - fin) * (1 - stomp) * (tumble > 0 ? 0 : 1) * (1 - 0.6 * tuck));
-    this.celebrateArms(arm, cel, calm);
+    this.celebrateArms(arm, cel);
     // Balancing a carve: the outside arm reaches out and up, the inside one tucks in, more while the
     // body is still catching up with the sled's bank (the lag between them).
     const bal = Math.max(-1, Math.min(1, lean * 0.9 + (p.lean - lean) * 1.4)) * (1 - air) * (1 - stomp) * (1 - fin) * (1 - dk);
@@ -955,13 +955,14 @@ export class Rider {
   /** Over the line (real seconds since it, act.finT): arms up in a V at once; then on a sled with a
    *  deck it hops up to stand on it (from 0.8 s), and a round sled spins under its rider instead.
    *  First place throws both fists up in turn and turns a full circle in the air; any other place
-   *  waves to the crowd on the lens's side with the other hand on its hip. Reduced motion stands up
-   *  slowly, with no hop, spin or turn, and waves slowly. */
+   *  waves to the crowd on the lens's side with the other hand on its hip. Reduced motion stays seated
+   *  and still: arms up for first place, out wide for any other (standing, the stopped rider filled
+   *  the chase lens that reduced motion keeps through the results). */
   private celebrate(p: RiderPose, calm: boolean): Celebration {
     const c = this.cel;
     const a = p.act;
     c.stand = c.lift = c.yaw = c.look = c.sledSpin = c.k = 0;
-    const deck = STAND_DECK[this.sledId];
+    const deck = calm ? undefined : STAND_DECK[this.sledId];
     c.deck = deck !== undefined;
     if (!a?.finish || this.finK < 0.01) {
       this.u.stand.value = 0;
@@ -973,9 +974,9 @@ export class Rider {
     c.t = t;
     c.champ = a.rank === 1;
     if (deck !== undefined) {
-      c.stand = smooth((t - 0.8) / (calm ? 0.7 : 0.32));
-      c.lift = (deck + 0.59 - this.seat.y) * c.stand + (calm ? 0 : Math.sin(Math.PI * clamp01((t - 0.75) / 0.45)) * 0.2);
-      if (c.champ && !calm) {
+      c.stand = smooth((t - 0.8) / 0.32);
+      c.lift = (deck + 0.59 - this.seat.y) * c.stand + Math.sin(Math.PI * clamp01((t - 0.75) / 0.45)) * 0.2;
+      if (c.champ) {
         const u = clamp01((t - 1.7) / 0.6);
         c.yaw = Math.PI * 2 * smooth(u);
         c.lift += Math.sin(Math.PI * u) * 0.3;
@@ -996,7 +997,7 @@ export class Rider {
   }
 
   /** The celebration's arms over the arms-up V (see celebrate). */
-  private celebrateArms(arm: Float32Array, c: Celebration, calm: boolean): void {
+  private celebrateArms(arm: Float32Array, c: Celebration): void {
     const k = c.k;
     if (k <= 0.001) return;
     const tau = Math.PI * 2;
@@ -1007,14 +1008,14 @@ export class Rider {
     if (c.champ) {
       // (On a round sled first place keeps the V as it spins.)
       if (!c.deck) return;
-      to(0, 0.35, 2.35 + (calm ? 0 : Math.max(0, Math.sin(c.t * tau * 2)) * 0.45));
-      to(2, 0.35, 2.35 + (calm ? 0 : Math.max(0, Math.sin(c.t * tau * 2 + Math.PI)) * 0.45));
+      to(0, 0.35, 2.35 + Math.max(0, Math.sin(c.t * tau * 2)) * 0.45);
+      to(2, 0.35, 2.35 + Math.max(0, Math.sin(c.t * tau * 2 + Math.PI)) * 0.45);
     } else if (!c.deck) {
       to(0, 0.15, 1.55);
       to(2, 0.15, 1.55);
     } else {
       const wv = this.waveSide > 0 ? 2 : 0;
-      to(wv, 0.12, 2.5 + Math.sin(c.t * tau * (calm ? 0.7 : 1.7)) * (calm ? 0.14 : 0.38));
+      to(wv, 0.12, 2.5 + Math.sin(c.t * tau * 1.7) * 0.38);
       to(2 - wv, -0.45, 0.7);
     }
   }

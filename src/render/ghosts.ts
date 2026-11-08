@@ -704,7 +704,8 @@ function injectStyle(): void {
   .ghost-label .em svg { width: 11px; height: 11px; }
   .ghost-label.marker .em { margin-left: -4px; }
   .ghost-say { position: absolute; left: 0; top: 0; padding: 4px 10px 5px; border-radius: 10px; opacity: 0; pointer-events: none; will-change: transform, opacity;
-    font: italic 700 12.5px/1.15 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; white-space: nowrap; color: #F5F3FF; background: #121933;
+    transform-origin: 50% 100%; width: max-content; max-width: min(220px, 60vw); text-align: center; text-wrap: balance;
+    font: italic 700 12.5px/1.15 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #F5F3FF; background: #121933;
     box-shadow: inset 0 0 0 1.5px var(--a), 0 2px 8px rgba(18, 25, 51, 0.45); }
   .ghost-say::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; background: #121933;
     transform: rotate(45deg); box-shadow: inset -1.5px -1.5px 0 var(--a); }
@@ -1231,7 +1232,8 @@ export class GhostVisuals {
     }
     const el = this.sayEl;
     el.style.setProperty('--a', it.rider?.accent ?? GHOST_COLORS[it.kind]);
-    el.textContent = text;
+    // (Typographic apostrophes: the roster's lines are typed with straight ones.)
+    el.textContent = text.replace(/'/g, '’');
     el.classList.remove('on');
     this.sayW = el.offsetWidth || 120;
     this.sayH = el.offsetHeight || 22;
