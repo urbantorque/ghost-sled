@@ -223,8 +223,8 @@ export class Title {
     bar.setAttribute('aria-label', 'Menu');
     const sledName = h('span', 'gs-btn-sub', m.sledName);
     sledName.setAttribute('translate', 'no');
-    const sb = btn(ctx, { cls: 'gs-btn-soft gs-t-sleds', icon: 'sledBold', label: 'Sleds', fk: 'sleds', onClick: () => this.hooks.openSleds() }, sledName);
-    sb.setAttribute('aria-label', `Sleds, riding ${m.sledName}`);
+    const sb = btn(ctx, { cls: 'gs-btn-soft gs-t-sleds', icon: 'sledBold', label: 'Garage', fk: 'sleds', onClick: () => this.hooks.openSleds() }, sledName);
+    sb.setAttribute('aria-label', `Garage, riding ${m.sledName}`);
     bar.append(sb);
     const mb = btn(ctx, {
       cls: 'gs-btn-soft',

@@ -597,6 +597,7 @@ const COIN = new Color('#FFC83A');
 const SLATE = new Color(0.3, 0.34, 0.5);
 const SHARD = new Color(0.78, 0.92, 1.05);
 const tmpTint = new Color();
+const tmpLook = new Color();
 /** Tint for freshly thrown powder: a touch over white, so a burst outshines the lit snow under it. */
 const POWDER = 1.12;
 const tmpF = new Vector3();
@@ -737,14 +738,15 @@ export class Particles {
    *  chase camera's view it rises beside the rider and streams back past the lens at the frame's side
    *  instead of vanishing behind it in a blink; plus a faint mist puff now and then. `toward` is +1 to
    *  throw to the sled's right, -1 to its left. */
-  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false, heat: Color | null = null, heatK = 0, glowShare = 0): void {
+  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false, heat: Color | null = null, heatK = 0, glowShare = 0, look: Color | null = null, lookK = 0): void {
     const f = this.forward(vel);
     // Thrown square to the line of travel, not to the sled's nose: in a drift the nose swings well
     // off the line, and spray thrown off it flew out ahead of the rider and hung in the sky.
     const side = vel.x * vel.x + vel.z * vel.z > 4 ? tmpS.set(-f.z * toward, 0, f.x * toward) : tmpS.set(Math.cos(heading) * toward, 0, Math.sin(heading) * toward);
     // Drift heat (a held drift's charge, 0 to 1): the spray warms inside the player's vermillion, the
     // colour picked once per emit (mix(white or ice, tier colour, 0.25 + 0.5k)), at no extra cost.
-    const base = ice ? ICE : WHITE;
+    // A garage trail (round 6) warms the snow's own white a little (look, lookK) before any drift heat.
+    const base = look && lookK > 0 ? tmpLook.copy(ice ? ICE : WHITE).lerp(look, lookK) : ice ? ICE : WHITE;
     const tint = heat ? tmpTint.copy(base).lerp(heat, 0.25 + 0.5 * Math.max(0, Math.min(1, heatK))) : base;
     // Spray rides on most of the sled's velocity (its carrier), so it must keep the matching share of
     // its descent too: otherwise the slope drops away under it and it floats off into the sky. It
@@ -865,6 +867,34 @@ export class Particles {
         3,
         KIND_MIST,
       );
+    }
+  }
+
+  /** A garage trail's motes off the runners (round 6, garage.ts): 'flick' throws sparks up and out off
+   *  both runners, riding most of the sled's speed; 'twinkle' leaves specks low on the groove that stay
+   *  where they fall and fade; 'stream' runs a ribbon of light straight back off the sled's tail. Warm
+   *  roles only (marigold, white-gold, cream), lifted past the bloom threshold on Medium and High. */
+  trailMotes(pos: Vector3, vel: Vector3, color: Color, count: number, style: 'flick' | 'twinkle' | 'stream'): void {
+    const n = this.n(count);
+    if (n <= 0) return;
+    const f = this.forward(vel);
+    const hs = Math.hypot(vel.x, vel.z);
+    const fall = Math.max(vel.y, -hs * 0.7);
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const ox = -f.z * side * 0.28;
+      const oz = f.x * side * 0.28;
+      const back = 0.5 + Math.random() * 0.5;
+      if (style === 'flick') {
+        const k = 0.85;
+        const out = 0.4 + Math.random() * 1.2;
+        this.glow.emit(pos.x + ox - f.x * back, pos.y + 0.05, pos.z + oz - f.z * back, vel.x * k - f.z * side * out - f.x * 1.5, fall * k + 1.4 + Math.random() * 1.8, vel.z * k + f.x * side * out - f.z * 1.5, 0.3 + Math.random() * 0.25, 0.12, 0.03, color.r * 1.4, color.g * 1.4, color.b * 1.4, 1, 6, 2.2, KIND_GRAIN, tmpC.set(vel.x * k, fall * k, vel.z * k));
+      } else if (style === 'twinkle') {
+        this.glow.emit(pos.x + ox * (0.5 + Math.random()) - f.x * (back + 0.6), pos.y + 0.04 + Math.random() * 0.12, pos.z + oz * (0.5 + Math.random()) - f.z * (back + 0.6), (Math.random() - 0.5) * 0.4, 0.15 + Math.random() * 0.35, (Math.random() - 0.5) * 0.4, 0.45 + Math.random() * 0.5, 0.1, 0.02, color.r * 1.35, color.g * 1.35, color.b * 1.35, 1, 0.4, 1.5, KIND_GRAIN);
+      } else {
+        const k = 0.62;
+        this.glow.emit(pos.x - f.x * (0.75 + Math.random() * 0.2) + (Math.random() - 0.5) * 0.12, pos.y + 0.22 + Math.random() * 0.1, pos.z - f.z * (0.75 + Math.random() * 0.2) + (Math.random() - 0.5) * 0.12, vel.x * k, fall * k + 0.2, vel.z * k, 0.28 + Math.random() * 0.18, 0.15, 0.05, color.r * 1.45, color.g * 1.45, color.b * 1.45, 1, 0.5, 1.2, KIND_GRAIN, tmpC.set(vel.x * k, fall * k, vel.z * k));
+      }
     }
   }
 

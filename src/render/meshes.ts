@@ -18,6 +18,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ObstacleKind } from '../sim/course';
 import type { HatKind } from '../bot/roster';
+import type { HatId } from '../game/garage';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
 import { hazardPineGeometry } from './flora';
 import { Palette } from './palette';
@@ -977,32 +978,25 @@ export const RIDER_POM = new Vector3(0, 1.225, 0.02);
  *  and a bob of hair that flares a little and rolls under above the scarf (one smooth dark mass read
  *  as a helmet). A ghost wears only the silhouette (head, beanie and pom-pom): thin straps and lenses
  *  inside the glass drew their own rims and read as dotted seams. */
-export function riderHeadGeometry(ghost = false): BufferGeometry {
+export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferGeometry {
   reseed(4242);
   const C = RIDER_COLORS;
-  const pom = sway(part(new IcosahedronGeometry(0.1, 1), C.pom, { pos: [RIDER_POM.x, RIDER_POM.y, RIDER_POM.z], jitter: 0.03 }), [1, 0]);
-  const parts: BufferGeometry[] = [
-    part(new SphereGeometry(0.24, 12, 9), C.skin, { pos: [0, 0.86, 0] }),
-    // The beanie, pulled down to just above the eyes.
-    part(new SphereGeometry(0.25, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), C.accent, { pos: [0, 0.915, 0.01], scale: [1.04, 1.12, 1.04] }),
-    pom,
-  ];
-  if (ghost) return mergeRider(parts);
+  if (ghost) {
+    const pom = sway(part(new IcosahedronGeometry(0.1, 1), C.pom, { pos: [RIDER_POM.x, RIDER_POM.y, RIDER_POM.z], jitter: 0.03 }), [1, 0]);
+    return mergeRider([
+      part(new SphereGeometry(0.24, 12, 9), C.skin, { pos: [0, 0.86, 0] }),
+      // The beanie, pulled down to just above the eyes.
+      part(new SphereGeometry(0.25, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), C.accent, { pos: [0, 0.915, 0.01], scale: [1.04, 1.12, 1.04] }),
+      pom,
+    ]);
+  }
   const eye = new Color('#1B1E36');
   const blush = new Color('#FF8E9E');
-  const cuff = shade(C.accent, 0.8);
-  parts.push(
+  const parts: BufferGeometry[] = [
+    part(new SphereGeometry(0.24, 12, 9), C.skin, { pos: [0, 0.86, 0] }),
     // Hair round the back and sides under the cuff: a bob that flares a little past the skull...
     smoothPart(new SphereGeometry(0.249, 18, 8, -0.25, Math.PI + 0.5, 1.3, 1.15), C.hair, { pos: [0, 0.86, 0.004], scale: [1.05, 1, 1.08] }),
-    // The folded cuff: a deeper vermillion band of knit ribs, a little proud of the crown.
-    ribs(part(new CylinderGeometry(0.268, 0.274, 0.095, 24, 1, true), cuff, { pos: [0, 0.905, 0.01] }), 24, 0.84),
-    part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }),
-    // A cream knit stripe round the crown, high enough to clear the goggle strap: from behind the
-    // beanie reads as a knitted hat rather than a red dome.
-    part(new SphereGeometry(0.256, 14, 1, 0, Math.PI * 2, 0.85, 0.16), C.pom, { pos: [0, 0.915, 0.01], scale: [1.04, 1.12, 1.04] }),
-    // The seam up the back of the crown to the pom-pom.
-    part(new TorusGeometry(0.26, 0.009, 3, 8, Math.PI / 2), shade(C.accent, 0.7), { pos: [0, 0.915, 0.01], rot: [0, -Math.PI / 2, 0], scale: [1.04, 1.12, 1.04] }),
-  );
+  ];
   // ...ending in a scalloped fringe of overlapping locks across the nape just above the scarf: from
   // behind the hair reads as a cut, not as a dark hole under the beanie (two tufts read as a pair of
   // closed eyes, and five lighter locks as a row of teeth).
@@ -1022,20 +1016,149 @@ export function riderHeadGeometry(ghost = false): BufferGeometry {
       part(new SphereGeometry(0.036, 8, 6), eye, { pos: [sx * 0.078, 0.822, -0.212], rot: [0, -sx * 0.34, 0], scale: [0.78, 1.15, 0.5] }),
       part(new SphereGeometry(0.011, 5, 4), C.pom, { pos: [sx * 0.088, 0.836, -0.228] }),
       part(new SphereGeometry(0.042, 8, 6), blush, { pos: [sx * 0.138, 0.772, -0.168], rot: [0, -sx * 0.68, 0], scale: [1.25, 0.72, 0.32] }),
-      // Ear flaps hanging from the cuff over the ears down to the scarf: from behind they square the
-      // head off and frame the hair.
-      part(new SphereGeometry(0.085, 9, 6), cuff, { pos: [sx * 0.238, 0.775, 0.035], rot: [0, 0, sx * 0.1], scale: [0.5, 1.5, 0.98] }),
-      // The goggles pushed up onto the beanie's front: two amber lenses in dark frames.
-      part(new SphereGeometry(0.06, 10, 7), C.lens, { pos: [sx * 0.086, 1.005, -0.232], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 0.42] }),
-      part(new TorusGeometry(0.06, 0.017, 5, 14), C.goggles, { pos: [sx * 0.086, 1.005, -0.229], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 1] }),
     );
   }
-  parts.push(
-    part(new BoxGeometry(0.06, 0.03, 0.04), C.goggles, { pos: [0, 1.0, -0.245], rot: [0.28, 0, 0] }),
-    // Their strap round the crown: a cobalt band that also reads from behind.
-    part(new TorusGeometry(0.247, 0.019, 4, 18), C.strap, { pos: [0, 1.0, 0.01], rot: [Math.PI / 2 + 0.06, 0, 0] }),
-  );
+  parts.push(...playerHat(hat));
   return mergeRider(parts);
+}
+
+/**
+ * The player's hat (the garage, round 6; garage.ts names them). Every one is the player's vermillion with
+ * the beanie's cream for its knit and poms, and each is told from the others by its outline from behind,
+ * where the chase lens always sees it: the cuffed pom beanie, a short watch cap with a thick rolled cuff, a
+ * pom over each ear, a trapper's cream fur brim and long flaps, a ring of bobbles round the crown, a
+ * pointed chullo with braided ties, and a long stocking cap that streams out behind. None is any signature
+ * rider's hat (meshes.ts ghostHatHead), and the goggles stay pushed up on the front of every one.
+ */
+function playerHat(hat: HatId): BufferGeometry[] {
+  const C = RIDER_COLORS;
+  const cuff = shade(C.accent, 0.8);
+  const out: BufferGeometry[] = [];
+  const dome = (sy = 1.12) => part(new SphereGeometry(0.25, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), C.accent, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
+  const ribbed = (r0: number, r1: number, h: number, y: number) => ribs(part(new CylinderGeometry(r0, r1, h, 24, 1, true), cuff, { pos: [0, y, 0.01] }), 24, 0.84);
+  const stripe = (sy = 1.12) => part(new SphereGeometry(0.256, 14, 1, 0, Math.PI * 2, 0.85, 0.16), C.pom, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
+  const seam = (sy = 1.12) => part(new TorusGeometry(0.26, 0.009, 3, 8, Math.PI / 2), shade(C.accent, 0.7), { pos: [0, 0.915, 0.01], rot: [0, -Math.PI / 2, 0], scale: [1.04, sy, 1.04] });
+  const flaps = (scale: [number, number, number] = [0.5, 1.5, 0.98], y = 0.775) => {
+    for (const sx of [-1, 1]) out.push(part(new SphereGeometry(0.085, 9, 6), cuff, { pos: [sx * 0.238, y, 0.035], rot: [0, 0, sx * 0.1], scale }));
+  };
+  const pom = (x: number, y: number, z: number, r: number, w = 1) => sway(part(new IcosahedronGeometry(r, 1), C.pom, { pos: [x, y, z], jitter: 0.3 * r }), [w, 0]);
+  const goggles = (y = 1.005, z = -0.232) => {
+    for (const sx of [-1, 1]) {
+      out.push(
+        part(new SphereGeometry(0.06, 10, 7), C.lens, { pos: [sx * 0.086, y, z], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 0.42] }),
+        part(new TorusGeometry(0.06, 0.017, 5, 14), C.goggles, { pos: [sx * 0.086, y, z + 0.003], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 1] }),
+      );
+    }
+    out.push(part(new BoxGeometry(0.06, 0.03, 0.04), C.goggles, { pos: [0, y - 0.005, z - 0.013], rot: [0.28, 0, 0] }));
+  };
+  const strap = (r = 0.247, y = 1.0) => part(new TorusGeometry(r, 0.019, 4, 18), C.strap, { pos: [0, y, 0.01], rot: [Math.PI / 2 + 0.06, 0, 0] });
+  switch (hat) {
+    case 'watch':
+      // Short and snug: a lower crown and a thick rolled cuff, no pom-pom.
+      out.push(dome(0.98), stripe(0.98), seam(0.98));
+      out.push(part(new TorusGeometry(0.262, 0.05, 6, 24), cuff, { pos: [0, 0.905, 0.01], rot: [Math.PI / 2, 0, 0] }));
+      out.push(ribbed(0.272, 0.278, 0.07, 0.885));
+      flaps([0.48, 1.3, 0.96]);
+      goggles(0.99, -0.236);
+      out.push(strap(0.24, 0.985));
+      break;
+    case 'twinpom':
+      // The beanie with a pom-pom over each ear and none on top: two bumps from behind.
+      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
+      out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
+      for (const sx of [-1, 1]) out.push(pom(sx * 0.17, 1.12, 0.03, 0.085));
+      flaps();
+      goggles();
+      out.push(strap());
+      break;
+    case 'trapper': {
+      // A round crown, a thick cream fur brim, the front turned up, and long flaps down past the jaw with
+      // a fur edge: from behind a broad hat with two flaps and a cream band.
+      out.push(dome(1.08), seam(1.08));
+      const fur = part(new TorusGeometry(0.272, 0.058, 7, 26), C.pom, { pos: [0, 0.9, 0.01], rot: [Math.PI / 2, 0, 0], jitter: 0.02 });
+      out.push(fur);
+      out.push(part(new SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), C.pom, { pos: [0, 0.95, -0.2], rot: [-1.2, 0, 0], scale: [1.35, 0.5, 0.9], jitter: 0.015 }));
+      for (const sx of [-1, 1]) {
+        out.push(part(new SphereGeometry(0.1, 10, 8), C.accent, { pos: [sx * 0.25, 0.72, 0.04], rot: [0, 0, sx * 0.08], scale: [0.5, 2.0, 1.2] }));
+        out.push(part(new SphereGeometry(0.1, 10, 8), C.pom, { pos: [sx * 0.258, 0.6, 0.04], scale: [0.48, 0.55, 1.1], jitter: 0.01 }));
+      }
+      // The back flap over the nape.
+      out.push(part(new SphereGeometry(0.25, 14, 6, Math.PI * 0.18, Math.PI * 0.64, Math.PI / 2, 0.55), C.accent, { pos: [0, 0.9, 0.03], scale: [1.08, 1.0, 1.1] }));
+      goggles(1.03, -0.24);
+      break;
+    }
+    case 'bobbles':
+      // The beanie with a ring of small cream bobbles round the crown and one in the middle.
+      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
+      out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+        out.push(pom(Math.sin(a) * 0.16, 1.135, 0.02 + Math.cos(a) * 0.16, 0.052, 0.55));
+      }
+      out.push(pom(0, 1.2, 0.02, 0.062, 0.8));
+      flaps();
+      goggles();
+      out.push(strap());
+      break;
+    case 'chullo': {
+      // A pointed crown with a little pom-pom at the tip, a cream band, and pointed ear flaps that end in
+      // braided ties hanging past the jaw (a braid: beads of vermillion and cream).
+      out.push(lathe([[0.262, 0.86], [0.27, 0.95], [0.25, 1.04], [0.2, 1.13], [0.12, 1.22], [0.05, 1.29], [0, 1.31]], 14, C.accent, { pos: [0, 0, 0.01] }));
+      out.push(part(new CylinderGeometry(0.259, 0.27, 0.035, 18, 1, true), C.pom, { pos: [0, 0.99, 0.01] }));
+      out.push(pom(0, 1.335, 0.01, 0.05, 1));
+      for (const sx of [-1, 1]) {
+        out.push(part(new ConeGeometry(0.11, 0.26, 8), cuff, { pos: [sx * 0.245, 0.71, 0.03], rot: [Math.PI, 0, -sx * 0.08], scale: [0.55, 1, 1.05] }));
+        for (let k = 0; k < 5; k++) {
+          const y = 0.57 - k * 0.045;
+          out.push(sway(part(new SphereGeometry(0.024, 6, 5), k % 2 ? C.pom : C.accent, { pos: [sx * (0.255 + 0.004 * k), y, 0.03 + 0.008 * k] }), [0.15 + 0.15 * k, 0]));
+        }
+        out.push(sway(part(new ConeGeometry(0.03, 0.07, 6), C.pom, { pos: [sx * 0.277, 0.33, 0.07] }), [0.9, 0]));
+      }
+      goggles(1.0, -0.236);
+      break;
+    }
+    case 'longcap': {
+      // A stocking cap: the cuffed crown runs on into a long tapering tail that streams back and down
+      // past one shoulder, a pom-pom at its end; the tail takes the pom-pom's spring, more toward its tip.
+      out.push(dome(), ribbed(0.268, 0.274, 0.095, 0.905), stripe(), seam());
+      out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
+      const path = [new Vector3(0, 1.08, 0.04), new Vector3(0.02, 1.18, 0.16), new Vector3(0.05, 1.19, 0.31), new Vector3(0.1, 1.12, 0.44), new Vector3(0.15, 1.01, 0.52), new Vector3(0.19, 0.9, 0.56)];
+      const rad = [0.17, 0.13, 0.1, 0.075, 0.058, 0.045];
+      for (let i = 0; i < path.length - 1; i++) {
+        const w0 = (i / (path.length - 1)) * 0.9;
+        const w1 = ((i + 1) / (path.length - 1)) * 0.9;
+        const seg = capsule(path[i], path[i + 1], rad[i], rad[i + 1], i % 2 ? shade(C.accent, 0.92) : C.accent, 10);
+        out.push(sway(seg, (x, y, z) => {
+          const t = Math.max(0, Math.min(1, ((x - path[i].x) * (path[i + 1].x - path[i].x) + (y - path[i].y) * (path[i + 1].y - path[i].y) + (z - path[i].z) * (path[i + 1].z - path[i].z)) / path[i].distanceToSquared(path[i + 1])));
+          return [w0 + (w1 - w0) * t, 0];
+        }));
+      }
+      out.push(pom(0.2, 0.86, 0.57, 0.075, 1));
+      flaps();
+      goggles();
+      out.push(strap());
+      break;
+    }
+    case 'beanie':
+    default: {
+      // The beanie, pulled down to just above the eyes, its folded cuff a deeper vermillion band of knit
+      // ribs a little proud of the crown, a cream knit stripe round the crown high enough to clear the
+      // goggle strap (from behind it reads as a knitted hat rather than a red dome), the seam up the back
+      // of the crown to the pom-pom, and ear flaps hanging from the cuff over the ears down to the scarf
+      // (from behind they square the head off and frame the hair).
+      out.push(dome(), pom(RIDER_POM.x, RIDER_POM.y, RIDER_POM.z, 0.1));
+      out.push(ribbed(0.268, 0.274, 0.095, 0.905));
+      out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
+      out.push(stripe(), seam());
+      flaps();
+      // The goggles pushed up onto the beanie's front: two amber lenses in dark frames, and their strap
+      // round the crown, a cobalt band that also reads from behind.
+      goggles();
+      out.push(strap());
+      break;
+    }
+  }
+  return out;
 }
 
 /** The coat: one rounded form, a padded hem flaring over the hips, nipped in at the waist, full at
