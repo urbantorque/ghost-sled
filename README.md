@@ -2,8 +2,11 @@
 
 A downhill sled race for the browser. You carve, drift, pop and trick your way down a 4.5 km descent,
 through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
-other riders to a finish town. Every run rolls a little controlled chaos (a mood, maybe an event), so
-no two runs feel the same.
+twelve signature riders and a crowd of others to a finish town. Spirit lights on the brave lines, and
+your skill, fill a lantern you either spend on a dash (through trees, faster) or keep as a ward that
+takes the next hit. Each mountain's biggest places play as set pieces, and a board of goals on each
+teaches it. Every run rolls a little controlled chaos (a mood, maybe an event), so no two runs feel the
+same.
 
 Built with Vite + TypeScript + three.js. Every mesh, texture, sound and note of music is generated
 in code; there are no asset files.
@@ -38,19 +41,25 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?autoride=1` | Skip the title and start a run |
 | `?m=N` | Mountain 0 to 3 (unlocks ignored) |
 | `?mood=N`, `?event=N` | Force a chaos mood or mid-run event |
-| `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll |
+| `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
+| `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
 
 ## Controls
 
 | Input | Steer | Action (one button) |
 | --- | --- | --- |
-| Keyboard | A / D or arrow keys | Space, Shift, S, W, Up or Down |
-| Mouse | Move left / right of centre | Hold any button |
-| Touch | Drag on the left 60% of the screen | Hold the right 40% |
+| Keyboard | A / D or arrow keys | Space, Shift, S, W, Up or Down; E, Q or Enter to dash |
+| Mouse | Move left / right of centre | Hold the left button; the right button dashes |
+| Touch | Drag on the left 60% of the screen | Hold the right 40%; tap the lantern to dash |
 
 Hold the action to crouch (deeper carve, tuck); hold it while steering hard to drift; release to
 pop. In the air, steer to spin and press-and-hold to backflip. Tap the action just before
 touchdown (when the ring on the snow flashes gold) for a perfect landing. P pauses.
+
+The lantern (three cells, top right; a round button on touch) fills from spirit lights and from skill.
+A full one is a dash: 1.4 s as a spirit, faster, through any tree or rock in the way. Kept, it is a
+ward: the next hit that would floor you is taken by the lantern instead. After a wreck, "Ride home as
+a spirit" rides the rest of the descent outside the race (Escape returns to the card).
 
 ## Build
 
@@ -249,6 +258,9 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | --- | --- |
 | `places.js`, `sheets.sh` | Rides any mountain on the safe line at a set speed and shoots a list of distances, or every site of the kinds named; the contact sheets of every street, bridge, tunnel and finish |
 | `places-cost.js`, `cost-run.sh` | Draw calls, triangles and frame times riding through a place; compare two builds interleaved |
+| `review.js` | The player review's screens: a fresh title, a first run's results, the second run, the returning title, the shop, the Daily and the Cup |
+| `lantern.js` | A replayed or hands-off run, shot at every dash, ward and sky gate, at fixed distances and (`marquee: true`) as each set piece comes up and in its middle, with the lantern's counts |
+| `homeward.js` | Wrecks a run by holding one key, rides home as a spirit to the town and checks the card comes back unchanged |
 | `life.js` | The living background: rides to distances and shoots bursts, clips or a fixed lens at the crowds; with `find` it picks the nearest herd, fox on a rock, perched flock, sledding kid or drop-in ahead and shoots it frame-exact on a virtual clock as the rider comes |
 | `places-plan.ts` | What stands where on each mountain, by mood, the longest bare stretch and what each piece costs, without a browser |
 | `descent.js`, `finish.js` | A whole descent without a teleport (are pieces made ahead of the rider?), and the last leap, the line and the stop |
@@ -407,6 +419,10 @@ unproven with people.
 | `src/ui` | DOM overlay screens |
 | `src/platform` | CrazyGames SDK v3 wrapper and local mock |
 | `src/workers` | Ghost replay and daily pool worker |
+
+Round 5 added `src/bot/roster.ts` (the signature riders), `src/game/marquee.ts` (set pieces), `src/game/mastery.ts`
+(boards), `src/game/paints.ts` (sled paints) and `src/render/spirit.ts` (sky gates, dash and ward light, set
+pieces' air, fireworks).
 
 See `PLAN.md` for the architecture, `ART.md` for the art bible and `DECISIONS.md` for every call
 made along the way.
