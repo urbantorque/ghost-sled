@@ -142,7 +142,13 @@ or win show mid-run). `garage-tris.ts` prints the hats' and effects' triangle co
 
 ## What I looked at
 
-Frames under  in the worktree (ignored by git): the garage on desktop and phone (, , ), a High run of Pinecrest (: dashes, gates from 60 m, the finish), Old Wren's ward on High and Low (, ), Ember on Low wearing a long cap, ink bands and sparks (), Pinecrest on a phone on Medium with a dash and a ward under reduced motion (), a synthetic gate burst with a set piece's smaller rings (), and street and win shows (). The console stayed clean throughout (no errors, no warnings).
+Frames under `shots/r6/feel` in the worktree (ignored by git): the garage on desktop and phone
+(`garage-*-desk.png`, `garage-*-phone.png`, `garage-hat-armed-desk.png`), a High run of Pinecrest
+(`run/desk-high-m0-fin-*`: dashes, gates from 60 m, the finish), Old Wren's ward on High and Low (`run2/`,
+`low/desk-low-m0-ward1-*`), Ember on Low wearing a long cap, ink bands and sparks (`low/desk-low-m2-*`),
+Pinecrest on a phone on Medium with a dash and a ward under reduced motion (`phone/`), a synthetic gate burst
+with a set piece's smaller rings (`gate-burst-*`), and street and win shows (`fw/`). The console stayed clean
+throughout (no errors, no warnings).
 
 What I could not check: whether any of it feels right at speed with hands on the keys, how the five sled sounds sound (the music lane's), the real set pieces' ring lines and gates beats (I pushed synthetic ones), and frame rates (the main lane measures).
 
