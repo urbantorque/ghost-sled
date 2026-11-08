@@ -77,7 +77,7 @@ export const ROSTER: readonly Rider[] = [
   },
   {
     key: 'ivo', name: 'Ivo Crag', hat: 'horns', emblem: 'fang', accent: '#F2C18D', sled: 1, style: 'bold', skill: 0.82, home: 2,
-    bio: 'Takes the fork\'s ice and the narrowest squeeze. Every time.',
+    bio: 'Takes the fork’s ice and the narrowest squeeze. Every time.',
     says: { pass: ['Long way round!', 'Up here!'], passed: ['Lucky line.', 'Grr.'], won: ['Fortune and the brave.'], lost: ['Next time the ice.'] },
   },
   {
@@ -93,12 +93,12 @@ export const ROSTER: readonly Rider[] = [
   {
     key: 'tavi', name: 'Tavi Rook', hat: 'beak', emblem: 'feather', accent: '#C7D0FF', sled: 4, style: 'sky', skill: 0.7, home: 1,
     bio: 'Pops every kicker for the lights up high. Knows every sky gate.',
-    says: { pass: ['Up here!', 'Caw.'], passed: ['Ground\'s overrated.'], won: ['Sky line wins.'], lost: ['Should have flown.'] },
+    says: { pass: ['Up here!', 'Caw.'], passed: ['Ground’s overrated.'], won: ['Sky line wins.'], lost: ['Should have flown.'] },
   },
   {
     key: 'nessa', name: 'Nessa Lumen', hat: 'lantern', emblem: 'moon', accent: '#FFE7A8', sled: 5, style: 'bold', skill: 0.64, home: 3,
     bio: 'Carries her own lantern, and takes the ice, the squeeze and the long way round.',
-    says: { pass: ['This way\'s brighter!', 'Through here!'], passed: ['Light the way.'], won: ['Followed the lights home.'], lost: ['Bright run.'] },
+    says: { pass: ['This way’s brighter!', 'Through here!'], passed: ['Light the way.'], won: ['Followed the lights home.'], lost: ['Bright run.'] },
   },
   {
     key: 'juno', name: 'Juno Vale', hat: 'bobble', emblem: 'star', accent: '#FFD1F0', sled: 0, style: 'collector', skill: 0.56, home: 0,
@@ -108,7 +108,7 @@ export const ROSTER: readonly Rider[] = [
   {
     key: 'pip', name: 'Pip Thistle', hat: 'aviator', emblem: 'bolt', accent: '#D9F2A6', sled: 3, style: 'wild', skill: 0.5, home: 1,
     bio: 'Fastest thing on two runners for thirty seconds at a time.',
-    says: { pass: ['Wheee!', 'Coming through!'], passed: ['Oops.'], won: ['Didn\'t even fall!'], lost: ['Fell. Twice.'] },
+    says: { pass: ['Wheee!', 'Coming through!'], passed: ['Oops.'], won: ['Didn’t even fall!'], lost: ['Fell. Twice.'] },
   },
   {
     key: 'bram', name: 'Bram Oakhollow', hat: 'antlers', emblem: 'leaf', accent: '#CFE8B8', sled: 2, style: 'liner', skill: 0.4, home: 0,
@@ -118,7 +118,7 @@ export const ROSTER: readonly Rider[] = [
   {
     key: 'rosa', name: 'Rosa Quill', hat: 'foxears', emblem: 'wave', accent: '#FFC4B3', sled: 1, style: 'stunt', skill: 0.3, home: 3,
     bio: 'Learning everything at once, mostly upside down.',
-    says: { pass: ['Hi!', 'Look, I\'m winning!'], passed: ['Aw.'], won: ['I won? I won!'], lost: ['Teach me that.'] },
+    says: { pass: ['Hi!', 'Look, I’m winning!'], passed: ['Aw.'], won: ['I won? I won!'], lost: ['Teach me that.'] },
   },
 ];
 
