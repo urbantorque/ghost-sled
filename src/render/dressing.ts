@@ -4,6 +4,7 @@ import type { BiomeId } from '../sim/mountains';
 import { BARK, SNOW, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
 import { crestE, ledgeAt, standable, visualGround } from './ground';
 import { emberSlot, emberSlotAt } from './groves';
+import { flankMode } from './overlook';
 import { Palette } from './palette';
 
 // Bank set dressing and the course sections' signatures: decorative pieces on and beyond the banks,
@@ -37,15 +38,21 @@ export const L_CABIN = 0;
 export const L_TOWER = 1;
 export const L_CABLE = 2;
 export const L_SIGN = 3;
-export const L_ROCKBAND = 4;
-export const L_CORNICE = 5;
-export const L_WALL = 6;
+/** A timber telegraph pole: the wire line that leads the eye from a first leap down to the lake. */
+export const L_POLE = 4;
+export const L_ROCKBAND = 5;
+export const L_CORNICE = 6;
+export const L_WALL = 7;
 
 /** Fence and bank pieces are modelled this long along local x. */
 const FENCE_LEN = 6;
 const PIECE_LEN = 6;
-/** Height of the lift tower's crossarm (the cable's line). */
+/** Height of the lift tower's crossarm (the cable's line), and of a telegraph pole's. */
 const TOWER_TOP = 9.6;
+const POLE_TOP = 8.6;
+/** A telegraph line's poles: how far apart and how far past the edge. */
+const POLE_STEP = 30;
+const POLE_E = 15.5;
 
 // ---------------------------------------------------------------- kits
 
@@ -245,6 +252,24 @@ function tower(): BufferGeometry {
   ]);
 }
 
+/** A weathered timber telegraph pole: a tall round pole with a crossarm across the line (local z), two
+ *  glass insulators where the wires ride (the cable piece's two lines), a brace, snow on the arm and a
+ *  collar of snow at its foot. */
+function telegraphPole(): BufferGeometry {
+  const wood = new Color('#5E4A44');
+  const dark = new Color('#40343A');
+  return merge([
+    part(new CylinderGeometry(0.12, 0.17, POLE_TOP + 0.6, 6), wood, { pos: [0, POLE_TOP / 2 - 0.3, 0] }),
+    part(new BoxGeometry(0.16, 0.16, 3.6), dark, { pos: [0, POLE_TOP, 0] }),
+    part(new CylinderGeometry(0.035, 0.035, 1.3, 4), dark, { pos: [0, POLE_TOP - 0.45, 0.45], rot: [0.8, 0, 0] }),
+    part(new CylinderGeometry(0.07, 0.07, 0.18, 6), new Color('#BFD8E4'), { pos: [0, POLE_TOP + 0.04, 1.6] }),
+    part(new CylinderGeometry(0.07, 0.07, 0.18, 6), new Color('#BFD8E4'), { pos: [0, POLE_TOP + 0.04, -1.6] }),
+    part(new BoxGeometry(0.2, 0.07, 3.4), SNOW, { pos: [0, POLE_TOP + 0.11, 0] }),
+    part(new ConeGeometry(0.17, 0.14, 6), SNOW, { pos: [0, POLE_TOP + 0.37, 0] }),
+    part(new IcosahedronGeometry(0.6, 0), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.35, 1.3], jitter: 0.08 }),
+  ]);
+}
+
 /** Two cable lines, unit length along +x from the origin (stretched per span). */
 function cable(): BufferGeometry {
   const c = new Color('#2A2838');
@@ -354,7 +379,7 @@ function signpost(): BufferGeometry {
 
 /** The large kit (cabin, lift tower and cable, and the section signatures), as one variant set. */
 export function largeKitSteps(biome: BiomeId, p: Palette): Array<() => BufferGeometry> {
-  return [() => cabin(biome, p), tower, cable, signpost, () => rockBand(p), () => cornice(p), () => rockWall(p)];
+  return [() => cabin(biome, p), tower, cable, signpost, telegraphPole, () => rockBand(p), () => cornice(p), () => rockWall(p)];
 }
 
 export function largeKit(biome: BiomeId, p: Palette): BufferGeometry {
@@ -502,11 +527,83 @@ export class Dresser {
       if (lift) this.lift(i, lift, put, clear);
       if (sec.kind === 'split') this.splitHead(i, sec, put);
     }
+    this.wire(i, put, clear, keep);
     for (let side = -1; side <= 1; side += 2) {
       this.signatures(i, side, put);
       this.shore(i, side, put);
       this.cabin(i, side, put, clear, secs);
       this.clutter(i, side, put);
+    }
+  }
+
+  /** The telegraph line's stretch on an alpine course (sim z from and to, and its bank side), or null:
+   *  from where the first leap's landing levels out down to the first frozen lake's shore, on the side
+   *  the valley falls away (flankMode), so its poles stand against the haze and its wires lead the eye
+   *  down the run to the lake. */
+  private wirePlan(): { z0: number; z1: number; side: number } | null {
+    if (this.wireLine !== undefined) return this.wireLine;
+    const c = this.c;
+    this.wireLine = null;
+    if (c.biome !== 'alpine') return null;
+    let lake: Section | null = null;
+    for (let z = 0; z < c.finishZ; ) {
+      const s = c.section(z);
+      if (s.kind === 'lake') {
+        lake = s;
+        break;
+      }
+      z = s.z1;
+    }
+    if (!lake) return null;
+    const leap = c.ledges.find((l) => l.kind === 'leap' && l.z < lake.z0);
+    const z1 = lake.z0 + 80;
+    const z0 = Math.max(leap ? leap.foot + 140 : 0, z1 - 620);
+    const side = flankMode(c.seed, lake.z0, -1) < flankMode(c.seed, lake.z0, 1) ? -1 : 1;
+    this.wireLine = { z0, z1, side };
+    return this.wireLine;
+  }
+  private wireLine: { z0: number; z1: number; side: number } | null | undefined = undefined;
+
+  /** The telegraph line through chunk i: a pole every POLE_STEP m at POLE_E past the edge, its wires to
+   *  the next, and a narrow cut through the trees along it. It skips the places where the bank is not
+   *  open ground (a tree run's wall, a ravine, a street): the line takes up again past them. */
+  private wire(i: number, put: Put, clear: Clearing[], keep: Clearing[]): void {
+    const w = this.wirePlan();
+    if (!w) return;
+    const c = this.c;
+    const z0 = i * CHUNK_LEN;
+    const z1 = z0 + CHUNK_LEN;
+    if (w.z1 < z0 || w.z0 > z1 + POLE_STEP) return;
+    clear.push({ side: w.side, e: POLE_E, z0: Math.max(z0, w.z0 - 4), z1: Math.min(z1, w.z1 + 4), w: 2.4 });
+    const open = (z: number) => {
+      const k = c.section(z).kind;
+      return k !== 'treerun' && k !== 'ravine' && k !== 'tunnel' && k !== 'street' && k !== 'bridge' && standable(c, z, POLE_E) && !ledgeAt(c, z, 6) && !(keep.length > 0 && inClearing(keep, w.side, POLE_E, z));
+    };
+    for (let n = Math.ceil(w.z0 / POLE_STEP); n * POLE_STEP <= w.z1; n++) {
+      const z = n * POLE_STEP;
+      if (z < z0 || z >= z1 || !open(z)) continue;
+      this.bankPoint(w.side, POLE_E, z - 1, this.a);
+      this.bankPoint(w.side, POLE_E, z + 1, this.b);
+      const yaw = Math.atan2(-(this.b.z - this.a.z), this.b.x - this.a.x);
+      const t = this.bankPoint(w.side, POLE_E, z, this.v);
+      const tx = t.x;
+      const ty = t.y - 0.3;
+      const tz = t.z;
+      put('dr:l', this.upright(tx, ty, tz, yaw, 1), L_POLE, 1, 1, 1);
+      const zn = z + POLE_STEP;
+      if (zn > w.z1 || !open(zn)) continue;
+      // The wires to the next pole down, from crossarm to crossarm.
+      const nb = this.bankPoint(w.side, POLE_E, zn, this.b);
+      this.a.set(tx, ty + POLE_TOP + 0.15, tz);
+      this.b.set(nb.x, nb.y - 0.3 + POLE_TOP + 0.15, nb.z);
+      this.xa.subVectors(this.b, this.a);
+      const len = this.xa.length();
+      this.xa.divideScalar(len);
+      this.ya.copy(this.up).addScaledVector(this.xa, -this.xa.dot(this.up)).normalize();
+      this.za.crossVectors(this.xa, this.ya);
+      this.m.makeBasis(this.xa.multiplyScalar(len), this.ya, this.za);
+      this.m.setPosition(this.a);
+      put('dr:l', this.m, L_CABLE, 1, 1, 1);
     }
   }
 
