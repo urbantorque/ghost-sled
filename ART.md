@@ -493,3 +493,25 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
 - **Sled paints** recolour a sled's body and wood at their own value, so the grain and the hull's shading stay; the
   trim stays vermillion, and so do the scarf and beanie. No paint uses a locked role's colour.
+
+## 14. The set pieces (round 6)
+
+Each mountain's three set pieces are a verb as well as a place, and each verb has its own look, built so it reads at
+30 to 46 m/s and never looks like a hazard.
+
+- **The race's machine** rides a dark cable along the bank (11 m up in the open, 7 m in a tube or a slot) between two
+  lit stations, on slim A-frame towers where the ground is open and wall brackets where it is not. Pinecrest's is a
+  blue cable car banded in cream, Frostfang's the research station's red gondola, Ember's an iron ore skip glowing
+  from inside with a lamp on its lip, a Daily's on Sakura a wine-lacquered car. Windows and the skip's ore are lit so
+  the machine reads against snow and against the dark of a tunnel. It sways a little on its hanger, more as it
+  leaves and arrives. Never vermillion: the machine is a rival, not you.
+- **Lantern gates** are two strings of three paper lanterns hung from a wire across the run, with a garland of small
+  lights sagging between their heads: the opening is between the strings, and nothing stands on the snow. The next
+  gate burns brightest and breathes, with a soft pool of its light on the snow in its opening; later gates wait
+  dimmer. A threaded gate's lanterns slip their strings and rise into the sky, drifting apart; a missed gate's light
+  gutters to an ember. Marigold, the lantern's own colour: a gate is a light you take.
+- **Ring lines** are the sky gates' family, three to a leap, a little smaller than a stage's gate.
+- **The collapse** breaks the span's cornices and snow off at its edges at the fall line, chunks of pale ice tumbling
+  into the gap with a puff of powder. The deck holds.
+- **The chip.** A set piece's card becomes its chip as it starts: its name a size smaller over the verb counting in
+  tabular figures. A win rims it in marigold with the line in marigold; a loss is said plainly in off-white.
