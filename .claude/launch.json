@@ -90,6 +90,54 @@
         "--strictPort"
       ],
       "port": 4332
+    },
+    {
+      "name": "ghost-sled-lowtag",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/lowtag",
+        "--port",
+        "4330",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4330
+    },
+    {
+      "name": "ghost-sled-nomin-base",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/nomin-base",
+        "--port",
+        "4341",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4341
+    },
+    {
+      "name": "ghost-sled-nomin-new",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/nomin-new",
+        "--port",
+        "4342",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4342
     }
   ]
 }

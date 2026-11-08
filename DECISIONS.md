@@ -2010,3 +2010,20 @@ Every place where I replaced, extended or interpreted the brief, and why.
     plays the main theme, each mountain's run music by stage and section, drops, the lift, the finale, the results'
     reprise, every set piece's cue and every cue in the score, by driving the real engine with synthetic frames and
     beats. LISTENING.md is the route for the owner's ears and the eight calls only an ear can make.
+
+### Round 6: what it measured
+
+274. **What the round measured, and what it did not reach.** The README's "Round 6 play-test" has the tables. In the lab
+    the set pieces spread by skill and by kind of skill (the careful line wins 18% of those it meets, mid 69%; the
+    steps are the careful rider's, the races the fast one's, the rings want speed held to a window), the novice-to-expert
+    gap holds at about 19 s, and every pilot finishes as often as before but one novice run in 24. In the browser a
+    finisher meets a set piece every 39 to 48 s. The mix is -16 LUFS on all four mountains with its true peak at -1.2
+    dBTP, the music sits 0.8 LU under the effects where it sat 2.8 under, and the band costs Low less main-thread time
+    than round 5's. High, Medium and the phone hold 60 fps; settled frames carry no new draw call on any tier; the build
+    is 776 KB zipped, 53 KB more. Three things did not land. Low at 6x on a very first run is level with round 5 within
+    about 5%, not better: the frame's JS is the same, so what remains is page work round the riders' labels, and naming
+    only the nearest rider on a struggling device bought 1 to 2 fps inside the noise and was not kept; hiding labels
+    altogether stays the owner's call (decision 217). The first frame is 70 ms later, inside the builds' overlap. And
+    in the browser the skilled pilots' races read a little less live (0.61 to 0.71 of a run against 0.70 to 0.85), as
+    they ride faster on the lanterns their set pieces pay, on four runs a pilot, inside the noise. None of it has been
+    played or heard by a person.

@@ -4,9 +4,11 @@ A downhill sled race for the browser. You carve, drift, pop and trick your way d
 through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
 twelve signature riders and a crowd of others to a finish town. Spirit lights on the brave lines, and
 your skill, fill a lantern you either spend on a dash (through trees, faster) or keep as a ward that
-takes the next hit. Each mountain's biggest places play as set pieces, and a board of goals on each
-teaches it. Every run rolls a little controlled chaos (a mood, maybe an event), so no two runs feel the
-same.
+takes the next hit. Each mountain's three biggest places are set pieces that each play their own way
+(race a cable car, thread lantern gates, fly a ring line over a leap, outrun a falling span, land every
+terraced step), and a board of goals on each teaches it. Every mountain has its own song, arranged against
+the run, and a garage dresses the rider. Every run rolls a little controlled chaos (a mood, maybe an
+event), so no two runs feel the same.
 
 Built with Vite + TypeScript + three.js. Every mesh, texture, sound and note of music is generated
 in code; there are no asset files.
@@ -518,6 +520,102 @@ in decisions 205 and 217. The 4x chase on High swings too widely on battery to c
 The build grew by 40 KB zipped: about 36 KB of script (the lantern, set pieces, mastery, paints and the ride home
 in the main bundle; the twelve hats, tags and reactions, about 7 KB; the crowds and animals, about 8.5 KB) and the
 sim's own growth in the ghost worker. The pools are the same size as before (42 riders a mountain, 124 KB).
+
+## Round 6 play-test: polish toward a 10
+
+This round refined what was there (DECISIONS 239 to 274). Each mountain's three biggest places became set pieces that
+play differently (a race against a machine, lantern gates, a ring line over a leap, a span that collapses behind you,
+terraced steps), one a stage, decided in the sim (SIM_VERSION 8). The lantern's feedback became visible on the rider and
+in the world. The HUD gives a set piece the top centre. The music became written songs arranged against the run, mixed
+to a measured loudness. The world between places was laid out on purpose, and the garage was finished. Everything below
+is scripted or measured; no human has played this build or heard it.
+
+**The pilot lab** (`lab.ts`, six seeds a mountain, the same pilots on round 5's sim and this one; the skilled pilots now
+try the set pieces, as a person who knows them would). Median finish, seconds, by mountain (Pinecrest/Frostfang/Ember/Sakura):
+
+| Pilot | Round 5 | Round 6 | Finished | Lanterns lit a run | Dashes a run |
+| --- | --- | --- | --- | --- | --- |
+| Hands off | 156/146/148/150 | 161/146/148/150 | 4 of 4, both | 5.7 / 6.1 | 0 / 0 |
+| Careful line | 160/150/152/161 | 160/152/152/161 | 24 of 24, both | 4.2 / 4.2 | 0 / 0 |
+| Novice | 155/148/148/151 | 162/150/138/153 | 24 / 23 of 24 | 8.8 / 9.8 | 5.0 / 5.8 |
+| Mid | 124/139/133/135 | 122/133/128/128 | 24 of 24, both | 11.5 / 13.7 | 8.5 / 11.3 |
+| Expert | 125/132/133/135 | 137/129/135/125 | 23 / 24 of 24 | 11.9 / 13.9 | 11.0 / 12.8 |
+| Stunt | 136/132/138/135 | 140/125/127/134 | 24 of 24, both | 11.4 / 12.2 | 8.3 / 8.8 |
+| Clumsy | no finish | no finish | 0 of 24, both | 4.3 / 4.2 | 3.0 / 3.0 |
+
+Set pieces won of those met (six seeds, all twelve set pieces): the careful line 13 of 72, the novice 27 of 71, mid 50 of
+72, the expert 36 of 72 (its habit of dashing before every lip flies it over the rings). The novice-to-expert gap holds at
+about 19 s; mid rides 5 s faster on average on the lanterns it wins; chasing Old Town's gates at full speed costs the
+expert pilot 12 s on Pinecrest, which is the trade the gates pose.
+
+**First runs in the browser** (`telemetry.js` through `tele-batch.sh`, one fresh run a mountain a pilot on Low; round 5's
+build and this one in the same sitting):
+
+| Pilot | Finish, round 5 / 6 | Passes a minute | Race live | Named moments a minute | Set pieces a minute |
+| --- | --- | --- | --- | --- | --- |
+| Clumsy | none / none | 2.7 / 3.5 | 0.95 / 0.75 | 24.7 / 23.5 | 0.37 |
+| Novice | 142.8 / 149.4 s | 4.0 / 4.4 | 0.93 / 0.93 | 23.3 / 24.6 | 1.25 |
+| Mid | 122.7 / 124.9 s | 3.1 / 2.6 | 0.67 / 0.63 | 24.8 / 25.8 | 1.48 |
+| Expert | 133.3 / 120.4 s | 3.6 / 3.1 | 0.70 / 0.61 | 26.6 / 29.2 | 1.53 |
+| Stunt | 129.3 / 125.9 s | 4.1 / 2.9 | 0.85 / 0.71 | 32.6 / 34.3 | 1.45 |
+
+A finisher meets a set piece every 39 to 48 s (round 5: four, about one every 30 to 40 s with the finish). With four runs a pilot the race
+numbers move within their noise; the skilled pilots' races read a little less live, as they ride faster on the lanterns
+they win.
+
+**Sound** (`loudness.js`, the first 70 s of each mountain's best pool run at the default sliders, both builds in one
+sitting; `audiocpu.js` interleaved, from the music lane):
+
+| Measure | Round 5 | Round 6 |
+| --- | --- | --- |
+| Mix, integrated (Pinecrest/Frostfang/Ember/Sakura) | -18.2 / -17.9 / -18.4 / -18.2 LUFS | -16.0 / -15.9 / -16.0 / -16.0 LUFS |
+| True peak | -6.5 to -6.7 dBTP | -1.1 to -1.2 dBTP |
+| Loudness range | 2.4 to 3.1 LU | 2.1 to 3.3 LU (the music alone: 2.2 to 4.5) |
+| Music against the effects | 2.8 LU under | 0.8 LU under |
+| Lost folded to mono / through a phone's band | 1.1 to 1.2 / 2.9 to 3.3 LU | 0.9 to 1.4 / 2.8 to 3.4 LU |
+| Audio main thread, a cruise on Low at 6x | 52 ms a second, 41 to 45 nodes | 33 to 43 ms a second, 30 to 31 nodes |
+| Audio main thread, a cruise on High at 1x | 9.8 ms a second | 10.6 ms a second |
+
+### Round 6 performance
+
+Measured on the production build in headless Chrome on the laptop's GPU, on mains power, round 5's build (dec2d60)
+and this one interleaved in fresh sessions with the save cleared (every probe is a very first run), nothing else on
+the machine (`perf-r6.sh`). The laptop's load moved a lot over the evening: the first Low sitting read 22 to 27 fps on
+both builds, a quieter one an hour later 38 to 46. Only the side-by-side figures compare.
+
+| Check | Round 5 | Round 6 |
+| --- | --- | --- |
+| High at 1x, a whole descent of Pinecrest and Frostfang | 60 fps, p90 16.8 ms, worst second 59 | 60 fps, p90 16.8 ms, worst second 59 |
+| Medium at 1x, Pinecrest and Ember | 60 fps | 60 fps |
+| High at 1x, Lantern Night on Sakura | 60 fps | 60 fps |
+| Phone layout: Medium, Low, an avalanche chase | 60 / 60 / 60 fps | 60 / 60 / 60 fps |
+| High through an avalanche chase, CPU 4x (a loaded sitting) | 24 fps | 25 fps |
+| Low at 6x, a very first run, Pinecrest/Ember/Sakura (median of 4, the quiet sitting) | 45 / 43.5 / 40 fps | 43 / 40.5 / 42 fps |
+| The same, the loaded sitting (median of 5) | 26 / 23 / 24 fps | 24 / 23 / 26 fps |
+| Frame JS on Low at 6x, Pinecrest, unminified, profiled | 13.4 ms a frame | 13.5 ms a frame |
+| First rendered frame at 6x, fresh save (median of 4) | 3.09 s | 3.16 s |
+| Draw calls settled, High / Medium / Low | 93 to 94 / 85 to 90 / 43 to 47 | 93 / 87 to 90 / 43 to 47 |
+| Draw calls at the peak, High / a chase | 99 / 139 | 104 / 143 |
+| Triangles settled, High / Medium / Low | 874k to 891k / 627k to 642k / 126k to 127k | 872k to 895k / 524k to 651k / 108k to 131k |
+| Build, zipped / unpacked | 723 KB / 2,279 KB | 776 KB / 2,436 KB |
+
+Low is the bar this round does not meet: on a very first run at 6x it is level with round 5 within about 5% (2 fps under
+on Pinecrest, where the passes do not overlap, 3 under on Ember and 2 over on Sakura, where they do), not better. The
+frame's own JS is the same (the music's lighter Low band paid for the new systems), so as in rounds 4 and 5 what remains
+is page work round the riders' labels and pills (DECISIONS 217). Naming only the nearest pool rider on a struggling Low
+device was tried and measured: 1 to 2 fps, inside the spread, so it was not kept. The first frame is 70 ms later, inside
+the two builds' overlap; the bundle is 44 KB bigger. The set pieces' world is drawn only within 520 m of the rider, and
+the ward, the dash's after-images (Medium and High) and the fireworks draw only while they play, so settled frames carry
+no new draw call on any tier.
+
+**Size.** 776 KB zipped, 2,436 KB unpacked (round 5: 723 KB and 2,279 KB): 53 KB more zipped, of which about 44 KB is the
+main bundle (the set pieces in the sim and the world, the score and the master, the garage, the fireworks and ward, the
+groves) and the rest the ghost worker's copy of the sim and the pools. The jukebox loads only behind `?debug`.
+
+What this does not show: whether the set pieces feel different under a person's hands, whether the gates at 40 m/s are a
+fair test or a frustration, whether the race's machine reads as a rival, how any of the music sounds (`LISTENING.md` is the
+route and the eight calls only an ear can make), whether the ward's slow beat feels like a beat or a stutter, and whether
+the garage's looks are worth buying.
 
 ## Layout
 
