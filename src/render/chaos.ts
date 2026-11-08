@@ -24,7 +24,7 @@ import { ChaosEvent } from '../sim/chaos';
 import { Course } from '../sim/course';
 import type { Sim } from '../sim/sim';
 import { makeGhostMaterial, makeToonMaterial, shared } from './materials';
-import { ghostRiderGeometry, giftGeometry } from './meshes';
+import { ghostRiderGeometry, lightGeometry } from './meshes';
 import { NearField } from './nearfield';
 import { ride } from '../ui/presence';
 import type { Tier } from './world';
@@ -301,9 +301,9 @@ export class ChaosVisuals {
     this.prints = new InstancedMesh(printGeo, makeToonMaterial({ coolShade: 0.1 }), FOOTPRINTS);
     this.prints.frustumCulled = false;
 
-    const giftMat = makeToonMaterial({ coolShade: 0.25, emissive: new Color('#FFB040'), emissiveStrength: 0.15 });
-    this.storm = new InstancedMesh(giftGeometry(false), giftMat, 64);
-    this.storm5 = new InstancedMesh(giftGeometry(true), giftMat, 16);
+    const giftMat = makeToonMaterial({ coolShade: 0.1, emissive: new Color('#FFD34D'), emissiveStrength: 0.62 });
+    this.storm = new InstancedMesh(lightGeometry(false), giftMat, 64);
+    this.storm5 = new InstancedMesh(lightGeometry(true), giftMat, 16);
     this.storm.frustumCulled = this.storm5.frustumCulled = false;
     this.sleigh = new Mesh(sleighGeometry(), toon);
     this.sleigh.scale.setScalar(1.8);

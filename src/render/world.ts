@@ -4,7 +4,7 @@ import { CHUNK_LEN, Course, courseFor } from '../sim/course';
 import type { Snap } from '../game/run';
 import type { GhostPose } from '../game/ghosts';
 import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, type Feel, type GhostRole } from '../game/beats';
-import type { Gift, ObstacleKind } from '../sim/course';
+import type { Light, ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
 import { reduced } from '../ui/motion';
@@ -34,6 +34,7 @@ import { Sky } from './sky';
 import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
 import { SpeedPosts } from './speedposts';
+import { SpiritFx } from './spirit';
 import { Terrain, TerrainDetail } from './terrain';
 import { Trail } from './trails';
 
@@ -110,6 +111,8 @@ const LOW = new Vector3(0, 0.15, 0);
 const WHISKER_C = new Color('#F2F8FF');
 const GOLD_WHITE = new Color(BEST_HEX);
 const BOOST_C = new Color('#FF8A5C');
+const LIGHT_C = new Color('#FFD34D');
+const LIGHT_GREAT_C = new Color('#FFF3C4');
 /** Drift tiers 1 to 3: a ramp inside the player's own vermillion (pale coral, coral, vermillion), so a
  *  drift's heat never borrows the hazard ice blue or the grudge rose. */
 const DRIFT_C = DRIFT_TIER_HEX.map((h) => new Color(h));
@@ -150,6 +153,8 @@ export class World {
   readonly setPieces: SetPieces;
   /** Where one bank opens over the valley (overlook.ts); the terrain, mid-ground and forest read it. */
   readonly overlooks: Overlooks;
+  /** The lantern in the world: sky gates, a dash's trail, a ward's light, ghosts' dashes. */
+  private readonly spirit: SpiritFx;
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
   readonly sky: Sky;
@@ -306,7 +311,10 @@ export class World {
     // A wreck under the trees slides out to a clearing as it settles, where the hero shot can see it.
     this.rider.blocked = this.cam.blocked;
 
+    this.spirit = new SpiritFx(this.particles);
+    this.spirit.setCourse(this.course);
     this.scene.add(
+      this.spirit.root,
       this.sky.root,
       this.terrain.root,
       this.midground.root,
@@ -444,6 +452,7 @@ export class World {
     this.overlooks.setCourse(c, this.palette);
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
+    this.spirit.setCourse(c);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -613,6 +622,7 @@ export class World {
     this.particles.clear();
     this.sloughs.clear();
     this.moments.reset();
+    this.spirit.reset();
     this.ghosts.resetRun();
     this.chaos.begin(event);
     tmpV.set(snap.x, snap.y, -snap.z);
@@ -683,12 +693,18 @@ export class World {
     // A stomp's style beat comes before its land event's reaction: read the streak it carries first.
     this.stompN = 0;
     for (const b of beats) if (b.type === 'stomp') this.stompN = Math.max(this.stompN, b.streak);
-    if (v.mode === 'run') for (const e of v.events) this.onEvent(e, s);
+    if (v.mode === 'run') for (const e of v.events) {
+      this.onEvent(e, s);
+      this.spirit.onEvent(e, s);
+    }
+    this.spirit.update(dt, v.time, v.mode, s, v.sim, v.ghostPoses, this.quality.tier === 'low');
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
     if (v.mode === 'run') this.moments.beats(beats, s);
+    this.spirit.beats(beats);
+    this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
 
@@ -720,6 +736,7 @@ export class World {
           vel,
           perfectPulse: this.perfectPulse,
           act: this.moments.act,
+          driftCharge: v.mode === 'run' ? feel.driftCharge : 0,
         },
         dt,
         v.time,
@@ -777,10 +794,10 @@ export class World {
     this.glintAcc += dt;
     if (v.mode === 'run' && this.quality.tier !== 'low' && this.glintAcc > 0.06) {
       this.glintAcc = 0;
-      let pick: Gift | null = null;
+      let pick: Light | null = null;
       let seen = 0;
       for (let k = Math.max(0, ci); k <= ci + 1; k++) {
-        for (const gf of this.course.chunk(k).gifts) {
+        for (const gf of this.course.chunk(k).lights) {
           const ahead = gf.z - s.z;
           if (ahead < 5 || ahead > 45 || v.collected.has(gf.id)) continue;
           if (Math.random() * ++seen < 1) pick = gf;
@@ -1273,13 +1290,16 @@ export class World {
         this.particles.burst(new Vector3(e.x, e.y + 0.6, -e.z), 1.6, 45);
         this.props.markDirty();
         break;
-      case 'gift':
-        // A brief, low burst at the gift that rides along with the sled for its moment and settles
-        // on the snow: thrown up and left behind, it floated up the frame as a column of stars.
-        // The box squashes and pops, a flare of marigold, ribbon confetti and coins (particles.ts giftPop).
+      case 'light':
+        // The light goes into the lantern: a soft flare of marigold motes that rides along with the sled
+        // for its moment (no confetti: a light is not a present, and red is the rider's alone).
         this.course.gradient(s.x, s.z, this.landG);
-        this.particles.giftPop(this.fxA.set(e.x, e.y, -e.z), this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz), e.value > 1);
+        this.particles.sparkle(this.fxA.set(e.x, e.y + 0.3, -e.z), e.value > 1 ? LIGHT_GREAT_C : LIGHT_C, e.value > 1 ? 22 : 9, e.value > 1 ? 2.6 : 1.6, 0.42, e.value > 1 ? 0.24 : 0.18, this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz), 0.5);
         this.props.markDirty();
+        break;
+      case 'dash':
+        // The lens punches out as the air opens.
+        if (e.phase === 'start') this.punch = 1;
         break;
       case 'boost':
         this.punch = Math.max(this.punch, 0.6);

@@ -9,7 +9,7 @@ import { ChaosEvent, ChaosRoll, EVENTS, MOODS, Mood, eventInfo, moodInfo, rollCh
 import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '../sim/mountains';
 import { Rng, hashString } from '../sim/prng';
 import { RunRecord, recordFromString, recordToString } from '../sim/replay';
-import { decodeLog } from '../sim/input';
+import { decodeLog, packInput } from '../sim/input';
 import { SIM_VERSION, Sim, SimEvent, TUMBLES } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { UI } from '../ui/ui';
@@ -17,8 +17,8 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
-import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS } from './beats';
+import type { GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
 import { anchorFor, pickField, poolTime } from './field';
@@ -26,14 +26,19 @@ import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding, trackStanding } from './ghosts';
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
 import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
+import { planMarquee } from './marquee';
+import { ROSTER, riderByName } from '../bot/roster';
+import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
+import { PAINTS, paintById } from './paints';
+import { courseFor } from '../sim/course';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
-import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, titleGreeting } from './progress';
+import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
-import { type InputSource, Run, emptySnap, lerpSnap } from './run';
+import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SaveStore, oldBest, retireGrudge, rideableGrudge } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
@@ -45,7 +50,7 @@ import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFini
 
 /** 'crashed' is the crash beat before its results; 'finished' the coast through the town square before
  *  its results (the sim still ticks). A finish is never a crash: only `crashed()` opens the first. */
-type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results';
+type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results' | 'home';
 
 /** Dev-only overrides for play-tests and screenshots: ?mood=3&event=1&m=2&autoride=1. */
 const DEV = new URLSearchParams(location.search);
@@ -211,6 +216,10 @@ export class App {
   private passedThisRun = new Set<number>();
   /** Gifts earned for passing ghosts (kept out of the sim so live state matches replays). */
   private passBonus = 0;
+  /** Mastery stars this run earned (shown on the card; each paid once). */
+  private masteryFresh: string[] = [];
+  /** Sky gates flown this run (mastery). */
+  private gatesThisRun: number[] = [];
   private grudgeBeaten = false;
   private paused = false;
   private adPlaying = false;
@@ -270,6 +279,7 @@ export class App {
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
+    this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.audio.setQuality(this.tiers.tier);
     this.tiers.onChange = (t: Tier) => {
       this.world.setQuality(qualityFor(t));
@@ -285,15 +295,18 @@ export class App {
       onRevive: () => this.revive(),
       onDouble: () => this.doubleGifts(),
       onChallenge: () => this.shareChallenge(),
+      onPaint: (id) => this.paint(id),
+      onRideHome: () => this.rideHome(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
+      onSpirit: () => this.input.spiritTap(),
       onSelectMountain: (id) => this.selectMountain(id),
       onDaily: () => this.selectMountain('daily'),
       onCup: () => this.selectMountain('cup'),
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
-      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts),
+      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards()),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -415,6 +428,8 @@ export class App {
     window.addEventListener('keydown', (e) => {
       this.audio.unlock();
       if (e.code === 'KeyP' && (this.phase === 'run' || this.paused)) this.setPaused(!this.paused);
+      // Riding home: Escape (or P) goes straight back to the card.
+      if ((e.code === 'Escape' || e.code === 'KeyP') && this.phase === 'home') this.endHome();
       if ((e.code === 'Enter' || e.code === 'NumpadEnter') && !e.repeat) {
         if (this.phase === 'title' && !this.ui.modal) this.ride();
         else if (this.phase === 'results') this.runAgain();
@@ -571,6 +586,10 @@ export class App {
           rankOf: spot.of,
           top: spot.top,
           medals: medalsHeld(d.climb?.[m.id]),
+          stars: (() => {
+            const b = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery?.[m.id]), d.climb?.[m.id]?.medal ?? 0);
+            return { got: b.filter((s) => s.done).length, of: b.length };
+          })(),
         };
       }),
       selected: this.mountain.id,
@@ -623,8 +642,33 @@ export class App {
     if (!this.save.data.ownedSleds.includes(id)) return;
     this.save.data.sled = id;
     this.save.save();
-    this.ui.showSleds(this.sledCards(), this.save.data.gifts);
+    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards());
     this.refreshTitle();
+  }
+
+  /** A sled paint: bought with gifts the first time, then put on (a look, never an edge). */
+  private paint(id: string): void {
+    const p = paintById(id);
+    const d = this.save.data;
+    const owned = p.price === 0 || (d.paints ?? []).includes(p.id);
+    if (!owned) {
+      if (d.gifts < p.price) return;
+      d.gifts -= p.price;
+      d.paints = [...(d.paints ?? []), p.id];
+      this.audio.ui('unlock');
+      this.ui.toast(`${p.name} paint`, 'gift', 'On your sled');
+    }
+    if (p.price === 0) delete d.paint;
+    else d.paint = p.id;
+    this.save.flush();
+    this.world.rider.setPaint(p.hex);
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
+  }
+
+  paintCards(): PaintCard[] {
+    const d = this.save.data;
+    const on = paintById(d.paint).id;
+    return PAINTS.map((p) => ({ id: p.id, name: p.name, hex: p.hex, price: p.price, owned: p.price === 0 || (d.paints ?? []).includes(p.id), on: p.id === on, affordable: d.gifts >= p.price }));
   }
 
   private buySled(id: number): void {
@@ -637,7 +681,7 @@ export class App {
     this.save.flush();
     this.audio.ui('unlock');
     this.ui.toast(`${def.name} unlocked`, 'gift', def.trait);
-    this.ui.showSleds(this.sledCards(), d.gifts);
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
     this.refreshTitle();
   }
 
@@ -774,7 +818,7 @@ export class App {
         let i = 0;
         // The recorded slipstream bit too: drafting this live field instead made the physics diverge
         // (fox84's 3,584 m run hit a tree at 216 m).
-        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0 }; } };
+        source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0, spirit: (b & 64) !== 0 }; } };
         demo = true;
         chaos = rec.chaos;
         this.chaos = chaos;
@@ -818,6 +862,8 @@ export class App {
     this.recordsThisRun.clear();
     this.passedThisRun.clear();
     this.passBonus = 0;
+    this.gatesThisRun = [];
+    this.masteryFresh = [];
     this.grudgeBeaten = false;
     this.passedAtStart = d.ghostsPassed;
     this.settlement = null;
@@ -922,6 +968,8 @@ export class App {
       unlockLadder: MOUNTAINS.filter((m) => m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
+      // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
+      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id),
     });
     this.director.time.reset();
   }
@@ -1034,7 +1082,7 @@ export class App {
       }
       this.pacing.adShown(Date.now());
       this.doubled = true;
-      const bonus = this.run.sim.gifts + this.passBonus;
+      const bonus = runPay(this.run.sim) + this.passBonus;
       this.save.data.gifts += bonus;
       this.save.data.lifetimeGifts += bonus;
       this.save.flush();
@@ -1076,6 +1124,82 @@ export class App {
       window.setTimeout(poll, 0);
     }
     this.uiWaiting.push({ name, detail });
+  }
+
+  /** The ride home (round 5): after a wreck, the rest of the descent as a spirit, outside the race. A sim
+   *  of its own from the wreck (Sim.homewardFrom), stepped here and never recorded, so the run, its
+   *  record, its place and its results are exactly what they were; the card comes back at the town. */
+  private homeRide: { sim: Sim; prev: ReturnType<typeof emptySnap>; cur: ReturnType<typeof emptySnap>; acc: number; t: number } | null = null;
+
+  private rideHome(): void {
+    const run = this.run;
+    if (!run || !run.sim.s.crashed || run.sim.finished || this.phase !== 'results' || this.homeRide) return;
+    const sim = Sim.homewardFrom(run.sim);
+    const prev = emptySnap();
+    const cur = emptySnap();
+    copySnap(sim.s, prev);
+    copySnap(sim.s, cur);
+    this.homeRide = { sim, prev, cur, acc: 0, t: 0 };
+    this.ui.hideResults();
+    // The world forgets the wreck: the rider up on its sled, the lens behind it, nothing of the run's trail.
+    lerpSnap(prev, cur, 1, this.view);
+    this.world.beginRun(this.view, ChaosEvent.None, run.sled);
+    this.world.cam.mode = 'chase';
+    this.phase = 'home';
+    this.audio.setScene('run');
+    this.ui.toast('Riding home as a spirit', 'ghost', 'Out of the race. The town is waiting.');
+  }
+
+  private endHome(): void {
+    if (!this.homeRide) return;
+    this.homeRide = null;
+    this.phase = 'results';
+    this.audio.setScene('results');
+    if (this.results) this.ui.showResults({ ...this.results, canRideHome: false });
+  }
+
+  private frameHome(dt: number): void {
+    const h = this.homeRide;
+    if (!h) return;
+    const sim = h.sim;
+    h.acc += this.paused ? 0 : dt;
+    while (h.acc >= 1 / 60) {
+      h.acc -= 1 / 60;
+      const inp = this.input.sample();
+      copySnap(sim.s, h.prev);
+      sim.step(packInput(inp.steer, inp.action, false, false));
+      copySnap(sim.s, h.cur);
+    }
+    h.t += dt;
+    lerpSnap(h.prev, h.cur, h.acc * 60, this.view);
+    this.renderTime += dt;
+    const tick = sim.tick;
+    this.ghostPoses.clear();
+    for (const t of this.ghosts.tracks) {
+      const p = emptyPose();
+      this.ghostPoses.set(t.entry.id, this.ghosts.pose(t, tick, p) ? p : null);
+    }
+    this.world.frame({
+      mode: 'run',
+      labels: false,
+      snap: this.view,
+      dt,
+      time: this.renderTime,
+      events: [],
+      collected: sim.collected,
+      destroyed: sim.destroyed,
+      sim,
+      airTicks: 0,
+      ghostPoses: this.ghostPoses,
+      playerVisible: true,
+      occluders: this.ui.occluders(),
+      mirror: null,
+      rival: null,
+      beats: [],
+      feel: IDLE_FEEL,
+    });
+    // Over the line, a few seconds in the square, then the card again.
+    if (sim.finished && sim.tick - sim.s.finishTick > 240) this.endHome();
   }
 
   private shareChallenge(): void {
@@ -1192,7 +1316,12 @@ export class App {
       biome: biomeForSeed(this.mountain.seed),
       score: sim.score,
       distance: sim.distance,
-      gifts: sim.gifts,
+      gifts: runPay(sim),
+      lights: st.lights,
+      dashes: st.dashes,
+      phased: st.phased,
+      skyGates: st.skyGates,
+      wards: st.wards,
       perfects: st.perfects,
       maxAirtime: st.maxAirtime,
       maxHalfTurns: st.maxHalfTurns,
@@ -1225,7 +1354,7 @@ export class App {
     const d = this.save.data;
     const sim = this.run.sim;
     const key = this.mountainKey();
-    const giftsNow = sim.gifts + this.passBonus;
+    const giftsNow = runPay(sim) + this.passBonus;
     const delta = giftsNow - this.giftsPersisted;
     d.gifts += delta;
     d.lifetimeGifts += delta;
@@ -1327,6 +1456,28 @@ export class App {
     const you = this.youStanding(sim);
     const board = MOUNTAINS.some((m) => m === this.mountain) ? this.boardFor(this.mountain.id) : null;
     const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks }) : null;
+    // A named mountain's mastery board: what this run added, each new star paid once.
+    let mastery: ResultsModel['mastery'] = null;
+    const mi = MOUNTAINS.indexOf(this.mountain as (typeof MOUNTAINS)[number]);
+    if (mi >= 0) {
+      d.mastery ??= {};
+      const rec = readMastery(d.mastery[key]);
+      const pool = poolFor(key);
+      const riderTimes = new Map(ROSTER.filter((r) => r.home === mi).map((r) => {
+        const g = pool.find((p) => p.name === r.name);
+        return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
+      }));
+      const course = courseFor(this.mountain.seed);
+      const fresh = settleMastery(course, key, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
+      d.mastery[key] = rec;
+      if (fresh.length) {
+        d.gifts += STAR_GIFTS * fresh.length;
+        d.lifetimeGifts += STAR_GIFTS * fresh.length;
+        this.masteryFresh.push(...fresh);
+      }
+      const board = masteryBoard(course, key, rec, d.climb?.[key]?.medal ?? 0);
+      mastery = { got: board.filter((s) => s.done).length, of: board.length, fresh: [...this.masteryFresh] };
+    }
     // The missions this card shows Done: a revive never pops them again mid-run.
     for (const mv of settled.missions) if (mv.justCompleted) this.missionsSettled.add(mv.id);
     const missions = { views: settled.missions };
@@ -1361,6 +1512,13 @@ export class App {
     const past = pastTracks.map((t) => (t.entry.kind === 'you' ? 'Your best' : t.entry.name));
     const shownPast = pastTracks.filter((t) => shownAt(t) < Infinity).length;
     const crashNote = this.rankAtCrash !== null ? crashLine(this.rankAtCrash, past, shownPast) : null;
+    // A signature rider has the last word: the one just ahead of you, else the one you just beat.
+    const sig = ghosts.filter((g) => g.kind === 'pool' && riderByName(g.name));
+    const over = sig.filter((g) => aheadOf({ time: g.time ?? null, distance: g.distance }, you));
+    const under = sig.filter((g) => !aheadOf({ time: g.time ?? null, distance: g.distance }, you));
+    const said = over.length ? { r: riderByName(over[over.length - 1].name)!, won: true } : under.length ? { r: riderByName(under[0].name)!, won: false } : null;
+    const lines = said ? (said.won ? said.r.says.won : said.r.says.lost) : [];
+    const quote = said && lines.length ? { name: said.r.name, text: lines[(this.save.data.runs + said.r.key.length) % lines.length], accent: said.r.accent } : null;
     const at = this.bestAtStart;
     const decided = this.decided(sim, you);
     const today = this.daily.tagline;
@@ -1390,7 +1548,7 @@ export class App {
       finishZ: FINISH_Z,
       best: topScore(d.best[key]) || sim.score,
       newBest: this.newBestThisRun,
-      giftsEarned: sim.gifts + this.passBonus,
+      giftsEarned: runPay(sim) + this.passBonus,
       wallet: d.gifts,
       ghosts,
       ghostsPassed: ghosts.filter((g) => g.passed).length,
@@ -1404,7 +1562,7 @@ export class App {
       mountain: this.mountain.name,
       mood: moodInfo(this.chaos.mood).name,
       canRevive: sim.s.crashed && !this.reviveUsed && this.platform.adsAvailable && !this.adblock && sim.distance > 120,
-      canDouble: this.platform.adsAvailable && !this.adblock && sim.gifts + this.passBonus > 0,
+      canDouble: this.platform.adsAvailable && !this.adblock && runPay(sim) + this.passBonus > 0,
       doubled: false,
       canChallenge: sim.score > 0,
       unlocked,
@@ -1414,6 +1572,8 @@ export class App {
       // One race line (C6): a friend's challenge, the Daily medal, a settled grudge or a nemesis, who
       // rode on past your wreck, the event the run never reached, then any other grudge line. The crash
       // line is also the place note's (results.ts), unless it is the race line itself.
+      quote,
+      mastery,
       raceLine: resultsRaceLine({
         friend: this.friendLine(sim),
         daily: settled.daily?.line ?? settled.cup?.line ?? null,
@@ -1447,6 +1607,7 @@ export class App {
           }
         : null,
       stages: this.stageTable(sim, decided?.text ?? null, climb),
+      canRideHome: sim.s.crashed && !sim.finished && sim.distance < sim.course.finishZ - 300 && !this.homeRide,
     };
     this.ui.hideHud();
     this.ui.showResults(this.results);
@@ -1631,6 +1792,7 @@ export class App {
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
     if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
+    else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
   }
 
@@ -2009,6 +2171,7 @@ export class App {
 
     const drained = run.drain();
     const events = drained.map((p) => p.e);
+    for (const e of events) if (e.type === 'skyGate') this.gatesThisRun.push(e.id);
     if (!sim.s.grounded) this.airTicks++;
     else this.airTicks = 0;
     // Standings once per frame: the world's rival, the HUD pill and the hints all read these. After the
@@ -2117,7 +2280,8 @@ export class App {
         clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
         stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
         wipeouts: sim.s.tumbles > 0 ? { left: Math.max(0, TUMBLES - sim.s.tumbles), of: TUMBLES } : null,
-        gifts: sim.gifts + this.passBonus,
+        gifts: runPay(sim) + this.passBonus,
+        lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes },
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
         nextGhost: next,
@@ -2301,6 +2465,8 @@ export class App {
         // The avalanche banner, meter and rear-view mirror own the lower screen while it chases you.
         chased: sim.dyn.avalanche.phase === 1 || sim.dyn.avalanche.phase === 2,
         tumbling: s.tumble > 0,
+        lit: s.lantern >= 100,
+        dashed: sim.stats.dashes > 0,
       },
       h,
     );

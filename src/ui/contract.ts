@@ -27,6 +27,8 @@ export interface MountainCard {
   /** You have beaten the top of this ladder. */
   top?: boolean;
   medals?: MedalSet;
+  /** Mastery stars held of the mountain's board. */
+  stars?: { got: number; of: number };
 }
 
 /** Your medals on a mountain: 0 none, 1 bronze, 2 silver, 3 gold, one per stage and the whole run. */
@@ -56,6 +58,16 @@ export interface MissionView {
   reward: number;
   done: boolean;
   justCompleted: boolean;
+}
+
+export interface PaintCard {
+  id: string;
+  name: string;
+  hex: string;
+  price: number;
+  owned: boolean;
+  on: boolean;
+  affordable: boolean;
 }
 
 export interface SledCard {
@@ -109,7 +121,13 @@ export interface HudModel {
   stage: { index: number; of: number; progress: number } | null;
   /** Wipeouts the run can still take, of how many; null until the first is spent. */
   wipeouts: { left: number; of: number } | null;
+  /** Gifts this run (shown on the results; the run HUD shows the lantern instead). */
   gifts: number;
+  /**
+   * The lantern: charge 0..300 (100 a lantern), how many are lit, whether a dash is on, and ward/dash/lit
+   * counters that tick up when one happens (so the HUD can flash on a change it did not see happen).
+   */
+  lantern: { charge: number; cells: number; dashing: boolean; wards: number; dashes: number };
   /**
    * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
    * (stake.fuseLevel); pace: the stake has passed your lifetime best combo this run.
@@ -225,6 +243,13 @@ export interface ResultsModel {
   lostCombo?: number;
   /** At most ONE extra race line on the card (C6 budget): friend, then grudge, then event note. */
   raceLine?: { text: string; tone: 'friend' | 'grudge' | 'event' | 'crash' | 'rung' | 'medal' } | null;
+  /** A signature rider's word on the result (round 5): the one just ahead of you, else the one you just
+   *  beat. Its accent is its own colour (roster.ts). */
+  quote?: { name: string; text: string; accent: string } | null;
+  /** A named mountain's mastery: stars held of the board, and the ones this run earned (each pays 10). */
+  mastery?: { got: number; of: number; fresh: string[] } | null;
+  /** A wreck short of the town: the rider may ride the rest home as a spirit, outside the race. */
+  canRideHome?: boolean;
   /** Where you stood at the crash and who rode on past ("You led at the crash. SparkleCedar rode on
    *  past."): shown in the place note's slot, unless it is the race line itself. */
   crashNote?: string | null;
@@ -301,14 +326,20 @@ export interface UIHandlers {
   onRevive(): void;
   onDouble(): void;
   onChallenge(): void;
+  /** Ride home as a spirit after a wreck (round 5): outside the race, to the finish town. */
+  onRideHome?(): void;
   onHome(): void;
   onPause(paused: boolean): void;
+  /** The lantern button (touch, or a click on it): a dash, if one is lit. */
+  onSpirit?(): void;
   onSelectMountain(id: string): void;
   onDaily(): void;
   /** Select the weekly Cup. */
   onCup?(): void;
   onSelectSled(id: number): void;
   onBuySled(id: number): void;
+  /** A sled paint: buy it (if not owned) and put it on. */
+  onPaint?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
   /** Any UI click/tap (for audio unlock and UI sounds). */
   onUiSound(kind: 'tap' | 'confirm' | 'back'): void;
@@ -346,7 +377,7 @@ export interface MirrorRect {
 
 export type StyleTone = 'normal' | 'big' | 'perfect' | 'lost' | 'best';
 export type ToastTone = 'ghost' | 'mission' | 'gift' | 'warn' | 'info' | 'grudge' | 'finale' | 'unlock';
-export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop';
+export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop' | 'dash';
 
 export interface GameUI {
   showTitle(m: TitleModel): void;
@@ -384,7 +415,7 @@ export interface GameUI {
   /** missions: the run's live mission progress, shown on the pause card (at most 3 rows). */
   showPause(settings: SettingsModel, missions?: MissionView[]): void;
   hidePause(): void;
-  showSleds(cards: SledCard[], wallet: number): void;
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void;
   showSettings(m: SettingsModel): void;
   closeMenus(): void;
   touchVisual(v: TouchVisual, visible: boolean): void;

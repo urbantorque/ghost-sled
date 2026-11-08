@@ -89,7 +89,7 @@ describe('its field', () => {
 });
 
 function summary(over: Partial<RunSummary> = {}): RunSummary {
-  return { mountain: 'cup', biome: 'alpine', score: 900, distance: FINISH_Z + 60, gifts: 3, perfects: 0, maxAirtime: 0, maxHalfTurns: 0, flips: 0, driftSeconds: 0, draftSeconds: 0, nearMisses: 0, bestCombo: 0, maxSpeed: 20, smashes: 0, gates: 0, yetiHop: false, outranAvalanche: false, ghostsPassed: 0, grudgeBeaten: false, chaos: true, seconds: 150, finished: true, finishSeconds: 140, tumbles: 0, wallRides: 0, grinds: 0, ...over };
+  return { mountain: 'cup', biome: 'alpine', score: 900, distance: FINISH_Z + 60, gifts: 3, lights: 0, dashes: 0, phased: 0, skyGates: 0, wards: 0, perfects: 0, maxAirtime: 0, maxHalfTurns: 0, flips: 0, driftSeconds: 0, draftSeconds: 0, nearMisses: 0, bestCombo: 0, maxSpeed: 20, smashes: 0, gates: 0, yetiHop: false, outranAvalanche: false, ghostsPassed: 0, grudgeBeaten: false, chaos: true, seconds: 150, finished: true, finishSeconds: 140, tumbles: 0, wallRides: 0, grinds: 0, ...over };
 }
 
 const T: [number, number, number] = [160, 140, 120];

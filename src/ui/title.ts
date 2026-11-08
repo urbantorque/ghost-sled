@@ -476,14 +476,17 @@ export class Title {
       const rung = rankText(c);
       const name = h('span', 'gs-wall-name', c.name);
       name.setAttribute('translate', 'no');
-      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet')), !c.locked && c.medals ? medalDots(c.medals) : null);
+      // Mastery's stars ride in the rank's cell, so the row keeps its three columns.
+      const stars = !c.locked && c.stars ? h('span', 'gs-wall-stars', ` · ★ ${c.stars.got}/${c.stars.of}`) : null;
+      stars?.setAttribute('aria-label', `, mastery ${c.stars?.got} of ${c.stars?.of} stars`);
+      const li = h('li', `gs-wall-row${c.locked ? ' is-locked' : ''}${c.top ? ' is-top' : ''}`, name, h('span', 'gs-wall-rank gs-num', c.locked ? 'Locked' : (rung ?? 'No run yet'), stars), !c.locked && c.medals ? medalDots(c.medals) : null);
       list.append(li);
     }
     if (m.cup) {
       const c = m.cup;
       list.append(h('li', 'gs-wall-row is-cup', h('span', 'gs-wall-name', `Week ${c.week} Cup`), h('span', 'gs-wall-rank gs-num', c.best > 0 ? clock(c.best) : 'No run yet'), medalDots({ stages: [], run: c.medal })));
     }
-    pop.append(list, h('p', 'gs-wall-key', 'Three stages, then the whole run.'));
+    pop.append(list, h('p', 'gs-wall-key', 'Three stages, then the whole run. Stars: medals, sky gates, set pieces swept clean, home riders beaten, a clean finish.'));
     bar.append(pop);
     if (animate) play(pop, [{ opacity: 0, transform: 'translateY(8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: 'cubic-bezier(0.2, 0.9, 0.2, 1.1)' });
     this.popover = pop;

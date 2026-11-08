@@ -272,7 +272,7 @@ describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
     wait(16);
     eng.simEvent({ type: 'revive' });
     wait(16);
-    eng.simEvent({ type: 'gift', id: 1, value: 1, x: 0, y: 0, z: 0 });
+    eng.simEvent({ type: 'light', id: 1, value: 1, gain: 6, x: 0, y: 0, z: 0 });
     expect(events).toEqual([]);
     wait(30);
     ctx.running();
@@ -297,12 +297,12 @@ describe('Double Gifts: the coin asked for as the rewarded ad closes', () => {
     const events: number[] = [];
     sfx.event = (_e, t) => void events.push(t);
     for (let k = 0; k < 4; k++) {
-      eng.simEvent({ type: 'gift', id: k, value: 1, x: 0, y: 0, z: 0 });
+      eng.simEvent({ type: 'light', id: k, value: 1, gain: 6, x: 0, y: 0, z: 0 });
       wait(16);
     }
     expect(events).toEqual([]);
     ctx.running();
-    eng.simEvent({ type: 'gift', id: 9, value: 1, x: 0, y: 0, z: 0 });
+    eng.simEvent({ type: 'light', id: 9, value: 1, gain: 6, x: 0, y: 0, z: 0 });
     expect(events).toHaveLength(1);
   });
 

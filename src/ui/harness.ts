@@ -148,6 +148,7 @@ function hudModel(over: Partial<HudModel> = {}): HudModel {
     clock: 71.4,
     stage: { index: 0, of: 3, progress: 0.285 },
     wipeouts: null,
+    lantern: { charge: 160, cells: 1, dashing: false, wards: 0, dashes: 0 },
     gifts: 37,
     combo: { active: true, pending: 1240, mult: 4, chain: 5, timer: 0.62 },
     speed: 21,

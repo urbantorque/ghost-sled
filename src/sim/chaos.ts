@@ -41,7 +41,7 @@ export interface MoodParams {
   spin: number;
   landTol: number;
   pop: number;
-  giftValue: number;
+  lightValue: number;
   /** Extra ghosts the game layer adds to the race. */
   extraGhosts: number;
 }
@@ -56,7 +56,7 @@ const NEUTRAL: MoodParams = {
   spin: 1,
   landTol: 0,
   pop: 1,
-  giftValue: 1,
+  lightValue: 1,
   extraGhosts: 0,
 };
 
@@ -82,7 +82,7 @@ export const MOODS: readonly MoodInfo[] = [
     id: Mood.Lantern,
     key: 'lantern',
     name: 'Lantern Night',
-    rule: 'Ride by lantern light. Gifts glow and combos last 50% longer',
+    rule: 'Ride by lantern light. Spirit lights glow and combos last 50% longer',
     params: { ...NEUTRAL, comboWindow: 1.5 },
   },
   {
@@ -110,8 +110,8 @@ export const MOODS: readonly MoodInfo[] = [
     id: Mood.Powder,
     key: 'powder',
     name: 'Powder Day',
-    rule: 'Deep fresh snow. Slower cruise, bigger pops, gifts worth double',
-    params: { ...NEUTRAL, drag: 1.12, pop: 1.18, giftValue: 2, grip: 1.08 },
+    rule: 'Deep fresh snow. Slower cruise, bigger pops, spirit lights burn twice as bright',
+    params: { ...NEUTRAL, drag: 1.12, pop: 1.18, lightValue: 2, grip: 1.08 },
   },
 ];
 
@@ -126,7 +126,7 @@ export const EVENTS: readonly EventInfo[] = [
   { id: ChaosEvent.None, key: 'none', name: 'None', warn: '' },
   { id: ChaosEvent.Avalanche, key: 'avalanche', name: 'Avalanche', warn: 'Avalanche! Outrun it' },
   { id: ChaosEvent.Yeti, key: 'yeti', name: 'Yeti Crossing', warn: 'Yeti crossing ahead' },
-  { id: ChaosEvent.GiftStorm, key: 'giftstorm', name: 'Gift Storm', warn: 'Gift storm incoming' },
+  { id: ChaosEvent.GiftStorm, key: 'giftstorm', name: 'Light Storm', warn: 'A storm of lights is coming' },
   { id: ChaosEvent.GhostTrain, key: 'ghosttrain', name: 'Spirit Train', warn: 'Spirit train! Draft them' },
 ];
 

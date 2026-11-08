@@ -1101,7 +1101,34 @@ async (page) => {
         if (F.metOk) for (const id of app.missionsPopped) if (!(id in F.met)) F.met[id] = +(sim.tick / 60).toFixed(2);
       };
       tele.trace = [];
-      const source = stunt ? stunt.sample : skill === 'clumsy' ? clumsy : pilot;
+      const source0 = stunt ? stunt.sample : skill === 'clumsy' ? clumsy : pilot;
+      // The lantern (round 5): each pilot spends as lab.ts's spenderFor does (a build without one never
+      // reads the spirit bit). clumsy mashes the key now and then; novice keeps one lantern as a ward;
+      // mid and stunt spend any lit lantern on the snow away from kickers (keeping one past 2 km); expert
+      // spends at once, best into a line that closes ahead.
+      const spendRnd = (() => { let a = ((sim.config.chaos.seed ^ 0x5a17) >>> 0) + skill.length; return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })();
+      let spendHold = 0;
+      let spendWait = 0;
+      const spend = () => {
+        if (spendHold > 0) { spendHold--; return true; }
+        const s = sim.s;
+        if (s.lantern === undefined || s.dash > 0 || s.tumble > 0 || s.finished || s.crashed) return false;
+        const lit = Math.floor(s.lantern / 100);
+        const k0 = Math.floor(s.z / 64);
+        let kick = false;
+        let closing = false;
+        for (let k = k0; k <= k0 + 1; k++) {
+          for (const r of c.zones(k).ramps) if (r.z > s.z - 2 && r.z < s.z + 30 && Math.abs(r.x - s.x) < 5) kick = true;
+          for (const o of c.chunk(k).obstacles) { if (o.soft || o.z < s.z + 4 || o.z > s.z + 18) continue; const ax = s.x + (s.vx / Math.max(1, s.vz)) * (o.z - s.z); if (Math.abs(o.x - ax) < o.r + 1) closing = true; }
+        }
+        const press = () => { spendHold = 3; return true; };
+        if (skill === 'clumsy') return spendRnd() < 0.15 / 60 ? press() : false;
+        if (skill === 'novice') { if (lit >= 2 && s.grounded) { if (++spendWait > 50) { spendWait = 0; return press(); } } else spendWait = 0; return false; }
+        if (skill === 'mid' || skill === 'stunt') return lit > (s.z > 2000 ? 1 : 0) && s.grounded && !kick && spendRnd() < 0.6 / 60 ? press() : false;
+        if (skill === 'expert') return lit >= 1 && s.grounded && !kick && (closing || spendRnd() < 0.9 / 60) ? press() : false;
+        return false;
+      };
+      const source = () => { const o = source0(); o.spirit = spend(); return o; };
       run.input = { sample: () => { try { tickHook(); } catch {} const o = source(); const s = sim.s; tele.trace.push([sim.tick, +s.z.toFixed(1), +s.x.toFixed(2), s.grounded ? 1 : 0, +s.airYaw.toFixed(2), +s.airPitch.toFixed(2), o.steer, o.action ? 1 : 0, +(s.y - c.ground(s.x, s.z)).toFixed(2)]); if (tele.trace.length > 200) tele.trace.shift(); return o; } };
 
       // Race-live samples every 0.25 s and the crash snapshot, polled from the node side.
@@ -1120,6 +1147,9 @@ async (page) => {
           tele.crash = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score, cause: s.crashCause, passed: app.passedThisRun.size, gifts: (r.sim.gifts || 0) + (app.passBonus || 0), passBonus: app.passBonus || 0, ghosts, liveNear: ghosts.filter((g) => g.riding && Math.abs(g.gap) <= 40).length, riding: ghosts.filter((g) => g.riding).length };
         }
         if (s.finished && !tele.finish) tele.finish = { t: +T.toFixed(2), distance: Math.round(r.sim.distance), score: r.sim.score };
+        // The lantern and the set pieces (round 5; absent on older builds): kept fresh until the run ends.
+        const lst = r.sim.stats || {};
+        tele.lantern = { lights: lst.lights ?? null, lit: lst.lit !== undefined ? Math.round(lst.lit) : null, dashes: lst.dashes ?? null, wards: lst.wards ?? null, gates: lst.skyGates ?? null, phased: lst.phased ?? null, finishTick: s.finished ? s.finishTick : null, marquee: app.director && app.director.marqueeDone ? app.director.marqueeDone.map((m) => [m.key, m.took, m.total, m.clean]) : null, place: app.frameStandings ? [app.frameStandings.rank, app.frameStandings.of] : null };
         return { phase: app.phase, crashed: s.crashed, finished: !!s.finished, t: T };
       };
       const sampleLive = () => {
@@ -1240,6 +1270,7 @@ async (page) => {
       cause: tele.crash ? tele.crash.cause : 'timeout',
       gifts: tele.crash ? tele.crash.gifts : null,
       passBonus: tele.crash ? tele.crash.passBonus : null,
+      lantern: tele.lantern || null,
       passes: shown,
       passedBy,
       wreckPassed,

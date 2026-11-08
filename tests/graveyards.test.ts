@@ -31,27 +31,29 @@ describe('graveyards and the finish line', () => {
 describe('graveyards', () => {
   it('finds the places on every mountain, from where riders really fell', () => {
     const at = (key: string) => graveyards(pool(key), key).map((g) => [Math.round(g.z), g.fell]);
+    // (Since the lantern round a ward is a fall the lantern took, and counts: the place is as deadly.)
     expect(at(pinecrest)).toEqual([
-      [417, 6],
-      [1183, 3],
-      [1420, 2],
-      [3002, 4],
+      [421, 6],
+      [1422, 4],
+      [2926, 3],
+      [3130, 5],
     ]);
     expect(at(frostfang)).toEqual([
-      [1084, 3],
-      [2706, 2],
-      [2894, 2],
-      [3115, 14],
+      [524, 4],
+      [2907, 2],
+      [3116, 14],
+      [3360, 2],
     ]);
     expect(at(ember)).toEqual([
-      [2506, 2],
-      [3053, 5],
+      [1380, 2],
+      [3050, 5],
+      [3628, 2],
     ]);
     expect(at(sakura)).toEqual([
-      [2131, 9],
-      [2345, 4],
-      [3504, 16],
-      [4109, 7],
+      [1079, 2],
+      [1453, 2],
+      [2136, 4],
+      [2873, 2],
     ]);
   });
 
@@ -99,11 +101,10 @@ describe('graveyards', () => {
   });
 
   it('still reads an older pool, from where its runs ended', () => {
-    const old = pool(sakura).map(({ falls: _, ...g }) => g);
-    expect(graveyards(old, sakura).map((g) => [Math.round(g.z), g.fell])).toEqual([
-      [3507, 2],
-      [4110, 2],
-    ]);
+    // (The bundled pools hardly wreck since the lantern's wards, so an older pool is made up here: two runs
+    // that ended together, one that ended alone, and a finisher.)
+    const old = [at(3505), at(3509), at(2000), { distance: FINISH_Z + 40, ticks: 11000, finishTick: 9000 }];
+    expect(graveyards(old, sakura).map((g) => [Math.round(g.z), g.fell])).toEqual([[3507, 2]]);
   });
 
   it('leaves out a recorded fall at or past the line, and takes a clean run for a clean run', () => {
@@ -133,7 +134,7 @@ describe('graveyards', () => {
     const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
-    expect(names.length).toBe(14);
+    expect(names.length).toBe(15);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
     // The clusters are the same ones the per-mountain call finds.

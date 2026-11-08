@@ -123,7 +123,7 @@ describe('the archive', () => {
     const d = load();
     const before = JSON.stringify(d.archive);
     settleBest(d, 'pinecrest', null, { score: 80, distance: 900, time: null, splits: [], record: () => recordToString(run('Nico', 80, 900)) });
-    settleRun(d, { mountain: 'pinecrest', biome: 'alpine', score: 80, distance: 900, gifts: 0, perfects: 0, maxAirtime: 0, maxHalfTurns: 0, flips: 0, driftSeconds: 0, draftSeconds: 0, nearMisses: 0, bestCombo: 0, maxSpeed: 0, smashes: 0, gates: 0, yetiHop: false, outranAvalanche: false, ghostsPassed: 0, grudgeBeaten: false, chaos: false, seconds: 40, finished: false, finishSeconds: 0, tumbles: 0, wallRides: 0, grinds: 0 }, null, 'pinecrest');
+    settleRun(d, { mountain: 'pinecrest', biome: 'alpine', score: 80, distance: 900, gifts: 0, lights: 0, dashes: 0, phased: 0, skyGates: 0, wards: 0, perfects: 0, maxAirtime: 0, maxHalfTurns: 0, flips: 0, driftSeconds: 0, draftSeconds: 0, nearMisses: 0, bestCombo: 0, maxSpeed: 0, smashes: 0, gates: 0, yetiHop: false, outranAvalanche: false, ghostsPassed: 0, grudgeBeaten: false, chaos: false, seconds: 40, finished: false, finishSeconds: 0, tumbles: 0, wallRides: 0, grinds: 0 }, null, 'pinecrest');
     expect(JSON.stringify(d.archive)).toBe(before);
   });
 
@@ -253,7 +253,9 @@ describe('what stays where it was', () => {
     const d = load();
     expect(d).toMatchObject({ gifts: 412, lifetimeGifts: 1980, ghostsPassed: 27, runs: 88, sled: 2, ownedSleds: [0, 1, 2] });
     expect(d.stats).toEqual({ bestScore: 6400, bestCombo: 3120, longestAir: 2.2, perfects: 90, topSpeed: 38.5, yetiHops: 2, avalanches: 3 });
-    expect(d.missions).toEqual({ active: [{ id: 'pass3', best: 2 }, { id: 'gifts20', best: 11 }, { id: 'near4', best: 3 }], cursor: 41, completed: 19, seed: 1234 });
+    // The gift mission retired with the lantern round: its slot carries on as the spirit lights mission, which
+    // starts again from nothing (11 gifts are not 11 lights).
+    expect(d.missions).toEqual({ active: [{ id: 'pass3', best: 2 }, { id: 'lights20', best: 0 }, { id: 'near4', best: 3 }], cursor: 41, completed: 19, seed: 1234 });
   });
 
   it('leaves v6 records alone', () => {

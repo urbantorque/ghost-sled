@@ -1,7 +1,7 @@
 import { ChaosEvent, ChaosRoll, Mood, MoodParams, eventTriggerZ, moodInfo } from './chaos';
-import { CHUNK_LEN, Course, Obstacle, ObstacleKind, Rail, courseFor } from './course';
+import { CHUNK_LEN, Course, Obstacle, ObstacleKind, Rail, SkyGate, courseFor } from './course';
 import { PI, TAU, angleDiff, approach, clamp, datan2, dcos, dsin, wrapAngle } from './dmath';
-import { MAX_RUN_TICKS, actionOf, draftOf, steerOf } from './input';
+import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
@@ -9,7 +9,7 @@ import { SledDef, sledById } from './sleds';
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 6;
+export const SIM_VERSION = 7;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -40,6 +40,31 @@ export const LAND_SET_TICKS = 14;
 /** Par for the time bonus: the finish reached at this speed earns nothing. */
 const PAR_SPEED = 24;
 
+// The lantern: what spirit lights and skill charge, and what a dash or a ward spends.
+/** One lantern's worth of charge; three lanterns hang on the sled. */
+export const LANTERN = 100;
+export const LANTERN_MAX = 300;
+/** What a spark and a great light are worth (a light's value 1 or 3). */
+const SPARK = 6;
+const GREAT = 25;
+/** A dash: how long the sled runs as a spirit, what it adds to the speed, how much of the air's drag is
+ *  left, and how far over the cap it may go while it lasts. */
+export const DASH_TICKS = 84;
+const DASH_BOOST = 7;
+const DASH_DRAG = 0.55;
+const DASH_CAP = 4;
+/** A ward takes the hit: the sled keeps this much of its speed and is untouchable for a moment. */
+const WARD_KEEP = 0.84;
+const WARD_INVULN = 50;
+const WARD_GHOST = 30;
+/** A sled held under this speed this long is nudged back to its line (wedged against a rock in a hollow). */
+const STUCK_SPEED = 2.5;
+const STUCK_TICKS = 60;
+/** Over the cap after a dash, speed eases back down at this rate (m/s per second), never in a step. */
+const OVERCAP_EASE = 6;
+/** A near miss under this edge gap is a whisker (the director's WHISKER_GAP): it lights more. */
+const WHISKER = 0.45;
+
 export type CrashCause = 'tree' | 'rock' | 'forest' | 'landing' | 'yeti' | 'avalanche' | 'daylight';
 export type TumbleCause = Exclude<CrashCause, 'avalanche' | 'daylight'>;
 export type TakeoffKind = 'lip' | 'pop' | 'geyser';
@@ -63,7 +88,16 @@ export type SimEvent =
   | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
   | { type: 'comboBank'; points: number; mult: number }
   | { type: 'comboLost'; points: number }
-  | { type: 'gift'; id: number; value: number; x: number; y: number; z: number }
+  /** A spirit light taken: its id, value (1 or 3), the charge it gave and where it was. */
+  | { type: 'light'; id: number; value: number; gain: number; x: number; y: number; z: number }
+  /** A sky gate ridden through. */
+  | { type: 'skyGate'; id: number; stage: number }
+  /** The lantern crossed a whole lantern: 'lit' as one fills, with the count of full ones now. */
+  | { type: 'lantern'; phase: 'lit'; cells: number }
+  /** A dash: 'start' as a lantern is spent, 'end' as the sled is solid again. */
+  | { type: 'dash'; phase: 'start' | 'end'; cells: number }
+  /** A full lantern took a hit that would have been a wipeout. */
+  | { type: 'ward'; cause: TumbleCause; cells: number }
   | { type: 'bump'; id: number }
   | { type: 'smash'; id: number; x: number; y: number; z: number }
   | { type: 'drift'; phase: 'start' | 'tier' | 'release' | 'end'; tier: number }
@@ -136,6 +170,12 @@ export interface SledState {
   wallTicks: number;
   /** On a rail. */
   grinding: boolean;
+  /** The lantern's charge, 0 to LANTERN_MAX: a full LANTERN is one dash or one ward. */
+  lantern: number;
+  /** Ticks left of a dash (0 when solid). */
+  dash: number;
+  /** Ticks the sled passes through obstacles without a dash's speed: after a ward, or a rescue. */
+  ghost: number;
 }
 
 export interface AvalancheState {
@@ -202,6 +242,16 @@ export interface RunStats {
   yetiHop: boolean;
   outranAvalanche: boolean;
   revived: boolean;
+  /** Spirit lights taken, and the charge they and skill gave the lantern. */
+  lights: number;
+  greatLights: number;
+  lit: number;
+  litBySkill: number;
+  dashes: number;
+  wards: number;
+  /** Obstacles ridden through as a spirit. */
+  phased: number;
+  skyGates: number;
 }
 
 const vec = { x: 0, z: 0 };
@@ -222,8 +272,11 @@ export class Sim {
   readonly destroyed = new Set<number>();
   tick = 0;
   maxZ = 0;
-  gifts = 0;
   private prevAction = false;
+  private prevSpirit = false;
+  /** The sky gates not yet passed, in order down the course. */
+  private gates: readonly SkyGate[];
+  private gateAt = 0;
   private nearMiss = new Map<number, number>();
   private resolvedObstacles = new Set<number>();
   private ventCooldown = 0;
@@ -289,7 +342,11 @@ export class Sim {
       finishTick: -1,
       wallTicks: 0,
       grinding: false,
+      lantern: 0,
+      dash: 0,
+      ghost: 0,
     };
+    this.gates = this.course.skyGates;
     this.course.gradient(x0, z0, vec);
     this.s.vy = vec.z * this.s.vz;
     this.dyn = {
@@ -322,18 +379,26 @@ export class Sim {
       yetiHop: false,
       outranAvalanche: false,
       revived: false,
+      lights: 0,
+      greatLights: 0,
+      lit: 0,
+      litBySkill: 0,
+      dashes: 0,
+      wards: 0,
+      phased: 0,
+      skyGates: 0,
     };
   }
 
-  /** Small direct score from gifts (gifts are mainly currency, not combo fuel). */
-  giftScore = 0;
+  /** Small direct score from spirit lights (they are the lantern's fuel, not combo fuel). */
+  lightScore = 0;
   /** The finish's bonus: flat, plus what the run beat par by. */
   finishBonus = 0;
   /** The tick each stage line was crossed. */
   readonly stageTicks: number[] = [];
 
   get score(): number {
-    return Math.floor(this.maxZ) + this.combo.banked + this.giftScore + this.finishBonus;
+    return Math.floor(this.maxZ) + this.combo.banked + this.lightScore + this.finishBonus;
   }
 
   get finished(): boolean {
@@ -346,6 +411,30 @@ export class Sim {
 
   get gravity(): number {
     return G * this.mood.gravity;
+  }
+
+  /** Riding home as a spirit: a sim of its own, started where a run was wrecked, after the race is over. It is
+   *  never recorded and never replayed, so nothing here can touch a run: it passes through everything, cannot
+   *  wipe out, lights nothing, meets no event and drafts nobody, and coasts into the town at the line. */
+  homeward = false;
+
+  static homewardFrom(run: Sim): Sim {
+    const sim = new Sim(run.config);
+    sim.homeward = true;
+    const s = sim.s;
+    const z = run.s.z + 3;
+    s.z = z;
+    s.x = sim.course.safeX(z);
+    s.y = sim.course.ground(s.x, z);
+    s.speed = Math.max(14, 0.6 * sim.cruiseSpeed());
+    s.vx = 0;
+    s.vz = s.speed;
+    sim.course.gradient(s.x, z, vec);
+    s.vy = vec.z * s.vz;
+    s.ghost = 1 << 30;
+    sim.tick = run.tick;
+    sim.maxZ = z;
+    return sim;
   }
 
   /** Bring a crashed sled back onto the safe line (rewarded revive). */
@@ -395,6 +484,7 @@ export class Sim {
     s.tumble = 0;
     s.tumbles = Math.max(0, TUMBLES - 1);
     s.wallTicks = 0;
+    s.dash = 0;
     this.endGrind();
     this.stats.revived = true;
     const d = this.dyn;
@@ -423,6 +513,14 @@ export class Sim {
     const pressed = action && !this.prevAction;
     const released = !action && this.prevAction;
     this.prevAction = action;
+    const spirit = spiritOf(input);
+    const spiritPressed = spirit && !this.prevSpirit;
+    this.prevSpirit = spirit;
+    if (spiritPressed && !s.finished && s.tumble === 0 && !this.homeward) this.startDash();
+    if (s.dash > 0) {
+      s.dash--;
+      if (s.dash === 0) this.events.push({ type: 'dash', phase: 'end', cells: this.cells });
+    }
     s.action = action;
     if (pressed) {
       s.lastPressTick = this.tick;
@@ -440,13 +538,14 @@ export class Sim {
     else this.airStep(action, pressed, released);
 
     const riding = !s.finished && s.tumble === 0;
-    if (riding && !s.crashed && !s.grinding) this.collide(prevZ);
-    if (riding && !s.crashed) this.pickups(prevZ);
+    const race = !this.homeward;
+    if (riding && !s.crashed && !s.grinding && race) this.collide(prevZ);
+    if (riding && !s.crashed && race) this.pickups(prevZ);
     if (riding && !s.crashed) this.edge();
     if (riding && !s.crashed) this.lines();
-    if (!s.crashed && !s.finished && this.tick >= MAX_RUN_TICKS - 1) this.crash('daylight');
-    if (!s.finished) this.chaos();
-    if (!s.finished) this.draft(draftOf(input));
+    if (!s.crashed && !s.finished && this.tick >= MAX_RUN_TICKS - 1 && race) this.crash('daylight');
+    if (!s.finished && race) this.chaos();
+    if (!s.finished && race) this.draft(draftOf(input));
 
     const hold = !s.grounded || s.drifting || s.drafting || s.grinding || s.wallTicks > 0;
     const bankedNow = this.combo.tick(hold);
@@ -456,6 +555,21 @@ export class Sim {
     s.flow = approach(s.flow, flowTarget, 1.5 * DT);
     s.boostGlow = approach(s.boostGlow, s.boostPool > 0.2 ? 1 : 0, 4 * DT);
     if (s.invuln > 0) s.invuln--;
+    if (s.ghost > 0) s.ghost--;
+    // Wedged: something has held the sled near a standstill for a second. The mountain sets it back on its
+    // way along the line, and lets it slip past what held it.
+    if (riding && !s.crashed && !s.finished && s.grounded && s.speed < STUCK_SPEED && this.tick > 120) {
+      if (++this.stuck >= STUCK_TICKS) {
+        this.stuck = 0;
+        const line = this.lineHeading();
+        s.heading = line;
+        s.velHeading = line;
+        s.speed = 8;
+        s.vx = s.speed * dsin(line);
+        s.vz = s.speed * dcos(line);
+        s.ghost = WARD_GHOST;
+      }
+    } else this.stuck = 0;
     if (s.wobble > 0) s.wobble--;
     if (s.lateStompTicks > 0) s.lateStompTicks--;
     if (this.ventCooldown > 0) this.ventCooldown--;
@@ -467,6 +581,7 @@ export class Sim {
 
   /** `extra`: optional presentation fields spread into the event (never hashed, never scored). */
   private style(kind: StyleKind, base: number, extra?: { gap: number; side: -1 | 1; x: number; z: number; obs: ObstacleKind; id: number }): void {
+    this.charge(skillCharge(kind, base, extra ? extra.gap : -1), true);
     const r = this.combo.add(kind, base);
     if (extra) this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, ...extra });
     else this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult });
@@ -613,10 +728,12 @@ export class Sim {
     let cd = CD * this.sled.drag * this.mood.drag * surf.drag * flowDrag;
     // The tuck: the crouch on a straight line is worth about 3 m/s at cruise.
     if (action && Math.abs(s.steer) < 0.3 && !s.drifting) cd *= 0.82;
+    // A dash cuts through the air: most of the drag is gone while it lasts.
+    if (s.dash > 0) cd *= DASH_DRAG;
     s.speed -= (cd * s.speed * s.speed + MU * g) * DT;
     if (s.speed < 0) s.speed = 0;
     this.applyBoost();
-    if (s.speed > MAX_SPEED) s.speed = MAX_SPEED;
+    this.capSpeed();
 
     s.vx = s.speed * dsin(s.velHeading);
     s.vz = s.speed * dcos(s.velHeading);
@@ -925,7 +1042,7 @@ export class Sim {
       const m = vyFollow / s.speed;
       const along = (s.speed + vyAtTouch * m) / (1 + m * m);
       if (along > s.speed) s.speed += Math.min(8, (along - s.speed) * 1.5);
-      if (s.speed > MAX_SPEED) s.speed = MAX_SPEED;
+      this.capSpeed();
     }
     s.vx = s.speed * dsin(s.velHeading);
     s.vz = s.speed * dcos(s.velHeading);
@@ -955,6 +1072,52 @@ export class Sim {
     this.events.push({ type: 'land', quality: 'perfect', airtime: 0, halfTurns: t.halfTurns, flips: t.flips, impact: 0, late: true });
   }
 
+  /** The speed cap, raised while a dash lasts; what a dash carried over it eases off, never in a step. */
+  private capSpeed(): void {
+    const s = this.s;
+    if (s.dash > 0) this.overcap = DASH_CAP;
+    // The allowance only ever falls once the dash is over: with the ease, or with the speed, if that drops first.
+    else if (this.overcap > 0) this.overcap = Math.max(0, Math.min(this.overcap - OVERCAP_EASE * DT, s.speed - MAX_SPEED));
+    const cap = MAX_SPEED + this.overcap;
+    if (s.speed > cap) s.speed = cap;
+  }
+
+  private overcap = 0;
+  private stuck = 0;
+
+  /** Full lanterns. */
+  get cells(): number {
+    return Math.floor(this.s.lantern / LANTERN);
+  }
+
+  /** Charge the lantern; a whole lantern lit says so. Skill is counted apart from lights, for the results. */
+  private charge(units: number, skill: boolean): void {
+    if (units <= 0) return;
+    const s = this.s;
+    const before = this.cells;
+    const add = units * (skill ? this.sled.skillGain : this.sled.lightGain);
+    const room = LANTERN_MAX - s.lantern;
+    const got = add < room ? add : room;
+    if (got <= 0) return;
+    s.lantern += got;
+    this.stats.lit += got;
+    if (skill) this.stats.litBySkill += got;
+    const after = this.cells;
+    if (after > before) this.events.push({ type: 'lantern', phase: 'lit', cells: after });
+  }
+
+  /** Spend a full lantern on a dash: a burst of speed, the air's drag mostly gone, and for its length the
+   *  sled rides as a spirit, through anything that would stop it (never through the mountain's walls). */
+  private startDash(): void {
+    const s = this.s;
+    if (s.crashed || s.dash > 0 || s.lantern < LANTERN) return;
+    s.lantern -= LANTERN;
+    s.dash = Math.round(DASH_TICKS * this.sled.dashLen);
+    s.boostPool += DASH_BOOST;
+    this.stats.dashes++;
+    this.events.push({ type: 'dash', phase: 'start', cells: this.cells });
+  }
+
   private applyBoost(): void {
     const s = this.s;
     if (s.boostPool <= 0) return;
@@ -968,6 +1131,39 @@ export class Sim {
   private wipeout(cause: TumbleCause): void {
     const s = this.s;
     if (s.tumble > 0 || s.crashed) return;
+    if (this.homeward) {
+      // Riding home nothing can go wrong: a landing that would have floored a racer just lands.
+      s.heading = s.velHeading;
+      s.airYaw = 0;
+      s.airPitch = 0;
+      s.spinRate = 0;
+      s.pitchRate = 0;
+      return;
+    }
+    // A full lantern takes the hit: the rider rides on, slower, the combo banked rather than lost.
+    if (s.lantern >= LANTERN) {
+      s.lantern -= LANTERN;
+      this.stats.wards++;
+      s.speed *= WARD_KEEP * this.sled.wardKeep;
+      s.heading = s.velHeading;
+      s.airYaw = 0;
+      s.airPitch = 0;
+      s.spinRate = 0;
+      s.pitchRate = 0;
+      s.drifting = false;
+      s.driftCharge = 0;
+      s.driftTier = 0;
+      s.vx = s.speed * dsin(s.velHeading);
+      s.vz = s.speed * dcos(s.velHeading);
+      s.invuln = WARD_INVULN;
+      // The spirits carry it through what it hit: never left inside a rock, never bounced off it.
+      s.ghost = WARD_GHOST;
+      s.wobble = 10;
+      const banked = this.combo.bank();
+      if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+      this.events.push({ type: 'ward', cause, cells: this.cells });
+      return;
+    }
     const free = s.z < FREE_TUMBLE_Z;
     if (!free && s.tumbles >= TUMBLES) {
       this.crash(cause);
@@ -1165,7 +1361,7 @@ export class Sim {
     const dir = datan2(r.x1 - r.x0, len);
     s.speed -= (0.6 * s.speed * s.speed * CD + 0.2 * MU * this.gravity) * DT;
     s.speed += 0.6 * DT;
-    if (s.speed > MAX_SPEED) s.speed = MAX_SPEED;
+    this.capSpeed();
     this.railU += (s.speed * dcos(dir) * DT) / len;
     const u = this.railU;
     const x = r.x0 + (r.x1 - r.x0) * u;
@@ -1251,6 +1447,19 @@ export class Sim {
             }
             continue;
           }
+          // A spirit rides through what would stop a sled: counted once, never a bump. (A ward's moment of
+          // spirit passes through too, but only a dash calls it style.)
+          if ((s.dash > 0 || s.ghost > 0) && !o.soft) {
+            if (!this.resolvedObstacles.has(o.id)) {
+              this.resolvedObstacles.add(o.id);
+              this.nearMiss.delete(o.id);
+              if (s.dash > 0) {
+                this.stats.phased++;
+                this.style('phase', 60);
+              }
+            }
+            continue;
+          }
           this.resolvedObstacles.add(o.id);
           this.nearMiss.delete(o.id);
           if (o.soft) {
@@ -1325,20 +1534,33 @@ export class Sim {
     for (let k = ci - 1; k <= ci + 1; k++) {
       if (k < 0) continue;
       const chunk = c.chunk(k);
-      for (const gft of chunk.gifts) {
-        if (this.collected.has(gft.id)) continue;
-        const dz = gft.z - s.z;
+      for (const lt of chunk.lights) {
+        if (this.collected.has(lt.id)) continue;
+        const dz = lt.z - s.z;
         if (dz > 3 || dz < -3) continue;
-        const dx = gft.x - s.x;
-        const gy = c.ground(gft.x, gft.z) + gft.hover;
+        const dx = lt.x - s.x;
+        const gy = c.ground(lt.x, lt.z) + lt.hover;
         const dy = gy - (s.y + 0.5);
-        if (dx * dx + dz * dz + dy * dy < r2) this.collectGift(gft.id, gft.value, gft.x, gy, gft.z);
+        if (dx * dx + dz * dz + dy * dy < r2) this.collectLight(lt.id, lt.value, lt.x, gy, lt.z);
       }
       for (const gate of chunk.gates) {
         if (prevZ < gate.z && s.z >= gate.z && s.x > gate.x1 + 0.45 && s.x < gate.x2 - 0.45) {
           this.stats.gates++;
           this.style('gate', 250);
         }
+      }
+    }
+    // A sky gate: through its ring as the sled crosses its plane.
+    while (this.gateAt < this.gates.length && this.gates[this.gateAt].z < prevZ - 1) this.gateAt++;
+    const gate = this.gateAt < this.gates.length ? this.gates[this.gateAt] : null;
+    if (gate && prevZ < gate.z && s.z >= gate.z) {
+      this.gateAt++;
+      const dx = s.x - gate.x;
+      const dy = s.y + 0.5 - gate.y;
+      if (dx * dx + dy * dy < gate.r * gate.r) {
+        this.stats.skyGates++;
+        this.events.push({ type: 'skyGate', id: gate.id, stage: gate.stage });
+        this.style('skyGate', 400);
       }
     }
     for (const g of this.dyn.storm) {
@@ -1350,7 +1572,7 @@ export class Sim {
       const dy = gy - (s.y + 0.5);
       if (dx * dx + dz * dz + dy * dy < r2 * 1.2) {
         g.collected = true;
-        this.collectGift(g.id, g.value, g.x, gy, g.z);
+        this.collectLight(g.id, g.value, g.x, gy, g.z);
       }
     }
   }
@@ -1362,13 +1584,15 @@ export class Sim {
     return base + (fall > 0 ? fall : 0);
   }
 
-  private collectGift(id: number, value: number, x: number, y: number, z: number): void {
+  private collectLight(id: number, value: number, x: number, y: number, z: number): void {
     this.collected.add(id);
-    const v = value * this.mood.giftValue;
-    this.gifts += v;
-    this.stats.gifts += v;
-    this.events.push({ type: 'gift', id, value: v, x, y, z });
-    this.giftScore += value > 1 ? 50 : 10;
+    const great = value > 1;
+    const before = this.s.lantern;
+    this.charge((great ? GREAT : SPARK) * this.mood.lightValue, false);
+    this.stats.lights++;
+    if (great) this.stats.greatLights++;
+    this.events.push({ type: 'light', id, value, gain: this.s.lantern - before, x, y, z });
+    this.lightScore += great ? 50 : 10;
   }
 
   private draft(bit: boolean): void {
@@ -1380,7 +1604,11 @@ export class Sim {
       return;
     }
     let active = bit;
-    if (!active && this.dyn.trainPhase === 2) active = this.trainDraft();
+    if (this.dyn.trainPhase === 2 && this.trainDraft()) {
+      active = true;
+      // Riding in the spirits' wake lights the lantern fast: the train is fuel for whoever chases it.
+      this.charge(1, true);
+    }
     s.drafting = active && !s.crashed;
     if (s.drafting) {
       s.draftTicks++;
@@ -1566,13 +1794,14 @@ export class Sim {
       if (d.stormTicks % 15 === 0 && d.storm.length < 48) {
         const k = d.storm.length;
         const z = s.z + 62 + this.chaosRng.next() * 22;
-        const sway = dsin(k * 0.55) * Math.max(0, c.halfWidth(z) - 3.5) * 0.8;
+        // The storm spreads wide across the corridor: chasing it is a choice, and the safe line gets little.
+        const sway = dsin(k * 0.55) * Math.max(0, c.halfWidth(z) - 2.5) * 0.95;
         const cx = c.centerX(z);
         const hw = c.halfWidth(z);
         let x = clamp(c.safeX(z) + sway, cx - hw + 1.2, cx + hw - 1.2);
         // Never drop a gift into a trunk: fall back to the guaranteed lane.
         if (this.nearHard(x, z, 1.9)) x = c.safeX(z);
-        d.storm.push({ id: 10_000_000 + k, x, z, y: 0, value: k % 8 === 7 ? 5 : 1, spawnTick: this.tick, collected: false });
+        d.storm.push({ id: 10_000_000 + k, x, z, y: 0, value: k % 4 === 3 ? 3 : 1, spawnTick: this.tick, collected: false });
       }
       if (d.stormTicks >= 720) {
         d.stormPhase = 3;
@@ -1642,16 +1871,66 @@ export class Sim {
     mixF(this.combo.pending);
     mixF(this.combo.banked);
     mixF(this.tick);
-    mixF(this.gifts);
+    mixF(this.stats.lights);
     mixF(s.crashed ? 1 : 0);
     mixF(s.tumble);
     mixF(s.tumbles);
     mixF(s.finished ? 1 : 0);
     mixF(s.grinding ? this.railU : -1);
+    mixF(s.lantern);
+    mixF(s.dash);
+    mixF(s.ghost);
+    mixF(this.overcap);
     return h >>> 0;
   }
 }
 
 export function isMood(roll: ChaosRoll, m: Mood): boolean {
   return roll.mood === m;
+}
+
+/** What a piece of skill lights in the lantern (charge units; LANTERN is one lantern). A stomp, a whisker, a
+ *  slingshot or a grind is worth a few sparks; a sky gate, a yeti hopped and an avalanche outrun are worth a
+ *  whole lantern. `gap` is a near miss's edge gap, or -1. */
+export function skillCharge(kind: StyleKind, base: number, gap: number): number {
+  switch (kind) {
+    case 'perfect':
+      return 16;
+    case 'clean':
+      return 5;
+    case 'spin':
+      return 4;
+    case 'flip':
+      return 8;
+    case 'nearMiss':
+      return gap >= 0 && gap < WHISKER ? 12 : 5;
+    case 'cleared':
+      return 6;
+    case 'slingshot':
+      return 18;
+    case 'draft':
+      return 2;
+    case 'drift':
+      return base >= 700 ? 14 : base >= 350 ? 8 : 4;
+    case 'smash':
+      return 3;
+    case 'gate':
+      return 15;
+    case 'geyser':
+      return 6;
+    case 'boostPop':
+      return 6;
+    case 'wallRide':
+      return base >= 200 ? 10 : 4;
+    case 'grind':
+      return base >= 150 ? 6 : 3;
+    case 'carve':
+      return 5;
+    case 'skyGate':
+    case 'yetiHop':
+    case 'avalanche':
+      return LANTERN;
+    default:
+      return 0;
+  }
 }

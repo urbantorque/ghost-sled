@@ -93,7 +93,7 @@ const ghost = (dx: number) => ({ id: 1, name: 'Probe', kind: 'pool' as const, dx
  */
 function burst(core: Core, t: number, n: number): void {
   const beats: Beat[] = [];
-  const events: SimEvent[] = [{ type: 'gift', id: n, value: 5, x: 0, y: 0, z: 0 }, { type: 'style', kind: 'gift', points: 50, chain: 12 + n, mult: 10 }];
+  const events: SimEvent[] = [{ type: 'light', id: n, value: 3, gain: 25, x: 0, y: 0, z: 0 }, { type: 'style', kind: 'cleared', points: 50, chain: 12 + n, mult: 10 }];
   const stomp = (): void => {
     beats.push({ type: 'stomp', tick: 0, streak: 5, late: false, title: 'Stomp streak 5', lead: [], x: 0, z: 0, heading: 0, yetiHop: false });
     events.push({ type: 'style', kind: 'perfect', points: 400, chain: 10 + n, mult: 10 }, { type: 'land', quality: 'perfect', airtime: 1.4, halfTurns: 2, flips: 1, impact: 9, late: false });
@@ -801,7 +801,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
     if (gifts) {
       for (let g = giftAt(n); t >= g.t - 1e-6; g = giftAt(++n)) {
         core.sfx.frame();
-        core.sfx.event({ type: 'gift', id: n, value: g.value, x: 0, y: 0, z: 0 }, t + 0.006);
+        core.sfx.event({ type: 'light', id: n, value: g.value >= 5 ? 3 : 1, gain: 6, x: 0, y: 0, z: 0 }, t + 0.006);
       }
     }
     if (snuffK) {

@@ -171,9 +171,12 @@ describe('determinism', () => {
     for (let z = 0; z < 2000; z += 7.3) expect(wild.course.ground(3, z)).toBe(plain.course.ground(3, z));
   });
 
-  it('a 3-minute scripted run log stays under 2 KB', () => {
+  it('a 3-minute scripted run log stays under 2.2 KB', () => {
+    // This run's input changes every 5 to 30 ticks, far busier than a person (a real 3-minute run is about
+    // 1 KB). Its rate is unchanged at about 700 bytes a minute: since the lantern's wards it rides the whole
+    // 3 minutes, where it used to wreck at 2:42 with 1,941 bytes.
     const rec = recordScriptedRun(MOUNTAINS[1].seed, 5, 0, 60 * 180);
-    expect(rec.inputs.length).toBeLessThan(2048);
+    expect(rec.inputs.length).toBeLessThan(2250);
   });
 
   it('a run replays the same however the course is read between ticks', () => {
@@ -211,7 +214,7 @@ describe('determinism', () => {
       const n = Math.ceil(a.finishZ / CHUNK_LEN) + 4;
       const list = (c: Course, i: number): string => {
         const ch = c.chunk(i);
-        return JSON.stringify([ch.obstacles.map((o) => [o.id, o.x, o.z, o.r]), ch.gifts.map((g) => [g.id, g.x, g.z]), ch.zones.ramps, ch.zones.rails, ch.zones.drops]);
+        return JSON.stringify([ch.obstacles.map((o) => [o.id, o.x, o.z, o.r]), ch.lights.map((g) => [g.id, g.x, g.z, g.hover, g.value]), ch.zones.ramps, ch.zones.rails, ch.zones.drops]);
       };
       const forward: string[] = [];
       for (let i = 0; i < n; i++) forward.push(list(a, i));

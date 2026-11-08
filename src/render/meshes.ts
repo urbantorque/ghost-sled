@@ -17,6 +17,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { ObstacleKind } from '../sim/course';
+import type { HatKind } from '../bot/roster';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
 import { hazardPineGeometry } from './flora';
 import { Palette } from './palette';
@@ -403,6 +404,37 @@ function roundedBox(hx: number, hy: number, hz: number, r: number, segs: number,
  *  marigold role wrapped in two tones of diagonal stripes with a few foil facets bright enough to catch
  *  the bloom, a satin ribbon round it (painted into the wrap so it follows the rounded edges), a plump bow of two leaning loops and two tails, and a knot
  *  that glows. A golden gift is gold-white with a mint ribbon. About 640 triangles (the old box was 450). */
+/** A spirit light: a small flame of marigold light, round at its foot and drawn to a point, its core paler
+ *  than its skin so it reads as glowing, not painted. A great light is half again as big, wears a thin ring
+ *  of light around its waist and carries a second, smaller flame beside it, so a great one is told from a
+ *  spark at a glance, at speed. The flame stands upright and bobs (the material's bob). */
+export function lightGeometry(great: boolean): BufferGeometry {
+  // (A flame reads at 30 m/s only at about a box's size: 0.8 m tall, a great one 1.2 m.)
+  const s = great ? 2.5 : 1.7;
+  const skin = great ? new Color('#FFD86A') : new Color('#FFC94A');
+  const core = new Color('#FFF6D8').multiplyScalar(1.5);
+  const flame = (k: number, x: number, y: number, col: Color): BufferGeometry =>
+    lathe(
+      [
+        [0, -0.2 * k],
+        [0.13 * k, -0.15 * k],
+        [0.2 * k, -0.02 * k],
+        [0.17 * k, 0.14 * k],
+        [0.09 * k, 0.3 * k],
+        [0, 0.46 * k],
+      ],
+      9,
+      col,
+      { pos: [x, y, 0] },
+    );
+  const parts = [flame(s, 0, 0, skin), flame(s * 0.62, 0, -0.02 * s, core)];
+  if (great) {
+    parts.push(part(new TorusGeometry(0.34 * s, 0.025 * s, 4, 18), core.clone().multiplyScalar(0.8), { rot: [Math.PI / 2, 0, 0], pos: [0, 0.02 * s, 0] }));
+    parts.push(flame(0.42, 0.42 * s, 0.22 * s, skin));
+  }
+  return merge(parts);
+}
+
 export function giftGeometry(golden: boolean): BufferGeometry {
   reseed(golden ? 3131 : 3030);
   const s = golden ? 1.35 : 1;
@@ -724,6 +756,28 @@ export function sledGeometry(runner: Color = RIDER_COLORS.accent): BufferGeometr
   return merge(parts);
 }
 
+/** A sled paint (game/paints.ts): every vertex but the vermillion trim, the steel and the pale bits takes
+ *  the paint's colour at its own value, so the wood's grain and the hull's shading stay under it. */
+export function paintSled(geo: BufferGeometry, hex: string): BufferGeometry {
+  if (!hex) return geo;
+  const col = geo.getAttribute('color') as BufferAttribute | undefined;
+  if (!col) return geo;
+  const paint = new Color(hex);
+  const pv = 0.2126 * paint.r + 0.7152 * paint.g + 0.0722 * paint.b;
+  const keep = [RIDER_COLORS.accent, STEEL, RIDER_COLORS.pom];
+  const c = new Color();
+  for (let i = 0; i < col.count; i++) {
+    c.setRGB(col.getX(i), col.getY(i), col.getZ(i));
+    // The trim keeps the player's colour; steel and the white trims stay as they are.
+    if (keep.some((k) => Math.abs(k.r - c.r) + Math.abs(k.g - c.g) + Math.abs(k.b - c.b) < 0.32)) continue;
+    const v = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    const k = Math.max(0.35, Math.min(1.6, v / 0.52)) * (pv > 0.6 ? 0.92 : 1);
+    col.setXYZ(i, paint.r * k, paint.g * k, paint.b * k);
+  }
+  col.needsUpdate = true;
+  return geo;
+}
+
 /** Each unlockable sled gets its own silhouette so an unlock is visible at a glance. */
 export function sledGeometryFor(id: number): BufferGeometry {
   const C = RIDER_COLORS;
@@ -823,7 +877,9 @@ export function sledSeat(id: number): SledSeat {
 
 /** Per-vertex secondary-motion weights, which rider.ts animates in its vertex shader: x is how much
  *  of the pom-pom's bounce a vertex takes, y how much of the coat hem's flutter. Every rider part
- *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry. */
+ *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry. A negative
+ *  x marks the legs out in front (-1, a boot -2), which swing down about the hips when the rider
+ *  stands up on its sled over the finish line. */
 type SwayFn = (x: number, y: number, z: number) => [number, number];
 function sway(g: BufferGeometry, w: SwayFn | [number, number] = [0, 0]): BufferGeometry {
   const p = g.getAttribute('position');
@@ -1098,10 +1154,11 @@ function riderLegs(crossLegged: boolean): BufferGeometry[] {
       const hip = new Vector3(sx * 0.12, 0.05, -0.02);
       const knee = new Vector3(sx * 0.125, 0.12, -0.34);
       const ankle = new Vector3(sx * 0.125, 0.04, -0.58);
+      // (Weighted for rider.ts's stand: the leg swings down about the hip, the boot keeps its sole flat.)
       legs.push(
-        capsule(hip, knee, 0.118, 0.1, C.pants),
-        capsule(knee, ankle, 0.096, 0.08, C.pants),
-        boot(new Vector3(ankle.x, ankle.y - 0.005, ankle.z + 0.01), new Vector3(ankle.x, ankle.y - 0.025, ankle.z - 0.13)),
+        sway(capsule(hip, knee, 0.118, 0.1, C.pants), [-1, 0]),
+        sway(capsule(knee, ankle, 0.096, 0.08, C.pants), [-1, 0]),
+        sway(boot(new Vector3(ankle.x, ankle.y - 0.005, ankle.z + 0.01), new Vector3(ankle.x, ankle.y - 0.025, ankle.z - 0.13)), [-2, 0]),
       );
     }
   }
@@ -1137,19 +1194,153 @@ export function riderArmGeometry(): BufferGeometry {
   ]);
 }
 
+/** How far each signature hat stands over the crowd's beanie and pom-pom (metres): the name tag is
+ *  raised by it, so a tall hood or a top hat never pokes up through its own pill. */
+export const HAT_LIFT: Record<HatKind, number> = {
+  hood: 0.4, antlers: 0.2, topknot: 0.26, brim: 0, stovepipe: 0.32, bobble: 0.26, beak: 0.2, lantern: 0.2, horns: 0, aviator: 0, foxears: 0.12, crown: 0.16,
+};
+
+/** A signature ghost's head (body pivot space, like riderHeadGeometry): the skull and the hat its
+ *  rider wears, sized to read as its own outline from behind at 20 to 40 m, where a head is a dozen
+ *  pixels across. Parts are chunky (the ghost body welds vertices within 2 cm and draws one smooth
+ *  glass silhouette), and no part is thin enough to draw its own rim inside the glass. Original
+ *  designs: a felt hood, stubby antlers, a tied topknot, a wide brim, a stovepipe, a giant bobble, a
+ *  beaked hood, a lantern on a headband hook, curled horns, a flapped flying cap, fox ears, a crown. */
+export function ghostHatHead(hat: HatKind): BufferGeometry {
+  const C = RIDER_COLORS.pom;
+  const H = 0.86;
+  const v = (x: number, y: number, z: number) => new Vector3(x, y, z);
+  const skull = () => part(new SphereGeometry(0.24, 12, 9), C, { pos: [0, H, 0] });
+  // A hood: a little larger than the skull, so it hides it inside the glass.
+  const hood = () => part(new SphereGeometry(0.275, 12, 9), C, { pos: [0, H + 0.02, 0.02] });
+  const dome = (r = 0.255, sy = 1.1) => part(new SphereGeometry(r, 12, 6, 0, Math.PI * 2, 0, Math.PI / 2), C, { pos: [0, H + 0.05, 0.01], scale: [1.04, sy, 1.04] });
+  const bend = (g: BufferGeometry, y0: number, f: (t: number) => [number, number], len: number) => {
+    const p = g.getAttribute('position') as BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const t = Math.max(0, (p.getY(i) - y0) / len);
+      const [dx, dz] = f(t);
+      p.setXYZ(i, p.getX(i) + dx, p.getY(i), p.getZ(i) + dz);
+    }
+    g.computeVertexNormals();
+    return g;
+  };
+  const parts: BufferGeometry[] = [];
+  switch (hat) {
+    case 'hood': {
+      // A tall felt hood whose point flops over to one side and back: asymmetric from behind.
+      const g = lathe([[0.21, H - 0.2], [0.285, H - 0.1], [0.3, H + 0.04], [0.27, H + 0.2], [0.2, H + 0.36], [0.13, H + 0.52], [0.07, H + 0.66], [0.03, H + 0.78], [0, H + 0.84]], 12, C, { pos: [0, 0, 0.02] });
+      parts.push(bend(g, H + 0.18, (t) => [0.3 * t * t, 0.12 * t * t], 0.66));
+      break;
+    }
+    case 'antlers':
+      parts.push(hood());
+      for (const s of [-1, 1]) {
+        const base = v(s * 0.15, H + 0.2, 0.02);
+        const tip = v(s * 0.38, H + 0.5, 0.06);
+        const mid = base.clone().lerp(tip, 0.55);
+        parts.push(
+          capsule(base, tip, 0.055, 0.04, C, 7),
+          capsule(mid, v(s * 0.24, H + 0.62, 0.02), 0.042, 0.032, C, 6),
+          capsule(base.clone().lerp(tip, 0.25), v(s * 0.36, H + 0.26, -0.04), 0.04, 0.03, C, 6),
+        );
+      }
+      break;
+    case 'topknot':
+      // Hair close to the skull, a band, a tall bun and a fanned tuft over it.
+      parts.push(skull(), dome(0.248, 1.0));
+      parts.push(part(new CylinderGeometry(0.085, 0.1, 0.07, 10), C, { pos: [0, H + 0.27, 0.03] }));
+      parts.push(part(new SphereGeometry(0.11, 10, 8), C, { pos: [0, H + 0.38, 0.03], scale: [1, 1.25, 1] }));
+      for (const [x, r] of [[0, 0], [-0.07, -0.45], [0.07, 0.45]] as const) parts.push(part(new ConeGeometry(0.075, 0.24, 8), C, { pos: [x, H + 0.56, 0.03], rot: [Math.PI, 0, r], scale: [1, 1, 0.7] }));
+      break;
+    case 'brim':
+      // A wide flat brim, tipped a touch down at the front, on a low crown.
+      parts.push(skull());
+      parts.push(part(new CylinderGeometry(0.5, 0.5, 0.05, 20), C, { pos: [0, H + 0.13, 0.02], rot: [0.08, 0, 0] }));
+      parts.push(part(new CylinderGeometry(0.19, 0.23, 0.17, 14), C, { pos: [0, H + 0.23, 0.03], rot: [0.08, 0, 0] }));
+      break;
+    case 'stovepipe':
+      // A tall narrow top hat, set a little back and to one side.
+      parts.push(skull());
+      parts.push(part(new CylinderGeometry(0.29, 0.29, 0.05, 16), C, { pos: [0, H + 0.17, 0.02], rot: [0.1, 0, -0.06] }));
+      parts.push(part(new CylinderGeometry(0.17, 0.16, 0.56, 14), C, { pos: [0.02, H + 0.46, 0.05], rot: [0.1, 0, -0.06] }));
+      break;
+    case 'bobble':
+      // The crowd's beanie with a pom-pom twice its size.
+      parts.push(skull(), dome());
+      parts.push(part(new IcosahedronGeometry(0.21, 1), C, { pos: [0, H + 0.5, 0.03] }));
+      break;
+    case 'beak': {
+      // A hood with a long peak jutting forward and up like a bill, and a short point behind.
+      // (Steep enough that from behind it stands over the head as a spike leaning away.)
+      parts.push(hood());
+      parts.push(capsule(v(0, H + 0.1, -0.18), v(0, H + 0.66, -0.56), 0.14, 0.02, C, 8, 0.6));
+      parts.push(capsule(v(0, H + 0.12, 0.2), v(0, H - 0.04, 0.44), 0.1, 0.03, C, 7, 0.6));
+      break;
+    }
+    case 'lantern': {
+      // A headband with a hooked rod rising off one side and a little lantern hanging from it.
+      parts.push(skull(), part(new TorusGeometry(0.25, 0.04, 6, 16), C, { pos: [0, H + 0.08, 0], rot: [Math.PI / 2, 0, 0] }));
+      const a = v(0.2, H + 0.12, 0.1);
+      const b = v(0.28, H + 0.62, 0.12);
+      const c = v(0.52, H + 0.66, 0.1);
+      parts.push(capsule(a, b, 0.045, 0.04, C, 6), capsule(b, c, 0.04, 0.04, C, 6));
+      parts.push(part(new CylinderGeometry(0.1, 0.115, 0.22, 8), C, { pos: [0.52, H + 0.42, 0.1] }));
+      parts.push(part(new ConeGeometry(0.13, 0.1, 8), C, { pos: [0.52, H + 0.58, 0.1] }));
+      break;
+    }
+    case 'horns':
+      // A round helm and two horns curling out, back, down and forward round the ears.
+      parts.push(dome(0.262, 1.05), skull());
+      for (const s of [-1, 1]) {
+        const path = [v(0.18, 1.04, 0), v(0.36, 1.15, 0.05), v(0.48, 1.03, 0.12), v(0.47, 0.87, 0.1), v(0.39, 0.8, -0.01), v(0.33, 0.86, -0.1)];
+        for (let i = 0; i < path.length - 1; i++) {
+          const r0 = 0.075 - i * 0.009;
+          parts.push(capsule(path[i].clone().setX(s * path[i].x), path[i + 1].clone().setX(s * path[i + 1].x), r0, r0 - 0.009, C, 7));
+        }
+      }
+      break;
+    case 'aviator':
+      // A snug flying cap, its earflaps blown out sideways, the goggles up on top.
+      parts.push(skull(), dome(0.255, 1.0));
+      for (const s of [-1, 1]) {
+        parts.push(part(new SphereGeometry(0.11, 8, 7), C, { pos: [s * 0.3, H - 0.1, 0.03], rot: [0, 0, s * 0.6], scale: [0.45, 1.7, 0.95] }));
+        // (Goggles high on the crown, where they stand out of its outline from behind.)
+        parts.push(part(new SphereGeometry(0.085, 8, 6), C, { pos: [s * 0.11, H + 0.31, -0.05], rot: [-0.35, 0, s * 0.25], scale: [1.1, 0.9, 0.8] }));
+      }
+      break;
+    case 'foxears':
+      // A hood with two tall pointed ears, flat plates facing the way it rides.
+      parts.push(hood());
+      for (const s of [-1, 1]) parts.push(part(new ConeGeometry(0.11, 0.36, 8), C, { pos: [s * 0.15, H + 0.38, 0.03], rot: [0, 0, -s * 0.32], scale: [1, 1, 0.45] }));
+      break;
+    case 'crown':
+      // A band and a ring of jagged points, tall and short in turn.
+      // (The band flares to a lip, so it reads as a crown rather than spiky hair.)
+      parts.push(skull(), lathe([[0.235, H + 0.12], [0.255, H + 0.2], [0.3, H + 0.3], [0.29, H + 0.34]], 14, C));
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        const h = i % 2 === 0 ? 0.3 : 0.18;
+        parts.push(part(new ConeGeometry(0.08, h, 6), C, { pos: [Math.sin(a) * 0.27, H + 0.34 + h / 2 - 0.03, Math.cos(a) * 0.27], rot: [Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.25] }));
+      }
+      break;
+  }
+  return mergeRider(parts);
+}
+
 /** The whole rider merged in a neutral seated pose for the ghosts (one draw call), as a silhouette
  *  only: no scarf, goggles, strap or face, whose thin parts inside the glass drew dotted seams.
  *  `sled` adds the wooden sled under it (the chaos spirit train); the race's ghosts ride their own
  *  glass sleds (ghosts.ts) and pass false. `seat` sits the body as rider.ts sits that sled: on a round
- *  sled cross-legged, leaning over the rim with the head held up. */
-export function ghostRiderGeometry(sled = true, seat: SledSeat = SEAT_SIT): BufferGeometry {
+ *  sled cross-legged, leaning over the rim with the head held up. `hat` gives a signature rider's
+ *  ghost its own hat in place of the crowd's beanie (merged into the same geometry: no extra draw). */
+export function ghostRiderGeometry(sled = true, seat: SledSeat = SEAT_SIT, hat: HatKind | null = null): BufferGeometry {
   const pitch = -0.15 - seat.lean;
   const torso = riderTorsoGeometry(seat.crossLegged, true);
   torso.rotateX(pitch);
   const lift = seat.crossLegged ? 0.15 : 0.03;
   const neck = RIDER_NECK.clone().applyAxisAngle(new Vector3(1, 0, 0), pitch);
   // The head stays near upright on its neck (rider.ts holds it), raised on a saucer's forward lean.
-  const head = riderHeadGeometry(true)
+  const head = (hat ? ghostHatHead(hat) : riderHeadGeometry(true))
     .translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z)
     .rotateX(pitch - (pitch + 0.15) * 0.7 + 0.06)
     .translate(neck.x, neck.y + lift, neck.z);

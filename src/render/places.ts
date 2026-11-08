@@ -1,6 +1,6 @@
-import { BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
+import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
-import { crowdColors } from './crowd';
+import { StillFigure, crowdColors, stillCrowd } from './crowd';
 import { SNOW, part, shade } from './flora';
 import { LINE_Z, liftLayout } from './liftline';
 import { CREAM, Glow, INK, Piece, Rail, ROPE, SiteCtx, Spot, Sub, TIMBER, TIMBER_DARK, TIMBER_LIGHT, V3, banners, box, bunting, crag, drift, grade, lampColor, latticeTower, pagodaParts, place, quad, ribbon, rnd, seed, seg, stone, windowColor } from './landmarkKit';
@@ -56,51 +56,6 @@ function letters(text: string, y: number, z: number, dot: number, col: Color): B
     }
   }
   return parts;
-}
-
-/** Hundreds of still spectators in one geometry: a coat and a head, two boxes each, the far rows of a
- *  stand. They cost no draw and no shader, and from the near rows' distance read as a packed crowd. */
-function stillCrowd(list: ReadonlyArray<{ x: number; y: number; z: number; coat: Color; hat: Color }>): BufferGeometry {
-  // The faces a stand's figure ever shows, wound outward: toward the run on either bank, the top and the
-  // side up the slope. (A corner's signs on x, y and z.)
-  const FACES: ReadonlyArray<readonly [V3, V3, V3, V3, V3]> = [
-    [[1, 0, 0], [1, -1, 1], [1, -1, -1], [1, 1, -1], [1, 1, 1]],
-    [[-1, 0, 0], [-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]],
-    [[0, 1, 0], [-1, 1, 1], [1, 1, 1], [1, 1, -1], [-1, 1, -1]],
-    [[0, 0, 1], [-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]],
-  ];
-  const n = list.length * 2 * FACES.length * 6;
-  const pos = new Float32Array(n * 3);
-  const nor = new Float32Array(n * 3);
-  const col = new Float32Array(n * 3);
-  let o = 0;
-  const skin = C('#F2C9A8');
-  const put = (x: number, y: number, z: number, hw: number, hh: number, hd: number, c: Color, cap: Color) => {
-    for (const [nv, a, b, d, e] of FACES) {
-      for (const v of [a, b, d, a, d, e]) {
-        pos[o] = x + v[0] * hw;
-        pos[o + 1] = y + v[1] * hh;
-        pos[o + 2] = z + v[2] * hd;
-        nor[o] = nv[0];
-        nor[o + 1] = nv[1];
-        nor[o + 2] = nv[2];
-        const k = v[1] > 0 ? cap : c;
-        col[o] = k.r;
-        col[o + 1] = k.g;
-        col[o + 2] = k.b;
-        o += 3;
-      }
-    }
-  };
-  for (const f of list) {
-    put(f.x, f.y + 0.42, f.z, 0.23, 0.42, 0.17, f.coat, f.coat);
-    put(f.x, f.y + 1.02, f.z, 0.17, 0.17, 0.17, skin, f.hat);
-  }
-  const g = new BufferGeometry();
-  g.setAttribute('position', new BufferAttribute(pos, 3));
-  g.setAttribute('normal', new BufferAttribute(nor, 3));
-  g.setAttribute('color', new BufferAttribute(col, 3));
-  return g;
 }
 
 /** A long thin pennant streaming off a mast top toward s. */
@@ -502,7 +457,7 @@ function finishLine(f: Sub, hw: number): BufferGeometry[] {
 /** A grandstand down one bank from dz a to b: rows of seats stepping up the bank, a near crowd that
  *  moves and far rows that stand still, masts and banners along its back. On a bank that gives it no
  *  height of its own (the start's stands, behind the crest) each row stands `rise` metres over the last. */
-function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: number, spots: Spot[], still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }>, glows: Glow[], rise = 0): { seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> } {
+function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: number, spots: Spot[], still: StillFigure[], glows: Glow[], rise = 0): { seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> } {
   const { p, biome } = ctx;
   const { coats, hats } = crowdColors(biome, p);
   const seats: BufferGeometry[] = [];
@@ -547,7 +502,7 @@ function stand(ctx: SiteCtx, rail: Rail, s: number, a: number, b: number, rows: 
       const pt = rail.at(jz, s, e);
       const y = yAt(jz, r);
       if (r < 2 && !low) spots.push({ x: pt.x, y, z: pt.z, yaw: pt.yaw + s * 0.5 + (rnd() - 0.5) * 0.5, flag: rnd() < 0.34 });
-      else still.push({ x: pt.x, y, z: pt.z, coat: coats[Math.floor(rnd() * coats.length)], hat: hats[Math.floor(rnd() * hats.length)] });
+      else still.push({ x: pt.x, y, z: pt.z, face: Math.sign(Math.sin(pt.yaw)), coat: coats[Math.floor(rnd() * coats.length)], hat: hats[Math.floor(rnd() * hats.length)] });
     }
   }
   for (let dz = a + 6; dz < b; dz += 18) {
@@ -594,13 +549,13 @@ export function finishPiece(ctx: SiteCtx): Piece {
   const spots = base.spots;
   const glows = base.glows ?? [];
   seed(ctx.seed + 701);
-  const still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }> = [];
+  const still: StillFigure[] = [];
   const made = [-1, 1].map((s) => stand(ctx, rail, s, sq0 + 3, sq1 - 3, low ? 4 : 6, spots, still, glows));
   // The stands.
   steps.push(() => made.flatMap((m) => m.seats));
   // The far rows: a few hundred to a step, each a batch of plain arrays.
   for (let i = 0; i < still.length; i += 500) {
-    steps.push(() => [stillCrowd(still.slice(i, i + 500))]);
+    steps.push(() => [stillCrowd(still.slice(i, i + 500), biome)]);
   }
   // Masts, long banners and strings along the backs of the stands.
   steps.push(() => {
@@ -744,14 +699,14 @@ export function startPiece(ctx: SiteCtx): Piece {
   // Worked out in a step of their own, on idle time: a site's plan runs on the frame that asks for it,
   // here a run's first, and 1,800 spots on the ground is 30 ms.
   // (No lamplight: a pool of it at night would be a draw the start has never had.)
-  const still: Array<{ x: number; y: number; z: number; coat: Color; hat: Color }> = [];
+  const still: StillFigure[] = [];
   let made: Array<{ s: number; seats: BufferGeometry[]; masts: Array<{ pos: V3; dz: number }> }> = [];
   steps.push(() => {
     seed(ctx.seed + 791);
     made = [-1, 1].flatMap((s) => runs.map(([a, b]) => ({ s, ...stand(ctx, rail, s, a, b, low ? START_ROWS_LOW : START_ROWS, base.spots, still, [], START_RISE) })));
     return made.flatMap((m) => m.seats);
   });
-  for (let k = 0; k < START_STILL_STEPS; k++) steps.push(() => (still.length > k * 500 ? [stillCrowd(still.slice(k * 500, (k + 1) * 500))] : []));
+  for (let k = 0; k < START_STILL_STEPS; k++) steps.push(() => (still.length > k * 500 ? [stillCrowd(still.slice(k * 500, (k + 1) * 500), biome)] : []));
   steps.push(() => {
     seed(ctx.seed + 793);
     return made.flatMap((m) => standMasts(ctx, m.masts, m.s));

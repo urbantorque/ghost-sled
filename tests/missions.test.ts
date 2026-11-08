@@ -12,6 +12,11 @@ function summary(p: Partial<RunSummary> = {}): RunSummary {
     score: 0,
     distance: 0,
     gifts: 0,
+    lights: 0,
+    dashes: 0,
+    phased: 0,
+    skyGates: 0,
+    wards: 0,
     perfects: 0,
     maxAirtime: 0,
     maxHalfTurns: 0,
@@ -97,11 +102,11 @@ describe('missions', () => {
 
   it('progress is the best single run, not a running total', () => {
     const s = newMissionState();
-    s.active = [{ id: 'gifts20', best: 0 }];
-    applyRun(s, summary({ gifts: 12 }));
-    expect(s.active.find((a) => a.id === 'gifts20')?.best).toBe(12);
-    applyRun(s, summary({ gifts: 9 }));
-    expect(s.active.find((a) => a.id === 'gifts20')?.best).toBe(12);
+    s.active = [{ id: 'lights20', best: 0 }];
+    applyRun(s, summary({ lights: 12 }));
+    expect(s.active.find((a) => a.id === 'lights20')?.best).toBe(12);
+    applyRun(s, summary({ lights: 9 }));
+    expect(s.active.find((a) => a.id === 'lights20')?.best).toBe(12);
   });
 
   it('biome missions only count on their biome', () => {

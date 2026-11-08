@@ -20,6 +20,13 @@ const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num = (v: number): string => NF.format(Math.round(v));
 const m = (v: number): string => `${num(v)} m`;
 
+/** What a run pays in gifts by itself: 5 a stage line crossed and 15 more for the finish. Gifts are the meta
+ *  currency since the lantern round: the course's own pickups are spirit lights, which pay the lantern, not
+ *  the wallet. Passes, duels, missions, medals, the ladder and mastery pay the rest. */
+export function runPay(sim: { stageTicks: readonly number[]; finished: boolean }): number {
+  return sim.stageTicks.length * 5 + (sim.finished ? 15 : 0);
+}
+
 /**
  * Missions newly met mid-run that have not popped yet, judged on the run so far against the mission
  * state the run started with (after a revive, the settlement's missionsBefore, never the refilled

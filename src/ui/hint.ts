@@ -25,6 +25,8 @@ const TEXT: Record<HintKind, string> = {
   spin: 'Steer in the air to spin',
   flip: 'Press and hold in the air to flip',
   boostPop: 'Hold, release at the lip',
+  // The lantern lit: spend it on a dash, or keep it to take a hit.
+  dash: 'Dash: spend a lantern, or keep it as a ward',
 };
 
 /** A hint on screen for the occluder cache: the boxes to keep clear, and the node that animates them. */
@@ -93,7 +95,7 @@ export class Hint {
       return;
     }
     let node: HTMLElement;
-    if (mode === 'touch' && kind !== 'draft') {
+    if (mode === 'touch' && kind !== 'draft' && kind !== 'dash') {
       node = touchZones(kind, learned);
       this.zones = node;
       this.occ = { root: node, els: Array.from(node.querySelectorAll('.gs-zone-mark, .gs-zone-txt')) };
@@ -142,6 +144,13 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
 
   if (kind === 'draft') {
     glyphs.append(icon('ghost', 'gs-hint-ghost'));
+  } else if (kind === 'dash') {
+    if (mode === 'mouse') {
+      glyphs.append(icon('mouse', 'gs-hint-mouse'));
+      text = 'Right click to dash, or keep it as a ward';
+    } else if (mode === 'touch') {
+      text = 'Tap the lantern to dash, or keep it as a ward';
+    } else glyphs.append(kbd('E'));
   } else if (mode === 'mouse') {
     if (kind === 'steer' || kind === 'spin') {
       glyphs.append(icon('arrowL', 'gs-hint-arrow'), icon('mouse', 'gs-hint-mouse'), icon('arrowR', 'gs-hint-arrow'));
@@ -173,6 +182,7 @@ const HOLD_TEXT: Record<HintKind, string> = {
   spin: 'Hold to flip',
   flip: 'Hold in the air to flip',
   boostPop: 'Hold, release at the lip',
+  dash: 'Hold to drift',
 };
 
 /** The left (drag) zone's label when a hint is about steering. */

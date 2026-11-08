@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PoolGhost, PoolRun, generatePool } from '../src/bot/pool';
+import { PoolGhost, PoolRun, fallsOf, generatePool } from '../src/bot/pool';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { hashString } from '../src/sim/prng';
 import { recordFromString, replayRecord } from '../src/sim/replay';
@@ -17,7 +17,8 @@ import { SIM_VERSION, TICK_RATE } from '../src/sim/sim';
 // own record (about a second a pool, and nothing else in the file changes). The stage medals read them
 // (src/game/ladder.ts), so a pool that comes in without them needs this and no more.
 
-const COUNT = 36;
+/** The crowd; the twelve signature riders (src/bot/roster.ts) join it, 42 a mountain. */
+const COUNT = 30;
 const BUDGET = 110;
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -66,6 +67,17 @@ function withSplits<G extends Pick<PoolGhost, 'record'>>(ghosts: readonly G[]): 
   return ghosts.map((g) => ({ ...g, stageTicks: [...replayRecord(recordFromString(g.record)).stageTicks] }));
 }
 
+if (process.argv.includes('--falls')) {
+  // Where each ghost fell, read again off a replay of its record (the records do not change).
+  for (const m of MOUNTAINS) {
+    const path = join(outDir, `${m.id}.json`);
+    const pool = JSON.parse(readFileSync(path, 'utf8')) as { ghosts: PoolGhost[] };
+    writeFileSync(path, JSON.stringify({ ...pool, ghosts: pool.ghosts.map((g) => ({ ...g, falls: fallsOf(recordFromString(g.record)) })) }));
+    console.log(`${m.name}: falls read again for ${pool.ghosts.length} ghosts`);
+  }
+  process.exit(0);
+}
+
 if (process.argv.includes('--splits')) {
   for (const m of MOUNTAINS) {
     const path = join(outDir, `${m.id}.json`);
@@ -80,7 +92,7 @@ let total = 0;
 for (const m of MOUNTAINS) {
   const t0 = performance.now();
   let runs: PoolRun[] = [];
-  const ghosts = withSplits(generatePool(m.seed, COUNT, hashString('bundled/' + m.id), { budgetRuns: BUDGET, report: (r) => (runs = r) }));
+  const ghosts = withSplits(generatePool(m.seed, COUNT, hashString('bundled/' + m.id), { budgetRuns: BUDGET, mountain: MOUNTAINS.indexOf(m), report: (r) => (runs = r) }));
   const json = JSON.stringify({ version: 1, simVersion: SIM_VERSION, mountain: m.id, seed: m.seed, ghosts });
   writeFileSync(join(outDir, `${m.id}.json`), json);
   total += json.length;

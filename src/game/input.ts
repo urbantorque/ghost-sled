@@ -2,10 +2,13 @@ import { STEER_CENTER } from '../sim/input';
 
 // Keyboard, mouse and touch, merged into one steer level (0..8) and one action button.
 //
-// Keyboard: A/D or arrows steer; Space, Shift, S, W, Up or Down is the action. Physical key codes
-//           are used, so AZERTY and other layouts get the same positions.
-// Mouse:    horizontal position relative to the screen centre steers, any button is the action.
-// Touch:    drag anywhere on the left 60% (a relative stick that re-centres), hold the right 40%.
+// Keyboard: A/D or arrows steer; Space, Shift, S, W, Up or Down is the action; E, Q or Enter is the spirit
+//           button (a dash, when a lantern is lit). Physical key codes are used, so AZERTY and other layouts
+//           get the same positions.
+// Mouse:    horizontal position relative to the screen centre steers, the left (or middle) button is the
+//           action, the right button the spirit button.
+// Touch:    drag anywhere on the left 60% (a relative stick that re-centres), hold the right 40%; the HUD's
+//           lantern button is the spirit button (spiritTap).
 
 export type InputMode = 'keyboard' | 'mouse' | 'touch';
 
@@ -16,6 +19,8 @@ const ACTION = new Set(['Space', 'ShiftLeft', 'ShiftRight', 'KeyS', 'ArrowDown',
  *  others stay action keys in a run only. Shift fires on keydown, so Shift+Tab, moving focus back,
  *  started a run from either screen. */
 const MENU_START = new Set(['Space']);
+/** The spirit button: spends a lit lantern on a dash. Only its press matters to the sim. */
+const SPIRIT = new Set(['KeyE', 'KeyQ', 'Enter', 'NumpadEnter']);
 
 /** A steer key starts at this much lock and builds to full lock at KEY_RAMP per tick (about 0.2 s),
  *  so a tap is a correction and a hold is a turn. Reversing starts over from KEY_START. */
@@ -47,6 +52,11 @@ export class InputController {
   private mouseX = 0.5;
   private mouseActive = false;
   private mouseDown = false;
+  private mouseSpirit = false;
+  private keySpirit = 0;
+  /** A tap of the touch button, held for a few samples so a tick always sees it. */
+  private spiritTaps = 0;
+  private spiritCbs: Array<() => void> = [];
   private steerTouch: { id: number; ox: number; x: number; y: number } | null = null;
   private actionTouches = new Map<number, { x: number; y: number }>();
   private level = STEER_CENTER;
@@ -61,7 +71,13 @@ export class InputController {
     };
     on(window, 'keydown', (e) => {
       if (e.repeat) {
-        if (ACTION.has(e.code) || LEFT.has(e.code) || RIGHT.has(e.code)) e.preventDefault();
+        if (ACTION.has(e.code) || LEFT.has(e.code) || RIGHT.has(e.code) || SPIRIT.has(e.code)) e.preventDefault();
+        return;
+      }
+      if (SPIRIT.has(e.code)) {
+        // (Enter in a menu is the app's; here it only counts while a run samples it.)
+        this.keySpirit++;
+        this.spirit();
         return;
       }
       if (LEFT.has(e.code)) this.keysL = true;
@@ -78,6 +94,7 @@ export class InputController {
       if (LEFT.has(e.code)) this.keysL = false;
       else if (RIGHT.has(e.code)) this.keysR = false;
       else if (ACTION.has(e.code)) this.keyAction = Math.max(0, this.keyAction - 1);
+      else if (SPIRIT.has(e.code)) this.keySpirit = Math.max(0, this.keySpirit - 1);
     });
     on(window, 'blur', () => this.releaseAll());
     on(el, 'pointerdown', (e) => this.pointerDown(e as PointerEvent));
@@ -96,6 +113,23 @@ export class InputController {
     for (const cb of this.pressCbs) cb(source, code);
   }
 
+  /** Called on any fresh spirit press (the HUD flashes its lantern). */
+  onSpirit(cb: () => void): void {
+    this.spiritCbs.push(cb);
+  }
+
+  private spirit(): void {
+    for (const cb of this.spiritCbs) cb();
+  }
+
+  /** The touch lantern button (or any on-screen spirit control). */
+  spiritTap(): void {
+    if (!this.enabled) return;
+    this.spiritTaps = 3;
+    this.mode = 'touch';
+    this.spirit();
+  }
+
   private pointerDown(e: PointerEvent): void {
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
       this.mode = 'touch';
@@ -110,8 +144,13 @@ export class InputController {
       this.mode = 'mouse';
       this.mouseActive = true;
       this.mouseX = e.clientX / window.innerWidth;
-      this.mouseDown = true;
-      this.press('mouse');
+      if (e.button === 2) {
+        this.mouseSpirit = true;
+        this.spirit();
+      } else {
+        this.mouseDown = true;
+        this.press('mouse');
+      }
     }
     this.syncVisual();
   }
@@ -146,6 +185,8 @@ export class InputController {
     if (e.pointerType === 'touch' || e.pointerType === 'pen') {
       if (this.steerTouch && this.steerTouch.id === e.pointerId) this.steerTouch = null;
       this.actionTouches.delete(e.pointerId);
+    } else if (e.button === 2) {
+      this.mouseSpirit = false;
     } else {
       this.mouseDown = false;
     }
@@ -167,6 +208,9 @@ export class InputController {
     this.keysL = this.keysR = false;
     this.keySteer = 0;
     this.keyAction = 0;
+    this.keySpirit = 0;
+    this.spiritTaps = 0;
+    this.mouseSpirit = false;
     this.mouseDown = false;
     this.steerTouch = null;
     this.actionTouches.clear();
@@ -203,14 +247,16 @@ export class InputController {
   }
 
   /** Sample once per sim tick. Quantised with hysteresis so the input log stays compact. */
-  sample(): { steer: number; action: boolean } {
-    if (!this.enabled) return { steer: STEER_CENTER, action: false };
+  sample(): { steer: number; action: boolean; spirit: boolean } {
+    if (!this.enabled) return { steer: STEER_CENTER, action: false, spirit: false };
     this.rampKeys();
     const raw = this.rawSteer() * 4;
     const cur = this.level - STEER_CENTER;
     if (Math.abs(raw - cur) > 0.62) this.level = STEER_CENTER + Math.round(raw);
     const action = this.keyAction > 0 || this.mouseDown || this.actionTouches.size > 0;
-    return { steer: this.level, action };
+    const spirit = this.keySpirit > 0 || this.mouseSpirit || this.spiritTaps > 0;
+    if (this.spiritTaps > 0) this.spiritTaps--;
+    return { steer: this.level, action, spirit };
   }
 
   dispose(): void {

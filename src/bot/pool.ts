@@ -5,6 +5,7 @@ import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
 import { runBot } from './bot';
 import { uniqueGhostName } from './names';
+import { ROSTER, riderSkill } from './roster';
 
 // Ghost pools: run bots across the skill range on one mountain, then keep a spread of results from the
 // weakest in the race to the best. Picking by result (not by skill) keeps the spread right even after
@@ -36,6 +37,10 @@ export interface PoolRun {
 }
 
 export interface PoolOptions {
+  /** The mountain's index, when the pool is a named mountain's: its signature riders ride it, each once. */
+  mountain?: number;
+  /** How many signature riders join (default all of them on a named mountain, none otherwise). */
+  riders?: number;
   /** Bot runs to choose from (default about 2.4 per ghost). */
   budgetRuns?: number;
   /** Cap on a run's length in ticks (default 5 minutes). */
@@ -62,7 +67,8 @@ function chaosFor(rng: Rng, seed: number, salt: number, i: number): ChaosRoll {
 export function fallsOf(record: RunRecord): number[] {
   const falls: number[] = [];
   replayRecord(record, (sim) => {
-    for (const e of sim.events) if (e.type === 'crash' || (e.type === 'tumble' && e.phase === 'start')) falls.push(Math.round(sim.s.z));
+    // A ward is a fall the lantern took: the place is as deadly, so it counts.
+    for (const e of sim.events) if (e.type === 'crash' || e.type === 'ward' || (e.type === 'tumble' && e.phase === 'start')) falls.push(Math.round(sim.s.z));
   });
   return falls;
 }
@@ -95,10 +101,33 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
     picked.push(runs[at]);
   }
 
+  // The signature riders: each rides once at its own level and style, on its own sled, plain chaos. They join
+  // the crowd in race order, so the pool still steps evenly through every pace.
+  const riders = opts.riders ?? (opts.mountain !== undefined ? ROSTER.length : 0);
+  if (riders > 0) {
+    const pick = new Rng(hash32(seed, salt, 0x51d3));
+    const cast = ROSTER.slice();
+    for (let i = cast.length - 1; i > 0; i--) {
+      const j = pick.int(0, i);
+      const t = cast[i];
+      cast[i] = cast[j];
+      cast[j] = t;
+    }
+    for (const rd of cast.slice(0, Math.min(riders, cast.length))) {
+      const skill = riderSkill(rd, opts.mountain ?? -1);
+      const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xc4a1, rd.key.length) };
+      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0x51d0, ROSTER.indexOf(rd)), sled: rd.sled, name: rd.name, style: rd.style }, maxTicks);
+      const run = { skill, record, sim, selected: true };
+      runs.push(run);
+      picked.push(run);
+    }
+    picked.sort((a, b) => raceKey(a) - raceKey(b));
+  }
+
   const names = new Rng(hash32(seed, salt, 0x4a3e));
-  const taken = new Set<string>();
+  const taken = new Set<string>(picked.map((r) => r.record.name).filter((n) => n));
   const ghosts = picked.map((r): PoolGhost => {
-    const record = { ...r.record, name: uniqueGhostName(names, taken) };
+    const record = { ...r.record, name: r.record.name || uniqueGhostName(names, taken) };
     r.record = record;
     return {
       name: record.name,

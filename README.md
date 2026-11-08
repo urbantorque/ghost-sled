@@ -2,8 +2,11 @@
 
 A downhill sled race for the browser. You carve, drift, pop and trick your way down a 4.5 km descent,
 through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
-other riders to a finish town. Every run rolls a little controlled chaos (a mood, maybe an event), so
-no two runs feel the same.
+twelve signature riders and a crowd of others to a finish town. Spirit lights on the brave lines, and
+your skill, fill a lantern you either spend on a dash (through trees, faster) or keep as a ward that
+takes the next hit. Each mountain's biggest places play as set pieces, and a board of goals on each
+teaches it. Every run rolls a little controlled chaos (a mood, maybe an event), so no two runs feel the
+same.
 
 Built with Vite + TypeScript + three.js. Every mesh, texture, sound and note of music is generated
 in code; there are no asset files.
@@ -38,19 +41,25 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | `?autoride=1` | Skip the title and start a run |
 | `?m=N` | Mountain 0 to 3 (unlocks ignored) |
 | `?mood=N`, `?event=N` | Force a chaos mood or mid-run event |
-| `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll |
+| `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
+| `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
 
 ## Controls
 
 | Input | Steer | Action (one button) |
 | --- | --- | --- |
-| Keyboard | A / D or arrow keys | Space, Shift, S, W, Up or Down |
-| Mouse | Move left / right of centre | Hold any button |
-| Touch | Drag on the left 60% of the screen | Hold the right 40% |
+| Keyboard | A / D or arrow keys | Space, Shift, S, W, Up or Down; E, Q or Enter to dash |
+| Mouse | Move left / right of centre | Hold the left button; the right button dashes |
+| Touch | Drag on the left 60% of the screen | Hold the right 40%; tap the lantern to dash |
 
 Hold the action to crouch (deeper carve, tuck); hold it while steering hard to drift; release to
 pop. In the air, steer to spin and press-and-hold to backflip. Tap the action just before
 touchdown (when the ring on the snow flashes gold) for a perfect landing. P pauses.
+
+The lantern (three cells, top right; a round button on touch) fills from spirit lights and from skill.
+A full one is a dash: 1.4 s as a spirit, faster, through any tree or rock in the way. Kept, it is a
+ward: the next hit that would floor you is taken by the lantern instead. After a wreck, "Ride home as
+a spirit" rides the rest of the descent outside the race (Escape returns to the card).
 
 ## Build
 
@@ -88,6 +97,9 @@ npm run generate-ghosts
 
 Runs the bot (`src/bot`) on the real simulation at a spread of skill levels, with human-like
 mistakes, and writes `src/data/ghosts/<mountain>.json` in race order, with each ghost's stage splits.
+Each pool is 30 crowd runs and one run by each of the twelve signature riders (`src/bot/roster.ts`), ridden
+with its style. `npm run generate-ghosts -- --falls` re-reads where each ghost fell (wards count) without
+riding anything again.
 The slowest bots finish in about 2:30, so `src/game/slowriders.ts` fills the race down to 5:00 at load
 with real runs played at a slower pace. Re-run it whenever simulation behaviour
 changes (bump `SIM_VERSION` in `src/sim/sim.ts`; the ghost pool test fails on stale pools). The Daily
@@ -249,6 +261,10 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | --- | --- |
 | `places.js`, `sheets.sh` | Rides any mountain on the safe line at a set speed and shoots a list of distances, or every site of the kinds named; the contact sheets of every street, bridge, tunnel and finish |
 | `places-cost.js`, `cost-run.sh` | Draw calls, triangles and frame times riding through a place; compare two builds interleaved |
+| `review.js` | The player review's screens: a fresh title, a first run's results, the second run, the returning title, the shop, the Daily and the Cup |
+| `lantern.js` | A replayed or hands-off run, shot at every dash, ward and sky gate, at fixed distances and (`marquee: true`) as each set piece comes up and in its middle, with the lantern's counts |
+| `homeward.js` | Wrecks a run by holding one key, rides home as a spirit to the town and checks the card comes back unchanged |
+| `life.js` | The living background: rides to distances and shoots bursts, clips or a fixed lens at the crowds; with `find` it picks the nearest herd, fox on a rock, perched flock, sledding kid or drop-in ahead and shoots it frame-exact on a virtual clock as the rider comes |
 | `places-plan.ts` | What stands where on each mountain, by mood, the longest bare stretch and what each piece costs, without a browser |
 | `descent.js`, `finish.js` | A whole descent without a teleport (are pieces made ahead of the rider?), and the last leap, the line and the stop |
 | `vista.js` | The world-scale set: the title, then a replayed best run (`?demo=0`) down each mountain, shot at 300, 1500, 2600 and 3900 m |
@@ -394,6 +410,102 @@ the medals and the ladder pull you back, and how any of it sounds are all unmeas
 heard. Only the rail pilot grinds: the skill pilots leave rails alone. All tuning of medals, ladders and gifts is
 unproven with people.
 
+## Round 5 play-test: depth, wonder and scale
+
+This round changed the sim (SIM_VERSION 7): spirit lights and a lantern you spend on a dash or keep as a
+ward, sky gates, a second fork on Pinecrest and Sakura, rails out from under flights, events that pay the
+lantern, and twelve signature riders in every pool. Everything below is scripted. No human has played this
+build or heard it.
+
+**The skill spread** (`lab.ts`, six seeds a mountain, the same pilots on both builds; the scripted pilots now
+spend lanterns as a person might, see `spenderFor`). Median finish, seconds, by mountain
+(Pinecrest/Frostfang/Ember/Sakura):
+
+| Pilot | Before | After | Finished before | Finished after | Dashes a minute | Lanterns lit a run |
+| --- | --- | --- | --- | --- | --- | --- |
+| Hands off | 155/143/dnf/dnf | 156/146/148/150 | 2 of 4 | 4 of 4 | 0 | 6 |
+| Careful line | 161/151/154/167 | 160/150/152/161 | 24 of 24 | 24 of 24 | 0 | 4 |
+| Novice | 149/146/155/164 | 155/148/148/151 | 22 of 24 | 24 of 24 | 2.1 | 8.6 |
+| Mid | 144/147/145/156 | 123/139/133/135 | 20 of 24 | 24 of 24 | 3.8 | 11 |
+| Expert | 144/148/152/154 | 125/132/133/135 | 23 of 24 | 23 of 24 | 5.0 | 11.6 |
+| Stunt | 150/147/150/151 | 136/132/138/134 | 14 of 24 | 24 of 24 | 3.5 | 11.3 |
+| Clumsy | no finish | no finish | 0 of 24 | 0 of 24 | 0.2 | 4.1 |
+
+Before, novice and expert finished 4.7 s apart on average while one pilot's seed-to-seed spread was 2.4 to
+7.5 s: skill sat inside the luck. After, they are 18.2 s apart against a spread of 6.2 to 8.6 s: skill is two to
+three times the luck, though the luck itself grew (a dash's timing varies). Hands-off and the careful line are
+now about the novice's pace, 12 to 17% behind mid and expert. Every pilot lights lanterns; the careful line and
+hands-off keep theirs as wards (1 to 3 a run).
+
+**First runs in the browser** (`telemetry.js`, one fresh run a mountain a pilot on Low, 4 a pilot; "before" is
+the wow pass's published table, 8 a pilot, same script and tier):
+
+| Pilot | Run before | Run after | Passes a minute before / after | Race live before / after | Place after (of 6) |
+| --- | --- | --- | --- | --- | --- |
+| Clumsy | 125 s, 1,705 m | 1.2 to 2.8 km, no finish | 3.2 / 3.7 | 0.76 / 0.88 | 5th to 6th |
+| Novice | 139 s | 149 s, 4 of 4 finish | 3.0 / 3.2 | 0.95 / 0.89 | 1st to 2nd |
+| Mid | 132 s | 121 s | 2.8 / 3.0 | 0.89 / 0.59 | 1st to 2nd |
+| Expert | 138 s | 132 s | 3.6 / 3.6 | 0.89 / 0.41 | 1st every time |
+| Stunt | 135 s | 129 s | 2.8 / 2.9 | 0.96 / 0.74 | 1st to 2nd |
+
+Every finisher met all four of its mountain's set pieces, about one every 30 to 40 s with the finish (1.6 to 2 a
+minute); the clumsy pilot met one or two before it wrecked. None of the scripted pilots swept one (every light in
+it and clean): that is left for people. The cost is the race for a skilled first-timer: the riders who read you
+ride at most 1.12 times their own run, and a pilot dashing at 34 m/s rides clear of them, so the expert's first
+race is live for 0.41 of the run against 0.89. It wins every time.
+
+**Returning runs** (runs 1 to 4 in one save, Pinecrest, Low, the same plan as the wow pass's measurement on the
+old build): the novice finished 2 of 4 against 1 of 4; mid ran 113 to 124 s against 123 to 138; stunt 120 to
+141 s against 133 to 136. The race is not livelier: mid's is live for 0.44 to 0.62 of a run against 0.50 to
+0.72, stunt's 0.35 to 0.87 against 0.36 to 0.79, and the clumsy pilot still finishes none.
+
+**The ride home.** `homeward.js` wrecked Pinecrest runs at 1,309 m and 1,451 m, rode home as a spirit to the
+square in about 85 s and came back to an unchanged card. The console was clean.
+
+| Other checks | Result |
+| --- | --- |
+| Every seed builds (the fairness test's 700) and dailies keep their variety | Yes; over 40 orders in 60 dailies |
+| Pools | 42 riders a mountain (30 crowd, 12 signature), 124 KB in all |
+| Console, every capture in `shots/r5/final`, `shots/r5/home`, `shots/r5/lantern`, `shots/r5/marquee` | No errors |
+
+What this does not show: whether a dash feels good, whether keeping a ward reads as a choice or as
+forgetting the button, whether the set pieces' camera beats feel directed or pushy, whether the signature
+riders feel like people, and every sound. The lab's pilots spend lanterns by a rule I wrote; people will not.
+
+**Rails.** `lab.ts --pilots rails`: rails no approach can mount cleanly fell from 8 of 80 to 4 of 76, and none
+of the four sits under a kicker's flight any more (they fail on a ground lip or a wide approach).
+
+### Round 5 performance
+
+Measured on the production build in headless Chrome on the laptop's GPU, **on battery** (the charger was not
+connected; throttled figures ran well under the last round's on both builds), the old build (3331717) and this
+one interleaved in fresh sessions with the save cleared (every probe is a very first run). The browser pane
+of the desktop app was closed for the probes after the first round, which it had loaded.
+
+| Check | Old build | This build |
+| --- | --- | --- |
+| High at 1x, Pinecrest | 60 fps, p90 16.8 ms (one of two passes 41, the machine) | 60 fps, p90 16.8 ms, both passes |
+| Medium at 1x, Pinecrest | 60 fps | 60 fps |
+| Phone layout, Medium and Low | 60 fps | 60 fps |
+| High through an avalanche chase, CPU 4x (two passes) | 18 and 33 fps | 19 and 21 fps |
+| Low at 6x, a very first run, Pinecrest/Ember/Sakura (median of 5 passes) | 37 / 49 / 38 fps | 34 / 44 / 41 fps |
+| First rendered frame at 6x, fresh save (median of 4) | 1.75 s | 1.59 s |
+| Draw calls settled, High / Medium / Low | 90 to 92 / 85 to 86 / 42 to 48 | 90 to 92 / 85 to 87 / 43 to 47 |
+| Draw calls at the peak, High / the chase | 100 / 132 to 141 | 99 to 100 / 138 to 139 |
+| Triangles settled, High / Medium / Low | 872k to 879k / 644k / 155k to 162k | 877k to 883k / 642k to 647k / 124k to 127k |
+| Build, zipped / unpacked | 683 KB / 2,171 KB | 723 KB / 2,279 KB |
+
+Low at 6x is the one bar this round does not meet: it did not win back the last round's loss, and on two of three
+mountains it sits 3 to 5 fps under the old build, on one 3 over, inside a spread where single passes of the old
+build read 24/19/25 and 39/49/45. A bisect over the round's checkpoints read the lantern alone and the riders'
+lane within noise of the old build, and the gap appearing once the living world and the signature-rider field
+came in; it was not pinned further. Triangles on Low fell by a fifth, so it is CPU work, most likely page work as
+in decisions 205 and 217. The 4x chase on High swings too widely on battery to call.
+
+The build grew by 40 KB zipped: about 36 KB of script (the lantern, set pieces, mastery, paints and the ride home
+in the main bundle; the twelve hats, tags and reactions, about 7 KB; the crowds and animals, about 8.5 KB) and the
+sim's own growth in the ghost worker. The pools are the same size as before (42 riders a mountain, 124 KB).
+
 ## Layout
 
 | Path | Contents |
@@ -406,6 +518,10 @@ unproven with people.
 | `src/ui` | DOM overlay screens |
 | `src/platform` | CrazyGames SDK v3 wrapper and local mock |
 | `src/workers` | Ghost replay and daily pool worker |
+
+Round 5 added `src/bot/roster.ts` (the signature riders), `src/game/marquee.ts` (set pieces), `src/game/mastery.ts`
+(boards), `src/game/paints.ts` (sled paints) and `src/render/spirit.ts` (sky gates, dash and ward light, set
+pieces' air, fireworks).
 
 See `PLAN.md` for the architecture, `ART.md` for the art bible and `DECISIONS.md` for every call
 made along the way.

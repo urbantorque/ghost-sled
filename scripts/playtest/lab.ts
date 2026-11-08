@@ -437,6 +437,7 @@ function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], a
     case 'zigzag':
       return scripted((t) => (Math.floor(t) % 2 === 0 ? 1 : -1))(sim);
     case 'clumsy':
+    case 'clumsy-keep':
       return clumsy(sim, seed);
     case 'stunt': {
       const p = stuntMake!(sim, { seed });
@@ -445,6 +446,74 @@ function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], a
     default:
       return classic(name as 'novice', sim, seed);
   }
+}
+
+/** How each pilot spends its lantern (SIM_VERSION 7): the button is bit 6, a dash on its press. A build
+ *  without a lantern never sees the bit (old sims mask it off), so one plan still rides two builds.
+ *    hands-off, hold*, zigzag, line: never press it (line is the careful rider who keeps every ward)
+ *    clumsy: mashes it now and then, whatever is ahead, like a first-timer finding a new key
+ *    novice: keeps one lantern as a ward, spends a second on the snow a beat after it lights
+ *    mid, stunt: spend any full lantern on the snow with no kicker close ahead, keeping one past 2 km
+ *    expert: spends at once, and best of all into a line that closes ahead (a spirit rides through)
+ */
+function spenderFor(name: string, sim: AnySim, seed: number): () => boolean {
+  const rnd = mulberry(seed ^ 0x5a17);
+  let hold = 0;
+  let wait = 0;
+  const lit = (): number => Math.floor((sim.s.lantern ?? 0) / 100);
+  const kickerNear = (): boolean => {
+    const s = sim.s;
+    const k0 = Math.floor(s.z / CHUNK_LEN);
+    for (let k = k0; k <= k0 + 1; k++) for (const r of sim.course.zones(k).ramps) if (r.z > s.z - 2 && r.z < s.z + 30 && Math.abs(r.x - s.x) < 5) return true;
+    return false;
+  };
+  const closing = (): boolean => {
+    const s = sim.s;
+    const k0 = Math.floor(s.z / CHUNK_LEN);
+    for (let k = k0; k <= k0 + 1; k++)
+      for (const o of sim.course.chunk(k).obstacles) {
+        if (o.soft || o.z < s.z + 4 || o.z > s.z + 18) continue;
+        const ahead = s.x + (s.vx / Math.max(1, s.vz)) * (o.z - s.z);
+        if (Math.abs(o.x - ahead) < o.r + 1) return true;
+      }
+    return false;
+  };
+  const press = (): boolean => {
+    hold = 3;
+    return true;
+  };
+  return () => {
+    if (hold > 0) {
+      hold--;
+      return true;
+    }
+    const s = sim.s;
+    if (s.lantern === undefined || s.dash > 0 || s.tumble > 0 || s.finished) return false;
+    switch (name) {
+      case 'clumsy':
+        return rnd() < 0.15 / 60 ? press() : false;
+      case 'clumsy-keep':
+        return false;
+      case 'novice':
+        if (lit() >= 2 && s.grounded) {
+          if (++wait > 50) {
+            wait = 0;
+            return press();
+          }
+        } else wait = 0;
+        return false;
+      case 'mid':
+      case 'stunt': {
+        const keep = s.z > 2000 ? 1 : 0;
+        return lit() > keep && s.grounded && !kickerNear() && rnd() < 0.6 / 60 ? press() : false;
+      }
+      case 'expert':
+        if (lit() < 1 || !s.grounded || kickerNear()) return false;
+        return closing() || rnd() < 0.9 / 60 ? press() : false;
+      default:
+        return false;
+    }
+  };
 }
 
 interface Ride {
@@ -477,20 +546,28 @@ interface Ride {
   rails: RailPass[];
   /** Where the last hit came, sim z. */
   lastHit: number;
+  /** The lantern (SIM_VERSION 7; zero on older sims). */
+  lights: number;
+  lit: number;
+  dashes: number;
+  wards: number;
+  gates: number;
+  phased: number;
 }
 
 function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null): Ride {
   const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 });
   const passes: RailPass[] = [];
   const pilot = pilotFor(pilotName, sim, seed, passes, alone);
+  const spend = spenderFor(pilotName, sim, seed);
   const speeds: number[] = [];
-  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9 };
+  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0 };
   let bankTicks = 0;
   let airTicks = 0;
   let grindTicks = 0;
   while (!sim.s.crashed && !sim.finished && sim.tick < MAX_SECONDS * 60) {
     const o = pilot();
-    sim.step((o.steer | 0) | (o.action ? 16 : 0));
+    sim.step((o.steer | 0) | (o.action ? 16 : 0) | (spend() ? 64 : 0));
     pilot.after?.();
     const s = sim.s;
     speeds.push(s.speed);
@@ -532,7 +609,14 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   r.airSeconds = airTicks / 60;
   r.bankShare = bankTicks / Math.max(1, n);
   r.score = sim.score;
-  r.gifts = sim.gifts;
+  r.gifts = sim.gifts ?? 0;
+  const st = sim.stats;
+  r.lights = st.lights ?? 0;
+  r.lit = st.lit ?? 0;
+  r.dashes = st.dashes ?? 0;
+  r.wards = st.wards ?? 0;
+  r.gates = st.skyGates ?? 0;
+  r.phased = st.phased ?? 0;
   return r;
 }
 
@@ -544,7 +628,7 @@ const fmt = (v: number, d = 1): string => v.toFixed(d).padStart(7);
 
 const all: Ride[] = [];
 console.log(`root ${ROOT}  seeds ${SEEDS}  mood ${MOOD} event ${EVENT}`);
-console.log('pilot      mtn    runs   secs(med)  dist(med)  mean m/s   p90 m/s   peak   first15   air/min  stomps/min  bank%  causes');
+console.log('pilot      mtn    runs   secs(med)  dist(med)  mean m/s   p90 m/s   peak   first15   air/min  stomps/min  bank%  lights  lanterns  dashes  wards  gates  causes');
 for (const p of PILOTS) {
   const seedsFor = p.startsWith('hold') || p === 'hands-off' || p === 'zigzag' ? 1 : SEEDS;
   for (let m = 0; m < MOUNTAINS.length; m++) {
@@ -570,6 +654,11 @@ for (const p of PILOTS) {
       fmt(rides.reduce((a, r) => a + r.airSeconds, 0) / mins),
       fmt(rides.reduce((a, r) => a + r.stomps, 0) / mins),
       fmt(100 * med(rides.map((r) => r.bankShare)), 0),
+      fmt(med(rides.map((r) => r.lights)), 0),
+      fmt(med(rides.map((r) => r.lit / 100)), 1),
+      fmt(med(rides.map((r) => r.dashes)), 0),
+      fmt(med(rides.map((r) => r.wards)), 0),
+      fmt(rides.reduce((a, r) => a + r.gates, 0), 0),
       ' ' + Object.entries(causes).map(([k, v]) => `${k}:${v}`).join(' '),
     );
   }

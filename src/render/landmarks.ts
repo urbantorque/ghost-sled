@@ -3,7 +3,7 @@ import type { Beat } from '../game/beats';
 import { MOODS, Mood } from '../sim/chaos';
 import { CHUNK_LEN, Course, RUN_OUT, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
-import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry } from './crowd';
+import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry, restyleCrowd } from './crowd';
 import { ENCLOSED, Kind, Piece, Rail, SPANS, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
 import { inClearing, liftLine, type Clearing } from './dressing';
 import { Chairs } from './liftline';
@@ -1098,6 +1098,8 @@ export class SetPieces {
     this.figures.clear();
     this.crowdKey = '';
     this.shown = this.shown.map(() => null);
+    // The crowd dresses for the mountain (crowd.ts).
+    restyleCrowd(this.crowd.geometry, this.course.biome);
   }
 
   /** Windows lit at this site: a night mood, or where the journey's light has gone by. */

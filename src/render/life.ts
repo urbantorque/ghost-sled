@@ -40,12 +40,18 @@ import type { Tier } from './world';
 //
 //   birds     crows and choughs wheeling over the banks and the valley, a flock crossing high up now
 //             and then, scattering from a stomp or a crash; a rare owl at night, cranes over Sakura
-//             Ridge; Ember Peak has none (its ash falls in the motes instead)
+//             Ridge. A flock or two sits pecking on the open bank ahead and lifts off as the rider
+//             comes, each bird a beat after the last, up and away from the run (every tier; on Ember
+//             Peak these ravens are all there is, on Medium and High: its ash falls in the motes)
 //   chairs    the lift lines the bank dressing stands (dressing.ts liftLine) run: chairs travel the
 //             cables, some with passengers
-//   figures   deer or ibex at the treeline's foot that bound off into the trees as you come, hares
-//             darting, a fox trotting along the forest edge; skiers and snowboarders carving S-turns
-//             on the open slopes past the trees; a snowcat with its lights on at night
+//   figures   herds of deer or ibex grazing at the treeline's foot that lift their heads and turn to
+//             watch as you come, then bolt into the trees one after another, fanning out; hares
+//             darting; a fox trotting along the forest edge, or sat up on a rock watching you come,
+//             its head following you, till it hops down and is gone; kids sledding down the bank; now
+//             and then a snowboarder who drops in off the bank and rides alongside for a few seconds
+//             before peeling away; skiers and snowboarders carving S-turns on the open slopes past the
+//             trees; a snowcat with its lights on at night
 //   smoke     the bank cabins' chimneys smoke: soft gouache puffs rising and leaning with the wind, lit
 //             warm on the sun side
 //   flags     prayer-flag lines by the cabins (Sakura Ridge: a string of paper lanterns, lit at night)
@@ -60,6 +66,9 @@ import type { Tier } from './world';
 // re-anchors a bird flock once it falls behind. No per-frame allocations.
 
 const NIGHT: ReadonlySet<Mood> = new Set([Mood.Lantern, Mood.Comet, Mood.Haunted]);
+
+/** A fox's rock, per mountain: slate, glacier-scoured blue-grey, basalt, a mossy grey. */
+const ROCK_C: Record<string, string> = { alpine: '#7A7C92', glacier: '#8696B6', volcanic: '#463E4C', blossom: '#7E7E88' };
 
 /** Jacket colours for people (skiers, chair passengers): cool and neutral, never the signal hues. */
 const JACKETS = ['#2F7F86', '#6A5AA8', '#2C3256', '#E2DACB', '#4C6FB0', '#6E4A7A', '#6F8F7A', '#3E5C8C'].map((h) => new Color(h));
@@ -185,7 +194,32 @@ void main() {
   vec3 p;
   vec3 fwd;
   float bank = 0.0;
-  if (aWay.x < 0.5) {
+  // 1 while a bird sits on the snow; how hard it beats its wings taking off.
+  float perch = 0.0;
+  float lift = 0.0;
+  if (aWay.x > 1.5) {
+    // Perched, pecking, until the rider comes near (the CPU writes the moment into aOrbit.w): then
+    // up and away from the run, each bird a beat after the last.
+    float age = t - aOrbit.w - fract(aFly.y * 7.31) * 0.45;
+    if (age < 0.0) {
+      perch = 1.0;
+      float yaw = aFly.x + 0.6 * sin(t * 0.27 + aFly.y * 11.0);
+      fwd = vec3(cos(yaw), 0.0, sin(yaw));
+      p = aOrbit.xyz + vec3(0.0, 0.1 * size, 0.0);
+      // Sat up, nose high and tail low; now and then a peck at the snow.
+      float pk = smoothstep(0.55, 0.95, sin(t * 2.3 + aFly.y * 23.0));
+      fwd = normalize(fwd + vec3(0.0, 0.5 - 1.3 * pk, 0.0));
+      p.y += 0.18 * size * max(0.0, sin(t * 9.0 + aFly.y * 31.0)) * step(0.93, fract(t * 0.23 + aFly.y * 3.0));
+    } else {
+      if (age > 12.0) { ${COLLAPSE} }
+      vec3 d = vec3(aWay.y, 0.0, aWay.z);
+      float run = 5.0 * age + 1.8 * age * age;
+      float climb = 4.0 * age + 1.1 * age * age;
+      p = aOrbit.xyz + d * run + vec3(0.0, 0.1 * size + climb, 0.0);
+      fwd = normalize(d * (5.0 + 3.6 * age) + vec3(0.0, 4.0 + 2.2 * age, 0.0));
+      lift = 1.0 - 0.6 * smoothstep(2.0, 5.0, age);
+    }
+  } else if (aWay.x < 0.5) {
     // Wheeling: a lazy circle that wanders into an ellipse, rising and falling.
     float a = aFly.y + aFly.x * t;
     float r = aOrbit.w * (1.0 + 0.25 * sin(t * 0.21 + aFly.y * 3.0));
@@ -206,7 +240,7 @@ void main() {
   vec3 dS = p - uScatter.xyz;
   float age = t - uScatter.w;
   float k = 0.0;
-  if (age > 0.0 && age < 16.0) {
+  if (age > 0.0 && age < 16.0 && perch < 0.5) {
     float near = 1.0 - smoothstep(90.0, 220.0, length(dS));
     k = near * (1.0 - exp(-age * 2.0)) * (1.0 - smoothstep(6.0, 16.0, age));
     vec3 away = normalize(vec3(dS.x, 0.0, dS.z) + vec3(0.01, 0.0, 0.0));
@@ -215,11 +249,18 @@ void main() {
     fwd = normalize(mix(fwd, normalize(push + fwd * 10.0), min(1.0, k * 2.0)));
     bank *= 1.0 - k;
   }
+  k = max(k, lift);
   float ph = t * aFly.z * (1.0 + 1.5 * k) * 6.2832 + aFly.y * 17.0;
   // Most birds glide part of the time, wings held in a shallow V.
   float glide = smoothstep(0.2, 0.7, sin(t * 0.45 + aFly.y * 7.0)) * uSoar * (1.0 - min(1.0, k * 2.0));
-  float flap = sin(ph) * (1.0 - glide);
+  float flap = sin(ph) * (1.0 - glide) * (1.0 - perch);
   vec3 lp = position;
+  // Sitting, the wings fold along the back.
+  if (perch > 0.5 && aRig.x > 0.5 && aRig.x < 2.5) {
+    lp.z *= 0.2;
+    lp.y += 0.03;
+    lp.x -= 0.04;
+  }
   float span = abs(lp.z);
   if (aRig.x > 0.5 && aRig.x < 2.5) {
     lp.y += (flap * 0.85 * uFlapAmp + glide * 0.18) * span;
@@ -231,6 +272,8 @@ void main() {
   vec3 right = normalize(cross(fwd, up));
   vec3 up2 = normalize(up * cos(bank) + right * sin(bank));
   right = normalize(cross(fwd, up2));
+  // (Square to a climbing or perched bird's pitch, so its body is not sheared.)
+  up2 = normalize(cross(right, fwd));
   vec3 wp = p + fwd * lp.x + up2 * lp.y + right * lp.z;
   int pi = int(aRig.x + 0.5);
   vCol = uBirdC[pi];
@@ -248,6 +291,11 @@ interface Flock {
   first: number;
   /** 1 for the high crossing flock. */
   cross: boolean;
+  /** Sitting on the bank until the rider comes within `trig` metres; when it took off (Infinity:
+   *  not yet). */
+  perch: boolean;
+  trig: number;
+  off: number;
 }
 
 // ---------------------------------------------------------------- chairs
@@ -348,9 +396,13 @@ const F_FOX = 3;
 const F_SKIER = 4;
 const F_BOARD = 5;
 const F_CAT = 6;
+const F_ROCK = 7;
+const F_SLED = 8;
 
 /** Rig tags for figures: 0 body, 1-4 legs (front left, front right, hind left, hind right), 5 jacket
- *  (tinted per instance), 6 head (grazes), 7 lamp (glows at night). */
+ *  (tinted per instance), 6 head (grazes, and turns on its neck to watch: its hip slot holds the neck's
+ *  x), 7 lamp (glows at night), 8 rock (the mountain's stone), 9 a waving arm (its hip slot holds the
+ *  shoulder's height). */
 function legs(P: BufferGeometry[], col: string, fx: number, hx: number, w: number, hip: number, r: number): void {
   P.push(rp(new BoxGeometry(r, hip, r), col, { pos: [fx, hip / 2, w] }, 1, hip));
   P.push(rp(new BoxGeometry(r, hip, r), col, { pos: [fx, hip / 2, -w] }, 2, hip));
@@ -364,26 +416,26 @@ function deer(ibex: boolean): BufferGeometry {
   const P: BufferGeometry[] = [
     rp(new IcosahedronGeometry(1, 1), coat, { pos: [0, 1.0, 0], scale: [0.6, 0.29, 0.24] }),
     rp(new IcosahedronGeometry(0.15, 0), '#E8DCC8', { pos: [-0.56, 1.08, 0] }),
-    rp(new BoxGeometry(0.17, 0.5, 0.16), coat, { pos: [0.5, 1.32, 0], rot: [0, 0, -0.55] }, 6),
-    rp(new IcosahedronGeometry(1, 0), coat, { pos: [0.72, 1.56, 0], scale: [0.21, 0.12, 0.11] }, 6),
-    rp(new IcosahedronGeometry(0.05, 0), '#2A2228', { pos: [0.92, 1.52, 0] }, 6),
-    rp(new ConeGeometry(0.05, 0.16, 4), dark, { pos: [0.62, 1.7, 0.08], rot: [0.4, 0, 0] }, 6),
-    rp(new ConeGeometry(0.05, 0.16, 4), dark, { pos: [0.62, 1.7, -0.08], rot: [-0.4, 0, 0] }, 6),
+    rp(new BoxGeometry(0.17, 0.5, 0.16), coat, { pos: [0.5, 1.32, 0], rot: [0, 0, -0.55] }, 6, 0.42),
+    rp(new IcosahedronGeometry(1, 0), coat, { pos: [0.72, 1.56, 0], scale: [0.21, 0.12, 0.11] }, 6, 0.42),
+    rp(new IcosahedronGeometry(0.05, 0), '#2A2228', { pos: [0.92, 1.52, 0] }, 6, 0.42),
+    rp(new ConeGeometry(0.05, 0.16, 4), dark, { pos: [0.62, 1.7, 0.08], rot: [0.4, 0, 0] }, 6, 0.42),
+    rp(new ConeGeometry(0.05, 0.16, 4), dark, { pos: [0.62, 1.7, -0.08], rot: [-0.4, 0, 0] }, 6, 0.42),
   ];
   if (ibex) {
     // Great swept-back horns.
     for (const s of [-1, 1]) {
-      P.push(rp(new BoxGeometry(0.06, 0.32, 0.06), dark, { pos: [0.62, 1.78, s * 0.05], rot: [0, 0, 0.5] }, 6));
-      P.push(rp(new BoxGeometry(0.05, 0.28, 0.05), dark, { pos: [0.5, 1.98, s * 0.06], rot: [0, 0, 1.2] }, 6));
-      P.push(rp(new BoxGeometry(0.04, 0.2, 0.04), dark, { pos: [0.33, 1.98, s * 0.07], rot: [0, 0, 2.1] }, 6));
+      P.push(rp(new BoxGeometry(0.06, 0.32, 0.06), dark, { pos: [0.62, 1.78, s * 0.05], rot: [0, 0, 0.5] }, 6, 0.42));
+      P.push(rp(new BoxGeometry(0.05, 0.28, 0.05), dark, { pos: [0.5, 1.98, s * 0.06], rot: [0, 0, 1.2] }, 6, 0.42));
+      P.push(rp(new BoxGeometry(0.04, 0.2, 0.04), dark, { pos: [0.33, 1.98, s * 0.07], rot: [0, 0, 2.1] }, 6, 0.42));
     }
-    P.push(rp(new ConeGeometry(0.04, 0.14, 4), dark, { pos: [0.8, 1.42, 0], rot: [0, 0, Math.PI] }, 6));
+    P.push(rp(new ConeGeometry(0.04, 0.14, 4), dark, { pos: [0.8, 1.42, 0], rot: [0, 0, Math.PI] }, 6, 0.42));
   } else {
     const ant = '#CBBBA4';
     for (const s of [-1, 1]) {
-      P.push(rp(new BoxGeometry(0.035, 0.42, 0.035), ant, { pos: [0.66, 1.82, s * 0.1], rot: [s * 0.35, 0, 0.25] }, 6));
-      P.push(rp(new BoxGeometry(0.03, 0.2, 0.03), ant, { pos: [0.74, 1.9, s * 0.16], rot: [s * 0.5, 0, -0.5] }, 6));
-      P.push(rp(new BoxGeometry(0.03, 0.18, 0.03), ant, { pos: [0.58, 2.02, s * 0.2], rot: [s * 0.6, 0, 0.6] }, 6));
+      P.push(rp(new BoxGeometry(0.035, 0.42, 0.035), ant, { pos: [0.66, 1.82, s * 0.1], rot: [s * 0.35, 0, 0.25] }, 6, 0.42));
+      P.push(rp(new BoxGeometry(0.03, 0.2, 0.03), ant, { pos: [0.74, 1.9, s * 0.16], rot: [s * 0.5, 0, -0.5] }, 6, 0.42));
+      P.push(rp(new BoxGeometry(0.03, 0.18, 0.03), ant, { pos: [0.58, 2.02, s * 0.2], rot: [s * 0.6, 0, 0.6] }, 6, 0.42));
     }
   }
   legs(P, dark, 0.4, -0.42, 0.12, 0.92, 0.07);
@@ -394,9 +446,9 @@ function hare(): BufferGeometry {
   const fur = '#9A8070';
   const P: BufferGeometry[] = [
     rp(new IcosahedronGeometry(1, 1), fur, { pos: [0, 0.27, 0], scale: [0.24, 0.15, 0.13] }),
-    rp(new IcosahedronGeometry(0.1, 0), fur, { pos: [0.22, 0.38, 0] }, 6),
-    rp(new BoxGeometry(0.035, 0.22, 0.06), fur, { pos: [0.17, 0.55, 0.04], rot: [0.15, 0, 0.35] }, 6),
-    rp(new BoxGeometry(0.035, 0.22, 0.06), fur, { pos: [0.17, 0.55, -0.04], rot: [-0.15, 0, 0.35] }, 6),
+    rp(new IcosahedronGeometry(0.1, 0), fur, { pos: [0.22, 0.38, 0] }, 6, 0.14),
+    rp(new BoxGeometry(0.035, 0.22, 0.06), fur, { pos: [0.17, 0.55, 0.04], rot: [0.15, 0, 0.35] }, 6, 0.14),
+    rp(new BoxGeometry(0.035, 0.22, 0.06), fur, { pos: [0.17, 0.55, -0.04], rot: [-0.15, 0, 0.35] }, 6, 0.14),
     rp(new IcosahedronGeometry(0.06, 0), '#F2EDE6', { pos: [-0.25, 0.3, 0] }),
   ];
   legs(P, '#7A6254', 0.12, -0.12, 0.06, 0.16, 0.05);
@@ -409,10 +461,10 @@ function fox(): BufferGeometry {
     rp(new IcosahedronGeometry(1, 1), fur, { pos: [0, 0.44, 0], scale: [0.36, 0.14, 0.12] }),
     rp(new IcosahedronGeometry(1, 0), fur, { pos: [-0.5, 0.42, 0], scale: [0.3, 0.09, 0.09], rot: [0, 0, 0.25] }),
     rp(new IcosahedronGeometry(0.07, 0), '#F0E6D8', { pos: [-0.76, 0.34, 0] }),
-    rp(new IcosahedronGeometry(0.12, 0), fur, { pos: [0.42, 0.54, 0] }, 6),
-    rp(new ConeGeometry(0.06, 0.18, 4), fur, { pos: [0.58, 0.51, 0], rot: [0, 0, -Math.PI / 2] }, 6),
-    rp(new ConeGeometry(0.04, 0.1, 4), '#3A2A28', { pos: [0.4, 0.68, 0.06] }, 6),
-    rp(new ConeGeometry(0.04, 0.1, 4), '#3A2A28', { pos: [0.4, 0.68, -0.06] }, 6),
+    rp(new IcosahedronGeometry(0.12, 0), fur, { pos: [0.42, 0.54, 0] }, 6, 0.3),
+    rp(new ConeGeometry(0.06, 0.18, 4), fur, { pos: [0.58, 0.51, 0], rot: [0, 0, -Math.PI / 2] }, 6, 0.3),
+    rp(new ConeGeometry(0.04, 0.1, 4), '#3A2A28', { pos: [0.4, 0.68, 0.06] }, 6, 0.3),
+    rp(new ConeGeometry(0.04, 0.1, 4), '#3A2A28', { pos: [0.4, 0.68, -0.06] }, 6, 0.3),
     rp(new IcosahedronGeometry(1, 0), '#EADFCF', { pos: [0.12, 0.38, 0], scale: [0.2, 0.06, 0.08] }),
   ];
   legs(P, '#3A2A28', 0.24, -0.24, 0.07, 0.34, 0.045);
@@ -460,8 +512,38 @@ function snowcat(): BufferGeometry {
   ]);
 }
 
+/** A boulder for a fox to sit on, snow on its top (tag 8 takes the mountain's stone). Its top stands
+ *  ROCK_TOP over the ground. */
+function rock(): BufferGeometry {
+  return merge([
+    rp(new IcosahedronGeometry(1, 0), '#FFFFFF', { pos: [0, 0.12, 0], scale: [0.8, 0.5, 0.65], rot: [0.2, 0.5, 0.1] }, 8),
+    rp(new IcosahedronGeometry(1, 0), '#FFFFFF', { pos: [-0.55, 0.04, 0.38], scale: [0.42, 0.3, 0.36], rot: [0.5, 0.2, 0] }, 8),
+    rp(new IcosahedronGeometry(1, 0), '#F4F7FF', { pos: [0.05, 0.5, 0], scale: [0.56, 0.12, 0.46] }),
+  ]);
+}
+const ROCK_TOP = 0.6;
+
+/** A kid sat on a toboggan, sliding along +x: a slatted deck curled up at the front, a snowsuit in the
+ *  jacket colours, a cream bobble hat; one mitt on the rope and the other arm free to wave. */
+function sledKid(): BufferGeometry {
+  const wood = '#8A6248';
+  return merge([
+    rp(new BoxGeometry(1.0, 0.06, 0.42), wood, { pos: [0, 0.08, 0] }),
+    rp(new BoxGeometry(0.3, 0.06, 0.42), wood, { pos: [0.58, 0.2, 0], rot: [0, 0, 0.9] }),
+    rp(new BoxGeometry(1.05, 0.04, 0.04), '#5A4034', { pos: [0.02, 0.03, 0.18] }),
+    rp(new BoxGeometry(1.05, 0.04, 0.04), '#5A4034', { pos: [0.02, 0.03, -0.18] }),
+    rp(new BoxGeometry(0.26, 0.34, 0.3), '#FFFFFF', { pos: [-0.12, 0.3, 0] }, 5),
+    rp(new BoxGeometry(0.42, 0.12, 0.26), '#FFFFFF', { pos: [0.16, 0.16, 0] }, 5),
+    rp(new IcosahedronGeometry(0.15, 1), '#F2C9A8', { pos: [-0.1, 0.6, 0] }),
+    rp(new ConeGeometry(0.15, 0.2, 6), '#ECE6F2', { pos: [-0.1, 0.74, 0] }),
+    rp(new IcosahedronGeometry(0.05, 0), '#ECE6F2', { pos: [-0.1, 0.86, 0] }),
+    rp(new BoxGeometry(0.24, 0.07, 0.07), '#FFFFFF', { pos: [0.04, 0.36, 0.14], rot: [0, 0.3, -0.35] }, 5),
+    rp(new BoxGeometry(0.07, 0.26, 0.07), '#FFFFFF', { pos: [-0.1, 0.34, -0.19] }, 9, 0.46),
+  ]);
+}
+
 function figureSet(): BufferGeometry {
-  return merge([deer(false), deer(true), hare(), fox(), skier(false), skier(true), snowcat()].map((g, i) => tagVariant(g, i)));
+  return merge([deer(false), deer(true), hare(), fox(), skier(false), skier(true), snowcat(), rock(), sledKid()].map((g, i) => tagVariant(g, i)));
 }
 
 const FIGURE_VERT = /* glsl */ `
@@ -472,39 +554,80 @@ attribute vec4 aAnim;
 uniform float uTime;
 uniform vec3 uJackets[8];
 uniform float uLamps;
+uniform vec3 uRider;
+uniform vec3 uRockC;
 varying vec3 vWP;
 varying vec3 vCol;
 varying float vGlow;
 void main() {
   if (abs(aVar - aPick) > 0.5) { ${COLLAPSE} }
-  // aAnim: gait phase (radians), how much it is moving (0..1), hop height, jacket index.
+  // aAnim: gait phase (radians), how much it is moving (0..1), hop height (-1: sat up), and an
+  // animal's alertness (0..1) or a person's jacket.
   vec3 lp = position;
+  vec3 ip = instanceMatrix[3].xyz;
   float g = aAnim.x;
   float mv = aAnim.y;
   float tag = aRig.x;
+  float alert = aPick < 3.5 ? aAnim.w : 0.0;
+  bool sit = aAnim.z < -0.5;
+  float hopH = max(aAnim.z, 0.0);
   if (tag > 0.5 && tag < 4.5) {
     // Legs swing from the hip: a gallop's pairs together, a trot's diagonals.
-    float off = tag < 1.5 ? 0.0 : tag < 2.5 ? (aAnim.z > 0.2 ? 0.4 : 3.1416) : tag < 3.5 ? (aAnim.z > 0.2 ? 2.6 : 3.1416) : (aAnim.z > 0.2 ? 3.0 : 0.0);
+    float off = tag < 1.5 ? 0.0 : tag < 2.5 ? (hopH > 0.2 ? 0.4 : 3.1416) : tag < 3.5 ? (hopH > 0.2 ? 2.6 : 3.1416) : (hopH > 0.2 ? 3.0 : 0.0);
     float sw = sin(g + off) * mv * 0.7;
     lp.x += sw * max(aRig.y - lp.y, 0.0);
   }
-  // Standing, the head dips to graze now and then.
   if (tag > 5.5 && tag < 6.5) {
-    float graze = (1.0 - mv) * smoothstep(0.3, 0.9, sin(uTime * 0.5 + aAnim.w * 3.0));
-    lp.y -= graze * (lp.y - 0.0) * 0.32;
+    // Standing, the head dips to graze now and then; alert, it comes up and turns on the neck to
+    // watch the rider come.
+    float graze = (1.0 - mv) * (1.0 - alert) * smoothstep(0.3, 0.9, sin(uTime * 0.5 + fract(ip.x * 0.37 + ip.z * 0.11) * 19.0));
+    lp.y -= graze * lp.y * 0.32;
     lp.x += graze * 0.12;
+    if (alert > 0.01) {
+      vec3 lr = transpose(mat3(instanceMatrix)) * (uRider - ip);
+      float yaw = clamp(atan(-lr.z, lr.x), -1.4, 1.4) * alert;
+      vec2 q = vec2(lp.x - aRig.y, lp.z);
+      q = vec2(q.x * cos(yaw) + q.y * sin(yaw), -q.x * sin(yaw) + q.y * cos(yaw));
+      lp.x = q.x + aRig.y;
+      lp.z = q.y;
+      lp.y += 0.05 * alert;
+    }
+  }
+  if (sit) {
+    // Sat up (a fox on its rock): the body pitched nose-up about the hind hip, the hind legs folded
+    // under it and the front legs straight down from the chest.
+    if (tag > 2.5 && tag < 4.5) lp.y *= 0.45;
+    else if (tag > 0.5 && tag < 2.5) {
+      lp.x -= 0.07;
+      lp.y *= 1.55;
+    } else {
+      vec2 q = lp.xy - vec2(-0.24, 0.3);
+      q = vec2(q.x * 0.9004 - q.y * 0.4350, q.x * 0.4350 + q.y * 0.9004);
+      lp.xy = q + vec2(-0.24, 0.3);
+    }
+  }
+  if (tag > 8.5 && tag < 9.5) {
+    // A kid's free arm: up and waving as the rider comes by.
+    float near = 1.0 - smoothstep(12.0, 45.0, distance(uRider, ip));
+    float a = mix(0.25, 2.6 + 0.45 * sin(uTime * 9.0 + ip.x), near);
+    vec2 q = vec2(lp.y - aRig.y, lp.z + 0.16);
+    q = vec2(q.x * cos(a) - q.y * sin(a), q.x * sin(a) + q.y * cos(a));
+    lp.y = q.x + aRig.y;
+    lp.z = q.y - 0.16;
   }
   // A bound's arc and the body pitching through it.
-  float hop = aAnim.z * max(sin(g), 0.0);
-  float pitch = aAnim.z * cos(g) * 0.25;
+  float hop = hopH * max(sin(g), 0.0);
+  float pitch = hopH * cos(g) * 0.25;
   float cp = cos(pitch);
   float sp = sin(pitch);
   lp.xy = vec2(lp.x * cp - lp.y * sp, lp.x * sp + lp.y * cp);
   lp.y += hop;
   vec4 wp = modelMatrix * instanceMatrix * vec4(lp, 1.0);
   vCol = color;
-  if (tag > 4.5 && tag < 5.5) vCol = uJackets[int(mod(aAnim.w, 8.0))] * color;
-  vGlow = tag > 6.5 ? uLamps : 0.0;
+  // (A kid's waving arm is in its snowsuit too.)
+  if ((tag > 4.5 && tag < 5.5) || (tag > 8.5 && tag < 9.5)) vCol = uJackets[int(mod(aAnim.w, 8.0))] * color;
+  else if (tag > 7.5 && tag < 8.5) vCol = uRockC * color;
+  vGlow = tag > 6.5 && tag < 7.5 ? uLamps : 0.0;
   vWP = wp.xyz;
   gl_Position = projectionMatrix * viewMatrix * wp;
 }
@@ -526,6 +649,15 @@ interface Fig {
   eMax: number;
   /** Its heading in (edge excess, z) space, radians from +z toward +e. */
   dir: number;
+  /** An animal bolts when the rider comes within `trig` metres; `alert` (0..1) is how far its head is
+   *  up and turned to watch. A fox `sit`s up on a rock until then. */
+  trig: number;
+  alert: number;
+  sit: boolean;
+  /** A snowboarder who drops in alongside: 0 not one, 1 waiting on the bank, 2 riding with the rider,
+   *  3 peeling away; `t0` when that began. */
+  drop: number;
+  t0: number;
   speed: number;
   amp: number;
   period: number;
@@ -538,6 +670,11 @@ interface Fig {
    *  centimetres off). */
   gy: number;
   gk: number;
+  /** Where its ground was last read (a figure standing still reads it once), and where its way ahead
+   *  was last found open (a sled or a drop-in asks every couple of metres, not every frame). */
+  gz: number;
+  ge: number;
+  okZ: number;
   /** The corridor where it walks, as a line: centre and half width at sim z `cz` and their slopes
    *  per metre (re-read from the course every CORRIDOR_STEP metres; NaN: not yet). Each figure asked
    *  the course for its centre and width at two z every frame, which missed the course's two-entry
@@ -555,6 +692,9 @@ const CORRIDOR_STEP = 1.5;
 /** How far a fox trots down the bank before the rider comes, and how far and in what steps a fright's
  *  way out is walked when an animal is placed (metres). */
 const FOX_TROT = 20;
+/** A drop-in waits this far past the edge, up the bank, and rides about this far out (metres). */
+const DROP_TOP = 8.4;
+const DROP_E = 4.6;
 const FLEE_REACH = 45;
 const FLEE_STEP = 3;
 
@@ -728,9 +868,9 @@ void main() {
 
 // ---------------------------------------------------------------- the system
 
-const BIRD_CAP = 64;
+const BIRD_CAP = 96;
 const CHAIR_CAP = 192;
-const FIG_CAP = 40;
+const FIG_CAP = 56;
 const SMOKE_PER = 10;
 const SMOKE_CAP = 22 * SMOKE_PER;
 const FLAG_CAP = 420;
@@ -740,18 +880,25 @@ interface Plan {
   birds: boolean;
   flocks: number;
   crossing: boolean;
+  /** Flocks sitting on the bank ahead, lifting off as the rider comes. */
+  perches: number;
   /** Everything but the birds (Medium and High). */
   rich: boolean;
   deerGroups: number;
+  /** A herd's size, from and to. */
+  herd: [number, number];
+  /** Kids sledding down the banks, and whether a snowboarder drops in now and then. */
+  sledders: number;
+  drops: boolean;
   hares: number;
   foxes: number;
   skiers: number;
 }
 
 const PLANS: Record<Tier, Plan> = {
-  low: { birds: true, flocks: 3, crossing: false, rich: false, deerGroups: 0, hares: 0, foxes: 0, skiers: 0 },
-  medium: { birds: true, flocks: 5, crossing: true, rich: true, deerGroups: 2, hares: 2, foxes: 1, skiers: 7 },
-  high: { birds: true, flocks: 7, crossing: true, rich: true, deerGroups: 3, hares: 3, foxes: 2, skiers: 12 },
+  low: { birds: true, flocks: 3, crossing: false, perches: 1, rich: false, deerGroups: 0, herd: [0, 0], hares: 0, foxes: 0, skiers: 0, sledders: 0, drops: false },
+  medium: { birds: true, flocks: 5, crossing: true, perches: 2, rich: true, deerGroups: 2, herd: [3, 5], hares: 2, foxes: 1, skiers: 7, sledders: 2, drops: true },
+  high: { birds: true, flocks: 7, crossing: true, perches: 3, rich: true, deerGroups: 3, herd: [3, 6], hares: 3, foxes: 2, skiers: 12, sledders: 3, drops: true },
 };
 
 export class Life {
@@ -805,6 +952,10 @@ export class Life {
   private aPick: InstancedBufferAttribute;
   private aAnim: InstancedBufferAttribute;
   private figs: Fig[] = [];
+  /** The rider's speed down the run (smoothed), its last z, and where the next drop-in may come. */
+  private vz = 0;
+  private prevZ = 0;
+  private nextDrop = 0;
 
   // Smoke.
   private smokeGeo: InstancedBufferGeometry;
@@ -889,14 +1040,14 @@ export class Life {
     this.figMat = new ShaderMaterial({
       vertexColors: true,
       side: DoubleSide,
-      uniforms: solidUniforms({ uJackets: { value: JACKETS }, uLamps: { value: 0 } }),
+      uniforms: solidUniforms({ uJackets: { value: JACKETS }, uLamps: { value: 0 }, uRider: { value: new Vector3() }, uRockC: { value: new Color('#7A7C92') } }),
       vertexShader: FIGURE_VERT,
       fragmentShader: SOLID_FRAG,
     });
     this.figMesh = new InstancedMesh(fg, this.figMat, FIG_CAP);
     this.figMesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.figMesh.count = 0;
-    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, eMax: Infinity, dir: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
+    for (let i = 0; i < FIG_CAP; i++) this.figs.push({ kind: 0, side: 1, e0: 0, z0: 0, e: 0, z: 0, age: 0, fled: -1, gait: 0, eMax: Infinity, dir: 0, trig: 48, alert: 0, sit: false, drop: 0, t0: 0, speed: 0, amp: 0, period: 1, tint: 0, live: false, far: false, gy: 0, gk: 0, gz: Number.NaN, ge: Number.NaN, okZ: Number.NaN, cz: Number.NaN, cx: 0, dcx: 0, hw: 0, dhw: 0 });
 
     // Smoke.
     this.smokeGeo = new InstancedBufferGeometry();
@@ -989,6 +1140,8 @@ export class Life {
     this.smokeMat.uniforms.uSmokeLit.value.set(this.night ? '#C8CCE6' : '#FFF6EE');
     (this.smokeMat.uniforms.uSmokeShade.value as Color).copy(p.snowShade).lerp(new Color('#E4E0EE'), 0.45);
     this.smokeMat.uniforms.uSmokeA.value = this.night ? 0.6 : p.windStreaks > 0 ? 0.55 : 0.95;
+    // The fox's rock in the mountain's own stone.
+    this.figMat.uniforms.uRockC.value.set(ROCK_C[this.course.biome] ?? '#7A7C92').multiplyScalar(this.night ? 0.7 : 1);
     const lamps = this.night ? 2.2 : 0;
     this.figMat.uniforms.uLamps.value = lamps;
     this.flagMat.uniforms.uGlowK.value = this.night ? 1.6 : 0;
@@ -1001,7 +1154,9 @@ export class Life {
     const biome = this.course.biome;
     const pl = this.plan;
     let kind: BirdKind | null = this.night ? 'owl' : biome === 'blossom' ? 'crane' : 'crow';
-    if (biome === 'volcanic') kind = null;
+    // Ember's sky is its ash's: only ravens sitting on the bank, on Medium and High (Low has never
+    // drawn a bird there, and gets no new draw).
+    if (biome === 'volcanic' && (this.night || !pl.rich)) kind = null;
     if (kind) this.setBirdKind(kind);
     this.birdMesh.visible = pl.birds && kind !== null;
     // Motes: diamond dust in the clear, sunny moods; ash on Ember Peak's own dusk, sparse and pale.
@@ -1057,7 +1212,7 @@ export class Life {
       if (b.type === 'stomp') this.startle(b.x, b.z, time);
       else if (b.type === 'crash') this.startle(x, z, time);
     }
-    if (this.birdMesh.visible) this.updateBirds(z, jump);
+    if (this.birdMesh.visible) this.updateBirds(z, jump, time);
     if (this.plan.rich) {
       const ci = Math.floor(z / CHUNK_LEN);
       const from = ci <= 0 ? -2 : ci - 1;
@@ -1067,6 +1222,7 @@ export class Life {
         this.range = key;
         this.place(from, to);
       }
+      (this.figMat.uniforms.uRider.value as Vector3).set(x, this.course.ground(x, z), -z);
       this.updateFigures(z, time, dt, jump);
     } else {
       this.chairGeo.instanceCount = 0;
@@ -1091,6 +1247,7 @@ export class Life {
     const c = this.course;
     const sc = this.birdMat.uniforms.uScatter.value as Vector4;
     sc.set(x, c.ground(x, z), -z, time);
+    for (const f of this.flocks) if (f.perch && f.off === Infinity && Math.abs(f.z - z) < 110) this.takeOff(f, time);
     for (const f of this.figs) {
       if (f.live && f.kind <= F_FOX && f.fled < 0 && Math.abs(f.z - z) < 70) f.fled = time;
     }
@@ -1103,7 +1260,7 @@ export class Life {
     return this.seed / 4294967296;
   }
 
-  private updateBirds(z: number, jump: boolean): void {
+  private updateBirds(z: number, jump: boolean, time: number): void {
     const pl = this.plan;
     if (jump || this.flocks.length === 0) {
       // Lay the flocks out ahead of the focus (and one just behind), and the crossing flock.
@@ -1111,24 +1268,40 @@ export class Life {
       this.flocks.length = 0;
       let first = 0;
       const owl = this.birdKind === 'owl';
-      const n = owl ? 1 : this.mood === Mood.Blizzard ? 2 : pl.flocks;
+      const ravens = this.course.biome === 'volcanic';
+      const n = owl ? 1 : ravens ? 0 : this.mood === Mood.Blizzard ? 2 : pl.flocks;
       for (let k = 0; k < n; k++) {
         const size = owl ? 1 : this.birdKind === 'crane' ? 4 + Math.floor(this.rand() * 3) : 5 + Math.floor(this.rand() * 4);
-        const f: Flock = { z: 0, side: 1, n: size, first, cross: false };
+        const f: Flock = { z: 0, side: 1, n: size, first, cross: false, perch: false, trig: 0, off: Infinity };
         first += size;
         this.flocks.push(f);
         this.anchor(f, z + 30 + (k / n) * 440 + this.rand() * 40);
       }
-      if (pl.crossing && !owl && this.mood !== Mood.Blizzard) {
-        const f: Flock = { z, side: this.rand() < 0.5 ? -1 : 1, n: this.birdKind === 'crane' ? 7 : 9, first, cross: true };
+      if (pl.crossing && !owl && !ravens && this.mood !== Mood.Blizzard) {
+        const f: Flock = { z, side: this.rand() < 0.5 ? -1 : 1, n: this.birdKind === 'crane' ? 7 : 9, first, cross: true, perch: false, trig: 0, off: Infinity };
         first += f.n;
         this.flocks.push(f);
         this.anchor(f, z);
+      }
+      // The flocks on the bank: none at night (the owl hunts alone), one in a blizzard.
+      const perches = owl ? 0 : this.mood === Mood.Blizzard ? 1 : pl.perches;
+      for (let k = 0; k < perches; k++) {
+        const size = this.birdKind === 'crane' ? 3 + Math.floor(this.rand() * 3) : 6 + Math.floor(this.rand() * 4);
+        const f: Flock = { z: 0, side: 1, n: size, first, cross: false, perch: true, trig: 0, off: Infinity };
+        first += size;
+        this.flocks.push(f);
+        this.perchAt(f, z + 60 + (k / perches) * 360 + this.rand() * 60);
       }
       this.birdGeo.instanceCount = Math.min(BIRD_CAP, first);
       return;
     }
     for (const f of this.flocks) {
+      if (f.perch) {
+        // The rider comes near: up they go. Once it is by, the flock settles again further down.
+        if (f.off === Infinity && z > f.z - f.trig) this.takeOff(f, time);
+        if (z - f.z > 70) this.perchAt(f, z + 280 + this.rand() * 220);
+        continue;
+      }
       // A flock wheeling behind the focus moves on ahead of it, into the fog.
       if (!f.cross && z - f.z > 70) this.anchor(f, z + 300 + this.rand() * 180);
       // The crossing flock keeps abreast of the focus; it is re-laid when far behind.
@@ -1196,6 +1369,69 @@ export class Life {
       a.addUpdateRange(f.first * 4, f.n * 4);
       a.needsUpdate = true;
     }
+  }
+
+  /** Sets flock f down on open bank near sim z, pecking in a loose knot 4.5 to 8 m past the edge, where
+   *  nothing stands (no rock, no set piece, no overlook's lip); none found, it sits this stretch out. */
+  private perchAt(f: Flock, z: number): void {
+    const c = this.course;
+    f.off = Infinity;
+    f.trig = 40 + this.rand() * 14;
+    const o = this.aOrbit.array as Float32Array;
+    const fl = this.aFly.array as Float32Array;
+    const w = this.aWay.array as Float32Array;
+    let found = false;
+    let side = 1;
+    let e = 6;
+    for (let k = 0; k < 6; k++, z += 35) {
+      side = this.rand() < 0.5 ? -1 : 1;
+      e = 4.5 + this.rand() * 3;
+      const zz = this.foot(z);
+      if (zz < 0) break;
+      z = zz;
+      found = openFoot(c, z, e + 1.5) && this.free(side, e - 1.5, z) && this.free(side, e + 1.5, z) && !(this.dropAt !== null && this.dropAt(z, side, e + 2) > 0.05);
+      if (found) break;
+    }
+    f.z = z;
+    f.side = side;
+    // Away from the run and on down the slope, a little spread.
+    const ang = (this.rand() - 0.5) * 0.5;
+    let dx = side * Math.cos(ang);
+    let dz = -0.75 - this.rand() * 0.5;
+    const dl = Math.hypot(dx, dz);
+    dx /= dl;
+    dz /= dl;
+    for (let i = 0; i < f.n; i++) {
+      const k = f.first + i;
+      const zi = z + (this.rand() - 0.5) * 5;
+      const ei = e + (this.rand() - 0.5) * 2.6;
+      const x = c.centerX(zi) + side * (c.halfWidth(zi) + ei);
+      o[k * 4] = x;
+      o[k * 4 + 1] = visualGround(c, x, zi);
+      o[k * 4 + 2] = -zi;
+      o[k * 4 + 3] = 1e9;
+      fl[k * 4] = this.rand() * 6.28;
+      fl[k * 4 + 1] = this.rand();
+      fl[k * 4 + 2] = this.flapHz * (1.15 + 0.3 * this.rand());
+      fl[k * 4 + 3] = found ? this.birdSize * (0.85 + 0.3 * this.rand()) : 0;
+      w[k * 4] = 2;
+      w[k * 4 + 1] = dx + (this.rand() - 0.5) * 0.35;
+      w[k * 4 + 2] = dz + (this.rand() - 0.5) * 0.35;
+      w[k * 4 + 3] = 0;
+    }
+    for (const a of [this.aOrbit, this.aFly, this.aWay]) {
+      a.addUpdateRange(f.first * 4, f.n * 4);
+      a.needsUpdate = true;
+    }
+  }
+
+  /** A perched flock takes off now. */
+  private takeOff(f: Flock, time: number): void {
+    f.off = time;
+    const o = this.aOrbit.array as Float32Array;
+    for (let i = 0; i < f.n; i++) o[(f.first + i) * 4 + 3] = time;
+    this.aOrbit.addUpdateRange(f.first * 4, f.n * 4);
+    this.aOrbit.needsUpdate = true;
   }
 
   // ---------------------------------------------------------------- placed by chunk range
@@ -1430,13 +1666,21 @@ export class Life {
     const people = !this.night && this.mood !== Mood.Haunted;
     const wantSkiers = people ? (this.mood === Mood.Blizzard ? Math.ceil(pl.skiers / 3) : pl.skiers) : 0;
     const wantCat = this.night ? 1 : 0;
-    if (jump) for (const f of figs) f.live = false;
+    const wantSleds = people && this.mood !== Mood.Blizzard ? pl.sledders : 0;
+    if (jump) {
+      for (const f of figs) f.live = false;
+      this.nextDrop = z + 200 + this.rand() * 200;
+      this.vz = 0;
+    } else if (dt > 0) this.vz += (Math.max(0, (z - this.prevZ) / dt) - this.vz) * Math.min(1, dt * 4);
+    this.prevZ = z;
     // Count who is out, and send off whoever the focus has left behind.
     let deer = 0;
     let hares = 0;
     let foxes = 0;
     let skiers = 0;
     let cats = 0;
+    let sleds = 0;
+    let drops = 0;
     for (const f of figs) {
       if (!f.live) continue;
       if (z - f.z > 45 || (f.kind === F_CAT && z - f.z > 80)) {
@@ -1447,22 +1691,32 @@ export class Life {
       else if (f.kind === F_HARE) hares++;
       else if (f.kind === F_FOX) foxes++;
       else if (f.kind === F_CAT) cats++;
-      else skiers++;
+      else if (f.kind === F_SLED) sleds++;
+      else if (f.drop > 0) drops++;
+      else if (f.kind !== F_ROCK) skiers++;
     }
     const ibex = this.course.biome === 'glacier' || this.course.biome === 'volcanic';
-    // Deer come in small groups, standing together at the treeline's foot.
-    while (deer < pl.deerGroups * 2) {
-      const n = 1 + Math.floor(this.rand() * 3);
+    // A herd grazes together at the treeline's foot, loosely spread along it.
+    while (deer < pl.deerGroups * 4) {
+      const n = pl.herd[0] + Math.floor(this.rand() * (pl.herd[1] - pl.herd[0] + 1));
       deer += n;
       const zz = this.foot(this.ahead(z, jump, 0));
       if (zz < 0) continue;
       const side = this.rand() < 0.5 ? -1 : 1;
-      for (let k = 0; k < n; k++) this.spawn(ibex ? F_IBEX : F_DEER, side, 9.3 + this.rand() * 0.5 + k * 0.3, zz + k * 2.6 + this.rand());
+      const e0 = 8.9 + this.rand() * 0.5;
+      // Each bolts at its own moment: the nearest first, the others a beat or two after.
+      for (let k = 0; k < n; k++) this.spawn(ibex ? F_IBEX : F_DEER, side, e0 + (this.rand() - 0.5) * 1.4, zz + k * 2.3 + this.rand() * 1.5, 44 + this.rand() * 10);
     }
-    for (; hares < pl.hares; hares++) this.spawn(F_HARE, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.7, this.foot(this.ahead(z, jump, 0)));
-    for (; foxes < pl.foxes; foxes++) this.spawn(F_FOX, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.4, this.foot(this.ahead(z, jump, 0)));
-    for (; skiers < wantSkiers; skiers++) this.spawn(this.rand() < 0.35 ? F_BOARD : F_SKIER, this.rand() < 0.5 ? -1 : 1, this.farGround ? 140 + this.rand() * 280 : 15 + this.rand() * 35, this.ahead(z, jump, -150 + this.rand() * 100));
-    for (; cats < wantCat; cats++) this.spawn(F_CAT, this.rand() < 0.5 ? -1 : 1, this.farGround ? 120 + this.rand() * 200 : 16 + this.rand() * 20, this.ahead(z, jump, 0));
+    for (; hares < pl.hares; hares++) this.spawn(F_HARE, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.7, this.foot(this.ahead(z, jump, 0)), 32);
+    // A fox trots the forest's edge, or sits up on a rock and watches the rider all the way in.
+    for (; foxes < pl.foxes; foxes++) this.spawn(F_FOX, this.rand() < 0.5 ? -1 : 1, 9.3 + this.rand() * 0.4, this.foot(this.ahead(z, jump, 0)), this.rand() < 0.65 ? -(22 + this.rand() * 8) : 38);
+    for (; skiers < wantSkiers; skiers++) this.spawn(this.rand() < 0.35 ? F_BOARD : F_SKIER, this.rand() < 0.5 ? -1 : 1, this.farGround ? 140 + this.rand() * 280 : 15 + this.rand() * 35, this.ahead(z, jump, -150 + this.rand() * 100), 0);
+    for (; cats < wantCat; cats++) this.spawn(F_CAT, this.rand() < 0.5 ? -1 : 1, this.farGround ? 120 + this.rand() * 200 : 16 + this.rand() * 20, this.ahead(z, jump, 0), 0);
+    for (; sleds < wantSleds; sleds++) this.spawn(F_SLED, this.rand() < 0.5 ? -1 : 1, 5 + this.rand() * 2.5, this.ahead(z, jump, 0), 0);
+    if (drops === 0 && pl.drops && people && this.mood !== Mood.Blizzard && z > this.nextDrop) {
+      // (Where the bank is not open long enough, it looks again a little further on.)
+      this.nextDrop = z + (this.dropIn(z) ? 650 + this.rand() * 450 : 50);
+    }
 
     // Walk them on, and write each one's matrix and gait.
     const c = this.course;
@@ -1476,13 +1730,17 @@ export class Life {
       let hop = 0;
       let rate = 0;
       let lean = 0;
+      let lift = 0;
       if (f.kind <= F_FOX) {
-        const trig = f.kind === F_HARE ? 32 : f.kind === F_FOX ? 38 : 48;
-        if (f.fled < 0 && z > f.z - trig) f.fled = time;
+        // Heads come up and turn to watch the rider come, from about 120 m.
+        const watch = f.fled < 0 && f.z - z < 120 ? 1 : 0;
+        f.alert += (watch - f.alert) * Math.min(1, dt * 2.5);
+        if (f.fled < 0 && z > f.z - f.trig) f.fled = time;
         if (f.fled >= 0) {
           // Away from the run, up the bank into the trees and a little down the slope.
           const t = time - f.fled;
-          const target = f.kind === F_HARE ? 0.9 + 0.5 * Math.sin(t * 5) : f.kind === F_FOX ? 1.15 : 0.95;
+          if (f.sit) lift = ROCK_TOP * Math.max(0, 1 - t / 0.3);
+          const target = f.kind === F_HARE ? 0.9 + 0.5 * Math.sin(t * 5) : f.kind === F_FOX ? 1.15 : 0.95 + f.amp;
           f.dir += (target * f.side - f.dir) * Math.min(1, dt * 6);
           const sp = Math.min(1, t * 3) * f.speed;
           const edge = f.e + 1.5 > f.eMax || (this.dropAt !== null && this.dropAt(f.z, f.side, f.e + 1.5) > 0.05);
@@ -1494,6 +1752,9 @@ export class Life {
           rate = f.kind === F_HARE ? 4.2 : f.kind === F_FOX ? 3.4 : 2.3;
           hop = f.kind === F_HARE ? 0.32 : f.kind === F_FOX ? 0.08 : 0.55;
           if (t > 9) f.live = false;
+        } else if (f.sit) {
+          lift = ROCK_TOP;
+          hop = -1;
         } else if (f.kind === F_FOX) {
           // A fox trots along the forest's edge, down the slope.
           f.z += 1.3 * dt;
@@ -1501,11 +1762,24 @@ export class Life {
           rate = 2.0;
           hop = 0.02;
         }
+      } else if (f.kind === F_ROCK) {
+        // (Stays where it was set, for a fox to sit on.)
       } else if (f.kind === F_CAT) {
         f.z -= 2.4 * dt;
         f.dir = Math.PI;
         move = 0;
-      } else {
+      } else if (f.kind === F_SLED) {
+        // Down the bank with a lazy wobble; it stops where the open ground does.
+        const w = (2 * Math.PI) / f.period;
+        const nz = f.z + f.speed * dt;
+        const ne = f.e0 + f.amp * Math.sin(f.age * w);
+        if (f.speed > 0 && this.openAhead(f, ne, nz, 2)) {
+          f.z = nz;
+          f.e = ne;
+          f.dir = Math.atan2(f.amp * w * Math.cos(f.age * w) * f.side, f.speed);
+        } else f.speed = 0;
+      } else if (f.drop > 0) this.ride(f, z, time, dt);
+      else {
         // Carving S-turns down the slope.
         const w = (2 * Math.PI) / f.period;
         f.z += f.speed * dt;
@@ -1515,6 +1789,7 @@ export class Life {
         f.dir = Math.atan2(de * f.side, f.speed);
         lean = -f.amp * w * w * s * f.side * 0.05;
       }
+      if (f.drop > 0) lean = f.amp;
       f.gait += dt * rate * 2 * Math.PI;
       // World position and heading, off the figure's corridor line (read again every CORRIDOR_STEP m).
       if (!(Math.abs(f.z - f.cz) < CORRIDOR_STEP)) {
@@ -1534,7 +1809,14 @@ export class Life {
         }
         f.gk--;
         gy = f.gy;
-      } else gy = visualGround(c, x, f.z);
+      } else {
+        if (f.z !== f.gz || f.e !== f.ge) {
+          f.gy = visualGround(c, x, f.z);
+          f.gz = f.z;
+          f.ge = f.e;
+        }
+        gy = f.gy;
+      }
       if (!(gy > -1e6)) {
         f.live = false;
         continue;
@@ -1546,14 +1828,15 @@ export class Life {
       const yaw = Math.atan2(Math.cos(head), Math.sin(head));
       this.q.setFromAxisAngle(this.up, yaw);
       if (lean !== 0) this.q.multiply(this.q2.setFromAxisAngle(this.xAxis, Math.max(-0.6, Math.min(0.6, lean))));
-      const sc = f.kind === F_HARE ? 2.0 : f.kind === F_FOX ? 1.7 : f.kind === F_SKIER || f.kind === F_BOARD ? 1.6 : f.kind === F_CAT ? 1 : 1.25;
-      this.m.compose(this.v.set(x, gy - 0.05, -f.z), this.q, this.s.setScalar(sc));
+      // (The drop-in a touch larger than life, as the rider is: it has a moment to be seen in.)
+      const sc = f.kind === F_HARE ? 2.0 : f.kind === F_FOX ? 1.7 : f.drop > 0 ? 1.85 : f.kind === F_SKIER || f.kind === F_BOARD ? 1.6 : f.kind === F_CAT || f.kind === F_ROCK ? 1 : 1.25;
+      this.m.compose(this.v.set(x, gy - 0.05 + lift, -f.z), this.q, this.s.setScalar(sc));
       this.figMesh.setMatrixAt(n, this.m);
       P[n] = f.kind;
       N[n * 4] = f.gait;
       N[n * 4 + 1] = move;
       N[n * 4 + 2] = hop;
-      N[n * 4 + 3] = f.tint;
+      N[n * 4 + 3] = f.kind <= F_FOX ? f.alert : f.tint;
       n++;
     }
     this.figMesh.count = n;
@@ -1562,6 +1845,80 @@ export class Life {
     uploadFirst(this.figMesh.instanceMatrix, n * 16);
     uploadFirst(this.aPick, n);
     uploadFirst(this.aAnim, n * 4);
+  }
+
+  /** Nothing stands on the bank `e` past the edge on `side` at sim z, and the snow there is open
+   *  (no rock, ledge, set piece or overlook's lip): where a sled or a board may go. */
+  private open(side: number, e: number, z: number): boolean {
+    return openFoot(this.course, z, e + 1) && this.free(side, e, z) && !(this.dropAt !== null && this.dropAt(z, side, e + 1.5) > 0.05);
+  }
+
+  /** Whether f's way on at (e, z) is open `lead` metres ahead, asked again every 2 m it travels. */
+  private openAhead(f: Fig, e: number, z: number, lead: number): boolean {
+    if (Math.abs(z - f.okZ) < 2) return true;
+    if (!this.open(f.side, e, z + lead) || !this.open(f.side, e, z + lead + 2)) return false;
+    f.okZ = z;
+    return true;
+  }
+
+  /** A snowboarder waits on the bank ahead where it stays open for 200 m, a few metres past the edge. */
+  private dropIn(z: number): boolean {
+    const zz = z + 110;
+    const first = this.rand() < 0.5 ? -1 : 1;
+    for (const side of [first, -first]) {
+      let ok = true;
+      for (let t = 0; t <= 200 && ok; t += 10) ok = this.open(side, DROP_E - 1, zz + t) && this.open(side, DROP_TOP, zz + t);
+      if (!ok) continue;
+      const f = this.figs.find((g) => !g.live);
+      if (!f) return false;
+      this.spawn(F_BOARD, side, DROP_TOP, zz, 0);
+      if (!f.live) return false;
+      f.drop = 1;
+      f.far = false;
+      f.speed = 0;
+      f.amp = 0;
+      f.dir = 0;
+      f.e0 = DROP_E;
+      return true;
+    }
+    return false;
+  }
+
+  /** The drop-in: waiting high on the bank until the rider is 40 m off, then dropping down it to ride
+   *  near its foot, holding about 18 m ahead of
+   *  it, carving, for five and a half seconds; then it sits back on its edge and lets the rider go. */
+  private ride(f: Fig, z: number, time: number, dt: number): void {
+    if (f.drop === 1) {
+      if (z > f.z - 40) {
+        f.drop = 2;
+        f.t0 = time;
+        f.speed = this.vz * 0.7;
+      }
+      return;
+    }
+    const t = time - f.t0;
+    if (f.drop === 2) {
+      const want = this.vz + (z + 18 - f.z) * 0.9;
+      f.speed += (Math.max(0, Math.min(48, want)) - f.speed) * Math.min(1, dt * 3);
+      if (t > 5.5) f.drop = 3;
+    } else f.speed = Math.max(0, f.speed - 10 * dt);
+    const w = 2.3;
+    const k = f.drop === 2 ? Math.min(1, t * 0.8) : Math.max(0, 1 - (t - 5.5) * 0.7);
+    const nz = f.z + f.speed * dt;
+    // (Down off the top of the bank in its first second and a half, then carving.)
+    const drop = f.drop === 2 ? Math.min(1, t / 1.5) : 1;
+    const ne = DROP_TOP + (f.e0 - DROP_TOP) * drop * drop * (3 - 2 * drop) + 0.9 * k * Math.sin(t * w);
+    if (this.openAhead(f, ne, nz, 3)) {
+      f.z = nz;
+      f.e = ne;
+    } else {
+      f.speed = 0;
+      f.drop = 3;
+    }
+    const de = 0.9 * k * w * Math.cos(t * w) + (f.drop === 2 && t < 1.5 ? ((f.e0 - DROP_TOP) * 6 * drop * (1 - drop)) / 1.5 : 0);
+    f.dir = f.speed > 0.5 ? Math.atan2(de * f.side, f.speed) : 0;
+    // Its lean into the turn (sent through `amp`, read as the lean).
+    f.amp = f.speed > 0.5 ? Math.max(-0.5, Math.min(0.5, 0.9 * k * w * w * Math.sin(t * w) * f.side * -0.12)) : 0;
   }
 
   /** Where a newcomer is placed: well ahead, in the fog (anywhere in view after a cut). */
@@ -1586,18 +1943,20 @@ export class Life {
     return -1;
   }
 
-  private spawn(kind: number, side: number, e: number, z: number): void {
+  /** Puts a figure out at edge excess e on side, sim z. `trig` is an animal's bolt distance (negative:
+   *  a fox that sits up on a rock until the rider is that close). */
+  private spawn(kind: number, side: number, e: number, z: number, trig: number): void {
     const f = this.figs.find((g) => !g.live);
     if (!f || z < 0) return;
     z = Math.max(80, z);
     f.eMax = Infinity;
-    if (kind <= F_FOX) {
+    if (kind <= F_FOX || kind === F_SLED) {
       // An animal stands only where the ground is open, and the slot waits for the next one if it is not.
       if (!openFoot(this.course, z, e) || !this.free(side, e, z)) return;
       // (A fox trots down the bank until something startles it: not into what stands further down.)
-      if (kind === F_FOX && (!openFoot(this.course, z + FOX_TROT, e) || !this.free(side, e, z + FOX_TROT))) return;
+      if (kind === F_FOX && trig > 0 && (!openFoot(this.course, z + FOX_TROT, e) || !this.free(side, e, z + FOX_TROT))) return;
       // Its way out, up the bank and a little down the slope: it pulls up short of what stands there.
-      for (let t = FLEE_STEP; t <= FLEE_REACH; t += FLEE_STEP) {
+      for (let t = FLEE_STEP; t <= FLEE_REACH && kind !== F_SLED; t += FLEE_STEP) {
         if (this.free(side, e + t * 0.8, z + t * 0.6)) continue;
         f.eMax = e + (t - FLEE_STEP) * 0.8;
         break;
@@ -1612,19 +1971,59 @@ export class Life {
     f.fled = -1;
     f.gait = this.rand() * 6.28;
     f.tint = Math.floor(this.rand() * JACKETS.length);
-    f.far = kind >= F_SKIER && this.farGround !== null;
+    f.far = kind >= F_SKIER && kind <= F_CAT && this.farGround !== null;
     f.gk = 0;
+    f.gz = Number.NaN;
+    f.okZ = Number.NaN;
     f.cz = Number.NaN;
+    f.trig = Math.abs(trig);
+    f.alert = 0;
+    f.sit = false;
+    f.drop = 0;
+    f.amp = 0;
     if (kind === F_DEER || kind === F_IBEX) {
-      // Standing turned toward the run, a little off square.
+      // Standing turned toward the run, a little off square; it fans out from the herd as it flees.
       f.dir = side * (-1.3 + this.rand() * 0.8);
       f.speed = 7 + this.rand() * 2;
+      f.amp = (this.rand() - 0.5) * 0.5;
     } else if (kind === F_HARE) {
       f.dir = side * (this.rand() - 0.5) * 2;
       f.speed = 9 + this.rand() * 3;
     } else if (kind === F_FOX) {
       f.dir = side * 0.15;
       f.speed = 6;
+      if (trig < 0) {
+        // Sat on a rock, side-on to the run (its head turns to watch): the rock is a figure of its own,
+        // and stays when the fox has gone.
+        const r = this.figs.find((g) => !g.live);
+        if (r) {
+          f.sit = true;
+          f.dir = side * (0.25 + this.rand() * 0.5);
+          r.live = true;
+          r.kind = F_ROCK;
+          r.side = side;
+          r.e0 = r.e = e;
+          r.z0 = r.z = z;
+          r.dir = this.rand() * 6.28;
+          r.fled = -1;
+          r.far = false;
+          r.cz = Number.NaN;
+          r.gz = Number.NaN;
+          r.drop = 0;
+          r.sit = false;
+          r.amp = 0;
+          r.speed = 0;
+          r.tint = 0;
+          r.alert = 0;
+        } else f.trig = 38;
+      }
+    } else if (kind === F_SLED) {
+      f.speed = 6.5 + this.rand() * 3;
+      f.amp = 0.5 + this.rand() * 0.6;
+      f.period = 2.6 + this.rand() * 1.5;
+      f.dir = 0;
+    } else if (kind === F_ROCK) {
+      f.speed = 0;
     } else {
       f.speed = kind === F_CAT ? 2.4 : 6 + this.rand() * 5;
       f.amp = 3 + this.rand() * 5;

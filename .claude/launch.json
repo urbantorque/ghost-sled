@@ -4,14 +4,92 @@
     {
       "name": "ghost-sled-dev",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "--port", "5173", "--host", "127.0.0.1"],
+      "runtimeArgs": [
+        "vite",
+        "--port",
+        "5173",
+        "--host",
+        "127.0.0.1"
+      ],
       "port": 5173
     },
     {
       "name": "ghost-sled-preview",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["vite", "preview", "--port", "4173", "--host", "127.0.0.1", "--strictPort"],
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--port",
+        "4173",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
       "port": 4173
+    },
+    {
+      "name": "ghost-sled-base",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        ".claude/worktrees/base/dist/game",
+        "--port",
+        "4310",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4310
+    },
+    {
+      "name": "ghost-sled-next",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/next",
+        "--port",
+        "4320",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4320
+    },
+    {
+      "name": "ghost-sled-bis-a",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/bis-81d9b02",
+        "--port",
+        "4331",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4331
+    },
+    {
+      "name": "ghost-sled-bis-c",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "vite",
+        "preview",
+        "--outDir",
+        "dist/bis-80e1992",
+        "--port",
+        "4332",
+        "--host",
+        "127.0.0.1",
+        "--strictPort"
+      ],
+      "port": 4332
     }
   ]
 }

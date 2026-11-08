@@ -4,13 +4,14 @@ import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
 import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
-import { RIDER_COLORS, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
+import { HAT_LIFT, RIDER_COLORS, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
 import { pageBeat } from '../ui/pagebeat';
 import { graveCopy, type GravePlace } from './graves';
+import { ROSTER, riderByName, type Emblem, type HatKind, type Rider } from '../bot/roster';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
@@ -24,6 +25,12 @@ import { graveCopy, type GravePlace } from './graves';
 // for the rest of the run; and your best and a friend's line on the snow carry a tag with the distance
 // ('Your best · 1,240 m'). A graveyard's cairn on the bank carries its name over how many fell there
 // ('4 ghosts fell here').
+//
+// Signature riders (bot/roster.ts, keyed on the ghost's name): the ghost wears its rider's hat in the
+// same glass (merged into its body geometry, so no extra draw), its tag carries the rider's emblem in a
+// disc of its accent and a thin inner edge of it, and its scarf wisp streams in the accent. The body
+// keeps its kind colour (mint, rose for a grudge). When it passes you or you pass it, a short line of
+// its own floats over its tag for 1.6 s (say()).
 
 export const GHOST_COLORS: Record<GhostKind, string> = {
   pool: '#8FF3E4',
@@ -173,7 +180,18 @@ interface Item {
    *  the class is written. */
   dropT: number;
   dropOn: boolean;
+  /** The signature rider it is (bot/roster.ts), or null for the crowd; its accent (linear), which its
+   *  scarf wisp streams in; how far its hat raises the tag; and which of its lines it says next. */
+  rider: Rider | null;
+  acc: Color | null;
+  lift: number;
+  line: number;
 }
+
+/** A speech chip's hold over its ghost's tag (s), and how long a showing chip keeps its place before
+ *  a newer line may take it. */
+const SAY_HOLD = 1.6;
+const SAY_KEEP = 0.9;
 
 /** How long a ghost's trick word replaces its name, and how often any tag may whisper one. */
 const TRICK_HOLD = 0.9;
@@ -198,13 +216,14 @@ const DROP_HOLD = 0.9;
 // groups over the same triangles: the depth prepass (material 0) draws right before the glass
 // (material 1), so each ghost is one silhouette while ghosts behind it still show through. The body
 // rides without its sled (each ghost's glass sled is drawn apart, below), seated as the rider sits
-// that sled: legs out on a deck, cross-legged on a saucer or a tray. Built on first use.
-const bodyGeos: Array<BufferGeometry | null> = [null, null];
-function ghostBodyGeometry(seat: SledSeat): BufferGeometry {
-  const k = seat.crossLegged ? 1 : 0;
-  let merged = bodyGeos[k];
+// that sled: legs out on a deck, cross-legged on a saucer or a tray. A signature rider's hat is part
+// of the same geometry. Built on first use, one per seat and hat.
+const bodyGeos = new Map<string, BufferGeometry>();
+function ghostBodyGeometry(seat: SledSeat, hat: HatKind | null): BufferGeometry {
+  const key = `${seat.crossLegged ? 1 : 0}${hat ?? ''}`;
+  let merged = bodyGeos.get(key);
   if (!merged) {
-    const geo = ghostRiderGeometry(false, seat);
+    const geo = ghostRiderGeometry(false, seat, hat);
     geo.deleteAttribute('color');
     geo.deleteAttribute('normal');
     geo.deleteAttribute('aSway');
@@ -212,9 +231,59 @@ function ghostBodyGeometry(seat: SledSeat): BufferGeometry {
     merged.computeVertexNormals();
     merged.addGroup(0, Infinity, 0);
     merged.addGroup(0, Infinity, 1);
-    bodyGeos[k] = merged;
+    bodyGeos.set(key, merged);
   }
   return merged;
+}
+
+/** Each signature rider's emblem as a 16 px glyph in ink (`s`: drawn as strokes, else filled), shown in
+ *  a disc of the rider's accent before its name. Original, simple marks. */
+const EMBLEMS: Record<Emblem, { d: string; s?: 1; n?: number }> = {
+  snowflake: { d: 'M8 1.5v13M2.4 4.75l11.2 6.5M2.4 11.25l11.2-6.5M6.2 2.6 8 4.2l1.8-1.6M6.2 13.4 8 11.8l1.8 1.6', s: 1 },
+  leaf: { d: 'M14 2C6.5 2 2.2 6 2.6 13.2L1.4 14.4l.9.9 1.2-1.2C10.4 14.4 14 9.8 14 2Z' },
+  flame: { d: 'M8 .8c1.2 3.2 4.6 4.8 4.6 9a4.6 4.6 0 0 1-9.2 0c0-2.4 1.4-3.6 2-5.6 1 1.4 1.5 2.4 1.6 3.6C8.4 6 8.6 3.4 8 .8Z' },
+  petal: { d: 'M8 8C5.9 6.2 6 2.8 8 1.3 10 2.8 10.1 6.2 8 8Z', n: 5 },
+  bell: { d: 'M8 1.2c-.8 0-1.3.6-1.3 1.3C4.6 3.2 4 5.2 4 7.4v3L2.4 12.2h11.2L12 10.4v-3c0-2.2-.6-4.2-2.7-4.9 0-.7-.5-1.3-1.3-1.3ZM6.3 13.2a1.7 1.7 0 0 0 3.4 0Z' },
+  star: { d: 'M8 .8l2.2 4.6 5 .6-3.7 3.5 1 5L8 12 3.5 14.5l1-5L.8 6l5-.6Z' },
+  feather: { d: 'M14.4 1.6C9.6 2 5.2 5.6 4.6 11.2L1.8 14l.6.6 2.8-2.8c3.8-.4 6.8-2.6 7.6-5.4h-2.4l3-1.6c.6-1 1-2.2 1-3.2Z' },
+  moon: { d: 'M10.2 1.2a6.8 6.8 0 1 0 4.6 10.4 5.6 5.6 0 0 1-4.6-10.4Z' },
+  fang: { d: 'M3.6 1.4h8.8c0 4.6-1.6 9.2-5.2 13.2.4-4.6-.8-8.4-3.6-13.2Z' },
+  bolt: { d: 'M9.8.8 2.8 9.2h4.6L6 15.2l7.2-8.6H8.6Z' },
+  wave: { d: 'M1.5 6c2-3 4.2-3 6.5 0s4.5 3 6.5 0M1.5 11c2-3 4.2-3 6.5 0s4.5 3 6.5 0', s: 1 },
+  crown: { d: 'M1.6 4.2 5 7.4 8 2.4l3 5 3.4-3.2-1.2 8.2H2.8ZM2.8 13.4h10.4v1.6H2.8Z' },
+};
+
+/** An emblem's inline SVG (`n`: the glyph drawn n times round the middle, a petal into a blossom). */
+function emblemSvg(e: Emblem): string {
+  const g = EMBLEMS[e];
+  const n = g.n ?? 1;
+  let paths = '';
+  for (let i = 0; i < n; i++) paths += `<path d="${g.d}"${i ? ` transform="rotate(${(360 * i) / n} 8 8)"` : ''}/>`;
+  const paint = g.s ? 'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"' : 'fill="currentColor"';
+  return `<svg viewBox="0 0 16 16" aria-hidden="true" ${paint}>${paths}</svg>`;
+}
+
+/** A tag's emblem: the glyph in a disc of the rider's accent. */
+function emblemEl(r: Rider): HTMLSpanElement {
+  const em = document.createElement('span');
+  em.className = 'em';
+  em.innerHTML = emblemSvg(r.emblem);
+  return em;
+}
+
+/** Dev only (?debug&riders=N): the field's riders wear the roster in turn from rider N, by name and hat,
+ *  so the signature looks can be seen before the pools carry those names. -1 when off. */
+const DEV_RIDERS = (() => {
+  if (typeof location === 'undefined') return -1;
+  const q = new URLSearchParams(location.search);
+  const r = q.get('riders');
+  return (import.meta.env.DEV || q.has('debug')) && r !== null ? Math.max(0, Math.floor(Number(r) || 0)) : -1;
+})();
+
+/** The signature rider behind a field entry (the n-th of the field), or null for the crowd. */
+function signature(name: string, kind: GhostKind, n: number): Rider | null {
+  if (kind === 'you') return null;
+  return riderByName(name) ?? (DEV_RIDERS >= 0 ? ROSTER[(n + DEV_RIDERS) % ROSTER.length] : null);
 }
 
 /** A ghost's glass sled, in the sled's own frame: positions, flat normals, and how much each vertex
@@ -624,10 +693,24 @@ function injectStyle(): void {
   .ghost-label.stacked::after { display: none; }
   .ghost-label.dot { width: ${DOT - 3}px; height: ${DOT - 3}px; padding: 0; overflow: hidden; color: transparent; font-size: 0; line-height: 0;
     box-shadow: 0 0 0 1.5px #121933, 0 0 8px color-mix(in srgb, var(--c) 65%, transparent); }
-  .ghost-label.dot::after, .ghost-label.dot .tag { display: none; }
+  .ghost-label.dot::after, .ghost-label.dot .tag, .ghost-label.dot .em { display: none; }
   .ghost-label.rival { box-shadow: 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
   .ghost-label.marker { background: #121933; color: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 2px 6px rgba(18, 25, 51, 0.3); font-weight: 700; }
   .ghost-label .tag { font-size: 11px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .ghost-label.sig:not(.dot) { box-shadow: inset 0 0 0 1.5px var(--a), 0 0 0 1px rgba(18, 25, 51, 0.3), 0 2px 6px rgba(18, 25, 51, 0.3), 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); }
+  .ghost-label.sig.rival:not(.dot) { box-shadow: inset 0 0 0 1.5px var(--a), 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
+  .ghost-label .em { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin: -2px 5px -3px -5px; vertical-align: -3px;
+    border-radius: 50%; background: var(--a); color: #121933; box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.6); }
+  .ghost-label .em svg { width: 11px; height: 11px; }
+  .ghost-label.marker .em { margin-left: -4px; }
+  .ghost-say { position: absolute; left: 0; top: 0; padding: 4px 10px 5px; border-radius: 10px; opacity: 0; pointer-events: none; will-change: transform, opacity;
+    transform-origin: 50% 100%; width: max-content; max-width: min(220px, 60vw); text-align: center; text-wrap: balance;
+    font: italic 700 12.5px/1.15 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #F5F3FF; background: #121933;
+    box-shadow: inset 0 0 0 1.5px var(--a), 0 2px 8px rgba(18, 25, 51, 0.45); }
+  .ghost-say::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; background: #121933;
+    transform: rotate(45deg); box-shadow: inset -1.5px -1.5px 0 var(--a); }
+  .ghost-say.on { animation: ghost-say 0.2s cubic-bezier(0.2, 0.9, 0.2, 1.15) both; }
+  @keyframes ghost-say { 0% { scale: 0.6; } 100% { scale: 1; } }
   .ghost-label .tw { display: none; font-style: italic; }
   .ghost-label.trick .nm, .ghost-label.trick .tag { display: none; }
   .ghost-label.trick .tw { display: inline-block; animation: ghost-trick 0.22s cubic-bezier(0.2, 0.9, 0.2, 1.1) both; }
@@ -654,6 +737,7 @@ function injectStyle(): void {
     .ghost-label.duel::before, .ghost-label.call::before { animation: none; opacity: 1; transform: none; }
     .ghost-label.stomp::before { animation: ghost-ring-out ${STOMP_HOLD}s linear 1 both; transform: none; }
     .ghost-label.passed { animation: none; }
+    .ghost-say.on { animation: ghost-trick-fade 0.2s linear both; }
   }
   .ghost-rival { position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
   .ghost-rival .plate { display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 11px 0 7px; border-radius: 999px;
@@ -928,11 +1012,15 @@ export class GhostVisuals {
           it.callT = it.wreckT = CALL_HOLD;
           it.tag.held = Math.max(it.tag.held, 0.1);
         }
+        this.riderSays(b.ghost.id, b.muted, true);
+      } else if (b.type === 'passedBy') {
+        this.riderSays(b.ghost.id, b.muted, true);
       } else if (b.type === 'pass') {
         // You passed it: its pill flashes, drops back and shrinks, then settles (the world shatters
         // its glass into petals, world.ts passFx).
         const it = this.items.find((g) => g.id === b.ghost.id);
         if (it && !this.reel) it.dropT = DROP_HOLD;
+        this.riderSays(b.ghost.id, b.muted, false);
       } else if (b.type === 'grudgeSettled') {
         // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
         // your wreck never contradicts the card.
@@ -948,6 +1036,17 @@ export class GhostVisuals {
         if (b.word) this.trick(it, b.word);
       }
     }
+  }
+
+  /** A signature rider's line on a pass: one of its `pass` lines when it goes by you, of its `passed`
+   *  lines when you go by it. Start-line jostles (muted) say nothing. */
+  private riderSays(id: number, muted: boolean, byIt: boolean): void {
+    if (muted || !this.labels || this.reel) return;
+    const it = this.items.find((g) => g.id === id);
+    const says = it?.rider?.says;
+    if (!it || !says) return;
+    const line = this.riderLine(it, byIt ? says.pass : says.passed);
+    if (line) this.say(id, line);
   }
 
   /** Swaps a ghost's name for its trick for 0.9 s: only while its full tag shows (never a dot), at
@@ -998,7 +1097,7 @@ export class GhostVisuals {
    *  sled): its glass sled takes that shape, and the ghost sits it as the rider would. */
   setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.clear();
-    for (const g of list) {
+    list.forEach((g, n) => {
       const color = new Color(GHOST_COLORS[g.kind]);
       // Your best rides in gold-white glass; the others in the default spectral glass.
       const mat = makeGhostMaterial(color, g.kind === 'you' ? 1 : 0);
@@ -1007,18 +1106,24 @@ export class GhostVisuals {
       const depth = makeDepthMaterial();
       const sled = g.sled !== undefined && g.sled >= 0 && g.sled <= 5 ? Math.floor(g.sled) : 0;
       const seat = sledSeat(sled);
-      const mesh = new Mesh(ghostBodyGeometry(seat), [depth, mat]);
+      // A signature rider wears its hat in the same glass (its body geometry carries it).
+      const rider = signature(g.name, g.kind, n);
+      const mesh = new Mesh(ghostBodyGeometry(seat, rider?.hat ?? null), [depth, mat]);
       mesh.frustumCulled = false;
       mesh.renderOrder = 5;
       const label = document.createElement('div');
-      label.className = 'ghost-label';
+      label.className = rider ? 'ghost-label sig' : 'ghost-label';
       label.style.setProperty('--c', GHOST_COLORS[g.kind]);
+      if (rider) {
+        label.style.setProperty('--a', rider.accent);
+        label.appendChild(emblemEl(rider));
+      }
       const nm = document.createElement('span');
       nm.className = 'nm';
       // Contract C7: your own best is never named by your own name, which read as a rival wearing it.
       if (g.kind === 'you') nm.textContent = 'Your best';
       else {
-        nm.textContent = g.name;
+        nm.textContent = rider?.name ?? g.name;
         // Player names are proper nouns: keep auto-translate off them.
         label.translate = false;
       }
@@ -1084,9 +1189,106 @@ export class GhostVisuals {
         stompOn: false,
         dropT: 0,
         dropOn: false,
+        rider,
+        acc: rider ? new Color(rider.accent) : null,
+        lift: rider ? HAT_LIFT[rider.hat] : 0,
+        line: n,
       });
-    }
+    });
     this.buildFx(list.length);
+  }
+
+  // The speech chip: one line at a time over a signature rider's tag (created on first use).
+  private sayEl: HTMLDivElement | null = null;
+  /** The ghost saying it, seconds left, seconds shown, its size (measured once per line), whether it
+   *  shows this frame, and where it was last written. */
+  private sayIt: Item | null = null;
+  private sayT = 0;
+  private sayAge = 0;
+  private sayW = 0;
+  private sayH = 0;
+  private sayOn = false;
+  private sayX = -1e9;
+  private sayY = -1e9;
+
+  /**
+   * A short line floated over a ghost's tag for 1.6 s: by default its signature rider's pass lines (the
+   * ghost layer says them itself on the race's pass beats), and open to the game layer for any other
+   * moment (`text`, at most about 30 characters). One chip at a time: a newer line takes the place of
+   * one shown for at least 0.9 s, and otherwise waits its turn by being dropped. It shows only while
+   * its ghost's full tag does (never over a dot), above it, and hides while it would touch the HUD, the
+   * rider, another tag or the screen's edge (contract C8); a portrait phone shows none. Returns whether
+   * the line was taken.
+   */
+  say(ghostId: number, text: string): boolean {
+    const it = this.items.find((g) => g.id === ghostId);
+    if (!it || !text || !this.labels || this.reel) return false;
+    if (this.sayIt && this.sayT > 0 && this.sayAge < SAY_KEEP && this.sayIt !== it) return false;
+    if (!this.sayEl) {
+      this.sayEl = document.createElement('div');
+      this.sayEl.className = 'ghost-say';
+      this.sayEl.translate = true;
+      this.layer.appendChild(this.sayEl);
+    }
+    const el = this.sayEl;
+    el.style.setProperty('--a', it.rider?.accent ?? GHOST_COLORS[it.kind]);
+    // (Typographic apostrophes: the roster's lines are typed with straight ones.)
+    el.textContent = text.replace(/'/g, '’');
+    el.classList.remove('on');
+    this.sayW = el.offsetWidth || 120;
+    this.sayH = el.offsetHeight || 22;
+    this.sayIt = it;
+    this.sayT = SAY_HOLD;
+    this.sayAge = 0;
+    this.sayOn = false;
+    el.style.opacity = '0';
+    return true;
+  }
+
+  /** A signature rider's next line of one kind (it takes them in turn). */
+  private riderLine(it: Item, lines: readonly string[] | undefined): string | null {
+    if (!lines || lines.length === 0) return null;
+    return lines[it.line++ % lines.length];
+  }
+
+  /** The chip over its ghost's tag, after the tags are placed (so it knows where its pill stands). */
+  private placeSay(occluders: ReadonlyArray<Rect> | undefined, w: number, h: number, dt: number): void {
+    const it = this.sayIt;
+    const el = this.sayEl;
+    if (!it || !el) return;
+    this.sayT -= dt;
+    this.sayAge += dt;
+    const t = it.tag;
+    let show = this.sayT > 0 && this.labels && !this.reel && !(w < h && w < 560) && t.want && t.a === 1 && !t.dot && !it.trickT;
+    let x = 0;
+    let y = 0;
+    if (show) {
+      const safe = this.safe;
+      const hw = this.sayW / 2;
+      x = Math.max(8 + safe.l + hw, Math.min(w - 8 - safe.r - hw, t.x));
+      // The tag's transform puts its pointer at (t.x, t.y): its top is a pill's height above.
+      y = t.y - t.h * t.scale - 9;
+      const x0 = x - hw;
+      const y0 = y - this.sayH;
+      show = y0 > 6 + safe.t && !this.onHud(occluders, x0, y0, x + hw, y + 4, 6) && !this.hits(x0, y0, x + hw, y + 4);
+      if (show) this.claim(x0, y0, x + hw, y + 4);
+    }
+    if (show && (this.labelsMove || !this.sayOn) && (Math.abs(x - this.sayX) > 0.05 || Math.abs(y - this.sayY) > 0.05)) {
+      this.sayX = x;
+      this.sayY = y;
+      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
+    }
+    if (show !== this.sayOn) {
+      this.sayOn = show;
+      el.style.opacity = show ? '1' : '0';
+      // The pop plays the first time it shows; a chip that hides and returns comes back plain.
+      if (show && !el.classList.contains('on')) el.classList.add('on');
+    }
+    if (this.sayT <= 0) {
+      this.sayIt = null;
+      el.style.opacity = '0';
+      this.sayOn = false;
+    }
   }
 
   /** One merged mesh each for every wisp (the tails and the scarf wisps), every shadow, every halo,
@@ -1200,6 +1402,7 @@ export class GhostVisuals {
       m.geometry.dispose();
     }
     this.wisp = this.shadow = this.aura = this.sleds = null;
+    this.hush();
     if (this.trails) {
       this.root.remove(this.trails.mesh);
       this.trails.dispose();
@@ -1238,6 +1441,15 @@ export class GhostVisuals {
     this.wakeIdx = -1;
     this.sinceStamp = Infinity;
     this.sinceTrick = Infinity;
+    this.hush();
+  }
+
+  /** Drops any speech chip. */
+  private hush(): void {
+    this.sayIt = null;
+    this.sayT = 0;
+    this.sayOn = false;
+    if (this.sayEl) this.sayEl.style.opacity = '0';
   }
 
   /** Low tier: labels may wait for the page's beat when frames run long. */
@@ -1501,8 +1713,9 @@ export class GhostVisuals {
       // size-based dissolve does not hide the tag there.)
       it.tagOn = this.labels && !p.done && (isRival ? core > (it.tagOn ? 0.2 : 0.3) : vis * (this.reel ? 1 : body) > (it.tagOn ? 0.9 : 0.97));
       if (it.tagOn) {
-        // Above the body's centre, wherever a flip has swung it, not above the sled's pivot.
-        tmpP.set(0, 0.8, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, 0.95);
+        // Above the body's centre, wherever a flip has swung it, not above the sled's pivot (and over
+        // a tall hat's top).
+        tmpP.set(0, 0.8, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, 0.95 + it.lift);
         this.project(it.tag, tmpP, camera, w, h, TAG_RANGE);
         it.tag.dp = dPlayer;
       }
@@ -1533,6 +1746,7 @@ export class GhostVisuals {
     }
     this.declutter(occluders, h);
     this.animateTags(dt);
+    this.placeSay(occluders, w, h, dt);
     this.placeRival(rival ?? null, poses, camera, w, h, dt, occluders);
   }
 
@@ -1970,16 +2184,17 @@ export class GhostVisuals {
       wc[o + 2] = z + tx * fl;
       k++;
     }
-    this.ribbon(i * 2, it.col, strength, camera, false);
+    this.ribbon(i * 2, it.col, strength, camera, 0);
 
     // The scarf wisp: a short, narrow streamer of the kind colour from the back of the neck, trailing
     // off the other shoulder from the tail (the rider's scarf without its red), fluttering harder with
     // speed. It is built straight back from the body each frame (no history: it is short).
+    // (A signature rider's streams in its own accent, a little longer and wider: its ribbon.)
     const knot = tmpA.set(0, it.seat.y + 0.58, it.seat.z + 0.24).applyQuaternion(it.mesh.quaternion).add(it.mesh.position);
     const hx = Math.sin(p.heading);
     const hz = -Math.cos(p.heading);
     const sl2 = Math.min(1, p.speed / 20);
-    const slen = 0.45 + 0.4 * sl2;
+    const slen = (0.45 + 0.4 * sl2) * (it.acc ? 1.45 : 1);
     const t1 = this.lastTime * 13 + i * 2.3;
     for (let q = 0; q < WISP_PTS; q++) {
       const t = q / WISP_SEG;
@@ -1990,12 +2205,12 @@ export class GhostVisuals {
       wc[o + 1] = knot.y - 0.1 * t * (1 - 0.5 * sl2) + Math.sin(t * 5 - t1 * 0.8) * 0.035 * t;
       wc[o + 2] = knot.z - hz * back + hx * lat;
     }
-    this.ribbon(i * 2 + 1, it.col, vis * 0.9, camera, true);
+    this.ribbon(i * 2 + 1, it.acc ?? it.col, vis * (it.acc ? 1 : 0.9), camera, it.acc ? 1.7 : 1);
   }
 
   /** Writes ribbon `slot` of the wisp mesh along this.wc, camera-facing, with the tail's flame profile
-   *  or the scarf's narrow one. */
-  private ribbon(slot: number, col: Color, strength: number, camera: PerspectiveCamera, scarf: boolean): void {
+   *  or (`scarf` > 0, its width) the scarf's narrow one. */
+  private ribbon(slot: number, col: Color, strength: number, camera: PerspectiveCamera, scarf: number): void {
     if (!this.wisp) return;
     const wc = this.wc;
     const posA = this.wisp.geometry.getAttribute('position').array as Float32Array;
@@ -2050,7 +2265,7 @@ export class GhostVisuals {
       // A flame profile: narrow where it leaves the waist, fullest about a quarter of the way, then a
       // point (as wide as the waist at the root, it read as a blade cut from the body).
       // (The scarf: a ribbon about 9 cm wide at its fullest, tapering to its tip.)
-      const hw = scarf ? 0.012 + 0.04 * (1 - t) * smooth01(t / 0.2) : 0.03 + 0.3 * (1 - t) ** 1.3 * (0.22 + 0.78 * smooth01(t / 0.3));
+      const hw = scarf ? (0.012 + 0.04 * (1 - t) * smooth01(t / 0.2)) * scarf : 0.03 + 0.3 * (1 - t) ** 1.3 * (0.22 + 0.78 * smooth01(t / 0.3));
       const v = (base + k * 2) * 3;
       posA[v] = wc[o] - ux * hw;
       posA[v + 1] = wc[o + 1] - uy * hw;
@@ -2319,8 +2534,13 @@ export class GhostVisuals {
     l.style.setProperty('--c', GHOST_COLORS[it.kind]);
     const who = document.createElement('span');
     // Contract C7: your own best is "Your best", never your name.
-    who.textContent = it.kind === 'you' ? 'Your best' : it.name;
+    who.textContent = it.kind === 'you' ? 'Your best' : it.rider?.name ?? it.name;
     who.translate = it.kind === 'you';
+    // A signature rider's marker carries its emblem too.
+    if (it.rider) {
+      l.style.setProperty('--a', it.rider.accent);
+      l.appendChild(emblemEl(it.rider));
+    }
     l.append(who, ' wiped out here');
     this.layer.appendChild(l);
     it.markTag = newTag(l, 2);

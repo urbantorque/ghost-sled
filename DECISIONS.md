@@ -1358,3 +1358,194 @@ Every place where I replaced, extended or interpreted the brief, and why.
 216. **The start has grandstands.** Past the crest, 10 m out, three rows were heads over the boards, and Low had nothing. The finish's stands now run down both banks either side of the gate, each row 0.62 m over the last since the ground gives them no height. The near rows move and the rest are baked in, so it costs triangles and no draw. They are worked out on idle time, because a piece's plan runs on the frame that asks, here a run's first.
 
 217. **Rider labels wait for the page's beat when Low runs short, and that was not enough.** With riders in frame all run, a Low frame at 6x throttle took 4.5 ms longer, and only 1.6 ms of that was the frame's own JS. Hiding the labels, the rival chip, the race pill and the draft pill together recovered all of it, so the cost is page work, not the scene. No one of them explained it, and neither did the looping pulses. Everything that changes often now shares one beat (`pagebeat.ts`, on the frame's timestamp, so all callers land together), and on Low under 50 fps labels and the chip move on it. A Low phone holding 60 fps keeps smooth labels. A trace gave back about a third of the page work and 8% more frames, but the probe's frame rate did not clearly move: a very first run on Low at 6x is 41 to 45 fps against 45 to 55. Hiding labels and chip outright gives 6 to 15% more frames on a struggling device, at the cost of the names, and that is the owner's call: the HUD's race pill still names the next rider. A returning run, with riders out of frame, is 47 to 50.
+
+## Round 5: depth, wonder and scale
+
+218. **The player review, before anything changed.** I played the wow-pass build (3331717) as a player would, in
+    headless Chrome on the real GPU: a very first run on every mountain, runs 2 to 4 on Pinecrest, the title, the
+    sled shop and the results, at 1280x720 and on a 390x844 phone. The scripted pilots gave the numbers
+    (`lab.ts` six seeds a mountain, `telemetry.js` four runs in one save per pilot on Low); I read the frames myself.
+
+    *Wonderful.* The first minute: the grandstands, the swinging line of gifts that teaches steering, the first
+    leap, 30 m/s that reads as speed. The places are real: Frostfang's ice ravine, Pinecrest's covered bridge into
+    a lit old town, Ember's red sky over the caldera, Sakura's lift line and blossom. A very first run is a race:
+    riders read you and someone is always in reach. The results card is rich and honest.
+
+    *Flat.* Riding well barely beats not riding. A rider who never touches the controls (`autoride`) finished
+    Pinecrest in 2:21.6, **2nd of 6 with a bronze medal**, unlocked Frostfang, and on its second run set a new best
+    and unlocked Ember Peak. In the lab hands-off finishes Pinecrest in 155 s and the expert pilot in 144 s, 7%
+    apart; the careful line pilot is slower than hands-off (161 s). Every verb (drift, trick, grind, wall ride) is
+    optional for time. Gifts: two hands-off runs paid 1,074, enough for four of the six sleds; after that the second
+    most visible number on screen means nothing, and the gift lines sit on the safe line, so collecting is never a
+    choice. Ghosts are usernames on identical mint glass ("vik_rides", "Yusuf42"): nobody to hate or chase. Events
+    happen to you: the avalanche is outrun by holding the line, the gift storm is more currency, the train is free
+    speed. Between places the course is a white groove with scenery beside it.
+
+    *Runs 2 to 4.* Same mountain, one save per pilot. The race thins after the first run: the stunt pilot's race is
+    live for 0.79 of run 1 and 0.36 to 0.73 after; mid's falls from 0.61 to 0.50 by run 4; the clumsy pilot finishes
+    none of four, places 5th to 7th. Passes stay at 1 to 4 a minute.
+
+    *Where a player stops.* Somewhere between run 3 and run 6: the sleds are bought, the mountains are unlocked by
+    passing ghosts, and the tenth run plays like the second because nothing a player gets better at changes the
+    clock much. A clumsy player stops sooner, at a third wreck around 1.2 to 1.9 km, never having seen a town.
+
+219. **The round's plan: eight changes, biggest lift first.** All sim work goes into one clean break (SIM_VERSION 7).
+    1. **Spirit lights and the lantern** (replaces presents on the course). Lights charge a three-lantern meter on
+       the sled; skill charges it too (a stomp, a whisker, a slingshot, a grind, a wall ride, a drift's release; a
+       sky gate, a yeti hopped and an avalanche outrun are worth a whole lantern). Lights sit on choices: a boosted
+       pop's arc over every kicker, a leap's apex, the fork's ice, a rail's top, a wall's berm, a squeeze, a line
+       through each place; the plain safe line carries almost none. Gifts stay as the meta currency (missions,
+       medals, ladder, passes, mastery) and leave the run's HUD; the lantern takes their place.
+    2. **Dash and Ward, one new button.** Spend a full lantern to Dash: 1.4 s as a spirit, faster, most of the
+       drag gone, and through any tree or rock in the way (never the walls). Or keep it, and it Wards the next
+       hit: no tumble, 84% of the speed kept. Spend now or keep insurance is the decision every few seconds. Self-
+       only, so a ghost is never touched; ghosts dash and ward in their own records, and you see them do it.
+    3. **Route depth.** A second fork on Pinecrest, Ember and Sakura (Frostfang's script has no room without losing
+       its tunnel), a sky gate over one kicker a stage (only a boosted pop goes through), light lines that need a
+       wall ride, a grind or a squeeze, and the open rail fix: rails keep out from under every flight.
+    4. **Events become choices.** The yeti hopped lights a lantern; the gift storm becomes a Light Storm spread wide
+       across the corridor (chase it or hold the line); the train's wake charges the lantern; a dash breaks away from
+       the avalanche, and outrunning it pays a lantern.
+    5. **Marquee moments.** Each mountain's places become authored set pieces, about one every 45 to 60 s: a name, a
+       camera beat that frames it without taking the steering, a music swell, and a line of lights to play through
+       it; the finish town erupts for a winner.
+    6. **Signature riders.** Twelve characters (`src/bot/roster.ts`) with a hat silhouette, an emblem, an accent, a
+       sled and a riding style the bot really rides (a dasher spends every lantern; a hoarder never does and rides
+       through what floors anyone else), each with a run on every mountain and a few short lines. Rivals and grudges
+       become people.
+    7. **Mastery and the garage.** A board of goals per mountain (medals, its sky gates, its places, its signature
+       riders) that teaches the mountain; gifts buy procedural cosmetics; sleds retuned as sidegrades around the
+       lantern.
+    8. **The struggling rider and the returning race.** Wards let a struggling rider survive hits it could not; a
+       wrecked rider can ride home as a spirit, outside the race, to the finish town; the returning field is picked
+       around your level with signature riders in it.
+    Two lanes run beside the main one in worktrees: the living world (crowds, villagers, animals that react, built
+    detail, the Low look) and the riders (the twelve silhouettes on the ghosts, the player's anticipation, reactions
+    and finish celebration).
+
+    *Rejected.* Random item boxes: the winner would be luck. Anything that touches another rider: ghosts are replays.
+    A second button for tricks (decision 5 stands; the new button only spends). A fifth mountain: a biome is a
+    full art set (palette, massif, flora, materials, town, landmarks) and weeks of tuning, while every run on the
+    four already has stretches the moments and the living world fix; the four deepen first. A starting lantern for
+    every rider: tried, it rescued none of the clumsy pilot's 24 runs and made letting go stronger. A second fork on
+    Frostfang: its third act cannot hold one without dropping its tunnel, the ice cavern.
+
+220. **Spirit lights charge a lantern, and the plain line carries almost none (SIM_VERSION 7).** Presents on the
+    course became spirit lights (`Course.lights`): a spark lights 6 of a lantern's 100, a great light 25, and the
+    sled holds three. Skill lights it too (`skillCharge` in sim.ts): a stomp 16, a whisker 12 and a plain near miss
+    5, a slingshot 18, a drift's release 4, 8 or 14 by tier, a grind 6 and then 3 a beat, a wall ride 10, a clean
+    trick 5 plus 4 a spin and 8 a flip; a sky gate, a yeti hopped and an avalanche outrun light a whole lantern.
+    Where lights sit is the point: the run-in's swing (it teaches steering and lights most of a first lantern), a
+    boosted pop's arc over every online kicker (a plain flight passes under it), a leap's flight with a great light
+    near its top, the fork's ice with a great light at its middle, three over each rail's top (only a grinding sled
+    reaches them), up the outside berm of a long bend, a great light in a squeeze between two trunks, a line that
+    tempts you wide past 400 m, and a line through each place (a weave down a street, a thread down a tunnel to a
+    great light at its mouth, an S across a lake, a line along a bridge, a swing through a ravine). Over a run the
+    lab's pilots light 4 lanterns holding the safe line, 8.6 as the novice and 11 to 11.6 as mid, expert and stunt.
+    Lights are marigold flames (ART.md 1): gold stays "a good thing you take", now the course's fuel as well as
+    the menus' gifts. Drawn at a gift box's size they vanished at speed; at 0.8 m tall (a great light 1.2 m, with a
+    ring and a second flame) they read down a ravine.
+221. **A lantern is a dash or a ward: spend it or keep it.** One new input, the spirit button (input bit 6; E, Q or
+    Enter, the right mouse button, or the HUD's lantern on touch), and only its press counts. A dash spends a full
+    lantern: 1.4 s as a spirit, 7 m/s of boost, 45% less drag, the cap 4 m/s higher while it lasts (eased back off
+    at 6 m/s a second, never a step), and through any tree, rock or log in the way (not the walls: `edge()` still
+    turns a sled back). A lantern kept is a ward: the next hit that would be a wipeout keeps 84% of the speed,
+    banks the combo instead of losing it, and the sled passes through what it hit for half a second. The first
+    version left the sled inside the rock with its velocity still into it, and the glancing push then pinned it at
+    0.2 m/s in a fork's channel for the rest of the run. Now it passes through, and any sled held under 2.5 m/s for a
+    second is set back on its way along the line, slipping past whatever held it. Spend now (about 1 to 1.5 s gained
+    a dash) or keep insurance (a wipeout costs about 4 s and, after 700 m, one of two forgiven): a decision every few
+    seconds, and it lands differently for different riders. Self-only: nothing touches a ghost, and a ghost's dashes
+    and wards are in its own record. The worker flags them (`FLAG_DASHING`, `FLAG_WARDED`), and a dashing ghost
+    trails pale light, a warded one breaks into marigold, so you see why it surged.
+222. **Route depth comes from lines, gates and two more forks.** One sky gate a stage (`Course.skyGates`), a ring of
+    light hung 22 m past the most open online kicker of the stage, set for a 70% boosted pop at 30 m/s and 4.6 m over
+    a plain flight's path, 2.4 m in radius: Pinecrest and Frostfang have three, Ember and Sakura two. A second fork on
+    Pinecrest (Old Town Run) and Sakura (Temple Town), written as `fork|split` and `cruise|fork` options so the
+    dailies keep their variety (over 40 orders in 60). Frostfang's third act cannot hold one without dropping its
+    tunnel, and Ember's cost it an overlook (two, against the three the overlook plan promises), so both keep one.
+    The rail fix: `railAt` keeps out from under every flight on the line and every ledge's landing, not 14 m past a
+    kicker; a stage short of rails gets a second, closer look, and one daily stage in 64 still holds two (the test
+    now allows two). Wall lines up a bend's berm are rarer than planned: most open sections bend too little.
+223. **Events are choices now.** The yeti hopped lights a whole lantern (going round it is safe and pays nothing). The
+    Gift Storm is the Light Storm: 48 lights, one in four great, swung across 95% of the corridor's width, so chasing
+    it is a line choice that leaves the safe lane. The Spirit Train's wake lights the lantern by 1 a tick while you
+    draft it. A dash breaks away from the avalanche as well as a clean line does, and outrunning it lights a lantern.
+224. **Gifts are the menus' currency, and the run's HUD shows the lantern.** A run pays 5 gifts a stage line and 15
+    for the finish (`runPay`); passes, duels, finales, graveyards, missions, ladder rungs, medals and mastery stars
+    pay the rest. Two hands-off runs used to pay 1,074; a finished run now pays about 30 to 60 before missions. The
+    counter left the run's top right for the lantern. "Collect 20 gifts" retired: its successor "Take 20 spirit
+    lights" takes its slot and tier with its best at 0 (11 gifts are not 11 lights). New missions teach the new
+    verbs: dash twice, dash through a tree or rock, fly a sky gate.
+225. **Sleds are lantern sidegrades.** Each trait trades something: Whirl Saucer's tricks light 15% more and its
+    lights 10% less; Lodge Toboggan's wards keep 10% more speed and its dashes run 15% shorter; Comet Bob's skill
+    lights 10% less; Tea Tray's dashes last 25% longer for an 8% lower pop and 10% less from lights. Wisp keeps its
+    slipstream for a weaker light pull. Bought with gifts, which skill does not buy faster: no sled is a better sled.
+226. **The ghosts are twelve signature riders and a crowd.** `src/bot/roster.ts`: a name, a hat silhouette, an emblem,
+    an accent, a sled, a style and a few lines each. Every bundled pool is 30 crowd runs and one run by each rider at
+    its own level (a touch better at home), ridden by the bot with its style's traits, so the style is in the record:
+    a dasher spends every lantern (Suki Ember dashes 8 times on Pinecrest), a hoarder never dashes and rides through
+    hits on wards (Old Wren: no dashes, 3 wards). The Hollow King first rode as a liner and came in mid-pack, against
+    the bio that says it tops every ladder; it rides as a master now. A pool cannot draft or grind (it is ridden alone,
+    and the bot leaves rails), so no rider claims to; those styles stay in the type for later. Daily and Cup fields
+    take three riders each. Inside each role's window the field takes a signature rider over the crowd, so the race
+    is people you come to know without moving its pace; the one just ahead of you, or the one you just beat, has the
+    last word on the results. The riders lane gave each its hat on the ghost (part of the body's glass, so C10 and
+    the fades hold), its emblem on the tag and a speech chip on passes, and the player's rider its anticipation,
+    reactions and finish (see the riders lane's commits).
+227. **Marquee moments: each mountain's biggest places, played as set pieces.** `src/game/marquee.ts` names four on each
+    named mountain from its own sections (Pinecrest: The First Drop, Mirror Lake, Old Town, The Valley Leap.
+    Frostfang: Serac Gate, The Crevasse Fields, The Ice Cavern, Aurora Straight. Ember: Cinder Gate, The Caldera Leap,
+    Basalt Halls, Ash Market. Sakura: Petal Steps, The Thousand Torii, The Blossom Leap, Temple Town). A Daily or Cup
+    takes its biggest places about a kilometre apart. Each is a director beat: about two seconds out, its title card
+    and the line to play, a camera beat that never takes the steering (out and up over a drop, low and close down a
+    street or a tube, aside across a span), a swell in the band (+0.16 drive and a three-bell call over a held chord),
+    and the air of the place (embers, petals, lantern light, a burst of light out of a tube). On the way out it scores
+    itself: lights taken of its total, and clean if nothing hit you in it. A win lights fireworks over the square in
+    the player's and the lantern's colours. A Pinecrest run meets one at about 15, 50, 95 and 110 s and the finish at
+    about 125: every 15 to 45 s, denser than the brief's 45 to 60, because the places were already there.
+228. **Mastery: a board per mountain that teaches it.** Stars for a bronze, silver and gold, each sky gate flown, each
+    set piece swept (every light in it, and clean), each signature rider who calls the mountain home beaten to the
+    line, and one finish with no wipeout and no ward: 13 to 15 a mountain, 10 gifts each, once. The medal wall shows
+    the stars beside the medals; the results show what a run added. Kept across clean breaks: it is the mountain's.
+229. **The garage opens with paints; the rest of it waits.** Eight procedural sled paints (`src/game/paints.ts`), 60 to
+    220 gifts, recolour a sled's body and wood under its grain; the trim and the rider's scarf and beanie stay
+    vermillion. Scarves, hats, trails and sled sounds were in the brief and are not built: the rider's colours would
+    have to come from the save rather than meshes.ts, and its scarf and beanie keep the player's signal while they
+    change. That is the next round's work.
+230. **A struggling rider rides home as a spirit.** Wards let a rider survive hits it could not before (hands-off
+    finishes all four mountains instead of two), but the clumsy pilot still wrecks in 24 of 24 lab runs: it hits
+    something every 300 to 400 m, more than any fair supply of wards. So a wreck short of the town offers "Ride home as
+    a spirit": a sim of its own from the wreck (`Sim.homewardFrom`), never recorded, with nothing to hit and nothing to
+    score, down to the square, then the same results card. Fair by construction: the run, its record, its place, its
+    ladder and its medals are exactly what they were at the wreck, so it cannot change any standing. Tested end to end
+    on Pinecrest from wrecks at 1,309 m and 1,451 m: about 85 s home, and the card unchanged.
+231. **The clean break, for the record.** SIM_VERSION 7. Saves keep gifts, sleds, stats, passes, missions (with 224's
+    rename), runs and the Climb's paid medals as before (decisions 149, 203); bests, grudges and links from version 6
+    move to the archive. Graveyards count a ward as a fall the lantern took (the place is as deadly), read again off
+    the records with `generate-ghosts -- --falls`; their pinned values in the tests were updated, and an older pool's
+    fallback is now tested on made-up runs, since the new pools hardly wreck. The 2 KB log test's scripted run, whose
+    input changes every 5 to 30 ticks, now rides all 3 minutes where it used to wreck at 2:42: the same rate, about
+    700 bytes a minute, so its bound is 2.2 KB.
+
+### Round 5: the living background (its own lane)
+
+232. **A crowd dresses for its mountain, and every figure has a habit.** The crowd was one beanie toy in nine coat colours, so from the lens it read as dots. `figureGeometry(biome)` now builds each mountain's people (Pinecrest's loden coats, bobble beanies, felt hats with a feather and trapper caps, with cowbells; Frostfang's quilted parkas, fur-ruffed hoods, goggles and fur hats, with ice axes; Ember's long dusters and capes, pointed ash hoods, miners' helmets with a headlamp and face wraps, with picks; Sakura's wrap robes with a sash and wide sleeves, straw hats, buns and headbands, with parasols), and `landmarks.ts` restyles its one crowd geometry when the course changes, a line in `setPalette`. Each figure draws one of three headwear variants and one of six habits from its seed: it waves, claps, pumps both arms, throws a snowball at the run while the rider is within about 25 m, rings or raises its prop, or stands arms folded and cups its hands to shout. Heads turn sooner and further than bodies and look round when nothing is near; bodies lean toward the run as the rider comes; a fifth are kids, who bounce more; a far stand stirs on its own now and then. Silhouettes were chosen to read at 30 m/s from 10 to 60 m: a brim, a ruff round the face, a point, a wide straw disc, a parasol. Everything is the vertex shader, still one draw. The figure is indexed now, so it runs fewer vertices than the old one (740 to 860 against 930) though it holds 480 to 575 triangles against 310: two of its three headwear variants collapse per figure, and past 46 m the fine parts (eyes, a feather, goggles, a collar) do too, which is the crowd's level of detail. The colours stay off the signal roles: coats in each culture's cool and muted earths, accents in creams, sky blues, lilacs and pale blossom pinks.
+233. **The still rows are posed, and Low gets a crowd of its own in a street.** The baked crowd (a stand's far rows on every tier, and the only crowd Low draws) was two boxes a figure. It is now wound to face the run on its own bank only, so a figure costs about 18 triangles (16 before) and two thirds of them have both arms up, one waving, a flag or the prop, under the culture's headwear in boxes and four-sided cones. Low drew nobody behind a street's barrier; it now bakes half the street's spots, 16% bigger, in the same poses: fewer, bolder figures and no draw. Low builds no bank piece, so a leap's shoulders stay empty there. The street and finish triangle budgets on Low (setpieces test) rise by 2k and 8k to pay for it; the start and every Medium and High budget hold.
+234. **Birds sit on the bank and lift off as you come.** A flock or two (one on Low, three on High) pecks on the open bank 4.5 to 8 m past the edge, ahead of the rider, sat up with wings folded; when the rider comes within 40 to 54 m, or a stomp lands near, they go up and away from the run one after another, wings beating hard. It is a fourth mode of the existing bird draw: the CPU writes one take-off time per flock, the vertex shader flies it. Ember Peak's sky stays its ash's: it gains ravens on the bank on Medium and High only, so Low draws nothing new there.
+235. **Animals watch, then go.** Deer and ibex come in herds of three to six (they were one to three), graze, then lift their heads and turn them on the neck toward the rider from about 120 m, and bolt one after another as it comes within 44 to 54 m, fanning out. A fox trots the forest edge, or two times in three sits up on a rock (its own figure, in the mountain's stone, which stays) and follows the rider with its head until it hops down at 22 to 30 m. Heads turn in the vertex shader against the rider's position; the CPU carries only how alert each one is.
+236. **Kids sled the bank, and a snowboarder drops in.** Medium and High: two or three kids slide down the bank on toboggans 5 to 7.5 m past the edge and wave as the rider passes. Every 650 to 1,100 m, where the bank stays open for 200 m, a snowboarder waits 8.4 m up it, drops down to about 4.6 m as the rider comes within 40 m, rides alongside about 18 m ahead for five and a half seconds, carving, then sits back and lets the rider go. It reads the rider's speed from the run, never the sim's state, and asks every 2 m that the bank ahead is open (no rock, wall, set piece or overlook's lip), so it never crosses anything; nothing on the bank is a collider. Rejected: a boarder that crosses the run (it would read as a hazard), and kids sledding down toward the run (life moves away from the run).
+237. **What was left out.** Chimney smoke over a street's houses (the town's chimneys have no way to reach the smoke system short of a new field on every piece, and the steam path is the wrong look), signs and further building texture, and trees that shed snow as the rider passes close (a near miss already does). The crowd ignores reduced motion as it always has: none of its motion moves the lens or flashes.
+
+238. **What the round measured, and what it did not reach.** The skill spread widened: in the lab the novice and
+    the expert are 18 s apart where they were 5, against a seed-to-seed spread of 6 to 9 s, and the careful line and
+    hands-off ride at the novice's pace (README, "Round 5 play-test"). Three things did not land. Low at 6x on a very
+    first run did not win back the last round's loss and sits within about 10% of the old build either way, under on
+    Pinecrest and Ember; a bisect put the lantern and the riders' lane inside the noise and the gap after the living
+    world and the signature-rider field came in, without pinning it. A skilled first-timer now rides clear of the
+    riders who read them (they ride at most 1.12 times their own run, and a pilot dashing at 34 m/s outruns that):
+    the expert's first race is live for 0.41 of the run against 0.89, and it wins every time. Raising that cap would
+    keep the race but fake it harder; leaving it rewards skill on the first run. The owner chose to
+    leave it: a skilled first-timer rides clear and wins. And the
+    returning race is no livelier (mid's runs 2 to 4 are live for 0.44 to 0.62 against 0.50 to 0.72), and the clumsy
+    pilot still finishes nothing in the race; it rides home as a spirit instead.

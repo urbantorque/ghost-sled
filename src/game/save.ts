@@ -1,5 +1,7 @@
 import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
+import { type MasteryRecord, readMastery } from './mastery';
+import { PAINTS } from './paints';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
@@ -120,6 +122,12 @@ export interface SaveData {
   climb?: Record<string, Climb>;
   /** This week's Cup, in the Daily's shape: best is a finish time in seconds, medal the week's best. */
   cup?: DailyRecord;
+  /** Each named mountain's mastery board, what you hold of it (mastery.ts). Kept across a clean break:
+   *  the gates, set pieces and riders are each mountain's own. */
+  mastery?: Record<string, MasteryRecord>;
+  /** Sled paints owned (game/paints.ts ids) and the one on the sled. */
+  paints?: string[];
+  paint?: string;
 }
 
 export function defaultSave(name: string): SaveData {
@@ -359,16 +367,24 @@ function loadRunList(p: unknown): Record<string, number[]> {
   return out;
 }
 
-/** Missions: unknown ids (retired missions) and duplicates dropped, bad tiers read as I, the shuffle
- *  seed captured now if the save predates it (from the save's name, once), and free slots refilled. */
+/** A retired mission's successor: its slot and tier carry over, its best starts again (gifts taken and spirit
+ *  lights taken are not the same count). */
+const RENAMED: Readonly<Record<string, string>> = { gifts20: 'lights20' };
+
+/** Missions: unknown ids (retired missions) and duplicates dropped, a renamed one carried to its successor,
+ *  bad tiers read as I, the shuffle seed captured now if the save predates it (from the save's name, once),
+ *  and free slots refilled. */
 function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPassed: number): MissionState {
   if (!isObj(p) || !Array.isArray(p.active)) return fallback;
   const seen = new Set<string>();
   const active: MissionState['active'] = [];
   for (const a of p.active) {
-    if (!isObj(a) || typeof a.id !== 'string' || seen.has(a.id) || !missionDef(a.id)) continue;
-    seen.add(a.id);
-    const e: MissionState['active'][number] = { id: a.id, best: isNum(a.best) && a.best > 0 ? a.best : 0 };
+    if (!isObj(a) || typeof a.id !== 'string') continue;
+    const renamed = RENAMED[a.id];
+    const id = renamed ?? a.id;
+    if (seen.has(id) || !missionDef(id)) continue;
+    seen.add(id);
+    const e: MissionState['active'][number] = { id, best: !renamed && isNum(a.best) && a.best > 0 ? a.best : 0 };
     if (a.tier === 2 || a.tier === 3) e.tier = a.tier;
     active.push(e);
   }
@@ -442,6 +458,19 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const cup = loadCup(p.cup, weekOfDay(today));
   if (cup) d.cup = cup;
   else delete d.cup;
+  // Paints: known ids only.
+  const owned = Array.isArray(p.paints) ? (p.paints as unknown[]).filter((x): x is string => typeof x === 'string' && PAINTS.some((q) => q.id === x)) : [];
+  if (owned.length) d.paints = owned;
+  else delete d.paints;
+  if (typeof p.paint === 'string' && owned.includes(p.paint)) d.paint = p.paint;
+  else delete d.paint;
+  // Mastery, a record per named mountain (only those): sanitised, and written only when it holds some.
+  if (p.mastery && typeof p.mastery === 'object') {
+    const ms: Record<string, MasteryRecord> = {};
+    for (const [k, v] of Object.entries(p.mastery as Record<string, unknown>)) if (/^[a-z]+$/.test(k)) ms[k] = readMastery(v);
+    if (Object.keys(ms).length) d.mastery = ms;
+    else delete d.mastery;
+  } else delete d.mastery;
   pruneDaily(d, today);
   return d;
 }

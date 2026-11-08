@@ -15,7 +15,6 @@ export type StyleKind =
   | 'perfect'
   | 'nearMiss'
   | 'cleared'
-  | 'gift'
   | 'draft'
   | 'slingshot'
   | 'smash'
@@ -25,7 +24,9 @@ export type StyleKind =
   | 'avalanche'
   | 'boostPop'
   | 'wallRide'
-  | 'grind';
+  | 'grind'
+  | 'phase'
+  | 'skyGate';
 
 export const STYLE_LABEL: Record<StyleKind, string> = {
   carve: 'Deep carve',
@@ -37,7 +38,6 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   perfect: 'Perfect landing',
   nearMiss: 'Near miss',
   cleared: 'Cleared',
-  gift: 'Gift',
   draft: 'Draft',
   slingshot: 'Slingshot',
   smash: 'Smash',
@@ -48,6 +48,8 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   boostPop: 'Boosted pop',
   wallRide: 'Wall ride',
   grind: 'Rail grind',
+  phase: 'Phased',
+  skyGate: 'Sky gate',
 };
 
 export const COMBO_WINDOW_TICKS = 156; // 2.6 s at 60 Hz

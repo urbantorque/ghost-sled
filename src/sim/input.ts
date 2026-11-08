@@ -1,6 +1,7 @@
 // Per-tick input and the compact input log.
 //
-// One byte per tick: bits 0-3 steer level (0..8, 4 = centre), bit 4 action held, bit 5 draft.
+// One byte per tick: bits 0-3 steer level (0..8, 4 = centre), bit 4 action held, bit 5 draft, bit 6 the spirit
+// button (a dash on its press).
 // The log stores runs of identical bytes as [value][varint run length]. Bytes >= 0x80 are event
 // tokens that apply at the start of the tick that follows them.
 
@@ -10,14 +11,15 @@ export const STEER_LEVELS = 9;
 export const STEER_CENTER = 4;
 export const ACTION_BIT = 1 << 4;
 export const DRAFT_BIT = 1 << 5;
+export const SPIRIT_BIT = 1 << 6;
 
 export enum LogEvent {
   Revive = 1,
 }
 
-export function packInput(steerLevel: number, action: boolean, draft: boolean): number {
+export function packInput(steerLevel: number, action: boolean, draft: boolean, spirit = false): number {
   const s = steerLevel < 0 ? 0 : steerLevel > 8 ? 8 : steerLevel | 0;
-  return s | (action ? ACTION_BIT : 0) | (draft ? DRAFT_BIT : 0);
+  return s | (action ? ACTION_BIT : 0) | (draft ? DRAFT_BIT : 0) | (spirit ? SPIRIT_BIT : 0);
 }
 
 export function steerOf(input: number): number {
@@ -32,6 +34,10 @@ export function draftOf(input: number): boolean {
   return (input & DRAFT_BIT) !== 0;
 }
 
+export function spiritOf(input: number): boolean {
+  return (input & SPIRIT_BIT) !== 0;
+}
+
 /** Records one input byte per tick and encodes it compactly. */
 export class InputRecorder {
   private bytes: number[] = [];
@@ -44,7 +50,7 @@ export class InputRecorder {
   }
 
   push(input: number): void {
-    const v = input & 0x3f;
+    const v = input & 0x7f;
     if (v === this.runValue) {
       this.runLength++;
     } else {

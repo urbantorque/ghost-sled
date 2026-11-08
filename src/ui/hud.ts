@@ -512,8 +512,14 @@ export class Hud {
   private readonly moodIco: HTMLElement;
   private readonly moodTxt: Txt;
   private readonly moodOn: Flag;
-  private readonly giftsEl: HTMLElement;
-  private readonly gifts: Txt;
+  /** The lantern: three cells whose fill is the charge, ready (a lantern lit), dashing, and a ward's flash. */
+  private readonly lanternEl: HTMLButtonElement;
+  private readonly lanFills: HTMLElement[] = [];
+  private readonly lanReady: Flag;
+  private readonly lanDash: Flag;
+  private lanShown = -1;
+  private lanWards = -1;
+  private lanLit = -1;
   private readonly race: HTMLElement;
   private readonly placeEl: HTMLElement;
   private readonly placeOn: Flag;
@@ -656,7 +662,6 @@ export class Hud {
   private readonly sayQ: string[] = [];
 
   private lastMood = -1;
-  private lastGifts = -1;
   private lastMult = 0;
   private lastRank = -1;
   private lastOf = -1;
@@ -800,10 +805,7 @@ export class Hud {
       h('div', 'gs-hud-sub', h('div', 'gs-hud-run', clockEl, h('div', 'gs-hud-dist', distEl, this.bestInEl)), this.legEl, h('div', 'gs-hud-chips', this.moodEl, this.cdEl)),
     );
 
-    // Top right: gifts, pause.
-    const giftNum = h('span', 'gs-num');
-    this.gifts = new Txt(giftNum);
-    this.giftsEl = h('div', 'gs-gifts gs-panel gs-pill', icon('gift'), giftNum, sr(' gifts'));
+    // Top right: the lantern, pause.
     // The pause button never keeps focus, even after a keyboard press: on resume, focus must not come
     // back to it, or Space (the action key) would press it again instead of reaching the game.
     const pause: HTMLButtonElement = btn(ctx, {
@@ -815,7 +817,30 @@ export class Hud {
         hd.onPause(true);
       },
     });
-    this.tr = h('div', 'gs-hud-tr', this.giftsEl, pause);
+    // The lantern takes the gifts' place (gifts are the menus' currency now): three lanterns that fill with
+    // spirit light. A lit one is a dash (E, Enter, Q, the right mouse button, or a tap on it) or, kept, a
+    // ward. On touch it is a big round button by the right thumb (style.css).
+    const cells = [0, 1, 2].map(() => {
+      const fill = h('span', 'gs-lan-fill');
+      this.lanFills.push(fill);
+      return h('span', 'gs-lan-cell', fill);
+    });
+    this.lanternEl = h('button', 'gs-lantern gs-panel gs-pill', h('span', 'gs-lan-cells', ...cells), h('span', 'gs-lan-key', 'E')) as HTMLButtonElement;
+    this.lanternEl.type = 'button';
+    this.lanternEl.setAttribute('aria-label', 'Spirit lanterns: none lit');
+    this.lanternEl.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      hd.onSpirit?.();
+    });
+    this.lanternEl.addEventListener('click', (e) => {
+      // A keyboard press on the focused button (pointer taps already fired on pointerdown).
+      if (e.detail === 0) hd.onSpirit?.();
+      this.lanternEl.blur();
+    });
+    this.lanReady = new Flag(this.lanternEl, 'is-ready');
+    this.lanDash = new Flag(this.lanternEl, 'is-dash');
+    this.tr = h('div', 'gs-hud-tr', this.lanternEl, pause);
 
     // Tier one: race position and the next ghost. A pass flashes here (mint pulse, rank flip, the
     // passed ghost's name for a moment) instead of taking a banner of its own. The place is a numeral
@@ -984,7 +1009,7 @@ export class Hud {
 
   show(): void {
     if (this.layer.show()) {
-      this.lastGifts = -1;
+      this.lanShown = this.lanWards = this.lanLit = -1;
       this.lastWipe = -1;
       this.legFill = -1;
       this.lastMult = 0;
@@ -1688,6 +1713,28 @@ export class Hud {
     return c !== undefined && c.contains('gs-band-on') && !c.contains('gs-chase-p');
   }
 
+  /** The lantern's cells fill on the page's beat (decision 205); lighting, a dash and a ward show at once. */
+  private lantern(l: HudModel['lantern'], beat: boolean): void {
+    const shown = Math.round(l.charge);
+    if (beat && shown !== this.lanShown) {
+      this.lanShown = shown;
+      for (let i = 0; i < 3; i++) {
+        const f = Math.max(0, Math.min(1, (l.charge - i * 100) / 100));
+        this.lanFills[i].style.transform = `scaleY(${f.toFixed(3)})`;
+        this.lanFills[i].parentElement!.classList.toggle('is-full', f >= 1);
+      }
+    }
+    this.lanReady.set(l.cells > 0);
+    this.lanDash.set(l.dashing);
+    if (l.cells !== this.lanLit) {
+      if (this.lanLit >= 0 && l.cells > this.lanLit) bump(this.lanternEl, 1.12, 260);
+      this.lanLit = l.cells;
+      this.lanternEl.setAttribute('aria-label', l.cells > 0 ? `Spirit lanterns: ${l.cells} lit. Press E to dash` : 'Spirit lanterns: none lit');
+    }
+    if (this.lanWards >= 0 && l.wards > this.lanWards) play(this.lanternEl, [{ filter: 'brightness(2.2)' }, { filter: 'brightness(1)' }], { duration: 420, easing: EASE_OUT });
+    this.lanWards = l.wards;
+  }
+
   update(m: HudModel): void {
     let moved = false;
     // A cash-in still on its way holds its points back (holdScore): the figure lands in the score.
@@ -1727,10 +1774,7 @@ export class Hud {
     // place only while a reveal is about to collapse into it).
     if (this.moodGone.set(!this.moodWanted)) moved = true;
 
-    if (beat && this.gifts.num(m.gifts)) {
-      if (this.lastGifts >= 0 && m.gifts > this.lastGifts) bump(this.giftsEl, 1.1, 240);
-      this.lastGifts = m.gifts;
-    }
+    this.lantern(m.lantern, beat);
 
     // Race position. A new rank must hold for a moment before it shows (ghosts bunched at the start
     // swap places every frame), then it ticks: a gain rolls the new place up in mint, a loss drops it in.

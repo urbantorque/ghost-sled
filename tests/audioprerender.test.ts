@@ -539,7 +539,8 @@ describe('a gift pickup from its take', () => {
     sfx.renders = renders;
     return { sfx, ctx, pool, off, renders };
   }
-  const gift = (value: number) => ({ type: 'gift' as const, id: 1, value, x: 0, y: 0, z: 0 });
+  // A spirit light: value 3 is a great light (the old gift worth 5, its third bell).
+  const gift = (value: number) => ({ type: 'light' as const, id: 1, value: value >= 5 ? 3 : value, gain: 6, x: 0, y: 0, z: 0 });
   /** The live voice's end once every deferred part is built. */
   function liveEnd(value: number): { end: number; nodes: number } {
     const { sfx, ctx, pool } = rig();

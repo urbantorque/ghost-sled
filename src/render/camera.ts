@@ -587,6 +587,13 @@ export class ChaseCamera {
         case 'stage':
           if (!b.last) this.kick(0.3);
           break;
+        case 'marquee':
+          this.mqWant = b.phase === 'enter' ? b.cam : null;
+          if (b.phase === 'enter') {
+            this.mqSide = b.key.length % 2 === 0 ? 1 : -1;
+            this.kick(0.25);
+          }
+          break;
         case 'finish':
           this.kick(0.5);
           break;
@@ -915,6 +922,32 @@ export class ChaseCamera {
   }
 
   /** The section entrance lift's weight: a quick rise and a slow settle over RISE_S seconds. */
+  /** A marquee moment's framing (marquee.ts): which, and its eased weight. It never takes the steering:
+   *  it moves the lens a little out and up over a drop, low and close down a street or a tube, or aside
+   *  across a span, and eases back as the moment is ridden out. */
+  private mqWant: 'wide' | 'low' | 'side' | null = null;
+  private mqKind: 'wide' | 'low' | 'side' = 'wide';
+  private mqK = 0;
+  private mqSide = 1;
+
+  private stepMarquee(dt: number, reduced: boolean): void {
+    if (this.mqWant) this.mqKind = this.mqWant;
+    const want = this.mqWant && !reduced && this.mode === 'chase' ? 1 : 0;
+    this.mqK += (want - this.mqK) * (1 - Math.exp(-dt * (want > this.mqK ? 1.4 : 0.9)));
+  }
+
+  private mqBack(): number {
+    return this.mqK * (this.mqKind === 'wide' ? 1.6 : this.mqKind === 'side' ? 0.4 : -0.35);
+  }
+
+  private mqUp(): number {
+    return this.mqK * (this.mqKind === 'wide' ? 1.0 : this.mqKind === 'side' ? 0.3 : -0.4);
+  }
+
+  private mqLat(): number {
+    return this.mqKind === 'side' ? this.mqK * 1.4 * this.mqSide : 0;
+  }
+
   private riseK(): number {
     if (this.riseLeft <= 0) return 0;
     const p = 1 - this.riseLeft / RISE_S;
@@ -1043,6 +1076,7 @@ export class ChaseCamera {
     }
     this.stepVista(t, dt, reduced);
     this.stepRise(t, dt, reduced);
+    this.stepMarquee(dt, reduced);
     this.stepOpen(t, dt, reduced);
     const vista = this.vistaK;
     const rise = this.riseK();
@@ -1066,8 +1100,8 @@ export class ChaseCamera {
       // speed the rider would shrink and the horizon climb back up the screen.
       // (The big-air vista and a section's lift open it out too, by half as much: the phone's frame
       // is already high and its rider must keep its size.)
-      const back = 3.5 + spK * 0.4 - Math.min(t.speed, TOP_SPEED) * 0.083 + vista * VISTA_OUT * 0.5 + rise * RISE_OUT * 0.5 + reveal * REVEAL_OUT * 0.5;
-      const up = 3.0 + spK * 0.2 + (t.airborne ? 0.4 : 0) + vista * VISTA_UP * 0.5 + rise * RISE_UP * 0.5 + (Math.abs(open) * OPEN_UP + reveal * REVEAL_UP) * 0.5;
+      const back = 3.5 + spK * 0.4 - Math.min(t.speed, TOP_SPEED) * 0.083 + vista * VISTA_OUT * 0.5 + rise * RISE_OUT * 0.5 + reveal * REVEAL_OUT * 0.5 + this.mqBack() * 0.5;
+      const up = 3.0 + spK * 0.2 + (t.airborne ? 0.4 : 0) + vista * VISTA_UP * 0.5 + rise * RISE_UP * 0.5 + (Math.abs(open) * OPEN_UP + reveal * REVEAL_UP) * 0.5 + this.mqUp() * 0.5;
       desired.copy(t.pos).addScaledVector(this.dirS, -back);
       desired.y += up;
       desired.x += -this.dirS.z * this.vistaS * vista * VISTA_SIDE * 0.5;
@@ -1105,20 +1139,20 @@ export class ChaseCamera {
       // below, the carve reads as low and fast).
       const carveLow = this.airK < 0.5 ? Math.min(1, Math.abs(t.steer)) * fast * 0.14 * (1 - intro) : 0;
       const tumble = this.tumbleK;
-      const back = chaseBack(t.speed) + intro * 1.1 + this.airK * 0.7 + this.chaseK * 0.6 + vista * VISTA_OUT + rise * RISE_OUT + reveal * REVEAL_OUT + tumble * TUMBLE_OUT;
+      const back = chaseBack(t.speed) + intro * 1.1 + this.airK * 0.7 + this.chaseK * 0.6 + vista * VISTA_OUT + rise * RISE_OUT + reveal * REVEAL_OUT + tumble * TUMBLE_OUT + this.mqBack();
       // Height is read against the slope, not the sled: the lens stands behind the rider, up the fall
       // line, where the snow is that much higher. From about 28 m/s all of that is made up.
       this.stepFall(t, dt);
       const clear = this.fallS * (back + t.speed / FOLLOW_RATE) * smooth01((t.speed - CLEAR_FROM) / (CLEAR_FULL - CLEAR_FROM));
-      const up = chaseUp(t.speed) + clear + this.airK * 0.05 + intro * 1.0 + this.chaseK * 0.3 + vista * VISTA_UP + rise * RISE_UP + Math.abs(open) * OPEN_UP + reveal * REVEAL_UP + tumble * TUMBLE_UP - carveLow;
+      const up = chaseUp(t.speed) + clear + this.airK * 0.05 + intro * 1.0 + this.chaseK * 0.3 + vista * VISTA_UP + rise * RISE_UP + Math.abs(open) * OPEN_UP + reveal * REVEAL_UP + tumble * TUMBLE_UP - carveLow + this.mqUp();
       desired.copy(t.pos).addScaledVector(this.dirS, -back);
       desired.y += up;
       desired.x += -this.dirS.z * this.vistaS * vista * VISTA_SIDE;
       desired.z += this.dirS.x * this.vistaS * vista * VISTA_SIDE;
       // ...and a little to one side: from straight behind, the far end of the corridor sat right
       // behind the rider's back however high the lens rode.
-      desired.x += -this.dirS.z * intro * 1.0;
-      desired.z += this.dirS.x * intro * 1.0;
+      desired.x += -this.dirS.z * (intro * 1.0 + this.mqLat());
+      desired.z += this.dirS.x * (intro * 1.0 + this.mqLat());
       // A ghost you are drafting rides squarely ahead, right behind the rider on screen: the lens
       // eases up to 0.8 m aside (toward the carve, else toward the ghost's own side), so the
       // slipstreamed ghost shows beside the rider rather than behind its back.
