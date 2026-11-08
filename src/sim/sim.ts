@@ -1395,8 +1395,8 @@ export class Sim {
           if (x >= g.x - g.hw && x <= g.x + g.hw) {
             mo.n++;
             this.charge(GATE_UNITS, true);
-            const r = this.combo.add('gate', 150);
-            this.events.push({ type: 'style', kind: 'gate', points: r.points, chain: r.chain, mult: r.mult });
+            const r = this.combo.add('lanternGate', 150);
+            this.events.push({ type: 'style', kind: 'lanternGate', points: r.points, chain: r.chain, mult: r.mult });
             this.events.push({ type: 'moment', index: p.index, phase: 'step', n: mo.n, of: mo.of });
           } else {
             mo.ok = false;

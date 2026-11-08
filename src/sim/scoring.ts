@@ -26,7 +26,8 @@ export type StyleKind =
   | 'wallRide'
   | 'grind'
   | 'phase'
-  | 'skyGate';
+  | 'skyGate'
+  | 'lanternGate';
 
 export const STYLE_LABEL: Record<StyleKind, string> = {
   carve: 'Deep carve',
@@ -50,6 +51,7 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   grind: 'Rail grind',
   phase: 'Phased',
   skyGate: 'Sky gate',
+  lanternGate: 'Lantern gate',
 };
 
 export const COMBO_WINDOW_TICKS = 156; // 2.6 s at 60 Hz

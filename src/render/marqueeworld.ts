@@ -40,7 +40,7 @@ const STRING_LOW = 2.8;
 const PER_STRING = 3;
 /** A set piece's world is drawn from this far up the run. */
 const SHOW_M = 520;
-const LANTERN_K = 1.35;
+const LANTERN_K = 1.7;
 const GARLAND = new Color('#FFE29A').multiplyScalar(1.4);
 
 interface Machine {
@@ -100,6 +100,38 @@ function pillarMaterial(): ShaderMaterial {
   });
 }
 
+/** A pool of lantern light on the snow in a gate's opening: an ellipse that fades to nothing. Additive. */
+function poolMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    vertexShader: /* glsl */ `
+      varying vec2 vUv;
+      varying vec3 vCol;
+      void main() {
+        vUv = uv;
+        #ifdef USE_INSTANCING_COLOR
+          vCol = instanceColor;
+        #else
+          vCol = vec3(1.0);
+        #endif
+        gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      varying vec2 vUv;
+      varying vec3 vCol;
+      void main() {
+        vec2 d = (vUv - 0.5) * 2.0;
+        float r = dot(d, d);
+        float a = (1.0 - smoothstep(0.15, 1.0, r)) * 0.5;
+        gl_FragColor = vec4(vCol * a, 1.0);
+      }
+    `,
+  });
+}
+
 /** A paper lantern: a rounded drum with a dark cap and foot. */
 function lanternGeometry(): BufferGeometry {
   const body = new CylinderGeometry(0.34, 0.34, 0.62, 10);
@@ -153,6 +185,7 @@ export class MarqueeWorld {
   private machines: Machine[] = [];
   private gates: GateLook[] = [];
   private pillars: InstancedMesh | null = null;
+  private pools: InstancedMesh | null = null;
   private lanterns: InstancedMesh | null = null;
   private readonly chunks: InstancedMesh;
   private readonly chunkState: { x: number; y: number; z: number; vx: number; vy: number; vz: number; r: number; spin: number; life: number }[] = [];
@@ -162,6 +195,7 @@ export class MarqueeWorld {
   private readonly toon = makeToonMaterial({ coolShade: 0.1, rim: 0.4 });
   private readonly lanternMat = makeToonMaterial({ coolShade: 0.05, emissive: new Color('#FFC46A'), emissiveStrength: 0.9, rim: 0.3 });
   private readonly pillarMat = pillarMaterial();
+  private readonly poolMat = poolMaterial();
   /** The set piece the director is playing (from its beats), so steps and misses land on the right gate. */
   private active: { key: string; seen: number } | null = null;
 
@@ -188,6 +222,8 @@ export class MarqueeWorld {
     }
     if (this.pillars) this.root.remove(this.pillars);
     if (this.lanterns) this.root.remove(this.lanterns);
+    if (this.pools) this.root.remove(this.pools);
+    this.pools = null;
     this.pillars = null;
     this.lanterns = null;
     this.machines = [];
@@ -290,6 +326,9 @@ export class MarqueeWorld {
     const pillars = new InstancedMesh(merge([plane, cross].map((q) => q.toNonIndexed())), this.pillarMat, n * 2);
     pillars.renderOrder = 6;
     const lanterns = new InstancedMesh(lanternGeometry().scale(LANTERN_K, LANTERN_K, LANTERN_K), this.lanternMat, n * 2 * PER_STRING);
+    const disc = new PlaneGeometry(1, 1).rotateX(-Math.PI / 2);
+    const pools = new InstancedMesh(disc, this.poolMat, n);
+    pools.renderOrder = 5;
     const cord = new Color('#2A2D48');
     const wires: BufferGeometry[] = [];
     const garland: BufferGeometry[] = [];
@@ -300,6 +339,9 @@ export class MarqueeWorld {
         const half = c.halfWidth(q.z) + 1.2;
         const cx = c.centerX(q.z);
         wires.push(seg([cx - half, wy + 0.6, -q.z], [cx + half, wy + 0.6, -q.z], 0.045, cord, 3));
+        tm.compose(tv.set(q.x, y0 + 0.08, -q.z), tq.identity(), ts.set(2 * q.hw + 1.4, 1, 4.2));
+        pools.setMatrixAt(g.base + i, tm);
+        pools.setColorAt(g.base + i, LIGHT);
         // A garland of small lights sags between the two strings' heads: the gate's lintel.
         const xa = q.x - q.hw - 0.15;
         const xb = q.x + q.hw + 0.15;
@@ -332,11 +374,14 @@ export class MarqueeWorld {
     // Instanced: their bounds are their instances' (a threaded gate's lanterns rise out of them, and the
     // frame they rise in is the one the rider is in, so a stale bound never hides one in view).
     pillars.computeBoundingSphere();
+    pools.computeBoundingSphere();
+    this.pools = pools;
+    this.root.add(pools);
     lanterns.computeBoundingSphere();
     lanterns.frustumCulled = false;
     const z0 = Math.min(...this.gates.map((g) => g.play.z0)) - 40;
     const z1 = Math.max(...this.gates.map((g) => g.play.z1)) + 40;
-    this.shown.push({ objs: [pillars, lanterns, wireMesh, garMesh], z0, z1 });
+    this.shown.push({ objs: [pillars, lanterns, wireMesh, garMesh, pools], z0, z1 });
     this.pillars = pillars;
     this.lanterns = lanterns;
     this.root.add(pillars, lanterns, wireMesh);
@@ -404,14 +449,17 @@ export class MarqueeWorld {
           const age = now - g.at[i];
           for (let k = 0; k < 2; k++) {
             const idx = (g.base + i) * 2 + k;
-            // Waiting: a slow breath. Threaded: a white-gold flare, then gone. Missed: an ember glow.
-            let lum = 0.75 + 0.25 * Math.sin(time * 2.4 + i * 1.3 + k);
+            // The next gate burns brightest and breathes, so the eye goes to it through a festival street;
+            // later ones wait dimmer. Threaded: a white-gold flare, then gone. Missed: an ember glow.
+            const next = this.active?.key === g.play.key ? i === this.active.seen : i === 0;
+            let lum = next ? 1.55 + 0.45 * Math.sin(time * 6.2) : 0.55 + 0.15 * Math.sin(time * 2.4 + i * 1.3 + k);
             let col = LIGHT;
             if (st === 1) {
               lum = age < 0.25 ? 2.2 : Math.max(0, 1.6 * (1 - (age - 0.25) / 0.9));
               col = WHITE_GOLD;
             } else if (st === -1) lum = 0.22;
             this.pillars!.setColorAt(idx, tc.copy(col).multiplyScalar(lum * (low ? 1.25 : 1)));
+            if (k === 0 && this.pools) this.pools.setColorAt(g.base + i, tc.copy(col).multiplyScalar(lum * (low ? 1.2 : 1)));
             if (st === 1 && age < 8) {
               // Threaded: its lanterns slip their string and rise into the sky, drifting apart.
               for (let j = 0; j < PER_STRING; j++) {
@@ -427,6 +475,7 @@ export class MarqueeWorld {
         });
       }
       if (this.pillars.instanceColor) this.pillars.instanceColor.needsUpdate = true;
+      if (this.pools?.instanceColor) this.pools.instanceColor.needsUpdate = true;
       if (dirty) this.lanterns.instanceMatrix.needsUpdate = true;
     }
     this.collapse(dt, s, sim, low);
