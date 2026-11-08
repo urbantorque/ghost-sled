@@ -2,7 +2,7 @@ import { Color, Vector3 } from 'three';
 import { BIG_DROP_S } from '../audio/cues';
 import { DRIFT_TIER_HEX, type Beat, type BeatOf } from '../game/beats';
 import type { Snap } from '../game/run';
-import type { Course } from '../sim/course';
+import { CHUNK_LEN, type Course } from '../sim/course';
 import { TUMBLE_TICKS, type Sim, type SimEvent } from '../sim/sim';
 import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
@@ -101,9 +101,12 @@ const SHOW: readonly (readonly [number, number, number, number])[] = [
 
 const HIST = 720;
 
+/** How far ahead of a lip the rider loads for it, in seconds at its speed. */
+const LOAD_AHEAD = 0.55;
+
 export class Moments {
   /** The rider's acting this frame (rider.ts). */
-  readonly act: RiderAct = { tumble: 0, grind: false, wall: 0, finish: false };
+  readonly act: RiderAct = { tumble: 0, grind: false, wall: 0, finish: false, finT: 0, rank: 0, load: 0, cue: null, cueN: 0, cueSide: 0 };
   /** True from the finish line until the next run: the lens and the rider belong to the finish. */
   finishing = false;
   private sim: Sim | null = null;
@@ -137,6 +140,10 @@ export class Moments {
     this.act.grind = false;
     this.act.wall = 0;
     this.act.finish = false;
+    this.act.finT = 0;
+    this.act.rank = 0;
+    this.act.load = 0;
+    this.act.cue = null;
     this.finishing = false;
     this.roar = this.roarHold = 0;
     crowdRoar.value = 0;
@@ -201,6 +208,14 @@ export class Moments {
     v.time -= this.lag;
   }
 
+  /** A reaction for the rider to play once (rider.ts): `side` is where it happened, +1 on three.js +x. */
+  private cue(cue: NonNullable<RiderAct['cue']>, side: number): void {
+    const a = this.act;
+    a.cue = cue;
+    a.cueSide = side;
+    a.cueN = (a.cueN ?? 0) + 1;
+  }
+
   /** The frame's beats (run only). */
   beats(list: readonly Beat[], s: Snap): void {
     const w = this.world;
@@ -208,6 +223,12 @@ export class Moments {
       switch (b.type) {
         case 'tumble':
           this.tumbleFx(b, s);
+          // Back on the sled: a shake of the head and the snow brushed off.
+          if (b.phase === 'end') this.cue('dust', 0);
+          break;
+        case 'passedBy':
+          // A ghost going by: a look at it over the shoulder (not at the start-line jostle, nor at a wreck).
+          if (!b.muted && !b.wreck) this.cue('look', b.ghost.dx >= 0 ? 1 : -1);
           break;
         case 'scrape': {
           const at = this.at(s);
@@ -223,7 +244,12 @@ export class Moments {
           this.shed(b.x, b.z, s, 1 + 0.08 * Math.min(4, b.streak - 1));
           break;
         case 'pass':
-          if (!b.muted) this.lift(0.6);
+          if (!b.muted) {
+            this.lift(0.6);
+            // Going by one: a fist pump; a double, a duel won or a lead taken back: both arms.
+            const big = b.word === 'double' || b.word === 'triple' || b.word === 'streak' || b.word === 'duelWon' || b.word === 'tookBack' || b.word === 'slung';
+            this.cue(big ? 'cheer' : 'pump', b.ghost.dx >= 0 ? 1 : -1);
+          }
           break;
         case 'driftRelease':
           if (b.tier >= 3) this.lift(0.75);
@@ -235,6 +261,7 @@ export class Moments {
           if (!b.last) this.stageFx(s);
           break;
         case 'finish':
+          this.act.rank = b.rank;
           this.startFinish(s);
           break;
         case 'grudgeSettled':
@@ -255,6 +282,30 @@ export class Moments {
     const k = Math.min(1.5, e.airtime / 2.2 + Math.max(0, e.impact - 8) * 0.04);
     this.world.particles.wave(this.at(s), this.carrier(s), k);
     this.shed(s.x, s.z, s, k);
+  }
+
+  /** How loaded the rider is for a lip ahead (0 to 1): holding the action into a kicker on its line
+   *  or a leap's brow, it sinks and draws its arms back over the last half-second, and the release at
+   *  the lip springs it up. Nothing without the action held. */
+  private loadFor(s: Snap): number {
+    if (!s.action || !s.grounded || s.speed < 6) return 0;
+    const c = this.world.course;
+    const ahead = s.speed * LOAD_AHEAD;
+    let best = Infinity;
+    const ci = Math.max(0, Math.floor(s.z / CHUNK_LEN));
+    for (let k = ci; k <= ci + 1; k++) {
+      for (const r of c.zones(k).ramps) {
+        const d = r.z + r.len - s.z;
+        if (d > -0.3 && d < best && Math.abs(s.x - r.x) < r.w * 0.5 + 0.5) best = d;
+      }
+    }
+    for (const l of c.ledges) {
+      const d = l.z - s.z;
+      if (l.kind === 'leap' && d > -0.3 && d < best) best = d;
+    }
+    if (best > ahead) return 0;
+    const k = Math.max(0, Math.min(1, (ahead - best) / (ahead * 0.6)));
+    return k * k * (3 - 2 * k);
   }
 
   private at(s: Snap): Vector3 {
@@ -383,12 +434,14 @@ export class Moments {
       act.grind = false;
       act.wall = 0;
       act.finish = false;
+      act.load = 0;
     } else {
       act.tumble = st.tumble > 0 ? 1 - st.tumble / TUMBLE_TICKS : 0;
       act.grind = st.grinding;
       act.wall = st.wallTicks > 0 && !st.finished ? (s.x > w.course.centerX(s.z) ? 1 : -1) : 0;
       act.finish = st.finished;
       if (st.finished && !this.finishing) this.startFinish(s);
+      act.load = v.mode === 'run' && !st.finished && !st.crashed && act.tumble === 0 ? this.loadFor(s) : 0;
     }
     if (v.mode === 'run' && st && !st.crashed) {
       if (act.tumble > 0) {
@@ -415,6 +468,9 @@ export class Moments {
       }
     }
     if (this.finishing) this.stepFinish(s, dt);
+    // The celebration keeps real seconds: the eased clock would spend the whole coast before the
+    // results on its first half-second (under reduced motion there is no ease, and the two agree).
+    act.finT = this.finishing ? Math.max(this.real, this.finT) : 0;
     // The roar: held after the finish, a moment's lift otherwise.
     if (this.roarHold > 0) this.roarHold -= dt;
     else this.roar = Math.max(0, this.roar - dt * ROAR_DECAY);

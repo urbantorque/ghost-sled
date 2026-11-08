@@ -720,6 +720,7 @@ export class World {
           vel,
           perfectPulse: this.perfectPulse,
           act: this.moments.act,
+          driftCharge: v.mode === 'run' ? feel.driftCharge : 0,
         },
         dt,
         v.time,

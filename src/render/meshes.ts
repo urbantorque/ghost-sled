@@ -824,7 +824,9 @@ export function sledSeat(id: number): SledSeat {
 
 /** Per-vertex secondary-motion weights, which rider.ts animates in its vertex shader: x is how much
  *  of the pom-pom's bounce a vertex takes, y how much of the coat hem's flutter. Every rider part
- *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry. */
+ *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry. A negative
+ *  x marks the legs out in front (-1, a boot -2), which swing down about the hips when the rider
+ *  stands up on its sled over the finish line. */
 type SwayFn = (x: number, y: number, z: number) => [number, number];
 function sway(g: BufferGeometry, w: SwayFn | [number, number] = [0, 0]): BufferGeometry {
   const p = g.getAttribute('position');
@@ -1099,10 +1101,11 @@ function riderLegs(crossLegged: boolean): BufferGeometry[] {
       const hip = new Vector3(sx * 0.12, 0.05, -0.02);
       const knee = new Vector3(sx * 0.125, 0.12, -0.34);
       const ankle = new Vector3(sx * 0.125, 0.04, -0.58);
+      // (Weighted for rider.ts's stand: the leg swings down about the hip, the boot keeps its sole flat.)
       legs.push(
-        capsule(hip, knee, 0.118, 0.1, C.pants),
-        capsule(knee, ankle, 0.096, 0.08, C.pants),
-        boot(new Vector3(ankle.x, ankle.y - 0.005, ankle.z + 0.01), new Vector3(ankle.x, ankle.y - 0.025, ankle.z - 0.13)),
+        sway(capsule(hip, knee, 0.118, 0.1, C.pants), [-1, 0]),
+        sway(capsule(knee, ankle, 0.096, 0.08, C.pants), [-1, 0]),
+        sway(boot(new Vector3(ankle.x, ankle.y - 0.005, ankle.z + 0.01), new Vector3(ankle.x, ankle.y - 0.025, ankle.z - 0.13)), [-2, 0]),
       );
     }
   }
