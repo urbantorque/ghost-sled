@@ -47,7 +47,7 @@ motes. Rejected: a pale white-gold ring (it vanished on snow and on a bright sky
 a plain additive halo (white on white).
 
 **Fireworks are streaks that rise, burst, droop and crackle.** The old shells were particle sparkles and
-gouache dabs that read as puffs. A shell now climbs for 0.8 to 0.9 s on a thin trail of embers, bursts with a
+gouache dabs that read as puffs. A shell now climbs on a thin trail of embers (0.55 s at the finish, where the render-time ease already slows it, 0.9 s elsewhere), bursts with a
 flash into a sphere of streaks (peony, chrysanthemum with longer tails, a tilted ring, a willow that droops
 in marigold, a crackle that breaks into twinkling glitter), and every streak stretches along its motion on
 screen, slows against the air and falls. One instanced draw for every spark of every shell, drawn only while
@@ -56,7 +56,7 @@ a little of the sky away behind it (a premultiplied blend with alpha), so vermil
 bright peach dusk. Colours are ART.md 13's: vermillion, coral, marigold, white-gold in four pairs, never mint
 or rose; the finish's old periwinkle shell is gone. They fire over the square for every finish (moments.ts
 keeps its show and its timing; only the shells changed), a bigger show over the square for a win, and over the
-street ahead when a `moment` beat says a gates set piece is won. Shells are placed along the lens's own view
+street ahead when a `moment` beat says a gates set piece is won. The square's shells keep the finish show's placement (from the lens as each goes up); the others are placed along the lens's own view
 from where the lens will be when they burst, kept near the middle of the frame where the speed streaks smear
 least: a sled at 30 m/s closes 40 m during a shell's climb, and the first placement (by the run, 70 m ahead)
 burst over the top of the frame. Reduced motion keeps the show, drops the glitter's twinkle and most of the
@@ -139,6 +139,12 @@ sells sleds, paints, scarves, hats, trails and sled sounds for gifts. Everything
 sound only." Playtest scripts: `feelfx.js` (shoots each dash, ward, gate from 60 m and the finish off a
 replayed run, with a garage look worn and reduced motion as options) and `fireworks.js` (a synthetic street
 or win show mid-run). `garage-tris.ts` prints the hats' and effects' triangle counts.
+
+## What I looked at
+
+Frames under  in the worktree (ignored by git): the garage on desktop and phone (, , ), a High run of Pinecrest (: dashes, gates from 60 m, the finish), Old Wren's ward on High and Low (, ), Ember on Low wearing a long cap, ink bands and sparks (), Pinecrest on a phone on Medium with a dash and a ward under reduced motion (), a synthetic gate burst with a set piece's smaller rings (), and street and win shows (). The console stayed clean throughout (no errors, no warnings).
+
+What I could not check: whether any of it feels right at speed with hands on the keys, how the five sled sounds sound (the music lane's), the real set pieces' ring lines and gates beats (I pushed synthetic ones), and frame rates (the main lane measures).
 
 ## Cost
 

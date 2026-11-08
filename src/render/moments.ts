@@ -82,7 +82,7 @@ interface Shell {
 }
 
 /** Seconds a shell climbs before it bursts. */
-const SHELL_RISE = 0.8;
+const SHELL_RISE = 0.55;
 /** The show: [burst time, ndc x, ndc y, metres off]. */
 const SHOW: readonly (readonly [number, number, number, number])[] = [
   [0.55, -0.5, 0.62, 84],

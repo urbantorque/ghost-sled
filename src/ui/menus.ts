@@ -450,6 +450,10 @@ export class Menus {
       panel.setAttribute('aria-labelledby', `gs-gtab-${this.tab}`);
     }
     this.sledsBody.replaceChildren(...(bar ? [bar] : []), panel);
+    // On a phone the tabs scroll sideways: keep the open one in view (set directly, so the sheet's own
+    // scroll never moves with it).
+    const on = bar?.querySelector<HTMLElement>('.gs-gtab.is-on');
+    if (bar && on && bar.scrollWidth > bar.clientWidth) bar.scrollLeft = Math.max(0, on.offsetLeft - (bar.clientWidth - on.offsetWidth) / 2);
     if (!fresh) {
       this.sledsBody.scrollTop = scroll;
       if (!restoreFocus(this.sledsSheet, fk)) this.sledsSheet.querySelector<HTMLElement>('[data-fk="sled-act"]')?.focus({ preventScroll: true });
@@ -524,6 +528,8 @@ export class Menus {
     const art = h('span', `gs-look-art is-${tab}`);
     art.innerHTML = it.art;
     const name = h('span', 'gs-look-name', it.name);
+    // Item names are names, like the sleds': auto-translate stays off them.
+    name.setAttribute('translate', 'no');
     let foot: HTMLElement;
     let state: string;
     if (it.on) {
@@ -560,6 +566,7 @@ export class Menus {
     if (!fresh && this.itemShown !== key) stage.classList.add('is-new');
     this.itemShown = key;
     const name = h('h3', 'gs-shop-name', it.name);
+    name.setAttribute('translate', 'no');
     name.id = 'gs-look-name';
     const blurb = h('p', 'gs-shop-effect', it.blurb);
     const note = h('p', 'gs-look-note', NOTE[tab]);

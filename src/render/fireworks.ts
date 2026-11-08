@@ -265,8 +265,8 @@ export class Fireworks {
   private burst(p: Pending): void {
     const { x, y, z, a, b, kind } = p;
     // The flash: a soft round burst of light, held down under reduced motion.
-    this.spark(FLASH, x, y, z, 0, 0, 0, 0.2, FW_WHITE_GOLD, this.reduced ? 0.6 : 2.4, 5.5, 0, 0, 0);
-    this.spark(FLASH, x, y, z, 0, 0, 0, 0.32, a, this.reduced ? 0.35 : 1.1, 10, 0, 0, 0);
+    this.spark(FLASH, x, y, z, 0, 0, 0, 0.18, FW_WHITE_GOLD, this.reduced ? 0.5 : 1.7, 3.6, 0, 0, 0);
+    this.spark(FLASH, x, y, z, 0, 0, 0, 0.3, a, this.reduced ? 0.3 : 0.8, 7, 0, 0, 0);
     const willow = kind === 'willow';
     const ring = kind === 'ring';
     const chrys = kind === 'chrysanthemum';

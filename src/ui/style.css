@@ -8880,6 +8880,7 @@
    place. Tabs are pills (ART.md 10), the picked tab off-white on ink, never vermillion: vermillion stays
    the primary action. Gifts stay marigold. */
 .gs-gtabs {
+  position: relative;
   display: flex;
   gap: 6px;
   margin: 0 0 14px;
@@ -8931,6 +8932,13 @@
 
 .gs-gtab:active {
   transform: scale(0.97);
+}
+
+/* Under a finger the tabs keep a 44 px target. */
+@media (pointer: coarse) {
+  .gs-gtab {
+    min-height: 44px;
+  }
 }
 
 /* A look's tile: its drawing on a small dusk stage, its name, then Owned, Wearing or its price. */

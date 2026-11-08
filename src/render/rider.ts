@@ -130,8 +130,8 @@ const MAX_ROLL = 0.61;
 /** A dash's after-images: frames of the rig's pose kept, and each image's lag (render seconds) and strength. */
 const ECHO_HIST = 40;
 const ECHO_LAGS: readonly (readonly [number, number])[] = [
-  [0.05, 0.32],
-  [0.1, 0.16],
+  [0.03, 0.34],
+  [0.065, 0.18],
 ];
 /** A scarf's tassels: strands at each tip, and how long they hang. */
 const TASSELS = 4;
@@ -152,8 +152,9 @@ function echoMaterial(): ShaderMaterial {
       varying vec3 vN;
       varying vec3 vV;
       void main() {
-        vA = aEcho;
         vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        // An image near the lens would fill the frame with glass: it fades out inside about 3.5 m.
+        vA = aEcho * smoothstep(2.2, 3.6, distance(wp.xyz, cameraPosition));
         vN = normalize(mat3(modelMatrix * instanceMatrix) * normal);
         vV = normalize(cameraPosition - wp.xyz);
         gl_Position = projectionMatrix * viewMatrix * wp;
@@ -423,7 +424,7 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           // (Linear light: a pale white-gold for the rim, a deeper gold for the bands, so the bands still
           // read over the rim's glow and over the snow behind.)
           vec3 spiritC = vec3(1.0, 0.86, 0.5);
-          vec3 bandC = vec3(1.0, 0.62, 0.16);
+          vec3 bandC = vec3(1.0, 0.74, 0.34);
           #ifdef DOUBLE_SIDED
             // The scarf keeps the player's vermillion (ART.md section 1): only a breath of the rim.
             col += spiritC * smoothstep(0.5, 0.95, riderEdge) * 0.5 * sk * rimCut;
