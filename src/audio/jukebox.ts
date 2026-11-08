@@ -271,7 +271,7 @@ export function openJukebox(app: unknown): void {
     startRun();
     switch (cue) {
       case 'enter':
-        fire([beat<'marquee'>({ type: 'marquee', phase: 'enter', key: 'jukebox', name: 'The Jukebox', verb: 'gates', line: '', cam: 'low', light: null, took: 0, total: 0, clean: true, won: false })]);
+        fire([beat<'marquee'>({ type: 'marquee', phase: 'enter', key: 'jukebox', name: 'The Jukebox', verb: 'gates', line: '', cam: 'low', light: null, side: 1, took: 0, total: 0, clean: true, won: false })]);
         break;
       case 'gates':
         for (let n = 1; n <= 6; n++) later((n - 1) * 1000, () => fire([moment('gates', 'step', n, 6)]));
