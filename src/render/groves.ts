@@ -210,6 +210,8 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
   const z0 = i * CHUNK_LEN;
   const z1 = z0 + CHUNK_LEN;
   const rows = rich ? (dens >= 0.9 ? ROWS : ROWS - 1) : 3;
+  // Low's rows are a tree further apart along the row (a sixth fewer trees, the same rhythm).
+  const gap = rich ? TREE_GAP : TREE_GAP * 1.2;
   for (let side = -1; side <= 1; side += 2) {
     const sd = side < 0 ? 0 : 1;
     for (const b of orchardBlocks(c, side)) {
@@ -218,10 +220,10 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
         // Each row keeps its distance from the run's edge: a contour of the bank.
         for (let r = 0; r < rows; r++) {
           // The rows step a little with the rows above, as terraces do, and the outer rows thin.
-          const stagger = r % 2 ? TREE_GAP / 2 : 0;
-          for (let z = b.z0 + stagger; z <= b.z1; z += TREE_GAP) {
+          const stagger = r % 2 ? gap / 2 : 0;
+          for (let z = b.z0 + stagger; z <= b.z1; z += gap) {
             if (z < z0 || z >= z1) continue;
-            const k = Math.round(z / TREE_GAP) * 8 + r;
+            const k = Math.round(z / gap) * 8 + r;
             const sh = c.shapeAt(z);
             const inner = sh.wall > 0.3 ? crestE(sh.limit) + 5 : FOREST_LIMIT;
             const e = inner + 1.2 + r * ROW_GAP + (hashf(k, sd, 510) - 0.5) * 0.5;
@@ -250,7 +252,8 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
     }
     // Past the orchards, the shoulder: a few dark pines, so the high slopes keep a little contrast
     // without a scatter of pink over them.
-    const n = Math.round(6 * dens);
+    // (Low keeps its pine stands and leaves the shoulder bare.)
+    const n = rich ? Math.round(6 * dens) : 0;
     for (let t = 0; t < n; t++) {
       const z = z0 + hashf(i, t * 2 + sd, 530) * CHUNK_LEN;
       const e = FOREST_LIMIT + rows * ROW_GAP + 8 + Math.pow(hashf(i, t * 2 + sd, 531), 1.3) * 50;
