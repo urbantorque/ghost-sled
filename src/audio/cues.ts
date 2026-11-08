@@ -371,3 +371,40 @@ export function stormCascade(grade: number): { notes: number; chord: boolean; fa
   if (g === 0) return { notes: 2, chord: false, falling: true };
   return { notes: 3 + 2 * g, chord: g === 3, falling: false };
 }
+
+/** What a landmark lands in the band (music.ts LandKind). */
+export type MarkKind = 'drop' | 'lift' | 'finish';
+
+/** A place down the course the band lands a drop on: a stage line, a set piece's first metre, the finish. */
+export interface Mark {
+  z: number;
+  kind: MarkKind;
+}
+
+const MARK_RANK: Record<MarkKind, number> = { drop: 0, lift: 1, finish: 2 };
+/** Two marks closer than this (m, about 1.5 s at a cruise) are one drop: the first to arrive, the bigger kind. */
+export const MARK_MERGE_M = 40;
+
+/**
+ * The run's landmarks, in order down the course: every stage line (the line into the last stage lifts the
+ * key, the last one is the finish) and every set piece's start. Pure: the course's own stage lines and set
+ * pieces (src/sim/moments.ts planMoments, the same list the director plays).
+ */
+export function marksOf(stages: readonly StageLine[], moments: readonly { readonly z0: number }[]): Mark[] {
+  const raw: Mark[] = [];
+  const n = stages.length;
+  stages.forEach((s, i) => raw.push({ z: s.z1, kind: i === n - 1 ? 'finish' : i === n - 2 ? 'lift' : 'drop' }));
+  for (const m of moments) if (Number.isFinite(m.z0)) raw.push({ z: m.z0, kind: 'drop' });
+  raw.sort((a, b) => a.z - b.z);
+  const out: Mark[] = [];
+  for (const m of raw) {
+    const prev = out[out.length - 1];
+    if (prev && m.z - prev.z < MARK_MERGE_M) {
+      if (MARK_RANK[m.kind] > MARK_RANK[prev.kind]) prev.kind = m.kind;
+    } else out.push({ ...m });
+  }
+  return out;
+}
+
+/** How far ahead (s) the band plans a landing for a mark: the finish builds longest. */
+export const markWindow = (kind: MarkKind): number => (kind === 'finish' ? 4.6 : 3.4);

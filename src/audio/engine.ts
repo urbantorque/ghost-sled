@@ -5,7 +5,10 @@ import type { Beat } from '../game/beats';
 import { RUN_FLOOR } from '../game/intensity';
 import { START_TICKS } from '../game/race';
 import { Core } from './core';
-import { ChoirTracker, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, openUp, resultsCues, revealCues, stageIndex } from './cues';
+import type { Course } from '../sim/course';
+import { planMoments } from '../sim/moments';
+import { ChoirTracker, type Mark, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, marksOf, markWindow, openUp, resultsCues, revealCues, stageIndex } from './cues';
+import type { Force } from './music';
 import { Listener, type ListenSources, newView } from './listen';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
@@ -291,6 +294,15 @@ export class AudioEngine {
   private lift = 0;
   private tier: 'low' | 'medium' | 'high' = 'high';
   private openK = 0;
+  /** The run's landmarks (stage lines, set pieces, the finish: cues.ts marksOf), the course they were read
+   *  from, the next one ahead, and the rider's speed down the course (m/s, smoothed) to time them. */
+  private marks: Mark[] = [];
+  private marksFor: unknown = null;
+  private markIx = 0;
+  private zPrev = Number.NaN;
+  private vz = 0;
+  /** Full lanterns (0 to 3), from the sim's lantern, dash and ward events: the Lantern Song sled sound. */
+  private cells = 0;
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -327,6 +339,12 @@ export class AudioEngine {
   sledSound: SledSoundId = 'runners';
   setSledSound(id: SledSoundId): void {
     this.sledSound = id;
+    try {
+      this.core?.ambience.setSled(id);
+      if (this.core) this.core.sfx.sled = id;
+    } catch (err) {
+      this.warn(err);
+    }
   }
 
   setVolumes(v: { master: number; music: number; sfx: number }): void {
@@ -360,6 +378,10 @@ export class AudioEngine {
       this.stage = 0;
       this.finished = false;
       this.listener.reset();
+      this.markIx = 0;
+      this.zPrev = Number.NaN;
+      this.vz = 0;
+      this.cells = 0;
     }
     this.choirs.reset();
     const c = this.core;
@@ -373,6 +395,7 @@ export class AudioEngine {
       c.ambience.setRail(false);
       c.music.setBuild(0, 0, 0);
       c.scape.bandOpen = 0;
+      c.ambience.setCells(0);
       c.music.setTarget(this.scene, this.mood, this.biome);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
@@ -394,6 +417,7 @@ export class AudioEngine {
   setQuality(tier: 'low' | 'medium' | 'high'): void {
     this.tier = tier;
     this.core?.scape.setTier(tier);
+    if (this.core) this.core.music.lite = tier === 'low';
   }
 
   /**
@@ -468,6 +492,7 @@ export class AudioEngine {
         this.climax = climaxK(frame.z as number, stages);
       }
       this.build = crashed || countIn ? 0 : buildLift(this.stage, this.climax);
+      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, c);
       const open = crashed || countIn ? 0 : openUp(frame.flow, frame.streak);
       this.bandOpen += (open - this.bandOpen) * (1 - Math.exp(-d / (open > this.bandOpen ? 0.5 : 2.4)));
       c.music.setBuild(this.stage, this.climax, this.bandOpen);
@@ -503,6 +528,10 @@ export class AudioEngine {
       // still resuming: it plays the moment it runs (like the doubled gifts' coin).
       this.reviveWaiting = clockMs();
       return;
+    }
+    if (e.type === 'lantern' || e.type === 'dash' || e.type === 'ward') {
+      this.cells = Math.max(0, Math.min(3, e.cells));
+      c.ambience.setCells(this.cells);
     }
     if (!this.live(ctx)) return;
     try {
@@ -544,12 +573,22 @@ export class AudioEngine {
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
         if (b.type === 'grind') c.ambience.setRail(b.phase === 'start');
-        else if (b.type === 'tumble' && b.phase === 'start') c.ambience.setRail(false);
+        else if (b.type === 'tumble' && b.phase === 'start') {
+          c.ambience.setRail(false);
+          c.music.breakdown();
+        } else if (b.type === 'crash') c.music.breakdown();
         else if (b.type === 'finish') {
-          // Resolved: the band goes to the results deck's bright loop, under the finish cue.
+          // Over the line: the band's finale (its landing, planned as the line came up) rings, then the
+          // results deck's reprise comes in under it.
           this.finished = true;
           c.ambience.setRail(false);
-          c.music.setTarget('results', this.mood, this.biome);
+          c.music.finish(now);
+        } else if (b.type === 'marquee') {
+          if (b.phase === 'enter') {
+            // Without a course to read (a probe, an old frame) the drop is planned from the card itself: it
+            // comes up about 2.2 s before the place.
+            if (!c.music.landing() && now - c.music.landedAt > 1.5) c.music.land(now + 2.2, 'drop', now);
+          } else c.music.breakdown();
         }
         if (b.type === 'unlockPop') c.graph.music.duck(0.75, now, 0.9, 0.5);
         // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
@@ -624,6 +663,53 @@ export class AudioEngine {
     for (const q of resultsCues(r, t, reduced)) this.ui(q.name, q.detail, q.at);
   }
 
+  /**
+   * The band's landings for the course's landmarks (cues.ts marksOf: stage lines, set pieces, the finish):
+   * each frame, the next one ahead and how soon the rider gets there at their speed down the course; inside
+   * its window (3.4 s, the finish 4.6 s) the band plans its drop on the beat nearest that moment (music.ts
+   * plan; it re-plans as the speed changes until the drop's pad is built). A drop is never planned within
+   * 3 s of the last: a set piece just past a stage line is one drop.
+   */
+  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, c: Core): void {
+    if (course !== this.marksFor) {
+      this.marksFor = course;
+      let moments: { z0: number }[] = [];
+      const full = course as Course;
+      try {
+        if (typeof full.stageAt === 'function' && Array.isArray(full.leaps) && Number.isFinite(full.finishZ)) moments = planMoments(full);
+      } catch {
+        moments = [];
+      }
+      this.marks = marksOf(stages, moments);
+      this.markIx = 0;
+      this.zPrev = Number.NaN;
+    }
+    if (dt > 0 && Number.isFinite(this.zPrev)) {
+      const v = (z - this.zPrev) / dt;
+      if (Number.isFinite(v) && v >= 0 && v < 90) this.vz += (v - this.vz) * (1 - Math.exp(-dt / 0.3));
+    }
+    this.zPrev = z;
+    while (this.markIx < this.marks.length && this.marks[this.markIx].z <= z) this.markIx++;
+    const m = this.marks[this.markIx];
+    if (!m || held || this.vz < 3) return;
+    const eta = (m.z - z) / this.vz;
+    if (eta > markWindow(m.kind) || eta < 0.15) return;
+    if (m.kind === 'drop' && now - c.music.landedAt < 3) return;
+    c.music.land(now + eta, m.kind, now);
+  }
+
+  /** Debug-only (the jukebox): hold the band in a section and a stage (null lets it go). */
+  debugMusic(force: Force | null): void {
+    if (this.core) this.core.music.force = force;
+  }
+
+  /** Debug-only (the jukebox): ask the band for a landing `inS` seconds from now. */
+  debugLand(inS: number, kind: 'drop' | 'lift' | 'finish'): number | null {
+    const ctx = this.ctx;
+    if (!ctx || !this.core) return null;
+    return this.core.music.land(ctx.currentTime + inS, kind, ctx.currentTime);
+  }
+
   /** Probe-only readout of the mix: the drive (smoothed intensity, its target and the accent), each
    *  music layer's presence, the music duck and both voice pools. */
   debugLevels(): Record<string, number> {
@@ -641,6 +727,18 @@ export class AudioEngine {
       out.cycleBars = pos.cycle;
     }
     out.decksStarted = c.music.decksStarted;
+    const sections = ['intro', 'verse', 'chorus', 'bridge', 'finale'];
+    out.section = pos ? sections.indexOf(pos.section) : -1;
+    out.landings = c.music.landings;
+    const l = c.music.landing();
+    out.landingIn = l && ctx ? l.t - ctx.currentTime : -1;
+    out.landedAgo = ctx ? ctx.currentTime - c.music.landedAt : -1;
+    out.sidechain = c.graph.side ? 1 : 0;
+    out.truePeak = c.graph.tp ? 1 : 0;
+    out.lite = c.music.lite ? 1 : 0;
+    out.marks = this.marks.length;
+    out.markIx = this.markIx;
+    out.vz = this.vz;
     out.choir = c.music.choirVoices();
     out.duck = c.graph.music.ducked;
     out.sfxVoices = c.sfxPool.active;

@@ -478,7 +478,7 @@ function shoulderAt(t: number): { amt: number; pan: number } | null {
 /** Drives the 'layers' probe solos each layer at: a novice cruise, a skilled stretch (a skill chain
  *  on a stomp streak with the pack close) and the stress drive (everything). */
 const LAYER_DRIVES = { cruise: 0.36, skilled: 0.6, stress: 1 } as const;
-const LAYER_NAMES = ['pad', 'bass', 'hat', 'arp', 'kick', 'clap', 'sparkle', 'lead', 'tension'] as const;
+const LAYER_NAMES = ['pad', 'bass', 'hat', 'arp', 'kick', 'clap', 'sparkle', 'lead', 'tension', 'bell'] as const;
 
 /** Each music layer alone (dBFS RMS, after the limiter, music bus only) at each drive. */
 async function renderLayers(): Promise<Record<string, number | number[]>> {
@@ -488,10 +488,13 @@ async function renderLayers(): Promise<Record<string, number | number[]>> {
       const secs = 6;
       const ctx = new OfflineAudioContext(2, SR * secs, SR);
       const core = new Core(ctx);
+      await core.graph.ready;
       core.graph.setMaster(1, 0);
       core.graph.sfx.setLevel(0, 0);
       core.music.setTarget('run', Mood.None, 'alpine');
       core.music.solo = layer;
+      // Round 6 plays in sections: a chorus has every layer in (the bells only ring in the intro and the bridge).
+      core.music.force = { section: layer === 'bell' ? 'bridge' : 'chorus' };
       const danger = label === 'stress' ? 0.9 : 0;
       core.music.setDrive(drive, danger, label === 'stress' ? 10 : 1, true);
       core.tick(0, LOOKAHEAD);
@@ -538,6 +541,7 @@ async function renderDescent(): Promise<Record<string, number | number[]>> {
     const secs = 12;
     const ctx = new OfflineAudioContext(2, SR * secs, SR);
     const core = new Core(ctx);
+    await core.graph.ready;
     core.graph.setMaster(1, 0);
     core.graph.sfx.setLevel(0, 0);
     core.music.setTarget('run', Mood.None, 'alpine');
@@ -737,6 +741,7 @@ export async function renderMix(kind: string, seconds = 8, opts: RenderOpts = {}
   const secs = snuffK ? MOMENT_T + snuffK.snuffAt + 1.2 : isMoment ? 5 : shoulder ? SHOULDER.sitTo : wind ? 2 + 2 * WIND_STEPS.length : Math.max(3, Math.min(30, Number.isFinite(seconds) ? seconds : 8));
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
   const core = new Core(ctx);
+  await core.graph.ready;
   // 'stress-music' and 'stress-sfx' render the stress mix with the other bus muted (diagnosis).
   const stress = kind.startsWith('stress');
   const lim = core.graph.limiter;
@@ -982,6 +987,7 @@ async function renderScape(kind: string, seconds: number, opts: RenderOpts): Pro
   const secs = Math.max(4, Math.min(40, Number.isFinite(seconds) && seconds > 10 ? seconds : 30));
   const ctx = new OfflineAudioContext(2, Math.ceil(SR * secs), SR);
   const core = new Core(ctx);
+  await core.graph.ready;
   const only = kind === 'scapeOnly';
   const none = kind === 'scapeMusic';
   const mood = opts.mood ?? Mood.None;

@@ -42,6 +42,11 @@ export class Core {
     this.music = new Music(ctx, this.musicPool, this.graph.music);
     this.sfx = new Sfx(ctx, this.sfxPool, this.graph.sfx, () => this.music.key(), this.graph.music);
     this.sfx.renders = this.renders;
+    this.sfx.band = this.music;
+    // Once the master chain is final, the sidechain does the everyday ducking.
+    void this.graph.ready.then((ok) => {
+      this.sfx.sidechained = ok;
+    });
     this.ambience = new Ambience(ctx, this.bank, this.graph.sfx);
     this.sfx.bed = (t, hold, depth) => this.ambience.dip(t, hold, depth);
     this.scape = new Soundscape(ctx, this.bank, this.graph, this.ambience);
