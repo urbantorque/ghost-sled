@@ -249,6 +249,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | --- | --- |
 | `places.js`, `sheets.sh` | Rides any mountain on the safe line at a set speed and shoots a list of distances, or every site of the kinds named; the contact sheets of every street, bridge, tunnel and finish |
 | `places-cost.js`, `cost-run.sh` | Draw calls, triangles and frame times riding through a place; compare two builds interleaved |
+| `life.js` | The living background: rides to distances and shoots bursts, clips or a fixed lens at the crowds; with `find` it picks the nearest herd, fox on a rock, perched flock, sledding kid or drop-in ahead and shoots it frame-exact on a virtual clock as the rider comes |
 | `places-plan.ts` | What stands where on each mountain, by mood, the longest bare stretch and what each piece costs, without a browser |
 | `descent.js`, `finish.js` | A whole descent without a teleport (are pieces made ahead of the rider?), and the last leap, the line and the stop |
 | `vista.js` | The world-scale set: the title, then a replayed best run (`?demo=0`) down each mountain, shot at 300, 1500, 2600 and 3900 m |
