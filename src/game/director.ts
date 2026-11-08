@@ -489,7 +489,7 @@ export class Director {
         const took = sim.stats.lights - this.mqLights;
         const clean = this.hits === this.mqHits;
         this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean });
-        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean }, sim);
+        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean, won: false }, sim);
         this.mqIn = -1;
       }
       return;
@@ -500,7 +500,7 @@ export class Director {
       this.mqIn = this.mqNext++;
       this.mqLights = sim.stats.lights;
       this.mqHits = this.hits;
-      this.push({ type: 'marquee', tick: sim.tick, phase: 'enter', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took: 0, total: m.total, clean: true }, sim);
+      this.push({ type: 'marquee', tick: sim.tick, phase: 'enter', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, took: 0, total: m.total, clean: true, won: false }, sim);
     }
   }
 

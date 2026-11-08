@@ -34,7 +34,7 @@
         "vite",
         "preview",
         "--outDir",
-        ".claude/worktrees/base/dist/game",
+        "dist/base",
         "--port",
         "4310",
         "--host",
