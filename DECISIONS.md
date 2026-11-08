@@ -1650,3 +1650,78 @@ Every place where I replaced, extended or interpreted the brief, and why.
     *How.* Three lanes in hand-made worktrees cut from this commit run beside the main one: music and sound
     (changes 4 and 5), feel and the garage (2 and 7), and the world (6). The main lane carries the sim, the set
     pieces' world, camera and HUD (1 and 3), Low (8), the measurements and the merges.
+
+241. **A set piece is a verb the sim plays (SIM_VERSION 8).** `src/sim/moments.ts` names each mountain's three, one a
+    stage, from its own sections, and says what each verb holds; `sim.ts` plays it from the tick the rider reaches
+    its first metre (`momentStep`), so a replay, and a ghost, meets exactly the same moment. Winning one lights a
+    whole lantern, as a sky gate does. Five verbs, so the three on any mountain play differently:
+    - *Race*: the machine leaves its station 16 m ahead as you arrive, fast, and eases into its far station at its
+      average pace (Mirror Lake's cable car 34 m/s, the Crevasse Fields' ropeway 37, Cinder Gate's ore train 36),
+      so it pulls away first and a rider at its pace closes on it late; whoever reaches the far end first wins.
+      It is a function of the tick you arrived, so what you see racing you is what the sim races you against.
+    - *Gates*: lantern gates on alternate sides of the safe line, their openings 2 m either side of a point 2.6 m
+      off it, 40 m apart down a street and 32 m in a cavern (a street is entered fast, often off a leap or a dash).
+      Through every one in order wins. Threading them costs speed (a direct steerer through Old Town slows from
+      26 to about 22 m/s), and a rider who dashes into the street at 47 m/s cannot weave them: that is the choice.
+    - *Rings*: three rings of light along a leap's flight, 2.2 m to one side of the safe line at the lip, set for a
+      takeoff at 34 m/s with no pop, 3 m in radius, at 0.4, 0.85 and 1.3 s. Line up the lip and arrive at the
+      right speed: a rider who dashes before the lip flies over them. They join the course's one list of rings
+      (`Course.skyGates`, tagged `moment`; the stage gates are `stageGates`), so one renderer draws them all.
+    - *Collapse*: the span's snow falls in behind you from 18 m back, at 0.86 of the speed you came onto it (30 m/s
+      at least). A span is flat and a sled slows on it: hold your speed and it stays at your heels; bleed it (a
+      drift, the parapet, a wipeout) and the snow gives under you, and you keep 72% of your speed.
+    - *Steps*: land every terrace step clean. The first rule was every step stomped; no pilot in the lab, expert
+      included, managed it in 24 runs. Clean is a test the careful rider passes and the trickster can fail.
+
+    Pinecrest: The First Drop (rings), Mirror Lake (race the cable car), Old Town (gates). Frostfang: Serac Gate
+    (collapse), The Crevasse Fields (race the ropeway), The Ice Cavern (gates in the dark). Ember: Cinder Gate (race
+    the ore train), The Caldera Leap (rings), Ash Market (gates). Sakura: Petal Steps (steps), The Blossom Leap
+    (rings), Temple Town (gates). A Daily or a Cup takes each stage's biggest place, with a verb it has not played
+    yet where the stage allows. The Valley Leap, Aurora Straight, Basalt Halls and the Thousand Torii stay places,
+    not set pieces: the brief asked for two or three a mountain about 45 to 60 s apart, and one a stage is that.
+242. **Tuned on pilots who try them.** The lab's skilled pilots now aim at the next gate's inside half and line up a
+    ring line's lip, as a person who knows the set piece does; the careful line ignores them. Over six seeds a
+    mountain, set pieces won of those met: the careful line 13 of 72 (18%), the novice 27 of 71 (38%), mid 50 of 72
+    (69%), the expert 36 of 72 (50%; its habit of dashing before every lip carries it over the rings). The race is
+    the skilled rider's (mid 18 of 18), the steps the careful rider's (the line 6 of 6, the expert 0 of 6), the rings
+    want speed held in a window (Ember's caldera: novice and line 4 of 6, mid and expert 1), and the gates want the
+    street taken without a dash. Every pilot finishes as often as before; mid rides 5 s faster on average (13.7
+    lanterns lit a run against 11.5, from set pieces won), the novice and the expert are within a second of round 5
+    on average, and the novice-to-expert spread holds at about 19 s.
+243. **What the set pieces look like (`src/render/marqueeworld.ts`).** The race machines ride a cable along the
+    bank, 11 m up in the open and 7 m in a tube or a slot, on towers where the ground is open and brackets where it is
+    not, between two lit stations: a blue cable car on Pinecrest, Frostfang's red research gondola down the crevasse,
+    an iron ore skip glowing from inside through Ember's tunnel, a lacquered car on Sakura (for a Daily). Each is
+    placed where the sim's schedule says, swaying on its hanger, and the lens steps away from the cable so the
+    machine rides in frame beside you. A gate is two strings of paper lanterns hung from a wire across the run with a
+    garland sagging between their heads: solid marigold that reads on bright snow, and nothing standing on the snow,
+    so a sled that misses a gate brushes through paper, never a post. The next gate burns brightest and breathes,
+    with a pool of its light on the snow in its opening, so the eye finds it in a festival street whose own lanterns
+    are the same warm family; threaded, its lanterns slip their strings and rise into the sky; missed, its light
+    gutters. A collapse breaks the span's cornices off at the sim's fall line into the gap behind you, with powder;
+    the deck holds, so a ghost behind you never rides on air. Each piece is drawn only within 520 m of the rider.
+244. **A set piece owns the top centre (the stacking in 239).** Its title card becomes its chip as the rider reaches
+    it: the name a size smaller, and under it the verb counting in tabular figures (`Gate 3 of 6`, `You lead the
+    cable car`, `Right behind you`), held over the race row until the sim decides it, then its result (`Beat the
+    cable car · Lantern lit` in marigold, or `The cable car won` plainly) for 1.8 s. The chip is never hurried by what
+    waits, and nothing waiting goes stale under it: a mission pop plays after it. On a phone the stake and the minor
+    callout line wait under the set piece from its card to its result. Everywhere, a cash-in now owns the second tier
+    while its figure holds over the combo row, so the figure no longer lands on the callout line (the phone's
+    `+30,994` over `SURVIVED BONEPILE BEND`). A threaded gate's style is its own, a Lantern gate, not the Sakura
+    slalom's Spirit gate.
+245. **Ghosts try the set pieces.** A pool rider aims a ring line's lip and each gate's inside half when it tries the
+    set piece, which it does by its own key, likelier the more skilled; through gates it takes no detour and looks
+    nearer. Over the four bundled pools riders now win the rings in about a third of runs and the races in most. The
+    gates stay hard for the bot at its speed (it threads the first and loses the line), and that is honest: they are
+    the set piece the player has to learn.
+246. **Mastery's set piece stars are the verbs.** Each is the set piece's own line (`Mirror Lake: Beat the cable car
+    across the ice`), won by beating its verb and kept as `key:won`, so a round 5 sweep under the same key never
+    claims one. The Valley Leap, Aurora Straight, Basalt Halls and the Thousand Torii are no longer set pieces, so
+    their sweep stars leave the boards; the save keeps what it held.
+247. **The clean break, for the record.** SIM_VERSION 8. Saves keep gifts, sleds, paints, stats, passes, missions,
+    mastery and counts (decisions 149, 203, 231); bests, grudges and links from version 7 move to the archive. The
+    pools were ridden again (42 riders a mountain, 125 KB). Riders fall less (a set piece won is a lantern, and a kept
+    lantern wards a hit), so the bundled graveyards fell from 15 to 12; their pins follow the pools
+    (`scripts/playtest/graves-repin.cjs`). Slow riders now also fill a hole in a pool's own slow end (a beginner who
+    tumbled twice finished 16 s behind the next), so the ladder has no gap. The stunt pilot's test counts wards with
+    tumbles: a won set piece turns one of its hits into a ward.
