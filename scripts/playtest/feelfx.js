@@ -2,11 +2,12 @@
 // starts and 0.5 s in), each ward (the lantern whole, cracking and broken: three frames over its slow
 // motion), each sky gate from about 60 m and as it is flown, and the finish (fireworks on a win). With
 // `street: true` it pushes a synthetic won gates set piece beat a few seconds in, to shoot the street's
-// fireworks. One page per call.
+// fireworks. `look` (a save's garage fields, e.g. { hats: ['trapper'], hat: 'trapper' }) is worn for the run;
+// `at` adds frames at fixed distances, `reduced` emulates reduced motion. One page per call.
 //   playwright-cli -s=feel eval "window.__feelfxCfg = { base: 'http://127.0.0.1:4402/', m: 0, demo: 0, tier: 'high', out: 'shots/r6/feel' }"
 //   playwright-cli -s=feel run-code --filename=scripts/playtest/feelfx.js
 async (page) => {
-  const cfg = Object.assign({ base: 'http://127.0.0.1:4402/', m: 0, demo: 0, tier: 'high', out: 'shots/r6/feel', maxShots: 26, tag: '', street: false, gateAhead: 60, finish: true, stopAt: 0 }, (await page.evaluate(() => window.__feelfxCfg).catch(() => null)) || {});
+  const cfg = Object.assign({ base: 'http://127.0.0.1:4402/', m: 0, demo: 0, tier: 'high', out: 'shots/r6/feel', maxShots: 26, tag: '', street: false, gateAhead: 60, finish: true, stopAt: 0, look: null, at: [], reduced: false }, (await page.evaluate(() => window.__feelfxCfg).catch(() => null)) || {});
   const vp = page.viewportSize();
   const dev = vp.width < vp.height ? 'phone' : 'desk';
   const errors = [];
@@ -14,10 +15,16 @@ async (page) => {
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text().slice(0, 300)); });
   const q = `?platform=mock&debug&tier=${cfg.tier}&m=${cfg.m}&autoride=1&demo=${cfg.demo}`;
   await page.goto(cfg.base + '?platform=mock');
-  await page.evaluate(() => { try { localStorage.clear(); } catch {} });
+  await page.evaluate((look) => {
+    try {
+      localStorage.clear();
+      if (look) localStorage.setItem('ghostsled.save.v1', JSON.stringify({ v: 1, name: 'Feel', ...look }));
+    } catch {}
+  }, cfg.look);
+  if (cfg.reduced) await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto(cfg.base + q);
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run', null, { timeout: 60000 });
-  const name = (k) => `${cfg.out}/${dev}-${cfg.tier}-m${cfg.m}${cfg.tag}-${k}.png`;
+  const name = (k) => `${cfg.out}/${dev}-${cfg.tier}-m${cfg.m}${cfg.tag}${cfg.reduced ? '-calm' : ''}-${k}.png`;
   const log = [];
   let shots = 0;
   const shoot = async (k) => {
@@ -26,7 +33,7 @@ async (page) => {
     await page.screenshot({ path: name(k) });
   };
   const gates = await page.evaluate(() => window.__gs.run.sim.course.skyGates.map((g) => ({ id: g.id, z: g.z, r: g.r })));
-  const marks = gates.map((g) => ({ z: g.z - cfg.gateAhead, k: `gate${g.id}-${cfg.gateAhead}m` })).sort((a, b) => a.z - b.z);
+  const marks = [...gates.map((g) => ({ z: g.z - cfg.gateAhead, k: `gate${g.id}-${cfg.gateAhead}m` })), ...cfg.at.map((z) => ({ z, k: `z${z}` }))].sort((a, b) => a.z - b.z);
   const seen = { dash: 0, ward: 0, gate: 0 };
   let streetDone = !cfg.street;
   for (let i = 0; i < 3000; i++) {

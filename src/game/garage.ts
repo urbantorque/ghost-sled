@@ -94,10 +94,10 @@ export const HATS: readonly HatDef[] = [
 export const TRAILS: readonly TrailDef[] = [
   { id: 'powder', name: 'Fresh Powder', blurb: 'Snow, and only snow', price: 0, tint: '', tintK: 0, mote: '', motes: 0, moteStyle: 'flick' },
   { id: 'honey', name: 'Honey Spray', blurb: 'Spray warmed to a pale honey', price: 70, tint: '#FFEFC2', tintK: 0.6, mote: '', motes: 0, moteStyle: 'flick' },
-  { id: 'sparks', name: 'Lantern Sparks', blurb: 'Marigold sparks flicked off the runners', price: 120, tint: '#FFF1D6', tintK: 0.25, mote: '#FFD34D', motes: 26, moteStyle: 'flick' },
-  { id: 'glints', name: 'Gold Glints', blurb: 'White-gold glints in the spray', price: 150, tint: '', tintK: 0, mote: '#FFF3C4', motes: 22, moteStyle: 'twinkle' },
-  { id: 'stardust', name: 'Stardust', blurb: 'A low drift of cream and gold specks', price: 190, tint: '#FFF6E6', tintK: 0.3, mote: '#FFE9B0', motes: 34, moteStyle: 'twinkle' },
-  { id: 'comet', name: 'Comet Tail', blurb: 'A marigold stream straight back off the sled', price: 240, tint: '#FFE6B3', tintK: 0.35, mote: '#FFD34D', motes: 40, moteStyle: 'stream' },
+  { id: 'sparks', name: 'Lantern Sparks', blurb: 'Marigold sparks flicked off the runners', price: 120, tint: '#FFF1D6', tintK: 0.25, mote: '#FFD34D', motes: 40, moteStyle: 'flick' },
+  { id: 'glints', name: 'Gold Glints', blurb: 'Gold glints left twinkling in the groove', price: 150, tint: '', tintK: 0, mote: '#F5C542', motes: 34, moteStyle: 'twinkle' },
+  { id: 'stardust', name: 'Stardust', blurb: 'A low drift of cream and gold specks', price: 190, tint: '#FFF6E6', tintK: 0.3, mote: '#FFE9B0', motes: 48, moteStyle: 'twinkle' },
+  { id: 'comet', name: 'Comet Tail', blurb: 'Two marigold streams back off the runners', price: 240, tint: '#FFE6B3', tintK: 0.35, mote: '#FFD34D', motes: 60, moteStyle: 'stream' },
 ];
 
 export const SOUNDS: readonly SoundDef[] = SLED_SOUNDS.map((s) => ({ id: s.id, name: s.name, blurb: s.blurb, price: s.price }));

@@ -871,9 +871,11 @@ export class Particles {
   }
 
   /** A garage trail's motes off the runners (round 6, garage.ts): 'flick' throws sparks up and out off
-   *  both runners, riding most of the sled's speed; 'twinkle' leaves specks low on the groove that stay
-   *  where they fall and fade; 'stream' runs a ribbon of light straight back off the sled's tail. Warm
-   *  roles only (marigold, white-gold, cream), lifted past the bloom threshold on Medium and High. */
+   *  both runners; 'twinkle' leaves specks low over the snow beside the groove that fall back slowly and fade;
+   *  'stream' runs two ribbons of motes back and out off both runners' tails. Each mote is a painted grain in the powder
+   *  layer (an added light alone vanishes on white snow) with, now and then, a hot twin in the glow layer
+   *  that blooms on Medium and High. All ride nearly the sled's speed and fan out sideways, so they show beside
+   *  the rider in the chase lens rather than falling out of the bottom of the frame behind the sled. Warm roles only (marigold, white-gold, cream). */
   trailMotes(pos: Vector3, vel: Vector3, color: Color, count: number, style: 'flick' | 'twinkle' | 'stream'): void {
     const n = this.n(count);
     if (n <= 0) return;
@@ -882,19 +884,51 @@ export class Particles {
     const fall = Math.max(vel.y, -hs * 0.7);
     for (let i = 0; i < n; i++) {
       const side = Math.random() < 0.5 ? -1 : 1;
-      const ox = -f.z * side * 0.28;
-      const oz = f.x * side * 0.28;
-      const back = 0.5 + Math.random() * 0.5;
+      const sx = -f.z * side;
+      const sz = f.x * side;
+      let x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, k: number, grav: number;
       if (style === 'flick') {
-        const k = 0.85;
-        const out = 0.4 + Math.random() * 1.2;
-        this.glow.emit(pos.x + ox - f.x * back, pos.y + 0.05, pos.z + oz - f.z * back, vel.x * k - f.z * side * out - f.x * 1.5, fall * k + 1.4 + Math.random() * 1.8, vel.z * k + f.x * side * out - f.z * 1.5, 0.3 + Math.random() * 0.25, 0.12, 0.03, color.r * 1.4, color.g * 1.4, color.b * 1.4, 1, 6, 2.2, KIND_GRAIN, tmpC.set(vel.x * k, fall * k, vel.z * k));
+        k = 0.97;
+        const out = 1.8 + Math.random() * 2.4;
+        const back = Math.random() * 0.6 - 0.2;
+        x = pos.x + sx * 0.3 - f.x * back;
+        y = pos.y + 0.06;
+        z = pos.z + sz * 0.3 - f.z * back;
+        vx = vel.x * k + sx * out - f.x;
+        vy = fall * k + 1.6 + Math.random() * 2;
+        vz = vel.z * k + sz * out - f.z;
+        life = 0.32 + Math.random() * 0.25;
+        size = 0.2;
+        grav = 6;
       } else if (style === 'twinkle') {
-        this.glow.emit(pos.x + ox * (0.5 + Math.random()) - f.x * (back + 0.6), pos.y + 0.04 + Math.random() * 0.12, pos.z + oz * (0.5 + Math.random()) - f.z * (back + 0.6), (Math.random() - 0.5) * 0.4, 0.15 + Math.random() * 0.35, (Math.random() - 0.5) * 0.4, 0.45 + Math.random() * 0.5, 0.1, 0.02, color.r * 1.35, color.g * 1.35, color.b * 1.35, 1, 0.4, 1.5, KIND_GRAIN);
+        k = 0.95;
+        const back = Math.random() * 0.8 - 0.2;
+        const across = 0.35 + Math.random() * 0.9;
+        x = pos.x + sx * across - f.x * back;
+        y = pos.y + 0.05 + Math.random() * 0.15;
+        z = pos.z + sz * across - f.z * back;
+        vx = vel.x * k;
+        vy = fall * k + 0.15 + Math.random() * 0.3;
+        vz = vel.z * k;
+        life = 0.5 + Math.random() * 0.5;
+        size = 0.17;
+        grav = 0.4;
       } else {
-        const k = 0.62;
-        this.glow.emit(pos.x - f.x * (0.75 + Math.random() * 0.2) + (Math.random() - 0.5) * 0.12, pos.y + 0.22 + Math.random() * 0.1, pos.z - f.z * (0.75 + Math.random() * 0.2) + (Math.random() - 0.5) * 0.12, vel.x * k, fall * k + 0.2, vel.z * k, 0.28 + Math.random() * 0.18, 0.15, 0.05, color.r * 1.45, color.g * 1.45, color.b * 1.45, 1, 0.5, 1.2, KIND_GRAIN, tmpC.set(vel.x * k, fall * k, vel.z * k));
+        k = 0.95;
+        const back = 0.3 + Math.random() * 0.3;
+        x = pos.x + sx * 0.32 - f.x * back + (Math.random() - 0.5) * 0.08;
+        y = pos.y + 0.08 + Math.random() * 0.1;
+        z = pos.z + sz * 0.32 - f.z * back + (Math.random() - 0.5) * 0.08;
+        vx = vel.x * k + sx * 1.3;
+        vy = fall * k + 0.3;
+        vz = vel.z * k + sz * 1.3;
+        life = 0.45 + Math.random() * 0.25;
+        size = 0.22;
+        grav = 0.5;
       }
+      const car = tmpC.set(vel.x * k, fall * k, vel.z * k);
+      this.powder.emit(x, y, z, vx, vy, vz, life, size, size * 0.4, color.r, color.g, color.b, 1, grav, 2, KIND_GRAIN, car);
+      if (Math.random() < 0.5) this.glow.emit(x, y, z, vx, vy, vz, life * 0.8, size * 1.2, size * 0.3, color.r * 1.45, color.g * 1.45, color.b * 1.45, 1, grav, 2, KIND_GRAIN, car);
     }
   }
 

@@ -130,8 +130,8 @@ const MAX_ROLL = 0.61;
 /** A dash's after-images: frames of the rig's pose kept, and each image's lag (render seconds) and strength. */
 const ECHO_HIST = 40;
 const ECHO_LAGS: readonly (readonly [number, number])[] = [
-  [0.05, 0.42],
-  [0.1, 0.22],
+  [0.05, 0.32],
+  [0.1, 0.16],
 ];
 /** A scarf's tassels: strands at each tip, and how long they hang. */
 const TASSELS = 4;
@@ -424,8 +424,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           // read over the rim's glow and over the snow behind.)
           vec3 spiritC = vec3(1.0, 0.86, 0.5);
           vec3 bandC = vec3(1.0, 0.62, 0.16);
-          col = mix(col, col * 0.7 + spiritC * 0.22, 0.25 * sk);
-          col += (spiritC * smoothstep(0.32, 0.92, riderEdge) * 1.5 + bandC * band * 1.1) * sk * rimCut;
+          #ifdef DOUBLE_SIDED
+            // The scarf keeps the player's vermillion (ART.md section 1): only a breath of the rim.
+            col += spiritC * smoothstep(0.5, 0.95, riderEdge) * 0.5 * sk * rimCut;
+          #else
+            col = mix(col, col * 0.7 + spiritC * 0.22, 0.25 * sk);
+            col += (spiritC * smoothstep(0.32, 0.92, riderEdge) * 1.5 + bandC * band * 1.1) * sk * rimCut;
+          #endif
         }
         `;
   const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
