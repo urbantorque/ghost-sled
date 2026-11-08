@@ -9,6 +9,7 @@ import type {
   RevealModel,
   ScreenRect,
   SettingsModel,
+  PaintCard,
   SledCard,
   StyleTone,
   TitleModel,
@@ -379,8 +380,8 @@ export class UI implements GameUI {
     this.menus.hidePause();
   }
 
-  showSleds(cards: SledCard[], wallet: number): void {
-    this.menus.showSleds(cards, wallet);
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void {
+    this.menus.showSleds(cards, wallet, paints);
   }
 
   showSettings(m: SettingsModel): void {

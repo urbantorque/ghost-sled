@@ -60,6 +60,16 @@ export interface MissionView {
   justCompleted: boolean;
 }
 
+export interface PaintCard {
+  id: string;
+  name: string;
+  hex: string;
+  price: number;
+  owned: boolean;
+  on: boolean;
+  affordable: boolean;
+}
+
 export interface SledCard {
   id: number;
   name: string;
@@ -328,6 +338,8 @@ export interface UIHandlers {
   onCup?(): void;
   onSelectSled(id: number): void;
   onBuySled(id: number): void;
+  /** A sled paint: buy it (if not owned) and put it on. */
+  onPaint?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
   /** Any UI click/tap (for audio unlock and UI sounds). */
   onUiSound(kind: 'tap' | 'confirm' | 'back'): void;
@@ -403,7 +415,7 @@ export interface GameUI {
   /** missions: the run's live mission progress, shown on the pause card (at most 3 rows). */
   showPause(settings: SettingsModel, missions?: MissionView[]): void;
   hidePause(): void;
-  showSleds(cards: SledCard[], wallet: number): void;
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void;
   showSettings(m: SettingsModel): void;
   closeMenus(): void;
   touchVisual(v: TouchVisual, visible: boolean): void;

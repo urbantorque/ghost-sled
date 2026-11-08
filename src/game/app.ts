@@ -17,7 +17,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GhostKind, HintKind, HudModel, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import type { GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -29,6 +29,7 @@ import { type Graveyard, bundledGraveyards, graveyards } from './graveyards';
 import { planMarquee } from './marquee';
 import { ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
+import { PAINTS, paintById } from './paints';
 import { courseFor } from '../sim/course';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
@@ -278,6 +279,7 @@ export class App {
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
+    this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.audio.setQuality(this.tiers.tier);
     this.tiers.onChange = (t: Tier) => {
       this.world.setQuality(qualityFor(t));
@@ -293,6 +295,7 @@ export class App {
       onRevive: () => this.revive(),
       onDouble: () => this.doubleGifts(),
       onChallenge: () => this.shareChallenge(),
+      onPaint: (id) => this.paint(id),
       onRideHome: () => this.rideHome(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
@@ -303,7 +306,7 @@ export class App {
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
-      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts),
+      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards()),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -639,8 +642,33 @@ export class App {
     if (!this.save.data.ownedSleds.includes(id)) return;
     this.save.data.sled = id;
     this.save.save();
-    this.ui.showSleds(this.sledCards(), this.save.data.gifts);
+    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards());
     this.refreshTitle();
+  }
+
+  /** A sled paint: bought with gifts the first time, then put on (a look, never an edge). */
+  private paint(id: string): void {
+    const p = paintById(id);
+    const d = this.save.data;
+    const owned = p.price === 0 || (d.paints ?? []).includes(p.id);
+    if (!owned) {
+      if (d.gifts < p.price) return;
+      d.gifts -= p.price;
+      d.paints = [...(d.paints ?? []), p.id];
+      this.audio.ui('unlock');
+      this.ui.toast(`${p.name} paint`, 'gift', 'On your sled');
+    }
+    if (p.price === 0) delete d.paint;
+    else d.paint = p.id;
+    this.save.flush();
+    this.world.rider.setPaint(p.hex);
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
+  }
+
+  paintCards(): PaintCard[] {
+    const d = this.save.data;
+    const on = paintById(d.paint).id;
+    return PAINTS.map((p) => ({ id: p.id, name: p.name, hex: p.hex, price: p.price, owned: p.price === 0 || (d.paints ?? []).includes(p.id), on: p.id === on, affordable: d.gifts >= p.price }));
   }
 
   private buySled(id: number): void {
@@ -653,7 +681,7 @@ export class App {
     this.save.flush();
     this.audio.ui('unlock');
     this.ui.toast(`${def.name} unlocked`, 'gift', def.trait);
-    this.ui.showSleds(this.sledCards(), d.gifts);
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards());
     this.refreshTitle();
   }
 

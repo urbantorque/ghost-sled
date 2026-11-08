@@ -4,7 +4,7 @@ import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
 import { makeToonMaterial, shared, type ToonOptions } from './materials';
-import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
+import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -613,10 +613,21 @@ export class Rider {
   /** Swap the sled model (unlocks show up on the slope, not just in a menu), and the way the rider
    *  sits it: on a saucer or a tray it sits cross-legged and leans over the rim. A wreck thrown
    *  clear of its sled always sits in the snow with its legs out. */
+  /** The sled's paint (game/paints.ts): '' is its natural finish. Applied on the next setSled. */
+  private paintHex = '';
+
+  setPaint(hex: string): void {
+    if (hex === this.paintHex) return;
+    this.paintHex = hex;
+    const id = this.sledId;
+    this.sledId = -1;
+    this.setSled(id);
+  }
+
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = withSway(sledGeometryFor(id));
+    const geo = withSway(paintSled(sledGeometryFor(id), this.paintHex));
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;

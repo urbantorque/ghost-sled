@@ -756,6 +756,28 @@ export function sledGeometry(runner: Color = RIDER_COLORS.accent): BufferGeometr
   return merge(parts);
 }
 
+/** A sled paint (game/paints.ts): every vertex but the vermillion trim, the steel and the pale bits takes
+ *  the paint's colour at its own value, so the wood's grain and the hull's shading stay under it. */
+export function paintSled(geo: BufferGeometry, hex: string): BufferGeometry {
+  if (!hex) return geo;
+  const col = geo.getAttribute('color') as BufferAttribute | undefined;
+  if (!col) return geo;
+  const paint = new Color(hex);
+  const pv = 0.2126 * paint.r + 0.7152 * paint.g + 0.0722 * paint.b;
+  const keep = [RIDER_COLORS.accent, STEEL, RIDER_COLORS.pom];
+  const c = new Color();
+  for (let i = 0; i < col.count; i++) {
+    c.setRGB(col.getX(i), col.getY(i), col.getZ(i));
+    // The trim keeps the player's colour; steel and the white trims stay as they are.
+    if (keep.some((k) => Math.abs(k.r - c.r) + Math.abs(k.g - c.g) + Math.abs(k.b - c.b) < 0.32)) continue;
+    const v = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+    const k = Math.max(0.35, Math.min(1.6, v / 0.52)) * (pv > 0.6 ? 0.92 : 1);
+    col.setXYZ(i, paint.r * k, paint.g * k, paint.b * k);
+  }
+  col.needsUpdate = true;
+  return geo;
+}
+
 /** Each unlockable sled gets its own silhouette so an unlock is visible at a glance. */
 export function sledGeometryFor(id: number): BufferGeometry {
   const C = RIDER_COLORS;

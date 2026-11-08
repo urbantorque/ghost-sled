@@ -1,6 +1,7 @@
 import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
 import { type MasteryRecord, readMastery } from './mastery';
+import { PAINTS } from './paints';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
@@ -124,6 +125,9 @@ export interface SaveData {
   /** Each named mountain's mastery board, what you hold of it (mastery.ts). Kept across a clean break:
    *  the gates, set pieces and riders are each mountain's own. */
   mastery?: Record<string, MasteryRecord>;
+  /** Sled paints owned (game/paints.ts ids) and the one on the sled. */
+  paints?: string[];
+  paint?: string;
 }
 
 export function defaultSave(name: string): SaveData {
@@ -454,6 +458,12 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const cup = loadCup(p.cup, weekOfDay(today));
   if (cup) d.cup = cup;
   else delete d.cup;
+  // Paints: known ids only.
+  const owned = Array.isArray(p.paints) ? (p.paints as unknown[]).filter((x): x is string => typeof x === 'string' && PAINTS.some((q) => q.id === x)) : [];
+  if (owned.length) d.paints = owned;
+  else delete d.paints;
+  if (typeof p.paint === 'string' && owned.includes(p.paint)) d.paint = p.paint;
+  else delete d.paint;
   // Mastery, a record per named mountain (only those): sanitised, and written only when it holds some.
   if (p.mastery && typeof p.mastery === 'object') {
     const ms: Record<string, MasteryRecord> = {};

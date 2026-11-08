@@ -8874,3 +8874,93 @@
   font-weight: 900;
   white-space: nowrap;
 }
+
+/* The garage's paint shelf under the sled tiles (round 5): a swatch, a name, a price or On. */
+.gs-paints-wrap {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.gs-paints-h {
+  margin: 0 0 8px;
+  font-size: 0.92em;
+  font-style: italic;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.gs-paints {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.gs-paint {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 2px 8px;
+  min-height: 48px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 14px;
+  background: var(--panel, rgba(30, 38, 74, 0.9));
+  box-shadow: inset 0 0 0 1px var(--hair-2, rgba(255, 255, 255, 0.12));
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.gs-paint:focus-visible {
+  outline: 3px solid #f5f3ff;
+  outline-offset: 2px;
+}
+
+.gs-paint.is-on {
+  box-shadow: inset 0 0 0 2px #f5f3ff;
+}
+
+.gs-paint.is-locked {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.gs-paint-sw {
+  grid-row: 1 / 3;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.gs-paint-name {
+  font-size: 0.84em;
+  font-weight: 800;
+}
+
+.gs-paint-price,
+.gs-paint-on {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78em;
+  font-weight: 800;
+  color: var(--gift);
+}
+
+.gs-paint-on {
+  color: #f5f3ff;
+}
+
+.gs-paint-price .gs-i {
+  width: 1em;
+  height: 1em;
+}
+
+.gs-paint-price.is-short {
+  opacity: 0.7;
+}

@@ -1,4 +1,4 @@
-import type { MissionView, SettingsModel, SledCard, UIHandlers } from './contract';
+import type { MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -182,7 +182,7 @@ export class Menus {
   private homeArmed = 0;
   /** Last data the game gave us, so the title buttons can reopen a sheet without a round trip. */
   lastSettings: SettingsModel | null = null;
-  lastSleds: { cards: SledCard[]; wallet: number } | null = null;
+  lastSleds: { cards: SledCard[]; wallet: number; paints?: PaintCard[] } | null = null;
   /** The sled the shop preview shows. */
   private sledPick = 0;
   private heroShown = -1;
@@ -354,8 +354,8 @@ export class Menus {
     this.onChange();
   }
 
-  showSleds(cards: SledCard[], wallet: number): void {
-    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet };
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void {
+    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet, paints: paints?.map((p) => ({ ...p })) };
     const fresh = !this.sleds.open;
     // A fresh open previews the equipped sled; a refresh (bought, equipped) keeps the pick.
     if (fresh || !cards.some((c) => c.id === this.sledPick)) this.sledPick = (cards.find((c) => c.equipped) ?? cards[0])?.id ?? 0;
@@ -381,12 +381,34 @@ export class Menus {
     grid.setAttribute('role', 'group');
     grid.setAttribute('aria-label', 'All sleds');
     for (const c of cards) grid.append(this.sledTile(c, c === pick, wallet));
-    const shop = h('div', 'gs-shop', pick ? this.sledHero(pick, wallet, fresh) : null, grid);
+    const shop = h('div', 'gs-shop', pick ? this.sledHero(pick, wallet, fresh) : null, grid, last.paints ? this.paintRow(last.paints) : null);
     this.sledsBody.replaceChildren(shop);
     if (!fresh) {
       this.sledsBody.scrollTop = scroll;
       if (!restoreFocus(this.sledsSheet, fk)) this.sledsSheet.querySelector<HTMLElement>('[data-fk="sled-act"]')?.focus({ preventScroll: true });
     }
+  }
+
+  /** The garage's paint shelf: a swatch each, its price until it is yours, a ring on the one on the sled.
+   *  A paint is a look, never an edge; the trim and the rider's scarf stay vermillion. */
+  private paintRow(paints: PaintCard[]): HTMLElement {
+    const row = h('div', 'gs-paints');
+    row.setAttribute('role', 'group');
+    row.setAttribute('aria-label', 'Sled paint');
+    for (const p of paints) {
+      const sw = h('span', 'gs-paint-sw');
+      sw.style.background = p.hex || 'linear-gradient(135deg, #e0a060, #b07840)';
+      const tag = p.owned ? (p.on ? h('span', 'gs-paint-on', 'On') : null) : h('span', `gs-paint-price${p.affordable ? '' : ' is-short'}`, icon('gift'), h('span', 'gs-num', fmt(p.price)));
+      const b = h('button', `gs-paint${p.on ? ' is-on' : ''}${!p.owned && !p.affordable ? ' is-locked' : ''}`, sw, h('span', 'gs-paint-name', p.name), tag) as HTMLButtonElement;
+      b.type = 'button';
+      b.dataset.fk = `paint-${p.id}`;
+      b.setAttribute('aria-pressed', p.on ? 'true' : 'false');
+      b.setAttribute('aria-label', p.owned ? `${p.name} paint${p.on ? ', on your sled' : ''}` : `${p.name} paint, ${p.price} gifts${p.affordable ? '' : ', not enough gifts'}`);
+      if (!p.owned && !p.affordable) b.disabled = true;
+      b.addEventListener('click', () => this.hd.onPaint?.(p.id));
+      row.append(b);
+    }
+    return h('section', 'gs-paints-wrap', h('h3', 'gs-paints-h', 'Paint'), row);
   }
 
   /**
