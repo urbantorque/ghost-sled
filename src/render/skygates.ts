@@ -3,11 +3,13 @@ import type { SkyGate } from '../sim/course';
 import { LIGHT_GLSL, shared } from './materials';
 
 // Sky gates as rings of light (round 6). A gate was a thin outline that showed at about 20 m; now each is
-// a bold emissive ring with a white-gold core, a soft marigold halo round it and four beacon motes riding
-// the ring, with a slow shimmer running round it. The ring and its halo are one geometry in one instanced
-// draw for every gate on the course, on every tier: a premultiplied blend lets the ring write opaque light
-// (alpha 1) and the halo add its glow (alpha 0) in the same pass. Low has no bloom, so the halo is what
-// glows there; on Medium and High the ring's core also runs past the bloom threshold.
+// a bold ring (a deep amber edge, a marigold body, a white-gold line along its core), a soft marigold halo
+// round it and four beacon motes riding the ring, with a slow shimmer running round it. The ring and its
+// halo are one geometry in one instanced draw for every gate on the course, on every tier: a premultiplied
+// blend lets the ring write opaque light (alpha 1) while the halo both tints what is behind it and adds
+// light, so it reads on white snow as well as a dusk sky (added light alone vanished on the snow). Low has
+// no bloom, so the halo is what glows there; on Medium and High the ring's core also runs past the bloom
+// threshold.
 //
 // From 60 m a 2.4 m ring is about fifty pixels tall but its tube would be two: the vertex shader holds the
 // tube at least a few pixels thick and the halo a few more, so a ring reads as a ring of light at any
