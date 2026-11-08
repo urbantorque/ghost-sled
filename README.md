@@ -88,6 +88,7 @@ npm test
 | `standing`, `finishflow`, `field` | Race order by time, the finish flow, and a field built around your pace |
 | `ladder`, `cup`, `rivalry`, `slowriders`, `pacer` | Ladder ranks and stage medals, the weekly Cup, the run's rival, and the paced riders that fill the slow end of the race, and the clocks of riders who read you |
 | `ground`, `setpieces`, `overlook`, `midground`, `palette`, `feel` | World rules: nothing stands in the run, no stretch stays bare past about 300 m, the forest stands on the ground it is drawn over, each mountain keeps its own light, and the speed curves reach the cap |
+| `moments` | Set pieces: three a named mountain, one a stage, each with its verb; a Daily's own; the ring lines in the course's one list of rings; the race machine's and the fall's schedules; a rider who steers at the gates wins Old Town and a replay agrees; mastery stars are the verbs beaten |
 
 ## Generate ghosts
 
@@ -290,6 +291,12 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `strips.js` | Beat strips: 4 to 6 frame-exact screenshots after each named moment, on a virtual clock, with a probe per frame (plans `fresh`, `rivals`, `flow`, `stunt`, `avalanche`, `giftStorm`) |
 | `levels.js`, `audio-capture.js` | Mix levels from offline renders of the shipped DSP, and the live master tapped per frame (onsets, sync to the picture, the choir) |
 | `stunt-sim.ts` | The stunt pilot in node, without a browser: `npx tsx scripts/playtest/stunt-sim.ts [runsPerMountain] [firstSeed] [mood]` |
+| `setpieces.js` | Round 6's set pieces frame by frame: a replayed run shot as each set piece's card comes up and every so often while it plays, with the sim's own count, the race machine's gap and the fall's gap |
+| `moments-plan.ts`, `pool-moments.ts` | What each set piece holds on every mountain and a few Dailies (gates, rings, steps, paces), without a browser; and how the bundled pools' riders played each one |
+| `lab-digest.mjs` | Two `lab.ts` outputs side by side, per pilot (`lab.ts` also prints a set-piece table: each pilot's wins of the set pieces it met) |
+| `loudness.js` | Loudness on a live run: integrated LUFS, short-term and momentary maxima, loudness range, true peak, L/R correlation, and what folding to mono and a phone speaker's band take off, for the whole mix, the music alone and the effects alone |
+| `tile.mjs` | Tiles frames into one contact-sheet PNG, for reading many frames at once |
+| `graves-pins.ts`, `graves-repin.cjs` | After a pool regen: print each pool's graveyards, and rewrite the graveyards test's pins from them |
 
 ## Fun pass play-test
 
@@ -520,8 +527,10 @@ sim's own growth in the ghost worker. The pools are the same size as before (42 
 | `src/workers` | Ghost replay and daily pool worker |
 
 Round 5 added `src/bot/roster.ts` (the signature riders), `src/game/marquee.ts` (set pieces), `src/game/mastery.ts`
-(boards), `src/game/paints.ts` (sled paints) and `src/render/spirit.ts` (sky gates, dash and ward light, set
-pieces' air, fireworks).
+(boards), `src/game/paints.ts` (sled paints) and `src/render/spirit.ts` (sky gates, dash and ward light, set pieces'
+air, fireworks). Round 6 added `src/sim/moments.ts` (the set pieces and their verbs, played in `sim.ts`),
+`src/render/marqueeworld.ts` (race machines, lantern gates, the falling span) and `src/ui/momentcopy.ts` (what a set
+piece's chip says).
 
 See `PLAN.md` for the architecture, `ART.md` for the art bible and `DECISIONS.md` for every call
 made along the way.
