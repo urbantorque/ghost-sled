@@ -914,7 +914,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   glacier: [
     {
       // The sun sinks onto the band.
-      from: 700, at: 1900, dusk: 0.5,
+      from: 600, at: 1450, dusk: 0.5,
       edit: (p) => {
         setSun(p, -40, 3.4, 19, 8);
         p.sunColor = c('#FFE9B8');
@@ -930,8 +930,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
     {
-      // Polar night comes on and the aurora arrives.
-      from: 2400, at: 3400, dusk: 1,
+      // Polar night comes on, and the aurora is at its strongest over the Crevasse Fields in the middle
+      // of the run.
+      from: 1700, at: 2250, dusk: 1,
       edit: (p) => {
         setSun(p, -44, 3, 18, 8);
         p.sunColor = c('#B8C4EC');
@@ -948,13 +949,70 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.snowDeep = c('#132A6C');
         p.fog = c('#2E4E94');
         p.hemiSky = c('#4E78CC');
-        p.aurora = 0.9;
+        p.aurora = 1;
         p.stars = 1;
         p.massif.flow = 1;
         p.bloom = 0.7;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.7;
         p.lanternGlow = 0.55;
+      },
+    },
+    {
+      // The deep of the night on the way to the Fang: the aurora past its crest, the band gone, the
+      // glacier holding what light there is. It is darkest at the Ice Cavern's mouth.
+      from: 2700, at: 3180, dusk: 1,
+      edit: (p) => {
+        p.sunDisc = 0.1;
+        p.skyZenith = c('#030A30');
+        p.skyMid = c('#102E74');
+        p.skyHorizon = c('#3A68AC');
+        p.skyBand.k = 0.35;
+        p.snowLit = c('#93ACE2');
+        p.aurora = 0.75;
+        p.lanternGlow = 0.6;
+      },
+    },
+    {
+      // Out of the cavern into the dawn: the sun comes up beside the Fang (it crosses the sky ahead while
+      // the rider is under the ice, so the far mouth opens onto it), rose gold on the snow and the peaks,
+      // the stars and the aurora fading out of a lightening sky.
+      from: 3300, at: 3580, dusk: 1,
+      edit: (p) => {
+        setSun(p, 30, 3.6, 20, 9);
+        p.sunColor = c('#FFC8A4');
+        p.sunCore.setRGB(2.9, 2.1, 1.5);
+        p.sunDisc = 1;
+        p.sunGlow = 1.2;
+        p.sunSize = 1.05;
+        p.hazardDim = 0.88;
+        p.skyZenith = c('#1A3A86');
+        p.skyMid = c('#7678C4');
+        p.skyHorizon = c('#F2B49A');
+        p.skyBand.color = c('#FFB884');
+        p.skyBand.k = 1;
+        p.skyBelow = c('#B88EB4');
+        p.snowLit = c('#F0DDEA');
+        p.snowShade = c('#5A6CB8');
+        p.snowDeep = c('#26388C');
+        p.rim = c('#FFD2B4');
+        p.fog = c('#A69CCC');
+        p.hemiSky = c('#8A98DC');
+        p.clouds.lit = c('#FFD8C4');
+        p.clouds.shade = c('#6A6AB4');
+        p.clouds.rim = c('#FFBC8C');
+        p.massif.glow = c('#FFB4A4');
+        p.massif.glowK = 0.85;
+        p.massif.glowLine = -40;
+        p.aurora = 0.12;
+        p.stars = 0.15;
+        p.atmo.rays = 0.8;
+        p.grade.shafts = 0.75;
+        p.grade.gain = c('#FFF4EE');
+        p.bloom = 0.6;
+        p.giftGlow = 0.3;
+        p.ghostGlow = 1.45;
+        p.lanternGlow = 0.25;
       },
     },
   ],
