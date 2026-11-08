@@ -1725,3 +1725,190 @@ Every place where I replaced, extended or interpreted the brief, and why.
     (`scripts/playtest/graves-repin.cjs`). Slow riders now also fill a hole in a pool's own slow end (a beginner who
     tumbled twice finished 16 s behind the next), so the ladder has no gap. The stunt pilot's test counts wards with
     tumbles: a won set piece turns one of its hits into a ward.
+
+### Round 6: the world lane
+
+248. **Ember's basalt stands in formations, and its pines in stands.** The Caldera Leap's banks were the decorative
+    forest's two sets dealt tree by tree (70% charred pines and snags, 30% basalt clusters and stubs, by an
+    independent hash per tree), so every bank was the same even scatter, and on Low, which draws each set's first
+    variant only, a scatter of boxes. Now one plan lays each bank (`groves.ts`): the bank is cut into slots 28 m
+    long and each slot is a formation, a stand or clear snow. A formation is an organ-pipe outcrop on the crest by
+    the run (15 hexagonal columns in two ranks, graded from 3 to 9.2 m to a peak a third of the way along, broken
+    drums at its foot, about 280 triangles), another 1.5 to 2.3 times the size on the shoulder 24 to 58 m out, and a
+    column cluster at the foot of each; a stand is 6 to 12 charred pines in a clump on a golden-angle spiral, its
+    outer ring dead, and a smaller clump further out. No formation follows a formation on one side, so the rock
+    comes at a rhythm (about one slot in five), stands about one in two, clear snow about one in three. A sentinel
+    column 9.5 m tall stands either side of every leap's approach, 36 m before the lip, where the view opens. The
+    bank dressing follows the same plan: a pair of columns at a formation's foot, a burnt stump at a stand's edge, a
+    steaming fissure out in the clear snow; no bushes or fences on Ember (they read as debris). Low lays the same
+    plan with one organ pipe for every piece of rock and stands thinned to 45%, so its banks are basalt country too,
+    with fewer pieces. Rejected: swapping the meshes and keeping the scatter (an even field of better rocks is still
+    debris); thresholding a noise field per tree (blotches, not formations); no basalt on Low (Low would lose the
+    mountain's material altogether).
+249. **Sakura's blossom stands in orchards.** Each bank is laid in blocks from the top of the run down: orchard,
+    orchard, then a stand of pines or an open meadow, in turn, with a path 7 m wide across between blocks. An
+    orchard block is 6 to 10 trees long, 5 m apart along a row and 5.5 m between rows, six rows on High, five on
+    Medium, three on Low (a tree 6 m apart there), the rows staggered by half a tree like terraces; each row keeps
+    its distance from the run's edge, so it follows the bank's contour and bends with the run. A block is all pink
+    or all pale (one in three is pale), and now and then a tree is gone from a row. The two banks are out of step by
+    17 m, so the rows never mirror across the run. Every leap lands between orchards: from the lip to 260 m past it
+    every block is an orchard, never pale. Past the orchards the shoulder has a few dark pines and no pink (Low
+    leaves it bare). Rejected: true contour lines across the fall line (from the lens they cut across the bank and
+    fight the run's own lines; rows at a constant distance from the edge are the bank's contours and lead the eye
+    down the run); eight rows (about 18k triangles a chunk more on High for rows the bank's crest hides from the
+    lens).
+250. **The Thousand Torii's posts stand on the lip of the cut.** The corridor is a trough the sim rides 4 m deep at
+    its limit (3 m past the edge), and its lintels clear the highest air, 21 to 34 m over the floor there, so the
+    lintels can only show from about 60 m ahead. The posts stood behind the limit in the drawn rock and showed only
+    above it; they now stand just past the limit on the trough's lip, thicker (0.72 m, black feet 0.95 m), dark and
+    light by turns, with a lit stone lantern between every second pair along the top of the cut. Rejected: lowering
+    any lintel (the air rule); taking the rock away past the limit (the sim's own ground rises to 15 m by 9 m out:
+    it is the cut); a lighter lacquer (it walks toward the grudge's rose). This is better, not finished: from the
+    chase lens it reads as a deep cut under a corridor of gates, the gates above the walls. A camera beat that lifts
+    the lens in here would show more of them; that is the main lane's call.
+251. **The Ice Cavern is a cavern.** Its roof clears 20 to 24 m of air over the floor (pops from up the slope fly
+    in), so it stands 27 m and more up, out of the lens's frame until about 60 m ahead. What reads at the lens's
+    height has to be on the walls. Each 5 m bay now has a cobalt crown (two deep masses over the middle, where the
+    vault was an even pale honeycomb), three great stalactites (one on Low) whose tips hang 0.4 m under the bay's
+    underside, which clears the air by AIR_MARGIN and 0.7 m more; on each wall a shelf of ice 5 to 14 m up with six
+    icicles under it (three on Low); and every other bay on each side, by turns, a cluster of three crystals at the
+    foot of the ice where the floor meets the wall, lit from within (pushed past white so they bloom on Medium and
+    High), leaning back into the wall so none comes over the limit. Rejected: hanging the vault lower (the air
+    rule); a smooth lid (a pipe).
+252. **Frostfang's Clear Skies goes through the night and out into the dawn.** Four stops where there were two: the
+    sun sinks onto the band (600 to 1450 m); polar night with the aurora at full over the Crevasse Fields (1700 to
+    2250); the deep of the night on the way to the Fang, the aurora past its crest at 0.75 and the band gone (2700
+    to 3180); then the dawn (3300 to 3580): the sun swings from 44 degrees left to 30 right, low (disc 3.6 degrees,
+    key light 20), rose gold on the snow and the peaks (alpenglow 0.85), the aurora down to 0.12 and the stars to
+    0.15. The sun crosses dead ahead at about 3,440 m, while the rider is under the ice (3,275 to 3,456), so the
+    cavern's far mouth opens onto the sunrise and the run comes out into it beside the Fang. The dawn's `dusk` stays
+    1: the windows and the station stay lit at first light, and the soundscape's day only goes on (the palette
+    test's rule that dusk never falls holds without a change). No pinned test value changed. Rejected: raising the
+    sun on its old bearing (it rose behind the left bank, away from the Fang); a dawn before the cavern (the card
+    promises the dawn out of it).
+253. **Pinecrest's far lakes are frozen lakes.** They were the gaps in the sea of clouds, which on Pinecrest lies at
+    the valley floor's level, so its white read as snow and its gaps (`uSeaDeep`, a saturated blue) as flat lakes. I
+    made them what they read as: on Pinecrest's Clear Skies (`massif.seaIce`) the sea's openings are frozen lakes
+    anchored in the world (their noise is placed where the lens is, so they hold still while the billows drift),
+    with a shore of drifted snow feathered into them, a body of pale ice (the deep mixed half and half with the
+    haze), long tongues of blown snow over it, and a sheen toward the sun. Low keeps it without the shore's fine
+    octave; every chaos mood keeps a sea of cloud. Rejected: closing the gaps (Pinecrest's valley would be one white
+    sheet and lose its lakes).
+254. **A telegraph line leads down to Mirror Lake.** Between the First Drop and the lake the run was a groove with
+    trees beside it. From the first leap's landing (its foot plus 140 m, at most 620 m before the lake) to the first
+    lake's shore and 80 m on, a timber pole stands every 30 m, 15.5 m past the edge, on the side the valley falls
+    away (`flankMode`), its two wires running crossarm to crossarm, in a cut through the trees 2.4 m wide. It skips
+    tree runs, ravines, tunnels, streets, bridges, ledges and the set pieces' ground, and takes up again past them.
+    From the lens its poles stand against the haze and its wires converge on the lake. A new large-kit piece
+    (`L_POLE`, before the signature pieces), Medium and High; Low draws no dressing. Rejected: an avenue of tall
+    trees (more forest); windows cut in the treeline (the bank's crest hides the valley from the lens, decision
+    117).
+255. **The towns live.** *Chimney smoke*: a street's houses record their chimney tops as the piece is made
+    (`Piece.chimneys`), about half their hearths lit (55%), and `Life` draws them in its existing smoke draw on
+    Medium and High: eight puffs to a chimney, 1.7 times a cabin's size and rising slower, lit warm on the sun side
+    and drifting with the wind; at most 22 chimneys at once, taken at a stride along the towns in view, re-placed
+    when a town comes into view (`SetPieces.chimneyKey`). Sakura's townhouses have no chimney and send up none. *Lit
+    signs*: a shop's sign board hangs on its awning's front edge, cream with its lettering's dark bar by day and lit
+    from within from dusk (the pieces' night flag is the journey's dusk as well as the night moods), and its corner
+    blade glows in its own colour; on Low a flat board over the window. *Cloth*: bunting, banners and lantern
+    strings carry a weight per vertex (held at the masts, freest at a pennant's point and in a string's middle, a
+    banner freest at its foot), and the set pieces' material swings them with the mood's wind in the vertex shader
+    (0.36 m a breezy day, 0.22 at night, 0.6 where the snow blows); across the run they move at most a third of a
+    metre, so nothing crosses the clearance. Rejected: the steam path for smoke (the wrong look, as decision 237
+    said); swinging cloth from the CPU or as its own instanced draw.
+256. **Trees shed snow when passed close.** A forest tree in the near rows (a tree run's wall, the treeline, an
+    orchard's first rows) with snow on its boughs, passed within 2.5 m of its trunk at 18 m/s or more, lets the near
+    miss's own sift fall (the same burst, placed by brush.ts on the side you passed, 15 grains, about two thirds of
+    an ordinary near miss), once a tree and at most one every 0.15 s, so scraping along a tree run's wall is a run
+    of falls, not a stream. It reads the chunks' packed forest (`Props.treesNear`), so nothing is drawn or made.
+    Snags, spires and basalt shed nothing; Frostfang sheds nothing. Low keeps it at its particle budget like every
+    burst (about seven grains): the scan is a few dozen comparisons a frame and there is no draw. Rejected: none on
+    Low (a tree run on Low would read as dead next to a near miss that sifts); a burst every frame while close (a
+    stream).
+
+### Round 6: the feel and garage lane
+
+257. **A dash puts the rider in a spirit shimmer.** For a dash's 1.4 s every rider material takes one uniform
+    (`uSpirit`): the body goes a little pale and luminous, a white-gold rim burns round the whole silhouette and
+    gold bands ripple up through the coat from the sled, about two a metre, rising at 1.6 a second. It eases in over
+    about 0.1 s and out over about 0.3 s, so it never flashes. The scarf keeps its vermillion (only a breath of the
+    rim): the player's signal does not change colour because the rider is fast. On Medium and High two faint
+    after-images (the seated rider's silhouette in white-gold glass, 0.05 s and 0.1 s behind) trail the rider; they
+    draw only where the rider is not (contract C10's stencil, as a ghost does) and only while it dashes. Low gets
+    the shimmer and no after-images, so Low draws nothing new. Reduced motion keeps the look and slows the bands to
+    a third. Rejected: a whole second rider drawn translucent behind (five draws an image, and the chase lens looks
+    straight through it at the rider); tinting the rider marigold (the lantern's colour belongs to the lights and
+    gifts; a dash already burns white-gold in the HUD's lantern).
+258. **A ward cracks the lantern open, with a beat of slow motion.** At the hit a paper lantern of marigold panels
+    (five rows of ten, translucent, densest at its rims) stands round the rider, white-gold cracks burn across it,
+    and 0.09 s later it breaks: the panels fly out as shards that keep most of the sled's speed (so they stream past
+    rather than vanish behind), spin, cool and fade, and a ring of light runs flat over the snow to 5.6 m. Shell,
+    shards and ring are one instanced draw that exists only while a ward plays (about a second). The ring and the
+    paper tint what is behind them as well as adding light, because added light alone washed out to white on the
+    snow. The slow motion is `WARD_CURVE` in `timescale.ts`: 0.3 by 50 ms, held to 0.3 s, back to full by 0.52 s, on
+    both channels. I chose both and not the render channel alone because the rider and the pack move on the feed:
+    slowing only the render slows the shards and the shaders while the sled shoots on at full speed, which reads as
+    a glitch, not a beat. The feed channel is what a stomp's hit-stop already uses; the sim stays tick-exact (only
+    how much real time is fed to the fixed loop changes), so replays and every ghost are untouched. It is triggered
+    in `app.ts` from the sim's own `ward` event, one line. Reduced motion plays none of the slow motion (the time
+    scale's rule) and the lantern breaks later (0.2 s) and gentler, with no pop of light.
+259. **Sky gates are rings of light from 60 m on every tier.** A gate was a 0.14 m tube that showed at about 20 m.
+    Now each is a ring with a deep amber edge on its silhouette, marigold through its body and a thin white-gold
+    line along its core, a shimmer running round it and one run of light chasing it, a halo that tints and glows
+    round it, a faint veil inside it (so it reads as a gate to fly through, not a hoop) and four beacon motes riding
+    it. The vertex shader holds the tube at least 2.7 px in radius and the halo 10 px wide whatever the distance, so
+    at 60 m it is a clear ring of light about fifty pixels across. Ring and halo are one geometry in one instanced
+    draw for every gate (as before), with a premultiplied blend: the ring writes opaque light, the halo tints and
+    adds. Low has no bloom, so the halo carries the glow there and the core stays under 1; on Medium and High the
+    core runs past the bloom threshold. The cap rose from 4 to 16 and every entry of `course.skyGates` draws at its
+    own radius, so a set piece's line of three smaller rings is the same family. Flying through one swells it, burns
+    it white-gold and it is gone in 0.7 s, with a ring of motes. Rejected: a pale white-gold ring (it vanished on
+    snow and on a bright sky: the first version did) and a plain additive halo (white on white).
+260. **Fireworks are streaks that rise, burst, droop and crackle.** The old shells were particle sparkles and
+    gouache dabs that read as puffs. A shell now climbs on a thin trail of embers (0.55 s at the finish, where the
+    render-time ease already slows it, 0.9 s elsewhere), bursts with a flash into a sphere of streaks (peony,
+    chrysanthemum with longer tails, a tilted ring, a willow that droops in marigold, a crackle that breaks into
+    twinkling glitter), and every streak stretches along its motion on screen, slows against the air and falls. One
+    instanced draw for every spark of every shell, drawn only while a show is in the air; Low throws about half the
+    stars and its streaks carry their own halo. Each streak takes a little of the sky away behind it (a
+    premultiplied blend with alpha), so vermillion still reads against a bright peach dusk. Colours are ART.md 13's:
+    vermillion, coral, marigold, white-gold in four pairs, never mint or rose; the finish's old periwinkle shell is
+    gone. They fire over the square for every finish (moments.ts keeps its show and its timing; only the shells
+    changed), a bigger show over the square for a win, and over the street ahead when a `moment` beat says a gates
+    set piece is won. The square's shells keep the finish show's placement (from the lens as each goes up); the
+    others are placed along the lens's own view from where the lens will be when they burst, kept near the middle of
+    the frame where the speed streaks smear least: a sled at 30 m/s closes 40 m during a shell's climb, and the
+    first placement (by the run, 70 m ahead) burst over the top of the frame. Reduced motion keeps the show, drops
+    the glitter's twinkle and most of the burst's flash.
+261. **The garage, finished.** Four new shelves beside the sleds and paints, all bought with gifts and all cosmetic;
+    nothing reaches the sim, a sled's handling, the lantern or a ghost (a test reads `src/sim` and `src/bot` for any
+    mention). Seven scarves (vermillion always dominant: two deeper stripes, cream bars, a short broad rib, a
+    fringe, narrow ink bands, cream-dipped ends with a fringe, a long slim streamer; each varies the tails' length
+    and width, the knit's pattern and the tassels, and the accent is at most cream or ink). Seven hats in vermillion
+    and the beanie's cream, each told by its outline from behind (the cuffed pom beanie, a short watch cap with a
+    thick rolled cuff, a pom over each ear, a trapper with a cream fur brim and long flaps, a ring of bobbles, a
+    pointed chullo with braided ties, a stocking cap that streams out behind; none is a signature rider's hat). Six
+    trails: plain powder, a pale honey spray, marigold sparks flicked off the runners, gold glints left twinkling in
+    the groove, a cream and gold stardust, a marigold stream straight back (warm roles only; never mint, rose, coral
+    or vermillion, because coral and vermillion are the drift's heat). Trail motes are painted grains in the powder
+    layer with a hot twin in the glow layer now and then: added light alone vanished on white snow, and that was the
+    first version. The five sled sounds are the music lane's list (`SLED_SOUNDS`); the garage sells them, saves the
+    choice and calls `AudioEngine.setSledSound` at load, after the platform's save is bound and on every change.
+    Prices run 60 to 240 gifts, the same band as the paints; there are 23 items to buy for 3,370 gifts in all, so
+    gifts keep mattering after the sleds.
+262. **The garage's shop.** The Sleds sheet is now the Garage (the title's button says Garage over the sled's name):
+    a row of tab pills (Sleds, Paint, Scarves, Hats, Trails, Sounds) over the shelf, arrow keys moving between tabs
+    as tabs do. Every shelf is the sled shop's own shape, a preview with its one action beside tiles that pick what
+    the preview shows, so the six read as one place; buying is two taps everywhere (Buy arms, Confirm spends),
+    paints included (a paint used to buy on one tap). The previews are drawn from the same numbers the game builds
+    the looks from (`garageart.ts`): a scarf tail in its pattern and length, a head and shoulders from behind in the
+    hat, a groove with its spray and motes, a drawn wave for each sound, a deck in its paint. A line under each
+    preview says what the shelf touches and that it is a look only. On a phone the tabs scroll sideways and the
+    tiles go two a row. Rejected: rendering each hat and scarf with the game's portrait renderer (a render per item
+    and a second camera angle for the back of the head; the drawings are instant and say the same thing), and a
+    listen button for sounds (the music lane owns how they sound and has no preview entry point yet).
+263. **Saves.** New optional fields: `scarves`/`scarf`, `hats`/`hat`, `trails`/`trail`, `sounds`/`sound`
+    (`SHELF_KEYS`). Known ids only, once each, the free item never stored, and the worn one must be owned or it
+    reads as the free one. A save from before them loads with the free item on every shelf and keeps its shape:
+    nothing empty is written back. `tests/garage.test.ts` holds a round 5 save (gifts, sleds, paints, mastery,
+    counts) through a load and a write, round-trips a bought set exactly, and throws mangled values at it.
