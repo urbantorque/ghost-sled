@@ -56,6 +56,9 @@ Hold the action to crouch (deeper carve, tuck); hold it while steering hard to d
 pop. In the air, steer to spin and press-and-hold to backflip. Tap the action just before
 touchdown (when the ring on the snow flashes gold) for a perfect landing. P pauses.
 
+The Garage (the title's Garage button) sells sleds, paints, scarves, hats, trails and sled sounds for gifts.
+Everything but a sled is a look or a sound only.
+
 The lantern (three cells, top right; a round button on touch) fills from spirit lights and from skill.
 A full one is a dash: 1.4 s as a spirit, faster, through any tree or rock in the way. Kept, it is a
 ward: the next hit that would floor you is taken by the lantern instead. After a wreck, "Ride home as
@@ -291,6 +294,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `strips.js` | Beat strips: 4 to 6 frame-exact screenshots after each named moment, on a virtual clock, with a probe per frame (plans `fresh`, `rivals`, `flow`, `stunt`, `avalanche`, `giftStorm`) |
 | `levels.js`, `audio-capture.js` | Mix levels from offline renders of the shipped DSP, and the live master tapped per frame (onsets, sync to the picture, the choir) |
 | `stunt-sim.ts` | The stunt pilot in node, without a browser: `npx tsx scripts/playtest/stunt-sim.ts [runsPerMountain] [firstSeed] [mood]` |
+| `feelfx.js`, `fireworks.js`, `garage-tris.ts` | Each dash, ward, a sky gate from 60 m and the finish off a replayed run (a garage look worn and reduced motion as options); a synthetic street or win show mid-run; the hats' and effects' triangle counts |
 | `setpieces.js` | Round 6's set pieces frame by frame: a replayed run shot as each set piece's card comes up and every so often while it plays, with the sim's own count, the race machine's gap and the fall's gap |
 | `moments-plan.ts`, `pool-moments.ts` | What each set piece holds on every mountain and a few Dailies (gates, rings, steps, paces), without a browser; and how the bundled pools' riders played each one |
 | `lab-digest.mjs` | Two `lab.ts` outputs side by side, per pilot (`lab.ts` also prints a set-piece table: each pilot's wins of the set pieces it met) |
