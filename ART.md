@@ -361,13 +361,26 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   Lift lines cross overhead at real height with chairs moving, from a station close beside the run; a
   red ropeway house at Frostfang, a basalt mine head with ore skips at Ember, a lacquered cableway at
   Sakura. Toy spectators in the rider's proportions, coats in cool and muted colours and never a signal
-  colour, turn to follow the rider and throw their arms up when a moment is made near them. Every run
+  colour, turn to follow the rider and throw their arms up when a moment is made near them. Each
+  mountain dresses its own: Pinecrest in loden under bobble beanies, felt hats with a feather and
+  trapper caps, ringing cowbells; Frostfang in quilted parkas with fur-ruffed hoods, goggles and fur
+  hats, waving ice axes; Ember in long ash dusters and capes under pointed hoods, miners' helmets and
+  face wraps, raising picks; Sakura in wrap robes with a sash under straw hats, a bun or a headband,
+  twirling paper parasols. Each has a habit (waves, claps, pumps both arms, throws a snowball at the
+  run as the rider passes, cups its hands to shout); heads turn before bodies, bodies lean out as the
+  rider comes, and a fifth are kids who bounce. The far rows are baked, posed with arms and flags up
+  in the same silhouettes, and on Low, which animates no crowd, a street's crowd is baked that way too:
+  fewer, bigger figures. Every run
   starts at an occasion: a gate high over the steep ramp with the word on it, packed grandstands down both banks with flags up, two huts looking over them, and barriers. Every leap has a crowd on the rock shoulders either side of its lip.
 - **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
   owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
   three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
   small warm-brown deer, ibex, hares and foxes stand at the treeline, only on open ground, never in rock, a street or over a gorge, and bolt away as you come, pulling up short of rock. Far
-  skiers carve S-turns on the flanks. Life is small, soft and moves away from the run: never in the
+  skiers carve S-turns on the flanks. Herds graze, then lift their heads and turn to watch you come,
+  and bolt one after another; a fox sits up on a rock following you with its head until it hops down;
+  crows (ravens on Ember, cranes on Sakura) peck on the bank ahead and lift off as you near; kids sled
+  down the bank and wave; now and then a snowboarder drops in off the bank and rides alongside for a
+  few seconds before peeling away. Life is small, soft and moves away from the run: never in the
   corridor, never a signal colour.
 - **Snow and trees.** Past the treeline snow heaps into drift dunes, crests catching the sun and
   troughs holding cold blue; the banks carry sastrugi in patches; the corridor's middle is a packed

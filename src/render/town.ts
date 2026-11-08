@@ -1,5 +1,6 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
+import { lowCrowd } from './crowd';
 import { SNOW, part, shade, softPart } from './flora';
 import {
   CREAM,
@@ -851,6 +852,8 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
     }
   }
   const steps: Array<() => BufferGeometry[]> = [];
+  // Low draws no animated crowd: the street's is baked, fewer and bolder, posed (crowd.ts).
+  if (low) steps.push(() => lowCrowd(spots, biome, p));
   // The lots, a couple to a step (a hotel or the landmark is a few ms on its own).
   const LOTS = low ? 4 : 2;
   for (let i = 0; i < lots.length; i += LOTS) {
