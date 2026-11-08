@@ -38,6 +38,8 @@ const CABLE_FAR = 15;
 const WIRE_H = 8.5;
 const STRING_LOW = 2.8;
 const PER_STRING = 3;
+/** A set piece's world is drawn from this far up the run. */
+const SHOW_M = 520;
 const LANTERN_K = 1.35;
 const GARLAND = new Color('#FFE29A').multiplyScalar(1.4);
 
@@ -145,6 +147,9 @@ export class MarqueeWorld {
   private plays: readonly MomentPlay[] = [];
   private biome: BiomeId = 'alpine';
   private readonly statics: Mesh[] = [];
+  /** Each set piece's meshes and the stretch of course they belong to: drawn only within SHOW_M of the rider,
+   *  so a run pays for the one ahead and nothing else. */
+  private readonly shown: { objs: Object3D[]; z0: number; z1: number }[] = [];
   private machines: Machine[] = [];
   private gates: GateLook[] = [];
   private pillars: InstancedMesh | null = null;
@@ -165,6 +170,7 @@ export class MarqueeWorld {
     this.chunks = new InstancedMesh(part(chunk, ICE, { jitter: 0.25 }), makeToonMaterial({ coolShade: 0.25, ice: true }), 36);
     this.chunks.count = 0;
     this.chunks.frustumCulled = false;
+    this.chunks.visible = false;
     this.root.add(this.chunks);
     for (let i = 0; i < 36; i++) this.chunkState.push({ x: 0, y: -1e4, z: 0, vx: 0, vy: 0, vz: 0, r: 0.5, spin: 0, life: 0 });
   }
@@ -175,6 +181,7 @@ export class MarqueeWorld {
       m.geometry.dispose();
     }
     this.statics.length = 0;
+    this.shown.length = 0;
     for (const m of this.machines) {
       this.root.remove(m.cabin);
       m.cabin.geometry.dispose();
@@ -258,12 +265,11 @@ export class MarqueeWorld {
       parts.push(box(1.6, 1.6, 0.2, new Color('#FFD08A').multiplyScalar(1.5), [a.x + p.side * 2.2, a.y - 1.6, a.z + 2.55]));
     }
     const mesh = new Mesh(merge(parts), this.toon);
-    mesh.frustumCulled = false;
     this.statics.push(mesh);
     this.root.add(mesh);
     const cabin = new Mesh(cabinGeometry(p.key, this.biome).scale(1.35, 1.35, 1.35), this.toon);
-    cabin.frustumCulled = false;
     this.root.add(cabin);
+    this.shown.push({ objs: [mesh, cabin], z0: from, z1: to });
     this.machines.push({ play: p, cabin, z: p.z0 + p.lead });
   }
 
@@ -282,10 +288,8 @@ export class MarqueeWorld {
     plane.translate(0, 2.1, 0);
     const cross = plane.clone().rotateY(Math.PI / 2);
     const pillars = new InstancedMesh(merge([plane, cross].map((q) => q.toNonIndexed())), this.pillarMat, n * 2);
-    pillars.frustumCulled = false;
     pillars.renderOrder = 6;
     const lanterns = new InstancedMesh(lanternGeometry().scale(LANTERN_K, LANTERN_K, LANTERN_K), this.lanternMat, n * 2 * PER_STRING);
-    lanterns.frustumCulled = false;
     const cord = new Color('#2A2D48');
     const wires: BufferGeometry[] = [];
     const garland: BufferGeometry[] = [];
@@ -321,12 +325,18 @@ export class MarqueeWorld {
       });
     }
     const wireMesh = new Mesh(merge(wires), this.toon);
-    wireMesh.frustumCulled = false;
     this.statics.push(wireMesh);
     const garMesh = new Mesh(merge(garland), this.lanternMat);
-    garMesh.frustumCulled = false;
     this.statics.push(garMesh);
     this.root.add(garMesh);
+    // Instanced: their bounds are their instances' (a threaded gate's lanterns rise out of them, and the
+    // frame they rise in is the one the rider is in, so a stale bound never hides one in view).
+    pillars.computeBoundingSphere();
+    lanterns.computeBoundingSphere();
+    lanterns.frustumCulled = false;
+    const z0 = Math.min(...this.gates.map((g) => g.play.z0)) - 40;
+    const z1 = Math.max(...this.gates.map((g) => g.play.z1)) + 40;
+    this.shown.push({ objs: [pillars, lanterns, wireMesh, garMesh], z0, z1 });
     this.pillars = pillars;
     this.lanterns = lanterns;
     this.root.add(pillars, lanterns, wireMesh);
@@ -363,6 +373,10 @@ export class MarqueeWorld {
   /** Per frame: the machines where the sim's schedule puts them, the gates' light, the span's fall. */
   update(dt: number, time: number, mode: 'run' | 'title' | 'results', s: Snap, sim: Sim | null, low: boolean): void {
     const now = performance.now() / 1000;
+    for (const g of this.shown) {
+      const on = s.z > g.z0 - SHOW_M && s.z < g.z1 + 30;
+      if (g.objs[0].visible !== on) for (const o of g.objs) o.visible = on;
+    }
     const c = sim?.course;
     for (const m of this.machines) {
       const p = m.play;
@@ -464,6 +478,7 @@ export class MarqueeWorld {
       this.chunks.setMatrixAt(live++, tm);
     }
     this.chunks.count = live;
+    this.chunks.visible = live > 0;
     if (live > 0) this.chunks.instanceMatrix.needsUpdate = true;
     void s;
   }

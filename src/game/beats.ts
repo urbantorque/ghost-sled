@@ -111,7 +111,7 @@ export type Beat =
   | (B & { type: 'graveyard'; name: string; fell: number; gifts: number })
   /** A marquee moment (marquee.ts): 'enter' as it comes up (its title, its line, its camera and light),
    *  'exit' as it is ridden out (the lights taken of its total, and clean: no hit, ward or wipeout in it). */
-  | (B & { type: 'marquee'; phase: 'enter' | 'exit'; key: string; name: string; verb: MomentVerb; line: string; cam: MarqueeCam; light: MarqueeLight; took: number; total: number; clean: boolean; won: boolean })
+  | (B & { type: 'marquee'; phase: 'enter' | 'exit'; key: string; name: string; verb: MomentVerb; line: string; cam: MarqueeCam; light: MarqueeLight; side: 1 | -1; took: number; total: number; clean: boolean; won: boolean })
   /** A set piece's verb as it plays (src/sim/moments.ts; the sim decides, every rider alike): 'start' as the
    *  rider reaches its first metre, 'miss' as a gate or ring is missed or a step not stomped, 'step' as a
    *  gate is threaded, a ring flown or a step stomped (n of `of` so far), 'lead' as the rider passes the race's

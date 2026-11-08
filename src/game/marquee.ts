@@ -1,6 +1,6 @@
 import type { Course } from '../sim/course';
 import { CHUNK_LEN } from '../sim/course';
-import { type MomentCam, type MomentLight, type MomentVerb, planMoments } from '../sim/moments';
+import { type MomentCam, type MomentLight, type MomentVerb, momentPlays } from '../sim/moments';
 
 // Marquee moments: each mountain's three biggest places, one a stage, played as set pieces (round 6). Where
 // they are and what each asks of you (its verb) is the sim's (src/sim/moments.ts), so every rider meets the
@@ -22,6 +22,8 @@ export interface Marquee {
   line: string;
   cam: MarqueeCam;
   light: MarqueeLight;
+  /** The side of the run its race machine travels (+1 right of the line). */
+  side: 1 | -1;
   /** Where it starts and ends, metres down the course. */
   z0: number;
   z1: number;
@@ -38,5 +40,5 @@ function lightsIn(course: Course, z0: number, z1: number): number {
 /** The run's marquee moments, in order down the course. (`_mountain` is kept for callers: the course's seed
  *  says which mountain it is.) */
 export function planMarquee(course: Course, _mountain?: string | null): Marquee[] {
-  return planMoments(course).map((m) => ({ index: m.index, key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, z0: m.z0, z1: m.z1, total: lightsIn(course, m.z0, m.z1) }));
+  return momentPlays(course).map((m) => ({ index: m.index, key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, side: m.side, z0: m.z0, z1: m.z1, total: lightsIn(course, m.z0, m.z1) }));
 }
