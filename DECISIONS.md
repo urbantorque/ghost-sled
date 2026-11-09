@@ -1549,3 +1549,481 @@ Every place where I replaced, extended or interpreted the brief, and why.
     leave it: a skilled first-timer rides clear and wins. And the
     returning race is no livelier (mid's runs 2 to 4 are live for 0.44 to 0.62 against 0.50 to 0.72), and the clumsy
     pilot still finishes nothing in the race; it rides home as a spirit instead.
+
+## Round 6: polish toward a 10
+
+239. **The review, before anything changed.** I rode round 5's build (dec2d60) in headless Chrome on the laptop's
+    GPU: a replayed best pool run (`?demo=0`) down every mountain on High at 1280x720, shot as each set piece comes
+    up and in its middle, at every sky gate, at the first dashes and wards, at fixed distances and at the finish; the
+    same down Pinecrest on a 390x844 phone on Medium, Ember on Low, and the title on the phone. I read every frame
+    (`shots/r6/before`, contact sheets `sheet-*.png`). I cannot hear, so for the music I read the score in
+    `theory.ts` and `music.ts` and measured the live master with a new probe (`loudness.js`: BS.1770 on a real run).
+
+    *Pinecrest.* Wonderful: the run-in; the First Drop's reveal of the whole valley, the lake below and a tower on
+    the shoulder; and the last third, golden hour on the peaks, the covered bridge between its lamp-eyed towers, Old
+    Town under bunting with lit windows, and the Valley Leap framing the finish town from the air. Flat: Mirror Lake
+    plays as a wide stretch with a mirror on it; nothing there asks anything of you. Generic: the valley's far lakes
+    are flat blue blobs on white, a diagram of a lake; between the First Drop and the lake the run is a groove with
+    trees beside it.
+
+    *Frostfang.* Wonderful: the ice ravines, shards from pale to cobalt; the red research-station street; the blue
+    hour sinking toward the aurora. Flat: the Ice Cavern does not read as a cavern from the chase lens (walls, then
+    sky), and its "Burst out into the light" opens onto polar night, so the card promises a sunrise the sky never
+    gives. Aurora Straight is a leap in the dark under a faint curtain. The Crevasse Fields' span is a corridor.
+
+    *Ember Peak.* Wonderful: one frame names it (the cone dead ahead under the orange smoke deck); the Cinder Gate
+    tunnel with lava in its joints; Ash Market's lit windows. Accidental: the Caldera Leap and the open slopes either
+    side are black stubs and boxes spread evenly over grey snow, and on Low that scatter is the whole picture. It
+    reads as debris, not as basalt country.
+
+    *Sakura Ridge.* Wonderful: the palette (peach mist, blossom, the long-skirted cone), Temple Town's street, the
+    pagoda over the square. Generic: between places it is pink blobs spread evenly over white at low contrast; the
+    Blossom Leap's "orchards" are scatter, not orchards; the Thousand Torii, from the lens, is two dark walls.
+
+    *Everywhere.* Feedback is quiet. A dash changes nothing on the rider (a colour fringe at the frame's edge and a
+    few motes); a ward is a puff; a sky gate is a thin outline that shows at about 20 m; fireworks over the square
+    are red and gold puffs. Set pieces come every 15 to 45 s, and half of them are a card and a camera beat over a
+    stretch that plays like any other. During a set piece the HUD's top centre stacks four things (the card, the
+    combo, the stake and a graveyard callout, a stomp callout beside them), and on the phone the bank's figure
+    "+30,994" lands on top of "SURVIVED BONEPILE BEND". The phone title is lovely.
+
+    *The music, read and measured.* On Clear Skies all four mountains play in D major at 112 bpm with the same bass
+    figure, the same drums and the same arp; only a four-bar chord loop and a timbre accent change. The lead is a
+    random walk that enters only at a skilled intensity (0.82 and up), so most runs have no melody at all: a cruise is
+    pad, bass and hats. There is no hook and no title theme, the loops stay diatonic, and the arrangement is layers
+    fading in with intensity and a whole-tone lift in the last stage. Nothing lands on a downbeat except the band
+    itself: stage lines and set pieces sound when the rider crosses them. The master is a fixed limiter for stacked
+    peaks and a trim, with no bus compression, sidechain or EQ. Measured live over the first 70 s of a replayed best
+    run at the default sliders: the mix is -18.2, -17.9, -18.4 and -18.2 LUFS integrated on the four mountains, with a
+    loudness range of only 2.4 to 3.1 LU (the run barely moves), true peak -6.5 to -6.7 dBTP, L/R correlation 0.62 to
+    0.66, 1.1 to 1.2 LU lost folded to mono and 2.9 to 3.3 LU through a phone speaker's band. Alone on Pinecrest the
+    music is -22.7 LUFS (correlation 0.87, narrow) and the effects with the wind and the world -19.9: **the music sits
+    2.8 LU under the effects.** It is a bed, not a score.
+
+240. **The round's plan: eight changes, biggest lift for a player first.** One clean break (SIM_VERSION 8) carries all
+    the sim work.
+    1. **Set pieces that play differently.** Three a mountain, one a stage, about 45 s apart, each the stage's
+       biggest place, each with a verb of its own in the sim, so a ghost rides it and its record carries it.
+       *Race*: a machine leaves its station as you arrive, and you beat it to the far end. *Gates*: a slalom of
+       lantern gates set on the beat; a full chain fires the street's fireworks. *Rings*: three rings of light along
+       a big flight; line up the lip and hit it at the right speed. *Collapse*: the snow bridge falls in behind you;
+       keep your speed or it takes some. *Steps*: stomp every terrace. Pinecrest: The First Drop (rings), Mirror Lake
+       (race the cable car), Old Town (gates). Frostfang: Serac Gate (the snow bridge collapses), The Crevasse
+       Fields (race the ropeway), The Ice Cavern (ice lantern gates in the dark, then out into the dawn). Ember:
+       Cinder Gate (race the ore train through the mountain), The Caldera Leap (rings), Ash Market (gates under
+       fireworks at dusk). Sakura: Petal Steps (steps), The Blossom Leap (rings), Temple Town (gates). Each has a
+       camera beat that frames the verb without taking the steering, a music moment on a downbeat, a line on its
+       card, a progress chip while it lasts, a mastery goal and a lantern for winning it. Dailies and Cups give
+       their biggest places the same verbs.
+    2. **Feedback you can feel.** A dash puts a spirit shimmer on the rider's body; a ward cracks a lantern open
+       round the rider with a beat of render slow motion; sky gates are rings of light that read from 60 m on every
+       tier; fireworks rise, burst into streaks that fall, and crackle.
+    3. **The HUD decides what shows when.** A set piece owns the top centre: its card collapses into the moment's
+       progress chip, the stake and minor callouts wait, and on a phone nothing else stacks under it.
+    4. **Music: hooks, a title theme and an arrangement against the run.** Each mountain gets its own key, tempo and
+       a composed hook a player could hum; the title gets a main theme; progressions borrow chords and lift a key
+       into the last stage; the run is arranged in sections (intro, build, drop, breakdown), with stage lines and set
+       pieces landing on downbeats.
+    5. **Music: production and sound design.** Bus glue, a sidechain under pads and bass and a duck under the big
+       effects, fuller pads, a bass that sits (a mono sub), punchier drums with transient shaping, a master to a
+       true-peak ceiling at a measured loudness, width that survives mono and phone speakers, and the music brought
+       up to sit with the effects rather than under them; the lantern, dash, ward, gate, pass and finish cues pitched
+       into the key and the tempo; the crowd swelling with the race; a dev-only jukebox (`?debug&jukebox`) and a
+       listening guide for the owner's ears.
+    6. **Course craft between places.** Ember's basalt in formations, not scattered stubs; Sakura's orchards in
+       rows on their terraces; the Ice Cavern a cavern that opens into a sunrise; chimney smoke, lit signs and
+       bunting that moves in the wind in the towns; trees that shed snow when passed close; each set piece framed
+       and led into from 150 m, its gates, rings or machine in view down the line.
+    7. **The garage, finished** (the round's one new thing): scarves, hats, trails and sled sounds, all procedural
+       and cosmetic, the rider's vermillion kept as the signal (ART.md 1). It is on the brief's weak list, and it
+       gives gifts something to buy once the sleds are bought (decision 218 found that is where they stop mattering).
+    8. **Low wins back its frames.** Measure the page and the audio apart at 6x; cut what costs on Low.
+
+    *Rejected.* A fifth mountain: a biome is a whole art set, palette, music and tuning, and the four are not
+    finished; the weak list is all inside them. A night or storm variant: the moods already re-light a mountain,
+    and nothing on the weak list is about variety. A Duel mode: a good reason to return, but the field already
+    carries signature riders and grudges, and it fixes nothing on the weak list; it is next round's. A frozen
+    waterfall to thread: it needs colliders on the line, which the fairness test forbids, and the lantern gates give
+    the weave without them. A collapse that drops the bridge's deck: a ghost behind you would ride on air, so the
+    cornices and the snow fall and the deck holds. Replacing the music engine: the brief says refine it.
+
+    *How.* Three lanes in hand-made worktrees cut from this commit run beside the main one: music and sound
+    (changes 4 and 5), feel and the garage (2 and 7), and the world (6). The main lane carries the sim, the set
+    pieces' world, camera and HUD (1 and 3), Low (8), the measurements and the merges.
+
+241. **A set piece is a verb the sim plays (SIM_VERSION 8).** `src/sim/moments.ts` names each mountain's three, one a
+    stage, from its own sections, and says what each verb holds; `sim.ts` plays it from the tick the rider reaches
+    its first metre (`momentStep`), so a replay, and a ghost, meets exactly the same moment. Winning one lights a
+    whole lantern, as a sky gate does. Five verbs, so the three on any mountain play differently:
+    - *Race*: the machine leaves its station 16 m ahead as you arrive, fast, and eases into its far station at its
+      average pace (Mirror Lake's cable car 34 m/s, the Crevasse Fields' ropeway 37, Cinder Gate's ore train 36),
+      so it pulls away first and a rider at its pace closes on it late; whoever reaches the far end first wins.
+      It is a function of the tick you arrived, so what you see racing you is what the sim races you against.
+    - *Gates*: lantern gates on alternate sides of the safe line, their openings 2 m either side of a point 2.6 m
+      off it, 40 m apart down a street and 32 m in a cavern (a street is entered fast, often off a leap or a dash).
+      Through every one in order wins. Threading them costs speed (a direct steerer through Old Town slows from
+      26 to about 22 m/s), and a rider who dashes into the street at 47 m/s cannot weave them: that is the choice.
+    - *Rings*: three rings of light along a leap's flight, 2.2 m to one side of the safe line at the lip, set for a
+      takeoff at 34 m/s with no pop, 3 m in radius, at 0.4, 0.85 and 1.3 s. Line up the lip and arrive at the
+      right speed: a rider who dashes before the lip flies over them. They join the course's one list of rings
+      (`Course.skyGates`, tagged `moment`; the stage gates are `stageGates`), so one renderer draws them all.
+    - *Collapse*: the span's snow falls in behind you from 18 m back, at 0.86 of the speed you came onto it (30 m/s
+      at least). A span is flat and a sled slows on it: hold your speed and it stays at your heels; bleed it (a
+      drift, the parapet, a wipeout) and the snow gives under you, and you keep 72% of your speed.
+    - *Steps*: land every terrace step clean. The first rule was every step stomped; no pilot in the lab, expert
+      included, managed it in 24 runs. Clean is a test the careful rider passes and the trickster can fail.
+
+    Pinecrest: The First Drop (rings), Mirror Lake (race the cable car), Old Town (gates). Frostfang: Serac Gate
+    (collapse), The Crevasse Fields (race the ropeway), The Ice Cavern (gates in the dark). Ember: Cinder Gate (race
+    the ore train), The Caldera Leap (rings), Ash Market (gates). Sakura: Petal Steps (steps), The Blossom Leap
+    (rings), Temple Town (gates). A Daily or a Cup takes each stage's biggest place, with a verb it has not played
+    yet where the stage allows. The Valley Leap, Aurora Straight, Basalt Halls and the Thousand Torii stay places,
+    not set pieces: the brief asked for two or three a mountain about 45 to 60 s apart, and one a stage is that.
+242. **Tuned on pilots who try them.** The lab's skilled pilots now aim at the next gate's inside half and line up a
+    ring line's lip, as a person who knows the set piece does; the careful line ignores them. Over six seeds a
+    mountain, set pieces won of those met: the careful line 13 of 72 (18%), the novice 27 of 71 (38%), mid 50 of 72
+    (69%), the expert 36 of 72 (50%; its habit of dashing before every lip carries it over the rings). The race is
+    the skilled rider's (mid 18 of 18), the steps the careful rider's (the line 6 of 6, the expert 0 of 6), the rings
+    want speed held in a window (Ember's caldera: novice and line 4 of 6, mid and expert 1), and the gates want the
+    street taken without a dash. Every pilot finishes as often as before; mid rides 5 s faster on average (13.7
+    lanterns lit a run against 11.5, from set pieces won), the novice and the expert are within a second of round 5
+    on average, and the novice-to-expert spread holds at about 19 s.
+243. **What the set pieces look like (`src/render/marqueeworld.ts`).** The race machines ride a cable along the
+    bank, 11 m up in the open and 7 m in a tube or a slot, on towers where the ground is open and brackets where it is
+    not, between two lit stations: a blue cable car on Pinecrest, Frostfang's red research gondola down the crevasse,
+    an iron ore skip glowing from inside through Ember's tunnel, a lacquered car on Sakura (for a Daily). Each is
+    placed where the sim's schedule says, swaying on its hanger, and the lens steps away from the cable so the
+    machine rides in frame beside you. A gate is two strings of paper lanterns hung from a wire across the run with a
+    garland sagging between their heads: solid marigold that reads on bright snow, and nothing standing on the snow,
+    so a sled that misses a gate brushes through paper, never a post. The next gate burns brightest and breathes,
+    with a pool of its light on the snow in its opening, so the eye finds it in a festival street whose own lanterns
+    are the same warm family; threaded, its lanterns slip their strings and rise into the sky; missed, its light
+    gutters. A collapse breaks the span's cornices off at the sim's fall line into the gap behind you, with powder;
+    the deck holds, so a ghost behind you never rides on air. Each piece is drawn only within 520 m of the rider.
+244. **A set piece owns the top centre (the stacking in 239).** Its title card becomes its chip as the rider reaches
+    it: the name a size smaller, and under it the verb counting in tabular figures (`Gate 3 of 6`, `You lead the
+    cable car`, `Right behind you`), held over the race row until the sim decides it, then its result (`Beat the
+    cable car · Lantern lit` in marigold, or `The cable car won` plainly) for 1.8 s. The chip is never hurried by what
+    waits, and nothing waiting goes stale under it: a mission pop plays after it. On a phone the stake and the minor
+    callout line wait under the set piece from its card to its result. Everywhere, a cash-in now owns the second tier
+    while its figure holds over the combo row, so the figure no longer lands on the callout line (the phone's
+    `+30,994` over `SURVIVED BONEPILE BEND`). A threaded gate's style is its own, a Lantern gate, not the Sakura
+    slalom's Spirit gate.
+245. **Ghosts try the set pieces.** A pool rider aims a ring line's lip and each gate's inside half when it tries the
+    set piece, which it does by its own key, likelier the more skilled; through gates it takes no detour and looks
+    nearer. Over the four bundled pools riders now win the rings in about a third of runs and the races in most. The
+    gates stay hard for the bot at its speed (it threads the first and loses the line), and that is honest: they are
+    the set piece the player has to learn.
+246. **Mastery's set piece stars are the verbs.** Each is the set piece's own line (`Mirror Lake: Beat the cable car
+    across the ice`), won by beating its verb and kept as `key:won`, so a round 5 sweep under the same key never
+    claims one. The Valley Leap, Aurora Straight, Basalt Halls and the Thousand Torii are no longer set pieces, so
+    their sweep stars leave the boards; the save keeps what it held.
+247. **The clean break, for the record.** SIM_VERSION 8. Saves keep gifts, sleds, paints, stats, passes, missions,
+    mastery and counts (decisions 149, 203, 231); bests, grudges and links from version 7 move to the archive. The
+    pools were ridden again (42 riders a mountain, 125 KB). Riders fall less (a set piece won is a lantern, and a kept
+    lantern wards a hit), so the bundled graveyards fell from 15 to 12; their pins follow the pools
+    (`scripts/playtest/graves-repin.cjs`). Slow riders now also fill a hole in a pool's own slow end (a beginner who
+    tumbled twice finished 16 s behind the next), so the ladder has no gap. The stunt pilot's test counts wards with
+    tumbles: a won set piece turns one of its hits into a ward.
+
+### Round 6: the world lane
+
+248. **Ember's basalt stands in formations, and its pines in stands.** The Caldera Leap's banks were the decorative
+    forest's two sets dealt tree by tree (70% charred pines and snags, 30% basalt clusters and stubs, by an
+    independent hash per tree), so every bank was the same even scatter, and on Low, which draws each set's first
+    variant only, a scatter of boxes. Now one plan lays each bank (`groves.ts`): the bank is cut into slots 28 m
+    long and each slot is a formation, a stand or clear snow. A formation is an organ-pipe outcrop on the crest by
+    the run (15 hexagonal columns in two ranks, graded from 3 to 9.2 m to a peak a third of the way along, broken
+    drums at its foot, about 280 triangles), another 1.5 to 2.3 times the size on the shoulder 24 to 58 m out, and a
+    column cluster at the foot of each; a stand is 6 to 12 charred pines in a clump on a golden-angle spiral, its
+    outer ring dead, and a smaller clump further out. No formation follows a formation on one side, so the rock
+    comes at a rhythm (about one slot in five), stands about one in two, clear snow about one in three. A sentinel
+    column 9.5 m tall stands either side of every leap's approach, 36 m before the lip, where the view opens. The
+    bank dressing follows the same plan: a pair of columns at a formation's foot, a burnt stump at a stand's edge, a
+    steaming fissure out in the clear snow; no bushes or fences on Ember (they read as debris). Low lays the same
+    plan with one organ pipe for every piece of rock and stands thinned to 45%, so its banks are basalt country too,
+    with fewer pieces. Rejected: swapping the meshes and keeping the scatter (an even field of better rocks is still
+    debris); thresholding a noise field per tree (blotches, not formations); no basalt on Low (Low would lose the
+    mountain's material altogether).
+249. **Sakura's blossom stands in orchards.** Each bank is laid in blocks from the top of the run down: orchard,
+    orchard, then a stand of pines or an open meadow, in turn, with a path 7 m wide across between blocks. An
+    orchard block is 6 to 10 trees long, 5 m apart along a row and 5.5 m between rows, six rows on High, five on
+    Medium, three on Low (a tree 6 m apart there), the rows staggered by half a tree like terraces; each row keeps
+    its distance from the run's edge, so it follows the bank's contour and bends with the run. A block is all pink
+    or all pale (one in three is pale), and now and then a tree is gone from a row. The two banks are out of step by
+    17 m, so the rows never mirror across the run. Every leap lands between orchards: from the lip to 260 m past it
+    every block is an orchard, never pale. Past the orchards the shoulder has a few dark pines and no pink (Low
+    leaves it bare). Rejected: true contour lines across the fall line (from the lens they cut across the bank and
+    fight the run's own lines; rows at a constant distance from the edge are the bank's contours and lead the eye
+    down the run); eight rows (about 18k triangles a chunk more on High for rows the bank's crest hides from the
+    lens).
+250. **The Thousand Torii's posts stand on the lip of the cut.** The corridor is a trough the sim rides 4 m deep at
+    its limit (3 m past the edge), and its lintels clear the highest air, 21 to 34 m over the floor there, so the
+    lintels can only show from about 60 m ahead. The posts stood behind the limit in the drawn rock and showed only
+    above it; they now stand just past the limit on the trough's lip, thicker (0.72 m, black feet 0.95 m), dark and
+    light by turns, with a lit stone lantern between every second pair along the top of the cut. Rejected: lowering
+    any lintel (the air rule); taking the rock away past the limit (the sim's own ground rises to 15 m by 9 m out:
+    it is the cut); a lighter lacquer (it walks toward the grudge's rose). This is better, not finished: from the
+    chase lens it reads as a deep cut under a corridor of gates, the gates above the walls. A camera beat that lifts
+    the lens in here would show more of them; that is the main lane's call.
+251. **The Ice Cavern is a cavern.** Its roof clears 20 to 24 m of air over the floor (pops from up the slope fly
+    in), so it stands 27 m and more up, out of the lens's frame until about 60 m ahead. What reads at the lens's
+    height has to be on the walls. Each 5 m bay now has a cobalt crown (two deep masses over the middle, where the
+    vault was an even pale honeycomb), three great stalactites (one on Low) whose tips hang 0.4 m under the bay's
+    underside, which clears the air by AIR_MARGIN and 0.7 m more; on each wall a shelf of ice 5 to 14 m up with six
+    icicles under it (three on Low); and every other bay on each side, by turns, a cluster of three crystals at the
+    foot of the ice where the floor meets the wall, lit from within (pushed past white so they bloom on Medium and
+    High), leaning back into the wall so none comes over the limit. Rejected: hanging the vault lower (the air
+    rule); a smooth lid (a pipe).
+252. **Frostfang's Clear Skies goes through the night and out into the dawn.** Four stops where there were two: the
+    sun sinks onto the band (600 to 1450 m); polar night with the aurora at full over the Crevasse Fields (1700 to
+    2250); the deep of the night on the way to the Fang, the aurora past its crest at 0.75 and the band gone (2700
+    to 3180); then the dawn (3300 to 3580): the sun swings from 44 degrees left to 30 right, low (disc 3.6 degrees,
+    key light 20), rose gold on the snow and the peaks (alpenglow 0.85), the aurora down to 0.12 and the stars to
+    0.15. The sun crosses dead ahead at about 3,440 m, while the rider is under the ice (3,275 to 3,456), so the
+    cavern's far mouth opens onto the sunrise and the run comes out into it beside the Fang. The dawn's `dusk` stays
+    1: the windows and the station stay lit at first light, and the soundscape's day only goes on (the palette
+    test's rule that dusk never falls holds without a change). No pinned test value changed. Rejected: raising the
+    sun on its old bearing (it rose behind the left bank, away from the Fang); a dawn before the cavern (the card
+    promises the dawn out of it).
+253. **Pinecrest's far lakes are frozen lakes.** They were the gaps in the sea of clouds, which on Pinecrest lies at
+    the valley floor's level, so its white read as snow and its gaps (`uSeaDeep`, a saturated blue) as flat lakes. I
+    made them what they read as: on Pinecrest's Clear Skies (`massif.seaIce`) the sea's openings are frozen lakes
+    anchored in the world (their noise is placed where the lens is, so they hold still while the billows drift),
+    with a shore of drifted snow feathered into them, a body of pale ice (the deep mixed half and half with the
+    haze), long tongues of blown snow over it, and a sheen toward the sun. Low keeps it without the shore's fine
+    octave; every chaos mood keeps a sea of cloud. Rejected: closing the gaps (Pinecrest's valley would be one white
+    sheet and lose its lakes).
+254. **A telegraph line leads down to Mirror Lake.** Between the First Drop and the lake the run was a groove with
+    trees beside it. From the first leap's landing (its foot plus 140 m, at most 620 m before the lake) to the first
+    lake's shore and 80 m on, a timber pole stands every 30 m, 15.5 m past the edge, on the side the valley falls
+    away (`flankMode`), its two wires running crossarm to crossarm, in a cut through the trees 2.4 m wide. It skips
+    tree runs, ravines, tunnels, streets, bridges, ledges and the set pieces' ground, and takes up again past them.
+    From the lens its poles stand against the haze and its wires converge on the lake. A new large-kit piece
+    (`L_POLE`, before the signature pieces), Medium and High; Low draws no dressing. Rejected: an avenue of tall
+    trees (more forest); windows cut in the treeline (the bank's crest hides the valley from the lens, decision
+    117).
+255. **The towns live.** *Chimney smoke*: a street's houses record their chimney tops as the piece is made
+    (`Piece.chimneys`), about half their hearths lit (55%), and `Life` draws them in its existing smoke draw on
+    Medium and High: eight puffs to a chimney, 1.7 times a cabin's size and rising slower, lit warm on the sun side
+    and drifting with the wind; at most 22 chimneys at once, taken at a stride along the towns in view, re-placed
+    when a town comes into view (`SetPieces.chimneyKey`). Sakura's townhouses have no chimney and send up none. *Lit
+    signs*: a shop's sign board hangs on its awning's front edge, cream with its lettering's dark bar by day and lit
+    from within from dusk (the pieces' night flag is the journey's dusk as well as the night moods), and its corner
+    blade glows in its own colour; on Low a flat board over the window. *Cloth*: bunting, banners and lantern
+    strings carry a weight per vertex (held at the masts, freest at a pennant's point and in a string's middle, a
+    banner freest at its foot), and the set pieces' material swings them with the mood's wind in the vertex shader
+    (0.36 m a breezy day, 0.22 at night, 0.6 where the snow blows); across the run they move at most a third of a
+    metre, so nothing crosses the clearance. Rejected: the steam path for smoke (the wrong look, as decision 237
+    said); swinging cloth from the CPU or as its own instanced draw.
+256. **Trees shed snow when passed close.** A forest tree in the near rows (a tree run's wall, the treeline, an
+    orchard's first rows) with snow on its boughs, passed within 2.5 m of its trunk at 18 m/s or more, lets the near
+    miss's own sift fall (the same burst, placed by brush.ts on the side you passed, 15 grains, about two thirds of
+    an ordinary near miss), once a tree and at most one every 0.15 s, so scraping along a tree run's wall is a run
+    of falls, not a stream. It reads the chunks' packed forest (`Props.treesNear`), so nothing is drawn or made.
+    Snags, spires and basalt shed nothing; Frostfang sheds nothing. Low keeps it at its particle budget like every
+    burst (about seven grains): the scan is a few dozen comparisons a frame and there is no draw. Rejected: none on
+    Low (a tree run on Low would read as dead next to a near miss that sifts); a burst every frame while close (a
+    stream).
+
+### Round 6: the feel and garage lane
+
+257. **A dash puts the rider in a spirit shimmer.** For a dash's 1.4 s every rider material takes one uniform
+    (`uSpirit`): the body goes a little pale and luminous, a white-gold rim burns round the whole silhouette and
+    gold bands ripple up through the coat from the sled, about two a metre, rising at 1.6 a second. It eases in over
+    about 0.1 s and out over about 0.3 s, so it never flashes. The scarf keeps its vermillion (only a breath of the
+    rim): the player's signal does not change colour because the rider is fast. On Medium and High two faint
+    after-images (the seated rider's silhouette in white-gold glass, 0.05 s and 0.1 s behind) trail the rider; they
+    draw only where the rider is not (contract C10's stencil, as a ghost does) and only while it dashes. Low gets
+    the shimmer and no after-images, so Low draws nothing new. Reduced motion keeps the look and slows the bands to
+    a third. Rejected: a whole second rider drawn translucent behind (five draws an image, and the chase lens looks
+    straight through it at the rider); tinting the rider marigold (the lantern's colour belongs to the lights and
+    gifts; a dash already burns white-gold in the HUD's lantern).
+258. **A ward cracks the lantern open, with a beat of slow motion.** At the hit a paper lantern of marigold panels
+    (five rows of ten, translucent, densest at its rims) stands round the rider, white-gold cracks burn across it,
+    and 0.09 s later it breaks: the panels fly out as shards that keep most of the sled's speed (so they stream past
+    rather than vanish behind), spin, cool and fade, and a ring of light runs flat over the snow to 5.6 m. Shell,
+    shards and ring are one instanced draw that exists only while a ward plays (about a second). The ring and the
+    paper tint what is behind them as well as adding light, because added light alone washed out to white on the
+    snow. The slow motion is `WARD_CURVE` in `timescale.ts`: 0.3 by 50 ms, held to 0.3 s, back to full by 0.52 s, on
+    both channels. I chose both and not the render channel alone because the rider and the pack move on the feed:
+    slowing only the render slows the shards and the shaders while the sled shoots on at full speed, which reads as
+    a glitch, not a beat. The feed channel is what a stomp's hit-stop already uses; the sim stays tick-exact (only
+    how much real time is fed to the fixed loop changes), so replays and every ghost are untouched. It is triggered
+    in `app.ts` from the sim's own `ward` event, one line. Reduced motion plays none of the slow motion (the time
+    scale's rule) and the lantern breaks later (0.2 s) and gentler, with no pop of light.
+259. **Sky gates are rings of light from 60 m on every tier.** A gate was a 0.14 m tube that showed at about 20 m.
+    Now each is a ring with a deep amber edge on its silhouette, marigold through its body and a thin white-gold
+    line along its core, a shimmer running round it and one run of light chasing it, a halo that tints and glows
+    round it, a faint veil inside it (so it reads as a gate to fly through, not a hoop) and four beacon motes riding
+    it. The vertex shader holds the tube at least 2.7 px in radius and the halo 10 px wide whatever the distance, so
+    at 60 m it is a clear ring of light about fifty pixels across. Ring and halo are one geometry in one instanced
+    draw for every gate (as before), with a premultiplied blend: the ring writes opaque light, the halo tints and
+    adds. Low has no bloom, so the halo carries the glow there and the core stays under 1; on Medium and High the
+    core runs past the bloom threshold. The cap rose from 4 to 16 and every entry of `course.skyGates` draws at its
+    own radius, so a set piece's line of three smaller rings is the same family. Flying through one swells it, burns
+    it white-gold and it is gone in 0.7 s, with a ring of motes. Rejected: a pale white-gold ring (it vanished on
+    snow and on a bright sky: the first version did) and a plain additive halo (white on white).
+260. **Fireworks are streaks that rise, burst, droop and crackle.** The old shells were particle sparkles and
+    gouache dabs that read as puffs. A shell now climbs on a thin trail of embers (0.55 s at the finish, where the
+    render-time ease already slows it, 0.9 s elsewhere), bursts with a flash into a sphere of streaks (peony,
+    chrysanthemum with longer tails, a tilted ring, a willow that droops in marigold, a crackle that breaks into
+    twinkling glitter), and every streak stretches along its motion on screen, slows against the air and falls. One
+    instanced draw for every spark of every shell, drawn only while a show is in the air; Low throws about half the
+    stars and its streaks carry their own halo. Each streak takes a little of the sky away behind it (a
+    premultiplied blend with alpha), so vermillion still reads against a bright peach dusk. Colours are ART.md 13's:
+    vermillion, coral, marigold, white-gold in four pairs, never mint or rose; the finish's old periwinkle shell is
+    gone. They fire over the square for every finish (moments.ts keeps its show and its timing; only the shells
+    changed), a bigger show over the square for a win, and over the street ahead when a `moment` beat says a gates
+    set piece is won. The square's shells keep the finish show's placement (from the lens as each goes up); the
+    others are placed along the lens's own view from where the lens will be when they burst, kept near the middle of
+    the frame where the speed streaks smear least: a sled at 30 m/s closes 40 m during a shell's climb, and the
+    first placement (by the run, 70 m ahead) burst over the top of the frame. Reduced motion keeps the show, drops
+    the glitter's twinkle and most of the burst's flash.
+261. **The garage, finished.** Four new shelves beside the sleds and paints, all bought with gifts and all cosmetic;
+    nothing reaches the sim, a sled's handling, the lantern or a ghost (a test reads `src/sim` and `src/bot` for any
+    mention). Seven scarves (vermillion always dominant: two deeper stripes, cream bars, a short broad rib, a
+    fringe, narrow ink bands, cream-dipped ends with a fringe, a long slim streamer; each varies the tails' length
+    and width, the knit's pattern and the tassels, and the accent is at most cream or ink). Seven hats in vermillion
+    and the beanie's cream, each told by its outline from behind (the cuffed pom beanie, a short watch cap with a
+    thick rolled cuff, a pom over each ear, a trapper with a cream fur brim and long flaps, a ring of bobbles, a
+    pointed chullo with braided ties, a stocking cap that streams out behind; none is a signature rider's hat). Six
+    trails: plain powder, a pale honey spray, marigold sparks flicked off the runners, gold glints left twinkling in
+    the groove, a cream and gold stardust, a marigold stream straight back (warm roles only; never mint, rose, coral
+    or vermillion, because coral and vermillion are the drift's heat). Trail motes are painted grains in the powder
+    layer with a hot twin in the glow layer now and then: added light alone vanished on white snow, and that was the
+    first version. The five sled sounds are the music lane's list (`SLED_SOUNDS`); the garage sells them, saves the
+    choice and calls `AudioEngine.setSledSound` at load, after the platform's save is bound and on every change.
+    Prices run 60 to 240 gifts, the same band as the paints; there are 23 items to buy for 3,370 gifts in all, so
+    gifts keep mattering after the sleds.
+262. **The garage's shop.** The Sleds sheet is now the Garage (the title's button says Garage over the sled's name):
+    a row of tab pills (Sleds, Paint, Scarves, Hats, Trails, Sounds) over the shelf, arrow keys moving between tabs
+    as tabs do. Every shelf is the sled shop's own shape, a preview with its one action beside tiles that pick what
+    the preview shows, so the six read as one place; buying is two taps everywhere (Buy arms, Confirm spends),
+    paints included (a paint used to buy on one tap). The previews are drawn from the same numbers the game builds
+    the looks from (`garageart.ts`): a scarf tail in its pattern and length, a head and shoulders from behind in the
+    hat, a groove with its spray and motes, a drawn wave for each sound, a deck in its paint. A line under each
+    preview says what the shelf touches and that it is a look only. On a phone the tabs scroll sideways and the
+    tiles go two a row. Rejected: rendering each hat and scarf with the game's portrait renderer (a render per item
+    and a second camera angle for the back of the head; the drawings are instant and say the same thing), and a
+    listen button for sounds (the music lane owns how they sound and has no preview entry point yet).
+263. **Saves.** New optional fields: `scarves`/`scarf`, `hats`/`hat`, `trails`/`trail`, `sounds`/`sound`
+    (`SHELF_KEYS`). Known ids only, once each, the free item never stored, and the worn one must be owned or it
+    reads as the free one. A save from before them loads with the free item on every shelf and keeps its shape:
+    nothing empty is written back. `tests/garage.test.ts` holds a round 5 save (gifts, sleds, paints, mastery,
+    counts) through a load and a write, round-trips a bought set exactly, and throws mangled values at it.
+
+### Round 6: the music and sound lane
+
+264. **The music is written, not walked.** Each mountain has a song (src/audio/score.ts): a two-bar intro, an 8-bar
+    verse, an 8-bar chorus and a 4-bar bridge, one chord a bar, as scale degrees, with a hook over the chorus (a
+    4-bar phrase and an answer that turns through the borrowed chords), a sparse answering line over the verse and a
+    build chord the bar before a drop leans on. Pinecrest is D major at 112 and climbs (its chorus answer lands on
+    the bVI and bVII before home); Frostfang is F# dorian at 100 with long notes over glass bells and a half-time
+    snare; Ember Peak is C minor at 124, a riff of repeated notes over a pumping kick, with a phrygian bII before
+    the major V; Sakura Ridge is Eb major at 96, swung, pentatonic, its chorus ending on the minor iv. The title has
+    a main theme (D major at 88), and the results play it again slower in the key the run ends in, so the game opens
+    and closes on one tune. All of it is original. I rejected a theme per mood (a mood is a colour on a run, not a
+    place): a mood keeps its key, mode, tempo, drums and timbres and plays the mountain's song in its own mode, so a
+    Blizzard on Pinecrest is still Pinecrest's hook, in A minor. That is why the songs are degrees: a borrowed chord
+    or note is written as the major scale's degree plus a shift, so the bVI stays a bVI in any mode, and a test
+    holds every hook at 85% or more of its on-beat notes on its chord.
+265. **The run is arranged against the run.** The form (src/audio/form.ts) is intro, verse, chorus, verse, and so
+    on, with three things that cut across it. A drop: a set piece, a stage line or the finish lands on the band's
+    beat nearest the moment the rider gets there, the bars before it build (a riser, a snare roll rising from
+    eighths to sixteenths, hats in sixteenths, the kick out for the last two beats, the bass out for the last
+    eighth), and the drop starts a chorus on its downbeat with a crash and a boom. The engine knows when the rider
+    gets there: it reads the course's stage lines and set pieces (planMoments, the same list the director plays) and
+    the rider's speed down the course, and plans each drop when it is 3.4 s out (the finish 4.6 s), re-planning as
+    the speed changes until the drop's pad is built half a bar ahead. A drop may land on a bar line or on beat 2, 3
+    or 4; off the bar line the bar is cut to 1/4, 2/4 or 3/4, the oldest edit in the book, so the music meets the
+    picture instead of the picture waiting up to a bar for the music. A breakdown: a set piece ridden out or a
+    wipeout drops to the bridge (pad, bells recalling the hook, a shaker) at the end of the chorus's phrase, never
+    mid-line. The lift: the line into the last stage lands its drop a whole tone up. Measured on the four best pool
+    runs: stage lines and finishes landed a mean 0.18 s from the crossing (the worst 0.40 s), the set pieces 2.0 to
+    2.5 s after their cards (which come up about 2.2 s out). Two drops a few seconds apart sounded like a hiccup on
+    paper, so a drop into a chorus still in its first phrase jumps to the second phrase instead of restarting it,
+    and a set piece within 40 m of a stage line is the same drop. Rejected: a drop on the next bar line only (up to
+    2.1 s late at 112 bpm, a whole leap); stretching the tempo to meet the place (a 30% swing to make a bar fit);
+    planning from the card alone (it is 2.2 s out at a cruise, but not at 9 m/s, and a stage line has no card).
+266. **A cruise has a melody.** Round 5's lead came in at a drive of 0.82 and most runs never reached it. Now every
+    chorus carries the hook at a plain cruise, a verse carries the answering line from the second stage (or a drive
+    of 0.45), and the run opens on the hook's first bar rung on bells. The skill still owns what it owned: the clap,
+    the sparkle, the choir, the arp's octaves when the band opens up, and the hook doubled an octave up (which the
+    last stage's choruses also get).
+267. **Notes make no nodes.** The bass, the melody and its octave double, the arp (three or four lanes it rotates
+    over, panned apart) and the drums are persistent lanes (src/audio/lanes.ts) built once per deck, one a scheduler
+    pass, and every note retunes and re-envelopes them by automation. Envelopes are pairs of setTargetAtTime, which
+    start from wherever the parameter is, so a note retriggered over the last one's tail never clicks. Drums are
+    synthesized once per context in JS into buffers (src/audio/drums.ts), so a hit is one buffer source; their
+    transients are shaped where they are made (a kick is a click, a fast pitch drop, a short hold that gives it
+    punch, then a soft clip that gives its body harmonics a phone can play; a snare's first 5 ms are its loudest;
+    hats are six detuned square partials over noise, high-passed). Only pads (one voice a bar), the choir, bells,
+    sparkle and the danger pulse are still voices. Low gets a lighter arrangement of its own anyway (Music.lite):
+    two arp lanes, no octave double or sparkle, a four-note mono pad, two choir voices. Rejected: an AudioWorklet
+    synth for the whole band (the cost moves off the main thread, but it is a second engine to maintain, and the
+    lanes already cut the nodes by most of what a worklet would).
+268. **Production.** The pad is fuller: a fifth over the root fills the hole between the bass and the chord, and its
+    notes alternate between two lowpasses panned half left and half right (width from panning, which folds to mono
+    with no comb). The bass is a pure sine sub under a saw an octave of harmonics higher through a lowpass that
+    snaps shut, so the line is still there on a phone. The kick pumps the pad and the bass by automation on one gain
+    (a sidechain without a detector: 10 to 45% by mountain, deepest on Ember). The music bus has a glue compressor
+    (2.2:1 from -22 dBFS, 15 ms in, 220 ms out) with its makeup trimmed away. The master is new
+    (src/audio/master.ts): two AudioWorklet processors inlined as a blob module, no fetch. gs-limiter is a true-peak
+    limiter at -1.2 dBTP (4x oversampled peak reading, a 1.3 ms lookahead held as a sliding minimum, a box-smoothed
+    gain, stereo-linked); gs-duck is the sidechain under the effects, a power follower on the one-shots at the
+    user's effects level whose gain (at most 5 dB down) drives the music bus's side gains, so the music gives way to
+    the effects by as much as they are loud and the everyday ducks (a stomp, a big bank) are left to it. The
+    deliberate gaps (the crash, a big bank's drop, the avalanche escape, a won set piece's stop) still duck by hand.
+    Below 25 Hz is cut on the master. Where AudioWorklet is missing the old fast compressor and its trim stay, and
+    the hand ducks come back. The first build put the loudness gain after the limiter and let peaks through at +0.8
+    dBTP; the loudness probe caught it, and it now sits in front.
+269. **The loudness target is -16 LUFS integrated, true peak under -1 dBTP.** A browser game plays in a tab beside
+    video (normalized near -14) and music services (-14 to -16); at round 5's -18.2 it was the quietest thing open,
+    and the effects were doing the work. -16 is the AES streaming recommendation's loud end and leaves the effects'
+    peaks room under the ceiling without squashing them; louder would need the limiter to take more than the odd
+    transient. The music is brought up to sit with the effects (within a loudness unit, not 2.8 LU under them).
+270. **The cues are in the score.** The lantern, the dash, the ward, the sky gate and the pass keep their rush or
+    thud on the action and put their notes on the band's next sixteenth (at most 134 ms at 112 bpm), each note moved
+    to the nearest tone of the chord playing; their runs move in 32nds of the band, not in fixed 40 to 60 ms. A
+    stage line's bells and the finish's slam land on the band's drop when one is within 0.7 s (0.5 s for the
+    finish), so the hit is one hit. The finish's fanfare is the main theme's opening bar on brass, in unison with
+    the band's finale, which quotes it on the melody over a bright tonic (major whatever the mode). The crowd at the
+    line roars louder for a win (1.25x) than for last place (0.55x), and a crowd beside a close race swells (up to
+    +4 dB) and cheers harder with it.
+271. **Every set piece has a music moment.** The card (marquee 'enter') rings the hook's head softly on bells while
+    the riser builds into the drop at the place's first metre. The moment beat's 'step': gates climb the pentatonic
+    ladder a step a gate on the band's sixteenths, and a full chain ends on a chord; rings ring a chord that holds
+    and fills (root, third, fifth and octave); steps hit a taiko on the band's eighth, rising a whole tone a step.
+    'lead' is a rising brass stab, 'trail' a falling bell pair, 'close' a low pulse on the beat with a brief dip,
+    'won' a stop and the hook's head on brass and bells a whole tone up ending on a bright chord, 'lost' three soft
+    bells falling to the tonic, 'miss' a dull sagging note. 'start' and anything unknown are silent (the drop
+    already marks the start).
+272. **Sled sounds are the runners' timbre, nothing else.** Steel Runners is the bed as it was. Sleigh Bells adds a
+    string of bells shaken harder as you carve; Old Timber a creak of boards in the crunch and a wooden knock on a
+    clean landing; Glass Chime a rubbed glass singing the key's tonic and fifth; Lantern Song a warm hum on the
+    tonic whose lowpass opens a step for each full lantern (read from the sim's lantern, dash and ward events). Each
+    is a small fixed graph built when it is chosen in the garage (never in a run frame) and moved by automation; a
+    landing's body swaps its parts for the same number of nodes. No cue changes, no ghost's sound.
+273. **The jukebox and the listening guide.** `?debug&jukebox` opens a panel over the title (src/audio/jukebox.ts,
+    loaded with a dynamic import from main.ts behind the debug switch, so the shipped game carries none of it) that
+    plays the main theme, each mountain's run music by stage and section, drops, the lift, the finale, the results'
+    reprise, every set piece's cue and every cue in the score, by driving the real engine with synthetic frames and
+    beats. LISTENING.md is the route for the owner's ears and the eight calls only an ear can make.
+
+### Round 6: what it measured
+
+274. **What the round measured, and what it did not reach.** The README's "Round 6 play-test" has the tables. In the lab
+    the set pieces spread by skill and by kind of skill (the careful line wins 18% of those it meets, mid 69%; the
+    steps are the careful rider's, the races the fast one's, the rings want speed held to a window), the novice-to-expert
+    gap holds at about 19 s, and every pilot finishes as often as before but one novice run in 24. In the browser a
+    finisher meets a set piece every 39 to 48 s. The mix is -16 LUFS on all four mountains with its true peak at -1.2
+    dBTP, the music sits 0.8 LU under the effects where it sat 2.8 under, and the band costs Low less main-thread time
+    than round 5's. High, Medium and the phone hold 60 fps; settled frames carry no new draw call on any tier; the build
+    is 776 KB zipped, 53 KB more. Three things did not land. Low at 6x on a very first run is level with round 5 within
+    about 5%, not better: the frame's JS is the same, so what remains is page work round the riders' labels, and naming
+    only the nearest rider on a struggling device bought 1 to 2 fps inside the noise and was not kept; hiding labels
+    altogether stays the owner's call (decision 217). The first frame is 70 ms later, inside the builds' overlap. And
+    in the browser the skilled pilots' races read a little less live (0.61 to 0.71 of a run against 0.70 to 0.85), as
+    they ride faster on the lanterns their set pieces pay, on four runs a pilot, inside the noise. None of it has been
+    played or heard by a person.

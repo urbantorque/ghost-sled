@@ -87,6 +87,8 @@ export interface ScapeFrame {
   speed: number;
   crashed: boolean;
   grounded: boolean;
+  /** 0..1 race closeness (the director's): a crowd watching a close race swells and roars with it. */
+  race?: number;
 }
 
 export class Soundscape {
@@ -111,6 +113,8 @@ export class Soundscape {
   private vistaArmed = true;
   private enclosedWas = 0;
   private crowdWas = 0;
+  /** The race's closeness, smoothed (the crowd swells with it). */
+  private raceK = 0;
   private lastCheer = -9;
   private lastScatter = -9;
   /** When each kind of ambient one-shot may next play (scheduler pass). */
@@ -332,8 +336,13 @@ export class Soundscape {
 
     // The crowd, and a ride-through village's bustle in the same voices, lower and calmer.
     const crowd = Math.max(v.crowd, v.bustle * 0.6);
-    this.crowdG.to(LEVEL.crowd * crowd * bandComp(750, 0.8, sr) * 0.25, now, 0.25);
-    this.crowdF.to(v.bustle > v.crowd ? 520 : 760, now, 0.5);
+    // A close race lifts a crowd that is watching it (not a village going about its day): up to +4 dB,
+    // brighter, and it cheers harder (race in cheer()).
+    const race = f.crashed ? 0 : Math.max(0, Math.min(1, f.race ?? 0));
+    this.raceK += (race - this.raceK) * (1 - Math.exp(-Math.max(0, dt) / 0.8));
+    const swell = 1 + 0.6 * this.raceK * (v.crowd >= v.bustle ? 1 : 0);
+    this.crowdG.to(LEVEL.crowd * crowd * swell * bandComp(750, 0.8, sr) * 0.25, now, 0.25);
+    this.crowdF.to(v.bustle > v.crowd ? 520 : 760 + 240 * this.raceK, now, 0.5);
     this.crowdLP.to(6500 - 5000 * v.crowdBehind, now, 0.3);
     this.crowdPan?.to(v.crowdWide ? 0 : v.crowdPan, now, 0.15);
     // The crowd that sees you coming cheers you past (once, as it comes up to full).
@@ -533,7 +542,7 @@ export class Soundscape {
     p.cancelScheduledValues(t);
     p.setTargetAtTime(1 + 1.6 * k, t, 0.07);
     p.setTargetAtTime(1, t + 0.7, 0.8);
-    const lvl = LEVEL.cheer * k * Math.sqrt(v.crowd);
+    const lvl = LEVEL.cheer * k * Math.sqrt(v.crowd) * (1 + 0.5 * this.raceK);
     this.play('cheer', t, lvl, v.crowdWide ? rand(-0.3, 0.3) : v.crowdPan, 7000 - 4500 * v.crowdBehind, rand(0.94, 1.06));
     if (this.biome === 'blossom') this.play('taiko', t + 0.05, 0.5 * lvl / LEVEL.cheer, v.crowdPan, 5000, 1);
     else if (Math.random() < 0.6) this.play('whistle', t + rand(0.1, 0.3), 0.3 * k * v.crowd, v.crowdPan + rand(-0.25, 0.25), 8000, rand(0.95, 1.08));

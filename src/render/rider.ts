@@ -1,10 +1,11 @@
-import { AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, Material, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, InstancedBufferAttribute, InstancedMesh, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { FLOW_HEX } from '../game/beats';
+import { type HatId, type ScarfDef, SCARVES } from '../game/garage';
 import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
-import { makeToonMaterial, shared, type ToonOptions } from './materials';
-import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
+import { ghostStencil, makeToonMaterial, shared, type ToonOptions } from './materials';
+import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -126,6 +127,54 @@ const TUMBLE_BOUNCE = 0.85;
 const GRIND_YAW = 0.42;
 /** Torso roll off vertical, at most (radians): about 35 degrees. */
 const MAX_ROLL = 0.61;
+/** A dash's after-images: frames of the rig's pose kept, and each image's lag (render seconds) and strength. */
+const ECHO_HIST = 40;
+const ECHO_LAGS: readonly (readonly [number, number])[] = [
+  [0.03, 0.34],
+  [0.065, 0.18],
+];
+/** A scarf's tassels: strands at each tip, and how long they hang. */
+const TASSELS = 4;
+const TASSEL_L = 0.11;
+const CREAM_KNIT = new Color('#F3E6D4');
+const INK_KNIT = new Color('#1A2140');
+
+/** The after-image's glass: a white-gold fresnel edge with a breath of light inside, added over the scene. */
+function echoMaterial(): ShaderMaterial {
+  const m = new ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    uniforms: { uColor: { value: new Color('#FFE29A') } },
+    vertexShader: /* glsl */ `
+      attribute float aEcho;
+      varying float vA;
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        vec4 wp = modelMatrix * instanceMatrix * vec4(position, 1.0);
+        // An image near the lens would fill the frame with glass: it fades out inside about 3.5 m.
+        vA = aEcho * smoothstep(2.2, 3.6, distance(wp.xyz, cameraPosition));
+        vN = normalize(mat3(modelMatrix * instanceMatrix) * normal);
+        vV = normalize(cameraPosition - wp.xyz);
+        gl_Position = projectionMatrix * viewMatrix * wp;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uColor;
+      varying float vA;
+      varying vec3 vN;
+      varying vec3 vV;
+      void main() {
+        float f = 1.0 - abs(dot(normalize(vN), normalize(vV)));
+        gl_FragColor = vec4(linearToOutputTexel(vec4(uColor * (pow(f, 1.6) * 1.1 + 0.2) * vA, 1.0)).rgb, 1.0);
+      }
+    `,
+  });
+  ghostStencil(m);
+  return m;
+}
+
 /** Results only: dazed stars orbiting the beanie (neck space), and how many. */
 const STAR_Y = 0.5;
 const STAR_R = 0.32;
@@ -194,6 +243,9 @@ interface RiderUniforms {
   hem: { value: number };
   /** Standing up on the sled (0 seated to 1 standing): the legs out in front swing down. */
   stand: { value: number };
+  /** A dash (round 6): x how much of the spirit shimmer shows (0 to 1, eased), y the rider's base height in
+   *  the world (the glow bands rise from it), z how fast the bands rise (slower under reduced motion). */
+  spirit: { value: Vector3 };
 }
 
 /** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
@@ -273,12 +325,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   m.uniforms.uFlowC = { value: FLOW_C };
   m.uniforms.uSunRim = { value: sunRim };
   m.uniforms.uHorizonRim = { value: horizonRim };
+  m.uniforms.uSpirit = u.spirit;
   // The toon shader dissolves whatever sits on the sight line from the camera to the rider. The
   // rider itself must never dissolve (least of all the scarf, which streams back toward the
   // camera), so its own focus sits far overhead: that sight line runs straight up, clear of it.
   m.uniforms.uFocus = { value: new Vector3(0, 1e6, 0) };
   const before = m.fragmentShader;
-  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;');
+  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;');
   fs = fs.replace(
     'vec3 n = normalize(vNormalW);',
     `vec3 n = normalize(vNormalW);
@@ -358,6 +411,28 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           float flowK = 0.55 * flowE + uFlow.y;
           col += uFlowC * smoothstep(mix(0.55, 0.38, uFlow.x), 0.94, riderEdge) * flowK * 1.7 * rimCut;
         #endif
+        // A dash (round 6): the rider as a spirit for its 1.4 s. The body goes pale and luminous, a white-gold
+        // rim burns round the whole silhouette, and bands of light ripple up through the coat and the scarf
+        // from the sled. Past the bloom threshold on Medium and High; on Low the rim and bands read as
+        // white-gold on their own. Eased in and out (uSpirit.x), never a flash.
+        if (uSpirit.x > 0.001) {
+          float sk = uSpirit.x;
+          float sh = vWorldPos.y - uSpirit.y;
+          float wob = 0.035 * sin(vWorldPos.x * 11.0 + uTime * 6.0 * uSpirit.z) + 0.035 * sin(vWorldPos.z * 9.0 - uTime * 5.0 * uSpirit.z);
+          float ph = fract((sh + wob) * 2.4 - uTime * 1.6 * uSpirit.z);
+          float band = smoothstep(0.0, 0.14, ph) * (1.0 - smoothstep(0.14, 0.36, ph));
+          // (Linear light: a pale white-gold for the rim, a deeper gold for the bands, so the bands still
+          // read over the rim's glow and over the snow behind.)
+          vec3 spiritC = vec3(1.0, 0.86, 0.5);
+          vec3 bandC = vec3(1.0, 0.74, 0.34);
+          #ifdef DOUBLE_SIDED
+            // The scarf keeps the player's vermillion (ART.md section 1): only a breath of the rim.
+            col += spiritC * smoothstep(0.5, 0.95, riderEdge) * 0.5 * sk * rimCut;
+          #else
+            col = mix(col, col * 0.7 + spiritC * 0.22, 0.25 * sk);
+            col += (spiritC * smoothstep(0.32, 0.92, riderEdge) * 1.5 + bandC * band * 1.1) * sk * rimCut;
+          #endif
+        }
         `;
   const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
   fs = fs.replace(anchor, rim + anchor);
@@ -453,7 +528,24 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) } };
+  /** The head on the neck and the tumbling wreck's head (both rebuilt for a hat from the garage). */
+  private head: Mesh;
+  private crashHead: Mesh;
+  private hat: HatId = 'beanie';
+  /** The scarf from the garage (garage.ts): its tails' length, width, knit pattern and tassels. */
+  private scarfLook: ScarfDef = SCARVES[0];
+  /** A dash's after-images: two faint white-gold silhouettes of the seated rider a few hundredths of a
+   *  second behind it (one instanced draw, only while it dashes, never on Low), drawn only where the
+   *  rider is not (contract C10's stencil, as a ghost is). */
+  private echo: InstancedMesh;
+  private echoA: InstancedBufferAttribute;
+  private echoHist: Matrix4[] = Array.from({ length: ECHO_HIST }, () => new Matrix4());
+  private echoT = new Float64Array(ECHO_HIST);
+  private echoHead = 0;
+  private echoN = 0;
+  private echoSeat = 0;
+  private echoOn = false;
   /** The reaction playing (rider cue), its seconds and side, and the last cue count seen (NaN until
    *  the first frame of a run, which only takes the count: a cue from before is never played). */
   private react: RiderCue | null = null;
@@ -514,6 +606,7 @@ export class Rider {
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
     const head = new Mesh(headGeo, mat);
+    this.head = head;
     this.neck.position.copy(RIDER_NECK);
     this.neck.add(head);
     const armGeo = riderArmGeometry();
@@ -547,16 +640,11 @@ export class Rider {
       this.tails.push(t);
     }
     for (let r = 0; r < TAIL_ROWS; r++) this.rows.push(new Vector3());
-    const verts = 2 * TAIL_ROWS * 2;
+    // Two ribbons of TAIL_ROWS rows, then each tail's tassels (three vertices a strand, collapsed to a
+    // point when the scarf has none).
+    const verts = 2 * TAIL_ROWS * 2 + 2 * TASSELS * 3;
     this.tailGeo = new BufferGeometry();
     const col = new Float32Array(verts * 3);
-    for (let i = 0; i < verts; i++) {
-      // A touch deeper toward the knot, where the cloth bunches, and two knit stripes near the
-      // tip that make the flutter easy to read.
-      const r = Math.floor(i / 2) % TAIL_ROWS;
-      const k = r < 3 ? 0.86 : r === TAIL_ROWS - 6 || r === TAIL_ROWS - 3 ? 0.7 : 1;
-      col.set([RIDER_COLORS.accent.r * k, RIDER_COLORS.accent.g * k, RIDER_COLORS.accent.b * k], i * 3);
-    }
     const idx: number[] = [];
     for (let k = 0; k < 2; k++) {
       for (let r = 0; r < TAIL_ROWS - 1; r++) {
@@ -564,10 +652,12 @@ export class Rider {
         idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
       }
     }
+    for (let i = 2 * TAIL_ROWS * 2; i < verts; i += 3) idx.push(i, i + 1, i + 2);
     this.tailGeo.setAttribute('position', new BufferAttribute(new Float32Array(verts * 3), 3).setUsage(DynamicDrawUsage));
     this.tailGeo.setAttribute('normal', new BufferAttribute(new Float32Array(verts * 3), 3).setUsage(DynamicDrawUsage));
     this.tailGeo.setAttribute('color', new BufferAttribute(col, 3));
     this.tailGeo.setIndex(idx);
+    this.paintScarf();
     // A ribbon is all edge when seen at a grazing angle, so a fresnel rim would wash the whole face
     // out: the scarf keeps only a trace of it and stays saturated vermillion.
     this.scarf = new Mesh(this.tailGeo, riderMaterial({ coolShade: 0.35, doubleSided: true, rim: 0.15 }, this.u, 0.12, 0));
@@ -581,6 +671,7 @@ export class Rider {
     this.crashArmL.position.copy(this.armL.position);
     this.crashArmR.position.copy(this.armR.position);
     const crashHead = new Mesh(headGeo, mat);
+    this.crashHead = crashHead;
     this.crashNeck.position.copy(RIDER_NECK);
     // The dazed head turns first, then nods and lolls about its turned axes.
     this.crashNeck.rotation.order = 'YXZ';
@@ -606,6 +697,123 @@ export class Rider {
       this.stars.add(s);
     }
     this.stars.visible = false;
+
+    this.echoA = new InstancedBufferAttribute(new Float32Array(ECHO_LAGS.length), 1).setUsage(DynamicDrawUsage);
+    const echoGeo = ghostRiderGeometry(false, sledSeat(0));
+    echoGeo.setAttribute('aEcho', this.echoA);
+    this.echo = new InstancedMesh(echoGeo, echoMaterial(), ECHO_LAGS.length);
+    this.echo.count = 0;
+    this.echo.visible = false;
+    this.echo.frustumCulled = false;
+  }
+
+  /** The garage's hat (garage.ts): the head and the wreck's head are rebuilt wearing it. */
+  setHat(id: HatId): void {
+    if (id === this.hat) return;
+    this.hat = id;
+    const geo = riderHeadGeometry(false, id).translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
+    this.head.geometry.dispose();
+    this.head.geometry = geo;
+    this.crashHead.geometry = geo;
+  }
+
+  /** The garage's scarf: its tails' length and width, its knit and its tassels. The wrap round the neck
+   *  stays the classic vermillion knot. */
+  setScarf(def: ScarfDef): void {
+    if (def === this.scarfLook) return;
+    this.scarfLook = def;
+    for (let k = 0; k < this.tails.length; k++) this.tails[k].seg = TAIL_SEG[k] * def.length;
+    this.paintScarf();
+  }
+
+  /** The scarf's knit in its vertex colours: vermillion, a touch deeper at the knot where the cloth bunches,
+   *  and the scarf's own pattern down each tail (the classic's two deeper stripes near the tip make the
+   *  flutter easy to read). Its accent, if any, is cream or ink, never a third colour. */
+  private paintScarf(): void {
+    const col = this.tailGeo.getAttribute('color') as BufferAttribute;
+    const def = this.scarfLook;
+    const R = TAIL_ROWS;
+    const V = RIDER_COLORS.accent;
+    const A = def.accent === 'cream' ? CREAM_KNIT : def.accent === 'ink' ? INK_KNIT : V;
+    const c = new Color();
+    for (let i = 0; i < 2 * R * 2; i++) {
+      const r = Math.floor(i / 2) % R;
+      let k = r < 3 ? 0.86 : 1;
+      let accent = false;
+      switch (def.pattern) {
+        case 'tipStripes':
+          if (r === R - 6 || r === R - 3) k = 0.7;
+          break;
+        case 'bars':
+          accent = r === R - 7 || r === R - 6 || r === R - 4 || r === R - 3;
+          break;
+        case 'tip':
+          accent = r >= R - 3;
+          if (r === R - 4) k = 0.8;
+          break;
+        case 'bands':
+          accent = r >= 4 && r % 4 === 0;
+          break;
+        case 'rib':
+          k = r % 2 === 0 ? 0.8 : 1;
+          break;
+        case 'plain':
+          break;
+      }
+      c.copy(accent ? A : V).multiplyScalar(accent ? 1 : k);
+      col.setXYZ(i, c.r, c.g, c.b);
+    }
+    // Tassels in the accent if it is cream, else a deeper vermillion.
+    const t = def.accent === 'cream' ? CREAM_KNIT : c.copy(V).multiplyScalar(0.82);
+    for (let i = 2 * R * 2; i < col.count; i++) col.setXYZ(i, t.r, t.g, t.b);
+    col.needsUpdate = true;
+  }
+
+  /** A dash's spirit shimmer, eased (0 to 1): uniforms on every rider material, plus the after-images
+   *  when `echoes` (Medium and High). `calm` (reduced motion) slows the bands' rise. */
+  setSpirit(k: number, echoes: boolean, calm: boolean): void {
+    const s = this.u.spirit.value;
+    s.x = Math.max(0, Math.min(1, k));
+    s.z = calm ? 0.35 : 1;
+    this.echoOn = echoes && !this.crash;
+  }
+
+  /** Keeps the rig's pose for the after-images and places them, a few hundredths of a second behind. */
+  private tickEcho(time: number): void {
+    const k = this.u.spirit.value.x;
+    if (k <= 0.02 || !this.echoOn) {
+      this.echo.visible = false;
+      this.echoN = 0;
+      return;
+    }
+    if (this.echoSeat !== this.sledId && this.sledId >= 0) {
+      // The images sit the rider as this sled seats it.
+      this.echoSeat = this.sledId;
+      const g = ghostRiderGeometry(false, sledSeat(this.sledId));
+      g.setAttribute('aEcho', this.echoA);
+      this.echo.geometry.dispose();
+      this.echo.geometry = g;
+    }
+    this.echoHead = (this.echoHead + 1) % ECHO_HIST;
+    this.echoHist[this.echoHead].copy(this.leanG.matrixWorld);
+    this.echoT[this.echoHead] = time;
+    this.echoN = Math.min(ECHO_HIST, this.echoN + 1);
+    const a = this.echoA.array as Float32Array;
+    let n = 0;
+    for (const [lag, strength] of ECHO_LAGS) {
+      for (let j = 0; j < this.echoN; j++) {
+        const i = (this.echoHead - j + ECHO_HIST) % ECHO_HIST;
+        if (time - this.echoT[i] < lag) continue;
+        this.echo.setMatrixAt(n, this.echoHist[i]);
+        a[n] = strength * k;
+        n++;
+        break;
+      }
+    }
+    this.echo.count = n;
+    this.echo.visible = n > 0;
+    this.echo.instanceMatrix.needsUpdate = true;
+    this.echoA.needsUpdate = true;
   }
 
   private sledId = 0;
@@ -641,7 +849,7 @@ export class Rider {
 
   /** Objects to add to the scene (scarf and crash parts live in world space). */
   get objects(): Object3D[] {
-    return [this.root, this.scarf, this.crashBody, this.crashSled, this.stars];
+    return [this.root, this.scarf, this.crashBody, this.crashSled, this.stars, this.echo];
   }
 
   /** Show or hide the rider; the world-space scarf follows (it also stays with a tumbling body). */
@@ -869,6 +1077,8 @@ export class Rider {
     this.planeN.copy(p.normal);
     this.planeP.copy(p.pos).addScaledVector(p.normal, 0.26);
     this.updateScarf(dt, time, p.vel, p.airborne, p.heading + p.airYaw);
+    this.u.spirit.value.y = p.pos.y;
+    this.tickEcho(time);
   }
 
   /** This frame's arms: left swing, left out, right swing, right out (radians). */
@@ -1593,13 +1803,67 @@ export class Rider {
         const s = Math.sin(th);
         W.multiplyScalar(c).addScaledVector(B, s);
         B.crossVectors(W, T);
-        const hw = 0.5 * tailWidth(u);
+        const hw = 0.5 * tailWidth(u) * this.scarfLook.width;
         const p = rows[r];
         pos.setXYZ(v, p.x - W.x * hw, p.y - W.y * hw, p.z - W.z * hw);
         pos.setXYZ(v + 1, p.x + W.x * hw, p.y + W.y * hw, p.z + W.z * hw);
         nrm.setXYZ(v, B.x, B.y, B.z);
         nrm.setXYZ(v + 1, B.x, B.y, B.z);
         v += 2;
+      }
+    }
+    // The tassels: thin strands fanned off each tip along its last run, drooping a little (collapsed to a
+    // point when the scarf has none).
+    const fringe = this.scarfLook.tassels;
+    let tv = 2 * TAIL_ROWS * 2;
+    for (let k = 0; k < 2; k++) {
+      const end = (k * TAIL_ROWS + TAIL_ROWS - 1) * 2;
+      const lx = pos.getX(end);
+      const ly = pos.getY(end);
+      const lz = pos.getZ(end);
+      const rx = pos.getX(end + 1);
+      const ry = pos.getY(end + 1);
+      const rz = pos.getZ(end + 1);
+      // The run of the tip (this tail's last two rows), recomputed from the ribbon itself.
+      const px = (pos.getX(end - 2) + pos.getX(end - 1)) / 2;
+      const py = (pos.getY(end - 2) + pos.getY(end - 1)) / 2;
+      const pz = (pos.getZ(end - 2) + pos.getZ(end - 1)) / 2;
+      const ex = (lx + rx) / 2;
+      const ey = (ly + ry) / 2;
+      const ez = (lz + rz) / 2;
+      let dx = ex - px;
+      let dy = ey - py;
+      let dz = ez - pz;
+      const dl = Math.hypot(dx, dy, dz) || 1;
+      dx /= dl;
+      dy /= dl;
+      dz /= dl;
+      const nx = nrm.getX(end);
+      const ny = nrm.getY(end);
+      const nz = nrm.getZ(end);
+      for (let j = 0; j < TASSELS; j++) {
+        if (!fringe) {
+          for (let q = 0; q < 3; q++) {
+            pos.setXYZ(tv + q, ex, ey, ez);
+            nrm.setXYZ(tv + q, nx, ny, nz);
+          }
+          tv += 3;
+          continue;
+        }
+        const f0 = j / TASSELS;
+        const f1 = (j + 0.72) / TASSELS;
+        const fm = (f0 + f1) / 2;
+        const spread = (fm - 0.5) * 0.9;
+        const len = TASSEL_L * (0.85 + 0.3 * ((j * 37 + k * 11) % 5) / 4) * this.scarfLook.length;
+        const wave = Math.sin(time * 14 + j * 1.7 + k) * 0.015;
+        const bx = lx + (rx - lx) * fm;
+        const by = ly + (ry - ly) * fm;
+        const bz = lz + (rz - lz) * fm;
+        pos.setXYZ(tv, lx + (rx - lx) * f0, ly + (ry - ly) * f0, lz + (rz - lz) * f0);
+        pos.setXYZ(tv + 1, lx + (rx - lx) * f1, ly + (ry - ly) * f1, lz + (rz - lz) * f1);
+        pos.setXYZ(tv + 2, bx + dx * len + (rx - lx) * spread + nx * wave, by + dy * len - 0.025 + (ry - ly) * spread + ny * wave, bz + dz * len + (rz - lz) * spread + nz * wave);
+        for (let q = 0; q < 3; q++) nrm.setXYZ(tv + q, nx, ny, nz);
+        tv += 3;
       }
     }
     pos.needsUpdate = true;

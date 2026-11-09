@@ -7,6 +7,7 @@ import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
 import type { Prerender } from './prerender';
+import type { SledSoundId } from './sledsounds';
 import { BRIGHT_ARP, BRIGHT_VOICING, Key, brightRoot, fit, ladder, ladderIndexOf, mtof } from './theory';
 import { PRIO, Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './voices';
 
@@ -113,6 +114,20 @@ export function giftParts(v: Voice, t: number, f1: number, f2: number, f3: numbe
   }
 }
 
+/** What the cues read from the band (music.ts Music). */
+export interface Band {
+  grid(): { t0: number; dur: number } | null;
+  chord(): { root: number; tones: readonly number[] } | null;
+  landing(): { t: number; kind: string } | null;
+  /** When the band last landed a drop (AudioContext time, -Infinity before any). */
+  readonly landedAt: number;
+  /** The hook's head as MIDI pitches and lengths in seconds, in the key playing (plus `lift` semitones). */
+  head(lift: number): { m: number; at: number; dur: number }[];
+  /** The main theme's opening bar the same way (the finish's fanfare). */
+  theme(): { m: number; at: number; dur: number }[];
+  readonly drums: { taiko: AudioBuffer; crash: AudioBuffer; boom: AudioBuffer };
+}
+
 interface Job {
   t: number;
   v: Voice | null;
@@ -162,6 +177,14 @@ export class Sfx {
   bed: ((t: number, hold: number, depth: number) => void) | null = null;
   /** Rendered takes of fixed sounds (Core wires its Prerender): a gift pickup plays as one source. */
   renders: Prerender | null = null;
+  /** The band (Core wires its Music): the grid the tonal cues land on, the chord they pick tones from, the
+   *  landing a stage line or the finish lines up with, and the hook's head the set pieces' stingers quote. */
+  band: Band | null = null;
+  /** The sidechain is live (the master chain loaded): the music gives way under the effects by itself, so
+   *  the everyday ducks (a stomp, a big bank) are left to it. */
+  sidechained = false;
+  /** The garage's sled sound: the timbre of your own landings (never a cue's). */
+  sled: SledSoundId = 'runners';
 
   constructor(
     private readonly ctx: BaseAudioContext,
@@ -243,7 +266,7 @@ export class Sfx {
         if (this.bankBeats > 0) this.bankBeats--;
         else {
           this.bank(e.points, t);
-          if (e.points >= 1500 && this.music) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
+          if (e.points >= 1500 && this.music && !this.sidechained) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
         }
         break;
       case 'comboLost':
@@ -296,7 +319,9 @@ export class Sfx {
         duck.duckSeq(t, 0.12, 0.25, 0.3, 0.7, 0.9);
         break;
       case 'land':
-        if (e.quality === 'perfect') duck.duck(DUCK_STOMP, t, 0.18, 0.25);
+        if (e.quality === 'perfect') {
+          if (!this.sidechained) duck.duck(DUCK_STOMP, t, 0.18, 0.25);
+        }
         else if (e.airtime >= BIG_DROP_S) duck.duck(0.72, t, 0.2, 0.35);
         break;
       case 'chaos':
@@ -485,7 +510,7 @@ export class Sfx {
    *  is its steal class (voices.ts PRIO): past the pool's cap the quietest, least important voice
    *  goes first. */
   private voice(t: number, send: number, pan = 0, level = 1, prio: number = PRIO.normal): Voice {
-    return this.pool.voice(t, level * SFX_TRIM, this.bus.dry, this.bus.wet, send, pan, prio);
+    return this.pool.voice(t, level * SFX_TRIM, this.bus.shots ?? this.bus.dry, this.bus.wet, send, pan, prio);
   }
 
   /** Run `fn(t)` now, or from a later scheduler pass if t is far enough ahead. */
@@ -506,6 +531,39 @@ export class Sfx {
   /** Frequency of pentatonic ladder step i in the current key. */
   private note(i: number): number {
     return mtof(ladder(this.key(), i));
+  }
+
+  /**
+   * The next point on the band's grid at or after t, every `every` 16ths (2: the eighths, which swing never
+   * moves), if it comes within `wait` seconds; else t itself (no band, or the grid too far). A cue's
+   * transient (its rush of air, its thud) stays on the action; its notes land in time with the band.
+   */
+  private onGrid(t: number, every: number, wait: number): number {
+    const g = this.band?.grid();
+    if (!g || !(g.dur > 0)) return t;
+    const span = g.dur * every;
+    const tq = g.t0 + Math.ceil((t - g.t0 - 1e-4) / span) * span;
+    return tq >= t - 1e-4 && tq - t <= wait ? Math.max(t, tq) : t;
+  }
+
+  /** The time between notes of a cue's run: a 32nd of the band (67 ms at 112 bpm), else `dflt`. */
+  private runGap(dflt: number): number {
+    const g = this.band?.grid();
+    return g && g.dur > 0 ? Math.min(0.09, Math.max(0.04, g.dur / 2)) : dflt;
+  }
+
+  /** Ladder step i, moved to the nearest step (i, i + 1, i - 1) that is a tone of the chord the band plays,
+   *  so a cue's notes sit in the chord as well as the key. */
+  private chordNote(i: number): number {
+    const k = this.key();
+    const c = this.band?.chord();
+    if (!c) return mtof(ladder(k, i));
+    const pcs = c.tones.map((x) => (((c.root + x) % 12) + 12) % 12);
+    for (const d of [0, 1, -1, 2]) {
+      const m = ladder(k, i + d);
+      if (pcs.includes(((m % 12) + 12) % 12)) return mtof(m);
+    }
+    return mtof(ladder(k, i));
   }
 
   /** A tick of noise high-passed at 4 kHz (the bank's clickNoise, filtered once, not per click). */
@@ -668,9 +726,7 @@ export class Sfx {
     }
     const v = this.voice(t, 0.08);
     if (q === 'clean') {
-      thump(v, t, 120, 52, 0.32 * imp, 0.06);
-      puff(v, t, 0.18 * imp, 2600, 700, 0.09);
-      crumble(v, t, 0.09 * imp, 1500, 0.9, 2, 0.06);
+      this.touchdown(v, t, imp);
       return;
     }
     // Sketchy: a thud, a scrape that judders, and a tone that wobbles and sags.
@@ -687,6 +743,35 @@ export class Sfx {
     o.frequency.setValueAtTime(f, t);
     o.frequency.exponentialRampToValueAtTime(f * 0.8, t + 0.45);
     v.lfo(7, f * 0.03, o.frequency, t, we);
+  }
+
+  /** A clean landing's body in the sled's own timbre (the same few nodes whichever it is). */
+  private touchdown(v: Voice, t: number, imp: number): void {
+    switch (this.sled) {
+      case 'bells':
+        thump(v, t, 120, 52, 0.26 * imp, 0.06);
+        puff(v, t, 0.14 * imp, 2600, 700, 0.08);
+        v.buffer(v.bank.jingle, t, t + 0.4, v.gain(0.12 * imp, v.out), 1.15, false);
+        break;
+      case 'timber':
+        this.knock(v, t, 520, 0.22 * imp);
+        puff(v, t, 0.13 * imp, 1800, 500, 0.08);
+        break;
+      case 'glass':
+        thump(v, t, 120, 52, 0.24 * imp, 0.06);
+        puff(v, t, 0.14 * imp, 2600, 700, 0.08);
+        ping(v, t + 0.005, this.chordNote(12), 0.03 * imp, 0.35);
+        break;
+      case 'lantern':
+        thump(v, t, 96, 44, 0.32 * imp, 0.08);
+        puff(v, t, 0.12 * imp, 1600, 500, 0.08);
+        fmBell(v, t + 0.005, this.chordNote(5), 0.025 * imp, 0.4, 2, 0.6);
+        break;
+      default:
+        thump(v, t, 120, 52, 0.32 * imp, 0.06);
+        puff(v, t, 0.18 * imp, 2600, 700, 0.09);
+        crumble(v, t, 0.09 * imp, 1500, 0.9, 2, 0.06);
+    }
   }
 
   private perfect(tricks: number, late: boolean, t: number): void {
@@ -927,12 +1012,14 @@ export class Sfx {
 
   /** A whole lantern lights: a warm two-note swell, a step higher for each lantern now lit, so three lit
    *  is heard as full without a look at the HUD. */
-  private lanternLit(cells: number, t: number): void {
+  private lanternLit(cells: number, t0: number): void {
+    const t = this.onGrid(t0, 1, 0.16);
+    const gap = this.runGap(0.07);
     const v = this.voice(t, 0.35, 0, 1.4);
     const step = Math.max(0, Math.min(2, cells - 1)) * 2;
-    fmBell(v, t, this.note(7 + step), 0.07, 0.9, 2, 0.8);
-    fmBell(v, t + 0.07, this.note(11 + step), 0.06, 1.1, 2, 0.8);
-    ping(v, t + 0.07, this.note(18 + step), 0.025, 0.4);
+    fmBell(v, t, this.chordNote(7 + step), 0.07, 0.9, 2, 0.8);
+    fmBell(v, t + gap, this.chordNote(11 + step), 0.06, 1.1, 2, 0.8);
+    ping(v, t + gap, this.chordNote(18 + step), 0.025, 0.4);
   }
 
   /** A dash: the air tears open (a rising rush) and a glass shimmer rides on it for the dash's length. */
@@ -940,7 +1027,12 @@ export class Sfx {
     const v = this.voice(t, 0.4, 0, 1.5);
     whoosh(v, t, 0.5, 500, 5200, 0.22, 1.1);
     whoosh(v, t + 0.05, 1.3, 2600, 7000, 0.05, 2.5, v.bank.white);
-    for (const [i, d] of [[12, 0], [16, 0.06], [19, 0.12]] as const) fmBell(v, t + d, this.note(i), 0.05, 1.2, 3.5, 1.1);
+    const tb = this.onGrid(t, 1, 0.16);
+    const gap = this.runGap(0.06);
+    [12, 16, 19].forEach((i, j) => {
+      const f = this.chordNote(i);
+      this.at(v, tb + j * gap, (tn) => fmBell(v, tn, f, 0.05, 1.2, 3.5, 1.1));
+    });
   }
 
   /** Solid again: the shimmer folds back down. */
@@ -955,14 +1047,24 @@ export class Sfx {
     const v = this.voice(t, 0.45, 0, 1.6);
     thump(v, t, 110, 50, 0.28, 0.06);
     puff(v, t, 0.1, 1400, 500, 0.05);
-    for (const [i, d] of [[19, 0.02], [14, 0.07], [10, 0.13]] as const) fmBell(v, t + d, this.note(i), 0.06, 0.7, 5.1, 1.6);
+    const tb = this.onGrid(t + 0.02, 1, 0.16);
+    const gap = this.runGap(0.055);
+    [19, 14, 10].forEach((i, j) => {
+      const f = this.chordNote(i);
+      this.at(v, tb + j * gap, (tn) => fmBell(v, tn, f, 0.06, 0.7, 5.1, 1.6));
+    });
   }
 
   /** Through a sky gate: a bright open chord, high and wide. */
   private skyGate(t: number): void {
     const v = this.voice(t, 0.5, 0, 1.6);
     whoosh(v, t, 0.6, 1200, 6000, 0.08, 1.2);
-    for (const [i, d] of [[7, 0], [11, 0.04], [14, 0.08], [19, 0.12]] as const) fmBell(v, t + d, this.note(i), 0.07, 1.4, 2, 1);
+    const tb = this.onGrid(t, 1, 0.16);
+    const gap = this.runGap(0.04) * 0.6;
+    [7, 11, 14, 19].forEach((i, j) => {
+      const f = this.chordNote(i);
+      this.at(v, tb + j * gap, (tn) => fmBell(v, tn, f, 0.07, 1.4, 2, 1));
+    });
   }
 
   private bump(t: number): void {
@@ -1334,46 +1436,186 @@ export class Sfx {
     this.knock(v, t, 2100, start ? 0.14 : 0.08);
   }
 
-  /** A stage line crossed: a quick rising pair of bells and a short rush of air into the band's lift. */
-  /** A marquee moment comes up: a long swell of air under a rising three-bell call and a held chord, the
-   *  band lifting under it (engine.ts accent). A clean sweep of its lights on the way out rings a chord. */
-  private marqueeCue(t: number): void {
+  /**
+   * When a moment the band lands on sounds: on the landing if one is planned within `ahead` seconds (the
+   * band's drop and the cue are one hit), on the next 16th if the band landed a moment ago, else on the next beat
+   * (within `wait`).
+   */
+  private onLanding(t: number, ahead: number, wait: number, grid = true): { t: number; landed: boolean } {
+    const band = this.band;
+    if (!band) return { t, landed: false };
+    const l = band.landing();
+    if (l && l.t >= t - 0.02 && l.t - t <= ahead) return { t: Math.max(t, l.t), landed: true };
+    if (t - band.landedAt < 0.45) return { t: grid ? this.onGrid(t, 1, 0.15) : t, landed: true };
+    return { t: this.onGrid(t, 4, wait), landed: false };
+  }
+
+  /** A marquee moment comes up (its card): a soft call of the hook's head on bells, on the band's next
+   *  eighth. The rise into its drop is the band's (music.ts plan). */
+  private marqueeCue(t0: number): void {
+    const t = this.onGrid(t0, 2, 0.3);
+    const head = this.band?.head(12) ?? [];
     const v = this.voice(t, 0.55, 0, 1, PRIO.payoff);
-    whoosh(v, t, 1.4, 300, 3200, 0.1, 0.7, v.bank.pink);
-    fmBell(v, t + 0.05, this.note(4), 0.06, 0.6, 2, 0.9);
-    const b2 = this.note(7);
-    const b3 = this.note(11);
-    this.at(v, t + 0.24, (tn) => fmBell(v, tn, b2, 0.07, 0.7, 2, 1));
-    this.at(v, t + 0.46, (tn) => fmBell(v, tn, b3, 0.08, 1.1, 2, 1.1));
-    this.chord(t + 0.46, 0.05, 1.4, 4);
+    if (head.length === 0) {
+      whoosh(v, t, 1.4, 300, 3200, 0.1, 0.7, v.bank.pink);
+      [4, 7, 11].forEach((i, j) => {
+        const f = this.note(i);
+        this.at(v, t + 0.05 + j * 0.22, (tn) => fmBell(v, tn, f, 0.06 + 0.01 * j, 0.6 + 0.2 * j, 2, 1));
+      });
+      return;
+    }
+    for (const n of head.slice(0, 4)) this.at(v, t + n.at, (tn) => fmBell(v, tn, mtof(n.m), 0.055, 0.5, 3.5, 1.1));
   }
 
-  private stageCue(t: number): void {
+  private stageCue(t0: number): void {
+    const { t } = this.onLanding(t0, 0.7, 0.55);
     const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
-    whoosh(v, t, 0.5, 700, 2600, 0.08, 0.8, v.bank.pink);
-    fmBell(v, t, this.note(7), 0.07, 0.3, 2.4, 1.1);
-    const hi = this.note(10);
-    this.at(v, t + 0.11, (tn) => fmBell(v, tn, hi, 0.08, 0.5, 2.4, 1.2));
-    this.chord(t + 0.11, 0.045, 0.55, 4);
+    whoosh(v, t0, 0.5, 700, 2600, 0.08, 0.8, v.bank.pink);
+    fmBell(v, t, this.chordNote(7), 0.07, 0.3, 2.4, 1.1);
+    const hi = this.chordNote(10);
+    const gap = this.runGap(0.11) * 1.6;
+    this.at(v, t + gap, (tn) => fmBell(v, tn, hi, 0.08, 0.5, 2.4, 1.2));
+    this.chord(t + gap, 0.045, 0.55, 4);
   }
 
-  /** The finish line: the band slams, the fanfare rises and resolves onto a bright add9 chord that
-   *  rings on over the crowd's roar. The results deck's resolved loop comes up under it. */
-  private finishCue(t: number): void {
+  /** The finish line: the slam, the main theme's opening bar on brass (the band's finale plays it too, in
+   *  unison), the bright chord and the crowd's roar, louder for a win and a close race. On the band's
+   *  landing when it has one: the band's own hit is the moment, so the band is not ducked under it. */
+  private finishCue(t0: number, rank = 1, of = 1): void {
     this.cutFlow();
-    this.music?.duck(0.55, t, 0.5, 0.8);
+    // (The band landed a moment early: the slam is the line itself, at once.)
+    const { t, landed } = this.onLanding(t0, 0.5, 0.3, false);
+    if (!landed) this.music?.duck(0.55, t, 0.5, 0.8);
     this.slam(t, true);
-    this.fanfare(t + 0.04);
+    const theme = this.band?.theme() ?? [];
+    if (theme.length > 0) {
+      const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
+      for (const n of theme) this.at(v, t + 0.02 + n.at, (tn) => this.brass(v, tn, [n.m - 12, n.m], Math.min(0.5, n.dur * 0.9), 0.045));
+      this.at(v, t + 0.02, (tc) => thump(v, tc, 98, 70, 0.28, 0.25));
+    } else this.fanfare(t + 0.04);
     this.chord(t + 1.05, 0.09, 1.5, 5);
     this.shimmer(t + 1.1, 18, 8, 0.05);
-    // The crowd: a broad band of noise swelling up, a slow surge in it, carried on every tier.
+    // The crowd: a broad band of noise swelling up, a slow surge in it, carried on every tier; a win
+    // roars, a podium cheers, the back of the field gets a polite swell.
+    const place = of > 1 ? (rank - 1) / (of - 1) : 0;
+    const roar = rank <= 1 ? 1.25 : 1 - 0.45 * place;
     const sr = this.ctx.sampleRate;
-    const v = this.voice(t, 0.5, 0, 1, PRIO.payoff);
+    const v = this.voice(t0, 0.5, 0, 1, PRIO.payoff);
     const g = v.gain(0, v.out);
-    const end = swell(g.gain, t + 0.05, 0.55 * bandComp(1000, 0.7, sr), 0.5, 2.2, 0.9);
+    const end = swell(g.gain, t0 + 0.05, 0.55 * roar * bandComp(1000, 0.7, sr), 0.5, 2.2 + 0.8 * roar, 0.9);
     const am = v.gain(0.72, g);
-    v.lfo(1.7, 0.2, am.gain, t, end);
-    v.buffer(v.bank.pink, t, end, v.filter('bandpass', 1000, 0.7, am));
+    v.lfo(1.7, 0.2, am.gain, t0, end);
+    v.buffer(v.bank.pink, t0, end, v.filter('bandpass', 1000, 0.7, am));
+  }
+
+  /**
+   * A set piece's verb as it plays (the moment beat): every step a note on the band's grid, in the chord.
+   * Gates climb the pentatonic ladder a step a gate; rings ring a rising chord (root, third, fifth and the
+   * octave) that sustains as it fills; steps hit a taiko on the band's eighth, rising. A race's lead is a
+   * rising brass stab and a lost lead a falling pair; a collapse closing in is a low pulse on the beat. Won:
+   * the hook's head on brass and bells a whole tone up, over the band's stop (the band gives way to it). Lost:
+   * three soft bells resolving down to the tonic. Any other phase is silent.
+   */
+  moment(verb: string, phase: string, n: number, of: number, t0: number): void {
+    const k = this.key();
+    switch (phase) {
+      case 'step': {
+        if (verb === 'gates') {
+          const t = this.onGrid(t0, 1, 0.15);
+          const i = 7 + Math.max(0, Math.min(9, n - 1));
+          const v = this.voice(t, 0.45, n % 2 === 0 ? 0.25 : -0.25, 1.3, PRIO.normal);
+          const f = this.note(i);
+          pluck(v, t, f, 0.1, 0.22, 4);
+          fmBell(v, t, f * 2, 0.045, 0.6, 3.5, 1.1);
+          if (n >= of && of > 0) this.chord(t + this.runGap(0.07) * 2, 0.06, 1.1, 5, Math.min(6, of));
+        } else if (verb === 'rings') {
+          const t = this.onGrid(t0, 1, 0.15);
+          const r = brightRoot(k, 60);
+          const tones = n <= 1 ? [0] : n === 2 ? [4] : [7, 12];
+          const v = this.voice(t, 0.6, n === 2 ? -0.3 : n >= 3 ? 0.3 : 0, 1.3, PRIO.payoff);
+          tones.forEach((x, j) => fmBell(v, t + j * 0.03, mtof(r + x), 0.075, 1.6 + 0.4 * n, 2, 1));
+          ping(v, t, mtof(r + tones[0] + 24), 0.02, 0.5);
+          if (n >= 3) this.shimmer(t + 0.12, 14, 10, 0.04);
+        } else if (verb === 'steps') {
+          const t = this.onGrid(t0, 2, 0.3);
+          const drums = this.band?.drums;
+          const v = this.voice(t, 0.25, 0, 1.4, PRIO.normal);
+          const rate = Math.pow(2, (2 * Math.max(0, Math.min(5, n - 1))) / 12);
+          if (drums) v.buffer(drums.taiko, t, t + drums.taiko.duration / rate, v.gain(0.55, v.out), rate, false);
+          else thump(v, t, 90 * rate, 55 * rate, 0.4, 0.12);
+          fmBell(v, t, this.note(2 + 2 * Math.max(0, n - 1)), 0.04, 0.4, 2, 1);
+          if (n >= of && of > 0) this.chord(t + 0.1, 0.07, 1.2, 5, 2);
+        }
+        break;
+      }
+      case 'miss': {
+        // A step lost: a dull, muted note that sags; quiet, it only tells.
+        const t = this.onGrid(t0, 1, 0.12);
+        const v = this.voice(t, 0.1, 0, 1, PRIO.low);
+        const f = this.note(2);
+        const g = v.gain(0, v.out);
+        const end = perc(g.gain, t, 0.06, 0.004, 0.12);
+        const o = v.osc('triangle', f, t, end, v.filter('lowpass', 900, 0.7, g));
+        o.frequency.setValueAtTime(f, t);
+        o.frequency.exponentialRampToValueAtTime(f * 0.89, t + 0.3);
+        break;
+      }
+      case 'lead': {
+        const t = this.onGrid(t0, 2, 0.28);
+        const r = brightRoot(k, 55);
+        const v = this.voice(t, 0.35, 0.2, 1.1, PRIO.payoff);
+        this.brass(v, t, [r + 7], 0.1, 0.04);
+        this.at(v, t + this.runGap(0.08) * 2, (tn) => this.brass(v, tn, [r + 12, r + 19], 0.22, 0.042));
+        break;
+      }
+      case 'trail': {
+        const t = this.onGrid(t0, 2, 0.28);
+        const v = this.voice(t, 0.4, -0.2, 1, PRIO.normal);
+        fmBell(v, t, this.note(4), 0.055, 0.25, 2.4, 1);
+        const lo = this.note(2);
+        this.at(v, t + this.runGap(0.08) * 2, (tn) => fmBell(v, tn, lo, 0.05, 0.45, 2.4, 1));
+        break;
+      }
+      case 'close': {
+        const t = this.onGrid(t0, 4, 0.6);
+        const v = this.voice(t, 0.1, 0, 1.2, PRIO.normal);
+        thump(v, t, 62, 38, 0.5, 0.12);
+        puff(v, t, 0.12, 500, 160, 0.12, v.bank.brown);
+        this.music?.duck(0.8, t, 0.12, 0.25);
+        break;
+      }
+      case 'won': {
+        const t = this.onGrid(t0, 2, 0.3);
+        const head = this.band?.head(2) ?? [];
+        this.music?.duck(0.3, t, 1.1, 0.5, 0.02);
+        const v = this.voice(t, 0.45, 0, 1.1, PRIO.payoff);
+        if (head.length > 0) {
+          for (const h of head) {
+            this.at(v, t + h.at, (tn) => {
+              this.brass(v, tn, [h.m - 12], Math.min(0.45, h.dur * 0.9), 0.04);
+              fmBell(v, tn, mtof(h.m + 12), 0.05, 0.5, 3.5, 1.2);
+            });
+          }
+        } else this.fanfare(t);
+        const endAt = head.length > 0 ? head[head.length - 1].at + 0.1 : 0.4;
+        const lifted = { ...k, tonic: k.tonic + 2 };
+        const r = brightRoot(lifted, 55);
+        this.at(v, t + endAt, (tc) => this.brass(v, tc, [r, r + 7, r + 12, r + 16], 0.6, 0.035));
+        this.shimmer(t + endAt, 14, 10, 0.04);
+        break;
+      }
+      case 'lost': {
+        const t = this.onGrid(t0, 2, 0.3);
+        const r = brightRoot(k, 60);
+        const v = this.voice(t, 0.5, 0, 1, PRIO.normal);
+        const gap = this.runGap(0.1) * 3;
+        [7, 4, 0].forEach((x, j) => this.at(v, t + j * gap, (tn) => fmBell(v, tn, mtof(r + x), 0.05 - 0.008 * j, 0.6 + 0.3 * j, 2, 0.9)));
+        this.music?.duck(0.82, t, 0.5, 0.6);
+        break;
+      }
+      default:
+        break;
+    }
   }
 
   // ---------------------------------------------------------------- beats (named moments)
@@ -1480,7 +1722,10 @@ export class Sfx {
         else if (b.clean && b.total > 0 && b.took >= b.total) this.chord(t, 0.05, 0.9, 5);
         break;
       case 'finish':
-        this.finishCue(t);
+        this.finishCue(t, b.rank, b.of);
+        break;
+      case 'moment':
+        this.moment(b.verb, b.phase as string, b.n, b.of, t);
         break;
       default:
         break;
@@ -1587,7 +1832,7 @@ export class Sfx {
     const tier = Math.max(0, Math.min(3, Math.round(b.tier)));
     if (tier === 0) {
       this.bank(b.points, t);
-      if (b.points >= 1500 && this.music) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
+      if (b.points >= 1500 && this.music && !this.sidechained) this.music.duck(DUCK_BANK, t, 0.3, 0.3);
       return;
     }
     const roll = bankRoll(b);
@@ -1627,7 +1872,7 @@ export class Sfx {
     });
     const music = this.music;
     if (tier === 1) {
-      if (music) this.later(t, (td) => music.duck(DUCK_BANK, td, 0.3, 0.3));
+      if (music && !this.sidechained) this.later(t, (td) => music.duck(DUCK_BANK, td, 0.3, 0.3));
       return;
     }
     this.chord(land, 0.08, 1 + 0.2 * tier, 5);
@@ -1765,7 +2010,7 @@ export class Sfx {
       whoosh(v, t, 0.16, 2600, 900, 0.05, 1.2);
       whoosh(v, t + 0.1, 0.3, 700, 2400, 0.09, 1.1);
     } else whoosh(v, t, 0.35, 700, 2400, 0.1, 1.1);
-    const tb = t + 0.06;
+    const tb = this.onGrid(t + 0.06, 1, 0.14);
     if (best) {
       this.goldAt = t;
       // On its own word the pair is the sound; over another word it lands after the word's figure

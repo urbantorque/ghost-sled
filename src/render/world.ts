@@ -35,6 +35,9 @@ import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
+import { MarqueeWorld } from './marqueeworld';
+import type { Fireworks } from './fireworks';
+import type { TrailDef } from '../game/garage';
 import { Terrain, TerrainDetail } from './terrain';
 import { Trail } from './trails';
 
@@ -129,6 +132,9 @@ const GHOST_C: Record<GhostKind, Color> = {
 /** Near misses: trees drop snow off their boughs, everything else kicks grit off its foot. */
 const BOUGHS: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['pine', 'blossom', 'charpine']);
 const ICY: ReadonlySet<ObstacleKind> = new Set<ObstacleKind>(['spire', 'serac', 'iceblock']);
+/** A forest tree passed within this many metres of its trunk, at this speed or more, sheds its snow. */
+const SHED_R = 2.5;
+const SHED_SPEED = 18;
 /** The best band's New ground flare and the 'In the flow' rim pulse, seconds. */
 const FLARE_S = 0.6;
 const FLOW_PULSE_S = 0.3;
@@ -155,6 +161,8 @@ export class World {
   readonly overlooks: Overlooks;
   /** The lantern in the world: sky gates, a dash's trail, a ward's light, ghosts' dashes. */
   private readonly spirit: SpiritFx;
+  /** The set pieces' own world: race machines, lantern gates, a falling span (round 6). */
+  private readonly marquee: MarqueeWorld;
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
   readonly sky: Sky;
@@ -185,6 +193,15 @@ export class World {
   /** 1 while riding, easing to 0 through a crash: how much of the speed streaks the post pass gets. */
   private streakK = 1;
   private sprayAcc = 0;
+  /** The dash's spirit shimmer on the rider, eased (0 to 1). */
+  private dashK = 0;
+  /** The garage's trail (garage.ts): the spray's warm tint and the motes the runners throw. */
+  private trailTint: Color | null = null;
+  private trailTintK = 0;
+  private trailMote: Color | null = null;
+  private trailRate = 0;
+  private trailStyle: TrailDef['moteStyle'] = 'flick';
+  private trailAcc = 0;
   private wasGrounded = true;
   private width = 1;
   private height = 1;
@@ -273,6 +290,8 @@ export class World {
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
+    this.life.townChimneys = (out, z0, z1) => this.setPieces.chimneys(out, z0, z1);
+    this.life.townKey = () => this.setPieces.chimneyKey;
     // (A cabin the dressing would not stand on a wall or a ledge smokes no chimney either.)
     this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
@@ -311,10 +330,14 @@ export class World {
     // A wreck under the trees slides out to a clearing as it settles, where the hero shot can see it.
     this.rider.blocked = this.cam.blocked;
 
-    this.spirit = new SpiritFx(this.particles);
+    this.spirit = new SpiritFx(this.particles, this.cam.camera);
     this.spirit.setCourse(this.course);
+    this.marquee = new MarqueeWorld(this.particles);
+    this.marquee.setCourse(this.course);
+    this.spirit.setQuality(quality.particleBudget, quality.bloom);
     this.scene.add(
       this.spirit.root,
+      this.marquee.root,
       this.sky.root,
       this.terrain.root,
       this.midground.root,
@@ -395,6 +418,7 @@ export class World {
     const pr = this.renderer.getPixelRatio();
     const px = h * pr;
     this.particles.setQuality(this.quality.particleBudget, px);
+    this.spirit.setViewport(w * pr, px);
     this.weather.setScale(px);
     this.post.setSize(Math.max(1, Math.floor(w * pr)), Math.max(1, Math.floor(h * pr)));
     for (const cb of this.onResize) cb(w, h);
@@ -422,6 +446,7 @@ export class World {
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
     this.post.setMsaa(q.msaa);
+    this.spirit.setQuality(q.particleBudget, q.bloom);
     this.post.shaftTaps = q.tier === 'high' ? 14 : 8;
     this.sky.setDetail(q.tier);
     this.life.setQuality(q.tier, q.forestDensity);
@@ -453,6 +478,7 @@ export class World {
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.spirit.setCourse(c);
+    this.marquee.setCourse(c);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
@@ -615,6 +641,21 @@ export class World {
     }
   }
 
+  /** The garage's trail (garage.ts): what the sled leaves, a look only. */
+  setTrail(t: TrailDef): void {
+    this.trailTint = t.tint ? new Color(t.tint) : null;
+    this.trailTintK = t.tint ? t.tintK : 0;
+    this.trailMote = t.mote ? new Color(t.mote) : null;
+    this.trailRate = t.motes;
+    this.trailStyle = t.moteStyle;
+    this.trailAcc = 0;
+  }
+
+  /** The shells over the square and the street (spirit.ts owns them; moments.ts sends the finish's up). */
+  get fireworks(): Fireworks {
+    return this.spirit.fireworks;
+  }
+
   /** Reset per-run visuals at the start of a run. */
   beginRun(snap: Snap, event: ChaosEvent, sled = 0): void {
     this.rider.setSled(sled);
@@ -623,6 +664,8 @@ export class World {
     this.sloughs.clear();
     this.moments.reset();
     this.spirit.reset();
+    this.marquee.reset();
+    this.dashK = 0;
     this.ghosts.resetRun();
     this.chaos.begin(event);
     tmpV.set(snap.x, snap.y, -snap.z);
@@ -697,13 +740,16 @@ export class World {
       this.onEvent(e, s);
       this.spirit.onEvent(e, s);
     }
-    this.spirit.update(dt, v.time, v.mode, s, v.sim, v.ghostPoses, this.quality.tier === 'low');
+    this.spirit.setReduced(feel.reduced || reduced());
+    this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.tier === 'low');
+    this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.tier === 'low');
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
     if (v.mode === 'run') this.onBeats(beats, v);
     if (v.mode === 'run') this.moments.beats(beats, s);
     this.spirit.beats(beats);
+    if (v.mode === 'run') this.marquee.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);
@@ -716,6 +762,12 @@ export class World {
     // (Only while riding: the crash owns its own beat, and the title reel's hero has earned nothing.)
     const riding = v.mode === 'run' && !this.rider.crashing;
     this.rider.setFlow(riding ? feel.flow : 0, riding ? Math.max(feel.flowPulse, pulse) : 0);
+    // A dash puts the spirit shimmer on the rider (round 6): in over about 0.1 s, out over about 0.3 s, with
+    // after-images on Medium and High.
+    const dashing = riding && v.sim !== null && v.sim.s.dash > 0;
+    this.dashK += ((dashing ? 1 : 0) - this.dashK) * Math.min(1, dt * (dashing ? 22 : 9));
+    if (!riding) this.dashK = 0;
+    this.rider.setSpirit(this.dashK < 0.004 ? 0 : this.dashK, this.quality.tier !== 'low', feel.reduced);
     const showRider = v.playerVisible;
     this.rider.setVisible(showRider);
     if (showRider && !this.rider.crashing) {
@@ -781,8 +833,17 @@ export class World {
           // then a quarter at tier 3): drift sparks in the charge's own ramp.
           const tier = s.drifting && v.mode === 'run' ? Math.min(3, feel.driftTier) : 0;
           const heat = tier > 0 ? DRIFT_C[tier - 1] : null;
-          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce, heat, feel.driftCharge, tier >= 3 ? 0.26 : tier === 2 ? 0.1 : 0);
+          this.particles.spray(pos, s.heading, toward, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), Math.min(2, this.sprayAcc), s.onIce, heat, feel.driftCharge, tier >= 3 ? 0.26 : tier === 2 ? 0.1 : 0, this.trailTint, this.trailTintK);
           this.sprayAcc = 0;
+        }
+        // The garage's trail: motes off the runners, more with speed (none on the title reel's hero).
+        if (this.trailMote && v.mode === 'run' && s.speed > 6) {
+          this.trailAcc += this.trailRate * dt * Math.min(1.4, s.speed / 30);
+          const n = Math.floor(this.trailAcc);
+          if (n > 0) {
+            this.trailAcc -= n;
+            this.particles.trailMotes(pos, this.landV.set(s.vx, g.x * s.vx + g.z * s.vz, -s.vz), this.trailMote, n, this.trailStyle);
+          }
         }
       } else if (this.wasGrounded) this.trail.lift();
       this.wasGrounded = s.grounded;
@@ -900,6 +961,7 @@ export class World {
     shared.uResults.value = this.resultsClear;
     // The title reel keeps hazards out of the band right behind its hero (materials.ts uTitleClear).
     shared.uTitleClear.value = v.mode === 'title' ? 1 : 0;
+    if (v.mode === 'run') this.shedSnow(s, v.time);
     this.sloughs.update(dt);
     this.particles.update(dt);
     this.life.update(s.x, s.z, v.time, dt, v.mode === 'run' ? beats : NO_BEATS, this.cam.camera.position, dir);
@@ -1108,6 +1170,38 @@ export class World {
     // A whisker also strikes a quick ring of white glints off the snow where you shaved it.
     if (b.grade === 'whisker') this.particles.ring(this.fxB, WHISKER_C, 9, 3.4, this.carrier(s), 0, 1.3, 0.3, 0.13);
   }
+
+  /** Trees near the corridor's edge shed snow as a rider passes close at speed: a forest tree in the near
+   *  rows (a tree run's wall, the treeline, an orchard's first rows) passed within SHED_R of its trunk at
+   *  SHED_SPEED or more lets a sift fall off its boughs, the near miss's own (the same burst, placed by
+   *  brush.ts on the side you passed it, about two thirds of an ordinary near miss's count), once a tree.
+   *  Every tier: it reads the chunks' packed forest (no draw, nothing made), the particle budget scales
+   *  it as it does every burst, and on Low, whose budget is 0.45, a shed is six or seven grains. */
+  private shedSnow(s: Snap, time: number): void {
+    if (s.crashed || s.speed < SHED_SPEED) return;
+    // A new run (or a revive far off) forgets which trees have shed.
+    if (!(Math.abs(s.z - this.shedZ) < 120) || time < this.shedT) {
+      this.shedKeys.clear();
+      this.shedT = -1;
+    }
+    this.shedZ = s.z;
+    const n = this.props.treesNear(s.x, s.z, SHED_R, 1.5, this.shedBuf);
+    for (let k = 0; k < n; k++) {
+      const key = this.shedBuf[k * 3];
+      // (Scraping along a tree run's wall, a sift every 0.15 s at most: discrete falls, not a stream.)
+      if (this.shedKeys.has(key) || time - this.shedT < 0.15) continue;
+      this.shedKeys.add(key);
+      if (this.shedKeys.size > 256) this.shedKeys.delete(this.shedKeys.values().next().value as number);
+      if (brushPoint(s, this.shedBuf[k * 3 + 1], this.shedBuf[k * 3 + 2], this.groundAt, this.cam.camera, this.fxB, this.fxT, BRUSH_REACH_BOUGH) === 0) continue;
+      this.particles.brush(this.fxB, this.fxT, this.carrier(s), true, false, 15);
+      this.shedT = time;
+    }
+  }
+
+  private shedKeys = new Set<number>();
+  private shedBuf: number[] = new Array(24).fill(0);
+  private shedZ = Number.NaN;
+  private shedT = -1;
 
   /** The snow's height at a sim (x, z), for brush.ts. */
   private readonly groundAt = (x: number, z: number): number => this.course.ground(x, z);

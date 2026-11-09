@@ -1,7 +1,7 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
 import { lowCrowd } from './crowd';
-import { SNOW, part, shade, softPart } from './flora';
+import { SNOW, crystal, part, shade, softPart } from './flora';
 import {
   CREAM,
   Glow,
@@ -28,6 +28,8 @@ import {
   seed,
   seg,
   stone,
+  stringFree,
+  sway,
   sweptRoof,
   windowColor,
 } from './landmarkKit';
@@ -148,17 +150,25 @@ export function lantern(parts: BufferGeometry[], x: number, y: number, z: number
   parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y - r * 1.3, z]));
 }
 
-/** A string of lanterns sagging from a to b. */
+/** A string of lanterns sagging from a to b. The string swings in the wind, held at its masts, and each
+ *  lantern swings with the string under it as one piece. */
 export function lanternString(a: V3, b: V3, sag: number, night: boolean, hex: string): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const len = Math.hypot(b[0] - a[0], b[2] - a[2]);
   const n = Math.max(4, Math.round(len / 3.4));
   const pt = (t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
   for (let i = 0; i < n; i++) {
-    parts.push(seg(pt(i / n), pt((i + 1) / n), 0.04, INK, 3));
+    const f0 = stringFree(i / n);
+    const f1 = stringFree((i + 1) / n);
+    const p0 = pt(i / n);
+    const p1 = pt((i + 1) / n);
+    const seglen = Math.max(1e-6, Math.hypot(p1[0] - p0[0], p1[2] - p0[2]));
+    parts.push(sway(seg(p0, p1, 0.04, INK, 3), (x, _y, z) => 0.3 * (f0 + ((f1 - f0) * Math.hypot(x - p0[0], z - p0[2])) / seglen)));
     if (i > 0) {
       const p = pt(i / n);
+      const from = parts.length;
       lantern(parts, p[0], p[1] - 0.75, p[2], 0.36, night, hex);
+      for (let k = from; k < parts.length; k++) sway(parts[k], () => 0.75 * f0);
     }
   }
   return parts;
@@ -222,7 +232,7 @@ const STOREY = 3.3;
  *  (plaster under timber, the gable to the street, balconies and shutters), a Frostfang station hut
  *  (panelled, on stilts, a flat roof deep in snow), an Ember lodge (basalt under timber, ember-lit
  *  windows), a Sakura townhouse (dark lattice under plaster, low swept eaves, lanterns). */
-export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color): BufferGeometry[] {
+export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color, chim?: V3[]): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const { w, d, storeys, s } = o;
   const jet = o.jet ?? 0;
@@ -291,13 +301,25 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     parts.push(box(sw, 2.0, 0.16, night ? lampColor(true, '#FFC27A') : C('#3A3650'), [0, F + 1.45, zf + 0.07]));
     const cols = [C('#3E5A9A'), CREAM, C('#2F6E78'), C('#6A4C86')];
     const ac = cols[Math.floor(rnd() * cols.length)];
+    // The shop's sign: a board with its lettering's dark bar across it, painted cream by day and lit
+    // from within from dusk (the night flag is the journey's dusk too), so a street's fronts glow in a
+    // row at the lens's height. On the awning's front edge, or flat over the window where there is none.
+    const lit = lampColor(true, '#FFE0A8').multiplyScalar(0.85);
+    const signW = Math.min(sw * 0.8, 4.2);
     if (!o.low) {
       const reach = Math.min(1.5, room - 0.2);
       for (let i = 0; i < 6; i++) parts.push(box(sw / 6 + 0.02, 0.12, reach, i % 2 ? CREAM : ac, [-sw / 2 + (i + 0.5) * (sw / 6), F + 2.95, zf + reach / 2], [0.35, 0, 0]));
       parts.push(box(sw + 0.1, 0.14, reach - 0.2, SNOW, [0, F + 3.12, zf + reach / 2], [0.35, 0, 0]));
-      // A hanging sign on a bracket at the corner.
+      const vz = zf + reach - 0.12;
+      parts.push(box(signW + 0.16, 0.56, 0.08, t.trim, [0, F + 2.43, vz]));
+      parts.push(box(signW, 0.42, 0.1, night ? lit : CREAM, [0, F + 2.43, vz + 0.02]));
+      parts.push(box(signW * 0.62, 0.09, 0.12, INK, [0, F + 2.43, vz + 0.03]));
+      // A hanging sign on a bracket at the corner, its blade lit in its own colour after dark.
       parts.push(seg([-w / 2 + 0.4, F + 3.6, zf], [-w / 2 + 0.4, F + 3.6, zf + reach - 0.1], 0.05, INK, 4));
-      parts.push(box(0.1, 0.8, reach * 0.66, ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+      parts.push(box(0.1, 0.8, reach * 0.66, night ? ac.clone().multiplyScalar(2.1) : ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+    } else {
+      parts.push(box(signW, 0.5, 0.12, night ? lit : CREAM, [0, F + 2.85, zf + 0.1]));
+      parts.push(box(signW * 0.62, 0.1, 0.14, INK, [0, F + 2.85, zf + 0.11]));
     }
   } else {
     parts.push(box(1.3, 2.3, 0.16, t.trim, [0, F + 1.15, zf + 0.05]));
@@ -319,11 +341,13 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     const cx = (rnd() - 0.5) * w * 0.4;
     parts.push(box(1.0, 3.0, 1.0, stoneC, [cx, top + w * 0.2 + 0.8, -d * 0.2]));
     parts.push(box(1.3, 0.4, 1.3, SNOW, [cx, top + w * 0.2 + 2.4, -d * 0.2]));
+    chim?.push([cx, top + w * 0.2 + 2.7, -d * 0.2]);
   } else if (biome === 'glacier') {
     parts.push(box(w + 0.8, 0.5, d + zr + 2 * Math.min(0.4, eave), t.roof, [0, top + 0.25, zr / 2]));
     parts.push(part(BoxGeometry2(w + 1.0, 1.2, d + zr + 2 * Math.min(0.5, eave)), SNOW, { pos: [0, top + 1.0, zr / 2], jitter: 0.12 }));
     // A stovepipe and an antenna.
     parts.push(seg([w / 3, top + 0.5, -d / 4], [w / 3, top + 3.2, -d / 4], 0.16, INK, 6));
+    chim?.push([w / 3, top + 3.4, -d / 4]);
     if (!plain) {
       parts.push(seg([-w / 3, top + 0.5, 0], [-w / 3, top + 5.5, 0], 0.05, INK, 4));
       parts.push(seg([-w / 3 - 0.7, top + 4.6, 0], [-w / 3 + 0.7, top + 4.6, 0], 0.04, INK, 4));
@@ -332,6 +356,7 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     parts.push(...place(gable(d + zr, w, 0, w * 0.22, Math.min(1.2, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
     // A stone chimney.
     parts.push(box(1.2, 3.2, 1.2, stoneC, [-w * 0.25, top + 2.4, -d * 0.15]));
+    chim?.push([-w * 0.25, top + 4.2, -d * 0.15]);
   } else {
     // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice.
     parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
@@ -852,6 +877,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
     }
   }
   const steps: Array<() => BufferGeometry[]> = [];
+  const chimneys: V3[] = [];
   // Low draws no animated crowd: the street's is baked, fewer and bolder, posed (crowd.ts).
   if (low) steps.push(() => lowCrowd(spots, biome, p));
   // The lots, a couple to a step (a hotel or the landmark is a few ms on its own).
@@ -867,7 +893,16 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         const F = floorOf(f, l, hi);
         if (l.kind === 'landmark') parts.push(...f.out(landmark(t, biome, night, F, lo, p, l.s)));
         else {
-          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.balconies, s: l.s, jet: l.jet, eave: l.eave, room: l.room, back: l.back, low, sunk: l.sunk }, stoneC)));
+          // About half the hearths are lit: their chimneys smoke (life.ts), the front rows' and the
+          // roofs behind them alike, so smoke stands over the whole town.
+          const ch: V3[] = [];
+          parts.push(...f.out(house(t, biome, night, F, lo, { w: l.w, d: l.d, storeys: l.storeys, shop: l.kind === 'shop', balconies: l.balconies, s: l.s, jet: l.jet, eave: l.eave, room: l.room, back: l.back, low, sunk: l.sunk }, stoneC, ch)));
+          if (rnd() < 0.55) {
+            for (const [u, y, v] of ch) {
+              const w = f.spot(u, y, v, 0);
+              chimneys.push([w.x, w.y, w.z]);
+            }
+          }
           // A parked sled or a woodpile against some fronts.
           if (!low && !l.back && l.room > 1 && rnd() < 0.3) parts.push(...f.out(place(rnd() < 0.5 ? parkedSled(F, cols[Math.floor(rnd() * cols.length)]) : woodpile(F), (rnd() - 0.5) * l.w * 0.7, 0, l.d / 2 + 0.3, 0)));
         }
@@ -963,6 +998,8 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         bp.push(part(disc, INK, { pos: [0, -1.25, 0.06] }));
         bp.push(part(new ConeGeometry(0.55, 0.7, 3).scale(1, 1, 0.1), CREAM, { pos: [0, -1.2, 0.14] }));
         for (const sx of [-1, 1]) bp.push(seg([sx * bw * 0.5, 0, 0], [sx * bw * 0.5, -0.05, 0], 0.04, INK, 3));
+        // The cloth billows from its ropes, freest at its foot.
+        for (const g of bp) sway(g, (_x, y) => 0.2 + 0.4 * Math.min(1, -y / 2.5));
         parts.push(...place(bp, mx, st.yA - 0.02, mz, yaw));
       } else if (lanterns) parts.push(...lanternString(A, B, 1.0, night || t.lampAlways, t.lamp));
       else parts.push(...bunting(A, B, 1.0, cols, 0.95));
@@ -1041,7 +1078,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
       });
     }
   }
-  return { steps, spots, ice: false, glows, steam };
+  return { steps, spots, ice: false, glows, steam, chimneys };
 }
 
 /** A ride-through town along the site's rail (see the file's head). */
@@ -1276,20 +1313,66 @@ export function iceTunnelPiece(ctx: SiteCtx): Piece {
   const list = bays(ctx, rail, 5);
   const os = openSide(ctx, list[Math.floor(list.length / 2)].f.yaw);
   const cols = [new Color('#7FC4E6'), new Color('#A8DDF2'), new Color('#5E9FD0'), new Color('#93D2EE')];
+  // The crown goes deep: cobalt masses over the middle of the span, so the vault has a value to it and
+  // reads as a ceiling from the lens rather than a pale honeycomb.
+  const crown = [new Color('#3E78C0'), new Color('#2E5EA8'), new Color('#4A8ACC')];
+  const icicle = new Color('#D8F2FF');
+  // The light in the walls: crystals lit from within, pushed past white so they bloom.
+  const glowC = new Color('#BFF0FF').multiplyScalar(1.75);
+  const low = !!ctx.low;
   const steps: Array<() => BufferGeometry[]> = [];
   for (let i0 = 0; i0 < list.length; i0 += 4) {
     steps.push(() => {
       seed(ctx.seed + 401 + i0);
       const parts: BufferGeometry[] = [];
       list.slice(i0, i0 + 4).forEach((b, j) => {
-        vault(b, cols, os, (i0 + j) % 3 === 1, ctx.clear > 0, parts);
-        // Icicles hung from the vault, their tips over the clearance.
-        const ic: BufferGeometry[] = [];
-        for (let k = 0; k < 5 && ctx.clear > 0; k++) {
-          const len = 0.8 + rnd() * 1.1;
-          ic.push(part(new ConeGeometry(0.16 + rnd() * 0.14, len, 5), new Color('#E4F6FF'), { pos: [(rnd() - 0.5) * 2 * b.hw, 0.5 + len / 2 + 0.05, (rnd() - 0.5) * 3], rot: [Math.PI, 0, 0] }));
+        const lid = ctx.clear > 0;
+        vault(b, cols, os, (i0 + j) % 3 === 1, lid, parts);
+        if (lid) {
+          // The crown's deep masses, and great stalactites hung from it, every tip over the clearance
+          // (the bay's underside clears the highest air by AIR_MARGIN and more).
+          const ic: BufferGeometry[] = [];
+          for (let k = 0; k < 2; k++) {
+            const w = 3 + rnd() * 3;
+            const sy = 1.4 + rnd() * 1.2;
+            ic.push(rock(crown[Math.floor(rnd() * crown.length)], [(k - 0.5) * b.hw * 0.9 + (rnd() - 0.5) * 2, sy * 1.3 + 0.3, (rnd() - 0.5) * 2], [w, sy, 2.8], 0.3));
+          }
+          for (let k = 0; k < (low ? 1 : 3); k++) {
+            const len = 2.6 + rnd() * 4.4;
+            const r = 0.45 + rnd() * 0.6 + len * 0.08;
+            ic.push(part(new ConeGeometry(r, len, 5), k === 0 ? icicle : cols[1], { pos: [(rnd() - 0.5) * 1.7 * b.hw, 0.4 + len / 2, (rnd() - 0.5) * 3], rot: [Math.PI, rnd(), 0] }));
+          }
+          parts.push(...b.f.out(pitched(b, ic)));
         }
-        parts.push(...b.f.out(pitched(b, ic)));
+        // The walls: a shelf of ice with a fringe of icicles under it, and crystals glowing in the ice,
+        // on each side at the lens's height and above, all past the limit.
+        for (const sx of [-1, 1]) {
+          if (sx === os && (i0 + j) % 3 === 1) continue;
+          const wall: BufferGeometry[] = [];
+          const g = b.f.gy(sx * (b.X + 1), 0);
+          const hy = g + 5 + rnd() * Math.max(2, Math.min(9, b.R - g - 9));
+          wall.push(rock(cols[Math.floor(rnd() * cols.length)], [sx * (b.X + 1.9), hy + 0.3, 0], [1.4, 0.45, 2.7], 0.2));
+          for (let k = 0; k < (low ? 3 : 6); k++) {
+            const len = 1.2 + rnd() * 2.8;
+            const r = 0.16 + rnd() * 0.18;
+            wall.push(part(new ConeGeometry(r, len, 5), icicle, { pos: [sx * (b.X + 0.55 + r + rnd() * 0.6), hy - len / 2 + 0.1, -2.1 + (k / 5) * 4.2], rot: [Math.PI, 0, 0] }));
+          }
+          parts.push(...b.f.out(wall));
+          // Crystals lit from within at the foot of the ice, where the floor meets the wall, every other
+          // bay on each side by turns: a line of cold light either side at the lens's height. They lean
+          // back into the wall, so nothing of them comes over the limit.
+          if ((i0 + j + (sx > 0 ? 1 : 0)) % 2 === 0) {
+            const lz = (rnd() - 0.5) * 2.4;
+            const xc = postX(rail, b, sx, 0.5, 0.3, lz);
+            const gc = b.f.gy(sx * xc, lz);
+            const glow: BufferGeometry[] = [];
+            for (let k = 0; k < (low ? 2 : 3); k++) {
+              const h = (k === 0 ? 1.5 : 0.7) + rnd() * 0.9;
+              glow.push(crystal(glowC, k === 0 ? 0.3 : 0.2, h, [sx * (xc + 0.25 * k), gc - 0.2, lz + (k - 1) * 0.55], [(rnd() - 0.5) * 0.3, 0, -sx * (0.12 + 0.25 * k)]));
+            }
+            parts.push(...b.f.out(glow));
+          }
+        }
       });
       return parts;
     });
@@ -1366,8 +1449,27 @@ export function lavaTunnelPiece(ctx: SiteCtx): Piece {
   return { steps, spots: [], ice: false };
 }
 
+/** Where a thin thing (a gate's post, a lantern) stands at a bay's centre: the local x on side sx whose
+ *  inner face, `r` in from it, is `pad` past the course's limit there. Measured at the bay's own dz, not
+ *  over the bay's length as b.X is, so a gate's posts stand at the snow's edge rather than in the wall. */
+function postX(rail: Rail, b: Bay, sx: number, r: number, pad: number, lz = 0): number {
+  const want = rail.limit(b.dz) + pad;
+  let x = b.hw + want + r;
+  for (let k = 0; k < 24; k++) {
+    const u = sx * (x - r);
+    if (rail.edge(b.f.x + u * b.f.c + lz * b.f.s, b.f.z - u * b.f.s + lz * b.f.c) >= want) break;
+    x += 0.1;
+  }
+  return x;
+}
+
 /** Sakura's corridor of torii: a gate every 4.2 m down the stretch, wine lacquer on black bases, the
- *  kasagi black over them, paper lanterns hung between the beams of every third gate. */
+ *  kasagi black over them, paper lanterns hung between the beams of every third gate. The posts stand just
+ *  past where the sim turns a sled back, on the lip of the run's own cut (a tunnel's floor is a trough 4 m
+ *  deep at its limit), not back in the drawn rock, so from the lens they pass in rhythm either side, dark
+ *  and light by turns, their black feet a band along the top of the cut and a lit stone lantern between
+ *  every second pair; the lintels, which clear the highest air like any roof, slide up through the top of
+ *  the frame. */
 export function toriiRowPiece(ctx: SiteCtx): Piece {
   const rail = ctx.rail;
   if (!rail) throw new Error('toriiRowPiece: no rail');
@@ -1376,6 +1478,9 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
   const lac = new Color('#93405A');
   const lacD = new Color('#6A2A40');
   const black = new Color('#24202E');
+  /** A post's radius, and its black foot's. */
+  const PR = 0.72;
+  const FR = 0.95;
   const steps: Array<() => BufferGeometry[]> = [];
   for (let i0 = 0; i0 < list.length; i0 += 6) {
     steps.push(() => {
@@ -1383,16 +1488,18 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
       const parts: BufferGeometry[] = [];
       list.slice(i0, i0 + 6).forEach((b, j) => {
         const i = i0 + j;
-        const X = b.X + 1.25;
+        const Xs = [postX(rail, b, -1, FR, 0.15), postX(rail, b, 1, FR, 0.15)];
+        const X = Math.max(Xs[0], Xs[1]);
         const top = b.R + 3.0;
-        for (const sx of [-1, 1]) {
-          const x = sx * X;
+        Xs.forEach((Xp, k) => {
+          const sx = k === 0 ? -1 : 1;
+          const x = sx * Xp;
           const g = b.f.gy(x, 0);
           parts.push(...b.f.out([
-            grade(part(new CylinderGeometry(0.7, 0.8, top - g + 1.5, 8), i % 2 ? lac : lacD, { pos: [x, (top + g - 1.5) / 2, 0] }), g, top, 0.7, 1.05),
-            part(new CylinderGeometry(1.0, 1.1, 1.2, 8), black, { pos: [x, g + 0.3, 0] }),
+            grade(part(new CylinderGeometry(PR, PR * 1.08, top - g + 1.5, 8), i % 2 ? lac : lacD, { pos: [x, (top + g - 1.5) / 2, 0] }), g, top, 0.62, 1.1),
+            part(new CylinderGeometry(FR * 0.92, FR, 1.5, 8), black, { pos: [x, g + 0.25, 0] }),
           ]));
-        }
+        });
         const beam: BufferGeometry[] = [];
         const W = 2 * X + 2.4;
         beam.push(grade(box(W - 1.2, 0.9, 0.7, lac, [0, 0.45, 0]), 0, 0.9, 0.85, 1.05));
@@ -1411,12 +1518,12 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
         // over the run its pillars stand in two rows, an avenue.)
         for (const g of beam) g.translate(0, b.R, 0);
         if (ctx.clear > 0) parts.push(...b.f.out(beam));
-        // A stone lantern on the bank by every fourth gate.
-        if (i % 4 === 2) {
+        // A lit stone lantern between the posts every second gate, along the top of the cut.
+        if (i % 2 === 1) {
           for (const sx of [-1, 1]) {
-            const x = sx * (X + 2.2);
-            const g = b.f.gy(x, 0);
-            parts.push(...b.f.out(place(streetLamp(townStyle('blossom', ctx.p), 'blossom', night, g, stone(ctx.p, 0.85)), x, 0, 0, 0)));
+            const x = sx * postX(rail, b, sx, 0.75, 0.35, 2.1);
+            const g = b.f.gy(x, 2.1);
+            parts.push(...b.f.out(place(streetLamp(townStyle('blossom', ctx.p), 'blossom', night, g, stone(ctx.p, 0.85)), x, 0, 2.1, 0)));
           }
         }
       });

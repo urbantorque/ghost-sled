@@ -132,6 +132,9 @@ export interface Piece {
   glows?: Glow[];
   /** Where steam rises (site frame: a hot spring's pools). */
   steam?: V3[];
+  /** Chimney tops that smoke (site frame; life.ts draws the smoke on Medium and High). Filled as the
+   *  piece's steps run, so complete once it is made. */
+  chimneys?: V3[];
 }
 
 // ---------------------------------------------------------------- helpers
@@ -336,16 +339,38 @@ export function latticeTower(ctx: SiteCtx, cx: number, cz: number, w: number, to
   return parts;
 }
 
-/** Bunting: a string sagging from a to b with triangular pennants hanging under it. */
+/** Marks a part as cloth the wind moves: each vertex's weight (0 held fast, 1 hanging free) by where it
+ *  stands. The set pieces' material swings it in the vertex shader (materials.ts `cloth`); a piece's
+ *  other parts get a weight of 0 when it is merged (mergePiece). */
+export function sway(g: BufferGeometry, w: (x: number, y: number, z: number) => number): BufferGeometry {
+  const pos = g.getAttribute('position');
+  const a = new Float32Array(pos.count);
+  for (let i = 0; i < pos.count; i++) a[i] = w(pos.getX(i), pos.getY(i), pos.getZ(i));
+  g.setAttribute('aSway', new BufferAttribute(a, 1));
+  return g;
+}
+
+/** How free a string is at t along it: held at the masts, swinging most in the middle. */
+export function stringFree(t: number): number {
+  return Math.sin(Math.PI * Math.max(0, Math.min(1, t)));
+}
+
+/** Bunting: a string sagging from a to b with triangular pennants hanging under it. The string swings a
+ *  little in the wind and its pennants more, most at their points and in the string's middle. */
 export function bunting(a: V3, b: V3, sag: number, cols: Color[], size = 0.9): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
   const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
   const n = Math.max(4, Math.round(len / (size * 1.5)));
   const pt = (t: number): V3 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t - sag * 4 * t * (1 - t), a[2] + (b[2] - a[2]) * t];
+  // Where along the string a vertex lies (its nearest point on the chord a to b).
+  const dx = b[0] - a[0];
+  const dz = b[2] - a[2];
+  const dl = Math.max(1e-6, dx * dx + dz * dz);
+  const along = (x: number, z: number) => ((x - a[0]) * dx + (z - a[2]) * dz) / dl;
   for (let i = 0; i < n; i++) {
     const p0 = pt(i / n);
     const p1 = pt((i + 1) / n);
-    parts.push(seg(p0, p1, 0.04, ROPE, 3));
+    parts.push(sway(seg(p0, p1, 0.04, ROPE, 3), (x, _y, z) => 0.3 * stringFree(along(x, z))));
     if (i === 0) continue;
     // A pennant: a flat triangle, point down, one each way so it shows from both sides.
     const ax = (a[0] === b[0] && a[2] === b[2] ? 1 : (b[0] - a[0]) / Math.hypot(b[0] - a[0], b[2] - a[2])) * size * 0.45;
@@ -353,7 +378,8 @@ export function bunting(a: V3, b: V3, sag: number, cols: Color[], size = 0.9): B
     const q = new BufferGeometry();
     const tip: V3 = [p0[0], p0[1] - size, p0[2]];
     q.setAttribute('position', new BufferAttribute(new Float32Array([p0[0] - ax, p0[1], p0[2] - az, tip[0], tip[1], tip[2], p0[0] + ax, p0[1], p0[2] + az, p0[0] + ax, p0[1], p0[2] + az, tip[0], tip[1], tip[2], p0[0] - ax, p0[1], p0[2] - az]), 3));
-    parts.push(part(q, cols[i % cols.length]));
+    const free = stringFree(i / n);
+    parts.push(sway(part(q, cols[i % cols.length]), (_x, y) => free * (0.3 + 0.7 * Math.min(1, (p0[1] - y) / size))));
   }
   return parts;
 }
@@ -1281,6 +1307,10 @@ export function pieceFor(kind: Kind, ctx: SiteCtx): Piece {
 
 /** Merges a piece's made parts (and frees them). */
 export function mergePiece(parts: BufferGeometry[]): BufferGeometry {
+  // Cloth (sway) carries a weight per vertex: whatever else is in the piece is held fast.
+  if (parts.some((q) => q.getAttribute('aSway'))) {
+    for (const q of parts) if (!q.getAttribute('aSway')) q.setAttribute('aSway', new BufferAttribute(new Float32Array(q.getAttribute('position').count), 1));
+  }
   const g = merge(parts);
   for (const q of parts) q.dispose();
   return g;

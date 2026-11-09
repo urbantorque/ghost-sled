@@ -9,6 +9,7 @@ import type {
   RevealModel,
   ScreenRect,
   SettingsModel,
+  GarageShelf,
   PaintCard,
   SledCard,
   StyleTone,
@@ -146,7 +147,7 @@ export class UI implements GameUI {
     this.title = new Title(this.el, ctx, hd, {
       openSleds: () => {
         if (hd.onOpenSleds) hd.onOpenSleds();
-        else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet);
+        else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves);
       },
       openSettings: () => {
         if (hd.onOpenSettings) hd.onOpenSettings();
@@ -380,8 +381,8 @@ export class UI implements GameUI {
     this.menus.hidePause();
   }
 
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[]): void {
-    this.menus.showSleds(cards, wallet, paints);
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void {
+    this.menus.showSleds(cards, wallet, paints, shelves);
   }
 
   showSettings(m: SettingsModel): void {

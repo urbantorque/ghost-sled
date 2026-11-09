@@ -8817,6 +8817,61 @@
   box-shadow: inset 0 0 0 2px #ffd34d, 0 0 18px rgba(255, 211, 77, 0.35), var(--shadow);
 }
 
+/* While its verb plays the card is the set piece's chip: the name steps down a size and the count under it
+   reads in the HUD's off-white with tabular figures, so "Gate 3 of 6" never jitters as it counts. */
+.gs-mq.is-live {
+  padding: 6px 18px 7px;
+}
+
+.gs-mq.is-live .gs-mq-k,
+.gs-mq.is-won .gs-mq-k,
+.gs-mq.is-lost .gs-mq-k {
+  font-size: clamp(14px, calc(var(--u) * 0.95), 20px);
+  letter-spacing: 0.1em;
+  opacity: 0.86;
+}
+
+.gs-mq.is-live .gs-mq-l {
+  color: var(--text);
+  font-size: clamp(17px, calc(var(--u) * 1.2), 26px);
+  font-style: italic;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Won: the lantern's marigold, rimmed and glowing (a whole lantern lit). Lost: said plainly, no colour. */
+.gs-mq.is-won {
+  box-shadow: inset 0 0 0 2px #ffd34d, 0 0 22px rgba(255, 211, 77, 0.45), var(--shadow);
+}
+
+.gs-mq.is-won .gs-mq-l {
+  color: var(--gift);
+  font-size: clamp(17px, calc(var(--u) * 1.2), 26px);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-mq.is-lost .gs-mq-l {
+  color: var(--text);
+  opacity: 0.8;
+}
+
+/* A set piece holds the top centre on a phone: the stake and the minor callout line wait under its chip,
+   so its card, the combo and a callout never stack (DECISIONS 240). */
+@media (max-aspect-ratio: 1/1) {
+  .gs-moment-on .gs-stake,
+  .gs-moment-on .gs-callouts {
+    opacity: 0;
+    visibility: hidden;
+  }
+}
+
+/* A cash-in owns the second tier while it holds over the combo row: its figure reaches down over the
+   callout line, so the line waits until the figure flies into the score. */
+.gs-combo.is-banking ~ .gs-callouts {
+  opacity: 0;
+}
+
 /* A signature rider's word on the result: its line in quotes, its name, a rule in its own colour. */
 .gs-res-quote {
   display: flex;
@@ -8875,97 +8930,299 @@
   white-space: nowrap;
 }
 
-/* The garage's paint shelf under the sled tiles (round 5): a swatch, a name, a price or On. */
-.gs-paints-wrap {
-  grid-column: 1 / -1;
-  margin-top: 4px;
+/* The garage (round 6): a row of tab pills over the shop, then the open shelf. Every shelf is the sled
+   shop's own shape (a preview with its one action beside tiles that pick it), so the six tabs read as one
+   place. Tabs are pills (ART.md 10), the picked tab off-white on ink, never vermillion: vermillion stays
+   the primary action. Gifts stay marigold. */
+.gs-gtabs {
+  position: relative;
+  display: flex;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 4px;
+  overflow-x: auto;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
 }
 
-.gs-paints-h {
-  margin: 0 0 8px;
+.gs-gtabs::-webkit-scrollbar {
+  display: none;
+}
+
+.gs-gtab {
+  flex: 1 0 auto;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: rgba(245, 243, 255, 0.78);
+  font: inherit;
   font-size: 0.92em;
   font-style: italic;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 850;
+  white-space: nowrap;
+  cursor: pointer;
+  scroll-snap-align: center;
+  touch-action: manipulation;
+  transition:
+    background-color 160ms ease,
+    color 160ms ease;
 }
 
-.gs-paints {
-  display: grid;
+.gs-gtab.is-on {
+  background: var(--text);
+  color: var(--ink);
+}
+
+.gs-gtab:focus-visible {
+  outline: 3px solid var(--text);
+  outline-offset: 2px;
+}
+
+.gs-gtab:active {
+  transform: scale(0.97);
+}
+
+/* Under a finger the tabs keep a 44 px target. */
+@media (pointer: coarse) {
+  .gs-gtab {
+    min-height: 44px;
+  }
+}
+
+/* A look's tile: its drawing on a small dusk stage, its name, then Owned, Wearing or its price. */
+.gs-looks {
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 8px;
+  grid-auto-rows: auto;
+  align-content: start;
 }
 
-.gs-paint {
+/* The preview's words sit at the top of its card, the action under them. */
+.gs-look-shop .gs-shop-info {
+  align-content: start;
+}
+
+.gs-look {
+  position: relative;
   display: grid;
-  grid-template-columns: 28px 1fr;
-  grid-template-rows: auto auto;
-  align-items: center;
-  gap: 2px 8px;
-  min-height: 48px;
-  padding: 7px 10px;
+  grid-template-rows: auto auto auto;
+  align-content: start;
+  justify-items: start;
+  gap: 3px;
+  padding: 0 0 10px;
+  overflow: hidden;
   border: 0;
-  border-radius: 14px;
-  background: var(--panel, rgba(30, 38, 74, 0.9));
-  box-shadow: inset 0 0 0 1px var(--hair-2, rgba(255, 255, 255, 0.12));
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
   touch-action: manipulation;
+  transition: transform 160ms var(--spring);
 }
 
-.gs-paint:focus-visible {
-  outline: 3px solid #f5f3ff;
+.gs-look:active {
+  transform: scale(0.97);
+}
+
+.gs-look:focus-visible {
+  outline: 3px solid var(--text);
   outline-offset: 2px;
 }
 
-.gs-paint.is-on {
-  box-shadow: inset 0 0 0 2px #f5f3ff;
+.gs-look.is-pick {
+  background: rgba(245, 243, 255, 0.09);
+  box-shadow: inset 0 0 0 2px var(--text);
 }
 
-.gs-paint.is-locked {
-  opacity: 0.55;
-  cursor: default;
+.gs-look-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 2.1 / 1;
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #34418c 0%, #5b5ca3 58%, #9a86b8 100%);
 }
 
-.gs-paint-sw {
-  grid-row: 1 / 3;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+/* Hats are drawn as a head and shoulders from behind: a squarer stage, the shoulders on its floor. */
+.gs-look-art.is-hat {
+  aspect-ratio: 1.45 / 1;
+  place-items: end center;
+  padding: 6px 0 0;
 }
 
-.gs-paint-name {
-  font-size: 0.84em;
-  font-weight: 800;
+.gs-look-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
-.gs-paint-price,
-.gs-paint-on {
+.gs-look.is-short .gs-look-art {
+  filter: saturate(0.7) brightness(0.82);
+}
+
+.gs-look-name {
+  padding: 6px 12px 0;
+  font-size: 0.9em;
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.gs-look-foot {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.78em;
-  font-weight: 800;
-  color: var(--gift);
+  min-height: 26px;
+  padding: 0 12px;
+  color: rgba(245, 243, 255, 0.78);
+  font-size: 0.8em;
+  font-weight: 850;
 }
 
-.gs-paint-on {
-  color: #f5f3ff;
+.gs-look-foot .gs-i {
+  width: 1.1em;
+  height: 1.1em;
 }
 
-.gs-paint-price .gs-i {
-  width: 1em;
-  height: 1em;
+.gs-look-foot.is-on {
+  color: var(--text);
 }
 
-.gs-paint-price.is-short {
-  opacity: 0.7;
+/* Within reach: a filled marigold price chip, as the sled tiles have it. */
+.gs-look-foot.is-price {
+  gap: 5px;
+  height: 24px;
+  min-height: 24px;
+  margin: 2px 0 0 12px;
+  padding: 0 10px 0 8px;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  color: var(--ink);
+  font-weight: 900;
 }
 
-/* Focus and hover for the lantern and the paint swatches (web interface guidelines). */
+.gs-look-foot.is-price.is-short {
+  height: auto;
+  min-height: 26px;
+  margin: 0;
+  padding: 0 12px;
+  background: none;
+  color: rgba(245, 243, 255, 0.78);
+  font-weight: 850;
+}
+
+/* The preview's drawing, large on the shop's dusk stage. */
+.gs-look-big {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 6% 10% 10%;
+}
+
+.gs-look-big svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 6px 8px rgba(18, 25, 51, 0.28));
+}
+
+.gs-look-stage.is-trail .gs-look-big svg,
+.gs-look-stage.is-sound .gs-look-big svg {
+  filter: none;
+}
+
+.gs-look-stage.is-trail .gs-look-big {
+  place-items: end center;
+  padding: 0;
+}
+
+.gs-look-art.is-trail {
+  place-items: end center;
+  padding: 0;
+}
+
+.gs-look-stage.is-hat .gs-look-big {
+  place-items: end center;
+  padding: 8% 0 0;
+}
+
+.gs-look-stage.is-new > .gs-look-big {
+  animation: gs-shop-in 380ms var(--spring) both;
+}
+
+/* What the shelf touches, and that it is a look only: quiet, under the item's own line. */
+.gs-look-note {
+  color: rgba(245, 243, 255, 0.72);
+  font-size: max(13px, 0.84em);
+  font-weight: 700;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-look-stage.is-new > .gs-look-big {
+    animation-name: gs-fade-in;
+  }
+
+  .gs-gtab,
+  .gs-look {
+    transition: none;
+  }
+
+  .gs-gtab:active,
+  .gs-look:active {
+    transform: none;
+  }
+}
+
+/* A phone held upright: the tabs scroll sideways under the thumb, two tiles a row. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-gtabs {
+    margin-bottom: 12px;
+  }
+
+  .gs-gtab {
+    flex: 0 0 auto;
+    padding: 0 14px;
+  }
+
+  .gs-looks {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* A short landscape screen: the tabs and the tiles tighten. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .gs-gtabs {
+    margin-bottom: 8px;
+  }
+
+  .gs-gtab {
+    min-height: 34px;
+  }
+
+  .gs-look-art {
+    aspect-ratio: 2.6 / 1;
+  }
+
+  .gs-look-art.is-hat {
+    aspect-ratio: 1.8 / 1;
+  }
+}
+
+/* Focus and hover for the lantern and the garage's tabs and tiles (web interface guidelines). */
 .gs-lantern:focus-visible {
   outline: 3px solid #f5f3ff;
   outline-offset: 3px;
@@ -8976,7 +9233,12 @@
     filter: brightness(1.12);
   }
 
-  .gs-paint:not(.is-locked):hover {
-    box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.55);
+  .gs-gtab:not(.is-on):hover {
+    background: rgba(245, 243, 255, 0.08);
+    color: var(--text);
+  }
+
+  .gs-look:not(.is-pick):hover {
+    box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
   }
 }

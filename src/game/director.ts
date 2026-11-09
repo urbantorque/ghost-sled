@@ -363,7 +363,7 @@ export class Director {
   /** Wards and wipeouts this run (a clean finish has none). */
   falls = 0;
   /** What each moment came to this run, for the results and mastery. */
-  readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean }> = [];
+  readonly marqueeDone: Array<{ key: string; name: string; took: number; total: number; clean: boolean; won: boolean }> = [];
   private avalancheAt = -1;
   private bestBank = 0;
   /** Run clock until which a bank's cash-in is on screen (New best waits for it). */
@@ -488,8 +488,9 @@ export class Director {
       if (sim.distance >= m.z1 || s.finished) {
         const took = sim.stats.lights - this.mqLights;
         const clean = this.hits === this.mqHits;
-        this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean });
-        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took, total: m.total, clean }, sim);
+        const won = (sim.stats.momentMask & (1 << m.index)) !== 0;
+        this.marqueeDone.push({ key: m.key, name: m.name, took, total: m.total, clean, won });
+        this.push({ type: 'marquee', tick: sim.tick, phase: 'exit', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, side: m.side, took, total: m.total, clean, won }, sim);
         this.mqIn = -1;
       }
       return;
@@ -500,7 +501,7 @@ export class Director {
       this.mqIn = this.mqNext++;
       this.mqLights = sim.stats.lights;
       this.mqHits = this.hits;
-      this.push({ type: 'marquee', tick: sim.tick, phase: 'enter', key: m.key, name: m.name, line: m.line, cam: m.cam, light: m.light, took: 0, total: m.total, clean: true }, sim);
+      this.push({ type: 'marquee', tick: sim.tick, phase: 'enter', key: m.key, name: m.name, verb: m.verb, line: m.line, cam: m.cam, light: m.light, side: m.side, took: 0, total: m.total, clean: true, won: false }, sim);
     }
   }
 
@@ -902,6 +903,12 @@ export class Director {
       if (p.e.type === 'ward') this.push({ type: 'callout', tick: p.tick, source: 'note', say: { label: 'Warded', points: 0, tone: 'normal' } }, sim);
       const e = p.e;
       switch (e.type) {
+        case 'moment': {
+          // A set piece's verb as the sim plays it (src/sim/moments.ts).
+          const m = this.run?.marquee?.find((q) => q.index === e.index);
+          if (m) this.push({ type: 'moment', tick: p.tick, key: m.key, verb: m.verb, phase: e.phase, n: e.n, of: e.of }, sim);
+          break;
+        }
         case 'chaos':
           placeFinales(e);
           break;

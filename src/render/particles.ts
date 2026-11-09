@@ -597,6 +597,7 @@ const COIN = new Color('#FFC83A');
 const SLATE = new Color(0.3, 0.34, 0.5);
 const SHARD = new Color(0.78, 0.92, 1.05);
 const tmpTint = new Color();
+const tmpLook = new Color();
 /** Tint for freshly thrown powder: a touch over white, so a burst outshines the lit snow under it. */
 const POWDER = 1.12;
 const tmpF = new Vector3();
@@ -737,14 +738,15 @@ export class Particles {
    *  chase camera's view it rises beside the rider and streams back past the lens at the frame's side
    *  instead of vanishing behind it in a blink; plus a faint mist puff now and then. `toward` is +1 to
    *  throw to the sled's right, -1 to its left. */
-  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false, heat: Color | null = null, heatK = 0, glowShare = 0): void {
+  spray(pos: Vector3, heading: number, toward: number, vel: Vector3, amount: number, ice = false, heat: Color | null = null, heatK = 0, glowShare = 0, look: Color | null = null, lookK = 0): void {
     const f = this.forward(vel);
     // Thrown square to the line of travel, not to the sled's nose: in a drift the nose swings well
     // off the line, and spray thrown off it flew out ahead of the rider and hung in the sky.
     const side = vel.x * vel.x + vel.z * vel.z > 4 ? tmpS.set(-f.z * toward, 0, f.x * toward) : tmpS.set(Math.cos(heading) * toward, 0, Math.sin(heading) * toward);
     // Drift heat (a held drift's charge, 0 to 1): the spray warms inside the player's vermillion, the
     // colour picked once per emit (mix(white or ice, tier colour, 0.25 + 0.5k)), at no extra cost.
-    const base = ice ? ICE : WHITE;
+    // A garage trail (round 6) warms the snow's own white a little (look, lookK) before any drift heat.
+    const base = look && lookK > 0 ? tmpLook.copy(ice ? ICE : WHITE).lerp(look, lookK) : ice ? ICE : WHITE;
     const tint = heat ? tmpTint.copy(base).lerp(heat, 0.25 + 0.5 * Math.max(0, Math.min(1, heatK))) : base;
     // Spray rides on most of the sled's velocity (its carrier), so it must keep the matching share of
     // its descent too: otherwise the slope drops away under it and it floats off into the sky. It
@@ -865,6 +867,68 @@ export class Particles {
         3,
         KIND_MIST,
       );
+    }
+  }
+
+  /** A garage trail's motes off the runners (round 6, garage.ts): 'flick' throws sparks up and out off
+   *  both runners; 'twinkle' leaves specks low over the snow beside the groove that fall back slowly and fade;
+   *  'stream' runs two ribbons of motes back and out off both runners' tails. Each mote is a painted grain in the powder
+   *  layer (an added light alone vanishes on white snow) with, now and then, a hot twin in the glow layer
+   *  that blooms on Medium and High. All ride nearly the sled's speed and fan out sideways, so they show beside
+   *  the rider in the chase lens rather than falling out of the bottom of the frame behind the sled. Warm roles only (marigold, white-gold, cream). */
+  trailMotes(pos: Vector3, vel: Vector3, color: Color, count: number, style: 'flick' | 'twinkle' | 'stream'): void {
+    const n = this.n(count);
+    if (n <= 0) return;
+    const f = this.forward(vel);
+    const hs = Math.hypot(vel.x, vel.z);
+    const fall = Math.max(vel.y, -hs * 0.7);
+    for (let i = 0; i < n; i++) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const sx = -f.z * side;
+      const sz = f.x * side;
+      let x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, size: number, k: number, grav: number;
+      if (style === 'flick') {
+        k = 0.97;
+        const out = 1.8 + Math.random() * 2.4;
+        const back = Math.random() * 0.6 - 0.2;
+        x = pos.x + sx * 0.3 - f.x * back;
+        y = pos.y + 0.06;
+        z = pos.z + sz * 0.3 - f.z * back;
+        vx = vel.x * k + sx * out - f.x;
+        vy = fall * k + 1.6 + Math.random() * 2;
+        vz = vel.z * k + sz * out - f.z;
+        life = 0.32 + Math.random() * 0.25;
+        size = 0.2;
+        grav = 6;
+      } else if (style === 'twinkle') {
+        k = 0.95;
+        const back = Math.random() * 0.8 - 0.2;
+        const across = 0.35 + Math.random() * 0.9;
+        x = pos.x + sx * across - f.x * back;
+        y = pos.y + 0.05 + Math.random() * 0.15;
+        z = pos.z + sz * across - f.z * back;
+        vx = vel.x * k;
+        vy = fall * k + 0.15 + Math.random() * 0.3;
+        vz = vel.z * k;
+        life = 0.5 + Math.random() * 0.5;
+        size = 0.17;
+        grav = 0.4;
+      } else {
+        k = 0.95;
+        const back = 0.3 + Math.random() * 0.3;
+        x = pos.x + sx * 0.32 - f.x * back + (Math.random() - 0.5) * 0.08;
+        y = pos.y + 0.08 + Math.random() * 0.1;
+        z = pos.z + sz * 0.32 - f.z * back + (Math.random() - 0.5) * 0.08;
+        vx = vel.x * k + sx * 1.3;
+        vy = fall * k + 0.3;
+        vz = vel.z * k + sz * 1.3;
+        life = 0.45 + Math.random() * 0.25;
+        size = 0.22;
+        grav = 0.5;
+      }
+      const car = tmpC.set(vel.x * k, fall * k, vel.z * k);
+      this.powder.emit(x, y, z, vx, vy, vz, life, size, size * 0.4, color.r, color.g, color.b, 1, grav, 2, KIND_GRAIN, car);
+      if (Math.random() < 0.5) this.glow.emit(x, y, z, vx, vy, vz, life * 0.8, size * 1.2, size * 0.3, color.r * 1.45, color.g * 1.45, color.b * 1.45, 1, grav, 2, KIND_GRAIN, car);
     }
   }
 

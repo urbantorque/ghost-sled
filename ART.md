@@ -53,8 +53,8 @@ Skill signals live inside these roles rather than adding new ones:
 - **Cloud shadows**: soft, slow cool patches drift over the snow in sunny moods (at most 30% off the
   light, never on the contact shadow or the painted bands). Medium and High.
 - **Each mountain's journey.** On Clear Skies the light or the weather changes down a run, differently
-  on each mountain (section 7): Pinecrest's cloud builds and it goes golden, Frostfang's sun sinks and
-  the aurora arrives, Ember's ash thickens toward a glowing dusk, Sakura's mist lifts off the cone. All
+  on each mountain (section 7): Pinecrest's cloud builds and it goes golden, Frostfang's sun sinks,
+  the aurora comes and goes and the dawn breaks over the Fang, Ember's ash thickens toward a glowing dusk, Sakura's mist lifts off the cone. All
   of it is keyed in metres in one table (`JOURNEY` in palette.ts). The title stays at the start; chaos
   moods keep their own light.
 - **A smoke deck.** A ceiling of cloud across the dome, in its existing pass: billows in three flat
@@ -101,6 +101,9 @@ rounded boxes with a big bow.
   on ice) kicks off a rock's foot. The burst sits 1.2 m ahead of the sled on the shaved side,
   blooms away from the rider so it never buries the hero, and is pulled in until it is on screen. A
   Whisker throws the full amount, an ordinary near miss about two thirds.
+- **Trees shed snow as you pass.** A forest tree by the run with snow on its boughs, passed within about
+  2.5 m at speed, lets the same sift fall off its boughs as a near miss, about two thirds of it, once a
+  tree. Snags, ice and basalt hold nothing to shed.
 - Kickers read as built wedges: a packed, corduroyed face, darker flanks, a shaded takeoff wall, a
   contact shadow and a snow-capped board for a lip (pale ice on icy mountains).
 - The bottom edge of the frame darkens toward the mood's periwinkle, never grey, so the foreground
@@ -128,6 +131,9 @@ rounded boxes with a big bow.
   lies in long feathered tongues about 25 degrees off the fall line, thickest toward a soft, wandering
   shore, and spindrift runs across the ice in thin wisps (held still under reduced motion, as are
   Ember's cracks).
+- **The valley's lakes.** On Pinecrest's Clear Skies the white far below is the valley floor's snow and
+  its openings are frozen lakes that hold still: a feathered shore of drifted snow, pale ice under the
+  haze with tongues of blown snow across it, and a sheen toward the sun. Never flat blue shapes.
 - **A leap's landing is groomed**: corduroy across the fall line and broad swaths of it, so from the
   air the face has a grain to judge by. Flags stand down both its sides. It is snow, not a painted mark
   (section 4's one painted line stands).
@@ -148,6 +154,17 @@ rounded boxes with a big bow.
   with arms up in a V on a perfect landing.
 - The wooden sled has curled vermillion runners. On the round sleds (the Whirl Saucer and the Tea
   Tray) the rider sits cross-legged and leans forward over the rim.
+- The rider's look is the player's to choose in the garage, inside the signal: the hat and the scarf are
+  always vermillion with at most the beanie's cream or an ink accent, so whatever is worn, the rider is the
+  one vermillion figure on the run. Hats are told apart by their outline from behind (the chase lens always
+  sees the back of the head): the cuffed pom beanie, a short watch cap with a thick rolled cuff, a pom over
+  each ear, a trapper with a cream fur brim and long flaps, a ring of bobbles, a pointed chullo with braided
+  ties, a long stocking cap that streams out behind. A scarf varies the tails' length and width, the knit's
+  pattern (deeper stripes, cream bars, a rib, ink bands, cream-dipped ends) and its tassels; the knot and
+  the wrap stay the classic vermillion.
+- A trail is what the sled leaves: the spray warmed toward honey or cream, and motes in the lantern's
+  warm family (marigold sparks, gold glints, cream and gold stardust, a marigold stream), never mint, rose,
+  coral or vermillion (the drift's heat owns coral and vermillion).
 - In the flow the rider's rim and scarf glow vermillion, building with the shown flow and full at
   3.5; a snuff puts the glow out with a short puff, so the state is visible without reading the HUD.
 - After a crash the rider sits up dazed beside its upside-down sled, both in the results shot, with
@@ -187,9 +204,16 @@ rounded boxes with a big bow.
   no cairn.
 
 Each biome's decorative forest mixes variants (Pinecrest: classic, snow-laden, young pines and a dead
-snag; Frostfang: spires, snapped spires, seracs, crystal mounds; Ember: charred pines, snags, basalt
-clusters and stubs; Sakura: blossom, pale spreading blossom and pines), with a small colour shift per
-tree and the odd lean. Medium and High also dress the banks, always at least 9.2 m past the corridor
+snag; Frostfang: spires, snapped spires, seracs, crystal mounds), with a small colour shift per tree and
+the odd lean. Two mountains lay theirs out as places rather than scattering them. Ember Peak is basalt
+country: each bank is a rhythm of formations (an organ-pipe outcrop of graded hexagonal columns on the
+crest by the run and a bigger one on the shoulder, column clusters at their feet), stands of charred pines
+in clumps with their dead at the edge, and clear snow between, with a steaming fissure in it now and then;
+a sentinel column stands either side of every leap's approach. Sakura Ridge is orchards: rows of blossom
+along the bank's contours, 5 m apart in a row and 5.5 m between rows, in blocks with paths across, a block
+all pink or all pale, and between them a stand of dark pines or an open meadow; every leap lands between
+orchards. On Pinecrest a line of timber telegraph poles runs from the first leap's landing down the valley
+side to the first frozen lake, its wires leading the eye to it. Medium and High also dress the banks, always at least 9.2 m past the corridor
 edge (bushes, stumps, fences, slalom poles, cabins, lift towers and cables, per-biome pieces), and
 each course section reads before it plays: chute rock bands and blue-violet slalom flags, a bowl's
 cornice lip, bench fence rails, gully walls of icicled rock, a split's two-armed signpost, crags along
@@ -237,7 +261,7 @@ Each mountain's run (metres are tunable, in `JOURNEY`):
 | Mountain | First | Then |
 | --- | --- | --- |
 | Pinecrest | 500 to 1700: cumulus and high cloud build, and their shadows sweep the snow | 2300 to 3500: gold over blue under the cloud, cream snow, the peaks glowing. Never the old lilac |
-| Frostfang | 700 to 1900: the sun sinks onto the band, stars come out | 2400 to 3400: polar night, the aurora arrives, the glacier holds the light, a soft sled lantern |
+| Frostfang | 600 to 1450: the sun sinks onto the band, stars come out; 1700 to 2250: polar night, the aurora at full over the Crevasse Fields | 2700 to 3180: the deep of the night into the Ice Cavern, the aurora past its crest; 3300 to 3580: the sun comes up beside the Fang as you come out of the cavern, rose gold on the snow and the peaks, the aurora and the stars fading |
 | Ember Peak | 500 to 1800: the deck closes, the disc dims, the air draws in, embers thicken | 2300 to 3400: a glowing dusk, lava lighting the smoke and running down the cone. No lightning |
 | Sakura Ridge | 400 to 1600: the mist lifts off the cone and the sun climbs out of it | 2400 to 3400: a clear spring day with the wind in the blossom |
 
@@ -374,7 +398,7 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   starts at an occasion: a gate high over the steep ramp with the word on it, packed grandstands down both banks with flags up, two huts looking over them, and barriers. Every leap has a crowd on the rock shoulders either side of its lip.
 - **Life.** Dark crows wheel over the treelines and scatter from a stomp; cranes cross Sakura, a lone
   owl flies at night, ash falls on Ember Peak. Chairlifts run with tiny passengers, chimneys send up
-  three-value gouache smoke lit warm on the sun side, prayer flags and lantern strings flutter, and
+  three-value gouache smoke lit warm on the sun side over the cabins, the hamlets and a town's roofs, prayer flags and lantern strings flutter, and
   small warm-brown deer, ibex, hares and foxes stand at the treeline, only on open ground, never in rock, a street or over a gorge, and bolt away as you come, pulling up short of rock. Far
   skiers carve S-turns on the flanks. Herds graze, then lift their heads and turn to watch you come,
   and bolt one after another; a fox sits up on a rock following you with its head until it hops down;
@@ -422,7 +446,8 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   crowd packs the strip behind them, flags up, doing the wave. A hotel's balconies look down.
   Banners, bunting and lantern strings hang high across from tall masts, only as low as the highest
   air allows. Windows glow from dusk and warm light spills over the run's edge; at night the
-  shop fronts bloom. A mountain with no street in its script has its town beside the run instead.
+  shop fronts bloom. Shop signs on the awnings light from dusk too, and the bunting, banners and lantern
+  strings swing in the wind, harder when the snow blows. About half the chimneys smoke. A mountain with no street in its script has its town beside the run instead.
 - **The finish.** Each mountain's biggest place. The street opens into a square of grandstands cut into
   both banks, the near rows alive and the far rows a packed still crowd, under masts and long banners.
   A real arch stands over the line, the word on its board, the mountain's own crown on each tower. The
@@ -438,8 +463,11 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   lamp-eyed towers, and Sakura's a span of oxblood lacquer on tall red towers. Raked legs and struts reach down round
   the ridge of ground under the deck, and the rails stand where the sim turns a sled back.
 - **Tunnels.** Where a script says tunnel the run goes under a roof at the section's whole length: a tall
-  avalanche gallery whose pillars throw bars of light across the snow, an ice vault, a basalt tunnel
-  with glowing cracks whose mouth is a hole in a great rock mass, a corridor of wine-lacquer torii. The
+  avalanche gallery whose pillars throw bars of light across the snow, an ice cavern (a cobalt crown hung
+  with great stalactites, shelves of ice fringed with icicles up its walls and crystals glowing at the foot of
+  the ice, opening at its far end onto the dawn), a basalt tunnel with glowing cracks whose mouth is a hole in a
+  great rock mass, a corridor of wine-lacquer torii whose posts stand on the lip of the cut, lit stone lanterns
+  between them. The
   roof follows the air down the stretch: the mouth stands tallest and it comes down inside. The frame
   darkens at its edges inside and bursts with light on the way out. Where low gravity flies over any
   roof the walls and pillars stand alone.
@@ -474,18 +502,25 @@ The run is high on a real mountain, in a world that goes on past the banks and i
 - **The lantern** on the HUD is three small lanterns where the gifts' counter stood: ink cells with a marigold
   rim that fill from the bottom with a cream-to-marigold gradient, glow when full, and burn white for a dash. On
   touch it is a 78 px round button above the right thumb's zone.
-- **A dash** is the rider as a spirit for 1.4 s: the lens punches out, white-gold motes trail behind the sled, and
-  a pale shimmer rides the sound. **A ward** breaks into marigold light and a puff of white where the hit was.
-  A dashing ghost trails pale mint-white light; a warded ghost breaks into marigold for a moment.
-- **Sky gates** are rings of marigold light (a torus 2.4 m in radius, its tube 0.14 m) hung over a kicker's flight,
-  breathing a little and turning slowly about their own axis; one draw for all of them, on every tier. Flying
-  through one bursts it into white-gold.
+- **A dash** is the rider as a spirit for 1.4 s: a white-gold rim round the silhouette and gold bands
+  rippling up through the coat, eased in and out, the scarf still vermillion; on Medium and High two faint
+  white-gold after-images trail it, drawn only where the rider is not. The lens punches out and white-gold
+  motes trail the sled. **A ward** stands a marigold paper lantern round the rider that cracks with white-gold
+  light and breaks into shards and a ring of light over the snow, in a beat of slow motion (none under
+  reduced motion). A dashing ghost trails pale mint-white light; a warded ghost breaks into marigold.
+- **Sky gates** are rings of light: a deep amber edge, a marigold body and a white-gold core line, a halo
+  that tints and glows, a faint veil inside and four beacon motes riding the ring, a shimmer running round it.
+  Held to a few pixels thick at any distance, they read from 60 m on every tier, Low included. Every gate on
+  the course, a set piece's smaller rings among them, is one draw. Flying through one bursts it into
+  white-gold.
 - **Set pieces** carry their own air for as long as they last: Ember's embers (`#FF9A4A`), Sakura's petals
   (`#FFC9DA`), a festival street's lantern glow (`#FFE29A`), and out of a tube a burst of warm light on the post
   pass. Their title card is the stage line's card set larger and wider, with the line to play in marigold and a
   marigold hairline; a clean sweep on the way out gets a marigold rim.
-- **Fireworks** over the square for a win use the rider's own warm colours and the lantern's (vermillion, coral,
-  marigold, white-gold), never mint or rose.
+- **Fireworks** climb on a thin trail of embers and burst with a flash into spheres, rings and willows of
+  streaks that stretch along their motion, droop and fade, the crackling kinds breaking into glitter: the
+  rider's warm colours and the lantern's (vermillion, coral, marigold, white-gold), never mint or rose. They
+  fire over the square at the finish (more for a win) and over the street when a gates set piece is won.
 - **Signature riders** keep the spectral body (mint, rose for a grudge, gold-white for your best) and carry their
   identity in silhouette: twelve hats in the same glass (a felt hood, antlers, a topknot, a wide brim, a stovepipe,
   a giant bobble, a beak hood, a lantern on a headband, curled horns, an aviator cap, fox ears, a crown). Their own
@@ -493,3 +528,25 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
 - **Sled paints** recolour a sled's body and wood at their own value, so the grain and the hull's shading stay; the
   trim stays vermillion, and so do the scarf and beanie. No paint uses a locked role's colour.
+
+## 14. The set pieces (round 6)
+
+Each mountain's three set pieces are a verb as well as a place, and each verb has its own look, built so it reads at
+30 to 46 m/s and never looks like a hazard.
+
+- **The race's machine** rides a dark cable along the bank (11 m up in the open, 7 m in a tube or a slot) between two
+  lit stations, on slim A-frame towers where the ground is open and wall brackets where it is not. Pinecrest's is a
+  blue cable car banded in cream, Frostfang's the research station's red gondola, Ember's an iron ore skip glowing
+  from inside with a lamp on its lip, a Daily's on Sakura a wine-lacquered car. Windows and the skip's ore are lit so
+  the machine reads against snow and against the dark of a tunnel. It sways a little on its hanger, more as it
+  leaves and arrives. Never vermillion: the machine is a rival, not you.
+- **Lantern gates** are two strings of three paper lanterns hung from a wire across the run, with a garland of small
+  lights sagging between their heads: the opening is between the strings, and nothing stands on the snow. The next
+  gate burns brightest and breathes, with a soft pool of its light on the snow in its opening; later gates wait
+  dimmer. A threaded gate's lanterns slip their strings and rise into the sky, drifting apart; a missed gate's light
+  gutters to an ember. Marigold, the lantern's own colour: a gate is a light you take.
+- **Ring lines** are the sky gates' family, three to a leap, a little smaller than a stage's gate.
+- **The collapse** breaks the span's cornices and snow off at its edges at the fall line, chunks of pale ice tumbling
+  into the gap with a puff of powder. The deck holds.
+- **The chip.** A set piece's card becomes its chip as it starts: its name a size smaller over the verb counting in
+  tabular figures. A win rims it in marigold with the line in marigold; a loss is said plainly in off-white.

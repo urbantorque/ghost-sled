@@ -12,8 +12,8 @@
 //             1.5 dB of the bed, a sitting ghost under the closing one)
 //   layers    each music layer soloed at a cruise (0.36), a skilled drive (0.6) and the stress drive
 //             (1.0): dBFS RMS on the music bus
-//   songs     each mountain's Clear Skies song (A A B B, 4 bars each) for 20 s, past the A to B
-//             change at 17 s: one deck the whole way (no crossfade), a 16-bar loop, and a per-bar
+//   songs     each mountain's Clear Skies song (round 6: its own key and tempo, intro then verse) for 20 s
+//             (round 5 looped A A B B): one deck the whole way (no crossfade) and a per-bar
 //             low-band reading that differs per mountain
 //   wind      the ambience bed at 30 m/s with earned flow 0, 0.5 and 1: the singing wind stays at
 //             the plain wind's level (within 2 dB), so a long stretch in the flow is a tone, not a
@@ -108,7 +108,9 @@ async (page) => {
     shoulderInItsChannel: sh ? sh.closingLR[0] - sh.closingLR[1] >= 4.5 : null,
     shoulderLeavesTheBed: sh ? Math.abs(sh.closingLR[1] - sh.offLR[1]) <= 1.5 : null,
     shoulderSittingQuieter: sh ? sh.sittingLR[0] < sh.closingLR[0] : null,
-    songsOneDeck: songList.length ? songList.every((x) => x.decksStarted === 1 && x.cycleBars === 16) : null,
+    // Round 6: the run plays in sections (intro 2 bars, then 8-bar verses and choruses), so the bar count read is
+    // the section's; one deck the whole way still holds.
+    songsOneDeck: songList.length ? songList.every((x) => x.decksStarted === 1) : null,
     songsDiffer: songList.length ? new Set(songList.map((x) => x.barLowHz)).size === songList.length : null,
     snuffReadsOverSketchy: levels.snuffSketchy ? levels.snuffSketchy.smrMaxDb >= 2 && levels.snuffSketchy.liftMaxDb >= 4 : null,
     snuffReadsOverStreakBroken: levels.snuffBroken ? levels.snuffBroken.smrMaxDb >= 2 && levels.snuffBroken.liftMaxDb >= 4 : null,

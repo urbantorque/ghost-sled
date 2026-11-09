@@ -5,11 +5,12 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
+import { type MomentPlay, fallPace, fallZ, machineZ, momentPlays } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 7;
+export const SIM_VERSION = 8;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -64,6 +65,12 @@ const STUCK_TICKS = 60;
 const OVERCAP_EASE = 6;
 /** A near miss under this edge gap is a whisker (the director's WHISKER_GAP): it lights more. */
 const WHISKER = 0.45;
+/** Set pieces (moments.ts): the lantern a gate threaded and a ring flown light, how near the fall comes before
+ *  it is close, and the speed a sled the fall catches keeps. */
+const GATE_UNITS = 6;
+const RING_UNITS = 12;
+const COLLAPSE_CLOSE = 7;
+const COLLAPSE_KEEP = 0.72;
 
 export type CrashCause = 'tree' | 'rock' | 'forest' | 'landing' | 'yeti' | 'avalanche' | 'daylight';
 export type TumbleCause = Exclude<CrashCause, 'avalanche' | 'daylight'>;
@@ -92,6 +99,11 @@ export type SimEvent =
   | { type: 'light'; id: number; value: number; gain: number; x: number; y: number; z: number }
   /** A sky gate ridden through. */
   | { type: 'skyGate'; id: number; stage: number }
+  /** A set piece's verb (moments.ts) as it plays: 'start' as the rider reaches it, 'step' as a gate is
+   *  threaded, a ring flown or a step stomped (n of `of`), 'miss' as one is not (n back to 0 for gates and
+   *  rings, the run of steps over), 'lead' and 'trail' as the rider passes the race's machine or it passes
+   *  back, 'close' as a collapse's fall comes within a few metres, and 'won' or 'lost' as it is decided. */
+  | { type: 'moment'; index: number; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number }
   /** The lantern crossed a whole lantern: 'lit' as one fills, with the count of full ones now. */
   | { type: 'lantern'; phase: 'lit'; cells: number }
   /** A dash: 'start' as a lantern is spent, 'end' as the sled is solid again. */
@@ -252,6 +264,28 @@ export interface RunStats {
   /** Obstacles ridden through as a spirit. */
   phased: number;
   skyGates: number;
+  /** Set pieces won (their verb beaten), and a bit per set piece by its index. */
+  momentsWon: number;
+  momentMask: number;
+}
+
+/** A set piece being played: which, from which tick, its count so far and how it stands. */
+export interface MomentState {
+  /** Index of the set piece being played, -1 between them. */
+  active: number;
+  /** The next set piece down the course. */
+  next: number;
+  t0: number;
+  n: number;
+  of: number;
+  /** Race: the rider is ahead of the machine. Collapse: the fall has come close. */
+  ahead: boolean;
+  close: boolean;
+  /** Gates and rings: the next one down the run. Steps: whether every landing so far was perfect. */
+  at: number;
+  ok: boolean;
+  /** Collapse: the fall's pace, from the rider's speed onto the span (moments.ts fallPace). */
+  pace: number;
 }
 
 const vec = { x: 0, z: 0 };
@@ -387,8 +421,16 @@ export class Sim {
       wards: 0,
       phased: 0,
       skyGates: 0,
+      momentsWon: 0,
+      momentMask: 0,
     };
+    this.plays = momentPlays(this.course);
   }
+
+  /** The course's set pieces and what their verbs hold (moments.ts). */
+  readonly plays: readonly MomentPlay[];
+  /** The set piece being played (public: the renderer reads the race's machine and the collapse's fall). */
+  readonly mo: MomentState = { active: -1, next: 0, t0: 0, n: 0, of: 0, ahead: false, close: false, at: 0, ok: true, pace: 0 };
 
   /** Small direct score from spirit lights (they are the lantern's fuel, not combo fuel). */
   lightScore = 0;
@@ -531,6 +573,7 @@ export class Sim {
     s.steer = approach(s.steer, steerTarget, rate * DT);
 
     const prevZ = s.z;
+    this.prevX = s.x;
     if (s.finished) this.coast();
     else if (s.tumble > 0) this.tumbleStep();
     else if (s.grinding) this.grindStep(action, released);
@@ -543,6 +586,8 @@ export class Sim {
     if (riding && !s.crashed && race) this.pickups(prevZ);
     if (riding && !s.crashed) this.edge();
     if (riding && !s.crashed) this.lines();
+    // A set piece plays on through a wipeout: the race's machine does not wait, nor does the fall.
+    if (!s.crashed && !s.finished && race) this.momentStep(prevZ);
     if (!s.crashed && !s.finished && this.tick >= MAX_RUN_TICKS - 1 && race) this.crash('daylight');
     if (!s.finished && race) this.chaos();
     if (!s.finished && race) this.draft(draftOf(input));
@@ -1084,6 +1129,8 @@ export class Sim {
 
   private overcap = 0;
   private stuck = 0;
+  /** The sled's x as this tick began (where a gate was crossed lies between it and now). */
+  private prevX = 0;
 
   /** Full lanterns. */
   get cells(): number {
@@ -1285,6 +1332,134 @@ export class Sim {
     const under = (par - this.tick) / TICK_RATE;
     this.finishBonus = 1000 + (under > 0 ? Math.round(under * 300) : 0);
     this.events.push({ type: 'finish', tick: this.tick, bonus: this.finishBonus });
+  }
+
+  // ---------------------------------------------------------------- set pieces (moments.ts)
+
+  /** A set piece as the rider plays it: it starts as the sled reaches its z0 and is decided by its verb.
+   *  Everything here reads the sled and the course; the machine and the fall are functions of the tick the
+   *  rider arrived, so a replay meets exactly the same moment. */
+  private momentStep(prevZ: number): void {
+    const s = this.s;
+    const mo = this.mo;
+    if (mo.active < 0) {
+      const p = this.plays[mo.next];
+      if (!p || s.z < p.z0) return;
+      mo.active = mo.next++;
+      mo.t0 = this.tick;
+      mo.n = 0;
+      mo.ahead = false;
+      mo.close = false;
+      mo.at = 0;
+      mo.ok = true;
+      mo.pace = p.verb === 'collapse' ? fallPace(p, s.speed) : p.pace;
+      mo.of = p.verb === 'gates' ? p.gates.length : p.verb === 'rings' ? p.rings.length : p.verb === 'steps' ? p.steps.length : 1;
+      this.events.push({ type: 'moment', index: p.index, phase: 'start', n: 0, of: mo.of });
+    }
+    const p = this.plays[mo.active];
+    const ticks = this.tick - mo.t0;
+    switch (p.verb) {
+      case 'race': {
+        const mz = machineZ(p, ticks);
+        const ahead = s.z > mz;
+        if (ahead !== mo.ahead) {
+          mo.ahead = ahead;
+          this.events.push({ type: 'moment', index: p.index, phase: ahead ? 'lead' : 'trail', n: 0, of: 1 });
+        }
+        if (s.z >= p.z1) this.momentEnd(p, mz < p.z1);
+        else if (mz >= p.z1) this.momentEnd(p, false);
+        break;
+      }
+      case 'collapse': {
+        const gap = s.z - fallZ(p, ticks, mo.pace);
+        if (!mo.close && gap < COLLAPSE_CLOSE) {
+          mo.close = true;
+          this.events.push({ type: 'moment', index: p.index, phase: 'close', n: 0, of: 1 });
+        }
+        if (gap < 0.6) {
+          // The snow gives under the sled: it drops onto the span's ice and loses its way.
+          s.speed *= COLLAPSE_KEEP;
+          s.vx = s.speed * dsin(s.velHeading);
+          s.vz = s.speed * dcos(s.velHeading);
+          s.wobble = 18;
+          this.momentEnd(p, false);
+        } else if (s.z >= p.z1) this.momentEnd(p, true);
+        break;
+      }
+      case 'gates': {
+        while (mo.at < p.gates.length && p.gates[mo.at].z <= s.z) {
+          const g = p.gates[mo.at++];
+          // Where the sled crossed the gate's line, between last tick and this one.
+          const u = s.z > prevZ ? (g.z - prevZ) / (s.z - prevZ) : 1;
+          const x = this.prevX + (s.x - this.prevX) * (u < 0 ? 0 : u > 1 ? 1 : u);
+          if (x >= g.x - g.hw && x <= g.x + g.hw) {
+            mo.n++;
+            this.charge(GATE_UNITS, true);
+            const r = this.combo.add('lanternGate', 150);
+            this.events.push({ type: 'style', kind: 'lanternGate', points: r.points, chain: r.chain, mult: r.mult });
+            this.events.push({ type: 'moment', index: p.index, phase: 'step', n: mo.n, of: mo.of });
+          } else {
+            mo.ok = false;
+            mo.n = 0;
+            this.events.push({ type: 'moment', index: p.index, phase: 'miss', n: 0, of: mo.of });
+          }
+        }
+        if (mo.at >= p.gates.length || s.z >= p.z1) this.momentEnd(p, mo.ok && mo.n === p.gates.length && p.gates.length > 0);
+        break;
+      }
+      case 'rings':
+        // The rings themselves are flown in pickups() (momentRing), with the stage gates.
+        if (mo.at >= p.rings.length || s.z >= p.z1) this.momentEnd(p, mo.ok && mo.n === p.rings.length && p.rings.length > 0);
+        break;
+      case 'steps': {
+        for (const e of this.events) {
+          if (e.type !== 'land' || e.airtime < 0.2) continue;
+          // Every step landed clean or better (a stomp scores more, as anywhere): a sketchy landing or a
+          // hop fails it. All four stomped was the first rule, and no pilot in the lab, expert included,
+          // managed it in 24 runs.
+          if (e.quality === 'perfect' || e.quality === 'clean') {
+            mo.n++;
+            this.events.push({ type: 'moment', index: p.index, phase: 'step', n: mo.n, of: mo.of });
+          } else if (mo.ok) {
+            mo.ok = false;
+            this.events.push({ type: 'moment', index: p.index, phase: 'miss', n: mo.n, of: mo.of });
+          }
+          // (pushed while iterating: a 'moment' event is never a landing, so the loop passes over it.)
+        }
+        if (mo.n >= mo.of || s.z >= p.z1) this.momentEnd(p, mo.ok && mo.n >= mo.of && mo.of > 0);
+        break;
+      }
+    }
+  }
+
+  /** A ring of a set piece's line, crossed: through it, or past it. */
+  private momentRing(index: number, through: boolean): void {
+    const mo = this.mo;
+    if (mo.active !== index) return;
+    const p = this.plays[index];
+    mo.at++;
+    if (through) {
+      mo.n++;
+      this.charge(RING_UNITS, true);
+      this.events.push({ type: 'moment', index, phase: 'step', n: mo.n, of: mo.of });
+    } else {
+      mo.ok = false;
+      this.events.push({ type: 'moment', index, phase: 'miss', n: mo.n, of: mo.of });
+    }
+    if (mo.at >= p.rings.length) this.momentEnd(p, mo.ok && mo.n === p.rings.length);
+  }
+
+  /** A set piece decided. Beating its verb lights a whole lantern. */
+  private momentEnd(p: MomentPlay, won: boolean): void {
+    const mo = this.mo;
+    if (mo.active !== p.index) return;
+    mo.active = -1;
+    if (won) {
+      this.stats.momentsWon++;
+      this.stats.momentMask |= 1 << p.index;
+      this.charge(LANTERN, true);
+    }
+    this.events.push({ type: 'moment', index: p.index, phase: won ? 'won' : 'lost', n: mo.n, of: mo.of });
   }
 
   /** Over the line the sled runs on through the square and stops: no hands, nothing to hit. */
@@ -1557,7 +1732,9 @@ export class Sim {
       this.gateAt++;
       const dx = s.x - gate.x;
       const dy = s.y + 0.5 - gate.y;
-      if (dx * dx + dy * dy < gate.r * gate.r) {
+      const through = dx * dx + dy * dy < gate.r * gate.r;
+      if (gate.moment !== undefined) this.momentRing(gate.moment, through);
+      else if (through) {
         this.stats.skyGates++;
         this.events.push({ type: 'skyGate', id: gate.id, stage: gate.stage });
         this.style('skyGate', 400);
@@ -1881,6 +2058,11 @@ export class Sim {
     mixF(s.dash);
     mixF(s.ghost);
     mixF(this.overcap);
+    mixF(this.mo.active);
+    mixF(this.mo.n);
+    mixF(this.mo.at);
+    mixF(this.mo.pace);
+    mixF(this.stats.momentMask);
     return h >>> 0;
   }
 }

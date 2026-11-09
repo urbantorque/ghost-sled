@@ -4,6 +4,7 @@ import { fmt, NBSP } from './fmt';
 import type { Fx } from './fx';
 import type { Hud } from './hud';
 import type { Notices } from './notices';
+import { momentLine } from './momentcopy';
 
 // The beat router: the overlay's half of the beats contract (src/game/beats.ts). The game hands the
 // UI every run-time named moment once per frame, in the order the director made them, and this turns
@@ -60,6 +61,8 @@ export class BeatRouter {
    * of any ghost opens that mountain (jostles and wrecks count), so from then on it is not true.
    */
   private tease: string | null = null;
+  /** The set piece being ridden (its card's name), and whether its verb's result has been shown. */
+  private mq: { key: string; name: string; decided: boolean } | null = null;
 
   constructor(
     private readonly hud: Hud,
@@ -178,11 +181,33 @@ export class BeatRouter {
           this.hud.say(b.say?.label ?? 'Wipeout');
           break;
         case 'marquee': {
-          if (b.phase === 'enter') this.notices.marquee(b.name, b.line, null, false);
-          else if (b.total > 0 || !b.clean) {
-            const lit = b.total > 0 ? `${b.took} of ${b.total} lights` : '';
-            this.notices.marquee(b.name, '', b.clean ? (lit ? `${lit} · Clean` : 'Clean') : lit || 'Ridden', b.clean);
+          if (b.phase === 'enter') {
+            this.mq = { key: b.key, name: b.name, decided: false };
+            this.notices.marquee(b.name, b.line, null, false);
+          } else {
+            // Its verb's result has had its card: a clean sweep of its lights is said under the combo.
+            const decided = this.mq?.key === b.key && this.mq.decided;
+            this.mq = null;
+            if (decided) {
+              if (b.clean && b.total > 0 && b.took >= b.total) this.hud.say(`${b.name}: every light, clean`);
+            } else if (b.total > 0 || !b.clean) {
+              const lit = b.total > 0 ? `${b.took} of ${b.total} lights` : '';
+              this.notices.marquee(b.name, '', b.clean ? (lit ? `${lit} · Clean` : 'Clean') : lit || 'Ridden', b.clean);
+            }
           }
+          break;
+        }
+        case 'moment': {
+          // The set piece's verb as it plays: its card becomes a chip that counts, then says the result.
+          const mq = this.mq;
+          if (!mq || mq.key !== b.key) break;
+          const line = momentLine(b.verb, b.key, b.phase, b.n, b.of);
+          if (!line) break;
+          if (b.phase === 'won' || b.phase === 'lost') {
+            mq.decided = true;
+            this.notices.momentDone(mq.name, b.phase === 'won' ? `${line} · Lantern lit` : line, b.phase === 'won');
+            this.hud.say(`${mq.name}: ${line}`);
+          } else this.notices.momentLive(mq.name, line);
           break;
         }
         case 'stage': {

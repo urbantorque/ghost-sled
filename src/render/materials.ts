@@ -1255,6 +1255,10 @@ export interface ToonOptions {
   /** The far rows of the decorative forest: they lean into the fog colour with distance (atmospheric
    *  perspective), so a forest has depth rather than reading as one flat dark mass. */
   aerial?: boolean;
+  /** Cloth the wind moves (a set piece's bunting, banners and lantern strings): each vertex's aSway
+   *  (0 held, 1 hanging free) swings it with the wind in the vertex shader, off the shared clock, by
+   *  uCloth metres; a geometry without aSway stands still. */
+  cloth?: boolean;
 }
 
 export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
@@ -1272,11 +1276,16 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uEmissiveStrength: { value: opts.emissiveStrength ?? 0 },
       uSway: { value: opts.sway ?? 0 },
       uRimK: { value: opts.rim ?? 0.3 },
+      uCloth: { value: 0.35 },
       uNearFade: { value: new Vector2(...(opts.nearFade ?? [0.9, 3.2])) },
     },
-    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}) },
+    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}) },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
+      #ifdef CLOTH
+        attribute float aSway;
+        uniform float uCloth;
+      #endif
       uniform float uTime;
       uniform float uSway;
       uniform vec2 uNearFade;
@@ -1336,6 +1345,18 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           transformed.x += sin(uTime * 1.3 + phase) * uSway * k * k;
           transformed.z += cos(uTime * 1.1 + phase * 1.3) * uSway * 0.6 * k * k;
         }
+        #ifdef CLOTH
+          if (aSway > 0.0) {
+            // A gust runs along a string (its phase by where the vertex stands), and what hangs free
+            // swings across the run and lifts a little at each end of its swing.
+            vec3 cw = (modelMatrix * vec4(transformed, 1.0)).xyz;
+            float cph = cw.x * 0.23 + cw.z * 0.19;
+            float g = sin(uTime * 2.1 + cph) * 0.62 + sin(uTime * 3.4 + cph * 1.7 + 1.3) * 0.38;
+            transformed.x += g * aSway * uCloth * 0.55;
+            transformed.z += g * aSway * uCloth;
+            transformed.y += abs(g) * aSway * uCloth * 0.3;
+          }
+        #endif
         #ifdef BOB
           float a = uTime * 2.2 + phase * 3.0;
           float ca = cos(a);

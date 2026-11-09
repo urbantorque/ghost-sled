@@ -590,7 +590,8 @@ export class ChaseCamera {
         case 'marquee':
           this.mqWant = b.phase === 'enter' ? b.cam : null;
           if (b.phase === 'enter') {
-            this.mqSide = b.key.length % 2 === 0 ? 1 : -1;
+            // Racing a machine, the lens steps away from its cable, so it rides in the frame beside you.
+            this.mqSide = b.verb === 'race' ? -b.side : b.key.length % 2 === 0 ? 1 : -1;
             this.kick(0.25);
           }
           break;

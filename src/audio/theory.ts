@@ -1,10 +1,13 @@
 import { Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
+import type { KickKind, SnareKind } from './drums';
+import type { ModeName } from './score';
 
-// Musical material: a key, mode and progression per mood, a timbre accent per biome, and the
-// pentatonic ladder every reward sound climbs. Rewards only ever use pentatonic tones of the
-// current key (and the bright chord is built from those same tones), which avoids the 4th and
-// 7th that would clash against the pad, so rewards always sit inside the soundtrack.
+// Musical material: a key, mode, tempo, groove and timbre per mood and (on Clear Skies) per mountain, a
+// timbre accent per biome, and the pentatonic ladder every reward sound climbs. Rewards only ever use
+// pentatonic tones of the current key (and the bright chord is built from those same tones), which avoids
+// the 4th and 7th that would clash against the pad, so rewards always sit inside the soundtrack. The songs
+// themselves (chords and melodies, as degrees) are in score.ts.
 
 export const mtof = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
 
@@ -82,7 +85,8 @@ export interface Chord {
 }
 
 export interface Style extends Key {
-  prog: readonly Chord[];
+  /** The mode its songs are played in (score.ts). */
+  mode: ModeName;
   /** Fraction of a 16th that odd 16ths are delayed by. */
   swing: number;
   pad: { cutoff: number; attack: number; detune: number; wobble: number };
@@ -97,23 +101,25 @@ export interface Style extends Key {
   lead: LeadKind;
   /** Reverb send multiplier for the whole deck. */
   verb: number;
+  /** The drum kit (drums.ts) and how deep the kick pumps the pad and the bass (the sidechain, 0..1). */
+  kit: { kick: KickKind; snare: SnareKind; pump: number };
 }
 
 const _ = null;
 
+/**
+ * The moods (chaos runs): each keeps its key, mode, tempo, drums and timbres, and plays the mountain's
+ * song in its own mode (score.ts), so a Blizzard on Pinecrest is still Pinecrest's hook, in A minor.
+ * Mood.None is Pinecrest's own style (the Clear Skies styles are CLEAR, by mountain).
+ */
 export const STYLES: Record<Mood, Style> = {
-  // Clear Skies: warm D major; the II chord (E major over the key) is the lydian lift.
+  // Clear Skies: warm D major (Pinecrest's).
   [Mood.None]: {
     tonic: 50,
     bpm: 112,
+    mode: 'major',
     penta: MAJOR_PENTA,
     bright: 0,
-    prog: [
-      { root: 0, tones: [0, 4, 7, 11, 14], bars: 1 },
-      { root: 2, tones: [0, 4, 7, 14], bars: 1 },
-      { root: 9, tones: [0, 3, 7, 10], bars: 1 },
-      { root: 5, tones: [0, 4, 7, 11, 14], bars: 1 },
-    ],
     swing: 0.08,
     pad: { cutoff: 1900, attack: 0.5, detune: 7, wobble: 0 },
     bass: [0, _, _, 0, _, _, 7, _, 0, _, _, 0, _, 12, 7, _],
@@ -124,19 +130,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.06, timbre: 'bell' },
     lead: 'square',
     verb: 1,
+    kit: { kick: 'tight', snare: 'snare', pump: 0.3 },
   },
-  // Blizzard: sparse, airy A minor; long chords, half-time pulse, high glassy arp.
+  // Blizzard: sparse, airy A minor; half-time pulse, high glassy arp.
   [Mood.Blizzard]: {
     tonic: 45,
     bpm: 100,
+    mode: 'minor',
     penta: MINOR_PENTA,
     bright: 3,
-    prog: [
-      { root: 0, tones: [0, 3, 7, 14], bars: 2 },
-      { root: 8, tones: [0, 4, 7, 11], bars: 2 },
-      { root: 3, tones: [0, 4, 7, 11, 14], bars: 2 },
-      { root: 7, tones: [0, 3, 7, 10], bars: 2 },
-    ],
     swing: 0,
     pad: { cutoff: 2600, attack: 1.2, detune: 10, wobble: 0 },
     bass: [0, _, _, _, _, _, _, _, _, _, 7, _, _, _, _, _],
@@ -147,19 +149,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.05, timbre: 'glass' },
     lead: 'flute',
     verb: 1.4,
+    kit: { kick: 'soft', snare: 'clap', pump: 0.15 },
   },
   // Lantern Night: F major lullaby with a music-box broken chord and a lilting swing.
   [Mood.Lantern]: {
     tonic: 53,
     bpm: 96,
+    mode: 'major',
     penta: MAJOR_PENTA,
     bright: 0,
-    prog: [
-      { root: 0, tones: [0, 4, 7, 14], bars: 1 },
-      { root: 9, tones: [0, 3, 7], bars: 1 },
-      { root: 5, tones: [0, 4, 7, 11], bars: 1 },
-      { root: 7, tones: [0, 5, 7, 14], bars: 1 },
-    ],
     swing: 0.14,
     pad: { cutoff: 1400, attack: 0.6, detune: 6, wobble: 0 },
     bass: [0, _, _, _, 7, _, _, _, 12, _, _, _, 7, _, _, _],
@@ -170,19 +168,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.04, timbre: 'box' },
     lead: 'flute',
     verb: 1.2,
+    kit: { kick: 'soft', snare: 'rim', pump: 0.1 },
   },
-  // Glass Ice: crystalline E major, 16th-note glass bells, a #11 on the IV, a suspended V.
+  // Glass Ice: crystalline E lydian, 16th-note glass bells.
   [Mood.GlassIce]: {
     tonic: 52,
     bpm: 108,
+    mode: 'lydian',
     penta: MAJOR_PENTA,
     bright: 0,
-    prog: [
-      { root: 0, tones: [0, 4, 7, 11], bars: 1 },
-      { root: 9, tones: [0, 3, 7, 10, 14], bars: 1 },
-      { root: 5, tones: [0, 4, 7, 11, 18], bars: 1 },
-      { root: 7, tones: [0, 5, 7, 9], bars: 1 },
-    ],
     swing: 0.04,
     pad: { cutoff: 2400, attack: 0.4, detune: 5, wobble: 0 },
     bass: [0, _, _, 0, _, _, 0, _, _, _, 7, _, 12, _, _, _],
@@ -193,19 +187,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.1, timbre: 'glass' },
     lead: 'flute',
     verb: 1.2,
+    kit: { kick: 'tight', snare: 'clap', pump: 0.25 },
   },
-  // Comet Night: dreamy Db major, two-bar chords, a lydian IV and a floating ii9, dotted arp.
+  // Comet Night: dreamy Db lydian, a dotted bell arp.
   [Mood.Comet]: {
     tonic: 49,
     bpm: 98,
+    mode: 'lydian',
     penta: MAJOR_PENTA,
     bright: 0,
-    prog: [
-      { root: 0, tones: [0, 4, 7, 11, 14], bars: 2 },
-      { root: 9, tones: [0, 3, 7, 10, 14], bars: 2 },
-      { root: 5, tones: [0, 4, 7, 11, 18], bars: 2 },
-      { root: 2, tones: [0, 3, 7, 10, 14], bars: 2 },
-    ],
     swing: 0,
     pad: { cutoff: 1600, attack: 1.4, detune: 9, wobble: 0 },
     bass: [0, _, _, _, _, _, _, _, 0, _, _, 7, _, _, _, _],
@@ -216,19 +206,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.08, timbre: 'bell' },
     lead: 'flute',
     verb: 1.6,
+    kit: { kick: 'soft', snare: 'clap', pump: 0.15 },
   },
-  // Haunted Hollow: E phrygian (the bII and the half-diminished v), heartbeat kick, theremin lead.
+  // Haunted Hollow: E phrygian, heartbeat kick, theremin lead, a seasick pad.
   [Mood.Haunted]: {
     tonic: 52,
     bpm: 104,
+    mode: 'phrygian',
     penta: MINOR_PENTA,
     bright: 3,
-    prog: [
-      { root: 0, tones: [0, 3, 7, 10], bars: 1 },
-      { root: 1, tones: [0, 4, 7, 11], bars: 1 },
-      { root: 0, tones: [0, 3, 7, 10], bars: 1 },
-      { root: 7, tones: [0, 3, 6, 10], bars: 1 },
-    ],
     swing: 0.06,
     pad: { cutoff: 1250, attack: 0.9, detune: 8, wobble: 14 },
     bass: [0, _, 0, _, _, _, _, _, 0, _, 0, _, _, _, 1, _],
@@ -239,19 +225,15 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.05, timbre: 'glass' },
     lead: 'theremin',
     verb: 1.5,
+    kit: { kick: 'deep', snare: 'rim', pump: 0.2 },
   },
   // Powder Day: bright, bouncy G major; octave bass, four on the floor, 16th plucks.
   [Mood.Powder]: {
     tonic: 55,
     bpm: 124,
+    mode: 'major',
     penta: MAJOR_PENTA,
     bright: 0,
-    prog: [
-      { root: 0, tones: [0, 4, 7, 14], bars: 1 },
-      { root: 7, tones: [0, 4, 7], bars: 1 },
-      { root: 9, tones: [0, 3, 7, 10], bars: 1 },
-      { root: 5, tones: [0, 4, 7, 14], bars: 1 },
-    ],
     swing: 0.1,
     pad: { cutoff: 2200, attack: 0.25, detune: 6, wobble: 0 },
     bass: [0, _, 12, _, 0, _, 12, _, 0, _, 12, _, 7, _, 12, 7],
@@ -262,54 +244,103 @@ export const STYLES: Record<Mood, Style> = {
     sparkle: { prob: 0.07, timbre: 'bell' },
     lead: 'square',
     verb: 0.9,
+    kit: { kick: 'tight', snare: 'clap', pump: 0.35 },
   },
 };
 
 /**
- * Clear Skies songs: each mountain has its own A and B sections (4 bars each) in the D major of
- * Mood.None. A deck plays A A B B, so the harmony turns over every two loops inside one deck: no
- * deck change, no crossfade, no key change. Every chord is diatonic to D major (Alpine keeps its
- * lydian II), so the pentatonic rewards sit on all of them. Alpine's A is the original loop.
+ * Clear Skies, by mountain (round 6): each its own key, tempo, groove and timbre, so the four mountains no
+ * longer share one D major at 112. Pinecrest keeps the original band.
  */
-const I9: Chord = { root: 0, tones: [0, 4, 7, 11, 14], bars: 1 };
-const Iadd9: Chord = { root: 0, tones: [0, 4, 7, 14], bars: 1 };
-const II: Chord = { root: 2, tones: [0, 4, 7, 14], bars: 1 };
-const ii7: Chord = { root: 2, tones: [0, 3, 7, 10], bars: 1 };
-const ii9: Chord = { root: 2, tones: [0, 3, 7, 10, 14], bars: 1 };
-const iii7: Chord = { root: 4, tones: [0, 3, 7, 10], bars: 1 };
-const IV9: Chord = { root: 5, tones: [0, 4, 7, 11, 14], bars: 1 };
-const IV7: Chord = { root: 5, tones: [0, 4, 7, 11], bars: 1 };
-const V: Chord = { root: 7, tones: [0, 4, 7, 14], bars: 1 };
-const Vsus: Chord = { root: 7, tones: [0, 5, 7, 14], bars: 1 };
-const vi7: Chord = { root: 9, tones: [0, 3, 7, 10], bars: 1 };
-const vi9: Chord = { root: 9, tones: [0, 3, 7, 10, 14], bars: 1 };
-
-export const SONGS: Record<BiomeId, { a: readonly Chord[]; b: readonly Chord[] }> = {
-  // Pinecrest: the lydian lift, then a vi IV I V chorus that opens up.
-  alpine: { a: [I9, II, vi7, IV9], b: [vi7, IV9, Iadd9, Vsus] },
-  // Glacier: glassy and patient, a I iii IV I verse and a minor-ninth turn into the V.
-  glacier: { a: [Iadd9, iii7, IV7, Iadd9], b: [vi9, Vsus, IV7, V] },
-  // Volcanic: starts on the relative minor and leans on the ii.
-  volcanic: { a: [vi7, IV7, Iadd9, Vsus], b: [ii7, vi7, IV9, V] },
-  // Blossom: a soft I vi ii V turnaround, then IV iii ii V.
-  blossom: { a: [I9, vi9, ii7, Vsus], b: [IV9, iii7, ii9, V] },
+export const CLEAR: Record<BiomeId, Style> = {
+  alpine: STYLES[Mood.None],
+  // Frostfang: F# dorian at 100, straight; a half-time snare, glass bells in 16ths, a breathy flute.
+  glacier: {
+    tonic: 54,
+    bpm: 100,
+    mode: 'dorian',
+    penta: MINOR_PENTA,
+    bright: 3,
+    swing: 0.02,
+    pad: { cutoff: 2500, attack: 0.9, detune: 9, wobble: 0 },
+    bass: [0, _, _, _, _, _, _, _, 7, _, _, _, _, _, 12, _],
+    arp: { kind: 'up', rate: 1, timbre: 'glass', prob: 0.9, oct: 1 },
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.75, 0, 0, 0, 0, 0],
+    hat: [0.3, 0.12, 0.45, 0.12, 0.3, 0.12, 0.45, 0.12, 0.3, 0.12, 0.45, 0.12, 0.3, 0.12, 0.45, 0.2],
+    clap: [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+    sparkle: { prob: 0.09, timbre: 'glass' },
+    lead: 'flute',
+    verb: 1.35,
+    kit: { kick: 'soft', snare: 'clap', pump: 0.18 },
+  },
+  // Ember Peak: C minor at 124, a driving octave bass, a heavy kick that pumps, a gritty square lead.
+  volcanic: {
+    tonic: 48,
+    bpm: 124,
+    mode: 'minor',
+    penta: MINOR_PENTA,
+    bright: 3,
+    swing: 0,
+    pad: { cutoff: 1350, attack: 0.35, detune: 8, wobble: 0 },
+    bass: [0, _, 0, 12, _, 0, 0, _, 0, _, 0, 12, _, 0, 7, _],
+    arp: { kind: 'box', rate: 2, timbre: 'pluck', prob: 1, oct: 0 },
+    kick: [1, 0, 0, 0, 0.85, 0, 0, 0.3, 1, 0, 0, 0, 0.85, 0, 0.4, 0],
+    hat: [0.2, 0.3, 0.7, 0.3, 0.2, 0.3, 0.7, 0.3, 0.2, 0.3, 0.7, 0.3, 0.2, 0.3, 0.7, 0.45],
+    clap: [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0.35],
+    sparkle: { prob: 0.04, timbre: 'bell' },
+    lead: 'square',
+    verb: 0.8,
+    kit: { kick: 'deep', snare: 'snare', pump: 0.45 },
+  },
+  // Sakura Ridge: Eb major at 96, swung; a gentle bass, a rim on four, a koto arp and a breathy flute.
+  blossom: {
+    tonic: 51,
+    bpm: 96,
+    mode: 'major',
+    penta: MAJOR_PENTA,
+    bright: 0,
+    swing: 0.12,
+    pad: { cutoff: 1750, attack: 0.6, detune: 6, wobble: 0 },
+    bass: [0, _, _, _, _, _, 7, _, 12, _, _, 7, _, _, _, _],
+    arp: { kind: 'updown', rate: 2, timbre: 'pluck', prob: 1, oct: 0 },
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0],
+    hat: [0, 0, 0.5, 0, 0, 0, 0.5, 0.2, 0, 0, 0.5, 0, 0, 0, 0.5, 0.25],
+    clap: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.8, 0, 0, 0],
+    sparkle: { prob: 0.07, timbre: 'bell' },
+    lead: 'flute',
+    verb: 1.15,
+    kit: { kick: 'soft', snare: 'rim', pump: 0.2 },
+  },
 };
 
-/** The progression a deck loops: a mood's own, or on Clear Skies the mountain's song (A A B B). */
-export function progFor(mood: Mood, biome: BiomeId): readonly Chord[] {
-  if (mood !== Mood.None) return styleFor(mood).prog;
-  const song = SONGS[biome] ?? SONGS.alpine;
-  return [...song.a, ...song.a, ...song.b, ...song.b];
-}
+/** The title's main theme: D major at 88, a bell arp, a flute, brushed drums only in its answer. */
+export const TITLE_STYLE: Style = {
+  tonic: 50,
+  bpm: 88,
+  mode: 'major',
+  penta: MAJOR_PENTA,
+  bright: 0,
+  swing: 0.06,
+  pad: { cutoff: 1700, attack: 0.9, detune: 8, wobble: 0 },
+  bass: [0, _, _, _, _, _, _, _, 7, _, _, _, _, _, _, _],
+  arp: { kind: 'updown', rate: 2, timbre: 'bell', prob: 1, oct: 1 },
+  kick: [0.7, 0, 0, 0, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0, 0],
+  hat: [0, 0, 0.35, 0, 0, 0, 0.35, 0, 0, 0, 0.35, 0, 0, 0, 0.35, 0],
+  clap: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.5, 0, 0, 0],
+  sparkle: { prob: 0.05, timbre: 'bell' },
+  lead: 'flute',
+  verb: 1.3,
+  kit: { kick: 'soft', snare: 'rim', pump: 0.1 },
+};
 
-/** Results scene: a gentle resolved loop on the bright (major) root of the mood's key. */
-export const RESOLVED: readonly Chord[] = [
-  { root: 0, tones: [0, 4, 7, 11, 14], bars: 2 },
-  { root: 5, tones: [0, 4, 7, 11, 14], bars: 2 },
-  { root: 9, tones: [0, 3, 7, 10, 14], bars: 2 },
-  { root: 7, tones: [0, 5, 7, 14], bars: 1 },
-  { root: 7, tones: [0, 4, 7, 14], bars: 1 },
-];
+export type DeckScene = 'title' | 'run' | 'results';
+
+/** A deck's style: the title's own; on a run or its results, the mood's, or on Clear Skies the mountain's. */
+export function deckStyle(scene: DeckScene, mood: Mood, biome: BiomeId): Style {
+  if (scene === 'title') return TITLE_STYLE;
+  if (mood === Mood.None) return CLEAR[biome] ?? STYLES[Mood.None];
+  return styleFor(mood);
+}
 
 /** Biome timbre accents: small, so the mood stays the identity of the run. */
 export interface Accent {

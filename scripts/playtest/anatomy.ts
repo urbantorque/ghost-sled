@@ -79,7 +79,7 @@ function anatomy(c: AnyCourse, name: string): void {
     feats.rails += zn.rails.length;
     feats.gates += ch.gates.length;
     feats.obstacles += ch.obstacles.length;
-    feats.gifts += ch.gifts.length;
+    feats.gifts += (ch as any).lights?.length ?? 0;
     for (const r of zn.ramps) {
       if (r.online) feats.online++;
       const q = of(r.z);

@@ -31,29 +31,27 @@ describe('graveyards and the finish line', () => {
 describe('graveyards', () => {
   it('finds the places on every mountain, from where riders really fell', () => {
     const at = (key: string) => graveyards(pool(key), key).map((g) => [Math.round(g.z), g.fell]);
-    // (Since the lantern round a ward is a fall the lantern took, and counts: the place is as deadly.)
+    // (Since the lantern round a ward is a fall the lantern took, and counts: the place is as deadly. The set
+    // pieces' round, SIM_VERSION 8, rode new pools: these are where its riders fall.)
     expect(at(pinecrest)).toEqual([
-      [421, 6],
-      [1422, 4],
-      [2926, 3],
-      [3130, 5],
+      [415, 8],
+      [1030, 5],
+      [3036, 4],
+      [3833, 4],
     ]);
     expect(at(frostfang)).toEqual([
-      [524, 4],
-      [2907, 2],
-      [3116, 14],
-      [3360, 2],
+      [2904, 2],
+      [3119, 17],
+      [3358, 2],
     ]);
     expect(at(ember)).toEqual([
-      [1380, 2],
-      [3050, 5],
-      [3628, 2],
+      [3052, 5],
     ]);
     expect(at(sakura)).toEqual([
-      [1079, 2],
-      [1453, 2],
-      [2136, 4],
-      [2873, 2],
+      [2137, 4],
+      [2966, 2],
+      [3425, 4],
+      [3617, 2],
     ]);
   });
 
@@ -134,7 +132,7 @@ describe('graveyards', () => {
     const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
-    expect(names.length).toBe(15);
+    expect(names.length).toBe(12);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
     // The clusters are the same ones the per-mountain call finds.

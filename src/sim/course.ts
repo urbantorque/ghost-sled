@@ -2,6 +2,7 @@ import { TAU, clamp, dcos, dsin, lerp, smoothstep } from './dmath';
 import { BiomeId, MountainParams, isNamedSeed, paramsForSeed } from './mountains';
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
+import { momentPlays } from './moments';
 
 // The course is a pure function of its seed. +z is downhill, +x is the rider's right when facing
 // downhill, +y is up. Chunks are generated lazily and cached, but every chunk depends only on
@@ -131,6 +132,8 @@ export interface SkyGate {
   z: number;
   /** Radius a sled's middle must be inside. */
   r: number;
+  /** One of a set piece's ring line (moments.ts), by the set piece's index; a stage's sky gate has none. */
+  moment?: number;
 }
 
 interface Box {
@@ -2170,8 +2173,8 @@ export class Course {
   /** The sky gates, one a stage: over the stage's most open online kicker past the first 800 m, set for a
    *  boosted pop at 30 m/s, where a plain flight passes about 2 m under its rim. Worked out once,
    *  whole-course (a few chunks' features), on first ask. */
-  get skyGates(): readonly SkyGate[] {
-    if (this.gateList) return this.gateList;
+  get stageGates(): readonly SkyGate[] {
+    if (this.stageGateList) return this.stageGateList;
     this.section(0);
     const out: SkyGate[] = [];
     for (const st of this.stages) {
@@ -2193,6 +2196,21 @@ export class Course {
       const lean = (this.safeX(lipZ + 1) - this.safeX(lipZ - 1)) / 2;
       out.push({ id: st.index, stage: st.index, x: r.x + lean * GATE_REACH, y: lipY + vy * t - 0.5 * G * t * t, z: lipZ + GATE_REACH, r: GATE_R });
     }
+    this.stageGateList = out;
+    return out;
+  }
+
+  private stageGateList: SkyGate[] | null = null;
+
+  /** Every ring of light to fly, in order down the course: the stages' sky gates and the set pieces' ring
+   *  lines (moments.ts), so everything that draws or flies a ring reads one list. A stage's own gate is the one
+   *  with no `moment`. (The set pieces read the course's chunks, whose lights read the stage gates: those come
+   *  first, on their own.) */
+  get skyGates(): readonly SkyGate[] {
+    if (this.gateList) return this.gateList;
+    const out: SkyGate[] = [...this.stageGates];
+    for (const m of momentPlays(this)) out.push(...m.rings);
+    out.sort((a, b) => a.z - b.z);
     this.gateList = out;
     return out;
   }
@@ -2287,7 +2305,7 @@ export class Course {
       const v = lerp(28, 31, diff);
       const vy = v * face + (POP_BASE + POP_CHARGE * 0.55) * POP_RAMP;
       const lean = (this.safeX(lipZ + 1) - this.safeX(lipZ - 1)) / 2;
-      const gated = this.skyGates.some((g) => Math.abs(g.z - (lipZ + GATE_REACH)) < 1);
+      const gated = this.stageGates.some((g) => Math.abs(g.z - (lipZ + GATE_REACH)) < 1);
       for (let k = 1; k <= 5; k++) {
         const t = k * (gated ? 0.12 : 0.2);
         const z = lipZ + v * t;

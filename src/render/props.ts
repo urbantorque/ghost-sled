@@ -3,6 +3,7 @@ import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
+import { Plant, emberGrove, hasGrove, orchard } from './groves';
 import { makeToonMaterial, shared } from './materials';
 import {
   cairnGeometry,
@@ -158,6 +159,13 @@ function farLightGeometry(great: boolean): BufferGeometry {
     part(new OctahedronGeometry(0.2 * s, 0), new Color('#FFC94A'), { scale: [1, 1.9, 1], pos: [0, 0.1 * s, 0] }),
     part(new OctahedronGeometry(0.12 * s, 0), new Color('#FFF6D8').multiplyScalar(1.4), { scale: [1, 1.9, 1], pos: [0, 0.08 * s, 0.06 * s] }),
   ]);
+}
+
+/** Whether a forest pick carries snow on its boughs to shake off (Props.treesNear). */
+function boughs(biome: string, set: 'a' | 'b', pick: number): boolean {
+  if (biome === 'alpine') return !(set === 'b' && pick === 1);
+  if (biome === 'volcanic') return set === 'a' && pick === 0;
+  return biome === 'blossom';
 }
 
 function hashf(a: number, b: number, c: number): number {
@@ -820,6 +828,11 @@ export class Props {
   private forest(i: number, clear: Clearing[]): void {
     const c = this.course;
     const dens = this.forestDensity;
+    // Ember's basalt country and Sakura's orchards are laid out as places, not scattered (groves.ts).
+    if (hasGrove(c.biome)) {
+      (c.biome === 'volcanic' ? emberGrove : orchard)(c, i, dens, this.arches, clear, this.plantFn);
+      return;
+    }
     const z0 = i * CHUNK_LEN;
     const share = VARIANT_SHARE[c.biome];
     const dress = !!this.dresser;
@@ -902,6 +915,58 @@ export class Props {
     // (A far row's tree is marked to lean into the fog, wherever its chunk's batch is.)
     this.push(b, this.v, this.q, this.s, b.startsWith('fo:') ? pick + AERIAL_PICK : pick, v * (1 + w), v, v * (1 - w));
   }
+
+  /**
+   * The near rows' trees with snow on their boughs (a pine, a blossom, a charred pine; never a snag, a
+   * spire or a basalt formation) standing within `r` metres of sim (x, z) across the run and within
+   * `ahead` metres down it: what a rider passing close shakes snow from (world.ts). Writes triples (a key
+   * that names the tree for this course, its sim x and z) into out and returns how many trees. Reads the
+   * chunks' packed batches: nothing is made.
+   */
+  treesNear(x: number, z: number, r: number, ahead: number, out: number[]): number {
+    const biome = this.course.biome;
+    if (biome === 'glacier') return 0;
+    let n = 0;
+    for (let i = Math.floor((z - 1) / CHUNK_LEN); i <= Math.floor((z + ahead) / CHUNK_LEN); i++) {
+      const packed = this.cache.get(i);
+      if (!packed) continue;
+      for (let s = 0; s < 2; s++) {
+        const set = s === 0 ? 'a' : 'b';
+        const b = packed.get(s === 0 ? 'fw:a' : 'fw:b');
+        if (!b) continue;
+        for (let k = 0; k < b.p.length; k++) {
+          const pick = b.p[k] >= AERIAL_PICK - 0.5 ? b.p[k] - AERIAL_PICK : b.p[k];
+          if (!boughs(biome, set, pick)) continue;
+          const tx = b.m[k * 16 + 12];
+          const tz = -b.m[k * 16 + 14];
+          if (Math.abs(tx - x) > r || tz < z - 1 || tz > z + ahead) continue;
+          if (n * 3 + 2 >= out.length) return n;
+          out[n * 3] = i * 65536 + s * 32768 + k;
+          out[n * 3 + 1] = tx;
+          out[n * 3 + 2] = tz;
+          n++;
+        }
+      }
+    }
+    return n;
+  }
+
+  /** One grove piece (groves.ts): its variant is the grove's choice (Low draws each set's first only), its
+   *  colour a step off its neighbours' as a forest tree's, and it never leans (a formation stands plumb,
+   *  an orchard is planted straight). */
+  private readonly plantFn: Plant = (near, set, pick, side, e, z, scale, yaw, tall) => {
+    const c = this.course;
+    const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+    const zi = Math.round(z * 8);
+    this.q.setFromAxisAngle(this.up, yaw);
+    this.v.set(x, visualGround(c, x, z) - 0.1, -z);
+    this.s.set(scale, scale * tall, scale);
+    const v = 0.9 + 0.11 * hashf(zi, side, 18);
+    const w = (hashf(zi, side, 19) - 0.5) * 0.09;
+    const b = (near ? 'fw:' : 'fo:') + set;
+    const p = this.arches ? pick : 0;
+    this.push(b, this.v, this.q, this.s, near ? p : p + AERIAL_PICK, v * (1 + w), v, v * (1 - w));
+  };
 
   private push(key: string, pos: Vector3, q: Quaternion, s: Vector3, pick = 0, r = 1, g = 1, bl = 1): void {
     this.m.compose(pos, q, s);
