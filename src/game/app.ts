@@ -16,7 +16,7 @@ import { UI } from '../ui/ui';
 import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
-import { prewarmSledPortraits, setSledPortraits } from '../ui/menus';
+import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
 import type { GarageShelf, GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
@@ -290,7 +290,11 @@ export class App {
       this.ui.setMirror(t !== 'low');
     };
     // The shop shows the real sled meshes, rendered once each by the main renderer.
-    setSledPortraits((id, seated) => this.world.sledPortrait(id, seated));
+    // The large preview seats the rider in the garage's hat and scarf: the look the save says is worn.
+    setSledPortraits((id, seated) => {
+      const d = this.save.data;
+      return this.world.sledPortrait(id, seated, seated ? { hat: hatById(shelfState(d, 'hat').on).id, scarf: scarfById(shelfState(d, 'scarf').on) } : undefined);
+    });
     this.input = new InputController(this.world.renderer.domElement);
     this.ui = new UI(root, {
       onRide: () => this.ride(),
@@ -300,6 +304,7 @@ export class App {
       onChallenge: () => this.shareChallenge(),
       onPaint: (id) => this.paint(id),
       onGarage: (shelf, id) => this.garage(shelf, id),
+      onListenSound: (id) => this.audio.previewSledSound(soundById(id).id),
       onRideHome: () => this.rideHome(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
@@ -697,6 +702,8 @@ export class App {
   /** Puts on what the save says is worn: the rider's hat and scarf, the sled's trail and its sound. */
   private applyLook(): void {
     const d = this.save.data;
+    // The shop's seated preview was drawn in the last look: it is drawn again in this one.
+    forgetSeatedPortraits();
     this.world.rider.setHat(hatById(shelfState(d, 'hat').on).id);
     this.world.rider.setScarf(scarfById(shelfState(d, 'scarf').on));
     this.world.setTrail(trailById(shelfState(d, 'trail').on));

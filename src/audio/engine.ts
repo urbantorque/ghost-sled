@@ -362,6 +362,52 @@ export class AudioEngine {
     }
   }
 
+  /** The garage's Listen button: about 2.4 s of the sled sound `id` under a rider carving at a cruise, with
+   *  two clean landings, then the runners fade. Drives the runners' bed itself (no run is feeding frames in
+   *  the garage), never the band. The sound chosen stays the one worn, which the garage sets after. */
+  previewSledSound(id: SledSoundId): void {
+    this.unlock();
+    const c = this.core;
+    const ctx = this.ctx;
+    if (!c || !ctx) return;
+    const worn = this.sledSound;
+    this.setSledSound(id);
+    if (this.previewRaf) cancelAnimationFrame(this.previewRaf);
+    const t0 = performance.now();
+    const landed = [false, false];
+    const step = (): void => {
+      const t = (performance.now() - t0) / 1000;
+      const cc = this.core;
+      if (!cc || !this.ctx || this.ctx.state !== 'running') {
+        this.previewRaf = 0;
+        return;
+      }
+      const run = t < 2.4;
+      const speed = run ? Math.min(24, 8 + t * 22) : Math.max(0, 24 - (t - 2.4) * 40);
+      const carve = run ? 0.35 + 0.3 * Math.sin(t * 5.2) : 0;
+      const frame: AudioFrame = { speed, grounded: true, carve, drifting: false, slip: 0, onIce: false, boostGlow: 0, drafting: false, comboChain: 0, comboMult: 1, intensity: 0, danger: 0, crashed: false };
+      try {
+        cc.ambience.update(frame, this.ctx.currentTime, false, cc.music.key(), 1);
+      } catch (err) {
+        this.warn(err);
+      }
+      for (const [k, at] of [[0, 1.0], [1, 1.9]] as const) {
+        if (!landed[k] && t >= at) {
+          landed[k] = true;
+          this.simEventNow({ type: 'land', quality: 'clean', airtime: 0.6, halfTurns: 0, flips: 0, impact: 6, late: false });
+        }
+      }
+      if (t < 3) this.previewRaf = requestAnimationFrame(step);
+      else {
+        this.previewRaf = 0;
+        if (this.sledSound !== worn) this.setSledSound(worn);
+      }
+    };
+    this.previewRaf = requestAnimationFrame(step);
+  }
+
+  private previewRaf = 0;
+
   setVolumes(v: { master: number; music: number; sfx: number }): void {
     this.volumes = { master: clamp01(v.master), music: clamp01(v.music), sfx: clamp01(v.sfx) };
     this.applyVolumes(false);

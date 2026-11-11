@@ -72,6 +72,11 @@ export function setSledPortraits(src: SledPortraitSource | null): void {
   portraitSource = src;
 }
 
+/** The rider's look changed in the garage: seated previews are drawn again, in the new hat and scarf. */
+export function forgetSeatedPortraits(): void {
+  for (const k of [...portraitUrls.keys()]) if (k.endsWith(':1')) portraitUrls.delete(k);
+}
+
 /**
  * Draws the shop's portraits ahead of time (the seated preview of `seated`, then every tile), one
  * at a time while `ok()` holds, so a first visit to the shop opens with its pictures in rather than
@@ -619,6 +624,12 @@ export class Menus {
       const b = btn(this.ctx, { cls: 'gs-btn-quiet gs-btn-lg gs-shop-btn', icon: 'lock', fk: 'sled-act', disabled: true, onClick: () => undefined }, h('span', 'gs-need', h('span', 'gs-num', fmt(need)), ' gifts to go'));
       b.setAttribute('aria-label', `${it.name} costs ${fmt(it.price)} gifts. You need ${fmt(need)} more`);
       act.append(b);
+    }
+    // A sound is heard before it is bought: Listen plays a few seconds of it under a carving rider.
+    if (tab === 'sound' && this.hd.onListenSound) {
+      const listen = btn(this.ctx, { cls: 'gs-btn-quiet gs-btn-lg gs-shop-btn gs-listen', icon: 'play', label: 'Listen', fk: 'look-listen', onClick: () => this.hd.onListenSound?.(it.id) });
+      listen.setAttribute('aria-label', `Listen to ${it.name}`);
+      act.append(listen);
     }
     const hero = h('section', 'gs-shop-hero', stage, h('div', 'gs-shop-info', h('div', 'gs-shop-title', name, blurb), note, act));
     hero.setAttribute('aria-labelledby', name.id);

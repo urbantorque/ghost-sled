@@ -298,6 +298,7 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `audiocpu.js`, `arrange.js`, `render.js` | The audio engine's main-thread milliseconds and nodes a second (`engine.debugCpu`); every stage line, set piece and finish against the drop the band landed on a live run; one offline render for an A/B |
 | `levels.js`, `audio-capture.js` | Mix levels from offline renders of the shipped DSP, and the live master tapped per frame (onsets, sync to the picture, the choir) |
 | `stunt-sim.ts` | The stunt pilot in node, without a browser: `npx tsx scripts/playtest/stunt-sim.ts [runsPerMountain] [firstSeed] [mood]` |
+| `garage-look.js` | Wears a hat and a scarf, opens the garage, shoots the Sleds and Sounds tabs and presses Listen, reading the master while it plays |
 | `feelfx.js`, `fireworks.js`, `garage-tris.ts` | Each dash, ward, a sky gate from 60 m and the finish off a replayed run (a garage look worn and reduced motion as options); a synthetic street or win show mid-run; the hats' and effects' triangle counts |
 | `setpieces.js` | Round 6's set pieces frame by frame: a replayed run shot as each set piece's card comes up and every so often while it plays, with the sim's own count, the race machine's gap and the fall's gap |
 | `moments-plan.ts`, `pool-moments.ts` | What each set piece holds on every mountain and a few Dailies (gates, rings, steps, paces), without a browser; and how the bundled pools' riders played each one |

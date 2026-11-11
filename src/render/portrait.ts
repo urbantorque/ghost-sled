@@ -18,7 +18,8 @@ import {
 } from 'three';
 import { Mood } from '../sim/chaos';
 import { makeToonMaterial, shared } from './materials';
-import { RIDER_COLORS, SCARF_KNOT, riderArmGeometry, riderBodyGeometry, sledGeometryFor } from './meshes';
+import { RIDER_COLORS, SCARF_KNOT, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor } from './meshes';
+import { type HatId, type ScarfDef, scarfById } from '../game/garage';
 import { getPalette } from './palette';
 
 // Sled shop portraits: each sled's real in-game mesh (and, for the large preview, the rider seated
@@ -32,6 +33,12 @@ const RT_W = 1280;
 const RT_H = 854;
 const FOV = 24;
 
+/** What the seated rider wears in the shop's preview: the garage's hat and scarf (the classic look by default). */
+export interface PortraitLook {
+  hat: HatId;
+  scarf: ScarfDef;
+}
+
 interface Studio {
   scene: Scene;
   camera: PerspectiveCamera;
@@ -41,6 +48,11 @@ interface Studio {
   /** The sled's own material, so a pale sled's portrait light never touches the rider. */
   sledMat: ShaderMaterial;
   rider: Group;
+  /** The seated rider's head and scarf, swapped for the look asked for (each look's geometry kept). */
+  head: Mesh;
+  scarf: Mesh;
+  heads: Map<string, BufferGeometry>;
+  scarves: Map<string, BufferGeometry>;
   shadow: Mesh;
   bowl: Mesh;
   geos: Map<number, BufferGeometry>;
@@ -95,11 +107,12 @@ const BOWL = { x: 0, y: 0.1312, z: 0.05, r: 0.585 };
  * shadow), or null when the renderer cannot draw one (a lost context, no canvas encoder).
  * `seated` puts the rider on it, in the in-game seated pose, for the shop's large preview.
  */
-export function sledPortrait(r: WebGLRenderer, id: number, seated: boolean): Promise<string | null> {
-  const key = `${id}:${seated ? 1 : 0}`;
+export function sledPortrait(r: WebGLRenderer, id: number, seated: boolean, look?: PortraitLook): Promise<string | null> {
+  const wear: PortraitLook = look ?? { hat: 'beanie', scarf: scarfById('classic') };
+  const key = `${id}:${seated ? 1 : 0}` + (seated ? `:${wear.hat}:${wear.scarf.id}` : '');
   let p = cache.get(key);
   if (!p) {
-    p = draw(r, id, seated).catch(() => null);
+    p = draw(r, id, seated, wear).catch(() => null);
     cache.set(key, p);
     // A failed portrait (a context lost mid-render) is tried again the next time it is asked for.
     void p.then((u) => {
@@ -117,12 +130,34 @@ function toon(): ShaderMaterial {
   return m;
 }
 
-/** The scarf's two tails at rest, trailing back off the knot as if in a light breeze. */
-function scarfGeometry(): BufferGeometry {
+const CREAM_KNIT = new Color('#F3E6D4');
+const INK_KNIT = new Color('#1A2140');
+
+/** The scarf's two tails at rest, trailing back off the knot as if in a light breeze, in the garage scarf's
+ *  length, width and knit (the same patterns rider.ts paints, read along each tail). */
+function scarfGeometry(def: ScarfDef = scarfById('classic')): BufferGeometry {
   const pos: number[] = [];
   const col: number[] = [];
   const idx: number[] = [];
   const a = RIDER_COLORS.accent;
+  const acc = def.accent === 'cream' ? CREAM_KNIT : def.accent === 'ink' ? INK_KNIT : a;
+  const knit = (i: number, n: number): { k: number; accent: boolean } => {
+    const fromTip = n - 1 - i;
+    switch (def.pattern) {
+      case 'tipStripes':
+        return { k: fromTip === 1 || fromTip === 3 ? 0.72 : i === 0 ? 0.86 : 1, accent: false };
+      case 'bars':
+        return { k: 1, accent: fromTip === 1 || fromTip === 3 };
+      case 'tip':
+        return { k: 1, accent: fromTip <= 1 };
+      case 'bands':
+        return { k: 1, accent: i > 0 && i % 2 === 0 };
+      case 'rib':
+        return { k: i % 2 === 0 ? 0.8 : 1, accent: false };
+      default:
+        return { k: i === 0 ? 0.86 : 1, accent: false };
+    }
+  };
   const tails: Array<[number, number]> = [
     [1, 6],
     [-1, 5],
@@ -131,14 +166,16 @@ function scarfGeometry(): BufferGeometry {
     const first = pos.length / 3;
     for (let i = 0; i < n; i++) {
       const u = i / (n - 1);
+      const L = def.length;
       // Back (+z) and down from the knot, flaring a little to its own side, with a soft wave.
       const x = SCARF_KNOT.x + side * (0.03 + 0.07 * u) + Math.sin(u * 5 + side) * 0.03;
-      const y = SCARF_KNOT.y - 0.05 - 0.22 * u * u;
-      const z = SCARF_KNOT.z + 0.04 + 0.6 * u * (side > 0 ? 1 : 0.8);
-      const w = 0.075 * (1 - 0.45 * u) * (u < 0.15 ? 0.6 + u * 2.6 : 1);
-      const k = i === n - 2 ? 0.74 : u < 0.2 ? 0.86 : 1;
+      const y = SCARF_KNOT.y - 0.05 - 0.22 * u * u * L;
+      const z = SCARF_KNOT.z + 0.04 + 0.6 * u * L * (side > 0 ? 1 : 0.8);
+      const w = 0.075 * def.width * (1 - 0.45 * u) * (u < 0.15 ? 0.6 + u * 2.6 : 1);
+      const { k, accent } = knit(i, n);
+      const c = accent ? acc : a;
       pos.push(x - w, y + w * 0.35, z, x + w, y - w * 0.35, z);
-      col.push(a.r * k, a.g * k, a.b * k, a.r * k, a.g * k, a.b * k);
+      col.push(c.r * k, c.g * k, c.b * k, c.r * k, c.g * k, c.b * k);
       if (i > 0) {
         const b = first + (i - 1) * 2;
         idx.push(b, b + 1, b + 2, b + 1, b + 3, b + 2);
@@ -302,7 +339,9 @@ function setup(r: WebGLRenderer): Studio {
   armR.position.set(0.27, 0.56, 0);
   armL.rotation.set(0.72, 0, -0.3);
   armR.rotation.set(0.72, 0, 0.3);
-  body.add(new Mesh(riderBodyGeometry(), mat), armL, armR, new Mesh(scarfGeometry(), scarfMat));
+  const head = new Mesh(riderHeadGeometry(), mat);
+  const scarf = new Mesh(scarfGeometry(), scarfMat);
+  body.add(new Mesh(riderTorsoGeometry(), mat), head, armL, armR, scarf);
   const rider = new Group();
   rider.add(body);
   const bowl = bowlMesh();
@@ -314,7 +353,7 @@ function setup(r: WebGLRenderer): Studio {
   // sRGB storage, so the GPU encodes on write and blends in linear light, like the main frame.
   const samples = r.capabilities.isWebGL2 ? 4 : 0;
   const rt = new WebGLRenderTarget(RT_W, RT_H, { samples, colorSpace: SRGBColorSpace });
-  return { scene, camera: new PerspectiveCamera(FOV, RT_W / RT_H, 0.1, 60), rt, rig, sled, sledMat, rider, shadow, bowl, geos: new Map([[0, sled.geometry]]) };
+  return { scene, camera: new PerspectiveCamera(FOV, RT_W / RT_H, 0.1, 60), rt, rig, sled, sledMat, rider, head, scarf, heads: new Map([['beanie', head.geometry]]), scarves: new Map([['classic', scarf.geometry]]), shadow, bowl, geos: new Map([[0, sled.geometry]]) };
 }
 
 /** The shared lighting uniforms this module overrides for its one render, saved to put back. */
@@ -331,9 +370,17 @@ const SAVED = {
   clearAlpha: 1,
 };
 
-async function draw(r: WebGLRenderer, id: number, seated: boolean): Promise<string | null> {
+async function draw(r: WebGLRenderer, id: number, seated: boolean, wear: PortraitLook): Promise<string | null> {
   if (r.getContext().isContextLost()) return null;
   const s = (studio ??= setup(r));
+  if (seated) {
+    let hg = s.heads.get(wear.hat);
+    if (!hg) s.heads.set(wear.hat, (hg = riderHeadGeometry(false, wear.hat)));
+    s.head.geometry = hg;
+    let sg = s.scarves.get(wear.scarf.id);
+    if (!sg) s.scarves.set(wear.scarf.id, (sg = scarfGeometry(wear.scarf)));
+    s.scarf.geometry = sg;
+  }
   const look = SLED_LOOK[id];
   let geo = s.geos.get(id);
   if (!geo) {

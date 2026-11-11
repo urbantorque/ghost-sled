@@ -620,8 +620,8 @@ export class World {
   /** The sled shop's previews (src/render/portrait.ts): the real sled mesh, with the rider seated
    *  for the large preview, drawn once by this renderer through a small offscreen scene in the toon
    *  lighting, as an image URL. Null when it cannot draw (a lost context). Loaded on first use. */
-  sledPortrait(id: number, seated: boolean): Promise<string | null> {
-    return import('./portrait').then((m) => m.sledPortrait(this.renderer, id, seated));
+  sledPortrait(id: number, seated: boolean, look?: import('./portrait').PortraitLook): Promise<string | null> {
+    return import('./portrait').then((m) => m.sledPortrait(this.renderer, id, seated, look));
   }
 
   private applyWeather(): void {

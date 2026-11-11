@@ -363,6 +363,8 @@ export interface UIHandlers {
   onPaint?(id: string): void;
   /** A garage item (scarf, hat, trail or sled sound): buy it (if not owned) and wear it. */
   onGarage?(shelf: GarageShelfId, id: string): void;
+  /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
+  onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
   /** Any UI click/tap (for audio unlock and UI sounds). */
   onUiSound(kind: 'tap' | 'confirm' | 'back'): void;

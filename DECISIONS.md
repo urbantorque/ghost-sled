@@ -2027,3 +2027,13 @@ Every place where I replaced, extended or interpreted the brief, and why.
     in the browser the skilled pilots' races read a little less live (0.61 to 0.71 of a run against 0.70 to 0.85), as
     they ride faster on the lanterns their set pieces pay, on four runs a pilot, inside the noise. None of it has been
     played or heard by a person.
+275. **The garage's loose ends, closed.** The feel lane left three. The Sleds tab's seated preview wore the beanie
+    and the classic scarf whatever the rider wore: the portrait studio now seats the rider in the garage's hat and
+    scarf (each look's head and scarf built once, keyed into the portrait cache), and the shop draws its seated
+    preview again whenever the look changes. A sled sound could not be heard before it was bought: the Sounds shelf
+    has a Listen button beside its action, which plays about 2.4 s of that sound under a rider carving at a cruise with
+    two clean landings (`AudioEngine.previewSledSound`, driving the runners' bed itself, since no run feeds frames in
+    the garage, and never the band), then puts the worn sound back. On the title it lifts the master from 0.044 to
+    0.072 RMS; the console stays clean on desktop and phone (`scripts/playtest/garage-look.js`). And the UI harness
+    opened only the Sleds tab: it now builds the paints and the four shelves as the game does, so every tab can be
+    opened, bought from and worn there.

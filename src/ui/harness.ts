@@ -3,7 +3,9 @@
 // URL params: s=<scenario> (see SCENARIOS), mode=keyboard|mouse|touch,
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
-import type { GhostKind, HudModel, MissionView, ResultsModel, SettingsModel, SledCard, TitleModel, UIHandlers } from './contract';
+import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, ResultsModel, SettingsModel, SledCard, TitleModel, UIHandlers } from './contract';
+import { SHELVES } from '../game/garage';
+import { PAINTS } from '../game/paints';
 import type { Beat, BankTier, GhostRef, PassWord } from '../game/beats';
 import type { InputMode, TouchVisual } from '../game/input';
 import { bankHeader, bankTier } from '../game/stake';
@@ -257,7 +259,7 @@ const handlers: UIHandlers & UIMenuHandlers = {
   onSelectSled: (id) => {
     log(`onSelectSled(${id})`);
     sleds = sleds.map((s) => ({ ...s, equipped: s.id === id }));
-    ui.showSleds(sleds, wallet);
+    showGarage();
   },
   onBuySled: (id) => {
     log(`onBuySled(${id})`);
@@ -265,16 +267,55 @@ const handlers: UIHandlers & UIMenuHandlers = {
     if (!s) return;
     wallet -= s.price;
     sleds = sleds.map((x) => (x.id === id ? { ...x, owned: true } : { ...x, affordable: x.owned || x.price <= wallet }));
-    ui.showSleds(sleds, wallet);
+    showGarage();
   },
   onSettings: (s) => {
     settings = { ...settings, ...s };
     log(`onSettings(${JSON.stringify(s)})`);
   },
   onUiSound: () => undefined,
-  onOpenSleds: () => ui.showSleds(sleds, wallet),
+  onPaint: (id) => {
+    log(`onPaint(${id})`);
+    wearLook('paint', id);
+  },
+  onGarage: (shelf, id) => {
+    log(`onGarage(${shelf}, ${id})`);
+    wearLook(shelf, id);
+  },
+  onListenSound: (id) => log(`onListenSound(${id})`),
+  onOpenSleds: () => showGarage(),
   onOpenSettings: () => ui.showSettings(settings),
 };
+
+// The garage's other shelves, as the game builds them (app.ts paintCards, garageShelves): the free item worn.
+const looks: Record<'paint' | GarageShelfId, { owned: Set<string>; on: string }> = {
+  paint: { owned: new Set(PAINTS.filter((p) => p.price === 0).map((p) => p.id)), on: PAINTS.find((p) => p.price === 0)?.id ?? PAINTS[0].id },
+  scarf: { owned: new Set(['classic']), on: 'classic' },
+  hat: { owned: new Set(['beanie']), on: 'beanie' },
+  trail: { owned: new Set(SHELVES.trail.filter((t) => t.price === 0).map((t) => t.id)), on: SHELVES.trail.find((t) => t.price === 0)?.id ?? '' },
+  sound: { owned: new Set(['runners']), on: 'runners' },
+};
+function paintCards(): PaintCard[] {
+  const st = looks.paint;
+  return PAINTS.map((p) => ({ id: p.id, name: p.name, hex: p.hex, price: p.price, owned: st.owned.has(p.id), on: st.on === p.id, affordable: wallet >= p.price }));
+}
+function shelves(): GarageShelf[] {
+  return (['scarf', 'hat', 'trail', 'sound'] as const).map((id) => ({ id, items: SHELVES[id].map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, price: i.price, owned: looks[id].owned.has(i.id), on: looks[id].on === i.id, affordable: wallet >= i.price })) }));
+}
+function showGarage(): void {
+  ui.showSleds(sleds, wallet, paintCards(), shelves());
+}
+function wearLook(shelf: 'paint' | GarageShelfId, id: string): void {
+  const st = looks[shelf];
+  const price = shelf === 'paint' ? (PAINTS.find((p) => p.id === id)?.price ?? 0) : (SHELVES[shelf].find((i) => i.id === id)?.price ?? 0);
+  if (!st.owned.has(id)) {
+    if (wallet < price) return;
+    wallet -= price;
+    st.owned.add(id);
+  }
+  st.on = id;
+  showGarage();
+}
 
 const ui = new UI(document.getElementById('app')!, handlers);
 /** The live UI, for automation (window.__ui.toast(...) etc.). */
@@ -1002,7 +1043,7 @@ const SCENARIOS: Record<string, () => void> = {
   },
   sleds: () => {
     goTitle();
-    ui.showSleds(sleds, wallet);
+    showGarage();
   },
   settings: () => {
     goTitle();
