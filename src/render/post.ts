@@ -420,6 +420,8 @@ export class PostFX {
               col += warm * acc * rays * fall * clearRider * air * uShaft * 0.42;
             }
           }
+          // Round 7: the shafts marched through the frame's depth (postfx/shafts.ts).
+          col += pipeShafts(uv, uShaftColor) * clearRider;
           if (uLens > 0.001) {
             // Lens character, only while the sun's disc itself is open to the lens (a peak or a trunk
             // across it puts it out): a thin anamorphic streak through the disc and a few soft ghosts
@@ -464,7 +466,7 @@ export class PostFX {
                 gsum += exp(-dot(dd, dd) / (sz * sz)) * tw;
               }
             }
-            float toward = 0.45 + 1.6 * exp(-length((uv - uSunUv) * vec2(uAspect, 1.0)) * 2.2) * step(0.001, uShaft + uLens);
+            float toward = 0.45 + 1.6 * exp(-length((uv - uSunUv) * vec2(uAspect, 1.0)) * 2.2) * step(0.001, uShaft + uLens + uShaftSun.z);
             col += mix(vec3(1.0), lightHue, 0.35) * gsum * uGlitter * toward * clearRider * 2.6;
           }
           if (uGust > 0.001) {
@@ -859,7 +861,11 @@ export class PostFX {
     r.render(scene, camera);
     this.aimShafts(camera);
     // The picture the bloom and the composite read: the scene, or the lens pass's when a beat blurs it.
-    const src = pipe.run(this.sceneRT, camera as PerspectiveCamera, this.composite.uniforms.uShaft.value as number);
+    const cu = this.composite.uniforms;
+    const src = pipe.run(this.sceneRT, camera as PerspectiveCamera, cu.uShaft.value as number, cu.uSunUv.value as Vector2);
+    // (Round 6's fan of taps in the composite stands down while the marched shafts are drawn; it is
+    // what `?post=-shafts` shows.)
+    if (pipe.plan.shafts) cu.uShaft.value = 0;
     if (this.bloomEnabled) {
       const first = this.mips[0];
       this.prefilter.uniforms.tSrc.value = src;

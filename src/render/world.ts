@@ -28,6 +28,7 @@ import { PostFX } from './post';
 import { PASSES, detailOf, parseSwitches, type Detail, type PassSettings, type Tier } from './postfx/tiers';
 import { VIEWS, type PipeView } from './postfx/pipeline';
 import { cine } from './cine';
+import { beginShaftSources } from './postfx/shafts';
 import { Props } from './props';
 import { SetPieces } from './landmarks';
 import { Moments } from './moments';
@@ -763,6 +764,7 @@ export class World {
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
+    beginShaftSources();
     lake.uGroundTime.value = reduced() ? 0 : v.time;
     this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
     this.sky.setStill(this.mood === Mood.None && reduced());

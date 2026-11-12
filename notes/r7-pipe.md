@@ -59,3 +59,24 @@ four samples a pixel is a trap), unless the save already chose it.
 ## What the main lane must wire or decide
 
 (Filled in as the work goes.)
+
+## Progress log (kept current; folded into the sections above at the end)
+
+- **Depth** (commit 1fbdcef). The scene target carries a D24S8 depth texture when a tier's passes read it
+  (`wantsDepth`). Under MSAA it is resolved with the colour (depth only: the stencil resolve stays off);
+  a frame whose plan reads no depth does not resolve it. `postfx/depth.ts` holds the shared uniforms and
+  GLSL. Ghosts, particles and the sky dome write no depth: passes see the opaque world behind them.
+- **Ambient occlusion and contact shadows** (1fbdcef). `postfx/ao.ts`. Half-frame RGBA8, two passes (the
+  search, a 4x4 depth-aware blur), then four taps in the composite. Ultra: 3 slices x 3 steps and an 8-step
+  contact ray; High: 1 slice x 2 steps. Lane GPU time at 1280x720 (timer query, other lanes running): High
+  0.2 to 0.3 ms, Ultra 0.4 to 0.7 ms, plus about 0.1 ms in the composite. +2 draw calls, +2 triangles. It
+  scales with pixels: about 4x that at a 2560x1440 frame. Frames: `shots/r7/pipe/ao/sheet-*.png`.
+  Limits: it is applied in the composite, so powder thrown over the sled's contact takes the tint too; a
+  luminance guard keeps it off anything brighter than lit snow (lamps, windows, glints).
+- **Shafts** (this commit). `postfx/shafts.ts`. Two zoom-blur passes at 1/4 (Medium) or 1/2 (High, Ultra)
+  of the frame, R8. 6, 8 and 12 taps a pass. The sun's are driven exactly as before by `GradeParams.shafts`
+  and the disc; `pushShaftSource(x, y, z, r, g, b, strength, radius)` offers one bright place a frame
+  (a cavern mouth). Lane GPU time at 1280x720: 0.15 to 0.4 ms; +2 draws a source. Round 6's fan in the
+  composite still exists behind `?post=-shafts` (the before); the main lane may delete it.
+  Ember and Sakura have `shafts: 0` in their grades, so nothing shows there until the light lane raises it.
+  Frames: `shots/r7/pipe/shafts/sheet-high.png`.

@@ -1,8 +1,9 @@
-import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, type PerspectiveCamera, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, type PerspectiveCamera, type Texture, type Vector2, type WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { cine } from '../cine';
 import { AOPass, AO_COMPOSITE_GLSL, aoComposite } from './ao';
 import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lensMotionPx } from './depth';
 import { Quad } from './quad';
+import { SHAFT_COMPOSITE_GLSL, ShaftsPass, shaftComposite, shaftPlace } from './shafts';
 import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
 import { GpuTimer } from './timing';
 
@@ -28,6 +29,7 @@ export const pipeUniforms = {
   uProjScale: depthUniforms.uProjScale,
   uDepthTexel: depthUniforms.uDepthTexel,
   ...aoComposite,
+  ...shaftComposite,
   /** The letterbox: each bar's height as a share of the frame's (0: none). */
   uBars: { value: 0 },
   uPipeView: { value: 0 },
@@ -36,6 +38,7 @@ export const pipeUniforms = {
 export const PIPE_COMPOSITE_GLSL = /* glsl */ `
   ${DEPTH_GLSL}
   ${AO_COMPOSITE_GLSL}
+  ${SHAFT_COMPOSITE_GLSL}
   uniform float uBars;
   uniform float uPipeView;
   // A beat's letterbox: two bars eased in by the camera (cine.letterbox), black, with a hairline of
@@ -52,6 +55,7 @@ export const PIPE_COMPOSITE_GLSL = /* glsl */ `
     if (uPipeView < 1.5) return raw >= 1.0 ? vec3(0.0, 0.0, 0.2) : vec3(1.0 - depthKey(linDepth(raw)) * 1.6);
     if (uPipeView < 2.5) return vec3(texture2D(tAO, uv).r);
     if (uPipeView < 3.5) return vec3(texture2D(tAO, uv).g);
+    if (uPipeView < 4.5) return vec3(uShaftSun.z > 0.001 ? texture2D(tShaftSun, uv).r : 0.0, uShaftPlace.z > 0.001 ? texture2D(tShaftPlace, uv).r : 0.0, 0.0);
     return col;
   }
 `;
@@ -68,6 +72,7 @@ export class Pipeline {
   readonly lightDir = new Vector3(0.3, 0.8, 0.2);
   view: PipeView = 'none';
   readonly ao: AOPass;
+  readonly shafts: ShaftsPass;
   private depthTex: DepthTexture | null = null;
   private signals: FrameSignals = { post: true, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false, motionPx: 0 };
   private w = 2;
@@ -77,6 +82,7 @@ export class Pipeline {
     this.quad = new Quad(renderer);
     this.timer = new GpuTimer(renderer);
     this.ao = new AOPass(this.quad);
+    this.shafts = new ShaftsPass(this.quad);
   }
 
   /** A tier's passes (and the dev switches): builds or drops the scene target's depth texture and
@@ -102,12 +108,14 @@ export class Pipeline {
       this.depthTex = null;
     }
     this.ao.configure(this.switches.ao ? passes.ao : 'off', passes.contact && this.switches.contact);
+    this.shafts.configure(this.switches.shafts ? passes.shaftTaps : 0, passes.shaftDiv);
   }
 
   setSize(w: number, h: number): void {
     this.w = w;
     this.h = h;
     this.ao.setSize(w, h);
+    this.shafts.setSize(w, h);
   }
 
   /** Before the scene pass: reads the camera's cine state and decides whether this frame's depth is
@@ -119,7 +127,7 @@ export class Pipeline {
     f.dof = cine.dof;
     f.motionBlur = cine.motionBlur;
     f.letterbox = cine.letterbox;
-    f.shafts = shafts;
+    f.shafts = Math.max(shafts, shaftPlace.strength);
     f.reduced = reducedMotion;
     f.motionPx = lensMotionPx(camera, this.h);
     planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
@@ -129,12 +137,12 @@ export class Pipeline {
 
   /**
    * After the scene pass: draws this frame's passes and returns the picture the bloom and the composite
-   * read (the scene's own, or the lens pass's when a beat blurs it). `shafts` is the shafts' strength
-   * now that the light's place on screen is known.
+   * read (the scene's own, or the lens pass's when a beat blurs it). `sunK` is the sun's shafts'
+   * strength now that its place on screen (`sunUv`) is known.
    */
-  run(target: WebGLRenderTarget, camera: PerspectiveCamera, shafts: number): Texture {
+  run(target: WebGLRenderTarget, camera: PerspectiveCamera, sunK: number, sunUv: Vector2): Texture {
     const f = this.signals;
-    f.shafts = shafts;
+    f.shafts = Math.max(sunK, shaftPlace.strength);
     const plan = planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
     const depth = this.depthTex && plan.depth ? this.depthTex : null;
     aimDepth(camera, depth, target.width, target.height);
@@ -142,6 +150,11 @@ export class Pipeline {
       this.timer.begin('ao');
       this.ao.render(camera, this.lightDir, plan.contact);
     } else this.ao.rest();
+    if (plan.shafts && depth) {
+      this.timer.begin('shafts');
+      // (A place that turns out to be behind the lens marches nothing; the plan still counted it.)
+      this.shafts.render(target.texture, camera, sunUv, sunK);
+    } else this.shafts.rest();
     pipeUniforms.uBars.value = plan.letterbox;
     pipeUniforms.uPipeView.value = depth ? VIEWS.indexOf(this.view) : 0;
     this.timer.begin('bloom');
@@ -156,6 +169,7 @@ export class Pipeline {
 
   dispose(): void {
     this.ao.dispose();
+    this.shafts.dispose();
     this.depthTex?.dispose();
   }
 }
