@@ -208,10 +208,11 @@ export class Moments {
   }
 
   /** A reaction for the rider to play once (rider.ts): `side` is where it happened, +1 on three.js +x. */
-  private cue(cue: NonNullable<RiderAct['cue']>, side: number): void {
+  private cue(cue: NonNullable<RiderAct['cue']>, side: number, k = 1): void {
     const a = this.act;
     a.cue = cue;
     a.cueSide = side;
+    a.cueK = k;
     a.cueN = (a.cueN ?? 0) + 1;
   }
 
@@ -245,13 +246,24 @@ export class Moments {
         case 'pass':
           if (!b.muted) {
             this.lift(0.6);
-            // Going by one: a fist pump; a double, a duel won or a lead taken back: both arms.
+            // Going by one: a glance across at it and a lean; a first pass, your best or a duel held: a
+            // fist with it; a double, a duel won, a slingshot or a lead taken back: both arms.
             const big = b.word === 'double' || b.word === 'triple' || b.word === 'streak' || b.word === 'duelWon' || b.word === 'tookBack' || b.word === 'slung';
-            this.cue(big ? 'cheer' : 'pump', b.ghost.dx >= 0 ? 1 : -1);
+            const fist = b.first || b.word === 'yourBest' || b.word === 'heldOff' || b.gifts > 0;
+            this.cue(big ? 'cheer' : fist ? 'pump' : 'glance', b.ghost.dx >= 0 ? 1 : -1);
           }
           break;
         case 'driftRelease':
           if (b.tier >= 3) this.lift(0.75);
+          break;
+        case 'nearMiss':
+          // Only just missed: a flinch away from it, harder for a whisker.
+          this.cue('flinch', b.side, b.grade === 'whisker' ? 1 : 0.55);
+          break;
+        case 'moment':
+          // A set piece decided: both arms for every step of it taken, a fist for a win, a slump for a loss.
+          if (b.phase === 'won') this.cue(b.of > 0 && b.n >= b.of ? 'cheer' : 'pump', 1);
+          else if (b.phase === 'lost') this.cue('slump', 1);
           break;
         case 'flow':
           if (b.phase === 'in') this.lift(0.6);
@@ -438,6 +450,7 @@ export class Moments {
       act.load = 0;
     } else {
       act.tumble = st.tumble > 0 ? 1 - st.tumble / TUMBLE_TICKS : 0;
+      act.tumbleS = TUMBLE_TICKS / 60;
       act.grind = st.grinding;
       act.wall = st.wallTicks > 0 && !st.finished ? (s.x > w.course.centerX(s.z) ? 1 : -1) : 0;
       act.finish = st.finished;

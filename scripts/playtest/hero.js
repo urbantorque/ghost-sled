@@ -56,6 +56,14 @@ async (page) => {
     const cam = w.cam;
     const orig = cam.update.bind(cam);
     window.__heroView = null;
+    // Forced acting (cfg.acts): after the world's own moments have set the rider's act, the shot's values go over it.
+    window.__heroAct = null;
+    const mo = w.moments;
+    const mu = mo.update.bind(mo);
+    mo.update = (v, dt) => {
+      mu(v, dt);
+      if (window.__heroAct) Object.assign(mo.act, window.__heroAct);
+    };
     cam.update = (t, dt) => {
       orig(t, dt);
       const v = window.__heroView;
@@ -90,12 +98,15 @@ async (page) => {
     { name: 'face', view: { az: Math.PI - 0.35, r: 2.0, up: 0.15, look: 1.25, fov: 26 } },
   ];
   const shots = [];
-  for (const v of views) {
-    await page.evaluate((view) => { window.__heroView = view; }, v.view);
-    await page.waitForTimeout(c.wait);
-    const file = `${c.out}m${c.m}-${c.tier}${c.tag ? '-' + c.tag : ''}-${v.name}.png`;
-    await page.screenshot({ path: file });
-    shots.push(file);
+  for (const a of c.acts || [{ name: '', set: null }]) {
+    await page.evaluate((set) => { window.__heroAct = set; }, a.set);
+    for (const v of views) {
+      await page.evaluate((view) => { window.__heroView = view; }, v.view);
+      await page.waitForTimeout(c.wait);
+      const file = `${c.out}m${c.m}-${c.tier}${c.tag ? '-' + c.tag : ''}${a.name ? '-' + a.name : ''}-${v.name}.png`;
+      await page.screenshot({ path: file });
+      shots.push(file);
+    }
   }
   const info = await page.evaluate(() => {
     const i = window.__gs.world.renderer.info;
