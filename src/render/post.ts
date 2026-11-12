@@ -7,6 +7,7 @@ import {
   LinearFilter,
   Mesh,
   OrthographicCamera,
+  type PerspectiveCamera,
   RGBAFormat,
   RGBFormat,
   Scene,
@@ -19,6 +20,8 @@ import {
   WebGLRenderer,
 } from 'three';
 import { shared } from './materials';
+import { PIPE_COMPOSITE_GLSL, Pipeline, pipeUniforms } from './postfx/pipeline';
+import type { PassSettings } from './postfx/tiers';
 
 // A small custom post stack (ART.md section 9): bloom via a downsample/upsample mip chain, then one
 // composite pass for colour grade, vignette, speed streaks, chromatic punch, grain and dither.
@@ -94,9 +97,12 @@ export class PostFX {
   shaftTaps: number;
   enabled = true;
   bloomEnabled = true;
+  /** Round 7's passes between the scene and the composite (postfx/pipeline.ts): the frame's depth, the
+   *  occlusion, the shafts, the lens pass. */
+  readonly pipe: Pipeline;
   /** bloomScale tames the bloom (portrait run, results hero shot); feetY is the sled's height on screen and vpX, vpY the
    *  course's vanishing point (uv, origin bottom left), for the avalanche. */
-  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1 };
+  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1, reduced: false };
 
   constructor(
     private renderer: WebGLRenderer,
@@ -106,6 +112,7 @@ export class PostFX {
     levels = 5,
   ) {
     this.levels = levels;
+    this.pipe = new Pipeline(renderer);
     this.shaftTaps = levels >= 5 ? 14 : 8;
     const type = renderer.capabilities.isWebGL2 ? HalfFloatType : UnsignedByteType;
     // The HDR scene buffer is R11G11B10F where float colour buffers are renderable: half the bytes
@@ -196,6 +203,7 @@ export class PostFX {
     this.composite = new ShaderMaterial({
       vertexShader: VERT,
       uniforms: {
+        ...pipeUniforms,
         tScene: { value: null },
         tBloom: { value: null },
         uBloom: { value: 0.55 },
@@ -321,6 +329,7 @@ export class PostFX {
           return best;
         }
         float lumaP(vec3 c) { return sqrt(dot(min(c, vec3(1.0)), vec3(0.299, 0.587, 0.114))); }
+        ${PIPE_COMPOSITE_GLSL}
         // FXAA (the compact console variant) for a scene rendered without MSAA (Medium, most phones):
         // five taps find an edge in perceptual luma, and only edge pixels take four more along it, so
         // the stair-steps on the rider, scarf, runners and tree edges smooth out for a fraction of a
@@ -370,6 +379,8 @@ export class PostFX {
             col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
             col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
           }
+          // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
+          col = pipeAO(col, uv);
           // The light's own hue, at full value: what the bloom and the lit snow lean toward.
           vec3 lightHue = uShaftColor / max(max(uShaftColor.r, uShaftColor.g), max(uShaftColor.b, 0.001));
           if (uUseBloom > 0.5) {
@@ -649,6 +660,7 @@ export class PostFX {
           // digital speckle across dark skies and pines once the sRGB curve lifts the shadows.
           float gl = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col *= 1.0 + (hash(uv * 813.0 + fract(uTime) * 91.0) - 0.5) * 0.07 * uGrain * smoothstep(0.015, 0.25, gl);
+          col = pipeView(col, uv) * pipeBars(uv);
           gl_FragColor = vec4(max(col, 0.0), 1.0);
           #include <colorspace_fragment>
           // Dither to break up banding in the big sky gradients.
@@ -754,6 +766,12 @@ export class PostFX {
     }
     this.composite.uniforms.uAspect.value = w / h;
     this.composite.uniforms.uTexel.value.set(1 / w, 1 / h);
+    this.pipe.setSize(w, h);
+  }
+
+  /** The tier's passes (postfx/tiers.ts). Call after construction and whenever the tier changes. */
+  configure(passes: PassSettings): void {
+    this.pipe.configure(passes, this.sceneRT);
   }
 
   setMsaa(samples: number): void {
@@ -835,11 +853,16 @@ export class PostFX {
       r.render(scene, camera);
       return;
     }
+    const pipe = this.pipe;
+    pipe.begin(this.sceneRT, camera as PerspectiveCamera, true, this.moodShafts, this.params.reduced);
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);
+    this.aimShafts(camera);
+    // The picture the bloom and the composite read: the scene, or the lens pass's when a beat blurs it.
+    const src = pipe.run(this.sceneRT, camera as PerspectiveCamera, this.composite.uniforms.uShaft.value as number);
     if (this.bloomEnabled) {
       const first = this.mips[0];
-      this.prefilter.uniforms.tSrc.value = this.sceneRT.texture;
+      this.prefilter.uniforms.tSrc.value = src;
       this.prefilter.uniforms.uTexel.value.set(1 / this.sceneRT.width, 1 / this.sceneRT.height);
       this.pass(this.prefilter, first);
       for (let i = 1; i < this.mips.length; i++) {
@@ -857,7 +880,7 @@ export class PostFX {
       }
     }
     const u = this.composite.uniforms;
-    u.tScene.value = this.sceneRT.texture;
+    u.tScene.value = src;
     u.tBloom.value = (this.ups[0] ?? this.mips[0]).texture;
     u.uUseBloom.value = this.bloomEnabled ? 1 : 0;
     u.uBloom.value = this.moodBloom * this.params.bloomScale;
@@ -873,8 +896,9 @@ export class PostFX {
     u.uFeet.value = this.params.feetY;
     u.uVp.value.set(this.params.vpX, this.params.vpY);
     u.uStreakFoot.value = this.params.streakFoot;
-    this.aimShafts(camera);
+    pipe.timer.begin('composite');
     this.pass(this.composite, null);
+    pipe.end();
   }
 
   /** Renders the scene from a second camera into a framed inset. x, y, w, h are CSS pixels with the
@@ -921,6 +945,7 @@ export class PostFX {
     this.sceneRT.dispose();
     for (const m of this.mips) m.dispose();
     for (const m of this.ups) m.dispose();
+    this.pipe.dispose();
     this.insetRT?.dispose();
   }
 }

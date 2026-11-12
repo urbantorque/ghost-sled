@@ -145,8 +145,10 @@ export function letterboxShare(k: number, aspect: number): number {
  * frame asks for it, so the cine contract's rest state (dof, motionBlur and letterbox all 0) adds
  * nothing over the tier's standing passes, and Low adds nothing ever.
  */
-export function planFrame(p: PassSettings, sw: PassSwitches, f: FrameSignals, aspect = 16 / 9): FramePlan {
-  const plan: FramePlan = { depth: false, ao: false, contact: false, shafts: false, dof: false, blur: false, lens: false, letterbox: 0, added: 0 };
+export function planFrame(p: PassSettings, sw: PassSwitches, f: FrameSignals, aspect = 16 / 9, out?: FramePlan): FramePlan {
+  const plan: FramePlan = out ?? { depth: false, ao: false, contact: false, shafts: false, dof: false, blur: false, lens: false, letterbox: 0, added: 0 };
+  plan.depth = plan.ao = plan.contact = plan.shafts = plan.dof = plan.blur = plan.lens = false;
+  plan.letterbox = plan.added = 0;
   if (!f.post) return plan;
   plan.ao = p.ao !== 'off' && sw.ao;
   plan.contact = plan.ao && p.contact && sw.contact;
@@ -155,7 +157,8 @@ export function planFrame(p: PassSettings, sw: PassSwitches, f: FrameSignals, as
   plan.blur = p.blurTaps > 0 && sw.blur && !f.reduced && f.motionBlur > CINE_EPS && (f.motionPx === undefined || f.motionPx > 0.5);
   plan.lens = plan.dof || plan.blur;
   plan.letterbox = sw.letterbox ? letterboxShare(f.letterbox, aspect) : 0;
-  plan.depth = plan.ao || plan.shafts || plan.lens;
+  // (The ice's screen mirror marches against last frame's depth, so it needs every frame's.)
+  plan.depth = plan.ao || plan.shafts || plan.lens || (p.mirror === 'screen' && sw.mirror);
   // The occlusion and its blur; the shafts' two radial passes; depth of field's prefilter and gather;
   // the lens pass. The letterbox is a few lines of the composite.
   plan.added = (plan.ao ? 2 : 0) + (plan.shafts ? 2 : 0) + (plan.dof ? 2 : 0) + (plan.lens ? 1 : 0);

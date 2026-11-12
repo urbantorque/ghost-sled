@@ -283,6 +283,7 @@ export class App {
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
+    if (DEV_ON) this.world.devPipe(DEV);
     this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.applyLook();
     this.audio.setQuality(detailOf(this.tiers.tier));

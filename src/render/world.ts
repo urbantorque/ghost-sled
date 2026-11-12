@@ -25,7 +25,9 @@ import { Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } fro
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
-import { PASSES, detailOf, type Detail, type PassSettings, type Tier } from './postfx/tiers';
+import { PASSES, detailOf, parseSwitches, type Detail, type PassSettings, type Tier } from './postfx/tiers';
+import { VIEWS, type PipeView } from './postfx/pipeline';
+import { cine } from './cine';
 import { Props } from './props';
 import { SetPieces } from './landmarks';
 import { Moments } from './moments';
@@ -374,6 +376,7 @@ export class World {
     this.post = new PostFX(this.renderer, 2, 2, canHalf ? quality.msaa : 0, quality.detail === 'high' ? 5 : 4);
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
+    this.post.configure(quality.passes);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
@@ -381,6 +384,44 @@ export class World {
     window.addEventListener('resize', () => this.resize());
     this.prewarm();
   }
+
+  /**
+   * The pipeline's dev switches, from the page's query (app.ts hands them over behind `?debug`):
+   * `post=` turns passes off or keeps only some (postfx/tiers.ts parseSwitches: `none`, `-ao,-blur`,
+   * `ao,shafts`), `postview=` shows what a pass made instead of the picture (depth, ao, contact, shafts,
+   * coc, motion), `gpu` times each pass on the GPU (read `world.post.pipe.timer.ms`), and `cine=`
+   * holds the camera's cine state at given values so a beat's passes can be shot without the beat
+   * (`cine=dof:1,focus:9,blur:1,box:1`).
+   */
+  devPipe(q: URLSearchParams): void {
+    const pipe = this.post.pipe;
+    if (q.has('post')) {
+      pipe.switches = parseSwitches(q.get('post'));
+      this.post.configure(this.quality.passes);
+    }
+    const view = q.get('postview') as PipeView | null;
+    if (view && VIEWS.includes(view)) pipe.view = view;
+    if (q.has('gpu')) pipe.timer.on = true;
+    const c = q.get('cine');
+    if (c) {
+      const hold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } = {};
+      for (const part of c.split(',')) {
+        const [k, v] = part.split(':');
+        const n = Number(v);
+        if (!Number.isFinite(n)) continue;
+        if (k === 'dof') hold.dof = n;
+        else if (k === 'focus') hold.focus = n;
+        else if (k === 'blur') hold.motionBlur = n;
+        else if (k === 'box') hold.letterbox = n;
+      }
+      this.cineHold = hold;
+    }
+  }
+
+  /** The camera's cine state (cine.ts), for play-tests. */
+  readonly cine = cine;
+  /** Dev: cine values held over whatever the camera wrote (devPipe). */
+  cineHold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } | null = null;
 
   /** Compiles every material in the scene now, the hidden ones too, into the target the scene pass
    *  draws into. The landing ring first draws on the run's first jump and the stomp crater on its first
@@ -455,6 +496,7 @@ export class World {
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
     this.post.setMsaa(q.msaa);
+    this.post.configure(q.passes);
     this.spirit.setQuality(q.particleBudget, q.bloom);
     this.post.shaftTaps = q.detail === 'high' ? 14 : 8;
     this.sky.setDetail(q.detail);
@@ -1004,6 +1046,8 @@ export class World {
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
     // smooth slope right under the results lens read as an overexposed smear).
     pp.footScale = v.mode === 'results' ? 1.8 : tall ? 1.3 : 1;
+    pp.reduced = feel.reduced || reduced();
+    this.post.pipe.lightDir.copy(this.palette.shadowDir);
     pp.punch = feel.reduced ? 0 : this.punch;
     pp.flash = this.flash * (feel.reduced ? 0.5 : 1);
     // An enclosed run (landmarks.ts): its dark at the frame's edges, the strobe and the way out's flash.
@@ -1033,6 +1077,7 @@ export class World {
       }
     }
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
+    if (this.cineHold) Object.assign(cine, this.cineHold);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
   }

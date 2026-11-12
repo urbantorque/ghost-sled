@@ -1,0 +1,161 @@
+import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, type PerspectiveCamera, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { cine } from '../cine';
+import { AOPass, AO_COMPOSITE_GLSL, aoComposite } from './ao';
+import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lensMotionPx } from './depth';
+import { Quad } from './quad';
+import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
+import { GpuTimer } from './timing';
+
+// Round 7's passes between the scene and the composite. post.ts owns the scene target, the bloom and
+// the composite; this owns everything new: the frame's depth, the occlusion, the shafts, the lens pass.
+// Each frame it is asked three things in order: begin() before the scene is drawn (does the target need
+// its depth resolved?), run() after it (draw the passes the plan names, and say which picture the bloom
+// and the composite read), end() once the composite is on screen.
+//
+// Every pass is gated twice: by the tier's row in tiers.ts and by this frame's plan. A pass that is not
+// in the plan draws nothing and its composite function returns on its first line.
+
+/** What the composite shows instead of the picture (dev: `?postview=`). */
+export const VIEWS = ['none', 'depth', 'ao', 'contact', 'shafts', 'coc', 'motion'] as const;
+export type PipeView = (typeof VIEWS)[number];
+
+/** The composite's side of the pipeline: uniforms to spread into its own, GLSL to splice in before
+ *  main(). post.ts adds nothing else for these passes but the calls. */
+export const pipeUniforms = {
+  tDepth: depthUniforms.tDepth,
+  uDepthNF: depthUniforms.uDepthNF,
+  uProj: depthUniforms.uProj,
+  uProjScale: depthUniforms.uProjScale,
+  uDepthTexel: depthUniforms.uDepthTexel,
+  ...aoComposite,
+  /** The letterbox: each bar's height as a share of the frame's (0: none). */
+  uBars: { value: 0 },
+  uPipeView: { value: 0 },
+};
+
+export const PIPE_COMPOSITE_GLSL = /* glsl */ `
+  ${DEPTH_GLSL}
+  ${AO_COMPOSITE_GLSL}
+  uniform float uBars;
+  uniform float uPipeView;
+  // A beat's letterbox: two bars eased in by the camera (cine.letterbox), black, with a hairline of
+  // softness so their edge does not stair-step. The HUD is the page's and draws over them.
+  float pipeBars(vec2 uv) {
+    if (uBars <= 0.0) return 1.0;
+    float edge = min(uv.y, 1.0 - uv.y);
+    return smoothstep(uBars - uDepthTexel.y, uBars + uDepthTexel.y, edge);
+  }
+  // Dev views of what the passes made.
+  vec3 pipeView(vec3 col, vec2 uv) {
+    if (uPipeView < 0.5) return col;
+    float raw = texture2D(tDepth, uv).r;
+    if (uPipeView < 1.5) return raw >= 1.0 ? vec3(0.0, 0.0, 0.2) : vec3(1.0 - depthKey(linDepth(raw)) * 1.6);
+    if (uPipeView < 2.5) return vec3(texture2D(tAO, uv).r);
+    if (uPipeView < 3.5) return vec3(texture2D(tAO, uv).g);
+    return col;
+  }
+`;
+
+export class Pipeline {
+  readonly quad: Quad;
+  readonly timer: GpuTimer;
+  /** The dev switches (`?post=`); flip one at run time for a before and after at the same frame. */
+  switches: PassSwitches = allSwitches(true);
+  passes: PassSettings = PASSES.low;
+  /** This frame's plan (the last frame's, between frames). */
+  readonly plan: FramePlan = planFrame(PASSES.low, this.switches, { post: false, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false });
+  /** The world direction to the light that casts the shadows (world.ts sets it each frame). */
+  readonly lightDir = new Vector3(0.3, 0.8, 0.2);
+  view: PipeView = 'none';
+  readonly ao: AOPass;
+  private depthTex: DepthTexture | null = null;
+  private signals: FrameSignals = { post: true, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false, motionPx: 0 };
+  private w = 2;
+  private h = 2;
+
+  constructor(renderer: WebGLRenderer) {
+    this.quad = new Quad(renderer);
+    this.timer = new GpuTimer(renderer);
+    this.ao = new AOPass(this.quad);
+  }
+
+  /** A tier's passes (and the dev switches): builds or drops the scene target's depth texture and
+   *  compiles the programs the tier will use. */
+  configure(passes: PassSettings, target: WebGLRenderTarget): void {
+    this.passes = passes;
+    const want = wantsDepth(passes, this.switches);
+    if (want && !this.depthTex) {
+      // 24 bits of depth and the 8 of stencil the rider's mask needs (contract C10), as one texture.
+      const t = new DepthTexture(target.width, target.height, UnsignedInt248Type);
+      t.format = DepthStencilFormat;
+      t.minFilter = NearestFilter;
+      t.magFilter = NearestFilter;
+      t.name = 'scene-depth';
+      this.depthTex = t;
+      target.depthTexture = t;
+      target.dispose();
+    } else if (!want && this.depthTex) {
+      target.depthTexture = null;
+      target.resolveDepthBuffer = false;
+      target.dispose();
+      this.depthTex.dispose();
+      this.depthTex = null;
+    }
+    this.ao.configure(this.switches.ao ? passes.ao : 'off', passes.contact && this.switches.contact);
+  }
+
+  setSize(w: number, h: number): void {
+    this.w = w;
+    this.h = h;
+    this.ao.setSize(w, h);
+  }
+
+  /** Before the scene pass: reads the camera's cine state and decides whether this frame's depth is
+   *  needed at all (under MSAA an unread depth is not resolved). `shafts` is the most the shafts could
+   *  be this frame (the mood's strength; where the light is on screen is known after the scene). */
+  begin(target: WebGLRenderTarget, camera: PerspectiveCamera, post: boolean, shafts: number, reducedMotion: boolean): void {
+    const f = this.signals;
+    f.post = post;
+    f.dof = cine.dof;
+    f.motionBlur = cine.motionBlur;
+    f.letterbox = cine.letterbox;
+    f.shafts = shafts;
+    f.reduced = reducedMotion;
+    f.motionPx = lensMotionPx(camera, this.h);
+    planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
+    if (this.depthTex) target.resolveDepthBuffer = this.plan.depth;
+    this.timer.begin('scene');
+  }
+
+  /**
+   * After the scene pass: draws this frame's passes and returns the picture the bloom and the composite
+   * read (the scene's own, or the lens pass's when a beat blurs it). `shafts` is the shafts' strength
+   * now that the light's place on screen is known.
+   */
+  run(target: WebGLRenderTarget, camera: PerspectiveCamera, shafts: number): Texture {
+    const f = this.signals;
+    f.shafts = shafts;
+    const plan = planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
+    const depth = this.depthTex && plan.depth ? this.depthTex : null;
+    aimDepth(camera, depth, target.width, target.height);
+    if (plan.ao && depth) {
+      this.timer.begin('ao');
+      this.ao.render(camera, this.lightDir, plan.contact);
+    } else this.ao.rest();
+    pipeUniforms.uBars.value = plan.letterbox;
+    pipeUniforms.uPipeView.value = depth ? VIEWS.indexOf(this.view) : 0;
+    this.timer.begin('bloom');
+    return target.texture;
+  }
+
+  /** Once the composite is on screen. */
+  end(): void {
+    keepLens();
+    this.timer.collect();
+  }
+
+  dispose(): void {
+    this.ao.dispose();
+    this.depthTex?.dispose();
+  }
+}
