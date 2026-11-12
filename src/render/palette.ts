@@ -942,8 +942,8 @@ function round7(p: Palette, biome: BiomeId): void {
       return;
     case 'volcanic':
       // The deck is what lights the ground: its orange on the lit side, its complement in the shade.
-      p.sunColor = c('#FFD4B8');
-      p.snowLit = c('#F2E2D8');
+      p.sunColor = c('#FFDEC8');
+      p.snowLit = c('#F0E6E0');
       p.snowShade = c('#3C4A66');
       p.snowDeep = c('#2A2444');
       p.hemiSky = c('#5C5A78');
@@ -1135,12 +1135,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand.k = 0.6;
         p.skyBelow = c('#2E4E94');
         p.snowLit = c('#9DB6EA');
-        p.snowShade = c('#343C9C');
-        p.snowDeep = c('#161A6A');
+        p.snowShade = c('#30469C');
+        p.snowDeep = c('#14226A');
         p.fog = c('#24367E');
         p.hemiSky = c('#4E78CC');
         p.air.far = c('#101A58');
-        p.key2 = { color: c('#3FD89A'), k: 1, shade: c('#4A3CB4') };
+        p.key2 = { color: c('#46E0A0'), k: 1, shade: c('#4A44B0') };
+        p.grade.saturation = 1.0;
         p.aurora = 1;
         p.stars = 1;
         p.massif.flow = 1;
@@ -1245,7 +1246,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       edit: (p) => {
         setSun(p, 45, 8, 25, 13);
         p.sunDisc = 0.35;
-        p.sunColor = c('#FFB48A');
+        p.sunColor = c('#FFD4BC');
         p.skyHorizon = c('#DC4C1C');
         p.deck.glow = c('#FF6222');
         p.snowLit = c('#DCC2B6');
@@ -1263,7 +1264,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       edit: (p) => {
         setSun(p, 48, 6, 24, 13);
         p.sunDisc = 0.25;
-        p.sunColor = c('#FFA070');
+        p.sunColor = c('#FFC8AC');
         p.skyZenith = c('#0E0A0E');
         p.skyMid = c('#36181C');
         p.skyHorizon = c('#E8481A');
@@ -1291,7 +1292,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3500, at: 4100, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
-        p.sunColor = c('#F08C5C');
+        p.sunColor = c('#F4BCA0');
         p.skyZenith = c('#0A0608');
         p.skyMid = c('#2C1014');
         p.skyHorizon = c('#D03A12');
@@ -1501,8 +1502,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.key2.k = 0;
         p.under = { color: c('#38C8FF'), k: 0.22 };
         p.hazardDim = 0.7;
-        p.grade.exposure = 0.95;
-        p.grade.contrast = 1.18;
+        p.grade.exposure = 0.9;
+        p.grade.contrast = 1.2;
         p.grade.hi = c('#F0F6FF');
         p.grade.lo = c('#DCE0FF');
         p.lanternGlow = 0.7;
@@ -1766,4 +1767,65 @@ export function journeyDusk(biome: BiomeId, metres: number): number {
   const i = Math.min(Math.floor(at), stops.length - 1);
   const a = i > 0 ? stops[i - 1].dusk : 0;
   return a + (stops[i].dusk - a) * (at - i);
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Low's poster. Low and the phone's lowest tier have no post pass, so the grade by place and the film
+// curve cannot be drawn over the frame: they are baked into the colours the frame is drawn with (ART.md
+// 15, "Tiers, designed"). The same exposure, lift and gain, saturation, contrast and split tone the
+// composite applies, and the same curve, on the snow, the sky, the air, the clouds and the far ranges.
+
+let poster = false;
+let posterOut: Palette | null = null;
+
+/** Low draws the poster (materials.ts turns it on with the tier). */
+export function setPoster(on: boolean): void {
+  poster = on;
+}
+
+/** One colour through a palette's grade and the film curve, in place. `lit` is how bright the surface
+ *  is drawn with this colour (lit snow about 0.85 of it), so the curve bends it where it will sit. */
+function gradeColor(col: Color, g: Grade, lit = 1): Color {
+  const e = (g.exposure ?? 1) * lit;
+  let r = col.r * e;
+  let gg = col.g * e;
+  let b = col.b * e;
+  r = r * g.gain.r + g.lift.r * 0.6 * Math.max(1 - r, 0);
+  gg = gg * g.gain.g + g.lift.g * 0.6 * Math.max(1 - gg, 0);
+  b = b * g.gain.b + g.lift.b * 0.6 * Math.max(1 - b, 0);
+  let l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+  r = Math.max(0, (l + (r - l) * g.saturation - 0.18) * g.contrast + 0.18);
+  gg = Math.max(0, (l + (gg - l) * g.saturation - 0.18) * g.contrast + 0.18);
+  b = Math.max(0, (l + (b - l) * g.saturation - 0.18) * g.contrast + 0.18);
+  l = 0.2126 * r + 0.7152 * gg + 0.0722 * b;
+  const hiK = Math.max(0, Math.min(1, (l - 0.3) / 0.6));
+  const loK = 1 - Math.max(0, Math.min(1, (l - 0.04) / 0.36));
+  if (g.hi && g.lo) {
+    r *= (1 + (g.hi.r - 1) * hiK) * (1 + (g.lo.r - 1) * loK);
+    gg *= (1 + (g.hi.g - 1) * hiK) * (1 + (g.lo.g - 1) * loK);
+    b *= (1 + (g.hi.b - 1) * hiK) * (1 + (g.lo.b - 1) * loK);
+  }
+  const m = Math.max(r, gg, b);
+  const d = (0.2126 * r + 0.7152 * gg + 0.0722 * b) * 0.4 + m * 0.6 + 1e-4;
+  const k = (filmValue(d) / d / lit) * (g.tone ?? 1) + (1 - (g.tone ?? 1)) / lit;
+  return col.setRGB(r * k, gg * k, b * k);
+}
+
+/** The palette a tier draws with: the palette itself, or on Low its poster (a scratch copy, reused). */
+export function tierLook(p: Palette): Palette {
+  if (!poster) return p;
+  const o = (posterOut = lerpPalette(p, p, 0, posterOut ?? ({} as Palette)));
+  const g = p.grade;
+  gradeColor(o.snowLit, g, 0.85);
+  for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor]) gradeColor(col, g);
+  if (o.skyMid) gradeColor(o.skyMid, g);
+  if (o.skyBand.color) gradeColor(o.skyBand.color, g);
+  if (o.mist) gradeColor(o.mist, g);
+  // A poster's sun is a flat disc of the light's own colour: nothing on Low can bloom, and a core over 1
+  // only clips to white.
+  const top = Math.max(o.sunCore.r, o.sunCore.g, o.sunCore.b, 1);
+  o.sunCore.multiplyScalar(1.05 / top);
+  // The sun's scatter is a gradient on the dome where the other tiers have shafts.
+  o.sunGlow *= 1.25;
+  return o;
 }

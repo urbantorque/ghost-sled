@@ -1,7 +1,7 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
 import { localUniforms, setLocalLightTier } from './lights';
-import { Palette } from './palette';
+import { Palette, setPoster, tierLook } from './palette';
 
 // One shared stylized lighting model for every surface (ART.md section 2). All materials share the
 // same uniform objects by reference, so a mood change updates the whole world at once.
@@ -107,6 +107,7 @@ export function setCloudShadows(on: boolean): void {
   shared.uMistDrift.value = on ? mistDriftK : 0;
   // (Low: the snow alone takes the nearest few local lights, as painted pools. lights.ts.)
   setLocalLightTier(!on);
+  setPoster(!on);
 }
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
@@ -178,12 +179,14 @@ function applyRock(p: Palette): void {
   rock.uRockLedge.value.set(set.ledge).multiplyScalar(set.style[2] === 3 ? k : 1);
   rock.uRockGlow.value.copy(p.accentProp).multiplyScalar(p.massif.lava > 0 ? 1.1 : 0);
   // (Frostfang's crevasse ice has a light of its own inside it.)
-  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.34, 0.6).multiplyScalar(0.55 + 0.45 * p.lamps);
+  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.34, 0.6).multiplyScalar(0.22 + 0.2 * p.lamps);
   rock.uRockStyle.value.set(...set.style);
   lake.uLakeTrees.value.copy(p.tallDark).lerp(p.tall, 0.35).multiplyScalar(0.8);
 }
 
-export function applyPalette(p: Palette): void {
+export function applyPalette(full: Palette): void {
+  // (Low draws the poster: the grade and the film curve baked into these colours. palette.ts.)
+  const p = tierLook(full);
   applyRock(p);
   shared.uSunDir.value.copy(p.sunDir);
   shared.uSunColor.value.copy(p.sunColor);
@@ -936,9 +939,10 @@ export function makeSnowMaterial(): ShaderMaterial {
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
           float a2 = smoothstep(0.4, 0.68, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
-          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * 0.3 * (1.0 - a2));
-          // Laid over the blue, not added to it (added, green on steel blue only made a paler blue).
-          col = mix(col, uKey2.rgb * (lv * 1.5 + 0.2), a2 * uKey2.a * 0.62);
+          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * 0.22 * (1.0 - a2));
+          // Laid over the blue, not added to it (added, green on steel blue only made a paler blue), and a
+          // step brighter than the snow round it: it is the light.
+          col = mix(col, uKey2.rgb * (lv * 3.0 + 0.42), a2 * uKey2.a * 0.78);
         }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the

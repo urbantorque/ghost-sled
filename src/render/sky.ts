@@ -1,5 +1,5 @@
 import { BackSide, BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
-import { COMET_DIR, Palette } from './palette';
+import { COMET_DIR, Palette, tierLook } from './palette';
 import { shared } from './materials';
 import { Massif, NOISE, SEA_GLSL, makeSeaUniforms } from './massif';
 
@@ -575,7 +575,8 @@ export class Sky {
     this.root.add(this.massif.root, this.mist.mesh);
   }
 
-  setPalette(p: Palette): void {
+  setPalette(full: Palette): void {
+    const p = tierLook(full);
     const u = this.domeMat.uniforms;
     u.uZenith.value.copy(p.skyZenith);
     u.uHorizon.value.copy(p.skyHorizon);

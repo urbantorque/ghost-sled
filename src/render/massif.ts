@@ -821,7 +821,8 @@ export class Massif {
     (u.uRockLit.value as Color).copy(p.massif.rock).lerp(p.sunColor, 0.2).multiplyScalar(1.35);
     (u.uRockShade.value as Color).copy(p.massif.rock).lerp(p.snowDeep, 0.4).multiplyScalar(0.75);
     (u.uIce.value as Color).copy(p.snowLit).lerp(p.hemiSky, 0.4);
-    const haze = (u.uHaze.value as Color).copy(p.fog).lerp(p.skyHorizon, 0.5);
+    // (Round 7: the far plane's own air, so the ranges go to the mountain's blue and not to a paler fog.)
+    const haze = (u.uHaze.value as Color).copy(p.air.far).lerp(p.skyHorizon, 0.4);
     if (p.mist) haze.lerp(p.mist, 0.35 * p.mistK);
     (u.uHazeSun.value as Color).copy(p.skyHorizon).lerp(p.sunColor, 0.25);
     (u.uGlow.value as Color).copy(p.massif.glow);

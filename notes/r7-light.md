@@ -55,13 +55,13 @@ L7. **Local lights in the shared model** (`lights.ts`, `LIGHT_GLSL.localLight`).
     Low: the snow alone takes the nearest four as two-value painted pools; props take none; no draw is
     added.
 
-L8. **Who offers a light.**  (every lamp that has a painted pool, while the lamps are lit; a
+L8. **Who offers a light.** `landmarks.ts` (every lamp that has a painted pool, while the lamps are lit; a
     radius of 2.3 pools, so a street is pools of amber with blue between, not a gold floor);
-     (each lantern gate at its own brightness, and the race's machine);
-     through  (lava in Ember's joints every 24 m on alternate sides of a
+    `marqueeworld.ts` (each lantern gate at its own brightness, and the race's machine);
+    `terrain.ts` through `addLightSource` (lava in Ember's joints every 24 m on alternate sides of a
     ravine or a tunnel, breathing; one 85 m light in the gap of the Caldera Leap; the cyan heart of
     Frostfang's crevasse walls and cavern every 28 m; the stone lanterns of Sakura's torii every 21 m).
-    The sled's own lantern keeps its own path (, the pool): pushed as a local light too it
+    The sled's own lantern keeps its own path (`lanternLight`, the pool): pushed as a local light too it
     lit the snow twice. Fireworks and spirit effects are the fx lane's to push.
 
 L9. **Snow carved by the wind.** Three scales of painted relief where there was one: wind slab (crests
@@ -76,15 +76,15 @@ L10. **Rock is painted, whatever its form.** Any stone-coloured fragment (a dull
     values, a dark parting under each and a line of snow along the top of some; what faces up holds snow.
     It is a mask on colour, not a new material, because rocks share their materials with trunks, roofs and
     rails and the fx lane is reshaping the geometry: any form it makes is painted. Foliage is left alone.
-    Ice (the  materials) has a darker heart seen square on, a pale skin at its edges, cracks on two
+    Ice (the `ice` materials) has a darker heart seen square on, a pale skin at its edges, cracks on two
     sets of planes and bubbles. Crevasse walls hold a cyan glow low down. The Petal Steps' banks hold
     still water (a negative value on the lake's paint channel; never on the line a sled rides).
 
-L11. **The far planes.** The massif's haze is the far air's colour (), so the ranges are the
+L11. **The far planes.** The massif's haze is the far air's colour (`air.far`), so the ranges are the
     mountain's blue. The clouds' shadows sweep the mid-ground's flanks and valley floor with the terrain's
     own pattern (unbroken across the bank's edge) and a broader one further out.
 
-L12. **Low is a poster.**  (palette.ts) bakes the place's grade and the film curve into the
+L12. **Low is a poster.** `tierLook` (palette.ts) bakes the place's grade and the film curve into the
     colours Low draws with (snow, sky, air, clouds, ranges), flattens the sun to a disc of the light's own
     colour and widens its glow on the dome. Local lights are painted pools on the snow. No draw, no
     triangle and no pass is added on Low.

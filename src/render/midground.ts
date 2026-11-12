@@ -240,6 +240,7 @@ function shoulderMaterial(): ShaderMaterial {
       uniform vec3 uRockLit;
       uniform vec3 uForest;
       uniform float uForestK;
+      uniform float uCloudShadow;
       varying vec3 vWorldPos;
       varying vec3 vN;
       varying float vE;
@@ -275,6 +276,16 @@ function shoulderMaterial(): ShaderMaterial {
         vec3 shade = mix(mix(uSnowShade, uSnowDeep, 0.2), uSnowDeep, 0.35);
         float ndl = dot(nn, uSunDir);
         float t = smoothstep(-0.12, 0.42, ndl);
+        if (uCloudShadow > 0.0) {
+          // Round 7: the clouds' shadows sweep the valley and the flanks too. The terrain's own pattern
+          // (materials.ts), so a shadow crosses the bank's edge unbroken, and deeper out here, where
+          // nothing is ridden: whole faces drop into shade and come back.
+          vec2 cp = vWorldPos.xz * vec2(0.011, 0.008) + vec2(uTime * 0.017, uTime * 0.006);
+          float cn = vnoise(cp) * 0.65 + vnoise(cp * 2.3 + 5.1) * 0.35;
+          vec2 cb = vWorldPos.xz * vec2(0.0031, 0.0024) + vec2(uTime * 0.007, uTime * 0.0025);
+          float big = smoothstep(0.5, 0.7, vnoise(cb) * 0.7 + vnoise(cb * 2.1 + 3.3) * 0.3) * smoothstep(60.0, 260.0, vE);
+          t *= 1.0 - max(smoothstep(0.5, 0.74, cn), big) * uCloudShadow * mix(1.0, 1.7, smoothstep(40.0, 240.0, vE));
+        }
         vec3 sunN = uSunColor / max(max(uSunColor.r, uSunColor.g), max(uSunColor.b, 0.001));
         vec3 sunSnow = mix(uSunColor, mix(vec3(1.0), sunN, 0.15), dayK);
         vec3 col = mix(shade, lit * sunSnow, t);
