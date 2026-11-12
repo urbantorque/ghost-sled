@@ -177,6 +177,8 @@ function applyRock(p: Palette): void {
   rock.uRockDeep.value.set(set.deep).multiplyScalar(0.5 + 0.5 * k);
   rock.uRockLedge.value.set(set.ledge).multiplyScalar(set.style[2] === 3 ? k : 1);
   rock.uRockGlow.value.copy(p.accentProp).multiplyScalar(p.massif.lava > 0 ? 1.1 : 0);
+  // (Frostfang's crevasse ice has a light of its own inside it.)
+  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.34, 0.6).multiplyScalar(0.55 + 0.45 * p.lamps);
   rock.uRockStyle.value.set(...set.style);
   lake.uLakeTrees.value.copy(p.tallDark).lerp(p.tall, 0.35).multiplyScalar(0.8);
 }
@@ -773,7 +775,9 @@ export function makeSnowMaterial(): ShaderMaterial {
         // Where rock has taken over entirely, the snow's own fine work is skipped.
         float bare = smoothstep(0.8, 1.0, vRock.x);
         // The frozen lake gives way to drifted snow along a wandering, feathered shore.
-        float lakeK = vPaint.x;
+        float lakeK = max(vPaint.x, 0.0);
+        // (Still water on a terrace's bank rides the same channel, negative. terrain.ts.)
+        float pond = max(-vPaint.x, 0.0);
         float shoreIn = 0.0;
         if (lakeK > 0.0) {
           float wob = vnoise(vWorldPos.xz * 0.075) * 3.4 + vnoise(vWorldPos.xz * vec2(0.3, 0.13) + 4.0) * 1.8;
@@ -798,7 +802,15 @@ export function makeSnowMaterial(): ShaderMaterial {
         // Sastrugi on the banks: wind-carved ridges with crisp crests, in patches. Medium and High.
         float sastC = 0.0;
         float sastL = 0.0;
-        float bankS = smoothstep(1.5, 6.0, vEdge) * (1.0 - smoothstep(30.0, 70.0, dist)) * (1.0 - smoothstep(0.2, 0.5, footprint)) * uSnowFx * (1.0 - ice);
+        // (Round 7: they reach in across the run too, fainter, so the snow under the lens is carved snow.)
+        float bankS = mix(0.5, 1.0, smoothstep(-1.0, 6.0, vEdge)) * (1.0 - smoothstep(30.0, 70.0, dist)) * (1.0 - smoothstep(0.2, 0.5, footprint)) * uSnowFx * (1.0 - ice) * (1.0 - 0.8 * packed);
+        // Round 7, wind slab: broad carved drifts some seven metres from crest to crest, lying across the
+        // wind like the sastrugi, in fields. A long windward rise, a crest that takes the light, a short
+        // lee face in the shade's blue. Painted relief in three values: it gives the near and the middle
+        // snow a lie and a grain to pass at speed, and stays too soft and too cool to read as a hazard.
+        float slabC = 0.0;
+        float slabL = 0.0;
+        float slabK = (1.0 - smoothstep(60.0, 150.0, dist)) * (1.0 - smoothstep(0.5, 1.4, footprint)) * (1.0 - ice) * (1.0 - bare) * (1.0 - 0.75 * packed);
         if (detail > 0.0) {
           vec2 p = vWorldPos.xz;
           float h0 = dunes(p);
@@ -838,6 +850,14 @@ export function makeSnowMaterial(): ShaderMaterial {
             trough = smoothstep(0.5, 0.18, r0) * k;
             // A thin bright line along each ripple crest, where the wind packed it.
             crestR = smoothstep(0.62, 0.7, r0) * smoothstep(0.84, 0.72, r0) * k;
+          }
+          if (slabK > 0.0) {
+            vec2 sp = p * 0.22 + vec2(7.3, 1.9);
+            float s0 = sastrugi(sp);
+            float k = slabK * (0.3 + 0.7 * smoothstep(0.3, 0.62, vnoise(p * vec2(0.033, 0.017) + 5.5)));
+            if (uSnowFx > 0.0) pert.xz += vec2(s0 - sastrugi(sp + vec2(0.035, 0.0)), s0 - sastrugi(sp + vec2(0.0, 0.035))) * 0.55 * k;
+            slabC = smoothstep(0.7, 0.86, s0) * k;
+            slabL = (1.0 - smoothstep(0.02, 0.36, s0)) * k;
           }
           if (bankS > 0.0) {
             // About 15 cm of relief: the gentle windward faces take the light, the short lee faces drop
@@ -895,7 +915,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         float macro = vnoise(vWorldPos.xz * 0.012 + 3.1) * 0.6 + vnoise(vWorldPos.xz * 0.031 + 8.3) * 0.4;
         float mk = smoothstep(0.28, 0.72, macro) - 0.5;
         lit = mix(lit, lit * mix(vec3(1.0), sunN, 0.3) * 1.03, max(mk, 0.0) * 0.9);
-        lit = mix(lit, mix(lit, uSnowShade, 0.3), max(-mk, 0.0) * 0.6);
+        lit = mix(lit, mix(lit, uSnowShade, 0.4), max(-mk, 0.0) * 0.7);
         shade = mix(shade, uSnowDeep, max(-mk, 0.0) * 0.3);
         // The drifts past the treeline (terrain.ts): their crests catch the sun, their troughs hold cold
         // blue, and the light breaks over them a little more crisply than on the groomed run (gouache
@@ -916,8 +936,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
           float a2 = smoothstep(0.4, 0.68, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
-          col = mix(col, uKey2Shade * (lv * 2.2 + 0.02), uKey2.a * 0.55 * (1.0 - a2));
-          col += uKey2.rgb * (a2 * uKey2.a * 0.42);
+          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * 0.3 * (1.0 - a2));
+          // Laid over the blue, not added to it (added, green on steel blue only made a paler blue).
+          col = mix(col, uKey2.rgb * (lv * 1.5 + 0.2), a2 * uKey2.a * 0.62);
         }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the
@@ -925,8 +946,12 @@ export function makeSnowMaterial(): ShaderMaterial {
         vec2 sunXZ = normalize(uSunDir.xz + vec2(0.0001, 0.0));
         float sunAcross = dot(vec2(0.866, 0.5), sunXZ);
         col *= 1.0 + dot(rip, vec2(0.866, 0.5)) * sign(sunAcross) * max(abs(sunAcross), 0.6);
-        col += lit * sunSnow * (crestR * 0.07 + sastC * 0.14) * t;
-        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), sastL * 0.32);
+        col += lit * sunSnow * (crestR * 0.07 + sastC * 0.14 + slabC * 0.1) * t;
+        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), sastL * 0.32 + slabL * 0.4);
+        // The sun held on the far snow: past the near field a slope turned to mirror the sun carries a
+        // broad soft sheen of it, so the distance has a lit face and not one even value.
+        float sheen = pow(max(dot(reflect(-uSunDir, n), v), 0.0), 7.0) * smoothstep(35.0, 140.0, dist) * shadow * t;
+        col += lit * sunSnow * sheen * 0.2;
         // Periwinkle settles in the ripple troughs.
         col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), trough * 0.8);
         // Wind-scoured patches: broad, soft-edged hollows a step cooler than the powder around them,
@@ -1129,6 +1154,19 @@ export function makeSnowMaterial(): ShaderMaterial {
           vec3 goldC = mix(mix(uSunColor, vec3(1.0, 0.78, 0.4), 0.5) * 0.86, uSunColor * 0.95, lakeK * 0.75);
           col = mix(col, goldC, path * runs * ice * mix(0.25, 1.0, shadow) * open * 0.92);
         }
+        if (pond > 0.01) {
+          // Still water in a terrace's flat (Sakura): a dark mirror of the sky with the sun's glint in it
+          // and a pale skin of ice at its wandering brim.
+          float brim = vnoise(vWorldPos.xz * 0.45) * 0.22;
+          float pk = smoothstep(0.34 + brim, 0.46 + brim, pond);
+          vec3 pr = reflect(-v, vec3(0.0, 1.0, 0.0));
+          vec3 psky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.5, pr.y));
+          float pf = 0.3 + 0.7 * pow(1.0 - clamp(v.y, 0.0, 1.0), 3.0);
+          vec3 water = mix(uSnowDeep * vec3(0.3, 0.42, 0.5), psky, pf) * (0.75 + 0.25 * shadow);
+          water += uSunColor * pow(max(dot(pr, uDiskDir), 0.0), 90.0) * 0.9 * shadow;
+          col = mix(col, uSnowLit * 0.92, smoothstep(0.2 + brim, 0.34 + brim, pond) * (1.0 - pk) * 0.55);
+          col = mix(col, water, pk);
+        }
         // Sparkle glints: one candidate per cell of a world-anchored grid on the snow, flashing as
         // the view sweeps past, on the lit side only: a bright core with two short rays, held at a
         // steady size on screen at any distance.
@@ -1179,14 +1217,15 @@ export function makeSnowMaterial(): ShaderMaterial {
             col += uSunColor * glint * smoothstep(0.05 - 0.15 * nightK, 0.45 - 0.15 * nightK, ndl) * mix(shadow, 1.0, 0.45 * nightK) * 3.4;
           }
         }
-        if (uSnowFx > 0.0 && dist < 15.0 && ice < 0.5) {
+        if (uSnowFx > 0.0 && dist < 22.0 && ice < 0.5) {
           // Crystal glitter under the lens (Medium and High): a fine field of pin-point facets, a pixel
           // or two each, that wink on and off as the view sweeps over them, some faintly prismatic,
           // under the larger star glints. Lit snow only.
           vec2 mp = vWorldPos.xz * 7.0;
           vec2 mc = floor(mp);
           float mh = hash13(vec3(mc, 21.0));
-          if (mh > 0.86) {
+          float mSun = smoothstep(0.3, 0.95, dot(normalize(vWorldPos.xz - cameraPosition.xz + vec2(0.0001, 0.0)), normalize(uSunDir.xz + vec2(0.0001, 0.0))));
+          if (mh > 0.84 - 0.1 * mSun) {
             vec2 mpt = mc + 0.2 + 0.6 * vec2(hash13(vec3(mc, 4.1)), hash13(vec3(mc, 6.6)));
             vec2 mo = (mp - mpt) / 7.0;
             // One pixel either way on screen, whatever the foreshortening (each axis by its own footprint).
@@ -1194,7 +1233,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             float mtw = fract(mh * 91.0 + dot(v, vec3(2.1, 1.7, 2.6)) * 3.0);
             float mon = smoothstep(0.7, 0.8, mtw) * smoothstep(1.0, 0.9, mtw);
             vec3 prism = mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831 * (mh * 7.0 + vec3(0.0, 0.33, 0.67))), 0.4);
-            col += mix(uSunColor, vec3(1.0), 0.3) * prism * smoothstep(1.0, 0.25, length(mq)) * mon * (1.0 - smoothstep(9.0, 15.0, dist)) * smoothstep(0.0, 0.35, ndl) * mix(shadow, 1.0, 0.3) * 1.8 * uSparkle;
+            col += mix(uSunColor, vec3(1.0), 0.3) * prism * smoothstep(1.0, 0.25, length(mq)) * mon * (1.0 - smoothstep(12.0, 22.0, dist)) * (1.0 + 0.8 * mSun) * smoothstep(0.0, 0.35, ndl) * mix(shadow, 1.0, 0.3) * 1.8 * uSparkle;
           }
         }
         if (vPaint.y > 0.01) {
@@ -1247,6 +1286,9 @@ export function makeSnowMaterial(): ShaderMaterial {
             rc += mix(uSkyHorizon, uSnowLit, 0.5) * fres * 0.25;
             rc += uSunColor * pow(max(dot(reflect(-v, rn), uSunDir), 0.0), 26.0) * 0.5 * shadow;
             rc = mix(rc, uRockLit * 1.15, crack * fine * (0.3 + 0.5 * dk));
+            // A glow from inside (round 7): low in the wall the ice holds a cyan light of its own, broken
+            // by the shards' own tones, strongest at night and under a roof.
+            rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(0.22, 0.62, dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
           } else {
             // Rock darkens into the ground it stands in, and where a wall meets the floor.
             rc = mix(rc, uRockDeep, (1.0 - smoothstep(0.0, 0.34, abs(over))) * 0.55 * step(0.5, vRock.w));
@@ -1360,6 +1402,9 @@ export interface ToonOptions {
   /** The far rows of the decorative forest: they lean into the fog colour with distance (atmospheric
    *  perspective), so a forest has depth rather than reading as one flat dark mass. */
   aerial?: boolean;
+  /** Round 7: this material draws stone among other things (a landmark's rock and masonry). Its
+   *  stone-coloured parts carry painted strata and snow on what faces up. Hazards always do. */
+  stone?: boolean;
   /** Cloth the wind moves (a set piece's bunting, banners and lantern strings): each vertex's aSway
    *  (0 held, 1 hanging free) swings it with the wind in the vertex shader, off the shared clock, by
    *  uCloth metres; a geometry without aSway stands still. */
@@ -1383,8 +1428,12 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uRimK: { value: opts.rim ?? 0.3 },
       uCloth: { value: 0.35 },
       uNearFade: { value: new Vector2(...(opts.nearFade ?? [0.9, 3.2])) },
+      // (The snow that lies on stone, under the names the stone code reads: shaders built on this one
+      // declare uSnowLit themselves.)
+      uStoneSnow: shared.uSnowLit,
+      uStoneShade: shared.uSnowShade,
     },
-    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}) },
+    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}) },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       #ifdef CLOTH
@@ -1577,6 +1626,8 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uniform float uShadowK;
       uniform float uHazardFog;
       uniform float uDayK;
+      uniform vec3 uStoneSnow;
+      uniform vec3 uStoneShade;
       varying vec3 vWorldPos;
       varying vec3 vNormalW;
       varying vec3 vColor;
@@ -1587,6 +1638,8 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       void main() {
         vec3 n = normalize(vNormalW);
         vec3 v = normalize(cameraPosition - vWorldPos);
+        // (Taken here, outside any branch, where derivatives are valid.)
+        float fwy = fwidth(vWorldPos.y) + fwidth(vWorldPos.x) * 0.15;
         float shadow = 1.0;
         #ifdef USE_SHADOWMAP
           shadow = mix(1.0, getShadowMask(), uShadowK);
@@ -1630,6 +1683,33 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           #endif
         #endif
         vec3 base = vColor * uTint;
+        float stoneK = 0.0;
+        float ledgeK = 0.0;
+        #if defined(STONE) && !defined(ICE)
+          if (uSway <= 0.0) {
+            // Round 7: rock is painted, whatever its form (ART.md 15, rule 3). What is stone-coloured
+            // (a dull, mid to dark colour: the mountain's rock, basalt, masonry) carries strata: beds about
+            // a metre thick, dipping a little and wandering, each in one of three values, a dark parting
+            // under each, and a line of snow lying along the top of some. What faces up holds snow
+            // (below). In world space, so it holds still on a prop and runs through a formation.
+            float hiS = max(base.r, max(base.g, base.b));
+            float loS = min(base.r, min(base.g, base.b));
+            stoneK = (1.0 - smoothstep(0.5, 0.68, (hiS - loS) / max(hiS, 0.001))) * smoothstep(0.004, 0.014, hiS) * (1.0 - smoothstep(0.4, 0.58, loS));
+            if (stoneK > 0.01) {
+              const float BED = 1.15;
+              float wy = vWorldPos.y + vWorldPos.x * 0.11 + vWorldPos.z * 0.06 + 0.32 * sin(vWorldPos.x * 0.29 + vWorldPos.z * 0.21);
+              float bq = wy / BED;
+              float bi = floor(bq);
+              float bf = bq - bi;
+              float bh = hash13(vec3(bi, floor((vWorldPos.x + vWorldPos.z * 0.7) * 0.09 + bi * 0.37), 5.0));
+              float fineS = stoneK * (1.0 - smoothstep(0.3, 0.8, fwy / BED));
+              float tone = bh < 0.34 ? 0.76 : bh < 0.67 ? 1.0 : 1.24;
+              float parting = 1.0 - smoothstep(0.0, 0.07 + fwy / BED, bf);
+              base *= mix(1.0, tone * (1.0 - 0.35 * parting), fineS);
+              ledgeK = fineS * step(0.45, fract(bh * 7.31)) * smoothstep(0.84 - fwy / BED, 0.9, bf);
+            }
+          }
+        #endif
         vec3 shade = mix(base * 0.42, uShadeTint * (0.35 + 0.4 * dot(base, vec3(0.33))), uCool);
         // Snow caps and drifts (near-white parts) take only a trace of a low sun's colour by day, like
         // the snow they sit in (decision 47): under Glass Ice's gold sun a serac's drift read as a tan slab.
@@ -1637,6 +1717,15 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
         float whiteK = smoothstep(0.78, 0.92, min(base.r, min(base.g, base.b))) * uDayK;
         vec3 litBase = mix(base, base * mix(vec3(1.0), sunN, 0.15) / max(uSunColor, vec3(0.05)), whiteK);
         vec3 col = toonLightK(litBase, shade, n, v, shadow, uRimK);
+        #if defined(STONE) && !defined(ICE)
+          if (stoneK > 0.01) {
+            // Snow lies on what faces up and along a ledge, lit as the snow round it is.
+            float tS = smoothstep(-0.12, 0.42, dot(n, uSunDir)) * mix(0.18, 1.0, shadow);
+            vec3 snowC = mix(mix(uStoneShade, uShadeTint, 0.3), uStoneSnow * mix(uSunColor, vec3(1.0), 0.6 * uDayK) * 0.9, tS);
+            float lie = max(smoothstep(0.52, 0.74, n.y) * stoneK, ledgeK * smoothstep(-0.35, 0.2, n.y));
+            col = mix(col, snowC, lie * 0.92);
+          }
+        #endif
         if (uLocalProps > 0.0) {
           vec3 L = localLight(vWorldPos, n, uLocalProps);
           #ifdef HAZARD
@@ -1663,6 +1752,27 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           float iceT = smoothstep(-0.12, 0.42, dot(n, uSunDir)) * mix(0.25, 1.0, shadow);
           vec3 iceCol = mix(iceShade, body * mix(vec3(1.0), sunN, 0.3), iceT) + uHemi * 0.06;
           iceCol += vec3(0.3, 0.7, 1.0) * 0.1 * (0.35 + 0.65 * tipK) * (1.0 - fr);
+          // Round 7, ice with depth: looking square into a face you see into its darker heart, and the
+          // skin pales toward the edges; pale cracks run through it on two sets of planes, some of them;
+          // bubbles hang in it. All in world space, so a serac keeps its own.
+          float heart = (1.0 - fr) * (1.0 - fr);
+          iceCol *= mix(vec3(1.0), vec3(0.42, 0.56, 0.82), heart * 0.6);
+          iceCol = mix(iceCol, vec3(0.8, 0.94, 1.0) * (0.45 + 0.55 * iceT), smoothstep(0.55, 0.95, fr) * 0.3);
+          float fineI = 1.0 - smoothstep(0.02, 0.09, fwy);
+          if (fineI > 0.0) {
+            float c1 = dot(vWorldPos, vec3(0.83, 0.31, 0.47)) + 0.25 * sin(vWorldPos.y * 1.3);
+            float c2 = dot(vWorldPos, vec3(-0.42, 0.27, 0.86)) * 0.7 + 0.2 * sin(vWorldPos.x * 1.1);
+            float k1 = step(0.55, hash13(vec3(floor(c1), 3.0, 7.0))) * (1.0 - smoothstep(0.012, 0.03 + fwy, abs(fract(c1) - 0.5)));
+            float k2 = step(0.6, hash13(vec3(floor(c2), 5.0, 1.0))) * (1.0 - smoothstep(0.012, 0.03 + fwy, abs(fract(c2) - 0.5)));
+            iceCol = mix(iceCol, vec3(0.82, 0.95, 1.0) * (0.5 + 0.5 * iceT), max(k1, k2) * 0.55 * fineI);
+            vec3 bg = vWorldPos * 2.6;
+            vec3 bc = floor(bg);
+            float bhh = hash13(bc + 4.0);
+            if (bhh > 0.9) {
+              float bd = length(fract(bg) - 0.5 - (vec3(hash13(bc + 1.0), hash13(bc + 2.0), hash13(bc + 3.0)) - 0.5) * 0.5);
+              iceCol = mix(iceCol, vec3(0.86, 0.96, 1.0) * (0.55 + 0.45 * iceT), (1.0 - smoothstep(0.1, 0.2, bd)) * 0.45 * fineI * heart);
+            }
+          }
           col = mix(col, iceCol, iceK);
         #endif
         #ifdef GLOW_MASK
