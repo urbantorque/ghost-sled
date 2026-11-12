@@ -6,6 +6,8 @@ import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, p
 import { Plant, emberGrove, hasGrove, orchard } from './groves';
 import { makeToonMaterial, shared } from './materials';
 import {
+  BASALT_MODEL_H,
+  ROCK_MODEL_H,
   cairnGeometry,
   gateBeamGeometry,
   lightGeometry,
@@ -316,7 +318,7 @@ export class Props {
     };
     for (const k of KINDS) {
       const mat = k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
-      add('ob:' + k, obstacleGeometry(k, p), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+      add('ob:' + k, obstacleGeometry(k, p, !this.arches), mat, k === 'pine' || k === 'rock' ? 700 : 300);
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
@@ -742,7 +744,9 @@ export class Props {
         this.v.set(o.x, o.y - 0.05, -o.z);
         // Pines in the run vary in height (only ever up: their collider stands taller than the model).
         const tallK = o.kind === 'pine' || o.kind === 'charpine' || o.kind === 'blossom' ? 1 + 0.3 * hashf(o.id, 3, 9) : 1;
-        this.s.set(k, o.kind === 'spire' || o.kind === 'basalt' ? o.h / 5 : k * tallK, k);
+        // (A spire and a basalt cluster stand as tall as their colliders, and so does a rock: the drawn form
+        // stays inside what the sim collides with, tests/rockforms.)
+        this.s.set(k, o.kind === 'basalt' ? o.h / BASALT_MODEL_H : o.kind === 'spire' ? o.h / 5 : o.kind === 'rock' || o.kind === 'lavarock' ? o.h / ROCK_MODEL_H : k * tallK, k);
       }
       this.push('ob:' + o.kind, this.v, this.q, this.s);
     }

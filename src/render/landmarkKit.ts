@@ -1,7 +1,8 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import type { BiomeId } from '../sim/mountains';
 import { flagColors } from './dressing';
-import { SNOW, merge, paint, part, reseed, shade, softPart } from './flora';
+import { ASH_TOP, SNOW, basaltTones, merge, paint, part, reseed, shade, softPart } from './flora';
+import { Facets, columnInto } from './rockforms';
 import type { Palette } from './palette';
 // (town.ts uses this file's helpers only inside its builders, so the two may import each other.)
 import { finishPiece, lipPiece, liftPiece, startPiece, viaductPiece } from './places';
@@ -672,8 +673,10 @@ export function archPiece(ctx: SiteCtx): Piece {
 export function basaltPiece(ctx: SiteCtx): Piece {
   const { p, clear: H } = ctx;
   const X = ctx.post + 4.6;
-  const col = shade(p.tall, 0.95);
-  const colD = shade(p.tallDark, 0.9);
+  const tones = basaltTones(p);
+  const col = tones.rock[1];
+  const colD = tones.rock[0];
+  const broke = tones.broke;
   const fire = lampColor(true, '#FFA040');
   const fire2 = lampColor(true, '#FF6A30');
   const steps: Array<() => BufferGeometry[]> = [];
@@ -681,6 +684,7 @@ export function basaltPiece(ctx: SiteCtx): Piece {
     steps.push(() => {
       seed(ctx.seed + 31 + s);
       const parts: BufferGeometry[] = [];
+      const f = new Facets();
       const cols: Array<[number, number, number, number]> = [
         [0, 0, 1.7, H + 8.5],
         [1.9, 1.2, 1.3, H + 3.5],
@@ -693,9 +697,23 @@ export function basaltPiece(ctx: SiteCtx): Piece {
       for (const [dx, dz, r, top] of cols) {
         const x = s * X + dx;
         const foot = ctx.gy(x, dz) - 2;
-        parts.push(grade(part(new CylinderGeometry(r, r * 1.04, top - foot, 6), dx === 0 ? colD : col, { pos: [x, (top + foot) / 2, dz], rot: [0, rnd(), 0] }), foot, top, 0.65, 1.0));
-        parts.push(part(new CylinderGeometry(r * 0.96, r, 0.25, 6), SNOW, { pos: [x, top + 0.1, dz] }));
+        // (The tallest carries the brazier on a level top; the rest are broken off on their own slants.)
+        const a = rnd() * 6.28;
+        const k = dx === 0 ? 0 : 0.15 + rnd() * 0.35;
+        columnInto(f, { x, z: dz, y: foot, r: r * 1.06, h: top - foot, foot: 0, yaw: rnd(), slant: [Math.cos(a) * k, Math.sin(a) * k], col: dx === 0 ? colD : col, top: k < 0.3 ? ASH_TOP : null, broke }, rnd);
+        // Two slimmer columns packed against each, a step and two steps lower: an organ's ranks.
+        for (let j = 0; j < 2; j++) {
+          const b = a + 2.1 + j * 2.3;
+          const rr = r * (0.52 - j * 0.08);
+          const kx = x + Math.cos(b) * (r + rr * 0.72);
+          const kz = dz + Math.sin(b) * (r + rr * 0.72);
+          // (Never out over the run: a column that would stand inside the posts is left out.)
+          if (Math.abs(kx) < ctx.post + 1.2) continue;
+          const kk = 0.2 + rnd() * 0.5;
+          columnInto(f, { x: kx, z: kz, y: foot, r: rr, h: (top - foot) * (0.5 + rnd() * 0.3 - j * 0.12), foot: 0, yaw: rnd(), slant: [Math.cos(b) * kk, Math.sin(b) * kk], col: j ? colD : col, top: rnd() < 0.4 ? ASH_TOP : null, broke }, rnd);
+        }
       }
+      parts.push(f.build());
       // The brazier on the tallest column.
       const bx = s * X;
       const by = H + 8.5;
