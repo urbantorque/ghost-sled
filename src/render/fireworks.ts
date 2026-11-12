@@ -1,4 +1,6 @@
 import { AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, type Vector3 } from 'three';
+import { BUDGET, byTier } from './fxhub';
+import { pushLocalLight } from './lights';
 
 // Fireworks that read as fireworks (round 6). The old shells were particle sparkles and gouache dabs: from
 // the lens, red and gold puffs. Now a shell climbs on a thin trail of embers, bursts with a flash into a
@@ -169,6 +171,9 @@ export class Fireworks {
   private readonly crackle = new Uint8Array(CAP);
   private readonly seed = new Float32Array(CAP);
   private readonly pending: Pending[] = [];
+  /** The last few bursts' light on the snow (pooled). */
+  private readonly lights = Array.from({ length: 6 }, () => ({ x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, life: 0, max: 1 }));
+  private lightNext = 0;
   private budget = 1;
   private reduced = false;
   private time = 0;
@@ -214,6 +219,7 @@ export class Fireworks {
   clear(): void {
     this.n = 0;
     this.pending.length = 0;
+    for (const l of this.lights) l.life = 0;
     this.mesh.count = 0;
     this.mesh.visible = false;
   }
@@ -238,7 +244,8 @@ export class Fireworks {
   }
 
   private spark(k: number, x: number, y: number, z: number, vx: number, vy: number, vz: number, life: number, c: Color, bright: number, width: number, tail: number, drag: number, grav: number): number {
-    if (this.n >= CAP) return -1;
+    // (The tier's share of the pool: fxhub.ts BUDGET.streaks.)
+    if (this.n >= Math.min(CAP, byTier(BUDGET.streaks))) return -1;
     const i = this.n++;
     this.px[i] = x;
     this.py[i] = y;
@@ -301,10 +308,69 @@ export class Fireworks {
       const j = this.spark(STAR, x, y, z, dx * s, dy * s, dz * s, life, c, willow ? 1.3 : 1.7, willow ? 0.34 : 0.45, willow ? 0.45 : chrys ? 0.32 : 0.24, willow ? 1.25 : 1.7, willow ? 4.2 : 3.2);
       if (j >= 0 && (kind === 'crackle' || (chrys && i % 3 === 0))) this.crackle[j] = 1;
     }
+    // Round 7: a burst is layered. Inside the shell's own break a smaller, slower heart opens in its second
+    // colour (a pistil), a willow carries a crown of white-gold glitter at its top, and a ring has a second
+    // ring inside it turned the other way. Half as many again on the tiers that can carry it.
+    const inner = Math.round((ring ? 30 : willow ? 22 : 44) * this.budget * (this.budget >= 0.9 ? 1 : 0.6));
+    for (let i = 0; i < inner; i++) {
+      let dx: number;
+      let dy: number;
+      let dz: number;
+      if (ring) {
+        const th = (i / inner) * Math.PI * 2;
+        dx = Math.cos(th);
+        dy = -Math.sin(th) * st;
+        dz = Math.sin(th) * ct;
+      } else {
+        dy = willow ? 0.35 + 0.65 * Math.random() : 1 - ((i + 0.5) / inner) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - dy * dy));
+        const th = i * gold * 1.7 + Math.random() * 0.3;
+        dx = Math.cos(th) * r;
+        dz = Math.sin(th) * r;
+      }
+      const sp = speed * (ring ? 0.55 : 0.42) * (0.85 + Math.random() * 0.3);
+      const j = this.spark(STAR, x, y, z, dx * sp, dy * sp, dz * sp, 0.9 + Math.random() * 0.5, willow ? FW_WHITE_GOLD : b, 1.9, 0.36, 0.16, 2.1, 2.6);
+      if (j >= 0 && (willow || kind === 'peony')) this.crackle[j] = 1;
+    }
+    // ...and it lights the square: a local light where it broke, in its own colour, gone in about a second
+    // (lights.ts; the nearest few to the rider are kept, and the tier says how many a show may offer).
+    const L = this.lights[this.lightNext];
+    this.lightNext = (this.lightNext + 1) % this.lights.length;
+    L.x = x;
+    L.y = y;
+    L.z = z;
+    L.r = a.r * 0.7 + FW_WHITE_GOLD.r * 0.3;
+    L.g = a.g * 0.7 + FW_WHITE_GOLD.g * 0.3;
+    L.b = a.b * 0.7 + FW_WHITE_GOLD.b * 0.3;
+    L.max = L.life = willow ? 1.5 : 1.0;
+  }
+
+  /** Bursts still lighting the snow (tests and the cost report). */
+  get litBursts(): number {
+    let n = 0;
+    for (const l of this.lights) if (l.life > 0) n++;
+    return n;
+  }
+
+  /** Offers the brightest bursts to the frame's local lights: a hard flash that falls away fast, then a
+   *  glow that fades with the stars. Under reduced motion the flash is left out. */
+  private light(dt: number): void {
+    const cap = byTier(BUDGET.showLights);
+    let pushed = 0;
+    for (const l of this.lights) {
+      if (l.life <= 0) continue;
+      l.life -= dt;
+      if (pushed >= cap || l.life <= 0) continue;
+      const k = l.life / l.max;
+      const flash = this.reduced ? 0 : Math.pow(k, 6) * 2.2;
+      pushLocalLight(l.x, l.y, l.z, l.r, l.g, l.b, 150, k * k * 0.9 + flash);
+      pushed++;
+    }
   }
 
   /** Per frame, render seconds. */
   update(dt: number): void {
+    this.light(dt);
     if (!this.busy) return;
     this.time += dt;
     this.mat.uniforms.uTime.value = this.time;

@@ -10,6 +10,7 @@ import { Breaks } from './breaks';
 import { FW_PAIRS, Fireworks, type ShellKind } from './fireworks';
 import type { Particles } from './particles';
 import { fx } from './fxhub';
+import { pushLocalLight } from './lights';
 import { SkyGates } from './skygates';
 import { TreeLife } from './treelife';
 import { WardFx } from './wardfx';
@@ -65,6 +66,36 @@ interface Scheduled {
   kind: ShellKind;
 }
 
+/** A win's finale (round 7), after the show: a volley across the whole sky in a second and a half, low
+ *  willows under high peonies, then one great ring and a crackling heart dead centre as the last word. */
+const FINALE: readonly (readonly [number, number, number, number, ShellKind])[] = [
+  [4.3, -0.78, 0.5, 112, 'willow'],
+  [4.45, 0.76, 0.52, 112, 'willow'],
+  [4.6, -0.42, 0.74, 126, 'peony'],
+  [4.75, 0.44, 0.76, 126, 'peony'],
+  [4.9, 0.0, 0.6, 104, 'chrysanthemum'],
+  [5.1, -0.6, 0.86, 134, 'crackle'],
+  [5.25, 0.6, 0.88, 134, 'crackle'],
+  [5.5, -0.2, 0.66, 110, 'willow'],
+  [5.6, 0.2, 0.66, 110, 'willow'],
+  [6.3, 0.0, 0.84, 122, 'ring'],
+  [6.45, 0.0, 0.84, 124, 'crackle'],
+];
+
+interface Pulse {
+  x: number;
+  y: number;
+  z: number;
+  r: number;
+  g: number;
+  b: number;
+  radius: number;
+  power: number;
+  life: number;
+  max: number;
+  ride: boolean;
+}
+
 /** Seconds a shell climbs before it bursts. */
 const RISE = 0.9;
 
@@ -78,6 +109,9 @@ export class SpiritFx {
   /** What breaks: snowmen, barriers, ice, cornices, icicles (breaks.ts). */
   readonly breaks: Breaks;
   private fallAcc = 0;
+  /** Spirit moments that light the snow and the rider for a beat (pooled; lights.ts). */
+  private readonly pulses: Pulse[] = Array.from({ length: 8 }, () => ({ x: 0, y: 0, z: 0, r: 0, g: 0, b: 0, radius: 1, power: 0, life: 0, max: 1, ride: false }));
+  private pulseNext = 0;
   private readonly v = new Vector3();
   private readonly w = new Vector3();
   private readonly carry = new Vector3();
@@ -144,6 +178,11 @@ export class SpiritFx {
         this.schedule(true);
       } else if (b.type === 'moment' && b.verb === 'gates' && b.phase === 'won') {
         this.schedule(false);
+      } else if (b.type === 'moment' && b.verb === 'gates' && b.phase === 'step') {
+        // A lantern gate threaded: its lanterns slip their strings (marqueeworld.ts) in a burst of their
+        // own glow round the rider, rising, and their light washes over the snow as it goes by.
+        this.particles.sparkle(this.v.copy(this.at).setY(this.at.y + 2.2), LANTERN_GLOW, 22, 3.4, 0.9, 0.24, this.carry.copy(this.vel).setY(0), 0.9);
+        this.pulse(this.at.x, this.at.y + 1.5, this.at.z, LANTERN_GLOW, 14, 1.9, 0.6, true);
       } else if (b.type === 'nearMiss' && (b.obs === 'pine' || b.obs === 'blossom' || b.obs === 'charpine')) {
         this.trees.nearMiss(b.x, b.z, b.grade === 'whisker');
       } else if (b.type === 'nearMiss' && (b.obs === 'spire' || b.obs === 'serac' || b.obs === 'iceblock') && this.course) {
@@ -159,7 +198,60 @@ export class SpiritFx {
     const base = this.showT;
     const kinds: readonly ShellKind[] = sky ? ['peony', 'chrysanthemum', 'crackle', 'ring', 'willow', 'peony', 'crackle', 'chrysanthemum'] : ['crackle', 'peony', 'ring', 'chrysanthemum', 'willow', 'crackle'];
     list.forEach(([t, a, b, c], i) => this.show.push({ at: base + Math.max(0, t - RISE), sky, a, b, c, pair: i % FW_PAIRS.length, kind: kinds[i % kinds.length] }));
+    // A win ends on its finale (Low sends up every other shell of it, the last two always).
+    if (sky) FINALE.forEach(([t, a, b, c, kind], i) => {
+      if (fx.tier === 0 && i % 2 === 1 && i < FINALE.length - 2) return;
+      this.show.push({ at: base + t - RISE, sky, a, b, c, pair: (i + 1) % FW_PAIRS.length, kind });
+    });
     this.show.sort((x, y) => x.at - y.at);
+  }
+
+  /** A beat of light at three.js (x, y, z): `radius` metres, gone in `life` seconds; `ride` keeps it on
+   *  the rider. */
+  private pulse(x: number, y: number, z: number, c: Color, radius: number, power: number, life: number, ride = false): void {
+    const p = this.pulses[this.pulseNext];
+    this.pulseNext = (this.pulseNext + 1) % this.pulses.length;
+    p.x = x;
+    p.y = y;
+    p.z = z;
+    p.r = c.r;
+    p.g = c.g;
+    p.b = c.b;
+    p.radius = radius;
+    p.power = power * (this.reduced ? 0.6 : 1);
+    p.max = p.life = life;
+    p.ride = ride;
+  }
+
+  /** Lights pushed by the spirit effects this frame (tests and the cost report). */
+  lit = 0;
+
+  /** Offers the frame's spirit lights: each pulse as it fades, a dash's own light on the rider for as long
+   *  as it lasts, and the sky gates ahead (a ring of light lights the snow under it). */
+  private light(dt: number, s: Snap, dashing: boolean): void {
+    this.lit = 0;
+    for (const p of this.pulses) {
+      if (p.life <= 0) continue;
+      p.life -= dt;
+      if (p.life <= 0) continue;
+      const k = p.life / p.max;
+      if (p.ride) pushLocalLight(s.x, s.y + 0.9, -s.z, p.r, p.g, p.b, p.radius, p.power * k * k);
+      else pushLocalLight(p.x, p.y, p.z, p.r, p.g, p.b, p.radius, p.power * k * k);
+      this.lit++;
+    }
+    if (dashing) {
+      pushLocalLight(s.x, s.y + 0.8, -s.z, WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, 10, 1.3);
+      this.lit++;
+    }
+    const c = this.course;
+    if (!c) return;
+    for (const g of c.skyGates) {
+      const dz = g.z - s.z;
+      // (A gate flown is behind the rider a blink later: no need to ask which have burst.)
+      if (dz < 2 || dz > 110) continue;
+      pushLocalLight(g.x, g.y, -g.z, LIGHT.r, LIGHT.g, LIGHT.b, 4 + g.r * 3, 0.7);
+      this.lit++;
+    }
   }
 
   setCourse(c: Course): void {
@@ -192,11 +284,31 @@ export class SpiritFx {
           const at = this.w.set(g.x, g.y, -g.z);
           this.particles.sparkle(at, WHITE_GOLD, 44, 4.8, 0.85, 0.26, carrier, 0.2);
           this.particles.sparkle(at, LIGHT, 20, 7.5, 0.6, 0.22, carrier, 0.1);
+          // (Round 7: the burst lights the snow under it and the rider going through it, and a second,
+          // slower ring of marigold hangs where the gate was.)
+          this.particles.sparkle(at, LIGHT, 16, 2.2, 1.1, 0.3, null, 0.1);
+          this.pulse(at.x, at.y, at.z, WHITE_GOLD, 18, 2.4, 0.55);
         }
         break;
       }
       case 'dash':
-        if (e.phase === 'start') this.particles.sparkle(pos, WHITE_GOLD, 26, 3.2, 0.5, 0.22, carrier, 0.25);
+        if (e.phase === 'start') {
+          this.particles.sparkle(pos, WHITE_GOLD, 26, 3.2, 0.5, 0.22, carrier, 0.25);
+          // Round 7, the burst: a ring of white-gold thrown out flat over the snow as the air opens, a
+          // second in marigold behind it, and a hard beat of light on the snow and the rider.
+          this.w.set(s.x, s.y + 0.15, -s.z);
+          this.particles.ring(this.w, WHITE_GOLD, 26, 7.5, carrier, 4, 1.6, 0.42, 0.2);
+          this.particles.ring(this.w, LIGHT, 14, 4.2, carrier, 0, 1.4, 0.6, 0.18);
+          this.pulse(s.x, s.y + 0.9, -s.z, WHITE_GOLD, 16, 2.6, 0.4, true);
+        } else {
+          // ...and as the sled is solid again, the light lets go: a last soft ring, falling behind.
+          this.w.set(s.x, s.y + 0.15, -s.z);
+          this.particles.ring(this.w, LIGHT, 12, 3, carrier, 3, 1.3, 0.5, 0.17);
+        }
+        break;
+      case 'light':
+        // A light taken lights the snow where it hung for a blink (a great light a wider one).
+        this.pulse(e.x, e.y + 0.4, -e.z, LIGHT, e.value > 1 ? 9 : 5.5, e.value > 1 ? 1.5 : 0.9, 0.28, true);
         break;
       case 'ward':
         // The lantern cracks open round the rider: its shell, shards and ring (wardfx.ts), with the
@@ -204,9 +316,13 @@ export class SpiritFx {
         this.ward.start(this.w.set(s.x, s.y, -s.z), this.carry.set(s.vx, s.vy, -s.vz), this.reduced);
         this.particles.sparkle(pos, LIGHT, 30, 4, 0.6, 0.24, this.carry.set(s.vx, 0, -s.vz), 0.4);
         this.particles.burst(pos, 0.9, 16, this.carry, WHITE_GOLD);
+        // (Round 7: the crack is a flash of the lantern's light on everything round the rider.)
+        this.pulse(s.x, s.y + 0.9, -s.z, LIGHT, 15, 2.8, 0.7, true);
         break;
       case 'lantern':
         this.particles.sparkle(this.v.set(s.x, s.y + 1.2, -s.z), LIGHT, 10, 1.4, 0.45, 0.18, carrier, 0.6);
+        // A lantern fills: its light swells on the rider and the snow for half a second.
+        this.pulse(s.x, s.y + 0.9, -s.z, LIGHT, 9, 1.3, 0.55, true);
         break;
       case 'smash':
         // A snowman bursts: lumps of snow, its carrot, its coals and its scarf, riding on with the sled.
@@ -250,10 +366,21 @@ export class SpiritFx {
       }
     }
     this.trailAcc += dt;
-    if (mode === 'run' && sim && sim.s.dash > 0 && this.trailAcc > (low ? 0.07 : 0.035)) {
+    const dashing = mode === 'run' && !!sim && sim.s.dash > 0;
+    if (dashing && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
       this.particles.sparkle(this.v.set(s.x, s.y + 0.5, -s.z + 0.8), WHITE_GOLD, low ? 2 : 3, 0.9, 0.55, 0.2, this.carry.set(s.vx * 0.6, 0, -s.vz * 0.6), 0.15);
+      // Round 7, the wake and the tail: two lines of light laid on the snow off the runners, a sled's
+      // width apart, that hold for most of a second behind the rider (they keep a third of its pace), and
+      // a stream of marigold off the scarf's height that falls back slower, so the dash draws a comet.
+      const hs = Math.hypot(s.vx, s.vz) || 1;
+      const rx = s.vz / hs;
+      const rz = s.vx / hs;
+      const wake = this.carry.set(s.vx * 0.34, 0, -s.vz * 0.34);
+      for (const side of [-1, 1]) this.particles.line(this.v.set(s.x + rx * side * 0.34, s.y + 0.02, -s.z + rz * side * 0.34), this.w.set(s.x + rx * side * 0.4 - (s.vx / hs) * 0.9, s.y + 0.02, -s.z + rz * side * 0.4 + (s.vz / hs) * 0.9), WHITE_GOLD, low ? 1 : 2, wake, 1.5);
+      if (!low) this.particles.sparkle(this.v.set(s.x, s.y + 1.0, -s.z + 0.5), LIGHT, 2, 1.4, 0.9, 0.17, this.carry.set(s.vx * 0.8, 0, -s.vz * 0.8), 0.3);
     }
+    this.light(dt, s, dashing);
     // A set piece's air drifts past the lens while it lasts.
     this.airAcc += dt;
     if (mode === 'run' && this.air && this.air !== 'dawn' && this.air !== 'aurora' && this.airAcc > (low ? 0.16 : 0.08)) {

@@ -49,6 +49,6 @@ export const BUDGET = {
   shivers: [0, 4, 4, 4],
   /** Weather: the share of the tier's flakes each depth layer takes is the same; the count is world.ts's. */
   /** Firework streaks alive at once (fireworks.ts), and the local lights a show may push a frame. */
-  streaks: [220, 520, 900, 1300],
+  streaks: [420, 900, 1700, 2600],
   showLights: [1, 2, 3, 4],
 } as const;
