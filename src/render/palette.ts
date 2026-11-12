@@ -79,7 +79,7 @@ export interface Palette {
   massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
-  grade: { lift: Color; gain: Color; saturation: number; contrast: number; grain: number; foot: number; shafts: number; lens: number; focal: number; gust: number; glitter: number; focalDir?: Vector3 };
+  grade: Grade;
   /** The living sky and air (sky.ts, massif.ts): crepuscular rays fanning from a low sun through the
    *  clouds, the 22 degree halo and sun dogs of ice-crystal air, shooting stars, a snow banner blown off
    *  the hero summit, a distant avalanche down its face, cloud shadows sweeping the panorama, the
@@ -121,6 +121,44 @@ export interface Palette {
    *  dark, hard shapes in the murk. */
   hazardFog: number;
   exposure: number;
+}
+
+/** The frame's finish (post.ts GradeParams reads these by name). Round 7 adds the film curve's strength
+ *  (tone), the place's exposure, and a split tone of its own: what the lit values (hi) and the shade (lo)
+ *  lean to, as near-white colours. getPalette fills the four in where a mood leaves them out. */
+export interface Grade {
+  lift: Color;
+  gain: Color;
+  saturation: number;
+  contrast: number;
+  grain: number;
+  foot: number;
+  shafts: number;
+  lens: number;
+  focal: number;
+  gust: number;
+  glitter: number;
+  focalDir?: Vector3;
+  tone?: number;
+  exposure?: number;
+  hi?: Color;
+  lo?: Color;
+}
+
+/** The film curve's numbers, in one place: the composite pass compiles them into its shader (post.ts) and
+ *  Low, which has no post pass, bakes the same curve into its colours (filmValue below). Scene values run
+ *  straight through the mid-tones; under `knee` a short toe deepens the darks by up to `toe`; over it a
+ *  shoulder climbs toward `white` and never reaches it, so the brightest snow stops short of paper white. */
+export const FILM = { knee: 0.45, white: 0.98, toe: 0.18 };
+
+/** The film curve on one value (the GLSL filmCurve in post.ts, line for line). */
+export function filmValue(x: number): number {
+  const { knee: K, white: W, toe: T } = FILM;
+  if (x < K) {
+    const t = 1 - x / K;
+    return x - T * x * t * t;
+  }
+  return K + (W - K) * (1 - Math.exp(-(x - K) / (W - K)));
 }
 
 /** Each biome's signature mountain (massif.ts): a classic snow-capped summit, an ice fang, a
@@ -605,6 +643,11 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
     p.sunDir = liftLight(p.diskDir, p.lightMin);
   }
   p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
+  // Round 7's grade fields, wherever a mood's own grade leaves them out (so every palette blends).
+  p.grade.tone ??= 1;
+  p.grade.exposure ??= 1;
+  p.grade.hi ??= new Color(1, 1, 1);
+  p.grade.lo ??= new Color(1, 1, 1);
   return p;
 }
 
