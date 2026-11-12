@@ -2037,3 +2037,152 @@ Every place where I replaced, extended or interpreted the brief, and why.
     0.072 RMS; the console stays clean on desktop and phone (`scripts/playtest/garage-look.js`). And the UI harness
     opened only the Sleds tab: it now builds the paints and the four shelves as the game does, so every tab can be
     opened, bought from and worn there.
+
+## Round 7: from an 8 to a 10
+
+276. **The review, before anything changed.** Round 6's build (5f70fe5) in headless Chrome on the laptop's GPU, on
+    mains. A new fixed frame set (`scripts/playtest/frames.js`, the list kept in `frames-r7.json`): for every mountain
+    the same 35 to 38 distances (every 150 m, each set piece's approach and middle, each leap's lip, the way into
+    every street, bridge, tunnel, lake, ravine and terrace, the finish and its square), ridden on the safe line at 30
+    m/s on High at 1280x720, on Low, and on a 390x844 phone on Medium (`shots/r7/before`). I read every High frame and
+    the phone's. The pilot lab rode the same seven pilots, six seeds a mountain (`shots/r7/lab/before.txt`). I cannot
+    hear, so the music is read from `score.ts` and round 6's measurements.
+
+    *Pinecrest.* Wonderful: the First Drop still opens the whole valley; the last third at golden hour is the best
+    light in the game, and Old Town's street through the bunting is a postcard. Flat: from 700 to 1700 m and again
+    from 2550 to 3000 the frame is two-thirds white foreground with streaks on it and a groove of trees; the eye has
+    nothing to hold. Cheap at speed: the two grey prisms either side of the First Drop and the Valley Leap, with a
+    crowd standing on them, read as untextured boxes; Old Town's lantern gates read as stacked yellow blocks; the
+    rider is about 5% of the frame's height on desktop at speed (the phone, where the rider is twice that, looks
+    better for it).
+
+    *Frostfang.* Wonderful: Station Street's red hulls and amber windows; the cavern's way out into a rose dawn, which
+    is the one staged change of light in the game that lands. Flat: from 600 to 3300 m, a minute and a half, the
+    frame is one blue. The polar night under the aurora (2250 to 2850) is a dark blue smear in which the snow, the
+    walls and the sky share a value and the rider is the only thing that reads. Cheap: ravine walls are a few huge
+    flat triangles; the ice has no depth; the Ice Cavern at 3300 is a dark corridor with a lit square at its end.
+
+    *Ember Peak.* Wonderful: the cone under the orange deck names the mountain in any frame that has it; Cinder
+    Gate's lava joints; the dusk bridge into Ash Market. Flat: the snow is a grey-brown that reads as mud, lit by
+    nothing: the deck is orange and the ground does not know it. The Caldera Leap has no caldera in it (no lava, no
+    glow from below, a grey slope with a flag). At 3450 the frame is grey fog with a line in it. Cheap: basalt is
+    dark brown boxes with a lighter top.
+
+    *Sakura Ridge.* Wonderful: the cone, Temple Town's street, the pagoda. It is also the weakest mountain to look at:
+    from 2400 to 3100 several frames are near-white paper with pink blobs on them, at so little contrast that the
+    course's edge is hard to find. The blossom is a flat mauve, not light. The Thousand Torii is two dark walls with
+    green steps.
+
+    *Everywhere.* The light is direct sun and distance fog. Shafts exist (a fan from the sun in view) but nothing in
+    a frame says where the light is coming from, and no lamp, window, lava or lantern lights the snow beside it. The
+    near snow is a bright plane with speed streaks. "Steer" sits at the bottom of every frame of a run (the hints
+    never retire for a rider who never touches a key, and the brief's capture shows it at 1:24 for one who does).
+
+    *Where a player stops, and why.* (1) The struggling player, in the first minute of every run: the clumsy pilot
+    finishes 0 of 24 (median 1,140 to 2,390 m of 4,500; 14 of its 24 runs end on a landing, 5 on a tree, 4 on a rock, 1 out of time) and never
+    sees a finish town. (2) The player who has learned a mountain, at about run five: its three set pieces play
+    identically every time. (3) The player who has ridden all four, at about run ten: there is nowhere new to go,
+    and the twelve riders are names in a field, not a ladder to climb. (4) The skilled player, quietly: the expert
+    pilot wins 36 of 72 set pieces against the mid pilot's 50. The lab's verbs say why, and it is not only the rings:
+    races 8 of 18 against 18 of 18 (it arrives slow off a trick line), rings 8 against 10, steps 0 of 6, gates 14
+    against 18 of 24. Only the collapse rewards it (6 of 6 against 3).
+
+    *The music, read and measured.* Round 6's numbers stand: -16.0 LUFS integrated, true peak -1.1 to -1.2 dBTP,
+    loudness range 2.1 to 3.3 LU. That range is the finding: a run's music barely moves in level from its first bar
+    to its finish. Each mountain has a key, a tempo and a written hook, but all four are played by the same eleven
+    Web Audio voices (saw and triangle oscillators through one filter each, noise drums), so the four courses are one
+    band playing four tunes. There is no space (one short reverb send), no real bass weight under 60 Hz, and nothing
+    that a listener would call an instrument. No human has heard any of it.
+
+    *The frame's cost, for the record.* High on Pinecrest in these captures: 69 to 100 draw calls and 0.79 to 1.19
+    million triangles a frame.
+
+277. **The round's plan: eleven changes, biggest lift for a player first.** Six of the eleven lift the look (1 to 4,
+    part of 5, and 10). One clean break (SIM_VERSION 9) carries every sim change.
+
+    1. **Light and air you can see** (look). A filmic tone curve; height fog with the sun's scatter in it and three
+       planes of aerial perspective; shafts through trees, towers, torii and cavern mouths; cloud shadows in the
+       valleys; a grade for every place, blended along the run to ART.md 15's colour scripts; lamps, windows, lava,
+       lanterns and fireworks that light the snow and the riders; an Ultra tier above High (ambient occlusion,
+       contact shadows, reflections, depth of field in the beats), and a designed Low. *"It looks like a film now."*
+    2. **Surfaces at speed** (look). Snow that sparkles near the lens, with sastrugi, soft blue shadow and ruts
+       that last the run; rock with painted strata and snow on its ledges, and no box anywhere (the First Drop's
+       edges are the test); ice with a heart; trees that sway and carry snow; clean seams. *"The snow looks like
+       snow."*
+    3. **A hero worth looking at** (look). A larger rider in the frame with a stronger silhouette, secondary motion
+       in scarf, coat and hat, weight into a carve, anticipation before a pop, reactions to a pass, a wipeout and a
+       win, a finish celebration; a rim and a key light in every frame; ghosts in glass. *"My rider has character."*
+    4. **A camera that directs** (look). Speed you feel across the curve; a held wide on each mountain's biggest
+       leap; a slow hero frame at the apex, on the music; a low tracking shot down a street; a whip-pan onto each
+       mountain's reveal. Steering is never taken. *"Did you see that shot?"*
+    5. **Set pieces that never repeat** (wow, sim). The sameness audit and its answer: no verb more than twice in
+       the game, a mountain's three all different, and the two uses of a shared verb clearly different to play. New
+       verbs where the audit needs them. Two or three seeded variants of every set piece; one or two rare legend
+       moments a mountain (about 1 run in 10, never a session's first); a climax in the last stage that lands in the
+       finish town on the beat. *"That has never happened before."*
+    6. **Lanternfall, a fifth mountain and the finale** (scale). The summit the spirit lights come from: a descent
+       from above the cloud, through it, into a valley of rising lanterns. Its own palette, architecture, people,
+       music, three set pieces on verbs used nowhere else (follow a guide light through the cloud, kindle a road of
+       stone lamps, carry a flame to the great lantern at the finish) and its home rider. *"Wait, there is a fifth
+       mountain?"*
+    7. **The Twelve** (depth). A campaign spine: beat each signature rider on their home ground, one duel at a
+       time; the twelfth opens Lanternfall and a last race against all of them. It gives runs 10 to 50 a direction
+       and the roster a story, and it needs no sim change (a duel is a field of one real record). *"Three more and I
+       get the King."*
+    8. **A produced score** (music). Each course in its own genre, instruments, tempo and production, rendered
+       offline at full quality and shipped as stems (Opus, with an AAC fallback), streamed after the first frame and
+       cached by course; re-sequenced to the run, layered with the race, with a stinger for each verb, a breath
+       before the biggest leap, a climax into the finish town, a title theme and a results reprise, and a motif for
+       each signature rider. The live engine stays for cues, stingers and the crowd. *"I had the Frostfang track in
+       my head all day."*
+    9. **A skill curve that works at both ends** (feel). The struggling player reaches the finish town; the expert
+       pilot wins at least as many set pieces as the mid; runs 2 to 20 stay a live race for a skilled player;
+       gamepad support with rumble and glyphs; control hints that leave once a control is shown. *"I finished!"* and
+       *"Finally a pad."*
+    10. **Your run, directed, and screens that belong to the look** (look, wow). A highlight reel after the finish,
+       cut from the run's own record with cinematic cameras and its own music; the title as a living piece of key
+       art that changes with the mountain; results as a celebration; motion design through the HUD and every
+       transition. *"Watch my leap."*
+    11. **Low beats round 6, by design.** The riders' labels and pills leave the DOM for the canvas (one batched
+       draw from a glyph atlas), which removes the page work decisions 217 and 238 measured, rather than trimming
+       it. *Nothing a player says; a phone that holds its frame rate.*
+
+    *Chosen for section 3 of the brief, and why.* A fifth mountain and The Twelve. The review's third stopping point
+    is scale and direction, and these two answer it together: the campaign is the road and Lanternfall is where it
+    goes. The summit beat the sea-cliff harbour because it pays off the game's own story (the lights, the ghosts)
+    and its palette is one the other four do not have (night, indigo, the fuel's marigold as world light), where a
+    harbour is a fifth day-lit snowfield. The Twelve beat a third lantern use because it is depth at almost no sim
+    risk: it reuses the records, the grudges and the roster the game already has.
+
+    *Rejected.* **A spirit route at a veil arch** (the third lantern use): a mirrored second ground is a second
+    course to prove fair, light, dress and teach, and a third lantern use dilutes the dash-or-ward choice that works.
+    **Weather fronts that move the safe line**: the fairness test's promise is a static safe lane a beginner can
+    learn, and moving it mid-run punishes exactly the player change 9 is for. **Drafting or any field-dependent
+    mechanic**: a record would depend on who else was in the race. **The sea-cliff harbour**: above; kept for a
+    later round. **Moving to the WebGPU renderer**: every material is hand-written GLSL on `ShaderMaterial`; a port
+    is a rewrite of the look to gain nothing a player would see on this hardware, with two renderers to keep. **A
+    music-generation tool**: its licence for a game sold on CrazyGames cannot be checked from here, and a generated
+    track cannot be re-sequenced by stage and race state as stems can. **Ableton**: the connector can write notes
+    and load devices but has no bounce, and nobody in the loop can hear the result. **Temporal anti-aliasing as the
+    default**: glass ghosts, particles and the speed streaks have no motion vectors; it stays an Ultra experiment the
+    look lane may keep or drop on evidence.
+
+    *The struggling player's fix, decided here because every lane depends on it.* A wreck no longer ends a run by
+    itself. The rider tumbles, loses time and speed, and gets up; the sim decides how many get-ups a run has and
+    how they come back, tuned until the clumsy pilot finishes most of its runs. It is fair to the ghosts because it
+    is the sim's rule for every rider (a ghost's record carries its own falls), and fair to the skilled because a
+    fall always costs more time than the line that avoids it, which the lab must show.
+
+    *Size.* CrazyGames' requirements today (docs.crazygames.com/requirements/technical, read 2026-11-12): at most
+    250 MB and 1,500 files in total, an initial download (to the first gameplay start) of at most 50 MB, and at
+    most 20 MB to be eligible for the mobile homepage. The round's own budget is far inside that: an initial
+    download under 6 MB and a whole build under 45 MB. `npm run release` will check 20 MB for the initial download
+    and 50 MB for the whole build.
+
+    *How.* Lanes in hand-made worktrees cut from this commit. Phase 1, side by side: light and pipeline (change 1,
+    and Low's designed look); hero, surfaces and camera (2, 3, 4); music (8); set pieces and Lanternfall in the sim
+    (5 and 6's sim); feel (9). Phase 2, once phase 1 is merged: Lanternfall's world (6); the set pieces' and
+    legends' world (5); screens, the reel, The Twelve and the labels (7, 10, 11). Phase 3: the visual review loop
+    (an independent critic with only the frames and ART.md, at least three passes a mountain). Phase 4: the pools
+    ridden again, telemetry, perf on every tier, loudness, size. The main lane holds the art direction, the merges
+    and the measurements.

@@ -550,3 +550,147 @@ Each mountain's three set pieces are a verb as well as a place, and each verb ha
   into the gap with a puff of powder. The deck holds.
 - **The chip.** A set piece's card becomes its chip as it starts: its name a size smaller over the verb counting in
   tabular figures. A win rims it in marigold with the line in marigold; a loss is said plainly in off-white.
+
+## 15. Round 7: the direction, mountain by mountain
+
+**Direction: "Alpenglow Gouache, lit like a film."** The painted, flat-valued world of sections 1 to 14 stays: every
+shape is still a brushed plane, every colour still has a role. What changes is that **light becomes the subject**.
+Round 6's frames are well-drawn objects in an even light. Round 7's are pictures of light falling through air onto
+those objects. Where this section and an earlier one disagree, this one wins.
+
+Five rules every frame is held to:
+
+1. **Three planes and a sky.** Near, middle and far are separated by value and by hue, not by fog alone: the near
+   plane has the full palette and hard edges, the middle loses a third of its contrast and leans to the air's colour,
+   the far range is two or three flat values of blue (or of the mountain's air) with the sun's scatter in it. A player
+   can point at each plane in a thumbnail.
+2. **One light motivates the frame.** The sun, the aurora, a street's lamps, the lava or the lanterns: something in
+   the picture is where the light comes from, the snow and the rider show it, and the air between shows it (shafts,
+   glow, a lit haze). No frame is lit by nothing in particular.
+3. **Painted detail, never noise.** Rock carries strata as painted bands with snow lying on its ledges; snow carries
+   sastrugi, sparkle and blue shadow near the lens; ice carries depth (cracks, bubbles, a darker heart). All of it is
+   drawn in the gouache's own three values. Nothing in the frame is an untextured box, and nothing is photo noise.
+4. **The hero is lit like a hero.** The rider always carries a rim from the frame's light and a soft key that keeps
+   the face of the coat readable; the vermillion never sinks into a dark frame or bleaches in a bright one. The rider
+   fills more of the frame than in round 6.
+5. **Grade by place.** Each place on a run has its own grade (lift, gain, saturation, the air's colour, the bloom),
+   blended over the metres between places, so a run is a sequence of pictures and not one picture for two minutes.
+   The colour scripts below are the source; `JOURNEY` and the place grades implement them. Their metres are
+   approximate: the code keys each row to the course's own sections.
+
+The filmic finish: a filmic tone curve (highlights roll off to the light's colour and never clip to white paper; the
+shade keeps its hue), bloom that belongs to light sources and the sun's rim on powder, and a lens that stays out of
+the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
+
+### Pinecrest: the bright day that turns to gold
+
+- **Feeling.** The first morning of a holiday. Generous, open, easy to love. It ends as the best evening of the trip.
+- **Colour script.**
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 450 | The run-in | Crisp cobalt morning. White snow, clean blue shade, the air clear enough to count ridges. Cool, high-key grade. |
+  | 450 to 700 | The First Drop | The valley opens: three blue haze layers below, cloud above with the sun breaking through it in shafts onto the far lake. The grade holds cool so the gold later is a change. |
+  | 700 to 1700 | Timberline Glades | Dappled: pine shadows and shafts between trunks, cloud shadows sweeping the open slopes. Teal-green anchors the frame. |
+  | 1700 to 2300 | Mirror Lake | High-key and wide. Black-cyan ice with the sky in it and the sun's path down it. The one place the grade goes almost monochrome blue. |
+  | 2300 to 3250 | The gold comes | The sun drops under the cloud: honey light, long violet-blue shadows, the peaks glowing. Saturation rises. |
+  | 3250 to 3700 | The covered bridge and Old Town | Lamplight against blue shade: windows and lantern gates light the snow amber, the sky peach over the roofs. The warmest grade on the mountain. |
+  | 3700 to 4500 | The Valley Leap and the finish | A held wide over the valley: the finish town's spires in a pool of gold, everything else in long shadow. Dusk at the line, fireworks against a deepening blue. |
+
+- **Hero vistas.** (1) The First Drop's lip: the whole valley, the lake, the cloud shafts. (2) Mirror Lake: the
+  rider and the cable car doubled in black ice. (3) Old Town's street at golden hour, down the bunting to the far
+  peak. (4) The Valley Leap's apex, the spired town below.
+- **The one image.** A red-scarfed rider in the air over a gold valley, a spired town far below.
+
+### Frostfang Glacier: blue hour, aurora, dawn
+
+- **Feeling.** Awe and cold. Alone at the top of the world, then the sun finds you.
+- **Colour script.**
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 600 | The run-in | Steel blue hour, a thin lemon band on the horizon, the Fang black against it. Snow in two blues with a lemon rim. |
+  | 600 to 1450 | Serac Gate | The sun goes: the lemon band narrows to a line, stars come out, the span crosses an abyss that glows cyan from below. |
+  | 1450 to 1700 | Station Street | Hot red hulls and amber windows against cobalt; the windows light the snow. The only warm place before the dawn. |
+  | 1700 to 2700 | The Crevasse Fields | Polar night that is not one blue: the aurora is the key light, green-teal on the snow's lit side with violet in the shade, moving. The ice glows from inside (cyan heart, pale skin) and holds the aurora's reflection. |
+  | 2700 to 3300 | The Ice Cavern | Near-black cobalt. The only light is what the cavern holds: lantern pools, crystals catching it, the rider's own glow. Value contrast at its highest. |
+  | 3300 to 3600 | The burst into dawn | The cavern mouth is a blade of rose-gold with shafts through it. The grade swings from the coldest frame in the game to the warmest in under four seconds. |
+  | 3600 to 4500 | Fang Town | Rose-gold snow, violet shadows half a slope long, the Fang lit on one side, the aurora a last thread over the far range. |
+
+- **Hero vistas.** (1) Serac Gate's span, the Fang in the lemon band. (2) The aurora over the Crevasse Fields, and
+  in them. (3) The cavern mouth at sunrise: the mountain's jaw-drop. (4) The Fang at dawn from the last leap.
+- **The one image.** A rider's silhouette bursting from a blue cavern mouth into a rose-gold sunrise under the Fang.
+
+### Ember Peak: under the mountain's breath
+
+- **Feeling.** Forge-light and danger. A thrilling place that should not be ridden, ridden.
+- **Colour script.** Ember's snow is no longer brown-grey mud. Its lit side takes the orange of what lights it (the
+  deck, the lava) and its shade goes to a cold plum-teal, the complement, so ash snow reads as snow in firelight.
+  Basalt is true black with a hot edge where lava or sky finds it.
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 500 | The run-in | The cone dead ahead under the smoke deck, the disc a dim coin. Snow in orange and plum, embers thin. |
+  | 500 to 1250 | The basalt slopes | The deck closes. Lava threads in the rock light the snow beside them in pools. |
+  | 1250 to 1700 | Cinder Gate | Black, lit from below: lava in the joints throws light up the walls and under the rider, the ore train glows from inside, and the far mouth is a hot orange disc. |
+  | 1700 to 2250 | The shield | Out under a deck lit from below, breathing. Heat shimmer over the vents. |
+  | 2250 to 2700 | The Caldera Leap | The caldera is a lake of lava: the whole frame is lit from underneath, the smoke above it glows, embers rise through the flight in depth. The mountain's jaw-drop. |
+  | 2700 to 3450 | Basalt Halls | Columns like organ pipes, lava rivers running beside the line and lighting the snow orange, the air thick with ash. Never a grey fog with nothing in it. |
+  | 3450 to 4500 | Ash Market and the forge town | Dusk to night under a red deck: lanterns, forge mouths and window light on the snow, sparks in the street, the cone running with lava behind the roofs. |
+
+- **Hero vistas.** (1) The cone from the start line. (2) Cinder Gate's glowing throat. (3) The Caldera Leap over the
+  lava lake. (4) Ash Market's bridge, the cone behind it.
+- **The one image.** A rider leaping a glowing caldera under a ceiling of smoke lit from below.
+
+### Sakura Ridge: the spring morning
+
+- **Feeling.** Calm joy. The mountain you ride to feel good.
+- **Colour script.** Sakura keeps its softness and gains a spine: ink and wine-lacquer darks (trunks, torii, roofs)
+  and deep cedar green hold the values, and the blossom is the light, backlit and glowing, never a pale blob on white.
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 400 | The run-in | Peach mist. The cone a pale ghost in it. Low contrast on purpose, the darks few and exact. |
+  | 400 to 1100 | Petal Steps | The mist lifts in layers. The terraces hold still water in their flats, mirrors of the sky, and the sun finds them one by one. |
+  | 1100 to 2200 | The orchards | Sun through blossom: canopies glow from behind, shafts fall between the rows, petals fall through them in depth. |
+  | 2200 to 2700 | The Blossom Leap | A clear, high frame: the cone sharp at last, orchard rows combed across the valley floor, a river of petals on the wind. |
+  | 2700 to 3300 | The Thousand Torii | Dark lacquer and strobing light: the sun cut into bars by the posts, flickering over the rider at speed. |
+  | 3300 to 4500 | Temple Town | Late morning, the clearest light on the mountain. Paper lanterns warm under the eaves, the pagoda over the square, a petal storm at the line. |
+
+- **Hero vistas.** (1) The cone through the lifting mist. (2) The flooded terraces. (3) The Blossom Leap over the
+  orchard rows. (4) The torii's bars of light. (5) The pagoda over the square.
+- **The one image.** A rider under a tunnel of backlit blossom, the perfect cone beyond it.
+
+### Lanternfall: where the lights come from (new in round 7)
+
+- **Feeling.** Wonder and hush, then homecoming. The spirit lights a player has collected on four mountains rise
+  from here. It is the game's secret and its finale.
+- **Palette.** Indigo and violet air, lilac snow with a silver lit side, ink silhouettes, and marigold: here, and only
+  here, the course's fuel colour is the world's own light. Ghosts keep their mint and the sky stays clear of it. The
+  rider's vermillion is the one red.
+- **Colour script.**
+
+  | Metres | Place | Light and grade |
+  | --- | --- | --- |
+  | 0 to 700 | The Crown, above the cloud | The end of night above a sea of cloud: indigo zenith, stars, a great pale moon, silver snow. The cloud below glows warm in patches from what is under it. |
+  | 700 to 1500 | The Cloud Sea | Into the cloud: white-violet, visibility closing to forty metres, lantern halos looming and passing. A guide light leads the line. |
+  | about 1500 | The break | Out under the deck: a whole valley of lanterns, thousands, rising. The mountain's jaw-drop, and the game's. |
+  | 1500 to 3000 | The Lamp Road | Lilac snow in pools of marigold. Standing stone lamps in avenues, lamp towers, a river carrying floating lights. |
+  | 3000 to 4500 | Firstlight | The lamplighters' town: paper windows, strings of lights over the street, a great unlit lantern over the square, lit at the finish. The sky goes from indigo to the first rose of morning as lanterns leave the valley. |
+
+- **Hero vistas.** (1) The Crown over the cloud sea. (2) The break under the deck. (3) The Lamp Road with the river of
+  lights. (4) The great lantern lit over the square, the sky full.
+- **The one image.** A rider coming out of cloud above a valley of ten thousand rising lanterns.
+- **Architecture and people.** Lamp towers: narrow stone bases with tall paper-and-timber lantern storeys that glow
+  from inside; standing stone lamps in rows; arched bridges strung with lights; bell frames. The lamplighters are
+  robed figures with long lighting poles, a small flame at the tip. All original shapes: nothing copied from, or
+  closely evoking, any existing game, film or festival.
+
+### Tiers, designed
+
+- **Ultra and High** carry the whole direction: the shafts, the scatter, the ambient occlusion, the reflections.
+- **Medium** keeps the grade by place, the three planes, the light's colour on the snow and the hero's rim. It loses
+  resolution and samples, never the picture.
+- **Low and phone** are a look of their own, a flatter poster of the same scene: the grade by place baked into fog,
+  sky and vertex colour, the three planes as three flat values, shafts and glows as a few painted quads, the sun's
+  scatter as a gradient on the dome, a painted rim on the hero. Stylised tricks instead of missing effects.
