@@ -2078,6 +2078,16 @@ Every place where I replaced, extended or interpreted the brief, and why.
     near snow is a bright plane with speed streaks. "Steer" sits at the bottom of every frame of a run (the hints
     never retire for a rider who never touches a key, and the brief's capture shows it at 1:24 for one who does).
 
+    *The screens, a Daily and a Cup, and a first and second run* (`review.js` on desktop and phone,
+    `shots/r7/before/review`). The title is already a live scene (the lodge, the lift, a rider and a ghost riding
+    past) and it changes with a Daily or a Cup, but it is an attract loop behind a logo, not a composed piece of key art,
+    and all four named mountains share the lodge. The results are a well-made table beside a waving rider: rank, three
+    splits, a race list, missions. Nothing in it celebrates, and the best moment of the run is not shown. A rider who
+    never touches a key finishes third of six on Pinecrest in 2:29 and fourth of six on Sakura in 2:22, so the finish
+    is reachable by doing nothing and unreachable by trying badly, which is the wrong way round. The second run is the
+    first with a mood and a rival named on the card; nothing else on the mountain differs from the first. A fifth run
+    was not ridden by hand: the lab and the telemetry stand in for it, and that is a gap only a person closes.
+
     *Where a player stops, and why.* (1) The struggling player, in the first minute of every run: the clumsy pilot
     finishes 0 of 24 (median 1,140 to 2,390 m of 4,500; 14 of its 24 runs end on a landing, 5 on a tree, 4 on a rock, 1 out of time) and never
     sees a finish town. (2) The player who has learned a mountain, at about run five: its three set pieces play
