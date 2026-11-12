@@ -1,11 +1,25 @@
 import { hash32, hashString } from './prng';
 
+/** The four looks the world and the music are dressed for today. */
 export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom';
-export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'daily';
+/** What a course is built as: the four, and Lanternfall's own ground (round 7). The sim reads this one. Until the
+ *  Lanternfall world lane widens BiomeId to it, everything outside the sim sees LOOK's stand-in (lookOf). */
+export type CourseBiome = BiomeId | 'lantern';
+export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'daily';
+
+// r7: placeholder until the Lanternfall world lane. The one place the new biome borrows a look: its palette,
+// dressing, crowd and music are Frostfang's (the nearest: night, cold snow) until its own are built. To build
+// them, add 'lantern' to BiomeId, delete this map, and let the compiler list every Record to fill.
+const LOOK: Record<CourseBiome, BiomeId> = { alpine: 'alpine', glacier: 'glacier', volcanic: 'volcanic', blossom: 'blossom', lantern: 'glacier' };
+
+/** The look a course biome is drawn and scored with. */
+export function lookOf(b: CourseBiome): BiomeId {
+  return LOOK[b];
+}
 
 /** Generation parameters. A course is a pure function of its seed: the seed selects these. */
 export interface MountainParams {
-  biome: BiomeId;
+  biome: CourseBiome;
   /** Base gradient: metres of descent per metre travelled. */
   slope: number;
   /** Amplitude of the centerline wander at full difficulty, metres. */
@@ -33,12 +47,15 @@ export interface MountainDef {
   tagline: string;
   seed: number;
   unlockGhosts: number;
+  /** The finale (Lanternfall). r7: placeholder flag: until The Twelve opens it, it opens like the others, at
+   *  `unlockGhosts` lifetime passes; `?debug&m=4` opens it in dev whatever the save holds. */
+  finale?: boolean;
 }
 
 /** The descent's length, metres (the sum of course.ts's STAGE_LENGTHS): difficulty arrives at the finish. */
 const DESCENT = 4500;
 
-const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
+const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
   alpine: {
     biome: 'alpine',
     slope: 0.29,
@@ -103,31 +120,61 @@ const BIOME_PARAMS: Record<BiomeId, MountainParams> = {
     snowmanChance: 0,
     rampDistance: DESCENT,
   },
+  // Lanternfall: the summit the spirit lights come from (ART.md 15). Open and calm above the cloud, a little
+  // glass underfoot, lamp arches over the line (the spirit gates' pillars) and no vents or snowmen.
+  lantern: {
+    biome: 'lantern',
+    slope: 0.3,
+    wander: 24,
+    halfWidthStart: 20,
+    halfWidthEnd: 13,
+    density: 0.9,
+    kickerChance: 0.5,
+    dropChance: 0.1,
+    mogulChance: 0.08,
+    iceChance: 0.1,
+    ventChance: 0,
+    gateChance: 0.24,
+    snowmanChance: 0,
+    rampDistance: DESCENT,
+  },
 };
+
+/** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
+ *  mountain, and its two streets stay inside the village's triangle budget on Low (notes/r7-moments.md). */
+export const LANTERNFALL_SEED = 0x9b05688c;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },
   { id: 'frostfang', name: 'Frostfang Glacier', tagline: 'Glass ice and big drops', seed: 0x2b7e1516, unlockGhosts: 4 },
   { id: 'ember', name: 'Ember Peak', tagline: 'Basalt, ash snow, steam vents', seed: 0x6a09e667, unlockGhosts: 12 },
   { id: 'sakura', name: 'Sakura Ridge', tagline: 'Blossom slopes and spirit gates', seed: 0x3c6ef372, unlockGhosts: 24 },
+  { id: 'lanternfall', name: 'Lanternfall', tagline: 'Where the spirit lights come from', seed: LANTERNFALL_SEED, unlockGhosts: 48, finale: true },
 ];
 
-const BIOME_BY_SEED = new Map<number, BiomeId>([
+const BIOME_BY_SEED = new Map<number, CourseBiome>([
   [0x51ed270b, 'alpine'],
   [0x2b7e1516, 'glacier'],
   [0x6a09e667, 'volcanic'],
   [0x3c6ef372, 'blossom'],
+  [LANTERNFALL_SEED, 'lantern'],
 ]);
 
 const BIOMES: readonly BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];
 
-/** Whether a seed is one of the four named mountains (the rest are dailies). */
+/** Whether a seed is one of the named mountains (the rest are dailies). */
 export function isNamedSeed(seed: number): boolean {
   return BIOME_BY_SEED.has(seed >>> 0);
 }
 
-export function biomeForSeed(seed: number): BiomeId {
+/** What a seed's course is built as. A Daily or a Cup is one of the four: Lanternfall is the finale's alone. */
+export function courseBiomeForSeed(seed: number): CourseBiome {
   return BIOME_BY_SEED.get(seed >>> 0) ?? BIOMES[hash32(seed, 0xb10e) % BIOMES.length];
+}
+
+/** The look a seed is drawn and scored with (see LOOK). */
+export function biomeForSeed(seed: number): BiomeId {
+  return LOOK[courseBiomeForSeed(seed)];
 }
 
 /** Parameters for any seed. Named mountains use their biome table; other seeds (daily) get a
@@ -135,7 +182,7 @@ export function biomeForSeed(seed: number): BiomeId {
 export function paramsForSeed(seed: number): MountainParams {
   const named = BIOME_BY_SEED.get(seed >>> 0);
   if (named) return BIOME_PARAMS[named];
-  const base = BIOME_PARAMS[biomeForSeed(seed)];
+  const base = BIOME_PARAMS[courseBiomeForSeed(seed)];
   const v = (k: number) => (hash32(seed, 0xda11, k) / 4294967296) * 2 - 1;
   return {
     ...base,

@@ -1,5 +1,5 @@
 import { TAU, clamp, dcos, dsin, lerp, smoothstep } from './dmath';
-import { BiomeId, MountainParams, isNamedSeed, paramsForSeed } from './mountains';
+import { BiomeId, CourseBiome, MountainParams, isNamedSeed, lookOf, paramsForSeed } from './mountains';
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
 import { momentPlays } from './moments';
@@ -223,18 +223,22 @@ export interface Ledge {
   faceEase: number;
 }
 
-const TALL: Record<BiomeId, ObstacleKind[]> = {
+// (Lanternfall stands in existing kinds until its world lane makes its own: standing stones are spires and
+// basalt columns, and its stone lamps are Sakura's stone lanterns.)
+const TALL: Record<CourseBiome, ObstacleKind[]> = {
   alpine: ['pine', 'pine', 'pine'],
   glacier: ['spire', 'spire', 'serac'],
   volcanic: ['basalt', 'charpine', 'basalt'],
   blossom: ['blossom', 'blossom', 'pine'],
+  lantern: ['spire', 'spire', 'basalt'],
 };
 
-const LOW: Record<BiomeId, ObstacleKind[]> = {
+const LOW: Record<CourseBiome, ObstacleKind[]> = {
   alpine: ['rock', 'rock', 'log'],
   glacier: ['iceblock', 'iceblock', 'rock'],
   volcanic: ['lavarock', 'lavarock', 'log'],
   blossom: ['lantern', 'rock', 'log'],
+  lantern: ['lantern', 'rock', 'iceblock'],
 };
 
 /** Corridor bank profile: a rounded rise past the edge that eases into a gentle forest floor. */
@@ -501,11 +505,13 @@ const LEAP_CLEAR = 40;
 /** The metres from a leap's lip to the end of its section. */
 const LEAP_TAIL = LEAP_FACE + LEAP_HOLD + LEAP_EASE;
 /** Cliff heights: a mountain's ordinary leaps, its first and its last. */
-const CLIFFS: Record<BiomeId, { first: readonly [number, number]; plain: readonly [number, number]; last: readonly [number, number] }> = {
+const CLIFFS: Record<CourseBiome, { first: readonly [number, number]; plain: readonly [number, number]; last: readonly [number, number] }> = {
   alpine: { first: [15, 17], plain: [13.5, 16], last: [18, 21] },
   glacier: { first: [20, 22], plain: [18, 22], last: [24, 25] },
   volcanic: { first: [16, 18], plain: [14, 18], last: [20, 22] },
   blossom: { first: [14, 16], plain: [13.5, 15], last: [16, 19] },
+  // The dive into the cloud, the break out under it (the mountain's great leap), and the leap into Firstlight.
+  lantern: { first: [18, 20], plain: [22.5, 24.5], last: [19, 21] },
 };
 
 /** Terraces: the lead to the first lip, the step spacing and the steps' fall. */
@@ -588,7 +594,7 @@ interface Act {
 
 /** The mountains' descents, three acts each: every act fits its stage as written, and the opening
  *  (start, run-in, first leap) comes before the first. Daily seeds deal their biome's acts in any order. */
-const SCRIPTS: Record<BiomeId, readonly [Act, Act, Act]> = {
+const SCRIPTS: Record<CourseBiome, readonly [Act, Act, Act]> = {
   alpine: [
     { name: 'Timberline Glades', blocks: [['treerun'], ['fork']] },
     { name: 'Mirror Lake', blocks: [['chute|gully'], ['lake'], ['bowl|cruise'], ['treerun'], ['leap'], ['benches']] },
@@ -609,15 +615,36 @@ const SCRIPTS: Record<BiomeId, readonly [Act, Act, Act]> = {
     { name: 'The Thousand Torii', blocks: [['chute'], ['tunnel'], ['bridge'], ['fork'], ['leap']] },
     { name: 'Temple Town', blocks: [['benches'], ['terraces'], ['cruise|fork'], ['leap'], ['street']] },
   ],
+  // Lanternfall (ART.md 15). The opening's own leap is the dive off the Crown into the cloud; the Cloud Sea is a
+  // slot of rock and a run of S-bends ridden blind; the second stage opens on the break, the great leap out
+  // under the deck, lands beside the river of lights (a fork: its ice strip is the river), and runs down the
+  // Lamp Road (an avenue street between rows of stone lamps), over an arched bridge and through a grove of
+  // standing lamps; Firstlight is benches into the town, its bridge, its street, a chute and the leap home.
+  lantern: [
+    { name: 'The Cloud Sea', blocks: [['ravine'], ['switchbacks']] },
+    { name: 'The Lamp Road', blocks: [['leap'], ['fork'], ['street'], ['bridge'], ['treerun'], ['bowl']] },
+    { name: 'Firstlight', blocks: [['benches'], ['bridge'], ['street'], ['chute'], ['leap']] },
+  ],
 };
 
 /** What each mountain promises to hold, on every seed. */
-const SIGNATURES: Record<BiomeId, readonly SectionKind[]> = {
+const SIGNATURES: Record<CourseBiome, readonly SectionKind[]> = {
   alpine: ['treerun', 'lake', 'street', 'fork'],
   glacier: ['ravine', 'bridge', 'fork'],
   volcanic: ['ravine', 'tunnel', 'bridge', 'fork'],
   blossom: ['terraces', 'tunnel', 'street', 'fork'],
+  lantern: ['ravine', 'fork', 'street', 'bridge'],
 };
+
+/** Lanternfall's avenues: a street there stands between two rows of stone lamps, a pair every LAMP_STEP metres,
+ *  each LAMP_GAP clear of the room every obstacle leaves beside the safe lane (so the fairness test holds). The
+ *  Lamp Road's are what the kindle set piece lights (moments.ts). */
+export const LAMP_STEP = 20;
+/** (From the street's first metre: the rows begin half way through its blend, as the houses close in.) */
+const LAMP_LEAD = 44;
+const LAMP_TAIL = 16;
+const LAMP_R = 0.6;
+const LAMP_GAP = 0.3;
 
 const ROLLER_WAVE = 80;
 /** Where the corridor's middle starts to fill up. */
@@ -808,8 +835,22 @@ export class Course {
     this.sR = hash32(this.seed, 5);
   }
 
+  /** The look the course is drawn and scored with: one of the four (mountains.ts LOOK). */
   get biome(): BiomeId {
+    return lookOf(this.params.biome);
+  }
+
+  /** What the course is built as: the four, or Lanternfall's own ground. */
+  get trueBiome(): CourseBiome {
     return this.params.biome;
+  }
+
+  /** Lanternfall's cloud sea, for whoever draws it: from the lip of the dive off the Crown to the lip of the
+   *  break out under the deck. Null on every other mountain. Presentation only: the sim never reads it. */
+  get cloud(): { z0: number; z1: number } | null {
+    if (this.params.biome !== 'lantern') return null;
+    const l = this.leaps;
+    return l.length >= 2 ? { z0: l[0].z, z1: l[1].z } : null;
   }
 
   private stageList: Stage[] | null = null;
@@ -842,7 +883,7 @@ export class Course {
       const acts = this.actOrder();
       let z = 0;
       STAGE_LENGTHS.forEach((len, index) => {
-        list.push({ index, name: SCRIPTS[this.biome][acts[index]].name, z0: z, z1: z + len });
+        list.push({ index, name: SCRIPTS[this.params.biome][acts[index]].name, z0: z, z1: z + len });
         z += len;
       });
       this.stageList = list;
@@ -986,7 +1027,7 @@ export class Course {
     });
     if (first < 0) return null;
     open.unshift(open.splice(first, 1)[0]);
-    const must = SIGNATURES[this.biome];
+    const must = SIGNATURES[this.params.biome];
     let before: SectionKind = 'leap';
     for (let n = 0; n < slots.length; n++) {
       const list = slots[n];
@@ -1041,7 +1082,7 @@ export class Course {
 
   /** The seed's descent: the script's order, tried until it meets every rule. The authored order always does. */
   private compose(): Beat[] {
-    const script = SCRIPTS[this.biome];
+    const script = SCRIPTS[this.params.biome];
     const order = this.actOrder();
     const rng = new Rng(hash32(this.seed, 0x5c71));
     for (let tries = 0; tries < 48; tries++) {
@@ -1137,7 +1178,7 @@ export class Course {
    *  each on ground falling away nearly as fast as it is. A higher cliff starts it gentler. */
   private layLeap(sec: Section, rng: Rng, which: 'first' | 'plain' | 'last'): void {
     const grade = sec.shape.slope * this.params.slope;
-    const [lo, hi] = CLIFFS[this.biome][which];
+    const [lo, hi] = CLIFFS[this.params.biome][which];
     const height = rng.range(lo, hi);
     const z = sec.z1 - LEAP_TAIL;
     const kick = (LIP_RUN * (grade - LIP_SLOPE)) / 2;
@@ -1388,6 +1429,8 @@ export class Course {
         const sites: { z: number; side: 1 | -1 }[] = [];
         for (const sec of this.sections) {
           if (sec.z0 >= stage.z1 || sec.z1 <= stage.z0 || !kinds.has(sec.kind)) continue;
+          // (Lanternfall's streets are avenues of stone lamps, which stand where a street's rails would.)
+          if (sec.kind === 'street' && this.params.biome === 'lantern') continue;
           const z0 = Math.max(sec.z0 + sec.blend + 4, stage.z0);
           const z1 = Math.min(sec.z1 - 26, stage.z1 - 34);
           let side: 1 | -1 = rng.chance(0.5) ? 1 : -1;
@@ -2068,6 +2111,20 @@ export class Course {
         const z = z0 + rng.next() * CHUNK_LEN;
         const x = this.centerX(z) + rng.signed() * this.halfWidth(z) * 0.8;
         if (clearOf(x, z, 0.65)) add('snowman', x, z, 0.65, 1.7, true);
+      }
+    }
+
+    // Lanternfall's avenues: a pair of stone lamps either side of the line, down the length of a street. Laid
+    // before the fill, so nothing crowds a lamp out of its row.
+    if (p.biome === 'lantern') {
+      for (const sec of this.sections) {
+        if (sec.kind !== 'street' || sec.z1 <= z0 || sec.z0 >= z1) continue;
+        const first = sec.z0 + LAMP_LEAD;
+        for (let k = Math.max(0, Math.ceil((z0 - first) / LAMP_STEP)); first + k * LAMP_STEP < Math.min(z1, sec.z1 - LAMP_TAIL); k++) {
+          const z = first + k * LAMP_STEP;
+          const off = LAMP_R + SAFE_LANE + EARLY_MARGIN * (1 - diff) + this.shapeAt(z).lane + LAMP_GAP;
+          for (let side = -1; side <= 1; side += 2) if (clearOf(this.safeX(z) + side * off, z, LAMP_R)) add('lantern', this.safeX(z) + side * off, z, LAMP_R, 1.4);
+        }
       }
     }
 
