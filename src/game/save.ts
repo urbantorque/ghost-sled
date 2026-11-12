@@ -83,7 +83,7 @@ export interface Settings {
   master: number;
   music: number;
   sfx: number;
-  quality: 'auto' | 'low' | 'medium' | 'high';
+  quality: 'auto' | 'low' | 'medium' | 'high' | 'ultra';
   hints: boolean;
 }
 

@@ -4,7 +4,8 @@ import { AudioEngine, AudioFrame, type UiSound } from '../audio/engine';
 import { ghostName } from '../bot/names';
 import { getPlatform, Platform } from '../platform/platform';
 import { AdPacing } from '../platform/pacing';
-import { World, qualityFor, Tier } from '../render/world';
+import { World, detailOf, qualityFor, Tier } from '../render/world';
+import { TIERS } from '../render/postfx/tiers';
 import { ChaosEvent, ChaosRoll, EVENTS, MOODS, Mood, eventInfo, moodInfo, rollChaos } from '../sim/chaos';
 import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '../sim/mountains';
 import { Rng, hashString } from '../sim/prng';
@@ -39,7 +40,7 @@ import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
 import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
-import { TierController, guessTier } from './quality';
+import { TierController, deviceCeiling, guessTier } from './quality';
 import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
@@ -273,8 +274,9 @@ export class App {
     this.save = new SaveStore(this.platform.storage, ghostName(new Rng(nameSeed)));
     const guess = guessTier();
     const pref = this.save.data.settings.quality;
-    const forced = DEV_ON && DEV.has('tier') ? (DEV.get('tier') as Tier) : null;
-    this.tiers = new TierController(forced ?? (pref === 'auto' ? guess : pref));
+    const asked = DEV_ON && DEV.has('tier') ? (DEV.get('tier') as Tier) : null;
+    const forced = asked && TIERS.includes(asked) ? asked : null;
+    this.tiers = new TierController(forced ?? (pref === 'auto' ? guess : pref), deviceCeiling());
     this.tiers.locked = forced !== null || pref !== 'auto';
     this.mountain = MOUNTAINS.find((m) => m.id === this.save.data.mountain) ?? MOUNTAINS[0];
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
@@ -283,10 +285,10 @@ export class App {
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
     this.world.rider.setPaint(paintById(this.save.data.paint).hex);
     this.applyLook();
-    this.audio.setQuality(this.tiers.tier);
+    this.audio.setQuality(detailOf(this.tiers.tier));
     this.tiers.onChange = (t: Tier) => {
       this.world.setQuality(qualityFor(t));
-      this.audio.setQuality(t);
+      this.audio.setQuality(detailOf(t));
       this.ui.setMirror(t !== 'low');
     };
     // The shop shows the real sled meshes, rendered once each by the main renderer.
@@ -745,7 +747,7 @@ export class App {
 
   private settingsModel(): SettingsModel {
     const s = this.save.data.settings;
-    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints };
+    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints, ultra: !matchMedia('(pointer: coarse)').matches };
   }
 
   private applySettings(p: Partial<SettingsModel>): void {

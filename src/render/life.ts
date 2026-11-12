@@ -904,6 +904,7 @@ const PLANS: Record<Tier, Plan> = {
   low: { birds: true, flocks: 3, crossing: false, perches: 1, rich: false, deerGroups: 0, herd: [0, 0], hares: 0, foxes: 0, skiers: 0, sledders: 0, drops: false },
   medium: { birds: true, flocks: 5, crossing: true, perches: 2, rich: true, deerGroups: 2, herd: [3, 5], hares: 2, foxes: 1, skiers: 7, sledders: 2, drops: true },
   high: { birds: true, flocks: 7, crossing: true, perches: 3, rich: true, deerGroups: 3, herd: [3, 6], hares: 3, foxes: 2, skiers: 12, sledders: 3, drops: true },
+  ultra: { birds: true, flocks: 7, crossing: true, perches: 3, rich: true, deerGroups: 3, herd: [3, 6], hares: 3, foxes: 2, skiers: 12, sledders: 3, drops: true },
 };
 
 export class Life {
