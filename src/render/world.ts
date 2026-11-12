@@ -284,6 +284,7 @@ export class World {
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
     this.ghosts.onBeat = quality.tier === 'low';
+    this.ghosts.glass = quality.tier === 'low' ? 0 : quality.tier === 'medium' ? 1 : 2;
     this.rider.setDetail(quality.tier === 'low' ? 'lite' : 'full');
     this.chaos = new ChaosVisuals(this.course);
     this.landing = new LandingAid(this.course);
@@ -440,6 +441,7 @@ export class World {
     this.midground.setTier(q.tier, q.terrain.reach);
     this.overlooks.setTier(q.tier);
     this.ghosts.onBeat = q.tier === 'low';
+    this.ghosts.glass = q.tier === 'low' ? 0 : q.tier === 'medium' ? 1 : 2;
     this.rider.setDetail(q.tier === 'low' ? 'lite' : 'full');
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');

@@ -1676,6 +1676,9 @@ export function ghostRiderGeometry(sled = true, seat: SledSeat = SEAT_SIT, hat: 
     arm.rotateZ(sx * (seat.crossLegged ? 0.14 : 0.3));
     arm.rotateX(0.72 + pitch);
     arm.translate(sh.x, sh.y + seat.y, sh.z + seat.z);
+    // (Marked for the ghosts' own motion, ghosts.ts: -3 the left arm, -4 the right, which lift in the air.)
+    const w = arm.getAttribute('aSway') as BufferAttribute;
+    for (let i = 0; i < w.count; i++) w.setX(i, sx < 0 ? -3 : -4);
     parts.push(arm);
   }
   if (sled) parts.unshift(withSway(sledGeometry()));
