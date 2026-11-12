@@ -1,5 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
+import { localUniforms, setLocalLightTier } from './lights';
 import { Palette } from './palette';
 
 // One shared stylized lighting model for every surface (ART.md section 2). All materials share the
@@ -75,6 +76,23 @@ export const shared = {
   /** 1 on Medium and High: the snow's finer painted detail (sastrugi, packed tracks, micro glitter).
    *  Low skips it (setCloudShadows carries the tier). */
   uSnowFx: { value: 1 },
+  /** Round 7, the air (fogColor): what the haze turns to in the far plane, what it cools to away from the
+   *  sun, and x: how far the far colour comes in (1 is the palette's own reach), y: how much thicker the air
+   *  lies below the lens, so a valley fills with it before a crest does. */
+  uAirFar: { value: new Color(0.5, 0.6, 0.9) },
+  uAirCool: { value: new Color(1, 1, 1) },
+  uAir: { value: new Vector4(1, 0.35, 0, 0) },
+  /** A second key light on the snow, moving: Frostfang's aurora (rgb, strength), and what the shade
+   *  between its curtains turns to. */
+  uKey2: { value: new Vector4(0, 0, 0, 0) },
+  uKey2Shade: { value: new Color(0.3, 0.2, 0.6) },
+  /** Light from below (Ember's lava and caldera): rgb and strength. It finds what faces down and sideways. */
+  uUnder: { value: new Vector4(0, 0, 0, 0) },
+  /** How strongly the local lights (lights.ts) light the world under this palette. */
+  uLampK: { value: 0.3 },
+  /** How much a canopy glows with the light behind it (Sakura's blossom). */
+  uLeaf: { value: 0 },
+  ...localUniforms,
 };
 
 /** Cloud shadows on the snow are a Medium and High touch (world.ts turns them off on Low), and so is
@@ -87,6 +105,8 @@ export function setCloudShadows(on: boolean): void {
   shared.uCloudShadow.value = on ? cloudShadowK : 0;
   shared.uSnowFx.value = on ? 1 : 0;
   shared.uMistDrift.value = on ? mistDriftK : 0;
+  // (Low: the snow alone takes the nearest few local lights, as painted pools. lights.ts.)
+  setLocalLightTier(!on);
 }
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
@@ -201,7 +221,15 @@ export function applyPalette(p: Palette): void {
   mistDriftK = p.atmo.drift;
   shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
-  shared.uFogSun.value = (0.2 + 0.4 * shared.uDayK.value) * (1 - 0.6 * dense);
+  shared.uFogSun.value = (0.2 + 0.4 * shared.uDayK.value) * (1 - 0.6 * dense) * p.air.scatter;
+  shared.uAirFar.value.copy(p.air.far);
+  shared.uAirCool.value.copy(p.air.cool);
+  shared.uAir.value.set(1, p.air.low * (1 - 0.7 * dense), 0, 0);
+  shared.uKey2.value.set(p.key2.color.r, p.key2.color.g, p.key2.color.b, p.key2.k);
+  shared.uKey2Shade.value.copy(p.key2.shade);
+  shared.uUnder.value.set(p.under.color.r, p.under.color.g, p.under.color.b, p.under.k);
+  shared.uLampK.value = p.lamps;
+  shared.uLeaf.value = p.leaf;
 }
 
 export const LIGHT_GLSL = /* glsl */ `
@@ -218,12 +246,49 @@ uniform float uLantern;
 uniform vec4 uLanternLow;
 uniform float uTime;
 uniform vec3 uShadeTint;
+uniform vec3 uDiskDir;
+uniform vec3 uAirFar;
+uniform vec3 uAirCool;
+uniform vec4 uAir;
+uniform vec4 uKey2;
+uniform vec3 uKey2Shade;
+uniform vec4 uUnder;
+uniform float uLampK;
+uniform float uLeaf;
+uniform vec4 uLocalPos[8];
+uniform vec4 uLocalCol[8];
+uniform float uLocalCount;
+uniform float uLocalProps;
+
+/** The local lights (lights.ts: lamps, windows, lantern gates, lava, fireworks) on a surface at wp facing
+ *  n, as light to multiply the surface's own colour by. Each falls off smoothly to nothing at its radius
+ *  (no spike at the lamp, no edge on the snow) and wraps a third of the way round a form. count is how
+ *  many this surface takes: the loop stops there, so a frame with no lamp near costs one compare. */
+vec3 localLight(vec3 wp, vec3 n, float count) {
+  vec3 acc = vec3(0.0);
+  for (int i = 0; i < 8; i++) {
+    if (float(i) >= count) break;
+    vec4 lp = uLocalPos[i];
+    vec3 d = lp.xyz - wp;
+    float d2 = dot(d, d);
+    float q = d2 / (lp.w * lp.w);
+    if (q < 1.0) {
+      float a = 1.0 - q;
+      float ndl = dot(n, d) * inversesqrt(max(d2, 1e-4));
+      acc += uLocalCol[i].rgb * (uLocalCol[i].a * a * a * (0.35 + 0.65 * max(ndl, 0.0)));
+    }
+  }
+  return acc * uLampK;
+}
 
 vec3 toonLightK(vec3 lit, vec3 shade, vec3 n, vec3 v, float shadow, float rimK) {
   float ndl = dot(n, uSunDir);
   float t = smoothstep(-0.12, 0.42, ndl) * mix(0.18, 1.0, shadow);
   vec3 col = mix(shade, lit * uSunColor, t);
   col += uHemi * 0.07 * (0.5 + 0.5 * n.y);
+  // Light from below (Ember): what faces down or sideways takes the lava's colour, so a column, a trunk
+  // and the rider are lit from underneath while the snow under them is not.
+  col += (lit * 0.8 + 0.03) * uUnder.rgb * (uUnder.a * smoothstep(0.55, -0.7, n.y));
   float fres = 1.0 - clamp(dot(n, v), 0.0, 1.0);
   fres = fres * fres * fres;
   col += uRim * fres * rimK * (0.35 + 0.65 * t);
@@ -299,19 +364,35 @@ float mistAt(vec3 wp, float d) {
   return m;
 }
 
-/** The fog's colour along a sight line: toward the sun it takes on the sun's warmth (aerial
- *  perspective), elsewhere it is the mood's fog. */
-vec3 fogColor(vec3 dir) {
-  float s = pow(max(dot(dir, uSunDir), 0.0), 4.0) * uFogSun;
-  return mix(uFog, max(uFog, uSunColor * 0.92), s);
+/** The air's colour along a sight line, d metres out (round 7: aerial perspective in hue, not only in
+ *  value). Near, it is the mood's fog; with distance it turns to the far plane's colour (uAirFar: the
+ *  mountain's blue, or its own air). Toward the sun's disc it glows with the sun's scatter, a tight
+ *  glow round the disc and a broad one across that side of the sky; away from the sun it cools. */
+vec3 fogColor(vec3 dir, float d) {
+  vec3 c = mix(uFog, uAirFar, smoothstep(uFogFar * 0.3, uFogFar * 1.5, d) * uAir.x);
+  float sd = dot(dir, uDiskDir);
+  float fwd = pow(max(sd, 0.0), 6.0) + 0.3 * max(sd, 0.0) * max(sd, 0.0);
+  c = mix(c, max(c, uSunColor * 0.94), min(fwd * uFogSun, 0.85));
+  return c * mix(vec3(1.0), uAirCool, max(-sd, 0.0) * 0.7);
+}
+
+/** How much of the air lies between the lens and a point d metres out: the mood's distance fog, and
+ *  the air below the course's own floor lying thicker (uAir.y), so a valley and what stands in it gather
+ *  haze well before the run ahead or a crest at the same distance does. (Below the floor, not below the
+ *  lens: the whole run ahead is below the lens.) */
+float fogAmount(vec3 wp, float d) {
+  float f = smoothstep(uFogNear, uFogFar, d);
+  float h = wp.y - (uFogFloor.x + uFogFloor.y * wp.z);
+  float low = smoothstep(-12.0, -190.0, h) * smoothstep(uFogNear * 0.7, uFogFar * 0.55, d);
+  return 1.0 - (1.0 - f) * (1.0 - uAir.y * 0.7 * low);
 }
 
 vec3 fogged(vec3 col, vec3 wp) {
   vec3 dv = wp - cameraPosition;
   float d = length(dv);
-  float f = smoothstep(uFogNear, uFogFar, d);
+  float f = fogAmount(wp, d);
   col = mix(col, uMistColor, mistAt(wp, d) * (1.0 - f));
-  return mix(col, fogColor(dv / max(d, 0.001)), f);
+  return mix(col, fogColor(dv / max(d, 0.001), d), f);
 }
 
 float hash13(vec3 p) {
@@ -417,7 +498,6 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec3 uFocus;
       uniform vec3 uSkyZenith;
       uniform vec3 uSkyHorizon;
-      uniform vec3 uDiskDir;
       uniform float uBestZ;
       uniform float uBestX;
       uniform float uBestHW;
@@ -780,8 +860,10 @@ export function makeSnowMaterial(): ShaderMaterial {
         // Banks deepen toward the treeline; the forest floor is cooler still.
         float bank = smoothstep(0.0, 10.0, vEdge);
         shade = mix(shade, uSnowDeep, bank * 0.35);
-        // Cast shadows (pines, banks, the rider) fall to a deeper, bluer shade.
+        // Cast shadows (pines, banks, the rider) fall to a deeper, bluer shade, with a hint of the sky
+        // that lights them (by day: at night the sky is darker than the snow).
         shade = mix(shade, uSnowDeep, (1.0 - shadow) * 0.3);
+        shade = mix(shade, shade * 0.55 + uSkyZenith * 0.5, (0.1 + 0.16 * (1.0 - shadow)) * dayK);
         lit = mix(lit, mix(lit, uSnowShade, 0.25), smoothstep(9.0, 16.0, vEdge));
         // Lit snow stays below the bloom threshold, a little lower in bright day moods, where full
         // strength washes the whole foreground out to one value.
@@ -825,6 +907,18 @@ export function makeSnowMaterial(): ShaderMaterial {
         col += lit * sunSnow * smoothstep(0.55, 0.95, vSnow.y) * 0.09 * t;
         // The lit side keeps a gentle Lambert falloff, so dunes and ripples hold their form.
         col *= mix(1.0, 0.8 + 0.28 * smoothstep(0.1, 0.95, ndl), t);
+        if (uKey2.a > 0.0) {
+          // The aurora is the night's key light (Frostfang): curtains of its light, a couple of hundred
+          // metres long, sweep slowly across the slope. Where one lies the snow that faces the sky takes
+          // its green; between them the shade goes to violet. So the polar night has a lit side and a
+          // shade side that move, where it had one blue. Held still under reduced motion (uGroundTime).
+          vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046) + vec2(uGroundTime * 0.012, uGroundTime * 0.004);
+          float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
+          float a2 = smoothstep(0.4, 0.68, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
+          float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          col = mix(col, uKey2Shade * (lv * 2.2 + 0.02), uKey2.a * 0.55 * (1.0 - a2));
+          col += uKey2.rgb * (a2 * uKey2.a * 0.42);
+        }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the
         // sun's bearing across the slope that rakes them (a sun dead ahead still picks out one side).
@@ -1176,6 +1270,17 @@ export function makeSnowMaterial(): ShaderMaterial {
             col += uRockGlow * crack * rk * breathe * (1.0 - smoothstep(24.0, 80.0, dist)) * (1.0 - 0.6 * shelf);
           }
         }
+        if (uLocalCount > 0.0) {
+          // Lamps, windows, lantern gates and lava light the snow round them (lights.ts). On Low the same
+          // lights are painted: two flat values with a soft step between, a gouache pool, for the price
+          // of the loop alone.
+          vec3 L = localLight(vWorldPos, n, uLocalCount);
+          if (uSnowFx <= 0.0) {
+            float li = max(L.r, max(L.g, L.b));
+            L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
+          }
+          col += L * mix(vec3(0.86, 0.88, 0.94), uRockLit * 1.3, smoothstep(0.46, 0.54, vRock.x));
+        }
         if (uLantern > 0.0) {
           // Lantern Night: a tight round pool of lamplight on the snow around and just ahead of the sled
           // (lanternPool), with its own warm glints. It is light laid over the moonlit snow in a
@@ -1458,6 +1563,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       ${SHADOW_FRAG_PARS}
       ${LIGHT_GLSL}
       uniform vec3 uTint;
+      uniform float uSway;
       uniform float uRimK;
       uniform vec3 uFocus;
       uniform vec2 uNearFade;
@@ -1531,6 +1637,18 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
         float whiteK = smoothstep(0.78, 0.92, min(base.r, min(base.g, base.b))) * uDayK;
         vec3 litBase = mix(base, base * mix(vec3(1.0), sunN, 0.15) / max(uSunColor, vec3(0.05)), whiteK);
         vec3 col = toonLightK(litBase, shade, n, v, shadow, uRimK);
+        if (uLocalProps > 0.0) {
+          vec3 L = localLight(vWorldPos, n, uLocalProps);
+          #ifdef HAZARD
+            // A hazard takes a lamp on its edge and little on its face: lit, it is still the dark, hard
+            // shape in the street (ART.md 1), now with a hot edge where the light finds it.
+            float frL = 1.0 - clamp(dot(n, v), 0.0, 1.0);
+            col += (base * 0.3 + 0.03) * L * (0.35 + 1.5 * frL * frL);
+          #else
+            // (A small floor on the base keeps the light visible on the ink-navy coat.)
+            col += (base * 0.9 + 0.05) * L;
+          #endif
+        }
         #ifdef ICE
           // Translucent ice, still a hard faceted hazard but never mint: deep blue at the foot rising to
           // white-cyan at the tips, lit by only a trace of the low sun's hue (gold over blue turned the
@@ -1561,6 +1679,14 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
         #endif
         #ifdef HAZARD
           col *= uHazardDim;
+          if (uSway > 0.0 && uLeaf > 0.0) {
+            // A canopy glows with the light behind it (Sakura's blossom is the light: ART.md 15): most
+            // looking toward the sun, where the light comes through the petals, a little everywhere. The
+            // pale parts (snow on the boughs) and the dark underside stay as they are.
+            float back = pow(max(dot(-v, uSunDir), 0.0), 2.0);
+            float petal = smoothstep(0.25, 0.6, max(base.r, max(base.g, base.b))) * (1.0 - smoothstep(0.8, 0.95, min(base.r, min(base.g, base.b))));
+            col += base * mix(vec3(1.0), uSunColor, 0.5) * (uLeaf * petal * (0.22 + 0.9 * back) * (0.5 + 0.5 * n.y));
+          }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,
           // the snow heaped round it), so a tree or a rock sits in the slope instead of on it.
           col *= mix(vec3(0.6, 0.66, 0.84), vec3(1.0), smoothstep(-0.25, 0.95, vLocalY));
@@ -1589,11 +1715,12 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           float dH = length(vWorldPos - cameraPosition);
           // The low mist veils a hazard's foot less than the snow round it (its body stands clear).
           col = mix(col, uMistColor, mistAt(vWorldPos, dH) * 0.7 * uHazardFog);
-          col = mix(col, fogColor((vWorldPos - cameraPosition) / max(dH, 0.001)), smoothstep(uFogNear, uFogFar, dH) * uHazardFog);
+          vec3 dirH = (vWorldPos - cameraPosition) / max(dH, 0.001);
+          col = mix(col, fogColor(dirH, dH), fogAmount(vWorldPos, dH) * uHazardFog);
           #ifdef AERIAL
             // The far forest rows lift into the fog colour well before the fog proper starts, so row
             // stands behind row in paler steps; the treeline wall and the run's own hazards stay dark.
-            col = mix(col, uFog, smoothstep(22.0, 150.0, length(vWorldPos - cameraPosition)) * 0.45 * uHazardFog);
+            col = mix(col, fogColor(dirH, dH), smoothstep(22.0, 150.0, dH) * 0.45 * uHazardFog);
           #endif
         #else
           col = fogged(col, vWorldPos);

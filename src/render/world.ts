@@ -21,7 +21,8 @@ import { Life } from './life';
 import { applyPalette, bands, lake, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
 import { Overlooks } from './overlook';
-import { Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } from './palette';
+import { beginLocalLights } from './lights';
+import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from './palette';
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
@@ -525,10 +526,11 @@ export class World {
   private journey(metres: number): void {
     if (this.mood !== Mood.None) return;
     const biome = this.course.biome;
-    const key = Math.round(journeyProgress(biome, metres) * 400);
+    // (Round 7, the light lane: the course's places grade the hour's light, palette.ts PLACES.)
+    const key = journeyStamp(biome, metres, this.course);
     if (key === this.journeyKey) return;
     this.journeyKey = key;
-    const p = journeyPalette(biome, metres, this.palette);
+    const p = journeyPalette(biome, metres, this.palette, this.course);
     applyPalette(p);
     this.sky.setPalette(p);
     this.ghosts.setGlow(p.ghostGlow);
@@ -712,6 +714,8 @@ export class World {
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
+    // (Round 7, the light lane: the frame's local lights start here, focused on the rider. lights.ts.)
+    beginLocalLights(s.x, s.y, -s.z);
     lake.uGroundTime.value = reduced() ? 0 : v.time;
     this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
     this.sky.setStill(this.mood === Mood.None && reduced());

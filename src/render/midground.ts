@@ -177,7 +177,8 @@ vec3 midAerial(vec3 col, vec3 wp, float e) {
   f = mix(f, 1.0, below * 0.2);
   f = max(f, smoothstep(1150.0, 1450.0, d));
   f = max(f, smoothstep(uRing.y + 420.0, uRing.y + 60.0, wp.z));
-  return mix(col, uFog, f);
+  // (Round 7: the air's own colour along the sight line, blue with distance and lit toward the sun.)
+  return mix(col, fogColor((wp - cameraPosition) / max(d, 0.001), d), f);
 }
 `;
 
