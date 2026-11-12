@@ -140,8 +140,9 @@ export interface HudModel {
   clock: number;
   /** The stage you are riding (0 based), of how many, and how far down the whole descent (0..1). */
   stage: { index: number; of: number; progress: number } | null;
-  /** Wipeouts the run can still take, of how many; null until the first is spent. */
-  wipeouts: { left: number; of: number } | null;
+  /** Get-ups (round 7): how many are left of how many, and how far the next one has come back (0 to 1); null
+   *  until the run's first fall. */
+  wipeouts: { left: number; of: number; back?: number } | null;
   /** Gifts this run (shown on the results; the run HUD shows the lantern instead). */
   gifts: number;
   /**

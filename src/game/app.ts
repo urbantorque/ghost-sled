@@ -10,7 +10,7 @@ import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '.
 import { Rng, hashString } from '../sim/prng';
 import { RunRecord, recordFromString, recordToString } from '../sim/replay';
 import { decodeLog, packInput } from '../sim/input';
-import { SIM_VERSION, Sim, SimEvent, TUMBLES } from '../sim/sim';
+import { GET_UPS, GET_UP_BACK_M, SIM_VERSION, Sim, SimEvent } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { UI } from '../ui/ui';
 import { reduced } from '../ui/motion';
@@ -2336,7 +2336,9 @@ export class App {
         distance: sim.distance,
         clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
         stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
-        wipeouts: sim.s.tumbles > 0 ? { left: Math.max(0, TUMBLES - sim.s.tumbles), of: TUMBLES } : null,
+        // Get-ups: shown from the run's first fall (a free one too: it shows the three you have), with how far
+        // the next has come back.
+        wipeouts: sim.s.getUps < GET_UPS || this.tumbles > 0 ? { left: sim.s.getUps, of: GET_UPS, back: sim.s.getUps < GET_UPS ? Math.min(1, Math.max(0, (sim.s.z - sim.s.getUpZ) / GET_UP_BACK_M)) : 0 } : null,
         gifts: runPay(sim) + this.passBonus,
         lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes },
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },

@@ -1523,10 +1523,21 @@
 }
 
 .gs-wipe-pip {
+  position: relative;
   width: 7px;
   height: 7px;
+  overflow: hidden;
   border-radius: 50%;
   box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.72), 0 0 0 1px rgba(18, 25, 51, 0.6);
+}
+
+/* A get-up on its way back: the hollow pip fills from the bottom, a step dimmer than one that is held. */
+.gs-wipe-fill {
+  position: absolute;
+  inset: 0;
+  background: rgba(245, 243, 255, 0.62);
+  transform: scaleY(0);
+  transform-origin: center bottom;
 }
 
 .gs-wipe-pip.is-left {

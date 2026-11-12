@@ -40,6 +40,8 @@ import { ride } from './presence';
 // spent: until then there is nothing to count.
 
 const CHEVRONS = 5;
+/** Steps a get-up's pip fills in as it comes back. */
+const WIPE_STEPS = 8;
 /**
  * The avalanche meter's scale: the wall's fill runs in proportion from the hazard disc (a gap this
  * large or more) to the rider badge (caught), so the bar reads without the number. It starts 45 m back.
@@ -2172,17 +2174,30 @@ export class Hud {
     });
   }
 
-  /** The wipeouts a run can still take: one pip each, hollow once spent, and a small dip as one goes. */
+  /** Get-ups (round 7): one pip each, hollow once spent, a small dip as one goes. The next one back fills
+   *  from the bottom as the metres are ridden (in eighths, so the DOM is written eight times, not every
+   *  frame), and lifts as it lands. */
   private wipePips(w: NonNullable<HudModel['wipeouts']>): void {
-    const key = w.of * 16 + w.left;
+    const step = w.left < w.of ? Math.min(WIPE_STEPS - 1, Math.floor((w.back ?? 0) * WIPE_STEPS)) : 0;
+    const key = (w.of * 16 + w.left) * 16 + step;
     if (key === this.lastWipe) return;
-    const spent = this.lastWipe >= 0;
+    const was = this.lastWipe >= 0 ? (this.lastWipe >> 4) & 15 : -1;
     this.lastWipe = key;
-    const pips: HTMLElement[] = [];
-    for (let i = 0; i < w.of; i++) pips.push(h('i', `gs-wipe-pip${i < w.left ? ' is-left' : ''}`));
-    this.wipeEl.replaceChildren(...pips);
-    this.wipeEl.setAttribute('aria-label', w.left === 1 ? '1 wipeout left' : w.left === 0 ? 'No wipeouts left' : `${w.left} wipeouts left`);
-    if (spent) bump(this.wipeEl, 1.35, 320);
+    if (this.wipeEl.childElementCount !== w.of) {
+      const pips: HTMLElement[] = [];
+      for (let i = 0; i < w.of; i++) pips.push(h('i', 'gs-wipe-pip', h('b', 'gs-wipe-fill')));
+      this.wipeEl.replaceChildren(...pips);
+    }
+    const pips = this.wipeEl.children;
+    for (let i = 0; i < w.of; i++) {
+      const pip = pips[i] as HTMLElement;
+      pip.classList.toggle('is-left', i < w.left);
+      (pip.firstElementChild as HTMLElement).style.transform = i === w.left ? `scaleY(${(step / WIPE_STEPS).toFixed(3)})` : 'scaleY(0)';
+    }
+    this.wipeEl.setAttribute('aria-label', w.left === 1 ? '1 get-up left' : w.left === 0 ? 'No get-ups left' : `${w.left} get-ups left`);
+    if (was < 0) return;
+    if (w.left < was) bump(this.wipeEl, 1.35, 320);
+    else if (w.left > was) for (let i = was; i < w.left; i++) bump(pips[i], 1.6, 360);
   }
 
   /**
