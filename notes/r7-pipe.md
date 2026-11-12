@@ -80,3 +80,16 @@ four samples a pixel is a trap), unless the save already chose it.
   composite still exists behind `?post=-shafts` (the before); the main lane may delete it.
   Ember and Sakura have `shafts: 0` in their grades, so nothing shows there until the light lane raises it.
   Frames: `shots/r7/pipe/shafts/sheet-high.png`.
+- **Depth of field, motion blur, letterbox** (this commit). `postfx/lens.ts`, read from `cine.dof`,
+  `cine.focus`, `cine.motionBlur`, `cine.letterbox`. At rest nothing is drawn and the two float targets
+  are never even sized (`tests/pipeline.test.ts`: the plan adds 0 passes at rest on every tier). In a beat:
+  a half-frame gather (22 taps with bright taps weighted up on Ultra, 8 on High) and one full-frame pass
+  that mixes the blur in by each pixel's own circle and gathers 9 (Ultra) or 5 (High) taps along the
+  depth-reprojected motion. The rider's ellipse on screen is never blurred or gathered from; the HUD is
+  the page's and is untouched; reduced motion drops the blur; a lens that moved under half a pixel skips
+  it. Medium and Low have neither. Lane GPU time at 1280x720: depth of field 0.6 to 0.9 ms, motion blur
+  0.25 to 0.3 ms, +3 draws in a full beat. The letterbox is in the composite: 2.39:1 inside 16:9 at most,
+  none in portrait; the HUD draws over the bars (the main lane should check the HUD's rows read on black).
+  Ghosts and particles write no depth, so they blur with what is behind them.
+  Dev: `?cine=dof:1,focus:7,blur:1,box:1` holds cine values. Frames: `shots/r7/pipe/lens/sheet-ultra.png`.
+  Shafts tiers as shipped: Medium 6 taps at 1/4, High 8 at 1/2, Ultra 12 at 1/2.

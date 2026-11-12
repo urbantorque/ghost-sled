@@ -856,6 +856,8 @@ export class PostFX {
       return;
     }
     const pipe = this.pipe;
+    pipe.rider.set(this.params.riderX, this.params.riderY);
+    pipe.time = this.params.time;
     pipe.begin(this.sceneRT, camera as PerspectiveCamera, true, this.moodShafts, this.params.reduced);
     r.setRenderTarget(this.sceneRT);
     r.render(scene, camera);

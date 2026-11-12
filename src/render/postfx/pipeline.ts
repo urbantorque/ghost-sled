@@ -1,7 +1,8 @@
-import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, type PerspectiveCamera, type Texture, type Vector2, type WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, Vector2, type PerspectiveCamera, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { cine } from '../cine';
 import { AOPass, AO_COMPOSITE_GLSL, aoComposite } from './ao';
 import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lensMotionPx } from './depth';
+import { LensPass } from './lens';
 import { Quad } from './quad';
 import { SHAFT_COMPOSITE_GLSL, ShaftsPass, shaftComposite, shaftPlace } from './shafts';
 import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
@@ -73,6 +74,11 @@ export class Pipeline {
   view: PipeView = 'none';
   readonly ao: AOPass;
   readonly shafts: ShaftsPass;
+  readonly lens: LensPass;
+  /** The rider's place on screen (uv, origin bottom left) and the clock, set by post.ts each frame. */
+  readonly rider = new Vector2(0.5, 0.4);
+  time = 0;
+  private lastTime = 0;
   private depthTex: DepthTexture | null = null;
   private signals: FrameSignals = { post: true, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false, motionPx: 0 };
   private w = 2;
@@ -83,6 +89,7 @@ export class Pipeline {
     this.timer = new GpuTimer(renderer);
     this.ao = new AOPass(this.quad);
     this.shafts = new ShaftsPass(this.quad);
+    this.lens = new LensPass(this.quad, renderer);
   }
 
   /** A tier's passes (and the dev switches): builds or drops the scene target's depth texture and
@@ -109,6 +116,7 @@ export class Pipeline {
     }
     this.ao.configure(this.switches.ao ? passes.ao : 'off', passes.contact && this.switches.contact);
     this.shafts.configure(this.switches.shafts ? passes.shaftTaps : 0, passes.shaftDiv);
+    this.lens.configure(this.switches.dof ? passes.dofTaps : 0, this.switches.blur ? passes.blurTaps : 0);
   }
 
   setSize(w: number, h: number): void {
@@ -116,6 +124,7 @@ export class Pipeline {
     this.h = h;
     this.ao.setSize(w, h);
     this.shafts.setSize(w, h);
+    this.lens.setSize(w, h);
   }
 
   /** Before the scene pass: reads the camera's cine state and decides whether this frame's depth is
@@ -157,8 +166,15 @@ export class Pipeline {
     } else this.shafts.rest();
     pipeUniforms.uBars.value = plan.letterbox;
     pipeUniforms.uPipeView.value = depth ? VIEWS.indexOf(this.view) : 0;
+    let picture = target.texture;
+    if (plan.lens && depth) {
+      this.timer.begin('lens');
+      const dt = Math.max(1 / 240, Math.min(0.1, this.time - this.lastTime));
+      picture = this.lens.render(picture, plan.dof ? cine.dof : 0, cine.focus, plan.blur ? cine.motionBlur : 0, dt, this.rider);
+    }
+    this.lastTime = this.time;
     this.timer.begin('bloom');
-    return target.texture;
+    return picture;
   }
 
   /** Once the composite is on screen. */
@@ -170,6 +186,7 @@ export class Pipeline {
   dispose(): void {
     this.ao.dispose();
     this.shafts.dispose();
+    this.lens.dispose();
     this.depthTex?.dispose();
   }
 }

@@ -50,6 +50,7 @@ export const DEPTH_GLSL = /* glsl */ `
 
 const viewProj = new Matrix4();
 const prevViewProj = new Matrix4();
+const nowViewProj = new Matrix4();
 let havePrev = false;
 const probe = new Vector3();
 
@@ -90,6 +91,8 @@ export function cutLens(): void {
  */
 export function lensMotionPx(camera: PerspectiveCamera, h: number): number {
   if (!havePrev) return 0;
+  // (Asked before the scene is drawn: this frame's matrix is built here, from the lens as it stands.)
+  nowViewProj.copy(camera.matrixWorld).invert().premultiply(camera.projectionMatrix);
   let worst = 0;
   // Three points fixed to the lens: low ahead (the near snow), off to each side.
   for (let i = 0; i < 3; i++) {
@@ -97,7 +100,7 @@ export function lensMotionPx(camera: PerspectiveCamera, h: number): number {
     const ax = probe.x;
     const ay = probe.y;
     const az = probe.z;
-    probe.applyMatrix4(viewProj);
+    probe.applyMatrix4(nowViewProj);
     const cx = probe.x;
     const cy = probe.y;
     probe.set(ax, ay, az).applyMatrix4(prevViewProj);
