@@ -5,6 +5,8 @@ import type { MarqueeLight } from '../game/marquee';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
+import { fallZ } from '../sim/moments';
+import { Breaks } from './breaks';
 import { FW_PAIRS, Fireworks, type ShellKind } from './fireworks';
 import type { Particles } from './particles';
 import { fx } from './fxhub';
@@ -73,6 +75,9 @@ export class SpiritFx {
   readonly fireworks: Fireworks;
   /** The forest's life: trees shaken by the riders that pass them, and what falls (treelife.ts). */
   readonly trees: TreeLife;
+  /** What breaks: snowmen, barriers, ice, cornices, icicles (breaks.ts). */
+  readonly breaks: Breaks;
+  private fallAcc = 0;
   private readonly v = new Vector3();
   private readonly w = new Vector3();
   private readonly carry = new Vector3();
@@ -98,7 +103,8 @@ export class SpiritFx {
     this.ward = new WardFx();
     this.fireworks = new Fireworks();
     this.trees = new TreeLife(particles);
-    this.root.add(this.gates.mesh, this.ward.mesh, this.fireworks.mesh);
+    this.breaks = new Breaks(particles);
+    this.root.add(this.gates.mesh, this.ward.mesh, this.fireworks.mesh, this.breaks.mesh);
   }
 
   /** A light beat's flash for the post pass (taken once): a burst of morning light out of a tube. */
@@ -140,6 +146,9 @@ export class SpiritFx {
         this.schedule(false);
       } else if (b.type === 'nearMiss' && (b.obs === 'pine' || b.obs === 'blossom' || b.obs === 'charpine')) {
         this.trees.nearMiss(b.x, b.z, b.grade === 'whisker');
+      } else if (b.type === 'nearMiss' && (b.obs === 'spire' || b.obs === 'serac' || b.obs === 'iceblock') && this.course) {
+        // Ice shaved by a runner throws shards, away from the rider's line.
+        this.breaks.shatter('ice', b.x, this.course.ground(b.x, b.z), -b.z, this.carry.copy(this.vel).setY(0), b.grade === 'whisker' ? 1 : 0.6, b.side);
       }
     }
   }
@@ -157,6 +166,7 @@ export class SpiritFx {
     this.course = c;
     this.gates.setGates(c.skyGates);
     this.trees.setCourse(c);
+    this.breaks.setCourse(c);
   }
 
   /** A new run: every gate hangs again, and nothing from the last run is still in the air. */
@@ -167,6 +177,7 @@ export class SpiritFx {
     this.ward.stop();
     this.fireworks.clear();
     this.trees.reset();
+    this.breaks.clear();
   }
 
   onEvent(e: SimEvent, s: Snap): void {
@@ -197,6 +208,19 @@ export class SpiritFx {
       case 'lantern':
         this.particles.sparkle(this.v.set(s.x, s.y + 1.2, -s.z), LIGHT, 10, 1.4, 0.45, 0.18, carrier, 0.6);
         break;
+      case 'smash':
+        // A snowman bursts: lumps of snow, its carrot, its coals and its scarf, riding on with the sled.
+        this.breaks.shatter('snowman', e.x, e.y, -e.z, carrier, 1);
+        break;
+      case 'scrape': {
+        // Turned back at the edge: a street's or a bridge's barrier splinters, a glacier's wall throws ice,
+        // anywhere else the bank's snow breaks off in blocks. Thrown back toward the run, off the rider.
+        const kind = this.course ? this.course.section(s.z).kind : 'cruise';
+        const built = kind === 'street' || kind === 'bridge' || kind === 'finish';
+        const what = built ? 'wood' : this.course && this.course.biome === 'glacier' ? 'ice' : 'snow';
+        this.breaks.shatter(what, s.x + e.side * 0.9, s.y, -s.z, carrier, Math.min(1.4, 0.5 + e.speed / 40), -e.side);
+        break;
+      }
     }
   }
 
@@ -208,6 +232,23 @@ export class SpiritFx {
     this.gates.update(dt);
     this.ward.update(dt, this.at, this.vel);
     this.trees.update(dt, mode, s, poses);
+    this.breaks.update(dt, s.z, s.speed, mode === 'run');
+    // The collapse set piece's fall (moments.ts fallZ): where the span's edges give way, blocks of its
+    // snow break off both sides and tumble into the gap with ice in them, on top of marqueeworld's own.
+    if (mode === 'run' && sim && sim.mo.active >= 0) {
+      const p = sim.plays[sim.mo.active];
+      if (p && p.verb === 'collapse') {
+        const c = sim.course;
+        const fz = fallZ(p, sim.tick - sim.mo.t0, sim.mo.pace);
+        this.fallAcc += dt;
+        if (fz > p.z0 - 2 && fz < p.z1 && this.fallAcc > (low ? 0.3 : 0.14)) {
+          this.fallAcc = 0;
+          const side = Math.random() < 0.5 ? -1 : 1;
+          const x = c.centerX(fz) + side * (c.halfWidth(fz) + 0.6);
+          this.breaks.shatter(Math.random() < 0.35 ? 'ice' : 'snow', x, c.ground(x, fz) + 0.4, -fz, null, 1.2, side);
+        }
+      }
+    }
     this.trailAcc += dt;
     if (mode === 'run' && sim && sim.s.dash > 0 && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
