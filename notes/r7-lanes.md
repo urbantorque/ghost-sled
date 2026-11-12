@@ -1,6 +1,6 @@
 # Round 7: rules every lane works to
 
-You are one lane of round 7 of Ghost Sled. Six lanes run side by side in phase 1; the main lane merges them. Read
+You are one lane of round 7 of Ghost Sled. Seven lanes run side by side in phase 1; the main lane merges them. Read
 this file first, then your own brief.
 
 ## Read before you change anything
@@ -20,7 +20,7 @@ this file first, then your own brief.
 - Commit to your branch as you go, in small commits whose messages say what a player gets. End each message with
   `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`. Never merge, rebase onto, push or deploy anything.
 - The machine: Windows 11, Git Bash, Node 24, an Intel Arc 130V laptop GPU, 8 cores, 15 GB. There is no Python and
-  no ffmpeg on the PATH. Six lanes share it, so builds, tests and captures are slow: be patient, never run two
+  no ffmpeg on the PATH. Seven lanes share it, so builds, tests and captures are slow: be patient, never run two
   heavy things at once, and never draw a conclusion about frames per second from your own runs.
 
 ## What you may not touch
@@ -39,8 +39,9 @@ this file first, then your own brief.
 | Lane | Owns |
 | --- | --- |
 | `pipe` | `src/render/post.ts` (new passes), `src/render/world.ts` (render targets, the frame's passes, tier plumbing), `src/game/quality.ts`, the Ultra tier, `src/render/lakemirror.ts`, reflections, anti-aliasing, depth of field, motion blur, ambient occlusion, depth-aware shafts |
-| `light` | `src/render/palette.ts`, `src/render/sky.ts`, `src/render/materials.ts`, `src/render/terrain.ts`, `src/render/ground.ts`, `src/render/lights.ts` (the implementation), the tone curve and the grade in `post.ts`'s composite pass only, Low's and the phone's designed look |
-| `hero` | `src/render/rider.ts`, `ghosts.ts`, `portrait.ts`, `camera.ts`, `speedfeel.ts`, `particles.ts`, `trails.ts`, `flora.ts`, `props.ts`, `landmarkKit.ts` (rock forms), `spirit.ts`, `wardfx.ts`, `fireworks.ts`, `chaos.ts` (weather's volume), `src/render/cine.ts` (the writer) |
+| `light` | `src/render/palette.ts`, `src/render/sky.ts`, `src/render/materials.ts`, `src/render/terrain.ts`, `src/render/ground.ts`, `src/render/lights.ts` (the implementation), `massif.ts`, `midground.ts`, `overlook.ts` (the far planes), the tone curve and the grade in `post.ts`'s composite pass only, Low's and the phone's designed look |
+| `hero` | `src/render/rider.ts`, `ghosts.ts`, `portrait.ts`, `camera.ts`, `speedfeel.ts`, `nearfield.ts`, `src/render/cine.ts` (the writer), `src/game/timescale.ts` |
+| `fx` | `src/render/particles.ts`, `trails.ts`, `flora.ts`, `props.ts`, `landmarkKit.ts` (rock forms), `spirit.ts`, `wardfx.ts`, `fireworks.ts`, `chaos.ts` (weather with volume), `sloughs.ts`, `landing.ts`, `skygates.ts` |
 | `music` | `src/audio/*`, a new offline renderer under `scripts/music/`, shipped audio under `public/music/`, the jukebox |
 | `moments` | `src/sim/moments.ts`, `course.ts`, `mountains.ts`, the set pieces' part of `sim.ts` and `bot.ts`, `src/game/marquee.ts`, `mastery.ts`, `src/ui/momentcopy.ts`, `tests/moments.test.ts`, `tests/fairness.test.ts` |
 | `feel` | the wreck and get-up part of `sim.ts`, `src/game/input.ts`, `hints.ts`, `field.ts`, `pacer.ts`, `slowriders.ts`, `run.ts`, `src/bot/pool.ts`, `src/ui/hint.ts`, `touch.ts`, the HUD's get-up and gamepad glyphs |
@@ -68,7 +69,7 @@ this file first, then your own brief.
 
 - Build with `npx vite build` and serve with
   `npx vite preview --outDir dist/game --port <your port> --host 127.0.0.1 --strictPort` as a background command.
-  Ports: pipe 4410, light 4420, hero 4430, music 4440, moments 4450, feel 4460.
+  Ports: pipe 4410, light 4420, hero 4430, music 4440, moments 4450, feel 4460, fx 4470.
 - Drive it with `playwright-cli` and the headless configs only (`.playwright/cli-headless.config.json`, 1280x720;
   `.playwright/mobile-headless.config.json`, 390x844): a headed browser drops to 2 fps when the display sleeps. Use
   your own session name, `-s=r7-<lane>`. One browser at a time. Close your own session when you are not using it
