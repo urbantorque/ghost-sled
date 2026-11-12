@@ -5,7 +5,7 @@ import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, actionOf, decodeLog, draftOf, packInput } from '../src/sim/input';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { Rng, hash32 } from '../src/sim/prng';
-import { CHUNK_LEN, Course, type Obstacle, courseFor } from '../src/sim/course';
+import { CHUNK_LEN, Course, courseFor } from '../src/sim/course';
 import { RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
 import { Sim } from '../src/sim/sim';
 
@@ -125,27 +125,14 @@ describe('determinism', () => {
 
   it('a live revive through Run delivers no stale crash event and records a replayable log', () => {
     let t = 0;
-    // A rider who aims at whatever stands ahead: nothing short of that ends a run this early, since the
-    // corridor's edge turns a sled back and two wipeouts are forgiven past the free stretch.
-    const hunter = {
-      sample: (): { steer: number; action: boolean } => {
-        const s = run.sim.s;
-        const k = Math.floor(s.z / CHUNK_LEN);
-        let best: Obstacle | null = null;
-        for (let i = k; i <= k + 1; i++) {
-          for (const o of run.sim.course.chunk(i).obstacles) {
-            if (o.soft || o.z < s.z + 2 || o.z > s.z + 45) continue;
-            if (!best || o.z < best.z) best = o;
-          }
-        }
-        const d = best ? best.x - s.x : 0;
-        return { steer: d > 0.4 ? 8 : d < -0.4 ? 0 : 4, action: false };
-      },
-    };
-    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, hunter);
+    // A rider who holds one key all the way down, with the avalanche behind it. Nothing a rider hits ends a
+    // run this early any more (round 7: a fall is got up from), but the avalanche still does, and a sled
+    // held against the bank at 10 m/s cannot outrun it.
+    const hunter = { sample: (): { steer: number; action: boolean } => ({ steer: 8, action: false }) };
+    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.Avalanche, seed: 1 }, 0, hunter);
     const loop = new FixedLoop(() => run.tick());
     const kinds: string[] = [];
-    while (!run.crashed && t++ < 60 * 120) loop.advance(1 / 60);
+    while (!run.crashed && t++ < 60 * 240) loop.advance(1 / 60);
     for (const p of run.drain()) kinds.push(p.e.type);
     expect(run.crashed).toBe(true);
     expect(kinds.filter((k) => k === 'crash')).toHaveLength(1);

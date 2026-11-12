@@ -17,6 +17,9 @@ import {
   FLAG_DASHING,
   FLAG_DRIFTING,
   FLAG_WARDED,
+  FLAG_FALLING,
+  FLAG_DOWN,
+  FLAG_UP,
   FLAG_GROUNDED,
   FRAME_STRIDE,
   PoolGhostData,
@@ -109,6 +112,8 @@ export interface GhostPose {
   /** Spending a lantern: a dash (its record says so), and a ward's moment after a hit. */
   dashing: boolean;
   warded: boolean;
+  /** A fall (round 7), as the sim's SledState.fall: 0 riding, 1 tumbling to a stop, 2 down, 3 getting up. */
+  fall: number;
   /** Past the end of its run: crashed (or stopped past the line) at the last sample. */
   done: boolean;
   /** Seconds since it crashed, for the fade-out. */
@@ -120,7 +125,7 @@ export interface GhostPose {
 export type RaceEvent = { type: 'pass'; track: GhostTrack; first: boolean } | { type: 'passedBy'; track: GhostTrack } | { type: 'crashed'; track: GhostTrack };
 
 export function emptyPose(): GhostPose {
-  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, dashing: false, warded: false, done: false, sinceDone: 0, finished: false };
+  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, dashing: false, warded: false, fall: 0, done: false, sinceDone: 0, finished: false };
 }
 
 /** A track's place in the race order. */
@@ -352,6 +357,7 @@ export class GhostManager {
     out.drifting = (flags1 & FLAG_DRIFTING) !== 0;
     out.dashing = (flags1 & FLAG_DASHING) !== 0;
     out.warded = (flags1 & FLAG_WARDED) !== 0;
+    out.fall = flags1 & FLAG_FALLING ? 1 : flags1 & FLAG_DOWN ? 2 : flags1 & FLAG_UP ? 3 : 0;
     return true;
   }
 

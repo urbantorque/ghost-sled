@@ -10,7 +10,7 @@ import { type MomentPlay, fallPace, fallZ, machineZ, momentPlays } from './momen
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 8;
+export const SIM_VERSION = 9;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -23,11 +23,46 @@ const CD = 0.0027;
 const MU = 0.03;
 /** A rider starts moving: the start ramp is steep and a first-timer should be flying within seconds. */
 const START_SPEED = 14;
-/** A wipeout's tumble, in ticks: the rider bounces back to the line, the run goes on, the time is lost. */
-export const TUMBLE_TICKS = 66;
-/** Wipeouts a run forgives after the free stretch; the next one ends it. */
-export const TUMBLES = 2;
-/** Before this distance a wipeout is always free: nobody's first minute ends in a wreck. */
+/** A fall, in ticks (round 7): the rider tumbles and slides to a stop on the safe line (falling), lies in the
+ *  snow (down), then stands the sled up and pushes off (up): a second and a half. The run goes on; the time
+ *  is lost. (2.1 s was tried first: a first-timer falls a dozen times a run, and spent half a minute of it
+ *  lying in the snow.) */
+export const FALL_TICKS = 42;
+export const DOWN_TICKS = 18;
+export const UP_TICKS = 30;
+/** What a falling sled keeps of its speed each tick: from 30 m/s it has slid about 6 m and all but stopped. */
+const FALL_BLEED = 0.93;
+/** The whole fall, start to riding again (the picture's tumble reads its progress off this). */
+export const TUMBLE_TICKS = FALL_TICKS + DOWN_TICKS + UP_TICKS;
+/** The phases of a fall (SledState.fall): what the rider is doing, for whoever draws it. */
+export const FALL_NONE = 0;
+export const FALL_FALLING = 1;
+export const FALL_DOWN = 2;
+export const FALL_UP = 3;
+/** Get-ups a rider carries. A fall past the free stretch spends one; with none left the next fall ends the run. */
+export const GET_UPS = 3;
+/** One comes back for every this many metres ridden, and all of them at a stage line. So what ends a run is
+ *  falling four times in about a quarter of a mile, not falling often: the lab's clumsy first-timer falls nine
+ *  or ten times a run and wrecks in about one run in twenty. (350 m, counted from the last fall, was tried
+ *  first: it finished 19 runs of 48.) */
+export const GET_UP_BACK_M = 200;
+/** The speed a rider pushes off at, as a share of cruise, and the least of it (just over what the wedged
+ *  sled's rescue counts as stuck). Above the least it is never more than the speed the sled had down the run
+ *  as the fall began, so getting up is never a way to go faster. */
+const GET_UP_SPEED = 0.5;
+const GET_UP_MIN = 3;
+/** Untouchable for this long after getting up: a fall cannot chain into the same tree, or a bad landing. */
+const GET_UP_INVULN = 150;
+/** How hard a sled must meet something head on to fall (m/s into it). Under this it bounces off, as a glancing
+ *  blow always did. It was 9: a rider just back on the sled at 12 m/s fell again on the next rock, and a third
+ *  of a first-timer's falls came under 16 m/s. A fast sled falls on less (HIT_FAST into it past HIT_FAST_SPEED),
+ *  as before. */
+const HIT_HARD = 12;
+const HIT_FAST = 6;
+const HIT_FAST_SPEED = 24;
+/** (The old name for the count: the get-ups a rider starts with.) */
+export const TUMBLES = GET_UPS;
+/** Before this distance a fall is always free: nobody's first minute ends in a wreck. */
 export const FREE_TUMBLE_Z = 700;
 /** Past the corridor's edge by this much a sled counts as riding the wall. */
 const WALL_RIDE_E = 1.2;
@@ -38,6 +73,12 @@ const CARVE_SOFT = 0.82;
 /** Ticks before touchdown the rider sets for the landing: steering stops adding spin and the sled swings
  *  to the nearest straight line. Stomp timing stays the skill, not surviving your own thumbs. */
 export const LAND_SET_TICKS = 14;
+/** The landing set, in numbers (round 7): how hard a spin is stopped (rad/s^2: from full rate in 6 ticks, so
+ *  the swing has 8 left and a spin alone can never wreck a landing), and how fast the rider comes out of a
+ *  flip to the nearest whole turn, in the set and once the button is let go in the air (rad/s). */
+const LAND_SET_SPIN = 90;
+const LAND_SET_PITCH = 4;
+const FLIP_RIGHT = 4.5;
 /** Par for the time bonus: the finish reached at this speed earns nothing. */
 const PAR_SPEED = 24;
 
@@ -81,8 +122,12 @@ export type SimEvent =
   | { type: 'takeoff'; kind: TakeoffKind; vy: number }
   | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean }
   | { type: 'crash'; cause: CrashCause }
-  /** A wipeout the run survives: 'start' as the rider goes down, 'end' back on the line. */
+  /** A fall the run survives: 'start' as the rider goes down, 'end' riding again. `left`: get-ups left. */
   | { type: 'tumble'; phase: 'start' | 'end'; cause: TumbleCause; left: number }
+  /** A fall's middle, for the picture: 'down' as the rider comes to rest, 'up' as it starts to stand. */
+  | { type: 'fall'; phase: 'down' | 'up' }
+  /** A get-up came back: one for GET_UP_BACK_M ridden without a fall, or all of them at a stage line. */
+  | { type: 'getUp'; left: number; why: 'ridden' | 'stage' }
   /** Turned back by something solid at the corridor's edge. */
   | { type: 'scrape'; side: -1 | 1; speed: number }
   /** A stage line crossed: its index and the tick. */
@@ -171,10 +216,20 @@ export interface SledState {
   crashCause: CrashCause | null;
   crashTick: number;
   onIce: boolean;
-  /** Ticks left in a wipeout's tumble (0 when riding). */
+  /** Ticks left of a fall, all three phases (0 when riding). */
   tumble: number;
-  /** Wipeouts spent from the run's allowance. */
-  tumbles: number;
+  /** What a fallen rider is doing: FALL_NONE riding, FALL_FALLING tumbling to a stop, FALL_DOWN lying in the
+   *  snow, FALL_UP standing the sled up and pushing off. */
+  fall: number;
+  /** The tick the fall's present phase began, and the tick the fall itself began (-1 when riding). */
+  fallTick: number;
+  fallStart: number;
+  /** Get-ups left (GET_UPS at the start). */
+  getUps: number;
+  /** Where the count toward the next get-up began, metres down the run (it follows the sled while all are held). */
+  getUpZ: number;
+  /** Falls this run, the free ones too (a ward is not a fall). */
+  falls: number;
   /** Over the finish line (the sled coasts on, the run is decided). */
   finished: boolean;
   finishTick: number;
@@ -371,7 +426,12 @@ export class Sim {
       crashTick: -1,
       onIce: false,
       tumble: 0,
-      tumbles: 0,
+      fall: FALL_NONE,
+      fallTick: -1,
+      fallStart: -1,
+      getUps: GET_UPS,
+      getUpZ: 0,
+      falls: 0,
       finished: false,
       finishTick: -1,
       wallTicks: 0,
@@ -524,7 +584,12 @@ export class Sim {
     s.crashCause = null;
     s.flow = 0;
     s.tumble = 0;
-    s.tumbles = Math.max(0, TUMBLES - 1);
+    s.fall = FALL_NONE;
+    s.fallTick = -1;
+    s.fallStart = -1;
+    // A revive rides on with one get-up, as it always rode on with one wipeout to spare.
+    s.getUps = 1;
+    s.getUpZ = z;
     s.wallTicks = 0;
     s.dash = 0;
     this.endGrind();
@@ -586,6 +651,7 @@ export class Sim {
     if (riding && !s.crashed && race) this.pickups(prevZ);
     if (riding && !s.crashed) this.edge();
     if (riding && !s.crashed) this.lines();
+    if (riding && !s.crashed && race) this.getUpsBack();
     // A set piece plays on through a wipeout: the race's machine does not wait, nor does the fall.
     if (!s.crashed && !s.finished && race) this.momentStep(prevZ);
     if (!s.crashed && !s.finished && this.tick >= MAX_RUN_TICKS - 1 && race) this.crash('daylight');
@@ -955,8 +1021,12 @@ export class Sim {
 
     // Spins from steering (with a dead zone), flips from holding the action.
     const spinMax = 9 * this.sled.spin * this.mood.spin;
-    if (s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS)) {
-      s.spinRate = approach(s.spinRate, 0, 40 * DT);
+    // The landing set (round 7 made it hold): a key held through a flight spins at full rate, and the old set
+    // could not stop that in time, so a first-timer who only steered in the air came down sideways one flight
+    // in four. Now the spin is stopped hard and the swing has time left: a spin alone lands sketchy at worst.
+    const setting = s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS);
+    if (setting) {
+      s.spinRate = approach(s.spinRate, 0, LAND_SET_SPIN * DT);
       s.airYaw = approach(s.airYaw, PI * Math.round(s.airYaw / PI), 4 * DT);
     } else if (Math.abs(s.steer) > 0.3) {
       s.spinRate = approach(s.spinRate, s.steer * spinMax, 34 * DT);
@@ -968,14 +1038,23 @@ export class Sim {
     s.airYaw += s.spinRate * DT;
     // A flip never starts in the last FLIP_GUARD_TICKS before touchdown: a stomp held a little too
     // long used to tip the rider into the snow. One already under way carries on.
-    if (action && s.airHold >= 7 && (s.pitchRate < -1 || !this.landingWithin(FLIP_GUARD_TICKS))) {
+    const flipping = action && s.airHold >= 7;
+    const whole = TAU * Math.round(s.airPitch / TAU);
+    // (A flip turns toward lower pitch, so past its half the nearest whole turn lies ahead of it.)
+    const finishing = flipping && s.pitchRate < -1 && whole < s.airPitch;
+    if (setting && !finishing) {
+      // The rider sets for the landing in pitch as well (round 7): out of the flip to the nearest whole turn,
+      // button held or not. A flip past its half still carries on at its own rate, so a late one that would
+      // have come round still does; one short of its half is unwound, where it used to land on its head.
+      s.pitchRate = approach(s.pitchRate, 0, 60 * DT);
+      s.airPitch = approach(s.airPitch, whole, LAND_SET_PITCH * DT);
+    } else if (flipping && (s.pitchRate < -1 || !this.landingWithin(FLIP_GUARD_TICKS))) {
       s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin, 20 * DT);
     } else {
       s.pitchRate = approach(s.pitchRate, 0, 26 * DT);
-      if (Math.abs(s.pitchRate) < 1.5) {
-        const nearest = TAU * Math.round(s.airPitch / TAU);
-        s.airPitch = approach(s.airPitch, nearest, 2.4 * DT);
-      }
+      // Let go of a flip and the rider comes out of it (twice as fast as before round 7: a hold begun in the
+      // air by a thumb that meant to crouch was a wreck most times it happened).
+      if (Math.abs(s.pitchRate) < 1.5) s.airPitch = approach(s.airPitch, whole, FLIP_RIGHT * DT);
     }
     s.airPitch += s.pitchRate * DT;
     s.lean = approach(s.lean, 0, 3 * DT);
@@ -1173,13 +1252,17 @@ export class Sim {
     s.boostPool -= add;
   }
 
-  /** A hard hit. The run forgives a couple of these (every one in the first stretch) as a tumble back
-   *  to the line, which costs the combo and a few seconds; the one after that is the wreck. */
+  /** A hard hit: a fall (round 7). The rider goes down, slides to a stop on the safe line, lies there, gets up
+   *  and rides on, for every rider, so a ghost's record carries its own falls. It costs the combo, the speed
+   *  and about four seconds, and a get-up: three are carried, one comes back for every GET_UP_BACK_M ridden
+   *  clean and all of them at a stage line, and every fall in the first stretch is free. A fall with none left
+   *  is the wreck that ends the run, as the third wipeout used to. */
   private wipeout(cause: TumbleCause): void {
     const s = this.s;
     if (s.tumble > 0 || s.crashed) return;
-    if (this.homeward) {
-      // Riding home nothing can go wrong: a landing that would have floored a racer just lands.
+    if (this.homeward || s.invuln > 0) {
+      // Riding home nothing can go wrong: a landing that would have floored a racer just lands. The same for a
+      // rider who has only just got up (or been warded): the first lip after a fall is never a second fall.
       s.heading = s.velHeading;
       s.airYaw = 0;
       s.airPitch = 0;
@@ -1212,13 +1295,22 @@ export class Sim {
       return;
     }
     const free = s.z < FREE_TUMBLE_Z;
-    if (!free && s.tumbles >= TUMBLES) {
+    if (!free && s.getUps <= 0) {
       this.crash(cause);
       return;
     }
-    if (!free) s.tumbles++;
+    if (!free) s.getUps--;
+    s.falls++;
     s.tumble = TUMBLE_TICKS;
+    s.fall = FALL_FALLING;
+    s.fallTick = this.tick;
+    s.fallStart = this.tick;
     this.tumbleCause = cause;
+    this.fallOff = s.x - this.course.safeX(s.z);
+    // Only the speed the sled had down the run goes into the slide and the get-up: a sled crossing the slope
+    // at 15 m/s was making 5 m/s of ground, and a fall must not turn the rest into distance.
+    this.fallSpeed = s.vz > 0 ? (s.vz < s.speed ? s.vz : s.speed) : 0;
+    s.speed = this.fallSpeed;
     s.drifting = false;
     s.driftCharge = 0;
     s.driftTier = 0;
@@ -1235,23 +1327,57 @@ export class Sim {
     this.endGrind();
     const lost = this.combo.lose();
     if (lost > 0) this.events.push({ type: 'comboLost', points: lost });
-    this.events.push({ type: 'tumble', phase: 'start', cause, left: Math.max(0, TUMBLES - s.tumbles) });
+    this.events.push({ type: 'tumble', phase: 'start', cause, left: s.getUps });
   }
 
   private tumbleCause: TumbleCause = 'landing';
+  /** How far off the safe line the fall began, and how fast. */
+  private fallOff = 0;
+  private fallSpeed = 0;
 
-  /** Rolling back to the line: momentum bleeds off, and the snow carries the rider home. */
+  /** The speed a rider gets up at: a share of cruise, and above the least of it never more than the speed
+   *  the fall began at. */
+  private getUpSpeed(): number {
+    const push = GET_UP_SPEED * this.cruiseSpeed();
+    const had = this.fallSpeed > GET_UP_MIN ? this.fallSpeed : GET_UP_MIN;
+    return had < push ? had : push;
+  }
+
+  /** A fall, tick by tick. Falling: the rider slides on down the run, the speed bleeding away, eased across
+   *  to the safe line (where nothing stands, by the course's own promise) so it comes to rest there. Down: at
+   *  rest. Up: the sled is stood up and pushed off along the line, from nothing to the get-up speed. The
+   *  rider is never set forward: every metre of a fall is ridden slower than the speed it began at. */
   private tumbleStep(): void {
     const s = this.s;
     const c = this.course;
     s.tumble--;
-    s.speed *= 0.982;
-    const u = 1 - s.tumble / TUMBLE_TICKS;
-    const pull = u * u * 0.09;
+    const into = TUMBLE_TICKS - s.tumble;
+    if (into <= FALL_TICKS) {
+      const u = into / FALL_TICKS;
+      s.speed *= FALL_BLEED;
+      s.z += s.speed * DT;
+      const e = u * u * (3 - 2 * u);
+      s.x = c.safeX(s.z) + this.fallOff * (1 - e);
+      if (into === FALL_TICKS) {
+        s.fall = FALL_DOWN;
+        s.fallTick = this.tick;
+        this.events.push({ type: 'fall', phase: 'down' });
+      }
+    } else if (into <= FALL_TICKS + DOWN_TICKS) {
+      s.speed = 0;
+      if (into === FALL_TICKS + DOWN_TICKS) {
+        s.fall = FALL_UP;
+        s.fallTick = this.tick;
+        this.events.push({ type: 'fall', phase: 'up' });
+      }
+    } else {
+      const u = (into - FALL_TICKS - DOWN_TICKS) / UP_TICKS;
+      s.speed = this.getUpSpeed() * u * u;
+      s.z += s.speed * DT;
+      s.x = c.safeX(s.z);
+    }
     s.vx = 0;
     s.vz = s.speed;
-    s.z += s.vz * DT;
-    s.x += (c.safeX(s.z) - s.x) * pull;
     const gy = c.ground(s.x, s.z);
     s.vy -= this.gravity * DT;
     s.y += s.vy * DT;
@@ -1262,10 +1388,12 @@ export class Sim {
     } else s.grounded = false;
     if (s.tumble > 0) return;
     const line = this.lineHeading();
+    s.fall = FALL_NONE;
+    s.fallTick = -1;
+    s.fallStart = -1;
     s.x = c.safeX(s.z);
     s.y = c.ground(s.x, s.z);
-    const floor = 0.55 * this.cruiseSpeed();
-    if (s.speed < floor) s.speed = floor;
+    s.speed = this.getUpSpeed();
     s.heading = line;
     s.velHeading = line;
     s.vx = s.speed * dsin(line);
@@ -1273,7 +1401,8 @@ export class Sim {
     c.gradient(s.x, s.z, vec);
     s.vy = vec.x * s.vx + vec.z * s.vz;
     s.grounded = true;
-    s.invuln = 110;
+    // (On the safe line nothing stands within a metre, so the rider needs no moment as a spirit to get clear.)
+    s.invuln = GET_UP_INVULN;
     s.wobble = 0;
     s.steer = 0;
     this.prevAction = s.action;
@@ -1282,7 +1411,20 @@ export class Sim {
     this.coyote = 0;
     this.airPressed = false;
     this.nearMiss.clear();
-    this.events.push({ type: 'tumble', phase: 'end', cause: this.tumbleCause, left: Math.max(0, TUMBLES - s.tumbles) });
+    this.events.push({ type: 'tumble', phase: 'end', cause: this.tumbleCause, left: s.getUps });
+  }
+
+  /** Get-ups come back with the riding: one for every GET_UP_BACK_M since the first of them was spent. */
+  private getUpsBack(): void {
+    const s = this.s;
+    if (s.getUps >= GET_UPS) {
+      s.getUpZ = s.z;
+      return;
+    }
+    if (s.z - s.getUpZ < GET_UP_BACK_M) return;
+    s.getUps++;
+    s.getUpZ = s.z;
+    this.events.push({ type: 'getUp', left: s.getUps, why: 'ridden' });
   }
 
   /** Something solid at the corridor's edge turns a sled back: it costs speed and the combo, never the run. */
@@ -1318,7 +1460,15 @@ export class Sim {
     if (i >= st.length || s.z < st[i].z1) return;
     this.stageTicks.push(this.tick);
     this.events.push({ type: 'stage', index: i, tick: this.tick });
-    if (i < st.length - 1) return;
+    if (i < st.length - 1) {
+      // A stage line gives every get-up back: each stage is ridden with all three.
+      if (s.getUps < GET_UPS) {
+        s.getUps = GET_UPS;
+        this.events.push({ type: 'getUp', left: s.getUps, why: 'stage' });
+      }
+      s.getUpZ = s.z;
+      return;
+    }
     s.finished = true;
     s.finishTick = this.tick;
     s.drifting = false;
@@ -1648,7 +1798,7 @@ export class Sim {
             continue;
           }
           const vn = -(s.vx * hit.nx + s.vz * hit.nz);
-          if (s.invuln === 0 && (vn > 9 || (vn > 6 && s.speed > 24))) {
+          if (s.invuln === 0 && (vn > HIT_HARD || (vn > HIT_FAST && s.speed > HIT_FAST_SPEED))) {
             this.wipeout(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : 'rock');
             return;
           }
@@ -2051,7 +2201,10 @@ export class Sim {
     mixF(this.stats.lights);
     mixF(s.crashed ? 1 : 0);
     mixF(s.tumble);
-    mixF(s.tumbles);
+    mixF(s.fall);
+    mixF(s.getUps);
+    mixF(s.getUpZ);
+    mixF(s.falls);
     mixF(s.finished ? 1 : 0);
     mixF(s.grinding ? this.railU : -1);
     mixF(s.lantern);
