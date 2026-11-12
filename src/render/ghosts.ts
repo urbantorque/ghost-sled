@@ -4,7 +4,7 @@ import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
 import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
-import { HAT_LIFT, RIDER_COLORS, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
+import { HAT_LIFT, RIDER_COLORS, RIDER_SCALE, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
@@ -301,13 +301,18 @@ const MAX_SLEDS = 24;
 function sledSource(id: number): SledSource {
   let s = sledSources.get(id);
   if (!s) {
-    const sled = sledGeometryFor(id);
+    // (Low's build of the sled: the glass shows its outline and its runners, never its grain.)
+    const sled = sledGeometryFor(id, true);
     const sn = sled.getAttribute('position').count;
     // The ghost's legs ride along as a faint glass lap (glow -1): the body's glass dissolves from the
     // chest down, and without them the head and shoulders floated a body length over an empty sled.
     const legs = ghostLegsGeometry(sledSeat(id));
     legs.deleteAttribute('aSway');
     const g = mergeGeometries([sled, legs])!;
+    // Drawn at the rider's own scale (the sled mesh places these positions in the world itself).
+    const low = new Float32Array(g.getAttribute('position').count);
+    for (let i = 0; i < low.length; i++) low[i] = g.getAttribute('position').getY(i);
+    g.scale(RIDER_SCALE, RIDER_SCALE, RIDER_SCALE);
     const pos = g.getAttribute('position');
     const col = g.getAttribute('color');
     const glow = new Float32Array(pos.count);
@@ -321,7 +326,7 @@ function sledSource(id: number): SledSource {
       const gg = col.getY(i);
       const b = col.getZ(i);
       const accent = hot.some((c) => Math.abs(c.r - r) + Math.abs(c.g - gg) + Math.abs(c.b - b) < 0.03);
-      glow[i] = accent ? 1 : pos.getY(i) < 0.06 ? 0.75 : 0;
+      glow[i] = accent ? 1 : low[i] < 0.06 ? 0.75 : 0;
     }
     s = { pos: pos.array as Float32Array, nrm: g.getAttribute('normal').array as Float32Array, glow, count: pos.count };
     sledSources.set(id, s);
@@ -488,11 +493,11 @@ function withStencil<M extends ShaderMaterial | MeshBasicMaterial>(m: M): M {
 const WISP_SEG = 12;
 const WISP_PTS = WISP_SEG + 1;
 const HIST = 32;
-const WISP_LIFT = 0.5;
+const WISP_LIFT = 0.5 * RIDER_SCALE;
 const WISP_MAX = 2.6;
 /** The aura's centre (the chest, in the rider model) and radius: a soft glow round head and shoulders. */
-const AURA_LIFT = 0.98;
-const AURA_R = 0.82;
+const AURA_LIFT = 0.98 * RIDER_SCALE;
+const AURA_R = 0.82 * RIDER_SCALE;
 
 function wispMaterial(): ShaderMaterial {
   return withStencil(new ShaderMaterial({
@@ -1111,6 +1116,8 @@ export class GhostVisuals {
       const mesh = new Mesh(ghostBodyGeometry(seat, rider?.hat ?? null), [depth, mat]);
       mesh.frustumCulled = false;
       mesh.renderOrder = 5;
+      // A ghost is the hero's size: the same toy, in glass.
+      mesh.scale.setScalar(RIDER_SCALE);
       const label = document.createElement('div');
       label.className = rider ? 'ghost-label sig' : 'ghost-label';
       label.style.setProperty('--c', GHOST_COLORS[g.kind]);
@@ -1715,7 +1722,7 @@ export class GhostVisuals {
       if (it.tagOn) {
         // Above the body's centre, wherever a flip has swung it, not above the sled's pivot (and over
         // a tall hat's top).
-        tmpP.set(0, 0.8, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, 0.95 + it.lift);
+        tmpP.set(0, 0.8 * RIDER_SCALE, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, (0.95 + it.lift) * RIDER_SCALE);
         this.project(it.tag, tmpP, camera, w, h, TAG_RANGE);
         it.tag.dp = dPlayer;
       }
@@ -2041,7 +2048,7 @@ export class GhostVisuals {
     sledQ.multiply(tmpQ.setFromAxisAngle(AX, -p.airPitch)).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.2));
     q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.28));
     // Turned about the hips: position = pos + sled * hips - body * hips.
-    hip.set(0, it.seat.y, it.seat.z);
+    hip.set(0, it.seat.y * RIDER_SCALE, it.seat.z * RIDER_SCALE);
     it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
     it.sledQ.copy(sledQ);
     it.sledP.copy(pos);

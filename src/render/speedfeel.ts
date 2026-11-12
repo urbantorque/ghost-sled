@@ -75,9 +75,12 @@ export function roosterK(v: number): number {
 
 /** How far the chase lens sits behind its set point (the follow's lag adds speed / FOLLOW_RATE metres
  *  on top): closes in with speed, so the rider keeps its size while the lag still lets a boost surge
- *  away from the lens. */
+ *  away from the lens. Past 28 m/s it closes faster (round 7): the lag grew by a metre and a half from
+ *  30 to the cap, the lens opened by five degrees, and the hero shrank by a quarter just as the run
+ *  got fast. */
 export function chaseBack(v: number): number {
-  return 2.2 - 0.06 * Math.min(v, TOP_SPEED);
+  const s = Math.min(v, TOP_SPEED);
+  return 2.2 - 0.06 * Math.min(s, 28) - 0.1 * Math.max(0, s - 28);
 }
 
 /** The chase lens's height over the sled: it rises with speed instead of dropping toward the snow, so
@@ -88,7 +91,7 @@ export function chaseUp(v: number): number {
 
 /** The rider's middle on the screen (NDC y): sinks a little with speed, opening the road above it. */
 export function chaseRow(v: number): number {
-  return -0.22 - 0.1 * fastK(v);
+  return -0.235 - 0.1 * fastK(v);
 }
 
 /** Metres down the road the chase's look reaches for: 1.5 s of travel, so the corner coming is framed

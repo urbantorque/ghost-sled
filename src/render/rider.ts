@@ -5,7 +5,7 @@ import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
 import { ghostStencil, makeToonMaterial, shared, type ToonOptions } from './materials';
-import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
+import { ARM_ELBOW, ARM_REST_BEND, ARM_WRIST, RIDER_COLORS, RIDER_HALF_WIDTH, RIDER_HEIGHT, RIDER_NECK, RIDER_SCALE, RIDER_SHOULDER, SCARF_KNOT, type RiderDetail, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -95,10 +95,10 @@ const UP = new Vector3(0, 1, 0);
 // curve and ripple along its length: with five long links each tail read as a stiff flat plank.
 const TAIL_N = 9;
 const TAIL_ROWS = (TAIL_N - 1) * 2 + 1;
-const TAIL_SEG = [0.165, 0.135];
+const TAIL_SEG = [0.165 * RIDER_SCALE, 0.135 * RIDER_SCALE];
 /** Ribbon width at its fullest; pinched where it leaves the knot, then tapering to a narrow tip (a
  *  tip as wide as the middle read as a paddle). */
-const TAIL_W = 0.27;
+const TAIL_W = 0.27 * RIDER_SCALE;
 function tailWidth(u: number): number {
   const s = Math.min(1, u / 0.18);
   return TAIL_W * (0.5 + 0.5 * s * s * (3 - 2 * s)) * (1 - 0.7 * Math.pow(u, 1.4));
@@ -113,12 +113,14 @@ const SCARF_MAX_RUN = Math.sqrt(3) / 2;
 /** The head and beanie as the camera sees them (neck space): the tails keep out of the cone it
  *  sweeps toward the lens, so the scarf never covers the head, however the rider is posed. */
 const HEAD_VIEW = new Vector3(0, 0.97 - RIDER_NECK.y, 0);
-const HEAD_VIEW_R = 0.37;
+const HEAD_VIEW_R = 0.37 * RIDER_SCALE;
 /** Spheres the tails slide around instead of passing through the rider: the torso (body-pivot
- *  space) and the head with its ear flaps (neck space). */
+ *  space), the head with its ear flaps (neck space) and the hood on the back (body-pivot space again;
+ *  the radii are the drawn rider's, RIDER_SCALE included). */
 const COLLIDERS: Array<[Vector3, number]> = [
-  [new Vector3(0, 0.34, 0.02), 0.27],
-  [new Vector3(0, 0.86 - RIDER_NECK.y, 0), 0.3],
+  [new Vector3(0, 0.34, 0.02), 0.27 * RIDER_SCALE],
+  [new Vector3(0, 0.86 - RIDER_NECK.y, 0), 0.3 * RIDER_SCALE],
+  [new Vector3(0, 0.46, 0.2), 0.17 * RIDER_SCALE],
 ];
 /** A tumble's turns of the whole rig (a whole number, so it ends upright) and how high it bounces. */
 const TUMBLE_TURNS = 2;
@@ -135,7 +137,7 @@ const ECHO_LAGS: readonly (readonly [number, number])[] = [
 ];
 /** A scarf's tassels: strands at each tip, and how long they hang. */
 const TASSELS = 4;
-const TASSEL_L = 0.11;
+const TASSEL_L = 0.11 * RIDER_SCALE;
 const CREAM_KNIT = new Color('#F3E6D4');
 const INK_KNIT = new Color('#1A2140');
 
@@ -209,7 +211,7 @@ function starGeometry(): BufferGeometry {
  *  pair between them, so both read and neither is cut by the frame edge. It lies just past the boots
  *  and a little beyond them: nearer, the outstretched legs lay across it and the two halves of the
  *  wreck merged into one heap. */
-export const WRECK_SLED = { right: 0.9, away: 0.72, side: 1 };
+export const WRECK_SLED = { right: 0.9 * RIDER_SCALE, away: 0.72 * RIDER_SCALE, side: 1 };
 
 const smooth = (x: number) => {
   const k = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -246,42 +248,68 @@ interface RiderUniforms {
   /** A dash (round 6): x how much of the spirit shimmer shows (0 to 1, eased), y the rider's base height in
    *  the world (the glow bands rise from it), z how fast the bands rise (slower under reduced motion). */
   spirit: { value: Vector3 };
+  /** What hangs off the rider and arrives late (round 7): the offset of the soft parts (the hood, a
+   *  hat's tail, the boots' toes), metres in the body's own frame. */
+  soft: { value: Vector3 };
 }
 
 /** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
- *  meshes.ts's aSway take the pom-pom's spring offset (x) and the coat hem's flutter (y). The hem
+ *  meshes.ts's aSway take the pom-pom's spring offset (x), the coat hem's flutter (y) and the soft
+ *  parts' lag (z); an arm's forearm bends about its elbow and its mitt flops about its wrist (w, by
+ *  the arm's own uJoint: x the elbow's bend, y the wrist's nod, z its sideways flop, radians). The hem
  *  flares a little and ripples round its rim, more at the back, so at speed the coat reads as cloth
  *  in the wind rather than a moulded shell. */
-function addSway(m: ShaderMaterial, u: RiderUniforms): void {
+function addSway(m: ShaderMaterial, u: RiderUniforms, joint?: { value: Vector3 }): void {
   m.uniforms.uPom = u.pom;
   m.uniforms.uHem = u.hem;
   m.uniforms.uStand = u.stand;
+  m.uniforms.uSoft = u.soft;
+  m.uniforms.uJoint = joint ?? { value: new Vector3() };
   const at = '#include <begin_vertex>';
   if (!m.vertexShader.includes(at)) {
     console.warn('rider material: vertex anchor not found, secondary motion disabled');
     return;
   }
   m.vertexShader =
-    'attribute vec2 aSway;\nuniform vec3 uPom;\nuniform float uHem;\nuniform float uStand;\n' +
+    'attribute vec4 aSway;\nuniform vec3 uPom;\nuniform float uHem;\nuniform float uStand;\nuniform vec3 uSoft;\nuniform vec3 uJoint;\n' +
     m.vertexShader.replace(
       at,
       /* glsl */ `${at}
-        transformed += max(aSway.x, 0.0) * uPom;
-        // Standing up on the sled: the legs out in front swing down about the hips (a quarter turn),
-        // and each boot turns back about its ankle first, so its sole stays flat on the deck.
+        transformed += max(aSway.x, 0.0) * uPom + aSway.z * uSoft;
+        // An arm's joints: the mitt turns about the wrist, then the forearm and the mitt about the elbow.
+        if (aSway.w > 0.5) {
+          vec3 jq = transformed;
+          vec3 jn = objectNormal;
+          if (aSway.w > 1.5) {
+            vec3 wr = vec3(${ARM_WRIST.x.toFixed(3)}, ${ARM_WRIST.y.toFixed(3)}, ${ARM_WRIST.z.toFixed(3)});
+            float sw = sin(uJoint.y);
+            float cw = cos(uJoint.y);
+            float sz = sin(uJoint.z);
+            float cz = cos(uJoint.z);
+            jq -= wr;
+            jq.yz = vec2(jq.y * cw - jq.z * sw, jq.y * sw + jq.z * cw);
+            jn.yz = vec2(jn.y * cw - jn.z * sw, jn.y * sw + jn.z * cw);
+            jq.xy = vec2(jq.x * cz - jq.y * sz, jq.x * sz + jq.y * cz);
+            jn.xy = vec2(jn.x * cz - jn.y * sz, jn.x * sz + jn.y * cz);
+            jq += wr;
+          }
+          vec3 el = vec3(${ARM_ELBOW.x.toFixed(3)}, ${ARM_ELBOW.y.toFixed(3)}, ${ARM_ELBOW.z.toFixed(3)});
+          float se = sin(uJoint.x);
+          float ce = cos(uJoint.x);
+          jq -= el;
+          jq.yz = vec2(jq.y * ce - jq.z * se, jq.y * se + jq.z * ce);
+          jn.yz = vec2(jn.y * ce - jn.z * se, jn.y * se + jn.z * ce);
+          transformed = jq + el;
+          objectNormal = jn;
+        }
+        // Standing up on the sled: the legs out in front swing down about the hips (a quarter turn);
+        // the feet, turned up from the shins, come down flat on the deck.
         if (aSway.x < -0.5 && uStand > 0.0) {
           float sa = sin(-1.5708 * uStand);
           float ca = cos(-1.5708 * uStand);
           vec3 hipP = vec3(0.0, 0.05, -0.02);
-          vec3 ank = vec3(0.0, -0.015, -0.55);
           vec3 q = transformed - hipP;
           vec3 nq = objectNormal;
-          if (aSway.x < -1.5) {
-            q -= ank;
-            q.yz = vec2(q.y * ca + q.z * sa, q.z * ca - q.y * sa);
-            nq.yz = vec2(nq.y * ca + nq.z * sa, nq.z * ca - nq.y * sa);
-            q += ank;
-          }
           q.yz = vec2(q.y * ca - q.z * sa, q.y * sa + q.z * ca);
           nq.yz = vec2(nq.y * ca - nq.z * sa, nq.y * sa + nq.z * ca);
           transformed = q + hipP;
@@ -312,12 +340,12 @@ const FLOW_C = new Color(FLOW_HEX);
  *  a fill from the lens side in the results hero shot, which also holds the rims down there (backlit,
  *  the wreck read milky); a thin white rim flash on a perfect landing; and, for the double-sided
  *  scarf, back faces that flip their normal and sit a shade darker so every twist of the ribbon reads. */
-function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false): ShaderMaterial {
+function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false, joint?: { value: Vector3 }): ShaderMaterial {
   // Props dissolve within about 3 m of the lens; the chase camera now rides closer than that on a
   // hard landing, which screen-doored the whole rider. The rider only gives way to a lens inside it.
   const m = makeToonMaterial({ nearFade: [0.25, 0.45], ...opts });
   riderStencil(m);
-  if (sway) addSway(m, u);
+  if (sway) addSway(m, u, joint);
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
@@ -528,7 +556,12 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() } };
+  /** Each arm's joints (left, right): x the elbow's bend, y the wrist's nod, z its sideways flop. */
+  private readonly joints = [{ value: new Vector3(ARM_REST_BEND, 0, 0) }, { value: new Vector3(ARM_REST_BEND, 0, 0) }];
+  /** Low's cheaper build (setDetail). */
+  private lite = false;
+  private armMats: ShaderMaterial[] = [];
   /** The head on the neck and the tumbling wreck's head (both rebuilt for a hat from the garage). */
   private head: Mesh;
   private crashHead: Mesh;
@@ -601,7 +634,9 @@ export class Rider {
   constructor() {
     const mat = riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true);
     this.mat = mat;
-    this.sled = new Mesh(withSway(sledGeometry()), mat);
+    // Each arm bends at its own elbow: the same shader, its own joint angles.
+    this.armMats = this.joints.map((j) => riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true, j));
+    this.sled = new Mesh(withSway(sledGeometryFor(0)), mat);
     this.sitGeo = riderTorsoGeometry();
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
@@ -609,11 +644,13 @@ export class Rider {
     this.head = head;
     this.neck.position.copy(RIDER_NECK);
     this.neck.add(head);
-    const armGeo = riderArmGeometry();
-    this.armL.add(new Mesh(armGeo, mat));
-    this.armR.add(new Mesh(armGeo, mat));
-    this.armL.position.set(-0.27, 0.56, 0.0);
-    this.armR.position.set(0.27, 0.56, 0.0);
+    const armGeo = riderArmGeometry({ bend: 0 });
+    this.armL.add(new Mesh(armGeo, this.armMats[0]));
+    this.armR.add(new Mesh(armGeo, this.armMats[1]));
+    this.armL.position.set(-RIDER_SHOULDER.x, RIDER_SHOULDER.y, RIDER_SHOULDER.z);
+    this.armR.position.copy(RIDER_SHOULDER);
+    // The whole rig is drawn RIDER_SCALE times its modelled size, about the sled's base on the snow.
+    this.root.scale.setScalar(RIDER_SCALE);
     this.bodyPivot.position.set(0, 0.24, 0.1);
     // The turn toward the travel comes first, so the crouch and the lean follow the turned torso.
     this.bodyPivot.rotation.order = 'YXZ';
@@ -666,8 +703,10 @@ export class Rider {
 
     // The tumbling body keeps its arms (flung out, then propping it up once it sits) and its head
     // (tilted, dazed, once it sits).
-    this.crashArmL.add(new Mesh(armGeo, mat));
-    this.crashArmR.add(new Mesh(armGeo, mat));
+    this.crashArmL.add(new Mesh(armGeo, this.armMats[0]));
+    this.crashArmR.add(new Mesh(armGeo, this.armMats[1]));
+    this.crashBody.scale.setScalar(RIDER_SCALE);
+    this.crashSled.scale.setScalar(RIDER_SCALE);
     this.crashArmL.position.copy(this.armL.position);
     this.crashArmR.position.copy(this.armR.position);
     const crashHead = new Mesh(headGeo, mat);
@@ -711,10 +750,42 @@ export class Rider {
   setHat(id: HatId): void {
     if (id === this.hat) return;
     this.hat = id;
-    const geo = riderHeadGeometry(false, id).translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
+    this.buildHead();
+  }
+
+  private buildHead(): void {
+    const geo = riderHeadGeometry(false, this.hat, this.lite).translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
     this.head.geometry.dispose();
     this.head.geometry = geo;
     this.crashHead.geometry = geo;
+  }
+
+  /** The seated rider as drawn (metres): sled base to the top of the pom-pom, and half its width at
+   *  rest. The playtest probes read them. */
+  readonly height = RIDER_HEIGHT;
+  readonly halfWidth = RIDER_HALF_WIDTH;
+
+  /** Which build the hero wears: the whole figure, or Low's (about a third of the triangles: fewer
+   *  sides to every round part and none of the trim only a close lens resolves). The pose, the scarf
+   *  and the shading are the same on every tier. */
+  setDetail(detail: RiderDetail): void {
+    const lite = detail === 'lite';
+    if (lite === this.lite) return;
+    this.lite = lite;
+    this.buildHead();
+    this.sitGeo.dispose();
+    this.crossGeo?.dispose();
+    this.sitGeo = riderTorsoGeometry(false, false, lite);
+    this.crossGeo = null;
+    this.body.geometry = this.seat.crossLegged ? (this.crossGeo = riderTorsoGeometry(true, false, lite)) : this.sitGeo;
+    (this.crashBody.children[0] as Mesh).geometry = this.body.geometry;
+    const armGeo = riderArmGeometry({ bend: 0, lite });
+    const arms = [this.armL.children[0], this.armR.children[0], this.crashArmL.children[0], this.crashArmR.children[0]] as Mesh[];
+    arms[0].geometry.dispose();
+    for (const m of arms) m.geometry = armGeo;
+    const id = this.sledId;
+    this.sledId = -1;
+    this.setSled(id);
   }
 
   /** The garage's scarf: its tails' length and width, its knit and its tassels. The wrap round the neck
@@ -835,12 +906,13 @@ export class Rider {
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = withSway(paintSled(sledGeometryFor(id), this.paintHex));
+    const geo = withSway(paintSled(sledGeometryFor(id, this.lite), this.paintHex));
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;
     this.seat = sledSeat(id);
-    this.body.geometry = this.seat.crossLegged ? (this.crossGeo ??= riderTorsoGeometry(true)) : this.sitGeo;
+    this.body.geometry = this.seat.crossLegged ? (this.crossGeo ??= riderTorsoGeometry(true, false, this.lite)) : this.sitGeo;
+    (this.crashBody.children[0] as Mesh).geometry = this.body.geometry;
     this.bodyPivot.position.set(0, this.seat.y, this.seat.z);
     // Leaning over a saucer's rim the head sank behind the shoulders: from behind the rider read as
     // a navy obelisk with no head. There the neck rises about 0.15 m.
@@ -897,7 +969,7 @@ export class Rider {
     this.loadK = this.driftK = this.waveSide = 0;
     this.u.stand.value = 0;
     // Hang the tails down the back; the first update carries them to the knot.
-    this.anchor.copy(pos).add(this.vA.set(0, 0.85, 0.35));
+    this.anchor.copy(pos).add(this.vA.set(0, 0.85 * RIDER_SCALE, 0.35 * RIDER_SCALE));
     this.anchorPrev.copy(this.anchor);
     for (const t of this.tails) {
       for (let i = 0; i < TAIL_N; i++) {
@@ -1075,7 +1147,7 @@ export class Rider {
     // The tails rest on the sled deck and never dig into the slope.
     this.usePlane = !p.airborne;
     this.planeN.copy(p.normal);
-    this.planeP.copy(p.pos).addScaledVector(p.normal, 0.26);
+    this.planeP.copy(p.pos).addScaledVector(p.normal, 0.26 * RIDER_SCALE);
     this.updateScarf(dt, time, p.vel, p.airborne, p.heading + p.airYaw);
     this.u.spirit.value.y = p.pos.y;
     this.tickEcho(time);
@@ -1344,7 +1416,7 @@ export class Rider {
   private setColliders(e: ArrayLike<number>, hE: ArrayLike<number>): void {
     for (let i = 0; i < COLLIDERS.length; i++) {
       const [c] = COLLIDERS[i];
-      const m = i === 0 ? e : hE;
+      const m = i === 1 ? hE : e;
       const out = this.colliders[i][0];
       out.set(m[0] * c.x + m[4] * c.y + m[8] * c.z + m[12], m[1] * c.x + m[5] * c.y + m[9] * c.z + m[13], m[2] * c.x + m[6] * c.y + m[10] * c.z + m[14]);
     }
@@ -1461,7 +1533,7 @@ export class Rider {
         c.bodyPos.z = fromZ;
       }
       c.clearK = k;
-      const gy = visualGround(course, c.bodyPos.x, -c.bodyPos.z) + 0.1;
+      const gy = visualGround(course, c.bodyPos.x, -c.bodyPos.z) + 0.1 * RIDER_SCALE;
       c.bodyPos.y = c.restY + (gy - c.restY) * k;
       this.crashBody.position.copy(c.bodyPos);
       // The snow under the wreck, which the scarf's tails settle onto (hanging free behind the seated
@@ -1497,7 +1569,7 @@ export class Rider {
       // uphill end), so it still reads as a sled upside down beside the rider: laid flat on the bank's
       // face it read as standing on its side up the slope.
       const steep = Math.hypot(this.slopeG.x, this.slopeG.z);
-      spot.y = visualGround(course, spot.x, -spot.z) + 0.3 + 0.3 * Math.min(1, steep);
+      spot.y = visualGround(course, spot.x, -spot.z) + 0.4 + 0.3 * Math.min(1, steep);
       c.sledPos.lerpVectors(c.sledFrom, spot, k);
       c.sledVel.set(0, 0, 0);
       this.crashSled.position.copy(c.sledPos);
@@ -1505,8 +1577,8 @@ export class Rider {
       this.sledRestQ.setFromEuler(this.sledRestE.set(0.06, -(az + 0.5 + 0.85 * bank), Math.PI - 0.1)).premultiply(this.tmpQ);
       this.crashSled.quaternion.slerpQuaternions(c.sledQFrom, this.sledRestQ, k);
     } else {
-      step(c.bodyPos, c.bodyVel, this.crashBody, c.spin, 0.3);
-      step(c.sledPos, c.sledVel, this.crashSled, c.sledSpin, 0.12);
+      step(c.bodyPos, c.bodyVel, this.crashBody, c.spin, 0.3 * RIDER_SCALE);
+      step(c.sledPos, c.sledVel, this.crashSled, c.sledSpin, 0.12 * RIDER_SCALE);
     }
     this.placeStars(c.rest);
     return c.bodyPos;
@@ -1547,7 +1619,7 @@ export class Rider {
       this.crashNeck.localToWorld(s.position);
       s.quaternion.copy(this.eye!.quaternion);
       s.rotateZ(t * 2.5 + i * 1.3);
-      s.scale.setScalar(pop * (0.85 + 0.15 * Math.sin(t * 7 + i * 2.1)));
+      s.scale.setScalar(RIDER_SCALE * pop * (0.85 + 0.15 * Math.sin(t * 7 + i * 2.1)));
     }
   }
 
@@ -1626,7 +1698,7 @@ export class Rider {
     // holds a tail at a steady angle to the track whatever the speed (about 34 degrees for the
     // long tail, 19 for the short one).
     for (const t of this.tails) {
-      t.pts[0].copy(this.stepAnchor).addScaledVector(side, t.sign * this.flareSide * 0.04);
+      t.pts[0].copy(this.stepAnchor).addScaledVector(side, t.sign * this.flareSide * 0.04 * RIDER_SCALE);
       t.prev[0].copy(t.pts[0]);
       for (let i = 1; i < TAIL_N; i++) {
         const u = i / (TAIL_N - 1);

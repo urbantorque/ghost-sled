@@ -76,8 +76,9 @@ async (page) => {
           const rz = rp.z;
           const ry = rp.y;
           const rA = proj(rx, ry, rz);
-          const rB = proj(rx, ry + 1.25, rz);
-          const rw = (0.55 * pxPerM(rA.d)) / (H / 2) / w.cam.camera.aspect;
+          // (The rider's own size as drawn: round 7's is bigger than the 1.25 m it was modelled at.)
+          const rB = proj(rx, ry + (w.rider.height ?? 1.25), rz);
+          const rw = ((w.rider.halfWidth ?? 0.55) * pxPerM(rA.d)) / (H / 2) / w.cam.camera.aspect;
           const fogFar = w.palette.fogFar;
           const fogNear = w.palette.fogNear;
           let road = 0;
