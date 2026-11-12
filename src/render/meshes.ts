@@ -330,7 +330,7 @@ export function gateBeamGeometry(p: Palette): BufferGeometry {
 /** Ember's log: a basalt column fallen across the run and broken into three drums where it hit, each
  *  turned a little on its axis and a finger's width from the next, ash lying along the faces that look up
  *  and banked against its foot. Unit length along x (stretched per instance, so the joints are thin in
- *  that axis), inside the log's collider (0.42 m about a line 0.4 m up). 76 triangles. */
+ *  that axis), inside the log's collider (0.42 m about a line 0.4 m up). 108 triangles. */
 function fallenColumn(p: Palette): BufferGeometry {
   reseed(1112);
   const t = basaltTones(p);
