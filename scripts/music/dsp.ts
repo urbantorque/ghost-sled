@@ -6,6 +6,11 @@ export const SR = 48000;
 export const TAU = Math.PI * 2;
 
 export const mtof = (m: number): number => 440 * Math.pow(2, (m - 69) / 12);
+/** 2^(cents/1200) for small bends (a vibrato, a drift): within a thousandth of a cent under 50 cents. */
+export const bend = (cents: number): number => {
+  const x = cents * 0.0005776226504666211;
+  return 1 + x + 0.5 * x * x;
+};
 export const db = (x: number): number => Math.pow(10, x / 20);
 export const todb = (x: number): number => 20 * Math.log10(Math.max(1e-12, x));
 export const clamp = (x: number, lo: number, hi: number): number => (x < lo ? lo : x > hi ? hi : x);
@@ -239,12 +244,25 @@ export class Svf {
   lp = 0;
   bp = 0;
   hp = 0;
+  private f = -1;
+  private q = -1;
+  private k = 0;
+  private a1 = 0;
+  private a2 = 0;
+  private a3 = 0;
   tick(x: number, f: number, q: number): number {
-    const g = Math.tan((Math.PI * clamp(f, 10, SR * 0.45)) / SR);
-    const k = 1 / q;
-    const a1 = 1 / (1 + g * (g + k));
-    const a2 = g * a1;
-    const a3 = g * a2;
+    // The coefficients are worked out again only when the cutoff has moved a fifth of a percent: a tangent
+    // a sample was most of a render's time, and a filter that sweeps does not need it.
+    if (q !== this.q || Math.abs(f - this.f) > this.f * 0.002) {
+      const g = Math.tan((Math.PI * clamp(f, 10, SR * 0.45)) / SR);
+      this.f = f;
+      this.q = q;
+      this.k = 1 / q;
+      this.a1 = 1 / (1 + g * (g + this.k));
+      this.a2 = g * this.a1;
+      this.a3 = g * this.a2;
+    }
+    const { k, a1, a2, a3 } = this;
     const v3 = x - this.ic2;
     const v1 = a1 * this.ic1 + a2 * v3;
     const v2 = this.ic2 + a2 * this.ic1 + a3 * v3;

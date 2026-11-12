@@ -6,7 +6,8 @@ import { Biquad, SR, type Stereo } from './dsp';
 // from the onsets). The same definitions as scripts/playtest/loudness.js, so a file and the live game
 // measure alike.
 
-function kWeight(x: Float32Array): Float32Array {
+/** The K-weighting of BS.1770 (48 kHz): a high shelf and a low cut. */
+export function kWeight(x: Float32Array): Float32Array {
   const y = x.slice();
   const a = new Biquad();
   a.b0 = 1.53512485958697; a.b1 = -2.69169618940638; a.b2 = 1.19839281085285; a.a1 = -1.69065929318241; a.a2 = 0.73248077421585;

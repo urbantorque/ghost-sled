@@ -1,4 +1,4 @@
-import { Biquad, type EqBand, Pulse, Rng, SR, Saw, type Stereo, Svf, TAU, adsr, clamp, eqMono, fadeTail, mtof, panGains, secs, stereo, tc } from './dsp';
+import { Biquad, type EqBand, Pulse, Rng, SR, Saw, type Stereo, Svf, TAU, adsr, bend, clamp, eqMono, fadeTail, mtof, panGains, secs, stereo, tc } from './dsp';
 
 // The renderer's pitched instruments (round 7). Each is a function from one note to its sound, mono or
 // stereo, starting at the note's first sample: physical models where a model is the sound (plucked
@@ -175,21 +175,20 @@ export function bowed(o: BowOpts): Inst {
       const vibRate = 5.3 + r.bip() * 0.5;
       let wander = 0;
       let ph = r.next() * TAU;
-      const base = clamp(mtof(n.m) * (3.5 + 9 * o.bright * (0.45 + 0.55 * n.v)), 900, 9000);
+      const f0 = mtof(n.m);
+      const base = clamp(f0 * (3.5 + 9 * o.bright * (0.45 + 0.55 * n.v)), 900, 9000);
       const hiss = Biquad.design('bp', 3600, 0.8);
       for (let i = late; i < len; i++) {
         const t = (i - late) / SR;
         wander += (r.bip() * 4 - wander) * 0.0006;
         const vibIn = n.dur > 0.24 ? clamp((t - vd) / 0.3, 0, 1) : 0;
         ph += (TAU * vibRate) / SR;
-        const slide = n.slide ? n.slide * Math.exp(-t / 0.022) : 0;
-        const cents = det + wander + o.vib * vibIn * Math.sin(ph);
-        const f = mtof(n.m + slide + cents / 100);
+        const slide = n.slide && t < 0.2 ? n.slide * 100 * Math.exp(-t / 0.022) : 0;
+        const f = f0 * bend(det + wander + o.vib * vibIn * Math.sin(ph) + slide);
         const e = env[i - late];
-        const x = saw.tick(f / SR) + hiss.tick(r.bip()) * (0.05 + 0.25 * Math.exp(-t / 0.03));
+        const x = saw.tick(f / SR) + hiss.tick(r.bip()) * (0.05 + (t < 0.25 ? 0.25 * Math.exp(-t / 0.03) : 0));
         mono[i] = lp.tick(x, base * (0.55 + 0.45 * e), 0.9) * e;
       }
-      eqMono(mono, BOW_BODY[o.body]);
       const pan = o.voices > 1 ? (v / (o.voices - 1)) * 2 - 1 : 0;
       const [gl, gr] = panGains(pan * spread);
       const g = (0.5 + 0.5 * n.v) / Math.sqrt(o.voices);
@@ -198,6 +197,9 @@ export function bowed(o: BowOpts): Inst {
         out.r[i] += mono[i] * gr * g;
       }
     }
+    // The body is the same wood for every player: one pass a side.
+    eqMono(out.l, BOW_BODY[o.body]);
+    eqMono(out.r, BOW_BODY[o.body]);
     fadeTail(out.l);
     fadeTail(out.r);
     return out;
@@ -247,13 +249,12 @@ export function brass(o: BrassOpts): Inst {
         const t = (i - late) / SR;
         let e = env[i - late];
         if (sw > 0 && i < held) e *= 1 - sw + sw * Math.pow(i / Math.max(1, held), 1.6);
-        const scoop = -0.28 * Math.exp(-t / 0.018);
-        const f = f0 * Math.pow(2, (scoop + det / 100) / 12);
+        const early = t < 0.15;
+        const f = f0 * bend(det - (early ? 28 * Math.exp(-t / 0.018) : 0));
         const breath = e * (0.35 + 0.65 * n.v);
-        const x = saw.tick(f / SR) + r.bip() * 0.12 * Math.exp(-t / 0.02);
+        const x = saw.tick(f / SR) + (early ? r.bip() * 0.12 * Math.exp(-t / 0.02) : 0);
         mono[i] = lp.tick(x, clamp(f0 * (1.4 + k.open * breath * breath), 200, 11000), 0.8) * e;
       }
-      eqMono(mono, k.eq);
       const pan = o.voices > 1 ? (v / (o.voices - 1)) * 2 - 1 : 0;
       const [gl, gr] = panGains(pan * spread);
       const g = (0.4 + 0.6 * n.v) / Math.sqrt(o.voices);
@@ -262,6 +263,8 @@ export function brass(o: BrassOpts): Inst {
         out.r[i] += mono[i] * gr * g;
       }
     }
+    eqMono(out.l, k.eq);
+    eqMono(out.r, k.eq);
     fadeTail(out.l);
     fadeTail(out.r);
     return out;
@@ -307,13 +310,14 @@ export function wind(o: WindOpts): Inst {
       const vibIn = n.dur > 0.3 ? clamp((t - 0.18) / 0.35, 0, 1) : 0;
       ph += (TAU * rate) / SR;
       flutter += (rng.bip() * (o.kind === 'shaku' ? 9 : 3) - flutter) * 0.0008;
-      const slide = n.slide ? n.slide * 100 * Math.exp(-t / 0.03) : 0;
-      const cents = -o.scoop * Math.exp(-t / 0.045) + o.vib * vibIn * Math.sin(ph) + flutter + slide;
-      const f = f0 * Math.pow(2, cents / 1200);
+      const early = t < 0.4;
+      const slide = n.slide && early ? n.slide * 100 * Math.exp(-t / 0.03) : 0;
+      const cents = (early ? -o.scoop * Math.exp(-t / 0.045) : 0) + o.vib * vibIn * Math.sin(ph) + flutter + slide;
+      const f = f0 * bend(cents);
       p1 += (TAU * f) / SR;
       const tone = Math.sin(p1) + h2 * e * Math.sin(2 * p1) + h3 * e * Math.sin(3 * p1);
       const w = rng.bip();
-      const chiff = 1 + 3.5 * Math.exp(-t / 0.035);
+      const chiff = early ? 1 + 3.5 * Math.exp(-t / 0.035) : 1;
       bp.tick(w, f * 2, 1.4);
       const noise = bp.bp * 0.9 + air.tick(w) * 0.12;
       out[i] = (tone * (1 - 0.35 * o.breath) * (1 + 0.08 * vibIn * Math.sin(ph)) + noise * o.breath * chiff) * e * (0.35 + 0.65 * n.v);
@@ -656,13 +660,14 @@ export function choir(o: ChoirOpts): Inst {
       let drift = 0;
       const pan = o.voices > 1 ? ((v / (o.voices - 1)) * 2 - 1) * 0.8 : 0;
       const [gl, gr] = panGains(pan);
+      const f0 = mtof(n.m);
       const late = Math.floor(r.next() * secs(0.03));
       for (let i = late; i < len; i++) {
         const t = i / SR;
         drift += (r.bip() * 7 - drift) * 0.0004;
         ph += (TAU * rate) / SR;
         const vib = clamp((t - 0.35) / 0.5, 0, 1) * 11 * Math.sin(ph);
-        const f = mtof(n.m + (det + drift + vib) / 100);
+        const f = f0 * bend(det + drift + vib);
         const x = osc.tick(f / SR, 0.22) + r.bip() * (o.breath ?? 0.25) * 0.5;
         src.l[i] += x * gl;
         src.r[i] += x * gr;
@@ -700,10 +705,11 @@ export function subBass(harm = 0.3, attack = 0.008, release = 0.07): Inst {
     const len = held + secs(release * 3);
     const out = new Float32Array(len);
     const env = adsr(len, attack, 0.2, 0.9, release, n.dur);
+    const f0 = mtof(n.m);
     let p = 0;
     for (let i = 0; i < len; i++) {
       const t = i / SR;
-      const f = mtof(n.m + (n.slide ? n.slide * Math.exp(-t / 0.04) : 0));
+      const f = n.slide && t < 0.4 ? mtof(n.m + n.slide * Math.exp(-t / 0.04)) : f0;
       p += (TAU * f) / SR;
       out[i] = Math.tanh((Math.sin(p) + harm * Math.sin(2 * p) + harm * 0.4 * Math.sin(3 * p)) * 1.2) * env[i] * (0.4 + 0.6 * n.v);
     }
@@ -752,7 +758,7 @@ export function distBass(drive = 5, tone = 3200): Inst {
     let p = 0;
     for (let i = 0; i < len; i++) {
       const t = i / SR;
-      const f = mtof(n.m + (n.slide ? n.slide * Math.exp(-t / 0.03) : 0));
+      const f = n.slide && t < 0.3 ? mtof(n.m + n.slide * Math.exp(-t / 0.03)) : f0;
       p += (TAU * f) / SR;
       const src = a.tick((f * 1.004) / SR) * 0.5 + b.tick((f * 0.996) / SR) * 0.5 + sq.tick(f / SR, 0.5) * 0.35;
       const x = lp.tick(src, f0 * (3 + 10 * n.v * Math.exp(-t / 0.25)) + 300, 1.2) * env[i] * drive;
@@ -780,12 +786,13 @@ export function synthLead(cut = 5, vib = 9, width = 0.35): Inst {
     const saw = new Saw(rng.next());
     const pu = new Pulse(rng.next());
     const lp = new Svf();
+    const f0 = mtof(n.m);
     let ph = 0;
     for (let i = 0; i < len; i++) {
       const t = i / SR;
       ph += (TAU * 5.4) / SR;
       const vibIn = n.dur > 0.3 ? clamp((t - 0.2) / 0.3, 0, 1) : 0;
-      const f = mtof(n.m + (n.slide ? n.slide * Math.exp(-t / 0.035) : 0) + (vib * vibIn * Math.sin(ph)) / 100);
+      const f = f0 * bend((n.slide && t < 0.35 ? n.slide * 100 * Math.exp(-t / 0.035) : 0) + vib * vibIn * Math.sin(ph));
       const x = saw.tick(f / SR) * 0.6 + pu.tick(f / SR, width) * 0.5;
       out[i] = lp.tick(x, clamp(f * (1.5 + cut * (0.4 + 0.6 * n.v) * (0.4 + 0.6 * env[i])), 200, 12000), 1.1) * env[i] * (0.4 + 0.6 * n.v);
     }
@@ -800,13 +807,14 @@ export function sineLead(vib = 7): Inst {
     const len = held + secs(0.3);
     const out = new Float32Array(len);
     const env = adsr(len, 0.015, 0.4, 0.8, 0.12, n.dur);
+    const f0 = mtof(n.m);
     let p = 0;
     let ph = 0;
     for (let i = 0; i < len; i++) {
       const t = i / SR;
       ph += (TAU * 5) / SR;
       const vibIn = n.dur > 0.35 ? clamp((t - 0.25) / 0.35, 0, 1) : 0;
-      const f = mtof(n.m + (n.slide ? n.slide * Math.exp(-t / 0.04) : 0) + (vib * vibIn * Math.sin(ph)) / 100);
+      const f = f0 * bend((n.slide && t < 0.4 ? n.slide * 100 * Math.exp(-t / 0.04) : 0) + vib * vibIn * Math.sin(ph));
       p += (TAU * f) / SR;
       out[i] = Math.sin(p + 0.9 * Math.exp(-t / 0.05) * Math.sin(2 * p)) * env[i] * (0.4 + 0.6 * n.v);
     }
