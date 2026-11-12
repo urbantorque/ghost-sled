@@ -438,7 +438,7 @@ export class World {
   private configureShadow(): void {
     const s = this.sun.shadow;
     s.mapSize.set(this.quality.shadowSize, this.quality.shadowSize);
-    const r = this.quality.detail === 'high' ? 34 : 26;
+    const r = this.quality.passes.shadowReach;
     s.camera.left = -r;
     s.camera.right = r;
     s.camera.top = r;
@@ -1021,9 +1021,10 @@ export class World {
 
     // Sun and shadow follow the focus.
     this.sunTarget.position.copy(focus);
+    if (this.post.pipe.switches.fit && this.quality.shadows) this.fitShadow(focus);
     // Shadows fall from their own, lower light across the slope (palette.ts shadowFrom), so they
     // rake across the run; the snow is still shaded by the lifted key light (uSunDir).
-    this.sun.position.copy(focus).addScaledVector(this.palette.shadowDir, 90);
+    this.sun.position.copy(this.sunTarget.position).addScaledVector(this.palette.shadowDir, 90);
     this.sunTarget.updateMatrixWorld();
     this.sky.follow(this.cam.camera.position);
     this.weather.follow(this.cam.camera.position);
@@ -1083,6 +1084,38 @@ export class World {
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
   }
+
+  /**
+   * Round 7: the shadow map is fitted to what the lens sees and held still on its own texels. Round 6's
+   * box sat square on the rider, so half of it lay behind the lens; this one is pushed down the lens's
+   * heading (the rider stays a quarter of the way in, with the lens behind it still covered), which puts
+   * shadows on the trees and towers the frame is looking at. Its middle then moves only in whole texels
+   * of the map, measured along the light's own axes: a shadow's edge no longer crawls as the sled moves
+   * under it, which was a shimmer in every frame at speed.
+   */
+  private fitShadow(focus: Vector3): void {
+    const r = this.quality.passes.shadowReach;
+    const e = this.cam.camera.matrixWorld.elements;
+    const fx = -e[8];
+    const fz = -e[10];
+    const fl = Math.hypot(fx, fz);
+    const t = this.sunTarget.position;
+    if (fl > 0.2) t.set(focus.x + (fx / fl) * r * 0.5, focus.y, focus.z + (fz / fl) * r * 0.5);
+    // The light's axes, as its shadow camera builds them (looking along -dir, y up).
+    const d = this.palette.shadowDir;
+    const ax = this.fitX.set(d.z, 0, -d.x);
+    if (ax.lengthSq() < 1e-6) return;
+    ax.normalize();
+    const ay = this.fitY.crossVectors(d, ax).normalize();
+    const texel = (2 * r) / this.quality.shadowSize;
+    const px = t.dot(ax);
+    const py = t.dot(ay);
+    t.addScaledVector(ax, Math.round(px / texel) * texel - px).addScaledVector(ay, Math.round(py / texel) * texel - py);
+    this.sunTarget.updateMatrixWorld();
+  }
+
+  private fitX = new Vector3();
+  private fitY = new Vector3();
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.

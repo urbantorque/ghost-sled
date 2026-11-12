@@ -93,3 +93,11 @@ four samples a pixel is a trap), unless the save already chose it.
   Ghosts and particles write no depth, so they blur with what is behind them.
   Dev: `?cine=dof:1,focus:7,blur:1,box:1` holds cine values. Frames: `shots/r7/pipe/lens/sheet-ultra.png`.
   Shafts tiers as shipped: Medium 6 taps at 1/4, High 8 at 1/2, Ultra 12 at 1/2.
+- **Shadows** (commit after 981979a). `world.ts fitShadow`: the shadow box is pushed half its reach down
+  the lens's heading (so it covers what the frame looks at, not the slope behind the lens) and its middle
+  moves in whole texels along the light's axes, so shadow edges stop crawling at speed. Reach by tier
+  (`PASSES.shadowReach`): Medium 26 m (1024), High 34 m (2048), Ultra 44 m (4096: 46 texels a metre against
+  High's 30). No pass added, no draw added. The soften-with-distance filter and the sled's crisp contact
+  blob are untouched (materials.ts, landing.ts). No second cascade: it would mean a second shadow lookup
+  in every material, which is the light lane's file this round. `?post=-fit` is round 6's box.
+  Frames: `shots/r7/pipe/shadow/sheet.png`.
