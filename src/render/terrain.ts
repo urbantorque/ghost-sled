@@ -1,6 +1,7 @@
 import { BufferAttribute, BufferGeometry, Mesh, Object3D, ShaderMaterial } from 'three';
 import { CHUNK_LEN, Course, Ramp } from '../sim/course';
 import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, handoverRow, ledgeAt, rampart, rockWeight, smoothK, vnoise2, wallK } from './ground';
+import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
 
@@ -17,6 +18,8 @@ const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
 };
+
+const sec0Kind = (c: Course, z: number): string => c.section(z).kind;
 
 export interface TerrainDetail {
   /** Lateral vertex spacing inside the corridor, metres. */
@@ -177,6 +180,9 @@ class ChunkJob {
       const wk = wallK(wall);
       const crestH = wk > 0 ? wk * (wall + 16) : 0;
       const lakeK = smoothK(0.3, 0.7, sh.ice);
+      // Sakura's terraces hold still water in their flats (ART.md 15): on the banks beside the run, never
+      // on the line, so nothing a sled rides looks like ice that is not there.
+      const pondRow = c.biome === 'blossom' && sec0Kind(c, z) === 'terraces';
       const by = c.baseY(z);
       const sec = c.section(z);
       const body = sec.z0 + sec.blend;
@@ -292,7 +298,8 @@ class ChunkJob {
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
         this.rock[rq + 3] = crestH;
-        this.paint[rq] = lakeK;
+        // (A pond is carried as a negative lake: the two never meet on one vertex.)
+        this.paint[rq] = pondRow && lakeK === 0 ? -smoothK(0.4, 1.6, ed) * (1 - smoothK(8.5, 11, ed)) * (1 - smoothK(0.05, 0.16, Math.abs(sz))) * (1 - smoothK(0.06, 0.2, Math.abs(sx))) : lakeK;
         this.paint[rq + 1] = alt === null ? 0 : stripK * (1 - smoothK(2.3, 3.1, Math.abs(x - alt)));
         this.paint[rq + 2] = groom;
         this.paint[rq + 3] = canopy;
@@ -364,7 +371,58 @@ export class Terrain {
   ) {
     this.material = makeSnowMaterial();
     this.root.name = 'terrain';
+    addLightSource(this.groundLights);
   }
+
+  /** What the ground itself holds that gives light (round 7, lights.ts): lava in Ember's joints along the
+   *  feet of its walls and under its roofs, and the lake of it under the Caldera Leap; the cyan heart of
+   *  Frostfang's crevasse walls and the crystals at the foot of its cavern; the stone lanterns between
+   *  Sakura's torii. One light every couple of dozen metres on alternate sides, from a little behind the
+   *  rider to 80 m ahead: a dozen offers a frame at most, and the nearest eight are kept. */
+  private groundLights = (_fx: number, _fy: number, fz: number): void => {
+    const c = this.course;
+    const biome = c.biome;
+    if (biome === 'alpine') return;
+    const z = -fz;
+    const t = shared.uTime.value;
+    for (let pass = 0; pass < 2; pass++) {
+      const sec = c.section(pass === 0 ? z : z + 80);
+      if (pass === 1 && sec === c.section(z)) break;
+      const walled = sec.kind === 'ravine' || sec.kind === 'tunnel';
+      if (walled) {
+        const step = biome === 'volcanic' ? 24 : biome === 'glacier' ? 28 : 21;
+        if (biome === 'blossom' && sec.kind !== 'tunnel') continue;
+        const from = Math.max(sec.z0 + sec.blend * 0.6, z - 30);
+        const to = Math.min(sec.z1 - 6, z + 84);
+        for (let k = Math.ceil(from / step); k * step <= to; k++) {
+          const lz = k * step;
+          const side = k % 2 === 0 ? -1 : 1;
+          const x = c.centerX(lz) + side * (c.halfWidth(lz) + (biome === 'blossom' ? 1.6 : 2.6));
+          const y = c.ground(x, lz);
+          if (biome === 'volcanic') {
+            // Lava in the joints: it breathes, each run of it on its own phase.
+            const br = 0.8 + 0.2 * Math.sin(t * 1.1 + k * 2.3);
+            pushLocalLight(x, y + 1.3, -lz, 1, 0.3, 0.07, 12, 1.0 * br);
+          } else if (biome === 'glacier') {
+            // The ice glows from inside: a cyan heart low in the wall (brighter under the cavern's roof).
+            pushLocalLight(x, y + 1.6, -lz, 0.16, 0.7, 1, 11, sec.kind === 'tunnel' ? 0.7 : 0.5);
+          } else {
+            pushLocalLight(x, y + 1.5, -lz, 1, 0.62, 0.3, 11, 0.9);
+          }
+        }
+      }
+      if (biome === 'volcanic' && sec.kind === 'leap') {
+        // The caldera under the leap: one great light from the gap, on the far face, the lip and whoever flies it.
+        for (const l of sec.ledges) {
+          if (l.kind !== 'leap') continue;
+          const lz = (l.z + l.land0) / 2;
+          if (Math.abs(lz - z) > 190) continue;
+          const x = c.centerX(lz);
+          pushLocalLight(x, c.ground(x, lz) + 3, -lz, 1, 0.34, 0.08, 85, 0.8 + 0.1 * Math.sin(t * 0.9));
+        }
+      }
+    }
+  };
 
   setCourse(course: Course): void {
     if (course === this.course) return;

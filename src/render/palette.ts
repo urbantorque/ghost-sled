@@ -1140,7 +1140,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fog = c('#24367E');
         p.hemiSky = c('#4E78CC');
         p.air.far = c('#101A58');
-        p.key2 = { color: c('#4CE0A0'), k: 1, shade: c('#5A40B8') };
+        p.key2 = { color: c('#3FD89A'), k: 1, shade: c('#4A3CB4') };
         p.aurora = 1;
         p.stars = 1;
         p.massif.flow = 1;
@@ -1149,9 +1149,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.ghostGlow = 1.7;
         p.lanternGlow = 0.55;
         p.lamps = 1;
-        p.grade.exposure = 1.14;
+        p.grade.exposure = 1.1;
         p.grade.contrast = 1.14;
-        p.grade.lo = c('#E4DAFF');
+        p.grade.lo = c('#E8E0FF');
       },
     },
     {
@@ -1440,7 +1440,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Old Town: lamplight against blue shade, the warmest grade on the mountain.
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.1);
+        lamps(p, 1);
         p.snowShade = c('#586CD0');
         p.grade.gain = c('#FFF4E0');
         p.grade.hi = c('#FFEAC4');
@@ -1480,7 +1480,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Station Street: hot hulls and amber windows against cobalt. The only warm place before the dawn.
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.15);
+        lamps(p, 1);
         p.snowShade = c('#2E4AA6');
         p.grade.hi = c('#FFEED6');
         p.bloom += 0.12;
@@ -1578,14 +1578,14 @@ export const PLACES: Record<BiomeId, Place[]> = {
     {
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.4);
+        lamps(p, 1.15);
         p.bloom += 0.1;
       },
     },
     {
       kind: 'finish',
       edit: (p) => {
-        lamps(p, 1.4);
+        lamps(p, 1.15);
         p.bloom += 0.1;
       },
     },

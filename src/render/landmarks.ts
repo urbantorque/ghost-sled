@@ -7,6 +7,7 @@ import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry, re
 import { ENCLOSED, Kind, Piece, Rail, SPANS, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
 import { inClearing, liftLine, type Clearing } from './dressing';
 import { Chairs } from './liftline';
+import { pushLocalLight } from './lights';
 import { makeToonMaterial, shared } from './materials';
 import { OverlookPlan } from './overlook';
 import { journeyDusk, type Palette } from './palette';
@@ -95,6 +96,15 @@ const WINDOW_AHEAD = 150;
 /** How far behind the rider a site stays drawn, and how far once something ahead wants its slot. */
 const BEHIND = 160;
 const BEHIND_SHORT = 30;
+/** A street lamp's light on what stands near it, by mountain (linear colour; town.ts gives the lamps
+ *  themselves their colours): amber in the Alps, a paler sodium on the glacier, a brazier's orange on
+ *  Ember, paper-lantern amber on Sakura. */
+const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
+  alpine: [1, 0.56, 0.2],
+  glacier: [1, 0.68, 0.3],
+  volcanic: [1, 0.4, 0.12],
+  blossom: [1, 0.6, 0.26],
+};
 /** How much of the day must have gone for the windows to glow (journeyDusk). */
 const DUSK_LIT = 0.45;
 
@@ -967,7 +977,8 @@ export class SetPieces {
     this.plan = new SitePlan(course, mood);
     const near: [number, number] = [1.8, 3.6];
     // (Cloth: the bunting, banners and lantern strings swing in the wind, set per mood in setPalette.)
-    this.plain = makeToonMaterial({ coolShade: 0.5, nearFade: near, cloth: true });
+    // (Round 7, the light lane: stone parts carry painted strata and snow on their ledges.)
+    this.plain = makeToonMaterial({ coolShade: 0.5, nearFade: near, cloth: true, stone: true });
     this.iceMat = makeToonMaterial({ coolShade: 0.5, nearFade: near, ice: true });
     for (let i = 0; i < SLOTS; i++) {
       const mesh = new Mesh(new BufferGeometry(), this.plain);
@@ -1286,6 +1297,27 @@ export class SetPieces {
     this.uniforms.uWave.value += (inVillage - this.uniforms.uWave.value) * Math.min(1, dt * 2);
     this.chairs.update(time);
     this.enclosure(z, dt);
+    this.lampLights(z);
+  }
+
+  /** Round 7 (the light lane): a town's lamps light the snow, the rider and the riders round them. Every
+   *  lamp that has a painted pool offers a local light (lights.ts keeps the nearest eight to the rider),
+   *  on every tier: Low paints them on the snow where it draws no pool. Only while the lamps are lit. */
+  private lampLights(z: number): void {
+    const w = this.v;
+    const lamp = LAMP_LIGHT[this.course.biome];
+    for (const s of this.shown) {
+      if (!s || Math.abs(s.z - z) > s.len + 90) continue;
+      const ex = this.extras.get(s.n);
+      if (!ex || !ex.glows || !(this.litAt(s.z) || this.course.biome === 'volcanic' || this.course.biome === 'blossom')) continue;
+      const gy = siteGround(this.course, s);
+      for (const gl of ex.glows) {
+        siteToWorld(s, gl.x, 0, gl.z, w);
+        if (Math.abs(-w.z - z) > 70) continue;
+        siteToWorld(s, gl.x, gy(gl.x, gl.z) + 3.1, gl.z, w);
+        pushLocalLight(w.x, w.y, w.z, lamp[0], lamp[1], lamp[2], gl.r * 2.3, 0.85);
+      }
+    }
   }
 
   /** The light of an enclosed run on the frame: darker edges inside, a strobe past a gallery's
