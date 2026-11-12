@@ -1,4 +1,4 @@
-import { Color } from 'three';
+import { type BufferAttribute, Color } from 'three';
 import { afterAll, describe, expect, it } from 'vitest';
 import { BUDGET, fx, setFxBudget } from '../src/render/fxhub';
 import { shared } from '../src/render/materials';
@@ -79,7 +79,7 @@ describe("the rider's groove", () => {
     setFxBudget(1);
     const t = new Trail(flat, 900, 'groove');
     for (let z = 0; z < 30; z += 1) t.add(0, z, 0.5, 0.4, z / 30, 30);
-    const pos = t.mesh.geometry.getAttribute('position');
+    const pos = t.mesh.geometry.getAttribute('position') as BufferAttribute;
     const sent = pos.updateRanges.reduce((n, r) => n + r.count, 0);
     expect(sent).toBe(30 * 6);
     t.flush();

@@ -7,7 +7,9 @@ import type { Course } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import { FW_PAIRS, Fireworks, type ShellKind } from './fireworks';
 import type { Particles } from './particles';
+import { fx } from './fxhub';
 import { SkyGates } from './skygates';
+import { TreeLife } from './treelife';
 import { WardFx } from './wardfx';
 
 // The lantern in the world (round 5, felt in round 6): the sky gates hung over their kickers as rings of
@@ -69,6 +71,8 @@ export class SpiritFx {
   readonly gates: SkyGates;
   readonly ward: WardFx;
   readonly fireworks: Fireworks;
+  /** The forest's life: trees shaken by the riders that pass them, and what falls (treelife.ts). */
+  readonly trees: TreeLife;
   private readonly v = new Vector3();
   private readonly w = new Vector3();
   private readonly carry = new Vector3();
@@ -93,6 +97,7 @@ export class SpiritFx {
     this.gates = new SkyGates();
     this.ward = new WardFx();
     this.fireworks = new Fireworks();
+    this.trees = new TreeLife(particles);
     this.root.add(this.gates.mesh, this.ward.mesh, this.fireworks.mesh);
   }
 
@@ -117,6 +122,8 @@ export class SpiritFx {
 
   setReduced(on: boolean): void {
     this.reduced = on;
+    // (Every effect of the lane reads the frame's reduced-motion state here: fxhub.ts.)
+    fx.reduced = on;
     this.fireworks.setReduced(on);
   }
 
@@ -131,6 +138,8 @@ export class SpiritFx {
         this.schedule(true);
       } else if (b.type === 'moment' && b.verb === 'gates' && b.phase === 'won') {
         this.schedule(false);
+      } else if (b.type === 'nearMiss' && (b.obs === 'pine' || b.obs === 'blossom' || b.obs === 'charpine')) {
+        this.trees.nearMiss(b.x, b.z, b.grade === 'whisker');
       }
     }
   }
@@ -147,6 +156,7 @@ export class SpiritFx {
   setCourse(c: Course): void {
     this.course = c;
     this.gates.setGates(c.skyGates);
+    this.trees.setCourse(c);
   }
 
   /** A new run: every gate hangs again, and nothing from the last run is still in the air. */
@@ -156,6 +166,7 @@ export class SpiritFx {
     this.gates.reset();
     this.ward.stop();
     this.fireworks.clear();
+    this.trees.reset();
   }
 
   onEvent(e: SimEvent, s: Snap): void {
@@ -196,6 +207,7 @@ export class SpiritFx {
     this.vel.set(s.vx, s.vy, -s.vz);
     this.gates.update(dt);
     this.ward.update(dt, this.at, this.vel);
+    this.trees.update(dt, mode, s, poses);
     this.trailAcc += dt;
     if (mode === 'run' && sim && sim.s.dash > 0 && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
