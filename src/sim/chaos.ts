@@ -1,7 +1,11 @@
-import { Rng } from './prng';
+import { Rng, hash32 } from './prng';
 
 // Chaos: at most one run-wide mood and at most one mid-run event per run. The roll is part of the
 // run record, so replays reproduce it exactly. Chaos never touches static course geometry.
+//
+// Round 7: the roll also carries the run's legend moment, if it has one (moments.ts LEGENDS): about one run in
+// ten, never a session's first, and never beside a mid-run event (it takes the event's place in the budget).
+// And the roll's seed picks each set piece's variant (moments.ts variantOf), on every run.
 
 export enum Mood {
   None = 0,
@@ -24,9 +28,15 @@ export enum ChaosEvent {
 export interface ChaosRoll {
   mood: Mood;
   event: ChaosEvent;
-  /** Seeds event placement and dynamic spawns. */
+  /** Seeds event placement and dynamic spawns, and picks each set piece's variant. */
   seed: number;
+  /** The run's legend moment: which of its mountain's (1 or 2), or 0 or absent for none. */
+  legend?: number;
 }
+
+/** The chance of a legend on a run that has no mid-run event (two runs in three have none, so about one run in
+ *  ten after a session's first). */
+export const LEGEND_CHANCE = 0.15;
 
 export const PLAIN: ChaosRoll = { mood: Mood.None, event: ChaosEvent.None, seed: 0 };
 
@@ -141,7 +151,8 @@ export function eventInfo(e: ChaosEvent): EventInfo {
 /**
  * Roll chaos for a run. `runIndex` is the run's position in the session (0 = first run, always
  * plain). Roughly 34% plain, 33% mood only, 16% event only, 17% both. Avoids repeating the
- * previous mood back to back.
+ * previous mood back to back. A run with no event may be a legend's (LEGEND_CHANCE), rolled on a stream of its
+ * own so the mood and the event a seed gives are what they always were.
  */
 export function rollChaos(seed: number, runIndex: number, lastMood: Mood = Mood.None): ChaosRoll {
   if (runIndex <= 0) return { mood: Mood.None, event: ChaosEvent.None, seed: seed >>> 0 };
@@ -165,7 +176,8 @@ export function rollChaos(seed: number, runIndex: number, lastMood: Mood = Mood.
   }
   let event = ChaosEvent.None;
   if (wantEvent) event = (1 + rng.int(0, EVENTS.length - 2)) as ChaosEvent;
-  return { mood, event, seed: seed >>> 0 };
+  const legend = event === ChaosEvent.None && hash32(seed, 0x1e6e4d) / 4294967296 < LEGEND_CHANCE ? 1 + (hash32(seed, 0x1e6e51) & 1) : 0;
+  return legend ? { mood, event, seed: seed >>> 0, legend } : { mood, event, seed: seed >>> 0 };
 }
 
 /** Distance at which the mid-run event starts its warning. */

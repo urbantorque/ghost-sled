@@ -1022,7 +1022,7 @@ export class App {
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
       // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
-      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id),
+      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id, this.chaos),
     });
     this.director.time.reset();
   }

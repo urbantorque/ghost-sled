@@ -23,9 +23,18 @@
 // with nothing else to do but that rail: every lead at every aim, then again holding the action, which
 // sticks a sled to the snow over a lip. It prints a table of its own after the main one:
 //   rails       npx tsx scripts/playtest/lab.ts --pilots rails --seeds 6
+// Round 7: each seed rides its own roll, so the six seeds ride a spread of every set piece's variants (the same
+// spread for every pilot); the tables at the end say set pieces won by pilot, by verb and by variant, and
+// finishes and median times by pilot. To ride one variant or a legend everywhere:
+//   --variant 1   every set piece's second variant     --legend 2   the mountain's second legend
+//   --mountains 4 only the fifth mountain (a list: 0,2)
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { type Inp, type Kit, type Pilot, classic, clumsy, mulberry, scripted, spenderFor } from './labpilots';
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type AnySim = any;
 
 const argv = process.argv.slice(2);
 const opt = (k: string, d: string): string => {
@@ -39,217 +48,25 @@ const OUT = opt('json', '');
 const MOOD = +opt('mood', '0');
 const EVENT = +opt('event', '0');
 const PILOTS = opt('pilots', 'hands-off,hold2s-r,hold2s-l,hold-r,zigzag,clumsy,novice,mid,expert,line,stunt').split(',');
+const VARIANT = +opt('variant', '-1');
+const LEGEND = +opt('legend', '0');
+const ONLY = opt('mountains', '');
 
 const load = async (p: string) => import(pathToFileURL(resolve(ROOT, p)).href);
 const { Sim } = await load('src/sim/sim.ts');
 const { MOUNTAINS } = await load('src/sim/mountains.ts');
 const { CHUNK_LEN } = await load('src/sim/course.ts');
+// What a round 7 sim's set pieces give the pilots (an older build has none of it, and its pilots need none).
+const momentsMod = await load('src/sim/moments.ts').catch(() => ({}));
+const KIT: Kit = { gateX: momentsMod.gateX, pathX: momentsMod.pathX, machineZ: momentsMod.machineZ };
+const MOUNTAIN_LIST: number[] = ONLY ? ONLY.split(',').map(Number) : MOUNTAINS.map((_: unknown, i: number) => i);
 
-function mulberry(seed: number): () => number {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-/** src/game/input.ts's key ramp and quantiser. */
-class Keys {
-  private keySteer = 0;
-  private level = 4;
-  sample(target: number): number {
-    if (target === 0) this.keySteer = 0;
-    else if (this.keySteer * target <= 0) this.keySteer = target * 0.35;
-    else this.keySteer = target * Math.min(1, Math.abs(this.keySteer) + 0.055);
-    const raw = this.keySteer * 4;
-    if (Math.abs(raw - (this.level - 4)) > 0.62) this.level = 4 + Math.round(raw);
-    return this.level;
-  }
-}
-
-type Inp = { steer: number; action: boolean };
-/** `after` runs once a tick after the sim stepped (the rail pilot keeps its notes there). */
-type Pilot = (() => Inp) & { after?: () => void };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnySim = any;
-
-function scripted(fn: (t: number) => number, action: (t: number) => boolean = () => false) {
-  return (sim: AnySim): Pilot => {
-    const k = new Keys();
-    return () => ({ steer: k.sample(fn(sim.tick / 60)), action: action(sim.tick / 60) });
-  };
-}
-
-function clumsy(sim: AnySim, seed: number): Pilot {
-  const rnd = mulberry(seed * 7919 + 13);
-  const k = new Keys();
-  const c = sim.course;
-  let key = 0;
-  let keyUntil = 0;
-  let nextThink = 0.4 + rnd() * 0.5;
-  let act = false;
-  let actUntil = 0;
-  let nextAct = 1 + rnd() * 3;
-  return () => {
-    const s = sim.s;
-    const T = sim.tick / 60;
-    if (T >= keyUntil) key = 0;
-    if (T >= nextThink && !s.crashed) {
-      nextThink = T + 0.35 + rnd() * 0.45;
-      // Aims down the middle of what it can see, not at the safe line, and it looks too near.
-      const look = s.z + 9 + rnd() * 6;
-      const cx = c.centerX(look) + (rnd() - 0.5) * 5;
-      const off = cx - s.x;
-      if (key === 0) {
-        if (rnd() < 0.12) {
-          // The hand freezes on a key for no reason.
-          key = rnd() < 0.5 ? 1 : -1;
-          keyUntil = T + 1.6 + rnd() * 0.8;
-        } else if (Math.abs(off) > 2.2) {
-          // A panic correction: far longer than the bend wants, and it overshoots.
-          key = off > 0 ? 1 : -1;
-          keyUntil = T + 0.5 + rnd() * 1.1;
-        }
-      }
-    }
-    if (T >= nextAct) {
-      nextAct = T + 1.5 + rnd() * 4;
-      act = true;
-      actUntil = T + 0.2 + rnd() * 0.9;
-    }
-    if (T >= actUntil) act = false;
-    return { steer: k.sample(key), action: act };
-  };
-}
-
-function timeToLand(sim: AnySim): { t: number; x: number; z: number } {
-  const s = sim.s;
-  const c = sim.course;
-  let y = s.y;
-  let vy = s.vy;
-  let x = s.x;
-  let z = s.z;
-  let t = 0;
-  while (t < 4) {
-    vy -= sim.gravity / 60;
-    y += vy / 60;
-    x += s.vx / 60;
-    z += s.vz / 60;
-    t += 1 / 60;
-    if (y <= c.ground(x, z)) break;
-  }
-  return { t, x, z };
-}
-
-/** telemetry.js's frozen novice, mid, expert and line pilots, without the ghost targeting. */
-function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim, seed: number): Pilot {
-  const rnd = mulberry(seed);
-  const c = sim.course;
-  const P = { flight: 0, spin: 0, stompTry: false, stompBias: 0, away: 0, tap: 0, drift: 0, wob: rnd() * 6.28, lvl: 4, nextThink: 0, wasAir: false };
-  const steerTo = (s: AnySim, target: (z: number) => number, gain: number, lat: number): number => {
-    const look = s.z + 4 + s.speed * 0.35;
-    const desired = Math.atan2(target(look) - s.x, look - s.z);
-    const err = desired - s.velHeading + (c.safeX(s.z) - s.x) * lat;
-    return Math.max(0, Math.min(8, Math.round(4 + err * gain)));
-  };
-  const nextRamp = (s: AnySim) => {
-    for (let k = Math.floor(s.z / 64); k <= Math.floor(s.z / 64) + 2; k++) {
-      for (const rr of c.zones(k).ramps) {
-        if (rr.z + rr.len > s.z + 1 && rr.z - s.z < 70) {
-          if (Math.abs(rr.x - c.centerX(rr.z)) > c.halfWidth(rr.z) - 4 || Math.abs(rr.x - c.safeX(rr.z + rr.len)) > 2.5) return null;
-          return rr;
-        }
-      }
-    }
-    return null;
-  };
-  /** A set piece being played (SIM_VERSION 8): where a rider who tries it aims. Gates: the next gate. Rings:
-   *  the line the rings hang on, up to the lip. Null on an older sim or between set pieces. */
-  const goal = (s: AnySim): number | null => {
-    const mo = sim.mo;
-    if (!mo || mo.active < 0 || skill === 'line') return null;
-    const p = sim.plays[mo.active];
-    if (p.verb === 'gates') {
-      const g = p.gates.find((q: AnySim) => q.z > s.z + 1);
-      // Cut the inside of each gate, as a rider who knows the line does: half its opening toward the line.
-      return g && g.z - s.z < 45 ? g.x - Math.sign(g.x - c.safeX(g.z)) * g.hw * 0.5 : null;
-    }
-    if (p.verb === 'rings' && p.rings.length && s.z < p.rings[0].z - 14) return p.rings[0].x;
-    return null;
-  };
-  return () => {
-    const s = sim.s;
-    const T = sim.tick / 60;
-    if (s.crashed) return { steer: 4, action: false };
-    if (!s.grounded) {
-      if (!P.wasAir) {
-        P.wasAir = true;
-        const land = timeToLand(sim);
-        P.flight = land.t;
-        const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
-        const off = land.x - c.safeX(land.z);
-        P.spin = skill !== 'novice' && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
-        P.stompTry = skill === 'mid' || skill === 'expert' ? true : skill === 'novice' && rnd() < 0.4;
-        P.stompBias = (rnd() - 0.5) * (skill === 'expert' ? 0.05 : skill === 'mid' ? 0.16 : 0.3);
-      }
-      const land = timeToLand(sim);
-      let steer = 4;
-      let goal = (skill === 'expert' && P.flight > 2.4 ? 4 : 2) * Math.PI;
-      if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
-      const coast = (s.spinRate * s.spinRate) / (2 * 22);
-      if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
-      else if (skill === 'mid' || skill === 'expert') {
-        const off = land.x - c.safeX(land.z);
-        if (Math.abs(off) > 0.8) steer = off > 0 ? 2 : 6;
-      }
-      const w = land.t - P.stompBias;
-      return { steer, action: P.stompTry && w < 0.11 && w > 0.01 };
-    }
-    P.wasAir = false;
-    if (skill === 'line') return { steer: steerTo(s, (z) => c.safeX(z), 14, 0.08), action: false };
-    if (skill === 'novice') {
-      if (P.away > T) return { steer: 4, action: false };
-      if (rnd() < 1 / (60 * 30)) {
-        P.away = T + 0.5 + rnd() * 0.6;
-        return { steer: 4, action: false };
-      }
-      if (T >= P.nextThink) {
-        P.nextThink = T + 0.08 + rnd() * 0.08;
-        const wob = 0.45 * Math.sin(T * 0.7 + P.wob) + 0.25 * Math.sin(T * 1.9 + P.wob * 2);
-        const gx = goal(s);
-        P.lvl = gx !== null ? steerTo(s, () => gx + wob, 10, 0) : steerTo(s, (z) => c.safeX(z) + wob, 10, 0.06);
-      }
-      if (P.tap <= T && rnd() < 1 / (60 * 8)) P.tap = T + 0.3 + rnd() * 0.4;
-      return { steer: P.lvl, action: P.tap > T };
-    }
-    if (P.away > T) return { steer: 4, action: false };
-    if (skill === 'mid' && rnd() < 1 / (60 * 70)) {
-      P.away = T + 0.4 + rnd() * 0.4;
-      return { steer: 4, action: false };
-    }
-    const gx = goal(s);
-    const ramp = gx === null ? nextRamp(s) : null;
-    let target = (z: number) => c.safeX(z);
-    if (ramp) target = () => ramp.x;
-    else if (gx !== null) target = () => gx;
-    const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
-    const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
-    if (!ramp && P.drift === 0 && Math.abs(bend) > 4.5 && room > 6 && Math.abs(s.x - c.safeX(s.z)) < 0.8 && rnd() < 0.02) P.drift = T + 0.3 + rnd() * 0.25;
-    if (P.drift > T && (room < 4 || Math.abs(s.x - c.safeX(s.z)) > 0.8)) P.drift = T;
-    if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
-    if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
-    if (P.drift < 0 && T > -P.drift) P.drift = 0;
-    const lvl = steerTo(s, target, 14, ramp || gx !== null ? 0 : 0.08);
-    let action = false;
-    if (ramp) {
-      const u = (s.z - ramp.z) / ramp.len;
-      action = u > -0.7 && u < 0.85;
-    }
-    return { steer: lvl, action };
-  };
+/** The roll a seed rides: plain (or --mood, --event), with its own seed, which picks the set pieces' variants. */
+function rollFor(m: number, seed: number): AnySim {
+  let roll: AnySim = { mood: MOOD, event: EVENT, seed: (0x1234 + seed * 2654435761) >>> 0 };
+  if (LEGEND > 0) roll.legend = LEGEND;
+  if (VARIANT >= 0 && momentsMod.rollForVariant) roll = momentsMod.rollForVariant(new Sim({ seed: MOUNTAINS[m].seed, chaos: roll, sled: 0 }).course, roll, VARIANT);
+  return roll;
 }
 
 /** Every rail on a course, low end first. */
@@ -461,76 +278,8 @@ function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], a
       return () => p.sample();
     }
     default:
-      return classic(name as 'novice', sim, seed);
+      return classic(name as 'novice', sim, seed, KIT);
   }
-}
-
-/** How each pilot spends its lantern (SIM_VERSION 7): the button is bit 6, a dash on its press. A build
- *  without a lantern never sees the bit (old sims mask it off), so one plan still rides two builds.
- *    hands-off, hold*, zigzag, line: never press it (line is the careful rider who keeps every ward)
- *    clumsy: mashes it now and then, whatever is ahead, like a first-timer finding a new key
- *    novice: keeps one lantern as a ward, spends a second on the snow a beat after it lights
- *    mid, stunt: spend any full lantern on the snow with no kicker close ahead, keeping one past 2 km
- *    expert: spends at once, and best of all into a line that closes ahead (a spirit rides through)
- */
-function spenderFor(name: string, sim: AnySim, seed: number): () => boolean {
-  const rnd = mulberry(seed ^ 0x5a17);
-  let hold = 0;
-  let wait = 0;
-  const lit = (): number => Math.floor((sim.s.lantern ?? 0) / 100);
-  const kickerNear = (): boolean => {
-    const s = sim.s;
-    const k0 = Math.floor(s.z / CHUNK_LEN);
-    for (let k = k0; k <= k0 + 1; k++) for (const r of sim.course.zones(k).ramps) if (r.z > s.z - 2 && r.z < s.z + 30 && Math.abs(r.x - s.x) < 5) return true;
-    return false;
-  };
-  const closing = (): boolean => {
-    const s = sim.s;
-    const k0 = Math.floor(s.z / CHUNK_LEN);
-    for (let k = k0; k <= k0 + 1; k++)
-      for (const o of sim.course.chunk(k).obstacles) {
-        if (o.soft || o.z < s.z + 4 || o.z > s.z + 18) continue;
-        const ahead = s.x + (s.vx / Math.max(1, s.vz)) * (o.z - s.z);
-        if (Math.abs(o.x - ahead) < o.r + 1) return true;
-      }
-    return false;
-  };
-  const press = (): boolean => {
-    hold = 3;
-    return true;
-  };
-  return () => {
-    if (hold > 0) {
-      hold--;
-      return true;
-    }
-    const s = sim.s;
-    if (s.lantern === undefined || s.dash > 0 || s.tumble > 0 || s.finished) return false;
-    switch (name) {
-      case 'clumsy':
-        return rnd() < 0.15 / 60 ? press() : false;
-      case 'clumsy-keep':
-        return false;
-      case 'novice':
-        if (lit() >= 2 && s.grounded) {
-          if (++wait > 50) {
-            wait = 0;
-            return press();
-          }
-        } else wait = 0;
-        return false;
-      case 'mid':
-      case 'stunt': {
-        const keep = s.z > 2000 ? 1 : 0;
-        return lit() > keep && s.grounded && !kickerNear() && rnd() < 0.6 / 60 ? press() : false;
-      }
-      case 'expert':
-        if (lit() < 1 || !s.grounded || kickerNear()) return false;
-        return closing() || rnd() < 0.9 / 60 ? press() : false;
-      default:
-        return false;
-    }
-  };
 }
 
 interface Ride {
@@ -572,16 +321,19 @@ interface Ride {
   phased: number;
   /** Set pieces (SIM_VERSION 8; none on older sims): each one met, its verb, outcome and count, the speed coming
    *  in and the seconds it took. */
-  moments: { index: number; won: boolean; n: number; of: number; v0: number; secs: number }[];
+  moments: { index: number; key: string; verb: string; variant: string; won: boolean; n: number; of: number; v0: number; secs: number }[];
+  /** The legend moment the run met (its key, '' for none) and what it lit (round 7). */
+  legend: string;
+  legendLit: number;
 }
 
 function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null): Ride {
-  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 });
+  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: rollFor(m, seed), sled: 0 });
   const passes: RailPass[] = [];
   const pilot = pilotFor(pilotName, sim, seed, passes, alone);
   const spend = spenderFor(pilotName, sim, seed);
   const speeds: number[] = [];
-  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [] };
+  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [], legend: '', legendLit: 0 };
   const mStart = new Map<number, { tick: number; v: number }>();
   let bankTicks = 0;
   let airTicks = 0;
@@ -612,7 +364,8 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
       else if (e.type === 'moment' && e.phase === 'start') mStart.set(e.index, { tick: sim.tick, v: s.speed });
       else if (e.type === 'moment' && (e.phase === 'won' || e.phase === 'lost')) {
         const st0 = mStart.get(e.index);
-        r.moments.push({ index: e.index, won: e.phase === 'won', n: e.n, of: e.of, v0: st0?.v ?? 0, secs: st0 ? (sim.tick - st0.tick) / 60 : 0 });
+        const pl = sim.plays[e.index];
+        r.moments.push({ index: e.index, key: pl.key, verb: pl.style ? `${pl.verb}:${pl.style}` : pl.verb, variant: pl.variantKey ?? '', won: e.phase === 'won', n: e.n, of: e.of, v0: st0?.v ?? 0, secs: st0 ? (sim.tick - st0.tick) / 60 : 0 });
       }
     }
     // (A rail tried alone is over once its low end has gone by.)
@@ -643,6 +396,8 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   r.wards = st.wards ?? 0;
   r.gates = st.skyGates ?? 0;
   r.phased = st.phased ?? 0;
+  r.legend = st.legend ? (sim.legend?.key ?? '') : '';
+  r.legendLit = st.legendLit ?? 0;
   return r;
 }
 
@@ -657,7 +412,7 @@ console.log(`root ${ROOT}  seeds ${SEEDS}  mood ${MOOD} event ${EVENT}`);
 console.log('pilot      mtn    runs   secs(med)  dist(med)  mean m/s   p90 m/s   peak   first15   air/min  stomps/min  bank%  lights  lanterns  dashes  wards  gates  causes');
 for (const p of PILOTS) {
   const seedsFor = p.startsWith('hold') || p === 'hands-off' || p === 'zigzag' ? 1 : SEEDS;
-  for (let m = 0; m < MOUNTAINS.length; m++) {
+  for (const m of MOUNTAIN_LIST) {
     const rides: Ride[] = [];
     for (let i = 0; i < seedsFor; i++) rides.push(ride(p, m, 1234 + i * 37));
     all.push(...rides);
@@ -692,28 +447,57 @@ for (const p of PILOTS) {
 if (PILOTS.includes('rails')) railTable(all.filter((r) => r.pilot === 'rails'));
 momentTable(all.filter((r) => r.pilot !== 'rails'));
 
-/** The set pieces: per mountain and set piece, each pilot's wins of the runs that met it, the median count, the
- *  speed coming in and the seconds it took. */
+/** The set pieces: per mountain and set piece, each pilot's wins of the runs that met it (and by variant, where the
+ *  sim has them), the median count, the speed coming in and the seconds it took. Then the round's sums: set pieces
+ *  won by pilot and by verb, finishes and median times by pilot, and what a legend gave. */
 function momentTable(rides: Ride[]): void {
   if (!rides.some((r) => r.moments && r.moments.length)) return;
-  console.log('\nset piece                  pilot      met  won   n/of(med)  in m/s  secs(med)');
-  for (let m = 0; m < MOUNTAINS.length; m++) {
+  console.log('\nset piece                       pilot      met  won   n/of(med)  in m/s  secs(med)  by variant');
+  for (const m of MOUNTAIN_LIST) {
     const plays = (new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 }) as AnySim).plays ?? [];
     for (const p of plays) {
       for (const pilot of PILOTS) {
         const met = rides.filter((r) => r.m === m && r.pilot === pilot).flatMap((r) => r.moments.filter((q) => q.index === p.index));
         if (!met.length) continue;
         const won = met.filter((q) => q.won).length;
+        const kinds = [...new Set(met.map((q) => q.variant))].filter((k) => k).sort();
         console.log(
-          `${MOUNTAINS[m].id.slice(0, 6)} ${p.key} ${p.verb}`.padEnd(26),
+          `${MOUNTAINS[m].id.slice(0, 6)} ${p.key} ${met[0].verb}`.padEnd(31),
           pilot.padEnd(10),
           String(met.length).padStart(3),
           String(won).padStart(4),
           `${med(met.map((q) => q.n))}/${met[0].of}`.padStart(10),
           fmt(med(met.map((q) => q.v0))),
           fmt(med(met.map((q) => q.secs))),
+          '  ' + kinds.map((k) => `${k} ${met.filter((q) => q.variant === k && q.won).length}/${met.filter((q) => q.variant === k).length}`).join('  '),
         );
       }
+    }
+  }
+  const human = PILOTS.filter((p) => rides.some((r) => r.pilot === p && r.moments.length));
+  const verbs = [...new Set(rides.flatMap((r) => r.moments.map((q) => q.verb)))].sort();
+  console.log('\nset pieces won of those met, by verb\n' + 'verb'.padEnd(16) + human.map((p) => p.padStart(10)).join(''));
+  for (const v of [...verbs, 'ALL']) {
+    const cell = (pilot: string): string => {
+      const met = rides.filter((r) => r.pilot === pilot).flatMap((r) => r.moments.filter((q) => v === 'ALL' || q.verb === v));
+      return `${met.filter((q) => q.won).length}/${met.length}`.padStart(10);
+    };
+    console.log(v.padEnd(16) + human.map(cell).join(''));
+  }
+  console.log('\npilot       finished   median s (finishers)   set pieces won   lanterns lit (med)');
+  for (const pilot of PILOTS) {
+    const rs = rides.filter((r) => r.pilot === pilot);
+    if (!rs.length) continue;
+    const fin = rs.filter((r) => r.finished);
+    const met = rs.flatMap((r) => r.moments);
+    console.log(pilot.padEnd(11), `${fin.length}/${rs.length}`.padStart(8), fmt(med(fin.map((r) => r.seconds))).padStart(14), `${met.filter((q) => q.won).length}/${met.length}`.padStart(22), fmt(med(rs.map((r) => r.lit / 100))).padStart(14));
+  }
+  const withLegend = rides.filter((r) => r.legend);
+  if (withLegend.length) {
+    console.log('\nlegend       pilot      runs   lanterns it lit (med)');
+    for (const key of [...new Set(withLegend.map((r) => r.legend))]) for (const pilot of PILOTS) {
+      const rs = withLegend.filter((r) => r.legend === key && r.pilot === pilot);
+      if (rs.length) console.log(key.padEnd(12), pilot.padEnd(10), String(rs.length).padStart(4), fmt(med(rs.map((r) => r.legendLit / 100)), 2));
     }
   }
 }
@@ -722,7 +506,7 @@ function momentTable(rides: Ride[]): void {
 function railTable(rides: Ride[]): void {
   console.log('\nrails       runs  on course  reached    tried  entered  of tried  grind s/run  finished  never mounted');
   const never: { m: number; id: number; why: Record<string, number> }[] = [];
-  for (let m = 0; m < MOUNTAINS.length; m++) {
+  for (const m of MOUNTAIN_LIST) {
     const rs = rides.filter((r) => r.m === m);
     if (!rs.length) continue;
     const list = railsOn(new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 }).course);
