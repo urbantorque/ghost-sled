@@ -1,4 +1,5 @@
 import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, Object3D, Points, ShaderMaterial, Vector3 } from 'three';
+import { setFxBudget } from './fxhub';
 import { makeToonMaterial, shared } from './materials';
 import { giftGeometry } from './meshes';
 import { roosterK } from './speedfeel';
@@ -53,6 +54,8 @@ class Layer {
   private n = 0;
   private cap: number;
   private ring = 0;
+  /** How much fuller a billow is drawn (Low throws under half as many: each one carries more of the plume). */
+  fat = 1;
   // Simulation state, one slot per particle.
   private x: Float32Array;
   private y: Float32Array;
@@ -164,9 +167,13 @@ class Layer {
         varying float vLamp;
         varying vec2 vLampDir;
         varying float vFlip;
+        varying float vGlint;
         void main() {
           vColor = aColor;
           vKind = aKind;
+          // One grain in ten is a crystal that catches the key light: which ones changes as the spray
+          // moves through the air (by where a grain is, in hand-wide cells), so a plume glitters.
+          vGlint = step(0.9, fract(sin(dot(floor(position.xyz * 7.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453));
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float depth = max(-mv.z, 0.05);
           vFog = smoothstep(uFogNear, uFogFar, depth);
@@ -300,6 +307,7 @@ class Layer {
         varying float vLamp;
         varying vec2 vLampDir;
         varying float vFlip;
+        varying float vGlint;
         float hash2(vec2 p) {
           vec3 p3 = fract(vec3(p.xyx) * 0.1031);
           p3 += dot(p3, p3.yzx + 33.33);
@@ -417,7 +425,11 @@ class Layer {
               vec3 crestC = mix(litCol, vec3(dot(litCol, vec3(0.3, 0.59, 0.11))), 0.7) * 1.15;
               col = mix(belly, crestC, crestK) * vColor;
               // The sunlit rim, brightest when a low sun backlights the plume (forward scattering).
-              col += litCol * smoothstep(0.45, 0.85, rr) * smoothstep(-0.1, 0.7, dot(nrm.xy, sun2)) * (0.3 + 0.6 * back);
+              // (Round 7: the rim takes the key light's own colour and, backlit, burns past white, so it
+              // is what the bloom picks out of a plume: gold at golden hour, lemon on Frostfang, orange
+              // under Ember's deck. The body stays the snow's cream.)
+              vec3 rimC = mix(litCol, uSnowLit * uSunColor, 0.6);
+              col += rimC * smoothstep(0.45, 0.85, rr) * smoothstep(-0.1, 0.7, dot(nrm.xy, sun2)) * (0.38 + 1.25 * back);
               lampK = smoothstep(-0.3, 0.7, dot(nrm.xy, vLampDir) * 0.8 + nrm.z * 0.2);
             } else if (vKind > 1.5) {
               // Mist: a soft sunlit veil with no edge, lit a little more on the sun side. Under a dim
@@ -448,6 +460,8 @@ class Layer {
               // The sun side of a fresh grain glows a step above the lit snow it is thrown over.
               col *= 1.0 + 0.15 * smoothstep(0.0, 0.8, side) * (1.0 - smoothstep(0.0, 0.9, cp.y));
               col += litCol * back * 0.3 * (1.0 - r2);
+              // A crystal catching the key light: a hard glint in the sun's colour, hottest when backlit.
+              col += mix(vec3(1.0), uSunColor, 0.5) * vGlint * (0.55 + 1.3 * back) * (1.0 - r2) * smoothstep(0.5, 0.9, dot(uSnowLit * uSunColor, vec3(0.3, 0.59, 0.11)) + back);
               // Translucent powder, densest at the heart and thinning to nothing at the edge.
               a = vAlpha * 0.85 * (1.0 - r2) * smoothstep(1.0, 0.6, r);
               lampK = smoothstep(-0.4, 0.6, dot(vec2(cp.x, -cp.y), vLampDir));
@@ -493,7 +507,7 @@ class Layer {
     this.life[i] = 0;
     this.max[i] = max;
     this.s0[i] = s0;
-    this.s1[i] = s1;
+    this.s1[i] = kind >= 3 && kind < 5 ? s1 * this.fat : s1;
     this.a[i] = a;
     this.grav[i] = grav;
     this.drag[i] = drag;
@@ -603,6 +617,7 @@ const POWDER = 1.12;
 const tmpF = new Vector3();
 const tmpS = new Vector3();
 const tmpC = new Vector3();
+const tmpC2 = new Vector3();
 
 /** How long a picked-up gift takes to squash and pop (s). */
 const POP_S = 0.26;
@@ -702,6 +717,9 @@ export class Particles {
 
   setQuality(budget: number, viewportHeight: number): void {
     this.budget = budget;
+    // (The budget names the tier for every effect: fxhub.ts.)
+    setFxBudget(budget);
+    this.powder.fat = budget < 0.6 ? 1.3 : 1;
     this.powder.setCap(Math.round(1700 * budget));
     this.glow.setCap(Math.round(900 * budget));
     const scale = viewportHeight * 0.9;
@@ -838,6 +856,38 @@ export class Particles {
         puffKind(),
         car,
       );
+    }
+    // The plume's depth (round 7): on a hard carve or a drift at speed, soft lit lumps that keep nearly the
+    // sled's pace, climb, swell and hang a sled's length behind the runner, out to the side, so the tail
+    // is a volume the sun rims and not a fan of specks. Out past the rider's outline and low: it never
+    // covers the rider or the line ahead.
+    const plume = this.n(amount * hard * (0.9 + 0.8 * over));
+    if (plume > 0) {
+      const car2 = tmpC2.set(vel.x * 0.93, fall * 0.93, vel.z * 0.93);
+      for (let i = 0; i < plume; i++) {
+        const back = 0.4 + Math.random() * 0.8;
+        const out = 0.6 + Math.random() * 1.1;
+        const big = Math.random();
+        this.powder.emit(
+          pos.x + side.x * (0.6 + 0.3 * Math.random()) - f.x * back,
+          pos.y + 0.2,
+          pos.z + side.z * (0.6 + 0.3 * Math.random()) - f.z * back,
+          car2.x + side.x * out,
+          car2.y + (0.9 + Math.random() * 1.2) * (1 + 0.5 * hard + 0.4 * over),
+          car2.z + side.z * out,
+          0.6 + Math.random() * 0.4 + 0.2 * over,
+          0.16,
+          (0.5 + big * 0.5) * (1 + 0.4 * over),
+          tint.r,
+          tint.g,
+          tint.b,
+          0.5,
+          2.4,
+          1.5,
+          dabKind(),
+          car2,
+        );
+      }
     }
     // Mist rolls out low and slow off the runner and swells as it thins: the body of the plume.
     // Many faint, overlapping puffs, so the mist reads as one continuous veil and never as balls.
@@ -1017,6 +1067,17 @@ export class Particles {
           puffKind(),
           car,
         );
+      }
+      // ...and powder left hanging in the light behind it (round 7): a few broad, thin lumps that keep the
+      // sled's pace a moment longer than the skirt and rise as they thin, low and out to the sides.
+      const veil = this.n(5 * Math.min(1.6, power));
+      const car2 = tmpC2.set(vel.x * 0.9, Math.max(vel.y, -hs * 0.7) * 0.9, vel.z * 0.9);
+      for (let i = 0; i < veil; i++) {
+        const a = (i % 2 ? 1 : -1) * (1.3 + Math.random() * 1.2);
+        const dx = fx * Math.cos(a) - fz * Math.sin(a);
+        const dz = fz * Math.cos(a) + fx * Math.sin(a);
+        const out = (1.4 + Math.random() * 1.6) * power;
+        this.powder.emit(pos.x + dx * 0.9, pos.y + 0.25, pos.z + dz * 0.9, car2.x + dx * out, car2.y + 0.9 + Math.random() * 1.1, car2.z + dz * out, 0.8 + Math.random() * 0.45, 0.3, 0.9 + Math.random() * 0.5, tint.r, tint.g, tint.b, 0.4, 1.2, 1.8, dabKind(), car2);
       }
     }
   }
@@ -1394,6 +1455,26 @@ export class Particles {
       const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
       const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
       this.powder.emit(pos.x + dx * 1.2, pos.y + 0.2, pos.z + dz * 1.2, car.x + dx * 4, car.y + 0.4, car.z + dz * 4, 0.8 + Math.random() * 0.5, 0.4, 2.2 * k, 1, 1, 1, 0.2, 1.4, 2.4, KIND_MIST);
+    }
+    // Round 7: the wave has a second act. Behind the front a ring of heavier lumps rolls out lower and
+    // slower (the snow the hit moved, still moving), and a broad veil of powder climbs out of the crater
+    // and hangs in the key light for over a second, riding with the sled, out to the sides and behind.
+    const roll = this.n(16 * k);
+    const car2 = tmpC2.set(vel.x * (keep + 0.2), Math.max(vel.y, -hs * 0.7) * (keep + 0.2), vel.z * (keep + 0.2));
+    for (let i = 0; i < roll; i++) {
+      const a = (i % 2 ? 1 : -1) * (0.9 + Math.random() * 1.7);
+      const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
+      const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
+      const out = (2.5 + Math.random() * 3) * Math.sqrt(k);
+      this.powder.emit(pos.x + dx * 1.4, pos.y + 0.15, pos.z + dz * 1.4, car2.x + dx * out, car2.y + 0.3 + Math.random() * 0.9, car2.z + dz * out, 0.9 + Math.random() * 0.5, 0.35, (0.9 + Math.random() * 0.7) * k, 1, 1, 1, 0.75, 2.6, 1.2, dabKind(), car2);
+    }
+    const veil = this.n(9 * k);
+    for (let i = 0; i < veil; i++) {
+      const a = (i % 2 ? 1 : -1) * (1.2 + Math.random() * 1.4);
+      const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
+      const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
+      const out = 1.5 + Math.random() * 2.5;
+      this.powder.emit(pos.x + dx * 1.6, pos.y + 0.4, pos.z + dz * 1.6, car2.x + dx * out, car2.y + 1.6 + Math.random() * 1.8, car2.z + dz * out, 1.2 + Math.random() * 0.6, 0.5, (1.5 + Math.random() * 1.0) * k, 1, 1, 1, 0.36, 0.9, 1.4, dabKind(), car2);
     }
   }
 
