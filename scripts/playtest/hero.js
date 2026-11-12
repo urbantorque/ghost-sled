@@ -99,7 +99,11 @@ async (page) => {
   ];
   const shots = [];
   for (const a of c.acts || [{ name: '', set: null }]) {
-    await page.evaluate((set) => { window.__heroAct = set; }, a.set);
+    await page.evaluate((a) => {
+      window.__heroAct = a.set ?? null;
+      // (a.hero: the hero's own light, [key, rim, hold]; [0, 0, 0] is the rider as the shared model alone lights it.)
+      if (a.hero) window.__gs.world.rider.u.hero.value.set(a.hero[0], a.hero[1], a.hero[2]);
+    }, a);
     for (const v of views) {
       await page.evaluate((view) => { window.__heroView = view; }, v.view);
       await page.waitForTimeout(c.wait);

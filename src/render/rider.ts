@@ -268,6 +268,9 @@ interface RiderUniforms {
   /** What hangs off the rider and arrives late (round 7): the offset of the soft parts (the hood, a
    *  hat's tail, the boots' toes), metres in the body's own frame. */
   soft: { value: Vector3 };
+  /** The hero's own light (round 7): x the soft key's floor, y the rim from the frame's light, z how
+   *  firmly the vermillion holds its value and hue. 1 each; the results' fill and a tier may trim them. */
+  hero: { value: Vector3 };
 }
 
 /** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
@@ -374,12 +377,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   m.uniforms.uSunRim = { value: sunRim };
   m.uniforms.uHorizonRim = { value: horizonRim };
   m.uniforms.uSpirit = u.spirit;
+  m.uniforms.uHero = u.hero;
   // The toon shader dissolves whatever sits on the sight line from the camera to the rider. The
   // rider itself must never dissolve (least of all the scarf, which streams back toward the
   // camera), so its own focus sits far overhead: that sight line runs straight up, clear of it.
   m.uniforms.uFocus = { value: new Vector3(0, 1e6, 0) };
   const before = m.fragmentShader;
-  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;');
+  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;\n      uniform vec3 uHero;');
   fs = fs.replace(
     'vec3 n = normalize(vNormalW);',
     `vec3 n = normalize(vNormalW);
@@ -439,6 +443,31 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // Under a warm dusk sky (Comet Night) the ember horizon behind the lens rims the coat's back
         // and shoulders, so the hero sits in the dusk light rather than reading as a cold cut-out.
         col += vec3(1.0, 0.42, 0.16) * uEmber * darkCloth * (0.6 * smoothstep(0.45, 0.95, riderEdge) + 0.04 + 0.1 * smoothstep(0.3, 0.9, n.y) * smoothstep(0.25, 0.7, riderEdge)) * rimCut;
+        // Lit like a hero (round 7, ART.md 15 rule 4). Everything here is the rider's own and reads only
+        // the shared light's direction and colours, so it holds whatever the shared model above becomes.
+        //   A soft key from over the lens's shoulder, leaning toward the frame's light: a floor under
+        //   every surface in its own colour, so the coat's face reads in a polar night and under a smoke
+        //   deck. It takes the light's hue but not its level: a dim light still keys the hero.
+        vec3 heroN = uSunColor / max(max(uSunColor.r, uSunColor.g), max(uSunColor.b, 0.001));
+        vec3 heroKeyDir = normalize(v + vec3(0.0, 0.55, 0.0) + uSunDir * 0.45);
+        float heroKey = smoothstep(-0.25, 0.85, dot(n, heroKeyDir));
+        vec3 heroFloor = base * mix(vec3(1.0), heroN, 0.3) * (0.2 + 0.3 * heroKey) * uHero.x;
+        // (Ink cloth takes a little more, and a cool lift with it: navy at a fifth of its value is black.)
+        heroFloor += (base * 0.16 + vec3(0.012, 0.018, 0.04)) * heroKey * darkCloth * uHero.x;
+        col = max(col, heroFloor);
+        //   A rim from the frame's key light: the silhouette's edge on the light's side burns in the
+        //   light's own colour, brighter as the frame gets darker, so the hero is cut out of a dark
+        //   frame by the same light that lights it.
+        float heroSide = smoothstep(-0.35, 0.5, dot(n, uSunDir));
+        vec3 heroRimC = mix(uRim, heroN, 0.55) * mix(1.0, 0.5, uDayK);
+        col += heroRimC * pow(riderEdge, 2.6) * heroSide * mix(0.4, 0.95, darkCloth) * uHero.y * rimCut;
+        //   The vermillion holds: a saturated warm surface never sinks under a third of its own value
+        //   nor climbs past it into pink or white, and keeps its hue under any light (a blue night turned
+        //   it plum, a white noon bleached the beanie's sunlit side).
+        float heroHi = max(base.r, 0.001);
+        float heroWarm = smoothstep(0.5, 0.8, (base.r - max(base.g, base.b)) / heroHi) * uHero.z;
+        float heroL = dot(col, vec3(0.2126, 0.7152, 0.0722)) / max(dot(base, vec3(0.2126, 0.7152, 0.0722)), 0.001);
+        col = mix(col, base * clamp(heroL, 0.36, 1.12), heroWarm * 0.85);
         #ifdef DOUBLE_SIDED
           if (!gl_FrontFacing) col *= 0.8;
         #endif
@@ -482,7 +511,8 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           #endif
         }
         `;
-  const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
+  // (Three places it may go, in order: the shared model is the light lane's to change.)
+  const anchor = ['col = lanternLight(col, base, vWorldPos, n);', 'col = fogged(col, vWorldPos);', 'gl_FragColor = vec4(col, keep);'].find((a) => fs.includes(a)) ?? 'gl_FragColor';
   fs = fs.replace(anchor, rim + anchor);
   if (fs === before || !fs.includes('inkK')) console.warn('rider material: toon shader anchors not found, rider shading partly disabled');
   m.fragmentShader = fs;
@@ -576,7 +606,7 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() }, hero: { value: new Vector3(1, 1, 1) } };
   /** Each arm's joints (left, right): x the elbow's bend, y the wrist's nod, z its sideways flop. */
   private readonly joints = [{ value: new Vector3(ARM_REST_BEND, 0, 0) }, { value: new Vector3(ARM_REST_BEND, 0, 0) }];
   /** Low's cheaper build (setDetail). */
