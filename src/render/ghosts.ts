@@ -1,4 +1,4 @@
-import { AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, Mesh, MeshBasicMaterial, NormalBlending, Object3D, PerspectiveCamera, Quaternion, ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4 } from 'three';
+import { type WebGLRenderer, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, Mesh, MeshBasicMaterial, NormalBlending, Object3D, PerspectiveCamera, Quaternion, ShaderMaterial, SphereGeometry, Vector2, Vector3, Vector4 } from 'three';
 import { Course } from '../sim/course';
 import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
@@ -9,13 +9,20 @@ import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferG
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
 import { fmt, NBSP } from '../ui/fmt';
-import { pageBeat } from '../ui/pagebeat';
+import { FACES, INK, LabelBatch, PAPER, rgb, type FaceId, type RGB, type Run } from './labels';
 import { graveCopy, type GravePlace } from './graves';
 import { ROSTER, riderByName, type Emblem, type HatKind, type Rider } from '../bot/roster';
+import { reduced as reducedMotion } from '../ui/motion';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
 // floating name pill, and a lantern marker planted where they crashed (ART.md section 6).
+//
+// Round 7: every pill, emblem, ring, speech chip and the edge chip is drawn in the canvas (labels.ts: one
+// batched draw from a sprite atlas), not in the DOM. The placement, the priorities and the occlusion
+// against the HUD's rects are as they were; only the drawing moved. Moving DOM pills round riders who are
+// in the frame all run cost a throttled Low frame about half its time in page work (decisions 217, 238).
+// They are decoration over what the HUD's rival pill states in text, so nothing here is for a reader.
 //
 // The fun pass: the tags react to the race. The duel ghost's ring beats at 1.2 Hz (Feel.duelId,
 // contract C11) and the start-line call pings it; a ghost that stomps a perfect landing near you rings
@@ -70,9 +77,21 @@ export function tagPrio(ringed: boolean, wreckT: number, basePrio: number): numb
 
 type Rect = { x0: number; y0: number; x1: number; y1: number };
 
+/** What a pill shows: a ghost's name (with its emblem and kind word), a crash marker's line, a band's
+ *  line on the snow, or a graveyard's two lines. `c` is its kind colour, `a` a signature rider's accent. */
+interface TagArt {
+  form: 'ghost' | 'marker' | 'line' | 'grave';
+  c: RGB;
+  a: RGB | null;
+  emblem: Emblem | null;
+  text: string;
+  /** A ghost's kind word ('grudge'), or a graveyard's count line. */
+  sub: string | null;
+}
+
 /** One floating pill: a ghost's name tag or its crash marker's tag. */
 interface Tag {
-  el: HTMLDivElement;
+  art: TagArt;
   /** Placement priority: special kinds, then pool ghosts, then crash markers. */
   prio: number;
   x: number;
@@ -169,9 +188,9 @@ interface Item {
   sy: number;
   sr: number;
   sd: number;
-  /** The trick word swapped in for the name (created on the first swap), seconds left of the swap,
-   *  and the name pill's measured size to restore. */
-  tw: HTMLSpanElement | null;
+  /** The trick word swapped in for the name ('' for none), seconds left of the swap, and the name
+   *  pill's measured size to restore. */
+  tw: string;
   trickT: number;
   nameW: number;
   nameH: number;
@@ -183,14 +202,14 @@ interface Item {
   wreckT: number;
   /** The tag's kind word ('grudge', 'nemesis', 'challenge', 'daily'), if it has one, and whether a
    *  settled grudge has dropped it for the rest of the run. */
-  kw: HTMLSpanElement | null;
+  kw: string | null;
   kwOff: boolean;
-  /** The ring classes as written (duel heartbeat, call ping, stomp ping). */
+  /** The rings that play this frame (duel heartbeat, call ping, stomp ping). */
   duelOn: boolean;
   callOn: boolean;
   stompOn: boolean;
-  /** Seconds left of the drop-back when you pass it (its pill flashes and falls back), and whether
-   *  the class is written. */
+  /** Seconds left of the drop-back when you pass it (its pill flashes and falls back), and whether it
+   *  plays this frame. */
   dropT: number;
   dropOn: boolean;
   /** The signature rider it is (bot/roster.ts), or null for the crowd; its accent (linear), which its
@@ -272,22 +291,18 @@ const EMBLEMS: Record<Emblem, { d: string; s?: 1; n?: number }> = {
   crown: { d: 'M1.6 4.2 5 7.4 8 2.4l3 5 3.4-3.2-1.2 8.2H2.8ZM2.8 13.4h10.4v1.6H2.8Z' },
 };
 
-/** An emblem's inline SVG (`n`: the glyph drawn n times round the middle, a petal into a blossom). */
-function emblemSvg(e: Emblem): string {
-  const g = EMBLEMS[e];
-  const n = g.n ?? 1;
-  let paths = '';
-  for (let i = 0; i < n; i++) paths += `<path d="${g.d}"${i ? ` transform="rotate(${(360 * i) / n} 8 8)"` : ''}/>`;
-  const paint = g.s ? 'fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"' : 'fill="currentColor"';
-  return `<svg viewBox="0 0 16 16" aria-hidden="true" ${paint}>${paths}</svg>`;
-}
+/** The edge chip's arrowhead, in a 14 unit box, pointing right. */
+const ARROW_PATH = 'M2.5 1.8 12.6 7 2.5 12.2 4.6 7Z';
 
-/** A tag's emblem: the glyph in a disc of the rider's accent. */
-function emblemEl(r: Rider): HTMLSpanElement {
-  const em = document.createElement('span');
-  em.className = 'em';
-  em.innerHTML = emblemSvg(r.emblem);
-  return em;
+/** A ring's ease as it opens (the CSS it replaces eased out). */
+const easeOut = (p: number) => 1 - (1 - p) * (1 - p);
+
+/** A passed ghost's pill at `p` (0 to 1) of its drop: up a little and larger, back and smaller, home. */
+export function dropPose(p: number): { y: number; s: number } {
+  const seg = (a: number, b: number) => easeOut(Math.max(0, Math.min(1, (p - a) / (b - a))));
+  if (p < 0.12) return { y: -5 * seg(0, 0.12), s: 1 + 0.14 * seg(0, 0.12) };
+  if (p < 0.55) return { y: -5 + 20 * seg(0.12, 0.55), s: 1.14 - 0.34 * seg(0.12, 0.55) };
+  return { y: 15 - 15 * seg(0.55, 1), s: 0.8 + 0.2 * seg(0.55, 1) };
 }
 
 /** Dev only (?debug&riders=N): the field's riders wear the roster in turn from rider N, by name and hat,
@@ -805,87 +820,6 @@ function auraMaterial(): ShaderMaterial {
   }));
 }
 
-/** A frame longer than this, read steadily, is one where labels wait for the page's beat: 50 fps. */
-const LABEL_FRAME_S = 0.02;
-const STYLE_ID = 'ghost-label-style';
-function injectStyle(): void {
-  if (document.getElementById(STYLE_ID)) return;
-  const s = document.createElement('style');
-  s.id = STYLE_ID;
-  s.textContent = `
-  .ghost-layer { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 2; }
-  .ghost-label { position: absolute; left: 0; top: 0; padding: 3px 9px 4px; border-radius: 999px; transform-origin: 50% 100%;
-    font: 800 12px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; letter-spacing: 0.02em; white-space: nowrap;
-    color: #121933; background: var(--c); opacity: 0; will-change: transform, opacity;
-    box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.3), 0 2px 6px rgba(18, 25, 51, 0.3), 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); }
-  .ghost-label::after { content: ''; position: absolute; left: 50%; bottom: -3px; width: 7px; height: 7px; margin-left: -3.5px;
-    background: inherit; border-radius: 1px; transform: rotate(45deg); box-shadow: 1px 1px 0 rgba(18, 25, 51, 0.3); }
-  .ghost-label.stacked::after { display: none; }
-  .ghost-label.dot { width: ${DOT - 3}px; height: ${DOT - 3}px; padding: 0; overflow: hidden; color: transparent; font-size: 0; line-height: 0;
-    box-shadow: 0 0 0 1.5px #121933, 0 0 8px color-mix(in srgb, var(--c) 65%, transparent); }
-  .ghost-label.dot::after, .ghost-label.dot .tag, .ghost-label.dot .em { display: none; }
-  .ghost-label.rival { box-shadow: 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
-  .ghost-label.marker { background: #121933; color: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 55%, transparent), 0 2px 6px rgba(18, 25, 51, 0.3); font-weight: 700; }
-  .ghost-label .tag { font-size: 11px; opacity: 0.9; margin-left: 5px; text-transform: uppercase; letter-spacing: 0.05em; }
-  .ghost-label.sig:not(.dot) { box-shadow: inset 0 0 0 1.5px var(--a), 0 0 0 1px rgba(18, 25, 51, 0.3), 0 2px 6px rgba(18, 25, 51, 0.3), 0 0 14px color-mix(in srgb, var(--c) 55%, transparent); }
-  .ghost-label.sig.rival:not(.dot) { box-shadow: inset 0 0 0 1.5px var(--a), 0 0 0 1.5px #121933, 0 0 0 3.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.35), 0 0 16px color-mix(in srgb, var(--c) 60%, transparent); }
-  .ghost-label .em { display: inline-flex; align-items: center; justify-content: center; width: 15px; height: 15px; margin: -2px 5px -3px -5px; vertical-align: -3px;
-    border-radius: 50%; background: var(--a); color: #121933; box-shadow: 0 0 0 1px rgba(18, 25, 51, 0.6); }
-  .ghost-label .em svg { width: 11px; height: 11px; }
-  .ghost-label.marker .em { margin-left: -4px; }
-  .ghost-say { position: absolute; left: 0; top: 0; padding: 4px 10px 5px; border-radius: 10px; opacity: 0; pointer-events: none; will-change: transform, opacity;
-    transform-origin: 50% 100%; width: max-content; max-width: min(220px, 60vw); text-align: center; text-wrap: balance;
-    font: italic 700 12.5px/1.15 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #F5F3FF; background: #121933;
-    box-shadow: inset 0 0 0 1.5px var(--a), 0 2px 8px rgba(18, 25, 51, 0.45); }
-  .ghost-say::after { content: ''; position: absolute; left: 50%; bottom: -4px; width: 8px; height: 8px; margin-left: -4px; background: #121933;
-    transform: rotate(45deg); box-shadow: inset -1.5px -1.5px 0 var(--a); }
-  .ghost-say.on { animation: ghost-say 0.2s cubic-bezier(0.2, 0.9, 0.2, 1.15) both; }
-  @keyframes ghost-say { 0% { scale: 0.6; } 100% { scale: 1; } }
-  .ghost-label .tw { display: none; font-style: italic; }
-  .ghost-label.trick .nm, .ghost-label.trick .tag { display: none; }
-  .ghost-label.trick .tw { display: inline-block; animation: ghost-trick 0.22s cubic-bezier(0.2, 0.9, 0.2, 1.1) both; }
-  @keyframes ghost-trick { 0% { opacity: 0; transform: scale(0.55); } 60% { opacity: 1; transform: scale(1.12); } 100% { opacity: 1; transform: scale(1); } }
-  @keyframes ghost-trick-fade { 0% { opacity: 0; } 100% { opacity: 1; } }
-  .ghost-label::before { content: ''; position: absolute; inset: -5px; border-radius: 999px; border: 2px solid var(--c); opacity: 0; pointer-events: none; }
-  .ghost-label.duel::before { animation: ghost-ring 0.833s ease-out infinite; }
-  .ghost-label.call::before { animation: ghost-ring-call 0.866s ease-out 3; }
-  .ghost-label.stomp::before { animation: ghost-ring-stomp ${STOMP_HOLD}s cubic-bezier(0.2, 0.8, 0.2, 1) 1 both; }
-  .ghost-label.dot::before { display: none; }
-  .ghost-label.passed { animation: ghost-drop ${DROP_HOLD}s cubic-bezier(0.2, 0.7, 0.2, 1) 1 both; }
-  @keyframes ghost-drop { 0% { translate: 0 0; scale: 1; } 12% { translate: 0 -5px; scale: 1.14; }
-    55% { translate: 0 15px; scale: 0.8; } 100% { translate: 0 0; scale: 1; } }
-  @keyframes ghost-ring { 0% { opacity: 0.95; transform: scale(1); } 70% { opacity: 0; transform: scale(1.18, 1.55); } 100% { opacity: 0; transform: scale(1.18, 1.55); } }
-  @keyframes ghost-ring-call { 0% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(1.32, 1.9); } }
-  @keyframes ghost-ring-stomp { 0% { opacity: 1; transform: scale(0.92); } 100% { opacity: 0; transform: scale(1.45, 2.2); } }
-  @keyframes ghost-ring-out { 0% { opacity: 1; } 100% { opacity: 0; } }
-  .ghost-label.line { background: #121933; color: var(--c); font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--c), 0 2px 6px rgba(18, 25, 51, 0.35), 0 0 12px color-mix(in srgb, var(--c) 40%, transparent); }
-  .ghost-label.grave { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 11px 5px; border-radius: 9px; text-align: center; }
-  .ghost-label.grave .gn { max-width: 190px; overflow: hidden; text-overflow: ellipsis; }
-  .ghost-label.grave .gf { font-size: 11px; font-weight: 650; letter-spacing: 0.01em; color: #F5F3FF; }
-  @media (prefers-reduced-motion: reduce) {
-    .ghost-label.trick .tw { animation-name: ghost-trick-fade; animation-timing-function: linear; }
-    .ghost-label.duel::before, .ghost-label.call::before { animation: none; opacity: 1; transform: none; }
-    .ghost-label.stomp::before { animation: ghost-ring-out ${STOMP_HOLD}s linear 1 both; transform: none; }
-    .ghost-label.passed { animation: none; }
-    .ghost-say.on { animation: ghost-trick-fade 0.2s linear both; }
-  }
-  .ghost-rival { position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
-  .ghost-rival .plate { display: flex; align-items: center; gap: 4px; height: 28px; padding: 0 11px 0 7px; border-radius: 999px;
-    background: #121933; color: #F5F3FF; transform-origin: 50% 50%;
-    font: italic 800 14px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap;
-    box-shadow: inset 0 0 0 1.5px var(--c), 0 2px 8px rgba(18, 25, 51, 0.45), 0 0 12px color-mix(in srgb, var(--c) 45%, transparent); }
-  .ghost-rival .gap { letter-spacing: 0.01em; }
-  .ghost-rival svg { flex: none; color: var(--c); }
-  .ghost-rival .gh { width: 16px; height: 16px; }
-  .ghost-rival .arrow { position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -7px 0 0 -7px; overflow: visible; }
-  .ghost-rival.close .plate { animation: ghost-rival-pulse 0.9s ease-in-out infinite;
-    box-shadow: inset 0 0 0 2px var(--c), 0 2px 8px rgba(18, 25, 51, 0.45), 0 0 20px color-mix(in srgb, var(--c) 75%, transparent); }
-  @keyframes ghost-rival-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-  @media (prefers-reduced-motion: reduce) { .ghost-rival.close .plate { animation: none; } }
-  `;
-  document.head.appendChild(s);
-}
-
 /** Pool ghosts beyond the nearest few keep their bodies but lose their tags. */
 const POOL_TAGS = 3;
 /** A collapsed tag's dot (CSS px, its ring included). */
@@ -912,8 +846,8 @@ const smooth01 = (x: number) => {
 };
 const mix01 = (a: number, b: number, k: number) => a + (b - a) * k;
 
-function newTag(el: HTMLDivElement, prio: number): Tag {
-  return { el, prio, x: 0, y: 0, scale: 1, d: 0, dp: 0, ok: false, want: false, held: 0, a: 0, w: 0, h: 0, op: '0', tx: -1e9, ty: -1e9, ts: -1e9, stacked: false, dot: false, wantDot: false };
+function newTag(art: TagArt, prio: number): Tag {
+  return { art, prio, x: 0, y: 0, scale: 1, d: 0, dp: 0, ok: false, want: false, held: 0, a: 0, w: 0, h: 0, op: '0', tx: -1e9, ty: -1e9, ts: -1e9, stacked: false, dot: false, wantDot: false };
 }
 
 /** A ghost whose track ran out at or past the finish line finished its run; anywhere else it crashed
@@ -935,7 +869,8 @@ export function coastOn(speed: number, t: number): number {
 
 export class GhostVisuals {
   readonly root = new Object3D();
-  readonly layer: HTMLDivElement;
+  /** Every label, drawn in the canvas in one call (labels.ts). */
+  readonly batch = new LabelBatch();
   private items: Item[] = [];
   private glow = 1;
   labels = true;
@@ -979,15 +914,13 @@ export class GhostVisuals {
   private byPrio = (a: Tag, b: Tag) => a.prio - b.prio || a.d - b.d;
   private byPlayer = (a: Tag, b: Tag) => a.dp - b.dp;
   // The off-screen rival marker: an edge chevron pointing at the ghost the HUD's rival pill names.
-  private rivalEl: HTMLDivElement;
-  private rivalChev: SVGElement;
-  private rivalGap: HTMLSpanElement;
-  /** The gap text on the chip (written only when it changes). */
+  /** The gap text on the chip. */
   private rivalTxt = '';
   private rivalA = 0;
-  private rivalOp = '';
   private rivalId = -1;
-  /** The chip's width, measured once per viewport (0 until then). */
+  /** The chip's kind colour. */
+  private rivalC: RGB = rgb(GHOST_COLORS.pool);
+  /** The chip's width (0 until its digits are in the atlas). */
   private rivalW = 0;
   /** Safe-area insets (CSS px), read once per viewport size from a probe padded with env(). */
   private safe = { t: 0, r: 0, b: 0, l: 0 };
@@ -998,8 +931,6 @@ export class GhostVisuals {
   private rivalX = 0;
   private rivalY = 0;
   private rivalAng = 0;
-  /** Last written marker x, y, arrow angle and chip width (style writes only when they move). */
-  private rivalM = new Float32Array([-1e9, -1e9, -1e9, -1]);
   /** The rival is within 3 m: the chip pulses. */
   private rivalClose = false;
   /** Seconds since the run began (passes in its first moments, off the start line, are no news). */
@@ -1014,31 +945,12 @@ export class GhostVisuals {
     private course: Course,
     host: HTMLElement,
   ) {
-    injectStyle();
-    this.layer = document.createElement('div');
-    this.layer.className = 'ghost-layer';
-    // World-space tags only echo the HUD's rival readout; a reader would hear a pile of moving names.
-    this.layer.setAttribute('aria-hidden', 'true');
-    host.appendChild(this.layer);
+    // Safe-area insets, read once a viewport size from a hidden probe padded with env().
     this.safeProbe = document.createElement('div');
+    this.safeProbe.setAttribute('aria-hidden', 'true');
     this.safeProbe.style.cssText =
       'position:absolute;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) env(safe-area-inset-bottom,0px) env(safe-area-inset-left,0px)';
-    this.layer.appendChild(this.safeProbe);
-    // A solid ink-navy plate with the ghost glyph in the ghost's kind colour (at partial opacity on
-    // bright snow the old chip all but vanished) and the gap in metres (contract C12, the short form
-    // "6 m": the arrow says which way, and without a distance a pin read as no threat or target), and
-    // a filled arrowhead just outside it pointing at the ghost: a chevron rotated inside the plate
-    // read as a checkmark. The outer box is placed; the plate inside it pulses while the rival is
-    // within 3 m.
-    this.rivalEl = document.createElement('div');
-    this.rivalEl.className = 'ghost-rival';
-    this.rivalEl.innerHTML =
-      // The HUD rival pill's own ghost glyph, so the chip reads as that ghost.
-      `<div class="plate"><svg class="gh" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" fill-rule="evenodd" d="${GHOST_PATH}"/></svg><span class="gap"></span></div>` +
-      '<svg class="arrow" viewBox="0 0 14 14" aria-hidden="true"><path d="M2.5 1.8 12.6 7 2.5 12.2 4.6 7Z" fill="currentColor" stroke="#121933" stroke-width="1.6" stroke-linejoin="round"/></svg>';
-    this.rivalChev = this.rivalEl.lastElementChild as SVGElement;
-    this.rivalGap = this.rivalEl.querySelector('.gap') as HTMLSpanElement;
-    this.layer.appendChild(this.rivalEl);
+    host.appendChild(this.safeProbe);
   }
 
   setCourse(course: Course): void {
@@ -1093,23 +1005,9 @@ export class GhostVisuals {
    *  anchor height): a two-line tag at each, the place's name over '4 ghosts fell here', on every tier
    *  (Low draws no cairn). An empty list clears them. */
   setGraveyards(list: ReadonlyArray<GravePlace>): void {
-    for (const g of this.graves) g.tag.el.remove();
     this.graves = list.map((g) => {
       const copy = graveCopy(g.name, g.fell);
-      const l = document.createElement('div');
-      l.className = 'ghost-label marker grave';
-      l.style.setProperty('--c', GHOST_COLORS.pool);
-      const nm = document.createElement('span');
-      nm.className = 'gn';
-      nm.textContent = copy.name;
-      // A place's name is a proper noun; the count line is plain copy.
-      nm.translate = false;
-      const ln = document.createElement('span');
-      ln.className = 'gf';
-      ln.textContent = copy.line;
-      l.append(nm, ln);
-      this.layer.appendChild(l);
-      const tag = newTag(l, 2);
+      const tag = newTag({ form: 'grave', c: rgb(GHOST_COLORS.pool), a: null, emblem: null, text: copy.name, sub: copy.line }, 2);
       tag.pull = true;
       return { tag, x: g.x, y: g.y, z: g.z };
     });
@@ -1186,19 +1084,18 @@ export class GhostVisuals {
     if (this.reel || !this.labels || this.sinceTrick < TRICK_GAP || it.trickT > 0) return;
     if (!it.tagOn || t.a !== 1 || t.dot || !t.w) return;
     if (it.id === this.rivalNow && this.sinceStamp < STAMP_QUIET) return;
-    if (!it.tw) {
-      it.tw = document.createElement('span');
-      it.tw.className = 'tw';
-      it.tw.translate = true;
-      t.el.appendChild(it.tw);
-    }
-    it.tw.textContent = word;
     it.nameW = t.w;
     it.nameH = t.h;
-    t.el.classList.add('trick');
-    // The pill's new size (one layout read per whisper, at most one each 1.5 s).
-    t.w = t.el.offsetWidth || t.w;
-    t.h = t.el.offsetHeight || t.h;
+    it.tw = word;
+    // The pill's new size, from the word's own sprite.
+    t.w = 0;
+    this.measure(t, it);
+    if (!t.w) {
+      // (No atlas yet: the name stays.)
+      it.tw = '';
+      t.w = it.nameW;
+      return;
+    }
     it.trickT = TRICK_HOLD;
     this.sinceTrick = 0;
   }
@@ -1208,15 +1105,15 @@ export class GhostVisuals {
   private dropWord(it: Item): void {
     if (!it.kw || it.kwOff) return;
     this.endTrick(it);
-    it.kw.remove();
     it.kwOff = true;
+    it.tag.art.sub = null;
     it.tag.w = 0;
   }
 
   private endTrick(it: Item): void {
     it.trickT = 0;
-    if (!it.tag.el.classList.contains('trick')) return;
-    it.tag.el.classList.remove('trick');
+    if (!it.tw) return;
+    it.tw = '';
     if (it.nameW) {
       it.tag.w = it.nameW;
       it.tag.h = it.nameH;
@@ -1227,6 +1124,10 @@ export class GhostVisuals {
    *  sled): its glass sled takes that shape, and the ghost sits it as the rider would. */
   setField(list: Array<{ id: number; name: string; kind: GhostKind; role?: GhostRole; nemesis?: boolean; sled?: number }>): void {
     this.clear();
+    // A new field's names: the atlas starts over (its glyphs and digits come back on first use).
+    this.batch.reset();
+    this.rivalW = 0;
+    this.sayIt = null;
     list.forEach((g, n) => {
       const color = new Color(GHOST_COLORS[g.kind]);
       // Your best rides in gold-white glass; the others in the default spectral glass.
@@ -1247,32 +1148,10 @@ export class GhostVisuals {
       mesh.renderOrder = 5;
       // A ghost is the hero's size: the same toy, in glass.
       mesh.scale.setScalar(RIDER_SCALE);
-      const label = document.createElement('div');
-      label.className = rider ? 'ghost-label sig' : 'ghost-label';
-      label.style.setProperty('--c', GHOST_COLORS[g.kind]);
-      if (rider) {
-        label.style.setProperty('--a', rider.accent);
-        label.appendChild(emblemEl(rider));
-      }
-      const nm = document.createElement('span');
-      nm.className = 'nm';
       // Contract C7: your own best is never named by your own name, which read as a rival wearing it.
-      if (g.kind === 'you') nm.textContent = 'Your best';
-      else {
-        nm.textContent = rider?.name ?? g.name;
-        // Player names are proper nouns: keep auto-translate off them.
-        label.translate = false;
-      }
-      label.appendChild(nm);
-      let kw: HTMLSpanElement | null = null;
-      if (g.kind !== 'pool' && g.kind !== 'you') {
-        kw = document.createElement('span');
-        kw.className = 'tag';
-        // A grudge that has beaten you three runs running is a nemesis (rose, like any grudge).
-        kw.textContent = g.kind === 'grudge' ? (g.nemesis ? 'nemesis' : 'grudge') : g.kind === 'friend' ? 'challenge' : 'daily';
-        label.appendChild(kw);
-      }
-      this.layer.appendChild(label);
+      // A grudge that has beaten you three runs running is a nemesis (rose, like any grudge).
+      const kw = g.kind === 'pool' || g.kind === 'you' ? null : g.kind === 'grudge' ? (g.nemesis ? 'nemesis' : 'grudge') : g.kind === 'friend' ? 'challenge' : 'daily';
+      const art: TagArt = { form: 'ghost', c: rgb(GHOST_COLORS[g.kind]), a: rider ? rgb(rider.accent) : null, emblem: rider?.emblem ?? null, text: g.kind === 'you' ? 'Your best' : rider?.name ?? g.name, sub: kw };
       this.root.add(mesh);
       const special = g.kind === 'you' || g.kind === 'grudge' || g.kind === 'friend';
       this.items.push({
@@ -1299,7 +1178,7 @@ export class GhostVisuals {
         tilt: new Quaternion(),
         sledQ: new Quaternion(),
         sledP: new Vector3(),
-        tag: newTag(label, special ? 0 : 1),
+        tag: newTag(art, special ? 0 : 1),
         marker: null,
         markTag: null,
         wasGrounded: true,
@@ -1321,7 +1200,7 @@ export class GhostVisuals {
         sy: 0,
         sr: 0,
         sd: 0,
-        tw: null,
+        tw: '',
         trickT: 0,
         nameW: 0,
         nameH: 0,
@@ -1344,8 +1223,11 @@ export class GhostVisuals {
     this.buildFx(list.length);
   }
 
-  // The speech chip: one line at a time over a signature rider's tag (created on first use).
-  private sayEl: HTMLDivElement | null = null;
+  // The speech chip: one line at a time over a signature rider's tag.
+  /** Its lines as wrapped (a line's text and its sprite), its accent, and its text. */
+  private sayLines: Array<{ text: string; run: Run | null }> = [];
+  private sayAcc: RGB = PAPER;
+  private sayText = '';
   /** The ghost saying it, seconds left, seconds shown, its size (measured once per line), whether it
    *  shows this frame, and where it was last written. */
   private sayIt: Item | null = null;
@@ -1354,6 +1236,8 @@ export class GhostVisuals {
   private sayW = 0;
   private sayH = 0;
   private sayOn = false;
+  /** Seconds it has shown (its pop). */
+  private sayShown = 0;
   private sayX = -1e9;
   private sayY = -1e9;
 
@@ -1370,24 +1254,15 @@ export class GhostVisuals {
     const it = this.items.find((g) => g.id === ghostId);
     if (!it || !text || !this.labels || this.reel) return false;
     if (this.sayIt && this.sayT > 0 && this.sayAge < SAY_KEEP && this.sayIt !== it) return false;
-    if (!this.sayEl) {
-      this.sayEl = document.createElement('div');
-      this.sayEl.className = 'ghost-say';
-      this.sayEl.translate = true;
-      this.layer.appendChild(this.sayEl);
-    }
-    const el = this.sayEl;
-    el.style.setProperty('--a', it.rider?.accent ?? GHOST_COLORS[it.kind]);
+    this.sayAcc = it.rider ? rgb(it.rider.accent) : rgb(GHOST_COLORS[it.kind]);
     // (Typographic apostrophes: the roster's lines are typed with straight ones.)
-    el.textContent = text.replace(/'/g, '’');
-    el.classList.remove('on');
-    this.sayW = el.offsetWidth || 120;
-    this.sayH = el.offsetHeight || 22;
+    this.sayText = text.replace(/'/g, '’');
+    this.sayW = 0;
     this.sayIt = it;
     this.sayT = SAY_HOLD;
     this.sayAge = 0;
     this.sayOn = false;
-    el.style.opacity = '0';
+    this.sayShown = 0;
     return true;
   }
 
@@ -1400,12 +1275,12 @@ export class GhostVisuals {
   /** The chip over its ghost's tag, after the tags are placed (so it knows where its pill stands). */
   private placeSay(occluders: ReadonlyArray<Rect> | undefined, w: number, h: number, dt: number): void {
     const it = this.sayIt;
-    const el = this.sayEl;
-    if (!it || !el) return;
+    if (!it) return;
+    if (!this.sayW) this.wrapSay(w);
     this.sayT -= dt;
     this.sayAge += dt;
     const t = it.tag;
-    let show = this.sayT > 0 && this.labels && !this.reel && !(w < h && w < 560) && t.want && t.a === 1 && !t.dot && !it.trickT;
+    let show = this.sayW > 0 && this.sayT > 0 && this.labels && !this.reel && !(w < h && w < 560) && t.want && t.a === 1 && !t.dot && !it.trickT;
     let x = 0;
     let y = 0;
     if (show) {
@@ -1419,22 +1294,48 @@ export class GhostVisuals {
       show = y0 > 6 + safe.t && !this.onHud(occluders, x0, y0, x + hw, y + 4, 6) && !this.hits(x0, y0, x + hw, y + 4);
       if (show) this.claim(x0, y0, x + hw, y + 4);
     }
-    if (show && (this.labelsMove || !this.sayOn) && (Math.abs(x - this.sayX) > 0.05 || Math.abs(y - this.sayY) > 0.05)) {
+    if (show) {
       this.sayX = x;
       this.sayY = y;
-      el.style.transform = `translate3d(${x.toFixed(1)}px, ${y.toFixed(1)}px, 0) translate(-50%, -100%)`;
-    }
-    if (show !== this.sayOn) {
-      this.sayOn = show;
-      el.style.opacity = show ? '1' : '0';
       // The pop plays the first time it shows; a chip that hides and returns comes back plain.
-      if (show && !el.classList.contains('on')) el.classList.add('on');
+      this.sayShown += dt;
     }
+    this.sayOn = show;
     if (this.sayT <= 0) {
       this.sayIt = null;
-      el.style.opacity = '0';
       this.sayOn = false;
     }
+  }
+
+  /** Wraps the chip's line to its width's cap (220 px, or three fifths of a narrow screen), balanced over
+   *  two lines when it needs them, and sizes the chip. Leaves sayW at 0 until the atlas has the words. */
+  private wrapSay(viewW: number): void {
+    const max = Math.min(220, 0.6 * viewW) - 20;
+    const whole = this.batch.run(this.sayText, 'say');
+    if (!whole) return;
+    let lines = [this.sayText];
+    if (whole.w > max) {
+      // The break that leaves the two lines nearest in length (text-wrap: balance).
+      const words = this.sayText.split(' ');
+      let best = Infinity;
+      for (let k = 1; k < words.length; k++) {
+        const a = words.slice(0, k).join(' ');
+        const b = words.slice(k).join(' ');
+        const d = Math.abs(a.length - b.length);
+        if (d < best) {
+          best = d;
+          lines = [a, b];
+        }
+      }
+    }
+    this.sayLines = lines.map((text) => ({ text, run: lines.length === 1 ? whole : this.batch.run(text, 'say') }));
+    let lw = 0;
+    for (const l of this.sayLines) {
+      if (!l.run) return;
+      lw = Math.max(lw, l.run.w);
+    }
+    this.sayW = Math.ceil(lw + 20);
+    this.sayH = Math.ceil(9 + FACES.say.lh * lines.length);
   }
 
   /** One merged mesh each for every wisp (the tails and the scarf wisps), every shadow, every halo,
@@ -1537,9 +1438,7 @@ export class GhostVisuals {
       this.root.remove(it.mesh);
       it.mat.dispose();
       it.depth.dispose();
-      it.tag.el.remove();
       if (it.marker) this.root.remove(it.marker);
-      it.markTag?.el.remove();
     }
     this.items = [];
     for (const m of [this.wisp, this.shadow, this.aura, this.sleds]) {
@@ -1562,7 +1461,6 @@ export class GhostVisuals {
     for (const it of this.items) {
       if (it.marker) this.root.remove(it.marker);
       it.marker = null;
-      it.markTag?.el.remove();
       it.markTag = null;
       it.fade = 1;
       it.tagOn = false;
@@ -1576,7 +1474,7 @@ export class GhostVisuals {
       it.stompT = 0;
       it.wreckT = 0;
       if (it.kw && it.kwOff) {
-        it.tag.el.insertBefore(it.kw, it.tw);
+        it.tag.art.sub = it.kw;
         it.kwOff = false;
         it.tag.w = 0;
       }
@@ -1595,14 +1493,19 @@ export class GhostVisuals {
     this.sayIt = null;
     this.sayT = 0;
     this.sayOn = false;
-    if (this.sayEl) this.sayEl.style.opacity = '0';
   }
 
-  /** Low tier: labels may wait for the page's beat when frames run long. */
-  onBeat = false;
-  /** The frame time, read steadily, and whether labels move this frame. */
-  private frameS = 0;
-  private labelsMove = true;
+  /** This frame's time (the rings' and the chip's pulses run on it). */
+  private time = 0;
+  /** The frame's pixel ratio (the world sets it with the tier): the atlas is rasterised at it. */
+  pixelRatio = 1;
+
+  /** The labels over the finished frame: one draw call. The world calls it last. */
+  drawLabels(renderer: WebGLRenderer): void {
+    this.batch.draw(renderer);
+    // (The first frame is out: from the next one on, words may be rasterised.)
+    this.batch.arm();
+  }
 
   update(
     poses: Map<number, GhostPose | null>,
@@ -1618,13 +1521,13 @@ export class GhostVisuals {
     const dt = Number.isNaN(this.lastTime) ? 0 : Math.max(0, Math.min(0.1, time - this.lastTime));
     this.lastTime = time;
     this.dt = dt;
-    // Labels move on every frame, except on a Low frame short of 50 fps: there they wait for the page's
-    // beat, because a rider's name in the frame all run costs as much page work as the HUD (decision 217).
-    this.frameS += (dt - this.frameS) * 0.1;
-    this.labelsMove = !this.onBeat || this.frameS < LABEL_FRAME_S || pageBeat();
+    // (Labels move on every frame on every tier: in the canvas a moved pill is four vertices, where in
+    // the DOM it was a style, a layout and a paint, and Low had to hold them to the page's beat.)
+    this.time = time;
     this.viewW = w;
     this.runT += dt;
     this.syncView(w, h);
+    this.batch.begin(w, h, this.pixelRatio);
     // The rider is the hero: no tag ever sits on it.
     this.riderBounds(player, camera, w, h);
     const portrait = w < h;
@@ -1671,28 +1574,16 @@ export class GhostVisuals {
       }
       it.callT = Math.max(0, it.callT - dt);
       const call = it.callT > 0 && this.labels && !this.reel;
-      if (call !== it.callOn) {
-        it.callOn = call;
-        it.tag.el.classList.toggle('call', call);
-      }
+      it.callOn = call;
       it.wreckT = Math.max(0, it.wreckT - dt);
       it.stompT = Math.max(0, it.stompT - dt);
       const stomp = it.stompT > 0 && !call && this.labels && !this.reel;
-      if (stomp !== it.stompOn) {
-        it.stompOn = stomp;
-        it.tag.el.classList.toggle('stomp', stomp);
-      }
+      it.stompOn = stomp;
       it.dropT = Math.max(0, it.dropT - dt);
       const drop = it.dropT > 0 && this.labels;
-      if (drop !== it.dropOn) {
-        it.dropOn = drop;
-        it.tag.el.classList.toggle('passed', drop);
-      }
+      it.dropOn = drop;
       const duel = duelId === it.id && !!p && !p.done;
-      if (duel !== it.duelOn) {
-        it.duelOn = duel;
-        it.tag.el.classList.toggle('duel', duel);
-      }
+      it.duelOn = duel;
       if (!p) {
         it.shown = 0;
         it.mesh.visible = false;
@@ -1850,10 +1741,7 @@ export class GhostVisuals {
       // the ghost the HUD's rival pill names keeps its tag whenever it is on screen and not sitting on
       // you or at the lens, ringed in its kind colour and placed before every other tag. The one riding
       // past your wreck goes before even the HUD's rival: the pill names it now.
-      if (isRival !== it.ringed) {
-        it.ringed = isRival;
-        it.tag.el.classList.toggle('rival', isRival);
-      }
+      it.ringed = isRival;
       it.tag.prio = tagPrio(isRival, it.wreckT, it.basePrio);
       // (The title reel names the ghost racing at the hero's shoulder, about the hero's size, so its
       // size-based dissolve does not hide the tag there.)
@@ -1892,7 +1780,9 @@ export class GhostVisuals {
     }
     this.declutter(occluders, h);
     this.animateTags(dt);
+    this.drawTags();
     this.placeSay(occluders, w, h, dt);
+    this.drawSay();
     this.placeRival(rival ?? null, poses, camera, w, h, dt, occluders);
   }
 
@@ -1910,7 +1800,7 @@ export class GhostVisuals {
       const t = (this.bestTag ??= this.makeLineTag(GHOST_COLORS.you));
       if (txt !== this.bestTxt) {
         this.bestTxt = txt;
-        t.el.textContent = txt;
+        t.art.text = txt;
         t.w = 0;
       }
       if (t.a === 0) this.bestSide = this.awaySide(best.z, player);
@@ -1923,7 +1813,7 @@ export class GhostVisuals {
       const t = (this.friendTag ??= this.makeLineTag(GHOST_COLORS.friend));
       if (txt !== this.friendTxt) {
         this.friendTxt = txt;
-        t.el.textContent = txt;
+        t.art.text = txt;
         t.w = 0;
       }
       if (t.a === 0) this.friendSide = this.awaySide(friend.z, player);
@@ -1932,13 +1822,7 @@ export class GhostVisuals {
   }
 
   private makeLineTag(color: string): Tag {
-    const l = document.createElement('div');
-    l.className = 'ghost-label line';
-    l.style.setProperty('--c', color);
-    // A friend's name is a proper noun; the copy around it is plain.
-    l.translate = false;
-    this.layer.appendChild(l);
-    const t = newTag(l, 2);
+    const t = newTag({ form: 'line', c: rgb(color), a: null, emblem: null, text: '', sub: null }, 2);
     // (A band across the snow: on a phone its tag's spot is often at the frame's edge.)
     t.pull = true;
     return t;
@@ -2035,18 +1919,13 @@ export class GhostVisuals {
 
   /** The chip's gap text and its within-3 m pulse for the rival's shown gap (written only on change). */
   private rivalText(gap: number): void {
-    const close = Math.abs(gap) < 3;
-    if (close !== this.rivalClose) {
-      this.rivalClose = close;
-      this.rivalEl.classList.toggle('close', close);
-    }
+    this.rivalClose = Math.abs(gap) < 3;
     const txt = rivalChipText(gap);
-    if (txt !== this.rivalTxt) {
-      // The chip's width holds while the digit count does (tabular figures), so it is measured
-      // again only when that changes (and once per viewport).
-      if (txt.length !== this.rivalTxt.length) this.rivalW = 0;
+    if (txt !== this.rivalTxt || !this.rivalW) {
       this.rivalTxt = txt;
-      this.rivalGap.textContent = txt;
+      // The chip's width, from its digits' own sprites: 7 px, the glyph's 16, a 4 px gap, the gap, 11 px.
+      const tw = this.chipText(0, 0, false);
+      this.rivalW = tw > 0 ? Math.ceil(38 + tw) : 0;
     }
   }
 
@@ -2089,12 +1968,11 @@ export class GhostVisuals {
       if (off) {
         if (it.id !== this.rivalId) {
           this.rivalId = it.id;
-          this.rivalEl.style.setProperty('--c', GHOST_COLORS[it.kind]);
+          this.rivalC = it.tag.art.c;
         }
         this.rivalText(rival!.gap);
-        if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
         // Room for the arrowhead outside the chip, on whichever side it points.
-        const hw = this.rivalW / 2 + 22;
+        const hw = (this.rivalW || 64) / 2 + 22;
         const hh = 14 + 22;
         // Walk out from the centre of the screen toward the ghost until the chip meets the edge,
         // then keep it inside the safe area (a notch or the home indicator in landscape).
@@ -2131,7 +2009,6 @@ export class GhostVisuals {
     // ('14 m' against the pill's '15 m' as the rival dropped past 15 m behind).
     if (!off && rival && rival.id === this.rivalId && this.rivalA > 0) {
       this.rivalText(rival.gap);
-      if (this.rivalW <= 0) this.rivalW = this.rivalEl.offsetWidth || 64;
     }
     // Only a rival that stays out of frame for a moment earns the marker (no flicker at the edge);
     // once earned it comes in fast, so it is never caught half transparent.
@@ -2140,34 +2017,61 @@ export class GhostVisuals {
     const target = want ? 1 : 0;
     this.rivalA = dt === 0 ? target : this.rivalA + (target - this.rivalA) * Math.min(1, dt * 16);
     if (Math.abs(this.rivalA - target) < 0.02) this.rivalA = target;
-    const op = this.rivalA.toFixed(2);
-    if (op !== this.rivalOp) {
-      this.rivalOp = op;
-      this.rivalEl.style.opacity = op;
+    if (this.rivalA > 0 && this.rivalW > 0) this.drawChip();
+  }
+
+  /** The chip's gap, set from its digits' sprites at local (x, y): returns its width (0 with a sprite
+   *  still to come), and draws it when asked. */
+  private chipText(x: number, y: number, draw: boolean): number {
+    const b = this.batch;
+    const txt = this.rivalTxt;
+    let w = 0;
+    for (let i = 0; i < txt.length; i++) {
+      // The digits one by one (tabular), then ' m' as one sprite.
+      const digit = txt.charCodeAt(i) >= 48 && txt.charCodeAt(i) <= 57;
+      const r = b.run(digit ? txt[i] : txt.slice(i), 'chip');
+      if (!r) return 0;
+      if (draw) b.sprite(r, x + w, y, PAPER, 1);
+      w += r.w;
+      if (!digit) break;
     }
-    if (this.rivalA === 0) return;
-    if (!this.labelsMove) return;
-    const m = this.rivalM;
-    if (Math.abs(this.rivalX - m[0]) > 0.05 || Math.abs(this.rivalY - m[1]) > 0.05) {
-      m[0] = this.rivalX;
-      m[1] = this.rivalY;
-      this.rivalEl.style.transform = `translate3d(${this.rivalX.toFixed(1)}px, ${this.rivalY.toFixed(1)}px, 0) translate(-50%, -50%)`;
+    return w;
+  }
+
+  /** The edge chip (contract C1): a solid ink-navy plate with the ghost glyph in the ghost's kind colour
+   *  (at partial opacity on bright snow the old chip all but vanished) and the gap in metres (C12, the
+   *  short form '6 m': the arrow says which way), and a filled arrowhead just outside it pointing at the
+   *  ghost. The plate pulses while the rival is within 3 m. */
+  private drawChip(): void {
+    const b = this.batch;
+    const c = this.rivalC;
+    const w = this.rivalW;
+    const glyph = b.glyph('ghost', GHOST_PATH, 24, 16, { evenodd: true });
+    const arrowF = b.glyph('arrowF', ARROW_PATH, 14, 14);
+    const arrowS = b.glyph('arrowS', ARROW_PATH, 14, 14, { stroke: 1.6 });
+    if (!glyph || !arrowF || !arrowS) return;
+    const close = this.rivalClose;
+    const k = close && !reducedMotion() ? 1 + 0.05 * (1 - Math.cos((this.time * Math.PI * 2) / 0.9)) : 1;
+    b.at(this.rivalX, this.rivalY, k, this.rivalA);
+    const hw = w / 2;
+    b.shadow(0, 0, hw, 14, 14, c, close ? 0.75 : 0.45, close ? 20 : 12);
+    b.shadow(0, 2, hw, 14, 14, INK, 0.45, 8);
+    b.box(0, 0, hw, 14, 14, INK, 1, c, 1, close ? 2 : 1.5);
+    b.sprite(glyph, -hw + 7, -8, c, 1);
+    this.chipText(-hw + 27, -8, true);
+    // The arrowhead: out from the chip's centre to just past its pill-shaped edge along its direction.
+    const co = Math.cos(this.rivalAng);
+    const si = Math.sin(this.rivalAng);
+    const ph = 14;
+    const cx = Math.max(0, hw - ph);
+    let t = ph / Math.max(Math.abs(si), 1e-3);
+    if (Math.abs(co) * t > cx) {
+      const e = Math.abs(co) * cx;
+      t = e + Math.sqrt(Math.max(0, e * e - cx * cx + ph * ph));
     }
-    if (Math.abs(this.rivalAng - m[2]) > 0.01 || this.rivalW !== m[3]) {
-      m[2] = this.rivalAng;
-      m[3] = this.rivalW;
-      // Out from the chip's centre to just past its pill-shaped edge along the arrow's direction.
-      const c = Math.cos(this.rivalAng);
-      const s = Math.sin(this.rivalAng);
-      const ph = 14;
-      const cx = Math.max(0, this.rivalW / 2 - ph);
-      let t = ph / Math.max(Math.abs(s), 1e-3);
-      if (Math.abs(c) * t > cx) {
-        const b = Math.abs(c) * cx;
-        t = b + Math.sqrt(Math.max(0, b * b - cx * cx + ph * ph));
-      }
-      this.rivalChev.style.transform = `rotate(${((this.rivalAng * 180) / Math.PI).toFixed(1)}deg) translateX(${(t + 7).toFixed(1)}px)`;
-    }
+    b.at(this.rivalX, this.rivalY, 1, this.rivalA);
+    b.spriteAt(arrowF, co * (t + 7), si * (t + 7), this.rivalAng, c, 1);
+    b.spriteAt(arrowS, co * (t + 7), si * (t + 7), this.rivalAng, INK, 1);
   }
 
   /** Seats the ghost on its sled as rider.ts seats the rider: the sled tilts to the slope under it
@@ -2579,11 +2483,9 @@ export class GhostVisuals {
     }
     for (const t of cands) {
       if (this.nr >= 64) break;
-      // Label sizes never change, so measure once (no per-frame layout reads).
-      if (!t.w) {
-        t.w = t.el.offsetWidth || 90;
-        t.h = t.el.offsetHeight || 20;
-      }
+      // A label's size never changes, so it is measured once, from its words' sprites (no layout is
+      // ever read). Until the atlas has them (the first frame, a full atlas) the tag waits.
+      if (!t.w && !this.measure(t, null)) continue;
       t.wantDot = false;
       const tw = t.w * t.scale;
       const th = t.h * t.scale;
@@ -2623,10 +2525,7 @@ export class GhostVisuals {
         // A slid tag drops its pointer: it no longer sits right above its ghost.
         const slid = Math.abs(x - t.x) > 4;
         t.x = x;
-        if (slid !== t.stacked) {
-          t.stacked = slid;
-          t.el.classList.toggle('stacked', slid);
-        }
+        t.stacked = slid;
         placed = true;
         break;
       }
@@ -2688,27 +2587,223 @@ export class GhostVisuals {
     // fade threshold or two tags trade a slot) and hides the frame it is no longer wanted.
     t.held = t.want ? t.held + dt : 0;
     const on = t.want && (t.a === 1 || t.held >= 0.1);
-    // Pill or dot: a class flip only when the state changes (the dot's size is fixed in CSS, so the
-    // pill's measured size stays valid).
-    if (t.want && t.wantDot !== t.dot) {
-      t.dot = t.wantDot;
-      t.el.classList.toggle('dot', t.dot);
-      t.ts = -1;
-    }
-    const scale = t.dot ? 1 : t.scale;
-    // (A tag coming on is placed at once: it must not show where it last stood.)
-    if (t.want && (this.labelsMove || t.op !== '1') && (Math.abs(t.x - t.tx) > 0.05 || Math.abs(t.y - t.ty) > 0.05 || Math.abs(scale - t.ts) > 0.002)) {
-      t.tx = t.x;
-      t.ty = t.y;
-      t.ts = scale;
-      t.el.style.transform = `translate3d(${t.x.toFixed(1)}px, ${(t.dot ? t.y - 2 : t.y).toFixed(1)}px, 0) translate(-50%, -100%) scale(${scale.toFixed(3)})`;
-    }
+    // Pill or dot (the dot's size is fixed, so the pill's measured size stays valid).
+    if (t.want && t.wantDot !== t.dot) t.dot = t.wantDot;
     t.a = on ? 1 : 0;
-    const op = on ? '1' : '0';
-    if (op !== t.op) {
-      t.op = op;
-      t.el.style.opacity = op;
+    t.op = on ? '1' : '0';
+  }
+
+  /** A sprite for one of a tag's words, kept on the tag while the atlas holds it. */
+  private word(text: string, face: FaceId): Run | null {
+    return this.batch.run(text, face);
+  }
+
+  /** Sizes a tag from its words (CSS px, as its CSS laid it out): false while the atlas has not got them.
+   *  `it` is its ghost when a trick word may stand in for the name. */
+  private measure(t: Tag, it: Item | null): boolean {
+    const a = t.art;
+    if (a.form === 'grave') {
+      const n = this.word(a.text, 'mark');
+      const l = this.word(a.sub ?? '', 'fell');
+      if (!n || !l) return false;
+      t.w = Math.ceil(22 + Math.max(Math.min(190, n.w), l.w));
+      t.h = 36;
+      return true;
     }
+    const trick = a.form === 'ghost' && it !== null && it.tw !== '';
+    const main = this.word(trick ? it!.tw : a.text, trick ? 'trick' : a.form === 'marker' ? 'mark' : 'name');
+    if (!main) return false;
+    let w = 18 + main.w + (a.emblem ? (a.form === 'marker' ? 16 : 15) : 0);
+    if (a.form === 'ghost' && a.sub && !trick) {
+      const kw = this.word(a.sub, 'kind');
+      if (!kw) return false;
+      w += 5 + kw.w;
+    }
+    t.w = Math.ceil(w);
+    t.h = 20;
+    return true;
+  }
+
+  /** This frame's tags into the batch, in the order the DOM stacked them: landmarks under ghosts, the
+   *  rival's on top. */
+  private drawTags(): void {
+    for (const g of this.graves) if (g.tag.a === 1) this.drawTag(g.tag, null);
+    for (const it of this.items) if (it.markTag && it.markTag.a === 1) this.drawTag(it.markTag, null);
+    if (this.bestTag && this.bestTag.a === 1) this.drawTag(this.bestTag, null);
+    if (this.friendTag && this.friendTag.a === 1) this.drawTag(this.friendTag, null);
+    let ringed: Item | null = null;
+    for (const it of this.items) {
+      if (it.tag.a !== 1) continue;
+      if (it.ringed) ringed = it;
+      else this.drawTag(it.tag, it);
+    }
+    if (ringed) this.drawTag(ringed.tag, ringed);
+  }
+
+  /** One pill (ART.md 10: a full pill in its ghost's kind colour with ink type, a marker's in ink with
+   *  its colour for type): its glow, its shadow, its edge, its pointer, its emblem, its words, and the
+   *  ring a duel, a call or a stomp plays round it. */
+  private drawTag(t: Tag, it: Item | null): void {
+    const b = this.batch;
+    const art = t.art;
+    const c = art.c;
+    const still = this.feel.reduced || reducedMotion();
+    if (t.dot) {
+      // Collapsed: a dot in its kind colour, ringed in ink.
+      b.at(t.x, t.y - 6.5, 1, 1);
+      b.shadow(0, 0, 4.5, 4.5, 4.5, c, 0.65, 8);
+      b.box(0, 0, 6, 6, 6, INK, 1);
+      b.box(0, 0, 4.5, 4.5, 4.5, c, 1);
+      return;
+    }
+    let s = t.scale;
+    let dy = 0;
+    if (it && it.dropOn && !still) {
+      const d = dropPose(1 - it.dropT / DROP_HOLD);
+      dy = d.y;
+      s *= d.s;
+    }
+    const w = t.w;
+    const h = t.h;
+    const hw = w / 2;
+    const hh = h / 2;
+    b.at(t.x - hw * s, t.y + dy - h * s, s, 1);
+    const ghost = art.form === 'ghost';
+    const dark = !ghost;
+    const r = art.form === 'grave' ? 9 : hh;
+    const bg = dark ? INK : c;
+    if (ghost && it && it.ringed) {
+      // The rival's ring (contract C11): ink, then its kind colour, outside the pill.
+      b.shadow(hw, hh, hw, hh, r, c, 0.6, 16);
+      b.shadow(hw, hh + 2, hw, hh, r, INK, 0.35, 8);
+      b.box(hw, hh, hw + 3.5, hh + 3.5, r + 3.5, c, 1);
+      b.box(hw, hh, hw + 1.5, hh + 1.5, r + 1.5, INK, 1);
+    } else if (ghost) {
+      b.shadow(hw, hh, hw, hh, r, c, 0.55, 14);
+      b.shadow(hw, hh + 2, hw, hh, r, INK, 0.3, 6);
+      b.box(hw, hh, hw + 1, hh + 1, r + 1, INK, 0.3);
+    } else {
+      if (art.form === 'line') b.shadow(hw, hh, hw, hh, r, c, 0.4, 12);
+      b.shadow(hw, hh + 2, hw, hh, r, INK, art.form === 'line' ? 0.35 : 0.3, 6);
+    }
+    // The pill: a signature rider's wears a thin inner edge of its accent; a dark one, of its colour.
+    if (ghost) b.box(hw, hh, hw, hh, r, c, 1, art.a, 1, 1.5);
+    else if (art.form === 'line') b.box(hw, hh, hw, hh, r, INK, 1, c, 1, 1.5);
+    else b.box(hw, hh, hw, hh, r, INK, 1, c, 0.55, 1);
+    // Its pointer (a slid tag drops it: it no longer sits right above its ghost).
+    if (!t.stacked) {
+      b.diamond(hw, h + 0.7, 4.95, INK, 0.3);
+      b.diamond(hw, h - 0.5, 4.95, bg, 1);
+    }
+    let x = 9;
+    if (art.emblem && art.a) {
+      const ex = art.form === 'marker' ? 12.5 : 11.5;
+      const e = EMBLEMS[art.emblem];
+      const g = b.glyph(art.emblem, e.d, 16, 11, { stroke: e.s ? 1.9 : undefined, n: e.n });
+      b.box(ex, hh + 0.5, 8.5, 8.5, 8.5, INK, 0.6);
+      b.box(ex, hh + 0.5, 7.5, 7.5, 7.5, art.a, 1);
+      if (g) b.sprite(g, ex - 5.5, hh - 5, INK, 1);
+      x += art.form === 'marker' ? 16 : 15;
+    }
+    if (art.form === 'grave') {
+      const n = this.word(art.text, 'mark');
+      const l = this.word(art.sub ?? '', 'fell');
+      if (n) b.sprite(n, hw - Math.min(190, n.w) / 2, 4, c, 1);
+      if (l) b.sprite(l, hw - l.w / 2, 4 + FACES.mark.lh + 2, PAPER, 1);
+      return;
+    }
+    const ink = dark ? c : INK;
+    if (ghost && it && it.tw) {
+      // The trick word pops in where the name was (a plain fade under reduced motion).
+      const tr = this.word(it.tw, 'trick');
+      const p = Math.min(1, (TRICK_HOLD - it.trickT) / 0.22);
+      const k = still ? 1 : p < 0.6 ? 0.55 + 0.57 * easeOut(p / 0.6) : 1.12 - 0.12 * ((p - 0.6) / 0.4);
+      if (tr) b.sprite(tr, x + (tr.w / 2) * (1 - k), 3 + (tr.h / 2) * (1 - k), ink, Math.min(1, p / 0.6), k);
+    } else {
+      const nm = this.word(art.text, art.form === 'marker' ? 'mark' : 'name');
+      if (nm) b.sprite(nm, x, 3, ink, 1);
+      if (ghost && art.sub && nm) {
+        const kw = this.word(art.sub, 'kind');
+        if (kw) b.sprite(kw, x + nm.w + 5, 3 + nm.base - kw.base, ink, 0.9);
+      }
+    }
+    if (!ghost || !it) return;
+    // The ring round the pill: the start-line call's three pings, a perfect landing's one, or the duel's
+    // heartbeat at 1.2 Hz (contract C11). Reduced motion holds the duel's and the call's still.
+    let op = 0;
+    let sx = 1;
+    let sy = 1;
+    if (it.callOn) {
+      const el = CALL_HOLD - it.callT;
+      if (still) op = 1;
+      else if (el < 2.598) {
+        const e = easeOut((el % 0.866) / 0.866);
+        op = 1 - e;
+        sx = 1 + 0.32 * e;
+        sy = 1 + 0.9 * e;
+      }
+    } else if (it.stompOn) {
+      const p = 1 - it.stompT / STOMP_HOLD;
+      const e = easeOut(p);
+      op = 1 - (still ? p : e);
+      if (!still) {
+        sx = 0.92 + 0.53 * e;
+        sy = 0.92 + 1.28 * e;
+      }
+    } else if (it.duelOn) {
+      if (still) op = 1;
+      else {
+        const e = easeOut(Math.min(1, ((this.time % 0.833) / 0.833) / 0.7));
+        op = 0.95 * (1 - e);
+        sx = 1 + 0.18 * e;
+        sy = 1 + 0.55 * e;
+      }
+    }
+    if (op > 0.01) b.ring(hw, hh, (hw + 5) * sx, (hh + 5) * sy, 999, c, op, 2);
+  }
+
+  /** The speech chip: an ink plate edged in its rider's accent, the line in paper italics, a pointer
+   *  down to the tag. It pops the first time it shows (a fade under reduced motion). */
+  private drawSay(): void {
+    if (!this.sayOn || !this.sayIt) return;
+    const b = this.batch;
+    const w = this.sayW;
+    const h = this.sayH;
+    const p = Math.min(1, this.sayShown / 0.2);
+    const still = this.feel.reduced || reducedMotion();
+    const k = still ? 1 : 0.6 + 0.4 * (p < 0.7 ? 1.08 * easeOut(p / 0.7) : 1.08 - 0.08 * ((p - 0.7) / 0.3));
+    b.at(this.sayX - (w / 2) * k, this.sayY - h * k, k, still ? p : 1);
+    b.shadow(w / 2, h / 2 + 2, w / 2, h / 2, 10, INK, 0.45, 8);
+    b.diamond(w / 2, h, 5.66, this.sayAcc, 1);
+    b.box(w / 2, h / 2, w / 2, h / 2, 10, INK, 1, this.sayAcc, 1, 1.5);
+    b.diamond(w / 2, h - 2.1, 5.66, INK, 1);
+    for (let i = 0; i < this.sayLines.length; i++) {
+      const l = this.sayLines[i];
+      const run = this.word(l.text, 'say');
+      if (run) b.sprite(run, (w - run.w) / 2, 4 + i * FACES.say.lh, PAPER, 1);
+    }
+  }
+
+  /** Play-tests: the tags showing this frame, by kind (what strips.js once read from the DOM). */
+  tagsNow(): Record<string, number | string> {
+    const out: Record<string, number | string> = {};
+    const add = (k: string) => {
+      out[k] = ((out[k] as number) || 0) + 1;
+    };
+    for (const it of this.items) {
+      if (it.tag.a === 1) {
+        add(it.tag.dot ? 'dot' : 'ghost');
+        if (it.duelOn) out.duelRing = 1;
+        if (it.tw) out.trick = it.tw;
+        if (it.tag.art.sub === 'nemesis') out.nemesis = 1;
+      }
+      if (it.markTag && it.markTag.a === 1) add('marker');
+    }
+    for (const g of this.graves) if (g.tag.a === 1) add('grave');
+    for (const t of [this.bestTag, this.friendTag]) if (t && t.a === 1) add('line');
+    if (this.sayOn) add('say');
+    if (this.rivalA > 0.5) add('chip');
+    return out;
   }
 
   private plantMarker(it: Item, pos: Vector3): void {
@@ -2722,20 +2817,10 @@ export class GhostVisuals {
     g.position.set(pos.x, gy, pos.z);
     this.root.add(g);
     it.marker = g;
-    const l = document.createElement('div');
-    l.className = 'ghost-label marker';
-    l.style.setProperty('--c', GHOST_COLORS[it.kind]);
-    const who = document.createElement('span');
-    // Contract C7: your own best is "Your best", never your name.
-    who.textContent = it.kind === 'you' ? 'Your best' : it.rider?.name ?? it.name;
-    who.translate = it.kind === 'you';
-    // A signature rider's marker carries its emblem too.
-    if (it.rider) {
-      l.style.setProperty('--a', it.rider.accent);
-      l.appendChild(emblemEl(it.rider));
-    }
-    l.append(who, ' wiped out here');
-    this.layer.appendChild(l);
-    it.markTag = newTag(l, 2);
+    // Contract C7: your own best is "Your best", never your name. A signature rider's marker carries its
+    // emblem too.
+    const who = it.kind === 'you' ? 'Your best' : it.rider?.name ?? it.name;
+    const art: TagArt = { form: 'marker', c: it.tag.art.c, a: it.tag.art.a, emblem: it.tag.art.emblem, text: `${who} wiped out here`, sub: null };
+    it.markTag = newTag(art, 2);
   }
 }

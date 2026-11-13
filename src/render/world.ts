@@ -296,7 +296,7 @@ export class World {
     this.weather = new Weather(3200);
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
-    this.ghosts.onBeat = quality.detail === 'low';
+    this.ghosts.pixelRatio = quality.pixelRatio;
     this.ghosts.glass = quality.detail === 'low' ? 0 : quality.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(quality.detail === 'low' ? 'lite' : 'full');
     this.chaos = new ChaosVisuals(this.course);
@@ -498,7 +498,7 @@ export class World {
     this.terrain.setDetail(q.terrain, q.shadows);
     this.midground.setTier(q.detail, q.terrain.reach);
     this.overlooks.setTier(q.detail);
-    this.ghosts.onBeat = q.detail === 'low';
+    this.ghosts.pixelRatio = q.pixelRatio;
     this.ghosts.glass = q.detail === 'low' ? 0 : q.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(q.detail === 'low' ? 'lite' : 'full');
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
@@ -1096,6 +1096,8 @@ export class World {
     if (this.cineHold) Object.assign(cine, this.cineHold);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
+    // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
+    this.ghosts.drawLabels(this.renderer);
   }
 
   /**
