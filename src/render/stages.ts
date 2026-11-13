@@ -585,8 +585,9 @@ export class Stages {
     const root = new Object3D();
     const b = new Beams();
     const end = s.z + s.len;
-    const dawn = night ? new Color(0.5, 0.62, 1.0) : new Color(1.0, 0.56, 0.42);
-    const gold = night ? new Color(0.7, 0.8, 1.0) : new Color(1.0, 0.8, 0.52);
+    // (Saturated: added over blue ice, a paler warm turns to lilac.)
+    const dawn = night ? new Color(0.5, 0.62, 1.0) : new Color(1.0, 0.42, 0.26);
+    const gold = night ? new Color(0.7, 0.8, 1.0) : new Color(1.0, 0.62, 0.22);
     const k0 = night ? 0.5 : 1;
     const at = (z: number, off: number, up: number): number[] => {
       const x = c.centerX(z) + off;
@@ -599,10 +600,10 @@ export class Stages {
     for (let i = 0; i < N; i++) {
       const za = end - REACH * (1 - i / N);
       const zb = end - REACH * (1 - (i + 1) / N);
-      const wa = 0.6 + hwE * 0.95 * Math.pow(i / N, 1.5);
-      const wb = 0.6 + hwE * 0.95 * Math.pow((i + 1) / N, 1.5);
-      const ka = 0.75 * Math.pow(i / N, 1.4) * k0;
-      const kb = 0.75 * Math.pow((i + 1) / N, 1.4) * k0;
+      const wa = 0.6 + hwE * 0.7 * Math.pow(i / N, 1.5);
+      const wb = 0.6 + hwE * 0.7 * Math.pow((i + 1) / N, 1.5);
+      const ka = 0.6 * Math.pow(i / N, 1.4) * k0;
+      const kb = 0.6 * Math.pow((i + 1) / N, 1.4) * k0;
       for (const sd of [-1, 1]) {
         b.quad(at(za, 0, 0.12), at(zb, 0, 0.12), at(zb, sd * wb, 0.12 + (wb > c.halfWidth(zb) ? 0.5 : 0)), at(za, sd * wa, 0.12), gold, ka, kb, 0, 0);
       }
