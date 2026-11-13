@@ -1283,7 +1283,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#0E0A0E');
         p.skyMid = c('#36181C');
         p.skyHorizon = c('#E8481A');
-        p.sunColor = c('#FFD0B4');
+        // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
+        // light on a dusk snow gave a grey-mauve floor that nothing lit.
+        p.sunColor = c('#FFB490');
         p.snowLit = c('#E4D6D2');
         p.snowShade = c('#2C3674');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
@@ -1314,12 +1316,12 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3500, at: 4100, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
-        p.sunColor = c('#F6C8B4');
+        p.sunColor = c('#FFB89C');
         p.skyZenith = c('#0A0608');
         p.skyMid = c('#2C1014');
         p.skyHorizon = c('#D03A12');
         // Night snow under a red deck is a dusk rose over plum, and the lamps are what is orange.
-        p.snowLit = c('#C2B6C6');
+        p.snowLit = c('#D0C4CC');
         p.snowShade = c('#262E56');
         p.fog = c('#4C1C18');
         p.hazardDim = 0.9;
@@ -1578,7 +1580,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Cinder Gate and the Halls' roof: black, lit from below, the far mouth a hot disc.
       kind: 'tunnel',
       edit: (p) => {
-        p.snowLit = c('#A8989C');
+        p.snowLit = c('#B4A4A4');
         p.snowShade = c('#201E3C');
         p.snowDeep = c('#120E22');
         p.fog = c('#1E0C10');
