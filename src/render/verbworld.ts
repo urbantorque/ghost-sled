@@ -41,6 +41,8 @@ const ROSE = new Color('#FFB7C9');
 const BRONZE = new Color('#F0B050');
 const DIM = new Color('#8A5A3A');
 const MUTE = new Color('#B48A5E');
+/** A mark on sunlit snow: deep marigold, so it has value against white as well as hue. */
+const MARK = new Color('#FF9E1A');
 const BLOOM = new Color('#FF6FA8');
 const INK = new Color('#2A2D48');
 const PETALS: readonly Color[] = [new Color('#FFC9DA'), new Color('#FFE3EC'), new Color('#FF9DBB')];
@@ -66,15 +68,19 @@ const v2 = new Vector3();
 
 /** A paper lantern: a bulged drum, pale so the instance's colour is its light, with a dark cap, foot and tassel. */
 export function lanternGeo(sides: number): BufferGeometry {
-  const body = new CylinderGeometry(0.34, 0.34, 0.66, sides, 2);
-  const pos = body.getAttribute('position');
-  for (let i = 0; i < pos.count; i++) {
-    const k = 1 + 0.36 * (1 - Math.min(1, Math.abs(pos.getY(i)) / 0.33) ** 2);
-    pos.setX(i, pos.getX(i) * k);
-    pos.setZ(i, pos.getZ(i) * k);
+  // (Four bands of paper between hoops: each band its own value, palest at the waist, so the drum has
+  // ribs and a glowing belly.)
+  const bands: BufferGeometry[] = [];
+  const ys = [-0.33, -0.17, 0, 0.17, 0.33];
+  const rad = (y: number): number => 0.34 * (1 + 0.36 * (1 - Math.min(1, Math.abs(y) / 0.33) ** 2));
+  const tones = ['#D9A070', '#FFFFFF', '#FFF2DC', '#E2AC7C'];
+  for (let b = 0; b < 4; b++) {
+    const g = new CylinderGeometry(rad(ys[b + 1]), rad(ys[b]), ys[b + 1] - ys[b], sides, 1, true);
+    g.translate(0, (ys[b] + ys[b + 1]) / 2, 0);
+    bands.push(part(g, tones[b]));
   }
   const dark = new Color('#241C2A');
-  return merge([part(body, '#FFFFFF'), box(0.4, 0.09, 0.4, dark, [0, 0.37, 0]), box(0.32, 0.07, 0.32, dark, [0, -0.36, 0]), box(0.06, 0.34, 0.06, new Color('#7A2A20'), [0, -0.56, 0])]);
+  return merge([...bands, box(0.4, 0.09, 0.4, dark, [0, 0.37, 0]), box(0.32, 0.07, 0.32, dark, [0, -0.36, 0]), box(0.06, 0.34, 0.06, new Color('#7A2A20'), [0, -0.56, 0])]);
 }
 
 /** A temple bell, hung from its crown at the origin: a flared bronze body, a dark lip and a clapper. */
@@ -344,7 +350,7 @@ export class VerbWorld {
 
   /** A paper lantern: half as large again as its form and bright enough to be the light in a day frame. */
   private lan(x: number, y: number, z: number, q: Quaternion | null, sx: number, sy: number, sz: number, col: Color, lum: number): void {
-    this.lanterns.put(x, y, z, q, sx * 1.45, sy * 1.45, sz * 1.45, col, lum * 1.7);
+    this.lanterns.put(x, y, z, q, sx * 1.45, sy * 1.45, sz * 1.45, col, lum * 1.8);
   }
 
   private stamp(x: number, z: number, t: number): void {
@@ -481,7 +487,7 @@ export class VerbWorld {
       }
       // Its light on the snow in the opening; the next gate is called with a chevron.
       kit.decal(c, gx, g.z, 2 * g.hw + 2, 6, col, Math.min(1.5, lum));
-      if (next && g.z > s.z + 6) kit.decal(c, gx, g.z - 8, 4, 5.5, WHITE_GOLD, breathe, DECAL_CHEVRON);
+      if (next && g.z > s.z + 6) kit.decal(c, gx, g.z - 8, 4.4, 6, MARK, breathe, DECAL_CHEVRON);
       if (st === 1 && age < 0.7 && g.z > s.z + 4) kit.glow(gx, y0 + 2.6, g.z, 4 + age * 8, WHITE_GOLD, 0.6 * (1 - age / 0.7), GLOW_RING);
       if (swing && st === 0 && !ctx.low) kit.decal(c, g.x, g.z, 1, 2 * g.amp + 2 * g.hw, LIGHT, 0.55, DECAL_LINE, Math.PI / 2);
       // Gates that sit: a faint line on the snow from one opening to the next, so the pattern reads (turn
@@ -590,8 +596,8 @@ export class VerbWorld {
             const top = j === jets - 1;
             const jy = y + j * (7.5 / jets);
             const boost = l.roar && age >= 0 && age < 1.6 ? 1 + 2.2 * (1 - age / 1.6) : 1;
-            if (lit) kit.glow(x, jy + 1.0 * boost, z, (top && hot ? 4 : 2.9) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.2 : 1.5) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
-            else kit.glow(x, jy + 0.55, z, 1.7, EMBER, 0.95, GLOW_FLAME, 0.7);
+            if (lit) kit.glow(x, jy + 1.4 * boost, z, (top && hot ? 5.4 : 4.2) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.2 : 1.5) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
+            else kit.glow(x, jy + 0.8, z, 2.4, EMBER, 1.1, GLOW_FLAME, 0.7);
           }
           kit.glow(x, y + 3.5, z, 11, hot ? HOT : EMBER, 0.22 + 0.3 * k, GLOW_SOFT, 0.5);
         }
@@ -601,7 +607,7 @@ export class VerbWorld {
       if (s.z < lip && !over) {
         for (let j = 0; j < 3; j++) {
           const z = lip - 9 - j * 9;
-          if (z > s.z + 3) kit.decal(c, c.safeX(z), z, 5, 6, hot ? WHITE_GOLD : EMBER, (0.5 + 0.9 * k) * (j === 0 ? breathe * 0.8 : 0.8), DECAL_CHEVRON);
+          if (z > s.z + 3) kit.decal(c, c.safeX(z), z, 5.5, 7, WHITE_GOLD, (0.7 + 0.8 * k) * (j === 0 ? breathe * 0.8 : 0.8), DECAL_CHEVRON);
         }
       }
       if (l.roar && age >= 0 && age < 1.2) kit.glow(c.centerX(lip), c.baseY(lip) + 4, lip, 10 + age * 30, HOT, 0.8 * (1 - age / 1.2), GLOW_RING, 1.6);
@@ -755,7 +761,7 @@ export class VerbWorld {
         if (z < s.z + 3) continue;
         const u = Math.min(1, (j * 10 + 7) / 44);
         const x = x0 + (c.safeX(z) - x0) * u * u;
-        kit.decal(c, x, z, 5, 6, LIGHT, j === 0 ? breathe : 0.9, DECAL_CHEVRON);
+        kit.decal(c, x, z, 5.5, 7, MARK, j === 0 ? breathe : 1, DECAL_CHEVRON);
       }
       // The high line is flown off a pop: the lip is marked where to spring.
       if (high) {

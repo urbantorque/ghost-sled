@@ -84,12 +84,16 @@ export class Pool {
   }
 }
 
+/** The brightest a lit form may be drawn: Low has no bloom and no film curve, so a colour over 1 clips to a
+ *  white block there. Capped by its brightest channel, it keeps its hue. */
+const LIT_CAP = { value: 8 };
+
 /** Paper lit from inside, and anything else that is its own light: vertex colour times the instance's, a
  *  little form from the normal, the mood's fog, no lighting. A colour over 1 blooms. */
 export function litMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     vertexColors: true,
-    uniforms: { uFog: shared.uFog, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar },
+    uniforms: { uFog: shared.uFog, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar, uCap: LIT_CAP },
     vertexShader: /* glsl */ `
       varying vec3 vCol;
       varying float vForm;
@@ -105,8 +109,12 @@ export function litMaterial(): ShaderMaterial {
           mat4 m = modelMatrix;
         #endif
         vec3 n = normalize(mat3(m) * normal);
-        vForm = 0.82 + 0.18 * n.y;
-        vec4 mv = viewMatrix * m * vec4(position, 1.0);
+        vec4 wp = m * vec4(position, 1.0);
+        // (Brightest where it faces the lens and deeper at its rim, so a drum of paper reads as round and
+        // lit from inside, never as a flat block of its colour.)
+        float facing = abs(dot(n, normalize(cameraPosition - wp.xyz)));
+        vForm = (0.5 + 0.6 * facing * facing) * (0.9 + 0.1 * n.y);
+        vec4 mv = viewMatrix * wp;
         vDist = -mv.z;
         gl_Position = projectionMatrix * mv;
       }
@@ -115,13 +123,16 @@ export function litMaterial(): ShaderMaterial {
       uniform vec3 uFog;
       uniform float uFogNear;
       uniform float uFogFar;
+      uniform float uCap;
       varying vec3 vCol;
       varying float vForm;
       varying float vDist;
       void main() {
         // (A light in fog is seen further than a wall is: half the fog.)
         float f = 0.5 * smoothstep(uFogNear, uFogFar, vDist);
-        gl_FragColor = vec4(mix(vCol * vForm, uFog, f), 1.0);
+        vec3 c = vCol * vForm;
+        c *= min(1.0, uCap / max(max(c.r, max(c.g, c.b)), 0.001));
+        gl_FragColor = vec4(mix(c, uFog, f), 1.0);
       }
     `,
   });
@@ -228,8 +239,8 @@ function decalMaterial(): ShaderMaterial {
         if (vKind < 0.5) {
           a = edge * edge * (3.0 - 2.0 * edge) * 0.55;
         } else if (vKind < 1.5) {
-          float k = (r - 0.82) / 0.07;
-          a = exp(-k * k) * 0.9 + edge * edge * 0.12;
+          float k = (r - 0.8) / 0.12;
+          a = exp(-k * k) * 1.0 + edge * edge * 0.12;
         } else if (vKind < 2.5) {
           // A line scribed down the mark's length: a fine bright core in a soft band, gone at both ends.
           float across = max(0.0, 1.0 - abs(d.x));
@@ -238,15 +249,15 @@ function decalMaterial(): ShaderMaterial {
         } else if (vKind < 3.5) {
           // A chevron pointing down the run.
           float v = d.y - (0.55 - abs(d.x) * 0.9);
-          float k = v / 0.16;
-          a = exp(-k * k) * max(0.0, 1.0 - abs(d.x)) * 1.1;
+          float k = v / 0.34;
+          a = exp(-k * k * k * k) * smoothstep(0.0, 0.25, 1.0 - abs(d.x)) * 1.2;
         } else {
           // Ripples: three rings, the outer the faintest.
           float w = max(0.0, sin(r * 9.42)) ;
           a = w * w * edge * 0.9;
         }
         a = min(a, 1.4);
-        gl_FragColor = vec4(vCol * a, min(1.0, a) * 0.8);
+        gl_FragColor = vec4(vCol * a, min(1.0, a) * 0.92);
       }
     `,
   });
@@ -304,6 +315,7 @@ export class MomentKit {
 
   setTier(t: Tier): void {
     this.tier = t;
+    LIT_CAP.value = t === 0 ? 1 : 8;
     this.glowCap = GLOW_CAP[t];
     this.decalCap = DECAL_CAP[t];
   }

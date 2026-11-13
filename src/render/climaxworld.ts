@@ -113,7 +113,7 @@ export class ClimaxWorld {
       for (let j = 0; j < per; j++) {
         const v = (j + 0.5) / per;
         const k = 1.9 + 0.6 * Math.sin(Math.PI * v);
-        this.lanterns.put(c.centerX(z) + (v * 2 - 1) * hw, y - 0.7 - 1.1 * Math.sin(Math.PI * v), z, null, k, k, k, lit ? WHITE_GOLD : LIGHT, lum * 1.6);
+        this.lanterns.put(c.centerX(z) + (v * 2 - 1) * hw, y - 0.7 - 1.1 * Math.sin(Math.PI * v), z, null, k, k, k, lit ? WHITE_GOLD : LIGHT, lum * 1.8);
       }
       if (lit && Math.abs(z - s.z) < 80) pushLocalLight(c.centerX(z), y - 3, -z, 1, 0.85, 0.55, 15, Math.min(1.5, lum * 0.6));
     }
