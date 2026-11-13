@@ -142,7 +142,7 @@ const BIOME_PARAMS: Record<CourseBiome, MountainParams> = {
 
 /** Lanternfall's seed. Chosen among eight: its descent keeps every promise the fairness test makes of a
  *  mountain, and its two streets stay inside the village's triangle budget on Low (notes/r7-moments.md). */
-export const LANTERNFALL_SEED = 0x9b05688c;
+export const LANTERNFALL_SEED = 0x510e527f;
 
 export const MOUNTAINS: readonly MountainDef[] = [
   { id: 'pinecrest', name: 'Pinecrest', tagline: 'Pine forest, soft powder, snowmen', seed: 0x51ed270b, unlockGhosts: 0 },

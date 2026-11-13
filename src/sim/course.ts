@@ -1343,8 +1343,10 @@ export class Course {
       }
     }
     add(first, false);
+    // Lanternfall's cloud sea is ridden blind, behind a guide light: nothing on the line launches a sled there.
+    const blind = this.params.biome === 'lantern' && plan.leaps.length >= 2 ? plan.leaps[1].z : 0;
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || sec.z0 >= this.finishZ || !KICK_KINDS.has(sec.kind)) continue;
+      if (sec.z0 < 800 || sec.z0 >= this.finishZ || !KICK_KINDS.has(sec.kind) || sec.z0 < blind) continue;
       const body = sec.z0 + sec.blend;
       let made = 0;
       for (let t = 0; t < 24 && made < 2; t++) {
@@ -1356,7 +1358,7 @@ export class Course {
       }
     }
     for (const sec of this.sections) {
-      if (sec.z0 < 800 || !KICK_WITHIN.has(sec.kind)) continue;
+      if (sec.z0 < 800 || !KICK_WITHIN.has(sec.kind) || sec.z0 < blind) continue;
       const first = sec.z0 + sec.blend + 8;
       const last = sec.z1 - 12 - KICK_BIG[1] * KICK_OVERRUN;
       const others = [...plan.busy, ...plan.flights];

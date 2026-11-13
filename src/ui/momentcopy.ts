@@ -14,9 +14,6 @@ export function machineName(key: string): string {
   return MACHINE[key] ?? 'cable car';
 }
 
-/** What hangs over a shatter's run, by set piece: Temple Town's are bells, the rest garlands. */
-const HUNG: Record<string, string> = { temple: 'Bell' };
-
 export type MomentPhase = 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost';
 
 /** The chip's line for a set piece's beat, or null when the beat changes nothing it says. */
@@ -68,15 +65,13 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
       if (phase === 'won') return of === 2 ? 'A slide each way' : 'One long slide';
       if (phase === 'lost') return 'No slide held';
       return null;
-    case 'shatter': {
-      const h = HUNG[key] ?? 'Garland';
-      if (phase === 'start') return `${h} 0 of ${of}`;
-      if (phase === 'step') return `${h} ${n} of ${of}`;
-      if (phase === 'miss') return h === 'Bell' ? 'Missed a bell' : 'Under a garland';
-      if (phase === 'won') return h === 'Bell' ? `Every bell, ${of} of ${of}` : `Every garland, ${of} of ${of}`;
-      if (phase === 'lost') return `${n} of ${of}`;
+    case 'shatter':
+      if (phase === 'start') return `Bell 0 of ${of}`;
+      if (phase === 'step') return `Bell ${n} of ${of}`;
+      if (phase === 'miss') return 'Missed a bell';
+      if (phase === 'won') return `Every bell, ${of} of ${of}`;
+      if (phase === 'lost') return `${n} of ${of} bells`;
       return null;
-    }
     case 'surge':
       // (`of` is the speed the far shelf wants; a step is the speed off the lip.)
       if (phase === 'start') return `Hit the lip at ${of} m/s`;

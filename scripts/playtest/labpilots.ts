@@ -265,26 +265,25 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
           M.pressed = false;
         }
         const d = t.z - s.z;
-        if (p.own) {
-          // A bell: one quick hop, so the sled is in the air under it.
-          if (!M.pressed && d < v * (0.33 + M.bias * 0.5) && d > v * 0.1) {
-            M.pressed = true;
-            M.tap = 2;
-          }
-          if (M.tap > 0) {
-            M.tap--;
-            return { action: true, calm: true, noDrift: true };
-          }
-          return { calm: d < v * 0.6, noDrift: true };
-        }
-        // A garland: crouch for a full charge, and spring so its top is under the garland (a pair: early, so
-        // the one pop is still up for the second).
-        const next = p.targets[mo.at + 1];
-        const pair = next && next.z - t.z < 20;
-        const rel = v * ((pair ? 0.26 : 0.46) + M.bias);
-        const hold = rel + v * 0.68;
+        // A bell: crouch, and spring so the sled is at the bell's height as it passes under: early for one
+        // hung high, late and sharp for one under a beam.
+        const rel = v * ((t.top < 50 ? 0.24 : 0.5 + 0.1 * t.h) + M.bias);
+        const hold = rel + v * 0.5;
         if (d < hold && d > rel) return { action: true, calm: true, noDrift: true };
         return { calm: d < hold + 12, noDrift: true };
+      }
+      case 'steps': {
+        // Down a street the landings are the rider's own: pop wherever a flight has room to come down inside
+        // the set piece, and stomp it (the air's own habit).
+        if (!skilled || p.style !== 'hops') return null;
+        if (M.wait > 0) M.wait--;
+        if (p.z1 - s.z < v * 2.6 || M.wait > 0) return { noDrift: true };
+        if (M.tap === 0) M.tap = 16 + Math.floor(mr() * 6 * sloppy);
+        if (--M.tap === 0) {
+          M.wait = 20;
+          return { action: false, calm: true, noDrift: true };
+        }
+        return { action: true, calm: true, noDrift: true };
       }
       case 'surge': {
         if (!skilled) return null;
@@ -381,7 +380,8 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         P.stompTry = skill === 'mid' || skill === 'expert' ? true : skill === 'novice' && rnd() < 0.4;
         P.stompBias = (rnd() - 0.5) * (skill === 'expert' ? 0.05 : skill === 'mid' ? 0.16 : 0.3);
         // A rider carrying the flame, or hopping under bells, spins nothing.
-        if (piece && skill !== 'line' && (piece.verb === 'carry' || piece.verb === 'shatter' || piece.verb === 'surge')) P.spin = 0;
+        // (Nor does one stomping steps: a spin over a 60 m step is how round 6's expert lost them.)
+        if (piece && skill !== 'line' && (piece.verb === 'carry' || piece.verb === 'shatter' || piece.verb === 'surge' || piece.verb === 'steps')) P.spin = 0;
       }
       const land = timeToLand(sim);
       if (piece && piece.verb === 'flourish') {
@@ -389,21 +389,28 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (f) return f;
       }
       let steer = 4;
-      let goal = (skill === 'expert' && P.flight > 2.4 ? 4 : 2) * Math.PI;
+      // (Round 7: the expert keeps its double spin for a landing with room after it. A spin pushes a sled wide,
+      // and round 6's expert carried that into the slot below a leap: no rider who knows the hill does.)
+      const slot = c.halfWidth(land.z + 110) < 9.5;
+      // Coming up on a set piece (or in one) a rider who knows it lands set up for it: one spin at most, and
+      // a nudge toward the line that stays inside the air's dead zone, so it moves the sled without turning it.
+      const next = pieceAhead(sim);
+      const setUp = skill !== 'novice' && (!!piece || (!!next && next.z0 - land.z < 400));
+      let goal = (skill === 'expert' && P.flight > 2.4 && !slot && !setUp ? 4 : 2) * Math.PI;
       if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
       const coast = (s.spinRate * s.spinRate) / (2 * 22);
       if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
-      else if (skill === 'mid' || skill === 'expert') {
+      else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'shatter' || piece.verb === 'carry'))) {
+        // (Not over a set piece that is decided by its landings: this nudge is past the air's dead zone, so it
+        // turns the sled as well as moving it, and a landing half way round is a sketchy one.)
         const off = land.x - c.safeX(land.z);
-        if (Math.abs(off) > 0.8) steer = off > 0 ? 2 : 6;
+        if (Math.abs(off) > 0.8) steer = off > 0 ? (setUp ? 3 : 2) : setUp ? 5 : 6;
       }
       // (A tuck held through a surge's lip is let go a beat into the air, where it is no pop.)
       if (M.airHold > 0) {
         M.airHold--;
         return { steer, action: true };
       }
-      // Under the bells a hop is a hop: no stomp, so the next press is a clean one.
-      if (piece && piece.verb === 'shatter' && piece.own && skill !== 'novice' && skill !== 'line') return { steer, action: false };
       const w = land.t - P.stompBias;
       return { steer, action: P.stompTry && w < 0.11 && w > 0.01 };
     }
@@ -547,14 +554,15 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
       }
       case 'mid': {
         const k = knows();
-        if (k === 'go') return lit() >= 1 && s.grounded ? press() : false;
+        if (k === 'go') return lit() >= 1 && s.grounded && Math.abs(s.x - sim.course.safeX(s.z)) < 5 ? press() : false;
         if (k === 'hold') return false;
         const keep = (s.z > 2000 ? 1 : 0) + (k === 'save' ? 1 : 0);
         return lit() > Math.min(keep, 1) && s.grounded && !kickerNear() && rnd() < 0.6 / 60 ? press() : false;
       }
       case 'expert': {
         const k = knows();
-        if (k === 'go') return lit() >= 1 && s.grounded ? press() : false;
+        // (On the line: a dash from out on the bank goes into whatever the bank holds.)
+        if (k === 'go') return lit() >= 1 && s.grounded && Math.abs(s.x - sim.course.safeX(s.z)) < 5 ? press() : false;
         if (k === 'hold') return false;
         if (lit() < (k === 'save' ? 2 : 1) || !s.grounded || kickerNear()) return false;
         return closing() || rnd() < 0.9 / 60 ? press() : false;

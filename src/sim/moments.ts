@@ -14,16 +14,16 @@ import { hash32 } from './prng';
 // moments a mountain ride on the roll too (ChaosRoll.legend).
 //   rings     three rings of light along a big leap's flight; hit the lip in line and at speed
 //   slide     hold one long drift across glass ice
-//   shatter   pop up through what hangs over the run: 'high', a few garlands that want a charged pop each;
-//             'low', a peal of bells a beat apart that want a quick hop each. The action button's, not the
-//             steering's
+//   shatter   pop, and be up in the air under each bell hung over the run, as high as it hangs (and no higher,
+//             where a bell hangs under a beam). The action button's, not the steering's
 //   collapse  the snow and ice of a span fall in; stay ahead of the fall
 //   race      a machine on its cable: 'sprint', it leaves as the rider arrives and the far end decides it;
 //             'chase', it left before the rider and passing it wins
 //   gates     a slalom of lantern gates, through every one in order: 'sit', they hang still and the rider
 //             weaves; 'swing', each sways across the run and the rider reads it
-//   surge     arrive at a leap's lip fast enough to clear to its far shelf (what a dash is for)
-//   steps     a terrace's steps; stomp the landings
+//   surge     leave a leap's lip at a speed or better and clear to its far shelf (what a dash is for)
+//   steps     stomp landings: 'stair', the ones a terrace's steps give; 'hops', the ones the rider's own pops
+//             make down a street
 //   flourish  land a named trick clean over a leap (the stunt rider's)
 //   follow    stay in the wake of a guide light that weaves through the cloud (Lanternfall)
 //   kindle    ride close along rows of unlit stone lamps to light them, on both sides of the road (Lanternfall)
@@ -37,7 +37,7 @@ export type MomentVerb = 'race' | 'gates' | 'rings' | 'collapse' | 'steps' | 'sl
 /** Every verb, in an order that will not change: the music's stingers and the boards key on it. */
 export const VERBS: readonly MomentVerb[] = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry'];
 /** How a verb is played where it appears twice ('' where it has one way). */
-export type MomentStyle = '' | 'sprint' | 'chase' | 'sit' | 'swing' | 'high' | 'low';
+export type MomentStyle = '' | 'sprint' | 'chase' | 'sit' | 'swing' | 'stair' | 'hops';
 /** How the lens frames it: out and up over a drop ('wide'), low and close down a street or a tube
  *  ('low'), or off to one side across a span or beside a machine ('side'). */
 export type MomentCam = 'wide' | 'low' | 'side';
@@ -68,14 +68,10 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'long', name: 'One long slide', line: 'Hold one long slide across the ice', t: { need: 132 } },
     { key: 'both', name: 'A slide each way', line: 'Slide both ways across the ice', t: { each: 66 } },
   ],
-  'shatter:high': [
-    { key: 'even', name: 'Evenly strung', line: 'Spring up through every garland' },
-    { key: 'pairs', name: 'Two at a spring', line: 'Burst the garlands, two at a spring', t: { pairs: 1 } },
-    { key: 'rising', name: 'Each higher than the last', line: 'Burst the garlands, each higher than the last', t: { rising: 1 } },
-  ],
-  'shatter:low': [
-    { key: 'peal', name: 'An even peal', line: 'Ring every bell with a hop' },
-    { key: 'swung', name: 'Long, short, long', line: 'Ring every bell: long, short, long', t: { swung: 1 } },
+  shatter: [
+    { key: 'even', name: 'Hung level', line: 'Pop up and ring every bell' },
+    { key: 'rising', name: 'Each higher than the last', line: 'Ring every bell: each hangs higher than the last', t: { rising: 1 } },
+    { key: 'under', name: 'Under the beams', line: 'Ring every bell, and stay under the beams', t: { under: 1 } },
   ],
   collapse: [
     { key: 'chase', name: 'The fall chases', line: 'Outrun the span as it falls' },
@@ -88,9 +84,9 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'late', name: 'It leaves late', line: 'The {m} leaves late: do not let it by', t: { lead: -12, pace: 1.2, v0: 0.8 } },
   ],
   'race:chase': [
-    { key: 'near', name: 'One car, near', line: 'Catch the {m} before the far station', t: { lead: 58, pace: 0 } },
-    { key: 'far', name: 'One car, a long start', line: 'Catch the {m}: it has a long start', t: { lead: 96, pace: -3 } },
-    { key: 'pair', name: 'Two cars on the rope', line: 'Catch both cars on the rope', t: { lead: 44, pace: -1, cars: 2, gap: 54, slow: 2.4 } },
+    { key: 'near', name: 'One car, near', line: 'Catch the {m} before the far station', t: { lead: 58, pace: -2.5 } },
+    { key: 'far', name: 'One car, a long start', line: 'Catch the {m}: it has a long start', t: { lead: 96, pace: -5.5 } },
+    { key: 'pair', name: 'Two cars on the rope', line: 'Catch both cars on the rope', t: { lead: 44, pace: -3, cars: 2, gap: 54, slow: 2.4 } },
   ],
   'gates:sit': [
     { key: 'weave', name: 'Turn about', line: 'Thread every lantern gate' },
@@ -103,12 +99,16 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'wide', name: 'Slow and wide', line: 'Thread the lanterns: they swing slow and wide', t: { amp: 3.9, period: 330 } },
   ],
   surge: [
-    { key: 'shelf', name: 'The shelf', line: 'Hit the lip flat out and clear to the shelf', t: { speed: 46.4 } },
-    { key: 'far', name: 'The far shelf', line: 'Clear to the far shelf: only a dash will do', t: { speed: 48.2 } },
+    { key: 'shelf', name: 'The shelf', line: 'Hit the lip at 44 m/s and clear to the shelf', t: { speed: 44 } },
+    { key: 'far', name: 'The far shelf', line: 'Hit the lip at 47 m/s: only a dash will do', t: { speed: 47 } },
   ],
-  steps: [
+  'steps:stair': [
     { key: 'three', name: 'Three of the four', line: 'Stomp three landings down the steps' },
     { key: 'row', name: 'Three in a row', line: 'Stomp three landings in a row', t: { row: 1 } },
+  ],
+  'steps:hops': [
+    { key: 'three', name: 'Three stomps', line: 'Pop and stomp your landings down the street' },
+    { key: 'row', name: 'Stomps in a row', line: 'Pop and stomp your landings, one after another', t: { row: 1 } },
   ],
   flourish: [
     { key: 'spinflip', name: 'A spin and a flip', line: 'Land a full spin and a flip', t: { half: 2, flips: 1 } },
@@ -117,7 +117,7 @@ const FAMILY: Record<string, readonly Variant[]> = {
   ],
   follow: [
     { key: 'wide', name: 'A slow, wide weave', line: "Stay in the guide light's wake", t: { amp: 4.0, wave: 132 } },
-    { key: 'quick', name: 'A quick weave', line: "Stay in the guide light's wake: it weaves quick", t: { amp: 2.6, wave: 88 } },
+    { key: 'quick', name: 'A quick weave', line: "Stay in the guide light's wake: it weaves quick", t: { amp: 3.3, wave: 96 } },
     { key: 'darts', name: 'It darts', line: "Stay in the guide light's wake: it darts", t: { amp: 3.4, wave: 128, darts: 1 } },
   ],
   kindle: [
@@ -157,7 +157,7 @@ const AUTHORED: Record<string, readonly Def[]> = {
   pinecrest: [
     { key: 'firstdrop', name: 'The First Drop', verb: 'rings', kind: 'leap', nth: 0, cam: 'wide', line: 'Fly all three rings' },
     { key: 'mirror', name: 'Mirror Lake', verb: 'slide', kind: 'lake', nth: 0, cam: 'side', line: 'Hold a long slide across the ice' },
-    { key: 'oldtown', name: 'Old Town', verb: 'shatter', style: 'high', kind: 'bridge', nth: 0, through: 1, cam: 'low', light: 'lanterns', line: 'Spring up through every garland' },
+    { key: 'oldtown', name: 'Old Town', verb: 'steps', style: 'hops', kind: 'bridge', nth: 0, through: 1, cam: 'low', light: 'lanterns', line: 'Pop and stomp your landings through the town' },
   ],
   frostfang: [
     { key: 'seracgate', name: 'Serac Gate', verb: 'collapse', kind: 'bridge', nth: 0, cam: 'side', line: 'Outrun the span as it falls' },
@@ -170,9 +170,9 @@ const AUTHORED: Record<string, readonly Def[]> = {
     { key: 'emberstreet', name: 'Ash Market', verb: 'gates', style: 'swing', kind: 'street', nth: 0, cam: 'low', light: 'lanterns', line: 'Thread the swinging lanterns to the line' },
   ],
   sakura: [
-    { key: 'petals', name: 'Petal Steps', verb: 'steps', kind: 'terraces', nth: 0, cam: 'wide', light: 'petals', line: 'Stomp three landings down the steps' },
+    { key: 'petals', name: 'Petal Steps', verb: 'steps', style: 'stair', kind: 'terraces', nth: 0, cam: 'wide', light: 'petals', line: 'Stomp three landings down the steps' },
     { key: 'blossomleap', name: 'The Blossom Leap', verb: 'flourish', kind: 'leap', nth: 1, cam: 'wide', light: 'petals', line: 'Land the trick over the orchards' },
-    { key: 'temple', name: 'Temple Town', verb: 'shatter', style: 'low', kind: 'street', nth: 1, cam: 'low', light: 'lanterns', line: 'Ring every bell down to the square' },
+    { key: 'temple', name: 'Temple Town', verb: 'shatter', kind: 'street', nth: 1, cam: 'low', light: 'lanterns', line: 'Ring every bell down to the square' },
   ],
   lanternfall: [
     { key: 'cloudsea', name: 'The Cloud Sea', verb: 'follow', kind: 'ravine', nth: 0, through: 1, cam: 'low', line: 'Follow the guide light through the cloud' },
@@ -185,12 +185,12 @@ const AUTHORED: Record<string, readonly Def[]> = {
  *  first verb the place can host that the run has not played yet. (Follow, kindle and carry are Lanternfall's
  *  alone.) */
 const PICK: ReadonlyArray<{ kind: SectionKind; cam: MomentCam; light: MomentLight; name: string; hosts: ReadonlyArray<{ verb: MomentVerb; style?: MomentStyle; line: string; machine?: string }> }> = [
-  { kind: 'street', cam: 'low', light: 'lanterns', name: 'The Lantern Street', hosts: [{ verb: 'gates', style: 'sit', line: 'Thread every lantern gate' }, { verb: 'shatter', style: 'high', line: 'Spring up through every garland' }] },
+  { kind: 'street', cam: 'low', light: 'lanterns', name: 'The Lantern Street', hosts: [{ verb: 'gates', style: 'sit', line: 'Thread every lantern gate' }, { verb: 'shatter', line: 'Pop up and ring every bell' }, { verb: 'steps', style: 'hops', line: 'Pop and stomp your landings down the street' }] },
   { kind: 'lake', cam: 'side', light: null, name: 'The Frozen Lake', hosts: [{ verb: 'slide', line: 'Hold a long slide across the ice' }, { verb: 'race', style: 'sprint', line: 'Beat the cable car across the ice', machine: 'cable car' }] },
   { kind: 'leap', cam: 'wide', light: null, name: 'The Big Leap', hosts: [{ verb: 'rings', line: 'Fly all three rings' }, { verb: 'surge', line: 'Clear the leap to the far shelf' }, { verb: 'flourish', line: 'Land the trick over the leap' }] },
   { kind: 'bridge', cam: 'side', light: null, name: 'The Span', hosts: [{ verb: 'collapse', line: 'Outrun the span as it falls' }] },
   { kind: 'tunnel', cam: 'low', light: 'dawn', name: 'The Tunnel', hosts: [{ verb: 'gates', style: 'sit', line: 'Follow the lanterns out to the light' }, { verb: 'race', style: 'sprint', line: 'Beat the cable car through the mountain', machine: 'cable car' }] },
-  { kind: 'terraces', cam: 'wide', light: null, name: 'The Terraces', hosts: [{ verb: 'steps', line: 'Stomp three landings down the steps' }] },
+  { kind: 'terraces', cam: 'wide', light: null, name: 'The Terraces', hosts: [{ verb: 'steps', style: 'stair', line: 'Stomp three landings down the steps' }] },
 ];
 
 export interface MomentSpec {
@@ -326,13 +326,14 @@ export interface MomentGate {
   phase: number;
 }
 
-/** Something hung over the run to pop up through: a garland, a bell. */
+/** A bell hung over the run, right across it. */
 export interface MomentTarget {
   z: number;
   x: number;
   hw: number;
-  /** How far over the snow a sled must be as it passes under. */
+  /** How far over the snow a sled must be as it passes under, and the most it may be (a beam over the bell). */
   h: number;
+  top: number;
 }
 
 /** A line across the corridor's length: metres off the safe line, sampled every `step` from z0. */
@@ -381,12 +382,11 @@ export interface MomentPlay extends MomentSpec {
   gates: MomentGate[];
   /** rings: three along the flight, in order. */
   rings: SkyGate[];
-  /** steps: each step's lip, in order; `row` when the stomps must come in a row. */
+  /** steps: each step's lip, in order (none down a street); `row` when the stomps must come in a row. */
   steps: number[];
   row: boolean;
-  /** shatter: what hangs over the run, in order; `own` when each wants a pop of its own. */
+  /** shatter: the bells, in order. */
   targets: MomentTarget[];
-  own: boolean;
   /** What wins it, where the verb counts: steps, stomps; slide, ticks of one drift ('long') or of each of two
    *  ('both' is set); shatter, targets; follow, metres in the wake; kindle, lamps (and `each` a side). */
   need: number;
@@ -444,23 +444,24 @@ export const RING_V = 34;
 const RING_T = [0.4, 0.85, 1.3] as const;
 export const RING_R = 3;
 const RING_OFF = 2.2;
-const RING_POP = 4.9;
+const RING_POP = 5.4;
 /** First id of a set piece's rings among a run's sky gates (the stage gates are 0 to 2). */
 export const RING_ID0 = 100;
-/** Garlands (shatter high): how far into the place the first hangs, how far apart, how high a sled must be to
- *  burst one (a pop of about two thirds of its charge reaches it), and a pair's spacing. */
-const GARLAND_LEAD = 96;
-const GARLAND_STEP = 78;
-const GARLAND_H = 0.92;
-const GARLAND_PAIR = 12;
-const GARLAND_PAIR_STEP = 118;
-/** Bells (shatter low): how far in, how far apart (a hop a bell at up to 49 m/s), and how high. */
+/** Bells (shatter). A pop on a falling street is a real flight (the sled leaves level while the ground drops
+ *  away: two seconds and 70 to 110 m at speed, 3 to 7 m up), so a bell asks for height at its place, not for a
+ *  hop: how far into the street the first hangs, how far apart, how high a sled must be to ring one, how much
+ *  higher each hangs in the rising peal, and the band under the beams. */
 const BELL_LEAD = 50;
-const BELL_STEP = 38;
-const BELL_H = 0.25;
-/** Follow: the wake's half-width, the path's sample step, and the share of its length that wins. */
+const BELL_STEP = 78;
+const BELL_H = 2.6;
+const BELL_RISE = [1.6, 2.6, 3.6, 4.4] as const;
+const BELL_UNDER = [1.2, 3.8] as const;
+/** Follow: the wake's half-width, the path's sample step, how far off the safe line the light must be for its
+ *  wake to count (where it rides the line itself, over a kicker and its flight, following it is nothing), and
+ *  the share of what counts that wins. */
 export const WAKE_HW = 2.4;
 const PATH_STEP = 4;
+export const WAKE_MIN = 0.6;
 const FOLLOW_SHARE = 0.6;
 /** Kindle: how near a lamp's middle the sled's must pass to light it (an edge gap of about 1.5 m). */
 export const KINDLE_REACH = 2.7;
@@ -477,6 +478,16 @@ function obstaclesNear(course: Course, z: number): Obstacle[] {
   const ci = Math.floor(z / CHUNK);
   for (let k = ci - 1; k <= ci + 1; k++) if (k >= 0) out.push(...course.chunk(k).obstacles);
   return out;
+}
+
+/** Whether a kicker's run-up or its flight lies under (x, z): a line that weaves there would throw a sled off it. */
+function launches(course: Course, x: number, z: number): boolean {
+  const ci = Math.floor(z / CHUNK);
+  for (let k = ci - 2; k <= ci; k++) {
+    if (k < 0) continue;
+    for (const r of course.zones(k).ramps) if (z > r.z - 26 && z < r.z + r.len + 72 && Math.abs(r.x - x) < r.w * 0.5 + 5) return true;
+  }
+  return false;
 }
 
 /** Whether a sled's middle may ride at (x, z) with `pad` to spare from every obstacle, `edge` inside the corridor. */
@@ -518,7 +529,7 @@ function weave(course: Course, zA: number, zB: number, amp: number, wave: number
         const z = zA + i * PATH_STEP;
         const s = dsin((PI * (z - a)) / (b - a));
         const o = side * amp * k * (darts ? s * s : s);
-        if (k > 0 && !open(course, course.safeX(z) + o, z, pad)) ok = false;
+        if (k > 0 && (!open(course, course.safeX(z) + o, z, pad) || launches(course, course.safeX(z) + o, z))) ok = false;
         else off[i] = o;
       }
       if (ok) break;
@@ -617,7 +628,6 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
     steps: [],
     row: false,
     targets: [],
-    own: false,
     need: 0,
     each: 0,
     both: false,
@@ -664,8 +674,11 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       p.rings = ringsFor(course, m, side, t.pop ? RING_POP : 0, g);
       break;
     case 'steps':
-      for (const l of course.ledges) if (l.kind === 'step' && l.z >= m.z0 && l.z < m.z1) p.steps.push(l.z);
-      p.need = Math.max(1, Math.min(3, p.steps.length - 1));
+      if (m.style === 'hops') p.need = m.z1 - m.z0 >= 330 ? 3 : 2;
+      else {
+        for (const l of course.ledges) if (l.kind === 'step' && l.z >= m.z0 && l.z < m.z1) p.steps.push(l.z);
+        p.need = Math.max(1, Math.min(3, p.steps.length - 1));
+      }
       p.row = !!t.row;
       break;
     case 'slide':
@@ -674,16 +687,17 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       p.need = p.both ? p.each : k('need', 132);
       break;
     case 'shatter':
-      p.targets = m.style === 'low' ? bellsFor(course, m, t) : garlandsFor(course, m, t);
-      p.own = m.style === 'low';
+      p.targets = bellsFor(course, m, t);
       p.need = p.targets.length;
       break;
     case 'surge':
       if (lip) {
         p.lip = lip.z;
-        p.speed = k('speed', 46.4);
-        // (The real sim comes down a little short of the flat model, and never past the landing's own end.)
-        p.far = lip.z + Math.min(0.955 * flightReach(course, lip, p.speed, 0, g), lip.land1 - lip.z - 24);
+        p.speed = k('speed', 44);
+        // The far line is where a plain flight at that speed comes down (the real sim lands about a seventh
+        // short of the flat model at these speeds), and never past the landing's own end. A pop off the lip
+        // flies far past it at any speed, so the speed off the lip is what the sim holds a rider to.
+        p.far = lip.z + Math.min(0.86 * flightReach(course, lip, p.speed, 0, g), lip.land1 - lip.z - 24);
       }
       break;
     case 'flourish':
@@ -694,7 +708,7 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
     case 'follow': {
       p.hw = WAKE_HW;
       p.path = weave(course, m.z0 + 50, m.z1 - 30, k('amp', 4), k('wave', 132), WAKE_HW + 0.5, side, !!t.darts);
-      p.need = Math.round(FOLLOW_SHARE * (p.path.z1 - p.path.z0));
+      p.need = Math.round(FOLLOW_SHARE * PATH_STEP * p.path.off.filter((o) => o >= WAKE_MIN || o <= -WAKE_MIN).length);
       break;
     }
     case 'kindle':
@@ -770,7 +784,8 @@ function ringsFor(course: Course, m: MomentSpec, side: 1 | -1, pop: number, g: n
   const lean = (course.safeX(lip.z + 1) - course.safeX(lip.z - 1)) / 2;
   const y0 = course.ground(x0, lip.z - 0.05);
   const slope = y0 - course.ground(x0, lip.z - 1.05);
-  const vy = RING_V * slope + pop;
+  // (A pop leaves level and adds its lift: the sim's pop() takes the lip's own fall out of the launch.)
+  const vy = pop > 0 ? pop : RING_V * slope;
   const out: SkyGate[] = [];
   RING_T.forEach((t, k) => {
     const z = lip.z + RING_V * t;
@@ -779,33 +794,12 @@ function ringsFor(course: Course, m: MomentSpec, side: 1 | -1, pop: number, g: n
   return out;
 }
 
-/** Garlands across a street or a covered bridge, right across the run: no steering wins one, only being in the
- *  air under it. Evenly strung, in close pairs one long pop takes together, or each higher than the last. */
-function garlandsFor(course: Course, m: MomentSpec, t: Tune): MomentTarget[] {
-  const out: MomentTarget[] = [];
-  const at = (z: number, h: number): void => {
-    out.push({ z, x: course.centerX(z), hw: Math.max(2.5, course.halfWidth(z) - 1.4), h });
-  };
-  const from = m.z0 + Math.min(GARLAND_LEAD, (m.z1 - m.z0) * 0.3);
-  const to = m.z1 - 28;
-  if (t.pairs) {
-    for (let z = from + 10; z + GARLAND_PAIR < to && out.length < 6; z += GARLAND_PAIR_STEP) {
-      at(z, GARLAND_H - 0.04);
-      at(z + GARLAND_PAIR, GARLAND_H - 0.04);
-    }
-  } else {
-    for (let z = from, i = 0; z < to && i < 5; z += GARLAND_STEP, i++) at(z, t.rising ? Math.min(1.16, 0.56 + 0.2 * i) : GARLAND_H);
-  }
-  return out;
-}
-
-/** Bells down a street, a hop each: an even peal, or long and short. */
+/** Bells down a street, right across the run: no steering rings one, only being up in the air under it. Hung
+ *  level, each higher than the last, or under beams a sled must not fly over. */
 function bellsFor(course: Course, m: MomentSpec, t: Tune): MomentTarget[] {
   const out: MomentTarget[] = [];
-  let i = 0;
-  for (let z = m.z0 + BELL_LEAD; z < m.z1 - 24 && out.length < 7; i++) {
-    out.push({ z, x: course.centerX(z), hw: Math.max(2.5, course.halfWidth(z) - 1.4), h: BELL_H });
-    z += t.swung ? (i % 2 === 0 ? BELL_STEP + 8 : BELL_STEP - 8) : BELL_STEP;
+  for (let z = m.z0 + BELL_LEAD, i = 0; z < m.z1 - 24 && i < 4; z += BELL_STEP, i++) {
+    out.push({ z, x: course.centerX(z), hw: Math.max(2.5, course.halfWidth(z) - 1.4), h: t.under ? BELL_UNDER[0] : t.rising ? BELL_RISE[i] : BELL_H, top: t.under ? BELL_UNDER[1] : 99 });
   }
   return out;
 }

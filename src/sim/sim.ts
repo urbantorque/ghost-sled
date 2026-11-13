@@ -5,7 +5,7 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
-import { KINDLE_REACH, LEGEND_AHEAD, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
+import { KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
@@ -71,7 +71,7 @@ const GATE_UNITS = 6;
 const RING_UNITS = 12;
 const COLLAPSE_CLOSE = 7;
 const COLLAPSE_KEEP = 0.72;
-/** What a garland burst or a bell rung lights, and a stone lamp kindled. */
+/** What a bell rung lights, and a stone lamp kindled. */
 const SHATTER_UNITS = 8;
 const KINDLE_UNITS = 4;
 /** A legend moment (moments.ts) is said this far up the run from where it plays, and a runner never falls below
@@ -300,13 +300,13 @@ export interface MomentState {
   at: number;
   ok: boolean;
   /** Collapse: the fall's pace, from the rider's speed onto the span (moments.ts fallPace). Follow: metres
-   *  ridden in the wake. Carry: the flame, 1 full to 0 out. */
+   *  ridden in the wake. Surge: the speed off the lip. Carry: the flame, 1 full to 0 out. */
   pace: number;
-  /** What is done of what the verb holds, a bit each: a chase's cars passed, a slide's ways, garlands and bells,
+  /** What is done of what the verb holds, a bit each: a chase's cars passed, a slide's ways, bells rung,
    *  lamps lit, the carry's brazier taken. */
   mask: number;
   /** The verb's own small number. Steps in a row: the run before a clean landing. Slide: the way of the drift.
-   *  Shatter low: a pop is in the air. Surge: off the lip. Kindle: lamps lit on the left. */
+   *  Surge: off the lip. Kindle: lamps lit on the left. */
   aux: number;
 }
 
@@ -1401,7 +1401,7 @@ export class Sim {
       mo.ok = true;
       mo.mask = 0;
       mo.aux = 0;
-      mo.pace = p.verb === 'collapse' ? fallPace(p, s.speed) : p.verb === 'carry' ? p.flame0 : p.verb === 'follow' ? 0 : p.pace;
+      mo.pace = p.verb === 'collapse' ? fallPace(p, s.speed) : p.verb === 'carry' ? p.flame0 : p.verb === 'follow' || p.verb === 'surge' ? 0 : p.pace;
       mo.of = momentCount(p);
       if (p.verb === 'carry') mo.n = Math.ceil(10 * p.flame0);
       this.events.push({ type: 'moment', index: p.index, phase: 'start', n: mo.n, of: mo.of });
@@ -1504,7 +1504,8 @@ export class Sim {
         // Stomp the landings (round 7). Round 6 asked for every step landed clean, which the careful line won
         // by doing nothing and a fast rider lost by flying two steps at once. Now a stomp is what counts,
         // three of them (in a row, in that variant: a clean landing between starts the count again), a step
-        // flown over costs only its chance, and a sketchy landing ends it.
+        // flown over costs only its chance, and a sketchy landing ends it. Down a street ('hops') there are
+        // no steps: the landings are the ones the rider's own pops make.
         for (const e of this.events) {
           if (e.type !== 'land') continue;
           if (e.late) {
@@ -1567,14 +1568,12 @@ export class Sim {
         break;
       }
       case 'shatter': {
-        // In the air under each garland or bell, high enough to reach it. A bell wants a hop of its own.
-        if (p.own) for (const e of this.events) if (e.type === 'takeoff' && e.kind === 'pop') mo.aux = 1;
+        // In the air under each bell, as high as it hangs (and under its beam, where it has one).
         while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
           const t = p.targets[mo.at++];
           const up = s.y - this.course.ground(s.x, s.z);
           const dx = s.x - t.x;
-          const hit = !s.grounded && s.tumble === 0 && up >= t.h && dx <= t.hw && dx >= -t.hw && (!p.own || mo.aux === 1);
-          mo.aux = 0;
+          const hit = !s.grounded && s.tumble === 0 && up >= t.h && up <= t.top && dx <= t.hw && dx >= -t.hw;
           if (hit) {
             mo.n++;
             mo.mask |= 1 << (mo.at - 1);
@@ -1589,18 +1588,19 @@ export class Sim {
         break;
       }
       case 'surge': {
-        // Off the lip (its speed is said as it goes), and the first touchdown past the far line wins.
+        // Off the lip at the speed or better (said as it goes), and down past the far line on its feet.
         if (mo.aux === 0) {
           if (!s.grounded && s.z >= p.lip - 4) {
             mo.aux = 1;
-            mo.n = Math.round(s.speed);
+            mo.pace = s.speed;
+            mo.n = Math.floor(s.speed);
             say('step', mo.n);
           }
         } else if (s.z > p.lip + 6) {
           let down = s.tumble > 0;
           for (const e of this.events) if (e.type === 'land' && !e.late) down = true;
           if (down) {
-            this.momentEnd(p, s.tumble === 0 && s.z >= p.far);
+            this.momentEnd(p, s.tumble === 0 && s.z >= p.far && mo.pace >= p.speed);
             break;
           }
         }
@@ -1629,9 +1629,11 @@ export class Sim {
         // Metres ridden inside the guide light's wake; enough of them wins on the spot.
         const path = p.path;
         if (path && s.z >= path.z0 && s.z <= path.z1) {
-          const dx = s.x - pathX(this.course, path, s.z);
+          const off = pathOff(path, s.z);
+          const dx = s.x - this.course.safeX(s.z) - off;
           const inWake = dx <= p.hw && dx >= -p.hw && s.tumble === 0;
-          if (inWake) mo.pace += s.z - prevZ;
+          // (Where the light rides the safe line itself, over a kicker and its flight, there is no wake to be in.)
+          if (inWake && (off >= WAKE_MIN || off <= -WAKE_MIN)) mo.pace += s.z - prevZ;
           if (inWake !== mo.ahead) {
             mo.ahead = inWake;
             say(inWake ? 'lead' : 'trail', mo.n);
