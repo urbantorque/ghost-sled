@@ -314,6 +314,8 @@ interface Air {
 
 /** Ticks from deciding on a pre-planned move to the finger actually moving. */
 const MOTOR = 2;
+/** How far to the inside of a sitting gate's middle a rider threads it, as a share of its half-width. */
+const GATE_CUT = 0.4;
 /** Collider id the bot uses for the yeti. */
 const YETI = -7;
 
@@ -403,12 +405,32 @@ export class Bot {
     const t = this.t;
     if (s.dash > 0 || now < this.spiritUntil + 40 || !s.grounded || this.mode !== 'ride' || s.tumble > 0) return;
     if (Math.floor(s.lantern / LANTERN) <= t.dashKeep) return;
+    // A rider who tries a set piece that wants control does not dash into it, or in the three seconds before
+    // it (nobody who has ridden Old Town twice does): a dash is 7 m/s the slalom has no room for.
+    if (this.holdsDash()) return;
     if (blocked) {
       if (this.rng.chance(t.dashPhase)) this.spiritUntil = now + 3;
       return;
     }
     if (this.goal || !this.openAhead(s.z, s.speed, 1.6)) return;
     if (this.rng.chance((t.dashRate * this.interval) / TICK_RATE)) this.spiritUntil = now + 3;
+  }
+
+  /** Whether the set piece this rider is in, or about to be in, is one it tries and one a dash would spoil. */
+  private holdsDash(): boolean {
+    const sim = this.sim;
+    const mo = sim.mo;
+    if (!mo) return false;
+    const p = mo.active >= 0 ? sim.plays[mo.active] : sim.plays[mo.next];
+    if (!p || (mo.active < 0 && p.z0 - sim.s.z > sim.s.speed * 3)) return false;
+    if (p.verb === 'race' || p.verb === 'carry' || p.verb === 'collapse' || p.verb === 'surge') return false;
+    return hashFloat(this.key, 0x5e7 + p.index) <= 0.3 + 0.6 * this.t.skill;
+  }
+
+  /** Whether the next set piece is ridden on the snow from its first metre (a line, not a leap or a pop). */
+  private wantsSnow(): boolean {
+    const p = this.sim.plays[this.sim.mo.next];
+    return !!p && (p.verb === 'gates' || p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'slide');
   }
 
   /** Read what happened on the tick just simulated. */
@@ -442,7 +464,8 @@ export class Bot {
       if (this.mode === 'air' && this.air) this.airThink(now);
       return;
     }
-    this.interval = this.rng.int(this.t.thinkMin, this.t.thinkMax);
+    // (Down a slalom the hands move with every gate: twice as often as on open snow.)
+    this.interval = this.slalom ? this.rng.int(4, 7) : this.rng.int(this.t.thinkMin, this.t.thinkMax);
     this.nextThink = now + this.interval;
     if (now < this.lapseUntil) return;
     if (this.rng.chance((this.t.lapsePerMin * this.interval) / 3600)) {
@@ -475,7 +498,33 @@ export class Bot {
 
   private lineX(z: number): number {
     // (In the guide light's wake the line is the light's own, weave and all.)
-    return this.lines.safeX(z) + (this.wake ? pathOff(this.wake, z) : this.off);
+    if (this.wake) return this.lines.safeX(z) + pathOff(this.wake, z);
+    // (Down a slalom of sitting gates the line is the slalom itself, one smooth swing gate to gate.)
+    return this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off);
+  }
+
+  /** The sitting gates this rider is threading (round 7's simfix), or null. */
+  private slalom: MomentPlay | null = null;
+
+  /** A slalom's line, metres off the safe line at z: through each gate well to its inside (GATE_CUT of its
+   *  half-width from its middle, so the swing is as small as the gates allow), eased gate to gate. Round 7's
+   *  riders aimed at one gate at a time and turned for the next only once it was passed: at 40 m/s that is
+   *  0.8 s a gate, less than their hands take, and they threaded none in any pool. */
+  private slalomOff(p: MomentPlay, z: number): number {
+    const gs = p.gates;
+    const at = (i: number): number => {
+      const off = gs[i].x - this.lines.safeX(gs[i].z);
+      return off - (off > 0 ? 1 : -1) * gs[i].hw * GATE_CUT;
+    };
+    if (gs.length === 0) return 0;
+    const ease = (u: number): number => (u <= 0 ? 0 : u >= 1 ? 1 : u * u * (3 - 2 * u));
+    if (z <= gs[0].z) return at(0) * ease((z - (gs[0].z - 36)) / 36);
+    for (let i = 1; i < gs.length; i++) {
+      if (z > gs[i].z) continue;
+      const a = at(i - 1);
+      return a + (at(i) - a) * ease((z - gs[i - 1].z) / (gs[i].z - gs[i - 1].z));
+    }
+    return at(gs.length - 1) * (1 - ease((z - gs[gs.length - 1].z) / 30));
   }
 
   /** The guide light's line while this rider follows it (round 7's follow), or null. */
@@ -528,7 +577,7 @@ export class Bot {
   /** Heading toward the look-ahead point on the planned path, never far across the fall line. */
   private desired(xp: number, zp: number, look = 0): number {
     // Down a slalom of gates the rider looks nearer, so it swings in time for the next one.
-    const L = Math.max(this.sim.s.speed * (this.inGates ? Math.min(this.t.lookTime, 0.32) : this.t.lookTime) + 3, look);
+    const L = Math.max(this.sim.s.speed * (this.slalom ? Math.min(this.t.lookTime, 0.22) : this.inGates ? Math.min(this.t.lookTime, 0.32) : this.t.lookTime) + 3, look);
     const dir = this.lines.dir(zp);
     return dir + clamp(wrapAngle(datan2(this.pathX(zp + L) - xp, L) - dir), -0.45, 0.45);
   }
@@ -547,12 +596,14 @@ export class Bot {
     if (hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill) return null;
     const z = sim.s.z;
     if (p.verb === 'gates') {
+      // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
+      // between gates popped there, and flew the next three.)
+      if (p.style === 'sit') return p.gates.length && z < p.gates[p.gates.length - 1].z + 1 ? this.slalomOff(p, z) : null;
       const g = p.gates.find((q) => q.z > z + 1);
       if (!g || g.z - z > 50) return null;
       // (A gate that swings: where its sway will have it when the sled gets there.)
       if (g.amp > 0) return gateX(g, sim.tick - mo.t0 + ((g.z - z) / Math.max(10, sim.s.vz)) * TICK_RATE) - this.lines.safeX(g.z);
-      const off = g.x - this.lines.safeX(g.z);
-      return off - (off > 0 ? 1 : -1) * g.hw * 0.45;
+      return this.slalomOff(p, z);
     }
     if (p.verb === 'rings' && p.rings.length > 0 && z < p.rings[0].z - 14) return p.rings[0].x - this.lines.safeX(p.rings[0].z);
     // Round 7's verbs that are a line to ride: the guide light's wake, the dark lamps' row (close beside the
@@ -567,7 +618,14 @@ export class Bot {
       const t = p.targets[mo.at];
       return t && t.hw < 4 ? t.x - this.lines.safeX(t.z) : null;
     }
-    if (p.verb === 'carry' && p.relight && !(mo.mask & 1) && p.relight.z > z + 2 && p.relight.z - z < sim.s.speed * 2.5) return p.relight.x - this.lines.safeX(p.relight.z);
+    if (p.verb === 'carry' && p.relight && !(mo.mask & 1) && p.relight.z > z + 2) {
+      // A low flame: the brazier stands just past the last leap's landing, so the lip is taken on its side (as
+      // far over as the lip's own lamps allow) and the sled comes down in line with it.
+      const off = p.relight.x - this.lines.safeX(p.relight.z);
+      const lip = this.course.leaps.filter((l) => l.z > p.z0 && l.z < p.relight!.z).pop();
+      if (lip && z < lip.z && lip.z - z < 160) return (off > 0 ? 1 : -1) * Math.min(3, Math.abs(off));
+      if (p.relight.z - z < sim.s.speed * 2.5) return off;
+    }
     return null;
   }
 
@@ -579,6 +637,31 @@ export class Bot {
     return hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill ? null : p;
   }
 
+  /** The next set piece, when this rider tries it and it is a second or two away. */
+  private triesNext(): MomentPlay | null {
+    const sim = this.sim;
+    const mo = sim.mo;
+    if (!mo || mo.active >= 0) return null;
+    const p = sim.plays[mo.next];
+    if (!p || p.z0 - sim.s.z > sim.s.speed * 2) return null;
+    return hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill ? null : p;
+  }
+
+  /** A pop a set piece asks for, decided whole: crouch at `P`, spring at `R`. Nothing else is tried meanwhile
+   *  (ride() waits for the release), and the steering is left where it is, as for any pop. */
+  private commitPop(P: number, R: number): void {
+    this.act.set(P, 1);
+    this.act.set(R, 0);
+    this.pressAt = P;
+    this.releasedAt = R;
+    this.centerAt = R;
+    this.mode = 'ride';
+    this.purpose = 'pop';
+  }
+
+  /** The brazier a low flame is being carried to (the air's nudge aims the landing in line with it), or null. */
+  private feed: { x: number; z: number } | null = null;
+
   private momentTry = -1;
   private onLine = false;
   private momentLine = false;
@@ -587,33 +670,41 @@ export class Bot {
    *  a pop timed under each bell, pops of its own down Old Town, a pop off the lip for the high rings, one
    *  long drift on the lake, and a dash into a race, a surge or the carry. True when it pressed something. */
   private momentRide(now: number, apply: number, zp: number): boolean {
-    const p = this.triesMoment();
+    const p = this.triesMoment() ?? this.triesNext();
     if (!p) return false;
     const sim = this.sim;
     const s = sim.s;
     const mo = sim.mo;
     const v = Math.max(10, s.vz);
-    const once = this.momentTry !== p.index * 16 + mo.at;
+    // (A set piece about to begin: its first bell hangs 50 m in, and the spring for it starts before the street.)
+    const at = mo.active === p.index ? mo.at : 0;
+    if (mo.active !== p.index && p.verb !== 'shatter') return false;
+    const once = this.momentTry !== p.index * 16 + at;
     switch (p.verb) {
       case 'shatter': {
-        const t = p.targets[mo.at];
+        const t = p.targets[at];
         if (!t || !once) return false;
         // Spring so the sled is up at the bell's height as it passes under; down late from the last flight,
-        // crouch at once and spring as soon as the crouch is a pop.
+        // crouch at once and spring as soon as the crouch is a pop. The spring is committed as the crouch
+        // begins (a bell does not wait for a second look, and one flight often carries under two).
         const rel = t.z - v * (0.5 + 0.1 * t.h);
-        if (zp < rel - v * 0.6 || zp > t.z - v * 0.3) return false;
-        this.momentTry = p.index * 16 + mo.at;
-        this.press(apply, 'crouch', 'pop');
-        this.releaseAt = Math.max(apply + 12, this.tickAtZ(now, rel) + Math.round(gauss(this.rng) * this.t.timingSd));
+        if (zp < rel - v * 0.7 || s.z > t.z - v * 0.42) return false;
+        this.momentTry = p.index * 16 + at;
+        this.commitPop(apply, Math.max(apply + 12, this.tickAtZ(now, rel) + Math.round(gauss(this.rng) * this.t.timingSd * 0.5)));
         return true;
       }
       case 'steps': {
-        if (p.style !== 'hops' || p.z1 - zp < v * 2.6 || now < this.momentWait) return false;
-        this.momentWait = now + 50;
-        const R = apply + this.rng.int(14, 22);
-        if (!this.flightClear(this.popFlight(now, R, apply, this.t.margin))) return false;
-        this.press(apply, 'crouch', 'pop');
-        this.releaseAt = R;
+        if (p.style !== 'hops' || p.z1 - zp < v * 2.4 || now < this.momentWait) return false;
+        // Pop as soon as the sled is down and the street ahead is open to land on: three flights of a hundred
+        // metres have to fit in the street, so the first leaves at its top and none waits for a perfect one.
+        const R = apply + this.rng.int(13, 17);
+        const f = this.popFlight(now, R, apply);
+        if (f.clearance < 0.3 || this.lines.edgeExcess(f.x, f.z) > -1.2 || f.z > p.z1 - 4) {
+          this.momentWait = now + 8;
+          return false;
+        }
+        this.momentWait = now + 30;
+        this.commitPop(apply, R);
         return true;
       }
       case 'rings': {
@@ -663,9 +754,14 @@ export class Bot {
     const mOff = this.momentOff();
     const verb = mOff !== null ? this.sim.plays[this.sim.mo.active]?.verb : undefined;
     this.inGates = verb === 'gates';
+    const piece = this.inGates ? this.sim.plays[this.sim.mo.active] : null;
+    this.slalom = piece && piece.style === 'sit' ? piece : null;
     this.wake = verb === 'follow' ? this.sim.plays[this.sim.mo.active].path : null;
     // (A line to ride wants the runners on the snow: no pops for the fun of it meanwhile.)
-    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle';
+    // (And a low flame not yet fed is carried on the snow to its brazier: no pop flies past it.)
+    const feeding = verb === 'carry' && !(this.sim.mo.mask & 1);
+    this.onLine = verb === 'gates' || verb === 'follow' || verb === 'kindle' || feeding;
+    this.feed = feeding ? (this.sim.plays[this.sim.mo.active].relight ?? null) : null;
     this.momentLine = mOff !== null;
     if (mOff !== null) {
       // A gate a beat away needs the line moved now, not a third of a metre a thought, and no detour after a
@@ -689,7 +785,8 @@ export class Bot {
     const t = this.t;
     this.px0 = xp;
     this.pz0 = zp;
-    this.join = Math.max(10, speed * 0.9);
+    // (A slalom is joined at once: eased onto over a second, the line aimed at is a gate out of step.)
+    this.join = this.slalom ? 4 : Math.max(10, speed * 0.9);
     const zEnd = zp + speed * 2.2 + 10;
     const g = this.goal;
     if (g) {
@@ -869,7 +966,7 @@ export class Bot {
       }
     }
     if (releasing) return;
-    this.setSteer(apply, cmd, this.mode === 'drift' || pulse);
+    this.setSteer(apply, cmd, this.mode === 'drift' || pulse || this.slalom !== null);
     // A swerve is a short jab, not a held turn.
     if (pulse) this.steer.set(apply + 12, 4);
     // Entering a drift takes a hard steer; once it catches, open the arc right out.
@@ -911,7 +1008,9 @@ export class Bot {
 
   private followSteer(xp: number, zp: number, hp: number, tr: number, aim: number): number {
     const e = wrapAngle(this.desired(xp, zp, aim) - hp);
-    return clamp(e / (tr * this.t.tau) + gauss(this.rng) * this.t.steerNoise, -1, 1);
+    // (Threading a slalom the hands are quick: a rider who tries it has ridden it before.)
+    const tau = this.slalom ? Math.min(this.t.tau, 0.22) : this.t.tau;
+    return clamp(e / (tr * tau) + gauss(this.rng) * this.t.steerNoise, -1, 1);
   }
 
   /**
@@ -1040,6 +1139,28 @@ export class Bot {
     const t = this.t;
     this.mode = 'ride';
     if (this.act.last !== 1) return cmd;
+    const piece = this.triesMoment();
+    if (piece && this.act.value === 1 && (piece.verb === 'shatter' || (piece.verb === 'steps' && piece.style === 'hops'))) {
+      // Down from a flight with the stomp still held, and the set piece wants another pop: the hold becomes the
+      // crouch (it is a pop once it has been held eleven ticks on the snow), sprung under the next bell, or
+      // as soon as it can be down Old Town.
+      const v = Math.max(10, s.vz);
+      const bell = piece.verb === 'shatter' ? piece.targets[this.sim.mo.at] : undefined;
+      const R0 = now + 12 - Math.min(11, s.groundHold);
+      if (bell && s.z < bell.z - v * 0.42) {
+        this.momentTry = piece.index * 16 + this.sim.mo.at;
+        this.commitPop(s.lastPressTick, Math.max(R0, this.tickAtZ(now, bell.z - v * (0.5 + 0.1 * bell.h))));
+        return cmd;
+      }
+      if (!bell && piece.verb === 'steps' && piece.z1 - zp > v * 2.4) {
+        const f = this.popFlight(now, R0 + 2, s.lastPressTick);
+        if (f.clearance >= 0.3 && this.lines.edgeExcess(f.x, f.z) <= -1.2 && f.z <= piece.z1 - 4) {
+          this.momentWait = now + 30;
+          this.commitPop(s.lastPressTick, R0 + 2);
+          return cmd;
+        }
+      }
+    }
     if (this.act.value === 1 && !this.cooling && !this.avalanche && !this.goal && s.speed >= 12 && this.rng.chance(t.driftRate * 3)) {
       // Drift straight out of the landing when the line needs a turn anyway.
       const e = wrapAngle(this.desired(this.px0, zp) - s.velHeading);
@@ -1062,9 +1183,12 @@ export class Bot {
     const s = sim.s;
     const t = this.t;
     const rng = this.rng;
-    if (this.act.last === 1 || now < this.releasedAt + 4 || this.cooling) return cmd;
+    if (this.act.last === 1 || now < this.releasedAt + 4) return cmd;
+    // (A set piece is played whatever the combo holds: riding calm to bank it is for open snow.)
     if (this.momentRide(now, apply, zp)) return cmd;
-    if (this.onLine) return cmd;
+    if (this.cooling) return cmd;
+    // (Nor a pop for the fun of it on the way into a set piece that wants the runners on the snow.)
+    if (this.onLine || (this.sim.mo.active < 0 && this.holdsDash() && this.wantsSnow())) return cmd;
     const g = this.goal;
     if (g && g.kind === 'kicker' && g.ramp) {
       // Crouch in and pop off the top of the face.
@@ -1430,7 +1554,8 @@ export class Bot {
     const s = this.sim.s;
     const L = this.lines;
     const d = runPlan(r0, plan, n, n, this.rotP, this.res);
-    const off = f.x + d.lat - L.safeX(f.z);
+    const aim = this.feed && this.feed.z > f.z ? this.feed.x - L.safeX(this.feed.z) : 0;
+    const off = f.x + d.lat - L.safeX(f.z) - aim;
     const ahead = off + (s.vx + d.vlat - s.vz * L.dir(f.z)) * 0.5;
     let cost = (off < 0 ? -off : off) + (ahead < 0 ? -ahead : ahead);
     if (this.scene.clearance(f.x + d.lat, f.z, -Infinity) < this.t.margin) cost += 4;
@@ -1453,6 +1578,13 @@ export class Bot {
     if (!rng.chance(0.35 + t.ambition * 0.65)) {
       maxK = Math.min(maxK, rng.int(0, 1));
       maxF = 0;
+    }
+    // A rider hopping under bells or stomping down Old Town spins nothing, and means every stomp.
+    const piece = this.triesMoment() ?? this.triesNext();
+    if (piece && (piece.verb === 'shatter' || piece.verb === 'steps')) {
+      maxK = 0;
+      maxF = 0;
+      if (piece.verb === 'steps' && total >= 27) a.stomp = true;
     }
     // Spinning pushes the sled sideways, so the direction is picked by where it leaves the landing.
     const spinning = r0.spin > 1.5 ? 1 : r0.spin < -1.5 ? -1 : 0;
