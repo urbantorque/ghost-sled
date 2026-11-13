@@ -2,7 +2,7 @@ import { AdditiveBlending, BufferGeometry, Color, CylinderGeometry, DoubleSide, 
 import type { Beat } from '../game/beats';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
-import { type MomentPlay, fallZ, machineZ, momentPlays } from '../sim/moments';
+import { type MomentPlay, LEGEND_AHEAD, RIBBON_HW, fallZ, gateX, machineZ, momentPlays, pathX } from '../sim/moments';
 import type { BiomeId } from '../sim/mountains';
 import type { Sim } from '../sim/sim';
 import { merge, part, shade } from './flora';
@@ -21,6 +21,13 @@ import type { Particles } from './particles';
 //  - Rings and steps: a burst where each is flown or stomped (the rings themselves are sky gates, drawn
 //    with the stage gates in spirit.ts).
 // Everything reads public sim state and the director's beats; nothing is written back.
+//
+// Round 7 (the moments lane). The world here is the run's own variant (Sim.plays), not the plain day's: a
+// chase's cars, gates that swing, a span that falls from its far end. What the new verbs, variants and
+// legends need to be seen and played is drawn by standIns() below with three small instanced meshes (orbs,
+// beams, discs of light). Every one of those is a STAND-IN, marked "r7 stand-in": functional, placed and
+// timed from the sim, and meant to be replaced by the world, fx and light lanes (notes/r7-moments.md says
+// what each must become).
 
 const LIGHT = new Color('#FFD34D');
 const WHITE_GOLD = new Color('#FFF3C4');
@@ -45,10 +52,23 @@ const GARLAND = new Color('#FFE29A').multiplyScalar(1.4);
 
 interface Machine {
   play: MomentPlay;
-  cabin: Mesh;
-  /** Where the cabin stood last frame, and whether the race is over for it. */
-  z: number;
+  /** One cabin a car (a chase may have two on the rope). */
+  cabins: Mesh[];
+  /** Where each cabin stood last frame. */
+  z: number[];
 }
+
+/** r7 stand-in budgets: orbs, beams and discs of light a frame may draw. */
+const ORBS = 96;
+const BEAMS = 48;
+const DISCS = 96;
+const BRONZE = new Color('#E9B45A');
+const COLD = new Color('#5A6A9A');
+const PALE = new Color('#CFE0FF');
+const EMBER = new Color('#FF9A4A');
+const ROSE = new Color('#FFB7C9');
+/** A legend's stand-in colour, by its key. */
+const LEGEND_COL: Record<string, Color> = { stag: PALE, fleet: LIGHT, aurora: new Color('#B9C8FF'), herd: PALE, eruption: EMBER, wyrm: EMBER, dragon: LIGHT, cranes: ROSE, rising: LIGHT, lamplighter: WHITE_GOLD };
 
 interface GateLook {
   play: MomentPlay;
@@ -177,7 +197,17 @@ function cabinGeometry(key: string, biome: BiomeId): BufferGeometry {
 export class MarqueeWorld {
   readonly root = new Object3D();
   private plays: readonly MomentPlay[] = [];
+  private course: Course | null = null;
   private biome: BiomeId = 'alpine';
+  // r7 stand-ins: what the new verbs, variants and legends are drawn with until their own world is built.
+  private readonly orbs: InstancedMesh;
+  private readonly beams: InstancedMesh;
+  private readonly discs: InstancedMesh;
+  private nOrb = 0;
+  private nBeam = 0;
+  private nDisc = 0;
+  /** What a set piece held when it was decided (its mask), so its lamps and bells stay as the rider left them. */
+  private readonly kept = new Map<number, number>();
   private readonly statics: Mesh[] = [];
   /** Each set piece's meshes and the stretch of course they belong to: drawn only within SHOW_M of the rider,
    *  so a run pays for the one ahead and nothing else. */
@@ -207,9 +237,30 @@ export class MarqueeWorld {
     this.chunks.visible = false;
     this.root.add(this.chunks);
     for (let i = 0; i < 36; i++) this.chunkState.push({ x: 0, y: -1e4, z: 0, vx: 0, vy: 0, vz: 0, r: 0.5, spin: 0, life: 0 });
+    // r7 stand-ins.
+    this.orbs = new InstancedMesh(lanternGeometry(), makeToonMaterial({ coolShade: 0.05, emissive: new Color('#FFE8C0'), emissiveStrength: 0.22, rim: 0.3 }), ORBS);
+    const plane = new PlaneGeometry(1.1, 4.2);
+    plane.translate(0, 2.1, 0);
+    this.beams = new InstancedMesh(merge([plane, plane.clone().rotateY(Math.PI / 2)].map((q) => q.toNonIndexed())), this.pillarMat, BEAMS);
+    this.beams.renderOrder = 6;
+    this.discs = new InstancedMesh(new PlaneGeometry(1, 1).rotateX(-Math.PI / 2), this.poolMat, DISCS);
+    this.discs.renderOrder = 5;
+    for (const m of [this.orbs, this.beams, this.discs]) {
+      m.count = 0;
+      m.visible = false;
+      m.frustumCulled = false;
+      m.setColorAt(0, LIGHT);
+      this.root.add(m);
+    }
   }
 
   setCourse(c: Course): void {
+    this.course = c;
+    this.build(c, momentPlays(c));
+  }
+
+  /** The set pieces' world for a course and the variants a run rides (a plain day's until a run begins). */
+  private build(c: Course, plays: readonly MomentPlay[]): void {
     for (const m of this.statics) {
       this.root.remove(m);
       m.geometry.dispose();
@@ -217,8 +268,10 @@ export class MarqueeWorld {
     this.statics.length = 0;
     this.shown.length = 0;
     for (const m of this.machines) {
-      this.root.remove(m.cabin);
-      m.cabin.geometry.dispose();
+      for (const cabin of m.cabins) {
+        this.root.remove(cabin);
+        cabin.geometry.dispose();
+      }
     }
     if (this.pillars) this.root.remove(this.pillars);
     if (this.lanterns) this.root.remove(this.lanterns);
@@ -229,7 +282,7 @@ export class MarqueeWorld {
     this.machines = [];
     this.gates = [];
     this.biome = c.biome;
-    this.plays = momentPlays(c);
+    this.plays = plays;
     for (const p of this.plays) {
       if (p.verb === 'race') this.buildMachine(c, p);
       else if (p.verb === 'gates' && p.gates.length) this.gates.push({ play: p, state: p.gates.map(() => 0), at: p.gates.map(() => 0), base: 0 });
@@ -241,7 +294,8 @@ export class MarqueeWorld {
   /** A new run on the same course: every machine back at its station, every gate lit again. */
   reset(): void {
     this.active = null;
-    for (const m of this.machines) m.z = m.play.z0 + m.play.lead;
+    this.kept.clear();
+    for (const m of this.machines) m.z = m.cabins.map((_, k) => m.play.z0 + (m.play.cars[k]?.lead ?? m.play.lead));
     for (const g of this.gates) {
       g.state.fill(0);
       g.at.fill(0);
@@ -303,10 +357,15 @@ export class MarqueeWorld {
     const mesh = new Mesh(merge(parts), this.toon);
     this.statics.push(mesh);
     this.root.add(mesh);
-    const cabin = new Mesh(cabinGeometry(p.key, this.biome).scale(1.35, 1.35, 1.35), this.toon);
-    this.root.add(cabin);
-    this.shown.push({ objs: [mesh, cabin], z0: from, z1: to });
-    this.machines.push({ play: p, cabin, z: p.z0 + p.lead });
+    // A chase has a cabin a car (two on the rope in one variant); a sprint has its one.
+    const cabins: Mesh[] = [];
+    for (let k = 0; k < Math.max(1, p.cars.length); k++) {
+      const cabin = new Mesh(cabinGeometry(p.key, this.biome).scale(1.35, 1.35, 1.35), this.toon);
+      this.root.add(cabin);
+      cabins.push(cabin);
+    }
+    this.shown.push({ objs: [mesh, ...cabins], z0: from, z1: to });
+    this.machines.push({ play: p, cabins, z: cabins.map((_, k) => p.z0 + (p.cars[k]?.lead ?? p.lead)) });
   }
 
   private buildGates(c: Course): void {
@@ -342,10 +401,11 @@ export class MarqueeWorld {
         tm.compose(tv.set(q.x, y0 + 0.08, -q.z), tq.identity(), ts.set(2 * q.hw + 1.4, 1, 4.2));
         pools.setMatrixAt(g.base + i, tm);
         pools.setColorAt(g.base + i, LIGHT);
-        // A garland of small lights sags between the two strings' heads: the gate's lintel.
+        // A garland of small lights sags between the two strings' heads: the gate's lintel. (r7 stand-in: a
+        // gate that swings has no lintel yet, only its strings, its pillars and its pool, which swing.)
         const xa = q.x - q.hw - 0.15;
         const xb = q.x + q.hw + 0.15;
-        for (let j = 0; j <= 6; j++) {
+        for (let j = 0; j <= 6 && q.amp === 0; j++) {
           const u = j / 6;
           const x = xa + (xb - xa) * u;
           const y = y0 + STRING_LOW + PER_STRING * 0.95 + 0.5 - 0.7 * Math.sin(Math.PI * u);
@@ -355,7 +415,7 @@ export class MarqueeWorld {
         for (let s = 0; s < 2; s++) {
           const x = q.x + (s === 0 ? -1 : 1) * (q.hw + 0.15);
           const k = (g.base + i) * 2 + s;
-          wires.push(seg([x, wy + 0.6, -q.z], [x, y0 + STRING_LOW, -q.z], 0.03, cord, 3));
+          if (q.amp === 0) wires.push(seg([x, wy + 0.6, -q.z], [x, y0 + STRING_LOW, -q.z], 0.03, cord, 3));
           tm.compose(tv.set(x, c.ground(x, q.z), -q.z), tq.identity(), ts.set(1, 1, 1));
           pillars.setMatrixAt(k, tm);
           pillars.setColorAt(k, LIGHT);
@@ -409,6 +469,9 @@ export class MarqueeWorld {
         this.particles.sparkle(ts.set(s.x, s.y + 0.8, -s.z), WHITE_GOLD, 30, 4, 0.7, 0.26, carrier, 0.3);
       } else if (b.verb === 'steps' && b.phase === 'step') {
         this.particles.sparkle(ts.set(s.x, s.y + 0.6, -s.z), PETAL, 26, 3.6, 0.9, 0.24, carrier, 0.6);
+      } else if ((b.verb === 'shatter' || b.verb === 'kindle' || b.verb === 'slide' || b.verb === 'follow' || b.verb === 'surge') && b.phase === 'step') {
+        // r7 stand-in: a bell rung, a lamp lit, a slide's quarter, the wake's eighth, the lip left.
+        this.particles.sparkle(ts.set(s.x, s.y + (b.verb === 'shatter' ? 2.2 : 0.8), -s.z), b.verb === 'shatter' ? BRONZE : WHITE_GOLD, 20, 3.2, 0.6, 0.22, carrier, 0.4);
       } else if (b.phase === 'won') {
         this.particles.sparkle(ts.set(s.x, s.y + 1.2, -s.z), LIGHT, 40, 4.5, 0.8, 0.28, carrier, 0.5);
       }
@@ -418,6 +481,10 @@ export class MarqueeWorld {
   /** Per frame: the machines where the sim's schedule puts them, the gates' light, the span's fall. */
   update(dt: number, time: number, mode: 'run' | 'title' | 'results', s: Snap, sim: Sim | null, low: boolean): void {
     const now = performance.now() / 1000;
+    // The run's own variants (a plain day's on the title and until a run begins).
+    if (sim && this.course && sim.course === this.course && sim.plays !== this.plays && sim.plays.length === this.plays.length) {
+      this.build(this.course, sim.plays);
+    }
     for (const g of this.shown) {
       const on = s.z > g.z0 - SHOW_M && s.z < g.z1 + 30;
       if (g.objs[0].visible !== on) for (const o of g.objs) o.visible = on;
@@ -425,28 +492,53 @@ export class MarqueeWorld {
     const c = sim?.course;
     for (const m of this.machines) {
       const p = m.play;
-      let z = p.z0 + p.lead;
-      if (sim && mode !== 'title') {
-        const mo = sim.mo;
-        if (mo.active === p.index) z = machineZ(p, sim.tick - mo.t0);
-        else if (mo.next > p.index) z = Math.min(p.z1, m.z + 34 * dt);
-        else if (mo.next <= p.index) z = p.z0 + p.lead;
-      }
-      m.z = z;
-      if (!c) continue;
-      this.cableAt(c, p.side, z, tv);
-      // It swings a little on its hanger as it goes, more as it leaves and arrives.
-      const sway = 0.06 * Math.sin(time * 1.7 + p.index) + (z > p.z0 + p.lead + 1 && z < p.z1 - 1 ? 0.03 : 0);
-      m.cabin.position.copy(tv);
-      const ahead = this.cableAt(c, p.side, z + 4, ts);
-      m.cabin.rotation.set(0, Math.atan2(ahead.x - tv.x, ahead.z - tv.z), sway);
+      m.cabins.forEach((cabin, k) => {
+        const z0 = p.z0 + (p.cars[k]?.lead ?? p.lead);
+        let z = z0;
+        if (sim && mode !== 'title') {
+          const mo = sim.mo;
+          if (mo.active === p.index) z = machineZ(p, sim.tick - mo.t0, k);
+          else if (mo.next > p.index) z = Math.min(p.z1, m.z[k] + 34 * dt);
+        }
+        m.z[k] = z;
+        if (!c) return;
+        this.cableAt(c, p.side, z, tv);
+        // It swings a little on its hanger as it goes, more as it leaves and arrives.
+        const sway = 0.06 * Math.sin(time * 1.7 + p.index + k) + (z > z0 + 1 && z < p.z1 - 1 ? 0.03 : 0);
+        cabin.position.copy(tv);
+        const ahead = this.cableAt(c, p.side, z + 4, ts);
+        cabin.rotation.set(0, Math.atan2(ahead.x - tv.x, ahead.z - tv.z), sway);
+      });
     }
     if (this.pillars && this.lanterns && c && this.pillars.visible) {
       let dirty = false;
       for (const g of this.gates) {
+        // A gate that swings is where the sim's sway has it (moments.ts gateX): at rest until the rider
+        // arrives, held where it was once the set piece is over.
+        const gp = g.play;
+        const swingT = sim && gp.style === 'swing' ? (sim.mo.active === gp.index ? sim.tick - sim.mo.t0 : sim.mo.next > gp.index ? -1 : 0) : -1;
         g.play.gates.forEach((q, i) => {
           const st = g.state[i];
           const age = now - g.at[i];
+          if (q.amp > 0 && swingT >= 0 && st !== 1) {
+            const gx = gateX(q, swingT);
+            const y0 = c.ground(gx, q.z);
+            tm.compose(tv.set(gx, y0 + 0.08, -q.z), tq.identity(), ts.set(2 * q.hw + 1.4, 1, 4.2));
+            this.pools?.setMatrixAt(g.base + i, tm);
+            for (let k = 0; k < 2; k++) {
+              const x = gx + (k === 0 ? -1 : 1) * (q.hw + 0.15);
+              const idx = (g.base + i) * 2 + k;
+              tm.compose(tv.set(x, c.ground(x, q.z), -q.z), tq.identity(), ts.set(1, 1, 1));
+              this.pillars!.setMatrixAt(idx, tm);
+              for (let j = 0; j < PER_STRING; j++) {
+                tm.compose(tv.set(x, y0 + STRING_LOW + 0.3 + j * 0.95, -q.z), tq.identity(), ts.setScalar(1 - j * 0.12));
+                this.lanterns!.setMatrixAt(idx * PER_STRING + j, tm);
+              }
+            }
+            dirty = true;
+            this.pillars!.instanceMatrix.needsUpdate = true;
+            if (this.pools) this.pools.instanceMatrix.needsUpdate = true;
+          }
           for (let k = 0; k < 2; k++) {
             const idx = (g.base + i) * 2 + k;
             // The next gate burns brightest and breathes, so the eye goes to it through a festival street;
@@ -479,6 +571,166 @@ export class MarqueeWorld {
       if (dirty) this.lanterns.instanceMatrix.needsUpdate = true;
     }
     this.collapse(dt, s, sim, low);
+    this.standIns(time, mode, s, sim, low);
+  }
+
+  // ---------------------------------------------------------------- r7 stand-ins
+
+  private orb(x: number, y: number, z: number, k: number, col: Color, lum = 1): void {
+    if (this.nOrb >= ORBS) return;
+    tm.compose(tv.set(x, y, -z), tq.identity(), ts.setScalar(k));
+    this.orbs.setMatrixAt(this.nOrb, tm);
+    this.orbs.setColorAt(this.nOrb++, tc.copy(col).multiplyScalar(lum));
+  }
+
+  private beam(c: Course, x: number, z: number, k: number, col: Color, lum = 1): void {
+    if (this.nBeam >= BEAMS) return;
+    tm.compose(tv.set(x, c.ground(x, z), -z), tq.identity(), ts.set(k, k, k));
+    this.beams.setMatrixAt(this.nBeam, tm);
+    this.beams.setColorAt(this.nBeam++, tc.copy(col).multiplyScalar(lum));
+  }
+
+  private disc(c: Course, x: number, z: number, w: number, len: number, col: Color, lum = 1): void {
+    if (this.nDisc >= DISCS) return;
+    tm.compose(tv.set(x, c.ground(x, z) + 0.1, -z), tq.identity(), ts.set(w, 1, len));
+    this.discs.setMatrixAt(this.nDisc, tm);
+    this.discs.setColorAt(this.nDisc++, tc.copy(col).multiplyScalar(lum));
+  }
+
+  /** r7 stand-in: everything round 7's new verbs, variants and legends need to be seen and played, as orbs,
+   *  beams and discs of light placed and timed from the sim. Functional, not final: notes/r7-moments.md lists
+   *  what the world, fx, light and camera lanes build in place of each. */
+  private standIns(time: number, mode: 'run' | 'title' | 'results', s: Snap, sim: Sim | null, low: boolean): void {
+    this.nOrb = this.nBeam = this.nDisc = 0;
+    const c = sim?.course;
+    if (sim && c && mode !== 'title') {
+      const mo = sim.mo;
+      const breathe = 1.3 + 0.35 * Math.sin(time * 6.2);
+      for (const p of this.plays) {
+        if (s.z < p.z0 - SHOW_M || s.z > p.z1 + 80) continue;
+        const active = mo.active === p.index;
+        const over = !active && mo.next > p.index;
+        if (active) this.kept.set(p.index, mo.mask);
+        const mask = this.kept.get(p.index) ?? 0;
+        switch (p.verb) {
+          case 'shatter':
+            // r7 stand-in: a bell is a bronze orb hung where the sled must be, over a pool on the snow.
+            p.targets.forEach((t, i) => {
+              if ((mask >> i) & 1) return;
+              const gone = over || (active && i < mo.at);
+              const next = active ? i === mo.at : i === 0;
+              const y = c.ground(t.x, t.z);
+              this.orb(t.x, y + t.h + 1.3, t.z, gone ? 1.1 : 2, BRONZE, gone ? 0.35 : next ? breathe : 0.9);
+              if (!gone) this.disc(c, t.x, t.z, Math.min(2 * t.hw, 9), 3, BRONZE, next ? 0.9 : 0.4);
+            });
+            break;
+          case 'surge':
+            // r7 stand-in: the far line is a row of beams across the landing; the lip, a pool.
+            if (p.far > 0) {
+              const hw = Math.min(10, c.halfWidth(p.far) - 1);
+              for (let k = -2; k <= 2; k++) this.beam(c, c.centerX(p.far) + (k * hw) / 2, p.far, 1.4, LIGHT, over ? 0.3 : 1.2);
+              this.disc(c, c.safeX(p.lip - 3), p.lip - 3, 8, 5, LIGHT, active ? breathe * 0.6 : 0.4);
+            }
+            break;
+          case 'collapse':
+            // r7 stand-in: the keystone of a span that falls from its far end, two beams and a pool.
+            if (p.from === 1) {
+              for (const side of [-1, 1]) this.beam(c, c.centerX(p.keystone) + side * (c.halfWidth(p.keystone) - 0.6), p.keystone, 1.3, ICE, over ? 0.3 : breathe);
+              this.disc(c, c.centerX(p.keystone), p.keystone, 2 * c.halfWidth(p.keystone), 3, ICE, 0.6);
+            }
+            break;
+          case 'follow':
+            // r7 stand-in: the guide light is an orb that keeps ahead of the rider on its line, its wake a
+            // run of pools behind it as wide as the wake is.
+            if (p.path && !over) {
+              const zl = Math.max(p.path.z0, Math.min(p.path.z1, s.z + 26));
+              const x = pathX(c, p.path, zl);
+              this.orb(x, c.ground(x, zl) + 1.9 + 0.25 * Math.sin(time * 3.1), zl, 1.7, WHITE_GOLD, 1.6);
+              this.beam(c, x, zl, 0.9, WHITE_GOLD, 0.9);
+              for (let k = 1; k <= (low ? 4 : 7); k++) {
+                const z = zl - k * 5;
+                if (z < p.path.z0) break;
+                this.disc(c, pathX(c, p.path, z), z, 2 * p.hw, 5.5, LIGHT, 0.55 - k * 0.05);
+              }
+            }
+            break;
+          case 'kindle':
+            // r7 stand-in: a flame over each stone lamp. Lit ones burn; a dark one is a cold mark with a pool
+            // on the snow where a sled lights it; lit by the rider, it flares with a beam.
+            p.lamps.forEach((l, i) => {
+              const y = c.ground(l.x, l.z) + 2.5;
+              const lit = ((mask >> i) & 1) === 1;
+              if (!l.dark) this.orb(l.x, y, l.z, 0.9, LIGHT, 0.9);
+              else if (lit) {
+                this.orb(l.x, y, l.z, 1.2, WHITE_GOLD, 1.7);
+                this.beam(c, l.x, l.z, 0.8, LIGHT, 1);
+              } else {
+                this.orb(l.x, y, l.z, 0.8, COLD, 0.5);
+                if (!over) this.disc(c, l.x - l.side * 2.2, l.z, 2.4, 3.4, LIGHT, active && l.z > s.z ? 0.5 : 0.25);
+              }
+            });
+            break;
+          case 'carry': {
+            // r7 stand-in: the flame rides over the sled, as big as it has left to burn; the brazier that
+            // feeds a low flame is an orb in a beam; the great lantern hangs over the line and lights when
+            // the flame arrives.
+            const won = ((sim.stats.momentMask >> p.index) & 1) === 1;
+            if (active && mo.pace > 0) this.orb(s.x, s.y + 1.75, s.z, 0.22 + 0.36 * mo.pace, mo.pace < 0.3 ? EMBER : WHITE_GOLD, 1.3 + 0.3 * Math.sin(time * 11));
+            const r = p.relight;
+            if (r && !(mask & 1) && !over) {
+              this.orb(r.x, c.ground(r.x, r.z) + 1.4, r.z, 1.5, EMBER, breathe);
+              this.beam(c, r.x, r.z, 1.2, EMBER, 1);
+              this.disc(c, r.x, r.z, 2 * r.r, 2 * r.r, EMBER, 0.7);
+            }
+            const zg = c.finishZ + 26;
+            this.orb(c.centerX(zg), c.ground(c.centerX(zg), zg) + 9, zg, 6, won ? WHITE_GOLD : COLD, won ? 1.8 : 0.5);
+            break;
+          }
+          default:
+            break;
+        }
+      }
+      // Legends (r7 stand-ins): a runner is a short train of orbs keeping ahead on its line (its lights are
+      // the storm's kind, drawn with them); a ribbon is a lane of pools; a sky legend is lanterns rising
+      // either side of the place.
+      const lg = sim.legend;
+      if (lg && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
+        const col = LEGEND_COL[lg.key] ?? LIGHT;
+        if (lg.kind === 'runner' && lg.path && sim.lg.phase < 3) {
+          const head = sim.lg.phase === 2 ? sim.lg.head : lg.z0 + LEGEND_AHEAD;
+          for (let k = 0; k < 6; k++) {
+            const z = Math.max(lg.path.z0, Math.min(lg.path.z1, head - k * 2.6));
+            const x = pathX(c, lg.path, z);
+            this.orb(x, c.ground(x, z) + 1.6 + 0.5 * Math.sin(time * 5 - k * 0.9), z, k === 0 ? 2.2 : 1.6 - k * 0.15, col, 1.5 - k * 0.12);
+          }
+        } else if (lg.kind === 'ribbon' && lg.path) {
+          const from = Math.max(lg.path.z0, s.z - 15);
+          for (let z = from - (from % 6), n = 0; z < lg.path.z1 && n < (low ? 14 : 24); z += 6, n++) {
+            if (z < lg.path.z0) continue;
+            this.disc(c, pathX(c, lg.path, z), z, 2 * RIBBON_HW, 7, col, 0.6 + 0.2 * Math.sin(time * 2 + z * 0.2));
+            if (n % 4 === 0) this.beam(c, pathX(c, lg.path, z), z, 1.5, col, 0.5);
+          }
+        } else if (lg.kind === 'sky') {
+          const n = low ? 14 : 30;
+          for (let k = 0; k < n; k++) {
+            const u = (k * 0.618034) % 1;
+            const z = lg.z0 + u * (lg.z1 - lg.z0);
+            const side = k % 2 === 0 ? 1 : -1;
+            const x = c.centerX(z) + side * (c.halfWidth(z) + 6 + ((k * 7) % 23));
+            const rise = (time * (2.2 + (k % 5) * 0.4) + k * 9) % 46;
+            this.orb(x, c.ground(x, z) + 2 + rise, z, 1.3 + (k % 3) * 0.4, col, sim.lg.phase >= 2 ? 1.4 : 0.6);
+          }
+        }
+      }
+    }
+    for (const [m, n] of [[this.orbs, this.nOrb], [this.beams, this.nBeam], [this.discs, this.nDisc]] as const) {
+      m.count = n;
+      m.visible = n > 0;
+      if (n > 0) {
+        m.instanceMatrix.needsUpdate = true;
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      }
+    }
   }
 
   /** While a collapse plays, the span's cornices break off at the sim's fall line and drop away. */

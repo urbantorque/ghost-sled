@@ -47,7 +47,8 @@ export function encodeRecord(r: RunRecord): Uint8Array {
   u8(VERSION);
   u8(SIM_VERSION);
   u32(r.seed);
-  u8(r.chaos.mood);
+  // (The legend rides in the mood byte's high half: a mood is 0 to 6, and bytes 0 to 27 keep their layout.)
+  u8(r.chaos.mood | (((r.chaos.legend ?? 0) & 15) << 4));
   u8(r.chaos.event);
   u32(r.chaos.seed);
   u8(r.sled);
@@ -73,7 +74,9 @@ export function decodeRecord(data: Uint8Array): RunRecord {
     return v >>> 0;
   };
   const seed = u32();
-  const mood = u8() as Mood;
+  const moodByte = u8();
+  const mood = (moodByte & 15) as Mood;
+  const legend = moodByte >> 4;
   const event = u8() as ChaosEvent;
   const chaosSeed = u32();
   const sled = u8();
@@ -87,7 +90,7 @@ export function decodeRecord(data: Uint8Array): RunRecord {
   if (mood > 6 || event > 4 || sled > 15) throw new Error('run record out of range');
   return {
     seed,
-    chaos: { mood, event, seed: chaosSeed },
+    chaos: legend ? { mood, event, seed: chaosSeed, legend } : { mood, event, seed: chaosSeed },
     sled,
     ticks,
     score,

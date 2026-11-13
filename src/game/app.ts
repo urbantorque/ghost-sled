@@ -34,6 +34,7 @@ import { PAINTS, paintById } from './paints';
 import { SHELVES, type ShelfId, hatById, scarfById, soundById, trailById } from './garage';
 import { WARD_CURVE } from './timescale';
 import { courseFor } from '../sim/course';
+import { rollForVariant } from '../sim/moments';
 import { HintCoach } from './hints';
 import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
@@ -844,6 +845,9 @@ export class App {
     // The Cup is one week's mood and event, whoever rides and however often.
     if (this.mountain.id === 'cup') chaos = cupChaos(this.cup.tagline);
     if (DEV_ON && (DEV.has('mood') || DEV.has('event'))) chaos = { mood: Number(DEV.get('mood') ?? 0) as Mood, event: Number(DEV.get('event') ?? 0) as ChaosEvent, seed: chaos.seed || 7 };
+    // (r7, dev only: ?variant=N rides every set piece's Nth variant, ?legend=1 or 2 the mountain's legend.)
+    if (DEV_ON && DEV.has('variant')) chaos = rollForVariant(courseFor(this.mountain.seed), chaos, Number(DEV.get('variant')));
+    if (DEV_ON && DEV.has('legend')) chaos = { ...chaos, event: ChaosEvent.None, legend: Number(DEV.get('legend')) };
     this.chaos = chaos;
     if (chaos.mood !== Mood.None) this.lastMood = chaos.mood;
     this.sessionRuns++;
@@ -1025,7 +1029,7 @@ export class App {
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
       // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
-      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id),
+      marquee: planMarquee(courseFor(this.mountain.seed), this.mountain.id === 'daily' || this.mountain.id === 'cup' ? null : this.mountain.id, this.chaos),
     });
     this.director.time.reset();
   }

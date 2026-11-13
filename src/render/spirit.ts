@@ -259,7 +259,12 @@ export class SpiritFx {
     this.gates.setGates(c.skyGates);
     this.trees.setCourse(c);
     this.breaks.setCourse(c);
+    this.gateKey = '';
   }
+
+  /** r7 (moments lane): the rings a run's set pieces hang are its variant's (Sim.skyGates), so a run whose
+   *  roll picked the far side or the high line draws those, not the plain day's. */
+  private gateKey = '';
 
   /** A new run: every gate hangs again, and nothing from the last run is still in the air. */
   reset(): void {
@@ -343,6 +348,13 @@ export class SpiritFx {
   /** Per frame: the gates shimmer, a dash trails light behind the rider, the ward's lantern plays out,
    *  fireworks climb and burst, and a dashing ghost trails its own light. */
   update(dt: number, mode: 'run' | 'title' | 'results', s: Snap, sim: Sim | null, poses: ReadonlyMap<number, GhostPose | null>, low: boolean): void {
+    if (sim && sim.course === this.course) {
+      const key = sim.plays.map((p) => p.variant).join('.');
+      if (key !== this.gateKey) {
+        this.gateKey = key;
+        this.gates.setGates(sim.skyGates);
+      }
+    }
     this.at.set(s.x, s.y, -s.z);
     this.vel.set(s.vx, s.vy, -s.vz);
     this.gates.update(dt);

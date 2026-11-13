@@ -2,16 +2,19 @@
 // piece, the riders who met it and the ones who won it, signature riders apart.
 //   npx tsx scripts/playtest/pool-moments.ts
 import { readFileSync } from 'node:fs';
+import { MOUNTAINS } from '../../src/sim/mountains';
 import { recordFromString, replayRecord } from '../../src/sim/replay';
-for (const k of ['pinecrest', 'frostfang', 'ember', 'sakura']) {
+for (const k of MOUNTAINS.map((m) => m.id)) {
   const pool = JSON.parse(readFileSync(`src/data/ghosts/${k}.json`, 'utf8')).ghosts as { record: string; name: string; rider?: string }[];
   const met: number[] = [];
   const won: number[] = [];
   const sig: string[] = [];
+  let legends = 0;
   let keys: string[] = [];
   for (const g of pool) {
     const sim = replayRecord(recordFromString(g.record));
     keys = sim.plays.map((p) => `${p.key}:${p.verb}`);
+    if (sim.stats.legend) legends++;
     sim.plays.forEach((p, i) => {
       if (sim.distance >= p.z0) met[i] = (met[i] ?? 0) + 1;
       if ((sim.stats.momentMask >> i) & 1) {
@@ -22,4 +25,5 @@ for (const k of ['pinecrest', 'frostfang', 'ember', 'sakura']) {
   }
   console.log(k, keys.map((key, i) => `${key} ${won[i] ?? 0}/${met[i] ?? 0}`).join(' | '));
   console.log('   signature winners:', sig.join(' '));
+  console.log(`   riders who met a legend: ${legends}/${pool.length}`);
 }

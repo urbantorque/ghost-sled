@@ -18,7 +18,8 @@ export const STAR_GIFTS = 10;
 export interface MasteryRecord {
   /** Sky gate ids flown. */
   gates: number[];
-  /** Set pieces: a key is one swept clean (round 5), a key with ":won" one whose verb was beaten (round 6). */
+  /** Set pieces: a key is one swept clean (round 5), a key with ":won" one whose verb was beaten (round 6), a
+   *  key with its verb (":slide") one beaten since round 7 changed what some of them ask. */
   moments: string[];
   /** Signature rider keys beaten to the line. */
   riders: string[];
@@ -44,6 +45,15 @@ export function readMastery(p: unknown): MasteryRecord {
   return { gates: nums(o.gates), moments: strs(o.moments), riders: strs(o.riders), clean: o.clean === true };
 }
 
+/** Set pieces that ask in round 7 what they asked in round 6: a star won then still stands. The rest changed
+ *  their verb or its rule (decision 246's pattern: the save keeps what it held, and it claims nothing new). */
+const SAME_AS_R6: ReadonlySet<string> = new Set(['firstdrop', 'seracgate', 'cavern', 'cindergate']);
+
+/** Whether a record holds a set piece's star. */
+function momentDone(rec: MasteryRecord, key: string, verb: string): boolean {
+  return rec.moments.includes(`${key}:${verb}`) || (SAME_AS_R6.has(key) && rec.moments.includes(`${key}:won`));
+}
+
 const MEDAL = ['Bronze', 'Silver', 'Gold'];
 const STAGE_WORD = ['first', 'second', 'third'];
 
@@ -52,8 +62,9 @@ export function masteryBoard(course: Course, mountainId: string, rec: MasteryRec
   const m = MOUNTAINS.findIndex((q) => q.id === mountainId);
   const stars: Star[] = MEDAL.map((name, i) => ({ key: `medal${i + 1}`, label: `${name} medal`, group: 'medal' as const, done: runMedal >= i + 1 }));
   for (const g of course.stageGates) stars.push({ key: `gate${g.id}`, label: `Fly the ${STAGE_WORD[g.stage] ?? ''} stage's sky gate`.replace('  ', ' '), group: 'gate', done: rec.gates.includes(g.id) });
-  // Each set piece's verb beaten (its line on the card is the goal). A round 5 sweep is still in the save.
-  for (const mq of planMarquee(course, mountainId)) stars.push({ key: `mq:${mq.key}`, label: `${mq.name}: ${mq.line}`, group: 'moment', done: rec.moments.includes(`${mq.key}:won`) });
+  // Each set piece's verb beaten, in any of its variants (the board's line is its goal). A round 5 sweep, and a
+  // round 6 win of a set piece that has changed since, are still in the save and claim nothing.
+  for (const mq of planMarquee(course, mountainId)) stars.push({ key: `mq:${mq.key}`, label: `${mq.name}: ${mq.goal}`, group: 'moment', done: momentDone(rec, mq.key, mq.verb) });
   for (const r of ROSTER) if (r.home === m) stars.push({ key: `rider:${r.key}`, label: `Beat ${r.name} to the line`, group: 'rider', done: rec.riders.includes(r.key) });
   stars.push({ key: 'clean', label: 'Finish with no wipeout and no ward', group: 'clean', done: rec.clean });
   return stars;
@@ -78,7 +89,11 @@ export function settleMastery(
 ): string[] {
   const before = new Set(masteryBoard(course, mountainId, rec, medalBefore).filter((s) => s.done).map((s) => s.key));
   for (const g of run.gates) if (!rec.gates.includes(g)) rec.gates.push(g);
-  for (const mq of run.moments) if (mq.won && !rec.moments.includes(`${mq.key}:won`)) rec.moments.push(`${mq.key}:won`);
+  const verbs = new Map(planMarquee(course, mountainId).map((mq) => [mq.key, mq.verb]));
+  for (const mq of run.moments) {
+    const token = `${mq.key}:${verbs.get(mq.key) ?? 'won'}`;
+    if (mq.won && !rec.moments.includes(token)) rec.moments.push(token);
+  }
   if (run.time !== null) {
     for (const [key, t] of run.riderTimes) if ((t === null || run.time < t) && !rec.riders.includes(key)) rec.riders.push(key);
     if (run.clean) rec.clean = true;
