@@ -59,7 +59,9 @@ export interface PoolOptions {
  *  one rider to chase at most. These riders are the quickest of many more top-skill runs, each a real
  *  record: the quickest a bot can ride this mountain, and a rider every FAST_GAP_S down from there. */
 export const FAST_RIDERS = 8;
-const FAST_TRIES = 6;
+/** (Twelve tries a rider since the racers: a pool is ridden offline, and the quickest of 96 is a second or two
+ *  quicker than the quickest of 48.) */
+const FAST_TRIES = 12;
 const FAST_GAP_S = 0.5;
 
 /** A run's place in the race: higher is better. */
