@@ -8,7 +8,37 @@ import { join, relative } from 'node:path';
 const ROOT = join(import.meta.dirname, '..');
 const SRC = join(ROOT, 'dist', 'game');
 const OUT = join(ROOT, 'dist', 'ghost-sled.zip');
-const LIMIT = 5 * 1024 * 1024;
+
+// The budget. CrazyGames' technical requirements (docs.crazygames.com/requirements/technical, as of
+// round 7): a build of at most 250 MB and 1,500 files; an initial download (everything fetched up to
+// the first start of gameplay) of at most 50 MB, and of at most 20 MB to be eligible for the mobile
+// homepage. Ours are tighter on the whole build and take the mobile figure for the first download.
+const MB = 1024 * 1024;
+const MAX_BUILD = 80 * MB;
+const MAX_FILES = 1500;
+const MAX_INITIAL = 20 * MB;
+
+// What the initial download is. The score lives in music/ as one pack a piece, a tier and a format
+// (`<piece>.<full|lite>.<webm|m4a>.bin`, with two decode probes beside them), and none of it is fetched
+// before the first frame. So, up to the first run on a desktop, a player has fetched at most:
+//   every file outside music/
+//   + the title theme's packs (all of `title.*`: a player takes one, we count them all) and the probes
+//   + the desktop pack (`full.webm`) of one course: the largest, whichever they pick.
+// The other courses' packs arrive as each is picked and are counted in the whole build only.
+function initialDownload(sizes: ReadonlyArray<{ name: string; size: number }>): { bytes: number; course: string } {
+  let bytes = 0;
+  let course = '';
+  let largest = 0;
+  for (const f of sizes) {
+    if (!f.name.startsWith('music/')) bytes += f.size;
+    else if (/^music\/(title|probe)\./.test(f.name)) bytes += f.size;
+    else if (/^music\/[^/]+\.full\.webm\.bin$/.test(f.name) && f.size > largest) {
+      largest = f.size;
+      course = f.name.slice(6);
+    }
+  }
+  return { bytes: bytes + largest, course };
+}
 
 const CRC_TABLE = (() => {
   const t = new Uint32Array(256);
@@ -99,10 +129,20 @@ function main(): void {
   end.writeUInt32LE(offset, 16);
   const zip = Buffer.concat([...locals, centralBuf, end]);
   writeFileSync(OUT, zip);
-  const raw = files.reduce((a, f) => a + statSync(f).size, 0);
-  console.log(`dist/ghost-sled.zip: ${files.length} files, ${(raw / 1024).toFixed(0)} KB unpacked, ${(zip.length / 1024).toFixed(0)} KB zipped`);
-  if (raw > LIMIT) {
-    console.error(`Build is ${(raw / 1048576).toFixed(2)} MB, over the 5 MB budget.`);
+  const sizes = files.map((f) => ({ name: relative(SRC, f).split('\\').join('/'), size: statSync(f).size }));
+  const raw = sizes.reduce((a, f) => a + f.size, 0);
+  const first = initialDownload(sizes);
+  const mb = (n: number): string => (n / MB).toFixed(2);
+  console.log(`dist/ghost-sled.zip: ${(zip.length / MB).toFixed(2)} MB zipped`);
+  console.log(`Whole build: ${mb(raw)} MB (at most ${MAX_BUILD / MB})`);
+  console.log(`Initial download: ${mb(first.bytes)} MB (at most ${MAX_INITIAL / MB}; with ${first.course || 'no course pack'})`);
+  console.log(`Files: ${files.length} (at most ${MAX_FILES})`);
+  const over: string[] = [];
+  if (raw > MAX_BUILD) over.push(`The build is ${mb(raw)} MB, over the ${MAX_BUILD / MB} MB budget.`);
+  if (files.length > MAX_FILES) over.push(`The build has ${files.length} files, over the limit of ${MAX_FILES}.`);
+  if (first.bytes > MAX_INITIAL) over.push(`The initial download is ${mb(first.bytes)} MB, over the ${MAX_INITIAL / MB} MB budget.`);
+  if (over.length) {
+    for (const line of over) console.error(line);
     process.exit(1);
   }
 }
