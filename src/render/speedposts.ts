@@ -43,8 +43,8 @@ const FALL_AWAY = 0.25;
 const LIMIT_CLEAR = 0.4;
 
 /** Posts drawn and how far ahead they reach (metres), per tier. */
-const CAP: Record<Tier, number> = { low: 0, medium: 72, high: 104 };
-const REACH: Record<Tier, number> = { low: 0, medium: 190, high: 260 };
+const CAP: Record<Tier, number> = { low: 0, medium: 72, high: 104, ultra: 104 };
+const REACH: Record<Tier, number> = { low: 0, medium: 190, high: 260, ultra: 260 };
 /** Metres behind the rider a post stays (the lens is a few metres back, and the banks are in view). */
 const BEHIND = 14;
 

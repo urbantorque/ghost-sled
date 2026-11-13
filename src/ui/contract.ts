@@ -336,8 +336,10 @@ export interface SettingsModel {
   master: number;
   music: number;
   sfx: number;
-  quality: 'auto' | 'low' | 'medium' | 'high';
-  currentTier: 'low' | 'medium' | 'high';
+  quality: 'auto' | 'low' | 'medium' | 'high' | 'ultra';
+  currentTier: 'low' | 'medium' | 'high' | 'ultra';
+  /** Whether Ultra is offered (not on a touch device: absent reads as offered). */
+  ultra?: boolean;
   hints: boolean;
 }
 

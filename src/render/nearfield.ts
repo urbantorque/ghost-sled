@@ -26,7 +26,7 @@ const K_GRIT = 3;
 const K_KICK = 4;
 
 /** Point budget per tier: Low draws none (its CPU has no headroom), Medium about half. */
-const CAP: Record<Tier, number> = { low: 0, medium: 400, high: 780 };
+const CAP: Record<Tier, number> = { low: 0, medium: 400, high: 780, ultra: 780 };
 const MAX = CAP.high;
 /** Shares of the cap: flurries, the kick, spindrift, and avalanche gusts and grit. */
 const SHARE = { flurry: 0.42, kick: 0.2, drift: 0.2, gust: 0.18 };

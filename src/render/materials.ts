@@ -1,6 +1,7 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
 import { Palette } from './palette';
+import { ICE_MIRROR_GLSL, iceMirror } from './postfx/reflect';
 
 // One shared stylized lighting model for every surface (ART.md section 2). All materials share the
 // same uniform objects by reference, so a mood change updates the whole world at once.
@@ -378,7 +379,7 @@ function lightsUniforms() {
 export function makeSnowMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     lights: true,
-    uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake },
+    uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       attribute float aEdge;
@@ -436,6 +437,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec4 uRockStyle;
       uniform sampler2D uLakeSky;
       uniform vec3 uLakeMap;
+      ${ICE_MIRROR_GLSL}
       uniform vec3 uLakeTrees;
       uniform float uGroundTime;
       varying vec3 vWorldPos;
@@ -936,6 +938,8 @@ export function makeSnowMaterial(): ShaderMaterial {
             stood = mix(stood, mix(uSnowShade, uSnowLit, 0.45), smoothstep(10.5, 9.0, hr));
             sky = mix(sky, stood, smoothstep(tips + 0.5, tips - 0.5, hr) * near * lakeK);
           }
+          // Round 7 (the pipe lane, postfx/reflect.ts): the baked sky on every glaze, or the frame itself.
+          sky = iceMirror(sky, vWorldPos, rr, lakeK);
           col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.6 * vPaint.y));
           if (lakeK > 0.0) {
             vec2 lp = vWorldPos.xz;

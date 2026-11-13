@@ -215,6 +215,7 @@ const FLANK: Record<Tier, { puffs: number; chunks: number }> = {
   low: { puffs: 0, chunks: 0 },
   medium: { puffs: 12, chunks: 8 },
   high: { puffs: 24, chunks: 14 },
+  ultra: { puffs: 24, chunks: 14 },
 };
 const PUFFS_MAX = PUFFS + FLANK.high.puffs;
 const CHUNKS_MAX = CHUNKS + FLANK.high.chunks;
@@ -226,6 +227,7 @@ const AV_DETAIL: Record<Tier, { puffs: number; chunks: number }> = {
   low: { puffs: 40, chunks: 22 },
   medium: { puffs: 70, chunks: 38 },
   high: { puffs: PUFFS, chunks: CHUNKS },
+  ultra: { puffs: PUFFS, chunks: CHUNKS },
 };
 
 const smooth = (a: number, b: number, x: number): number => {

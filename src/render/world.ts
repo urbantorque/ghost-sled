@@ -25,6 +25,10 @@ import { Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } fro
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
+import { PASSES, detailOf, parseSwitches, type Detail, type PassSettings, type Tier } from './postfx/tiers';
+import { VIEWS, type PipeView } from './postfx/pipeline';
+import { cine } from './cine';
+import { beginShaftSources } from './postfx/shafts';
 import { Props } from './props';
 import { SetPieces } from './landmarks';
 import { Moments } from './moments';
@@ -44,10 +48,15 @@ import { Trail } from './trails';
 // The scene orchestrator: owns the renderer and every visual system, and turns an interpolated
 // sim snapshot plus this frame's sim events into a picture.
 
-export type Tier = 'low' | 'medium' | 'high';
+export type { Tier, Detail } from './postfx/tiers';
+export { detailOf } from './postfx/tiers';
 
 export interface QualitySettings {
   tier: Tier;
+  /** The world's dressing: Ultra dresses as High (postfx/tiers.ts). */
+  detail: Detail;
+  /** The frame's passes this tier may run (postfx/tiers.ts). */
+  passes: PassSettings;
   pixelRatio: number;
   shadows: boolean;
   shadowSize: number;
@@ -61,16 +70,19 @@ export interface QualitySettings {
   weather: number;
 }
 
-export const QUALITY: Record<Tier, Omit<QualitySettings, 'pixelRatio'> & { maxPixelRatio: number }> = {
+export const QUALITY: Record<Tier, Omit<QualitySettings, 'pixelRatio' | 'detail' | 'passes'> & { maxPixelRatio: number }> = {
   low: { tier: 'low', maxPixelRatio: 1, shadows: false, shadowSize: 512, post: false, bloom: false, msaa: 0, particleBudget: 0.45, forestDensity: 0.45, viewChunks: 6, terrain: { inner: 1.6, row: 3, reach: 60 }, weather: 900 },
   medium: { tier: 'medium', maxPixelRatio: 1.5, shadows: true, shadowSize: 1024, post: true, bloom: true, msaa: 0, particleBudget: 0.75, forestDensity: 0.75, viewChunks: 8, terrain: { inner: 1.1, row: 2.2, reach: 90 }, weather: 1800 },
   high: { tier: 'high', maxPixelRatio: 2, shadows: true, shadowSize: 2048, post: true, bloom: true, msaa: 2, particleBudget: 1, forestDensity: 1, viewChunks: 10, terrain: { inner: 0.85, row: 2, reach: 110 }, weather: 3200 },
+  // The showpiece, for a discrete GPU: High's world under four samples a pixel, a 4096 shadow map over a
+  // wider reach, and every pass of postfx/tiers.ts at its full count. It may cost what such a GPU can pay.
+  ultra: { tier: 'ultra', maxPixelRatio: 2, shadows: true, shadowSize: 4096, post: true, bloom: true, msaa: 4, particleBudget: 1, forestDensity: 1, viewChunks: 10, terrain: { inner: 0.85, row: 2, reach: 110 }, weather: 3200 },
 };
 
 export function qualityFor(tier: Tier): QualitySettings {
   const q = QUALITY[tier];
   const dpr = Math.min(window.devicePixelRatio || 1, q.maxPixelRatio);
-  return { ...q, pixelRatio: tier === 'low' ? Math.max(0.75, Math.min(1, dpr)) : dpr };
+  return { ...q, detail: detailOf(tier), passes: PASSES[tier], pixelRatio: tier === 'low' ? Math.max(0.75, Math.min(1, dpr)) : dpr };
 }
 
 export type ViewMode = 'run' | 'title' | 'results';
@@ -267,26 +279,26 @@ export class World {
     this.palette = getPalette(this.course.biome, Mood.None);
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
-    this.midground = new Midground(this.course, this.palette, quality.tier, quality.terrain.reach);
-    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.tier !== 'low');
-    this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.tier, quality.shadows);
-    this.overlooks = new Overlooks(this.course, this.palette, quality.tier);
+    this.midground = new Midground(this.course, this.palette, quality.detail, quality.terrain.reach);
+    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.detail !== 'low');
+    this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.detail, quality.shadows);
+    this.overlooks = new Overlooks(this.course, this.palette, quality.detail);
     this.terrain.overlooks = this.midground.overlooks = this.overlooks;
     this.rails = new Rails(this.course, this.palette, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
     this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
     this.sky = new Sky(seed);
-    this.sky.setDetail(quality.tier);
-    setCloudShadows(quality.tier !== 'low');
+    this.sky.setDetail(quality.detail);
+    setCloudShadows(quality.detail !== 'low');
     this.sky.setPalette(this.palette);
     this.particles = new Particles(1800);
     this.weather = new Weather(3200);
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
-    this.ghosts.onBeat = quality.tier === 'low';
+    this.ghosts.onBeat = quality.detail === 'low';
     this.chaos = new ChaosVisuals(this.course);
     this.landing = new LandingAid(this.course);
-    this.life = new Life(this.course, this.palette, quality.tier, quality.forestDensity);
+    this.life = new Life(this.course, this.palette, quality.detail, quality.forestDensity);
     // Skiers and the snowcat ride the far flanks, and the settlements' chimneys smoke.
     this.life.farGround = (x, z) => this.midground.ground(x, z);
     this.life.farChimneys = (out) => this.midground.chimneys(out);
@@ -295,9 +307,9 @@ export class World {
     // (A cabin the dressing would not stand on a wall or a ledge smokes no chimney either.)
     this.life.kept = (x, z) => this.setPieces.keeps(x, z) || !standable(this.course, z, this.course.edgeExcess(x, z));
     this.life.dropAt = (z, side, e) => this.overlooks.drop(z, side, e);
-    this.speedPosts = new SpeedPosts(this.course, quality.tier);
+    this.speedPosts = new SpeedPosts(this.course, quality.detail);
     this.speedPosts.kept = (x, z) => this.setPieces.keeps(x, z);
-    this.sloughs = new Sloughs(this.course, quality.tier, this.particles);
+    this.sloughs = new Sloughs(this.course, quality.detail, this.particles);
     this.moments = new Moments(this);
     this.cam.ground = (x, z) => this.course.ground(x, -z);
     this.cam.surface = (x, z) => visualGround(this.course, x, -z);
@@ -362,9 +374,10 @@ export class World {
     this.sun.target = this.sunTarget;
 
     const canHalf = this.renderer.capabilities.isWebGL2 && (this.renderer.extensions.has('EXT_color_buffer_float') || this.renderer.extensions.has('EXT_color_buffer_half_float'));
-    this.post = new PostFX(this.renderer, 2, 2, canHalf ? quality.msaa : 0, quality.tier === 'high' ? 5 : 4);
+    this.post = new PostFX(this.renderer, 2, 2, canHalf ? quality.msaa : 0, quality.detail === 'high' ? 5 : 4);
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
+    this.post.configure(quality.passes);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
@@ -372,6 +385,49 @@ export class World {
     window.addEventListener('resize', () => this.resize());
     this.prewarm();
   }
+
+  /**
+   * The pipeline's dev switches, from the page's query (app.ts hands them over behind `?debug`):
+   * `post=` turns passes off or keeps only some (postfx/tiers.ts parseSwitches: `none`, `-ao,-blur`,
+   * `ao,shafts`), `postview=` shows what a pass made instead of the picture (depth, ao, contact, shafts,
+   * coc, motion), `gpu` times each pass on the GPU (read `world.post.pipe.timer.ms`), and `cine=`
+   * holds the camera's cine state at given values so a beat's passes can be shot without the beat
+   * (`cine=dof:1,focus:9,blur:1,box:1`).
+   */
+  devPipe(q: URLSearchParams): void {
+    const pipe = this.post.pipe;
+    if (q.has('post')) {
+      pipe.switches = parseSwitches(q.get('post'));
+      this.post.configure(this.quality.passes);
+    }
+    const view = q.get('postview') as PipeView | null;
+    if (view && VIEWS.includes(view)) pipe.view = view;
+    if (q.has('gpu')) pipe.timer.on = true;
+    // The temporal anti-aliasing experiment, on whatever tier has a depth (`?taa`).
+    if (q.has('taa')) {
+      this.quality = { ...this.quality, passes: { ...this.quality.passes, taa: true } };
+      this.post.configure(this.quality.passes);
+    }
+    const c = q.get('cine');
+    if (c) {
+      const hold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } = {};
+      for (const part of c.split(',')) {
+        const [k, v] = part.split(':');
+        const n = Number(v);
+        if (!Number.isFinite(n)) continue;
+        if (k === 'dof') hold.dof = n;
+        else if (k === 'focus') hold.focus = n;
+        else if (k === 'blur') hold.motionBlur = n;
+        else if (k === 'box') hold.letterbox = n;
+      }
+      this.cineHold = hold;
+    }
+  }
+
+  /** The camera's cine state (cine.ts), for play-tests. */
+  readonly cine = cine;
+  /** Dev: cine values held over whatever the camera wrote (devPipe). */
+  cineHold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } | null = null;
 
   /** Compiles every material in the scene now, the hidden ones too, into the target the scene pass
    *  draws into. The landing ring first draws on the run's first jump and the stomp crater on its first
@@ -387,7 +443,7 @@ export class World {
   private configureShadow(): void {
     const s = this.sun.shadow;
     s.mapSize.set(this.quality.shadowSize, this.quality.shadowSize);
-    const r = this.quality.tier === 'high' ? 34 : 26;
+    const r = this.quality.passes.shadowReach;
     s.camera.left = -r;
     s.camera.right = r;
     s.camera.top = r;
@@ -436,23 +492,24 @@ export class World {
     this.sun.castShadow = q.shadows;
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
-    this.midground.setTier(q.tier, q.terrain.reach);
-    this.overlooks.setTier(q.tier);
-    this.ghosts.onBeat = q.tier === 'low';
+    this.midground.setTier(q.detail, q.terrain.reach);
+    this.overlooks.setTier(q.detail);
+    this.ghosts.onBeat = q.detail === 'low';
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
-    this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.tier !== 'low');
-    this.setPieces.setQuality(q.tier, q.shadows);
+    this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.detail !== 'low');
+    this.setPieces.setQuality(q.detail, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
     this.post.enabled = q.post && canHalf;
     this.post.bloomEnabled = q.bloom;
     this.post.setMsaa(q.msaa);
+    this.post.configure(q.passes);
     this.spirit.setQuality(q.particleBudget, q.bloom);
-    this.post.shaftTaps = q.tier === 'high' ? 14 : 8;
-    this.sky.setDetail(q.tier);
-    this.life.setQuality(q.tier, q.forestDensity);
-    this.speedPosts.setTier(q.tier);
-    this.sloughs.setTier(q.tier);
-    setCloudShadows(q.tier !== 'low');
+    this.post.shaftTaps = q.detail === 'high' ? 14 : 8;
+    this.sky.setDetail(q.detail);
+    this.life.setQuality(q.detail, q.forestDensity);
+    this.speedPosts.setTier(q.detail);
+    this.sloughs.setTier(q.detail);
+    setCloudShadows(q.detail !== 'low');
     this.applyWeather();
     this.lastChunkRange = '';
     this.resize();
@@ -553,7 +610,7 @@ export class World {
       course: this.course,
       biome: this.course.biome,
       mood: this.mood,
-      tier: this.quality.tier,
+      tier: this.quality.detail,
       sites: this.setPieces.planned,
       crowds: false,
       flocks: life.flocks,
@@ -570,9 +627,9 @@ export class World {
     src.course = this.course;
     src.biome = this.course.biome;
     src.mood = this.mood;
-    src.tier = this.quality.tier;
+    src.tier = this.quality.detail;
     src.sites = this.setPieces.planned;
-    src.crowds = this.quality.tier !== 'low';
+    src.crowds = this.quality.detail !== 'low';
     src.flocks = life.flocks;
     src.birds = life.birdMesh.visible ? life.birdKind : null;
     src.lifts = life.plan.rich;
@@ -712,6 +769,7 @@ export class World {
     const s = v.snap;
     const dt = v.dt;
     shared.uTime.value = v.time;
+    beginShaftSources();
     lake.uGroundTime.value = reduced() ? 0 : v.time;
     this.journey(this.journeyAt ?? (v.mode === 'title' ? 0 : Math.max(0, s.z)));
     this.sky.setStill(this.mood === Mood.None && reduced());
@@ -741,8 +799,8 @@ export class World {
       this.spirit.onEvent(e, s);
     }
     this.spirit.setReduced(feel.reduced || reduced());
-    this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.tier === 'low');
-    this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.tier === 'low');
+    this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.detail === 'low');
+    this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
@@ -767,7 +825,7 @@ export class World {
     const dashing = riding && v.sim !== null && v.sim.s.dash > 0;
     this.dashK += ((dashing ? 1 : 0) - this.dashK) * Math.min(1, dt * (dashing ? 22 : 9));
     if (!riding) this.dashK = 0;
-    this.rider.setSpirit(this.dashK < 0.004 ? 0 : this.dashK, this.quality.tier !== 'low', feel.reduced);
+    this.rider.setSpirit(this.dashK < 0.004 ? 0 : this.dashK, this.quality.detail !== 'low', feel.reduced);
     const showRider = v.playerVisible;
     this.rider.setVisible(showRider);
     if (showRider && !this.rider.crashing) {
@@ -853,7 +911,7 @@ export class World {
     // Gifts ahead twinkle: every few frames a marigold glint flashes on one of the gifts 5 to 45 m down
     // the line, so a line of gifts reads as a trail of lights to follow (Medium and High).
     this.glintAcc += dt;
-    if (v.mode === 'run' && this.quality.tier !== 'low' && this.glintAcc > 0.06) {
+    if (v.mode === 'run' && this.quality.detail !== 'low' && this.glintAcc > 0.06) {
       this.glintAcc = 0;
       let pick: Light | null = null;
       let seen = 0;
@@ -908,7 +966,7 @@ export class World {
     // (Reduced motion never swings: the chase follows the rider to a stop.)
     this.cam.mode = v.mode === 'title' ? 'orbit' : this.moments.finishing && !feel.reduced ? 'finish' : hero ? 'hero' : this.rider.crashing ? 'crash' : 'chase';
     let chaosShake = 0;
-    this.chaos.detail = this.quality.tier;
+    this.chaos.detail = this.quality.detail;
     if (v.sim) chaosShake = this.chaos.update(v.sim, v.time, this.cam.camera.position);
     // Reduced motion: no rumbles (the chaos shake here, the avalanche's below).
     if (chaosShake > 0 && !feel.reduced) this.cam.shake(chaosShake * dt * 4);
@@ -968,9 +1026,10 @@ export class World {
 
     // Sun and shadow follow the focus.
     this.sunTarget.position.copy(focus);
+    if (this.post.pipe.switches.fit && this.quality.shadows) this.fitShadow(focus);
     // Shadows fall from their own, lower light across the slope (palette.ts shadowFrom), so they
     // rake across the run; the snow is still shaded by the lifted key light (uSunDir).
-    this.sun.position.copy(focus).addScaledVector(this.palette.shadowDir, 90);
+    this.sun.position.copy(this.sunTarget.position).addScaledVector(this.palette.shadowDir, 90);
     this.sunTarget.updateMatrixWorld();
     this.sky.follow(this.cam.camera.position);
     this.weather.follow(this.cam.camera.position);
@@ -995,6 +1054,8 @@ export class World {
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
     // smooth slope right under the results lens read as an overexposed smear).
     pp.footScale = v.mode === 'results' ? 1.8 : tall ? 1.3 : 1;
+    pp.reduced = feel.reduced || reduced();
+    this.post.pipe.lightDir.copy(this.palette.shadowDir);
     pp.punch = feel.reduced ? 0 : this.punch;
     pp.flash = this.flash * (feel.reduced ? 0.5 : 1);
     // An enclosed run (landmarks.ts): its dark at the frame's edges, the strobe and the way out's flash.
@@ -1023,10 +1084,44 @@ export class World {
         pp.vpY = Math.max(0.5, Math.min(1.1, vp.y * 0.5 + 0.5));
       }
     }
+    this.lakeMirror.everywhere = this.post.enabled && this.quality.passes.mirror !== 'sky' && this.post.pipe.switches.mirror;
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
+    if (this.cineHold) Object.assign(cine, this.cineHold);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
   }
+
+  /**
+   * Round 7: the shadow map is fitted to what the lens sees and held still on its own texels. Round 6's
+   * box sat square on the rider, so half of it lay behind the lens; this one is pushed down the lens's
+   * heading (the rider stays a quarter of the way in, with the lens behind it still covered), which puts
+   * shadows on the trees and towers the frame is looking at. Its middle then moves only in whole texels
+   * of the map, measured along the light's own axes: a shadow's edge no longer crawls as the sled moves
+   * under it, which was a shimmer in every frame at speed.
+   */
+  private fitShadow(focus: Vector3): void {
+    const r = this.quality.passes.shadowReach;
+    const e = this.cam.camera.matrixWorld.elements;
+    const fx = -e[8];
+    const fz = -e[10];
+    const fl = Math.hypot(fx, fz);
+    const t = this.sunTarget.position;
+    if (fl > 0.2) t.set(focus.x + (fx / fl) * r * 0.5, focus.y, focus.z + (fz / fl) * r * 0.5);
+    // The light's axes, as its shadow camera builds them (looking along -dir, y up).
+    const d = this.palette.shadowDir;
+    const ax = this.fitX.set(d.z, 0, -d.x);
+    if (ax.lengthSq() < 1e-6) return;
+    ax.normalize();
+    const ay = this.fitY.crossVectors(d, ax).normalize();
+    const texel = (2 * r) / this.quality.shadowSize;
+    const px = t.dot(ax);
+    const py = t.dot(ay);
+    t.addScaledVector(ax, Math.round(px / texel) * texel - px).addScaledVector(ay, Math.round(py / texel) * texel - py);
+    this.sunTarget.updateMatrixWorld();
+  }
+
+  private fitX = new Vector3();
+  private fitY = new Vector3();
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.
@@ -1036,7 +1131,7 @@ export class World {
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.tier !== 'low' ? 1 : 0;
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it
@@ -1109,7 +1204,7 @@ export class World {
     this.life.root.visible = true;
     this.midground.root.visible = true;
     this.setPieces.root.visible = true;
-    this.speedPosts.mesh.visible = this.quality.tier !== 'low';
+    this.speedPosts.mesh.visible = this.quality.detail !== 'low';
     this.rails.root.visible = true;
     r.shadowMap.autoUpdate = autoShadow;
   }
@@ -1269,7 +1364,7 @@ export class World {
       vel = this.fxV.set(vx, this.landG.x * vx + this.landG.z * vz, -vz);
     }
     const at = this.fxA.set(b.x, Math.max(b.y, this.course.ground(b.x, b.z)) + 0.1, -b.z);
-    this.particles.ring(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, 10, 3.6, vel, 0, 1.3, 0.4, 0.17, this.quality.tier === 'low' ? 4 : Infinity);
+    this.particles.ring(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, 10, 3.6, vel, 0, 1.3, 0.4, 0.17, this.quality.detail === 'low' ? 4 : Infinity);
   }
 
   /** You passed a ghost: its glass shatters into petals of its kind colour with a flare at its heart,
@@ -1287,7 +1382,7 @@ export class World {
     // out beside the hero and falls back past it (thrown where the ghost was, it filled the lens).
     const z = Math.max(pose.z, v.snap.z + 0.9);
     const at = this.fxA.set(pose.x, this.course.ground(pose.x, z) + 0.6, -z);
-    this.particles.shatter(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, vel, this.quality.tier === 'low' ? 10 : 28);
+    this.particles.shatter(at, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, vel, this.quality.detail === 'low' ? 10 : 28);
   }
 
   /** Your best and an unbeaten friend's distance, as bands the snow shader paints across the corridor

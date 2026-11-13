@@ -13,9 +13,10 @@ const QUALITIES: Array<{ q: Quality; label: string }> = [
   { q: 'low', label: 'Low' },
   { q: 'medium', label: 'Medium' },
   { q: 'high', label: 'High' },
+  { q: 'ultra', label: 'Ultra' },
 ];
 
-const TIER: Record<SettingsModel['currentTier'], string> = { low: 'Low', medium: 'Medium', high: 'High' };
+const TIER: Record<SettingsModel['currentTier'], string> = { low: 'Low', medium: 'Medium', high: 'High', ultra: 'Ultra' };
 
 let uid = 0;
 
@@ -119,7 +120,11 @@ export class SettingsPanel {
 
   private paintQuality(): void {
     for (const [q, b] of this.segs) b.setAttribute('aria-pressed', String(q === this.m.quality));
-    this.cap.textContent = this.m.quality === 'auto' ? `Auto is running at ${TIER[this.m.currentTier]}` : 'Fixed quality';
+    // Ultra is offered where a dedicated graphics card might be (never on a touch device), and stays
+    // in the row for a save that already chose it.
+    const ultra = this.segs.get('ultra');
+    if (ultra) ultra.hidden = this.m.ultra === false && this.m.quality !== 'ultra';
+    this.cap.textContent = this.m.quality === 'auto' ? `Auto is running at ${TIER[this.m.currentTier]}` : this.m.quality === 'ultra' ? 'Ultra is built for a dedicated graphics card' : 'Fixed quality';
   }
 
   private paintHints(): void {
