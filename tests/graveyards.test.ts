@@ -13,6 +13,7 @@ const pinecrest = 'pinecrest';
 const frostfang = 'frostfang';
 const ember = 'ember';
 const sakura = 'sakura';
+const lanternfall = 'lanternfall';
 const at = (d: number, ticks = 600) => ({ distance: d, ticks });
 /** A rider with its falls recorded (and its own run, by its score). */
 const rider = (score: number, ...falls: number[]) => ({ distance: FINISH_Z + 40, ticks: 11000, score, falls });
@@ -34,28 +35,33 @@ describe('graveyards', () => {
     // (Since the lantern round a ward is a fall the lantern took, and counts: the place is as deadly. The set
     // pieces' round, SIM_VERSION 8, rode new pools: these are where its riders fall.)
     expect(at(pinecrest)).toEqual([
-      [423, 5],
-      [1185, 3],
-      [1345, 3],
-      [2979, 8],
+      [428, 7],
+      [1427, 8],
+      [2047, 7],
+      [2978, 7],
     ]);
     expect(at(frostfang)).toEqual([
-      [474, 2],
-      [1081, 2],
-      [2871, 2],
-      [3117, 17],
+      [2141, 2],
+      [3104, 14],
+      [3417, 3],
+      [3878, 2],
     ]);
     expect(at(ember)).toEqual([
-      [2118, 2],
-      [3050, 2],
-      [3265, 2],
-      [4133, 2],
+      [2143, 5],
+      [3087, 3],
     ]);
     expect(at(sakura)).toEqual([
-      [2135, 6],
-      [2794, 2],
-      [2973, 2],
-      [3332, 2],
+      [2130, 3],
+      [2280, 2],
+      [2969, 3],
+      [3416, 4],
+    ]);
+    // (The fifth mountain, since round 7.)
+    expect(at(lanternfall)).toEqual([
+      [1866, 2],
+      [2069, 4],
+      [2958, 2],
+      [3879, 4],
     ]);
   });
 
@@ -133,10 +139,10 @@ describe('graveyards', () => {
   });
 
   it('names never repeat across the bundled mountains, and come out the same every time', () => {
-    const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura].map((key) => ({ key, pool: pool(key) })));
+    const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura, lanternfall].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
-    expect(names.length).toBe(16);
+    expect(names.length).toBe(18);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
     // The clusters are the same ones the per-mountain call finds.

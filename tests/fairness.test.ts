@@ -400,7 +400,8 @@ describe('the descent', () => {
           // Flattened: the same height right across the sheet.
           expect(Math.abs(c.ground(cx - 20, z) - c.ground(cx + 20, z))).toBeLessThan(1e-9);
         }
-        for (const o of obstaclesAt(c, body0(s), s.z1)) expect(Math.abs(o.x - c.safeX(o.z)) - o.r).toBeGreaterThanOrEqual(8);
+        // (What stands on a lake stands along its shores: a slide across the glass has 17 m either side of the line.)
+        for (const o of obstaclesAt(c, body0(s), s.z1)) expect(Math.abs(o.x - c.safeX(o.z)) - o.r).toBeGreaterThanOrEqual(17);
         // Off the lip a sled at cruise really flies.
         const f = fly(c, l.z, 30);
         expect(f.t).toBeGreaterThan(0.8);

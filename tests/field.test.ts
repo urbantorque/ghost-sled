@@ -356,7 +356,7 @@ describe('a field laid across your own runs', () => {
   });
 
   it('is not stretched by one disaster, nor by a short wreck that predicted a record', () => {
-    // A run that took twice as long: the slow end stops at 1.12 of the pace.
+    // A run that took twice as long: the slow end stops at FIELD_SLOW_MAX of the pace.
     const slow = times(laid([120, 121, 119, 122, 240]));
     const pace = fieldPace(anchorFor({ m: [120, 121, 119, 122, 240] }, 'm'), [120, 121, 119, 122, 240]);
     expect(slow[4]).toBeLessThanOrEqual(FIELD_SLOW_MAX * pace + 1);

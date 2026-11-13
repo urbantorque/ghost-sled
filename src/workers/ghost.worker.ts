@@ -106,8 +106,10 @@ ctx.onmessage = (ev: MessageEvent<WorkerIn>) => {
   } else if (msg.type === 'pool') {
     try {
       let runs: PoolRun[] = [];
-      // Three signature riders join every Daily and Cup field, the same three for everyone on that course.
-      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks, riders: 3, report: (r) => (runs = r) });
+      // Three signature riders join every Daily and Cup field, the same three for everyone on that course, and
+      // two racers at the fast end (round 7's simfix: the quickest of six more runs, about a third more work in
+      // this worker, for a rider two to six seconds up the road of the crowd's best).
+      const ghosts = generatePool(msg.seed, msg.count, msg.salt, { budgetRuns: msg.budgetRuns, maxTicks: msg.maxTicks, riders: 3, fast: 2, fastTries: 3, report: (r) => (runs = r) });
       // The bot rides on past the line, so a pool ghost's `ticks` is no finish time: its Sim knows.
       const finish = new Map(runs.filter((r) => r.sim.finished).map((r) => [r.record.name, r.sim.s.finishTick]));
       post({ type: 'pool', reqId: msg.reqId, ghosts: ghosts.map((g) => ({ ...g, ...(finish.has(g.name) ? { finishTick: finish.get(g.name) } : {}) })) });

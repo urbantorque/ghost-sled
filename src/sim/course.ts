@@ -405,7 +405,9 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   split: shaped({ width: 6, wander: 0.5, wave: 1.2, span: 0.35, split: 0.42, obstacles: 0.6, kickers: 0.7, moguls: 0.5, drops: 0 }),
   ravine: shaped({ pin: 1, wander: 0.4, wave: 1.6, span: 0.2, obstacles: 0, wall: 13, relief: 0.4, limit: 5, ...BARE }),
   treerun: shaped({ pin: 1, wander: 0.5, wave: 1.1, span: 0.3, obstacles: 0.25, relief: 0.6, limit: 7, ...BARE }),
-  lake: shaped({ pin: 1, wander: 0.25, wave: 1.6, span: 0.25, obstacles: 0.3, relief: 0, ice: 1, lane: 5.6, ...BARE }),
+  // (lane: what stands on a lake stands along its shores, 17 m and more from the line. It was 8 m, and a slide
+  // across the glass, which is what Mirror Lake asks for, carries a sled 10 to 25 m: into the pines on the ice.)
+  lake: shaped({ pin: 1, wander: 0.25, wave: 1.6, span: 0.25, obstacles: 0.3, relief: 0, ice: 1, lane: 14.6, ...BARE }),
   fork: shaped({ pin: 1, wander: 0.4, wave: 1.4, span: 0.08, split: 0.55, obstacles: 0.45, relief: 0.35, ridge: RIDGE_H, ...BARE }),
   street: shaped({ pin: 1, wander: 0.3, wave: 1.4, span: 0.25, obstacles: 0.15, relief: 0.2, limit: 2, ...BARE }),
   bridge: shaped({ pin: 1, wander: 0.15, wave: 2, span: 0.08, obstacles: 0, fall: 34, relief: 0.15, limit: 0.8, ...BARE }),
@@ -502,6 +504,19 @@ const LEAP_HOLD = 186;
 const LEAP_EASE = 30;
 /** Metres past a leap's section that stay clear. */
 const LEAP_CLEAR = 40;
+/** A leap's run-in (round 7's simfix): for this far above its lip nothing stands within LINE_ROOM of the safe
+ *  line, wherever the line goes on the way. A leap's section begins by bringing the line across from the place
+ *  above (out of a fork's channel, eight metres in eighty), and a sled that lands a kicker's flight there, or
+ *  skips over the brow's own lips, rides straight on for a moment while the line leaves it: Sakura's Blossom
+ *  Leap had a rock four and a half metres off the line seventy metres above its lip, on the outside of that
+ *  swing, and a rider who popped the kicker above at 35 m/s met it every time. */
+const LEAP_RUN_IN = 80;
+/** A mogul field throws a sled about and keeps its runners off the snow, so the line through one and for this
+ *  far past it has the same room: Frostfang's switchbacks had a field where the line crosses seven metres, and
+ *  the careful line came out of it five metres wide into a rock. */
+const MOGUL_EXIT = 30;
+/** The room either side of the safe line in a kicker's landing, a leap's run-in and through a mogul field. */
+const LINE_ROOM = 5.5;
 /** The metres from a leap's lip to the end of its section. */
 const LEAP_TAIL = LEAP_FACE + LEAP_HOLD + LEAP_EASE;
 /** Cliff heights: a mountain's ordinary leaps, its first and its last. */
@@ -1833,7 +1848,9 @@ export class Course {
     }
     for (const m of plan.fields) {
       if (m.z0 >= z0 && m.z0 < z1) zn.moguls.push({ z0: m.z0, z1: m.z1, amp: lerp(0.32, 0.55, diff), phase: rng.range(0, 6.28), wave: rng.range(2.6, 3.4) });
+      this.lineBand(zn, Math.max(m.z0 - 4, z0), Math.min(m.z1 + MOGUL_EXIT, z1));
     }
+    for (const l of plan.leaps) this.lineBand(zn, Math.max(l.z - LEAP_RUN_IN, z0), Math.min(l.z - 2, z1));
     for (const k of plan.kicks) {
       if (k.z >= z0 && k.z < z1) {
         const len = rng.range(8.5, 10);
@@ -1854,7 +1871,7 @@ export class Course {
           if (x < x0) x0 = x;
           if (x > x1) x1 = x;
         }
-        zn.keepOut.push({ z0: lo, z1: hi, x0: x0 - 5.5, x1: x1 + 5.5 });
+        zn.keepOut.push({ z0: lo, z1: hi, x0: x0 - LINE_ROOM, x1: x1 + LINE_ROOM });
       }
     }
     // The terrain lights ice row by row near a patch, so the sheet and the strip carry one a chunk.
@@ -1923,6 +1940,9 @@ export class Course {
     const mz = z0 + rng.range(0, 24);
     if (!drop && zn.ramps.length === 0 && rng.chance(1.6 * OPEN_GATHER * p.mogulChance * mogulMul * (0.6 + 0.8 * diff)) && z0 >= 300 && !this.busy(mz, mz + 48)) {
       zn.moguls.push({ z0: mz, z1: mz + rng.range(28, 48), amp: lerp(0.32, 0.55, diff), phase: rng.range(0, 6.28), wave: rng.range(2.6, 3.4) });
+      // (One box for the whole of a scattered field: the chunks after it look back for it.)
+      const m = zn.moguls[zn.moguls.length - 1];
+      this.lineBand(zn, m.z0 - 4, m.z1 + MOGUL_EXIT);
     }
 
     if (rng.chance(p.iceChance)) {
@@ -1966,6 +1986,19 @@ export class Course {
       }
     }
     return zn;
+  }
+
+  /** Keeps LINE_ROOM clear either side of the safe line from lo to hi, wherever the line goes between them. */
+  private lineBand(zn: Zones, lo: number, hi: number): void {
+    if (!(lo < hi)) return;
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    for (let z = lo; z <= hi; z += 4) {
+      const x = this.safeX(z);
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+    }
+    zn.keepOut.push({ z0: lo, z1: hi, x0: x0 - LINE_ROOM, x1: x1 + LINE_ROOM });
   }
 
   private inKeepOut(x: number, z: number, r: number, i: number): boolean {

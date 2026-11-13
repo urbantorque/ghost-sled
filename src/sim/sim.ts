@@ -5,7 +5,7 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
-import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
+import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
@@ -127,7 +127,9 @@ export type LandQuality = 'perfect' | 'clean' | 'sketchy' | 'hop';
 
 export type SimEvent =
   | { type: 'takeoff'; kind: TakeoffKind; vy: number }
-  | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean }
+  /** Every touchdown is said. `botched`: a landing that floors a racer (a fall, a ward or the wreck follows on the
+   *  same tick, or nothing at all for a rider just up and still untouchable); it is said as sketchy, no points. */
+  | { type: 'land'; quality: LandQuality; airtime: number; halfTurns: number; flips: number; impact: number; late: boolean; botched?: true }
   | { type: 'crash'; cause: CrashCause }
   /** A fall the run survives: 'start' as the rider goes down, 'end' riding again. `left`: get-ups left. */
   | { type: 'tumble'; phase: 'start' | 'end'; cause: TumbleCause; left: number }
@@ -154,7 +156,8 @@ export type SimEvent =
   /** A set piece's verb (moments.ts) as it plays: 'start' as the rider reaches it, 'step' as a gate is
    *  threaded, a ring flown or a step stomped (n of `of`), 'miss' as one is not (n back to 0 for gates and
    *  rings, the run of steps over), 'lead' and 'trail' as the rider passes the race's machine or it passes
-   *  back, 'close' as a collapse's fall comes within a few metres, and 'won' or 'lost' as it is decided. */
+   *  back (the carry: 'trail' as a fall or a ward gutters the flame, 'lead' as it catches again), 'close' as a
+   *  collapse's fall comes within a few metres, and 'won' or 'lost' as it is decided. */
   | { type: 'moment'; index: number; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number }
   /** The run's legend moment (moments.ts LEGENDS): 'warn' as it comes up, 'start' as the rider reaches it, 'step'
    *  as a ribbon lights another quarter lantern (n quarters), 'end' as the rider leaves it. */
@@ -351,17 +354,21 @@ export interface MomentState {
   /** Race: the rider is ahead of the machine. Collapse: the fall has come close. */
   ahead: boolean;
   close: boolean;
-  /** Gates and rings: the next one down the run. Steps: whether every landing so far was perfect. */
+  /** Gates and rings: the next one down the run. Steps: whether every landing so far was perfect. Carry: the
+   *  ticks a guttering flame has left to be ridden back up to its pace (0 while it burns, the play's `gutter`
+   *  at most; the count runs only while the rider is riding, so through a fall it stands at the full count). */
   at: number;
   ok: boolean;
   /** Collapse: the fall's pace, from the rider's speed onto the span (moments.ts fallPace). Follow: metres
-   *  ridden in the wake. Surge: the speed off the lip. Carry: the flame, 1 full to 0 out. */
+   *  ridden in the wake. Surge: the speed off the lip. Carry: the flame, 1 full to 0 out (while it gutters,
+   *  the level it holds). */
   pace: number;
   /** What is done of what the verb holds, a bit each: a chase's cars passed, a slide's ways, bells rung,
    *  lamps lit, the carry's brazier taken. */
   mask: number;
   /** The verb's own small number. Steps in a row: the run before a clean landing. Slide: the way of the drift.
-   *  Surge: off the lip. Kindle: lamps lit on the left. */
+   *  Surge: off the lip. Kindle: lamps lit on the left. Carry: while the flame gutters, the seconds it had in
+   *  hand over a clean coast to the line. */
   aux: number;
 }
 
@@ -680,8 +687,9 @@ export class Sim {
 
     const prevZ = s.z;
     this.prevX = s.x;
-    if (s.finished) this.coast();
-    else if (s.tumble > 0) this.tumbleStep();
+    // (A fall that slides over the finish line plays to its end there: the rider gets up in the square.)
+    if (s.tumble > 0) this.tumbleStep();
+    else if (s.finished) this.coast();
     else if (s.grinding) this.grindStep(action, released);
     else if (s.grounded) this.groundStep(action, pressed, released);
     else this.airStep(action, pressed, released);
@@ -691,7 +699,9 @@ export class Sim {
     if (riding && !s.crashed && !s.grinding && race) this.collide(prevZ);
     if (riding && !s.crashed && race) this.pickups(prevZ);
     if (riding && !s.crashed) this.edge();
-    if (riding && !s.crashed) this.lines();
+    // A line is crossed on the tick the sled crosses it, falling or not: a fallen sled slides, and a rider who
+    // went down just short of a line was credited up to a second and a half late.
+    if (!s.finished && !s.crashed) this.lines();
     if (riding && !s.crashed && race) this.getUpsBack();
     // A set piece plays on through a wipeout: the race's machine does not wait, nor does the fall.
     if (!s.crashed && !s.finished && race) this.momentStep(prevZ);
@@ -1157,6 +1167,10 @@ export class Sim {
     if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol)) {
       s.airYaw = 0;
       s.airPitch = 0;
+      // The landing is always said, whatever becomes of it: under a ward or the grace after a get-up it used to
+      // pass without a word, and a set piece decided by its landing (the surge, the flourish) waited for one
+      // that never came and ran on to its end as lost. (A rider reads it too: a bot was left thinking it flew.)
+      this.events.push({ type: 'land', quality: 'sketchy', airtime, halfTurns, flips, impact, late: false, botched: true });
       this.wipeout('landing');
       return;
     }
@@ -1514,7 +1528,8 @@ export class Sim {
     // A set piece that runs to the line (the carry) is decided on it.
     if (this.mo.active >= 0 && !this.homeward) {
       const p = this.plays[this.mo.active];
-      this.momentEnd(p, p.verb === 'carry' && this.mo.pace > 0);
+      // (Burning as it arrives: a flame still guttering at the line lights nothing.)
+      this.momentEnd(p, p.verb === 'carry' && this.mo.pace > 0 && this.mo.at === 0);
     }
     s.finished = true;
     s.finishTick = this.tick;
@@ -1748,9 +1763,15 @@ export class Sim {
           }
         } else if (s.z > p.lip + 6) {
           let down = s.tumble > 0;
-          for (const e of this.events) if (e.type === 'land' && !e.late) down = true;
+          let botched = false;
+          for (const e of this.events) {
+            if (e.type !== 'land' || e.late) continue;
+            down = true;
+            if (e.botched) botched = true;
+          }
           if (down) {
-            this.momentEnd(p, s.tumble === 0 && s.z >= p.far && mo.pace >= p.speed);
+            // (On its feet: a landing a ward or a get-up's grace had to save is not one.)
+            this.momentEnd(p, s.tumble === 0 && !botched && s.z >= p.far && mo.pace >= p.speed);
             break;
           }
         }
@@ -1828,14 +1849,55 @@ export class Sim {
         break;
       }
       case 'carry': {
-        // The flame burns down by the clock, a hit gutters it, a wipeout puts it out. The line decides it
-        // (lines()): this only ever loses it.
-        let f = mo.pace - 1 / p.flameTicks;
+        // The flame burns down by the clock and a hit takes some of it. A fall or a ward gutters it (it used to
+        // put it out, so the rider who gets up never lit the lantern): mo.at counts the ticks left to be back at
+        // the flame's pace, from riding again, and the clock waits meanwhile. Back at pace it catches with the
+        // seconds in hand it had when it guttered (mo.aux: what the flame had left to burn over what a clean
+        // coast to the line from there, at that speed, would take), less what the guttering took. So a fall
+        // costs the flame a bite and the rider whatever it does next, never the pace it had made; and a rider
+        // who was behind the flame is no nearer for falling. A second fall while it gutters puts it out, and
+        // so does the time. The line decides it (lines()): this only ever loses it.
+        let f = mo.pace;
+        let hits = 0;
+        let down = false;
+        let warded = false;
+        let botched = false;
         for (const e of this.events) {
-          if (e.type === 'bump') f -= p.hit;
-          else if (e.type === 'scrape') f -= p.hit * 0.5;
-          else if (e.type === 'land' && e.quality === 'sketchy') f -= p.hit;
-          else if (e.type === 'ward' || (e.type === 'tumble' && e.phase === 'start')) f = 0;
+          if (e.type === 'bump') hits += p.hit;
+          else if (e.type === 'scrape') hits += p.hit * 0.5;
+          else if (e.type === 'land' && e.quality === 'sketchy') {
+            if (e.botched) botched = true;
+            else hits += p.hit;
+          } else if (e.type === 'ward') down = warded = true;
+          else if (e.type === 'tumble' && e.phase === 'start') down = true;
+        }
+        // (A landing on the rider's head that the grace after a get-up let pass is a hit to the flame.)
+        if (botched && !down) hits += p.hit;
+        f -= hits;
+        if (mo.at === 0) f -= 1 / p.flameTicks;
+        if (down && f > 0) {
+          if (mo.at > 0) f = 0;
+          else {
+            f -= p.fall;
+            if (f > 0) {
+              mo.at = p.gutter;
+              // (At the speed it had going in: what a ward keeps of it is the ward's price, not the flame's.)
+              const v = warded ? s.speed / (WARD_KEEP * this.sled.wardKeep) : s.speed;
+              mo.aux = (f * p.flameTicks) / TICK_RATE - coastSeconds(this.course, s.z, p.z1, v, true);
+              say('trail', Math.ceil(f * 10));
+            }
+          }
+        } else if (mo.at > 0 && f > 0) {
+          mo.aux -= (hits * p.flameTicks) / TICK_RATE;
+          if (s.tumble === 0) {
+            if (s.speed >= flamePace(p, s.z)) {
+              f = ((coastSeconds(this.course, s.z, p.z1, s.speed, true) + mo.aux) * TICK_RATE) / p.flameTicks;
+              if (f > 1) f = 1;
+              mo.at = 0;
+              mo.aux = 0;
+              if (f > 0) say('lead', Math.ceil(f * 10));
+            } else if (--mo.at === 0) f = 0;
+          }
         }
         const r = p.relight;
         if (r && f > 0 && !(mo.mask & 1)) {
@@ -1843,7 +1905,9 @@ export class Sim {
           const dz = r.z - s.z;
           if (dx * dx + dz * dz < r.r * r.r) {
             mo.mask |= 1;
-            f = f + r.gain > 1 ? 1 : f + r.gain;
+            const fed = f + r.gain > 1 ? 1 : f + r.gain;
+            if (mo.at > 0) mo.aux += ((fed - f) * p.flameTicks) / TICK_RATE;
+            f = fed;
             say('close', mo.n);
           }
         }

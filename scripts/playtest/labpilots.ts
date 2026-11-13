@@ -220,23 +220,29 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const left = p.z1 - s.z;
         // (No slide is started that the ice left has no room for.)
         if (M.st >= 9 || (M.st !== 2 && left < 24 + v * ((p.both ? p.each : p.need) / 60))) return { noDrift: true };
-        const cx = c.centerX(s.z);
         const onIce = c.surface(s.x, s.z).ice;
         // Slide toward where the lake's middle will be: the side with the most ice to cross.
         if (M.dir === 0) M.dir = s.x < c.centerX(s.z + 60) ? 1 : -1;
         if (M.st === 0) {
-          // Set up wide on one side while the ice comes in, to slide back across the whole sheet.
-          const out = cx - M.dir * c.halfWidth(s.z + 30) * 0.42;
-          if (onIce && s.z > p.z0 + 96 + mr() * 6 * sloppy) M.st = 1;
-          else return { x: () => out, noDrift: true };
+          // Run straight onto the ice, where the sled is, and start the slide from a straight line once the
+          // sheet has opened out. (It used to swing wide first: on glass a swing is kept, the slide began
+          // already crossing at 15 m/s, and half the rides ran off the far shore inside a second.)
+          const off = Math.max(-6, Math.min(6, s.x - c.safeX(s.z)));
+          const across = Math.abs(s.vx - s.vz * ((c.safeX(s.z + 8) - c.safeX(s.z)) / 8));
+          if (onIce && s.z > p.z0 + 78 + mr() * 6 * sloppy && across < 2.5) {
+            M.dir = s.x < c.centerX(s.z + 60) ? 1 : -1;
+            M.st = 1;
+          } else return { x: (z: number) => c.safeX(z) + off, noDrift: true };
         }
         if (M.st === 1) {
           if (s.drifting) M.st = 2;
-          else return { steer: M.dir > 0 ? 8 : 0, action: true };
+          // (The key first, the crouch once the sled leans that way: a crouch on the old lean drifts the old way.)
+          else return { steer: M.dir > 0 ? 8 : 0, action: s.steer * M.dir > 0.5 };
         }
         if (M.st === 2) {
-          if (!s.drifting) {
-            M.st = 1;
+          if (!s.drifting || s.driftDir !== M.dir) {
+            M.st = s.drifting ? 3 : 1;
+            M.wait = 4;
             return { noDrift: true };
           }
           const done = p.both ? (mo.mask & (M.dir > 0 ? 1 : 2)) !== 0 : false;
@@ -305,6 +311,17 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (!skilled) return null;
         // (No pop off the lip, even for two flips: over a cliff a pop is three more seconds of air, and the sled
         // comes down past the landing. Two flips want speed onto the lip, which is the trade the variant poses.)
+        // The last second to the lip is ridden square to it, where the sled is: a rider still coming back to
+        // the line there leaves the lip crossing it (the expert did, at 9 m/s sideways, and flew into the bank).
+        const d = lipOf(p) - s.z;
+        if (d > 0 && d < v * 1.1) {
+          if (M.at < 0) {
+            M.at = 0;
+            M.bias = Math.max(-5, Math.min(5, s.x - c.safeX(s.z)));
+          }
+          const off = M.bias;
+          return { x: (z: number) => c.safeX(z) + off, noDrift: true };
+        }
         return { noDrift: true };
       }
       case 'follow': {
@@ -327,7 +344,9 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         }
         const litHere = M.side < 0 ? leftLit : rightLit;
         const litThere = M.side < 0 ? rightLit : leftLit;
-        if ((litHere >= half && litThere < Math.max(p.each, p.need - litHere)) || aheadOn(M.side) < 0) M.side = -M.side;
+        // (Across only for lamps that are there: with one row dark the other has none, and a rider who crossed
+        // for them every other tick, as this one did, wandered back to the line two lamps short.)
+        if ((litHere >= half && litThere < Math.max(p.each, p.need - litHere) && aheadOn(-M.side) >= 0) || aheadOn(M.side) < 0) M.side = -M.side;
         const i = aheadOn(M.side);
         if (i < 0) return { noDrift: true };
         const l = lamps[i];
@@ -338,9 +357,19 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         return { x: () => pass, noDrift: true };
       }
       case 'carry': {
-        // A low flame is fed at the brazier beside the line.
+        // A low flame is fed at the brazier beside the line. It stands a little past the last leap's landing, so
+        // a rider who knows it takes the lip on the brazier's side (as far over as the lip's own lamps allow) and
+        // comes down already in line with it: landed on the safe line at 45 m/s there is half a second to cross
+        // five metres, and no rider does.
         const r = p.relight;
-        if (skilled && r && !(mo.mask & 1) && r.z > s.z + 2 && r.z - s.z < v * 2.2) return { x: () => r.x, noDrift: true };
+        if (!r || mo.mask & 1 || r.z <= s.z + 2) return { noDrift: true };
+        const lip = c.leaps.filter((l: AnySim) => l.z > p.z0 && l.z < r.z).pop();
+        // (The novice sees the brazier too, and steers for it once it is down: the lip's side is the skilled rider's.)
+        if (skilled && lip && s.z < lip.z && lip.z - s.z < 160) {
+          const off = r.x - c.safeX(r.z);
+          return { x: (z: number) => c.safeX(z) + Math.sign(off) * Math.min(3, Math.abs(off)), noDrift: true };
+        }
+        if (r.z - s.z < v * 2.2) return { x: () => r.x, noDrift: true };
         return { noDrift: true };
       }
       default:
@@ -354,7 +383,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     const wantYaw = p.half * Math.PI;
     const wantPitch = p.flips * 2 * Math.PI;
     if (!M.flipped) {
-      // Commit at takeoff, if the flight is long enough for it.
+      // Commit at takeoff, if the flight is long enough for it. (Not on a skip over the brow, nor on the lip's
+      // first tick, when the snow still under the runners reads as a landing: the expert, a little faster off
+      // the lip, read it so, took the flight for a hop, and spun where two flips were asked.)
+      if (land.t < 0.5) return null;
       M.flipped = true;
       const need = Math.max(wantYaw / 9 + 0.5, wantPitch > 0 ? wantPitch / 6.8 + 0.6 : 0);
       M.st = land.t > need + 0.1 ? 1 : 0;
@@ -391,7 +423,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         P.flight = land.t;
         const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
         const off = land.x - c.safeX(land.z);
-        P.spin = skill !== 'novice' && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
+        // (The careful line spins nothing. It used to: it took the mid pilot's habit with its hands, each spin's
+        // held key pushed it two to four metres off the line in the air, and it skipped down the landing face
+        // unable to steer back, into the trees ten metres out. That was the pilot, not the landing.)
+        P.spin = skill !== 'novice' && skill !== 'line' && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
         P.stompTry = skill === 'mid' || skill === 'expert' ? true : skill === 'novice' && rnd() < 0.4;
         P.stompBias = (rnd() - 0.5) * (skill === 'expert' ? 0.05 : skill === 'mid' ? 0.16 : 0.3);
         // A rider carrying the flame, or hopping under bells, spins nothing.
@@ -419,7 +454,11 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
       const coast = (s.spinRate * s.spinRate) / (2 * 22);
       if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
-      else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
+      else if ((skill === 'mid' || skill === 'expert') && piece && piece.verb === 'carry' && piece.relight && !(sim.mo.mask & 1) && piece.relight.z > s.z) {
+        // (Over the last leap with a low flame: a nudge inside the air's dead zone toward the brazier's side.)
+        const off = land.x - piece.relight.x;
+        if (Math.abs(off) > 0.8) steer = off > 0 ? 3 : 5;
+      } else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
         // (Not over a set piece that is decided by its landings: this nudge is past the air's dead zone, so it
         // turns the sled as well as moving it, and a landing half way round is a sketchy one.)
         const off = land.x - c.safeX(land.z);
@@ -459,9 +498,18 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       P.away = T + 0.4 + rnd() * 0.4;
       return { steer: 4, action: false };
     }
-    const ramp = !act ? nextRamp(s) : null;
+    let ramp = !act ? nextRamp(s) : null;
     let target = (z: number) => c.safeX(z);
+    // A kicker whose flight comes down on glass that is to be slid across is ridden round: a popped flight off
+    // the one above Mirror Lake lands 110 m into its 270 m, and what is left is too short for a slide each way.
+    const ahead = pieceAhead(sim);
+    let round = 0;
+    if (ramp && ahead && ahead.verb === 'slide' && ramp.z + ramp.len + 150 > ahead.z0) {
+      round = ramp.x + (s.x >= ramp.x ? 1 : -1) * (ramp.w * 0.5 + 1.4);
+      ramp = null;
+    }
     if (ramp) target = () => ramp.x;
+    else if (round) target = () => round;
     else if (aim) target = aim;
     const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
     const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
@@ -471,7 +519,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
     if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
     if (P.drift < 0 && T > -P.drift) P.drift = 0;
-    let lvl = steerTo(s, target, 14, ramp || aim ? 0 : 0.08);
+    let lvl = steerTo(s, target, 14, ramp || aim || round ? 0 : 0.08);
     let action = false;
     if (ramp) {
       const u = (s.z - ramp.z) / ramp.len;

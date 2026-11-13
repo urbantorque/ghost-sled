@@ -104,6 +104,9 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
       if (phase === 'start') return n < 10 ? 'A low flame' : 'The flame is yours';
       if (phase === 'step') return n <= 3 ? 'The flame is low' : null;
       if (phase === 'close') return 'The flame leaps';
+      // (A fall or a ward gutters it, 'trail'; ridden back up to its pace it catches, 'lead'.)
+      if (phase === 'trail') return 'The flame gutters: ride';
+      if (phase === 'lead') return 'The flame catches';
       if (phase === 'won') return 'The great lantern is lit';
       if (phase === 'lost') return 'The flame went out';
       return null;
