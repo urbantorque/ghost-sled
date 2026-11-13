@@ -155,8 +155,8 @@ export function emberGrove(c: Course, i: number, dens: number, rich: boolean, cl
 
 /** A tree's spacing along an orchard row, the spacing of the rows, and how many rows a block has. */
 const TREE_GAP = 5;
-const ROW_GAP = 5.5;
-const ROWS = 6;
+const ROW_GAP = 7;
+const ROWS = 5;
 /** A block's length down the run (in trees) and the path across between blocks (metres). */
 const BLOCK_MIN = 6;
 const BLOCK_MORE = 5;
@@ -219,17 +219,17 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
       if (b.kind === 'orchard') {
         // Each row keeps its distance from the run's edge: a contour of the bank.
         for (let r = 0; r < rows; r++) {
-          // The rows step a little with the rows above, as terraces do, and the outer rows thin.
-          const stagger = r % 2 ? gap / 2 : 0;
-          for (let z = b.z0 + stagger; z <= b.z1; z += gap) {
+          // Rows in line, the trees of each row abreast of the next and a lane of snow between rows, so
+          // the block reads as combed lines down the bank (from the air above all); the outer rows thin.
+          for (let z = b.z0; z <= b.z1; z += gap) {
             if (z < z0 || z >= z1) continue;
             const k = Math.round(z / gap) * 8 + r;
             const sh = c.shapeAt(z);
             const inner = sh.wall > 0.3 ? crestE(sh.limit) + 5 : FOREST_LIMIT;
-            const e = inner + 1.2 + r * ROW_GAP + (hashf(k, sd, 510) - 0.5) * 0.5;
+            const e = inner + 1.2 + r * ROW_GAP + (hashf(k, sd, 510) - 0.5) * 0.2;
             // An old tree gone from the row now and then: an orchard, not a wallpaper.
             if (hashf(k, sd, 511) < 0.07 + r * 0.03) continue;
-            const zz = z + (hashf(k, sd, 512) - 0.5) * 0.6;
+            const zz = z + (hashf(k, sd, 512) - 0.5) * 0.3;
             if (!standable(c, zz, e) || (clear.length > 0 && inClearing(clear, side, e, zz))) continue;
             plant(r < 2, 'a', b.pale && rich ? 1 : 0, side, e, zz, 0.86 + hashf(k, sd, 513) * 0.18, anyWay(hashf(k, sd, 514)), 0.92 + hashf(k, sd, 515) * 0.16);
           }

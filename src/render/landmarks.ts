@@ -11,7 +11,7 @@ import { pushLocalLight } from './lights';
 import { makeToonMaterial, shared } from './materials';
 import { OverlookPlan } from './overlook';
 import { journeyDusk, type Palette } from './palette';
-import { Stages, calderaLedge } from './stages';
+import { PADDY_FROM, Stages, calderaLedge, paddySpans } from './stages';
 
 // Places: a run is a sequence of places down the fall line instead of one corridor. The course says where
 // (SitePlan): a `street` section is a town you ride through, a `tunnel` an enclosed run, a `bridge` a
@@ -718,6 +718,10 @@ export class SitePlan {
     // The Caldera Leap's banks hold lava (stages.ts): no forest and no dressing stands in it.
     const cal = calderaLedge(this.course);
     if (cal && cal.land1 + 12 > z0 && cal.z + 14 < z1) for (const side of [-1, 1]) out.push({ side, e: 33, z0: cal.z + 14, z1: cal.land1 + 12, w: 23 });
+    // Petal Steps' banks hold paddies (stages.ts): the orchards and the dressing keep off them.
+    for (const [a, b] of paddySpans(this.course)) {
+      if (b > z0 && a < z1) for (const side of [-1, 1]) out.push({ side, e: 10 + PADDY_FROM + 22, z0: a - 4, z1: b + 4, w: 24 });
+    }
     for (const s of this.list) {
       if (s.z + s.len < z0 - 60 || s.z - s.len > z1 + 60) continue;
       const [a, b] = siteSpan(s);

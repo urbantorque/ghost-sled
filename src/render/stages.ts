@@ -277,6 +277,88 @@ export function calderaLedge(c: Course): Ledge | null {
   return l;
 }
 
+const PADDIES = new WeakMap<Course, Array<[number, number]>>();
+
+/** Where Sakura's terraces hold paddies on their banks: the body of each `terraces` section, from the
+ *  end of its blend to its foot (empty on any other mountain). The forest keeps off them (landmarks.ts
+ *  SitePlan.clearings asks). */
+export function paddySpans(c: Course): ReadonlyArray<[number, number]> {
+  let out = PADDIES.get(c);
+  if (out) return out;
+  out = [];
+  if (c.biome === 'blossom') {
+    let last = null as unknown;
+    for (let z = 0; z < c.finishZ; z += 20) {
+      const sec = c.section(z);
+      if (sec === last) continue;
+      last = sec;
+      if (sec.kind === 'terraces') out.push([sec.z0 + sec.blend * 0.5, sec.z1 - 6]);
+    }
+  }
+  PADDIES.set(c, out);
+  return out;
+}
+
+/** How far past the run's edge (its edge excess) the paddies start, and how wide each step is. */
+export const PADDY_FROM = 4;
+const PADDY_STEP = 8;
+
+/** Still water in a paddy: the sky mirrored, darker straight down, the sun's glint in it, a slow shiver
+ *  of wind over it (stopped under reduced motion: the clock it reads stops). */
+function paddyMaterial(): ShaderMaterial {
+  return new ShaderMaterial({
+    uniforms: {
+      uFlow: { value: 0 },
+      uSkyZenith: shared.uSkyZenith,
+      uSkyHorizon: shared.uSkyHorizon,
+      uSunColor: shared.uSunColor,
+      uDiskDir: shared.uDiskDir,
+      uFog: shared.uFog,
+      uFogNear: shared.uFogNear,
+      uFogFar: shared.uFogFar,
+    },
+    vertexShader: /* glsl */ `
+      varying vec3 vW;
+      void main() {
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform float uFlow;
+      uniform vec3 uSkyZenith;
+      uniform vec3 uSkyHorizon;
+      uniform vec3 uSunColor;
+      uniform vec3 uDiskDir;
+      uniform vec3 uFog;
+      uniform float uFogNear;
+      uniform float uFogFar;
+      varying vec3 vW;
+      void main() {
+        vec3 d = cameraPosition - vW;
+        float dist = max(length(d), 0.001);
+        vec3 v = d / dist;
+        // (A shiver of wind: the mirror's normal tips a little, in long bands.)
+        float sh = sin(vW.x * 0.9 + vW.z * 0.35 + uFlow * 1.3) * sin(vW.z * 0.7 - uFlow * 0.9);
+        vec3 n = normalize(vec3(sh * 0.025, 1.0, sh * 0.018));
+        vec3 r = reflect(-v, n);
+        vec3 sky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.55, r.y));
+        float f = 0.25 + 0.75 * pow(1.0 - clamp(v.y, 0.0, 1.0), 3.0);
+        // (Looking straight down it is the zenith, darkened: still water is never a hole.)
+        vec3 col = mix(uSkyZenith * 0.5 + vec3(0.02, 0.03, 0.05), sky * 0.95, f);
+        vec3 dd = normalize(uDiskDir);
+        col += uSunColor * pow(max(dot(r, dd), 0.0), 120.0) * 1.6;
+        float fog = smoothstep(uFogNear, uFogFar, dist);
+        gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
+        #include <colorspace_fragment>
+      }
+    `,
+    // (The two banks mirror each other, so one is wound the other way round.)
+    side: DoubleSide,
+  });
+}
+
 interface Stage {
   key: string;
   z0: number;
@@ -294,6 +376,7 @@ export class Stages {
   private beamMat = beamMaterial();
   private lavaMat: ShaderMaterial;
   private emberMat = emberMaterial();
+  private paddyMat = paddyMaterial();
   private flow = 0;
   private lastT = 0;
   private caldera: Ledge | null = null;
@@ -353,6 +436,7 @@ export class Stages {
     if (!fx.reduced) this.flow += dt;
     this.lavaMat.uniforms.uFlow.value = this.flow;
     this.emberMat.uniforms.uFlow.value = this.flow;
+    this.paddyMat.uniforms.uFlow.value = this.flow;
     const want = (key: string, z0: number, z1: number, make: () => Stage): void => {
       if (z < z0 - MAKE_AHEAD || z > z1 + DROP_BEHIND) return;
       if (!this.made.has(key)) {
@@ -363,6 +447,7 @@ export class Stages {
     };
     const c = this.caldera;
     if (c) want('caldera', c.z - 30, c.land1 + 20, () => this.makeCaldera(c));
+    paddySpans(this.course).forEach(([a, b], i) => want('paddies' + i, a, b, () => this.makePaddies('paddies' + i, a, b)));
     for (const s of sites) {
       if (!s.flown || s.len <= 0) continue;
       if (s.kind === 'icetunnel' && s.clear > 0) want('mouth' + s.n, s.z - s.len, s.z + s.len, () => this.makeMouth(s, night));
@@ -575,6 +660,86 @@ export class Stages {
       }
     };
     return { key: 'caldera', z0: zA, z1: zB, root, lights };
+  }
+
+  // ------------------------------------------------------------------ Sakura: the flooded terraces
+
+  /** Petal Steps' banks as paddies: level steps of still water up each wall, each held by a bund of
+   *  earth capped with snow, cut into cells down the fall line so each holds its own level. From the run
+   *  they read as a stair of snow-capped rims up the banks; from the air the water mirrors the sky. Low
+   *  keeps three steps in longer cells. */
+  private makePaddies(key: string, z0: number, z1: number): Stage {
+    const c = this.course;
+    const low = this.tier === 'low';
+    const root = new Object3D();
+    const levels = low ? 3 : this.tier === 'medium' ? 4 : 5;
+    const L = low ? 16 : 11;
+    const S = low ? 2 : 3;
+    const pos: number[] = [];
+    const f = new Facets();
+    const bund = new Color('#8A7484');
+    const cap = new Color('#F4EEF4');
+    const at = (side: number, e: number, z: number, y?: number): [number, number, number] => {
+      const x = c.centerX(z) + side * (c.halfWidth(z) + e);
+      return [x, y ?? snowY(c, x, z), -z];
+    };
+    for (const side of [-1, 1]) {
+      for (let za = z0; za < z1 - 4; za += L) {
+        const zb = Math.min(z1, za + L);
+        const zm = (za + zb) / 2;
+        const e0 = c.edgeLimit(zm) + PADDY_FROM;
+        for (let k = 0; k < levels; k++) {
+          const ea = e0 + k * PADDY_STEP;
+          const eb = ea + PADDY_STEP;
+          // The water stands just under the ground at the next bund's foot, so it fills the step.
+          const H = at(side, eb, zm)[1] - 0.3;
+          // (A step whose ground already stands over the water at its inner edge has no water to hold.)
+          if (at(side, ea, za)[1] > H && at(side, ea, zb)[1] > H) continue;
+          const q = (e: number, z: number): number[] => at(side, e, z, H);
+          const a = q(ea, za);
+          const b = q(eb + 1.5, za);
+          const cc = q(eb + 1.5, zb);
+          const d = q(ea, zb);
+          pos.push(...a, ...b, ...cc, ...a, ...cc, ...d);
+          // The bund along the inner edge: a face of earth from the snow up to just over the water,
+          // with a cap of snow along its top, the rim that catches the light.
+          const top = H + 0.25;
+          const out: [number, number, number] = [-side, 0, 0];
+          for (let s = 0; s < S; s++) {
+            const zA = za + ((zb - za) * s) / S;
+            const zB = za + ((zb - za) * (s + 1)) / S;
+            const gA = at(side, ea, zA)[1];
+            const gB = at(side, ea, zB)[1];
+            if (gA < top || gB < top) f.quad(at(side, ea, zA, Math.min(gA, top) - 0.4), at(side, ea, zB, Math.min(gB, top) - 0.4), at(side, ea, zB, top), at(side, ea, zA, top), bund, out, 0.8, 1);
+            f.quad(at(side, ea - 0.25, zA, top + 0.12), at(side, ea - 0.25, zB, top + 0.12), at(side, ea + 0.5, zB, top + 0.12), at(side, ea + 0.5, zA, top + 0.12), cap, [0, 1, 0]);
+          }
+          // The cross bunds at the cell's ends (Medium and High): earth from the snow to the rim.
+          if (!low) {
+            for (const [z, dir] of [[za, 1], [zb, -1]] as const) {
+              const n = 3;
+              for (let s = 0; s < n; s++) {
+                const eA = ea + ((eb - ea) * s) / n;
+                const eB = ea + ((eb - ea) * (s + 1)) / n;
+                const gA = at(side, eA, z)[1];
+                const gB = at(side, eB, z)[1];
+                if (gA >= top && gB >= top) continue;
+                f.quad(at(side, eA, z, Math.min(gA, top) - 0.4), at(side, eB, z, Math.min(gB, top) - 0.4), at(side, eB, z, top), at(side, eA, z, top), bund, [0, 0, -dir], 0.8, 1);
+                f.quad(at(side, eA, z - 0.2, top + 0.1), at(side, eB, z - 0.2, top + 0.1), at(side, eB, z + 0.2, top + 0.1), at(side, eA, z + 0.2, top + 0.1), cap, [0, 1, 0]);
+              }
+            }
+          }
+        }
+      }
+    }
+    const wg = new BufferGeometry();
+    wg.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+    const water = new Mesh(wg, this.paddyMat);
+    water.frustumCulled = false;
+    root.add(water);
+    const rims = new Mesh(f.build(), this.rockMat);
+    rims.frustumCulled = false;
+    root.add(rims);
+    return { key, z0, z1, root, lights: null };
   }
 
   // ------------------------------------------------------------------ Frostfang: the cavern's mouth
