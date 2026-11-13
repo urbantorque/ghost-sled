@@ -60,6 +60,7 @@
   font-weight: 900;
   letter-spacing: -0.01em;
   line-height: 1.12;
+  font-variant-numeric: tabular-nums;
   text-wrap: balance;
 }
 
@@ -92,6 +93,7 @@
 
 .gs-film-ctl .gs-btn {
   min-height: 44px;
+  touch-action: manipulation;
   font-size: max(13px, 0.86em);
 }
 

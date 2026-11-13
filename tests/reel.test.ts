@@ -34,18 +34,27 @@ function rider(e: PoolEntry): ReelRider {
   };
 }
 
-/** A run that ends in a wreck: hands off the line with the sled held hard over, until the sim says so. */
+/** A run that ends in a wreck: an avalanche day, a pilot that holds the safe line until the wall is behind
+ *  it and then weaves its speed away, until the sim says the run is over. */
 function wreckedRun(seed: number): RunRecord {
-  const sim = new Sim({ seed, chaos: { mood: 0, event: 0, seed: 7 }, sled: 0 });
+  const chaos = { mood: 0, event: 1, seed: 7 };
+  const sim = new Sim({ seed, chaos, sled: 0 });
   const rec = new InputRecorder();
-  for (let t = 0; t < 60 * 240 && !sim.s.crashed; t++) {
-    // Straight for a few seconds to gather speed, then held over into whatever stands at the edge.
-    const steer = t < 240 ? 4 : (Math.floor(t / 420) % 2 ? 8 : 0);
+  const c = sim.course;
+  for (let t = 0; t < 60 * 240 && !sim.s.crashed && !sim.finished; t++) {
+    const s = sim.s;
+    let steer = 4;
+    if (s.grounded) {
+      const look = s.z + 4 + s.speed * 0.35;
+      const err = Math.atan2(c.safeX(look) - s.x, look - s.z) - s.velHeading + (c.safeX(s.z) - s.x) * 0.08;
+      steer = Math.max(0, Math.min(8, Math.round(4 + err * 14)));
+    }
+    if (sim.dyn.avalanche.phase === 2) steer = Math.floor(t / 32) % 2 ? 8 : 0;
     const byte = packInput(steer, false, false, false);
     rec.push(byte);
     sim.step(byte);
   }
-  return { seed, chaos: { mood: 0, event: 0, seed: 7 }, sled: 0, inputs: rec.encode(), ticks: rec.tickCount, score: sim.score, distance: sim.distance, name: 'Wreck' };
+  return { seed, chaos, sled: 0, inputs: rec.encode(), ticks: rec.tickCount, score: sim.score, distance: sim.distance, name: 'Wreck' };
 }
 
 const noOverlap = (shots: ReturnType<typeof planReel>, ticks: number) => {
@@ -132,11 +141,14 @@ describe('the highlight reel', () => {
     const w = wreckedRun(recordFromString(entries[0].record).seed);
     const scan = scanRecord(w);
     expect(scan.finishTick).toBe(-1);
+    // (It was a wreck, not a run that only stopped.)
+    expect(scan.crashTick).toBeGreaterThan(0);
     const shots = planReel(scan);
     expect(shots.length).toBeGreaterThanOrEqual(1);
     noOverlap(shots, scan.ticks);
     const last = shots[shots.length - 1];
     expect(last.kind).toBe('wreck');
+    expect(last.peak).toBe(scan.crashTick);
     expect(reelCard(last)).toMatch(/m$/);
     // It plays to its end: the player rides the wreck's window and stops with the log.
     const p = new ReelPlayer(w);

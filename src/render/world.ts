@@ -1157,7 +1157,8 @@ export class World {
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' ? 1 : 0;
+    // (Never in the highlight reel: its lens is the picture, and the HUD the mirror hangs from is away.)
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' && !this.lens ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it

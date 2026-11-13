@@ -105,7 +105,7 @@ export class ReelShow {
       onShare: host.share,
       sound: host.click,
     });
-    this.ui.say('Your run, directed', 'Cutting the reel');
+    this.ui.say('Your run, directed', 'Cutting the reel…');
     this.ui.cut(true);
     host.world.beginRun(this.player.view, host.record.chaos.event, host.record.sled);
     host.world.lens = this.cam.frame;
