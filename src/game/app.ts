@@ -1365,7 +1365,7 @@ export class App {
 
   /** The reel while it plays (game/reelshow.ts, loaded on first asking), a friend's record waiting to
    *  play on the title, and whether the code is on its way. */
-  private reel: { frame(dt: number): void; now: unknown; plan: unknown } | null = null;
+  private runReel: { frame(dt: number): void; now: unknown; plan: unknown } | null = null;
   private linkReel: RunRecord | null = null;
   private reelLoading = false;
 
@@ -1378,7 +1378,7 @@ export class App {
   /** Loads the reel's code (its own chunk: never with the first frame) and plays a record: your own
    *  run from the results, with its ghosts as they rode, or a friend's from a link, on the title. */
   private startReel(rec: RunRecord, own: boolean): void {
-    if (this.reelLoading || this.reel) return;
+    if (this.reelLoading || this.runReel) return;
     this.reelLoading = true;
     const from: Phase = own ? 'results' : 'title';
     import('./reelshow').then(
@@ -1396,7 +1396,7 @@ export class App {
         }
         this.audio.setScene('run');
         this.phase = 'reel';
-        this.reel = new m.ReelShow({
+        this.runReel = new m.ReelShow({
           record: rec,
           riders: tracks.map((t) => ({
             name: t.entry.kind === 'you' ? 'your best' : t.entry.name,
@@ -1467,7 +1467,7 @@ export class App {
 
   /** The reel is over (or skipped): the results card again, or the title a friend's link opened. */
   private endReel(own: boolean): void {
-    this.reel = null;
+    this.runReel = null;
     if (!own) return this.enterTitle();
     this.phase = 'results';
     this.audio.setScene('results');
@@ -2125,7 +2125,7 @@ export class App {
       this.linkReel = null;
       this.startReel(rec, false);
     }
-    if (this.phase === 'reel') this.reel?.frame(this.paused || this.adPlaying ? 0 : dt);
+    if (this.phase === 'reel') this.runReel?.frame(this.paused || this.adPlaying ? 0 : dt);
     else if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
     else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
