@@ -487,7 +487,9 @@ export function laneMaterial(laneEdge: number): ShaderMaterial {
         float e = (abs(v) - uEdge) / 0.06;
         float edge = exp(-e * e);
         vec3 col = mix(vec3(0.52, 0.32, 1.0), vec3(1.0, 0.4, 0.76), 0.5 + 0.5 * sin(u * 0.05 + v * 1.4 + t * 0.4));
-        float a = across * across * (0.3 + 0.34 * flow) * (1.0 + 0.9 * uCharge) + edge * (0.42 + 0.5 * uCharge);
+        // (Additive over white snow: the body is a tint with bands in it, the edges carry the shape, so the
+        // rider in it stays vermillion and readable.)
+        float a = across * across * (0.1 + 0.2 * flow * flow) * (1.0 + 0.7 * uCharge) + edge * (0.4 + 0.45 * uCharge);
         col = mix(col, vec3(0.88, 0.95, 1.0), edge * 0.8 + uCharge * 0.25 * flow);
         // It is laid as the curtain touches down, the near end first.
         float laid = clamp(uDown * 2.2 - 0.6 - u * 0.0016, 0.0, 1.0);
@@ -636,8 +638,9 @@ export function craneFlock(n: number, ribbons: number): { geo: InstancedBufferGe
         l *= size;
         vec3 wp = ctr + rt * l.x + up * l.y - fw * l.z;
         // White, rose and a few of pale gold; each fold holds its own value, cooler in its shade.
-        vec3 paper = aB.z < 0.56 ? vec3(1.0, 0.99, 0.97) : aB.z < 0.9 ? vec3(1.0, 0.66, 0.76) : vec3(1.0, 0.9, 0.62);
-        vCol = paper * mix(vec3(0.7, 0.76, 0.95), vec3(1.08), aShade);
+        vec3 paper = aB.z < 0.46 ? vec3(1.0, 0.99, 0.97) : aB.z < 0.9 ? vec3(1.0, 0.6, 0.72) : vec3(1.0, 0.86, 0.56);
+        // (Deep fold shade, so a white crane holds its shape against a pale sky.)
+        vCol = paper * mix(vec3(0.5, 0.56, 0.86), vec3(1.1), aShade * aShade);
         vec4 mv = viewMatrix * vec4(wp, 1.0);
         vDist = -mv.z;
         gl_Position = projectionMatrix * mv;
@@ -664,6 +667,21 @@ export function craneFlock(n: number, ribbons: number): { geo: InstancedBufferGe
  *  the eruption is placed from it too and sits on the crater from anywhere on the mountain. */
 export const ERUPT_AT = { value: new Vector3(0, 1340, -4400) };
 
+/** Places a point of the eruption (x across the lens's view, y up from the summit, metres). Above the
+ *  summit it stands in the plane through the crater; below it, it lies on the cone's face toward the lens
+ *  (massif.ts's Ember cone: radius 3700, 2120 m from foot to rim, a concave fall with a crater of 0.075),
+ *  a little proud of it, so the cone's near flank never hides a river or a falling bomb. */
+const PLACE = /* glsl */ `
+      vec4 place(vec2 p) {
+        vec2 d = normalize(uAt.xz);
+        float drop = clamp(-p.y / 2120.0, 0.0, 0.98);
+        float rho = 3700.0 * (1.0 - pow(1.0 - drop, 0.5714) * 0.925);
+        float x = clamp(p.x, -0.92 * rho, 0.92 * rho);
+        float toward = p.y < 0.0 ? sqrt(max(0.0, rho * rho - x * x)) : 0.0;
+        vec3 wp = cameraPosition + uAt + vec3(-d.y, 0.0, d.x) * x - vec3(d.x, 0.0, d.y) * toward + vec3(0.0, p.y + (p.y < 0.0 ? 28.0 : 0.0), 0.0);
+        return projectionMatrix * viewMatrix * vec4(wp, 1.0);
+      }`;
+
 /** A sheet that faces the lens from the cone's summit (x across, y up from its foot, in metres). */
 function sheet(w: number, h: number): BufferGeometry {
   const g = new PlaneGeometry(w, h);
@@ -680,11 +698,7 @@ export function fountain(w: number, h: number): { geo: BufferGeometry; mat: Shad
     uniforms: { uAt: ERUPT_AT, uT: { value: 0 }, uPower: { value: 0 }, uMove: { value: 1 } },
     vertexShader: /* glsl */ `
       uniform vec3 uAt;
-      vec4 place(vec2 p) {
-        vec2 d = normalize(uAt.xz);
-        vec3 wp = cameraPosition + uAt + vec3(-d.y, 0.0, d.x) * p.x + vec3(0.0, p.y, 0.0);
-        return projectionMatrix * viewMatrix * vec4(wp, 1.0);
-      }
+${PLACE}
       varying vec2 vUv;
       void main() {
         vUv = uv;
@@ -725,11 +739,7 @@ export function smokeColumn(w: number, h: number): { geo: BufferGeometry; mat: S
     uniforms: { uAt: ERUPT_AT, uT: { value: 0 }, uGrow: { value: 0 }, uGlow: { value: 1 }, uMove: { value: 1 }, uFade: { value: 1 } },
     vertexShader: /* glsl */ `
       uniform vec3 uAt;
-      vec4 place(vec2 p) {
-        vec2 d = normalize(uAt.xz);
-        vec3 wp = cameraPosition + uAt + vec3(-d.y, 0.0, d.x) * p.x + vec3(0.0, p.y, 0.0);
-        return projectionMatrix * viewMatrix * vec4(wp, 1.0);
-      }
+${PLACE}
       varying vec2 vUv;
       void main() {
         vUv = uv;
@@ -807,11 +817,7 @@ export function lavaBombs(n: number): { geo: InstancedBufferGeometry; mat: Shade
       varying float vK;
       varying float vAge;
       uniform vec3 uAt;
-      vec4 place(vec2 p) {
-        vec2 d = normalize(uAt.xz);
-        vec3 wp = cameraPosition + uAt + vec3(-d.y, 0.0, d.x) * p.x + vec3(0.0, p.y, 0.0);
-        return projectionMatrix * viewMatrix * vec4(wp, 1.0);
-      }
+${PLACE}
       varying float vOn;
       vec2 arc(float t) {
         return vec2(aArc.x * t, aArc.y * t - 34.0 * t * t);
@@ -860,9 +866,9 @@ export function lavaRuns(runs: number, drop: number): { geo: BufferGeometry; mat
     for (let i = 0; i <= N; i++) {
       const u = i / N;
       const d = u * len;
-      // The cone is concave: a river falls steeply off the rim and runs out across the flank.
-      const x = lean * (40 + d * 0.55 + 0.0009 * d * d) + Math.sin(u * 7 + k * 1.9) * 26 * u;
-      const w = 16 + 26 * u;
+      // Down the face toward the lens, fanning out as they fall and wandering (place() lays them on it).
+      const x = lean * (30 + d * 0.5) + Math.sin(u * 7 + k * 1.9) * 60 * u;
+      const w = 22 + 46 * u;
       pos.push(x - w, -d, 0, x + w, -d, 0);
       uv.push(u, -1, k, u, 1, k);
     }
@@ -881,11 +887,7 @@ export function lavaRuns(runs: number, drop: number): { geo: BufferGeometry; mat
     vertexShader: /* glsl */ `
       attribute vec3 aUv;
       uniform vec3 uAt;
-      vec4 place(vec2 p) {
-        vec2 d = normalize(uAt.xz);
-        vec3 wp = cameraPosition + uAt + vec3(-d.y, 0.0, d.x) * p.x + vec3(0.0, p.y, 0.0);
-        return projectionMatrix * viewMatrix * vec4(wp, 1.0);
-      }
+${PLACE}
       varying vec3 vUv;
       void main() {
         vUv = aUv;

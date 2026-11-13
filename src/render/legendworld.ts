@@ -45,7 +45,7 @@ const REACH_OUT = 150;
 const PALE = new Color('#DDEBFF');
 const LILAC = new Color('#EFE6FF');
 const HALO = new Color('#B9A6FF');
-const IVORY = new Color('#FFF3D8');
+const STAG = new Color('#E4EEFF');
 const ICE = new Color('#BFD9FF');
 const WARM = new Color('#FFD9A0');
 const MARI = new Color('#FFB84A');
@@ -315,18 +315,22 @@ export class LegendWorld {
     const STRIDE = 12;
     const k = 2.8;
     const z = this.rz;
-    const x = this.lineX(c, lg, z) + this.off;
-    const yaw = Math.atan2(this.lineX(c, lg, z + 3) - this.lineX(c, lg, z - 3) + lg.side * 3.4 * smooth(this.kOut), 6);
+    // It weaves across the glade on long arcs, so from behind the chase camera sees its flank as it crosses,
+    // not only its rump (the weave dies away as it leaves, when it turns for the trees anyway).
+    const wv = (1 - smooth(this.kOut * 2)) * c.halfWidth(z) * 0.42;
+    const weave = (zz: number): number => wv * Math.sin(zz / 34);
+    const x = this.lineX(c, lg, z) + this.off + weave(z);
+    const yaw = Math.atan2(this.lineX(c, lg, z + 3) + weave(z + 3) - this.lineX(c, lg, z - 3) - weave(z - 3) + lg.side * 3.4 * smooth(this.kOut), 6);
     const fade = (1 - smooth((this.kOut - 0.5) / 0.5)) * smooth(this.kIn * 5 + (ctx.sim!.lg.phase > 1 ? 1 : 0));
     P.mat.uniforms.uAlpha.value = fade;
     const ph = frac(z / STRIDE);
     // (Leaving, it bounds: higher and longer as it goes.)
-    this.deer(P, c, x, z, yaw, k, ph, move, IVORY, 2.1, 0.6 * this.kOut * move * Math.max(0, -Math.sin(ph * 6.283)));
+    this.deer(P, c, x, z, yaw, k, ph, move, STAG, 1.7, 0.6 * this.kOut * move * Math.max(0, -Math.sin(ph * 6.283)));
     const g = c.ground(x, z);
     const yb = g + DEER.stand * k;
-    // Its own light: a halo that makes a white stag read on white snow, a star in its antlers.
-    ctx.kit.glow(x, yb + 0.6, z + 0.5, 15, WARM, 0.42 * fade, GLOW_SOFT, 1.25);
-    ctx.kit.glow(x, yb + 5.6, z - 2, 5, WARM, 0.9 * fade * (0.8 + 0.2 * move * Math.sin(ctx.time * 7)), GLOW_STAR);
+    // Its own light: a cold halo that makes a white stag read on white snow, a star in its antlers.
+    ctx.kit.glow(x, yb + 0.6, z + 0.5, 15, ICE, 0.44 * fade, GLOW_SOFT, 1.25);
+    ctx.kit.glow(x, yb + 5.6, z - 2, 4, PALE, 0.8 * fade * (0.8 + 0.2 * move * Math.sin(ctx.time * 7)), GLOW_STAR);
     ctx.kit.decal(c, x, z, 7, 9, ICE, 0.5 * fade, DECAL_POOL);
     // Hoofprints of light where it has landed, back to the rider and past.
     const first = Math.floor(z / STRIDE);
@@ -334,20 +338,20 @@ export class LegendWorld {
     for (let j = 1; j <= (ctx.low ? 6 : 10); j++) {
       const zj = (first - j + 1) * STRIDE - 2.2;
       if (zj < from || zj > lg.z1 + 20) continue;
-      const xj = this.lineX(c, lg, zj);
+      const xj = this.lineX(c, lg, zj) + weave(zj);
       const f = 1 - j / 11;
-      ctx.kit.decal(c, xj - 0.8, zj, 2.1, 3.2, WARM, 1.7 * f, DECAL_POOL);
-      ctx.kit.decal(c, xj + 0.8, zj + 1.6, 2.1, 3.2, WARM, 1.7 * f, DECAL_POOL);
-      if (j < 2) ctx.kit.decal(c, xj, zj + 0.8, 4.5 + j * 1.5, 4.5 + j * 1.5, WARM, 0.7 * f, DECAL_RING);
+      ctx.kit.decal(c, xj - 0.8, zj, 2.1, 3.2, PALE, 1.7 * f, DECAL_POOL);
+      ctx.kit.decal(c, xj + 0.8, zj + 1.6, 2.1, 3.2, PALE, 1.7 * f, DECAL_POOL);
+      if (j < 2) ctx.kit.decal(c, xj, zj + 0.8, 4.5 + j * 1.5, 4.5 + j * 1.5, ICE, 0.7 * f, DECAL_RING);
     }
     pushLocalLight(x, yb + 1, -z, 0.8, 0.9, 1.0, 17, 1.7 * fade);
-    pushLocalLight(x, g + 0.8, -(z - STRIDE * 1.2), 1.0, 0.85, 0.6, 9, 0.9 * fade);
+    pushLocalLight(x, g + 0.8, -(z - STRIDE * 1.2), 0.85, 0.92, 1.0, 9, 0.9 * fade);
     // Snow off its hooves at each landing, and a breath of light behind its head.
     if (ctx.dt > 0 && first !== this.stride) {
       this.stride = first;
       if (move) {
         ctx.particles.burst(v0.set(x, g + 0.2, -z), 0.55, ctx.low ? 6 : 14, vel.set(0, 1, -12));
-        ctx.particles.sparkle(v0, WARM, ctx.low ? 3 : 7, 3.2, 0.6, 0.22, null, 0.6);
+        ctx.particles.sparkle(v0, PALE, ctx.low ? 3 : 7, 3.2, 0.6, 0.22, null, 0.6);
       }
     }
     if (throwNow && move && fade > 0.3) ctx.particles.sparkle(v0.set(x, yb + 1.9, -(z + 1.6)), PALE, 2, 1.2, 0.8, 0.16, vel.set(0, 0, -ctx.s.speed * 0.8), 0.2);
@@ -507,8 +511,10 @@ export class LegendWorld {
     const gone = 1 - smooth((this.kOut - 0.62) / 0.38);
     const P = this.chain;
     this.lay(c, lg, n, this.rz + LEN + 70 * this.kOut * this.kOut, step, (i, x, g, z) => {
-      // (It reads from behind by its swing across the run and its rise and fall: both wide, on short waves.)
-      P[i * 3] = x + 4.8 * Math.sin(z * 0.19 - t * 1.3) * Math.min(1, 0.35 + i / 5);
+      // (It reads from behind by its swing across the run and its rise and fall: the swing is wide and its
+      // wave about one and a half bodies long, so the body always lies in an S across the frame.)
+      const sw = Math.min(9, c.halfWidth(z) * 0.55 + 3);
+      P[i * 3] = x + sw * Math.sin(z * 0.15 - t * 1.1) * Math.min(1, 0.35 + i / 5);
       P[i * 3 + 1] = g + 7 + up + 2.3 * Math.sin(z * 0.27 - t * 2.0) + (i === 0 ? 0.6 : 0);
       P[i * 3 + 2] = z;
     });
@@ -797,9 +803,9 @@ export class LegendWorld {
       pushLocalLight(x, c.ground(x, z) + 4, -z, 0.62, 0.36, 1.0, 26, 1.5 * fade * clamp01(down));
     }
     if (this.riding > 0.02) {
-      pushLocalLight(s.x, s.y + 1.4, -s.z, 1.0, 0.5, 0.9, 9, 2.4 * this.riding);
-      ctx.kit.glow(s.x, s.y + 0.9, s.z, 5.5, MAGENTA, 0.3 * this.riding, GLOW_SOFT);
-      ctx.kit.decal(c, s.x, s.z, 5, 7, PALE, 0.5 * this.riding, DECAL_POOL);
+      pushLocalLight(s.x, s.y + 1.4, -s.z, 1.0, 0.5, 0.9, 9, 1.3 * this.riding);
+      ctx.kit.glow(s.x, s.y + 0.9, s.z, 5.5, MAGENTA, 0.16 * this.riding, GLOW_SOFT);
+      ctx.kit.decal(c, s.x, s.z, 5, 7, PALE, 0.3 * this.riding, DECAL_POOL);
       if (throwNow && move) ctx.particles.sparkle(v0.set(s.x, s.y + 0.5, -s.z), Math.random() < 0.5 ? MAGENTA : VIOLET, ctx.low ? 1 : 3, 2.2, 0.6, 0.18, vel.set(s.vx, s.vy, -s.vz), 0.9);
     }
     const fz = Math.min(p.z1, Math.max(p.z0, s.z + 46));
@@ -870,9 +876,11 @@ export class LegendWorld {
     // The crater's glow as it rumbles, the flash of the blast, the smoke deck lit from below.
     k.glow(cx, cy + 40, cz, 700 + 500 * power, HOT, (0.5 * smooth(te / BLAST) + 0.9 * power) * pulse * out, GLOW_SOFT, 1.5);
     if (flash > 0.01) k.glow(cx, cy + 200, cz, 5200, WARM, 1.5 * flash, GLOW_SOFT, 1.4);
-    k.glow(cx, cy + 1250, cz, 2600, LAVA, 0.5 * power * pulse * out, GLOW_SOFT, 3.2);
-    k.glow(cx + 900, cy + 1500, cz, 1900, LAVA, 0.3 * power * (1.56 - pulse) * out, GLOW_SOFT, 2.6);
-    k.glow(cx - 1000, cy + 1450, cz, 2100, LAVA, 0.3 * power * pulse * out, GLOW_SOFT, 2.6);
+    // (The chase lens holds the summit at the top of its frame: the smoke deck it can see is the band of
+    // sky either side of the cone, so that is where the deck is lit from below.)
+    k.glow(cx, cy + 700, cz, 2600, LAVA, 0.5 * power * pulse * out, GLOW_SOFT, 3.2);
+    k.glow(cx + 2600, cy - 60, cz, 2000, LAVA, 0.36 * power * (1.56 - pulse) * out, GLOW_SOFT, 2.6);
+    k.glow(cx - 2700, cy - 40, cz, 2200, LAVA, 0.36 * power * pulse * out, GLOW_SOFT, 2.6);
     // (From the bridge the lens looks down the run and the summit rides the top of the frame: the glow off
     // the cone's shoulders and its lit flanks are what is always in view.)
     k.glow(cx - 1500, cy - 420, cz, 2300, LAVA, 0.34 * power * pulse * out, GLOW_SOFT, 2.2);
@@ -884,8 +892,9 @@ export class LegendWorld {
     }
     // The frame is lit: the blast, then the fountain's pulse, from the cone's side of the sky.
     const lx = s.x + Math.sin(az) * 40;
-    pushLocalLight(lx, s.y + 30, -(s.z + 46), 1.0, 0.46, 0.14, 120, (1.0 * power * pulse + 2.6 * flash + 0.3 * smooth(te / BLAST)) * out);
-    pushLocalLight(s.x - Math.sin(az) * 20, s.y + 16, -(s.z + 8), 1.0, 0.4, 0.12, 60, 0.5 * power * pulse * out);
+    // (Ember's snow is already warm: the light is a pulse on it, not a wash, so the rider keeps her red.)
+    pushLocalLight(lx, s.y + 30, -(s.z + 46), 1.0, 0.46, 0.14, 120, (0.5 * power * pulse + 1.8 * flash + 0.15 * smooth(te / BLAST)) * out);
+    pushLocalLight(s.x - Math.sin(az) * 20, s.y + 16, -(s.z + 8), 1.0, 0.4, 0.12, 60, 0.22 * power * pulse * out);
     // Ember rain over the bridge once the fountain has had time to throw it this far.
     if (throwNow && tb > 1.4 && out > 0.1) {
       const n = ctx.low ? 2 : 5;
@@ -954,7 +963,7 @@ export class LegendWorld {
     // The first flock is up as it is said, the rest by the lip; all of them leave together.
     u.uRise.value = 0.8 * smooth(this.kIn * 1.25) + 0.5 * smooth(tp / 1.2);
     u.uLeave.value = smooth((this.kExit - 0.2) / 0.8);
-    u.uSize.value = ctx.low ? 2.6 : 1.7;
+    u.uSize.value = ctx.low ? 2.9 : 2.1;
     (C.mesh.geometry as BufferGeometry & { instanceCount: number }).instanceCount = tiered(ctx.tier, [150, 520, 900, 960]);
     C.mesh.visible = true;
     // A few folds of loose paper coming down through the flight.
