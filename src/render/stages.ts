@@ -107,7 +107,7 @@ function lavaMaterial(low: boolean): ShaderMaterial {
         float heat = clamp(vHeat, 0.0, 1.0);
         // (The fall line is world -z: the plates drift down it, the big ones slower than the small.)
         vec2 p = vec2(vW.x, vW.z + vW.y * 0.6) * 0.21;
-        vec3 crust = mix(vec3(0.035, 0.018, 0.03), vec3(0.32, 0.05, 0.02), heat * heat * 0.7);
+        vec3 crust = mix(vec3(0.016, 0.01, 0.014), vec3(0.2, 0.035, 0.012), heat * heat * 0.6);
         #ifdef LAVA_LOW
           vec2 c = floor(p * 0.8);
           float pick = hash2(c).x;
@@ -141,16 +141,16 @@ function lavaMaterial(low: boolean): ShaderMaterial {
             }
           }
           float breathe = 0.85 + 0.15 * sin(uFlow * 0.7 + id * 6.28);
-          float w = mix(0.035, 0.3, heat * heat) * breathe;
+          float w = mix(0.03, 0.17, heat * heat) * breathe;
           float crack = 1.0 - smoothstep(0.0, w, ed);
           // A plate near the heart is thin: it glows through, and some are not crust at all.
-          float thin = heat * smoothstep(0.55, 1.0, id + heat * 0.45);
+          float thin = heat * heat * smoothstep(0.72, 1.0, id + heat * 0.3);
           vec3 hotc = mix(vec3(1.9, 0.42, 0.05), vec3(3.4, 1.9, 0.5), crack * crack * (0.4 + 0.6 * heat));
-          vec3 col = mix(crust * (0.7 + 0.6 * id), hotc, max(crack, thin * 0.8));
+          vec3 col = mix(crust * (0.6 + 0.8 * id), hotc, max(crack, thin * 0.7));
         #endif
         float fog = smoothstep(uFogNear, uFogFar, length(vW - cameraPosition));
-        // (Lava shines through the haze: it takes half the air's fog.)
-        gl_FragColor = vec4(mix(col, uFog, fog * 0.5), 1.0);
+        // (Lava shines through the haze: it takes a third of the air's fog, so the crust stays dark.)
+        gl_FragColor = vec4(mix(col, uFog, fog * 0.35), 1.0);
         #include <colorspace_fragment>
       }
     `,
@@ -410,10 +410,10 @@ export class Stages {
     /** Where a field starts and ends across the bank at z: outside the crowd's shoulder at the lip, from
      *  just past the limit below it, swelling to its widest under the middle of the flight. */
     const inner = (z: number, side: number): number => {
-      const lim = c.edgeLimit(z) + 3.2;
+      const lim = c.edgeLimit(z) + 2;
       const past = smooth(l.z + 17, l.z + 30, z);
       const wob = 1.6 * Math.sin(z * 0.19 + side * 1.7) + 1.1 * Math.sin(z * 0.53 + side);
-      return Math.max(lim, lim + (1 - past) * 24 + wob * past + 1.5);
+      return Math.max(lim, lim + (1 - past) * 24 + (wob + 1.2) * past);
     };
     const outer = (z: number, side: number): number => {
       const t = (z - zA) / (zB - zA);
