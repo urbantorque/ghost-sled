@@ -6,10 +6,16 @@ import { type MomentPlay, LEGEND_AHEAD, RIBBON_HW, fallZ, gateX, machineZ, momen
 import type { BiomeId } from '../sim/mountains';
 import type { Sim } from '../sim/sim';
 import { merge, part, shade } from './flora';
+import type { Breaks } from './breaks';
+import { ClimaxWorld } from './climaxworld';
+import type { Fireworks } from './fireworks';
 import { box, seg } from './landmarkKit';
+import { type LegendShot, LegendWorld } from './legendworld';
 import { pushLocalLight } from './lights';
 import { makeToonMaterial } from './materials';
+import { MomentKit, type StageCtx, type Tier } from './momentkit';
 import type { Particles } from './particles';
+import { VerbWorld } from './verbworld';
 
 // The set pieces' own world (round 6, DECISIONS 240): what each verb needs to be seen.
 //  - Race: the machine on its cable along the bank, its towers where the ground is open, waiting at its
@@ -110,7 +116,9 @@ function pillarMaterial(): ShaderMaterial {
       varying vec2 vUv;
       varying vec3 vCol;
       void main() {
-        float across = 1.0 - abs(vUv.x - 0.5) * 2.0;
+        // (Clamped: under MSAA a varying is extrapolated past the quad's edge, and pow() of a negative is not
+        // a number. That was round 7's black one-pixel dashes under the lantern gates.)
+        float across = clamp(1.0 - abs(vUv.x - 0.5) * 2.0, 0.0, 1.0);
         float core = pow(across, 2.2);
         float up = smoothstep(0.0, 0.18, vUv.y) * (1.0 - smoothstep(0.62, 1.0, vUv.y));
         float a = core * up;
@@ -229,6 +237,16 @@ export class MarqueeWorld {
   private readonly poolMat = poolMaterial();
   /** The set piece the director is playing (from its beats), so steps and misses land on the right gate. */
   private active: { key: string; seen: number } | null = null;
+  // Round 7 (the momentsworld lane): the verbs', the legends' and the climax's own worlds, drawn with one kit.
+  readonly kit = new MomentKit();
+  private readonly verbs = new VerbWorld(this.kit);
+  private readonly legends = new LegendWorld(this.kit);
+  private readonly climax = new ClimaxWorld(this.kit);
+  private tier: Tier = 2;
+  private reducedMotion = false;
+  private fireworks: Fireworks | null = null;
+  private breaks: Breaks | null = null;
+  private ctx: StageCtx | null = null;
 
   constructor(private readonly particles: Particles) {
     const chunk = new IcosahedronGeometry(1, 0);
@@ -253,10 +271,27 @@ export class MarqueeWorld {
       m.setColorAt(0, LIGHT);
       this.root.add(m);
     }
+    this.root.add(this.kit.root, this.verbs.root, this.legends.root, this.climax.root);
+  }
+
+  /** The frame's tier (0 Low to 3 Ultra), reduced motion, and the effects a stage may call. */
+  stage(tier: Tier, reduced: boolean, fireworks: Fireworks | null, breaks: Breaks | null): void {
+    this.tier = tier;
+    this.reducedMotion = reduced;
+    this.fireworks = fireworks;
+    this.breaks = breaks;
+    this.kit.setTier(tier);
+  }
+
+  /** The legend on screen this frame (for the reel's legend beat, the camera and the HUD), or null. */
+  legendShot(): LegendShot | null {
+    return this.legends.shot();
   }
 
   setCourse(c: Course): void {
     this.course = c;
+    this.legends.setCourse(c);
+    this.climax.setCourse(c);
     this.build(c, momentPlays(c));
   }
 
@@ -289,6 +324,7 @@ export class MarqueeWorld {
       else if (p.verb === 'gates' && p.gates.length) this.gates.push({ play: p, state: p.gates.map(() => 0), at: p.gates.map(() => 0), base: 0 });
     }
     this.buildGates(c);
+    this.verbs.build(c, plays);
     this.reset();
   }
 
@@ -296,6 +332,9 @@ export class MarqueeWorld {
   reset(): void {
     this.active = null;
     this.kept.clear();
+    this.verbs.reset();
+    this.legends.reset();
+    this.climax.reset();
     for (const m of this.machines) m.z = m.cabins.map((_, k) => m.play.z0 + (m.play.cars[k]?.lead ?? m.play.lead));
     for (const g of this.gates) {
       g.state.fill(0);
@@ -453,6 +492,7 @@ export class MarqueeWorld {
 
   /** The director's beats: which set piece is on, and each gate threaded or missed as the sim decides it. */
   beats(list: readonly Beat[], s: Snap): void {
+    if (this.ctx) this.verbs.beats(list, this.ctx);
     for (const b of list) {
       if (b.type === 'marquee' && b.phase === 'enter') this.active = { key: b.key, seen: 0 };
       if (b.type !== 'moment') continue;
@@ -580,6 +620,27 @@ export class MarqueeWorld {
     }
     this.collapse(dt, s, sim, low);
     this.standIns(time, mode, s, sim, low);
+    // Round 7: the stages. One context a frame; the kit hides whatever nothing was put into.
+    this.kit.begin();
+    const course = sim?.course ?? this.course;
+    if (course) {
+      const ctx = (this.ctx ??= { dt, time, mode, s, sim, course, tier: this.tier, low, reduced: this.reducedMotion, kit: this.kit, particles: this.particles, fireworks: this.fireworks, breaks: this.breaks });
+      ctx.dt = dt;
+      ctx.time = time;
+      ctx.mode = mode;
+      ctx.s = s;
+      ctx.sim = sim;
+      ctx.course = course;
+      ctx.tier = low ? 0 : this.tier;
+      ctx.low = low;
+      ctx.reduced = this.reducedMotion;
+      ctx.fireworks = this.fireworks;
+      ctx.breaks = this.breaks;
+      this.verbs.update(ctx);
+      this.legends.update(ctx);
+      this.climax.update(ctx);
+    }
+    this.kit.end();
   }
 
   // ---------------------------------------------------------------- r7 stand-ins
@@ -702,7 +763,7 @@ export class MarqueeWorld {
       // the storm's kind, drawn with them); a ribbon is a lane of pools; a sky legend is lanterns rising
       // either side of the place.
       const lg = sim.legend;
-      if (lg && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
+      if (lg && !this.legends.owns(lg.key) && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
         const col = LEGEND_COL[lg.key] ?? LIGHT;
         if (lg.kind === 'runner' && lg.path && sim.lg.phase < 3) {
           const head = sim.lg.phase === 2 ? sim.lg.head : lg.z0 + LEGEND_AHEAD;
