@@ -1,0 +1,690 @@
+/*
+  Round 7 screens: the title as key art (the place line, the veil between mountains, The Twelve's card and
+  ladder), the results' moment, the screen transitions, and the pause card in the same language.
+  Loaded after style.css and meta.css, so a rule here wins a tie. Tokens and roles are ART.md 10's: ink-navy
+  panels, pills and 18 px cards, vermillion for the primary action only, mint for ghosts.
+*/
+
+/* ------------------------------------------------------------------ Title: the place under the logo */
+
+.gs-t-place {
+  display: grid;
+  gap: 2px;
+  max-width: 34ch;
+  text-shadow: var(--halo);
+}
+
+.gs-t-place-n {
+  font-size: clamp(17px, calc(var(--u) * 1.3), 25px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.gs-t-place-l {
+  color: var(--text);
+  font-size: clamp(14px, calc(var(--u) * 1.02), 19px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+/* A refresh that changed the mountain lands its words: the name steps in from the logo's side. */
+.gs-title.is-static .gs-t-place {
+  animation: gs-place-in 420ms var(--out) both;
+}
+
+@keyframes gs-place-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Title: the veil between mountains */
+
+.gs-title > .gs-title-dip,
+.gs-title > .gs-t-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gs-title > .gs-title-dip {
+  background: var(--ink);
+  opacity: 0;
+}
+
+.gs-t-veil {
+  --veil: linear-gradient(112deg, #1d3f8f 0%, #2b5fb8 46%, #f0a35a 100%);
+  overflow: hidden;
+}
+
+.gs-t-veil.v-pinecrest {
+  --veil: linear-gradient(112deg, #1b3a86 0%, #2f63bd 44%, #f2a85c 100%);
+}
+
+.gs-t-veil.v-frostfang {
+  --veil: linear-gradient(112deg, #0a1440 0%, #163a7c 42%, #1f9a8f 78%, #7a5cc0 100%);
+}
+
+.gs-t-veil.v-ember {
+  --veil: linear-gradient(112deg, #1c0f26 0%, #4a1f3a 44%, #e2622b 100%);
+}
+
+.gs-t-veil.v-sakura {
+  --veil: linear-gradient(112deg, #3a1830 0%, #8a3a5e 46%, #f6b3c6 100%);
+}
+
+.gs-t-veil.v-lanternfall {
+  --veil: linear-gradient(112deg, #100c3a 0%, #33247e 48%, #7a5cc0 82%, #f2b84a 100%);
+}
+
+.gs-t-veil.v-daily {
+  --veil: linear-gradient(112deg, #0f2a4e 0%, #1c5a86 48%, #55c9bb 100%);
+}
+
+.gs-t-veil.v-cup {
+  --veil: linear-gradient(112deg, #171a4a 0%, #3a3f96 50%, #9a86e0 100%);
+}
+
+/* The slab is wider than the screen and leans, so its leading and trailing edges cross as diagonals. */
+.gs-t-veil-slab {
+  position: absolute;
+  inset: -12% -34%;
+  background: var(--veil);
+  transform: translateX(-132%) skewX(-14deg);
+  will-change: transform;
+}
+
+.gs-t-veil.is-in .gs-t-veil-slab {
+  animation: gs-veil-in 260ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+
+.gs-t-veil.is-out .gs-t-veil-slab {
+  animation: gs-veil-out 460ms cubic-bezier(0.6, 0, 0.3, 1) both;
+}
+
+.gs-t-veil-txt {
+  position: absolute;
+  top: 26%;
+  right: clamp(24px, 6vw, 96px);
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  max-width: 54%;
+  text-align: right;
+  opacity: 0;
+}
+
+.gs-t-veil.is-in .gs-t-veil-txt {
+  animation: gs-veil-txt-in 300ms var(--out) 120ms both;
+}
+
+.gs-t-veil.is-out .gs-t-veil-txt {
+  animation: gs-veil-txt-out 220ms ease both;
+}
+
+.gs-t-veil-name {
+  font-size: clamp(40px, 7.4vw, 104px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+  text-transform: uppercase;
+  text-shadow: 0.045em 0.04em 0 rgba(18, 25, 51, 0.5);
+  text-wrap: balance;
+}
+
+.gs-t-veil-line {
+  font-size: clamp(15px, calc(var(--u) * 1.2), 22px);
+  font-weight: 750;
+  text-shadow: var(--halo-tight);
+}
+
+@keyframes gs-veil-in {
+  from {
+    transform: translateX(-132%) skewX(-14deg);
+  }
+  to {
+    transform: translateX(0) skewX(-14deg);
+  }
+}
+
+@keyframes gs-veil-out {
+  from {
+    transform: translateX(0) skewX(-14deg);
+  }
+  to {
+    transform: translateX(132%) skewX(-14deg);
+  }
+}
+
+@keyframes gs-veil-txt-in {
+  from {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-veil-txt-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+}
+
+/* ------------------------------------------------------------------ Title: the finale's card */
+
+.b-lantern .gs-mtn-sky,
+.gs-toast-sky.b-lantern,
+.gs-ul-art.b-lantern,
+.gs-nu-art.b-lantern {
+  background: linear-gradient(180deg, #120e3f 0%, #3a2a88 62%, #7a5cc0 100%);
+}
+
+/* ------------------------------------------------------------------ Title: The Twelve's card */
+
+.gs-title {
+  grid-template-areas:
+    'main . stats'
+    'main . .'
+    'side . twelve'
+    'ride . daily'
+    'bar  . daily';
+}
+
+.gs-t12 {
+  --rider: var(--ghost);
+  grid-area: twelve;
+  align-self: end;
+  justify-self: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  width: min(100%, 440px);
+  margin-bottom: 12px;
+  border-radius: var(--r-card);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--rider) 16%, transparent), transparent 64%),
+    var(--panel-solid);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--rider) 46%, transparent),
+    var(--shadow);
+  pointer-events: auto;
+}
+
+.gs-title.is-in .gs-t12 {
+  animation-delay: 170ms;
+}
+
+.gs-t12-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 9px 6px 9px 10px;
+  border-radius: var(--r-card) 0 0 var(--r-card);
+  text-align: left;
+  transition: transform 160ms var(--spring);
+}
+
+.gs-t12-main:active {
+  transform: scale(0.98);
+}
+
+.gs-t12-bust {
+  display: block;
+  width: 58px;
+  height: 58px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-t12-bust svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gs-t12-txt {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-t12-k {
+  color: var(--dim);
+  font-size: max(11px, 0.68em);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gs-t12-name {
+  overflow: hidden;
+  color: var(--rider);
+  font-size: clamp(17px, calc(var(--u) * 1.22), 22px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12-line {
+  overflow: hidden;
+  color: var(--text);
+  font-size: max(12px, 0.8em);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12-bio {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12.is-waiting .gs-t12-bust {
+  opacity: 0.6;
+}
+
+.gs-t12-count {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-content: center;
+  align-items: center;
+  column-gap: 2px;
+  min-width: 64px;
+  padding: 0 10px 0 12px;
+  border-left: 1px solid var(--hair-2);
+  border-radius: 0 var(--r-card) var(--r-card) 0;
+  color: var(--text);
+  transition: background-color 160ms ease;
+}
+
+.gs-t12-count-n {
+  grid-row: 1;
+  font-size: clamp(22px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.gs-t12-count-of {
+  grid-row: 2;
+  color: var(--dim);
+  font-size: max(11px, 0.7em);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.gs-t12-count .gs-i {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 18px;
+  height: 18px;
+  color: var(--dim);
+  transition: transform 180ms var(--spring);
+}
+
+.gs-t12-count[aria-expanded='true'] .gs-i {
+  transform: rotate(-90deg);
+}
+
+.gs-t12-main:focus-visible,
+.gs-t12-count:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--ink);
+}
+
+@media (hover: hover) {
+  .gs-t12-main:hover .gs-t12-bust {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+
+  .gs-t12-bust {
+    transition: transform 220ms var(--spring);
+  }
+
+  .gs-t12-count:hover {
+    background: rgba(245, 243, 255, 0.07);
+  }
+
+  .gs-t12-count:hover .gs-i {
+    transform: translateX(2px);
+  }
+
+  .gs-t12-count[aria-expanded='true']:hover .gs-i {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ------------------------------------------------------------------ Title: The Twelve's ladder */
+
+.gs-pop.gs-t12-pop {
+  left: auto;
+  right: var(--sr);
+  bottom: var(--sb);
+  z-index: 3;
+  gap: 10px;
+  width: min(820px, calc(100vw - var(--sl) - var(--sr)));
+  max-height: calc(100% - var(--st) - var(--sb));
+  padding: 16px 16px 16px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gs-t12-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gs-t12-h {
+  color: var(--text);
+  font-size: clamp(20px, calc(var(--u) * 1.5), 28px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.gs-t12-key {
+  max-width: 62ch;
+  color: var(--dim);
+  font-size: max(12px, 0.84em);
+  font-weight: 650;
+}
+
+.gs-t12-list {
+  display: grid;
+  grid-template-rows: repeat(6, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-t12-rung {
+  --rider: var(--ghost);
+  display: grid;
+  grid-template-columns: 1.4em auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 6px 10px 6px 8px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+}
+
+.gs-t12-rung .gs-t12-bust {
+  width: 44px;
+  height: 44px;
+}
+
+.gs-t12-num {
+  color: var(--dim);
+  font-size: max(12px, 0.82em);
+  font-style: italic;
+  font-weight: 900;
+  text-align: right;
+}
+
+.gs-t12-rtxt {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-t12-rname {
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.gs-t12-rbio {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.gs-t12-rmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--text);
+  font-size: max(11px, 0.74em);
+  font-weight: 750;
+}
+
+.gs-t12-rmeta .gs-num {
+  color: var(--dim);
+}
+
+.gs-t12-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.9em;
+  padding: 0 0.7em;
+  border-radius: var(--r-pill);
+  font-size: max(11px, 0.72em);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.gs-t12-tag .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-t12-tag.is-beaten {
+  background: rgba(245, 243, 255, 0.1);
+  color: var(--text);
+}
+
+.gs-t12-tag.is-next {
+  background: color-mix(in srgb, var(--rider) 22%, transparent);
+  color: var(--rider);
+}
+
+.gs-t12-tag.is-locked {
+  padding: 0 0.5em;
+  color: var(--dim);
+}
+
+.gs-t12-go {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+/* Who has fallen reads at a glance: a beaten rider's row goes quiet and their name is struck through;
+   the one that rides now wears their own colour; a rider whose mountain is locked is dimmed. */
+.gs-t12-rung.is-beaten .gs-t12-bust,
+.gs-t12-rung.is-beaten .gs-t12-rbio,
+.gs-t12-rung.is-beaten .gs-t12-rmeta {
+  opacity: 0.5;
+}
+
+.gs-t12-rung.is-beaten .gs-t12-rname {
+  color: var(--dim);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.gs-t12-rung.is-next {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--rider) 18%, transparent), transparent 80%), rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rider) 55%, transparent);
+}
+
+.gs-t12-rung.is-next .gs-t12-rname {
+  color: var(--rider);
+}
+
+.gs-t12-rung.is-locked {
+  opacity: 0.62;
+}
+
+/* ------------------------------------------------------------------ Title: tall screens */
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-title,
+  .gs-title.is-first {
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto auto;
+    grid-template-areas:
+      'stats'
+      'main'
+      '.'
+      'daily'
+      'side'
+      'twelve'
+      'ride'
+      'bar';
+  }
+
+  .gs-t-place {
+    justify-items: center;
+    text-align: center;
+  }
+
+  /* The Twelve's row takes the greeting's place above Ride: one line of direction, not two. */
+  .gs-title:has(.gs-t12) .gs-t-greet {
+    display: none;
+  }
+
+  .gs-t12 {
+    justify-self: stretch;
+    width: auto;
+    margin-bottom: 0;
+    border-radius: var(--r-pill);
+  }
+
+  .gs-t12-main {
+    gap: 10px;
+    min-height: 52px;
+    padding: 4px 4px 4px 5px;
+    border-radius: var(--r-pill) 0 0 var(--r-pill);
+  }
+
+  .gs-t12-bust {
+    width: 44px;
+    height: 44px;
+  }
+
+  .gs-t12-k,
+  .gs-t12-bio {
+    display: none;
+  }
+
+  .gs-t12-count {
+    min-width: 58px;
+    border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  }
+
+  .gs-t-veil-txt {
+    top: 30%;
+    right: 0;
+    left: 0;
+    justify-items: center;
+    max-width: none;
+    padding: 0 20px;
+    text-align: center;
+  }
+
+  .gs-t-veil-name {
+    font-size: clamp(38px, 13vw, 72px);
+  }
+
+  .gs-pop.gs-t12-pop {
+    left: var(--sl);
+    right: var(--sr);
+    width: auto;
+    max-height: calc(100% - var(--st) - var(--sb));
+  }
+
+  .gs-t12-list {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+}
+
+/* Short landscape (a phone on its side): the card keeps its name and its line. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .gs-t12 {
+    margin-bottom: 4px;
+  }
+
+  .gs-t12-main {
+    min-height: 54px;
+    padding: 5px 4px 5px 8px;
+  }
+
+  .gs-t12-bust {
+    width: 42px;
+    height: 42px;
+  }
+
+  .gs-t12-k,
+  .gs-t12-bio,
+  .gs-t-place-l {
+    display: none;
+  }
+
+  .gs-t12-rung {
+    min-height: 48px;
+  }
+
+  .gs-t12-rbio {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-title.is-static .gs-t-place,
+  .gs-t-veil .gs-t-veil-slab,
+  .gs-t-veil .gs-t-veil-txt {
+    animation: none;
+  }
+
+  .gs-t12-main,
+  .gs-t12-bust,
+  .gs-t12-count .gs-i {
+    transition: none;
+  }
+}

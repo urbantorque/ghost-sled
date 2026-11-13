@@ -3,7 +3,8 @@
 // URL params: s=<scenario> (see SCENARIOS), mode=keyboard|mouse|touch,
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
-import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, ResultsModel, SettingsModel, SledCard, TitleModel, UIHandlers } from './contract';
+import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, ResultsModel, SettingsModel, SledCard, TitleModel, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import { ROSTER } from '../bot/roster';
 import { SHELVES } from '../game/garage';
 import { PAINTS } from '../game/paints';
 import type { Beat, BankTier, GhostRef, PassWord } from '../game/beats';
@@ -62,6 +63,44 @@ let sleds: SledCard[] = [
 ];
 
 let selected = 'pinecrest';
+
+// The Twelve, as the game builds it (app.ts twelveModel): `beaten` have fallen, the gentlest of the rest
+// whose home is open rides next.
+const HOMES = ['Pinecrest', 'Frostfang Glacier', 'Ember Peak', 'Sakura Ridge', 'Lanternfall'];
+const HOME_IDS = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
+function twelve(beaten: number, open: number[] = [0, 1], crowned = false): TitleTwelve {
+  const order = [...ROSTER].sort((a, b) => a.skill - b.skill);
+  const reach = order.filter((r) => open.includes(r.home));
+  const fallen = new Set(beaten >= 12 ? order.map((r) => r.key) : reach.slice(0, beaten).map((r) => r.key));
+  const next = order.find((r) => !fallen.has(r.key) && open.includes(r.home)) ?? null;
+  const rung = (r: (typeof order)[number], i: number): TwelveRung => ({
+    key: r.key,
+    name: r.name,
+    hat: r.hat,
+    emblem: r.emblem,
+    accent: r.accent,
+    bio: r.bio,
+    mountain: HOMES[r.home],
+    time: `2:${String(18 - i).padStart(2, '0')}.${(i * 7) % 10}`,
+    state: fallen.has(r.key) ? 'beaten' : r === next ? 'next' : open.includes(r.home) ? 'open' : 'locked',
+  });
+  const rungs = order.map(rung);
+  const waits = next ? null : order.find((r) => !fallen.has(r.key));
+  const left = 11 - order.filter((r) => r.key !== 'crown' && fallen.has(r.key)).length;
+  return {
+    beaten: fallen.size,
+    of: 12,
+    tally: crowned ? 'You hold the crown' : fallen.size >= 12 ? 'The Twelve are beaten' : `${fallen.size} of 12 beaten`,
+    next: next ? { ...rungs[order.indexOf(next)], mountainId: HOME_IDS[next.home], here: HOME_IDS[next.home] === selected } : null,
+    final: fallen.size >= 12 && !crowned ? { mountainId: 'lanternfall', mountain: 'Lanternfall', here: selected === 'lanternfall' } : null,
+    waiting: waits ? { rider: rungs[order.indexOf(waits)], opens: 'Pass 15 more ghosts' } : null,
+    hook: left > 0 ? `${left} more open Lanternfall` : fallen.size >= 12 ? null : 'The Hollow King waits on Lanternfall',
+    crowned,
+    rungs,
+  };
+}
+const twelveNow: TitleTwelve | null = twelve(2);
+
 function titleModel(over: Partial<TitleModel> = {}): TitleModel {
   return {
     mountains: [
@@ -69,6 +108,7 @@ function titleModel(over: Partial<TitleModel> = {}): TitleModel {
       { id: 'frostfang', name: 'Frostfang Glacier', tagline: 'Glass ice and big drops', biome: 'glacier', locked: false, unlockText: '', best: 6315 },
       { id: 'ember', name: 'Ember Peak', tagline: 'Ash snow over a lava glow', biome: 'volcanic', locked: true, unlockText: 'Pass 8 more ghosts to unlock', best: 0 },
       { id: 'sakura', name: 'Sakura Ridge', tagline: 'Petals and spirit gates', biome: 'blossom', locked: true, unlockText: 'Pass 20 more ghosts to unlock', best: 0 },
+      { id: 'lanternfall', name: 'Lanternfall', tagline: 'Where the spirit lights come from', biome: 'lantern', locked: true, unlockText: 'Beat 9 more of The Twelve to unlock', best: 0 },
     ],
     selected,
     daily: { key: '2026-10-24', best: 8420, ready: true },
@@ -79,6 +119,7 @@ function titleModel(over: Partial<TitleModel> = {}): TitleModel {
     missions,
     inputMode: mode,
     firstVisit: false,
+    twelve: over.firstVisit ? null : twelveNow && { ...twelveNow, next: twelveNow.next && { ...twelveNow.next, here: twelveNow.next.mountainId === selected } },
     ...over,
   };
 }
@@ -496,6 +537,15 @@ function cashIn(m: HudModel, b: Beat, at: number): void {
 const SCENARIOS: Record<string, () => void> = {
   title: () => goTitle(),
   'title-first': () => goTitle({ firstVisit: true }),
+  // The Twelve: the ladder open; nobody to duel yet; the King up; the last race; the crown.
+  'title-twelve': () => {
+    goTitle(ladderTitle());
+    window.setTimeout(() => document.querySelector<HTMLElement>('[data-fk="t12-ladder"]')?.click(), 300);
+  },
+  'title-twelve-wait': () => goTitle(ladderTitle({ twelve: twelve(3, [0]) })),
+  'title-twelve-king': () => goTitle(ladderTitle({ twelve: twelve(11, [0, 1, 2, 3, 4]) })),
+  'title-twelve-final': () => goTitle(ladderTitle({ twelve: twelve(12, [0, 1, 2, 3, 4]) })),
+  'title-twelve-crowned': () => goTitle(ladderTitle({ twelve: twelve(12, [0, 1, 2, 3, 4], true) })),
   // A returning player: ranks and medals on the cards, the name above you on Ride, the Cup by the Daily.
   'title-ladder': () => goTitle(ladderTitle()),
   'title-cup-waiting': () => goTitle(ladderTitle({ cup: { key: '2026-W45', week: 45, ready: false, mood: 'Blizzard', event: null, best: 0, medal: 0 } })),
@@ -1357,7 +1407,7 @@ panel.append(head);
 const groups = document.createElement('div');
 groups.className = 'groups';
 const GROUPS: Record<string, string[]> = {
-  title: ['title', 'title-first', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-challenge-cup', 'title-challenge-cup-waiting', 'title-missions', 'title-touch', 'title-long', 'loading'],
+  title: ['title', 'title-first', 'title-twelve', 'title-twelve-wait', 'title-twelve-king', 'title-twelve-final', 'title-twelve-crowned', 'title-ladder', 'title-medals', 'title-cup-waiting', 'title-cup-picked', 'title-zero', 'title-challenge', 'title-challenge-cup', 'title-challenge-cup-waiting', 'title-missions', 'title-touch', 'title-long', 'loading'],
   hud: ['hud', 'hud-live', 'hud-grudge', 'hud-you', 'hud-you-named', 'hud-even', 'hud-behind', 'hud-long', 'rank-gain', 'rank-swing', 'rank-first', 'rank-first-you', 'combo-single', 'draft-pill', 'night-pills', 'touch', 'danger-far', 'danger-mid', 'danger-near', 'danger-urgent', 'danger-chase'],
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],

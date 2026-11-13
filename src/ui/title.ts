@@ -1,13 +1,13 @@
-import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, UIHandlers } from './contract';
+import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, TitleTwelve, TwelveRung, UIHandlers } from './contract';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
 import { clock } from '../game/standing';
 import { MOUNTAINS } from '../sim/mountains';
-import { biomeArt } from './art';
+import { biomeArt, riderBust } from './art';
 import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
 import { dailyDate, fmt, metres, NBSP, progFigures } from './fmt';
 import { icon } from './icons';
-import { play, reduced } from './motion';
+import { EASE_OUT, SPRING, play, reduced } from './motion';
 
 // Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
 // them, then the menu row; wallet and the daily and Cup cards keep to the right, and the 3D scene owns
@@ -18,6 +18,25 @@ export interface TitleMenuHooks {
   openSleds(): void;
   openSettings(): void;
 }
+
+/**
+ * Each place's line under the logo and on the veil that carries the title from one mountain to the next:
+ * the feeling ART.md 15 gives it, in a few words. The title is that mountain's key art, so the words under
+ * the logo are the mountain's own.
+ */
+const PLACES: Readonly<Record<string, string>> = {
+  pinecrest: 'The bright day that turns to gold',
+  frostfang: 'Blue hour, aurora, dawn',
+  ember: 'Under the mountain\u2019s breath',
+  sakura: 'The spring morning',
+  lanternfall: 'Where the lights come from',
+  daily: 'One mountain, new every day',
+  cup: 'One week, one field, one mood',
+};
+
+/** The veil's beats (ms): it sweeps over the scene, the app builds the new mountain under it, the name
+ *  holds long enough to read, and it sweeps on and off. style.css (.gs-t-veil) carries the same figures. */
+export const TRAVEL_TIMING = { IN_MS: 260, HOLD_MS: 420, OUT_MS: 460 } as const;
 
 /** Medal names by rank (0 none). */
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
@@ -32,10 +51,18 @@ export class Title {
   readonly layer: Layer;
   private readonly el: HTMLElement;
   private popover: HTMLElement | null = null;
-  private popKind: 'missions' | 'medals' = 'missions';
+  private popKind: 'missions' | 'medals' | 'twelve' = 'missions';
   private missionsBtn: HTMLButtonElement | null = null;
   private medalsBtn: HTMLButtonElement | null = null;
+  private twelveBtn: HTMLButtonElement | null = null;
   private io: IntersectionObserver | null = null;
+  /** The veil that carries the title from one mountain to the next, kept across renders so its sweep is
+   *  never cut by the re-render it covers. */
+  private readonly veil: HTMLElement;
+  private readonly veilName: HTMLElement;
+  private readonly veilLine: HTMLElement;
+  private travelling = false;
+  private travelTimers: number[] = [];
   /** The first-visit sound toggle: muted here, and the master volume it gives back. */
   private muted = false;
   private unmuteTo = 1;
@@ -49,6 +76,12 @@ export class Title {
     this.el = h('section', 'gs-title');
     this.el.setAttribute('aria-label', 'Ghost Sled');
     parent.append(this.el);
+    this.veilName = h('span', 'gs-t-veil-name');
+    this.veilName.setAttribute('translate', 'no');
+    this.veilLine = h('span', 'gs-t-veil-line');
+    this.veil = h('div', 'gs-t-veil', h('span', 'gs-t-veil-slab'), h('span', 'gs-t-veil-txt', this.veilName, this.veilLine));
+    this.veil.setAttribute('aria-hidden', 'true');
+    this.veil.hidden = true;
     this.layer = new Layer(this.el, 220);
     window.addEventListener('resize', () => {
       if (this.layer.open) this.dock();
@@ -56,7 +89,7 @@ export class Title {
     document.addEventListener('pointerdown', (e) => {
       if (!this.popover) return;
       const t = e.target as Node | null;
-      if (t && (this.popover.contains(t) || this.missionsBtn?.contains(t) || this.medalsBtn?.contains(t))) return;
+      if (t && (this.popover.contains(t) || this.missionsBtn?.contains(t) || this.medalsBtn?.contains(t) || this.twelveBtn?.contains(t))) return;
       this.closeMissions();
     });
   }
@@ -88,6 +121,7 @@ export class Title {
       }
     }
     if (hadPopover && popKind === 'medals') this.openMedals(m, false);
+    else if (hadPopover && popKind === 'twelve') this.openTwelve(m, false);
     else if (hadPopover) this.openMissions(m.missions, false);
     restoreFocus(this.el, fk);
     this.dock();
@@ -108,7 +142,56 @@ export class Title {
 
   hide(): void {
     this.closeMissions();
+    this.endTravel();
     this.layer.hide();
+  }
+
+  /** The reel cut back to the start of its shot: a short dip of ink over the scene, so the loop reads as
+   *  an edit. Nothing under reduced motion, and never over a veil already crossing. */
+  cut(): void {
+    if (!this.layer.open || this.travelling || reduced() || typeof this.el.animate !== 'function') return;
+    const scrim = this.el.querySelector('.gs-title-dip');
+    scrim?.animate([{ opacity: 0.7 }, { opacity: 0 }], { duration: 520, easing: EASE_OUT });
+  }
+
+  /**
+   * Picking another mountain is a designed move, not a swap: a veil in the new place's own air sweeps over
+   * the scene from the logo's side, the app builds the mountain under it (`go`), the place's name and its
+   * line hold on the veil, and it sweeps on off the far edge to show the new shot. The controls stay
+   * where they are, above it. Under reduced motion the mountain changes at once.
+   */
+  private travel(id: string, name: string, go: () => void): void {
+    if (this.travelling) return;
+    if (reduced() || typeof this.veil.animate !== 'function') {
+      go();
+      return;
+    }
+    this.travelling = true;
+    this.closeMissions();
+    this.veil.className = `gs-t-veil v-${id} is-in`;
+    this.veilName.textContent = name;
+    this.veilLine.textContent = PLACES[id] ?? '';
+    this.veil.hidden = false;
+    const T = TRAVEL_TIMING;
+    this.travelTimers.push(
+      window.setTimeout(() => {
+        go();
+        this.travelTimers.push(
+          window.setTimeout(() => {
+            this.veil.className = `gs-t-veil v-${id} is-out`;
+            this.travelTimers.push(window.setTimeout(() => this.endTravel(), T.OUT_MS));
+          }, T.HOLD_MS),
+        );
+      }, T.IN_MS),
+    );
+  }
+
+  private endTravel(): void {
+    for (const t of this.travelTimers) clearTimeout(t);
+    this.travelTimers.length = 0;
+    this.travelling = false;
+    this.veil.hidden = true;
+    this.veil.className = 'gs-t-veil';
   }
 
   /** The last input used changed while the title is up: Ride's prompt follows it (Space, the pad's A, or
@@ -131,13 +214,21 @@ export class Title {
     el.classList.toggle('is-first', m.firstVisit);
     el.classList.toggle('has-challenge', m.challenge !== null);
 
-    el.append(h('div', 'gs-title-scrim'));
+    this.twelveBtn = null;
+    const dip = h('div', 'gs-title-dip');
+    el.append(h('div', 'gs-title-scrim'), dip, this.veil);
 
     // Logo + tagline. A brand-new player reads the hook directly above the button that starts it:
     // on a phone that leaves the logo alone at the top, the sky and the rider's band open, and the
     // words on the ink floor under the scene instead of floating over the sky.
     const tagline = h('p', 'gs-tagline', 'Race the ghosts of every great run.');
-    el.append(h('div', 'gs-t-main gs-t-anim', logo(), m.firstVisit ? null : tagline));
+    // A returning player reads the mountain picked under the logo: its name and the feeling of its key art.
+    const placeLine = PLACES[m.selected];
+    const picking = m.selected === 'daily' ? 'Daily Mountain' : m.selected === 'cup' ? 'Weekly Cup' : (m.mountains.find((x) => x.id === m.selected)?.name ?? '');
+    const placeName = h('span', 'gs-t-place-n', picking);
+    placeName.setAttribute('translate', 'no');
+    const place = !m.firstVisit && placeLine && picking ? h('p', 'gs-t-place', placeName, h('span', 'gs-t-place-l', placeLine)) : null;
+    el.append(h('div', 'gs-t-main gs-t-anim', logo(), m.firstVisit ? null : (place ?? tagline)));
 
     // Challenge banner + Ride.
     const ride = h('div', 'gs-t-ride gs-t-anim');
@@ -165,16 +256,19 @@ export class Title {
     // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
     // button is the plain one. The banner says so rather than promising a ghost that will not ride.
     const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
-    const verb = raced ? 'Accept' : 'Ride';
+    // The Twelve: on the next rider's home ground the run is the duel, and the button says so.
+    const tw = raced || m.firstVisit || picked ? null : (m.twelve ?? null);
+    const duel = tw?.next?.here ? tw.next.name : tw?.final?.here ? 'The last race' : null;
+    const verb = raced ? 'Accept' : tw?.next?.here ? 'Duel' : 'Ride';
     const where = raced ? raced.mountain : (picked ?? sel?.name ?? '');
     const aim = raced || m.firstVisit || picked ? null : (m.nextRung ?? null);
     // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
     // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
     const waiting = !!m.challenge?.waiting;
     const status = 'Finding rivals…';
-    const subline = waiting ? status : (aim ?? (raced || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
+    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
-    if (subline === where || aim) mtn?.setAttribute('translate', 'no');
+    if (subline === where || aim || duel) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
       ctx,
       {
@@ -190,7 +284,7 @@ export class Title {
       h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
       rideKey(m.inputMode),
     );
-    rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}${aim ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
+    rideBtn.setAttribute('aria-label', where ? `${verb}: ${duel ? `${duel} on ` : ''}${where}${aim && !duel ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
     if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
@@ -234,6 +328,7 @@ export class Title {
     // The mountain cards sit directly above the Ride that rides them; the daily is its own card.
     el.append(side, h('div', `gs-t-daily gs-t-anim${m.cup ? ' has-cup' : ''}`, m.cup ? this.cupCard(m.cup, m.selected === 'cup') : null, this.dailyCard(m.daily, m.selected === 'daily')));
     this.watchEnds(track, prev, next, strip);
+    if (m.twelve) el.append(this.twelveCard(m.twelve, m));
 
     // Secondary row.
     const bar = h('nav', 'gs-t-bar gs-t-anim');
@@ -322,7 +417,7 @@ export class Title {
         return;
       }
       this.ctx.sound('tap');
-      if (!selected) this.hd.onSelectMountain(c.id);
+      if (!selected) this.travel(c.id, c.name, () => this.hd.onSelectMountain(c.id));
     });
     return b;
   }
@@ -397,7 +492,8 @@ export class Title {
     b.addEventListener('click', () => {
       if (!d.ready) return;
       this.ctx.sound('confirm');
-      this.hd.onDaily();
+      if (selected) this.hd.onDaily();
+      else this.travel('daily', 'Daily Mountain', () => this.hd.onDaily());
     });
     return b;
   }
@@ -432,9 +528,138 @@ export class Title {
     b.addEventListener('click', () => {
       if (!c.ready) return;
       this.ctx.sound('confirm');
-      this.hd.onCup?.();
+      if (selected) this.hd.onCup?.();
+      else this.travel('cup', 'Weekly Cup', () => this.hd.onCup?.());
     });
     return b;
+  }
+
+  /**
+   * The Twelve's home on the title: who rides next, their bust, their home ground and a line of their
+   * character. The card picks that mountain (the title travels there and Ride becomes the duel); its
+   * count opens the ladder. With nobody to duel yet it names who waits and what opens them.
+   */
+  private twelveCard(t: TitleTwelve, m: TitleModel): HTMLElement {
+    const box = h('div', 'gs-t12 gs-t-anim');
+    const face: Pick<TwelveRung, 'hat' | 'accent'> = t.next ?? t.waiting?.rider ?? { hat: 'crown', accent: '#E8D9FF' };
+    const bust = h('span', 'gs-t12-bust');
+    bust.innerHTML = riderBust(face.hat, face.accent);
+    let kicker = 'Next of The Twelve';
+    let name = '';
+    let line: (string | HTMLElement)[] = [];
+    let bio = '';
+    let said = '';
+    let go: (() => void) | null = null;
+    if (t.next) {
+      const n = t.next;
+      name = n.name;
+      const where = h('span', '', n.mountain);
+      where.setAttribute('translate', 'no');
+      line = n.time ? [where, ', ', h('span', 'gs-num', n.time), ' to beat'] : [where];
+      bio = n.bio;
+      said = `Next of The Twelve: ${n.name}, on ${n.mountain}${n.time ? `, ${n.time} to beat` : ''}. ${n.bio}`;
+      if (!n.here) go = () => this.travel(n.mountainId, n.mountain, () => this.hd.onSelectMountain(n.mountainId));
+    } else if (t.final) {
+      const f = t.final;
+      kicker = 'The Twelve';
+      name = 'The Last Race';
+      line = [`All twelve at once on ${f.mountain}`];
+      said = `The Twelve: the last race, all twelve at once on ${f.mountain}`;
+      if (!f.here) go = () => this.travel(f.mountainId, f.mountain, () => this.hd.onSelectMountain(f.mountainId));
+    } else if (t.waiting) {
+      const w = t.waiting;
+      kicker = 'The Twelve';
+      name = w.rider.name;
+      line = [`Waits on ${w.rider.mountain}. ${w.opens}`];
+      said = `The Twelve: ${w.rider.name} waits on ${w.rider.mountain}. ${w.opens}`;
+      box.classList.add('is-waiting');
+    } else {
+      kicker = 'The Twelve';
+      name = t.crowned ? 'The crown is yours' : t.tally;
+      line = [t.crowned ? 'All twelve beaten in one race' : (t.hook ?? '')];
+      said = `The Twelve: ${name}`;
+      box.classList.add('is-crowned');
+    }
+    box.style.setProperty('--rider', face.accent);
+    const who = h('span', 'gs-t12-name', name);
+    who.setAttribute('translate', 'no');
+    const main = h('button', 'gs-t12-main', bust, h('span', 'gs-t12-txt', h('span', 'gs-t12-k', kicker), who, h('span', 'gs-t12-line', ...line), bio ? h('span', 'gs-t12-bio', bio) : null));
+    main.type = 'button';
+    main.dataset.fk = 't12';
+    main.setAttribute('aria-label', go ? `${said}. Go to their mountain` : `${said}. Open the ladder`);
+    main.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      if (go) go();
+      else if (this.popover && this.popKind === 'twelve') this.closeMissions();
+      else this.openTwelve(m, true);
+    });
+    const count = h('button', 'gs-t12-count', h('span', 'gs-t12-count-n gs-num', String(t.beaten)), h('span', 'gs-t12-count-of gs-num', `of ${t.of}`), icon('chevR'));
+    count.type = 'button';
+    count.dataset.fk = 't12-ladder';
+    count.setAttribute('aria-label', `The Twelve: ${t.tally}. Open the ladder`);
+    count.setAttribute('aria-expanded', 'false');
+    count.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      if (this.popover && this.popKind === 'twelve') this.closeMissions();
+      else this.openTwelve(m, true);
+    });
+    this.twelveBtn = count;
+    box.append(main, count);
+    return box;
+  }
+
+  /**
+   * The ladder: all twelve, gentlest first, each with their bust, their home ground and their time there,
+   * and who has fallen. The one that rides now can be gone to from its row. A popover like the medal
+   * wall's, so there is no sheet to dismiss.
+   */
+  private openTwelve(m: TitleModel, animate: boolean): void {
+    this.closeMissions();
+    const t = m.twelve;
+    if (!t || !this.twelveBtn) return;
+    const pop = h('div', 'gs-pop gs-panel gs-t12-pop');
+    pop.id = 'gs-twelve-pop';
+    pop.setAttribute('role', 'region');
+    pop.setAttribute('aria-label', 'The Twelve');
+    const close = btn(this.ctx, { cls: 'gs-btn-soft gs-btn-round gs-t12-close', icon: 'close', aria: 'Close the ladder', sound: 'back', fk: 't12-close', onClick: () => this.closeMissions() });
+    pop.append(h('div', 'gs-t12-head', h('h2', 'gs-h2 gs-t12-h', 'The Twelve', h('span', 'gs-wall-n', h('span', 'gs-num', t.tally))), close));
+    pop.append(h('p', 'gs-t12-key', t.crowned ? 'Every one of them beaten, and all of them at once.' : `Beat each rider on their home ground, one duel at a time.${t.hook ? ` ${t.hook}.` : ''}`));
+    const list = h('ol', 'gs-t12-list');
+    t.rungs.forEach((r, i) => {
+      const li = h('li', `gs-t12-rung is-${r.state}`);
+      li.style.setProperty('--rider', r.accent);
+      li.style.setProperty('--i', String(i));
+      const bust = h('span', 'gs-t12-bust');
+      bust.innerHTML = riderBust(r.hat, r.accent);
+      const name = h('span', 'gs-t12-rname', r.name);
+      name.setAttribute('translate', 'no');
+      const where = h('span', '', r.mountain);
+      where.setAttribute('translate', 'no');
+      const meta = h('span', 'gs-t12-rmeta', where, r.time ? h('span', 'gs-num', r.time) : null);
+      let tag: HTMLElement | null = null;
+      if (r.state === 'beaten') tag = h('span', 'gs-t12-tag is-beaten', icon('check'), 'Beaten');
+      else if (r.state === 'locked') tag = h('span', 'gs-t12-tag is-locked', icon('lock'), sr('Their mountain is locked'));
+      else if (r.state === 'next' && t.next) {
+        const n = t.next;
+        if (n.here) tag = h('span', 'gs-t12-tag is-next', 'Rides now');
+        else {
+          tag = btn(this.ctx, { cls: 'gs-btn-soft gs-t12-go', label: 'Go', icon: 'arrowR', aria: `Go to ${n.mountain} to duel ${n.name}`, fk: 't12-go', onClick: () => this.travel(n.mountainId, n.mountain, () => this.hd.onSelectMountain(n.mountainId)) });
+        }
+      }
+      li.append(h('span', 'gs-t12-num gs-num', String(i + 1)), bust, h('span', 'gs-t12-rtxt', name, h('span', 'gs-t12-rbio', r.bio), meta));
+      if (tag) li.append(tag);
+      list.append(li);
+    });
+    pop.append(list);
+    this.el.append(pop);
+    if (animate) {
+      play(pop, [{ opacity: 0, transform: 'translateY(14px) scale(0.98)' }, { opacity: 1, transform: 'none' }], { duration: 260, easing: SPRING });
+      if (!reduced()) for (const li of Array.from(list.children)) play(li, [{ opacity: 0, transform: 'translateX(-10px)' }, { opacity: 1, transform: 'none' }], { duration: 300, delay: 60 + 28 * Number((li as HTMLElement).style.getPropertyValue('--i')), easing: EASE_OUT, fill: 'backwards' });
+    }
+    this.popover = pop;
+    this.popKind = 'twelve';
+    this.twelveBtn.setAttribute('aria-expanded', 'true');
+    this.twelveBtn.setAttribute('aria-controls', pop.id);
   }
 
   private page(track: HTMLElement, dir: number): void {
@@ -537,6 +762,8 @@ export class Title {
     this.missionsBtn?.removeAttribute('aria-controls');
     this.medalsBtn?.setAttribute('aria-expanded', 'false');
     this.medalsBtn?.removeAttribute('aria-controls');
+    this.twelveBtn?.setAttribute('aria-expanded', 'false');
+    this.twelveBtn?.removeAttribute('aria-controls');
   }
 }
 

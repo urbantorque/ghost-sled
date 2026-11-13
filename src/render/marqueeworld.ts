@@ -428,7 +428,8 @@ export class MarqueeWorld {
     }
     const wireMesh = new Mesh(merge(wires), this.toon);
     this.statics.push(wireMesh);
-    const garMesh = new Mesh(merge(garland), this.lanternMat);
+    // (A mountain whose gates all swing hangs no garland: Ember. An empty merge throws.)
+    const garMesh = new Mesh(garland.length ? merge(garland) : new BufferGeometry(), this.lanternMat);
     this.statics.push(garMesh);
     this.root.add(garMesh);
     // Instanced: their bounds are their instances' (a threaded gate's lanterns rise out of them, and the

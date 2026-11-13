@@ -412,7 +412,8 @@ export function pickField(i: FieldInput): FieldPick[] {
     let at = -1;
     let best = Infinity;
     out.forEach((p, k) => {
-      if (p.role !== 'pack' || p.time === undefined) return;
+      // (Never the grudge's slot: a duel of The Twelve promises its rider while a grudge rides too.)
+      if (p.role !== 'pack' || p.time === undefined || p.kind === 'grudge') return;
       const gap = Math.abs(p.time - promisedRec!.time);
       if (gap < best) {
         best = gap;

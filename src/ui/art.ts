@@ -31,6 +31,14 @@ const RIDGES: Record<MountainCard['biome'], string> = {
     '<path d="M0 80V68c26-12 52-12 78 0s56-14 82-4v16z" fill="#121933" opacity=".66"/>' +
     '<g fill="#FFC4D6" opacity=".95"><circle cx="30" cy="58" r="6"/><circle cx="38" cy="55" r="5"/><circle cx="24" cy="54" r="4"/><circle cx="132" cy="60" r="5"/><circle cx="139" cy="57" r="4"/></g>' +
     '<path d="M31 80v-18M133 80v-16" stroke="#121933" stroke-width="2" opacity=".7"/>',
+  // Lanternfall: a great pale moon, a sea of cloud with the peak's crown through it, and lanterns rising.
+  lantern:
+    '<circle cx="120" cy="24" r="13" fill="#EFEAFF" opacity=".8"/>' +
+    '<path d="M0 80V60l30-18 14 8 22-26 20 22 16-8 26 16 32-6v32z" fill="#F5F3FF" opacity=".16"/>' +
+    '<path d="M48 80l18-40 12 14 10-22 22 48z" fill="#121933" opacity=".72"/>' +
+    '<path d="M0 80V66c16-8 28-2 42-6s22-10 38-6 26 8 40 4 26-6 40 0v22z" fill="#CFC4FF" opacity=".5"/>' +
+    '<path d="M0 80V72c20-6 34 0 52-3s30-7 48-3 34 4 60-2v16z" fill="#F5F3FF" opacity=".42"/>' +
+    '<g fill="#FFC857"><rect x="26" y="40" width="5" height="7" rx="2"/><rect x="62" y="22" width="4" height="6" rx="2"/><rect x="98" y="46" width="5" height="7" rx="2"/><rect x="140" y="50" width="4" height="6" rx="2"/><rect x="14" y="20" width="3" height="5" rx="1.5" opacity=".8"/><rect x="84" y="8" width="3" height="5" rx="1.5" opacity=".7"/></g>',
 };
 
 export function biomeArt(biome: MountainCard['biome']): string {
@@ -103,6 +111,59 @@ function rider(sx: number, sy: number): string {
     '<rect x="-7.4" y="-37.6" width="17" height="3.6" rx="1.8" fill="#FF7457"/>' +
     '<circle cx="-3.4" cy="-43.6" r="3.2" fill="#F5F3FF"/>' +
     '</g>'
+  );
+}
+
+// The signature riders' busts (The Twelve): a spectral head and shoulders under the hat that names each of
+// them from behind at 30 m (roster.ts HatKind), trimmed in the rider's own colour. Each hat is a different
+// outline, so the ladder reads as twelve people before any name does.
+const INK = '#0D1226';
+const HATS: Record<string, (a: string) => string> = {
+  // A tall pointed felt hood.
+  hood: (a) => `<path d="M18.5 33C17 19 26 10 34 2c5 9 13 17 11.5 31z" fill="${INK}"/><path d="M19 31.5c8-4 18-4 26 0" fill="none" stroke="${a}" stroke-width="2.4" stroke-linecap="round"/>`,
+  // A round hood with two stubby antlers.
+  antlers: (a) =>
+    `<path d="M24 16l-5-9M21.5 11.5l-5 .5M40 16l5-9M42.5 11.5l5 .5" fill="none" stroke="${a}" stroke-width="3" stroke-linecap="round"/><path d="M19.5 32a12.5 12.5 0 0 1 25 0z" fill="${INK}"/><path d="M20 31.5h24" stroke="${a}" stroke-width="2.2" stroke-linecap="round"/>`,
+  // A tied topknot with a band.
+  topknot: (a) => `<circle cx="32" cy="11" r="5.5" fill="${INK}"/><path d="M21 27a11 11 0 0 1 22 0z" fill="${INK}"/><path d="M28 16.5h8" stroke="${a}" stroke-width="2.6" stroke-linecap="round"/>`,
+  // A wide flat brim.
+  brim: (a) => `<ellipse cx="32" cy="22.5" rx="21" ry="4.6" fill="${INK}"/><path d="M23.5 22c0-7 3.5-10 8.5-10s8.5 3 8.5 10z" fill="${INK}"/><path d="M23.8 20h16.4" stroke="${a}" stroke-width="2.2"/>`,
+  // A tall narrow top hat.
+  stovepipe: (a) => `<rect x="24.5" y="2" width="15" height="20" rx="1.5" fill="${INK}"/><rect x="18" y="20" width="28" height="4.4" rx="2.2" fill="${INK}"/><path d="M24.5 16.5h15" stroke="${a}" stroke-width="2.6"/>`,
+  // A beanie with a huge pom.
+  bobble: (a) => `<circle cx="32" cy="9" r="7" fill="${a}"/><path d="M20 29a12 12 0 0 1 24 0z" fill="${INK}"/><rect x="19" y="26" width="26" height="4.6" rx="2.3" fill="${a}"/>`,
+  // A hood with a long beak-like peak.
+  beak: (a) => `<path d="M19.5 33a12.5 13 0 0 1 22-9l14 7-13 2.4z" fill="${INK}"/><path d="M41 25.5l13 5.6" stroke="${a}" stroke-width="2" stroke-linecap="round"/>`,
+  // A headband carrying a small lantern on a hook.
+  lantern: (a) =>
+    `<path d="M20.5 25.5h23" stroke="${INK}" stroke-width="4.4" stroke-linecap="round"/><path d="M40 24c2-8 8-11 12-8v4" fill="none" stroke="${INK}" stroke-width="2.2" stroke-linecap="round"/><rect x="48.5" y="19.5" width="7" height="9" rx="2.4" fill="${a}"/><path d="M48.5 22.5h7" stroke="${INK}" stroke-width="1.2"/>`,
+  // A helm with two curled horns.
+  horns: (a) =>
+    `<path d="M21 23c-8-1-11-8-7-14 0 5 3 8 8 8zM43 23c8-1 11-8 7-14 0 5-3 8-8 8z" fill="${a}"/><path d="M20 30a12 12.5 0 0 1 24 0z" fill="${INK}"/><path d="M32 18v12" stroke="${a}" stroke-width="2"/>`,
+  // An earflap cap with goggles on top.
+  aviator: (a) =>
+    `<path d="M19.5 29a12.5 12.5 0 0 1 25 0v9l-4.5-3v-6h-16v6l-4.5 3z" fill="${INK}"/><rect x="23" y="15" width="8" height="6" rx="3" fill="${a}"/><rect x="33" y="15" width="8" height="6" rx="3" fill="${a}"/><path d="M31 18h2" stroke="${a}" stroke-width="1.6"/>`,
+  // A hood with two tall pointed ears.
+  foxears: (a) => `<path d="M20 22l1-17 10 10zM44 22l-1-17-10 10z" fill="${INK}"/><path d="M22.6 17l.6-8 4.6 5zM41.4 17l-.6-8-4.6 5z" fill="${a}"/><path d="M19.5 32a12.5 12.5 0 0 1 25 0z" fill="${INK}"/>`,
+  // A jagged crown.
+  crown: (a) => `<path d="M19 25l-1.5-15 7 7 3-11 4.500 9 4.500-9 3 11 7-7L45 25z" fill="${a}"/><path d="M19 25h26" stroke="${INK}" stroke-width="2.6" stroke-linecap="round"/>`,
+};
+
+/**
+ * A signature rider's bust for The Twelve's card and ladder: glass-pale head and shoulders (a ghost, so it
+ * leans mint), the hat that is theirs, and their colour on its trim and across the chest.
+ */
+export function riderBust(hat: string, accent: string): string {
+  const top = (HATS[hat] ?? HATS.hood)(accent);
+  return (
+    '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
+    `<circle cx="32" cy="34" r="30" fill="${accent}" opacity=".14"/>` +
+    '<path d="M10 64c0-12 9-19 22-19s22 7 22 19z" fill="#8FF3E4" opacity=".78"/>' +
+    `<path d="M15.500 56c5-4.600 11-6.400 16.500-6.400s11.500 1.800 16.500 6.400" fill="none" stroke="${accent}" stroke-width="3.4" stroke-linecap="round"/>` +
+    '<circle cx="32" cy="31" r="11.5" fill="#D8FBF5"/>' +
+    '<path d="M27.500 33.500v2M36.500 33.500v2" stroke="#121933" stroke-width="2.2" stroke-linecap="round" opacity=".8"/>' +
+    top +
+    '</svg>'
   );
 }
 

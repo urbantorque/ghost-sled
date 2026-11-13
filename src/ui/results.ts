@@ -9,6 +9,7 @@ import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
 import { medalDots, missionList, progText } from './title';
 import './meta.css';
+import './screens.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
