@@ -153,17 +153,15 @@ summed over the frame's passes. No console error or page error in any of the 16 
 | Tier | Pinecrest | Frostfang | Ember | Sakura |
 | --- | --- | --- | --- | --- |
 | High, before | (report unreadable) | 94 calls, 824k | 93, 703k | 94, 942k |
-| High, after | 94, 1013k | 94, 831k | 94, 704k | 94, 947k |
+| High, after | 94, 1013k | 94, 831k | 93, 702k | 94, 947k |
 | Medium, before | 87, 709k | 90, 579k | 86, 495k | 88, 666k |
-| Medium, after | 87, 713k | 90, 583k | 87, 501k | 88, 674k |
+| Medium, after | 87, 713k | 90, 583k | 90, 505k | 88, 674k |
 | Low, before | 46, 148k | 49, 141k | 44, 114k | 45, 136k |
-| Low, after | 48, 156k | 52, 150k | 45, 119k | 48, 145k |
+| Low, after | 48, 156k | 52, 150k | 47, 126k | 48, 145k |
 | Phone (Medium), before | 87, 709k | 90, 578k | 86, 492k | 88, 665k |
-| Phone (Medium), after | 87, 711k | 90, 578k | 87, 496k | 88, 670k |
+| Phone (Medium), after | 87, 711k | 90, 578k | 86, 495k | 88, 670k |
 
-(Ember's "after" row is from the set before its last re-shoot; the lane added no geometry in between.)
-
-**Low reads 2 to 3 calls and 5 to 9 thousand triangles heavier in the set, and that is not this lane.**
+**Low reads 2 to 3 calls and 8 to 12 thousand triangles heavier in the set (and Ember on Medium 4 calls), and that is not this lane.**
 I checked it two ways. (1) The same set on this branch's own base (e503f1e) on Low, Pinecrest: frame for
 frame the two builds match to within 1% until 1900 m, then differ by a steady 4 calls and 12 to 18
 thousand triangles, which is the size of four riders: the two runs had different ghosts in frame (the
