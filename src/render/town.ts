@@ -142,12 +142,13 @@ function balcony(parts: BufferGeometry[], w: number, y: number, z0: number, dept
   parts.push(box(w, 0.1, depth - 0.2, SNOW, [0, y + 0.2, z0 + depth / 2]));
 }
 
-/** A hanging paper lantern (lit warm at night, a soft glow by day). */
+/** A hanging paper lantern (lit warm at night, a soft glow by day): a bulged paper drum between a
+ *  dark cap and foot narrower than its belly, and a tassel under it. */
 export function lantern(parts: BufferGeometry[], x: number, y: number, z: number, r: number, night: boolean, hex = '#FFB45E'): void {
-  parts.push(part(new SphereGeometry(r, 6, 4), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.3, 1] }));
-  if (r < 0.4) return;
-  parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y + r * 1.3, z]));
-  parts.push(box(r * 1.2, r * 0.25, r * 1.2, INK, [x, y - r * 1.3, z]));
+  parts.push(part(new SphereGeometry(r, 7, 5), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.2, 1] }));
+  parts.push(part(new CylinderGeometry(r * 0.62, r * 0.7, r * 0.26, 7), INK, { pos: [x, y + r * 1.12, z] }));
+  parts.push(part(new CylinderGeometry(r * 0.7, r * 0.62, r * 0.22, 7), INK, { pos: [x, y - r * 1.12, z] }));
+  parts.push(part(new ConeGeometry(r * 0.16, r * 0.75, 4), INK, { pos: [x, y - r * 1.55, z], rot: [Math.PI, 0, 0] }));
 }
 
 /** A string of lanterns sagging from a to b. The string swings in the wind, held at its masts, and each
@@ -462,7 +463,9 @@ export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, 
     parts.push(box(0.9, 0.5, 0.9, stoneC, [0, gy + 0.25, 0]));
     parts.push(box(0.45, 1.4, 0.45, stoneC, [0, gy + 1.2, 0]));
     parts.push(box(1.0, 0.25, 1.0, stoneC, [0, gy + 2.0, 0]));
-    parts.push(box(0.7, 0.7, 0.7, lit, [0, gy + 2.45, 0]));
+    // The firebox: a lit paper drum between four stone posts, not a lit block.
+    parts.push(part(new CylinderGeometry(0.3, 0.3, 0.62, 6), lit, { pos: [0, gy + 2.45, 0] }));
+    for (const [px, pz] of [[-0.33, -0.33], [0.33, -0.33], [-0.33, 0.33], [0.33, 0.33]]) parts.push(box(0.14, 0.7, 0.14, stoneC, [px, gy + 2.47, pz]));
     parts.push(part(new ConeGeometry(0.95, 0.6, 4), stoneC, { pos: [0, gy + 3.1, 0], rot: [0, Math.PI / 4, 0] }));
     parts.push(part(new ConeGeometry(0.8, 0.4, 4), SNOW, { pos: [0, gy + 3.3, 0], rot: [0, Math.PI / 4, 0] }));
     return parts;
@@ -475,9 +478,13 @@ export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, 
   }
   parts.push(seg([0, gy - 0.3, 0], [0, gy + 4.6, 0], 0.09, INK, 6));
   parts.push(seg([0, gy + 4.4, 0], [0, gy + 4.6, 0.8], 0.05, INK, 4));
-  parts.push(box(0.5, 0.65, 0.5, lit, [0, gy + 4.15, 0.8]));
-  parts.push(part(new ConeGeometry(0.45, 0.4, 4), INK, { pos: [0, gy + 4.65, 0.8], rot: [0, Math.PI / 4, 0] }));
-  parts.push(part(new ConeGeometry(0.35, 0.22, 4), SNOW, { pos: [0, gy + 4.85, 0.8], rot: [0, Math.PI / 4, 0] }));
+  // The head: a lantern hung from the bracket, a bulged glass drum in an iron cap and foot, with a
+  // curl of iron under the arm.
+  parts.push(seg([0, gy + 3.7, 0], [0, gy + 4.45, 0.55], 0.04, INK, 4));
+  parts.push(part(new SphereGeometry(0.3, 7, 5), lit, { pos: [0, gy + 4.05, 0.8], scale: [1, 1.25, 1] }));
+  parts.push(part(new CylinderGeometry(0.2, 0.24, 0.12, 6), INK, { pos: [0, gy + 3.66, 0.8] }));
+  parts.push(part(new ConeGeometry(0.4, 0.36, 6), INK, { pos: [0, gy + 4.58, 0.8] }));
+  parts.push(part(new ConeGeometry(0.3, 0.2, 6), SNOW, { pos: [0, gy + 4.8, 0.8] }));
   parts.push(drift([0, gy, 0], [0.45, 0.2, 0.45]));
   return parts;
 }
