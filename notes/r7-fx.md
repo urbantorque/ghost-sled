@@ -128,12 +128,41 @@ F8. **Fireworks are layered, light the square, and a win ends on a finale** (`fi
     once are capped at 420 / 900 / 1700 by tier. Colours unchanged: vermillion, coral, marigold,
     white-gold, never mint or rose.
 
+F9. **The final read found the rock still built, not grown, and fixed it** (`rockforms.ts`, commits c7c065b,
+    1401b2a). Shot at the round's fixed distances and read beside the baseline, F1's forms failed the
+    owner's test in three ways. A leap's shoulder (Valley Leap at 3940 m and 2429 m, the First Drop at 537
+    m) was five level courses, every joint a ruled line parallel to the top's edge, a white stripe of snow
+    on each: stacked slabs, a grandstand of laid stone. Its crown behind the crowd and every rock's top
+    were level (the "broken crown" put its rim at the peak's own height), so the crown read as stacked
+    boxes. The run's rock was three rings with a stripe round each. And a basalt column was one unbroken
+    face from snow to break. Now: a joint between two beds has a dip along the outcrop as well as across
+    it (`dipZ`), wanders up and down round the rock (`warp`), pinches out against the bed over it and is
+    cut off by a level top, so on a shoulder no joint is parallel to the top and the beds visibly run up
+    out of the slope; each bed's corners stand in or out on their own (`jut`) and a long wall is cut into
+    bays and buttresses (`bays`), so one joint is a ledge here, flush there and an overhang past it; a
+    crown's rim is broken, every corner its own drop under the peak; snow lies only on a ledge wide
+    enough to hold it (`lieMin`), which on a boulder is its lee side. A shoulder on Medium and High is six
+    beds and eighteen corners (Low keeps three and eight). Basalt is cross-jointed into drums
+    (`ColumnSpec.drums`, `ColumnsSpec.drum`): each drum over the first a little slimmer and turned off
+    the one under it, the lower drum's break showing as a lip (the hot edge the light finds), its own dark
+    foot over it. Drums are on the run's basalt, the cluster, the sentinel, a leap's palisade and the
+    gateway's columns, on Medium and High only; Low's columns are whole. The organ pipes are not jointed
+    (they are Low's one formation and have no cheaper build).
+    *Measured:* `tests/rockforms.test.ts` gained three cases (a column in drums is 16 triangles a drum,
+    faces out, stays inside its radius and height for 19 seeds; a long outcrop's corners stand on more
+    than twenty heights where five level courses would give four, its top still level at `h`; a rock's
+    rim stands under its peak). Triangles a form, F1 to now: the run's rock 91 (Low 54) unchanged, basalt
+    124 to 156 (Low 124), a cluster 126 to 174, a sentinel 94 to 190, a shoulder about 620 to about 880
+    (Low unchanged). Frame cost is in the table under "The final capture".
+
 ## Text for ART.md
 
 Section 3, the hazards' row, add: "Rock is laid down in beds: each bed its own value and thickness, shifted
-off the one under it, so it has ledges that hold snow and overhangs in shade; the beds dip a little. Basalt
+off the one under it, so it has ledges that hold snow and overhangs in shade; the beds dip, and on
+a long outcrop they run up out of the slope and are cut off by its top, so no joint is level; a crown is
+broken, never flat; snow lies on a boulder's lee side, never in a ring. Basalt
 stands in organ pipes: slim hexagonal columns packed shoulder to shoulder, each broken off at its own height
-on its own slant, near black and cold, ash on the flatter tops. Nothing is a prism under a white lid."
+on its own slant and cross-jointed into drums, near black and cold, ash on the flatter tops. Nothing is a prism under a white lid."
 
 Section 4, replace the groove's "running to the bottom of the frame and fading toward the lens" with:
 "running to the bottom of the frame at full strength, and lasting the run: a rut does not age. A deep carve
@@ -188,6 +217,68 @@ burst has a heart inside it, lights the square, and a win ends on a finale."
   `scripts/playtest/fxshots.js`, `tests/rockforms.test.ts`, `tests/ruts.test.ts`, `tests/fxbudget.test.ts`.
 - `world.ts` was not edited: everything new hangs off `SpiritFx`, `Particles` and `Props`.
 
+## The final capture (the build at 1401b2a, one headless browser, session `r7-fx`, port 4470)
+
+Frames are in the main checkout under `shots/r7/fx/final/`: the fixed set in `high/` (all four mountains),
+`low/` and `phone-medium/` (Pinecrest and Ember), each run's numbers and console in `<tier>-m<n>.json`,
+contact sheets `sheet-<tier>-m<n>-a|b.png`, and before and after at the same distance in
+`pair-m2-z0450.png`, `pair-m2-z3150.png`, `pair-low.png` and `pair-phone.png`. The effects in motion:
+`fx/` (fxshots.js: carve, landing, sheds, breaks, dash, ward, gate on High; Ember's air; Low's landing,
+shed and breaks), `moments/` (moments.js: tumble, scrape, leap, finish), `feel/` (feelfx.js: a replayed
+winning run's dashes, ward, gates and finish), `fw/` (fireworks.js: the street's show and a win's),
+`strips/` (strips.js, plan `flow` on Sakura), with `sheet-fx-high-m0-a|b.png`, `sheet-moments-a.png`,
+`sheet-feel.png`, `sheet-fw.png`, `sheet-strips-flow.png`. The lane as it was handed over (before F9) is
+kept beside it in `shots/r7/fx/handover/`.
+
+**Cost, the fixed frames against `shots/r7/before`** (frame by frame at the same distance, summed over
+every pass; mean of the run, then the median and the worst single frame's difference):
+
+| Tier, mountain | Frames | Draw calls | Triangles | Median difference | Worst frame |
+| --- | --- | --- | --- | --- | --- |
+| High, Pinecrest | 38 | 92.3 to 92.2 | 1,006,169 to 1,008,065 | 0 calls, +420 | +3 calls, +47,373 |
+| High, Frostfang | 36 | 93.1 to 95.0 | 830,714 to 841,862 | +2 calls, +17,085 | +7 calls, +59,486 |
+| High, Ember | 35 | 91.9 to 92.3 | 708,751 to 720,509 | 0 calls, +14,820 | +4 calls, +54,910 |
+| High, Sakura | 37 | 93.2 to 93.4 | 946,316 to 952,231 | 0 calls, +912 | +3 calls, +49,580 |
+| Low, Pinecrest | 38 | 45.6 to 45.4 | 148,251 to 143,741 | 0 calls, -3,598 | +5 calls, +2,082 |
+| Low, Ember | 35 | 43.3 to 43.6 | 114,363 to 111,506 | 0 calls, -3,228 | +4 calls, +8,438 |
+| Phone (Medium), Pinecrest | 38 | 86.3 to 86.6 | 708,037 to 707,592 | 0 calls, -502 | +6 calls, +26,461 |
+| Phone (Medium), Ember | 35 | 85.9 to 86.5 | 494,600 to 504,220 | 0 calls, +6,267 | +4 calls, +47,921 |
+
+Low is lighter on both mountains shot (3% fewer triangles, the same calls). High and Medium are within
+1.7% of the baseline in triangles. A single frame swings by tens of thousands of triangles either way
+between two runs of the same build (ghosts in view, a set piece's state), so the worst-frame column is the
+run's noise more than the lane's cost. The owner's six frames, calls and triangles, baseline to now: 537 m
+90 / 1,046,742 to 88 / 1,032,720; 2429 m 92 / 989,552 to 94 / 991,920; 3940 m 86 / 934,596 to 84 /
+915,420; Ember 450 m 95 / 705,207 to 94 / 720,959; 2271 m 89 / 691,863 to 91 / 709,454; 3150 m 101 /
+628,350 to 99 / 631,377.
+**Not explained:** Frostfang on High carries two calls more than the baseline at the median, and four to
+seven through the Crevasse Fields (1650 to 3300 m). No effect was staged there; it is steady, so it is
+something of this lane's drawn in more than one pass (the ruts or the weather in the ice's reflection is
+the first thing to look at). The main lane should count that stretch's passes after the merge.
+
+**The console** was clean in every capture: no error in any of the eight frame runs, and no error or
+warning in fxshots (four runs), moments, feelfx, both fireworks runs and the strip.
+
+**Read as an art director, at the owner's distances:**
+- *Pinecrest, the First Drop (537 m, and close at 600 m).* Passes. From the approach each shoulder is an
+  outcrop with a pinnacle behind its crowd; at the lip the walls either side are dark tilted beds with
+  snow lodged on their ledges. Nothing is a slab under a lid.
+- *Pinecrest, the Valley Leap (3940 m) and the leap at 2429 m.* Passes after F9, failed before it (stacked
+  courses with white stripes). The top edge under the crowd is still a level line 35 m long, because a
+  crowd stands on it; the crown behind and the beds under it break it up, but it is the weakest line left.
+- *Ember (450 m, 2271 m, 3150 m).* Passes. The run's basalt is a cluster of slim columns broken at their
+  own heights with a lit lip at each joint; a leap's shoulders are a palisade round the crowd. Basalt is
+  near black by direction, so the two values round a column barely show in Ember's light: the form reads
+  by its silhouette and its hot edges, not by its faces.
+- *The run's rock.* Now a dark boulder with snow on one side and a broken crown. It is small in the frame
+  and has 91 triangles; close to the lens it is still plainly facets.
+- *Low.* Draws no leap shoulders (as before this round); its rock and basalt are the cheaper builds and
+  read as a boulder and as columns.
+- *Effects.* The landing's burst and hanging lumps, a tumble's and a scrape's snow, the ward's crack, the
+  dash's ring under the rider (feel/dash1-a), a carve's lit spray (strips/flow), the ruts ahead, Ember's
+  embers, the win's fireworks in layers and the finish's all show. The staged breaks are small in the
+  frame. See what is not verified below.
+
 ## What was measured, what was only seen, what needs a human
 
 - *Measured:* the tests above; triangles and draw calls in the frames below; the console in every capture
@@ -202,9 +293,16 @@ burst has a heart inside it, lights the square, and a win ends on a finale."
 
 ## Not finished, and fragile
 
-- The dash's ring, wake and tail, the ward's and the gates' light typecheck and run in a real replayed run
-  with a clean console, but no staged frame shows the new ring or wake (the capture tool could not start
-  a dash, and its synthetic ward played out before the shot).
+- The dash's ring shows in the replayed run (`final/feel/desk-high-m0-dash1-a.png`); its wake and tail are
+  not told apart from the powder in any still. fxshots.js's own `dash` plan still does not start a dash
+  (the lantern is empty in its frames) and its `carve` plan throws the sled into the air instead of
+  carving: both plans need mending before they are evidence of anything. The carve's spray is seen in
+  the `flow` strip instead.
+- fireworks.js fires the shows a few seconds into a run, in daylight, where they wash out; the show at a
+  real finish is in `final/feel/desk-high-m0-finish-a.png` and `final/moments/finish-200.png`.
+- The organ pipes are not cross-jointed (Low draws them and they have no cheaper build): give
+  `forestSteps` a lod for Ember's second set and they can be.
+- A shoulder's top edge is level for its whole length (see the read above).
 - Wall crests in `terrain.ts` and the ravine's big flat ice planes are the light lane's and were not
   touched; `crag()` users (arches, spurs, falls) keep their icosahedra.
 - No Ultra-specific look beyond larger pools.
@@ -213,5 +311,5 @@ burst has a heart inside it, lights the square, and a win ends on a finale."
   quietly.
 - Ghost ruts read `shared.uFocus` for the rider's place when they rebuild their index: a camera far from
   the focus sees ruts only from 60 m behind the focus to the tier's range ahead of it.
-- A carve's spray was not captured (the staged carve barely carved); the trailing body and the glints are
-  seen only in the two dash frames of the replayed run.
+- No local light is in any frame: nothing draws them until the light lane's implementation is merged.
+- Frostfang's extra calls on High (the cost table) are not explained.
