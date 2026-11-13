@@ -322,7 +322,6 @@
   border-left: 1px solid var(--hair-2);
   border-radius: 0 var(--r-card) var(--r-card) 0;
   color: var(--text);
-  transition: background-color 160ms ease;
 }
 
 .gs-t12-count-n {
@@ -834,7 +833,7 @@
   opacity: 0;
 }
 
-/* A win: gold-white (the colour of your own best), a burst of rays that turns slowly behind the figure. */
+/* A win: gold-white (the colour of your own best), a burst of rays that turns behind the figure and settles. */
 .gs-mo.is-win {
   --mo: var(--you);
 }
@@ -846,7 +845,7 @@
 .gs-results.is-in .gs-mo.is-win .gs-mo-rays {
   animation:
     gs-mo-burst 700ms var(--out) both,
-    gs-mo-turn 48s linear 700ms infinite;
+    gs-mo-turn 24s var(--out) 700ms both;
 }
 
 .gs-results.is-in .gs-mo.is-win .gs-mo-fig {
@@ -997,9 +996,10 @@
   }
 }
 
+/* (One slow settle, not a loop: nothing on the card moves for ever.) */
 @keyframes gs-mo-turn {
   to {
-    transform: rotate(360deg);
+    transform: rotate(70deg);
   }
 }
 

@@ -2364,9 +2364,10 @@ export class ChaseCamera {
     // Behind the hero is uphill: keep a little air under the lens, low enough that the slope
     // ahead and the hero's shadow fill the foreground.
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.5);
-    // The hero's middle at about 53% of the height, so its sled clears the cards and Ride below 60%.
+    // The hero's middle at about 43% of the height: round 7 gave the foot of the screen one more row (The
+    // Twelve), so the cards start at half height and the open band is from the place line down to them.
     // (A shot that lifts its look sets the hero a little lower in the band, so its landmark clears the logo.)
-    this.aimAt(lookAt, desired, yaw, Math.atan2(t.pos.y + 0.5 - desired.y, r), -0.06 - (L.lift - 0.5) * 0.1);
+    this.aimAt(lookAt, desired, yaw, Math.atan2(t.pos.y + 0.5 - desired.y, r), 0.14 - (L.lift - 0.5) * 0.1);
   }
 
   /** Desktop title hero shot: a slow sweep behind and beside the lead rider, looking down the

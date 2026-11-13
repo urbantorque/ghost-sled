@@ -210,13 +210,14 @@ export class Title {
     this.popover = null;
     const ctx = this.ctx;
     const el = this.el;
-    el.replaceChildren();
+    // (Everything but the veil: taking it out and putting it back would start its sweep again mid-crossing.)
+    for (const c of Array.from(el.children)) if (c !== this.veil) c.remove();
+    if (!this.veil.isConnected) el.append(this.veil);
     el.classList.toggle('is-first', m.firstVisit);
     el.classList.toggle('has-challenge', m.challenge !== null);
 
     this.twelveBtn = null;
-    const dip = h('div', 'gs-title-dip');
-    el.append(h('div', 'gs-title-scrim'), dip, this.veil);
+    el.prepend(h('div', 'gs-title-scrim'), h('div', 'gs-title-dip'));
 
     // Logo + tagline. A brand-new player reads the hook directly above the button that starts it:
     // on a phone that leaves the logo alone at the top, the sky and the rider's band open, and the

@@ -58,7 +58,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     to: 4150,
     light: null,
     desk: { r: 6.2, up: 1.9, sweep: 0.42, drift: 0.16, ahead: 34, lift: 0.4, crane: 0.45, hero: [0.08, 0.2] },
-    phone: { r: 5.0, up: 1.3, sweep: 0.2, drift: 0.05, ahead: 26, lift: 0.3, crane: 0, hero: [-0.06, -0.06] },
+    phone: { r: 7.6, up: 1.7, sweep: 0.2, drift: 0.05, ahead: 26, lift: 0.3, crane: 0, hero: [-0.06, -0.06] },
   },
   // The Fang over the aurora: the polar night of the Crevasse Fields, the lens low so the sky owns two
   // thirds of the frame and the aurora lights the snow.
@@ -67,7 +67,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     to: 2620,
     light: 2200,
     desk: { r: 5.4, up: 0.85, sweep: -0.3, drift: 0.14, ahead: 30, lift: 3.4, crane: 0.25, hero: [0.08, 0.2] },
-    phone: { r: 4.8, up: 0.9, sweep: -0.12, drift: 0.05, ahead: 22, lift: 1.1, crane: 0, hero: [-0.08, -0.08] },
+    phone: { r: 7.4, up: 1.3, sweep: -0.12, drift: 0.05, ahead: 22, lift: 1.1, crane: 0, hero: [-0.08, -0.08] },
   },
   // The cone dead ahead under the smoke deck: the run-in, straight behind the hero, the cone over its head.
   ember: {
@@ -75,7 +75,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     to: 900,
     light: 120,
     desk: { r: 5.6, up: 1.1, sweep: 0.2, drift: 0.1, ahead: 40, lift: 2.6, crane: 0.3, hero: [0.08, 0.2] },
-    phone: { r: 4.8, up: 1.0, sweep: 0.06, drift: 0.04, ahead: 30, lift: 1.0, crane: 0, hero: [-0.06, -0.06] },
+    phone: { r: 8.0, up: 1.5, sweep: 0.06, drift: 0.04, ahead: 30, lift: 1.0, crane: 0, hero: [-0.06, -0.06] },
   },
   // The cone through blossom: the last orchard rows and the Blossom Leap in the clear high light, the lens
   // low under the canopies.
@@ -84,7 +84,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     to: 2620,
     light: 2450,
     desk: { r: 5.0, up: 0.9, sweep: 0.34, drift: 0.14, ahead: 30, lift: 1.3, crane: 0.2, hero: [0.08, 0.2] },
-    phone: { r: 4.6, up: 0.9, sweep: 0.14, drift: 0.05, ahead: 22, lift: 0.8, crane: 0, hero: [-0.08, -0.08] },
+    phone: { r: 7.0, up: 1.3, sweep: 0.14, drift: 0.05, ahead: 22, lift: 0.8, crane: 0, hero: [-0.08, -0.08] },
   },
   // A rider above a sea of cloud with the lanterns rising: the Crown before the dive, the lens high so the
   // cloud sea lies below the hero and the moon and the lights stand over it.
@@ -93,7 +93,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     to: 690,
     light: 200,
     desk: { r: 6.0, up: 1.6, sweep: 0.3, drift: 0.14, ahead: 44, lift: 1.4, crane: 0.4, hero: [0.08, 0.2] },
-    phone: { r: 5.0, up: 1.2, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
+    phone: { r: 7.8, up: 1.6, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
   },
 };
 
