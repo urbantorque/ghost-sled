@@ -499,7 +499,7 @@ export class App {
   private showMountain(): void {
     if (this.phase !== 'title') return;
     this.world.setCourse(this.mountain.seed);
-    this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed));
+    this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.setAttractField();
   }
 
@@ -514,7 +514,7 @@ export class App {
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(Mood.None);
     this.audio.setScene('title');
-    this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed));
+    this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.ui.hideHud();
     this.hideResults();
     this.setAttractField();
@@ -944,7 +944,7 @@ export class App {
     this.beginDirector(chaos);
 
     this.audio.setScene('run');
-    this.audio.setMood(chaos.mood, biomeForSeed(this.mountain.seed));
+    this.audio.setMood(chaos.mood, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.ui.showHud();
     const reveal = chaos.mood !== Mood.None || chaos.event !== ChaosEvent.None;
     if (reveal) {

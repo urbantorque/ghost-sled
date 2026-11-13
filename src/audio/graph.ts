@@ -48,6 +48,9 @@ export class Bus {
   readonly sideDry: GainNode | null = null;
   readonly sideWet: GainNode | null = null;
   readonly glue: DynamicsCompressorNode | null = null;
+  /** The music bus's way in for the produced score (round 7): past the glue compressor and its gain (the
+   *  stems are already mastered), into the sidechain, the ducks and the user's level like the live band. */
+  readonly direct: GainNode | null = null;
   private readonly duckDry: GainNode;
   private readonly duckWet: GainNode;
   private readonly levelDry: GainNode;
@@ -88,7 +91,9 @@ export class Bus {
       this.sideWet = ctx.createGain();
       this.dry.connect(glue).connect(trim).connect(this.sideDry);
       this.wet.connect(wetTrim).connect(this.sideWet);
-      this.extra.push(glue, trim, wetTrim, this.sideDry, this.sideWet);
+      this.direct = ctx.createGain();
+      this.direct.connect(this.sideDry);
+      this.extra.push(glue, trim, wetTrim, this.sideDry, this.sideWet, this.direct);
       dryIn = this.sideDry;
       wetIn = this.sideWet;
     }
