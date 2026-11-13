@@ -69,7 +69,7 @@ this file first, then your own brief.
 
 - Build with `npx vite build` and serve with
   `npx vite preview --outDir dist/game --port <your port> --host 127.0.0.1 --strictPort` as a background command.
-  Ports: pipe 4410, light 4420, hero 4430, music 4440, moments 4450, feel 4460, fx 4470.
+  Ports: simfix 4480, screens 4490, reel 4500, lanternworld 4510, momentsworld 4520, pipe 4410, light 4420, hero 4430, music 4440, moments 4450, feel 4460, fx 4470.
 - Drive it with `playwright-cli` and the headless configs only (`.playwright/cli-headless.config.json`, 1280x720;
   `.playwright/mobile-headless.config.json`, 390x844): a headed browser drops to 2 fps when the display sleeps. Use
   your own session name, `-s=r7-<lane>`. One browser at a time. Close your own session when you are not using it
