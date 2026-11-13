@@ -1284,8 +1284,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#36181C');
         p.skyHorizon = c('#E8481A');
         p.sunColor = c('#FFD0B4');
-        p.snowLit = c('#DED0CE');
-        p.snowShade = c('#2A3660');
+        p.snowLit = c('#E4D6D2');
+        p.snowShade = c('#2C3674');
+        // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
+        p.fogNear = 60;
+        p.fogFar = 430;
         p.snowDeep = c('#1C183C');
         // Ash with the lava's light in it: a deep ember red near, hotter with distance, and no cooling
         // away from the disc (cooled, it went to the grey the review saw at 3450 m).
@@ -1499,8 +1502,13 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Serac Gate and the Crevasse Fields: the walls go down into the dark and the abyss holds the air.
       kind: 'ravine',
       edit: (p) => {
+        // A slot in the ice is the dark of the frame: its floor drops to violet-black and its air closes,
+        // so the walls' cobalt, the glow at their feet and the lit valley at the far end are the picture.
         p.grade.contrast += 0.08;
-        p.grade.exposure! *= 0.96;
+        p.grade.exposure! *= 0.94;
+        p.snowShade = c('#2C2A84');
+        p.snowDeep = c('#120C44');
+        p.fog.lerp(c('#141A58'), 0.6);
         p.air.low = 0.9;
         p.under = { color: c('#38C8FF'), k: 0.2 };
       },

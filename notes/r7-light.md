@@ -89,6 +89,32 @@ L12. **Low is a poster.** `tierLook` (palette.ts) bakes the place's grade and th
     colour and widens its glow on the dome. Local lights are painted pools on the snow. No draw, no
     triangle and no pass is added on Low.
 
+L13. **The review pass: what the first full frame set showed, and what changed** (the frames in
+    `shots/r7/light/v1` are the set before this pass, `final` the set after).
+    - *Ember read as sand.* The snow's own colour was a pink-grey (#DCC2B6 and darker down the run) under
+      an orange light, so it was tinted twice and the slopes were a flat salmon. The snow is now a warm
+      white all the way down (#F6EEEA to #E4D6D2, a dusk rose #C2B6C6 at night) and the light carries the
+      orange once: lit snow is cream-peach, the brightest thing in the frame, against the plum-teal shade.
+      The Basalt Halls' ash is an ember red that stands 60 m off the lens (thick from the first metre, a
+      dark red over a blue shade made the grey-brown the review saw at 3450 m), and it no longer cools away
+      from the disc. In the Caldera Leap the shade itself warms (plum, an orange rim).
+    - *Sakura read as custard.* The yellow was not in the palette: it was a full fan of shafts (stock gold
+      at half strength) over white snow, plus the sun's scatter. The shafts take a third of the stock gold
+      now (post.ts, every mountain), Sakura's are thin until the orchards and thin again after, and the
+      light leans to rose. From the Blossom Leap on the sky comes down a full step under the snow (#4E94DC
+      zenith), the far air and the ridges are blue, the shade deepens (#6474D0) and the blossom goes to a
+      deeper rose over wine (#FF7EB2, #862660): the cone stands on blue and the snow is the light.
+    - *Frostfang was still one blue from 600 to 2550 m.* Blue hour: paler lit snow, shade and air a step
+      under it, a lemon rim. Polar night: the shade is violet (#3A3296, and the aurora's own shade
+      #5C3CC4 is laid on the shaded snow at up to half strength, on the lit snow at a sixth), the aurora's
+      curtains cover more of the slope and keep the snow's relief under them (laid flat they read as a
+      green field), and the top third of every ice wall takes the aurora on its crest. A slot in the ice
+      is the dark of the frame (violet-black floor, closed air), so the cobalt walls, the cyan at their
+      feet and the lit valley beyond are the picture.
+    - *Old Town's lantern gates went peach at dusk.* The film curve folded anything hot halfway to the
+      light's colour, and at dusk that is orange. A colour with a hue of its own now keeps it up the
+      curve; only what is near white takes the light's colour. Marigold is the lantern's again.
+
 ## Touched outside my files
 
 - `src/render/world.ts` (the pipe lane's): three small edits, each marked "Round 7, the light lane".
