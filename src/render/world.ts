@@ -42,6 +42,7 @@ import { planShots } from '../game/shots';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
 import { MarqueeWorld } from './marqueeworld';
+import { LanternWorld } from './lanternworld';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
 import { Terrain, TerrainDetail } from './terrain';
@@ -177,6 +178,9 @@ export class World {
   private readonly spirit: SpiritFx;
   /** The set pieces' own world: race machines, lantern gates, a falling span (round 6). */
   private readonly marquee: MarqueeWorld;
+  /** Lanternfall's own world: the cloud sea, the valley of lanterns, its lamps and set pieces (round 7, the
+   *  lanternworld lane). Empty on every other mountain. */
+  private readonly lantern: LanternWorld;
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
   readonly sky: Sky;
@@ -351,10 +355,20 @@ export class World {
     this.spirit.setCourse(this.course);
     this.marquee = new MarqueeWorld(this.particles);
     this.marquee.setCourse(this.course);
+    // (Round 7, the lanternworld lane.)
+    this.lantern = new LanternWorld(this.particles);
+    this.lantern.kept = (x, z) => this.setPieces.keeps(x, z);
+    this.lantern.setDetail(quality.detail);
+    this.lantern.setCourse(this.course);
+    this.props.siteClearings = (z0, z1, out) => {
+      this.overlooks.clearings(z0, z1, out);
+      this.lantern.clearings(z0, z1, out);
+    };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
     this.scene.add(
       this.spirit.root,
       this.marquee.root,
+      this.lantern.root,
       this.sky.root,
       this.terrain.root,
       this.midground.root,
@@ -480,6 +494,7 @@ export class World {
     const px = h * pr;
     this.particles.setQuality(this.quality.particleBudget, px);
     this.spirit.setViewport(w * pr, px);
+    this.lantern.setViewport(px);
     this.weather.setScale(px);
     this.post.setSize(Math.max(1, Math.floor(w * pr)), Math.max(1, Math.floor(h * pr)));
     for (const cb of this.onResize) cb(w, h);
@@ -513,6 +528,7 @@ export class World {
     this.spirit.setQuality(q.particleBudget, q.bloom);
     this.post.shaftTaps = q.detail === 'high' ? 14 : 8;
     this.sky.setDetail(q.detail);
+    this.lantern.setDetail(q.detail);
     this.life.setQuality(q.detail, q.forestDensity);
     this.speedPosts.setTier(q.detail);
     this.sloughs.setTier(q.detail);
@@ -545,6 +561,7 @@ export class World {
     this.spirit.setCourse(c);
     this.marquee.setCourse(c);
     this.setPieces.setCourse(c, this.palette, this.mood);
+    this.lantern.setCourse(c);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.trail.setCourse(c);
@@ -731,6 +748,7 @@ export class World {
     this.moments.reset();
     this.spirit.reset();
     this.marquee.reset();
+    this.lantern.reset();
     this.dashK = 0;
     this.ghosts.resetRun();
     this.chaos.begin(event);
@@ -812,6 +830,7 @@ export class World {
     this.spirit.setReduced(feel.reduced || reduced());
     this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.detail === 'low');
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
+    this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);
@@ -819,6 +838,7 @@ export class World {
     if (v.mode === 'run') this.moments.beats(beats, s);
     this.spirit.beats(beats);
     if (v.mode === 'run') this.marquee.beats(beats, s);
+    if (v.mode === 'run') this.lantern.beats(beats, s);
     this.flash = Math.max(this.flash, this.spirit.takeFlash());
     this.moments.update(v, dt);
     this.setPieces.update(s.z, this.quality.viewChunks * CHUNK_LEN, tmpV.set(s.x, s.y, -s.z), v.time, v.mode === 'run' ? beats : NO_BEATS);

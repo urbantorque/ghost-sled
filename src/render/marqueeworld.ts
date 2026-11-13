@@ -64,7 +64,6 @@ const ORBS = 96;
 const BEAMS = 48;
 const DISCS = 96;
 const BRONZE = new Color('#E9B45A');
-const COLD = new Color('#5A6A9A');
 const PALE = new Color('#CFE0FF');
 const EMBER = new Color('#FF9A4A');
 const ROSE = new Color('#FFB7C9');
@@ -473,7 +472,7 @@ export class MarqueeWorld {
         this.particles.sparkle(ts.set(s.x, s.y + 0.8, -s.z), WHITE_GOLD, 30, 4, 0.7, 0.26, carrier, 0.3);
       } else if (b.verb === 'steps' && b.phase === 'step') {
         this.particles.sparkle(ts.set(s.x, s.y + 0.6, -s.z), PETAL, 26, 3.6, 0.9, 0.24, carrier, 0.6);
-      } else if ((b.verb === 'shatter' || b.verb === 'kindle' || b.verb === 'slide' || b.verb === 'follow' || b.verb === 'surge') && b.phase === 'step') {
+      } else if ((b.verb === 'shatter' || b.verb === 'kindle' || b.verb === 'slide' || b.verb === 'surge') && b.phase === 'step') {
         // r7 stand-in: a bell rung, a lamp lit, a slide's quarter, the wake's eighth, the lip left.
         this.particles.sparkle(ts.set(s.x, s.y + (b.verb === 'shatter' ? 2.2 : 0.8), -s.z), b.verb === 'shatter' ? BRONZE : WHITE_GOLD, 20, 3.2, 0.6, 0.22, carrier, 0.4);
       } else if (b.phase === 'won') {
@@ -620,6 +619,8 @@ export class MarqueeWorld {
         const over = !active && mo.next > p.index;
         if (active) this.kept.set(p.index, mo.mask);
         const mask = this.kept.get(p.index) ?? 0;
+        // (Lanternfall's three are drawn by its own world, lanternworld.ts: the lanternworld lane.)
+        if (p.verb === 'follow' || p.verb === 'kindle' || p.verb === 'carry') continue;
         switch (p.verb) {
           case 'shatter':
             // r7 stand-in: a bell is a bronze orb hung where the sled must be, over a pool on the snow.
@@ -647,53 +648,6 @@ export class MarqueeWorld {
               this.disc(c, c.centerX(p.keystone), p.keystone, 2 * c.halfWidth(p.keystone), 3, ICE, 0.6);
             }
             break;
-          case 'follow':
-            // r7 stand-in: the guide light is an orb that keeps ahead of the rider on its line, its wake a
-            // run of pools behind it as wide as the wake is.
-            if (p.path && !over) {
-              const zl = Math.max(p.path.z0, Math.min(p.path.z1, s.z + 26));
-              const x = pathX(c, p.path, zl);
-              this.orb(x, c.ground(x, zl) + 1.9 + 0.25 * Math.sin(time * 3.1), zl, 1.7, WHITE_GOLD, 1.6);
-              this.beam(c, x, zl, 0.9, WHITE_GOLD, 0.9);
-              for (let k = 1; k <= (low ? 4 : 7); k++) {
-                const z = zl - k * 5;
-                if (z < p.path.z0) break;
-                this.disc(c, pathX(c, p.path, z), z, 2 * p.hw, 5.5, LIGHT, 0.55 - k * 0.05);
-              }
-            }
-            break;
-          case 'kindle':
-            // r7 stand-in: a flame over each stone lamp. Lit ones burn; a dark one is a cold mark with a pool
-            // on the snow where a sled lights it; lit by the rider, it flares with a beam.
-            p.lamps.forEach((l, i) => {
-              const y = c.ground(l.x, l.z) + 2.5;
-              const lit = ((mask >> i) & 1) === 1;
-              if (!l.dark) this.orb(l.x, y, l.z, 0.9, LIGHT, 0.9);
-              else if (lit) {
-                this.orb(l.x, y, l.z, 1.2, WHITE_GOLD, 1.7);
-                this.beam(c, l.x, l.z, 0.8, LIGHT, 1);
-              } else {
-                this.orb(l.x, y, l.z, 0.8, COLD, 0.5);
-                if (!over) this.disc(c, l.x - l.side * 2.2, l.z, 2.4, 3.4, LIGHT, active && l.z > s.z ? 0.5 : 0.25);
-              }
-            });
-            break;
-          case 'carry': {
-            // r7 stand-in: the flame rides over the sled, as big as it has left to burn; the brazier that
-            // feeds a low flame is an orb in a beam; the great lantern hangs over the line and lights when
-            // the flame arrives.
-            const won = ((sim.stats.momentMask >> p.index) & 1) === 1;
-            if (active && mo.pace > 0) this.orb(s.x, s.y + 1.75, s.z, 0.22 + 0.36 * mo.pace, mo.pace < 0.3 ? EMBER : WHITE_GOLD, 1.3 + 0.3 * Math.sin(time * 11));
-            const r = p.relight;
-            if (r && !(mask & 1) && !over) {
-              this.orb(r.x, c.ground(r.x, r.z) + 1.4, r.z, 1.5, EMBER, breathe);
-              this.beam(c, r.x, r.z, 1.2, EMBER, 1);
-              this.disc(c, r.x, r.z, 2 * r.r, 2 * r.r, EMBER, 0.7);
-            }
-            const zg = c.finishZ + 26;
-            this.orb(c.centerX(zg), c.ground(c.centerX(zg), zg) + 9, zg, 6, won ? WHITE_GOLD : COLD, won ? 1.8 : 0.5);
-            break;
-          }
           default:
             break;
         }
@@ -702,7 +656,7 @@ export class MarqueeWorld {
       // the storm's kind, drawn with them); a ribbon is a lane of pools; a sky legend is lanterns rising
       // either side of the place.
       const lg = sim.legend;
-      if (lg && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
+      if (lg && lg.key !== 'rising' && lg.key !== 'lamplighter' && s.z > lg.z0 - SHOW_M && s.z < lg.z1 + 120) {
         const col = LEGEND_COL[lg.key] ?? LIGHT;
         if (lg.kind === 'runner' && lg.path && sim.lg.phase < 3) {
           const head = sim.lg.phase === 2 ? sim.lg.head : lg.z0 + LEGEND_AHEAD;

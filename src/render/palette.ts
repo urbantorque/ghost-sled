@@ -942,26 +942,28 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // The Crown, at the end of night above a sea of cloud (ART.md 15): an indigo zenith full of stars, a
       // great pale moon off to the right, silver on the snow's lit side and lilac in its shade, ink for
       // everything that stands. The cloud below is lit warm in patches by what is under it.
-      setSun(p, 19, 15, 31, 12);
+      setSun(p, 19, 15, 42, 12);
       p.moon = true;
+      // (The run's gates and marks are bronze here: the rider's vermillion is the one red on this mountain.)
+      p.accentProp = c('#B88A4A');
       p.moonPhase = 0;
-      p.sunColor = c('#D4D8FF');
+      p.sunColor = c('#E6EAFF');
       p.sunCore = new Color(1.9, 1.95, 2.3);
       p.sunTint = 0.9;
       p.sunSize = 1.75;
       p.sunGlow = 0.85;
       p.skyZenith = c('#0B0A3E');
-      p.skyMid = c('#2C2484');
-      p.skyHorizon = c('#6452B2');
-      p.skyBand = { color: c('#C4B4F0'), fade: 22, k: 0.55 };
-      p.skyBelow = c('#4A3C8E');
+      p.skyMid = c('#1C1868');
+      p.skyHorizon = c('#5648B0');
+      p.skyBand = { color: c('#A898E4'), fade: 26, k: 0.4 };
+      p.skyBelow = c('#2E2674');
       p.skySpread = 0.6;
       p.skyCurve = 0.5;
-      p.snowLit = c('#D6D8F6');
-      p.snowShade = c('#6A54BC');
-      p.snowDeep = c('#2E2078');
-      p.rim = c('#E4E6FF');
-      p.fog = c('#3C3090');
+      p.snowLit = c('#E8EAFC');
+      p.snowShade = c('#685CC0');
+      p.snowDeep = c('#261C6C');
+      p.rim = c('#EEF0FF');
+      p.fog = c('#3A3096');
       p.fogNear = 60;
       p.fogFar = 560;
       p.hemiSky = c('#6C5ED0');
@@ -975,10 +977,12 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glow = c('#FFC49C');
       p.massif.heroAz = -18;
       p.massif.sea = 1;
-      p.massif.seaWarm = 1;
+      p.massif.seaWarm = 0.55;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
-      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#B4AAE6'), shade: c('#4A3E98'), rim: c('#E6DCFF'), shadow: 0 };
+      p.grade.saturation = 1.02;
+      p.grade.contrast = 1.12;
+      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#9088D4'), shade: c('#352C84'), rim: c('#DCD6FF'), shadow: 0 };
       p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
       p.bloom = 0.62;
@@ -1067,8 +1071,8 @@ function round7(p: Palette, biome: BiomeId): void {
       // The far plane is the night's own violet, the lit values lean silver and the shade lilac. Lamps are
       // the mountain's light from the first metre.
       p.air = { far: c('#221C6A'), cool: c('#DCD8FF'), low: 0.7, scatter: 1.1 };
-      p.lamps = 1.1;
-      p.grade.exposure = 1.1;
+      p.lamps = 1;
+      p.grade.exposure = 1.08;
       p.grade.hi = c('#F4F6FF');
       p.grade.lo = c('#E6DCFF');
       return;
@@ -1508,41 +1512,43 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunGlow = 0.2;
         p.skyZenith = c('#120E44');
         p.skyMid = c('#34267E');
-        p.skyHorizon = c('#8A5C9C');
-        p.skyBand = { color: c('#FFB870'), fade: 16, k: 0.75 };
-        p.skyBelow = c('#3A2A70');
+        p.skyHorizon = c('#5A3E8C');
+        p.skyBand = { color: c('#D8906A'), fade: 30, k: 0.45 };
+        p.skyBelow = c('#1E1650');
         p.deck.k = 0.92;
-        p.deck.lit = c('#7466BA');
-        p.deck.shade = c('#2C2470');
-        p.deck.glow = c('#FFAE4A');
+        p.deck.lit = c('#5C50A6');
+        p.deck.shade = c('#221A60');
+        p.deck.glow = c('#A0607A');
         p.snowLit = c('#CDC6F2');
         p.snowShade = c('#5C46B0');
         p.snowDeep = c('#2A1A6E');
         p.rim = c('#FFD9A0');
-        p.fog = c('#4A388E');
+        p.fog = c('#3A2C80');
         p.fogFar = 640;
         p.hemiSky = c('#6A58C4');
         p.air.far = c('#3A2670');
         p.air.low = 0.9;
-        p.under = { color: c('#FFB04A'), k: 0.34 };
-        p.atmo.valley = 1;
-        p.atmo.valleyColor = c('#B88470');
+        p.under = { color: c('#FFB04A'), k: 0.14 };
+        p.atmo.valley = 0.7;
+        p.atmo.valleyColor = c('#7A5C92');
         p.atmo.meteors = 0;
-        p.massif.sea = 0.5;
-        p.massif.seaWarm = 0.6;
+        p.massif.sea = 0;
+        p.massif.seaWarm = 0;
+        p.massif.veil = 0.35;
+        p.ridge = [c('#4A3E96'), c('#2C2470'), c('#181446')];
         p.massif.glow = c('#FFB870');
         p.massif.glowK = 0.3;
         p.massif.glowLine = -900;
         p.stars = 0.15;
         p.shadowK = 0.6;
         p.bloom = 0.78;
-        p.lamps = 1.3;
+        p.lamps = 1.05;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.6;
-        p.grade.exposure = 1.14;
-        p.grade.saturation = 1.14;
-        p.grade.hi = c('#FFF0D8');
+        p.grade.exposure = 1.1;
+        p.grade.saturation = 1.08;
+        p.grade.hi = c('#FFF6E8');
         p.grade.lo = c('#E2D6FF');
       },
     },
@@ -1553,12 +1559,12 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.deck.k = 0.62;
         p.skyZenith = c('#161450');
         p.skyMid = c('#4A3690');
-        p.skyHorizon = c('#B2709C');
-        p.skyBand = { color: c('#FFB48C'), fade: 18, k: 0.85 };
+        p.skyHorizon = c('#8A5C9C');
+        p.skyBand = { color: c('#F0A088'), fade: 22, k: 0.7 };
         p.snowLit = c('#D6CCF2');
         p.fog = c('#5C4496');
         p.air.far = c('#4A2E7C');
-        p.under.k = 0.26;
+        p.under.k = 0.12;
         p.stars = 0.35;
         p.massif.glowK = 0.45;
       },
@@ -1569,29 +1575,29 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3900, at: 4460, dusk: 1,
       edit: (p) => {
         setSun(p, 24, 6, 26, 10);
-        p.sunColor = c('#FFD2C8');
+        p.sunColor = c('#F4DCE4');
         p.deck.k = 0.3;
         p.deck.glow = c('#FFB48E');
         p.skyZenith = c('#22206C');
         p.skyMid = c('#7450A4');
-        p.skyHorizon = c('#F0949C');
-        p.skyBand = { color: c('#FFC09A'), fade: 14, k: 1 };
-        p.skyBelow = c('#8A5C9C');
-        p.snowLit = c('#EAD6EC');
+        p.skyHorizon = c('#DC8CA0');
+        p.skyBand = { color: c('#FFC09A'), fade: 16, k: 0.9 };
+        p.skyBelow = c('#6A4A8C');
+        p.snowLit = c('#E6DAF2');
         p.snowShade = c('#6650B8');
         p.rim = c('#FFC6B4');
-        p.fog = c('#8660A8');
-        p.hemiSky = c('#8068CC');
-        p.air.far = c('#7A4C94');
-        p.air.scatter = 1.5;
+        p.fog = c('#6A4E9C');
+        p.hemiSky = c('#7A66CC');
+        p.air.far = c('#5E3E88');
+        p.air.scatter = 1.2;
         p.clouds.lit = c('#FFC4B8');
         p.clouds.rim = c('#FFB49A');
         p.massif.glow = c('#FFAA9C');
         p.massif.glowK = 0.8;
         p.massif.glowLine = -300;
         p.stars = 0.25;
-        p.under.k = 0.18;
-        p.grade.hi = c('#FFEAD8');
+        p.under.k = 0.08;
+        p.grade.hi = c('#FFF2E6');
         p.grade.lo = c('#E6D8FF');
         p.grade.exposure = 1.1;
       },
@@ -1941,12 +1947,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'leap',
       nth: 1,
       edit: (p) => {
-        p.fogFar *= 1.5;
-        p.fogNear = 90;
-        p.air.low = 0.6;
-        p.under.k = 0.42;
-        p.bloom += 0.1;
-        p.grade.hi = c('#FFEFD4');
+        p.fogFar *= 1.6;
+        p.fogNear = 110;
+        p.air.low = 0.5;
+        p.under.k = 0.2;
+        p.bloom += 0.12;
+        p.grade.hi = c('#FFF4E2');
         p.grade.contrast += 0.04;
         lamps(p, 1.35);
       },
@@ -1955,9 +1961,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The Lamp Road's avenue and Firstlight's street: lilac snow in pools of marigold.
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.5);
+        lamps(p, 1.15);
         p.snowShade = c('#5440AC');
-        p.grade.hi = c('#FFE8C0');
+        p.grade.hi = c('#FFF2DC');
         p.grade.lo = c('#DCD0FF');
         p.grade.saturation += 0.05;
         p.bloom += 0.1;
@@ -1967,10 +1973,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // An arched bridge strung with lights, over the river that carries them.
       kind: 'bridge',
       edit: (p) => {
-        lamps(p, 1.4);
-        p.under.k = Math.max(p.under.k, 0.4);
+        lamps(p, 1.15);
+        p.under.k = Math.max(p.under.k, 0.24);
         p.air.low = 1;
-        p.grade.hi = c('#FFECC8');
+        p.grade.hi = c('#FFF2DC');
       },
     },
     {
@@ -1996,8 +2002,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
     {
       kind: 'finish',
       edit: (p) => {
-        lamps(p, 1.5);
-        p.grade.hi = c('#FFE6C6');
+        lamps(p, 1.2);
+        p.grade.hi = c('#FFF0DC');
         p.bloom += 0.1;
       },
     },
@@ -2057,6 +2063,8 @@ interface LaidPlace {
   rise: number;
   fall: number;
   pal: Palette;
+  /** How finely its weight steps the stamp (a span changes the whole picture, so it steps finer). */
+  steps?: number;
 }
 
 const LAID = new WeakMap<Course, LaidPlace[]>();
@@ -2075,7 +2083,7 @@ function laidPlaces(course: Course): LaidPlace[] {
     if (!sp) continue;
     const pal = copyOf(hourPalette(course.biome, (sp.z0 + sp.z1) / 2, {} as Palette));
     pl.edit(pal);
-    spans.push({ ...sp, pal });
+    spans.push({ ...sp, pal, steps: 240 });
   }
   for (let z = 0, guard = 0; guard < 80; guard++) {
     const sec = course.section(z);
@@ -2133,7 +2141,7 @@ export function journeyStamp(biome: BiomeId, metres: number, course?: Course): n
     const laid = laidPlaces(course);
     for (let i = 0; i < laid.length; i++) {
       const w = placeWeight(laid[i], metres);
-      if (w > 0) key += (i + 1) * 4001 * Math.round(w * 64);
+      if (w > 0) key += (i + 1) * 4001 * Math.round(w * (laid[i].steps ?? 64));
     }
   }
   return key;

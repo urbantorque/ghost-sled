@@ -184,12 +184,12 @@ export function markerStoneGeometry(p: Palette): BufferGeometry {
 // ---------------------------------------------------------------- the forest
 
 /** A limb from a to b: four sides, no caps (a forest holds two thousand trees). */
-function limb(a: V3, b: V3, r0: number, r1: number, col: Color): BufferGeometry {
+function limb(a: V3, b: V3, r0: number, r1: number, col: Color, sides = 4): BufferGeometry {
   const dx = b[0] - a[0];
   const dy = b[1] - a[1];
   const dz = b[2] - a[2];
   const len = Math.hypot(dx, dy, dz);
-  const g = new CylinderGeometry(r1, r0, len, 4, 1, true);
+  const g = new CylinderGeometry(r1, r0, len, sides, 1, true);
   g.translate(0, len / 2, 0);
   // Lean the limb from straight up onto its own line.
   g.rotateZ(-Math.atan2(Math.hypot(dx, dz), dy));
@@ -218,10 +218,10 @@ export function silverTreeGeometry(variant = 0, hung = false): BufferGeometry {
     for (let j = 0; j < 2; j++) {
       const a2 = a + (j === 0 ? -0.7 : 0.6) + (rnd() - 0.5) * 0.4;
       const tip: V3 = [mid[0] + Math.cos(a2) * (0.8 + rnd() * 0.5), mid[1] + 1.1 + rnd() * 0.9, mid[2] + Math.sin(a2) * (0.8 + rnd() * 0.5)];
-      parts.push(limb(mid, tip, 0.075, 0.025, bark));
+      parts.push(limb(mid, tip, 0.075, 0.025, bark, 3));
       tips.push(tip);
     }
-    parts.push(part(new IcosahedronGeometry(0.3, 0), SNOW, { pos: [mid[0], mid[1] + 0.08, mid[2]], scale: [1.2, 0.4, 1.1] }));
+    parts.push(part(new CylinderGeometry(0, 0.36, 0.2, 4, 1, true), SNOW, { pos: [mid[0], mid[1] + 0.12, mid[2]] }));
   }
   if (hung) {
     for (let k = 0; k < 3; k++) {
