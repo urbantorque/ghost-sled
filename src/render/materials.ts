@@ -937,12 +937,15 @@ export function makeSnowMaterial(): ShaderMaterial {
           // shade side that move, where it had one blue. Held still under reduced motion (uGroundTime).
           vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046) + vec2(uGroundTime * 0.012, uGroundTime * 0.004);
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
-          float a2 = smoothstep(0.4, 0.68, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
+          float a2 = smoothstep(0.34, 0.64, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
-          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * 0.22 * (1.0 - a2));
+          // Between the curtains the snow's shade is violet, and it is the shade that takes it (the lit
+          // snow stays the moon's steel): three hues on the ground, where there was one blue.
+          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * mix(0.5, 0.16, t) * (1.0 - a2));
           // Laid over the blue, not added to it (added, green on steel blue only made a paler blue), and a
           // step brighter than the snow round it: it is the light.
-          col = mix(col, uKey2.rgb * (lv * 3.0 + 0.42), a2 * uKey2.a * 0.78);
+          // It keeps the snow's own relief under it (laid flat it read as a green field).
+          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.7);
         }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the
@@ -1293,6 +1296,9 @@ export function makeSnowMaterial(): ShaderMaterial {
             // A glow from inside (round 7): low in the wall the ice holds a cyan light of its own, broken
             // by the shards' own tones, strongest at night and under a roof.
             rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(0.22, 0.62, dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
+            // The aurora finds the walls' crests: the top third of the ice takes its green on the shards
+            // that face up and out, so a crevasse is cut out of the night by its own rim of light.
+            rc = mix(rc, uKey2.rgb * (0.5 + 0.4 * tone), uKey2.a * smoothstep(0.5, 1.0, dk) * (0.3 + 0.7 * tr) * 0.55);
           } else {
             // Rock darkens into the ground it stands in, and where a wall meets the floor.
             rc = mix(rc, uRockDeep, (1.0 - smoothstep(0.0, 0.34, abs(over))) * 0.55 * step(0.5, vRock.w));

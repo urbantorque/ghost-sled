@@ -942,8 +942,10 @@ function round7(p: Palette, biome: BiomeId): void {
       return;
     case 'volcanic':
       // The deck is what lights the ground: its orange on the lit side, its complement in the shade.
-      p.sunColor = c('#FFDEC8');
-      p.snowLit = c('#F0E6E0');
+      // The snow itself stays pale (a warm white): the light carries the orange, once. Tinted twice (a
+      // pink-grey snow under an orange light) the slopes read as sand.
+      p.sunColor = c('#FFDCC4');
+      p.snowLit = c('#F6EEEA');
       p.snowShade = c('#3C4A66');
       p.snowDeep = c('#2A2444');
       p.hemiSky = c('#5C5A78');
@@ -964,14 +966,18 @@ function round7(p: Palette, biome: BiomeId): void {
       p.sparkle = 0.5;
       return;
     case 'blossom':
-      p.snowLit = c('#FFF4E8');
+      // A peach morning, not a yellow one: the light leans to rose, and the shafts are thin until the
+      // orchards (a full fan of them over white snow washed the frame custard).
+      p.sunColor = c('#FFF0E6');
+      p.grade.shafts = 0.35;
+      p.snowLit = c('#FFF6F0');
       p.snowShade = c('#7E8CD6');
       p.snowDeep = c('#6452AC');
-      p.fog = c('#F4DCD6');
+      p.fog = c('#F4DAD8');
       p.low = c('#2E2A44');
       p.lowLit = c('#5E5878');
-      p.tall = c('#FF9CC4');
-      p.tallDark = c('#A8386E');
+      p.tall = c('#FF8EBC');
+      p.tallDark = c('#96306A');
       p.air = { far: c('#9AB0DE'), cool: c('#E8EEFF'), low: 0.8, scatter: 1.3 };
       p.lamps = 0.3;
       p.leaf = 0.5;
@@ -979,7 +985,7 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.contrast = 1.1;
       p.grade.saturation = 1.12;
       p.grade.exposure = 0.96;
-      p.grade.hi = c('#FFF4E6');
+      p.grade.hi = c('#FFF4EC');
       p.grade.lo = c('#E2E0FF');
       return;
   }
@@ -1110,7 +1116,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#2553A8');
         p.skyHorizon = c('#8CAEE0');
         p.skyBand.color = c('#FFD97A');
-        p.snowLit = c('#BCCFF2');
+        // Two blues and a lemon rim: the lit snow pales, the shade and the air go down a step under it.
+        p.snowLit = c('#C8D8F6');
+        p.snowShade = c('#3A58B0');
+        p.snowDeep = c('#16297C');
+        p.fog = c('#5A80CC');
+        p.rim = c('#FFF0A0');
+        p.grade.contrast = 1.13;
         p.stars = 0.8;
         p.giftGlow = 0.35;
         p.ghostGlow = 1.5;
@@ -1134,13 +1146,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand.color = c('#7FC4D0');
         p.skyBand.k = 0.6;
         p.skyBelow = c('#2E4E94');
-        p.snowLit = c('#9DB6EA');
-        p.snowShade = c('#30469C');
-        p.snowDeep = c('#14226A');
-        p.fog = c('#24367E');
-        p.hemiSky = c('#4E78CC');
+        // The night's three hues: moon-pale steel where the snow is lit, violet (not cobalt) in the shade,
+        // and the aurora's green over both. The ice walls keep the cobalt to themselves.
+        p.snowLit = c('#A6BAE8');
+        p.snowShade = c('#3A3296');
+        p.snowDeep = c('#181050');
+        p.fog = c('#1E2268');
+        p.hemiSky = c('#4A5CC0');
+        p.rim = c('#9CF0D0');
         p.air.far = c('#101A58');
-        p.key2 = { color: c('#46E0A0'), k: 1, shade: c('#4A44B0') };
+        p.key2 = { color: c('#44D8A2'), k: 1, shade: c('#5C3CC4') };
         p.grade.saturation = 1.0;
         p.aurora = 1;
         p.stars = 1;
@@ -1232,7 +1247,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunSoft = 0.6;
         p.skyZenith = c('#150E12');
         p.skyHorizon = c('#C84E22');
-        p.snowLit = c('#E4CCC0');
+        p.snowLit = c('#F0E6E2');
         p.snowShade = c('#34425E');
         p.fogFar = 360;
         p.deck.k = 1;
@@ -1249,7 +1264,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunColor = c('#FFD4BC');
         p.skyHorizon = c('#DC4C1C');
         p.deck.glow = c('#FF6222');
-        p.snowLit = c('#DCC2B6');
+        p.snowLit = c('#EADEDA');
         p.under.k = 0.24;
         p.massif.lava = 0.68;
         p.massif.flow = 0.8;
@@ -1268,12 +1283,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#0E0A0E');
         p.skyMid = c('#36181C');
         p.skyHorizon = c('#E8481A');
-        p.snowLit = c('#D2B4A8');
-        p.snowShade = c('#2C3858');
-        p.snowDeep = c('#1E1836');
-        p.fog = c('#4E2024');
-        p.air.far = c('#2E1218');
-        p.under.k = 0.3;
+        p.sunColor = c('#FFD0B4');
+        p.snowLit = c('#DED0CE');
+        p.snowShade = c('#2A3660');
+        p.snowDeep = c('#1C183C');
+        // Ash with the lava's light in it: a deep ember red near, hotter with distance, and no cooling
+        // away from the disc (cooled, it went to the grey the review saw at 3450 m).
+        p.fog = c('#6E2C1E');
+        p.air.far = c('#521A10');
+        p.air.cool = c('#F0E0E0');
+        p.under.k = 0.38;
         // Under the 0.75 that wakes the night moods' lightning: nothing strobes on a Clear Skies run.
         p.massif.lava = 0.7;
         p.massif.flow = 1;
@@ -1292,13 +1311,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3500, at: 4100, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
-        p.sunColor = c('#F4BCA0');
+        p.sunColor = c('#F6C8B4');
         p.skyZenith = c('#0A0608');
         p.skyMid = c('#2C1014');
         p.skyHorizon = c('#D03A12');
-        p.snowLit = c('#BC9C92');
-        p.snowShade = c('#28324E');
-        p.fog = c('#3E181C');
+        // Night snow under a red deck is a dusk rose over plum, and the lamps are what is orange.
+        p.snowLit = c('#C2B6C6');
+        p.snowShade = c('#262E56');
+        p.fog = c('#4C1C18');
         p.hazardDim = 0.9;
         p.lamps = 1.3;
         p.bloom = 0.8;
@@ -1332,10 +1352,12 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // The orchards: sun through blossom. The canopies glow from behind and shafts fall between the rows.
       from: 1100, at: 1700, dusk: 0.2,
       edit: (p) => {
-        p.sunColor = c('#FFF0DC');
-        p.leaf = 0.85;
+        p.sunColor = c('#FFF2E4');
+        p.leaf = 0.9;
         p.atmo.rays = 1;
-        p.grade.shafts = 1;
+        p.grade.shafts = 0.75;
+        p.snowShade = c('#7482D4');
+        p.fog = c('#EEDADE');
         p.grade.saturation = 1.18;
         p.petals = 0.9;
       },
@@ -1345,14 +1367,27 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 2200, at: 2700, dusk: 0.5,
       edit: (p) => {
         setSun(p, -28, 27, 36, 19);
-        p.sunColor = c('#FFF8EE');
-        p.skyZenith = c('#74B0DA');
-        p.skyMid = c('#B6D8E4');
-        p.fog = c('#EEDCDC');
+        p.sunColor = c('#FFF8F2');
+        // The sky comes down a full step under the snow, so the snow is the light and the cone stands
+        // on blue: at one value with the snow the frame was paper.
+        p.skyZenith = c('#4E94DC');
+        p.skyMid = c('#94C4EA');
+        p.skyHorizon = c('#F6E0E4');
+        p.skyBelow = c('#D6D2EC');
+        p.fog = c('#D8D6F0');
         p.fogFar = 880;
-        p.air.far = c('#86A6E0');
-        p.air.low = 0.5;
-        p.snowShade = c('#7686D6');
+        p.air.far = c('#7694DE');
+        p.air.low = 0.6;
+        p.snowShade = c('#6474D0');
+        p.snowDeep = c('#4E44A4');
+        p.tall = c('#FF7EB2');
+        p.tallDark = c('#862660');
+        p.ridge = [c('#C6D0F0'), c('#9CB0E4'), c('#7690D6')];
+        p.atmo.rays = 0.45;
+        p.atmo.valleyColor = c('#DCDCF4');
+        p.grade.shafts = 0.3;
+        p.grade.contrast = 1.16;
+        p.grade.hi = c('#FFF8F4');
         p.clouds.low = 0.5;
         p.clouds.high = 0.5;
         p.petals = 1.1;
@@ -1363,10 +1398,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // Late morning, the clearest light on the mountain, over Temple Town.
       from: 3300, at: 3900, dusk: 0.6,
       edit: (p) => {
-        p.skyZenith = c('#62A4DC');
-        p.snowShade = c('#7A8CDA');
-        p.snowDeep = c('#5E54B4');
-        p.grade.contrast = 1.14;
+        p.skyZenith = c('#4A90DC');
+        p.snowShade = c('#6C7CD4');
+        p.snowDeep = c('#5448AC');
+        p.grade.contrast = 1.16;
         p.petals = 1.3;
         p.lamps = 0.45;
       },
@@ -1464,9 +1499,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Serac Gate and the Crevasse Fields: the walls go down into the dark and the abyss holds the air.
       kind: 'ravine',
       edit: (p) => {
-        p.grade.contrast += 0.06;
+        p.grade.contrast += 0.08;
+        p.grade.exposure! *= 0.96;
         p.air.low = 0.9;
-        p.under = { color: c('#38C8FF'), k: 0.14 };
+        p.under = { color: c('#38C8FF'), k: 0.2 };
       },
     },
     {
@@ -1534,8 +1570,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Cinder Gate and the Halls' roof: black, lit from below, the far mouth a hot disc.
       kind: 'tunnel',
       edit: (p) => {
-        p.snowLit = c('#A88474');
-        p.snowShade = c('#201E38');
+        p.snowLit = c('#A8989C');
+        p.snowShade = c('#201E3C');
         p.snowDeep = c('#120E22');
         p.fog = c('#1E0C10');
         p.air.far = c('#3A1210');
@@ -1562,6 +1598,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       nth: 1,
       edit: (p) => {
         p.under.k = 0.85;
+        p.snowShade = c('#5A3454');
+        p.snowDeep = c('#3A1C34');
+        p.rim = c('#FF9A54');
+        p.hemiSky = c('#C05A34');
         p.fog = c('#7A2A18');
         p.air.far = c('#A03A14');
         p.air.low = 1;

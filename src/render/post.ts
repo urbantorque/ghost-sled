@@ -315,7 +315,11 @@ export class PostFX {
           float t = filmCurve(d);
           vec3 o = c * (t / d);
           float top = max(o.r, max(o.g, o.b));
-          vec3 pale = mix(c / max(m, 1e-4), lightHue, 0.5) * t;
+          // A colour with a hue of its own (a lantern gate's marigold, a ghost's mint, the scarf) keeps it
+          // on the way up: folded toward a dusk's orange light the gates of Old Town went peach, and the
+          // marigold is the lantern's. Only what is near white already takes the light's colour.
+          float own = smoothstep(0.25, 0.6, (m - min(c.r, min(c.g, c.b))) / max(m, 1e-4));
+          vec3 pale = mix(c / max(m, 1e-4), lightHue, 0.5 * (1.0 - own)) * t;
           o = mix(o, pale, clamp((top - 0.86) * 2.2, 0.0, 0.75));
           return min(o, vec3(1.0));
         }
@@ -453,7 +457,9 @@ export class PostFX {
               float ang = atan(toS.y, toS.x * uAspect);
               float rays = 0.35 + 0.65 * vnoise(vec2(ang * 11.0 + uTime * 0.03, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0 - uTime * 0.05, 3.1));
               float fall = (exp(-dS * 2.7) + 0.12 * exp(-dS * 0.9)) * (1.0 - smoothstep(0.6, 0.95, dS));
-              vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.5);
+              // Round 7: the rays are the light's own colour with a third of the old stock gold (at half,
+              // a rose morning's shafts over white snow washed the frame yellow).
+              vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.3);
               col += warm * acc * rays * fall * clearRider * air * uShaft * 0.42;
             }
           }
