@@ -844,6 +844,8 @@ export class World {
     }
     this.spirit.setReduced(feel.reduced || reduced());
     this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.detail === 'low');
+    // Round 7, the momentsworld lane: the set pieces' stages take the tier, reduced motion and the effects.
+    this.marquee.stage(this.quality.detail === 'low' ? 0 : this.quality.detail === 'medium' ? 1 : this.quality.detail === 'high' ? 2 : 3, feel.reduced || reduced(), this.spirit.fireworks, this.spirit.breaks);
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.

@@ -766,6 +766,23 @@ export function startPiece(ctx: SiteCtx): Piece {
  *  top whose lip droops over the edge, boulders buttressing its foot and a drift banked round it where it
  *  meets the slope. On Ember it is a palisade of basalt columns broken off at their own heights, a lower
  *  rank of stubs stepping down in front of it, ash on the flat tops. */
+/** A ledge over part of a shoulder's top, from v0 to v1 along it, standing up metres over the top. */
+type Tier = { v0: number; v1: number; up: number };
+
+/** A shoulder's ledges: three spans along its length, one raised high, one a step, one left at the
+ *  top, in an order that differs side to side (rnd: the piece's seed). */
+function lipTiers(s: number): Tier[] {
+  const cut0 = -6 + rnd() * 3;
+  const cut1 = 3 + rnd() * 3;
+  const ups = rnd() < 0.5 ? [0, 1.7 + rnd() * 0.5, 0.8] : [0.9, 0, 1.8 + rnd() * 0.5];
+  if (s > 0) ups.reverse();
+  return [
+    { v0: -13.6, v1: cut0, up: ups[0] },
+    { v0: cut0, v1: cut1, up: ups[1] },
+    { v0: cut1, v1: 13.6, up: ups[2] },
+  ];
+}
+
 export function lipPiece(ctx: SiteCtx): Piece {
   const { p, biome, post } = ctx;
   const low = !!ctx.low;
@@ -774,23 +791,28 @@ export function lipPiece(ctx: SiteCtx): Piece {
   const steps: Array<() => BufferGeometry[]> = [];
   const spots: Spot[] = [];
   seed(ctx.seed + 901);
-  const tops: Array<{ s: number; y: number; x: number }> = [];
+  const tops: Array<{ s: number; y: number; x: number; tiers: Tier[] }> = [];
   for (const s of [-1, 1]) {
     const x = s * (post + 11.6);
     let g = -Infinity;
     for (const u of [-6, 0, 6]) for (const v of [-13, 0, 13]) g = Math.max(g, ctx.gy(x + u, v));
     const y = g + 1.9;
-    tops.push({ s, y, x });
+    // The top is not one level: it steps up in ledges along its length (Ember's palisade keeps its own
+    // broken line), so the crowd stands on two or three heights and the edge under it is never a ruler.
+    const tiers = biome === 'volcanic' ? [] : lipTiers(s);
+    tops.push({ s, y, x, tiers });
+    const upAt = (v: number): number => tiers.find((t) => v >= t.v0 && v < t.v1)?.up ?? 0;
     for (let r = 0; r < 3; r++) {
       for (let v = -13; v <= 13; v += 1.3) {
         if (rnd() < 0.14 + r * 0.08) continue;
-        spots.push({ x: x - s * (5.8 - r * 1.05), y, z: v + (rnd() - 0.5) * 0.4, yaw: Math.atan2(-s, 0.55) + (rnd() - 0.5) * 0.5, flag: rnd() < 0.3 });
+        const z = v + (rnd() - 0.5) * 0.4;
+        spots.push({ x: x - s * (5.8 - r * 1.05), y: y + upAt(z), z, yaw: Math.atan2(-s, 0.55) + (rnd() - 0.5) * 0.5, flag: rnd() < 0.3 });
       }
     }
   }
   /** How far a shoulder's rock runs down under its top: its downhill end stands that far over the slope. */
   const DEPTH = 7.4;
-  for (const { s, y, x } of tops) {
+  for (const { s, y, x, tiers } of tops) {
     steps.push(() => {
       seed(ctx.seed + 903 + s);
       const parts: BufferGeometry[] = [];
@@ -889,18 +911,67 @@ export function lipPiece(ctx: SiteCtx): Piece {
           strataInto(f, { rx: 1.5 + rnd() * 0.4, rz: 2.1 + rnd() * 1.2, h: Math.min(y - gy - 1.2, 2.4 + rnd() * 2.2) + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.45, shift: 0.16, dip: 0.1 * s, dipZ: 0.1, warp: 0.4, jut: 0.14, rough: 0.28, apron: 0.2, ground: (lx, lz) => ctx.gy(bx + lx, v + lz) - (gy - 1), seed: sd + 11 + k });
           f.place(from, bx, gy - 1, v, rnd() * 0.6 - 0.3);
         }
+        // The ledges the crowd stands up on: a block of the same beds over part of the top, flat where
+        // they stand (Low: the same ledges in fewer beds).
+        tiers.forEach((t, k) => {
+          if (t.up <= 0) return;
+          const from = f.triangles;
+          strataInto(f, { rx: 4.4, rz: (t.v1 - t.v0) / 2, h: t.up + 1.4, foot: 0, layers: low ? 1 : 2, sides: low ? 6 : 9, rock, lie, taper: 0.06, shift: 0.08, dip: 0, dipZ: 0, warp: 0.25, jut: low ? 0.05 : 0.1, flat: true, rough: 0.16, square: 0.7, seed: sd + 61 + k });
+          f.place(from, x - s * 3.1, y - 1.4, (t.v0 + t.v1) / 2);
+        });
+        // A cornice along the edge facing the run: the top's snow curls out over the rock and sags,
+        // deepest midway between the ledges, its lip wavering.
+        const cz0 = -16;
+        const cz1 = 16;
+        const n = low ? 8 : 20;
+        const lipAt = (v: number): [number, number] => {
+          const w = 1.0 + 0.45 * Math.sin(v * 0.9 + s) + 0.25 * Math.sin(v * 2.3);
+          const sag = 0.35 + 0.35 * (0.5 + 0.5 * Math.sin(v * 0.42 + 1.3 * s));
+          return [w, sag];
+        };
+        for (let k = 0; k < n; k++) {
+          const va = cz0 + ((cz1 - cz0) * k) / n;
+          const vb = cz0 + ((cz1 - cz0) * (k + 1)) / n;
+          const [wa, sa] = lipAt(va);
+          const [wb, sb] = lipAt(vb);
+          const ia: V3 = [x - s * 7.4, y + 0.12, va];
+          const ib: V3 = [x - s * 7.4, y + 0.12, vb];
+          const oa: V3 = [x - s * (8.9 + wa), y - sa, va];
+          const ob: V3 = [x - s * (8.9 + wb), y - sb, vb];
+          f.quad(ia, ib, ob, oa, SNOW, [0, 1, 0], 1, 0.92);
+          f.quad(oa, ob, [ob[0] + s * 0.3, ob[1] - 0.45, vb], [oa[0] + s * 0.3, oa[1] - 0.45, va], SNOW, [-s, -0.3, 0], 0.86, 0.72);
+        }
       }
       parts.push(f.build());
-      // A rope along the edge on stakes, and flags at the shoulder's corners.
+      // Pines standing behind the crowd, off the far side of the top, at their own heights.
+      if (biome !== 'volcanic') {
+        for (let k = 0; k < (low ? 2 : 5); k++) {
+          const v = -15 + ((k + 0.2 + rnd() * 0.6) / (low ? 2 : 5)) * 30;
+          const px = x + s * (9.6 + rnd() * 4.5);
+          const gy = ctx.gy(px, v);
+          const h = 6 + rnd() * 5;
+          parts.push(part(new CylinderGeometry(0.2, 0.3, 1.6, 5), TIMBER_DARK, { pos: [px, gy + 0.6, v] }));
+          for (let i = 0; i < 3; i++) {
+            const r = (1.9 - i * 0.5) * (h / 9);
+            const th = h * 0.42;
+            const ty = gy + 1.2 + i * h * 0.26 + th / 2;
+            parts.push(part(new ConeGeometry(r, th, 7, 1), i % 2 ? shade(p.tall, 0.82) : p.tall, { pos: [px, ty, v], rot: [0, rnd() * 3, 0], jitter: 0.1 }));
+            parts.push(part(new ConeGeometry(r * 0.6, th * 0.4, 7, 1), SNOW, { pos: [px, ty + th * 0.3, v], rot: [0, rnd() * 3, 0], jitter: 0.06 }));
+          }
+        }
+      }
+      // A rope along the edge on stakes, up and down the ledges, and flags at the shoulder's corners on
+      // poles of their own heights.
+      const upAt = (v: number): number => tiers.find((t) => v >= t.v0 && v < t.v1)?.up ?? 0;
       let prev: V3 | null = null;
       for (let v = -15; v <= 15; v += 5) {
-        const pt: V3 = [x - s * 6.5, y, v];
-        parts.push(seg(pt, [pt[0], y + 1.1, v], 0.05, INK, 3));
-        if (prev) parts.push(seg([prev[0], y + 1, prev[2]], [pt[0], y + 1, v], 0.03, ROPE, 3));
+        const pt: V3 = [x - s * 6.5, y + upAt(v), v];
+        parts.push(seg(pt, [pt[0], pt[1] + 1.1, v], 0.05, INK, 3));
+        if (prev) parts.push(seg([prev[0], prev[1] + 1, prev[2]], [pt[0], pt[1] + 1, v], 0.03, ROPE, 3));
         prev = pt;
       }
       for (const v of [-13, 0, 13]) {
-        const top = y + 8 + rnd() * 2;
+        const top = y + 5 + rnd() * 7;
         parts.push(seg([x + s * 3, y - 0.5, v], [x + s * 3, top, v], 0.08, TIMBER_DARK, 4));
         parts.push(pennant([x + s * 3, top - 0.3, v], s, cols[(Math.round(v) & 1) * 2]));
       }
