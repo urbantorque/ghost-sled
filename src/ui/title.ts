@@ -1,9 +1,10 @@
 import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, UIHandlers } from './contract';
+import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
 import { clock } from '../game/standing';
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt } from './art';
-import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
+import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
 import { dailyDate, fmt, metres, NBSP, progFigures } from './fmt';
 import { icon } from './icons';
 import { play, reduced } from './motion';
@@ -20,6 +21,12 @@ export interface TitleMenuHooks {
 
 /** Medal names by rank (0 none). */
 const MEDAL = ['', 'Bronze', 'Silver', 'Gold'] as const;
+
+/** Ride's prompt for the last input used: the Space keycap, the pad's A, or none for touch. */
+function rideKey(mode: InputMode): HTMLElement | null {
+  if (mode === 'touch') return null;
+  return mode === 'gamepad' ? padBtn('A', 'gs-ride-key') : kbd('Space', 'gs-ride-key');
+}
 
 export class Title {
   readonly layer: Layer;
@@ -104,6 +111,16 @@ export class Title {
     this.layer.hide();
   }
 
+  /** The last input used changed while the title is up: Ride's prompt follows it (Space, the pad's A, or
+   *  none for touch). */
+  setInputMode(mode: InputMode): void {
+    const ride = this.el.querySelector<HTMLElement>('[data-fk="ride"]');
+    if (!ride) return;
+    ride.querySelector('.gs-ride-key')?.remove();
+    const key = rideKey(mode);
+    if (key) ride.append(key);
+  }
+
   private render(m: TitleModel): void {
     this.io?.disconnect();
     this.io = null;
@@ -171,7 +188,7 @@ export class Title {
         },
       },
       h('span', 'gs-btn-label gs-ride-label', h('span', 'gs-ride-verb', verb), mtn),
-      showKey ? kbd('Space', 'gs-ride-key') : null,
+      rideKey(m.inputMode),
     );
     rideBtn.setAttribute('aria-label', where ? `${verb}: ${where}${aim ? `. ${aim}` : ''}${waiting ? `. ${status.slice(0, -1)}` : ''}` : verb);
     if (waiting) rideBtn.setAttribute('aria-disabled', 'true');

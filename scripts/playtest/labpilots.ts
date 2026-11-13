@@ -486,6 +486,25 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   };
 }
 
+/** A steady hand: it rides straight down the run where it is, as far off the safe line as it was when it took
+ *  over (kept 3 m inside the corridor), with the line pilot's own steering and no button. A rider who has
+ *  fallen is put on the safe line by the fall, so after one this pilot rides the line. It makes no detour
+ *  and no mistake, so what is left between two rides it finishes is the fall and nothing else. */
+export function steadyPilot(sim: AnySim): Pilot {
+  const c = sim.course;
+  let off = sim.s.x - c.safeX(sim.s.z);
+  return () => {
+    const s = sim.s;
+    if (s.tumble > 0) off = s.x - c.safeX(s.z);
+    if (!s.grounded || s.tumble > 0) return { steer: 4, action: false };
+    const look = s.z + 4 + s.speed * 0.35;
+    const room = Math.max(0, c.halfWidth(look) - 3);
+    const tx = Math.max(c.centerX(look) - room, Math.min(c.centerX(look) + room, c.safeX(look) + off));
+    const err = Math.atan2(tx - s.x, look - s.z) - s.velHeading;
+    return { steer: Math.max(0, Math.min(8, Math.round(4 + err * 14))), action: false };
+  };
+}
+
 /** How each pilot spends its lantern (SIM_VERSION 7): the button is bit 6, a dash on its press. A build
  *  without a lantern never sees the bit (old sims mask it off), so one plan still rides two builds.
  *    hands-off, hold*, zigzag, line: never press it (line is the careful rider who keeps every ward)

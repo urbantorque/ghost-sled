@@ -30,10 +30,23 @@
 // finishes and median times by pilot. To ride one variant or a legend everywhere:
 //   --variant 1   every set piece's second variant     --legend 2   the mountain's second legend
 //   --mountains 4 only the fifth mountain (a list: 0,2)
+// Falls (round 7): every ride notes where and why its rider went down, and a table after the main one gives
+// each pilot's finishes, falls and wrecks. With --falls it also prices every fall: the same pilot rides the
+// same run again to the tick of the fall, and from there rides the next 300 m as a spirit that nothing can
+// touch (no fall, no bump: more than any line that avoided the hit could have kept). The two rides are
+// compared: how far behind the faller is as it gets up, and how many seconds later it passes the point 300 m
+// on. The second number takes in whatever else either rider did on the way (a pilot is a closed loop: the
+// two rides part at the fall and never meet the same snow again), so read its median; each fall that came
+// out cheaper is printed with its cost at every 50 m and both riders' speeds, which says who lost the time.
+// The third price takes the pilot out: both rides are finished by the same steady hand (steadyPilot: straight
+// down the run where it is, no detour, no button, no mistake), so what is left between them is the fall and
+// nothing else. That is the one to read for "is anyone ever faster for falling". A get-up run is long, so
+// ride with --max 420 when a struggling pilot is in the plan.
+//   falls       npx tsx scripts/playtest/lab.ts --pilots clumsy,novice,mid,expert,stunt --max 420 --falls
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { type Inp, type Kit, type Pilot, classic, clumsy, mulberry, scripted, spenderFor } from './labpilots';
+import { type Inp, type Kit, type Pilot, classic, clumsy, mulberry, scripted, spenderFor, steadyPilot } from './labpilots';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySim = any;
@@ -49,6 +62,9 @@ const MAX_SECONDS = +opt('max', '240');
 const OUT = opt('json', '');
 const MOOD = +opt('mood', '0');
 const EVENT = +opt('event', '0');
+const PRICE = argv.includes('--falls');
+/** A fall is priced over this many metres past where it began. */
+const PRICE_M = 300;
 const PILOTS = opt('pilots', 'hands-off,hold2s-r,hold2s-l,hold-r,zigzag,clumsy,novice,mid,expert,line,stunt').split(',');
 const VARIANT = +opt('variant', '-1');
 const LEGEND = +opt('legend', '0');
@@ -62,6 +78,8 @@ const { CHUNK_LEN } = await load('src/sim/course.ts');
 const momentsMod = await load('src/sim/moments.ts').catch(() => ({}));
 const KIT: Kit = { gateX: momentsMod.gateX, pathX: momentsMod.pathX, machineZ: momentsMod.machineZ };
 const MOUNTAIN_LIST: number[] = ONLY ? ONLY.split(',').map(Number) : MOUNTAINS.map((_: unknown, i: number) => i);
+/** The sim's length of a fall (66 before round 7, when a tumble was one piece). */
+const TUMBLE_TICKS: number = (await load('src/sim/sim.ts')).TUMBLE_TICKS ?? 66;
 
 /** The roll a seed rides: plain (or --mood, --event), with its own seed, which picks the set pieces' variants. */
 function rollFor(m: number, seed: number): AnySim {
@@ -316,6 +334,11 @@ interface Ride {
   rails: RailPass[];
   /** Where the last hit came, sim z. */
   lastHit: number;
+  /** Every time the rider went down: the tick and place, why, and what it was (a fall got up from, a ward that
+   *  took it, or the wreck that ended the run), the speed going in, and with --falls its price. */
+  falls: Fall[];
+  /** The tick the ride reached each whole 10 m (the price of a fall is read off two of these). */
+  marks: number[];
   /** The lantern (SIM_VERSION 7; zero on older sims). */
   lights: number;
   lit: number;
@@ -331,23 +354,73 @@ interface Ride {
   legendLit: number;
 }
 
-function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null): Ride {
+interface Fall {
+  tick: number;
+  z: number;
+  cause: string;
+  kind: 'fall' | 'ward' | 'wreck';
+  v: number;
+  /** As it went down: its speed down the run, how far off the safe line, and how far past the corridor's edge. */
+  vz: number;
+  off: number;
+  edge: number;
+  /** Metres behind the untouched ride as the faller rides again, and seconds behind PRICE_M on (null when
+   *  either ride did not get that far). */
+  behind?: number | null;
+  cost?: number | null;
+  /** The cost at every 50 m of the way, with the faller's and the untouched ride's speed over each. */
+  profile?: string;
+  /** The cost with the same steady hand riding both from the fall on: the fall's own price, with what the
+   *  pilot did next taken out. */
+  sure?: number | null;
+}
+
+/** `spare`: the tick of a fall this ride is carried through untouched (the priced ride); it stops PRICE_M past it.
+ *  `steady`: from this tick on a steady hand rides (steadyPilot; nobody spends a lantern), and the ride stops
+ *  PRICE_M on: two rides that differ only by the fall are then ridden the same way after it. */
+function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null, spare = -1, steady = -1): Ride {
   const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: rollFor(m, seed), sled: 0 });
   const passes: RailPass[] = [];
-  const pilot = pilotFor(pilotName, sim, seed, passes, alone);
-  const spend = spenderFor(pilotName, sim, seed);
+  let pilot = pilotFor(pilotName, sim, seed, passes, alone);
+  let spend = spenderFor(pilotName, sim, seed);
+  let steadyZ = Infinity;
   const speeds: number[] = [];
-  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [], legend: '', legendLit: 0 };
+  const falls: Fall[] = [];
+  const marks: number[] = [];
+  let spareZ = Infinity;
+  const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, falls, marks, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [], legend: '', legendLit: 0 };
   const mStart = new Map<number, { tick: number; v: number }>();
   let bankTicks = 0;
   let airTicks = 0;
   let grindTicks = 0;
   while (!sim.s.crashed && !sim.finished && sim.tick < MAX_SECONDS * 60) {
+    if (steady >= 0 && sim.tick === steady) {
+      pilot = steadyPilot(sim);
+      spend = () => false;
+      steadyZ = sim.s.z;
+    }
     const o = pilot();
+    const vIn = sim.s.speed;
+    const was = { vz: sim.s.vz, off: sim.s.x - sim.course.safeX(sim.s.z), edge: sim.course.edgeExcess(sim.s.x, sim.s.z) };
+    if (spare >= 0 && sim.tick >= spare) {
+      // From the fall on nothing touches this ride: a spirit through whatever stands there, and no landing
+      // can floor it.
+      sim.s.ghost = Math.max(sim.s.ghost, 2);
+      sim.s.invuln = Math.max(sim.s.invuln, 2);
+      if (sim.tick === spare) spareZ = sim.s.z;
+    }
     sim.step((o.steer | 0) | (o.action ? 16 : 0) | (spend() ? 64 : 0));
     pilot.after?.();
     const s = sim.s;
     speeds.push(s.speed);
+    while (marks.length * 10 <= s.z) marks.push(sim.tick);
+    if (spare >= 0 && s.z > spareZ + PRICE_M + 10) break;
+    if (steady >= 0 && s.z > steadyZ + PRICE_M + 20) break;
+    for (const e of sim.events) {
+      if (e.type === 'tumble' && e.phase === 'start') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'fall', v: vIn, ...was });
+      else if (e.type === 'ward') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'ward', v: vIn, ...was });
+      else if (e.type === 'crash') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'wreck', v: vIn, ...was });
+    }
     if (s.grinding) grindTicks++;
     if (!s.grounded) airTicks++;
     if (sim.course.edgeExcess(s.x, s.z) > 0) bankTicks++;
@@ -405,6 +478,60 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   return r;
 }
 
+/** The z a ride had reached at a tick, from its 10 m marks (-1 past its end). */
+function zAt(marks: number[], tick: number): number {
+  if (!marks.length || tick > marks[marks.length - 1]) return -1;
+  let lo = 0;
+  let hi = marks.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (marks[mid] <= tick) lo = mid;
+    else hi = mid;
+  }
+  const span = marks[hi] - marks[lo];
+  return lo * 10 + (span > 0 ? (10 * (tick - marks[lo])) / span : 0);
+}
+
+/** The tick a ride reached z, or -1 if it never did. */
+function tickAt(marks: number[], z: number): number {
+  const k = Math.ceil(z / 10);
+  return k < marks.length ? marks[k] : -1;
+}
+
+/** Prices every fall a ride got up from: the same pilot, the same run, carried through that one hit. */
+function price(r: Ride): void {
+  for (const f of r.falls) {
+    if (f.kind !== 'fall') continue;
+    const clean = ride(r.pilot, r.m, r.seed, null, f.tick);
+    // As the faller rides again (the sim's own length of a fall), how far ahead the untouched ride is.
+    const up = f.tick + 1 + TUMBLE_TICKS;
+    const za = zAt(r.marks, up);
+    const zb = zAt(clean.marks, up);
+    f.behind = za >= 0 && zb >= 0 ? zb - za : null;
+    const a = tickAt(r.marks, f.z + PRICE_M);
+    const b = tickAt(clean.marks, f.z + PRICE_M);
+    f.cost = a >= 0 && b >= 0 ? (a - b) / 60 : null;
+    // The same cost at every 50 m of the way, with the untouched ride's speed over each: where a fall came
+    // out cheaper, this says whether the faller gained or the other ride lost.
+    const steps: string[] = [];
+    for (let d = 50; d <= PRICE_M; d += 50) {
+      const ta = tickAt(r.marks, f.z + d);
+      const tb = tickAt(clean.marks, f.z + d);
+      const ta0 = tickAt(r.marks, f.z + d - 50);
+      const tb0 = tickAt(clean.marks, f.z + d - 50);
+      const v = (t0: number, t1: number): string => (t0 >= 0 && t1 > t0 ? (3000 / (t1 - t0)).toFixed(0) : '?');
+      steps.push(ta >= 0 && tb >= 0 ? `${d}m ${((ta - tb) / 60).toFixed(2)}s (${v(ta0, ta)} vs ${v(tb0, tb)} m/s)` : `${d}m ?`);
+    }
+    f.profile = steps.join('  ');
+    const fell = ride(r.pilot, r.m, r.seed, null, -1, f.tick + 1);
+    const rode = ride(r.pilot, r.m, r.seed, null, f.tick, f.tick + 1);
+    const sa = tickAt(fell.marks, f.z + PRICE_M);
+    const sb = tickAt(rode.marks, f.z + PRICE_M);
+    f.sure = sa >= 0 && sb >= 0 ? (sa - sb) / 60 : null;
+    if (f.cost !== null && f.cost <= 0) console.log(`  cheaper: ${r.pilot} m${r.m} seed ${r.seed} tick ${f.tick} z ${f.z.toFixed(0)} ${f.cause} at ${f.v.toFixed(1)} m/s: ${f.profile}`);
+  }
+}
+
 const med = (a: number[]): number => {
   const s = [...a].sort((x, y) => x - y);
   return s.length ? s[Math.floor(s.length / 2)] : 0;
@@ -419,6 +546,7 @@ for (const p of PILOTS) {
   for (const m of MOUNTAIN_LIST) {
     const rides: Ride[] = [];
     for (let i = 0; i < seedsFor; i++) rides.push(ride(p, m, 1234 + i * 37));
+    if (PRICE) for (const r of rides) price(r);
     all.push(...rides);
     const causes: Record<string, number> = {};
     for (const r of rides) {
@@ -449,7 +577,42 @@ for (const p of PILOTS) {
   }
 }
 if (PILOTS.includes('rails')) railTable(all.filter((r) => r.pilot === 'rails'));
+fallTable(all.filter((r) => r.pilot !== 'rails'));
 momentTable(all.filter((r) => r.pilot !== 'rails'));
+
+/** Falls (round 7): per pilot over every mountain, how its runs ended, how often it went down and why, and
+ *  with --falls what a fall cost it against the same ride carried through the hit. */
+function fallTable(rides: Ride[]): void {
+  console.log(`\nfalls      runs  finish  wreck  time  secs(med)  falls/run  wards/run  by cause${PRICE ? `                       priced  behind m (min/med)  cost s at ${PRICE_M} m (min/p10/med)  cheaper   steady hand after (min/p10/med)  cheaper` : ''}`);
+  for (const p of PILOTS) {
+    const rs = rides.filter((r) => r.pilot === p);
+    if (!rs.length) continue;
+    const fl = rs.flatMap((r) => r.falls);
+    const got = fl.filter((f) => f.kind === 'fall');
+    const by: Record<string, number> = {};
+    for (const f of fl) if (f.kind !== 'ward') by[f.cause] = (by[f.cause] || 0) + 1;
+    const q = (a: number[], k: number): number => {
+      const s = [...a].sort((x, y) => x - y);
+      return s.length ? s[Math.min(s.length - 1, Math.floor(k * s.length))] : NaN;
+    };
+    const behind = got.map((f) => f.behind).filter((v): v is number => typeof v === 'number');
+    const cost = got.map((f) => f.cost).filter((v): v is number => typeof v === 'number');
+    const sure = got.map((f) => f.sure).filter((v): v is number => typeof v === 'number');
+    const fin = rs.filter((r) => r.finished);
+    console.log(
+      p.padEnd(10),
+      String(rs.length).padStart(4),
+      String(fin.length).padStart(7),
+      String(rs.filter((r) => !r.finished && r.cause).length).padStart(6),
+      String(rs.filter((r) => !r.finished && !r.cause).length).padStart(5),
+      fmt(med(fin.map((r) => r.seconds))).padStart(10),
+      fmt(got.length / rs.length).padStart(10),
+      fmt(fl.filter((f) => f.kind === 'ward').length / rs.length).padStart(10),
+      ' ' + Object.entries(by).map(([k, v]) => `${k}:${v}`).join(' ').padEnd(30),
+      PRICE ? `${String(cost.length).padStart(5)}  ${fmt(q(behind, 0))} ${fmt(q(behind, 0.5))}      ${fmt(q(cost, 0), 2)} ${fmt(q(cost, 0.1), 2)} ${fmt(q(cost, 0.5), 2)}        ${cost.filter((c) => c <= 0).length}/${cost.length}  ${fmt(q(sure, 0), 2)} ${fmt(q(sure, 0.1), 2)} ${fmt(q(sure, 0.5), 2)}        ${sure.filter((c) => c <= 0).length}/${sure.length}` : '',
+    );
+  }
+}
 
 /** The set pieces: per mountain and set piece, each pilot's wins of the runs that met it (and by variant, where the
  *  sim has them), the median count, the speed coming in and the seconds it took. Then the round's sums: set pieces

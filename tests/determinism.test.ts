@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { InputController } from '../src/game/input';
 import { FixedLoop } from '../src/game/loop';
 import { Run } from '../src/game/run';
 import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, actionOf, decodeLog, draftOf, packInput } from '../src/sim/input';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { Rng, hash32 } from '../src/sim/prng';
-import { CHUNK_LEN, Course, type Obstacle, courseFor } from '../src/sim/course';
+import { CHUNK_LEN, Course, courseFor } from '../src/sim/course';
 import { RunRecord, recordFromString, recordToString, replayRecord } from '../src/sim/replay';
 import { Sim } from '../src/sim/sim';
 
@@ -125,27 +126,14 @@ describe('determinism', () => {
 
   it('a live revive through Run delivers no stale crash event and records a replayable log', () => {
     let t = 0;
-    // A rider who aims at whatever stands ahead: nothing short of that ends a run this early, since the
-    // corridor's edge turns a sled back and two wipeouts are forgiven past the free stretch.
-    const hunter = {
-      sample: (): { steer: number; action: boolean } => {
-        const s = run.sim.s;
-        const k = Math.floor(s.z / CHUNK_LEN);
-        let best: Obstacle | null = null;
-        for (let i = k; i <= k + 1; i++) {
-          for (const o of run.sim.course.chunk(i).obstacles) {
-            if (o.soft || o.z < s.z + 2 || o.z > s.z + 45) continue;
-            if (!best || o.z < best.z) best = o;
-          }
-        }
-        const d = best ? best.x - s.x : 0;
-        return { steer: d > 0.4 ? 8 : d < -0.4 ? 0 : 4, action: false };
-      },
-    };
-    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.None, seed: 1 }, 0, hunter);
+    // A rider who holds one key all the way down, with the avalanche behind it. Nothing a rider hits ends a
+    // run this early any more (round 7: a fall is got up from), but the avalanche still does, and a sled
+    // held against the bank at 10 m/s cannot outrun it.
+    const hunter = { sample: (): { steer: number; action: boolean } => ({ steer: 8, action: false }) };
+    const run: Run = new Run(MOUNTAINS[0].seed, { mood: Mood.None, event: ChaosEvent.Avalanche, seed: 1 }, 0, hunter);
     const loop = new FixedLoop(() => run.tick());
     const kinds: string[] = [];
-    while (!run.crashed && t++ < 60 * 120) loop.advance(1 / 60);
+    while (!run.crashed && t++ < 60 * 240) loop.advance(1 / 60);
     for (const p of run.drain()) kinds.push(p.e.type);
     expect(run.crashed).toBe(true);
     expect(kinds.filter((k) => k === 'crash')).toHaveLength(1);
@@ -234,5 +222,55 @@ describe('determinism', () => {
       expect(b.stages.map((s) => s.name)).toEqual(names);
       expect(b.finishZ).toBe(a.finishZ);
     }
+  });
+
+  it('a run ridden on a gamepad records a log that replays to the same state', () => {
+    // The pad reaches the sim only as the bytes InputController.sample() quantises it to, the same path the
+    // keys and the touch zones take, so what the stick and the triggers did is all in the log.
+    const pad = { connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+    (globalThis as { window?: unknown }).window = Object.assign(new EventTarget(), { innerWidth: 1280, innerHeight: 720 });
+    const input = new InputController(new EventTarget() as unknown as HTMLElement, () => [pad]);
+    input.poll();
+    const run = new Run(MOUNTAINS[0].seed, rollChaos(31, 3), 0, input);
+    const rng = new Rng(4242);
+    let actions = 0;
+    let spirits = 0;
+    let trigger = 0;
+    let hold = 0;
+    for (let t = 0; t < 60 * 40 && !run.crashed; t++) {
+      // Stick sweeps of several speeds and depths, the odd flick to full lock, the trigger eased on and off
+      // through its hysteresis band, and a tap of X now and then.
+      const s = run.sim.s;
+      const look = s.z + 6 + s.speed * 0.4;
+      const want = Math.atan2(run.sim.course.safeX(look) - s.x, look - s.z) - s.velHeading;
+      const sweep = Math.sin(t / 37) * 0.5 + Math.sin(t / 11) * 0.25;
+      pad.axes[0] = Math.max(-1, Math.min(1, want * 2.2 + sweep));
+      pad.axes[2] = t % 600 > 560 ? (t % 1200 > 600 ? 1 : -1) : 0;
+      if (hold-- <= 0) {
+        hold = rng.int(10, 50);
+        trigger = rng.chance(0.4) ? rng.next() : 0;
+      }
+      pad.buttons[7] = { pressed: trigger > 0.5, value: trigger };
+      pad.buttons[2] = { pressed: t % 97 < 3, value: t % 97 < 3 ? 1 : 0 };
+      // A frame's poll lands between some ticks and not others, as it does at 144 Hz or at 37.
+      if (t % 3 !== 1) input.poll();
+      run.tick();
+    }
+    const rec = run.toRecord('Pad');
+    const log = decodeLog(rec.inputs);
+    const steers = new Set<number>();
+    for (const b of log.inputs) {
+      steers.add(b & 15);
+      if (actionOf(b)) actions++;
+      if (b & 64) spirits++;
+    }
+    input.dispose();
+    expect(run.finished).toBe(false);
+    expect(log.inputs.length).toBeGreaterThan(60 * 10);
+    expect(steers.size).toBeGreaterThanOrEqual(7);
+    expect(actions).toBeGreaterThan(60);
+    expect(spirits).toBeGreaterThan(5);
+    expect(replayRecord(rec).hash()).toBe(run.sim.hash());
+    expect(replayRecord(recordFromString(recordToString(rec))).hash()).toBe(run.sim.hash());
   });
 });

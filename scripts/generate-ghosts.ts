@@ -17,7 +17,8 @@ import { SIM_VERSION, TICK_RATE } from '../src/sim/sim';
 // own record (about a second a pool, and nothing else in the file changes). The stage medals read them
 // (src/game/ladder.ts), so a pool that comes in without them needs this and no more.
 
-/** The crowd; the twelve signature riders (src/bot/roster.ts) join it, 42 a mountain. */
+/** The crowd; the twelve signature riders (src/bot/roster.ts) join it, and the fast end's eight (pool.ts
+ *  FAST_RIDERS): 50 a mountain. */
 const COUNT = 30;
 const BUDGET = 110;
 

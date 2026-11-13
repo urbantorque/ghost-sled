@@ -217,7 +217,8 @@ describe('the finish', () => {
   });
 
   it('knows a tumble is the sim\'s length', () => {
-    expect(TUMBLE_TICKS / 60).toBeCloseTo(1.1, 6);
+    // (Round 7: a fall is three phases, a second and a half in all.)
+    expect(TUMBLE_TICKS / 60).toBeCloseTo(1.5, 6);
   });
 });
 

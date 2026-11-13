@@ -21,6 +21,10 @@ export const FLAG_CRASHED = 4;
 export const FLAG_DASHING = 8;
 /** A ward has just taken a hit (the half second the sled passes through what it hit). */
 export const FLAG_WARDED = 16;
+/** A fall (round 7), and where in it: tumbling to a stop, down in the snow, getting up. One at most is set. */
+export const FLAG_FALLING = 32;
+export const FLAG_DOWN = 64;
+export const FLAG_UP = 128;
 
 export interface PoolGhostData {
   name: string;

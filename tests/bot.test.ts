@@ -128,6 +128,34 @@ describe('ghost pool generation', () => {
     expect(generatePool(MOUNTAINS[1].seed, 0, 99)).toEqual([]);
   });
 
+  it('adds a fast end of real records: plain, finished, apart, and the crowd unchanged', () => {
+    const o = { budgetRuns: 5, maxTicks: 60 * 60 * 4 };
+    const crowd = generatePool(MOUNTAINS[1].seed, 4, 99, o);
+    const pool = generatePool(MOUNTAINS[1].seed, 4, 99, { ...o, fast: 2 });
+    const fast = pool.filter((g) => !crowd.some((c) => c.record === g.record));
+    // The crowd is the crowd it was: asking for a fast end changes nobody else's run.
+    expect(pool.length - fast.length).toBe(crowd.length);
+    expect(fast.length).toBe(2);
+    for (const g of fast) {
+      expect(g.mood, g.name).toBe(Mood.None);
+      expect(g.event, g.name).toBe(ChaosEvent.None);
+      expect(g.finishTick, g.name).toBeGreaterThan(0);
+      // A real run: its record replays to the score and the finish the pool says.
+      const sim = replayRecord(recordFromString(g.record));
+      expect(sim.score, g.name).toBe(g.score);
+      expect(sim.s.finishTick, g.name).toBe(g.finishTick);
+    }
+    const ticks = pool.filter((g) => g.finishTick > 0).map((g) => g.finishTick);
+    for (let i = 0; i < ticks.length; i++) for (let j = 0; j < i; j++) if (fast.some((g) => g.finishTick === ticks[i] || g.finishTick === ticks[j])) expect(Math.abs(ticks[i] - ticks[j])).toBeGreaterThanOrEqual(30);
+    // They are the quick end: no slower than the crowd's quickest finisher by more than a few seconds.
+    const best = Math.min(...crowd.filter((g) => g.finishTick > 0).map((g) => g.finishTick), Infinity);
+    for (const g of fast) expect(g.finishTick).toBeLessThan(best + 60 * 6);
+    // Still race order, weakest first, and every name its own.
+    expect(new Set(pool.map((g) => g.name)).size).toBe(pool.length);
+    // A pool that is no named mountain's (the Daily, in a worker) pays for none unless asked.
+    expect(generatePool(MOUNTAINS[1].seed, 4, 99, o)).toEqual(crowd);
+  });
+
   it('uses no Node APIs, since it also runs in a Web Worker', () => {
     const dir = join(process.cwd(), 'src', 'bot');
     for (const f of readdirSync(dir).filter((n) => n.endsWith('.ts'))) {

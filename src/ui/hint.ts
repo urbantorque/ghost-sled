@@ -1,11 +1,11 @@
 import type { HintKind, ScreenRect } from './contract';
 import type { InputMode } from '../game/input';
-import { h, kbd, kbdIcon } from './dom';
+import { h, kbd, kbdIcon, padBtn, padStick } from './dom';
 import { pushBox } from './hud';
 import { icon } from './icons';
 import { play } from './motion';
 
-// Contextual onboarding along the bottom. Keyboard and mouse get a pill with control glyphs, seated
+// Contextual onboarding along the bottom. Keyboard, mouse and gamepad get a pill with control glyphs, seated
 // just above the bottom safe area (never on the corridor under the sled); touch gets the two real
 // input zones drawn on screen (left 60% drag, right 40% hold), each glyph on an ink disc and each
 // label on an ink pill. A zone's soft ink pool goes after its first successful use (the steer zone's
@@ -150,7 +150,13 @@ function pill(kind: HintKind, mode: InputMode): HTMLElement {
       text = 'Right click to dash, or keep it as a ward';
     } else if (mode === 'touch') {
       text = 'Tap the lantern to dash, or keep it as a ward';
-    } else glyphs.append(kbd('E'));
+    } else if (mode === 'gamepad') glyphs.append(padBtn('X'));
+    else glyphs.append(kbd('E'));
+  } else if (mode === 'gamepad') {
+    // A pad: the stick for steering and spinning, A for every hold, tap and release, both for a drift.
+    if (kind === 'steer' || kind === 'spin') glyphs.append(padStick());
+    else if (kind === 'drift') glyphs.append(padBtn('A'), plus(), padStick());
+    else glyphs.append(padBtn('A'));
   } else if (mode === 'mouse') {
     if (kind === 'steer' || kind === 'spin') {
       glyphs.append(icon('arrowL', 'gs-hint-arrow'), icon('mouse', 'gs-hint-mouse'), icon('arrowR', 'gs-hint-arrow'));

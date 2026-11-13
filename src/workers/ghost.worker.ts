@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 import { generatePool, type PoolRun } from '../bot/pool';
 import { recordFromString, replayRecord } from '../sim/replay';
+import { FALL_DOWN, FALL_FALLING, FALL_UP } from '../sim/sim';
 import {
   F_AIRPITCH,
   F_AIRYAW,
@@ -17,6 +18,9 @@ import {
   FLAG_DRIFTING,
   FLAG_GROUNDED,
   FLAG_WARDED,
+  FLAG_FALLING,
+  FLAG_DOWN,
+  FLAG_UP,
   FRAME_STRIDE,
   SAMPLE_EVERY,
   WorkerIn,
@@ -68,7 +72,7 @@ function replay(id: number, recordStr: string): void {
       frames[o + F_AIRPITCH] = st.airPitch;
       frames[o + F_LEAN] = st.lean;
       frames[o + F_SPEED] = st.speed;
-      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0) | (st.dash > 0 ? FLAG_DASHING : 0) | (st.ghost > 0 && st.dash === 0 ? FLAG_WARDED : 0);
+      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0) | (st.dash > 0 ? FLAG_DASHING : 0) | (st.ghost > 0 && st.dash === 0 ? FLAG_WARDED : 0) | (st.fall === FALL_FALLING ? FLAG_FALLING : st.fall === FALL_DOWN ? FLAG_DOWN : st.fall === FALL_UP ? FLAG_UP : 0);
       frames[o + F_CARVE] = st.carve;
       n++;
     });

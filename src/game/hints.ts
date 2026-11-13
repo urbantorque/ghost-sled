@@ -4,6 +4,12 @@ import type { HintKind } from '../ui/contract';
 // The app feeds the frame's state and the save's lifetime counts (h); the coach keeps the per-run
 // state (what is up, for how long, how often a nag has shown) and says when the shown hint changes.
 //
+// A hint leaves once the player has shown the control (the save's lesson counts), and it does not wait for
+// that for ever (round 7). The steer lesson is up STEER_UP_S at a showing, then gone, and comes back only
+// to a rider who still has not steered and is off the corridor. Any other lesson shown in RETIRE_RUNS runs
+// and never taken up is not shown again (the save counts the runs a lesson was shown in, HintStep.seen),
+// except the lip's, which comes back when the button was held through one.
+//
 // Pure: no DOM, render or audio imports.
 
 /** A hint stays up at least this long (s) against an ordinary change of mind. */
@@ -38,6 +44,16 @@ export const LIP_SHOWS = 3;
 export const DRIFT_AFTER_Z = 800;
 /** The ring waits for the lip lesson, but never past this far down a run with no kicker in reach (m). */
 export const RING_AFTER_Z = 450;
+/** The steer lesson: this long (s) on screen at a showing, and at most this many showings a run. After the
+ *  first it shows only to a rider who is astray (off the corridor) and has still never steered. */
+export const STEER_UP_S = 8;
+export const STEER_SHOWS = 3;
+/** ...and once it has gone it stays gone this long (s), so a rider sat in the bank does not see it blink. */
+export const STEER_REST_S = 20;
+/** A lesson shown in this many runs and never taken up is not shown again. The landing ring is a timing
+ *  aid more than a lesson, so it has longer. */
+export const RETIRE_RUNS = 3;
+export const RETIRE_RING_RUNS = 6;
 
 /** The lifetime lesson counts (save.hints). */
 export type HintCounts = Partial<Record<HintKind, number>>;
@@ -73,6 +89,8 @@ export interface HintFrame {
   /** A whole lantern is lit (a dash to spend), and the run has dashed at least once. */
   lit?: boolean;
   dashed?: boolean;
+  /** Off the corridor: in the bank or against the edge. A rider there who has never steered needs telling. */
+  astray?: boolean;
 }
 
 export interface HintStep {
@@ -80,6 +98,8 @@ export interface HintStep {
   show?: HintKind | null;
   /** Lessons the frame taught by doing (the app counts them into save.hints). */
   learned: HintKind[];
+  /** A lesson shown for the first time this run (the app counts the run into save.hintsSeen). */
+  seen?: HintKind;
 }
 
 export class HintCoach {
@@ -90,6 +110,12 @@ export class HintCoach {
   private driftUp = 0;
   private spinShows = 0;
   private lipShows = 0;
+  private steerShows = 0;
+  /** Seconds the steer lesson has been up at this showing, and since it last went. */
+  private steerUp = 0;
+  private sinceSteer = Infinity;
+  /** The lessons shown this run (each counts the run once). */
+  private seenRun = new Set<HintKind>();
   /** The stomp cue has shown this run: the air lessons may follow it. */
   private ringShown = false;
   /** Seconds the sled has been on the snow (0 in the air). */
@@ -106,6 +132,10 @@ export class HintCoach {
     this.driftUp = 0;
     this.spinShows = 0;
     this.lipShows = 0;
+    this.steerShows = 0;
+    this.steerUp = 0;
+    this.sinceSteer = Infinity;
+    this.seenRun.clear();
     this.ringShown = false;
     this.ground = 0;
     this.sinceStomp = Infinity;
@@ -120,52 +150,59 @@ export class HintCoach {
   }
 
   /** What this frame wants on screen. */
-  want(f: HintFrame, h: HintCounts): { want: HintKind | null; learned: HintKind[] } {
+  want(f: HintFrame, h: HintCounts, seen: HintCounts = {}): { want: HintKind | null; learned: HintKind[] } {
     const learned: HintKind[] = [];
     const n = (k: HintKind): number => h[k] ?? 0;
+    // Shown in enough earlier runs and never taken up: retired (this run's own showing is not counted).
+    const gone = (k: HintKind): boolean => (seen[k] ?? 0) - (this.seenRun.has(k) ? 1 : 0) >= (k === 'stomp' ? RETIRE_RING_RUNS : RETIRE_RUNS);
     let want: HintKind | null = null;
     // The first minute goes in order, and nothing here waits for a miss: steer at once, the lip on the
-    // first kicker, the ring on that flight, and the air on the first leap after it.
-    if (n('steer') < 1 && !f.kickerAhead) want = 'steer';
+    // first kicker, the ring on that flight, and the air on the first leap after it. The steer lesson has
+    // its time and goes; it comes back only to a rider off the corridor who has still never steered.
+    const steerLeft = this.shown === 'steer' ? this.steerUp < STEER_UP_S : this.steerShows < STEER_SHOWS;
+    const steerNeed = this.shown === 'steer' || (this.steerShows === 0 && !gone('steer')) || (f.astray === true && this.sinceSteer >= STEER_REST_S);
+    if (n('steer') < 1 && !f.kickerAhead && steerLeft && steerNeed) want = 'steer';
     if (f.steered && n('steer') < 1) {
       learned.push('steer');
       want = null;
     }
     // A kicker ahead is a short window: the lip lesson goes before the drift nag on that approach.
     const lipLeft = this.shown === 'boostPop' || this.lipShows < LIP_SHOWS;
-    if (!want && f.grounded && (n('boostPop') < 1 || f.heldLip) && f.kickerAhead && lipLeft) want = 'boostPop';
+    if (!want && f.grounded && ((n('boostPop') < 1 && !gone('boostPop')) || f.heldLip) && f.kickerAhead && lipLeft) want = 'boostPop';
     const driftLeft = this.shown === 'drift' ? this.driftUp < DRIFT_UP_S : this.driftShows < DRIFT_SHOWS && this.driftUp < DRIFT_UP_S;
     const taught = f.runs > 0 || f.z >= DRIFT_AFTER_Z;
-    if (!want && n('drift') < 2 && f.timer > 6 && taught && f.grounded && !f.drifting && driftLeft) want = 'drift';
-    if (!want && n('pop') < 1 && f.action && f.grounded && !f.drifting) want = 'pop';
+    if (!want && n('drift') < 2 && !gone('drift') && f.timer > 6 && taught && f.grounded && !f.drifting && driftLeft) want = 'drift';
+    if (!want && n('pop') < 1 && !gone('pop') && f.action && f.grounded && !f.drifting) want = 'pop';
     // New verbs as players reach them: once the ring has been taught, a long flight teaches the spin,
     // then the backflip. While the stomp is still being learned, an air lesson needs time to be read
     // before the stomp cue takes over.
     if (!want && !f.grounded && f.airTicks > 6 && f.ttl < 5) {
       const room = (k: HintKind, base: number): number => (this.shown === k ? 0.8 : n('stomp') < 3 ? AIR_LESSON_S : base);
-      const ring = this.ringShown || n('stomp') >= 1;
-      if (n('spin') < 2 && ring && f.ttl > room('spin', 0.8) && (this.shown === 'spin' || this.spinShows < SPIN_SHOWS)) want = 'spin';
-      else if (n('spin') >= 1 && n('flip') < 1 && f.ttl > room('flip', 0.9)) want = 'flip';
+      const ring = this.ringShown || n('stomp') >= 1 || gone('stomp');
+      if (n('spin') < 2 && !gone('spin') && ring && f.ttl > room('spin', 0.8) && (this.shown === 'spin' || this.spinShows < SPIN_SHOWS)) want = 'spin';
+      else if (n('spin') >= 1 && n('flip') < 1 && !gone('flip') && f.ttl > room('flip', 0.9)) want = 'flip';
     }
     // The stomp cue always wins (one threshold; it waits only for a hint's HINT_MIN_S), on a real flight,
     // once the lip has been taught.
     const realFlight = f.airTicks > STOMP_CUE_AIR_TICKS || f.ttl >= STOMP_CUE_MIN_TTL_S;
     const stompBack = this.shown === 'stomp' || this.sinceStomp >= STOMP_GROUND_S;
     const lipFirst = this.lipShows > 0 || n('boostPop') >= 1 || n('pop') >= 1 || f.runs > 0 || f.z >= RING_AFTER_Z;
-    if (!f.grounded && n('stomp') < 3 && f.ttl < STOMP_CUE_S && realFlight && stompBack && lipFirst) want = 'stomp';
+    if (!f.grounded && n('stomp') < 3 && !gone('stomp') && f.ttl < STOMP_CUE_S && realFlight && stompBack && lipFirst) want = 'stomp';
     // The lantern: the first time one is lit (on the snow, out of a drift), what the button does with it.
-    if (!want && n('dash') < 2 && f.lit && f.grounded && !f.drifting && n('steer') >= 1) want = 'dash';
+    if (!want && n('dash') < 2 && !gone('dash') && f.lit && f.grounded && !f.drifting && n('steer') >= 1) want = 'dash';
     if (f.dashed && n('dash') < 2) learned.push('dash');
-    if (!want && n('draft') < 1 && f.timer > 20 && f.draftTarget) want = 'draft';
+    if (!want && n('draft') < 1 && !gone('draft') && f.timer > 20 && f.draftTarget) want = 'draft';
     if (f.drafting && n('draft') < 1) learned.push('draft');
     if (f.chased || f.tumbling) want = null;
     return { want, learned };
   }
 
   /** Steps the coach; `show` is set when the hint on screen changes. */
-  step(f: HintFrame, h: HintCounts): HintStep {
+  step(f: HintFrame, h: HintCounts, seen: HintCounts = {}): HintStep {
     this.sinceStomp += f.dt;
-    const { want, learned } = this.want(f, h);
+    if (this.shown === 'steer') this.steerUp += f.dt;
+    else this.sinceSteer += f.dt;
+    const { want, learned } = this.want(f, h, seen);
     this.hold = Math.max(0, this.hold - f.dt);
     if (this.shown) this.up += f.dt;
     if (this.shown === 'drift') this.driftUp += f.dt;
@@ -187,6 +224,7 @@ export class HintCoach {
     const swap = !stompHeld && (this.hold <= 0 || f.chased || f.tumbling || doing || stompIn || stompOut);
     if (want === this.shown || !swap) return { learned };
     if (this.shown === 'stomp') this.sinceStomp = 0;
+    if (this.shown === 'steer') this.sinceSteer = 0;
     this.shown = want;
     this.hold = want ? HINT_HOLD_S : 0;
     this.up = 0;
@@ -194,6 +232,14 @@ export class HintCoach {
     if (want === 'spin') this.spinShows++;
     if (want === 'boostPop') this.lipShows++;
     if (want === 'stomp') this.ringShown = true;
+    if (want === 'steer') {
+      this.steerShows++;
+      this.steerUp = 0;
+    }
+    if (want && !this.seenRun.has(want)) {
+      this.seenRun.add(want);
+      return { show: want, learned, seen: want };
+    }
     return { show: want, learned };
   }
 }

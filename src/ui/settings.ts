@@ -22,11 +22,12 @@ let uid = 0;
 
 export class SettingsPanel {
   readonly el: HTMLElement;
-  private m: SettingsModel = { master: 1, music: 0.8, sfx: 1, quality: 'auto', currentTier: 'high', hints: true };
+  private m: SettingsModel = { master: 1, music: 0.8, sfx: 1, quality: 'auto', currentTier: 'high', hints: true, rumble: true };
   private readonly ranges = new Map<Vol, { input: HTMLInputElement; out: HTMLElement }>();
   private readonly segs = new Map<Quality, HTMLButtonElement>();
   private readonly cap: HTMLElement;
   private readonly hintsBtn: HTMLButtonElement;
+  private readonly rumbleBtn: HTMLButtonElement;
 
   constructor(
     private readonly ctx: Ctx,
@@ -76,7 +77,19 @@ export class SettingsPanel {
       this.hd.onSettings({ hints: this.m.hints });
     });
 
-    this.el.append(sound, qual, this.hintsBtn);
+    // The pad's rumble. The row shows once a gamepad has been used (.gs-has-pad on the UI root).
+    this.rumbleBtn = h('button', 'gs-switch-row gs-set-rumble', h('span', 'gs-set-label', 'Controller Rumble'), h('span', 'gs-switch'));
+    this.rumbleBtn.type = 'button';
+    this.rumbleBtn.dataset.fk = 'rumble';
+    this.rumbleBtn.setAttribute('role', 'switch');
+    this.rumbleBtn.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      this.m = { ...this.m, rumble: !this.m.rumble };
+      this.paintRumble();
+      this.hd.onSettings({ rumble: this.m.rumble });
+    });
+
+    this.el.append(sound, qual, this.hintsBtn, this.rumbleBtn);
     this.set(this.m);
   }
 
@@ -116,6 +129,7 @@ export class SettingsPanel {
     }
     this.paintQuality();
     this.paintHints();
+    this.paintRumble();
   }
 
   private paintQuality(): void {
@@ -129,6 +143,10 @@ export class SettingsPanel {
 
   private paintHints(): void {
     this.hintsBtn.setAttribute('aria-checked', String(this.m.hints));
+  }
+
+  private paintRumble(): void {
+    this.rumbleBtn.setAttribute('aria-checked', String(this.m.rumble));
   }
 }
 

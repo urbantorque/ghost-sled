@@ -11,7 +11,7 @@ import { MOUNTAINS, MountainDef, biomeForSeed, dailyKey, dailyMountain } from '.
 import { Rng, hashString } from '../sim/prng';
 import { RunRecord, recordFromString, recordToString } from '../sim/replay';
 import { decodeLog, packInput } from '../sim/input';
-import { SIM_VERSION, Sim, SimEvent, TUMBLES } from '../sim/sim';
+import { GET_UPS, GET_UP_BACK_M, SIM_VERSION, Sim, SimEvent } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { UI } from '../ui/ui';
 import { reduced } from '../ui/motion';
@@ -22,7 +22,7 @@ import type { GarageShelf, GhostKind, HintKind, HudModel, PaintCard, ResultsMode
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
-import { anchorFor, pickField, poolTime } from './field';
+import { anchorFor, fieldCount, pickField, poolTime, recentFor } from './field';
 import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding, trackStanding } from './ghosts';
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
@@ -42,6 +42,7 @@ import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
 import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, deviceCeiling, guessTier } from './quality';
+import { Rumble } from './rumble';
 import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
@@ -143,6 +144,8 @@ export class App {
   private ui: UI;
   private audio = new AudioEngine();
   private input: InputController;
+  /** The pad's rumble: only while the pad is the last input used, the setting is on and motion is not reduced. */
+  private readonly rumble = new Rumble({ pad: () => this.input.activePad(), on: () => this.input.mode === 'gamepad' && this.save.data.settings.rumble && !reduced() });
   private ghosts = new GhostManager();
   /** Turns each frame's sim and race events into beats and feel (window.__gs.director for probes). */
   readonly director = new Director(reduced);
@@ -430,6 +433,9 @@ export class App {
   // ------------------------------------------------------------------ wiring
 
   private wireInput(): void {
+    // The pad: the menus get the first turn at its presses, and the glyphs on screen follow the last input used.
+    this.input.onPadMenu((p) => this.ui.padMenu(p));
+    this.input.onMode((m) => this.ui.inputModeChanged(m));
     this.input.onPress((source, code) => {
       this.audio.unlock();
       if (this.ui.modal && this.phase !== 'results') return;
@@ -749,7 +755,7 @@ export class App {
 
   private settingsModel(): SettingsModel {
     const s = this.save.data.settings;
-    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints, ultra: !matchMedia('(pointer: coarse)').matches };
+    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints, rumble: s.rumble, ultra: !matchMedia('(pointer: coarse)').matches };
   }
 
   private applySettings(p: Partial<SettingsModel>): void {
@@ -758,6 +764,7 @@ export class App {
     if (p.music !== undefined) s.music = p.music;
     if (p.sfx !== undefined) s.sfx = p.sfx;
     if (p.hints !== undefined) s.hints = p.hints;
+    if (p.rumble !== undefined) s.rumble = p.rumble;
     if (p.quality !== undefined && p.quality !== s.quality) {
       s.quality = p.quality;
       this.tiers.force(p.quality, guessTier());
@@ -796,10 +803,12 @@ export class App {
       kind: MOUNTAINS.some((m) => m === this.mountain) ? 'pool' : 'daily',
       mood: chaos.mood,
       event: chaos.event,
-      count: 5 + moodInfo(chaos.mood).params.extraGhosts,
+      count: fieldCount(moodInfo(chaos.mood).params.extraGhosts, cup ? [] : recentFor(d.runTimes ?? {}, key)),
       // The Cup's field is the week's, the same for everyone: no anchor of yours picks it, and your
       // best joins it after (a pick keeps its distance from your best, which would move the field).
       anchor: cup ? 0 : anchorFor(d.runTimes ?? {}, key),
+      // Your own runs here lay the field across where you finish (never the Cup's, which is shared).
+      recent: cup ? [] : recentFor(d.runTimes ?? {}, key),
       seed: chaos.seed,
       bestScore: ownRec?.score ?? 0,
       you: cup ? null : mine,
@@ -1851,6 +1860,7 @@ export class App {
     this.frameTimes.push(dt * 1000);
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
+    this.input.poll();
     if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
     else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
@@ -2300,6 +2310,7 @@ export class App {
     this.audio.beats(out.beats);
     for (const e of events) {
       this.audio.simEvent(e);
+      this.rumble.simEvent(e);
       this.onSimEvent(e);
     }
 
@@ -2343,7 +2354,9 @@ export class App {
         distance: sim.distance,
         clock: (sim.finished ? sim.s.finishTick : sim.tick) / 60,
         stage: { index: Math.min(sim.stageTicks.length, stages.length - 1), of: stages.length, progress: Math.min(1, sim.distance / sim.course.finishZ) },
-        wipeouts: sim.s.tumbles > 0 ? { left: Math.max(0, TUMBLES - sim.s.tumbles), of: TUMBLES } : null,
+        // Get-ups: shown from the run's first fall (a free one too: it shows the three you have), with how far
+        // the next has come back.
+        wipeouts: sim.s.getUps < GET_UPS || this.tumbles > 0 ? { left: sim.s.getUps, of: GET_UPS, back: sim.s.getUps < GET_UPS ? Math.min(1, Math.max(0, (sim.s.z - sim.s.getUpZ) / GET_UP_BACK_M)) : 0 } : null,
         gifts: runPay(sim) + this.passBonus,
         lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes },
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
@@ -2514,7 +2527,8 @@ export class App {
       {
         dt,
         timer: this.hintTimer,
-        steered: this.input.steering,
+        // The run's own input as well as the hands': a pad's stick, a replay or a scripted rider steers too.
+        steered: this.input.steering || Math.abs(s.steer) > 0.2,
         grounded: s.grounded,
         drifting: s.drifting,
         action: s.action,
@@ -2531,9 +2545,16 @@ export class App {
         tumbling: s.tumble > 0,
         lit: s.lantern >= 100,
         dashed: sim.stats.dashes > 0,
+        astray: s.grounded && sim.course.edgeExcess(s.x, s.z) > 0,
       },
       h,
+      this.save.data.hintsSeen,
     );
+    // The run counts once for each lesson it showed: one shown in run after run and never taken up retires.
+    if (hint.seen) {
+      const seen = (this.save.data.hintsSeen ??= {});
+      seen[hint.seen] = (seen[hint.seen] ?? 0) + 1;
+    }
     // Lessons learned by doing (steering while the steer hint is wanted; any slipstream).
     for (const k of hint.learned) h[k] = Math.max(1, h[k] ?? 0);
     // Steered and drifted once: the touch zone outlines fade out for good (the labels stay).

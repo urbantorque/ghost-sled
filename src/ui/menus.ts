@@ -278,7 +278,8 @@ export class Menus {
     this.homeBtn = home;
     const title = h('h2', 'gs-pause-title', 'Paused');
     title.id = 'gs-pause-title';
-    const key = h('p', 'gs-pause-key gs-kbd-only', kbd('P'), ' to resume');
+    // The way back, in the keys' words and in the pad's: the UI root shows the one in use (.gs-pad-mode).
+    const key = h('p', 'gs-pause-key gs-kbd-only', h('span', 'gs-key-keys', kbd('P'), ' to resume'), h('span', 'gs-key-pad', kbd('Start', 'gs-pad-start'), ' to resume'));
     // Under the title, what the run is working toward: each mission's live progress, Done once it popped.
     this.pauseMis = h('section', 'gs-pause-mis');
     this.pauseMis.setAttribute('aria-labelledby', 'gs-pause-mis-h');

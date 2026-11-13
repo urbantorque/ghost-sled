@@ -85,6 +85,8 @@ export interface Settings {
   sfx: number;
   quality: 'auto' | 'low' | 'medium' | 'high' | 'ultra';
   hints: boolean;
+  /** The gamepad's rumble (round 7). A save from before it reads as on. */
+  rumble: boolean;
 }
 
 /** The Daily Mountain's record. medal (0 none, 1 bronze, 2 silver, 3 gold), streak and last (the UTC
@@ -113,6 +115,8 @@ export interface SaveData {
   settings: Settings;
   stats: { bestScore: number; bestCombo: number; longestAir: number; perfects: number; topSpeed: number; yetiHops: number; avalanches: number };
   hints: Record<string, number>;
+  /** The runs each lesson has been shown in (hints.ts retires one shown often and never taken up). */
+  hintsSeen?: Record<string, number>;
   daily: DailyRecord;
   /** Run-end distances from before runs had a finish. Kept, and read by nothing: see runTimes. */
   runDists?: Record<string, number[]>;
@@ -172,7 +176,7 @@ export function defaultSave(name: string): SaveData {
     best: {},
     grudge: {},
     missions: newMissionState(hashString(name), { unlockedBiomes: unlockedBiomes(0) }),
-    settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true },
+    settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true, rumble: true },
     stats: { bestScore: 0, bestCombo: 0, longestAir: 0, perfects: 0, topSpeed: 0, yetiHops: 0, avalanches: 0 },
     hints: {},
     daily: { key: '', best: 0, medal: 0, streak: 0, last: '' },
@@ -485,6 +489,7 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     best: loadBest(p.best, archive),
     grudge: loadGrudges(p.grudge, archive),
     hints: isObj(p.hints) ? (p.hints as Record<string, number>) : {},
+    hintsSeen: isObj(p.hintsSeen) ? (p.hintsSeen as Record<string, number>) : {},
     // Shallow merge: new daily fields get their defaults and unknown ones are kept.
     daily: { ...base.daily, ...(isObj(p.daily) ? p.daily : {}) },
     ownedSleds: Array.isArray(p.ownedSleds) && p.ownedSleds.length ? p.ownedSleds : [0],

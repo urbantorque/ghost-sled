@@ -33,6 +33,21 @@ import { FINISH_Z, predictedTime, recordStanding } from './standing';
 // 604.4 m never ride together). Finishers are spaced by time alone: they all end at the same line, so
 // spacing them by distance rode one.
 //
+// Once you have ridden a mountain the field is laid across where you finish (round 7, FieldInput.recent).
+// The fixed roles above put five riders between 0.88A and 1.07A whoever you were, and a skilled player's
+// times move more than that from one run to the next (the expert pilot: 116 to 139 s in five runs), so on a
+// slow day the whole field rode away and on a quick one it was left at the first stage line. Now the riders
+// are spaced evenly from a little quicker than your quickest recent run (the one to chase on a good day)
+// to your slowest of the last three, and never tighter than 1.08A at the slow end or wider than 1.12A. A
+// steady player gets a tight pack and an erratic one a long string, and whichever run you have, somebody
+// real is near it. And two more riders ride (FIELD_MORE, fieldCount): the race lab (scripts/playtest/
+// race-lab.ts) says what makes a race live is how many real riders are spread over where you might finish.
+// Five on the fixed roles were within 40 m for 0.53 of a skilled pilot's run; five picked with hindsight,
+// nearest the time the pilot then rode, for 0.71; seven laid across its runs, 0.66, with a third of the
+// quiet runs; nine, 0.72. The roles are read off the targets (an opener is over 1.03A, pace is under 0.97A), the
+// field's pace follows your last three runs when they are quicker than the median of five, and every
+// record is still a real run replayed as it was ridden.
+//
 // Pure: no DOM, render or audio imports.
 
 export interface FieldInput {
@@ -44,6 +59,9 @@ export interface FieldInput {
   count: number;
   /** Your predicted finish time in seconds (anchorFor), or 0 with no runs: a mid-pack time. */
   anchor: number;
+  /** Your last predicted finish times on this mountain, oldest first (recentFor). With any, the field is
+   *  laid across where you finish; with none it is the fixed roles around the anchor. */
+  recent?: readonly number[];
   /** chaos.seed, for reproducible tie-breaks. */
   seed: number;
   /** Your best score on this mountain key (0 for none). Kept for the app's call; the field is built by time. */
@@ -88,6 +106,20 @@ export const ANCHOR_RUNS = 5;
 export const ANCHOR_LAST = 1.1;
 /** A mountain you have not ridden: your other mountains' median, this much slower. */
 export const ANCHOR_NEW = 1.1;
+/** The quickest rider of a field laid across your runs: this share of your quickest recent run, by how
+ *  many runs are known (one, two, three or more). A new player is still getting quicker fast, so the
+ *  carrot hangs further out; and never under FIELD_FAST_MIN of the field's pace, whatever a short
+ *  wrecked run predicted. */
+export const FIELD_CARROT = [0.94, 0.95, 0.97] as const;
+export const FIELD_FAST_MIN = 0.85;
+/** Its slowest rider: your slowest of the last FIELD_SLOW_RUNS, but at least and at most these shares
+ *  of the field's pace. */
+export const FIELD_SLOW_RUNS = 3;
+export const FIELD_SLOW_MIN = 1.08;
+export const FIELD_SLOW_MAX = 1.12;
+/** Riders added to a field laid across your runs, and the most a field holds (Haunted Hollow's nine). */
+export const FIELD_MORE = 2;
+export const FIELD_MOST = 9;
 /** Seconds every pick keeps from every other pick and from your best. */
 export const FIELD_SPACING_S = 1;
 /** Metres two riders who crashed keep between their wrecks. */
@@ -132,6 +164,49 @@ export function anchorFor(runTimes: Readonly<Record<string, number[]>>, key: str
     if (others.length) a = ANCHOR_NEW * median(others);
   }
   return a > 0 ? Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, a)) : 0;
+}
+
+/** Your last predicted finish times on a mountain key, oldest first (FieldInput.recent). */
+export function recentFor(runTimes: Readonly<Record<string, number[]>>, key: string): number[] {
+  return runs(runTimes?.[key]).slice(-ANCHOR_RUNS);
+}
+
+/** How many pool riders a run's field holds: five and the mood's extra, and FIELD_MORE once you have a run
+ *  here for the field to be laid across (`recent`), FIELD_MOST at most. */
+export function fieldCount(extra: number, recent: readonly number[]): number {
+  const base = 5 + Math.max(0, extra);
+  return runs(recent).length ? Math.max(base, Math.min(FIELD_MOST, base + FIELD_MORE)) : base;
+}
+
+/** The pace a field laid across your runs is read at: the anchor, or the median of your last three
+ *  when that is quicker (a player who is improving run by run is not raced on last week's pace). */
+export function fieldPace(anchor: number, recent: readonly number[]): number {
+  const last = runs(recent).slice(-FIELD_SLOW_RUNS);
+  if (!last.length) return anchor;
+  const m = Math.min(ANCHOR_MAX, Math.max(ANCHOR_MIN, median(last)));
+  return anchor > 0 ? Math.min(anchor, m) : m;
+}
+
+/** The roles of a field laid across your recent runs (see the header): `count` riders evenly from the
+ *  carrot to your slow day, slowest first. */
+function spread(a: number, count: number, recent: readonly number[]): Role[] {
+  if (count <= 0) return [];
+  const quickest = Math.min(...recent);
+  const slowest = Math.max(...recent.slice(-FIELD_SLOW_RUNS));
+  const carrot = FIELD_CARROT[Math.min(recent.length, FIELD_CARROT.length) - 1];
+  const fast = Math.min(0.97 * a, Math.max(carrot * quickest, FIELD_FAST_MIN * a));
+  const slow = Math.min(FIELD_SLOW_MAX * a, Math.max(slowest, FIELD_SLOW_MIN * a));
+  const step = count > 1 ? (slow - fast) / (count - 1) : 0;
+  const half = Math.max(1, step / 2);
+  const out: Role[] = [];
+  for (let k = 0; k < count; k++) {
+    const target = count > 1 ? slow - k * step : a;
+    const role: GhostRole = target > 1.03 * a ? 'opener' : target < 0.97 * a ? 'pace' : 'pack';
+    out.push({ role, target, lo: target - half, hi: target + half });
+  }
+  // A grudge or a promised rider takes the pack slot nearest its pace: there is always one.
+  if (!out.some((r) => r.role === 'pack')) out.reduce((b, r) => (Math.abs(r.target - a) < Math.abs(b.target - a) ? r : b)).role = 'pack';
+  return out;
 }
 
 interface Role {
@@ -243,7 +318,8 @@ export function pickField(i: FieldInput): FieldPick[] {
     .filter((g) => g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
     .sort((x, y) => timeOf(x) - timeOf(y));
   const first = !(Number.isFinite(i.anchor) && i.anchor > 0);
-  const a = first ? ANCHOR_DEFAULT : i.anchor;
+  const recent = runs(i.recent);
+  const a = first ? ANCHOR_DEFAULT : recent.length ? fieldPace(i.anchor, recent) : i.anchor;
 
   const wreckOf = (distance: number): number | null => (distance >= FINISH_Z ? null : distance);
   const used = new Set<PoolGhostData>();
@@ -256,7 +332,7 @@ export function pickField(i: FieldInput): FieldPick[] {
   };
 
   const picks: Array<{ g: PoolGhostData; role: GhostRole; widened: boolean }> = [];
-  for (const r of roles(a, count, first && i.kind !== 'pool')) {
+  for (const r of !first && recent.length ? spread(a, count, recent) : roles(a, count, first && i.kind !== 'pool')) {
     const fits = (g: PoolGhostData) => !used.has(g) && spaced(g);
     let found: PoolGhostData | null = null;
     let widened = false;

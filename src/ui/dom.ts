@@ -29,6 +29,18 @@ export function kbdIcon(name: IconName, label: string): HTMLElement {
   return k;
 }
 
+/** A gamepad's face button: a round cap with its letter, read out as "A button". */
+export function padBtn(letter: string, cls = ''): HTMLElement {
+  const face = h('span', '', letter);
+  face.setAttribute('aria-hidden', 'true');
+  return h('kbd', cls ? `gs-kbd gs-pad-btn ${cls}` : 'gs-kbd gs-pad-btn', face, sr(`${letter} button`));
+}
+
+/** A gamepad's stick, pushed left and right. */
+export function padStick(label = 'Stick'): HTMLElement {
+  return h('span', 'gs-pad-stick', icon('stick'), sr(label));
+}
+
 export type UiSound = 'tap' | 'confirm' | 'back';
 
 /** What every screen module needs from the UI root. */

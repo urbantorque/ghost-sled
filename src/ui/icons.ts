@@ -43,7 +43,8 @@ export type IconName =
   | 'slip'
   | 'ghostPlus'
   | 'rider'
-  | 'tri';
+  | 'tri'
+  | 'stick';
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const FILL = 'fill="currentColor"';
@@ -145,6 +146,8 @@ const GLYPHS: Record<IconName, string> = {
   rider: `<g ${FILL}><circle cx="11.2" cy="6.4" r="3.1"/><circle cx="12.4" cy="2.6" r="1.3"/><path d="M7.4 10.6h7.2a1.6 1.6 0 0 1 1.6 1.6v3.4H5.8v-3.4a1.6 1.6 0 0 1 1.6-1.6z"/></g><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M2.6 19.2h15.6c2.2 0 3.6-1.5 3.6-3.4 0-1.1-.8-1.9-1.8-1.9"/>`,
   // A solid, rounded arrowhead: bold enough to read its direction at a glance.
   tri: `<path ${FILL} d="M12 4.4a1.7 1.7 0 0 1 1.5.9l6.8 11.6a1.7 1.7 0 0 1-1.5 2.6H5.2a1.7 1.7 0 0 1-1.5-2.6l6.8-11.6a1.7 1.7 0 0 1 1.5-.9z"/>`,
+  // A gamepad's stick from above: its well as a ring, its cap solid inside, and which way it is pushed.
+  stick: `<circle ${STROKE} cx="12" cy="12" r="6.2"/><circle ${FILL} cx="12" cy="12" r="3"/><path ${STROKE} d="M3.2 9.8L1 12l2.2 2.2M20.8 9.8L23 12l-2.2 2.2"/>`,
 };
 
 /** Raw SVG markup for a glyph (24 x 24 viewBox). */
