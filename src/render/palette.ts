@@ -1367,7 +1367,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     },
     {
       // A clear, high frame: the cone sharp at last, the air blue behind it, a river of petals on the wind.
-      from: 2200, at: 2700, dusk: 0.5,
+      from: 2100, at: 2450, dusk: 0.5,
       edit: (p) => {
         setSun(p, -28, 27, 36, 19);
         p.sunColor = c('#FFF8F2');

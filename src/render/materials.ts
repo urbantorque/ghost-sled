@@ -219,14 +219,17 @@ export function applyPalette(full: Palette): void {
   // whiteout is all fog already and takes less of it.
   const dense = Math.max(0, Math.min(1, (260 - p.fogFar) / 110));
   if (p.mist) shared.uMistColor.value.copy(p.mist).lerp(p.fog, 0.3);
-  else shared.uMistColor.value.copy(p.fog).lerp(p.skyHorizon, 0.35).lerp(p.snowLit, 0.25);
+  // (The snow's white only by day: under Ember's dusk it greyed the ash, which is lit by the horizon.)
+  else shared.uMistColor.value.copy(p.fog).lerp(p.skyHorizon, 0.35).lerp(p.snowLit, 0.25 * shared.uDayK.value);
   // A drifting mist (Haunted Hollow's above all) lies a little deeper, so its banks roll round the
   // hazards' feet and the hollows past the banks brim with it.
   shared.uMist.value.set((p.mist ? 0.5 + 0.3 * p.mistK : 0.58) * (1 - 0.5 * dense), 5 + 4 * dense + 3 * p.atmo.drift * (p.mist ? 1 : 0.4));
   mistDriftK = p.atmo.drift;
   shared.uMistDrift.value = cloudShadowsOn ? mistDriftK : 0;
   // Forward scatter toward the sun, strongest by day; a moon gets a little.
-  shared.uFogSun.value = (0.2 + 0.4 * shared.uDayK.value) * (1 - 0.6 * dense) * p.air.scatter;
+  // A disc dimmed behind smoke or gone under the horizon scatters less: at full strength a pale sun's
+  // colour lay over Ember's dark halls as a grey veil (the review's "grey fog with a line in it").
+  shared.uFogSun.value = (0.2 + 0.4 * shared.uDayK.value) * (1 - 0.6 * dense) * p.air.scatter * Math.min(1, 0.25 + 0.75 * p.sunDisc);
   shared.uAirFar.value.copy(p.air.far);
   shared.uAirCool.value.copy(p.air.cool);
   shared.uAir.value.set(1, p.air.low * (1 - 0.7 * dense), 0, 0);
