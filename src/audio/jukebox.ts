@@ -5,6 +5,7 @@ import type { SimEvent } from '../sim/sim';
 import { buildLift } from './cues';
 import type { AudioEngine, AudioFrame } from './engine';
 import type { SectionName } from './form';
+import { MOTIFS } from './motifs';
 import { SLED_SOUNDS, type SledSoundId } from './sledsounds';
 
 // The jukebox (round 6, debug only: ?debug&jukebox). A panel over the title screen that plays any part of the
@@ -14,15 +15,39 @@ import { SLED_SOUNDS, type SledSoundId } from './sledsounds';
 // score. It drives the real engine with a synthetic frame (a cruise at the drive the slider sets) and
 // synthetic beats, the same way the probes do. Loaded with a dynamic import from main.ts behind the debug
 // switch, so the shipped game carries none of it.
+//
+// Round 7: the produced score. Every mountain (Lanternfall too) plays its own produced piece once its pack
+// has loaded (the line at the bottom says which band is playing and which section); the panel adds the
+// piece's sections by name, the breath before the biggest leap and the crash back in, a stinger for every
+// set-piece verb in the mountain's own instruments, the twelve signature riders' motifs, and a switch back
+// to the live band (the fallback). `?tier=low` on the address plays the lighter packs Low and phones get.
 
 type Engine = AudioEngine;
 
-const MOUNTAINS: ReadonlyArray<{ biome: BiomeId; name: string }> = [
-  { biome: 'alpine', name: 'Pinecrest' },
-  { biome: 'glacier', name: 'Frostfang' },
-  { biome: 'volcanic', name: 'Ember Peak' },
-  { biome: 'blossom', name: 'Sakura Ridge' },
+const MOUNTAINS: ReadonlyArray<{ biome: BiomeId; name: string; course: string }> = [
+  { biome: 'alpine', name: 'Pinecrest', course: 'pinecrest' },
+  { biome: 'glacier', name: 'Frostfang', course: 'frostfang' },
+  { biome: 'volcanic', name: 'Ember Peak', course: 'ember' },
+  { biome: 'blossom', name: 'Sakura Ridge', course: 'sakura' },
+  // (Lanternfall borrows Frostfang's look until its own is built; its music is its own, by the course's id.)
+  { biome: 'glacier', name: 'Lanternfall', course: 'lanternfall' },
 ];
+
+/** The produced pieces' sections, by their own names (every course is laid out alike). */
+const PRODUCED: ReadonlyArray<{ id: string; name: string }> = [
+  { id: 'intro', name: 'Intro' },
+  { id: 'a', name: 'A: Verse' },
+  { id: 'b', name: 'B: Chorus (hook)' },
+  { id: 'c', name: 'C: Second Verse' },
+  { id: 'd', name: 'D: Stage Two' },
+  { id: 'bd', name: 'Breakdown' },
+  { id: 'b2', name: 'B2: Last-Stage Chorus' },
+  { id: 'c2', name: 'C2: The Climb' },
+];
+
+/** Every set-piece verb (src/sim/moments.ts), and the plain stinger a verb without one of its own plays. */
+const VERBS = ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry', 'any'] as const;
+const cap = (s: string): string => s[0].toUpperCase() + s.slice(1);
 
 const MOODS: ReadonlyArray<{ mood: Mood; name: string }> = [
   { mood: Mood.None, name: 'Clear Skies' },
@@ -100,6 +125,7 @@ export function openJukebox(app: unknown): void {
   document.head.appendChild(style);
 
   let biome: BiomeId = 'alpine';
+  let course = 'pinecrest';
   let mood: Mood = Mood.None;
   let stage = 0;
   let drive = 0.36;
@@ -120,19 +146,28 @@ export function openJukebox(app: unknown): void {
         <button type="button" data-act="results">Results Reprise</button>
         <button type="button" data-act="stop">Silence the Band</button></div>
       <h3>Mountain</h3>
-      <div class="row" data-group="biome">${MOUNTAINS.map((m) => `<button type="button" data-biome="${m.biome}" aria-pressed="${m.biome === biome}">${m.name}</button>`).join('')}</div>
+      <div class="row" data-group="biome">${MOUNTAINS.map((m) => `<button type="button" data-course="${m.course}" aria-pressed="${m.course === course}">${m.name}</button>`).join('')}</div>
       <label>Mood<select name="mood" autocomplete="off" data-act="mood">${MOODS.map((m) => `<option value="${m.mood}">${m.name}</option>`).join('')}</select></label>
       <h3>Stage</h3>
       <div class="row" data-group="stage">${[0, 1, 2].map((s) => `<button type="button" data-stage="${s}" aria-pressed="${s === stage}">Stage ${s + 1}</button>`).join('')}</div>
       <h3>Run Music by Section</h3>
       <div class="row">${SECTIONS.map((s) => `<button type="button" data-sec="${s.s}">${s.name}</button>`).join('')}
         <button type="button" data-act="flow">Let It Flow</button></div>
+      <h3>Produced Score by Section</h3>
+      <div class="row">${PRODUCED.map((s) => `<button type="button" data-pid="${s.id}">${s.name}</button>`).join('')}</div>
+      <div class="row" style="margin-top:6px"><button type="button" data-band="produced" aria-pressed="true">Produced Score</button>
+        <button type="button" data-band="live" aria-pressed="false">Live Band</button></div>
       <h3>Landings</h3>
       <div class="row"><button type="button" data-land="drop">Build into a Drop</button>
         <button type="button" data-land="lift">Lift a Key</button>
         <button type="button" data-land="finish">Finish Line</button>
-        <button type="button" data-act="breakdown">Break Down</button></div>
+        <button type="button" data-act="breakdown">Break Down</button>
+        <button type="button" data-act="breath">Breath and Crash Back</button></div>
       <label>Drive <span data-out="drive">0.36</span><input type="range" name="drive" min="0" max="1" step="0.01" value="0.36" data-act="drive"></label>
+      <h3>Stingers (One per Set-Piece Verb)</h3>
+      <div class="row">${VERBS.map((v) => `<button type="button" data-st="${v}">${cap(v)}</button>`).join('')}</div>
+      <h3>Rider Motifs</h3>
+      <div class="row">${Object.keys(MOTIFS).map((k) => `<button type="button" data-rider="${k}">${cap(k)}</button>`).join('')}</div>
       <h3>Set Pieces</h3>
       <div class="row"><button type="button" data-cue="enter">Card Call</button>
         <button type="button" data-cue="gates">Gates</button>
@@ -166,7 +201,7 @@ export function openJukebox(app: unknown): void {
     engine.unlock();
     if (scene !== 'run') {
       engine.setScene('run');
-      engine.setMood(mood, biome);
+      engine.setMood(mood, biome, course);
       scene = 'run';
     }
     engine.debugMusic({ stage });
@@ -203,7 +238,7 @@ export function openJukebox(app: unknown): void {
       engine.unlock();
       engine.debugMusic(null);
       engine.setScene('title');
-      engine.setMood(Mood.None, biome);
+      engine.setMood(Mood.None, biome, course);
       scene = 'title';
       return;
     }
@@ -211,7 +246,7 @@ export function openJukebox(app: unknown): void {
       engine.unlock();
       engine.debugMusic(null);
       engine.setScene('results');
-      engine.setMood(mood, biome);
+      engine.setMood(mood, biome, course);
       scene = 'results';
       return;
     }
@@ -225,11 +260,12 @@ export function openJukebox(app: unknown): void {
       engine.setVolumes({ master: 1, music: 0.8, sfx: 0.8 });
       muted = false;
     }
-    if (b.dataset.biome) {
-      biome = b.dataset.biome as BiomeId;
-      press('biome', 'data-biome', biome);
-      if (scene === 'run') engine.setMood(mood, biome);
-      else if (scene === 'title') engine.setMood(Mood.None, biome);
+    if (b.dataset.course) {
+      course = b.dataset.course;
+      biome = MOUNTAINS.find((m) => m.course === course)?.biome ?? 'alpine';
+      press('biome', 'data-course', course);
+      if (scene === 'run') engine.setMood(mood, biome, course);
+      else if (scene === 'title') engine.setMood(Mood.None, biome, course);
       return;
     }
     if (b.dataset.stage) {
@@ -259,6 +295,33 @@ export function openJukebox(app: unknown): void {
         const wait = ctx ? Math.max(0, (t - ctx.currentTime - 0.05) * 1000) : 3500;
         later(wait, () => fire([beat<'finish'>({ type: 'finish', bonus: 0, seconds: 120, rank: 1, of: 6 })]));
       }
+      return;
+    }
+    if (b.dataset.pid) {
+      startRun();
+      engine.debugMusic({ stage, id: b.dataset.pid });
+      return;
+    }
+    if (b.dataset.band) {
+      engine.unlock();
+      engine.debugProduced(b.dataset.band === 'produced');
+      for (const x of el.querySelectorAll<HTMLButtonElement>('[data-band]')) x.setAttribute('aria-pressed', String(x === b));
+      return;
+    }
+    if (act === 'breath') {
+      startRun();
+      engine.debugMusic({ stage });
+      engine.debugBreath(1.4);
+      return;
+    }
+    if (b.dataset.st) {
+      startRun();
+      fire([beat<'marquee'>({ type: 'marquee', phase: 'enter', key: 'jukebox', name: 'The Jukebox', verb: b.dataset.st as never, line: '', cam: 'low', light: null, side: 1, took: 0, total: 0, clean: true, won: false })]);
+      return;
+    }
+    if (b.dataset.rider) {
+      startRun();
+      engine.debugMotif(b.dataset.rider);
       return;
     }
     if (act === 'breakdown') {
@@ -326,7 +389,7 @@ export function openJukebox(app: unknown): void {
       if (out) out.textContent = drive.toFixed(2);
     } else if (t.dataset.act === 'mood') {
       mood = Number(t.value) as Mood;
-      if (scene === 'run' || scene === 'results') engine.setMood(mood, biome);
+      if (scene === 'run' || scene === 'results') engine.setMood(mood, biome, course);
     } else if (t.dataset.act === 'sled') engine.setSledSound(t.value as SledSoundId);
   });
 
@@ -341,7 +404,9 @@ export function openJukebox(app: unknown): void {
     const key = (engine as unknown as { core?: { music: { key(): { tonic: number; bpm: number } } } }).core?.music.key();
     const sec = sections[lv.section as number] ?? '';
     const land = (lv.landingIn as number) >= 0 ? `, drop in ${(lv.landingIn as number).toFixed(1)} s` : '';
-    const text = `${scene === 'idle' ? 'Title screen' : scene[0].toUpperCase() + scene.slice(1)}: ${sec} bar ${(lv.bar as number) + 1} of ${lv.cycleBars}${land}. ${key ? `${NAMES[key.tonic % 12]}, ${key.bpm} bpm` : ''}. Drive ${(lv.drive as number).toFixed(2)}${muted ? ', band silenced' : ''}.`;
+    const st = engine.debugStems() as { produced?: boolean; section?: string; tier?: string; format?: string | null } | null;
+    const band = st?.produced ? `Produced score (${st.tier} pack, ${st.format}), section ${st.section}. ` : st ? 'Live band (the produced score is not loaded, or is switched off). ' : 'Live band. ';
+    const text = `${band}${scene === 'idle' ? 'Title screen' : scene[0].toUpperCase() + scene.slice(1)}: ${sec} bar ${(lv.bar as number) + 1} of ${lv.cycleBars}${land}. ${key ? `${NAMES[key.tonic % 12]}, ${key.bpm} bpm` : ''}. Drive ${(lv.drive as number).toFixed(2)}${muted ? ', band silenced' : ''}.`;
     if (out.textContent !== text) out.textContent = text;
   }, 250);
 }

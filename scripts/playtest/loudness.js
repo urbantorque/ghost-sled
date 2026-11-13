@@ -36,7 +36,8 @@ async (page) => {
     const seconds = p.seconds || cfg.seconds;
     await page.goto(cfg.base + '?platform=mock');
     await page.evaluate(() => { try { localStorage.clear(); } catch {} });
-    await page.goto(cfg.base + `?platform=mock&debug&tier=${cfg.tier}&m=${p.m}&autoride=1&demo=${p.demo ?? cfg.demo}`);
+    // p.extra: more of the address (round 7: '&nostems' keeps the live band).
+    await page.goto(cfg.base + `?platform=mock&debug&tier=${p.tier ?? cfg.tier}&m=${p.m}&autoride=1&demo=${p.demo ?? cfg.demo}${p.extra ?? ''}`);
     await page.waitForFunction(() => window.__gs && window.__gs.audio, null, { timeout: 60000 });
     await page.keyboard.press('q');
     const res = await page.evaluate(async ([part, seconds]) => {
@@ -190,6 +191,23 @@ async (page) => {
       const phoneM = measure(pm, pm);
       const tp = Math.max(truePeak(l), truePeak(r));
       const r1 = (v) => Math.round(v * 10) / 10;
+      // Round 7: the mono mix in octave bands (63 Hz to 8 kHz, a band-pass each, RMS in dBFS), so a music
+      // pass and an effects pass of the same replayed run can be read against each other band by band.
+      const bandDb = [63, 125, 250, 500, 1000, 2000, 4000, 8000].map((fc) => {
+        const w = (2 * Math.PI * fc) / sr;
+        const al = Math.sin(w) / (2 * 1.414);
+        const a0 = 1 + al;
+        const b0 = al / a0, a1c = (-2 * Math.cos(w)) / a0, a2c = (1 - al) / a0;
+        let x1 = 0, x2 = 0, y1 = 0, y2 = 0, e = 0;
+        for (let i = 0; i < n; i++) {
+          const x = mono[i];
+          const y = b0 * x - b0 * x2 - a1c * y1 - a2c * y2;
+          x2 = x1; x1 = x; y2 = y1; y1 = y;
+          e += y * y;
+        }
+        return r1(db(Math.sqrt(e / n)));
+      });
+      const stems = a.debugStems ? a.debugStems() : null;
       return {
         part,
         seconds: r1(n / sr),
@@ -204,6 +222,8 @@ async (page) => {
         corr: Math.round((slr / Math.sqrt(sl * sr2 + 1e-30)) * 100) / 100,
         monoLoss: r1(full.lufs - monoM.lufs),
         phoneLoss: r1(full.lufs - phoneM.lufs),
+        bands: bandDb,
+        ...(stems ? { produced: stems.produced, pack: `${stems.tier}.${stems.format}`, decodedPeakMB: stems.peakMB } : {}),
         // The limiter's deepest gain reduction (dB), and the share of quarter seconds it took more than 1 dB and
         // more than 3 dB; the sidechain's deepest duck and the share it ducked the music more than 1 dB.
         ...(lim.length

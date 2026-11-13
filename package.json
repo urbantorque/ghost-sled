@@ -11,6 +11,7 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "generate-ghosts": "tsx scripts/generate-ghosts.ts",
+    "music": "tsx scripts/music/build.ts",
     "package": "tsx scripts/package.ts",
     "release": "npm run test && npm run build && npm run package"
   },
@@ -20,12 +21,14 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/three": "0.186.0",
+    "ffmpeg-static": "^5.3.0",
     "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
   },
   "allowScripts": {
-    "esbuild@0.28.2": true
+    "esbuild@0.28.2": true,
+    "ffmpeg-static@5.3.0": true
   }
 }

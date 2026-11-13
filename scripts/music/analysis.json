@@ -1,0 +1,1796 @@
+{
+ "version": "092dd8709d18",
+ "verbs": [
+  "race",
+  "gates",
+  "rings",
+  "collapse",
+  "steps",
+  "follow",
+  "kindle",
+  "carry",
+  "slide",
+  "shatter",
+  "surge",
+  "flourish",
+  "any",
+  "won",
+  "lost"
+ ],
+ "trackSeconds": {
+  "furnace": 9.5,
+  "lowbrass": 16.8,
+  "kick": 3.2,
+  "bass": 10.6,
+  "anvil": 2.5,
+  "steam": 0.4,
+  "snare": 1.4,
+  "horns": 4.2,
+  "taiko": 29.2,
+  "plate": 0.8,
+  "tuba": 0.8,
+  "grit": 1.7,
+  "girder": 0.7,
+  "scream": 1.6,
+  "toms": 4.7,
+  "crash": 1,
+  "riser": 0.1,
+  "swell": 0.1,
+  "boom": 0
+ },
+ "pieces": {
+  "title": {
+   "version": "092dd8709d18",
+   "name": "Title theme",
+   "style": "the game's motif on a felt piano, strings, a harp, soft voices and glass bells",
+   "bpm": 92,
+   "metre": "4/4",
+   "swing": 0.04,
+   "key": "C major",
+   "band": [
+    "choir",
+    "felt piano",
+    "flute",
+    "frame drum",
+    "glass bells",
+    "harp",
+    "shaker",
+    "string section",
+    "sub bass"
+   ],
+   "bars": 24,
+   "seconds": 62.6,
+   "pulse": {
+    "bpm": 61.2,
+    "strength": 0.32,
+    "onsetsPerS": 1
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -40.67,
+     -8.52,
+     -5.72,
+     -7.1,
+     -6.98,
+     -9.82,
+     -11.73,
+     -17.27,
+     -22.47,
+     -32.28
+    ],
+    "centroid": 567
+   },
+   "loudness": {
+    "lufs": -16,
+    "lra": 3,
+    "tp": -2.2,
+    "tpAfterOpus": -2.5,
+    "masterGainDb": 2.1,
+    "limiterDb": -0.8
+   },
+   "stereo": {
+    "corr": 0.84,
+    "monoLoss": 0.5,
+    "phoneLoss": 1.8
+   },
+   "sections": {
+    "a": {
+     "role": "title",
+     "bars": 8,
+     "seconds": 20.9,
+     "lufs": -17.9,
+     "tp": -4.2,
+     "layers": {
+      "bed": -17.9
+     }
+    },
+    "b": {
+     "role": "title",
+     "bars": 8,
+     "seconds": 20.9,
+     "lufs": -15.3,
+     "tp": -2.9,
+     "layers": {
+      "bed": -15.3
+     }
+    },
+    "c": {
+     "role": "title",
+     "bars": 8,
+     "seconds": 20.9,
+     "lufs": -15.4,
+     "tp": -2.2,
+     "layers": {
+      "bed": -15.4
+     }
+    }
+   },
+   "run": {},
+   "hooks": {
+    "a": {
+     "range": 16,
+     "low": 0,
+     "high": 16,
+     "steps": 11,
+     "leaps": 14,
+     "peakAt": 0.63,
+     "notes": 26,
+     "meanLenBeats": 1.23,
+     "onChord": 1,
+     "chordsPerBar": 1.75,
+     "distinctChords": 8,
+     "voiceMove": 1.15
+    },
+    "b": {
+     "range": 14,
+     "low": 5,
+     "high": 19,
+     "steps": 6,
+     "leaps": 15,
+     "peakAt": 0.63,
+     "notes": 23,
+     "meanLenBeats": 1.39,
+     "onChord": 1,
+     "chordsPerBar": 1.13,
+     "distinctChords": 7,
+     "voiceMove": 1.44
+    },
+    "c": {
+     "range": 16,
+     "low": 0,
+     "high": 16,
+     "steps": 11,
+     "leaps": 14,
+     "peakAt": 0.63,
+     "notes": 26,
+     "meanLenBeats": 1.23,
+     "onChord": 1,
+     "chordsPerBar": 1.75,
+     "distinctChords": 7,
+     "voiceMove": 1.19
+    }
+   },
+   "bytes": {
+    "full.webm": 616575,
+    "lite.webm": 523945,
+    "lite.m4a": 727490
+   },
+   "sha": {
+    "full.webm": "3de053d7bb92",
+    "lite.webm": "39da61dd1fbc",
+    "lite.m4a": "2068cb1c3be1"
+   },
+   "fullRateScale": 1,
+   "decodedMB": {
+    "fullSection": 35,
+    "liteSectionAt32k": 11.7
+   },
+   "renderSeconds": 20.3
+  },
+  "pinecrest": {
+   "version": "092dd8709d18",
+   "name": "Pinecrest",
+   "style": "bright folk-orchestral: fiddle, two strummed guitars, upright bass, stomps and claps, a tin whistle, horns and trumpets",
+   "bpm": 116,
+   "metre": "4/4",
+   "swing": 0.05,
+   "key": "D major",
+   "band": [
+    "acoustic guitar",
+    "claps",
+    "cymbal",
+    "fiddle",
+    "field drum",
+    "glockenspiel",
+    "horns",
+    "mandolin",
+    "shaker",
+    "stomps",
+    "string section",
+    "tambourine",
+    "tin whistle",
+    "trumpets",
+    "upright bass"
+   ],
+   "bars": 68,
+   "seconds": 140.7,
+   "pulse": {
+    "bpm": 115.4,
+    "strength": 0.72,
+    "onsetsPerS": 6.6
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -31.92,
+     -9.33,
+     -13.82,
+     -9.78,
+     -5.55,
+     -6.39,
+     -7.99,
+     -12.74,
+     -19.21,
+     -24.84
+    ],
+    "centroid": 1071
+   },
+   "loudness": {
+    "lufs": -16,
+    "lra": 2.1,
+    "tp": -2,
+    "tpAfterOpus": -2.3,
+    "masterGainDb": -1.1,
+    "limiterDb": -0.9
+   },
+   "stereo": {
+    "corr": 0.86,
+    "monoLoss": 0.4,
+    "phoneLoss": 0.6
+   },
+   "sections": {
+    "intro": {
+     "role": "intro",
+     "bars": 4,
+     "seconds": 8.3,
+     "lufs": -20.2,
+     "tp": -6.4,
+     "layers": {
+      "bed": -25.8,
+      "drive": -30.2,
+      "lead": -20.8
+     }
+    },
+    "a": {
+     "role": "low",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -17,
+     "tp": -2.9,
+     "layers": {
+      "bed": -23,
+      "drive": -23.3,
+      "lead": -20.4,
+      "peak": -28.6
+     }
+    },
+    "b": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -15.6,
+     "tp": -2,
+     "layers": {
+      "bed": -22.2,
+      "drive": -21.4,
+      "lead": -19.3,
+      "peak": -25.9
+     }
+    },
+    "c": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -16.9,
+     "tp": -3.6,
+     "layers": {
+      "bed": -25,
+      "drive": -23,
+      "lead": -19.4,
+      "peak": -27.3
+     }
+    },
+    "d": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -16.5,
+     "tp": -4.2,
+     "layers": {
+      "bed": -23,
+      "drive": -21.8,
+      "lead": -20.8,
+      "peak": -25.8
+     }
+    },
+    "bd": {
+     "role": "break",
+     "bars": 4,
+     "seconds": 8.3,
+     "lufs": -20.1,
+     "tp": -8.2,
+     "layers": {
+      "bed": -27.4,
+      "drive": -38.4,
+      "lead": -21.2
+     }
+    },
+    "b2": {
+     "role": "climax",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -15,
+     "tp": -2.5,
+     "layers": {
+      "bed": -22.2,
+      "drive": -21.5,
+      "lead": -18.5,
+      "peak": -24.1
+     }
+    },
+    "c2": {
+     "role": "climb",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -16.2,
+     "tp": -2.7,
+     "layers": {
+      "bed": -24,
+      "drive": -21.7,
+      "lead": -19.6,
+      "peak": -26.2
+     }
+    },
+    "fin": {
+     "role": "finale",
+     "bars": 4,
+     "seconds": 8.3,
+     "lufs": -15.1,
+     "tp": -2.2,
+     "layers": {
+      "bed": -24,
+      "drive": -21,
+      "lead": -18.3,
+      "peak": -21.5
+     }
+    },
+    "res": {
+     "role": "results",
+     "bars": 8,
+     "seconds": 16.6,
+     "lufs": -18.6,
+     "tp": -5.4,
+     "layers": {
+      "bed": -26.2,
+      "drive": -26.4,
+      "lead": -20.3
+     }
+    }
+   },
+   "run": {
+    "novice": {
+     "lufs": -16.2,
+     "lra": 5.7,
+     "tp": 1.8,
+     "stMax": -13.3
+    },
+    "skilled": {
+     "lufs": -15.8,
+     "lra": 5.1,
+     "tp": 1.6,
+     "stMax": -13.1
+    },
+    "energyEvery10s": [
+     -20.1,
+     -18.3,
+     -16.1,
+     -16.5,
+     -14.4,
+     -16.8,
+     -19.2,
+     -15.3,
+     -15,
+     -16.9,
+     -18.3,
+     -15.4,
+     -15.8,
+     -16.1,
+     -14.7
+    ],
+    "order": [
+     "0.0 intro",
+     "8.3 a",
+     "19.1 b",
+     "35.7 bd",
+     "39.8 b",
+     "40.3 b (second phrase)",
+     "44.0 b",
+     "44.5 b (second phrase)",
+     "52.8 d",
+     "61.0 bd",
+     "69.3 b",
+     "75.0 b2",
+     "82.2 b2 (second phrase)",
+     "90.5 c2",
+     "98.8 bd",
+     "107.1 b2",
+     "123.6 c2",
+     "140.2 b2",
+     "150.0 fin"
+    ]
+   },
+   "hooks": {
+    "a": {
+     "range": 21,
+     "low": -5,
+     "high": 16,
+     "steps": 16,
+     "leaps": 39,
+     "peakAt": 0.56,
+     "notes": 56,
+     "meanLenBeats": 0.55,
+     "onChord": 1,
+     "chordsPerBar": 1.13,
+     "distinctChords": 5,
+     "voiceMove": 1
+    },
+    "b": {
+     "range": 13,
+     "low": 4,
+     "high": 17,
+     "steps": 13,
+     "leaps": 13,
+     "peakAt": 0.52,
+     "notes": 27,
+     "meanLenBeats": 1.15,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 0.96
+    },
+    "c": {
+     "range": 13,
+     "low": 4,
+     "high": 17,
+     "steps": 5,
+     "leaps": 21,
+     "peakAt": 0.69,
+     "notes": 29,
+     "meanLenBeats": 1.1,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 0.89
+    },
+    "d": {
+     "range": 24,
+     "low": -5,
+     "high": 19,
+     "steps": 12,
+     "leaps": 40,
+     "peakAt": 0.75,
+     "notes": 53,
+     "meanLenBeats": 0.57,
+     "onChord": 1,
+     "chordsPerBar": 1.13,
+     "distinctChords": 5,
+     "voiceMove": 1.25
+    }
+   },
+   "bytes": {
+    "full.webm": 5522322,
+    "lite.webm": 2598521,
+    "lite.m4a": 3404931
+   },
+   "sha": {
+    "full.webm": "86b4ae94c35c",
+    "lite.webm": "5d92e0d77295",
+    "lite.m4a": "18a9d55c11e5"
+   },
+   "fullRateScale": 1,
+   "decodedMB": {
+    "fullSection": 28.6,
+    "liteSectionAt32k": 9.5
+   },
+   "renderSeconds": 307.9
+  },
+  "frostfang": {
+   "version": "092dd8709d18",
+   "name": "Frostfang Glacier",
+   "style": "glassy, pulsing electronica: glass bells in sixteenths, a wide supersaw pad, a four-on-the-floor kick that pumps it, a sine lead in a cavernous room; a major-key dawn",
+   "bpm": 126,
+   "metre": "4/4",
+   "swing": 0,
+   "key": "F# dorian",
+   "band": [
+    "club kick",
+    "cymbal",
+    "fm bell",
+    "glass bells",
+    "glass pad",
+    "hats",
+    "piano",
+    "sine lead",
+    "snare and clap",
+    "sub bass",
+    "supersaw pad",
+    "supersaw stabs",
+    "synth bass"
+   ],
+   "bars": 68,
+   "seconds": 129.5,
+   "pulse": {
+    "bpm": 50.4,
+    "strength": 0.86,
+    "onsetsPerS": 3.5
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -15.56,
+     -6.51,
+     -6.69,
+     -11.65,
+     -6.83,
+     -7.02,
+     -14.92,
+     -21.17,
+     -18.97,
+     -21.18
+    ],
+    "centroid": 655
+   },
+   "loudness": {
+    "lufs": -16.1,
+    "lra": 2.5,
+    "tp": -1.2,
+    "tpAfterOpus": -1.3,
+    "masterGainDb": 0.3,
+    "limiterDb": -3.3
+   },
+   "stereo": {
+    "corr": 0.81,
+    "monoLoss": 0.6,
+    "phoneLoss": 1.9
+   },
+   "sections": {
+    "intro": {
+     "role": "intro",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -21.1,
+     "tp": -6.2,
+     "layers": {
+      "bed": -22.4,
+      "drive": -27
+     }
+    },
+    "a": {
+     "role": "low",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -17.3,
+     "tp": -4.6,
+     "layers": {
+      "bed": -24.3,
+      "drive": -20.5,
+      "lead": -22.8,
+      "peak": -32.9
+     }
+    },
+    "b": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15.6,
+     "tp": -1.2,
+     "layers": {
+      "bed": -23.8,
+      "drive": -19.6,
+      "lead": -20.1,
+      "peak": -26.5
+     }
+    },
+    "c": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -17.3,
+     "tp": -2.5,
+     "layers": {
+      "bed": -22.8,
+      "drive": -23.2,
+      "lead": -21
+     }
+    },
+    "d": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -16.9,
+     "tp": -1.4,
+     "layers": {
+      "bed": -24.1,
+      "drive": -19.3,
+      "lead": -23.9,
+      "peak": -32.4
+     }
+    },
+    "bd": {
+     "role": "break",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -19.6,
+     "tp": -7.8,
+     "layers": {
+      "bed": -23.4,
+      "drive": -33.6,
+      "lead": -22.3
+     }
+    },
+    "b2": {
+     "role": "climax",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -14.9,
+     "tp": -1.4,
+     "layers": {
+      "bed": -24,
+      "drive": -19.7,
+      "lead": -20,
+      "peak": -23.9
+     }
+    },
+    "c2": {
+     "role": "climb",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15.9,
+     "tp": -1.4,
+     "layers": {
+      "bed": -24.3,
+      "drive": -20,
+      "lead": -20.2,
+      "peak": -26
+     }
+    },
+    "fin": {
+     "role": "finale",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -15.8,
+     "tp": -1.5,
+     "layers": {
+      "bed": -21.8,
+      "drive": -22.2,
+      "lead": -20.5,
+      "peak": -24.1
+     }
+    },
+    "res": {
+     "role": "results",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -20.2,
+     "tp": -5.9,
+     "layers": {
+      "bed": -23.6,
+      "drive": -25.9,
+      "lead": -26.7
+     }
+    }
+   },
+   "run": {
+    "novice": {
+     "lufs": -16.2,
+     "lra": 4.9,
+     "tp": 1.4,
+     "stMax": -13.4
+    },
+    "skilled": {
+     "lufs": -15.8,
+     "lra": 5.1,
+     "tp": 1.8,
+     "stMax": -12.7
+    },
+    "energyEvery10s": [
+     -20.6,
+     -17.6,
+     -15.9,
+     -17.2,
+     -15,
+     -16,
+     -18.5,
+     -15.5,
+     -15.1,
+     -16.4,
+     -17.9,
+     -15.8,
+     -14.9,
+     -15.4,
+     -15.2
+    ],
+    "order": [
+     "0.0 intro",
+     "7.6 a",
+     "19.0 b",
+     "34.3 bd",
+     "40.0 b",
+     "43.8 b (second phrase)",
+     "44.3 b",
+     "59.5 bd",
+     "67.1 d",
+     "74.8 b2",
+     "75.2 b2",
+     "81.9 b2 (second phrase)",
+     "82.4 b2",
+     "97.6 bd",
+     "105.2 c2",
+     "120.5 b2",
+     "135.7 c2",
+     "150.0 fin"
+    ]
+   },
+   "hooks": {
+    "b": {
+     "range": 19,
+     "low": 0,
+     "high": 19,
+     "steps": 7,
+     "leaps": 15,
+     "peakAt": 0.77,
+     "notes": 23,
+     "meanLenBeats": 1.35,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 1.46
+    },
+    "c": {
+     "range": 14,
+     "low": 3,
+     "high": 17,
+     "steps": 3,
+     "leaps": 9,
+     "peakAt": 0.56,
+     "notes": 13,
+     "meanLenBeats": 2.46,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 1.36
+    },
+    "d": {
+     "range": 19,
+     "low": 0,
+     "high": 19,
+     "steps": 1,
+     "leaps": 38,
+     "peakAt": 0.77,
+     "notes": 40,
+     "meanLenBeats": 0.75,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 1.07
+    }
+   },
+   "bytes": {
+    "full.webm": 5298045,
+    "lite.webm": 2601447,
+    "lite.m4a": 3276345
+   },
+   "sha": {
+    "full.webm": "39faeee93f1d",
+    "lite.webm": "074986cbe704",
+    "lite.m4a": "411cf5fe968d"
+   },
+   "fullRateScale": 1,
+   "decodedMB": {
+    "fullSection": 26.7,
+    "liteSectionAt32k": 8.9
+   },
+   "renderSeconds": 137.9
+  },
+  "ember": {
+   "version": "092dd8709d18",
+   "name": "Ember Peak",
+   "style": "heavy industrial: a half-time kick and big snare, a distorted bass riff, anvils, steam, taiko and struck plate, low brass and trumpets",
+   "bpm": 138,
+   "metre": "4/4",
+   "swing": 0,
+   "key": "E phrygian",
+   "band": [
+    "anvils",
+    "big snare",
+    "cymbal",
+    "dark pad",
+    "deep kick",
+    "distorted bass",
+    "low brass",
+    "steam",
+    "struck girder",
+    "struck plate",
+    "synth lead",
+    "taiko",
+    "toms",
+    "trumpets"
+   ],
+   "bars": 68,
+   "seconds": 118.3,
+   "pulse": {
+    "bpm": 69,
+    "strength": 0.75,
+    "onsetsPerS": 5.2
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -10.99,
+     -5,
+     -5.2,
+     -9.42,
+     -10.8,
+     -12.71,
+     -15.35,
+     -18.7,
+     -21.25,
+     -29.65
+    ],
+    "centroid": 378
+   },
+   "loudness": {
+    "lufs": -16,
+    "lra": 2.4,
+    "tp": -1.5,
+    "tpAfterOpus": -1.9,
+    "masterGainDb": 1.2,
+    "limiterDb": -2.2
+   },
+   "stereo": {
+    "corr": 0.92,
+    "monoLoss": 0.2,
+    "phoneLoss": 4
+   },
+   "sections": {
+    "intro": {
+     "role": "intro",
+     "bars": 4,
+     "seconds": 7,
+     "lufs": -20,
+     "tp": -4.7,
+     "layers": {
+      "bed": -24,
+      "drive": -21.1
+     }
+    },
+    "a": {
+     "role": "low",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -17.6,
+     "tp": -3,
+     "layers": {
+      "bed": -24.7,
+      "drive": -19.4,
+      "lead": -29.6,
+      "peak": -26.9
+     }
+    },
+    "b": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -15.4,
+     "tp": -2.2,
+     "layers": {
+      "bed": -22.6,
+      "drive": -19.7,
+      "lead": -22.3,
+      "peak": -22.2
+     }
+    },
+    "c": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -16.6,
+     "tp": -2.1,
+     "layers": {
+      "bed": -22.8,
+      "drive": -19.6,
+      "lead": -24.6,
+      "peak": -26.8
+     }
+    },
+    "d": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -16.8,
+     "tp": -1.5,
+     "layers": {
+      "bed": -28,
+      "drive": -19,
+      "lead": -25.3,
+      "peak": -24.5
+     }
+    },
+    "bd": {
+     "role": "break",
+     "bars": 4,
+     "seconds": 7,
+     "lufs": -21,
+     "tp": -8.6,
+     "layers": {
+      "bed": -23.3,
+      "drive": -24.1
+     }
+    },
+    "b2": {
+     "role": "climax",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -15.1,
+     "tp": -2.1,
+     "layers": {
+      "bed": -23.3,
+      "drive": -19.1,
+      "lead": -22.3,
+      "peak": -21.1
+     }
+    },
+    "c2": {
+     "role": "climb",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -15.8,
+     "tp": -1.9,
+     "layers": {
+      "bed": -24.1,
+      "drive": -18.2,
+      "lead": -25.5,
+      "peak": -23.7
+     }
+    },
+    "fin": {
+     "role": "finale",
+     "bars": 4,
+     "seconds": 7,
+     "lufs": -15.7,
+     "tp": -1.6,
+     "layers": {
+      "bed": -22.1,
+      "drive": -19.4,
+      "lead": -24.7,
+      "peak": -22.5
+     }
+    },
+    "res": {
+     "role": "results",
+     "bars": 8,
+     "seconds": 13.9,
+     "lufs": -19.9,
+     "tp": -6.6,
+     "layers": {
+      "bed": -22,
+      "drive": -26.4,
+      "lead": -25.8
+     }
+    }
+   },
+   "run": {
+    "novice": {
+     "lufs": -16.3,
+     "lra": 5.4,
+     "tp": -0.3,
+     "stMax": -13.5
+    },
+    "skilled": {
+     "lufs": -15.7,
+     "lra": 5.7,
+     "tp": 0.7,
+     "stMax": -12.9
+    },
+    "energyEvery10s": [
+     -19.5,
+     -16.6,
+     -16.5,
+     -17.7,
+     -15.3,
+     -17.9,
+     -18,
+     -15.3,
+     -15.5,
+     -17.5,
+     -17.4,
+     -16,
+     -15,
+     -15.6,
+     -14.8
+    ],
+    "order": [
+     "0.0 intro",
+     "7.0 a",
+     "19.1 b",
+     "33.0 bd",
+     "40.0 b",
+     "43.9 b (second phrase)",
+     "50.9 d",
+     "57.8 bd",
+     "64.8 b",
+     "75.2 b2",
+     "82.2 b2",
+     "96.1 bd",
+     "103.0 c2",
+     "117.0 b2",
+     "130.9 c2",
+     "144.8 b2",
+     "150.0 fin"
+    ]
+   },
+   "hooks": {
+    "b": {
+     "range": 13,
+     "low": 7,
+     "high": 20,
+     "steps": 8,
+     "leaps": 15,
+     "peakAt": 0.81,
+     "notes": 38,
+     "meanLenBeats": 0.84,
+     "onChord": 0.83,
+     "chordsPerBar": 1,
+     "distinctChords": 4,
+     "voiceMove": 1.64
+    },
+    "c": {
+     "range": 12,
+     "low": 5,
+     "high": 17,
+     "steps": 5,
+     "leaps": 16,
+     "peakAt": 0.5,
+     "notes": 23,
+     "meanLenBeats": 1.39,
+     "onChord": 0.95,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 1.54
+    },
+    "d": {
+     "range": 14,
+     "low": 5,
+     "high": 19,
+     "steps": 10,
+     "leaps": 19,
+     "peakAt": 0.42,
+     "notes": 40,
+     "meanLenBeats": 0.54,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 4,
+     "voiceMove": 2.14
+    }
+   },
+   "bytes": {
+    "full.webm": 4452680,
+    "lite.webm": 2048935,
+    "lite.m4a": 2804268
+   },
+   "sha": {
+    "full.webm": "ee78f2efbde6",
+    "lite.webm": "e34df38e6e01",
+    "lite.m4a": "3e2f4d0d616f"
+   },
+   "fullRateScale": 1,
+   "decodedMB": {
+    "fullSection": 24.8,
+    "liteSectionAt32k": 8.3
+   },
+   "renderSeconds": 117.8
+  },
+  "sakura": {
+   "version": "092dd8709d18",
+   "name": "Sakura Ridge",
+   "style": "plucked strings and a breathy bamboo flute over a warm, laid-back groove: electric piano, a soft sub and kick, a rim, a shaker, a frame drum",
+   "bpm": 84,
+   "metre": "4/4",
+   "swing": 0.18,
+   "key": "Ab major",
+   "band": [
+    "bamboo flute",
+    "cymbal",
+    "electric piano",
+    "frame drum",
+    "koto-like pluck",
+    "plucked strings",
+    "rim",
+    "shaker",
+    "soft kick",
+    "sub bass",
+    "wind chimes",
+    "wood block"
+   ],
+   "bars": 68,
+   "seconds": 194.3,
+   "pulse": {
+    "bpm": 56.1,
+    "strength": 0.56,
+    "onsetsPerS": 3.8
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -27.07,
+     -4.28,
+     -7.98,
+     -10.21,
+     -11.46,
+     -8.05,
+     -10.14,
+     -14.42,
+     -21.03,
+     -29.87
+    ],
+    "centroid": 687
+   },
+   "loudness": {
+    "lufs": -16.2,
+    "lra": 2.4,
+    "tp": -1.4,
+    "tpAfterOpus": -1.5,
+    "masterGainDb": 0.5,
+    "limiterDb": -4.2
+   },
+   "stereo": {
+    "corr": 0.94,
+    "monoLoss": 0.2,
+    "phoneLoss": 2.1
+   },
+   "sections": {
+    "intro": {
+     "role": "intro",
+     "bars": 4,
+     "seconds": 11.4,
+     "lufs": -23.2,
+     "tp": -6.5,
+     "layers": {
+      "bed": -24.6,
+      "drive": -32.7,
+      "lead": -26.5,
+      "peak": -31.3
+     }
+    },
+    "a": {
+     "role": "low",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -17.4,
+     "tp": -1.9,
+     "layers": {
+      "bed": -25.6,
+      "drive": -21,
+      "lead": -22.6,
+      "peak": -25.6
+     }
+    },
+    "b": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -15.5,
+     "tp": -1.8,
+     "layers": {
+      "bed": -24.9,
+      "drive": -20.5,
+      "lead": -18.9,
+      "peak": -24.9
+     }
+    },
+    "c": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -17.4,
+     "tp": -2,
+     "layers": {
+      "bed": -24.5,
+      "drive": -21.3,
+      "lead": -21.4,
+      "peak": -27.8
+     }
+    },
+    "d": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -15.8,
+     "tp": -2,
+     "layers": {
+      "bed": -26.4,
+      "drive": -20.8,
+      "lead": -18.8,
+      "peak": -26.1
+     }
+    },
+    "bd": {
+     "role": "break",
+     "bars": 4,
+     "seconds": 11.4,
+     "lufs": -20.8,
+     "tp": -9,
+     "layers": {
+      "bed": -24.5,
+      "lead": -23.3,
+      "peak": -32.2
+     }
+    },
+    "b2": {
+     "role": "climax",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -15.4,
+     "tp": -1.9,
+     "layers": {
+      "bed": -25.1,
+      "drive": -20.5,
+      "lead": -18.9,
+      "peak": -24.5
+     }
+    },
+    "c2": {
+     "role": "climb",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -16.8,
+     "tp": -1.7,
+     "layers": {
+      "bed": -24.9,
+      "drive": -20.9,
+      "lead": -21,
+      "peak": -25.8
+     }
+    },
+    "fin": {
+     "role": "finale",
+     "bars": 4,
+     "seconds": 11.4,
+     "lufs": -15.6,
+     "tp": -1.4,
+     "layers": {
+      "bed": -22.4,
+      "drive": -21.7,
+      "lead": -18.8,
+      "peak": -26.6
+     }
+    },
+    "res": {
+     "role": "results",
+     "bars": 8,
+     "seconds": 22.9,
+     "lufs": -18.8,
+     "tp": -4.8,
+     "layers": {
+      "bed": -23,
+      "drive": -23.3,
+      "lead": -23.2
+     }
+    }
+   },
+   "run": {
+    "novice": {
+     "lufs": -16.5,
+     "lra": 6.2,
+     "tp": 0.4,
+     "stMax": -13.9
+    },
+    "skilled": {
+     "lufs": -16.2,
+     "lra": 6.4,
+     "tp": 1.4,
+     "stMax": -13.6
+    },
+    "energyEvery10s": [
+     -23.1,
+     -17.8,
+     -15.8,
+     -19,
+     -15,
+     -16.2,
+     -17.5,
+     -16.4,
+     -15.3,
+     -16.7,
+     -18.9,
+     -17.9,
+     -15.4,
+     -15.4,
+     -16
+    ],
+    "order": [
+     "0.0 intro",
+     "11.4 a",
+     "19.3 b",
+     "30.7 bd",
+     "40.0 b",
+     "44.3 b (second phrase)",
+     "55.7 d",
+     "67.1 bd",
+     "75.0 b2",
+     "82.1 b2 (second phrase)",
+     "93.6 c2",
+     "105.0 bd",
+     "116.4 b2",
+     "139.3 c2",
+     "150.0 fin"
+    ]
+   },
+   "hooks": {
+    "a": {
+     "range": 14,
+     "low": 0,
+     "high": 14,
+     "steps": 14,
+     "leaps": 21,
+     "peakAt": 0.8,
+     "notes": 36,
+     "meanLenBeats": 0.89,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 6,
+     "voiceMove": 0.93
+    },
+    "b": {
+     "range": 14,
+     "low": 0,
+     "high": 14,
+     "steps": 14,
+     "leaps": 10,
+     "peakAt": 0.56,
+     "notes": 27,
+     "meanLenBeats": 1.19,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 6,
+     "voiceMove": 1.25
+    },
+    "c": {
+     "range": 9,
+     "low": 7,
+     "high": 16,
+     "steps": 6,
+     "leaps": 5,
+     "peakAt": 0,
+     "notes": 13,
+     "meanLenBeats": 1.23,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 6,
+     "voiceMove": 0.82
+    },
+    "d": {
+     "range": 14,
+     "low": 2,
+     "high": 16,
+     "steps": 9,
+     "leaps": 5,
+     "peakAt": 0.59,
+     "notes": 15,
+     "meanLenBeats": 1.07,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 4,
+     "voiceMove": 0.61
+    }
+   },
+   "bytes": {
+    "full.webm": 6244213,
+    "lite.webm": 3671739,
+    "lite.m4a": 4510759
+   },
+   "sha": {
+    "full.webm": "8ce6314afd26",
+    "lite.webm": "5237a5f8be92",
+    "lite.m4a": "a4294520a645"
+   },
+   "fullRateScale": 0.77,
+   "decodedMB": {
+    "fullSection": 37.9,
+    "liteSectionAt32k": 12.6
+   },
+   "renderSeconds": 227.2
+  },
+  "lanternfall": {
+   "version": "092dd8709d18",
+   "name": "Lanternfall",
+   "style": "a lullaby that grows into an anthem, in a slow 6/8: music box and choir, harp and felt piano, then flute, strings, horns, trumpets, bells, timpani and a field drum",
+   "bpm": 63,
+   "metre": "6/8",
+   "swing": 0,
+   "key": "Bb major",
+   "band": [
+    "bell tree",
+    "bells",
+    "choir",
+    "concert bass drum",
+    "cymbal",
+    "felt piano",
+    "field drum",
+    "flute",
+    "glockenspiel",
+    "harp",
+    "horns",
+    "music box",
+    "string section",
+    "timpani",
+    "trumpets"
+   ],
+   "bars": 68,
+   "seconds": 129.5,
+   "pulse": {
+    "bpm": 187.5,
+    "strength": 0.45,
+    "onsetsPerS": 4.7
+   },
+   "spectrum": {
+    "bands": [
+     31.5,
+     63,
+     125,
+     250,
+     500,
+     1000,
+     2000,
+     4000,
+     8000,
+     16000
+    ],
+    "db": [
+     -46.07,
+     -12.19,
+     -10.29,
+     -6.82,
+     -6.57,
+     -5.28,
+     -10.22,
+     -17.04,
+     -23.44,
+     -27.58
+    ],
+    "centroid": 817
+   },
+   "loudness": {
+    "lufs": -16,
+    "lra": 4.2,
+    "tp": -1.6,
+    "tpAfterOpus": -1.5,
+    "masterGainDb": 0.1,
+    "limiterDb": -0.3
+   },
+   "stereo": {
+    "corr": 0.72,
+    "monoLoss": 0.7,
+    "phoneLoss": 0.8
+   },
+   "sections": {
+    "intro": {
+     "role": "intro",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -23.9,
+     "tp": -11.8,
+     "layers": {
+      "bed": -24.1,
+      "peak": -33.2
+     }
+    },
+    "a": {
+     "role": "low",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -19.3,
+     "tp": -7.2,
+     "layers": {
+      "bed": -21.1,
+      "drive": -24.9,
+      "lead": -23.6,
+      "peak": -33.6
+     }
+    },
+    "b": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15.7,
+     "tp": -5.4,
+     "layers": {
+      "bed": -20.5,
+      "drive": -24.6,
+      "lead": -18.9,
+      "peak": -29.8
+     }
+    },
+    "c": {
+     "role": "mid",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -17,
+     "tp": -5.7,
+     "layers": {
+      "bed": -22.3,
+      "drive": -26,
+      "lead": -20.1,
+      "peak": -27.6
+     }
+    },
+    "d": {
+     "role": "high",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15.7,
+     "tp": -2.7,
+     "layers": {
+      "bed": -20.7,
+      "drive": -23.3,
+      "lead": -19.1,
+      "peak": -26.9
+     }
+    },
+    "bd": {
+     "role": "break",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -23,
+     "tp": -12.1,
+     "layers": {
+      "bed": -23.2,
+      "peak": -33.1
+     }
+    },
+    "b2": {
+     "role": "climax",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15,
+     "tp": -2.3,
+     "layers": {
+      "bed": -20.1,
+      "drive": -22.6,
+      "lead": -20.3,
+      "peak": -21.1
+     }
+    },
+    "c2": {
+     "role": "climb",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -15.8,
+     "tp": -3.4,
+     "layers": {
+      "bed": -22,
+      "drive": -22.5,
+      "lead": -19.6,
+      "peak": -24.8
+     }
+    },
+    "fin": {
+     "role": "finale",
+     "bars": 4,
+     "seconds": 7.6,
+     "lufs": -15,
+     "tp": -1.6,
+     "layers": {
+      "bed": -21.2,
+      "drive": -22.2,
+      "lead": -19.8,
+      "peak": -20.6
+     }
+    },
+    "res": {
+     "role": "results",
+     "bars": 8,
+     "seconds": 15.2,
+     "lufs": -20,
+     "tp": -8,
+     "layers": {
+      "bed": -22,
+      "drive": -25.1,
+      "lead": -25.1
+     }
+    }
+   },
+   "run": {
+    "novice": {
+     "lufs": -16.1,
+     "lra": 7.8,
+     "tp": -0.8,
+     "stMax": -13.3
+    },
+    "skilled": {
+     "lufs": -15.8,
+     "lra": 7.6,
+     "tp": 0,
+     "stMax": -12.9
+    },
+    "energyEvery10s": [
+     -22.4,
+     -17.5,
+     -15.9,
+     -17.5,
+     -14.5,
+     -16,
+     -20.8,
+     -15.7,
+     -15.1,
+     -16.6,
+     -18.8,
+     -16,
+     -15,
+     -15,
+     -15
+    ],
+    "order": [
+     "0.0 intro",
+     "7.6 a",
+     "19.0 b",
+     "34.3 bd",
+     "40.0 b",
+     "43.8 d",
+     "44.8 d (second phrase)",
+     "52.4 d",
+     "60.0 bd",
+     "67.6 c",
+     "75.2 b2",
+     "81.9 b2 (second phrase)",
+     "82.9 b2",
+     "98.1 bd",
+     "105.7 c2",
+     "121.0 b2",
+     "136.2 c2",
+     "149.5 fin"
+    ]
+   },
+   "hooks": {
+    "a": {
+     "range": 14,
+     "low": 0,
+     "high": 14,
+     "steps": 8,
+     "leaps": 18,
+     "peakAt": 0.81,
+     "notes": 28,
+     "meanLenBeats": 0.57,
+     "onChord": 1,
+     "chordsPerBar": 1,
+     "distinctChords": 5,
+     "voiceMove": 0.57
+    },
+    "b": {
+     "range": 14,
+     "low": 0,
+     "high": 14,
+     "steps": 14,
+     "leaps": 11,
+     "peakAt": 0.56,
+     "notes": 26,
+     "meanLenBeats": 0.62,
+     "onChord": 1,
+     "chordsPerBar": 1.75,
+     "distinctChords": 6,
+     "voiceMove": 1.19
+    },
+    "c": {
+     "range": 15,
+     "low": 4,
+     "high": 19,
+     "steps": 6,
+     "leaps": 9,
+     "peakAt": 0.88,
+     "notes": 17,
+     "meanLenBeats": 0.94,
+     "onChord": 1,
+     "chordsPerBar": 1.13,
+     "distinctChords": 5,
+     "voiceMove": 1.03
+    },
+    "d": {
+     "range": 12,
+     "low": 0,
+     "high": 12,
+     "steps": 16,
+     "leaps": 11,
+     "peakAt": 0.04,
+     "notes": 28,
+     "meanLenBeats": 0.57,
+     "onChord": 1,
+     "chordsPerBar": 1.75,
+     "distinctChords": 6,
+     "voiceMove": 1.27
+    }
+   },
+   "bytes": {
+    "full.webm": 5182817,
+    "lite.webm": 2631689,
+    "lite.m4a": 3423128
+   },
+   "sha": {
+    "full.webm": "5988687c5133",
+    "lite.webm": "f11bc5cee816",
+    "lite.m4a": "c75ae12581bf"
+   },
+   "fullRateScale": 1,
+   "decodedMB": {
+    "fullSection": 26.7,
+    "liteSectionAt32k": 8.9
+   },
+   "renderSeconds": 157.2
+  }
+ }
+}

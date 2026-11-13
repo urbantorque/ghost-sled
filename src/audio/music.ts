@@ -5,6 +5,9 @@ import { type Sec, type SectionName, LAND_MIN_STEPS, cutTo, landingStep, nextSec
 import type { Bus } from './graph';
 import { Formants, Sung, fadeSung, fmBell, formants, pad, pluck, sigh, sing } from './instruments';
 import { type ArpTone, ArpLanes, BassLane, DrumLane, LeadLane, RiserLane } from './lanes';
+import { StemDeck } from './stemdeck';
+import { pieceFor } from './stemform';
+import type { StemStore } from './stemstore';
 import { type ChordSpec, type LineIndex, MODES, type Note, type Song, THEME, headOf, indexLine, notePitch, realize, songFor } from './score';
 import { type Accent, type Chord, type DeckScene, type Key, MAJOR_PENTA, type Style, accentFor, deckStyle, fit, ladder, mtof } from './theory';
 import { type Voice, VoicePool, rand, smoothstep, swell } from './voices';
@@ -101,10 +104,12 @@ interface Landing {
   buildBar: number;
 }
 
-/** The jukebox's override (debug only): hold a section, a stage and a drive. */
+/** The jukebox's override (debug only): hold a section, a stage and a drive. `id` holds a section of the
+ *  produced score by its own name (stemform.ts). */
 export interface Force {
   section?: SectionName;
   stage?: number;
+  id?: string;
 }
 
 const NO_BUILD: Build = { stage: 0, climax: 0, open: 0 };
@@ -122,7 +127,18 @@ function deckId(scene: Scene, mood: Mood, biome: BiomeId): string {
   return scene === 'title' ? 'title' : `${scene}|${mood}|${biome}`;
 }
 
+/** A deck of the live band, or one of the produced score (stemdeck.ts). */
+type AnyDeck = Deck | StemDeck;
+/** A live run deck younger than this gives way to the produced score when its audio arrives (s): later
+ *  than this the run keeps the band it started with, so the music never changes hands mid-descent. */
+const SWAP_S = 6;
+/** A mountain shown on the title this long is picked: its music is fetched (s). */
+const PICK_S = 1.2;
+/** The results' reprise comes in at most this long after the finale lands (s). */
+const FINALE_MAX_S = 7;
+
 class Deck {
+  readonly produced = false;
   readonly id: string;
   key: Key;
   retireAt = Infinity;
@@ -961,7 +977,24 @@ class Deck {
 export class Music {
   /** False while the music volume is zero: the clock keeps running but no notes are made. */
   enabled = true;
-  private readonly decks: Deck[] = [];
+  /** The produced score's files (stemstore.ts), once the engine has made it; null plays the live band. */
+  store: StemStore | null = null;
+  private readonly decks: AnyDeck[] = [];
+  /** When the playing deck started, and the mountain shown and since when (the title's pick). */
+  private deckAt = 0;
+  private shown = '';
+  private shownAt = 0;
+  private course = '';
+  private produceAt = 0;
+  private produceKey = '';
+  /** Probe: stingers of the produced score played. */
+  stingers = 0;
+  /** The last scheduler pass that was not the results (the reprise waits at most 2 s on its decode). */
+  private resultsSince = 0;
+  /** The set pieces' stingers to have decoded on a run (their one-shots' names). */
+  private primed: string[] = [];
+  /** The wipeout's muffle, kept so a new deck starts with it. */
+  private muffled = false;
   private scene: Scene = 'title';
   private mood = Mood.None;
   private biome: BiomeId = 'alpine';
@@ -994,10 +1027,13 @@ export class Music {
     return this.kit;
   }
 
-  setTarget(scene: Scene, mood: Mood, biome: BiomeId): void {
+  /** `course`: the mountain's own id where the caller knows it (a mountain whose look borrows another's
+   *  biome still plays its own produced piece); without it the biome names the piece. */
+  setTarget(scene: Scene, mood: Mood, biome: BiomeId, course = ''): void {
     this.scene = scene;
     this.mood = mood;
     this.biome = biome;
+    this.course = course;
     if (scene !== 'run') this.resultsAt = Infinity;
   }
 
@@ -1012,7 +1048,7 @@ export class Music {
     b.open = open;
   }
 
-  private get top(): Deck | undefined {
+  private get top(): AnyDeck | undefined {
     return this.decks[this.decks.length - 1];
   }
 
@@ -1057,7 +1093,8 @@ export class Music {
   /** Plans a landing near `target` on the run deck (see Deck.plan). Returns its time, or null. */
   land(target: number, kind: LandKind, now: number): number | null {
     const top = this.top;
-    if (!top || top.id !== deckId(this.scene, this.mood, this.biome)) return null;
+    const id = deckId(this.scene, this.mood, this.biome);
+    if (!top || (top.id !== id && !(top.produced && top.id.endsWith(`|${id}`)))) return null;
     return top.plan(target, kind, now);
   }
 
@@ -1074,13 +1111,72 @@ export class Music {
   /** The hook's head in the key playing, `lift` semitones up (the set pieces' call and their won stinger). */
   head(lift: number): { m: number; at: number; dur: number }[] {
     const top = this.top;
-    return top ? top.pitches(top.head, lift) : [];
+    if (!top) return [];
+    return top.produced ? top.headPitches(lift) : top.pitches(top.head, lift);
   }
 
   /** The main theme's opening bar in the key playing (the finish's fanfare, in unison with the finale). */
   theme(): { m: number; at: number; dur: number }[] {
     const top = this.top;
-    return top ? top.pitches(FINALE_QUOTE, 0) : [];
+    // (The produced finale plays the game's motif itself: nothing to double.)
+    return top && !top.produced ? top.pitches(FINALE_QUOTE, 0) : [];
+  }
+
+  /** The produced score is playing (not the live band). */
+  get produced(): boolean {
+    return this.top?.produced === true;
+  }
+
+  /**
+   * A set piece's stinger in the course's own style (`race`, `gates`, ..., and `won`, `lost`), on the
+   * score's next beat at or after t. False when the live band is playing or the stinger is not decoded:
+   * the live cue plays instead.
+   */
+  stinger(verb: string, t: number): boolean {
+    const top = this.top;
+    if (!top || !top.produced || top.scene !== 'run' || !this.enabled) return false;
+    const played = top.stinger(verb, top.nextBeat(t));
+    if (played) this.stingers++;
+    return played;
+  }
+
+  /** The run's set pieces, by verb: their stingers are decoded ahead (with won, lost and the plain one). */
+  prime(verbs: readonly string[]): void {
+    this.primed = [...new Set([...verbs, 'won', 'lost', 'any'])].map((v) => `st.${v}`);
+    for (const d of this.decks) if (d.produced) d.prime(this.primed);
+  }
+
+  /** The breath before the mountain's biggest leap: the produced score cuts to its own tail. False on the
+   *  live band (the engine ducks it instead). */
+  breath(now: number): boolean {
+    const top = this.top;
+    if (!top || !top.produced || top.scene !== 'run') return false;
+    top.breath(now);
+    return top.holding;
+  }
+
+  /** The landing: the score crashes back in, on a new downbeat that is this instant. */
+  /** The breath ends. Without the hit when the leap ended in a wipeout. */
+  crashIn(now: number, hit = true): void {
+    const top = this.top;
+    if (top && top.produced) top.crashIn(now, hit);
+  }
+
+  get holding(): boolean {
+    const top = this.top;
+    return top !== undefined && top.produced && top.holding;
+  }
+
+  /** A wipeout: the produced score goes under water until the rider is up. */
+  muffle(on: boolean, now: number): void {
+    this.muffled = on;
+    for (const d of this.decks) if (d.produced) d.muffle(on, now);
+  }
+
+  /** The section playing by its own name on the produced score ('' on the live band). */
+  sectionId(): string {
+    const top = this.top;
+    return top && top.produced ? top.sectionId() : '';
   }
 
   /** Landings the playing deck has made (probe). */
@@ -1099,19 +1195,31 @@ export class Music {
     const g = this.grid();
     const bar = g ? g.dur * 16 : 2;
     const at = l && l.kind === 'finish' && l.t > now - 0.5 ? l.t : now;
-    this.resultsAt = at + bar * 1.5;
+    const top = this.top;
+    // The produced finale is written out: the reprise comes in under its last bar.
+    this.resultsAt = top && top.produced ? at + Math.min(FINALE_MAX_S, top.finaleS) - 1 : at + bar * 1.5;
   }
 
   tick(now: number, until: number): void {
+    if (this.scene !== 'results') this.resultsSince = now;
     if (this.scene === 'run' && now >= this.resultsAt) {
       this.scene = 'results';
       this.resultsAt = Infinity;
     }
-    const id = deckId(this.scene, this.mood, this.biome);
+    const live = deckId(this.scene, this.mood, this.biome);
     const top = this.top;
-    if (!top || top.id !== id) {
+    const piece = this.produce(now, live);
+    const id = piece ? `p|${piece}|${live}` : live;
+    // (undefined: the produced run deck plays on for the moment its reprise takes to decode.)
+    if (piece !== undefined && (!top || top.id !== id)) {
       if (top) top.fadeOut(now, XFADE);
-      const d = new Deck(this.ctx, this.pool, this.kit, this.bus, this.scene, this.mood, this.biome, now + 0.05, this.lite);
+      const sp = piece ? this.store?.piece(piece) : null;
+      const d: AnyDeck = piece && sp && this.store ? new StemDeck(this.ctx, this.pool, this.bus, this.store, id, piece, sp, this.scene, this.mood, now + 0.05) : new Deck(this.ctx, this.pool, this.kit, this.bus, this.scene, this.mood, this.biome, now + 0.05, this.lite);
+      if (d.produced) {
+        d.prime(this.primed);
+        if (this.muffled && this.scene === 'run') d.muffle(true, now);
+      }
+      this.deckAt = now;
       if (top && this.scene === 'results') d.liftKey(top.lift);
       d.fadeIn(now, top ? XFADE : 1.2);
       d.setChoir(this.choir, now, false);
@@ -1139,8 +1247,61 @@ export class Music {
     }
   }
 
+  /**
+   * The produced score's part of a scheduler pass: fetch what the scene needs (the title's theme; a
+   * mountain's pack once it has been shown for PICK_S or a run starts on it), have the next opening section
+   * decoded, and say whether the scene's deck should be a produced one now: its piece's id, or null for the
+   * live band. The live band plays whenever the audio is not there, and a run more than SWAP_S old keeps
+   * the band it has.
+   */
+  private produce(now: number, live: string): string | null | undefined {
+    const store = this.store;
+    if (!store) return null;
+    // Four times a second is often enough to fetch, claim and change hands; a pass between keeps what plays.
+    const key = `${this.scene}|${this.course}|${this.biome}`;
+    if (now < this.produceAt && key === this.produceKey) return undefined;
+    this.produceAt = now + 0.25;
+    this.produceKey = key;
+    const course = store.piece(this.course) && this.course !== 'title' ? this.course : pieceFor(this.biome);
+    if (course !== this.shown) {
+      this.shown = course ?? '';
+      this.shownAt = now;
+    }
+    if (this.scene === 'title') void store.load('title');
+    if (course && (this.scene !== 'title' || now - this.shownAt >= PICK_S)) void store.load(course);
+    const piece = this.scene === 'title' ? 'title' : course;
+    const sp = piece ? store.piece(piece) : null;
+    if (!piece || !sp) {
+      store.release('next');
+      return null;
+    }
+    const top = this.top;
+    const open = this.scene === 'results' ? sp.form.results : sp.form.open;
+    if (top && top.id === `p|${piece}|${live}`) {
+      // Playing: get what comes after it ready. The mountain's opening under the title and the results
+      // (Run Again starts on it), the results' reprise from the last stretch of a run (decoded audio is the
+      // dear part: not before it is near).
+      const cp = course ? store.piece(course) : null;
+      if (this.scene === 'run') {
+        if (this.build.stage >= sp.form.stages.length - 1 && this.build.climax > 0.6) store.claim('next', piece, [sp.form.results]);
+        else store.release('next');
+      } else if (course && cp && store.state(course) === 'ready') store.claim('next', course, [cp.form.open], ['hit', 'build']);
+      else store.release('next');
+      return piece;
+    }
+    // A run the live band played ends on the live band's reprise.
+    if (this.scene === 'results' && top && !top.produced) return null;
+    if (store.state(piece) !== 'ready') return null;
+    store.claim('next', piece, [open], this.scene === 'run' ? ['hit', 'build'] : []);
+    if (!store.sectionReady(piece, open)) return this.scene === 'results' && top && top.produced && top.scene === 'run' && now - this.resultsSince < 2 ? undefined : null;
+    // A run that has been going on the live band keeps it.
+    if (this.scene === 'run' && top && top.id === live && now - this.deckAt > SWAP_S) return null;
+    return piece;
+  }
+
   dispose(): void {
     for (const d of this.decks) d.dispose();
     this.decks.length = 0;
+    this.store?.release('next');
   }
 }

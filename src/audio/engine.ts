@@ -10,9 +10,12 @@ import { planMoments } from '../sim/moments';
 import { ChoirTracker, type Mark, type ResultsCue, type ResultsShow, type RevealCue, buildLift, climaxK, floorDrive, grooveLift, marksOf, markWindow, openUp, resultsCues, revealCues, stageIndex } from './cues';
 import type { Force } from './music';
 import { Listener, type ListenSources, newView } from './listen';
+import { MOTIFS } from './motifs';
 import type { Scene } from './music';
 import { bankLandDelay } from './sfx';
 import type { SledSoundId } from './sledsounds';
+import type { StemManifest } from './stemform';
+import { StemStore } from './stemstore';
 
 export type { ResultsCue, ResultsShow, RevealCue } from './cues';
 
@@ -264,6 +267,8 @@ export class AudioEngine {
   private scene: Scene = 'title';
   private mood: Mood = Mood.None;
   private biome: BiomeId = 'alpine';
+  /** The mountain's own id, where the app says (setMood): it names the produced piece. */
+  private course = '';
   private timer: ReturnType<typeof setInterval> | null = null;
   private suspendTimer: ReturnType<typeof setTimeout> | null = null;
   /** Until this clock time a just-requested resume still accepts sounds (they play on resume). */
@@ -318,6 +323,53 @@ export class AudioEngine {
   private az = 0;
   /** Full lanterns (0 to 3), from the sim's lantern, dash and ward events: the Lantern Song sled sound. */
   private cells = 0;
+  /** The produced score's files (stemstore.ts): made a moment after the first frame, null until then and
+   *  wherever there is nothing to fetch with (the live band plays). */
+  private store: StemStore | null = null;
+  /** The lip of the course's biggest leap (the music holds its breath there), and whether this run has. */
+  private bigLeapZ = Number.NaN;
+  private breathed = false;
+  private groundedFor = 0;
+
+  constructor() {
+    this.warm();
+  }
+
+  /**
+   * The produced score starts loading once the first frame is on screen (two animation frames and a
+   * moment's idle later): its manifest (a chunk of its own), the decode test, the title theme's pack. None
+   * of it waits for a gesture, so the theme is usually decoded by the first tap; none of it is asked for
+   * before the first frame. `?nostems` keeps the live band (the fallback, on demand).
+   */
+  private warm(): void {
+    const g = globalThis as unknown as { requestAnimationFrame?: (f: () => void) => number; fetch?: unknown; location?: { search?: string } };
+    if (typeof g.requestAnimationFrame !== 'function' || typeof g.fetch !== 'function') return;
+    if (/[?&]nostems\b/.test(g.location?.search ?? '')) return;
+    const raf = g.requestAnimationFrame.bind(globalThis);
+    raf(() =>
+      raf(() =>
+        setTimeout(() => {
+          void import('./produced.json')
+            .then((m) => {
+              if (this.disposed) return;
+              const base = `${(import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL ?? './'}music/`;
+              const manifest = (m as unknown as { default: StemManifest }).default;
+              const store = new StemStore(manifest, base);
+              store.setQuality(this.tier);
+              if (this.ctx) store.setRate(this.ctx.sampleRate);
+              this.store = store;
+              if (this.core) this.core.music.store = store;
+              // The theme's first section is decoded now, whoever asks for it first.
+              const title = manifest.pieces.title;
+              void store.load('title').then((ok) => {
+                if (ok && title && !this.core) store.claim('next', 'title', [title.form.open]);
+              });
+            })
+            .catch(() => undefined);
+        }, 250),
+      ),
+    );
+  }
 
   get ready(): boolean {
     return !this.disposed && this.core !== null && this.ctx !== null && this.ctx.state === 'running';
@@ -444,6 +496,7 @@ export class AudioEngine {
       this.vz = 0;
       this.az = 0;
       this.cells = 0;
+      this.breathed = false;
     }
     this.choirs.reset();
     const c = this.core;
@@ -452,13 +505,14 @@ export class AudioEngine {
     try {
       if (scene === 'run') c.sfx.reset();
       c.music.setChoir(0, ctx.currentTime);
+      c.music.muffle(false, ctx.currentTime);
       c.pulse.fuse = 0;
       c.pulse.duel = 0;
       c.ambience.setRail(false);
       c.music.setBuild(0, 0, 0);
       c.scape.bandOpen = 0;
       c.ambience.setCells(0);
-      c.music.setTarget(this.scene, this.mood, this.biome);
+      c.music.setTarget(this.scene, this.mood, this.biome, this.course);
       c.music.setDrive(this.intensity, 0, 1);
       c.ambience.setScene(scene, ctx.currentTime);
       c.scape.setScene(scene, ctx.currentTime);
@@ -467,18 +521,24 @@ export class AudioEngine {
     }
   }
 
-  setMood(mood: Mood, biome: BiomeId): void {
+  /** `course`: the mountain's id ('pinecrest' ... 'lanternfall'), so a mountain that borrows another's
+   *  biome for its look still plays its own music; without it the biome picks the piece. */
+  setMood(mood: Mood, biome: BiomeId, course = ''): void {
     this.mood = mood;
     this.biome = biome;
-    this.core?.music.setTarget(this.scene, this.mood, this.biome);
+    this.course = course;
+    this.core?.music.setTarget(this.scene, this.mood, this.biome, this.course);
     this.core?.scape.setMood(mood, biome);
   }
 
   /** The render tier: Low hears a reduced soundscape (no crowds, lifts, villages or snowcat, and
    *  its ambient sounds about half as often). */
-  setQuality(tier: 'low' | 'medium' | 'high'): void {
+  setQuality(q: 'low' | 'medium' | 'high' | 'ultra'): void {
+    // (Ultra is a matter of pixels: it hears what High hears.)
+    const tier = q === 'ultra' ? 'high' : q;
     this.tier = tier;
     this.core?.scape.setTier(tier);
+    this.store?.setQuality(tier);
     if (this.core) this.core.music.lite = tier === 'low';
   }
 
@@ -554,7 +614,7 @@ export class AudioEngine {
         this.climax = climaxK(frame.z as number, stages);
       }
       this.build = crashed || countIn ? 0 : buildLift(this.stage, this.climax);
-      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, c);
+      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, frame.grounded !== false, c);
       const open = crashed || countIn ? 0 : openUp(frame.flow, frame.streak);
       this.bandOpen += (open - this.bandOpen) * (1 - Math.exp(-d / (open > this.bandOpen ? 0.5 : 2.4)));
       c.music.setBuild(this.stage, this.climax, this.bandOpen);
@@ -601,6 +661,8 @@ export class AudioEngine {
       // Sounds and the music ducks under them (sfx.ts).
       c.sfx.event(e, now + START_LEAD);
       if (e.type === 'drift' && e.phase === 'release') c.ambience.whineRelease(now);
+      // The biggest leap's landing: the score, holding its breath since the lip, crashes back in.
+      else if ((e.type === 'land' || e.type === 'crash') && c.music.holding) c.music.crashIn(now + START_LEAD);
     } catch (err) {
       this.warn(err);
     }
@@ -635,10 +697,19 @@ export class AudioEngine {
           c.sfx.schedule(tq, (tt) => c.sfx.km(tt));
         } else c.sfx.beat(b, t);
         if (b.type === 'grind') c.ambience.setRail(b.phase === 'start');
-        else if (b.type === 'tumble' && b.phase === 'start') {
-          c.ambience.setRail(false);
+        else if (b.type === 'tumble') {
+          // A wipeout: the score goes under water until the rider is up, and breaks down at its next phrase.
+          c.music.muffle(b.phase === 'start', now);
+          if (b.phase === 'start') {
+            // (A leap that ends in a wipeout tells no landing: the breath ends here, without the hit.)
+            if (c.music.holding) c.music.crashIn(now + START_LEAD, false);
+            c.ambience.setRail(false);
+            c.music.breakdown();
+          }
+        } else if (b.type === 'crash') {
+          if (c.music.holding) c.music.crashIn(now + START_LEAD, false);
           c.music.breakdown();
-        } else if (b.type === 'crash') c.music.breakdown();
+        }
         else if (b.type === 'finish') {
           // Over the line: the band's finale (its landing, planned as the line came up) rings, then the
           // results deck's reprise comes in under it.
@@ -732,16 +803,31 @@ export class AudioEngine {
    * plan; it re-plans as the speed changes until the drop's pad is built). A drop is never planned within
    * 3 s of the last: a set piece just past a stage line is one drop.
    */
-  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, c: Core): void {
+  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, grounded: boolean, c: Core): void {
     if (course !== this.marksFor) {
       this.marksFor = course;
-      let moments: { z0: number }[] = [];
+      let moments: { z0: number; z1?: number; verb?: string }[] = [];
       const full = course as Course;
+      this.bigLeapZ = Number.NaN;
       try {
-        if (typeof full.stageAt === 'function' && Array.isArray(full.leaps) && Number.isFinite(full.finishZ)) moments = planMoments(full);
+        if (typeof full.stageAt === 'function' && Array.isArray(full.leaps) && Number.isFinite(full.finishZ)) {
+          moments = planMoments(full);
+          // The mountain's biggest leap: the tallest cliff on the descent that is not part of a set piece (a
+          // set piece has its own drop, and some carry the sled through the air for a long while).
+          let tall = 0;
+          for (const l of full.leaps) {
+            if (moments.some((m) => l.z > m.z0 - 40 && l.z < (m.z1 ?? m.z0) + 40)) continue;
+            if (l.height > tall) {
+              tall = l.height;
+              this.bigLeapZ = l.z;
+            }
+          }
+        }
       } catch {
         moments = [];
       }
+      // The set pieces' stingers, decoded before their cards come up.
+      c.music.prime(moments.map((m) => m.verb ?? 'any'));
       this.marks = marksOf(stages, moments);
       this.markIx = 0;
       this.zPrev = Number.NaN;
@@ -756,6 +842,17 @@ export class AudioEngine {
       }
     }
     this.zPrev = z;
+    // The breath: as the sled leaves the lip of the biggest leap the score cuts to its own tail (the live
+    // band ducks instead); the landing brings it back (simEventNow), or the first frames back on the snow
+    // where no landing is told. A rider who does not fly there hears no breath.
+    if (!this.breathed && !held && !grounded && Number.isFinite(this.bigLeapZ) && z >= this.bigLeapZ - 8 && z < this.bigLeapZ + 16 && this.vz > 8) {
+      this.breathed = true;
+      if (!c.music.breath(now)) c.graph.music.duck(0.15, now, 1.1, 0.3, 0.05);
+    }
+    if (c.music.holding) {
+      this.groundedFor = grounded ? this.groundedFor + dt : 0;
+      if (this.groundedFor > 0.2) c.music.crashIn(now + START_LEAD);
+    } else this.groundedFor = 0;
     while (this.markIx < this.marks.length && this.marks[this.markIx].z <= z) this.markIx++;
     const m = this.marks[this.markIx];
     if (!m || held || this.vz < 3) return;
@@ -778,6 +875,36 @@ export class AudioEngine {
   /** Debug-only (the jukebox): hold the band in a section and a stage (null lets it go). */
   debugMusic(force: Force | null): void {
     if (this.core) this.core.music.force = force;
+  }
+
+  /** Probe-only: the produced score's files and what plays of them (format, tier, decoded memory now and
+   *  at most, bytes fetched, the section playing); null while the live band is all there is. */
+  debugStems(): Record<string, unknown> | null {
+    if (!this.store) return null;
+    return { ...this.store.debug(), produced: this.core?.music.produced ?? false, stingers: this.core?.music.stingers ?? 0, section: this.core?.music.sectionId() ?? '' };
+  }
+
+  /** Debug-only (the jukebox): a signature rider's motif by the rider's key (src/bot/roster.ts). */
+  debugMotif(key: string): void {
+    const ctx = this.ctx;
+    const m = MOTIFS[key];
+    if (ctx && this.core && m) this.core.sfx.playMotif(m, ctx.currentTime + START_LEAD);
+  }
+
+  /** Debug-only (the jukebox): the produced score, or the live band it falls back to. */
+  debugProduced(on: boolean): void {
+    if (this.core) this.core.music.store = on ? this.store : null;
+  }
+
+  /** Debug-only (the jukebox): the breath before the biggest leap, and `afterS` later the landing. */
+  debugBreath(afterS = 1.4): void {
+    const ctx = this.ctx;
+    const c = this.core;
+    if (!ctx || !c) return;
+    if (!c.music.breath(ctx.currentTime)) c.graph.music.duck(0.15, ctx.currentTime, afterS, 0.3, 0.05);
+    setTimeout(() => {
+      if (this.ctx && this.core) this.core.music.crashIn(this.ctx.currentTime + START_LEAD);
+    }, afterS * 1000);
   }
 
   /** Debug-only (the jukebox): ask the band for a landing `inS` seconds from now. */
@@ -813,6 +940,8 @@ export class AudioEngine {
     out.sidechain = c.graph.side ? 1 : 0;
     out.truePeak = c.graph.tp ? 1 : 0;
     out.lite = c.music.lite ? 1 : 0;
+    out.produced = c.music.produced ? 1 : 0;
+    out.holding = c.music.holding ? 1 : 0;
     out.marks = this.marks.length;
     out.markIx = this.markIx;
     out.vz = this.vz;
@@ -1029,6 +1158,7 @@ export class AudioEngine {
     this.suspendTimer = null;
     try {
       this.core?.dispose();
+      this.store?.dispose();
     } catch {
       // Tearing down: nothing useful to do.
     }
@@ -1068,9 +1198,13 @@ export class AudioEngine {
     }
     this.ctx = ctx;
     this.core = core;
+    if (this.store) {
+      this.store.setRate(ctx.sampleRate);
+      core.music.store = this.store;
+    }
     this.applyVolumes(true);
     core.graph.mute.gain.value = this.mutes.size > 0 ? 0 : 1;
-    core.music.setTarget(this.scene, this.mood, this.biome);
+    core.music.setTarget(this.scene, this.mood, this.biome, this.course);
     core.ambience.setScene(this.scene, ctx.currentTime);
     core.scape.setTier(this.tier);
     core.scape.setMood(this.mood, this.biome);
