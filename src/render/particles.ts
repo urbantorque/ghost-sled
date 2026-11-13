@@ -1,4 +1,5 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, Object3D, Points, ShaderMaterial, Vector3 } from 'three';
+import { AddEquation, AdditiveBlending, BufferAttribute, BufferGeometry, Color, CustomBlending, DynamicDrawUsage, Mesh, NormalBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, Points, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { fx, setFxBudget } from './fxhub';
 import { makeToonMaterial, shared } from './materials';
 import { giftGeometry } from './meshes';
 import { roosterK } from './speedfeel';
@@ -53,6 +54,8 @@ class Layer {
   private n = 0;
   private cap: number;
   private ring = 0;
+  /** How much fuller a billow is drawn (Low throws under half as many: each one carries more of the plume). */
+  fat = 1;
   // Simulation state, one slot per particle.
   private x: Float32Array;
   private y: Float32Array;
@@ -164,9 +167,13 @@ class Layer {
         varying float vLamp;
         varying vec2 vLampDir;
         varying float vFlip;
+        varying float vGlint;
         void main() {
           vColor = aColor;
           vKind = aKind;
+          // One grain in ten is a crystal that catches the key light: which ones changes as the spray
+          // moves through the air (by where a grain is, in hand-wide cells), so a plume glitters.
+          vGlint = step(0.9, fract(sin(dot(floor(position.xyz * 7.0), vec3(12.9898, 78.233, 37.719))) * 43758.5453));
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float depth = max(-mv.z, 0.05);
           vFog = smoothstep(uFogNear, uFogFar, depth);
@@ -300,6 +307,7 @@ class Layer {
         varying float vLamp;
         varying vec2 vLampDir;
         varying float vFlip;
+        varying float vGlint;
         float hash2(vec2 p) {
           vec3 p3 = fract(vec3(p.xyx) * 0.1031);
           p3 += dot(p3, p3.yzx + 33.33);
@@ -417,7 +425,11 @@ class Layer {
               vec3 crestC = mix(litCol, vec3(dot(litCol, vec3(0.3, 0.59, 0.11))), 0.7) * 1.15;
               col = mix(belly, crestC, crestK) * vColor;
               // The sunlit rim, brightest when a low sun backlights the plume (forward scattering).
-              col += litCol * smoothstep(0.45, 0.85, rr) * smoothstep(-0.1, 0.7, dot(nrm.xy, sun2)) * (0.3 + 0.6 * back);
+              // (Round 7: the rim takes the key light's own colour and, backlit, burns past white, so it
+              // is what the bloom picks out of a plume: gold at golden hour, lemon on Frostfang, orange
+              // under Ember's deck. The body stays the snow's cream.)
+              vec3 rimC = mix(litCol, uSnowLit * uSunColor, 0.6);
+              col += rimC * smoothstep(0.45, 0.85, rr) * smoothstep(-0.1, 0.7, dot(nrm.xy, sun2)) * (0.38 + 1.25 * back);
               lampK = smoothstep(-0.3, 0.7, dot(nrm.xy, vLampDir) * 0.8 + nrm.z * 0.2);
             } else if (vKind > 1.5) {
               // Mist: a soft sunlit veil with no edge, lit a little more on the sun side. Under a dim
@@ -448,6 +460,8 @@ class Layer {
               // The sun side of a fresh grain glows a step above the lit snow it is thrown over.
               col *= 1.0 + 0.15 * smoothstep(0.0, 0.8, side) * (1.0 - smoothstep(0.0, 0.9, cp.y));
               col += litCol * back * 0.3 * (1.0 - r2);
+              // A crystal catching the key light: a hard glint in the sun's colour, hottest when backlit.
+              col += mix(vec3(1.0), uSunColor, 0.5) * vGlint * (0.55 + 1.3 * back) * (1.0 - r2) * smoothstep(0.5, 0.9, dot(uSnowLit * uSunColor, vec3(0.3, 0.59, 0.11)) + back);
               // Translucent powder, densest at the heart and thinning to nothing at the edge.
               a = vAlpha * 0.85 * (1.0 - r2) * smoothstep(1.0, 0.6, r);
               lampK = smoothstep(-0.4, 0.6, dot(vec2(cp.x, -cp.y), vLampDir));
@@ -493,7 +507,7 @@ class Layer {
     this.life[i] = 0;
     this.max[i] = max;
     this.s0[i] = s0;
-    this.s1[i] = s1;
+    this.s1[i] = kind >= 3 && kind < 5 ? s1 * this.fat : s1;
     this.a[i] = a;
     this.grav[i] = grav;
     this.drag[i] = drag;
@@ -603,6 +617,7 @@ const POWDER = 1.12;
 const tmpF = new Vector3();
 const tmpS = new Vector3();
 const tmpC = new Vector3();
+const tmpC2 = new Vector3();
 
 /** How long a picked-up gift takes to squash and pop (s). */
 const POP_S = 0.26;
@@ -702,6 +717,9 @@ export class Particles {
 
   setQuality(budget: number, viewportHeight: number): void {
     this.budget = budget;
+    // (The budget names the tier for every effect: fxhub.ts.)
+    setFxBudget(budget);
+    this.powder.fat = budget < 0.6 ? 1.3 : 1;
     this.powder.setCap(Math.round(1700 * budget));
     this.glow.setCap(Math.round(900 * budget));
     const scale = viewportHeight * 0.9;
@@ -838,6 +856,38 @@ export class Particles {
         puffKind(),
         car,
       );
+    }
+    // The plume's depth (round 7): on a hard carve or a drift at speed, soft lit lumps that keep nearly the
+    // sled's pace, climb, swell and hang a sled's length behind the runner, out to the side, so the tail
+    // is a volume the sun rims and not a fan of specks. Out past the rider's outline and low: it never
+    // covers the rider or the line ahead.
+    const plume = this.n(amount * hard * (0.9 + 0.8 * over));
+    if (plume > 0) {
+      const car2 = tmpC2.set(vel.x * 0.93, fall * 0.93, vel.z * 0.93);
+      for (let i = 0; i < plume; i++) {
+        const back = 0.4 + Math.random() * 0.8;
+        const out = 0.6 + Math.random() * 1.1;
+        const big = Math.random();
+        this.powder.emit(
+          pos.x + side.x * (0.6 + 0.3 * Math.random()) - f.x * back,
+          pos.y + 0.2,
+          pos.z + side.z * (0.6 + 0.3 * Math.random()) - f.z * back,
+          car2.x + side.x * out,
+          car2.y + (0.9 + Math.random() * 1.2) * (1 + 0.5 * hard + 0.4 * over),
+          car2.z + side.z * out,
+          0.6 + Math.random() * 0.4 + 0.2 * over,
+          0.16,
+          (0.5 + big * 0.5) * (1 + 0.4 * over),
+          tint.r,
+          tint.g,
+          tint.b,
+          0.5,
+          2.4,
+          1.5,
+          dabKind(),
+          car2,
+        );
+      }
     }
     // Mist rolls out low and slow off the runner and swells as it thins: the body of the plume.
     // Many faint, overlapping puffs, so the mist reads as one continuous veil and never as balls.
@@ -1017,6 +1067,17 @@ export class Particles {
           puffKind(),
           car,
         );
+      }
+      // ...and powder left hanging in the light behind it (round 7): a few broad, thin lumps that keep the
+      // sled's pace a moment longer than the skirt and rise as they thin, low and out to the sides.
+      const veil = this.n(5 * Math.min(1.6, power));
+      const car2 = tmpC2.set(vel.x * 0.9, Math.max(vel.y, -hs * 0.7) * 0.9, vel.z * 0.9);
+      for (let i = 0; i < veil; i++) {
+        const a = (i % 2 ? 1 : -1) * (1.3 + Math.random() * 1.2);
+        const dx = fx * Math.cos(a) - fz * Math.sin(a);
+        const dz = fz * Math.cos(a) + fx * Math.sin(a);
+        const out = (1.4 + Math.random() * 1.6) * power;
+        this.powder.emit(pos.x + dx * 0.9, pos.y + 0.25, pos.z + dz * 0.9, car2.x + dx * out, car2.y + 0.9 + Math.random() * 1.1, car2.z + dz * out, 0.8 + Math.random() * 0.45, 0.3, 0.9 + Math.random() * 0.5, tint.r, tint.g, tint.b, 0.4, 1.2, 1.8, dabKind(), car2);
       }
     }
   }
@@ -1395,6 +1456,26 @@ export class Particles {
       const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
       this.powder.emit(pos.x + dx * 1.2, pos.y + 0.2, pos.z + dz * 1.2, car.x + dx * 4, car.y + 0.4, car.z + dz * 4, 0.8 + Math.random() * 0.5, 0.4, 2.2 * k, 1, 1, 1, 0.2, 1.4, 2.4, KIND_MIST);
     }
+    // Round 7: the wave has a second act. Behind the front a ring of heavier lumps rolls out lower and
+    // slower (the snow the hit moved, still moving), and a broad veil of powder climbs out of the crater
+    // and hangs in the key light for over a second, riding with the sled, out to the sides and behind.
+    const roll = this.n(16 * k);
+    const car2 = tmpC2.set(vel.x * (keep + 0.2), Math.max(vel.y, -hs * 0.7) * (keep + 0.2), vel.z * (keep + 0.2));
+    for (let i = 0; i < roll; i++) {
+      const a = (i % 2 ? 1 : -1) * (0.9 + Math.random() * 1.7);
+      const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
+      const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
+      const out = (2.5 + Math.random() * 3) * Math.sqrt(k);
+      this.powder.emit(pos.x + dx * 1.4, pos.y + 0.15, pos.z + dz * 1.4, car2.x + dx * out, car2.y + 0.3 + Math.random() * 0.9, car2.z + dz * out, 0.9 + Math.random() * 0.5, 0.35, (0.9 + Math.random() * 0.7) * k, 1, 1, 1, 0.75, 2.6, 1.2, dabKind(), car2);
+    }
+    const veil = this.n(9 * k);
+    for (let i = 0; i < veil; i++) {
+      const a = (i % 2 ? 1 : -1) * (1.2 + Math.random() * 1.4);
+      const dx = f.x * Math.cos(a) - f.z * Math.sin(a);
+      const dz = f.z * Math.cos(a) + f.x * Math.sin(a);
+      const out = 1.5 + Math.random() * 2.5;
+      this.powder.emit(pos.x + dx * 1.6, pos.y + 0.4, pos.z + dz * 1.6, car2.x + dx * out, car2.y + 1.6 + Math.random() * 1.8, car2.z + dz * out, 1.2 + Math.random() * 0.6, 0.5, (1.5 + Math.random() * 1.0) * k, 1, 1, 1, 0.36, 0.9, 1.4, dabKind(), car2);
+    }
   }
 
   /** Riding the wall: snow thrown up it, grains and billows off the sled's outer side, on the bank's
@@ -1550,7 +1631,8 @@ export class Particles {
    *  off the snow with chips (`ice`: pale shards) and grains in it. It keeps nearly the sled's speed,
    *  so it hangs at the rider's side as it falls, gone in about a second. */
   brush(pos: Vector3, toward: Vector3, carrier: Vector3, bough: boolean, ice: boolean, count: number): void {
-    const n = this.n(count);
+    // (Round 7: a tree's sift is two thirds bigger again, its clumps fuller: a shed you see at 40 m/s.)
+    const n = this.n(count * (bough ? 1.7 : 1));
     const car = tmpC.set(carrier.x * 0.97, Math.max(carrier.y, -Math.hypot(carrier.x, carrier.z) * 0.7) * 0.97, carrier.z * 0.97);
     const f = this.forward(carrier);
     const fx = f.x;
@@ -1583,11 +1665,11 @@ export class Particles {
           vz,
           clump ? 0.85 + Math.random() * 0.4 : mist ? 1 : 0.75 + Math.random() * 0.35,
           clump ? 0.16 : mist ? 0.35 : 0.045,
-          clump ? 0.42 + Math.random() * 0.2 : mist ? 1 : 0.07 + Math.random() * 0.04,
+          clump ? 0.52 + Math.random() * 0.26 : mist ? 1.3 : 0.07 + Math.random() * 0.04,
           POWDER,
           POWDER,
           POWDER,
-          clump ? 0.85 : mist ? 0.25 : 0.9,
+          clump ? 0.88 : mist ? 0.32 : 0.9,
           clump ? 2.2 : mist ? 0.6 : 5,
           1.2,
           kind,
@@ -1706,6 +1788,50 @@ export class Particles {
     }
   }
 
+  /** A tree down the run lets its snow go (a ghost shook it, treelife.ts): at the tree itself, clumps and
+   *  grains sifting down from its boughs through a thin veil, about a second of it. Dabs, not billows: it
+   *  falls well away from the rider. */
+  shedAt(x: number, y: number, z: number, count: number): void {
+    const n = this.n(count);
+    for (let i = 0; i < n; i++) {
+      const ox = (Math.random() - 0.5) * 1.9;
+      const oz = (Math.random() - 0.5) * 1.9;
+      const h = 1.5 + Math.random() * 2.8;
+      if (i % 4 === 0) this.powder.emit(x + ox, y + h, z + oz, (Math.random() - 0.5) * 0.6, -0.3 - Math.random() * 0.7, (Math.random() - 0.5) * 0.6, 0.9 + Math.random() * 0.4, 0.2, 0.55 + Math.random() * 0.4, POWDER, POWDER, POWDER, 0.85, 4.5, 1, dabKind());
+      else this.powder.emit(x + ox, y + h, z + oz, (Math.random() - 0.5) * 0.9, -1.6 - Math.random() * 1.2, (Math.random() - 0.5) * 0.9, 0.8 + Math.random() * 0.4, 0.05, 0.09, POWDER, POWDER, POWDER, 0.9, 6, 1.2, KIND_GRAIN);
+    }
+    const veil = this.n(2);
+    for (let i = 0; i < veil; i++) this.powder.emit(x, y + 2 + Math.random(), z, 0.3, -0.5, 0.2, 1.1 + Math.random() * 0.4, 0.5, 1.7, 1, 1, 1, 0.22, 0.5, 1, KIND_MIST);
+  }
+
+  /** What the wind takes off a tree (treelife.ts): petals or flakes of ash tumbling down and away on it,
+   *  each a small ribbon in one of `cols`; with `grain`, a sift of snow instead. `drift` is the wind's
+   *  speed, `spread` the crown's radius. */
+  flakes(x: number, y: number, z: number, cols: readonly Color[], count: number, spread: number, drift: number, size: number, grain = false): void {
+    const n = this.n(count);
+    for (let i = 0; i < n; i++) {
+      const c = cols[i % cols.length];
+      this.powder.emit(
+        x + (Math.random() - 0.5) * 2 * spread,
+        y + (Math.random() - 0.5) * 1.3,
+        z + (Math.random() - 0.5) * 2 * spread,
+        drift * (0.5 + Math.random()),
+        -(grain ? 1.2 : 0.5) - Math.random() * 0.6,
+        drift * 0.5 * (Math.random() - 0.3),
+        grain ? 0.9 + Math.random() * 0.5 : 2.2 + Math.random() * 1.4,
+        size,
+        size * 0.85,
+        c.r,
+        c.g,
+        c.b,
+        grain ? 0.85 : 0.95,
+        grain ? 4 : 0.45,
+        0.9,
+        grain ? KIND_GRAIN : seeded(KIND_CONFETTI),
+      );
+    }
+  }
+
   /** Vent steam: low, faint, slowly rising wisps that telegraph the vent without hiding anything. */
   steam(pos: Vector3, strength: number): void {
     this.steamAt(pos.x, pos.y, pos.z, strength);
@@ -1736,8 +1862,18 @@ export class Particles {
   }
 }
 
-/** Camera-following weather volume animated entirely in the vertex shader. The volume sits mostly
- *  ahead of the lens (wrapping in world space, so flakes never swim when the camera turns). */
+/** Camera-following weather animated entirely in the vertex shader, wrapping in world space (flakes never
+ *  swim when the camera turns). Round 7 gives it volume: three depth layers in one draw. A few big, fast
+ *  flakes in a small box right ahead of the lens (the near layer: strong parallax, and what a storm reads by
+ *  at thumbnail size); the body of the weather in the middle box; and a far layer in a box more than twice
+ *  as deep, fine and slow on screen, so snow, blossom and ash fall all the way down the run and not in a
+ *  shell round the camera. Gusts are sheets of displacement that cross the slope along the wind, and bands
+ *  of thicker air follow them, so the visibility breathes. Every flake takes the frame's light: the snow's
+ *  own lit colour, a trace of the key light's, and a forward-scatter lift looking toward the sun (blossom
+ *  glows when it is backlit). Ember's air is two things in the one draw: ash that falls on the wind and
+ *  embers that rise and flicker (a premultiplied blend lets one lie over the picture and the other add to
+ *  it). Low draws the same three layers with fewer flakes, each a little larger and with less in the far
+ *  box: a sparser storm, not a missing one. Reduced motion stills the gusts and keeps the fall. */
 export class Weather {
   readonly points: Points;
   private mat: ShaderMaterial;
@@ -1760,6 +1896,11 @@ export class Weather {
     this.mat = new ShaderMaterial({
       transparent: true,
       depthWrite: false,
+      // Premultiplied: a flake lies over the picture (alpha), an ember adds to it (alpha 0), in one draw.
+      blending: CustomBlending,
+      blendEquation: AddEquation,
+      blendSrc: OneFactor,
+      blendDst: OneMinusSrcAlphaFactor,
       uniforms: {
         uTime: shared.uTime,
         uCam: { value: new Vector3() },
@@ -1770,10 +1911,20 @@ export class Weather {
         uStreak: { value: 0 },
         uColor: { value: new Color(1, 1, 1) },
         uFog: shared.uFog,
+        uSunDir: shared.uSunDir,
+        uSunColor: shared.uSunColor,
+        uSnowLit: shared.uSnowLit,
+        uSnowShade: shared.uSnowShade,
         uAlpha: { value: 0.8 },
         uScale: { value: 600 },
         uDensity: { value: 1 },
         uKind: { value: 0 },
+        uAdd: { value: 0 },
+        /** How hard the gusts blow (1 in play, 0 under reduced motion), and Low's larger flakes. */
+        uGust: { value: 1 },
+        uBig: { value: 1 },
+        /** The layers' shares of the flakes: below x the near layer, from y on the far one. */
+        uLayers: { value: new Vector2(0.06, 0.66) },
       },
       vertexShader: /* glsl */ `
         attribute float aSeed;
@@ -1782,47 +1933,83 @@ export class Weather {
         uniform vec3 uCamVel;
         uniform vec3 uBox;
         uniform vec3 uFall;
+        uniform vec3 uSunDir;
         uniform float uSize;
         uniform float uScale;
         uniform float uDensity;
         uniform float uKind;
         uniform float uStreak;
+        uniform float uGust;
+        uniform float uBig;
+        uniform vec2 uLayers;
         varying float vAlpha;
         varying float vSeed;
         varying vec2 vAxis;
         varying float vRatio;
         varying float vFar;
+        varying float vLit;
+        varying float vAsh;
+        varying float vFlip;
         void main() {
           vSeed = aSeed;
-          // Blizzard streaks come in three layers: heavy fast flakes, a mid layer and fine slow ones.
-          float layer = uStreak > 0.0 ? (aSeed < 0.3 ? 0.0 : aSeed < 0.65 ? 1.0 : 2.0) : 1.0;
-          // And a few big, fast flakes whipping past close to the lens, in a small box just ahead of
-          // it, so the storm still reads at thumbnail size (small, the frame read as plain grey fog).
-          float nearL = uStreak > 0.0 && aSeed < 0.03 ? 1.0 : 0.0;
-          float speed = (0.7 + aSeed * 0.6) * (uStreak > 0.0 ? 1.3 - layer * 0.25 : 1.0) * (1.0 + 0.7 * nearL);
-          vec3 drift = uFall * uTime * speed;
-          drift.x += sin(uTime * (0.6 + aSeed) + aSeed * 30.0) * (uKind > 1.5 ? 2.5 : 0.8);
-          // The box is centred ahead of the lens, so almost every flake is in view.
+          // Which layer: its own hash, so a layer holds flakes of every speed.
+          float lh = fract(aSeed * 91.7);
+          float nearL = lh < uLayers.x ? 1.0 : 0.0;
+          float farL = lh >= uLayers.y ? 1.0 : 0.0;
+          float layer = farL > 0.5 ? 2.0 : nearL > 0.5 ? 0.0 : 1.0;
+          bool embers = uKind > 1.5 && uKind < 2.5;
+          // Ember's air: under half of it is ash, which falls on the wind; the rest are embers, which rise.
+          vAsh = embers && fract(aSeed * 37.3) < 0.45 ? 1.0 : 0.0;
+          float speed = (0.7 + aSeed * 0.6) * (1.0 + 0.7 * nearL - 0.25 * farL);
+          vec3 fall = vAsh > 0.5 ? vec3(uFall.x * 1.8, -0.85, uFall.z * 1.8) : uFall;
+          vec3 drift = fall * uTime * speed;
+          // Each layer's box: a small one just ahead of the lens, the body's, and one more than twice as
+          // deep that reaches on down the run. All centred ahead, so almost every flake is in view.
+          vec3 box = nearL > 0.5 ? vec3(12.0, 7.0, 12.0) : farL > 0.5 ? uBox * vec3(2.2, 1.6, 2.5) : uBox;
+          float ahead = nearL > 0.5 ? 6.5 : farL > 0.5 ? uBox.z * 1.2 : uBox.z * 0.3;
           vec3 fwd = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
-          vec3 box = mix(uBox, vec3(9.0, 6.0, 9.0), nearL);
-          vec3 centre = uCam + vec3(fwd.x, fwd.y * 0.3, fwd.z) * mix(uBox.z * 0.3, 5.5, nearL);
+          vec3 centre = uCam + vec3(fwd.x, fwd.y * 0.3, fwd.z) * ahead;
           vec3 p = position * box + drift - centre;
           p = mod(p, box) - box * 0.5;
           vec3 wp = centre + p;
+          // Gusts: sheets of displacement crossing the slope along the wind, a long one and a shorter one
+          // riding it, so the fall leans and recovers in waves that move across the frame.
+          vec2 wd = normalize(uFall.xz + vec2(0.0001, 0.0));
+          float gph = dot(wp.xz, wd) * 0.07 - uTime * 1.3;
+          float gust = sin(gph) * 0.6 + sin(gph * 2.3 + 1.7) * 0.4;
+          wp.xz += wd * gust * uGust * (uStreak > 0.0 ? 2.4 : 1.3);
+          wp.x += sin(uTime * (0.6 + aSeed) + aSeed * 30.0) * (uKind > 1.5 ? 2.2 : 0.8) * (0.4 + 0.6 * uGust);
+          // Petals rock as they fall; embers jitter on the heat they ride.
+          if (uKind > 0.5 && uKind < 1.5) wp.y += sin(uTime * 1.9 + aSeed * 50.0) * 0.3;
+          if (embers && vAsh < 0.5) wp.y += sin(uTime * 2.7 + aSeed * 44.0) * 0.45;
+          vFlip = abs(sin(uTime * (2.2 + aSeed * 2.4) + aSeed * 40.0));
           vec4 mv = modelViewMatrix * vec4(wp, 1.0);
           float depth = -mv.z;
-          float keep = step(aSeed, uDensity);
-          // Nothing near the lens grows into an out-of-focus blob (it reads as a smudge on the lens):
-          // flakes fade in from 2.5 m and never draw bigger than about 9 px at 720p (petals, embers
-          // and wisps a little bigger).
-          vAlpha = keep * smoothstep(mix(2.5, 1.4, nearL), mix(6.0, 2.6, nearL), depth) * (1.0 - smoothstep(uBox.z * 0.55, uBox.z * 0.78, depth));
-          float size = keep * min(uSize * uScale / max(depth, 0.5), uScale * (uKind < 0.5 ? 0.0125 : 0.022));
+          // The air's thickness breathes: bands of denser fall cross the slope with the gusts.
+          vec2 wx = vec2(-wd.y, wd.x);
+          float band = 0.5 + 0.5 * sin(dot(wp.xz, wx) * 0.045 + dot(wp.xz, wd) * 0.02 - uTime * 0.55);
+          float dens = uDensity * mix(1.0, 0.5 + 1.0 * band, uGust * (uStreak > 0.0 ? 1.0 : 0.6));
+          float keep = step(aSeed, dens);
+          // Nothing near the lens grows into an out-of-focus blob (it reads as a smudge on the lens): the
+          // body fades in from 2.5 m, the near layer from 1.4 m, the far layer only past the body's box.
+          float reach = ahead + box.z * 0.5;
+          float fadeIn = nearL > 0.5 ? smoothstep(1.4, 2.6, depth) : farL > 0.5 ? smoothstep(uBox.z * 0.5, uBox.z * 0.85, depth) : smoothstep(2.5, 6.0, depth);
+          vAlpha = keep * fadeIn * (1.0 - smoothstep(reach * 0.78, reach, depth));
+          // (Ash stays a small flake however near: a big grey disc by the lens is a smudge on it.)
+          float cap = uScale * (uKind < 0.5 || vAsh > 0.5 ? 0.0125 : 0.022) * (1.0 + 0.5 * nearL * (1.0 - vAsh));
+          float size = keep * min(uSize * uBig * uScale / max(depth, 0.5), cap);
+          // A far flake never shrinks under a pixel and a half: it thins instead.
+          float minPx = 1.5 * uScale / 720.0;
+          if (size < minPx && keep > 0.0) {
+            vAlpha *= max(size / minPx, 0.35);
+            size = minPx;
+          }
           vAxis = vec2(1.0, 0.0);
           vRatio = 1.0;
           vFar = layer * 0.5;
           if (uStreak > 0.0 && keep > 0.0) {
             // Sideways motion streaks: the wind plus a little of the camera's own travel, 8 to 20 px
-            // long (at 720p), thinner and fainter in the far layer and faint right by the lens.
+            // long (at 720p), thinner and fainter in the far layer, long and bold right by the lens.
             vec3 rel = uFall * speed - uCamVel * 0.12;
             vec4 c0 = projectionMatrix * mv;
             vec4 c1 = projectionMatrix * modelViewMatrix * vec4(wp + rel * 0.05, 1.0);
@@ -1831,15 +2018,17 @@ export class Weather {
             if (c0.w > 0.1 && c1.w > 0.1) dpx = (c1.xy / c1.w - c0.xy / c0.w) * vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0) * uScale * 0.5;
             float len = length(dpx);
             vAxis = len > 0.001 ? vec2(dpx.x, -dpx.y) / len : vec2(1.0, 0.0);
-            float lmax = mix(mix(20.0, 11.0, layer * 0.5), 48.0, nearL) * px720;
-            float lmin = mix(mix(12.0, 8.0, layer * 0.5), 30.0, nearL) * px720;
+            float lmax = mix(mix(20.0, 11.0, farL), 48.0, nearL) * px720;
+            float lmin = mix(mix(12.0, 7.0, farL), 30.0, nearL) * px720;
             float l = clamp(len, lmin, lmax);
-            float thick = mix(mix(2.2, 1.1, layer * 0.5) * clamp(28.0 / max(depth, 1.0), 0.6, 1.4), 4.2, nearL) * px720;
+            float thick = mix(mix(2.2, 1.0, farL) * clamp(28.0 / max(depth, 1.0), 0.6, 1.4), 4.2, nearL) * px720 * uBig;
             vRatio = clamp(thick / l, 0.05, 1.0);
             size = l;
-            vAlpha *= mix(mix(0.95, 0.6, layer * 0.5) * mix(0.25, 1.0, smoothstep(2.5, 12.0, depth)), 0.85, nearL);
+            vAlpha *= mix(mix(0.95, 0.55, farL) * mix(0.25, 1.0, smoothstep(2.5, 12.0, depth)), 0.85, nearL);
             vFar = mix(vFar, 0.0, nearL);
           }
+          // Looking toward the key light, a flake is lit through (forward scatter).
+          vLit = pow(max(dot(normalize(wp - uCam), uSunDir), 0.0), 3.0);
           gl_PointSize = size;
           gl_Position = projectionMatrix * mv;
         }
@@ -1847,34 +2036,57 @@ export class Weather {
       fragmentShader: /* glsl */ `
         uniform vec3 uColor;
         uniform vec3 uFog;
+        uniform vec3 uSunColor;
+        uniform vec3 uSnowLit;
+        uniform vec3 uSnowShade;
         uniform float uAlpha;
         uniform float uStreak;
         uniform float uKind;
+        uniform float uAdd;
         varying float vAlpha;
         varying float vSeed;
         varying vec2 vAxis;
         varying float vRatio;
         varying float vFar;
+        varying float vLit;
+        varying float vAsh;
+        varying float vFlip;
         void main() {
           vec2 c = gl_PointCoord - 0.5;
           float a;
-          vec3 col = uColor;
+          // What the frame's light makes of a pale flake: the snow's own lit colour with a trace of the
+          // key light's, in the snow's shade away from it, lifted where the light comes through it.
+          vec3 air = mix(uSnowShade * 1.25, vec3(1.0), 0.72) * mix(vec3(1.0), uSunColor, 0.3);
+          vec3 col = uColor * air * (0.9 + 0.7 * vLit);
+          float add = uAdd;
           if (uStreak > 0.0) {
             // A tapered streak along the motion axis, its head a little brighter than its tail.
             vec2 q = vec2(dot(c, vAxis), dot(c, vec2(-vAxis.y, vAxis.x)) / vRatio) * 2.0;
             a = smoothstep(1.0, 0.2, abs(q.x)) * smoothstep(1.0, 0.25, abs(q.y)) * (0.75 + 0.25 * q.x) * vAlpha * uAlpha;
             // Never darker than the fog behind it: far streaks lean toward the fog, near ones are white.
-            col = max(mix(uColor, uFog, vFar * 0.45), uFog * 1.04);
+            col = max(mix(col, uFog, vFar * 0.45), uFog * 1.04);
           } else {
-            // Petals are little ovals.
-            if (uKind > 0.5 && uKind < 1.5) c.y *= 1.8;
+            // Petals are little ovals that turn as they fall: face on, then nearly edge on.
+            if (uKind > 0.5 && uKind < 1.5) c.y *= mix(1.5, 3.4, vFlip);
             float d = length(c) * 2.0;
             a = smoothstep(1.0, 0.6, d) * vAlpha * uAlpha;
-            if (uKind > 2.5) col *= 0.8 + 0.4 * vSeed;
+            if (uKind > 0.5 && uKind < 1.5) {
+              // Blossom is the light: backlit it glows past its own pink.
+              col = uColor * mix(vec3(0.86, 0.84, 0.94), vec3(1.0), 0.5 + 0.5 * vFlip) * mix(vec3(1.0), uSunColor, 0.25) * (0.92 + 1.1 * vLit);
+            } else if (uKind > 1.5 && uKind < 2.5) {
+              if (vAsh > 0.5) {
+                // Ash: a grey flake in the frame's light, lying over the picture.
+                col = vec3(0.44, 0.41, 0.46) * mix(uSnowShade * 1.3, uSnowLit * uSunColor, 0.45 + 0.4 * vLit);
+                a *= 0.8;
+                add = 0.0;
+              } else {
+                // An ember: a hot core that flickers as it rises.
+                col = uColor * (0.75 + 0.6 * vSeed) * (0.6 + 0.9 * vFlip) * (1.0 + 1.2 * smoothstep(0.6, 0.0, d));
+              }
+            } else if (uKind > 2.5) col = uColor * (0.8 + 0.4 * vSeed);
           }
           if (a < 0.01) discard;
-          gl_FragColor = vec4(col, a);
-          #include <colorspace_fragment>
+          gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a * (1.0 - add));
         }
       `,
     });
@@ -1883,7 +2095,7 @@ export class Weather {
     this.points.renderOrder = 4;
   }
 
-  /** kind: 0 snow, 1 petals, 2 embers, 3 wisps. */
+  /** kind: 0 snow, 1 petals, 2 embers (and ash), 3 wisps. */
   configure(opts: { density: number; kind: number; color: Color; streak: number; size: number; alpha: number; fall: Vector3; additive: boolean }): void {
     const u = this.mat.uniforms;
     u.uDensity.value = opts.density;
@@ -1893,8 +2105,7 @@ export class Weather {
     u.uSize.value = opts.size;
     u.uAlpha.value = opts.alpha;
     u.uFall.value.copy(opts.fall);
-    this.mat.blending = opts.additive ? AdditiveBlending : NormalBlending;
-    this.mat.needsUpdate = true;
+    u.uAdd.value = opts.additive ? 1 : 0;
     this.points.visible = opts.density > 0.001;
   }
 
@@ -1902,10 +2113,23 @@ export class Weather {
     this.mat.uniforms.uScale.value = px;
   }
 
+  /** The share of the flakes each layer takes (near, body, far), for the cost report and tests. */
+  get layers(): [number, number, number] {
+    const l = this.mat.uniforms.uLayers.value as Vector2;
+    return [l.x, l.y - l.x, 1 - l.y];
+  }
+
   /** Called once per frame with the camera position; also tracks the camera's velocity, which
    *  the powder and the blizzard streaks use to stretch along their motion through the lens. */
   follow(cam: Vector3): void {
     this.mat.uniforms.uCam.value.copy(cam);
+    // Reduced motion stills the gusts (the fall itself stays: weather is a beat, its lurch is motion).
+    const g = this.mat.uniforms.uGust;
+    g.value += ((fx.reduced ? 0 : 1) - g.value) * 0.08;
+    // Low: the same three layers with less in the far box, each flake a little larger.
+    const low = fx.tier === 0;
+    this.mat.uniforms.uBig.value = low ? 1.35 : 1;
+    (this.mat.uniforms.uLayers.value as Vector2).set(low ? 0.08 : 0.06, low ? 0.8 : 0.66);
     const t = shared.uTime.value;
     const dt = t - this.lastT;
     if (this.lastT < 0 || dt > 0.25 || dt < 0) camVel.set(0, 0, 0);

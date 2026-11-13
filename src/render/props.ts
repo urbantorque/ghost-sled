@@ -3,9 +3,13 @@ import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
+import { fx } from './fxhub';
 import { Plant, emberGrove, hasGrove, orchard } from './groves';
+import { liveTree } from './treelife';
 import { makeToonMaterial, shared } from './materials';
 import {
+  BASALT_MODEL_H,
+  ROCK_MODEL_H,
   cairnGeometry,
   gateBeamGeometry,
   lightGeometry,
@@ -236,6 +240,8 @@ export class Props {
     const giftOpts = { bob: true, coolShade: 0.1, emissive: new Color('#FFD34D'), emissiveStrength: 0.62, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
     this.giftMat = makeToonMaterial(giftOpts);
     this.giftFarMat = variantMaterial(makeToonMaterial(giftOpts));
+    // The trees a rider shakes as it passes are read from here (treelife.ts).
+    fx.trees = this;
     this.build();
   }
 
@@ -292,7 +298,9 @@ export class Props {
     // Kicker lips and gate beams are friendly signals and keep the lantern's light.
     const toon = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true });
     // Foliage keeps its spruce teal in shade (at 0.55 the cool shade tint turned every pine indigo).
-    const foliage = makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true });
+    // (Round 7: foliage moves in the wind and shakes when shaved, treelife.ts; Low bends only.)
+    const rich = this.arches;
+    const foliage = liveTree(makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true }), rich);
     const plain = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf });
     const glow = makeToonMaterial({ coolShade: 0.3, emissive: new Color('#FF9A4A'), emissiveStrength: 0.2, nearFade: near, coverageFade: cf });
     // Stone lanterns and lava rocks are hazards too: dark and cold, with only a stone lantern's
@@ -301,7 +309,7 @@ export class Props {
     // Frostfang's spires, seracs and crystal rocks are translucent ice (still hazards).
     const ice = makeToonMaterial({ coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, ice: true });
     // The far rows of the forest lean into the fog with distance (materials.ts AERIAL).
-    const farFoliage = makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true, aerial: true });
+    const farFoliage = liveTree(makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true, aerial: true }), false);
     const farToon = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, aerial: true });
     const farIce = makeToonMaterial({ coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, ice: true, aerial: true });
     this.materials.push(toon, foliage, plain, glow, hazGlow, ice, farFoliage, farToon, farIce);
@@ -316,7 +324,7 @@ export class Props {
     };
     for (const k of KINDS) {
       const mat = k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
-      add('ob:' + k, obstacleGeometry(k, p), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+      add('ob:' + k, obstacleGeometry(k, p, !this.arches), mat, k === 'pine' || k === 'rock' ? 700 : 300);
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
@@ -326,6 +334,8 @@ export class Props {
     const forestCap = Math.round(2200 * this.forestDensity) + 10;
     const vFor = (opts: Parameters<typeof makeToonMaterial>[0], aerialPick = false) => {
       const m = variantMaterial(makeToonMaterial(opts), aerialPick);
+      // (The wall by the run shakes when a rider passes; the far rows only bend.)
+      if ((opts?.sway ?? 0) > 0) liveTree(m, rich && !aerialPick);
       this.materials.push(m);
       return m;
     };
@@ -742,7 +752,9 @@ export class Props {
         this.v.set(o.x, o.y - 0.05, -o.z);
         // Pines in the run vary in height (only ever up: their collider stands taller than the model).
         const tallK = o.kind === 'pine' || o.kind === 'charpine' || o.kind === 'blossom' ? 1 + 0.3 * hashf(o.id, 3, 9) : 1;
-        this.s.set(k, o.kind === 'spire' || o.kind === 'basalt' ? o.h / 5 : k * tallK, k);
+        // (A spire and a basalt cluster stand as tall as their colliders, and so does a rock: the drawn form
+        // stays inside what the sim collides with, tests/rockforms.)
+        this.s.set(k, o.kind === 'basalt' ? o.h / BASALT_MODEL_H : o.kind === 'spire' ? o.h / 5 : o.kind === 'rock' || o.kind === 'lavarock' ? o.h / ROCK_MODEL_H : k * tallK, k);
       }
       this.push('ob:' + o.kind, this.v, this.q, this.s);
     }

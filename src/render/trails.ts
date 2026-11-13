@@ -1,7 +1,16 @@
 import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
 import { Course } from '../sim/course';
+import { BUDGET, byTier } from './fxhub';
 import { LANTERN_POOL_GLSL, shared } from './materials';
 
+// Round 7: ruts last the run. Your own groove no longer ages away or thins toward the lens: it is cut into
+// the snow for as long as it is in the buffer (540 m and more behind the sled), so the finish's swing, a
+// wreck's orbit, the mirror and the reel all see the line you rode. Every ghost cuts real ruts too (two
+// runner cuts in the snow's own shade, a lit lip beside each), which stay on the snow ahead of you until you
+// ride over them; its light still fades in seven seconds, the rut under it does not. Budgets per tier are
+// fxhub.ts BUDGET (samples kept, their spacing, how far ahead a rut is drawn and where it drops to every
+// third sample); a far rut is the shader's own pixel-wide line. Only the samples added are uploaded.
+//
 // Skill written in the snow (ART.md section 4). The sled leaves two runner tracks pressed into the
 // snow, a runner's width apart. A deep carve presses a wide periwinkle floor between them and throws
 // up a broken, noisy lip on the outside (bright on the sun side), and a drift scrubs a wide fan of
@@ -22,6 +31,17 @@ const GHOST_HW = 0.13;
 const STRETCH = 4.5;
 const STRETCH_FROM = 14;
 const STRETCH_TO = 46;
+
+/** The groove's per-sample attributes and their sizes (each sample is two vertices). */
+const TRAIL_DYNAMIC: ReadonlyArray<readonly [string, number]> = [
+  ['position', 3],
+  ['aDepth', 1],
+  ['aBorn', 1],
+  ['aPerp', 2],
+  ['aFan', 1],
+  ['aHw', 1],
+  ['aArc', 1],
+];
 
 export class Trail {
   readonly mesh: Mesh;
@@ -200,7 +220,13 @@ export class Trail {
           return (1.0 - smoothstep(h - f * 0.5 - px * 0.4, h + f * 0.5 + px * 0.4, abs(x - (lo + hi) * 0.5))) * (w / wp);
         }
         void main() {
-          float fade = clamp(1.0 - vAge / uLife, 0.0, 1.0);
+          #ifdef GHOST
+            float fade = clamp(1.0 - vAge / uLife, 0.0, 1.0);
+          #else
+            // A rut lasts the run: fresh it is crisp, and it settles a little over its first seconds (wind
+            // softening its lips), never further.
+            float fade = mix(0.84, 1.0, exp(-vAge * 0.3));
+          #endif
           float d = length(cameraPosition - vWorldPos);
           float fogF = smoothstep(uFogNear, uFogFar, d);
           // View depth of this fragment and of the rider (the sled, under the focus point). The near
@@ -291,6 +317,19 @@ export class Trail {
             float kb = max(lipS * 0.42, lipF * 0.28) * mix(1.0, 0.45, soft);
             P = brightLip * kb + P * (1.0 - kb);
             A = kb + A * (1.0 - kb);
+            // Snow moved, not marked: a deep carve throws clods out past its lip, each a small lit crumb
+            // with its own shade under it, thinning with distance from the cut. Stretched along the track
+            // with the rest of the groove's noise, so at speed they are flecks, not dots.
+            vec2 cq = vec2(x * 9.0, vArc * 3.2);
+            vec2 ci = floor(cq);
+            vec2 cf = fract(cq) - 0.5;
+            float ch = h12(ci);
+            float clod = step(0.8, ch) * smoothstep(0.34, 0.12, length(cf + (vec2(h12(ci + 7.0), h12(ci + 13.0)) - 0.5) * 0.4));
+            float outside = smoothstep(floorW, floorW + 0.05, an) * smoothstep(vHw - 0.02, vHw - 0.2, an);
+            float kcl = clod * outside * smoothstep(0.25, 0.7, deep) * (1.0 - soft * 0.5) * (1.0 - smoothstep(0.02, 0.06, px));
+            vec3 clodCol = mix(mix(uShade, uDeep, 0.3), brightLip, smoothstep(-0.1, 0.25, cf.y * sign(vSunK + 0.0001) + 0.1));
+            P = clodCol * kcl + P * (1.0 - kcl);
+            A = kcl + A * (1.0 - kcl);
             vec3 col = P / max(A, 0.001);
             // The sled lantern's amber pool falls into the groove too (the same pool as the snow's).
             if (uLantern > 0.0) {
@@ -305,8 +344,9 @@ export class Trail {
             // by the bottom edge: the critics wanted the carve written in the foreground, where a groove
             // that dissolved early left the lower third blank. A camera looking away from the rider
             // (the rear-view mirror) sees it at full strength.
-            float nearK = zr > 1.0 ? mix(0.6, 1.0, smoothstep(0.0, 0.6, vScreenK)) : 1.0;
-            alpha *= fade * nearK * smoothstep(vHw, vHw - 0.05, an) * (1.0 - fogF * 0.5);
+            // (Round 7: at full strength to the bottom edge. The groove no longer thins toward the lens;
+            // its feather there, 'soft', is what keeps it from reading as paint.)
+            alpha *= fade * smoothstep(vHw, vHw - 0.05, an) * (1.0 - fogF * 0.5);
             // Runners only scratch glass ice: a shallower, fainter cut than in powder.
             if (uIceMood >= 1.0) alpha *= 0.55;
             gl_FragColor = vec4(col, alpha);
@@ -343,7 +383,8 @@ export class Trail {
     if (!Number.isNaN(this.lastX)) {
       const dx = x - this.lastX;
       const dz = z - this.lastZ;
-      if (dx * dx + dz * dz < 0.36) return;
+      const gap = this.ghost ? 0.6 : byTier(BUDGET.rutGap);
+      if (dx * dx + dz * dz < gap * gap) return;
     }
     let tx = 0;
     let tz = 1;
@@ -365,7 +406,8 @@ export class Trail {
     const fan = this.ghost ? 0 : Math.max(0, Math.min(1, (width - 0.95) / 0.7));
     // Ghost lines are a fixed hairline. The groove is a runner's width plus a lip that grows with
     // the carve; only a drift fans out wider.
-    const hw = this.ghost ? GHOST_HW : Math.max(RUNNER + 0.12 + 0.3 * Math.min(1, depth), width * 0.45 * fan);
+    // (A deep carve's ribbon runs a hand wider than its lip, for the clods it throws out.)
+    const hw = this.ghost ? GHOST_HW : Math.max(RUNNER + 0.12 + 0.42 * Math.min(1, depth), width * 0.45 * fan);
     // Perpendicular in sim space.
     const px = tz;
     const pz = -tx;
@@ -393,6 +435,7 @@ export class Trail {
     this.head = (this.head + 1) % this.max;
     this.count = Math.min(this.count + 1, this.max);
     this.dirtyFlag = true;
+    for (const [name, size] of TRAIL_DYNAMIC) (this.geo.getAttribute(name) as BufferAttribute).addUpdateRange(i * 2 * size, 2 * size);
   }
 
   flush(): void {
@@ -416,15 +459,12 @@ export class Trail {
       arr[q++] = b0 + 1;
       arr[q++] = b0;
     }
+    idx.clearUpdateRanges();
+    idx.addUpdateRange(0, Math.max(q, 3));
     idx.needsUpdate = true;
     this.geo.setDrawRange(0, q);
-    (this.geo.getAttribute('position') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aDepth') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aBorn') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aPerp') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aFan') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aHw') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aArc') as BufferAttribute).needsUpdate = true;
+    // (Each attribute uploads only the samples added since the last flush: its update ranges.)
+    for (const [name] of TRAIL_DYNAMIC) (this.geo.getAttribute(name) as BufferAttribute).needsUpdate = true;
   }
 
   dispose(): void {
@@ -432,6 +472,9 @@ export class Trail {
     this.mat.dispose();
   }
 }
+
+/** A rut is kept this far behind the rider (the mirror, a wreck's orbit and the finish's swing look back). */
+const RUT_BEHIND = 60;
 
 /** Half-width of a ghost's runner ribbon: both runner lines and their glow. */
 const GHOST_RUNNERS_HW = RUNNER + 0.12;
@@ -445,7 +488,8 @@ const GHOST_STRIP_HW = GHOST_RUNNERS_HW + 0.7;
  * the snow behind a ghost reads as a sled's track rather than one painted stripe. Each line is a crisp
  * core in a soft glow; by day the colour deepens so it shows on bright snow, at night it glows (past
  * the bloom threshold on Medium and High). They fade with age, with distance, and before they reach
- * the lens, as the single lines did.
+ * the lens, as the single lines did. Under the light lies the rut itself (round 7), which does not fade:
+ * the same strip, the same draw.
  */
 export class GhostTrails {
   readonly mesh: Mesh;
@@ -461,12 +505,24 @@ export class GhostTrails {
   private dirtyFlag = false;
   private mat: ShaderMaterial;
 
+  /** Metres between a rut's samples, how far ahead of the rider it is drawn, and where it drops to every
+   *  third sample (fxhub.ts BUDGET, read once as the field is made). */
+  private gap: number;
+  private far: number;
+  private coarse: number;
+
   constructor(
     private course: Course,
     private n: number,
     private max: number,
     colors: Color[],
   ) {
+    // The tier's budget: a rut keeps the visible range ahead of the rider (Low keeps round 6's vertex
+    // count and spaces its samples wider).
+    this.max = max = Math.max(max, byTier(BUDGET.rutSamples));
+    this.gap = byTier(BUDGET.rutGap);
+    this.far = byTier(BUDGET.rutFar);
+    this.coarse = byTier(BUDGET.rutCoarse);
     const verts = n * max * 2;
     this.pos = new Float32Array(verts * 3);
     this.born = new Float32Array(verts);
@@ -494,7 +550,9 @@ export class GhostTrails {
     this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aCol', new BufferAttribute(col, 3));
     this.geo.setAttribute('aG', new BufferAttribute(gi, 1));
-    this.geo.setIndex(new BufferAttribute(new Uint32Array(Math.max(1, n * (max - 1) * 6)), 1).setUsage(DynamicDrawUsage));
+    // (A 16-bit index wherever the field's vertices fit one: half the bytes a rebuild sends.)
+    const indices = Math.max(1, n * (max - 1) * 6);
+    this.geo.setIndex(new BufferAttribute(verts <= 65535 ? new Uint16Array(indices) : new Uint32Array(indices), 1).setUsage(DynamicDrawUsage));
     this.geo.setDrawRange(0, 0);
     this.mat = new ShaderMaterial({
       transparent: true,
@@ -506,6 +564,10 @@ export class GhostTrails {
       uniforms: {
         uTime: shared.uTime,
         uLit: shared.uSnowLit,
+        uShade: shared.uSnowShade,
+        uDeep: shared.uSnowDeep,
+        uSunColor: shared.uSunColor,
+        uIceMood: shared.uIceMood,
         uFog: shared.uFog,
         uFogNear: shared.uFogNear,
         uFogFar: shared.uFogFar,
@@ -539,6 +601,10 @@ export class GhostTrails {
       `,
       fragmentShader: /* glsl */ `
         uniform vec3 uLit;
+        uniform vec3 uShade;
+        uniform vec3 uDeep;
+        uniform vec3 uSunColor;
+        uniform float uIceMood;
         uniform vec3 uFog;
         uniform float uFogNear;
         uniform float uFogFar;
@@ -584,9 +650,27 @@ export class GhostTrails {
             col = mix(col, mix(vCol * 1.5, pow(vCol, vec3(1.4)) * 1.05, day * 0.5), wa / max(alpha + wa, 0.001));
             alpha = alpha + wa * (1.0 - alpha);
           }
-          if (alpha < 0.003) discard;
           col = mix(col, uFog, fogF * 0.5);
-          gl_FragColor = vec4(col, alpha);
+          // The rut under the light (round 7): two runner cuts pressed into the snow in its own shade, a lip
+          // of packed snow outside each catching the light. It does not age: it lies on the snow ahead of
+          // you until you ride over it, shallower than your own groove, and on glass ice only a scratch.
+          float cut = line(r, 0.034, px);
+          float lipX = abs(x) - 0.28 - 0.062;
+          float lip = line(lipX, 0.022, px) * (1.0 - smoothstep(0.015, 0.05, px));
+          float rutK = (1.0 - fogF) * mix(1.0, 0.6, smoothstep(50.0, 160.0, d)) * (uIceMood >= 1.0 ? 0.5 : 1.0) * smoothstep(0.0, 0.25, vAge);
+          float ka = cut * 0.46 * rutK;
+          float kl = lip * 0.3 * rutK;
+          vec3 rutCol = mix(mix(uShade, uDeep, 0.38), uFog, fogF);
+          vec3 lipCol = mix(mix(uLit, vec3(1.0), 0.15) * mix(vec3(1.0), uSunColor, 0.4), uFog, fogF);
+          // Under the light: the rut and its lip first, the luminous line over them.
+          vec3 P = rutCol * ka;
+          float A = ka;
+          P = lipCol * kl + P * (1.0 - kl);
+          A = kl + A * (1.0 - kl);
+          P = col * alpha + P * (1.0 - alpha);
+          A = alpha + A * (1.0 - alpha);
+          if (A < 0.004) discard;
+          gl_FragColor = vec4(P / A, A);
           #include <colorspace_fragment>
         }
       `,
@@ -631,7 +715,7 @@ export class GhostTrails {
       const dx = x - lx0;
       const dz = z - lz0;
       const l2 = dx * dx + dz * dz;
-      if (l2 < 0.36) return;
+      if (l2 < this.gap * this.gap) return;
       const l = Math.sqrt(l2);
       tx = dx / l;
       tz = dz / l;
@@ -663,23 +747,53 @@ export class GhostTrails {
     this.heads[i] = (k + 1) % this.max;
     this.counts[i] = Math.min(this.counts[i] + 1, this.max);
     this.dirtyFlag = true;
+    // Only this sample goes up to the GPU.
+    (this.geo.getAttribute('position') as BufferAttribute).addUpdateRange(o, 6);
+    (this.geo.getAttribute('aBorn') as BufferAttribute).addUpdateRange(s * 2, 2);
+  }
+
+  /** Triangles in the last flush (tests and the cost report). */
+  get triangles(): number {
+    return this.geo.drawRange.count / 3;
   }
 
   flush(): void {
     if (!this.dirtyFlag) return;
     this.dirtyFlag = false;
     const idx = this.geo.index as BufferAttribute;
-    const arr = idx.array as Uint32Array;
+    const arr = idx.array as Uint16Array | Uint32Array;
     const max = this.max;
     let q = 0;
+    // Where the rider is down the run (three.js z is the sim's, negated): a rut is drawn from a little
+    // behind the lens to the tier's range ahead, and past `coarse` metres it keeps every third sample (a
+    // far rut is a pixel wide, and its bends are long).
+    const fz = -shared.uFocus.value.z;
     for (let g = 0; g < this.n; g++) {
       const n = this.counts[g];
       const start = (this.heads[g] - n + max) % max;
       const base = g * max;
-      for (let k = 0; k < n - 1; k++) {
+      let k = 0;
+      while (k < n - 1) {
         const a = (start + k) % max;
-        const b = (a + 1) % max;
-        if (this.segStart[base + b]) continue;
+        const ahead = -this.pos[(base + a) * 6 + 2] - fz;
+        if (ahead < -RUT_BEHIND || ahead > this.far) {
+          k++;
+          continue;
+        }
+        const want = ahead > this.coarse ? 3 : 1;
+        let b = a;
+        let step = 0;
+        while (step < want && k + step + 1 < n) {
+          const c = (start + k + step + 1) % max;
+          if (this.segStart[base + c]) break;
+          b = c;
+          step++;
+        }
+        if (step === 0) {
+          k++;
+          continue;
+        }
+        k += step;
         const a0 = (base + a) * 2;
         const b0 = (base + b) * 2;
         arr[q++] = a0;
@@ -690,6 +804,9 @@ export class GhostTrails {
         arr[q++] = b0;
       }
     }
+    // (Only the indices in use go up, and only the samples added since the last flush.)
+    idx.clearUpdateRanges();
+    idx.addUpdateRange(0, Math.max(q, 3));
     idx.needsUpdate = true;
     this.geo.setDrawRange(0, q);
     (this.geo.getAttribute('position') as BufferAttribute).needsUpdate = true;

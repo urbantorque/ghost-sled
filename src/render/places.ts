@@ -1,7 +1,8 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
 import { StillFigure, crowdColors, stillCrowd } from './crowd';
-import { SNOW, part, shade } from './flora';
+import { ASH_TOP, SNOW, basaltTones, part, shade } from './flora';
+import { Facets, columnInto, strataInto } from './rockforms';
 import { LINE_Z, liftLayout } from './liftline';
 import { CREAM, Glow, INK, Piece, Rail, ROPE, SiteCtx, Spot, Sub, TIMBER, TIMBER_DARK, TIMBER_LIGHT, V3, banners, box, bunting, crag, drift, grade, lampColor, latticeTower, pagodaParts, place, quad, ribbon, rnd, seed, seg, stone, windowColor } from './landmarkKit';
 import { AIR_MARGIN, barrier, frontAt, house, kerbAt, landmark, lantern, streetPiece, townStyle } from './town';
@@ -750,11 +751,16 @@ export function startPiece(ctx: SiteCtx): Piece {
 // ---------------------------------------------------------------- a leap's crowd
 
 /** Rock shoulders either side of a leap's lip, each a flat-topped outcrop past the keep line with a crowd
- *  along its edge, flags, and a rope along the drop. */
+ *  along its edge, flags, and a rope along the drop. Round 7: the mountain's own rock, never a prism. On
+ *  Pinecrest, Frostfang and Sakura a shoulder is an outcrop in beds that dip a little, each bed shifted off
+ *  the one under it, so there are ledges with snow lying on them and overhangs in shade, a slab of snow on
+ *  top whose lip droops over the edge, boulders buttressing its foot and a drift banked round it where it
+ *  meets the slope. On Ember it is a palisade of basalt columns broken off at their own heights, a lower
+ *  rank of stubs stepping down in front of it, ash on the flat tops. */
 export function lipPiece(ctx: SiteCtx): Piece {
   const { p, biome, post } = ctx;
   const low = !!ctx.low;
-  const rock = biome === 'volcanic' ? [shade(p.low, 0.62), shade(p.low, 0.74), shade(p.low, 0.54)] : biome === 'glacier' ? [C('#7C8EB0'), C('#94A8C4'), C('#687AA0')] : [stone(p, 0.95), stone(p, 1.05), stone(p, 0.84)];
+  const rock = biome === 'volcanic' ? [shade(p.low, 0.54), shade(p.low, 0.62), shade(p.low, 0.74)] : biome === 'glacier' ? [C('#5E7098'), C('#7C8EB0'), C('#9AAECC')] : [stone(p, 0.74), stone(p, 0.92), stone(p, 1.08)];
   const cols = banners(p);
   const steps: Array<() => BufferGeometry[]> = [];
   const spots: Spot[] = [];
@@ -773,17 +779,109 @@ export function lipPiece(ctx: SiteCtx): Piece {
       }
     }
   }
+  /** How far a shoulder's rock runs down under its top: its downhill end stands that far over the slope. */
+  const DEPTH = 7.4;
   for (const { s, y, x } of tops) {
     steps.push(() => {
       seed(ctx.seed + 903 + s);
       const parts: BufferGeometry[] = [];
-      const plinth = new CylinderGeometry(1, 1.16, 1, 8);
-      parts.push(grade(part(plinth, rock[0], { pos: [x, y - 3.4, 0], scale: [8.2, 6.8, 17], rot: [0, Math.PI / 8, 0] }), y - 7, y, 0.7, 1.0));
-      parts.push(part(new CylinderGeometry(1, 1, 1, 8), SNOW, { pos: [x, y - 0.06, 0], scale: [7.9, 0.16, 16.6], rot: [0, Math.PI / 8, 0] }));
-      for (let k = 0; k < (low ? 3 : 8); k++) {
-        const v = -15 + rnd() * 30;
-        parts.push(crag(rock[k % 3], [x - s * (6.8 + rnd() * 1.4), y - 3 - rnd() * 2, v], [1.8 + rnd(), 2.6, 2.4 + rnd() * 1.6], 0.3));
+      const f = new Facets();
+      const sd = ctx.seed * 7 + 903 + (s > 0 ? 1 : 0);
+      if (biome === 'volcanic') {
+        const t = basaltTones(p);
+        // The floor the crowd stands on and the faces away from the run: one bed of basalt under ash.
+        strataInto(f, { rx: 8.3, rz: 17.2, h: DEPTH, foot: 0, layers: 1, sides: 8, rock: [t.rock[0], t.rock[1]], lie: ASH_TOP, taper: 0, shift: 0, flat: true, rough: 0.08, square: 0.55, ground: (lx, lz) => ctx.gy(x + lx, lz) - (y - DEPTH), seed: sd });
+        f.place(0, x, y - DEPTH, 0);
+        // The palisade: columns down the side that faces the run and round both ends, their tops within
+        // a step of the floor, every one broken at its own height and slant.
+        const step = low ? 3.1 : 2.0;
+        const rad = low ? 1.75 : 1.14;
+        const ring: Array<[number, number]> = [];
+        for (let v = -17; v <= 17.01; v += step) ring.push([x - s * 8.4, v]);
+        for (let u = -8.4 + step; u <= 6; u += step) ring.push([x + s * u, 17.4], [x + s * u, -17.4]);
+        ring.forEach(([cx, cz], i) => {
+          // Each stands on its own ground (the far end runs out over the drop), its top within a step of
+          // the floor; about one in five is broken off lower.
+          const gy = Math.min(ctx.gy(cx, cz), y - 2) - 1.2;
+          const top = y + 0.3 - 1.1 * rnd() - (rnd() < 0.22 ? 1.6 : 0);
+          const steep = rnd() < 0.4;
+          const a = rnd() * 6.28;
+          const k = steep ? 0.3 + rnd() * 0.4 : rnd() * 0.1;
+          columnInto(f, { x: cx, z: cz, y: gy, r: rad * (0.9 + 0.2 * rnd()), h: top - gy, foot: 0, yaw: rnd() * 0.4, slant: [Math.cos(a) * k, Math.sin(a) * k], col: t.rock[i % 2], top: steep ? null : ASH_TOP, broke: t.broke, drums: low ? 1 : 2 + (i % 2) }, rnd);
+        });
+        // The lower rank: stubs stepping down in front, off the keep line.
+        if (!low) {
+          for (let v = -15; v <= 15.01; v += 3.75) {
+            const cx = x - s * (9.9 + rnd() * 0.5);
+            const cz = v + (rnd() - 0.5) * 1.6;
+            const gy = ctx.gy(cx, cz);
+            const top = Math.min(y - 2.2, gy + 1.4 + rnd() * 3.2);
+            columnInto(f, { x: cx, z: cz, y: gy - 1.2, r: 0.8 + rnd() * 0.25, h: top - gy + 1.2, foot: 0, yaw: rnd(), slant: [(rnd() - 0.5) * 0.9, (rnd() - 0.5) * 0.9], col: t.rock[rnd() < 0.5 ? 0 : 1], top: rnd() < 0.4 ? ASH_TOP : null, broke: t.broke }, rnd);
+          }
+        }
+      } else {
+        const lie = SNOW;
+        strataInto(f, {
+          rx: 8.9,
+          rz: 17.8,
+          h: DEPTH,
+          foot: 0,
+          // (Low keeps three beds and eight corners. Above it the long wall is broken into bays and
+          // buttresses, and the beds run up out of the slope along it and are cut off by the level top:
+          // no joint is parallel to the top's edge, so it never reads as courses of laid stone.)
+          layers: low ? 3 : 6,
+          sides: low ? 8 : 18,
+          rock,
+          lie,
+          taper: 0.1,
+          shift: 0.1,
+          dip: 0.05 * s,
+          dipZ: 0.085,
+          warp: 0.34,
+          jut: low ? 0.06 : 0.11,
+          bays: low ? 0 : 0.1,
+          flat: true,
+          rough: 0.18,
+          square: 0.6,
+          apron: 0.1,
+          ground: (lx, lz) => ctx.gy(x + lx, lz) - (y - DEPTH),
+          seed: sd,
+        });
+        f.place(0, x, y - DEPTH, 0);
+        // A broken crown of rock behind the crowd, along the side away from the run, and the outcrop
+        // stepping down at the end the rider comes to: the shoulder's outline is the mountain's, not a table's.
+        const crown: Array<[number, number, number, number, number]> = low
+          ? [[5.9, 2, 2.6, 6.5, 4.2]]
+          : [
+              [6.1, 9.5, 2.4, 5.2, 4.6],
+              [5.7, -1.5, 2.9, 6.4, 3.1],
+              [6.3, -12, 2.2, 4.6, 5.4],
+            ];
+        crown.forEach(([dx, dz, rx, rz, up], k) => {
+          const from = f.triangles;
+          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
+          f.place(from, x + s * dx, y - 1, dz, rnd() * 0.5 - 0.25);
+        });
+        for (let k = 0; k < (low ? 1 : 2); k++) {
+          const bz = 18.5 + k * 4.2;
+          const bx = x + s * (k * 0.8 - 0.5);
+          const gy = ctx.gy(bx, bz);
+          const top = Math.max(gy + 1.2, y - 2.2 - k * 2.4);
+          const from = f.triangles;
+          strataInto(f, { rx: 6.6 - k * 1.5, rz: 3.6 - k * 0.6, h: top - gy + 1.5, foot: 0, layers: 3, sides: 7, rock, lie, taper: 0.4, shift: 0.14, dip: 0.05 * s, dipZ: 0.1, warp: 0.4, jut: 0.14, rough: 0.28, apron: 0.12, ground: (lx, lz) => ctx.gy(bx + lx, bz + lz) - (gy - 1.5), seed: sd + 41 + k });
+          f.place(from, bx, gy - 1.5, bz);
+        }
+        // Boulders buttressing the foot on the side that faces the run, each in its own beds.
+        for (let k = 0; k < (low ? 1 : 4); k++) {
+          const v = -14 + ((k + rnd() * 0.8) / (low ? 1 : 4)) * 28;
+          const bx = x - s * (8.3 + rnd() * 0.8);
+          const gy = ctx.gy(bx, v);
+          const from = f.triangles;
+          strataInto(f, { rx: 1.5 + rnd() * 0.4, rz: 2.1 + rnd() * 1.2, h: Math.min(y - gy - 1.2, 2.4 + rnd() * 2.2) + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.45, shift: 0.16, dip: 0.1 * s, dipZ: 0.1, warp: 0.4, jut: 0.14, rough: 0.28, apron: 0.2, ground: (lx, lz) => ctx.gy(bx + lx, v + lz) - (gy - 1), seed: sd + 11 + k });
+          f.place(from, bx, gy - 1, v, rnd() * 0.6 - 0.3);
+        }
       }
+      parts.push(f.build());
       // A rope along the edge on stakes, and flags at the shoulder's corners.
       let prev: V3 | null = null;
       for (let v = -15; v <= 15; v += 5) {

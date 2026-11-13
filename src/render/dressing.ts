@@ -1,7 +1,8 @@
 import { BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
-import { BARK, SNOW, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
+import { ASH_TOP, BARK, SNOW, basaltTones, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
+import { Facets, columnsInto, strata, strataInto } from './rockforms';
 import { crestE, ledgeAt, standable, visualGround } from './ground';
 import { emberSlot, emberSlotAt } from './groves';
 import { flankMode } from './overlook';
@@ -104,13 +105,9 @@ function pole(): BufferGeometry {
   ]);
 }
 
+/** A boulder on the bank, in beds: a ledge with snow on it, a crown under snow, a drift round its foot. */
 function outcrop(p: Palette): BufferGeometry {
-  reseed(9202);
-  return merge([
-    part(new IcosahedronGeometry(0.9, 0), p.low, { pos: [0, 0.3, 0], scale: [1.3, 0.8, 1.0], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.3 }),
-    part(new IcosahedronGeometry(0.55, 0), p.lowLit, { pos: [0.6, 0.2, 0.3], rot: [rnd(), rnd(), rnd()], jitter: 0.18 }),
-    part(new IcosahedronGeometry(0.7, 0), SNOW, { pos: [0, 0.8, 0], scale: [1.1, 0.3, 0.9], jitter: 0.12 }),
-  ]);
+  return strata({ rx: 1.3, rz: 1.0, h: 1.05, foot: 0.5, layers: 3, sides: 6, rock: [shade(p.low, 0.74), shade(p.low, 0.95), p.low.clone().lerp(p.lowLit, 0.6)], lie: SNOW, taper: 0.38, shift: 0.22, dip: 0.18, dipZ: 0.1, warp: 0.5, jut: 0.14, lieMin: 0.16, rough: 0.3, apron: 0.2, seed: 9202 });
 }
 
 let rs = 7;
@@ -155,14 +152,12 @@ function steamFissure(p: Palette): BufferGeometry {
   ]);
 }
 
+/** Ember's bank clutter: three stubs of column broken off at their own slants, ash round their feet. */
 function basaltPair(p: Palette): BufferGeometry {
-  return merge([
-    part(new CylinderGeometry(0.42, 0.45, 1.6, 6), p.tall, { pos: [0, 0.7, 0] }),
-    part(new CylinderGeometry(0.4, 0.42, 0.1, 6), SNOW, { pos: [0, 1.55, 0] }),
-    part(new CylinderGeometry(0.34, 0.36, 1.0, 6), p.tallDark, { pos: [0.6, 0.4, 0.2], rot: [0, 0.4, 0] }),
-    part(new CylinderGeometry(0.32, 0.34, 0.1, 6), SNOW, { pos: [0.6, 0.95, 0.2], rot: [0, 0.4, 0] }),
-    part(new IcosahedronGeometry(0.75, 0), SNOW, { pos: [0.2, 0.0, 0], scale: [1.4, 0.3, 1.2], jitter: 0.08 }),
-  ]);
+  const t = basaltTones(p);
+  const f = new Facets();
+  columnsInto(f, { cols: [[0, 0, 0.42, 1.7], [0.62, 0.22, 0.34, 1.0], [-0.3, 0.55, 0.3, 0.6]], rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.5, seed: 9303 });
+  return merge([f.build(), part(new IcosahedronGeometry(0.75, 0), ASH_TOP, { pos: [0.2, 0.0, 0.1], scale: [1.4, 0.3, 1.2], jitter: 0.08 })]);
 }
 
 /** Sakura Ridge: an unlit stone lantern on the bank (the run's own lanterns are the lit hazards). */
@@ -278,34 +273,25 @@ function cable(): BufferGeometry {
   return merge([part(new BoxGeometry(1, 0.05, 0.05), c, { pos: [0.5, -0.15, 1.6] }), part(new BoxGeometry(1, 0.05, 0.05), c, { pos: [0.5, -0.15, -1.6] })]);
 }
 
-/** A chunky faceted rock mass (ART.md: rocks are chunky crystals; a box with a flat snow lid reads
- *  as concrete). */
-function crag(col: Color, pos: [number, number, number], scale: [number, number, number], jitter = 0.32): BufferGeometry {
-  return part(new IcosahedronGeometry(1, 0), col, { pos, scale, rot: [rnd() * 0.4, rnd() * 3, rnd() * 0.4], jitter });
+/** The bank rock's three values, darkest first. */
+function bankRock(p: Palette): Color[] {
+  return [shade(p.low, 0.62), shade(p.low, 0.8), shade(p.lowLit, 0.84)];
 }
 
-/** A lumpy drift of snow lying on a ledge. */
-function drift(pos: [number, number, number], scale: [number, number, number]): BufferGeometry {
-  return part(new IcosahedronGeometry(1, 0), SNOW, { pos, scale, rot: [0, rnd() * 3, 0], jitter: 0.14 });
-}
-
-/** Chute: dark rock bands stepping up the bank, snow lying on their ledges; the face looks along +z. */
+/** Chute: dark rock bands stepping up the bank, snow lying on their ledges; the face looks along +z.
+ *  Three long outcrops in beds, each set back and above the last, their beds dipping the same way. */
 function rockBand(p: Palette): BufferGeometry {
-  reseed(9404);
-  rs = 9404;
-  const dark = shade(p.low, 0.72);
-  const mid = shade(p.low, 0.9);
-  return merge([
-    crag(dark, [-1.6, 0.4, 0.2], [1.9, 1.1, 1.4]),
-    crag(mid, [1.4, 0.3, 0.4], [1.8, 0.95, 1.3]),
-    crag(dark, [0.2, 1.4, -0.5], [2.1, 1.0, 1.2]),
-    crag(shade(p.lowLit, 0.85), [1.9, 1.5, -0.6], [1.1, 0.8, 0.9], 0.22),
-    crag(mid, [-0.6, 2.4, -1.1], [1.5, 0.9, 1.0], 0.26),
-    drift([-1.4, 1.3, 0.75], [1.5, 0.22, 0.6]),
-    drift([1.3, 1.08, 0.95], [1.4, 0.2, 0.55]),
-    drift([0.2, 2.3, 0.05], [1.6, 0.22, 0.6]),
-    drift([-0.6, 3.2, -1.0], [1.2, 0.28, 0.8]),
-  ]);
+  const rock = bankRock(p);
+  const f = new Facets();
+  const band = (x: number, y: number, z: number, rx: number, h: number, seed: number, yaw: number) => {
+    const from = f.triangles;
+    strataInto(f, { rx, rz: 1.25, h, foot: 0.9, layers: 3, sides: 7, rock, lie: SNOW, taper: 0.2, shift: 0.16, dip: 0.07, rough: 0.2, square: 0.75, apron: 0.14, seed });
+    f.place(from, x, y, z, yaw);
+  };
+  band(-0.9, 0, 0.5, 2.9, 1.5, 9404, 0.08);
+  band(1.0, 1.15, -0.5, 2.5, 1.45, 9405, -0.1);
+  band(-0.5, 2.3, -1.4, 1.9, 1.25, 9406, 0.05);
+  return f.build();
 }
 
 /** Bowl: a cornice, the wind-sculpted lip of snow at the top of the bank, curling out over +z with
@@ -331,30 +317,25 @@ function cornice(p: Palette): BufferGeometry {
 }
 
 /** Gully: a steep rock wall with icicles hanging off its ledges; the face looks along +z, its foot
- *  buried deep in the bank. */
+ *  buried deep in the bank. One tall face in six beds, each shifted off the one under it (ledges under
+ *  snow, overhangs in shade), a second, lower buttress against it, and icicles under the overhangs. */
 function rockWall(p: Palette): BufferGeometry {
   reseed(9505);
   rs = 9505;
   const ice = new Color('#E2F2FF');
-  const dark = shade(p.low, 0.66);
-  const mid = shade(p.low, 0.82);
-  // Tall leaning slabs of dark rock, shoulder to shoulder, a lighter one set back above; snow lying
-  // on the mid ledge and the top.
-  const parts: BufferGeometry[] = [
-    crag(dark, [-2.2, 1.0, 0.1], [1.5, 3.9, 1.1], 0.4),
-    crag(mid, [0.0, 1.3, 0.25], [1.6, 4.3, 1.15], 0.4),
-    crag(dark, [2.2, 0.9, 0.05], [1.5, 3.7, 1.1], 0.4),
-    crag(shade(p.lowLit, 0.8), [0.6, 4.2, -0.6], [2.4, 1.4, 1.0], 0.3),
-    drift([0.1, 2.45, 1.05], [2.7, 0.16, 0.42]),
-    drift([-1.4, 4.95, 0.2], [1.9, 0.3, 1.0]),
-    drift([1.5, 5.1, 0.0], [1.8, 0.32, 1.0]),
-  ];
+  const rock = bankRock(p);
+  const f = new Facets();
+  strataInto(f, { rx: 3.5, rz: 1.25, h: 5.5, foot: 1.2, layers: 6, sides: 9, rock, lie: SNOW, taper: 0.14, shift: 0.2, dip: 0.05, rough: 0.2, square: 0.7, seed: 9505 });
+  const from = f.triangles;
+  strataInto(f, { rx: 1.5, rz: 1.0, h: 2.7, foot: 1.0, layers: 3, sides: 6, rock, lie: SNOW, taper: 0.3, shift: 0.16, dip: 0.05, rough: 0.24, apron: 0.16, seed: 9506 });
+  f.place(from, 2.5, 0, 0.75, 0.3);
+  const parts: BufferGeometry[] = [f.build()];
   for (let k = 0; k < 8; k++) {
     const x = -2.9 + k * 0.82 + (rnd() - 0.5) * 0.3;
     const len = 0.7 + rnd() * 1.1;
     const r = 0.1 + rnd() * 0.08;
     const high = k % 2 === 0;
-    parts.push(part(new ConeGeometry(r, len, 5), ice, { pos: [x, (high ? 4.85 : 2.3) - len / 2, high ? 1.05 : 1.3], rot: [Math.PI, 0, 0] }));
+    parts.push(part(new ConeGeometry(r, len, 5), ice, { pos: [x, (high ? 4.6 : 2.3) - len / 2, high ? 1.0 : 1.18], rot: [Math.PI, 0, 0] }));
   }
   return merge(parts);
 }

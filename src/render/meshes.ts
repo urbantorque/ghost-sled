@@ -20,8 +20,9 @@ import type { ObstacleKind } from '../sim/course';
 import type { HatKind } from '../bot/roster';
 import type { HatId } from '../game/garage';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
-import { hazardPineGeometry } from './flora';
+import { ASH_TOP, basaltTones, hazardPineGeometry } from './flora';
 import { Palette } from './palette';
+import { Facets, columnsInto, strata } from './rockforms';
 
 // Every mesh in the game is built here from primitives. Parts are flat-shaded (non-indexed) and
 // carry vertex colours, so the shared toon shader can light them consistently (ART.md section 3).
@@ -167,14 +168,38 @@ export function blossomGeometry(p: Palette): BufferGeometry {
   return merge(parts);
 }
 
-export function rockGeometry(base: Color, lit: Color, variant: number): BufferGeometry {
-  reseed(404 + variant * 17);
-  const parts = [
-    part(new IcosahedronGeometry(1, 0), base, { pos: [0, 0.35, 0], scale: [1.15, 0.85, 1.0], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.35 }),
-    part(new IcosahedronGeometry(0.62, 0), lit, { pos: [0.45, 0.25, 0.35], rot: [rnd(), rnd(), rnd()], jitter: 0.2 }),
-    part(new IcosahedronGeometry(0.75, 0), SNOW, { pos: [0, 0.95, 0], scale: [1.05, 0.32, 0.95], jitter: 0.15 }),
-  ];
-  return merge(parts);
+/** The model sizes the run's rocks are built to (obstacleModelRadius, and props.ts stretches a rock to its
+ *  collider's own height): the drawn rock stands inside its collider. */
+export const ROCK_MODEL_R = 1.1;
+export const ROCK_MODEL_H = 1.0;
+
+/** The run's rock (ART.md 3 and 15): a hard, crisp boulder in three beds that dip a little, a ledge with
+ *  snow lying on it, an overhang in its darkest value, a broken crown under snow and a drift banked round
+ *  its foot. Built inside its collider (a circle of ROCK_MODEL_R, ROCK_MODEL_H tall). */
+export function rockGeometry(base: Color, lit: Color, variant: number, low = false): BufferGeometry {
+  return strata({
+    rx: 1.05,
+    rz: 0.98,
+    h: ROCK_MODEL_H,
+    foot: 0.5,
+    // (Low's rock: two beds and six corners, the triangles round 6's rock had.)
+    layers: low ? 2 : 3,
+    sides: low ? 6 : 7,
+    rock: [shade(base, 0.74), shade(base, 0.96), base.clone().lerp(lit, 0.6)],
+    lie: SNOW,
+    // (Beds well off each other and dipping hard, snow only where one steps well in: a boulder with a
+    // lee side, never a stack of rings with a white stripe round each.)
+    taper: 0.38,
+    shift: 0.24,
+    dip: 0.2,
+    dipZ: -0.12,
+    warp: 0.5,
+    jut: 0.14,
+    lieMin: 0.16,
+    rough: 0.3,
+    apron: 0.2,
+    seed: 404 + variant * 17,
+  });
 }
 
 /** One hexagonal ice crystal: a prism with a pointed tip, standing on `pos` and leaning by `rot`. */
@@ -227,33 +252,59 @@ export function seracGeometry(p: Palette): BufferGeometry {
   ]);
 }
 
-export function basaltGeometry(p: Palette): BufferGeometry {
+/** The model sizes the run's basalt is built to (a circle of 1 m, 5 m tall; props.ts stretches it to its
+ *  collider's height). */
+export const BASALT_MODEL_R = 1.0;
+export const BASALT_MODEL_H = 5;
+
+/** Ember's basalt on the run: an organ-pipe cluster, one tall column with six slimmer ones packed round
+ *  it, graded in height round the ring, each broken off on its own slant, ash on the flatter tops and
+ *  drifted round the foot. Near black and cold: a hazard's hard silhouette, never a brown box under a
+ *  white lid. Built inside its collider. */
+export function basaltGeometry(p: Palette, low = false): BufferGeometry {
   reseed(808);
-  const parts: BufferGeometry[] = [];
-  const cols = [
-    [0, 0, 0.7, 5.5],
-    [0.9, 0.3, 0.55, 4.2],
-    [-0.75, 0.5, 0.5, 3.6],
-    [0.2, -0.8, 0.5, 4.8],
-  ];
-  cols.forEach(([x, z, r, h], i) => {
-    parts.push(part(new CylinderGeometry(r, r * 1.05, h, 6), i % 2 ? p.tallDark : p.tall, { pos: [x, h / 2, z], rot: [0, rnd(), 0] }));
-    parts.push(part(new CylinderGeometry(r * 0.95, r, 0.12, 6), SNOW, { pos: [x, h + 0.06, z] }));
+  const t = basaltTones(p);
+  const f = new Facets();
+  const cols: Array<[number, number, number, number]> = [[0, 0, 0.36, BASALT_MODEL_H]];
+  const ring = [4.3, 3.5, 2.5, 1.7, 2.2, 3.2];
+  ring.forEach((h, k) => {
+    const a = (k / 6) * Math.PI * 2 + 0.5;
+    cols.push([Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0.31 + 0.03 * rnd(), h * (0.94 + 0.12 * rnd())]);
   });
-  return merge(parts);
+  // (Cross-jointed into drums on Medium and up: Low's columns are whole, the triangles they had.)
+  columnsInto(f, { cols, rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.55, drum: low ? 0 : 2.6, seed: 8081 });
+  // Ash banked round the foot.
+  for (let k = 0; k < 6; k++) {
+    const a0 = (k / 6) * Math.PI * 2;
+    const a1 = ((k + 1) / 6) * Math.PI * 2;
+    f.quad([Math.cos(a0) * 0.98, -0.45, Math.sin(a0) * 0.98], [Math.cos(a1) * 0.98, -0.45, Math.sin(a1) * 0.98], [Math.cos(a1) * 0.62, 0.3, Math.sin(a1) * 0.62], [Math.cos(a0) * 0.62, 0.22, Math.sin(a0) * 0.62], ASH_TOP, [Math.cos(a0), 1, Math.sin(a0)], 0.92, 1);
+  }
+  return f.build();
 }
 
-export function lavaRockGeometry(p: Palette): BufferGeometry {
-  reseed(909);
-  // Hazards are never warm (ART.md section 1): a chunky dark basalt boulder with a cooled, dull
-  // plum seam, not a glowing ember. The lava glow belongs far below, on the horizon.
-  const rock = shade(p.low, 0.85);
-  return merge([
-    part(new IcosahedronGeometry(1, 0), rock, { pos: [0, 0.35, 0], scale: [1.2, 0.8, 1.05], rot: [rnd(), rnd(), rnd()], jitter: 0.4 }),
-    part(new IcosahedronGeometry(0.55, 0), shade(p.low, 1.15), { pos: [0.6, 0.18, -0.35], rot: [rnd(), rnd(), rnd()], jitter: 0.18 }),
-    part(new IcosahedronGeometry(0.4, 0), new Color('#3A2234'), { pos: [0.55, 0.08, 0.5], scale: [1, 0.4, 1], jitter: 0.1 }),
-    part(new IcosahedronGeometry(0.7, 0), SNOW, { pos: [0, 0.92, 0], scale: [1.0, 0.25, 0.9], jitter: 0.12 }),
-  ]);
+/** Ember's boulder on the run: hazards are never warm (ART.md section 1), so a chunky block of cold dark
+ *  basalt in beds with ash on its ledge and crown, not a glowing ember. The lava glow belongs below. */
+export function lavaRockGeometry(p: Palette, low = false): BufferGeometry {
+  return strata({
+    rx: 1.05,
+    rz: 0.95,
+    h: ROCK_MODEL_H,
+    foot: 0.5,
+    layers: low ? 2 : 3,
+    sides: 6,
+    rock: [shade(p.low, 0.58), shade(p.low, 0.8), shade(p.low, 1.08)],
+    lie: ASH_TOP,
+    taper: 0.34,
+    shift: 0.24,
+    dip: -0.18,
+    dipZ: 0.12,
+    warp: 0.5,
+    jut: 0.14,
+    lieMin: 0.16,
+    rough: 0.3,
+    apron: 0.2,
+    seed: 909,
+  });
 }
 
 export function lanternGeometry(): BufferGeometry {
@@ -287,6 +338,42 @@ export function gateBeamGeometry(p: Palette): BufferGeometry {
   ]);
 }
 
+/** Ember's log: a basalt column fallen across the run and broken into three drums where it hit, each
+ *  turned a little on its axis and a finger's width from the next, ash lying along the faces that look up
+ *  and banked against its foot. Unit length along x (stretched per instance, so the joints are thin in
+ *  that axis), inside the log's collider (0.42 m about a line 0.4 m up). 108 triangles. */
+function fallenColumn(p: Palette): BufferGeometry {
+  reseed(1112);
+  const t = basaltTones(p);
+  const f = new Facets();
+  const drums: Array<[number, number, number, number, number]> = [
+    [-0.5, -0.172, 0.4, 0.01, 0.2],
+    [-0.168, 0.212, 0.415, -0.015, 0.75],
+    [0.216, 0.5, 0.385, 0.012, 0.4],
+  ];
+  drums.forEach(([x0, x1, r, zc, turn], d) => {
+    const pt = (x: number, k: number): [number, number, number] => {
+      const a = turn + (k / 6) * Math.PI * 2;
+      return [x, 0.4 + Math.sin(a) * r, zc + Math.cos(a) * r];
+    };
+    for (let k = 0; k < 6; k++) {
+      const am = turn + ((k + 0.5) / 6) * Math.PI * 2;
+      const up = Math.sin(am);
+      // Ash on the faces that look up (broken where the drum turned); the rest in the column's two values.
+      const ash = up > 0.55 && (d !== 1 || k % 2 === 0);
+      const fk = (k % 2 ? 0.86 : 1.04) * (0.95 + rnd() * 0.1);
+      f.quad(pt(x0, k), pt(x1, k), pt(x1, k + 1), pt(x0, k + 1), ash ? ASH_TOP : t.rock[d % 2], [0, up, Math.cos(am)], ash ? 0.95 : fk * (0.7 + 0.3 * Math.max(0, up)));
+    }
+    // The broken ends, a paler dull plum-grey.
+    for (const [x, sx] of [[x0, -1], [x1, 1]] as const) for (let k = 1; k < 5; k++) f.tri(pt(x, 0), pt(x, k), pt(x, k + 1), t.broke, [sx, 0, 0], 0.85 + rnd() * 0.25);
+  });
+  return merge([
+    f.build(),
+    part(new CylinderGeometry(0.22, 0.22, 0.98, 6), ASH_TOP, { rot: [0, 0, Math.PI / 2], pos: [0, 0.03, 0.36], scale: [0.5, 1, 1.2], jitter: 0.05 }),
+    part(new CylinderGeometry(0.22, 0.22, 0.98, 6), ASH_TOP, { rot: [0, 0, Math.PI / 2], pos: [0, 0.03, -0.36], scale: [0.5, 1, 1.2], jitter: 0.05 }),
+  ]);
+}
+
 /** Log along local x, unit length, scaled per instance. */
 export function logGeometry(p?: Palette): BufferGeometry {
   reseed(1111);
@@ -300,6 +387,7 @@ export function logGeometry(p?: Palette): BufferGeometry {
   // near-black hexagonal prism with uneven facets and a dull plum-grey break, still under its snow cap.
   // A plain grey cylinder did not belong to the biome.
   const charred = !!p && p.embers > 0;
+  if (charred) return fallenColumn(p!);
   const sides = charred ? 6 : 9;
   const bark = new Color(charred ? '#2E2836' : '#4F4459');
   const barkDark = new Color(charred ? '#1D1923' : '#3A3144');
@@ -637,7 +725,7 @@ export function kickerLipGeometry(p?: Palette): BufferGeometry {
 }
 
 /** Obstacle kinds to geometry for the current palette. */
-export function obstacleGeometry(kind: ObstacleKind, p: Palette): BufferGeometry {
+export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false): BufferGeometry {
   switch (kind) {
     case 'pine':
       return hazardPineGeometry(p);
@@ -646,7 +734,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette): BufferGeometry
     case 'blossom':
       return blossomGeometry(p);
     case 'rock':
-      return rockGeometry(p.low, p.lowLit, 0);
+      return rockGeometry(p.low, p.lowLit, 0, low);
     case 'iceblock':
       return iceBlockGeometry(p);
     case 'spire':
@@ -654,9 +742,9 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette): BufferGeometry
     case 'serac':
       return seracGeometry(p);
     case 'basalt':
-      return basaltGeometry(p);
+      return basaltGeometry(p, low);
     case 'lavarock':
-      return lavaRockGeometry(p);
+      return lavaRockGeometry(p, low);
     case 'lantern':
       return lanternGeometry();
     case 'pillar':
@@ -673,13 +761,13 @@ export function obstacleModelRadius(kind: ObstacleKind): number {
   switch (kind) {
     case 'rock':
     case 'lavarock':
-      return 1.1;
+      return ROCK_MODEL_R;
     case 'iceblock':
       return 1.0;
     case 'serac':
       return 1.9;
     case 'basalt':
-      return 1.0;
+      return BASALT_MODEL_R;
     default:
       return 0;
   }
