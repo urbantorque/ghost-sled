@@ -5,7 +5,7 @@ import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
 import { ghostStencil, makeToonMaterial, shared, type ToonOptions } from './materials';
-import { RIDER_COLORS, RIDER_NECK, SCARF_KNOT, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
+import { ARM_ELBOW, ARM_REST_BEND, ARM_WRIST, RIDER_COLORS, RIDER_HALF_WIDTH, RIDER_HEIGHT, RIDER_NECK, RIDER_SCALE, RIDER_SHOULDER, SCARF_KNOT, type RiderDetail, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
 // wrap and knot are part of the body mesh; its two tails are simulated here and stream from the
@@ -35,14 +35,23 @@ export interface RiderPose {
   driftCharge?: number;
 }
 
-/** A reaction the rider plays once: a look at a ghost going by, a fist pump (or both arms) for one it
- *  went by, and the head shaken and the snow brushed off after a tumble. */
-export type RiderCue = 'look' | 'pump' | 'cheer' | 'dust';
+/** A reaction the rider plays once: a look and a lean at a ghost going by ('look'); a glance at one it
+ *  goes by ('glance'), with a fist for a pass worth one ('pump') or both arms ('cheer', a set piece
+ *  swept too); a flinch from something it only just missed ('flinch'); the shoulders dropped over a set
+ *  piece lost ('slump'); and the head shaken and the snow brushed off after a tumble ('dust'). */
+export type RiderCue = 'look' | 'glance' | 'pump' | 'cheer' | 'flinch' | 'slump' | 'dust';
 
 /** The moments that take over the rider's pose. */
 export interface RiderAct {
-  /** A wipeout's roll: 0 riding, else 0 to 1 through it. */
+  /** A wipeout: 0 riding, else 0 to 1 through it, from the hit to back on the line. */
   tumble: number;
+  /** How long the wipeout lasts in all (seconds; the sim's own length). From WIPE_MIN_S up the rider
+   *  plays the whole fall (thrown off, a slide on its back beside the sled, a sit-up, a scramble back
+   *  on); a shorter one is the old roll of the whole rig. Absent reads as short. */
+  tumbleS?: number;
+  /** Where the fall's phases change, as shares of it: the end of the tumble and slide, and the end of
+   *  lying in the snow (the sim's FALL_TICKS and DOWN_TICKS over TUMBLE_TICKS). Absent: 0.4 and 0.7. */
+  tumbleCuts?: readonly [number, number];
   /** On a rail. */
   grind: boolean;
   /** Riding the wall: + the bank on three.js +x, - on -x, 0 none. */
@@ -59,25 +68,33 @@ export interface RiderAct {
   cue?: RiderCue | null;
   cueN?: number;
   cueSide?: number;
+  /** How hard the reaction is played, 0 to 1 (a whisker flinches harder than a near miss); absent: 1. */
+  cueK?: number;
 }
 
+/** A wipeout this long or longer (seconds) is played as the whole fall and get-up. */
+export const WIPE_MIN_S = 1.3;
+
 /** A frame of the finish celebration: how far it stands (0 to 1) and rises, its torso's and head's
- *  turn, the round sled's spin, the seconds since the line, first place, whether its sled has a deck
- *  to stand on, and how far the celebration has taken over from the arms-up V. */
+ *  turn, how far it leans back in its seat, the round sled's spin, the seconds since the line, the
+ *  place it is played for (first, the podium, or any finish), whether its sled has a deck to stand on,
+ *  and how far the celebration has taken over from the arms-up V. */
 interface Celebration {
   stand: number;
   lift: number;
   yaw: number;
   look: number;
+  lean: number;
   sledSpin: number;
   t: number;
   champ: boolean;
+  podium: boolean;
   deck: boolean;
   k: number;
 }
 
 /** How long each reaction plays (s). */
-const CUE_S: Record<RiderCue, number> = { look: 1.25, pump: 0.95, cheer: 1.2, dust: 1.55 };
+const CUE_S: Record<RiderCue, number> = { look: 1.35, glance: 0.85, pump: 1.1, cheer: 1.3, flinch: 0.55, slump: 1.6, dust: 1.55 };
 
 /** The deck a standing rider's boots come down on, by sled (metres over the sled's base); the round
  *  sleds have none to stand on (their rider spins instead). */
@@ -95,10 +112,10 @@ const UP = new Vector3(0, 1, 0);
 // curve and ripple along its length: with five long links each tail read as a stiff flat plank.
 const TAIL_N = 9;
 const TAIL_ROWS = (TAIL_N - 1) * 2 + 1;
-const TAIL_SEG = [0.165, 0.135];
+const TAIL_SEG = [0.165 * RIDER_SCALE, 0.135 * RIDER_SCALE];
 /** Ribbon width at its fullest; pinched where it leaves the knot, then tapering to a narrow tip (a
  *  tip as wide as the middle read as a paddle). */
-const TAIL_W = 0.27;
+const TAIL_W = 0.27 * RIDER_SCALE;
 function tailWidth(u: number): number {
   const s = Math.min(1, u / 0.18);
   return TAIL_W * (0.5 + 0.5 * s * s * (3 - 2 * s)) * (1 - 0.7 * Math.pow(u, 1.4));
@@ -113,12 +130,14 @@ const SCARF_MAX_RUN = Math.sqrt(3) / 2;
 /** The head and beanie as the camera sees them (neck space): the tails keep out of the cone it
  *  sweeps toward the lens, so the scarf never covers the head, however the rider is posed. */
 const HEAD_VIEW = new Vector3(0, 0.97 - RIDER_NECK.y, 0);
-const HEAD_VIEW_R = 0.37;
+const HEAD_VIEW_R = 0.37 * RIDER_SCALE;
 /** Spheres the tails slide around instead of passing through the rider: the torso (body-pivot
- *  space) and the head with its ear flaps (neck space). */
+ *  space), the head with its ear flaps (neck space) and the hood on the back (body-pivot space again;
+ *  the radii are the drawn rider's, RIDER_SCALE included). */
 const COLLIDERS: Array<[Vector3, number]> = [
-  [new Vector3(0, 0.34, 0.02), 0.27],
-  [new Vector3(0, 0.86 - RIDER_NECK.y, 0), 0.3],
+  [new Vector3(0, 0.34, 0.02), 0.27 * RIDER_SCALE],
+  [new Vector3(0, 0.86 - RIDER_NECK.y, 0), 0.3 * RIDER_SCALE],
+  [new Vector3(0, 0.46, 0.2), 0.17 * RIDER_SCALE],
 ];
 /** A tumble's turns of the whole rig (a whole number, so it ends upright) and how high it bounces. */
 const TUMBLE_TURNS = 2;
@@ -135,7 +154,7 @@ const ECHO_LAGS: readonly (readonly [number, number])[] = [
 ];
 /** A scarf's tassels: strands at each tip, and how long they hang. */
 const TASSELS = 4;
-const TASSEL_L = 0.11;
+const TASSEL_L = 0.11 * RIDER_SCALE;
 const CREAM_KNIT = new Color('#F3E6D4');
 const INK_KNIT = new Color('#1A2140');
 
@@ -209,7 +228,7 @@ function starGeometry(): BufferGeometry {
  *  pair between them, so both read and neither is cut by the frame edge. It lies just past the boots
  *  and a little beyond them: nearer, the outstretched legs lay across it and the two halves of the
  *  wreck merged into one heap. */
-export const WRECK_SLED = { right: 0.9, away: 0.72, side: 1 };
+export const WRECK_SLED = { right: 0.9 * RIDER_SCALE, away: 0.72 * RIDER_SCALE, side: 1 };
 
 const smooth = (x: number) => {
   const k = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -246,42 +265,71 @@ interface RiderUniforms {
   /** A dash (round 6): x how much of the spirit shimmer shows (0 to 1, eased), y the rider's base height in
    *  the world (the glow bands rise from it), z how fast the bands rise (slower under reduced motion). */
   spirit: { value: Vector3 };
+  /** What hangs off the rider and arrives late (round 7): the offset of the soft parts (the hood, a
+   *  hat's tail, the boots' toes), metres in the body's own frame. */
+  soft: { value: Vector3 };
+  /** The hero's own light (round 7): x the soft key's floor, y the rim from the frame's light, z how
+   *  firmly the vermillion holds its value and hue. 1 each; the results' fill and a tier may trim them. */
+  hero: { value: Vector3 };
 }
 
 /** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
- *  meshes.ts's aSway take the pom-pom's spring offset (x) and the coat hem's flutter (y). The hem
+ *  meshes.ts's aSway take the pom-pom's spring offset (x), the coat hem's flutter (y) and the soft
+ *  parts' lag (z); an arm's forearm bends about its elbow and its mitt flops about its wrist (w, by
+ *  the arm's own uJoint: x the elbow's bend, y the wrist's nod, z its sideways flop, radians). The hem
  *  flares a little and ripples round its rim, more at the back, so at speed the coat reads as cloth
  *  in the wind rather than a moulded shell. */
-function addSway(m: ShaderMaterial, u: RiderUniforms): void {
+function addSway(m: ShaderMaterial, u: RiderUniforms, joint?: { value: Vector3 }): void {
   m.uniforms.uPom = u.pom;
   m.uniforms.uHem = u.hem;
   m.uniforms.uStand = u.stand;
+  m.uniforms.uSoft = u.soft;
+  m.uniforms.uJoint = joint ?? { value: new Vector3() };
   const at = '#include <begin_vertex>';
   if (!m.vertexShader.includes(at)) {
     console.warn('rider material: vertex anchor not found, secondary motion disabled');
     return;
   }
   m.vertexShader =
-    'attribute vec2 aSway;\nuniform vec3 uPom;\nuniform float uHem;\nuniform float uStand;\n' +
+    'attribute vec4 aSway;\nuniform vec3 uPom;\nuniform float uHem;\nuniform float uStand;\nuniform vec3 uSoft;\nuniform vec3 uJoint;\n' +
     m.vertexShader.replace(
       at,
       /* glsl */ `${at}
-        transformed += max(aSway.x, 0.0) * uPom;
-        // Standing up on the sled: the legs out in front swing down about the hips (a quarter turn),
-        // and each boot turns back about its ankle first, so its sole stays flat on the deck.
+        transformed += max(aSway.x, 0.0) * uPom + aSway.z * uSoft;
+        // An arm's joints: the mitt turns about the wrist, then the forearm and the mitt about the elbow.
+        if (aSway.w > 0.5) {
+          vec3 jq = transformed;
+          vec3 jn = objectNormal;
+          if (aSway.w > 1.5) {
+            vec3 wr = vec3(${ARM_WRIST.x.toFixed(3)}, ${ARM_WRIST.y.toFixed(3)}, ${ARM_WRIST.z.toFixed(3)});
+            float sw = sin(uJoint.y);
+            float cw = cos(uJoint.y);
+            float sz = sin(uJoint.z);
+            float cz = cos(uJoint.z);
+            jq -= wr;
+            jq.yz = vec2(jq.y * cw - jq.z * sw, jq.y * sw + jq.z * cw);
+            jn.yz = vec2(jn.y * cw - jn.z * sw, jn.y * sw + jn.z * cw);
+            jq.xy = vec2(jq.x * cz - jq.y * sz, jq.x * sz + jq.y * cz);
+            jn.xy = vec2(jn.x * cz - jn.y * sz, jn.x * sz + jn.y * cz);
+            jq += wr;
+          }
+          vec3 el = vec3(${ARM_ELBOW.x.toFixed(3)}, ${ARM_ELBOW.y.toFixed(3)}, ${ARM_ELBOW.z.toFixed(3)});
+          float se = sin(uJoint.x);
+          float ce = cos(uJoint.x);
+          jq -= el;
+          jq.yz = vec2(jq.y * ce - jq.z * se, jq.y * se + jq.z * ce);
+          jn.yz = vec2(jn.y * ce - jn.z * se, jn.y * se + jn.z * ce);
+          transformed = jq + el;
+          objectNormal = jn;
+        }
+        // Standing up on the sled: the legs out in front swing down about the hips (a quarter turn);
+        // the feet, turned up from the shins, come down flat on the deck.
         if (aSway.x < -0.5 && uStand > 0.0) {
           float sa = sin(-1.5708 * uStand);
           float ca = cos(-1.5708 * uStand);
           vec3 hipP = vec3(0.0, 0.05, -0.02);
-          vec3 ank = vec3(0.0, -0.015, -0.55);
           vec3 q = transformed - hipP;
           vec3 nq = objectNormal;
-          if (aSway.x < -1.5) {
-            q -= ank;
-            q.yz = vec2(q.y * ca + q.z * sa, q.z * ca - q.y * sa);
-            nq.yz = vec2(nq.y * ca + nq.z * sa, nq.z * ca - nq.y * sa);
-            q += ank;
-          }
           q.yz = vec2(q.y * ca - q.z * sa, q.y * sa + q.z * ca);
           nq.yz = vec2(nq.y * ca - nq.z * sa, nq.y * sa + nq.z * ca);
           transformed = q + hipP;
@@ -295,6 +343,9 @@ function addSway(m: ShaderMaterial, u: RiderUniforms): void {
           transformed.xz *= 1.0 + hk * (0.06 + 0.045 * rip);
           transformed.z += hk * 0.035 * (0.6 + 0.4 * rip);
           transformed.y += hk * 0.018 * rip;
+          // The hem has weight too: it swings out late on a carve and drops on a landing (uSoft).
+          transformed.x += aSway.y * uSoft.x * 0.9;
+          transformed.y += aSway.y * min(uSoft.y, 0.0) * 0.5;
         }`,
     );
 }
@@ -312,12 +363,12 @@ const FLOW_C = new Color(FLOW_HEX);
  *  a fill from the lens side in the results hero shot, which also holds the rims down there (backlit,
  *  the wreck read milky); a thin white rim flash on a perfect landing; and, for the double-sided
  *  scarf, back faces that flip their normal and sit a shade darker so every twist of the ribbon reads. */
-function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false): ShaderMaterial {
+function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false, joint?: { value: Vector3 }): ShaderMaterial {
   // Props dissolve within about 3 m of the lens; the chase camera now rides closer than that on a
   // hard landing, which screen-doored the whole rider. The rider only gives way to a lens inside it.
   const m = makeToonMaterial({ nearFade: [0.25, 0.45], ...opts });
   riderStencil(m);
-  if (sway) addSway(m, u);
+  if (sway) addSway(m, u, joint);
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
@@ -326,12 +377,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   m.uniforms.uSunRim = { value: sunRim };
   m.uniforms.uHorizonRim = { value: horizonRim };
   m.uniforms.uSpirit = u.spirit;
+  m.uniforms.uHero = u.hero;
   // The toon shader dissolves whatever sits on the sight line from the camera to the rider. The
   // rider itself must never dissolve (least of all the scarf, which streams back toward the
   // camera), so its own focus sits far overhead: that sight line runs straight up, clear of it.
   m.uniforms.uFocus = { value: new Vector3(0, 1e6, 0) };
   const before = m.fragmentShader;
-  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;');
+  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;\n      uniform vec3 uHero;');
   fs = fs.replace(
     'vec3 n = normalize(vNormalW);',
     `vec3 n = normalize(vNormalW);
@@ -391,6 +443,31 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // Under a warm dusk sky (Comet Night) the ember horizon behind the lens rims the coat's back
         // and shoulders, so the hero sits in the dusk light rather than reading as a cold cut-out.
         col += vec3(1.0, 0.42, 0.16) * uEmber * darkCloth * (0.6 * smoothstep(0.45, 0.95, riderEdge) + 0.04 + 0.1 * smoothstep(0.3, 0.9, n.y) * smoothstep(0.25, 0.7, riderEdge)) * rimCut;
+        // Lit like a hero (round 7, ART.md 15 rule 4). Everything here is the rider's own and reads only
+        // the shared light's direction and colours, so it holds whatever the shared model above becomes.
+        //   A soft key from over the lens's shoulder, leaning toward the frame's light: a floor under
+        //   every surface in its own colour, so the coat's face reads in a polar night and under a smoke
+        //   deck. It takes the light's hue but not its level: a dim light still keys the hero.
+        vec3 heroN = uSunColor / max(max(uSunColor.r, uSunColor.g), max(uSunColor.b, 0.001));
+        vec3 heroKeyDir = normalize(v + vec3(0.0, 0.55, 0.0) + uSunDir * 0.45);
+        float heroKey = smoothstep(-0.25, 0.85, dot(n, heroKeyDir));
+        vec3 heroFloor = base * mix(vec3(1.0), heroN, 0.3) * (0.2 + 0.3 * heroKey) * uHero.x;
+        // (Ink cloth takes a little more, and a cool lift with it: navy at a fifth of its value is black.)
+        heroFloor += (base * 0.16 + vec3(0.012, 0.018, 0.04)) * heroKey * darkCloth * uHero.x;
+        col = max(col, heroFloor);
+        //   A rim from the frame's key light: the silhouette's edge on the light's side burns in the
+        //   light's own colour, brighter as the frame gets darker, so the hero is cut out of a dark
+        //   frame by the same light that lights it.
+        float heroSide = smoothstep(-0.35, 0.5, dot(n, uSunDir));
+        vec3 heroRimC = mix(uRim, heroN, 0.55) * mix(1.0, 0.5, uDayK);
+        col += heroRimC * pow(riderEdge, 2.6) * heroSide * mix(0.4, 0.95, darkCloth) * uHero.y * rimCut;
+        //   The vermillion holds: a saturated warm surface never sinks under a third of its own value
+        //   nor climbs past it into pink or white, and keeps its hue under any light (a blue night turned
+        //   it plum, a white noon bleached the beanie's sunlit side).
+        float heroHi = max(base.r, 0.001);
+        float heroWarm = smoothstep(0.5, 0.8, (base.r - max(base.g, base.b)) / heroHi) * uHero.z;
+        float heroL = dot(col, vec3(0.2126, 0.7152, 0.0722)) / max(dot(base, vec3(0.2126, 0.7152, 0.0722)), 0.001);
+        col = mix(col, base * clamp(heroL, 0.36, 1.12), heroWarm * 0.85);
         #ifdef DOUBLE_SIDED
           if (!gl_FrontFacing) col *= 0.8;
         #endif
@@ -434,7 +511,8 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           #endif
         }
         `;
-  const anchor = fs.includes('col = lanternLight(col, base, vWorldPos, n);') ? 'col = lanternLight(col, base, vWorldPos, n);' : 'col = fogged(col, vWorldPos);';
+  // (Three places it may go, in order: the shared model is the light lane's to change.)
+  const anchor = ['col = lanternLight(col, base, vWorldPos, n);', 'col = fogged(col, vWorldPos);', 'gl_FragColor = vec4(col, keep);'].find((a) => fs.includes(a)) ?? 'gl_FragColor';
   fs = fs.replace(anchor, rim + anchor);
   if (fs === before || !fs.includes('inkK')) console.warn('rider material: toon shader anchors not found, rider shading partly disabled');
   m.fragmentShader = fs;
@@ -528,7 +606,12 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() }, hero: { value: new Vector3(1, 1, 1) } };
+  /** Each arm's joints (left, right): x the elbow's bend, y the wrist's nod, z its sideways flop. */
+  private readonly joints = [{ value: new Vector3(ARM_REST_BEND, 0, 0) }, { value: new Vector3(ARM_REST_BEND, 0, 0) }];
+  /** Low's cheaper build (setDetail). */
+  private lite = false;
+  private armMats: ShaderMaterial[] = [];
   /** The head on the neck and the tumbling wreck's head (both rebuilt for a hat from the garage). */
   private head: Mesh;
   private crashHead: Mesh;
@@ -578,6 +661,28 @@ export class Rider {
   private bodyVy = 0;
   private tuckK = 0;
   private chatY = 0;
+  /** Take-off and touchdown (round 7), read off the pose itself: whether it was in the air last frame
+   *  and how fast it was falling; the pop's seconds and strength (the release that extends), and the
+   *  touchdown's seconds, strength and length (the compression that recovers, longer for a harder hit). */
+  private wasAir = false;
+  private airVy = 0;
+  private popT = 9;
+  private popK = 0;
+  private touchT = 9;
+  private touchK = 0;
+  private touchS = 0.3;
+  /** What hangs off the rider (the hood, a hat's tail, the boots' toes): a soft spring in the body's
+   *  frame, kicked by every change of speed, bank and height, so it arrives late and settles. */
+  private softP = new Vector3();
+  private softV = new Vector3();
+  private softVy = 0;
+  private softLean = 0;
+  private lastSpeed = 0;
+  /** Each arm's elbow bend this frame (left, right), last frame's arm angles, and each wrist's eased
+   *  lag (nod, flop). */
+  private bends = new Float32Array([ARM_REST_BEND, ARM_REST_BEND]);
+  private armPrev = new Float32Array(4);
+  private wrists = new Float32Array(4);
   /** The eased weights of a rail, a wall ride (signed) and the arms-up finish. */
   private grindK = 0;
   private wallS = 0;
@@ -601,7 +706,9 @@ export class Rider {
   constructor() {
     const mat = riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true);
     this.mat = mat;
-    this.sled = new Mesh(withSway(sledGeometry()), mat);
+    // Each arm bends at its own elbow: the same shader, its own joint angles.
+    this.armMats = this.joints.map((j) => riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true, j));
+    this.sled = new Mesh(withSway(sledGeometryFor(0)), mat);
     this.sitGeo = riderTorsoGeometry();
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
@@ -609,11 +716,13 @@ export class Rider {
     this.head = head;
     this.neck.position.copy(RIDER_NECK);
     this.neck.add(head);
-    const armGeo = riderArmGeometry();
-    this.armL.add(new Mesh(armGeo, mat));
-    this.armR.add(new Mesh(armGeo, mat));
-    this.armL.position.set(-0.27, 0.56, 0.0);
-    this.armR.position.set(0.27, 0.56, 0.0);
+    const armGeo = riderArmGeometry({ bend: 0 });
+    this.armL.add(new Mesh(armGeo, this.armMats[0]));
+    this.armR.add(new Mesh(armGeo, this.armMats[1]));
+    this.armL.position.set(-RIDER_SHOULDER.x, RIDER_SHOULDER.y, RIDER_SHOULDER.z);
+    this.armR.position.copy(RIDER_SHOULDER);
+    // The whole rig is drawn RIDER_SCALE times its modelled size, about the sled's base on the snow.
+    this.root.scale.setScalar(RIDER_SCALE);
     this.bodyPivot.position.set(0, 0.24, 0.1);
     // The turn toward the travel comes first, so the crouch and the lean follow the turned torso.
     this.bodyPivot.rotation.order = 'YXZ';
@@ -666,8 +775,10 @@ export class Rider {
 
     // The tumbling body keeps its arms (flung out, then propping it up once it sits) and its head
     // (tilted, dazed, once it sits).
-    this.crashArmL.add(new Mesh(armGeo, mat));
-    this.crashArmR.add(new Mesh(armGeo, mat));
+    this.crashArmL.add(new Mesh(armGeo, this.armMats[0]));
+    this.crashArmR.add(new Mesh(armGeo, this.armMats[1]));
+    this.crashBody.scale.setScalar(RIDER_SCALE);
+    this.crashSled.scale.setScalar(RIDER_SCALE);
     this.crashArmL.position.copy(this.armL.position);
     this.crashArmR.position.copy(this.armR.position);
     const crashHead = new Mesh(headGeo, mat);
@@ -711,10 +822,42 @@ export class Rider {
   setHat(id: HatId): void {
     if (id === this.hat) return;
     this.hat = id;
-    const geo = riderHeadGeometry(false, id).translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
+    this.buildHead();
+  }
+
+  private buildHead(): void {
+    const geo = riderHeadGeometry(false, this.hat, this.lite).translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
     this.head.geometry.dispose();
     this.head.geometry = geo;
     this.crashHead.geometry = geo;
+  }
+
+  /** The seated rider as drawn (metres): sled base to the top of the pom-pom, and half its width at
+   *  rest. The playtest probes read them. */
+  readonly height = RIDER_HEIGHT;
+  readonly halfWidth = RIDER_HALF_WIDTH;
+
+  /** Which build the hero wears: the whole figure, or Low's (about a third of the triangles: fewer
+   *  sides to every round part and none of the trim only a close lens resolves). The pose, the scarf
+   *  and the shading are the same on every tier. */
+  setDetail(detail: RiderDetail): void {
+    const lite = detail === 'lite';
+    if (lite === this.lite) return;
+    this.lite = lite;
+    this.buildHead();
+    this.sitGeo.dispose();
+    this.crossGeo?.dispose();
+    this.sitGeo = riderTorsoGeometry(false, false, lite);
+    this.crossGeo = null;
+    this.body.geometry = this.seat.crossLegged ? (this.crossGeo = riderTorsoGeometry(true, false, lite)) : this.sitGeo;
+    (this.crashBody.children[0] as Mesh).geometry = this.body.geometry;
+    const armGeo = riderArmGeometry({ bend: 0, lite });
+    const arms = [this.armL.children[0], this.armR.children[0], this.crashArmL.children[0], this.crashArmR.children[0]] as Mesh[];
+    arms[0].geometry.dispose();
+    for (const m of arms) m.geometry = armGeo;
+    const id = this.sledId;
+    this.sledId = -1;
+    this.setSled(id);
   }
 
   /** The garage's scarf: its tails' length and width, its knit and its tassels. The wrap round the neck
@@ -835,12 +978,13 @@ export class Rider {
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = withSway(paintSled(sledGeometryFor(id), this.paintHex));
+    const geo = withSway(paintSled(sledGeometryFor(id, this.lite), this.paintHex));
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;
     this.seat = sledSeat(id);
-    this.body.geometry = this.seat.crossLegged ? (this.crossGeo ??= riderTorsoGeometry(true)) : this.sitGeo;
+    this.body.geometry = this.seat.crossLegged ? (this.crossGeo ??= riderTorsoGeometry(true, false, this.lite)) : this.sitGeo;
+    (this.crashBody.children[0] as Mesh).geometry = this.body.geometry;
     this.bodyPivot.position.set(0, this.seat.y, this.seat.z);
     // Leaning over a saucer's rim the head sank behind the shoulders: from behind the rider read as
     // a navy obelisk with no head. There the neck rises about 0.15 m.
@@ -896,8 +1040,15 @@ export class Rider {
     this.cueSeen = NaN;
     this.loadK = this.driftK = this.waveSide = 0;
     this.u.stand.value = 0;
+    this.wasAir = false;
+    this.popT = this.touchT = 9;
+    this.popK = this.touchK = 0;
+    this.softP.set(0, 0, 0);
+    this.softV.set(0, 0, 0);
+    this.u.soft.value.set(0, 0, 0);
+    this.wrists.fill(0);
     // Hang the tails down the back; the first update carries them to the knot.
-    this.anchor.copy(pos).add(this.vA.set(0, 0.85, 0.35));
+    this.anchor.copy(pos).add(this.vA.set(0, 0.85 * RIDER_SCALE, 0.35 * RIDER_SCALE));
     this.anchorPrev.copy(this.anchor);
     for (const t of this.tails) {
       for (let i = 0; i < TAIL_N; i++) {
@@ -936,7 +1087,12 @@ export class Rider {
     this.wallS += ((act?.wall ?? 0) - this.wallS) * Math.min(1, dt * 8);
     this.finK += ((act?.finish ? 1 : 0) - this.finK) * Math.min(1, dt * (calm ? 8 : 3.2));
     const tumble = act?.tumble ?? 0;
-    const spun = tumble > 0 && !calm ? tumble : 0;
+    const fin0 = this.finK;
+    // A wipeout long enough is played whole (wipeout() below): the rider is thrown from the sled, and
+    // the sled skids on beside it. A short one rolls the whole rig, as it always did.
+    const wipe = tumble > 0 && !calm && (act?.tumbleS ?? 0) >= WIPE_MIN_S ? this.wipeout(tumble, act!.tumbleS!, act!.tumbleCuts, time, p) : null;
+    if (tumble === 0) this.wipeSide = 0;
+    const spun = tumble > 0 && !calm && !wipe ? tumble : 0;
     const rollEase = 1 - (1 - spun) * (1 - spun);
     const rollSin = Math.sin(Math.PI * spun);
     if (spun > 0) this.root.position.y += Math.abs(Math.sin(Math.PI * 2.5 * spun)) * (1 - spun) * TUMBLE_BOUNCE;
@@ -947,13 +1103,13 @@ export class Rider {
     this.tmpQ.setFromUnitVectors(UP, n);
     this.tilt.quaternion.slerp(this.tmpQ, Math.min(1, dt * (p.airborne ? 4 : 14)));
     // (A round sled spins under its rider over the line.)
-    this.yaw.rotation.set(0, -(p.heading + p.airYaw) + rollSin * 1.3 + this.grindK * GRIND_YAW + cel.sledSpin, 0);
+    this.yaw.rotation.set(0, -(p.heading + p.airYaw) + rollSin * 1.3 + this.grindK * GRIND_YAW + cel.sledSpin + (wipe ? wipe.sledYaw : 0), 0);
     const wob = p.wobble > 0 ? Math.sin(time * 38) * 0.08 * Math.min(1, p.wobble / 20) : 0;
     this.flip.rotation.set(-p.airPitch - rollEase * Math.PI * 2 * TUMBLE_TURNS, 0, 0);
     // The sled banks a little; most of the carve lean comes from the hips (below), so the rider bends
     // into the turn rather than tipping over as one rigid block with its sled.
     // (A rail's balance sways it side to side; a tumble throws it over.)
-    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK));
+    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK) + (wipe ? wipe.sledRock : 0));
 
     // Body pose. A perfect landing squashes the torso and legs flat on touchdown (0.7 tall, 1.25
     // wide) and holds it for about 150 ms, springs back through a stretch, and rides the landing out
@@ -962,9 +1118,29 @@ export class Rider {
     // A squash that sprang straight back read as no squash at all: caught a tenth of a second after
     // touchdown the pose looked like normal riding.
     const lt = this.landT;
+    // Take-off and touchdown. Leaving the snow with any lift, the body extends (the release of whatever
+    // it had loaded: a held crouch into a lip gives the most); coming down, it compresses by how hard
+    // it hit and takes longer to come back up from a harder one. A tumble has its own motion.
+    if (tumble === 0 && fin0 < 0.5) {
+      if (p.airborne && !this.wasAir) {
+        this.popT = 0;
+        this.popK = Math.max(this.loadK, smooth((p.vel.y - 1.5) / 7));
+      } else if (!p.airborne && this.wasAir) {
+        this.touchT = 0;
+        this.touchK = smooth((-this.airVy - 2.5) / 12);
+        this.touchS = 0.22 + 0.5 * this.touchK;
+      }
+    }
+    this.wasAir = p.airborne;
+    if (p.airborne) this.airVy = p.vel.y;
+    this.popT += dt;
+    this.touchT += dt;
+    const ext = calm ? 0 : this.popK * env(this.popT, 0.05, 0.13, 0.42);
     const sq = lt < 0.15 ? 1 : 1 - smooth((lt - 0.15) / 0.1);
     const rebound = lt > 0.15 && lt < 0.42 ? Math.sin((Math.PI * (lt - 0.15)) / 0.27) : 0;
     const stomp = lt < 0.9 ? (lt < 0.05 ? lt / 0.05 : 1 - smooth((lt - 0.3) / 0.6)) : 0;
+    // (A perfect landing's own squash owns the frame; under reduced motion the body only sinks.)
+    const touch = this.touchK * env(this.touchT, 0.045, 0.045 + 0.25 * this.touchS, this.touchS + 0.25) * (1 - stomp) * (calm ? 0.5 : 1);
     this.tickBody(p, dt, time);
     const fin = this.finK;
     // Loading for a lip with the action held: it sinks lower than a plain crouch, pitches over its
@@ -979,10 +1155,11 @@ export class Rider {
     const dk = this.driftK * (1 - fin) * (1 - stomp);
     const inside = p.driftDir >= 0 ? 1 : -1;
     // Riding the wall the body leans in toward it, over the sled's own tilt up the bank.
-    const lean = this.leanS + this.wallS * 0.85 + inside * dk * (0.12 + 0.1 * (p.driftCharge ?? 0));
+    const air0 = p.airborne ? 1 : 0;
+    const lean = this.leanS + this.wallS * 0.85 + inside * dk * (0.16 + 0.14 * (p.driftCharge ?? 0));
     const bob = this.bobY + this.chatY;
     const speedTuck = this.tuckK;
-    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62, this.grindK * 0.8, load, tumble > 0 && calm ? 1 : 0) * (1 - fin);
+    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62, this.grindK * 0.8, load, touch * 0.9, dk * 0.3, tumble > 0 && calm ? 1 : 0) * (1 - fin) * (1 - 0.8 * ext);
     const tuck = p.airborne && p.crouch > 0.5 ? 1 : 0;
     // Drifting, the sled slides sideways while the rider keeps its chest to the way it is going, as a
     // rider does: crouched over a sled turned across the view, it read from the chase camera as a
@@ -998,21 +1175,28 @@ export class Rider {
     // landing it soaks up pitches it forward over its knees for a moment.)
     // (Over the line it sits up tall.)
     // (Standing over the line it is upright, so its legs hang straight down to the deck.)
-    const pitch = (-0.15 - this.seat.lean - crouch * 0.3 - load * 0.14 - dk * 0.06 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 + Math.min(0, bob) * 1.6) * (1 - fin * 0.85) * (1 - cel.stand);
-    this.bodyPivot.rotation.set(pitch + rollSin * 0.5, -this.twist - this.grindK * GRIND_YAW * 0.7 + cel.yaw + this.cueTwist, -lean * 0.26 + this.cueRoll);
+    // (The pop's release throws the chest up and back off the knees; a touchdown folds it over them.)
+    const pitch = (-0.15 - this.seat.lean - crouch * 0.3 - load * 0.14 - dk * 0.06 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 - touch * 0.16 + ext * 0.34 + Math.min(0, bob) * 1.6) * (1 - fin * 0.85) * (1 - cel.stand) + cel.lean;
+    // Weight into a carve (round 7): the shoulders open toward the turn and the hips slide to its inside
+    // further than they did, so a carve is a shift of the whole body and not a tilt of it; held by the
+    // finish, a drift (which has its own posture) and a reaction.
+    const carve = lean * (1 - fin) * (1 - dk) * (1 - air0);
+    this.bodyPivot.rotation.set(pitch + this.cuePitch + rollSin * 0.5, -this.twist - this.grindK * GRIND_YAW * 0.7 + cel.yaw + this.cueTwist - carve * 0.16, -lean * 0.26 + this.cueRoll);
     // (A tumble throws the body up off the sled; over the line it may hop up to stand on it.)
-    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - load * 0.05 - dk * 0.025 - stomp * 0.05 + bob + rollSin * 0.2 + (calm ? 0 : fin * (1 - cel.stand) * Math.abs(Math.sin(time * 3.4)) * 0.05) + cel.lift;
-    // The hips slide a little to the inside of the carve: the weight goes where the turn is.
-    this.bodyPivot.position.x = Math.max(-0.05, Math.min(0.05, lean * 0.045));
-    const sx = 1 + sq * 0.25 - rebound * 0.04;
-    const sy = 1 - sq * 0.3 + rebound * 0.08;
+    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - load * 0.05 - dk * 0.025 - stomp * 0.05 + ext * 0.07 - this.cueDip + bob + rollSin * 0.2 + (calm ? 0 : fin * (1 - cel.stand) * Math.abs(Math.sin(time * 3.4)) * 0.05) + cel.lift;
+    // The hips slide to the inside of the carve: the weight goes where the turn is.
+    this.bodyPivot.position.x = Math.max(-0.085, Math.min(0.085, lean * 0.075));
+    // (The release stretches the body a touch, the touchdown squashes it by its impact.)
+    const sx = 1 + sq * 0.25 - rebound * 0.04 + touch * 0.14 - ext * 0.05;
+    const sy = 1 - sq * 0.3 + rebound * 0.08 - touch * 0.2 + ext * 0.1;
     this.bodyPivot.scale.set(sx, sy, sx);
     this.neck.scale.set(1 / sx, 1 / sy, 1 / sx);
     this.neck.position.set(RIDER_NECK.x, (RIDER_NECK.y + this.headLift) * (1 + (1 / sy - 1) * 0.75), RIDER_NECK.z);
     // The head holds toward upright as the torso pitches forward, chin a little up, so the face and
     // beanie stay above the shoulder line (the roll is countered once the lean is capped, below).
     // A reaction turns it on the neck (a look, a nod, a shake), and loading for a lip lifts the chin.
-    this.neck.rotation.set(-(pitch + 0.15) * 0.7 + 0.06 + stomp * 0.12 + load * 0.12 + this.cueNod, this.cueYaw + cel.look, 0);
+    // (Into a carve it looks where it is going; a touchdown nods it.)
+    this.neck.rotation.set(-(pitch + 0.15) * 0.7 + 0.06 + stomp * 0.12 + load * 0.12 - touch * 0.14 + this.cueNod, this.cueYaw + cel.look - carve * 0.42, 0);
     const air = p.airborne ? 1 : 0;
     const flail = air * (1 - tuck);
     const armSwing = Math.sin(time * 9) * 0.25 * flail;
@@ -1035,36 +1219,74 @@ export class Rider {
       armX += Math.sin(time * 19) * 1.1;
       armOut += 0.9 + Math.sin(time * 15) * 0.7;
     }
-    // Each arm on its own from here (x: swung forward, o: out from the side, + away from the body).
+    // A touchdown throws both arms out for balance, by its impact.
+    armOut += touch * 0.75;
+    // Each arm on its own from here (x: swung forward, o: out from the side, + away from the body), and
+    // each elbow's bend: relaxed on the snow, nearly straight flung out in the air or up in a V, folded
+    // in a tuck (the mitts to the knees).
     const arm = this.arms;
+    const bend = this.bends;
     arm[0] = armX + armSwing;
     arm[1] = armOut;
     arm[2] = armX - armSwing;
     arm[3] = armOut;
-    // Loading: both arms drawn back past the hips.
+    bend[0] = bend[1] = ARM_REST_BEND + (0.18 - ARM_REST_BEND) * Math.max(flail, stomp, fin, touch) + tuck * 0.75 + speedTuck * 0.45 - this.grindK * 0.2;
+    if (spun > 0) {
+      bend[0] = 0.5 + 0.4 * Math.sin(time * 17);
+      bend[1] = 0.5 + 0.4 * Math.sin(time * 13 + 1);
+    }
+    // Loading: both arms drawn back past the hips, elbows bent.
     if (load > 0.001) for (let k = 0; k < 4; k += 2) {
       arm[k] += (-0.6 - arm[k]) * load;
       arm[k + 1] += (0.4 - arm[k + 1]) * load;
+      bend[k >> 1] += (1.05 - bend[k >> 1]) * load;
     }
-    // Drifting: the inside mitt reaches down toward the snow, the outside arm goes up and out.
+    // The release: both arms thrown forward and up as the body extends, straightening as they go.
+    if (ext > 0.001) for (let k = 0; k < 4; k += 2) {
+      arm[k] += (2.1 - arm[k]) * ext;
+      arm[k + 1] += (0.55 - arm[k + 1]) * ext;
+      bend[k >> 1] += (0.12 - bend[k >> 1]) * ext;
+    }
+    // Drifting: a posture that reads at a glance. The inside arm goes straight down to the snow, its
+    // mitt trailing in it; the outside arm comes up and over, bent, the way a rider holds a slide; more
+    // of both as the charge builds.
     if (dk > 0.001) {
       const i = inside > 0 ? 2 : 0;
       const o = 2 - i;
-      arm[i] += (0.2 - arm[i]) * dk;
-      arm[i + 1] += (1.0 + 0.15 * (p.driftCharge ?? 0) - arm[i + 1]) * dk;
-      arm[o] += (0.55 - arm[o]) * dk;
-      arm[o + 1] += (1.45 - arm[o + 1]) * dk;
+      const ch = p.driftCharge ?? 0;
+      arm[i] += (-0.05 - arm[i]) * dk;
+      arm[i + 1] += (0.8 + 0.1 * ch - arm[i + 1]) * dk;
+      bend[i >> 1] += (0.08 - bend[i >> 1]) * dk;
+      arm[o] += (0.75 - arm[o]) * dk;
+      arm[o + 1] += (1.7 + 0.25 * ch - arm[o + 1]) * dk;
+      bend[o >> 1] += (0.95 - bend[o >> 1]) * dk;
     }
     this.cueArms(arm, calm, (1 - fin) * (1 - stomp) * (tumble > 0 ? 0 : 1) * (1 - 0.6 * tuck));
     this.celebrateArms(arm, cel);
+    if (wipe) {
+      arm.set(wipe.arm);
+      bend.set(wipe.bend);
+    }
+    this.tickJoints(arm, dt, calm);
     // Balancing a carve: the outside arm reaches out and up, the inside one tucks in, more while the
     // body is still catching up with the sled's bank (the lag between them).
     const bal = Math.max(-1, Math.min(1, lean * 0.9 + (p.lean - lean) * 1.4)) * (1 - air) * (1 - stomp) * (1 - fin) * (1 - dk);
     this.armL.rotation.set(arm[0], 0, -arm[1] + p.lean * 0.15 - Math.max(0, bal) * 0.5);
     this.armR.rotation.set(arm[2], 0, arm[3] + p.lean * 0.15 - Math.min(0, bal) * 0.5);
+    if (wipe) {
+      // Thrown from the sled: the body has its own place beside it, its own roll and its own head.
+      this.bodyPivot.position.set(wipe.x, wipe.y, this.seat.z + wipe.z);
+      this.bodyPivot.rotation.set(wipe.pitch, wipe.yaw, wipe.roll);
+      this.bodyPivot.scale.set(1, wipe.sy, 1);
+      this.neck.scale.set(1, 1 / wipe.sy, 1);
+      this.neck.position.set(RIDER_NECK.x, RIDER_NECK.y + this.headLift, RIDER_NECK.z);
+      this.neck.rotation.set(wipe.nod, wipe.headYaw, wipe.headRoll);
+      this.armL.rotation.set(arm[0], 0, -arm[1]);
+      this.armR.rotation.set(arm[2], 0, arm[3]);
+    }
 
     this.root.updateMatrixWorld(true);
-    const roll = p.airborne ? 0 : this.capLean(p.heading + p.airYaw);
+    const roll = p.airborne || wipe ? 0 : this.capLean(p.heading + p.airYaw);
     // ...and holds toward upright against the torso's roll.
     if (roll !== 0) {
       this.neck.rotation.z = -roll * 0.55;
@@ -1075,10 +1297,146 @@ export class Rider {
     // The tails rest on the sled deck and never dig into the slope.
     this.usePlane = !p.airborne;
     this.planeN.copy(p.normal);
-    this.planeP.copy(p.pos).addScaledVector(p.normal, 0.26);
+    this.planeP.copy(p.pos).addScaledVector(p.normal, 0.26 * RIDER_SCALE);
     this.updateScarf(dt, time, p.vel, p.airborne, p.heading + p.airYaw);
     this.u.spirit.value.y = p.pos.y;
     this.tickEcho(time);
+  }
+
+  /** This frame of a wipeout played whole (wipeout()): where the thrown body is (metres from its seat,
+   *  in the sled's frame) and how it is turned, its head, its arms, and what the sled does. */
+  private wp = { x: 0, y: 0, z: 0, pitch: 0, yaw: 0, roll: 0, sy: 1, nod: 0, headYaw: 0, headRoll: 0, sledYaw: 0, sledRock: 0, arm: new Float32Array(4), bend: new Float32Array(2) };
+  /** The side the rider was thrown to (+1 the right; 0 before a fall picks one). */
+  private wipeSide = 0;
+
+  /**
+   * A wipeout the run survives, played whole (round 7): `u` is 0 to 1 through it and `secs` how long the
+   * sim says it lasts. In order, by share of that time: the rider is thrown off to one side and rolls
+   * twice over the snow, bouncing, arms windmilling, while the sled skids on askew (to 40%, or the
+   * sim's own share, act.tumbleCuts); it slides on its back beside the sled and sits up, dazed, shakes its head and looks
+   * across at the sled (to 70%); it scrambles up and hops back onto the seat (to 94%); and it settles
+   * into its crouch, ready for the snow to be brushed off (the 'dust' reaction the tumble's end cues).
+   * The sim moves the pair down the hill throughout (rider.root): this only says where the rider is
+   * about its sled. Nothing here is read back.
+   */
+  private wipeout(u: number, secs: number, cuts: readonly [number, number] | undefined, time: number, p: RiderPose): typeof this.wp {
+    const w = this.wp;
+    if (this.wipeSide === 0) this.wipeSide = Math.abs(p.lean) > 0.05 ? (p.lean > 0 ? -1 : 1) : Math.sin(time * 91.7) > 0 ? 1 : -1;
+    const sd = this.wipeSide;
+    const t = u * secs;
+    const tR = (cuts ? cuts[0] : 0.4) * secs;
+    const tS = (cuts ? cuts[1] : 0.7) * secs;
+    const tM = 0.94 * secs;
+    const sitY = 0.13;
+    const OUT = 0.98;
+    const BACK = 0.5;
+    const tau = Math.PI * 2;
+    w.sy = 1;
+    w.sledYaw = w.sledRock = w.headRoll = 0;
+    // (The arm on the sled's side: thrown to the right, the sled lies on the rider's left.)
+    const near = sd > 0 ? 0 : 2;
+    const far = 2 - near;
+    if (t < tR) {
+      const r = t / tR;
+      const e = 1 - (1 - r) * (1 - r);
+      w.x = sd * OUT * smooth(r * 1.5);
+      w.z = BACK * smooth(r);
+      w.y = this.seat.y + (sitY - this.seat.y) * smooth(r * 1.3) + Math.abs(Math.sin(Math.PI * 2.5 * r)) * (1 - r) * 0.7;
+      w.pitch = -e * tau * TUMBLE_TURNS + 0.2 * smooth((r - 0.8) / 0.2);
+      w.yaw = sd * 0.55 * r;
+      w.roll = -sd * Math.sin(Math.PI * r) * 0.55;
+      w.nod = 0.2 * Math.sin(time * 14);
+      w.headYaw = 0.4 * Math.sin(time * 9);
+      w.sledYaw = -sd * Math.sin(Math.PI * Math.min(1, r * 1.2)) * 0.6;
+      w.sledRock = Math.sin(r * Math.PI * 3) * 0.22 * (1 - r);
+      w.arm[0] = 0.5 + Math.sin(time * 19) * 1.1;
+      w.arm[1] = 1.2 + Math.sin(time * 15) * 0.7;
+      w.arm[2] = 0.5 - Math.sin(time * 19) * 1.1;
+      w.arm[3] = 1.2 + Math.sin(time * 15 + 2) * 0.7;
+      w.bend[0] = 0.5 + 0.4 * Math.sin(time * 17);
+      w.bend[1] = 0.5 + 0.4 * Math.sin(time * 13 + 1);
+    } else if (t < tS) {
+      const q = (t - tR) / (tS - tR);
+      const up = smooth((q - 0.25) / 0.35);
+      w.x = sd * OUT;
+      w.z = BACK;
+      w.y = sitY + Math.abs(Math.sin(q * Math.PI * 2)) * 0.05 * (1 - q);
+      // Flat on its back at first, then sitting up, propped on its mitts.
+      w.pitch = 0.2 + 0.85 * (1 - up);
+      w.yaw = sd * 0.55 * (1 - 0.6 * smooth((q - 0.5) / 0.5));
+      w.roll = 0;
+      const look = smooth((q - 0.62) / 0.25);
+      w.nod = -0.35 * (1 - up) - 0.1 * up;
+      w.headYaw = Math.sin((q - 0.3) * tau * 3.2) * 0.38 * env(q - 0.3, 0.06, 0.2, 0.36) + sd * 0.95 * look;
+      w.headRoll = Math.sin(time * 2.6) * 0.16 * up * (1 - look);
+      w.sledRock = Math.sin(q * Math.PI * 4) * 0.04 * (1 - q);
+      // Arms flung wide on its back, then propping it up behind; the near one reaches for the sled.
+      const prop = up;
+      w.arm[0] = w.arm[2] = 0.2 + (-0.75 - 0.2) * prop;
+      w.arm[1] = w.arm[3] = 1.35 + (0.5 - 1.35) * prop;
+      w.bend[0] = w.bend[1] = 0.25;
+      w.arm[near] += (0.5 - w.arm[near]) * look;
+      w.arm[near + 1] += (1.25 - w.arm[near + 1]) * look;
+    } else if (t < tM) {
+      const m = (t - tS) / (tM - tS);
+      const e = smooth(m);
+      const hop = Math.sin(Math.PI * m);
+      w.x = sd * OUT * (1 - e);
+      w.z = BACK * (1 - e);
+      w.y = sitY + (this.seat.y - sitY) * e + hop * 0.4;
+      w.pitch = 0.2 * (1 - e) - 0.45 * hop - 0.15 * e;
+      w.yaw = sd * 0.22 * (1 - e) + sd * 0.5 * hop * (1 - e);
+      w.roll = sd * 0.25 * hop;
+      w.nod = 0.15 * hop;
+      w.headYaw = sd * 0.95 * (1 - e);
+      w.arm[near] = 0.9;
+      w.arm[near + 1] = 0.9 - 0.5 * e;
+      w.arm[far] = 0.3 + 0.8 * hop;
+      w.arm[far + 1] = 0.6 + 0.9 * hop;
+      w.bend[0] = w.bend[1] = 0.7;
+    } else {
+      const s2 = (t - tM) / Math.max(1e-3, secs - tM);
+      const sq = Math.sin(Math.PI * Math.min(1, s2 * 1.4)) * (1 - s2);
+      w.x = w.z = 0;
+      w.y = this.seat.y - 0.07 * (1 - s2);
+      w.sy = 1 - 0.18 * sq;
+      w.pitch = -0.15 - 0.28 * (1 - s2);
+      w.yaw = w.roll = 0;
+      w.nod = 0.1 * (1 - s2);
+      w.headYaw = 0;
+      w.sledRock = Math.sin(s2 * Math.PI * 3) * 0.06 * (1 - s2);
+      w.arm[0] = w.arm[2] = 0.72;
+      w.arm[1] = w.arm[3] = 0.3 + 0.6 * sq;
+      w.bend[0] = w.bend[1] = ARM_REST_BEND;
+    }
+    return w;
+  }
+
+  /** The arms' joints for this frame (round 7): each elbow eases to its bend, and each mitt lags the arm
+   *  it hangs from (a swing forward leaves it trailing, a stop lets it catch up and settle), a little
+   *  more in the wind of a flight. The upper arm is posed, the forearm and the mitt follow: that is
+   *  what makes an arm read as an arm and not as a paddle. Reduced motion keeps the bends and drops the
+   *  lag. */
+  private tickJoints(arm: Float32Array, dt: number, calm: boolean): void {
+    const h = Math.min(Math.max(dt, 0), 1 / 20);
+    const prev = this.armPrev;
+    const w = this.wrists;
+    for (let k = 0; k < 2; k++) {
+      const j = this.joints[k].value;
+      const b = Math.max(0, Math.min(1.9, this.bends[k]));
+      j.x += (b - j.x) * Math.min(1, dt * 18);
+      const vSwing = h > 0 ? Math.max(-12, Math.min(12, (arm[k * 2] - prev[k * 2]) / h)) : 0;
+      const vOut = h > 0 ? Math.max(-12, Math.min(12, (arm[k * 2 + 1] - prev[k * 2 + 1]) / h)) : 0;
+      prev[k * 2] = arm[k * 2];
+      prev[k * 2 + 1] = arm[k * 2 + 1];
+      // (A hanging arm swung forward turns positive about x; the mitt's nod is about the same axis.)
+      const nodT = calm ? 0 : Math.max(-0.75, Math.min(0.75, -vSwing * 0.075));
+      const flopT = calm ? 0 : Math.max(-0.6, Math.min(0.6, vOut * 0.06 * (k === 0 ? 1 : -1)));
+      w[k * 2] += (nodT - w[k * 2]) * Math.min(1, dt * 13);
+      w[k * 2 + 1] += (flopT - w[k * 2 + 1]) * Math.min(1, dt * 13);
+      j.y = w[k * 2];
+      j.z = w[k * 2 + 1];
+    }
   }
 
   /** This frame's arms: left swing, left out, right swing, right out (radians). */
@@ -1088,8 +1446,12 @@ export class Rider {
   private cueNod = 0;
   private cueTwist = 0;
   private cueRoll = 0;
+  /** ...and the chest's pitch (+ back) and how far the body dips (metres). */
+  private cuePitch = 0;
+  private cueDip = 0;
+  private reactK = 1;
   /** This frame's finish celebration (celebrate()). */
-  private cel: Celebration = { stand: 0, lift: 0, yaw: 0, look: 0, sledSpin: 0, t: 0, champ: false, deck: false, k: 0 };
+  private cel: Celebration = { stand: 0, lift: 0, yaw: 0, look: 0, lean: 0, sledSpin: 0, t: 0, champ: false, podium: false, deck: false, k: 0 };
 
   /** Takes a new reaction cue (each count once) and works out its head and shoulders for this frame. A
    *  tumble or the finish owns the rider: no reaction shows through them. */
@@ -1102,10 +1464,11 @@ export class Rider {
           this.react = act.cue;
           this.reactT = 0;
           this.reactSide = (act.cueSide ?? 1) < 0 ? -1 : 1;
+          this.reactK = Math.max(0, Math.min(1, act.cueK ?? 1));
         }
       }
     }
-    this.cueYaw = this.cueNod = this.cueTwist = this.cueRoll = 0;
+    this.cueYaw = this.cueNod = this.cueTwist = this.cueRoll = this.cuePitch = this.cueDip = 0;
     const r = this.react;
     if (!r) return;
     this.reactT += dt;
@@ -1118,17 +1481,49 @@ export class Rider {
     const s = this.reactSide;
     const tau = Math.PI * 2;
     if (r === 'look') {
-      // A look at it over the shoulder on its side: the head turns most of the way (far enough that
-      // the face shows in profile from behind), the shoulders a little.
-      const w = env(t, 0.18, 0.8, CUE_S.look);
-      this.cueYaw = -s * (calm ? 0.9 : 1.35) * w;
+      // Passed: a look at it over the shoulder on its side (the head turns most of the way, far enough
+      // that the face shows in profile from behind, the shoulders a little), a lean in after it, and
+      // the head coming back with a small shake.
+      const w = env(t, 0.18, 0.8, 1.2);
+      this.cueYaw = -s * (calm ? 0.9 : 1.35) * w + (calm ? 0 : Math.sin((t - 1.0) * tau * 3) * 0.12 * env(t - 1.0, 0.05, 0.2, 0.33));
       this.cueTwist = -s * 0.3 * w;
+      this.cueRoll = -s * 0.1 * w;
+      this.cuePitch = -0.08 * env(t - 0.5, 0.2, 0.5, 0.8);
+    } else if (r === 'glance') {
+      // Passing: a glance across at it as it drops back, a lean toward it, a nod.
+      const w = env(t, 0.12, 0.45, CUE_S.glance);
+      this.cueYaw = -s * (calm ? 0.6 : 0.95) * w;
+      this.cueTwist = -s * 0.18 * w;
+      this.cueRoll = -s * 0.09 * w;
+      this.cueNod = calm ? 0 : -0.12 * env(t - 0.3, 0.07, 0.16, 0.32);
     } else if (r === 'pump') {
-      // Nods in time with the pump.
-      const w = env(t, 0.12, 0.65, CUE_S.pump);
-      this.cueNod = calm ? -0.06 * w : -0.15 * Math.max(0, Math.sin(t * tau * 2.6)) * w;
+      // A glance across first, then the head nods in time with the fist.
+      const g = env(t, 0.1, 0.24, 0.42);
+      const w = env(t - 0.15, 0.12, 0.65, CUE_S.pump - 0.15);
+      this.cueYaw = -s * 0.8 * g;
+      this.cueRoll = -s * 0.07 * g;
+      this.cueNod = calm ? -0.06 * w : -0.15 * Math.max(0, Math.sin((t - 0.15) * tau * 2.6)) * w;
     } else if (r === 'cheer') {
-      this.cueNod = 0.14 * env(t, 0.12, 0.9, CUE_S.cheer);
+      // Chin up and chest out under both arms.
+      const w = env(t, 0.12, 0.95, CUE_S.cheer);
+      this.cueNod = 0.16 * w;
+      this.cuePitch = 0.1 * w;
+    } else if (r === 'flinch') {
+      // A near miss: the head ducks and turns away from it, the shoulders hunch and roll away, and the
+      // whole body dips for a moment. Fast in, a breath to come back.
+      const w = env(t, 0.045, 0.17, CUE_S.flinch) * this.reactK;
+      this.cueNod = -0.34 * w;
+      this.cueYaw = s * 0.5 * w;
+      this.cueRoll = (calm ? 0.08 : 0.2) * s * w;
+      this.cueDip = 0.05 * w;
+      this.cuePitch = -0.1 * w;
+    } else if (r === 'slump') {
+      // A set piece lost: the shoulders drop, the head hangs and shakes slowly, and it sits back up.
+      const w = env(t, 0.22, 1.05, CUE_S.slump);
+      this.cueNod = -0.4 * w;
+      this.cuePitch = -0.17 * w;
+      this.cueDip = 0.035 * w;
+      this.cueYaw = calm ? 0 : Math.sin((t - 0.45) * tau * 1.5) * 0.2 * env(t - 0.45, 0.15, 0.6, 0.85);
     } else {
       // A shake of the head, a shiver of the shoulders like a dog shaking off water, then a look down
       // at the coat while the snow is slapped off it.
@@ -1142,6 +1537,8 @@ export class Rider {
     this.cueNod *= k;
     this.cueTwist *= k;
     this.cueRoll *= k;
+    this.cuePitch *= k;
+    this.cueDip *= k;
   }
 
   /** The reaction's arms, over the riding pose by weight `w` (a stomp, a tuck or the finish hold them
@@ -1152,38 +1549,61 @@ export class Rider {
     if (!r || w <= 0.001) return;
     const t = this.reactT;
     const tau = Math.PI * 2;
-    const to = (i: number, x: number, o: number, k: number) => {
+    const bend = this.bends;
+    const to = (i: number, x: number, o: number, k: number, b: number) => {
       arm[i] += (x - arm[i]) * k;
       arm[i + 1] += (o - arm[i + 1]) * k;
+      bend[i >> 1] += (b - bend[i >> 1]) * k;
     };
     if (r === 'pump') {
-      to(this.reactSide > 0 ? 0 : 2, 0.25, 2.75 + (calm ? 0 : Math.sin(t * tau * 2.6) * 0.22), env(t, 0.12, 0.65, CUE_S.pump) * w);
+      // The fist on the far side from the ghost punches up: the elbow drives it, bent then straight.
+      const ph = (t - 0.15) * tau * 2.6;
+      to(this.reactSide > 0 ? 0 : 2, 0.25, 2.7 + (calm ? 0 : Math.sin(ph) * 0.2), env(t - 0.15, 0.12, 0.65, CUE_S.pump - 0.15) * w, calm ? 0.3 : 0.5 - 0.42 * Math.sin(ph));
     } else if (r === 'cheer') {
-      const k = env(t, 0.12, 0.9, CUE_S.cheer) * w;
-      to(0, 0.3, 2.45 + (calm ? 0 : Math.sin(t * tau * 2.4) * 0.22), k);
-      to(2, 0.3, 2.45 + (calm ? 0 : Math.sin(t * tau * 2.4 + 2) * 0.22), k);
+      const k = env(t, 0.12, 0.95, CUE_S.cheer) * w;
+      to(0, 0.3, 2.45 + (calm ? 0 : Math.sin(t * tau * 2.4) * 0.22), k, calm ? 0.2 : 0.3 - 0.25 * Math.sin(t * tau * 2.4));
+      to(2, 0.3, 2.45 + (calm ? 0 : Math.sin(t * tau * 2.4 + 2) * 0.22), k, calm ? 0.2 : 0.3 - 0.25 * Math.sin(t * tau * 2.4 + 2));
+    } else if (r === 'flinch') {
+      // The arm on its side comes up as a shield, the other pulls in to the chest.
+      const k = env(t, 0.045, 0.17, CUE_S.flinch) * this.reactK * w;
+      const near = this.reactSide > 0 ? 2 : 0;
+      to(near, 0.7, 1.35, k, 1.25);
+      to(2 - near, 0.85, 0.2, k, 1.4);
+    } else if (r === 'slump') {
+      // Both arms hang, limp, the mitts on the deck.
+      const k = env(t, 0.22, 1.05, CUE_S.slump) * w;
+      to(0, 0.28, 0.16, k, 0.12);
+      to(2, 0.28, 0.16, k, 0.12);
     } else if (r === 'dust') {
       // Both mitts slap the snow off the coat's sides in turn, out and in, where the lens behind sees
       // them (a mitt brushing the chest hid behind the back, and the toy's arms never reach its beanie).
       const k = env(t - 0.7, 0.12, 0.65, 0.85) * w;
       const ph = (t - 0.7) * tau * (calm ? 1 : 3.2);
       const amp = calm ? 0.15 : 0.42;
-      to(0, 0.1, 0.55 + amp * Math.sin(ph), k);
-      to(2, 0.1, 0.55 + amp * Math.sin(ph + Math.PI), k);
+      to(0, 0.1, 0.55 + amp * Math.sin(ph), k, 0.9 + 0.3 * Math.sin(ph));
+      to(2, 0.1, 0.55 + amp * Math.sin(ph + Math.PI), k, 0.9 - 0.3 * Math.sin(ph));
     }
   }
 
-  /** Over the line (real seconds since it, act.finT): arms up in a V at once; then on a sled with a
-   *  deck it hops up to stand on it (from 0.8 s), and a round sled spins under its rider instead.
-   *  First place throws both fists up in turn and turns a full circle in the air; any other place
-   *  waves to the crowd on the lens's side with the other hand on its hip. Reduced motion stays seated
-   *  and still: arms up for first place, out wide for any other (standing, the stopped rider filled
-   *  the chase lens that reduced motion keeps through the results). */
+  /** Over the line (real seconds since it, act.finT): arms up in a V at once, then the place decides
+   *  (round 7: three celebrations, told apart at a glance).
+   *    A win: it hops up to stand on the deck (from 0.8 s), throws both fists up in turn, turns a full
+   *    circle in the air, and lands with both arms flung wide to the sky, bouncing.
+   *    The podium (second or third): it stands, punches one fist up twice and holds it high, then
+   *    waves to the crowd on the lens's side with the other hand on its hip.
+   *    Any other finish: it stays in its seat, leans back and stretches both arms over its head (made
+   *    it), then gives the lens a wave and a nod.
+   *  A round sled has no deck to stand on and spins under its rider instead (once and a half for a
+   *  win). Reduced motion stays seated and still: arms up for first place, out wide for any other
+   *  (standing, the stopped rider filled the chase lens that reduced motion keeps through the results). */
   private celebrate(p: RiderPose, calm: boolean): Celebration {
     const c = this.cel;
     const a = p.act;
-    c.stand = c.lift = c.yaw = c.look = c.sledSpin = c.k = 0;
-    const deck = calm ? undefined : STAND_DECK[this.sledId];
+    c.stand = c.lift = c.yaw = c.look = c.lean = c.sledSpin = c.k = 0;
+    c.champ = a?.rank === 1;
+    c.podium = a?.rank === 2 || a?.rank === 3;
+    // (Only a win or a podium stands up; anyone else keeps its seat.)
+    const deck = calm || !(c.champ || c.podium) ? undefined : STAND_DECK[this.sledId];
     c.deck = deck !== undefined;
     if (!a?.finish || this.finK < 0.01) {
       this.u.stand.value = 0;
@@ -1193,7 +1613,7 @@ export class Rider {
     const t = a.finT ?? 0;
     const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
     c.t = t;
-    c.champ = a.rank === 1;
+    const seated = !calm && !c.champ && !c.podium && STAND_DECK[this.sledId] !== undefined;
     if (deck !== undefined) {
       c.stand = smooth((t - 0.8) / 0.32);
       c.lift = (deck + 0.59 - this.seat.y) * c.stand + Math.sin(Math.PI * clamp01((t - 0.75) / 0.45)) * 0.2;
@@ -1202,17 +1622,22 @@ export class Rider {
         c.yaw = Math.PI * 2 * smooth(u);
         c.lift += Math.sin(Math.PI * u) * 0.3;
       }
+    } else if (seated) {
+      // Any other finish: back in its seat, a long stretch.
+      c.lean = 0.3 * smooth((t - 0.7) / 0.5) * (1 - 0.5 * smooth((t - 2.3) / 0.5));
     } else if (!calm) c.sledSpin = Math.PI * 2 * (c.champ ? 1.5 : 1) * smooth((t - 0.9) / (c.champ ? 1.5 : 2.2));
     this.u.stand.value = c.stand;
     c.k = smooth((t - 1.05) / 0.3);
-    if (c.deck && !c.champ && c.k > 0) {
+    if ((c.deck || seated) && !c.champ && c.k > 0) {
       if (this.waveSide === 0 && this.eye) {
         const h = p.heading + p.airYaw;
         this.waveSide = (this.eye.position.x - p.pos.x) * Math.cos(h) + (this.eye.position.z - p.pos.z) * Math.sin(h) >= 0 ? 1 : -1;
       }
       const s = this.waveSide || 1;
-      c.look = -s * 0.45 * c.k;
-      c.yaw += -s * 0.3 * c.k;
+      // (The podium turns to the crowd once its fist is down; a seated finish once it has stretched.)
+      const turn = c.k * smooth((t - (seated ? 2.3 : 2.1)) / 0.4);
+      c.look = -s * (seated ? 0.7 : 0.45) * turn;
+      c.yaw += -s * (seated ? 0.16 : 0.3) * turn;
     }
     return c;
   }
@@ -1222,22 +1647,45 @@ export class Rider {
     const k = c.k;
     if (k <= 0.001) return;
     const tau = Math.PI * 2;
-    const to = (i: number, x: number, o: number) => {
-      arm[i] += (x - arm[i]) * k;
-      arm[i + 1] += (o - arm[i + 1]) * k;
+    const bend = this.bends;
+    const to = (i: number, x: number, o: number, b: number, w = 1) => {
+      arm[i] += (x - arm[i]) * k * w;
+      arm[i + 1] += (o - arm[i + 1]) * k * w;
+      bend[i >> 1] += (b - bend[i >> 1]) * k * w;
+    };
+    const t = c.t;
+    const wv = this.waveSide > 0 ? 2 : 0;
+    // The wave to the lens's side: the forearm does the waving, the other hand on the hip.
+    const wave = (w: number) => {
+      to(wv, 0.12, 2.2 + Math.sin(t * tau * 1.7) * 0.2, 0.55 + 0.5 * Math.sin(t * tau * 1.7 + 0.8), w);
+      to(2 - wv, -0.4, 0.72, 1.45, w);
     };
     if (c.champ) {
       // (On a round sled first place keeps the V as it spins.)
       if (!c.deck) return;
-      to(0, 0.35, 2.35 + Math.max(0, Math.sin(c.t * tau * 2)) * 0.45);
-      to(2, 0.35, 2.35 + Math.max(0, Math.sin(c.t * tau * 2 + Math.PI)) * 0.45);
-    } else if (!c.deck) {
-      to(0, 0.15, 1.55);
-      to(2, 0.15, 1.55);
+      // Both fists up in turn; once the spin has landed, both arms flung wide to the sky.
+      const wide = smooth((t - 2.35) / 0.25);
+      to(0, 0.35, 2.35 + Math.max(0, Math.sin(t * tau * 2)) * 0.45, 0.45 - 0.35 * Math.max(0, Math.sin(t * tau * 2)), 1 - wide);
+      to(2, 0.35, 2.35 + Math.max(0, Math.sin(t * tau * 2 + Math.PI)) * 0.45, 0.45 - 0.35 * Math.max(0, Math.sin(t * tau * 2 + Math.PI)), 1 - wide);
+      to(0, 0.1, 2.05 + Math.sin(t * tau * 1.1) * 0.12, 0.12, wide);
+      to(2, 0.1, 2.05 + Math.sin(t * tau * 1.1) * 0.12, 0.12, wide);
+    } else if (c.podium && c.deck) {
+      // One fist punched up twice and held, then the wave.
+      const turn = smooth((t - 2.1) / 0.4);
+      const ph = (t - 1.05) * tau * 1.9;
+      to(2 - wv, 0.3, 2.7 + 0.18 * Math.sin(ph) * (1 - smooth((t - 1.7) / 0.3)), 0.5 - 0.4 * Math.max(Math.sin(ph), smooth((t - 1.7) / 0.3)), 1 - turn);
+      to(wv, -0.4, 0.72, 1.45, 1 - turn);
+      wave(turn);
+    } else if (!c.deck && STAND_DECK[this.sledId] === undefined) {
+      to(0, 0.15, 1.55, 0.3);
+      to(2, 0.15, 1.55, 0.3);
     } else {
-      const wv = this.waveSide > 0 ? 2 : 0;
-      to(wv, 0.12, 2.5 + Math.sin(c.t * tau * 1.7) * 0.38);
-      to(2 - wv, -0.45, 0.7);
+      // Seated: both arms stretched up and back over the head, then the wave.
+      const turn = smooth((t - 2.3) / 0.4);
+      to(0, -0.25, 2.85, 0.1, 1 - turn);
+      to(2, -0.25, 2.85, 0.1, 1 - turn);
+      to(wv, 0.12, 1.9 + Math.sin(t * tau * 1.7) * 0.18, 0.6 + 0.5 * Math.sin(t * tau * 1.7 + 0.8), turn);
+      to(2 - wv, 0.72, 0.3, ARM_REST_BEND, turn);
     }
   }
 
@@ -1327,6 +1775,35 @@ export class Rider {
     const speed = Math.hypot(p.vel.x, p.vel.z);
     const want = live ? smooth((speed - 4) / 18) * (p.airborne ? 1 : 0.8) : 0;
     this.u.hem.value += (want - this.u.hem.value) * Math.min(1, dt * 4);
+    // The soft parts (the hood on the back, a hat's tail, the toes of the boots): heavier and slower
+    // than the pom-pom (about 2.4 Hz, three swings to settle), kicked down by a landing, across by a
+    // change of bank and back by a burst of speed, and streaming back a little at speed. Reduced motion
+    // holds them still.
+    const sp = this.softP;
+    const sv = this.softV;
+    if (live && h > 0 && !reduced()) {
+      const dvy = Math.max(-14, Math.min(14, p.vel.y - this.softVy));
+      sv.y -= dvy * 0.1;
+      sv.x += Math.max(-0.5, Math.min(0.5, p.lean - this.softLean)) * 1.3;
+      sv.z += Math.max(-6, Math.min(6, speed - this.lastSpeed)) * 0.09;
+      const sub = Math.ceil(h * 240);
+      const s = h / sub;
+      for (let i = 0; i < sub; i++) {
+        sv.x += (-225 * sp.x - 8.5 * sv.x) * s;
+        sv.y += (-225 * sp.y - 8.5 * sv.y) * s;
+        sv.z += (-225 * sp.z - 8.5 * sv.z) * s;
+        sp.addScaledVector(sv, s);
+      }
+      sp.set(Math.max(-0.07, Math.min(0.07, sp.x)), Math.max(-0.07, Math.min(0.05, sp.y)), Math.max(-0.05, Math.min(0.08, sp.z)));
+      this.u.soft.value.set(sp.x, sp.y, sp.z + 0.035 * this.u.hem.value);
+    } else {
+      sp.set(0, 0, 0);
+      sv.set(0, 0, 0);
+      this.u.soft.value.multiplyScalar(Math.max(0, 1 - dt * 6));
+    }
+    this.softVy = p.vel.y;
+    this.softLean = p.lean;
+    this.lastSpeed = speed;
   }
 
   /** How warm a dusk the mood's sky is: a dark zenith over a warm horizon (Comet Night) lays an ember
@@ -1344,7 +1821,7 @@ export class Rider {
   private setColliders(e: ArrayLike<number>, hE: ArrayLike<number>): void {
     for (let i = 0; i < COLLIDERS.length; i++) {
       const [c] = COLLIDERS[i];
-      const m = i === 0 ? e : hE;
+      const m = i === 1 ? hE : e;
       const out = this.colliders[i][0];
       out.set(m[0] * c.x + m[4] * c.y + m[8] * c.z + m[12], m[1] * c.x + m[5] * c.y + m[9] * c.z + m[13], m[2] * c.x + m[6] * c.y + m[10] * c.z + m[14]);
     }
@@ -1461,7 +1938,7 @@ export class Rider {
         c.bodyPos.z = fromZ;
       }
       c.clearK = k;
-      const gy = visualGround(course, c.bodyPos.x, -c.bodyPos.z) + 0.1;
+      const gy = visualGround(course, c.bodyPos.x, -c.bodyPos.z) + 0.1 * RIDER_SCALE;
       c.bodyPos.y = c.restY + (gy - c.restY) * k;
       this.crashBody.position.copy(c.bodyPos);
       // The snow under the wreck, which the scarf's tails settle onto (hanging free behind the seated
@@ -1497,7 +1974,7 @@ export class Rider {
       // uphill end), so it still reads as a sled upside down beside the rider: laid flat on the bank's
       // face it read as standing on its side up the slope.
       const steep = Math.hypot(this.slopeG.x, this.slopeG.z);
-      spot.y = visualGround(course, spot.x, -spot.z) + 0.3 + 0.3 * Math.min(1, steep);
+      spot.y = visualGround(course, spot.x, -spot.z) + 0.4 + 0.3 * Math.min(1, steep);
       c.sledPos.lerpVectors(c.sledFrom, spot, k);
       c.sledVel.set(0, 0, 0);
       this.crashSled.position.copy(c.sledPos);
@@ -1505,8 +1982,8 @@ export class Rider {
       this.sledRestQ.setFromEuler(this.sledRestE.set(0.06, -(az + 0.5 + 0.85 * bank), Math.PI - 0.1)).premultiply(this.tmpQ);
       this.crashSled.quaternion.slerpQuaternions(c.sledQFrom, this.sledRestQ, k);
     } else {
-      step(c.bodyPos, c.bodyVel, this.crashBody, c.spin, 0.3);
-      step(c.sledPos, c.sledVel, this.crashSled, c.sledSpin, 0.12);
+      step(c.bodyPos, c.bodyVel, this.crashBody, c.spin, 0.3 * RIDER_SCALE);
+      step(c.sledPos, c.sledVel, this.crashSled, c.sledSpin, 0.12 * RIDER_SCALE);
     }
     this.placeStars(c.rest);
     return c.bodyPos;
@@ -1547,7 +2024,7 @@ export class Rider {
       this.crashNeck.localToWorld(s.position);
       s.quaternion.copy(this.eye!.quaternion);
       s.rotateZ(t * 2.5 + i * 1.3);
-      s.scale.setScalar(pop * (0.85 + 0.15 * Math.sin(t * 7 + i * 2.1)));
+      s.scale.setScalar(RIDER_SCALE * pop * (0.85 + 0.15 * Math.sin(t * 7 + i * 2.1)));
     }
   }
 
@@ -1626,7 +2103,7 @@ export class Rider {
     // holds a tail at a steady angle to the track whatever the speed (about 34 degrees for the
     // long tail, 19 for the short one).
     for (const t of this.tails) {
-      t.pts[0].copy(this.stepAnchor).addScaledVector(side, t.sign * this.flareSide * 0.04);
+      t.pts[0].copy(this.stepAnchor).addScaledVector(side, t.sign * this.flareSide * 0.04 * RIDER_SCALE);
       t.prev[0].copy(t.pts[0]);
       for (let i = 1; i < TAIL_N; i++) {
         const u = i / (TAIL_N - 1);

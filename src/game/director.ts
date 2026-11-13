@@ -14,7 +14,8 @@ import { figure, placeAtFinish } from './standing';
 import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, LEVEL_IN_M, PASS_GIFTS, SLING_TICKS, START_TICKS, callPick, classifyPass, ladderIndex, rivalPick, steadyNext } from './race';
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle } from './streak';
-import { CRASH_CURVE, TimeScale } from './timescale';
+import { planShots, type Shot } from './shots';
+import { APEX_CURVE, APEX_S, CRASH_CURVE, TimeScale } from './timescale';
 
 // The director: turns this frame's sim events, race events and sim state into Beats (named moments)
 // and continuous Feel, once per frame, before any consumer runs. The app hands the same beat list to
@@ -22,6 +23,36 @@ import { CRASH_CURVE, TimeScale } from './timescale';
 // the economy: the app credits their `gifts` into passBonus, never sim.score.
 //
 // Pure: no DOM, render or audio imports (types only).
+
+/** The slow hero frame: the shortest flight that gets one (seconds), where in the flight it starts, the
+ *  least it waits after the lip, how long before touchdown it must be over, and how far past the lip a
+ *  take-off still counts as that leap's (metres). */
+export const HERO_MIN_FLIGHT = 1.9;
+export const HERO_AT = 0.42;
+export const HERO_IN_MIN = 0.45;
+export const HERO_HOME = 0.5;
+const HERO_LIP_PAST = 14;
+
+/** Seconds until an airborne sled comes down, marched over the real ground as the landing ring does
+ *  (5 at most). Reads the sim and changes nothing in it. */
+export function flightSeconds(sim: Sim): number {
+  const s = sim.s;
+  if (s.grounded) return 0;
+  const g = sim.gravity;
+  const step = 1 / 60;
+  let x = s.x;
+  let y = s.y;
+  let z = s.z;
+  let vy = s.vy;
+  for (let t = step; t <= 5; t += step) {
+    vy -= g * step;
+    x += s.vx * step;
+    y += vy * step;
+    z += s.vz * step;
+    if (y <= sim.course.ground(x, z)) return t;
+  }
+  return 5;
+}
 //
 // Each frame, in order: the batch is pre-scanned (a landing's 'perfect' style comes before its land
 // event, a bank before its bump, a lost combo before its crash, a slingshot before the pass it
@@ -358,6 +389,13 @@ export class Director {
   private mqIn = -1;
   private mqLights = 0;
   private mqHits = 0;
+  /** The slow hero frame (shots.ts): the course its leap was planned for, the leap, the tick the frame
+   *  starts and the tick it ends (-1 none), and whether this run has had it. */
+  private shotCourse: unknown = null;
+  private heroLeap: Shot | null = null;
+  private apexTick = -1;
+  private apexOut = -1;
+  private apexDone = false;
   /** Hits so far this run: wards, wipeouts and bumps (a moment is clean with none inside it). */
   private hits = 0;
   /** Wards and wipeouts this run (a clean finish has none). */
@@ -505,6 +543,45 @@ export class Director {
     }
   }
 
+  /** The slow hero frame at the top of the biggest leap's flight (round 7). Leaving that lip, the flight is
+   *  marched over the real ground: one long enough gets the frame at about two fifths of the way, never
+   *  inside its last half second, so the landing is judged at full speed. Once a run. The beat goes out
+   *  under reduced motion too; only the slow motion is dropped. */
+  private heroFrameStep(sim: Sim, evs: readonly SimEvent[], motion: boolean): void {
+    if (this.shotCourse !== sim.course) {
+      this.shotCourse = sim.course;
+      // (A course with no leaps to read, as a test's stand-in, has no frame.)
+      this.heroLeap = Array.isArray(sim.course.leaps) ? (planShots(sim.course).find((q) => q.kind === 'wide') ?? null) : null;
+    }
+    const leap = this.heroLeap;
+    if (!leap) return;
+    const s = sim.s;
+    const up = !s.grounded && !s.crashed && s.tumble === 0 && !s.finished;
+    if (!this.apexDone && s.z >= leap.z0 && s.z <= leap.at + HERO_LIP_PAST) {
+      for (const e of evs) {
+        if (e.type !== 'takeoff') continue;
+        const flight = flightSeconds(sim);
+        if (flight < HERO_MIN_FLIGHT) break;
+        const inS = Math.max(HERO_IN_MIN, Math.min(flight * HERO_AT, flight - APEX_S - HERO_HOME));
+        this.apexDone = true;
+        this.apexTick = sim.tick + Math.round(inS * 60);
+        this.push({ type: 'heroFrame', tick: sim.tick, phase: 'lip', key: leap.key, inS, secs: APEX_S }, sim);
+        break;
+      }
+    }
+    if (this.apexTick >= 0 && (!up || sim.tick >= this.apexTick)) {
+      this.apexTick = -1;
+      if (up) {
+        if (motion) this.time.curve(APEX_CURVE, 'render');
+        this.apexOut = sim.tick + Math.round(APEX_S * 60);
+        this.push({ type: 'heroFrame', tick: sim.tick, phase: 'apex', key: leap.key, inS: 0, secs: APEX_S }, sim);
+      } else this.push({ type: 'heroFrame', tick: sim.tick, phase: 'out', key: leap.key, inS: 0, secs: 0 }, sim);
+    } else if (this.apexOut >= 0 && (!up || sim.tick >= this.apexOut)) {
+      this.apexOut = -1;
+      this.push({ type: 'heroFrame', tick: sim.tick, phase: 'out', key: leap.key, inS: 0, secs: 0 }, sim);
+    }
+  }
+
   beginRun(r: DirectorRun): void {
     this.run = r;
     this.log.length = 0;
@@ -557,6 +634,8 @@ export class Director {
     this.kmDone = 0;
     this.mqNext = 0;
     this.mqIn = -1;
+    this.apexTick = this.apexOut = -1;
+    this.apexDone = false;
     this.hits = 0;
     this.falls = 0;
     this.marqueeDone.length = 0;
@@ -1101,6 +1180,7 @@ export class Director {
         this.push({ type: 'friendBeaten', tick: sim.tick, name: fr.name, distance: fr.distance, say: { label: friendBeatenText(fr.name, standing), points: 0, tone: 'big' } }, sim);
       }
       this.marqueeStep(sim);
+      this.heroFrameStep(sim, evs, motion);
       const km = Math.floor(sim.distance / 1000);
       if (km > this.kmDone) {
         this.kmDone = km;

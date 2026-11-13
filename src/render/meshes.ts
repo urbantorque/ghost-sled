@@ -734,26 +734,59 @@ function grain(g: BufferGeometry, z0: number, z1: number): BufferGeometry {
   return g;
 }
 
-/** Sled: deck along -z (forward), runners curling up at the front. The slats carry their grain and
- *  the runners a pale steel shoe that catches the light along the snow. */
-export function sledGeometry(runner: Color = RIDER_COLORS.accent): BufferGeometry {
+/** Sled: deck along -z (forward). Round 7 gives it a shape of its own: five grained slats on two cross
+ *  pieces, runners that sweep up off the snow at the nose and scroll back over to a wooden foot bar (a
+ *  real curl, where the old one was an arch standing on the runner), a steel shoe that catches the light
+ *  along the snow, tails that flick up, and a low bow of bent wood behind the seat, which is the part of
+ *  it the chase lens sees. `lite` is Low's: fewer sides, no bow. */
+export function sledGeometry(runner: Color = RIDER_COLORS.accent, lite = false): BufferGeometry {
   const C = RIDER_COLORS;
   reseed(5150);
   const parts: BufferGeometry[] = [];
-  for (let i = 0; i < 4; i++) {
+  const slats = lite ? 3 : 5;
+  const span = 0.6;
+  const sw = span / slats - 0.016;
+  for (let i = 0; i < slats; i++) {
     const z = 0.05;
-    parts.push(grain(part(new BoxGeometry(0.14, 0.06, 1.25, 3, 1, 12), i % 2 ? C.woodDark : C.wood, { pos: [-0.24 + i * 0.16, 0.2, z] }), z - 0.625, z + 0.625));
+    const x = -span / 2 + (i + 0.5) * (span / slats);
+    parts.push(grain(part(new BoxGeometry(sw, 0.055, 1.28, lite ? 1 : 2, 1, lite ? 4 : 10), i % 2 ? C.woodDark : C.wood, { pos: [x, 0.2, z] }), z - 0.64, z + 0.64));
   }
-  parts.push(grain(part(new BoxGeometry(0.62, 0.05, 0.1, 6, 1, 1), C.woodDark, { pos: [0, 0.17, -0.42] }), -0.47, -0.37));
-  parts.push(grain(part(new BoxGeometry(0.62, 0.05, 0.1, 6, 1, 1), C.woodDark, { pos: [0, 0.17, 0.5] }), 0.45, 0.55));
-  for (const sx of [-0.28, 0.28]) {
-    parts.push(part(new BoxGeometry(0.05, 0.05, 1.5), runner, { pos: [sx, 0.03, 0.05] }));
-    parts.push(part(new BoxGeometry(0.036, 0.016, 1.46), STEEL, { pos: [sx, 0.0, 0.05] }));
-    parts.push(part(new TorusGeometry(0.16, 0.026, 5, 10, Math.PI), runner, { pos: [sx, 0.19, -0.7], rot: [0, Math.PI / 2, 0] }));
-    parts.push(part(new BoxGeometry(0.04, 0.16, 0.04), runner, { pos: [sx, 0.11, 0.35] }));
-    parts.push(part(new BoxGeometry(0.04, 0.16, 0.04), runner, { pos: [sx, 0.11, -0.3] }));
+  parts.push(grain(part(new BoxGeometry(0.64, 0.05, 0.1, lite ? 2 : 6, 1, 1), C.woodDark, { pos: [0, 0.165, -0.42] }), -0.47, -0.37));
+  parts.push(grain(part(new BoxGeometry(0.64, 0.05, 0.1, lite ? 2 : 6, 1, 1), C.woodDark, { pos: [0, 0.165, 0.5] }), 0.45, 0.55));
+  const sides = lite ? 5 : 7;
+  // The curl: up off the snow at the nose, forward, over the top and back down toward the deck, the
+  // scroll tightening and the tube thinning as it goes.
+  const curl: Vector3[] = [];
+  const steps = lite ? 5 : 8;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const a = -Math.PI / 2 + u * Math.PI * 1.42;
+    const r = 0.185 * (1 - 0.3 * u * u);
+    curl.push(new Vector3(0, 0.215 + r * Math.sin(a), -0.71 - r * Math.cos(a)));
   }
-  parts.push(part(new CylinderGeometry(0.025, 0.025, 0.78, 6), C.woodDark, { pos: [0, 0.26, -0.62], rot: [0, 0, Math.PI / 2] }));
+  for (const sx of [-0.3, 0.3]) {
+    parts.push(part(new BoxGeometry(0.052, 0.052, 1.46), runner, { pos: [sx, 0.03, 0.03] }));
+    parts.push(part(new BoxGeometry(0.036, 0.016, 1.44), STEEL, { pos: [sx, 0.0, 0.03] }));
+    for (let i = 0; i < steps; i++) {
+      const u = i / steps;
+      parts.push(capsule(curl[i].clone().setX(sx), curl[i + 1].clone().setX(sx), 0.03 - 0.008 * u, 0.03 - 0.008 * (u + 1 / steps), runner, sides));
+    }
+    // The tail flicks up off the snow.
+    parts.push(capsule(new Vector3(sx, 0.03, 0.74), new Vector3(sx, 0.1, 0.86), 0.028, 0.02, runner, sides));
+    for (const z of lite ? [0.4, -0.32] : [0.5, 0.08, -0.36]) parts.push(part(new BoxGeometry(0.04, 0.15, 0.045), runner, { pos: [sx, 0.105, z] }));
+  }
+  // The foot bar across the curls' tops.
+  const top = curl[Math.round(steps * 0.63)];
+  parts.push(part(new CylinderGeometry(0.027, 0.027, 0.7, lite ? 5 : 7), C.woodDark, { pos: [0, top.y, top.z], rot: [0, 0, Math.PI / 2] }));
+  if (!lite) {
+    // The bow behind the seat: a low arch of bent wood from one runner's stanchion to the other.
+    const bow: Vector3[] = [];
+    for (let i = 0; i <= 6; i++) {
+      const a = (i / 6) * Math.PI;
+      bow.push(new Vector3(-0.29 * Math.cos(a), 0.215 + 0.13 * Math.sin(a), 0.66 + 0.03 * Math.sin(a)));
+    }
+    for (let i = 0; i < 6; i++) parts.push(capsule(bow[i], bow[i + 1], 0.024, 0.024, i % 2 ? C.wood : C.woodDark, 6));
+  }
   return merge(parts);
 }
 
@@ -780,7 +813,7 @@ export function paintSled(geo: BufferGeometry, hex: string): BufferGeometry {
 }
 
 /** Each unlockable sled gets its own silhouette so an unlock is visible at a glance. */
-export function sledGeometryFor(id: number): BufferGeometry {
+export function sledGeometryFor(id: number, lite = false): BufferGeometry {
   const C = RIDER_COLORS;
   switch (id) {
     case 1: {
@@ -841,7 +874,7 @@ export function sledGeometryFor(id: number): BufferGeometry {
       ]);
     }
     default:
-      return sledGeometry();
+      return sledGeometry(RIDER_COLORS.accent, lite);
   }
 }
 
@@ -876,21 +909,55 @@ export function sledSeat(id: number): SledSeat {
 }
 
 
-/** Per-vertex secondary-motion weights, which rider.ts animates in its vertex shader: x is how much
- *  of the pom-pom's bounce a vertex takes, y how much of the coat hem's flutter. Every rider part
- *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry. A negative
- *  x marks the legs out in front (-1, a boot -2), which swing down about the hips when the rider
- *  stands up on its sled over the finish line. */
-type SwayFn = (x: number, y: number, z: number) => [number, number];
-function sway(g: BufferGeometry, w: SwayFn | [number, number] = [0, 0]): BufferGeometry {
+/** How much bigger the hero and every ghost are drawn than the 1.25 m toy they were modelled as (round
+ *  7: the rider is in every frame, and was a tenth of its height). Presentation only: the sim's sled is
+ *  a 0.55 m disc whatever is drawn. rider.ts and ghosts.ts scale their rigs by it. */
+export const RIDER_SCALE = 1.2;
+
+/** The seated rider as drawn, sled base to the top of the pom-pom, and half its width with the arms at
+ *  rest (metres): what the playtest probes measure it by. */
+export const RIDER_HEIGHT = 1.3 * RIDER_SCALE;
+export const RIDER_HALF_WIDTH = 0.55 * RIDER_SCALE;
+
+/** How much of the hero is built: the whole figure, or Low's cheaper one (fewer sides to every round
+ *  part and none of the small trim that only a close lens resolves). */
+export type RiderDetail = 'full' | 'lite';
+
+/** Per-vertex secondary-motion weights, which rider.ts animates in its vertex shader. Every rider part
+ *  carries the attribute (zero on rigid parts), so the parts still merge into one geometry.
+ *    x  how much of the pom-pom's bounce a vertex takes; -1 marks the legs out in front, which swing
+ *       down about the hips when the rider stands up on its sled over the finish line
+ *    y  how much of the coat hem's flutter
+ *    z  how soft it is: how much of the body's own lag it takes (the hood on the back, a hat's tail,
+ *       the boots' toes), so what hangs off the rider arrives late and settles
+ *    w  an arm's joints: 1 below the elbow (the forearm bends about it), 2 the mitt (which also flops
+ *       at the wrist) */
+type SwayW = [number, number] | [number, number, number] | [number, number, number, number];
+type SwayFn = (x: number, y: number, z: number) => SwayW;
+function sway(g: BufferGeometry, w: SwayFn | SwayW = [0, 0]): BufferGeometry {
   const p = g.getAttribute('position');
-  const a = new Float32Array(p.count * 2);
+  const a = new Float32Array(p.count * 4);
   for (let i = 0; i < p.count; i++) {
     const v = typeof w === 'function' ? w(p.getX(i), p.getY(i), p.getZ(i)) : w;
-    a[i * 2] = v[0];
-    a[i * 2 + 1] = v[1];
+    a[i * 4] = v[0];
+    a[i * 4 + 1] = v[1];
+    a[i * 4 + 2] = v[2] ?? 0;
+    a[i * 4 + 3] = v[3] ?? 0;
   }
-  g.setAttribute('aSway', new BufferAttribute(a, 2));
+  g.setAttribute('aSway', new BufferAttribute(a, 4));
+  return g;
+}
+
+/** Mutates a part's positions and refreshes its flat normals: a lathed form pushed out of round (the
+ *  coat's shoulders, its tail). */
+function reshape(g: BufferGeometry, f: (x: number, y: number, z: number, out: [number, number, number]) => void): BufferGeometry {
+  const p = g.getAttribute('position') as BufferAttribute;
+  const o: [number, number, number] = [0, 0, 0];
+  for (let i = 0; i < p.count; i++) {
+    f(p.getX(i), p.getY(i), p.getZ(i), o);
+    p.setXYZ(i, o[0], o[1], o[2]);
+  }
+  g.computeVertexNormals();
   return g;
 }
 
@@ -969,7 +1036,7 @@ function ribs(g: BufferGeometry, count: number, k: number): BufferGeometry {
 export const RIDER_NECK = new Vector3(0, 0.64, 0);
 
 /** The pom-pom's centre (body pivot space, before the neck turns it): rider.ts bounces it. */
-export const RIDER_POM = new Vector3(0, 1.225, 0.02);
+export const RIDER_POM = new Vector3(0, 1.235, 0.02);
 
 /** The head in body pivot space: a toy face (two dark oval eyes with a catchlight and a soft blush on
  *  each cheek) under a beanie pulled low, the goggles pushed up onto its front, ear flaps and hair at
@@ -978,11 +1045,11 @@ export const RIDER_POM = new Vector3(0, 1.225, 0.02);
  *  and a bob of hair that flares a little and rolls under above the scarf (one smooth dark mass read
  *  as a helmet). A ghost wears only the silhouette (head, beanie and pom-pom): thin straps and lenses
  *  inside the glass drew their own rims and read as dotted seams. */
-export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferGeometry {
+export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie', lite = false): BufferGeometry {
   reseed(4242);
   const C = RIDER_COLORS;
   if (ghost) {
-    const pom = sway(part(new IcosahedronGeometry(0.1, 1), C.pom, { pos: [RIDER_POM.x, RIDER_POM.y, RIDER_POM.z], jitter: 0.03 }), [1, 0]);
+    const pom = sway(part(new IcosahedronGeometry(0.115, 1), C.pom, { pos: [RIDER_POM.x, RIDER_POM.y, RIDER_POM.z], jitter: 0.03 }), [1, 0]);
     return mergeRider([
       part(new SphereGeometry(0.24, 12, 9), C.skin, { pos: [0, 0.86, 0] }),
       // The beanie, pulled down to just above the eyes.
@@ -993,9 +1060,9 @@ export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferG
   const eye = new Color('#1B1E36');
   const blush = new Color('#FF8E9E');
   const parts: BufferGeometry[] = [
-    part(new SphereGeometry(0.24, 12, 9), C.skin, { pos: [0, 0.86, 0] }),
+    part(new SphereGeometry(0.24, lite ? 10 : 14, lite ? 7 : 10), C.skin, { pos: [0, 0.86, 0] }),
     // Hair round the back and sides under the cuff: a bob that flares a little past the skull...
-    smoothPart(new SphereGeometry(0.249, 18, 8, -0.25, Math.PI + 0.5, 1.3, 1.15), C.hair, { pos: [0, 0.86, 0.004], scale: [1.05, 1, 1.08] }),
+    smoothPart(new SphereGeometry(0.249, lite ? 10 : 18, lite ? 5 : 8, -0.25, Math.PI + 0.5, 1.3, 1.15), C.hair, { pos: [0, 0.86, 0.004], scale: [1.05, 1, 1.08] }),
   ];
   // ...ending in a scalloped fringe of overlapping locks across the nape just above the scarf: from
   // behind the hair reads as a cut, not as a dark hole under the beanie (two tufts read as a pair of
@@ -1003,7 +1070,7 @@ export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferG
   for (const [a, s] of [[-0.95, 0.85], [-0.48, 1], [0, 1.08], [0.48, 1], [0.95, 0.85]] as const) {
     const r = 0.212;
     parts.push(
-      smoothPart(new SphereGeometry(0.056 * s, 8, 6), C.hair, {
+      smoothPart(new SphereGeometry(0.056 * s, lite ? 6 : 8, lite ? 4 : 6), C.hair, {
         pos: [Math.sin(a) * r * 1.05, 0.725 - 0.012 * Math.abs(a), Math.cos(a) * r * 1.08 - 0.01],
         rot: [0.35, a, 0],
         scale: [1.45, 1.25, 0.6],
@@ -1011,14 +1078,27 @@ export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferG
     );
   }
   for (const sx of [-1, 1]) {
+    // Oval eyes just under the cuff, flattened onto the face.
+    parts.push(part(new SphereGeometry(0.04, lite ? 6 : 9, lite ? 4 : 7), eye, { pos: [sx * 0.08, 0.82, -0.211], rot: [0, -sx * 0.34, 0], scale: [0.8, 1.18, 0.5] }));
+    if (lite) continue;
     parts.push(
-      // Oval eyes just under the cuff, flattened onto the face, with a catchlight high and outside.
-      part(new SphereGeometry(0.036, 8, 6), eye, { pos: [sx * 0.078, 0.822, -0.212], rot: [0, -sx * 0.34, 0], scale: [0.78, 1.15, 0.5] }),
-      part(new SphereGeometry(0.011, 5, 4), C.pom, { pos: [sx * 0.088, 0.836, -0.228] }),
-      part(new SphereGeometry(0.042, 8, 6), blush, { pos: [sx * 0.138, 0.772, -0.168], rot: [0, -sx * 0.68, 0], scale: [1.25, 0.72, 0.32] }),
+      // A catchlight high and outside and a smaller one low and inside, a soft blush on each cheek, and
+      // a lock of the fringe showing under the cuff: the close lenses (the title, the garage, the
+      // finish) get a face that looks back at them.
+      part(new SphereGeometry(0.012, 5, 4), C.pom, { pos: [sx * 0.091, 0.836, -0.229] }),
+      part(new SphereGeometry(0.006, 4, 3), C.pom, { pos: [sx * 0.072, 0.808, -0.232] }),
+      part(new SphereGeometry(0.042, 8, 6), blush, { pos: [sx * 0.14, 0.77, -0.168], rot: [0, -sx * 0.68, 0], scale: [1.25, 0.72, 0.32] }),
+      smoothPart(new SphereGeometry(0.05, 7, 5), C.hair, { pos: [sx * 0.07, 0.868, -0.2], rot: [0.5, -sx * 0.3, sx * 0.5], scale: [1.5, 0.6, 0.5] }),
     );
   }
-  parts.push(...playerHat(hat));
+  if (!lite) {
+    parts.push(
+      // A button nose and a small, pleased mouth: an arc turned up at its corners, a shade under the blush.
+      part(new SphereGeometry(0.025, 7, 5), shade(C.skin, 0.93), { pos: [0, 0.797, -0.238], scale: [1, 0.85, 0.7] }),
+      part(new TorusGeometry(0.032, 0.007, 4, 8, Math.PI * 0.62), new Color('#B4524E'), { pos: [0, 0.782, -0.219], rot: [0.2, 0, Math.PI * 1.19] }),
+    );
+  }
+  parts.push(...playerHat(hat, lite));
   return mergeRider(parts);
 }
 
@@ -1030,28 +1110,28 @@ export function riderHeadGeometry(ghost = false, hat: HatId = 'beanie'): BufferG
  * pointed chullo with braided ties, and a long stocking cap that streams out behind. None is any signature
  * rider's hat (meshes.ts ghostHatHead), and the goggles stay pushed up on the front of every one.
  */
-function playerHat(hat: HatId): BufferGeometry[] {
+function playerHat(hat: HatId, lite = false): BufferGeometry[] {
   const C = RIDER_COLORS;
   const cuff = shade(C.accent, 0.8);
   const out: BufferGeometry[] = [];
-  const dome = (sy = 1.12) => part(new SphereGeometry(0.25, 14, 6, 0, Math.PI * 2, 0, Math.PI / 2), C.accent, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
-  const ribbed = (r0: number, r1: number, h: number, y: number) => ribs(part(new CylinderGeometry(r0, r1, h, 24, 1, true), cuff, { pos: [0, y, 0.01] }), 24, 0.84);
-  const stripe = (sy = 1.12) => part(new SphereGeometry(0.256, 14, 1, 0, Math.PI * 2, 0.85, 0.16), C.pom, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
+  const dome = (sy = 1.12) => part(new SphereGeometry(0.25, lite ? 10 : 14, lite ? 4 : 6, 0, Math.PI * 2, 0, Math.PI / 2), C.accent, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
+  const ribbed = (r0: number, r1: number, h: number, y: number) => ribs(part(new CylinderGeometry(r0, r1, h, lite ? 12 : 24, 1, true), cuff, { pos: [0, y, 0.01] }), lite ? 12 : 24, 0.84);
+  const stripe = (sy = 1.12) => part(new SphereGeometry(0.256, lite ? 10 : 14, 1, 0, Math.PI * 2, 0.85, 0.16), C.pom, { pos: [0, 0.915, 0.01], scale: [1.04, sy, 1.04] });
   const seam = (sy = 1.12) => part(new TorusGeometry(0.26, 0.009, 3, 8, Math.PI / 2), shade(C.accent, 0.7), { pos: [0, 0.915, 0.01], rot: [0, -Math.PI / 2, 0], scale: [1.04, sy, 1.04] });
   const flaps = (scale: [number, number, number] = [0.5, 1.5, 0.98], y = 0.775) => {
-    for (const sx of [-1, 1]) out.push(part(new SphereGeometry(0.085, 9, 6), cuff, { pos: [sx * 0.238, y, 0.035], rot: [0, 0, sx * 0.1], scale }));
+    for (const sx of [-1, 1]) out.push(part(new SphereGeometry(0.085, lite ? 6 : 9, lite ? 4 : 6), cuff, { pos: [sx * 0.238, y, 0.035], rot: [0, 0, sx * 0.1], scale }));
   };
-  const pom = (x: number, y: number, z: number, r: number, w = 1) => sway(part(new IcosahedronGeometry(r, 1), C.pom, { pos: [x, y, z], jitter: 0.3 * r }), [w, 0]);
+  const pom = (x: number, y: number, z: number, r: number, w = 1) => sway(part(new IcosahedronGeometry(r, lite ? 0 : 1), C.pom, { pos: [x, y, z], jitter: 0.3 * r }), [w, 0]);
   const goggles = (y = 1.005, z = -0.232) => {
     for (const sx of [-1, 1]) {
       out.push(
-        part(new SphereGeometry(0.06, 10, 7), C.lens, { pos: [sx * 0.086, y, z], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 0.42] }),
-        part(new TorusGeometry(0.06, 0.017, 5, 14), C.goggles, { pos: [sx * 0.086, y, z + 0.003], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 1] }),
+        part(new SphereGeometry(0.06, lite ? 6 : 10, lite ? 4 : 7), C.lens, { pos: [sx * 0.086, y, z], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 0.42] }),
+        part(new TorusGeometry(0.06, 0.017, lite ? 3 : 5, lite ? 8 : 14), C.goggles, { pos: [sx * 0.086, y, z + 0.003], rot: [0.28, -sx * 0.36, 0], scale: [1.12, 0.86, 1] }),
       );
     }
     out.push(part(new BoxGeometry(0.06, 0.03, 0.04), C.goggles, { pos: [0, y - 0.005, z - 0.013], rot: [0.28, 0, 0] }));
   };
-  const strap = (r = 0.247, y = 1.0) => part(new TorusGeometry(r, 0.019, 4, 18), C.strap, { pos: [0, y, 0.01], rot: [Math.PI / 2 + 0.06, 0, 0] });
+  const strap = (r = 0.247, y = 1.0) => part(new TorusGeometry(r, 0.019, lite ? 3 : 4, lite ? 10 : 18), C.strap, { pos: [0, y, 0.01], rot: [Math.PI / 2 + 0.06, 0, 0] });
   switch (hat) {
     case 'watch':
       // Short and snug: a lower crown and a thick rolled cuff, no pom-pom.
@@ -1146,7 +1226,7 @@ function playerHat(hat: HatId): BufferGeometry[] {
       // goggle strap (from behind it reads as a knitted hat rather than a red dome), the seam up the back
       // of the crown to the pom-pom, and ear flaps hanging from the cuff over the ears down to the scarf
       // (from behind they square the head off and frame the hair).
-      out.push(dome(), pom(RIDER_POM.x, RIDER_POM.y, RIDER_POM.z, 0.1));
+      out.push(dome(), pom(RIDER_POM.x, RIDER_POM.y, RIDER_POM.z, 0.115));
       out.push(ribbed(0.268, 0.274, 0.095, 0.905));
       out.push(part(new TorusGeometry(0.27, 0.018, 4, 18), shade(C.accent, 0.9), { pos: [0, 0.952, 0.01], rot: [Math.PI / 2, 0, 0] }));
       out.push(stripe(), seam());
@@ -1161,59 +1241,115 @@ function playerHat(hat: HatId): BufferGeometry[] {
   return out;
 }
 
-/** The coat: one rounded form, a padded hem flaring over the hips, nipped in at the waist, full at
- *  the chest, with a cobalt yoke rounding over the shoulders to the collar (a second tone: an
- *  untapered navy cylinder read as a box). Slightly deeper across than front to back. The hem's
- *  vertices carry the flutter weight (aSway.y). */
-function coatGeometry(): BufferGeometry {
+/** The coat's lathe: (radius, height) up the body, then the yoke over the shoulders to the collar. */
+const COAT: Array<[number, number]> = [
+  [0, 0.0],
+  [0.2, 0.004],
+  [0.262, 0.03],
+  [0.288, 0.078],
+  [0.272, 0.14],
+  [0.226, 0.215],
+  [0.216, 0.3],
+  [0.24, 0.4],
+  [0.262, 0.49],
+];
+const YOKE: Array<[number, number]> = [
+  [0.262, 0.49],
+  [0.262, 0.55],
+  [0.24, 0.605],
+  [0.182, 0.648],
+  [0.095, 0.672],
+  [0, 0.68],
+];
+/** The coat is a little deeper across than front to back, and sits a touch behind the hips. */
+const COAT_DEEP = 0.9;
+const COAT_Z = 0.02;
+
+/** Where an arm hangs from (body pivot space, the right one; the left mirrors it): out on the broad
+ *  shoulder, so the arms frame the back instead of hanging down its sides. */
+export const RIDER_SHOULDER = new Vector3(0.295, 0.56, 0);
+
+/** The coat off the lathe: the shoulders pushed out broader than the chest (a wedge from behind, where
+ *  the round coat was a bottle), and the hem's back swept out into a short tail over the seat. */
+function coatShape(x: number, y: number, z: number, out: [number, number, number]): void {
+  const sh = smooth01((y - 0.34) / 0.18) * (1 - smooth01((y - 0.6) / 0.09));
+  const tail = (1 - smooth01((y - 0.02) / 0.2)) * smooth01((z - COAT_Z) / 0.2);
+  out[0] = x * (1 + 0.17 * sh);
+  out[1] = y;
+  out[2] = COAT_Z + (z - COAT_Z) * (1 + 0.2 * tail);
+}
+
+/** A point on the coat's surface at a height and a bearing round it (0 the back, PI the front), `lift`
+ *  metres proud of it: where the trim is sewn on. */
+function onCoat(y: number, a: number, lift = 0): Vector3 {
+  const prof = y <= 0.49 ? COAT : YOKE;
+  let r = prof[prof.length - 1][0];
+  for (let i = 1; i < prof.length; i++) {
+    if (y <= prof[i][1]) {
+      const [r0, y0] = prof[i - 1];
+      const [r1, y1] = prof[i];
+      r = r0 + ((r1 - r0) * (y - y0)) / Math.max(1e-6, y1 - y0);
+      break;
+    }
+  }
+  const o: [number, number, number] = [0, 0, 0];
+  coatShape(Math.sin(a) * (r + lift), y, COAT_Z + Math.cos(a) * (r + lift) * COAT_DEEP, o);
+  return new Vector3(o[0], o[1], o[2]);
+}
+
+/** The coat (round 7): a parka with a shape. A padded hem flaring over the hips with a short tail at
+ *  the back, nipped in at the waist, full at the chest and broad across the shoulders under a cobalt
+ *  yoke; a hood lying on the back under the scarf's knot, its fur edge a cream horseshoe (the chase lens
+ *  only ever sees the back, so the back carries the coat's one big shape); and, for the lenses that
+ *  come round to the front, a zip with three wooden toggles, two pocket flaps and a belt. The hem's
+ *  vertices carry the flutter weight (aSway.y) and the hood the body's lag (aSway.z). A ghost wears the
+ *  form alone: thin trim inside the glass drew its own rims. */
+function coatGeometry(ghost: boolean, lite: boolean): BufferGeometry {
   const C = RIDER_COLORS;
+  const segs = lite ? 10 : 16;
   const hem: SwayFn = (_x, y) => [0, 1 - smooth01((y - 0.05) / 0.16)];
-  return merge([
-    sway(
-      lathe(
-        [
-          [0, 0.0],
-          [0.2, 0.006],
-          [0.252, 0.035],
-          [0.268, 0.085],
-          [0.25, 0.15],
-          [0.212, 0.225],
-          [0.214, 0.31],
-          [0.238, 0.41],
-          [0.252, 0.5],
-        ],
-        14,
-        C.coat,
-        { pos: [0, 0, 0.02], scale: [1, 1, 0.9] },
-      ),
-      hem,
-    ),
-    sway(
-      lathe(
-        [
-          [0.252, 0.5],
-          [0.248, 0.56],
-          [0.222, 0.615],
-          [0.17, 0.652],
-          [0.09, 0.675],
-          [0, 0.68],
-        ],
-        14,
-        C.yoke,
-        { pos: [0, 0, 0.02], scale: [1, 1, 0.9] },
-      ),
-    ),
-    // A puffer's quilting: two stitched seams round the body above the hem, a seam up the middle of
-    // the back and a small cream maker's tag between the shoulder blades, so from the chase lens
-    // the back reads as a padded coat rather than a moulded navy shell.
-    ...[
-      [0.31, 0.216],
-      [0.41, 0.24],
-    ].map(([y, r]) => sway(part(new TorusGeometry(r, 0.008, 3, 20), shade(C.coat, 0.72), { pos: [0, y, 0.02], rot: [Math.PI / 2, 0, 0], scale: [1, 0.9, 1] }))),
-    sway(part(new BoxGeometry(0.014, 0.27, 0.012), shade(C.coat, 0.72), { pos: [0, 0.36, 0.232], rot: [0.13, 0, 0] })),
-    sway(part(new BoxGeometry(0.075, 0.045, 0.012), new Color('#F2E6D2'), { pos: [0, 0.465, 0.249], rot: [0.16, 0, 0] })),
-    sway(part(new BoxGeometry(0.03, 0.022, 0.006), C.accent, { pos: [0, 0.466, 0.256], rot: [0.16, 0, 0] })),
-  ]);
+  const lathed = (prof: Array<[number, number]>, col: Color) => reshape(lathe(prof, segs, col, { pos: [0, 0, COAT_Z], scale: [1, 1, COAT_DEEP] }), coatShape);
+  const parts: BufferGeometry[] = [sway(lathed(COAT, C.coat), hem), sway(lathed(YOKE, C.yoke))];
+  // The hood: a soft bundle between the shoulder blades.
+  const soft: SwayW = [0, 0, 0.6];
+  parts.push(sway(part(new SphereGeometry(0.13, lite ? 8 : 12, lite ? 5 : 8), C.yoke, { pos: [0, 0.47, 0.25], scale: [1.2, 1.1, 0.52] }), soft));
+  if (ghost) return merge(parts.map(withSway));
+  // Its fur edge, hanging in a horseshoe from shoulder to shoulder.
+  reseed(2718);
+  parts.push(sway(part(new TorusGeometry(0.145, 0.036, lite ? 4 : 6, lite ? 8 : 14, Math.PI * 1.2), C.pom, { pos: [0, 0.53, 0.292], rot: [-0.14, 0, Math.PI * 0.9], scale: [1.08, 1.2, 0.8], jitter: lite ? 0 : 0.016 }), soft));
+  if (lite) return merge(parts.map(withSway));
+  const seam = shade(C.coat, 0.72);
+  // A puffer's quilting: two stitched seams round the body above the hem.
+  for (const y of [0.3, 0.4]) {
+    const ring: Vector3[] = [];
+    for (let i = 0; i <= 16; i++) ring.push(onCoat(y, (i / 16) * Math.PI * 2, 0.002));
+    for (let i = 0; i < 16; i++) parts.push(part(new BoxGeometry(0.012, 0.012, ring[i].distanceTo(ring[i + 1]) + 0.004), seam, { pos: ring[i].clone().lerp(ring[i + 1], 0.5).toArray() as [number, number, number], rot: [0, Math.atan2(ring[i + 1].x - ring[i].x, ring[i + 1].z - ring[i].z), 0] }));
+  }
+  // The belt, a shade lighter, with its buckle at the front.
+  const belt: Vector3[] = [];
+  for (let i = 0; i <= 16; i++) belt.push(onCoat(0.222, (i / 16) * Math.PI * 2, 0.004));
+  for (let i = 0; i < 16; i++) parts.push(part(new BoxGeometry(0.014, 0.04, belt[i].distanceTo(belt[i + 1]) + 0.006), C.strap, { pos: belt[i].clone().lerp(belt[i + 1], 0.5).toArray() as [number, number, number], rot: [0, Math.atan2(belt[i + 1].x - belt[i].x, belt[i + 1].z - belt[i].z), 0] }));
+  const buckle = onCoat(0.222, Math.PI, 0.012);
+  parts.push(part(new BoxGeometry(0.06, 0.05, 0.014), STEEL, { pos: [buckle.x, buckle.y, buckle.z] }));
+  // The zip up the front, and three wooden toggles across it.
+  for (let i = 0; i < 7; i++) {
+    const y = 0.07 + i * 0.07;
+    const p = onCoat(y, Math.PI, 0.004);
+    const q = onCoat(y + 0.07, Math.PI, 0.004);
+    if (Math.abs(y + 0.035 - 0.222) < 0.03) continue;
+    parts.push(part(new BoxGeometry(0.02, 0.074, 0.01), STEEL, { pos: [0, (p.y + q.y) / 2, (p.z + q.z) / 2], rot: [Math.atan2(q.z - p.z, q.y - p.y), 0, 0] }));
+  }
+  for (const y of [0.14, 0.33, 0.46]) {
+    const p = onCoat(y, Math.PI, 0.016);
+    parts.push(capsule(new Vector3(-0.04, p.y, p.z), new Vector3(0.04, p.y, p.z), 0.014, 0.014, C.wood, 5));
+  }
+  // A pocket flap on each hip.
+  for (const sx of [-1, 1]) {
+    const a = Math.PI - sx * 0.62;
+    const p = onCoat(0.125, a, 0.006);
+    parts.push(part(new BoxGeometry(0.11, 0.05, 0.014), C.yoke, { pos: [p.x, p.y, p.z], rot: [0, a, 0] }));
+  }
+  return merge(parts.map(withSway));
 }
 
 function smooth01(x: number): number {
@@ -1221,21 +1357,21 @@ function smooth01(x: number): number {
   return k * k * (3 - 2 * k);
 }
 
-/** A rounded boot from the ankle, its toe out along `toe`: a soft, flat-soled capsule. */
-function boot(ankle: Vector3, toe: Vector3): BufferGeometry {
-  return capsule(ankle, toe, 0.078, 0.07, RIDER_COLORS.goggles, 9, 0.8);
+/** A boot in line with the shin (the cross-legged rider's): a soft, flat-soled capsule from the ankle. */
+function boot(ankle: Vector3, toe: Vector3, sides: number): BufferGeometry {
+  return capsule(ankle, toe, 0.09, 0.08, RIDER_COLORS.goggles, sides, 0.8);
 }
 
 /** Torso, scarf wrap and legs (no head), pivot at the hips: seated with the legs out along -z, or
  *  cross-legged (thighs out to knees past the hips, shins crossed in front, a seat under the coat).
- *  A ghost leaves out the scarf wrap and its knot. */
-export function riderTorsoGeometry(crossLegged = false, ghost = false): BufferGeometry {
+ *  A ghost leaves out the scarf wrap and its knot, and the coat's trim. `lite` is Low's build. */
+export function riderTorsoGeometry(crossLegged = false, ghost = false, lite = false): BufferGeometry {
   const C = RIDER_COLORS;
-  const parts = [...riderLegs(crossLegged), coatGeometry()];
+  const parts = [...riderLegs(crossLegged, ghost, lite), coatGeometry(ghost, lite)];
   if (!ghost) {
     parts.push(
       // scarf wrap, dipping to the knot at the back (the two tails are simulated in rider.ts)
-      part(new TorusGeometry(0.19, 0.07, 6, 14), C.accent, { pos: [0, 0.655, 0.02], rot: [Math.PI / 2 + 0.18, 0, 0] }),
+      part(new TorusGeometry(0.19, 0.07, lite ? 5 : 6, lite ? 10 : 14), C.accent, { pos: [0, 0.655, 0.02], rot: [Math.PI / 2 + 0.18, 0, 0] }),
       part(new IcosahedronGeometry(0.085, 0), shade(C.accent, 0.88), { pos: [SCARF_KNOT.x, SCARF_KNOT.y, SCARF_KNOT.z - 0.015], scale: [1.2, 0.9, 0.85] }),
     );
   }
@@ -1245,44 +1381,70 @@ export function riderTorsoGeometry(crossLegged = false, ghost = false): BufferGe
 /** A ghost's legs alone, seated on its sled as ghostRiderGeometry seats the body (sled space): the
  *  ghost's glass sled mesh carries them as a faint lap, so the dissolving body still sits on its sled. */
 export function ghostLegsGeometry(seat: SledSeat = SEAT_SIT): BufferGeometry {
-  const g = mergeRider(riderLegs(seat.crossLegged));
+  const g = mergeRider(riderLegs(seat.crossLegged, true, true));
   g.rotateX(-0.15 - seat.lean);
   g.translate(0, seat.y, seat.z);
   return g;
 }
 
-function riderLegs(crossLegged: boolean): BufferGeometry[] {
+function riderLegs(crossLegged: boolean, ghost: boolean, lite: boolean): BufferGeometry[] {
   const C = RIDER_COLORS;
   const legs: BufferGeometry[] = [];
+  const sides = lite ? 6 : 9;
+  const fur = (at: Vector3, axis: Vector3, w: SwayW): BufferGeometry => {
+    const e = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 0, 1), axis.clone().normalize()));
+    return sway(part(new TorusGeometry(0.088, 0.03, lite ? 4 : 5, lite ? 7 : 10), C.pom, { pos: [at.x, at.y, at.z], rot: [e.x, e.y, e.z], jitter: lite ? 0 : 0.012 }), w);
+  };
   if (crossLegged) {
     // The hips carry the coat's line down to the disc, so the knees read as their own lumps.
-    const cross: BufferGeometry[] = [lathe([[0, -0.15], [0.2, -0.14], [0.255, -0.08], [0.25, 0.0], [0.2, 0.05], [0, 0.06]], 12, C.pants, { pos: [0, 0, 0.03] })];
+    const cross: BufferGeometry[] = [lathe([[0, -0.15], [0.2, -0.14], [0.255, -0.08], [0.25, 0.0], [0.2, 0.05], [0, 0.06]], lite ? 8 : 12, C.pants, { pos: [0, 0, 0.03] })];
     for (const sx of [-1, 1]) {
       const knee = new Vector3(sx * 0.42, -0.07, -0.18);
       // The shins cross in front, one a touch above the other.
       const ankle = new Vector3(-sx * 0.15, sx > 0 ? -0.09 : -0.12, -0.38);
       cross.push(
-        capsule(new Vector3(sx * 0.1, -0.03, 0.02), knee, 0.118, 0.104, C.pants),
-        capsule(knee, ankle, 0.1, 0.082, C.pants),
-        boot(ankle.clone().add(new Vector3(-sx * 0.02, 0, 0)), ankle.clone().add(new Vector3(-sx * 0.1, 0, -0.08))),
+        capsule(new Vector3(sx * 0.1, -0.03, 0.02), knee, 0.122, 0.108, C.pants, sides),
+        capsule(knee, ankle, 0.104, 0.088, C.pants, sides),
+        boot(ankle.clone().add(new Vector3(-sx * 0.02, 0, 0)), ankle.clone().add(new Vector3(-sx * 0.12, 0, -0.09)), sides),
       );
+      if (!ghost) cross.push(fur(ankle, ankle.clone().sub(knee), [0, 0]));
     }
     // Modelled flat on the disc, then tipped back by the seat's lean, which the pose tips forward.
     const g = mergeRider(cross);
     g.rotateX(0.15 + CROSS_LEAN);
     legs.push(g);
   } else {
-    // Thighs taper to a raised, rounded knee and the shins to the ankle, into soft boots.
+    // Thighs taper to a raised, rounded knee and the shins to the ankle, into boots a toy's size: the
+    // shaft runs on from the shin and the foot turns up from it, toes to the sky and soles to the way it
+    // is going (in line with the shin, as they were, the feet read as two stumps). Standing up on the
+    // deck over the line, the whole leg swings down about the hip (aSway.x -1) and the feet come flat.
     for (const sx of [-1, 1]) {
       const hip = new Vector3(sx * 0.12, 0.05, -0.02);
-      const knee = new Vector3(sx * 0.125, 0.12, -0.34);
-      const ankle = new Vector3(sx * 0.125, 0.04, -0.58);
-      // (Weighted for rider.ts's stand: the leg swings down about the hip, the boot keeps its sole flat.)
+      const knee = new Vector3(sx * 0.13, 0.125, -0.34);
+      const ankle = new Vector3(sx * 0.13, 0.045, -0.58);
+      const heel = new Vector3(ankle.x, ankle.y - 0.03, ankle.z - 0.075);
+      const toe = new Vector3(ankle.x, ankle.y + 0.135, ankle.z - 0.105);
+      const leg: SwayW = [-1, 0];
+      // (The toes carry a little of the body's lag: the boots waggle as a landing settles.)
+      const foot: SwayFn = (_x, y) => [-1, 0, 0.5 * smooth01((y - ankle.y) / 0.16)];
       legs.push(
-        sway(capsule(hip, knee, 0.118, 0.1, C.pants), [-1, 0]),
-        sway(capsule(knee, ankle, 0.096, 0.08, C.pants), [-1, 0]),
-        sway(boot(new Vector3(ankle.x, ankle.y - 0.005, ankle.z + 0.01), new Vector3(ankle.x, ankle.y - 0.025, ankle.z - 0.13)), [-2, 0]),
+        sway(capsule(hip, knee, 0.124, 0.108, C.pants, sides), leg),
+        sway(capsule(knee, ankle, 0.102, 0.09, C.pants, sides), leg),
+        sway(capsule(ankle, heel, 0.094, 0.094, C.goggles, sides), leg),
+        sway(capsule(heel, toe, 0.094, 0.082, C.goggles, sides, 1), foot),
       );
+      if (ghost) continue;
+      legs.push(fur(ankle.clone().lerp(knee, 0.12), ankle.clone().sub(knee), leg));
+      if (lite) continue;
+      // A knee patch, and the sole: pale, with three treads, facing the lens that comes round the front.
+      legs.push(sway(part(new SphereGeometry(0.075, 7, 5), C.strap, { pos: [knee.x, knee.y + 0.062, knee.z + 0.01], scale: [1, 0.45, 1.15] }), leg));
+      const mid = heel.clone().lerp(toe, 0.5);
+      const tilt = Math.atan2(toe.z - heel.z, toe.y - heel.y);
+      legs.push(sway(part(new BoxGeometry(0.15, 0.3, 0.03), shade(C.pom, 0.82), { pos: [mid.x, mid.y, mid.z - 0.085], rot: [tilt, 0, 0] }), foot));
+      for (let k = 0; k < 3; k++) {
+        const p = heel.clone().lerp(toe, 0.2 + 0.3 * k);
+        legs.push(sway(part(new BoxGeometry(0.13, 0.03, 0.012), C.goggles, { pos: [p.x, p.y, p.z - 0.102], rot: [tilt, 0, 0] }), foot));
+      }
     }
   }
   return legs;
@@ -1293,28 +1455,64 @@ export function riderBodyGeometry(crossLegged = false): BufferGeometry {
   return merge([riderTorsoGeometry(crossLegged), riderHeadGeometry()]);
 }
 
-/** One arm from shoulder (origin) pointing down -y, ending in a mitt: a puffy, rounded sleeve
- *  tapering to an elbow bent a little forward, a forearm with a cobalt cuff, and a round mitt with a
- *  thumb (one straight six-sided bar read as a stick arm, and open cylinders as box limbs). */
-export function riderArmGeometry(): BufferGeometry {
+/** An arm's joints (arm space, the shoulder at the origin, the arm hanging down -y): the forearm bends
+ *  about the elbow, the mitt flops about the wrist. rider.ts's vertex shader turns the vertices below
+ *  each (aSway.w); a build with `bend` baked in (the ghosts, the shop's portrait) turns them here. */
+export const ARM_ELBOW = new Vector3(0, -0.235, 0);
+export const ARM_WRIST = new Vector3(0, -0.43, 0);
+/** The bend a relaxed arm holds (radians, the forearm forward of the upper arm). */
+export const ARM_REST_BEND = 0.5;
+
+/** One arm from the shoulder (origin) hanging down -y: a rounded shoulder cap in the yoke's cobalt, a
+ *  puffy sleeve tapering to the elbow, a forearm into a cream fur cuff, and a mitt a toy's size in the
+ *  player's vermillion with its thumb out in front. The hands are the rider's second signal (round 7):
+ *  at speed the rider is a few dozen pixels tall and a navy arm on a navy coat said nothing, so a fist
+ *  pumped, a wave or a flail reads by its mitt. Modelled straight; `bend` bakes the elbow in (radians).
+ *  A ghost's has no cuff (thin trim inside the glass draws its own rim). */
+export function riderArmGeometry(o: { bend?: number; lite?: boolean; ghost?: boolean } = {}): BufferGeometry {
   const C = RIDER_COLORS;
+  const lite = !!o.lite;
+  const sides = lite ? 6 : 9;
   const shoulder = new Vector3(0, -0.02, 0);
-  const elbow = new Vector3(0, -0.215, 0.012);
-  const wrist = new Vector3(0, -0.39, -0.085);
-  const dir = wrist.clone().sub(elbow).normalize();
-  const cuff = wrist.clone().addScaledVector(dir, -0.02);
-  const e = new Euler().setFromQuaternion(new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), dir));
-  const mitt = wrist.clone().addScaledVector(dir, 0.045);
-  const thumb = mitt.clone().add(new Vector3(0, 0.01, -0.06));
-  return mergeRider([
-    part(new SphereGeometry(0.088, 9, 7), C.coat, { pos: [shoulder.x, shoulder.y, shoulder.z] }),
-    capsule(shoulder, elbow, 0.084, 0.07, C.coat),
-    capsule(elbow, wrist, 0.068, 0.058, C.coat),
-    part(new CylinderGeometry(0.068, 0.066, 0.05, 10), C.yoke, { pos: [cuff.x, cuff.y, cuff.z], rot: [e.x, e.y, e.z] }),
+  const lower: SwayW = [0, 0, 0, 1];
+  const hand: SwayW = [0, 0, 0, 2];
+  const mitt = ARM_WRIST.clone().setY(ARM_WRIST.y - 0.035);
+  const tip = ARM_WRIST.clone().setY(ARM_WRIST.y - 0.125);
+  const parts: BufferGeometry[] = [
+    part(new SphereGeometry(0.102, lite ? 7 : 10, lite ? 5 : 7), C.yoke, { pos: [shoulder.x, shoulder.y + 0.01, shoulder.z] }),
+    capsule(shoulder, ARM_ELBOW, 0.092, 0.078, C.coat, sides),
+    sway(capsule(ARM_ELBOW, ARM_WRIST, 0.076, 0.066, C.coat, sides), lower),
     // The mitt: a soft paddle a little flatter side to side, and its thumb out in front.
-    capsule(mitt, mitt.clone().addScaledVector(dir, 0.06), 0.072, 0.064, C.goggles, 9, 0.82),
-    capsule(mitt.clone().addScaledVector(dir, 0.01), thumb, 0.03, 0.026, C.goggles, 6),
-  ]);
+    sway(capsule(mitt, tip, 0.092, 0.082, C.accent, sides, 0.8), hand),
+    sway(capsule(mitt.clone().setY(mitt.y - 0.015), new Vector3(0, mitt.y - 0.03, -0.085), 0.038, 0.032, shade(C.accent, 0.9), lite ? 5 : 6), hand),
+  ];
+  if (!o.ghost) {
+    reseed(1618);
+    parts.push(sway(part(new TorusGeometry(0.07, 0.03, lite ? 4 : 5, lite ? 7 : 10), C.pom, { pos: [0, ARM_WRIST.y - 0.005, 0], rot: [Math.PI / 2, 0, 0], jitter: lite ? 0 : 0.012 }), lower));
+    // An elbow patch, a shade lighter, on the side the chase lens sees.
+    if (!lite) parts.push(sway(part(new SphereGeometry(0.06, 7, 5), C.strap, { pos: [0, ARM_ELBOW.y - 0.03, 0.058], scale: [1, 1.25, 0.4] }), lower));
+  }
+  const g = mergeRider(parts);
+  const bend = o.bend ?? ARM_REST_BEND;
+  if (bend !== 0) {
+    const p = g.getAttribute('position') as BufferAttribute;
+    const n = g.getAttribute('normal') as BufferAttribute;
+    const w = g.getAttribute('aSway') as BufferAttribute;
+    const c = Math.cos(bend);
+    const s = Math.sin(bend);
+    for (let i = 0; i < p.count; i++) {
+      if (w.getW(i) < 0.5) continue;
+      const y = p.getY(i) - ARM_ELBOW.y;
+      const z = p.getZ(i) - ARM_ELBOW.z;
+      p.setY(i, ARM_ELBOW.y + y * c - z * s);
+      p.setZ(i, ARM_ELBOW.z + y * s + z * c);
+      const ny = n.getY(i);
+      const nz = n.getZ(i);
+      n.setY(i, ny * c - nz * s);
+      n.setZ(i, ny * s + nz * c);
+    }
+  }
+  return g;
 }
 
 /** How far each signature hat stands over the crowd's beanie and pom-pom (metres): the name tag is
@@ -1458,7 +1656,7 @@ export function ghostHatHead(hat: HatKind): BufferGeometry {
  *  ghost its own hat in place of the crowd's beanie (merged into the same geometry: no extra draw). */
 export function ghostRiderGeometry(sled = true, seat: SledSeat = SEAT_SIT, hat: HatKind | null = null): BufferGeometry {
   const pitch = -0.15 - seat.lean;
-  const torso = riderTorsoGeometry(seat.crossLegged, true);
+  const torso = riderTorsoGeometry(seat.crossLegged, true, true);
   torso.rotateX(pitch);
   const lift = seat.crossLegged ? 0.15 : 0.03;
   const neck = RIDER_NECK.clone().applyAxisAngle(new Vector3(1, 0, 0), pitch);
@@ -1473,11 +1671,14 @@ export function ghostRiderGeometry(sled = true, seat: SledSeat = SEAT_SIT, hat: 
   // The rider's relaxed pose: arms down and forward, a little out from the hips (closer in, resting
   // on the knees, when cross-legged).
   for (const sx of [-1, 1]) {
-    const sh = new Vector3(sx * 0.27, 0.56, 0).applyAxisAngle(new Vector3(1, 0, 0), pitch);
-    const arm = riderArmGeometry();
+    const sh = new Vector3(sx * RIDER_SHOULDER.x, RIDER_SHOULDER.y, RIDER_SHOULDER.z).applyAxisAngle(new Vector3(1, 0, 0), pitch);
+    const arm = riderArmGeometry({ lite: true, ghost: true });
     arm.rotateZ(sx * (seat.crossLegged ? 0.14 : 0.3));
     arm.rotateX(0.72 + pitch);
     arm.translate(sh.x, sh.y + seat.y, sh.z + seat.z);
+    // (Marked for the ghosts' own motion, ghosts.ts: -3 the left arm, -4 the right, which lift in the air.)
+    const w = arm.getAttribute('aSway') as BufferAttribute;
+    for (let i = 0; i < w.count; i++) w.setX(i, sx < 0 ? -3 : -4);
     parts.push(arm);
   }
   if (sled) parts.unshift(withSway(sledGeometry()));

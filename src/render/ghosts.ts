@@ -4,7 +4,7 @@ import type { GhostKind } from '../ui/contract';
 import type { GhostPose } from '../game/ghosts';
 import { IDLE_FEEL, type Beat, type Feel, type GhostRole } from '../game/beats';
 import { GHOST_MOOD_GLSL, ghostStencil, makeGhostMaterial, makeToonMaterial, shared } from './materials';
-import { HAT_LIFT, RIDER_COLORS, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
+import { HAT_LIFT, RIDER_COLORS, RIDER_SCALE, RIDER_SHOULDER, ghostLegsGeometry, ghostRiderGeometry, sledGeometryFor, sledSeat, type SledSeat } from './meshes';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GhostTrails } from './trails';
 import { GHOST_PATH } from '../ui/icons';
@@ -111,6 +111,19 @@ interface Item {
   mesh: Mesh;
   mat: ShaderMaterial;
   depth: ShaderMaterial;
+  /** Its own motion (round 7): the uniform both its materials read, the carve lean it is carried into
+   *  on a spring, the body's bob and the pom-pom's (metres, and their rates), how far its arms are out,
+   *  and its height and vertical speed last frame (a landing is a jump in that speed). */
+  pose: { value: Vector4 };
+  leanS: number;
+  leanV: number;
+  bob: number;
+  bobV: number;
+  pom: number;
+  pomV: number;
+  armS: number;
+  lastY: number;
+  lastVy: number;
   /** The sled this ghost rode (meshes.ts sledGeometryFor id), how it sits it, its glass sled's
    *  vertices in the field's merged sled mesh (first vertex, count), and the eased tilt to the
    *  snow's slope under it. */
@@ -224,6 +237,12 @@ function ghostBodyGeometry(seat: SledSeat, hat: HatKind | null): BufferGeometry 
   let merged = bodyGeos.get(key);
   if (!merged) {
     const geo = ghostRiderGeometry(false, seat, hat);
+    // What moves on a ghost (round 7, GHOST_POSE_GLSL): the pom-pom's and the hood's share of the bob
+    // (positive), and which arm a vertex belongs to (-3 the left, -4 the right).
+    const sw = geo.getAttribute('aSway');
+    const part = new Float32Array(sw.count);
+    for (let i = 0; i < sw.count; i++) part[i] = sw.getX(i) < -2.5 ? sw.getX(i) : Math.max(0, sw.getX(i)) + 0.5 * sw.getZ(i);
+    geo.setAttribute('aPart', new BufferAttribute(part, 1));
     geo.deleteAttribute('color');
     geo.deleteAttribute('normal');
     geo.deleteAttribute('aSway');
@@ -301,13 +320,18 @@ const MAX_SLEDS = 24;
 function sledSource(id: number): SledSource {
   let s = sledSources.get(id);
   if (!s) {
-    const sled = sledGeometryFor(id);
+    // (Low's build of the sled: the glass shows its outline and its runners, never its grain.)
+    const sled = sledGeometryFor(id, true);
     const sn = sled.getAttribute('position').count;
     // The ghost's legs ride along as a faint glass lap (glow -1): the body's glass dissolves from the
     // chest down, and without them the head and shoulders floated a body length over an empty sled.
     const legs = ghostLegsGeometry(sledSeat(id));
     legs.deleteAttribute('aSway');
     const g = mergeGeometries([sled, legs])!;
+    // Drawn at the rider's own scale (the sled mesh places these positions in the world itself).
+    const low = new Float32Array(g.getAttribute('position').count);
+    for (let i = 0; i < low.length; i++) low[i] = g.getAttribute('position').getY(i);
+    g.scale(RIDER_SCALE, RIDER_SCALE, RIDER_SCALE);
     const pos = g.getAttribute('position');
     const col = g.getAttribute('color');
     const glow = new Float32Array(pos.count);
@@ -321,7 +345,7 @@ function sledSource(id: number): SledSource {
       const gg = col.getY(i);
       const b = col.getZ(i);
       const accent = hot.some((c) => Math.abs(c.r - r) + Math.abs(c.g - gg) + Math.abs(c.b - b) < 0.03);
-      glow[i] = accent ? 1 : pos.getY(i) < 0.06 ? 0.75 : 0;
+      glow[i] = accent ? 1 : low[i] < 0.06 ? 0.75 : 0;
     }
     s = { pos: pos.array as Float32Array, nrm: g.getAttribute('normal').array as Float32Array, glow, count: pos.count };
     sledSources.set(id, s);
@@ -444,10 +468,114 @@ function markerGeometry(): BufferGeometry {
   return markerGeo!;
 }
 
+/** A ghost's own motion, in its vertex shader (round 7): the hero's secondary motion on a replay. uPose
+ *  is x how far the arms are lifted out from the sides (radians: out in the air, down on the snow), y the
+ *  body's squash about its seat (1 none: a landing compresses it and it springs back), z the bob of the
+ *  pom-pom and the hood (metres), w the seat's height; uShoulder is where the right arm hangs from. The
+ *  depth prepass runs the same code, so the glass's front surface still passes LEQUAL. */
+const GHOST_POSE_GLSL = /* glsl */ `
+  attribute float aPart;
+  uniform vec4 uPose;
+  uniform vec3 uShoulder;
+  vec3 ghostPose(vec3 p, inout vec3 nrm) {
+    if (aPart < -2.5) {
+      float s = aPart < -3.5 ? 1.0 : -1.0;
+      vec3 sh = vec3(s * uShoulder.x, uShoulder.y, uShoulder.z);
+      float a = s * uPose.x;
+      float c = cos(a);
+      float sn = sin(a);
+      vec3 q = p - sh;
+      q.xy = vec2(q.x * c - q.y * sn, q.x * sn + q.y * c);
+      nrm.xy = vec2(nrm.x * c - nrm.y * sn, nrm.x * sn + nrm.y * c);
+      p = q + sh;
+    }
+    p.y += max(aPart, 0.0) * uPose.z;
+    p.y = uPose.w + (p.y - uPose.w) * uPose.y;
+    return p;
+  }
+`;
+
+/** Glass (round 7, ART.md 6): the shared ghost material with the hero lane's own terms worked into it.
+ *    A refraction that needs no scene texture: the sight line is bent through the body as through a
+ *    lens, and what it would land on is drawn inside the glass, the sky and the snow of the frame the
+ *    ghost is in (the shared palette), upside down and squeezed as a glass ball shows them, tinted by
+ *    how much glass it passed through. The body covers what is really behind it there, which is what
+ *    sells the bend. (A screen-space sample of the frame would be truer where a tree stands behind a
+ *    ghost; the frame is not readable while it is being drawn, and at the size a ghost is, the sky over
+ *    the snow is what is behind it.)
+ *    A hard glint and a soft one from the frame's light, and a second, dimmer glint through the far side.
+ *    A spirit's own glow: a light in the chest that breathes, in the kind colour.
+ *  `level` 2 is all of it (High), 1 drops the far glint and the breathing (Medium), 0 is the shared
+ *  material as it was, with the ghost's motion (Low). Mint stays mint: every term is multiplied through
+ *  the kind colour, never added over it in white. */
+function ghostGlassMaterial(color: Color, gold: number, level: number, pose: { value: Vector4 }, shoulder: { value: Vector3 }): ShaderMaterial {
+  const m = makeGhostMaterial(color, gold);
+  m.uniforms.uPose = pose;
+  m.uniforms.uShoulder = shoulder;
+  m.uniforms.uSkyZenith = shared.uSkyZenith;
+  m.uniforms.uSkyHorizon = shared.uSkyHorizon;
+  m.uniforms.uSnowShade = shared.uSnowShade;
+  m.uniforms.uSunColor = shared.uSunColor;
+  const v0 = m.vertexShader;
+  let vs = v0.replace('varying vec3 vN;', GHOST_POSE_GLSL + '\n      varying vec3 vN;');
+  vs = vs.replace('vec4 wp = modelMatrix * vec4(position, 1.0);', 'vec3 gn = normal;\n        vec3 gp = ghostPose(position, gn);\n        vec4 wp = modelMatrix * vec4(gp, 1.0);');
+  vs = vs.replace('vN = normalize(mat3(modelMatrix) * normal);', 'vN = normalize(mat3(modelMatrix) * gn);');
+  vs = vs.replace('gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);', 'gl_Position = projectionMatrix * modelViewMatrix * vec4(gp, 1.0);');
+  if (!vs.includes('gl_Position = projectionMatrix * modelViewMatrix * vec4(gp, 1.0);') || !vs.includes('ghostPose(position')) {
+    console.warn('ghost material: vertex anchors not found, ghost motion disabled');
+    vs = v0;
+    // (The depth prepass must then stand still too.)
+    pose.value.set(0, 1, 0, 0);
+  }
+  m.vertexShader = vs;
+  if (level <= 0) return m;
+  let fs = m.fragmentShader.replace('uniform vec3 uSnowLit;', 'uniform vec3 uSnowLit;\n      uniform vec3 uSkyZenith;\n      uniform vec3 uSkyHorizon;\n      uniform vec3 uSnowShade;\n      uniform vec3 uSunColor;');
+  const faceAt = 'face = mix(face, deep * 0.85, inner * 0.5);';
+  const rimAt = 'float rimA =';
+  if (!fs.includes(faceAt) || !fs.includes(rimAt) || !fs.includes('uniform vec3 uSkyZenith;')) {
+    console.warn('ghost material: fragment anchors not found, glass disabled');
+    return m;
+  }
+  fs = fs.replace(
+    faceAt,
+    /* glsl */ `${faceAt}
+        // Glass. The sight line bent through the body: a lens shows the world behind it upside down, so
+        // the bent ray's height is turned over, and it is squeezed toward the middle of the body.
+        vec3 gBent = refract(-v, n, 0.72);
+        float gH = -(gBent.y * 1.6 + n.y * 0.55) + 0.05 * sin(vWorldPos.y * 7.0 + uTime * 1.3);
+        vec3 gSky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.75, gH));
+        vec3 gSnow = mix(uSnowLit, uSnowShade, smoothstep(0.0, -0.6, gH) * 0.8);
+        vec3 gBehind = mix(gSnow, gSky, smoothstep(-0.05, 0.05, gH));
+        // Thicker glass takes more of the kind colour out of what it shows (and never lets a pale sky
+        // through as cream: the tint's floor is the kind colour itself).
+        float gThick = 1.0 - fres;
+        vec3 gSeen = gBehind * mix(mix(vec3(1.0), kc, 0.62), kc * kc, 0.55 * gThick) * mix(0.9, 0.6, day);
+        float gK = ${level >= 2 ? '0.62' : '0.45'} * smoothstep(0.02, 0.3, gThick) * rise * (1.0 - uGlass * 0.3) * mix(0.55, 1.0, min(uBody, uNear));
+        face = mix(face, max(gSeen, deep * 0.6), gK);`,
+  );
+  fs = fs.replace(
+    rimAt,
+    /* glsl */ `// (Where the glass shows the bent world it covers the real one.)
+        body = mix(body, max(body, 0.82 * uFade * uFade * rise * mix(0.45, 1.0, uNear)), gK);
+        // The frame's light on the glass: a hard point and a soft sheen where it strikes${level >= 2 ? ', and a dimmer point where it leaves through the far side' : ''}.
+        vec3 gR = reflect(-v, n);
+        float gSpec = pow(max(dot(gR, uSunDir), 0.0), 70.0) * 1.6 + pow(max(dot(gR, uSunDir), 0.0), 9.0) * 0.22;
+        ${level >= 2 ? 'gSpec += pow(max(dot(reflect(-v, -n), uSunDir), 0.0), 26.0) * 0.4;' : ''}
+        vec3 gLight = mix(uSunColor, vec3(1.0), 0.35) * mix(kc, vec3(1.0), 0.45);
+        col += gLight * gSpec * rise * uFade * mix(0.7, 1.0, day);
+        // The spirit's own light: low in the chest, in the kind colour${level >= 2 ? ', breathing' : ''}.
+        float gHeart = exp(-pow((vH - 0.62) / 0.3, 2.0)) * gThick * gThick;
+        col += kc * gHeart * (0.28 + 0.5 * glowK) * ${level >= 2 ? '(0.8 + 0.2 * sin(uTime * 2.1 + vWorldPos.x))' : '0.9'};
+        ${rimAt}`,
+  );
+  m.fragmentShader = fs;
+  return m;
+}
+
 /** Depth only, pushed back a hair so the glass pass's front surface always wins LEQUAL. The
  *  dissolved lower body (legs and sled, all but invisible glass) writes no depth: an invisible sled
  *  would otherwise cut a sled-shaped hole in every wisp, spark and faint ghost drawn behind it. */
-function makeDepthMaterial(): ShaderMaterial {
+function makeDepthMaterial(pose: { value: Vector4 }, shoulder: { value: Vector3 }): ShaderMaterial {
   return withStencil(new ShaderMaterial({
     transparent: true,
     colorWrite: false,
@@ -455,12 +583,14 @@ function makeDepthMaterial(): ShaderMaterial {
     polygonOffset: true,
     polygonOffsetFactor: 1,
     polygonOffsetUnits: 2,
-    uniforms: { uCut: { value: 0.36 } },
+    uniforms: { uCut: { value: 0.36 }, uPose: pose, uShoulder: shoulder },
     vertexShader: /* glsl */ `
+      ${GHOST_POSE_GLSL}
       varying float vH;
       void main() {
         vH = position.y;
-        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        vec3 gn = normal;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(ghostPose(position, gn), 1.0);
       }
     `,
     fragmentShader: /* glsl */ `
@@ -488,11 +618,11 @@ function withStencil<M extends ShaderMaterial | MeshBasicMaterial>(m: M): M {
 const WISP_SEG = 12;
 const WISP_PTS = WISP_SEG + 1;
 const HIST = 32;
-const WISP_LIFT = 0.5;
+const WISP_LIFT = 0.5 * RIDER_SCALE;
 const WISP_MAX = 2.6;
 /** The aura's centre (the chest, in the rider model) and radius: a soft glow round head and shoulders. */
-const AURA_LIFT = 0.98;
-const AURA_R = 0.82;
+const AURA_LIFT = 0.98 * RIDER_SCALE;
+const AURA_R = 0.82 * RIDER_SCALE;
 
 function wispMaterial(): ShaderMaterial {
   return withStencil(new ShaderMaterial({
@@ -1100,17 +1230,23 @@ export class GhostVisuals {
     list.forEach((g, n) => {
       const color = new Color(GHOST_COLORS[g.kind]);
       // Your best rides in gold-white glass; the others in the default spectral glass.
-      const mat = makeGhostMaterial(color, g.kind === 'you' ? 1 : 0);
-      mat.uniforms.uGlow.value = this.glow;
-      mat.uniforms.uMood.value = this.mood;
-      const depth = makeDepthMaterial();
       const sled = g.sled !== undefined && g.sled >= 0 && g.sled <= 5 ? Math.floor(g.sled) : 0;
       const seat = sledSeat(sled);
+      // The ghost's own motion (GHOST_POSE_GLSL): at rest until its first frame.
+      const pose = { value: new Vector4(0, 1, 0, seat.y) };
+      const pitch = -0.15 - seat.lean;
+      const shoulder = { value: RIDER_SHOULDER.clone().applyAxisAngle(AX, pitch).add(tmp.set(0, seat.y, seat.z)) };
+      const mat = ghostGlassMaterial(color, g.kind === 'you' ? 1 : 0, this.glass, pose, shoulder);
+      mat.uniforms.uGlow.value = this.glow;
+      mat.uniforms.uMood.value = this.mood;
+      const depth = makeDepthMaterial(pose, shoulder);
       // A signature rider wears its hat in the same glass (its body geometry carries it).
       const rider = signature(g.name, g.kind, n);
       const mesh = new Mesh(ghostBodyGeometry(seat, rider?.hat ?? null), [depth, mat]);
       mesh.frustumCulled = false;
       mesh.renderOrder = 5;
+      // A ghost is the hero's size: the same toy, in glass.
+      mesh.scale.setScalar(RIDER_SCALE);
       const label = document.createElement('div');
       label.className = rider ? 'ghost-label sig' : 'ghost-label';
       label.style.setProperty('--c', GHOST_COLORS[g.kind]);
@@ -1148,6 +1284,16 @@ export class GhostVisuals {
         depth,
         sled,
         seat,
+        pose,
+        leanS: 0,
+        leanV: 0,
+        bob: 0,
+        bobV: 0,
+        pom: 0,
+        pomV: 0,
+        armS: 0,
+        lastY: NaN,
+        lastVy: 0,
         sv0: 0,
         svN: 0,
         tilt: new Quaternion(),
@@ -1715,7 +1861,7 @@ export class GhostVisuals {
       if (it.tagOn) {
         // Above the body's centre, wherever a flip has swung it, not above the sled's pivot (and over
         // a tall hat's top).
-        tmpP.set(0, 0.8, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, 0.95 + it.lift);
+        tmpP.set(0, 0.8 * RIDER_SCALE, 0).applyQuaternion(it.mesh.quaternion).add(pos).addScaledVector(UP, (0.95 + it.lift) * RIDER_SCALE);
         this.project(it.tag, tmpP, camera, w, h, TAG_RANGE);
         it.tag.dp = dPlayer;
       }
@@ -2029,6 +2175,7 @@ export class GhostVisuals {
    *  little into the carve; the body leans further into the carve about its hips, so the ghost bends
    *  into the turn over its sled rather than tipping over with it as one rigid block. */
   private poseGhost(it: Item, p: GhostPose, pos: Vector3, dt: number): void {
+    this.moveGhost(it, p, dt);
     if (p.grounded) {
       this.course.gradient(p.x, p.z, grad);
       tmpN.set(-grad.x, 1, grad.z).normalize();
@@ -2039,12 +2186,58 @@ export class GhostVisuals {
     const q = it.mesh.quaternion;
     sledQ.copy(it.tilt).multiply(tmpQ.setFromAxisAngle(UP, -(p.heading + p.airYaw)));
     sledQ.multiply(tmpQ.setFromAxisAngle(AX, -p.airPitch)).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.2));
-    q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.28));
+    // (The body is carried into the carve on its spring: it lags the sled's bank and settles past it.)
+    q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -it.leanS * 0.28));
     // Turned about the hips: position = pos + sled * hips - body * hips.
-    hip.set(0, it.seat.y, it.seat.z);
+    hip.set(0, it.seat.y * RIDER_SCALE, it.seat.z * RIDER_SCALE);
     it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
     it.sledQ.copy(sledQ);
     it.sledP.copy(pos);
+  }
+
+  /** How much glass the ghosts are drawn in (ghostGlassMaterial): 2 High, 1 Medium, 0 Low. Read as
+   *  the field is set. */
+  glass = 2;
+
+  /** A ghost's secondary motion, from its replayed pose alone (the hero's, rider.ts, on fewer springs):
+   *  its lean lags the sled's bank and settles; a landing (its vertical speed jumping) drops the body
+   *  into its knees and the pom-pom and hood after it, and they spring back; its arms come out in the
+   *  air and down on the snow. Reduced motion keeps the lean and the arms and drops the springs. */
+  private moveGhost(it: Item, p: GhostPose, dt: number): void {
+    const h = Math.min(dt, 1 / 30);
+    const calm = this.feel.reduced;
+    if (h <= 0 || Number.isNaN(it.lastY) || Math.abs(p.y - it.lastY) > 6) {
+      // The first frame, a frozen one or a jump (the title reel changing leads): at rest where it is.
+      it.leanS = p.lean;
+      it.leanV = it.bob = it.bobV = it.pom = it.pomV = 0;
+      it.lastVy = 0;
+    } else {
+      const vy = (p.y - it.lastY) / h;
+      const dvy = Math.max(-12, Math.min(12, vy - it.lastVy));
+      it.lastVy = vy;
+      if (!calm) {
+        if (p.grounded) it.bobV -= Math.max(0, dvy) * 0.2;
+        it.pomV -= dvy * 0.1;
+      }
+      const sub = Math.ceil(h * 240);
+      const s = h / sub;
+      for (let i = 0; i < sub; i++) {
+        it.leanV += (-(it.leanS - p.lean) * 340 - it.leanV * 20) * s;
+        it.leanS += it.leanV * s;
+        it.bobV += (-it.bob * 620 - it.bobV * 22) * s;
+        it.bob += it.bobV * s;
+        it.pomV += (-360 * it.pom - 11 * it.pomV) * s;
+        it.pom += it.pomV * s;
+      }
+      if (calm) it.bob = it.bobV = it.pom = it.pomV = 0;
+      it.bob = Math.max(-0.1, Math.min(0.04, it.bob));
+      it.pom = Math.max(-0.06, Math.min(0.05, it.pom));
+    }
+    it.lastY = p.y;
+    // Arms out in the air (and waving a little), up for a drift's balance, down on the snow.
+    const want = p.grounded ? (p.drifting ? 0.45 : 0) : 0.95 + (calm ? 0 : 0.18 * Math.sin(shared.uTime.value * 9 + it.id));
+    it.armS += (want - it.armS) * Math.min(1, dt === 0 ? 1 : dt * 8);
+    it.pose.value.set(it.armS, 1 + it.bob * 2.2, it.pom, it.seat.y);
   }
 
   /** Places ghost i's glass sled (its sled pose, at strength `a`) through the sled mesh's uniforms. */

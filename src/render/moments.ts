@@ -3,6 +3,7 @@ import { BIG_DROP_S } from '../audio/cues';
 import { DRIFT_TIER_HEX, type Beat, type BeatOf } from '../game/beats';
 import type { Snap } from '../game/run';
 import { CHUNK_LEN, type Course } from '../sim/course';
+import * as simConsts from '../sim/sim';
 import { TUMBLE_TICKS, type Sim, type SimEvent } from '../sim/sim';
 import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
@@ -37,6 +38,19 @@ export interface MomentWorld {
   readonly cam: ChaseCamera;
   readonly course: Course;
 }
+
+/** Where a fall's phases change, as shares of it, read off the sim's own phase lengths when it has them
+ *  (round 7's fall: FALL_TICKS tumbling and sliding, DOWN_TICKS lying in the snow, the rest standing the
+ *  sled up and pushing off), so the picture is thrown, down and up exactly while the sim is. A sim with
+ *  one undivided tumble has none and the rider keeps its own 40% and 70%. */
+export function fallCuts(k: Readonly<Record<string, unknown>>): readonly [number, number] | undefined {
+  const fall = k.FALL_TICKS;
+  const down = k.DOWN_TICKS;
+  const all = k.TUMBLE_TICKS;
+  if (typeof fall !== 'number' || typeof down !== 'number' || typeof all !== 'number' || !(all > fall + down) || !(fall > 0) || !(down > 0)) return undefined;
+  return [fall / all, (fall + down) / all];
+}
+const FALL_CUTS = fallCuts(simConsts as unknown as Record<string, unknown>);
 
 /** The finish's render-time ease: full speed over the line, down to FINISH_SLOW by a third of a second,
  *  held to 1.1 s, and back to full by 2.2 s (render seconds since the line). */
@@ -208,10 +222,11 @@ export class Moments {
   }
 
   /** A reaction for the rider to play once (rider.ts): `side` is where it happened, +1 on three.js +x. */
-  private cue(cue: NonNullable<RiderAct['cue']>, side: number): void {
+  private cue(cue: NonNullable<RiderAct['cue']>, side: number, k = 1): void {
     const a = this.act;
     a.cue = cue;
     a.cueSide = side;
+    a.cueK = k;
     a.cueN = (a.cueN ?? 0) + 1;
   }
 
@@ -245,13 +260,24 @@ export class Moments {
         case 'pass':
           if (!b.muted) {
             this.lift(0.6);
-            // Going by one: a fist pump; a double, a duel won or a lead taken back: both arms.
+            // Going by one: a glance across at it and a lean; a first pass, your best or a duel held: a
+            // fist with it; a double, a duel won, a slingshot or a lead taken back: both arms.
             const big = b.word === 'double' || b.word === 'triple' || b.word === 'streak' || b.word === 'duelWon' || b.word === 'tookBack' || b.word === 'slung';
-            this.cue(big ? 'cheer' : 'pump', b.ghost.dx >= 0 ? 1 : -1);
+            const fist = b.first || b.word === 'yourBest' || b.word === 'heldOff' || b.gifts > 0;
+            this.cue(big ? 'cheer' : fist ? 'pump' : 'glance', b.ghost.dx >= 0 ? 1 : -1);
           }
           break;
         case 'driftRelease':
           if (b.tier >= 3) this.lift(0.75);
+          break;
+        case 'nearMiss':
+          // Only just missed: a flinch away from it, harder for a whisker.
+          this.cue('flinch', b.side, b.grade === 'whisker' ? 1 : 0.55);
+          break;
+        case 'moment':
+          // A set piece decided: both arms for every step of it taken, a fist for a win, a slump for a loss.
+          if (b.phase === 'won') this.cue(b.of > 0 && b.n >= b.of ? 'cheer' : 'pump', 1);
+          else if (b.phase === 'lost') this.cue('slump', 1);
           break;
         case 'flow':
           if (b.phase === 'in') this.lift(0.6);
@@ -438,6 +464,8 @@ export class Moments {
       act.load = 0;
     } else {
       act.tumble = st.tumble > 0 ? 1 - st.tumble / TUMBLE_TICKS : 0;
+      act.tumbleS = TUMBLE_TICKS / 60;
+      if (FALL_CUTS) act.tumbleCuts = FALL_CUTS;
       act.grind = st.grinding;
       act.wall = st.wallTicks > 0 && !st.finished ? (s.x > w.course.centerX(s.z) ? 1 : -1) : 0;
       act.finish = st.finished;

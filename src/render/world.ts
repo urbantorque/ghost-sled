@@ -37,6 +37,7 @@ import { Rider } from './rider';
 import { Sky } from './sky';
 import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
+import { planShots } from '../game/shots';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
 import { MarqueeWorld } from './marqueeworld';
@@ -296,6 +297,8 @@ export class World {
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
     this.ghosts.onBeat = quality.detail === 'low';
+    this.ghosts.glass = quality.detail === 'low' ? 0 : quality.detail === 'medium' ? 1 : 2;
+    this.rider.setDetail(quality.detail === 'low' ? 'lite' : 'full');
     this.chaos = new ChaosVisuals(this.course);
     this.landing = new LandingAid(this.course);
     this.life = new Life(this.course, this.palette, quality.detail, quality.forestDensity);
@@ -320,6 +323,7 @@ export class World {
       return cor;
     };
     this.cam.section = (z) => this.course.section(-z);
+    this.cam.shots = planShots(this.course);
     // The results hero shot never sets its lens among the props: a tree within a few metres fills
     // the frame with a cone (or a dithered one). Only asked while it picks a framing.
     this.cam.blocked = (x, z, r) => {
@@ -495,6 +499,8 @@ export class World {
     this.midground.setTier(q.detail, q.terrain.reach);
     this.overlooks.setTier(q.detail);
     this.ghosts.onBeat = q.detail === 'low';
+    this.ghosts.glass = q.detail === 'low' ? 0 : q.detail === 'medium' ? 1 : 2;
+    this.rider.setDetail(q.detail === 'low' ? 'lite' : 'full');
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.detail !== 'low');
     this.setPieces.setQuality(q.detail, q.shadows);
@@ -531,6 +537,7 @@ export class World {
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
     this.midground.setCourse(c, this.palette);
+    this.cam.shots = planShots(c);
     this.overlooks.setCourse(c, this.palette);
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);

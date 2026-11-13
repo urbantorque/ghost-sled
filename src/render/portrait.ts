@@ -18,7 +18,7 @@ import {
 } from 'three';
 import { Mood } from '../sim/chaos';
 import { makeToonMaterial, shared } from './materials';
-import { RIDER_COLORS, SCARF_KNOT, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor } from './meshes';
+import { RIDER_COLORS, RIDER_SHOULDER, SCARF_KNOT, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor } from './meshes';
 import { type HatId, type ScarfDef, scarfById } from '../game/garage';
 import { getPalette } from './palette';
 
@@ -335,8 +335,8 @@ function setup(r: WebGLRenderer): Studio {
   const armGeo = riderArmGeometry();
   const armL = new Mesh(armGeo, mat);
   const armR = new Mesh(armGeo, mat);
-  armL.position.set(-0.27, 0.56, 0);
-  armR.position.set(0.27, 0.56, 0);
+  armL.position.set(-RIDER_SHOULDER.x, RIDER_SHOULDER.y, RIDER_SHOULDER.z);
+  armR.position.copy(RIDER_SHOULDER);
   armL.rotation.set(0.72, 0, -0.3);
   armR.rotation.set(0.72, 0, 0.3);
   const head = new Mesh(riderHeadGeometry(), mat);
