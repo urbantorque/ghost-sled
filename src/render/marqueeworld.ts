@@ -7,6 +7,7 @@ import type { BiomeId } from '../sim/mountains';
 import type { Sim } from '../sim/sim';
 import { merge, part, shade } from './flora';
 import { box, seg } from './landmarkKit';
+import { pushLocalLight } from './lights';
 import { makeToonMaterial } from './materials';
 import type { Particles } from './particles';
 
@@ -506,6 +507,8 @@ export class MarqueeWorld {
         // It swings a little on its hanger as it goes, more as it leaves and arrives.
         const sway = 0.06 * Math.sin(time * 1.7 + p.index + k) + (z > z0 + 1 && z < p.z1 - 1 ? 0.03 : 0);
         cabin.position.copy(tv);
+        // Round 7 (the light lane): the machine is lit from inside, and its light falls on the bank it passes.
+        if (Math.abs(z - s.z) < 110) pushLocalLight(tv.x, tv.y - 1, tv.z, 1, 0.5, 0.18, 15, 0.9);
         const ahead = this.cableAt(c, p.side, z + 4, ts);
         cabin.rotation.set(0, Math.atan2(ahead.x - tv.x, ahead.z - tv.z), sway);
       });
@@ -552,6 +555,8 @@ export class MarqueeWorld {
             } else if (st === -1) lum = 0.22;
             this.pillars!.setColorAt(idx, tc.copy(col).multiplyScalar(lum * (low ? 1.25 : 1)));
             if (k === 0 && this.pools) this.pools.setColorAt(g.base + i, tc.copy(col).multiplyScalar(lum * (low ? 1.2 : 1)));
+            // Round 7 (the light lane): a gate's lanterns light the snow under them and whoever threads it.
+            if (k === 0 && lum > 0.05 && Math.abs(q.z - s.z) < 95) pushLocalLight(q.x, c.ground(q.x, q.z) + STRING_LOW + 1, -q.z, col.r, col.g * 0.8, col.b * 0.5, 9 + q.hw * 1.6, Math.min(1.6, lum * 0.75));
             if (st === 1 && age < 8) {
               // Threaded: its lanterns slip their string and rise into the sky, drifting apart.
               for (let j = 0; j < PER_STRING; j++) {

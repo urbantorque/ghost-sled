@@ -20,6 +20,7 @@ import {
   WebGLRenderer,
 } from 'three';
 import { shared } from './materials';
+import { FILM } from './palette';
 import { PIPE_COMPOSITE_GLSL, Pipeline, pipeUniforms } from './postfx/pipeline';
 import { iceMirror } from './postfx/reflect';
 import type { PassSettings } from './postfx/tiers';
@@ -67,6 +68,15 @@ export interface GradeParams {
   gust?: number;
   /** Glittering air: diamond dust and fresh powder twinkling in the light (0 for none). */
   glitter?: number;
+  /** Round 7. The film curve (0..1, default 1): highlights roll off into the light's colour and never
+   *  reach paper white, the shade keeps its hue. 0 is round 6's soft knee. */
+  tone?: number;
+  /** How much light the place lets into the lens, before the curve (default 1). */
+  exposure?: number;
+  /** A place's own split tone: what its lit values and its shade lean to (near-white colours; default
+   *  none). The grade by place (ART.md 15) is mostly these two and the exposure. */
+  hi?: Color;
+  lo?: Color;
 }
 
 const sunProbe = new Vector3();
@@ -245,6 +255,10 @@ export class PostFX {
         uFocalUv: { value: new Vector2(0.5, 0.7) },
         uGust: { value: 0 },
         uGlitter: { value: 0 },
+        uTone: { value: 1 },
+        uExposure: { value: 1 },
+        uHiTint: { value: new Color(1, 1, 1) },
+        uLoTint: { value: new Color(1, 1, 1) },
       },
       fragmentShader: /* glsl */ `
         uniform sampler2D tScene;
@@ -286,7 +300,40 @@ export class PostFX {
         uniform vec2 uFocalUv;
         uniform float uGust;
         uniform float uGlitter;
+        uniform float uTone;
+        uniform float uExposure;
+        uniform vec3 uHiTint;
+        uniform vec3 uLoTint;
         varying vec2 vUv;
+        // The film curve (palette.ts FILM holds its numbers, so Low can bake the same curve): a short toe
+        // that deepens the darks, a straight run through the mid-tones, and from the knee a shoulder
+        // that climbs toward FILM.white and never reaches it.
+        float filmCurve(float x) {
+          const float K = ${FILM.knee.toFixed(3)};
+          const float W = ${FILM.white.toFixed(3)};
+          float toe = 1.0 - x / K;
+          float lo = x - ${FILM.toe.toFixed(3)} * x * toe * toe;
+          float hi = K + (W - K) * (1.0 - exp(-(x - K) / (W - K)));
+          return x < K ? lo : hi;
+        }
+        // The curve is driven by a colour's value and scales the colour whole, so the shade keeps its hue
+        // and a signal colour its saturation (a curve per channel greys the vermillion and bleaches the
+        // marigold). What is hot enough to leave the range folds toward the light's own colour instead of
+        // toward white paper: a sunlit crest goes to the sun's cream, a lamp's heart to amber.
+        vec3 filmic(vec3 c, vec3 lightHue) {
+          float m = max(c.r, max(c.g, c.b));
+          float d = mix(dot(c, vec3(0.2126, 0.7152, 0.0722)), m, 0.6) + 1e-4;
+          float t = filmCurve(d);
+          vec3 o = c * (t / d);
+          float top = max(o.r, max(o.g, o.b));
+          // A colour with a hue of its own (a lantern gate's marigold, a ghost's mint, the scarf) keeps it
+          // on the way up: folded toward a dusk's orange light the gates of Old Town went peach, and the
+          // marigold is the lantern's. Only what is near white already takes the light's colour.
+          float own = smoothstep(0.25, 0.6, (m - min(c.r, min(c.g, c.b))) / max(m, 1e-4));
+          vec3 pale = mix(c / max(m, 1e-4), lightHue, 0.5 * (1.0 - own)) * t;
+          o = mix(o, pale, clamp((top - 0.86) * 2.2, 0.0, 0.75));
+          return min(o, vec3(1.0));
+        }
         float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         // A lattice hash without sin: the sine hash amplifies a one-ulp difference between two
         // evaluations of the same corner into a different value, which tore value noise into blocks.
@@ -472,7 +519,12 @@ export class PostFX {
             // (a moon's is cool), so it reads as light in the air rather than a grey haze.
             vec3 bl = texture2D(tBloom, uv).rgb;
             float bL = dot(bl, vec3(0.2126, 0.7152, 0.0722));
-            col += mix(bl, bL * mix(lightHue, vec3(1.0, 0.74, 0.5), 0.3) * 1.1, uBloomWarm) * uBloom;
+            // Round 7: a light keeps its own colour in its glow (a lamp's amber, lava's orange, a ghost's
+            // mint). Only what blooms white (the sun's core, a glint on the powder) takes the colour of the
+            // light it is lit by: tinted whole, a street of lamps bloomed the sky's colour.
+            float bM = max(bl.r, max(bl.g, bl.b));
+            float own = smoothstep(0.12, 0.45, (bM - min(bl.r, min(bl.g, bl.b))) / max(bM, 1e-4));
+            col += mix(bl, bL * mix(lightHue, vec3(1.0, 0.74, 0.5), 0.3) * 1.1, uBloomWarm * (1.0 - own)) * uBloom;
           }
           // Light shafts: while a low sun is in view, warm rays fan out from it through the gaps in the
           // treeline and the ridges. Each pixel near the sun looks back along the line to it for bright
@@ -500,7 +552,9 @@ export class PostFX {
               float ang = atan(toS.y, toS.x * uAspect);
               float rays = 0.35 + 0.65 * vnoise(vec2(ang * 11.0 + uTime * 0.03, 1.7)) * vnoise(vec2(ang * 23.0 + 4.0 - uTime * 0.05, 3.1));
               float fall = (exp(-dS * 2.7) + 0.12 * exp(-dS * 0.9)) * (1.0 - smoothstep(0.6, 0.95, dS));
-              vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.5);
+              // Round 7: the rays are the light's own colour with a third of the old stock gold (at half,
+              // a rose morning's shafts over white snow washed the frame yellow).
+              vec3 warm = mix(uShaftColor, vec3(1.0, 0.7, 0.4), 0.3);
               col += warm * acc * rays * fall * clearRider * air * uShaft * 0.42;
             }
           }
@@ -571,8 +625,10 @@ export class PostFX {
             col = mix(col, snowC, clamp(amt, 0.0, 1.0) * 0.5 * uGust);
             col = mix(col, uPowLit * 0.95, env * env * 0.1 * uGust);
           }
-          // Grade: lift / gain, saturation, contrast around mid grey.
-          col = col * uGain + uLift * (1.0 - col);
+          // Grade, in the scene's own light: the place's exposure, lift and gain, saturation, and contrast
+          // round mid grey. (The lift fills the darks only: over 1 it would take light away.)
+          col *= uExposure;
+          col = col * uGain + uLift * max(1.0 - col, 0.0);
           float l = dot(col, vec3(0.2126, 0.7152, 0.0722));
           col = mix(vec3(l), col, uSat);
           col = (col - 0.18) * uContrast + 0.18;
@@ -588,8 +644,11 @@ export class PostFX {
             float loK = 1.0 - smoothstep(0.04, 0.4, lg);
             col *= mix(vec3(1.0), mix(vec3(1.0), lightHue, 0.5), hiK * 0.1 * uFilm);
             col *= mix(vec3(1.0), mix(vec3(1.0), coolHue, 0.5), loK * 0.16 * uFilm);
+            // The place's own split tone on top (ART.md 15, grade by place).
+            col *= mix(vec3(1.0), uHiTint, hiK) * mix(vec3(1.0), uLoTint, loK);
+            // Round 6's S-curve, only where the film curve is off: the curve has its own toe and shoulder.
             float lc = min(lg, 1.0);
-            float s = lc + (lc * lc * (3.0 - 2.0 * lc) - lc) * 0.38 * uFilm;
+            float s = lc + (lc * lc * (3.0 - 2.0 * lc) - lc) * 0.38 * uFilm * (1.0 - uTone);
             col *= mix(1.0, s / max(lc, 0.001), step(lg, 1.0));
             float mx = max(col.r, max(col.g, col.b));
             float sat = (mx - min(col.r, min(col.g, col.b))) / max(mx, 0.001);
@@ -606,8 +665,10 @@ export class PostFX {
             col *= 1.0 + uFocal * 0.13 * lift * mix(vec3(1.0), lightHue, 0.55);
             col *= 1.0 - uFocal * 0.1 * smoothstep(0.55, 1.5, fr);
           }
-          // Soft tone curve so highlights roll off instead of clipping.
-          col = col / (1.0 + max(col - 0.85, 0.0) * 0.6);
+          // The film curve: highlights roll off into the light's colour, the shade keeps its hue. (Under
+          // it, round 6's soft knee, which let the brightest snow reach paper white.)
+          col = max(col, 0.0);
+          col = mix(col / (1.0 + max(col - 0.85, 0.0) * 0.6), filmic(col, lightHue), uTone);
           col += uFlash * 0.35;
           float vig = smoothstep(1.05, 0.35, r);
           col *= mix(1.0, vig, 0.38 * uVignette);
@@ -893,6 +954,12 @@ export class PostFX {
     u.uGlitter.value = g.glitter ?? 0;
     u.uFilm.value = g.film ?? 1;
     u.uBloomWarm.value = g.bloomWarm ?? 0.4;
+    u.uTone.value = g.tone ?? 1;
+    u.uExposure.value = g.exposure ?? 1;
+    if (g.hi) u.uHiTint.value.copy(g.hi);
+    else u.uHiTint.value.setRGB(1, 1, 1);
+    if (g.lo) u.uLoTint.value.copy(g.lo);
+    else u.uLoTint.value.setRGB(1, 1, 1);
   }
 
   /** How strong the light shafts are this frame, and where the sun sits on screen: only for a low,

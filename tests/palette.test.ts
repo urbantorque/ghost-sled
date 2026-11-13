@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Color } from 'three';
 import { Mood } from '../src/sim/chaos';
-import { BiomeId } from '../src/sim/mountains';
-import { JOURNEY, Palette, getPalette, journeyDusk, journeyPalette, journeyProgress } from '../src/render/palette';
+import { courseFor } from '../src/sim/course';
+import { BiomeId, MOUNTAINS } from '../src/sim/mountains';
+import { FILM, JOURNEY, PLACES, Palette, filmValue, getPalette, journeyDusk, journeyPalette, journeyProgress, journeyStamp } from '../src/render/palette';
 
 const BIOMES: BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];
 const CHAOS = [Mood.Blizzard, Mood.Lantern, Mood.GlassIce, Mood.Comet, Mood.Haunted, Mood.Powder];
@@ -165,5 +166,113 @@ describe('The chaos moods', () => {
         expect(elevation(p.sunDir)).toBeGreaterThanOrEqual(p.lightMin - 1e-6);
       }
     }
+  });
+});
+
+// Round 7: the grade by place (palette.ts PLACES), laid on each mountain's own course.
+describe('The places', () => {
+  const courses = MOUNTAINS.map((m) => courseFor(m.seed));
+  const mint = new Color('#8FF3E4');
+  const vermillion = new Color('#FF4D2E');
+  const marigold = new Color('#FFD34D');
+  const at = (i: number, m: number) => journeyPalette(courses[i].biome, m, getPalette(courses[i].biome, Mood.None), courses[i]);
+
+  it('lays a place on every mountain, and only on sections the mountain has', () => {
+    courses.forEach((c, i) => {
+      expect(PLACES[c.biome].length).toBeGreaterThan(3);
+      // Somewhere down the run the place moves the picture away from the hour's own.
+      let moved = 0;
+      for (let m = 0; m <= 4400; m += 50) {
+        const hour = journeyPalette(c.biome, m, getPalette(c.biome, Mood.None));
+        const p = at(i, m);
+        if (dist(hour.grade.hi as Color, p.grade.hi as Color) > 0.01 || Math.abs(hour.lamps - p.lamps) > 0.05 || Math.abs(hour.under.k - p.under.k) > 0.05) moved++;
+      }
+      expect(moved, c.biome).toBeGreaterThan(8);
+    });
+  });
+
+  it('keeps each mountain its own light in every place: no two share a frame at any metre', () => {
+    const look = (p: Palette) => [p.skyZenith, p.skyHorizon, p.fog, p.snowLit, p.snowShade];
+    for (let m = 0; m <= 4400; m += 100) {
+      const ps = courses.map((_, i) => at(i, m));
+      for (let i = 0; i < ps.length; i++) {
+        for (let j = i + 1; j < ps.length; j++) {
+          const a = look(ps[i]);
+          const b = look(ps[j]);
+          expect(a.reduce((sum, col, k) => sum + dist(col, b[k]), 0), `${courses[i].biome} and ${courses[j].biome} at ${m} m`).toBeGreaterThan(0.7);
+        }
+      }
+    }
+  });
+
+  it('holds the rules of the hour in every place: the sky clear of mint, hazards dark, the light above the slope', () => {
+    courses.forEach((c, i) => {
+      const baked = getPalette(c.biome, Mood.None);
+      for (let m = 0; m <= 4500; m += 25) {
+        const p = at(i, m);
+        for (const col of [p.skyZenith, p.skyMid as Color, p.skyHorizon]) expect(dist(col, mint), `${c.biome} sky at ${m} m`).toBeGreaterThan(0.25);
+        expect(lum(baked.low) * p.hazardDim, `${c.biome} rock at ${m} m`).toBeLessThan(lum(p.snowLit) * 0.6);
+        expect(lum(baked.tall) * p.hazardDim, `${c.biome} trees at ${m} m`).toBeLessThan(lum(p.snowLit));
+        expect(elevation(p.sunDir), `${c.biome} at ${m} m`).toBeGreaterThanOrEqual(17);
+        expect(p.massif.heroAz).toBe(baked.massif.heroAz);
+        expect(p.massif.lava).toBeLessThan(0.75);
+      }
+    });
+  });
+
+  it('keeps the signal colours theirs: the lit snow, the air and the second light never come near them', () => {
+    courses.forEach((c, i) => {
+      for (let m = 0; m <= 4500; m += 25) {
+        const p = at(i, m);
+        // The lit snow as the snow shader draws it: by day it takes only a trace of the sun's colour.
+        const dk = Math.max(0, Math.min(1, (0.3 * p.snowLit.r + 0.59 * p.snowLit.g + 0.11 * p.snowLit.b - 0.7) / 0.25));
+        const day = dk * dk * (3 - 2 * dk);
+        const mx = Math.max(p.sunColor.r, p.sunColor.g, p.sunColor.b);
+        const pale = new Color(1, 1, 1).lerp(p.sunColor.clone().multiplyScalar(1 / mx), 0.15);
+        const lit = p.snowLit.clone().multiply(p.sunColor.clone().lerp(pale, day));
+        for (const [name, sig] of [['vermillion', vermillion], ['mint', mint], ['marigold', marigold]] as const) {
+          expect(dist(lit, sig), `${c.biome} lit snow and ${name} at ${m} m`).toBeGreaterThan(0.2);
+          expect(dist(p.fog, sig), `${c.biome} air and ${name} at ${m} m`).toBeGreaterThan(0.2);
+        }
+        // The aurora's light on the snow is a deeper green than the ghosts' mint, and the snow it lies on
+        // is darker than a ghost glows.
+        if (p.key2.k > 0) expect(dist(p.key2.color, mint), `${c.biome} second light at ${m} m`).toBeGreaterThan(0.3);
+        // The grade tints, it never recolours: both split tones stay near white.
+        for (const t of [p.grade.hi as Color, p.grade.lo as Color]) expect(Math.min(t.r, t.g, t.b), `${c.biome} split tone at ${m} m`).toBeGreaterThan(0.42);
+        expect(p.grade.exposure).toBeGreaterThan(0.85);
+        expect(p.grade.exposure).toBeLessThan(1.25);
+      }
+    });
+  });
+
+  it('blends between places: no step between neighbouring metres, and the stamp moves when the picture does', () => {
+    courses.forEach((c, i) => {
+      let prev = at(i, 0);
+      let prevStamp = journeyStamp(c.biome, 0, c);
+      let stamps = 0;
+      for (let m = 4; m <= 4500; m += 4) {
+        const p = at(i, m);
+        const stamp = journeyStamp(c.biome, m, c);
+        const d = dist(p.snowLit, prev.snowLit) + dist(p.fog, prev.fog) + Math.abs((p.grade.exposure as number) - (prev.grade.exposure as number)) + Math.abs(p.lamps - prev.lamps) * 0.3;
+        // (The widest step is the burst out of a cavern, which is meant to take under two seconds.)
+        expect(d, `${c.biome} at ${m} m`).toBeLessThan(0.2);
+        // A picture that moved more than a hair moved the stamp with it.
+        if (d > 0.01) expect(stamp, `${c.biome} stamp at ${m} m`).not.toBe(prevStamp);
+        if (stamp !== prevStamp) stamps++;
+        prev = p;
+        prevStamp = stamp;
+      }
+      // And it holds still where the light does: far fewer re-blends than frames.
+      expect(stamps, c.biome).toBeLessThan(900);
+    });
+  });
+
+  it('bakes the film curve the composite draws: straight through the mids, short of white at the top', () => {
+    expect(filmValue(0.18)).toBeGreaterThan(0.16);
+    expect(filmValue(0.18)).toBeLessThan(0.18);
+    expect(filmValue(FILM.knee)).toBeCloseTo(FILM.knee, 6);
+    expect(filmValue(1)).toBeLessThan(0.9);
+    expect(filmValue(8)).toBeLessThan(FILM.white);
+    for (let x = 0.01; x < 6; x += 0.01) expect(filmValue(x)).toBeGreaterThan(filmValue(x - 0.01));
   });
 });
