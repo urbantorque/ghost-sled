@@ -23,8 +23,8 @@ dashes, motion with a reason, reduced motion, no invented numbers) were held.
     the field holds exactly that rider's record once, as the one rival; a walk of the ladder with every
     mountain open visits all twelve in order and ends at the last race; a second settle of the same run beats
     nobody twice. In the browser a hands-off run on Pinecrest with Rosa, Bram and Pip beaten rode a field of
-    Pete_on_Tour, Rosa Quill, Juno Vale (rival), Old Wren and Bram Oakhollow, finished 4th of 6 in 2:27.3,
-    and the card read "Juno Vale held you off by 12.8 s." with Run Again as "Rematch Juno Vale"; the save was
+    Pete_on_Tour, Rosa Quill, Juno Vale (rival), Old Wren and Bram Oakhollow, finished 4th of 6 in 2:27.3
+    (3rd in 2:28.4 on the phone), and the card read "Juno Vale held you off by 12.8 s." with Run Again as "Rematch Juno Vale"; the save was
     unchanged. Rejected: a separate duel mode with a field of one (an empty mountain is a worse race than the
     one the player already knows, and a second mode is a second thing to teach); counting any run in which
     you happened to finish ahead of a rider (the duel would never be announced, so it would never be a
@@ -128,6 +128,12 @@ dashes, motion with a reason, reduced motion, no invented numbers) were held.
   results. I did not measure frames per second (seven lanes share the machine).
 - **Size.** `screens.css` is 29 kB raw; `twelve.ts` and `keyart.ts` 17 kB of source. The built CSS is 160 kB
   and the main chunk 2,425 kB (801 kB gzip) on this branch; I have no number for the base build.
+
+- **Console.** No error on either walk ( in the scratchpad drove every screen below on both viewports).
+  Two warnings, neither from this lane: on desktop High a shader compile note ("X3595: gradient instruction
+  used in a loop with varying iteration", a world shader), and on the phone one from the audio engine
+  ("Oscillator.frequency.value 26897.6 outside nominal range"). The phone's first frame, same measure on
+  Medium at 390x844: Pinecrest 1,425, 1,795, 1,422 ms; Ember 1,534, 1,440, 1,341 ms.
 
 ## ART.md text
 
