@@ -227,6 +227,7 @@ export class PostFX {
         uAspect: { value: 1 },
         uUseBloom: { value: 1 },
         uFxaa: { value: msaa > 0 ? 0 : 1 },
+        uFringe: { value: 0 },
         uTexel: { value: new Vector2(1, 1) },
         // The mood's own snow and sun, shared by reference: the avalanche bank is lit like its powder.
         uPowLit: shared.uSnowLit,
@@ -249,6 +250,7 @@ export class PostFX {
         uniform sampler2D tScene;
         uniform sampler2D tBloom;
         uniform float uFxaa;
+        uniform float uFringe;
         uniform vec2 uTexel;
         uniform float uBloom;
         uniform vec3 uLift;
@@ -353,6 +355,76 @@ export class PostFX {
           float lB = lumaP(b);
           return (lB < lMin || lB > lMax) ? a : b;
         }
+        // The edge walk (round 7, tiers.ts fxaa 2): where the five-tap cross finds an edge it is followed
+        // both ways to its ends, up to 23 texels off, and the pixel is moved across the edge by how far
+        // along the stair it sits. A long shallow stair (a cable, a roof line, a rail, the horizon of a
+        // bank) becomes a ramp over its whole length instead of a softened step, which is what stops it
+        // crawling at speed. A lone bright or dark pixel (a wire thinner than a pixel, a glint) is
+        // spread into its neighbours instead of blinking. Edge pixels only: the rest return on five taps.
+        vec3 fxaaWalk(vec2 uv) {
+          vec3 rgbM = texture2D(tScene, uv).rgb;
+          float lM = lumaP(rgbM);
+          float lN = lumaP(texture2D(tScene, uv + vec2(0.0, uTexel.y)).rgb);
+          float lS = lumaP(texture2D(tScene, uv - vec2(0.0, uTexel.y)).rgb);
+          float lE = lumaP(texture2D(tScene, uv + vec2(uTexel.x, 0.0)).rgb);
+          float lW = lumaP(texture2D(tScene, uv - vec2(uTexel.x, 0.0)).rgb);
+          float lMin = min(lM, min(min(lN, lS), min(lE, lW)));
+          float lMax = max(lM, max(max(lN, lS), max(lE, lW)));
+          float range = lMax - lMin;
+          if (range < max(0.04, lMax * 0.12)) return rgbM;
+          float lNW = lumaP(texture2D(tScene, uv + vec2(-uTexel.x, uTexel.y)).rgb);
+          float lNE = lumaP(texture2D(tScene, uv + uTexel).rgb);
+          float lSW = lumaP(texture2D(tScene, uv - uTexel).rgb);
+          float lSE = lumaP(texture2D(tScene, uv + vec2(uTexel.x, -uTexel.y)).rgb);
+          float edgeH = abs(lNW + lNE - 2.0 * lN) + 2.0 * abs(lW + lE - 2.0 * lM) + abs(lSW + lSE - 2.0 * lS);
+          float edgeV = abs(lNW + lSW - 2.0 * lW) + 2.0 * abs(lN + lS - 2.0 * lM) + abs(lNE + lSE - 2.0 * lE);
+          // (Named for the edge: a horizontal one has its luma changing up and down.)
+          bool horz = edgeV >= edgeH;
+          float l1 = horz ? lS : lW;
+          float l2 = horz ? lN : lE;
+          float g1 = l1 - lM;
+          float g2 = l2 - lM;
+          bool first = abs(g1) >= abs(g2);
+          float gradient = 0.25 * max(abs(g1), abs(g2));
+          float across = horz ? uTexel.y : uTexel.x;
+          float lAvg = 0.5 * ((first ? l1 : l2) + lM);
+          if (first) across = -across;
+          vec2 at = uv + (horz ? vec2(0.0, across * 0.5) : vec2(across * 0.5, 0.0));
+          vec2 along = horz ? vec2(uTexel.x, 0.0) : vec2(0.0, uTexel.y);
+          vec2 uv1 = at - along;
+          vec2 uv2 = at + along;
+          float end1 = lumaP(texture2D(tScene, uv1).rgb) - lAvg;
+          float end2 = lumaP(texture2D(tScene, uv2).rgb) - lAvg;
+          bool done1 = abs(end1) >= gradient;
+          bool done2 = abs(end2) >= gradient;
+          for (int i = 0; i < 7; i++) {
+            if (done1 && done2) break;
+            float q = i < 1 ? 1.5 : i < 4 ? 2.0 : i < 5 ? 4.0 : 8.0;
+            if (!done1) {
+              uv1 -= along * q;
+              end1 = lumaP(texture2D(tScene, uv1).rgb) - lAvg;
+              done1 = abs(end1) >= gradient;
+            }
+            if (!done2) {
+              uv2 += along * q;
+              end2 = lumaP(texture2D(tScene, uv2).rgb) - lAvg;
+              done2 = abs(end2) >= gradient;
+            }
+          }
+          float d1 = horz ? uv.x - uv1.x : uv.y - uv1.y;
+          float d2 = horz ? uv2.x - uv.x : uv2.y - uv.y;
+          float shift = 0.5 - min(d1, d2) / (d1 + d2);
+          // Only when the nearer end really turns the way this pixel's side of the edge says.
+          if (((d1 < d2 ? end1 : end2) < 0.0) == (lM < lAvg)) shift = 0.0;
+          // A pixel that differs from all its neighbours: spread it (part strength, so detail stays).
+          float lAll = (2.0 * (lN + lS + lE + lW) + lNW + lNE + lSW + lSE) / 12.0;
+          float sub = clamp(abs(lAll - lM) / range, 0.0, 1.0);
+          sub = (3.0 - 2.0 * sub) * sub * sub;
+          shift = max(shift, sub * sub * 0.6);
+          vec3 moved = texture2D(tScene, uv + (horz ? vec2(0.0, shift * across) : vec2(shift * across, 0.0))).rgb;
+          // (A pixel that is not a number, should a material ever write one, stays one pixel wide.)
+          return moved.r == moved.r && moved.g == moved.g && moved.b == moved.b ? moved : rgbM;
+        }
         void main() {
           vec2 uv = vUv;
           vec2 dc = uv - 0.5;
@@ -369,6 +441,8 @@ export class PostFX {
               acc += texture2D(tScene, uv - dc * k * streak * 0.07).rgb;
             }
             col = acc / 6.0;
+          } else if (uFxaa > 1.5) {
+            col = fxaaWalk(uv);
           } else if (uFxaa > 0.5) {
             col = fxaa(uv);
           } else {
@@ -379,6 +453,15 @@ export class PostFX {
             vec2 off = dc * 0.0035 * uPunch;
             col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
             col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
+          }
+          // Round 7's lens character: at speed the glass shows in the frame's corners and nowhere else, a
+          // hair of colour fringe (two and a half pixels of a 1280 frame in the very corner at the
+          // cap). A calm frame has none.
+          float fringe = uFringe * uSpeed * smoothstep(0.5, 1.0, r);
+          if (fringe > 0.004) {
+            vec2 off = dc * 0.004 * fringe;
+            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.7);
+            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.7);
           }
           // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
           col = pipeAO(col, uv);
@@ -775,12 +858,20 @@ export class PostFX {
   /** The tier's passes (postfx/tiers.ts). Call after construction and whenever the tier changes. */
   configure(passes: PassSettings): void {
     this.pipe.configure(passes, this.sceneRT);
+    this.aimAA();
+  }
+
+  /** Which edge anti-aliasing the composite runs: the tier's, or round 6's with the dev switch off
+   *  (FXAA only for a scene drawn without MSAA). */
+  private aimAA(): void {
+    const sw = this.pipe.switches;
+    this.composite.uniforms.uFxaa.value = sw.aa ? this.pipe.passes.fxaa : this.msaa > 0 ? 0 : 1;
   }
 
   setMsaa(samples: number): void {
     if (samples === this.msaa) return;
     this.msaa = samples;
-    this.composite.uniforms.uFxaa.value = samples > 0 ? 0 : 1;
+    this.aimAA();
     this.sceneRT.samples = samples;
     this.sceneRT.dispose();
   }
@@ -896,6 +987,7 @@ export class PostFX {
     u.uFoot.value = this.moodFoot * this.params.footScale;
     u.uSpeed.value = this.params.speed;
     u.uPunch.value = this.params.punch;
+    u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe : 0;
     u.uFlash.value = this.params.flash;
     u.uVignette.value = this.params.vignette;
     u.uGrain.value = this.params.grain * this.moodGrain;
@@ -907,7 +999,7 @@ export class PostFX {
     u.uStreakFoot.value = this.params.streakFoot;
     pipe.timer.begin('composite');
     this.pass(this.composite, null);
-    pipe.end();
+    pipe.end(camera as PerspectiveCamera);
   }
 
   /** Renders the scene from a second camera into a framed inset. x, y, w, h are CSS pixels with the

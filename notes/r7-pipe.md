@@ -118,3 +118,44 @@ four samples a pixel is a trap), unless the save already chose it.
   that write no depth (ghost glass, particles) are mirrored only where they overlap something that does.
   `?post=-mirror` is round 6's. Frames: `shots/r7/pipe/mirror/` (`*-r6.png` against `*-r7.png`: the lake
   at 1800 m, Glass Ice at 900 m).
+- **Anti-aliasing** (this commit). Measured first (`scripts/playtest/pipe.js`, `shimmer: 8`: a frozen frame
+  drawn eight times with the lens moved by parts of a pixel; the luma's standard deviation a pixel, 99th
+  percentile, thousandths of white; lane numbers, compare within a frame only):
+
+  | Frame (m0) | no MSAA, none | no MSAA, round 6 FXAA | no MSAA, edge walk | 2x | 2x + walk | 4x | 4x + walk | 8x |
+  | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+  | 900 m, trees | 146 | 112 | 118 | 114 | 97 | 101 | 89 | 95 |
+  | 1800 m, the lake's cables | 119 | 96 | 99 | 92 | 79 | 84 | 73 | 81 |
+  | 3464 m, Old Town's bunting | 161 | 118 | 122 | 120 | 99 | 104 | 90 | 99 |
+
+  So: the composite's edge pass on top of MSAA buys as much as doubling the samples, and 4x with it beats
+  8x without. Shipped: Medium no MSAA and the edge walk (`fxaa: 2`); High 2x MSAA and the edge walk; Ultra
+  4x MSAA and the edge walk. The walk (post.ts `fxaaWalk`) follows an edge to both ends (up to 23 texels)
+  and moves the pixel across it by its place on the stair. By the number it equals round 6's FXAA; by eye
+  (`shots/r7/pipe/aa/crop-medium-z1800.png`, `crop-high-z1800.png`, 4x enlargements) it keeps more of the
+  picture (the pylon, the hut's windows) for the same edges, and on High it turns the beads along the
+  cable-car wires into lines. Alpha to coverage was already on every near-fading material wherever there
+  is MSAA (materials.ts `coverageFade`); nothing to add. `?post=-aa` is round 6's.
+  What it cannot fix: a wire thinner than a pixel with no MSAA is drawn as dashes (Medium, the same
+  crop), and no pass after the fact can redraw the gaps. That wants the wire's geometry held to a pixel's
+  width and faded instead (props.ts, the fx lane's): see "What the main lane must wire or decide".
+- **Temporal anti-aliasing: tried on Ultra, not kept** (`postfx/taa.ts`, `taa: false` on every tier,
+  `?taa` turns it on for a look). The lens moves through eight places inside a pixel and one pass blends
+  into a reprojected, colour-clamped history. On a still frame it works: 1800 m, p99 81 to 54 and the
+  share of crawling pixels 4.2% to 2.2%; 3464 m, 90 to 66 and 4.0% to 2.6%. In motion, which is all this
+  game is, every pixel's history is fetched from somewhere else each frame through a bilinear read, and
+  the picture goes soft (`shots/r7/pipe/aa/crop-taa-live-z3464.png`: the house fronts and the rider's
+  outline). Fixing that is a sharper history filter and a jitter-aware depth for the occlusion and the
+  shafts, for a tier that already has 4x MSAA and the edge walk. Not worth it this round; the pass and
+  its test stay so the next one starts from a working blend.
+- **Lens character** (this commit). ART.md 15 asks for a lens that stays out of the way: no fringe in a
+  calm frame, no dirt. Round 6 already has the sun's streak and ghosts, the punch's fringe, the vignette
+  and the grain. Added: at speed, a hair of colour fringe in the frame's corners only (`fringe`: High
+  0.7, Ultra 1; at the cap about 2.5 pixels of a 1280 frame in the very corner, nothing inside the middle
+  half), off under reduced motion, `?post=-lens`. Two taps on corner pixels at speed, no pass. Ultra's
+  depth of field already opens highlights into discs. Nothing else: more would be dirt.
+- **Cost table as data** (this commit). `tiers.ts passCosts()` lists, for a tier and a frame, every pass
+  with its draws, target size and format, and taps, and every cost that is not a pass (the mirror, the
+  edge walk, the fringe, the shadow's reach). `tests/pipeline.test.ts` holds it to the plan: Low empty,
+  rows add up to `plan.added`, cine at rest lists nothing, each row has a switch that removes it.
+  Correction: depth of field is one gather and shares the lens pass, so a full beat adds 2 draws, not 3.

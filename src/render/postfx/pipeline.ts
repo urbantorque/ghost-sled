@@ -5,6 +5,7 @@ import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lastViewProj, lensMotion
 import { LensPass } from './lens';
 import { Quad } from './quad';
 import { aimIceMirror } from './reflect';
+import { TaaPass } from './taa';
 import { SHAFT_COMPOSITE_GLSL, ShaftsPass, shaftComposite, shaftPlace } from './shafts';
 import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
 import { GpuTimer } from './timing';
@@ -76,6 +77,7 @@ export class Pipeline {
   readonly ao: AOPass;
   readonly shafts: ShaftsPass;
   readonly lens: LensPass;
+  readonly taa: TaaPass;
   /** The rider's place on screen (uv, origin bottom left) and the clock, set by post.ts each frame. */
   readonly rider = new Vector2(0.5, 0.4);
   time = 0;
@@ -93,6 +95,7 @@ export class Pipeline {
     this.ao = new AOPass(this.quad);
     this.shafts = new ShaftsPass(this.quad);
     this.lens = new LensPass(this.quad, renderer);
+    this.taa = new TaaPass(this.quad, renderer);
   }
 
   /** A tier's passes (and the dev switches): builds or drops the scene target's depth texture and
@@ -129,6 +132,7 @@ export class Pipeline {
     this.ao.setSize(w, h);
     this.shafts.setSize(w, h);
     this.lens.setSize(w, h);
+    this.taa.setSize(w, h);
   }
 
   /** Before the scene pass: reads the camera's cine state and decides whether this frame's depth is
@@ -150,6 +154,9 @@ export class Pipeline {
     const mode = !post || !this.switches.mirror || this.passes.mirror === 'sky' ? 0 : this.passes.mirror === 'bake' ? 1 : 2;
     const screen = mode === 2 && target.samples > 0 && this.depthTex !== null && this.drawn;
     aimIceMirror(mode, screen ? target.texture : null, screen ? this.depthTex : null, lastViewProj(), camera.near, camera.far);
+    // (After the lens's own motion is measured: the part-pixel move is not motion.)
+    if (this.plan.taa && this.depthTex) this.taa.move(camera);
+    else this.taa.rest();
     this.timer.begin('scene');
   }
 
@@ -176,6 +183,10 @@ export class Pipeline {
     pipeUniforms.uBars.value = plan.letterbox;
     pipeUniforms.uPipeView.value = depth ? VIEWS.indexOf(this.view) : 0;
     let picture = target.texture;
+    if (plan.taa && depth) {
+      this.timer.begin('taa');
+      picture = this.taa.render(picture, this.rider);
+    }
     if (plan.lens && depth) {
       this.timer.begin('lens');
       const dt = Math.max(1 / 240, Math.min(0.1, this.time - this.lastTime));
@@ -187,7 +198,8 @@ export class Pipeline {
   }
 
   /** Once the composite is on screen. */
-  end(): void {
+  end(camera?: PerspectiveCamera): void {
+    if (camera) this.taa.settle(camera);
     this.drawn = this.plan.depth;
     keepLens();
     this.timer.collect();
@@ -197,6 +209,7 @@ export class Pipeline {
     this.ao.dispose();
     this.shafts.dispose();
     this.lens.dispose();
+    this.taa.dispose();
     this.depthTex?.dispose();
   }
 }

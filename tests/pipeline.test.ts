@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cine, resetCine } from '../src/render/cine';
-import { CINE_EPS, PASSES, SWITCH_NAMES, TIERS, allSwitches, detailOf, letterboxShare, parseSwitches, planFrame, wantsDepth, type FrameSignals, type PassSettings, type Tier } from '../src/render/postfx/tiers';
+import { CINE_EPS, PASSES, SWITCH_NAMES, TIERS, allSwitches, detailOf, letterboxShare, parseSwitches, passCosts, planFrame, wantsDepth, type FrameSignals, type PassSettings, type Tier } from '../src/render/postfx/tiers';
 
 // The frame's passes without a GPU: every tier has a full row, Low runs nothing, and the camera's cine
 // state at rest (cine.ts) schedules no pass at all. post.ts runs exactly the plan these functions return.
@@ -11,7 +11,7 @@ const fromCine = (over: Partial<FrameSignals> = {}): FrameSignals => rest({ dof:
 
 describe('the tier tables', () => {
   it('has a complete row of passes for every tier, Ultra included', () => {
-    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'shadowReach'];
+    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'fxaa', 'fringe', 'shadowReach'];
     expect([...TIERS]).toEqual(['low', 'medium', 'high', 'ultra']);
     for (const t of TIERS) {
       const p = PASSES[t];
@@ -44,6 +44,8 @@ describe('the tier tables', () => {
     expect(p.blurTaps).toBe(0);
     expect(p.mirror).toBe('sky');
     expect(p.taa).toBe(false);
+    expect(p.fxaa).toBe(0);
+    expect(p.fringe).toBe(0);
     expect(wantsDepth(p, ON)).toBe(false);
     // Whatever the camera and the light ask for, Low draws none of it.
     const loud = rest({ dof: 1, motionBlur: 1, letterbox: 1, shafts: 1 });
@@ -89,7 +91,7 @@ describe('the cine contract', () => {
       expect(plan.dof && plan.blur && plan.lens, t).toBe(true);
       expect(plan.depth, t).toBe(true);
       expect(plan.letterbox, t).toBeGreaterThan(0.1);
-      expect(added(t, beat) - added(t, rest()), t).toBe(3);
+      expect(added(t, beat) - added(t, rest()), t).toBe(2);
       // A value under the rest threshold is rest.
       expect(added(t, rest({ dof: CINE_EPS / 2, motionBlur: CINE_EPS / 2 })), t).toBe(added(t, rest()));
     }
@@ -116,6 +118,79 @@ describe('the cine contract', () => {
     expect(letterboxShare(1, 390 / 844)).toBe(0);
     expect(letterboxShare(0, 16 / 9)).toBe(0);
     expect(letterboxShare(1, 4 / 3)).toBeLessThanOrEqual(0.13);
+  });
+});
+
+describe('the cost table', () => {
+  const beat = rest({ dof: 1, motionBlur: 1, letterbox: 1, shafts: 1, motionPx: 8 });
+
+  it('is empty on Low, whatever the frame asks for', () => {
+    // Low draws straight to the canvas (quality.post is false): nothing at all.
+    expect(passCosts(PASSES.low, ON, { ...beat, post: false }, 1280, 720)).toEqual([]);
+    // And its row of the table would draw nothing even behind a post stack.
+    const rows = passCosts(PASSES.low, ON, beat, 1280, 720);
+    expect(rows.reduce((n, r) => n + r.draws + r.targets + r.taps, 0)).toBe(0);
+    expect(passCosts(PASSES.ultra, ON, { ...beat, post: false }, 1280, 720)).toEqual([]);
+  });
+
+  it('adds up to the plan on every tier, at rest and in a beat', () => {
+    for (const t of TIERS) {
+      for (const f of [rest(), rest({ shafts: 1 }), beat, { ...beat, reduced: true }]) {
+        const rows = passCosts(PASSES[t], ON, f, 1280, 720);
+        const draws = rows.reduce((n, r) => n + r.draws, 0);
+        expect(draws, t).toBe(planFrame(PASSES[t], ON, f).added);
+        // A row is named for the switch that removes it, and no pass is listed twice.
+        for (const r of rows) expect(SWITCH_NAMES, r.name).toContain(r.name);
+        expect(new Set(rows.map((r) => r.name)).size, t).toBe(rows.length);
+        // No target is larger than the frame, and a pass that draws has one.
+        for (const r of rows) {
+          if (r.name === 'mirror') continue;
+          expect(r.w, r.name).toBeLessThanOrEqual(1280);
+          expect(r.h, r.name).toBeLessThanOrEqual(720);
+          if (r.draws > 0) expect(r.w * r.h, r.name).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
+  it('lists nothing for the camera while cine is at rest', () => {
+    resetCine();
+    for (const t of TIERS) {
+      const names = passCosts(PASSES[t], ON, fromCine({ shafts: 1 }), 1280, 720).map((r) => r.name);
+      expect(names, t).not.toContain('dof');
+      expect(names, t).not.toContain('blur');
+      expect(names, t).not.toContain('letterbox');
+    }
+  });
+
+  it('has a switch that removes each row', () => {
+    for (const t of TIERS) {
+      for (const r of passCosts(PASSES[t], ON, beat, 1280, 720)) {
+        const off = passCosts(PASSES[t], { ...ON, [r.name]: false }, beat, 1280, 720).map((x) => x.name);
+        expect(off, t + ' -' + r.name).not.toContain(r.name);
+      }
+    }
+  });
+
+  it('sizes the half and quarter targets from the frame', () => {
+    const rows = passCosts(PASSES.medium, ON, rest({ shafts: 1 }), 1281, 721);
+    const shafts = rows.find((r) => r.name === 'shafts')!;
+    expect([shafts.w, shafts.h]).toEqual([321, 181]);
+    const ao = passCosts(PASSES.high, ON, rest(), 1281, 721).find((r) => r.name === 'ao')!;
+    expect([ao.w, ao.h]).toEqual([641, 361]);
+  });
+});
+
+describe('the temporal experiment', () => {
+  it('is off on every tier as shipped, and is one pass with a depth when a tier turns it on', () => {
+    for (const t of TIERS) expect(PASSES[t].taa, t).toBe(false);
+    const p = { ...PASSES.high, taa: true };
+    const plan = planFrame(p, ON, rest());
+    expect(plan.taa && plan.depth).toBe(true);
+    expect(plan.added).toBe(planFrame(PASSES.high, ON, rest()).added + 1);
+    expect(planFrame(p, parseSwitches('-taa'), rest()).taa).toBe(false);
+    expect(wantsDepth({ ...PASSES.medium, taa: true, shaftTaps: 0 }, ON)).toBe(true);
+    expect(planFrame({ ...PASSES.low, taa: true }, ON, rest({ post: false })).taa).toBe(false);
   });
 });
 

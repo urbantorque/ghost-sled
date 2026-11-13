@@ -403,6 +403,11 @@ export class World {
     const view = q.get('postview') as PipeView | null;
     if (view && VIEWS.includes(view)) pipe.view = view;
     if (q.has('gpu')) pipe.timer.on = true;
+    // The temporal anti-aliasing experiment, on whatever tier has a depth (`?taa`).
+    if (q.has('taa')) {
+      this.quality = { ...this.quality, passes: { ...this.quality.passes, taa: true } };
+      this.post.configure(this.quality.passes);
+    }
     const c = q.get('cine');
     if (c) {
       const hold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } = {};

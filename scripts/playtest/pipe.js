@@ -12,6 +12,14 @@
 // ao, shafts, dof, lens, bloom, composite), with draw calls and triangles summed over every pass.
 // These are a lane's numbers from a shared laptop: compare variants within one run, never across runs.
 //
+// Shimmer. With `shimmer: N` a job also measures how much each still variant's edges crawl: the frozen
+// frame is drawn N times with the lens moved by parts of a pixel (a Halton set inside one pixel), and
+// the report gives the luma's standard deviation over those draws, per pixel: its mean and its 99th
+// percentile (in thousandths of full white) and `crawl`, the share of pixels (per cent) that move by
+// more than 4% of white. A picture with no aliasing still moves a little under a part-pixel shift, so
+// only compare variants of the same frame. A variant may set `msaa` and `settle` (draws per shift,
+// for a pass with a history).
+//
 //   playwright-cli -s=r7-pipe open --config=.playwright/cli-headless.config.json
 //   playwright-cli -s=r7-pipe eval "window.__pipeCfg = { base: 'http://127.0.0.1:4410/', out: 'C:/.../shots/r7/pipe/', jobs: [{ tier: 'ultra', m: 0, at: [707, 3400], variants: [{ tag: 'off', post: 'none' }, { tag: 'on', post: 'all' }] }] }"
 //   playwright-cli -s=r7-pipe run-code --filename=scripts/playtest/pipe.js
@@ -71,6 +79,7 @@ async (page) => {
           else if (names.includes(t)) sw[t] = true;
         }
         w.post.configure(w.quality.passes);
+        if (v.msaa != null) w.post.setMsaa(v.msaa);
         w.post.pipe.view = v.view || 'none';
         w.cineHold = v.cine || { dof: 0, motionBlur: 0, letterbox: 0 };
         if (v.set) v.set.forEach(([path, val]) => { const ks = path.split('.'); let o = w; for (let i = 0; i < ks.length - 1; i++) o = o[ks[i]]; o[ks[ks.length - 1]] = val; });
@@ -79,6 +88,45 @@ async (page) => {
       window.__pipeFreeze = (on) => {
         if (on) { window.__held = []; window.requestAnimationFrame = (cb) => { window.__held.push(cb); return 0; }; }
         else { window.requestAnimationFrame = raf; const h = window.__held || []; window.__held = null; for (const cb of h) raf(cb); }
+      };
+      // The crawl of a frozen frame under part-pixel moves of the lens (see the header).
+      window.__pipeShimmer = async (n, settle) => {
+        const cam = w.cam.camera;
+        const gl = r.getContext();
+        const W = gl.drawingBufferWidth;
+        const H = gl.drawingBufferHeight;
+        const sum = new Float32Array(W * H);
+        const sq = new Float32Array(W * H);
+        const buf = new Uint8Array(W * H * 4);
+        const halton = (i, b) => { let f = 1; let x = 0; while (i > 0) { f /= b; x += f * (i % b); i = Math.floor(i / b); } return x; };
+        for (let k = 0; k < n; k++) {
+          cam.setViewOffset(W, H, halton(k + 1, 2) - 0.5, halton(k + 1, 3) - 0.5, W, H);
+          await new Promise((res) => raf(() => {
+            Object.assign(w.cine, w.cineHold || {});
+            for (let s = 0; s < (settle || 1); s++) w.post.render(w.scene, cam);
+            gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+            for (let i = 0, p = 0; i < W * H; i++, p += 4) {
+              const l = (0.299 * buf[p] + 0.587 * buf[p + 1] + 0.114 * buf[p + 2]) / 255;
+              sum[i] += l;
+              sq[i] += l * l;
+            }
+            res(true);
+          }));
+        }
+        cam.clearViewOffset();
+        const sd = new Float32Array(W * H);
+        let mean = 0;
+        let crawl = 0;
+        for (let i = 0; i < W * H; i++) {
+          const m = sum[i] / n;
+          const s = Math.sqrt(Math.max(0, sq[i] / n - m * m));
+          sd[i] = s;
+          mean += s;
+          if (s > 0.04) crawl++;
+        }
+        sd.sort();
+        const r3 = (x) => Math.round(x * 10000) / 10;
+        return { mean: r3(mean / (W * H)), p99: r3(sd[Math.floor(W * H * 0.99)]), crawl: Math.round((crawl / (W * H)) * 10000) / 100 };
       };
       window.__pipeRedraw = () => new Promise((res) => raf(() => {
         Object.assign(w.cine, w.cineHold || {});
@@ -105,8 +153,10 @@ async (page) => {
           await page.evaluate(() => window.__pipeRedraw());
           await page.evaluate(() => window.__pipeRedraw());
           const name = `${tier}-m${m}-z${String(z).padStart(4, '0')}-${v.tag}.png`;
-          await page.screenshot({ path: c.out + name });
-          report.push({ name });
+          if (!v.noshot) await page.screenshot({ path: c.out + name });
+          const row = { name };
+          if (job.shimmer) row.shimmer = await page.evaluate(([n, s]) => window.__pipeShimmer(n, s), [job.shimmer, v.settle || 1]);
+          report.push(row);
         }
         await page.evaluate(() => window.__pipeFreeze(false));
       }
