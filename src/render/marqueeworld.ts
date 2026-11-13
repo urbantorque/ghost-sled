@@ -429,9 +429,12 @@ export class MarqueeWorld {
     }
     const wireMesh = new Mesh(merge(wires), this.toon);
     this.statics.push(wireMesh);
-    const garMesh = new Mesh(merge(garland), this.lanternMat);
-    this.statics.push(garMesh);
-    this.root.add(garMesh);
+    // (A course whose gates all swing has no garland at all: nothing to merge, nothing to draw.)
+    const garMesh = garland.length > 0 ? new Mesh(merge(garland), this.lanternMat) : null;
+    if (garMesh) {
+      this.statics.push(garMesh);
+      this.root.add(garMesh);
+    }
     // Instanced: their bounds are their instances' (a threaded gate's lanterns rise out of them, and the
     // frame they rise in is the one the rider is in, so a stale bound never hides one in view).
     pillars.computeBoundingSphere();
@@ -442,7 +445,7 @@ export class MarqueeWorld {
     lanterns.frustumCulled = false;
     const z0 = Math.min(...this.gates.map((g) => g.play.z0)) - 40;
     const z1 = Math.max(...this.gates.map((g) => g.play.z1)) + 40;
-    this.shown.push({ objs: [pillars, lanterns, wireMesh, garMesh, pools], z0, z1 });
+    this.shown.push({ objs: garMesh ? [pillars, lanterns, wireMesh, garMesh, pools] : [pillars, lanterns, wireMesh, pools], z0, z1 });
     this.pillars = pillars;
     this.lanterns = lanterns;
     this.root.add(pillars, lanterns, wireMesh);
