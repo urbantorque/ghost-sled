@@ -550,8 +550,8 @@ export function craneFlock(n: number, ribbons: number): { geo: InstancedBufferGe
   };
   for (let i = 0; i < n; i++) {
     const rib = i % ribbons;
-    // (A flock bunches: thick at its middle, thin at its ends.)
-    const along = (rnd() + rnd() + rnd()) / 3;
+    // (Spread evenly along its ribbon: a ribbon is long and the rider is only ever beside a part of it.)
+    const along = rnd();
     const ang = rnd() * Math.PI * 2;
     const rad = Math.sqrt(rnd());
     a.set([rib, along, Math.cos(ang) * rad, Math.sin(ang) * rad], i * 4);
@@ -638,7 +638,7 @@ export function craneFlock(n: number, ribbons: number): { geo: InstancedBufferGe
         l *= size;
         vec3 wp = ctr + rt * l.x + up * l.y - fw * l.z;
         // White, rose and a few of pale gold; each fold holds its own value, cooler in its shade.
-        vec3 paper = aB.z < 0.46 ? vec3(1.0, 0.99, 0.97) : aB.z < 0.9 ? vec3(1.0, 0.6, 0.72) : vec3(1.0, 0.86, 0.56);
+        vec3 paper = aB.z < 0.4 ? vec3(1.0, 0.99, 0.97) : aB.z < 0.92 ? vec3(1.0, 0.52, 0.66) : vec3(1.0, 0.86, 0.56);
         // (Deep fold shade, so a white crane holds its shape against a pale sky.)
         vCol = paper * mix(vec3(0.5, 0.56, 0.86), vec3(1.1), aShade * aShade);
         vec4 mv = viewMatrix * vec4(wp, 1.0);

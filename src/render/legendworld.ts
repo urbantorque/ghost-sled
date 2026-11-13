@@ -766,7 +766,8 @@ export class LegendWorld {
     cu.uMove.value = move;
     cu.uFade.value = fade * smooth(this.tSaid / 0.8);
     cu.uHeight.value = ctx.low ? 22 : 27;
-    cu.uGain.value = ctx.low ? 1.25 : 1;
+    // (Brighter while it is still high and far, so its coming down is seen from a long way up the run.)
+    cu.uGain.value = (ctx.low ? 1.25 : 1) * (1 + 0.9 * (1 - clamp01(down)));
     A.curtain.geometry.setDrawRange(0, ctx.low ? A.one : Infinity);
     A.curtain.visible = true;
     const charge = clamp01(st.n / RIBBON_CAP);
@@ -938,9 +939,10 @@ export class LegendWorld {
     };
     // Two streams down the flight either side of the rider, one crossing over it, a great wheel over the
     // landing on the legend's side, a high stream coming back up the valley, a second wheel beyond.
-    rib(0, sd * 12, 5, 26, 7, 2.4, -120, 1, 23, 430, 0.4, 4.2);
-    rib(1, -sd * 16, 7, 31, 13, 3, -140, 1, 27, 450, 2.1, 5);
-    rib(2, 0, 30, 15, 21, 4, -90, 1, 25, 420, 4.0, 5);
+    // (The streams fly near the rider's own pace, so they keep beside the sled down the flight.)
+    rib(0, sd * 11, 5, 26, 5, 2, -120, 1, 31, 340, 0.4, 4.2);
+    rib(1, -sd * 14, 7, 31, 9, 3, -140, 1, 34, 360, 2.1, 5);
+    rib(2, 0, 26, 15, 16, 4, -90, 1, 29, 330, 4.0, 5);
     rib(3, sd * 10, 38, 38, 27, 5, far - 20, 0, 21, 2 * Math.PI * 38, 0, 6.5);
     rib(4, -sd * 42, 12, 30, 36, 5, far + 260, -1, 19, 430, 1.3, 8);
     rib(5, -sd * 30, 27, 27, 19, 4, far + 90, 0, 18, 2 * Math.PI * 27, 2.6, 5);
@@ -963,7 +965,7 @@ export class LegendWorld {
     // The first flock is up as it is said, the rest by the lip; all of them leave together.
     u.uRise.value = 0.8 * smooth(this.kIn * 1.25) + 0.5 * smooth(tp / 1.2);
     u.uLeave.value = smooth((this.kExit - 0.2) / 0.8);
-    u.uSize.value = ctx.low ? 2.9 : 2.1;
+    u.uSize.value = ctx.low ? 3.2 : 2.6;
     (C.mesh.geometry as BufferGeometry & { instanceCount: number }).instanceCount = tiered(ctx.tier, [150, 520, 900, 960]);
     C.mesh.visible = true;
     // A few folds of loose paper coming down through the flight.
