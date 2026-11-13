@@ -177,17 +177,15 @@ export function bowed(o: BowOpts): Inst {
       let ph = r.next() * TAU;
       const f0 = mtof(n.m);
       const base = clamp(f0 * (3.5 + 9 * o.bright * (0.45 + 0.55 * n.v)), 900, 9000);
-      const hiss = Biquad.design('bp', 3600, 0.8);
       for (let i = late; i < len; i++) {
         const t = (i - late) / SR;
-        wander += (r.bip() * 4 - wander) * 0.0006;
+        if ((i & 15) === 0) wander += (r.bip() * 4 - wander) * 0.0096;
         const vibIn = n.dur > 0.24 ? clamp((t - vd) / 0.3, 0, 1) : 0;
         ph += (TAU * vibRate) / SR;
         const slide = n.slide && t < 0.2 ? n.slide * 100 * Math.exp(-t / 0.022) : 0;
         const f = f0 * bend(det + wander + o.vib * vibIn * Math.sin(ph) + slide);
         const e = env[i - late];
-        const x = saw.tick(f / SR) + hiss.tick(r.bip()) * (0.05 + (t < 0.25 ? 0.25 * Math.exp(-t / 0.03) : 0));
-        mono[i] = lp.tick(x, base * (0.55 + 0.45 * e), 0.9) * e;
+        mono[i] = lp.tick(saw.tick(f / SR), base * (0.55 + 0.45 * e), 0.9) * e;
       }
       const pan = o.voices > 1 ? (v / (o.voices - 1)) * 2 - 1 : 0;
       const [gl, gr] = panGains(pan * spread);
@@ -196,6 +194,12 @@ export function bowed(o: BowOpts): Inst {
         out.l[i] += mono[i] * gl * g;
         out.r[i] += mono[i] * gr * g;
       }
+    }
+    // The bows' hiss: one band of noise a side, loudest as the bows bite.
+    for (const ch of [out.l, out.r]) {
+      const hiss = Biquad.design('bp', 3600, 0.8);
+      const hg = 0.06 * (0.5 + 0.5 * n.v) * Math.sqrt(o.voices);
+      for (let i = 0; i < len; i++) ch[i] += hiss.tick(rng.bip()) * env[i] * hg * (1 + (i < 12000 ? 4 * Math.exp(-i / 1440) : 0));
     }
     // The body is the same wood for every player: one pass a side.
     eqMono(out.l, BOW_BODY[o.body]);
@@ -664,14 +668,19 @@ export function choir(o: ChoirOpts): Inst {
       const late = Math.floor(r.next() * secs(0.03));
       for (let i = late; i < len; i++) {
         const t = i / SR;
-        drift += (r.bip() * 7 - drift) * 0.0004;
+        if ((i & 15) === 0) drift += (r.bip() * 7 - drift) * 0.0064;
         ph += (TAU * rate) / SR;
         const vib = clamp((t - 0.35) / 0.5, 0, 1) * 11 * Math.sin(ph);
         const f = f0 * bend(det + drift + vib);
-        const x = osc.tick(f / SR, 0.22) + r.bip() * (o.breath ?? 0.25) * 0.5;
+        const x = osc.tick(f / SR, 0.22);
         src.l[i] += x * gl;
         src.r[i] += x * gr;
       }
+    }
+    const air = (o.breath ?? 0.25) * 0.5 * Math.sqrt(o.voices);
+    for (let i = 0; i < len; i++) {
+      src.l[i] += rng.bip() * air;
+      src.r[i] += rng.bip() * air;
     }
     const g = (0.3 + 0.7 * n.v) / Math.sqrt(o.voices);
     [[src.l, out.l], [src.r, out.r]].forEach(([s, d]) => {

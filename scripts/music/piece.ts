@@ -232,6 +232,9 @@ export function sumLayers(layers: Partial<Record<Layer, Stereo>>, which: readonl
 /** Peak ceiling of a mastered section with every layer in, dBFS. A lossy encode overshoots by a few tenths
  *  and sections' tails overlap the next section's head: the game's own true-peak limiter is the last word. */
 export const CEILING_DB = -1.5;
+/** The drop's hit against the section it lands on, dB: the two sound together, and the reference runs' true
+ *  peak read +3 dBTP with the hit at the ceiling too. */
+export const HIT_TRIM_DB = -4;
 /** What the music is mastered to: every section with every layer in, end to end, integrated. */
 export const TARGET_LUFS = -16;
 
@@ -300,6 +303,8 @@ export function master(piece: Piece, sections: RenderedSection[], shots: Array<{
     width(s.audio, m.width);
     scale(s.audio, G);
     applyGain(s.audio, limiterGain(s.audio, CEILING_DB).gain);
+    // The hit lands on a chorus's own downbeat, itself at the ceiling: it sits under it.
+    if (s.id === 'hit') scale(s.audio, db(HIT_TRIM_DB));
   }
   return { sections, shots, gainDb, limitDb: 20 * Math.log10(deepest) };
 }
