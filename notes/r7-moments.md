@@ -487,7 +487,7 @@ met for the save (not added: the save is the main lane's).
   40 m/s is fun, or even readable, is unknown.
 - Pool riders win few of the new set pieces (M8).
 - The lab's expert and the rock above the Blossom Leap (above).
-- The stand-ins were looked at in 55 frames over four hands-off runs (below), not in every variant: Pinecrest and
+- The stand-ins were looked at in 44 frames over four hands-off runs (below), not in every variant: Pinecrest and
   Ember were not shot, nor the phone. They read as what they are, small blocks and pools of light: a bell is a
   lantern-shaped block over the street, the guide light a pool 26 m ahead, the Great Rising a few blocks at the
   frame's edge. The aurora ribbon's beams show a dotted edge against the bank (the pillar material at 1.5 scale).
