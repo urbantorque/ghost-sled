@@ -220,23 +220,29 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const left = p.z1 - s.z;
         // (No slide is started that the ice left has no room for.)
         if (M.st >= 9 || (M.st !== 2 && left < 24 + v * ((p.both ? p.each : p.need) / 60))) return { noDrift: true };
-        const cx = c.centerX(s.z);
         const onIce = c.surface(s.x, s.z).ice;
         // Slide toward where the lake's middle will be: the side with the most ice to cross.
         if (M.dir === 0) M.dir = s.x < c.centerX(s.z + 60) ? 1 : -1;
         if (M.st === 0) {
-          // Set up wide on one side while the ice comes in, to slide back across the whole sheet.
-          const out = cx - M.dir * c.halfWidth(s.z + 30) * 0.42;
-          if (onIce && s.z > p.z0 + 96 + mr() * 6 * sloppy) M.st = 1;
-          else return { x: () => out, noDrift: true };
+          // Run straight onto the ice, where the sled is, and start the slide from a straight line once the
+          // sheet has opened out. (It used to swing wide first: on glass a swing is kept, the slide began
+          // already crossing at 15 m/s, and half the rides ran off the far shore inside a second.)
+          const off = Math.max(-6, Math.min(6, s.x - c.safeX(s.z)));
+          const across = Math.abs(s.vx - s.vz * ((c.safeX(s.z + 8) - c.safeX(s.z)) / 8));
+          if (onIce && s.z > p.z0 + 78 + mr() * 6 * sloppy && across < 2.5) {
+            M.dir = s.x < c.centerX(s.z + 60) ? 1 : -1;
+            M.st = 1;
+          } else return { x: (z: number) => c.safeX(z) + off, noDrift: true };
         }
         if (M.st === 1) {
           if (s.drifting) M.st = 2;
-          else return { steer: M.dir > 0 ? 8 : 0, action: true };
+          // (The key first, the crouch once the sled leans that way: a crouch on the old lean drifts the old way.)
+          else return { steer: M.dir > 0 ? 8 : 0, action: s.steer * M.dir > 0.5 };
         }
         if (M.st === 2) {
-          if (!s.drifting) {
-            M.st = 1;
+          if (!s.drifting || s.driftDir !== M.dir) {
+            M.st = s.drifting ? 3 : 1;
+            M.wait = 4;
             return { noDrift: true };
           }
           const done = p.both ? (mo.mask & (M.dir > 0 ? 1 : 2)) !== 0 : false;
@@ -492,9 +498,18 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       P.away = T + 0.4 + rnd() * 0.4;
       return { steer: 4, action: false };
     }
-    const ramp = !act ? nextRamp(s) : null;
+    let ramp = !act ? nextRamp(s) : null;
     let target = (z: number) => c.safeX(z);
+    // A kicker whose flight comes down on glass that is to be slid across is ridden round: a popped flight off
+    // the one above Mirror Lake lands 110 m into its 270 m, and what is left is too short for a slide each way.
+    const ahead = pieceAhead(sim);
+    let round = 0;
+    if (ramp && ahead && ahead.verb === 'slide' && ramp.z + ramp.len + 150 > ahead.z0) {
+      round = ramp.x + (s.x >= ramp.x ? 1 : -1) * (ramp.w * 0.5 + 1.4);
+      ramp = null;
+    }
     if (ramp) target = () => ramp.x;
+    else if (round) target = () => round;
     else if (aim) target = aim;
     const bend = c.safeX(s.z + 24) - c.safeX(s.z + 4);
     const room = c.halfWidth(s.z) - Math.abs(s.x - c.centerX(s.z));
@@ -504,7 +519,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     if (P.drift > T) return { steer: bend > 0 ? 8 : 0, action: true };
     if (P.drift > 0 && P.drift <= T) P.drift = -(T + 3);
     if (P.drift < 0 && T > -P.drift) P.drift = 0;
-    let lvl = steerTo(s, target, 14, ramp || aim ? 0 : 0.08);
+    let lvl = steerTo(s, target, 14, ramp || aim || round ? 0 : 0.08);
     let action = false;
     if (ramp) {
       const u = (s.z - ramp.z) / ramp.len;

@@ -405,7 +405,9 @@ const SHAPES: Record<SectionKind, SectionShape> = {
   split: shaped({ width: 6, wander: 0.5, wave: 1.2, span: 0.35, split: 0.42, obstacles: 0.6, kickers: 0.7, moguls: 0.5, drops: 0 }),
   ravine: shaped({ pin: 1, wander: 0.4, wave: 1.6, span: 0.2, obstacles: 0, wall: 13, relief: 0.4, limit: 5, ...BARE }),
   treerun: shaped({ pin: 1, wander: 0.5, wave: 1.1, span: 0.3, obstacles: 0.25, relief: 0.6, limit: 7, ...BARE }),
-  lake: shaped({ pin: 1, wander: 0.25, wave: 1.6, span: 0.25, obstacles: 0.3, relief: 0, ice: 1, lane: 5.6, ...BARE }),
+  // (lane: what stands on a lake stands along its shores, 17 m and more from the line. It was 8 m, and a slide
+  // across the glass, which is what Mirror Lake asks for, carries a sled 10 to 25 m: into the pines on the ice.)
+  lake: shaped({ pin: 1, wander: 0.25, wave: 1.6, span: 0.25, obstacles: 0.3, relief: 0, ice: 1, lane: 14.6, ...BARE }),
   fork: shaped({ pin: 1, wander: 0.4, wave: 1.4, span: 0.08, split: 0.55, obstacles: 0.45, relief: 0.35, ridge: RIDGE_H, ...BARE }),
   street: shaped({ pin: 1, wander: 0.3, wave: 1.4, span: 0.25, obstacles: 0.15, relief: 0.2, limit: 2, ...BARE }),
   bridge: shaped({ pin: 1, wander: 0.15, wave: 2, span: 0.08, obstacles: 0, fall: 34, relief: 0.15, limit: 0.8, ...BARE }),
