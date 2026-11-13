@@ -197,6 +197,11 @@ export class BeatRouter {
           }
           break;
         }
+        case 'legend':
+          // A legend is announced once, as it comes up: its name and its line on the band's rarest card.
+          // What it does after is for the eye (and, for a ribbon, the lantern's own fill says the rest).
+          if (b.phase === 'warn') this.notices.legend(b.name, b.line);
+          break;
         case 'moment': {
           // The set piece's verb as it plays: its card becomes a chip that counts, then says the result.
           const mq = this.mq;

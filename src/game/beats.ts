@@ -124,6 +124,12 @@ export type Beat =
    *  it ends. Under reduced motion all three are still sent and nothing slows. A crash or a fall before the
    *  apex cancels it: 'lip' is then followed by 'out' alone. */
   | (B & { type: 'heroFrame'; phase: 'lip' | 'apex' | 'out'; key: string; inS: number; secs: number })
+  /** The run's legend moment (sim/moments.ts LEGENDS; about one run in ten, never a session's first): 'warn'
+   *  as it comes up (its name and its line: the HUD's one card for it), 'start' as the rider reaches it,
+   *  'step' as a ribbon lights another quarter lantern (n quarters so far), 'end' as the rider leaves it.
+   *  kind: a runner ahead on the line, a ribbon to ride in, or spectacle in the sky. side: where it plays
+   *  (+1 right of the line), for a lens or a pan. */
+  | (B & { type: 'legend'; phase: 'warn' | 'start' | 'step' | 'end'; key: string; name: string; line: string; kind: 'runner' | 'ribbon' | 'sky'; side: 1 | -1; n: number })
   | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number });
 
 export type BeatType = Beat['type'];
@@ -131,7 +137,7 @@ import type { MarqueeCam, MarqueeLight, MomentVerb } from './marquee';
 export type BeatOf<T extends BeatType> = Extract<Beat, { type: T }>;
 
 /** Beat types that count as a named moment in telemetry (pass/passedBy only when !muted). */
-export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'tumble', 'stage', 'finish', 'km', 'graveyard', 'marquee']);
+export const NAMED: ReadonlySet<BeatType> = new Set<BeatType>(['stomp', 'nearMiss', 'driftRelease', 'flow', 'bank', 'comboLost', 'bestComboPace', 'pass', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'newGround', 'newBest', 'friendBeaten', 'finale', 'missionPop', 'unlockPop', 'crash', 'tumble', 'stage', 'finish', 'km', 'graveyard', 'marquee', 'legend']);
 
 // ---------- continuous state, computed before any consumer runs this frame
 export interface Feel {

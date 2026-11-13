@@ -55,7 +55,7 @@ import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFini
 
 /** 'crashed' is the crash beat before its results; 'finished' the coast through the town square before
  *  its results (the sim still ticks). A finish is never a crash: only `crashed()` opens the first. */
-type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results' | 'home';
+type Phase = 'boot' | 'title' | 'run' | 'crashed' | 'finished' | 'results' | 'home' | 'reel';
 
 /** Dev-only overrides for play-tests and screenshots: ?mood=3&event=1&m=2&autoride=1. */
 const DEV = new URLSearchParams(location.search);
@@ -313,6 +313,7 @@ export class App {
       onGarage: (shelf, id) => this.garage(shelf, id),
       onListenSound: (id) => this.audio.previewSledSound(soundById(id).id),
       onRideHome: () => this.rideHome(),
+      onWatchReel: () => this.watchReel(),
       onHome: () => this.home(),
       onPause: (p) => this.setPaused(p),
       onSpirit: () => this.input.spiritTap(),
@@ -493,6 +494,8 @@ export class App {
     const before = this.mountain;
     const link = readChallengeLink(raw);
     if (link?.ghost) this.challenge = { record: link.ghost, attempts: 0 };
+    // A reel sent as a link (round 7): the same record, with a word to say "watch it first".
+    if (link?.ghost && (this.platform.getInviteParam('reel') ?? new URLSearchParams(location.search).get('reel')) === '1' && linkMountain(link.ghost.seed, this.rideable())) this.linkReel = link.ghost;
     if (link?.old) this.oldLink = link.old;
     const m = linkMountain(link?.ghost?.seed ?? link?.old?.seed, this.rideable());
     if (m) this.mountain = m;
@@ -1271,6 +1274,129 @@ export class App {
     if (sim.finished && sim.tick - sim.s.finishTick > 240) this.endHome();
   }
 
+  // ------------------------------------------------------------------ the highlight reel (round 7)
+
+  /** The reel while it plays (game/reelshow.ts, loaded on first asking), a friend's record waiting to
+   *  play on the title, and whether the code is on its way. */
+  private reel: { frame(dt: number): void; now: unknown; plan: unknown } | null = null;
+  private linkReel: RunRecord | null = null;
+  private reelLoading = false;
+
+  /** "Watch your run" on the results: the run just ridden, cut and played back. */
+  private watchReel(): void {
+    if (this.phase !== 'results' || !this.run || this.homeRide) return;
+    this.startReel(this.run.toRecord(this.save.data.name), true);
+  }
+
+  /** Loads the reel's code (its own chunk: never with the first frame) and plays a record: your own
+   *  run from the results, with its ghosts as they rode, or a friend's from a link, on the title. */
+  private startReel(rec: RunRecord, own: boolean): void {
+    if (this.reelLoading || this.reel) return;
+    this.reelLoading = true;
+    const from: Phase = own ? 'results' : 'title';
+    import('./reelshow').then(
+      (m) => {
+        this.reelLoading = false;
+        if (this.phase !== from) return;
+        const tracks = own ? this.ghosts.tracks : [];
+        const tmp = emptyPose();
+        const finished = own && this.run ? this.run.sim.finished : false;
+        if (own) this.hideResults();
+        else {
+          this.ui.hideTitle();
+          this.world.setMood(rec.chaos.mood);
+          this.world.setGhostField([]);
+        }
+        this.audio.setScene('run');
+        this.phase = 'reel';
+        this.reel = new m.ReelShow({
+          record: rec,
+          riders: tracks.map((t) => ({
+            name: t.entry.kind === 'you' ? 'your best' : t.entry.name,
+            kind: t.entry.kind,
+            at: (tick, out) => {
+              if (!this.ghosts.poseThen(t, tick, tmp)) return false;
+              out.x = tmp.x;
+              out.z = tmp.z;
+              out.done = tmp.done || tmp.finished;
+              return true;
+            },
+          })),
+          world: this.world,
+          root: document.querySelector<HTMLElement>('.gs-ui') ?? document.body,
+          poses: (tick, out) => {
+            out.clear();
+            for (const t of tracks) {
+              const p = emptyPose();
+              out.set(t.entry.id, this.ghosts.poseThen(t, tick, p) ? p : null);
+            }
+          },
+          sound: (sim, events, dt) => {
+            for (const e of events) this.audio.simEvent(e);
+            const s = sim.s;
+            this.audio.update(
+              {
+                speed: s.speed,
+                grounded: s.grounded,
+                carve: s.carve,
+                drifting: s.drifting,
+                slip: s.slip,
+                onIce: s.onIce,
+                boostGlow: s.boostGlow,
+                drafting: false,
+                comboChain: 0,
+                comboMult: 1,
+                // The run's own music, held at a ride's middle weight: the picture is cut, the score is not.
+                intensity: 0.55,
+                danger: 0,
+                crashed: s.crashed,
+                x: s.x,
+                z: s.z,
+                height: s.y - this.world.course.ground(s.x, s.z),
+              },
+              dt,
+            );
+          },
+          click: (k) => this.audio.ui(k),
+          // The hook the reel wants of the audio: a clock that says how long a bar of the score is now.
+          // (None on this branch: the cut then stands on its own lengths.)
+          bar: () => (this.audio as unknown as { clock?: () => { barS: number } | null }).clock?.()?.barS ?? null,
+          time: () => this.renderTime,
+          setTime: (t) => {
+            this.renderTime = t;
+          },
+          reduced: () => reduced(),
+          rank: finished && this.frameStandings ? this.frameStandings.rank : null,
+          share: own && rec.score > 0 ? () => this.shareReel(rec) : undefined,
+          done: () => this.endReel(own),
+        });
+      },
+      () => {
+        this.reelLoading = false;
+        this.ui.toast('The reel could not load', 'info');
+      },
+    );
+  }
+
+  /** The reel is over (or skipped): the results card again, or the title a friend's link opened. */
+  private endReel(own: boolean): void {
+    this.reel = null;
+    if (!own) return this.enterTitle();
+    this.phase = 'results';
+    this.audio.setScene('results');
+    if (this.results) this.ui.showResults(this.results);
+  }
+
+  /** The reel as a link: the challenge link the game already has (the record itself), with a word that
+   *  says to play it as a reel first. Nothing is filmed, and nothing but the record is sent. */
+  private shareReel(rec: RunRecord): void {
+    const link = this.platform.inviteLink({ c: recordToString(rec), reel: '1' });
+    const nav = navigator as Navigator & { share?: (d: { title: string; url: string }) => Promise<void> };
+    const title = `Watch ${this.save.data.name}'s run on ${this.mountain.name}`;
+    if (this.platform.deviceType !== 'desktop' && nav.share) nav.share({ title, url: link }).catch(() => undefined);
+    else if (navigator.clipboard?.writeText) navigator.clipboard.writeText(link).then(() => this.ui.toast('Reel link copied', 'ghost', 'Whoever opens it watches the run, then races it'), () => this.ui.toast('Could not copy the link', 'info'));
+  }
+
   private shareChallenge(): void {
     if (!this.run) return;
     const rec = this.run.toRecord(this.save.data.name);
@@ -1861,7 +1987,14 @@ export class App {
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
     this.input.poll();
-    if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
+    // A friend's reel link plays once the title has had its first frames (it loads its code then).
+    if (this.linkReel && this.phase === 'title' && this.time > 0.6 && !this.reelLoading) {
+      const rec = this.linkReel;
+      this.linkReel = null;
+      this.startReel(rec, false);
+    }
+    if (this.phase === 'reel') this.reel?.frame(this.paused || this.adPlaying ? 0 : dt);
+    else if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
     else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
   }

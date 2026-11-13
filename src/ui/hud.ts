@@ -1056,8 +1056,12 @@ export class Hud {
       this.scoreHold.release();
       this.figured = false;
       this.fit();
+      // The corners slide in from their edges (style.css): the rects are read again once they rest.
+      window.clearTimeout(this.inTimer);
+      this.inTimer = window.setTimeout(() => this.layer.open && this.onLayout(), 520);
     }
   }
+  private inTimer = 0;
 
   /** One running figure, on the beat. In the DOM it is written as it changes. With the canvas drawing
    *  it, the canvas gets the text and the DOM is written only when its length changes (its box, and the
@@ -1797,7 +1801,7 @@ export class Hud {
     this.lanReady.set(l.cells > 0);
     this.lanDash.set(l.dashing);
     if (l.cells !== this.lanLit) {
-      if (this.lanLit >= 0 && l.cells > this.lanLit) bump(this.lanternEl, 1.12, 260);
+      // (A lantern lit is the filled cell's own lift, style.css gs-lan-lit: the pill holds still.)
       this.lanLit = l.cells;
       this.lanternEl.setAttribute('aria-label', l.cells > 0 ? `Spirit lanterns: ${l.cells} lit. Press E to dash` : 'Spirit lanterns: none lit');
     }

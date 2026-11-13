@@ -2360,3 +2360,21 @@ describe('the stomp metronome', () => {
     ]);
   });
 });
+
+describe('legends', () => {
+  it("forwards the sim's legend events as legend beats, with the legend's own name and line", () => {
+    const rig = new Rig();
+    (rig.sim as unknown as { legend: unknown }).legend = { slot: 1, key: 'stag', name: 'The White Stag', line: 'Follow its lights', kind: 'runner', side: -1 };
+    const warn = of(rig.frame([{ type: 'legend', phase: 'warn', slot: 1, n: 0 }]), 'legend');
+    expect(warn).toHaveLength(1);
+    expect(warn[0]).toMatchObject({ phase: 'warn', key: 'stag', name: 'The White Stag', line: 'Follow its lights', kind: 'runner', side: -1 });
+    const step = of(rig.frame([{ type: 'legend', phase: 'step', slot: 1, n: 3 }]), 'legend');
+    expect(step[0]).toMatchObject({ phase: 'step', n: 3 });
+    expect(of(rig.frame([{ type: 'legend', phase: 'end', slot: 1, n: 3 }]), 'legend')[0].phase).toBe('end');
+  });
+
+  it('says nothing on a run with no legend', () => {
+    const rig = new Rig();
+    expect(of(rig.frame([{ type: 'legend', phase: 'warn', slot: 1, n: 0 }]), 'legend')).toHaveLength(0);
+  });
+});

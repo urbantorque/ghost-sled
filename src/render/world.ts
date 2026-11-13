@@ -162,6 +162,9 @@ export class World {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly cam = new ChaseCamera();
+  /** The highlight reel's lens (render/reelcam.ts), set while a reel plays: it takes the camera after the
+   *  chase has had its frame, and writes the cine state. Null in play, always. */
+  lens: ((camera: PerspectiveCamera, focus: Vector3, dir: Vector3, dt: number) => void) | null = null;
   course: Course;
   palette: Palette;
   quality: QualitySettings;
@@ -748,6 +751,16 @@ export class World {
     this.updateChunks(snap.z, true);
   }
 
+  /** A cut in the highlight reel: the picture jumps down the course, so the groove, the spray and the
+   *  ground are made fresh there and the chase lens is put behind the sled. */
+  reelCut(snap: Snap): void {
+    this.trail.clear();
+    this.particles.clear();
+    this.wasGrounded = true;
+    this.updateChunks(snap.z, true);
+    this.snapCamera(snap);
+  }
+
   /** Snap the chase camera behind the sled (after a revive or a hard cut). */
   snapCamera(snap: Snap): void {
     tmpV.set(snap.x, snap.y, -snap.z);
@@ -1007,7 +1020,9 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    chase();
+    if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;

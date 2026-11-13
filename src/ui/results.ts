@@ -542,6 +542,9 @@ export class Results {
     const home = btn(ctx, { cls: 'gs-btn-soft gs-res-home', icon: 'back', label: 'Home', sound: 'back', fk: 'home', onClick: () => this.hd.onHome() });
     // A wreck short of the town: ride the rest home as a spirit, outside the race (never recorded).
     if (m.canRideHome) extra.append(btn(ctx, { cls: 'gs-btn-soft gs-res-homeward', icon: 'ghost', label: 'Ride Home as a Spirit', sound: 'tap', fk: 'homeward', onClick: () => this.hd.onRideHome?.() }));
+    // Your run, directed (round 7, the reel lane's one button here): the highlight reel of the run just
+    // ridden. It sits with the card's other offers and never takes Run Again's place.
+    if (this.hd.onWatchReel) extra.append(btn(ctx, { cls: 'gs-btn-soft gs-res-opt gs-res-reel', icon: 'play', label: 'Watch Your Run', sound: 'tap', fk: 'reel', onClick: () => this.hd.onWatchReel?.() }));
     const actions = h('div', 'gs-res-actions', extra.childElementCount > 0 ? extra : null, h('div', `gs-res-main${chal ? ' has-chal' : ''}`, chal, home, again));
 
     // The body scrolls on short screens. A sentinel at its end drives a bottom fade and a More cue,
