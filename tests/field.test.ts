@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
 import { recordToString } from '../src/sim/replay';
 import type { PoolGhostData } from '../src/game/ghostdata';
-import { ANCHOR_DEFAULT, ANCHOR_MAX, ANCHOR_MIN, FIELD_SPACING, FIELD_SPACING_S, anchorFor, fieldCandidates, pickField, poolTime, type FieldInput, type FieldPick } from '../src/game/field';
+import { ANCHOR_DEFAULT, ANCHOR_MAX, ANCHOR_MIN, FIELD_CARROT, FIELD_FAST_MIN, FIELD_SLOW_MAX, FIELD_SLOW_MIN, FIELD_SPACING, FIELD_SPACING_S, anchorFor, fieldCandidates, fieldPace, pickField, poolTime, recentFor, type FieldInput, type FieldPick } from '../src/game/field';
 import { FINISH_Z } from '../src/game/standing';
 
 // The race field is built around when you would finish (field.ts). Names are never asserted:
@@ -279,5 +279,112 @@ describe('pickField: other pools', () => {
     const out = pickField(input([], { anchor: 0, you: { name: 'Me', score: 5, distance: 300, record: rec(300, 900) } }));
     expect(out.map((p) => p.kind)).toEqual(['you']);
     expect(ANCHOR_DEFAULT).toBeGreaterThan(ANCHOR_MIN);
+  });
+});
+
+// Round 7: once you have ridden a mountain the field is laid across where you finish.
+describe('a field laid across your own runs', () => {
+  /** A dense pool, a finisher every half second from 100 s to 200 s. */
+  const DENSE: PoolGhostData[] = (() => {
+    const out: PoolGhostData[] = [];
+    for (let t = 100; t <= 200; t += 0.5) out.push(fin(t));
+    return out;
+  })();
+  const laid = (recent: number[], p: Partial<FieldInput> = {}): FieldPick[] => pickField(input(DENSE, { anchor: anchorFor({ m: recent }, 'm'), recent, ...p }));
+  const times = (out: FieldPick[]): number[] => poolPicks(out).map((p) => p.time!).sort((x, y) => x - y);
+  /** How far a finish at t is from the nearest rider of the field, seconds. */
+  const nearest = (ts: number[], t: number): number => Math.min(...ts.map((x) => Math.abs(x - t)));
+
+  it('reads your last runs for a key, and the pace follows the last three when they are quicker', () => {
+    expect(recentFor({ m: [9, 8, 7, 130, 125, 120, 115, 110] }, 'm')).toEqual([130, 125, 120, 115, 110]);
+    expect(recentFor({}, 'm')).toEqual([]);
+    // Improving run by run: the median of five says 120, the last three say 115.
+    expect(anchorFor({ m: [130, 125, 120, 115, 110] }, 'm')).toBe(120);
+    expect(fieldPace(120, [130, 125, 120, 115, 110])).toBe(115);
+    // Getting slower: never slower than the anchor.
+    expect(fieldPace(118, [110, 115, 120, 125, 130])).toBe(118);
+    expect(fieldPace(118, [])).toBe(118);
+  });
+
+  it('a steady player gets a tight pack: everyone within a few seconds, nobody a minute up the road', () => {
+    const recent = [119.2, 113.6, 112.5, 116.8, 114.1];
+    const ts = times(laid(recent));
+    expect(ts.length).toBe(5);
+    // From the carrot (a little quicker than the quickest of them) to 1.05 of the pace.
+    expect(ts[0]).toBeGreaterThanOrEqual(FIELD_CARROT[2] * 112.5 - 1.5);
+    expect(ts[0]).toBeLessThan(112.5);
+    expect(ts[4]).toBeLessThanOrEqual(FIELD_SLOW_MIN * 114.1 + 1.5);
+    // Any finish this player has had lately lands within 2 s of a rider.
+    for (const t of recent) expect(nearest(ts, t), String(t)).toBeLessThanOrEqual(2);
+  });
+
+  it('an erratic player gets a long string that still reaches the slow day and the quick one', () => {
+    // The expert pilot's five runs on Pinecrest (the baseline telemetry).
+    const recent = [126.5, 127.4, 115.8, 139.1, 123];
+    const out = laid(recent);
+    const ts = times(out);
+    // The fixed roles left the 139 s run 9 s behind the slowest rider and the 115.8 s run alone in front.
+    const fixed = times(pickField(input(DENSE, { anchor: anchorFor({ m: recent }, 'm') })));
+    expect(nearest(fixed, 139.1)).toBeGreaterThan(3);
+    for (const t of recent) expect(nearest(ts, t), String(t)).toBeLessThanOrEqual(3.6);
+    expect(ts[0]).toBeLessThan(115.8);
+    expect(ts[4]).toBeGreaterThanOrEqual(135);
+    expect(spacedOk(out)).toBe(true);
+  });
+
+  it('names the roles off the targets, and always keeps a pack slot for a grudge', () => {
+    const out = laid([126.5, 127.4, 115.8, 139.1, 123]);
+    const a = fieldPace(anchorFor({ m: [126.5, 127.4, 115.8, 139.1, 123] }, 'm'), [126.5, 127.4, 115.8, 139.1, 123]);
+    for (const p of poolPicks(out)) {
+      if (p.role === 'opener') expect(p.time!).toBeGreaterThan(a);
+      if (p.role === 'pace') expect(p.time!).toBeLessThan(a);
+    }
+    expect(out.some((p) => p.role === 'opener')).toBe(true);
+    expect(out.some((p) => p.role === 'pace')).toBe(true);
+    for (const recent of [[150], [120, 121, 119], [200, 140, 139], [104, 180, 104, 180, 104]]) expect(laid(recent).some((p) => p.role === 'pack'), String(recent)).toBe(true);
+    // Slowest first, as the fixed roles are filled.
+    const order = poolPicks(out).map((p) => p.time!);
+    expect(order).toEqual([...order].sort((x, y) => y - x));
+  });
+
+  it('hangs the carrot further out for a new player, who is still getting quicker fast', () => {
+    const one = times(laid([150]));
+    const many = times(laid([150, 150, 150, 150]));
+    expect(Math.abs(one[0] - FIELD_CARROT[0] * 150)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(many[0] - FIELD_CARROT[2] * 150)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(one[4] - FIELD_SLOW_MIN * 150)).toBeLessThanOrEqual(1.5);
+  });
+
+  it('is not stretched by one disaster, nor by a short wreck that predicted a record', () => {
+    // A run that took twice as long: the slow end stops at 1.12 of the pace.
+    const slow = times(laid([120, 121, 119, 122, 240]));
+    const pace = fieldPace(anchorFor({ m: [120, 121, 119, 122, 240] }, 'm'), [120, 121, 119, 122, 240]);
+    expect(slow[4]).toBeLessThanOrEqual(FIELD_SLOW_MAX * pace + 1);
+    // A wreck at 300 m that predicted 80 s: the fast end stops at FIELD_FAST_MIN of the pace.
+    const fast = times(laid([150, 152, 80, 151, 149]));
+    const p2 = fieldPace(anchorFor({ m: [150, 152, 80, 151, 149] }, 'm'), [150, 152, 80, 151, 149]);
+    expect(fast[0]).toBeGreaterThanOrEqual(FIELD_FAST_MIN * p2 - 1);
+  });
+
+  it('still keeps clear of your best, rides every extra ghost, and is the same for the same seed', () => {
+    const recent = [126.5, 127.4, 115.8, 139.1, 123];
+    const mine = rec(FINISH_Z + 50, Math.round(115.8 * 60) + 300);
+    const out = laid(recent, { you: { name: 'You', score: 9, distance: FINISH_Z + 50, record: mine } });
+    const you = out.find((p) => p.kind === 'you')!;
+    expect(you).toBeDefined();
+    for (const p of poolPicks(out)) expect(Math.abs(p.time! - you.time!)).toBeGreaterThanOrEqual(FIELD_SPACING_S);
+    expect(poolPicks(laid(recent, { count: 9 })).length).toBe(9);
+    expect(laid(recent, { seed: 31 })).toEqual(laid(recent, { seed: 31 }));
+  });
+
+  it('a thin pool rides the nearest it has and says so; no runs here means the fixed roles', () => {
+    const thin = [fin(108), fin(110), fin(112), fin(125), fin(150)];
+    const out = pickField(input(thin, { anchor: 111, recent: [111, 110, 112] }));
+    expect(poolPicks(out).length).toBe(5);
+    expect(out.some((p) => p.widened)).toBe(true);
+    // A mountain you have not ridden (the anchor came from your others): the roles around the anchor.
+    expect(pickField(input(POOL, { anchor: 200, recent: [] })).map((p) => p.role)).toEqual(['opener', 'pack', 'pack', 'pace', 'pace']);
+    // A very first run still reads you.
+    expect(pickField(input(POOL, { anchor: 0, recent: [] })).every((p) => p.reads)).toBe(true);
   });
 });
