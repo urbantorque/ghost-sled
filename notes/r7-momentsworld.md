@@ -42,6 +42,14 @@ frame: `verbworld.ts`, `legendworld.ts`, `climaxworld.ts`. Positions are in the 
 - **A lit form is round.** `litMaterial()` (paper lit from inside, a bell) is brightest where it faces the lens and
   deeper at its rim, with the mood's fog at half strength. Without it a lantern close to the lens was a flat block of
   marigold, the review's "yellow blocks" again (`sheet-c-demo-2.png`, Ash Market, second frame).
+- **A lantern at the lens dissolves.** A gate's lanterns hang where the lens passes through them; at 2 m one was a
+  block of marigold across a phone's frame (`sheet-c-phone.png`, Ash Market). A lit form now dissolves over its
+  last 7 m by a screen-door dither, as the world's props do.
+- **Low keeps a lantern's hue.** Low has no bloom and no film curve, so a lit form over 1 clipped to a white block
+  with a dark cap (`sheet-c-low-1.png`). On Low a lit colour is capped by its brightest channel: the lantern is
+  marigold with paler and deeper bands, a poster of the High one (`sheet-d-low.png`).
+- **A lantern has ribs.** Four bands of paper, palest at the waist, under a dark cap and over a foot and a tassel:
+  108 triangles at eight sides.
 - **A mark is lifted off the mesh.** `c.ground()` is the surface the drawn snow samples; between the mesh's vertices
   a mark 0.1 m up was buried on any slope. Marks sit 0.3 m up with a strong polygon offset.
 
@@ -218,6 +226,14 @@ as round 7's sim lane noted; the new statics add a few hundred triangles to that
   threaded, whether the forge gate's flames are understood as a speed read: unknown.
 - **The Caldera has no lake under the flight** and no smoke ceiling lit from below (W5). It is the brief's first
   place and it is the least met.
+- **The last build was looked at only on the phone through Ash Market and Ember's climax** (the near dissolve went
+  in after the last High and Low passes). `npx tsc --noEmit` and `npm test` (72 files, 1,471 tests) are green
+  on it.
+- **The forge gate's flames are still slight** in the frame at 30 m/s, and the climax's two beams over the line
+  were not found in any frame: the lantern strings carry the climax, and no shell was caught in a frame (they are
+  sent; none was on screen at the three distances shot).
+- **The collapse's crack of light was not seen**: on a span chased from behind it is behind the lens, and no run
+  shot reached the far-end variant's fall.
 - **Variants were not each shot on every tier.** What was shot is listed under Frames. A hit was seen only where
   the pool rider or the hands-off sled made one: a surge cleared, a chase caught, a flourish landed, two bells rung,
   stomps, one gate threaded. A slide held, a ring line flown, a sprint won, a keystone reached and a row of stomps
@@ -240,7 +256,11 @@ as round 7's sim lane noted; the new statics add a few hundred triangles to that
 - `verbs\sheet-a-*.png`: the first cut on High, hands-off, variant 1 of each (the invisible one: kept as the before).
 - `verbs\sheet-b-*.png`: High, hands-off, variant 2 of each, after the light was made to cover.
 - `verbs\sheet-c-demo-*.png`: High, a pool rider who plays (the hits).
-- `verbs\c-low\`, `verbs\c-phone\`: Low (variant 3 of each) and the phone on Medium.
-- `verbs\d\`: the last pass.
+- `verbs\sheet-c-low-1.png`, `sheet-c-phone.png`: Low (variant 3 of each) and the phone on Medium (variants 1
+  and 3), before the lanterns' ribs, the Low cap and the near dissolve.
+- `verbs\sheet-d.png`: High, variant 3 of each (Ember ridden by the pool rider), with the ribs and the deep
+  marigold marks. `sheet-d-low.png`: Low again, Frostfang and Ash Market. `sheet-e-phone.png`: the phone
+  through Ash Market and Ember's climax on the last build.
+- Every capture's console error list was empty (the `log-*.json` beside each set).
 - `legends\sheet-*.png`: each legend on High, the phone and Low.
 - `places\final\sheet-high.png`, `sheet-low.png`, `sheet-phone-medium.png`: each place before and after.

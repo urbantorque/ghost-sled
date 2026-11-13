@@ -130,6 +130,10 @@ export function litMaterial(): ShaderMaterial {
       void main() {
         // (A light in fog is seen further than a wall is: half the fog.)
         float f = 0.5 * smoothstep(uFogNear, uFogFar, vDist);
+        // (A lantern the lens passes through dissolves over its last metres, as the world's props do: at the
+        // lens it would be a block of its colour across the frame.)
+        float thr = (mod(floor(gl_FragCoord.x), 2.0) + 2.0 * mod(floor(gl_FragCoord.y), 2.0)) / 4.0 + 0.125;
+        if (smoothstep(2.0, 7.0, vDist) < thr) discard;
         vec3 c = vCol * vForm;
         c *= min(1.0, uCap / max(max(c.r, max(c.g, c.b)), 0.001));
         gl_FragColor = vec4(mix(c, uFog, f), 1.0);
