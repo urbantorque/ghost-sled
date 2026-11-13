@@ -38,7 +38,6 @@ import { VerbWorld } from './verbworld';
 
 const LIGHT = new Color('#FFD34D');
 const WHITE_GOLD = new Color('#FFF3C4');
-const PETAL = new Color('#FFC9DA');
 const ICE = new Color('#E4F1FF');
 
 /** How high the cable runs over the bank, in the open and inside a tube or a slot. */
@@ -203,6 +202,19 @@ function cabinGeometry(key: string, biome: BiomeId): BufferGeometry {
   return merge(parts);
 }
 
+/** Where a race's cable runs at z metres down the course, in three.js space (verbworld.ts lights the machine
+ *  and its stations from it). */
+export function cablePoint(c: Course, side: number, z: number, out: Vector3): Vector3 {
+  const k = c.section(z).kind;
+  const inside = k === 'tunnel' || k === 'ravine' || k === 'street';
+  // In a tube the wall stands 3 m past the edge: the cable runs just over the edge, clear of it.
+  const off = k === 'tunnel' ? 0.8 : CABLE_OUT;
+  const x = c.centerX(z) + side * Math.min(CABLE_FAR, c.halfWidth(z) + off);
+  // Over the bank's own ground where it rises, never into it.
+  const y = Math.max(c.baseY(z) + (inside ? CABLE_H_IN : CABLE_H), c.ground(x, z) + 6.5);
+  return out.set(x, y, -z);
+}
+
 export class MarqueeWorld {
   readonly root = new Object3D();
   private plays: readonly MomentPlay[] = [];
@@ -321,7 +333,7 @@ export class MarqueeWorld {
     this.plays = plays;
     for (const p of this.plays) {
       if (p.verb === 'race') this.buildMachine(c, p);
-      else if (p.verb === 'gates' && p.gates.length) this.gates.push({ play: p, state: p.gates.map(() => 0), at: p.gates.map(() => 0), base: 0 });
+      // (Round 7: the gates are verbworld.ts's now, hung lanterns on a yoke; round 6's strings are not built.)
     }
     this.buildGates(c);
     this.verbs.build(c, plays);
@@ -346,14 +358,7 @@ export class MarqueeWorld {
   }
 
   private cableAt(c: Course, side: number, z: number, out: Vector3): Vector3 {
-    const k = c.section(z).kind;
-    const inside = k === 'tunnel' || k === 'ravine' || k === 'street';
-    // In a tube the wall stands 3 m past the edge: the cable runs just over the edge, clear of it.
-    const off = k === 'tunnel' ? 0.8 : CABLE_OUT;
-    const x = c.centerX(z) + side * Math.min(CABLE_FAR, c.halfWidth(z) + off);
-    // Over the bank's own ground where it rises, never into it.
-    const y = Math.max(c.baseY(z) + (inside ? CABLE_H_IN : CABLE_H), c.ground(x, z) + 6.5);
-    return out.set(x, y, -z);
+    return cablePoint(c, side, z, out);
   }
 
   private buildMachine(c: Course, p: MomentPlay): void {
@@ -496,26 +501,12 @@ export class MarqueeWorld {
     for (const b of list) {
       if (b.type === 'marquee' && b.phase === 'enter') this.active = { key: b.key, seen: 0 };
       if (b.type !== 'moment') continue;
+      // (Round 7: every verb but the fifth mountain's three is answered in verbworld.ts.)
+      if (b.verb !== 'follow' && b.verb !== 'kindle' && b.verb !== 'carry') continue;
       const carrier = tv.set(s.vx, 0, -s.vz);
-      if (b.verb === 'gates' && (b.phase === 'step' || b.phase === 'miss')) {
-        const g = this.gates.find((q) => q.play.key === b.key);
-        const a = this.active;
-        if (!g || !a || a.key !== b.key) continue;
-        const i = a.seen++;
-        if (i >= g.state.length) continue;
-        g.state[i] = b.phase === 'step' ? 1 : -1;
-        g.at[i] = performance.now() / 1000;
-        if (b.phase === 'step') {
-          const q = g.play.gates[i];
-          this.particles.sparkle(ts.set(q.x, s.y + 1.4, -q.z), WHITE_GOLD, 22, 3.4, 0.6, 0.24, carrier, 0.5);
-        }
-      } else if (b.verb === 'rings' && b.phase === 'step') {
-        this.particles.sparkle(ts.set(s.x, s.y + 0.8, -s.z), WHITE_GOLD, 30, 4, 0.7, 0.26, carrier, 0.3);
-      } else if (b.verb === 'steps' && b.phase === 'step') {
-        this.particles.sparkle(ts.set(s.x, s.y + 0.6, -s.z), PETAL, 26, 3.6, 0.9, 0.24, carrier, 0.6);
-      } else if ((b.verb === 'shatter' || b.verb === 'kindle' || b.verb === 'slide' || b.verb === 'follow' || b.verb === 'surge') && b.phase === 'step') {
-        // r7 stand-in: a bell rung, a lamp lit, a slide's quarter, the wake's eighth, the lip left.
-        this.particles.sparkle(ts.set(s.x, s.y + (b.verb === 'shatter' ? 2.2 : 0.8), -s.z), b.verb === 'shatter' ? BRONZE : WHITE_GOLD, 20, 3.2, 0.6, 0.22, carrier, 0.4);
+      if (b.phase === 'step') {
+        // r7 stand-in: a lamp lit, the wake's eighth.
+        this.particles.sparkle(ts.set(s.x, s.y + 0.8, -s.z), WHITE_GOLD, 20, 3.2, 0.6, 0.22, carrier, 0.4);
       } else if (b.phase === 'won') {
         this.particles.sparkle(ts.set(s.x, s.y + 1.2, -s.z), LIGHT, 40, 4.5, 0.8, 0.28, carrier, 0.5);
       }
@@ -676,7 +667,7 @@ export class MarqueeWorld {
       const mo = sim.mo;
       const breathe = 1.3 + 0.35 * Math.sin(time * 6.2);
       for (const p of this.plays) {
-        if (s.z < p.z0 - SHOW_M || s.z > p.z1 + 80) continue;
+        if (s.z < p.z0 - SHOW_M || s.z > p.z1 + 80 || this.verbs.owns(p)) continue;
         const active = mo.active === p.index;
         const over = !active && mo.next > p.index;
         if (active) this.kept.set(p.index, mo.mask);
