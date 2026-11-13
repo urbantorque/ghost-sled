@@ -143,12 +143,15 @@ function balcony(parts: BufferGeometry[], w: number, y: number, z0: number, dept
 }
 
 /** A hanging paper lantern (lit warm at night, a soft glow by day): a bulged paper drum between a
- *  dark cap and foot narrower than its belly, and a tassel under it. */
+ *  dark cap and foot narrower than its belly. */
 export function lantern(parts: BufferGeometry[], x: number, y: number, z: number, r: number, night: boolean, hex = '#FFB45E'): void {
-  parts.push(part(new SphereGeometry(r, 7, 5), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.2, 1] }));
-  parts.push(part(new CylinderGeometry(r * 0.62, r * 0.7, r * 0.26, 7), INK, { pos: [x, y + r * 1.12, z] }));
-  parts.push(part(new CylinderGeometry(r * 0.7, r * 0.62, r * 0.22, 7), INK, { pos: [x, y - r * 1.12, z] }));
-  parts.push(part(new ConeGeometry(r * 0.16, r * 0.75, 4), INK, { pos: [x, y - r * 1.55, z], rot: [Math.PI, 0, 0] }));
+  // (A small one, strung by the dozen, is the drum alone: a cap and tassel are lost at its size, and the
+  // strings of a finish would pay for them by the hundred.)
+  parts.push(part(new SphereGeometry(r, 6, 4), lampColor(night, hex), { pos: [x, y, z], scale: [1, 1.2, 1] }));
+  if (r < 0.4) return;
+  // A cap and a foot narrower than the belly, which now bulges past them.
+  parts.push(box(r * 1.05, r * 0.26, r * 1.05, INK, [x, y + r * 1.14, z]));
+  parts.push(box(r * 1.05, r * 0.22, r * 1.05, INK, [x, y - r * 1.14, z]));
 }
 
 /** A string of lanterns sagging from a to b. The string swings in the wind, held at its masts, and each
@@ -463,9 +466,9 @@ export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, 
     parts.push(box(0.9, 0.5, 0.9, stoneC, [0, gy + 0.25, 0]));
     parts.push(box(0.45, 1.4, 0.45, stoneC, [0, gy + 1.2, 0]));
     parts.push(box(1.0, 0.25, 1.0, stoneC, [0, gy + 2.0, 0]));
-    // The firebox: a lit paper drum between four stone posts, not a lit block.
-    parts.push(part(new CylinderGeometry(0.3, 0.3, 0.62, 6), lit, { pos: [0, gy + 2.45, 0] }));
-    for (const [px, pz] of [[-0.33, -0.33], [0.33, -0.33], [-0.33, 0.33], [0.33, 0.33]]) parts.push(box(0.14, 0.7, 0.14, stoneC, [px, gy + 2.47, pz]));
+    // The firebox: a lit six-sided paper drum between the stone slabs, not a lit block (open at both
+    // ends, which the slabs hide: the triangles the block cost).
+    parts.push(part(new CylinderGeometry(0.34, 0.34, 0.66, 6, 1, true), lit, { pos: [0, gy + 2.45, 0] }));
     parts.push(part(new ConeGeometry(0.95, 0.6, 4), stoneC, { pos: [0, gy + 3.1, 0], rot: [0, Math.PI / 4, 0] }));
     parts.push(part(new ConeGeometry(0.8, 0.4, 4), SNOW, { pos: [0, gy + 3.3, 0], rot: [0, Math.PI / 4, 0] }));
     return parts;
@@ -478,13 +481,10 @@ export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, 
   }
   parts.push(seg([0, gy - 0.3, 0], [0, gy + 4.6, 0], 0.09, INK, 6));
   parts.push(seg([0, gy + 4.4, 0], [0, gy + 4.6, 0.8], 0.05, INK, 4));
-  // The head: a lantern hung from the bracket, a bulged glass drum in an iron cap and foot, with a
-  // curl of iron under the arm.
-  parts.push(seg([0, gy + 3.7, 0], [0, gy + 4.45, 0.55], 0.04, INK, 4));
-  parts.push(part(new SphereGeometry(0.3, 7, 5), lit, { pos: [0, gy + 4.05, 0.8], scale: [1, 1.25, 1] }));
-  parts.push(part(new CylinderGeometry(0.2, 0.24, 0.12, 6), INK, { pos: [0, gy + 3.66, 0.8] }));
-  parts.push(part(new ConeGeometry(0.4, 0.36, 6), INK, { pos: [0, gy + 4.58, 0.8] }));
-  parts.push(part(new ConeGeometry(0.3, 0.2, 6), SNOW, { pos: [0, gy + 4.8, 0.8] }));
+  // The head: a lantern hung from the bracket, a bulged glass drum under an iron cap (in the triangles
+  // the old lit box and its two caps cost: a street has dozens).
+  parts.push(part(new SphereGeometry(0.3, 5, 3), lit, { pos: [0, gy + 4.05, 0.8], scale: [1, 1.3, 1] }));
+  parts.push(part(new ConeGeometry(0.42, 0.4, 4), INK, { pos: [0, gy + 4.6, 0.8], rot: [0, Math.PI / 4, 0] }));
   parts.push(drift([0, gy, 0], [0.45, 0.2, 0.45]));
   return parts;
 }
@@ -1312,42 +1312,48 @@ function mouth(b: Bay, cols: Color[], parts: BufferGeometry[]): void {
   }
 }
 
-/** How high over the floor's centre a cavern's rib meets, and where it springs from the wall. Its lowest
- *  point over the corridor is at the corridor's edge, about 9 m over the snow there: over any line a sled
- *  rides or flies in a cavern (the roof proper still clears the highest air a pop can reach). */
-const RIB_APEX = 15;
+/** Where a cavern's rib springs from the wall, over the floor's centre. */
 const RIB_SPRING = 7.5;
 
-/** One rib of a cavern's crown, built at a bay's centre: a pointed arch of ice in strokes that thin toward
- *  the point, a boss of hanging crystals where the two halves meet, and a cluster of crystals lit from
- *  within standing out of the wall at each springing, where the lanterns and the dawn find them. */
-function iceRib(b: Bay, cols: Color[], pale: Color, glow: Color, low: boolean): BufferGeometry[] {
+/** One rib of a cavern's crown, built at a bay's centre: a shaft of ice climbing each wall outside the
+ *  limit, in strokes that thin as they rise, leaning in only once it is over the highest air a pop can
+ *  reach (`need`), then a pointed arch to the roof; a cluster of crystals lit from within standing out of
+ *  the wall at each springing, where the lanterns and the dawn find them, and a boss of hanging crystals
+ *  at the point where there is room for one over the air. */
+function iceRib(b: Bay, need: number, cols: Color[], pale: Color, glow: Color, low: boolean): BufferGeometry[] {
   const out: BufferGeometry[] = [];
   const fl = b.f.gy(0, 0);
-  const yA = Math.min(b.R - 0.8, fl + RIB_APEX);
-  if (yA < fl + 11) return out;
-  const N = low ? 3 : 6;
+  const yA = Math.max(need + 0.3, b.R - 0.8);
   const X = b.X + 0.9;
+  const N = low ? 2 : 4;
   for (const sx of [-1, 1]) {
     const yS = Math.max(b.f.gy(sx * X, 0) + 3, fl + RIB_SPRING);
+    if (yS >= need) continue;
+    // The shaft up the wall, past the limit, to the air's height.
     let prev: V3 = [sx * (X + 1.2), yS - 5, 0];
-    for (let k = 0; k <= N; k++) {
+    const shaft: V3 = [sx * (X + 0.3), need + 0.4, 0.2];
+    out.push(seg(prev, [sx * (X + 0.5), yS, -0.2], 1.0, cols[0], low ? 3 : 4));
+    out.push(seg([sx * (X + 0.5), yS, -0.2], shaft, 0.85, cols[1 % cols.length], low ? 3 : 4));
+    prev = shaft;
+    // The arch over the run, from the top of the shaft to the point, never under the air.
+    for (let k = 1; k <= N; k++) {
       const t = ((k / N) * Math.PI) / 2;
-      const p: V3 = [sx * X * Math.pow(Math.cos(t), 0.85), yS + (yA - yS) * Math.pow(Math.sin(t), 0.8), (k % 2 ? 0.25 : -0.25) * (1 - k / N)];
-      out.push(seg(prev, p, 1.0 - 0.5 * (k / N), cols[k % cols.length], low ? 3 : 4));
+      const p: V3 = [sx * (X + 0.3) * Math.cos(t), need + 0.4 + (yA - need - 0.4) * Math.sin(t), (k % 2 ? 0.25 : -0.25) * (1 - k / N)];
+      out.push(seg(prev, p, 0.7 - 0.3 * (k / N), cols[k % cols.length], low ? 3 : 4));
       prev = p;
     }
     if (!low) {
-      // Crystals at the springing: they lean out of the wall and up, well over a rider's head.
+      // Crystals at the springing: they stand out of the wall past the limit, leaning up and away.
       for (let k = 0; k < 4; k++) {
         const h = 1.6 + rnd() * 2.2;
-        out.push(crystal(k % 2 ? glow : pale, 0.28 + rnd() * 0.22, h, [sx * (X + 0.4 - 0.2 * k), yS - 1.2 + k * 0.5, (k - 1.5) * 0.7], [(rnd() - 0.5) * 0.7, 0, sx * (0.5 + rnd() * 0.5)]));
+        out.push(crystal(k % 2 ? glow : pale, 0.28 + rnd() * 0.22, h, [sx * (X + 0.9 + 0.25 * k), yS - 1.2 + k * 0.5, (k - 1.5) * 0.7], [(rnd() - 0.5) * 0.5, 0, -sx * (0.25 + rnd() * 0.3)]));
       }
     }
   }
-  // The boss: crystals hanging from the point (their tips stay within two and a half metres of it).
+  // The boss: crystals hanging from the point, where it stands clear of the air by their length.
   for (let k = 0; k < (low ? 1 : 3); k++) {
     const len = 1.2 + rnd() * 1.3;
+    if (yA - len < need) continue;
     out.push(part(new ConeGeometry(0.3 + rnd() * 0.25, len, 5), k === 0 ? glow : pale, { pos: [(k - 1) * 0.6, yA - len / 2 + 0.2, (rnd() - 0.5) * 0.8], rot: [Math.PI, rnd(), 0] }));
   }
   return out;
@@ -1394,7 +1400,7 @@ export function iceTunnelPiece(ctx: SiteCtx): Piece {
           // The crown a rider can see: the roof itself clears the highest air and so stands out of the
           // frame, so every third bay a rib of ice springs from both walls and meets in a point over the
           // run, far lower (Low: every fifth, in fewer strokes).
-          if ((i0 + j) % (low ? 5 : 3) === 1) parts.push(...b.f.out(iceRib(b, crown, icicle, glowC, low)));
+          if ((i0 + j) % (low ? 5 : 3) === 1) parts.push(...b.f.out(iceRib(b, rail.air(b.dz - 4, b.dz + 4) + AIR_MARGIN, crown, icicle, glowC, low)));
         }
         // The walls: a shelf of ice with a fringe of icicles under it, and crystals glowing in the ice,
         // on each side at the lens's height and above, all past the limit.
