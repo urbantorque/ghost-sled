@@ -121,8 +121,19 @@ export interface StrataSpec {
   /** How far a bed shifts off the one under it, as a share of the smaller half extent: what makes one
    *  side a ledge and the other an overhang. */
   shift?: number;
-  /** The beds' dip across x, metres of rise a metre. */
+  /** The beds' dip across x, metres of rise a metre, and along z (a long outcrop's beds run up out of the
+   *  slope and are cut off by its top: what says "the mountain's rock" and not "a wall somebody built"). */
   dip?: number;
+  dipZ?: number;
+  /** How far a joint between two beds wanders up and down round the rock, as a share of a bed's thickness
+   *  (beds swell and pinch; no joint is a ruled line). Default 0.2. */
+  warp?: number;
+  /** How far each bed's corners stand in or out of the shared outline on their own, as a share of the
+   *  radius: what makes a ledge here, a flush wall there and an overhang past it along one joint. Default
+   *  a third of `rough`. */
+  jut?: number;
+  /** Buttresses: how deep the outline's three bays are cut between them (0 none). */
+  bays?: number;
   /** A level top at exactly `h` that something stands on, under a slab of `lie` whose lip droops over
    *  the edge. Without it the top is a low broken crown with `lie` on its gentler facets. */
   flat?: boolean;
@@ -148,6 +159,10 @@ export function strataInto(f: Facets, s: StrataSpec): void {
   const shift = s.shift ?? 0.1;
   const rough = s.rough ?? 0.2;
   const dip = s.dip ?? 0;
+  const dipZ = s.dipZ ?? 0;
+  const warp = s.warp ?? 0.2;
+  const jut = s.jut ?? rough * 0.35;
+  const bays = s.bays ?? 0;
   const small = Math.min(s.rx, s.rz);
   const sq = s.square ?? 1;
   const pw = (v: number) => Math.sign(v) * Math.pow(Math.abs(v), sq);
@@ -158,6 +173,10 @@ export function strataInto(f: Facets, s: StrataSpec): void {
   for (let k = 0; k < N; k++) {
     ang.push(((k + (r() - 0.5) * 0.5) / N) * Math.PI * 2);
     base.push(1 - rough * r());
+  }
+  if (bays > 0) {
+    const ph = r() * 6.28;
+    for (let k = 0; k < N; k++) base[k] *= 1 - bays * (0.5 + 0.5 * Math.sin(ang[k] * 3 + ph)) * (0.6 + 0.4 * r());
   }
   // (The outline reaches its bounds at its widest corner: a form made for a collider fills it.)
   const widest = Math.max(...base);
@@ -175,6 +194,20 @@ export function strataInto(f: Facets, s: StrataSpec): void {
     acc += th[i];
     ys.push((acc / sum) * s.h);
   }
+  // A joint's height at a point: its level, the dip, and a slow wander of its own round the rock. Joints
+  // never cross (a bed pinches out against the one over it) and never pass the top. The top itself is
+  // level where something stands on it; otherwise it is broken: each corner its own drop under the peak.
+  const mean = s.h / L;
+  const wave: Array<[number, number, number, number]> = [];
+  for (let i = 0; i <= L; i++) wave.push([r() * 6.28, r() * 6.28, 1 + Math.floor(r() * 2), 0.5 + r() * 0.5]);
+  const crownDrop: number[] = [];
+  for (let k = 0; k < N; k++) crownDrop.push((0.12 + 0.5 * r()) * th[L - 1] / sum * s.h);
+  const joint = (i: number, k: number, x: number, z: number): number => {
+    if (i >= L) return s.flat ? s.h : s.h - crownDrop[k];
+    const w = wave[i];
+    const y = ys[i] + x * dip + z * dipZ + warp * mean * w[3] * (0.65 * Math.sin(ang[k] * w[2] + w[0]) + 0.35 * Math.sin(ang[k] * 3 + w[1]));
+    return Math.min(s.flat ? s.h : s.h - crownDrop[k] - 0.02, Math.max(0.04 - foot * 0.5, y));
+  };
   // Each bed: its scale (stepping in up the rock), its shift, and its own outline noise. Everything is
   // kept inside the bounds: scale plus shift never passes 1.
   interface Bed {
@@ -197,19 +230,19 @@ export function strataInto(f: Facets, s: StrataSpec): void {
     const lo: V3[] = [];
     const hi: V3[] = [];
     for (let k = 0; k < N; k++) {
-      const n = base[k] * (1 - rough * 0.35 * r());
+      // (A level top keeps most of its outline: a crowd stands on it out to its edge.)
+      const n = base[k] * (1 - jut * (top && s.flat ? 0.3 : 1) * r());
       // Walls lean in a little up each bed (a battered face catches the light along its top edge).
       const x0 = pw(Math.cos(ang[k])) * s.rx * sc * n + cx;
       const z0 = pw(Math.sin(ang[k])) * s.rz * sc * n + cz;
       const x1 = pw(Math.cos(ang[k])) * s.rx * sc * n * 0.95 + cx;
       const z1 = pw(Math.sin(ang[k])) * s.rz * sc * n * 0.95 + cz;
-      // The dip fades out toward a level top.
-      const d0 = dip * (s.flat ? 1 - Math.max(0, ys[i]) / s.h : 1);
-      const d1 = dip * (s.flat ? 1 - Math.max(0, ys[i + 1]) / s.h : 1);
+      const yHi = joint(i + 1, k, x1, z1);
       // (The lowest bed's foot follows the ground where the builder knows it, a metre under the snow: a
       // shoulder that runs out over a leap's drop never shows its underside.)
-      lo.push([x0, i === 0 ? (s.ground ? Math.min(s.ground(x0, z0) - 1, ys[1] - 0.2) : ys[0]) : ys[i] + x0 * d0, z0]);
-      hi.push([x1, Math.min(s.h, ys[i + 1] + (top && s.flat ? 0 : x1 * d1)), z1]);
+      const yLo = i === 0 ? (s.ground ? Math.min(s.ground(x0, z0) - 1, yHi - 0.2) : ys[0]) : Math.min(yHi, joint(i, k, x0, z0));
+      lo.push([x0, yLo, z0]);
+      hi.push([x1, yHi, z1]);
     }
     beds.push({ lo, hi, cx, cz, tone: i % s.rock.length });
     scale = sc - (taper / Math.max(1, L - 1)) * (0.5 + r());
@@ -224,8 +257,10 @@ export function strataInto(f: Facets, s: StrataSpec): void {
       const k1 = (k + 1) % N;
       const out: V3 = [(b.lo[k][0] + b.lo[k1][0]) / 2 - b.cx, 0, (b.lo[k][2] + b.lo[k1][2]) / 2 - b.cz];
       // A bed's face: darker at its foot than at its top edge, each facet its own small step of value.
-      const fk = 0.94 + r() * 0.12;
-      f.quad(b.lo[k], b.lo[k1], b.hi[k1], b.hi[k], col, out, 0.8 * fk, 1.06 * fk);
+      // Now and then a block is the next bed's value (a bed is not one colour end to end).
+      const fk = 0.9 + r() * 0.2;
+      const fc = r() < 0.2 ? s.rock[(b.tone + 1) % s.rock.length] : col;
+      f.quad(b.lo[k], b.lo[k1], b.hi[k1], b.hi[k], fc, out, 0.78 * fk, 1.06 * fk);
     }
     if (i === L - 1) break;
     // Between this bed and the next: where the next steps in, a ledge (and what lies on it, banked up
@@ -244,7 +279,7 @@ export function strataInto(f: Facets, s: StrataSpec): void {
       if (ledge > 0) {
         if (s.lie && ledge > small * 0.05) {
           // Banked against the wall: the snow's inner edge stands up the next bed's face.
-          const bank = Math.min(ledge * 0.7, (ys[i + 2] - ys[i + 1]) * 0.45);
+          const bank = Math.max(0, Math.min(ledge * 0.7, (Math.min(u.hi[k][1], u.hi[k1][1]) - Math.max(u.lo[k][1], u.lo[k1][1])) * 0.45));
           const a: V3 = [u.lo[k][0], u.lo[k][1] + bank, u.lo[k][2]];
           const c: V3 = [u.lo[k1][0], u.lo[k1][1] + bank, u.lo[k1][2]];
           f.quad(b.hi[k], b.hi[k1], c, a, s.lie, UP, 0.93, 1);
@@ -326,10 +361,16 @@ export interface ColumnSpec {
   broke: Color;
   /** Lean, radians about x and z (a column fallen against its neighbours). */
   lean?: [number, number];
+  /** Cross joints: the column stands in this many drums (default 1, no joint). Each drum over the first is
+   *  a little slimmer and turned off the one under it, so a joint is a lip of the break's value with the
+   *  drum's dark foot over it: a painted band round the column, and a notch in its outline. 16 triangles a
+   *  drum. */
+  drums?: number;
 }
 
 /** One basalt column: a hexagonal prism open at the foot, dark at the foot and its own value at the top,
- *  each face its own small step of value, broken off on a slant. 16 triangles. */
+ *  each face its own small step of value, broken off on a slant, cross-jointed into drums if asked.
+ *  16 triangles a drum. */
 export function columnInto(f: Facets, c: ColumnSpec, r: () => number): void {
   const from = f.triangles;
   const foot = c.foot ?? 0.4;
@@ -345,11 +386,37 @@ export function columnInto(f: Facets, c: ColumnSpec, r: () => number): void {
     // (Never above h: the slant only ever cuts down from the high corner.)
     hi.push([x, c.h - Math.abs(sl[0]) * c.r - Math.abs(sl[1]) * c.r + x * sl[0] + z * sl[1], z]);
   }
-  for (let k = 0; k < 6; k++) {
-    const k1 = (k + 1) % 6;
-    // Two values round a column: its faces alternate a step apart, so the joints read.
-    const fk = (k % 2 ? 0.86 : 1.04) * (0.95 + r() * 0.1);
-    f.quad(lo[k], lo[k1], hi[k1], hi[k], c.col, [lo[k][0] + lo[k1][0], 0, lo[k][2] + lo[k1][2]], 0.62 * fk, 1.05 * fk);
+  const drums = Math.max(1, Math.floor(c.drums ?? 1));
+  const low = Math.min(...hi.map((v) => v[1]));
+  // Where the cross joints are: uneven lengths, never in the slanted break.
+  const cuts: number[] = [];
+  for (let j = 1; j < drums; j++) cuts.push(low * ((j + (r() - 0.5) * 0.5) / drums));
+  let foot0 = lo;
+  for (let j = 0; j < drums; j++) {
+    const last = j === drums - 1;
+    // This drum's own turn and girth (the first is the column's).
+    const sc = j === 0 ? 1 : 0.84 + 0.1 * r();
+    const tw = j === 0 ? 0 : (r() - 0.5) * 0.3;
+    const ox = j === 0 ? 0 : (r() - 0.5) * 0.12 * c.r;
+    const oz = j === 0 ? 0 : (r() - 0.5) * 0.12 * c.r;
+    const ring = (y: number | null): V3[] =>
+      hi.map((v, k) => {
+        const a = yaw + tw + (k / 6) * Math.PI * 2;
+        return y === null ? [v[0] * sc, v[1], v[2] * sc] : [Math.cos(a) * c.r * sc + ox, y, Math.sin(a) * c.r * sc + oz];
+      });
+    const a = j === 0 ? foot0 : ring(cuts[j - 1]);
+    const b = last ? (j === 0 ? hi : ring(null)) : ring(cuts[j]);
+    const dk = 0.94 + r() * 0.12;
+    for (let k = 0; k < 6; k++) {
+      const k1 = (k + 1) % 6;
+      // Two values round a column: its faces alternate a step apart, so the joints read.
+      const fk = (k % 2 ? 0.86 : 1.04) * (0.95 + r() * 0.1) * dk;
+      f.quad(a[k], a[k1], b[k1], b[k], c.col, [a[k][0] + a[k1][0], 0, a[k][2] + a[k1][2]], 0.62 * fk, 1.05 * fk);
+    }
+    // The joint: the lower drum's break shows as a lip round the slimmer drum over it.
+    if (!last) for (let k = 1; k < 5; k++) f.tri(b[0], b[k], b[k + 1], c.broke, [0, 1, 0], 1.05);
+    else if (j > 0) for (let k = 0; k < 6; k++) hi[k] = b[k];
+    foot0 = b;
   }
   const cap = c.top ?? c.broke;
   for (let k = 1; k < 5; k++) f.tri(hi[0], hi[k], hi[k + 1], cap, [0, 1, 0], c.top ? 0.96 + r() * 0.06 : 0.9 + r() * 0.2);
@@ -367,6 +434,9 @@ export interface ColumnsSpec {
   /** The share of tops broken on a steep slant (bare), the rest near level under `top`. */
   broken?: number;
   foot?: number;
+  /** A drum's usual length in metres: columns longer than that are cross-jointed (up to three drums).
+   *  Left out, no column is. */
+  drum?: number;
   seed: number;
 }
 
@@ -379,7 +449,7 @@ export function columnsInto(f: Facets, s: ColumnsSpec): void {
     const steep = r() < broken;
     const a = r() * Math.PI * 2;
     const k = steep ? 0.35 + r() * 0.45 : r() * 0.12;
-    columnInto(f, { x, z, r: rad, h, foot: s.foot, yaw: (r() - 0.5) * 0.35, slant: [Math.cos(a) * k, Math.sin(a) * k], col: s.rock[i % 2], top: steep ? null : s.top, broke: s.broke }, r);
+    columnInto(f, { x, z, r: rad, h, foot: s.foot, yaw: (r() - 0.5) * 0.35, slant: [Math.cos(a) * k, Math.sin(a) * k], col: s.rock[i % 2], top: steep ? null : s.top, broke: s.broke, drums: s.drum ? Math.max(1, Math.min(3, Math.round((h / s.drum) * (0.75 + 0.5 * r())))) : 1 }, r);
   });
 }
 

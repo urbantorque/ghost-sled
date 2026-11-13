@@ -660,7 +660,7 @@ export function basaltClusterGeometry(p: Palette): BufferGeometry {
     [0.5, 0.82, 0.34, 1.5],
     [-0.52, -0.5, 0.36, 2.8],
   ];
-  columnsInto(f, { cols, rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.5, seed: 8381 });
+  columnsInto(f, { cols, rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.5, drum: 1.8, seed: 8381 });
   columnInto(f, { x: -0.6, z: 1.15, r: 0.36, h: 2.4, foot: 0.2, yaw: 0.3, col: t.rock[0], top: null, broke: t.broke, lean: [-0.95, 0.15] }, () => rnd());
   ashSkirt(f, 0, 0.15, 1.5, 1.4, 1.3, 0.34);
   return f.build();
@@ -674,10 +674,10 @@ export function basaltSentinelGeometry(p: Palette): BufferGeometry {
   const t = basaltTones(p);
   const f = new Facets();
   const lr = () => rnd();
-  columnInto(f, { x: 0, z: 0, r: 0.58, h: 10.3, col: t.rock[1], top: null, broke: t.broke, slant: [0.9, 0.3] }, lr);
-  columnInto(f, { x: 0.86, z: 0.42, r: 0.44, h: 7.1, yaw: 0.3, col: t.rock[0], top: null, broke: t.broke, slant: [-0.5, 0.4] }, lr);
+  columnInto(f, { x: 0, z: 0, r: 0.58, h: 10.3, col: t.rock[1], top: null, broke: t.broke, slant: [0.9, 0.3], drums: 4 }, lr);
+  columnInto(f, { x: 0.86, z: 0.42, r: 0.44, h: 7.1, yaw: 0.3, col: t.rock[0], top: null, broke: t.broke, slant: [-0.5, 0.4], drums: 3 }, lr);
   columnInto(f, { x: -0.7, z: 0.62, r: 0.42, h: 3.4, yaw: 0.1, col: t.rock[0], top: ASH_TOP, broke: t.broke, slant: [0.06, 0.04] }, lr);
-  columnInto(f, { x: 0.3, z: -0.84, r: 0.4, h: 4.8, yaw: 0.5, col: t.rock[1], top: ASH_TOP, broke: t.broke, slant: [0.05, -0.08] }, lr);
+  columnInto(f, { x: 0.3, z: -0.84, r: 0.4, h: 4.8, yaw: 0.5, col: t.rock[1], top: ASH_TOP, broke: t.broke, slant: [0.05, -0.08], drums: 2 }, lr);
   columnInto(f, { x: 1.5, z: -0.2, r: 0.36, h: 1.7, yaw: 0.2, col: t.rock[1], top: null, broke: t.broke, slant: [0.4, 0.2] }, lr);
   ashSkirt(f, 0.3, 0.1, 1.6, 1.3, 1.3, 0.34);
   return f.build();

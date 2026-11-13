@@ -807,7 +807,7 @@ export function lipPiece(ctx: SiteCtx): Piece {
           const steep = rnd() < 0.4;
           const a = rnd() * 6.28;
           const k = steep ? 0.3 + rnd() * 0.4 : rnd() * 0.1;
-          columnInto(f, { x: cx, z: cz, y: gy, r: rad * (0.9 + 0.2 * rnd()), h: top - gy, foot: 0, yaw: rnd() * 0.4, slant: [Math.cos(a) * k, Math.sin(a) * k], col: t.rock[i % 2], top: steep ? null : ASH_TOP, broke: t.broke }, rnd);
+          columnInto(f, { x: cx, z: cz, y: gy, r: rad * (0.9 + 0.2 * rnd()), h: top - gy, foot: 0, yaw: rnd() * 0.4, slant: [Math.cos(a) * k, Math.sin(a) * k], col: t.rock[i % 2], top: steep ? null : ASH_TOP, broke: t.broke, drums: low ? 1 : 2 + (i % 2) }, rnd);
         });
         // The lower rank: stubs stepping down in front, off the keep line.
         if (!low) {
@@ -826,13 +826,20 @@ export function lipPiece(ctx: SiteCtx): Piece {
           rz: 17.8,
           h: DEPTH,
           foot: 0,
-          layers: low ? 3 : 5,
-          sides: low ? 8 : 12,
+          // (Low keeps three beds and eight corners. Above it the long wall is broken into bays and
+          // buttresses, and the beds run up out of the slope along it and are cut off by the level top:
+          // no joint is parallel to the top's edge, so it never reads as courses of laid stone.)
+          layers: low ? 3 : 6,
+          sides: low ? 8 : 18,
           rock,
           lie,
-          taper: 0.08,
-          shift: 0.09,
-          dip: 0.04 * s,
+          taper: 0.1,
+          shift: 0.1,
+          dip: 0.05 * s,
+          dipZ: 0.085,
+          warp: 0.34,
+          jut: low ? 0.06 : 0.11,
+          bays: low ? 0 : 0.1,
           flat: true,
           rough: 0.18,
           square: 0.6,
@@ -852,7 +859,7 @@ export function lipPiece(ctx: SiteCtx): Piece {
             ];
         crown.forEach(([dx, dz, rx, rz, up], k) => {
           const from = f.triangles;
-          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.4, shift: 0.14, dip: 0.08 * s, rough: 0.26, seed: sd + 31 + k });
+          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
           f.place(from, x + s * dx, y - 1, dz, rnd() * 0.5 - 0.25);
         });
         for (let k = 0; k < (low ? 1 : 2); k++) {
@@ -861,7 +868,7 @@ export function lipPiece(ctx: SiteCtx): Piece {
           const gy = ctx.gy(bx, bz);
           const top = Math.max(gy + 1.2, y - 2.2 - k * 2.4);
           const from = f.triangles;
-          strataInto(f, { rx: 6.6 - k * 1.5, rz: 3.6 - k * 0.6, h: top - gy + 1.5, foot: 0, layers: 3, sides: 7, rock, lie, taper: 0.22, shift: 0.12, dip: 0.05 * s, rough: 0.24, apron: 0.12, ground: (lx, lz) => ctx.gy(bx + lx, bz + lz) - (gy - 1.5), seed: sd + 41 + k });
+          strataInto(f, { rx: 6.6 - k * 1.5, rz: 3.6 - k * 0.6, h: top - gy + 1.5, foot: 0, layers: 3, sides: 7, rock, lie, taper: 0.4, shift: 0.14, dip: 0.05 * s, dipZ: 0.1, warp: 0.4, jut: 0.14, rough: 0.28, apron: 0.12, ground: (lx, lz) => ctx.gy(bx + lx, bz + lz) - (gy - 1.5), seed: sd + 41 + k });
           f.place(from, bx, gy - 1.5, bz);
         }
         // Boulders buttressing the foot on the side that faces the run, each in its own beds.
@@ -870,7 +877,7 @@ export function lipPiece(ctx: SiteCtx): Piece {
           const bx = x - s * (8.3 + rnd() * 0.8);
           const gy = ctx.gy(bx, v);
           const from = f.triangles;
-          strataInto(f, { rx: 1.5 + rnd() * 0.4, rz: 2.1 + rnd() * 1.2, h: Math.min(y - gy - 1.2, 2.4 + rnd() * 2.2) + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.36, shift: 0.16, dip: 0.1 * s, rough: 0.26, apron: 0.2, ground: (lx, lz) => ctx.gy(bx + lx, v + lz) - (gy - 1), seed: sd + 11 + k });
+          strataInto(f, { rx: 1.5 + rnd() * 0.4, rz: 2.1 + rnd() * 1.2, h: Math.min(y - gy - 1.2, 2.4 + rnd() * 2.2) + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.45, shift: 0.16, dip: 0.1 * s, dipZ: 0.1, warp: 0.4, jut: 0.14, rough: 0.28, apron: 0.2, ground: (lx, lz) => ctx.gy(bx + lx, v + lz) - (gy - 1), seed: sd + 11 + k });
           f.place(from, bx, gy - 1, v, rnd() * 0.6 - 0.3);
         }
       }

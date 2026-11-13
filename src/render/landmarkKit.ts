@@ -700,7 +700,7 @@ export function basaltPiece(ctx: SiteCtx): Piece {
         // (The tallest carries the brazier on a level top; the rest are broken off on their own slants.)
         const a = rnd() * 6.28;
         const k = dx === 0 ? 0 : 0.15 + rnd() * 0.35;
-        columnInto(f, { x, z: dz, y: foot, r: r * 1.06, h: top - foot, foot: 0, yaw: rnd(), slant: [Math.cos(a) * k, Math.sin(a) * k], col: dx === 0 ? colD : col, top: k < 0.3 ? ASH_TOP : null, broke }, rnd);
+        columnInto(f, { x, z: dz, y: foot, r: r * 1.06, h: top - foot, foot: 0, yaw: rnd(), slant: [Math.cos(a) * k, Math.sin(a) * k], col: dx === 0 ? colD : col, top: k < 0.3 ? ASH_TOP : null, broke, drums: ctx.low ? 1 : 3 }, rnd);
         // Two slimmer columns packed against each, a step and two steps lower: an organ's ranks.
         for (let j = 0; j < 2; j++) {
           const b = a + 2.1 + j * 2.3;

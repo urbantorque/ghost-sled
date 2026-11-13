@@ -255,7 +255,7 @@ export const BASALT_MODEL_H = 5;
  *  it, graded in height round the ring, each broken off on its own slant, ash on the flatter tops and
  *  drifted round the foot. Near black and cold: a hazard's hard silhouette, never a brown box under a
  *  white lid. Built inside its collider. */
-export function basaltGeometry(p: Palette): BufferGeometry {
+export function basaltGeometry(p: Palette, low = false): BufferGeometry {
   reseed(808);
   const t = basaltTones(p);
   const f = new Facets();
@@ -265,7 +265,8 @@ export function basaltGeometry(p: Palette): BufferGeometry {
     const a = (k / 6) * Math.PI * 2 + 0.5;
     cols.push([Math.cos(a) * 0.6, Math.sin(a) * 0.6, 0.31 + 0.03 * rnd(), h * (0.94 + 0.12 * rnd())]);
   });
-  columnsInto(f, { cols, rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.55, seed: 8081 });
+  // (Cross-jointed into drums on Medium and up: Low's columns are whole, the triangles they had.)
+  columnsInto(f, { cols, rock: t.rock, broke: t.broke, top: ASH_TOP, broken: 0.55, drum: low ? 0 : 2.6, seed: 8081 });
   // Ash banked round the foot.
   for (let k = 0; k < 6; k++) {
     const a0 = (k / 6) * Math.PI * 2;
@@ -731,7 +732,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false): B
     case 'serac':
       return seracGeometry(p);
     case 'basalt':
-      return basaltGeometry(p);
+      return basaltGeometry(p, low);
     case 'lavarock':
       return lavaRockGeometry(p, low);
     case 'lantern':

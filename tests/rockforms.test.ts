@@ -71,6 +71,43 @@ describe('rock forms', () => {
     expect(soffits).toBeGreaterThan(2);
   });
 
+  it('a column in drums is 16 triangles a drum, faces out and stays under its height', () => {
+    for (let seed = 1; seed < 20; seed++) {
+      const c = columns({ cols: [[0, 0, 0.5, 6]], rock: [new Color(0.1, 0.1, 0.1), new Color(0.2, 0.2, 0.2)], broke: new Color(0.4, 0.4, 0.4), top: null, drum: 2, seed });
+      expect(tris(c) % 16).toBe(0);
+      expect(tris(c)).toBeLessThanOrEqual(48);
+      expect(outward(c)).toBe(1);
+      const b = formBounds(c, 0);
+      expect(b.h).toBeLessThanOrEqual(6 + 1e-6);
+      expect(b.r).toBeLessThanOrEqual(0.5 * 1.04 + 1e-6);
+    }
+  });
+
+  it('a long outcrop: its beds run up along it, no joint level, and its top is still level at h', () => {
+    const g = strata({ rx: 4, rz: 12, h: 6, foot: 0, layers: 5, sides: 14, rock: [new Color(0.2, 0.2, 0.2), new Color(0.3, 0.3, 0.3)], lie: null, flat: true, dipZ: 0.09, warp: 0.3, bays: 0.1, square: 0.6, seed: 21 });
+    const pos = g.getAttribute('position') as BufferAttribute;
+    let top = -Infinity;
+    const levels = new Set<number>();
+    for (let i = 0; i < pos.count; i++) {
+      top = Math.max(top, pos.getY(i));
+      expect(Math.abs(pos.getX(i))).toBeLessThanOrEqual(4 + 1e-6);
+      expect(Math.abs(pos.getZ(i))).toBeLessThanOrEqual(12 + 1e-6);
+      if (pos.getY(i) > 0.1 && pos.getY(i) < 5.5) levels.add(Math.round(pos.getY(i) * 20));
+    }
+    expect(top).toBeCloseTo(6.02, 2);
+    // (Five level courses would put every corner on one of four heights.)
+    expect(levels.size).toBeGreaterThan(20);
+  });
+
+  it('a rock without a level top has a broken crown: its rim stands under its peak', () => {
+    const g = strata({ rx: 2, rz: 2, h: 3, layers: 3, sides: 7, rock: [new Color(0.2, 0.2, 0.3)], lie: null, taper: 0.3, seed: 9 });
+    const pos = g.getAttribute('position') as BufferAttribute;
+    let atPeak = 0;
+    for (let i = 0; i < pos.count; i++) if (pos.getY(i) > 3 - 1e-4) atPeak++;
+    // Only the crown's own peak (one corner of each of its seven facets) reaches h.
+    expect(atPeak).toBe(7);
+  });
+
   it('a foot that knows the ground follows it', () => {
     const f = new Facets();
     // Ground falling away along z: the lowest corners go down with it.
@@ -110,13 +147,15 @@ describe('the forms hold their triangle budgets', () => {
   it('the run hazards: no heavier on Low than round 6 (rock 60, basalt 192, lava rock 80)', () => {
     expect(tris(obstacleGeometry('rock', p, true))).toBeLessThanOrEqual(60);
     expect(tris(obstacleGeometry('lavarock', p, true))).toBeLessThanOrEqual(80);
-    expect(tris(obstacleGeometry('basalt', p, true))).toBeLessThanOrEqual(192);
+    expect(tris(obstacleGeometry('basalt', p, true))).toBeLessThanOrEqual(124);
     expect(tris(obstacleGeometry('rock', p))).toBeLessThanOrEqual(110);
     expect(tris(obstacleGeometry('basalt', p))).toBeLessThanOrEqual(192);
   });
   it("Ember's formations", () => {
     expect(tris(organPipeGeometry(p))).toBeLessThanOrEqual(520);
-    expect(tris(basaltClusterGeometry(p))).toBeLessThanOrEqual(140);
-    expect(tris(basaltSentinelGeometry(p))).toBeLessThanOrEqual(110);
+    // (The cluster and the sentinel are Medium's and High's pieces, cross-jointed into drums; the organ
+    // pipes are Low's one piece too and stay whole.)
+    expect(tris(basaltClusterGeometry(p))).toBeLessThanOrEqual(180);
+    expect(tris(basaltSentinelGeometry(p))).toBeLessThanOrEqual(200);
   });
 });
