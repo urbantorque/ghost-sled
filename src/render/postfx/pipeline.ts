@@ -1,9 +1,10 @@
 import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, Vector2, type PerspectiveCamera, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { cine } from '../cine';
 import { AOPass, AO_COMPOSITE_GLSL, aoComposite } from './ao';
-import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lensMotionPx } from './depth';
+import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lastViewProj, lensMotionPx } from './depth';
 import { LensPass } from './lens';
 import { Quad } from './quad';
+import { aimIceMirror } from './reflect';
 import { SHAFT_COMPOSITE_GLSL, ShaftsPass, shaftComposite, shaftPlace } from './shafts';
 import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
 import { GpuTimer } from './timing';
@@ -79,6 +80,8 @@ export class Pipeline {
   readonly rider = new Vector2(0.5, 0.4);
   time = 0;
   private lastTime = 0;
+  /** Last frame left a resolved picture and depth in the scene target. */
+  private drawn = false;
   private depthTex: DepthTexture | null = null;
   private signals: FrameSignals = { post: true, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false, motionPx: 0 };
   private w = 2;
@@ -122,6 +125,7 @@ export class Pipeline {
   setSize(w: number, h: number): void {
     this.w = w;
     this.h = h;
+    this.drawn = false;
     this.ao.setSize(w, h);
     this.shafts.setSize(w, h);
     this.lens.setSize(w, h);
@@ -141,6 +145,11 @@ export class Pipeline {
     f.motionPx = lensMotionPx(camera, this.h);
     planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
     if (this.depthTex) target.resolveDepthBuffer = this.plan.depth;
+    // What glazed ice mirrors while the scene is drawn: last frame's own picture and depth on Ultra
+    // (the target's resolved textures; only under MSAA, where drawing does not write them).
+    const mode = !post || !this.switches.mirror || this.passes.mirror === 'sky' ? 0 : this.passes.mirror === 'bake' ? 1 : 2;
+    const screen = mode === 2 && target.samples > 0 && this.depthTex !== null && this.drawn;
+    aimIceMirror(mode, screen ? target.texture : null, screen ? this.depthTex : null, lastViewProj(), camera.near, camera.far);
     this.timer.begin('scene');
   }
 
@@ -179,6 +188,7 @@ export class Pipeline {
 
   /** Once the composite is on screen. */
   end(): void {
+    this.drawn = this.plan.depth;
     keepLens();
     this.timer.collect();
   }

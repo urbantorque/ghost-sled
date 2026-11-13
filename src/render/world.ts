@@ -1079,6 +1079,7 @@ export class World {
         pp.vpY = Math.max(0.5, Math.min(1.1, vp.y * 0.5 + 0.5));
       }
     }
+    this.lakeMirror.everywhere = this.post.enabled && this.quality.passes.mirror !== 'sky' && this.post.pipe.switches.mirror;
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
     if (this.cineHold) Object.assign(cine, this.cineHold);
     this.post.render(this.scene, this.cam.camera);

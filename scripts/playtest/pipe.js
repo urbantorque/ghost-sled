@@ -25,7 +25,7 @@ async (page) => {
     const tier = job.tier || 'high';
     const m = job.m || 0;
     const speed = job.speed || c.speed;
-    await page.goto(c.base + `?platform=mock&debug&tier=${tier}&autoride=1&m=${m}&mood=${job.mood || 0}${job.extra || ''}`);
+    await page.goto(c.base + `?platform=mock&debug&tier=${tier}&autoride=1&m=${m}&mood=${job.mood || 0}${job.extra || ''}`, { timeout: 120000 });
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 60000 });
     await page.waitForTimeout(1200);
     await page.evaluate((v) => {

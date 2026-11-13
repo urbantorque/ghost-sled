@@ -21,6 +21,7 @@ import {
 } from 'three';
 import { shared } from './materials';
 import { PIPE_COMPOSITE_GLSL, Pipeline, pipeUniforms } from './postfx/pipeline';
+import { iceMirror } from './postfx/reflect';
 import type { PassSettings } from './postfx/tiers';
 
 // A small custom post stack (ART.md section 9): bloom via a downsample/upsample mip chain, then one
@@ -928,8 +929,13 @@ export class PostFX {
       refresh = true;
     }
     if (refresh) {
+      // (The ice's screen mirror is the main lens's last frame: the inset's ice keeps the baked one.)
+      const mirror = iceMirror.uIceMirror.value;
+      const ready = mirror.y;
+      mirror.y = 0;
       r.setRenderTarget(this.insetRT);
       r.render(scene, camera);
+      mirror.y = ready;
     }
     const u = this.inset.uniforms;
     const m = u.uMargin.value as number;

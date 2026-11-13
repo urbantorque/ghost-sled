@@ -24,6 +24,9 @@ export class LakeMirror {
   private fwd = new Vector3();
   private last = -1e9;
   private course: Course | null = null;
+  /** Round 7: every glaze mirrors the bake (ice patches, Glass Ice, the fork's strip), so it is kept
+   *  fresh on any stretch of any mountain, not only near a lake. Off on Low, which keeps round 6's. */
+  everywhere = false;
 
   constructor(renderer: WebGLRenderer) {
     const half = renderer.capabilities.isWebGL2;
@@ -50,7 +53,7 @@ export class LakeMirror {
       this.course = c;
       this.last = -1e9;
     }
-    if (time - this.last < EVERY || !this.near(c, z)) return;
+    if (time - this.last < EVERY || !(this.everywhere || this.near(c, z))) return;
     this.last = time;
     const prev = renderer.getRenderTarget();
     this.cam.position.copy(sky.position);

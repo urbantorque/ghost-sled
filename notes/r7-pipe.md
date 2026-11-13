@@ -101,3 +101,20 @@ four samples a pixel is a trap), unless the save already chose it.
   blob are untouched (materials.ts, landing.ts). No second cascade: it would mean a second shadow lookup
   in every material, which is the light lane's file this round. `?post=-fit` is round 6's box.
   Frames: `shots/r7/pipe/shadow/sheet.png`.
+- **Reflections on ice and the lakes** (this commit). `postfx/reflect.ts`, spliced into the snow shader's
+  ice branch (one call in `materials.ts`). Low: round 6's painted gradient. Medium and High (`bake`): the
+  lake's baked sky and peaks on every glaze (an ice patch, Glass Ice, the fork's strip), faded out toward
+  the bake's foot so a glaze on a slope has no edge, and the rider's soft figure standing in it; the bake
+  (768x200, the sky's own few draws) is now refreshed every 3.5 s on any stretch instead of only near a
+  lake. No pass, no draw a frame. Ultra (`screen`): the snow shader marches the mirrored ray through last
+  frame's depth (24 growing steps, 100 m, then five halvings to the crossing) and reads last frame's
+  picture there: trees, pylons, the hut, gifts, the rider and the ghosts stand in the ice, and a ray that
+  leaves for the sky reads the real sky. Last frame's picture and depth are the scene target's own
+  resolved textures (under MSAA the scene draws into renderbuffers, so there is no copy and no feedback).
+  It runs on ice pixels only. A hit is accepted only where the ray's depth meets the depth buffer's at the
+  crossing: a thickness test smeared gifts down the ice and, with a jittered start, stippled the rider.
+  The first frame after a resize or a tier change, and the results inset, fall back to the bake.
+  Limits: what is off screen is not in the ice (the mirror fades over the last 6% of the frame); things
+  that write no depth (ghost glass, particles) are mirrored only where they overlap something that does.
+  `?post=-mirror` is round 6's. Frames: `shots/r7/pipe/mirror/` (`*-r6.png` against `*-r7.png`: the lake
+  at 1800 m, Glass Ice at 900 m).
