@@ -125,7 +125,10 @@ const LIGHT_FRAG = /* glsl */ `
     float inside = 1.0 - smoothstep(w * 0.6, w, abs(p.x));
     inside *= smoothstep(-0.62, -0.42, p.y) * (1.0 - smoothstep(0.75, 0.98, p.y));
     #ifdef POSTER
-      return col * step(0.5, inside) * 1.1 + vec3(1.0, 0.95, 0.8) * step(0.5, inside) * step(abs(p.x), w * 0.3) * step(p.y, 0.2) * 0.5;
+      // (A painted flame: wider than the lit one, flat, with one paler value at its heart.)
+      float fat = 1.0 - step(w * 1.5 + 0.05, abs(p.x));
+      fat *= step(-0.62, p.y) * step(p.y, 0.9);
+      return col * fat * 1.3 + vec3(1.0, 0.95, 0.8) * fat * step(abs(p.x), w * 0.6) * step(p.y, 0.25) * 0.6;
     #else
       float core = inside * (1.0 - smoothstep(0.0, w * 0.5, abs(p.x))) * (1.0 - smoothstep(-0.3, 0.5, p.y));
       float halo = exp(-dot(q, q) * 2.0) * 0.45;
@@ -153,7 +156,7 @@ function valleyMaterial(low: boolean): ShaderMaterial {
     blendSrcAlpha: ZeroFactor,
     blendDstAlpha: OneFactor,
     defines: defs(low),
-    uniforms: { uTime: shared.uTime, uH: { value: 720 }, uFogR: { value: [60, 600] }, uCloud: { value: 0 }, uShow: { value: 0 }, uSurge: { value: 0 }, uRelease: { value: -1 }, uMinPx: { value: low ? 3 : 2.1 }, uGain: { value: low ? 1.15 : 1.9 } },
+    uniforms: { uTime: shared.uTime, uH: { value: 720 }, uFogR: { value: [60, 600] }, uCloud: { value: 0 }, uShow: { value: 0 }, uSurge: { value: 0 }, uRelease: { value: -1 }, uMinPx: { value: low ? 3.6 : 2.1 }, uGain: { value: low ? 1.7 : 1.9 } },
     vertexShader: /* glsl */ `
       attribute vec4 aA;
       attribute vec2 aB;
@@ -1534,6 +1537,18 @@ export class LanternWorld {
     const z = c.finishZ + GREAT_Z;
     root.visible = mode !== 'title' && s.z > c.finishZ - 760;
     if (!root.visible) return;
+    // Firstlight from far up the run: its lamps as a few soft lights over the roofs, so the town is a pool of
+    // marigold in the valley before any of its windows can be read.
+    const far = z - s.z;
+    if (far > 160) {
+      const k = Math.min(1, (far - 160) / 200);
+      for (let i = 0; i < 9; i++) {
+        const tz = c.finishZ - 250 + i * 48;
+        const side = i % 2 === 0 ? -1 : 1;
+        const tx = c.centerX(tz) + side * (c.halfWidth(tz) + 9 + (i % 3) * 5);
+        this.sprite(tx, c.ground(tx, tz) + 9 + (i % 4) * 2, tz, 7 + (i % 3) * 2, 0, FLAME, 0.34 * k, i * 0.11);
+      }
+    }
     // (A run that ends in the results without a finish beat seen here still lights it at the line.)
     if (this.greatLit < 0 && mode !== 'title' && s.z >= c.finishZ) this.greatLit = time + (this.greatWon ? 0 : 1.1);
     const t = this.greatLit < 0 ? -1 : time - this.greatLit;

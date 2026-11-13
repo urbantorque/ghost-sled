@@ -160,7 +160,7 @@ export const SEA_GLSL = /* glsl */ `
       float pool = snoise(wq + vec2(1.7, -4.2)) * 0.6 + snoise(wq * 2.3 + vec2(-3.1, 2.6)) * 0.4;
       pool = smoothstep(0.22, 0.78, pool + 0.08 * sin(uTime * 0.21 + wq.x * 3.0));
       float thin = 1.0 - smoothstep(-0.35, 0.55, n);
-      col += uSeaWarm * pool * (0.35 + 0.65 * thin) * cov;
+      col += uSeaWarm * pool * (0.35 + 0.65 * thin) * cov * (1.0 - smoothstep(1400.0, 5200.0, t));
     }
     // Aerial perspective: the far sea melts into the horizon.
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);

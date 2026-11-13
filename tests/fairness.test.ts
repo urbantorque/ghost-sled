@@ -266,6 +266,7 @@ describe('the descent', () => {
       glacier: ['ravine', 'bridge', 'fork', 'leap'],
       volcanic: ['ravine', 'tunnel', 'bridge', 'fork'],
       blossom: ['terraces', 'tunnel', 'street', 'fork'],
+      lantern: ['ravine', 'fork', 'street', 'bridge', 'leap'],
     };
     const bad: string[] = [];
     for (const seed of MANY) {

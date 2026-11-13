@@ -138,11 +138,11 @@ export function standingStoneGeometry(p: Palette): BufferGeometry {
   reseed(4606);
   const a = shade(p.low, 1.15);
   const b = p.lowLit.clone().lerp(p.low, 0.35);
-  const main = new CylinderGeometry(0.4, 0.82, 4.9, 5, 3);
+  const main = new CylinderGeometry(0.38, 0.72, 4.9, 5, 3);
   return merge([
     grade(part(main, a, { pos: [0, 2.45, 0], rot: [0.03, 0.4, -0.04], jitter: 0.22 }), 0, 5, 0.8, 1.15, 0.12),
-    part(new CylinderGeometry(0.58, 0.63, 0.24, 5), b, { pos: [0.02, 3.2, 0.02], rot: [0.03, 0.4, -0.04] }),
-    part(new CylinderGeometry(0.2, 0.42, 1.7, 4), shade(a, 0.85), { pos: [0.55, 0.7, 0.3], rot: [0.2, 0.9, -0.5], jitter: 0.1 }),
+    part(new CylinderGeometry(0.53, 0.57, 0.24, 5), b, { pos: [0.02, 3.2, 0.02], rot: [0.03, 0.4, -0.04] }),
+    part(new CylinderGeometry(0.2, 0.42, 1.7, 4), shade(a, 0.85), { pos: [0.4, 0.55, 0.22], rot: [0.2, 0.9, -0.42], jitter: 0.08 }),
     part(new IcosahedronGeometry(0.42, 0), SNOW, { pos: [0, 4.86, 0], scale: [1, 0.36, 1], jitter: 0.08 }),
     part(new IcosahedronGeometry(0.8, 0), SNOW, { pos: [0.1, 0.02, 0.1], scale: [1.15, 0.22, 1.1], jitter: 0.1 }),
   ]);

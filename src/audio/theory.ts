@@ -254,11 +254,11 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
-  // Lanternfall: Bb major at 84 (the produced score's key, a slow pulse), a music-box arp rising and falling,
+  // Lanternfall: Bb major at 92 (the produced score's key, a slow pulse), a music-box arp rising and falling,
   // a bass that only marks the bar, no clap until the lanterns: a hush that keeps moving.
   lantern: {
     tonic: 46,
-    bpm: 84,
+    bpm: 92,
     mode: 'major',
     penta: MAJOR_PENTA,
     bright: 2,
