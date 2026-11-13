@@ -744,6 +744,34 @@ const SCENARIOS: Record<string, () => void> = {
     }),
   // The ladder beside the card, and the stage table folded under the race.
   'results-ladder': () => showResults(FINISH),
+  // The moment (round 7): a win, and a duel of The Twelve won, lost, opening Lanternfall, and the crown.
+  'results-win': () => showResults({ ...FINISH, ghosts: (FINISH.ghosts ?? []).map((g) => (typeof g.time === 'number' && g.time < 171.45 ? { ...g, time: g.time + 9, passed: true } : g)) }),
+  'results-duel': () =>
+    showResults({
+      ...{ ...FINISH, ghosts: (FINISH.ghosts ?? []).map((g) => (typeof g.time === 'number' && g.time < 171.45 ? { ...g, time: g.time + 9, passed: true } : g)) },
+      twelve: { tone: 'fell', line: 'Bram Oakhollow falls. 3 of 12 beaten.', rider: { key: 'bram', name: 'Bram Oakhollow', hat: 'antlers', emblem: 'leaf', accent: '#CFE8B8' }, says: 'Good on you.', beaten: 3, of: 12, gifts: 40 },
+      runAgainLabel: { text: 'Duel Juno Vale', aria: 'Duel Juno Vale, run again' },
+    }),
+  'results-duel-lost': () =>
+    showResults({
+      ...FINISH,
+      finish: { ...FINISH.finish!, newBest: false },
+      twelve: { tone: 'held', line: 'Old Wren held you off by 1.2 s.', rider: { key: 'wren', name: 'Old Wren', hat: 'stovepipe', emblem: 'bell', accent: '#E6E0C8' }, says: 'Patience, child.', beaten: 2, of: 12, gifts: 0 },
+      runAgainLabel: { text: 'Rematch Old Wren', aria: 'Duel Old Wren, run again' },
+    }),
+  'results-duel-opens': () =>
+    showResults({
+      ...{ ...FINISH, ghosts: (FINISH.ghosts ?? []).map((g) => (typeof g.time === 'number' && g.time < 171.45 ? { ...g, time: g.time + 9, passed: true } : g)) },
+      twelve: { tone: 'fell', line: 'Mila Frost falls. Lanternfall is open.', rider: { key: 'mila', name: 'Mila Frost', hat: 'hood', emblem: 'snowflake', accent: '#BFE6FF' }, says: 'Well ridden.', beaten: 11, of: 12, gifts: 40 },
+      unlocked: ['Lanternfall'],
+      unlockedMountains: [{ id: 'lanternfall', name: 'Lanternfall', biome: 'lantern', tagline: 'Where the spirit lights come from' }],
+    }),
+  'results-crowned': () =>
+    showResults({
+      ...{ ...FINISH, ghosts: (FINISH.ghosts ?? []).map((g) => (typeof g.time === 'number' && g.time < 171.45 ? { ...g, time: g.time + 9, passed: true } : g)) },
+      mountain: 'Lanternfall',
+      twelve: { tone: 'crowned', line: 'All twelve beaten in one race. The crown is yours.', rider: null, says: null, beaten: 12, of: 12, gifts: 200 },
+    }),
   // Climbing: the name beaten, the new rank, what it paid, and a medal landing.
   'results-climb': () =>
     showResults({
@@ -1412,7 +1440,7 @@ const GROUPS: Record<string, string[]> = {
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
   hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-learn'],
-  menus: ['results', 'results-finish', 'results-finish-solo', 'results-short', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
+  menus: ['results', 'results-win', 'results-duel', 'results-duel-lost', 'results-duel-opens', 'results-crowned', 'results-finish', 'results-finish-solo', 'results-short', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
   cash: ['bank-tiers', 'bank-t0', 'bank-t1', 'bank-t2', 'bank-t3', 'bank-best', 'bank-draft', 'bank-bump', 'stake', 'stake-fuse', 'stake-held', 'lost-crack', 'lost-best', 'lost-small', 'chase-stake'],
   beats: ['streak', 'streak-5', 'pass-words', 'pass-streak', 'race-news', 'race-queue', 'race-call', 'race-call-grudge', 'race-call-you', 'duel', 'duel-lost', 'lead', 'grudge-settled', 'nemesis-down', 'finale-avalanche', 'finale-storm', 'finale-train', 'finale-yeti', 'finale-dodged', 'pops', 'pop-mission', 'pop-unlock', 'new-best', 'friend-beaten', 'says', 'countdown', 'countdown-storm', 'countdown-plain', 'countdown-yeti'],
 };

@@ -2,7 +2,7 @@ import type { ResultsFinish, ResultsGhost, ResultsLadder, ResultsModel, ResultsN
 import type { InputMode } from '../game/input';
 import { type Standing, aheadOf, byStanding, clock, gapSeconds, margin, splitGap, timeGap } from '../game/standing';
 import { SLEDS } from '../sim/sleds';
-import { biomeArt } from './art';
+import { biomeArt, riderBust } from './art';
 import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
@@ -60,6 +60,65 @@ const MIS_STAMP_MS = 1050;
 export function landAt(row: number): number {
   return MIS_STAMP_MS + 420 + row * 140;
 }
+/** What kind of ending a run was: each gets its own entrance and its own words. */
+export type MomentKind = 'win' | 'podium' | 'finish' | 'wreck';
+
+/** The results' moment: the one thing the run was, said large before the card's detail. */
+export interface Moment {
+  kind: MomentKind;
+  /** The figure it leads with: your place ("1st"), or how far a wreck got ("2,340 m"); a finish with
+   *  nobody to race leads with its time. */
+  figure: string;
+  /** "of 7" beside a place; empty otherwise. */
+  of: string;
+  /** The words under it, in the kind's own voice. */
+  word: string;
+  /** The fact that made it: a rider of The Twelve beaten, a new best, the ladder climbed, a medal. */
+  fact: string | null;
+  /** What the fact is, for its colour: The Twelve's news, your own best, or plain. */
+  factTone: 'twelve' | 'best' | 'plain';
+  /** The finish time, shown with a place (null on a wreck, or when the time is the figure). */
+  time: string | null;
+}
+
+/**
+ * The moment a results card leads with, read off the model: a win (first across the line), a podium
+ * (second or third of four or more), a finish, or a wreck. The fact under it is the best thing the run
+ * did, by rank: a rider of The Twelve beaten or the crown, a new best time, the ladder's own moment
+ * ("Beat SparkleCedar and 2 more."), a medal, a new best score; a duel lost says how close it was.
+ */
+export function resultsMoment(m: ResultsModel): Moment {
+  const fin = m.finish ?? null;
+  const place = finish(m);
+  const tw = m.twelve ?? null;
+  let fact: string | null = null;
+  let factTone: Moment['factTone'] = 'plain';
+  if (tw && (tw.tone === 'fell' || tw.tone === 'crowned')) {
+    fact = tw.line;
+    factTone = 'twelve';
+  } else if (fin && fin.newBest) {
+    const gap = fin.bestTime === null ? 0 : timeGap(fin.seconds, fin.bestTime);
+    fact = fin.bestTime === null ? 'Your first finish here.' : gap >= 1 ? `New best, ${gapSeconds(gap)} quicker.` : 'New best.';
+    factTone = 'best';
+  } else if (m.ladder?.moment) fact = m.ladder.moment;
+  else if (tw) {
+    fact = tw.line;
+    factTone = 'twelve';
+  } else if (fin && fin.medal > 0) fact = `${MEDAL[fin.medal]} run.`;
+  else if (!fin && m.newBest) {
+    fact = 'New best score.';
+    factTone = 'best';
+  }
+  if (!fin) {
+    const short = typeof m.finishZ === 'number' ? Math.round(m.finishZ - m.distance) : 0;
+    return { kind: 'wreck', figure: metres(m.distance), of: '', word: 'Wiped out', fact: fact ?? (short > 0 ? `${metres(short)} short of the finish.` : null), factTone, time: null };
+  }
+  if (!place) return { kind: 'finish', figure: clock(fin.seconds), of: '', word: 'Across the line', fact, factTone, time: null };
+  const kind: MomentKind = place.rank === 1 ? 'win' : place.rank <= 3 && place.of >= 4 ? 'podium' : 'finish';
+  const word = kind === 'win' ? 'First down the mountain' : kind === 'podium' ? 'On the podium' : 'Across the line';
+  return { kind, figure: ordinal(place.rank), of: `of ${place.of}`, word, fact, factTone, time: clock(fin.seconds) };
+}
+
 /** The finishing order shows your row, the two places above it (the next ghosts to beat) and the one
  *  below; Show All opens the rest. A field this small or smaller always shows whole. */
 const WIN_ABOVE = 2;
@@ -518,7 +577,7 @@ export class Results {
     }
     const label = m.runAgainLabel?.text ?? 'Run Again';
     // "Rematch Mila", or "Race Mila" for a rider new to you: Run Again names who is about to ride.
-    const named = /^(Rematch|Race) (.+)$/.exec(label);
+    const named = /^(Rematch|Race|Duel) (.+)$/.exec(label);
     const rematch = named !== null;
     const again = btn(
       ctx,
@@ -573,7 +632,8 @@ export class Results {
     card.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
     // The strip sits outside the card: over its top edge in portrait (the wreck's band), in the free
     // corner beside it on wide screens. The card itself is laid out as if it were not there.
-    this.el.replaceChildren(...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), card);
+    this.el.dataset.moment = resultsMoment(m).kind;
+    this.el.replaceChildren(momentEl(m), ...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), card);
     this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
@@ -1008,7 +1068,8 @@ function masteryRow(m: ResultsModel): HTMLElement | null {
 
 /** A signature rider's word on the result: the line in quotes, the name after it, a rule in its colour. */
 function quoteLine(m: ResultsModel): HTMLElement | null {
-  const q = m.quote;
+  // The rider duelled has the last word on a duel.
+  const q = m.twelve?.rider && m.twelve.says ? { name: m.twelve.rider.name, text: m.twelve.says, accent: m.twelve.rider.accent } : m.quote;
   if (!q) return null;
   const p = h('p', 'gs-res-quote', h('span', 'gs-res-quote-t', `“${q.text}”`), h('span', 'gs-res-quote-n', q.name));
   p.style.setProperty('--accent', q.accent);
@@ -1016,7 +1077,52 @@ function quoteLine(m: ResultsModel): HTMLElement | null {
   return p;
 }
 
+/**
+ * The moment, over the scene beside the card (above it on a phone): the figure slams in, the words follow,
+ * then the fact that made it, and with a duel of The Twelve the rider's bust beside it. It is the card's
+ * headline said large, so readers skip it: the card under it carries every word.
+ */
+function momentEl(m: ResultsModel): HTMLElement {
+  const mo = resultsMoment(m);
+  const el = h('div', `gs-mo is-${mo.kind}`);
+  el.setAttribute('aria-hidden', 'true');
+  const fig = h('span', 'gs-mo-fig gs-num', mo.figure);
+  const figRow = h('div', 'gs-mo-figrow', fig, mo.of ? h('span', 'gs-mo-of gs-num', mo.of) : null);
+  const word = h('div', 'gs-mo-word', h('span', 'gs-mo-word-t', mo.word), mo.time ? h('span', 'gs-mo-time gs-num', mo.time) : null);
+  el.append(h('span', 'gs-mo-rays'), figRow, h('span', 'gs-mo-rule'), word);
+  if (mo.fact) {
+    const tw = mo.factTone === 'twelve' ? (m.twelve ?? null) : null;
+    const fact = h('div', `gs-mo-fact is-${mo.factTone}`);
+    if (tw?.rider) {
+      const bust = h('span', `gs-mo-bust${tw.tone === 'fell' ? ' is-fell' : ''}`);
+      bust.innerHTML = riderBust(tw.rider.hat, tw.rider.accent);
+      fact.style.setProperty('--rider', tw.rider.accent);
+      fact.append(bust);
+    }
+    const t = h('span', 'gs-mo-fact-t', mo.fact);
+    t.setAttribute('translate', 'no');
+    fact.append(t);
+    el.append(fact);
+  }
+  return el;
+}
+
+/** The Twelve's news, in the card's one race line: who fell and what that leaves, or how close it was. */
+function twelveLine(m: ResultsModel): HTMLElement | null {
+  const t = m.twelve;
+  if (!t) return null;
+  const text = h('span', 'gs-res-line-t', t.line, t.gifts > 0 ? h('span', 'gs-res-line-gifts gs-num', ` +${fmt(t.gifts)}`, sr(' gifts')) : null);
+  text.setAttribute('translate', 'no');
+  const bust = h('span', 'gs-res-line-ico gs-res-line-bust');
+  bust.innerHTML = riderBust(t.rider?.hat ?? 'crown', t.rider?.accent ?? '#E8D9FF');
+  const p = h('p', `gs-res-line is-twelve is-${t.tone}`, bust, text);
+  p.style.setProperty('--rider', t.rider?.accent ?? '#E8D9FF');
+  return p;
+}
+
 function raceLine(m: ResultsModel): HTMLElement | null {
+  // A duel of The Twelve is the run's race line: the card's one line, as ever (C6).
+  if (m.twelve) return twelveLine(m);
   const l = m.raceLine;
   if (!l || !l.text) return null;
   // The Daily or Cup medal line ("Daily: Silver. Gold at 2,410 m.") wears its medal disc in the icon

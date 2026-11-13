@@ -556,7 +556,7 @@
 }
 
 .gs-t12-rung.is-locked {
-  opacity: 0.62;
+  opacity: 0.8;
 }
 
 /* ------------------------------------------------------------------ Title: tall screens */
@@ -685,6 +685,699 @@
   .gs-t12-main,
   .gs-t12-bust,
   .gs-t12-count .gs-i {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Results: the moment */
+
+/* The run said large, over the scene: the figure slams in first (0 ms), the rule draws under it (160 ms),
+   the words follow (220 ms) and the fact that made it lands last (420 ms), while the card with the detail
+   slides in beside it on its own beats (RESULTS_TIMING is unchanged). Four endings, four entrances: a win
+   bursts and holds gold-white, a podium rises onto its step, a finish sweeps in across a line, and a wreck
+   drops, tilts and settles. */
+.gs-mo {
+  --mo: var(--text);
+  position: absolute;
+  top: calc(var(--st) + 6px);
+  left: calc(var(--sl) + 10px);
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  width: min(36vw, 440px);
+  pointer-events: none;
+  text-shadow: var(--halo);
+}
+
+.gs-mo-figrow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
+.gs-mo-fig {
+  color: var(--mo);
+  font-size: clamp(64px, 14vmin, 150px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.92;
+  padding-right: 0.08em;
+}
+
+.gs-mo-of {
+  color: var(--text);
+  font-size: clamp(16px, calc(var(--u) * 1.3), 24px);
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-mo-rule {
+  width: min(100%, 300px);
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--mo);
+  box-shadow: 0 0 0 2px var(--halo-c);
+  transform-origin: 0 50%;
+}
+
+.gs-mo-word {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+}
+
+.gs-mo-word-t {
+  font-size: clamp(19px, calc(var(--u) * 1.55), 30px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.gs-mo-time {
+  color: var(--text);
+  font-size: clamp(17px, calc(var(--u) * 1.3), 25px);
+  font-weight: 850;
+}
+
+.gs-mo-fact {
+  --rider: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 7px 14px 7px 12px;
+  border-radius: var(--r-pill);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--text);
+  font-size: max(13px, 0.92em);
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: none;
+}
+
+.gs-mo-fact.is-best {
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 138, 0.6), var(--shadow);
+  color: var(--you);
+}
+
+.gs-mo-fact.is-twelve {
+  padding-left: 6px;
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rider) 60%, transparent), var(--shadow);
+}
+
+.gs-mo-bust {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-mo-bust svg,
+.gs-res-line-bust svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A rider who fell: the bust tips over as the line lands. */
+.gs-mo-bust.is-fell {
+  transform: rotate(-16deg);
+  opacity: 0.8;
+}
+
+.gs-results.is-in .gs-mo-bust.is-fell {
+  animation: gs-mo-topple 620ms var(--spring) 760ms both;
+}
+
+.gs-mo-rays {
+  position: absolute;
+  top: -70px;
+  left: -90px;
+  z-index: -1;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 224, 138, 0.2) 0deg 7deg, rgba(255, 224, 138, 0) 7deg 20deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 46%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 46%, transparent 100%);
+  opacity: 0;
+}
+
+/* A win: gold-white (the colour of your own best), a burst of rays that turns slowly behind the figure. */
+.gs-mo.is-win {
+  --mo: var(--you);
+}
+
+.gs-mo.is-win .gs-mo-rays {
+  opacity: 1;
+}
+
+.gs-results.is-in .gs-mo.is-win .gs-mo-rays {
+  animation:
+    gs-mo-burst 700ms var(--out) both,
+    gs-mo-turn 48s linear 700ms infinite;
+}
+
+.gs-results.is-in .gs-mo.is-win .gs-mo-fig {
+  animation: gs-mo-slam 520ms var(--spring) both;
+}
+
+/* A podium: the figure rises onto its step, which grows under it. */
+.gs-mo.is-podium .gs-mo-rule {
+  height: 10px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #e6ebf5, #aab4c8);
+}
+
+.gs-results.is-in .gs-mo.is-podium .gs-mo-fig {
+  animation: gs-mo-rise 480ms var(--spring) 80ms both;
+}
+
+/* A finish: across the line, in from the side it was ridden from. */
+.gs-results.is-in .gs-mo.is-finish .gs-mo-fig {
+  animation: gs-mo-cross 420ms var(--out) both;
+}
+
+/* A wreck: it drops, tips and settles, and stays a little crooked. */
+.gs-mo.is-wreck {
+  --mo: rgba(245, 243, 255, 0.92);
+}
+
+.gs-mo.is-wreck .gs-mo-fig {
+  font-size: clamp(48px, 8.4vmin, 92px);
+  transform: rotate(-3deg);
+  transform-origin: 0 100%;
+}
+
+.gs-mo.is-wreck .gs-mo-rule {
+  width: min(70%, 200px);
+  opacity: 0.55;
+  transform: rotate(-1.2deg);
+}
+
+.gs-results.is-in .gs-mo.is-wreck .gs-mo-fig {
+  animation: gs-mo-drop 640ms cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+
+.gs-results.is-in .gs-mo-rule {
+  animation: gs-mo-draw 380ms var(--out) 160ms both;
+}
+
+.gs-results.is-in .gs-mo.is-wreck .gs-mo-rule {
+  animation-name: gs-mo-draw-wreck;
+}
+
+.gs-results.is-in .gs-mo-of,
+.gs-results.is-in .gs-mo-word {
+  animation: gs-rise 360ms var(--out) 220ms both;
+}
+
+.gs-results.is-in .gs-mo-fact {
+  animation: gs-pop 380ms var(--spring) 420ms both;
+}
+
+.gs-results.is-static .gs-mo,
+.gs-results.is-static .gs-mo * {
+  animation: none !important;
+}
+
+@keyframes gs-mo-slam {
+  from {
+    opacity: 0;
+    transform: scale(1.7) rotate(-4deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(46px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-cross {
+  from {
+    opacity: 0;
+    transform: translateX(-70px) skewX(-10deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-60px) rotate(7deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes gs-mo-draw {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-draw-wreck {
+  from {
+    opacity: 0;
+    transform: scaleX(0) rotate(-1.2deg);
+  }
+  to {
+    opacity: 0.55;
+    transform: rotate(-1.2deg);
+  }
+}
+
+@keyframes gs-mo-burst {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-20deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes gs-mo-topple {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0.8;
+    transform: rotate(-16deg);
+  }
+}
+
+/* The news of The Twelve in the card's race line: the rider's bust in the icon column, their colour on the words. */
+.gs-res-line.is-twelve {
+  color: var(--rider);
+}
+
+.gs-res-line.is-twelve.is-held,
+.gs-res-line.is-twelve.is-final {
+  color: rgba(245, 243, 255, 0.86);
+}
+
+.gs-res-line-bust {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-res-line-gifts {
+  color: var(--gift);
+  white-space: nowrap;
+}
+
+/* A phone: the moment keeps the top of the band over the card, beside the rider. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-mo {
+    top: calc(var(--st) + 2px);
+    left: var(--sl);
+    gap: 3px;
+    width: min(62vw, 300px);
+  }
+
+  .gs-mo-fig {
+    font-size: clamp(46px, 14vw, 68px);
+  }
+
+  .gs-mo.is-wreck .gs-mo-fig {
+    font-size: clamp(36px, 10.5vw, 52px);
+  }
+
+  .gs-mo-word-t {
+    font-size: clamp(15px, 4.4vw, 19px);
+  }
+
+  .gs-mo-time {
+    font-size: 15px;
+  }
+
+  .gs-mo-rule {
+    width: min(100%, 170px);
+    height: 4px;
+  }
+
+  .gs-mo-rays {
+    top: -110px;
+    left: -130px;
+    width: 340px;
+    height: 340px;
+  }
+
+  /* The fact is the card's own race line a few lines below: a phone has no band to spare for it twice. */
+  .gs-mo-fact {
+    display: none;
+  }
+}
+
+/* Small landscape: the card fills the screen and says it all. */
+@media (min-aspect-ratio: 1/1) and (max-width: 900px) {
+  .gs-mo {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-results.is-in .gs-mo,
+  .gs-results.is-in .gs-mo * {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ Screen transitions */
+
+/* Title to run: the screen leaves the way it is built. The column goes back off the logo's side, the cards
+   off theirs, and the scrim lets go of the scene last, so the first thing the run shows is the mountain the
+   title was a picture of. The layer is gone 220 ms after Ride (title.ts), so every exit fits inside 200. */
+.gs-title.is-out {
+  animation: gs-fade-out 200ms ease 20ms both;
+}
+
+.gs-title.is-out .gs-t-main,
+.gs-title.is-out .gs-t-side,
+.gs-title.is-out .gs-t-ride,
+.gs-title.is-out .gs-t-bar {
+  animation: gs-exit-l 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+.gs-title.is-out .gs-t-side {
+  animation-delay: 15ms;
+}
+
+.gs-title.is-out .gs-t-bar {
+  animation-delay: 30ms;
+}
+
+/* Ride itself goes last and forward: the button pressed is the one thing that leads into the run. */
+.gs-title.is-out .gs-t-ride {
+  animation-name: gs-exit-go;
+  animation-duration: 210ms;
+}
+
+.gs-title.is-out .gs-t-stats,
+.gs-title.is-out .gs-t12,
+.gs-title.is-out .gs-t-daily {
+  animation: gs-exit-r 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+/* Results to the next run: the moment goes off its side and the card off its own (down, on a phone). */
+.gs-results.is-out .gs-mo,
+.gs-results.is-out .gs-lad.is-band {
+  animation: gs-exit-l 180ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+.gs-results.is-out .gs-res-card {
+  animation: gs-exit-r 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+/* The garage and the settings sheet: the sheet pops (style.css), then what it holds steps in, top first,
+   and it leaves by sinking back. */
+.gs-sheetwrap.is-in .gs-sheet-body > * {
+  animation: gs-rise 300ms var(--out) both;
+  animation-delay: 70ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(2) {
+  animation-delay: 110ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(3) {
+  animation-delay: 150ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(n + 4) {
+  animation-delay: 190ms;
+}
+
+.gs-sheetwrap.is-out .gs-sheet,
+.gs-pause.is-out .gs-pause-card {
+  animation: gs-sink 170ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+@keyframes gs-exit-l {
+  to {
+    opacity: 0;
+    transform: translateX(-44px);
+  }
+}
+
+@keyframes gs-exit-r {
+  to {
+    opacity: 0;
+    transform: translateX(44px);
+  }
+}
+
+@keyframes gs-exit-go {
+  35% {
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(60px) scale(1.04);
+  }
+}
+
+@keyframes gs-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-title.is-out .gs-t-main {
+    animation-name: gs-exit-up;
+  }
+
+  .gs-title.is-out .gs-t-side,
+  .gs-title.is-out .gs-t-bar,
+  .gs-title.is-out .gs-t12,
+  .gs-title.is-out .gs-t-daily,
+  .gs-results.is-out .gs-res-card {
+    animation-name: gs-exit-down;
+  }
+
+  .gs-title.is-out .gs-t-ride {
+    animation-name: gs-exit-go-up;
+  }
+}
+
+@keyframes gs-exit-up {
+  to {
+    opacity: 0;
+    transform: translateY(-36px);
+  }
+}
+
+@keyframes gs-exit-down {
+  to {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@keyframes gs-exit-go-up {
+  35% {
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+/* ------------------------------------------------------------------ Buttons and cards with intent */
+
+/* Ride (and Run Again): the play glyph leans into the direction of travel under the pointer, and a single
+   light crosses the button once when the title lands, so the eye finds the one filled play button. */
+.gs-ride,
+.gs-again {
+  position: relative;
+  overflow: hidden;
+}
+
+.gs-ride > .gs-i,
+.gs-again > .gs-i {
+  transition: transform 200ms var(--spring);
+}
+
+@media (hover: hover) {
+  .gs-ride:hover:not([aria-disabled='true']) > .gs-i,
+  .gs-again:hover > .gs-i {
+    transform: translateX(4px) scale(1.08);
+  }
+
+  /* A mountain card rises to the pointer and its art breathes in; a locked one only nods. */
+  .gs-mtns .gs-mtn:not(.is-locked):not(.is-sel):hover {
+    transform: translateY(-3px);
+  }
+
+  .gs-mtn-sky svg {
+    transition: transform 320ms var(--out);
+  }
+
+  .gs-mtn:not(.is-locked):hover .gs-mtn-sky svg {
+    transform: scale(1.07) translateY(-1px);
+  }
+}
+
+.gs-title.is-in .gs-ride::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.34) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateX(-120%) skewX(-18deg);
+  animation: gs-sheen 720ms var(--out) 620ms both;
+  pointer-events: none;
+}
+
+@keyframes gs-sheen {
+  from {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+/* Picking a mountain lands its check and lifts its card in one move (the title re-renders in place). */
+.gs-title.is-static .gs-mtn.is-sel .gs-mtn-check {
+  animation: gs-pop 340ms var(--spring) both;
+}
+
+/* ------------------------------------------------------------------ Pause, in the same language */
+
+/* The pause card speaks the title's language: the scene stays in view through the title's own diagonal
+   scrim, the word is set like the wordmark with its runner drawn under it, and the card comes in from the
+   logo's side with its parts stepping in after it. */
+.gs-pause {
+  background:
+    linear-gradient(100deg, rgba(8, 12, 30, 0.82) 0%, rgba(8, 12, 30, 0.62) 46%, rgba(8, 12, 30, 0.4) 100%);
+}
+
+.gs-pause-title {
+  position: relative;
+  justify-self: start;
+  padding: 0 0.12em 0.2em 0;
+  letter-spacing: -0.035em;
+  text-shadow:
+    0.05em 0.045em 0 var(--ghost),
+    0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.gs-pause-title::after {
+  content: '';
+  position: absolute;
+  left: 0.1em;
+  right: 0.3em;
+  bottom: 0;
+  height: 0.1em;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  transform-origin: 0 50%;
+}
+
+.gs-pause.is-in .gs-pause-card {
+  animation: gs-rise-l 300ms var(--out) both;
+}
+
+.gs-pause.is-in .gs-pause-title::after {
+  animation: gs-mo-draw 360ms var(--out) 140ms both;
+}
+
+.gs-pause.is-in .gs-pause-card > :not(.gs-pause-title) {
+  animation: gs-rise 300ms var(--out) 90ms both;
+}
+
+.gs-pause.is-in .gs-pause-card > .gs-set {
+  animation-delay: 150ms;
+}
+
+/* The loading bar is the wordmark's runner: round-ended, off-white with the ghosts' mint under it. */
+.gs-load {
+  height: 4px;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  box-shadow: 0 2px 0 rgba(143, 243, 228, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-title.is-out .gs-t-anim,
+  .gs-title.is-out .gs-t12,
+  .gs-results.is-out .gs-mo,
+  .gs-results.is-out .gs-lad.is-band,
+  .gs-results.is-out .gs-res-card,
+  .gs-sheetwrap.is-in .gs-sheet-body > *,
+  .gs-sheetwrap.is-out .gs-sheet,
+  .gs-pause.is-out .gs-pause-card,
+  .gs-pause.is-in .gs-pause-card,
+  .gs-pause.is-in .gs-pause-card > *,
+  .gs-pause.is-in .gs-pause-title::after,
+  .gs-title.is-in .gs-ride::after,
+  .gs-title.is-static .gs-mtn.is-sel .gs-mtn-check {
+    animation: none;
+  }
+
+  .gs-title.is-in .gs-ride::after {
+    content: none;
+  }
+
+  .gs-ride > .gs-i,
+  .gs-again > .gs-i,
+  .gs-mtn-sky svg {
     transition: none;
   }
 }
