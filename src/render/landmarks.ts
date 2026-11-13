@@ -11,6 +11,7 @@ import { pushLocalLight } from './lights';
 import { makeToonMaterial, shared } from './materials';
 import { OverlookPlan } from './overlook';
 import { journeyDusk, type Palette } from './palette';
+import { PADDY_FROM, Stages, calderaLedge, paddySpans } from './stages';
 
 // Places: a run is a sequence of places down the fall line instead of one corridor. The course says where
 // (SitePlan): a `street` section is a town you ride through, a `tunnel` an enclosed run, a `bridge` a
@@ -714,6 +715,13 @@ export class SitePlan {
    *  where it cannot stand are both kept. */
   clearings(z0: number, z1: number, out: Clearing[]): void {
     this.lay();
+    // The Caldera Leap's banks hold lava (stages.ts): no forest and no dressing stands in it.
+    const cal = calderaLedge(this.course);
+    if (cal && cal.land1 + 12 > z0 && cal.z + 14 < z1) for (const side of [-1, 1]) out.push({ side, e: 33, z0: cal.z + 14, z1: cal.land1 + 12, w: 23 });
+    // Petal Steps' banks hold paddies (stages.ts): the orchards and the dressing keep off them.
+    for (const [a, b] of paddySpans(this.course)) {
+      if (b > z0 && a < z1) for (const side of [-1, 1]) out.push({ side, e: 10 + PADDY_FROM + 22, z0: a - 4, z1: b + 4, w: 24 });
+    }
     for (const s of this.list) {
       if (s.z + s.len < z0 - 60 || s.z - s.len > z1 + 60) continue;
       const [a, b] = siteSpan(s);
@@ -920,6 +928,8 @@ export class SetPieces {
   private aSeed: InstancedBufferAttribute;
   /** The lift lines' chairs, on the lines in view (Medium and High). */
   private chairs: Chairs;
+  /** The light a place holds, staged (stages.ts): the caldera's lava, the cavern's dawn, the torii's bars. */
+  readonly stages: Stages;
   /** A village's lamplight on the snow (night, Medium and High) and Ember's steam. */
   private pools: Mesh;
   private poolPos: BufferAttribute;
@@ -1050,6 +1060,8 @@ export class SetPieces {
     this.steam.visible = false;
     this.steam.renderOrder = 3;
     this.root.add(this.steam);
+    this.stages = new Stages(course, palette, tier, this.plain);
+    this.root.add(this.stages.root);
     this.setPalette(palette);
   }
 
@@ -1062,6 +1074,7 @@ export class SetPieces {
     this.chairs.setBiome(course.biome);
     this.palette = palette;
     this.setPalette(palette);
+    this.stages.setCourse(course, palette);
   }
 
   /** The sites planned so far (other systems keep their own pieces clear of them). */
@@ -1117,6 +1130,7 @@ export class SetPieces {
     // (What is made stays as it is: a tier that changes mid-run must not rebuild the street in view.)
     this.tier = tier;
     this.shadows = shadows;
+    this.stages.setQuality(tier);
     this.crowdKey = '';
     this.shown = this.shown.map(() => null);
   }
@@ -1298,6 +1312,7 @@ export class SetPieces {
     this.chairs.update(time);
     this.enclosure(z, dt);
     this.lampLights(z);
+    this.stages.update(z, time, plan.planned, this.night);
   }
 
   /** Round 7 (the light lane): a town's lamps light the snow, the rider and the riders round them. Every
