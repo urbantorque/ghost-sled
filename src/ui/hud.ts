@@ -2,12 +2,13 @@ import type { GhostKind, HudModel, MirrorRect, ScreenRect, StyleTone, UIHandlers
 import { ChaosEvent, eventInfo, Mood, moodInfo } from '../sim/chaos';
 import { btn, Flag, h, Layer, sr, Txt, type Ctx } from './dom';
 import { clock } from '../game/standing';
-import { kindCls, NBSP, ordinal } from './fmt';
+import { fmt, kindCls, NBSP, ordinal } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, EASE_OUT, play, reduced, SPRING } from './motion';
 import { EVENT_ICON } from './notices';
 import { pageBeat } from './pagebeat';
 import { ride } from './presence';
+import { figures, figuresAllowed, type Fig } from './figures';
 
 // In-run HUD. updateHud runs every frame: nodes are built once and each value is diffed, so a
 // frame where nothing changed touches no DOM at all. The top-centre stack is two tiers at most: the
@@ -40,6 +41,9 @@ import { ride } from './presence';
 // spent: until then there is nothing to count.
 
 const CHEVRONS = 5;
+/** The canvas figures' colours: the HUD's text, and your best's gold-white while a New best flashes. */
+const FIG_TEXT = '#f5f3ff';
+const FIG_BEST = '#ffe08a';
 /** Steps a get-up's pip fills in as it comes back. */
 const WIPE_STEPS = 8;
 /**
@@ -718,9 +722,16 @@ export class Hud {
   private lastTier = -1;
   private lastChev = -1;
   private lastDanger = -1;
-  private lastScoreLen = 0;
   /** The running figures have been drawn once: the first never waits for the beat. */
   private figured = false;
+  /** Low draws the score, the clock and the distance in the canvas (figures.ts): the DOM keeps each
+   *  figure's box, with its text clear, written when its length changes and once a second for a reader. */
+  private canvasFigs = false;
+  private readonly figsOk = figuresAllowed();
+  private readonly clockEl: HTMLElement;
+  private readonly distEl: HTMLElement;
+  private figDomAt = [0, 0, 0];
+  private figLen = [0, 0, 0];
   private lastGapLen = 0;
   private revealing = false;
   private moodWanted = false;
@@ -764,6 +775,8 @@ export class Hud {
     this.dist = new Txt(distEl);
     const clockEl = h('div', 'gs-clock gs-num');
     this.clockT = new Txt(clockEl);
+    this.distEl = distEl;
+    this.clockEl = clockEl;
     // The stage line: its words, and one hairline per stage (built with the first model).
     const legTxt = h('span', 'gs-leg-t');
     this.legT = new Txt(legTxt);
@@ -1041,8 +1054,42 @@ export class Hud {
       this.pillFading = false;
       this.flowState('off');
       this.scoreHold.release();
+      this.figured = false;
       this.fit();
     }
+  }
+
+  /** One running figure, on the beat. In the DOM it is written as it changes. With the canvas drawing
+   *  it, the canvas gets the text and the DOM is written only when its length changes (its box, and the
+   *  boxes beside it, depend on that alone: the numerals are tabular) or a second has gone by (so a
+   *  reader's figure is never more than a second old). Returns whether the layout may have moved. */
+  private figure(i: number, fig: Fig, slot: Txt, s: string, now: number): boolean {
+    if (!this.canvasFigs) {
+      fig.text = '';
+      if (!slot.str(s)) return false;
+    } else {
+      fig.text = s;
+      if (s.length === this.figLen[i] && now - this.figDomAt[i] < 1000) return false;
+      this.figDomAt[i] = now;
+      slot.str(s);
+    }
+    const moved = s.length !== this.figLen[i];
+    this.figLen[i] = s.length;
+    return moved;
+  }
+
+  /** Where the canvas draws a figure: its box and its face, read with the HUD's other rects (measure). */
+  private placeFigure(el: HTMLElement, fig: Fig): void {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 && r.height <= 0) return;
+    const cs = getComputedStyle(el);
+    const size = parseFloat(cs.fontSize) || 16;
+    fig.x = r.left + (parseFloat(cs.paddingLeft) || 0);
+    fig.y = r.top + (parseFloat(cs.paddingTop) || 0);
+    fig.lh = parseFloat(cs.lineHeight) || size * 1.1;
+    fig.size = size;
+    fig.font = `${cs.fontStyle} ${cs.fontWeight} ${size}px`;
+    fig.ls = parseFloat(cs.letterSpacing) || 0;
   }
 
   hide(): void {
@@ -1054,6 +1101,8 @@ export class Hud {
     window.clearTimeout(this.deltaTimer);
     window.clearTimeout(this.bestTimer);
     this.scoreEl.classList.remove('is-best');
+    figures.score.color = FIG_TEXT;
+    figures.on = false;
     this.deltaSum = 0;
     this.placeUp.set(false);
     this.placeDown.set(false);
@@ -1226,7 +1275,16 @@ export class Hud {
   }
 
   bumpScore(): void {
-    bump(this.scoreEl, 1.14, 300);
+    this.bumpFig(1.14, 300);
+  }
+
+  /** The score's punch: on its element, or on the canvas's figure when that is what a player sees. */
+  private bumpFig(amount: number, ms: number): void {
+    if (!this.canvasFigs) return bump(this.scoreEl, amount, ms);
+    const f = figures.score;
+    f.bump = amount;
+    f.bumpMs = ms;
+    f.bumpAt = performance.now();
   }
 
   /**
@@ -1243,7 +1301,7 @@ export class Hud {
    * from this frame on, at once (the landing's bumpScore punches it). No id releases every hold.
    */
   releaseScore(id?: number): void {
-    if (this.scoreHold.release(id) && this.layer.open) this.score.num(shownScore(this.lastScore, this.scoreHold.held));
+    if (this.scoreHold.release(id) && this.layer.open) this.figure(0, figures.score, this.score, fmt(Math.round(shownScore(this.lastScore, this.scoreHold.held))), performance.now());
   }
 
   /**
@@ -1252,9 +1310,13 @@ export class Hud {
    */
   flashBest(): void {
     this.scoreEl.classList.add('is-best');
-    bump(this.scoreEl, 1.2, 380);
+    figures.score.color = FIG_BEST;
+    this.bumpFig(1.2, 380);
     window.clearTimeout(this.bestTimer);
-    this.bestTimer = window.setTimeout(() => this.scoreEl.classList.remove('is-best'), BEST_FLASH_MS);
+    this.bestTimer = window.setTimeout(() => {
+      this.scoreEl.classList.remove('is-best');
+      figures.score.color = FIG_TEXT;
+    }, BEST_FLASH_MS);
   }
 
   /** Best combo pace: the stake line (gold-white from here, through the model's pace flag) punches once. */
@@ -1647,6 +1709,12 @@ export class Hud {
     // transformed rect would carry into the cash-in's anchor.
     this.rowAt = layoutCentre(this.comboRow, this.rowAt);
     this.readLayout();
+    if (this.canvasFigs) {
+      this.placeFigure(this.scoreEl, figures.score);
+      this.placeFigure(this.clockEl, figures.clock);
+      this.placeFigure(this.distEl, figures.dist);
+      figures.on = true;
+    }
     // The top-left block carries the distance, "Best in 240 m", the mood chip and the countdown chip.
     n = pushRect(out, n, this.tl);
     if (this.cdOn.on) n = pushRect(out, n, this.cdEl);
@@ -1742,17 +1810,24 @@ export class Hud {
     // A cash-in still on its way holds its points back (holdScore): the figure lands in the score.
     this.lastScore = m.score;
     const now = performance.now();
+    // Low hands the three running figures to the canvas (figures.ts); a change of tier mid-run swaps
+    // who draws them, and the boxes are measured again.
+    const canvas = figures.canvas && this.figsOk;
+    if (canvas !== this.canvasFigs) {
+      this.canvasFigs = canvas;
+      this.el.classList.toggle('gs-figs', canvas);
+      this.figured = false;
+      this.figDomAt.fill(0);
+      if (!canvas) figures.on = false;
+      moved = true;
+    }
     const beat = pageBeat() || !this.figured;
     if (beat) {
       this.figured = true;
-      this.score.num(shownScore(m.score, this.scoreHold.held));
-      const sLen = this.scoreEl.textContent?.length ?? 0;
-      if (sLen !== this.lastScoreLen) {
-        this.lastScoreLen = sLen;
-        moved = true;
-      }
-      this.dist.num(m.distance, NBSP + 'm');
-      this.clockT.str(clock(m.clock));
+      if (this.figure(0, figures.score, this.score, fmt(Math.round(shownScore(m.score, this.scoreHold.held))), now)) moved = true;
+      this.figure(2, figures.dist, this.dist, fmt(Math.round(m.distance)) + NBSP + 'm', now);
+      // (The distance stands after the clock: a longer clock moves it.)
+      if (this.figure(1, figures.clock, this.clockT, clock(m.clock), now)) moved = true;
     }
     if (m.stage) this.stageLine(m.stage);
     if (this.wipeOn.set(m.wipeouts !== null)) moved = true;
@@ -1976,8 +2051,10 @@ export class Hud {
         }
         this.lastMult = c.mult;
       }
+      // The timer's fill is written on the page's beat and glides between beats on the compositor (a
+      // 60 ms transition, style.css): it moved on every frame of a combo, each one a write.
       const t = Math.max(0, Math.min(1, c.timer));
-      if (Math.abs(t - this.lastTimer) > 0.004) {
+      if (beat && Math.abs(t - this.lastTimer) > 0.004) {
         this.lastTimer = t;
         this.comboBar.style.transform = `scaleX(${t.toFixed(3)})`;
       }
@@ -2022,7 +2099,7 @@ export class Hud {
     const bi = m.bestIn ?? null;
     const showBi = bi !== null && bi > 0;
     if (this.bestInOn.set(showBi)) moved = true;
-    if (showBi) this.bestInNum.num(bi);
+    if (showBi && beat) this.bestInNum.num(bi);
 
     // The rolled event's countdown chip (it goes at the warn, before any chase opens).
     const cd = m.countdown ?? null;
@@ -2095,7 +2172,7 @@ export class Hud {
     if (this.chased.set(d !== null)) this.el.parentElement?.classList.toggle('gs-chase-p', this.portrait && d !== null);
     if (d) {
       const gap = Math.max(0, Math.round(d.gap));
-      if (gap !== this.lastDanger) {
+      if (gap !== this.lastDanger && (beat || this.lastDanger < 0)) {
         this.lastDanger = gap;
         const num = String(gap);
         if (this.dangerGap.str(num)) moved = true;

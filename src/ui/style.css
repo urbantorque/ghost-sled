@@ -2529,8 +2529,23 @@
   border-radius: inherit;
   background: var(--text);
   transform-origin: left center;
-  /* It moves on most frames of a combo: on its own layer that costs the page no repaint. */
+  /* It is written on the page's beat (20 Hz) and glides between beats here, on its own layer: no
+     repaint, and no write on the frames between. */
   will-change: transform;
+  transition: transform 60ms linear;
+}
+
+/* Low: the score, the clock and the distance are drawn in the canvas (figures.ts). Their boxes stay,
+   with the text clear, for the layout and for a reader. */
+.gs-hud.gs-figs :is(.gs-score, .gs-clock, .gs-dist) {
+  color: transparent;
+  text-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-combo-bar {
+    transition: none;
+  }
 }
 
 .gs-combo.is-low .gs-combo-bar {

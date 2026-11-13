@@ -297,6 +297,7 @@ export class World {
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
     this.ghosts.pixelRatio = quality.pixelRatio;
+    this.ghosts.lowPage = quality.detail === 'low';
     this.ghosts.glass = quality.detail === 'low' ? 0 : quality.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(quality.detail === 'low' ? 'lite' : 'full');
     this.chaos = new ChaosVisuals(this.course);
@@ -499,6 +500,7 @@ export class World {
     this.midground.setTier(q.detail, q.terrain.reach);
     this.overlooks.setTier(q.detail);
     this.ghosts.pixelRatio = q.pixelRatio;
+    this.ghosts.lowPage = q.detail === 'low';
     this.ghosts.glass = q.detail === 'low' ? 0 : q.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(q.detail === 'low' ? 'lite' : 'full');
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);

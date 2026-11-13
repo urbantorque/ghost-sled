@@ -13,6 +13,8 @@ import { FACES, INK, LabelBatch, PAPER, rgb, type FaceId, type RGB, type Run } f
 import { graveCopy, type GravePlace } from './graves';
 import { ROSTER, riderByName, type Emblem, type HatKind, type Rider } from '../bot/roster';
 import { reduced as reducedMotion } from '../ui/motion';
+import { figures } from '../ui/figures';
+import { drawFigures } from './hudfigs';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
@@ -1499,9 +1501,14 @@ export class GhostVisuals {
   private time = 0;
   /** The frame's pixel ratio (the world sets it with the tier): the atlas is rasterised at it. */
   pixelRatio = 1;
+  /** Low: the HUD's running figures are drawn here too, so the page does no work for them. */
+  lowPage = false;
 
   /** The labels over the finished frame: one draw call. The world calls it last. */
   drawLabels(renderer: WebGLRenderer): void {
+    // Low's running figures ride in the same draw (hudfigs.ts).
+    figures.canvas = this.lowPage;
+    drawFigures(this.batch, this.dt, this.feel.reduced || reducedMotion());
     this.batch.draw(renderer);
     // (The first frame is out: from the next one on, words may be rasterised.)
     this.batch.arm();
