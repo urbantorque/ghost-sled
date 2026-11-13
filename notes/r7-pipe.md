@@ -44,21 +44,104 @@ four samples a pixel is a trap), unless the save already chose it.
 - `src/game/save.ts`, `src/ui/contract.ts`, `src/ui/settings.ts`, `src/ui/style.css`: `'ultra'` in the
   quality setting, a fifth button, its caption, and `.gs-seg` laid out for any number of buttons.
 
+- `src/render/materials.ts` (the light lane's): the snow shader takes the ice mirror. One import, the
+  mirror's uniforms spread into the snow material, its GLSL spliced in after the lake's uniforms, and one
+  call (`sky = iceMirror(sky, vWorldPos, rr, lakeK);`) before the glaze is mixed in. Nothing of the
+  light lane's maths is changed.
+- `scripts/playtest/pipe.js`, `pipe.sh`, `crop.mjs`: this lane's own play-test tools (new files).
+
 ## Dev switches (text for the README's table)
+
+All behind `?debug`.
 
 | Switch | Effect |
 | --- | --- |
 | `?tier=low\|medium\|high\|ultra` | Force a quality tier instead of the automatic one |
+| `?post=none` | Round 6's stack on this tier: every round 7 pass off |
+| `?post=-ao,-blur` | Everything but the passes named. Names: `ao`, `contact`, `shafts`, `dof`, `blur`, `mirror`, `taa`, `aa`, `letterbox`, `fit`, `lens` |
+| `?post=ao,shafts` | Only the passes named |
+| `?postview=depth\|ao\|contact\|shafts` | Show what a pass made instead of the picture |
+| `?cine=dof:1,focus:7,blur:1,box:1` | Hold the camera's cine state, to see a beat's passes without the beat |
+| `?gpu` | Time each pass on the GPU (`__gs.world.post.pipe.timer.ms`) |
+| `?taa` | The temporal anti-aliasing experiment, on any tier with a post stack |
 
-(More rows are added below as each pass lands.)
+At run time the same switches are `__gs.world.post.pipe.switches` (call
+`world.post.configure(world.quality.passes)` after flipping one).
 
 ## Cost
 
-(Filled in pass by pass.)
+The table is in code: `passCosts(PASSES[tier], switches, signals, w, h)` in `src/render/postfx/tiers.ts`,
+held to the frame's plan by `tests/pipeline.test.ts`. At 1280x720, at rest and in a full camera beat:
+
+| Pass | Low | Medium | High | Ultra | Target | Draws | GPU ms, a lane measurement |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Scene MSAA | canvas | none | 2x | 4x | frame, R11G11B10F + D24S8 | 0 | in the scene |
+| Depth resolve | no | none needed (no MSAA) | yes | yes | frame, D24S8 | 0 (a blit) | in the scene |
+| Ambient occlusion | no | no | 1 slice x 2 steps | 3 slices x 3 steps | 640x360 RGBA8 x2 | 2 | High 0.17 to 0.3, Ultra 0.33 to 0.9 |
+| Contact shadows | no | no | no | 8 steps | in the occlusion pass | 0 | in the above |
+| Shafts (while a low sun or a bright place is in view) | no | 6 taps at 1/4 | 8 taps at 1/2 | 12 taps at 1/2 | 320x180 or 640x360 R8 x2 | 2 a source | 0.15 to 0.4 (1.4 under load) |
+| Mirror | round 6 | baked sky, every glaze | baked sky, every glaze | the frame, marched | bake 768x200 RGBA16F every 3.5 s; Ultra none | 0 | in the scene: not separable here |
+| Edge walk | no | yes | yes | yes | in the composite | 0 | about +0.1 to +0.2 on the composite's 1.0 to 1.2 |
+| Corner fringe | no | no | at speed | at speed | in the composite | 0 | not measurable |
+| Shadow map | none | 1024, 26 m | 2048, 34 m | 4096, 44 m | its own | 0 added | in the scene |
+| Depth of field (a beat) | no | no | 8 taps | 22 taps, bokeh | 640x360 RGBA16F | 1 | with the lens pass: High 0.54, Ultra 0.84 |
+| Motion blur (a beat) | no | no | 5 taps | 9 taps | frame, R11G11B10F | 1 (the lens pass) | in the above |
+| Letterbox (a beat) | no | yes | yes | yes | in the composite | 0 | none |
+| Temporal AA (off; `?taa`) | no | no | no | off | frame, R11G11B10F x2 | 1 | 0.36 |
+
+Standing passes a frame over round 6's: Low 0, Medium 0 (2 while shafts run), High 2 (4 with shafts),
+Ultra 2 (4 with shafts); a full beat adds 2 on High and Ultra. Each is one triangle. Low's row is empty
+and Low draws straight to the canvas as before (43 calls and 121 k triangles at 300 m of Pinecrest in this
+run): nothing of this lane runs there.
+
+**What the timings are worth.** They were taken at 1280x720 in a headless browser with six other lanes
+using the same GPU. The small spans (occlusion, shafts, lens, composite) repeat within a factor of two
+or three. The scene span does not repeat at all (the same variant measured 14 and 34 ms on Medium, 26 and
+36 on Ultra, minutes apart), so nothing that lives inside the scene pass could be priced: not the cost
+of 4x MSAA over 2x, not the 4096 shadow map, not the mirror's march on ice. **Those are the three numbers
+the main lane has to take on a quiet machine**, with `?post=-mirror`, `?tier=high` against
+`?tier=ultra`, and `?gpu`. Frame rates from these runs mean nothing and none is quoted.
+The passes scale with pixels: at 2560x1440 expect about four times each figure.
+
+## Text to fold into ART.md (section 15, tiers) and the README
+
+- **Tiers.** Ultra is High's world with a heavier frame: 4x MSAA, a 4096 shadow map over 44 m, three-slice
+  occlusion with contact shadows, 12-tap shafts, 22-tap depth of field, and ice that mirrors the frame
+  itself. The automatic controller steps into it only on a GPU the browser names as discrete; anywhere
+  else it is the player's choice in Settings.
+- **Anti-aliasing row of the tier table:** Low the canvas's own MSAA; Medium the edge walk; High 2x MSAA
+  and the edge walk; Ultra 4x MSAA and the edge walk.
+- **Ice.** Every glaze mirrors: Low a painted sky and ridges; Medium and High the baked sky and peaks with
+  the rider standing in it; Ultra the trees, towers, lamps, gifts and riders in view.
+- **The lens.** Depth of field, motion blur and the letterbox belong to the camera's beats and cost
+  nothing between them. At speed the corners carry a hair of fringe on High and Ultra; a calm frame has
+  none.
 
 ## What the main lane must wire or decide
 
-(Filled in as the work goes.)
+1. **Price the scene-side costs on a quiet machine** (above): Ultra's 4x MSAA and 4096 shadows, and the
+   screen mirror on the lake and under Glass Ice. If the mirror's march is too dear on a lake at 1440p,
+   the knob is the 24 in `reflect.ts` (16 steps still reaches 17 m, enough for the rider and the near bank).
+2. **High on the Arc 130V.** High gained the occlusion (2 draws at half the frame), the edge walk and,
+   with a low sun, the half-frame shafts. Each measured a few tenths of a millisecond here, but whether
+   High still holds 60 at this laptop's native size is the main lane's measurement, not mine. If it does
+   not, the order to give things back is: shafts to 1/4 (`shaftDiv: 4`), then `fxaa: 1`, then `ao: 'off'`.
+3. **Thin wires on Medium.** With no MSAA a cable thinner than a pixel is drawn in dashes
+   (`shots/r7/pipe/aa/crop-medium-z1800.png`); the edge walk cannot draw what the rasteriser dropped.
+   The fix is in the fx lane's geometry: hold wires, bunting lines and fence rails to a pixel's width on
+   screen and fade them by their true width instead.
+4. **Not-a-number pixels under Old Town's lantern gates.** Black one-pixel dashes hang under the gate
+   lanterns at about 3490 m of Pinecrest with `?post=none` too, so they come from a material, not from a
+   pass of mine (`shots/r7/pipe/diag/crop.png`, top). The edge walk now refuses to spread them, but the
+   bloom and a camera beat will. Whoever owns the gate's material should find the divide.
+5. **The HUD over the letterbox.** The bars are black; the HUD draws over them.
+6. **The results inset and the first frame after a resize** show the baked mirror on Ultra, by design.
+7. **Round 6's shafts fan** still sits in the composite behind `?post=-shafts`; delete it when the
+   before and after are no longer wanted. The same for round 6's FXAA (`fxaa: 1`).
+8. **Ember and Sakura have `shafts: 0`** in their grades (the light lane's), so the marched shafts never
+   show there.
+9. **`playwright-cli close-all`.** The owner's global instructions ask for it at the end of a task; the
+   lane rules forbid it while other lanes capture. This lane closed only its own session (`r7-pipe`).
 
 ## Progress log (kept current; folded into the sections above at the end)
 
@@ -88,7 +171,7 @@ four samples a pixel is a trap), unless the save already chose it.
   depth-reprojected motion. The rider's ellipse on screen is never blurred or gathered from; the HUD is
   the page's and is untouched; reduced motion drops the blur; a lens that moved under half a pixel skips
   it. Medium and Low have neither. Lane GPU time at 1280x720: depth of field 0.6 to 0.9 ms, motion blur
-  0.25 to 0.3 ms, +3 draws in a full beat. The letterbox is in the composite: 2.39:1 inside 16:9 at most,
+  0.25 to 0.3 ms, +2 draws in a full beat (the gather and the lens pass). The letterbox is in the composite: 2.39:1 inside 16:9 at most,
   none in portrait; the HUD draws over the bars (the main lane should check the HUD's rows read on black).
   Ghosts and particles write no depth, so they blur with what is behind them.
   Dev: `?cine=dof:1,focus:7,blur:1,box:1` holds cine values. Frames: `shots/r7/pipe/lens/sheet-ultra.png`.
