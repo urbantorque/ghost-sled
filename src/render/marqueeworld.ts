@@ -675,7 +675,7 @@ export class MarqueeWorld {
             // feeds a low flame is an orb in a beam; the great lantern hangs over the line and lights when
             // the flame arrives.
             const won = ((sim.stats.momentMask >> p.index) & 1) === 1;
-            if (active && mo.pace > 0) this.orb(s.x, s.y + 2.1, s.z, 0.45 + 0.75 * mo.pace, mo.pace < 0.3 ? EMBER : WHITE_GOLD, 1.3 + 0.3 * Math.sin(time * 11));
+            if (active && mo.pace > 0) this.orb(s.x, s.y + 1.75, s.z, 0.22 + 0.36 * mo.pace, mo.pace < 0.3 ? EMBER : WHITE_GOLD, 1.3 + 0.3 * Math.sin(time * 11));
             const r = p.relight;
             if (r && !(mask & 1) && !over) {
               this.orb(r.x, c.ground(r.x, r.z) + 1.4, r.z, 1.5, EMBER, breathe);

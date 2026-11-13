@@ -487,7 +487,13 @@ met for the save (not added: the save is the main lane's).
   40 m/s is fun, or even readable, is unknown.
 - Pool riders win few of the new set pieces (M8).
 - The lab's expert and the rock above the Blossom Leap (above).
-- The stand-ins were SHOTS_STATUS.
+- The stand-ins were looked at in 55 frames over four hands-off runs (below), not in every variant: Pinecrest and
+  Ember were not shot, nor the phone. They read as what they are, small blocks and pools of light: a bell is a
+  lantern-shaped block over the street, the guide light a pool 26 m ahead, the Great Rising a few blocks at the
+  frame's edge. The aurora ribbon's beams show a dotted edge against the bank (the pillar material at 1.5 scale).
+  In "two cars on the rope" the second cabin was out of frame in both shots taken.
+- The console was clean on the three High runs (Lanternfall, Sakura, Frostfang). The Low run's log was cut off by
+  the capture's time limit after Lanternfall's frames were written, so Low's console is not confirmed.
 - The Ghost Herd weaves nothing (M4).
 - A Daily can host slide, shatter, surge, flourish and steps-hops; three Dailies were read in `moments-plan.ts` and
   none was ridden in the lab.
@@ -496,4 +502,15 @@ met for the save (not added: the save is the main lane's).
 
 ## Frames
 
-FRAMES
+`C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\r7\moments\` (shot by `scripts/playtest/moments-r7.js`, a
+hands-off sled, headless 1280x720; a frame as each set piece comes up and two while it plays, and two of the legend):
+
+- `desk-high-m4-v2-*`: Lanternfall, the light that darts, one row then the other, the low flame, the Tall
+  Lamplighter.
+- `desk-high-m3-v2-*`: Sakura, three of four, two flips, bells along one wall, the Lantern Dragon.
+- `desk-high-m1-v2-*`: Frostfang, the span from its far end, two cars on the rope, gates two and two, the Aurora
+  Comes Down.
+- `desk-low-m4-v0-*`: Lanternfall on Low, the slow wide weave, both rows dark, still air, the Great Rising.
+
+To shoot the rest: build, serve on 4450, and set `window.__mrCfg.runs` to `{ m, variant, legend }` rows (the
+script's first lines say how).
