@@ -31,6 +31,14 @@ const RIDGES: Record<MountainCard['biome'], string> = {
     '<path d="M0 80V68c26-12 52-12 78 0s56-14 82-4v16z" fill="#121933" opacity=".66"/>' +
     '<g fill="#FFC4D6" opacity=".95"><circle cx="30" cy="58" r="6"/><circle cx="38" cy="55" r="5"/><circle cx="24" cy="54" r="4"/><circle cx="132" cy="60" r="5"/><circle cx="139" cy="57" r="4"/></g>' +
     '<path d="M31 80v-18M133 80v-16" stroke="#121933" stroke-width="2" opacity=".7"/>',
+  // Lanternfall: a pale moon over a sea of cloud, an ink ridge with a lamp tower on it, lanterns rising.
+  lantern:
+    '<circle cx="122" cy="26" r="11" fill="#E4E6FF" opacity=".9"/>' +
+    '<path d="M0 80V62c14-6 26-6 40 0s28-8 42-2 26 6 40 0 26-4 38 2v18z" fill="#F5F3FF" opacity=".22"/>' +
+    '<path d="M0 80V70l30-16 20 8 26-22 22 20 20-8 42 20v8z" fill="#121933" opacity=".78"/>' +
+    '<path d="M72 44h8v-6h-8zM73 37h6v-5h-6zM74 31h4v-4h-4z" fill="#FFC46A"/>' +
+    '<path d="M71 44h10M72 37.5h8M73 31.5h6M76 27v-4" stroke="#121933" stroke-width="1.2"/>' +
+    '<g fill="#FFD34D"><rect x="24" y="30" width="3" height="4" rx="1"/><rect x="46" y="18" width="2.4" height="3.2" rx=".8"/><rect x="100" y="44" width="3" height="4" rx="1"/><rect x="140" y="50" width="2.4" height="3.2" rx=".8"/><rect x="58" y="8" width="1.8" height="2.4" rx=".6" opacity=".8"/><rect x="12" y="12" width="1.8" height="2.4" rx=".6" opacity=".7"/><rect x="92" y="14" width="1.6" height="2.2" rx=".5" opacity=".7"/></g>',
 };
 
 export function biomeArt(biome: MountainCard['biome']): string {

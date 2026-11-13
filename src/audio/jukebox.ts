@@ -30,7 +30,7 @@ const MOUNTAINS: ReadonlyArray<{ biome: BiomeId; name: string; course: string }>
   { biome: 'volcanic', name: 'Ember Peak', course: 'ember' },
   { biome: 'blossom', name: 'Sakura Ridge', course: 'sakura' },
   // (Lanternfall borrows Frostfang's look until its own is built; its music is its own, by the course's id.)
-  { biome: 'glacier', name: 'Lanternfall', course: 'lanternfall' },
+  { biome: 'lantern', name: 'Lanternfall', course: 'lanternfall' },
 ];
 
 /** The produced pieces' sections, by their own names (every course is laid out alike). */

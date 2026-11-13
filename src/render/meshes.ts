@@ -1,3 +1,5 @@
+import type { BiomeId } from '../sim/mountains';
+import { markerStoneGeometry, standingStoneGeometry, stoneLampGeometry, stoneRowGeometry } from './lanternkit';
 import {
   BoxGeometry,
   BufferAttribute,
@@ -725,7 +727,15 @@ export function kickerLipGeometry(p?: Palette): BufferGeometry {
 }
 
 /** Obstacle kinds to geometry for the current palette. */
-export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false): BufferGeometry {
+export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, biome?: BiomeId): BufferGeometry {
+  // Lanternfall's ground stands its own stone where the sim's kinds name ice and basalt (lanternkit.ts):
+  // standing stones, a row of them, a marker stone, and a stone lamp whose flame the world draws.
+  if (biome === 'lantern') {
+    if (kind === 'spire') return standingStoneGeometry(p);
+    if (kind === 'basalt') return stoneRowGeometry(p, low);
+    if (kind === 'iceblock') return markerStoneGeometry(p);
+    if (kind === 'lantern') return stoneLampGeometry();
+  }
   switch (kind) {
     case 'pine':
       return hazardPineGeometry(p);

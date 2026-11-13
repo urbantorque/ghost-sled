@@ -73,6 +73,8 @@ const STYLES: Record<BiomeId, Style> = {
   glacier: { weights: [4, 3, 3, 0], shaft: '#E2ECF5', band: '#6C8AD8', fence: '#D5DDEA', flags: ['#9A88E6', '#DCE8FA'] },
   volcanic: { weights: [4, 3, 1, 2], shaft: '#D3CED7', band: '#7A70B4', fence: '#C2BCC8', flags: ['#9484D0', '#E2DEE8'] },
   blossom: { weights: [2, 2, 4, 2], shaft: '#EFE7D8', band: '#9C86CC', fence: '#E0D6C4', flags: ['#EDBFD8', '#B09EE8'] },
+  // Lanternfall: pale wands banded in violet, silver-grey rails, lilac and cream flags.
+  lantern: { weights: [3, 3, 3, 1], shaft: '#DCD6EE', band: '#7462C4', fence: '#B8B0D4', flags: ['#A894EA', '#E6E0F6'] },
 };
 
 /** Every colour a post can wear (a test holds them clear of the locked roles). */

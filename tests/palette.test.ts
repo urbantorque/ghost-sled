@@ -5,7 +5,7 @@ import { courseFor } from '../src/sim/course';
 import { BiomeId, MOUNTAINS } from '../src/sim/mountains';
 import { FILM, JOURNEY, PLACES, Palette, filmValue, getPalette, journeyDusk, journeyPalette, journeyProgress, journeyStamp } from '../src/render/palette';
 
-const BIOMES: BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom'];
+const BIOMES: BiomeId[] = ['alpine', 'glacier', 'volcanic', 'blossom', 'lantern'];
 const CHAOS = [Mood.Blizzard, Mood.Lantern, Mood.GlassIce, Mood.Comet, Mood.Haunted, Mood.Powder];
 
 const dist = (a: Color, b: Color) => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
@@ -31,7 +31,7 @@ describe('Clear Skies per mountain', () => {
     // The sun is never dead centre, and the bearings are all different.
     const az = ps.map(bearing);
     for (const a of az) expect(Math.abs(a)).toBeGreaterThan(15);
-    expect(new Set(az.map((a) => Math.round(a / 5))).size).toBe(4);
+    expect(new Set(az.map((a) => Math.round(a / 5))).size).toBe(5);
     // Pinecrest is the high sun, Frostfang the low one.
     expect(elevation(ps[0].sunDir)).toBeGreaterThan(40);
     expect(elevation(ps[1].diskDir)).toBeLessThan(7);
@@ -197,9 +197,8 @@ describe('The places', () => {
       const ps = courses.map((_, i) => at(i, m));
       for (let i = 0; i < ps.length; i++) {
         for (let j = i + 1; j < ps.length; j++) {
-          // (Lanternfall is drawn with Frostfang's look until its own world is built: mountains.ts LOOK. Two
-          // courses of one look are one light by definition; the day it has a biome of its own it is held here.)
-          if (courses[i].biome === courses[j].biome) continue;
+          // (Lanternfall has its own biome since its world was built: all five are held apart here.)
+          expect(courses[i].biome).not.toBe(courses[j].biome);
           const a = look(ps[i]);
           const b = look(ps[j]);
           expect(a.reduce((sum, col, k) => sum + dist(col, b[k]), 0), `${courses[i].biome} and ${courses[j].biome} at ${m} m`).toBeGreaterThan(0.7);

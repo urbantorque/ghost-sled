@@ -205,6 +205,8 @@ const STYLE: Record<BiomeId, Style> = {
   glacier: { walls: [C('#E2563A'), C('#F0A030'), C('#D8E2EE'), C('#C8402E')], roof: C('#F2F8FF'), trim: C('#3A4A66'), glass: C('#24345A'), ice: C('#A8E8FA'), rim: C('#E6F4FF'), road: C('#7C8CB0') },
   volcanic: { walls: [C('#564A52'), C('#4A4048'), C('#6A5A5E'), C('#3E363E')], roof: C('#E8DCDC'), trim: C('#241E26'), glass: C('#2A2030'), ice: C('#3A2A30'), rim: C('#5A4A50'), road: C('#5A4A58') },
   blossom: { walls: [C('#EFE4D6'), C('#E6D6C8'), C('#C8402E'), C('#F2EADF')], roof: C('#F6F2FA'), trim: C('#3A3048'), glass: C('#3A2E48'), ice: C('#C8DCF4'), rim: C('#F0EAF4'), road: C('#8A80A0') },
+  // Lanternfall's far hamlets: plum timber over stone, snow roofs, and a pool that holds the lamps' light.
+  lantern: { walls: [C('#4A3C66'), C('#3E3258'), C('#5A4C78'), C('#352C50')], roof: C('#EEEAFA'), trim: C('#221C3C'), glass: C('#2A2448'), ice: C('#6A5CB0'), rim: C('#C8C0E8'), road: C('#5E5490') },
 };
 
 const VERMILLION = C('#D8402E');
@@ -262,6 +264,7 @@ export function buildVillage(spec: VillageSpec): VillageBuild {
   if (spec.biome === 'alpine') church(s, new Frame(lmX, 0, lmZ, Math.PI / 2 + range(-0.1, 0.1)), st, lights);
   else if (spec.biome === 'glacier') station(s, new Frame(lmX, 0, lmZ, range(0, 3)), st, lights);
   else if (spec.biome === 'volcanic') lodgeHall(s, new Frame(lmX, 0, lmZ, Math.PI / 2), st, lights);
+  else if (spec.biome === 'lantern') lampTowerFar(s, new Frame(lmX, 0, lmZ, Math.PI / 4), st, lights);
   else pagoda(s, new Frame(lmX, 0, lmZ, Math.PI / 4), st, lights);
   if (spec.biome === 'blossom') {
     // A vermillion spirit gate across the road at the top of the town.
@@ -292,7 +295,7 @@ export function buildVillage(spec: VillageSpec): VillageBuild {
   }
 
   // Street lamps (lanterns in Sakura) down both sides of the road.
-  const lampTone = spec.biome === 'blossom' ? 2 : 1;
+  const lampTone = spec.biome === 'blossom' || spec.biome === 'lantern' ? 2 : 1;
   for (let z = -R * 0.9; z <= R * 0.9; z += 34) {
     for (const sd of [-1, 1]) {
       const x = roadAt(z) + sd * 6.5;
@@ -411,7 +414,7 @@ function house(s: Soup, f: Frame, l: number, w: number, st: Style, biome: BiomeI
   box(s, f, l, w, h, wall);
   // A darker plinth course (stone footing) under timber walls.
   if (!stone) box(s, f, l + 0.3, w + 0.3, 1.2, st.trim);
-  const rise = biome === 'blossom' ? w * 0.28 : biome === 'volcanic' ? w * 0.34 : w * 0.5;
+  const rise = biome === 'blossom' ? w * 0.28 : biome === 'volcanic' ? w * 0.34 : biome === 'lantern' ? w * 0.68 : w * 0.5;
   gable(s, f, l, w, h, rise, 1.6, st.roof, wall);
   if (biome === 'blossom') {
     // A dark tiled eave under the snow: the temple-town roofline.
@@ -517,6 +520,30 @@ function lodgeHall(s: Soup, f: Frame, st: Style, lights: VillageLight[]): void {
   }
   const p = tf.at(0, 13, 0);
   lights.push({ x: p[0], y: p[1], z: p[2], size: 7, tone: 0 });
+}
+
+/** Lanternfall's far landmark: a lamp tower. A stone stem, five storeys of lit paper each a little slimmer
+ *  than the one under it, a dark eave between them, a steep cap. From the run it is a stack of lights. */
+function lampTowerFar(s: Soup, f: Frame, st: Style, lights: VillageLight[]): void {
+  box(s, f, 9, 9, 13, STONE);
+  let y = 13;
+  let w = 11;
+  for (let i = 0; i < 5; i++) {
+    const h = 5.2;
+    box(s, f, w, w, h, st.trim, y);
+    for (const face of [-1, 1]) pane(s, f, 0, y + 0.7, face, w / 2, w * 0.82, h * 0.74, st.glass, KIND_LAMP);
+    const lf = new Frame(f.x, 0, f.z, f.yaw + Math.PI / 2);
+    for (const face of [-1, 1]) pane(s, lf, 0, y + 0.7, face, w / 2, w * 0.82, h * 0.74, st.glass, KIND_LAMP);
+    y += h;
+    box(s, f, w + 2.6, w + 2.6, 0.5, DARK_ROOF, y);
+    box(s, f, w + 2.2, w + 2.2, 0.4, st.roof, y + 0.5);
+    const lp = f.at(0, y - h * 0.5, w * 0.5 + 1);
+    lights.push({ x: lp[0], y: lp[1], z: lp[2], size: 9 - i, tone: 2 });
+    y += 0.9;
+    w *= 0.85;
+  }
+  pyramid(s, f, w * 0.5 + 1, w * 0.5 + 1, y, w * 1.1, DARK_ROOF);
+  box(s, f, 0.6, 0.6, 5, C('#6A5238'), y + w * 1.1 - 1);
 }
 
 function pagoda(s: Soup, f: Frame, st: Style, lights: VillageLight[]): void {

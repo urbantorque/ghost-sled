@@ -76,8 +76,9 @@ export interface Palette {
    *  the fall line from the sun, as chaos moods have it. Clear Skies pins it per mountain, so a sun
    *  moving through a run never makes the mountain jump sides). seaIce 1 reads the sea's white as a
    *  snowfield on the valley floor and its openings as frozen lakes that hold still (Pinecrest's Clear
-   *  Skies); 0 keeps them gaps in a sea of cloud. */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number };
+   *  Skies); 0 keeps them gaps in a sea of cloud. seaWarm lights the sea from beneath in patches, in the
+   *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -234,7 +235,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -353,6 +354,30 @@ function biomeBase(biome: BiomeId): Palette {
       p.petals = 0.7;
       p.clouds = { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFEAF0'), shade: c('#B49CCC'), rim: c('#FFB4C6'), shadow: 0.28 };
       p.atmo.valleyColor = c('#F0CCDA');
+      return p;
+    case 'lantern':
+      // What the chaos moods stand on at Lanternfall: lilac snow, ink stone and trees, violet ranges.
+      p.skyZenith = c('#2A2C8C');
+      p.skyHorizon = c('#E8B4C8');
+      p.skyMid = c('#8C78C4');
+      p.skyBelow = c('#B8A8DC');
+      p.sunColor = c('#F4E8F4');
+      p.sunDir = sunDir(18, 16);
+      p.snowLit = c('#F4F0FC');
+      p.snowShade = c('#8478CC');
+      p.snowDeep = c('#4C3C9C');
+      p.rim = c('#F0D8F0');
+      p.fog = c('#D2C2E2');
+      p.hemiSky = c('#A294E4');
+      p.tall = c('#26223C');
+      p.tallDark = c('#14122A');
+      p.low = c('#2E2A4A');
+      p.lowLit = c('#5A5484');
+      p.ridge = [c('#C6BCE4'), c('#9486CC'), c('#5E52A4')];
+      p.massif.rock = c('#3A3470');
+      p.massif.glow = c('#FFC0A8');
+      p.clouds = { low: 0.8, high: 0.5, top: 0.3, lit: c('#F4E6F2'), shade: c('#A092CC'), rim: c('#FFC8B4'), shadow: 0.25 };
+      p.atmo.valleyColor = c('#DCCCE8');
       return p;
   }
 }
@@ -913,6 +938,56 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.giftGlow = 0.2;
       p.ghostGlow = 1.5;
       return;
+    case 'lantern':
+      // The Crown, at the end of night above a sea of cloud (ART.md 15): an indigo zenith full of stars, a
+      // great pale moon off to the right, silver on the snow's lit side and lilac in its shade, ink for
+      // everything that stands. The cloud below is lit warm in patches by what is under it.
+      setSun(p, 19, 15, 31, 12);
+      p.moon = true;
+      p.moonPhase = 0;
+      p.sunColor = c('#D4D8FF');
+      p.sunCore = new Color(1.9, 1.95, 2.3);
+      p.sunTint = 0.9;
+      p.sunSize = 1.75;
+      p.sunGlow = 0.85;
+      p.skyZenith = c('#0B0A3E');
+      p.skyMid = c('#2C2484');
+      p.skyHorizon = c('#6452B2');
+      p.skyBand = { color: c('#C4B4F0'), fade: 22, k: 0.55 };
+      p.skyBelow = c('#4A3C8E');
+      p.skySpread = 0.6;
+      p.skyCurve = 0.5;
+      p.snowLit = c('#D6D8F6');
+      p.snowShade = c('#6A54BC');
+      p.snowDeep = c('#2E2078');
+      p.rim = c('#E4E6FF');
+      p.fog = c('#3C3090');
+      p.fogNear = 60;
+      p.fogFar = 560;
+      p.hemiSky = c('#6C5ED0');
+      p.tall = c('#1C1934');
+      p.tallDark = c('#0E0C20');
+      p.low = c('#242040');
+      p.lowLit = c('#4C4678');
+      p.hazardDim = 0.9;
+      p.ridge = [c('#5A50AE'), c('#342C84'), c('#1C1858')];
+      p.massif.rock = c('#191646');
+      p.massif.glow = c('#FFC49C');
+      p.massif.heroAz = -18;
+      p.massif.sea = 1;
+      p.massif.seaWarm = 1;
+      p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
+      p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
+      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#B4AAE6'), shade: c('#4A3E98'), rim: c('#E6DCFF'), shadow: 0 };
+      p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
+      p.stars = 1;
+      p.bloom = 0.62;
+      p.sparkle = 1.15;
+      p.snowfall = 0.02;
+      p.giftGlow = 0.45;
+      p.ghostGlow = 1.6;
+      p.lanternGlow = 0.45;
+      return;
   }
 }
 
@@ -987,6 +1062,15 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.exposure = 0.96;
       p.grade.hi = c('#FFF4EC');
       p.grade.lo = c('#E2E0FF');
+      return;
+    case 'lantern':
+      // The far plane is the night's own violet, the lit values lean silver and the shade lilac. Lamps are
+      // the mountain's light from the first metre.
+      p.air = { far: c('#221C6A'), cool: c('#DCD8FF'), low: 0.7, scatter: 1.1 };
+      p.lamps = 1.1;
+      p.grade.exposure = 1.1;
+      p.grade.hi = c('#F4F6FF');
+      p.grade.lo = c('#E6DCFF');
       return;
   }
 }
@@ -1412,6 +1496,107 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
   ],
+  lantern: [
+    {
+      // Under the deck. The change of hour is ridden blind, inside the Cloud Sea (PLACES below), so the
+      // break at its foot opens on a different night: the moon gone behind a ceiling of cloud lit marigold
+      // from beneath, and the valley's lanterns the light of the frame, from below and ahead.
+      from: 900, at: 1420, dusk: 1,
+      edit: (p) => {
+        p.sunColor = c('#C0B4EC');
+        p.sunDisc = 0;
+        p.sunGlow = 0.2;
+        p.skyZenith = c('#120E44');
+        p.skyMid = c('#34267E');
+        p.skyHorizon = c('#8A5C9C');
+        p.skyBand = { color: c('#FFB870'), fade: 16, k: 0.75 };
+        p.skyBelow = c('#3A2A70');
+        p.deck.k = 0.92;
+        p.deck.lit = c('#7466BA');
+        p.deck.shade = c('#2C2470');
+        p.deck.glow = c('#FFAE4A');
+        p.snowLit = c('#CDC6F2');
+        p.snowShade = c('#5C46B0');
+        p.snowDeep = c('#2A1A6E');
+        p.rim = c('#FFD9A0');
+        p.fog = c('#4A388E');
+        p.fogFar = 640;
+        p.hemiSky = c('#6A58C4');
+        p.air.far = c('#3A2670');
+        p.air.low = 0.9;
+        p.under = { color: c('#FFB04A'), k: 0.34 };
+        p.atmo.valley = 1;
+        p.atmo.valleyColor = c('#B88470');
+        p.atmo.meteors = 0;
+        p.massif.sea = 0.5;
+        p.massif.seaWarm = 0.6;
+        p.massif.glow = c('#FFB870');
+        p.massif.glowK = 0.3;
+        p.massif.glowLine = -900;
+        p.stars = 0.15;
+        p.shadowK = 0.6;
+        p.bloom = 0.78;
+        p.lamps = 1.3;
+        p.giftGlow = 0.6;
+        p.ghostGlow = 1.75;
+        p.lanternGlow = 0.6;
+        p.grade.exposure = 1.14;
+        p.grade.saturation = 1.14;
+        p.grade.hi = c('#FFF0D8');
+        p.grade.lo = c('#E2D6FF');
+      },
+    },
+    {
+      // Down to Firstlight: the deck thins and lifts off the far range, and the east begins to pale.
+      from: 2900, at: 3600, dusk: 1,
+      edit: (p) => {
+        p.deck.k = 0.62;
+        p.skyZenith = c('#161450');
+        p.skyMid = c('#4A3690');
+        p.skyHorizon = c('#B2709C');
+        p.skyBand = { color: c('#FFB48C'), fade: 18, k: 0.85 };
+        p.snowLit = c('#D6CCF2');
+        p.fog = c('#5C4496');
+        p.air.far = c('#4A2E7C');
+        p.under.k = 0.26;
+        p.stars = 0.35;
+        p.massif.glowK = 0.45;
+      },
+    },
+    {
+      // The first rose of morning at the line, as the lanterns leave the valley. Not yet a sun: a band of
+      // rose under an indigo that is letting go of its stars, and rose on the snow that faces it.
+      from: 3900, at: 4460, dusk: 1,
+      edit: (p) => {
+        setSun(p, 24, 6, 26, 10);
+        p.sunColor = c('#FFD2C8');
+        p.deck.k = 0.3;
+        p.deck.glow = c('#FFB48E');
+        p.skyZenith = c('#22206C');
+        p.skyMid = c('#7450A4');
+        p.skyHorizon = c('#F0949C');
+        p.skyBand = { color: c('#FFC09A'), fade: 14, k: 1 };
+        p.skyBelow = c('#8A5C9C');
+        p.snowLit = c('#EAD6EC');
+        p.snowShade = c('#6650B8');
+        p.rim = c('#FFC6B4');
+        p.fog = c('#8660A8');
+        p.hemiSky = c('#8068CC');
+        p.air.far = c('#7A4C94');
+        p.air.scatter = 1.5;
+        p.clouds.lit = c('#FFC4B8');
+        p.clouds.rim = c('#FFB49A');
+        p.massif.glow = c('#FFAA9C');
+        p.massif.glowK = 0.8;
+        p.massif.glowLine = -300;
+        p.stars = 0.25;
+        p.under.k = 0.18;
+        p.grade.hi = c('#FFEAD8');
+        p.grade.lo = c('#E6D8FF');
+        p.grade.exposure = 1.1;
+      },
+    },
+  ],
 };
 
 /** A place on a mountain: what its section of the course does to the light of the hour. */
@@ -1420,6 +1605,10 @@ export interface Place {
   kind: SectionKind;
   /** Which of the mountain's sections of that kind, from 0 down the run (omitted: every one). */
   nth?: number;
+  /** A place that is not a section (Lanternfall's Cloud Sea, which lies between two lips): where it lies
+   *  on a course, the metres it comes in and goes out over; null where the course has none. Its kind is
+   *  then only a label. */
+  span?: (course: Course) => { z0: number; z1: number; rise: number; fall: number } | null;
   /** What the place changes, over the journey's palette at its own middle. */
   edit: (p: Palette) => void;
 }
@@ -1687,7 +1876,137 @@ export const PLACES: Record<BiomeId, Place[]> = {
       },
     },
   ],
+  lantern: [
+    {
+      // The Cloud Sea: inside the cloud, white-violet, visibility closing to forty metres. It closes over
+      // the dive off the Crown and lets go in under two seconds, a breath before the lip of the break, so
+      // the valley opens while the sled is still on the ground and the leap flies into it.
+      kind: 'ravine',
+      span: (course) => {
+        const cl = course.cloud;
+        return cl ? { z0: cl.z0 + 55, z1: cl.z1 - CLOUD_BREAK, rise: 150, fall: 50 } : null;
+      },
+      edit: (p) => {
+        p.fog = c('#B6AEE6');
+        p.air.far = c('#A49ADC');
+        p.air.cool = c('#F2F0FF');
+        p.air.low = 0.2;
+        p.air.scatter = 0.4;
+        p.fogNear = 2;
+        p.fogFar = 44;
+        p.skyZenith = c('#7E74C8');
+        p.skyMid = c('#9A90DA');
+        p.skyHorizon = c('#B6AEE6');
+        p.skyBelow = c('#A49ADC');
+        p.skyBand = { color: c('#C8C0F0'), fade: 8, k: 0.3 };
+        p.deck = { k: 1, lit: c('#BCB4EA'), shade: c('#9086D0'), glow: c('#C8BEEE') };
+        p.sunColor = c('#DCD8FF');
+        p.sunDisc = 0;
+        p.sunGlow = 0.35;
+        p.sunSoft = 1;
+        p.snowLit = c('#DEDAF8');
+        p.snowShade = c('#8E82D2');
+        p.snowDeep = c('#5A4CA8');
+        p.rim = c('#F0EEFF');
+        p.hemiSky = c('#A69CE0');
+        p.ridge = [c('#B6AEE6'), c('#AEA6E2'), c('#A49ADC')];
+        p.massif.veil = 1;
+        p.massif.sea = 1;
+        p.massif.seaWarm = 0;
+        p.massif.glowK = 0;
+        p.under = { color: c('#FFB04A'), k: 0 };
+        p.atmo.valley = 0;
+        p.atmo.meteors = 0;
+        p.stars = 0;
+        p.shadowK = 0.3;
+        p.hazardFog = 0.5;
+        p.hazardDim = 0.78;
+        p.giftGlow = 1;
+        p.ghostGlow = 2.6;
+        p.lanternGlow = 0.8;
+        p.sparkle = 0.5;
+        p.bloom = 0.85;
+        p.grade.exposure = 1.02;
+        p.grade.contrast = 1.02;
+        p.grade.saturation = 1.04;
+        p.grade.hi = c('#F8F6FF');
+        p.grade.lo = c('#E4DCFF');
+        p.grade.focal = 0.5;
+        lamps(p, 1.5);
+      },
+    },
+    {
+      // The break: the whole valley under the deck. The air opens as far as it ever does on this mountain,
+      // so the far plane, the town and the lanterns between are all in the frame.
+      kind: 'leap',
+      nth: 1,
+      edit: (p) => {
+        p.fogFar *= 1.5;
+        p.fogNear = 90;
+        p.air.low = 0.6;
+        p.under.k = 0.42;
+        p.bloom += 0.1;
+        p.grade.hi = c('#FFEFD4');
+        p.grade.contrast += 0.04;
+        lamps(p, 1.35);
+      },
+    },
+    {
+      // The Lamp Road's avenue and Firstlight's street: lilac snow in pools of marigold.
+      kind: 'street',
+      edit: (p) => {
+        lamps(p, 1.5);
+        p.snowShade = c('#5440AC');
+        p.grade.hi = c('#FFE8C0');
+        p.grade.lo = c('#DCD0FF');
+        p.grade.saturation += 0.05;
+        p.bloom += 0.1;
+      },
+    },
+    {
+      // An arched bridge strung with lights, over the river that carries them.
+      kind: 'bridge',
+      edit: (p) => {
+        lamps(p, 1.4);
+        p.under.k = Math.max(p.under.k, 0.4);
+        p.air.low = 1;
+        p.grade.hi = c('#FFECC8');
+      },
+    },
+    {
+      // The lamp grove: ink trunks, and the light between them.
+      kind: 'treerun',
+      edit: (p) => {
+        lamps(p, 1.4);
+        p.grade.contrast += 0.06;
+        p.grade.exposure! *= 0.96;
+        p.grade.lo = c('#DCCCFF');
+      },
+    },
+    {
+      // The leap into Firstlight: the town below in its own light, the east paling behind it.
+      kind: 'leap',
+      nth: 2,
+      edit: (p) => {
+        p.fogFar *= 1.3;
+        p.air.low = 0.8;
+        p.grade.hi = c('#FFEAD0');
+      },
+    },
+    {
+      kind: 'finish',
+      edit: (p) => {
+        lamps(p, 1.5);
+        p.grade.hi = c('#FFE6C6');
+        p.bloom += 0.1;
+      },
+    },
+  ],
 };
+
+/** Lanternfall's cloud lets go this many metres above the lip of the break, so the camera's whip onto the
+ *  valley (game/shots.ts lands it 26 m short of the lip) finds it already open. */
+export const CLOUD_BREAK = 80;
 
 const copyOf = (p: Palette): Palette => lerpPalette(p, p, 0, {} as Palette);
 
@@ -1749,12 +2068,21 @@ function laidPlaces(course: Course): LaidPlace[] {
   laid = [];
   const table = PLACES[course.biome];
   const seen = new Map<SectionKind, number>();
+  // (Places that are not sections lie where they say; they are laid after the sections', below.)
+  const spans: LaidPlace[] = [];
+  for (const pl of table) {
+    const sp = pl.span?.(course);
+    if (!sp) continue;
+    const pal = copyOf(hourPalette(course.biome, (sp.z0 + sp.z1) / 2, {} as Palette));
+    pl.edit(pal);
+    spans.push({ ...sp, pal });
+  }
   for (let z = 0, guard = 0; guard < 80; guard++) {
     const sec = course.section(z);
     const n = seen.get(sec.kind) ?? 0;
     seen.set(sec.kind, n + 1);
     for (const pl of table) {
-      if (pl.kind !== sec.kind || (pl.nth !== undefined && pl.nth !== n)) continue;
+      if (pl.span || pl.kind !== sec.kind || (pl.nth !== undefined && pl.nth !== n)) continue;
       const pal = copyOf(hourPalette(course.biome, (sec.z0 + sec.z1) / 2, {} as Palette));
       pl.edit(pal);
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
@@ -1766,6 +2094,8 @@ function laidPlaces(course: Course): LaidPlace[] {
     if (sec.kind === 'finish') break;
     z = sec.z1 + 0.5;
   }
+  // A span is blended last, over whatever section it crosses: inside the cloud nothing else is seen.
+  laid.push(...spans);
   LAID.set(course, laid);
   return laid;
 }
@@ -1812,6 +2142,8 @@ export function journeyStamp(biome: BiomeId, metres: number, course?: Course): n
 /** How much of the day has gone `metres` into a run, 0..1. Allocates nothing (the soundscape asks
  *  every frame). */
 export function journeyDusk(biome: BiomeId, metres: number): number {
+  // Lanternfall is ridden at the end of night, from the first metre: its lamps and windows are always lit.
+  if (biome === 'lantern') return 1;
   const stops = JOURNEY[biome];
   const at = journeyProgress(biome, metres);
   const i = Math.min(Math.floor(at), stops.length - 1);

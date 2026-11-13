@@ -19,6 +19,7 @@ import {
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeId } from '../sim/mountains';
+import { silverTreeGeometry } from './lanternkit';
 import { blossomGeometry, charPineGeometry, seracGeometry, spireGeometry } from './meshes';
 import { Palette } from './palette';
 import { Facets, columnInto, columnsInto, honeycomb } from './rockforms';
@@ -714,12 +715,15 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   // Ember's second set is its basalt in formations (groves.ts): the organ pipes first (Low's one
   // piece), then the clusters round their feet and the sentinels that frame a leap.
   if (biome === 'volcanic') return a ? [() => charPineGeometry(p), () => charSnagGeometry(p)] : [() => organPipeGeometry(p), () => basaltClusterGeometry(p), () => basaltSentinelGeometry(p)];
+  // Lanternfall: ink conifers hold the values, and bare silver trees are the light shape among them (the
+  // second of them hung with small lit lanterns: the lamp grove's own tree).
+  if (biome === 'lantern') return a ? [() => boughPineGeometry(p, 5, lod), () => heavyPineGeometry(p, lod)] : [() => silverTreeGeometry(0, false), () => silverTreeGeometry(1, true)];
   return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3, lod), () => youngPineGeometry(p, lod)];
 }
 
 /** Whether a biome's set has cheaper builds at lod 1 and 2 (else every lod is the full set). */
 export function hasLod(biome: BiomeId, set: 'a' | 'b'): boolean {
-  return biome === 'alpine' || (biome === 'blossom' && set === 'b');
+  return biome === 'alpine' || (biome === 'blossom' && set === 'b') || (biome === 'lantern' && set === 'a');
 }
 
 /** A forest set made at once (tests and probes; the game makes it a variant per idle callback). */
@@ -738,6 +742,7 @@ export const VARIANT_SHARE: Record<BiomeId, { a: number; b: number }> = {
   glacier: { a: 0.3, b: 0.4 },
   volcanic: { a: 0.35, b: 0.4 },
   blossom: { a: 0.4, b: 0.4 },
+  lantern: { a: 0.3, b: 0.3 },
 };
 
 /** Whether a pick is an upright tree that may lean (mounds, stubs and seracs stay planted). */

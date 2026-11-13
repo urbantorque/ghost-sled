@@ -254,6 +254,26 @@ export const STYLES: Record<Mood, Style> = {
  */
 export const CLEAR: Record<BiomeId, Style> = {
   alpine: STYLES[Mood.None],
+  // Lanternfall: Bb major at 84 (the produced score's key, a slow pulse), a music-box arp rising and falling,
+  // a bass that only marks the bar, no clap until the lanterns: a hush that keeps moving.
+  lantern: {
+    tonic: 46,
+    bpm: 84,
+    mode: 'major',
+    penta: MAJOR_PENTA,
+    bright: 2,
+    swing: 0.08,
+    pad: { cutoff: 1900, attack: 1.1, detune: 7, wobble: 0.12 },
+    bass: [0, _, _, _, _, _, 7, _, 0, _, _, _, _, _, _, _],
+    arp: { kind: 'updown', rate: 1, timbre: 'box', prob: 0.8, oct: 1 },
+    kick: [1, 0, 0, 0, 0, 0, 0, 0, 0.7, 0, 0, 0, 0, 0, 0, 0],
+    hat: [0, 0.1, 0.3, 0.1, 0, 0.1, 0.3, 0.1, 0, 0.1, 0.3, 0.1, 0, 0.1, 0.3, 0.16],
+    clap: [0, 0, 0, 0, 0, 0, 0, 0, 0.6, 0, 0, 0, 0, 0, 0, 0],
+    sparkle: { prob: 0.12, timbre: 'bell' },
+    lead: 'flute',
+    verb: 1.5,
+    kit: { kick: 'soft', snare: 'clap', pump: 0.12 },
+  },
   // Frostfang: F# dorian at 100, straight; a half-time snare, glass bells in 16ths, a breathy flute.
   glacier: {
     tonic: 54,
@@ -356,6 +376,8 @@ export interface Accent {
 }
 
 export const ACCENTS: Record<BiomeId, Accent> = {
+  // Lanternfall: a soft pad, round plucks, the most sparkle of any mountain (a music box), a glass octave.
+  lantern: { padCut: 0.9, pluckBright: 0.85, sparkleMul: 1.9, sub: false, koto: false, shimmer: true },
   alpine: { padCut: 1, pluckBright: 0.8, sparkleMul: 1, sub: false, koto: false, shimmer: false },
   glacier: { padCut: 1.15, pluckBright: 1.1, sparkleMul: 1.6, sub: false, koto: false, shimmer: true },
   volcanic: { padCut: 0.72, pluckBright: 0.9, sparkleMul: 0.8, sub: true, koto: false, shimmer: false },

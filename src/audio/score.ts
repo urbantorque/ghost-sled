@@ -268,11 +268,42 @@ export const THEME: Song = {
   ]),
 };
 
+/**
+ * Lanternfall (the built-in band's fallback; the produced score is its own piece, picked by the mountain's
+ * id): a lullaby that climbs. The verse rocks between I and vi over a held tonic, the chorus rises by step
+ * (IV, V, vi) to the borrowed bVII and comes home, and the hook starts low and ends on the high tonic: the
+ * lanterns going up.
+ */
+const LANTERNFALL: Song = {
+  intro: [I('add9'), at(5, 'add9')],
+  verse: [I('add9'), at(5, 7), I('add9'), at(3, 9), at(1, 7), at(5, 7), at(3, 'add9'), at(4, undefined, 's4')],
+  chorus: [at(3, 9), at(4), at(5, 7), bor(6, -1, 'add9'), at(3, 9), at(4), at(1, 9), at(4, undefined, 's4')],
+  bridge: [at(1, 9), at(5, 9), at(3, 9), at(4, undefined, 's4')],
+  build: bor(6, -1, 'add9'),
+  hook: line([
+    [0, 6, 2], [6, 2, 4], [8, 8, 4],
+    [16, 6, 4], [22, 2, 5], [24, 8, 5],
+    [32, 4, 5], [36, 4, 6], [40, 8, 7],
+    [48, 12, 6], [60, 4, 4],
+    [64, 6, 4], [70, 2, 5], [72, 8, 7],
+    [80, 6, 6], [86, 2, 7], [88, 8, 8],
+    [96, 4, 9], [100, 4, 8], [104, 8, 7],
+    [112, 16, 7],
+  ]),
+  answer: line([
+    [24, 8, 2],
+    [56, 4, 4], [60, 4, 2],
+    [88, 8, 5],
+    [120, 4, 4], [124, 4, 5],
+  ]),
+};
+
 export const SONGS: Record<BiomeId, Song> = {
   alpine: PINECREST,
   glacier: FROSTFANG,
   volcanic: EMBER,
   blossom: SAKURA,
+  lantern: LANTERNFALL,
 };
 
 export function songFor(biome: BiomeId): Song {

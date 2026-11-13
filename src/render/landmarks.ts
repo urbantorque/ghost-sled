@@ -104,6 +104,8 @@ const LAMP_LIGHT: Record<BiomeId, [number, number, number]> = {
   glacier: [1, 0.68, 0.3],
   volcanic: [1, 0.4, 0.12],
   blossom: [1, 0.6, 0.26],
+  // Marigold: here the course's fuel colour is the world's own light.
+  lantern: [1, 0.66, 0.2],
 };
 /** How much of the day must have gone for the windows to glow (journeyDusk). */
 const DUSK_LIT = 0.45;
@@ -120,6 +122,8 @@ const SPAN_KINDS: Record<BiomeId, Kind[]> = {
   glacier: ['arch', 'gate'],
   volcanic: ['basalt', 'arch', 'bridge'],
   blossom: ['torii', 'bridge'],
+  // (lanternkit.ts builds them: a bell frame, an arched bridge strung with lights.)
+  lantern: ['gate', 'bridge'],
 };
 // (Ember's vents throw spans high, so it gets the most bank pieces, its basalt lodge among them.)
 const BANK_KINDS: Record<BiomeId, Kind[]> = {
@@ -127,12 +131,15 @@ const BANK_KINDS: Record<BiomeId, Kind[]> = {
   glacier: ['falls', 'dome', 'guardian'],
   volcanic: ['guardian', 'hut', 'tower', 'falls'],
   blossom: ['pagoda', 'guardian', 'hut'],
+  // (A lamp tower, and a great standing lamp.)
+  lantern: ['tower', 'guardian', 'tower'],
 };
 const ENC_KINDS: Record<BiomeId, Kind[]> = {
   alpine: ['gallery'],
   glacier: ['icetunnel', 'gallery'],
   volcanic: ['lavatunnel', 'gallery'],
   blossom: ['toriirow', 'gallery'],
+  lantern: ['gallery'],
 };
 /** How likely a section's piece is to span the run: narrow ones mostly (a ravine's walls hide anything on
  *  its banks), wide ones mostly a bank piece. */
@@ -1309,7 +1316,7 @@ export class SetPieces {
     for (const s of this.shown) {
       if (!s || Math.abs(s.z - z) > s.len + 90) continue;
       const ex = this.extras.get(s.n);
-      if (!ex || !ex.glows || !(this.litAt(s.z) || this.course.biome === 'volcanic' || this.course.biome === 'blossom')) continue;
+      if (!ex || !ex.glows || !(this.litAt(s.z) || this.course.biome === 'volcanic' || this.course.biome === 'blossom' || this.course.biome === 'lantern')) continue;
       const gy = siteGround(this.course, s);
       for (const gl of ex.glows) {
         siteToWorld(s, gl.x, 0, gl.z, w);

@@ -1,5 +1,6 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
+import { lampTowerParts, lanternCrown, paper } from './lanternkit';
 import { StillFigure, crowdColors, stillCrowd } from './crowd';
 import { ASH_TOP, SNOW, basaltTones, part, shade } from './flora';
 import { Facets, columnInto, strataInto } from './rockforms';
@@ -91,6 +92,9 @@ function spanStyle(biome: BiomeId, ctx: SiteCtx): SpanStyle {
       return { post: C('#93405A'), rail: C('#6A2A40'), beam: C('#93405A'), dark: C('#3A2A36'), arch: true, rise: 11, ice: false };
     case 'alpine':
       return { post: TIMBER_DARK, rail: TIMBER_LIGHT, beam: TIMBER, dark: TIMBER_DARK, arch: false, rise: 4, ice: false };
+    case 'lantern':
+      // An arched bridge of the mountain's stone and plum timber (lanternworld.ts strings it with lights).
+      return { post: stone(p, 0.8), rail: C('#4A3A60'), beam: stone(p, 0.95), dark: C('#2A2140'), arch: true, rise: 12, ice: false };
   }
 }
 
@@ -321,11 +325,11 @@ function balloon(x: number, y: number, z: number, g: number, cols: Color[]): Buf
  *  hall that closes the run-out. */
 function greatHall(biome: BiomeId, t: ReturnType<typeof townStyle>, night: boolean, F: number, lo: number, ctx: SiteCtx): BufferGeometry[] {
   const parts: BufferGeometry[] = [];
-  const glass = night ? lampColor(true, '#FFC27A') : C('#2A2D48');
+  const glass = biome === 'lantern' ? paper(0.95) : night ? lampColor(true, '#FFC27A') : C('#2A2D48');
   const W = 46;
   const D = 16;
   const H = 15;
-  const wall = biome === 'alpine' ? C('#ECE4D6') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(ctx.p.low, 0.62) : C('#EDE4D8');
+  const wall = biome === 'alpine' ? C('#ECE4D6') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(ctx.p.low, 0.62) : biome === 'lantern' ? C('#3A2E52') : C('#EDE4D8');
   parts.push(grade(box(W + 3, F - lo + 2, D + 3, stone(ctx.p, 0.8), [0, (F + lo - 2) / 2, 0]), lo - 2, F, 0.7, 0.95));
   parts.push(grade(box(W, H, D, wall, [0, F + H / 2, 0]), F, F + H, 0.82, 1.03));
   for (let k = 0; k < 2; k++) {
@@ -371,7 +375,7 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
   const B = 6;
   const top = H + B + 2.2;
   const blossom = biome === 'blossom';
-  const towerC = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#B5523E') : TIMBER;
+  const towerC = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#B5523E') : biome === 'lantern' ? stone(p, 0.85) : TIMBER;
   const parts: BufferGeometry[] = [];
   for (const s of [-1, 1]) {
     const x = s * X;
@@ -395,6 +399,8 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
     } else if (biome === 'volcanic') {
       parts.push(part(new CylinderGeometry(2.1, 1.2, 1.3, 8), INK, { pos: [x, top + 0.6, 0] }));
       parts.push(part(new ConeGeometry(1.7, 4.4, 7), lampColor(true, '#FFA040'), { pos: [x, top + 3.3, 0], jitter: 0.3 }));
+    } else if (biome === 'lantern') {
+      parts.push(...lanternCrown(x, top, !!ctx.low));
     } else {
       parts.push(...place(sweptRoofAt(5.6, t), x, top + 0.3, 0, 0));
     }
@@ -607,7 +613,10 @@ export function finishPiece(ctx: SiteCtx): Piece {
     const tall = new Sub(ctx, c.x, c.z - 0, c.yaw);
     const top = hi + 0.4 + 15;
     if (biome === 'blossom') parts.push(...tall.out(place(pagodaParts(night, top, top - 1, p), 0, 0, -1, 0)));
-    else if (biome === 'alpine') {
+    else if (biome === 'lantern') {
+      // The tallest lamp tower on the mountain, over the hall: seen from the last leap as a stack of lights.
+      parts.push(...tall.out(lampTowerParts(p, top, 11, low ? 4 : 5, low)));
+    } else if (biome === 'alpine') {
       const white = C('#ECE6EE');
       parts.push(...tall.out([
         grade(box(9, 26, 9, white, [0, top + 13, 0]), top, top + 26, 0.85, 1.03),

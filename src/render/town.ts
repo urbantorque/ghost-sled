@@ -1,5 +1,6 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
+import { lanternHouse, lanternLandmark, lanternStreetLamp } from './lanternkit';
 import { lowCrowd } from './crowd';
 import { SNOW, crystal, part, shade, softPart } from './flora';
 import {
@@ -198,6 +199,9 @@ export function townStyle(biome: BiomeId, p: Palette): Town {
       return { lower: [shade(p.low, 0.6), shade(p.low, 0.7), shade(p.low, 0.52)], upper: [C('#5E4436'), C('#6E5040'), shade(p.low, 0.8)], roof: C('#2E2834'), trim: C('#241E26'), shutters: [C('#3A2A30')], lamp: '#FF9A50', lampAlways: true };
     case 'blossom':
       return { lower: [C('#4A3440'), C('#3E2E38'), C('#55404A')], upper: [C('#EDE4D8'), C('#E6DACB'), C('#F2EADF')], roof: C('#3E3A50'), trim: C('#2E2230'), shutters: [C('#2E2230')], lamp: '#FFB45E', lampAlways: true };
+    case 'lantern':
+      // The lamplighters' town: stone under plum-black timber, slate roofs, and paper lit from inside.
+      return { lower: [stone(p, 0.8), stone(p, 0.9), stone(p, 0.7)], upper: [C('#3A2E52'), C('#44345C'), C('#302848'), C('#4C3E66')], roof: C('#24244E'), trim: C('#1E1936'), shutters: [C('#1E1936')], lamp: '#FFC46A', lampAlways: true };
   }
 }
 
@@ -233,6 +237,8 @@ const STOREY = 3.3;
  *  (panelled, on stilts, a flat roof deep in snow), an Ember lodge (basalt under timber, ember-lit
  *  windows), a Sakura townhouse (dark lattice under plaster, low swept eaves, lanterns). */
 export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color, chim?: V3[]): BufferGeometry[] {
+  // Lanternfall's houses are its own (lanternkit.ts): timber and lit paper under a steep roof.
+  if (biome === 'lantern') return lanternHouse(t, F, lo, o, stoneC);
   const parts: BufferGeometry[] = [];
   const { w, d, storeys, s } = o;
   const jet = o.jet ?? 0;
@@ -374,6 +380,8 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
  *  radome and mast, Ember's bathhouse and its tall stack, Sakura's temple hall. Returns the parts and
  *  the height its top reaches. */
 export function landmark(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, p: Palette, s: number): BufferGeometry[] {
+  // Lanternfall's is the lamp hall: a great lamp tower over a low stone hall (lanternkit.ts).
+  if (biome === 'lantern') return lanternLandmark(p, F, lo, false);
   const parts: BufferGeometry[] = [];
   const stoneC = stone(p, 0.95);
   const glass = windowColor(night);
@@ -456,6 +464,7 @@ export function landmark(t: Town, biome: BiomeId, night: boolean, F: number, lo:
 /** A street lamp at (0, gy) in its own frame, the head toward +z: an iron post (Pinecrest, Frostfang),
  *  a stone lantern (Sakura) or a brazier on a column (Ember). */
 export function streetLamp(t: Town, biome: BiomeId, night: boolean, gy: number, stoneC: Color): BufferGeometry[] {
+  if (biome === 'lantern') return lanternStreetLamp(gy, stoneC);
   const parts: BufferGeometry[] = [];
   const lit = lampColor(night || t.lampAlways, t.lamp);
   if (biome === 'blossom') {
@@ -955,7 +964,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
             // A festival mast: banded in the mood's colours, a gilt finial and a long pennant streaming.
             const st = keepStrings.find((x) => x.dz === q.dz);
             const top = st ? st.yA + 0.6 : gy + 9;
-            const mast = biome === 'blossom' ? C('#93405A') : TIMBER_DARK;
+            const mast = biome === 'blossom' ? C('#93405A') : biome === 'lantern' ? C('#2A2140') : TIMBER_DARK;
             parts.push(grade(seg([pt.x, gy - 0.5, pt.z], [pt.x, top, pt.z], 0.17, mast, 6), gy, top, 0.8, 1.05));
             for (let y = gy + 3, k = 0; y < top - 1 && !low; y += 3.2, k++) parts.push(part(new CylinderGeometry(0.2, 0.2, 0.7, 4, 1, true), k % 2 ? CREAM : cols[0], { pos: [pt.x, y, pt.z] }));
             parts.push(heap([pt.x, gy, pt.z], [0.45, 0.2, 0.45]));
@@ -975,7 +984,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
   steps.push(() => {
     seed(ctx.seed + 281);
     const parts: BufferGeometry[] = [];
-    const lanterns = biome === 'blossom' || biome === 'volcanic';
+    const lanterns = biome === 'blossom' || biome === 'volcanic' || biome === 'lantern';
     for (const st of keepStrings) {
       if (!st.across) continue;
       const a = rail.at(st.dz, -1, poleE(st.dz));
@@ -1037,7 +1046,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         if (H - Math.max(gL, gR) > 26) return [];
         const parts: BufferGeometry[] = [];
         const blossom = biome === 'blossom';
-        const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : TIMBER;
+        const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : biome === 'lantern' ? C('#2A2140') : TIMBER;
         for (const sx of [-1, 1]) {
           const g = sx < 0 ? gL : gR;
           if (blossom) parts.push(grade(part(new CylinderGeometry(0.75, 0.9, H + 3 - g + 1.5, 10), post, { pos: [sx * X, (H + 3 + g - 1.5) / 2, 0] }), g, H + 3, 0.75, 1.05));

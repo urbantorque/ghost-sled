@@ -1062,6 +1062,11 @@
   background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
 }
 
+/* Lanternfall: the end of night, indigo down to a violet that holds the lamps' marigold at its foot. */
+.b-lantern .gs-mtn-sky {
+  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
+}
+
 /* A locked mountain keeps its own biome colours under about 40% dim, with the lock badge: as a grey
    silhouette it read as a failed thumbnail and hid the game's variety. */
 .gs-mtn.is-locked .gs-mtn-sky {
@@ -3932,6 +3937,10 @@
 
 .gs-toast-sky.b-blossom {
   background: linear-gradient(180deg, #3a5ba8 0%, #ffc4d6 100%);
+}
+
+.gs-toast-sky.b-lantern {
+  background: linear-gradient(180deg, #0b0a3e 0%, #4a388e 62%, #c88a70 100%);
 }
 
 /* An event's finale: the round it ends on, in the event's role colour (the hazards ice blue, the Gift

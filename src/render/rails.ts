@@ -67,6 +67,7 @@ function railLook(biome: BiomeId): RailLook {
   if (biome === 'glacier') return { bar: new Color('#4E6288'), top: new Color('#E2ECF8'), post: new Color('#383C54') };
   if (biome === 'volcanic') return { bar: new Color('#3C343A'), top: new Color('#B4A8A6'), post: new Color('#2C2630') };
   if (biome === 'blossom') return { bar: new Color('#5E2C3C'), top: new Color('#F0E0D0'), post: new Color('#3A2A36') };
+  if (biome === 'lantern') return { bar: new Color('#3E3260'), top: new Color('#DCD6F0'), post: new Color('#221C3C') };
   return { bar: new Color('#74563F'), top: new Color('#D8DCE6'), post: new Color('#54402F') };
 }
 
@@ -132,9 +133,10 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
     return merge([...col(0, 0, 1.1, 7.2, a), ...col(1.75, 0.3, 0.95, 5.4, b), ...col(-1.6, 0.4, 1.0, 4.4, b), ...col(0.5, 1.5, 0.8, 3.2, a), ...col(-0.8, -1.3, 0.9, 6.0, b), softPart(new SphereGeometry(1, 7, 3), new Color('#AFA6AC'), { pos: [0, -0.5, 0.4], scale: [4.4, 1.1, 3.6] })]);
   }
   const blossom = biome === 'blossom';
-  const dark = blossom ? new Color('#807A92') : new Color('#57506C');
-  const mid = blossom ? new Color('#9C94A6') : new Color('#7A7088');
-  const pale = blossom ? new Color('#B2A8B4') : new Color('#94889E');
+  const lf = biome === 'lantern';
+  const dark = lf ? new Color('#2C2850') : blossom ? new Color('#807A92') : new Color('#57506C');
+  const mid = lf ? new Color('#454070') : blossom ? new Color('#9C94A6') : new Color('#7A7088');
+  const pale = lf ? new Color('#625C92') : blossom ? new Color('#B2A8B4') : new Color('#94889E');
   const lid = blossom ? new Color('#7E9868') : SNOW;
   // Tall fins of rock leaning together, broken at the top, each a few hard planes (ART.md section 3:
   // a rock is a chunky crystal, never a pebble), with what lies on their ledges.

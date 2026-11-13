@@ -12,7 +12,7 @@ export interface MountainCard {
   id: string;
   name: string;
   tagline: string;
-  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom';
+  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern';
   locked: boolean;
   /** e.g. "Pass 4 ghosts to unlock" */
   unlockText: string;

@@ -106,6 +106,8 @@ const CUT: Record<BiomeId, { coat: [number, number, number, number]; sleeve: [nu
   glacier: { coat: [0.23, 0.3, 0.66, 0.67], sleeve: [0.075, 0.09] },
   volcanic: { coat: [0.2, 0.33, 0.86, 0.56], sleeve: [0.06, 0.08] },
   blossom: { coat: [0.2, 0.28, 0.82, 0.58], sleeve: [0.06, 0.13] },
+  // The lamplighters' robe: narrow at the shoulder, a full bell to the snow, a wide sleeve.
+  lantern: { coat: [0.19, 0.34, 0.96, 0.5], sleeve: [0.07, 0.14] },
 };
 
 /** What a prop holder does with it, per mountain: the right arm's rest (side raise, forward raise,
@@ -115,6 +117,8 @@ const PROP_REST: Record<BiomeId, [number, number, number, number]> = {
   glacier: [0.12, 0.25, 0, 1],
   volcanic: [0.15, 0.3, 0, 1],
   blossom: [3.15, -0.3, 0, 2],
+  // A lighting pole held up at arm's length, its flame over the heads, turned in the hand.
+  lantern: [2.95, -0.2, 0, 2],
 };
 
 /** The prop holders' style, shared by the one crowd material (set by restyleCrowd). */
@@ -219,6 +223,23 @@ export function figureGeometry(biome: BiomeId = 'alpine'): BufferGeometry {
     // The prop: a long-handled pick, carried on the shoulder and raised.
     add(part(new CylinderGeometry(0.02, 0.02, 0.74, 4), new Color('#4A3A34'), { pos: [HAND_X, HAND_Y - 0.3, 0] }), S_PROP, { arm: 1, grp: G_GRIP });
     add(part(new BoxGeometry(0.05, 0.05, 0.38), new Color('#3A3A44'), { pos: [HAND_X, HAND_Y - 0.66, 0.04], rot: [0.15, 0, 0] }), S_PROP, { arm: 1, grp: G_GRIP });
+  } else if (biome === 'lantern') {
+    // The lamplighters. A long robe to the snow with a sash, and a short shoulder cape over it.
+    add(softPart(new CylinderGeometry(0.218, 0.23, 0.09, 8, 1, true), white, { pos: [0, 0.78, 0] }), S_HAT);
+    add(softPart(new ConeGeometry(0.33, 0.3, 8, 1, true), white, { pos: [0, top - 0.04, 0] }), S_DARK);
+    // 0: a deep cowl, open round the face, its peak standing.
+    add(softPart(hood(0.285, 0.82), white, { pos: [0, 1.34, -0.02] }), S_COAT, { grp: G_HEAD, v: 0 });
+    add(part(new ConeGeometry(0.13, 0.26, 5), white, { pos: [0, 1.66, -0.05], rot: [-0.3, 0, 0] }), S_COAT, { grp: G_HEAD, v: 0 });
+    // 1: a tall lamp-cap: a soft cylinder, a band in the accent, a flat crown.
+    add(softPart(new CylinderGeometry(0.2, 0.25, 0.3, 8, 1, true), white, { pos: [0, 1.6, -0.01] }), S_HAT, { grp: G_HEAD, v: 1 });
+    add(part(new CylinderGeometry(0.2, 0.2, 0.02, 8), white, { pos: [0, 1.75, -0.01] }), S_HAT, { grp: G_HEAD, v: 1 });
+    add(part(new CylinderGeometry(0.256, 0.256, 0.06, 8, 1, true), white, { pos: [0, 1.48, -0.01] }), S_TRIM, { grp: G_HEAD, v: 1 });
+    // 2: a wrapped headcloth with a tail down the back.
+    add(softPart(dome(0.252), white, { pos: [0, 1.36, -0.01] }), S_HAT, { grp: G_HEAD, v: 2 });
+    add(part(new BoxGeometry(0.16, 0.34, 0.03), white, { pos: [0, 1.2, -0.25], rot: [0.2, 0, 0] }), S_HAT, { grp: G_HEAD, v: 2, fine: true });
+    // The prop: a long lighting pole, a small flame at its tip (held up, so the flame stands over the heads).
+    add(part(new CylinderGeometry(0.014, 0.016, 1.5, 4), new Color('#2A2140'), { pos: [HAND_X, HAND_Y - 0.62, 0] }), S_PROP, { arm: 1, grp: G_GRIP });
+    add(part(new OctahedronGeometry(0.075, 0), new Color('#FFC46A').multiplyScalar(2.6), { pos: [HAND_X, HAND_Y - 1.44, 0], scale: [1, 1.7, 1] }), S_PROP, { arm: 1, grp: G_GRIP });
   } else {
     // A wrap robe with a sash in the accent and a crossed collar.
     add(softPart(new CylinderGeometry(0.228, 0.235, 0.1, 8, 1, true), white, { pos: [0, 0.8, 0] }), S_HAT);
@@ -269,13 +290,16 @@ const DRESS: Record<BiomeId, { coats: string[]; hats: string[] }> = {
   volcanic: { coats: ['#5E5A62', '#3A3640', '#4A3E5A', '#3A5058', '#5A4A44', '#7A6A86', '#48424E', '#6A5E58'], hats: ['#B9AAB4', '#D8D0C8', '#2E2A34', '#8E8296', '#6A7A84', '#A89A8E'] },
   // Festival robes: indigo, plum, sage, cream, blossom pink, deep teal, wine lacquer.
   blossom: { coats: ['#34406E', '#6A4C86', '#7E9A88', '#EDE4D8', '#D9B6C4', '#2F6E78', '#5A2F42', '#8A7DB8'], hats: ['#F4CFDC', '#F2EBDD', '#EBC2D4', '#B9A6E0', '#9CC0EE', '#FFFFFF', '#5B6E9A'] },
+  // Lamplighters: robes in the night's own colours (indigo, plum, slate violet, a deep teal, undyed wool)
+  // with hoods and sashes in pale lilac, silver and cream. The only warm thing on them is the flame they carry.
+  lantern: { coats: ['#3A3478', '#54407E', '#2E2C5C', '#6A5C9C', '#2F5A70', '#C9C2DC', '#463A6A', '#7A6CA8'], hats: ['#DAD2F2', '#F0ECF8', '#B4A8E0', '#8E86C8', '#E6E0D2', '#5E5490'] },
 };
 
 /** A crowd's colour range for a biome: coats and accents. */
 export function crowdColors(biome: BiomeId, p: Palette): { coats: Color[]; hats: Color[] } {
   const d = DRESS[biome];
   // A trace of the mood's light in the coats, so a night crowd is not a row of day colours.
-  const k = p.lantern || p.moon ? 0.72 : 1;
+  const k = biome === 'lantern' ? 1 : p.lantern || p.moon ? 0.72 : 1;
   return { coats: d.coats.map((h) => new Color(h).multiplyScalar(k)), hats: d.hats.map((h) => new Color(h).multiplyScalar(k)) };
 }
 
