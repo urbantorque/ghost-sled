@@ -164,7 +164,34 @@ Nobody is faked: every rider is a record replayed as it was ridden.
 | stunt | 0.50 to 0.61 | 2.57 to 3.81 | 55 to 19 of 240 |
 
 (`shots/r7/feel/race/race-lab.txt`. The lab's pilots ride without a slipstream, so their times are a few
-seconds slower than in the game; the comparison is the same runs against two fields.) *Rejected:* a wider
+seconds slower than in the game; the comparison is the same runs against two fields.)
+
+**The browser does not show it yet, and I am not claiming it does.** Telemetry in the game, five runs in a
+row on Pinecrest, round 6's build then this one (`shots/r7/feel/tele`):
+
+| pilot | run | before: time s, live, passes/min | after: time s, live, passes/min |
+| --- | --- | --- | --- |
+| mid | 1 | 119.2, 0.57, 3.0 | 114.5, 0.48, 1.6 |
+| mid | 2 | 113.6, 0.63, 2.6 | 116.0, 0.69, 5.7 |
+| mid | 5 | 126.4, 0.73, 3.8 | 110.5, 0.59, 4.3 |
+| expert | 1 | 126.5, 0.60, 2.4 | 156.2, 0.83, 6.2 |
+| expert | 2 | 127.4, 0.64, 3.8 | 131.3, 0.26, 1.8 |
+| expert | 5 | 123.0, 0.44, 4.9 | 137.5, 0.44, 2.2 |
+| stunt | 1 | 138.2, 0.82, 4.8 | 130.5, 1.00, 2.8 |
+| stunt | 2 | 137.6, 0.82, 5.2 | 150.3, 0.20, 2.0 |
+| stunt | 5 | 91.3 (did not finish), 0.55, 3.3 | 141.7, 0.42, 2.5 |
+
+Over runs 2 to 5: mid live 0.65 to 0.66 and passes 3.4 to 4.9 a minute; expert 0.47 to 0.36 and 4.0 to 2.7;
+stunt 0.58 to 0.50 and 3.7 to 3.2. Four runs a pilot cannot tell 0.5 from 0.65 (the stunt pilot's live share runs
+from 0.20 to 1.0 on one build), so this neither confirms the lab nor is it nothing: every quiet run on the
+new build has the same cause, and it is the one the change was meant to cure. The expert's first run took
+156 s, so its second (131 s) had a field from 147 s up; the stunt pilot rode 130.5 then 150.3 against a field
+that stopped at 141. In the game these pilots swing by 15% from one run to the next, more than in the lab
+(the expert: 122 to 156 s here, 130 to 141 there), and a field laid across one or two known runs is not wide
+enough for that. **To re-tune after the merge, with the pools ridden:** `FIELD_CARROT` (how far the quick end
+hangs out with one and two runs known, 0.94 and 0.95 now), `FIELD_SLOW_MIN` and `FIELD_SLOW_MAX` (1.08 and
+1.12), and `FIELD_MORE`; `race-lab.ts` answers each in a minute, and telemetry wants twenty runs a pilot,
+not five, before it says anything. *Rejected:* a wider
 string of five (tried first: live 0.56 to 0.58, no better than noise, and more quiet runs for the mid
 pilot: five riders cannot cover 25 s); nine on every run (0.72, but it is Haunted Hollow's whole idea);
 riders who read you on every run (that is faking a ghost).
@@ -197,7 +224,71 @@ does not, and no pool can give them one until the bot rides faster. That is `bot
 - **Rumble needs hands.** No headless browser has an actuator. The table is tested; what it feels like is
   not.
 
+## Text to fold in
+
+*README, controls.* "Gamepad: either stick or the d-pad steers; A or the right trigger is the button; X, B, a
+bumper or the left trigger spends the lantern; Start pauses. The menus follow the stick and the d-pad, A
+chooses, B goes back. The pad rumbles on landings, hits and dashes where the browser allows it (Chrome and
+Edge with a dual-rumble pad); Controller Rumble in the settings turns it off, and so does reduced motion."
+
+*README, how a run goes.* "A hard hit is a fall: you slide, lie in the snow a moment, get up and ride on,
+slower and with your combo gone. You carry three get-ups (the pips by the stage line). One comes back for
+every 200 m you ride and all of them at a stage line; a fall with none left ends the run. Falls in the
+first 700 m cost none."
+
+*README, the race.* "From your second run on a mountain seven ghosts ride with you, spread from a little
+quicker than your best recent run to your slowest: whichever run you have, someone is near."
+
+*README, dev tools.* `scripts/playtest/lab.ts --falls` (what a fall costs each pilot), `race-lab.ts` (how
+live the race is, no browser), `pool-fast.ts` (how fast a bot can ride), `feel-frames.js` (this lane's
+frames).
+
+*ART.md.* Nothing new to the art direction. The pad's glyphs follow the HUD's keycaps: a face button is a
+round cap with a 2 px rim and no keycap lip (so A the button never reads as A the key), Start is a pill, the
+stick is drawn bare like the mouse. The get-up pips are 9 px rings in the HUD's text colour, solid while
+held.
+
+## Cost
+
+No draw calls, no triangles and no frame JS on a first run. From the second run on a mountain: two more
+ghost riders (the field's five draw calls are unchanged; two riders' triangles, two more replays in the
+worker before the start). The pad is one `navigator.getGamepads()` a frame and one a tick while a pad is connected, and
+one every 30 frames while none is. Rumble and the hints cost nothing measurable. I timed none of it in a
+browser: seven lanes share the machine.
+
+## Frames and numbers
+
+In the main checkout, `shots/r7/feel/` (shot by `scripts/playtest/feel-frames.js`, Medium, console clean on
+both; the pad is a scripted one read by the game's own poll, and each fall frame is held still by the page
+because a screenshot takes longer than a phase lasts):
+
+- `desk-` and `phone-fall{,2,3}-{1-falling,2-down,3-up,4-riding}.png`: three falls in a row past 760 m, the
+  pips going 2, 1, 0 beside the stage line; `sheet-desk-fall.png` is the twelve on one sheet. What I read in
+  them: falling is the tumble in a burst of snow, up is the rider beside the sled with an arm out, riding is
+  clean. **Down is not a rider lying in the snow yet**: the picture is still the old tumble's roll at that
+  tick. That is the hero lane's to draw from `sim.s.fall`.
+- `desk-pips-zoom.png`: the pips as they ship, two held and one spent. In the fall frames a spent pip is still
+  a hollow ring, which on snow and sky read the same as a held one (I could not tell 1 left from 3 in my own
+  frames); a spent pip is now ink inside its ring, and the pips are 9 px where they were 7. The fall frames
+  were shot before that last change.
+- `hint-steer.png`, `hint-steer-gone.png` (1.5 s and 9.6 s into a run nobody steers), `pad-hint-steer.png`
+  (the stick), `pad-hint-steer-learned.png` (gone after the stick moved), `pad-hint-boostPop.png` (the round
+  A), `pad-title-before.png`, `pad-title.png`, `pad-title-focus.png` (Ride's prompt turns from Space to A
+  and the ring lands on Ride), `pad-pause.png`, `pad-pause-focus.png` (Start to resume, the ring, the
+  rumble switch). Not shot: the results with a pad (Run Again's A), which needs a whole run.
+- `lab/after-final.txt` and `.json` (the pilot lab with all three prices), `lab/before-420.txt` (the
+  baseline at the same cap), `race/race-lab.txt`, `tele/before` and `tele/after` (telemetry, five runs in a
+  row on Pinecrest for mid, expert and stunt).
+
 ## Touched outside my files
+
+- `src/ui/menus.ts`, `src/ui/results.ts`, `src/ui/title.ts`, `src/ui/settings.ts`, `src/ui/ui.ts`,
+  `src/ui/dom.ts`, `src/ui/icons.ts`, `src/ui/style.css`, `src/ui/contract.ts`, `src/ui/harness.ts`: the
+  pad's glyphs, prompts, focus ring and rumble switch (small additions; `SettingsModel.rumble` is new).
+  `src/game/app.ts`: the pad's poll and menus, rumble beside the audio's event line, the hints' two new
+  inputs, `fieldCount` and `recent` for the field. `src/game/save.ts`: `settings.rumble`, `hintsSeen`.
+- `scripts/playtest/lab.ts` (fall pricing), and new `race-lab.ts`, `pool-fast.ts`, `feel-frames.js`.
+  `scripts/generate-ghosts.ts`: a comment (50 a mountain).
 
 - `src/game/ghostdata.ts`, `src/workers/ghost.worker.ts`, `src/game/ghosts.ts`: three flags in a ghost's
   frames (`FLAG_FALLING`, `FLAG_DOWN`, `FLAG_UP`) and `GhostPose.fall` (0 to 3), so the hero lane can draw a
