@@ -3,6 +3,7 @@ import { BIG_DROP_S } from '../audio/cues';
 import { DRIFT_TIER_HEX, type Beat, type BeatOf } from '../game/beats';
 import type { Snap } from '../game/run';
 import { CHUNK_LEN, type Course } from '../sim/course';
+import * as simConsts from '../sim/sim';
 import { TUMBLE_TICKS, type Sim, type SimEvent } from '../sim/sim';
 import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
@@ -37,6 +38,19 @@ export interface MomentWorld {
   readonly cam: ChaseCamera;
   readonly course: Course;
 }
+
+/** Where a fall's phases change, as shares of it, read off the sim's own phase lengths when it has them
+ *  (round 7's fall: FALL_TICKS tumbling and sliding, DOWN_TICKS lying in the snow, the rest standing the
+ *  sled up and pushing off), so the picture is thrown, down and up exactly while the sim is. A sim with
+ *  one undivided tumble has none and the rider keeps its own 40% and 70%. */
+export function fallCuts(k: Readonly<Record<string, unknown>>): readonly [number, number] | undefined {
+  const fall = k.FALL_TICKS;
+  const down = k.DOWN_TICKS;
+  const all = k.TUMBLE_TICKS;
+  if (typeof fall !== 'number' || typeof down !== 'number' || typeof all !== 'number' || !(all > fall + down) || !(fall > 0) || !(down > 0)) return undefined;
+  return [fall / all, (fall + down) / all];
+}
+const FALL_CUTS = fallCuts(simConsts as unknown as Record<string, unknown>);
 
 /** The finish's render-time ease: full speed over the line, down to FINISH_SLOW by a third of a second,
  *  held to 1.1 s, and back to full by 2.2 s (render seconds since the line). */
@@ -451,6 +465,7 @@ export class Moments {
     } else {
       act.tumble = st.tumble > 0 ? 1 - st.tumble / TUMBLE_TICKS : 0;
       act.tumbleS = TUMBLE_TICKS / 60;
+      if (FALL_CUTS) act.tumbleCuts = FALL_CUTS;
       act.grind = st.grinding;
       act.wall = st.wallTicks > 0 && !st.finished ? (s.x > w.course.centerX(s.z) ? 1 : -1) : 0;
       act.finish = st.finished;
