@@ -1,20 +1,16 @@
 import { hash32, hashString } from './prng';
 
-/** The four looks the world and the music are dressed for today. */
-export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom';
-/** What a course is built as: the four, and Lanternfall's own ground (round 7). The sim reads this one. Until the
- *  Lanternfall world lane widens BiomeId to it, everything outside the sim sees LOOK's stand-in (lookOf). */
-export type CourseBiome = BiomeId | 'lantern';
+/** The five looks the world and the music are dressed for: the four, and Lanternfall's own (round 7). */
+export type BiomeId = 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern';
+/** What a course is built as. Since Lanternfall's world was built this is the look itself; the name is kept for
+ *  the sim's tables. */
+export type CourseBiome = BiomeId;
 export type MountainId = 'pinecrest' | 'frostfang' | 'ember' | 'sakura' | 'lanternfall' | 'daily';
 
-// r7: placeholder until the Lanternfall world lane. The one place the new biome borrows a look: its palette,
-// dressing, crowd and music are Frostfang's (the nearest: night, cold snow) until its own are built. To build
-// them, add 'lantern' to BiomeId, delete this map, and let the compiler list every Record to fill.
-const LOOK: Record<CourseBiome, BiomeId> = { alpine: 'alpine', glacier: 'glacier', volcanic: 'volcanic', blossom: 'blossom', lantern: 'glacier' };
-
-/** The look a course biome is drawn and scored with. */
+/** The look a course biome is drawn and scored with: its own (Lanternfall borrowed Frostfang's until its world
+ *  was built). */
 export function lookOf(b: CourseBiome): BiomeId {
-  return LOOK[b];
+  return b;
 }
 
 /** Generation parameters. A course is a pure function of its seed: the seed selects these. */
@@ -172,9 +168,9 @@ export function courseBiomeForSeed(seed: number): CourseBiome {
   return BIOME_BY_SEED.get(seed >>> 0) ?? BIOMES[hash32(seed, 0xb10e) % BIOMES.length];
 }
 
-/** The look a seed is drawn and scored with (see LOOK). */
+/** The look a seed is drawn and scored with. */
 export function biomeForSeed(seed: number): BiomeId {
-  return LOOK[courseBiomeForSeed(seed)];
+  return courseBiomeForSeed(seed);
 }
 
 /** Parameters for any seed. Named mountains use their biome table; other seeds (daily) get a

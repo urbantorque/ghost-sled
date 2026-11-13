@@ -472,7 +472,11 @@ export class Soundscape {
         n.cowbell = now + rand(1.6, 3.4);
         this.play('cowbell', t, 0.38 * v.crowd, v.crowdPan + rand(-0.2, 0.2), 7000, rand(0.94, 1.06));
       }
-      if (this.biome !== 'blossom' && now >= n.whistle) {
+      // (The lamplighters ring hand bells for a rider: the temple take, high and short. No whistles.)
+      if (this.biome === 'lantern' && now >= n.whistle) {
+        n.whistle = now + rand(2.4, 5);
+        this.play('temple', t, 0.26 * v.crowd, v.crowdPan + rand(-0.25, 0.25), 7000, rand(1.9, 2.3));
+      } else if (this.biome !== 'blossom' && this.biome !== 'lantern' && now >= n.whistle) {
         n.whistle = now + rand(4, 8);
         this.play('whistle', t, 0.3 * v.crowd, v.crowdPan + rand(-0.2, 0.2), 8000, rand(0.95, 1.08));
       }
@@ -507,7 +511,8 @@ export class Soundscape {
 
   /** The birds' call, by kind: crows and choughs, cranes over Sakura, the owl at night. */
   private call(): TakeName | null {
-    if (this.view.night) return 'owl';
+    // (Lanternfall is ridden at the end of night: its bird is the owl, whatever the mood.)
+    if (this.view.night || this.biome === 'lantern') return 'owl';
     return this.biome === 'blossom' ? 'crane' : 'caw';
   }
 
@@ -523,6 +528,10 @@ export class Soundscape {
     } else if (this.biome === 'blossom') {
       n.mood = now + rand(6, 12) * sparse;
       this.play('chimes', t, 0.3, rand(-0.6, 0.6), 7000, rand(0.98, 1.02));
+    } else if (this.biome === 'lantern') {
+      // Lanternfall's own bed: wind-bells, low and far apart (the chimes take, slowed to a bell's pitch).
+      n.mood = now + rand(7, 15) * sparse;
+      this.play('chimes', t, 0.34, rand(-0.7, 0.7), 5200, rand(0.58, 0.66));
     } else if (this.mood === Mood.Powder) {
       n.mood = now + rand(6, 12) * sparse;
       this.play('slough', t, 0.45, rand(-0.8, 0.8), 3000, rand(0.85, 1.15));
@@ -545,6 +554,7 @@ export class Soundscape {
     const lvl = LEVEL.cheer * k * Math.sqrt(v.crowd) * (1 + 0.5 * this.raceK);
     this.play('cheer', t, lvl, v.crowdWide ? rand(-0.3, 0.3) : v.crowdPan, 7000 - 4500 * v.crowdBehind, rand(0.94, 1.06));
     if (this.biome === 'blossom') this.play('taiko', t + 0.05, 0.5 * lvl / LEVEL.cheer, v.crowdPan, 5000, 1);
+    else if (this.biome === 'lantern') this.play('temple', t + 0.05, 0.4 * k * v.crowd, v.crowdPan, 7000, rand(1.4, 1.6));
     else if (Math.random() < 0.6) this.play('whistle', t + rand(0.1, 0.3), 0.3 * k * v.crowd, v.crowdPan + rand(-0.25, 0.25), 8000, rand(0.95, 1.08));
   }
 

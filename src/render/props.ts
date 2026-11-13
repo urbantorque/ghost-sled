@@ -169,6 +169,8 @@ function farLightGeometry(great: boolean): BufferGeometry {
 function boughs(biome: string, set: 'a' | 'b', pick: number): boolean {
   if (biome === 'alpine') return !(set === 'b' && pick === 1);
   if (biome === 'volcanic') return set === 'a' && pick === 0;
+  // (Lanternfall's conifers carry snow; its bare silver trees have none to drop.)
+  if (biome === 'lantern') return set === 'a';
   return biome === 'blossom';
 }
 
@@ -323,8 +325,11 @@ export class Props {
       this.batches.set(key, { mesh, count: 0, near: 0 });
     };
     for (const k of KINDS) {
-      const mat = k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
-      add('ob:' + k, obstacleGeometry(k, p, !this.arches), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+      // (Lanternfall's spires and blocks are standing stones, not ice, and its stone lamps carry no window of
+      // their own: all three are plain dark hazards. lanternkit.ts, lanternworld.ts.)
+      const stoneWorld = biome === 'lantern' && (k === 'spire' || k === 'serac' || k === 'iceblock' || k === 'lantern');
+      const mat = stoneWorld ? toon : k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
+      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300);
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a

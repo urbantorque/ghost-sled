@@ -1,6 +1,7 @@
 import { BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind, Section, SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
+import { markerStoneGeometry, standingStoneGeometry, wayLampGeometry } from './lanternkit';
 import { ASH_TOP, BARK, SNOW, basaltTones, crystal, merge, part, reseed, shade, softPart, variantSet } from './flora';
 import { Facets, columnsInto, strata, strataInto } from './rockforms';
 import { crestE, ledgeAt, standable, visualGround } from './ground';
@@ -202,6 +203,11 @@ export function smallKitSteps(biome: BiomeId, p: Palette): Array<() => BufferGeo
     const char = new Color('#2E2836');
     return [() => bush(new Color('#3A3242')), () => stump(char, new Color('#4E4658')), () => fence(char, new Color('#3A3344'), new Color('#3A3344')), pole, () => steamFissure(p), () => basaltPair(p)];
   }
+  if (biome === 'lantern') {
+    // A drifted bush, a marker stone for a stump, a plum rail fence, a way lamp and a standing stone.
+    const plum = new Color('#2E2648');
+    return [() => bush(mix(p.lowLit, new Color('#DCD6F0'), 0.25)), () => markerStoneGeometry(p), () => fence(plum, new Color('#221C3C'), new Color('#4A3A60')), pole, wayLampGeometry, () => standingStoneGeometry(p)];
+  }
   return [() => bush(shade(p.tall, 0.72)), () => stump(BARK, new Color('#9A8890')), () => fence(new Color('#3A2A36'), new Color('#3A2A36'), shade(p.accentProp, 0.45)), pole, stoneLantern, () => toriiFence(p)];
 }
 
@@ -210,7 +216,7 @@ export function smallKit(biome: BiomeId, p: Palette): BufferGeometry {
 }
 
 function cabin(biome: BiomeId, p: Palette): BufferGeometry {
-  const wall = biome === 'volcanic' ? shade(p.low, 0.9) : biome === 'blossom' ? new Color('#5E4650') : new Color('#5A4A50');
+  const wall = biome === 'volcanic' ? shade(p.low, 0.9) : biome === 'blossom' ? new Color('#5E4650') : biome === 'lantern' ? new Color('#3A2E52') : new Color('#5A4A50');
   const roof = new Color('#2E2A3A');
   const stone = shade(p.low, 1.05);
   const win = new Color('#2A2540');

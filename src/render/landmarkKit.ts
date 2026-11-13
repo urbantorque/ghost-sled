@@ -1,5 +1,6 @@
 import { BoxGeometry, BufferAttribute, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, Matrix4, Quaternion, SphereGeometry, TorusGeometry, Vector3 } from 'three';
 import type { BiomeId } from '../sim/mountains';
+import { lanternPiece } from './lanternkit';
 import { flagColors } from './dressing';
 import { ASH_TOP, SNOW, basaltTones, merge, paint, part, reseed, shade, softPart } from './flora';
 import { Facets, columnInto } from './rockforms';
@@ -1275,6 +1276,11 @@ export function pagodaParts(night: boolean, b: number, lo: number, p: Palette): 
 
 /** The piece for a kind. */
 export function pieceFor(kind: Kind, ctx: SiteCtx): Piece {
+  // Lanternfall builds its own: lamp towers, great standing lamps, bell frames and arched bridges of lights.
+  if (ctx.biome === 'lantern') {
+    const own = lanternPiece(kind, ctx);
+    if (own) return own;
+  }
   switch (kind) {
     case 'gate':
       return gatePiece(ctx);

@@ -5,7 +5,7 @@
 #   scripts/playtest/frames.sh http://127.0.0.1:4310/ shots/r7/before phone "medium" "0 1 2 3"
 BASE="$1"; OUT="$2"; DEV="${3:-desk}"; TIERS="${4:-high}"; MS="${5:-0 1 2 3}"
 CFG=.playwright/cli-headless.config.json; [ "$DEV" = phone ] && CFG=.playwright/mobile-headless.config.json
-S="fr-$DEV"
+S="${FRAMES_SESSION:-fr-$DEV}"
 mkdir -p "$OUT"
 playwright-cli -s="$S" open --config="$CFG" >/dev/null 2>&1
 playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1

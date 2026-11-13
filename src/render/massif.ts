@@ -95,6 +95,7 @@ export const SEA_GLSL = /* glsl */ `
   uniform vec3 uSeaHaze;
   uniform vec3 uSeaDeep;
   uniform vec3 uSeaSun;
+  uniform vec3 uSeaWarm;
   ${NOISE}
   float seaBillow(vec2 p, float detail) {
     vec2 q = p * 0.0009 + vec2(uTime * 0.0032, uTime * 0.0011);
@@ -151,6 +152,16 @@ export const SEA_GLSL = /* glsl */ `
     } else {
       col = mix(uSeaDeep, col, cov);
     }
+    // Lit from beneath in patches (Lanternfall: the valley's lanterns under the cloud). Broad pools that
+    // hold their place while the billows drift over them, brightest in the billows' thin troughs, and a
+    // slow breath so the sea is alive. uSeaWarm is black on every other mountain.
+    if (uSeaWarm.r + uSeaWarm.g > 0.001) {
+      vec2 wq = (p + cameraPosition.xz) * 0.00042;
+      float pool = snoise(wq + vec2(1.7, -4.2)) * 0.6 + snoise(wq * 2.3 + vec2(-3.1, 2.6)) * 0.4;
+      pool = smoothstep(0.22, 0.78, pool + 0.08 * sin(uTime * 0.21 + wq.x * 3.0));
+      float thin = 1.0 - smoothstep(-0.35, 0.55, n);
+      col += uSeaWarm * pool * (0.35 + 0.65 * thin) * cov * (1.0 - smoothstep(1400.0, 5200.0, t));
+    }
     // Aerial perspective: the far sea melts into the horizon.
     col = mix(col, uSeaHaze, smoothstep(1200.0, 12000.0, t) * 0.92);
     return vec4(col, step(0.001, uSea));
@@ -169,6 +180,7 @@ export function makeSeaUniforms() {
     uSeaHaze: { value: new Color() },
     uSeaDeep: { value: new Color() },
     uSeaSun: { value: new Vector3(0, 0.2, -1) },
+    uSeaWarm: { value: new Color(0, 0, 0) },
   };
 }
 export type SeaUniforms = ReturnType<typeof makeSeaUniforms>;
@@ -183,6 +195,7 @@ export function paletteSea(u: SeaUniforms, p: Palette): void {
   u.uSeaHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
   u.uSeaDeep.value.copy(p.ridge[2]).lerp(p.snowDeep, 0.4);
   u.uSeaSun.value.copy(p.diskDir);
+  u.uSeaWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.85);
 }
 
 const VERT = /* glsl */ `

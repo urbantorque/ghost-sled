@@ -413,6 +413,7 @@ export class OverlookPlan {
 function railColors(biome: BiomeId, p: Palette): { post: Color; rail: Color } {
   if (biome === 'glacier') return { post: new Color('#3A3C52'), rail: new Color('#B9C4D6').lerp(p.lowLit, 0.2) };
   if (biome === 'volcanic') return { post: new Color('#2E2834'), rail: new Color('#4A3E44') };
+  if (biome === 'lantern') return { post: new Color('#221C3C'), rail: new Color('#4A3A60') };
   if (biome === 'blossom') return { post: new Color('#3A2A36'), rail: shade(p.accentProp, 0.5).lerp(new Color('#3A2A36'), 0.4) };
   return { post: new Color('#5A4438'), rail: new Color('#7A5A44') };
 }

@@ -74,8 +74,9 @@ function carrier(biome: BiomeId): BufferGeometry {
     parts.push(part(new CylinderGeometry(0.96, 0.96, 0.1, 7), new Color('#2A2230'), { pos: [0, -3.86, 0], scale: [1, 1, 0.8] }));
   } else {
     const blossom = biome === 'blossom';
-    const shell = blossom ? new Color('#EDE4D8') : new Color('#B5523E');
-    const trim = blossom ? new Color('#93405A') : new Color('#EEF4FA');
+    const lf = biome === 'lantern';
+    const shell = lf ? new Color('#3A2E52') : blossom ? new Color('#EDE4D8') : new Color('#B5523E');
+    const trim = lf ? new Color('#DCD6F0') : blossom ? new Color('#93405A') : new Color('#EEF4FA');
     parts.push(part(new BoxGeometry(0.09, 0.09, 0.09).scale(1, 12, 1), steel, { pos: [0, -2.9, 0] }));
     parts.push(part(new BoxGeometry(1.7, 1.5, 1.5), shell, { pos: [0, -4.05, 0] }));
     parts.push(part(new BoxGeometry(1.74, 0.5, 1.54), new Color('#2A2D48'), { pos: [0, -3.85, 0] }));

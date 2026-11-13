@@ -628,9 +628,9 @@ export class Midground {
     t.uTreeA.value.copy(p.tall);
     t.uTreeB.value.copy(p.tallDark);
     // Sakura's slopes mix spruce among the blossom; Frostfang's ice spires stand among dark firs.
-    const alt = this.biome === 'blossom' ? '#1F5753' : this.biome === 'glacier' ? '#2C5872' : this.biome === 'volcanic' ? '#3A3036' : '#24605A';
+    const alt = this.biome === 'lantern' ? '#8E88B8' : this.biome === 'blossom' ? '#1F5753' : this.biome === 'glacier' ? '#2C5872' : this.biome === 'volcanic' ? '#3A3036' : '#24605A';
     t.uTreeAlt.value.set(alt);
-    t.uCapK.value = this.biome === 'alpine' ? 0.7 : this.biome === 'glacier' ? 0.45 : this.biome === 'volcanic' ? 0.3 : 0.35;
+    t.uCapK.value = this.biome === 'lantern' ? 0.55 : this.biome === 'alpine' ? 0.7 : this.biome === 'glacier' ? 0.45 : this.biome === 'volcanic' ? 0.3 : 0.35;
     // The carpet's colour on the shoulder: the forest's own mix, a step darker.
     const f = u.uForest.value as Color;
     f.copy(p.tall).lerp(p.tallDark, 0.55);
@@ -1130,6 +1130,13 @@ export class Midground {
           if (!alt) {
             w = 0.45 + 0.2 * hv;
             h *= 1.1;
+          }
+        } else if (biome === 'lantern') {
+          // Bare silver trees among the ink conifers: slimmer, a little shorter.
+          alt = pick < 0.3;
+          if (alt) {
+            w = 0.6 + 0.2 * hv;
+            h *= 0.85;
           }
         } else if (biome === 'volcanic') {
           if (pick < 0.45) {

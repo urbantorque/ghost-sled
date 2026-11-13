@@ -207,7 +207,7 @@ export class Listener {
       if (p.bustle) out.bustle = Math.max(out.bustle, p.bustle * within(out1, 0, 140));
       if (p.bell && !this.rung.has(s.n) && dz - half < 140 && past < 0) {
         this.rung.add(s.n);
-        out.bell = p.bell === 'church' && src.biome === 'blossom' ? 'temple' : p.bell;
+        out.bell = p.bell === 'church' && (src.biome === 'blossom' || src.biome === 'lantern') ? 'temple' : p.bell;
         out.bellPan = s.span || half > 0 ? 0 : s.side * 0.5;
       }
       // A crowd is only heard where it is drawn.
