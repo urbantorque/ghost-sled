@@ -38,7 +38,7 @@ import { FINISH_Z, predictedTime, recordStanding } from './standing';
 // times move more than that from one run to the next (the expert pilot: 116 to 139 s in five runs), so on a
 // slow day the whole field rode away and on a quick one it was left at the first stage line. Now the riders
 // are spaced evenly from a little quicker than your quickest recent run (the one to chase on a good day)
-// to your slowest of the last three, and never tighter than 1.08A at the slow end or wider than 1.12A. A
+// to your slowest of the last three, and never tighter than 1.10A at the slow end or wider than 1.16A (round 7's simfix, on the final pools: 1.08 and 1.12 left a skilled pilot's slow run without a rider 20 times in 300, and this 8). A
 // steady player gets a tight pack and an erratic one a long string, and whichever run you have, somebody
 // real is near it. And two more riders ride (FIELD_MORE, fieldCount): the race lab (scripts/playtest/
 // race-lab.ts) says what makes a race live is how many real riders are spread over where you might finish.
@@ -115,8 +115,8 @@ export const FIELD_FAST_MIN = 0.85;
 /** Its slowest rider: your slowest of the last FIELD_SLOW_RUNS, but at least and at most these shares
  *  of the field's pace. */
 export const FIELD_SLOW_RUNS = 3;
-export const FIELD_SLOW_MIN = 1.08;
-export const FIELD_SLOW_MAX = 1.12;
+export const FIELD_SLOW_MIN = 1.1;
+export const FIELD_SLOW_MAX = 1.16;
 /** Riders added to a field laid across your runs, and the most a field holds (Haunted Hollow's nine). */
 export const FIELD_MORE = 2;
 export const FIELD_MOST = 9;
