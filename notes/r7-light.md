@@ -203,7 +203,11 @@ seven lanes share the machine and the rules say not to conclude on frames a seco
   re-tuned (Sakura's were cut to 0.35, 0.75 in the orchards and 0.3 after, against the old fan).
 - **Chaos moods were not re-shot** after the scatter change and the film curve's hue guard. Both are
   small on a mood with a full disc; Lantern Night, Blizzard and the night moods want a look.
-- Fireworks and spirit effects do not push local lights yet (the fx lane's call: `pushLocalLight`).
+- Fireworks and spirit effects push local lights on the merged build (checked in the code after the merge:
+  `fireworks.ts light()`, `spirit.ts light()`, which carries the ward's crack for `wardfx.ts`). `World.frame`
+  calls `beginLocalLights` before `spirit.update`, `marquee.update` and `setPieces.update`, and nothing else
+  pushes; the kept lights reach every material through `shared` (`...localUniforms`, by reference). Their
+  radii and powers were chosen blind (a firework reaches 150 m and so wins a slot from any lamp): re-tune.
 - A stray folder `C:/c` holds copies of one capture's frames (a path the capture tool resolved
   wrongly on its first run). It is safe to delete; I was not permitted to.
 
