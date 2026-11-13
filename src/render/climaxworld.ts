@@ -112,8 +112,8 @@ export class ClimaxWorld {
       const y = c.baseY(z) + STRING_H;
       for (let j = 0; j < per; j++) {
         const v = (j + 0.5) / per;
-        const k = 1.2 + 0.4 * Math.sin(Math.PI * v);
-        this.lanterns.put(c.centerX(z) + (v * 2 - 1) * hw, y - 0.7 - 1.1 * Math.sin(Math.PI * v), z, null, k, k, k, lit ? WHITE_GOLD : LIGHT, lum);
+        const k = 1.9 + 0.6 * Math.sin(Math.PI * v);
+        this.lanterns.put(c.centerX(z) + (v * 2 - 1) * hw, y - 0.7 - 1.1 * Math.sin(Math.PI * v), z, null, k, k, k, lit ? WHITE_GOLD : LIGHT, lum * 1.6);
       }
       if (lit && Math.abs(z - s.z) < 80) pushLocalLight(c.centerX(z), y - 3, -z, 1, 0.85, 0.55, 15, Math.min(1.5, lum * 0.6));
     }
@@ -126,7 +126,7 @@ export class ClimaxWorld {
     if (s.z > cx.lineZ - 420 && s.z < cx.lineZ + 60) {
       const h = 18 + 46 * rise;
       for (const side of [-1, 1]) {
-        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, 0.25 + 0.75 * rise + flare, GLOW_SOFT, ctx.low ? 0.09 : 0.06);
+        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, 0.5 + 1.1 * rise + flare, GLOW_SOFT, 0.1);
         kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, 0.8 + rise + 1.5 * flare, GLOW_STAR);
       }
       kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, 0.5 + 0.9 * rise + 1.5 * flare, DECAL_LINE, Math.PI / 2);

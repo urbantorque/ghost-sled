@@ -38,8 +38,10 @@ const EMBER = new Color('#FF8A3A');
 const HOT = new Color('#FFD9A0');
 const ICE = new Color('#CFE6FF');
 const ROSE = new Color('#FFB7C9');
-const BRONZE = new Color('#C98A3C');
+const BRONZE = new Color('#F0B050');
 const DIM = new Color('#8A5A3A');
+const MUTE = new Color('#B48A5E');
+const BLOOM = new Color('#FF6FA8');
 const INK = new Color('#2A2D48');
 const PETALS: readonly Color[] = [new Color('#FFC9DA'), new Color('#FFE3EC'), new Color('#FF9DBB')];
 
@@ -146,7 +148,7 @@ export class VerbWorld {
 
   constructor(private readonly kit: MomentKit) {
     this.lanterns = kit.pool(lanternGeo(8), 150, kit.lit);
-    this.bells = kit.pool(bellGeo(10), 40);
+    this.bells = kit.pool(bellGeo(10), 40, kit.lit);
     this.ropes = kit.pool(box(0.07, 1, 0.07, INK, [0, -0.5, 0]), 120);
     this.wheels = kit.pool(wheelGeo(), 6, kit.lit);
   }
@@ -191,7 +193,7 @@ export class VerbWorld {
     for (const l of this.looks) {
       l.st.fill(0);
       l.at.fill(0);
-      l.p.gates.forEach((g, i) => (l.gx[i] = g.x));
+      l.p.gates.forEach((g, i) => (l.gx[i] = gateX(g, 0)));
       l.seen = 0;
       l.mask = 0;
       l.doneAt = 0;
@@ -226,19 +228,18 @@ export class VerbWorld {
       const pairs = p.speed >= 46 ? [lip - 3, lip - 19] : [lip - 3];
       for (const z of pairs) {
         for (const side of [-1, 1]) {
-          const x = edge(z, side, 2.1);
+          // (A slim iron mast with a bowl a flame: a torch stand, never a wall beside the run.)
+          const x = edge(z, side, 2.6);
           const y = c.ground(x, z) - 0.6;
-          for (let k = 0; k < 5; k++) {
-            out.push(box(1.7 - k * 0.14, 1.5, 1.7 - k * 0.14, shade(rock, 1 + (k % 2) * 0.25), [x + ((k * 7) % 3) * 0.06, y + 0.75 + k * 1.5, -z], [0, k * 0.5, 0]));
-            out.push(box(0.9, 0.16, 0.5, iron, [x - side * 0.95, y + 1.2 + k * 1.5, -z]));
-          }
+          out.push(seg([x, y, -z], [x, y + 9.2, -z], 0.12, iron, 5));
+          for (let k = 0; k < 5; k++) out.push(box(0.8, 0.14, 0.8, shade(iron, 1.3), [x, y + 1.5 + k * 1.5, -z], [0, 0.6, 0]));
         }
       }
       for (const side of [-1, 1]) {
         for (let k = 0; k < 3; k++) {
           const z = p.far + (k - 1) * 5;
           const x = edge(z, side, 1.4);
-          out.push(box(0.9, 0.9, 0.9, rock, [x, c.ground(x, z) + 0.3, -z], [0, 0.6, 0]), box(1.1, 0.14, 1.1, iron, [x, c.ground(x, z) + 0.8, -z]));
+          out.push(seg([x, c.ground(x, z) - 0.4, -z], [x, c.ground(x, z) + 1.1, -z], 0.1, iron, 5), box(0.9, 0.14, 0.9, shade(rock, 1.6), [x, c.ground(x, z) + 1.1, -z], [0, 0.6, 0]));
         }
       }
     } else if (p.verb === 'collapse') {
@@ -341,6 +342,11 @@ export class VerbWorld {
     }
   }
 
+  /** A paper lantern: half as large again as its form and bright enough to be the light in a day frame. */
+  private lan(x: number, y: number, z: number, q: Quaternion | null, sx: number, sy: number, sz: number, col: Color, lum: number): void {
+    this.lanterns.put(x, y, z, q, sx * 1.45, sy * 1.45, sz * 1.45, col, lum * 1.7);
+  }
+
   private stamp(x: number, z: number, t: number): void {
     if (this.stamps.length >= 8) this.stamps.shift();
     this.stamps.push({ x, z, t });
@@ -427,10 +433,10 @@ export class VerbWorld {
       const gx = l.gx[i];
       const y0 = c.ground(gx, g.z);
       const next = i === nextI;
-      let lum = next ? breathe + 0.3 : 0.62;
+      let lum = next ? breathe : 0.75;
       let col = LIGHT;
       if (st === 1) {
-        lum = age < 0.25 ? 2.4 : Math.max(0, 1.7 * (1 - (age - 0.25) / 0.9));
+        lum = age < 0.25 ? 1.5 : Math.max(0, 1.3 * (1 - (age - 0.25) / 0.9));
         col = WHITE_GOLD;
       } else if (st === -1) {
         lum = 0.2;
@@ -468,23 +474,23 @@ export class VerbWorld {
           if (t > 7.5) continue;
           const lx = ex + side * t * (0.3 + 0.15 * j) - a * 0.25 * (j + 1);
           const ly = ey - 0.62 - j * 1.0 + t * (2 + t * 0.55);
-          const k2 = (1.5 - j * 0.16) * (per === 2 ? 1.25 : 1);
-          this.lanterns.put(lx, ly, g.z, null, k2, k2, k2, col, st === 1 ? Math.max(0.9, lum) : lum);
+          const k2 = (1.7 - j * 0.16) * (per === 2 ? 1.25 : 1);
+          this.lan(lx, ly, g.z, null, k2, k2, k2, col, st === 1 ? Math.max(0.9, lum) : lum);
         }
         if (lum > 0.3) kit.glow(ex, ey - 1.6, g.z, 4.2, col, 0.22 * lum, GLOW_SOFT, 0.6);
       }
       // Its light on the snow in the opening; the next gate is called with a chevron.
-      kit.decal(c, gx, g.z, 2 * g.hw + 1.6, 4.4, col, 0.9 * Math.min(1.6, lum));
-      if (next && g.z > s.z + 6) kit.decal(c, gx, g.z - 7, 2.6, 3.4, WHITE_GOLD, 0.8 * breathe, DECAL_CHEVRON);
-      if (st === 1 && age < 0.9) kit.glow(gx, y0 + 2.6, g.z, 5 + age * 16, WHITE_GOLD, 1.2 * (1 - age / 0.9), GLOW_RING);
-      if (swing && st === 0 && !ctx.low) kit.decal(c, g.x, g.z, 0.5, 2 * g.amp + 2 * g.hw, LIGHT, 0.28, DECAL_LINE, Math.PI / 2);
+      kit.decal(c, gx, g.z, 2 * g.hw + 2, 6, col, Math.min(1.5, lum));
+      if (next && g.z > s.z + 6) kit.decal(c, gx, g.z - 8, 4, 5.5, WHITE_GOLD, breathe, DECAL_CHEVRON);
+      if (st === 1 && age < 0.7 && g.z > s.z + 4) kit.glow(gx, y0 + 2.6, g.z, 4 + age * 8, WHITE_GOLD, 0.6 * (1 - age / 0.7), GLOW_RING);
+      if (swing && st === 0 && !ctx.low) kit.decal(c, g.x, g.z, 1, 2 * g.amp + 2 * g.hw, LIGHT, 0.55, DECAL_LINE, Math.PI / 2);
       // Gates that sit: a faint line on the snow from one opening to the next, so the pattern reads (turn
       // about, or two and two).
       if (!swing && st === 0 && i + 1 < p.gates.length && g.z > s.z - 4 && linked < (ctx.low ? 2 : 4)) {
         const h = p.gates[i + 1];
         const dx = h.x - g.x;
         const dz = h.z - g.z;
-        kit.decal(c, g.x + dx / 2, g.z + dz / 2, 0.7, Math.hypot(dx, dz) - 4, LIGHT, linked === 0 ? 0.5 : 0.3, DECAL_LINE, Math.atan2(dx, dz));
+        kit.decal(c, g.x + dx / 2, g.z + dz / 2, 1.3, Math.hypot(dx, dz) - 4, LIGHT, linked === 0 ? 1 : 0.6, DECAL_LINE, Math.atan2(dx, dz));
         linked++;
       }
       if (lum > 0.05 && Math.abs(g.z - s.z) < 95) pushLocalLight(gx, y0 + 3.6, -g.z, col.r, col.g * 0.8, col.b * 0.5, 9 + g.hw * 1.6, Math.min(1.6, lum * 0.75));
@@ -519,31 +525,29 @@ export class VerbWorld {
       const wide = Math.min(t.hw, 5.2);
       const swingA = rung && !ctx.reduced ? 0.95 * Math.exp(-1.1 * age) * Math.sin(7.5 * age) : 0;
       q1.setFromAxisAngle(AXIS_X, swingA);
-      const col = rung ? WHITE_GOLD : missed ? DIM : BRONZE;
-      const lum = rung ? 1.2 + 1.6 * Math.exp(-2 * age) : missed ? 0.45 : next ? 1.15 : 0.9;
+      const col = rung ? WHITE_GOLD : missed ? MUTE : BRONZE;
+      const lum = rung ? 1.3 + 0.9 * Math.exp(-2 * age) : missed ? 0.8 : next ? 1.5 : 1.15;
       this.ropes.put(t.x, wy, t.z, null, 1, wy - by, 1, null);
-      this.bells.put(t.x, by, t.z, q1, 1.5, 1.5, 1.5, col, lum);
+      this.bells.put(t.x, by + 1.9, t.z, q1, 3, 3, 3, col, lum);
       // A bar of small bells either side, as wide as the sled may pass under (they shatter when it rings).
       if (!rung) {
-        q2.setFromAxisAngle(AXIS_Z, Math.PI / 2);
-        this.ropes.put(t.x - wide, by + 0.2, t.z, q2, 1.4, 2 * wide, 1.4, null);
         const n = ctx.low ? 2 : 4;
         for (let k = 0; k < n; k++) {
           const u = ((k + 0.5) / n) * 2 - 1;
           if (Math.abs(u * wide) < 0.9) continue;
-          this.bells.put(t.x + u * wide, by + 0.2, t.z, null, 0.5, 0.5, 0.5, col, lum * 0.9);
+          this.bells.put(t.x + u * wide, by + 0.9, t.z, null, 0.9, 0.9, 0.9, col, lum * 0.9);
+          this.ropes.put(t.x + u * wide, wy, t.z, null, 0.5, wy - by - 0.9, 0.5, null);
         }
-        for (const side of [-1, 1]) this.ropes.put(t.x + side * wide, wy, t.z, null, 0.7, wy - by - 0.2, 0.7, null);
       }
       if (next) {
         kit.glow(t.x, by - 0.9, t.z, 4.6, HOT, 0.5 * breathe, GLOW_SOFT);
-        kit.decal(c, t.x, t.z, 2 * wide, 5, HOT, 0.7 * breathe, DECAL_RING);
+        kit.decal(c, t.x, t.z, 2 * wide, 7, HOT, 1.1 * breathe, DECAL_RING);
         // How high: a thread of light from the snow to the bell's mouth.
         kit.glow(t.x, y0 + (t.h + 1.2) / 2, t.z, t.h + 1.2, HOT, 0.35, GLOW_SOFT, 0.1);
       } else if (!rung && !missed) kit.decal(c, t.x, t.z, 2 * wide, 4, BRONZE, 0.35);
       if (rung && age < 1.4) {
-        kit.glow(t.x, by - 0.8, t.z, 4 + age * 22, WHITE_GOLD, 1.5 * (1 - age / 1.4), GLOW_RING);
-        kit.glow(t.x, by - 0.8, t.z, 7, WHITE_GOLD, 1.2 * (1 - age / 1.4), GLOW_STAR);
+        kit.glow(t.x, by - 0.8, t.z, 4 + age * 14, WHITE_GOLD, 0.8 * (1 - age / 1.4), GLOW_RING);
+        kit.glow(t.x, by - 0.8, t.z, 6, WHITE_GOLD, 0.8 * (1 - age / 1.4), GLOW_STAR);
       }
       if (Math.abs(t.z - s.z) < 110 && !missed) pushLocalLight(t.x, by - 1, -t.z, 1, 0.82, 0.5, rung ? 22 : 11, rung ? 0.5 + 2 * Math.exp(-2.5 * age) : next ? 0.9 : 0.4);
     }
@@ -579,17 +583,17 @@ export class VerbWorld {
     if (s.z < lip + 160) {
       for (const z of pairs) {
         for (const side of [-1, 1]) {
-          const x = c.centerX(z) + side * (c.halfWidth(z) + 2.1) - side * 1.25;
-          const y = c.ground(x + side * 1.25, z) + 0.9;
+          const x = c.centerX(z) + side * (c.halfWidth(z) + 2.6);
+          const y = c.ground(x, z) + 0.9;
           for (let j = 0; j < jets; j++) {
             const lit = k * jets > j + 0.02;
             const top = j === jets - 1;
             const jy = y + j * (7.5 / jets);
             const boost = l.roar && age >= 0 && age < 1.6 ? 1 + 2.2 * (1 - age / 1.6) : 1;
-            if (lit) kit.glow(x, jy + 0.7 * boost, z, (top && hot ? 2.6 : 1.9) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.2 : 1.5) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
-            else kit.glow(x, jy + 0.2, z, 0.7, EMBER, 0.35, GLOW_SOFT);
+            if (lit) kit.glow(x, jy + 1.0 * boost, z, (top && hot ? 4 : 2.9) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.2 : 1.5) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
+            else kit.glow(x, jy + 0.55, z, 1.7, EMBER, 0.95, GLOW_FLAME, 0.7);
           }
-          if (k > 0.1) kit.glow(x, y + 3.5, z, 11, hot ? HOT : EMBER, 0.2 + 0.25 * k, GLOW_SOFT, 0.5);
+          kit.glow(x, y + 3.5, z, 11, hot ? HOT : EMBER, 0.22 + 0.3 * k, GLOW_SOFT, 0.5);
         }
         if (Math.abs(z - s.z) < 120) pushLocalLight(c.centerX(z), c.baseY(z) + 4, -z, 1, 0.55, 0.22, 26, (0.5 + 1.3 * k) * (l.roar && age < 1.2 ? 2 : 1));
       }
@@ -597,10 +601,10 @@ export class VerbWorld {
       if (s.z < lip && !over) {
         for (let j = 0; j < 3; j++) {
           const z = lip - 9 - j * 9;
-          if (z > s.z + 3) kit.decal(c, c.safeX(z), z, 3.2, 4, hot ? WHITE_GOLD : EMBER, (0.35 + 0.9 * k) * (j === 0 ? breathe * 0.8 : 0.8), DECAL_CHEVRON);
+          if (z > s.z + 3) kit.decal(c, c.safeX(z), z, 5, 6, hot ? WHITE_GOLD : EMBER, (0.5 + 0.9 * k) * (j === 0 ? breathe * 0.8 : 0.8), DECAL_CHEVRON);
         }
       }
-      if (l.roar && age >= 0 && age < 1.2) kit.glow(c.centerX(lip), c.baseY(lip) + 4, lip, 10 + age * 40, HOT, 1.6 * (1 - age / 1.2), GLOW_RING, 1.6);
+      if (l.roar && age >= 0 && age < 1.2) kit.glow(c.centerX(lip), c.baseY(lip) + 4, lip, 10 + age * 30, HOT, 0.8 * (1 - age / 1.2), GLOW_RING, 1.6);
     }
     // The far line: braziers either side and a line of fire across the shelf. Won, it flares.
     if (s.z > p.far - 260) {
@@ -613,7 +617,7 @@ export class VerbWorld {
         for (let j = 0; j < 3; j++) {
           const z = p.far + (j - 1) * 5;
           const x = c.centerX(z) + side * (hw + 1.4);
-          kit.glow(x, c.ground(x, z) + 1.6, z, j === 1 ? 2.4 : 1.7, col, lum * 1.3, GLOW_FLAME, 0.7);
+          kit.glow(x, c.ground(x, z) + 2.4, z, j === 1 ? 3.6 : 2.6, col, lum * 1.3, GLOW_FLAME, 0.7);
         }
       }
       if (Math.abs(p.far - s.z) < 120) pushLocalLight(c.centerX(p.far), c.baseY(p.far) + 2, -p.far, 1, 0.6, 0.3, 20, Math.min(2, lum));
@@ -643,7 +647,7 @@ export class VerbWorld {
       for (const side of [-1, 1]) {
         const x = c.centerX(z) + side * (c.halfWidth(z) + 0.7);
         const y = c.ground(x, z) + 2.75;
-        this.lanterns.put(x, y, z, null, 0.9, 0.9, 0.9, near && active ? WHITE_GOLD : ICE, lum);
+        this.lan(x, y, z, null, 1.1, 1.1, 1.1, near && active ? WHITE_GOLD : ICE, lum);
         if (!ctx.low) kit.glow(x, y, z, 2.6, ICE, 0.25 * lum, GLOW_SOFT);
       }
     }
@@ -702,7 +706,7 @@ export class VerbWorld {
       // The machine's own light: seen far down the bank, hot while it leads, pale once it is behind or caught.
       const col = caught ? WHITE_GOLD : k === 1 ? ROSE : warm;
       const lum = caught ? 0.5 + 2 * Math.max(0, 1 - age) : lead ? 0.6 : active ? breathe : 1;
-      kit.glow(v1.x, v1.y - 2.4, z, 8.5, col, 0.34 * lum, GLOW_SOFT);
+      kit.glow(v1.x, v1.y - 2.4, z, 10, col, 0.5 * lum, GLOW_SOFT);
       kit.glow(v1.x, v1.y - 0.9, z, 2.6, WHITE_GOLD, 1.1 * lum, GLOW_STAR);
       if (caught && age < 1) kit.glow(v1.x, v1.y - 2.4, z, 5 + age * 18, WHITE_GOLD, 1.4 * (1 - age), GLOW_RING);
     }
@@ -726,7 +730,7 @@ export class VerbWorld {
     for (let j = 0; j < 3; j++) {
       const lit = p.lead > 30 ? false : p.lead < 0 ? !active || ticks < 20 : gap > 30 * (2 - j);
       const y = v1.y - 0.9 - j * 0.7;
-      kit.glow(v1.x - p.side * 1.2, y, zs - 0.3, lit ? 1.5 : 0.6, lit ? (p.lead < 0 ? WHITE_GOLD : LIGHT) : DIM, lit ? 1.8 : 0.5, lit ? GLOW_STAR : GLOW_SOFT);
+      kit.glow(v1.x - p.side * 1.2, y, zs - 0.3, lit ? 2.6 : 1, lit ? (p.lead < 0 ? WHITE_GOLD : LIGHT) : DIM, lit ? 1.8 : 0.5, lit ? GLOW_STAR : GLOW_SOFT);
     }
   }
 
@@ -751,7 +755,7 @@ export class VerbWorld {
         if (z < s.z + 3) continue;
         const u = Math.min(1, (j * 10 + 7) / 44);
         const x = x0 + (c.safeX(z) - x0) * u * u;
-        kit.decal(c, x, z, 3, 3.8, LIGHT, j === 0 ? breathe * 0.9 : 0.7, DECAL_CHEVRON);
+        kit.decal(c, x, z, 5, 6, LIGHT, j === 0 ? breathe : 0.9, DECAL_CHEVRON);
       }
       // The high line is flown off a pop: the lip is marked where to spring.
       if (high) {
@@ -777,7 +781,7 @@ export class VerbWorld {
         if (z < s.z - 10) continue;
         // (A little lift mid-span, so three straight spans read as one arc.)
         const y = ay + (r.y - ay) * u + (high ? 1.1 : 0.7) * Math.sin(Math.PI * u);
-        kit.glow(ax + (r.x - ax) * u, y, z, flown ? 0.5 : next ? 0.85 : 0.6, flown && took ? WHITE_GOLD : LIGHT, flown ? 0.5 : next ? 1.5 * breathe : 0.9, GLOW_SOFT);
+        kit.glow(ax + (r.x - ax) * u, y, z, flown ? 0.9 : next ? 1.6 : 1.2, flown && took ? WHITE_GOLD : LIGHT, flown ? 0.6 : next ? 1.3 * breathe : 1, GLOW_SOFT);
       }
       ax = r.x;
       ay = r.y;
@@ -805,7 +809,7 @@ export class VerbWorld {
           const z = zc - len / 2 + u * len;
           const x = c.safeX(z) + dir * 5.5 * Math.sin(Math.PI * u);
           const yaw = Math.atan2((dir * 5.5 * Math.PI * Math.cos(Math.PI * u)) / len, 1);
-          kit.decalAt(x, c.ground(x, z) + 0.07, z, 0.9, len / n + 0.6, ICE, 0.55 + 0.25 * Math.sin(Math.PI * u), DECAL_LINE, yaw);
+          kit.decalAt(x, c.ground(x, z) + 0.07, z, 1.6, len / n + 0.6, WHITE_GOLD, 0.8 + 0.3 * Math.sin(Math.PI * u), DECAL_LINE, yaw);
         }
       }
     }
@@ -845,7 +849,7 @@ export class VerbWorld {
       const m = this.scribe[i];
       if (m.z < s.z - 150) continue;
       const head = i > this.scribe.length - 6 && drifting;
-      kit.decalAt(m.x, c.ground(m.x, m.z) + 0.07, m.z, 0.8, 2.3, col, head ? lum * 1.5 : lum, DECAL_LINE, m.yaw);
+      kit.decalAt(m.x, c.ground(m.x, m.z) + 0.07, m.z, 1.4, 2.3, col, head ? lum * 1.5 : lum, DECAL_LINE, m.yaw);
       if (head && !ctx.low) kit.glow(m.x, c.ground(m.x, m.z) + 0.3, m.z, 0.9, WHITE_GOLD, 0.9, GLOW_STAR);
     }
   }
@@ -857,7 +861,7 @@ export class VerbWorld {
     const c = ctx.course;
     const p = l.p;
     const stair = p.steps.length > 0;
-    const per = ctx.low ? 3 : 5;
+    const per = ctx.low ? 3 : stair ? 7 : 5;
     const done = l.doneAt > 0 ? ctx.time - l.doneAt : -1;
     const share = p.need > 0 ? Math.min(1, l.seen / p.need) : 0;
     let nextArch = -1;
@@ -870,8 +874,8 @@ export class VerbWorld {
       const y = Math.max(c.ground(xa, z), c.ground(xb, z), c.baseY(z)) + 6.4;
       // An arch's light: on the stair, its own stomp; down a street, the count so far, arriving as a wave
       // that runs on ahead of the sled.
-      let lum = 0.5;
-      let col = stair ? ROSE : LIGHT;
+      let lum = stair ? 0.75 : 0.5;
+      let col = stair ? BLOOM : LIGHT;
       if (stair) {
         if (l.st[i] === 1) {
           const age = ctx.time - l.at[i];
@@ -892,7 +896,7 @@ export class VerbWorld {
         const u = (j + 0.5) / per;
         const sag = 0.9 * Math.sin(Math.PI * u);
         const k = 1.15 + 0.35 * Math.sin(Math.PI * u);
-        this.lanterns.put(xa + (xb - xa) * u, y - 0.75 - sag, z, null, k, k, k, col, lum);
+        this.lan(xa + (xb - xa) * u, y - 0.75 - sag, z, null, k, k, k, col, lum);
       }
       if (lum > 0.8 && !ctx.low) kit.glow((xa + xb) / 2, y - 1.4, z, 5, col, 0.16 * lum, GLOW_SOFT, 3);
       // In a row: one garland ties each arch to the next, so a row is seen before it is ridden.
@@ -907,13 +911,13 @@ export class VerbWorld {
         this.ropes.put(xm, y, z, q2, 0.8, len, 0.8, null);
         for (let j = 1; j <= 3; j++) {
           const u = j / 4;
-          this.lanterns.put(xm + (xm2 - xm) * u, y + (y2 - y) * u - 0.6 - 0.5 * Math.sin(Math.PI * u), z + (z2 - z) * u, null, 0.8, 0.8, 0.8, col, lum);
+          this.lan(xm + (xm2 - xm) * u, y + (y2 - y) * u - 0.6 - 0.5 * Math.sin(Math.PI * u), z + (z2 - z) * u, null, 0.8, 0.8, 0.8, col, lum);
         }
       }
       // The tread under a stair's arch: where a stomp lands.
       if (stair && !over && l.st[i] !== 1) {
         const tz = z + 11;
-        kit.decal(c, c.safeX(tz), tz, 6.5, 6.5, ROSE, i === nextArch ? 0.9 * breathe : 0.4, DECAL_RING);
+        kit.decal(c, c.safeX(tz), tz, 7.5, 7.5, new Color('#FF7EB2'), i === nextArch ? breathe : 0.6, DECAL_RING);
       }
       if (Math.abs(z - s.z) < 90 && lum > 0.6) pushLocalLight((xa + xb) / 2, y - 2, -z, 1, 0.8, stair ? 0.7 : 0.5, 13, Math.min(1.6, lum * 0.6));
     }
@@ -946,7 +950,7 @@ export class VerbWorld {
         q2.setFromAxisAngle(AXIS_Z, turn);
         q1.multiply(q2);
       } else q1.setFromAxisAngle(AXIS_Z, -turn);
-      this.wheels.put(x, y, z, q1, 2.5, 2.5, 2.5, col, lum);
+      this.wheels.put(x, y, z, q1, 3.6, 3.6, 3.6, col, lum * 1.3);
       kit.glow(x, y, z, 7, kinds[k] === 0 ? ROSE : WHITE_GOLD, 0.22 * lum, GLOW_SOFT);
       if (over && l.won && done < 1.2) kit.glow(x, y, z, 5 + done * 14, WHITE_GOLD, 1.3 * (1 - done / 1.2), GLOW_RING);
       if (Math.abs(z - s.z) < 90) pushLocalLight(x, y - 1, -z, 1, 0.8, 0.78, 14, 0.6 * lum);

@@ -1,4 +1,4 @@
-import { AdditiveBlending, type BufferGeometry, Color, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { type BufferGeometry, Color, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
 import type { Sim } from '../sim/sim';
@@ -127,11 +127,14 @@ export function litMaterial(): ShaderMaterial {
   });
 }
 
+// (Both of the kit's own materials are premultiplied and cover a part of what is behind them: pure added
+// light is lost on sunlit snow and on a bright sky, where half of a run is ridden. At night the cover is
+// nothing and they are light.)
 function glowMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
+    premultipliedAlpha: true,
     uniforms: { uTime: shared.uTime },
     vertexShader: /* glsl */ `
       attribute vec4 aCenter;
@@ -180,7 +183,8 @@ function glowMaterial(): ShaderMaterial {
           float body = max(0.0, 1.0 - x * x) * smoothstep(-1.0, -0.6, vP.y) * max(0.0, 1.0 - max(vP.y, 0.0));
           a = body * body * 1.3 + exp(-dot(vP - vec2(0.0, -0.45), vP - vec2(0.0, -0.45)) * 9.0) * 0.6;
         }
-        gl_FragColor = vec4(vTint.rgb * a, 1.0);
+        a = min(a, 1.6);
+        gl_FragColor = vec4(vTint.rgb * a, min(1.0, a) * 0.5);
       }
     `,
   });
@@ -190,10 +194,12 @@ function decalMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
+    premultipliedAlpha: true,
     polygonOffset: true,
-    polygonOffsetFactor: -2,
-    polygonOffsetUnits: -4,
+    // (The drawn snow is a mesh and c.ground() is the surface it samples: between its vertices a mark must
+    // be pulled well toward the lens or the slope buries it.)
+    polygonOffsetFactor: -6,
+    polygonOffsetUnits: -14,
     vertexShader: /* glsl */ `
       attribute float aKind;
       varying vec2 vUv;
@@ -239,7 +245,8 @@ function decalMaterial(): ShaderMaterial {
           float w = max(0.0, sin(r * 9.42)) ;
           a = w * w * edge * 0.9;
         }
-        gl_FragColor = vec4(vCol * a, 1.0);
+        a = min(a, 1.4);
+        gl_FragColor = vec4(vCol * a, min(1.0, a) * 0.8);
       }
     `,
   });
@@ -332,7 +339,7 @@ export class MomentKit {
 
   /** A mark of light on the snow at a sim-frame place, `w` across and `len` down the run, turned by `yaw`
    *  (radians from down the run toward +x) and tilted to the slope under it. */
-  decal(c: Course, x: number, z: number, w: number, len: number, col: Color, lum = 1, kind = DECAL_POOL, yaw = 0, lift = 0.1): void {
+  decal(c: Course, x: number, z: number, w: number, len: number, col: Color, lum = 1, kind = DECAL_POOL, yaw = 0, lift = 0.3): void {
     if (this.nDecal >= this.decalCap || !(lum > 0.004)) return;
     const sy = Math.sin(yaw);
     const cy = Math.cos(yaw);
