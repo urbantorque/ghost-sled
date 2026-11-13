@@ -1,7 +1,7 @@
 # Round 7, the light lane: notes for the main lane to fold in
 
 Branch `r7-light`, cut from `round-7` at e503f1e. Render only: nothing in `src/sim` or `src/bot`.
-(Kept up to date as the work lands; the last section says what is still open.)
+(The last sections say what is still open and where the frames are.)
 
 ## Decisions (numbered from L1; renumber as you fold them in)
 
@@ -115,6 +115,65 @@ L13. **The review pass: what the first full frame set showed, and what changed**
       light's colour, and at dusk that is orange. A colour with a hue of its own now keeps it up the
       curve; only what is near white takes the light's colour. Marigold is the lantern's again.
 
+    - *Ember's halls had a grey veil* (3450 m, in the baseline too). Two causes. The air's forward
+      scatter used the sun's colour at full strength however dim the disc was, so a pale sun behind
+      smoke lay over a dark hall as grey: the scatter now scales with the disc (`0.25 + 0.75 * sunDisc`,
+      materials.ts; this touches every mood with a dim or hidden disc, the chaos moods included, and
+      they have not been re-shot). And the dusk light was a pale peach on a dusk-rose snow, which is
+      mauve-grey: from 2700 m the light is ember (#FFB490, #FFB89C at night) on a pale snow.
+    - Sakura's clear frame (blue sky, blue far plane) now arrives by 2450 m, at the Blossom Leap, where
+      it arrived at 2700.
+
+L14. **Air with depth was already in (L6); nothing new was added for it.** Height fog below the course's
+    floor, the sun's scatter in it, the far colour, and the valley mist layers all read in the final
+    frames (Pinecrest 707 and 3940, Sakura 2580). No volumetric pass was added: that is the pipe lane's.
+
+## Text to fold into ART.md 15
+
+- Under "The filmic finish": *A colour with a hue of its own keeps it up the curve: only what is already
+  near white takes the light's colour, so marigold, mint and vermillion never fold into a dusk's orange.*
+- Under Ember's colour script: *The snow's own colour stays a warm white from the start line to the forge
+  town; the light carries the orange, once. From the Basalt Halls on the light is ember, and the ash is
+  an ember red that stands off the lens and never cools to grey.*
+- Under Sakura's colour script: *The morning is rose, not yellow. Shafts are thin over open snow and full
+  only under blossom. From the Blossom Leap the sky sits a full step under the snow and the far plane is
+  blue.*
+- Under Frostfang's colour script: *The night has three hues on the ground: moon-pale steel where the
+  snow is lit, violet in its shade, the aurora's green across both and on the crests of the ice. A slot
+  in the ice is the dark of its frame. Cobalt belongs to the ice walls.*
+- Under rule 5: *A place's row is keyed to the course's sections (kind, and which of that kind), never to
+  metres, so a Daily's shuffled acts carry their places with them.*
+
+## Cost (measured, headless Chrome on the laptop's GPU, the fixed frame set at 30 m/s)
+
+Mean draw calls and triangles a frame over a mountain's 34 to 37 frames, round 6's build (the baseline in
+`shots/r7/before`) against this branch (`shots/r7/light/final`). Every number is from `renderer.info`
+summed over the frame's passes. No console error or page error in any of the 16 runs.
+
+| Tier | Pinecrest | Frostfang | Ember | Sakura |
+| --- | --- | --- | --- | --- |
+| High, before | (report unreadable) | 94 calls, 824k | 93, 703k | 94, 942k |
+| High, after | 94, 1013k | 94, 831k | 94, 704k | 94, 947k |
+| Medium, before | 87, 709k | 90, 579k | 86, 495k | 88, 666k |
+| Medium, after | 87, 713k | 90, 583k | 87, 501k | 88, 674k |
+| Low, before | 46, 148k | 49, 141k | 44, 114k | 45, 136k |
+| Low, after | 48, 156k | 52, 150k | 45, 119k | 48, 145k |
+| Phone (Medium), before | 87, 709k | 90, 578k | 86, 492k | 88, 665k |
+| Phone (Medium), after | 87, 711k | 90, 578k | 87, 496k | 88, 670k |
+
+(Ember's "after" row is from the set before its last re-shoot; the lane added no geometry in between.)
+
+**Low reads 2 to 3 calls and 5 to 9 thousand triangles heavier in the set, and that is not this lane.**
+I checked it two ways. (1) The same set on this branch's own base (e503f1e) on Low, Pinecrest: frame for
+frame the two builds match to within 1% until 1900 m, then differ by a steady 4 calls and 12 to 18
+thousand triangles, which is the size of four riders: the two runs had different ghosts in frame (the
+capture teleports the player, not the field). (2) Both builds ridden fresh to 3000 m on Low with every
+visible mesh listed: 49 calls and 137,128 against 137,124 triangles, the same meshes in the same
+groups. So Low draws what it drew. The lane's cost on Low is in the snow's fragment shader (the local
+light loop over at most four lights, and the slab's colour); on Medium and High it is the same loop over
+eight, the slab's and the strata's noise, and nothing in draw calls. **Frame time was not measured**:
+seven lanes share the machine and the rules say not to conclude on frames a second from a lane's runs.
+
 ## Touched outside my files
 
 - `src/render/world.ts` (the pipe lane's): three small edits, each marked "Round 7, the light lane".
@@ -124,7 +183,35 @@ L13. **The review pass: what the first full frame set showed, and what changed**
   material takes `stone: true`.
 - `src/render/marqueeworld.ts` (unowned): two `pushLocalLight` calls (gates, machines).
 
-## Still open (updated as I go)
+## Still open, and what the main lane must wire or decide
 
-- Lights pushed from the world's sources, the snow's surface, rock and ice, the far planes, Low's poster,
-  the full frame sets and the cost table.
+- **Frostfang from 900 to 2400 m is better and is still a blue mountain.** The slots now have a dark
+  floor, lit crests and a lit valley beyond, and the open fields have violet shade and the aurora's
+  green, but a ravine's walls are large cobalt planes and no grade makes them three values. The fx
+  lane's rock forms and the pipe lane's occlusion are what will finish it; re-read 975 to 1195 and 2250
+  to 2405 after the merge.
+- **Sakura 2410 to 2700 is soft, not paper.** The snow has a lavender shade and the blossom is a deeper
+  rose, but the darks there are few (the frame is a wide over orchards). If it still reads thin after
+  the merge, the lever is `tallDark` and the leap's `grade.contrast` in `PLACES.blossom`.
+- **Ember's rider on firelit snow.** Vermillion on a terracotta slope at dusk (4050 to 4330) is the
+  closest the hero's colour comes to its ground anywhere. The navy coat holds the figure; the hero
+  lane's rim should be checked there after the merge. The night light was pulled a step paler
+  (#FFB89C) for this.
+- **The Caldera Leap is lit from below in its grade, and the lava lake itself is thin in the frame**
+  (2441): the lake is the moments and fx lanes' geometry. The 85 m light in the gap is in place.
+- **This branch is behind `round-7`** (pipe, hero, fx and moments have merged since e503f1e).
+  `world.ts` will conflict: keep theirs and re-apply the three marked edits listed above. The pipe
+  lane's depth-aware shafts replace the composite's fan; `grade.shafts` per place should then be
+  re-tuned (Sakura's were cut to 0.35, 0.75 in the orchards and 0.3 after, against the old fan).
+- **Chaos moods were not re-shot** after the scatter change and the film curve's hue guard. Both are
+  small on a mood with a full disc; Lantern Night, Blizzard and the night moods want a look.
+- Fireworks and spirit effects do not push local lights yet (the fx lane's call: `pushLocalLight`).
+- A stray folder `C:/c` holds copies of one capture's frames (a path the capture tool resolved
+  wrongly on its first run). It is safe to delete; I was not permitted to.
+
+## Frames
+
+`C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r7/light/final/{high,medium,low,phone-medium}`:
+the fixed set, 146 frames a tier, with each run's report beside it (`<tier>-m<n>.json`: calls,
+triangles, errors). `shots/r7/light/v1/high` is the set before the review pass, for comparison;
+`v2` holds key frames from the middle of it.
