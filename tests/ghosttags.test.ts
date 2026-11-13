@@ -8,16 +8,15 @@ import { IDLE_FEEL, type Beat, type GhostRef } from '../src/game/beats';
 
 const ref = (id: number, kind: GhostRef['kind'] = 'pool'): GhostRef => ({ id, name: `G${id}`, kind, dx: 0 });
 
-/** The tag state beats() reads and writes, without the DOM the constructor builds. */
+/** The tag state beats() reads and writes, without the canvas the constructor builds. */
 function visuals(ids: number[]) {
-  const removed: number[] = [];
   const items = ids.map((id) => ({
     id,
     callT: 0,
     wreckT: 0,
     stompT: 0,
     trickT: 0,
-    kw: { remove: () => removed.push(id) },
+    kw: 'grudge',
     kwOff: false,
     tag: {
       w: 64,
@@ -33,12 +32,12 @@ function visuals(ids: number[]) {
       ts: -1e9,
       scale: 1,
       op: '0',
-      el: { classList: { contains: () => false, toggle: () => false }, style: {} as Record<string, string> },
+      art: { form: 'ghost', sub: 'grudge' as string | null },
     },
   }));
   const gv = Object.create(GhostVisuals.prototype) as GhostVisuals;
   Object.assign(gv, { items, rivalNow: -1, sinceStamp: Infinity, sinceTrick: Infinity });
-  return { gv, items, removed };
+  return { gv, items };
 }
 
 type MockTag = ReturnType<typeof visuals>['items'][number]['tag'];
@@ -134,15 +133,16 @@ describe('ghost tag beats', () => {
   });
 
   it("a settled grudge drops its tag's word once, and only its own", () => {
-    const { gv, items, removed } = visuals([3, 5]);
+    const { gv, items } = visuals([3, 5]);
     const settled: Beat = { type: 'grudgeSettled', tick: 0, ghost: ref(3, 'grudge'), nemesis: false, after: 2, paid: 5 };
     gv.beats([settled], IDLE_FEEL);
-    expect(removed).toEqual([3]);
+    expect(items[0].tag.art.sub).toBeNull();
     expect(items[0].kwOff).toBe(true);
     // Measured again on its next placement.
     expect(items[0].tag.w).toBe(0);
     expect(items[1].kwOff).toBe(false);
+    expect(items[1].tag.art.sub).toBe('grudge');
     gv.beats([settled], IDLE_FEEL);
-    expect(removed).toEqual([3]);
+    expect(items[0].kwOff).toBe(true);
   });
 });

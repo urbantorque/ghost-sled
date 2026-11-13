@@ -33,6 +33,8 @@ const LIVE_MS = 30000;
 const RESULT_MS = 1800;
 /** The finish card holds until the results cover it (FINISH_RESULTS_MS). */
 const FINISH_MS = 3400;
+/** A legend's card: about one run in ten has one, so it is given the time to be read whole. */
+const LEGEND_MS = 3600;
 /** Shortest time a banner stays up once shown, even with others waiting. */
 const MIN_MS = 900;
 /** The grudge toast and the grudge pass arrive in the same tick: within this window they merge. */
@@ -93,6 +95,8 @@ type Spec =
   | { type: 'stage'; name: string; time: string; ghost: { text: string; kind: GhostKind } | null; best: string | null }
   /** A marquee moment: its title as it comes up with the line to play, or its score as it is ridden out. */
   | { type: 'marquee'; name: string; line: string; score: string | null; clean: boolean; live?: boolean; won?: boolean }
+  /** A legend moment, as it comes up: the rarest card on the band. */
+  | { type: 'legend'; name: string; line: string }
   | { type: 'finish'; time: string; rank: number; of: number };
 
 interface Banner {
@@ -234,7 +238,12 @@ export class Notices {
     this.push({ spec: { type: 'toast', text, tone: 'unlock', name, sub: 'Ride it from the title', biome }, pri: P_CELEBRATE, key: `t:unlock:${text}`, ms: TOAST_MS + 400, at: performance.now(), el: null, shown: 0, end: 0 });
   }
 
-  /** A stage line crossed: the stage, the clock, and its splits ("1.2 s behind Mila"). */
+  /** A legend moment coming up (about one run in ten): its name over its line, on a card of its own that
+   *  nothing but an event's telegraph hurries. Said once a run. */
+  legend(name: string, line: string): void {
+    this.push({ spec: { type: 'legend', name, line }, pri: P_FINALE, key: `l:${name}`, ms: LEGEND_MS, at: performance.now(), el: null, shown: 0, end: 0 });
+  }
+
   /** A marquee moment's title card, or its score on the way out ("9 of 11 lights · Clean"). */
   marquee(name: string, line: string, score: string | null, clean: boolean): void {
     this.push({ spec: { type: 'marquee', name, line, score, clean }, pri: P_CELEBRATE, key: `m:${name}:${score ? 'out' : 'in'}`, ms: score ? STAGE_MS - 400 : STAGE_MS + 300, at: performance.now(), el: null, shown: 0, end: 0 });
@@ -565,6 +574,12 @@ function render(s: Spec): HTMLElement {
     const mq = h('div', `gs-mq${s.score ? ' is-out' : ''}${s.clean && s.score ? ' is-clean' : ''}${state}`, h('span', 'gs-mq-k', s.name), h('span', 'gs-mq-l', s.score ?? s.line));
     if (s.live || s.won !== undefined) mq.setAttribute('aria-hidden', 'true');
     return mq;
+  }
+  if (s.type === 'legend') {
+    // The word, the name, a hairline that draws out from the middle, and the line. One gesture: the rule.
+    const rule = h('span', 'gs-legend-rule');
+    rule.setAttribute('aria-hidden', 'true');
+    return h('div', 'gs-legend', h('span', 'gs-legend-k', 'Legend'), h('span', 'gs-legend-n', s.name), rule, h('span', 'gs-legend-l', s.line));
   }
   if (s.type === 'stage') {
     const gaps: HTMLElement[] = [];

@@ -988,6 +988,12 @@ export class Director {
           if (m) this.push({ type: 'moment', tick: p.tick, key: m.key, verb: m.verb, phase: e.phase, n: e.n, of: e.of }, sim);
           break;
         }
+        case 'legend': {
+          // The run's legend (src/sim/moments.ts), as the sim plays it: every consumer hears the same beat.
+          const lg = sim.legend;
+          if (lg) this.push({ type: 'legend', tick: p.tick, phase: e.phase, key: lg.key, name: lg.name, line: lg.line, kind: lg.kind, side: lg.side, n: e.n }, sim);
+          break;
+        }
         case 'chaos':
           placeFinales(e);
           break;

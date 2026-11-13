@@ -163,6 +163,9 @@ export class World {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
   readonly cam = new ChaseCamera();
+  /** The highlight reel's lens (render/reelcam.ts), set while a reel plays: it takes the camera after the
+   *  chase has had its frame, and writes the cine state. Null in play, always. */
+  lens: ((camera: PerspectiveCamera, focus: Vector3, dir: Vector3, dt: number) => void) | null = null;
   course: Course;
   palette: Palette;
   quality: QualitySettings;
@@ -297,7 +300,8 @@ export class World {
     this.weather = new Weather(3200);
     this.trail = new Trail(this.course, 900, 'groove');
     this.ghosts = new GhostVisuals(this.course, container);
-    this.ghosts.onBeat = quality.detail === 'low';
+    this.ghosts.pixelRatio = quality.pixelRatio;
+    this.ghosts.lowPage = quality.detail === 'low';
     this.ghosts.glass = quality.detail === 'low' ? 0 : quality.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(quality.detail === 'low' ? 'lite' : 'full');
     this.chaos = new ChaosVisuals(this.course);
@@ -499,7 +503,8 @@ export class World {
     this.terrain.setDetail(q.terrain, q.shadows);
     this.midground.setTier(q.detail, q.terrain.reach);
     this.overlooks.setTier(q.detail);
-    this.ghosts.onBeat = q.detail === 'low';
+    this.ghosts.pixelRatio = q.pixelRatio;
+    this.ghosts.lowPage = q.detail === 'low';
     this.ghosts.glass = q.detail === 'low' ? 0 : q.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(q.detail === 'low' ? 'lite' : 'full');
     this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
@@ -746,6 +751,16 @@ export class World {
     this.flareT = -1;
     this.bestZ = -1;
     this.updateChunks(snap.z, true);
+  }
+
+  /** A cut in the highlight reel: the picture jumps down the course, so the groove, the spray and the
+   *  ground are made fresh there and the chase lens is put behind the sled. */
+  reelCut(snap: Snap): void {
+    this.trail.clear();
+    this.particles.clear();
+    this.wasGrounded = true;
+    this.updateChunks(snap.z, true);
+    this.snapCamera(snap);
   }
 
   /** Snap the chase camera behind the sled (after a revive or a hard cut). */
@@ -1009,7 +1024,9 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    chase();
+    if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
@@ -1100,6 +1117,8 @@ export class World {
     if (this.cineHold) Object.assign(cine, this.cineHold);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
+    // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
+    this.ghosts.drawLabels(this.renderer);
   }
 
   /**
@@ -1142,7 +1161,8 @@ export class World {
   private renderMirror(v: FrameView, focus: Vector3, dir: Vector3, dt: number): void {
     const sim = v.sim;
     const gap = sim ? sim.s.z - sim.dyn.avalanche.z : Infinity;
-    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' ? 1 : 0;
+    // (Never in the highlight reel: its lens is the picture, and the HUD the mirror hangs from is away.)
+    const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' && !this.lens ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
     if (this.mirrorFade < 0.05 || !sim) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it

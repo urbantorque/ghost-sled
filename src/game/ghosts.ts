@@ -78,6 +78,10 @@ export interface GhostTrack {
   map: Float32Array | null;
   /** Set once a rider reading you has been read: its clock from then on. */
   warp: Warp | null;
+  /** Every clock it has ridden on, in order (from, at, rate: three numbers a reading), and the surge it had
+   *  before the first: the highlight reel asks where it was at a tick of the race that was (poseThen). */
+  warps?: number[];
+  swing0?: number;
   /** The rate a rider reading you rides at, under the air's. */
   rate: number;
   own: OwnRun | null;
@@ -361,6 +365,39 @@ export class GhostManager {
     return true;
   }
 
+  private thenWarp: Warp = { from: 0, at: 0, rate: 1 };
+
+  /** A ghost's pose at a tick of the race as it was ridden: for a rider that read you, on the clock it
+   *  had then, not the one it ended on (the highlight reel). Any other rider's is pose(). */
+  poseThen(t: GhostTrack, tick: number, out: GhostPose): boolean {
+    const h = t.warps;
+    if (!h || h.length === 0) return this.pose(t, tick, out);
+    const warp = t.warp;
+    const swing = t.swing;
+    if (tick < h[0]) {
+      t.warp = null;
+      t.swing = t.swing0 ?? 0;
+    } else {
+      // The last reading at or before the tick.
+      let lo = 0;
+      let hi = h.length / 3 - 1;
+      while (lo < hi) {
+        const m = (lo + hi + 1) >> 1;
+        if (h[m * 3] <= tick) lo = m;
+        else hi = m - 1;
+      }
+      const w = this.thenWarp;
+      w.from = h[lo * 3];
+      w.at = h[lo * 3 + 1];
+      w.rate = h[lo * 3 + 2];
+      t.warp = w;
+    }
+    const ok = this.pose(t, tick, out);
+    t.warp = warp;
+    t.swing = swing;
+    return ok;
+  }
+
   /** Course progress (z) of a ghost at a tick: where it stopped once it is done. */
   zAt(t: GhostTrack, tick: number): number {
     if (!t.ready || !t.frames) return 0;
@@ -392,6 +429,11 @@ export class GhostManager {
       if (reads) t.rate = paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z), s) - own) / PACE_AIM);
       const flying = (t.frames[s * FRAME_STRIDE + F_FLAGS] & FLAG_GROUNDED) === 0;
       t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, AIR_RATE) : t.rate };
+      if (!t.warps) {
+        t.warps = [];
+        t.swing0 = t.swing;
+      }
+      t.warps.push(t.warp.from, t.warp.at, t.warp.rate);
       t.swing = 0;
       this.retime(t, t.own, t.warp);
     }

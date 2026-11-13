@@ -763,15 +763,7 @@ async (page) => {
       const f = app.director.feel ?? {};
       const p = cam.camera.position;
       // The ghost layer's tags on screen right now, by kind.
-      const tags = {};
-      for (const el of document.querySelectorAll('.ghost-layer .ghost-label')) {
-        if (el.style.opacity !== '1') continue;
-        const k = el.classList.contains('grave') ? 'grave' : el.classList.contains('line') ? 'line' : el.classList.contains('marker') ? 'marker' : el.classList.contains('dot') ? 'dot' : 'ghost';
-        tags[k] = (tags[k] || 0) + 1;
-        if (el.classList.contains('duel')) tags.duelRing = 1;
-        if (el.classList.contains('trick')) tags.trick = el.textContent;
-        if (/nemesis/.test(el.textContent)) tags.nemesis = 1;
-      }
+      const tags = app.world.ghosts.tagsNow();
       return {
         frame: window.__vc.frames,
         t: app.run ? +(app.run.sim.tick / 60).toFixed(3) : null,

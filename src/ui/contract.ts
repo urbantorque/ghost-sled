@@ -411,6 +411,8 @@ export interface UIHandlers {
   onRevive(): void;
   onDouble(): void;
   onChallenge(): void;
+  /** Watch your run (round 7): the highlight reel cut from the run's own record. */
+  onWatchReel?(): void;
   /** Ride home as a spirit after a wreck (round 5): outside the race, to the finish town. */
   onRideHome?(): void;
   onHome(): void;
