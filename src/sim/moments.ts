@@ -27,8 +27,8 @@ import { hash32 } from './prng';
 //   flourish  land a named trick clean over a leap (the stunt rider's)
 //   follow    stay in the wake of a guide light that weaves through the cloud (Lanternfall)
 //   kindle    ride close along rows of unlit stone lamps to light them, on both sides of the road (Lanternfall)
-//   carry     take a flame at the shrine and bring it to the great lantern at the line; it burns down, and a hit
-//             gutters it (Lanternfall)
+//   carry     take a flame at the shrine and bring it to the great lantern at the line; it burns down, a hit takes
+//             some of it, and a fall or a ward gutters it: ride back up to its pace and it catches (Lanternfall)
 // This file names them and says where they are and what each holds. What happens in them is the sim's (sim.ts).
 //
 // Pure: no DOM, render or audio imports.
@@ -409,6 +409,11 @@ export interface MomentPlay extends MomentSpec {
   flame0: number;
   hit: number;
   relight: { x: number; z: number; r: number; gain: number } | null;
+  /** carry, when a fall or a ward gutters the flame: what the guttering takes of it, the ticks a rider has, once
+   *  riding again, to be back at the flame's pace, and that pace, m/s, at each whole metre past z0 (flamePace). */
+  fall: number;
+  gutter: number;
+  kindle: number[];
 }
 
 /** The race. Sprint: the machine's average pace over its trip, and how far ahead of the rider it leaves; a plain
@@ -475,9 +480,26 @@ export const KINDLE_REACH = 2.9;
 export const KINDLE_COLD = 30;
 /** Carry: the flame lasts this share of the time a clean coast from the shrine to the line takes. */
 const CARRY_SLACK = 1.02;
+/** A fall or a ward gutters the flame (it used to put it out, and the rider who gets up never lit the lantern).
+ *  The rider has this long, from riding again, to be back at the flame's pace: this share of the speed the hill
+ *  itself gives a sled at that place (a coast's steady speed on the slope there, so on the steep chute it is a
+ *  few seconds of clean riding from a get-up, and in the flat square, where nothing can be gained, a get-up's
+ *  own push is enough). Then it catches, with as many seconds in hand over a clean coast to the line as it had
+ *  when it guttered, less what the guttering took. A second fall while it gutters puts it out, and so does the
+ *  time. */
+export const CARRY_GUTTER_TICKS = 240;
+export const CARRY_PACE = 0.6;
+/** What guttering takes of the flame, as a share of what a hit takes in that variant (a fifth: 0.06 of a full flame
+ *  in still air, about a second and a half of it). */
+const CARRY_FALL = 0.2;
+/** The speed a carry's clean coast leaves the shrine at. */
+const CARRY_V0 = 36;
+const TICKS = 60;
 const G = 9.81;
 const CD = 0.0027;
 const MU = 0.03;
+/** What a tuck leaves of the air's drag (sim.ts groundStep). */
+const TUCK = 0.82;
 /** course.ts's chunk length (a value import from there would close a cycle). */
 const CHUNK = 64;
 
@@ -580,17 +602,41 @@ function flightReach(course: Course, lip: Ledge, v: number, pop: number, g: numb
 }
 
 /** Seconds a sled coasting the safe line from z0 to z1 takes, from `v` m/s: the sim's own slope, drag and
- *  friction, with no hands. What the carry's flame is measured against, and what the music can count down by. */
-export function coastSeconds(course: Course, z0: number, z1: number, v: number): number {
+ *  friction, with no hands. What the carry's flame is measured against, and what the music can count down by.
+ *  `tuck`: crouched all the way (the sim's tuck: less of the air's drag), the best a sled does without a boost. */
+export function coastSeconds(course: Course, z0: number, z1: number, v: number, tuck = false): number {
   let t = 0;
+  const cd = tuck ? CD * TUCK : CD;
   for (let z = z0; z < z1; z += 1) {
     const sl = (course.baseY(z - 2) - course.baseY(z + 2)) / 4;
     const drag = course.surface(course.safeX(z), z).drag;
-    v = Math.sqrt(Math.max(64, v * v + 2 * ((G * sl) / (1 + sl * sl) - MU * G - CD * drag * v * v)));
+    v = Math.sqrt(Math.max(64, v * v + 2 * ((G * sl) / (1 + sl * sl) - MU * G - cd * drag * v * v)));
     if (v > 46) v = 46;
     t += 1 / v;
   }
   return t;
+}
+
+/** The flame's pace at z, m/s: what a guttering flame must be ridden back up to. */
+export function flamePace(p: MomentPlay, z: number): number {
+  const k = p.kindle;
+  const i = Math.floor(z - p.z0);
+  return k.length === 0 ? 0 : k[i < 0 ? 0 : i >= k.length ? k.length - 1 : i];
+}
+
+/** A carry's pace down its length: CARRY_PACE of the steady speed a coast holds on the slope at each metre (read
+ *  over the 40 m about it, so a cliff's face is not a slope), never more than that share of the coast's own
+ *  speed off the shrine. */
+function kindlePace(course: Course, z0: number, z1: number): number[] {
+  const out: number[] = [];
+  for (let z = z0; z <= z1; z += 1) {
+    const raw = (course.baseY(z - 10) - course.baseY(z + 30)) / 40;
+    const sl = raw > 0.6 ? 0.6 : raw;
+    const drive = (G * sl) / (1 + sl * sl) - MU * G;
+    const v = drive > 0 ? Math.sqrt(drive / (CD * course.surface(course.safeX(z), z).drag)) : 0;
+    out.push(CARRY_PACE * (v < CARRY_V0 ? v : CARRY_V0));
+  }
+  return out;
 }
 
 const playCache = new WeakMap<Course, Map<string, MomentPlay[]>>();
@@ -651,6 +697,9 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
     flame0: 1,
     hit: 0,
     relight: null,
+    fall: 0,
+    gutter: 0,
+    kindle: [],
   };
   const lip = course.leaps.find((l) => l.z >= m.z0 && l.z < m.z1);
   switch (m.verb) {
@@ -723,9 +772,12 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       lampsFor(course, m, k('pattern', 0), p);
       break;
     case 'carry': {
-      p.flameTicks = Math.round(coastSeconds(course, m.z0, m.z1, 36) * 60 * CARRY_SLACK * k('slack', 1));
+      p.flameTicks = Math.round(coastSeconds(course, m.z0, m.z1, CARRY_V0) * TICKS * CARRY_SLACK * k('slack', 1));
+      p.kindle = kindlePace(course, m.z0, m.z1);
       p.flame0 = k('start', 1);
       p.hit = k('hit', 0.3);
+      p.fall = CARRY_FALL * p.hit;
+      p.gutter = CARRY_GUTTER_TICKS;
       if (t.relight) {
         // A brazier beside the line, a little past the last leap's landing: feeding the flame is a choice.
         const l = course.leaps[course.leaps.length - 1];

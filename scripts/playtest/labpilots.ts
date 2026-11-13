@@ -338,9 +338,18 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         return { x: () => pass, noDrift: true };
       }
       case 'carry': {
-        // A low flame is fed at the brazier beside the line.
+        // A low flame is fed at the brazier beside the line. It stands a little past the last leap's landing, so
+        // a rider who knows it takes the lip on the brazier's side (as far over as the lip's own lamps allow) and
+        // comes down already in line with it: landed on the safe line at 45 m/s there is half a second to cross
+        // five metres, and no rider does.
         const r = p.relight;
-        if (skilled && r && !(mo.mask & 1) && r.z > s.z + 2 && r.z - s.z < v * 2.2) return { x: () => r.x, noDrift: true };
+        if (!skilled || !r || mo.mask & 1 || r.z <= s.z + 2) return { noDrift: true };
+        const lip = c.leaps.filter((l: AnySim) => l.z > p.z0 && l.z < r.z).pop();
+        if (lip && s.z < lip.z && lip.z - s.z < 160) {
+          const off = r.x - c.safeX(r.z);
+          return { x: (z: number) => c.safeX(z) + Math.sign(off) * Math.min(3, Math.abs(off)), noDrift: true };
+        }
+        if (r.z - s.z < v * 2.2) return { x: () => r.x, noDrift: true };
         return { noDrift: true };
       }
       default:
@@ -419,7 +428,11 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
       const coast = (s.spinRate * s.spinRate) / (2 * 22);
       if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
-      else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
+      else if ((skill === 'mid' || skill === 'expert') && piece && piece.verb === 'carry' && piece.relight && !(sim.mo.mask & 1) && piece.relight.z > s.z) {
+        // (Over the last leap with a low flame: a nudge inside the air's dead zone toward the brazier's side.)
+        const off = land.x - piece.relight.x;
+        if (Math.abs(off) > 0.8) steer = off > 0 ? 3 : 5;
+      } else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
         // (Not over a set piece that is decided by its landings: this nudge is past the air's dead zone, so it
         // turns the sled as well as moving it, and a landing half way round is a sketchy one.)
         const off = land.x - c.safeX(land.z);

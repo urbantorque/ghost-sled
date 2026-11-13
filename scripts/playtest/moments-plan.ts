@@ -37,7 +37,7 @@ function holds(c: Course, p: MomentPlay): string {
     case 'kindle':
       return `${p.lamps.length} lamps (${p.lamps.filter((l) => l.dark).length} dark: ${p.lamps.map((l) => (l.dark ? (l.side > 0 ? 'R' : 'L') : '.')).join('')}), need ${p.need}, ${p.each} a side`;
     case 'carry':
-      return `flame ${(p.flameTicks / 60).toFixed(1)} s from full, starts ${p.flame0}, a hit takes ${p.hit}${p.relight ? `, brazier at ${Math.round(p.relight.z)} (${(p.relight.x - c.safeX(p.relight.z)).toFixed(1)} off)` : ''}; ${Math.round(p.z1 - p.z0)} m`;
+      return `flame ${(p.flameTicks / 60).toFixed(1)} s from full, starts ${p.flame0}, a hit takes ${p.hit}, guttering ${p.fall.toFixed(3)} (back to ${Math.round(Math.max(...p.kindle))} m/s on the chute within ${(p.gutter / 60).toFixed(0)} s)${p.relight ? `, brazier at ${Math.round(p.relight.z)} (${(p.relight.x - c.safeX(p.relight.z)).toFixed(1)} off)` : ''}; ${Math.round(p.z1 - p.z0)} m`;
   }
 }
 
