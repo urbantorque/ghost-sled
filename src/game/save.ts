@@ -115,6 +115,8 @@ export interface SaveData {
   settings: Settings;
   stats: { bestScore: number; bestCombo: number; longestAir: number; perfects: number; topSpeed: number; yetiHops: number; avalanches: number };
   hints: Record<string, number>;
+  /** The runs each lesson has been shown in (hints.ts retires one shown often and never taken up). */
+  hintsSeen?: Record<string, number>;
   daily: DailyRecord;
   /** Run-end distances from before runs had a finish. Kept, and read by nothing: see runTimes. */
   runDists?: Record<string, number[]>;
@@ -487,6 +489,7 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     best: loadBest(p.best, archive),
     grudge: loadGrudges(p.grudge, archive),
     hints: isObj(p.hints) ? (p.hints as Record<string, number>) : {},
+    hintsSeen: isObj(p.hintsSeen) ? (p.hintsSeen as Record<string, number>) : {},
     // Shallow merge: new daily fields get their defaults and unknown ones are kept.
     daily: { ...base.daily, ...(isObj(p.daily) ? p.daily : {}) },
     ownedSleds: Array.isArray(p.ownedSleds) && p.ownedSleds.length ? p.ownedSleds : [0],

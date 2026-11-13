@@ -2518,7 +2518,8 @@ export class App {
       {
         dt,
         timer: this.hintTimer,
-        steered: this.input.steering,
+        // The run's own input as well as the hands': a pad's stick, a replay or a scripted rider steers too.
+        steered: this.input.steering || Math.abs(s.steer) > 0.2,
         grounded: s.grounded,
         drifting: s.drifting,
         action: s.action,
@@ -2535,9 +2536,16 @@ export class App {
         tumbling: s.tumble > 0,
         lit: s.lantern >= 100,
         dashed: sim.stats.dashes > 0,
+        astray: s.grounded && sim.course.edgeExcess(s.x, s.z) > 0,
       },
       h,
+      this.save.data.hintsSeen,
     );
+    // The run counts once for each lesson it showed: one shown in run after run and never taken up retires.
+    if (hint.seen) {
+      const seen = (this.save.data.hintsSeen ??= {});
+      seen[hint.seen] = (seen[hint.seen] ?? 0) + 1;
+    }
     // Lessons learned by doing (steering while the steer hint is wanted; any slipstream).
     for (const k of hint.learned) h[k] = Math.max(1, h[k] ?? 0);
     // Steered and drifted once: the touch zone outlines fade out for good (the labels stay).
