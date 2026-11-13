@@ -21,7 +21,7 @@ import type { GarageShelf, GhostKind, HintKind, HudModel, PaintCard, ResultsMode
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
-import { anchorFor, pickField, poolTime, recentFor } from './field';
+import { anchorFor, fieldCount, pickField, poolTime, recentFor } from './field';
 import { PoolGhostData } from './ghostdata';
 import { GhostEntry, GhostManager, GhostPose, RaceEvent, emptyPose, realStanding, trackStanding } from './ghosts';
 import { type CupMountain, type RideMountain, cupChaos, cupMountain, weekKey, weekNumber } from './cup';
@@ -799,7 +799,7 @@ export class App {
       kind: MOUNTAINS.some((m) => m === this.mountain) ? 'pool' : 'daily',
       mood: chaos.mood,
       event: chaos.event,
-      count: 5 + moodInfo(chaos.mood).params.extraGhosts,
+      count: fieldCount(moodInfo(chaos.mood).params.extraGhosts, cup ? [] : recentFor(d.runTimes ?? {}, key)),
       // The Cup's field is the week's, the same for everyone: no anchor of yours picks it, and your
       // best joins it after (a pick keeps its distance from your best, which would move the field).
       anchor: cup ? 0 : anchorFor(d.runTimes ?? {}, key),

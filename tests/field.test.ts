@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
 import { recordToString } from '../src/sim/replay';
 import type { PoolGhostData } from '../src/game/ghostdata';
-import { ANCHOR_DEFAULT, ANCHOR_MAX, ANCHOR_MIN, FIELD_CARROT, FIELD_FAST_MIN, FIELD_SLOW_MAX, FIELD_SLOW_MIN, FIELD_SPACING, FIELD_SPACING_S, anchorFor, fieldCandidates, fieldPace, pickField, poolTime, recentFor, type FieldInput, type FieldPick } from '../src/game/field';
+import { ANCHOR_DEFAULT, ANCHOR_MAX, ANCHOR_MIN, FIELD_CARROT, FIELD_FAST_MIN, FIELD_SLOW_MAX, FIELD_SLOW_MIN, FIELD_MORE, FIELD_MOST, FIELD_SPACING, FIELD_SPACING_S, anchorFor, fieldCandidates, fieldCount, fieldPace, pickField, poolTime, recentFor, type FieldInput, type FieldPick } from '../src/game/field';
 import { FINISH_Z } from '../src/game/standing';
 
 // The race field is built around when you would finish (field.ts). Names are never asserted:
@@ -375,6 +375,17 @@ describe('a field laid across your own runs', () => {
     for (const p of poolPicks(out)) expect(Math.abs(p.time! - you.time!)).toBeGreaterThanOrEqual(FIELD_SPACING_S);
     expect(poolPicks(laid(recent, { count: 9 })).length).toBe(9);
     expect(laid(recent, { seed: 31 })).toEqual(laid(recent, { seed: 31 }));
+  });
+
+  it('rides two more once you have a run here, never more than nine, and five on a first run', () => {
+    expect(fieldCount(0, [])).toBe(5);
+    expect(fieldCount(0, [120])).toBe(5 + FIELD_MORE);
+    expect(fieldCount(4, [])).toBe(9);
+    expect(fieldCount(4, [120, 118])).toBe(FIELD_MOST);
+    const ts = times(laid([126.5, 127.4, 115.8, 139.1, 123], { count: fieldCount(0, [126.5]) }));
+    expect(ts.length).toBe(7);
+    // Seven across the same string: any of those finishes is within 2.6 s of a rider.
+    for (const t of [126.5, 127.4, 115.8, 139.1, 123]) expect(nearest(ts, t), String(t)).toBeLessThanOrEqual(2.6);
   });
 
   it('a thin pool rides the nearest it has and says so; no runs here means the fixed roles', () => {
