@@ -6,6 +6,7 @@ import { BIG_DROP_S, UiOnce, bankRoll, stormCascade } from './cues';
 import type { UiSound } from './engine';
 import type { Bus } from './graph';
 import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
+import { type Motif, motifFor } from './motifs';
 import type { Prerender } from './prerender';
 import type { SledSoundId } from './sledsounds';
 import { BRIGHT_ARP, BRIGHT_VOICING, Key, brightRoot, fit, ladder, ladderIndexOf, mtof } from './theory';
@@ -126,6 +127,11 @@ export interface Band {
   /** The main theme's opening bar the same way (the finish's fanfare). */
   theme(): { m: number; at: number; dur: number }[];
   readonly drums: { taiko: AudioBuffer; crash: AudioBuffer; boom: AudioBuffer };
+  /** The produced score is playing (round 7): its finale is the finish's fanfare. */
+  readonly produced?: boolean;
+  /** A set piece's stinger in the course's own style, on the score's next beat at or after t. False when
+   *  it cannot play one (the live band, or not decoded): the live cue plays. */
+  stinger?(verb: string, t: number): boolean;
 }
 
 interface Job {
@@ -134,6 +140,9 @@ interface Job {
   fn: (t: number) => void;
   lead: number;
 }
+
+/** A rider's motif is not played again within this long (s). */
+const MOTIF_GAP_S = 12;
 
 const panOf = (dx: number, span: number, fallback: number): number => (dx !== 0 && Number.isFinite(dx) ? clamp(dx / span, -0.8, 0.8) : fallback);
 
@@ -195,6 +204,7 @@ export class Sfx {
   ) {}
 
   reset(): void {
+    this.motifAt.clear();
     this.styleNext = 0;
     this.giftStreak = 0;
     this.lastGift = -10;
@@ -1452,7 +1462,9 @@ export class Sfx {
 
   /** A marquee moment comes up (its card): a soft call of the hook's head on bells, on the band's next
    *  eighth. The rise into its drop is the band's (music.ts plan). */
-  private marqueeCue(t0: number): void {
+  private marqueeCue(t0: number, verb: string): void {
+    // The produced score has a stinger written for the verb, in the course's instruments.
+    if (this.band?.stinger?.(verb, t0)) return;
     const t = this.onGrid(t0, 2, 0.3);
     const head = this.band?.head(12) ?? [];
     const v = this.voice(t, 0.55, 0, 1, PRIO.payoff);
@@ -1488,7 +1500,11 @@ export class Sfx {
     if (!landed) this.music?.duck(0.55, t, 0.5, 0.8);
     this.slam(t, true);
     const theme = this.band?.theme() ?? [];
-    if (theme.length > 0) {
+    if (this.band?.produced) {
+      // The produced finale lands the game's motif itself: only the timpani under it.
+      const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
+      thump(v, t + 0.02, 98, 70, 0.28, 0.25);
+    } else if (theme.length > 0) {
       const v = this.voice(t, 0.4, 0, 1, PRIO.payoff);
       for (const n of theme) this.at(v, t + 0.02 + n.at, (tn) => this.brass(v, tn, [n.m - 12, n.m], Math.min(0.5, n.dur * 0.9), 0.045));
       this.at(v, t + 0.02, (tc) => thump(v, tc, 98, 70, 0.28, 0.25));
@@ -1585,6 +1601,10 @@ export class Sfx {
         break;
       }
       case 'won': {
+        if (this.band?.stinger?.('won', t0)) {
+          this.shimmer(t0 + 0.4, 14, 10, 0.04);
+          break;
+        }
         const t = this.onGrid(t0, 2, 0.3);
         const head = this.band?.head(2) ?? [];
         this.music?.duck(0.3, t, 1.1, 0.5, 0.02);
@@ -1605,6 +1625,7 @@ export class Sfx {
         break;
       }
       case 'lost': {
+        if (this.band?.stinger?.('lost', t0)) break;
         const t = this.onGrid(t0, 2, 0.3);
         const r = brightRoot(k, 60);
         const v = this.voice(t, 0.5, 0, 1, PRIO.normal);
@@ -1673,6 +1694,8 @@ export class Sfx {
         break;
       case 'raceCall':
         this.raceCall(b.word, t);
+        // A signature rider waiting on the line is announced by their own motif, after the call.
+        this.riderMotif(b.ghost.name, t + 0.45, 0, 1);
         break;
       case 'grudgeSettled':
         this.grudge(b.nemesis, t);
@@ -1718,7 +1741,7 @@ export class Sfx {
         if (!b.last) this.stageCue(t);
         break;
       case 'marquee':
-        if (b.phase === 'enter') this.marqueeCue(t);
+        if (b.phase === 'enter') this.marqueeCue(t, b.verb);
         else if (b.clean && b.total > 0 && b.took >= b.total) this.chord(t, 0.05, 0.9, 5);
         break;
       case 'finish':
@@ -2076,8 +2099,65 @@ export class Sfx {
       v.pan.linearRampToValueAtTime(p, t + 0.4);
     }
     whoosh(v, t, 0.4, 1800, 600, 0.08, 1);
+    // A signature rider goes by on their own motif (never past your wreck); the crowd on the falling pair.
+    if (!b.wreck && this.riderMotif(b.ghost.name, t + 0.05, p * 0.6, 0.8)) return;
     fmBell(v, t + 0.05, this.note(2), 0.06, 0.25, 2.4, 1);
     fmBell(v, t + 0.17, this.note(0), 0.06, 0.45, 2.4, 1);
+  }
+
+  /** When each rider's motif last played: one going back and forth with you is not announced every time. */
+  private readonly motifAt = new Map<string, number>();
+
+  /**
+   * A signature rider's motif (motifs.ts), in the key playing and on the music's eighths, in the rider's
+   * own voice. False for the crowd, and for a rider whose motif played within the last MOTIF_GAP_S.
+   */
+  private riderMotif(name: string, t0: number, pan: number, level: number): boolean {
+    const m = motifFor(name);
+    if (!m) return false;
+    if (t0 - (this.motifAt.get(name) ?? -100) < MOTIF_GAP_S) return false;
+    this.motifAt.set(name, t0);
+    this.playMotif(m, t0, pan, level);
+    return true;
+  }
+
+  /** A motif by itself (the jukebox plays every rider's). */
+  playMotif(m: Motif, t0: number, pan = 0, level = 1): void {
+    const t = this.onGrid(t0, 2, 0.3);
+    const g = this.band?.grid();
+    const eighth = g && g.dur > 0 ? Math.min(0.24, Math.max(0.09, g.dur * 2)) : 0.13;
+    const root = brightRoot(this.key(), 60) + 12 * m.oct;
+    const v = this.voice(t, 0.5, pan, 1.1 * level, PRIO.payoff);
+    for (const [semi, at, len] of m.notes) {
+      const f = mtof(root + semi);
+      const dur = len * eighth;
+      this.at(v, t + at * eighth, (tn) => {
+        switch (m.voice) {
+          case 'brass':
+            this.brass(v, tn, [root + semi], Math.max(0.12, dur * 0.9), 0.05);
+            break;
+          case 'bell':
+            fmBell(v, tn, f, 0.075, 0.5 + dur, 3.5, 1.2);
+            break;
+          case 'glass':
+            fmBell(v, tn, f, 0.06, 0.4 + dur, 2.76, 0.9);
+            ping(v, tn, f * 2, 0.02, 0.3);
+            break;
+          case 'pluck':
+            pluck(v, tn, f, 0.11, 0.2 + dur * 0.5, 4);
+            break;
+          case 'whistle': {
+            // A breathy sine with a little scoop up into the note.
+            const e = v.gain(0, v.out);
+            const end = swell(e.gain, tn, 0.05, 0.03, Math.max(0.06, dur * 0.85), 0.08);
+            const o = v.osc('sine', f, tn, end, e);
+            o.frequency.setValueAtTime(f * 0.97, tn);
+            o.frequency.exponentialRampToValueAtTime(f, tn + 0.05);
+            break;
+          }
+        }
+      });
+    }
   }
 
   /** Into the lead: a brass 1-3-5 stab, a timpani and a high bell. */
