@@ -95,6 +95,7 @@ export function momentLine(verb: MomentVerb, key: string, phase: MomentPhase, n:
     case 'kindle':
       if (phase === 'start') return `Lamp 0 of ${of}`;
       if (phase === 'step') return n >= of ? 'Now the other row' : `Lamp ${n} of ${of}`;
+      if (phase === 'miss') return 'A hit lights nothing';
       if (phase === 'won') return 'The road is alight';
       if (phase === 'lost') return `${n} of ${of} lamps`;
       return null;

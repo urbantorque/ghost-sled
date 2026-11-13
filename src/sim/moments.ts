@@ -14,8 +14,8 @@ import { hash32 } from './prng';
 // moments a mountain ride on the roll too (ChaosRoll.legend).
 //   rings     three rings of light along a big leap's flight; hit the lip in line and at speed
 //   slide     hold one long drift across glass ice
-//   shatter   pop, and be up in the air under each bell hung over the run, as high as it hangs (and no higher,
-//             where a bell hangs under a beam). The action button's, not the steering's
+//   shatter   pop, and be up in the air under each bell hung over the run, as high as it hangs (and on its side
+//             of the street, where the bells hang along one wall). The action button's
 //   collapse  the snow and ice of a span fall in; stay ahead of the fall
 //   race      a machine on its cable: 'sprint', it leaves as the rider arrives and the far end decides it;
 //             'chase', it left before the rider and passing it wins
@@ -66,12 +66,12 @@ const FAMILY: Record<string, readonly Variant[]> = {
   ],
   slide: [
     { key: 'long', name: 'One long slide', line: 'Hold one long slide across the ice', t: { need: 132 } },
-    { key: 'both', name: 'A slide each way', line: 'Slide both ways across the ice', t: { each: 66 } },
+    { key: 'both', name: 'A slide each way', line: 'Slide both ways across the ice', t: { each: 45 } },
   ],
   shatter: [
     { key: 'even', name: 'Hung level', line: 'Pop up and ring every bell' },
     { key: 'rising', name: 'Each higher than the last', line: 'Ring every bell: each hangs higher than the last', t: { rising: 1 } },
-    { key: 'under', name: 'Under the beams', line: 'Ring every bell, and stay under the beams', t: { under: 1 } },
+    { key: 'wall', name: 'Along one wall', line: 'Ring every bell: they hang along one wall', t: { wall: 1 } },
   ],
   collapse: [
     { key: 'chase', name: 'The fall chases', line: 'Outrun the span as it falls' },
@@ -116,19 +116,19 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'flips', name: 'Two flips', line: 'Land two flips', t: { half: 0, flips: 2 } },
   ],
   follow: [
-    { key: 'wide', name: 'A slow, wide weave', line: "Stay in the guide light's wake", t: { amp: 4.0, wave: 132 } },
+    { key: 'wide', name: 'A slow, wide weave', line: "Stay in the guide light's wake", t: { amp: 3.6, wave: 132 } },
     { key: 'quick', name: 'A quick weave', line: "Stay in the guide light's wake: it weaves quick", t: { amp: 3.3, wave: 96 } },
-    { key: 'darts', name: 'It darts', line: "Stay in the guide light's wake: it darts", t: { amp: 3.4, wave: 128, darts: 1 } },
+    { key: 'darts', name: 'It darts', line: "Stay in the guide light's wake: it darts", t: { amp: 3.8, wave: 128, darts: 1 } },
   ],
   kindle: [
     { key: 'both', name: 'Both rows dark', line: 'Light the lamps on both sides of the road' },
-    { key: 'turns', name: 'Dark turn about', line: 'Light the dark lamps: they stand turn about', t: { pattern: 1 } },
+    { key: 'row', name: 'One row dark', line: 'One row is dark: light it all the way down', t: { pattern: 1 } },
     { key: 'halves', name: 'One row, then the other', line: 'Light the dark lamps: one row, then the other', t: { pattern: 2 } },
   ],
   carry: [
     { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1, hit: 0.3 } },
     { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 0.93, hit: 0.18 } },
-    { key: 'ember', name: 'A low flame', line: 'Carry a low flame: feed it at the brazier', t: { slack: 1, hit: 0.24, start: 0.62, relight: 1 } },
+    { key: 'ember', name: 'A low flame', line: 'Carry a low flame: feed it at the brazier', t: { slack: 1, hit: 0.24, start: 0.7, relight: 1 } },
   ],
 };
 
@@ -331,9 +331,8 @@ export interface MomentTarget {
   z: number;
   x: number;
   hw: number;
-  /** How far over the snow a sled must be as it passes under, and the most it may be (a beam over the bell). */
+  /** How far over the snow a sled must be as it passes under. */
   h: number;
-  top: number;
 }
 
 /** A line across the corridor's length: metres off the safe line, sampled every `step` from z0. */
@@ -450,21 +449,30 @@ export const RING_ID0 = 100;
 /** Bells (shatter). A pop on a falling street is a real flight (the sled leaves level while the ground drops
  *  away: two seconds and 70 to 110 m at speed, 3 to 7 m up), so a bell asks for height at its place, not for a
  *  hop: how far into the street the first hangs, how far apart, how high a sled must be to ring one, how much
- *  higher each hangs in the rising peal, and the band under the beams. */
+ *  higher each hangs in the rising peal, and, along one wall, how far off the line they hang and how wide. (At
+ *  speed one flight carries a sled under two bells, so a beam to stay under cannot be asked: a variant that
+ *  did was won by no skilled pilot in 12 rides.) */
 const BELL_LEAD = 50;
 const BELL_STEP = 78;
-const BELL_H = 2.6;
-const BELL_RISE = [1.6, 2.6, 3.6, 4.4] as const;
-const BELL_UNDER = [1.2, 3.8] as const;
+const BELL_H = 2.0;
+const BELL_RISE = [1.4, 2.4, 3.4, 4.0] as const;
+const BELL_WALL = 2.4;
+const BELL_WALL_HW = 3.0;
 /** Follow: the wake's half-width, the path's sample step, how far off the safe line the light must be for its
- *  wake to count (where it rides the line itself, over a kicker and its flight, following it is nothing), and
- *  the share of what counts that wins. */
-export const WAKE_HW = 2.4;
+ *  wake to count, and the share of what counts that wins. The wake counts only where the safe line is outside
+ *  it, so a rider who never leaves the line is never in a wake that counts (the careful line won the darting
+ *  light 6 rides in 6 while it counted from 0.6 m out). */
+export const WAKE_HW = 2.0;
 const PATH_STEP = 4;
-export const WAKE_MIN = 0.6;
+export const WAKE_MIN = WAKE_HW;
+/** The light keeps this far from everything that stands, and from the corridor's edge (a ravine's walls throw a
+ *  sled that rides up them). */
+const FOLLOW_PAD = 2.9;
 const FOLLOW_SHARE = 0.6;
-/** Kindle: how near a lamp's middle the sled's must pass to light it (an edge gap of about 1.5 m). */
-export const KINDLE_REACH = 2.7;
+/** Kindle: how near a lamp's middle the sled's must pass to light it (an edge gap of about 1.8 m), and how
+ *  many ticks after a hit a rider lights nothing (a sled that ploughs into a lamp does not light it). */
+export const KINDLE_REACH = 2.9;
+export const KINDLE_COLD = 30;
 /** Carry: the flame lasts this share of the time a clean coast from the shrine to the line takes. */
 const CARRY_SLACK = 1.02;
 const G = 9.81;
@@ -687,7 +695,7 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       p.need = p.both ? p.each : k('need', 132);
       break;
     case 'shatter':
-      p.targets = bellsFor(course, m, t);
+      p.targets = bellsFor(course, m, t, side);
       p.need = p.targets.length;
       break;
     case 'surge':
@@ -707,8 +715,8 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
       break;
     case 'follow': {
       p.hw = WAKE_HW;
-      p.path = weave(course, m.z0 + 50, m.z1 - 30, k('amp', 4), k('wave', 132), WAKE_HW + 0.5, side, !!t.darts);
-      p.need = Math.round(FOLLOW_SHARE * PATH_STEP * p.path.off.filter((o) => o >= WAKE_MIN || o <= -WAKE_MIN).length);
+      p.path = weave(course, m.z0 + 50, m.z1 - 30, k('amp', 4), k('wave', 132), FOLLOW_PAD, side, !!t.darts);
+      p.need = Math.max(24, Math.round(FOLLOW_SHARE * PATH_STEP * p.path.off.filter((o) => o >= WAKE_MIN || o <= -WAKE_MIN).length));
       break;
     }
     case 'kindle':
@@ -722,7 +730,7 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
         // A brazier beside the line, a little past the last leap's landing: feeding the flame is a choice.
         const l = course.leaps[course.leaps.length - 1];
         const z = Math.min(course.finishZ - 200, (l ? l.land1 : m.z0 + 300) + 26);
-        p.relight = { x: course.safeX(z) + side * 4.2, z, r: 2.4, gain: 0.45 };
+        p.relight = { x: course.safeX(z) + side * 5, z, r: 2.2, gain: 0.45 };
       }
       break;
     }
@@ -794,18 +802,20 @@ function ringsFor(course: Course, m: MomentSpec, side: 1 | -1, pop: number, g: n
   return out;
 }
 
-/** Bells down a street, right across the run: no steering rings one, only being up in the air under it. Hung
- *  level, each higher than the last, or under beams a sled must not fly over. */
-function bellsFor(course: Course, m: MomentSpec, t: Tune): MomentTarget[] {
+/** Bells down a street: being up in the air under one rings it. Hung level right across the run, each higher
+ *  than the last, or along one wall, where the sled must be on that side of the line as it flies under. */
+function bellsFor(course: Course, m: MomentSpec, t: Tune, side: 1 | -1): MomentTarget[] {
   const out: MomentTarget[] = [];
   for (let z = m.z0 + BELL_LEAD, i = 0; z < m.z1 - 24 && i < 4; z += BELL_STEP, i++) {
-    out.push({ z, x: course.centerX(z), hw: Math.max(2.5, course.halfWidth(z) - 1.4), h: t.under ? BELL_UNDER[0] : t.rising ? BELL_RISE[i] : BELL_H, top: t.under ? BELL_UNDER[1] : 99 });
+    const room = course.halfWidth(z) - 1.4;
+    if (t.wall) out.push({ z, x: course.safeX(z) + side * BELL_WALL, hw: BELL_WALL_HW, h: BELL_H });
+    else out.push({ z, x: course.centerX(z), hw: Math.max(2.5, room), h: t.rising ? BELL_RISE[i] : BELL_H });
   }
   return out;
 }
 
 /** The Lamp Road's stone lamps (course.ts lays them in pairs down a Lanternfall street), and which stand unlit
- *  this run: both rows, turn about, or one row and then the other. */
+ *  this run: both rows, one whole row, or one row and then the other. */
 function lampsFor(course: Course, m: MomentSpec, pattern: number, p: MomentPlay): void {
   const seen = new Set<number>();
   for (let k = Math.floor(m.z0 / CHUNK); k <= Math.floor(m.z1 / CHUNK); k++) {
@@ -823,14 +833,14 @@ function lampsFor(course: Course, m: MomentSpec, pattern: number, p: MomentPlay)
   const z0 = p.lamps.length ? p.lamps[0].z : 0;
   const zm = p.lamps.length ? (z0 + p.lamps[p.lamps.length - 1].z) / 2 : 0;
   for (const l of p.lamps) {
-    const pair = Math.round((l.z - z0) / 20);
-    if (pattern === 1) l.dark = (pair % 2 === 0) === (l.side === p.side);
+    if (pattern === 1) l.dark = l.side === p.side;
     else if (pattern === 2) l.dark = l.z <= zm ? l.side === p.side : l.side !== p.side;
   }
   const dark = p.lamps.filter((l) => l.dark).length;
-  // Both rows dark: a rider can hug one row and cross once. Half of them dark: most of what there is.
-  p.need = Math.max(2, Math.round(dark * (pattern === 0 ? 0.42 : 0.7)));
-  p.each = Math.max(1, Math.min(3, Math.floor(p.need / 3)));
+  // Both rows dark: a rider can hug one row and cross once. Half of them dark: about half of what there is.
+  // (A fast rider lands a leap's flight a little way into the road, with four seconds of it left.)
+  p.need = Math.max(2, Math.round(dark * (pattern === 0 ? 0.34 : pattern === 1 ? 0.6 : 0.55)));
+  p.each = pattern === 1 ? 0 : Math.max(1, Math.min(3, Math.floor(p.need / 3)));
 }
 
 /** A sprint's machine: metres down the course `ticks` after it left (it leaves as the rider reaches z0). It runs

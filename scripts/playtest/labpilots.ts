@@ -218,10 +218,12 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       case 'slide': {
         if (!skilled) return null;
         const left = p.z1 - s.z;
-        if (M.st >= 9 || left < 70) return { noDrift: true };
+        // (No slide is started that the ice left has no room for.)
+        if (M.st >= 9 || (M.st !== 2 && left < 24 + v * ((p.both ? p.each : p.need) / 60))) return { noDrift: true };
         const cx = c.centerX(s.z);
         const onIce = c.surface(s.x, s.z).ice;
-        if (M.dir === 0) M.dir = s.x < cx ? 1 : -1;
+        // Slide toward where the lake's middle will be: the side with the most ice to cross.
+        if (M.dir === 0) M.dir = s.x < c.centerX(s.z + 60) ? 1 : -1;
         if (M.st === 0) {
           // Set up wide on one side while the ice comes in, to slide back across the whole sheet.
           const out = cx - M.dir * c.halfWidth(s.z + 30) * 0.42;
@@ -239,10 +241,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
           }
           const done = p.both ? (mo.mask & (M.dir > 0 ? 1 : 2)) !== 0 : false;
           if (done) {
-            // One way done: let go, then the other way.
+            // One way done: let go (which pops the sled), then the other way as it comes down.
             M.dir = -M.dir;
             M.st = 3;
-            M.wait = 14;
+            M.wait = 4;
             return { noDrift: true };
           }
           // The widest arc the drift allows: full counter-steer, which holds the slide longest.
@@ -265,12 +267,20 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
           M.pressed = false;
         }
         const d = t.z - s.z;
-        // A bell: crouch, and spring so the sled is at the bell's height as it passes under: early for one
-        // hung high, late and sharp for one under a beam.
-        const rel = v * ((t.top < 50 ? 0.24 : 0.5 + 0.1 * t.h) + M.bias);
+        // A bell: crouch, and spring so the sled is at the bell's height as it passes under (earlier for one
+        // hung high), on the bell's side of the street where it hangs along a wall.
+        const rel = v * (0.5 + 0.1 * t.h + M.bias);
         const hold = rel + v * 0.5;
-        if (d < hold && d > rel) return { action: true, calm: true, noDrift: true };
-        return { calm: d < hold + 12, noDrift: true };
+        // (Along a wall: the line that far off the safe one, ridden straight, so the flight stays under them.)
+        const off = t.x - c.safeX(t.z);
+        const x = t.hw < 4 ? (z: number): number => c.safeX(z) + off : undefined;
+        // (Down late from the last flight: crouch at once, and spring as soon as the crouch is a pop.)
+        const late = d <= rel && d > v * 0.3;
+        if (d < hold && (d > rel || (M.tap < 12 && (M.tap > 0 || late)))) {
+          M.tap++;
+          return { x, action: true, calm: true, noDrift: true };
+        }
+        return { x, calm: d < hold + 12, noDrift: true };
       }
       case 'steps': {
         // Down a street the landings are the rider's own: pop wherever a flight has room to come down inside
@@ -293,10 +303,9 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       }
       case 'flourish': {
         if (!skilled) return null;
-        const lip = lipOf(p);
-        // Two flips want more air than the leap gives: pop off the lip for them.
-        const pop = p.flips >= 2 && lip - s.z < 30 && lip - s.z > 0;
-        return { action: pop, calm: pop, noDrift: true };
+        // (No pop off the lip, even for two flips: over a cliff a pop is three more seconds of air, and the sled
+        // comes down past the landing. Two flips want speed onto the lip, which is the trade the variant poses.)
+        return { noDrift: true };
       }
       case 'follow': {
         if (!p.path || !kit.pathX) return null;
@@ -322,12 +331,18 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         const i = aheadOn(M.side);
         if (i < 0) return { noDrift: true };
         const l = lamps[i];
-        const pass = l.x - l.side * (skilled ? 2.0 : 2.25);
+        // (Coming across the road it aims a little wide of the lamp first: a crossing overshoots.)
+        const inside = skilled ? 2.2 : 2.4;
+        const pass = l.x - l.side * (Math.abs(s.x - (l.x - l.side * inside)) > 2.5 ? inside + 0.8 : inside);
         if (l.z - s.z > 60) return { noDrift: true };
         return { x: () => pass, noDrift: true };
       }
-      case 'carry':
+      case 'carry': {
+        // A low flame is fed at the brazier beside the line.
+        const r = p.relight;
+        if (skilled && r && !(mo.mask & 1) && r.z > s.z + 2 && r.z - s.z < v * 2.2) return { x: () => r.x, noDrift: true };
         return { noDrift: true };
+      }
       default:
         return null;
     }
@@ -342,7 +357,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       // Commit at takeoff, if the flight is long enough for it.
       M.flipped = true;
       const need = Math.max(wantYaw / 9 + 0.5, wantPitch > 0 ? wantPitch / 6.8 + 0.6 : 0);
-      M.st = land.t > need + 0.25 ? 1 : 0;
+      M.st = land.t > need + 0.1 ? 1 : 0;
       M.dir = mr() < 0.5 ? 1 : -1;
       M.bias = (mr() - 0.5) * 0.24 * sloppy;
       M.wait = 2;
@@ -382,6 +397,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         // A rider carrying the flame, or hopping under bells, spins nothing.
         // (Nor does one stomping steps: a spin over a 60 m step is how round 6's expert lost them.)
         if (piece && skill !== 'line' && (piece.verb === 'carry' || piece.verb === 'shatter' || piece.verb === 'surge' || piece.verb === 'steps')) P.spin = 0;
+        // Nor does a rider who knows the hill spin a flight that comes down on a set piece's doorstep: a spin
+        // pushes a sled wide, and the set piece wants it on its line.
+        const ahead = pieceAhead(sim);
+        if (ahead && skill !== 'line' && skill !== 'novice' && ahead.z0 - land.z < 150) P.spin = 0;
       }
       const land = timeToLand(sim);
       if (piece && piece.verb === 'flourish') {
@@ -400,11 +419,13 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       if (goal > 2 * Math.PI && land.t < (goal - Math.abs(s.airYaw)) / 9 + 0.3) goal = 2 * Math.PI;
       const coast = (s.spinRate * s.spinRate) / (2 * 22);
       if (P.spin && Math.abs(s.airYaw) + coast < goal - 0.12 && land.t > 0.2) steer = P.spin > 0 ? 8 : 0;
-      else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'shatter' || piece.verb === 'carry'))) {
+      else if ((skill === 'mid' || skill === 'expert') && !(piece && (piece.verb === 'steps' || piece.verb === 'carry'))) {
         // (Not over a set piece that is decided by its landings: this nudge is past the air's dead zone, so it
         // turns the sled as well as moving it, and a landing half way round is a sketchy one.)
         const off = land.x - c.safeX(land.z);
-        if (Math.abs(off) > 0.8) steer = off > 0 ? (setUp ? 3 : 2) : setUp ? 5 : 6;
+        // (Gently, unless the landing is well off the line: then the line matters more than a square landing.)
+        const soft = setUp && Math.abs(off) < 2;
+        if (Math.abs(off) > 0.8) steer = off > 0 ? (soft ? 3 : 2) : soft ? 5 : 6;
       }
       // (A tuck held through a surge's lip is let go a beat into the air, where it is no pop.)
       if (M.airHold > 0) {

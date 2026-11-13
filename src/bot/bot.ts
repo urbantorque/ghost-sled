@@ -8,6 +8,7 @@ import { DT, LANTERN, Sim, TICK_RATE } from '../sim/sim';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
 import { AirPlan, Flight, PlanResult, Rot, RotParams, predictFlight, runPlan, solveFlip, solveSpin } from './model';
+import { type MomentPlay, gateX, pathOff } from '../sim/moments';
 import { Scene } from './scene';
 
 // A ghost bot that plays the real Sim through the same one-byte-per-tick input a player produces.
@@ -544,11 +545,108 @@ export class Bot {
     if (p.verb === 'gates') {
       const g = p.gates.find((q) => q.z > z + 1);
       if (!g || g.z - z > 50) return null;
+      // (A gate that swings: where its sway will have it when the sled gets there.)
+      if (g.amp > 0) return gateX(g, sim.tick - mo.t0 + ((g.z - z) / Math.max(10, sim.s.vz)) * TICK_RATE) - this.lines.safeX(g.z);
       const off = g.x - this.lines.safeX(g.z);
       return off - (off > 0 ? 1 : -1) * g.hw * 0.45;
     }
     if (p.verb === 'rings' && p.rings.length > 0 && z < p.rings[0].z - 14) return p.rings[0].x - this.lines.safeX(p.rings[0].z);
+    // Round 7's verbs that are a line to ride: the guide light's wake, the dark lamps' row (close beside the
+    // next one, between it and the line), the wall the bells hang along, the brazier that feeds a low flame.
+    if (p.verb === 'follow' && p.path) return pathOff(p.path, z + sim.s.speed * 0.3);
+    if (p.verb === 'kindle') {
+      const l = p.lamps.find((q, i) => q.dark && !(mo.mask & (1 << i)) && q.z > z + 4);
+      if (!l || l.z - z > 70) return null;
+      return l.x - l.side * 2.3 - this.lines.safeX(l.z);
+    }
+    if (p.verb === 'shatter') {
+      const t = p.targets[mo.at];
+      return t && t.hw < 4 ? t.x - this.lines.safeX(t.z) : null;
+    }
+    if (p.verb === 'carry' && p.relight && !(mo.mask & 1) && p.relight.z > z + 2 && p.relight.z - z < sim.s.speed * 2.5) return p.relight.x - this.lines.safeX(p.relight.z);
     return null;
+  }
+
+  /** Whether this rider tries the set piece it is in (its own, from its key: momentOff's rule). */
+  private triesMoment(): MomentPlay | null {
+    const mo = this.sim.mo;
+    if (!mo || mo.active < 0) return null;
+    const p = this.sim.plays[mo.active];
+    return hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill ? null : p;
+  }
+
+  private momentTry = -1;
+
+  /** Round 7's verbs that are the action button's or the lantern's, tried as a person who knows them would:
+   *  a pop timed under each bell, pops of its own down Old Town, a pop off the lip for the high rings, one
+   *  long drift on the lake, and a dash into a race, a surge or the carry. True when it pressed something. */
+  private momentRide(now: number, apply: number, zp: number): boolean {
+    const p = this.triesMoment();
+    if (!p) return false;
+    const sim = this.sim;
+    const s = sim.s;
+    const mo = sim.mo;
+    const v = Math.max(10, s.vz);
+    const once = this.momentTry !== p.index * 16 + mo.at;
+    switch (p.verb) {
+      case 'shatter': {
+        const t = p.targets[mo.at];
+        if (!t || !once) return false;
+        const rel = t.z - v * (0.5 + 0.1 * t.h);
+        if (zp < rel - v * 0.6 || zp > rel - v * 0.2) return false;
+        this.momentTry = p.index * 16 + mo.at;
+        this.press(apply, 'crouch', 'pop');
+        this.releaseAt = this.tickAtZ(now, rel) + Math.round(gauss(this.rng) * this.t.timingSd);
+        return true;
+      }
+      case 'steps': {
+        if (p.style !== 'hops' || p.z1 - zp < v * 2.6 || now < this.momentWait) return false;
+        this.momentWait = now + 50;
+        const R = apply + this.rng.int(14, 22);
+        if (!this.flightClear(this.popFlight(now, R, apply, this.t.margin))) return false;
+        this.press(apply, 'crouch', 'pop');
+        this.releaseAt = R;
+        return true;
+      }
+      case 'rings': {
+        if (p.variantKey !== 'high' || !p.rings.length || !once) return false;
+        const lip = p.rings[0].z - 13.6;
+        if (zp < lip - v * 0.7 || zp > lip - 4) return false;
+        this.momentTry = p.index * 16 + mo.at;
+        this.press(apply, 'crouch', 'kicker');
+        this.releaseAt = this.tickAtZ(now, lip - 1);
+        return true;
+      }
+      case 'slide': {
+        if (!once || !s.onIce || p.z1 - zp < v * 3 || s.speed < 14) return false;
+        this.momentTry = p.index * 16 + mo.at;
+        // Toward where the lake's middle will be: the side with the most ice to cross.
+        const dir = s.x < this.course.centerX(s.z + 60) ? 1 : -1;
+        const cmd = this.startDrift(now, apply, dir, true);
+        this.driftTier = 3;
+        this.driftUntil = apply + (p.both ? p.each : p.need) + 12;
+        this.steer.set(apply, level(cmd));
+        return true;
+      }
+      case 'race':
+      case 'carry':
+        if (now - mo.t0 < 50) this.momentDash(now);
+        return false;
+      case 'surge':
+        if (p.lip - s.z < s.speed * 1.2 && p.lip - s.z > s.speed * 0.35) this.momentDash(now);
+        return false;
+      default:
+        return false;
+    }
+  }
+
+  private momentWait = 0;
+
+  /** A dash a set piece asks for: any full lantern, from the line. */
+  private momentDash(now: number): void {
+    const s = this.sim.s;
+    if (s.dash > 0 || now < this.spiritUntil + 40 || !s.grounded || s.tumble > 0 || s.lantern < LANTERN) return;
+    if (Math.abs(s.x - this.lines.safeX(s.z)) < 5) this.spiritUntil = now + 3;
   }
 
   private updateWander(now: number): void {
@@ -948,6 +1046,7 @@ export class Bot {
     const t = this.t;
     const rng = this.rng;
     if (this.act.last === 1 || now < this.releasedAt + 4 || this.cooling) return cmd;
+    if (this.momentRide(now, apply, zp)) return cmd;
     const g = this.goal;
     if (g && g.kind === 'kicker' && g.ramp) {
       // Crouch in and pop off the top of the face.

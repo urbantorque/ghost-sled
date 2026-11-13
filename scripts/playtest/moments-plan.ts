@@ -25,7 +25,7 @@ function holds(c: Course, p: MomentPlay): string {
     case 'slide':
       return p.both ? `a drift of ${(p.each / 60).toFixed(1)} s each way` : `one drift of ${(p.need / 60).toFixed(1)} s`;
     case 'shatter':
-      return `${p.targets.length} bells: ` + p.targets.map((t) => `${Math.round(t.z)}^${t.h.toFixed(1)}${t.top < 50 ? `-${t.top.toFixed(1)}` : ''}`).join(' ');
+      return `${p.targets.length} bells: ` + p.targets.map((t) => `${Math.round(t.z)}^${t.h.toFixed(1)}@${(t.x - c.safeX(t.z)).toFixed(1)}`).join(' ');
     case 'surge':
       return `lip ${Math.round(p.lip)}, set for ${p.speed} m/s, far line ${Math.round(p.far)} (${Math.round(p.far - p.lip)} m out)`;
     case 'flourish':

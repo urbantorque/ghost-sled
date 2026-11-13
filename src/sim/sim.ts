@@ -5,7 +5,7 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
-import { KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
+import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, fallPace, fallZ, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
@@ -1568,12 +1568,12 @@ export class Sim {
         break;
       }
       case 'shatter': {
-        // In the air under each bell, as high as it hangs (and under its beam, where it has one).
+        // In the air under each bell, as high as it hangs (and on its side of the street, where it hangs there).
         while (mo.at < p.targets.length && p.targets[mo.at].z <= s.z) {
           const t = p.targets[mo.at++];
           const up = s.y - this.course.ground(s.x, s.z);
           const dx = s.x - t.x;
-          const hit = !s.grounded && s.tumble === 0 && up >= t.h && up <= t.top && dx <= t.hw && dx >= -t.hw;
+          const hit = !s.grounded && s.tumble === 0 && up >= t.h && dx <= t.hw && dx >= -t.hw;
           if (hit) {
             mo.n++;
             mo.mask |= 1 << (mo.at - 1);
@@ -1651,14 +1651,22 @@ export class Sim {
         break;
       }
       case 'kindle': {
-        // Each unlit lamp the sled passes close beside is lit: enough of them, on both sides of the road.
+        // Each unlit lamp the sled passes close beside is lit: enough of them, on both sides of the road. Close,
+        // and clean: a sled that hits anything (a lamp above all) lights nothing for half a second, so a rider
+        // who ploughs down a row lights none of it. (mo.at counts that half second down.)
+        for (const e of this.events) {
+          if (e.type !== 'bump' && e.type !== 'ward' && e.type !== 'scrape' && !(e.type === 'tumble' && e.phase === 'start')) continue;
+          if (mo.at === 0) say('miss', mo.n);
+          mo.at = KINDLE_COLD;
+        }
+        if (mo.at > 0) mo.at--;
         for (let i = 0; i < p.lamps.length; i++) {
           const l = p.lamps[i];
           if (!l.dark || mo.mask & (1 << i)) continue;
-          const dz = l.z - s.z;
-          if (dz > 4 || dz < -4 || s.tumble > 0) continue;
+          // (As the sled passes the lamp: a hit on it has landed by then.)
+          if (l.z > s.z || l.z <= prevZ || s.tumble > 0 || mo.at > 0) continue;
           const dx = l.x - s.x;
-          if (dx * dx + dz * dz > KINDLE_REACH * KINDLE_REACH) continue;
+          if (dx > KINDLE_REACH || dx < -KINDLE_REACH) continue;
           mo.mask |= 1 << i;
           mo.n++;
           if (l.side < 0) mo.aux++;

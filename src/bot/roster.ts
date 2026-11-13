@@ -61,7 +61,7 @@ export interface Rider {
 
 export const ROSTER: readonly Rider[] = [
   {
-    key: 'crown', name: 'The Hollow King', hat: 'crown', emblem: 'crown', accent: '#E8D9FF', sled: 3, style: 'master', skill: 1, home: 0,
+    key: 'crown', name: 'The Hollow King', hat: 'crown', emblem: 'crown', accent: '#E8D9FF', sled: 3, style: 'master', skill: 1, home: 4,
     bio: 'Holds the top of every ladder and has never been seen to fall.',
     says: { pass: ['Kneel, little sled.', 'Make way.'], passed: ['Bold.', 'Enjoy the view.'], won: ['As it always is.'], lost: ['Again. Tomorrow.'] },
   },
