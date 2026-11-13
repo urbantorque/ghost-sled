@@ -107,7 +107,7 @@ function pole(): BufferGeometry {
 
 /** A boulder on the bank, in beds: a ledge with snow on it, a crown under snow, a drift round its foot. */
 function outcrop(p: Palette): BufferGeometry {
-  return strata({ rx: 1.3, rz: 1.0, h: 1.05, foot: 0.5, layers: 3, sides: 6, rock: [shade(p.low, 0.74), shade(p.low, 0.95), p.low.clone().lerp(p.lowLit, 0.6)], lie: SNOW, taper: 0.36, shift: 0.15, dip: 0.08, rough: 0.26, apron: 0.2, seed: 9202 });
+  return strata({ rx: 1.3, rz: 1.0, h: 1.05, foot: 0.5, layers: 3, sides: 6, rock: [shade(p.low, 0.74), shade(p.low, 0.95), p.low.clone().lerp(p.lowLit, 0.6)], lie: SNOW, taper: 0.38, shift: 0.22, dip: 0.18, dipZ: 0.1, warp: 0.5, jut: 0.14, lieMin: 0.16, rough: 0.3, apron: 0.2, seed: 9202 });
 }
 
 let rs = 7;

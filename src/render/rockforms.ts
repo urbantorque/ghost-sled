@@ -132,6 +132,9 @@ export interface StrataSpec {
    *  radius: what makes a ledge here, a flush wall there and an overhang past it along one joint. Default
    *  a third of `rough`. */
   jut?: number;
+  /** The narrowest ledge that holds `lie`, as a share of the smaller half extent (default 0.05). Raised,
+   *  snow lies only where a bed steps well in: on one side of a boulder, never in a ring round it. */
+  lieMin?: number;
   /** Buttresses: how deep the outline's three bays are cut between them (0 none). */
   bays?: number;
   /** A level top at exactly `h` that something stands on, under a slab of `lie` whose lip droops over
@@ -277,7 +280,7 @@ export function strataInto(f: Facets, s: StrataSpec): void {
       const outer = Math.hypot(mx - b.cx, mz - b.cz);
       const ledge = outer - inner;
       if (ledge > 0) {
-        if (s.lie && ledge > small * 0.05) {
+        if (s.lie && ledge > small * (s.lieMin ?? 0.05)) {
           // Banked against the wall: the snow's inner edge stands up the next bed's face.
           const bank = Math.max(0, Math.min(ledge * 0.7, (Math.min(u.hi[k][1], u.hi[k1][1]) - Math.max(u.lo[k][1], u.lo[k1][1])) * 0.45));
           const a: V3 = [u.lo[k][0], u.lo[k][1] + bank, u.lo[k][2]];
