@@ -242,3 +242,11 @@ The passes scale with pixels: at 2560x1440 expect about four times each figure.
   edge walk, the fringe, the shadow's reach). `tests/pipeline.test.ts` holds it to the plan: Low empty,
   rows add up to `plan.added`, cine at rest lists nothing, each row has a switch that removes it.
   Correction: depth of field is one gather and shares the lens pass, so a full beat adds 2 draws, not 3.
+- **Before and after at the fixed distances** (after a2dc2e1). Six of the round's fixed distances a
+  mountain, all four mountains, on Ultra, High and Medium: the same frozen frame drawn with `?post=none`
+  (round 6's stack on that tier) and with everything on, 144 frames, and Low's 24 (Low has no before:
+  nothing of this lane runs there). `shots/r7/pipe/fixed/<tier>-m<n>-z<dddd>-before|after.png`, and a
+  contact sheet a tier and mountain, `sheet-<tier>-m<n>.png`, `sheet-low.png`. Read: Ultra m0 and m3, High
+  m1, Medium m2 and Low's sheet. No console error in any run. The passes are quiet at sheet size, as they
+  should be (the grade is not this lane's); the lake on Ultra is the one frame that changes at a glance.
+  "Before" on Ultra is round 6's stack at Ultra's samples and shadow map, since round 6 had no Ultra.
