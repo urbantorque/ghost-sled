@@ -19,7 +19,7 @@ const C = (h: string) => new Color(h);
 /** Lit paper: a warm marigold-cream pushed past 1, so a storey of it blooms on Medium and High and is the
  *  brightest flat value in the frame on Low. */
 export function paper(k = 1): Color {
-  return C('#FFC46A').multiplyScalar(1.75 * k);
+  return C('#FFD070').multiplyScalar(1.6 * k);
 }
 /** Paper with no light behind it (the great lantern before the line, a shuttered storey). */
 export const PAPER_DARK = '#5A4E84';

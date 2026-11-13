@@ -977,7 +977,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glow = c('#FFC49C');
       p.massif.heroAz = -18;
       p.massif.sea = 1;
-      p.massif.seaWarm = 0.55;
+      p.massif.seaWarm = 0.75;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
       p.grade.saturation = 1.02;
@@ -1534,7 +1534,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.atmo.meteors = 0;
         p.massif.sea = 0;
         p.massif.seaWarm = 0;
-        p.massif.veil = 0.35;
+        p.massif.veil = 0.6;
         p.ridge = [c('#4A3E96'), c('#2C2470'), c('#181446')];
         p.massif.glow = c('#FFB870');
         p.massif.glowK = 0.3;
@@ -2002,9 +2002,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
     {
       kind: 'finish',
       edit: (p) => {
-        lamps(p, 1.2);
-        p.grade.hi = c('#FFF0DC');
-        p.bloom += 0.1;
+        lamps(p, 1);
+        p.grade.hi = c('#FFF4E6');
+        p.bloom += 0.08;
       },
     },
   ],

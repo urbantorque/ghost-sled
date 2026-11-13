@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferAttribute, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, NormalBlending, Object3D, PlaneGeometry, Points, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, CustomBlending, OneFactor, OneMinusSrcAlphaFactor, ZeroFactor, BufferAttribute, BufferGeometry, CircleGeometry, Color, CylinderGeometry, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedBufferGeometry, InstancedMesh, Matrix4, Mesh, NormalBlending, Object3D, PlaneGeometry, Points, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import type { Beat } from '../game/beats';
 import type { Snap } from '../game/run';
 import { CHUNK_LEN, type Course } from '../sim/course';
@@ -145,7 +145,13 @@ function valleyMaterial(low: boolean): ShaderMaterial {
   return new ShaderMaterial({
     transparent: true,
     depthWrite: false,
-    blending: AdditiveBlending,
+    // Each lantern covers what is behind it and then adds its light (premultiplied): added alone, marigold
+    // over a pale range is only a paler pink, and the valley reads as snowfall.
+    blending: CustomBlending,
+    blendSrc: OneFactor,
+    blendDst: OneMinusSrcAlphaFactor,
+    blendSrcAlpha: ZeroFactor,
+    blendDstAlpha: OneFactor,
     defines: defs(low),
     uniforms: { uTime: shared.uTime, uH: { value: 720 }, uFogR: { value: [60, 600] }, uCloud: { value: 0 }, uShow: { value: 0 }, uSurge: { value: 0 }, uRelease: { value: -1 }, uMinPx: { value: low ? 3 : 2.1 }, uGain: { value: low ? 1.15 : 1.9 } },
     vertexShader: /* glsl */ `
@@ -186,8 +192,8 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         // A lantern too far to cover a pixel dims; it never flickers in and out of the raster.
         a *= clamp(px / uMinPx, 0.5, 1.0) * lightAir(d);
         gl_PointSize = a < 0.004 ? 0.0 : min(max(px, uMinPx), 200.0);
-        vBig = smoothstep(5.0, 15.0, px);
-        vCol = mix(vec3(1.0, 0.56, 0.16), vec3(1.0, 0.82, 0.4), aB.x) * (0.86 + 0.2 * sin(uTime * (1.6 + aB.x * 2.4) + aA.x * 90.0));
+        vBig = smoothstep(4.0, 11.0, px);
+        vCol = mix(vec3(1.0, 0.5, 0.1), vec3(1.0, 0.76, 0.3), aB.x) * (0.86 + 0.2 * sin(uTime * (1.6 + aB.x * 2.4) + aA.x * 90.0));
         vA = a;
         gl_Position = projectionMatrix * mv;
       }
@@ -202,12 +208,15 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         vec2 q = gl_PointCoord * 2.0 - 1.0;
         q.y = -q.y;
         #ifdef POSTER
-          vec3 far = vCol * step(max(abs(q.x), abs(q.y)), 0.72);
+          float dotK = step(max(abs(q.x), abs(q.y)), 0.72);
         #else
-          vec3 far = vCol * mote(q) * 1.2;
+          float dotK = mote(q) * 1.25;
         #endif
-        vec3 col = mix(far, paperLantern(q, vCol), vBig);
-        gl_FragColor = vec4(col * vA * uGain, 1.0);
+        vec2 b = q / vec2(0.4, 0.56);
+        float bodyK = 1.0 - smoothstep(0.8, 1.0, pow(pow(abs(b.x), 2.8) + pow(abs(b.y), 2.8), 1.0 / 2.8));
+        vec3 col = mix(vCol * dotK, paperLantern(q, vCol), vBig);
+        float cover = mix(min(dotK, 1.0) * 0.85, bodyK * 0.92, vBig) * vA;
+        gl_FragColor = vec4(col * vA * uGain, cover);
       }
     `,
   });
@@ -321,12 +330,12 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         return n;
       }
       void main() {
-        vec2 q = vW.xz * 0.0012 + vec2(uTime * 0.004, uTime * 0.0015);
+        vec2 q = vW.xz * 0.0021 + vec2(uTime * 0.004, uTime * 0.0015);
         float n = billow(q);
         // The top sheet is the billows' crests alone; each one under it is fuller, and the floor is whole.
         float cover = smoothstep(0.42 - vL * 0.9, 0.62 - vL * 0.8, n * 0.5 + 0.5);
         vec2 sxz = normalize(uMoon.xz + vec2(0.0001, 0.0));
-        float facing = clamp(0.5 + (n - billow(q - sxz * 0.2)) * 2.3, 0.0, 1.0);
+        float facing = clamp(0.5 + (n - billow(q - sxz * 0.16)) * 3.2, 0.0, 1.0);
         float l = clamp(facing * 0.6 + (n * 0.5 + 0.5) * 0.4 + (1.0 - vL) * 0.12, 0.0, 0.999) * 3.0;
         float st = (floor(l) + smoothstep(0.35, 0.65, fract(l))) / 3.0;
         vec3 col = mix(uShade, uLit, st);
@@ -337,7 +346,7 @@ function sheetMaterial(low: boolean): ShaderMaterial {
         pool = smoothstep(0.22, 0.78, pool + 0.08 * sin(uTime * 0.21 + wq.x * 3.0));
         col += uWarm * pool * (0.3 + 0.7 * (1.0 - smoothstep(-0.35, 0.55, n))) * (0.45 + 0.55 * vL);
         float d = distance(vW, cameraPosition);
-        float a = cover * (1.0 - smoothstep(0.7, 1.0, length(vW.xz - cameraPosition.xz) / uR)) * smoothstep(5.0, 70.0, d);
+        float a = cover * (1.0 - smoothstep(0.7, 1.0, length(vW.xz - cameraPosition.xz) / uR)) * smoothstep(3.0, 26.0, d);
         col = mix(col, uHaze, smoothstep(700.0, 2500.0, d) * 0.85);
         gl_FragColor = vec4(col, a * uK);
       }
@@ -762,21 +771,21 @@ export class LanternWorld {
         // Beside the run: lanterns a rider passes among, each a paper lantern at the lens.
         off = hw + 13 + Math.pow(rnd(), 1.4) * 80;
         y0 = c.ground(cx + side * off, zc) + 1.5 + rnd() * 26;
-        size = 1.0 + rnd() * 0.7;
+        size = 1.6 + rnd() * 1.2;
       } else if (r < 0.2) {
         // Over the road, well above any flight.
         off = rnd() * (hw + 13);
         y0 = yc + 42 + rnd() * 120;
-        size = 1.2 + rnd() * 0.9;
+        size = 2 + rnd() * 1.4;
       } else if (r < 0.56) {
         off = 95 + rnd() * 400;
         y0 = yc - 30 + Math.pow(rnd(), 1.6) * 420;
-        size = 2 + rnd() * 2.2;
+        size = 3.5 + rnd() * 3.5;
       } else {
         // The far valley: the thousands. Bigger than life, as a far thing is drawn.
         off = 480 + Math.pow(rnd(), 1.25) * 1900;
         y0 = yc - 110 + Math.pow(rnd(), 1.4) * 620;
-        size = 5 + rnd() * 6;
+        size = 9 + rnd() * 9;
       }
       const range = 70 + rnd() * 190;
       y0 = Math.min(y0, deck - 20 - range * 0.5);
@@ -1018,15 +1027,15 @@ export class LanternWorld {
     const top = GREAT_Y + 11.6;
     const root = new Object3D();
     root.position.set(cx, g0, -z);
-    const frame = new Mesh(this.keep(greatFrame(X, top, (x) => visualGround(c, cx + x, z) - g0)), this.keep(makeToonMaterial({ coolShade: 0.4, rim: 0.3 })));
     const lan = greatLantern(3.3, 6.6);
-    const ribs = new Mesh(this.keep(lan.frame), frame.material);
-    ribs.position.y = top;
+    // (The lantern's ribs ride in the frame's own draw.)
+    lan.frame.translate(0, top, 0);
+    const frame = new Mesh(this.keep(merge([greatFrame(X, top, (x) => visualGround(c, cx + x, z) - g0), lan.frame])), this.keep(makeToonMaterial({ coolShade: 0.4, rim: 0.3 })));
     // The paper: dark until lit. The emissive is the light inside it.
     const paper = new Mesh(this.keep(lan.paper), this.keep(makeToonMaterial({ coolShade: 0.25, rim: 0.2, emissive: new Color('#FFB84E'), emissiveStrength: 0 })));
     paper.position.y = top;
-    for (const m of [frame, ribs, paper]) m.frustumCulled = false;
-    root.add(frame, ribs, paper);
+    for (const m of [frame, paper]) m.frustumCulled = false;
+    root.add(frame, paper);
     this.greatRoot = root;
     this.greatPaper = paper;
     this.root.add(root);
@@ -1145,8 +1154,8 @@ export class LanternWorld {
         this.sheets.position.set(cam.position.x, this.cloudTop, cam.position.z);
         const u = (this.sheets.material as ShaderMaterial).uniforms;
         u.uK.value = k;
-        u.uLit.value.copy(p.clouds.lit).lerp(p.snowLit, 0.45);
-        u.uShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.2);
+        u.uLit.value.copy(p.clouds.lit).lerp(p.snowLit, 0.6);
+        u.uShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.1);
         u.uRim.value.copy(p.rim);
         u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 0.8);
         u.uHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
@@ -1455,19 +1464,21 @@ export class LanternWorld {
     const gut = this.gutter || mo.at > 0 || pace < 0.22;
     const fx = Math.sin(s.heading);
     const fz = Math.cos(s.heading);
-    const x = s.x + fx * 0.75;
-    const zz = s.z + fz * 0.75;
-    const y = s.y + 0.78;
+    // (On a short staff at the sled's tail, a little to one side: the chase camera sees it over the rider's
+    // shoulder, where a flame on the prow would hide behind the coat.)
+    const x = s.x - fx * 0.5 + fz * 0.42;
+    const zz = s.z - fz * 0.5 - fx * 0.42;
+    const y = s.y + 1.42;
     const fl = gut ? 0.35 + 0.65 * Math.abs(Math.sin(time * 19) * Math.sin(time * 7.3)) : 0.88 + 0.12 * Math.sin(time * 11);
     const col = gut ? EMBER : pace < 0.45 ? FLAME : WHITE_GOLD;
     const fk = 1 + 1.4 * Math.exp(-(time - this.flare) * 5);
-    const size = (0.5 + 0.95 * pace) * fk * (gut ? 0.8 : 1);
+    const size = (0.34 + 0.56 * pace) * fk * (gut ? 0.8 : 1);
     // It streams back off the prow with the speed.
     const lean = Math.min(0.5, s.speed / 90);
     this.sprite(x - fx * lean * size, y + 0.34 * size, zz - fz * lean * size, 1.05 * size, 1, col, (1.5 + 0.6 * pace) * fl, 0.12);
-    this.sprite(x, y + 0.3 * size, zz, 3.4 * size, 0, col, 0.5 * fl);
+    this.sprite(x, y + 0.3 * size, zz, 2.2 * size, 0, col, 0.22 * fl);
     if (!gut) this.sprite(x, y + 0.2, zz, 0.42 * size, 0, WHITE_GOLD, 1.8 * fl);
-    pushLocalLight(x, y + 0.6, -zz, 1, gut ? 0.5 : 0.72, gut ? 0.16 : 0.3, 6.5 + 6 * pace, (0.55 + 0.9 * pace) * fl * fk * lampK);
+    pushLocalLight(x, y + 0.6, -zz, 1, gut ? 0.5 : 0.72, gut ? 0.16 : 0.3, 5 + 4 * pace, (0.3 + 0.45 * pace) * fl * fk * lampK);
     this.sparkAcc += dt * (gut ? 14 : 2 + 4 * (1 - pace));
     if (this.sparkAcc > 1) {
       this.sparkAcc = 0;
@@ -1530,15 +1541,15 @@ export class LanternWorld {
     const u = (paper.material as ShaderMaterial).uniforms;
     const flash = t < 0 ? 0 : Math.exp(-t * 2.2);
     const full = this.greatWon ? 1 : 0.72;
-    u.uEmissiveStrength.value = lit * full * (1.55 + 1.6 * flash + 0.08 * Math.sin(time * 5));
+    u.uEmissiveStrength.value = lit * full * (1.25 + 0.9 * flash + 0.06 * Math.sin(time * 5));
     const x = root.position.x;
     const y = root.position.y + GREAT_Y + 11.6 - 2.2 - 3.3;
     // It sways a little on its chains.
     paper.rotation.z = 0.02 * Math.sin(time * 0.9);
     if (lit > 0) {
-      this.sprite(x, y, z, 26 + 30 * flash, 0, MARIGOLD, (0.55 + 1.2 * flash) * lit * full);
-      this.sprite(x, y - 0.6, z, 7, 0, WHITE_GOLD, (0.9 + 1.4 * flash) * lit * full);
-      pushLocalLight(x, y - 3, -z, 1, 0.74, 0.3, 70, (1.5 + 1.6 * flash) * lit * full * lampK);
+      this.sprite(x, y, z, 15 + 10 * flash, 0, MARIGOLD, (0.3 + 0.5 * flash) * lit * full);
+      this.sprite(x, y - 0.6, z, 5, 0, WHITE_GOLD, (0.6 + 0.8 * flash) * lit * full);
+      pushLocalLight(x, y - 3, -z, 1, 0.78, 0.4, 40, (0.45 + 0.6 * flash) * lit * full * lampK);
       if (this.valley) {
         const vu = (this.valley.material as ShaderMaterial).uniforms;
         if (vu.uRelease.value < 0 && t > 0.25) {
