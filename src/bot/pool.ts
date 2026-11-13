@@ -44,6 +44,8 @@ export interface PoolOptions {
   /** Riders added at the fast end (round 7; default FAST_RIDERS on a named mountain, none otherwise): the
    *  quickest of FAST_TRIES times as many runs by the best bots, plain chaos so they can ride any run. */
   fast?: number;
+  /** Runs tried for each of them (default FAST_TRIES; a Daily's worker pool asks for fewer). */
+  fastTries?: number;
   /** Bot runs to choose from (default about 2.4 per ghost). */
   budgetRuns?: number;
   /** Cap on a run's length in ticks (default 5 minutes). */
@@ -140,10 +142,12 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
   const fast = Math.max(0, Math.floor(opts.fast ?? (opts.mountain !== undefined ? FAST_RIDERS : 0)));
   if (fast > 0) {
     const tries: PoolRun[] = [];
-    for (let i = 0; i < fast * FAST_TRIES; i++) {
+    for (let i = 0; i < fast * (opts.fastTries ?? FAST_TRIES); i++) {
       const skill = i % 3 === 2 ? 0.95 : 1;
       const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xfa57, i) };
-      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0xfa58, i), sled: i % 6, name: '' }, maxTicks);
+      // (Racers, round 7's simfix: tucked on every straight, every set piece tried, every lantern a dash. They
+      // are two to four seconds quicker at the top than the best of the crowd's own kind.)
+      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0xfa58, i), sled: i % 6, name: '', style: 'racer' }, maxTicks);
       if (sim.s.finished) tries.push({ skill, record, sim, selected: false });
     }
     tries.sort((a, b) => a.sim.s.finishTick - b.sim.s.finishTick);

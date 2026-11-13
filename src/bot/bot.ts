@@ -88,6 +88,12 @@ interface Traits {
   dashRate: number;
   /** Chance of dashing through a line that has closed ahead instead of swerving. */
   dashPhase: number;
+  /** The racer's habit (round 7's simfix), 0 to 1: how readily the rider drops into a tuck on a straight and
+   *  holds it, where a pop for the fun of it is held half a second. A tuck is worth 3 m/s at cruise, and no
+   *  pool rider used one for more than that half second: it is most of what the quickest riders lacked. */
+  tuck: number;
+  /** Set to 1 for a rider who tries every set piece (left out, its key and its skill decide each). */
+  setPieces?: number;
 }
 
 /** Roughly normal, unit variance, from four uniforms (no transcendental functions). */
@@ -111,6 +117,20 @@ function styleTraits(t: Traits, style: RideStyle): void {
       t.dashKeep = 0;
       t.dashRate = 0.45;
       t.dashPhase = 0.85;
+      break;
+    case 'racer':
+      // Rides for the clock (the pools' fast end): tucked wherever the line runs straight, no detour that is
+      // not fuel, every lantern a dash the moment the line is open, and every set piece tried, for the lantern
+      // it lights.
+      t.tuck = 1;
+      t.lateRate *= 0.3;
+      t.lapsePerMin *= 0.3;
+      t.blunder *= 0.3;
+      t.wander *= 0.3;
+      t.dashKeep = 0;
+      t.dashRate = 1.2;
+      t.dashPhase = 0.9;
+      t.setPieces = 1;
       break;
     case 'liner':
       // Never wastes a metre: no detours, few tricks, and a spare lantern goes on the next straight.
@@ -214,6 +234,7 @@ function baseTraits(skill: number, rng: Rng): Traits {
     dashKeep: s < 0.35 ? 1 : s < 0.7 ? (rng.chance(0.5) ? 1 : 0) : 0,
     dashRate: lerp(0.03, 0.3, s),
     dashPhase: lerp(0, 0.6, s),
+    tuck: s > 0.7 ? vary(lerp(0, 0.9, (s - 0.7) / 0.3), 0.15, 0, 1) : 0,
   };
 }
 
@@ -424,7 +445,7 @@ export class Bot {
     const p = mo.active >= 0 ? sim.plays[mo.active] : sim.plays[mo.next];
     if (!p || (mo.active < 0 && p.z0 - sim.s.z > sim.s.speed * 3)) return false;
     if (p.verb === 'race' || p.verb === 'carry' || p.verb === 'collapse' || p.verb === 'surge') return false;
-    return hashFloat(this.key, 0x5e7 + p.index) <= 0.3 + 0.6 * this.t.skill;
+    return this.tries(p);
   }
 
   /** Whether the next set piece is ridden on the snow from its first metre (a line, not a leap or a pop). */
@@ -593,7 +614,7 @@ export class Bot {
     const mo = sim.mo;
     if (!mo || mo.active < 0) return null;
     const p = sim.plays[mo.active];
-    if (hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill) return null;
+    if (!this.tries(p)) return null;
     const z = sim.s.z;
     if (p.verb === 'gates') {
       // (Sitting gates are one line from the set piece's first metre to its last gate: a rider who left it
@@ -634,7 +655,7 @@ export class Bot {
     const mo = this.sim.mo;
     if (!mo || mo.active < 0) return null;
     const p = this.sim.plays[mo.active];
-    return hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill ? null : p;
+    return this.tries(p) ? p : null;
   }
 
   /** The next set piece, when this rider tries it and it is a second or two away. */
@@ -644,7 +665,7 @@ export class Bot {
     if (!mo || mo.active >= 0) return null;
     const p = sim.plays[mo.next];
     if (!p || p.z0 - sim.s.z > sim.s.speed * 2) return null;
-    return hashFloat(this.key, 0x5e7 + p.index) > 0.3 + 0.6 * this.t.skill ? null : p;
+    return this.tries(p) ? p : null;
   }
 
   /** A pop a set piece asks for, decided whole: crouch at `P`, spring at `R`. Nothing else is tried meanwhile
@@ -661,6 +682,11 @@ export class Bot {
 
   /** The brazier a low flame is being carried to (the air's nudge aims the landing in line with it), or null. */
   private feed: { x: number; z: number } | null = null;
+
+  /** Whether this rider tries a set piece: its own, from its key, likelier the more skilled (a racer tries all). */
+  private tries(p: MomentPlay): boolean {
+    return this.t.setPieces === 1 || hashFloat(this.key, 0x5e7 + p.index) <= 0.3 + 0.6 * this.t.skill;
+  }
 
   private momentTry = -1;
   private onLine = false;
@@ -1222,10 +1248,13 @@ export class Bot {
     const combo = sim.combo;
     const chainNow = combo.active && combo.timer < 70 && rng.chance(t.chain);
     const popRate = avalanche ? t.popRate * 1.5 + 0.1 : t.popRate;
-    if (chainNow || rng.chance((popRate * this.interval) / TICK_RATE)) {
+    // A racer tucks whenever the line runs straight, and holds it: the pop it ends in comes when the line bends.
+    const tucking = !chainNow && Math.abs(cmd) < 0.2 && rng.chance((t.tuck * 2.5 * this.interval) / TICK_RATE);
+    if (tucking || chainNow || rng.chance((popRate * this.interval) / TICK_RATE)) {
       // Only crouch for a pop that will land clean: once crouched, letting go means popping.
-      const R = apply + rng.int(14, 36);
-      if (this.flightClear(this.popFlight(now, R, apply, t.margin))) {
+      const R = apply + (tucking ? rng.int(90, 210) : rng.int(14, 36));
+      // (A tuck is judged by the pop it could end in half a second on: where it will really end is looked at then.)
+      if (this.flightClear(this.popFlight(now, tucking ? apply + 30 : R, apply, t.margin))) {
         this.press(apply, 'crouch', 'pop');
         this.releaseAt = R;
       }

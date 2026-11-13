@@ -26,6 +26,7 @@ export type Emblem = 'snowflake' | 'leaf' | 'flame' | 'petal' | 'bell' | 'star' 
 /** How a rider rides, which the bot's traits carry into the record (see `styleTraits`). */
 export type RideStyle =
   | 'master' // everything, cleanly: every lantern spent where it pays, every line taken
+  | 'racer' // the clock and nothing else: tucked on every straight, every set piece tried, every lantern a dash (the pools' fast end)
   | 'liner' // the cleanest line on the mountain, few tricks, rarely falls, spends only spare lanterns on straights
   | 'dasher' // spends every lantern the moment it lights
   | 'stunt' // spins and flips everything with air under it
