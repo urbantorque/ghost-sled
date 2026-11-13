@@ -46,6 +46,8 @@ const PALE = new Color('#DDEBFF');
 const LILAC = new Color('#EFE6FF');
 const HALO = new Color('#B9A6FF');
 const STAG = new Color('#E4EEFF');
+/** Low's flat light leaves the snow near white: there the stag is a deeper ice blue, so it still parts from it. */
+const STAG_LOW = new Color('#8FB4FF');
 const ICE = new Color('#BFD9FF');
 const WARM = new Color('#FFD9A0');
 const MARI = new Color('#FFB84A');
@@ -325,7 +327,7 @@ export class LegendWorld {
     P.mat.uniforms.uAlpha.value = fade;
     const ph = frac(z / STRIDE);
     // (Leaving, it bounds: higher and longer as it goes.)
-    this.deer(P, c, x, z, yaw, k, ph, move, STAG, 1.7, 0.6 * this.kOut * move * Math.max(0, -Math.sin(ph * 6.283)));
+    this.deer(P, c, x, z, yaw, k, ph, move, ctx.low ? STAG_LOW : STAG, ctx.low ? 1.45 : 1.7, 0.6 * this.kOut * move * Math.max(0, -Math.sin(ph * 6.283)));
     const g = c.ground(x, z);
     const yb = g + DEER.stand * k;
     // Its own light: a cold halo that makes a white stag read on white snow, a star in its antlers.
@@ -337,7 +339,8 @@ export class LegendWorld {
     const from = lg.z0 - WARN;
     for (let j = 1; j <= (ctx.low ? 6 : 10); j++) {
       const zj = (first - j + 1) * STRIDE - 2.2;
-      if (zj < from || zj > lg.z1 + 20) continue;
+      // (They stop short of the sled: a print under it reads as a glitch of light, not a track.)
+      if (zj < from || zj < ctx.s.z + 6 || zj > lg.z1 + 20) continue;
       const xj = this.lineX(c, lg, zj) + weave(zj);
       const f = 1 - j / 11;
       ctx.kit.decal(c, xj - 0.8, zj, 2.1, 3.2, PALE, 1.7 * f, DECAL_POOL);
