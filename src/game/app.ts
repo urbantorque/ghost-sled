@@ -18,7 +18,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GarageShelf, GhostKind, HintKind, HudModel, PaintCard, ResultsModel, SettingsModel, TitleModel } from '../ui/contract';
+import type { GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -40,7 +40,7 @@ import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
-import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
+import { challengeShareTitle, crashLine, dailyHook, ellipsize, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, deviceCeiling, guessTier } from './quality';
 import { Rumble } from './rumble';
 import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
@@ -48,7 +48,9 @@ import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbM
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
-import { FINISH_Z, type Standing, aheadOf, byStanding, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
+import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
+import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider } from './twelve';
+import { FINISH_Z, type Standing, aheadOf, byStanding, clock, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
 // subsystem and is the only place where they meet.
@@ -63,8 +65,8 @@ const DEV_ON = import.meta.env.DEV || DEV.has('debug');
 /** The attract reel starts at least 6 s into the replays: before that its riders sit on top of each
  *  other at the start line, where the ghost layer fades them, so the title showed no race at all.
  *  Within the first 30 s it starts where two riders duel side by side (pickAttractHero). */
-const REEL_START = 360;
-const REEL_SCAN_END = 1800;
+const REEL_T0 = 360;
+const REEL_T1 = 1800;
 /** The title reel's duel partner: this ghost is replayed off its own clock, `lead` metres ahead of
  *  the hero and `lat` metres off its line (sim x), so it races at the hero's shoulder
  *  (App.pickReelMate; id -1 for none). A phone's narrow frame has the partner closer in and a little
@@ -170,6 +172,10 @@ export class App {
   private climbAtStart: Climb | null = null;
   /** The rider the results named on Run Again: it rides next on that mountain (field.ts). */
   private promised: { key: string; name: string; score: number; record: string } | null = null;
+  /** The Twelve: the duel this run is (null: not one), and what it did once it settled (a revive's second
+   *  settle keeps the first card's news). */
+  private duel: Duel | null = null;
+  private twelveOutcome: TwelveOutcome | null = null;
   private challenge: Challenge | null = null;
   private oldLink: OldLink | null = null;
   private sessionRuns = 0;
@@ -232,7 +238,11 @@ export class App {
   private adPlaying = false;
   private last = performance.now();
   private time = 0;
-  private attract = { tick: 0, focus: -1 };
+  /** The title's key art (keyart.ts): the shot of the mountain picked, and the reel's window on its
+   *  replays in ticks (it scans from..to for its opening and cuts back at end). */
+  private shot: TitleShot = PLAIN_SHOT;
+  private reel = { from: REEL_T0, to: REEL_T1, end: 60 * 45, staged: false };
+  private attract = { tick: REEL_T0, focus: -1 };
   private ghostPoses = new Map<number, GhostPose | null>();
   /** This frame's standings, computed once (the world's rival, the HUD pill and the hints read them). */
   private frameStandings: ReturnType<GhostManager['standings']> | null = null;
@@ -282,7 +292,7 @@ export class App {
     const forced = asked && TIERS.includes(asked) ? asked : null;
     this.tiers = new TierController(forced ?? (pref === 'auto' ? guess : pref), deviceCeiling());
     this.tiers.locked = forced !== null || pref !== 'auto';
-    this.mountain = MOUNTAINS.find((m) => m.id === this.save.data.mountain) ?? MOUNTAINS[0];
+    this.mountain = this.savedMountain();
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
@@ -402,7 +412,53 @@ export class App {
 
   /** The mountain the save last picked. */
   private savedMountain(): MountainDef {
-    return MOUNTAINS.find((m) => m.id === this.save.data.mountain) ?? MOUNTAINS[0];
+    const m = MOUNTAINS.find((x) => x.id === this.save.data.mountain);
+    return m && this.isOpen(m) ? m : MOUNTAINS[0];
+  }
+
+  /** Whether a named mountain is open: by ghosts passed, the finale by The Twelve (twelve.ts). In dev,
+   *  `?debug&m=N` opens the one it asks for whatever the save holds. */
+  private isOpen(m: MountainDef): boolean {
+    return mountainOpen(this.save.data, m) || (DEV_ON && DEV.has('m') && MOUNTAINS[Number(DEV.get('m'))] === m);
+  }
+
+  /** The duel a run on the selected mountain is (twelve.ts): the next rider's home ground, or the last
+   *  race. Never on a Daily or a Cup, and a friend's challenge on this mountain rides instead. */
+  private duelHere(): Duel | null {
+    const mi = MOUNTAINS.indexOf(this.mountain as MountainDef);
+    if (mi < 0 || (this.challenge && this.challenge.record.seed === this.mountain.seed)) return null;
+    return duelOn(this.save.data.twelve, mi, (i) => this.isOpen(MOUNTAINS[i]));
+  }
+
+  /** The card art a named mountain wears: its course's biome, the finale its own. */
+  private cardArt(m: MountainDef): MountainCard['biome'] {
+    return m.finale ? 'lantern' : biomeForSeed(m.seed);
+  }
+
+  /** The Twelve as the title shows it: the card (who rides next) and the ladder. */
+  private twelveModel(): TitleTwelve {
+    const t = this.save.data.twelve;
+    const open = (i: number): boolean => this.isOpen(MOUNTAINS[i]);
+    const next = nextDuel(t, open);
+    const rung = (r: (typeof TWELVE)[number]): TwelveRung => {
+      const g = duelRecord(poolFor(MOUNTAINS[r.home].id), r);
+      const time = g ? poolStanding(g).time : null;
+      const state: TwelveRung['state'] = hasBeaten(t, r.key) ? 'beaten' : next?.kind === 'duel' && next.rider === r ? 'next' : open(r.home) ? 'open' : 'locked';
+      return { key: r.key, name: r.name, hat: r.hat, emblem: r.emblem, accent: r.accent, bio: r.bio, mountain: MOUNTAINS[r.home].name, time: time === null ? null : clock(time), state };
+    };
+    const waits = waitingRider(t, open);
+    const at = next ? MOUNTAINS[duelMountain(next)] : null;
+    return {
+      beaten: t?.beaten.length ?? 0,
+      of: TWELVE.length,
+      tally: tallyLine(t),
+      next: next?.kind === 'duel' && at ? { ...rung(next.rider), mountainId: at.id, here: this.mountain === at } : null,
+      final: next?.kind === 'final' && at ? { mountainId: at.id, mountain: at.name, here: this.mountain === at } : null,
+      waiting: waits ? { rider: rung(waits), opens: lockText(this.save.data, MOUNTAINS[waits.home]).replace(/\s+to unlock$/, '') } : null,
+      hook: gateLine(t),
+      crowned: t?.crowned === true,
+      rungs: TWELVE.map(rung),
+    };
   }
 
   /** A link opened this Daily or Cup before its rivals were generated: its title stands, Ride waits. */
@@ -545,11 +601,16 @@ export class App {
     const entries = picks.map((g) => ({ name: g.name, kind: 'pool' as GhostKind, score: g.score, record: g.record }));
     this.ghosts.setField(entries);
     this.world.setGhostField(this.ghostField());
-    this.attract = { tick: REEL_START, focus: -1 };
+    // The mountain's composition: where its reel rides and where the lens sits. The world opens there, so
+    // the first frame is already the shot (the riders join it once their replays are in).
+    this.shot = DEV_ON ? devShot(titleShot(this.mountain.id), DEV) : titleShot(this.mountain.id);
+    this.world.cam.titleLens = { desk: this.shot.desk, phone: this.shot.phone };
+    this.reel = { from: REEL_T0, to: REEL_T1, end: 60 * 45, staged: false };
+    this.attract = { tick: this.reel.from, focus: -1 };
     const pose = emptySnap();
-    pose.z = 2;
-    pose.x = this.world.course.safeX(2);
-    pose.y = this.world.course.ground(pose.x, 2);
+    pose.z = Math.max(2, this.shot.from);
+    pose.x = this.world.course.safeX(pose.z);
+    pose.y = this.world.course.ground(pose.x, pose.z);
     this.world.beginRun(pose, ChaosEvent.None);
   }
 
@@ -598,9 +659,9 @@ export class App {
           id: m.id,
           name: m.name,
           tagline: m.tagline,
-          biome: biomeForSeed(m.seed),
-          locked: d.ghostsPassed < m.unlockGhosts,
-          unlockText: d.ghostsPassed < m.unlockGhosts ? `Pass ${m.unlockGhosts - d.ghostsPassed} more ${m.unlockGhosts - d.ghostsPassed === 1 ? 'ghost' : 'ghosts'} to unlock` : '',
+          biome: this.cardArt(m),
+          locked: !this.isOpen(m),
+          unlockText: this.isOpen(m) ? '' : lockText(d, m),
           best: topScore(d.best[m.id]),
           bestTime: d.best[m.id]?.time ?? 0,
           oldBest: oldBest(d, m.id)?.score ?? 0,
@@ -638,6 +699,7 @@ export class App {
         best: d.best[`cup:${week}`]?.time ?? 0,
         medal: cupMedalNow(d.cup, week),
       },
+      twelve: d.runs > 0 ? this.twelveModel() : null,
     };
     this.ui.showTitle(model);
   }
@@ -651,7 +713,7 @@ export class App {
       this.mountain = this.cup;
     } else {
       const m = MOUNTAINS.find((mm) => mm.id === id);
-      if (!m || this.save.data.ghostsPassed < m.unlockGhosts) return;
+      if (!m || !this.isOpen(m)) return;
       this.mountain = m;
       this.save.data.mountain = m.id;
       this.save.save();
@@ -797,7 +859,16 @@ export class App {
     const friend = this.challenge && this.challenge.record.seed === this.mountain.seed ? this.challenge.record : null;
     const cup = this.mountain.id === 'cup';
     const mine = own?.record ? { name: d.name, score: own.score, distance: own.distance, record: own.record } : null;
-    const promised = this.promised?.key === key ? this.promised : null;
+    // A duel of The Twelve: the rider's real record on their home ground rides as the promised rival, whatever
+    // the mood. The last race is its own field: all twelve on their Lanternfall records, and your best.
+    const duel = this.duel;
+    if (duel?.kind === 'final') {
+      const all: Omit<GhostEntry, 'id'>[] = finalField(this.poolForMountain(this.mountain)).map((g) => ({ name: g.name, kind: g.kind, score: g.score, record: g.record, role: g.role, ...(g.rival ? { rival: true } : {}) }));
+      if (mine) all.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record });
+      return all;
+    }
+    const duelRec = duel ? duelRecord(this.poolForMountain(this.mountain), duel.rider) : null;
+    const promised = duelRec ? { key, name: duelRec.name, score: duelRec.score, record: duelRec.record } : this.promised?.key === key ? this.promised : null;
     const picks = pickField({
       pool: this.poolForMountain(this.mountain),
       kind: MOUNTAINS.some((m) => m === this.mountain) ? 'pool' : 'daily',
@@ -863,6 +934,9 @@ export class App {
 
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(chaos.mood);
+    this.world.journeyAt = null;
+    this.duel = this.duelHere();
+    this.twelveOutcome = null;
     const field = this.pickField(chaos);
     this.promised = null;
     this.ghosts.setField(field);
@@ -982,6 +1056,19 @@ export class App {
         if (go) this.audio.ui('go', 0, 0.9);
       });
     }
+    // A duel says so as it starts: who, and the time to beat. After the reveal card, when there is one.
+    if (this.duel) {
+      const duel = this.duel;
+      const rec = duel.kind === 'duel' ? duelRecord(this.poolForMountain(this.mountain), duel.rider) : null;
+      const line = duelStartLine(duel, rec ? poolStanding(rec) : null);
+      const run = this.run;
+      window.setTimeout(
+        () => {
+          if (this.run === run && this.phase === 'run') this.ui.toast(line.text, 'grudge', line.sub);
+        },
+        reveal ? REVEAL_TIMING.T_LEAVE + REVEAL_TIMING.LEAVE_MS : 700,
+      );
+    }
     this.platform.gameplayStart();
     return reveal;
   }
@@ -1034,7 +1121,7 @@ export class App {
       grudgeAtStart: g ? { name: g.name, record: g.record, them: g.them ?? 1, streak: g.streak ?? 1 } : null,
       friend: goal ? { name: goal.name, distance: goal.standing.distance, time: goal.standing.time } : null,
       lifetimePassed: d.ghostsPassed,
-      unlockLadder: MOUNTAINS.filter((m) => m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
+      unlockLadder: MOUNTAINS.filter((m) => !m.finale && m.unlockGhosts > d.ghostsPassed).map((m) => ({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), need: m.unlockGhosts })),
       missionsCrossed: () => this.missionsCrossedNow(),
       graveyards: this.graves,
       // A named mountain's authored set pieces; a Daily's or a Cup's biggest places.
@@ -1556,10 +1643,46 @@ export class App {
     // the first crash's passes (its passedBefore), and the card still belongs to this run's results.
     const before = Math.min(settled.passedBefore, this.passedAtStart);
     for (const m of MOUNTAINS) {
-      if (before < m.unlockGhosts && d.ghostsPassed >= m.unlockGhosts) {
+      if (!m.finale && before < m.unlockGhosts && d.ghostsPassed >= m.unlockGhosts) {
         unlocked.push(m.name);
-        unlockedMountains.push({ id: m.id, name: m.name, biome: biomeForSeed(m.seed), tagline: m.tagline });
+        unlockedMountains.push({ id: m.id, name: m.name, biome: this.cardArt(m), tagline: m.tagline });
       }
+    }
+    // The Twelve: a duel settles on every card of the run (a revive's second finish may win it), and the
+    // settle that beat the rider keeps the news. A rider who falls pays once; the eleventh opens
+    // Lanternfall, which is the card's unlock.
+    let twelve: ResultsModel['twelve'] = null;
+    if (this.duel) {
+      const t = (d.twelve = readTwelve(d.twelve));
+      const standings = new Map<string, Standing>();
+      for (const tr of this.ghosts.tracks) if (tr.ready && tr.entry.kind !== 'you') standings.set(tr.entry.name, trackStanding(tr));
+      const o = settleTwelve(t, this.duel, you, standings);
+      if (!t.beaten.length) delete d.twelve;
+      const won = this.twelveOutcome?.fell || this.twelveOutcome?.crowned;
+      const kept = (this.twelveOutcome = won ? this.twelveOutcome! : o);
+      const pay = o.fell ? DUEL_GIFTS : o.crowned ? CROWN_GIFTS : 0;
+      if (pay) {
+        d.gifts += pay;
+        d.lifetimeGifts += pay;
+      }
+      if (kept.opened) {
+        const m = MOUNTAINS[KING.home];
+        unlocked.push(m.name);
+        unlockedMountains.push({ id: m.id, name: m.name, biome: this.cardArt(m), tagline: m.tagline });
+      }
+      const line = outcomeLine(kept);
+      const r = kept.duel?.kind === 'duel' ? kept.duel.rider : null;
+      const said = r ? (kept.fell ? r.says.lost : kept.lost ? r.says.won : []) : [];
+      if (line && sim.finished)
+        twelve = {
+          tone: kept.crowned ? 'crowned' : kept.fell ? 'fell' : kept.duel?.kind === 'final' ? 'final' : 'held',
+          line,
+          rider: r ? { key: r.key, name: r.name, hat: r.hat, emblem: r.emblem, accent: r.accent } : null,
+          says: said.length ? said[d.runs % said.length] : null,
+          beaten: t.beaten.length,
+          of: TWELVE.length,
+          gifts: kept.fell ? DUEL_GIFTS : kept.crowned ? CROWN_GIFTS : 0,
+        };
     }
     this.save.flush();
     // The race is decided by time, then distance (standing.ts): each ghost carries its whole run (the
@@ -1597,6 +1720,14 @@ export class App {
     const friendLabel = this.friendForLabel(sim);
     const grudgeNext = rideableGrudge(d, key);
     this.promised = null;
+    // The duel that rides next on this mountain names Run Again: a rematch with the rider who held you
+    // off, or the next of The Twelve when their home is this ground too.
+    const duelNext = friendLabel?.beaten === false ? null : this.duelHere();
+    const duelLabel = !duelNext
+      ? null
+      : duelNext.kind === 'final'
+        ? { text: 'The Last Race', aria: 'The last race against all twelve, run again' }
+        : { text: `${this.duel?.kind === 'duel' && this.duel.rider === duelNext.rider ? 'Rematch' : 'Duel'} ${ellipsize(duelNext.rider.name)}`, aria: `Duel ${duelNext.rider.name}, run again` };
     const finish: ResultsModel['finish'] =
       you.time === null
         ? null
@@ -1658,7 +1789,8 @@ export class App {
       // A phone card, whose race line takes the crash note's slot, shows the place you fell in beside
       // the finishing place (results.ts, only when it was better).
       rankAtCrash: this.rankAtCrash,
-      runAgainLabel: runAgainLabel(friendLabel, grudgeNext, friendLabel?.beaten === false || grudgeNext ? null : this.promiseNext(you, key, climb?.spot ?? null)),
+      runAgainLabel: duelLabel ?? runAgainLabel(friendLabel, grudgeNext, friendLabel?.beaten === false || grudgeNext ? null : this.promiseNext(you, key, climb?.spot ?? null)),
+      twelve,
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
       ladder: climb
@@ -1901,8 +2033,18 @@ export class App {
     const p = emptyPose();
     for (const t of tracks) if (!this.ghosts.pose(t, 600, p)) return -1;
     if (n === 0) return -1;
+    // A composed mountain's reel rides its vista: the window opens as the middle rider reaches the shot's
+    // first metre and the reel cuts back as it reaches the last. (The riders reach it seconds apart; the
+    // duel partner rides off its own clock, so the hero still has one at its shoulder.)
+    if (!this.reel.staged && this.shot.from > 100) {
+      const mid = tracks[Math.min(1, n - 1)];
+      const from = Math.max(REEL_T0, this.tickAtZ(mid, this.shot.from));
+      const end = Math.max(from + 900, this.tickAtZ(mid, this.shot.to));
+      this.reel = { from, to: Math.min(from + 1440, Math.max(from + 600, end - 600)), end, staged: true };
+      this.attract.tick = from;
+    }
     const STEP = 6;
-    const samples = Math.floor((REEL_SCAN_END - REEL_START) / STEP);
+    const samples = Math.floor((this.reel.to - this.reel.from) / STEP);
     // The duel score of each rider as hero at each sample: 1 for a grounded mate half a length to two
     // lengths ahead and a lane or so aside (it reads as a rival at about two thirds of the hero's size,
     // where level with it, from the camera behind, it read as a companion and further back as a
@@ -1911,7 +2053,7 @@ export class App {
     const q = new Float32Array(n * samples);
     const poses = tracks.map(() => emptyPose());
     for (let k = 0; k < samples; k++) {
-      const tick = REEL_START + k * STEP;
+      const tick = this.reel.from + k * STEP;
       for (let i = 0; i < n; i++) if (!this.ghosts.pose(tracks[i], tick, poses[i])) poses[i].done = true;
       for (let i = 0; i < n; i++) {
         const h = poses[i];
@@ -1948,7 +2090,7 @@ export class App {
     const W = Math.floor(300 / STEP);
     let bestSum = 0;
     let hero = -1;
-    let start = REEL_START;
+    let start = this.reel.from;
     for (let i = 0; i < n; i++) {
       for (let k = 0; k + W <= samples; k++) {
         let sum = 0;
@@ -1956,17 +2098,17 @@ export class App {
         if (sum > bestSum + 1e-6) {
           bestSum = sum;
           hero = i;
-          start = REEL_START + k * STEP;
+          start = this.reel.from + k * STEP;
         }
       }
     }
     let heroId: number;
     if (hero >= 0 && bestSum > W * 0.35) {
       // Half a second of lead-in, so the pair is already together when the first frame settles.
-      this.attract.tick = Math.max(REEL_START, start - 30);
+      this.attract.tick = Math.max(this.reel.from, start - 30);
       heroId = tracks[hero].entry.id;
     } else {
-      this.attract.tick = REEL_START;
+      this.attract.tick = this.reel.from;
       const ranked: { id: number; z: number }[] = [];
       for (const t of tracks) {
         this.ghosts.pose(t, 600, p);
@@ -2004,10 +2146,10 @@ export class App {
     const EVERY = 16;
     let best = SAMPLES * 0.45;
     let heroId = -1;
-    let start = REEL_START;
+    let start = this.reel.from;
     // The natural pick's opening first, then the stretches every 4 s through the first 25 s.
     const starts = [this.attract.tick];
-    for (let s = REEL_START; s <= REEL_SCAN_END - SAMPLES * EVERY; s += 240) starts.push(s);
+    for (let s = this.reel.from; s <= this.reel.to - SAMPLES * EVERY; s += 240) starts.push(s);
     for (const from of starts) {
       for (const ht of tracks) {
         for (const mt of tracks) {
@@ -2159,12 +2301,14 @@ export class App {
         allDone = false;
       }
     }
-    if (allDone || tick > 60 * 45) {
+    if (allDone || tick > this.reel.end || (this.reel.staged && focus !== null && focus.z > this.shot.to)) {
+      // (A soft dip over the cut, so the loop reads as an edit and not as a jump.)
+      this.ui.titleCut();
       this.ghosts.resetRace();
       this.world.ghosts.resetRun();
       this.world.trail.clear();
       // The next frame picks again, back to the same opening moment.
-      this.attract.tick = REEL_START;
+      this.attract.tick = this.reel.from;
       this.attract.focus = -1;
     }
     const snap = this.view;
@@ -2186,12 +2330,14 @@ export class App {
       snap.grounded = focus.grounded;
       snap.drifting = focus.drifting;
     } else {
-      snap.z = 2 + this.time * 0.5;
+      snap.z = Math.max(2, this.shot.from) + this.time * 0.5;
       snap.x = this.world.course.safeX(snap.z);
       snap.y = this.world.course.ground(snap.x, snap.z);
       snap.speed = 0;
     }
     snap.crashed = false;
+    // The colour script's time for this shot (the run takes the light back when it starts).
+    this.world.journeyAt = this.shot.light ?? snap.z;
     this.world.frame({
       mode: 'title',
       snap,

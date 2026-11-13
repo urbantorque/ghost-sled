@@ -1,6 +1,7 @@
 import { weekOfDay } from './cup';
 import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
 import { type MasteryRecord, readMastery } from './mastery';
+import { type TwelveSave, readTwelve } from './twelve';
 import { type ShelfId, freeItem, isItem } from './garage';
 import { PAINTS } from './paints';
 import { dailyKey } from '../sim/mountains';
@@ -143,6 +144,9 @@ export interface SaveData {
   trail?: string;
   sounds?: string[];
   sound?: string;
+  /** The Twelve (round 7, twelve.ts): the signature riders beaten in a duel, and the last race won. Kept
+   *  across a clean break: a rider beaten stays beaten whatever the pools are re-ridden to. */
+  twelve?: TwelveSave;
 }
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
@@ -520,6 +524,10 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     if (Object.keys(ms).length) d.mastery = ms;
     else delete d.mastery;
   } else delete d.mastery;
+  // The Twelve: known riders only, and written only once somebody has fallen.
+  const twelve = readTwelve(p.twelve);
+  if (twelve.beaten.length) d.twelve = twelve;
+  else delete d.twelve;
   pruneDaily(d, today);
   return d;
 }

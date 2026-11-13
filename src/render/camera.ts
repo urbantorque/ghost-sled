@@ -5,6 +5,7 @@ import { TOP_SPEED, blurK, chaseBack, chaseFov, chaseRow, chaseUp, edgeK, fastK,
 import { CRASH_FREEZE_S, CRASH_PACK_NEAR_M, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
 import type { GhostPose } from '../game/ghosts';
 import type { Shot } from '../game/shots';
+import { PLAIN_SHOT, type TitleLens } from '../game/keyart';
 import type { SimEvent } from '../sim/sim';
 
 // Chase camera (ART.md section 8): leads into turns, breathes FOV with speed, rolls into carves,
@@ -457,6 +458,9 @@ export class ChaseCamera {
   /** Section entrances: the section ahead last seen (its start, sim z) and the rise's seconds left. */
   private riseFrom = NaN;
   private riseLeft = 0;
+  /** The title's composition (round 7, game/keyart.ts): where the lens sits for the mountain picked, on a
+   *  wide screen and on a tall one. The app sets it with the mountain; the defaults are the reel as it was. */
+  titleLens: { desk: TitleLens; phone: TitleLens } = { desk: PLAIN_SHOT.desk, phone: PLAIN_SHOT.phone };
   /** The desktop title crane's clock (seconds) and its eased weight (1 is the wide shot). */
   private titleT = 0;
   private craneK = 1;
@@ -2327,17 +2331,21 @@ export class ChaseCamera {
    *  in the sky above the rider and the lit snow and its long shadow fill the foreground. A ghost
    *  racing alongside shares the shot: the hero shifts to the other side to make room for it. */
   private phoneTitle(t: CamTarget, desired: Vector3, lookAt: Vector3, dt: number, tanHalfW: number, travelAz: number): void {
+    const L = this.titleLens.phone;
     let yaw = travelAz;
-    if (this.sun) {
+    if (L.sweep !== null) {
+      // A composed mountain: the lens rests where its shot puts it (keyart.ts).
+      yaw = travelAz + L.sweep;
+    } else if (this.sun) {
       // The sun just right of centre, under the tagline; never so far round that the course leaves the frame.
       const want = azimuth(this.sun.x, this.sun.z) - Math.atan(0.3 * tanHalfW);
       yaw = travelAz + MathUtils.clamp(wrapAngle(want - travelAz), -0.4, 0.4);
     }
-    yaw += Math.sin(this.orbitAngle) * 0.06;
+    yaw += Math.sin(this.orbitAngle) * (this.feel.reduced ? 0 : L.drift);
     // Close and low: the hero and the ghost beside it stand larger in their band, and the lit snow and
     // the hero's groove fill the band down to the tagline (from 1.15 m up it was a fog gradient).
-    const r = 4.6;
-    let heroX = -0.08;
+    const r = L.r;
+    let heroX = L.hero[0];
     let near = Infinity;
     for (let i = 0; i < this.crowdN; i++) {
       const mx = this.crowd[i].x - t.pos.x;
@@ -2352,12 +2360,14 @@ export class ChaseCamera {
     // Shift across gently when the ghost alongside changes sides.
     this.heroXS = this.initialized ? this.heroXS + (heroX - this.heroXS) * (1 - Math.exp(-dt * 1.5)) : heroX;
     const toward = yaw + Math.atan(this.heroXS * tanHalfW);
-    desired.set(t.pos.x - Math.sin(toward) * r, t.pos.y + 0.95, t.pos.z + Math.cos(toward) * r);
+    desired.set(t.pos.x - Math.sin(toward) * r, t.pos.y + L.up, t.pos.z + Math.cos(toward) * r);
     // Behind the hero is uphill: keep a little air under the lens, low enough that the slope
     // ahead and the hero's shadow fill the foreground.
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.5);
-    // The hero's middle at about 53% of the height, so its sled clears the cards and Ride below 60%.
-    this.aimAt(lookAt, desired, yaw, Math.atan2(t.pos.y + 0.5 - desired.y, r), -0.06);
+    // The hero's middle at about 43% of the height: round 7 gave the foot of the screen one more row (The
+    // Twelve), so the cards start at half height and the open band is from the place line down to them.
+    // (A shot that lifts its look sets the hero a little lower in the band, so its landmark clears the logo.)
+    this.aimAt(lookAt, desired, yaw, Math.atan2(t.pos.y + 0.5 - desired.y, r), 0.14 - (L.lift - 0.5) * 0.1);
   }
 
   /** Desktop title hero shot: a slow sweep behind and beside the lead rider, looking down the
@@ -2374,22 +2384,28 @@ export class ChaseCamera {
     const ph = (this.titleT / TITLE_CYCLE) * Math.PI * 2;
     const craneT = this.feel.reduced ? 0 : smooth01((0.5 + 0.5 * Math.cos(ph) - 0.45) / 0.45);
     this.craneK = this.initialized ? this.craneK + (craneT - this.craneK) * (1 - Math.exp(-dt * 1.2)) : craneT;
-    const crane = this.craneK;
+    const L = this.titleLens.desk;
+    const crane = this.craneK * L.crane;
     // Far enough back (and low) that the hero and its streaming scarf stand against the open sky
     // right of the menu cards, with the ghost racing it in the same shot at about two thirds of its
     // size: at 3.2 m the hero filled the frame behind the cards and the ghost read as a bystander.
-    const r = 4.7 + crane * 6.5;
+    const r = L.r + crane * 6.5;
     // Seen from sweep s the hero lies s radians left of the course, so the sweep rocks about the one
     // that puts the low sun a little right of the hero: the bloomed disc and the paling ridges hang
     // in the open sky over its shoulder (the frame ART.md section 11 asks for), not behind the
     // menu column and its scrim on the left. With the sun behind, the sweep opens on the hero's
     // left, where the field (which starts behind it) shows on the right.
     const sunRel = this.sun ? wrapAngle(azimuth(this.sun.x, this.sun.z) - travelAz) : Math.PI;
-    const natural = Math.abs(sunRel) < 1.2 ? MathUtils.clamp(0.25 - sunRel + Math.sin(this.orbitAngle) * 0.2, -1.1, 1.1) : -Math.sin(this.orbitAngle) * 0.9;
+    // A composed mountain rests its sweep where its shot puts it (keyart.ts) and drifts a little either
+    // side; it still steps aside for a ghost that would sit in the logo's corner, but not far.
+    const composed = L.sweep !== null;
+    const sway = this.feel.reduced ? 0 : Math.sin(this.orbitAngle);
+    const natural = L.sweep !== null ? L.sweep + sway * L.drift : Math.abs(sunRel) < 1.2 ? MathUtils.clamp(0.25 - sunRel + Math.sin(this.orbitAngle) * 0.2, -1.1, 1.1) : -Math.sin(this.orbitAngle) * 0.9;
     let target = natural;
     if (this.crowdN > 0) {
       let best = Infinity;
-      for (let k = -8; k <= 8; k++) {
+      const reach = composed ? 3 : 8;
+      for (let k = -reach; k <= reach; k++) {
         const s = MathUtils.clamp(natural + k * 0.15, -1.15, 1.15);
         let cost = Math.abs(k);
         for (let i = 0; i < this.crowdN; i++) cost += this.logoClash(t.pos, this.crowd[i], s, r, side, tanHalfW) * 100;
@@ -2406,13 +2422,13 @@ export class ChaseCamera {
       .copy(t.pos)
       .addScaledVector(this.dirS, -Math.cos(sweep) * r)
       .addScaledVector(side, Math.sin(sweep) * r);
-    desired.y = t.pos.y + 1.0 + crane * 4.4 + Math.sin(this.orbitAngle * 0.7) * 0.15;
+    desired.y = t.pos.y + L.up + crane * 4.4 + Math.sin(this.orbitAngle * 0.7) * 0.15;
     // Behind the hero is uphill: on a steep pitch that height alone would sink into the slope.
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.85);
     // The crane looks far down the course at about the hero's height, so the horizon, the ridges and
     // the low sun stand over the slope falling away below.
-    lookAt.copy(t.pos).addScaledVector(this.dirS, 5 + crane * 40);
-    lookAt.y += 1.25 + crane * 0.5;
+    lookAt.copy(t.pos).addScaledVector(this.dirS, L.ahead + crane * 40);
+    lookAt.y += L.lift + crane * 0.5;
     // As the sweep swings, the hero drifts sideways in the frame. Turn just enough to keep it
     // between about 57 and 63% of the width: clear of the menu column on the left (the logo, and
     // for a returning player the mountain cards beside Ride, out to about 38%), its scarf included.
@@ -2422,7 +2438,7 @@ export class ChaseCamera {
     const hx = t.pos.x - desired.x;
     const hz = t.pos.z - desired.z;
     const heroAng = Math.atan2((hz * fx - hx * fz) / fl, (hx * fx + hz * fz) / fl);
-    const turn = heroAng - MathUtils.clamp(heroAng, Math.atan(0.14 * tanHalfW), Math.atan(0.26 * tanHalfW));
+    const turn = heroAng - MathUtils.clamp(heroAng, Math.atan(L.hero[0] * tanHalfW), Math.atan(L.hero[1] * tanHalfW));
     if (turn !== 0) {
       const c = Math.cos(turn);
       const s = Math.sin(turn);

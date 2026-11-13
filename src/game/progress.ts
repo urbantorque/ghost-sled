@@ -16,6 +16,9 @@ import { type Standing, aheadOf, figure, marginPhrase } from './standing';
 
 export type { MissionCtx };
 
+/** The mountains ghosts passed open, nearest first. The finale opens by The Twelve (twelve.ts), not by this count. */
+const GHOST_LADDER = MOUNTAINS.filter((x) => !x.finale).sort((a, b) => a.unlockGhosts - b.unlockGhosts);
+
 const NF = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const num = (v: number): string => NF.format(Math.round(v));
 const m = (v: number): string => `${num(v)} m`;
@@ -69,7 +72,7 @@ export function liveMissionViews(s: MissionState, sum: RunSummary, ctx: MissionC
 /** The next unlock to work toward: the next mountain by lifetime ghosts passed, then the cheapest
  *  sled you do not own (gifts to go, 0 once affordable), then null. */
 export function nextUnlock(d: SaveData): ResultsNextUnlock | null {
-  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > d.ghostsPassed);
+  const mtn = GHOST_LADDER.find((x) => x.unlockGhosts > d.ghostsPassed);
   if (mtn) return { kind: 'mountain', name: mtn.name, biome: biomeForSeed(mtn.seed), have: Math.max(0, d.ghostsPassed), need: mtn.unlockGhosts };
   const sled = SLEDS.filter((s) => !d.ownedSleds.includes(s.id) && s.price > 0).sort((a, b) => a.price - b.price)[0];
   if (sled) return { kind: 'sled', name: sled.name, gifts: Math.max(0, sled.price - d.gifts) };
@@ -88,13 +91,13 @@ export function livePassed(lifetime: number, passedThisRun: number, settledPasse
 /** The mountain a live pass count just opened (its unlockGhosts in (before, now]), or null. */
 export function unlockCrossed(before: number, now: number): { id: string; name: string; biome: BiomeId } | null {
   if (now <= before) return null;
-  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > before && x.unlockGhosts <= now);
+  const mtn = GHOST_LADDER.find((x) => x.unlockGhosts > before && x.unlockGhosts <= now);
   return mtn ? { id: mtn.id, name: mtn.name, biome: biomeForSeed(mtn.seed) } : null;
 }
 
 /** The raceNews 'unlockTease' line once a pass leaves one ghost to go, else null. */
 export function unlockTease(live: number): string | null {
-  const mtn = [...MOUNTAINS].sort((a, b) => a.unlockGhosts - b.unlockGhosts).find((x) => x.unlockGhosts > live);
+  const mtn = GHOST_LADDER.find((x) => x.unlockGhosts > live);
   return mtn && mtn.unlockGhosts - live === 1 ? `1 more ghost opens ${mtn.name}` : null;
 }
 

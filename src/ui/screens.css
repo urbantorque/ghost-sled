@@ -1,0 +1,1383 @@
+/*
+  Round 7 screens: the title as key art (the place line, the veil between mountains, The Twelve's card and
+  ladder), the results' moment, the screen transitions, and the pause card in the same language.
+  Loaded after style.css and meta.css, so a rule here wins a tie. Tokens and roles are ART.md 10's: ink-navy
+  panels, pills and 18 px cards, vermillion for the primary action only, mint for ghosts.
+*/
+
+/* ------------------------------------------------------------------ Title: the place under the logo */
+
+.gs-t-place {
+  display: grid;
+  gap: 2px;
+  max-width: 34ch;
+  text-shadow: var(--halo);
+}
+
+.gs-t-place-n {
+  font-size: clamp(17px, calc(var(--u) * 1.3), 25px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.gs-t-place-l {
+  color: var(--text);
+  font-size: clamp(14px, calc(var(--u) * 1.02), 19px);
+  font-weight: 700;
+  line-height: 1.3;
+  text-wrap: balance;
+}
+
+/* A refresh that changed the mountain lands its words: the name steps in from the logo's side. */
+.gs-title.is-static .gs-t-place {
+  animation: gs-place-in 420ms var(--out) both;
+}
+
+@keyframes gs-place-in {
+  from {
+    opacity: 0;
+    transform: translateX(-14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Title: the veil between mountains */
+
+.gs-title > .gs-title-dip,
+.gs-title > .gs-t-veil {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.gs-title > .gs-title-dip {
+  background: var(--ink);
+  opacity: 0;
+}
+
+.gs-t-veil {
+  --veil: linear-gradient(112deg, #1d3f8f 0%, #2b5fb8 46%, #f0a35a 100%);
+  overflow: hidden;
+}
+
+.gs-t-veil.v-pinecrest {
+  --veil: linear-gradient(112deg, #1b3a86 0%, #2f63bd 44%, #f2a85c 100%);
+}
+
+.gs-t-veil.v-frostfang {
+  --veil: linear-gradient(112deg, #0a1440 0%, #163a7c 42%, #1f9a8f 78%, #7a5cc0 100%);
+}
+
+.gs-t-veil.v-ember {
+  --veil: linear-gradient(112deg, #1c0f26 0%, #4a1f3a 44%, #e2622b 100%);
+}
+
+.gs-t-veil.v-sakura {
+  --veil: linear-gradient(112deg, #3a1830 0%, #8a3a5e 46%, #f6b3c6 100%);
+}
+
+.gs-t-veil.v-lanternfall {
+  --veil: linear-gradient(112deg, #100c3a 0%, #33247e 48%, #7a5cc0 82%, #f2b84a 100%);
+}
+
+.gs-t-veil.v-daily {
+  --veil: linear-gradient(112deg, #0f2a4e 0%, #1c5a86 48%, #55c9bb 100%);
+}
+
+.gs-t-veil.v-cup {
+  --veil: linear-gradient(112deg, #171a4a 0%, #3a3f96 50%, #9a86e0 100%);
+}
+
+/* The slab is wider than the screen and leans, so its leading and trailing edges cross as diagonals. */
+.gs-t-veil-slab {
+  position: absolute;
+  inset: -12% -34%;
+  background: var(--veil);
+  transform: translateX(-132%) skewX(-14deg);
+  will-change: transform;
+}
+
+.gs-t-veil.is-in .gs-t-veil-slab {
+  animation: gs-veil-in 260ms cubic-bezier(0.5, 0, 0.2, 1) both;
+}
+
+.gs-t-veil.is-out .gs-t-veil-slab {
+  animation: gs-veil-out 460ms cubic-bezier(0.6, 0, 0.3, 1) both;
+}
+
+.gs-t-veil-txt {
+  position: absolute;
+  top: 26%;
+  right: clamp(24px, 6vw, 96px);
+  display: grid;
+  justify-items: end;
+  gap: 6px;
+  max-width: 54%;
+  text-align: right;
+  opacity: 0;
+}
+
+.gs-t-veil.is-in .gs-t-veil-txt {
+  animation: gs-veil-txt-in 300ms var(--out) 120ms both;
+}
+
+.gs-t-veil.is-out .gs-t-veil-txt {
+  animation: gs-veil-txt-out 220ms ease both;
+}
+
+.gs-t-veil-name {
+  font-size: clamp(40px, 7.4vw, 104px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 0.92;
+  text-transform: uppercase;
+  text-shadow: 0.045em 0.04em 0 rgba(18, 25, 51, 0.5);
+  text-wrap: balance;
+}
+
+.gs-t-veil-line {
+  font-size: clamp(15px, calc(var(--u) * 1.2), 22px);
+  font-weight: 750;
+  text-shadow: var(--halo-tight);
+}
+
+@keyframes gs-veil-in {
+  from {
+    transform: translateX(-132%) skewX(-14deg);
+  }
+  to {
+    transform: translateX(0) skewX(-14deg);
+  }
+}
+
+@keyframes gs-veil-out {
+  from {
+    transform: translateX(0) skewX(-14deg);
+  }
+  to {
+    transform: translateX(132%) skewX(-14deg);
+  }
+}
+
+@keyframes gs-veil-txt-in {
+  from {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-veil-txt-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateX(48px);
+  }
+}
+
+/* ------------------------------------------------------------------ Title: the finale's card */
+
+.b-lantern .gs-mtn-sky,
+.gs-toast-sky.b-lantern,
+.gs-ul-art.b-lantern,
+.gs-nu-art.b-lantern {
+  background: linear-gradient(180deg, #120e3f 0%, #3a2a88 62%, #7a5cc0 100%);
+}
+
+/* ------------------------------------------------------------------ Title: The Twelve's card */
+
+.gs-title {
+  grid-template-areas:
+    'main . stats'
+    'main . .'
+    'side . twelve'
+    'ride . daily'
+    'bar  . daily';
+}
+
+.gs-t12 {
+  --rider: var(--ghost);
+  grid-area: twelve;
+  align-self: end;
+  justify-self: end;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: stretch;
+  width: min(100%, 440px);
+  margin-bottom: 12px;
+  border-radius: var(--r-card);
+  background:
+    linear-gradient(100deg, color-mix(in srgb, var(--rider) 16%, transparent), transparent 64%),
+    var(--panel-solid);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--rider) 46%, transparent),
+    var(--shadow);
+  pointer-events: auto;
+}
+
+.gs-title.is-in .gs-t12 {
+  animation-delay: 170ms;
+}
+
+.gs-t12-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 9px 6px 9px 10px;
+  border-radius: var(--r-card) 0 0 var(--r-card);
+  text-align: left;
+  transition: transform 160ms var(--spring);
+}
+
+.gs-t12-main:active {
+  transform: scale(0.98);
+}
+
+.gs-t12-bust {
+  display: block;
+  width: 58px;
+  height: 58px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-t12-bust svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gs-t12-txt {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-t12-k {
+  color: var(--dim);
+  font-size: max(11px, 0.68em);
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.gs-t12-name {
+  overflow: hidden;
+  color: var(--rider);
+  font-size: clamp(17px, calc(var(--u) * 1.22), 22px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12-line {
+  overflow: hidden;
+  color: var(--text);
+  font-size: max(12px, 0.8em);
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12-bio {
+  overflow: hidden;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t12.is-waiting .gs-t12-bust {
+  opacity: 0.6;
+}
+
+.gs-t12-count {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-content: center;
+  align-items: center;
+  column-gap: 2px;
+  min-width: 64px;
+  padding: 0 10px 0 12px;
+  border-left: 1px solid var(--hair-2);
+  border-radius: 0 var(--r-card) var(--r-card) 0;
+  color: var(--text);
+}
+
+.gs-t12-count-n {
+  grid-row: 1;
+  font-size: clamp(22px, calc(var(--u) * 1.6), 30px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.gs-t12-count-of {
+  grid-row: 2;
+  color: var(--dim);
+  font-size: max(11px, 0.7em);
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.gs-t12-count .gs-i {
+  grid-row: 1 / span 2;
+  grid-column: 2;
+  width: 18px;
+  height: 18px;
+  color: var(--dim);
+  transition: transform 180ms var(--spring);
+}
+
+.gs-t12-count[aria-expanded='true'] .gs-i {
+  transform: rotate(-90deg);
+}
+
+.gs-t12-main:focus-visible,
+.gs-t12-count:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+  box-shadow: inset 0 0 0 4px var(--ink);
+}
+
+@media (hover: hover) {
+  .gs-t12-main:hover .gs-t12-bust {
+    transform: translateY(-2px) rotate(-3deg);
+  }
+
+  .gs-t12-bust {
+    transition: transform 220ms var(--spring);
+  }
+
+  .gs-t12-count:hover {
+    background: rgba(245, 243, 255, 0.07);
+  }
+
+  .gs-t12-count:hover .gs-i {
+    transform: translateX(2px);
+  }
+
+  .gs-t12-count[aria-expanded='true']:hover .gs-i {
+    transform: rotate(-90deg);
+  }
+}
+
+/* ------------------------------------------------------------------ Title: The Twelve's ladder */
+
+.gs-pop.gs-t12-pop {
+  left: auto;
+  right: var(--sr);
+  bottom: var(--sb);
+  z-index: 3;
+  gap: 10px;
+  width: min(820px, calc(100vw - var(--sl) - var(--sr)));
+  max-height: calc(100% - var(--st) - var(--sb));
+  padding: 16px 16px 16px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.gs-t12-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.gs-t12-h {
+  color: var(--text);
+  font-size: clamp(20px, calc(var(--u) * 1.5), 28px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.01em;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+.gs-t12-key {
+  max-width: 62ch;
+  color: var(--dim);
+  font-size: max(12px, 0.84em);
+  font-weight: 650;
+}
+
+.gs-t12-list {
+  display: grid;
+  grid-template-rows: repeat(6, auto);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-t12-rung {
+  --rider: var(--ghost);
+  display: grid;
+  grid-template-columns: 1.4em auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  padding: 6px 10px 6px 8px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+}
+
+.gs-t12-rung .gs-t12-bust {
+  width: 44px;
+  height: 44px;
+}
+
+.gs-t12-num {
+  color: var(--dim);
+  font-size: max(12px, 0.82em);
+  font-style: italic;
+  font-weight: 900;
+  text-align: right;
+}
+
+.gs-t12-rtxt {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.gs-t12-rname {
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.gs-t12-rbio {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 600;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.gs-t12-rmeta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  color: var(--text);
+  font-size: max(11px, 0.74em);
+  font-weight: 750;
+}
+
+.gs-t12-rmeta .gs-num {
+  color: var(--dim);
+}
+
+.gs-t12-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 1.9em;
+  padding: 0 0.7em;
+  border-radius: var(--r-pill);
+  font-size: max(11px, 0.72em);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.gs-t12-tag .gs-i {
+  width: 1.15em;
+  height: 1.15em;
+}
+
+.gs-t12-tag.is-beaten {
+  background: rgba(245, 243, 255, 0.1);
+  color: var(--text);
+}
+
+.gs-t12-tag.is-next {
+  background: color-mix(in srgb, var(--rider) 22%, transparent);
+  color: var(--rider);
+}
+
+.gs-t12-tag.is-locked {
+  padding: 0 0.5em;
+  color: var(--dim);
+}
+
+.gs-t12-go {
+  min-height: 44px;
+  padding: 0 14px;
+}
+
+/* Who has fallen reads at a glance: a beaten rider's row goes quiet and their name is struck through;
+   the one that rides now wears their own colour; a rider whose mountain is locked is dimmed. */
+.gs-t12-rung.is-beaten .gs-t12-bust,
+.gs-t12-rung.is-beaten .gs-t12-rbio,
+.gs-t12-rung.is-beaten .gs-t12-rmeta {
+  opacity: 0.5;
+}
+
+.gs-t12-rung.is-beaten .gs-t12-rname {
+  color: var(--dim);
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.gs-t12-rung.is-next {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--rider) 18%, transparent), transparent 80%), rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rider) 55%, transparent);
+}
+
+.gs-t12-rung.is-next .gs-t12-rname {
+  color: var(--rider);
+}
+
+.gs-t12-rung.is-locked {
+  opacity: 0.8;
+}
+
+/* ------------------------------------------------------------------ Title: tall screens */
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-title,
+  .gs-title.is-first {
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto auto auto auto;
+    grid-template-areas:
+      'stats'
+      'main'
+      '.'
+      'daily'
+      'side'
+      'twelve'
+      'ride'
+      'bar';
+  }
+
+  .gs-t-place {
+    justify-items: center;
+    text-align: center;
+  }
+
+  /* The Twelve's row takes the greeting's place above Ride: one line of direction, not two. */
+  .gs-title:has(.gs-t12) .gs-t-greet {
+    display: none;
+  }
+
+  .gs-t12 {
+    justify-self: stretch;
+    width: auto;
+    margin-bottom: 0;
+    border-radius: var(--r-pill);
+  }
+
+  .gs-t12-main {
+    gap: 10px;
+    min-height: 52px;
+    padding: 4px 4px 4px 5px;
+    border-radius: var(--r-pill) 0 0 var(--r-pill);
+  }
+
+  .gs-t12-bust {
+    width: 44px;
+    height: 44px;
+  }
+
+  .gs-t12-k,
+  .gs-t12-bio {
+    display: none;
+  }
+
+  .gs-t12-count {
+    min-width: 58px;
+    border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  }
+
+  .gs-t-veil-txt {
+    top: 30%;
+    right: 0;
+    left: 0;
+    justify-items: center;
+    max-width: none;
+    padding: 0 20px;
+    text-align: center;
+  }
+
+  .gs-t-veil-name {
+    font-size: clamp(38px, 13vw, 72px);
+  }
+
+  .gs-pop.gs-t12-pop {
+    left: var(--sl);
+    right: var(--sr);
+    width: auto;
+    max-height: calc(100% - var(--st) - var(--sb));
+  }
+
+  .gs-t12-list {
+    grid-template-rows: none;
+    grid-auto-flow: row;
+  }
+}
+
+/* Short landscape (a phone on its side): the card keeps its name and its line. */
+@media (min-aspect-ratio: 1/1) and (max-height: 560px) {
+  .gs-t12 {
+    margin-bottom: 4px;
+  }
+
+  .gs-t12-main {
+    min-height: 54px;
+    padding: 5px 4px 5px 8px;
+  }
+
+  .gs-t12-bust {
+    width: 42px;
+    height: 42px;
+  }
+
+  .gs-t12-k,
+  .gs-t12-bio,
+  .gs-t-place-l {
+    display: none;
+  }
+
+  .gs-t12-rung {
+    min-height: 48px;
+  }
+
+  .gs-t12-rbio {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-title.is-static .gs-t-place,
+  .gs-t-veil .gs-t-veil-slab,
+  .gs-t-veil .gs-t-veil-txt {
+    animation: none;
+  }
+
+  .gs-t12-main,
+  .gs-t12-bust,
+  .gs-t12-count .gs-i {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Results: the moment */
+
+/* The run said large, over the scene: the figure slams in first (0 ms), the rule draws under it (160 ms),
+   the words follow (220 ms) and the fact that made it lands last (420 ms), while the card with the detail
+   slides in beside it on its own beats (RESULTS_TIMING is unchanged). Four endings, four entrances: a win
+   bursts and holds gold-white, a podium rises onto its step, a finish sweeps in across a line, and a wreck
+   drops, tilts and settles. */
+.gs-mo {
+  --mo: var(--text);
+  position: absolute;
+  top: calc(var(--st) + 6px);
+  left: calc(var(--sl) + 10px);
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  width: min(36vw, 440px);
+  pointer-events: none;
+  text-shadow: var(--halo);
+}
+
+.gs-mo-figrow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6em;
+}
+
+.gs-mo-fig {
+  color: var(--mo);
+  font-size: clamp(64px, 14vmin, 150px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.05em;
+  line-height: 0.92;
+  padding-right: 0.08em;
+}
+
+.gs-mo-of {
+  color: var(--text);
+  font-size: clamp(16px, calc(var(--u) * 1.3), 24px);
+  font-style: italic;
+  font-weight: 850;
+}
+
+.gs-mo-rule {
+  width: min(100%, 300px);
+  height: 5px;
+  border-radius: var(--r-pill);
+  background: var(--mo);
+  box-shadow: 0 0 0 2px var(--halo-c);
+  transform-origin: 0 50%;
+}
+
+.gs-mo-word {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 14px;
+}
+
+.gs-mo-word-t {
+  font-size: clamp(19px, calc(var(--u) * 1.55), 30px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.035em;
+  line-height: 1.1;
+  text-transform: uppercase;
+}
+
+.gs-mo-time {
+  color: var(--text);
+  font-size: clamp(17px, calc(var(--u) * 1.3), 25px);
+  font-weight: 850;
+}
+
+.gs-mo-fact {
+  --rider: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  padding: 7px 14px 7px 12px;
+  border-radius: var(--r-pill);
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--text);
+  font-size: max(13px, 0.92em);
+  font-weight: 800;
+  line-height: 1.25;
+  text-shadow: none;
+}
+
+.gs-mo-fact.is-best {
+  box-shadow: inset 0 0 0 1px rgba(255, 224, 138, 0.6), var(--shadow);
+  color: var(--you);
+}
+
+.gs-mo-fact.is-twelve {
+  padding-left: 6px;
+  border-radius: var(--r-card);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rider) 60%, transparent), var(--shadow);
+}
+
+.gs-mo-bust {
+  flex: none;
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-mo-bust svg,
+.gs-res-line-bust svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* A rider who fell: the bust tips over as the line lands. */
+.gs-mo-bust.is-fell {
+  transform: rotate(-16deg);
+  opacity: 0.8;
+}
+
+.gs-results.is-in .gs-mo-bust.is-fell {
+  animation: gs-mo-topple 620ms var(--spring) 760ms both;
+}
+
+.gs-mo-rays {
+  position: absolute;
+  top: -70px;
+  left: -90px;
+  z-index: -1;
+  width: 420px;
+  height: 420px;
+  border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 224, 138, 0.2) 0deg 7deg, rgba(255, 224, 138, 0) 7deg 20deg);
+  -webkit-mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 46%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.5) 46%, transparent 100%);
+  opacity: 0;
+}
+
+/* A win: gold-white (the colour of your own best), a burst of rays that turns behind the figure and settles. */
+.gs-mo.is-win {
+  --mo: var(--you);
+}
+
+.gs-mo.is-win .gs-mo-rays {
+  opacity: 1;
+}
+
+.gs-results.is-in .gs-mo.is-win .gs-mo-rays {
+  animation:
+    gs-mo-burst 700ms var(--out) both,
+    gs-mo-turn 24s var(--out) 700ms both;
+}
+
+.gs-results.is-in .gs-mo.is-win .gs-mo-fig {
+  animation: gs-mo-slam 520ms var(--spring) both;
+}
+
+/* A podium: the figure rises onto its step, which grows under it. */
+.gs-mo.is-podium .gs-mo-rule {
+  height: 10px;
+  border-radius: 4px 4px 0 0;
+  background: linear-gradient(180deg, #e6ebf5, #aab4c8);
+}
+
+.gs-results.is-in .gs-mo.is-podium .gs-mo-fig {
+  animation: gs-mo-rise 480ms var(--spring) 80ms both;
+}
+
+/* A finish: across the line, in from the side it was ridden from. */
+.gs-results.is-in .gs-mo.is-finish .gs-mo-fig {
+  animation: gs-mo-cross 420ms var(--out) both;
+}
+
+/* A wreck: it drops, tips and settles, and stays a little crooked. */
+.gs-mo.is-wreck {
+  --mo: rgba(245, 243, 255, 0.92);
+}
+
+.gs-mo.is-wreck .gs-mo-fig {
+  font-size: clamp(48px, 8.4vmin, 92px);
+  transform: rotate(-3deg);
+  transform-origin: 0 100%;
+}
+
+.gs-mo.is-wreck .gs-mo-rule {
+  width: min(70%, 200px);
+  opacity: 0.55;
+  transform: rotate(-1.2deg);
+}
+
+.gs-results.is-in .gs-mo.is-wreck .gs-mo-fig {
+  animation: gs-mo-drop 640ms cubic-bezier(0.3, 1.3, 0.5, 1) both;
+}
+
+.gs-results.is-in .gs-mo-rule {
+  animation: gs-mo-draw 380ms var(--out) 160ms both;
+}
+
+.gs-results.is-in .gs-mo.is-wreck .gs-mo-rule {
+  animation-name: gs-mo-draw-wreck;
+}
+
+.gs-results.is-in .gs-mo-of,
+.gs-results.is-in .gs-mo-word {
+  animation: gs-rise 360ms var(--out) 220ms both;
+}
+
+.gs-results.is-in .gs-mo-fact {
+  animation: gs-pop 380ms var(--spring) 420ms both;
+}
+
+.gs-results.is-static .gs-mo,
+.gs-results.is-static .gs-mo * {
+  animation: none !important;
+}
+
+@keyframes gs-mo-slam {
+  from {
+    opacity: 0;
+    transform: scale(1.7) rotate(-4deg);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-rise {
+  from {
+    opacity: 0;
+    transform: translateY(46px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-cross {
+  from {
+    opacity: 0;
+    transform: translateX(-70px) skewX(-10deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-60px) rotate(7deg);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(0) rotate(-5deg);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(-3deg);
+  }
+}
+
+@keyframes gs-mo-draw {
+  from {
+    opacity: 0;
+    transform: scaleX(0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes gs-mo-draw-wreck {
+  from {
+    opacity: 0;
+    transform: scaleX(0) rotate(-1.2deg);
+  }
+  to {
+    opacity: 0.55;
+    transform: rotate(-1.2deg);
+  }
+}
+
+@keyframes gs-mo-burst {
+  from {
+    opacity: 0;
+    transform: scale(0.4) rotate(-20deg);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* (One slow settle, not a loop: nothing on the card moves for ever.) */
+@keyframes gs-mo-turn {
+  to {
+    transform: rotate(70deg);
+  }
+}
+
+@keyframes gs-mo-topple {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0.8;
+    transform: rotate(-16deg);
+  }
+}
+
+/* The news of The Twelve in the card's race line: the rider's bust in the icon column, their colour on the words. */
+.gs-res-line.is-twelve {
+  color: var(--rider);
+}
+
+.gs-res-line.is-twelve.is-held,
+.gs-res-line.is-twelve.is-final {
+  color: rgba(245, 243, 255, 0.86);
+}
+
+.gs-res-line-bust {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rider) 70%, transparent);
+  overflow: hidden;
+}
+
+.gs-res-line-gifts {
+  color: var(--gift);
+  white-space: nowrap;
+}
+
+/* A phone: the moment keeps the top of the band over the card, beside the rider. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-mo {
+    top: calc(var(--st) + 2px);
+    left: var(--sl);
+    gap: 3px;
+    width: min(62vw, 300px);
+  }
+
+  .gs-mo-fig {
+    font-size: clamp(46px, 14vw, 68px);
+  }
+
+  .gs-mo.is-wreck .gs-mo-fig {
+    font-size: clamp(36px, 10.5vw, 52px);
+  }
+
+  .gs-mo-word-t {
+    font-size: clamp(15px, 4.4vw, 19px);
+  }
+
+  .gs-mo-time {
+    font-size: 15px;
+  }
+
+  .gs-mo-rule {
+    width: min(100%, 170px);
+    height: 4px;
+  }
+
+  .gs-mo-rays {
+    top: -110px;
+    left: -130px;
+    width: 340px;
+    height: 340px;
+  }
+
+  /* The fact is the card's own race line a few lines below: a phone has no band to spare for it twice. */
+  .gs-mo-fact {
+    display: none;
+  }
+}
+
+/* Small landscape: the card fills the screen and says it all. */
+@media (min-aspect-ratio: 1/1) and (max-width: 900px) {
+  .gs-mo {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-results.is-in .gs-mo,
+  .gs-results.is-in .gs-mo * {
+    animation: none !important;
+  }
+}
+
+/* ------------------------------------------------------------------ Screen transitions */
+
+/* Title to run: the screen leaves the way it is built. The column goes back off the logo's side, the cards
+   off theirs, and the scrim lets go of the scene last, so the first thing the run shows is the mountain the
+   title was a picture of. The layer is gone 220 ms after Ride (title.ts), so every exit fits inside 200. */
+.gs-title.is-out {
+  animation: gs-fade-out 200ms ease 20ms both;
+}
+
+.gs-title.is-out .gs-t-main,
+.gs-title.is-out .gs-t-side,
+.gs-title.is-out .gs-t-ride,
+.gs-title.is-out .gs-t-bar {
+  animation: gs-exit-l 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+.gs-title.is-out .gs-t-side {
+  animation-delay: 15ms;
+}
+
+.gs-title.is-out .gs-t-bar {
+  animation-delay: 30ms;
+}
+
+/* Ride itself goes last and forward: the button pressed is the one thing that leads into the run. */
+.gs-title.is-out .gs-t-ride {
+  animation-name: gs-exit-go;
+  animation-duration: 210ms;
+}
+
+.gs-title.is-out .gs-t-stats,
+.gs-title.is-out .gs-t12,
+.gs-title.is-out .gs-t-daily {
+  animation: gs-exit-r 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+/* Results to the next run: the moment goes off its side and the card off its own (down, on a phone). */
+.gs-results.is-out .gs-mo,
+.gs-results.is-out .gs-lad.is-band {
+  animation: gs-exit-l 180ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+.gs-results.is-out .gs-res-card {
+  animation: gs-exit-r 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+/* The garage and the settings sheet: the sheet pops (style.css), then what it holds steps in, top first,
+   and it leaves by sinking back. */
+.gs-sheetwrap.is-in .gs-sheet-body > * {
+  animation: gs-rise 300ms var(--out) both;
+  animation-delay: 70ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(2) {
+  animation-delay: 110ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(3) {
+  animation-delay: 150ms;
+}
+
+.gs-sheetwrap.is-in .gs-sheet-body > :nth-child(n + 4) {
+  animation-delay: 190ms;
+}
+
+.gs-sheetwrap.is-out .gs-sheet,
+.gs-pause.is-out .gs-pause-card {
+  animation: gs-sink 170ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+@keyframes gs-exit-l {
+  to {
+    opacity: 0;
+    transform: translateX(-44px);
+  }
+}
+
+@keyframes gs-exit-r {
+  to {
+    opacity: 0;
+    transform: translateX(44px);
+  }
+}
+
+@keyframes gs-exit-go {
+  35% {
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(60px) scale(1.04);
+  }
+}
+
+@keyframes gs-sink {
+  to {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-title.is-out .gs-t-main {
+    animation-name: gs-exit-up;
+  }
+
+  .gs-title.is-out .gs-t-side,
+  .gs-title.is-out .gs-t-bar,
+  .gs-title.is-out .gs-t12,
+  .gs-title.is-out .gs-t-daily,
+  .gs-results.is-out .gs-res-card {
+    animation-name: gs-exit-down;
+  }
+
+  .gs-title.is-out .gs-t-ride {
+    animation-name: gs-exit-go-up;
+  }
+}
+
+@keyframes gs-exit-up {
+  to {
+    opacity: 0;
+    transform: translateY(-36px);
+  }
+}
+
+@keyframes gs-exit-down {
+  to {
+    opacity: 0;
+    transform: translateY(40px);
+  }
+}
+
+@keyframes gs-exit-go-up {
+  35% {
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.06);
+  }
+}
+
+/* ------------------------------------------------------------------ Buttons and cards with intent */
+
+/* Ride (and Run Again): the play glyph leans into the direction of travel under the pointer, and a single
+   light crosses the button once when the title lands, so the eye finds the one filled play button. */
+.gs-ride,
+.gs-again {
+  position: relative;
+  overflow: hidden;
+}
+
+.gs-ride > .gs-i,
+.gs-again > .gs-i {
+  transition: transform 200ms var(--spring);
+}
+
+@media (hover: hover) {
+  .gs-ride:hover:not([aria-disabled='true']) > .gs-i,
+  .gs-again:hover > .gs-i {
+    transform: translateX(4px) scale(1.08);
+  }
+
+  /* A mountain card rises to the pointer and its art breathes in; a locked one only nods. */
+  .gs-mtns .gs-mtn:not(.is-locked):not(.is-sel):hover {
+    transform: translateY(-3px);
+  }
+
+  .gs-mtn-sky svg {
+    transition: transform 320ms var(--out);
+  }
+
+  .gs-mtn:not(.is-locked):hover .gs-mtn-sky svg {
+    transform: scale(1.07) translateY(-1px);
+  }
+}
+
+.gs-title.is-in .gs-ride::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 34%;
+  background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.34) 50%, rgba(255, 255, 255, 0) 100%);
+  transform: translateX(-120%) skewX(-18deg);
+  animation: gs-sheen 720ms var(--out) 620ms both;
+  pointer-events: none;
+}
+
+@keyframes gs-sheen {
+  from {
+    transform: translateX(-120%) skewX(-18deg);
+  }
+  to {
+    transform: translateX(420%) skewX(-18deg);
+  }
+}
+
+/* Picking a mountain lands its check and lifts its card in one move (the title re-renders in place). */
+.gs-title.is-static .gs-mtn.is-sel .gs-mtn-check {
+  animation: gs-pop 340ms var(--spring) both;
+}
+
+/* ------------------------------------------------------------------ Pause, in the same language */
+
+/* The pause card speaks the title's language: the scene stays in view through the title's own diagonal
+   scrim, the word is set like the wordmark with its runner drawn under it, and the card comes in from the
+   logo's side with its parts stepping in after it. */
+.gs-pause {
+  background:
+    linear-gradient(100deg, rgba(8, 12, 30, 0.82) 0%, rgba(8, 12, 30, 0.62) 46%, rgba(8, 12, 30, 0.4) 100%);
+}
+
+.gs-pause-title {
+  position: relative;
+  justify-self: start;
+  padding: 0 0.12em 0.2em 0;
+  letter-spacing: -0.035em;
+  text-shadow:
+    0.05em 0.045em 0 var(--ghost),
+    0.1em 0.09em 0 rgba(18, 25, 51, 0.55);
+}
+
+.gs-pause-title::after {
+  content: '';
+  position: absolute;
+  left: 0.1em;
+  right: 0.3em;
+  bottom: 0;
+  height: 0.1em;
+  border-radius: var(--r-pill);
+  background: var(--text);
+  transform-origin: 0 50%;
+}
+
+.gs-pause.is-in .gs-pause-card {
+  animation: gs-rise-l 300ms var(--out) both;
+}
+
+.gs-pause.is-in .gs-pause-title::after {
+  animation: gs-mo-draw 360ms var(--out) 140ms both;
+}
+
+.gs-pause.is-in .gs-pause-card > :not(.gs-pause-title) {
+  animation: gs-rise 300ms var(--out) 90ms both;
+}
+
+.gs-pause.is-in .gs-pause-card > .gs-set {
+  animation-delay: 150ms;
+}
+
+/* The loading bar is the wordmark's runner: round-ended, off-white with the ghosts' mint under it. */
+.gs-load {
+  height: 4px;
+  border-radius: 0 var(--r-pill) var(--r-pill) 0;
+  box-shadow: 0 2px 0 rgba(143, 243, 228, 0.7);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-title.is-out .gs-t-anim,
+  .gs-title.is-out .gs-t12,
+  .gs-results.is-out .gs-mo,
+  .gs-results.is-out .gs-lad.is-band,
+  .gs-results.is-out .gs-res-card,
+  .gs-sheetwrap.is-in .gs-sheet-body > *,
+  .gs-sheetwrap.is-out .gs-sheet,
+  .gs-pause.is-out .gs-pause-card,
+  .gs-pause.is-in .gs-pause-card,
+  .gs-pause.is-in .gs-pause-card > *,
+  .gs-pause.is-in .gs-pause-title::after,
+  .gs-title.is-in .gs-ride::after,
+  .gs-title.is-static .gs-mtn.is-sel .gs-mtn-check {
+    animation: none;
+  }
+
+  .gs-title.is-in .gs-ride::after {
+    content: none;
+  }
+
+  .gs-ride > .gs-i,
+  .gs-again > .gs-i,
+  .gs-mtn-sky svg {
+    transition: none;
+  }
+}

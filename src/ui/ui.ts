@@ -310,6 +310,11 @@ export class UI implements GameUI {
     this.title.hide();
   }
 
+  /** The title reel cut back to the start of its shot (round 7): the title dips over the cut. */
+  titleCut(): void {
+    this.title.cut();
+  }
+
   showHud(): void {
     this.hud.show();
   }

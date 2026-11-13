@@ -12,7 +12,8 @@ export interface MountainCard {
   id: string;
   name: string;
   tagline: string;
-  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom';
+  /** The card's art: the course's biome, or 'lantern' for the finale (its own night and lights). */
+  biome: 'alpine' | 'glacier' | 'volcanic' | 'blossom' | 'lantern';
   locked: boolean;
   /** e.g. "Pass 4 ghosts to unlock" */
   unlockText: string;
@@ -47,6 +48,60 @@ export interface TitleCup {
   event: string | null;
   best: number;
   medal: number;
+}
+
+/** A signature rider as the screens draw one: the bust's hat and emblem, and the rider's own colour. */
+export interface RiderFace {
+  key: string;
+  name: string;
+  hat: string;
+  emblem: string;
+  accent: string;
+}
+
+/** One rung of The Twelve's ladder, gentlest first. */
+export interface TwelveRung extends RiderFace {
+  /** One line of their character (roster.ts bio). */
+  bio: string;
+  /** Their home mountain's name, and their time there ("2:12.8"; null when the pool holds no finish). */
+  mountain: string;
+  time: string | null;
+  /** beaten; next (the duel that rides now); open (home open, waiting their turn); locked (home locked). */
+  state: 'beaten' | 'next' | 'open' | 'locked';
+}
+
+/** The Twelve on the title (game/twelve.ts): the card and the ladder. */
+export interface TitleTwelve {
+  beaten: number;
+  of: number;
+  /** "3 of 12 beaten". */
+  tally: string;
+  /** The rider to duel now (a rung in state 'next'), with the mountain to pick; null with none to ride. */
+  next: (TwelveRung & { mountainId: string; here: boolean }) | null;
+  /** The last race is what rides next: all twelve on Lanternfall. here: that mountain is selected. */
+  final: { mountainId: string; mountain: string; here: boolean } | null;
+  /** Nobody can be duelled yet: who waits, and what opens their home ("Pass 3 more ghosts"). */
+  waiting: { rider: TwelveRung; opens: string } | null;
+  /** What is left before the King ("3 more open Lanternfall"); null once it no longer applies. */
+  hook: string | null;
+  /** The last race is won. */
+  crowned: boolean;
+  rungs: TwelveRung[];
+}
+
+/** The Twelve on a run's results: what the duel did. */
+export interface ResultsTwelve {
+  /** fell: a rider beaten; crowned: the last race won; held: the rider held you off; final: the last race stands. */
+  tone: 'fell' | 'crowned' | 'held' | 'final';
+  /** "Bram Oakhollow falls. 3 of 12 beaten." */
+  line: string;
+  rider: RiderFace | null;
+  /** What the rider says about it (roster.ts says), when one was duelled. */
+  says: string | null;
+  beaten: number;
+  of: number;
+  /** Gifts it paid: already in the wallet, never doubled. */
+  gifts: number;
 }
 
 export interface MissionView {
@@ -131,6 +186,8 @@ export interface TitleModel {
   nextRung?: string | null;
   /** The weekly Cup, when there is one to show. */
   cup?: TitleCup | null;
+  /** The Twelve: the campaign's card and ladder (absent on a first visit). */
+  twelve?: TitleTwelve | null;
 }
 
 export interface HudModel {
@@ -288,6 +345,8 @@ export interface ResultsModel {
   ladder?: ResultsLadder | null;
   /** The stage table (a run that crossed a stage line). */
   stages?: ResultsStages | null;
+  /** The Twelve: this run was a duel or the last race, and how it went. */
+  twelve?: ResultsTwelve | null;
 }
 
 /** Your place on this mountain's ladder as the run left it, and what the run earned on it. */
