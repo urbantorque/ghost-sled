@@ -580,6 +580,11 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
         const keep = (s.z > 2000 ? 1 : 0) + (k === 'save' ? 1 : 0);
         return lit() > Math.min(keep, 1) && s.grounded && !kickerNear() && rnd() < 0.6 / 60 ? press() : false;
       }
+      case 'expert-dash':
+        // Round 6's expert, kept to measure what knowing the set pieces is worth: a dash the moment a lantern
+        // lights, wherever it is (lab.ts --pilots expert-dash).
+        if (lit() < 1 || !s.grounded || kickerNear()) return false;
+        return closing() || rnd() < 0.9 / 60 ? press() : false;
       case 'expert': {
         const k = knows();
         // (On the line: a dash from out on the bank goes into whatever the bank holds.)

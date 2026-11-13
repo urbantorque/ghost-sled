@@ -18,6 +18,8 @@
 //   expert      the mid pilot with clean hands
 //   stunt       telemetry.js's stunt pilot, read from its source
 //   line        the fairness test's driver
+//   expert-dash (not in the default list) the expert's hands with round 6's habit of dashing the moment a
+//               lantern lights: what knowing where a dash belongs is worth
 // The rail pilot (not in the default list): rides the safe line and steers onto each rail's low end, so
 // rails are proved on a real approach and not an injected one. A rail no seed mounted gets a second go
 // with nothing else to do but that rail: every lead at every aim, then again holding the action, which
@@ -277,6 +279,8 @@ function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], a
       const p = stuntMake!(sim, { seed });
       return () => p.sample();
     }
+    case 'expert-dash':
+      return classic('expert', sim, seed, KIT);
     default:
       return classic(name as 'novice', sim, seed, KIT);
   }
