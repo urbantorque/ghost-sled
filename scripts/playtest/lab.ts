@@ -28,8 +28,13 @@
 // same run again to the tick of the fall, and from there rides the next 300 m as a spirit that nothing can
 // touch (no fall, no bump: more than any line that avoided the hit could have kept). The two rides are
 // compared: how far behind the faller is as it gets up, and how many seconds later it passes the point 300 m
-// on. The second number takes in whatever else the faller met on the way, so read its median. A get-up run
-// is long, so ride with --max 420 when a struggling pilot is in the plan.
+// on. The second number takes in whatever else either rider did on the way (a pilot is a closed loop: the
+// two rides part at the fall and never meet the same snow again), so read its median; each fall that came
+// out cheaper is printed with its cost at every 50 m and both riders' speeds, which says who lost the time.
+// The third price takes the pilot out: both rides are finished by the same steady hand (steadyPilot: straight
+// down the run where it is, no detour, no button, no mistake), so what is left between them is the fall and
+// nothing else. That is the one to read for "is anyone ever faster for falling". A get-up run is long, so
+// ride with --max 420 when a struggling pilot is in the plan.
 //   falls       npx tsx scripts/playtest/lab.ts --pilots clumsy,novice,mid,expert,stunt --max 420 --falls
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -452,6 +457,25 @@ function loadStunt(): (sim: AnySim, o: { seed: number }) => { sample(): Inp } {
 }
 const stuntMake = PILOTS.includes('stunt') ? loadStunt() : null;
 
+/** A steady hand: it rides straight down the run where it is, as far off the safe line as it was when it took
+ *  over (kept 3 m inside the corridor), with the line pilot's own steering and no button. A rider who has
+ *  fallen is put on the safe line by the fall, so after one this pilot rides the line. It makes no detour
+ *  and no mistake, so what is left between two rides it finishes is the fall and nothing else. */
+function steadyPilot(sim: AnySim): Pilot {
+  const c = sim.course;
+  let off = sim.s.x - c.safeX(sim.s.z);
+  return () => {
+    const s = sim.s;
+    if (s.tumble > 0) off = s.x - c.safeX(s.z);
+    if (!s.grounded || s.tumble > 0) return { steer: 4, action: false };
+    const look = s.z + 4 + s.speed * 0.35;
+    const room = Math.max(0, c.halfWidth(look) - 3);
+    const tx = Math.max(c.centerX(look) - room, Math.min(c.centerX(look) + room, c.safeX(look) + off));
+    const err = Math.atan2(tx - s.x, look - s.z) - s.velHeading;
+    return { steer: Math.max(0, Math.min(8, Math.round(4 + err * 14))), action: false };
+  };
+}
+
 function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], alone: Alone | null): Pilot {
   switch (name) {
     case 'rails':
@@ -599,18 +623,30 @@ interface Fall {
   cause: string;
   kind: 'fall' | 'ward' | 'wreck';
   v: number;
+  /** As it went down: its speed down the run, how far off the safe line, and how far past the corridor's edge. */
+  vz: number;
+  off: number;
+  edge: number;
   /** Metres behind the untouched ride as the faller rides again, and seconds behind PRICE_M on (null when
    *  either ride did not get that far). */
   behind?: number | null;
   cost?: number | null;
+  /** The cost at every 50 m of the way, with the faller's and the untouched ride's speed over each. */
+  profile?: string;
+  /** The cost with the same steady hand riding both from the fall on: the fall's own price, with what the
+   *  pilot did next taken out. */
+  sure?: number | null;
 }
 
-/** `spare`: the tick of a fall this ride is carried through untouched (the priced ride); it stops PRICE_M past it. */
-function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null, spare = -1): Ride {
+/** `spare`: the tick of a fall this ride is carried through untouched (the priced ride); it stops PRICE_M past it.
+ *  `steady`: from this tick on a steady hand rides (steadyPilot; nobody spends a lantern), and the ride stops
+ *  PRICE_M on: two rides that differ only by the fall are then ridden the same way after it. */
+function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null, spare = -1, steady = -1): Ride {
   const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: { mood: MOOD, event: EVENT, seed: 0x1234 }, sled: 0 });
   const passes: RailPass[] = [];
-  const pilot = pilotFor(pilotName, sim, seed, passes, alone);
-  const spend = spenderFor(pilotName, sim, seed);
+  let pilot = pilotFor(pilotName, sim, seed, passes, alone);
+  let spend = spenderFor(pilotName, sim, seed);
+  let steadyZ = Infinity;
   const speeds: number[] = [];
   const falls: Fall[] = [];
   const marks: number[] = [];
@@ -621,8 +657,14 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   let airTicks = 0;
   let grindTicks = 0;
   while (!sim.s.crashed && !sim.finished && sim.tick < MAX_SECONDS * 60) {
+    if (steady >= 0 && sim.tick === steady) {
+      pilot = steadyPilot(sim);
+      spend = () => false;
+      steadyZ = sim.s.z;
+    }
     const o = pilot();
     const vIn = sim.s.speed;
+    const was = { vz: sim.s.vz, off: sim.s.x - sim.course.safeX(sim.s.z), edge: sim.course.edgeExcess(sim.s.x, sim.s.z) };
     if (spare >= 0 && sim.tick >= spare) {
       // From the fall on nothing touches this ride: a spirit through whatever stands there, and no landing
       // can floor it.
@@ -636,10 +678,11 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
     speeds.push(s.speed);
     while (marks.length * 10 <= s.z) marks.push(sim.tick);
     if (spare >= 0 && s.z > spareZ + PRICE_M + 10) break;
+    if (steady >= 0 && s.z > steadyZ + PRICE_M + 20) break;
     for (const e of sim.events) {
-      if (e.type === 'tumble' && e.phase === 'start') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'fall', v: vIn });
-      else if (e.type === 'ward') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'ward', v: vIn });
-      else if (e.type === 'crash') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'wreck', v: vIn });
+      if (e.type === 'tumble' && e.phase === 'start') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'fall', v: vIn, ...was });
+      else if (e.type === 'ward') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'ward', v: vIn, ...was });
+      else if (e.type === 'crash') falls.push({ tick: sim.tick - 1, z: s.z, cause: e.cause, kind: 'wreck', v: vIn, ...was });
     }
     if (s.grinding) grindTicks++;
     if (!s.grounded) airTicks++;
@@ -728,6 +771,24 @@ function price(r: Ride): void {
     const a = tickAt(r.marks, f.z + PRICE_M);
     const b = tickAt(clean.marks, f.z + PRICE_M);
     f.cost = a >= 0 && b >= 0 ? (a - b) / 60 : null;
+    // The same cost at every 50 m of the way, with the untouched ride's speed over each: where a fall came
+    // out cheaper, this says whether the faller gained or the other ride lost.
+    const steps: string[] = [];
+    for (let d = 50; d <= PRICE_M; d += 50) {
+      const ta = tickAt(r.marks, f.z + d);
+      const tb = tickAt(clean.marks, f.z + d);
+      const ta0 = tickAt(r.marks, f.z + d - 50);
+      const tb0 = tickAt(clean.marks, f.z + d - 50);
+      const v = (t0: number, t1: number): string => (t0 >= 0 && t1 > t0 ? (3000 / (t1 - t0)).toFixed(0) : '?');
+      steps.push(ta >= 0 && tb >= 0 ? `${d}m ${((ta - tb) / 60).toFixed(2)}s (${v(ta0, ta)} vs ${v(tb0, tb)} m/s)` : `${d}m ?`);
+    }
+    f.profile = steps.join('  ');
+    const fell = ride(r.pilot, r.m, r.seed, null, -1, f.tick + 1);
+    const rode = ride(r.pilot, r.m, r.seed, null, f.tick, f.tick + 1);
+    const sa = tickAt(fell.marks, f.z + PRICE_M);
+    const sb = tickAt(rode.marks, f.z + PRICE_M);
+    f.sure = sa >= 0 && sb >= 0 ? (sa - sb) / 60 : null;
+    if (f.cost !== null && f.cost <= 0) console.log(`  cheaper: ${r.pilot} m${r.m} seed ${r.seed} tick ${f.tick} z ${f.z.toFixed(0)} ${f.cause} at ${f.v.toFixed(1)} m/s: ${f.profile}`);
   }
 }
 
@@ -782,7 +843,7 @@ momentTable(all.filter((r) => r.pilot !== 'rails'));
 /** Falls (round 7): per pilot over every mountain, how its runs ended, how often it went down and why, and
  *  with --falls what a fall cost it against the same ride carried through the hit. */
 function fallTable(rides: Ride[]): void {
-  console.log(`\nfalls      runs  finish  wreck  time  secs(med)  falls/run  wards/run  by cause${PRICE ? `                       priced  behind m (min/med)  cost s at ${PRICE_M} m (min/p10/med)  cheaper` : ''}`);
+  console.log(`\nfalls      runs  finish  wreck  time  secs(med)  falls/run  wards/run  by cause${PRICE ? `                       priced  behind m (min/med)  cost s at ${PRICE_M} m (min/p10/med)  cheaper   steady hand after (min/p10/med)  cheaper` : ''}`);
   for (const p of PILOTS) {
     const rs = rides.filter((r) => r.pilot === p);
     if (!rs.length) continue;
@@ -796,6 +857,7 @@ function fallTable(rides: Ride[]): void {
     };
     const behind = got.map((f) => f.behind).filter((v): v is number => typeof v === 'number');
     const cost = got.map((f) => f.cost).filter((v): v is number => typeof v === 'number');
+    const sure = got.map((f) => f.sure).filter((v): v is number => typeof v === 'number');
     const fin = rs.filter((r) => r.finished);
     console.log(
       p.padEnd(10),
@@ -807,7 +869,7 @@ function fallTable(rides: Ride[]): void {
       fmt(got.length / rs.length).padStart(10),
       fmt(fl.filter((f) => f.kind === 'ward').length / rs.length).padStart(10),
       ' ' + Object.entries(by).map(([k, v]) => `${k}:${v}`).join(' ').padEnd(30),
-      PRICE ? `${String(cost.length).padStart(5)}  ${fmt(q(behind, 0))} ${fmt(q(behind, 0.5))}      ${fmt(q(cost, 0), 2)} ${fmt(q(cost, 0.1), 2)} ${fmt(q(cost, 0.5), 2)}        ${cost.filter((c) => c <= 0).length}/${cost.length}` : '',
+      PRICE ? `${String(cost.length).padStart(5)}  ${fmt(q(behind, 0))} ${fmt(q(behind, 0.5))}      ${fmt(q(cost, 0), 2)} ${fmt(q(cost, 0.1), 2)} ${fmt(q(cost, 0.5), 2)}        ${cost.filter((c) => c <= 0).length}/${cost.length}  ${fmt(q(sure, 0), 2)} ${fmt(q(sure, 0.1), 2)} ${fmt(q(sure, 0.5), 2)}        ${sure.filter((c) => c <= 0).length}/${sure.length}` : '',
     );
   }
 }
