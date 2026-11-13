@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MOTIFS, motifFor, motifShape } from '../src/audio/motifs';
 import produced from '../src/audio/produced.json';
-import { BREATH_MAX_S, type Cmd, GATES_OFF, LAND_LEAD_S, LOCK_S, type StemManifest, type StemPiece, StemForm, gatesFor, layerGain, pieceFor } from '../src/audio/stemform';
+import { AWAIT_MAX_S, BREATH_MAX_S, type Cmd, GATES_OFF, LAND_LEAD_S, LOCK_S, type StemManifest, type StemPiece, StemForm, gatesFor, layerGain, pieceFor } from '../src/audio/stemform';
 import { StemStore, parsePack } from '../src/audio/stemstore';
 import { ROSTER } from '../src/bot/roster';
 import analysisFile from '../scripts/music/analysis.json';
@@ -234,13 +234,26 @@ describe('the scheduler: the breakdown, the breath and the crash back in', () =>
     expect(plays(run(f, 10.73, 28)).pop()?.t).toBeCloseTo(10.73 + 16, 6);
   });
 
-  it('a breath no landing ends is ended by the music itself', () => {
+  it('a flight longer than a breath gets the breakdown under the rest of it, and still its crash on the landing', () => {
     const f = new StemForm(TOY, 'run', 0);
     run(f, 0, 9);
     f.breath(9);
     const p = plays(run(f, 9, 9 + BREATH_MAX_S + 1));
     expect(p.length).toBe(1);
+    expect(p[0].id).toBe('bd');
     expect(p[0].t - 9).toBeGreaterThanOrEqual(BREATH_MAX_S - 0.3);
+    expect(f.holding).toBe(true);
+    const back = f.crashIn(15.4);
+    expect(back.map((c) => c.op).sort()).toEqual(['cut', 'play', 'shot']);
+    expect(back.find((c) => c.op === 'play')).toMatchObject({ id: 'b', t: 15.4 });
+    expect(f.holding).toBe(false);
+    // And a landing that never comes is forgotten: the form goes on.
+    const g = new StemForm(TOY, 'run', 0);
+    run(g, 0, 9);
+    g.breath(9);
+    run(g, 9, 9 + BREATH_MAX_S + AWAIT_MAX_S + 1);
+    expect(g.holding).toBe(false);
+    expect(g.crashIn(30)).toEqual([]);
   });
 
   it('knows the key and the chord at any moment, and what to have decoded', () => {
@@ -664,6 +677,34 @@ describe("the signature riders' motifs", () => {
       }
       expect(end, key).toBeLessThanOrEqual(10);
       expect(m.says.length, key).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe('the scheduler: one landmark, one landing', () => {
+  it('a second landing asked for within two seconds of the last is refused, the finish apart', () => {
+    const f = new StemForm(TOY, 'run', 0);
+    run(f, 0, 6);
+    const t = f.plan(8, 'lift', 6) as number;
+    run(f, 6, t + 0.1);
+    expect(f.landings).toBe(1);
+    expect(f.plan(t + 0.6, 'lift', t + 0.1)).toBeNull();
+    expect(f.plan(t + 1.2, 'finish', t + 0.1)).not.toBeNull();
+  });
+});
+
+describe('the scheduler: a breakdown on a section\'s own end', () => {
+  it('takes the place of the next section instead of cutting it as it starts', () => {
+    for (const id of COURSES) {
+      const f = new StemForm(manifest.pieces[id], 'run', 0.5);
+      const seen: Array<{ t: number; id: string }> = [];
+      for (let now = 0; now < 60; now += 0.025) {
+        // Asked for in the last bars of the first verse: its four-bar line is the verse's end.
+        if (Math.abs(now - (0.5 + 10.5 * f.barS)) < 0.0126) f.breakdown(now);
+        for (const c of f.advance(now + 0.25)) if (c.op === 'play') seen.push({ t: c.t, id: c.id });
+      }
+      for (let i = 1; i < seen.length; i++) expect(seen[i].t - seen[i - 1].t, `${id} ${seen[i - 1].id} then ${seen[i].id}`).toBeGreaterThan(1);
+      expect(seen.map((s) => s.id).slice(0, 4), id).toEqual(['intro', 'a', 'bd', 'b']);
     }
   });
 });

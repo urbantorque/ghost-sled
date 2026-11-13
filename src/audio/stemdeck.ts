@@ -16,9 +16,11 @@ import type { VoicePool } from './voices';
 
 /** How far ahead of the clock section starts are scheduled (s). */
 const AHEAD_S = 0.25;
-/** The produced score's level on the music bus, after the glue (it is already mastered): set with the
- *  music slider at 0.8 so a run's mix measures about -16 LUFS (scripts/playtest/loudness.js). */
-export const PRODUCED_GAIN = 1.15;
+/** The produced score's level on the music bus, after the glue (it is already mastered). Measured on replayed
+ *  runs with the sliders at their defaults (scripts/playtest/loudness.js): at 1.15 the mix read -15.2 to -14.7
+ *  LUFS and the music alone 1 to 2 LU over the effects alone; 1.5 dB down puts the mix at about -16 and the
+ *  music level with the effects. */
+export const PRODUCED_GAIN = 0.97;
 /** A little of the stems goes to the game's own reverb, so a vista or a tunnel opens the music too. */
 const SPACE_SEND = 0.06;
 const CHOIR_MIX = 0.2;
@@ -85,6 +87,8 @@ export class StemDeck {
   private stopAt = Infinity;
   private muffled = false;
   private wasEnabled = true;
+  private claimAt = 0;
+  private liveOn = false;
   private readonly lp: BiquadFilterNode;
   private readonly lpOpen: number;
   /** The ghost choir (as on a live deck): the voices sung, their chord, their vowels. */
@@ -234,8 +238,8 @@ export class StemDeck {
     this.exec(this.form.breath(now), now);
   }
 
-  crashIn(now: number): void {
-    const cmds = this.form.crashIn(now);
+  crashIn(now: number, hit = true): void {
+    const cmds = this.form.crashIn(now, hit);
     if (cmds.length === 0) return;
     this.gates = gatesFor(this.gates, 'high', this.scene, this.race());
     this.applyGates(now, 0.005);
@@ -396,9 +400,11 @@ export class StemDeck {
     const form = this.form;
     form.stage = this.force?.stage ?? this.build.stage;
     if (this.scene === 'run') form.jump(this.force?.id ?? null, now);
-    const sections = form.upcoming();
-    const shots = this.scene === 'run' ? ['hit', 'build', ...this.primed] : [];
-    this.store.claim(this.owner, this.pieceId, sections, shots);
+    // What to have decoded changes a few times a run: asked of the store four times a second, not every pass.
+    if (now >= this.claimAt) {
+      this.claimAt = now + 0.25;
+      this.store.claim(this.owner, this.pieceId, form.upcoming(), this.scene === 'run' ? ['hit', 'build', ...this.primed] : []);
+    }
     const cmds = form.advance(now + AHEAD_S, (id) => this.store.sectionReady(this.pieceId, id));
     this.landings = form.landings;
     // The layers: worked out every pass, changed on the next bar line (at once on a snap or a new section).
@@ -483,11 +489,15 @@ export class StemDeck {
   private riders(now: number): void {
     const pos = this.form.position(now + 0.1);
     if (!pos || this.form.holding) return;
+    if (this.choirN === 0 && this.drive.danger <= 0.05 && !this.liveOn) return;
     const g = this.form.grid();
     const bar = this.form.barS;
     const k = Math.floor((now + 0.1 - g.t0) / bar);
     const want = this.choirN > 0 || this.drive.danger > 0.05;
-    this.liveOut.gain.setTargetAtTime(want ? 1 : 0, now, 0.3);
+    if (want !== this.liveOn) {
+      this.liveOn = want;
+      this.liveOut.gain.setTargetAtTime(want ? 1 : 0, now, 0.3);
+    }
     if (this.choirN > 0 && (k !== this.choirBar || this.sung.length < this.choirN)) {
       const fresh = k !== this.choirBar;
       this.choirBar = k;

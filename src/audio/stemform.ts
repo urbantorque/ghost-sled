@@ -69,12 +69,16 @@ export type Cmd =
 export const LOCK_S = 0.5;
 /** A landing is planned at least this far ahead (s). */
 export const LAND_LEAD_S = 0.25;
+/** A landing is not followed by another within this long (s), the finish apart. */
+export const RELAND_S = 2;
 /** Fades: a section cut by a drop, by a breakdown, and by the breath before a leap (s). */
 export const CUT_FADE_S = 0.05;
 export const BREAK_FADE_S = 0.09;
 export const BREATH_FADE_S = 0.14;
-/** A breath nobody ends (no landing came) ends itself after this long (s). */
-export const BREATH_MAX_S = 6;
+/** The breath's silence lasts at most this long (s): past it the breakdown plays until the landing. */
+export const BREATH_MAX_S = 4.2;
+/** After a breath that ran out, the landing's crash back in is waited for this long (s). */
+export const AWAIT_MAX_S = 6;
 
 const isHigh = (r: StemRole): boolean => r === 'high' || r === 'climax';
 
@@ -105,6 +109,8 @@ export class StemForm {
   private buildFor = Number.NaN;
   private breakAt = Number.NaN;
   private silentSince = Number.NaN;
+  /** The breath ran out with the sled still in the air: the landing is still owed its crash. */
+  private awaitSince = Number.NaN;
   private pending: Cmd[] = [];
   private hold: string | null = null;
   private jumpAt = Number.NaN;
@@ -200,8 +206,16 @@ export class StemForm {
     if (!Number.isNaN(this.silentSince)) {
       // Holding its breath: nothing plays until crashIn, or until the breath has gone on too long.
       if (until - this.silentSince < BREATH_MAX_S) return out;
-      this.resume(until, false, out);
+      // A flight longer than a breath (Frostfang's tallest drop is over six seconds in the air): the
+      // breakdown comes in under the rest of it, and the landing still crashes back in.
+      const bd = this.piece.form.breakdown;
+      if (ready(bd)) {
+        this.silentSince = Number.NaN;
+        this.awaitSince = until;
+        this.begin(bd, until, 0, out);
+      } else this.resume(until, false, out);
     }
+    if (until - this.awaitSince > AWAIT_MAX_S) this.awaitSince = Number.NaN;
     for (let guard = 0; guard < 64; guard++) {
       const cur = this.cur as Playing;
       const end = this.endOf(cur);
@@ -210,19 +224,20 @@ export class StemForm {
       const jT = Number.isNaN(this.jumpAt) ? Infinity : this.jumpAt;
       const next = Math.min(landT, brT, jT, this.done ? Infinity : end);
       if (!(next < until)) break;
-      if (next === landT && this.land) this.doLand(this.land.t, this.land.kind, ready, out);
-      else if (next === jT) {
+      // (A landing, a jump or a breakdown that falls on the section's own end takes it: never both.)
+      if (landT - next < 1e-6 && this.land) this.doLand(this.land.t, this.land.kind, ready, out);
+      else if (jT - next < 1e-6) {
         this.jumpAt = Number.NaN;
         if (this.hold && ready(this.hold)) {
           out.push({ op: 'cut', token: cur.token, t: next, fade: CUT_FADE_S });
           this.begin(this.hold, next, 0, out);
         }
-      } else if (next === brT) {
+      } else if (brT - next < 1e-6) {
         this.breakAt = Number.NaN;
         const bd = this.piece.form.breakdown;
         if (ready(bd) && this.sec(cur.id).role !== 'break') {
-          out.push({ op: 'cut', token: cur.token, t: next, fade: BREAK_FADE_S });
-          this.begin(bd, next, 0, out);
+          out.push({ op: 'cut', token: cur.token, t: brT, fade: BREAK_FADE_S });
+          this.begin(bd, brT, 0, out);
         }
       } else {
         let id = this.follow();
@@ -274,6 +289,8 @@ export class StemForm {
    */
   plan(target: number, kind: LandKind, now: number): number | null {
     if (this.scene !== 'run' || this.done || !this.cur || !Number.isNaN(this.silentSince)) return null;
+    // One landmark is one landing: a rider who reaches the line a moment after its beat does not land it twice.
+    if (kind !== 'finish' && target - this.landedAt < RELAND_S) return null;
     const cur = this.land;
     if (cur && cur.t - now < LOCK_S) {
       if (LAND_RANK[kind] > LAND_RANK[cur.kind]) cur.kind = kind;
@@ -342,7 +359,7 @@ export class StemForm {
   }
 
   get holding(): boolean {
-    return !Number.isNaN(this.silentSince);
+    return !Number.isNaN(this.silentSince) || !Number.isNaN(this.awaitSince);
   }
 
   /** The section sounding, for a deck that has to start it part way through (the music slider back up
@@ -352,10 +369,15 @@ export class StemForm {
   }
 
   /** The landing: the stage's chorus from its top, on a new downbeat that is this instant, under the hit. */
-  crashIn(now: number): Cmd[] {
-    if (Number.isNaN(this.silentSince)) return [];
+  crashIn(now: number, hit = true): Cmd[] {
     const out: Cmd[] = [];
-    this.resume(now, true, out);
+    if (Number.isNaN(this.silentSince)) {
+      if (Number.isNaN(this.awaitSince) || !this.cur || this.done) return [];
+      this.awaitSince = Number.NaN;
+      if (!hit) return [];
+      out.push({ op: 'cut', token: this.cur.token, t: now, fade: CUT_FADE_S });
+    }
+    this.resume(now, hit, out);
     return out;
   }
 

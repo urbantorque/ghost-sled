@@ -985,6 +985,12 @@ export class Music {
   private shown = '';
   private shownAt = 0;
   private course = '';
+  private produceAt = 0;
+  private produceKey = '';
+  /** Probe: stingers of the produced score played. */
+  stingers = 0;
+  /** The last scheduler pass that was not the results (the reprise waits at most 2 s on its decode). */
+  private resultsSince = 0;
   /** The set pieces' stingers to have decoded on a run (their one-shots' names). */
   private primed: string[] = [];
   /** The wipeout's muffle, kept so a new deck starts with it. */
@@ -1129,7 +1135,9 @@ export class Music {
   stinger(verb: string, t: number): boolean {
     const top = this.top;
     if (!top || !top.produced || top.scene !== 'run' || !this.enabled) return false;
-    return top.stinger(verb, top.nextBeat(t));
+    const played = top.stinger(verb, top.nextBeat(t));
+    if (played) this.stingers++;
+    return played;
   }
 
   /** The run's set pieces, by verb: their stingers are decoded ahead (with won, lost and the plain one). */
@@ -1148,9 +1156,10 @@ export class Music {
   }
 
   /** The landing: the score crashes back in, on a new downbeat that is this instant. */
-  crashIn(now: number): void {
+  /** The breath ends. Without the hit when the leap ended in a wipeout. */
+  crashIn(now: number, hit = true): void {
     const top = this.top;
-    if (top && top.produced) top.crashIn(now);
+    if (top && top.produced) top.crashIn(now, hit);
   }
 
   get holding(): boolean {
@@ -1192,6 +1201,7 @@ export class Music {
   }
 
   tick(now: number, until: number): void {
+    if (this.scene !== 'results') this.resultsSince = now;
     if (this.scene === 'run' && now >= this.resultsAt) {
       this.scene = 'results';
       this.resultsAt = Infinity;
@@ -1200,7 +1210,8 @@ export class Music {
     const top = this.top;
     const piece = this.produce(now, live);
     const id = piece ? `p|${piece}|${live}` : live;
-    if (!top || top.id !== id) {
+    // (undefined: the produced run deck plays on for the moment its reprise takes to decode.)
+    if (piece !== undefined && (!top || top.id !== id)) {
       if (top) top.fadeOut(now, XFADE);
       const sp = piece ? this.store?.piece(piece) : null;
       const d: AnyDeck = piece && sp && this.store ? new StemDeck(this.ctx, this.pool, this.bus, this.store, id, piece, sp, this.scene, this.mood, now + 0.05) : new Deck(this.ctx, this.pool, this.kit, this.bus, this.scene, this.mood, this.biome, now + 0.05, this.lite);
@@ -1243,9 +1254,14 @@ export class Music {
    * live band. The live band plays whenever the audio is not there, and a run more than SWAP_S old keeps
    * the band it has.
    */
-  private produce(now: number, live: string): string | null {
+  private produce(now: number, live: string): string | null | undefined {
     const store = this.store;
     if (!store) return null;
+    // Four times a second is often enough to fetch, claim and change hands; a pass between keeps what plays.
+    const key = `${this.scene}|${this.course}|${this.biome}`;
+    if (now < this.produceAt && key === this.produceKey) return undefined;
+    this.produceAt = now + 0.25;
+    this.produceKey = key;
     const course = store.piece(this.course) && this.course !== 'title' ? this.course : pieceFor(this.biome);
     if (course !== this.shown) {
       this.shown = course ?? '';
@@ -1263,10 +1279,11 @@ export class Music {
     const open = this.scene === 'results' ? sp.form.results : sp.form.open;
     if (top && top.id === `p|${piece}|${live}`) {
       // Playing: get what comes after it ready. The mountain's opening under the title and the results
-      // (Run Again starts on it), the results' reprise from the last stage of a run.
+      // (Run Again starts on it), the results' reprise from the last stretch of a run (decoded audio is the
+      // dear part: not before it is near).
       const cp = course ? store.piece(course) : null;
       if (this.scene === 'run') {
-        if (this.build.stage >= sp.form.stages.length - 1) store.claim('next', piece, [sp.form.results]);
+        if (this.build.stage >= sp.form.stages.length - 1 && this.build.climax > 0.6) store.claim('next', piece, [sp.form.results]);
         else store.release('next');
       } else if (course && cp && store.state(course) === 'ready') store.claim('next', course, [cp.form.open], ['hit', 'build']);
       else store.release('next');
@@ -1276,7 +1293,7 @@ export class Music {
     if (this.scene === 'results' && top && !top.produced) return null;
     if (store.state(piece) !== 'ready') return null;
     store.claim('next', piece, [open], this.scene === 'run' ? ['hit', 'build'] : []);
-    if (!store.sectionReady(piece, open)) return null;
+    if (!store.sectionReady(piece, open)) return this.scene === 'results' && top && top.produced && top.scene === 'run' && now - this.resultsSince < 2 ? undefined : null;
     // A run that has been going on the live band keeps it.
     if (this.scene === 'run' && top && top.id === live && now - this.deckAt > SWAP_S) return null;
     return piece;

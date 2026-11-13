@@ -329,6 +329,7 @@ export class AudioEngine {
   /** The lip of the course's biggest leap (the music holds its breath there), and whether this run has. */
   private bigLeapZ = Number.NaN;
   private breathed = false;
+  private groundedFor = 0;
 
   constructor() {
     this.warm();
@@ -611,7 +612,7 @@ export class AudioEngine {
         this.climax = climaxK(frame.z as number, stages);
       }
       this.build = crashed || countIn ? 0 : buildLift(this.stage, this.climax);
-      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, c);
+      if (w?.course && stages && Number.isFinite(frame.z)) this.approach(w.course, stages, frame.z as number, d, now, crashed || countIn, frame.grounded !== false, c);
       const open = crashed || countIn ? 0 : openUp(frame.flow, frame.streak);
       this.bandOpen += (open - this.bandOpen) * (1 - Math.exp(-d / (open > this.bandOpen ? 0.5 : 2.4)));
       c.music.setBuild(this.stage, this.climax, this.bandOpen);
@@ -698,10 +699,15 @@ export class AudioEngine {
           // A wipeout: the score goes under water until the rider is up, and breaks down at its next phrase.
           c.music.muffle(b.phase === 'start', now);
           if (b.phase === 'start') {
+            // (A leap that ends in a wipeout tells no landing: the breath ends here, without the hit.)
+            if (c.music.holding) c.music.crashIn(now + START_LEAD, false);
             c.ambience.setRail(false);
             c.music.breakdown();
           }
-        } else if (b.type === 'crash') c.music.breakdown();
+        } else if (b.type === 'crash') {
+          if (c.music.holding) c.music.crashIn(now + START_LEAD, false);
+          c.music.breakdown();
+        }
         else if (b.type === 'finish') {
           // Over the line: the band's finale (its landing, planned as the line came up) rings, then the
           // results deck's reprise comes in under it.
@@ -795,18 +801,20 @@ export class AudioEngine {
    * plan; it re-plans as the speed changes until the drop's pad is built). A drop is never planned within
    * 3 s of the last: a set piece just past a stage line is one drop.
    */
-  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, c: Core): void {
+  private approach(course: unknown, stages: readonly { z0: number; z1: number }[], z: number, dt: number, now: number, held: boolean, grounded: boolean, c: Core): void {
     if (course !== this.marksFor) {
       this.marksFor = course;
-      let moments: { z0: number; verb?: string }[] = [];
+      let moments: { z0: number; z1?: number; verb?: string }[] = [];
       const full = course as Course;
       this.bigLeapZ = Number.NaN;
       try {
         if (typeof full.stageAt === 'function' && Array.isArray(full.leaps) && Number.isFinite(full.finishZ)) {
           moments = planMoments(full);
-          // The mountain's biggest leap: the tallest cliff on the descent.
+          // The mountain's biggest leap: the tallest cliff on the descent that is not part of a set piece (a
+          // set piece has its own drop, and some carry the sled through the air for a long while).
           let tall = 0;
           for (const l of full.leaps) {
+            if (moments.some((m) => l.z > m.z0 - 40 && l.z < (m.z1 ?? m.z0) + 40)) continue;
             if (l.height > tall) {
               tall = l.height;
               this.bigLeapZ = l.z;
@@ -832,12 +840,17 @@ export class AudioEngine {
       }
     }
     this.zPrev = z;
-    // The breath: a third of a second before the lip of the biggest leap the score cuts to its own tail
-    // (the live band ducks instead); the landing brings it back (simEventNow).
-    if (!this.breathed && !held && Number.isFinite(this.bigLeapZ) && z >= this.bigLeapZ - Math.max(4, this.vz * 0.35) && z < this.bigLeapZ + 6 && this.vz > 8) {
+    // The breath: as the sled leaves the lip of the biggest leap the score cuts to its own tail (the live
+    // band ducks instead); the landing brings it back (simEventNow), or the first frames back on the snow
+    // where no landing is told. A rider who does not fly there hears no breath.
+    if (!this.breathed && !held && !grounded && Number.isFinite(this.bigLeapZ) && z >= this.bigLeapZ - 8 && z < this.bigLeapZ + 16 && this.vz > 8) {
       this.breathed = true;
       if (!c.music.breath(now)) c.graph.music.duck(0.15, now, 1.1, 0.3, 0.05);
     }
+    if (c.music.holding) {
+      this.groundedFor = grounded ? this.groundedFor + dt : 0;
+      if (this.groundedFor > 0.2) c.music.crashIn(now + START_LEAD);
+    } else this.groundedFor = 0;
     while (this.markIx < this.marks.length && this.marks[this.markIx].z <= z) this.markIx++;
     const m = this.marks[this.markIx];
     if (!m || held || this.vz < 3) return;
@@ -866,7 +879,7 @@ export class AudioEngine {
    *  at most, bytes fetched, the section playing); null while the live band is all there is. */
   debugStems(): Record<string, unknown> | null {
     if (!this.store) return null;
-    return { ...this.store.debug(), produced: this.core?.music.produced ?? false, section: this.core?.music.sectionId() ?? '' };
+    return { ...this.store.debug(), produced: this.core?.music.produced ?? false, stingers: this.core?.music.stingers ?? 0, section: this.core?.music.sectionId() ?? '' };
   }
 
   /** Debug-only (the jukebox): a signature rider's motif by the rider's key (src/bot/roster.ts). */
