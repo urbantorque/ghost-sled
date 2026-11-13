@@ -313,6 +313,7 @@ const HERO_BACK = 0.6;
 const HERO_UP = 1.5;
 const HERO_SIDE = 2.4;
 const HERO_FOV = 56;
+const HERO_FOV_TALL = 78;
 /** The tracking shot down a street: down toward the snow, aside toward the street's middle and a little
  *  further back (the longer lens brings the rider back to its size and stacks the street up behind it), under a thin letterbox with a little depth of field. */
 const TRACK_DOWN = 0.75;
@@ -1557,7 +1558,7 @@ export class ChaseCamera {
     const chaseWide = this.mode === 'chase' && this.aspect >= 1;
     let baseFov = chaseFov(t.speed) + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (chaseWide ? this.airK * 4 + vista * VISTA_FOV + wideM * WIDE_FOV - trackM * TRACK_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
     if (chaseWide) baseFov = Math.min(baseFov, CHASE_FOV_MAX);
-    if (this.mode === 'chase') baseFov = MathUtils.lerp(baseFov, HERO_FOV, heroM * (portrait ? 0.4 : 1));
+    if (this.mode === 'chase' && !portrait) baseFov = MathUtils.lerp(baseFov, HERO_FOV, heroM);
     if (this.mode === 'finish') {
       // Into a longer lens as the swing comes round: the rider and the square behind it, undistorted.
       baseFov = portrait ? 74 : FINISH_FOV;
@@ -1573,6 +1574,8 @@ export class ChaseCamera {
       const hfov = 2 * Math.atan(Math.tan(MathUtils.degToRad(baseFov) / 2) * 1.6);
       baseFov = MathUtils.radToDeg(2 * Math.atan(Math.tan(hfov / 2) / Math.max(this.aspect, 0.4)));
       baseFov = Math.min(baseFov, 96);
+      // (The hero frame's longer lens, on a tall screen's terms.)
+      if (this.mode === 'chase') baseFov = MathUtils.lerp(baseFov, HERO_FOV_TALL, heroM);
     }
     // The crash orbit's long lens on the ghost that passes your wreck.
     if (this.mode === 'crash') baseFov = this.packZoomFov(t, baseFov, held, dt);
