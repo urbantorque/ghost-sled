@@ -1305,6 +1305,47 @@ function mouth(b: Bay, cols: Color[], parts: BufferGeometry[]): void {
   }
 }
 
+/** How high over the floor's centre a cavern's rib meets, and where it springs from the wall. Its lowest
+ *  point over the corridor is at the corridor's edge, about 9 m over the snow there: over any line a sled
+ *  rides or flies in a cavern (the roof proper still clears the highest air a pop can reach). */
+const RIB_APEX = 15;
+const RIB_SPRING = 7.5;
+
+/** One rib of a cavern's crown, built at a bay's centre: a pointed arch of ice in strokes that thin toward
+ *  the point, a boss of hanging crystals where the two halves meet, and a cluster of crystals lit from
+ *  within standing out of the wall at each springing, where the lanterns and the dawn find them. */
+function iceRib(b: Bay, cols: Color[], pale: Color, glow: Color, low: boolean): BufferGeometry[] {
+  const out: BufferGeometry[] = [];
+  const fl = b.f.gy(0, 0);
+  const yA = Math.min(b.R - 0.8, fl + RIB_APEX);
+  if (yA < fl + 11) return out;
+  const N = low ? 3 : 6;
+  const X = b.X + 0.9;
+  for (const sx of [-1, 1]) {
+    const yS = Math.max(b.f.gy(sx * X, 0) + 3, fl + RIB_SPRING);
+    let prev: V3 = [sx * (X + 1.2), yS - 5, 0];
+    for (let k = 0; k <= N; k++) {
+      const t = ((k / N) * Math.PI) / 2;
+      const p: V3 = [sx * X * Math.pow(Math.cos(t), 0.85), yS + (yA - yS) * Math.pow(Math.sin(t), 0.8), (k % 2 ? 0.25 : -0.25) * (1 - k / N)];
+      out.push(seg(prev, p, 1.0 - 0.5 * (k / N), cols[k % cols.length], low ? 3 : 4));
+      prev = p;
+    }
+    if (!low) {
+      // Crystals at the springing: they lean out of the wall and up, well over a rider's head.
+      for (let k = 0; k < 4; k++) {
+        const h = 1.6 + rnd() * 2.2;
+        out.push(crystal(k % 2 ? glow : pale, 0.28 + rnd() * 0.22, h, [sx * (X + 0.4 - 0.2 * k), yS - 1.2 + k * 0.5, (k - 1.5) * 0.7], [(rnd() - 0.5) * 0.7, 0, sx * (0.5 + rnd() * 0.5)]));
+      }
+    }
+  }
+  // The boss: crystals hanging from the point (their tips stay within two and a half metres of it).
+  for (let k = 0; k < (low ? 1 : 3); k++) {
+    const len = 1.2 + rnd() * 1.3;
+    out.push(part(new ConeGeometry(0.3 + rnd() * 0.25, len, 5), k === 0 ? glow : pale, { pos: [(k - 1) * 0.6, yA - len / 2 + 0.2, (rnd() - 0.5) * 0.8], rot: [Math.PI, rnd(), 0] }));
+  }
+  return out;
+}
+
 /** Frostfang's ice tunnel: a vault of translucent blue ice over the run (the ice material), icicles
  *  under its crown, shafts of light where its wall thins. */
 export function iceTunnelPiece(ctx: SiteCtx): Piece {
@@ -1343,6 +1384,10 @@ export function iceTunnelPiece(ctx: SiteCtx): Piece {
             ic.push(part(new ConeGeometry(r, len, 5), k === 0 ? icicle : cols[1], { pos: [(rnd() - 0.5) * 1.7 * b.hw, 0.4 + len / 2, (rnd() - 0.5) * 3], rot: [Math.PI, rnd(), 0] }));
           }
           parts.push(...b.f.out(pitched(b, ic)));
+          // The crown a rider can see: the roof itself clears the highest air and so stands out of the
+          // frame, so every third bay a rib of ice springs from both walls and meets in a point over the
+          // run, far lower (Low: every fifth, in fewer strokes).
+          if ((i0 + j) % (low ? 5 : 3) === 1) parts.push(...b.f.out(iceRib(b, crown, icicle, glowC, low)));
         }
         // The walls: a shelf of ice with a fringe of icicles under it, and crystals glowing in the ice,
         // on each side at the lens's height and above, all past the limit.
