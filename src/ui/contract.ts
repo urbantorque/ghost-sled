@@ -340,6 +340,8 @@ export interface SettingsModel {
   quality: 'auto' | 'low' | 'medium' | 'high';
   currentTier: 'low' | 'medium' | 'high';
   hints: boolean;
+  /** The gamepad's rumble. */
+  rumble: boolean;
 }
 
 export interface UIHandlers {

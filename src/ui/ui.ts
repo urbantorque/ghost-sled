@@ -20,6 +20,7 @@ import type {
 import { ChaosEvent } from '../sim/chaos';
 import type { Beat } from '../game/beats';
 import type { InputMode, TouchVisual } from '../game/input';
+import type { PadMenu } from '../game/pad';
 import { BeatRouter } from './beatsui';
 import { h, type Ctx, type UiSound } from './dom';
 import { Fx } from './fx';
@@ -27,6 +28,7 @@ import { Hint } from './hint';
 import { Hud, pushRect } from './hud';
 import { Menus } from './menus';
 import { Notices } from './notices';
+import { PadNav } from './padnav';
 import { Results } from './results';
 import { Reveal } from './reveal';
 import { Title } from './title';
@@ -49,7 +51,7 @@ const CONTROL_KEYS = new Set(['Space', 'Enter', 'NumpadEnter', 'ArrowLeft', 'Arr
 const ARROWS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']);
 const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End']);
 
-const DEFAULT_SETTINGS: SettingsModel = { master: 1, music: 0.8, sfx: 1, quality: 'auto', currentTier: 'high', hints: true };
+const DEFAULT_SETTINGS: SettingsModel = { master: 1, music: 0.8, sfx: 1, quality: 'auto', currentTier: 'high', hints: true, rumble: true };
 
 export class UI implements GameUI {
   private readonly el: HTMLElement;
@@ -64,6 +66,8 @@ export class UI implements GameUI {
   private readonly results: Results;
   private readonly menus: Menus;
   private readonly touch: TouchViz;
+  private readonly padNav = new PadNav();
+  private readonly hd: UIHandlers;
   private readonly loadEl: HTMLElement;
   private loadShown = false;
   private lastLoad = -1;
@@ -87,6 +91,7 @@ export class UI implements GameUI {
 
   constructor(root: HTMLElement, handlers: UIHandlers & UIMenuHandlers) {
     const hd = handlers;
+    this.hd = hd;
     this.el = h('div', 'gs-ui');
     root.append(this.el);
 
@@ -252,6 +257,47 @@ export class UI implements GameUI {
     this.modeSet = true;
     this.inputMode = mode;
     this.el.classList.toggle('gs-touch-mode', mode === 'touch');
+  }
+
+  /** The last input used changed kind (keys, mouse, touch, pad): the glyphs on screen follow it at once,
+   *  the title's prompt and a hint that is up included. */
+  inputModeChanged(mode: InputMode): void {
+    if (mode === 'gamepad') this.el.classList.add('gs-has-pad');
+    this.setMode(mode);
+    this.results.inputMode = mode;
+    if (this.title.layer.open) this.title.setInputMode(mode);
+    if (this.hintUp) this.hints.set(this.hintKind, mode, this.learned);
+  }
+
+  /**
+   * The pad in the menus, once a frame (InputController.poll). A direction moves focus on whatever is on
+   * top (a sheet or the pause card, else the results, else the title), A presses what is focused, B goes
+   * back, and Start pauses a run or resumes it. Returns true when it took the A or Start press, so the
+   * game does not also read it as Ride or Run again. While a run is being ridden it does nothing but
+   * Start: the run reads the pad itself.
+   */
+  padMenu(p: PadMenu): boolean {
+    const menu = this.menus.topEl;
+    if (p.start && this.menus.pause.open) {
+      if (menu === this.menus.pause.el) menu.querySelector<HTMLElement>('[data-fk="resume"]')?.click();
+      return true;
+    }
+    const scope = menu ?? (this.results.layer.open ? this.results.layer.el : this.title.layer.open ? this.title.layer.el : null);
+    if (!scope) {
+      this.padNav.idle();
+      if (p.start && this.hud.layer.open) {
+        this.hd.onPause(true);
+        return true;
+      }
+      return false;
+    }
+    // A pad plugged in and left alone while the keys or the mouse are used moves nothing and marks nothing.
+    if (this.inputMode !== 'gamepad' && !p.a && !p.b && !p.start && p.x === 0 && p.y === 0) {
+      this.padNav.idle();
+      return false;
+    }
+    // In a sheet over the title, Start is not Ride.
+    return this.padNav.step(p, scope, menu !== null, performance.now()) || (p.start && menu !== null);
   }
 
   showTitle(m: TitleModel): void {

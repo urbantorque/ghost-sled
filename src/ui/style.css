@@ -429,6 +429,42 @@
   box-shadow: inset 0 0 0 1px rgba(18, 25, 51, 0.32);
 }
 
+/* Gamepad glyphs, shown while a pad is the last input used. A face button is a round cap with a firm rim
+   and no keycap lip, so A the button never reads as A the key; the stick is drawn bare, like the mouse. */
+.gs-pad-btn {
+  min-width: 1.9em;
+  height: 1.9em;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(245, 243, 255, 0.14);
+  box-shadow: inset 0 0 0 2px rgba(245, 243, 255, 0.78);
+  letter-spacing: 0;
+}
+
+.gs-btn-primary .gs-pad-btn {
+  box-shadow: inset 0 0 0 2px rgba(18, 25, 51, 0.55);
+}
+
+.gs-pad-stick {
+  display: inline-flex;
+}
+
+.gs-pad-stick .gs-i {
+  width: 2.1em;
+  height: 2.1em;
+}
+
+/* The control the pad is on: the focus ring, for browsers that draw none for a focus no key moved. */
+:where(.gs-ui) .gs-pad-focus {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+/* The rumble switch means nothing until a gamepad has been used. */
+.gs-ui:not(.gs-has-pad) .gs-set-rumble {
+  display: none;
+}
+
 /* Tags */
 
 .gs-tag {

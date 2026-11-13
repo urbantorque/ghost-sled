@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { InputController } from '../src/game/input';
 import { FixedLoop } from '../src/game/loop';
 import { Run } from '../src/game/run';
 import { ChaosEvent, Mood, rollChaos } from '../src/sim/chaos';
@@ -221,5 +222,55 @@ describe('determinism', () => {
       expect(b.stages.map((s) => s.name)).toEqual(names);
       expect(b.finishZ).toBe(a.finishZ);
     }
+  });
+
+  it('a run ridden on a gamepad records a log that replays to the same state', () => {
+    // The pad reaches the sim only as the bytes InputController.sample() quantises it to, the same path the
+    // keys and the touch zones take, so what the stick and the triggers did is all in the log.
+    const pad = { connected: true, mapping: 'standard', axes: [0, 0, 0, 0], buttons: Array.from({ length: 17 }, () => ({ pressed: false, value: 0 })) };
+    (globalThis as { window?: unknown }).window = Object.assign(new EventTarget(), { innerWidth: 1280, innerHeight: 720 });
+    const input = new InputController(new EventTarget() as unknown as HTMLElement, () => [pad]);
+    input.poll();
+    const run = new Run(MOUNTAINS[0].seed, rollChaos(31, 3), 0, input);
+    const rng = new Rng(4242);
+    let actions = 0;
+    let spirits = 0;
+    let trigger = 0;
+    let hold = 0;
+    for (let t = 0; t < 60 * 40 && !run.crashed; t++) {
+      // Stick sweeps of several speeds and depths, the odd flick to full lock, the trigger eased on and off
+      // through its hysteresis band, and a tap of X now and then.
+      const s = run.sim.s;
+      const look = s.z + 6 + s.speed * 0.4;
+      const want = Math.atan2(run.sim.course.safeX(look) - s.x, look - s.z) - s.velHeading;
+      const sweep = Math.sin(t / 37) * 0.5 + Math.sin(t / 11) * 0.25;
+      pad.axes[0] = Math.max(-1, Math.min(1, want * 2.2 + sweep));
+      pad.axes[2] = t % 600 > 560 ? (t % 1200 > 600 ? 1 : -1) : 0;
+      if (hold-- <= 0) {
+        hold = rng.int(10, 50);
+        trigger = rng.chance(0.4) ? rng.next() : 0;
+      }
+      pad.buttons[7] = { pressed: trigger > 0.5, value: trigger };
+      pad.buttons[2] = { pressed: t % 97 < 3, value: t % 97 < 3 ? 1 : 0 };
+      // A frame's poll lands between some ticks and not others, as it does at 144 Hz or at 37.
+      if (t % 3 !== 1) input.poll();
+      run.tick();
+    }
+    const rec = run.toRecord('Pad');
+    const log = decodeLog(rec.inputs);
+    const steers = new Set<number>();
+    for (const b of log.inputs) {
+      steers.add(b & 15);
+      if (actionOf(b)) actions++;
+      if (b & 64) spirits++;
+    }
+    input.dispose();
+    expect(run.finished).toBe(false);
+    expect(log.inputs.length).toBeGreaterThan(60 * 10);
+    expect(steers.size).toBeGreaterThanOrEqual(7);
+    expect(actions).toBeGreaterThan(60);
+    expect(spirits).toBeGreaterThan(5);
+    expect(replayRecord(rec).hash()).toBe(run.sim.hash());
+    expect(replayRecord(recordFromString(recordToString(rec))).hash()).toBe(run.sim.hash());
   });
 });

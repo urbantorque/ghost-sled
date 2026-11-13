@@ -40,6 +40,7 @@ import { FixedLoop } from './loop';
 import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
 import { challengeShareTitle, crashLine, dailyHook, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, guessTier } from './quality';
+import { Rumble } from './rumble';
 import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
@@ -141,6 +142,8 @@ export class App {
   private ui: UI;
   private audio = new AudioEngine();
   private input: InputController;
+  /** The pad's rumble: only while the pad is the last input used, the setting is on and motion is not reduced. */
+  private readonly rumble = new Rumble({ pad: () => this.input.activePad(), on: () => this.input.mode === 'gamepad' && this.save.data.settings.rumble && !reduced() });
   private ghosts = new GhostManager();
   /** Turns each frame's sim and race events into beats and feel (window.__gs.director for probes). */
   readonly director = new Director(reduced);
@@ -426,6 +429,9 @@ export class App {
   // ------------------------------------------------------------------ wiring
 
   private wireInput(): void {
+    // The pad: the menus get the first turn at its presses, and the glyphs on screen follow the last input used.
+    this.input.onPadMenu((p) => this.ui.padMenu(p));
+    this.input.onMode((m) => this.ui.inputModeChanged(m));
     this.input.onPress((source, code) => {
       this.audio.unlock();
       if (this.ui.modal && this.phase !== 'results') return;
@@ -745,7 +751,7 @@ export class App {
 
   private settingsModel(): SettingsModel {
     const s = this.save.data.settings;
-    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints };
+    return { master: s.master, music: s.music, sfx: s.sfx, quality: s.quality, currentTier: this.tiers.tier, hints: s.hints, rumble: s.rumble };
   }
 
   private applySettings(p: Partial<SettingsModel>): void {
@@ -754,6 +760,7 @@ export class App {
     if (p.music !== undefined) s.music = p.music;
     if (p.sfx !== undefined) s.sfx = p.sfx;
     if (p.hints !== undefined) s.hints = p.hints;
+    if (p.rumble !== undefined) s.rumble = p.rumble;
     if (p.quality !== undefined && p.quality !== s.quality) {
       s.quality = p.quality;
       this.tiers.force(p.quality, guessTier());
@@ -1844,6 +1851,7 @@ export class App {
     this.frameTimes.push(dt * 1000);
     if (this.frameTimes.length > 300) this.frameTimes.shift();
     if (DEV.has('fps')) this.drawFps();
+    this.input.poll();
     if (this.phase === 'title' || this.phase === 'boot') this.frameTitle(dt);
     else if (this.phase === 'home') this.frameHome(dt);
     else this.frameRun(dt);
@@ -2293,6 +2301,7 @@ export class App {
     this.audio.beats(out.beats);
     for (const e of events) {
       this.audio.simEvent(e);
+      this.rumble.simEvent(e);
       this.onSimEvent(e);
     }
 

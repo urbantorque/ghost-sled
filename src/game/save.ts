@@ -85,6 +85,8 @@ export interface Settings {
   sfx: number;
   quality: 'auto' | 'low' | 'medium' | 'high';
   hints: boolean;
+  /** The gamepad's rumble (round 7). A save from before it reads as on. */
+  rumble: boolean;
 }
 
 /** The Daily Mountain's record. medal (0 none, 1 bronze, 2 silver, 3 gold), streak and last (the UTC
@@ -172,7 +174,7 @@ export function defaultSave(name: string): SaveData {
     best: {},
     grudge: {},
     missions: newMissionState(hashString(name), { unlockedBiomes: unlockedBiomes(0) }),
-    settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true },
+    settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true, rumble: true },
     stats: { bestScore: 0, bestCombo: 0, longestAir: 0, perfects: 0, topSpeed: 0, yetiHops: 0, avalanches: 0 },
     hints: {},
     daily: { key: '', best: 0, medal: 0, streak: 0, last: '' },
