@@ -55,6 +55,13 @@ export const GRAVE_NAMES = [
   'Broken Rein',
   'Last Orders',
   'Thin Prayer',
+  // (Round 7: five mountains of up to four places each want twenty names, and a few to spare.)
+  'Snuffed Wick',
+  'Candle End',
+  'Long Sleep',
+  'Hollow Bell',
+  'Still Water',
+  'Cinder Rest',
 ] as const;
 
 export interface Graveyard {
