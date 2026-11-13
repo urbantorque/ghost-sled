@@ -132,6 +132,71 @@ shown again (the landing ring, a timing aid, has six), except the lip's, which r
 held through one. The save counts the runs each lesson was shown in (`hintsSeen`; an old save starts at
 none). Nine tests in `tests/hints.test.ts`.
 
+**A live race on runs 2 to 20: seven real riders, laid across where you finish.** *Why it went quiet.* I
+measured the baseline (round 6's build, five runs in a row on Pinecrest, `shots/r7/feel/tele/before`): a
+riding ghost was within 40 m for 0.63 of the mid pilot's run, 0.49 of the expert's and 0.63 of the stunt
+pilot's, and the expert's fourth run had one for 0.24 of it. The cause is not mainly the pool and not mainly
+an old pace. It is that a skilled pilot's time moves more from run to run than the field was wide: the
+expert rode 126.5, 127.4, 115.8, 139.1 and 123.0 s, and the field was five riders on fixed roles between
+0.88 and 1.07 of the median, so on the 139 s run all five rode away and on the 116 s run they were left at
+the first stage line. A ghost that finishes 4 s from you is within 40 m for about a quarter of the run.
+*How I know.* A telemetry run is two minutes of real time and one pilot's five runs say little, so I built
+the race lab (`scripts/playtest/race-lab.ts`): it takes the pilot lab's rides as the player's runs, builds
+each run's field exactly as the game does, replays the picked records for where each ghost is at each tick,
+and counts what telemetry counts, over twelve orders of each pilot's six rides on every mountain (720 runs
+in a minute). Five riders picked with hindsight, nearest the time the pilot then rode, are within 40 m for
+0.71 of the run: that is the ceiling for five, and the fixed roles got 0.53. What closes the gap is the
+number of real riders spread over where you might finish: nine on the old roles reach 0.70.
+*What changed* (`src/game/field.ts`). From the second run on a mountain the field is laid across your own
+last runs: riders evenly from a little quicker than your quickest recent run (0.94, 0.95, 0.97 of it by how
+many runs are known: a new player is still getting quicker fast) to your slowest of the last three, never
+tighter than 1.08 of the pace at the slow end or wider than 1.12, and the pace follows your last three runs
+when they are quicker than the median of five (an improving player is not raced on last week's pace). And
+two more riders ride, seven in all (`fieldCount`; Haunted Hollow keeps its nine, and a very first run its
+five, who read you). Your best still rides on top, as it did, and every pick keeps a second from it. Roles
+are read off the targets, so a grudge and a promised rider still take the pack slot nearest their pace.
+Nobody is faked: every rider is a record replayed as it was ridden.
+
+| race lab, runs 2 to 6, all four mountains | live (a ghost within 40 m) | passes a minute | quiet runs (live under 0.35) |
+| --- | --- | --- | --- |
+| mid: five on fixed roles, then seven laid across | 0.56 to 0.67 | 2.08 to 3.11 | 18 to 11 of 240 |
+| expert | 0.52 to 0.69 | 2.14 to 3.85 | 38 to 1 of 240 |
+| stunt | 0.50 to 0.61 | 2.57 to 3.81 | 55 to 19 of 240 |
+
+(`shots/r7/feel/race/race-lab.txt`. The lab's pilots ride without a slipstream, so their times are a few
+seconds slower than in the game; the comparison is the same runs against two fields.) *Rejected:* a wider
+string of five (tried first: live 0.56 to 0.58, no better than noise, and more quiet runs for the mid
+pilot: five riders cannot cover 25 s); nine on every run (0.72, but it is Haunted Hollow's whole idea);
+riders who read you on every run (that is faking a ghost).
+
+**The pools get a fast end, and it is as fast as a bot can ride.** `src/bot/pool.ts` adds up to eight riders
+a named mountain: the quickest of 48 more runs by the best bots on every sled, plain chaos so they can ride
+any run, each half a second from the next (`FAST_RIDERS`; the Daily's worker pool pays for none unless
+asked). On the pools I rode locally that is 45 to 48 riders a mountain where there were 42, and seven
+riders under 112.5 s on Pinecrest where there were five. It is not a faster top: the quickest record is
+106.5 to 108.2 s by mountain, where it was 108 to 109, because that is what the bot can do
+(`scripts/playtest/pool-fast.ts`: at skill 1.0 on any sled the median is 110 to 114 s and the best of
+twelve 107). The telemetry's mid pilot finishes in 112 s, so it has a rider ahead; a human who rides 103 s
+does not, and no pool can give them one until the bot rides faster. That is `bot.ts`, which is not mine.
+
+## For the main lane to wire, decide or re-ride
+
+- **Ride the pools again** (`npm run generate-ghosts`): the committed pools are round 6's (SIM_VERSION 8), so
+  `tests/ghostpool`, `nearmiss`, `slowriders` and one `graveyards` test fail on this branch as committed.
+  With the pools ridden locally on this sim everything passes but two `graveyards` tests, which pin where
+  riders fell and how many graves there are (14 where 12): re-pin them after the ride. The pools grow from
+  about 31 to 36 KB each.
+- **Seven riders is two more glass riders on every tier** on runs 2 and later (no more draw calls: the field
+  is merged; two more riders' triangles and two more replays in the worker at the start of a run). Haunted
+  Hollow has always drawn nine, so every tier already carries more than this, but I did not time it. If Low
+  or the phone cannot take it, `FIELD_MORE` in `field.ts` is the one number.
+- **The Daily and the Cup** make their pools in a worker with no fast end (`fast` is 0 there). Passing
+  `fast: 2` costs twelve more bot runs in the worker; your call.
+- **The hero lane** draws the fall (`sim.s.fall`, below); until it does, a fall plays the old tumble's
+  picture for 1.5 s.
+- **Rumble needs hands.** No headless browser has an actuator. The table is tested; what it feels like is
+  not.
+
 ## Touched outside my files
 
 - `src/game/ghostdata.ts`, `src/workers/ghost.worker.ts`, `src/game/ghosts.ts`: three flags in a ghost's

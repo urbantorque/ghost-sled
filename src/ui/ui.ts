@@ -257,6 +257,7 @@ export class UI implements GameUI {
     this.modeSet = true;
     this.inputMode = mode;
     this.el.classList.toggle('gs-touch-mode', mode === 'touch');
+    this.el.classList.toggle('gs-pad-mode', mode === 'gamepad');
   }
 
   /** The last input used changed kind (keys, mouse, touch, pad): the glyphs on screen follow it at once,

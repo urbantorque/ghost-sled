@@ -49,23 +49,38 @@ async (page) => {
 
   // 2. A fall past the first stretch: falling, down, up, riding again one get-up short, then a second.
   await until((s) => s.z > 760 && s.fall === 0, 90000);
+  // A screenshot takes longer than a phase of a fall lasts, so the page itself holds the run still the frame
+  // the moment comes (the pause flag, without the pause card), the frame is shot, and the run goes on.
+  const held = async (k, fall, tumbleMax) => {
+    await page.evaluate(([f, t]) => {
+      window.__held = null;
+      const g = window.__gs;
+      const watch = () => {
+        const s = g.run && g.run.sim.s;
+        if (!s) return;
+        if (s.fall === f && s.tumble <= t) {
+          g.paused = true;
+          window.__held = { z: Math.round(s.z), t: +(g.run.sim.tick / 60).toFixed(2), fall: s.fall, tumble: s.tumble, getUps: s.getUps };
+        } else requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    }, [fall, tumbleMax]);
+    await page.waitForFunction(() => window.__held, null, { timeout: 20000 });
+    await page.waitForTimeout(250);
+    log.push(await page.evaluate(() => window.__held));
+    await shot(k);
+    await page.evaluate(() => { window.__gs.paused = false; });
+  };
   const fall = async (tag) => {
     await page.evaluate(() => { const sim = window.__gs.run.sim; sim.s.invuln = 0; sim.s.lantern = Math.min(sim.s.lantern, 50); sim.wipeout('tree'); });
-    log.push(await until((s) => s.fall === 1 && s.tumble < 78, 4000));
-    await shot(`${tag}-1-falling`);
-    await until((s) => s.fall === 2, 4000);
-    await page.waitForTimeout(120);
-    await shot(`${tag}-2-down`);
-    await until((s) => s.fall === 3 && s.tumble < 18, 4000);
-    await shot(`${tag}-3-up`);
-    await until((s) => s.fall === 0, 4000);
-    await page.waitForTimeout(500);
-    log.push(await state());
-    await shot(`${tag}-4-riding`);
+    await held(`${tag}-1-falling`, 1, 72);
+    await held(`${tag}-2-down`, 2, 40);
+    await held(`${tag}-3-up`, 3, 12);
+    await held(`${tag}-4-riding`, 0, 0);
   };
   await fall('fall');
-  await page.waitForTimeout(3000);
   await fall('fall2');
+  await fall('fall3');
 
   // 3. The gamepad. A scripted pad, read by the game's own poll.
   await page.addInitScript(() => {
@@ -95,9 +110,8 @@ async (page) => {
   await button(12);
   await button(12);
   await page.waitForTimeout(200);
-  // A on Ride.
-  await page.evaluate(() => document.querySelector('[data-fk="ride"]')?.focus());
-  await button(0);
+  // Start rides (A would too; Start is not the run's button, so the sled does not hop off the line).
+  await button(9);
   const st = await until((s) => s.phase === 'run' && s.t > 1.5, 60000);
   log.push(st);
   await shot('pad-hint-steer');

@@ -3,7 +3,7 @@ import type { InputMode } from '../game/input';
 import { type Standing, aheadOf, byStanding, clock, gapSeconds, margin, splitGap, timeGap } from '../game/standing';
 import { SLEDS } from '../sim/sleds';
 import { biomeArt } from './art';
-import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
+import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
@@ -522,7 +522,7 @@ export class Results {
     const again = btn(
       ctx,
       { cls: `gs-btn-primary gs-btn-xl gs-again${rematch ? ' is-rematch' : ''}`, icon: 'play', label, aria: m.runAgainLabel?.aria, sound: 'confirm', fk: 'again', gameKey: true, onClick: () => this.hd.onRunAgain() },
-      this.inputMode !== 'touch' ? kbd('Space') : null,
+      this.inputMode === 'touch' ? null : this.inputMode === 'gamepad' ? padBtn('A') : kbd('Space'),
     );
     // "Rematch Mila": the rival's name is a handle, so auto-translate leaves it alone. On a phone the
     // word stacks over the name (meta.css), so the name keeps the button's width to itself.
