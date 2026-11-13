@@ -41,6 +41,9 @@ export interface PoolOptions {
   mountain?: number;
   /** How many signature riders join (default all of them on a named mountain, none otherwise). */
   riders?: number;
+  /** Riders added at the fast end (round 7; default FAST_RIDERS on a named mountain, none otherwise): the
+   *  quickest of FAST_TRIES times as many runs by the best bots, plain chaos so they can ride any run. */
+  fast?: number;
   /** Bot runs to choose from (default about 2.4 per ghost). */
   budgetRuns?: number;
   /** Cap on a run's length in ticks (default 5 minutes). */
@@ -48,6 +51,14 @@ export interface PoolOptions {
   /** Called once with every candidate run after selection. */
   report?: (runs: PoolRun[]) => void;
 }
+
+/** The fast end (round 7). A pool stepped evenly through the bots' results holds two or three riders
+ *  within 2 s of its quickest, so a player near the top of it had nobody ahead after the first stage and
+ *  one rider to chase at most. These riders are the quickest of many more top-skill runs, each a real
+ *  record: the quickest a bot can ride this mountain, and a rider every FAST_GAP_S down from there. */
+export const FAST_RIDERS = 8;
+const FAST_TRIES = 6;
+const FAST_GAP_S = 0.5;
 
 /** A run's place in the race: higher is better. */
 function raceKey(r: PoolRun): number {
@@ -121,6 +132,32 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       runs.push(run);
       picked.push(run);
     }
+    picked.sort((a, b) => raceKey(a) - raceKey(b));
+  }
+
+  // The fast end: many runs by the best bots, on every sled, and the quickest of them kept, each at least
+  // FAST_GAP_S from the last and from every rider already in.
+  const fast = Math.max(0, Math.floor(opts.fast ?? (opts.mountain !== undefined ? FAST_RIDERS : 0)));
+  if (fast > 0) {
+    const tries: PoolRun[] = [];
+    for (let i = 0; i < fast * FAST_TRIES; i++) {
+      const skill = i % 3 === 2 ? 0.95 : 1;
+      const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xfa57, i) };
+      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0xfa58, i), sled: i % 6, name: '' }, maxTicks);
+      if (sim.s.finished) tries.push({ skill, record, sim, selected: false });
+    }
+    tries.sort((a, b) => a.sim.s.finishTick - b.sim.s.finishTick);
+    const taken = picked.filter((r) => r.sim.s.finished).map((r) => r.sim.s.finishTick);
+    let kept = 0;
+    for (const r of tries) {
+      if (kept >= fast) break;
+      if (taken.some((t) => Math.abs(t - r.sim.s.finishTick) < FAST_GAP_S * 60)) continue;
+      r.selected = true;
+      taken.push(r.sim.s.finishTick);
+      picked.push(r);
+      kept++;
+    }
+    runs.push(...tries);
     picked.sort((a, b) => raceKey(a) - raceKey(b));
   }
 
