@@ -41,6 +41,12 @@ export function streakK(v: number): number {
   return Math.pow(clamp01((v - 24) / 22), 1.2);
 }
 
+/** Speed-scaled motion blur (cine.motionBlur): none to 18 m/s, a third by 28 (already fast), then an even
+ *  climb that is only all of it at the cap. */
+export function blurK(v: number): number {
+  return 0.34 * smooth01((v - 18) / 10) + 0.66 * Math.pow(clamp01((v - 28) / 18), 1.1);
+}
+
 /** The lens's rumble over the snow: 0 to 22 m/s, under half at 30, all of it only at the cap. */
 export function rumbleK(v: number): number {
   return Math.pow(clamp01((v - 22) / 24), 1.1);

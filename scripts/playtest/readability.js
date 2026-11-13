@@ -21,6 +21,9 @@ async (page) => {
       await page.goto(c.base + `?debug&tier=${c.tier}&autoride=1&m=${m}&mood=0`);
       await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 60000 });
       await page.waitForTimeout(600);
+      // cfg.force: hold one of the camera's directed shots on for the whole read ('track'), or play none
+      // ('none'), so the hazard read inside a shot can be set beside the plain chase's at the same metres.
+      if (c.force) await page.evaluate((k) => { window.__gs.world.cam.shots = k === 'none' ? [] : [{ kind: k, key: 'forced', name: '', z0: -1e9, z1: 1e9, at: 0 }]; }, c.force);
       await page.evaluate(({ z, speed }) => {
         const r = window.__gs.run;
         r.sim.s.z = z;

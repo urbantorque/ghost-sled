@@ -52,6 +52,24 @@ export const WARD_CURVE: readonly TimeKey[] = [
   { at: 0.52, scale: 1 },
 ];
 
+/** The slow hero frame at the top of a big leap (round 7): render time eases to about a third by 0.1 s,
+ *  holds it to 0.5 s and eases back to full speed by APEX_S (smoothstep, sampled into keys). Played on the
+ *  render channel only: the sim is fed real time all through it, so the sled flies, steers and lands exactly
+ *  as it would have, and what slows is the picture's own motion (the scarf, the powder, the petals, the
+ *  rider's acting). The director plays it and names it with a 'heroFrame' beat. Reduced motion plays none
+ *  of it and keeps the beat. */
+export const APEX_S = 0.8;
+export const APEX_CURVE: readonly TimeKey[] = [
+  { at: 0, scale: 1 },
+  { at: 0.05, scale: 0.6 },
+  { at: 0.1, scale: 0.32 },
+  { at: 0.5, scale: 0.32 },
+  { at: 0.575, scale: 0.426 },
+  { at: 0.65, scale: 0.66 },
+  { at: 0.725, scale: 0.894 },
+  { at: APEX_S, scale: 1 },
+];
+
 /** Live pulses kept per channel (a beat never needs more: the weakest is dropped when full). */
 const SLOTS = 4;
 

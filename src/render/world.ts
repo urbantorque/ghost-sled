@@ -33,6 +33,7 @@ import { Rider } from './rider';
 import { Sky } from './sky';
 import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
+import { planShots } from '../game/shots';
 import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
 import { MarqueeWorld } from './marqueeworld';
@@ -310,6 +311,7 @@ export class World {
       return cor;
     };
     this.cam.section = (z) => this.course.section(-z);
+    this.cam.shots = planShots(this.course);
     // The results hero shot never sets its lens among the props: a tree within a few metres fills
     // the frame with a cone (or a dithered one). Only asked while it picks a framing.
     this.cam.blocked = (x, z, r) => {
@@ -478,6 +480,7 @@ export class World {
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
     this.midground.setCourse(c, this.palette);
+    this.cam.shots = planShots(c);
     this.overlooks.setCourse(c, this.palette);
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);

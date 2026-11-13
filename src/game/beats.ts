@@ -118,6 +118,12 @@ export type Beat =
    *  machine and 'trail' as it passes back, 'close' as a collapse's fall comes within a few metres; 'won' or
    *  'lost' as it is decided (a win lights a lantern). A run that fails a step keeps going: n counts the
    *  chain, so a gate missed sets it back to 0. */
+  /** The slow hero frame on the mountain's biggest leap (shots.ts, timescale.ts APEX_CURVE). 'lip' as the
+   *  sled leaves the lip: the frame will start `inS` seconds of sim time from now and last `secs`, so
+   *  music can set a hit to land on it. 'apex' as it starts (render time slows, the sim does not). 'out' as
+   *  it ends. Under reduced motion all three are still sent and nothing slows. A crash or a fall before the
+   *  apex cancels it: 'lip' is then followed by 'out' alone. */
+  | (B & { type: 'heroFrame'; phase: 'lip' | 'apex' | 'out'; key: string; inS: number; secs: number })
   | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number });
 
 export type BeatType = Beat['type'];

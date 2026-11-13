@@ -6,6 +6,14 @@ import { courseFor } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
 import { CRASH_FREEZE_S, IDLE_FEEL, type Beat, type Feel } from '../src/game/beats';
 import { emptyPose, type GhostPose } from '../src/game/ghosts';
+import { Director, HERO_IN_MIN, flightSeconds } from '../src/game/director';
+import { REVEALS, WHIP_BEFORE_LIP, planShots, type Shot } from '../src/game/shots';
+import { APEX_CURVE, APEX_S, sampleCurve } from '../src/game/timescale';
+import { cine } from '../src/render/cine';
+import { fallCuts } from '../src/render/moments';
+import { TOP_SPEED, blurK } from '../src/render/speedfeel';
+import { ChaosEvent, Mood } from '../src/sim/chaos';
+import { Sim } from '../src/sim/sim';
 
 // The crash beat's pack shot: after the held frame the lens cuts to face the pack from low downhill
 // of the wreck, and keeps clear of the trees at its spot and across its line to the wreck.
@@ -659,5 +667,378 @@ describe('overlook lean', () => {
       expect(open[i].roll).toBe(0);
       expect(open[i].reveal).toBe(0);
     }
+  });
+});
+
+// Round 7's directed shots: where they are (game/shots.ts), what the lens does for each, what it writes
+// for the pipeline (cine.ts), and that none of it reaches the sim or survives reduced motion as motion.
+
+describe('directed shots: the plan', () => {
+  it('gives every mountain a held wide on its tallest leap, a street to track down and a whip onto its reveal', () => {
+    for (const m of MOUNTAINS) {
+      const c = courseFor(m.seed);
+      const shots = planShots(c);
+      const wide = shots.find((s) => s.kind === 'wide')!;
+      const track = shots.find((s) => s.kind === 'track')!;
+      const whip = shots.find((s) => s.kind === 'whip')!;
+      expect(wide && track && whip, m.id).toBeTruthy();
+      const tallest = Math.max(...c.leaps.map((l) => l.height));
+      expect(c.leaps.find((l) => l.z === wide.at)!.height, m.id).toBe(tallest);
+      expect(c.section(track.z0).kind, m.id).toBe('street');
+      expect(c.section(track.z1).kind, m.id).toBe('street');
+      // The reveal is the place ART.md 15 names: a leap's lip coming up, or (Frostfang) the cavern's far mouth.
+      const sec = c.section(whip.at);
+      expect(sec.kind, m.id).toBe(m.id === 'frostfang' ? 'tunnel' : 'leap');
+      if (sec.kind === 'leap') {
+        const lip = c.leaps.find((l) => l.z >= sec.z0 && l.z < sec.z1)!;
+        expect(lip.z - whip.at, m.id).toBeCloseTo(WHIP_BEFORE_LIP, 6);
+      }
+      for (const s of shots) expect(s.z1, `${m.id} ${s.kind}`).toBeGreaterThan(s.z0);
+    }
+  });
+
+  it('names a reveal for each of the five mountains, and a Daily still gets one', () => {
+    expect(Object.keys(REVEALS).sort()).toEqual(['ember', 'frostfang', 'lanternfall', 'pinecrest', 'sakura']);
+    const daily = planShots(courseFor(0x1234567));
+    expect(daily.filter((s) => s.kind === 'whip').length).toBeLessThanOrEqual(1);
+    expect(daily.filter((s) => s.kind === 'wide').length).toBe(1);
+  });
+
+  it('is a pure function of the course', () => {
+    const seed = MOUNTAINS[2].seed;
+    expect(planShots(courseFor(seed))).toEqual(planShots(courseFor(seed)));
+  });
+});
+
+describe('directed shots: the lens', () => {
+  const SLOPE = 0.3;
+  const WIDE: Shot = { kind: 'wide', key: 'bigleap', name: '', z0: 150, z1: 400, at: 180 };
+  const TRACK: Shot = { kind: 'track', key: 'street', name: '', z0: 150, z1: 270, at: 150 };
+  const WHIP: Shot = { kind: 'whip', key: 'reveal', name: '', z0: 110, z1: 225, at: 180 };
+  function chase(shots: Shot[], feel: Feel = IDLE_FEEL, aspect = 16 / 9): ChaseCamera {
+    const cam = new ChaseCamera();
+    cam.setAspect(aspect);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.shots = shots;
+    cam.resetFeel();
+    cam.beats([], feel);
+    cam.mode = 'chase';
+    return cam;
+  }
+  const at = (z: number, up = 0) => new Vector3(4, z * SLOPE + up, z);
+  const yawOf = (cam: ChaseCamera) => {
+    const d = new Vector3();
+    cam.camera.getWorldDirection(d);
+    return Math.atan2(d.x, -d.z);
+  };
+  /** Rides the snow from sim z 100 to the lip at 180, then flies `flight` seconds. `apexAt`: the
+   *  second of the flight the director's hero frame starts (none when negative). */
+  function leap(cam: ChaseCamera, flight: number, feel: Feel = IDLE_FEEL, apexAt = -1) {
+    const v = 30;
+    let z = -100;
+    while (z > -180) {
+      z -= v / 60;
+      cam.beats([], feel);
+      cam.update({ pos: at(z), dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0, airTime: 0, airLeft: Infinity }, 1 / 60);
+    }
+    const out: { t: number; left: number; wide: number; hero: number; back: number; fov: number; box: number; dof: number; slow: number; focus: number; rider: Vector3; lens: Vector3; ndc: Vector3 }[] = [];
+    const n = Math.round(flight * 60);
+    let slowLeft = 0;
+    for (let i = 1; i < n; i++) {
+      z -= v / 60;
+      const t = i / 60;
+      const pos = at(z, 4.9 * t * (flight - t));
+      const beats: Beat[] = [];
+      if (apexAt >= 0 && i === Math.round(apexAt * 60)) {
+        beats.push({ type: 'heroFrame', tick: 0, phase: 'apex', key: 'bigleap', inS: 0, secs: APEX_S });
+        slowLeft = APEX_S;
+      }
+      // The render clock slows through the frame (never under reduced motion); real time does not.
+      const scale = slowLeft > 0 && !feel.reduced ? sampleCurve(APEX_CURVE, APEX_S - slowLeft) : 1;
+      slowLeft = Math.max(0, slowLeft - 1 / 60);
+      const f = { ...feel, timeRender: scale };
+      cam.beats(beats, f);
+      cam.update({ pos, dir: DOWN, speed: v, steer: 0, airborne: true, boost: 0, airTime: t, airLeft: flight - t }, scale / 60);
+      cam.camera.updateMatrixWorld();
+      out.push({ t, left: flight - t, ndc: pos.clone().project(cam.camera), wide: cam.wideNow, hero: cam.heroNow, back: Math.hypot(cam.camera.position.x - pos.x, cam.camera.position.z - pos.z), fov: cam.camera.fov, box: cine.letterbox, dof: cine.dof, slow: cine.slow, focus: cine.focus, rider: pos.clone(), lens: cam.camera.position.clone() });
+    }
+    return out;
+  }
+
+  it('holds wider than the vista over the biggest leap, under a letterbox, and is home by touchdown', () => {
+    const plain = leap(chase([]), 2.6);
+    const wide = leap(chase([WIDE]), 2.6);
+    const mid = Math.round(1.1 * 60);
+    expect(wide[mid].wide).toBeGreaterThan(0.85);
+    expect(wide[mid].back - plain[mid].back).toBeGreaterThan(2.2);
+    expect(wide[mid].lens.y - plain[mid].lens.y).toBeGreaterThan(1);
+    expect(wide[mid].box).toBeGreaterThan(0.6);
+    expect(plain[mid].box).toBe(0);
+    // Deep focus: a wide blurs nothing.
+    expect(wide[mid].dof).toBe(0);
+    for (const q of wide.filter((p) => p.left <= 0.15)) expect(q.wide).toBeLessThan(0.12);
+  });
+
+  it('keeps the rider in the frame all through the wide and the hero frame', () => {
+    const f = leap(chase([WIDE]), 2.6, IDLE_FEEL, 1.05);
+    for (const q of f) {
+      expect(Math.abs(q.ndc.x)).toBeLessThan(0.7);
+      expect(q.ndc.y).toBeGreaterThan(-0.85);
+      expect(q.ndc.y).toBeLessThan(0.6);
+    }
+  });
+
+  it('pushes in on a longer lens for the slow hero frame, with depth of field on the rider, and lets go', () => {
+    const wide = leap(chase([WIDE]), 2.6);
+    const hero = leap(chase([WIDE]), 2.6, IDLE_FEEL, 1.05);
+    const peak = Math.round(1.5 * 60);
+    expect(hero[peak].hero).toBeGreaterThan(0.9);
+    // Closer and on a longer lens: the rider at least half as big again as in the wide.
+    const size = (q: { back: number; fov: number; lens: Vector3; rider: Vector3 }) => 1 / (q.lens.distanceTo(q.rider) * Math.tan((q.fov * Math.PI) / 360));
+    expect(size(hero[peak]) / size(wide[peak])).toBeGreaterThan(1.5);
+    expect(hero[peak].dof).toBeGreaterThan(0.9);
+    expect(hero[peak].box).toBeGreaterThan(0.9);
+    expect(hero[peak].slow).toBeLessThan(0.4);
+    // The focus rides the rider as the lens closes (within a pace of it mid-push).
+    expect(Math.abs(hero[peak].focus - hero[peak].lens.distanceTo(hero[peak].rider))).toBeLessThan(0.8);
+    // The follow runs on real time: the slowed render clock never leaves the lens behind the sled.
+    expect(hero[peak].lens.distanceTo(hero[peak].rider)).toBeLessThan(wide[peak].lens.distanceTo(wide[peak].rider));
+    // Over well before touchdown: the landing is judged from the usual frame, at full speed.
+    for (const q of hero.filter((p) => p.left <= 0.3)) {
+      expect(q.hero).toBeLessThan(0.05);
+      expect(q.slow).toBe(1);
+      expect(q.dof).toBeLessThan(0.15);
+    }
+  });
+
+  it('a hero frame is the air only: touching down ends it at once', () => {
+    const cam = chase([WIDE]);
+    leap(cam, 1.4, IDLE_FEEL, 1.0);
+    for (let i = 0; i < 20; i++) {
+      cam.beats([], IDLE_FEEL);
+      cam.update({ pos: at(-300 - i * 0.5), dir: DOWN, speed: 30, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    }
+    expect(cam.heroNow).toBeLessThan(0.01);
+    expect(cine.slow).toBe(1);
+  });
+
+  it('under reduced motion the lens never moves for the wide or the hero frame, nothing slows, and the beat still shows', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const plain = leap(chase([], feel), 2.6, feel);
+    const shot = leap(chase([WIDE], feel), 2.6, feel, 1.05);
+    for (let i = 0; i < plain.length; i++) {
+      expect(shot[i].lens.distanceTo(plain[i].lens)).toBeLessThan(1e-9);
+      expect(shot[i].fov).toBeCloseTo(plain[i].fov, 9);
+      expect(shot[i].wide).toBe(0);
+      expect(shot[i].slow).toBe(1);
+    }
+    const peak = Math.round(1.5 * 60);
+    expect(shot[peak].box).toBeGreaterThan(0.9);
+    expect(shot[peak].dof).toBeGreaterThan(0.9);
+    expect(plain[peak].box).toBe(0);
+  });
+
+  /** Rides the snow from sim z 100 for `metres` at `v`; returns the look's heading and the cine state each frame. */
+  function ride(cam: ChaseCamera, metres: number, feel: Feel = IDLE_FEEL, v = 30) {
+    let z = -100;
+    const out: { z: number; yaw: number; track: number; whip: number; blur: number; box: number; dof: number; up: number; side: number; fov: number }[] = [];
+    while (z > -100 - metres) {
+      z -= v / 60;
+      const pos = at(z);
+      cam.beats([], feel);
+      cam.update({ pos, dir: DOWN, speed: v, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+      out.push({ z: -z, yaw: yawOf(cam), track: cam.trackNow, whip: cam.whipNow, blur: cine.motionBlur, box: cine.letterbox, dof: cine.dof, up: cam.camera.position.y - pos.y, side: cam.camera.position.x - pos.x, fov: cam.camera.fov });
+    }
+    return out;
+  }
+
+  it('drops low and steps toward the middle of a street, then lets go past it', () => {
+    const plain = ride(chase([]), 260);
+    const shot = ride(chase([TRACK]), 260);
+    const i = shot.findIndex((q) => q.z >= 255);
+    expect(shot[i].track).toBeGreaterThan(0.9);
+    expect(plain[i].up - shot[i].up).toBeGreaterThan(0.25);
+    // The rider is at x = 4 and the street's middle at 0: the lens steps toward -x.
+    expect(shot[i].side - plain[i].side).toBeLessThan(-0.8);
+    expect(shot[i].fov).toBeLessThan(plain[i].fov - 2);
+    expect(shot[i].box).toBeGreaterThan(0.3);
+    expect(shot[i].dof).toBeGreaterThan(0.2);
+    expect(shot[i].dof).toBeLessThan(0.4);
+    // Never under the floor the chase keeps over the sled.
+    for (const q of shot) expect(q.up).toBeGreaterThan(0.79);
+    const end = shot[shot.length - 1];
+    expect(end.track).toBeLessThan(0.1);
+    expect(end.box).toBeLessThan(0.1);
+  });
+
+  it('whips onto the reveal once: a drift off the road, a snap back across it, a settle', () => {
+    const plain = ride(chase([]), 200);
+    const shot = ride(chase([WHIP]), 200);
+    const off = shot.map((q, i) => q.yaw - plain[i].yaw);
+    const before = shot.findIndex((q) => q.z >= 179);
+    // The rider is right of the middle, so the pan travels left (-) and the drift before it goes right.
+    expect(off[before]).toBeGreaterThan(0.15);
+    expect(Math.max(...off.map(Math.abs))).toBeLessThan(0.25);
+    const after = shot.findIndex((q) => q.z >= 180 + 30 * 0.3);
+    expect(off[after]).toBeLessThan(-0.02);
+    // The snap is quick and smears the frame; it is the only time the blur stands at full.
+    const fastest = Math.max(...off.slice(1).map((y, i) => Math.abs(y - off[i]) * 60));
+    expect(fastest).toBeGreaterThan(1.2);
+    expect(Math.max(...shot.map((q) => q.blur))).toBeGreaterThan(0.95);
+    expect(Math.max(...plain.map((q) => q.blur))).toBeLessThan(0.6);
+    const end = shot.length - 1;
+    expect(Math.abs(off[end])).toBeLessThan(0.005);
+    expect(shot[end].whip).toBe(0);
+    expect(shot[end].blur).toBeCloseTo(plain[end].blur, 3);
+    // The road stays on the screen: the look never leaves it by more than the lens sees to one side.
+    const halfW = Math.atan(Math.tan((62 * Math.PI) / 360) * (16 / 9));
+    for (const y of off) expect(Math.abs(y)).toBeLessThan(halfW * 0.5);
+  });
+
+  it('a phone whips half as far', () => {
+    const plain = ride(chase([], IDLE_FEEL, 390 / 844), 200);
+    const shot = ride(chase([WHIP], IDLE_FEEL, 390 / 844), 200);
+    const peak = Math.max(...shot.map((q, i) => Math.abs(q.yaw - plain[i].yaw)));
+    expect(peak).toBeGreaterThan(0.06);
+    expect(peak).toBeLessThan(0.125);
+  });
+
+  it('under reduced motion nothing whips or tracks: the same lens as with no shots, and the street keeps its letterbox', () => {
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const plain = ride(chase([], feel), 200, feel);
+    const shot = ride(chase([WHIP, TRACK], feel), 200, feel);
+    for (let i = 0; i < plain.length; i++) {
+      expect(shot[i].yaw).toBeCloseTo(plain[i].yaw, 9);
+      expect(shot[i].up).toBeCloseTo(plain[i].up, 9);
+      expect(shot[i].side).toBeCloseTo(plain[i].side, 9);
+      expect(shot[i].whip).toBe(0);
+    }
+    expect(Math.max(...shot.map((q) => q.box))).toBeGreaterThan(0.3);
+    // Speed's blur is halved, as the streaks are, and nothing spikes it.
+    expect(Math.max(...shot.map((q) => q.blur))).toBeLessThan(0.3);
+  });
+
+  it('writes motion blur from the speed curve: none at a crawl, a third at 28 m/s, all of it only at the cap', () => {
+    expect(blurK(15)).toBe(0);
+    expect(blurK(28)).toBeGreaterThan(0.3);
+    expect(blurK(28)).toBeLessThan(0.4);
+    expect(blurK(TOP_SPEED)).toBeCloseTo(1, 6);
+    expect(blurK(60)).toBeCloseTo(1, 6);
+    let last = -1;
+    for (let v = 0; v <= TOP_SPEED; v += 0.5) {
+      expect(blurK(v)).toBeGreaterThanOrEqual(last);
+      last = blurK(v);
+    }
+    expect(blurK(46) - blurK(44)).toBeGreaterThan(0);
+    for (const v of [12, 28, 46]) {
+      const f = ride(chase([]), 150, IDLE_FEEL, v);
+      expect(f[f.length - 1].blur).toBeCloseTo(blurK(v), 2);
+    }
+    // Off the chase it goes: a results frame is a still.
+    const cam = chase([]);
+    ride(cam, 60, IDLE_FEEL, 40);
+    cam.mode = 'hero';
+    for (let i = 0; i < 90; i++) cam.update({ pos: at(-170), dir: DOWN, speed: 0, steer: 0, airborne: false, boost: 0 }, 1 / 60);
+    expect(cine.motionBlur).toBe(0);
+    expect(cine.dof).toBeGreaterThan(0.5);
+  });
+});
+
+describe("the fall's phases", () => {
+  it("cuts the picture's fall where the sim's phases change, and keeps its own cuts without them", () => {
+    // The feel lane's fall: 42 ticks falling, 18 down, 30 up.
+    const cuts = fallCuts({ FALL_TICKS: 42, DOWN_TICKS: 18, TUMBLE_TICKS: 90 })!;
+    expect(cuts[0]).toBeCloseTo(42 / 90, 9);
+    expect(cuts[1]).toBeCloseTo(60 / 90, 9);
+    expect(fallCuts({ TUMBLE_TICKS: 66 })).toBeUndefined();
+    expect(fallCuts({ FALL_TICKS: 60, DOWN_TICKS: 30, TUMBLE_TICKS: 90 })).toBeUndefined();
+  });
+});
+
+describe('the slow hero frame: the director', () => {
+  /** Rides the safe line down a mountain with the director watching; every heroFrame beat with its tick,
+   *  the least render scale seen, and whether the sim's feed was ever scaled inside the frame. */
+  function watch(seed: number, reduced: boolean) {
+    const sim = new Sim({ seed, chaos: { mood: 0, event: 0, seed: 0x1234 }, sled: 0 });
+    const d = new Director(() => reduced);
+    d.beginRun({ mood: Mood.None, event: ChaosEvent.None, triggerZ: Infinity, hasReveal: false, revealLeaveS: 0, bestDistAtStart: 0, bestScoreAtStart: 0, bestComboAtStart: 0, grudgeAtStart: null, friend: null, lifetimePassed: 0, unlockLadder: [], missionsCrossed: () => [] });
+    const c = sim.course;
+    const beats: { tick: number; phase: string; inS: number; secs: number; z: number; grounded: boolean }[] = [];
+    let slowest = 1;
+    let feedInFrame = 1;
+    let inFrame = false;
+    while (!sim.finished && !sim.s.crashed && sim.tick < 300 * 60) {
+      const s = sim.s;
+      const look = s.z + 4 + s.speed * 0.35;
+      const err = Math.atan2(c.safeX(s.z + 20) - s.x, look - s.z) - s.velHeading;
+      sim.step(Math.max(0, Math.min(8, Math.round(4 + err * 14))));
+      d.time.step(1 / 60);
+      const out = d.step({ phase: 'run', dt: 1 / 60, sim, events: sim.events.map((e) => ({ tick: sim.tick, e })), race: [], tracks: [], poses: new Map(), standings: { next: null, rank: 1, of: 1 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: sim.s.airTicks, reduced });
+      sim.events.length = 0;
+      for (const b of out.beats) {
+        if (b.type !== 'heroFrame') continue;
+        beats.push({ tick: b.tick, phase: b.phase, inS: b.inS, secs: b.secs, z: sim.s.z, grounded: sim.s.grounded });
+        inFrame = b.phase === 'apex';
+      }
+      if (inFrame) {
+        slowest = Math.min(slowest, out.feel.timeRender);
+        feedInFrame = Math.min(feedInFrame, out.feel.timeFeed);
+      }
+    }
+    return { beats, slowest, feedInFrame, sim };
+  }
+
+  it('names the frame off the biggest lip, starts it when it said it would, and only ever slows the picture', () => {
+    for (const m of [MOUNTAINS[0], MOUNTAINS[3]]) {
+      const wide = planShots(courseFor(m.seed)).find((s) => s.kind === 'wide')!;
+      const r = watch(m.seed, false);
+      expect(r.beats.map((b) => b.phase), m.id).toEqual(['lip', 'apex', 'out']);
+      const [lip, apex, out] = r.beats;
+      expect(lip.z, m.id).toBeGreaterThan(wide.at - 2);
+      expect(lip.z, m.id).toBeLessThan(wide.at + 14);
+      expect(lip.inS, m.id).toBeGreaterThanOrEqual(HERO_IN_MIN);
+      expect(lip.secs).toBe(APEX_S);
+      // Music can count on it: the frame starts inS seconds of sim time after the lip beat.
+      expect(apex.tick - lip.tick, m.id).toBe(Math.round(lip.inS * 60));
+      expect(apex.grounded, m.id).toBe(false);
+      expect(out.tick - apex.tick, m.id).toBe(Math.round(APEX_S * 60));
+      // Still in the air when it lets go: the landing is flown at full speed.
+      expect(out.grounded, m.id).toBe(false);
+      expect(r.slowest, m.id).toBeLessThan(0.35);
+      expect(r.feedInFrame, m.id).toBe(1);
+    }
+  }, 120_000);
+
+  it('under reduced motion the same beats go out on the same ticks and nothing slows', () => {
+    const seed = MOUNTAINS[3].seed;
+    const a = watch(seed, false);
+    const b = watch(seed, true);
+    expect(b.beats).toEqual(a.beats);
+    expect(b.slowest).toBe(1);
+    // The sim never knew: the same run either way.
+    expect(b.sim.tick).toBe(a.sim.tick);
+    expect(b.sim.s.z).toBe(a.sim.s.z);
+    expect(b.sim.score).toBe(a.sim.score);
+  }, 120_000);
+
+  it('marches a flight over the real ground, as the landing ring does', () => {
+    const sim = new Sim({ seed: MOUNTAINS[0].seed, chaos: { mood: 0, event: 0, seed: 0x1234 }, sled: 0 });
+    expect(flightSeconds(sim)).toBe(0);
+    const c = sim.course;
+    let predicted = -1;
+    let took = 0;
+    while (sim.tick < 120 * 60 && !sim.s.crashed) {
+      const s = sim.s;
+      const look = s.z + 4 + s.speed * 0.35;
+      const err = Math.atan2(c.safeX(s.z + 20) - s.x, look - s.z) - s.velHeading;
+      const was = s.grounded;
+      sim.step(Math.max(0, Math.min(8, Math.round(4 + err * 14))));
+      if (predicted < 0 && was && !sim.s.grounded && sim.s.z > c.leaps[0].z - 2) predicted = flightSeconds(sim);
+      else if (predicted >= 0 && !sim.s.grounded) took++;
+      else if (predicted >= 0) break;
+    }
+    expect(predicted).toBeGreaterThan(1.5);
+    expect(Math.abs(predicted - (took + 1) / 60)).toBeLessThan(0.25);
   });
 });
