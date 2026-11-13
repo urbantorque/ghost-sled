@@ -84,7 +84,7 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'late', name: 'It leaves late', line: 'The {m} leaves late: do not let it by', t: { lead: -12, pace: 1.2, v0: 0.8 } },
   ],
   'race:chase': [
-    { key: 'near', name: 'One car, near', line: 'Catch the {m} before the far station', t: { lead: 58, pace: -2.5 } },
+    { key: 'near', name: 'One car, near', line: 'Catch the {m} before the far station', t: { lead: 70, pace: -2.5 } },
     { key: 'far', name: 'One car, a long start', line: 'Catch the {m}: it has a long start', t: { lead: 96, pace: -5.5 } },
     { key: 'pair', name: 'Two cars on the rope', line: 'Catch both cars on the rope', t: { lead: 44, pace: -3, cars: 2, gap: 54, slow: 2.4 } },
   ],
@@ -127,8 +127,8 @@ const FAMILY: Record<string, readonly Variant[]> = {
   ],
   carry: [
     { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1, hit: 0.3 } },
-    { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 0.93, hit: 0.18 } },
-    { key: 'ember', name: 'A low flame', line: 'Carry a low flame: feed it at the brazier', t: { slack: 1, hit: 0.24, start: 0.7, relight: 1 } },
+    { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 0.98, hit: 0.18 } },
+    { key: 'ember', name: 'A low flame', line: 'Carry a low flame: feed it at the brazier', t: { slack: 1.09, hit: 0.24, start: 0.7, relight: 1 } },
   ],
 };
 
@@ -479,7 +479,7 @@ const FOLLOW_SHARE = 0.6;
 export const KINDLE_REACH = 2.9;
 export const KINDLE_COLD = 30;
 /** Carry: the flame lasts this share of the time a clean coast from the shrine to the line takes. */
-const CARRY_SLACK = 1.02;
+const CARRY_SLACK = 0.935;
 /** A fall or a ward gutters the flame (it used to put it out, and the rider who gets up never lit the lantern).
  *  The rider has this long, from riding again, to be back at the flame's pace: this share of the speed the hill
  *  itself gives a sled at that place (a coast's steady speed on the slope there, so on the steep chute it is a
@@ -491,7 +491,7 @@ export const CARRY_GUTTER_TICKS = 240;
 export const CARRY_PACE = 0.6;
 /** What guttering takes of the flame, as a share of what a hit takes in that variant (a fifth: 0.06 of a full flame
  *  in still air, about a second and a half of it). */
-const CARRY_FALL = 0.2;
+const CARRY_FALL = 0.1;
 /** The speed a carry's clean coast leaves the shrine at. */
 const CARRY_V0 = 36;
 const TICKS = 60;

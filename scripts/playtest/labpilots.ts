@@ -305,6 +305,17 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         if (!skilled) return null;
         // (No pop off the lip, even for two flips: over a cliff a pop is three more seconds of air, and the sled
         // comes down past the landing. Two flips want speed onto the lip, which is the trade the variant poses.)
+        // The last second to the lip is ridden square to it, where the sled is: a rider still coming back to
+        // the line there leaves the lip crossing it (the expert did, at 9 m/s sideways, and flew into the bank).
+        const d = lipOf(p) - s.z;
+        if (d > 0 && d < v * 1.1) {
+          if (M.at < 0) {
+            M.at = 0;
+            M.bias = Math.max(-5, Math.min(5, s.x - c.safeX(s.z)));
+          }
+          const off = M.bias;
+          return { x: (z: number) => c.safeX(z) + off, noDrift: true };
+        }
         return { noDrift: true };
       }
       case 'follow': {
@@ -327,7 +338,9 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         }
         const litHere = M.side < 0 ? leftLit : rightLit;
         const litThere = M.side < 0 ? rightLit : leftLit;
-        if ((litHere >= half && litThere < Math.max(p.each, p.need - litHere)) || aheadOn(M.side) < 0) M.side = -M.side;
+        // (Across only for lamps that are there: with one row dark the other has none, and a rider who crossed
+        // for them every other tick, as this one did, wandered back to the line two lamps short.)
+        if ((litHere >= half && litThere < Math.max(p.each, p.need - litHere) && aheadOn(-M.side) >= 0) || aheadOn(M.side) < 0) M.side = -M.side;
         const i = aheadOn(M.side);
         if (i < 0) return { noDrift: true };
         const l = lamps[i];
@@ -343,9 +356,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         // comes down already in line with it: landed on the safe line at 45 m/s there is half a second to cross
         // five metres, and no rider does.
         const r = p.relight;
-        if (!skilled || !r || mo.mask & 1 || r.z <= s.z + 2) return { noDrift: true };
+        if (!r || mo.mask & 1 || r.z <= s.z + 2) return { noDrift: true };
         const lip = c.leaps.filter((l: AnySim) => l.z > p.z0 && l.z < r.z).pop();
-        if (lip && s.z < lip.z && lip.z - s.z < 160) {
+        // (The novice sees the brazier too, and steers for it once it is down: the lip's side is the skilled rider's.)
+        if (skilled && lip && s.z < lip.z && lip.z - s.z < 160) {
           const off = r.x - c.safeX(r.z);
           return { x: (z: number) => c.safeX(z) + Math.sign(off) * Math.min(3, Math.abs(off)), noDrift: true };
         }
@@ -363,7 +377,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     const wantYaw = p.half * Math.PI;
     const wantPitch = p.flips * 2 * Math.PI;
     if (!M.flipped) {
-      // Commit at takeoff, if the flight is long enough for it.
+      // Commit at takeoff, if the flight is long enough for it. (Not on a skip over the brow, nor on the lip's
+      // first tick, when the snow still under the runners reads as a landing: the expert, a little faster off
+      // the lip, read it so, took the flight for a hop, and spun where two flips were asked.)
+      if (land.t < 0.5) return null;
       M.flipped = true;
       const need = Math.max(wantYaw / 9 + 0.5, wantPitch > 0 ? wantPitch / 6.8 + 0.6 : 0);
       M.st = land.t > need + 0.1 ? 1 : 0;
@@ -400,7 +417,10 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
         P.flight = land.t;
         const room = c.halfWidth(land.z) - Math.abs(land.x - c.centerX(land.z));
         const off = land.x - c.safeX(land.z);
-        P.spin = skill !== 'novice' && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
+        // (The careful line spins nothing. It used to: it took the mid pilot's habit with its hands, each spin's
+        // held key pushed it two to four metres off the line in the air, and it skipped down the landing face
+        // unable to steer back, into the trees ten metres out. That was the pilot, not the landing.)
+        P.spin = skill !== 'novice' && skill !== 'line' && land.t > 1.45 && room > 4 && Math.abs(off) < 1.5 && rnd() < (skill === 'expert' ? 0.95 : 0.7) ? (off > 0 ? -1 : 1) : 0;
         P.stompTry = skill === 'mid' || skill === 'expert' ? true : skill === 'novice' && rnd() < 0.4;
         P.stompBias = (rnd() - 0.5) * (skill === 'expert' ? 0.05 : skill === 'mid' ? 0.16 : 0.3);
         // A rider carrying the flame, or hopping under bells, spins nothing.

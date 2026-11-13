@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { classic } from '../scripts/playtest/labpilots';
 import { PLAIN, type ChaosRoll } from '../src/sim/chaos';
-import { courseFor } from '../src/sim/course';
+import { CHUNK_LEN, courseFor } from '../src/sim/course';
 import { packInput } from '../src/sim/input';
 import { CARRY_GUTTER_TICKS, flamePace, momentPlays, rollForVariant } from '../src/sim/moments';
 import { MOUNTAINS } from '../src/sim/mountains';
@@ -291,17 +292,17 @@ describe('the carry and a fall', () => {
         for (const lantern of [false, true]) {
           const r = carry(v, [z], { lantern });
           const tag = `variant ${v}, a ${lantern ? 'ward' : 'fall'} at ${Math.round(z)}`;
-          // It gutters and it catches, wherever it was; in still air the rider who only tucks still lights the
-          // lantern after either, and after a ward in the wind.
+          // It gutters and it catches, wherever it was. A rider who only tucks (a second and a bit in hand at
+          // the line) still lights the lantern after any ward, and after most falls.
           expect(phases(r.said).slice(0, 2), tag).toEqual(['trail', 'lead']);
-          if (v === 0 || lantern) expect(won(r.sim, r.index), tag).toBe(true);
+          if (lantern) expect(won(r.sim, r.index), tag).toBe(true);
           else if (won(r.sim, r.index)) fallsWon++;
           expect(r.said.some((q) => q.e.type === (lantern ? 'ward' : 'tumble')), tag).toBe(true);
         }
       }
-      // (In the wind the flame is shorter by a fourteenth: a fall there is made up by more than a tuck, or not
-      // at all. A tuck alone still makes up most of them.)
-      if (v === 1) expect(fallsWon).toBeGreaterThanOrEqual(3);
+      // (A fall just above the last lip leaves no speed for its flight, and in the wind the flame is half a
+      // second shorter: those are made up by more than a tuck, a dash say, or not at all.)
+      expect(fallsWon, `variant ${v}`).toBeGreaterThanOrEqual(v === 0 ? 4 : 2);
     }
   });
 
@@ -412,5 +413,67 @@ describe('the carry and a fall', () => {
     const b = carry(1, [course.finishZ - 500]);
     expect(b.sim.hash()).toBe(a.sim.hash());
     expect(b.sim.tick).toBe(a.sim.tick);
+  });
+});
+
+describe('room beside the line where a sled cannot hold it', () => {
+  const SEEDS = [...MOUNTAINS.map((m) => m.seed), 0x2026b10c, 0x7e57ab1e, 0x0ddba11];
+  /** The least gap between any hard obstacle's edge and the safe line, over the obstacles standing from z0 to z1. */
+  function room(seed: number, z0: number, z1: number): number {
+    const c = courseFor(seed);
+    let least = Infinity;
+    for (let k = Math.max(0, Math.floor(z0 / CHUNK_LEN) - 1); k <= Math.floor(z1 / CHUNK_LEN) + 1; k++) {
+      for (const o of c.chunk(k).obstacles) {
+        if (o.soft) continue;
+        for (const [x, z] of [[o.x, o.z], [o.x2, o.z2]] as const) {
+          if (z + o.r <= z0 || z - o.r >= z1) continue;
+          const gap = Math.abs(x - c.safeX(z)) - o.r;
+          if (gap < least) least = gap;
+        }
+      }
+    }
+    return least;
+  }
+
+  it("keeps five and a half metres either side of the line for 80 m above every leap's lip", () => {
+    let n = 0;
+    for (const seed of SEEDS) {
+      for (const l of courseFor(seed).leaps) {
+        n++;
+        expect(room(seed, l.z - 80, l.z - 2), `seed ${seed.toString(16)} leap at ${Math.round(l.z)}`).toBeGreaterThanOrEqual(5.5);
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(3 * SEEDS.length);
+  });
+
+  it('keeps the same room through every mogul field and for 30 m past it', () => {
+    let n = 0;
+    for (const seed of SEEDS) {
+      const c = courseFor(seed);
+      for (let k = 0; k <= Math.ceil(c.finishZ / CHUNK_LEN); k++) {
+        for (const m of c.zones(k).moguls) {
+          n++;
+          expect(room(seed, m.z0 - 4, m.z1 + 30), `seed ${seed.toString(16)} field at ${Math.round(m.z0)}`).toBeGreaterThanOrEqual(5.5);
+        }
+      }
+    }
+    expect(n).toBeGreaterThan(SEEDS.length);
+  });
+
+  it("the careful line rides every mountain's plain day without a fall or a ward", () => {
+    // (The lab's line pilot, which is the fairness test's driver with the lab's air: it used to spin, and came
+    // down ten metres wide. On the line and in the air with its hands still, nothing touches it.)
+    for (let m = 0; m < MOUNTAINS.length; m++) {
+      const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: PLAIN, sled: 0 });
+      const pilot = classic('line', sim, 1234, {});
+      let hits = 0;
+      while (!sim.finished && !sim.s.crashed && sim.tick < 240 * 60) {
+        const o = pilot();
+        sim.step(packInput(o.steer, o.action, false));
+        for (const e of sim.events) if (e.type === 'ward' || e.type === 'crash' || (e.type === 'tumble' && e.phase === 'start')) hits++;
+      }
+      expect(sim.finished, MOUNTAINS[m].id).toBe(true);
+      expect(hits, MOUNTAINS[m].id).toBe(0);
+    }
   });
 });
