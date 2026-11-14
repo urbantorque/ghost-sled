@@ -1,163 +1,208 @@
-# Listening guide (round 6: the music and the sound)
+# Listening guide (round 7: a produced score, a style for every mountain)
 
-Nobody has heard this build. Everything in it was written, arranged and mixed by reading the score and
-measuring the output (BS.1770 loudness, true peak, the mono fold-down and a phone speaker's band). This guide
-says what to listen for, where, and what good sounds like, so one sitting with headphones and one with a phone
-can say whether it worked. About 25 minutes in all.
+Nobody has heard this build. The music is no longer played live by the game: every mountain's score was
+written as notation, rendered offline by the project's own synthesizer (`npm run music`), mastered, and
+shipped as audio that the game sequences to your run. All of it was judged by measurement (loudness, true
+peak, spectrum, the mono fold-down, a phone speaker's band) and by reading the score. This guide says what to
+listen for, where, and what good sounds like, so one sitting with headphones and one with a phone can say
+whether it worked. About 40 minutes in all.
 
-**Before you start.** Default sliders (music 0.8, effects 0.8, master 1). Headphones first, then the same run
-on a phone speaker. Keep the tab in front (a hidden tab mutes). Note anything that sounds wrong with the
-mountain, the second on the run clock and what you heard; that is enough to find it.
+**Before you start.** Default sliders (music 0.8, effects 0.8, master 1). Headphones first, then a phone.
+Keep the tab in front (a hidden tab mutes). Note anything that sounds wrong with the mountain, the second on
+the run clock and what you heard; that is enough to find it.
+
+**What you are hearing.** The line at the foot of the jukebox says "Produced score" or "Live band". The live
+band (round 6's music, played by the game) is the fallback: it plays until a mountain's audio has loaded, and
+for good on a browser that can decode neither Opus nor AAC. Add `?nostems` to the address to hear only the
+live band; add `?tier=low` to hear the lighter files Low and phones get.
 
 ## The jukebox (`?debug&jukebox`)
 
-Open the game with `?debug&jukebox` (for example `http://127.0.0.1:4401/?debug&jukebox`). A panel sits top
-right over the title screen; Hide folds it, and Silence the Band mutes the music until the next button. The line at its foot says what is playing: section, bar, key, tempo.
+Open the game with `?debug&jukebox` (for example, after `npx vite build` and `npx vite preview --port 4173`,
+`http://127.0.0.1:4173/?debug&jukebox`). A panel sits top right over the title screen; Hide folds it, and
+Silence the Band mutes the music until the next button.
 
 | Button | What it plays |
 | --- | --- |
-| Main Theme | The title's music: the main theme in D major at 88 bpm, A then B, 16 bars a time round |
-| Results Reprise | The theme again, slower, in the key the run ends in (on Clear Skies a run that never lifted) |
-| Mountain, Mood, Stage | Which song, in which mood's colours, and which stage's tempo, floor and lift |
-| Intro, Verse, Chorus (hook), Bridge | Holds the run music in that section; "Let It Flow" lets the form run on its own |
-| Build into a Drop | A riser and a snare roll, then the drop on a downbeat 2.4 s later (a crash, a boom, the chorus from its top) |
-| Lift a Key | The same, with the chorus a whole tone up: what the line into the last stage does |
-| Finish Line | A longer build, the finale (the main theme's opening bar on the melody, a bright chord), the slam and fanfare in unison, then the results reprise |
-| Break Down | A wipeout: the band breaks down to the bridge at the end of the phrase |
-| Drive | How hard the run is being ridden (0.36 is a plain cruise, 0.6 a skilled stretch, 0.9 and up a streak) |
-| Set Pieces | Each verb's cue on its own: the card's call, six gates a second apart, three rings, four steps two seconds apart, a miss, a race lead and trail, a collapse closing in, won, lost |
-| Cues in the Score | The lantern lighting, a dash, a ward, a sky gate, a pass, a stage line |
-| Sled Sound | The garage's five runner sounds (they play under a run frame: start any run section first) |
+| Main Theme | The title theme: the game's motif in C major at 92, on a felt piano, then strings and a harp, then both with glass bells |
+| Results Reprise | The chosen mountain's reprise: the motif played through in that mountain's instruments, in the key its run ends in |
+| Mountain | Pinecrest, Frostfang, Ember Peak, Sakura Ridge, Lanternfall. A mountain's audio loads about a second after you pick it; the first press may start on the live band and cross over |
+| Mood, Stage | A mood's treatment of the mountain's music (pitch, pace, a filter, more room), and which stage's sections and layers play |
+| Intro, Verse, Chorus (hook), Bridge | The live band's sections (they do nothing while the produced score plays) |
+| Let It Flow | Lets the form run on its own |
+| Produced Score by Section | Holds one section of the mountain's piece, from the next bar line: Intro, A (verse), B (chorus, the hook), C (second verse), D (stage two), Breakdown, B2 (the last stage's chorus), C2 (the climb to the line) |
+| Produced Score / Live Band | Which band plays: the fallback on demand |
+| Build into a Drop | A riser ending on a downbeat 2.4 s later, the drums out for its last two beats, then a hit and the chorus from its top |
+| Lift a Key | The same into the last stage's chorus (a tone up on Pinecrest and Sakura, the major on Frostfang, C on Lanternfall, full-time drums on Ember) |
+| Finish Line | A longer build, then the finale (the motif's first two bars on everything) and, under its last bar, the reprise |
+| Break Down | A wipeout: the breakdown at the next four-bar line |
+| Breath and Crash Back | The biggest leap: the music cuts to its own tail, and 1.4 s later crashes back in on the chorus under a hit |
+| Drive | How hard the run is being ridden: 0.36 is a cruise (bed, drums and bass; the lead in choruses), 0.6 a skilled stretch, 0.75 and up brings the top layer in |
+| Stingers | One for each set-piece verb, in the chosen mountain's instruments: Race, Gates, Rings, Collapse, Steps, Slide, Shatter, Surge, Flourish, Follow, Kindle, Carry, and the plain one a new verb plays |
+| Rider Motifs | The twelve signature riders' motifs, in the key that is playing |
+| Set Pieces | The live cues that still play during a set piece (a gate, a ring, a step, a miss, a race lead and trail, a collapse closing in), and Won and Lost, which are stingers of the produced score |
+| Cues in the Score | The lantern lighting, a dash, a ward, a sky gate, a pass, a stage line: live, pitched into the produced score's key and chord |
+| Sled Sound | The garage's five runner sounds |
 
 ## The route
 
-### 1. The title (2 minutes): is there a theme?
+### 1. The title (3 minutes): is there a theme?
 
-Load the game, tap once, wait on the title. Then the jukebox's Main Theme.
+Load the game, tap once, wait. The theme should start within a second of the tap (it loads before it).
 
-- **Good:** a melody you could hum back after two times round: a held high note, a step down, then a slow climb
-  back up; the A half (8 bars) ends turning through two borrowed chords (Bb then C in D major) into home;
-  the B half answers higher and lighter, with soft brushed drums. A flute-like lead, bells under it, a pad that
-  breathes.
-- **Wrong:** the melody buried under the pad or the bells; any note that sounds sour against the chord under it;
-  the loop's seam (bar 16 back to bar 1) audible as a jolt.
+- **Good:** a tune you could hum after twice round: up a fourth to the top note and a step down, a fall, a
+  small arch, home. A soft piano has it alone over a held pad; strings answer it higher with a harp; then both
+  together, bells on the downbeats. Unhurried. It should feel like the start of something kind.
+- **Wrong:** the piano dull or plinky; the strings thin, buzzy or obviously synthetic; the voices a wash of
+  noise; a join you can hear when a section hands over to the next (every 21 seconds).
 
-### 2. Each mountain's hook (5 minutes): would a player hum it?
+### 2. Five mountains, thirty seconds each (5 minutes): does a few seconds name the mountain?
 
-In the jukebox pick each mountain and press Chorus (hook) at a drive of 0.36 (a plain cruise). Listen to two
-times round (8 bars, 17 to 20 s).
+In the jukebox pick each mountain and press B: Chorus, then A: Verse. This is the round's main question.
+Could you tell which mountain it is with your eyes shut, within five seconds?
 
-| Mountain | Key, tempo | Listen for |
-| --- | --- | --- |
-| Pinecrest | D major, 112, swung | A sunny line that climbs to the octave in its first bar (long, short, short, long), answered by a phrase that turns through Bb and C before home |
-| Frostfang | F# dorian, 100, straight | Long held notes that hang over glassy 16th bells; a half-time snare; the dorian's raised sixth is the cold colour |
-| Ember Peak | C minor, 124, driving | A hammering riff of repeated notes over a heavy kick that pumps the pad; a Db (the phrygian flat two) before the last bar's major V |
-| Sakura Ridge | Eb major, 96, swung | A lilting pentatonic tune on a breathy flute over a koto-like arp; the last chord of the chorus is a minor iv, bittersweet, before home |
+- **Pinecrest** (D major, 116): a fiddle playing a reel over two strummed guitars, an upright bass, stomps
+  and claps, a tambourine; a tin whistle answers; horns and trumpets when it opens up. A holiday morning.
+  **Wrong:** the fiddle a buzz saw; the strum mechanical; twee.
+- **Frostfang** (F# dorian, 126): glass bells in sixteenths over a wide slow pad that pumps with a kick on
+  every beat, an off-beat bass, a pure high lead with long notes in a very big room. Cold, wide, forward.
+  **Wrong:** the pump seasick; the bells harsh; a generic dance track.
+- **Ember Peak** (E phrygian, 138 in half time): a deep kick and a huge snare on three, a distorted bass riff
+  in sixteenths, anvils off the beat, steam for hats, taiko and struck metal, low brass hammering a hook of
+  repeated notes. Heavy and dangerous. **Wrong:** mud (no riff audible under 200 Hz of weight); distortion that
+  hurts; the snare a slap.
+- **Sakura Ridge** (Ab major, 84, swung): a koto-like pluck and a breathy bamboo flute over an electric piano
+  in rich chords, a soft sub and a kick behind the beat, a rim on two and four, a shaker with a lilt. The
+  slowest pulse; the one you ride to feel good. **Wrong:** the flute a whistle with hiss stuck on; the groove
+  stiff; muzak.
+- **Lanternfall** (Bb major, a slow 6/8 at 63): a music box and a choir of soft vowels, alone; then a harp and
+  a piano; then a flute and strings with the game's motif whole; and in the last stage, in C, everything plays
+  it: brass, strings, choir, bells, a field drum, timpani. A lullaby that grows up into an anthem.
+  **Wrong:** the music box toy-like in a bad way; the choir a pad; the anthem not arriving.
 
-- **Good:** each mountain is recognisable in two bars with your eyes shut; the melody is the loudest thing in
-  the band but not on top of it; the kick is felt as well as heard and the pad ducks a little under it.
-- **Wrong:** two mountains that sound alike; a melody note that clashes with its chord; the bass booming or
-  missing on a phone; hats that hiss.
+### 3. A whole run on Pinecrest (4 minutes): does it follow the run?
 
-Then press Verse (the answering line comes in from stage 2, or at a drive of 0.45), Bridge (the band strips to
-pad, bells and a shaker) and Intro (two bars with the hook's first bar rung on bells: every run starts with it).
+Ride Pinecrest, or watch `?debug&autoride=1&demo=0&m=0`. On the replayed run:
 
-### 3. A whole run on Pinecrest (3 minutes): is it arranged against the run?
+| Run clock | What happens |
+| --- | --- |
+| 0:00 | The intro, four bars, under the count-in |
+| 0:09 | The verse: guitars, bass, stomps, the fiddle's reel |
+| 0:17 to 0:19 | The First Drop's card: the Rings stinger, a riser, then the hit and the chorus on the leap |
+| 0:27 | The breakdown (the set piece is over), then the second verse |
+| 0:38 and 0:43 | The stage line's drop and Mirror Lake's |
+| 1:16 | The line into the last stage: the chorus a tone up, with the brass |
+| 1:25 | Old Town's drop |
+| 1:39 to 1:43 | The biggest leap: the breath, three and a half seconds, and the crash back in |
+| 1:55 | The finish: the finale |
+| 1:59 | The reprise, on the results |
 
-Ride Pinecrest (or watch `?debug&autoride=1&demo=0`, the best pool run, which these timings are from; a first
-run takes longer, and the music keeps to the rider, not the clock).
+- **The start:** the intro (4 bars) under the count-in, then the verse with drums and bass.
+- **A set piece's card:** a short stinger in the mountain's instruments on the next beat (on Pinecrest's
+  first, the rings: three ringing chords, each higher), a riser under it, the drums drop out for two beats,
+  then a hit and the chorus on the beat you arrive. **Wrong:** the hit late to the picture by more than a
+  beat; the stinger sour against the music; the cut into the chorus a click or a stumble.
+- **Layers:** ride badly and the verse is bed, bass and drums; a stomp streak or the flow brings the lead and
+  then the top layer in on the next bar line. **Wrong:** a layer popping in mid-phrase, or flapping.
+- **A wipeout:** the music goes under water while you are down, and breaks down (4 bars, sparse) at the next
+  phrase.
+- **The last stage:** its own chorus, a tone up, with the brass; then the climb.
+- **The biggest leap** (late in the last stage on this run): the music stops as you leave the lip and its
+  tail rings out; nothing but wind in the air; on the landing a hit and the chorus from its top.
+  **Good:** you hold your breath with it. **Wrong:** it reads as the audio breaking; the silence too long.
+- **The finish:** a longer rise, then the finale lands as you cross: the game's motif, two bars, on
+  everything, and a held chord. **Wrong:** the finale early or late against the line; the fanfare of the
+  effects fighting it.
+- **The results:** the reprise comes in under the finale's last bar: the motif played through, quieter, in
+  Pinecrest's instruments. Run Again should start the intro at once.
 
-| Run clock | What happens | Good sounds like |
-| --- | --- | --- |
-| 0 to 4 s | Intro: pad, the hook's head on bells | The mountain's identity before anything else |
-| 2.5 s | The bass and hats arrive as the run floor is reached | A groove at once, not a slow fade |
-| about 5 s | Verse | A calm bed with room for the effects |
-| about 16 s | The First Drop's card: a soft call (the hook's head) on bells, then a riser | Something is coming |
-| about 19 s | The drop lands on the downbeat where the place begins: crash, boom, the chorus (the hook) from its top | The music and the picture hit together; this is the main thing to judge |
-| 19 to 25 s | Rings: each ring flown rings a bell that holds, building a chord (root, third, fifth and octave) | A chord assembling in time, not three dings |
-| after the place | The band breaks down at the end of the hook's phrase: bells and a shaker for four bars | A breath, not an interruption mid-melody |
-| about 40 s | Stage line: a drop on the line itself (measured within 0.3 s of the crossing), two rising bells | The line lands on the beat |
-| about 44 s | Mirror Lake (its card at 42 s): the race. Its drop lifts the chorus to its second phrase (it does not restart) | One continuous lift, not a hiccup |
-| race | Passing the machine: a rising brass stab; losing the lead: a falling pair | Short and in key |
-| about 75 s | The line into the last stage: the riser, and the chorus lands a whole tone higher | The oldest trick in pop, and it should feel earned; the band is also 5% quicker now |
-| about 82 s | Old Town (its card at 80 s): lantern gates; each gate threaded plays the next note up the scale, on the band's 16ths | A ladder climbing in time; a full chain ends on a chord |
-| last 4 s | The finish builds: a two-bar riser and roll | Tension rising to the line |
-| the line | The finale lands on the line (measured 0.01 s from the crossing): crash, boom, the main theme's first bar on the melody and on brass in unison, the slam, the crowd's roar (louder for a win) | The run's biggest moment, by a clear margin |
-| about 2 s later | The results reprise fades in under it | Home |
+### 4. The other mountains (8 minutes)
 
-- **Wrong:** a drop that lands a beat after the place (or before it, with nothing on screen); a riser that
-  stops with no drop; two crashes a second apart; the hook cut off mid-phrase; the key lift sounding like a
-  mistake rather than a lift; anything clipping (it should not: a true-peak limiter sits at -1.2 dBTP).
+One run each (`m=1`, `m=2`, `m=3`; Lanternfall with `?debug&m=4`, or from the mountain select once eleven of
+The Twelve have fallen, and from the jukebox at any time). The same moments, in each mountain's own way.
+Lanternfall's score was measured as files only: the music lane had no fifth mountain to ride, so its run is the
+one nobody has even measured in the game.
 
-### 4. The other three mountains (6 minutes)
+- **Frostfang:** the last stage turns from F# dorian to F# major with a piano in octaves: the sun finding you
+  out of the cavern. The breakdown is the room alone.
+- **Ember Peak:** the last stage keeps its key and the drums go from half time to full time, which doubles the
+  pace under the same riff. The stingers are low brass and struck metal.
+- **Sakura Ridge:** the last stage lifts a tone to Bb with a frame drum and the koto in octaves. The hook ends
+  on the one bittersweet chord in the piece.
+- **Lanternfall:** stage one is the lullaby, stage two the song with the motif, stage three the anthem in C.
+  Its stingers (follow, kindle, carry) are a call and its echo, sparks and a bloom, three slow steps like a
+  hymn. The finale should be the largest sound in the game, and the title theme's key.
 
-Ride or watch one run each (`?debug&autoride=1&demo=0&m=1`, `m=2`, `m=3`). Listen for the same moments as on
-Pinecrest; each mountain's set pieces have their own verbs:
+### 5. The stingers (3 minutes)
 
-- **Frostfang:** Serac Gate (the bridge collapses: a low pressure pulse on the beat when the fall closes in),
-  the Crevasse Fields (a race), the Ice Cavern (gates in the dark; the dawn should feel like the drop).
-- **Ember Peak:** Cinder Gate (a race with the ore train through the mountain), the Caldera Leap (rings), Ash
-  Market (gates under fireworks).
-- **Sakura Ridge:** Petal Steps (four steps about two seconds apart, each a taiko hit on the band's eighth,
-  rising), the Blossom Leap (rings), Temple Town (gates).
+On each mountain press a few of the Stingers row with a section playing. Each verb is one gesture, re-voiced:
+Race is a gallop on one note that jumps a fifth and then the octave; Gates a run up the chord to a held top;
+Rings three chords each higher; Collapse a low line falling under a roll; Steps pairs of notes coming down a
+step at a time; Slide a fast run down to a low landing; Shatter a high cluster and shards falling slower and
+slower; Surge one note hammered faster and faster, breaking upward; Flourish a turn and a leap; Follow a call
+and its echo; Kindle three flickers and a bloom; Carry three slow steps. Won is the motif's first bar landing
+on the octave; Lost three soft notes down to the tonic.
 
-Where the drops come on the best pool runs (run clock, seconds; a first run is later, and the music follows the
-rider, not the clock):
+- **Good:** you could name the verb from the sound, and the mountain from its instruments.
+- **Wrong:** a stinger louder than the music; one that clashes with the chord under it (they are in the key
+  but do not follow the chord).
 
-| Mountain | First set piece drop | Stage line 1 | Second set piece drop | The lift (stage line 2) | Third set piece drop | The finish |
-| --- | --- | --- | --- | --- | --- | --- |
-| Frostfang | 34 (Serac Gate) | 39 | 56 (Crevasse Fields) | 74 | 79 (Ice Cavern) | 112 |
-| Ember Peak | 33 (Cinder Gate) | 39 | 59 (Caldera Leap) | 73 | 91 (Ash Market) | 111 |
-| Sakura Ridge | 26 (Petal Steps) | 40 | 63 (Blossom Leap) | 74 | 98 (Temple Town) | 110 |
+### 6. The riders (2 minutes)
 
-A set piece won ends on a stinger: the band stops for a moment and the hook's first bar plays on brass and
-bells a whole tone up, ending on a bright chord. Lost: three soft bells falling to the tonic.
+Press each of the twelve Rider Motifs with a section playing, then again on another mountain: the same tune
+in the new key. On a run you hear a rider's motif after the start-line call when they are your rival, and
+when they pass you.
 
-The step, lead, trail, close, won and lost cues sound from the director's `moment` beats, which the main
-lane's set-piece sim pushes. On a build without them, hear them from the jukebox's Set Pieces row; the drops,
-the card's call, the breakdowns and the finish work on any build (they read the course and the card).
+The Hollow King: low brass, up a fifth and slowly home. Mila Frost: glass falling four notes and turning back
+up. Suki Ember: a plucked note struck twice, then a dash to the octave. Ivo Crag: a hammered fifth that drops
+to the root. Kaito Mori: a plucked turn. Old Wren: two slow bells. Tavi Rook: a whistle climbing the chord.
+Nessa Lumen: glass rocking before it lifts. Juno Vale: bells stepping down three and up five. Pip Thistle:
+plucked leaps, never where expected. Bram Oakhollow: a horn call. Rosa Quill: a whistled wave.
 
-### 5. A mood (2 minutes)
+- **Good:** after a few runs you know who passed you without reading the name.
+- **Wrong:** all twelve sound like one bell; a motif that sounds wrong on Ember or Frostfang (the minor keys).
 
-Ride with `?debug&mood=1` (Blizzard) or pick a mood in the jukebox. The mountain's hook should still be there,
-recoloured: in A minor at 100 for the Blizzard, phrygian and wobbly for Haunted Hollow (`mood=5`).
-Wrong: the hook unrecognisable, or harmony that sounds broken rather than dark.
+### 7. A mood (2 minutes)
 
-### 6. The cues in the score (2 minutes)
+Pick a mood in the jukebox with a mountain playing. The mountain's own music, treated: a Blizzard a semitone
+down and darker with more room; Glass Ice a semitone up and thinner; Haunted Hollow two semitones down and
+muffled; Comet Night wetter; Powder Day a semitone up. **Wrong:** the slower or faster playback audible as a
+tape effect in a bad way; drums that sound pitched down.
 
-In the jukebox, with a section playing, press each of: Lantern Lit, Dash, Ward, Sky Gate, Pass, Stage Line.
-Their rush of air or thud is on the press; their notes land on the band's next 16th and are tones of the chord
-playing. **Good:** they sound like part of the music. **Wrong:** a cue that feels late to the action (more than a
-16th: 134 ms at 112 bpm), or sour against the chord.
+### 8. The fallback (2 minutes)
 
-### 7. The sled sounds (1 minute)
+Press Live Band: round 6's music takes over within two seconds, and Produced Score brings the score back.
+Then load the game with `?nostems` and ride: the whole game on the live band. **Wrong:** silence at any point.
 
-Press Verse, then switch the Sled Sound: Steel Runners (the hiss as before), Sleigh Bells (bells shaken harder
-the harder you carve), Old Timber (a creak of boards, a wooden knock on a landing), Glass Chime (a rubbed glass
-singing the key's tonic and fifth), Lantern Song (a warm hum on the tonic that brightens with each full lantern).
-They are under your own runners only. **Wrong:** one that is louder than the music, or that sounds like a cue.
+### 9. Low, and a phone (6 minutes)
 
-### 8. On a phone speaker (3 minutes)
+Load with `?tier=low`, then on a phone. Both get the lighter files: two layers a section instead of four (the
+lead and the top layer arrive together), decoded at 32 kHz.
 
-Repeat step 2's Pinecrest and Ember choruses and step 3's finish on a phone.
-
-- **Good:** the bass line is still there (its upper harmonics carry it), the kick still knocks (its click
-  carries it), the melody is clear, nothing in the middle of the stereo vanishes.
-- **Wrong:** the music thin or gone under the wind and effects; the melody masked by the arp.
+- **Good:** the same music, a little less air at the very top. On a phone speaker the bass line is still
+  there through its harmonics, the kick still knocks, the tune is clear, nothing in the middle vanishes.
+- **Wrong:** Ember gone thin (it loses most on a phone: its weight is under 250 Hz); a gap or a click where a
+  section hands over (the AAC files, on a browser without Opus, are the likeliest place: old Safari).
 
 ## What a human ear must decide
 
-These are the calls the measurements cannot make. Each is a one-line change if it is wrong (the file and the
-constant are in brackets).
+The calls the measurements cannot make. Each is one number and a rebuild of that piece (`npm run music
+<piece>`, then a full `npm run music` before shipping), unless it says otherwise.
 
-1. Is each hook good enough to hum? (score.ts, the hook lines)
-2. Is the melody at the right level over the band: present, not on top? (music.ts MIX.lead)
-3. Is the kick's pump on the pad and bass musical or seasick, mountain by mountain? (theory.ts kit.pump)
-4. Is the sidechain under the effects audible as pumping? It is at most 5 dB. (graph.ts DUCK)
-5. Do the cut bars (a drop on beat 3 or 4) feel like an edit or a stumble? (form.ts LAND_BEATS: drop 8 and 12 to
-   land only on bar lines, up to a bar later than the picture)
-6. Is the key lift into the last stage welcome, or one change too many on top of the tempo step? (music.ts
-   LAST_STAGE_LIFT)
-7. Is the won stinger a whole tone up a lift or a clash? (sfx.ts moment 'won')
-8. Is the overall loudness right next to other tabs and games? The target is -16 LUFS integrated. (graph.ts
-   TP_GAIN)
+1. Do the instruments sound produced, or like oscillators? Mountain by mountain, instrument by instrument: say
+   which ones fail. (`scripts/music/inst.ts`, `perc.ts`; a piece's `tracks`)
+2. Is each hook good enough to hum? (each piece's `HOOK`)
+3. Is each mix balanced: the lead present and not on top, the bass audible, the drums not buried? (a track's
+   `gain`, its loudness against the others in LUFS)
+4. Is the music level with the effects? (`stemdeck.ts` PRODUCED_GAIN)
+5. Is the sidechain under the effects audible as pumping? (`graph.ts`)
+6. Frostfang's pump and Ember's distortion: musical or tiring over two minutes? (a track's `duck`, `tape`)
+7. Do sections join without a seam, and do drops land without a click? (`stemform.ts` CUT_FADE_S)
+8. Is the breath before the biggest leap a held breath or a dropout, and is it too long? (`engine.ts`
+   approach; `stemform.ts` BREATH_FADE_S, and BREATH_MAX_S, 4.2 s, for its length)
+9. Is the hit under a drop the right size? (`piece.ts` HIT_TRIM_DB)
+10. Are the stingers at the right level, and does any clash with its music? (a piece's sting band)
+11. Do the riders' motifs read as characters, and sit in every key? (`motifs.ts`)
+12. Does the reprise arrive too soon or too late after the finale? (`music.ts` FINALE_MAX_S)
+13. Is anything too close to music that exists? Every note was written here, from nothing but the brief, and
+    no existing piece was used as a model, but only a listener can say a tune does not remind them of one.
