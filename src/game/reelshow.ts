@@ -54,8 +54,11 @@ export interface ReelHost {
   sound(sim: Sim, events: readonly SimEvent[], dt: number): void;
   /** A UI click. */
   click(kind: 'tap' | 'back'): void;
-  /** Seconds a bar of the score lasts, when the audio can say (the cuts land on bar lines); else null. */
+  /** Seconds a bar of the score lasts, when the audio can say (the shots are whole bars long); else null. */
   bar(): number | null;
+  /** Seconds until the score's next bar line and its next beat, when the audio can say (a cut waits for
+   *  one); else null, and a cut falls as its card ends. */
+  toLine?(): { toBar: number; toBeat: number } | null;
   /** The game's render clock: the reel draws on it and hands it back. */
   time(): number;
   setTime(t: number): void;
@@ -73,6 +76,18 @@ const SLICE_TICKS = 900;
 const SLICE_MS = 7;
 /** A card stands this long over the dip before its shot plays (s), and the opening card at least this. */
 const CARD_S = 0.45;
+/** A cut lands on the score: on the bar line when one comes within this long of the card's end (s), else on
+ *  the next beat, and never held longer than CUT_HOLD_MAX for either. */
+const CUT_BAR_REACH = 0.6;
+const CUT_HOLD_MAX = 0.9;
+
+/** How long a cut waits past its card to land on the score: to the bar line if it is near, else to the beat. */
+export function cutHold(line: { toBar: number; toBeat: number } | null): number {
+  if (!line) return 0;
+  const { toBar, toBeat } = line;
+  if (toBar >= 0 && toBar <= CUT_BAR_REACH) return toBar;
+  return toBeat >= 0 && toBeat <= CUT_HOLD_MAX ? toBeat : 0;
+}
 const OPEN_S = 0.9;
 /** The slow frame at a leap's apex: the reel's own clock eases to this, over these seconds round the apex. */
 const SLOW_RATE = 0.28;
@@ -122,6 +137,9 @@ export class ReelShow {
     return { stage: this.stage, shot: this.i, t: s ? (this.player.drawn - s.t0) / 60 : 0, paused: this.paused };
   }
 
+  /** This cut has taken its wait for the score's line. */
+  private lined = false;
+
   setPaused(on: boolean): void {
     this.paused = on;
     this.ui.paused(on);
@@ -149,6 +167,7 @@ export class ReelShow {
     const s = this.shots[this.i];
     if (!s) return this.finish();
     this.stage = 'seek';
+    this.lined = false;
     this.wait = CARD_S;
     this.ui.cut(true);
     this.ui.say(reelKicker(s), reelCard(s));
@@ -186,6 +205,11 @@ export class ReelShow {
       const t0 = performance.now();
       let there = false;
       while (!(there = this.player.seek(s.t0, SLICE_TICKS / 6)) && performance.now() - t0 < SLICE_MS);
+      if (there && this.wait <= 0 && !this.lined) {
+        // The card has stood and the record is there: the cut now waits for the score's line (once).
+        this.lined = true;
+        this.wait = this.paused ? 0 : cutHold(host.toLine?.() ?? null);
+      }
       if (there && this.wait <= 0) {
         // The cut: the world is made fresh where the window opens, and the lens set down.
         host.world.reelCut(this.player.view);

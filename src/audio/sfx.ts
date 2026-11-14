@@ -5,7 +5,7 @@ import type { CrashCause, LandQuality, SimEvent, TakeoffKind } from '../sim/sim'
 import { BIG_DROP_S, UiOnce, bankRoll, stormCascade } from './cues';
 import type { UiSound } from './engine';
 import type { Bus } from './graph';
-import { crumble, fmBell, mallet, ping, pluck, puff, thump, whoosh } from './instruments';
+import { crumble, fmBell, mallet, pad, ping, pluck, puff, thump, whoosh } from './instruments';
 import { type Motif, motifFor } from './motifs';
 import type { Prerender } from './prerender';
 import type { SledSoundId } from './sledsounds';
@@ -1464,7 +1464,11 @@ export class Sfx {
    *  eighth. The rise into its drop is the band's (music.ts plan). */
   private marqueeCue(t0: number, verb: string): void {
     // The produced score has a stinger written for the verb, in the course's instruments.
-    if (this.band?.stinger?.(verb, t0)) return;
+    if (this.band?.stinger?.(verb, t0)) {
+      this.cued(`stinger.${verb}`);
+      return;
+    }
+    this.cued(`call.${verb}`);
     const t = this.onGrid(t0, 2, 0.3);
     const head = this.band?.head(12) ?? [];
     const v = this.voice(t, 0.55, 0, 1, PRIO.payoff);
@@ -1561,7 +1565,11 @@ export class Sfx {
           else thump(v, t, 90 * rate, 55 * rate, 0.4, 0.12);
           fmBell(v, t, this.note(2 + 2 * Math.max(0, n - 1)), 0.04, 0.4, 2, 1);
           if (n >= of && of > 0) this.chord(t + 0.1, 0.07, 1.2, 5, 2);
-        }
+        } else if (verb === 'shatter') this.bellRung(n, t0);
+        else if (verb === 'surge') this.forgeGate(n >= of, t0);
+        else if (verb === 'slide') this.glassNote(n, t0);
+        else if (verb === 'follow' || verb === 'kindle') this.lampNote(verb === 'kindle', n, of, t0);
+        else if (verb === 'carry') this.flameLow(n, t0);
         break;
       }
       case 'miss': {
@@ -1577,6 +1585,17 @@ export class Sfx {
         break;
       }
       case 'lead': {
+        if (verb === 'follow' || verb === 'carry') {
+          // Back in the guide light's wake, or the flame caught again: a warm breath in and two bells up.
+          this.cued(`${verb}.lead`);
+          const t = this.onGrid(t0, 2, 0.28);
+          const v = this.voice(t, 0.45, 0, 1, PRIO.normal);
+          if (verb === 'carry') whoosh(v, t0, 0.35, 500, 2200, 0.07, 0.8, v.bank.pink);
+          fmBell(v, t, this.chordNote(5), 0.04, 0.3, 2, 0.9);
+          const hi = this.chordNote(7);
+          this.at(v, t + this.runGap(0.08) * 2, (tn) => fmBell(v, tn, hi, 0.045, 0.5, 2, 0.9));
+          break;
+        }
         const t = this.onGrid(t0, 2, 0.28);
         const r = brightRoot(k, 55);
         const v = this.voice(t, 0.35, 0.2, 1.1, PRIO.payoff);
@@ -1585,6 +1604,19 @@ export class Sfx {
         break;
       }
       case 'trail': {
+        if (verb === 'carry') {
+          // The flame gutters: its air goes out of it, and a low note sags.
+          this.cued('carry.trail');
+          const v = this.voice(t0, 0.3, 0, 1, PRIO.normal);
+          puff(v, t0, 0.14, 1800, 300, 0.2);
+          const f = this.note(1);
+          const g = v.gain(0, v.out);
+          const end = perc(g.gain, t0, 0.05, 0.01, 0.3);
+          const o = v.osc('triangle', f, t0, end, v.filter('lowpass', 700, 0.7, g));
+          o.frequency.setValueAtTime(f, t0);
+          o.frequency.exponentialRampToValueAtTime(f * 0.84, t0 + 0.5);
+          break;
+        }
         const t = this.onGrid(t0, 2, 0.28);
         const v = this.voice(t, 0.4, -0.2, 1, PRIO.normal);
         fmBell(v, t, this.note(4), 0.055, 0.25, 2.4, 1);
@@ -1593,6 +1625,20 @@ export class Sfx {
         break;
       }
       case 'close': {
+        if (verb === 'carry') {
+          // The brazier feeds the flame: it takes with a rush, and three bells climb the chord.
+          this.cued('carry.close');
+          const v = this.voice(t0, 0.5, 0, 1.1, PRIO.payoff);
+          whoosh(v, t0, 0.5, 400, 3000, 0.11, 0.8, v.bank.pink);
+          thump(v, t0, 110, 60, 0.2, 0.1);
+          const t = this.onGrid(t0, 2, 0.28);
+          const gap = this.runGap(0.08) * 2;
+          [4, 6, 9].forEach((i, j) => {
+            const f = this.chordNote(i);
+            this.at(v, t + j * gap, (tn) => fmBell(v, tn, f, 0.05, 0.5 + 0.2 * j, 2, 1));
+          });
+          break;
+        }
         const t = this.onGrid(t0, 4, 0.6);
         const v = this.voice(t, 0.1, 0, 1.2, PRIO.normal);
         thump(v, t, 62, 38, 0.5, 0.12);
@@ -1637,6 +1683,180 @@ export class Sfx {
       default:
         break;
     }
+  }
+
+  // ---------------------------------------------------------------- round 7: the new verbs, the legend, the hero frame
+
+  /** Probe: what these cues have played, by name (window.__gs.audio.debugCues(), and the tests). */
+  readonly cues: Record<string, number> = {};
+
+  private cued(name: string): void {
+    this.cues[name] = (this.cues[name] ?? 0) + 1;
+  }
+
+  /**
+   * A bell rung from the air under it (the shatter's step): the strike on the action, a bronze note in the
+   * chord a moment later on the band's grid, each bell a chord tone higher so three ring a phrase, and the
+   * air it moves as it swings out and back twice (the world swings it at 7.5 rad/s: 0.42 s a pass).
+   */
+  private bellRung(n: number, t0: number): void {
+    this.cued('shatter.step');
+    const t = this.onGrid(t0, 1, 0.12);
+    const r = brightRoot(this.key(), 48);
+    const m = r + [0, 4, 7, 12, 16][Math.max(0, Math.min(4, n - 1))];
+    const f = mtof(m);
+    const pan = n % 2 === 0 ? 0.3 : -0.3;
+    const v = this.voice(t0, 0.6, pan, 1.3, PRIO.payoff);
+    this.knock(v, t0, 1700, 0.16);
+    // Bronze: a hum, the strike tone an inharmonic step over it, and a bright partial that dies first.
+    fmBell(v, t, f, 0.085, 1.9, 2.76, 1.2);
+    fmBell(v, t, f * 0.5, 0.05, 2.6, 2, 0.5);
+    fmBell(v, t, f * 2.4, 0.022, 0.5, 1.5, 0.8);
+    for (let i = 0; i < 4; i++) {
+      const ts = t0 + 0.14 + i * 0.42;
+      this.at(v, ts, (tn) => whoosh(v, tn, 0.3, i % 2 ? 620 : 380, i % 2 ? 380 : 620, 0.05 * Math.exp(-0.45 * i), 1.2, v.bank.pink));
+    }
+  }
+
+  /**
+   * Off the forge gate's lip (the surge's step). At the speed asked or better the gate roars: a body of low
+   * fire that opens and falls away over the 1.6 s its flames stand tall, the thud of it lighting and the
+   * crackle after. Slower, it gutters: a short cough of air that sags.
+   */
+  private forgeGate(roar: boolean, t0: number): void {
+    this.cued(roar ? 'surge.roar' : 'surge.gutter');
+    const sr = this.ctx.sampleRate;
+    if (!roar) {
+      const v = this.voice(t0, 0.2, 0, 1, PRIO.normal);
+      puff(v, t0, 0.16, 900, 220, 0.16, v.bank.brown);
+      whoosh(v, t0 + 0.04, 0.4, 700, 240, 0.06, 0.8, v.bank.pink);
+      return;
+    }
+    const v = this.voice(t0, 0.35, 0, 1.2, PRIO.payoff);
+    thump(v, t0, 92, 36, 0.5, 0.2);
+    // The roar: brown noise through a band that opens with the flames and closes as they fall, with a flutter.
+    const g = v.gain(0, v.out);
+    const end = swell(g.gain, t0, 0.5 * bandComp(320, 0.6, sr), 0.07, 0.5, 0.42);
+    const bp = v.filter('bandpass', 180, 0.6, g);
+    bp.frequency.setValueAtTime(180, t0);
+    bp.frequency.exponentialRampToValueAtTime(620, t0 + 0.28);
+    bp.frequency.exponentialRampToValueAtTime(210, t0 + 1.6);
+    const am = v.gain(0.78, bp);
+    v.lfo(13, 0.22, am.gain, t0, end);
+    v.buffer(v.bank.brown, t0, end, am);
+    // Its breath over the top, and the embers it throws.
+    whoosh(v, t0, 0.9, 900, 3600, 0.08, 0.7, v.bank.pink);
+    crumble(v, t0 + 0.2, 0.1, 2600, 1.2, 3, 0.5);
+    this.music?.duck(0.72, t0, 0.5, 0.6);
+  }
+
+  /** A slide's hold, a quarter at a time (or one way of two): a note of glass, each higher. */
+  private glassNote(n: number, t0: number): void {
+    this.cued('slide.step');
+    const t = this.onGrid(t0, 1, 0.15);
+    const f = this.chordNote(9 + 2 * Math.max(0, Math.min(3, n - 1)));
+    const v = this.voice(t, 0.6, n % 2 === 0 ? 0.3 : -0.3, 1.1, PRIO.normal);
+    fmBell(v, t, f, 0.05, 0.9, 4, 0.7);
+    ping(v, t, Math.min(f * 2, 9000), 0.014, 0.5);
+  }
+
+  /**
+   * A lamp lit (kindle) or another eighth ridden in the guide light's wake (follow): a note up the ladder for
+   * each, so the row or the wake is heard filling. A lamp catches with a small breath of flame; the wake's
+   * note is softer and longer. The last of them rings the chord.
+   */
+  private lampNote(lamp: boolean, n: number, of: number, t0: number): void {
+    this.cued(lamp ? 'kindle.step' : 'follow.step');
+    const t = this.onGrid(t0, 1, 0.15);
+    const f = this.note(5 + Math.max(0, Math.min(9, n - 1)));
+    const v = this.voice(t, lamp ? 0.4 : 0.6, n % 2 === 0 ? 0.25 : -0.25, 1.1, PRIO.normal);
+    if (lamp) {
+      puff(v, t0, 0.07, 2400, 700, 0.08);
+      pluck(v, t, f, 0.07, 0.2, 3);
+      fmBell(v, t, f * 2, 0.035, 0.5, 3.5, 1);
+    } else fmBell(v, t, f, 0.045, 0.9, 2, 0.8);
+    if (n >= of && of > 0) this.chord(t + this.runGap(0.07) * 2, 0.05, 1.1, 5);
+  }
+
+  /** The carried flame burning low (three tenths and under): a dull pulse, lower and nearer each tenth lost.
+   *  Above that the flame says nothing as it burns: its size on the sled is the read. */
+  private flameLow(tenths: number, t0: number): void {
+    if (tenths > 3 || tenths < 1) return;
+    this.cued('carry.low');
+    const t = this.onGrid(t0, 2, 0.3);
+    const v = this.voice(t, 0.15, 0, 1, PRIO.normal);
+    thump(v, t, 70 + 8 * tenths, 44, 0.16 + 0.06 * (3 - tenths), 0.1);
+    puff(v, t, 0.05, 700, 260, 0.09, v.bank.brown);
+  }
+
+  /**
+   * The run's legend (about one run in ten). As it is said: a long breath in from its side of the run, then
+   * an open fifth low on brass with four bells climbing a ninth and a sharp fourth over it (a colour no other
+   * cue in the game uses), and the band gives it room. As the rider reaches it: a held fifth, quiet, for the
+   * first seconds inside. A ribbon's quarters are bells up that same chord. As it is left: two bells down.
+   */
+  legend(phase: 'warn' | 'start' | 'step' | 'end', side: number, n: number, t0: number): void {
+    this.cued(`legend.${phase}`);
+    const r = brightRoot(this.key(), 50);
+    const pan = 0.35 * Math.sign(side);
+    if (phase === 'warn') {
+      this.swellUp(t0, 1.1, 0.07, pan);
+      const t = this.onGrid(t0 + 1.1, 4, 0.5);
+      this.music?.duck(0.6, t, 1.6, 0.9);
+      const v = this.voice(t, 0.7, pan, 1.2, PRIO.payoff);
+      this.brass(v, t, [r - 12, r - 5], 1.5, 0.034);
+      const gap = this.runGap(0.11) * 2;
+      [7, 14, 18, 26].forEach((x, j) => {
+        const f = mtof(r + x);
+        this.at(v, t + 0.05 + j * gap, (tn) => fmBell(v, tn, f, 0.06 - 0.006 * j, 1.1 + 0.3 * j, 2, 1));
+      });
+      this.shimmer(t + 4 * gap, 16, 9, 0.035);
+    } else if (phase === 'start') {
+      const t = this.onGrid(t0, 4, 0.5);
+      const v = this.voice(t, 0.7, pan, 1, PRIO.normal);
+      const end = pad(v, t, [mtof(r), mtof(r + 7), mtof(r + 14)], 5, 0.028, 1800, 1.2, 6, 0.3);
+      v.hold(end);
+      fmBell(v, t, mtof(r + 18), 0.045, 1.4, 2, 1);
+    } else if (phase === 'step') {
+      const t = this.onGrid(t0, 1, 0.15);
+      const v = this.voice(t, 0.6, pan, 1.1, PRIO.normal);
+      fmBell(v, t, mtof(r + [7, 14, 18, 26][Math.max(0, Math.min(3, n - 1))]), 0.05, 1, 2, 1);
+    } else {
+      const t = this.onGrid(t0, 2, 0.3);
+      const v = this.voice(t, 0.7, pan, 1, PRIO.low);
+      fmBell(v, t, mtof(r + 14), 0.035, 0.9, 2, 0.9);
+      const lo = mtof(r + 7);
+      this.at(v, t + this.runGap(0.11) * 3, (tn) => fmBell(v, tn, lo, 0.03, 1.3, 2, 0.9));
+    }
+  }
+
+  /**
+   * The slow hero frame on the mountain's biggest leap. Off the lip: air drawn in, cresting as the frame
+   * starts (`inS` seconds on), with a low tone rising under it. At the apex: the breath held, three high
+   * bells of the chord hanging for as long as the frame does. The landing is the band's own (the engine
+   * brings the score back on it).
+   */
+  heroFrame(phase: 'lip' | 'apex' | 'out', inS: number, secs: number, t0: number): void {
+    if (phase === 'out') return;
+    this.cued(`heroFrame.${phase}`);
+    if (phase === 'lip') {
+      const dur = Math.max(0.3, Math.min(1.4, inS));
+      const v = this.swellUp(t0, dur, 0.075);
+      const f = this.note(0) / 2;
+      const g = v.gain(0, v.out);
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(0.09, t0 + dur);
+      g.gain.setTargetAtTime(0, t0 + dur, 0.05);
+      const o = v.osc('sine', f, t0, t0 + dur + 0.3, g);
+      o.frequency.setValueAtTime(f, t0);
+      o.frequency.exponentialRampToValueAtTime(f * 1.5, t0 + dur);
+      return;
+    }
+    const hold = Math.max(0.6, secs);
+    const r = brightRoot(this.key(), 72);
+    const v = this.voice(t0, 0.8, 0, 1, PRIO.payoff);
+    [0, 7, 12].forEach((x, j) => fmBell(v, t0 + 0.02 + j * 0.05, mtof(r + x), 0.04, hold * 0.9 + 0.2 * j, 2, 0.7));
+    this.shimmer(t0 + 0.1, 10, 12, 0.025);
   }
 
   // ---------------------------------------------------------------- beats (named moments)
@@ -1749,6 +1969,12 @@ export class Sfx {
         break;
       case 'moment':
         this.moment(b.verb, b.phase as string, b.n, b.of, t);
+        break;
+      case 'legend':
+        this.legend(b.phase, b.side, b.n, t);
+        break;
+      case 'heroFrame':
+        this.heroFrame(b.phase, b.inS, b.secs, t);
         break;
       default:
         break;
