@@ -4,14 +4,44 @@ A downhill sled race for the browser. You carve, drift, pop and trick your way d
 through ravines, frozen lakes, village streets and off real cliffs, racing the translucent ghosts of
 twelve signature riders and a crowd of others to a finish town. Spirit lights on the brave lines, and
 your skill, fill a lantern you either spend on a dash (through trees, faster) or keep as a ward that
-takes the next hit. Each mountain's three biggest places are set pieces that each play their own way
-(race a cable car, thread lantern gates, fly a ring line over a leap, outrun a falling span, land every
-terraced step), and a board of goals on each teaches it. Every mountain has its own song, arranged against
-the run, and a garage dresses the rider. Every run rolls a little controlled chaos (a mood, maybe an
-event), so no two runs feel the same.
+takes the next hit. There are five mountains; the fifth, Lanternfall, is the finale, opened by beating
+The Twelve one duel at a time. Each mountain's three biggest places are set pieces, fifteen in all on
+twelve different verbs (fly a ring line, hold a slide across a frozen lake, outrun a falling span, race a
+cable car, thread lantern gates, ring bells, carry a flame to the line), each with two or three variants
+picked by the run's seed, and a board of goals on each teaches it. Every mountain has its own produced
+score in its own genre, sequenced to the run, and a garage dresses the rider. Every run rolls a little
+controlled chaos (a mood, maybe an event, now and then a legend), so no two runs feel the same. After the
+finish, Watch Your Run cuts a highlight reel from the run's own record.
 
-Built with Vite + TypeScript + three.js. Every mesh, texture, sound and note of music is generated
-in code; there are no asset files.
+Built with Vite + TypeScript + three.js. Every mesh, texture and sound effect is generated in code at run
+time. The music is the one exception since round 7: it is written and synthesized in this repository
+(`npm run music`) and shipped as audio files in `public/music/`. `ASSETS.md` lists every shipped file, how
+it was made and its licence position. There are no image, model or font files.
+
+**The Twelve.** Twelve signature riders, each with a home mountain. Beat them one duel at a time, gentlest
+first: a duel is a run on their home ground with their real record as your rival, won by reaching the line
+ahead of their time. The title shows who is next and the full ladder. Eleven open Lanternfall, where The
+Hollow King waits, and after him one last race against all twelve at once.
+
+**Set pieces.** Each mountain has three, one a stage, each with its own verb: rings, slide, steps, collapse,
+race, gates, surge, flourish, shatter, and Lanternfall's follow, kindle and carry. No verb is used more than
+twice, and each set piece has two or three variants chosen by the run's seed, so a ghost rides the variant of its
+own run. Beating a set piece lights a whole lantern and earns its star on the mountain's board.
+
+**Legend moments.** After a session's first run, about one run in ten has a legend: a white stag in the glades, a
+lantern dragon on the benches, the aurora come down to the snow. They never hurt a run.
+
+**Lanternfall.** The fifth mountain, a night mountain: a dive into cloud behind a guide light, a road of stone
+lamps to light, and a flame to carry to the great lantern at the line. A fall or a spent ward gutters the flame.
+Ride back up to speed within four seconds and it catches again; fall again while it gutters and it is out. The
+Hollow King's home.
+
+**The race.** From your second run on a mountain seven ghosts ride with you, spread from a little quicker than
+your best recent run to your slowest: whichever run you have, someone is near. Every one is a real record.
+
+**The fairness promise.** Nothing stands within 5.5 m of the line where a sled cannot hold it: in a kicker's
+landing, for 80 m above a leap's lip, and through a mogul field and 30 m past it. What stands on a lake stands
+along its shores, 17 m from the line.
 
 Screenshots of the final build, captured from live runs on desktop and phone, are in `screenshots/`.
 
@@ -33,19 +63,35 @@ Open http://127.0.0.1:5173. Useful URL switches (local mock platform only):
 | `?mockAdFail=1` | Make mock ads fail to test error paths |
 | `?platform=mock` | Skip loading the CrazyGames SDK |
 | `?c=<record>` | Open a friend's challenge (normally produced by the in-game share button) |
+| `?c=<record>&reel=1` | Open a shared highlight reel: it plays on the title, then the challenge is offered as before |
+| `?nostems` | Play the live band only (the fallback), never the produced score |
 
 Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 
 | Switch | Effect |
 | --- | --- |
 | `?fps` | Frame-time overlay (fps, p90, tier) |
-| `?tier=low\|medium\|high` | Force a quality tier instead of the automatic one |
+| `?tier=low\|medium\|high\|ultra` | Force a quality tier instead of the automatic one |
 | `?autoride=1` | Skip the title and start a run |
-| `?m=N` | Mountain 0 to 3 (unlocks ignored) |
+| `?m=N` | Mountain 0 to 4 (unlocks ignored; 4 is Lanternfall) |
+| `?variant=N` | Ride every set piece's Nth variant (0 to 2) |
+| `?legend=1` or `2` | Ride the mountain's first or second legend moment |
+| `?post=none` | Round 6's post stack on this tier: every round 7 pass off |
+| `?post=-ao,-blur` | Everything but the passes named. Names: `ao`, `contact`, `shafts`, `dof`, `blur`, `mirror`, `taa`, `aa`, `letterbox`, `fit`, `lens` |
+| `?post=ao,shafts` | Only the passes named |
+| `?postview=depth\|ao\|contact\|shafts` | Show what a pass made instead of the picture |
+| `?cine=dof:1,focus:7,blur:1,box:1` | Hold the camera's cine state, to see a beat's passes without the beat |
+| `?gpu` | Time each pass on the GPU (`__gs.world.post.pipe.timer.ms`) |
+| `?taa` | The temporal anti-aliasing experiment (not shipped on any tier) |
+| `?kz=3700&kto=4200&kl=3500&kr=6&ku=2&ks=0.4&kd=0.1&ka=30&kh=1&kc=0.3&kx=0.08&ky=0.2` | Compose a title shot without a rebuild (`keyart.ts` `devShot`: the reel's first and last metre, the light's metre, then the lens) |
 | `?mood=N`, `?event=N` | Force a chaos mood or mid-run event |
 | `?demo=N` | Replay the Nth-best pool ghost as the player, with its chaos roll (it dashes and wards as it did) |
 | `?riders=N` | Dress the field as the signature riders from roster index N (render only) |
-| `?jukebox` | The music jukebox over the title: the main theme, each mountain's music by stage and section, the drops, the lift, the finale, the results reprise and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
+| `?jukebox` | The music jukebox over the title: the main theme, each of the five mountains' produced score by section, the live band, the drops, the lift, the breath, the finale, the results reprise, a stinger for every set-piece verb, the twelve riders' motifs and every cue, on demand (`LISTENING.md` is the route for listening to the game) |
+
+The UI harness (`ui-harness.html` on the dev server) shows screens with fake models; round 7 added `title-twelve`,
+`title-twelve-wait`, `title-twelve-king`, `title-twelve-final`, `title-twelve-crowned`, `results-win`,
+`results-duel`, `results-duel-lost`, `results-duel-opens` and `results-crowned`.
 
 ## Controls
 
@@ -54,10 +100,26 @@ Dev switches (on in `npm run dev`, or anywhere with `?debug`):
 | Keyboard | A / D or arrow keys | Space, Shift, S, W, Up or Down; E, Q or Enter to dash |
 | Mouse | Move left / right of centre | Hold the left button; the right button dashes |
 | Touch | Drag on the left 60% of the screen | Hold the right 40%; tap the lantern to dash |
+| Gamepad | Either stick or the d-pad | A or the right trigger; X, B, a bumper or the left trigger to dash |
 
 Hold the action to crouch (deeper carve, tuck); hold it while steering hard to drift; release to
 pop. In the air, steer to spin and press-and-hold to backflip. Tap the action just before
 touchdown (when the ring on the snow flashes gold) for a perfect landing. P pauses.
+
+Gamepad: either stick or the d-pad steers; A or the right trigger is the button; X, B, a bumper or the left
+trigger spends the lantern; Start pauses. The menus follow the stick and the d-pad, A chooses, B goes back. The
+pad rumbles on landings, hits and dashes where the browser allows it (Chrome and Edge with a dual-rumble pad);
+Controller Rumble in the settings turns it off, and so does reduced motion. A pad run is in the input log like
+any other and replays exactly.
+
+A hard hit is a fall: you slide, lie in the snow a moment, get up and ride on, slower and with your combo gone.
+You carry three get-ups (the pips by the stage line). One comes back for every 200 m you ride and all of them at
+a stage line; a fall with none left ends the run. Falls in the first 700 m cost none. A fall that slides over a
+stage line or the finish counts from the moment it crosses.
+
+Quality is Low, Medium, High or Ultra. The game picks one from the GPU's name and measured frame times and
+never picks Ultra by itself except on a GPU the browser names as discrete; anywhere else Ultra is a choice in
+Settings (it is not offered on a touch device).
 
 The Garage (the title's Garage button) sells sleds, paints, scarves, hats, trails and sled sounds for gifts.
 Everything but a sled is a look or a sound only.
@@ -94,7 +156,15 @@ npm test
 | `standing`, `finishflow`, `field` | Race order by time, the finish flow, and a field built around your pace |
 | `ladder`, `cup`, `rivalry`, `slowriders`, `pacer` | Ladder ranks and stage medals, the weekly Cup, the run's rival, and the paced riders that fill the slow end of the race, and the clocks of riders who read you |
 | `ground`, `setpieces`, `overlook`, `midground`, `palette`, `feel` | World rules: nothing stands in the run, no stretch stays bare past about 300 m, the forest stands on the ground it is drawn over, each mountain keeps its own light, and the speed curves reach the cap |
-| `moments` | Set pieces: three a named mountain, one a stage, each with its verb; a Daily's own; the ring lines in the course's one list of rings; the race machine's and the fall's schedules; a rider who steers at the gates wins Old Town and a replay agrees; mastery stars are the verbs beaten |
+| `moments` | Set pieces: three a named mountain, one a stage, each with its verb; no verb more than twice in the game; every variant can be won by the lab's pilots and none is a gift to a rider who does nothing; variants come up evenly; a legend on one later run in 8 to 15 and never a session's first, and the careful line rides every legend unhurt; a Daily's own; mastery stars are the verbs beaten (rides about 150 whole runs: about two minutes) |
+| `simfix` | A line is crossed on the tick the sled crosses it, falling or not; a botched landing is always said; the carried flame gutters and catches, and a fall never leaves it higher |
+| `getup` | A fall is got up from: three get-ups that come back with the riding; a record replayed beside other riders gives the same falls and the same hash; a fall never sets a rider forward or sends one off faster |
+| `pad`, `hints` | A gamepad's dead zone, curve, trigger hysteresis and taps between ticks (`determinism` replays a pad run to the same hash); control hints that leave once learned or never taken up |
+| `twelve`, `moment` | The Twelve: a duel's field holds that rider's real record once, as the one rival; the ladder's walk; Lanternfall opens at eleven; the last race; and which of four endings the results lead with |
+| `reel` | The highlight reel: its scan's hash is the replay's, the same record gives the same shots, windows never overlap and total 12 to 30 s, a wrecked run plays to its wreck |
+| `audiostems` | The produced score: the section scheduler, the store, the packs, the motifs, and that no two courses measure alike in tempo, spectrum and instruments |
+| `quality`, `pipeline` | The tier controller never climbs to Ultra without a discrete GPU's ceiling; the frame's pass plan and its cost table agree, Low adds nothing, a camera at rest draws no lens pass |
+| `rockforms`, `ruts`, `fxbudget`, `lanternworld` | Every hazard's drawn form sits inside its collider and fills it; a rut does not age and a flight leaves none; pooled effects keep their budgets by tier and draw nothing while idle; Lanternfall's kit and cloud |
 
 ## Generate ghosts
 
@@ -104,13 +174,34 @@ npm run generate-ghosts
 
 Runs the bot (`src/bot`) on the real simulation at a spread of skill levels, with human-like
 mistakes, and writes `src/data/ghosts/<mountain>.json` in race order, with each ghost's stage splits.
-Each pool is 30 crowd runs and one run by each of the twelve signature riders (`src/bot/roster.ts`), ridden
-with its style. `npm run generate-ghosts -- --falls` re-reads where each ghost fell (wards count) without
+Each pool is 30 crowd runs, one run by each of the twelve signature riders (`src/bot/roster.ts`), ridden
+with its style, and a fast end of up to eight racers (the quickest of 96 more runs, each half a second from the
+next): 46 to 50 riders and 34 to 40 KB a mountain, five mountains, about three minutes to generate. `npm run generate-ghosts -- --falls` re-reads where each ghost fell (wards count) without
 riding anything again.
 The slowest bots finish in about 2:30, so `src/game/slowriders.ts` fills the race down to 5:00 at load
 with real runs played at a slower pace. Re-run it whenever simulation behaviour
-changes (bump `SIM_VERSION` in `src/sim/sim.ts`; the ghost pool test fails on stale pools). The Daily
-Mountain's pool is generated at load by the same bot in a Web Worker.
+changes (bump `SIM_VERSION` in `src/sim/sim.ts`, now 9; the ghost pool test fails on stale pools). The Daily
+Mountain's and the Cup's pools are generated at load by the same bot in a Web Worker, with two racers each.
+
+## Build the music
+
+```bash
+npm run music
+```
+
+Renders, masters, encodes and measures the whole produced score from source (`scripts/music/`): five courses
+and the title theme, written as notation in `scripts/music/pieces/`, synthesized by the project's own renderer,
+encoded to Opus in WebM with an AAC fallback by `ffmpeg-static` (a devDependency; its install script must have
+run, which `allowScripts` in `package.json` permits). It writes the packs to `public/music/`, the manifest to
+`src/audio/produced.json` and its measurements to `scripts/music/analysis.json`. About 10 minutes on a quiet
+machine, 30 on a busy one. `npm run music ember` rebuilds one piece, but stamps the new version on that piece
+only, so finish any change with a full build. `npm run music -- --wav` also writes every stem and a sequenced
+reference run of each course as WAV files under `dist/music/wav/`. The packs are committed (56.8 MB): rebuild
+only when the score changes, because every changed pack adds its size to the repository's history.
+
+The game streams the music after the first frame: the title's pack first, a mountain's pack when it is picked,
+kept in the Cache API. Low and phones get lighter packs. Until a pack arrives, and on a browser that decodes
+neither Opus nor AAC, the live band (round 6's music, synthesized in the browser) plays.
 
 ## Package for CrazyGames
 
@@ -118,9 +209,20 @@ Mountain's pool is generated at load by the same bot in a Web Worker.
 npm run release
 ```
 
-Runs the tests, builds, and writes `dist/ghost-sled.zip` (index.html at the root). The script
-fails if the unpacked build exceeds 5 MB. Upload the zip in the CrazyGames developer portal and
-enable "Progress Save" so the data module is active.
+Runs the tests, builds, and writes `dist/ghost-sled.zip` (index.html at the root). The script fails if the
+whole build is over 80 MB, has more than 1,500 files, or its initial download is over 20 MB. The initial
+download is counted as every file outside `music/`, the title theme's packs, the decode probes and the largest
+course's desktop pack, since no music is fetched before the first frame and a course's pack only when it is
+picked.
+
+| | The check | Measured at the last merge | CrazyGames allows |
+| --- | --- | --- | --- |
+| Whole build | at most 80 MB | 59.48 MB | 250 MB |
+| Files | at most 1,500 | 29 | 1,500 |
+| Initial download | at most 20 MB | 10.43 MB | 50 MB, and 20 MB for the mobile homepage |
+
+(CrazyGames' figures are from docs.crazygames.com/requirements/technical, read 2026-11-12.) Upload the zip in
+the CrazyGames developer portal and enable "Progress Save" so the data module is active.
 
 ## Performance
 
@@ -243,12 +345,16 @@ and holds 60.
 The build grew by 229 KB, past the 2.0 MB the brief asked to hold near, and I think it is worth it: 193 KB of
 code in the main bundle for the authored stages, places, moments, ladder and results, 25 KB in the ghost worker
 (which carries its own copy of the sim and course), 10 KB of CSS and the rest in longer ghost pools. There are
-no asset files in it. It stays under half the 5 MB limit.
+no asset files in it. It stays under half the 5 MB limit. (True of that build. Since round 7 the score ships as
+files and the limit is the release check under "Package for CrazyGames".)
 
-High renders into an R11G11B10F buffer with 2x MSAA; Medium and Low use FXAA in the composite
-pass instead. The tier is chosen automatically, first from the GPU name and then from measured
-frame times (`src/game/quality.ts`): it steps down when frames run long or judder and back up when
-there is headroom.
+Since round 7 there are four tiers. High renders into an R11G11B10F buffer with 2x MSAA and an edge walk in
+the composite pass, with ambient occlusion and depth-cut shafts at half the frame; Ultra is High's world with
+4x MSAA, a 4096 shadow map, three-slice occlusion with contact shadows and ice that mirrors the frame; Medium
+has no MSAA and uses the edge walk; Low draws straight to the canvas with none of the round's passes. Depth of
+field, motion blur and the letterbox are drawn only during a camera beat. The tier is chosen automatically,
+first from the GPU name and then from measured frame times (`src/game/quality.ts`): it steps down when frames
+run long or judder and back up when there is headroom, and up to Ultra only on a GPU named as discrete.
 
 ## Play-testing
 
@@ -306,6 +412,26 @@ playwright-cli -s=gs run-code --filename=scripts/playtest/shots.js
 | `loudness.js` | Loudness on a live run: integrated LUFS, short-term and momentary maxima, loudness range, true peak, L/R correlation, and what folding to mono and a phone speaker's band take off, for the whole mix, the music alone and the effects alone |
 | `tile.mjs` | Tiles frames into one contact-sheet PNG, for reading many frames at once |
 | `graves-pins.ts`, `graves-repin.cjs` | After a pool regen: print each pool's graveyards, and rewrite the graveyards test's pins from them |
+
+Round 7's scripts. Use the headless configs (`.playwright/cli-headless.config.json`, 1280x720;
+`.playwright/mobile-headless.config.json`, 390x844): a headed browser drops to a couple of frames a second when
+the display sleeps.
+
+| Script | What it does |
+| --- | --- |
+| `frames.js`, `frames.sh`, `frames-r7.json` | The round's fixed frame set: the same 35 to 38 distances a mountain (five mountains) on any build and tier, on the safe line at 30 m/s, each run with its draw calls, triangles and console |
+| `lab.ts` (round 7) | Five mountains. Tables of set pieces won by pilot, verb and variant (`--variant N`, `--legend N`, `--mountains 4`, `--pilots expert-dash`), and `--falls`: what a fall costs each pilot, priced three ways |
+| `race-lab.ts` | How live the race is on runs 2 to 6, without a browser: the pilot lab's rides against fields built exactly as the game builds them |
+| `moments-plan.ts --rolls 3000` | How often each variant and legend comes up |
+| `pool-moments.ts`, `pool-fast.ts`, `twelve-times.ts` | How the pools' riders played each set piece; how fast a bot can ride (`--style racer`); each signature rider's home record beside its usual time |
+| `moments-r7.js`, `momentsworld.js`, `momentsworld.sh`, `legends-r7.js`, `legend.js` | Shoot every set piece, variant, the climax and the legends, with what the staging kit is drawing; the legend's card |
+| `beats.js`, `readability.js` (`force: 'track' \| 'none'`), `hero.js`, `rider-tris.ts` | Every directed shot with a probe a frame; the road read with a shot held on; a turntable round the rider with forced acting; the rider's triangles |
+| `pipe.js`, `pipe.sh`, `crop.mjs` | A frozen frame with passes on and off, the shimmer measure (the same frame drawn eight times with the lens moved by parts of a pixel), and enlarged crops |
+| `fxshots.js`, `feel-frames.js` | The effects staged (its `dash` and `carve` plans need mending); falls, get-up pips, hints and the pad's glyphs |
+| `lanternworld-key.json`, `lanternworld-digest.mjs` | A 14-frame list of Lanternfall's places, and a capture's cost |
+| `screens-walk.js`, `screens-harness.js` | Walks every screen on both viewports; shoots the UI harness's states |
+| `reel.js`, `labels.js`, `lifecycle.js` | A whole run then its reel; label quads against the old DOM tags at the same ticks; a trace of the renderer's main thread summed by event, with DOM writes a frame |
+| `loudness.js`, `audiocpu.js` (round 7) | Both report which band played (the produced score or the live band) and its pack; `loudness.js` also reports the mix in octave bands; a pass may add `&nostems` |
 
 ## Fun pass play-test
 
@@ -618,18 +744,38 @@ fair test or a frustration, whether the race's machine reads as a rival, how any
 route and the eight calls only an ear can make), whether the ward's slow beat feels like a beat or a stutter, and whether
 the garage's looks are worth buying.
 
+## Round 7 play test and performance
+
+Round 7 (DECISIONS 276 to 343) changed the sim once (SIM_VERSION 9: a fall that is got up from, twelve verbs
+with variants, legends, Lanternfall) and most of what is drawn and heard: a film curve and a grade for every
+place, local lights, an Ultra tier, a rebuilt rider, directed camera shots, the set pieces' own worlds, a fifth
+mountain, The Twelve, a produced score, a gamepad, a highlight reel, and labels drawn in the canvas. The lanes'
+own measurements are in DECISIONS 278 to 341 and `notes/r7-*.md`. The headline lab figures on the final sim
+(`shots/r7/lab/final.txt`, six seeds on each of five mountains): the clumsy pilot finishes 26 of 30 runs where it
+finished 0 of 24; the expert wins 82 of 90 set pieces and the mid pilot 80, where they won 36 and 50 of 72; no
+skilled pilot is faster for falling (the least a fall cost was 1.03 s, of 73 falls). In the race lab a skilled
+pilot's race on runs 2 to 6 is live for 0.65 to 0.73 of a run where the fixed roles gave 0.51 to 0.64; five-run
+telemetry in the browser could not confirm it. No human has played this build or heard it.
+
+(filled by the main lane: telemetry by pilot, how live the race is on runs 1, 2 and 5, performance on every
+tier, the first frame, size, loudness and audio CPU, the critic's scores, and what still needs a person)
+
 ## Layout
 
 | Path | Contents |
 | --- | --- |
-| `src/sim` | Deterministic simulation: course generation, sled physics, scoring, chaos, input log, replay |
-| `src/bot` | Ghost bot and pool generator |
-| `src/game` | App flow, fixed-step loop, input, ghosts manager, saves, missions, quality tiers |
+| `src/sim` | Deterministic simulation: course generation, sled physics, scoring, chaos, set pieces, input log, replay |
+| `src/bot` | Ghost bot, the roster and the pool generator |
+| `src/game` | App flow, fixed-step loop, input (keys, touch, gamepad), ghosts manager, saves, missions, quality tiers, The Twelve, the reel |
 | `src/render` | three.js world: terrain, props, rider, ghosts, trails, particles, sky, post FX, camera |
-| `src/audio` | Procedural audio and generative music |
+| `src/render/postfx` | Round 7's frame passes: depth, ambient occlusion, shafts, the lens, reflections, the tier table |
+| `src/audio` | The produced score's runtime (store, scheduler, decks), the live band, effects, ambience, the jukebox |
 | `src/ui` | DOM overlay screens |
 | `src/platform` | CrazyGames SDK v3 wrapper and local mock |
 | `src/workers` | Ghost replay and daily pool worker |
+| `scripts/music` | The offline renderer for the score (`npm run music`): instruments, effects, meters, and the pieces in `pieces/` |
+| `public/music` | The shipped score: one pack a piece, a tier and a format, and two decode probes (see `ASSETS.md`) |
+| `scripts/playtest` | Play-test, capture and measurement scripts |
 
 Round 5 added `src/bot/roster.ts` (the signature riders), `src/game/marquee.ts` (set pieces), `src/game/mastery.ts`
 (boards), `src/game/paints.ts` (sled paints) and `src/render/spirit.ts` (sky gates, dash and ward light, set pieces'
@@ -637,5 +783,17 @@ air, fireworks). Round 6 added `src/sim/moments.ts` (the set pieces and their ve
 `src/render/marqueeworld.ts` (race machines, lantern gates, the falling span) and `src/ui/momentcopy.ts` (what a set
 piece's chip says).
 
-See `PLAN.md` for the architecture, `ART.md` for the art bible and `DECISIONS.md` for every call
-made along the way.
+Round 7 added, in `src/sim`: Lanternfall and the twelve verbs, variants and legends in `moments.ts`, `course.ts`
+and `chaos.ts`. In `src/game`: `twelve.ts` (the campaign), `keyart.ts` (the title's shots), `shots.ts` (the
+directed camera shots), `pad.ts` and `rumble.ts` (the gamepad), `reel.ts` and `reelshow.ts` (the highlight reel),
+`hints.ts`, `field.ts` (the field laid across your runs). In `src/render`: `postfx/`, `lights.ts` (local lights),
+`cine.ts` (what the lens is doing), `rockforms.ts`, `treelife.ts`, `breaks.ts`, `fxhub.ts`, `momentkit.ts` with
+`verbworld.ts`, `legendworld.ts` and `climaxworld.ts` (the set pieces' worlds, the legends, the last stage's
+lights and shells; the places' own light is in `stages.ts`), `lanternkit.ts` and `lanternworld.ts`
+(Lanternfall), `labels.ts` and `hudfigs.ts` (labels and Low's figures in the canvas), `reelcam.ts`. In
+`src/audio`: `stemstore.ts`, `stemform.ts`, `stemdeck.ts`, `motifs.ts` and `produced.json`. In `src/ui`:
+`padnav.ts`, `figures.ts`, `reelui.ts`, `reelcopy.ts`.
+
+See `PLAN.md` for the architecture, `ART.md` for the art bible, `LISTENING.md` for the route to listen by,
+`ASSETS.md` for every shipped file and its licence position, and `DECISIONS.md` for every call made along the
+way.
