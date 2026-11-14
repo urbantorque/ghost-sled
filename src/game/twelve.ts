@@ -3,6 +3,11 @@ import { MOUNTAINS, type MountainDef } from '../sim/mountains';
 import type { FieldPick } from './field';
 import type { PoolGhostData } from './ghostdata';
 import { type Standing, aheadOf, clock, marginPhrase } from './standing';
+import ember from '../data/ghosts/ember.json';
+import frostfang from '../data/ghosts/frostfang.json';
+import lanternfall from '../data/ghosts/lanternfall.json';
+import pinecrest from '../data/ghosts/pinecrest.json';
+import sakura from '../data/ghosts/sakura.json';
 
 // The Twelve: the campaign spine (round 7). Beat each signature rider on their home ground, one duel at a
 // time, from the gentlest to The Hollow King. A duel is a normal run on that rider's home mountain in which
@@ -23,9 +28,50 @@ export interface TwelveSave {
   crowned?: boolean;
 }
 
-/** The ladder, gentlest first. The roster's own skill orders it, so the story is the same whatever the
- *  pools' times are after a re-ride; The Hollow King (skill 1, home Lanternfall) is always last. */
-export const TWELVE: readonly Rider[] = [...ROSTER].sort((a, b) => a.skill - b.skill);
+/** A rider's real record in a mountain's pool, or null when the pool does not hold one. */
+export function duelRecord(pool: readonly PoolGhostData[], rider: Rider): PoolGhostData | null {
+  return pool.find((g) => g.name === rider.name && !!g.record) ?? null;
+}
+
+/** A pool ghost's finish as a standing (a run that did not finish stands by its distance). */
+export function poolStanding(g: Pick<PoolGhostData, 'distance' | 'finishTick'>): Standing {
+  return { time: typeof g.finishTick === 'number' && g.finishTick > 0 ? g.finishTick / 60 : null, distance: g.distance };
+}
+
+/** The bundled pools by mountain id: the records the duels are ridden against. */
+const POOLS: Record<string, { ghosts: PoolGhostData[] }> = { pinecrest, frostfang, ember, sakura, lanternfall };
+
+/** A rider's time on their own home ground in the bundled pools (seconds), or null with no finished record. */
+export function homeTime(r: Rider): number | null {
+  const pool = POOLS[MOUNTAINS[r.home]?.id ?? '']?.ghosts;
+  const g = pool ? duelRecord(pool, r) : null;
+  return g ? poolStanding(g).time : null;
+}
+
+/**
+ * The ladder's order: the time to beat falls with every rung. Each rider stands by their real record on their
+ * home ground, slowest first, so the next duel is never an easier time than the last (ordered by the
+ * roster's skill, the third duel asked for a quicker time than the eleventh: the bot's variance is wider than
+ * the gap between two riders). Whoever's home is the finale closes it whatever their time: the King is the
+ * twelfth, on Lanternfall. Read from the records, so a re-ride of the pools re-orders the ladder by itself;
+ * should any of the eleven have no finished record at home, the whole ladder falls back on the roster's skill.
+ */
+export function ladderOrder(riders: readonly Rider[], time: (r: Rider) => number | null = homeTime): Rider[] {
+  const last = (r: Rider): number => (MOUNTAINS[r.home]?.finale ? 1 : 0);
+  const bySkill = (a: Rider, b: Rider): number => last(a) - last(b) || a.skill - b.skill || (a.key < b.key ? -1 : 1);
+  const times = new Map<Rider, number>();
+  for (const r of riders) {
+    const t = time(r);
+    if (t !== null && Number.isFinite(t)) times.set(r, t);
+    else if (!last(r)) return [...riders].sort(bySkill);
+  }
+  return [...riders].sort((a, b) => last(a) - last(b) || (last(a) ? 0 : times.get(b)! - times.get(a)!) || bySkill(a, b));
+}
+
+/** The ladder, gentlest first: the slowest home time is the first duel, The Hollow King (home Lanternfall)
+ *  always the last. Progress is kept by rider (TwelveSave.beaten holds roster keys), never by rung, so a save
+ *  made on another order keeps everyone it beat. */
+export const TWELVE: readonly Rider[] = ladderOrder(ROSTER);
 
 /** The rider whose duel closes the ladder. */
 export const KING = TWELVE[TWELVE.length - 1];
@@ -105,16 +151,6 @@ export function duelMountain(d: Duel): number {
 export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mountain: number) => boolean): Duel | null {
   const d = nextDuel(t, open);
   return d && duelMountain(d) === mountain ? d : null;
-}
-
-/** A rider's real record in a mountain's pool, or null when the pool does not hold one. */
-export function duelRecord(pool: readonly PoolGhostData[], rider: Rider): PoolGhostData | null {
-  return pool.find((g) => g.name === rider.name && !!g.record) ?? null;
-}
-
-/** A pool ghost's finish as a standing (a run that did not finish stands by its distance). */
-export function poolStanding(g: Pick<PoolGhostData, 'distance' | 'finishTick'>): Standing {
-  return { time: typeof g.finishTick === 'number' && g.finishTick > 0 ? g.finishTick / 60 : null, distance: g.distance };
 }
 
 /** The last race's field: all twelve, each on their real Lanternfall record, quickest first. The King is the

@@ -21,6 +21,8 @@ import {
   finalField,
   gateCount,
   gateLine,
+  homeTime,
+  ladderOrder,
   lanternfallOpen,
   lockText,
   mountainOpen,
@@ -58,13 +60,44 @@ function ghost(name: string, seconds: number, o: Partial<PoolGhostData> = {}): P
 const POOL: PoolGhostData[] = [...Array.from({ length: 40 }, (_, i) => ghost(`crowd${i}`, 100 + i * 3)), ...ROSTER.map((r, i) => ghost(r.name, 110 + i * 4))];
 
 describe('the ladder', () => {
-  it('is all twelve signature riders once each, gentlest first, and ends with The Hollow King', () => {
+  it('is all twelve signature riders once each and ends with The Hollow King', () => {
     expect(TWELVE).toHaveLength(12);
     expect(new Set(TWELVE.map((r) => r.key)).size).toBe(12);
-    for (let i = 1; i < TWELVE.length; i++) expect(TWELVE[i].skill).toBeGreaterThanOrEqual(TWELVE[i - 1].skill);
     expect(KING.key).toBe('crown');
     expect(TWELVE[TWELVE.length - 1]).toBe(KING);
-    expect(TWELVE[0].key).toBe('rosa');
+  });
+
+  it('asks for a quicker time at every rung: the eleven stand by their home records, slowest first', () => {
+    // Read from the bundled pools, so this holds through any re-ride that leaves each of them a finish at home.
+    const times = TWELVE.map((r) => homeTime(r));
+    for (const t of times) expect(t).not.toBeNull();
+    for (let i = 1; i < TWELVE.length - 1; i++) expect(times[i]!, `${TWELVE[i].name} after ${TWELVE[i - 1].name}`).toBeLessThanOrEqual(times[i - 1]!);
+  });
+
+  it('orders any roster by the times it is given, the rider of the finale last whatever their time', () => {
+    const t: Record<string, number> = { rosa: 100, bram: 140, juno: 120, crown: 300, mila: 120 };
+    const some = ['mila', 'crown', 'rosa', 'juno', 'bram'].map((k) => riderByKey(k)!);
+    // (Juno and Mila tie: the roster's skill breaks it, the gentler first.)
+    expect(ladderOrder(some, (r) => t[r.key]).map((r) => r.key)).toEqual(['bram', 'juno', 'mila', 'rosa', 'crown']);
+    // The King needs no time to be last.
+    expect(ladderOrder(some, (r) => (r.key === 'crown' ? null : t[r.key])).map((r) => r.key)).toEqual(['bram', 'juno', 'mila', 'rosa', 'crown']);
+  });
+
+  it('falls back on the skill of the roster when one of the eleven has no finished record at home', () => {
+    const order = ladderOrder(ROSTER, (r) => (r.key === 'pip' ? null : 120));
+    for (let i = 1; i < order.length; i++) expect(order[i].skill).toBeGreaterThanOrEqual(order[i - 1].skill);
+    expect(order[order.length - 1].key).toBe('crown');
+    expect(order[0].key).toBe('rosa');
+  });
+
+  it('a save made on another order keeps everyone it beat, whatever rung they stand on now', () => {
+    // Progress is kept by rider. The old ladder (by skill) began Rosa, Bram, Pip: three beaten there are three
+    // beaten here, and the next duel is the first rung still standing.
+    const old = readTwelve({ beaten: ['rosa', 'bram', 'pip'] });
+    expect(old.beaten).toEqual(['rosa', 'bram', 'pip']);
+    expect(gateCount(old)).toBe(3);
+    const next = nextDuel(old, all);
+    expect(next).toEqual({ kind: 'duel', rider: TWELVE.find((r) => !old.beaten.includes(r.key)) });
   });
 
   it("the King's home is the finale, and nobody else's is", () => {
@@ -89,10 +122,11 @@ describe('the next duel', () => {
     // A new player has Pinecrest alone: Rosa (Sakura) and Pip (Frostfang) wait, Bram rides.
     expect(nextDuel(undefined, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
     expect(nextDuel(beat('bram'), only(0))).toEqual({ kind: 'duel', rider: riderByKey('juno') });
-    // Frostfang opens: Pip is gentler than Juno, so Pip is next.
-    expect(nextDuel(beat('bram'), only(0, 1))).toEqual({ kind: 'duel', rider: riderByKey('pip') });
+    // Frostfang opens: the first of its riders on the ladder stands before Juno, so they are next.
+    const reach = TWELVE.filter((r) => r.key !== 'bram' && (r.home === 0 || r.home === 1));
+    expect(nextDuel(beat('bram'), only(0, 1))).toEqual({ kind: 'duel', rider: reach[0] });
     // Everything open: the ladder's own order.
-    expect(nextDuel(undefined, all)).toEqual({ kind: 'duel', rider: riderByKey('rosa') });
+    expect(nextDuel(undefined, all)).toEqual({ kind: 'duel', rider: TWELVE[0] });
   });
 
   it('walks the whole ladder in order with every mountain open', () => {
