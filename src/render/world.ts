@@ -1050,7 +1050,10 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    // The legend in reach (the four mountains' from the marquee's world, Lanternfall's from its own): the
+    // chase looks a little toward it.
+    const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot()) : null;
+    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
 

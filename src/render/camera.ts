@@ -80,7 +80,19 @@ export interface CamTarget {
   wall?: number;
   /** Finish only: the results card is up, so the held shot makes room for it. */
   results?: boolean;
+  /** Run only: the legend in reach (MarqueeWorld.legendShot, LanternWorld.legendShot): where to look, in
+   *  three.js space, and how near its peak it is (0 to 1). The chase turns and lifts a little toward it. */
+  legend?: { x: number; y: number; z: number; peak: number } | null;
 }
+
+/** The legend look: the most the lens turns toward a legend (radians, about 8 degrees: the rider stays in the
+ *  middle third and the line ahead in frame), the most it lets the rider sink to lift the sky into frame
+ *  (NDC), the elevation at which the lift is whole, and how fast it eases in and out (1/s). */
+export const LEGEND_YAW_MAX = 0.14;
+export const LEGEND_LIFT_NDC = 0.14;
+const LEGEND_LIFT_FULL = 0.5;
+const LEGEND_EASE_IN = 1.3;
+const LEGEND_EASE_OUT = 0.9;
 
 const smooth01 = (x: number) => {
   const k = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -815,6 +827,7 @@ export class ChaseCamera {
     this.pendDriftKick = 0;
     this.vistaK = this.vistaS = this.vistaPick = 0;
     this.openK = this.revealLeft = this.revealSide = 0;
+    this.legYaw = this.legLift = 0;
     this.revealArmed = true;
     this.riseFrom = NaN;
     this.riseLeft = 0;
@@ -1144,6 +1157,45 @@ export class ChaseCamera {
   private mqKind: 'wide' | 'low' | 'side' = 'wide';
   private mqK = 0;
   private mqSide = 1;
+
+  /** The legend look (round 7): while a legend is in reach the chase turns a few degrees toward where it
+   *  plays and, for one in the sky, lets the rider sink in the frame so the sky lifts into it. The eruption
+   *  needs the lift most: the cone stands high and to one side, and the plain chase crops it at the top edge.
+   *  It never takes the steering: the lens only looks, the turn is capped at LEGEND_YAW_MAX so the line ahead
+   *  stays in frame, it eases over about a second so it never fights the player's own steering, and it gives
+   *  way in the air (the landing has the lens), in a tumble and during the run's reveal. Chase only, and off
+   *  under reduced motion, as every other move of the lens is: the card and the cue still say the legend. */
+  private legYaw = 0;
+  private legLift = 0;
+
+  private stepLegend(t: CamTarget, yaw: number, dt: number, reduced: boolean): void {
+    let yawT = 0;
+    let liftT = 0;
+    const g = t.legend;
+    if (g && !reduced && this.mode === 'chase' && (t.tumble ?? 0) === 0 && (t.intro ?? 0) < 0.05) {
+      const fx = Math.sin(yaw);
+      const fz = -Math.cos(yaw);
+      const gx = g.x - this.pos.x;
+      const gz = g.z - this.pos.z;
+      const depth = gx * fx + gz * fz;
+      // (A focus level with the lens or behind it cannot be looked toward from a chase camera.)
+      const w = smooth01(MathUtils.clamp(g.peak, 0, 1) / 0.35) * smooth01((depth - 4) / 10) * (t.airborne ? 0.4 : 1);
+      if (w > 0.001) {
+        const bearing = Math.atan2(gx * -fz + gz * fx, depth);
+        yawT = MathUtils.clamp(bearing * 0.6, -LEGEND_YAW_MAX, LEGEND_YAW_MAX) * w;
+        const elev = Math.atan2(g.y - this.pos.y, Math.hypot(gx, gz));
+        liftT = smooth01((elev - 0.06) / LEGEND_LIFT_FULL) * w;
+      }
+    }
+    this.legYaw += (yawT - this.legYaw) * (1 - Math.exp(-dt * (Math.abs(yawT) > Math.abs(this.legYaw) ? LEGEND_EASE_IN : LEGEND_EASE_OUT)));
+    this.legLift += (liftT - this.legLift) * (1 - Math.exp(-dt * (liftT > this.legLift ? LEGEND_EASE_IN : LEGEND_EASE_OUT)));
+    if (reduced || this.mode !== 'chase') this.legYaw = this.legLift = 0;
+  }
+
+  /** Probe (tests, the wire lane's capture): the legend look's turn (radians) and lift (0 to 1) now. */
+  get legendLook(): { yaw: number; lift: number } {
+    return { yaw: this.legYaw, lift: this.legLift };
+  }
 
   private stepMarquee(dt: number, reduced: boolean): void {
     if (this.mqWant) this.mqKind = this.mqWant;
@@ -1505,7 +1557,9 @@ export class ChaseCamera {
       const hx = t.pos.x - this.pos.x;
       const hz = t.pos.z - this.pos.z;
       this.frameRival(t, travelAz, dt);
-      this.aimAt(this.look, this.pos, travelAz + this.rivalYaw + openYaw * 0.5, Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz)), -0.16);
+      this.stepLegend(t, travelAz, dt, reduced);
+      // (A phone's frame is tall: the legend's turn is halved, its lift whole.)
+      this.aimAt(this.look, this.pos, travelAz + this.rivalYaw + openYaw * 0.5 + this.legYaw * 0.5, Math.atan2(t.pos.y + 0.55 - this.pos.y, Math.hypot(hx, hz)), -0.16 - LEGEND_LIFT_NDC * this.legLift);
     } else if (this.mode === 'chase') {
       // The eased look point leads into turns; the pitch is set from where the camera actually is,
       // so the rider's middle holds about 61% of the height (its base clear of the hint and chip
@@ -1545,7 +1599,13 @@ export class ChaseCamera {
         }
       }
       this.stepLead(t, yaw, dt, reduced);
-      this.aimAt(this.look, this.pos, yaw + this.rivalYaw + openYaw + this.leadYaw, elev, ndc, horizon);
+      this.stepLegend(t, yaw, dt, reduced);
+      // The legend's lift lets the rider sink (never below where the vista would put it) and frees the horizon.
+      // (On most slopes the horizon's cap is what holds the pitch, so the lift moves the cap too: the horizon
+      // may sink to a little over a third of the way down.)
+      const lift = this.legLift * (1 - vista);
+      ndc -= LEGEND_LIFT_NDC * lift;
+      this.aimAt(this.look, this.pos, yaw + this.rivalYaw + openYaw + this.leadYaw + this.legYaw, elev, ndc, horizon + LEGEND_LIFT_NDC * lift);
     } else {
       this.look.lerp(lookAt, kLook);
       this.lookS.copy(this.look);
