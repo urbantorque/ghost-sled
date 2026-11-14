@@ -294,6 +294,10 @@ export class MarqueeWorld {
     this.kit.setTier(tier);
   }
 
+  /** The rider leads the field this frame (world.ts sets it from the app's standings): what the climax's
+   *  last volley is sized by. */
+  leading = true;
+
   /** The legend on screen this frame (for the reel's legend beat, the camera and the HUD), or null. */
   legendShot(): LegendShot | null {
     return this.legends.shot();
@@ -628,6 +632,7 @@ export class MarqueeWorld {
       ctx.breaks = this.breaks;
       this.verbs.update(ctx);
       this.legends.update(ctx);
+      this.climax.leading = this.leading;
       this.climax.update(ctx);
     }
     this.kit.end();

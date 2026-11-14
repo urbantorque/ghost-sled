@@ -2611,6 +2611,8 @@ export class App {
       mirror: this.ui.mirrorRect(),
       // The ghost the rival pill names.
       rival: this.phase === 'run' ? out.rival : null,
+      // At the head of the field on this frame: the town saves its biggest shells for a rider who is winning.
+      lead: st.rank <= 1,
       beats: out.beats,
       feel: out.feel,
     });
