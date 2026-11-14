@@ -73,8 +73,15 @@ Skill signals live inside these roles rather than adding new ones:
 | Rewards (gifts, gates) | Round, bouncy, bobbing, puffy bows | Good things feel friendly |
 | Ghosts | Flowing, tapered, ribbon tails, slightly blurred edges | Spirits feel fast and unreal |
 
-Pines are three stacked faceted cones with crisp snow caps, rocks are chunky crystals, and gifts are
-rounded boxes with a big bow.
+Pines are three stacked faceted cones with crisp snow caps, and gifts are rounded boxes with a big bow.
+
+Round 7, the hazards' row: rock is laid down in beds: each bed its own value and thickness, shifted off the one
+under it, so it has ledges that hold snow and overhangs in shade; the beds dip, and on a long outcrop they run up
+out of the slope and are cut off by its top, so no joint is level; a crown is broken, never flat; snow lies on a
+boulder's lee side, never in a ring. Basalt stands in organ pipes: slim hexagonal columns packed shoulder to
+shoulder, each broken off at its own height on its own slant and cross-jointed into drums, near black and cold, ash
+on the flatter tops. Nothing is a prism under a white lid. Whatever its form, stone is painted with strata in three
+values (`rockforms.ts` builds the forms, the stone material paints them).
 
 ## 4. Snow
 
@@ -89,10 +96,18 @@ rounded boxes with a big bow.
   and never straight down the slope, where they converge like speed lines.
 - **Skill is written in the snow**: the runners cut two soft periwinkle grooves whose width and
   depth follow carve depth, each with a modest lip on its sun side, running to the bottom of the
-  frame and fading toward the lens: carved snow, never painted stripes. Drifts leave wide fans, and
+  frame at full strength, and lasting the run: a rut does not age. A deep carve throws clods out past
+  its lip. Every ghost cuts ruts too, two runner cuts in the snow's own shade with a lit lip, under its
+  line of light; they lie on the snow ahead until you ride over them. Carved snow, never painted
+  stripes. Drifts leave wide fans, and
   a perfect landing leaves a burst crater of displaced snow: a feathered cream-gold lip of raised
   powder, lit on the sun side and periwinkle on the other, a shaded bowl and 12 streaks, with no
-  outer stroke. Ghost trails are faint luminous mint lines that show the line they took.
+  outer stroke. A ghost's light fades in seven seconds; its rut stays.
+- **Round 7: snow carved by the wind.** Three scales of painted relief: wind slab (crests 7 m apart, in
+  fields), sastrugi (1.6 m, across the run at half strength as well as on the banks) and the fine
+  ripples, each with a lit crest and a lee face in the shade's own blue (teal on Ember, lavender on
+  Sakura). The fine glitter reaches 22 m and gathers toward the sun; far slopes turned to mirror the
+  sun carry a soft sheen. Low paints the slab's colour and skips its normal.
 - **One painted line**: your best run's line is a thin gold-white band on the snow (a friend's is
   mint), brighter as you close on it, with a "Best in N m" countdown and a flare where it ends and
   new ground begins. It is the one painted mark allowed, because it is a line to chase rather than
@@ -103,7 +118,8 @@ rounded boxes with a big bow.
   Whisker throws the full amount, an ordinary near miss about two thirds.
 - **Trees shed snow as you pass.** A forest tree by the run with snow on its boughs, passed within about
   2.5 m at speed, lets the same sift fall off its boughs as a near miss, about two thirds of it, once a
-  tree. Snags, ice and basalt hold nothing to shed.
+  tree. Snags, ice and basalt hold nothing to shed. A shaved or passed tree shakes for a second and a
+  half. Ghosts shake theirs too. Sakura's blossom sheds petals, Ember's charred pines ash.
 - Kickers read as built wedges: a packed, corduroyed face, darker flanks, a shaded takeoff wall, a
   contact shadow and a snow-capped board for a lip (pale ice on icy mountains).
 - The bottom edge of the frame darkens toward the mood's periwinkle, never grey, so the foreground
@@ -175,6 +191,20 @@ rounded boxes with a big bow.
   because the chase camera only ever sees it: a ribbed cuff, a seam up the crown, a cream knit stripe,
   a fluffy pom-pom and a scalloped chestnut bob. The pom-pom springs on landings and the hem flutters
   with speed (in the vertex shader). After a crash the upside-down sled rests just past the boots.
+- **Round 7: the hero.** The rider and every ghost are drawn 1.2 times their modelled size (the sim's sled
+  is unchanged), about a fifth of the frame's height at 30 m/s. Inside the toy: shoulders broader than the
+  chest, a hood on the back with a cream fur horseshoe (the one big shape the chase lens sees), a belt, a
+  zip with toggles, pocket flaps, knee and elbow patches, fur cuffs, treaded boots, a nose and a mouth.
+  **The mitts are vermillion**, so a fist, a wave or a flail reads by its mitt; vermillion is still only
+  ever you. The sled has five grained slats, runners that scroll up and back to a foot bar, and a bow of
+  bent wood behind the seat. The hood, a hat's tail and the boots' toes lag on a soft spring; a carve opens
+  the shoulders, slides the hips inside and turns the head; the body extends leaving the snow and
+  compresses by the impact on touchdown. The rider reacts: a glance and a lean passing, a fist for a pass
+  worth one, both arms for a set piece swept, a look over the shoulder when passed, a flinch from a near
+  miss, a slump for a set piece lost. A fall is played whole: thrown and rolling while the sled skids on,
+  on its back in the snow, a sit-up with a shake of the head, a hop back onto the seat. Three finishes: a
+  win stands, pumps both fists, spins and lands arms wide; a podium punches one fist twice, then waves
+  with a hand on its hip; any other keeps its seat and stretches both arms overhead.
 
 ## 6. Ghosts
 
@@ -223,7 +253,8 @@ behind it, and the light on its floor comes through the boughs in soft pools.
 
 The course's own marks are on every tier, Low included, in one draw:
 
-- **Leaps.** Fins of the mountain's rock stand either side of the lip, off the line, and two lines of
+- **Leaps.** Outcrops of the mountain's rock in beds (on Ember, a palisade of broken basalt columns), a
+  broken crown behind the crowd and the crowd on two or three stepped ledges, stand either side of the lip, off the line, and two lines of
   flags in the slalom blue-violets close on it, so the eye is led to the gap and the sky past it. A
   wind-torn cornice runs across the brow, flush with it, hanging out over the drop. Nothing on the line
   looks like a hazard.
@@ -308,6 +339,21 @@ stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.
   drifting and turns toward the passing ghost with the wreck kept in the middle of the frame, or
   cuts to a still shot beside the line the ghost will cross, so the race you just left goes by in
   view before the results.
+- **Round 7: three directed shots a mountain**, keyed to a place (`src/game/shots.ts`), and none of them
+  takes the steering. Over its tallest leap the lens holds wider than the big-air vista under a letterbox,
+  and at two fifths of the flight pushes in for a slow hero frame: a longer lens, the rider sharp and the
+  valley soft, render time at a third for half a second while the sim flies on at full speed. Down its
+  first street the lens drops low and steps toward the middle of the street on a longer lens. Coming up on
+  its reveal (Pinecrest's First Drop, Frostfang's cavern mouth at dawn, Ember's caldera, Sakura's Blossom
+  Leap, Lanternfall's break out of the cloud) the look drifts a little off the road and whips back onto
+  it as the place opens.
+- The camera writes what the lens is doing for the pipeline (`src/render/cine.ts`): depth of field and its
+  focus, motion blur from the speed curve, the letterbox and the slow frame's scale.
+- Reduced motion keeps the letterbox, the depth of field and the director's beats and drops the swing, the
+  push and the slow.
+- The highlight reel has four lenses of its own (`reelcam.ts`): a side tracking shot on a long lens, a low
+  front three-quarter, a high wide, and an orbit round a flight that is nearest at its apex, where the
+  reel's own clock eases to 0.28. Under reduced motion every reel shot is a tripod that pans.
 
 - While the avalanche chases, it is in the world: its cloud's flank rolls down both banks ahead of
   the front in rooted billows, dark slabs roll past along the corridor edges (never between the lens
@@ -325,6 +371,23 @@ stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.
 | Speed streaks (radial) | on | on | off |
 | Anti-aliasing | 2x MSAA | FXAA | FXAA |
 | Pixel ratio | up to 2 | up to 1.5 | 0.8 to 1 |
+
+Round 7 adds an Ultra tier and a second table (the first stands for what it lists, but for anti-aliasing):
+
+| Effect | Ultra | High | Medium | Low |
+| --- | --- | --- | --- | --- |
+| Anti-aliasing | 4x MSAA and the edge walk | 2x MSAA and the edge walk | the edge walk | the canvas's own MSAA |
+| Ambient occlusion | 3 slices by 3 steps, with contact shadows | 1 slice by 2 steps | off | off |
+| Shafts cut by depth | 12 taps at half the frame | 8 taps at half | 6 taps at a quarter | off |
+| Shadow map | 4096 over 44 m | 2048 over 34 m | 1024 over 26 m | none |
+| Ice's mirror | the frame itself, marched | baked sky and peaks, the rider in it | the same | a painted sky and ridges |
+| Depth of field and motion blur (camera beats only) | 22 taps with bokeh, 9 taps | 8 taps, 5 taps | off | off |
+| Letterbox (camera beats only) | on | on | on | off |
+| Corner fringe at speed | on | on, fainter | off | off |
+| Local lights on snow | nearest eight | nearest eight | nearest eight | nearest four, as painted pools |
+
+The film curve replaces the old soft knee on every tier with a post stack (section 15); Low has it baked into
+its colours.
 
 ## 10. UI
 
@@ -348,6 +411,35 @@ stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.
   A duel's result owns the rival pill for 1.5 s.
 - A bank's chip slams and its figure rolls up, longer for a bigger tier (350, 600 or 900 ms), and a
   lost combo of 300 or more cracks and falls.
+
+Round 7:
+
+- **The title is the picked mountain's key art.** Each mountain has one composed shot (`game/keyart.ts`):
+  where its reel rides, the colour script's time and where the lens sits. The logo and the controls keep the
+  left of a wide screen and the top and bottom of a tall one; the hero is held right of centre (54 to 60%
+  of the width) and the mountain's landmark stands in the sky over its shoulder. The mountain's name and
+  its feeling sit under the logo. Moving between mountains is a veil in the new place's own air, never a
+  swap.
+- **The Twelve wear their own colours.** A signature rider's bust is a glass-pale head and shoulders under
+  the hat that names them, trimmed in the rider's accent; that accent is also the hairline of their card
+  and the colour of their name. It is theirs alone: it is never used for an action.
+- **The results lead with the moment.** One figure and one line in italic 900 over the scene: gold-white for
+  a win (your best's colour), a silver step for a podium, off-white for a finish, off-white and a little
+  crooked for a wreck. The card beside it is the detail. Vermillion stays on Run Again.
+- **Motion has a direction.** A screen leaves the way it is built: the logo's column off the logo's side,
+  the cards off theirs, the primary button forward. The HUD arrives from its corners once; a lantern cell
+  that fills lifts once; a set piece's card settles into its chip. Transform and opacity only, nothing
+  loops in a plain ride, and reduced motion keeps every beat and drops the movement.
+- **Labels are drawn in the canvas.** Riders' name tags, emblems, crash markers, graveyard tags, speech
+  chips and the edge chip are quads in one batched draw (`render/labels.ts`), the same pills to the pixel;
+  on Low the score, the clock and the distance are drawn there too.
+- **A legend's card is moonlight on ink:** the word, the name, a hairline that draws out from the middle,
+  the line. It takes none of the roles' colours.
+- **A pad's glyphs follow the HUD's keycaps:** a face button is a round cap with a 2 px rim and no keycap
+  lip (so A the button never reads as A the key), Start is a pill, the stick is drawn bare like the mouse.
+  The get-up pips are 9 px rings in the HUD's text colour, solid while held, ink inside the ring when spent.
+- **Pause and loading** are set like the wordmark: italic 900, the ghosts' mint under it, a runner drawn
+  beneath (the loading screen's runner is its bar).
 
 ## 11. What makes a frame screenshot-worthy
 
@@ -428,6 +520,13 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   down it with powder off its front, ahead of the sled, gone before the edge of the run. A max drift or
   a passed ghost near a crowd lifts them onto their toes. A rival beaten shakes powder off the treeline
   and the banks: down both of them for a grudge, in its rose, and down one for a duel.
+  And it breaks: a snowman bursts into lumps, a carrot and a scarf; a barrier scraped at speed splinters;
+  shaved ice throws shards; icicles drop in a gully as you pass; a span's snow breaks off in blocks as it
+  falls. Pieces are light and paint, never a hazard.
+- **Weather falls in depth** (round 7): a few big flakes at the lens, the body of the fall, and a far layer
+  down the run; gusts cross the slope and the air thickens and thins with them; every flake takes the
+  frame's light. Ember's air is ash that falls and embers that rise. Trees bend in the same fronts of
+  wind, tips most. Reduced motion stills the gusts and the wind and keeps the fall.
 - **The finish.** Shells rise from the snow and bloom as dabs of gouache in the player's vermillion, the
   gifts' marigold, cream and the snow's periwinkle, never lit like a hazard and never mint. Confetti
   cannons fire in over the rider and ribbons drift down through the frame while the crowd roars.
@@ -528,6 +627,10 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   tag, and a ribbon in the wisp. Their word on the results has a rule in that accent.
 - **Sled paints** recolour a sled's body and wood at their own value, so the grain and the hull's shading stay; the
   trim stays vermillion, and so do the scarf and beanie. No paint uses a locked role's colour.
+- **Round 7.** Powder's rim takes the key light's colour and is what blooms in a plume. A dash throws a ring as the
+  air opens, lays a wake of light off the runners and trails a comet's tail; the lantern's moments (a dash, a ward,
+  a gate, a light taken, a lantern filled) each light the snow and the rider for a beat. A burst has a heart inside
+  it, lights the square, and a win ends on a finale.
 
 ## 14. The set pieces (round 6)
 
@@ -550,6 +653,69 @@ Each mountain's three set pieces are a verb as well as a place, and each verb ha
   into the gap with a puff of powder. The deck holds.
 - **The chip.** A set piece's card becomes its chip as it starts: its name a size smaller over the verb counting in
   tabular figures. A win rims it in marigold with the line in marigold; a loss is said plainly in off-white.
+
+### Round 7: twelve verbs, variants, legends and a climax
+
+Where this part and the round 6 bullets above disagree, this part stands: the lantern gates' garland and round 6's
+pillars of light are gone, and the Caldera's and the Blossom Leap's ring lines became the surge and the flourish.
+
+**Fifteen set pieces, twelve verbs, none in the game more than twice.** A mountain's three are three different
+things to do with the hands, and each has two or three variants picked by the run's own seed. What a verb needs to
+be seen is the world's to build and the sim's to place: a bell hangs where the sim says a sled must be, a gate swings
+where the sim has it this tick, a flame is as tall as the sim says it has left to burn. Nothing drawn for a set piece
+may suggest a line the sim does not reward.
+
+| Mountain | Stage 1 | Stage 2 | Stage 3 |
+| --- | --- | --- | --- |
+| Pinecrest | The First Drop: rings | Mirror Lake: slide | Old Town: steps (hops) |
+| Frostfang | Serac Gate: collapse | The Crevasse Fields: race (chase) | The Ice Cavern: gates (sit) |
+| Ember | Cinder Gate: race (sprint) | The Caldera Leap: surge | Ash Market: gates (swing) |
+| Sakura | Petal Steps: steps (stair) | The Blossom Leap: flourish | Temple Town: shatter |
+| Lanternfall | The Cloud Sea: follow | The Lamp Road: kindle | The First Flame: carry |
+
+**The verbs' worlds.** Every verb is a thing that stands or hangs in its place, lit by its own light, and nothing of
+it stands on the snow a sled rides. Lantern gates are two strings of three ribbed paper lanterns on a yoke: hung from
+a wire where a gate sits, on a pendulum from a pivot 11 m up where it swings. Bells are bronze, lit, on ropes as long
+as the height they ask. The Caldera's forge gate is two slim iron masts of five flames that climb with the sled's
+speed and roar when it leaves fast enough. A falling span carries lamps that go out with it. A slide is scribed in the
+ice behind the sled. Stomps light lantern arches (Petal Steps) and strings of lanterns over the street (Old Town).
+Paper wheels at a lip say the trick: a flat one that spins is a spin, a standing one that turns is a flip. A ring
+line is led to by chevrons and joined by a dotted arc of light. A race's machine keeps round 6's look and gains its
+own lamp and a signal mast of three lamps at its station.
+
+**State reads in the world.** The next target is the brightest thing in the set piece and breathes (steady under
+reduced motion). A hit is answered with light (a flare, a ring, a local light on the snow) and debris; a miss gutters
+to an ember colour and is otherwise quiet. A variant is seen before it is played: the arc hangs low or high and on
+its own side, a row of stomps is tied by one garland, a far shelf has two forge gates, a keystone stands on a span
+that falls from its far end.
+
+**Light that covers.** A set piece's sprites and marks are premultiplied and cover part of what is behind them, so
+they are paint on sunlit snow and light at night; marks on bright snow are deep marigold (`#FF9E1A`). A form lit
+from inside is brightest facing the lens and deeper at its rim: never a flat block of its colour. A lantern has ribs:
+four bands of paper, palest at the waist, under a dark cap and over a foot and a tassel. One the lens passes through
+dissolves over its last 7 m. Low keeps a lantern's hue (capped by its brightest channel), a poster of the High one.
+
+**Legends.** Two a mountain, on about one run in ten and never a session's first. A legend is spectacle first.
+Where it changes play it only gives: lights to take or a lane that charges the lantern, the same for every rider
+whose run rolled it, with no collider anywhere. A runner keeps 18 m ahead of the rider and is never caught. Never
+mint: the aurora that comes down is violet and rose with an ice-white hem. Each has a beginning, a peak and an end:
+
+| Legend | Beginning, peak, end |
+| --- | --- |
+| The White Stag (Pinecrest) | Comes in from its side far ahead; gallops 18 m ahead weaving across the glade so its flank shows, a star in its antlers, hoofprints of light; bounds off to its side |
+| The Lantern Fleet (Pinecrest) | A launch wave from both shores; a sky of lanterns over the lake, never on the ice; drifts off on the wind |
+| The Aurora Comes Down (Frostfang) | Curtains come down from far up the run; violet and rose curtains with a lit lane; lifts and fades |
+| The Ghost Herd (Frostfang) | Comes up toward its side; sixteen translucent caribou on the edges and banks; peels off up the banks |
+| The Cone Wakes (Ember) | The crater rumbles; a blast, a fountain, lava down the cone's face, bombs, the sky band lit, ember rain; fades |
+| The Cinder Wyrm (Ember) | Rises out of the snow; 30 m of glowing plates swimming the ravine, a mane of sparks; dives under |
+| The Lantern Dragon (Sakura) | Flies in high from its side; winds in a wide S so its twenty drums read as a body; climbs away |
+| The Thousand Cranes (Sakura) | A first flock rises; rose and white streams beside the rider that wheel over the landing; climb away |
+| The Great Rising (Lanternfall) | As the rider breaks out under the deck the whole valley's lanterns double, rise about twice as fast and a fifth larger |
+| The Tall Lamplighter (Lanternfall) | A robed figure 9.5 m tall with a faceless cowl walks the lamp grove 40 m ahead, his pole out over the lane; the lane is his lantern's light on the snow |
+
+**The climax.** From the last lip the way to the line takes light ahead of the sled, in a wave that reaches the line
+first: strings of five lanterns over the run every 34 m. Beams stand over the line and shells break over it as the
+sled arrives. Everything is keyed to the sled's place and speed, never the clock.
 
 ## 15. Round 7: the direction, mountain by mountain
 
@@ -576,11 +742,22 @@ Five rules every frame is held to:
 5. **Grade by place.** Each place on a run has its own grade (lift, gain, saturation, the air's colour, the bloom),
    blended over the metres between places, so a run is a sequence of pictures and not one picture for two minutes.
    The colour scripts below are the source; `JOURNEY` and the place grades implement them. Their metres are
-   approximate: the code keys each row to the course's own sections.
+   approximate: the code keys each row to the course's own sections. A place's row is keyed to the course's
+   sections (kind, and which of that kind), never to metres, so a Daily's shuffled acts carry their places with
+   them.
 
 The filmic finish: a filmic tone curve (highlights roll off to the light's colour and never clip to white paper; the
 shade keeps its hue), bloom that belongs to light sources and the sun's rim on powder, and a lens that stays out of
-the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
+the way (a little vignette, no chromatic fringe in a calm frame, no dirt). A colour with a hue of its own keeps it
+up the curve: only what is already near white takes the light's colour, so marigold, mint and vermillion never fold
+into a dusk's orange. Depth of field, motion blur and the letterbox belong to the camera's beats and cost nothing
+between them. At speed the corners carry a hair of fringe on High and Ultra; a calm frame has none.
+
+As built: the air has two colours (the mood's fog near, the far plane's own colour with distance), glows toward the
+sun's disc, cools away from it and lies thicker in the valleys. Lamps, windows' pools, lantern gates, lava, the ice's
+cyan heart, stone lanterns, the lantern's moments and fireworks are local lights on the snow and the riders: a
+street is pools of amber with blue between, never a gold floor, and a hazard takes them on its edge only, so it
+stays the dark shape in the street.
 
 ### Pinecrest: the bright day that turns to gold
 
@@ -620,6 +797,10 @@ the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
 - **Hero vistas.** (1) Serac Gate's span, the Fang in the lemon band. (2) The aurora over the Crevasse Fields, and
   in them. (3) The cavern mouth at sunrise: the mountain's jaw-drop. (4) The Fang at dawn from the last leap.
 - **The one image.** A rider's silhouette bursting from a blue cavern mouth into a rose-gold sunrise under the Fang.
+- **As built.** The night has three hues on the ground: moon-pale steel where the snow is lit, violet in its shade,
+  the aurora's green across both and on the crests of the ice. A slot in the ice is the dark of its frame. Cobalt
+  belongs to the ice walls. The Ice Cavern has ribs of ice with crystals at their springings and a rose and gold
+  dawn blade on the floor at its mouth.
 
 ### Ember Peak: under the mountain's breath
 
@@ -641,6 +822,11 @@ the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
 - **Hero vistas.** (1) The cone from the start line. (2) Cinder Gate's glowing throat. (3) The Caldera Leap over the
   lava lake. (4) Ash Market's bridge, the cone behind it.
 - **The one image.** A rider leaping a glowing caldera under a ceiling of smoke lit from below.
+- **As built.** The snow's own colour stays a warm white from the start line to the forge town; the light carries
+  the orange, once. From the Basalt Halls on the light is ember, and the ash is an ember red that stands off the
+  lens and never cools to grey. Caldera Leap: lava lies on the banks, its crust near-black, only the heart glows.
+  (It is not yet a lake under the flight, and no smoke ceiling is lit from below: the direction above still asks
+  for both.)
 
 ### Sakura Ridge: the spring morning
 
@@ -660,6 +846,10 @@ the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
 - **Hero vistas.** (1) The cone through the lifting mist. (2) The flooded terraces. (3) The Blossom Leap over the
   orchard rows. (4) The torii's bars of light. (5) The pagoda over the square.
 - **The one image.** A rider under a tunnel of backlit blossom, the perfect cone beyond it.
+- **As built.** The morning is rose, not yellow. Shafts are thin over open snow and full only under blossom. From
+  the Blossom Leap the sky sits a full step under the snow and the far plane is blue. Petal Steps: the flooded
+  paddies are a view from the air; from the run they read as rims. The Thousand Torii lays bars of sun across the
+  snow in every gap.
 
 ### Lanternfall: where the lights come from (new in round 7)
 
@@ -686,11 +876,52 @@ the way (a little vignette, no chromatic fringe in a calm frame, no dirt).
   robed figures with long lighting poles, a small flame at the tip. All original shapes: nothing copied from, or
   closely evoking, any existing game, film or festival.
 
+**Lanternfall as built.** Three stages on the same lines as every mountain (1450, 2950, 4500 m).
+
+| Metres | Place | What is there |
+| --- | --- | --- |
+| 0 to 605 | The Crown | Indigo zenith (`#0B0A3E`), stars at full, a moon 1.75 times the stock disc, snow silver where lit and violet in shade. The cloud lies below as three sheets of billows with warm pools. A 20 m dive off the first lip. |
+| about 660 to 1490 | The Cloud Sea | White-violet fog from 2 to 44 m, banks of thicker cloud drifting across the run, hazards kept dark in the murk, ghosts and gifts blazing, way lamps every 13 m looming as halos. No kickers. Set piece: **follow** the guide light in its wake. |
+| 1568 | The break | The cloud lets go 80 m short of the second lip, in under two seconds; a 23 m leap under a dark deck with a rose underside, the air at its widest, and the valley of rising lanterns (6,000 on High and Ultra, 3,600 on Medium, 1,500 on Low). |
+| 1568 to 2950 | The Lamp Road | A fork, an avenue between two rows of stone lamps, an arched bridge of lights, the lamp grove, a canal carrying lights on the open banks. Set piece: **kindle** the dark lamps by passing each cleanly. |
+| 2950 to 4500 | Firstlight | Benches, a bridge, a street of stone and lit paper, a chute, a 21 m leap at 3980 m, the square. From 3900 m the east goes rose. Set piece: **carry** a flame over the last 880 m to the great lantern, a paper drum 6.6 m tall on a timber frame 36 m past the line, dark all run and lit at the finish. |
+
+- **How it is built.** A building here is a lantern, squared and stacked: a narrow stone stem, storeys of lit
+  paper in a timber lattice each slimmer than the one under it, a flat eave of snow between them, a steep cap.
+  Houses are stone below and paper above, and every roof ends in a small lantern of its own. Nothing has a swept
+  eave or a lintel on two posts. Hazards are ink: standing stones, marker stones, and stone lamps whose flame the
+  world draws over them. The run's gates are bronze, so the rider's vermillion is the one red.
+- **The lights.** Marigold is spent in pools: a way lamp every 18 m, each lighting about 13 m of snow, with lilac
+  between. A light in cloud is a wide soft halo far off and a flame up close. A lantern in the valley covers what
+  is behind it before it adds its light, so it stays marigold against a pale range. The deck is dark with a rose
+  underside, never orange: the lanterns are the brightest thing under it.
+- **The cloud.** From above, three sheets of billows in three values with warm pools that hold their place. The
+  cloud lets go 80 m above the lip of the break, in under two seconds, so the whip onto the valley finds it open.
+- **The set pieces as light.** The guide light is a paper lantern with a white heart, three small lights circling
+  it and a tail, 26 m ahead; its wake on the snow is marigold and whole while the rider is in it, thin and cold
+  when not. A dark lamp holds a cold glint and catches with a burst as a sled passes; a won road blazes. The
+  carried flame stands on a short staff over the rider's shoulder, white-gold when full and amber when low, and
+  drops to an ember shedding sparks while it gutters.
+- **Low** is a poster of it: one cloud sheet, lanterns as flat squares, flames as flat painted shapes with one
+  paler value, no canal, the lamps' light as painted pools.
+
 ### Tiers, designed
 
 - **Ultra and High** carry the whole direction: the shafts, the scatter, the ambient occlusion, the reflections.
+  As built, Ultra is High's world with a heavier frame: 4x MSAA, a 4096 shadow map over 44 m, three-slice
+  occlusion with contact shadows, 12-tap shafts, 22-tap depth of field, and ice that mirrors the frame itself. The
+  automatic controller steps into it only on a GPU the browser names as discrete; anywhere else it is the player's
+  choice in Settings.
+- **Anti-aliasing.** Low the canvas's own MSAA; Medium the edge walk; High 2x MSAA and the edge walk; Ultra 4x
+  MSAA and the edge walk.
+- **Ice.** Every glaze mirrors: Low a painted sky and ridges; Medium and High the baked sky and peaks with the
+  rider standing in it; Ultra the trees, towers, lamps, gifts and riders in view.
 - **Medium** keeps the grade by place, the three planes, the light's colour on the snow and the hero's rim. It loses
   resolution and samples, never the picture.
 - **Low and phone** are a look of their own, a flatter poster of the same scene: the grade by place baked into fog,
   sky and vertex colour, the three planes as three flat values, shafts and glows as a few painted quads, the sun's
   scatter as a gradient on the dome, a painted rim on the hero. Stylised tricks instead of missing effects.
+  As built (`tierLook`): the place's grade and the film curve are baked into the colours Low draws with, the sun
+  is a flat disc of the light's own colour with a wider glow on the dome, local lights are two-value painted pools
+  on the snow, a lit lantern keeps its hue, powder is fewer, fuller billows, and riders' labels and the running
+  figures are drawn in the canvas.
