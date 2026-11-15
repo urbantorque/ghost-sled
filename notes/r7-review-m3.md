@@ -328,7 +328,7 @@ Motion: z0260 7, z0880 7, z1020 7, z1780 8, z2440 7, z2500 7.5, z2560 6, z4420 7
 Its themes: canopies still read as opaque front-lit facets; the near snow's bottom 40% a lavender wash with radial
 streaks; even light away from the torii and the town; a faint rim on a rider often under 5% of the frame.
 
-### After pass 4 (the last fixes)
+### After pass 4 (5725435, the last fixes)
 
 - **Near snow smeared by radial streaks (z0900, z1026, z1500, z4200; motion z0880).** Sakura keeps 0.55 of the
   speed streaks (world.ts), as its lens already keeps none of the fringe or punch: the calm mountain.
@@ -341,3 +341,163 @@ streaks; even light away from the torii and the town; a faint rim on a rider oft
 - **The Leap's slopes one pale sheet with puddles of cloud shadow (z2580, z2700).** Its lit snow a warm cream
   (`#FFF2E6`), its cloud shadows back to 0.22.
 - **Low's snow lost the grade.** `posterSnow` 0.3 to 0.5.
+
+## Pass 5 (5725435; a new critic, Opus at extra effort): the last pass
+
+| Frame | High | Low | Phone | Weakest thing on High |
+| --- | --- | --- | --- | --- |
+| z0150 | 7.5 | 7 | 7 | Cone cut by the top-right edge; a grey kicker slab |
+| z0300 | 7 | 7 | 7 | Two big fuel drops on the cone; a grey box station |
+| z0450 | 7 | 7 | 7.5 | Lift station a cold violet box; a pine clipped at the edge |
+| z0600 | 6.5 | 6.5 | 6.5 | Navy "crystal shards" (the shoulders' rock); empty middle plane |
+| z0750 | 7.5 | 7 | 7.5 | Terrace water grey-blue tiles, no sky or glint |
+| z0820 | 7.5 | 6.5 | 7 | Terraces grey grids; bare lower half |
+| z0900 | 7.5 | 7 | 7.5 | Flat-lit faceted blossom; snow smear |
+| z0970 | 8 | 6.5 | 7.5 | Gate crossbar a flat slate beam |
+| z1026 | 6.5 | 7 | 7.5 | A giant translucent ghost over the cone; navy box tower |
+| z1200 | 7 | 7 | 7 | Cold violet box facades |
+| z1301 | 7 | 6 | 7.5 | Box facades; a translucent prop at the lens |
+| z1350 | 7 | 7 | 7.5 | Boxy facades |
+| z1500 | 8 | 7 | 6.5 | Navy blocks on the ridge; flat lower half |
+| z1650 | 7 | 7 | 7 | Navy icicle rock pillars; dark tunnel mouth |
+| z1754 | 7.5 | 7 | 7.5 | Stepped slab walls; soft bars |
+| z1800 | 8 | 6.5 | 7.5 | Stepped slab walls |
+| z1971 | 8 | 7.5 | 7.5 | Flat slab arches; unlit lanterns |
+| z2100 | 7.5 | 6.5 | 7 | Grey box props; pale canopies |
+| z2210 | 7.5 | 7 | 7.5 | A flat-lit pale near blossom |
+| z2410 | 7 | 7 | 7 | Blotchy valley, no orchard rows; cone cropped |
+| z2580 | 7 | 6.5 | 7.5 | Rider small; blotchy valley; no cone |
+| z2700 | 6.5 | 6 | 7 | Two-thirds featureless slope; rider tiny |
+| z2850 | 7.5 | 7 | 7 | A flat grey kicker slab; a cold pylon |
+| z3000 | 7.5 | 7 | 7.5 | Flat midday light |
+| z3060 | 8 | 7 | 7 | Featureless near snow; pagoda at the edge |
+| z3150 | 8 | 7.5 | 7.5 | Few darks; pastel blossom |
+| z3300 | 8 | 7.5 | 7.5 | Pastel, no near darks |
+| z3405 | 7 | 6 | 6.5 | An untextured plank (the kicker lip) across the near plane |
+| z3450 | 7.5 | 7 | 7.5 | A steel trestle reads industrial |
+| z3600 | 7.5 | 7 | 7.5 | Blotchy valley; flat-lit blossom |
+| z3706 | 6.5 | 6.5 | 6.5 | Navy shards; pagoda a washed grey silhouette |
+| z3926 | 7 | 6.5 | 7 | Temple Town a pale grey mass |
+| z4076 | 7.5 | 6.5 | 7.5 | Flat violet facades; a box stone lantern at the lens |
+| z4200 | 7.5 | 7 | 7.5 | Torii slate-violet, not lacquer |
+| z4330 | 8 | 7.5 | 7.5 | Boxy facades; no pagoda |
+| z4440 | 8 | 7.5 | 7.5 | No petal storm; pagoda behind the gate |
+| z4590 | n/a | n/a | n/a | Results card |
+| **Mean** | **7.38** | **6.86** | **7.24** | |
+| **Minimum** | **6.5** (z0600, z1026, z2700, z3706) | **6** (z1301, z2700, z3405) | **6.5** | |
+
+Motion: z0260 7, z0880 7.5, z1020 8, z1780 8, z2440 8, z2500 7, z2560 7.5, z4420 8 (mean 7.63).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7.5 | No |
+| The flooded terraces | 7.5 | No |
+| The Blossom Leap over the orchard rows | 7.5 (motion 8, High 7) | No |
+| The torii's bars of light | 8 | No |
+| The pagoda over the square | 7.5 (motion z4420-2 the best shot) | No |
+
+## Every pass at a glance
+
+| Pass | Build | Critic | High mean | High min | Low mean | Phone mean | Motion mean | Cone | Terraces | Leap | Torii | Pagoda |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | ead6196 | earlier model | 7.57 | 6 | 7.7 | 7.9 | 7.81 | 7.5 | 7 | 7 | 8.5 | 7.5 |
+| 2 | fc66e3e | Opus, extra effort | 7.04 | 6 | 6.68 | 7.11 | 6.94 | 7 | 6.5 to 7 | 6 to 6.5 | 7.5 | 7.5 |
+| 3 | 0b8dac9 | Opus, extra effort | 7.08 | 6 | 6.88 | 7.13 | 6.94 | 7.5 | 7.5 | 7 | 7.5 | 6.5 |
+| 4 | 999b138 | Opus, extra effort | 7.04 | 6 | 6.75 | 7.04 | 7.1 | 7.5 | 7 | 6.5 | 8 | 7.5 |
+| 5 | 5725435 | Opus, extra effort | 7.38 | 6.5 | 6.86 | 7.24 | 7.63 | 7.5 | 7.5 | 7.5 | 8 | 7.5 |
+
+Pass 1 was judged by a different, gentler critic, so its numbers do not compare with the rest: the Opus critics
+gave the frames that pass 1 called 8.5 a 7.5 to 8. Across passes 2 to 5 (one kind of judge, a fresh one each time)
+High rose from 7.04 to 7.38 and its minimum from 6 to 6.5, motion from 6.94 to 7.63, the phone from 7.11 to 7.24,
+Low from 6.68 to 6.86; the terraces, the cone, the Leap and the torii each rose by half a point to a point, and the
+pagoda went down and back up. A fresh critic's spread is about half a point frame to frame, so a single frame
+moving by 0.5 is within its noise; the means and the vistas are the signal.
+
+## Stopping rule: five passes, not met
+
+No frame reached 9 and no hero vista is a 9. What is still short, and why:
+
+- **The blossom does not read as backlit.** Every critic's first theme. The canopies are five faceted icosahedra
+  a tree; shading (a glow toward the outline, a hot rim, a wine underside) moved them from "flat magenta" to
+  "pastel facets lit from the front" but not to light coming through petals. That needs a different canopy
+  (layered petal cards, or a denser cluster with a translucent shell), which costs triangles on every tree of a
+  forest of a thousand: the main lane's or the fx lane's call, not a palette.
+- **The rider is small in the leap frames (z0820, z2580, z2700, z3926) and its rim faint.** camera.ts frames a
+  leap wide on purpose and the rim is rider.ts: the hero lane's.
+- **The Blossom Leap's valley has no orchard rows.** The valley floor is the panorama's sea of cloud; there are no
+  orchards down there to see. Rows on the valley floor would be new far geometry (midground.ts or a set piece).
+- **Boxes the critics name on every pass are shared props:** the kicker lip and its plank (z3405, every
+  mountain), the kicker faces' grid (z2850, z0150), the stone lantern at the lens (z4076), the 5x7 dot FINISH
+  lettering, the dither of the props' near fade on Low (z1301, z3405, z3600).
+- **Ghosts:** a giant translucent legend figure over the cone (z0970, z1026, phone z1500) is a legend's look from
+  the momentsworld lane, placed on the cone's bearing on purpose; a pool ghost inside the lens (z1350, z3450).
+- **The script's orchards (1100 to 2200 m) are a street and the torii row on this course.** The course's
+  sections decide that, not the render (the critics noticed it from pass 3 on).
+- **The terraces still read as tiled panels.** They are a rectilinear grid of cells by construction (stages.ts
+  makePaddies); the water now holds the zenith with a narrow glint and dark bund tops, but curving them along the
+  contours is a rebuild of the stage.
+- **The rock fins at the lips (z0600, z3706)** went from pale lilac with moss to ink rock under snow; the critics
+  now read them as navy crystal shards. They are rails.ts's tall fin shapes; a Sakura shoulder in strata (as
+  Pinecrest's) would be the next step.
+- **Low** sits at 6.9: its snow a cream smear without the grade, its torii bars still bleaching the floor at
+  1800 m, and near props dithering.
+
+## Shared code touched
+
+All small, general and safe for the other four mountains (each is 0, 1 or unchanged off Sakura):
+
+- `src/render/world.ts`: the mountain's calm lens (`post.fringeK`) is also set in the constructor (a run on the
+  mountain the world was built for never passed through setCourse's line); Sakura keeps 0.55 of the speed streaks.
+- `src/render/post.ts`: the boost and landing punch's colour split is scaled by `fringeK` (1 elsewhere).
+- `src/render/massif.ts` and `palette.ts`: `massif.bands`, three layers of mist on the panorama's lower slopes
+  (0 elsewhere).
+- `src/render/palette.ts`: `posterSnow`, how much of the lit snow's colour Low's poster keeps (1 elsewhere).
+- `src/render/materials.ts`: the canopy glow's shape (toward the outline) and its rim, scaled by the palette's
+  `leaf` (Pinecrest's 0.05 trace moves by a hair; no other mountain has leaf); the `cone` rock set (Sakura's only).
+- `src/render/props.ts`: Sakura's foliage shade (`coolShade` 0.2, 0.38 elsewhere).
+- `src/render/town.ts`: `gable`'s `snowK` (1 by default; Sakura's townhouses 0.5); Sakura's town style and paper
+  windows.
+- Sakura's own: `landmarkKit.ts` (the pagoda), `places.ts` (the finish pagoda's size, the lift station), `rails.ts`
+  (the shoulder fins), `stages.ts` (the paddies and the torii row), `meshes.ts` and `flora.ts` (the blossom trees'
+  vertex colours).
+
+## Cost
+
+From each pass's frame JSON (draw calls and triangles summed over every pass of a frame; the mean and the largest
+over the 37 distances). No change added a draw or a triangle: every fix is a colour, a uniform, a shader term or a
+scale. The spread between passes is which ghosts and props a run happens to have in view.
+
+| Tier | Pass 1 calls (max) | Pass 5 calls (max) | Pass 1 triangles (max) | Pass 5 triangles (max) |
+| --- | --- | --- | --- | --- |
+| High | 99 (107) | 99 (108) | 914k (1.09M) | 901k (1.07M) |
+| Low | 50 (57) | 49 (54) | 133k (190k) | 132k (186k) |
+| Phone, Medium | 89 (99) | 91 (99) | 636k (819k) | 638k (823k) |
+
+High stays at the 99 calls the merged round already drew (over the brief's "near 95" before this lane began); Low
+is no heavier. The mist bands are a few instructions on the panorama's pixels, the canopy terms a few on foliage.
+Frames per second not judged (six lanes share the GPU).
+
+Console: clean on every capture except an `AudioContext` device error from headless Chrome on pass 1 High and on
+pass 3's phone and motion runs (the machine's audio device, not the page's code); passes 4 and 5 clean.
+
+## Where things are
+
+- Frames: `C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\r7\review\m3\pass1` to `pass5` (`pass2-stale` is the
+  first run's uncounted pass 2).
+- Contact sheets: `shots\r7\review\m3\sheet-before.png` (pass 1 High) and `sheet-after.png` (pass 5 High), at the
+  same 37 distances; `sheet-before-low.png` and `sheet-after-low.png` for Low.
+- Hero frames: `C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\r7\hero\m3\` (the torii's bars, the Blossom Leap,
+  the pagoda over the finish, the cone over the orchards, the temple approach, the Petal Steps gate).
+- Capture: `scripts/playtest/frames.sh` and `scripts/playtest/review-motion.sh` (committed in b4cef24).
+
+## For ART.md and the main lane
+
+- ART.md 15, Sakura, could say: the blossom glows toward its outline against the sun over a wine-rose underside;
+  the run-in's mist lies on the cone in three layers with the summit clear; the rock is ink with snow on its
+  ledges; Temple Town is wine lacquer, mid plaster and lit paper under ink roofs; Sakura's lens is the calm one
+  (no colour fringe or punch, about half the speed streaks).
+- Decide: whether the calm lens is Sakura's alone or a rule for every calm frame; whether the legend figure should
+  stand off the cone's bearing at 970 to 1026 m; whether the blossom canopy gets new geometry (the one change
+  every critic asked for, with a triangle cost on every tree).
+- Wire nothing new: `massif.bands` and `posterSnow` are palette fields with defaults (0 and 1) that every other
+  mountain already takes from `base()`.
