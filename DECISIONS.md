@@ -3118,3 +3118,41 @@ played or heard by a person. Where a later lane changed what an earlier one buil
 357. **The jukebox covers the wiring.** Rows for every verb's steps (the bells, the forge's roar and gutter, the glass,
     the lamps, the wake, the carried flame), a legend from its warning to its leaving, a ribbon's quarters and the
     hero frame's breath with the landing that ends it.
+
+### Round 7: the faults every mountain shared (one more lane)
+
+358. **The three faults every critic named, fixed once for all five mountains.** Render only; where anything stands
+    and what it does is the sim's and did not move. The lane's notes are `notes/r7-shared.md`.
+    - *Fuel drops* (the course's spirit lights) were the old faceted drop in the generic toon material: one flat
+      yellow value lit by nothing, 1.1 m tall at any distance, so a seventh of the frame beside the lens, and a giant
+      drop in the sky over a leap. Each is now a small flame (`spiritlights.ts`): a teardrop that licks at its tip,
+      marigold facing the lens, amber at its rim, a pale heart, lit by the frame's light, with a soft premultiplied
+      glow (on Low, with no bloom, the glow is the light). Near the lens its growth has a knee, not a cap, so one by
+      the rider is about 7% of the frame and a nearer one is still a little bigger (depth reads the right way). It
+      fades inside 6 m of the lens, at the frame's sides (before the speed streak can smear it) and in the top fifth
+      near the lens. A great light's ring and second flame are painted in its glow; lights over a leap are joined
+      by a dotted line of motes, so they read as a trail. Two draws for every light on the course, where it was up to
+      three. Rejected: hiding the lights over a leap (they are the leap's line) and moving them (a sim change).
+    - *A ghost at the lens.* The giant mint figure at Frostfang 2850 m was a pool ghost (`winter164`) in the air off
+      the bank 2.9 to 3.8 m from the lens, a third of the frame tall, during a pass beat; the old size fade started
+      at 0.38 of the frame, just over it. Now a ghost nearer the lens than the rider, more than 1.2 times the rider's
+      size and over a fifth of the frame, dissolves whatever beat holds it. A ghost level with the rider is the
+      rider's size and untouched, so the race beside you never blinks out.
+    - *Glows bleaching the rider.* The ward's paper lantern was laid over the rider; the dash and flow rims burned in
+      from a third of the silhouette; the lights that ride with the rider sat on it at full strength. Now the ward
+      draws only off the rider's pixels (the rider stencil the ghosts use), the rims keep to the outer facets, the
+      ride-along lights stand 3 m ahead at 0.65, and a local light on the rider rolls off past a lamp's strength. The
+      coat stays navy and the beanie and scarf vermillion through a dash, a ward and a full flow.
+    - *Sled undersides* in a flip take shade, the snow's cool bounce and grain, with seams on slatted sleds. No new
+      draw or program.
+
+    *Judged* by one fresh critic on 52 same-place pairs: fuel drops clearly better on all three tiers, the mint
+    figure better, the rider much better, nothing broken; what it raised after (near drops turned to round orbs, the
+    great light's ring, the trail, Low's lemon-white, a weak dash) was fixed and re-shot, not re-judged. *Cost:* High
+    99.2 to 98.3 draws, Low 49.6 to 49.6, phone Medium 89.5 to 88.8; one more small shader program (the glow).
+    *At the merge:* the new flames replace Lanternfall's own fixes for the old ones (a wider lens fade, amber on Low);
+    the flame's knee and its side and top fades cover the first, and on Lanternfall's Low the flames' marigold leans
+    amber as that lane had it. *Still short:* Pinecrest's "yellow lines" at 1650 m are the slide's sign
+    (`verbworld.ts`), not fuel; lights over a leap still read as in the sky in a still before the lip; the ward still
+    floods the Ice Cavern's snow gold; a dashing rider's sled deck is a bright plank; the Gift Storm still draws the
+    old lights; a ghost passed beside the lens goes with no trace.

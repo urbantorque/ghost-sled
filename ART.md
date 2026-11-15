@@ -217,7 +217,10 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   wraps the head and shoulders. In night, dusk and whiteout moods ghosts blaze brighter.
   A ghost stays solid glass anywhere in the frame and never draws over the rider: where the two
   overlap on screen, the ghost shows around the rider's silhouette. It fades only on top of the
-  rider or as it nears the lens.
+  rider or as it nears the lens. *Round 7:* a ghost nearer the lens than the rider never fills the frame: past
+  1.2 times the rider's size and a fifth of the frame it dissolves, whatever beat holds it, and is gone by a
+  third of the frame. A ghost level with the rider is the rider's size and never fades for size, so the race
+  beside you never blinks out.
 - A tapering wisp ribbon trails each ghost, narrow at the root and fading over its last 60%, and a
   small floating name pill sits above it. The ghost the HUD names gets its pill first, with a ring.
 - Every ghost rides a faint glass sled of the sled it raced, in its kind colour, with glowing
@@ -601,6 +604,15 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   great light is 1.2 m, wears a thin ring of light at its waist and carries a second small flame beside it, so the
   two are told apart at 30 m/s. Past the detail range a light is a drawn-out diamond. Taking one throws a soft
   flare of marigold motes that rides with the sled: no confetti and never red (the rider owns vermillion).
+  *Round 7:* a light is a flame of light that belongs to its frame, not a sticker. A smooth teardrop that licks at
+  its tip, marigold where it faces the lens, amber (`#FF9E1A`) at its rim and a white-gold heart low in it, its side
+  toward the frame's light a touch brighter; a soft glow round it tints the snow by day and adds light at night (on
+  Low the glow is the light, and on Lanternfall's Low the marigold leans amber against the lilac snow). Never a slab:
+  past a twentieth of the frame's height it grows at a third of its rate, so one by the rider is about a third of
+  the rider and a nearer one is still a little bigger. It goes inside 6 m of the lens, at the frame's sides before
+  the speed streak can smear it, and in the top fifth near the lens. A great light's ring and second flame are
+  painted in its glow. Lights over a leap are joined by a dotted line of motes, so they read as a trail over the
+  leap, not drops in the sky. Past the detail range a light is a small flame painted in its glow.
 - **The lantern** on the HUD is three small lanterns where the gifts' counter stood: ink cells with a marigold
   rim that fill from the bottom with a cream-to-marigold gradient, glow when full, and burn white for a dash. On
   touch it is a 78 px round button above the right thumb's zone.
@@ -610,6 +622,13 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   motes trail the sled. **A ward** stands a marigold paper lantern round the rider that cracks with white-gold
   light and breaks into shards and a ring of light over the snow, in a beat of slow motion (none under
   reduced motion). A dashing ghost trails pale mint-white light; a warded ghost breaks into marigold.
+  *Round 7: the rider holds through every glow.* The ward's lantern, shards and ring draw only off the rider's own
+  pixels, so the rider stands inside the lantern as a navy and vermillion figure; the dash's white-gold rim and the
+  flow's vermillion rim keep to the silhouette's outer facets, and the dash's bands ride over the coat's own value;
+  the lights that ride with the rider stand 3 m ahead of it at 0.65, so the snow takes the light and the rider stands
+  against it; a local light on the rider rolls off past a lamp's strength. The coat is never cream and never a red
+  blob. In a flip a sled's underside sits a step into shade with the snow's cool bounce and grain, slatted sleds
+  with dark seams.
 - **Sky gates** are rings of light: a deep amber edge, a marigold body and a white-gold core line, a halo
   that tints and glows, a faint veil inside and four beacon motes riding the ring, a shimmer running round it.
   Held to a few pixels thick at any distance, they read from 60 m on every tier, Low included. Every gate on
