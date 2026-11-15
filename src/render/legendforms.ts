@@ -665,7 +665,7 @@ export function craneFlock(n: number, ribbons: number): { geo: InstancedBufferGe
 
 /** Where the cone's summit stands from the lens (three.js space): the far range is drawn round the lens, so
  *  the eruption is placed from it too and sits on the crater from anywhere on the mountain. */
-export const ERUPT_AT = { value: new Vector3(0, 1340, -4400) };
+export const ERUPT_AT = { value: new Vector3(0, 1020, -4400) };
 
 /** Places a point of the eruption (x across the lens's view, y up from the summit, metres). Above the
  *  summit it stands in the plane through the crater; below it, it lies on the cone's face toward the lens

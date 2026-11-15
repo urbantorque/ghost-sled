@@ -2,13 +2,13 @@ import { AdditiveBlending, BufferAttribute, BufferGeometry, Color, DoubleSide, M
 import { Course, type Ledge } from '../sim/course';
 import { ASH_TOP, basaltTones } from './flora';
 import { fx } from './fxhub';
-import { visualGround } from './ground';
+import { visualGround, vnoise2 } from './ground';
 import type { Kind } from './landmarkKit';
 import { pushLocalLight } from './lights';
 import { shared } from './materials';
 import { Palette } from './palette';
 import { Facets, columnInto } from './rockforms';
-import { snowDrift } from './terrain';
+import { lateralOffsets, snowDrift } from './terrain';
 
 // Round 7: the light a place holds, staged. Three places were objects in an even light; here each gets the
 // thing that lights it, drawn in the air and on the ground round the run:
@@ -86,13 +86,16 @@ function beamMaterial(near = false): ShaderMaterial {
 function lavaMaterial(low: boolean): ShaderMaterial {
   return new ShaderMaterial({
     defines: low ? { LAVA_LOW: 1 } : {},
-    uniforms: { uFlow: { value: 0 }, uFog: shared.uFog, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar },
+    uniforms: { uFlow: { value: 0 }, uFog: shared.uFog, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar, uFocus: shared.uFocus },
     vertexShader: /* glsl */ `
       attribute float aHeat;
+      attribute float aCover;
       varying float vHeat;
+      varying float vCover;
       varying vec3 vW;
       void main() {
         vHeat = aHeat;
+        vCover = aCover;
         vec4 w = modelMatrix * vec4(position, 1.0);
         vW = w.xyz;
         gl_Position = projectionMatrix * viewMatrix * w;
@@ -103,24 +106,62 @@ function lavaMaterial(low: boolean): ShaderMaterial {
       uniform vec3 uFog;
       uniform float uFogNear;
       uniform float uFogFar;
+      uniform vec3 uFocus;
       varying float vHeat;
+      varying float vCover;
       varying vec3 vW;
       vec2 hash2(vec2 p) {
         p = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
         return fract(sin(p) * 43758.5453);
       }
+      float vn(vec2 p) {
+        vec2 i = floor(p);
+        vec2 f = fract(p);
+        f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(hash2(i).x, hash2(i + vec2(1.0, 0.0)).x, f.x), mix(hash2(i + vec2(0.0, 1.0)).x, hash2(i + vec2(1.0, 1.0)).x, f.x), f.y);
+      }
       void main() {
         float heat = clamp(vHeat, 0.0, 1.0);
+        // (Rivers of heat and rafts of crust, forty metres across: a field is never one even tiling.)
+        heat = clamp(heat * (0.55 + 0.8 * vn(vW.xz * 0.045 + 3.7)), 0.0, 1.0);
         // (The fall line is world -z: the plates drift down it, the big ones slower than the small.)
         vec2 p = vec2(vW.x, vW.z + vW.y * 0.6) * 0.21;
-        vec3 crust = mix(vec3(0.016, 0.01, 0.014), vec3(0.2, 0.035, 0.012), heat * heat * 0.6);
+        // (Basalt, not a hole: near the lens a near-black crust read as a void.)
+    vec3 crust = mix(vec3(0.065, 0.03, 0.032), vec3(0.2, 0.035, 0.012), heat * heat * 0.6);
         #ifdef LAVA_LOW
-          vec2 c = floor(p * 0.8);
-          float pick = hash2(c).x;
-          float hot = step(1.0 - 0.55 * heat, pick);
-          vec3 col = mix(crust, vec3(2.2, 0.62, 0.1), hot);
+          // The poster's lava: the same plates in two flat values, a dark crust and a line of fire between
+          // them, in one pass over the cells and standing still (square cells in two values read as a
+          // chequered floor).
+          p += (vec2(vn(p * 0.31 + 1.3), vn(p * 0.31 + 8.7)) - 0.5) * 1.3;
+          vec2 n = floor(p);
+          vec2 f = fract(p);
+          float f1 = 8.0;
+          float f2 = 8.0;
+          float id = 0.0;
+          for (int j = -1; j <= 1; j++) {
+            for (int i = -1; i <= 1; i++) {
+              vec2 g = vec2(float(i), float(j));
+              vec2 o = hash2(n + g);
+              vec2 r = g + o - f;
+              float d = dot(r, r);
+              if (d < f1) { f2 = f1; f1 = d; id = o.x; } else if (d < f2) { f2 = d; }
+            }
+          }
+          float edge = sqrt(f2) - sqrt(f1);
+          // (As High's: most of a cool crust's cracks are a dark red seam, and what is lit is broken along
+          // each crack; a lit yellow line round every cell read as a net laid on the floor.)
+          float ln = vn(p * 0.9 + 11.0) * 0.55 + vn(p * 0.3 + 4.0) * 0.45;
+          float live = smoothstep(0.52, 0.8, ln + heat * 0.6 - 0.1);
+          float pool = step(1.0 - 0.3 * heat * heat, id);
+          float hot = max(step(edge, mix(0.04, 0.2, heat * heat)), pool);
+          // (Red to orange, never past it: a hotter fire clipped to lemon on Low's ungraded frame.)
+          vec3 fire = mix(vec3(1.05, 0.14, 0.03), vec3(1.5, 0.36, 0.05), heat);
+          vec3 seam = mix(vec3(0.28, 0.03, 0.008), fire, max(live, pool));
+          vec3 col = mix(crust * (0.5 + 0.45 * id), seam, hot);
         #else
           p.y += uFlow * 0.16;
+          // (Warped, so the plates are rafts of every shape and size: unwarped, a cell field is a honeycomb.)
+          p += (vec2(vn(p * 0.31 + 1.3), vn(p * 0.31 + 8.7)) - 0.5) * 1.3;
           vec2 n = floor(p);
           vec2 f = fract(p);
           float md = 8.0;
@@ -147,13 +188,42 @@ function lavaMaterial(low: boolean): ShaderMaterial {
             }
           }
           float breathe = 0.85 + 0.15 * sin(uFlow * 0.7 + id * 6.28);
-          float w = mix(0.03, 0.17, heat * heat) * breathe;
-          float crack = 1.0 - smoothstep(0.0, w, ed);
-          // A plate near the heart is thin: it glows through, and some are not crust at all.
-          float thin = heat * heat * smoothstep(0.72, 1.0, id + heat * 0.3);
-          vec3 hotc = mix(vec3(1.9, 0.42, 0.05), vec3(3.4, 1.9, 0.5), crack * crack * (0.4 + 0.6 * heat));
-          vec3 col = mix(crust * (0.6 + 0.8 * id), hotc, max(crack, thin * 0.7));
+          // The melt between the rafts: thin cracks at a cool shore, rivers between shrinking rafts toward
+          // the heart, its width wandering along each crack. Near the heart some rafts have gone under.
+          float w = mix(0.03, 0.3, heat * heat) * (0.6 + 0.8 * vn(p * 0.7 + 3.1)) * breathe;
+          float gone = step(1.0 - 0.32 * heat * heat * heat, id);
+          float crack = max(1.0 - smoothstep(w * 0.55, w, ed), gone);
+          // Not every crack is live: across a cool crust most have dulled to a dark red seam, so the floor
+          // is never a lit net (a net of even lines read as a grid laid on the ground).
+          // (Broken along each crack too, so what is lit is a run of segments and never a whole cell's rim.)
+          float ln = vn(p * 0.9 + 11.0) * 0.55 + vn(p * 0.3 + 4.0) * 0.45;
+          float live = max(smoothstep(0.52, 0.82, ln + heat * 0.6 - 0.1), gone);
+          // (Under the lens the crust's cracks are awake: on the phone's high lens a cool crust filled the
+          // lower frame as one dark slab.)
+          float nearL = 1.0 - smoothstep(6.0, 22.0, length(vW - cameraPosition));
+          live = max(live, nearL * smoothstep(0.35, 0.6, ln));
+          // The melt itself: deep red to orange, streaked down the fall line, yellow only in the hottest
+          // streaks (a sheet of yellow bloomed into a flat smear).
+          float streak = vn(vec2(vW.x * 0.5, (vW.z + vW.y * 0.6) * 0.07 + uFlow * 0.05));
+          vec3 melt = mix(vec3(0.95, 0.13, 0.02), vec3(1.75, 0.5, 0.07), smoothstep(0.15, 0.85, streak * 0.75 + heat * 0.45));
+          melt = mix(melt, vec3(2.7, 1.3, 0.3), smoothstep(0.72, 1.0, streak) * heat * 0.8);
+          // A crack's lip is darker red than its middle; a dulled crack is only its lip.
+          float core = max(1.0 - smoothstep(0.0, w * 0.45, ed), gone);
+          // (On a cool crust even a live crack is a dim one: at full heat the floor's net bloomed.)
+          vec3 seam = mix(vec3(0.5, 0.05, 0.012), melt * mix(0.5, 1.0, smoothstep(0.25, 0.7, heat)), core * live);
+          seam *= mix(0.28, 1.0, live);
+          // The crust: dark rafts that redden toward a live edge (the heat under them shows at the rim).
+          float halo = (1.0 - smoothstep(w, w + 0.14 + 0.12 * heat, ed)) * live;
+          vec3 raft = mix(crust * (0.6 + 0.8 * id), vec3(0.4, 0.05, 0.012), halo * 0.6);
+          vec3 col = mix(raft, seam, crack);
         #endif
+        // A shore breaks along whole plates (the floor under the flight ends ragged, never on a ruled line).
+        if (vCover < 0.999 && vCover < 0.22 + 0.6 * id) discard;
+        // Whoever flies over it is marked on it: lava takes no cast shadow, and a flight needs its ground.
+        vec2 dq = (vW.xz - uFocus.xz) * vec2(1.0, 0.8);
+        float hgt = max(uFocus.y - vW.y, 0.0);
+        float rad = 1.2 + hgt * 0.12;
+        col *= 1.0 - (1.0 - smoothstep(rad * 0.45, rad, length(dq))) * 0.8 / (1.0 + hgt * 0.05) * step(hgt, 60.0);
         float fog = smoothstep(uFogNear, uFogFar, length(vW - cameraPosition));
         // (Lava shines through the haze: it takes a third of the air's fog, so the crust stays dark.)
         gl_FragColor = vec4(mix(col, uFog, fog * 0.35), 1.0);
@@ -227,6 +297,14 @@ function snowY(c: Course, x: number, z: number): number {
   return visualGround(c, x, z) + snowDrift(x, z, c.edgeExcess(x, z), driftBuf)[0];
 }
 
+/** The terrain's own detail per tier (world.ts QUALITY): what lies on a steep bank is laid on the drawn
+ *  chord between the terrain's columns, not on the true surface under it. */
+const TERRAIN_DETAIL: Record<Tier, { inner: number; row: number; reach: number }> = {
+  low: { inner: 1.6, row: 3, reach: 60 },
+  medium: { inner: 1.1, row: 2.2, reach: 90 },
+  high: { inner: 0.85, row: 2, reach: 110 },
+};
+
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
   return t * t * (3 - 2 * t);
@@ -260,6 +338,10 @@ class Beams {
   }
 }
 
+/** Metres past the landing that the caldera's lava runs on down the banks: the landing is still the
+ *  caldera (ended at the landing, the jaw-drop came down onto an empty slope). */
+export const CALDERA_RUNOUT = 50;
+
 const CALDERAS = new WeakMap<Course, Ledge | null>();
 
 /** The Caldera Leap's ledge: Ember's second leap (sim/moments.ts: kind 'leap', nth 1), or null on any
@@ -281,6 +363,27 @@ export function calderaLedge(c: Course): Ledge | null {
   }
   CALDERAS.set(c, l);
   return l;
+}
+
+const RIVERS = new WeakMap<Course, Array<{ z0: number; z1: number; roof: boolean }>>();
+
+/** Where Ember's walled places hold lava at the feet of their walls: the basalt slots and the roofed
+ *  halls, from where the walls have risen to their end (empty on any other mountain). */
+export function lavaRuns(c: Course): ReadonlyArray<{ z0: number; z1: number; roof: boolean }> {
+  let out = RIVERS.get(c);
+  if (out) return out;
+  out = [];
+  if (c.biome === 'volcanic') {
+    let last = null as unknown;
+    for (let z = 0; z < c.finishZ; z += 20) {
+      const sec = c.section(z);
+      if (sec === last) continue;
+      last = sec;
+      if (sec.kind === 'ravine' || sec.kind === 'tunnel') out.push({ z0: sec.z0 + sec.blend * 0.6, z1: sec.z1 - 8, roof: sec.kind === 'tunnel' });
+    }
+  }
+  RIVERS.set(c, out);
+  return out;
 }
 
 const PADDIES = new WeakMap<Course, Array<[number, number]>>();
@@ -399,6 +502,7 @@ export class Stages {
   private flow = 0;
   private lastT = 0;
   private caldera: Ledge | null = null;
+  private cols: number[] | null = null;
 
   constructor(
     private course: Course,
@@ -423,6 +527,7 @@ export class Stages {
     this.tier = tier;
     this.lavaMat.dispose();
     this.lavaMat = lavaMaterial(tier === 'low');
+    this.cols = null;
     this.clear();
   }
 
@@ -441,6 +546,27 @@ export class Stages {
 
   private find(): void {
     this.caldera = calderaLedge(this.course);
+    this.cols = null;
+  }
+
+  /** The drawn snow's height at sim (x, z): the higher of the true surface and the terrain's chord
+   *  between its two columns either side. At a wall's foot the chord stands well over the true surface
+   *  (the rock climbs thirteen metres in four and a half), and laid on the surface the slots' lava was
+   *  inside the drawn bank, unseen. */
+  private drawnY(x: number, z: number): number {
+    const c = this.course;
+    const y = snowY(c, x, z);
+    const offs = (this.cols ??= lateralOffsets(c, TERRAIN_DETAIL[this.tier]));
+    const cx = c.centerX(z);
+    const o = x - cx;
+    if (o <= offs[0] || o >= offs[offs.length - 1]) return y;
+    let i = 0;
+    while (offs[i + 1] < o) i++;
+    const a = offs[i];
+    const b = offs[i + 1];
+    const ya = snowY(c, cx + a, z);
+    const yb = snowY(c, cx + b, z);
+    return Math.max(y, ya + ((yb - ya) * (o - a)) / (b - a));
   }
 
   /**
@@ -465,11 +591,15 @@ export class Stages {
       }
     };
     const c = this.caldera;
-    if (c) want('caldera', c.z - 30, c.land1 + 20, () => this.makeCaldera(c));
+    if (c) want('caldera', c.z - 30, c.land1 + CALDERA_RUNOUT + 14, () => this.makeCaldera(c));
+    lavaRuns(this.course).forEach((r, i) => want('river' + i, r.z0, r.z1, () => this.makeRivers('river' + i, r.z0, r.z1, r.roof)));
     paddySpans(this.course).forEach(([a, b], i) => want('paddies' + i, a, b, () => this.makePaddies('paddies' + i, a, b)));
     for (const s of sites) {
       if (!s.flown || s.len <= 0) continue;
       if (s.kind === 'icetunnel' && s.clear > 0) want('mouth' + s.n, s.z - s.len, s.z + s.len, () => this.makeMouth(s, night));
+      // Ember's lava tunnels: the far mouth is a hot disc and its heat spills in along the floor (Medium
+      // and High; Low keeps the tunnel's own lava).
+      else if (s.kind === 'lavatunnel' && s.clear > 0 && this.tier !== 'low') want('mouth' + s.n, s.z - s.len, s.z + s.len, () => this.makeMouth(s, night, true));
       else if (s.kind === 'toriirow' && !night) want('torii' + s.n, s.z - s.len, s.z + s.len, () => this.makeTorii(s));
     }
     let tris = 0;
@@ -496,7 +626,7 @@ export class Stages {
     const low = this.tier === 'low';
     const root = new Object3D();
     const zA = l.z - 10;
-    const zB = l.land1 + 6;
+    const zB = l.land1 + CALDERA_RUNOUT;
     // Columns across a field, in metres from the centre line: the terrain's own outer columns (terrain.ts
     // lateralOffsets), so the lava lies on the drawn snow and not through it.
     const hwC = c.params.halfWidthStart + 2.6;
@@ -510,7 +640,22 @@ export class Stages {
     rows.push(zB);
     const pos: number[] = [];
     const heat: number[] = [];
+    const cover: number[] = [];
     const idx: number[] = [];
+    // The caldera is a bowl: each field climbs from its near shore to the foot of the rim, so from the
+    // run its lava faces the lens (lying on the bank it was a thin band seen edge on), and from the air
+    // it is a lake with the flight down its middle.
+    const LIFT = 11;
+    const ends = (z: number): number => smooth(zA, zA + 24, z) * (1 - smooth(zB - 46, zB, z));
+    const lift = (u: number, z: number): number => LIFT * Math.pow(Math.min(1, Math.max(0, u)), 1.5) * ends(z);
+    // The floor under the flight: a crust over the lake, from the foot of the cliff to the far shelf's
+    // shore. Dark plates on thin cracks where sleds cross it (a rider must read against it), hotter
+    // toward the banks. The sim rides the same ground under it: a sled that lands short crosses crust.
+    const zF0 = l.foot + 2;
+    // (On past the landing face with the fields, so the whole of a fast flight is over lava: ended short
+    // of the face's end, the flight's last second was over a tongue of snow, and ended at it, its ragged
+    // last plates lay round a rider landed there like a hole.)
+    const zF1 = l.land1 + CALDERA_RUNOUT - 2;
     /** Where a field starts and ends across the bank at z: outside the crowd's shoulder at the lip, from
      *  just past the limit below it, swelling to its widest under the middle of the flight. */
     const inner = (z: number, side: number): number => {
@@ -535,13 +680,18 @@ export class Stages {
         const e1 = outer(z, side);
         const along = smooth(zA, zA + 14, z) * (1 - smooth(zB - 40, zB, z));
         for (let k = 0; k < n; k++) {
-          // The field's own edges cut the columns: the first and last are moved onto them.
-          const e = Math.max(e0, Math.min(e1, cols[k] - hw));
+          // The field's own edges cut the columns: the first and last are moved onto them. (Clamped only,
+          // the first stood on the terrain's first column past the shore, and a strip of bare snow ran
+          // between the floor and the field the length of the flight.)
+          const e = k === 0 ? e0 : k === n - 1 ? e1 : Math.max(e0, Math.min(e1, cols[k] - hw));
           const x = cx + side * (hw + e);
-          pos.push(x, snowY(c, x, z) + 0.45, -z);
           const u = e1 > e0 ? (e - e0) / (e1 - e0) : 0;
-          // Brightest at the heart of the field, a cooled margin at both shores.
-          heat.push(Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, u))), 0.7) * (0.35 + 0.65 * along));
+          pos.push(x, snowY(c, x, z) + 0.45 + lift(u, z), -z);
+          // Brightest at the heart of the field, a cooled margin at both shores (where the floor joins
+          // it, the near shore is the floor's own heat).
+          const onFloor = smooth(zF0, zF0 + 8, z) * (1 - smooth(zF1 - 22, zF1, z));
+          heat.push(Math.max(Math.pow(Math.sin(Math.PI * Math.min(1, Math.max(0, u))), 0.7) * (0.35 + 0.65 * along), 0.34 * onFloor));
+          cover.push(1);
         }
       }
       for (let r = 0; r + 1 < rows.length; r++) {
@@ -555,12 +705,54 @@ export class Stages {
         }
       }
     }
+    {
+      // The floor, shore to shore across the run, on the drawn snow.
+      // (Columns: the corridor's in the middle, then close ones out over each bank to the field's near
+      // shore, where the field's first column stands. The bank's chord between them sags, so the floor
+      // rides a little higher over it.)
+      const mid = low ? 7 : 13;
+      const wing = low ? 4 : 9;
+      const n = mid + 2 * wing;
+      const base = pos.length / 3;
+      const frows = rows.filter((z) => z >= zF0 && z <= zF1);
+      for (const z of frows) {
+        const cx = c.centerX(z);
+        const hw = c.halfWidth(z);
+        const xl = cx - (hw + inner(z, -1));
+        const xr = cx + (hw + inner(z, 1));
+        const cv = smooth(zF0, zF0 + 8, z) * (1 - smooth(zF1 - 22, zF1, z));
+        const el = cx - (hw + 1);
+        const er = cx + (hw + 1);
+        for (let k = 0; k < n; k++) {
+          let x: number;
+          let out = 0;
+          if (k < wing) {
+            out = 1 - k / wing;
+            x = el + (xl - el) * out;
+          } else if (k >= wing + mid) {
+            out = (k - wing - mid + 1) / wing;
+            x = er + (xr - er) * out;
+          } else x = el + ((er - el) * (k - wing)) / (mid - 1);
+          pos.push(x, snowY(c, x, z) + (low ? 0.3 : 0.16) + (out > 0 ? 0.3 + 0.25 * out : 0), -z);
+          heat.push(0.2 + 0.14 * out);
+          cover.push(cv);
+        }
+      }
+      for (let r = 0; r + 1 < frows.length; r++) {
+        for (let k = 0; k + 1 < n; k++) {
+          const a = base + r * n + k;
+          idx.push(a, a + n, a + 1, a + 1, a + n, a + n + 1);
+        }
+      }
+    }
     const lg = new BufferGeometry();
     lg.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
     lg.setAttribute('aHeat', new BufferAttribute(new Float32Array(heat), 1));
+    lg.setAttribute('aCover', new BufferAttribute(new Float32Array(cover), 1));
     lg.setIndex(idx);
+    // (The lake, the rim and the glow are still: culled, they cost nothing once the flight is behind the
+    // lens, though the stage is kept for the 50 m the lava runs on past the landing.)
     const lava = new Mesh(lg, this.lavaMat);
-    lava.frustumCulled = false;
     root.add(lava);
 
     // The rim: broken basalt along each field's far shore, tall enough to stand black against the deck,
@@ -573,17 +765,19 @@ export class Stages {
       return seedN / 4294967296;
     };
     for (const side of [-1, 1]) {
-      for (let z = l.z + 20; z < zB; z += low ? 7.5 : 3.4) {
+      for (let z = l.z + 20; z < zB; z += low ? 7.5 : 3.1) {
         const zz = z + (rnd() - 0.5) * 1.6;
         const cx = c.centerX(zz);
         const hw = c.halfWidth(zz);
         const e = outer(zz, side) + 0.6 + rnd() * 2.4;
         const x = cx + side * (hw + e);
         const gy = snowY(c, x, zz);
-        const h = (low ? 4 : 2.6) + rnd() * 5.5 + (rnd() < 0.2 ? 4 : 0);
+        // (The rim is the caldera's wall: it stands on the lifted shore, organ pipes of uneven height.)
+        const up = lift(1, zz);
+        const h = (low ? 5 : 3.6) + rnd() * 7 + (rnd() < 0.25 ? 6 : 0);
         const a = rnd() * 6.28;
         const k = rnd() * 0.5;
-        columnInto(f, { x, z: -zz, y: gy - 1.5, r: (low ? 1.9 : 1.25) * (0.85 + 0.4 * rnd()), h: h + 1.5, foot: 0, yaw: rnd(), slant: [Math.cos(a) * k, Math.sin(a) * k], col: t.rock[rnd() < 0.5 ? 0 : 1], top: rnd() < 0.5 ? ASH_TOP : null, broke: t.broke, drums: low ? 1 : 2 }, rnd);
+        columnInto(f, { x, z: -zz, y: gy - 1.5, r: (low ? 2.3 : 1.7) * (0.85 + 0.4 * rnd()), h: h + up + 1.5, foot: 0, yaw: rnd(), slant: [Math.cos(a) * k, Math.sin(a) * k], col: t.rock[rnd() < 0.5 ? 0 : 1], top: rnd() < 0.5 ? ASH_TOP : null, broke: t.broke, drums: low ? 1 : 2 }, rnd);
       }
       if (!low) {
         for (let z = l.z + 32; z < zB - 6; z += 4.6) {
@@ -598,11 +792,10 @@ export class Stages {
       }
     }
     const rim = new Mesh(f.build(), this.rockMat);
-    rim.frustumCulled = false;
     root.add(rim);
 
     // Embers off both fields and, thinner, over the run between them (Medium and High).
-    const count = this.tier === 'high' ? 260 : this.tier === 'medium' ? 130 : 0;
+    const count = this.tier === 'high' ? 420 : this.tier === 'medium' ? 200 : 0;
     if (count > 0) {
       const corner = new Float32Array(count * 12);
       const bases = new Float32Array(count * 12);
@@ -613,10 +806,11 @@ export class Stages {
         const side = rnd() < 0.5 ? -1 : 1;
         const cx = c.centerX(z);
         const hw = c.halfWidth(z);
-        const onRun = rnd() < 0.22;
+        // (Nearly half rise through the flight itself, off the floor: embers in depth, before and behind the rider.)
+        const onRun = rnd() < 0.45 && z > zF0 && z < zF1;
         const e = onRun ? -hw * rnd() : inner(z, side) + rnd() * Math.max(1, outer(z, side) - inner(z, side));
         const x = cx + side * (hw + e);
-        const y = snowY(c, x, z) + 0.5;
+        const y = snowY(c, x, z) + 0.5 + (onRun ? 0 : lift((e - inner(z, side)) / Math.max(1, outer(z, side) - inner(z, side)), z));
         const s0 = rnd();
         const s1 = rnd();
         const s2 = rnd();
@@ -656,14 +850,15 @@ export class Stages {
           const hw = c.halfWidth(zz);
           const e = (inner(zz, side) + outer(zz, side)) / 2;
           const x = cx + side * (hw + e + up * 0.35);
-          return [x, snowY(c, x, zz) + 0.7 + up, -zz];
+          return [x, snowY(c, x, zz) + 0.7 + up + lift(0.5, zz), -zz];
         };
-        const k = 0.5;
-        b.quad(p(z, 0), p(z2, 0), p(z2, 15), p(z, 15), glow, k, k, 0, 0);
+        // (Faint: at half strength the sheets joined into one flat orange band across the frame.)
+        const k = 0.2;
+        // (Tall enough to stand over the lip from the run-in: the bowl announces itself before the leap.)
+        b.quad(p(z, 0), p(z2, 0), p(z2, 26), p(z, 26), glow, k, k, 0, 0);
       }
     }
     const haze = new Mesh(b.build(), this.beamMat);
-    haze.frustumCulled = false;
     haze.renderOrder = 3;
     root.add(haze);
 
@@ -675,10 +870,116 @@ export class Stages {
         const cx = c.centerX(zl);
         const x = cx + side * (c.halfWidth(zl) + (inner(zl, side) + outer(zl, side)) / 2);
         const br = 0.9 + 0.12 * Math.sin(time * 1.3 + side);
-        pushLocalLight(x, snowY(c, x, zl) + 2.2, -zl, 1, 0.33, 0.07, 46, 1.25 * br);
+        pushLocalLight(x, snowY(c, x, zl) + 2.2 + lift(0.5, zl), -zl, 1, 0.33, 0.07, 46, 1.25 * br);
+      }
+      // The floor lights whoever is over it from underneath.
+      if (!low && z > zF0 - 30 && z < zF1 + 10) {
+        const zf = Math.max(zF0, Math.min(zF1, z + 3));
+        const cx = c.centerX(zf);
+        pushLocalLight(cx, snowY(c, cx, zf) + 0.8, -zf, 1, 0.36, 0.08, 30, 1.1 + 0.12 * Math.sin(time * 1.7));
       }
     };
     return { key: 'caldera', z0: zA, z1: zB, root, lights };
+  }
+
+  // ------------------------------------------------------------------ Ember: lava at the walls' feet
+
+  /** The basalt slots and the halls: a river of lava along the foot of each wall, in runs with dark
+   *  ground between them, a breath of its light standing up the rock over it, and (in the open slots)
+   *  organ pipes of basalt against the wall behind it. It lies past the limit, on the wall's own foot,
+   *  so it faces the lens. The pools of light on the snow beside it are terrain.ts's ground lights. */
+  private makeRivers(key: string, z0: number, z1: number, roof: boolean): Stage {
+    const c = this.course;
+    const low = this.tier === 'low';
+    const root = new Object3D();
+    const pos: number[] = [];
+    const heat: number[] = [];
+    const cover: number[] = [];
+    const idx: number[] = [];
+    const step = low ? 4 : 2;
+    const b = new Beams();
+    const glow = new Color(1, 0.3, 0.06);
+    /** How much of a river runs at z on a side (0 where the ground between two runs is dark). */
+    const runs = (z: number, side: number): number => smooth(0.4, 0.56, vnoise2(z * 0.021, side * 3.3, 31)) * smooth(z0, z0 + 16, z) * (1 - smooth(z1 - 16, z1, z));
+    const ACROSS = [0, 0.3, 0.68, 1];
+    // (A crusted seam with live cracks, not open melt: a three-metre band of melt read as a neon strip.)
+    const HEAT = roof ? [0.3, 0.6, 0.55, 0.25] : [0.4, 0.8, 0.72, 0.3];
+    for (const side of [-1, 1]) {
+      const base = pos.length / 3;
+      let rows = 0;
+      for (let z = z0; z <= z1; z += step, rows++) {
+        const cx = c.centerX(z);
+        const hw = c.halfWidth(z);
+        const lim = c.edgeLimit(z);
+        const k = runs(z, side);
+        // (The rock climbs thirteen metres in its first four and a half: a metre and a bit of the wall's
+        // foot is a band of lava three metres high, facing the lens.)
+        const w = 1.0 + 0.5 * vnoise2(z * 0.09, side * 5.1, 17);
+        for (let j = 0; j < 4; j++) {
+          const x = cx + side * (hw + lim - 0.25 + w * ACROSS[j]);
+          pos.push(x, this.drawnY(x, z) + 0.4, -z);
+          heat.push(HEAT[j] * (0.55 + 0.45 * k));
+          cover.push(Math.min(0.99, k));
+        }
+        // Its light up the wall, every few metres of a run.
+        // (Not on Low: the tier draws the river and nothing more beside it.)
+        if (!low && k > 0.5 && rows % 4 === 0) {
+          const zb = Math.min(z1, z + step * 4);
+          const p = (zz: number, up: number): number[] => {
+            const x = c.centerX(zz) + side * (c.halfWidth(zz) + c.edgeLimit(zz) - 0.6);
+            return [x, this.drawnY(x, zz) + 0.3 + up, -zz];
+          };
+          // (Faint: at a third it stood up the wall as a sheet of flame.)
+          const s = 0.1 * k;
+          b.quad(p(z, 0), p(zb, 0), p(zb, 4.5), p(z, 4.5), glow, s, s, 0, 0);
+        }
+      }
+      for (let r = 0; r + 1 < rows; r++) {
+        for (let j = 0; j < 3; j++) {
+          const a = base + r * 4 + j;
+          idx.push(a, a + 4, a + 1, a + 1, a + 4, a + 5);
+        }
+      }
+    }
+    const lg = new BufferGeometry();
+    lg.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+    lg.setAttribute('aHeat', new BufferAttribute(new Float32Array(heat), 1));
+    lg.setAttribute('aCover', new BufferAttribute(new Float32Array(cover), 1));
+    lg.setIndex(idx);
+    // (Each piece of a river is still and long: culled, the one made ahead or left behind costs nothing.)
+    const lava = new Mesh(lg, this.lavaMat);
+    root.add(lava);
+    if (!low) {
+      const haze = new Mesh(b.build(), this.beamMat);
+      haze.renderOrder = 3;
+      root.add(haze);
+    }
+    if (!roof && !low) {
+      // Organ pipes against the walls, in stands with bare wall between them.
+      const f = new Facets();
+      const t = basaltTones(this.palette);
+      let seedN = (c.seed ^ Math.imul(Math.round(z0), 0x9e37)) >>> 0;
+      const rnd = (): number => {
+        seedN = (Math.imul(seedN, 1664525) + 1013904223) >>> 0;
+        return seedN / 4294967296;
+      };
+      for (const side of [-1, 1]) {
+        for (let z = z0 + 6; z < z1 - 6; z += 2.7) {
+          const stand = vnoise2(z * 0.034, side * 2.1, 53);
+          if (stand < 0.45) continue;
+          const zz = z + (rnd() - 0.5) * 1.2;
+          const e = c.halfWidth(zz) + c.edgeLimit(zz);
+          // (They stand in the river at the wall's foot, against its face, footed on the drawn rock where
+          // they stand: footed on the river's line, a metre in, the steep face buried them whole.)
+          const x = c.centerX(zz) + side * (e + 0.7 + rnd() * 0.6);
+          const gy = this.drawnY(x, zz) + 0.5;
+          const h = 8 + 10 * (stand - 0.45) / 0.55 + rnd() * 4;
+          columnInto(f, { x, z: -zz, y: gy - 2, r: 1.15 * (0.85 + 0.4 * rnd()), h: h + 2, foot: 0, yaw: rnd(), slant: [(rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3], col: t.rock[rnd() < 0.5 ? 0 : 1], top: rnd() < 0.4 ? ASH_TOP : null, broke: t.broke, drums: 2 }, rnd);
+        }
+      }
+      root.add(new Mesh(f.build(), this.rockMat));
+    }
+    return { key, z0, z1, root, lights: null };
   }
 
   // ------------------------------------------------------------------ Sakura: the flooded terraces
@@ -765,16 +1066,18 @@ export class Stages {
 
   // ------------------------------------------------------------------ Frostfang: the cavern's mouth
 
-  private makeMouth(s: StageSite, night: boolean): Stage {
+  private makeMouth(s: StageSite, night: boolean, forge = false): Stage {
     const c = this.course;
     const low = this.tier === 'low';
     const root = new Object3D();
     const b = new Beams();
     const end = s.z + s.len;
     // (Saturated: added over blue ice, a paler warm turns to lilac.)
-    const dawn = night ? new Color(0.5, 0.62, 1.0) : new Color(1.0, 0.42, 0.26);
-    const gold = night ? new Color(0.7, 0.8, 1.0) : new Color(1.0, 0.62, 0.22);
-    const k0 = night ? 0.5 : 1;
+    // (A forge's mouth is the fire's own colour, deeper than a dawn, and a little fainter: it is lit by
+    // the lava beyond it, not by a sun.)
+    const dawn = forge ? new Color(1.0, 0.3, 0.06) : night ? new Color(0.5, 0.62, 1.0) : new Color(1.0, 0.42, 0.26);
+    const gold = forge ? new Color(1.0, 0.4, 0.1) : night ? new Color(0.7, 0.8, 1.0) : new Color(1.0, 0.62, 0.22);
+    const k0 = forge ? 0.8 : night ? 0.5 : 1;
     const at = (z: number, off: number, up: number): number[] => {
       const x = c.centerX(z) + off;
       return [x, c.ground(x, z) + up, -z];
@@ -845,7 +1148,8 @@ export class Stages {
     }
     for (const [geo, mat] of [[b, this.beamMat], ...(air === b ? [] : [[air, this.airMat]])] as Array<[Beams, ShaderMaterial]>) {
       const mesh = new Mesh(geo.build(), mat);
-      mesh.frustumCulled = false;
+      // (A forge's mouth is culled like any still mesh; the cavern's dawn is left as it was.)
+      if (!forge) mesh.frustumCulled = false;
       mesh.renderOrder = 3;
       root.add(mesh);
     }

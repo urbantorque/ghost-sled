@@ -572,6 +572,9 @@ export class World {
     this.props.setCourse(c, this.palette);
     this.spirit.setCourse(c);
     this.marquee.setCourse(c);
+    // The eruption rises from the cone where the massif stands it (only Ember's erupts; 0 would be "the
+    // massif's own default bearing", which the eruption cannot know, so it keeps its own then).
+    if (this.palette.massif.heroAz) this.marquee.setConeBearing(this.palette.massif.heroAz);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.lantern.setCourse(c);
     this.sky.setPalette(this.palette);

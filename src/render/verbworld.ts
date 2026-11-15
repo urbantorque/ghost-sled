@@ -596,10 +596,12 @@ export class VerbWorld {
             const top = j === jets - 1;
             const jy = y + j * (7.5 / jets);
             const boost = l.roar && age >= 0 && age < 1.6 ? 1 + 2.2 * (1 - age / 1.6) : 1;
-            if (lit) kit.glow(x, jy + 1.4 * boost, z, (top && hot ? 5.4 : 4.2) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.2 : 1.5) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
-            else kit.glow(x, jy + 0.8, z, 2.4, EMBER, 1.1, GLOW_FLAME, 0.7);
+            // (A flame a bowl and a bowl's height or more: at a third smaller the gate read as a row of
+            // candles beside the run. Cold, each bowl still smoulders.)
+            if (lit) kit.glow(x, jy + 1.9 * boost, z, (top && hot ? 7.6 : 5.8) * boost, top && hot ? WHITE_GOLD : EMBER, (top && hot ? 2.4 : 1.7) * (ctx.reduced ? 1 : 0.9 + 0.2 * Math.sin(ctx.time * 9 + j * 2 + side)), GLOW_FLAME, 0.7);
+            else kit.glow(x, jy + 1.1, z, 3.4, EMBER, 1.35, GLOW_FLAME, 0.7);
           }
-          kit.glow(x, y + 3.5, z, 11, hot ? HOT : EMBER, 0.22 + 0.3 * k, GLOW_SOFT, 0.5);
+          kit.glow(x, y + 4, z, 16, hot ? HOT : EMBER, 0.3 + 0.4 * k, GLOW_SOFT, 0.5);
         }
         if (Math.abs(z - s.z) < 120) pushLocalLight(c.centerX(z), c.baseY(z) + 4, -z, 1, 0.55, 0.22, 26, (0.5 + 1.3 * k) * (l.roar && age < 1.2 ? 2 : 1));
       }

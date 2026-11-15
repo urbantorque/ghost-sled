@@ -31,6 +31,9 @@ const GRID: Record<'low' | 'medium' | 'high', { bands: Array<Band | null>; hero:
  *  of the run, but never crowding the disc. */
 const HERO_DIST = 4400;
 const HERO_AZ = 24;
+/** Ember's summit over the lens's level (metres). Round 7's review: at 1360 the crater stood above the top
+ *  of a wide frame for most of the run, so the mountain's own light was never in the picture. */
+export const VOLCANO_TOP = 1040;
 /** The sea of clouds' level relative to the lens (metres). */
 const SEA_Y = -330;
 const PEAK_ID: Record<HeroPeak, number> = { summit: 0, fang: 1, volcano: 2, cone: 3 };
@@ -376,7 +379,7 @@ const VERT = /* glsl */ `
       } else if (uPeak < 2.5) {
         // Ember Peak: a broad, concave volcanic cone with a notched crater rim, scored by radial gullies.
         R = 3700.0;
-        top = 1360.0;
+        top = ${VOLCANO_TOP.toFixed(1)};
         p = C + off * v * R;
         float rc = 0.075;
         f = pow(1.0 - max(v, rc), 1.75) / pow(1.0 - rc, 1.75);
@@ -890,7 +893,7 @@ export class Massif {
   }
 
   /** The hero summit's height (metres from the lens's level), where its banner leaves the ridge. */
-  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: 1340, cone: 1300 };
+  private static readonly SUMMIT_Y: Record<HeroPeak, number> = { summit: 1500, fang: 2100, volcano: VOLCANO_TOP - 20, cone: 1300 };
 
   private placePlume(): void {
     const show = this.tier !== 'low' && this.banner > 0.01;
