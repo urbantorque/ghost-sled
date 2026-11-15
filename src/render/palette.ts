@@ -1039,9 +1039,11 @@ function round7(p: Palette, biome: BiomeId): void {
       p.sunColor = c('#FFDCC4');
       // (The lit side warm and bright, the shade a cold plum-slate: the pair is what reads as firelight
       // on snow. A near-white lit side read lilac-grey, and a saturated blue shade as a paint error.)
-      // (Low takes the light's colour on the snow at full strength: warmer than this, it read as dunes.)
-      p.snowLit = c('#FFE6D6');
-      p.snowShade = c('#3C4462');
+      // (Bright enough that the snow shader reads it as day and takes only a trace of the key's colour:
+      // a warmer, darker lit snow took the key's orange as well, twice tinted, and Low read as dunes.)
+      p.snowLit = c('#FFF0E6');
+      // (Plum-slate: a bluer shade rendered as a saturated navy.)
+      p.snowShade = c('#463E60');
       p.snowDeep = c('#2A2444');
       p.hemiSky = c('#5C5A78');
       p.fog = c('#5A3438');
@@ -1360,8 +1362,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#0C080C');
         p.skyMid = c('#2E1618');
         p.skyHorizon = c('#C04A20');
-        p.snowLit = c('#F6DACA');
-        p.snowShade = c('#343C5A');
+        p.snowLit = c('#FAE8DE');
+        p.snowShade = c('#3E3858');
         p.fogFar = 340;
         p.deck.k = 1;
         p.deck.lit = c('#3A2A2E');
@@ -1385,7 +1387,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // (Lit from below: the deck's own body takes the fire, not only its far edge.)
         p.deck.lit = c('#8E3A1E');
         p.deck.shade = c('#3A1612');
-        p.snowLit = c('#FFDECC');
+        p.snowLit = c('#FFEEE2');
         p.grade.exposure = 1.08;
         p.grade.contrast = 1.12;
         p.under.k = 0.3;
@@ -1409,8 +1411,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
         p.sunColor = c('#FFB490');
-        p.snowLit = c('#F8D4C0');
-        p.snowShade = c('#30365A');
+        p.snowLit = c('#FCE6DA');
+        p.snowShade = c('#3A3456');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
         p.fogNear = 60;
         p.fogFar = 430;
@@ -1437,23 +1439,29 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // Night under a red deck over Ash Market and the forge town: lanterns, forge mouths and windows
       // light the snow, the cone runs with lava behind the roofs.
       // (It has come by the market's bridge: begun at 3500 m, the bridge was still the halls' dusk.)
-      from: 3400, at: 3760, dusk: 1,
+      // (Full night by the bridge: half blended there, the bridge was still the afternoon's orange.)
+      from: 3380, at: 3540, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
         // (A dim key under the dark deck: a peach one on the night's lilac snow read as candy pink.)
         p.sunColor = c('#D8B0A8');
         p.skyZenith = c('#0A0608');
         p.skyMid = c('#2C1014');
-        p.skyHorizon = c('#D03A12');
+        p.skyHorizon = c('#9E2A10');
         // Night snow under a red deck is a cold lilac over plum, and the lamps are what is orange (a rose
         // snow under orange lamps went to brown mud). The deck darkens to embers: the town is lit by its
         // own windows and forges now, not by the sky.
-        p.snowLit = c('#C4BCD8');
-        p.snowShade = c('#2A2C52');
+        // (Darker than the lamps' pools, so the slopes are the dark plane and the town is the light: a
+        // mid lilac read as mud lit by nothing.)
+        p.snowLit = c('#A8A2C8');
+        p.snowShade = c('#22244C');
         p.fog = c('#3C1416');
         p.deck.lit = c('#3A1616');
         p.deck.shade = c('#120A0E');
-        p.deck.glow = c('#D8401A');
+        p.deck.glow = c('#B4341A');
+        // The cone runs with lava behind the roofs (kept under the lightning's 0.75).
+        p.massif.lava = 0.74;
+        p.massif.flow = 1;
         p.hazardDim = 0.9;
         p.lamps = 1.3;
         p.bloom = 0.6;
@@ -1815,7 +1823,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fog = c('#5A1E18');
         p.air.far = c('#6A2010');
         // The slot's floor lies in the walls' shade: cold, so the lava's light on it is seen.
-        p.snowShade = c('#2E3658');
+        p.snowShade = c('#383254');
         p.grade.contrast += 0.04;
         lamps(p, 1.25);
       },
@@ -1879,7 +1887,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.skyMid = c('#8A2C12');
         p.skyHorizon = c('#FF6A22');
         p.sunDisc = 0.2;
-        p.snowLit = c('#FFDCC4');
+        p.snowLit = c('#FFE8D8');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
         p.massif.seaWarm = 2.2;

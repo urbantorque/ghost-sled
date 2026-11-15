@@ -167,7 +167,9 @@ interface RockSet {
 const ROCK: Record<string, RockSet> = {
   summit: { lit: '#94889E', shade: '#3C3654', deep: '#25213A', ledge: '#FFFFFF', style: [1.35, 3.6, 0, 0.1] },
   fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [1.8, 8.5, 1, 0] },
-  volcano: { lit: '#5E5058', shade: '#1F1A22', deep: '#0E0C13', ledge: '#8C8288', style: [1.5, 6.5, 2, 0] },
+  // (Basalt is near black, so the lava's light and the sky's edge are what model it: a mid grey-mauve rock
+  // read as brown walls in an even light.)
+  volcano: { lit: '#43383F', shade: '#17131A', deep: '#0B0910', ledge: '#7A7076', style: [1.5, 6.5, 2, 0] },
   cone: { lit: '#B2A6AE', shade: '#5C5672', deep: '#3C3852', ledge: '#6F8C5A', style: [1.2, 2.5, 3, 0.02] },
 };
 

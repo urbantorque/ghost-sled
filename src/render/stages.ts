@@ -148,9 +148,10 @@ function lavaMaterial(low: boolean): ShaderMaterial {
           float live = smoothstep(0.52, 0.8, ln + heat * 0.6 - 0.1);
           float pool = step(1.0 - 0.3 * heat * heat, id);
           float hot = max(step(edge, mix(0.04, 0.2, heat * heat)), pool);
-          vec3 fire = mix(vec3(1.15, 0.16, 0.03), vec3(1.9, 0.52, 0.08), heat);
+          // (Red to orange, never past it: a hotter fire clipped to lemon on Low's ungraded frame.)
+          vec3 fire = mix(vec3(1.05, 0.14, 0.03), vec3(1.5, 0.36, 0.05), heat);
           vec3 seam = mix(vec3(0.28, 0.03, 0.008), fire, max(live, pool));
-          vec3 col = mix(crust * (0.7 + 0.6 * id), seam, hot);
+          vec3 col = mix(crust * (0.5 + 0.45 * id), seam, hot);
         #else
           p.y += uFlow * 0.16;
           // (Warped, so the plates are rafts of every shape and size: unwarped, a cell field is a honeycomb.)
@@ -191,6 +192,10 @@ function lavaMaterial(low: boolean): ShaderMaterial {
           // (Broken along each crack too, so what is lit is a run of segments and never a whole cell's rim.)
           float ln = vn(p * 0.9 + 11.0) * 0.55 + vn(p * 0.3 + 4.0) * 0.45;
           float live = max(smoothstep(0.52, 0.82, ln + heat * 0.6 - 0.1), gone);
+          // (Under the lens the crust's cracks are awake: on the phone's high lens a cool crust filled the
+          // lower frame as one dark slab.)
+          float nearL = 1.0 - smoothstep(6.0, 22.0, length(vW - cameraPosition));
+          live = max(live, nearL * smoothstep(0.35, 0.6, ln));
           // The melt itself: deep red to orange, streaked down the fall line, yellow only in the hottest
           // streaks (a sheet of yellow bloomed into a flat smear).
           float streak = vn(vec2(vW.x * 0.5, (vW.z + vW.y * 0.6) * 0.07 + uFlow * 0.05));
