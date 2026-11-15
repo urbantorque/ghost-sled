@@ -60,6 +60,9 @@ export interface GradeParams {
   /** How much of the glass shows at speed (default 1): scales the corner fringe, the punch's colour split and
    *  half of the speed streaks. A night of small point lights wants little: each light splits into three. */
   glass?: number;
+  /** How much of a beat's white flash (a perfect landing, a stomp) shows (default 1). In a night frame a
+   *  white lift over everything bleaches the rider it celebrates. */
+  flash?: number;
   /** Lens character round a low sun in view (an anamorphic streak and a few soft ghosts), 0 for none. */
   lens?: number;
   /** The mood's final light pass: the frame lifts and warms round its key light and settles away
@@ -106,6 +109,7 @@ export class PostFX {
   private moodShafts = 0;
   private moodLens = 0;
   private moodGlass = 1;
+  private moodFlash = 1;
   private moodFocal = 0;
   private focalDir: Vector3 | null = null;
   /** Taps per pixel for the light shafts: 14 on High, 8 on Medium (Low has no post pass at all). */
@@ -499,11 +503,14 @@ export class PostFX {
           } else {
             col = texture2D(tScene, uv).rgb;
           }
-          // Chromatic punch on boosts and perfect landings.
+          // Chromatic punch on boosts and perfect landings. (The split is added to the colour the streaks
+          // left, as a difference: set from the unstreaked frame, red and blue lost the speed streak and
+          // green kept it, so at speed every small light trailed a green tail.)
+          vec3 c0 = uPunch > 0.01 || uFringe * uSpeed > 0.004 ? texture2D(tScene, uv).rgb : col;
           if (uPunch > 0.01) {
             vec2 off = dc * 0.0035 * uPunch;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
+            col.r += (texture2D(tScene, uv + off).r - c0.r) * 0.85;
+            col.b += (texture2D(tScene, uv - off).b - c0.b) * 0.85;
           }
           // Round 7's lens character: at speed the glass shows in the frame's corners and nowhere else, a
           // hair of colour fringe (two and a half pixels of a 1280 frame in the very corner at the
@@ -511,9 +518,10 @@ export class PostFX {
           float fringe = uFringe * uSpeed * smoothstep(0.5, 1.0, r);
           if (fringe > 0.004) {
             vec2 off = dc * 0.004 * fringe;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.7);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.7);
+            col.r += (texture2D(tScene, uv + off).r - c0.r) * 0.7;
+            col.b += (texture2D(tScene, uv - off).b - c0.b) * 0.7;
           }
+          col = max(col, 0.0);
           // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
           col = pipeAO(col, uv);
           // The light's own hue, at full value: what the bloom and the lit snow lean toward.
@@ -953,6 +961,7 @@ export class PostFX {
     this.moodShafts = g.shafts ?? 0;
     this.moodLens = g.lens ?? 0;
     this.moodGlass = g.glass ?? 1;
+    this.moodFlash = g.flash ?? 1;
     this.moodFocal = g.focal ?? 0;
     this.focalDir = g.focalDir ?? null;
     u.uGust.value = g.gust ?? 0;
@@ -1060,7 +1069,7 @@ export class PostFX {
     u.uSpeed.value = this.params.speed * (0.5 + 0.5 * this.moodGlass);
     u.uPunch.value = this.params.punch * this.moodGlass;
     u.uFringe.value = (pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe : 0) * this.moodGlass;
-    u.uFlash.value = this.params.flash;
+    u.uFlash.value = this.params.flash * this.moodFlash;
     u.uVignette.value = this.params.vignette;
     u.uGrain.value = this.params.grain * this.moodGrain;
     u.uTime.value = this.params.time;

@@ -8,7 +8,7 @@ import type { Clearing } from './dressing';
 import { SNOW, merge, part } from './flora';
 import { ledgeAt, standable, visualGround } from './ground';
 import { box, seg } from './landmarkKit';
-import { LAMP_BRONZE, LAMP_SLATE, LAMP_TIMBER, LAMP_TIMBER_LIT, PAPER_DARK, WAY_LAMP_FLAME, wayLampGeometry } from './lanternkit';
+import { LAMP_BRONZE, LAMP_SLATE, LAMP_TIMBER, LAMP_TIMBER_LIT, PAPER_DARK, WAY_LAMP_FLAME, paper, wayLampGeometry } from './lanternkit';
 import { pushLocalLight } from './lights';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
@@ -47,8 +47,8 @@ const LAMP_RGB: [number, number, number] = [1, 0.66, 0.2];
 /** Lanterns in the valley by tier, the lanterns a win lets go, and the banks of cloud at the lens. */
 const BUDGET: Record<Detail, { valley: number; release: number; puffs: number; sheets: number; sprites: number; floats: number; lampAhead: number }> = {
   low: { valley: 1500, release: 160, puffs: 10, sheets: 1, sprites: 160, floats: 0, lampAhead: 170 },
-  medium: { valley: 3600, release: 360, puffs: 18, sheets: 2, sprites: 320, floats: 24, lampAhead: 240 },
-  high: { valley: 6000, release: 600, puffs: 28, sheets: 3, sprites: 480, floats: 44, lampAhead: 300 },
+  medium: { valley: 3600, release: 360, puffs: 18, sheets: 2, sprites: 320, floats: 36, lampAhead: 240 },
+  high: { valley: 6000, release: 600, puffs: 28, sheets: 3, sprites: 480, floats: 72, lampAhead: 300 },
 };
 
 /** Way lamps stand this far past the corridor's edge, a pair of them every this many metres. */
@@ -57,14 +57,16 @@ const WAY_STEP = 36;
 /** Way-lamp posts are drawn from this far behind the rider to this far ahead. */
 const LAMP_BACK = 70;
 const LAMP_AHEAD = 400;
-/** The great lantern hangs this far past the line, its foot this high over the snow. */
-const GREAT_Z = 36;
+/** The great lantern hangs this far past the line (here, before it, over the square), its foot this high
+ *  over the snow. (It hung 36 m past the line, where the finish lens, which swings round to look back up the
+ *  run at the rider, never saw it: lit over the square it stands behind the rider in that shot.) */
+const GREAT_Z = -28;
 const GREAT_Y = 9.5;
 /** The guide light keeps this far ahead of the rider. */
 const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
 const CANAL_E = 13;
-const CANAL_W = 5.5;
+const CANAL_W = 6.5;
 
 const smooth01 = (x: number): number => {
   const t = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -214,7 +216,8 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         vec2 q = gl_PointCoord * 2.0 - 1.0;
         q.y = -q.y;
         #ifdef POSTER
-          float dotK = step(max(abs(q.x), abs(q.y)), 0.72);
+          // (A round dab with a soft edge: a square one read as a pixel, not a lantern.)
+          float dotK = 1.0 - smoothstep(0.5, 0.8, length(q));
         #else
           float dotK = mote(q) * 1.25;
         #endif
@@ -479,15 +482,17 @@ function waterMaterial(low: boolean): ShaderMaterial {
           col = mix(vec3(0.02, 0.018, 0.07), uSky * 0.55, 0.35 + 0.25 * sin(flow * 0.8 + sin(vUv.x * 9.0) * 0.7));
           // Lights on the water: one every few metres, each in its own lane, bobbing.
           vec3 glow = vec3(0.0);
+          // (Each a hand across and its streak long on the water: at a third of that the lights were under a
+          // pixel from the run, and the river read as a dark ditch.)
           for (int k = 0; k < 2; k++) {
-            float cell = 5.5 + float(k) * 3.0;
+            float cell = 4.0 + float(k) * 2.5;
             float id = floor(flow / cell) + float(k) * 57.0;
             float fy = fract(flow / cell) * cell - cell * 0.5;
             float fx = (vUv.x - (0.2 + 0.6 * hash(id))) * ${CANAL_W.toFixed(1)};
-            float on = step(0.35, hash(id + 9.0));
-            float core = exp(-(fx * fx * 9.0 + fy * fy * 9.0));
-            float streak = exp(-(fx * fx * 5.0)) * exp(-max(fy, 0.0) * 1.3) * step(0.0, fy) * 0.35;
-            glow += vec3(1.0, 0.7, 0.26) * (core * 2.4 + streak) * on * (0.8 + 0.2 * sin(uTime * 3.0 + id));
+            float on = step(0.2, hash(id + 9.0));
+            float core = exp(-(fx * fx * 2.6 + fy * fy * 2.6));
+            float streak = exp(-(fx * fx * 2.2)) * exp(-max(fy, 0.0) * 0.55) * step(0.0, fy) * 0.5;
+            glow += vec3(1.0, 0.66, 0.24) * (core * 2.8 + streak) * on * (0.8 + 0.2 * sin(uTime * 3.0 + id));
           }
           col += glow;
         }
@@ -580,6 +585,18 @@ function tallLamplighter(): BufferGeometry {
   // The cowl: a cone tipped back, its mouth dark.
   parts.push(part(new CylinderGeometry(0.2, 0.72, 1.7, 8, 1), cape, { pos: [0, 8.6, -0.1], rot: [-0.18, 0, 0] }));
   parts.push(part(new CylinderGeometry(0.44, 0.44, 0.1, 8), new Color('#0E0C22'), { pos: [0, 8.25, 0.42], rot: [Math.PI / 2 - 0.2, 0, 0] }));
+  // The robe's making: a dark hem, folds falling from the waist, a bronze cord at the waist with a small
+  // lantern of his own on it, and the other sleeve hanging long. (Without them he read as a bare cone.)
+  const dark = new Color('#241E52');
+  parts.push(part(new CylinderGeometry(1.78, 1.82, 0.5, 9, 1, true), dark, { pos: [0, 0.35, 0] }));
+  for (let k = 0; k < 5; k++) {
+    const a = -0.9 + k * 0.45;
+    parts.push(seg([Math.sin(a) * 0.82, 5.0, Math.cos(a) * 0.82], [Math.sin(a) * 1.72, 0.6, Math.cos(a) * 1.72], 0.07, dark, 4));
+  }
+  parts.push(part(new CylinderGeometry(0.84, 0.86, 0.14, 9, 1, true), new Color(LAMP_BRONZE), { pos: [0, 5.35, 0] }));
+  parts.push(seg([-0.5, 5.3, 0.6], [-0.62, 4.5, 0.82], 0.03, new Color(LAMP_BRONZE), 3));
+  parts.push(part(new CylinderGeometry(0.26, 0.26, 0.55, 6), paper(1.2), { pos: [-0.64, 4.2, 0.86] }));
+  parts.push(seg([-0.55, 7.4, 0.1], [-1.05, 5.4, 0.35], 0.34, cape, 6));
   // The arm that holds the pole, and the pole.
   parts.push(seg([0.55, 7.4, 0.1], [1.3, 6.2, 0.7], 0.2, cape, 5));
   parts.push(seg([0.9, 0.2, 0.5], [TALL_TIP[0], TALL_TIP[1], TALL_TIP[2]], 0.11, new Color(LAMP_TIMBER_LIT), 5));
@@ -781,12 +798,14 @@ export class LanternWorld {
       let off: number;
       let y0: number;
       let size: number;
-      if (r < 0.13) {
-        // Beside the run: lanterns a rider passes among, each a paper lantern at the lens.
-        off = hw + 13 + Math.pow(rnd(), 1.4) * 80;
-        y0 = c.ground(cx + side * off, zc) + 1.5 + rnd() * 26;
+      const near = r < 0.17;
+      if (near) {
+        // Beside the run: lanterns a rider passes among, each a paper lantern at the lens. They drift up
+        // slowly through the first few tens of metres, so a frame always holds some at the rider's height.
+        off = hw + 11 + Math.pow(rnd(), 1.4) * 70;
+        y0 = c.ground(cx + side * off, zc) + 1.5 + rnd() * 12;
         size = 2.2 + rnd() * 1.8;
-      } else if (r < 0.2) {
+      } else if (r < 0.22) {
         // Over the road, well above any flight.
         off = rnd() * (hw + 13);
         y0 = yc + 42 + rnd() * 120;
@@ -801,13 +820,13 @@ export class LanternWorld {
         y0 = yc - 110 + Math.pow(rnd(), 1.4) * 620;
         size = 11 + rnd() * 11;
       }
-      const range = 70 + rnd() * 190;
+      const range = near ? 26 + rnd() * 44 : 70 + rnd() * 190;
       y0 = Math.min(y0, deck - 20 - range * 0.5);
       P[i * 3] = cx + side * off;
       P[i * 3 + 1] = y0;
       P[i * 3 + 2] = -z;
       A[i * 4] = rnd();
-      A[i * 4 + 1] = 1.3 + rnd() * 2.4;
+      A[i * 4 + 1] = near ? 0.5 + rnd() * 0.9 : 1.3 + rnd() * 2.4;
       A[i * 4 + 2] = size;
       A[i * 4 + 3] = range;
       Bb[i * 2] = rnd();
@@ -1193,7 +1212,8 @@ export class LanternWorld {
         u.uLit.value.copy(p.clouds.lit).lerp(p.snowLit, 0.25);
         u.uShade.value.copy(p.clouds.shade).lerp(p.skyHorizon, 0.1);
         u.uRim.value.copy(p.rim);
-        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * 1.25);
+        // (Low's flat values have no bloom to soften the pools: at High's strength they read as lava.)
+        u.uWarm.value.copy(p.deck.glow).multiplyScalar(p.massif.seaWarm * (low ? 0.5 : 1.25));
         u.uHaze.value.copy(p.skyHorizon).lerp(p.fog, 0.3);
         u.uMoon.value.copy(p.diskDir);
       }
@@ -1380,7 +1400,7 @@ export class LanternWorld {
         const d = h[2] - z;
         if (d < 120 || d > 2600) continue;
         const near = smooth01((d - 120) / 200) * this.show;
-        this.sprite(h[0], h[1], h[2], h[3], 0, FLAME, 0.3 * near, k * 0.13);
+        this.sprite(h[0], h[1], h[2], h[3], 0, FLAME, 0.45 * near, k * 0.13);
         if (low) continue;
         for (let j = 0; j < 4; j++) {
           const a = k * 2.4 + j * 1.9;
@@ -1635,7 +1655,7 @@ export class LanternWorld {
     if (lit > 0) {
       this.sprite(x, y, z, 17 + 6 * flash, 0, MARIGOLD, (0.3 + 0.25 * flash) * lit * full);
       this.sprite(x, y - 0.6, z, 6, 0, FLAME, (0.5 + 0.4 * flash) * lit * full);
-      pushLocalLight(x, y - 3, -z, 1, 0.7, 0.3, 40, (0.34 + 0.2 * flash) * lit * full * lampK);
+      pushLocalLight(x, y - 3, -z, 1, 0.7, 0.3, 36, (0.3 + 0.08 * flash) * lit * full * lampK);
       if (this.valley) {
         const vu = (this.valley.material as ShaderMaterial).uniforms;
         if (vu.uRelease.value < 0 && t > 0.25) {

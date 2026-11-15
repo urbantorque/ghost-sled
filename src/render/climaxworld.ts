@@ -135,7 +135,8 @@ export class ClimaxWorld {
         kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, (0.8 + rise + 1.5 * flare) * (0.5 + 0.5 * lay), GLOW_STAR);
       }
       kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, (0.5 + 0.9 * rise + 1.5 * flare) * (0.4 + 0.6 * lay), DECAL_LINE, Math.PI / 2);
-      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, (0.4 + 1.2 * rise + 1.5 * flare) * lay);
+      // (On Lanternfall the line's own light is a sliver of the stock one: at the flare it lit the square cream.)
+      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, (0.4 + 1.2 * rise + 1.5 * flare) * (lay < 1 ? 0.12 : 1));
     }
     if (ctx.mode !== 'run') return;
     // Shells, each volley once a run: as the sled lands the leap, as it comes into the town, and timed from

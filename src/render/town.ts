@@ -1,6 +1,6 @@
 import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry, TorusGeometry } from 'three';
 import type { BiomeId } from '../sim/mountains';
-import { lanternHouse, lanternLandmark, lanternStreetLamp } from './lanternkit';
+import { lampTower, lanternHouse, lanternLandmark, lanternStreetLamp, paper } from './lanternkit';
 import { lowCrowd } from './crowd';
 import { SNOW, crystal, part, shade, softPart } from './flora';
 import {
@@ -1053,8 +1053,32 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
         const H = Math.max(need, Math.max(gL, gR) + 7, rail.floor(dz) + 16);
         if (H - Math.max(gL, gR) > 26) return [];
         const parts: BufferGeometry[] = [];
+        if (biome === 'lantern') {
+          // (Lanternfall has no gate of two posts and a lintel: its street is entered between two lamp
+          // towers, a string of paper lanterns sagging between their heads.)
+          const heads: number[] = [];
+          for (const sx of [-1, 1]) {
+            const g = sx < 0 ? gL : gR;
+            heads.push(lampTower(parts, p, sx * (X + 1.2), g, 0, { w: 3.0, stem: Math.max(3.5, H - g - 3), n: 2, storey: 2.6, fine: !ctx.low, foot: g - 1 }));
+          }
+          const y0 = H + 2.2;
+          const n = 9;
+          const sag = 1.2;
+          for (let i = 0; i <= n; i++) {
+            const u = i / n;
+            const x = -(X + 1.2) + 2 * (X + 1.2) * u;
+            const y = y0 - sag * 4 * u * (1 - u);
+            if (i < n) {
+              const u2 = (i + 1) / n;
+              parts.push(seg([x, y, 0], [-(X + 1.2) + 2 * (X + 1.2) * u2, y0 - sag * 4 * u2 * (1 - u2), 0], 0.04, C('#2A2140'), 3));
+            }
+            if (i > 0 && i < n) parts.push(box(0.55, 0.75, 0.55, paper(1.05), [x, y - 0.6, 0]));
+          }
+          void heads;
+          return f.out(parts);
+        }
         const blossom = biome === 'blossom';
-        const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : biome === 'lantern' ? C('#2A2140') : TIMBER;
+        const post = blossom ? C('#93405A') : biome === 'volcanic' ? shade(p.low, 0.55) : biome === 'glacier' ? C('#6A7088') : TIMBER;
         for (const sx of [-1, 1]) {
           const g = sx < 0 ? gL : gR;
           if (blossom) parts.push(grade(part(new CylinderGeometry(0.75, 0.9, H + 3 - g + 1.5, 10), post, { pos: [sx * X, (H + 3 + g - 1.5) / 2, 0] }), g, H + 3, 0.75, 1.05));

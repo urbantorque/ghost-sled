@@ -499,11 +499,13 @@ function roundedBox(hx: number, hy: number, hz: number, r: number, segs: number,
  *  than its skin so it reads as glowing, not painted. A great light is half again as big, wears a thin ring
  *  of light around its waist and carries a second, smaller flame beside it, so a great one is told from a
  *  spark at a glance, at speed. The flame stands upright and bobs (the material's bob). */
-export function lightGeometry(great: boolean): BufferGeometry {
+export function lightGeometry(great: boolean, warm = false): BufferGeometry {
   // (A flame reads at 30 m/s only at about a box's size: 0.8 m tall, a great one 1.2 m.)
   const s = great ? 2.5 : 1.7;
-  const skin = great ? new Color('#FFD86A') : new Color('#FFC94A');
-  const core = new Color('#FFF6D8').multiplyScalar(1.5);
+  // `warm`: a deeper marigold skin, for a frame with no tone curve to carry gold to marigold (Lanternfall's
+  // Low, where the stock gold read as lemon on the lilac snow).
+  const skin = new Color(warm ? (great ? '#FFB848' : '#FFA63A') : great ? '#FFD86A' : '#FFC94A');
+  const core = new Color(warm ? '#FFE4B4' : '#FFF6D8').multiplyScalar(1.5);
   const flame = (k: number, x: number, y: number, col: Color): BufferGeometry =>
     lathe(
       [
@@ -612,7 +614,7 @@ function archDrop(cream: boolean): BufferGeometry {
  *  High through the plain toon material (no emissive and no new shader). The
  *  posts reach 6 m below the snow so they never float over a falling bank. Local x runs across the
  *  run, y up; one instance per arch. */
-export function kmArchGeometry(span: number): BufferGeometry {
+export function kmArchGeometry(span: number, lantern = false): BufferGeometry {
   reseed(1717);
   const H = ARCH_HEIGHT;
   const half = span / 2;
@@ -622,6 +624,33 @@ export function kmArchGeometry(span: number): BufferGeometry {
   const lamp = new Color('#FFB45E').multiplyScalar(2.8);
   const spruce = new Color('#2F6F68');
   const parts: BufferGeometry[] = [];
+  if (lantern) {
+    // Lanternfall's: no lintel on two posts (the mountain has none). Two stone lamp pillars, each a dressed
+    // shaft with a lit paper head under a slate cap, and the string of lanterns sagging between their heads.
+    const stoneC = new Color('#3A3462');
+    const slate = new Color('#2C2A44');
+    for (const sx of [-1, 1]) {
+      const x = sx * half;
+      parts.push(paint(part(new BoxGeometry(0.9, H + 6, 0.9), stoneC, { pos: [x, (H - 6) / 2 - 0.6, 0] }), -6, H - 1.2, 0.6, 1.05, 0.1));
+      parts.push(part(new BoxGeometry(1.2, 0.3, 1.2), slate, { pos: [x, H - 2.4, 0] }));
+      parts.push(part(new BoxGeometry(1.0, 1.3, 1.0), new Color('#FFD070').multiplyScalar(2.2), { pos: [x, H - 1.55, 0] }));
+      parts.push(part(new ConeGeometry(1.0, 0.9, 4), slate, { pos: [x, H - 0.45, 0], rot: [0, Math.PI / 4, 0] }));
+      parts.push(part(new CylinderGeometry(0.66, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
+    }
+    const n = Math.max(6, Math.round(span / 1.6));
+    const sag = Math.min(2.2, 0.07 * span);
+    const top = H - 1.0;
+    const at = (t: number): [number, number] => [-half + (span * t), top - sag * 4 * t * (1 - t)];
+    for (let i = 0; i < n; i++) {
+      const [ax, ay] = at(i / n);
+      const [bx, by] = at((i + 1) / n);
+      const len = Math.hypot(bx - ax, by - ay);
+      parts.push(part(new BoxGeometry(len, 0.035, 0.035), rope, { pos: [(ax + bx) / 2, (ay + by) / 2, 0], rot: [0, 0, Math.atan2(by - ay, bx - ax)] }));
+      if (i === 0) continue;
+      parts.push(archDrop(i % 4 === 0).clone().translate(ax, ay, 0));
+    }
+    return merge(parts);
+  }
   for (const sx of [-1, 1]) {
     const x = sx * half;
     // The post: square timber, darker toward its foot.

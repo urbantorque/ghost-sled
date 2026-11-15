@@ -46,29 +46,32 @@ async (page) => {
   // places, not of times.)
   const at = async (tag, zs) => { for (let i = 0; i < zs.length; i++) { await waitZ(zs[i]); await shoot(`${tag}-${i}`); } };
   const L = info.leaps;
-  await at('a-crown', [240, 420]);
-  await at('b-lip1', [L[0] - 45, L[0] + 25, L[0] + 90]);
-  const fo = play('follow');
-  if (fo) await at('c-follow', [fo.z0 + 120, fo.z0 + 300, fo.z1 - 90]);
-  await at('d-break', [L[1] - 75, L[1] - 20, L[1] + 40, L[1] + 100, L[1] + 160, L[1] + 240]);
   const ki = play('kindle');
-  if (ki) await at('e-kindle', [ki.z0 + 10, ki.z0 + 70, ki.z0 + 130, ki.z0 + 190, ki.z1 + 15, ki.z1 + 80]);
-  await at('f-road', [2620, 2800, 3050]);
   const ca = play('carry');
-  if (ca) await at('g-carry', [ca.z0 + 60, ca.z0 + 150, ca.z0 + 260]);
-  await at('h-lip3', [L[2] - 30, L[2] + 30, L[2] + 95, L[2] + 180]);
-  await at('i-finish', [info.fin - 150, info.fin - 60, info.fin + 2]);
-  for (let i = 3; i < 6; i++) { await page.waitForTimeout(350); await shoot('i-finish-' + i); }
-  await page.waitForTimeout(2500);
-  await shoot('i-finish-results');
-  // The scene behind the results card.
-  await page.addStyleTag({ content: '#ui > *, .gs-results, [class*="results"] { opacity: 0 !important; }' });
-  await page.waitForTimeout(300);
-  await shoot('i-finish-lantern');
+  // (`run: false` skips the pool rider's run and shoots only the pinned pass and the title.)
+  if (c.run !== false) {
+    await at('a-crown', [240, 420]);
+    await at('b-lip1', [L[0] - 45, L[0] + 25, L[0] + 90]);
+    const fo = play('follow');
+    if (fo) await at('c-follow', [fo.z0 + 120, fo.z0 + 300, fo.z1 - 90]);
+    await at('d-break', [L[1] - 75, L[1] - 20, L[1] + 40, L[1] + 100, L[1] + 160, L[1] + 240]);
+    if (ki) await at('e-kindle', [ki.z0 + 10, ki.z0 + 70, ki.z0 + 130, ki.z0 + 190, ki.z1 + 15, ki.z1 + 80]);
+    await at('f-road', [2620, 2800, 3050]);
+    if (ca) await at('g-carry', [ca.z0 + 60, ca.z0 + 150, ca.z0 + 260]);
+    await at('h-lip3', [L[2] - 30, L[2] + 30, L[2] + 95, L[2] + 180]);
+    await at('i-finish', [info.fin - 150, info.fin - 60, info.fin + 2]);
+    for (let i = 3; i < 6; i++) { await page.waitForTimeout(350); await shoot('i-finish-' + i); }
+    await page.waitForTimeout(2500);
+    await shoot('i-finish-results');
+    // The scene behind the results card.
+    await page.addStyleTag({ content: '#ui > *, .gs-results, [class*="results"] { opacity: 0 !important; }' });
+    await page.waitForTimeout(300);
+    await shoot('i-finish-lantern');
+  }
 
   // ---- the gutter, forced: a pinned sled inside the carry, the simfix lane's state held up by hand
-  await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&autoride=1&m=4${c.extra}`);
-  await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 60000 });
+  await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&autoride=1&m=4${c.extra}`, { timeout: 90000 });
+  await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 90000 });
   await page.waitForTimeout(1200);
   {
     await page.evaluate((z) => {
@@ -120,7 +123,7 @@ async (page) => {
 
   // ---- the title
   if (c.title) {
-    await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&m=4${c.extra}`);
+    await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&m=4${c.extra}`, { timeout: 90000 });
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'title', null, { timeout: 60000 }).catch(() => {});
     await page.waitForTimeout(5000);
     await shoot('k-title-0');

@@ -158,6 +158,8 @@ export interface Grade {
   focalDir?: Vector3;
   /** How much of the glass shows at speed (post.ts GradeParams.glass; 1 when left out). */
   glass?: number;
+  /** How much of a beat's white flash shows (post.ts GradeParams.flash; 1 when left out). */
+  flash?: number;
   tone?: number;
   exposure?: number;
   hi?: Color;
@@ -699,6 +701,7 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   // Round 7's grade fields, wherever a mood's own grade leaves them out (so every palette blends).
   p.grade.tone ??= 1;
   p.grade.glass ??= 1;
+  p.grade.flash ??= 1;
   p.grade.exposure ??= 1;
   p.grade.hi ??= new Color(1, 1, 1);
   p.grade.lo ??= new Color(1, 1, 1);
@@ -945,7 +948,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // The Crown, at the end of night above a sea of cloud (ART.md 15): an indigo zenith full of stars, a
       // great pale moon off to the right, silver on the snow's lit side and lilac in its shade, ink for
       // everything that stands. The cloud below is lit warm in patches by what is under it.
-      setSun(p, 19, 15, 42, 12);
+      // (The moon at 9.5 degrees, right of the run: at 15 it stood at the frame's top edge or under the
+      // HUD in every frame down the Crown.)
+      setSun(p, 17, 9.5, 42, 12);
       p.moon = true;
       // (The run's gates and marks are bronze here: the rider's vermillion is the one red on this mountain.)
       p.accentProp = c('#B88A4A');
@@ -984,12 +989,14 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.sea = 1;
       p.massif.seaWarm = 0.75;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
-      p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
+      p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
       p.grade.saturation = 1.02;
       p.grade.contrast = 1.12;
       // (A night of point lights: at speed each lantern split into a red, a green and a blue one, and the
       // streaks drew every one as a dashed line. The glass stays out of this mountain's frames.)
       p.grade.glass = 0.15;
+      // (A perfect landing's white flash, over a night frame, bleached the rider to cream.)
+      p.grade.flash = 0.3;
       p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#9088D4'), shade: c('#352C84'), rim: c('#DCD6FF'), shadow: 0 };
       p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
@@ -1533,7 +1540,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.rim = c('#FFD9A0');
         p.fog = c('#3A2C80');
         p.fogFar = 640;
-        p.hemiSky = c('#6A58C4');
+        // (Less of the sky's light between the lamps, so the Lamp Road's snow is lilac in pools of marigold
+        // and not lilac all over.)
+        p.hemiSky = c('#5E4EBC');
         p.air.far = c('#3A2670');
         p.air.low = 0.9;
         p.under = { color: c('#FFB04A'), k: 0.14 };
@@ -1550,7 +1559,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.stars = 0.15;
         p.shadowK = 0.6;
         p.bloom = 0.78;
-        p.lamps = 1.2;
+        p.lamps = 1.3;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.6;
@@ -1561,20 +1570,30 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       },
     },
     {
-      // Down to Firstlight: the deck thins and lifts off the far range, and the east begins to pale.
+      // Down to Firstlight: the deck thins and lifts off the far range, and the east begins to pale. The
+      // hour turns here, so the town is a different picture from the Lamp Road: the air lighter and bluer,
+      // the shade a cold blue-violet, the lamps no longer the only light, the lit snow taking a rose edge.
       from: 2900, at: 3600, dusk: 1,
       edit: (p) => {
         p.deck.k = 0.62;
-        p.skyZenith = c('#161450');
-        p.skyMid = c('#4A3690');
-        p.skyHorizon = c('#8A5C9C');
+        p.skyZenith = c('#1A1A5C');
+        p.skyMid = c('#5444A0');
+        p.skyHorizon = c('#9A66A4');
         p.skyBand = { color: c('#F0A088'), fade: 22, k: 0.7 };
-        p.snowLit = c('#D6CCF2');
-        p.fog = c('#5C4496');
-        p.air.far = c('#4A2E7C');
-        p.under.k = 0.12;
+        p.snowLit = c('#D8D0F2');
+        p.snowShade = c('#5658BE');
+        p.rim = c('#FFD2C0');
+        p.hemiSky = c('#7468CC');
+        p.fog = c('#5C4A9C');
+        p.air.far = c('#4A3480');
+        p.under.k = 0.1;
+        p.lamps = 1.05;
         p.stars = 0.35;
         p.massif.glowK = 0.45;
+        p.grade.exposure = 1.02;
+        p.grade.hi = c('#FFEEE6');
+        p.grade.lo = c('#DCDEFF');
+        p.grade.saturation = 0.97;
       },
     },
     {
@@ -1906,7 +1925,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
         p.air.scatter = 0.4;
-        p.fogNear = 2;
+        // (The near plane keeps its whole palette for the first few metres, so the snow under the rider is
+        // snow and the cloud is beyond it: from 2 m the near, the middle and the far were one violet.)
+        p.fogNear = 7;
         p.fogFar = 49;
         p.skyZenith = c('#6A60BC');
         p.skyMid = c('#9A90DA');
@@ -1919,8 +1940,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sunGlow = 0.35;
         p.sunSoft = 1;
         p.snowLit = c('#ECEAFF');
-        p.snowShade = c('#7C70C8');
-        p.snowDeep = c('#5A4CA8');
+        p.snowShade = c('#6658BE');
+        p.snowDeep = c('#46389A');
         p.rim = c('#F0EEFF');
         p.hemiSky = c('#A69CE0');
         p.ridge = [c('#B6AEE6'), c('#AEA6E2'), c('#A49ADC')];
@@ -1939,14 +1960,16 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.ghostGlow = 2.6;
         p.lanternGlow = 0.8;
         p.sparkle = 0.5;
-        p.bloom = 0.85;
-        p.grade.exposure = 1.02;
-        p.grade.contrast = 1.02;
+        // (Less bloom and more contrast than a white-out would have: at 0.85 and 1.02 the cloud was a milky
+        // veil of one lilac value over everything, the rider bleached in it as it came out.)
+        p.bloom = 0.62;
+        p.grade.exposure = 1.0;
+        p.grade.contrast = 1.1;
         p.grade.saturation = 1.04;
         p.grade.hi = c('#F8F6FF');
         p.grade.lo = c('#E4DCFF');
         p.grade.focal = 0.5;
-        lamps(p, 1.5);
+        lamps(p, 1.3);
       },
     },
     {
@@ -1958,6 +1981,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fogFar *= 1.6;
         p.fogNear = 110;
         p.air.low = 0.5;
+        // (The valley's air is lit from inside by its lanterns: a dusky rose-violet the dots stand in, where
+        // the night's own violet made the valley under the lip a dark hole.)
+        p.air.far = c('#6A4890');
+        p.fog = c('#4C3A8C');
         p.under.k = 0.3;
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');
