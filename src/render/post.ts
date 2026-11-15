@@ -57,6 +57,9 @@ export interface GradeParams {
   film?: number;
   /** How far the bloom leans to the light's own colour (0..1, default 0.4). */
   bloomWarm?: number;
+  /** How much of the glass shows at speed (default 1): scales the corner fringe, the punch's colour split and
+   *  half of the speed streaks. A night of small point lights wants little: each light splits into three. */
+  glass?: number;
   /** Lens character round a low sun in view (an anamorphic streak and a few soft ghosts), 0 for none. */
   lens?: number;
   /** The mood's final light pass: the frame lifts and warms round its key light and settles away
@@ -102,6 +105,7 @@ export class PostFX {
   private moodFoot = 0;
   private moodShafts = 0;
   private moodLens = 0;
+  private moodGlass = 1;
   private moodFocal = 0;
   private focalDir: Vector3 | null = null;
   /** Taps per pixel for the light shafts: 14 on High, 8 on Medium (Low has no post pass at all). */
@@ -948,6 +952,7 @@ export class PostFX {
     this.moodFoot = g.foot ?? 0;
     this.moodShafts = g.shafts ?? 0;
     this.moodLens = g.lens ?? 0;
+    this.moodGlass = g.glass ?? 1;
     this.moodFocal = g.focal ?? 0;
     this.focalDir = g.focalDir ?? null;
     u.uGust.value = g.gust ?? 0;
@@ -1052,9 +1057,9 @@ export class PostFX {
     u.uUseBloom.value = this.bloomEnabled ? 1 : 0;
     u.uBloom.value = this.moodBloom * this.params.bloomScale;
     u.uFoot.value = this.moodFoot * this.params.footScale;
-    u.uSpeed.value = this.params.speed;
-    u.uPunch.value = this.params.punch;
-    u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe : 0;
+    u.uSpeed.value = this.params.speed * (0.5 + 0.5 * this.moodGlass);
+    u.uPunch.value = this.params.punch * this.moodGlass;
+    u.uFringe.value = (pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe : 0) * this.moodGlass;
     u.uFlash.value = this.params.flash;
     u.uVignette.value = this.params.vignette;
     u.uGrain.value = this.params.grain * this.moodGrain;

@@ -142,6 +142,12 @@ export function standingStoneGeometry(p: Palette): BufferGeometry {
   return merge([
     grade(part(main, a, { pos: [0, 2.45, 0], rot: [0.03, 0.4, -0.04], jitter: 0.22 }), 0, 5, 0.8, 1.15, 0.12),
     part(new CylinderGeometry(0.53, 0.57, 0.24, 5), b, { pos: [0.02, 3.2, 0.02], rot: [0.03, 0.4, -0.04] }),
+    // Two more courses cut round it, each a ledge that holds a line of snow: at the lens a stone this size
+    // was one flat value from foot to head, and read as a box.
+    part(new CylinderGeometry(0.66, 0.7, 0.2, 5, 1, true), shade(a, 0.72), { pos: [0.0, 1.45, 0.0], rot: [0.03, 0.4, -0.04] }),
+    part(new CylinderGeometry(0.6, 0.68, 0.09, 5, 1, true), SNOW, { pos: [0.0, 1.6, 0.0], rot: [0.03, 0.4, -0.04] }),
+    part(new CylinderGeometry(0.47, 0.5, 0.18, 5, 1, true), shade(a, 0.72), { pos: [0.02, 4.05, 0.02], rot: [0.03, 0.4, -0.04] }),
+    part(new CylinderGeometry(0.42, 0.49, 0.08, 5, 1, true), SNOW, { pos: [0.02, 4.18, 0.02], rot: [0.03, 0.4, -0.04] }),
     part(new CylinderGeometry(0.2, 0.42, 1.7, 4), shade(a, 0.85), { pos: [0.4, 0.55, 0.22], rot: [0.2, 0.9, -0.42], jitter: 0.08 }),
     part(new IcosahedronGeometry(0.42, 0), SNOW, { pos: [0, 4.86, 0], scale: [1, 0.36, 1], jitter: 0.08 }),
     part(new IcosahedronGeometry(0.8, 0), SNOW, { pos: [0.1, 0.02, 0.1], scale: [1.15, 0.22, 1.1], jitter: 0.1 }),
@@ -163,6 +169,12 @@ export function stoneRowGeometry(p: Palette, low = false): BufferGeometry {
   for (const [x, z, r, h, col] of stones) {
     parts.push(grade(part(new CylinderGeometry(r * 0.62, r, h, 5, low ? 1 : 2), col, { pos: [x, h / 2, z], rot: [0, x * 2.1 + 0.3, 0], jitter: 0.12 }), 0, 5, 0.82, 1.12, 0.1));
     parts.push(part(new IcosahedronGeometry(r * 0.7, 0), SNOW, { pos: [x, h - 0.02, z], scale: [1, 0.34, 1], jitter: 0.06 }));
+    if (!low) {
+      // A course cut round each, and the snow that lies on it.
+      const ry = r * (1 - 0.38 * 0.58);
+      parts.push(part(new CylinderGeometry(ry + 0.05, ry + 0.08, 0.2, 5, 1, true), shade(col, 0.7), { pos: [x, h * 0.58, z], rot: [0, x * 2.1 + 0.3, 0] }));
+      parts.push(part(new CylinderGeometry(ry, ry + 0.07, 0.08, 5, 1, true), SNOW, { pos: [x, h * 0.58 + 0.14, z], rot: [0, x * 2.1 + 0.3, 0] }));
+    }
   }
   parts.push(part(new IcosahedronGeometry(0.9, 0), SNOW, { pos: [0, 0.02, 0], scale: [1.1, 0.2, 1.05], jitter: 0.1 }));
   return merge(parts);
@@ -522,7 +534,7 @@ export function lanternHouse(t: Town, F: number, lo: number, o: LanternHouseOpts
       parts.push(box(1.0, 2.0, 0.16, pap, [o.shop ? -w * 0.3 : 0, F + 1.15, zf + 0.07]));
       if (o.shop) {
         parts.push(box(w * 0.46 + 0.3, 1.9, 0.12, t.trim, [w * 0.16, F + 1.7, zf + 0.04]));
-        parts.push(box(w * 0.46, 1.6, 0.14, pap, [w * 0.16, F + 1.7, zf + 0.07]));
+        parts.push(grade(box(w * 0.46, 1.6, 0.14, pap, [w * 0.16, F + 1.7, zf + 0.07]), F + 0.9, F + 2.5, 1.15, 0.55, 0.03));
         if (!plain) for (let i = 1; i < 4; i++) parts.push(box(0.09, 1.6, 0.16, t.trim, [w * 0.16 - w * 0.23 + (i * w * 0.46) / 4, F + 1.7, zf + 0.09]));
       }
       continue;
@@ -532,12 +544,14 @@ export function lanternHouse(t: Town, F: number, lo: number, o: LanternHouseOpts
     const bw = w / bays;
     for (let i = 0; i < bays; i++) {
       const x = -w / 2 + (i + 0.5) * bw;
-      parts.push(box(bw - 0.5, STOREY - 1.0, 0.1, pap, [x, y0 + STOREY * 0.52, zf + 0.05]));
+      // (A pane is brightest low, where its lamp stands, and a deeper amber under the rail above it: one
+      // flat value a pane, a street of them was a wall of orange slabs.)
+      parts.push(grade(box(bw - 0.5, STOREY - 1.0, 0.1, pap, [x, y0 + STOREY * 0.52, zf + 0.05]), y0 + 0.6, y0 + STOREY - 0.3, lit ? 1.18 : 1, lit ? 0.5 : 0.8, 0.03));
       if (!plain) parts.push(box(bw - 0.5, 0.09, 0.14, t.trim, [x, y0 + STOREY * 0.66, zf + 0.07]));
     }
     if (!plain && !o.sunk) {
       const m = Math.max(1, Math.floor(d / 3.4));
-      for (let i = 0; i < m; i++) parts.push(box(0.1, STOREY - 1.0, d / m - 0.6, pap, [s * (w / 2 + 0.05), y0 + STOREY * 0.52, -d / 2 + ((i + 0.5) * d) / m]));
+      for (let i = 0; i < m; i++) parts.push(grade(box(0.1, STOREY - 1.0, d / m - 0.6, pap, [s * (w / 2 + 0.05), y0 + STOREY * 0.52, -d / 2 + ((i + 0.5) * d) / m]), y0 + 0.6, y0 + STOREY - 0.3, lit ? 1.18 : 1, lit ? 0.5 : 0.8, 0.03));
     }
   }
   // The roof, and the lantern on its point.

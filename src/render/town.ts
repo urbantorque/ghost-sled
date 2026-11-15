@@ -785,7 +785,8 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
           if (dz2 + w > b - 2) break;
           lots.push({ s, dz: dz2 + w / 2, w, d, e: eb, kind, storeys: biome === 'glacier' ? 1 + (rnd() < 0.6 ? 1 : 0) : 2 + (rnd() < 0.5 ? 1 : 0), jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });
           bk++;
-          dz2 += w + 2.5 + rnd() * 4 + (bk % 3 === 0 ? 5 : 0);
+          // (Lanternfall's crest keeps every other lot: its streets were the mountain's heaviest frames.)
+          dz2 += w + 2.5 + rnd() * 4 + (bk % 3 === 0 ? 5 : 0) + (biome === 'lantern' ? 10 : 0);
         }
       } else if (narrowAll && s === markSide && spec.mark) {
         lots.push({ s, dz: markAt, w: 21, d: 15, e: 14.4, kind: 'landmark', storeys: 1, jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });

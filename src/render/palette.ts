@@ -156,6 +156,8 @@ export interface Grade {
   gust: number;
   glitter: number;
   focalDir?: Vector3;
+  /** How much of the glass shows at speed (post.ts GradeParams.glass; 1 when left out). */
+  glass?: number;
   tone?: number;
   exposure?: number;
   hi?: Color;
@@ -696,6 +698,7 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
   // Round 7's grade fields, wherever a mood's own grade leaves them out (so every palette blends).
   p.grade.tone ??= 1;
+  p.grade.glass ??= 1;
   p.grade.exposure ??= 1;
   p.grade.hi ??= new Color(1, 1, 1);
   p.grade.lo ??= new Color(1, 1, 1);
@@ -982,6 +985,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
       p.grade.saturation = 1.02;
       p.grade.contrast = 1.12;
+      // (A night of point lights: at speed each lantern split into a red, a green and a blue one, and the
+      // streaks drew every one as a dashed line. The glass stays out of this mountain's frames.)
+      p.grade.glass = 0.15;
       p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#9088D4'), shade: c('#352C84'), rim: c('#DCD6FF'), shadow: 0 };
       p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
@@ -1513,14 +1519,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#120E44');
         p.skyMid = c('#34267E');
         p.skyHorizon = c('#5A3E8C');
-        p.skyBand = { color: c('#D8906A'), fade: 30, k: 0.45 };
-        p.skyBelow = c('#1E1650');
+        p.skyBand = { color: c('#C88466'), fade: 26, k: 0.24 };
+        p.skyBelow = c('#3A2458');
         p.deck.k = 0.92;
         p.deck.lit = c('#5C50A6');
         p.deck.shade = c('#221A60');
-        p.deck.glow = c('#A0607A');
-        p.snowLit = c('#CDC6F2');
-        p.snowShade = c('#5C46B0');
+        p.deck.glow = c('#8E5C8C');
+        p.snowLit = c('#DAD8F6');
+        p.snowShade = c('#6656B2');
         p.snowDeep = c('#2A1A6E');
         p.rim = c('#FFD9A0');
         p.fog = c('#3A2C80');
@@ -1529,25 +1535,25 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.air.far = c('#3A2670');
         p.air.low = 0.9;
         p.under = { color: c('#FFB04A'), k: 0.14 };
-        p.atmo.valley = 0.7;
-        p.atmo.valleyColor = c('#7A5C92');
+        p.atmo.valley = 1;
+        p.atmo.valleyColor = c('#B27C62');
         p.atmo.meteors = 0;
         p.massif.sea = 0;
         p.massif.seaWarm = 0;
         p.massif.veil = 0.6;
         p.ridge = [c('#4A3E96'), c('#2C2470'), c('#181446')];
         p.massif.glow = c('#FFB870');
-        p.massif.glowK = 0.3;
+        p.massif.glowK = 0.5;
         p.massif.glowLine = -900;
         p.stars = 0.15;
         p.shadowK = 0.6;
         p.bloom = 0.78;
-        p.lamps = 1.05;
+        p.lamps = 1.2;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.6;
-        p.grade.exposure = 1.1;
-        p.grade.saturation = 1.08;
+        p.grade.exposure = 1.08;
+        p.grade.saturation = 1.0;
         p.grade.hi = c('#FFF6E8');
         p.grade.lo = c('#E2D6FF');
       },
@@ -1893,14 +1899,14 @@ export const PLACES: Record<BiomeId, Place[]> = {
         return cl ? { z0: cl.z0 + 55, z1: cl.z1 - CLOUD_BREAK, rise: 150, fall: 50 } : null;
       },
       edit: (p) => {
-        p.fog = c('#B6AEE6');
-        p.air.far = c('#A49ADC');
+        p.fog = c('#A8A0E2');
+        p.air.far = c('#968CD6');
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
         p.air.scatter = 0.4;
         p.fogNear = 2;
-        p.fogFar = 44;
-        p.skyZenith = c('#7E74C8');
+        p.fogFar = 49;
+        p.skyZenith = c('#6A60BC');
         p.skyMid = c('#9A90DA');
         p.skyHorizon = c('#B6AEE6');
         p.skyBelow = c('#A49ADC');
@@ -1910,8 +1916,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sunDisc = 0;
         p.sunGlow = 0.35;
         p.sunSoft = 1;
-        p.snowLit = c('#DEDAF8');
-        p.snowShade = c('#8E82D2');
+        p.snowLit = c('#ECEAFF');
+        p.snowShade = c('#7C70C8');
         p.snowDeep = c('#5A4CA8');
         p.rim = c('#F0EEFF');
         p.hemiSky = c('#A69CE0');
@@ -1950,7 +1956,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fogFar *= 1.6;
         p.fogNear = 110;
         p.air.low = 0.5;
-        p.under.k = 0.2;
+        p.under.k = 0.3;
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');
         p.grade.contrast += 0.04;
