@@ -43,8 +43,9 @@ export interface MountainDef {
   tagline: string;
   seed: number;
   unlockGhosts: number;
-  /** The finale (Lanternfall). r7: placeholder flag: until The Twelve opens it, it opens like the others, at
-   *  `unlockGhosts` lifetime passes; `?debug&m=4` opens it in dev whatever the save holds. */
+  /** The finale (Lanternfall). The Twelve opens it (src/game/twelve.ts `mountainOpen`), never a pass count: its
+   *  `unlockGhosts` opens nothing (the ladder and the unlock notices skip the finale, and no mission is set on
+   *  its biome). `?debug&m=4` opens it in dev whatever the save holds. */
   finale?: boolean;
 }
 
