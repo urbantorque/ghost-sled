@@ -1587,6 +1587,12 @@ export class Sfx {
       case 'lead': {
         if (verb === 'follow' || verb === 'carry') {
           // Back in the guide light's wake, or the flame caught again: a warm breath in and two bells up.
+          // (A rider on the wake's edge crosses it many times: a real ride of the follow sent eleven. Said
+          // once in any three seconds.)
+          if (verb === 'follow') {
+            if (t0 - this.wakeAt < 3) break;
+            this.wakeAt = t0;
+          }
           this.cued(`${verb}.lead`);
           const t = this.onGrid(t0, 2, 0.28);
           const v = this.voice(t, 0.45, 0, 1, PRIO.normal);
@@ -1686,6 +1692,9 @@ export class Sfx {
   }
 
   // ---------------------------------------------------------------- round 7: the new verbs, the legend, the hero frame
+
+  /** When "back in the wake" last sounded (the context's clock). */
+  private wakeAt = -1e9;
 
   /** Probe: what these cues have played, by name (window.__gs.audio.debugCues(), and the tests). */
   readonly cues: Record<string, number> = {};
