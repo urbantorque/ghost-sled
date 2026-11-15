@@ -1152,6 +1152,12 @@ export class Life {
     this.smokeMat.uniforms.uSmokeLit.value.set(this.night ? '#C8CCE6' : '#FFF6EE');
     (this.smokeMat.uniforms.uSmokeShade.value as Color).copy(p.snowShade).lerp(new Color('#E4E0EE'), 0.45);
     this.smokeMat.uniforms.uSmokeA.value = this.night ? 0.6 : p.windStreaks > 0 ? 0.55 : 0.95;
+    // Under Ember's deck the smoke is forge smoke: dark, and lit from below by what it rises from (white
+    // puffs against a red sky read as cotton).
+    if (p.massif.peak === 'volcano' && !this.night) {
+      this.smokeMat.uniforms.uSmokeLit.value.set('#F29A62');
+      (this.smokeMat.uniforms.uSmokeShade.value as Color).set('#3E2434');
+    }
     // The fox's rock in the mountain's own stone.
     this.figMat.uniforms.uRockC.value.set(ROCK_C[this.course.biome] ?? '#7A7C92').multiplyScalar(this.night ? 0.7 : 1);
     const lamps = this.night ? 2.2 : 0;

@@ -3,6 +3,7 @@ import type { Course } from '../sim/course';
 import { LEGEND_AHEAD, type LegendPlay, pathX, RIBBON_CAP, RIBBON_HW } from '../sim/moments';
 import { CRANE_RIBBONS, craneFlock, curtainMaterial, DEER, type DeerForms, deerForms, dragonDrum, dragonHead, dragonTail, ERUPT_AT, type Field, fountain, laneMaterial, lanternField, lavaBombs, lavaRuns, ribbonLink, smokeColumn, spiritMaterial, wyrmHead, wyrmPlate } from './legendforms';
 import { pushLocalLight } from './lights';
+import { VOLCANO_TOP } from './massif';
 import { DECAL_POOL, DECAL_RING, GLOW_FLAME, GLOW_RING, GLOW_SOFT, GLOW_STAR, type MomentKit, type Pool, type StageCtx, tiered } from './momentkit';
 
 // Round 7 (the momentsworld lane): the legend moments of the four older mountains, staged. Each is drawn
@@ -837,7 +838,7 @@ export class LegendWorld {
     const s = ctx.s;
     const move = ctx.reduced ? 0 : 1;
     const az = (this.coneAz * Math.PI) / 180;
-    const at = ERUPT_AT.value.set(Math.sin(az) * 4400, 1322, -Math.cos(az) * 4400);
+    const at = ERUPT_AT.value.set(Math.sin(az) * 4400, VOLCANO_TOP - 38, -Math.cos(az) * 4400);
     const BLAST = 2.3;
     const te = this.tSaid;
     const tb = te - BLAST;

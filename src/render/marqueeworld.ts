@@ -299,6 +299,11 @@ export class MarqueeWorld {
     return this.legends.shot();
   }
 
+  /** Where the hero cone stands (the palette's massif.heroAz, degrees): the eruption rises from it. */
+  setConeBearing(deg: number): void {
+    this.legends.setConeBearing(deg);
+  }
+
   setCourse(c: Course): void {
     this.course = c;
     this.legends.setCourse(c);

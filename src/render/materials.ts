@@ -91,6 +91,8 @@ export const shared = {
   uUnder: { value: new Vector4(0, 0, 0, 0) },
   /** How strongly the local lights (lights.ts) light the world under this palette. */
   uLampK: { value: 0.3 },
+  /** Low's painted pools laid over in their own hue (palette.poolSoft). */
+  uPoolSoft: { value: 0 },
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
   ...localUniforms,
@@ -238,6 +240,7 @@ export function applyPalette(full: Palette): void {
   shared.uKey2Shade.value.copy(p.key2.shade);
   shared.uUnder.value.set(p.under.color.r, p.under.color.g, p.under.color.b, p.under.k);
   shared.uLampK.value = p.lamps;
+  shared.uPoolSoft.value = p.poolSoft;
   shared.uLeaf.value = p.leaf;
 }
 
@@ -263,6 +266,7 @@ uniform vec4 uKey2;
 uniform vec3 uKey2Shade;
 uniform vec4 uUnder;
 uniform float uLampK;
+uniform float uPoolSoft;
 uniform float uLeaf;
 uniform vec4 uLocalPos[8];
 uniform vec4 uLocalCol[8];
@@ -1337,6 +1341,13 @@ export function makeSnowMaterial(): ShaderMaterial {
           if (uSnowFx <= 0.0) {
             float li = max(L.r, max(L.g, L.b));
             L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
+            // (Where the palette asks, the pool is a paler, warmer step of the snow it lies on, kept under
+            // white: the light's full hue added to a warm or a violet snow clipped to mustard.)
+            if (uPoolSoft > 0.0) {
+              float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
+              vec3 ls = mix(vec3(max(L.r, max(L.g, L.b))), L, 0.5) * max(1.0 - lv, 0.0) * 1.6;
+              L = mix(L, ls, uPoolSoft);
+            }
           }
           col += L * mix(vec3(0.86, 0.88, 0.94), uRockLit * 1.3, smoothstep(0.46, 0.54, vRock.x));
         }
