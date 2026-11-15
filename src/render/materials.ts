@@ -168,7 +168,7 @@ const ROCK: Record<string, RockSet> = {
   volcano: { lit: '#5E5058', shade: '#1F1A22', deep: '#0E0C13', ledge: '#8C8288', style: [1.5, 6.5, 2, 0] },
   // (Sakura's rock is the spine's ink, with snow lying on its ledges: moss on them read as olive banks
   // under the torii's warm bars, and the paler rock as a lilac wall at the snow's own value.)
-  cone: { lit: '#86788C', shade: '#3C3554', deep: '#221E34', ledge: '#ECE6F0', style: [1.2, 2.5, 3, 0.02] },
+  cone: { lit: '#86788C', shade: '#3C3554', deep: '#221E34', ledge: '#C4BCD0', style: [1.2, 2.5, 3, 0.02] },
 };
 
 function applyRock(p: Palette): void {
@@ -1821,7 +1821,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             // The sun's own edge on the canopy: a hot peach-white rim on the faces turned to it and round
             // the outline against it, so a tree has a lit rim and a rose heart, not one pink.
             float rimL = thin * thin * max(smoothstep(-0.1, 0.7, dot(n, uSunDir)), back);
-            col += mix(uSunColor, vec3(1.0, 0.86, 0.8), 0.5) * (uLeaf * petal * rimL * 0.6);
+            col += mix(uSunColor, vec3(1.0, 0.86, 0.8), 0.5) * (uLeaf * petal * rimL * 0.85);
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,
           // the snow heaped round it), so a tree or a rock sits in the slope instead of on it.

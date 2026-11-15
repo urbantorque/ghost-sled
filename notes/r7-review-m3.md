@@ -146,3 +146,108 @@ Motion: z0260 7, z0880 6.5, z1020 7.5, z1780 7.5, z2440 7, z2500 7, z2560 6, z44
 
 Also flagged: a 2 to 4 px colour fringe at the frame's edges in most High frames; Low's torii bars clipping
 white; an ordered dither on the rail at Low z3405; the FINISH banner's stair-stepped lettering.
+
+### After pass 2 (0b8dac9)
+
+Worst first, each with the frame that asked for it:
+
+- **The lens was never calm here (every High frame's fringe).** b4cef24 and fc66e3e set Sakura's fringe in
+  `World.setCourse`, but the world built for a mountain never runs setCourse for that mountain (it returns early
+  when the course is the one it was built with), so a run that starts on Sakura, as every capture and a player
+  who picks it from its own title does, kept the full fringe at speed. Measured in the page: `post.fringeK` was
+  1 on m3 until the constructor set it too. The boost's chromatic punch keeps a quarter of its split on a calm
+  mountain (`post.ts`).
+- **Violet shard "pines" at the lips (z0600, z3706).** They were the leap shoulders' rock fins (rails.ts), pale
+  lilac with green moss lids. Now the spine's ink rock with snow on the ledges, dark enough for the painted
+  strata. The terrain's own rock set for the cone goes to ink with snow on its ledges too: the moss read as olive
+  banks in the torii row (z1754).
+- **Cedars violet in shade, blossom one flat pink (z0150, z0900, z2100, z3300).** Sakura's foliage shade keeps
+  more of the tree's own colour (`coolShade` 0.38 to 0.2, props.ts), and the blossom's backlight comes through
+  where a canopy is thin, toward its outline against the sun, with a hot rim there (materials.ts, scaled by the
+  palette's `leaf`, so Pinecrest's trace of it moves by a hair).
+- **The cone through the mist had no layers (z0150 to z0600, motion z0260).** A new `massif.bands`: three bands
+  of peach haze across the panorama's lower slopes, densest at each foot and ragged along the top, the summit
+  clear. 0.85 at the start, 0.4 by the terraces, gone in the orchards. 0 on every other mountain.
+- **One white value from lens to far bank (z2410, z2580, z2700).** Cloud shadows lie on the snow as a middle value
+  (0.1 to 0.32 at the start, 0.36 in the orchards, 0.42 at the Leap; Medium and High only), the frame's foot
+  darkens a step (0.14 to 0.24), and from the Leap the sea of cloud thins (`massif.sea` 0.62) so the far plane is
+  blue openings in white.
+- **Temple Town and the first street were cream boxes with dark holes (z1200, z1301, z1350, z4076 to z4330).** Upper
+  storeys are a mid-value warm plaster or wine lacquer, paper windows are warm by day, roofs ink. Temple Town's air
+  is the clearest on the mountain (`fogFar` 1350).
+- **The pagoda a pale ghost (z3926, z4440).** Wine lacquer under ink roofs, a thin snow only near each crown, lit
+  paper in every storey. The lift station (z0450) takes the town's plaster and paper.
+- **Terraces read as slabs (z0750, z0820).** Measured by hiding the water in the page: the white slabs were the
+  water, a broad sun sheen and the horizon's near-white in it. The sheen is narrow, the water holds more of the
+  zenith, the mist lies on it at a third, and the bunds' tops are wet earth instead of white rails.
+- **Torii (z1754, z1800).** The bars are rose gold (green held down: the paler gold added over the lacquer and the
+  rock was olive), the shafts thinner so the bars on the snow are what reads, the way-out veil halved; Low's bars
+  and lights are softer.
+- **Low's snow was sand.** The lit snow and the highlights' split tone a breath cooler, a neutral gain, and a pale
+  blue sky light in place of the old celadon one.
+
+Not touched, and why: the rider's size on the leaps (camera.ts, the hero lane's framing); the giant mint legend over
+the cone at z0970 and phone z1026 (a legend's look from the momentsworld lane; it stands on the cone's bearing on
+purpose); the FINISH lettering (a 5x7 dot font on every mountain's gate); a ghost inside the lens at z1350 (ghosts.ts);
+Low's dither on a rail at z3405 (the props' near fade).
+
+## Pass 3 (0b8dac9; a new critic, Opus at extra effort)
+
+| Frame | High | Low | Phone | Weakest thing on High |
+| --- | --- | --- | --- | --- |
+| z0150 | 7 | 7 | 7 | Blossoms front-lit faceted blobs; half the frame flat lilac |
+| z0300 | 7 | 7 | 7 | Flat lilac foreground; no darks to anchor the mist |
+| z0450 | 7 | 7 | 7.5 | Lift station a navy box with stripe windows |
+| z0600 | 6.5 | 6.5 | 6.5 | Navy "crystal pines" (the shoulders' rock fins), no cedar green |
+| z0750 | 7.5 | 7.5 | 7.5 | Terraces grey solar-panel grids, not water |
+| z0820 | 7 | 7 | 7.5 | Same grids; rider small |
+| z0900 | 6.5 | 6.5 | 7.5 | Rider tiny |
+| z0970 | 7.5 | 7 | 6.5 | Empty lilac foreground; gate beam a plain dark bar |
+| z1026 | 7.5 | 7 | 7 | Bare banks under a lovely cone |
+| z1200 | 7 | 7 | 7 | Box facades where orchards belong |
+| z1301 | 7 | 7 | 7.5 | Mauve-brown boxes, flat orange window cards |
+| z1350 | 7 | 7 | 7.5 | Box facades; a faceted pink blob tree |
+| z1500 | 7.5 | 7.5 | 7 | Empty lilac foreground |
+| z1650 | 6.5 | 6.5 | 7 | Grey-violet haze round the torii mouth; navy crystal walls |
+| z1754 | 7.5 | 6 | 7.5 | Bars miss the rider; stepped slab walls (Low: walls blow out white) |
+| z1800 | 7.5 | 6.5 | 7.5 | Walls stacked mauve slabs |
+| z1971 | 8 | 7.5 | 7.5 | Lanterns unlit; flat wine rails |
+| z2100 | 7 | 7 | 7 | Orchard pale pink umbrellas on white |
+| z2210 | 7 | 7 | 7 | Near canopy a giant flat-lit polyhedron |
+| z2410 | 6.5 | 6.5 | 6.5 | Valley floor cobalt camouflage; cone cropped |
+| z2580 | 6.5 | 6.5 | 6.5 | Rider tiny; cone out of frame; camouflage valley |
+| z2700 | 6 | 6 | 6.5 | Rider tiny, half the frame blank snow, no visible light |
+| z2850 | 7.5 | 7.5 | 7.5 | A lattice pylon cuts in; flat snow |
+| z3000 | 7 | 7 | 7.5 | No torii in the torii's place; a navy log box |
+| z3060 | 8 | 7 | 7 | Snow cool and flat; plain sky |
+| z3150 | 7.5 | 7.5 | 7 | Sun in frame, blossom front-lit |
+| z3300 | 7.5 | 7 | 7 | Faceted blobs; flat lilac near plane |
+| z3405 | 6.5 | 6 | 6.5 | Kicker an untextured white slab with an orange lip |
+| z3450 | 6.5 | 6.5 | 6.5 | A black iron truss bridge across the vista |
+| z3600 | 7 | 7 | 7.5 | Camouflage valley behind a good torii |
+| z3706 | 6.5 | 6.5 | 6.5 | Navy crystal pines, log boxes, camouflage valley |
+| z3926 | 6.5 | 6.5 | 7.5 | Temple Town washed pale grey; rider tiny |
+| z4076 | 7.5 | 7 | 8 | A boxy stone lantern at the lens; flat window cards |
+| z4200 | 7.5 | 7.5 | 7.5 | Torii and houses navy-violet, not wine |
+| z4330 | 7.5 | 7 | 7 | Flat facades; no pagoda |
+| z4440 | 7.5 | 7 | 7.5 | Pagoda tiny behind the banner; crowd noise |
+| z4590 | n/a | n/a | n/a | Results card |
+| **Mean** | **7.08** | **6.88** | **7.13** | |
+| **Minimum** | **6** (z2700) | **6** (z1754, z2700, z3405) | **6.5** | |
+
+Motion: z0260 7, z0880 7, z1020 6.5, z1780 8 (frames 0 and 1 at 8.5, the best images on the mountain), z2440 7,
+z2500 6.5, z2560 7, z4420 6.5 (mean 6.94).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7.5 | No |
+| The flooded terraces | 7.5 | No |
+| The Blossom Leap over the orchard rows | 7 | No |
+| The torii's bars of light | 7.5 High, 8 motion | No (the closest) |
+| The pagoda over the square | 6.5 | No |
+
+Its five themes: the lit snow is lilac everywhere (none of the light's colour); the blossom is never backlit; the
+rider's rim is faint; the valley from 2410 to 3706 is cobalt camouflage; the gorges at 600 and 3706 have navy
+crystal "pines". It also saw a strong colour split on landing frames in motion, scan-line dither on near objects
+(the props' near fade), the finish flash bleaching the frame, and that the script's orchards (1100 to 2200) are
+spent on a street and the torii row: the course's sections, not the render's.

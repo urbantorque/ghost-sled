@@ -76,7 +76,8 @@ function prism(w: number, h: number, d: number, col: Color, pos: V3): BufferGeom
 
 /** A gable roof whose ridge runs along z (the gable end faces +z): the gable's infill in the wall
  *  colour, two pitched slabs with an overhang, and a heavy layer of snow on each. */
-function gable(L: number, D: number, y: number, rise: number, over: number, roof: Color, wall: Color): BufferGeometry[] {
+/** A pitched roof over a gable wall; `snowK` is how far down each slope its snow lies, from the ridge. */
+function gable(L: number, D: number, y: number, rise: number, over: number, roof: Color, wall: Color, snowK = 1): BufferGeometry[] {
   const parts: BufferGeometry[] = [prism(L, rise, D, wall, [0, y, 0])];
   const a = Math.atan2(rise, L / 2);
   const run = L / 2 + over;
@@ -87,7 +88,9 @@ function gable(L: number, D: number, y: number, rise: number, over: number, roof
     const nx = sx * Math.sin(a);
     const ny = Math.cos(a);
     parts.push(box(sl, 0.42, D + 2 * over, roof, [mx + nx * 0.22, my + ny * 0.22, 0], [0, 0, -sx * a]));
-    parts.push(part(BoxGeometry2(sl - 0.25, 0.6, D + 2 * over - 0.2), SNOW, { pos: [mx + nx * 0.7, my + ny * 0.7, 0], rot: [0, 0, -sx * a], jitter: 0.1 }));
+    const sk = (sl - 0.25) * snowK;
+    const up = (sl - 0.25 - sk) / 2;
+    parts.push(part(BoxGeometry2(sk, 0.6, D + 2 * over - 0.2), SNOW, { pos: [mx + nx * 0.7 - sx * Math.cos(a) * up, my + ny * 0.7 + Math.sin(a) * up, 0], rot: [0, 0, -sx * a], jitter: 0.1 }));
   }
   // A roll of snow on the ridge.
   parts.push(softPart(new CylinderGeometry(0.5, 0.5, D + 2 * over, 8), SNOW, { pos: [0, y + rise + 0.75, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1, 0.75] }));
@@ -372,8 +375,10 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
     parts.push(box(1.2, 3.2, 1.2, stoneC, [-w * 0.25, top + 2.4, -d * 0.15]));
     chim?.push([-w * 0.25, top + 4.2, -d * 0.15]);
   } else {
-    // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice.
-    parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper), 0, top, zr / 2, Math.PI / 2));
+    // A low eave roof along the street, swept up at the ends, and a pent roof over the lattice. (Round 7: a
+    // late spring morning's snow lies on the upper half of each slope only, so a street seen from above is
+    // ink roofs and not a field of white lids.)
+    parts.push(...place(gable(d + zr, w, 0, d * 0.24, Math.min(1.6, eave), t.roof, upper, 0.5), 0, top, zr / 2, Math.PI / 2));
     if (eave > 0.55) {
       const pent = Math.min(1.6, eave + 0.3);
       parts.push(box(w + 0.6, 0.3, pent, t.roof, [0, F + SH + 0.15, zf + pent * 0.44], [0.32, 0, 0]));

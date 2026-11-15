@@ -712,8 +712,9 @@ export function paleBlossomGeometry(p: Palette): BufferGeometry {
     [0.3, 3.0, 1.15, 0.82],
     [-0.2, 2.95, -1.15, 0.86],
   ];
+  // (A wine-rose underside lifting to the crown, as blossomGeometry.)
   blobs.forEach(([x, y, z, r], i) => {
-    parts.push(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], scale: [1, 0.78, 1], rot: [rnd(), rnd(), rnd()], jitter: 0.16 }));
+    parts.push(paint(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], scale: [1, 0.78, 1], rot: [rnd(), rnd(), rnd()], jitter: 0.16 }), 2.2, 4.4, 0.66, 1.06, 0.14));
   });
   parts.push(part(new IcosahedronGeometry(0.85, 0), SNOW, { pos: [0.2, 4.05, 0], scale: [1.4, 0.35, 1.3], jitter: 0.1 }));
   return merge(parts);

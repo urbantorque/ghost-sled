@@ -616,9 +616,11 @@ export function finishPiece(ctx: SiteCtx): Piece {
       // The pagoda over the square (ART.md 15, a hero vista): twice the size it was built at, so it stands
       // over the roofs from the last leap and fills the finish gate's opening down the street. Scaled about
       // its own foot.
+      // (Taller than it is wide grown: at 2.1 all round it stood under the finish banner from the street.)
       const K = 2.1;
+      const KY = 2.6;
       const pg = pagodaParts(night, top, top - 1, p);
-      for (const g of pg) g.translate(0, -top, 0).scale(K, K, K).translate(0, top, 0);
+      for (const g of pg) g.translate(0, -top, 0).scale(K, KY, K).translate(0, top, 0);
       parts.push(...tall.out(place(pg, 0, 0, -1, 0)));
     }
     else if (biome === 'lantern') {
