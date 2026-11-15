@@ -1316,7 +1316,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyBand.color = c('#FFB884');
         p.skyBand.k = 1;
         p.skyBelow = c('#B88EB4');
-        p.snowLit = c('#F6DCE4');
+        // (Round 7's review: rose-gold, not lilac: the lit snow takes the sun's warmth.)
+        p.snowLit = c('#FFD8C4');
         // (Round 7's review: Fang Town sank into a lilac haze, the middle plane and the Fang lost in it. The
         // shade is a deeper violet and the air clearer, so the lit snow, the long shadows and the far range
         // stand in three planes.)
@@ -1733,6 +1734,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // so the walls' cobalt, the glow at their feet and the lit valley at the far end are the picture.
         p.grade.contrast += 0.08;
         p.grade.exposure! *= 0.94;
+        // (Round 7's review: the walls were the brightest, flattest thing in the slot. Under 0.75 the ice
+        // goes down, cubed (materials.ts), so the walls are its dark frame; at night the aurora still finds
+        // their crests.)
+        p.hazardDim = 0.66;
         p.snowShade = c('#2C2A84');
         p.snowDeep = c('#120C44');
         p.fog.lerp(c('#141A58'), 0.6);

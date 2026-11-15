@@ -781,8 +781,8 @@ export class Stages {
       const zb = end - REACH * (1 - (i + 1) / N);
       const wa = 0.4 + hwE * 0.55 * Math.pow(i / N, 1.6);
       const wb = 0.4 + hwE * 0.55 * Math.pow((i + 1) / N, 1.6);
-      const ka = 0.95 * Math.pow(i / N, 1.2) * k0;
-      const kb = 0.95 * Math.pow((i + 1) / N, 1.2) * k0;
+      const ka = (low ? 0.55 : 0.95) * Math.pow(i / N, 1.2) * k0;
+      const kb = (low ? 0.55 : 0.95) * Math.pow((i + 1) / N, 1.2) * k0;
       for (const sd of [-1, 1]) {
         b.quad(at(za, 0, lift(za)), at(zb, 0, lift(zb)), at(zb, sd * wb, lift(zb) + (wb > c.halfWidth(zb) ? 0.5 : 0)), at(za, sd * wa, lift(za)), gold, ka, kb, 0, 0);
       }
@@ -794,26 +794,30 @@ export class Stages {
     // sun is, cooling to rose up toward the lintel, and soft at its sides.
     const H = Math.max(22, s.clear + 8);
     const rose = night ? dawn : new Color(1.0, 0.5, 0.42);
-    const vk = (low ? 0.8 : 1) * k0;
+    const vk = (low ? 0.45 : 1) * k0;
+    // (A deeper gold than the floor's: added over the lilac of the dawn sky, a pale gold went to white.)
+    const ember = night ? gold : new Color(1.0, 0.48, 0.16);
     // (Seen from inside, the horizon crosses the opening a third to a half of the way up, the floor
     // falling away to the mouth: the veil burns hottest there.)
     for (const sd of [-1, 1]) {
       const w0 = sd * hwE * 1.25;
       const w1 = sd * hwE * 1.15;
-      air.quad(at(end + 2, 0, 0), at(end + 2, w0, 0), at(end + 2, w1, H * 0.35), at(end + 2, 0, H * 0.35), gold, 0.9 * vk, 0.2 * vk, 0.5 * vk, 1.7 * vk);
-      air.quad(at(end + 2, 0, H * 0.35), at(end + 2, w1, H * 0.35), at(end + 2, w1, H * 0.6), at(end + 2, 0, H * 0.6), gold, 1.7 * vk, 0.5 * vk, 0.25 * vk, 1.1 * vk);
-      air.quad(at(end + 2, 0, H * 0.6), at(end + 2, w1, H * 0.6), at(end + 2, sd * hwE, H), at(end + 2, 0, H), rose, 1.1 * vk, 0.25 * vk, 0, 0);
+      air.quad(at(end + 2, 0, 0), at(end + 2, w0, 0), at(end + 2, w1, H * 0.35), at(end + 2, 0, H * 0.35), ember, 1.0 * vk, 0.25 * vk, 0.6 * vk, 1.9 * vk);
+      air.quad(at(end + 2, 0, H * 0.35), at(end + 2, w1, H * 0.35), at(end + 2, w1, H * 0.6), at(end + 2, 0, H * 0.6), ember, 1.9 * vk, 0.6 * vk, 0.15 * vk, 0.6 * vk);
+      air.quad(at(end + 2, 0, H * 0.6), at(end + 2, w1, H * 0.6), at(end + 2, sd * hwE, H), at(end + 2, 0, H), rose, 0.6 * vk, 0.15 * vk, 0, 0);
     }
     // Shafts: beams of light slanting down from the opening onto the floor inside, through the dark air the
     // rider rides in: each brightest along its middle and gone at its edges, so it reads as light in the
     // air and not as a cut sheet (Medium and High).
     if (!low) {
+      // (Gold, not the veil's rose: a sheet of rose over blue air read as lilac.)
+      const shaft = night ? dawn : new Color(1.0, 0.56, 0.24);
       const fan: Array<[number, number, number, number]> = [
-        [-0.55, 4.2, 46, 0.5],
-        [-0.12, 3.0, 62, 0.42],
-        [0.3, 4.6, 40, 0.5],
-        [0.66, 2.8, 54, 0.38],
-        [-0.82, 2.4, 32, 0.34],
+        [-0.55, 4.6, 46, 0.85],
+        [-0.12, 3.4, 62, 0.7],
+        [0.3, 5.0, 40, 0.85],
+        [0.66, 3.0, 54, 0.62],
+        [-0.82, 2.6, 32, 0.55],
       ];
       for (const [u, w, reach, k] of fan) {
         const x1 = u * hwE * 0.9;
@@ -821,7 +825,7 @@ export class Stages {
         const top = H * (0.55 + 0.25 * Math.abs(u));
         const kk = k * k0;
         for (const sd of [-1, 1]) {
-          air.quad(at(end + 1, x0, top), at(end + 1, x0 + sd * w * 0.45, top), at(end - reach, x1 + sd * w, 0.4), at(end - reach, x1, 0.4), dawn, kk, 0, 0, kk * 0.15);
+          air.quad(at(end + 1, x0, top), at(end + 1, x0 + sd * w * 0.45, top), at(end - reach, x1 + sd * w, 0.4), at(end - reach, x1, 0.4), shaft, kk, 0, 0, kk * 0.15);
         }
       }
     }

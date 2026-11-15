@@ -183,3 +183,41 @@ Worst first among what this lane can reach; the jaw-drop first of all.
   dash and landing glows on the rider (all shared, and on every mountain: the main lane should take them once).
 - Tests: the Clear Skies test keeps each mountain's start apart; Frostfang's first blue hour came within 1.49 of
   Lanternfall's night (limit 1.5), so its zenith and horizon are a touch bluer and paler (#0A2266, #96B8E6).
+
+### Pass 4 (`d33130f`)
+
+| Folder | Mean | Min |
+| --- | --- | --- |
+| High (36) | 6.6 | 5.0 (2850, a ghost over a third of the frame) |
+| Motion on High (48) | 6.9 | 5.5 (mo-z1917-0, mo-z3470-0, mo-z3520-2: flashes on the rider) |
+| Low (36) | 6.7 | 5.5 (2850) |
+| Phone, Medium (36) | 6.9 | 5.5 (1800, a ghost across the vista) |
+
+High, frame by frame: 150 6.5, 300 6, 450 6.5, 595 7, 750 7, 900 5.5, 975 6, 1045 6, 1195 6, 1343 7, 1500 7,
+1550 6.5, 1650 6.5, 1800 6.5, 1917 6.5, 2137 6.5, 2250 6, 2297 6.5, 2405 5.5, 2548 7, 2700 7, 2783 6.5, 2850 5,
+3000 7, 3154 6, 3304 6.5, 3418 7.5, 3549 8, 3600 7.5, 3750 6.5, 3940 7, 4050 7, 4200 7, 4330 7.5, 4440 7.5,
+4590 6.5.
+
+Hero vistas: Serac Gate's span 7 (was 6.5); the aurora 7, 7.5 in motion (was 7.5 at one frame); the cavern mouth
+7.5 (was 7: "a pastel lilac haze, not a blade of rose-gold; no shafts"); the Fang at dawn 7. None a 9. Every
+folder's mean rose (High 6.54 to 6.6, motion 6.35 to 6.9, Low 6.31 to 6.7, phone 6.60 to 6.9); the cavern
+(3304 6.5, 3418 7.5) and 3000 (5.5 to 7) rose most. The worst frames now are all ghosts at the lens (2850, 2405,
+1650, 1917, phone 1800) and Serac Gate's walls (900 5.5: "flat facets, nothing lights them").
+
+The console: one line on High, "The AudioContext encountered an error from the audio device", which is the
+machine's audio device under six lanes' headless browsers, not the game; Low, phone and motion were clean.
+
+### After pass 4
+
+- The mouth burns (`stages.ts`): the veil's horizon band at 1.9 in a deeper gold (was 1.7 in the floor's pale gold, which over the dawn sky went to white) and its rose top at a third; the
+  shafts in gold, not the veil's rose (a sheet of rose over blue air read as lilac), wider and at 0.55 to 0.85
+  (were 0.34 to 0.5). Low's veil at 0.45 and blade at 0.55 of High's: on Low there is no tone curve to hold them
+  and they went to a white rectangle down the track.
+- The dawn's lit snow is rose-gold, #FFD8C4 (was #F6DCE4, which read as lilac under the violet shade).
+- Frostfang's ravines (Serac Gate's slot and the Crevasse Fields' trenches) set `hazardDim` 0.66, under the
+  0.75 at which the ice walls go down, so the walls are the dark frame of the slot and not its brightest, flattest
+  thing; at night the aurora still lights their crests (that term comes after the dimming).
+- Ghosts at the lens (`ghosts.ts`, shared): the size fade starts at about a third of the frame's height (was
+  0.28 for the body and 0.38 for the rest) and a ghost is gone by under a half (was about 0.6). One at half the
+  frame's height beside the lens (2850 m, the worst frame of pass 4) stood over a third of the picture at a third
+  of its strength. The pass beat's floor and the between-lens-and-rider fade are as they were.
