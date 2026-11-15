@@ -18,7 +18,7 @@ this file first, then your own brief.
   worktree, except to write frames into the main checkout's `shots/r7/<lane>/` (git-ignored) so the main lane can
   read them.
 - Commit to your branch as you go, in small commits whose messages say what a player gets. End each message with
-  `Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>`. Never merge, rebase onto, push or deploy anything.
+  `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` (from 2026-11-15; earlier commits carry Fable 5.2). Never merge, rebase onto, push or deploy anything.
 - The machine: Windows 11, Git Bash, Node 24, an Intel Arc 130V laptop GPU, 8 cores, 15 GB. There is no Python and
   no ffmpeg on the PATH. Seven lanes share it, so builds, tests and captures are slow: be patient, never run two
   heavy things at once, and never draw a conclusion about frames per second from your own runs.

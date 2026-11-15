@@ -13,7 +13,7 @@ what you are judging (`notes/r7-light.md`, `r7-hero.md`, `r7-fx.md`, `r7-pipe.md
    `C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\r7\review\m<N>\pass<K>\{high,low,phone-medium}`. Add a few
    frames in motion at the hero vistas and in each set piece (a pool rider with `demo=2`, or a short strip of
    stills 0.25 s apart). Check the console is clean.
-2. **Critique, independently.** Spawn a fresh subagent (general-purpose, `effort: "medium"`) as the critic. Give
+2. **Critique, independently.** Spawn a fresh subagent (general-purpose, `model: "opus"`, `effort: "xhigh"`) as the critic. Give
    it ONLY: the paths of the frames, the path of `ART.md`, and this instruction: it is a demanding art director
    for a near-AAA stylised game; read ART.md section 15, open every frame, score each out of 10 against the
    direction (three planes, a motivated light, painted detail and no boxes, the hero lit and large enough, the
