@@ -867,12 +867,18 @@ export class Rider {
     this.stars.visible = false;
 
     this.echoA = new InstancedBufferAttribute(new Float32Array(ECHO_LAGS.length), 1).setUsage(DynamicDrawUsage);
-    const echoGeo = ghostRiderGeometry(false, sledSeat(0));
-    echoGeo.setAttribute('aEcho', this.echoA);
-    this.echo = new InstancedMesh(echoGeo, echoMaterial(), ECHO_LAGS.length);
+    // The after-images' body is made on idle time after the first frame (or by the first dash, if one comes
+    // sooner: tickEcho), not here: a whole ghost rider's build that the first frame never draws.
+    this.echo = new InstancedMesh(new BufferGeometry(), echoMaterial(), ECHO_LAGS.length);
+    this.echoSeat = -1;
     this.echo.count = 0;
     this.echo.visible = false;
     this.echo.frustumCulled = false;
+    const idle = (fn: () => void): void => {
+      if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 4000 });
+      else setTimeout(fn, 1500);
+    };
+    idle(() => this.makeEcho());
   }
 
   /** The garage's hat (garage.ts): the head and the wreck's head are rebuilt wearing it. */
@@ -978,6 +984,16 @@ export class Rider {
     this.echoOn = echoes && !this.crash;
   }
 
+  /** The after-images' body, seated as this sled seats the rider (made again only when the seat changes). */
+  private makeEcho(): void {
+    if (this.echoSeat === this.sledId || this.sledId < 0) return;
+    this.echoSeat = this.sledId;
+    const g = ghostRiderGeometry(false, sledSeat(this.sledId));
+    g.setAttribute('aEcho', this.echoA);
+    this.echo.geometry.dispose();
+    this.echo.geometry = g;
+  }
+
   /** Keeps the rig's pose for the after-images and places them, a few hundredths of a second behind. */
   private tickEcho(time: number): void {
     const k = this.u.spirit.value.x;
@@ -986,14 +1002,7 @@ export class Rider {
       this.echoN = 0;
       return;
     }
-    if (this.echoSeat !== this.sledId && this.sledId >= 0) {
-      // The images sit the rider as this sled seats it.
-      this.echoSeat = this.sledId;
-      const g = ghostRiderGeometry(false, sledSeat(this.sledId));
-      g.setAttribute('aEcho', this.echoA);
-      this.echo.geometry.dispose();
-      this.echo.geometry = g;
-    }
+    this.makeEcho();
     this.echoHead = (this.echoHead + 1) % ECHO_HIST;
     this.echoHist[this.echoHead].copy(this.leanG.matrixWorld);
     this.echoT[this.echoHead] = time;

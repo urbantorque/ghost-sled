@@ -17,6 +17,8 @@ const TAN_Y = 1.25;
 /** How far ahead a lake is baked for, and how often it is baked again, seconds. */
 const AHEAD = 480;
 const EVERY = 3.5;
+/** The app's clock (s) before which nothing is baked. */
+const FIRST_BAKE = 0.4;
 
 export class LakeMirror {
   private target: WebGLRenderTarget;
@@ -53,7 +55,9 @@ export class LakeMirror {
       this.course = c;
       this.last = -1e9;
     }
-    if (time - this.last < EVERY || !(this.everywhere || this.near(c, z))) return;
+    // (The first bake waits until the page has drawn its first frames: until then a glaze shows the painted sky,
+    // as it does before any bake, and the very first frame does not pay for a second render of the sky.)
+    if (time < FIRST_BAKE || time - this.last < EVERY || !(this.everywhere || this.near(c, z))) return;
     this.last = time;
     const prev = renderer.getRenderTarget();
     this.cam.position.copy(sky.position);

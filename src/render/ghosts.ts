@@ -150,6 +150,9 @@ interface Item {
    *  snow's slope under it. */
   sled: number;
   seat: SledSeat;
+  /** The signature hat its body wears, and whether that body is made yet (on its first pose: see update). */
+  hat: HatKind | null;
+  body: boolean;
   sv0: number;
   svN: number;
   tilt: Quaternion;
@@ -253,6 +256,8 @@ const DROP_HOLD = 0.9;
 // that sled: legs out on a deck, cross-legged on a saucer or a tray. A signature rider's hat is part
 // of the same geometry. Built on first use, one per seat and hat.
 const bodyGeos = new Map<string, BufferGeometry>();
+/** A ghost's body until its first pose (setField): nothing to draw, never disposed. */
+const NO_BODY = new BufferGeometry();
 function ghostBodyGeometry(seat: SledSeat, hat: HatKind | null): BufferGeometry {
   const key = `${seat.crossLegged ? 1 : 0}${hat ?? ''}`;
   let merged = bodyGeos.get(key);
@@ -1150,7 +1155,9 @@ export class GhostVisuals {
       const depth = makeDepthMaterial(pose, shoulder);
       // A signature rider wears its hat in the same glass (its body geometry carries it).
       const rider = signature(g.name, g.kind, n);
-      const mesh = new Mesh(ghostBodyGeometry(seat, rider?.hat ?? null), [depth, mat]);
+      // (Its body is made on its first pose, not here: a field set on the title comes before its replays do, and a
+      // dozen seats and hats built for the very first frame, which draws none of them, cost it about 50 ms at 6x.)
+      const mesh = new Mesh(NO_BODY, [depth, mat]);
       mesh.frustumCulled = false;
       mesh.renderOrder = 5;
       // A ghost is the hero's size: the same toy, in glass.
@@ -1170,6 +1177,8 @@ export class GhostVisuals {
         depth,
         sled,
         seat,
+        hat: rider?.hat ?? null,
+        body: false,
         pose,
         leanS: 0,
         leanV: 0,
@@ -1601,6 +1610,10 @@ export class GhostVisuals {
         it.mesh.visible = false;
         this.hideFx(i);
         continue;
+      }
+      if (!it.body) {
+        it.body = true;
+        it.mesh.geometry = ghostBodyGeometry(it.seat, it.hat);
       }
       const pos = tmp.set(p.x, p.y, -p.z);
       if (p.done && rodeHome(p.z, this.course.finishZ)) {

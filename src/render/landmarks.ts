@@ -1005,7 +1005,9 @@ export class SetPieces {
       this.root.add(mesh);
     }
     this.crowdMat = crowdMaterial(this.uniforms);
-    const geo = figureGeometry();
+    // (Dressed for this course from the start, and marked so: restyleCrowd built the same figure again otherwise.)
+    const geo = figureGeometry(course.biome);
+    geo.userData.biome = course.biome;
     this.aCoat = new InstancedBufferAttribute(new Float32Array(CROWD_CAP * 3), 3);
     this.aHat = new InstancedBufferAttribute(new Float32Array(CROWD_CAP * 3), 3);
     this.aSeed = new InstancedBufferAttribute(new Float32Array(CROWD_CAP * 4), 4);
@@ -1278,7 +1280,10 @@ export class SetPieces {
     // to be made here and now: never a whole view's worth on the frames a run starts on.
     this.wantReach = z + ahead + 1400;
     this.viewEnd = z + ahead + 60;
-    plan.flyTo(z + 3 * CHUNK_LEN + 60);
+    // (Nothing is made here and now until the grace has passed, so nothing need be flown here and now either:
+    // till then idle time flies the sites in order. The title's shot stands far down the course, and flying every
+    // site from the start to it on the very first frame cost that frame about 120 ms at 6x.)
+    if (this.madeOpen) plan.flyTo(z + 3 * CHUNK_LEN + 60);
     this.pump();
     this.uniforms.uLamps.value = this.litAt(z) ? 1 : 0;
     // The sites in view, nearest first.

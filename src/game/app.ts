@@ -658,6 +658,12 @@ export class App {
     const model: TitleModel = {
       mountains: MOUNTAINS.map((m) => {
         const spot = this.spotFor(m.id);
+        // (Counted only when the medal wall opens and reads it: a board builds its mountain's whole course and plans
+        // its set pieces, and five of them for a wall nobody has opened cost the first frame about 150 ms at 6x.)
+        const stars = (): { got: number; of: number } => {
+          const b = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery?.[m.id]), d.climb?.[m.id]?.medal ?? 0);
+          return { got: b.filter((s) => s.done).length, of: b.length };
+        };
         return {
           id: m.id,
           name: m.name,
@@ -672,10 +678,9 @@ export class App {
           rankOf: spot.of,
           top: spot.top,
           medals: medalsHeld(d.climb?.[m.id]),
-          stars: (() => {
-            const b = masteryBoard(courseFor(m.seed), m.id, readMastery(d.mastery?.[m.id]), d.climb?.[m.id]?.medal ?? 0);
-            return { got: b.filter((s) => s.done).length, of: b.length };
-          })(),
+          get stars() {
+            return stars();
+          },
         };
       }),
       selected: this.mountain.id,
