@@ -7,7 +7,8 @@ ART.md, fix, repeat. Frames are in the main checkout, `shots/r7/review/m1/pass<K
 
 ## Scores by pass
 
-Each critic was a new general-purpose agent at medium effort, told nothing but the frames' folders, ART.md's path
+Each critic was a new general-purpose agent (passes 1 and 2 at medium effort, 3 to 5 on `opus` at `xhigh`), told
+nothing but the frames' folders, ART.md's path
 and the brief's instruction. Scores are the critic's own, out of 10.
 
 ### Pass 1 (the merged round, `ead6196`, untouched)
@@ -221,3 +222,113 @@ machine's audio device under six lanes' headless browsers, not the game; Low, ph
   0.28 for the body and 0.38 for the rest) and a ghost is gone by under a half (was about 0.6). One at half the
   frame's height beside the lens (2850 m, the worst frame of pass 4) stood over a third of the picture at a third
   of its strength. The pass beat's floor and the between-lens-and-rider fade are as they were.
+
+### Pass 5 (`e5ac592`), the last
+
+| Folder | Mean | Min |
+| --- | --- | --- |
+| High (36) | 6.69 | 5.5 (2850, the giant mint figure) |
+| Motion on High (48) | 6.44 | 4.5 (mo-z3418-0: a ward's gold blob over the rider) |
+| Low (36) | 6.50 | 5.0 (300: a gold drop hanging in the sky) |
+| Phone, Medium (36) | 6.72 | 5.5 (300) |
+
+High, frame by frame: 150 6.5, 300 6, 450 6.5, 595 6.5, 750 7, 900 6, 975 6, 1045 6, 1195 6, 1343 7, 1500 6.5,
+1550 6.5, 1650 6.5, 1800 7, 1917 6.5, 2137 6.5, 2250 6, 2297 6.5, 2405 6, 2548 7, 2700 7.5, 2783 6.5, 2850 5.5,
+3000 6.5, 3154 6, 3304 7.5, 3418 7.5, 3549 8, 3600 8, 3750 6.5, 3940 7, 4050 7, 4200 7, 4330 7.5, 4440 7.5,
+4590 7.
+
+Hero vistas: Serac Gate's span 7; the aurora 7.5 (2700); the cavern mouth 7.5 ("a milky lavender haze, not a
+rose-gold blade"; the HUD banner sits on it); the Fang at dawn 7. None a 9. The nearest to a 9 on the mountain is
+the dawn bridge out of the cavern: 3549 and 3600 at 8, mo-z3470-1 and -2 at 8.
+
+**The ghosts' size fade is not on the branch.** It went into `e5ac592` for this pass and made no visible
+difference to any frame it was aimed at (2850, 1650 and the phone's 1800 are the same picture before and after:
+the 2850 figure carries no tag and is probably not a pool ghost, and the others were under the new thresholds).
+An unmeasured change to the hero lane's file is not worth its merge, so `ghosts.ts` is back to `d33130f`.
+Everything else in pass 5's frames is the branch as it stands.
+
+## All passes
+
+Critics 1 and 2 were medium effort on another model; 3 to 5 were `opus` at `xhigh`, and 3 was much harsher than
+2 on the same defects. Read the table down a column from pass 3, not across the change of critic.
+
+| Pass | Build | High mean / min | Motion | Low | Phone | Span | Aurora | Cavern mouth | Fang at dawn |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `ead6196` | 6.8 / 5.5 | 6.7 / 4.5 | 7.1 / 6.0 | 7.3 / 6.0 | 7.5 | 7.5 | 6 | 7.5 |
+| 2 | `cee32c1` | 6.86 / 5.5 | 6.63 / 4.5 | 6.90 / 6.0 | 6.97 / 6.0 | 7.5 | 7 to 7.5 | 7.5 | 7 |
+| 3 | `f682cd3` | 6.54 / 5.0 | 6.35 / 5.0 | 6.31 / 5.5 | 6.60 / 5.0 | 6.5 | 7.5 | 7 | 7 |
+| 4 | `d33130f` | 6.6 / 5.0 | 6.9 / 5.5 | 6.7 / 5.5 | 6.9 / 5.5 | 7 | 7 (7.5 moving) | 7.5 | 7 |
+| 5 | `e5ac592` | 6.69 / 5.5 | 6.44 / 4.5 | 6.50 / 5.0 | 6.72 / 5.5 | 7 | 7.5 | 7.5 | 7 |
+
+The stopping rule (no frame under 8, every hero vista 9 or more) was not met; the lane stopped at five passes.
+
+## Still short, and why
+
+- **No hero vista is a 9.** The cavern mouth rose from 6 to 7.5 and is still "a haze, not a blade": the opening
+  in the fixed frame (3418) is about 30 m tall because the roof must clear the highest air plus 6.3 m
+  (`town.ts` bays, `landmarks.ts` roofNeed), so from 40 m inside the lintel is above the frame and the mouth
+  reads as a slot with sky over it. A real mouth in that frame needs the roof lower than the air allows, or a
+  camera that looks up at the way out (the reveal of `shots.ts` does, in a real run). The rider is never seen
+  in silhouette against it: the chase camera is always behind and above.
+- **Serac Gate's span has no abyss.** The span crosses snow level with its deck on both sides; an abyss is a
+  change to the ground beside a bridge (`ground.ts`, the terrain, the props that stand on it), too big and too
+  shared for a review lane.
+- **The ice walls of Serac Gate and the Crevasse Fields** still read as stretched, flat slabs (900 to 1195, 2250
+  to 2405 all score 6). Darkening them (`hazardDim` 0.66 in Frostfang's ravines) moved the score little: their
+  brightness is mostly the cyan glow at their foot, and the shards' cut is drawn on wall faces stretched by the
+  slope. Needs painted ice on the walls themselves (the light lane's `rockCells` style 1).
+- **Shared, every mountain** (named by every critic, not this lane's to change alone): ghosts or a giant mint
+  figure at the lens (2850, 1650, 2405, 3154); dash, ward, flow and stomp glows bleaching the rider in motion
+  (rule 4; the worst motion frames of pass 5); the gold drop hanging in the sky at 300 m; flat fuel drops at the
+  lens; the sled's underside as a slab mid-flip; the HUD over the letterbox and over the cavern mouth; the
+  results card mid-fade; a small rider on High (13 to 15% of the frame's height against about twice that on Low
+  and the phone); the lake vista repeating at 595, 750, 1650, 1800, 1917, 2783, 2850, 3750 and 3940 m (the
+  course's own bowls and lips); fine horizontal banding on open snow.
+- **Low:** the cavern's roof goes olive-khaki (3304, 3418): the ice vault under Low's baked grade. The light
+  pools are hard-edged discs (2297, 3304, 3750, 4200), as they are by design on Low, but the critics read them as
+  stains.
+
+## Shared code touched
+
+All small; each one is either a no-op off Frostfang or says why it is general.
+
+- `post.ts` (pass 1): the lens's red and blue taps read through the same speed smear as green. Every mountain:
+  no colour split on a calm frame.
+- `palette.ts`: `Place.fall` (optional, default unchanged) and its use in `laidPlaces` (pass 1).
+- `particles.ts`: the lantern lights a puff's near side at 0.6 outside Lantern Night (pass 2); the fragment
+  shader declares `uLantern` (the pass 2 change had left every puff shader failing to compile).
+- `midground.ts` (pass 2): the flanks take the aurora only where `key2` is set (Frostfang's night).
+- `materials.ts`: the crevasse ice (rock style 1, only the Fang's) and its glow go down under `hazardDim` 0.75;
+  the snow shader declares `uHazardDim`; the toon `ICE` branch for ice that is not a hazard (Frostfang's tunnel,
+  its spans, the marquee's ice chunks) goes down under 0.75 and keeps the local lights (it threw them away).
+  Only Frostfang's cavern (0.45) and ravines (0.66) are under 0.75; every other mood and place is 0.75 or over.
+- `sky.ts`: the aurora's hems and curtains change only where `aurora` is over 1, which is only Frostfang's night.
+- `stages.ts`: `beamMaterial(near)` (a define; the Caldera's and the torii's beams are unchanged) and Frostfang's
+  `makeMouth`.
+- `landmarks.ts`: the way out of any enclosure flashes 0.3 by day (was 0.6) and 0.2 at night (was 0.25): Ember's
+  halls, Sakura's torii and every gallery too. The main lane may want it per mountain.
+
+## Cost
+
+Mean over the 36 fixed frames, from the frames' JSON (draw calls, triangles), pass 1 against pass 5:
+
+| Tier | Pass 1 (`ead6196`) | Pass 5 (`e5ac592`) |
+| --- | --- | --- |
+| High | 100.2 calls (max 114), 844k tris | 100.7 calls (max 114), 844k tris |
+| Low | 52.6 calls (max 63), 143k tris | 48.3 calls (max 57), 128k tris |
+| Phone, Medium | 89.1 calls (max 101), 584k tris | 89.1 calls (max 102), 583k tris |
+
+The run to run spread is about three calls a frame (ghosts, particles). The mouth adds one draw on Medium and High
+while the cavern's stage is made (its light in the air is its own mesh) and about 80 triangles; Low draws it in one
+mesh, as before. The shader changes are a uniform and a multiply each; the aurora covers more of the sky on
+Frostfang's night, so more of the sky's pixels run its loop there. High was already over the brief's 95 calls at
+pass 1 and is unchanged. Frames per second were not judged: six lanes share the GPU.
+
+## Frames
+
+- Passes: `shots/r7/review/m1/pass1` to `pass5`, each with `high`, `low`, `phone-medium`, `motion` and the
+  JSON of each set (cost, console).
+- Contact sheets of pass 1 and pass 5 High at the same 36 distances: `shots/r7/review/m1/sheet-before.png` and
+  `sheet-after.png`.
+- Hero frames (pass 5): `shots/r7/hero/m1/` (the dawn bridge at 3549 and 3600, out of the cavern and on the
+  bridge in motion at 3470, the cavern mouth at 3418, the aurora at 2700).

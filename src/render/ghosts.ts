@@ -1641,7 +1641,7 @@ export class GhostVisuals {
       const isRival = wearsRing(it.id, rivalId, it.wreckT, this.labels && !this.reel, p.done);
       // By size: from about 30% of the screen height (sooner when the frame edge cuts it) a ghost's
       // dissolve climbs from the hips toward its shoulders, so none outweighs the rider and none
-      // hollows into an outline; from about a third it goes evenly, gone by under a half (riding beside the
+      // hollows into an outline; from about 40% it goes evenly, gone by about 60% (riding beside the
       // lens at 80% it hung in the sky as a giant soap-bubble head). One in a pass beat keeps at least
       // half, and never vanishes until it is right at the lens.
       let body = 1;
@@ -1659,11 +1659,8 @@ export class GhostVisuals {
         const cy = (-c.y * 0.5 + 0.5) * h;
         const half = 0.5 * pxPerM;
         crop = smooth01((Math.abs(cx - w * 0.5) + half - w * 0.5) / (2 * half));
-        // (Round 7's review: one at half the frame's height beside the lens still stood over a third of
-        // the picture at a third of its strength. It now goes from about a third of the height and is
-        // gone by under a half.)
-        body = 1 - smooth01((size * (1 + 0.45 * crop) - 0.24) / 0.2);
-        lens = 1 - smooth01((size - 0.32) / 0.14);
+        body = 1 - smooth01((size * (1 + 0.45 * crop) - 0.28) / 0.22);
+        lens = 1 - smooth01((size - 0.38) / 0.24);
         // One flipping over the lens shows only its sled's underside, cut by the top edge under the
         // race pills: it goes evenly as its chest climbs past the top tenth of the screen.
         if (depth < 7) lens *= smooth01(cy / (0.1 * h));
