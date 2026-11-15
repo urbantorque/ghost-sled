@@ -1,4 +1,4 @@
-// The race lab: how live a race the field gives a pilot over runs 2 to 6, in node, with no browser. It takes
+// The race lab: how live a race the field gives a pilot over runs 1 to 6 (runs 2 to 6 in the main table; runs 1, 2 and 5 on their own at the foot), in node, with no browser. It takes
 // the pilot lab's rides (lab.ts --json: every ride carries the tick it passed each 10 m) as the player's runs,
 // builds each run's field as the game does (field.ts on the bundled pools, with the slow riders), replays the
 // picked records for where each ghost is at each tick, and counts what telemetry.js counts in a browser: the
@@ -123,6 +123,9 @@ const pools = MOUNTAINS.map((m) => withSlowRiders((JSON.parse(readFileSync(`src/
 console.log(`race-live (a riding ghost within ${NEAR} m) and passes a minute, runs 2 to 6, ${ORDERS} orders of each pilot's six rides a mountain`);
 console.log('pilot   mtn       times s (min..max)   five on fixed roles: live  passes/min  nearest m  quiet runs | laid across your runs: live  passes/min  nearest m  quiet runs');
 const total: Record<string, { a: Raced[]; b: Raced[] }> = {};
+/** Runs 1, 2 and 5 on their own (the brief asks how live the race is there): by pilot, by run, each way. */
+const RUNS = [0, 1, 4];
+const byRun: Record<string, Record<number, { a: Raced[]; b: Raced[] }>> = {};
 for (const pilot of PILOTS) {
   for (let m = 0; m < MOUNTAINS.length; m++) {
     const mine = rides.filter((r) => r.pilot === pilot && r.m === m && r.finished && r.marks.length > FINISH / 10);
@@ -134,11 +137,20 @@ for (const pilot of PILOTS) {
       const order = shuffled(mine, 977 * (o + 1) + m);
       const runTimes: Record<string, number[]> = { [key]: [] };
       for (let k = 0; k < order.length; k++) {
-        if (k > 0) {
-          const base = { pool: pools[m], kind: 'pool' as const, mood: 0, event: 0, count: 5, anchor: anchorFor(runTimes, key), seed: 31 * o + k, bestScore: 0, you: null, grudge: null, friend: null };
-          out.a.push(race(order[k].marks, pickField(base)));
-          const recent = recentFor(runTimes, key);
-          out.b.push(race(order[k].marks, pickField({ ...base, recent, count: fieldCount(0, recent) })));
+        const base = { pool: pools[m], kind: 'pool' as const, mood: 0, event: 0, count: 5, anchor: anchorFor(runTimes, key), seed: 31 * o + k, bestScore: 0, you: null, grudge: null, friend: null };
+        const recent = recentFor(runTimes, key);
+        if (k > 0 || RUNS.includes(k)) {
+          const ra = race(order[k].marks, pickField(base));
+          const rb = race(order[k].marks, pickField({ ...base, recent, count: fieldCount(0, recent) }));
+          if (k > 0) {
+            out.a.push(ra);
+            out.b.push(rb);
+          }
+          if (RUNS.includes(k)) {
+            const r = ((byRun[pilot] ??= {})[k] ??= { a: [], b: [] });
+            r.a.push(ra);
+            r.b.push(rb);
+          }
         }
         runTimes[key].push(Math.round(time(order[k]) * 10) / 10);
       }
@@ -158,4 +170,15 @@ for (const [pilot, t] of Object.entries(total)) {
   const ppm = (rs: Raced[]): string => (rs.reduce((x, r) => x + r.passes, 0) / rs.reduce((x, r) => x + r.mins, 0)).toFixed(2);
   const quiet = (rs: Raced[]): string => `${rs.filter((r) => r.live < 0.35).length}/${rs.length}`;
   console.log(`${pilot.padEnd(8)} ${mean(t.a)}  ${ppm(t.a)}  ${quiet(t.a)}`.padEnd(60), '|', `${mean(t.b)}  ${ppm(t.b)}  ${quiet(t.b)}`);
+}
+console.log('\nby run (every mountain, every order): run  five on fixed roles: live  passes/min  quiet runs | laid across your runs: live  passes/min  quiet runs');
+for (const [pilot, rs] of Object.entries(byRun)) {
+  for (const k of RUNS) {
+    const t = rs[k];
+    if (!t) continue;
+    const mean = (xs: Raced[]): string => (xs.reduce((x, r) => x + r.live, 0) / Math.max(1, xs.length)).toFixed(2);
+    const ppm = (xs: Raced[]): string => (xs.reduce((x, r) => x + r.passes, 0) / xs.reduce((x, r) => x + r.mins, 0)).toFixed(2);
+    const quiet = (xs: Raced[]): string => `${xs.filter((r) => r.live < 0.35).length}/${xs.length}`;
+    console.log(`${pilot.padEnd(8)} run ${k + 1}  ${mean(t.a)}  ${ppm(t.a)}  ${quiet(t.a)}`.padEnd(60), '|', `${mean(t.b)}  ${ppm(t.b)}  ${quiet(t.b)}`);
+  }
 }
