@@ -481,6 +481,9 @@ export class LandingAid {
       const wide = this.painted ? 1.45 : 1;
       this.blob.scale.set(0.55 * k * wide, 0.95 * k * (this.painted ? 1.25 : 1), 1);
       this.blobMat.uniforms.uColor.value.copy(shared.uSnowDeep.value).multiplyScalar(0.75 - 0.15 * faintK);
+      // (The painted shadow takes the shade's own hue: in the deep blue it read as a saturated disc,
+      // a decal under the sled rather than its shadow on the snow.)
+      if (this.painted) this.blobMat.uniforms.uColor.value.lerp(shared.uSnowShade.value, 0.55).multiplyScalar(0.8);
       this.blobMat.uniforms.uAlpha.value = Math.min(0.7, Math.max(0.3 + 0.2 * faintK, (0.5 + 0.25 * faintK) / (1 + h * 0.15))) + (this.painted ? 0.14 : 0);
     }
 

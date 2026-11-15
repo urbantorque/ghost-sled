@@ -496,10 +496,14 @@ export class PostFX {
             col = texture2D(tScene, uv).rgb;
           }
           // Chromatic punch on boosts and perfect landings.
-          if (uPunch > 0.01) {
-            vec2 off = dc * 0.0035 * uPunch;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
+          // (The review loop: across the whole frame at 0.85 it printed magenta and green edges on every
+          // pine for the punch's 0.4 s, and a still taken after a drift read as a misregistered print. It
+          // lives toward the frame's edges now, at a softer blend; the FOV punch carries the kick.)
+          float punch = uPunch * smoothstep(0.6, 1.05, r);
+          if (punch > 0.01) {
+            vec2 off = dc * 0.0035 * punch;
+            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.6);
+            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.6);
           }
           // Round 7's lens character: at speed the glass shows in the frame's corners and nowhere else, a
           // hair of colour fringe (two and a half pixels of a 1280 frame in the very corner at the

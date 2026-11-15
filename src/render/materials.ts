@@ -1038,7 +1038,8 @@ export function makeSnowMaterial(): ShaderMaterial {
           float nearC = 1.0 - smoothstep(5.0, 24.0, dist);
           if (nearC > 0.0) {
             float crack = max(iceCracks(vWorldPos.xz * 0.42, footprint * 0.42, 1.0), iceCracks(vWorldPos.xz * 1.1 + 5.3, footprint * 1.1, 1.0) * 0.55);
-            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * 0.5);
+            // (A lake's plates a little fainter: on the black body they drew a white grid, the review loop.)
+            body = mix(body, mix(uSnowShade, uSnowLit, 0.6), crack * nearC * mix(0.5, 0.32, lakeK));
           }
           col = mix(col, body, 0.62 * ice);
           // The mirror: the sky, and low along the horizon the far ridges, mirrored dark and soft in
@@ -1069,7 +1070,11 @@ export function makeSnowMaterial(): ShaderMaterial {
           }
           // Round 7 (the pipe lane, postfx/reflect.ts): the baked sky on every glaze, or the frame itself.
           sky = iceMirror(sky, vWorldPos, rr, lakeK);
-          col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.6 * vPaint.y));
+          // The fork's strip is seen at a grazing angle, where it mirrors the low horizon: under a gold
+          // hour's peach horizon it lay across the snow as a salmon smear and never read as ice (the
+          // review loop). It takes half its mirror from the deep upper sky, so it stays a blue lane.
+          sky = mix(sky, mix(uSkyZenith, uSnowDeep, 0.3), 0.5 * vPaint.y * (1.0 - lakeK));
+          col = mix(col, sky * (0.72 + 0.28 * shadow), clamp(fr * 1.15, 0.0, 0.95) * ice * (1.0 - 0.8 * vPaint.y));
           if (lakeK > 0.0) {
             vec2 lp = vWorldPos.xz;
             // The rider in the mirror: the reflected ray is tested against a soft upright figure at the
@@ -1095,7 +1100,9 @@ export function makeSnowMaterial(): ShaderMaterial {
             // (Low keeps the mirror, the near cracks and the blown snow: these are the Voronois and the wisps.)
             if (uSnowFx > 0.0 && dist < 130.0) {
               float major = iceCracks(lp * 0.05 + 3.1, footprint * 0.05, 0.13) * (1.0 - smoothstep(80.0, 130.0, dist));
-              col = mix(col, uSnowLit * 0.95, major * 0.85 * lakeK);
+              // (The review loop: at 0.85 of the lit snow the long fractures were bright white strokes that
+              // read as a tiling grid laid over the ice. They are pale lines in the ice, not on it.)
+              col = mix(col, mix(uSnowShade, uSnowLit, 0.7), major * 0.5 * lakeK);
             }
             if (uSnowFx > 0.0 && dist < 30.0) {
               float under = iceCracks(deep * 0.34 + 7.7, footprint * 0.34, 0.7) * (1.0 - smoothstep(16.0, 30.0, dist));
@@ -1691,10 +1698,13 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           #else
             if (keep < 1.0) {
               // Interleaved gradient noise: a fine, unstructured per-pixel dither (an ordered 4x4 grid
-              // reads as a coarse screen door on a big prop at the frame edge). The last fifth is
-              // dropped outright, so a nearly gone prop never lingers as sparse specks.
+              // reads as a coarse screen door on a big prop at the frame edge). Only the middle of the
+              // fade is dithered (keep 0.42 to 0.58): a pine hugging the frame's edge spent a whole
+              // metre or more half stippled, and every still that caught it read as a broken render
+              // (the review loop, three passes running). Now a prop is solid, then gone within a
+              // few centimetres of travel.
               float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-              if (ign >= (keep - 0.2) / 0.8) discard;
+              if (ign >= (keep - 0.42) / 0.16) discard;
             }
             keep = 1.0;
           #endif

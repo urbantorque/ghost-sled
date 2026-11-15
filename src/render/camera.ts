@@ -1131,7 +1131,11 @@ export class ChaseCamera {
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.45);
     // The results card takes the right of a wide screen (the rider moves to the left column, as the
     // results hero shot does) and the lower part of a phone's (the rider moves up into the open band).
-    this.finRes += ((t.results ? 1 : 0) - this.finRes) * (1 - Math.exp(-dt * 3));
+    // (The review loop: moved only once the card was up, the rider was still mid-frame as it landed, and
+    // the card's edge cut it in half. The move starts as the swing settles, so the rider is in its column
+    // by the time the results open; a skip still snaps it there.)
+    const resWant = t.results ? 1 : smooth01((this.finT - FINISH_SWING_S * 0.7) / 0.8);
+    this.finRes += (resWant - this.finRes) * (1 - Math.exp(-dt * (t.results ? 3 : 4)));
     const toward = azimuth(t.pos.x - desired.x, t.pos.z - desired.z);
     const off = portrait ? 0 : Math.atan(0.5 * tanHalfW) * this.finRes;
     const elev = Math.atan2(t.pos.y + 0.7 - desired.y, Math.hypot(t.pos.x - desired.x, t.pos.z - desired.z));
