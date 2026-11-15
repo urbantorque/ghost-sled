@@ -85,3 +85,64 @@ known (they may predate b4cef24's last edits), so that pass is not counted: it w
 and judged again (pass 2 below). For the record, that critic gave High a mean of 7.8, minimum 6.5 (z1026, z2700),
 Low 7.5, the phone 8.0, and no hero vista a 9 (cone 7.5, terraces 7, Leap 7.5, torii 8.5, pagoda 7). Its findings
 drove the first run's uncommitted second round of fixes, which this lane reviewed and committed (below).
+
+## Pass 2 (recaptured from fc66e3e; a new critic, Opus at extra effort)
+
+The first fresh capture from a committed head. This critic is stricter than pass 1's (an Opus critic at extra
+effort, where pass 1's ran on the earlier model), so the drop from pass 1 is partly the judge: the same frames
+that pass 1 called 8.5 it calls 7.5 to 8. Read each pass against its own critic's words.
+
+| Frame | High | Low | Phone | Weakest thing on High |
+| --- | --- | --- | --- | --- |
+| z0150 | 7 | 6.5 | 7 | Near blossom a faceted pink lump on a black stick; flat lilac bank |
+| z0300 | 7 | 7 | 7 | A sun-sized fuel drop on the cone's shoulder; featureless snow |
+| z0450 | 7 | 7 | 7.5 | Lift station a flat grey box |
+| z0600 | 6.5 | 6 | 7 | Violet "shard" pines read as crystals; fringe on the ledges |
+| z0750 | 7 | 6.5 | 7.5 | Terraces pale grey slabs, no sky in the water |
+| z0820 | 6.5 | 6 | 7.5 | Rider small; terraces grey slab rows; fringe on the rock wall |
+| z0900 | 7.5 | 7 | 7.5 | Canopies frontlit pink polyhedra |
+| z0970 | 6.5 | 7.5 | 7.5 | A giant translucent mint figure over the cone |
+| z1026 | 8 | 7.5 | 6.5 | Middle plane dissolves in haze |
+| z1200 | 6.5 | 6.5 | 7 | Beige box facades |
+| z1301 | 6 | 6.5 | 7 | Cream boxes with dark window holes; heavy fringe |
+| z1350 | 6 | 6.5 | 7 | A ghost sled inside the lens; box facades |
+| z1500 | 7.5 | 7 | 7 | Dark navy block on the snow; tunnel mouth a flat box |
+| z1650 | 6.5 | 6.5 | 7.5 | Torii mouth an unlit maroon box; rock pillars slabs |
+| z1754 | 7.5 | 6.5 | 7.5 | Olive box walls; the bars veils in the air, not on the snow |
+| z1800 | 7 | 6.5 | 7 | Exit blows out to a white rectangle |
+| z1971 | 8 | 7 | 7.5 | Flat wine arches; the valley below washes out |
+| z2100 | 7.5 | 7 | 7 | Orchard pale pink on white, not backlit |
+| z2210 | 7 | 6.5 | 7 | Dark green hedge slab at left; faceted canopies |
+| z2410 | 6.5 | 6.5 | 6.5 | Valley under the Leap a washed blank; cone cropped |
+| z2580 | 6.5 | 6 | 6.5 | Rider tiny; valley floor empty haze |
+| z2700 | 6 | 6 | 6.5 | Middle and far planes one pale value; rider tiny |
+| z2850 | 7.5 | 7 | 7.5 | A striped box building in the corner |
+| z3000 | 7.5 | 7 | 7 | Pale faceted near blossom with fringe |
+| z3060 | 8 | 7 | 7 | Pagoda cropped, flat window panels; glare band |
+| z3150 | 8 | 7.5 | 7 | Flat glare band in the middle; frontlit canopies |
+| z3300 | 7.5 | 7 | 7.5 | A low-poly ball of blossom; middle washes out |
+| z3405 | 7 | 5.5 | 6.5 | Big faceted near canopies |
+| z3450 | 6.5 | 7 | 7.5 | Fringed pine and a smeared ghost at the lens |
+| z3600 | 7 | 7 | 7.5 | A huge faceted near pine |
+| z3706 | 6.5 | 6 | 7 | Violet shard pines again; washed |
+| z3926 | 7 | 6.5 | 7 | Rider tiny; town grey-white boxes; pagoda a ghost |
+| z4076 | 7 | 6.5 | 7.5 | Beige facades, flat orange panes |
+| z4200 | 7.5 | 6.5 | 7.5 | Grey box houses; streaked banks |
+| z4330 | 7.5 | 7 | 7 | Box facades, flat window slabs; no pagoda |
+| z4440 | 7.5 | 7 | 7 | Pixel FINISH lettering; crowd noise; pagoda small |
+| z4590 | n/a | n/a | 6.5 | Results card (phone: a flat blue floor with a hex grid) |
+| **Mean** | **7.04** | **6.68** | **7.11** | |
+| **Minimum** | **6** (z1301, z1350, z2700) | **5.5** (z3405) | **6.5** | |
+
+Motion: z0260 7, z0880 6.5, z1020 7.5, z1780 7.5, z2440 7, z2500 7, z2560 6, z4420 7 (mean 6.94).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7 | No |
+| The flooded terraces | 6.5 to 7 | No |
+| The Blossom Leap over the orchard rows | 6 to 6.5 stills, 6 to 7 motion | No |
+| The torii's bars of light | 7.5 | No |
+| The pagoda over the square | 7.5 | No |
+
+Also flagged: a 2 to 4 px colour fringe at the frame's edges in most High frames; Low's torii bars clipping
+white; an ordered dither on the rail at Low z3405; the FINISH banner's stair-stepped lettering.

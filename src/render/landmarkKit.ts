@@ -1248,9 +1248,12 @@ export function pagodaPiece(ctx: SiteCtx): Piece {
 
 /** A five-storey pagoda on its plinth, in its own frame, its first floor at b. */
 export function pagodaParts(night: boolean, b: number, lo: number, p: Palette): BufferGeometry[] {
-  const slate = new Color('#3E3A50');
-  const trim = new Color('#5A2F42');
-  const wall = new Color('#EDE4D8');
+  // Round 7 (ART.md 15): the pagoda is the town's dark spine, wine lacquer under ink roofs, with paper
+  // lanterns warm in every storey by day and night. (Cream plaster under the mist was a pale ghost over the
+  // square, the lightest thing in the sky.)
+  const slate = new Color('#2E2A3E');
+  const trim = new Color('#24182A');
+  const wall = new Color('#8E2E46');
   const bronze = new Color('#5E5468');
   const parts: BufferGeometry[] = [];
   parts.push(grade(box(13, b - lo + 2, 13, stone(p, 0.85), [0, (b + lo - 2) / 2, 0]), lo - 2, b, 0.7, 1.0));
@@ -1261,10 +1264,16 @@ export function pagodaParts(night: boolean, b: number, lo: number, p: Palette): 
     const h = i === 0 ? 4.4 : 3.2;
     parts.push(grade(box(w, h, w, wall, [0, y + h / 2, 0]), y, y + h, 0.9, 1.03));
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.35, h, 0.35, trim, [(sx * w) / 2, y + h / 2, (sz * w) / 2]));
-    const win = night ? lampColor(true, '#FFC27A') : new Color('#3A2A36');
+    const win = lampColor(night, '#FFC27A');
     for (const a of [0, Math.PI / 2, -Math.PI / 2]) parts.push(box(w * 0.32, h * 0.45, 0.2, win, [Math.sin(a) * (w / 2 + 0.02), y + h * 0.5, Math.cos(a) * (w / 2 + 0.02)], [0, a, 0]));
     y += h;
-    parts.push(...place(sweptRoof(w + 4.2, 0, slate, trim), 0, y + 0.1, 0, 0));
+    // (Only a thin snow near each roof's crown: the swept roof's full cap of it turned the tower into a stack
+    // of white under the haze, and the lacquer between was lost.)
+    const R = w + 4.2;
+    const roof = sweptRoof(R, 0, slate, trim);
+    roof[2].dispose();
+    roof[2] = part(new ConeGeometry(R * 0.36, R * 0.14, 4, 1), SNOW, { pos: [0, R * 0.2, 0], rot: [0, Math.PI / 4, 0] });
+    parts.push(...place(roof, 0, y + 0.1, 0, 0));
     y += 1.6;
   }
   const t = b + 4.4 + 4 * 3.2 + 5 * 1.6 + 1.2;

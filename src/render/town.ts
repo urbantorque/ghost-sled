@@ -202,7 +202,9 @@ export function townStyle(biome: BiomeId, p: Palette): Town {
     case 'volcanic':
       return { lower: [shade(p.low, 0.6), shade(p.low, 0.7), shade(p.low, 0.52)], upper: [C('#5E4436'), C('#6E5040'), shade(p.low, 0.8)], roof: C('#2E2834'), trim: C('#241E26'), shutters: [C('#3A2A30')], lamp: '#FF9A50', lampAlways: true };
     case 'blossom':
-      return { lower: [C('#4A3440'), C('#3E2E38'), C('#55404A')], upper: [C('#EDE4D8'), C('#E6DACB'), C('#F2EADF')], roof: C('#3E3A50'), trim: C('#2E2230'), shutters: [C('#2E2230')], lamp: '#FFB45E', lampAlways: true };
+      // (Round 7: the upper storeys are a mid-value warm plaster or wine lacquer, so a street has a value
+      // step between its dark lattice, its walls and the snow; cream plaster made it a row of pale boxes.)
+      return { lower: [C('#4A3440'), C('#3E2E38'), C('#55404A')], upper: [C('#C4B09C'), C('#7E2E44'), C('#B4A08E'), C('#D0BEAA')], roof: C('#2E2A3E'), trim: C('#2E2230'), shutters: [C('#2E2230')], lamp: '#FFB45E', lampAlways: true };
     case 'lantern':
       // The lamplighters' town: stone under plum-black timber, slate roofs, and paper lit from inside.
       return { lower: [stone(p, 0.8), stone(p, 0.9), stone(p, 0.7)], upper: [C('#3A2E52'), C('#44345C'), C('#302848'), C('#4C3E66')], roof: C('#24244E'), trim: C('#1E1936'), shutters: [C('#1E1936')], lamp: '#FFC46A', lampAlways: true };
@@ -252,7 +254,9 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
   const lower = t.lower[Math.floor(rnd() * t.lower.length)];
   const upper = t.upper[Math.floor(rnd() * t.upper.length)];
   const shutter = t.shutters[Math.floor(rnd() * t.shutters.length)];
-  const glass = biome === 'volcanic' ? lampColor(true, '#FF9A50').multiplyScalar(night ? 1 : 0.55) : windowColor(night);
+  // (Sakura's windows are paper screens, warm with the light inside them by day too: dark glass read as
+  // holes in the walls.)
+  const glass = biome === 'volcanic' ? lampColor(true, '#FF9A50').multiplyScalar(night ? 1 : 0.55) : biome === 'blossom' && !night ? C('#F4CA92').multiplyScalar(1.1) : windowColor(night);
   const SH = STOREY;
   const top = F + storeys * SH;
   // How far the top storey has leant out, which the roof has to cover.

@@ -1001,11 +1001,13 @@ export function liftPiece(ctx: SiteCtx): Piece {
   const { C: H, nodes } = liftLayout(ctx.post, ctx.clear, s, ctx.gy);
   const steel = biome === 'volcanic' ? C('#3E3440') : C('#6A7088');
   const steelD = biome === 'volcanic' ? C('#2E2830') : C('#4A5068');
-  const wall = biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : C('#EDE4D8');
+  // (Sakura's station is the town's warm plaster with paper windows: cream walls and dark glass read as a
+  // grey box on the bank.)
+  const wall = biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : biome === 'blossom' ? C('#C4B09C') : C('#EDE4D8');
   const upper = biome === 'alpine' ? TIMBER : biome === 'glacier' ? C('#D8E2EE') : biome === 'volcanic' ? shade(p.low, 0.8) : C('#93405A');
-  const roof = biome === 'blossom' ? C('#3E3A50') : C('#3A3448');
+  const roof = biome === 'blossom' ? C('#2E2A3E') : C('#3A3448');
   const trim = biome === 'blossom' ? C('#2E2230') : TIMBER_DARK;
-  const glass = windowColor(night);
+  const glass = biome === 'blossom' && !night ? C('#F4CA92').multiplyScalar(1.1) : windowColor(night);
   const cols = banners(p);
   const steps: Array<() => BufferGeometry[]> = [];
   const spots: Spot[] = [];

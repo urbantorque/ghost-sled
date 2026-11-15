@@ -102,7 +102,8 @@ export class PostFX {
   private moodFoot = 0;
   private moodShafts = 0;
   private moodLens = 0;
-  /** How much of the lens's colour fringe at speed a mountain keeps (1: all of it; a calm mountain less). */
+  /** How much of the lens's colour fringe at speed a mountain keeps (1: all of it; a calm mountain less).
+   *  The chromatic punch on a boost keeps a quarter of its split at the least. */
   fringeK = 1;
   private moodFocal = 0;
   private focalDir: Vector3 | null = null;
@@ -1055,7 +1056,9 @@ export class PostFX {
     u.uBloom.value = this.moodBloom * this.params.bloomScale;
     u.uFoot.value = this.moodFoot * this.params.footScale;
     u.uSpeed.value = this.params.speed;
-    u.uPunch.value = this.params.punch;
+    // (On a calm mountain the punch is a hair: a slingshot fires one every few seconds in a pack, and at
+    // full strength the frame's edges were split red and blue more often than not.)
+    u.uPunch.value = this.params.punch * Math.max(this.fringeK, 0.25);
     u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe * this.fringeK : 0;
     u.uFlash.value = this.params.flash;
     u.uVignette.value = this.params.vignette;

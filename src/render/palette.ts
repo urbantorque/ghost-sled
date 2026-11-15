@@ -77,8 +77,9 @@ export interface Palette {
    *  moving through a run never makes the mountain jump sides). seaIce 1 reads the sea's white as a
    *  snowfield on the valley floor and its openings as frozen lakes that hold still (Pinecrest's Clear
    *  Skies); 0 keeps them gaps in a sea of cloud. seaWarm lights the sea from beneath in patches, in the
-   *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). */
-  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number };
+   *  deck's glow colour (Lanternfall: the valley of lanterns under the cloud). bands lays mist in three
+   *  layers across the panorama's lower slopes (Sakura's run-in: the mist lifting off the cone). */
+  massif: { peak: HeroPeak; rock: Color; glow: Color; glowK: number; glowLine: number; veil: number; sea: number; lava: number; flow: number; heroAz: number; seaIce: number; seaWarm: number; bands: number };
   /** grain: film grain strength (night moods run light, where grain reads as digital noise in the
    *  dark). foot: how much the bottom edge of the frame darkens and cools (see post.ts). */
   grade: Grade;
@@ -235,7 +236,7 @@ function base(): Palette {
     ridge: [c('#C8B4DE'), c('#9A8AC6'), c('#6660A6')],
     mist: null,
     mistK: 0,
-    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0 },
+    massif: { peak: 'summit', rock: c('#5A4E7A'), glow: c('#FF9AA2'), glowK: 0, glowLine: -6000, veil: 0, sea: 1, lava: 0, flow: 0, heroAz: 0, seaIce: 0, seaWarm: 0, bands: 0 },
     grade: { lift: c('#0A0F2A'), gain: c('#FFF8F0'), saturation: 1.08, contrast: 1.04, grain: 1, foot: 0.3, shafts: 1, lens: 1, focal: 1, gust: 0, glitter: 0.15 },
     clouds: { low: 0.8, high: 0.6, top: 0.3, lit: c('#FFE6CF'), shade: c('#A48CC0'), rim: c('#FFB088'), shadow: 0.3 },
     deck: { k: 0, lit: c('#FFFFFF'), shade: c('#FFFFFF'), glow: c('#FFFFFF') },
@@ -1049,7 +1050,9 @@ function round7(p: Palette, biome: BiomeId): void {
       // orchards (a full fan of them over white snow washed the frame custard).
       p.sunColor = c('#FFF0E6');
       p.grade.shafts = 0.35;
-      p.snowLit = c('#FFF6F0');
+      // (The lit snow and the highlights' split tone are a breath cooler than the light: on Low, which bakes
+      // the grade into its colours with no film over them, the warmer pair turned the lit snow to sand.)
+      p.snowLit = c('#FFF8F6');
       p.snowShade = c('#7E8CD6');
       p.snowDeep = c('#6452AC');
       p.fog = c('#F4DAD8');
@@ -1064,8 +1067,12 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.contrast = 1.1;
       p.grade.saturation = 1.12;
       p.grade.exposure = 0.96;
-      p.grade.hi = c('#FFF4EC');
+      p.grade.hi = c('#FFFAF8');
       p.grade.lo = c('#E2E0FF');
+      // (A neutral gain and a pale blue sky light: the warm gain and the old celadon sky light took the lit
+      // snow to tan on Low, where nothing rolls it off, and the shade toward green.)
+      p.grade.gain = c('#FFFFFF');
+      p.hemiSky = c('#D4DCF0');
       // Round 7's review. Peach mist, not cream (ART.md 15): the horizon, the air under it and the sea of
       // cloud were three creams, and with a celadon zenith over them the run-in read yellow-green. The
       // horizon is peach, the zenith a pale morning blue, and the cloud's shade is rose-lavender, so the
@@ -1077,10 +1084,16 @@ function round7(p: Palette, biome: BiomeId): void {
       p.skyBelow = c('#F4CFC6');
       p.fog = c('#F4D4D4');
       p.ridge = [c('#F2DAD6'), c('#D8CEDC'), c('#B4BAD8')];
-      p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFEEE6'), shade: c('#D6BCCC'), rim: c('#FFC4AE'), shadow: 0.1 };
+      // (The cloud's shadows lie on the snow as big soft cool shapes, a middle value between the lit snow
+      // and the shade: at 0.1 the slopes were one white sheet from the lens to the far bank. The frame's
+      // foot holds a value frame round the rider.)
+      p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFEEE6'), shade: c('#D6BCCC'), rim: c('#FFC4AE'), shadow: 0.32 };
+      p.grade.foot = 0.24;
       p.atmo.valleyColor = c('#FAD2C8');
       p.massif.heroAz = 17;
       p.massif.veil = 0.16;
+      // The mist lies on the cone's lower slopes in layers and its summit stands clear over them.
+      p.massif.bands = 0.85;
       p.massif.glow = c('#FFBCA8');
       p.massif.glowK = 0.35;
       p.tallDark = c('#7E2459');
@@ -1456,6 +1469,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fogNear = 120;
         p.fogFar = 720;
         p.massif.veil = 0;
+        p.massif.bands = 0.4;
         p.shadowK = 0.95;
         p.atmo.valley = 0.7;
         p.atmo.drift = 0.15;
@@ -1475,6 +1489,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fog = c('#EEDADE');
         p.grade.saturation = 1.18;
         p.petals = 0.9;
+        p.massif.bands = 0;
+        p.clouds.shadow = 0.36;
       },
     },
     {
@@ -1518,6 +1534,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.veil = 0;
         p.petals = 1.1;
         p.grade.exposure = 0.9;
+        // (The valley under the Leap opens: the sea of cloud thins so the far plane is flat blue openings
+        // between white, not one white floor, and the cloud's shadows break the slopes either side.)
+        p.massif.sea = 0.62;
+        p.clouds.shadow = 0.42;
       },
     },
     {
@@ -1530,6 +1550,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.grade.contrast = 1.16;
         p.petals = 1.3;
         p.lamps = 0.45;
+        // (The clearest light on the mountain: the air thins so the town under the last leap and the pagoda
+        // over the square stand in it, not a pale ghost of them.)
+        p.fogFar = 1350;
+        p.air.low = 0.4;
       },
     },
   ],

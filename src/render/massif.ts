@@ -421,6 +421,7 @@ const FRAG = /* glsl */ `
   uniform float uGlowK;
   uniform float uGlowLine;
   uniform float uVeil;
+  uniform float uBands;
   uniform float uLava;
   uniform float uFlow;
   uniform vec3 uLavaColor;
@@ -555,6 +556,17 @@ const FRAG = /* glsl */ `
     vec2 sxz = normalize(uSeaSun.xz + vec2(0.0001, 0.0));
     vec3 haze = mix(uHaze, uHazeSun, pow(max(dot(normalize(dir.xz), sxz), 0.0), 4.0) * 0.7);
     col = mix(col, haze, clamp(hz + uVeil, 0.0, 1.0));
+    if (uBands > 0.0) {
+      // Mist lying in layers across the lower slopes (Sakura's run-in, ART.md 15: the cone a pale ghost
+      // that the mist lifts off in layers): three bands between the sea and 520 m, each densest at its
+      // foot and ragged along its top, and the summit clear over them. The sun's side is peach.
+      float hb = clamp((vPos.y - uSeaY) / (520.0 - uSeaY), 0.0, 1.0);
+      float rag = snoise(vec2(atan(dir.x, -dir.z) * 16.0, hb * 4.0)) * 0.1;
+      float q = fract(hb * 3.0 + rag);
+      float band = 1.0 - smoothstep(0.15, 0.85, q);
+      float mist = (0.3 + 0.7 * band) * (1.0 - smoothstep(0.7, 1.0, hb));
+      col = mix(col, mix(haze, uHazeSun, 0.55), clamp(mist * uBands, 0.0, 1.0));
+    }
     // The crater glows (stronger at night).
     col += uLavaColor * crater * uLava * (0.8 + 0.2 * sin(uTime * 1.3));
     // The sea of clouds swallows the mountains' feet, round a billowing surface.
@@ -754,6 +766,7 @@ export class Massif {
         uGlowK: { value: 0 },
         uGlowLine: { value: -6000 },
         uVeil: { value: 0 },
+        uBands: { value: 0 },
         uLava: { value: 0 },
         uFlow: { value: 0 },
         uLavaColor: { value: new Color('#FF6A2A') },
@@ -842,6 +855,7 @@ export class Massif {
     u.uGlowK.value = p.massif.glowK;
     u.uGlowLine.value = p.massif.glowLine;
     u.uVeil.value = p.massif.veil;
+    u.uBands.value = p.massif.bands;
     // At night the silhouettes hold: the ranges keep more of their dark value against the horizon glow.
     u.uHazeK.value = p.moon ? 0.6 : 1;
     u.uLava.value = p.massif.lava;

@@ -353,12 +353,15 @@ function paddyMaterial(): ShaderMaterial {
         // roof tile. The mist lies on it half as thick as on the snow, so a far flat stays blue.)
         vec3 deep = mix(uSkyZenith, sky, 0.2);
         deep = mix(vec3(dot(deep, vec3(0.3, 0.59, 0.11))), deep, 1.6) * 0.8;
-        vec3 col = mix(deep, sky * 0.98, f);
+        // (A painted mirror holds more of the sky over it than glass would: the flats are the zenith's blue
+        // going to peach at their far edge, so a step of water never reads as a step of snow.)
+        vec3 col = mix(deep, sky * 0.98, f * 0.4);
         vec3 dd = normalize(uDiskDir);
         float gl = max(dot(r, dd), 0.0);
-        // The sun finds the flats one by one: a wide soft sheen round a hot core.
-        col += uSunColor * (pow(gl, 120.0) * 1.6 + pow(gl, 14.0) * 0.3);
-        float fog = smoothstep(uFogNear, uFogFar, dist) * 0.5;
+        // The sun finds the flats one by one: a soft sheen round a hot core. (Narrow: a wide sheen turned
+        // every flat on the sun's side to one white slab.)
+        col += uSunColor * (pow(gl, 260.0) * 2.2 + pow(gl, 40.0) * 0.22);
+        float fog = smoothstep(uFogNear, uFogFar, dist) * 0.35;
         gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
         #include <colorspace_fragment>
       }
@@ -687,7 +690,9 @@ export class Stages {
     const pos: number[] = [];
     const f = new Facets();
     const bund = new Color('#4A2C44');
-    const cap = new Color('#F4EEF4');
+    // (The bund's top is wet earth, a step lighter than its face: capped with snow, the steps were a grid
+    // of white rails and the water between them read as pale slabs.)
+    const cap = new Color('#6A4256');
     const at = (side: number, e: number, z: number, y?: number): [number, number, number] => {
       const x = c.centerX(z) + side * (c.halfWidth(z) + e);
       return [x, y ?? snowY(c, x, z), -z];
@@ -830,7 +835,9 @@ export class Stages {
     const step = (2 * s.len) / n;
     // The side the sun stands on (the gates' shadows fall away from it).
     const sun = this.palette.sunDir.x >= 0 ? 1 : -1;
-    const warm = new Color(1.0, 0.8, 0.56);
+    // (A rose gold, its green held down: the paler gold added over the lacquer and the cut banks turned
+    // them olive.)
+    const warm = new Color(1.0, 0.66, 0.4);
     const at = (z: number, off: number, up: number): number[] => {
       const x = c.centerX(z) + off;
       return [x, c.ground(x, z) + up, -z];
@@ -840,7 +847,7 @@ export class Stages {
       const z = a + i * step;
       const hw = c.halfWidth(z) + Math.min(3, c.edgeLimit(z));
       // (Low has no film curve over the frame: at full strength its bars added up to paper white.)
-      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.4 : 1);
+      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.3 : 1);
       const W = step * 0.3;
       const M = low ? 3 : 6;
       for (let j = 0; j < M; j++) {
@@ -856,7 +863,8 @@ export class Stages {
       // to the snow on the far side (Medium and High; every gap on High, every second on Medium).
       if (!low && (this.tier === 'high' || i % 2 === 0)) {
         const top = Math.min(13, Math.max(9, s.clear - 1));
-        const ks = k * 0.62;
+        // (Thin enough that the bars on the snow are what reads, not a veil across the frame.)
+        const ks = k * 0.42;
         const x0 = sun * (hw + 1.2);
         const x1 = -sun * hw * 0.82;
         b.quad(at(z - W * 0.8, x0, top), at(z + W * 0.8, x0, top), at(z + W * 1.2, x1, 0.2), at(z - W * 1.2, x1, 0.2), warm, ks, ks, ks * 0.25, ks * 0.25);
@@ -866,7 +874,7 @@ export class Stages {
     const end = s.z + s.len;
     const hwE = c.halfWidth(end) + c.edgeLimit(end);
     const H = Math.max(10, s.clear);
-    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.14, 0.06, 0.0, 0.05);
+    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.07, 0.03, 0.0, 0.02);
     const mesh = new Mesh(b.build(), this.beamMat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 3;
@@ -887,14 +895,16 @@ export class Stages {
       const inK = smooth(a - 4, a + 10, z) * (1 - smooth(end - 6, end + 4, z));
       if (inK > 0) {
         const [x, y, zz] = at3(z + 0.6, sun * 2.6, 3.4);
-        pushLocalLight(x, y, zz, warm.r, warm.g * 0.92, warm.b * 0.8, 8.5, (fx.reduced ? 0.42 : 0.2 + 0.85 * bar) * inK);
+        // (Low paints a local light on the snow as a pool with no film over it: at full strength the floor
+        // under the sled went to paper white.)
+        pushLocalLight(x, y, zz, warm.r, warm.g * 0.92, warm.b * 0.8, 8.5, (fx.reduced ? 0.42 : 0.2 + 0.85 * bar) * inK * (low ? 0.5 : 1));
       }
       const i0 = Math.max(1, Math.ceil(ph));
       for (let i = i0 + 1; i <= i0 + (low ? 1 : 3) && i < n; i += 2) {
         const zg = a + i * step;
         const hw = c.halfWidth(zg);
         const [x, y, zz] = at3(zg, -sun * (hw - 1.2), 4.5);
-        pushLocalLight(x, y, zz, warm.r, warm.g * 0.86, warm.b * 0.74, 11, 0.7);
+        pushLocalLight(x, y, zz, warm.r, warm.g * 0.86, warm.b * 0.74, 11, low ? 0.4 : 0.7);
       }
     };
     return { key: 'torii' + s.n, z0: a, z1: end, root, lights };

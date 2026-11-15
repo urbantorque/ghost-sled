@@ -401,6 +401,8 @@ export class World {
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
     this.post.configure(quality.passes);
+    // (As setCourse: a run on the mountain the world was built for never passes through it.)
+    this.post.fringeK = this.course.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();

@@ -302,7 +302,10 @@ export class Props {
     // Foliage keeps its spruce teal in shade (at 0.55 the cool shade tint turned every pine indigo).
     // (Round 7: foliage moves in the wind and shakes when shaved, treelife.ts; Low bends only.)
     const rich = this.arches;
-    const foliage = liveTree(makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true }), rich);
+    // (Sakura's shade keeps more of a tree's own colour: at 0.38 its cedars went violet on the side away
+    // from the sun and the blossom's shade a lilac, where the script wants cedar green and a wine heart.)
+    const leafCool = biome === 'blossom' ? 0.2 : 0.38;
+    const foliage = liveTree(makeToonMaterial({ sway: 0.12, coolShade: leafCool, nearFade: near, coverageFade: cf, hazard: true }), rich);
     const plain = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf });
     const glow = makeToonMaterial({ coolShade: 0.3, emissive: new Color('#FF9A4A'), emissiveStrength: 0.2, nearFade: near, coverageFade: cf });
     // Stone lanterns and lava rocks are hazards too: dark and cold, with only a stone lantern's
@@ -346,10 +349,10 @@ export class Props {
     };
     const glacier = biome === 'glacier';
     const vol = biome === 'volcanic';
-    const wallMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier });
+    const wallMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : leafCool, nearFade: near, coverageFade: cf, hazard: true, ice: glacier });
     // The far rows lean into the fog with distance, the treeline wall does not: one material for both,
     // each instance's pick saying which it is (flora.ts AERIAL_PICK).
-    const farMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : 0.38, nearFade: near, coverageFade: cf, hazard: true, ice: glacier, aerial: true }, true);
+    const farMat = vFor({ sway: glacier || vol ? 0 : 0.12, coolShade: glacier || vol ? 0.5 : leafCool, nearFade: near, coverageFade: cf, hazard: true, ice: glacier, aerial: true }, true);
     const key = paletteKey(biome, p);
     // Medium and High draw the full trees in the detail range, Low its own cheaper ones; past it every
     // tier draws the far trees. A set with no cheaper build shares the full set's buffers.
