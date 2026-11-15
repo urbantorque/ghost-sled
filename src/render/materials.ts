@@ -1345,7 +1345,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             // white: the light's full hue added to a warm or a violet snow clipped to mustard.)
             if (uPoolSoft > 0.0) {
               float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
-              vec3 ls = mix(vec3(max(L.r, max(L.g, L.b))), L, 0.5) * max(1.0 - lv, 0.0) * 1.6;
+              vec3 ls = mix(vec3(max(L.r, max(L.g, L.b))), L, 0.65) * max(1.0 - lv, 0.0) * 0.75;
               L = mix(L, ls, uPoolSoft);
             }
           }
