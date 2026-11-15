@@ -731,8 +731,9 @@ export class Stages {
     lg.setAttribute('aHeat', new BufferAttribute(new Float32Array(heat), 1));
     lg.setAttribute('aCover', new BufferAttribute(new Float32Array(cover), 1));
     lg.setIndex(idx);
+    // (The lake, the rim and the glow are still: culled, they cost nothing once the flight is behind the
+    // lens, though the stage is kept for the 50 m the lava runs on past the landing.)
     const lava = new Mesh(lg, this.lavaMat);
-    lava.frustumCulled = false;
     root.add(lava);
 
     // The rim: broken basalt along each field's far shore, tall enough to stand black against the deck,
@@ -772,7 +773,6 @@ export class Stages {
       }
     }
     const rim = new Mesh(f.build(), this.rockMat);
-    rim.frustumCulled = false;
     root.add(rim);
 
     // Embers off both fields and, thinner, over the run between them (Medium and High).
@@ -840,7 +840,6 @@ export class Stages {
       }
     }
     const haze = new Mesh(b.build(), this.beamMat);
-    haze.frustumCulled = false;
     haze.renderOrder = 3;
     root.add(haze);
 
@@ -1100,7 +1099,8 @@ export class Stages {
       }
     }
     const mesh = new Mesh(b.build(), this.beamMat);
-    mesh.frustumCulled = false;
+    // (A forge's mouth is culled like any still mesh; the cavern's dawn is left as it was.)
+    if (!forge) mesh.frustumCulled = false;
     mesh.renderOrder = 3;
     root.add(mesh);
     const lights = (z: number): void => {
