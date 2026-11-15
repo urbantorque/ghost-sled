@@ -1440,7 +1440,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // light the snow, the cone runs with lava behind the roofs.
       // (It has come by the market's bridge: begun at 3500 m, the bridge was still the halls' dusk.)
       // (Full night by the bridge: half blended there, the bridge was still the afternoon's orange.)
-      from: 3380, at: 3540, dusk: 1,
+      from: 3400, at: 3540, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
         // (A dim key under the dark deck: a peach one on the night's lilac snow read as candy pink.)
