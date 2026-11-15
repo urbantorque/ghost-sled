@@ -1053,9 +1053,24 @@ describe('the legend look', () => {
     cam.ground = () => 0;
     cam.mode = 'chase';
     cam.beats([], feel);
-    for (let i = 0; i < 60; i++) cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0 }, 1 / 60);
-    for (let i = 0; i < frames; i++) cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend, ...more }, 1 / 60);
+    // The rider rides (26 m/s down the course), so the chase trails it as it does in a run.
+    RIDER.set(0, 0, -400);
+    const step = (l: typeof legend, extra: typeof more = {}): void => {
+      RIDER.z -= 26 / 60;
+      cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend: l ? { ...l, z: l.z + RIDER.z + 400 } : null, ...extra }, 1 / 60);
+    };
+    for (let i = 0; i < 90; i++) step(null);
+    for (let i = 0; i < frames; i++) step(legend, more);
+    cam.camera.updateMatrixWorld(true);
+    cam.camera.matrixWorldInverse.copy(cam.camera.matrixWorld).invert();
     return cam;
+  };
+  /** Rides on with the legend gone. */
+  const rideOn = (cam: ChaseCamera, frames: number): void => {
+    for (let i = 0; i < frames; i++) {
+      RIDER.z -= 26 / 60;
+      cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend: null }, 1 / 60);
+    }
   };
   /** The lens's compass yaw (0 down the course, + toward +x) and pitch (radians, + up). */
   const aim = (cam: ChaseCamera): { yaw: number; pitch: number } => {
@@ -1074,9 +1089,12 @@ describe('the legend look', () => {
     expect(a.yaw - plain.yaw).toBeLessThanOrEqual(LEGEND_YAW_MAX + 0.005);
     expect(a.pitch - plain.pitch).toBeGreaterThan(0.03);
     expect(cam.legendLook.lift).toBeGreaterThan(0.6);
-    // (Where that leaves the rider in the frame is read off real frames: this stand-in rider does not move,
-    // so the lens sits on top of it. The pitch may rise by no more than the lift's share of the frame.)
-    expect(a.pitch - plain.pitch).toBeLessThan(0.2);
+    // The rider is still in the frame: within the middle of the width, and no lower than its floor (70% of
+    // the way down, clear of the hint row).
+    const p = RIDER.clone().setY(0.55).project(cam.camera);
+    expect(Math.abs(p.x)).toBeLessThan(0.3);
+    expect(p.y).toBeGreaterThan(-0.42);
+    expect(p.y).toBeLessThan(0);
     // A legend on the other side turns the other way.
     expect(aim(ride({ ...cone, x: -140 })).yaw - plain.yaw).toBeLessThan(-0.08);
   });
@@ -1086,7 +1104,7 @@ describe('the legend look', () => {
     const full = ride(cone);
     expect(Math.abs(far.legendLook.yaw)).toBeLessThan(Math.abs(full.legendLook.yaw) * 0.5);
     // Gone: three seconds on the look is back to nothing.
-    for (let i = 0; i < 360; i++) full.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend: null }, 1 / 60);
+    rideOn(full, 360);
     expect(Math.abs(full.legendLook.yaw)).toBeLessThan(0.01);
     expect(full.legendLook.lift).toBeLessThan(0.03);
   });
@@ -1105,10 +1123,11 @@ describe('the legend look', () => {
     expect(aim(still).yaw).toBeCloseTo(plain.yaw, 6);
     expect(aim(still).pitch).toBeCloseTo(plain.pitch, 6);
     expect(Math.abs(ride(cone, IDLE_FEEL, 240, { tumble: 1 }).legendLook.yaw)).toBeLessThan(1e-6);
-    expect(Math.abs(ride({ x: 30, y: 20, z: -380, peak: 1 }).legendLook.yaw)).toBeLessThan(1e-6);
+    expect(Math.abs(ride({ x: 30, y: 20, z: -370, peak: 1 }).legendLook.yaw)).toBeLessThan(1e-6);
   });
 
   it('never steers: the lens is all it moves (the target it is handed is read, not written)', () => {
+    RIDER.set(0, 0, -400);
     const t = { pos: RIDER.clone(), dir: DOWN.clone(), speed: 26, steer: 0.3, airborne: false, boost: 0, legend: { ...cone } };
     const cam = new ChaseCamera();
     cam.setAspect(16 / 9);
@@ -1117,7 +1136,7 @@ describe('the legend look', () => {
     cam.beats([], IDLE_FEEL);
     for (let i = 0; i < 120; i++) cam.update(t, 1 / 60);
     expect(t.steer).toBe(0.3);
-    expect(t.pos.equals(RIDER)).toBe(true);
+    expect(t.pos.equals(new Vector3(0, 0, -400))).toBe(true);
     expect(t.dir.equals(DOWN)).toBe(true);
     expect(t.legend).toEqual(cone);
   });

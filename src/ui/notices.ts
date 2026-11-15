@@ -37,6 +37,14 @@ const FINISH_MS = 3400;
 const LEGEND_MS = 3600;
 /** Shortest time a banner stays up once shown, even with others waiting. */
 const MIN_MS = 900;
+/** A legend's card is not hurried off as other banners are: its name and its line are a dozen words, read
+ *  once in ten runs, and a mission's toast waiting behind it used to take it down in under a second. */
+const LEGEND_MIN_MS = 2600;
+
+/** The least a banner of this kind stays up once shown, whatever waits behind it (ms). */
+export function minShowMs(type: string): number {
+  return type === 'legend' ? LEGEND_MIN_MS : MIN_MS;
+}
 /** The grudge toast and the grudge pass arrive in the same tick: within this window they merge. */
 const MERGE_MS = 400;
 const MAX_QUEUE = 3;
@@ -453,7 +461,7 @@ export class Notices {
   private hurry(now: number): void {
     const cur = this.cur;
     if (!cur || cur.pri >= P_ALERT || this.queue.length === 0 || this.liveChip()) return;
-    const end = Math.max(now, cur.shown + MIN_MS);
+    const end = Math.max(now, cur.shown + minShowMs(cur.spec.type));
     if (end < cur.end) this.arm(cur, end);
   }
 

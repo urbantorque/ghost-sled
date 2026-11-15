@@ -89,8 +89,11 @@ export interface CamTarget {
  *  middle third and the line ahead in frame), the most it lets the rider sink to lift the sky into frame
  *  (NDC), the elevation at which the lift is whole, and how fast it eases in and out (1/s). */
 export const LEGEND_YAW_MAX = 0.14;
-export const LEGEND_LIFT_NDC = 0.14;
-const LEGEND_LIFT_FULL = 0.5;
+export const LEGEND_LIFT_NDC = 0.16;
+const LEGEND_LIFT_FULL = 0.2;
+const LEGEND_DEAD = 0.06;
+/** The lowest the legend's lift may leave the rider in the frame (NDC: -0.4 is 70% of the way down). */
+const LEGEND_RIDER_FLOOR = -0.4;
 const LEGEND_EASE_IN = 1.3;
 const LEGEND_EASE_OUT = 0.9;
 
@@ -1182,7 +1185,10 @@ export class ChaseCamera {
       const w = smooth01(MathUtils.clamp(g.peak, 0, 1) / 0.35) * smooth01((depth - 4) / 10) * (t.airborne ? 0.4 : 1);
       if (w > 0.001) {
         const bearing = Math.atan2(gx * -fz + gz * fx, depth);
-        yawT = MathUtils.clamp(bearing * 0.6, -LEGEND_YAW_MAX, LEGEND_YAW_MAX) * w;
+        // (A legend that keeps to the line, a stag weaving 18 m ahead, is in the frame already: within
+        // LEGEND_DEAD of straight ahead the lens does not follow it from side to side.)
+        const off = Math.max(0, Math.abs(bearing) - LEGEND_DEAD) * Math.sign(bearing);
+        yawT = MathUtils.clamp(off * 0.8, -LEGEND_YAW_MAX, LEGEND_YAW_MAX) * w;
         const elev = Math.atan2(g.y - this.pos.y, Math.hypot(gx, gz));
         liftT = smooth01((elev - 0.06) / LEGEND_LIFT_FULL) * w;
       }
@@ -1605,7 +1611,11 @@ export class ChaseCamera {
       // may sink to a little over a third of the way down.)
       const lift = this.legLift * (1 - vista);
       ndc -= LEGEND_LIFT_NDC * lift;
-      this.aimAt(this.look, this.pos, yaw + this.rivalYaw + openYaw + this.leadYaw + this.legYaw, elev, ndc, horizon + LEGEND_LIFT_NDC * lift);
+      // ...and never so far that the rider sinks behind the hint row: on a steep run-in the horizon's cap had
+      // the rider low already, and the lift on top of it put the sled off the bottom of the frame. The floor
+      // comes in with the lift, so nothing steps as a legend arrives.
+      const floor = lift > 0.001 ? -1.5 + (1.5 + LEGEND_RIDER_FLOOR) * smooth01(lift / 0.25) : undefined;
+      this.aimAt(this.look, this.pos, yaw + this.rivalYaw + openYaw + this.leadYaw + this.legYaw, elev, ndc, horizon + LEGEND_LIFT_NDC * lift, floor);
     } else {
       this.look.lerp(lookAt, kLook);
       this.lookS.copy(this.look);

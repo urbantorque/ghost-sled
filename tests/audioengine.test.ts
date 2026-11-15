@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from '../src/audio/engine';
+import { fmBell } from '../src/audio/instruments';
+import type { Voice } from '../src/audio/voices';
 import type { Beat } from '../src/game/beats';
 import { cutHold } from '../src/game/reelshow';
 import { RESULTS_TIMING } from '../src/ui/results';
@@ -482,5 +484,31 @@ describe('the score’s clock (the reel cuts on it)', () => {
     expect(cutHold({ toBar: 1.9, toBeat: 0.45 })).toBe(0.45);
     // A beat too slow to wait for (a very slow piece): the cut falls as its card ends.
     expect(cutHold({ toBar: 3, toBeat: 1.2 })).toBe(0);
+  });
+});
+
+describe('an FM bell too high for its modulator', () => {
+  /** A voice that only counts what is asked of it. */
+  const voice = (sampleRate: number): { v: Voice; freqs: number[] } => {
+    const freqs: number[] = [];
+    const node = (): Node => new Node();
+    const v = { ctx: { sampleRate }, out: node(), envelope: node, gain: node, osc: (_w: string, f: number) => (freqs.push(f), node()) } as unknown as Voice;
+    return { v, freqs };
+  };
+
+  it('never asks an oscillator for a frequency past Nyquist (the browser clamps it, with a console warning)', () => {
+    // The warning seen in round 7: a gate's bell an octave up, 7,685 Hz at ratio 3.5, is a 26.9 kHz modulator.
+    for (const sr of [44100, 48000]) {
+      for (const f of [440, 3842.5, 5200, 7685, 9000]) {
+        const { v, freqs } = voice(sr);
+        fmBell(v, 0, f, 0.05, 0.5, 3.5, 1.1);
+        expect(freqs[0]).toBe(f);
+        for (const q of freqs) expect(q, `${f} Hz at ${sr}`).toBeLessThan(sr / 2);
+      }
+    }
+    // An ordinary bell keeps its modulator.
+    const { v, freqs } = voice(48000);
+    fmBell(v, 0, 880, 0.05, 0.5, 3.5, 1.1);
+    expect(freqs).toEqual([880, 3080]);
   });
 });
