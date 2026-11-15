@@ -14,8 +14,8 @@ async (page) => {
   const lists = {};
   const report = [];
   for (const m of c.ms) {
-    await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&autoride=1&m=${m}&mood=${c.mood}${c.extra}`);
-    await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 60000 });
+    await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&autoride=1&m=${m}&mood=${c.mood}${c.extra}`, { timeout: 180000, waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 180000, waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1200);
     await page.evaluate((speed) => {
       window.__pinSpeed = speed;

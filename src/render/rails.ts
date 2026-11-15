@@ -135,10 +135,12 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
   }
   const blossom = biome === 'blossom';
   const lf = biome === 'lantern';
-  const dark = lf ? new Color('#2C2850') : blossom ? new Color('#807A92') : new Color('#57506C');
-  const mid = lf ? new Color('#454070') : blossom ? new Color('#9C94A6') : new Color('#7A7088');
-  const pale = lf ? new Color('#625C92') : blossom ? new Color('#B2A8B4') : new Color('#94889E');
-  const lid = blossom ? new Color('#7E9868') : SNOW;
+  // (Sakura's are the cone's own ink rock under snow, ART.md 15's spine: pale lilac fins with green moss
+  // lids read as violet crystals with tufts on them, and too pale to carry painted strata.)
+  const dark = lf ? new Color('#2C2850') : blossom ? new Color('#3A3042') : new Color('#57506C');
+  const mid = lf ? new Color('#454070') : blossom ? new Color('#4E4456') : new Color('#7A7088');
+  const pale = lf ? new Color('#625C92') : blossom ? new Color('#665A6C') : new Color('#94889E');
+  const lid = SNOW;
   if (biome === 'alpine') {
     // Pinecrest (the review loop): the fins below stood either side of every lip as flat violet prisms
     // eight metres tall, the one untextured thing in the mountain's hero frames. Its shoulders are

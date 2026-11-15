@@ -22,7 +22,7 @@ import type { ObstacleKind } from '../sim/course';
 import type { HatKind } from '../bot/roster';
 import type { HatId } from '../game/garage';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
-import { ASH_TOP, basaltTones, hazardPineGeometry } from './flora';
+import { ASH_TOP, CEDAR, basaltTones, hazardPineGeometry } from './flora';
 import { Palette } from './palette';
 import { Facets, columnsInto, strata } from './rockforms';
 
@@ -163,8 +163,10 @@ export function blossomGeometry(p: Palette): BufferGeometry {
     [0.3, 4.3, -0.5, 1.0],
     [-0.4, 3.9, 0.8, 0.95],
   ];
+  // (Round 7: each cloud of bloom deepens to a wine-rose underneath and lifts toward its crown, a step
+  // apart facet to facet, so a canopy has a dark heart for its lit rim to glow against: ART.md 15.)
   blobs.forEach(([x, y, z, r], i) => {
-    parts.push(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], rot: [rnd(), rnd(), rnd()], jitter: 0.18 }));
+    parts.push(paint(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], rot: [rnd(), rnd(), rnd()], jitter: 0.18 }), 2.0, 5.0, 0.62, 1.08, 0.16));
   });
   parts.push(part(new IcosahedronGeometry(0.9, 0), SNOW, { pos: [0, 4.4, 0], scale: [1.3, 0.45, 1.3], jitter: 0.1 }));
   return merge(parts);
@@ -738,7 +740,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
   }
   switch (kind) {
     case 'pine':
-      return hazardPineGeometry(p);
+      return hazardPineGeometry(p, biome === 'blossom' ? CEDAR : undefined);
     case 'charpine':
       return charPineGeometry(p);
     case 'blossom':

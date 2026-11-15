@@ -612,7 +612,17 @@ export function finishPiece(ctx: SiteCtx): Piece {
     // Biggest of all, over the hall: what is seen from the last leap.
     const tall = new Sub(ctx, c.x, c.z - 0, c.yaw);
     const top = hi + 0.4 + 15;
-    if (biome === 'blossom') parts.push(...tall.out(place(pagodaParts(night, top, top - 1, p), 0, 0, -1, 0)));
+    if (biome === 'blossom') {
+      // The pagoda over the square (ART.md 15, a hero vista): twice the size it was built at, so it stands
+      // over the roofs from the last leap and fills the finish gate's opening down the street. Scaled about
+      // its own foot.
+      // (Taller than it is wide grown: at 2.1 all round it stood under the finish banner from the street.)
+      const K = 2.1;
+      const KY = 2.6;
+      const pg = pagodaParts(night, top, top - 1, p);
+      for (const g of pg) g.translate(0, -top, 0).scale(K, KY, K).translate(0, top, 0);
+      parts.push(...tall.out(place(pg, 0, 0, -1, 0)));
+    }
     else if (biome === 'lantern') {
       // The tallest lamp tower on the mountain, over the hall: seen from the last leap as a stack of lights.
       parts.push(...tall.out(lampTowerParts(p, top, 11, low ? 4 : 5, low)));
@@ -1003,11 +1013,13 @@ export function liftPiece(ctx: SiteCtx): Piece {
   const { C: H, nodes } = liftLayout(ctx.post, ctx.clear, s, ctx.gy);
   const steel = biome === 'volcanic' ? C('#3E3440') : C('#6A7088');
   const steelD = biome === 'volcanic' ? C('#2E2830') : C('#4A5068');
-  const wall = biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : C('#EDE4D8');
+  // (Sakura's station is the town's warm plaster with paper windows: cream walls and dark glass read as a
+  // grey box on the bank.)
+  const wall = biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : biome === 'blossom' ? C('#C4B09C') : C('#EDE4D8');
   const upper = biome === 'alpine' ? TIMBER : biome === 'glacier' ? C('#D8E2EE') : biome === 'volcanic' ? shade(p.low, 0.8) : C('#93405A');
-  const roof = biome === 'blossom' ? C('#3E3A50') : C('#3A3448');
+  const roof = biome === 'blossom' ? C('#2E2A3E') : C('#3A3448');
   const trim = biome === 'blossom' ? C('#2E2230') : TIMBER_DARK;
-  const glass = windowColor(night);
+  const glass = biome === 'blossom' && !night ? C('#F4CA92').multiplyScalar(1.1) : windowColor(night);
   const cols = banners(p);
   const steps: Array<() => BufferGeometry[]> = [];
   const spots: Spot[] = [];

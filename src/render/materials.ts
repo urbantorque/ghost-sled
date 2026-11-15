@@ -166,7 +166,9 @@ const ROCK: Record<string, RockSet> = {
   summit: { lit: '#94889E', shade: '#3C3654', deep: '#25213A', ledge: '#FFFFFF', style: [1.35, 3.6, 0, 0.1] },
   fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [1.8, 8.5, 1, 0] },
   volcano: { lit: '#5E5058', shade: '#1F1A22', deep: '#0E0C13', ledge: '#8C8288', style: [1.5, 6.5, 2, 0] },
-  cone: { lit: '#B2A6AE', shade: '#5C5672', deep: '#3C3852', ledge: '#6F8C5A', style: [1.2, 2.5, 3, 0.02] },
+  // (Sakura's rock is the spine's ink, with snow lying on its ledges: moss on them read as olive banks
+  // under the torii's warm bars, and the paler rock as a lilac wall at the snow's own value.)
+  cone: { lit: '#86788C', shade: '#3C3554', deep: '#221E34', ledge: '#C4BCD0', style: [1.2, 2.5, 3, 0.02] },
 };
 
 function applyRock(p: Palette): void {
@@ -1856,7 +1858,14 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             // pale parts (snow on the boughs) and the dark underside stay as they are.
             float back = pow(max(dot(-v, uSunDir), 0.0), 2.0);
             float petal = smoothstep(0.25, 0.6, max(base.r, max(base.g, base.b))) * (1.0 - smoothstep(0.8, 0.95, min(base.r, min(base.g, base.b))));
-            col += base * mix(vec3(1.0), uSunColor, 0.5) * (uLeaf * petal * (0.22 + 0.9 * back) * (0.5 + 0.5 * n.y));
+            // The light comes through where the canopy is thin, toward its edges as seen: the heart of a
+            // tree against the sun stays a deep rose and its outline glows (lit evenly, it read as one flat pink).
+            float thin = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 1.5);
+            col += base * mix(vec3(1.0), uSunColor, 0.5) * (uLeaf * petal * (0.14 + 0.9 * back * (0.3 + 0.7 * thin)) * (0.5 + 0.5 * n.y));
+            // The sun's own edge on the canopy: a hot peach-white rim on the faces turned to it and round
+            // the outline against it, so a tree has a lit rim and a rose heart, not one pink.
+            float rimL = thin * thin * max(smoothstep(-0.1, 0.7, dot(n, uSunDir)), back);
+            col += mix(uSunColor, vec3(1.0, 0.86, 0.8), 0.5) * (uLeaf * petal * rimL * 0.85);
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,
           // the snow heaped round it), so a tree or a rock sits in the slope instead of on it.

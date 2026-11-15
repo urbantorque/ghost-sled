@@ -639,10 +639,13 @@ export class Midground {
     const t = this.treeMat.uniforms;
     t.uTreeA.value.copy(p.tall);
     t.uTreeB.value.copy(p.tallDark);
+    // (Sakura's far orchards are a deeper rose than the trees beside the run: at a few pixels a tree the
+    // near blossom's pink, under its cap of snow, was a pale dot on white.)
+    if (this.biome === 'blossom') t.uTreeA.value.lerp(new Color('#DE4C8A'), 0.5);
     // Sakura's slopes mix spruce among the blossom; Frostfang's ice spires stand among dark firs.
     const alt = this.biome === 'lantern' ? '#8E88B8' : this.biome === 'blossom' ? '#1F5753' : this.biome === 'glacier' ? '#2C5872' : this.biome === 'volcanic' ? '#3A3036' : '#24605A';
     t.uTreeAlt.value.set(alt);
-    t.uCapK.value = this.biome === 'lantern' ? 0.55 : this.biome === 'alpine' ? 0.7 : this.biome === 'glacier' ? 0.45 : this.biome === 'volcanic' ? 0.3 : 0.35;
+    t.uCapK.value = this.biome === 'lantern' ? 0.55 : this.biome === 'alpine' ? 0.7 : this.biome === 'glacier' ? 0.45 : this.biome === 'volcanic' ? 0.3 : this.biome === 'blossom' ? 0.2 : 0.35;
     // The carpet's colour on the shoulder: the forest's own mix, a step darker.
     const f = u.uForest.value as Color;
     f.copy(p.tall).lerp(p.tallDark, 0.55);

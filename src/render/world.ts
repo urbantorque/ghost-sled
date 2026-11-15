@@ -405,6 +405,8 @@ export class World {
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
     this.post.configure(quality.passes);
+    // (As setCourse: a run on the mountain the world was built for never passes through it.)
+    this.post.fringeK = this.course.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
@@ -581,6 +583,9 @@ export class World {
     this.speedPosts.setCourse(c);
     this.sloughs.setCourse(c);
     this.life.setCourse(c, this.palette, this.mood);
+    // Sakura is the calm mountain (ART.md 15): its lens shows no colour fringe at speed (a third of the
+    // others' still split the blossom's trunks green and the crowd to noise at the frame's edge).
+    this.post.fringeK = c.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
     this.lastChunkRange = '';
@@ -1107,7 +1112,10 @@ export class World {
     // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
     // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
     this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
-    pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
+    // (Sakura, the calm mountain, keeps half the streaks: at full strength the bottom of its pale frames was
+    // a radial smear, and its ripples and shade lost their shape. ART.md 15: a lens that stays out of the way.)
+    const calm = this.course.biome === 'blossom' ? 0.55 : 1;
+    pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK * calm : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,
