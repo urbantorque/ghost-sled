@@ -43,14 +43,18 @@ describe('spirit lights', () => {
     expect(m.elements[10]).toBe(2);
     expect(glowMatrix(m, 0, 0, 0, 1, 'spark').elements[10]).toBe(1);
     expect(glowMatrix(m, 0, 0, 0, 1, 'mote').elements[10]).toBeLessThan(0);
+    // Past the detail range the glow paints the flame: its kind is marked far, a mote never.
+    expect(glowMatrix(m, 0, 0, 0, 1, 'spark', true).elements[10]).toBe(3);
+    expect(glowMatrix(m, 0, 0, 0, 1, 'great', true).elements[10]).toBe(4);
+    expect(glowMatrix(m, 0, 0, 0, 1, 'mote', true).elements[10]).toBeLessThan(0);
   });
 
-  it('threads a few motes between neighbours of an arc in the air, none across a short gap', () => {
+  it('threads a dotted line of motes between neighbours of an arc in the air, about one every 2 m', () => {
     expect(airMotes(2)).toBe(0);
-    expect(airMotes(3.5)).toBe(0);
-    expect(airMotes(6)).toBeGreaterThanOrEqual(1);
-    expect(airMotes(10.3)).toBe(3);
-    expect(airMotes(40)).toBe(4);
+    expect(airMotes(3.5)).toBe(1);
+    expect(airMotes(6)).toBe(2);
+    expect(airMotes(10.3)).toBe(4);
+    expect(airMotes(40)).toBe(5);
   });
 
   it('costs no more than the old spark: one flame of 180 triangles, one quad of glow', () => {

@@ -36,8 +36,9 @@ export const GREAT_SCALE = 1.47;
 /** A spark's flame in metres: its foot 0.32 m under the light's point, its tip 0.58 m over it. */
 const FLAME_H = 0.9;
 const FLAME_FOOT = -0.32;
-/** The tallest a spark stands on screen, as a share of the frame's height (a great light GREAT_SCALE times it). */
-const CAP = 0.052;
+/** The share of the frame's height past which a spark grows at a third of its rate (a great light GREAT_SCALE times
+ *  it): one by the rider about 7% of the frame, one passing the lens under 10%. */
+const CAP = 0.05;
 /** Metres from the lens: gone at the first, whole from the second. */
 const LENS: [number, number] = [3.4, 6.0];
 /** What a glow instance is (its z column): a spark's, a great light's, or a mote of a trail in the air. */
@@ -91,11 +92,12 @@ const KEEP_GLSL = /* glsl */ `
         keep = min(keep, mix(1.0, smoothstep(1.0, 0.92, max(e.x, e.y)), uResults));
       }
     }
-    // Never more than a small flame on screen: at most uSpirit.x of the frame's height (of 1.6 widths on a screen
-    // held upright), however near it comes.
+    // Never a slab near the lens: past uSpirit.x of the frame's height (of 1.6 widths on a screen held upright) a
+    // flame grows at a third of the rate it would, so a nearer one is still a little bigger (depth reads the right
+    // way) and one by the rider stands about a third of the rider's height, never the whole of it.
     float tall = ${FLAME_H.toFixed(2)} * sc * projectionMatrix[1][1] / (2.0 * max(-gv.z, 0.05));
     float cap = uSpirit.x * mix(1.0, ${GREAT_SCALE.toFixed(2)}, great) * min(1.0, 1.6 * projectionMatrix[1][1] / projectionMatrix[0][0]);
-    return keep * min(1.0, cap / max(tall, 1e-4));
+    return keep * (tall > cap ? (cap + (tall - cap) * 0.35) / tall : 1.0);
   }
 `;
 
@@ -196,6 +198,7 @@ export function spiritFlameMaterial(): ShaderMaterial {
       ${LIGHT_GLSL}
       uniform float uDayK;
       uniform float uGiftGlow;
+      uniform float uSnowFx;
       uniform vec3 uMarigold;
       uniform vec3 uAmber;
       uniform vec3 uWhiteGold;
@@ -211,7 +214,7 @@ export function spiritFlameMaterial(): ShaderMaterial {
         // and its tip a step deeper again.
         vec3 col = mix(uAmber, uMarigold, smoothstep(0.08, 0.62, face));
         float heart = smoothstep(0.5, 0.95, face) * (1.0 - smoothstep(0.2, 0.75, vH));
-        col = mix(col, uWhiteGold * 1.18, heart * 0.85);
+        col = mix(col, uWhiteGold * 1.18, heart * mix(0.5, 0.85, uSnowFx));
         col = mix(col, uAmber * 0.92, smoothstep(0.62, 1.0, vH) * (1.0 - heart) * 0.55);
         // The frame's light on it: its side toward the light a touch brighter, with a rim of the light's own
         // colour on that edge, its far side a step deeper (still warm: it is a light, never shaded grey).
@@ -303,6 +306,7 @@ export function spiritGlowMaterial(): ShaderMaterial {
       uniform vec3 uWhiteGold;
       uniform float uDayK;
       uniform float uGiftGlow;
+      uniform float uSnowFx;
       varying vec2 vU;
       varying float vFade;
       varying float vKind;
@@ -314,35 +318,55 @@ export function spiritGlowMaterial(): ShaderMaterial {
         vec2 u = vU;
         float mote = step(vKind, 0.0);
         float great = step(1.5, vKind);
-        // In the light's own units (a spark's flame is 0.9 tall): a soft glow with a warm heart round a flame,
-        // small and round as a mote.
+        // (Low, which has no tone curve, takes the glow's light at a little over half: added in full it washed the
+        // flames to lemon-white, toward your best's gold-white.)
+        float lowK = mix(0.55, 1.0, uSnowFx);
+        // In the light's own units (a spark's flame is 0.9 tall): a soft glow round a flame, thin over the flame
+        // itself so its pointed shape reads through it (laid over it, a near flame read as a round orb).
         float span = mote > 0.5 ? 0.3 : 0.62;
         float r2 = dot(u, u) / (span * span);
         float wide = exp(-r2 * 3.4) * (1.0 - smoothstep(0.55, 1.0, r2));
         float core = exp(-r2 * 14.0);
-        float g = mix(wide, core * 1.4 + wide * 0.4, mote);
-        float hot = 0.35 * core;
-        if (great > 0.5) {
-          // A great light: a thin ring of light at its waist, lying level (its far half dimmer where the flame
-          // stands in front of it), and a second small flame beside it, swaying a little.
-          vec2 q = vec2(u.x, (u.y + 0.2) / vRing);
-          float ring = exp(-pow((length(q) - 0.34) / 0.03, 2.0));
-          ring *= u.y > -0.2 && abs(u.x) < 0.2 ? 0.4 : 1.0;
-          vec2 s = u - vec2(0.37 + 0.03 * vSway, -0.12);
-          // A small teardrop: round at its foot, drawn to a point above.
-          float sy = clamp((s.y + 0.1) / 0.3, 0.0, 1.0);
-          float sw = mix(0.075, 0.0, sy * sy);
-          float side = (1.0 - smoothstep(sw * 0.6, sw + 0.02, abs(s.x))) * step(-0.12, s.y) * step(s.y, 0.2);
-          side = max(side, 1.0 - smoothstep(0.05, 0.085, length(s - vec2(0.0, -0.06))));
-          g += ring * 0.95 + side * 1.1;
-          hot += ring * 0.6 + side * 0.5;
+        float onFlame = (1.0 - vFar) * (1.0 - mote) * (1.0 - smoothstep(0.7, 1.2, (u.x * u.x) / 0.06 + ((u.y + 0.04) * (u.y + 0.04)) / 0.2));
+        float g = wide * (1.0 - 0.75 * onFlame);
+        float hot = 0.35 * core * (1.0 - onFlame);
+        float paint = 0.0;
+        if (mote > 0.5) {
+          // A mote of a trail in the air: a small round light with a painted heart, so the arc reads as a dotted
+          // line of light between the flames, by day as well as by night.
+          g = wide * 0.5;
+          paint = 1.0 - smoothstep(0.28, 0.42, sqrt(r2));
+          hot = core;
         }
-        g *= vFade * (1.0 + 0.4 * uGiftGlow);
+        if (great > 0.5) {
+          // A great light: a ring of light at its waist, lying level (its far half dimmer where the flame stands in
+          // front of it), and a second small flame beside it, swaying a little. Both are painted as well as lit, so
+          // they read on bright snow.
+          vec2 q = vec2(u.x, (u.y + 0.2) / vRing);
+          float ring = exp(-pow((length(q) - 0.34) / 0.045, 2.0));
+          ring *= u.y > -0.2 && abs(u.x) < 0.2 ? 0.45 : 1.0;
+          vec2 sd = u - vec2(0.37 + 0.03 * vSway, -0.12);
+          // A small teardrop: round at its foot, drawn to a point above.
+          float sy = clamp((sd.y + 0.1) / 0.3, 0.0, 1.0);
+          float sw = mix(0.075, 0.0, sy * sy);
+          float side = (1.0 - smoothstep(sw * 0.6, sw + 0.02, abs(sd.x))) * step(-0.12, sd.y) * step(sd.y, 0.2);
+          side = max(side, 1.0 - smoothstep(0.05, 0.085, length(sd - vec2(0.0, -0.06))));
+          g += ring * 0.6 + side * 0.6;
+          hot += ring * 0.7 + side * 0.5;
+          paint = max(paint, max(ring * 0.85, side));
+        }
+        g *= vFade * (1.0 + 0.4 * uGiftGlow) * lowK;
+        paint *= vFade;
         vec3 col = mix(uMarigold, uWhiteGold, clamp(hot, 0.0, 1.0)) * mix(0.75, 0.5, uDayK);
         // By day it tints what is behind it toward marigold (light alone is lost on bright snow); at night it is
         // light.
         vec3 rgb = linearToOutputTexel(vec4(col, 1.0)).rgb * g;
         float cover = clamp(g * mix(0.06, 0.32, uDayK), 0.0, 0.6);
+        // What is painted (a mote's heart, a great light's ring and second flame) covers what is behind it in the
+        // lantern's own colours.
+        vec3 paintC = mix(uMarigold, uWhiteGold, clamp(hot, 0.0, 1.0) * mix(0.4, 0.7, uSnowFx));
+        rgb = mix(rgb, linearToOutputTexel(vec4(paintC * mix(1.15, 1.0, uDayK), 1.0)).rgb, paint);
+        cover = mix(cover, 1.0, paint);
         if (vFar > 0.5) {
           // Past the detail range, where no flame is drawn, the flame is painted here, a few pixels tall: round at
           // its foot (a little under the glow's middle) and drawn to a point, with a pale heart.
@@ -351,7 +375,7 @@ export function spiritGlowMaterial(): ShaderMaterial {
           float taper = (1.0 - smoothstep(hw - 0.025, hw + 0.025, abs(f.x))) * step(0.0, f.y) * step(f.y, 0.45);
           float body = max(taper, 1.0 - smoothstep(0.17, 0.21, length(f))) * vFade;
           float heart = exp(-(f.x * f.x) / 0.008 - (f.y + 0.02) * (f.y + 0.02) / 0.02);
-          vec3 bodyC = mix(uMarigold, uWhiteGold * 1.1, heart * 0.8) * mix(1.25, 1.0, uDayK);
+          vec3 bodyC = mix(uMarigold, uWhiteGold * 1.1, heart * mix(0.35, 0.8, uSnowFx)) * mix(1.25, 1.0, uDayK);
           rgb = mix(rgb, linearToOutputTexel(vec4(bodyC, 1.0)).rgb, body);
           cover = mix(cover, 1.0, body);
         }
@@ -382,5 +406,5 @@ export function glowMatrix(m: Matrix4, x: number, y: number, z: number, k: numbe
 
 /** The motes between two neighbouring lights of one arc in the air, by the gap between them (metres). */
 export function airMotes(gap: number): number {
-  return Math.max(0, Math.min(4, Math.round(gap / 2.4) - 1));
+  return Math.max(0, Math.min(5, Math.round(gap / 2) - 1));
 }
