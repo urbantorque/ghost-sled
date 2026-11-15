@@ -232,10 +232,13 @@ const TRIPOD_REACH = 24;
 const VISTA_FROM = 1.0;
 const VISTA_FULL = 1.9;
 const VISTA_BACK = 0.35;
-const VISTA_OUT = 2.1;
+// (The review loop, twice: at 2.6 m and then 2.1 m back with 6 and then 4 degrees more lens, the rider at
+// a vista's apex was a tenth of the frame's height or less, against ART.md 15's rule 4. The lens keeps its
+// height and its side step, so the valley still opens under the rider, and stands closer.)
+const VISTA_OUT = 1.5;
 const VISTA_UP = 2.1;
 const VISTA_SIDE = 1.7;
-const VISTA_FOV = 4;
+const VISTA_FOV = 3;
 /** The predicted landing spot is kept above this share of the frame's lower half (NDC). */
 const VISTA_RING_NDC = -0.78;
 /** The chase's follow: the lens trails its set point by speed / FOLLOW_RATE metres, so a boost surges
@@ -304,10 +307,12 @@ const REVEAL_YAW = 0.07;
 // (The review loop: at 3 m back and 4 degrees on top of the vista's own, the rider was a thirtieth of the
 // frame at the apex of the game's one image. The wide keeps its height and its side step and gives back
 // two fifths of its distance.)
-const WIDE_OUT = 1.8;
+// (And again after the third pass: 1.8 m and 2 degrees left the rider a twelfth of the frame at the apex
+// of the game's one image. 0.9 m and 1 degree.)
+const WIDE_OUT = 0.9;
 const WIDE_UP = 1.5;
 const WIDE_SIDE = 2.0;
-const WIDE_FOV = 2;
+const WIDE_FOV = 1;
 const WIDE_BOX = 0.8;
 /** The slow hero frame: from wherever the wide stood, the lens pushes in to HERO_BACK metres behind its
  *  set point and HERO_UP over the sled (half as far again on a phone, whose rider is already big),

@@ -189,8 +189,10 @@ function corniceGeometry(p: Palette): BufferGeometry {
   for (const [x, reach] of lumps) {
     parts.push(softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [x, -0.5, -0.3 - reach * 0.32], scale: [1.6, 0.5, reach] }));
     parts.push(softPart(new SphereGeometry(1, 5, 2), under, { pos: [x, -0.82, -0.2 - reach * 0.42], scale: [1.3, 0.38, reach * 0.84] }));
-    // A torn tongue of snow off each scallop.
-    parts.push(softPart(new ConeGeometry(0.42, reach * 1.2, 4), SNOW, { pos: [x + 0.4, -0.3, -0.5 - reach * 1.05], rot: [-Math.PI / 2, 0, 0], scale: [1.3, 1, 0.4] }));
+    // A torn tongue of snow off each scallop. (The review loop: long four-sided tongues, repeated piece
+    // after piece, read from the air as a row of identical white teeth along the brow. Shorter, broader
+    // and rounder, each a scallop's sagging edge.)
+    parts.push(softPart(new ConeGeometry(0.7, reach * 0.62, 6), SNOW, { pos: [x + 0.4, -0.34, -0.45 - reach * 0.78], rot: [-Math.PI / 2, 0, 0], scale: [1.3, 1, 0.42] }));
   }
   return merge(parts);
 }

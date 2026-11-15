@@ -1346,6 +1346,9 @@ export function makeSnowMaterial(): ShaderMaterial {
             L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
           }
           col += L * mix(vec3(0.86, 0.88, 0.94), uRockLit * 1.3, smoothstep(0.46, 0.54, vRock.x));
+          // (Low has no curve after this: a pool on bright day snow went over 1 in every channel and was
+          // drawn as a hard white oval, the review loop. Where it would clip, it keeps its hue instead.)
+          if (uSnowFx <= 0.0 && max(L.r, max(L.g, L.b)) > 0.001) col /= max(1.0, max(col.r, max(col.g, col.b)));
         }
         if (uLantern > 0.0) {
           // Lantern Night: a tight round pool of lamplight on the snow around and just ahead of the sled

@@ -122,4 +122,61 @@ Valley Leap 8.
   shot starts moving the rider into the results card's free column as its swing settles (camera.ts), so the
   card no longer lands across the rider; Low's painted shadow takes the shade's hue (landing.ts).
 
-<!-- PASS4 -->
+## Pass 4: what the critic found (ranked by cost)
+
+A fresh Opus critic: High 7.28 (min 5.5), Low 6.33 (5.0), phone 7.05 (5.0), motion 7.29 (4.0). Against pass 3:
+High +0.37, Low +0.19, phone +0.43, motion level. No frame above 8; the gold stretch and Mirror Lake's sky called
+the best work. Hero vistas: the First Drop 7, Mirror Lake 8, Old Town 8, the Valley Leap 8.
+
+1. The near snow still washed and empty on every tier (High lavender or cream with sparkle; Low a neutral grey-white
+   it reads as paper; the phone's lower third empty).
+2. The vistas' signatures not drawn: no shafts or haze layers at the First Drop, no doubling at Mirror Lake, no
+   apex at the Valley Leap, Old Town's lamps not pooling on the snow.
+3. Chromatic fringe and motion smear at the frame's edges in the strips after a landing.
+4. Untextured boxes and placeholders: fuel drops as flat polygons (some parked in the sun), rail ends, lip terraces,
+   window grids, the FINISH board.
+5. The hero 75 to 110 px at the First Drop, the Valley Leap and 4200 m.
+6. Low's stains: cobalt shade on the gold's right banks, the fork strip's rust band, hard white ovals where a lamp
+   lights the snow (4200, 4440).
+7. The HUD over the focal area; the phone's fuel button over the rider.
+8. Blown highlights: the ray fan over the lake's first ice (z1650, 5.5), the finish flash (`mo-finish-2`, 4.0).
+
+### What changed after pass 4
+
+- **The line's light no longer floods the square** (climaxworld.ts, shared): the finish's local light peaks at 1.6
+  instead of 3.1 (`0.35 + 0.75 rise + 0.5 flare`); the beams, the bar and the shells carry the moment. Why:
+  `mo-finish-2` bleached the rider three passes running.
+- **Low's lamp pools keep their hue** (materials.ts, Low only): where a pool would push the snow over 1 it is
+  scaled back to its own hue instead of clipping to a white oval.
+- **Low's lit snow leans cool and its gold shade is muted** (palette.ts `tierLook`): `Grade.posterCool` (0.16 on
+  Pinecrest) leans the lit snow to the baked shade's hue at its own value; `Grade.posterMute` (0.3 in the gold)
+  pulls the baked shade a third toward grey. Both 0 elsewhere.
+- **The ray fan over the lake's first ice is cut** (`PLACES` chute: shafts 1 to 0.5, rays 0.8 to 0.45; the lake's
+  own shafts 0.7) and the lake's low sky is a step deeper (`#8CB0E2`).
+- **The vistas stand closer** (camera.ts, shared): `VISTA_OUT` 2.1 to 1.5, `VISTA_FOV` 4 to 3, `WIDE_OUT` 1.8 to 0.9,
+  `WIDE_FOV` 2 to 1. Why: the rider 75 to 110 px at the apex of every leap, four passes running.
+- **The cornice's tongues are scallops, not teeth** (rails.ts, shared).
+- **The chromatic punch moves further out** (post.ts: from 0.7 of the radius, blend 0.45).
+
+<!-- PASS5 -->
+
+## Shared code touched
+
+Every change below is small, general and kept safe for the other mountains; each carries a comment saying the
+review loop asked for it.
+
+| File (owner) | Change | Effect on the other mountains |
+| --- | --- | --- |
+| `camera.ts` (hero) | `VISTA_OUT` 2.6 to 2.1 to 1.5, `VISTA_FOV` 6 to 4 to 3; `WIDE_OUT` 3.0 to 1.8 to 0.9, `WIDE_FOV` 4 to 2 to 1 | Every big air's vista and every biggest leap's held wide stands closer: the rider bigger at the apex, the lens's height and side step unchanged |
+| `camera.ts` (hero) | The finish shot starts its move into the results card's free column as the swing settles (was: when the card opened) | Every finish: the card lands beside the rider, not across it |
+| `post.ts` (pipe) | The speed fringe from 0.74 of the radius (was 0.5), blend 0.5 (was 0.7); the chromatic punch weighted toward the frame's edges (`smoothstep(0.6, 1.05, r)`), blend 0.6 (was 0.85) | Less colour fringe in every still; the punch still felt at the edges |
+| `postfx/tiers.ts` (pipe) | High's `fringe` 0.7 to 0.3 | As above |
+| `materials.ts` (light) | A prop's near dissolve dithered only between keep 0.42 and 0.58 (was 0.2 to 1) on tiers without coverage fade | Low and the phone: near pines solid, then gone, instead of a metre of stipple |
+| `materials.ts` (light) | The fork's ice strip takes half its mirror from the deep upper sky and mirrors less (`1 - 0.8 * strip`, was 0.6) | Every fork strip a bluer lane at any hour |
+| `materials.ts` (light) | The lake's long fractures 0.85 to 0.5 toward a paler shade, its near plates 0.5 to 0.32 | Lakes only (Pinecrest's Mirror Lake) |
+| `momentkit.ts` (momentsworld) | A lit lantern holds solid to 5.2 m and is gone by 4.4 m (was a 2x2 dither from 7 m to 2 m) | Every set piece's lanterns and bells near the lens |
+| `verbworld.ts` (momentsworld) | A street lantern's unlit glow 0.45 to 0.85 | Every lantern street before its first stomp |
+| `landing.ts` (fx), `world.ts` (pipe) | `painted`: on a tier with no cast shadows the sled's blob is larger, darker, thrown off the sled away from the sun, in the shade's own hue | Low on every mountain |
+| `rails.ts` | The cornice's torn tongues shorter, broader and six-sided; Pinecrest's lip shoulders bedded outcrops (alpine only) | Every leap's cornice: no row of white teeth from the air |
+| `palette.ts` (light) | New `Grade.posterSnow` and `Grade.posterKey` (Low's poster only, 0 by default) | None unless a mountain sets them |
+| `places.ts` | Pinecrest's lip crowns blunt (alpine only); the lift station's shutters and storeys (alpine only) | None |

@@ -771,7 +771,9 @@ describe('directed shots: the lens', () => {
     const wide = leap(chase([WIDE]), 2.6);
     const mid = Math.round(1.1 * 60);
     expect(wide[mid].wide).toBeGreaterThan(0.85);
-    expect(wide[mid].back - plain[mid].back).toBeGreaterThan(2.2);
+    // (The review loop brought the wide in from 3 m to 0.9 m past the vista, so the rider is not a twelfth
+    // of the frame at the apex: it still stands well back of the vista, under its letterbox.)
+    expect(wide[mid].back - plain[mid].back).toBeGreaterThan(1.2);
     expect(wide[mid].lens.y - plain[mid].lens.y).toBeGreaterThan(1);
     expect(wide[mid].box).toBeGreaterThan(0.6);
     expect(plain[mid].box).toBe(0);

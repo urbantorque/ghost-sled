@@ -168,6 +168,12 @@ export interface Grade {
    *  morning baked through the grade and the curve reached paper white on Low, and a slope with no
    *  shadow on it then had no form at all. */
   posterKey?: number;
+  /** Low's poster only: how far the lit snow leans to the baked shade's hue (0: none). With no cast
+   *  shadow and no curve to cool it, the lit snow on Low was a neutral grey-white, read as paper. */
+  posterCool?: number;
+  /** Low's poster only: how far the baked shade is pulled toward its own grey (0: none). A gold hour's
+   *  violet shade, baked through a raised saturation, lay on Low's banks as a cobalt stain. */
+  posterMute?: number;
 }
 
 /** The film curve's numbers, in one place: the composite pass compiles them into its shader (post.ts) and
@@ -709,6 +715,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   p.grade.lo ??= new Color(1, 1, 1);
   p.grade.posterSnow ??= 0;
   p.grade.posterKey ??= 0;
+  p.grade.posterCool ??= 0;
+  p.grade.posterMute ??= 0;
   return p;
 }
 
@@ -1036,6 +1044,7 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.contrast = 1.12;
       p.clouds.shadow = 0.34;
       p.grade.posterKey = 0.92;
+      p.grade.posterCool = 0.16;
       return;
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
@@ -1195,6 +1204,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.grade.lo = c('#DCD8FF');
         p.grade.lens = 0.1;
         p.grade.posterSnow = 0.7;
+        p.grade.posterMute = 0.3;
         p.sparkle = 0.6;
         p.giftGlow = 0.2;
         p.lamps = 0.7;
@@ -1707,7 +1717,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.shafts = 1;
         p.grade.contrast += 0.07;
         p.snowShade = c('#5A60B4');
-        lamps(p, 1.6);
+        // (1.6 after the third pass; 1.3 after the fourth: on Low the lamps' pools on the open slope
+        // under the leap were hard pale ovals.)
+        lamps(p, 1.3);
       },
     },
     {
@@ -1776,8 +1788,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fogFar *= 1.3;
         p.air.low = 0.3;
         p.clouds.shadow = Math.max(p.clouds.shadow, 0.45);
-        p.grade.shafts = 1;
-        p.atmo.rays = Math.max(p.atmo.rays, 0.8);
+        // (Fourth pass: with the sun ahead down the chute, full shafts fanned white rays across the lake's
+        // first ice and blew it out to a grey road.)
+        p.grade.shafts = 0.5;
+        p.atmo.rays = 0.45;
       },
     },
     {
@@ -1809,8 +1823,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (Third pass: the ice read mid-blue because at a rider's angle it mirrors the horizon, which the
         // cloud stop had made cream. Over the lake the low sky is a clear pale blue, so the mirror holds
         // the black-cyan body under a blue sky.)
-        p.skyHorizon = c('#A6C6EC');
-        p.skyMid = c('#4E88D4');
+        // (Fourth pass: still mid-blue. A step deeper.)
+        p.skyHorizon = c('#8CB0E2');
+        p.skyMid = c('#3E78C8');
+        p.grade.shafts = 0.7;
         p.grade.hi = c('#EEF6FF');
         p.grade.lo = c('#D4E4FF');
         p.fog = c('#BCD8F8');
@@ -2375,6 +2391,18 @@ export function tierLook(p: Palette): Palette {
     if (l > g.posterKey) o.snowLit.multiplyScalar(g.posterKey / l);
   }
   for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor]) gradeColor(col, g);
+  if (g.posterMute) {
+    for (const col of [o.snowShade, o.snowDeep]) {
+      const l = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
+      col.lerp(posterWhite.setRGB(l, l, l), g.posterMute);
+    }
+  }
+  if (g.posterCool) {
+    // The baked shade's hue at the lit snow's own value.
+    const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
+    const s = Math.max(o.snowShade.r, o.snowShade.g, o.snowShade.b, 1e-4);
+    o.snowLit.lerp(posterWhite.copy(o.snowShade).multiplyScalar(l / s), g.posterCool);
+  }
   if (o.skyMid) gradeColor(o.skyMid, g);
   if (o.skyBand.color) gradeColor(o.skyBand.color, g);
   if (o.mist) gradeColor(o.mist, g);
