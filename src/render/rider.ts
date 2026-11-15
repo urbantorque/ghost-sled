@@ -350,13 +350,14 @@ function addSway(m: ShaderMaterial, u: RiderUniforms, joint?: { value: Vector3 }
     );
 }
 
-/** The classic sled carries its slats' pitch for its underside (riderMaterial) in aSway.w: -1 for its five slats,
- *  -2 for Low's three. The round and shelled sleds (1 to 5) keep 0. */
+/** A sled carries what its underside is (riderMaterial) in aSway.w: -1 the classic sled's five slats, -2 Low's three,
+ *  -3 the toboggan's three broad ones, -4 a flat deck over runners (the Wisp), -5 a round or shelled hull (the
+ *  saucer, the bob, the tray), whose whole underside is the hull. */
 function markSled(g: BufferGeometry, id: number, lite: boolean): BufferGeometry {
-  if (id >= 1 && id <= 5) return g;
   const a = g.getAttribute('aSway') as BufferAttribute | undefined;
   if (!a || a.itemSize !== 4) return g;
-  for (let i = 0; i < a.count; i++) a.setW(i, lite ? -2 : -1);
+  const code = id === 2 ? -3 : id === 4 ? -4 : id === 1 || id === 3 || id === 5 ? -5 : lite ? -2 : -1;
+  for (let i = 0; i < a.count; i++) a.setW(i, code);
   a.needsUpdate = true;
   return g;
 }
@@ -381,11 +382,18 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   riderStencil(m);
   if (sway) {
     addSway(m, u, joint);
-    // The classic sled's own frame, for its underside (below): its vertices carry the slats' pitch in aSway.w
-    // (markSled), every other part 0 or an arm's joint.
-    if (m.vertexShader.includes('attribute vec4 aSway;')) m.vertexShader = 'varying float vSledK;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + m.vertexShader.replace('void main() {', 'void main() {\n        vSledK = aSway.w < -1.5 ? 0.2 : aSway.w < -0.5 ? 0.12 : 0.0;\n        vSledP = position;\n        vSledN = normal;');
+    // The sled's own frame, for its underside (below): its vertices carry what that underside is in aSway.w
+    // (markSled), every other part 0 or an arm's joint. vSledI: x 1 on a sled, y its slats' pitch (0 for none), z
+    // where its slats start across it, w the lowest underside that is hull (under it, the runners).
+    const sledAt = [
+      'float sledC = -aSway.w;',
+      'vSledI = sledC < 0.5 ? vec4(0.0) : vec4(1.0, sledC < 1.5 ? 0.12 : sledC < 2.5 ? 0.2 : sledC < 3.5 ? 0.21 : 0.0, sledC > 2.5 && sledC < 3.5 ? -0.315 : -0.3, sledC > 2.5 && sledC < 3.5 ? 0.03 : sledC > 4.5 ? -10.0 : 0.1);',
+      'vSledP = position;',
+      'vSledN = normal;',
+    ].join('\n        ');
+    if (m.vertexShader.includes('attribute vec4 aSway;')) m.vertexShader = 'varying vec4 vSledI;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + m.vertexShader.replace('void main() {', 'void main() {\n        ' + sledAt);
   }
-  const under = m.vertexShader.includes('vSledK = ');
+  const under = m.vertexShader.includes('vSledI = ');
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
@@ -495,18 +503,18 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         #endif
         ${
           under
-            ? `if (vSledK > 0.01) {
-          // The classic sled's underside (round 7, the shared lane): seen from below in a flip it was one flat
-          // slab of wood. What faces down in the sled's own frame sits a step into shade with the snow's cool
-          // bounce in it, each slat split from the next by a dark seam and grained along its length, darker
-          // toward the runners. (vSledK is the slats' pitch.)
-          float underK = smoothstep(-0.3, -0.75, normalize(vSledN).y) * step(0.1, vSledP.y);
+            ? `if (vSledI.x > 0.5) {
+          // A sled's underside (round 7, the shared lane): seen from below in a flip it was one flat slab. What
+          // faces down in the sled's own frame sits a step into shade with the snow's cool bounce in it, grained
+          // along its length and darker toward its edges; a slatted sled's slats are split by dark seams.
+          float underK = smoothstep(-0.3, -0.75, normalize(vSledN).y) * step(vSledI.w, vSledP.y);
           if (underK > 0.001) {
-            float slat = fract((vSledP.x + 0.3) / vSledK);
-            float seam = 1.0 - smoothstep(0.004, 0.012, min(slat, 1.0 - slat) * vSledK);
+            float pitch = max(vSledI.y, 0.01);
+            float slat = fract((vSledP.x - vSledI.z) / pitch);
+            float seam = (1.0 - smoothstep(0.004, 0.012, min(slat, 1.0 - slat) * pitch)) * step(0.05, vSledI.y);
             float grainU = 0.5 + 0.5 * sin(vSledP.x * 210.0 + sin(vSledP.z * 9.0) * 2.2);
-            float edgeU = smoothstep(0.17, 0.3, abs(vSledP.x));
-            vec3 underC = col * (0.66 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.25 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * 0.14;
+            float edgeU = smoothstep(0.17, 0.32, abs(vSledP.x));
+            vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * 0.14;
             col = mix(col, underC, underK);
           }
         }`
@@ -555,7 +563,7 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             // of the way in at 1.5 and the body lifted toward white-gold bleached it to a cream blob in every
             // dash frame of the review.)
             col = mix(col, col * 0.85 + spiritC * 0.06, 0.25 * sk);
-            col += (spiritC * smoothstep(0.62, 0.95, riderEdge) * 1.3 + bandC * band * 0.6 * mix(0.45, 1.0, darkCloth)) * sk * rimCut;
+            col += (spiritC * smoothstep(0.56, 0.95, riderEdge) * 1.45 + bandC * band * 0.85 * mix(0.4, 1.0, darkCloth)) * sk * rimCut;
           #endif
         }
         `;
@@ -563,7 +571,7 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   const anchor = ['col = lanternLight(col, base, vWorldPos, n);', 'col = fogged(col, vWorldPos);', 'gl_FragColor = vec4(col, keep);'].find((a) => fs.includes(a)) ?? 'gl_FragColor';
   fs = fs.replace(anchor, rim + anchor);
   if (fs === before || !fs.includes('inkK')) console.warn('rider material: toon shader anchors not found, rider shading partly disabled');
-  if (under) fs = 'varying float vSledK;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + fs;
+  if (under) fs = 'varying vec4 vSledI;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + fs;
   m.fragmentShader = fs;
   return m;
 }
