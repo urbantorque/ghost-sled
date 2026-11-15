@@ -1066,6 +1066,24 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.exposure = 0.96;
       p.grade.hi = c('#FFF4EC');
       p.grade.lo = c('#E2E0FF');
+      // Round 7's review. Peach mist, not cream (ART.md 15): the horizon, the air under it and the sea of
+      // cloud were three creams, and with a celadon zenith over them the run-in read yellow-green. The
+      // horizon is peach, the zenith a pale morning blue, and the cloud's shade is rose-lavender, so the
+      // mist has a lit side and a shade side. The cone stands nearer the fall line (it was cut by the
+      // frame's edge, and off a phone's altogether) and is a pale ghost from the first metre.
+      p.skyZenith = c('#A4C4DC');
+      p.skyMid = c('#EEDCDC');
+      p.skyHorizon = c('#FFD8C6');
+      p.skyBelow = c('#F4CFC6');
+      p.fog = c('#F6D2CA');
+      p.ridge = [c('#F2DAD6'), c('#D8CEDC'), c('#B4BAD8')];
+      p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFEEE6'), shade: c('#D6BCCC'), rim: c('#FFC4AE'), shadow: 0.1 };
+      p.atmo.valleyColor = c('#FAD2C8');
+      p.massif.heroAz = 17;
+      p.massif.veil = 0.16;
+      p.massif.glow = c('#FFBCA8');
+      p.massif.glowK = 0.35;
+      p.tallDark = c('#7E2459');
       return;
     case 'lantern':
       // The far plane is the night's own violet, the lit values lean silver and the shade lilac. Lamps are
@@ -1428,9 +1446,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         setSun(p, -27, 22, 33, 18);
         p.sunDisc = 1;
         p.sunSoft = 0.2;
-        p.skyZenith = c('#90C4CC');
-        p.skyMid = c('#C6E2D8');
-        p.skyHorizon = c('#FFF4E2');
+        p.skyZenith = c('#7EB4E0');
+        p.skyMid = c('#CFE0EC');
+        p.skyHorizon = c('#FFE4D6');
+        p.skyBelow = c('#EED6D8');
+        p.fog = c('#EED8DA');
+        p.clouds.shade = c('#C4BCD8');
+        p.atmo.valleyColor = c('#F0D8DC');
         p.fogNear = 120;
         p.fogFar = 720;
         p.massif.veil = 0;
@@ -1446,7 +1468,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 1100, at: 1700, dusk: 0.2,
       edit: (p) => {
         p.sunColor = c('#FFF2E4');
-        p.leaf = 0.9;
+        p.leaf = 1.25;
         p.atmo.rays = 1;
         p.grade.shafts = 0.75;
         p.snowShade = c('#7482D4');
@@ -1465,9 +1487,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // on blue: at one value with the snow the frame was paper.
         p.skyZenith = c('#4E94DC');
         p.skyMid = c('#94C4EA');
-        p.skyHorizon = c('#F6E0E4');
-        p.skyBelow = c('#D6D2EC');
-        p.fog = c('#D8D6F0');
+        p.skyHorizon = c('#D6DAF2');
+        p.skyBelow = c('#B4C0EA');
+        p.fog = c('#C0CAEE');
         p.fogFar = 880;
         p.air.far = c('#7694DE');
         p.air.low = 0.6;
@@ -1477,14 +1499,24 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.tallDark = c('#862660');
         p.ridge = [c('#C6D0F0'), c('#9CB0E4'), c('#7690D6')];
         p.atmo.rays = 0.45;
-        p.atmo.valleyColor = c('#DCDCF4');
+        p.atmo.valleyColor = c('#C4CEF0');
         p.grade.shafts = 0.3;
-        p.grade.contrast = 1.16;
+        p.grade.contrast = 1.2;
         p.grade.hi = c('#FFF8F4');
         p.clouds.low = 0.5;
         p.clouds.high = 0.5;
+        // (The sea of cloud and the valley's haze are lit white and shaded blue here: cream, they filled
+        // the valley floor with custard under a blue sky. The sun's scatter and glow come down with them,
+        // so the lit snow is white and only the shade carries colour.)
+        p.clouds.lit = c('#F8F4FC');
+        p.clouds.shade = c('#A4B2E4');
+        p.clouds.rim = c('#FFE0DC');
+        p.sunGlow = 0.4;
+        p.air.scatter = 0.8;
+        p.bloom = 0.17;
+        p.massif.veil = 0;
         p.petals = 1.1;
-        p.grade.exposure = 0.94;
+        p.grade.exposure = 0.9;
       },
     },
     {
@@ -1862,9 +1894,14 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The Blossom Leap: orchard rows combed across a valley floor that lies in its own mist.
       kind: 'leap',
       edit: (p) => {
-        p.fogFar *= 1.2;
-        p.air.low = 0.9;
-        p.atmo.valley = Math.max(p.atmo.valley, 0.8);
+        // (Clear, not misted: a floor in its own mist was a floor nobody could see, and the town under
+        // the last leap a ghost.)
+        p.fogFar *= 1.45;
+        p.air.low = 0.4;
+        p.atmo.valley = Math.min(p.atmo.valley, 0.35);
+        p.snowShade = c('#5868C8');
+        p.snowDeep = c('#44389C');
+        p.grade.contrast += 0.04;
       },
     },
     {

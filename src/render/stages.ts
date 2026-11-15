@@ -343,12 +343,17 @@ function paddyMaterial(): ShaderMaterial {
         float sh = sin(vW.x * 0.9 + vW.z * 0.35 + uFlow * 1.3) * sin(vW.z * 0.7 - uFlow * 0.9);
         vec3 n = normalize(vec3(sh * 0.025, 1.0, sh * 0.018));
         vec3 r = reflect(-v, n);
-        vec3 sky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.55, r.y));
+        // (A painted mirror: it holds the horizon's colour well up the reflection, so a flat seen from
+        // the air is the morning's peach going to blue, not one tile of zenith.)
+        vec3 sky = mix(uSkyHorizon, uSkyZenith, smoothstep(0.0, 0.75, r.y));
         float f = 0.25 + 0.75 * pow(1.0 - clamp(v.y, 0.0, 1.0), 3.0);
-        // (Looking straight down it is the zenith, darkened: still water is never a hole.)
-        vec3 col = mix(uSkyZenith * 0.5 + vec3(0.02, 0.03, 0.05), sky * 0.95, f);
+        // (Looking straight down it is the sky a step deeper: still water is never a hole, and never
+        // darker than the shade on the snow beside it.)
+        vec3 col = mix(mix(uSkyZenith, sky, 0.3) * 0.74, sky * 0.98, f);
         vec3 dd = normalize(uDiskDir);
-        col += uSunColor * pow(max(dot(r, dd), 0.0), 120.0) * 1.6;
+        float gl = max(dot(r, dd), 0.0);
+        // The sun finds the flats one by one: a wide soft sheen round a hot core.
+        col += uSunColor * (pow(gl, 120.0) * 1.6 + pow(gl, 14.0) * 0.5);
         float fog = smoothstep(uFogNear, uFogFar, dist);
         gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
         #include <colorspace_fragment>
@@ -677,7 +682,7 @@ export class Stages {
     const S = low ? 2 : 3;
     const pos: number[] = [];
     const f = new Facets();
-    const bund = new Color('#8A7484');
+    const bund = new Color('#4A2C44');
     const cap = new Color('#F4EEF4');
     const at = (side: number, e: number, z: number, y?: number): [number, number, number] => {
       const x = c.centerX(z) + side * (c.halfWidth(z) + e);
@@ -830,7 +835,8 @@ export class Stages {
       // A gap between two gates: the bar lies across the snow under it, a touch down-sun of the gap.
       const z = a + i * step;
       const hw = c.halfWidth(z) + Math.min(3, c.edgeLimit(z));
-      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i);
+      // (Low has no film curve over the frame: at full strength its bars added up to paper white.)
+      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.55 : 1);
       const W = step * 0.3;
       const M = low ? 3 : 6;
       for (let j = 0; j < M; j++) {
@@ -856,11 +862,37 @@ export class Stages {
     const end = s.z + s.len;
     const hwE = c.halfWidth(end) + c.edgeLimit(end);
     const H = Math.max(10, s.clear);
-    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.6, 0.3, 0.1, 0.3);
+    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.34, 0.16, 0.04, 0.14);
     const mesh = new Mesh(b.build(), this.beamMat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 3;
     root.add(mesh);
-    return { key: 'torii' + s.n, z0: a, z1: end, root, lights: null };
+    // The bars fall on whoever rides through them, and on the lacquer (ART.md 15: the sun cut into bars
+    // by the posts, flickering over the rider at speed). One warm light rides with the sled on the sun's
+    // side, full in a gap and gone behind a post; two more stand in the next gaps ahead and light the
+    // posts' faces, so the row is lacquer in sun and not a dark wall. Reduced motion holds the rider's
+    // light steady at half. Keyed to the sled's place, never the clock.
+    const lights = (z: number): void => {
+      if (z < a - 30 || z > end + 6) return;
+      const at3 = (zz: number, off: number, up: number): [number, number, number] => {
+        const x = c.centerX(zz) + off;
+        return [x, c.ground(x, zz) + up, -zz];
+      };
+      const ph = (z - a) / step;
+      const bar = Math.pow(0.5 + 0.5 * Math.cos(ph * Math.PI * 2), 2);
+      const inK = smooth(a - 4, a + 10, z) * (1 - smooth(end - 6, end + 4, z));
+      if (inK > 0) {
+        const [x, y, zz] = at3(z + 0.6, sun * 2.6, 3.4);
+        pushLocalLight(x, y, zz, warm.r, warm.g * 0.92, warm.b * 0.8, 8.5, (fx.reduced ? 0.42 : 0.2 + 0.85 * bar) * inK);
+      }
+      const i0 = Math.max(1, Math.ceil(ph));
+      for (let i = i0 + 1; i <= i0 + (low ? 1 : 3) && i < n; i += 2) {
+        const zg = a + i * step;
+        const hw = c.halfWidth(zg);
+        const [x, y, zz] = at3(zg, -sun * (hw - 1.2), 4.5);
+        pushLocalLight(x, y, zz, warm.r, warm.g * 0.86, warm.b * 0.74, 11, 0.7);
+      }
+    };
+    return { key: 'torii' + s.n, z0: a, z1: end, root, lights };
   }
 }

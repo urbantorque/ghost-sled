@@ -166,7 +166,7 @@ const ROCK: Record<string, RockSet> = {
   summit: { lit: '#94889E', shade: '#3C3654', deep: '#25213A', ledge: '#FFFFFF', style: [1.35, 3.6, 0, 0.1] },
   fang: { lit: '#8FCDF2', shade: '#1B4A9E', deep: '#071A58', ledge: '#D6ECFF', style: [1.8, 8.5, 1, 0] },
   volcano: { lit: '#5E5058', shade: '#1F1A22', deep: '#0E0C13', ledge: '#8C8288', style: [1.5, 6.5, 2, 0] },
-  cone: { lit: '#B2A6AE', shade: '#5C5672', deep: '#3C3852', ledge: '#6F8C5A', style: [1.2, 2.5, 3, 0.02] },
+  cone: { lit: '#A2969E', shade: '#463F5E', deep: '#28233A', ledge: '#3F6252', style: [1.2, 2.5, 3, 0.02] },
 };
 
 function applyRock(p: Palette): void {

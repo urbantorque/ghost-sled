@@ -576,6 +576,8 @@ export class World {
     this.speedPosts.setCourse(c);
     this.sloughs.setCourse(c);
     this.life.setCourse(c, this.palette, this.mood);
+    // Sakura is the calm mountain (ART.md 15): its lens keeps a third of the fringe the others show at speed.
+    this.post.fringeK = c.biome === 'blossom' ? 0.3 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.applyWeather();
     this.lastChunkRange = '';

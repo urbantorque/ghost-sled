@@ -22,7 +22,7 @@ import type { ObstacleKind } from '../sim/course';
 import type { HatKind } from '../bot/roster';
 import type { HatId } from '../game/garage';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
-import { ASH_TOP, basaltTones, hazardPineGeometry } from './flora';
+import { ASH_TOP, CEDAR, basaltTones, hazardPineGeometry } from './flora';
 import { Palette } from './palette';
 import { Facets, columnsInto, strata } from './rockforms';
 
@@ -738,7 +738,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
   }
   switch (kind) {
     case 'pine':
-      return hazardPineGeometry(p);
+      return hazardPineGeometry(p, biome === 'blossom' ? CEDAR : undefined);
     case 'charpine':
       return charPineGeometry(p);
     case 'blossom':

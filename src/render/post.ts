@@ -102,6 +102,8 @@ export class PostFX {
   private moodFoot = 0;
   private moodShafts = 0;
   private moodLens = 0;
+  /** How much of the lens's colour fringe at speed a mountain keeps (1: all of it; a calm mountain less). */
+  fringeK = 1;
   private moodFocal = 0;
   private focalDir: Vector3 | null = null;
   /** Taps per pixel for the light shafts: 14 on High, 8 on Medium (Low has no post pass at all). */
@@ -1054,7 +1056,7 @@ export class PostFX {
     u.uFoot.value = this.moodFoot * this.params.footScale;
     u.uSpeed.value = this.params.speed;
     u.uPunch.value = this.params.punch;
-    u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe : 0;
+    u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe * this.fringeK : 0;
     u.uFlash.value = this.params.flash;
     u.uVignette.value = this.params.vignette;
     u.uGrain.value = this.params.grain * this.moodGrain;

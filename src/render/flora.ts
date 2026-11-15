@@ -290,7 +290,19 @@ interface BoughSpec {
   clumps: number;
   /** Value multiplier on the needles (the young trees are a step lighter, the heavy ones darker). */
   tone: number;
+  /** The needles' own colours where a mountain's are not its palette's (Sakura's cedars). */
+  tones?: PineTones;
 }
+
+/** A pine's lit needles and the dark under its boughs. */
+export interface PineTones {
+  needle: Color;
+  under: Color;
+}
+
+/** Sakura Ridge's conifers are deep cedar green (ART.md 15: with the ink and the lacquer they hold the
+ *  values the blossom glows against). Its palette's tall colours are the blossom's. */
+export const CEDAR: PineTones = { needle: new Color('#2C6A56'), under: new Color('#123230') };
 
 /** Bough segments round a tier: even ones are bough tips, odd ones the gaps between them (four
  *  boughs; the small top tier has three). */
@@ -412,8 +424,8 @@ function treeWell(r: number, shadeC: Color, segs = 6): BufferGeometry {
  *  stands where that one stood). */
 function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0): BufferGeometry {
   reseed(s.seed);
-  const needle = shade(p.tall, s.tone);
-  const under = shade(p.tallDark.clone().lerp(p.tall, 0.3), 0.62 * s.tone);
+  const needle = shade(s.tones ? s.tones.needle : p.tall, s.tone);
+  const under = s.tones ? shade(s.tones.under, s.tone) : shade(p.tallDark.clone().lerp(p.tall, 0.3), 0.62 * s.tone);
   // Fewer boughs a tier for Low's pine and the far tree (three tips round a tier, two on the top
   // one), a thinner trunk, and on the far tree no clumps (a few pixels at that range).
   const parts: BufferGeometry[] = [part(new CylinderGeometry(s.trunkR * 0.65, s.trunkR, s.trunk, lod === 0 ? 5 : lod === 1 ? 4 : 3, 1, true), WOOD, { pos: [0, s.trunk / 2, 0] })];
@@ -441,8 +453,9 @@ function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0): BufferGeometry {
 }
 
 /** The forest's spruce, in its plain and blossom-ridge colourings (variant reseeds it). */
-export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0): BufferGeometry {
+export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0, tones?: PineTones): BufferGeometry {
   return boughPine(p, {
+    tones,
     seed: 501 + variant,
     trunk: 1.3,
     trunkR: 0.24,
@@ -462,8 +475,9 @@ export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0): Buffer
  *  spruce with less snow on it, so it stays the dark, hard silhouette a hazard must be (ART.md section
  *  1), and a bottom tier as wide as the old pine's (1.35 m; colliders are 0.7 to 0.95 m), so it looks
  *  at least as wide as it collides. */
-export function hazardPineGeometry(p: Palette): BufferGeometry {
+export function hazardPineGeometry(p: Palette, tones?: PineTones): BufferGeometry {
   return boughPine(p, {
+    tones,
     seed: 511,
     trunk: 1.3,
     trunkR: 0.24,
@@ -498,8 +512,9 @@ export function heavyPineGeometry(p: Palette, lod: Lod = 0): BufferGeometry {
 }
 
 /** A young spruce: three small tiers on a thin stem, about half a grown tree's height. */
-export function youngPineGeometry(p: Palette, lod: Lod = 0): BufferGeometry {
+export function youngPineGeometry(p: Palette, lod: Lod = 0, tones?: PineTones): BufferGeometry {
   return boughPine(p, {
+    tones,
     seed: 131,
     trunk: 0.7,
     trunkR: 0.12,
@@ -718,7 +733,7 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   // Lanternfall: ink conifers hold the values, and bare silver trees are the light shape among them (the
   // second of them hung with small lit lanterns: the lamp grove's own tree).
   if (biome === 'lantern') return a ? [() => boughPineGeometry(p, 5, lod), () => heavyPineGeometry(p, lod)] : [() => silverTreeGeometry(0, false), () => silverTreeGeometry(1, true)];
-  return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3, lod), () => youngPineGeometry(p, lod)];
+  return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3, lod, CEDAR), () => youngPineGeometry(p, lod, CEDAR)];
 }
 
 /** Whether a biome's set has cheaper builds at lod 1 and 2 (else every lod is the full set). */
