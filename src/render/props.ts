@@ -496,7 +496,7 @@ export class Props {
     gb.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(900 * 3).fill(1), 3);
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
-    add('beam', gateBeamGeometry(p), plain, 60);
+    add('beam', gateBeamGeometry(p, biome === 'lantern'), plain, 60);
     if (this.arches) {
       // Kilometre arches: one batch of at most two, in the plain toon material (no new shader), casting
       // no shadow. It is culled by its own bounds (update), so it costs a draw only while one is in view;

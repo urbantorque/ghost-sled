@@ -645,8 +645,9 @@ export function finishPiece(ctx: SiteCtx): Piece {
     }
     return parts;
   });
-  // Two balloons tethered over the town.
-  if (!low) {
+  // Two balloons tethered over the town. (Not over Firstlight: its sky is the lanterns', and a balloon there
+  // read as one more modern thing in the lamplighters' town.)
+  if (!low && biome !== 'lantern') {
     steps.push(() => {
       seed(ctx.seed + 751);
       const parts: BufferGeometry[] = [];
@@ -1000,7 +1001,7 @@ export function liftPiece(ctx: SiteCtx): Piece {
   const lf = biome === 'lantern';
   const steel = lf ? C('#2A2140') : biome === 'volcanic' ? C('#3E3440') : C('#6A7088');
   const steelD = lf ? C('#1C1630') : biome === 'volcanic' ? C('#2E2830') : C('#4A5068');
-  const wall = lf ? C('#3A2E5C') : biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : C('#EDE4D8');
+  const wall = lf ? stone(p, 0.8) : biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : C('#EDE4D8');
   const upper = lf ? C('#2A2140') : biome === 'alpine' ? TIMBER : biome === 'glacier' ? C('#D8E2EE') : biome === 'volcanic' ? shade(p.low, 0.8) : C('#93405A');
   const roof = biome === 'blossom' ? C('#3E3A50') : C('#3A3448');
   const trim = biome === 'blossom' ? C('#2E2230') : TIMBER_DARK;
@@ -1030,7 +1031,9 @@ export function liftPiece(ctx: SiteCtx): Piece {
     parts.push(grade(box(W + 1, g1 + 0.6 - y0, D + 1, stone(p, 0.8), [hx, (g1 + 0.6 + y0) / 2, 0]), y0, g1 + 0.6, 0.68, 0.95));
     parts.push(grade(box(W, hall - g1, D, wall, [hx, (hall + g1) / 2, 0]), g1, hall, 0.84, 1.02));
     // Rows of windows up the base, toward the run and up the slope.
-    for (let y = g1 + 2.6; y < hall - 1.6; y += 3.3) {
+    // (Lanternfall's is a stone stem with its lit hall only at the top: four rows of windows up a tower read
+    // as flats.)
+    for (let y = lf ? Math.max(g1 + 2.6, hall - 5.0) : g1 + 2.6; y < hall - 1.6; y += 3.3) {
       for (let i = 0; i < 4; i++) {
         parts.push(box(1.5, 1.5, 0.14, glass, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.04]));
         parts.push(box(0.14, 1.5, 1.5, glass, [hx - (s * W) / 2 - s * 0.04, y, -D / 2 + (i + 0.5) * (D / 4)]));

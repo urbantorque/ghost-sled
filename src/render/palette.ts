@@ -997,14 +997,18 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.grade.glass = 0.15;
       // (A perfect landing's white flash, over a night frame, bleached the rider to cream.)
       p.grade.flash = 0.3;
-      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#9088D4'), shade: c('#352C84'), rim: c('#DCD6FF'), shadow: 0 };
+      // (The sea's shade is a mid violet, not navy: at #352C84 its hollows were dark blots and the sea read as
+      // a frozen lake under the moon.)
+      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#A49CE0'), shade: c('#544A9E'), rim: c('#DCD6FF'), shadow: 0 };
       p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
       p.bloom = 0.62;
       p.sparkle = 1.15;
       p.snowfall = 0.02;
       p.giftGlow = 0.45;
-      p.ghostGlow = 1.6;
+      // (A night frame needs little of a ghost's glow to find it: at 1.6 to 2.6 a ghost near the lens was a mint blaze
+      // over the rider and in the lantern sky, which belongs to marigold.)
+      p.ghostGlow = 1.1;
       p.lanternGlow = 0.45;
       return;
   }
@@ -1529,7 +1533,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#34267E');
         p.skyHorizon = c('#5A3E8C');
         p.skyBand = { color: c('#C88466'), fade: 26, k: 0.24 };
-        p.skyBelow = c('#3A2458');
+        // (What lies under the horizon in the valley is the dome's own below: the lanterns' lit haze, not a
+        // dark hole for them to float in.)
+        p.skyBelow = c('#4A3268');
         p.deck.k = 0.92;
         p.deck.lit = c('#5C50A6');
         p.deck.shade = c('#221A60');
@@ -1561,7 +1567,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.bloom = 0.78;
         p.lamps = 1.3;
         p.giftGlow = 0.6;
-        p.ghostGlow = 1.75;
+        p.ghostGlow = 1.2;
         p.lanternGlow = 0.6;
         p.grade.exposure = 1.0;
         p.grade.saturation = 1.0;
@@ -1599,16 +1605,18 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     {
       // The first rose of morning at the line, as the lanterns leave the valley. Not yet a sun: a band of
       // rose under an indigo that is letting go of its stars, and rose on the snow that faces it.
-      from: 3900, at: 4460, dusk: 1,
+      // (It comes in from 3650 m, so the leap into Firstlight and the town are already under the rose: from
+      // 3900 the run was at the line before a frame showed it.)
+      from: 3650, at: 4300, dusk: 1,
       edit: (p) => {
         setSun(p, 24, 6, 26, 10);
         p.sunColor = c('#F4DCE4');
         p.deck.k = 0.3;
         p.deck.glow = c('#FFB48E');
         p.skyZenith = c('#22206C');
-        p.skyMid = c('#7450A4');
+        p.skyMid = c('#8656A8');
         p.skyHorizon = c('#DC8CA0');
-        p.skyBand = { color: c('#FFC09A'), fade: 16, k: 0.9 };
+        p.skyBand = { color: c('#FFC09A'), fade: 24, k: 1.0 };
         p.skyBelow = c('#6A4A8C');
         p.snowLit = c('#E6DAF2');
         p.snowShade = c('#6650B8');
@@ -1920,8 +1928,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         return cl ? { z0: cl.z0 + 55, z1: cl.z1 - CLOUD_BREAK, rise: 150, fall: 50 } : null;
       },
       edit: (p) => {
-        p.fog = c('#A8A0E2');
-        p.air.far = c('#968CD6');
+        // (A value under the white it was: in a cloud as bright as its snow the lamps' halos had nothing to
+        // loom out of, and the frame was one lilac wash.)
+        p.fog = c('#9A92D8');
+        p.air.far = c('#8A80CE');
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
         p.air.scatter = 0.4;
@@ -1939,7 +1949,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sunDisc = 0;
         p.sunGlow = 0.35;
         p.sunSoft = 1;
-        p.snowLit = c('#ECEAFF');
+        p.snowLit = c('#E0DEFA');
         p.snowShade = c('#6658BE');
         p.snowDeep = c('#46389A');
         p.rim = c('#F0EEFF');
@@ -1957,7 +1967,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.hazardFog = 0.5;
         p.hazardDim = 0.78;
         p.giftGlow = 1;
-        p.ghostGlow = 2.6;
+        p.ghostGlow = 1.6;
         p.lanternGlow = 0.8;
         p.sparkle = 0.5;
         // (Less bloom and more contrast than a white-out would have: at 0.85 and 1.02 the cloud was a milky
@@ -1985,6 +1995,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // the night's own violet made the valley under the lip a dark hole.)
         p.air.far = c('#6A4890');
         p.fog = c('#4C3A8C');
+        p.skyBelow = c('#644678');
         p.under.k = 0.3;
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');

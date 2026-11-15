@@ -146,6 +146,9 @@ function streakMaterial(): ShaderMaterial {
 
 export class Fireworks {
   readonly mesh: InstancedMesh;
+  /** How much of a burst's light reaches the world (the grade's flash, world.ts): 1 by day; a night of
+   *  pale snow under a lit square takes less, or a volley at the line floods the whole frame. */
+  lightK = 1;
   private readonly mat: ShaderMaterial;
   private readonly iPos: InstancedBufferAttribute;
   private readonly iVel: InstancedBufferAttribute;
@@ -363,7 +366,7 @@ export class Fireworks {
       if (pushed >= cap || l.life <= 0) continue;
       const k = l.life / l.max;
       const flash = this.reduced ? 0 : Math.pow(k, 6) * 2.2;
-      pushLocalLight(l.x, l.y, l.z, l.r, l.g, l.b, 150, k * k * 0.9 + flash);
+      pushLocalLight(l.x, l.y, l.z, l.r, l.g, l.b, 150, (k * k * 0.9 + flash) * this.lightK);
       pushed++;
     }
   }

@@ -118,7 +118,9 @@ const LIGHT_FRAG = /* glsl */ `
     #else
       float body = 1.0 - smoothstep(0.82, 1.0, sq);
       float flame = exp(-(q.x * q.x * 26.0 + (q.y + 0.2) * (q.y + 0.2) * 12.0));
-      float halo = exp(-dot(q, q) * 2.4) * 0.4;
+      // (Every halo reaches nothing inside the point's circle: cut off at the square's edge, a near light
+      // was a glowing card.)
+      float halo = exp(-dot(q, q) * 2.4) * 0.4 * (1.0 - smoothstep(0.45, 1.0, dot(q, q)));
       return col * (body * (0.5 + 0.3 * (0.5 - q.y)) + halo) + vec3(1.0, 0.93, 0.72) * flame * body * 0.9;
     #endif
   }
@@ -133,10 +135,11 @@ const LIGHT_FRAG = /* glsl */ `
       // (A painted flame: wider than the lit one, flat, with one paler value at its heart.)
       float fat = 1.0 - step(w * 1.5 + 0.05, abs(p.x));
       fat *= step(-0.62, p.y) * step(p.y, 0.9);
-      return col * fat * 1.3 + vec3(1.0, 0.95, 0.8) * fat * step(abs(p.x), w * 0.6) * step(p.y, 0.25) * 0.6;
+      // (At 1.3 a near flame clipped to a white triangle with no tone curve to roll it off.)
+      return col * fat * 0.8 + vec3(1.0, 0.86, 0.6) * fat * step(abs(p.x), w * 0.6) * step(p.y, 0.25) * 0.3;
     #else
       float core = inside * (1.0 - smoothstep(0.0, w * 0.5, abs(p.x))) * (1.0 - smoothstep(-0.3, 0.5, p.y));
-      float halo = exp(-dot(q, q) * 2.0) * 0.45;
+      float halo = exp(-dot(q, q) * 2.0) * 0.45 * (1.0 - smoothstep(0.45, 1.0, dot(q, q)));
       return col * (inside * 0.9 + halo) + vec3(1.0, 0.95, 0.8) * core * 0.9;
     #endif
   }
@@ -1202,7 +1205,9 @@ export class LanternWorld {
     // ------------------------------------------------ the sea of cloud, from above
     if (this.sheets) {
       const above = cam.position.y - this.cloudTop;
-      const k = (1 - inCloud) * smooth01((above + 26) / 26) * (z < cl.z1 ? 1 : 0);
+      // (Only from well above its top, and gone once the dive has begun: below its top the sheet met the
+      // slope, and the ground standing through it cut a hard-edged hole under the first flight.)
+      const k = (1 - inCloud) * smooth01((above - 4) / 20) * (1 - smooth01((z - cl.z0) / 50));
       this.sheets.visible = k > 0.01;
       if (this.sheets.visible) {
         this.sheets.position.set(cam.position.x, this.cloudTop, cam.position.z);
@@ -1305,6 +1310,12 @@ export class LanternWorld {
       else this.sprite(l.x, y + 0.26, l.z, 0.8, 1, FLAME, 1.5 * fl, l.seed);
       if (d < (low ? 90 : 170)) this.sprite(l.x, y + 0.2, l.z, 2.4, 0, FLAME, 0.16 * fl, l.seed);
       if (d > -22 && d < 84) pushLocalLight(l.x, y + 0.4, -l.z, LAMP_RGB[0], LAMP_RGB[1], LAMP_RGB[2], l.hung ? 14 : 16.5, 1.1 * fl * lampK);
+      // Its pool on the snow, reaching in toward the line: the light falls off with distance and was gone a
+      // few metres in, so a lamp lit nothing a rider could see. (Medium and High: Low keeps its draws.)
+      if (!low && d > -24 && d < 150) {
+        const toward = Math.sign(c.centerX(l.z) - l.x);
+        this.pool(c, l.x + toward * 3.2, l.z, 11, 12, MARIGOLD, 0.16 * fl * Math.min(1.2, p.lamps));
+      }
     }
     // The stone lamps the sim stands in the run: lit, unless one waits to be kindled.
     const ci = Math.floor(z / CHUNK_LEN);
@@ -1428,7 +1439,8 @@ export class LanternWorld {
       (this.pools.material as ShaderMaterial).uniforms.uFogR.value = fogR;
     }
     if (this.canal) {
-      this.canal.visible = this.reaches.some((r) => r.z1 > z - 60 && r.z0 < z + 700);
+      // (Drawn while a reach is within 420 m: past that its lights are under a pixel.)
+      this.canal.visible = this.reaches.some((r) => r.z1 > z - 60 && r.z0 < z + 420);
       (this.canal.material as ShaderMaterial).uniforms.uFogR.value = fogR;
     }
   }

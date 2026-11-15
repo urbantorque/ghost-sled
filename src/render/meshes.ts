@@ -324,15 +324,28 @@ export function lanternGeometry(): BufferGeometry {
   ]);
 }
 
-export function pillarGeometry(p: Palette): BufferGeometry {
+export function pillarGeometry(p: Palette, lantern = false): BufferGeometry {
+  if (lantern) {
+    // Lanternfall's gate posts are lamp posts: the bronze post, a lit paper head under a slate cap.
+    const slate = new Color('#2C2A44');
+    return merge([
+      part(new CylinderGeometry(0.26, 0.4, 4.6, 8), p.accentProp, { pos: [0, 2.3, 0] }),
+      part(new CylinderGeometry(0.5, 0.5, 0.35, 8), new Color('#2A2230'), { pos: [0, 0.17, 0] }),
+      part(new BoxGeometry(0.62, 0.16, 0.62), slate, { pos: [0, 4.66, 0] }),
+      part(new BoxGeometry(0.52, 0.72, 0.52), new Color('#FFD070').multiplyScalar(2.2), { pos: [0, 5.1, 0] }),
+      part(new ConeGeometry(0.5, 0.5, 4), slate, { pos: [0, 5.7, 0], rot: [0, Math.PI / 4, 0] }),
+    ]);
+  }
   return merge([
     part(new CylinderGeometry(0.34, 0.4, 5.2, 8), p.accentProp, { pos: [0, 2.6, 0] }),
     part(new CylinderGeometry(0.5, 0.5, 0.35, 8), new Color('#2A2230'), { pos: [0, 0.17, 0] }),
   ]);
 }
 
-/** Torii crossbeam spanning two pillars; unit width along x, scaled per gate. */
-export function gateBeamGeometry(p: Palette): BufferGeometry {
+/** Torii crossbeam spanning two pillars; unit width along x, scaled per gate. On Lanternfall (which has no
+ *  lintels) a cord between the two lamp heads instead. */
+export function gateBeamGeometry(p: Palette, lantern = false): BufferGeometry {
+  if (lantern) return part(new BoxGeometry(1, 0.06, 0.06), new Color('#4A3A2A'), { pos: [0, 4.95, 0] });
   return merge([
     part(new BoxGeometry(1, 0.42, 0.55), p.accentProp, { pos: [0, 4.4, 0] }),
     part(new BoxGeometry(1.25, 0.32, 0.7), new Color('#2A2230'), { pos: [0, 5.2, 0] }),
@@ -764,6 +777,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
     if (kind === 'basalt') return stoneRowGeometry(p, low);
     if (kind === 'iceblock') return markerStoneGeometry(p);
     if (kind === 'lantern') return stoneLampGeometry();
+    if (kind === 'pillar') return pillarGeometry(p, true);
   }
   switch (kind) {
     case 'pine':
