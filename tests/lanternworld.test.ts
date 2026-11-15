@@ -40,7 +40,10 @@ describe('Lanternfall is its own mountain', () => {
     const lum = (col: Color) => 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
     expect(lum(p.tall)).toBeLessThan(0.02);
     expect(lum(p.low)).toBeLessThan(0.03);
-    expect(lum(p.snowLit)).toBeGreaterThan(0.75);
+    // Silver, a value under white (the review lane: at white the snow outshone the lamps), and still the
+    // lightest thing that stands in the frame by far.
+    expect(lum(p.snowLit)).toBeGreaterThan(0.65);
+    expect(lum(p.snowLit)).toBeLessThan(0.75);
     // The run's gates are not the rider's red here.
     expect(dist(p.accentProp, new Color('#FF4D2E'))).toBeGreaterThan(0.4);
   });

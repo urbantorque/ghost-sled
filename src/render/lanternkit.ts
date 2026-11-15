@@ -547,7 +547,11 @@ export function lanternHouse(t: Town, F: number, lo: number, o: LanternHouseOpts
       // (A pane is brightest low, where its lamp stands, and a deeper amber under the rail above it: one
       // flat value a pane, a street of them was a wall of orange slabs.)
       parts.push(grade(box(bw - 0.5, STOREY - 1.0, 0.1, pap, [x, y0 + STOREY * 0.52, zf + 0.05]), y0 + 0.6, y0 + STOREY - 0.3, lit ? 1.18 : 1, lit ? 0.5 : 0.8, 0.03));
-      if (!plain) parts.push(box(bw - 0.5, 0.09, 0.14, t.trim, [x, y0 + STOREY * 0.66, zf + 0.07]));
+      if (!plain) {
+        // A rail across and a bar down: the pane is four of paper in a lattice, not one slab of light.
+        parts.push(box(bw - 0.5, 0.09, 0.14, t.trim, [x, y0 + STOREY * 0.66, zf + 0.07]));
+        parts.push(box(0.09, STOREY - 1.0, 0.14, t.trim, [x, y0 + STOREY * 0.52, zf + 0.07]));
+      }
     }
     if (!plain && !o.sunk) {
       const m = Math.max(1, Math.floor(d / 3.4));

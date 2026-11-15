@@ -1169,6 +1169,8 @@ export class Life {
     // Ember's sky is its ash's: only ravens sitting on the bank, on Medium and High (Low has never
     // drawn a bird there, and gets no new draw).
     if (biome === 'volcanic' && (this.night || !pl.rich)) kind = null;
+    // Lanternfall's sky belongs to its lanterns: a flock against them read as more of them, gone wrong.
+    if (biome === 'lantern') kind = null;
     if (kind) this.setBirdKind(kind);
     this.birdMesh.visible = pl.birds && kind !== null;
     // Motes: diamond dust in the clear, sunny moods; ash on Ember Peak's own dusk, sparse and pale.

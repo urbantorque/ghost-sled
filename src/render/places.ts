@@ -304,6 +304,7 @@ const LINE_CHECK = 3;
 export const LINE_DEPTH = 4.5;
 const LINE_CELLS = 3;
 export const LINE_LIFT = 0.14;
+const LINE_LILAC = new Color('#9C90D0');
 
 /** A hot-air balloon tethered over the town, visible from the last leap: where the run is going. */
 function balloon(x: number, y: number, z: number, g: number, cols: Color[]): BufferGeometry[] {
@@ -439,14 +440,14 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
  *  snow to read and stays a checker from the lens at speed: three rows a metre deep were a broken dashed
  *  line from 30 m. Each check is a few cells, so it lies on the ground up the banks, a hand over the
  *  snow, where no tier's coarser terrain comes up through it. */
-function finishLine(f: Sub, hw: number): BufferGeometry[] {
+function finishLine(f: Sub, hw: number, light: Color = CREAM): BufferGeometry[] {
   const n = Math.round((2 * hw) / LINE_CHECK);
   const w = (2 * hw) / n;
   const y = (u: number, v: number) => f.gy(u, v) + LINE_LIFT;
   const line: BufferGeometry[] = [];
   for (let r = 0; r < LINE_ROWS; r++) {
     for (let i = 0; i < n; i++) {
-      const col = (i + r) & 1 ? CREAM : INK;
+      const col = (i + r) & 1 ? light : INK;
       for (let a = 0; a < LINE_CELLS; a++) {
         const u0 = -hw + (i + a / LINE_CELLS) * w;
         const u1 = -hw + (i + (a + 1) / LINE_CELLS) * w;
@@ -580,7 +581,9 @@ export function finishPiece(ctx: SiteCtx): Piece {
     const parts = finishArch(ctx, rail, F);
     const c = rail.at(F, 0, 0);
     const f = new Sub(ctx, c.x, c.z, c.yaw);
-    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F)))];
+    // (Lanternfall's line is painted in a lilac a value under its snow: in the great lantern's light a cream
+    // check was the brightest thing at the finish, and its bloom washed the frame.)
+    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F), ctx.biome === 'lantern' ? LINE_LILAC : CREAM))];
   });
   // The square's great buildings, on the crests behind the stands.
   for (const s of [-1, 1]) {

@@ -129,8 +129,10 @@ export class ClimaxWorld {
     if (s.z > cx.lineZ - 420 && s.z < cx.lineZ + 60) {
       const h = 18 + 46 * rise;
       for (const side of [-1, 1]) {
-        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, (0.5 + 1.1 * rise + flare) * (0.5 + 0.5 * lay), GLOW_SOFT, 0.1);
-        kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, 0.8 + rise + 1.5 * flare, GLOW_STAR);
+        // (On Lanternfall the beams are a fifth: at the line the lens stands between them, and two columns of
+        // white-gold sixty metres tall were a veil over the whole frame.)
+        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, (0.5 + 1.1 * rise + flare) * (lay < 1 ? 0.2 : 1), GLOW_SOFT, 0.1);
+        kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, (0.8 + rise + 1.5 * flare) * (0.5 + 0.5 * lay), GLOW_STAR);
       }
       kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, (0.5 + 0.9 * rise + 1.5 * flare) * (0.4 + 0.6 * lay), DECAL_LINE, Math.PI / 2);
       pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, (0.4 + 1.2 * rise + 1.5 * flare) * lay);

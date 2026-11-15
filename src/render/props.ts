@@ -329,7 +329,10 @@ export class Props {
       // their own: all three are plain dark hazards. lanternkit.ts, lanternworld.ts.)
       const stoneWorld = biome === 'lantern' && (k === 'spire' || k === 'serac' || k === 'iceblock' || k === 'lantern');
       const mat = stoneWorld ? toon : k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
-      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+      // (Lanternfall's night casts the moon's shadow from its tall stones and trees only: a marker stone's or a
+      // stone lamp's was a few pixels of shade for a draw of its own in the shadow pass.)
+      const cast = biome !== 'lantern' || k === 'spire' || k === 'basalt' || k === 'pine';
+      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300, cast);
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
@@ -467,6 +470,9 @@ export class Props {
       sets.delete(k);
     }
     this.pump();
+    // (On Lanternfall's Low, with no tone curve to roll it to marigold, the lights' gold read as lemon against
+    // the lilac snow: there their glow leans amber.)
+    for (const m of [this.giftMat, this.giftFarMat]) (m.uniforms.uEmissive.value as Color).set(biome === 'lantern' && !this.arches ? '#FFA838' : '#FFD34D');
     add('gift', lightGeometry(false), this.giftMat, 900, false);
     add('gift5', lightGeometry(true), this.giftMat, 200, false);
     // Past the detail range a light is a few pixels: a drawn-out diamond, sparks and great lights in one batch.

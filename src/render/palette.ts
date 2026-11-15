@@ -962,8 +962,10 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.skyBelow = c('#2E2674');
       p.skySpread = 0.6;
       p.skyCurve = 0.5;
-      p.snowLit = c('#E8EAFC');
-      p.snowShade = c('#685CC0');
+      // (A value under white: at #E8EAFC the snow was the brightest thing in a night frame, brighter than the
+      // lamps, and the moon's silver rim could not be read on it.)
+      p.snowLit = c('#D4D6F4');
+      p.snowShade = c('#5E52B8');
       p.snowDeep = c('#261C6C');
       p.rim = c('#EEF0FF');
       p.fog = c('#3A3096');
@@ -1078,7 +1080,7 @@ function round7(p: Palette, biome: BiomeId): void {
       // the mountain's light from the first metre.
       p.air = { far: c('#221C6A'), cool: c('#DCD8FF'), low: 0.7, scatter: 1.1 };
       p.lamps = 1;
-      p.grade.exposure = 1.08;
+      p.grade.exposure = 1.0;
       p.grade.hi = c('#F4F6FF');
       p.grade.lo = c('#E6DCFF');
       return;
@@ -1552,7 +1554,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.giftGlow = 0.6;
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.6;
-        p.grade.exposure = 1.08;
+        p.grade.exposure = 1.0;
         p.grade.saturation = 1.0;
         p.grade.hi = c('#FFF6E8');
         p.grade.lo = c('#E2D6FF');
@@ -1605,7 +1607,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.under.k = 0.08;
         p.grade.hi = c('#FFF2E6');
         p.grade.lo = c('#E6D8FF');
-        p.grade.exposure = 1.1;
+        p.grade.exposure = 1.02;
       },
     },
   ],
@@ -2009,8 +2011,11 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1);
-        p.grade.hi = c('#FFF4E6');
-        p.bloom += 0.08;
+        // (Warm light on pale paint and stands of people: at the journey's bloom the square bloomed into a
+        // cream veil when the great lantern lit. The lantern is the brightest thing here, and the bloom its.)
+        p.grade.hi = c('#FFE8CC');
+        p.bloom -= 0.2;
+        p.grade.exposure! *= 0.94;
       },
     },
   ],
