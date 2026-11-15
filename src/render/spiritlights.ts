@@ -44,6 +44,8 @@ const LENS: [number, number] = [3.4, 6.0];
 const SPARK = 1;
 const GREAT = 2;
 const MOTE = -1;
+/** Added to a light's kind past the detail range. */
+const FAR = 2;
 
 /** Kept small, gone near the lens, off the sight line to the rider, out of the rider's outline (and from round it
  *  after a perfect landing), and out of the results' frame edge: what a flame and its glow have left of their size.
@@ -259,13 +261,17 @@ export function spiritGlowMaterial(): ShaderMaterial {
       varying float vKind;
       varying float vRing;
       varying float vSway;
+      varying float vFar;
       void main() {
-        // The instance carries the light's point, its scale (x) and what it is (z: a spark, a great light, a mote).
+        // The instance carries the light's point, its scale (x) and what it is (z: a spark, a great light, either
+        // past the detail range, or a mote).
         mat4 im = instanceMatrix;
         float sc = abs(im[0].x);
-        float kind = im[2].z;
+        float far = step(2.5, im[2].z);
+        float kind = im[2].z - 2.0 * far;
         float mote = step(kind, 0.0);
         float great = step(1.5, kind);
+        vFar = far;
         vec3 ip = im[3].xyz;
         float phase = ip.x * 0.37 + ip.z * 0.21;
         vec3 gc = (modelMatrix * vec4(ip, 1.0)).xyz;
@@ -302,6 +308,7 @@ export function spiritGlowMaterial(): ShaderMaterial {
       varying float vKind;
       varying float vRing;
       varying float vSway;
+      varying float vFar;
       void main() {
         if (vFade <= 0.0) discard;
         vec2 u = vU;
@@ -334,7 +341,21 @@ export function spiritGlowMaterial(): ShaderMaterial {
         vec3 col = mix(uMarigold, uWhiteGold, clamp(hot, 0.0, 1.0)) * mix(0.75, 0.5, uDayK);
         // By day it tints what is behind it toward marigold (light alone is lost on bright snow); at night it is
         // light.
-        gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * g, clamp(g * mix(0.06, 0.32, uDayK), 0.0, 0.6));
+        vec3 rgb = linearToOutputTexel(vec4(col, 1.0)).rgb * g;
+        float cover = clamp(g * mix(0.06, 0.32, uDayK), 0.0, 0.6);
+        if (vFar > 0.5) {
+          // Past the detail range, where no flame is drawn, the flame is painted here, a few pixels tall: round at
+          // its foot (a little under the glow's middle) and drawn to a point, with a pale heart.
+          vec2 f = u - vec2(0.0, -0.17);
+          float hw = 0.19 * pow(clamp(1.0 - f.y / 0.45, 0.0, 1.0), 1.3);
+          float taper = (1.0 - smoothstep(hw - 0.025, hw + 0.025, abs(f.x))) * step(0.0, f.y) * step(f.y, 0.45);
+          float body = max(taper, 1.0 - smoothstep(0.17, 0.21, length(f))) * vFade;
+          float heart = exp(-(f.x * f.x) / 0.008 - (f.y + 0.02) * (f.y + 0.02) / 0.02);
+          vec3 bodyC = mix(uMarigold, uWhiteGold * 1.1, heart * 0.8) * mix(1.25, 1.0, uDayK);
+          rgb = mix(rgb, linearToOutputTexel(vec4(bodyC, 1.0)).rgb, body);
+          cover = mix(cover, 1.0, body);
+        }
+        gl_FragColor = vec4(rgb, cover);
       }
     `,
   });
@@ -351,10 +372,12 @@ export function flameMatrix(m: Matrix4, x: number, y: number, z: number, yaw: nu
   return m.set(c * f, 0, sn, x, 0, s, 0, y, -sn * f, 0, c, z, 0, 0, 0, 1);
 }
 
-/** Writes a glow's instance matrix: the light's point, its scale (a great light's included) and what it is. */
-export function glowMatrix(m: Matrix4, x: number, y: number, z: number, k: number, kind: 'spark' | 'great' | 'mote'): Matrix4 {
+/** Writes a glow's instance matrix: the light's point, its scale (a great light's included) and what it is; `far`
+ *  past the detail range, where the glow paints the flame itself. */
+export function glowMatrix(m: Matrix4, x: number, y: number, z: number, k: number, kind: 'spark' | 'great' | 'mote', far = false): Matrix4 {
   const s = kind === 'great' ? k * GREAT_SCALE : k;
-  return m.set(s, 0, 0, x, 0, 1, 0, y, 0, 0, kind === 'great' ? GREAT : kind === 'mote' ? MOTE : SPARK, z, 0, 0, 0, 1);
+  const id = kind === 'great' ? GREAT : kind === 'mote' ? MOTE : SPARK;
+  return m.set(s, 0, 0, x, 0, 1, 0, y, 0, 0, id + (far && kind !== 'mote' ? FAR : 0), z, 0, 0, 0, 1);
 }
 
 /** The motes between two neighbouring lights of one arc in the air, by the gap between them (metres). */

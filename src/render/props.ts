@@ -1,8 +1,8 @@
-import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
-import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, merge, part, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
+import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
 import { fx } from './fxhub';
 import { Plant, emberGrove, hasGrove, orchard } from './groves';
 import { liveTree } from './treelife';
@@ -155,16 +155,6 @@ function upload(a: InstancedBufferAttribute, n: number): void {
   a.needsUpdate = true;
 }
 
-/** A spirit light past the detail range (meshes.ts lightGeometry, a few pixels across there): a drawn-out
- *  diamond of marigold with a pale core, and for a great light a wider one. */
-function farLightGeometry(great: boolean): BufferGeometry {
-  const s = great ? 2.5 : 1.7;
-  return merge([
-    part(new OctahedronGeometry(0.2 * s, 0), new Color('#FFC94A'), { scale: [1, 1.9, 1], pos: [0, 0.1 * s, 0] }),
-    part(new OctahedronGeometry(0.12 * s, 0), new Color('#FFF6D8').multiplyScalar(1.4), { scale: [1, 1.9, 1], pos: [0, 0.08 * s, 0.06 * s] }),
-  ]);
-}
-
 /** Whether a forest pick carries snow on its boughs to shake off (Props.treesNear). */
 function boughs(biome: string, set: 'a' | 'b', pick: number): boolean {
   if (biome === 'alpine') return !(set === 'b' && pick === 1);
@@ -191,10 +181,6 @@ export class Props {
   private glowMat: ShaderMaterial;
   /** The last light in the air pushed this update (the one a trail's motes run from). */
   private air = { on: false, x: 0, y: 0, z: 0 };
-  /** The far gifts' material (the gift's, drawing one of two variants: plain or golden). */
-  private giftFarMat: ShaderMaterial;
-  /** The far gifts' variant set, made once. */
-  private giftFarGeo: BufferGeometry | null = null;
   /** A chunk's forest batch key to its batch in the detail range and past it (build). */
   private route = new Map<string, [string, string]>();
   private range = { from: -1, to: -1 };
@@ -242,12 +228,10 @@ export class Props {
     private arches = false,
   ) {
     // Spirit lights are small flames of light with a glow round them, held small near the lens and gone right
-    // round the rider after a perfect landing (round 7, spiritlights.ts). Past the detail range a light is the
-    // old diamond, glowing in the toon material, with its glow.
-    const giftOpts = { bob: true, coolShade: 0.1, emissive: new Color('#FFD34D'), emissiveStrength: 0.62, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
+    // round the rider after a perfect landing (round 7, spiritlights.ts). Past the detail range a light is a small
+    // flame painted in its glow, a few pixels tall.
     this.giftMat = spiritFlameMaterial();
     this.glowMat = spiritGlowMaterial();
-    this.giftFarMat = variantMaterial(makeToonMaterial(giftOpts));
     // The trees a rider shakes as it passes are read from here (treelife.ts).
     fx.trees = this;
     this.build();
@@ -474,19 +458,12 @@ export class Props {
     }
     this.pump();
     // Sparks and great lights in one flame batch (a great light is pushed mirrored: spiritlights.ts), and every
-    // light's glow in one more, drawn after the world.
+    // light's glow in one more, drawn after the world; past the detail range a light is a small flame painted in
+    // its glow, a few pixels tall. Two draws for every light on the course (the near sparks, the near great
+    // lights and the far diamonds were three).
     add('gift', spiritFlameGeometry(), this.giftMat, 1100, false);
     add('glow', spiritGlowGeometry(), this.glowMat, 2400, false);
     this.batches.get('glow')!.mesh.renderOrder = 2;
-    // Past the detail range a light is a few pixels: a drawn-out diamond, sparks and great lights in one batch.
-    this.giftFarGeo ??= variantSet([farLightGeometry(false), farLightGeometry(true)]);
-    const gPick = new InstancedBufferAttribute(new Float32Array(900), 1);
-    const gView = variantView(this.giftFarGeo, gPick);
-    this.owned.push(gView);
-    add('giftL', gView, this.giftFarMat, 900, false);
-    const gb = this.batches.get('giftL')!;
-    gb.pick = gPick;
-    gb.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(900 * 3).fill(1), 3);
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p), plain, 60);
@@ -602,11 +579,8 @@ export class Props {
         const k = gs * (0.9 + 0.2 * hashf(g.id, 7, 4));
         const great = g.value > 1;
         const y = c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.18;
-        if (far) {
-          this.q.setFromAxisAngle(this.up, h1 * 6.28);
-          this.push('giftL', this.v.set(g.x, y, -g.z), this.q, this.s.setScalar(k), great ? 1 : 0);
-        } else this.pushM('gift', flameMatrix(this.m, g.x, y, -g.z, h1 * 6.28, k, great));
-        this.pushM('glow', glowMatrix(this.m, g.x, y, -g.z, k, great ? 'great' : 'spark'));
+        if (!far) this.pushM('gift', flameMatrix(this.m, g.x, y, -g.z, h1 * 6.28, k, great));
+        this.pushM('glow', glowMatrix(this.m, g.x, y, -g.z, k, great ? 'great' : 'spark', far));
         // A light in the air (a leap's flight, a kicker's high line) is threaded to the one before it on the
         // same arc by a few motes, so the line reads as a trail of light over the leap, not a drop in the sky.
         const air = this.air;
