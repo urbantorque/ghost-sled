@@ -251,3 +251,93 @@ rider's rim is faint; the valley from 2410 to 3706 is cobalt camouflage; the gor
 crystal "pines". It also saw a strong colour split on landing frames in motion, scan-line dither on near objects
 (the props' near fade), the finish flash bleaching the frame, and that the script's orchards (1100 to 2200) are
 spent on a street and the torii row: the course's sections, not the render's.
+
+### After pass 3 (999b138)
+
+- **The blossom never backlit (its first theme; z0150, z2100, z2210, z3150, z3300).** Each cloud of bloom is painted
+  a wine-rose underneath lifting to its crown, with a value step facet to facet (meshes.ts blossomGeometry,
+  flora.ts paleBlossomGeometry: vertex colour only, no new triangles), the canopy glow runs at 0.9 from the start
+  and 1.6 in the orchards (0.5 and 1.25), and the rim against the sun is stronger (0.6 to 0.85 of the leaf).
+- **Lilac everywhere, "none of the light's colour" (its second theme).** Pass 2's cooling of the lit snow (for
+  Low's sand) and the deeper cloud shadows overshot on High. The lit snow takes the peach light again
+  (`#FFF2EA`; late morning `#FFF7EE`), the cloud shadows come down to 0.22, 0.26 and 0.3, and a new palette
+  field, `posterSnow`, lets Low's poster keep only a third of the lit snow's colour (1 on every other mountain).
+- **Cobalt camouflage under the Leap (z2410 to z3706).** The sea of cloud fuller (0.62 to 0.8) and the far range
+  and its openings the air's blue instead of cobalt.
+- **Temple Town washed pale from the lip (z3926).** Townhouse roofs keep snow on the upper half of each slope only
+  (`gable`'s new `snowK`, 1 by default), so a street from above shows ink roofs.
+- **The pagoda tiny behind the banner (z4440, 6.5).** Grown 2.6 times up and 2.1 across about its foot.
+- **Low's torii walls blew out white (Low z1754, z1800).** The rock's ledges are snow in shade (`#C4BCD0`), not
+  white.
+- **Colour split on landing frames (motion).** A calm mountain keeps none of the boost and landing punch either.
+
+## Pass 4 (999b138; a new critic, Opus at extra effort)
+
+| Frame | High | Low | Phone | Weakest thing on High |
+| --- | --- | --- | --- | --- |
+| z0150 | 7 | 7 | 7 | Near snow a flat lavender wash; canopies opaque facets |
+| z0300 | 6.5 | 7 | 7 | A haloed fuel drop where the sun should be |
+| z0450 | 6.5 | 7 | 7 | Lift station a purple box; a clipped spruce and drop at the edge |
+| z0600 | 6.5 | 6.5 | 6.5 | Far valley one peach value |
+| z0750 | 7.5 | 7 | 7.5 | Terraces grey-blue tile grids |
+| z0820 | 6.5 | 6.5 | 7 | Rider tiny; terraces a grid; blank foreground |
+| z0900 | 7.5 | 7 | 7.5 | Near snow washed and smeared |
+| z0970 | 7 | 6.5 | 6.5 | A translucent ghost over the cone |
+| z1026 | 7.5 | 7 | 7 | A ghost at the vanishing point; smeared near snow |
+| z1200 | 6.5 | 7 | 7 | A street where the script's orchards should be; window cards |
+| z1301 | 6.5 | 7 | 7.5 | Near-lens blobs read as lens dirt |
+| z1350 | 6 | 6.5 | 7 | A pole across the lens; a clipped ghost |
+| z1500 | 7.5 | 7 | 6.5 | Bleached near snow with shapeless blue blots |
+| z1650 | 7 | 7 | 7.5 | Cliff columns untextured slabs |
+| z1754 | 7.5 | 6.5 | 7.5 | Box-step walls; the bars a haze, not bands on the snow |
+| z1800 | 7.5 | 6.5 | 7.5 | Box-step walls; the bars miss the rider |
+| z1971 | 8 | 7.5 | 7.5 | Deck and far slopes one lavender |
+| z2100 | 7.5 | 7 | 7 | Orchard pale pink lollipops on white |
+| z2210 | 7.5 | 7 | 7.5 | A big flat-pink canopy, not backlit |
+| z2410 | 6.5 | 6.5 | 6.5 | Leap valley empty; rider small |
+| z2580 | 6 | 7 | 6.5 | Rider tiny; cloud-shadow puddles; cyan stands loudest |
+| z2700 | 6 | 6 | 7 | Rider tiny; washed near white, no dark anchor |
+| z2850 | 6.5 | 7 | 7 | A grey grid slab (a kicker's face) on the track |
+| z3000 | 7.5 | 6.5 | 7 | A dark log box |
+| z3060 | 8 | 6.5 | 7 | Flat near snow; plain sky |
+| z3150 | 7.5 | 7 | 7 | A trench with no dressing |
+| z3300 | 7.5 | 7 | 7 | Opaque faceted canopies |
+| z3405 | 6.5 | 6 | 6 | An untextured plank (the kicker lip) across the foreground |
+| z3450 | 6.5 | 6.5 | 7 | A ghost over the hero |
+| z3600 | 7 | 5.5 | 7.5 | An oversized near spruce (Low: near-fade dither) |
+| z3706 | 7 | 6.5 | 6.5 | Far plane a white sheet with blue blots |
+| z3926 | 6.5 | 6.5 | 7 | Rider tiny; town white boxes |
+| z4076 | 7.5 | 7 | 7.5 | Boxes with window cards; a box stone lantern |
+| z4200 | 8 | 7 | 7.5 | Bleached near snow |
+| z4330 | 7.5 | 7 | 7 | Boxes with window cards; no pagoda |
+| z4440 | 7.5 | 7 | 7 | Pagoda behind the gate; a modern hotel block |
+| z4590 | n/a | n/a | n/a | Results card |
+| **Mean** | **7.04** | **6.75** | **7.04** | |
+| **Minimum** | **6** (z1350, z2580, z2700) | **5.5** (z3600) | **6** (z3405) | |
+
+Motion: z0260 7, z0880 7, z1020 7, z1780 8, z2440 7, z2500 7.5, z2560 6, z4420 7.5 (mean 7.1).
+
+| Vista | Score | A 9? |
+| --- | --- | --- |
+| The cone through the lifting mist | 7.5 | No |
+| The flooded terraces | 7 | No |
+| The Blossom Leap over the orchard rows | 6.5 | No |
+| The torii's bars of light | 8 | No (the closest) |
+| The pagoda over the square | 7.5 (pass 3: 6.5) | No |
+
+Its themes: canopies still read as opaque front-lit facets; the near snow's bottom 40% a lavender wash with radial
+streaks; even light away from the torii and the town; a faint rim on a rider often under 5% of the frame.
+
+### After pass 4 (the last fixes)
+
+- **Near snow smeared by radial streaks (z0900, z1026, z1500, z4200; motion z0880).** Sakura keeps 0.55 of the
+  speed streaks (world.ts), as its lens already keeps none of the fringe or punch: the calm mountain.
+- **The torii's bars a haze, not bands (z1754, z1800).** Bars on the snow half as hard again on Medium and High,
+  shafts in the air under half as strong, and the shade between them a deep plum-blue (the torii place's
+  `snowShade` `#5C56A8`), so each bar is a hard band on the snow.
+- **The mist an even haze over the cone (z0150, z0300).** The bands' edges sharper and the gaps between them
+  nearly clear (0.3 to 0.12), and the run-in's whole-panorama veil down from 0.16 to 0.05, so the cone stands
+  sunlit over its layers.
+- **The Leap's slopes one pale sheet with puddles of cloud shadow (z2580, z2700).** Its lit snow a warm cream
+  (`#FFF2E6`), its cloud shadows back to 0.22.
+- **Low's snow lost the grade.** `posterSnow` 0.3 to 0.5.

@@ -1057,7 +1057,7 @@ function round7(p: Palette, biome: BiomeId): void {
       // (The lit snow takes the peach light, so it is not one lilac with the shade; Low's poster keeps only a
       // third of that colour, where with no film to roll it off it read as sand.)
       p.snowLit = c('#FFF2EA');
-      p.posterSnow = 0.3;
+      p.posterSnow = 0.5;
       p.snowShade = c('#7E8CD6');
       p.snowDeep = c('#6452AC');
       p.fog = c('#F4DAD8');
@@ -1098,7 +1098,8 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.foot = 0.24;
       p.atmo.valleyColor = c('#FAD2C8');
       p.massif.heroAz = 17;
-      p.massif.veil = 0.16;
+      // (A thin veil only: the bands below carry the mist, and the cone stands sunlit over them.)
+      p.massif.veil = 0.05;
       // The mist lies on the cone's lower slopes in layers and its summit stands clear over them.
       p.massif.bands = 0.85;
       p.massif.glow = c('#FFBCA8');
@@ -1546,9 +1547,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // (The valley under the Leap opens: the sea of cloud thins so the far plane is flat blue openings
         // between white, not one white floor, and the cloud's shadows break the slopes either side.)
         p.massif.sea = 0.8;
-        p.clouds.shadow = 0.3;
-        // Late morning's light on the snow is white-gold.
-        p.snowLit = c('#FFF7EE');
+        p.clouds.shadow = 0.22;
+        // Late morning's light on the snow is a warm cream (white, the Leap's slopes were one pale sheet).
+        p.snowLit = c('#FFF2E6');
       },
     },
     {
@@ -1924,7 +1925,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.contrast = 1.18;
         p.grade.lo = c('#F0D6E0');
         p.grade.shafts = 1;
-        p.snowShade = c('#7078C8');
+        // (A deep plum-blue between the bars, so each bar of sun lands on the snow as a hard band.)
+        p.snowShade = c('#5C56A8');
         lamps(p, 0.7);
       },
     },

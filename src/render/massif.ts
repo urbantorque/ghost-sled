@@ -563,8 +563,8 @@ const FRAG = /* glsl */ `
       float hb = clamp((vPos.y - uSeaY) / (520.0 - uSeaY), 0.0, 1.0);
       float rag = snoise(vec2(atan(dir.x, -dir.z) * 16.0, hb * 4.0)) * 0.1;
       float q = fract(hb * 3.0 + rag);
-      float band = 1.0 - smoothstep(0.15, 0.85, q);
-      float mist = (0.3 + 0.7 * band) * (1.0 - smoothstep(0.7, 1.0, hb));
+      float band = 1.0 - smoothstep(0.2, 0.62, q);
+      float mist = (0.12 + 0.88 * band) * (1.0 - smoothstep(0.7, 1.0, hb));
       col = mix(col, mix(haze, uHazeSun, 0.55), clamp(mist * uBands, 0.0, 1.0));
     }
     // The crater glows (stronger at night).

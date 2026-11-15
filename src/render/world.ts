@@ -1103,7 +1103,10 @@ export class World {
     // A crash lets the speed go: the streaks die away on the scaled clock (the held frame keeps them a
     // moment, then they thin through the slow motion), so the pack shot after it is a still wreck.
     this.streakK += ((v.mode === 'run' && !this.rider.crashing && !s.crashed ? 1 : 0) - this.streakK) * Math.min(1, dt * 6);
-    pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK : 0;
+    // (Sakura, the calm mountain, keeps half the streaks: at full strength the bottom of its pale frames was
+    // a radial smear, and its ripples and shade lost their shape. ART.md 15: a lens that stays out of the way.)
+    const calm = this.course.biome === 'blossom' ? 0.55 : 1;
+    pp.speed = v.mode === 'run' ? streakK(s.speed) * (tall ? 0.6 : 1) * (feel.reduced ? 0.5 : 1) * this.streakK * calm : 0;
     pp.streakFoot = tall ? 0 : 0.12;
     pp.bloomScale = v.mode === 'results' ? 0.55 : tall ? 0.7 : 1;
     // The cool darkening at the foot of the frame holds the near snow's form there too (a bright,

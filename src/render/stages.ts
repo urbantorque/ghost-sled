@@ -846,8 +846,9 @@ export class Stages {
       // A gap between two gates: the bar lies across the snow under it, a touch down-sun of the gap.
       const z = a + i * step;
       const hw = c.halfWidth(z) + Math.min(3, c.edgeLimit(z));
-      // (Low has no film curve over the frame: at full strength its bars added up to paper white.)
-      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.3 : 1);
+      // (Low has no film curve over the frame: at full strength its bars added up to paper white. Medium and
+      // High lay them half as hard again, so a bar of sun is a band on the snow and not a haze over it.)
+      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.3 : 1.45);
       const W = step * 0.3;
       const M = low ? 3 : 6;
       for (let j = 0; j < M; j++) {
@@ -864,7 +865,7 @@ export class Stages {
       if (!low && (this.tier === 'high' || i % 2 === 0)) {
         const top = Math.min(13, Math.max(9, s.clear - 1));
         // (Thin enough that the bars on the snow are what reads, not a veil across the frame.)
-        const ks = k * 0.42;
+        const ks = k * 0.2;
         const x0 = sun * (hw + 1.2);
         const x1 = -sun * hw * 0.82;
         b.quad(at(z - W * 0.8, x0, top), at(z + W * 0.8, x0, top), at(z + W * 1.2, x1, 0.2), at(z - W * 1.2, x1, 0.2), warm, ks, ks, ks * 0.25, ks * 0.25);
