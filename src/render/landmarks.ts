@@ -11,7 +11,7 @@ import { pushLocalLight } from './lights';
 import { makeToonMaterial, shared } from './materials';
 import { OverlookPlan } from './overlook';
 import { journeyDusk, type Palette } from './palette';
-import { PADDY_FROM, Stages, calderaLedge, paddySpans } from './stages';
+import { CALDERA_RUNOUT, PADDY_FROM, Stages, calderaLedge, paddySpans } from './stages';
 
 // Places: a run is a sequence of places down the fall line instead of one corridor. The course says where
 // (SitePlan): a `street` section is a town you ride through, a `tunnel` an enclosed run, a `bridge` a
@@ -724,7 +724,7 @@ export class SitePlan {
     this.lay();
     // The Caldera Leap's banks hold lava (stages.ts): no forest and no dressing stands in it.
     const cal = calderaLedge(this.course);
-    if (cal && cal.land1 + 12 > z0 && cal.z + 14 < z1) for (const side of [-1, 1]) out.push({ side, e: 33, z0: cal.z + 14, z1: cal.land1 + 12, w: 23 });
+    if (cal && cal.land1 + CALDERA_RUNOUT + 6 > z0 && cal.z + 14 < z1) for (const side of [-1, 1]) out.push({ side, e: 33, z0: cal.z + 14, z1: cal.land1 + CALDERA_RUNOUT + 6, w: 23 });
     // Petal Steps' banks hold paddies (stages.ts): the orchards and the dressing keep off them.
     for (const [a, b] of paddySpans(this.course)) {
       if (b > z0 && a < z1) for (const side of [-1, 1]) out.push({ side, e: 10 + PADDY_FROM + 22, z0: a - 4, z1: b + 4, w: 24 });
@@ -1366,7 +1366,9 @@ export class SetPieces {
     else if (this.inside) {
       // Out the far end (not a crash and a new run): the burst of daylight.
       const end = this.inside.z + this.inside.len;
-      if (z > end - 12 && z < end + 15) this.exitFlash = this.night ? 0.25 : 0.6;
+      // (Ember's halls open under a smoke deck, not into daylight: a full flash lay over the dusk past
+      // the mouth as a grey veil, the review's "grey fog with nothing in it".)
+      if (z > end - 12 && z < end + 15) this.exitFlash = this.night ? 0.25 : this.course.biome === 'volcanic' ? 0.12 : 0.6;
       this.inside = null;
     }
     this.exitFlash = Math.max(0, this.exitFlash - dt * 1.3);

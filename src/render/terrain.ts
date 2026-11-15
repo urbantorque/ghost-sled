@@ -402,7 +402,10 @@ export class Terrain {
           if (biome === 'volcanic') {
             // Lava in the joints: it breathes, each run of it on its own phase.
             const br = 0.8 + 0.2 * Math.sin(t * 1.1 + k * 2.3);
-            pushLocalLight(x, y + 1.3, -lz, 1, 0.3, 0.07, 12, 1.0 * br);
+            // (Low paints it as a pool: a deeper red and nearer the wall, or its two flat values clipped to
+            // mustard across the whole floor.)
+            const low = this.detail.reach <= 60;
+            pushLocalLight(x, y + 1.3, -lz, 1, low ? 0.2 : 0.3, low ? 0.04 : 0.07, low ? 10 : 15, (low ? 0.85 : 1.35) * br);
           } else if (biome === 'glacier') {
             // The ice glows from inside: a cyan heart low in the wall (brighter under the cavern's roof).
             pushLocalLight(x, y + 1.6, -lz, 0.16, 0.7, 1, 11, sec.kind === 'tunnel' ? 0.7 : 0.5);
