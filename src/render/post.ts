@@ -57,6 +57,12 @@ export interface GradeParams {
   film?: number;
   /** How far the bloom leans to the light's own colour (0..1, default 0.4). */
   bloomWarm?: number;
+  /** How much of the glass shows at speed (default 1): scales the corner fringe, the punch's colour split and
+   *  half of the speed streaks. A night of small point lights wants little: each light splits into three. */
+  glass?: number;
+  /** How much of a beat's white flash (a perfect landing, a stomp) shows (default 1). In a night frame a
+   *  white lift over everything bleaches the rider it celebrates. */
+  flash?: number;
   /** Lens character round a low sun in view (an anamorphic streak and a few soft ghosts), 0 for none. */
   lens?: number;
   /** The mood's final light pass: the frame lifts and warms round its key light and settles away
@@ -105,6 +111,8 @@ export class PostFX {
   /** How much of the lens's colour fringe at speed a mountain keeps (1: all of it; a calm mountain less).
    *  The chromatic punch on a boost or a landing goes with it. */
   fringeK = 1;
+  private moodGlass = 1;
+  private moodFlash = 1;
   private moodFocal = 0;
   private focalDir: Vector3 | null = null;
   /** Taps per pixel for the light shafts: 14 on High, 8 on Medium (Low has no post pass at all). */
@@ -525,6 +533,7 @@ export class PostFX {
               col.b = mix(col.b, texture2D(tScene, uv - split).b, splitK);
             }
           }
+          col = max(col, 0.0);
           // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
           col = pipeAO(col, uv);
           // The light's own hue, at full value: what the bloom and the lit snow lean toward.
@@ -963,6 +972,8 @@ export class PostFX {
     this.moodFoot = g.foot ?? 0;
     this.moodShafts = g.shafts ?? 0;
     this.moodLens = g.lens ?? 0;
+    this.moodGlass = g.glass ?? 1;
+    this.moodFlash = g.flash ?? 1;
     this.moodFocal = g.focal ?? 0;
     this.focalDir = g.focalDir ?? null;
     u.uGust.value = g.gust ?? 0;
@@ -1067,12 +1078,12 @@ export class PostFX {
     u.uUseBloom.value = this.bloomEnabled ? 1 : 0;
     u.uBloom.value = this.moodBloom * this.params.bloomScale;
     u.uFoot.value = this.moodFoot * this.params.footScale;
-    u.uSpeed.value = this.params.speed;
+    u.uSpeed.value = this.params.speed * (0.5 + 0.5 * this.moodGlass);
     // (A calm mountain's lens keeps none of the punch's split either: a slingshot fires one every few
     // seconds in a pack, and the frame's edges were split red and blue more often than not.)
-    u.uPunch.value = this.params.punch * this.fringeK;
-    u.uFringe.value = pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe * this.fringeK : 0;
-    u.uFlash.value = this.params.flash;
+    u.uPunch.value = this.params.punch * this.fringeK * this.moodGlass;
+    u.uFringe.value = (pipe.switches.lens && !this.params.reduced ? pipe.passes.fringe * this.fringeK : 0) * this.moodGlass;
+    u.uFlash.value = this.params.flash * this.moodFlash;
     u.uVignette.value = this.params.vignette;
     u.uGrain.value = this.params.grain * this.moodGrain;
     u.uTime.value = this.params.time;

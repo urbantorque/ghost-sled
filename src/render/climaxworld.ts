@@ -108,6 +108,9 @@ export class ClimaxWorld {
     // The wave of light runs ahead of the sled and is at the line while the sled is still coming.
     const front = done ? 1e9 : s.z + 50 + 260 * u;
     const per = ctx.low ? 3 : 5;
+    // (Lanternfall's snow is pale and its night is lit already: the climax's lights at full washed the whole
+    // finish to cream. There they lay a third of their light, and the great lantern is the light at the line.)
+    const lay = c.biome === 'lantern' ? 0.35 : 1;
     for (let i = 0; i < this.strings.length; i++) {
       const z = this.strings[i];
       if (z < s.z - 40 || z > s.z + 340) continue;
@@ -122,7 +125,7 @@ export class ClimaxWorld {
         const k = 1.9 + 0.6 * Math.sin(Math.PI * v);
         this.lanterns.put(c.centerX(z) + (v * 2 - 1) * hw, y - 0.7 - 1.1 * Math.sin(Math.PI * v), z, null, k, k, k, lit ? WHITE_GOLD : LIGHT, lum * 1.8);
       }
-      if (lit && Math.abs(z - s.z) < 80) pushLocalLight(c.centerX(z), y - 3, -z, 1, 0.85, 0.55, 15, Math.min(1.5, lum * 0.6));
+      if (lit && Math.abs(z - s.z) < 80) pushLocalLight(c.centerX(z), y - 3, -z, 1, 0.85, 0.55, 15, Math.min(1.5, lum * 0.6) * lay);
     }
     // The line itself: two beams that stand taller as the sled comes, and a bar of light across the snow.
     const rise = u * u;
@@ -133,14 +136,17 @@ export class ClimaxWorld {
     if (s.z > cx.lineZ - 420 && s.z < cx.lineZ + 60) {
       const h = 18 + 46 * rise;
       for (const side of [-1, 1]) {
-        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, 0.5 + 1.1 * rise + flare, GLOW_SOFT, 0.1);
-        kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, 0.8 + rise + 1.5 * flare, GLOW_STAR);
+        // (On Lanternfall the beams are a fifth: at the line the lens stands between them, and two columns of
+        // white-gold sixty metres tall were a veil over the whole frame.)
+        kit.glow(lx + side * (lhw + 2.5), ly + h / 2, cx.lineZ + 2, h, WHITE_GOLD, (0.5 + 1.1 * rise + flare) * (lay < 1 ? 0.2 : 1), GLOW_SOFT, 0.1);
+        kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, (0.8 + rise + 1.5 * flare) * (0.5 + 0.5 * lay), GLOW_STAR);
       }
-      kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, 0.5 + 0.9 * rise + 1.5 * flare, DECAL_LINE, Math.PI / 2);
+      kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, (0.5 + 0.9 * rise + 1.5 * flare) * (0.4 + 0.6 * lay), DECAL_LINE, Math.PI / 2);
       // (The review loop, three passes running: at up to 3.1 over 34 m the line's light flooded the snow
       // and the square orange as the sled crossed and bleached the rider to a peach ghost. It peaks at
-      // 1.6: the beams, the bar and the shells carry the moment.)
-      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, 0.35 + 0.75 * rise + 0.5 * flare);
+      // 1.6: the beams, the bar and the shells carry the moment. On Lanternfall it is a sliver of the stock
+      // one: at the flare it lit the square cream, and the great lantern is the light at the line there.)
+      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, lay < 1 ? (0.4 + 1.2 * rise + 1.5 * flare) * 0.12 : 0.35 + 0.75 * rise + 0.5 * flare);
     }
     if (ctx.mode !== 'run') return;
     // Shells, each volley once a run: as the sled lands the leap, as it comes into the town, and timed from

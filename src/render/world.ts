@@ -408,6 +408,8 @@ export class World {
     // (As setCourse: a run on the mountain the world was built for never passes through it.)
     this.post.fringeK = this.course.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
     this.resize();
@@ -590,6 +592,8 @@ export class World {
     // others' still split the blossom's trunks green and the crowd to noise at the frame's edge).
     this.post.fringeK = c.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
@@ -612,6 +616,8 @@ export class World {
     this.life.setPalette(this.palette, mood);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
+    this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.lakeMirror.invalidate();
     this.applyWeather();
     this.lastChunkRange = '';
@@ -634,6 +640,9 @@ export class World {
     this.sky.setPalette(p);
     this.ghosts.setGlow(p.ghostGlow);
     this.post.setGrade({ ...p.grade, bloom: p.bloom });
+    this.spirit.fireworks.lightK = p.grade.flash ?? 1;
+    this.spirit.fireworks.noRed = this.course.biome === 'lantern';
+    this.spirit.lightK = Math.max(0.5, p.grade.flash ?? 1);
     // The falling weather thickens in coarse steps (configuring it is not free).
     const fall = Math.round((p.embers + p.petals + p.snowfall) * 20);
     if (fall !== this.journeyFall) {

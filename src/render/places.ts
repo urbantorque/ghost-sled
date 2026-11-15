@@ -304,6 +304,7 @@ const LINE_CHECK = 3;
 export const LINE_DEPTH = 4.5;
 const LINE_CELLS = 3;
 export const LINE_LIFT = 0.14;
+const LINE_LILAC = new Color('#9C90D0');
 
 /** A hot-air balloon tethered over the town, visible from the last leap: where the run is going. */
 function balloon(x: number, y: number, z: number, g: number, cols: Color[]): BufferGeometry[] {
@@ -439,14 +440,14 @@ function finishArch(ctx: SiteCtx, rail: Rail, F: number): BufferGeometry[] {
  *  snow to read and stays a checker from the lens at speed: three rows a metre deep were a broken dashed
  *  line from 30 m. Each check is a few cells, so it lies on the ground up the banks, a hand over the
  *  snow, where no tier's coarser terrain comes up through it. */
-function finishLine(f: Sub, hw: number): BufferGeometry[] {
+function finishLine(f: Sub, hw: number, light: Color = CREAM): BufferGeometry[] {
   const n = Math.round((2 * hw) / LINE_CHECK);
   const w = (2 * hw) / n;
   const y = (u: number, v: number) => f.gy(u, v) + LINE_LIFT;
   const line: BufferGeometry[] = [];
   for (let r = 0; r < LINE_ROWS; r++) {
     for (let i = 0; i < n; i++) {
-      const col = (i + r) & 1 ? CREAM : INK;
+      const col = (i + r) & 1 ? light : INK;
       for (let a = 0; a < LINE_CELLS; a++) {
         const u0 = -hw + (i + a / LINE_CELLS) * w;
         const u1 = -hw + (i + (a + 1) / LINE_CELLS) * w;
@@ -580,7 +581,9 @@ export function finishPiece(ctx: SiteCtx): Piece {
     const parts = finishArch(ctx, rail, F);
     const c = rail.at(F, 0, 0);
     const f = new Sub(ctx, c.x, c.z, c.yaw);
-    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F)))];
+    // (Lanternfall's line is painted in a lilac a value under its snow: in the great lantern's light a cream
+    // check was the brightest thing at the finish, and its bloom washed the frame.)
+    return [...parts, ...f.out(finishLine(f, c.hw + rail.limit(F), ctx.biome === 'lantern' ? LINE_LILAC : CREAM))];
   });
   // The square's great buildings, on the crests behind the stands.
   for (const s of [-1, 1]) {
@@ -652,8 +655,9 @@ export function finishPiece(ctx: SiteCtx): Piece {
     }
     return parts;
   });
-  // Two balloons tethered over the town.
-  if (!low) {
+  // Two balloons tethered over the town. (Not over Firstlight: its sky is the lanterns', and a balloon there
+  // read as one more modern thing in the lamplighters' town.)
+  if (!low && biome !== 'lantern') {
     steps.push(() => {
       seed(ctx.seed + 751);
       const parts: BufferGeometry[] = [];
@@ -1011,15 +1015,19 @@ export function liftPiece(ctx: SiteCtx): Piece {
   const { p, biome, night } = ctx;
   const s = ctx.side;
   const { C: H, nodes } = liftLayout(ctx.post, ctx.clear, s, ctx.gy);
-  const steel = biome === 'volcanic' ? C('#3E3440') : C('#6A7088');
-  const steelD = biome === 'volcanic' ? C('#2E2830') : C('#4A5068');
   // (Sakura's station is the town's warm plaster with paper windows: cream walls and dark glass read as a
   // grey box on the bank.)
-  const wall = biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : biome === 'blossom' ? C('#C4B09C') : C('#EDE4D8');
-  const upper = biome === 'alpine' ? TIMBER : biome === 'glacier' ? C('#D8E2EE') : biome === 'volcanic' ? shade(p.low, 0.8) : C('#93405A');
+  // (Lanternfall's station is the lamplighters' own: plum timber on stone, its windows lit paper, timber
+  // towers for the line, a lantern storey on the roof. In white plaster with a grid of glass and steel
+  // towers it read as a block of flats on the Crown.)
+  const lf = biome === 'lantern';
+  const steel = lf ? C('#2A2140') : biome === 'volcanic' ? C('#3E3440') : C('#6A7088');
+  const steelD = lf ? C('#1C1630') : biome === 'volcanic' ? C('#2E2830') : C('#4A5068');
+  const wall = lf ? stone(p, 0.8) : biome === 'alpine' ? C('#E4DACA') : biome === 'glacier' ? C('#B5523E') : biome === 'volcanic' ? shade(p.low, 0.6) : biome === 'blossom' ? C('#C4B09C') : C('#EDE4D8');
+  const upper = lf ? C('#2A2140') : biome === 'alpine' ? TIMBER : biome === 'glacier' ? C('#D8E2EE') : biome === 'volcanic' ? shade(p.low, 0.8) : C('#93405A');
   const roof = biome === 'blossom' ? C('#2E2A3E') : C('#3A3448');
   const trim = biome === 'blossom' ? C('#2E2230') : TIMBER_DARK;
-  const glass = biome === 'blossom' && !night ? C('#F4CA92').multiplyScalar(1.1) : windowColor(night);
+  const glass = lf ? paper(0.85) : biome === 'blossom' && !night ? C('#F4CA92').multiplyScalar(1.1) : windowColor(night);
   const cols = banners(p);
   const steps: Array<() => BufferGeometry[]> = [];
   const spots: Spot[] = [];
@@ -1045,7 +1053,9 @@ export function liftPiece(ctx: SiteCtx): Piece {
     parts.push(grade(box(W + 1, g1 + 0.6 - y0, D + 1, stone(p, 0.8), [hx, (g1 + 0.6 + y0) / 2, 0]), y0, g1 + 0.6, 0.68, 0.95));
     parts.push(grade(box(W, hall - g1, D, wall, [hx, (hall + g1) / 2, 0]), g1, hall, 0.84, 1.02));
     // Rows of windows up the base, toward the run and up the slope.
-    for (let y = g1 + 2.6; y < hall - 1.6; y += 3.3) {
+    // (Lanternfall's is a stone stem with its lit hall only at the top: four rows of windows up a tower read
+    // as flats.)
+    for (let y = lf ? Math.max(g1 + 2.6, hall - 5.0) : g1 + 2.6; y < hall - 1.6; y += 3.3) {
       for (let i = 0; i < 4; i++) {
         parts.push(box(1.5, 1.5, 0.14, glass, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.04]));
         parts.push(box(0.14, 1.5, 1.5, glass, [hx - (s * W) / 2 - s * 0.04, y, -D / 2 + (i + 0.5) * (D / 4)]));
@@ -1062,6 +1072,7 @@ export function liftPiece(ctx: SiteCtx): Piece {
           parts.push(box(2.5, 0.16, 0.34, SNOW, [wx, y - 0.86, D / 2 + 0.16]));
           parts.push(box(0.34, 0.16, 2.5, SNOW, [fx - s * 0.1, y - 0.86, wz]));
         }
+        if (lf) parts.push(box(0.1, 1.5, 0.18, trim, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.06]), box(1.5, 0.1, 0.18, trim, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.06]));
       }
       // (A timber band under each row, so the wall is storeys and not one slab.)
       if (biome === 'alpine') parts.push(box(W + 0.24, 0.26, D + 0.24, TIMBER, [hx, y - 1.5, 0]));
@@ -1078,8 +1089,11 @@ export function liftPiece(ctx: SiteCtx): Piece {
     const R = hall + 6.8;
     parts.push(box(W + 7, 0.6, D + 5, roof, [hx - s * 1.5, R, 0]));
     parts.push(part(new CylinderGeometry(1, 1, 1, 4), SNOW, { pos: [hx - s * 1.5, R + 0.6, 0], rot: [0, Math.PI / 4, 0], scale: [(W + 7) * 0.72, 0.9, (D + 5) * 0.72], jitter: 0.1 }));
-    parts.push(seg([hx, R, -3], [hx, R + 8, -3], 0.09, INK, 4));
-    parts.push(pennant([hx, R + 7.4, -3], s, cols[0], 4));
+    if (lf) parts.push(...lanternCrown(hx - s * 1.5, R + 0.4, false));
+    else {
+      parts.push(seg([hx, R, -3], [hx, R + 8, -3], 0.09, INK, 4));
+      parts.push(pennant([hx, R + 7.4, -3], s, cols[0], 4));
+    }
     // The name board and a banner down its face.
     parts.push(box(W * 0.8, 1.8, 0.2, CREAM, [hx, hall + 1.6, D / 2 + 1.1]));
     parts.push(box(W * 0.8, 0.34, 0.24, cols[0], [hx, hall + 2.3, D / 2 + 1.12]));
@@ -1092,7 +1106,7 @@ export function liftPiece(ctx: SiteCtx): Piece {
     const parts: BufferGeometry[] = [];
     for (let i = 1; i < nodes.length; i++) {
       const [x, y] = nodes[i];
-      parts.push(...latticeTower(ctx, x, 0, 3.4, y - 0.6, biome === 'alpine' ? TIMBER : steel, biome === 'alpine' ? TIMBER_DARK : steelD));
+      parts.push(...latticeTower(ctx, x, 0, 3.4, y - 0.6, biome === 'alpine' ? TIMBER : steel, biome === 'alpine' || lf ? TIMBER_DARK : steelD));
       parts.push(box(2.2, 0.5, 2 * LINE_Z + 1.6, steelD, [x, y - 0.6, 0]));
       for (const v of [-LINE_Z, LINE_Z]) parts.push(part(new CylinderGeometry(0.42, 0.42, 0.3, 8), steelD, { pos: [x, y - 0.14, v], rot: [0, 0, Math.PI / 2] }));
     }

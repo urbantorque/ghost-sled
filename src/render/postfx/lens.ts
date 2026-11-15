@@ -36,11 +36,14 @@ const GATHER_FRAG = /* glsl */ `
     float c0 = abs(coc(raw >= 1.0 ? 1e5 : linDepth(raw)));
     vec3 acc = min(texture2D(tScene, vUv).rgb, vec3(6.0));
     float wsum = 1.0;
-    // A golden-angle spiral over the widest circle.
+    // A golden-angle spiral over the widest circle, turned a different way at each pixel: with one spiral
+    // for the whole frame a small bright light behind the focus was printed as the spiral's own eight dots,
+    // a frost of little stars (a night of lanterns was covered in them). Turned, the dots fill a soft disc.
+    float turn = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
     for (int i = 0; i < TAPS; i++) {
       float fi = float(i) + 0.5;
       float r = sqrt(fi / float(TAPS));
-      float a = fi * 2.39996323;
+      float a = fi * 2.39996323 + turn;
       vec2 off = vec2(cos(a), sin(a)) * r * uDof.y;
       vec2 uv = vUv + off * vec2(1.0 / uDof.z, 1.0);
       float rs = texture2D(tDepth, uv).r;

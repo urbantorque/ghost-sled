@@ -1,4 +1,4 @@
-import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, OctahedronGeometry, PlaneGeometry, Quaternion, ShaderMaterial, Vector2, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
@@ -317,7 +317,10 @@ export class Props {
     const farFoliage = liveTree(makeToonMaterial({ sway: 0.12, coolShade: 0.38, nearFade: near, coverageFade: cf, hazard: true, aerial: true }), false);
     const farToon = makeToonMaterial({ sway: 0, coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, aerial: true });
     const farIce = makeToonMaterial({ coolShade: 0.5, nearFade: near, coverageFade: cf, hazard: true, ice: true, aerial: true });
-    this.materials.push(toon, foliage, plain, glow, hazGlow, ice, farFoliage, farToon, farIce);
+    // Lanternfall's standing stones, marker stones, stone lamps and rows: ink with the moon's silver on their
+    // edges (at the stock rim a stone was one flat value from foot to head, and read as a slab).
+    const moonStone = makeToonMaterial({ sway: 0, coolShade: 0.4, rim: 0.7, nearFade: near, coverageFade: cf, hazard: true });
+    this.materials.push(toon, foliage, plain, glow, hazGlow, ice, farFoliage, farToon, farIce, moonStone);
     const add = (key: string, geo: BufferGeometry, mat: ShaderMaterial, cap: number, cast = true) => {
       const mesh = new InstancedMesh(geo, mat, cap);
       mesh.count = 0;
@@ -330,9 +333,12 @@ export class Props {
     for (const k of KINDS) {
       // (Lanternfall's spires and blocks are standing stones, not ice, and its stone lamps carry no window of
       // their own: all three are plain dark hazards. lanternkit.ts, lanternworld.ts.)
-      const stoneWorld = biome === 'lantern' && (k === 'spire' || k === 'serac' || k === 'iceblock' || k === 'lantern');
-      const mat = stoneWorld ? toon : k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
-      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300);
+      const stoneWorld = biome === 'lantern' && (k === 'spire' || k === 'serac' || k === 'iceblock' || k === 'lantern' || k === 'basalt');
+      const mat = stoneWorld ? moonStone :k === 'pine' || k === 'blossom' || k === 'charpine' ? foliage : k === 'lantern' || k === 'lavarock' ? hazGlow : k === 'spire' || k === 'serac' || k === 'iceblock' ? ice : toon;
+      // (Lanternfall's night casts the moon's shadow from its tall stones and trees only: a marker stone's or a
+      // stone lamp's was a few pixels of shade for a draw of its own in the shadow pass.)
+      const cast = biome !== 'lantern' || k === 'spire' || k === 'basalt' || k === 'pine';
+      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300, cast);
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
@@ -470,8 +476,18 @@ export class Props {
       sets.delete(k);
     }
     this.pump();
-    add('gift', lightGeometry(false), this.giftMat, 900, false);
-    add('gift5', lightGeometry(true), this.giftMat, 200, false);
+    // (On Lanternfall's Low, with no tone curve to roll it to marigold, the lights' gold read as lemon against
+    // the lilac snow: there their glow leans amber.)
+    const warm = biome === 'lantern' && !this.arches;
+    for (const m of [this.giftMat, this.giftFarMat]) {
+      (m.uniforms.uEmissive.value as Color).set(warm ? '#FFA838' : '#FFD34D');
+      // (On Lanternfall a light passing the lens, at night the brightest thing in the frame, filled a corner
+      // as a flat slab of yellow: there it shrinks away from further out.)
+      if (biome === 'lantern') (m.uniforms.uNearFade.value as Vector2).set(5.5, 9.0);
+      else (m.uniforms.uNearFade.value as Vector2).set(3.0, 5.2);
+    }
+    add('gift', lightGeometry(false, warm), this.giftMat, 900, false);
+    add('gift5', lightGeometry(true, warm), this.giftMat, 200, false);
     // Past the detail range a light is a few pixels: a drawn-out diamond, sparks and great lights in one batch.
     this.giftFarGeo ??= variantSet([farLightGeometry(false), farLightGeometry(true)]);
     const gPick = new InstancedBufferAttribute(new Float32Array(900), 1);
@@ -483,7 +499,7 @@ export class Props {
     gb.mesh.instanceColor = new InstancedBufferAttribute(new Float32Array(900 * 3).fill(1), 3);
     add('lip', kickerLipGeometry(p), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
-    add('beam', gateBeamGeometry(p), plain, 60);
+    add('beam', gateBeamGeometry(p, biome === 'lantern'), plain, 60);
     if (this.arches) {
       // Kilometre arches: one batch of at most two, in the plain toon material (no new shader), casting
       // no shadow. It is culled by its own bounds (update), so it costs a draw only while one is in view;
@@ -495,7 +511,7 @@ export class Props {
       // Not a prop the results lens must keep clear of: its instance sits on the corridor's middle.
       arch.userData.noBlock = true;
       const span = archSpan(this.course, 1);
-      this.queue('arch:' + span, () => kmArchGeometry(span));
+      this.queue(this.archKey(span), () => kmArchGeometry(span, this.course.biome === 'lantern'));
       // Graveyard cairns: the same rules (one batch, at most four, plain material, no shadow, culled by
       // its bounds, so a draw only while one is in view).
       add('cairn', NO_GEOMETRY, plain, CAIRN_CAP, false);
@@ -539,16 +555,16 @@ export class Props {
       // arch is queued again in case a long run evicted it.
       if (from <= 0) {
         const s1 = archSpan(c, 1);
-        this.queue('arch:' + s1, () => kmArchGeometry(s1));
+        this.queue(this.archKey(s1), () => kmArchGeometry(s1, c.biome === 'lantern'));
       }
       for (let i = Math.max(-2, from); i <= to; i++) {
         const km = kmInChunk(i);
         if (!km) continue;
         const span = archSpan(c, km);
-        archGeo = this.landmark('arch:' + span, () => kmArchGeometry(span), i - nearChunk <= LANDMARK_NOW);
+        archGeo = this.landmark(this.archKey(span), () => kmArchGeometry(span, c.biome === 'lantern'), i - nearChunk <= LANDMARK_NOW);
         if (archGeo) {
           const next = archSpan(c, km + 1);
-          this.queue('arch:' + next, () => kmArchGeometry(next));
+          this.queue(this.archKey(next), () => kmArchGeometry(next, c.biome === 'lantern'));
           this.batches.get('arch')!.mesh.geometry = archGeo;
         }
         break;
@@ -647,6 +663,11 @@ export class Props {
   }
 
   /** A landmark's mesh: built already, else made now (`now`) or queued for idle time (null till then). */
+  /** A km arch's cache key: its span, and Lanternfall's own build apart from the others'. */
+  private archKey(span: number): string {
+    return 'arch:' + (this.course.biome === 'lantern' ? 'lf:' : '') + span;
+  }
+
   private landmark(key: string, make: () => BufferGeometry, now: boolean): BufferGeometry | null {
     const have = this.landmarks.get(key);
     if (have) {

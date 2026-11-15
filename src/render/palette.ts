@@ -163,6 +163,10 @@ export interface Grade {
   gust: number;
   glitter: number;
   focalDir?: Vector3;
+  /** How much of the glass shows at speed (post.ts GradeParams.glass; 1 when left out). */
+  glass?: number;
+  /** How much of a beat's white flash shows (post.ts GradeParams.flash; 1 when left out). */
+  flash?: number;
   tone?: number;
   exposure?: number;
   hi?: Color;
@@ -719,6 +723,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
   // Round 7's grade fields, wherever a mood's own grade leaves them out (so every palette blends).
   p.grade.tone ??= 1;
+  p.grade.glass ??= 1;
+  p.grade.flash ??= 1;
   p.grade.exposure ??= 1;
   p.grade.hi ??= new Color(1, 1, 1);
   p.grade.lo ??= new Color(1, 1, 1);
@@ -834,7 +840,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // (Round 7's review: the disc sits low over the band, a blue hour's sun and not a day's. The run-in
       // read as a bright noon: the snow is now two blues, a pale steel lit side and a cobalt shade, with
       // the lemon only on its rim and in the band; the sky is a step deeper and the low sun throws no
-      // starburst, so the Fang and the far ranges stand dark against the band.)
+      // starburst, so the Fang and the far ranges stand dark against the band. At the merge its horizon went
+      // a step paler and its lit snow a step bluer, so its start stays its own beside Lanternfall's darker
+      // night.)
       setSun(p, -35, 3.9, 19, 9);
       p.sunColor = c('#FFE9AE');
       p.sunCore = new Color(2.5, 2.3, 1.3);
@@ -843,12 +851,12 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.sunGlow = 0.45;
       p.skyZenith = c('#0A2266');
       p.skyMid = c('#2856A8');
-      p.skyHorizon = c('#96B8E6');
+      p.skyHorizon = c('#A2C4EC');
       p.skyBand = { color: c('#FFE98C'), fade: 30, k: 0.95 };
       p.skyBelow = c('#5E80C0');
       p.skySpread = 0.62;
       p.skyCurve = 0.44;
-      p.snowLit = c('#C0D2F2');
+      p.snowLit = c('#B2CAF0');
       p.snowShade = c('#4268B8');
       p.snowDeep = c('#183584');
       p.rim = c('#FFEB9E');
@@ -991,7 +999,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // The Crown, at the end of night above a sea of cloud (ART.md 15): an indigo zenith full of stars, a
       // great pale moon off to the right, silver on the snow's lit side and lilac in its shade, ink for
       // everything that stands. The cloud below is lit warm in patches by what is under it.
-      setSun(p, 19, 15, 42, 12);
+      // (The moon at 9.5 degrees, right of the run: at 15 it stood at the frame's top edge or under the
+      // HUD in every frame down the Crown.)
+      setSun(p, 17, 9.5, 42, 12);
       p.moon = true;
       // (The run's gates and marks are bronze here: the rider's vermillion is the one red on this mountain.)
       p.accentProp = c('#B88A4A');
@@ -1008,8 +1018,10 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.skyBelow = c('#2E2674');
       p.skySpread = 0.6;
       p.skyCurve = 0.5;
-      p.snowLit = c('#E8EAFC');
-      p.snowShade = c('#685CC0');
+      // (A value under white: at #E8EAFC the snow was the brightest thing in a night frame, brighter than the
+      // lamps, and the moon's silver rim could not be read on it.)
+      p.snowLit = c('#D4D6F4');
+      p.snowShade = c('#5E52B8');
       p.snowDeep = c('#261C6C');
       p.rim = c('#EEF0FF');
       p.fog = c('#3A3096');
@@ -1028,17 +1040,28 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.sea = 1;
       p.massif.seaWarm = 0.75;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
-      p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.35, focal: 0.9, gust: 0, glitter: 0.5 };
+      p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
       p.grade.saturation = 1.02;
       p.grade.contrast = 1.12;
-      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#9088D4'), shade: c('#352C84'), rim: c('#DCD6FF'), shadow: 0 };
-      p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
+      // (A night of point lights: at speed each lantern split into a red, a green and a blue one, and the
+      // streaks drew every one as a dashed line. The glass stays out of this mountain's frames.)
+      p.grade.glass = 0.15;
+      // (A perfect landing's white flash, over a night frame, bleached the rider to cream.)
+      p.grade.flash = 0.3;
+      // (The sea's shade is a mid violet, not navy: at #352C84 its hollows were dark blots and the sea read as
+      // a frozen lake under the moon.)
+      p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#A49CE0'), shade: c('#544A9E'), rim: c('#DCD6FF'), shadow: 0 };
+      // (No 22 degree halo: with the moon in the frame it drew a ring across the whole sky.)
+      p.atmo = { rays: 0, halo: 0, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
       p.bloom = 0.62;
-      p.sparkle = 1.15;
+      // (The moon's glints on the near snow: at 1.15 the near plane read as a featureless lilac wash.)
+      p.sparkle = 1.7;
       p.snowfall = 0.02;
       p.giftGlow = 0.45;
-      p.ghostGlow = 1.6;
+      // (A night frame needs little of a ghost's glow to find it: at 1.6 to 2.6 a ghost near the lens was a mint blaze
+      // over the rider and in the lantern sky, which belongs to marigold.)
+      p.ghostGlow = 1.1;
       p.lanternGlow = 0.45;
       return;
   }
@@ -1182,7 +1205,7 @@ function round7(p: Palette, biome: BiomeId): void {
       // the mountain's light from the first metre.
       p.air = { far: c('#221C6A'), cool: c('#DCD8FF'), low: 0.7, scatter: 1.1 };
       p.lamps = 1;
-      p.grade.exposure = 1.08;
+      p.grade.exposure = 1.0;
       p.grade.hi = c('#F4F6FF');
       p.grade.lo = c('#E6DCFF');
       return;
@@ -1717,75 +1740,91 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#120E44');
         p.skyMid = c('#34267E');
         p.skyHorizon = c('#5A3E8C');
-        p.skyBand = { color: c('#D8906A'), fade: 30, k: 0.45 };
-        p.skyBelow = c('#1E1650');
+        p.skyBand = { color: c('#C88466'), fade: 26, k: 0.24 };
+        // (What lies under the horizon in the valley is the dome's own below: the lanterns' lit haze, not a
+        // dark hole for them to float in.)
+        p.skyBelow = c('#4A3268');
         p.deck.k = 0.92;
         p.deck.lit = c('#5C50A6');
         p.deck.shade = c('#221A60');
-        p.deck.glow = c('#A0607A');
-        p.snowLit = c('#CDC6F2');
-        p.snowShade = c('#5C46B0');
+        p.deck.glow = c('#8E5C8C');
+        p.snowLit = c('#DAD8F6');
+        p.snowShade = c('#6656B2');
         p.snowDeep = c('#2A1A6E');
         p.rim = c('#FFD9A0');
         p.fog = c('#3A2C80');
         p.fogFar = 640;
-        p.hemiSky = c('#6A58C4');
+        // (Less of the sky's light between the lamps, so the Lamp Road's snow is lilac in pools of marigold
+        // and not lilac all over.)
+        p.hemiSky = c('#5E4EBC');
         p.air.far = c('#3A2670');
         p.air.low = 0.9;
         p.under = { color: c('#FFB04A'), k: 0.14 };
-        p.atmo.valley = 0.7;
-        p.atmo.valleyColor = c('#7A5C92');
+        p.atmo.valley = 1;
+        p.atmo.valleyColor = c('#B27C62');
         p.atmo.meteors = 0;
         p.massif.sea = 0;
         p.massif.seaWarm = 0;
         p.massif.veil = 0.6;
         p.ridge = [c('#4A3E96'), c('#2C2470'), c('#181446')];
         p.massif.glow = c('#FFB870');
-        p.massif.glowK = 0.3;
+        p.massif.glowK = 0.5;
         p.massif.glowLine = -900;
         p.stars = 0.15;
         p.shadowK = 0.6;
         p.bloom = 0.78;
-        p.lamps = 1.05;
+        p.lamps = 1.3;
         p.giftGlow = 0.6;
-        p.ghostGlow = 1.75;
+        p.ghostGlow = 1.2;
         p.lanternGlow = 0.6;
-        p.grade.exposure = 1.1;
-        p.grade.saturation = 1.08;
+        p.grade.exposure = 1.0;
+        p.grade.saturation = 1.0;
         p.grade.hi = c('#FFF6E8');
         p.grade.lo = c('#E2D6FF');
       },
     },
     {
-      // Down to Firstlight: the deck thins and lifts off the far range, and the east begins to pale.
+      // Down to Firstlight: the deck thins and lifts off the far range, and the east begins to pale. The
+      // hour turns here, so the town is a different picture from the Lamp Road: the air lighter and bluer,
+      // the shade a cold blue-violet, the lamps no longer the only light, the lit snow taking a rose edge.
       from: 2900, at: 3600, dusk: 1,
       edit: (p) => {
         p.deck.k = 0.62;
-        p.skyZenith = c('#161450');
-        p.skyMid = c('#4A3690');
-        p.skyHorizon = c('#8A5C9C');
+        p.skyZenith = c('#1A1A5C');
+        p.skyMid = c('#5444A0');
+        p.skyHorizon = c('#9A66A4');
         p.skyBand = { color: c('#F0A088'), fade: 22, k: 0.7 };
-        p.snowLit = c('#D6CCF2');
-        p.fog = c('#5C4496');
-        p.air.far = c('#4A2E7C');
-        p.under.k = 0.12;
+        p.snowLit = c('#D8D0F2');
+        p.snowShade = c('#5658BE');
+        p.rim = c('#FFD2C0');
+        p.hemiSky = c('#7468CC');
+        p.fog = c('#5C4A9C');
+        p.air.far = c('#4A3480');
+        p.under.k = 0.1;
+        p.lamps = 1.05;
         p.stars = 0.35;
         p.massif.glowK = 0.45;
+        p.grade.exposure = 1.02;
+        p.grade.hi = c('#FFEEE6');
+        p.grade.lo = c('#DCDEFF');
+        p.grade.saturation = 0.97;
       },
     },
     {
       // The first rose of morning at the line, as the lanterns leave the valley. Not yet a sun: a band of
       // rose under an indigo that is letting go of its stars, and rose on the snow that faces it.
-      from: 3900, at: 4460, dusk: 1,
+      // (It comes in from 3650 m, so the leap into Firstlight and the town are already under the rose: from
+      // 3900 the run was at the line before a frame showed it.)
+      from: 3650, at: 4300, dusk: 1,
       edit: (p) => {
         setSun(p, 24, 6, 26, 10);
         p.sunColor = c('#F4DCE4');
         p.deck.k = 0.3;
         p.deck.glow = c('#FFB48E');
         p.skyZenith = c('#22206C');
-        p.skyMid = c('#7450A4');
+        p.skyMid = c('#8656A8');
         p.skyHorizon = c('#DC8CA0');
-        p.skyBand = { color: c('#FFC09A'), fade: 16, k: 0.9 };
+        p.skyBand = { color: c('#FFC09A'), fade: 24, k: 1.0 };
         p.skyBelow = c('#6A4A8C');
         p.snowLit = c('#E6DAF2');
         p.snowShade = c('#6650B8');
@@ -1803,7 +1842,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.under.k = 0.08;
         p.grade.hi = c('#FFF2E6');
         p.grade.lo = c('#E6D8FF');
-        p.grade.exposure = 1.1;
+        p.grade.exposure = 1.02;
       },
     },
   ],
@@ -2267,14 +2306,18 @@ export const PLACES: Record<BiomeId, Place[]> = {
         return cl ? { z0: cl.z0 + 55, z1: cl.z1 - CLOUD_BREAK, rise: 150, fall: 50 } : null;
       },
       edit: (p) => {
-        p.fog = c('#B6AEE6');
-        p.air.far = c('#A49ADC');
+        // (A value under the white it was: in a cloud as bright as its snow the lamps' halos had nothing to
+        // loom out of, and the frame was one lilac wash.)
+        p.fog = c('#9A92D8');
+        p.air.far = c('#8A80CE');
         p.air.cool = c('#F2F0FF');
         p.air.low = 0.2;
         p.air.scatter = 0.4;
-        p.fogNear = 2;
-        p.fogFar = 44;
-        p.skyZenith = c('#7E74C8');
+        // (The near plane keeps its whole palette for the first few metres, so the snow under the rider is
+        // snow and the cloud is beyond it: from 2 m the near, the middle and the far were one violet.)
+        p.fogNear = 7;
+        p.fogFar = 49;
+        p.skyZenith = c('#6A60BC');
         p.skyMid = c('#9A90DA');
         p.skyHorizon = c('#B6AEE6');
         p.skyBelow = c('#A49ADC');
@@ -2284,9 +2327,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.sunDisc = 0;
         p.sunGlow = 0.35;
         p.sunSoft = 1;
-        p.snowLit = c('#DEDAF8');
-        p.snowShade = c('#8E82D2');
-        p.snowDeep = c('#5A4CA8');
+        p.snowLit = c('#E0DEFA');
+        p.snowShade = c('#6658BE');
+        p.snowDeep = c('#46389A');
         p.rim = c('#F0EEFF');
         p.hemiSky = c('#A69CE0');
         p.ridge = [c('#B6AEE6'), c('#AEA6E2'), c('#A49ADC')];
@@ -2302,18 +2345,19 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.hazardFog = 0.5;
         p.hazardDim = 0.78;
         p.giftGlow = 1;
-        p.ghostGlow = 2.6;
+        p.ghostGlow = 1.6;
         p.lanternGlow = 0.8;
-        // (Glints: snow glitters in firelight, where sand would not.)
-      p.sparkle = 0.9;
-        p.bloom = 0.85;
-        p.grade.exposure = 1.02;
-        p.grade.contrast = 1.02;
+        p.sparkle = 0.5;
+        // (Less bloom and more contrast than a white-out would have: at 0.85 and 1.02 the cloud was a milky
+        // veil of one lilac value over everything, the rider bleached in it as it came out.)
+        p.bloom = 0.62;
+        p.grade.exposure = 1.0;
+        p.grade.contrast = 1.1;
         p.grade.saturation = 1.04;
         p.grade.hi = c('#F8F6FF');
         p.grade.lo = c('#E4DCFF');
         p.grade.focal = 0.5;
-        lamps(p, 1.5);
+        lamps(p, 1.3);
       },
     },
     {
@@ -2325,7 +2369,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fogFar *= 1.6;
         p.fogNear = 110;
         p.air.low = 0.5;
-        p.under.k = 0.2;
+        // (The valley's air is lit from inside by its lanterns: a dusky rose-violet the dots stand in, where
+        // the night's own violet made the valley under the lip a dark hole.)
+        p.air.far = c('#6A4890');
+        p.fog = c('#4C3A8C');
+        p.skyBelow = c('#644678');
+        p.under.k = 0.3;
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');
         p.grade.contrast += 0.04;
@@ -2378,8 +2427,11 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1);
-        p.grade.hi = c('#FFF4E6');
-        p.bloom += 0.08;
+        // (Warm light on pale paint and stands of people: at the journey's bloom the square bloomed into a
+        // cream veil when the great lantern lit. The lantern is the brightest thing here, and the bloom its.)
+        p.grade.hi = c('#FFE8CC');
+        p.bloom -= 0.2;
+        p.grade.exposure! *= 0.94;
       },
     },
   ],

@@ -202,9 +202,11 @@ function corniceGeometry(p: Palette): BufferGeometry {
 /** The fork's gantry, facing up the run (+z), GANTRY across between its posts, their feet well under
  *  the higher bank: `bold` is the side (-1 left, 1 right) of the bold route. Each board hangs over its
  *  channel, an arrow turned out and down toward it. */
-function signGeometry(bold: number): BufferGeometry {
-  const wood = new Color('#3E3442');
-  const light = new Color('#EFE9DE');
+function signGeometry(bold: number, lantern = false): BufferGeometry {
+  // (Lanternfall's gantry is the lamplighters' own: ink timber, the calm board lit paper in a frame under
+  // a little eave, a lantern hung at each post. Flat white and navy boards read as a placeholder there.)
+  const wood = new Color(lantern ? '#241C34' : '#3E3442');
+  const light = new Color(lantern ? '#F4CF96' : '#EFE9DE');
   const dark = new Color('#161A30');
   const disc = new Color('#3E56C8');
   const gold = new Color('#FFD34D');
@@ -214,6 +216,15 @@ function signGeometry(bold: number): BufferGeometry {
     part(new BoxGeometry(11.4, 3.3, 0.2), face, { pos: [dir * 8.8, y, 0.3] }),
     part(new BoxGeometry(11.6, 0.2, 0.26), wood, { pos: [dir * 8.8, y - 1.74, 0.3] }),
     part(new BoxGeometry(11.6, 0.26, 0.5), SNOW, { pos: [dir * 8.8, y + 1.78, 0.3] }),
+    ...(lantern
+      ? [
+          // A frame round the board, an eave over it holding a line of snow.
+          part(new BoxGeometry(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 - 5.8, y, 0.32] }),
+          part(new BoxGeometry(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 + 5.8, y, 0.32] }),
+          part(new BoxGeometry(12.4, 0.22, 1.3), wood, { pos: [dir * 8.8, y + 1.95, 0.3], rot: [0.18, 0, 0] }),
+          part(new BoxGeometry(12.2, 0.16, 1.1), SNOW, { pos: [dir * 8.8, y + 2.1, 0.26], rot: [0.18, 0, 0] }),
+        ]
+      : []),
     // The arrow, pointing out over the channel and down into it.
     part(new ConeGeometry(1.5, 2.3, 3), tip, { pos: [dir * 12.6, y - 0.1, 0.42], rot: [0, 0, dir * (Math.PI * 0.72)], scale: [1, 1, 0.08] }),
     part(new BoxGeometry(5.2, 0.8, 0.08), tip, { pos: [dir * 9.0, y - 0.1 + 0.34, 0.42], rot: [0, 0, -dir * 0.12] }),
@@ -230,6 +241,15 @@ function signGeometry(bold: number): BufferGeometry {
     ...board(bold, dark, light),
     part(new OctahedronGeometry(1.45, 0), SNOW, { pos: [bold * 4.8, y, 0.44], scale: [1, 1, 0.05] }),
     part(new BoxGeometry(11.4, 0.42, 0.06), gold, { pos: [bold * 8.8, y - 1.42, 0.44] }),
+    // A paper lantern hung from each post's head on a short drop.
+    ...(lantern
+      ? [-1, 1].flatMap((s) => [
+          part(new BoxGeometry(0.06, 1.1, 0.06), wood, { pos: [s * (half - 0.7), y + 0.9, 0.3] }),
+          part(new CylinderGeometry(0.5, 0.5, 1.3, 8), light, { pos: [s * (half - 0.7), y - 0.3, 0.3], scale: [1, 1, 1] }),
+          part(new CylinderGeometry(0.34, 0.56, 0.24, 8), wood, { pos: [s * (half - 0.7), y + 0.44, 0.3] }),
+          part(new CylinderGeometry(0.56, 0.34, 0.2, 8), wood, { pos: [s * (half - 0.7), y - 1.02, 0.3] }),
+        ])
+      : []),
   ]);
 }
 
@@ -295,7 +315,7 @@ export class Rails {
   private kit(): BufferGeometry {
     const biome = this.course.biome;
     const look = railLook(biome);
-    const list = [rampGeometry(look), barGeometry(look), flagGeometry(), shoulderGeometry(biome), corniceGeometry(this.palette), signGeometry(-1), signGeometry(1)];
+    const list = [rampGeometry(look), barGeometry(look), flagGeometry(), shoulderGeometry(biome), corniceGeometry(this.palette), signGeometry(-1, biome === 'lantern'), signGeometry(1, biome === 'lantern')];
     const g = variantSet(list);
     for (const b of list) b.dispose();
     return g;
