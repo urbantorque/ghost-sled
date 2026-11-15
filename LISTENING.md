@@ -5,7 +5,7 @@ written as notation, rendered offline by the project's own synthesizer (`npm run
 shipped as audio that the game sequences to your run. All of it was judged by measurement (loudness, true
 peak, spectrum, the mono fold-down, a phone speaker's band) and by reading the score. This guide says what to
 listen for, where, and what good sounds like, so one sitting with headphones and one with a phone can say
-whether it worked. About 40 minutes in all.
+whether it worked. About 42 minutes in all.
 
 **Before you start.** Default sliders (music 0.8, effects 0.8, master 1). Headphones first, then a phone.
 Keep the tab in front (a hidden tab mutes). Note anything that sounds wrong with the mountain, the second on
@@ -41,6 +41,8 @@ Silence the Band mutes the music until the next button.
 | Stingers | One for each set-piece verb, in the chosen mountain's instruments: Race, Gates, Rings, Collapse, Steps, Slide, Shatter, Surge, Flourish, Follow, Kindle, Carry, and the plain one a new verb plays |
 | Rider Motifs | The twelve signature riders' motifs, in the key that is playing |
 | Set Pieces | The live cues that still play during a set piece (a gate, a ring, a step, a miss, a race lead and trail, a collapse closing in), and Won and Lost, which are stingers of the produced score |
+| Set-Piece Steps | What a set piece sounds like as it is ridden: the bells swinging, the forge's roar and its gutter, the glass, the lamps catching, the wake filling and being regained, the carried flame low, guttering, catching and taking at the brazier |
+| Legends and the Hero Frame | A legend from its warning to its leaving, a ribbon legend's quarters, and the hero frame's breath, bells and landing |
 | Cues in the Score | The lantern lighting, a dash, a ward, a sky gate, a pass, a stage line: live, pitched into the produced score's key and chord |
 | Sled Sound | The garage's five runner sounds |
 
@@ -133,7 +135,7 @@ one nobody has even measured in the game.
   Its stingers (follow, kindle, carry) are a call and its echo, sparks and a bloom, three slow steps like a
   hymn. The finale should be the largest sound in the game, and the title theme's key.
 
-### 5. The stingers (3 minutes)
+### 5. The stingers, the steps and the legends (5 minutes)
 
 On each mountain press a few of the Stingers row with a section playing. Each verb is one gesture, re-voiced:
 Race is a gallop on one note that jumps a fifth and then the octave; Gates a run up the chord to a held top;
@@ -146,6 +148,25 @@ on the octave; Lost three soft notes down to the tonic.
 - **Good:** you could name the verb from the sound, and the mountain from its instruments.
 - **Wrong:** a stinger louder than the music; one that clashes with the chord under it (they are in the key
   but do not follow the chord).
+
+Then the Set-Piece Steps row, which plays what a set piece sounds like while it is ridden: Bells Swing (three
+bronze bells, each a chord tone higher, with the air they move), Forge Roars and Forge Gutters (a thud and a
+second and a half of low fire that opens and falls, or a cough of smoke), Glass Sings (four rising notes of
+glass), Lamps Catch (a pluck and a breath of flame up the ladder, the chord on the last), The Wake Fills (soft
+bells an eighth at a time) and Back in the Wake (two bells up), and the carried flame: Flame Low (a dull pulse),
+Flame Gutters (air out and a note that sags), Flame Catches (a breath in) and Brazier Takes (a rush and three
+bells up the chord). Then the Legends row: A Legend Comes and Goes (a breath in from one side, then an open
+fifth low on brass under four bells climbing a ninth and a sharp fourth, the band ducking under it; a held fifth
+as it is reached; two bells down as it is left), A Ribbon's Quarters (bells up the same chord), and The Hero
+Frame (air drawn in under a rising low tone, the score cutting to its tail, three high bells hanging at the
+apex, the band crashing back in on the landing).
+
+- **Good:** the legend's chord is a colour heard nowhere else in the game, and you would know it again; the
+  forge's roar sits under the Surge stinger rather than fighting it; the hero frame's breath feels like a held
+  breath, not a dropout.
+- **Wrong:** the legend's cue too loud against a busy band (it ducks the band to 0.6); the wake's bells
+  pecking (in a real ride "back in the wake" sounds at most once in three seconds); a step louder than its
+  stinger.
 
 ### 6. The riders (2 minutes)
 

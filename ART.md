@@ -347,6 +347,9 @@ stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.
   its reveal (Pinecrest's First Drop, Frostfang's cavern mouth at dawn, Ember's caldera, Sakura's Blossom
   Leap, Lanternfall's break out of the cloud) the look drifts a little off the road and whips back onto
   it as the place opens.
+- A legend gets a look: while one is in reach the chase turns toward it by up to 8 degrees and, for one in
+  the sky, lets the rider sink so the sky lifts into frame (never below 70% of the frame's height). It never
+  takes the steering, gives way in the air and in a tumble, and never moves under reduced motion.
 - The camera writes what the lens is doing for the pipeline (`src/render/cine.ts`): depth of field and its
   focus, motion blur from the speed curve, the letterbox and the slow frame's scale.
 - Reduced motion keeps the letterbox, the depth of field and the director's beats and drops the swing, the
