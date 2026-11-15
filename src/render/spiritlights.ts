@@ -15,7 +15,9 @@ import { LIGHT_GLSL, shared } from './materials';
 //   a light keeps a glow a few pixels across, so a line far down the run reads as points of warm light.
 // - Never big: a flame stands at most about a twentieth of the frame's height (a great light half as tall again),
 //   so one met at the lens or beside the rider is a small flame, not a slab; it shrinks away inside 6 m of the lens,
-//   off the sight line to the rider and, after a perfect landing, from round the rider (as the old ones did).
+//   off the sight line to the rider and, after a perfect landing, from round the rider (as the old ones did); and
+//   one near the lens that is out of reach (high in the frame over a kicker passed under, or out at the frame's side
+//   being passed) goes before it can hang in the sky or be dragged into a smear by the speed streak.
 // - In the air: the lights over a leap's flight and a kicker's high line hang where the sim put them, and the glow
 //   batch threads a few small motes between neighbours of the same arc (props.ts), so they read as a trail of light
 //   over the leap rather than a drop stuck in the sky.
@@ -77,6 +79,9 @@ const KEEP_GLSL = /* glsl */ `
     // and up in the sky: it goes as it climbs into the top fifth, where a light near the lens read as a drop
     // stuck in the sky. One the rider flies toward rides lower in the frame, with the rider.
     if (cg.w > 0.1) keep *= 1.0 - smoothstep(0.6, 0.86, cg.y / cg.w) * (1.0 - smoothstep(10.0, 20.0, -gv.z));
+    // One near the lens out at the frame's side is being passed, out of reach: it goes before the speed streak at
+    // the frame's edges can drag it into a smear.
+    if (cg.w > 0.1) keep *= 1.0 - smoothstep(0.55, 0.85, abs(cg.x / cg.w)) * (1.0 - smoothstep(8.0, 14.0, -gv.z));
     // While the results are up, a light the frame's edge would cut shrinks away.
     if (uResults > 0.0) {
       if (cg.w > 0.1) {
