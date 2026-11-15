@@ -481,34 +481,40 @@ export class PostFX {
           // and ripples into one pale sheet of radial lines (worst on a tall phone screen).
           vec3 col;
           float streak = uSpeed * smoothstep(0.3, 0.8, r) * mix(uStreakFoot, 1.0, smoothstep(0.25, 0.6, uv.y)) * mix(0.5, 1.0, smoothstep(0.12, 0.45, abs(dc.x) * uAspect));
+          // The lens's colour split: the chromatic punch on boosts and perfect landings, and round 7's
+          // lens character (at speed the glass shows in the frame's corners and nowhere else, a hair of
+          // colour fringe, two and a half pixels of a 1280 frame in the very corner at the cap; a calm
+          // frame has none). Red and blue are read through the same smear as green: read sharp beside
+          // a smeared green, the split was as wide as the smear (eight pixels of green and magenta on
+          // every edge in the frame's outer third at any speed), not the hair it was drawn to be.
+          float fringe = uFringe * uSpeed * smoothstep(0.5, 1.0, r);
+          vec2 split = dc * ((uPunch > 0.01 ? 0.0035 * uPunch : 0.0) + (fringe > 0.004 ? 0.004 * fringe : 0.0));
+          float splitK = uPunch > 0.01 ? 0.85 : fringe > 0.004 ? 0.7 : 0.0;
           if (streak > 0.002) {
             vec3 acc = vec3(0.0);
             for (int i = 0; i < 6; i++) {
               float k = float(i) / 5.0;
-              acc += texture2D(tScene, uv - dc * k * streak * 0.07).rgb;
+              vec2 at = uv - dc * k * streak * 0.07;
+              vec3 tap = texture2D(tScene, at).rgb;
+              if (splitK > 0.0) {
+                tap.r = mix(tap.r, texture2D(tScene, at + split).r, splitK);
+                tap.b = mix(tap.b, texture2D(tScene, at - split).b, splitK);
+              }
+              acc += tap;
             }
             col = acc / 6.0;
-          } else if (uFxaa > 1.5) {
-            col = fxaaWalk(uv);
-          } else if (uFxaa > 0.5) {
-            col = fxaa(uv);
           } else {
-            col = texture2D(tScene, uv).rgb;
-          }
-          // Chromatic punch on boosts and perfect landings.
-          if (uPunch > 0.01) {
-            vec2 off = dc * 0.0035 * uPunch;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.85);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.85);
-          }
-          // Round 7's lens character: at speed the glass shows in the frame's corners and nowhere else, a
-          // hair of colour fringe (two and a half pixels of a 1280 frame in the very corner at the
-          // cap). A calm frame has none.
-          float fringe = uFringe * uSpeed * smoothstep(0.5, 1.0, r);
-          if (fringe > 0.004) {
-            vec2 off = dc * 0.004 * fringe;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.7);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.7);
+            if (uFxaa > 1.5) {
+              col = fxaaWalk(uv);
+            } else if (uFxaa > 0.5) {
+              col = fxaa(uv);
+            } else {
+              col = texture2D(tScene, uv).rgb;
+            }
+            if (splitK > 0.0) {
+              col.r = mix(col.r, texture2D(tScene, uv + split).r, splitK);
+              col.b = mix(col.b, texture2D(tScene, uv - split).b, splitK);
+            }
           }
           // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
           col = pipeAO(col, uv);

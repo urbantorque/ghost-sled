@@ -180,7 +180,7 @@ function applyRock(p: Palette): void {
   rock.uRockLedge.value.set(set.ledge).multiplyScalar(set.style[2] === 3 ? k : 1);
   rock.uRockGlow.value.copy(p.accentProp).multiplyScalar(p.massif.lava > 0 ? 1.1 : 0);
   // (Frostfang's crevasse ice has a light of its own inside it.)
-  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.34, 0.6).multiplyScalar(0.22 + 0.2 * p.lamps);
+  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.38, 0.62).multiplyScalar(0.3 + 0.32 * p.lamps);
   rock.uRockStyle.value.set(...set.style);
   lake.uLakeTrees.value.copy(p.tallDark).lerp(p.tall, 0.35).multiplyScalar(0.8);
 }
@@ -942,7 +942,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           // shade side that move, where it had one blue. Held still under reduced motion (uGroundTime).
           vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046) + vec2(uGroundTime * 0.012, uGroundTime * 0.004);
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
-          float a2 = smoothstep(0.34, 0.64, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
+          // (Round 7's review: the curtains cover most of the sky-facing snow, so the night's lit side is the
+          // aurora's and the steel is what shows between them, not the other way about.)
+          float a2 = smoothstep(0.22, 0.52, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
           // Between the curtains the snow's shade is violet, and it is the shade that takes it (the lit
           // snow stays the moon's steel): three hues on the ground, where there was one blue.
@@ -950,7 +952,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // Laid over the blue, not added to it (added, green on steel blue only made a paler blue), and a
           // step brighter than the snow round it: it is the light.
           // It keeps the snow's own relief under it (laid flat it read as a green field).
-          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.7);
+          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.8);
         }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the
@@ -1295,7 +1297,10 @@ export function makeSnowMaterial(): ShaderMaterial {
             float dk = clamp(over, 0.0, 1.0);
             vec3 ramp = mix(uRockDeep, uRockShade * 1.15, smoothstep(0.0, 0.5, dk));
             ramp = mix(ramp, uRockLit, smoothstep(0.42, 1.0, dk) * (0.35 + 0.65 * tr));
-            rc = ramp * mix(1.0, tone, fine) + uRockLit * 0.1 * tr;
+            // (Round 7's review: the shards come in three values, a dark heart, the wall's own cobalt and a
+            // pale skin, a step apart, so a wall is cut ice and not one blue plane.)
+            float tone3 = tone < 0.87 ? 0.5 : tone < 1.08 ? 0.94 : 1.42;
+            rc = ramp * mix(1.0, mix(tone, tone3, 0.8), mix(0.55, 1.0, fine)) + uRockLit * 0.1 * tr;
             float fres = pow(1.0 - clamp(dot(rn, v), 0.0, 1.0), 3.0);
             rc += mix(uSkyHorizon, uSnowLit, 0.5) * fres * 0.25;
             rc += uSunColor * pow(max(dot(reflect(-v, rn), uSunDir), 0.0), 26.0) * 0.5 * shadow;

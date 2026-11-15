@@ -804,7 +804,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
     case 'glacier':
       // Polar blue hour: deep cobalt down to a thin lemon band, a low cold sun off to the left, long
       // steel-blue light and glazed snow. Hazards are a deep ice blue so they stay darker than the snow.
-      setSun(p, -35, 5.5, 23, 9);
+      // (Round 7's review: the disc sits low over the band, a blue hour's sun and not a day's.)
+      setSun(p, -35, 3.9, 23, 9);
       p.sunColor = c('#FFF2C4');
       p.sunCore = new Color(2.5, 2.4, 1.5);
       p.sunTint = 0.85;
@@ -831,7 +832,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.lowLit = c('#3E6AA4');
       p.hazardDim = 0.9;
       p.ridge = [c('#6F95D4'), c('#3F66B4'), c('#1F3C8A')];
-      p.massif.rock = c('#1A2E68');
+      p.massif.rock = c('#0E1A4A');
       p.massif.glow = c('#FFEFB0');
       p.massif.heroAz = 17;
       p.massif.sea = 0.8;
@@ -1195,10 +1196,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   ],
   glacier: [
     {
-      // The sun sinks onto the band.
-      from: 600, at: 1450, dusk: 0.5,
+      // The sun sinks onto the band and is gone by Serac Gate: the stars are out over the span.
+      from: 480, at: 1340, dusk: 0.5,
       edit: (p) => {
-        setSun(p, -40, 3.4, 19, 8);
+        setSun(p, -40, 2.9, 19, 8);
+        p.sunDisc = 0.3;
+        p.sunGlow = 0.45;
+        p.massif.rock = c('#0A1440');
+        p.grade.shafts = 0.2;
         p.sunColor = c('#FFE9B8');
         p.skyZenith = c('#071C5C');
         p.skyMid = c('#2553A8');
@@ -1211,7 +1216,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.fog = c('#5A80CC');
         p.rim = c('#FFF0A0');
         p.grade.contrast = 1.13;
-        p.stars = 0.8;
+        p.stars = 0.9;
         p.giftGlow = 0.35;
         p.ghostGlow = 1.5;
         p.lanternGlow = 0.35;
@@ -1222,7 +1227,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     {
       // Polar night comes on, and it is not one blue: the aurora is the key light over the Crevasse
       // Fields, green on the snow that faces it with violet in the shade, moving.
-      from: 1700, at: 2250, dusk: 1,
+      // (It has come by the Crevasse Fields' leap: night falls over Station Street, whose lamps hold it off.)
+      from: 1480, at: 1820, dusk: 1,
       edit: (p) => {
         setSun(p, -44, 3, 18, 8);
         p.sunColor = c('#B8C4EC');
@@ -1278,7 +1284,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // Out of the cavern into the dawn: the sun comes up beside the Fang (it crosses the sky ahead while
       // the rider is under the ice, so the far mouth opens onto it), rose gold on the snow and the peaks,
       // the stars and the aurora fading out of a lightening sky.
-      from: 3300, at: 3580, dusk: 1,
+      // (It turns in the cavern's first hundred metres, so the far mouth is the dawn from the moment it shows.)
+      from: 3185, at: 3345, dusk: 1,
       edit: (p) => {
         setSun(p, 30, 3.6, 20, 9);
         p.sunColor = c('#FFC8A4');
@@ -1305,6 +1312,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.lit = c('#FFD8C4');
         p.clouds.shade = c('#6A6AB4');
         p.clouds.rim = c('#FFBC8C');
+        p.massif.rock = c('#222C70');
         p.massif.glow = c('#FFB4A4');
         p.massif.glowK = 0.85;
         p.massif.glowLine = -40;
@@ -1615,6 +1623,8 @@ export interface Place {
    *  on a course, the metres it comes in and goes out over; null where the course has none. Its kind is
    *  then only a label. */
   span?: (course: Course) => { z0: number; z1: number; rise: number; fall: number } | null;
+  /** The metres it lets go over, past its end (omitted: 75 for a roof, 90 in the open). */
+  fall?: number;
   /** What the place changes, over the journey's palette at its own middle. */
   edit: (p: Palette) => void;
 }
@@ -1731,22 +1741,31 @@ export const PLACES: Record<BiomeId, Place[]> = {
     {
       // The Ice Cavern: near-black cobalt. The only light is what the cavern holds.
       kind: 'tunnel',
+      // (Night to full dawn is the widest step in the game: it takes ten metres more than a roof's 75.)
+      fall: 85,
       edit: (p) => {
-        p.snowLit = c('#5C78C8');
-        p.snowShade = c('#1C2C7A');
-        p.snowDeep = c('#0A1248');
+        // (Round 7's review: the hour outside is the dawn by the cavern's middle, so the far mouth is a
+        // blade of rose gold in the dark. Inside, the sun's own light is held down to a dim violet and
+        // the walls drop a step, so the mouth, the lanterns and the rider's rim are the brightest things.)
+        p.sunColor = c('#4E5098');
+        p.snowLit = c('#546CC0');
+        p.snowShade = c('#16226A');
+        p.snowDeep = c('#080E3C');
         p.fog = c('#0E1A52');
-        p.air.far = c('#081040');
+        p.air.far = c('#1A1650');
+        p.air.scatter = 1;
+        p.sunGlow = 0.8;
         p.fogNear = 24;
         p.fogFar = 260;
-        p.hemiSky = c('#2A4A9C');
+        p.hemiSky = c('#22408E');
         p.key2.k = 0;
         p.under = { color: c('#38C8FF'), k: 0.22 };
-        p.hazardDim = 0.7;
-        p.grade.exposure = 0.9;
-        p.grade.contrast = 1.2;
-        p.grade.hi = c('#F0F6FF');
-        p.grade.lo = c('#DCE0FF');
+        p.hazardDim = 0.55;
+        p.grade.exposure = 0.86;
+        p.grade.contrast = 1.22;
+        p.grade.gain = c('#F2F6FF');
+        p.grade.hi = c('#FFE8D8');
+        p.grade.lo = c('#D6DCFF');
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
         lamps(p, 1.35);
@@ -2096,7 +2115,7 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1, rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: roof ? 75 : 90, pal });
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1, rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal });
       break;
     }
     if (sec.kind === 'finish') break;
