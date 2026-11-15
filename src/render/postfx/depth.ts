@@ -36,7 +36,9 @@ export const DEPTH_GLSL = /* glsl */ `
   uniform vec2 uDepthTexel;
   // Metres from the lens along its axis, from a depth sample.
   float linDepth(float d) { return uDepthNF.x * uDepthNF.y / (uDepthNF.y - d * (uDepthNF.y - uDepthNF.x)); }
-  float depthAt(vec2 uv) { return linDepth(texture2D(tDepth, uv).r); }
+  // (Read at the base level, which is all a depth target has: an implicit-gradient read inside a march that
+  // can stop early is a compile warning on Direct3D, X3595, printed on the console the first time it builds.)
+  float depthAt(vec2 uv) { return linDepth(texture2DLodEXT(tDepth, uv, 0.0).r); }
   // The view-space point seen at uv, lin metres out (the lens looks down -z).
   vec3 viewPos(vec2 uv, float lin) { return vec3(((uv * 2.0 - 1.0) * uProj.xy + uProj.zw) * lin, -lin); }
   // Where a view-space point lands on screen.

@@ -2976,14 +2976,145 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     last race; Frostfang's unexplained calls on High; Lanternfall's seven calls over on High. *Housekeeping the lanes
     could not do:* a stray `C:\c` folder from a mis-resolved capture path, a stale preview on port 4522, round 6's
     shafts fan and FXAA still in the composite behind their switches, and `mountains.ts` still calls Lanternfall's
-    48 passes a placeholder though `twelve.ts` is the rule.
+    48 passes a placeholder though `twelve.ts` is the rule. *Closed since, at the merges:* the audio reads the
+    legend and hero-frame beats (347, 348), the camera reads the legend shot (345), `audio.clock()` exists and the
+    reel cuts on it (350), the forge roars (349), Ember's review calls `setConeBearing` from `World.setCourse`, the
+    ladder is ordered by home time (344), `mountains.ts` says The Twelve opens Lanternfall, the X3595 warning is gone
+    (356), and the preview on 4522 is no longer running. The `C:\c` folder (an empty `Users` tree) is still there,
+    for the owner to remove.
 
 ### Round 7: the review loop and the numbers
 
-342. **The visual review loop: the critic's scores, pass by pass.**
+342. **The visual review loop: the critic's scores, pass by pass.** One lane a mountain ran the owner's loop: the
+    fixed frames (`frames-r7.json`) on High at 1280x720, on Low and on a phone on Medium, plus strips in motion at
+    the vistas and the set pieces; a fresh critic each pass, told only the frames and ART.md section 15; fixes worst
+    first; at least three passes, stop at no frame under 8 and every hero vista at 9, or at five passes. **No mountain
+    met the stopping rule. Every lane ran five passes; no critic gave any frame a 9, and no hero vista reached 9.** The
+    best frames are 8 to 8.5. Each lane's notes (`notes/r7-review-m0.md` to `m4.md`) hold every frame's score.
 
-    (filled by the main lane)
+    *Reading the numbers.* Passes 1 (and on Pinecrest pass 2) were judged by the earlier model at medium effort; the
+    rest by Opus 5.5 at extra-high effort, which scored the same kind of frame 0.5 to 1.5 points lower, so the means
+    fall at the change of critic and are comparable only from it on. A fresh critic moves a frame by about half a
+    point on its own. Low and phone are judged as the poster look ART.md 15 designs, and their minimums are mostly the
+    results card over the picture.
+
+    | Mountain | Tier | P1 | P2 | P3 | P4 | P5 |
+    |---|---|---|---|---|---|---|
+    | Pinecrest | High mean (min) | 7.14 (5.5) | 7.08 (5.5) | 6.91 (5.5) | 7.28 (5.5) | 6.55 (5.0) |
+    | | Low / phone / motion | 6.83 / 7.25 / 7.50 | 6.74 / 7.51 / 7.38 | 6.14 / 6.62 / 7.26 | 6.33 / 7.05 / 7.29 | 5.93 / 6.59 / 7.07 |
+    | Frostfang | High mean (min) | 6.8 (5.5) | 6.86 (5.5) | 6.54 (5.0) | 6.6 (5.0) | 6.69 (5.5) |
+    | | Low / phone / motion | 7.1 / 7.3 / 6.7 | 6.90 / 6.97 / 6.63 | 6.31 / 6.60 / 6.35 | 6.7 / 6.9 / 6.9 | 6.50 / 6.72 / 6.44 |
+    | Ember Peak | High mean (min) | 7.19 (5.5) | 6.46 (5.5) | 6.54 (5.5) | 6.80 (6.0) | 6.97 (6.0) |
+    | | Low / phone / motion | 7.61 / 7.90 / 7.22 | 6.59 / 6.90 / 6.23 | 6.67 / 7.03 / 6.47 | 7.00 / 7.40 / 7.00 | 7.01 / 7.79 / 7.38 |
+    | Sakura Ridge | High mean (min) | 7.57 (6) | 7.04 (6) | 7.08 (6) | 7.04 (6) | 7.38 (6.5) |
+    | | Low / phone / motion | 7.7 / 7.9 / 7.81 | 6.68 / 7.11 / 6.94 | 6.88 / 7.13 / 6.94 | 6.75 / 7.04 / 7.1 | 6.86 / 7.24 / 7.63 |
+    | Lanternfall | High mean (min) | 6.73 (6) | 6.4 (5) | 6.1 (4.5) | 6.66 (5.5) | 6.49 (5.5) |
+    | | Low / phone / motion | 6.73 / 7.1 / 6.26 | 6.0 / 6.5 / 5.9 | 6.0 / 6.3 / 6.1 | 6.27 / 6.51 / 6.47 | 6.23 / 6.66 / 6.38 |
+
+    *Hero vistas, the best frame of each across tiers, pass 1 to pass 5:* Pinecrest's First Drop 8 to 7, Mirror Lake
+    8.5 to 8, Old Town 8.5 to 7.5, Valley Leap 8 to 8; Frostfang's span 7.5 to 7, aurora 7.5 to 7.5, Ice Cavern's
+    mouth 6 to 7.5, Fang Town at dawn 7.5 to 7; Ember's cone 7.5 to 7, Cinder Gate 7.5 to 7.5, the Caldera Leap 7 to 8
+    (8.5 on the phone), the bridge 8.5 to 8; Sakura's cone 7.5 to 7.5, terraces 7 to 7.5, Blossom Leap 7 to 7.5, torii
+    8.5 to 8, pagoda 7.5 to 7.5; Lanternfall's Crown 6.5 to 7, the break 7.5 to 7, the Lamp Road 7 to 7, the great
+    lantern lit 4 to 6 then 5.5.
+
+    *Under one critic standard* (pass 2 or 3 on), Ember rose every pass (High 6.46 to 6.97, motion 6.23 to 7.38) and
+    Sakura rose (High 7.04 to 7.38, its minimum 6 to 6.5, motion 6.94 to 7.63); Frostfang held (6.54 to 6.69) while
+    its worst frame, the cavern mouth, went from 6 to 7.5; Lanternfall's worst frames rose from 3.5 to 4.5 to 5.5 with
+    its means flat; Pinecrest's last critic was the harshest of the five and scored everything down (its lane compared
+    pass 4 and pass 5 at the same distances and found no regression, only the fixes and capture timing).
+
+    *What every critic named, on every mountain, that no mountain owns:* flat fuel drops near the lens and hanging in
+    the sky; a ghost or a figure at the lens; the dash, ward and flow glows washing out the rider; the rider small in
+    High's wides; the results card over the hero shot on a phone; boxes left in props (a kicker's lip plank, a stone
+    lantern, the FINISH board's dot lettering). The first three went to one more lane (item 358). *What the loop could
+    not reach in a lane:* Sakura's blossom never reads backlit (faceted canopies need new geometry); Ember's Basalt
+    Halls read as its first slot (a river beside the line would be a sim change); Frostfang's span has no abyss (a
+    terrain change); Lanternfall's great lantern is never framed lit with the rider (a camera beat); Low is still a
+    degraded High rather than the designed poster ART.md 15 asks for (no painted shafts or rims on any mountain).
+
+    *Cost* (each lane's frames' JSON, mean draw calls, first pass to last): High 98 to 99 (Pinecrest), 100 to 101
+    (Frostfang), 91 to 99 at the slots and up to 102 in the caldera (Ember, measured with ghosts hidden), 99 to 99
+    (Sakura), 103 to 99 (Lanternfall); Low unchanged or lighter except Ember's, one draw for each lava river in view.
+    High sat over the brief's "near 95" before the loop started.
 
 343. **Round 7 measured: performance, first frame, size, loudness.**
 
     (filled by the main lane)
+
+### Round 7: the wiring (the lanes' hooks, connected)
+
+344. **The Twelve's ladder is ordered by home time, read from the records.** `twelve.ts ladderOrder()` sorts the
+    eleven by their finished record on their own home mountain in the bundled pools, slowest first; the King, whose
+    home is the finale, is last whatever his time. On today's pools: Rosa 2:20.5, Nessa 2:10.8, Bram 2:09.3, Pip
+    2:01.6, Tavi 2:01.4, Juno 2:01.0, Wren 2:00.7, Mila 1:58.1, Ivo 1:53.5, Kaito 1:53.3, Suki 1:48.0, then the King.
+    By skill the fifth duel asked for a time nine seconds slower than the third; a player feels the clock, not the
+    roster's skill number. Nothing is hard-coded: a re-ride of the pools re-orders the ladder, ties go to skill, and
+    if any of the eleven has no finished record at home the whole ladder falls back on skill. Saves were already kept
+    by rider, so an old save keeps everyone it beat (a test pins it); a new player's first three duels are unchanged.
+    Rejected: ordering at load in `app.ts` (the app and the tests would differ) and a hard-coded order (it would rot).
+345. **A legend gets a look.** While a legend is in reach the chase turns toward its focus by up to 8 degrees and, for
+    one in the sky, lets the rider sink so the sky lifts into frame, never below 70% of the frame's height. It eases in
+    over about a second, gives way in the air, in a tumble and in the reveal, does not chase a runner within 3.4
+    degrees of straight ahead, never takes the steering, and does nothing under reduced motion (the card and the cue
+    still say the legend). *Measured* on a real ride through The Cone Wakes: the summit and the column clear the top
+    edge over the bridge; a phone takes half the turn. Lanternfall's two legends hand the camera the same shape
+    (`LanternWorld.legendShot()`).
+346. **A legend's card stays up to be read.** Any banner waiting behind another cut it to 900 ms, and a mission toast
+    took a twelve-word card down in 1.2 s. A legend's card now stands at least 2.6 s whatever waits; an event's
+    telegraph still outranks it. Measured after: 2.2 to 3.8 s across four legends.
+347. **A legend has its own sound.** A breath in from its side of the run, then an open fifth low on brass with four
+    bells climbing a ninth and a sharp fourth, in the course's key and on the band's beat, the band ducking under it.
+    That chord colour is used by nothing else, so it means "legend" on every mountain. Reaching it: a held fifth and a
+    lift in the band's drive; a ribbon's quarters are bells up the same chord; leaving it, two bells down.
+348. **The hero frame takes a breath in the score.** Off the lip the produced score cuts to its tail (the live band
+    ducks) and air rises with a low tone, timed to crest as the frame starts; at the apex three high bells hang for the
+    frame; the landing brings the band back. The breath is wherever the picture holds; the old tallest-leap rule only
+    fires when no hero frame came first.
+349. **Every verb's steps sound.** The cards' stingers were wired; the steps were silent or borrowed the race's brass.
+    Now the bell swings in three chord tones on the band's grid; the forge gate roars (the speed off the lip against the
+    speed asked, the world's own test) or gutters; the glass sings a quarter at a time; lamps catch up the ladder; the
+    wake fills in soft bells and "back in the wake" sounds once in any three seconds; the carried flame is silent while
+    healthy, pulses low at three tenths, sags when it gutters, breathes in when it catches and takes with a rush at the
+    brazier.
+350. **The reel cuts on the score.** `audio.clock()` returns the playing deck's bar and beat (Lanternfall's produced
+    piece is in two). Shots are whole bars long and each cut waits for the bar line when one is within 0.6 s, else
+    the next beat, never more than 0.9 s. Waiting for the bar line every time added a second a cut on a slow piece:
+    rejected.
+351. **The line's fireworks are a winner's.** The volley timed to the crossing is five shells at 58 m for a rider at
+    the head of the field, two at 44 m for anyone else; the earlier volleys welcome everyone. A duel won from second
+    gets the modest volley (the volley reads first place, not the duel).
+352. **Fireworks take two of the light slots, not all of them.** A burst's 150 m reach outranked every lamp, so a
+    volley of eight put the street dark exactly at the finale. Bursts are sky lights now: the two strongest are kept
+    (one on Low), the rest of the slots stay the lamps'.
+353. **A bell too high for its modulator plays its carrier alone.** A gate's bell an octave up at ratio 3.5 asked an
+    oscillator for 26.9 kHz, which Chrome clamps and warns about. Sidebands that far up are past hearing.
+354. **The slow hero frame stays on the picture's clock.** Slowing the sim's feed would not change a record, but the
+    frame ends on sim ticks, so its beats and letterbox would hang a second past the slow, and the player's trick
+    inputs would slow mid-flight on the biggest leap: a feel call for a person with hands on it.
+
+### Round 7: merging the five reviews
+
+355. **Where two reviews met in one place, both were kept.** Five lanes tuned the same render files for their own
+    mountains; the merge kept each mountain's look and settled what was shared:
+    - *The lens's colour split* is Frostfang's, read through the same smear as the green (the green tails behind
+      lights at speed, which Lanternfall answered with a difference, are answered here), with Pinecrest's weights
+      (the punch only toward the frame's edges at 0.45, the fringe from the last quarter of the radius at 0.5, High's
+      fringe 0.3), Sakura's calm lens (`fringeK` 0) and Lanternfall's `glass` and `flash` dials.
+    - *The finish line's own light* peaks at 1.6 where it flooded the square at 3.1 (Pinecrest); on Lanternfall it is
+      the sliver its lane tuned, and the great lantern is the light at the line.
+    - *A tunnel's exit flash* is a breath, 0.3 by day and 0.2 at night (Frostfang), 0.12 under Ember's smoke deck.
+    - *Rock:* Ember's basalt is near black; Sakura's fins and cone are ink rock under snow; Pinecrest's lip shoulders
+      are bedded outcrops.
+    - *Low's lit snow:* Pinecrest's grade fields (`posterSnow`, `posterKey`, `posterCool`, `posterMute`) and Sakura's
+      palette field, renamed `posterSnowSat` so the two are not read as one.
+    - *A sparkle line Ember's lane dropped into Lanternfall's cloud place* (its comment about firelight) is gone.
+    - *Frostfang's start* went a step paler at the horizon and a step bluer on the lit snow: Lanternfall's darker night
+      had brought the two starts within 1.33 of each other in the Clear Skies test, under its floor of 1.5. Now 1.53.
+356. **The console's last warning was the occlusion's depth reads.** "Gradient instruction used in a loop with varying
+    iteration" (X3595, Direct3D only) printed once, the first time High's occlusion pass compiled: its contact-shadow
+    march reads depth inside a loop that stops early. Depth targets have one level, so `depthAt` reads it at level 0
+    explicitly and the warning is gone on a cold start. The wire lane had put it on the materials; it was the post's.
+357. **The jukebox covers the wiring.** Rows for every verb's steps (the bells, the forge's roar and gutter, the glass,
+    the lamps, the wake, the carried flame), a legend from its warning to its leaving, a ribbon's quarters and the
+    hero frame's breath with the landing that ends it.

@@ -21,6 +21,9 @@ import { SLED_SOUNDS, type SledSoundId } from './sledsounds';
 // piece's sections by name, the breath before the biggest leap and the crash back in, a stinger for every
 // set-piece verb in the mountain's own instruments, the twelve signature riders' motifs, and a switch back
 // to the live band (the fallback). `?tier=low` on the address plays the lighter packs Low and phones get.
+// The wiring's sounds have rows too: every verb's steps as it is played (the bells swinging, the forge's roar
+// and its gutter, the glass, the lamps, the wake, the carried flame), a legend's cue from its warning to its
+// leaving, a ribbon's quarters, and the hero frame's breath with its bells and the landing that ends it.
 
 type Engine = AudioEngine;
 
@@ -178,6 +181,22 @@ export function openJukebox(app: unknown): void {
         <button type="button" data-cue="close">Collapse Closing</button>
         <button type="button" data-cue="won">Won</button>
         <button type="button" data-cue="lost">Lost</button></div>
+      <h3>Set-Piece Steps</h3>
+      <div class="row"><button type="button" data-cue="shatter">Bells Swing</button>
+        <button type="button" data-cue="roar">Forge Roars</button>
+        <button type="button" data-cue="gutter">Forge Gutters</button>
+        <button type="button" data-cue="slide">Glass Sings</button>
+        <button type="button" data-cue="kindle">Lamps Catch</button>
+        <button type="button" data-cue="follow">The Wake Fills</button>
+        <button type="button" data-cue="wake">Back in the Wake</button>
+        <button type="button" data-cue="low">Flame Low</button>
+        <button type="button" data-cue="gutterFlame">Flame Gutters</button>
+        <button type="button" data-cue="catch">Flame Catches</button>
+        <button type="button" data-cue="brazier">Brazier Takes</button></div>
+      <h3>Legends and the Hero Frame</h3>
+      <div class="row"><button type="button" data-cue="legend">A Legend Comes and Goes</button>
+        <button type="button" data-cue="ribbon">A Ribbon's Quarters</button>
+        <button type="button" data-cue="hero">The Hero Frame</button></div>
       <h3>Cues in the Score</h3>
       <div class="row"><button type="button" data-cue="lantern">Lantern Lit</button>
         <button type="button" data-cue="dash">Dash</button>
@@ -357,6 +376,59 @@ export function openJukebox(app: unknown): void {
       case 'won':
       case 'lost':
         fire([moment('gates', cue, 6, 6)]);
+        break;
+      // Round 7's steps, as the wire lane voiced them (sfx.ts moment): each verb's own sound as it is played.
+      case 'shatter':
+        for (let n = 1; n <= 3; n++) later((n - 1) * 1500, () => fire([moment('shatter', 'step', n, 3)]));
+        break;
+      case 'roar':
+        // The speed off the lip against the speed asked (moments.ts: 44 asked; 47 makes it).
+        fire([moment('surge', 'step', 47, 44)]);
+        break;
+      case 'gutter':
+        fire([moment('surge', 'step', 34, 44)]);
+        break;
+      case 'slide':
+        for (let n = 1; n <= 4; n++) later((n - 1) * 700, () => fire([moment('slide', 'step', n, 4)]));
+        break;
+      case 'kindle':
+        for (let n = 1; n <= 6; n++) later((n - 1) * 650, () => fire([moment('kindle', 'step', n, 6)]));
+        break;
+      case 'follow':
+        for (let n = 1; n <= 8; n++) later((n - 1) * 550, () => fire([moment('follow', 'step', n, 8)]));
+        break;
+      case 'wake':
+        fire([moment('follow', 'lead')]);
+        break;
+      case 'low':
+        for (let n = 3; n >= 1; n--) later((3 - n) * 1400, () => fire([moment('carry', 'step', n, 10)]));
+        break;
+      case 'gutterFlame':
+        fire([moment('carry', 'trail')]);
+        break;
+      case 'catch':
+        fire([moment('carry', 'lead')]);
+        break;
+      case 'brazier':
+        fire([moment('carry', 'close')]);
+        break;
+      case 'legend': {
+        // Warned from its side, met, and left: the legend's own chord (sfx.ts legend).
+        const lg = (phase: 'warn' | 'start' | 'step' | 'end', n = 0): Beat => beat<'legend'>({ type: 'legend', phase, key: 'jukebox', name: 'The Jukebox', line: '', kind: 'sky', side: 1, n });
+        fire([lg('warn')]);
+        later(2600, () => fire([lg('start')]));
+        later(8200, () => fire([lg('end')]));
+        break;
+      }
+      case 'ribbon':
+        for (let n = 1; n <= 4; n++) later((n - 1) * 1300, () => fire([beat<'legend'>({ type: 'legend', phase: 'step', key: 'jukebox', name: 'The Jukebox', line: '', kind: 'ribbon', side: -1, n })]));
+        break;
+      case 'hero':
+        // Off the lip the breath is drawn, cresting a second on as the frame starts; at the apex the bells hang
+        // for the frame's 1.6 s; the landing brings the band back.
+        fire([beat<'heroFrame'>({ type: 'heroFrame', phase: 'lip', key: 'jukebox', inS: 1, secs: 1.6 })]);
+        later(1000, () => fire([beat<'heroFrame'>({ type: 'heroFrame', phase: 'apex', key: 'jukebox', inS: 0, secs: 1.6 })]));
+        later(2600, () => fire([beat<'heroFrame'>({ type: 'heroFrame', phase: 'out', key: 'jukebox', inS: 0, secs: 1.6 })], [{ type: 'land', quality: 'perfect', airtime: 2.6, halfTurns: 0, flips: 0, impact: 0.4, late: false } as SimEvent]));
         break;
       case 'lantern':
         fire([], [{ type: 'lantern', phase: 'lit', cells: 2 } as SimEvent]);
