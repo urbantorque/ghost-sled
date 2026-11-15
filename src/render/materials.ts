@@ -180,7 +180,16 @@ function applyRock(p: Palette): void {
   rock.uRockLedge.value.set(set.ledge).multiplyScalar(set.style[2] === 3 ? k : 1);
   rock.uRockGlow.value.copy(p.accentProp).multiplyScalar(p.massif.lava > 0 ? 1.1 : 0);
   // (Frostfang's crevasse ice has a light of its own inside it.)
-  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.38, 0.62).multiplyScalar(0.3 + 0.32 * p.lamps);
+  if (set.style[2] === 1) {
+    rock.uRockGlow.value.setRGB(0.04, 0.38, 0.62).multiplyScalar(0.3 + 0.32 * Math.min(1, p.lamps));
+    // Its ice goes down with the hazards under the cavern's roof (0.55 there, 0.78 in the open night,
+    // which is left alone), so the cavern's walls are the dark of its frame and the glow at their feet
+    // is the light.
+    const dim = Math.min(1, p.hazardDim / 0.78);
+    rock.uRockLit.value.multiplyScalar(dim * dim);
+    rock.uRockShade.value.multiplyScalar(dim * dim);
+    rock.uRockDeep.value.multiplyScalar(dim);
+  }
   rock.uRockStyle.value.set(...set.style);
   lake.uLakeTrees.value.copy(p.tallDark).lerp(p.tall, 0.35).multiplyScalar(0.8);
 }

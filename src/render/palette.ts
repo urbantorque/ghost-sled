@@ -809,8 +809,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.sunColor = c('#FFF2C4');
       p.sunCore = new Color(2.5, 2.4, 1.5);
       p.sunTint = 0.85;
-      p.sunSize = 0.9;
-      p.sunGlow = 0.7;
+      p.sunSize = 0.75;
+      p.sunGlow = 0.45;
       p.skyZenith = c('#0A2470');
       p.skyMid = c('#2E67BE');
       p.skyHorizon = c('#A6C6EE');
@@ -1251,7 +1251,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.air.far = c('#101A58');
         p.key2 = { color: c('#44D8A2'), k: 1, shade: c('#5C3CC4') };
         p.grade.saturation = 1.0;
-        p.aurora = 1;
+        // (Over 1: the curtains in the sky are bright enough to be what lights the snow.)
+        p.aurora = 1.7;
         p.stars = 1;
         p.massif.flow = 1;
         p.bloom = 0.7;
@@ -1275,7 +1276,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#3A68AC');
         p.skyBand.k = 0.35;
         p.snowLit = c('#93ACE2');
-        p.aurora = 0.75;
+        p.aurora = 1.3;
         p.key2.k = 0.7;
         p.lanternGlow = 0.6;
       },

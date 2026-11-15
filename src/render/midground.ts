@@ -290,6 +290,18 @@ function shoulderMaterial(): ShaderMaterial {
         vec3 sunSnow = mix(uSunColor, mix(vec3(1.0), sunN, 0.15), dayK);
         vec3 col = mix(shade, lit * sunSnow, t);
         col *= mix(1.0, 0.8 + 0.28 * smoothstep(0.1, 0.95, ndl), t);
+        if (uKey2.a > 0.0) {
+          // The aurora's light (Frostfang's night) does not stop at the bank: the terrain's own curtains and
+          // violet shade (materials.ts) carry on over the flanks, a step quieter with distance, so the
+          // ridden snow is not a lit lane between two cobalt hills. (Slow enough to need no clock here.)
+          vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046);
+          float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
+          float a2 = smoothstep(0.22, 0.52, cur) * clamp(nn.y * 1.25 - 0.25, 0.0, 1.0);
+          float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
+          float far2 = mix(1.0, 0.6, smoothstep(60.0, 400.0, vE));
+          col = mix(col, uKey2Shade * (lv * 2.0 + 0.02), uKey2.a * mix(0.5, 0.16, t) * (1.0 - a2));
+          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.8 * far2);
+        }
         // Broad wind-drifted snowfields: soft cool hollows across the open slopes, so a far flank
         // reads as snow with a lie to it rather than one flat sheet (none at the edge, as the bank).
         float drift = vnoise(vWorldPos.xz * vec2(0.011, 0.007) + 2.3) * 0.65 + vnoise(vWorldPos.xz * 0.031 + 7.1) * 0.35;
