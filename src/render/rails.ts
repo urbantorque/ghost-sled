@@ -6,6 +6,7 @@ import { SNOW, crystal, merge, part, reseed, softPart, variantDepthMaterial, var
 import { visualGround } from './ground';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
+import { Facets, strataInto } from './rockforms';
 
 // What the course is furnished with so a place reads before you reach it, on every tier, in one draw:
 // the grindable rails, and the leaps' and the forks' markers. One instanced variant set (flora.ts), so
@@ -138,6 +139,27 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
   const mid = lf ? new Color('#454070') : blossom ? new Color('#9C94A6') : new Color('#7A7088');
   const pale = lf ? new Color('#625C92') : blossom ? new Color('#B2A8B4') : new Color('#94889E');
   const lid = blossom ? new Color('#7E9868') : SNOW;
+  if (biome === 'alpine') {
+    // Pinecrest (the review loop): the fins below stood either side of every lip as flat violet prisms
+    // eight metres tall, the one untextured thing in the mountain's hero frames. Its shoulders are
+    // outcrops in beds instead (rockforms.ts): three blunt stacks leaning on each other, snow on every
+    // ledge and on the tops, a drift round the foot.
+    const f = new Facets();
+    // (A step paler than the fins' rock: in the lip's own shade the darkest bed went to ink and the
+    // stack read as crates. Tapered more, so every bed shows a ledge of snow from the run.)
+    const rock = [new Color('#6C6684'), new Color('#8F88A4'), new Color('#ACA4BA')];
+    const stacks: Array<[number, number, number, number, number, number, number]> = [
+      [0, 0, 2.9, 2.3, 4.6, 0.46, 0.3],
+      [2.4, 0.6, 2.0, 1.7, 3.0, 0.5, 1.4],
+      [-2.3, 0.5, 1.9, 1.6, 2.3, 0.52, -0.9],
+    ];
+    stacks.forEach(([x, z, rx, rz, h, taper, yaw], k) => {
+      const from = f.triangles;
+      strataInto(f, { rx, rz, h: h + 0.8, foot: 0.3, layers: k === 0 ? 4 : 3, sides: 7, rock, lie: SNOW, taper, shift: 0.22, dip: 0.12, dipZ: 0.14, warp: 0.5, jut: 0.22, rough: 0.36, lieMin: 0.02, apron: 0.22, seed: 7711 + k * 13 });
+      f.place(from, x, -0.8, z, yaw);
+    });
+    return merge([f.build(), softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [0, -0.5, 0.4], scale: [5, 1.2, 4] })]);
+  }
   // Tall fins of rock leaning together, broken at the top, each a few hard planes (ART.md section 3:
   // a rock is a chunky crystal, never a pebble), with what lies on their ledges.
   const fin = (r: number, h: number, pos: [number, number, number], rot: [number, number, number], c: Color, jit: number): BufferGeometry => part(new ConeGeometry(r, h, 5, 2), c, { pos, rot, scale: [1, 1, 0.72], jitter: jit });
@@ -167,8 +189,10 @@ function corniceGeometry(p: Palette): BufferGeometry {
   for (const [x, reach] of lumps) {
     parts.push(softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [x, -0.5, -0.3 - reach * 0.32], scale: [1.6, 0.5, reach] }));
     parts.push(softPart(new SphereGeometry(1, 5, 2), under, { pos: [x, -0.82, -0.2 - reach * 0.42], scale: [1.3, 0.38, reach * 0.84] }));
-    // A torn tongue of snow off each scallop.
-    parts.push(softPart(new ConeGeometry(0.42, reach * 1.2, 4), SNOW, { pos: [x + 0.4, -0.3, -0.5 - reach * 1.05], rot: [-Math.PI / 2, 0, 0], scale: [1.3, 1, 0.4] }));
+    // A torn tongue of snow off each scallop. (The review loop: long four-sided tongues, repeated piece
+    // after piece, read from the air as a row of identical white teeth along the brow. Shorter, broader
+    // and rounder, each a scallop's sagging edge.)
+    parts.push(softPart(new ConeGeometry(0.7, reach * 0.62, 6), SNOW, { pos: [x + 0.4, -0.34, -0.45 - reach * 0.78], rot: [-Math.PI / 2, 0, 0], scale: [1.3, 1, 0.42] }));
   }
   return merge(parts);
 }
@@ -329,7 +353,7 @@ export class Rails {
     for (let side = -1; side <= 1; side += 2) {
       const sd = side < 0 ? 0 : 1;
       // Stepping up the bank toward the lip, so a pair of shoulders frames the sky past it.
-      const stones = big ? [[-1.5, 2.6, 1.5], [-11, 4.2, 1.15], [-23, 3.4, 0.8]] : [[-1, 2.6, 0.7]];
+      const stones = big ? (c.biome === 'alpine' ? [[-1.5, 2.8, 1.4], [-15, 4.6, 0.85]] : [[-1.5, 2.6, 1.5], [-11, 4.2, 1.15], [-23, 3.4, 0.8]]) : [[-1, 2.6, 0.7]];
       stones.forEach(([dz, e, sc], k) => {
         const z = l.z + dz;
         const x = c.centerX(z) + side * (c.halfWidth(z) + e + hashf(n, sd, k) * 0.8);

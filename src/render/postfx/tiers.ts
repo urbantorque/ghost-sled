@@ -56,7 +56,7 @@ const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4
 export const PASSES: Record<Tier, PassSettings> = {
   low: { ...OFF },
   medium: { ...OFF, shaftTaps: 6, shaftDiv: 4, mirror: 'bake', fxaa: 2 },
-  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', fxaa: 2, fringe: 0.7, shadowReach: 34 },
+  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', fxaa: 2, fringe: 0.3, shadowReach: 34 },
   ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: false, fxaa: 2, fringe: 1, shadowReach: 44 },
 };
 

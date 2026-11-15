@@ -362,6 +362,10 @@ export class LandingAid {
   readonly root = new Object3D();
   private ring: Mesh;
   private ringMat = ringMaterial();
+  /** The tier draws no cast shadows (Low): the blob is the rider's whole shadow, so it is drawn larger,
+   *  darker and thrown a little off the sled away from the sun, where the chase lens can see it. Under
+   *  the sled alone it was hidden by the sled, and the rider floated. */
+  painted = false;
   private blob: Mesh;
   private blobMat = blobMaterial();
   private q = new Quaternion();
@@ -455,6 +459,15 @@ export class LandingAid {
           bz = s.z + s.vz * lead;
         }
       }
+      if (this.painted) {
+        const sun = shared.uSunDir.value;
+        const hl = Math.hypot(sun.x, sun.z);
+        if (hl > 0.05) {
+          const reach = Math.min(0.75, 0.3 + (0.3 * hl) / Math.max(0.25, sun.y));
+          bx -= (sun.x / hl) * reach;
+          bz += (sun.z / hl) * reach;
+        }
+      }
       const gy = c.ground(bx, bz);
       c.gradient(bx, bz, g);
       const n = tmpN.set(-g.x, 1, g.z).normalize();
@@ -465,9 +478,13 @@ export class LandingAid {
       // spreads and thins only gently with height, and where the cast shadows are faint (Blizzard's
       // overcast) it carries the read on its own, a little darker.
       const k = 1 + h * 0.09;
-      this.blob.scale.set(0.55 * k, 0.95 * k, 1);
+      const wide = this.painted ? 1.45 : 1;
+      this.blob.scale.set(0.55 * k * wide, 0.95 * k * (this.painted ? 1.25 : 1), 1);
       this.blobMat.uniforms.uColor.value.copy(shared.uSnowDeep.value).multiplyScalar(0.75 - 0.15 * faintK);
-      this.blobMat.uniforms.uAlpha.value = Math.min(0.7, Math.max(0.3 + 0.2 * faintK, (0.5 + 0.25 * faintK) / (1 + h * 0.15)));
+      // (The painted shadow takes the shade's own hue: in the deep blue it read as a saturated disc,
+      // a decal under the sled rather than its shadow on the snow.)
+      if (this.painted) this.blobMat.uniforms.uColor.value.lerp(shared.uSnowShade.value, 0.55).multiplyScalar(0.8);
+      this.blobMat.uniforms.uAlpha.value = Math.min(0.7, Math.max(0.3 + 0.2 * faintK, (0.5 + 0.25 * faintK) / (1 + h * 0.15))) + (this.painted ? 0.14 : 0);
     }
 
     // Predict touchdown with a ballistic march over the real ground function.

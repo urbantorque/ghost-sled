@@ -888,9 +888,16 @@ export function lipPiece(ctx: SiteCtx): Piece {
               [5.7, -1.5, 2.9, 6.4, 3.1],
               [6.3, -12, 2.2, 4.6, 5.4],
             ];
-        crown.forEach(([dx, dz, rx, rz, up], k) => {
+        // (Pinecrest, from the review loop: tapered to a point in three beds, a crown stood over the lip
+        // as a flat violet spike, the very prism this piece was rebuilt to lose. Its crowns are lower,
+        // broader and blunt, in five beds, so each holds snow on its ledges and reads as an outcrop.)
+        const blunt = biome === 'alpine' && !low;
+        crown.forEach(([dx, dz, rx0, rz0, up0], k) => {
           const from = f.triangles;
-          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
+          const rx = blunt ? rx0 * 1.35 : rx0;
+          const rz = blunt ? rz0 * 1.15 : rz0;
+          const up = blunt ? 1.6 + up0 * 0.38 : up0;
+          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: blunt ? 5 : 3, sides: blunt ? 8 : 6, rock, lie, taper: blunt ? 0.34 : 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
           f.place(from, x + s * dx, y - 1, dz, rnd() * 0.5 - 0.25);
         });
         for (let k = 0; k < (low ? 1 : 2); k++) {
@@ -983,6 +990,9 @@ export function lipPiece(ctx: SiteCtx): Piece {
 
 // ---------------------------------------------------------------- a lift line and its station
 
+/** Pinecrest's shutters: the pines' own teal, a step lighter. */
+const SHUTTER = C('#2C6A66');
+
 /** A lift crossing the run: the station close beside it, its cable hall at the height the line runs at,
  *  on a tall base where the bank is lower than the air; a tower on the far bank and two more climbing
  *  away from the run; both cables. Pinecrest in timber and steel, Frostfang a red ropeway house, Ember
@@ -1027,7 +1037,22 @@ export function liftPiece(ctx: SiteCtx): Piece {
       for (let i = 0; i < 4; i++) {
         parts.push(box(1.5, 1.5, 0.14, glass, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.04]));
         parts.push(box(0.14, 1.5, 1.5, glass, [hx - (s * W) / 2 - s * 0.04, y, -D / 2 + (i + 0.5) * (D / 4)]));
+        if (biome === 'alpine' && !ctx.low) {
+          // Pinecrest (the review loop): a bare plaster tower with rows of glass read as a block of flats.
+          // Each window has its shutters and a sill of snow, as the village's have.
+          const wx = hx - W / 2 + (i + 0.5) * (W / 4);
+          const wz = -D / 2 + (i + 0.5) * (D / 4);
+          const fx = hx - (s * W) / 2 - s * 0.05;
+          for (const e of [-1, 1]) {
+            parts.push(box(0.42, 1.6, 0.1, SHUTTER, [wx + e * 0.98, y, D / 2 + 0.06]));
+            parts.push(box(0.1, 1.6, 0.42, SHUTTER, [fx, y, wz + e * 0.98]));
+          }
+          parts.push(box(2.5, 0.16, 0.34, SNOW, [wx, y - 0.86, D / 2 + 0.16]));
+          parts.push(box(0.34, 0.16, 2.5, SNOW, [fx - s * 0.1, y - 0.86, wz]));
+        }
       }
+      // (A timber band under each row, so the wall is storeys and not one slab.)
+      if (biome === 'alpine') parts.push(box(W + 0.24, 0.26, D + 0.24, TIMBER, [hx, y - 1.5, 0]));
     }
     parts.push(box(W + 0.5, 0.4, D + 0.5, trim, [hx, hall, 0]));
     // The cable hall, open toward the run, its bull wheel showing under a long overhanging roof.

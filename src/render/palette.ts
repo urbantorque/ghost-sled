@@ -160,6 +160,20 @@ export interface Grade {
   exposure?: number;
   hi?: Color;
   lo?: Color;
+  /** Low's poster only: how far the lit snow is pulled back toward white of its own value after the
+   *  grade is baked in (0: none). A gold hour tints the snow twice on Low, by the light and by the
+   *  baked grade, and at full strength the slopes read as sand. */
+  posterSnow?: number;
+  /** Low's poster only: the brightest the lit snow is drawn, its strongest channel (0: no limit). A
+   *  morning baked through the grade and the curve reached paper white on Low, and a slope with no
+   *  shadow on it then had no form at all. */
+  posterKey?: number;
+  /** Low's poster only: how far the lit snow leans to the baked shade's hue (0: none). With no cast
+   *  shadow and no curve to cool it, the lit snow on Low was a neutral grey-white, read as paper. */
+  posterCool?: number;
+  /** Low's poster only: how far the baked shade is pulled toward its own grey (0: none). A gold hour's
+   *  violet shade, baked through a raised saturation, lay on Low's banks as a cobalt stain. */
+  posterMute?: number;
 }
 
 /** The film curve's numbers, in one place: the composite pass compiles them into its shader (post.ts) and
@@ -699,6 +713,10 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
   p.grade.exposure ??= 1;
   p.grade.hi ??= new Color(1, 1, 1);
   p.grade.lo ??= new Color(1, 1, 1);
+  p.grade.posterSnow ??= 0;
+  p.grade.posterKey ??= 0;
+  p.grade.posterCool ??= 0;
+  p.grade.posterMute ??= 0;
   return p;
 }
 
@@ -1009,8 +1027,24 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.exposure = 1.06;
       p.grade.hi = c('#FFFDF4');
       p.grade.lo = c('#E6EEFF');
-      p.grade.shafts = 0.35;
-      p.atmo.rays = 0.3;
+      p.grade.shafts = 0.8;
+      p.atmo.rays = 0.6;
+      // The review's first pass: no frame of the morning showed where its light came from. The disc
+      // sits lower and nearer the fall line (the key light keeps its height), so it stands just over the
+      // frame's top right and its shafts fan down into the picture. The powder's glints are fewer: at
+      // 1.25 the whole foreground was confetti.
+      setSun(p, 24, 11, 44, 24);
+      p.sparkle = 0.7;
+      p.grade.glitter = 0.35;
+      p.grade.lens = 0.15;
+      // (Third pass: the lower half of a morning frame was one pale field with nothing painted in it, and
+      // on Low paper white from the start to the lake. The exposure comes down a step, the cloud's
+      // shadows cross the open slopes from the start line, and Low's lit snow stops short of paper.)
+      p.grade.exposure = 1.0;
+      p.grade.contrast = 1.12;
+      p.clouds.shadow = 0.34;
+      p.grade.posterKey = 0.92;
+      p.grade.posterCool = 0.16;
       return;
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
@@ -1103,8 +1137,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // The cloud builds through the afternoon. The grade holds cool, so the gold later is a change.
       from: 500, at: 1700, dusk: 0,
       edit: (p) => {
-        setSun(p, 38, 17, 36, 18);
+        // (The disc comes down over the valley's far side, inside the frame from the First Drop's lip on:
+        // the cloud's shafts fall from it onto the lake.)
+        setSun(p, 23, 9.5, 36, 18);
         p.sunColor = c('#FFF0D8');
+        p.sunGlow = 1;
         p.skyZenith = c('#184A9E');
         p.skyMid = c('#6FA2D8');
         p.skyHorizon = c('#EDE8DC');
@@ -1112,36 +1149,46 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.low = 0.95;
         p.clouds.high = 0.8;
         p.clouds.top = 0.3;
-        p.clouds.shadow = 0.38;
+        p.clouds.shadow = 0.44;
         p.clouds.lit = c('#FFF8EC');
         p.clouds.shade = c('#8FA6CE');
-        p.atmo.rays = 0.6;
-        p.grade.shafts = 0.6;
+        p.atmo.rays = 0.75;
+        p.grade.shafts = 1;
+        p.grade.lens = 0.15;
       },
     },
     {
       // The gold comes: the sun drops under the cloud, honey light, long violet-blue shadows, the peaks
       // glowing, and the saturation rises. Gold against blue, never the old lilac.
-      from: 2300, at: 3250, dusk: 0.55,
+      // (Full by the benches under the second leap: at 3250 the leap's own frames, 2430 to 2700, were
+      // a quarter of the way there and read as beige. The disc stays inside the frame.)
+      from: 2250, at: 2800, dusk: 0.55,
       edit: (p) => {
-        setSun(p, 46, 9, 28, 13);
-        p.sunColor = c('#FFDCA8');
+        setSun(p, 29, 8, 28, 13);
+        // (Second pass: honey, not orange. At #FFDCA8 on cream snow under a 1.22 saturation the slopes
+        // were peach dunes against electric ultramarine; the light pales, the shade goes to a quieter
+        // violet-blue and the saturation rises less.)
+        p.sunColor = c('#FFE2BA');
         p.sunCore.setRGB(3, 2.5, 1.7);
         p.sunTint = 0.6;
         p.sunSize = 1.1;
-        p.sunGlow = 1.1;
+        p.sunGlow = 0.9;
         p.skyZenith = c('#1E4A96');
         p.skyMid = c('#A8BCCB');
         p.skyHorizon = c('#FFC98A');
         p.skyBelow = c('#E8C8A8');
-        p.snowLit = c('#FFF6E6');
-        p.snowShade = c('#6480D8');
-        p.snowDeep = c('#3446B4');
+        p.snowLit = c('#FFFAF0');
+        // (Third pass: the second pass's quieter shade and a cream fog left the whole stretch one milky
+        // cream with nothing in long shadow. The shade takes back a step of violet, and the air is a
+        // deeper honey that holds its value, so the far planes and the shadows read against the light.)
+        p.snowShade = c('#6670C6');
+        p.snowDeep = c('#3A44A4');
         p.rim = c('#FFD2A0');
-        p.fog = c('#F0CFA8');
+        p.fog = c('#DDB494');
+        p.fogFar = 760;
         p.hemiSky = c('#8AA8E0');
-        p.air.far = c('#8C8CD2');
-        p.air.scatter = 1.5;
+        p.air.far = c('#7C80CA');
+        p.air.scatter = 1.0;
         p.clouds.lit = c('#FFE0B4');
         p.clouds.shade = c('#7E8CB8');
         p.clouds.rim = c('#FFB86C');
@@ -1149,11 +1196,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.glowLine = -60;
         p.atmo.rays = 0.8;
         p.grade.gain = c('#FFF9F0');
-        p.grade.shafts = 0.8;
-        p.grade.saturation = 1.2;
-        p.grade.exposure = 1.02;
-        p.grade.hi = c('#FFF0D2');
-        p.grade.lo = c('#E2E0FF');
+        p.grade.shafts = 1;
+        p.grade.saturation = 1.16;
+        p.grade.contrast = 1.17;
+        p.grade.exposure = 0.97;
+        p.grade.hi = c('#FFF4DE');
+        p.grade.lo = c('#DCD8FF');
+        p.grade.lens = 0.1;
+        p.grade.posterSnow = 0.7;
+        p.grade.posterMute = 0.3;
+        p.sparkle = 0.6;
         p.giftGlow = 0.2;
         p.lamps = 0.7;
         p.bloom = 0.4;
@@ -1164,15 +1216,18 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // deepening behind the fireworks.
       from: 3700, at: 4250, dusk: 0.85,
       edit: (p) => {
-        setSun(p, 50, 5, 22, 11);
-        p.sunColor = c('#FFC890');
+        setSun(p, 31, 5, 22, 11);
+        p.sunColor = c('#FFDAB0');
         p.sunCore.setRGB(3, 2.1, 1.2);
+        p.sunGlow = 0.8;
+        p.grade.shafts = 0.7;
+        p.grade.saturation = 1.1;
         p.skyZenith = c('#16306E');
         p.skyMid = c('#7A7CB8');
         p.skyHorizon = c('#FFB07A');
         p.skyBelow = c('#C89C98');
-        p.snowLit = c('#F8E4D2');
-        p.snowShade = c('#5868C8');
+        p.snowLit = c('#FBEEE2');
+        p.snowShade = c('#6068B8');
         p.snowDeep = c('#2A389C');
         p.fog = c('#D8B4B0');
         p.hemiSky = c('#7888D8');
@@ -1181,8 +1236,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.shade = c('#5E64A8');
         p.massif.glowK = 0.9;
         p.massif.glowLine = 120;
-        p.grade.hi = c('#FFE8C6');
+        p.grade.hi = c('#FFEED6');
         p.grade.lo = c('#DCDCFF');
+        p.grade.posterSnow = 0.75;
         p.hazardDim = 0.9;
         p.stars = 0.2;
         p.giftGlow = 0.4;
@@ -1629,14 +1685,64 @@ const lamps = (p: Palette, k: number): void => {
 export const PLACES: Record<BiomeId, Place[]> = {
   alpine: [
     {
-      // The First Drop and the Valley Leap: the valley opens, haze in layers below, shafts through the cloud.
+      // The gold's own leap (the second): honey on the lit snow, violet in the long shadows, the valley's
+      // haze lit from the sun's side.
+      kind: 'leap',
+      nth: 1,
+      edit: (p) => {
+        // (Third pass: at 0.85 the valley's haze was a cream plate under the leap. Thinner, and honey
+        // rather than cream, so the valley floor keeps its forms in the light.)
+        p.fogFar *= 1.3;
+        p.air.low = 0.5;
+        p.atmo.valley = 0.55;
+        p.atmo.valleyColor = c('#F2B878');
+        p.atmo.rays = 1;
+        p.grade.shafts = 1;
+        p.grade.contrast += 0.04;
+        p.grade.exposure! *= 0.95;
+      },
+    },
+    {
+      // The Valley Leap: the finish town in a pool of gold, everything else in long shadow.
+      kind: 'leap',
+      nth: 2,
+      edit: (p) => {
+        // (Third pass: the haze at 0.8 bleached the town to cream boxes with no spires. It thins and
+        // deepens to amber, so the town's roofs and lit windows hold their darks inside the gold.)
+        p.fogFar *= 1.4;
+        p.air.low = 0.45;
+        p.atmo.valley = 0.45;
+        p.atmo.valleyColor = c('#EE9C5C');
+        p.atmo.rays = 1;
+        p.grade.shafts = 1;
+        p.grade.contrast += 0.07;
+        p.snowShade = c('#5A60B4');
+        // (1.6 after the third pass; 1.3 after the fourth: on Low the lamps' pools on the open slope
+        // under the leap were hard pale ovals.)
+        lamps(p, 1.3);
+      },
+    },
+    {
+      // The First Drop (and any leap a shuffled course adds): the valley opens, haze in layers below,
+      // shafts through the cloud.
       kind: 'leap',
       edit: (p) => {
-        p.fogFar *= 1.25;
-        p.air.low = 0.75;
-        p.atmo.valley = 0.85;
-        p.atmo.rays = Math.max(p.atmo.rays, 0.7);
-        p.grade.shafts = Math.max(p.grade.shafts, 0.7);
+        // (Second pass: at 0.85 the valley's haze lay over the lake as milk on High, and Low, which draws
+        // less of it, showed the lake better. The haze thins and the frame takes more contrast.)
+        p.fogFar *= 1.35;
+        p.air.low = 0.5;
+        p.atmo.valley = 0.5;
+        p.grade.contrast += 0.05;
+        p.grade.exposure! *= 0.95;
+        p.atmo.rays = 1;
+        p.grade.shafts = 1;
+        // (Third pass: the valley floor was one white-cyan plate. Its snowfield opens into more frozen
+        // lake, and the haze over it is blue, so the floor reads as lake and haze in layers.)
+        p.massif.sea = 0.5;
+        p.atmo.valleyColor = c('#9CC0EC');
+        p.atmo.valley = 0.4;
+        p.air.low = 0.25;
+        p.fog = c('#B4D0F2');
       },
     },
     {
@@ -1653,11 +1759,74 @@ export const PLACES: Record<BiomeId, Place[]> = {
       },
     },
     {
+      // The glades run on through the fork and the chute to the lake's shore (ART.md 15: 700 to 1700):
+      // the same dappled, teal-anchored grade, held a little under the morning's exposure so the open
+      // slopes above the lake keep their blue shade instead of bleaching.
+      kind: 'fork',
+      nth: 0,
+      edit: (p) => {
+        p.grade.exposure! *= 0.94;
+        p.grade.contrast = 1.13;
+        p.grade.saturation += 0.06;
+        p.grade.lo = c('#D8F0EC');
+        p.clouds.shadow = Math.max(p.clouds.shadow, 0.42);
+        p.grade.shafts = 1;
+        p.atmo.rays = Math.max(p.atmo.rays, 0.8);
+      },
+    },
+    {
+      kind: 'chute',
+      nth: 0,
+      edit: (p) => {
+        p.grade.exposure! *= 0.88;
+        p.grade.contrast = 1.17;
+        p.grade.saturation += 0.08;
+        p.grade.lo = c('#D4ECF0');
+        p.snowShade = c('#6690E4');
+        // (The air clears toward the lake: the shore, the lodge and the ice ahead keep their darks.)
+        p.fog = c('#B4D0F4');
+        p.fogFar *= 1.3;
+        p.air.low = 0.3;
+        p.clouds.shadow = Math.max(p.clouds.shadow, 0.45);
+        // (Fourth pass: with the sun ahead down the chute, full shafts fanned white rays across the lake's
+        // first ice and blew it out to a grey road.)
+        p.grade.shafts = 0.5;
+        p.atmo.rays = 0.45;
+      },
+    },
+    {
+      // The benches under the second leap and the fork after them: the gold has come. Long violet-blue
+      // shadows, the saturation up, the shafts full.
+      kind: 'benches',
+      edit: (p) => {
+        p.grade.contrast += 0.04;
+        p.grade.shafts = 1;
+        p.atmo.rays = 1;
+      },
+    },
+    {
+      kind: 'fork',
+      nth: 1,
+      edit: (p) => {
+        p.grade.contrast += 0.04;
+        p.grade.shafts = 1;
+        p.atmo.rays = 1;
+      },
+    },
+    {
       // Mirror Lake: high-key and wide, the one place the grade goes almost monochrome blue.
       kind: 'lake',
       edit: (p) => {
-        p.grade.saturation = 0.9;
-        p.grade.exposure! *= 1.05;
+        p.grade.saturation = 0.92;
+        p.grade.contrast = 1.14;
+        p.snowDeep = c('#123A8C');
+        // (Third pass: the ice read mid-blue because at a rider's angle it mirrors the horizon, which the
+        // cloud stop had made cream. Over the lake the low sky is a clear pale blue, so the mirror holds
+        // the black-cyan body under a blue sky.)
+        // (Fourth pass: still mid-blue. A step deeper.)
+        p.skyHorizon = c('#8CB0E2');
+        p.skyMid = c('#3E78C8');
+        p.grade.shafts = 0.7;
         p.grade.hi = c('#EEF6FF');
         p.grade.lo = c('#D4E4FF');
         p.fog = c('#BCD8F8');
@@ -1668,16 +1837,17 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The covered bridge: the lamps come on against blue shade.
       kind: 'bridge',
       edit: (p) => {
-        lamps(p, 0.9);
+        lamps(p, 1.2);
         p.grade.lo = c('#D8DEFF');
       },
     },
     {
       // Old Town: lamplight against blue shade, the warmest grade on the mountain.
+      // (Third pass: at 1 the street's snow was flat lavender, with no amber under the lanterns.)
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1);
-        p.snowShade = c('#586CD0');
+        lamps(p, 1.6);
+        p.snowShade = c('#5064C8');
         p.grade.gain = c('#FFF4E0');
         p.grade.hi = c('#FFEAC4');
         p.grade.lo = c('#D4D8FF');
@@ -1689,8 +1859,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1.1);
-        p.grade.hi = c('#FFE8C2');
-        p.bloom += 0.08;
+        p.grade.hi = c('#FFEED2');
+        p.bloom += 0.04;
+        // (The sun stands in the street's mouth at the line: at full shafts it flooded the frame orange
+        // and bleached the coat.)
+        p.grade.shafts = 0.35;
+        p.sunGlow = 0.6;
       },
     },
   ],
@@ -2166,6 +2340,7 @@ export function journeyDusk(biome: BiomeId, metres: number): number {
 // composite applies, and the same curve, on the snow, the sky, the air, the clouds and the far ranges.
 
 let poster = false;
+const posterWhite = new Color();
 let posterOut: Palette | null = null;
 
 /** Low draws the poster (materials.ts turns it on with the tier). */
@@ -2207,7 +2382,27 @@ export function tierLook(p: Palette): Palette {
   const o = (posterOut = lerpPalette(p, p, 0, posterOut ?? ({} as Palette)));
   const g = p.grade;
   gradeColor(o.snowLit, g, 0.85);
+  if (g.posterSnow) {
+    const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
+    o.snowLit.lerp(posterWhite.setRGB(l, l, l), g.posterSnow);
+  }
+  if (g.posterKey) {
+    const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
+    if (l > g.posterKey) o.snowLit.multiplyScalar(g.posterKey / l);
+  }
   for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor]) gradeColor(col, g);
+  if (g.posterMute) {
+    for (const col of [o.snowShade, o.snowDeep]) {
+      const l = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
+      col.lerp(posterWhite.setRGB(l, l, l), g.posterMute);
+    }
+  }
+  if (g.posterCool) {
+    // The baked shade's hue at the lit snow's own value.
+    const l = Math.max(o.snowLit.r, o.snowLit.g, o.snowLit.b);
+    const s = Math.max(o.snowShade.r, o.snowShade.g, o.snowShade.b, 1e-4);
+    o.snowLit.lerp(posterWhite.copy(o.snowShade).multiplyScalar(l / s), g.posterCool);
+  }
   if (o.skyMid) gradeColor(o.skyMid, g);
   if (o.skyBand.color) gradeColor(o.skyBand.color, g);
   if (o.mist) gradeColor(o.mist, g);

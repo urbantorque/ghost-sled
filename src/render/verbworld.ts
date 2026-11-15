@@ -891,7 +891,10 @@ export class VerbWorld {
       } else {
         const front = l.wave >= 0 ? (ctx.reduced ? 1e9 : s.z - 20 + (ctx.time - l.wave) * 150) : -1e9;
         const lit = z < front ? share : Math.max(0, share - 1 / Math.max(1, p.need));
-        lum = 0.45 + 1.1 * lit + (z < front && z > front - 40 ? 0.9 : 0);
+        // (The review loop: at 0.45 a street's lanterns hung as dark drums until the first stomp, at dusk,
+        // over snow they did not light. They burn low from the start, enough to pool on the snow under
+        // them, and a stomp still doubles them.)
+        lum = 0.85 + 1.1 * lit + (z < front && z > front - 40 ? 0.9 : 0);
         if (lit > 0.6) col = WHITE_GOLD;
       }
       if (over) {

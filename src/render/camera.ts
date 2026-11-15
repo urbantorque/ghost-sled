@@ -247,10 +247,13 @@ const TRIPOD_REACH = 24;
 const VISTA_FROM = 1.0;
 const VISTA_FULL = 1.9;
 const VISTA_BACK = 0.35;
-const VISTA_OUT = 2.6;
+// (The review loop, twice: at 2.6 m and then 2.1 m back with 6 and then 4 degrees more lens, the rider at
+// a vista's apex was a tenth of the frame's height or less, against ART.md 15's rule 4. The lens keeps its
+// height and its side step, so the valley still opens under the rider, and stands closer.)
+const VISTA_OUT = 1.5;
 const VISTA_UP = 2.1;
 const VISTA_SIDE = 1.7;
-const VISTA_FOV = 6;
+const VISTA_FOV = 3;
 /** The predicted landing spot is kept above this share of the frame's lower half (NDC). */
 const VISTA_RING_NDC = -0.78;
 /** The chase's follow: the lens trails its set point by speed / FOLLOW_RATE metres, so a boost surges
@@ -316,10 +319,15 @@ const REVEAL_YAW = 0.07;
 /** The held wide on the biggest leap: what it adds to the vista at full weight (metres back, up and aside,
  *  degrees of lens) and its letterbox. It rides the vista's own weight, so it is in as the flight opens
  *  and home before the stomp window, as the vista is. */
-const WIDE_OUT = 3.0;
+// (The review loop: at 3 m back and 4 degrees on top of the vista's own, the rider was a thirtieth of the
+// frame at the apex of the game's one image. The wide keeps its height and its side step and gives back
+// two fifths of its distance.)
+// (And again after the third pass: 1.8 m and 2 degrees left the rider a twelfth of the frame at the apex
+// of the game's one image. 0.9 m and 1 degree.)
+const WIDE_OUT = 0.9;
 const WIDE_UP = 1.5;
 const WIDE_SIDE = 2.0;
-const WIDE_FOV = 4;
+const WIDE_FOV = 1;
 const WIDE_BOX = 0.8;
 /** The slow hero frame: from wherever the wide stood, the lens pushes in to HERO_BACK metres behind its
  *  set point and HERO_UP over the sled (half as far again on a phone, whose rider is already big),
@@ -1144,7 +1152,11 @@ export class ChaseCamera {
     if (this.ground) desired.y = Math.max(desired.y, this.ground(desired.x, desired.z) + 0.45);
     // The results card takes the right of a wide screen (the rider moves to the left column, as the
     // results hero shot does) and the lower part of a phone's (the rider moves up into the open band).
-    this.finRes += ((t.results ? 1 : 0) - this.finRes) * (1 - Math.exp(-dt * 3));
+    // (The review loop: moved only once the card was up, the rider was still mid-frame as it landed, and
+    // the card's edge cut it in half. The move starts as the swing settles, so the rider is in its column
+    // by the time the results open; a skip still snaps it there.)
+    const resWant = t.results ? 1 : smooth01((this.finT - FINISH_SWING_S * 0.7) / 0.8);
+    this.finRes += (resWant - this.finRes) * (1 - Math.exp(-dt * (t.results ? 3 : 4)));
     const toward = azimuth(t.pos.x - desired.x, t.pos.z - desired.z);
     const off = portrait ? 0 : Math.atan(0.5 * tanHalfW) * this.finRes;
     const elev = Math.atan2(t.pos.y + 0.7 - desired.y, Math.hypot(t.pos.x - desired.x, t.pos.z - desired.z));

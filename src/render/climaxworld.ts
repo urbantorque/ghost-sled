@@ -137,7 +137,10 @@ export class ClimaxWorld {
         kit.glow(lx + side * (lhw + 2.5), ly + 2, cx.lineZ + 2, 4 + 3 * rise, WHITE_GOLD, 0.8 + rise + 1.5 * flare, GLOW_STAR);
       }
       kit.decal(c, lx, cx.lineZ, 2.4, 2 * lhw, WHITE_GOLD, 0.5 + 0.9 * rise + 1.5 * flare, DECAL_LINE, Math.PI / 2);
-      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, 0.4 + 1.2 * rise + 1.5 * flare);
+      // (The review loop, three passes running: at up to 3.1 over 34 m the line's light flooded the snow
+      // and the square orange as the sled crossed and bleached the rider to a peach ghost. It peaks at
+      // 1.6: the beams, the bar and the shells carry the moment.)
+      pushLocalLight(lx, ly + 5, -cx.lineZ, 1, 0.9, 0.65, 34, 0.35 + 0.75 * rise + 0.5 * flare);
     }
     if (ctx.mode !== 'run') return;
     // Shells, each volley once a run: as the sled lands the leap, as it comes into the town, and timed from
