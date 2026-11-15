@@ -470,6 +470,10 @@ export class Props {
     // light's glow in one more, drawn after the world; past the detail range a light is a small flame painted in
     // its glow, a few pixels tall. Two draws for every light on the course (the near sparks, the near great
     // lights and the far diamonds were three).
+    // (On Lanternfall's Low, with no tone curve to roll it to marigold, the flames' gold read as lemon against the
+    // lilac snow: there their marigold leans amber, as the Lanternfall review found.)
+    const warm = biome === 'lantern' && !this.arches;
+    for (const m of [this.giftMat, this.glowMat]) (m.uniforms.uMarigold.value as Color).set(warm ? '#FFB43C' : '#FFD34D');
     add('gift', spiritFlameGeometry(), this.giftMat, 1100, false);
     add('glow', spiritGlowGeometry(), this.glowMat, 2400, false);
     this.batches.get('glow')!.mesh.renderOrder = 2;
