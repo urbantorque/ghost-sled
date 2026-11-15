@@ -87,13 +87,15 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     phone: { r: 7.0, up: 1.3, sweep: 0.14, drift: 0.05, ahead: 22, lift: 0.8, crane: 0, hero: [-0.08, -0.08] },
   },
   // A rider coming out of the cloud above a valley of rising lanterns (ART.md 15, the one image): the break,
-  // from the last of the cloud over the lip and down into the Lamp Road, under the deck's light, the lens
-  // a little nearer than the plain reel's so the hero is large against the valley.
+  // from the lip and down into the Lamp Road, under the deck's light. No crane, the lens near and swung to
+  // the valley side, the look low: the rider large in the air over the lanterns with the peak behind, and the
+  // duel partner out past the frame's edge (at 0.3 and a crane it stood beside the hero, and the hero was
+  // cut by the frame's foot).
   lanternfall: {
-    from: 1490,
-    to: 2050,
+    from: 1540,
+    to: 1950,
     light: 1600,
-    desk: { r: 5.4, up: 1.4, sweep: 0.3, drift: 0.14, ahead: 44, lift: 1.4, crane: 0.3, hero: [0.08, 0.2] },
+    desk: { r: 4.8, up: 1.3, sweep: 0.4, drift: 0.14, ahead: 40, lift: 0.6, crane: 0, hero: [0.08, 0.2] },
     phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
   },
 };
