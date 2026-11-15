@@ -1014,15 +1014,16 @@ function round7(p: Palette, biome: BiomeId): void {
       p.grade.exposure = 1.06;
       p.grade.hi = c('#FFFDF4');
       p.grade.lo = c('#E6EEFF');
-      p.grade.shafts = 0.5;
-      p.atmo.rays = 0.4;
+      p.grade.shafts = 0.8;
+      p.atmo.rays = 0.6;
       // The review's first pass: no frame of the morning showed where its light came from. The disc
       // sits lower and nearer the fall line (the key light keeps its height), so it stands just over the
       // frame's top right and its shafts fan down into the picture. The powder's glints are fewer: at
       // 1.25 the whole foreground was confetti.
-      setSun(p, 25, 14, 44, 24);
-      p.sparkle = 0.8;
-      p.grade.glitter = 0.4;
+      setSun(p, 24, 11, 44, 24);
+      p.sparkle = 0.7;
+      p.grade.glitter = 0.35;
+      p.grade.lens = 0.15;
       return;
     case 'glacier':
       p.air = { far: c('#27469C'), cool: c('#D8E2FF'), low: 0.5, scatter: 1.25 };
@@ -1117,7 +1118,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       edit: (p) => {
         // (The disc comes down over the valley's far side, inside the frame from the First Drop's lip on:
         // the cloud's shafts fall from it onto the lake.)
-        setSun(p, 23, 10.5, 36, 18);
+        setSun(p, 23, 9.5, 36, 18);
         p.sunColor = c('#FFF0D8');
         p.sunGlow = 1;
         p.skyZenith = c('#184A9E');
@@ -1131,8 +1132,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.lit = c('#FFF8EC');
         p.clouds.shade = c('#8FA6CE');
         p.atmo.rays = 0.75;
-        p.grade.shafts = 0.9;
-        p.grade.lens = 0.4;
+        p.grade.shafts = 1;
+        p.grade.lens = 0.15;
       },
     },
     {
@@ -1143,7 +1144,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 2250, at: 2800, dusk: 0.55,
       edit: (p) => {
         setSun(p, 29, 8, 28, 13);
-        p.sunColor = c('#FFDCA8');
+        // (Second pass: honey, not orange. At #FFDCA8 on cream snow under a 1.22 saturation the slopes
+        // were peach dunes against electric ultramarine; the light pales, the shade goes to a quieter
+        // violet-blue and the saturation rises less.)
+        p.sunColor = c('#FFE8C4');
         p.sunCore.setRGB(3, 2.5, 1.7);
         p.sunTint = 0.6;
         p.sunSize = 1.1;
@@ -1152,11 +1156,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#A8BCCB');
         p.skyHorizon = c('#FFC98A');
         p.skyBelow = c('#E8C8A8');
-        p.snowLit = c('#FFF6E6');
-        p.snowShade = c('#5E72D8');
-        p.snowDeep = c('#3440B0');
+        p.snowLit = c('#FFFAF0');
+        p.snowShade = c('#6E7CC8');
+        p.snowDeep = c('#3E4AA8');
         p.rim = c('#FFD2A0');
-        p.fog = c('#F2C69A');
+        p.fog = c('#F0D0AC');
         p.hemiSky = c('#8AA8E0');
         p.air.far = c('#8C8CD2');
         p.air.scatter = 1.5;
@@ -1168,12 +1172,13 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.atmo.rays = 0.8;
         p.grade.gain = c('#FFF9F0');
         p.grade.shafts = 1;
-        p.grade.saturation = 1.22;
+        p.grade.saturation = 1.12;
         p.grade.contrast = 1.12;
         p.grade.exposure = 1.0;
-        p.grade.hi = c('#FFF0D2');
+        p.grade.hi = c('#FFF4DE');
         p.grade.lo = c('#DCD8FF');
-        p.grade.posterSnow = 0.55;
+        p.grade.lens = 0.1;
+        p.grade.posterSnow = 0.7;
         p.sparkle = 0.6;
         p.giftGlow = 0.2;
         p.lamps = 0.7;
@@ -1186,14 +1191,17 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3700, at: 4250, dusk: 0.85,
       edit: (p) => {
         setSun(p, 31, 5, 22, 11);
-        p.sunColor = c('#FFC890');
+        p.sunColor = c('#FFDAB0');
         p.sunCore.setRGB(3, 2.1, 1.2);
+        p.sunGlow = 0.8;
+        p.grade.shafts = 0.7;
+        p.grade.saturation = 1.1;
         p.skyZenith = c('#16306E');
         p.skyMid = c('#7A7CB8');
         p.skyHorizon = c('#FFB07A');
         p.skyBelow = c('#C89C98');
-        p.snowLit = c('#F8E4D2');
-        p.snowShade = c('#5868C8');
+        p.snowLit = c('#FBEEE2');
+        p.snowShade = c('#6068B8');
         p.snowDeep = c('#2A389C');
         p.fog = c('#D8B4B0');
         p.hemiSky = c('#7888D8');
@@ -1202,9 +1210,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.clouds.shade = c('#5E64A8');
         p.massif.glowK = 0.9;
         p.massif.glowLine = 120;
-        p.grade.hi = c('#FFE8C6');
+        p.grade.hi = c('#FFEED6');
         p.grade.lo = c('#DCDCFF');
-        p.grade.posterSnow = 0.6;
+        p.grade.posterSnow = 0.75;
         p.hazardDim = 0.9;
         p.stars = 0.2;
         p.giftGlow = 0.4;
@@ -1662,10 +1670,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.atmo.valleyColor = c('#FFDCA8');
         p.atmo.rays = 1;
         p.grade.shafts = 1;
-        p.grade.saturation += 0.06;
         p.grade.contrast += 0.04;
         p.grade.exposure! *= 0.95;
-        p.snowShade = c('#5A64D4');
       },
     },
     {
@@ -1680,7 +1686,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.atmo.rays = 1;
         p.grade.shafts = 1;
         p.grade.contrast += 0.05;
-        p.snowShade = c('#4E58C4');
+        p.snowShade = c('#5A60B4');
         lamps(p, 1.2);
       },
     },
@@ -1689,11 +1695,15 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // shafts through the cloud.
       kind: 'leap',
       edit: (p) => {
-        p.fogFar *= 1.25;
-        p.air.low = 0.75;
-        p.atmo.valley = 0.85;
-        p.atmo.rays = Math.max(p.atmo.rays, 0.7);
-        p.grade.shafts = Math.max(p.grade.shafts, 0.7);
+        // (Second pass: at 0.85 the valley's haze lay over the lake as milk on High, and Low, which draws
+        // less of it, showed the lake better. The haze thins and the frame takes more contrast.)
+        p.fogFar *= 1.35;
+        p.air.low = 0.5;
+        p.atmo.valley = 0.5;
+        p.grade.contrast += 0.05;
+        p.grade.exposure! *= 0.95;
+        p.atmo.rays = 1;
+        p.grade.shafts = 1;
       },
     },
     {
@@ -1729,11 +1739,15 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'chute',
       nth: 0,
       edit: (p) => {
-        p.grade.exposure! *= 0.9;
-        p.grade.contrast = 1.15;
-        p.grade.saturation += 0.06;
+        p.grade.exposure! *= 0.88;
+        p.grade.contrast = 1.17;
+        p.grade.saturation += 0.08;
         p.grade.lo = c('#D4ECF0');
-        p.snowShade = c('#6E98E6');
+        p.snowShade = c('#6690E4');
+        // (The air clears toward the lake: the shore, the lodge and the ice ahead keep their darks.)
+        p.fog = c('#B4D0F4');
+        p.fogFar *= 1.3;
+        p.air.low = 0.3;
         p.clouds.shadow = Math.max(p.clouds.shadow, 0.45);
         p.grade.shafts = 1;
         p.atmo.rays = Math.max(p.atmo.rays, 0.8);
@@ -1745,8 +1759,6 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'benches',
       edit: (p) => {
         p.grade.contrast += 0.04;
-        p.grade.saturation += 0.04;
-        p.snowShade = c('#5A64D4');
         p.grade.shafts = 1;
         p.atmo.rays = 1;
       },
@@ -1756,7 +1768,6 @@ export const PLACES: Record<BiomeId, Place[]> = {
       nth: 1,
       edit: (p) => {
         p.grade.contrast += 0.04;
-        p.snowShade = c('#5862D0');
         p.grade.shafts = 1;
         p.atmo.rays = 1;
       },
@@ -1799,8 +1810,12 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1.1);
-        p.grade.hi = c('#FFE8C2');
-        p.bloom += 0.08;
+        p.grade.hi = c('#FFEED2');
+        p.bloom += 0.04;
+        // (The sun stands in the street's mouth at the line: at full shafts it flooded the frame orange
+        // and bleached the coat.)
+        p.grade.shafts = 0.35;
+        p.sunGlow = 0.6;
       },
     },
   ],

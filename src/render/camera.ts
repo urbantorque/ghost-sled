@@ -232,10 +232,10 @@ const TRIPOD_REACH = 24;
 const VISTA_FROM = 1.0;
 const VISTA_FULL = 1.9;
 const VISTA_BACK = 0.35;
-const VISTA_OUT = 2.6;
+const VISTA_OUT = 2.1;
 const VISTA_UP = 2.1;
 const VISTA_SIDE = 1.7;
-const VISTA_FOV = 6;
+const VISTA_FOV = 4;
 /** The predicted landing spot is kept above this share of the frame's lower half (NDC). */
 const VISTA_RING_NDC = -0.78;
 /** The chase's follow: the lens trails its set point by speed / FOLLOW_RATE metres, so a boost surges

@@ -990,6 +990,9 @@ export function lipPiece(ctx: SiteCtx): Piece {
 
 // ---------------------------------------------------------------- a lift line and its station
 
+/** Pinecrest's shutters: the pines' own teal, a step lighter. */
+const SHUTTER = C('#2C6A66');
+
 /** A lift crossing the run: the station close beside it, its cable hall at the height the line runs at,
  *  on a tall base where the bank is lower than the air; a tower on the far bank and two more climbing
  *  away from the run; both cables. Pinecrest in timber and steel, Frostfang a red ropeway house, Ember
@@ -1034,7 +1037,22 @@ export function liftPiece(ctx: SiteCtx): Piece {
       for (let i = 0; i < 4; i++) {
         parts.push(box(1.5, 1.5, 0.14, glass, [hx - W / 2 + (i + 0.5) * (W / 4), y, D / 2 + 0.04]));
         parts.push(box(0.14, 1.5, 1.5, glass, [hx - (s * W) / 2 - s * 0.04, y, -D / 2 + (i + 0.5) * (D / 4)]));
+        if (biome === 'alpine' && !ctx.low) {
+          // Pinecrest (the review loop): a bare plaster tower with rows of glass read as a block of flats.
+          // Each window has its shutters and a sill of snow, as the village's have.
+          const wx = hx - W / 2 + (i + 0.5) * (W / 4);
+          const wz = -D / 2 + (i + 0.5) * (D / 4);
+          const fx = hx - (s * W) / 2 - s * 0.05;
+          for (const e of [-1, 1]) {
+            parts.push(box(0.42, 1.6, 0.1, SHUTTER, [wx + e * 0.98, y, D / 2 + 0.06]));
+            parts.push(box(0.1, 1.6, 0.42, SHUTTER, [fx, y, wz + e * 0.98]));
+          }
+          parts.push(box(2.5, 0.16, 0.34, SNOW, [wx, y - 0.86, D / 2 + 0.16]));
+          parts.push(box(0.34, 0.16, 2.5, SNOW, [fx - s * 0.1, y - 0.86, wz]));
+        }
       }
+      // (A timber band under each row, so the wall is storeys and not one slab.)
+      if (biome === 'alpine') parts.push(box(W + 0.24, 0.26, D + 0.24, TIMBER, [hx, y - 1.5, 0]));
     }
     parts.push(box(W + 0.5, 0.4, D + 0.5, trim, [hx, hall, 0]));
     // The cable hall, open toward the run, its bull wheel showing under a long overhanging roof.
