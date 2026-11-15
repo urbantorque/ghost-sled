@@ -350,6 +350,18 @@ function addSway(m: ShaderMaterial, u: RiderUniforms, joint?: { value: Vector3 }
     );
 }
 
+/** A sled carries what its underside is (riderMaterial) in aSway.w: -1 the classic sled's five slats, -2 Low's three,
+ *  -3 the toboggan's three broad ones, -4 a flat deck over runners (the Wisp), -5 a round or shelled hull (the
+ *  saucer, the bob, the tray), whose whole underside is the hull. */
+function markSled(g: BufferGeometry, id: number, lite: boolean): BufferGeometry {
+  const a = g.getAttribute('aSway') as BufferAttribute | undefined;
+  if (!a || a.itemSize !== 4) return g;
+  const code = id === 2 ? -3 : id === 4 ? -4 : id === 1 || id === 3 || id === 5 ? -5 : lite ? -2 : -1;
+  for (let i = 0; i < a.count; i++) a.setW(i, code);
+  a.needsUpdate = true;
+  return g;
+}
+
 /** Flow's colour is the player's own vermillion: no gold and no groove tint (decision 69). */
 const FLOW_C = new Color(FLOW_HEX);
 
@@ -368,7 +380,20 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   // hard landing, which screen-doored the whole rider. The rider only gives way to a lens inside it.
   const m = makeToonMaterial({ nearFade: [0.25, 0.45], ...opts });
   riderStencil(m);
-  if (sway) addSway(m, u, joint);
+  if (sway) {
+    addSway(m, u, joint);
+    // The sled's own frame, for its underside (below): its vertices carry what that underside is in aSway.w
+    // (markSled), every other part 0 or an arm's joint. vSledI: x 1 on a sled, y its slats' pitch (0 for none), z
+    // where its slats start across it, w the lowest underside that is hull (under it, the runners).
+    const sledAt = [
+      'float sledC = -aSway.w;',
+      'vSledI = sledC < 0.5 ? vec4(0.0) : vec4(1.0, sledC < 1.5 ? 0.12 : sledC < 2.5 ? 0.2 : sledC < 3.5 ? 0.21 : 0.0, sledC > 2.5 && sledC < 3.5 ? -0.315 : -0.3, sledC > 2.5 && sledC < 3.5 ? 0.03 : sledC > 4.5 ? -10.0 : 0.1);',
+      'vSledP = position;',
+      'vSledN = normal;',
+    ].join('\n        ');
+    if (m.vertexShader.includes('attribute vec4 aSway;')) m.vertexShader = 'varying vec4 vSledI;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + m.vertexShader.replace('void main() {', 'void main() {\n        ' + sledAt);
+  }
+  const under = m.vertexShader.includes('vSledI = ');
   m.uniforms.uFlash = u.flash;
   m.uniforms.uFill = u.fill;
   m.uniforms.uEmber = u.ember;
@@ -391,6 +416,11 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           n = gl_FrontFacing ? n : -n;
         #endif`,
   );
+  // The local lights (lamps, gates, the lantern's moments) on the rider roll off past a lamp's strength, so a
+  // moment's flash of light right by the rider lights it without washing its pale parts (the sled's wood, the
+  // fur, the beanie's stripe) to cream (round 7, the shared lane; a lamp's ordinary light is under the knee).
+  const localAt = 'col += (base * 0.9 + 0.05) * L;';
+  if (fs.includes(localAt)) fs = fs.replace(localAt, 'col += (base * 0.9 + 0.05) * L / (1.0 + 0.8 * max(L - 0.35, 0.0));');
   const shadeAt = 'vec3 col = toonLightK(litBase, shade, n, v, shadow, uRimK);';
   fs = fs.replace(
     shadeAt,
@@ -471,6 +501,25 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         #ifdef DOUBLE_SIDED
           if (!gl_FrontFacing) col *= 0.8;
         #endif
+        ${
+          under
+            ? `if (vSledI.x > 0.5) {
+          // A sled's underside (round 7, the shared lane): seen from below in a flip it was one flat slab. What
+          // faces down in the sled's own frame sits a step into shade with the snow's cool bounce in it, grained
+          // along its length and darker toward its edges; a slatted sled's slats are split by dark seams.
+          float underK = smoothstep(-0.3, -0.75, normalize(vSledN).y) * step(vSledI.w, vSledP.y);
+          if (underK > 0.001) {
+            float pitch = max(vSledI.y, 0.01);
+            float slat = fract((vSledP.x - vSledI.z) / pitch);
+            float seam = (1.0 - smoothstep(0.004, 0.012, min(slat, 1.0 - slat) * pitch)) * step(0.05, vSledI.y);
+            float grainU = 0.5 + 0.5 * sin(vSledP.x * 210.0 + sin(vSledP.z * 9.0) * 2.2);
+            float edgeU = smoothstep(0.17, 0.32, abs(vSledP.x));
+            vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * 0.14;
+            col = mix(col, underC, underK);
+          }
+        }`
+            : ''
+        }
         // The flash is a thin rim on the upright silhouette facets, so the stomp pops while the rider
         // keeps its colour: over the whole body it read as bleached, and across a pale saucer's face,
         // seen edge-on from the low camera, as the sled blown out to white.
@@ -481,12 +530,15 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // bloom threshold on Medium and High) and a brighter scarf, which goes HDR and blooms. On Low it
         // reads as saturated colour. Never gold and never a tint on the snow (decision 69). The results
         // fill holds it down.
+        // (Round 7, the shared lane: the rim keeps to the silhouette's outer facets and the coat keeps its navy
+        // inside it. Grown in from a third of the way across at 1.7, a full flow turned the whole coat red and the
+        // pulse bloomed the rider into one vermillion blob, its silhouette lost.)
         float flowE = pow(uFlow.x, 0.7);
         #ifdef DOUBLE_SIDED
           col *= 1.0 + (0.7 * flowE + 0.35 * uFlow.y) * rimCut;
         #else
-          float flowK = 0.55 * flowE + uFlow.y;
-          col += uFlowC * smoothstep(mix(0.55, 0.38, uFlow.x), 0.94, riderEdge) * flowK * 1.7 * rimCut;
+          float flowK = 0.55 * flowE + 0.8 * uFlow.y;
+          col += uFlowC * smoothstep(mix(0.72, 0.58, uFlow.x), 0.96, riderEdge) * flowK * 1.45 * rimCut;
         #endif
         // A dash (round 6): the rider as a spirit for its 1.4 s. The body goes pale and luminous, a white-gold
         // rim burns round the whole silhouette, and bands of light ripple up through the coat and the scarf
@@ -506,8 +558,12 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             // The scarf keeps the player's vermillion (ART.md section 1): only a breath of the rim.
             col += spiritC * smoothstep(0.5, 0.95, riderEdge) * 0.5 * sk * rimCut;
           #else
-            col = mix(col, col * 0.7 + spiritC * 0.22, 0.25 * sk);
-            col += (spiritC * smoothstep(0.32, 0.92, riderEdge) * 1.5 + bandC * band * 1.1) * sk * rimCut;
+            // (Round 7, the shared lane: the rim on the silhouette's edge only and the bands over the coat's own
+            // value, so the rider stays a navy and vermillion figure in a white-gold outline. A rim from a third
+            // of the way in at 1.5 and the body lifted toward white-gold bleached it to a cream blob in every
+            // dash frame of the review.)
+            col = mix(col, col * 0.85 + spiritC * 0.06, 0.25 * sk);
+            col += (spiritC * smoothstep(0.56, 0.95, riderEdge) * 1.45 + bandC * band * 0.85 * mix(0.4, 1.0, darkCloth)) * sk * rimCut;
           #endif
         }
         `;
@@ -515,6 +571,7 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   const anchor = ['col = lanternLight(col, base, vWorldPos, n);', 'col = fogged(col, vWorldPos);', 'gl_FragColor = vec4(col, keep);'].find((a) => fs.includes(a)) ?? 'gl_FragColor';
   fs = fs.replace(anchor, rim + anchor);
   if (fs === before || !fs.includes('inkK')) console.warn('rider material: toon shader anchors not found, rider shading partly disabled');
+  if (under) fs = 'varying vec4 vSledI;\nvarying vec3 vSledP;\nvarying vec3 vSledN;\n' + fs;
   m.fragmentShader = fs;
   return m;
 }
@@ -708,7 +765,7 @@ export class Rider {
     this.mat = mat;
     // Each arm bends at its own elbow: the same shader, its own joint angles.
     this.armMats = this.joints.map((j) => riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true, j));
-    this.sled = new Mesh(withSway(sledGeometryFor(0)), mat);
+    this.sled = new Mesh(markSled(withSway(sledGeometryFor(0)), 0, false), mat);
     this.sitGeo = riderTorsoGeometry();
     this.body = new Mesh(this.sitGeo, mat);
     const headGeo = riderHeadGeometry().translate(-RIDER_NECK.x, -RIDER_NECK.y, -RIDER_NECK.z);
@@ -978,7 +1035,7 @@ export class Rider {
   setSled(id: number): void {
     if (id === this.sledId) return;
     this.sledId = id;
-    const geo = withSway(paintSled(sledGeometryFor(id, this.lite), this.paintHex));
+    const geo = markSled(withSway(paintSled(sledGeometryFor(id, this.lite), this.paintHex)), id, this.lite);
     this.sled.geometry.dispose();
     this.sled.geometry = geo;
     (this.crashSled.children[0] as Mesh).geometry = geo;

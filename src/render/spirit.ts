@@ -98,6 +98,10 @@ interface Pulse {
 
 /** Seconds a shell climbs before it bursts. */
 const RISE = 0.9;
+/** A light that rides with the rider (a dash, a ward, a lantern's moment): metres ahead of it down the run, and
+ *  its strength against what it was pushed at. */
+const RIDE_AHEAD = 3;
+const RIDE_K = 0.65;
 
 export class SpiritFx {
   readonly root = new Object3D();
@@ -233,17 +237,24 @@ export class SpiritFx {
    *  as it lasts, and the sky gates ahead (a ring of light lights the snow under it). */
   private light(dt: number, s: Snap, dashing: boolean): void {
     this.lit = 0;
+    // Round 7 (the shared lane): a light that rides with the rider stands a few metres ahead of it, down the run,
+    // and a step dimmer. On the rider at full strength the dash's and the ward's light washed the rider and the
+    // snow round it to one cream sheet that bloomed over it (the review's worst frames in motion); ahead, the snow
+    // the rider rides into takes the light, the rider stands against it, and its colour and timing are as they were.
+    const sp = Math.hypot(s.vx, s.vz) || 1;
+    const ax = s.x + (s.vx / sp) * RIDE_AHEAD;
+    const az = -(s.z + (s.vz / sp) * RIDE_AHEAD);
     for (const p of this.pulses) {
       if (p.life <= 0) continue;
       p.life -= dt;
       if (p.life <= 0) continue;
       const k = p.life / p.max;
-      if (p.ride) pushLocalLight(s.x, s.y + 0.9, -s.z, p.r, p.g, p.b, p.radius, p.power * k * k * this.lightK);
+      if (p.ride) pushLocalLight(ax, s.y + 0.9, az, p.r, p.g, p.b, p.radius, p.power * k * k * RIDE_K * this.lightK);
       else pushLocalLight(p.x, p.y, p.z, p.r, p.g, p.b, p.radius, p.power * k * k * this.lightK);
       this.lit++;
     }
     if (dashing) {
-      pushLocalLight(s.x, s.y + 0.8, -s.z, WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, 10, 1.3 * this.lightK);
+      pushLocalLight(ax, s.y + 0.8, az, WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, 10, 1.3 * RIDE_K * this.lightK);
       this.lit++;
     }
     const c = this.course;
