@@ -300,6 +300,11 @@ export class Sky {
           float T = uTime * (1.0 - uStill);
           vec3 acc = vec3(0.0);
           const mat2 ROT = mat2(0.8, 0.6, -0.6, 0.8);
+          // A display over 1 is a storm (Frostfang's polar night, where the aurora is the key light): its
+          // hems come down to just over the far ranges and its curtains stand taller, so the light that
+          // lights the snow is in the frame and not a thread at its top edge.
+          float storm = clamp(uAurora - 1.0, 0.0, 1.0);
+          float tall = 1.0 + 1.1 * storm;
           for (int k = 0; k < 3; k++) {
             float fk = float(k);
             // Each ribbon spans an arc of the sky (centred near the view down the course), never a ring.
@@ -307,14 +312,14 @@ export class Sky {
             float off = acos(clamp(cos(az - centre), -1.0, 1.0));
             float arc = smoothstep(1.4 - fk * 0.2, 0.3, off);
             if (arc <= 0.0) continue;
-            float hem = 0.12 + fk * 0.085 + 0.05 * sin(az * 2.0 + fk * 2.3 + T * 0.035) + 0.02 * sin(az * 5.0 - fk * 1.7 - T * 0.06);
+            float hem = (0.12 + fk * 0.085) * (1.0 - 0.5 * storm) + 0.05 * sin(az * 2.0 + fk * 2.3 + T * 0.035) + 0.02 * sin(az * 5.0 - fk * 1.7 - T * 0.06);
             float above = h - hem;
             // Skip below the hem and where even the tallest swell has faded out (most of the sky).
-            if (above < -0.05 || above > (0.06 + fk * 0.03) * 6.7) continue;
+            if (above < -0.05 || above > (0.06 + fk * 0.03) * 6.7 * tall) continue;
             float drift = az - T * 0.012 * (1.0 + fk);
             vec2 ring = vec2(cos(drift), sin(drift));
             float swell = gnoise(ROT * (ring * 2.2 + vec2(fk * 5.1, T * 0.01)));
-            float span = (0.06 + fk * 0.03) * (0.55 + 0.9 * swell);
+            float span = (0.06 + fk * 0.03) * (0.55 + 0.9 * swell) * tall;
             float body = smoothstep(-0.045, 0.012, above) * exp(-max(above, 0.0) / span);
             float folds = gnoise(ROT * (ring * 5.0 + vec2(fk * 7.3, above * 6.0 - T * 0.015)));
             // Fine vertical rays that ripple sideways along the curtain, and slow surges of brightness

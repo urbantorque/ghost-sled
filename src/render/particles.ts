@@ -297,6 +297,7 @@ class Layer {
         uniform vec3 uRim;
         uniform vec3 uFog;
         uniform vec3 uLanternColor;
+        uniform float uLantern;
         varying vec3 vColor;
         varying float vAlpha;
         varying float vFog;
@@ -469,7 +470,10 @@ class Layer {
             // Lantern Night: the side facing the sled lantern takes its desaturated amber; the far side
             // keeps the moon's blue, so a plume reads as a lit volume rather than grey cotton.
             vec3 lampC = mix(vec3(dot(uLanternColor, vec3(0.2126, 0.7152, 0.0722))), uLanternColor, 0.7);
-            col += lampC * vLamp * mix(0.12, 1.25, lampK);
+            // (Round 7's review: a stomp's whole burst inside the lantern's light went to one cream sheet at
+            // night and took the rider with it. The lamp's side of a puff is lit; it does not glow. Lantern
+            // Night, where the lantern is the only light, keeps all of it.)
+            col += lampC * vLamp * mix(0.12, mix(0.6, 1.25, smoothstep(0.8, 1.0, uLantern)), lampK);
             col = mix(col, uFog, vFog);
             gl_FragColor = vec4(col, a * (1.0 - vFog * 0.6));
           #endif

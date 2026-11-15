@@ -822,45 +822,58 @@ function clearSkies(p: Palette, biome: BiomeId): void {
     case 'glacier':
       // Polar blue hour: deep cobalt down to a thin lemon band, a low cold sun off to the left, long
       // steel-blue light and glazed snow. Hazards are a deep ice blue so they stay darker than the snow.
-      setSun(p, -35, 5.5, 23, 9);
-      p.sunColor = c('#FFF2C4');
-      p.sunCore = new Color(2.5, 2.4, 1.5);
+      // (Round 7's review: the disc sits low over the band, a blue hour's sun and not a day's. The run-in
+      // read as a bright noon: the snow is now two blues, a pale steel lit side and a cobalt shade, with
+      // the lemon only on its rim and in the band; the sky is a step deeper and the low sun throws no
+      // starburst, so the Fang and the far ranges stand dark against the band.)
+      setSun(p, -35, 3.9, 19, 9);
+      p.sunColor = c('#FFE9AE');
+      p.sunCore = new Color(2.5, 2.3, 1.3);
       p.sunTint = 0.85;
-      p.sunSize = 0.9;
-      p.sunGlow = 0.7;
-      p.skyZenith = c('#0A2470');
-      p.skyMid = c('#2E67BE');
-      p.skyHorizon = c('#A6C6EE');
-      p.skyBand = { color: c('#FFF0A0'), fade: 30, k: 0.95 };
-      p.skyBelow = c('#6E92CC');
+      p.sunSize = 0.75;
+      p.sunGlow = 0.45;
+      p.skyZenith = c('#0A2266');
+      p.skyMid = c('#2856A8');
+      p.skyHorizon = c('#96B8E6');
+      p.skyBand = { color: c('#FFE98C'), fade: 30, k: 0.95 };
+      p.skyBelow = c('#5E80C0');
       p.skySpread = 0.62;
       p.skyCurve = 0.44;
-      p.snowLit = c('#D4E4FA');
-      p.snowShade = c('#4C76C4');
-      p.snowDeep = c('#1C3C8C');
-      p.rim = c('#FFF2BE');
-      p.fog = c('#7FA4DC');
+      p.snowLit = c('#C0D2F2');
+      p.snowShade = c('#4268B8');
+      p.snowDeep = c('#183584');
+      p.rim = c('#FFEB9E');
+      p.fog = c('#7094D2');
       p.fogNear = 50;
       p.fogFar = 470;
-      p.hemiSky = c('#6A9CEC');
+      p.hemiSky = c('#5C88D8');
       p.tall = c('#2C8CCC');
       p.tallDark = c('#114A8A');
       p.low = c('#1E3A6E');
       p.lowLit = c('#3E6AA4');
-      p.hazardDim = 0.9;
-      p.ridge = [c('#6F95D4'), c('#3F66B4'), c('#1F3C8A')];
-      p.massif.rock = c('#1A2E68');
+      // (The ice spires along the banks are the frame's darks in the blue hour, not pale shapes in the sun:
+      // they go down a step and the air pales their crowns less.)
+      p.hazardDim = 0.78;
+      p.hazardFog = 0.65;
+      p.sunDisc = 0.55;
+      p.ridge = [c('#5E80C6'), c('#33529E'), c('#162E72')];
+      p.massif.rock = c('#0E1A4A');
       p.massif.glow = c('#FFEFB0');
       p.massif.heroAz = 17;
       p.massif.sea = 0.8;
       p.massif.flow = 0.35;
+      // (Round 7's review: the ranges are in the blue hour's shade below the summits, so the Fang stands
+      // dark against the band with only its crown still in the last lemon light.)
+      p.massif.glowLine = 1450;
+      p.massif.glowK = 0.55;
       p.ice = 0.6;
-      p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.08, grain: 0.7, foot: 0.3, shafts: 0.55, lens: 0.5, focal: 1, gust: 0, glitter: 0.45 };
-      p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#BCD2F2'), shade: c('#3A5EAC'), rim: c('#FFF3BE'), shadow: 0.08 };
-      p.atmo = { rays: 0.55, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6C92D2'), drift: 0.1 };
-      p.stars = 0.55;
+      p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.12, grain: 0.7, foot: 0.3, shafts: 0.3, lens: 0.25, focal: 1, gust: 0, glitter: 0.25 };
+      p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#AFC6EC'), shade: c('#34559E'), rim: c('#FFEFAE'), shadow: 0.08 };
+      p.atmo = { rays: 0.25, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6084C8'), drift: 0.1 };
+      p.stars = 0.7;
       p.bloom = 0.5;
-      p.sparkle = 1;
+      // (Fewer, finer glints: a field of them read as noise on the blue snow.)
+      p.sparkle = 0.65;
       p.snowfall = 0.03;
       p.giftGlow = 0.2;
       p.ghostGlow = 1.35;
@@ -1251,23 +1264,29 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   ],
   glacier: [
     {
-      // The sun sinks onto the band.
-      from: 600, at: 1450, dusk: 0.5,
+      // The sun sinks onto the band and is gone by Serac Gate: the stars are out over the span.
+      from: 480, at: 1340, dusk: 0.5,
       edit: (p) => {
-        setSun(p, -40, 3.4, 19, 8);
+        setSun(p, -40, 2.9, 19, 8);
+        p.sunDisc = 0.3;
+        p.sunGlow = 0.45;
+        p.massif.rock = c('#0A1440');
+        // (The light leaves the Fang's crown too: by the span it is one dark shape in the band.)
+        p.massif.glowLine = 2400;
+        p.grade.shafts = 0.2;
         p.sunColor = c('#FFE9B8');
         p.skyZenith = c('#071C5C');
         p.skyMid = c('#2553A8');
         p.skyHorizon = c('#8CAEE0');
         p.skyBand.color = c('#FFD97A');
         // Two blues and a lemon rim: the lit snow pales, the shade and the air go down a step under it.
-        p.snowLit = c('#C8D8F6');
+        p.snowLit = c('#B2C4EA');
         p.snowShade = c('#3A58B0');
         p.snowDeep = c('#16297C');
         p.fog = c('#5A80CC');
         p.rim = c('#FFF0A0');
         p.grade.contrast = 1.13;
-        p.stars = 0.8;
+        p.stars = 0.9;
         p.giftGlow = 0.35;
         p.ghostGlow = 1.5;
         p.lanternGlow = 0.35;
@@ -1278,7 +1297,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     {
       // Polar night comes on, and it is not one blue: the aurora is the key light over the Crevasse
       // Fields, green on the snow that faces it with violet in the shade, moving.
-      from: 1700, at: 2250, dusk: 1,
+      // (It has come by the Crevasse Fields' leap: night falls over Station Street, whose lamps hold it off.)
+      from: 1480, at: 1820, dusk: 1,
       edit: (p) => {
         setSun(p, -44, 3, 18, 8);
         p.sunColor = c('#B8C4EC');
@@ -1301,7 +1321,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.air.far = c('#101A58');
         p.key2 = { color: c('#44D8A2'), k: 1, shade: c('#5C3CC4') };
         p.grade.saturation = 1.0;
-        p.aurora = 1;
+        // (Over 1: the curtains in the sky are bright enough to be what lights the snow.)
+        p.aurora = 1.7;
         p.stars = 1;
         p.massif.flow = 1;
         p.bloom = 0.7;
@@ -1325,7 +1346,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#3A68AC');
         p.skyBand.k = 0.35;
         p.snowLit = c('#93ACE2');
-        p.aurora = 0.75;
+        p.aurora = 1.3;
         p.key2.k = 0.7;
         p.lanternGlow = 0.6;
       },
@@ -1334,7 +1355,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // Out of the cavern into the dawn: the sun comes up beside the Fang (it crosses the sky ahead while
       // the rider is under the ice, so the far mouth opens onto it), rose gold on the snow and the peaks,
       // the stars and the aurora fading out of a lightening sky.
-      from: 3300, at: 3580, dusk: 1,
+      // (It turns in the cavern's first hundred metres, so the far mouth is the dawn from the moment it shows.)
+      from: 3185, at: 3345, dusk: 1,
       edit: (p) => {
         setSun(p, 30, 3.6, 20, 9);
         p.sunColor = c('#FFC8A4');
@@ -1343,24 +1365,31 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunGlow = 1.2;
         p.sunSize = 1.05;
         p.hazardDim = 0.88;
+        p.hazardFog = 0.9;
         p.skyZenith = c('#1A3A86');
         p.skyMid = c('#7678C4');
         p.skyHorizon = c('#F2B49A');
         p.skyBand.color = c('#FFB884');
         p.skyBand.k = 1;
         p.skyBelow = c('#B88EB4');
-        p.snowLit = c('#F6DCE4');
-        p.snowShade = c('#5A64BC');
-        p.snowDeep = c('#2A3490');
+        // (Round 7's review: rose-gold, not lilac: the lit snow takes the sun's warmth.)
+        p.snowLit = c('#FFD8C4');
+        // (Round 7's review: Fang Town sank into a lilac haze, the middle plane and the Fang lost in it. The
+        // shade is a deeper violet and the air clearer, so the lit snow, the long shadows and the far range
+        // stand in three planes.)
+        p.snowShade = c('#4E54B2');
+        p.snowDeep = c('#242C88');
         p.rim = c('#FFD2B4');
-        p.fog = c('#A69CCC');
+        p.fog = c('#8E84C2');
+        p.fogFar = 620;
         p.hemiSky = c('#8A98DC');
-        p.air.far = c('#8A7CC6');
-        p.air.scatter = 1.7;
+        p.air.far = c('#7064B6');
+        p.air.scatter = 1.15;
         p.key2.k = 0.06;
         p.clouds.lit = c('#FFD8C4');
         p.clouds.shade = c('#6A6AB4');
         p.clouds.rim = c('#FFBC8C');
+        p.massif.rock = c('#222C70');
         p.massif.glow = c('#FFB4A4');
         p.massif.glowK = 0.85;
         p.massif.glowLine = -40;
@@ -1671,6 +1700,8 @@ export interface Place {
    *  on a course, the metres it comes in and goes out over; null where the course has none. Its kind is
    *  then only a label. */
   span?: (course: Course) => { z0: number; z1: number; rise: number; fall: number } | null;
+  /** The metres it lets go over, past its end (omitted: 75 for a roof, 90 in the open). */
+  fall?: number;
   /** What the place changes, over the journey's palette at its own middle. */
   edit: (p: Palette) => void;
 }
@@ -1877,6 +1908,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // so the walls' cobalt, the glow at their feet and the lit valley at the far end are the picture.
         p.grade.contrast += 0.08;
         p.grade.exposure! *= 0.94;
+        // (Round 7's review: the walls were the brightest, flattest thing in the slot. Under 0.75 the ice
+        // goes down, cubed (materials.ts), so the walls are its dark frame; at night the aurora still finds
+        // their crests.)
+        p.hazardDim = 0.66;
         p.snowShade = c('#2C2A84');
         p.snowDeep = c('#120C44');
         p.fog.lerp(c('#141A58'), 0.6);
@@ -1905,22 +1940,35 @@ export const PLACES: Record<BiomeId, Place[]> = {
     {
       // The Ice Cavern: near-black cobalt. The only light is what the cavern holds.
       kind: 'tunnel',
+      // (Night to full dawn is the widest step in the game: it takes ten metres more than a roof's 75.)
+      fall: 85,
       edit: (p) => {
-        p.snowLit = c('#5C78C8');
-        p.snowShade = c('#1C2C7A');
-        p.snowDeep = c('#0A1248');
+        // (Round 7's review: the hour outside is the dawn by the cavern's middle, so the far mouth is a
+        // blade of rose gold in the dark. Inside, the sun's own light is held down to a dim violet and
+        // the walls drop a step, so the mouth, the lanterns and the rider's rim are the brightest things.)
+        p.sunColor = c('#4E5098');
+        p.snowLit = c('#546CC0');
+        p.snowShade = c('#16226A');
+        p.snowDeep = c('#080E3C');
         p.fog = c('#0E1A52');
-        p.air.far = c('#081040');
+        p.air.far = c('#1A1650');
+        p.air.scatter = 1;
+        p.sunGlow = 0.8;
         p.fogNear = 24;
         p.fogFar = 260;
-        p.hemiSky = c('#2A4A9C');
+        p.hemiSky = c('#22408E');
         p.key2.k = 0;
         p.under = { color: c('#38C8FF'), k: 0.22 };
-        p.hazardDim = 0.7;
-        p.grade.exposure = 0.9;
-        p.grade.contrast = 1.2;
-        p.grade.hi = c('#F0F6FF');
-        p.grade.lo = c('#DCE0FF');
+        p.hazardDim = 0.45;
+        // (No sky under a roof: the floor's glaze mirrors little, and the ice's crowns do not pale to
+        // white-cyan, so the vault stays a dark shape round the mouth.)
+        p.ice = 0.15;
+        p.hazardFog = 0.4;
+        p.grade.exposure = 0.86;
+        p.grade.contrast = 1.22;
+        p.grade.gain = c('#F2F6FF');
+        p.grade.hi = c('#FFE8D8');
+        p.grade.lo = c('#D6DCFF');
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
         lamps(p, 1.35);
@@ -2270,7 +2318,7 @@ function laidPlaces(course: Course): LaidPlace[] {
       // A roof closes over quickly and lets go quickly (the burst out of a cavern is under two seconds);
       // an open place comes in over its section's own blend.
       const roof = sec.kind === 'tunnel';
-      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1, rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: roof ? 75 : 90, pal });
+      laid.push({ z0: sec.z0 + (roof ? sec.blend * 0.5 : 0), z1: sec.z1, rise: roof ? Math.max(30, sec.blend * 0.5) : Math.max(40, sec.blend), fall: pl.fall ?? (roof ? 75 : 90), pal });
       break;
     }
     if (sec.kind === 'finish') break;

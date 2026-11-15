@@ -1366,7 +1366,10 @@ export class SetPieces {
     else if (this.inside) {
       // Out the far end (not a crash and a new run): the burst of daylight.
       const end = this.inside.z + this.inside.len;
-      if (z > end - 12 && z < end + 15) this.exitFlash = this.night ? 0.25 : 0.6;
+      // (Round 7's review: at 0.6 the white went over the whole frame for half a second and the way out
+      // into a coloured light, Frostfang's dawn above all, read as milk. The place's own grade carries the
+      // change of light now; the flash is a breath of it.)
+      if (z > end - 12 && z < end + 15) this.exitFlash = this.night ? 0.2 : 0.3;
       this.inside = null;
     }
     this.exitFlash = Math.max(0, this.exitFlash - dt * 1.3);

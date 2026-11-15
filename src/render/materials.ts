@@ -180,7 +180,16 @@ function applyRock(p: Palette): void {
   rock.uRockLedge.value.set(set.ledge).multiplyScalar(set.style[2] === 3 ? k : 1);
   rock.uRockGlow.value.copy(p.accentProp).multiplyScalar(p.massif.lava > 0 ? 1.1 : 0);
   // (Frostfang's crevasse ice has a light of its own inside it.)
-  if (set.style[2] === 1) rock.uRockGlow.value.setRGB(0.04, 0.34, 0.6).multiplyScalar(0.22 + 0.2 * p.lamps);
+  if (set.style[2] === 1) {
+    rock.uRockGlow.value.setRGB(0.04, 0.38, 0.62).multiplyScalar(0.3 + 0.32 * Math.min(1, p.lamps));
+    // Its ice goes down with the hazards under the cavern's roof (0.45 there, 0.78 in the open night,
+    // which is left alone), so the cavern's walls are the dark of its frame and the glow at their feet
+    // is the light.
+    const dim = Math.min(1, p.hazardDim / 0.78);
+    rock.uRockLit.value.multiplyScalar(dim * dim);
+    rock.uRockShade.value.multiplyScalar(dim * dim);
+    rock.uRockDeep.value.multiplyScalar(dim);
+  }
   rock.uRockStyle.value.set(...set.style);
   lake.uLakeTrees.value.copy(p.tallDark).lerp(p.tall, 0.35).multiplyScalar(0.8);
 }
@@ -504,6 +513,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec3 uSnowDeep;
       uniform float uSparkle;
       uniform float uIceMood;
+      uniform float uHazardDim;
       uniform vec3 uFocus;
       uniform vec3 uSkyZenith;
       uniform vec3 uSkyHorizon;
@@ -942,7 +952,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           // shade side that move, where it had one blue. Held still under reduced motion (uGroundTime).
           vec2 ap = vWorldPos.xz * vec2(0.013, 0.0046) + vec2(uGroundTime * 0.012, uGroundTime * 0.004);
           float cur = vnoise(ap) * 0.62 + vnoise(ap * vec2(2.3, 2.1) + 3.7) * 0.38;
-          float a2 = smoothstep(0.34, 0.64, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
+          // (Round 7's review: the curtains cover most of the sky-facing snow, so the night's lit side is the
+          // aurora's and the steel is what shows between them, not the other way about.)
+          float a2 = smoothstep(0.22, 0.52, cur) * clamp(n.y * 1.25 - 0.25, 0.0, 1.0) * mix(0.3, 1.0, shadow);
           float lv = dot(col, vec3(0.2126, 0.7152, 0.0722));
           // Between the curtains the snow's shade is violet, and it is the shade that takes it (the lit
           // snow stays the moon's steel): three hues on the ground, where there was one blue.
@@ -950,7 +962,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // Laid over the blue, not added to it (added, green on steel blue only made a paler blue), and a
           // step brighter than the snow round it: it is the light.
           // It keeps the snow's own relief under it (laid flat it read as a green field).
-          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.7);
+          col = mix(col, uKey2.rgb * (lv * 2.7 + 0.36) + col * 0.16, a2 * uKey2.a * 0.8);
         }
         // Raking light: ripple faces turned toward the sun's (or moon's) bearing catch it and the lee
         // faces drop into shade, whatever its height. The ripples run down the fall line, so it is the
@@ -1302,14 +1314,24 @@ export function makeSnowMaterial(): ShaderMaterial {
             float dk = clamp(over, 0.0, 1.0);
             vec3 ramp = mix(uRockDeep, uRockShade * 1.15, smoothstep(0.0, 0.5, dk));
             ramp = mix(ramp, uRockLit, smoothstep(0.42, 1.0, dk) * (0.35 + 0.65 * tr));
-            rc = ramp * mix(1.0, tone, fine) + uRockLit * 0.1 * tr;
+            // (Round 7's review: the shards come in three values, a dark heart, the wall's own cobalt and a
+            // pale skin, a step apart, so a wall is cut ice and not one blue plane.)
+            float tone3 = tone < 0.87 ? 0.5 : tone < 1.08 ? 0.94 : 1.42;
+            rc = ramp * mix(1.0, mix(tone, tone3, 0.8), mix(0.55, 1.0, fine)) + uRockLit * 0.1 * tr;
             float fres = pow(1.0 - clamp(dot(rn, v), 0.0, 1.0), 3.0);
             rc += mix(uSkyHorizon, uSnowLit, 0.5) * fres * 0.25;
             rc += uSunColor * pow(max(dot(reflect(-v, rn), uSunDir), 0.0), 26.0) * 0.5 * shadow;
             rc = mix(rc, uRockLit * 1.15, crack * fine * (0.3 + 0.5 * dk));
+            // (Round 7's review: under the Ice Cavern's roof, the only place darker than the night, the
+            // sky in the glaze and the skin of the shards go down too, so the walls are near-black cobalt
+            // and the glow at their feet, the lamps and the mouth are the light.)
+            float caveR = clamp(uHazardDim / 0.75, 0.0, 1.0);
+            caveR = caveR * caveR * caveR;
+            rc *= caveR;
             // A glow from inside (round 7): low in the wall the ice holds a cyan light of its own, broken
-            // by the shards' own tones, strongest at night and under a roof.
-            rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(0.22, 0.62, dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
+            // by the shards' own tones, strongest at night. (Under the cavern's roof it keeps to the
+            // wall's foot, a line of cold light along the floor, so the wall above it is the dark.)
+            rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(mix(0.12, 0.22, caveR), mix(0.34, 0.62, caveR), dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
             // The aurora finds the walls' crests: the top third of the ice takes its green on the shards
             // that face up and out, so a crevasse is cut out of the night by its own rim of light.
             rc = mix(rc, uKey2.rgb * (0.5 + 0.4 * tone), uKey2.a * smoothstep(0.5, 1.0, dk) * (0.3 + 0.7 * tr) * 0.55);
@@ -1756,8 +1778,9 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             col = mix(col, snowC, lie * 0.92);
           }
         #endif
+        vec3 L = vec3(0.0);
         if (uLocalProps > 0.0) {
-          vec3 L = localLight(vWorldPos, n, uLocalProps);
+          L = localLight(vWorldPos, n, uLocalProps);
           #ifdef HAZARD
             // A hazard takes a lamp on its edge and little on its face: lit, it is still the dark, hard
             // shape in the street (ART.md 1), now with a hot edge where the light finds it.
@@ -1803,6 +1826,14 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               iceCol = mix(iceCol, vec3(0.86, 0.96, 1.0) * (0.55 + 0.45 * iceT), (1.0 - smoothstep(0.1, 0.2, bd)) * 0.45 * fineI * heart);
             }
           }
+          #ifndef HAZARD
+            // Round 7's review: ice built over the run (Frostfang's cavern and spans) goes down with the
+            // hazards in a place darker than the night (only the Ice Cavern sets them under 0.75), so the
+            // vault is the dark of the frame; the lanterns and the dawn at the mouth light it where they
+            // reach, as they light everything else.
+            float caveK = clamp(uHazardDim / 0.75, 0.0, 1.0);
+            iceCol = iceCol * (caveK * caveK * caveK) + (base * 0.8 + 0.03) * L;
+          #endif
           col = mix(col, iceCol, iceK);
         #endif
         #ifdef GLOW_MASK

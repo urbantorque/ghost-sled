@@ -40,9 +40,12 @@ export interface StageSite {
 const MAKE_AHEAD = 420;
 const DROP_BEHIND = 180;
 
-/** Light added over the scene: vertex colours past white bloom; it thins into the fog. */
-function beamMaterial(): ShaderMaterial {
+/** Light added over the scene: vertex colours past white bloom; it thins into the fog. `near` makes it
+ *  thin out close to the lens too (sheets of light in the air: met at the lens, a sheet is a flat pale
+ *  card over the whole frame). */
+function beamMaterial(near = false): ShaderMaterial {
   return new ShaderMaterial({
+    defines: near ? { NEAR_FADE: 1 } : {},
     uniforms: { uK: { value: 1 }, uFogNear: shared.uFogNear, uFogFar: shared.uFogFar },
     vertexShader: /* glsl */ `
       attribute vec3 color;
@@ -63,6 +66,9 @@ function beamMaterial(): ShaderMaterial {
       varying vec3 vW;
       void main() {
         float fog = 1.0 - 0.8 * smoothstep(uFogNear, uFogFar, length(vW - cameraPosition));
+        #ifdef NEAR_FADE
+          fog *= smoothstep(6.0, 30.0, length(vW - cameraPosition));
+        #endif
         gl_FragColor = vec4(max(vC, 0.0) * uK * fog, 1.0);
         #include <colorspace_fragment>
       }
@@ -374,6 +380,7 @@ export class Stages {
   readonly stats = { stages: 0, triangles: 0 };
   private made = new Map<string, Stage>();
   private beamMat = beamMaterial();
+  private airMat = beamMaterial(true);
   private lavaMat: ShaderMaterial;
   private emberMat = emberMaterial();
   private paddyMat = paddyMaterial();
@@ -759,52 +766,82 @@ export class Stages {
       return [x, c.ground(x, z) + up, -z];
     };
     const hwE = c.halfWidth(end) + c.edgeLimit(end);
-    // The blade on the floor: dawn spilling in along the snow from the mouth, widest and brightest there.
-    const REACH = 62;
-    const N = low ? 4 : 8;
+    // (Round 7's review: the cavern is the dark of the frame and the mouth is all of its light. The dawn
+    // used to reach 44 m in as one broad lamp, which washed the floor and the walls lilac from the middle of
+    // the cavern on, so the mouth had no dark to stand in. Now the light is drawn where it falls: a blade
+    // of gold laid narrow along the floor from the mouth, sheets of it slanting in from the opening, a
+    // veil filling the opening from the horizon up, and a short warm pool at the lip.)
+    // The blade on the floor: dawn spilling in along the snow from the mouth, narrow far in and widening
+    // to the lip, brightest there.
+    const REACH = 70;
+    const N = low ? 4 : 10;
+    const lift = (zz: number): number => 0.2 + Math.max(0, visualGround(c, c.centerX(zz), zz) - c.ground(c.centerX(zz), zz));
     for (let i = 0; i < N; i++) {
       const za = end - REACH * (1 - i / N);
       const zb = end - REACH * (1 - (i + 1) / N);
-      const wa = 0.6 + hwE * 0.7 * Math.pow(i / N, 1.5);
-      const wb = 0.6 + hwE * 0.7 * Math.pow((i + 1) / N, 1.5);
-      const ka = 0.6 * Math.pow(i / N, 1.4) * k0;
-      const kb = 0.6 * Math.pow((i + 1) / N, 1.4) * k0;
+      const wa = 0.4 + hwE * 0.55 * Math.pow(i / N, 1.6);
+      const wb = 0.4 + hwE * 0.55 * Math.pow((i + 1) / N, 1.6);
+      const ka = (low ? 0.55 : 0.95) * Math.pow(i / N, 1.2) * k0;
+      const kb = (low ? 0.55 : 0.95) * Math.pow((i + 1) / N, 1.2) * k0;
       for (const sd of [-1, 1]) {
-        b.quad(at(za, 0, 0.12), at(zb, 0, 0.12), at(zb, sd * wb, 0.12 + (wb > c.halfWidth(zb) ? 0.5 : 0)), at(za, sd * wa, 0.12), gold, ka, kb, 0, 0);
+        b.quad(at(za, 0, lift(za)), at(zb, 0, lift(zb)), at(zb, sd * wb, lift(zb) + (wb > c.halfWidth(zb) ? 0.5 : 0)), at(za, sd * wa, lift(za)), gold, ka, kb, 0, 0);
       }
     }
-    // The mouth itself: a veil of rose-gold standing in the opening, brightest low down where the sun is.
-    const H = Math.max(12, s.clear - 2);
+    // The light in the air (Medium and High: its own mesh, thinning out close to the lens, so a sheet met
+    // at the lens is never a pale card over the frame; Low draws the veil with the floor, in one draw).
+    const air = low ? b : new Beams();
+    // The mouth itself: a veil of rose-gold standing in the opening, hottest low at the horizon where the
+    // sun is, cooling to rose up toward the lintel, and soft at its sides.
+    const H = Math.max(22, s.clear + 8);
+    const rose = night ? dawn : new Color(1.0, 0.5, 0.42);
+    const vk = (low ? 0.45 : 1) * k0;
+    // (A deeper gold than the floor's: added over the lilac of the dawn sky, a pale gold went to white.)
+    const ember = night ? gold : new Color(1.0, 0.48, 0.16);
+    // (Seen from inside, the horizon crosses the opening a third to a half of the way up, the floor
+    // falling away to the mouth: the veil burns hottest there.)
     for (const sd of [-1, 1]) {
-      b.quad(at(end + 2, 0, 0), at(end + 2, sd * hwE, 0), at(end + 2, sd * hwE * 0.8, H), at(end + 2, 0, H), dawn, 1.5 * k0, 0.5 * k0, 0, 0.35 * k0);
+      const w0 = sd * hwE * 1.25;
+      const w1 = sd * hwE * 1.15;
+      air.quad(at(end + 2, 0, 0), at(end + 2, w0, 0), at(end + 2, w1, H * 0.35), at(end + 2, 0, H * 0.35), ember, 1.0 * vk, 0.25 * vk, 0.6 * vk, 1.9 * vk);
+      air.quad(at(end + 2, 0, H * 0.35), at(end + 2, w1, H * 0.35), at(end + 2, w1, H * 0.6), at(end + 2, 0, H * 0.6), ember, 1.9 * vk, 0.6 * vk, 0.15 * vk, 0.6 * vk);
+      air.quad(at(end + 2, 0, H * 0.6), at(end + 2, w1, H * 0.6), at(end + 2, sd * hwE, H), at(end + 2, 0, H), rose, 0.6 * vk, 0.15 * vk, 0, 0);
     }
-    // Shafts: sheets of light fanning down from the top of the mouth to the floor inside (Medium and High).
+    // Shafts: beams of light slanting down from the opening onto the floor inside, through the dark air the
+    // rider rides in: each brightest along its middle and gone at its edges, so it reads as light in the
+    // air and not as a cut sheet (Medium and High).
     if (!low) {
+      // (Gold, not the veil's rose: a sheet of rose over blue air read as lilac.)
+      const shaft = night ? dawn : new Color(1.0, 0.56, 0.24);
       const fan: Array<[number, number, number, number]> = [
-        [-0.55, 3.2, 44, 0.5],
-        [-0.12, 2.4, 58, 0.42],
-        [0.3, 3.6, 38, 0.5],
-        [0.66, 2.2, 50, 0.36],
-        [-0.82, 1.8, 30, 0.34],
+        [-0.55, 4.6, 46, 0.85],
+        [-0.12, 3.4, 62, 0.7],
+        [0.3, 5.0, 40, 0.85],
+        [0.66, 3.0, 54, 0.62],
+        [-0.82, 2.6, 32, 0.55],
       ];
       for (const [u, w, reach, k] of fan) {
         const x1 = u * hwE * 0.9;
         const x0 = u * hwE * 0.7;
-        const top = H * (0.72 + 0.2 * Math.abs(u));
+        const top = H * (0.55 + 0.25 * Math.abs(u));
         const kk = k * k0;
-        b.quad(at(end + 1, x0 - w * 0.4, top), at(end + 1, x0 + w * 0.4, top), at(end - reach, x1 + w, 0.3), at(end - reach, x1 - w, 0.3), dawn, kk, kk, 0, 0);
+        for (const sd of [-1, 1]) {
+          air.quad(at(end + 1, x0, top), at(end + 1, x0 + sd * w * 0.45, top), at(end - reach, x1 + sd * w, 0.4), at(end - reach, x1, 0.4), shaft, kk, 0, 0, kk * 0.15);
+        }
       }
     }
-    const mesh = new Mesh(b.build(), this.beamMat);
-    mesh.frustumCulled = false;
-    mesh.renderOrder = 3;
-    root.add(mesh);
+    for (const [geo, mat] of [[b, this.beamMat], ...(air === b ? [] : [[air, this.airMat]])] as Array<[Beams, ShaderMaterial]>) {
+      const mesh = new Mesh(geo.build(), mat);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 3;
+      root.add(mesh);
+    }
     const lights = (z: number): void => {
-      // The dawn reaches in: one warm light inside the mouth, on the floor, the walls and whoever rides out.
+      // The dawn reaches in at the lip: a short warm pool on the floor, the walls of the mouth and
+      // whoever rides out, which leaves the cavern behind it dark.
       if (z < end - 150 || z > end + 20) return;
-      const zl = end - 16;
+      const zl = end - 4;
       const x = c.centerX(zl);
-      pushLocalLight(x, c.ground(x, zl) + 5, -zl, dawn.r, dawn.g, dawn.b, 44, 0.9 * k0);
+      pushLocalLight(x, c.ground(x, zl) + 4, -zl, dawn.r, dawn.g, dawn.b, 24, 1.0 * k0);
     };
     return { key: 'mouth' + s.n, z0: s.z - s.len, z1: end, root, lights };
   }
