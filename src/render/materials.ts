@@ -182,7 +182,7 @@ function applyRock(p: Palette): void {
   // (Frostfang's crevasse ice has a light of its own inside it.)
   if (set.style[2] === 1) {
     rock.uRockGlow.value.setRGB(0.04, 0.38, 0.62).multiplyScalar(0.3 + 0.32 * Math.min(1, p.lamps));
-    // Its ice goes down with the hazards under the cavern's roof (0.55 there, 0.78 in the open night,
+    // Its ice goes down with the hazards under the cavern's roof (0.45 there, 0.78 in the open night,
     // which is left alone), so the cavern's walls are the dark of its frame and the glow at their feet
     // is the light.
     const dim = Math.min(1, p.hazardDim / 0.78);
@@ -513,6 +513,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       uniform vec3 uSnowDeep;
       uniform float uSparkle;
       uniform float uIceMood;
+      uniform float uHazardDim;
       uniform vec3 uFocus;
       uniform vec3 uSkyZenith;
       uniform vec3 uSkyHorizon;
@@ -1314,9 +1315,16 @@ export function makeSnowMaterial(): ShaderMaterial {
             rc += mix(uSkyHorizon, uSnowLit, 0.5) * fres * 0.25;
             rc += uSunColor * pow(max(dot(reflect(-v, rn), uSunDir), 0.0), 26.0) * 0.5 * shadow;
             rc = mix(rc, uRockLit * 1.15, crack * fine * (0.3 + 0.5 * dk));
+            // (Round 7's review: under the Ice Cavern's roof, the only place darker than the night, the
+            // sky in the glaze and the skin of the shards go down too, so the walls are near-black cobalt
+            // and the glow at their feet, the lamps and the mouth are the light.)
+            float caveR = clamp(uHazardDim / 0.75, 0.0, 1.0);
+            caveR = caveR * caveR * caveR;
+            rc *= caveR;
             // A glow from inside (round 7): low in the wall the ice holds a cyan light of its own, broken
-            // by the shards' own tones, strongest at night and under a roof.
-            rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(0.22, 0.62, dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
+            // by the shards' own tones, strongest at night. (Under the cavern's roof it keeps to the
+            // wall's foot, a line of cold light along the floor, so the wall above it is the dark.)
+            rc += uRockGlow * smoothstep(0.02, 0.2, dk) * (1.0 - smoothstep(mix(0.12, 0.22, caveR), mix(0.34, 0.62, caveR), dk)) * (0.35 + 0.65 * tone * tone) * (1.0 - 0.6 * dayK);
             // The aurora finds the walls' crests: the top third of the ice takes its green on the shards
             // that face up and out, so a crevasse is cut out of the night by its own rim of light.
             rc = mix(rc, uKey2.rgb * (0.5 + 0.4 * tone), uKey2.a * smoothstep(0.5, 1.0, dk) * (0.3 + 0.7 * tr) * 0.55);
@@ -1757,8 +1765,9 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             col = mix(col, snowC, lie * 0.92);
           }
         #endif
+        vec3 L = vec3(0.0);
         if (uLocalProps > 0.0) {
-          vec3 L = localLight(vWorldPos, n, uLocalProps);
+          L = localLight(vWorldPos, n, uLocalProps);
           #ifdef HAZARD
             // A hazard takes a lamp on its edge and little on its face: lit, it is still the dark, hard
             // shape in the street (ART.md 1), now with a hot edge where the light finds it.
@@ -1804,6 +1813,14 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               iceCol = mix(iceCol, vec3(0.86, 0.96, 1.0) * (0.55 + 0.45 * iceT), (1.0 - smoothstep(0.1, 0.2, bd)) * 0.45 * fineI * heart);
             }
           }
+          #ifndef HAZARD
+            // Round 7's review: ice built over the run (Frostfang's cavern and spans) goes down with the
+            // hazards in a place darker than the night (only the Ice Cavern sets them under 0.75), so the
+            // vault is the dark of the frame; the lanterns and the dawn at the mouth light it where they
+            // reach, as they light everything else.
+            float caveK = clamp(uHazardDim / 0.75, 0.0, 1.0);
+            iceCol = iceCol * (caveK * caveK * caveK) + (base * 0.8 + 0.03) * L;
+          #endif
           col = mix(col, iceCol, iceK);
         #endif
         #ifdef GLOW_MASK

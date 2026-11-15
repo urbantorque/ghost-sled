@@ -102,3 +102,84 @@ found:
   0.75); the blue hour's sun smaller and with less glow (size 0.75, glow 0.45).
 - `materials.ts` `applyRock` (the Fang's ice only): the ice goes down with `hazardDim` under 0.78, which only the
   cavern is, so its walls are half as bright and the glow at their feet and the lanterns are the light.
+
+### Before pass 3 (`f682cd3`)
+
+The lane changed hands here. The first capture of pass 3 (from `f69feef`) showed a console error on every tier:
+the puffs' fragment shader read `uLantern`, which only its vertex shader declared, so no snow spray, landing
+burst or powder drew at all. `particles.ts` (shared): the fragment shader declares it. Pass 3 was then shot again
+in full from `f682cd3` (console clean on all four sets) before any critic saw it.
+
+### Pass 3 (`f682cd3`)
+
+From this pass on each critic is a new general-purpose agent on `opus` at `xhigh` effort (the brief's current
+text); passes 1 and 2 were at medium effort on another model. This critic is much the strictest of the three: it
+marks down every ghost at the lens, flat fuel drop and HUD card over a vista, which the first two mostly let pass.
+
+| Folder | Mean | Min |
+| --- | --- | --- |
+| High (36) | 6.54 | 5.0 (4590, the results card) |
+| Motion on High (48) | 6.35 | 5.0 (mo-z2300-0, mo-z3990-0) |
+| Low (36) | 6.31 | 5.5 |
+| Phone, Medium (36) | 6.60 | 5.0 (4590) |
+
+High, frame by frame: 150 6, 300 6, 450 7, 595 7, 750 7, 900 7, 975 7, 1045 6, 1195 6, 1343 6.5, 1500 6.5,
+1550 6.5, 1650 6, 1800 6.5, 1917 6.5, 2137 7, 2250 6, 2297 5.5, 2405 6, 2548 7, 2700 7.5, 2783 7, 2850 5.5,
+3000 5.5, 3154 6.5, 3304 6.5, 3418 7, 3549 7.5, 3600 7.5, 3750 6.5, 3940 7, 4050 7, 4200 6.5, 4330 7, 4440 7,
+4590 5.
+
+Hero vistas: Serac Gate's span 6.5 (no abyss under it; the Fang not black in the band); the aurora 7.5 at best
+(2700; "a thin band pinned under the HUD, not the key light"); the cavern mouth 7 ("a dim violet rectangle, not
+a blade of rose-gold; no shafts"); the Fang at dawn 7 (the hero tiny in the letterbox, the Fang not one spire
+lit on one side). None a 9. The best image of the run is still the dawn bridge, mo-z3470 at 8.
+
+What it found, worst first, and whose it is:
+
+1. Results card over the hero, a stale HUD number behind "3rd" (4590, every tier): UI, not this lane's.
+2. 3000: the 3 km arch's beam and ring cross the top of the frame as the lens passes under it (every mountain
+   has a fixed frame at 3000 m): shared props.
+3. Ghosts at or over the lens (1650, 2250, 2850 and Low and phone): shared ghosts.
+4. 2297: a pale untextured slab across the bottom of the frame.
+5. Stair-stepped blocks in the ice floor's reflection (1045, 2405): the pipe lane's reflections.
+6. The cavern mid-blue, not near-black; the mouth with no blade and no shafts; the way out milky.
+7. The run-in a noon, not a blue hour; the Fang never black against the band.
+8. The aurora a thread at the top edge, so the teal on the snow has no source.
+9. Systemic, every mountain: landing and dash glows bleach the rider; flat fuel drops at the lens; the sled's
+   underside an untextured slab; lanterns dithering through the lens.
+
+### After pass 3
+
+Worst first among what this lane can reach; the jaw-drop first of all.
+
+- **The cavern is dark and its mouth is the light** (`stages.ts`, Frostfang's section; `materials.ts`, shared;
+  `palette.ts`, the cavern's place). Found by switching parts off in a live frame at 3418 m: the lilac wash over
+  the floor and walls from the middle of the cavern on was the mouth's own dawn lamp, 44 m wide at 0.9 (and
+  the place's 1.35 lamps over it). Now: the lamp is a short warm pool at the lip (24 m at 1.0); a blade of gold
+  laid narrow along the floor from 70 m in, widening and brightening to the lip; a veil of rose-gold standing
+  in the whole opening, hottest where the horizon crosses it; five shafts slanting in from the opening, each
+  bright along its middle and gone at its edges. The veil and shafts are their own mesh in a beam material that
+  thins out within 6 to 30 m of the lens (`beamMaterial(near)`), so a sheet met at the lens is never a pale card
+  over the frame (Low keeps one mesh and no shafts).
+- The cavern's walls: the crevasse ice (`materials.ts` snow shader, rock style 1) and the ice built over the run
+  (the toon `ICE` branch, not a hazard) go down with `hazardDim` under 0.75, cubed; only the cavern is under
+  0.75 (now 0.45), so no other place or mountain changes. The ice's glow keeps to the wall's foot under the roof.
+  Ice built over the run now takes the lamps (the `ICE` branch threw the local light away). The cavern's place
+  glazes its floor less (`ice` 0.15) and pales its ice crowns less (`hazardFog` 0.4).
+- The way out of any enclosure flashes 0.3 by day (was 0.6) and 0.2 at night (was 0.25) (`landmarks.ts`,
+  shared): the white over the whole frame read as milk going into Frostfang's dawn.
+- **The run-in is a blue hour** (`palette.ts`, Frostfang's Clear Skies): the snow two blues (lit #C0D2F2, shade
+  #4268B8), the sky a step deeper, a lemon band and rim, the key light at 19 degrees (was 23), the disc at 0.55
+  with a quarter of the rays and lens, the glints at 0.65 and the glitter at 0.25 (a field of them read as noise),
+  the ice spires down a step (`hazardDim` 0.78, `hazardFog` 0.65) so they are the darks against the band, the
+  ranges in shade under the summits (`massif.glowLine` 1450, then 2400 by the span).
+- **The aurora is in the frame** (`sky.ts`, shared shader, only where `aurora` is over 1, which is only
+  Frostfang's night): its hems come down to just over the far ranges and its curtains stand twice as tall, so
+  the light on the snow has its source in the picture.
+- **Fang Town's air is clearer** (`palette.ts`, the dawn): shade #4E54B2, fog #8E84C2 out to 620 m, the far air
+  #7064B6 and its scatter 1.15 (was 1.7): three planes instead of one lilac haze.
+- Not done, and why: the span's abyss (the terrain under Serac Gate's span is snow dunes level with the deck; an
+  abyss is a change to the ground beside a bridge, too big and too shared to make safely here); the 3 km arch
+  over the lens at 3000 m, ghosts at the lens, the results card, flat fuel drops, the sled's underside and the
+  dash and landing glows on the rider (all shared, and on every mountain: the main lane should take them once).
+- Tests: the Clear Skies test keeps each mountain's start apart; Frostfang's first blue hour came within 1.49 of
+  Lanternfall's night (limit 1.5), so its zenith and horizon are a touch bluer and paler (#0A2266, #96B8E6).
