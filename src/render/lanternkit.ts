@@ -527,7 +527,9 @@ export function lanternHouse(t: Town, F: number, lo: number, o: LanternHouseOpts
     parts.push(grade(box(w, STOREY, d + out, col, [0, y0 + STOREY / 2, out / 2]), y0, y0 + STOREY, 0.84, 1.04));
     if (k > 0) parts.push(box(w + 0.18, 0.24, d + out + 0.18, t.trim, [0, y0, out / 2]));
     const lit = k === 0 || rnd() < 0.78;
-    const pap = lit ? paper(k === 0 ? 0.95 : 0.8 + rnd() * 0.3) : C(PAPER_DARK);
+    // (Lit paper a little under the clip, so the pane's own grade, bright low and amber under the rail, reads:
+    // brighter, every pane rolled off to one flat orange.)
+    const pap = lit ? paper(k === 0 ? 0.95 : 0.62 + rnd() * 0.22) : C(PAPER_DARK);
     if (k === 0) {
       // The door, and a shop's long window of paper beside it.
       parts.push(box(1.4, 2.4, 0.14, t.trim, [o.shop ? -w * 0.3 : 0, F + 1.2, zf + 0.04]));

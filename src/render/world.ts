@@ -403,6 +403,7 @@ export class World {
     this.post.configure(quality.passes);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.lakeMirror = new LakeMirror(this.renderer);
     this.applyWeather();
     this.resize();
@@ -579,6 +580,7 @@ export class World {
     this.life.setCourse(c, this.palette, this.mood);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
@@ -602,6 +604,7 @@ export class World {
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
     this.spirit.fireworks.lightK = this.palette.grade.flash ?? 1;
+    this.spirit.lightK = Math.max(0.5, this.palette.grade.flash ?? 1);
     this.lakeMirror.invalidate();
     this.applyWeather();
     this.lastChunkRange = '';
@@ -625,6 +628,8 @@ export class World {
     this.ghosts.setGlow(p.ghostGlow);
     this.post.setGrade({ ...p.grade, bloom: p.bloom });
     this.spirit.fireworks.lightK = p.grade.flash ?? 1;
+    this.spirit.fireworks.noRed = this.course.biome === 'lantern';
+    this.spirit.lightK = Math.max(0.5, p.grade.flash ?? 1);
     // The falling weather thickens in coarse steps (configuring it is not free).
     const fall = Math.round((p.embers + p.petals + p.snowfall) * 20);
     if (fall !== this.journeyFall) {

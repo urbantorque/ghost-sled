@@ -1000,10 +1000,12 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // (The sea's shade is a mid violet, not navy: at #352C84 its hollows were dark blots and the sea read as
       // a frozen lake under the moon.)
       p.clouds = { low: 0.25, high: 0.2, top: 0.12, lit: c('#A49CE0'), shade: c('#544A9E'), rim: c('#DCD6FF'), shadow: 0 };
-      p.atmo = { rays: 0, halo: 0.25, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
+      // (No 22 degree halo: with the moon in the frame it drew a ring across the whole sky.)
+      p.atmo = { rays: 0, halo: 0, meteors: 0.35, banner: 0.6, slide: 0, sweep: 0.2, valley: 0.9, valleyColor: c('#8A78CC'), drift: 0.3 };
       p.stars = 1;
       p.bloom = 0.62;
-      p.sparkle = 1.15;
+      // (The moon's glints on the near snow: at 1.15 the near plane read as a featureless lilac wash.)
+      p.sparkle = 1.7;
       p.snowfall = 0.02;
       p.giftGlow = 0.45;
       // (A night frame needs little of a ghost's glow to find it: at 1.6 to 2.6 a ghost near the lens was a mint blaze

@@ -19,6 +19,8 @@ export const FW_VERMILLION = new Color('#FF4D2E');
 export const FW_CORAL = new Color('#FF8A5C');
 export const FW_MARIGOLD = new Color('#FFD34D');
 export const FW_WHITE_GOLD = new Color('#FFF3C4');
+/** Lanternfall's stand-in for the reds: there the rider's vermillion is the one red (ART.md 15). */
+const FW_LILAC = new Color('#C8B8FF');
 /** Shell pairs (main stars, accent stars) in the show's order. */
 export const FW_PAIRS: readonly (readonly [Color, Color])[] = [
   [FW_VERMILLION, FW_WHITE_GOLD],
@@ -149,6 +151,8 @@ export class Fireworks {
   /** How much of a burst's light reaches the world (the grade's flash, world.ts): 1 by day; a night of
    *  pale snow under a lit square takes less, or a volley at the line floods the whole frame. */
   lightK = 1;
+  /** No red stars (world.ts sets it for Lanternfall): vermillion bursts take marigold, coral ones lilac. */
+  noRed = false;
   private readonly mat: ShaderMaterial;
   private readonly iPos: InstancedBufferAttribute;
   private readonly iVel: InstancedBufferAttribute;
@@ -229,6 +233,10 @@ export class Fireworks {
 
   /** A shell from `from` that bursts at `to` after `rise` seconds (three.js space). */
   shell(from: Vector3, to: Vector3, rise: number, a: Color, b: Color, kind?: ShellKind): void {
+    if (this.noRed) {
+      a = a === FW_VERMILLION ? FW_MARIGOLD : a === FW_CORAL ? FW_LILAC : a;
+      b = b === FW_VERMILLION ? FW_MARIGOLD : b === FW_CORAL ? FW_LILAC : b;
+    }
     const t = Math.max(0.3, rise);
     const g = GRAV * 0.55;
     this.pending.push({

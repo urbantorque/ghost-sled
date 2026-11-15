@@ -61,7 +61,7 @@ const LAMP_AHEAD = 400;
  *  over the snow. (It hung 36 m past the line, where the finish lens, which swings round to look back up the
  *  run at the rider, never saw it: lit over the square it stands behind the rider in that shot.) */
 const GREAT_Z = -28;
-const GREAT_Y = 9.5;
+const GREAT_Y = 6.5;
 /** The guide light keeps this far ahead of the rider. */
 const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
@@ -227,7 +227,9 @@ function valleyMaterial(low: boolean): ShaderMaterial {
         vec2 b = q / vec2(0.4, 0.56);
         float bodyK = 1.0 - smoothstep(0.8, 1.0, pow(pow(abs(b.x), 2.8) + pow(abs(b.y), 2.8), 1.0 / 2.8));
         vec3 col = mix(vCol * dotK, paperLantern(q, vCol), vBig);
-        float cover = mix(min(dotK, 1.0) * 0.85, bodyK * 0.92, vBig) * vA;
+        // (A paper lantern near the lens covers what is behind it; a far mote covers little: thousands of them
+        // each taking 85% of the air behind them made the lit valley under the break a dark hole full of dots.)
+        float cover = mix(min(dotK, 1.0) * 0.28, bodyK * 0.92, vBig) * vA;
         gl_FragColor = vec4(col * vA * uGain, cover);
       }
     `,
@@ -256,7 +258,7 @@ function spriteMaterial(low: boolean): ShaderMaterial {
         float d = -mv.z;
         float f = clamp((d - uFogR.x) / max(uFogR.y - uFogR.x, 1.0), 0.0, 1.0);
         // In cloud a light far off is a wide soft halo, and it tightens to a flame as it comes: the looming.
-        float size = aS.x * (1.0 + uCloud * f * (aS.y < 0.5 ? 2.6 : 1.4));
+        float size = aS.x * (1.0 + uCloud * f * (aS.y < 0.5 ? 3.6 : 1.4));
         float px = lightPx(size, d);
         float a = lightAir(d) * clamp(px / 1.5, 0.25, 1.0) * (1.0 - uCloud * f * 0.35);
         gl_PointSize = a < 0.004 ? 0.0 : min(max(px, 1.5), 256.0);
@@ -285,6 +287,13 @@ function spriteMaterial(low: boolean): ShaderMaterial {
           #endif
         } else if (vKind < 1.5) col = flameShape(q, vCol, vSeed, uTime);
         else col = paperLantern(q, vCol);
+        #ifdef POSTER
+          // (No tone curve on Low: a light over 1 clipped to a white shape. It keeps its hue at full value.)
+          col *= uGain;
+          col /= max(1.0, max(col.r, max(col.g, col.b)));
+          gl_FragColor = vec4(col, 1.0);
+          return;
+        #endif
         gl_FragColor = vec4(col * uGain, 1.0);
       }
     `,
@@ -1353,7 +1362,9 @@ export class LanternWorld {
           }
           const t = at === undefined ? 9 : time - at;
           size = 1 + 1.6 * Math.exp(-t * 4);
-          lum = 1.5 + 2.4 * Math.exp(-t * 3);
+          // (A catch is a flare in the lamp, not in the air round the lens: at 2.4 and a light to match, a row
+          // catching at once washed the near plane peach.)
+          lum = 1.5 + 1.3 * Math.exp(-t * 3);
         }
         // A road that is won blazes: every lamp of it stands taller, and lets a lantern go.
         const pk = this.playAt(plays, o.z);
@@ -1369,7 +1380,7 @@ export class LanternWorld {
         const fl = 0.86 + 0.14 * Math.sin(time * 8 + seed * 40);
         this.flameAt(o.x, fy, o.z, size, FLAME, lum * fl, seed);
         const d = o.z - z;
-        if (d > -20 && d < 70) pushLocalLight(o.x, fy + 0.5, -o.z, LAMP_RGB[0], LAMP_RGB[1], LAMP_RGB[2], 9.5 + 3 * (size - 1), Math.min(1.9, 0.75 * lum * fl * 0.66) * lampK);
+        if (d > -20 && d < 70) pushLocalLight(o.x, fy + 0.5, -o.z, LAMP_RGB[0], LAMP_RGB[1], LAMP_RGB[2], 9.5 + 3 * (size - 1), Math.min(1.15, 0.75 * lum * fl * 0.66) * lampK);
       }
     }
     // Floats on the canal, near the lens: the nearest of the water's lights, as light.
@@ -1510,7 +1521,7 @@ export class LanternWorld {
     // The light itself: a lantern, a white heart, a wide soft halo that the cloud spreads.
     this.sprite(x, y, zl, 1.5 + 0.5 * pulse, 2, WHITE_GOLD, 1.7 * k, 0.3);
     this.sprite(x, y - 0.1, zl, 0.9, 0, WHITE_GOLD, 2.2 * k);
-    this.sprite(x, y, zl, 6.5 + 4 * pulse, 0, MARIGOLD, (0.5 + 0.5 * pulse) * k);
+    this.sprite(x, y, zl, 9 + 4 * pulse, 0, MARIGOLD, (0.6 + 0.5 * pulse) * k);
     // Three small lights that circle it, and a tail of them falling back down its line.
     for (let i = 0; i < 3; i++) {
       const a = time * 2.2 + (i * Math.PI * 2) / 3;

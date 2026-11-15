@@ -225,6 +225,9 @@ export class SpiritFx {
 
   /** Lights pushed by the spirit effects this frame (tests and the cost report). */
   lit = 0;
+  /** How strongly the pulses and a dash light the world and the rider (world.ts, from the grade's flash; 1
+   *  by day). A night frame takes less: at full a dash's white-gold light washed the rider to peach. */
+  lightK = 1;
 
   /** Offers the frame's spirit lights: each pulse as it fades, a dash's own light on the rider for as long
    *  as it lasts, and the sky gates ahead (a ring of light lights the snow under it). */
@@ -235,12 +238,12 @@ export class SpiritFx {
       p.life -= dt;
       if (p.life <= 0) continue;
       const k = p.life / p.max;
-      if (p.ride) pushLocalLight(s.x, s.y + 0.9, -s.z, p.r, p.g, p.b, p.radius, p.power * k * k);
-      else pushLocalLight(p.x, p.y, p.z, p.r, p.g, p.b, p.radius, p.power * k * k);
+      if (p.ride) pushLocalLight(s.x, s.y + 0.9, -s.z, p.r, p.g, p.b, p.radius, p.power * k * k * this.lightK);
+      else pushLocalLight(p.x, p.y, p.z, p.r, p.g, p.b, p.radius, p.power * k * k * this.lightK);
       this.lit++;
     }
     if (dashing) {
-      pushLocalLight(s.x, s.y + 0.8, -s.z, WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, 10, 1.3);
+      pushLocalLight(s.x, s.y + 0.8, -s.z, WHITE_GOLD.r, WHITE_GOLD.g, WHITE_GOLD.b, 10, 1.3 * this.lightK);
       this.lit++;
     }
     const c = this.course;
