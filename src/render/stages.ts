@@ -8,7 +8,7 @@ import { pushLocalLight } from './lights';
 import { shared } from './materials';
 import { Palette } from './palette';
 import { Facets, columnInto } from './rockforms';
-import { snowDrift } from './terrain';
+import { lateralOffsets, snowDrift } from './terrain';
 
 // Round 7: the light a place holds, staged. Three places were objects in an even light; here each gets the
 // thing that lights it, drawn in the air and on the ground round the run:
@@ -121,7 +121,7 @@ function lavaMaterial(low: boolean): ShaderMaterial {
         // (The fall line is world -z: the plates drift down it, the big ones slower than the small.)
         vec2 p = vec2(vW.x, vW.z + vW.y * 0.6) * 0.21;
         // (Basalt, not a hole: near the lens a near-black crust read as a void.)
-    vec3 crust = mix(vec3(0.045, 0.024, 0.028), vec3(0.2, 0.035, 0.012), heat * heat * 0.6);
+    vec3 crust = mix(vec3(0.065, 0.03, 0.032), vec3(0.2, 0.035, 0.012), heat * heat * 0.6);
         #ifdef LAVA_LOW
           // The poster's lava: the same plates in two flat values, a dark crust and a line of fire between
           // them, in one pass over the cells and standing still (square cells in two values read as a
@@ -285,6 +285,14 @@ const driftBuf: [number, number] = [0, 0];
 function snowY(c: Course, x: number, z: number): number {
   return visualGround(c, x, z) + snowDrift(x, z, c.edgeExcess(x, z), driftBuf)[0];
 }
+
+/** The terrain's own detail per tier (world.ts QUALITY): what lies on a steep bank is laid on the drawn
+ *  chord between the terrain's columns, not on the true surface under it. */
+const TERRAIN_DETAIL: Record<Tier, { inner: number; row: number; reach: number }> = {
+  low: { inner: 1.6, row: 3, reach: 60 },
+  medium: { inner: 1.1, row: 2.2, reach: 90 },
+  high: { inner: 0.85, row: 2, reach: 110 },
+};
 
 const smooth = (a: number, b: number, x: number): number => {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -470,6 +478,7 @@ export class Stages {
   private flow = 0;
   private lastT = 0;
   private caldera: Ledge | null = null;
+  private cols: number[] | null = null;
 
   constructor(
     private course: Course,
@@ -494,6 +503,7 @@ export class Stages {
     this.tier = tier;
     this.lavaMat.dispose();
     this.lavaMat = lavaMaterial(tier === 'low');
+    this.cols = null;
     this.clear();
   }
 
@@ -512,6 +522,27 @@ export class Stages {
 
   private find(): void {
     this.caldera = calderaLedge(this.course);
+    this.cols = null;
+  }
+
+  /** The drawn snow's height at sim (x, z): the higher of the true surface and the terrain's chord
+   *  between its two columns either side. At a wall's foot the chord stands well over the true surface
+   *  (the rock climbs thirteen metres in four and a half), and laid on the surface the slots' lava was
+   *  inside the drawn bank, unseen. */
+  private drawnY(x: number, z: number): number {
+    const c = this.course;
+    const y = snowY(c, x, z);
+    const offs = (this.cols ??= lateralOffsets(c, TERRAIN_DETAIL[this.tier]));
+    const cx = c.centerX(z);
+    const o = x - cx;
+    if (o <= offs[0] || o >= offs[offs.length - 1]) return y;
+    let i = 0;
+    while (offs[i + 1] < o) i++;
+    const a = offs[i];
+    const b = offs[i + 1];
+    const ya = snowY(c, cx + a, z);
+    const yb = snowY(c, cx + b, z);
+    return Math.max(y, ya + ((yb - ya) * (o - a)) / (b - a));
   }
 
   /**
@@ -597,9 +628,10 @@ export class Stages {
     // shore. Dark plates on thin cracks where sleds cross it (a rider must read against it), hotter
     // toward the banks. The sim rides the same ground under it: a sled that lands short crosses crust.
     const zF0 = l.foot + 2;
-    // (It ends short of the landing face's foot, so a sled that comes down the face rides out onto snow:
-    // run to the face's end, the floor's ragged last plates lay round a landed rider like a hole.)
-    const zF1 = l.land1 - 26;
+    // (On past the landing face with the fields, so the whole of a fast flight is over lava: ended short
+    // of the face's end, the flight's last second was over a tongue of snow, and ended at it, its ragged
+    // last plates lay round a rider landed there like a hole.)
+    const zF1 = l.land1 + CALDERA_RUNOUT - 2;
     /** Where a field starts and ends across the bank at z: outside the crowd's shoulder at the lip, from
      *  just past the limit below it, swelling to its widest under the middle of the flight. */
     const inner = (z: number, side: number): number => {
@@ -862,7 +894,7 @@ export class Stages {
         const w = 1.0 + 0.5 * vnoise2(z * 0.09, side * 5.1, 17);
         for (let j = 0; j < 4; j++) {
           const x = cx + side * (hw + lim - 0.25 + w * ACROSS[j]);
-          pos.push(x, snowY(c, x, z) + 0.4, -z);
+          pos.push(x, this.drawnY(x, z) + 0.4, -z);
           heat.push(HEAT[j] * (0.55 + 0.45 * k));
           cover.push(Math.min(0.99, k));
         }
@@ -872,7 +904,7 @@ export class Stages {
           const zb = Math.min(z1, z + step * 4);
           const p = (zz: number, up: number): number[] => {
             const x = c.centerX(zz) + side * (c.halfWidth(zz) + c.edgeLimit(zz) - 0.6);
-            return [x, snowY(c, x, zz) + 0.3 + up, -zz];
+            return [x, this.drawnY(x, zz) + 0.3 + up, -zz];
           };
           // (Faint: at a third it stood up the wall as a sheet of flame.)
           const s = 0.1 * k;
@@ -914,10 +946,10 @@ export class Stages {
           if (stand < 0.45) continue;
           const zz = z + (rnd() - 0.5) * 1.2;
           const e = c.halfWidth(zz) + c.edgeLimit(zz);
-          // (They stand in the river at the wall's foot, in front of its face: set back where the rock had
-          // already climbed five metres, they were mostly inside it.)
+          // (They stand in the river at the wall's foot, against its face, footed on the drawn rock where
+          // they stand: footed on the river's line, a metre in, the steep face buried them whole.)
           const x = c.centerX(zz) + side * (e + 0.7 + rnd() * 0.6);
-          const gy = snowY(c, c.centerX(zz) + side * (e + 0.2), zz);
+          const gy = this.drawnY(x, zz) + 0.5;
           const h = 8 + 10 * (stand - 0.45) / 0.55 + rnd() * 4;
           columnInto(f, { x, z: -zz, y: gy - 2, r: 1.15 * (0.85 + 0.4 * rnd()), h: h + 2, foot: 0, yaw: rnd(), slant: [(rnd() - 0.5) * 0.3, (rnd() - 0.5) * 0.3], col: t.rock[rnd() < 0.5 ? 0 : 1], top: rnd() < 0.4 ? ASH_TOP : null, broke: t.broke, drums: 2 }, rnd);
         }

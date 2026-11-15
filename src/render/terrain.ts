@@ -82,7 +82,7 @@ function overLip(lift: number, e: number, w: number): number {
 
 /** The same offsets for every chunk of a course, so neighbouring chunks share edge vertices
  *  exactly and no cracks open between them. */
-function lateralOffsets(course: Course, d: TerrainDetail): number[] {
+export function lateralOffsets(course: Course, d: TerrainDetail): number[] {
   const hw = course.params.halfWidthStart + 2.6;
   const inner = hw + 10;
   const n = Math.ceil((inner * 2) / d.inner);

@@ -856,7 +856,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       // Under ash: a heavy overcast of smoke lit from below, a dim orange disc, ash-grey snow, and the
       // volcano dead ahead at the end of the valley. Warmth stays in the sky so the snow still sets off
       // the rider's vermillion and the gifts' marigold.
-      setSun(p, 34, 15, 30, 15);
+      // (The key well above the slope, decision 27: at 30 degrees every face turned downhill sat half lit,
+      // where a warm lit side and a cold shade mixed to grey-mauve.)
+      setSun(p, 34, 15, 44, 15);
       p.sunColor = c('#E8E0DC');
       p.sunCore = new Color(1.7, 0.62, 0.16);
       p.sunTint = 0.85;
@@ -886,12 +888,15 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.heroAz = 7;
       // The valley below is a sea of smoke lit from beneath in pools. (At half cover its gaps were cold
       // navy lakes in peach billows: a camouflage that read as neither cloud nor lava.)
-      p.massif.sea = 0.92;
-      p.massif.seaWarm = 1;
-      p.massif.lava = 0.6;
-      p.massif.flow = 0.5;
+      p.massif.sea = 1.25;
+      p.massif.seaWarm = 1.4;
+      // (The crater glows and the flanks run from the start line: at 0.6 the cone read as a dull brown
+      // triangle. Kept under the 0.75 that wakes the night moods' lightning.)
+      p.massif.lava = 0.72;
+      p.massif.flow = 0.75;
       p.deck = { k: 0.85, lit: c('#54403E'), shade: c('#241A20'), glow: c('#FF6A28') };
-      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#6A4A44'), shade: c('#2A1C22'), rim: c('#FF7A38'), shadow: 0 };
+      // (Smoke, lit from below: pale billows over the valley read as a beige plain with black holes.)
+      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#5A2A26'), shade: c('#24141A'), rim: c('#FF7A38'), shadow: 0 };
       p.shadowK = 0.7;
       p.grade = { lift: c('#120A10'), gain: c('#FFF4EA'), saturation: 1.06, contrast: 1.06, grain: 0.8, foot: 0.3, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0 };
       p.atmo = { rays: 0.25, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.2, valley: 0.8, valleyColor: c('#8A4A38'), drift: 0.4 };
@@ -1047,7 +1052,7 @@ function round7(p: Palette, biome: BiomeId): void {
       p.massif.rock = c('#140E12');
       p.air = { far: c('#3A1C24'), cool: c('#C4CCE4'), low: 0.6, scatter: 1.3 };
       // (Basalt and the rider take a hot edge from the deck and the lava from the first metre.)
-      p.under = { color: c('#FF6A28'), k: 0.2 };
+      p.under = { color: c('#FF6A28'), k: 0.3 };
       p.lamps = 0.9;
       p.poolSoft = 1;
       // The smoke deck's own shadows drift over the slopes: the firelit snow lies in pools between
@@ -1347,7 +1352,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // The deck closes over the basalt slopes: the disc dims and the air draws in.
       from: 500, at: 1250, dusk: 0.4,
       edit: (p) => {
-        setSun(p, 42, 11, 27, 14);
+        setSun(p, 42, 11, 42, 14);
         p.sunDisc = 0.5;
         p.sunSoft = 0.6;
         // The deck closes: the top of the sky goes to smoke, the fire draws down to a band at the
@@ -1364,14 +1369,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.grade.exposure = 1.02;
         p.grade.contrast = 1.15;
         p.embers = 1;
-        p.under.k = 0.26;
+        p.under.k = 0.34;
       },
     },
     {
       // Out on the shield the deck is lit from below, and breathes.
       from: 1700, at: 2250, dusk: 0.7,
       edit: (p) => {
-        setSun(p, 45, 8, 25, 13);
+        setSun(p, 45, 8, 40, 13);
         p.sunDisc = 0.35;
         p.sunColor = c('#FFD4BC');
         p.skyHorizon = c('#E8521C');
@@ -1395,7 +1400,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // it. The air is thick with ash and warm with light, never a grey fog with nothing in it.
       from: 2700, at: 3400, dusk: 1,
       edit: (p) => {
-        setSun(p, 48, 6, 24, 13);
+        setSun(p, 48, 6, 40, 13);
         p.sunDisc = 0.25;
         p.sunColor = c('#FFC8AC');
         p.skyZenith = c('#0E0A0E');
@@ -1435,7 +1440,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 3400, at: 3760, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
-        p.sunColor = c('#FFB89C');
+        // (A dim key under the dark deck: a peach one on the night's lilac snow read as candy pink.)
+        p.sunColor = c('#D8B0A8');
         p.skyZenith = c('#0A0608');
         p.skyMid = c('#2C1014');
         p.skyHorizon = c('#D03A12');
@@ -1449,7 +1455,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.deck.shade = c('#120A0E');
         p.deck.glow = c('#D8401A');
         p.hazardDim = 0.9;
-        p.lamps = 1.5;
+        p.lamps = 1.3;
         p.bloom = 0.6;
         p.grade.exposure = 1.04;
         p.grade.hi = c('#FFE0C0');
@@ -1827,8 +1833,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.snowLit = c('#949CBC');
         p.snowShade = c('#1C1E40');
         p.snowDeep = c('#120E26');
-        p.fog = c('#240C0C');
-        p.air.far = c('#5A1A0C');
+        // (The air thickens to the fire's colour with distance, so the far mouth is a hot disc and not a
+        // pale slot of the slope beyond.)
+        p.fog = c('#6A1E0A');
+        p.air.far = c('#A0360E');
         p.fogNear = 24;
         p.fogFar = 280;
         p.under.k = 0.6;
@@ -1874,6 +1882,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.snowLit = c('#FFDCC4');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
+        p.massif.seaWarm = 2.2;
         p.embers = 1.7;
         p.grade.hi = c('#FFDCB4');
         p.grade.exposure! *= 1.04;
