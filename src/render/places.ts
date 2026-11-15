@@ -888,9 +888,16 @@ export function lipPiece(ctx: SiteCtx): Piece {
               [5.7, -1.5, 2.9, 6.4, 3.1],
               [6.3, -12, 2.2, 4.6, 5.4],
             ];
-        crown.forEach(([dx, dz, rx, rz, up], k) => {
+        // (Pinecrest, from the review loop: tapered to a point in three beds, a crown stood over the lip
+        // as a flat violet spike, the very prism this piece was rebuilt to lose. Its crowns are lower,
+        // broader and blunt, in five beds, so each holds snow on its ledges and reads as an outcrop.)
+        const blunt = biome === 'alpine' && !low;
+        crown.forEach(([dx, dz, rx0, rz0, up0], k) => {
           const from = f.triangles;
-          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: 3, sides: 6, rock, lie, taper: 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
+          const rx = blunt ? rx0 * 1.35 : rx0;
+          const rz = blunt ? rz0 * 1.15 : rz0;
+          const up = blunt ? 1.6 + up0 * 0.38 : up0;
+          strataInto(f, { rx, rz, h: up + 1, foot: 0, layers: blunt ? 5 : 3, sides: blunt ? 8 : 6, rock, lie, taper: blunt ? 0.34 : 0.62, shift: 0.16, dip: 0.1 * s, dipZ: 0.12, warp: 0.4, jut: 0.16, rough: 0.3, seed: sd + 31 + k });
           f.place(from, x + s * dx, y - 1, dz, rnd() * 0.5 - 0.25);
         });
         for (let k = 0; k < (low ? 1 : 2); k++) {

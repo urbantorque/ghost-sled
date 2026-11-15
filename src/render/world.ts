@@ -352,6 +352,7 @@ export class World {
     this.rider.eye = this.cam.camera;
     // An airborne sled's contact shadow is kept inside the chase camera's frame (landing.ts).
     this.landing.eye = this.cam.camera;
+    this.landing.painted = !quality.shadows;
     // A wreck under the trees slides out to a clearing as it settles, where the hero shot can see it.
     this.rider.blocked = this.cam.blocked;
 
@@ -514,6 +515,7 @@ export class World {
     this.renderer.setPixelRatio(q.pixelRatio);
     this.renderer.shadowMap.enabled = q.shadows;
     this.sun.castShadow = q.shadows;
+    this.landing.painted = !q.shadows;
     if (shadowsChanged) this.configureShadow();
     this.terrain.setDetail(q.terrain, q.shadows);
     this.midground.setTier(q.detail, q.terrain.reach);

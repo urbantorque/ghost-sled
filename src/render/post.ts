@@ -504,11 +504,13 @@ export class PostFX {
           // Round 7's lens character: at speed the glass shows in the frame's corners and nowhere else, a
           // hair of colour fringe (two and a half pixels of a 1280 frame in the very corner at the
           // cap). A calm frame has none.
-          float fringe = uFringe * uSpeed * smoothstep(0.5, 1.0, r);
+          // (The review loop: from half the radius out it reached the pines and peaks a third of the way
+          // in, and a still at speed read as a misprint. It starts at the last quarter and blends less.)
+          float fringe = uFringe * uSpeed * smoothstep(0.74, 1.0, r);
           if (fringe > 0.004) {
             vec2 off = dc * 0.004 * fringe;
-            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.7);
-            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.7);
+            col.r = mix(col.r, texture2D(tScene, uv + off).r, 0.5);
+            col.b = mix(col.b, texture2D(tScene, uv - off).b, 0.5);
           }
           // Round 7: the ambient occlusion and contact shadows, under the bloom and the grade.
           col = pipeAO(col, uv);

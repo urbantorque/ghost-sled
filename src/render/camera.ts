@@ -301,10 +301,13 @@ const REVEAL_YAW = 0.07;
 /** The held wide on the biggest leap: what it adds to the vista at full weight (metres back, up and aside,
  *  degrees of lens) and its letterbox. It rides the vista's own weight, so it is in as the flight opens
  *  and home before the stomp window, as the vista is. */
-const WIDE_OUT = 3.0;
+// (The review loop: at 3 m back and 4 degrees on top of the vista's own, the rider was a thirtieth of the
+// frame at the apex of the game's one image. The wide keeps its height and its side step and gives back
+// two fifths of its distance.)
+const WIDE_OUT = 1.8;
 const WIDE_UP = 1.5;
 const WIDE_SIDE = 2.0;
-const WIDE_FOV = 4;
+const WIDE_FOV = 2;
 const WIDE_BOX = 0.8;
 /** The slow hero frame: from wherever the wide stood, the lens pushes in to HERO_BACK metres behind its
  *  set point and HERO_UP over the sled (half as far again on a phone, whose rider is already big),

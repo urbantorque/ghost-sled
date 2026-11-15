@@ -6,6 +6,7 @@ import { SNOW, crystal, merge, part, reseed, softPart, variantDepthMaterial, var
 import { visualGround } from './ground';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
+import { Facets, strataInto } from './rockforms';
 
 // What the course is furnished with so a place reads before you reach it, on every tier, in one draw:
 // the grindable rails, and the leaps' and the forks' markers. One instanced variant set (flora.ts), so
@@ -138,6 +139,25 @@ function shoulderGeometry(biome: BiomeId): BufferGeometry {
   const mid = lf ? new Color('#454070') : blossom ? new Color('#9C94A6') : new Color('#7A7088');
   const pale = lf ? new Color('#625C92') : blossom ? new Color('#B2A8B4') : new Color('#94889E');
   const lid = blossom ? new Color('#7E9868') : SNOW;
+  if (biome === 'alpine') {
+    // Pinecrest (the review loop): the fins below stood either side of every lip as flat violet prisms
+    // eight metres tall, the one untextured thing in the mountain's hero frames. Its shoulders are
+    // outcrops in beds instead (rockforms.ts): three blunt stacks leaning on each other, snow on every
+    // ledge and on the tops, a drift round the foot.
+    const f = new Facets();
+    const rock = [dark, mid, pale];
+    const stacks: Array<[number, number, number, number, number, number, number]> = [
+      [0, 0, 2.7, 2.1, 5.0, 0.3, 0.3],
+      [2.3, 0.6, 1.9, 1.6, 3.4, 0.36, 1.4],
+      [-2.2, 0.5, 1.8, 1.5, 2.6, 0.4, -0.9],
+    ];
+    stacks.forEach(([x, z, rx, rz, h, taper, yaw], k) => {
+      const from = f.triangles;
+      strataInto(f, { rx, rz, h: h + 0.8, foot: 0.3, layers: k === 0 ? 5 : 4, sides: 7, rock, lie: SNOW, taper, shift: 0.16, dip: 0.08, dipZ: 0.1, warp: 0.4, jut: 0.15, rough: 0.26, apron: 0.18, seed: 7711 + k * 13 });
+      f.place(from, x, -0.8, z, yaw);
+    });
+    return merge([f.build(), softPart(new SphereGeometry(1, 7, 3), SNOW, { pos: [0, -0.5, 0.4], scale: [5, 1.2, 4] })]);
+  }
   // Tall fins of rock leaning together, broken at the top, each a few hard planes (ART.md section 3:
   // a rock is a chunky crystal, never a pebble), with what lies on their ledges.
   const fin = (r: number, h: number, pos: [number, number, number], rot: [number, number, number], c: Color, jit: number): BufferGeometry => part(new ConeGeometry(r, h, 5, 2), c, { pos, rot, scale: [1, 1, 0.72], jitter: jit });
