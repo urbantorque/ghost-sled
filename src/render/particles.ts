@@ -297,6 +297,7 @@ class Layer {
         uniform vec3 uRim;
         uniform vec3 uFog;
         uniform vec3 uLanternColor;
+        uniform float uLantern;
         varying vec3 vColor;
         varying float vAlpha;
         varying float vFog;
