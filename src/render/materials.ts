@@ -1813,6 +1813,10 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             float back = pow(max(dot(-v, uSunDir), 0.0), 2.0);
             float petal = smoothstep(0.25, 0.6, max(base.r, max(base.g, base.b))) * (1.0 - smoothstep(0.8, 0.95, min(base.r, min(base.g, base.b))));
             col += base * mix(vec3(1.0), uSunColor, 0.5) * (uLeaf * petal * (0.22 + 0.9 * back) * (0.5 + 0.5 * n.y));
+            // The sun's own edge on the canopy: a hot peach-white rim on the faces turned to it, so a
+            // tree has a lit rim and a rose heart, not one pink.
+            float rimL = pow(1.0 - clamp(dot(n, v), 0.0, 1.0), 2.0) * smoothstep(-0.1, 0.7, dot(n, uSunDir));
+            col += mix(uSunColor, vec3(1.0, 0.86, 0.8), 0.5) * (uLeaf * petal * rimL * 0.42);
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,
           // the snow heaped round it), so a tree or a rock sits in the slope instead of on it.

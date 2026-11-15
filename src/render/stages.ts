@@ -349,12 +349,16 @@ function paddyMaterial(): ShaderMaterial {
         float f = 0.25 + 0.75 * pow(1.0 - clamp(v.y, 0.0, 1.0), 3.0);
         // (Looking straight down it is the sky a step deeper: still water is never a hole, and never
         // darker than the shade on the snow beside it.)
-        vec3 col = mix(mix(uSkyZenith, sky, 0.3) * 0.74, sky * 0.98, f);
+        // (Seen from above it is the zenith, a step deeper and with its colour pushed: grey water is a
+        // roof tile. The mist lies on it half as thick as on the snow, so a far flat stays blue.)
+        vec3 deep = mix(uSkyZenith, sky, 0.2);
+        deep = mix(vec3(dot(deep, vec3(0.3, 0.59, 0.11))), deep, 1.6) * 0.8;
+        vec3 col = mix(deep, sky * 0.98, f);
         vec3 dd = normalize(uDiskDir);
         float gl = max(dot(r, dd), 0.0);
         // The sun finds the flats one by one: a wide soft sheen round a hot core.
-        col += uSunColor * (pow(gl, 120.0) * 1.6 + pow(gl, 14.0) * 0.5);
-        float fog = smoothstep(uFogNear, uFogFar, dist);
+        col += uSunColor * (pow(gl, 120.0) * 1.6 + pow(gl, 14.0) * 0.3);
+        float fog = smoothstep(uFogNear, uFogFar, dist) * 0.5;
         gl_FragColor = vec4(mix(col, uFog, fog), 1.0);
         #include <colorspace_fragment>
       }
@@ -836,7 +840,7 @@ export class Stages {
       const z = a + i * step;
       const hw = c.halfWidth(z) + Math.min(3, c.edgeLimit(z));
       // (Low has no film curve over the frame: at full strength its bars added up to paper white.)
-      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.55 : 1);
+      const k = (0.3 + 0.3 * hashf(s.n * 31 + 7, i)) * smooth(0, 3, i) * smooth(0, 3, n - i) * (low ? 0.4 : 1);
       const W = step * 0.3;
       const M = low ? 3 : 6;
       for (let j = 0; j < M; j++) {
@@ -862,7 +866,7 @@ export class Stages {
     const end = s.z + s.len;
     const hwE = c.halfWidth(end) + c.edgeLimit(end);
     const H = Math.max(10, s.clear);
-    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.34, 0.16, 0.04, 0.14);
+    for (const sd of [-1, 1]) b.quad(at(end + 1.5, 0, 0), at(end + 1.5, sd * hwE, 0), at(end + 1.5, sd * hwE, H), at(end + 1.5, 0, H), warm, 0.14, 0.06, 0.0, 0.05);
     const mesh = new Mesh(b.build(), this.beamMat);
     mesh.frustumCulled = false;
     mesh.renderOrder = 3;

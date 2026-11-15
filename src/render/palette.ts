@@ -1075,7 +1075,7 @@ function round7(p: Palette, biome: BiomeId): void {
       p.skyMid = c('#EEDCDC');
       p.skyHorizon = c('#FFD8C6');
       p.skyBelow = c('#F4CFC6');
-      p.fog = c('#F6D2CA');
+      p.fog = c('#F4D4D4');
       p.ridge = [c('#F2DAD6'), c('#D8CEDC'), c('#B4BAD8')];
       p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFEEE6'), shade: c('#D6BCCC'), rim: c('#FFC4AE'), shadow: 0.1 };
       p.atmo.valleyColor = c('#FAD2C8');
@@ -1490,18 +1490,19 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#D6DAF2');
         p.skyBelow = c('#B4C0EA');
         p.fog = c('#C0CAEE');
-        p.fogFar = 880;
+        p.fogFar = 1000;
         p.air.far = c('#7694DE');
         p.air.low = 0.6;
-        p.snowShade = c('#6474D0');
-        p.snowDeep = c('#4E44A4');
+        p.snowShade = c('#5466CC');
+        p.snowDeep = c('#43389E');
+        p.grade.lift = c('#0C1020');
         p.tall = c('#FF7EB2');
         p.tallDark = c('#862660');
         p.ridge = [c('#C6D0F0'), c('#9CB0E4'), c('#7690D6')];
         p.atmo.rays = 0.45;
         p.atmo.valleyColor = c('#C4CEF0');
         p.grade.shafts = 0.3;
-        p.grade.contrast = 1.2;
+        p.grade.contrast = 1.24;
         p.grade.hi = c('#FFF8F4');
         p.clouds.low = 0.5;
         p.clouds.high = 0.5;
@@ -1873,8 +1874,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // Petal Steps: the flooded terraces are mirrors of the sky, and the grade goes clear to let them.
       kind: 'terraces',
       edit: (p) => {
-        p.grade.hi = c('#F4FAFF');
-        p.grade.contrast += 0.03;
+        // (The lit snow keeps the morning's peach here: with a cold split tone the steps were one lavender.)
+        p.grade.hi = c('#FFF4EA');
+        p.grade.contrast += 0.05;
+        p.snowShade = c('#6878D2');
         p.air.low = 0.9;
       },
     },
@@ -1899,8 +1902,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fogFar *= 1.45;
         p.air.low = 0.4;
         p.atmo.valley = Math.min(p.atmo.valley, 0.35);
-        p.snowShade = c('#5868C8');
-        p.snowDeep = c('#44389C');
+        p.snowShade = c('#4A5CC4');
+        p.snowDeep = c('#3C3096');
         p.grade.contrast += 0.04;
       },
     },

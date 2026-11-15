@@ -231,7 +231,7 @@ export function orchard(c: Course, i: number, dens: number, rich: boolean, clear
             if (hashf(k, sd, 511) < 0.07 + r * 0.03) continue;
             const zz = z + (hashf(k, sd, 512) - 0.5) * 0.3;
             if (!standable(c, zz, e) || (clear.length > 0 && inClearing(clear, side, e, zz))) continue;
-            plant(r < 2, 'a', b.pale && rich ? 1 : 0, side, e, zz, 0.86 + hashf(k, sd, 513) * 0.18, anyWay(hashf(k, sd, 514)), 0.92 + hashf(k, sd, 515) * 0.16);
+            plant(r < 2, 'a', b.pale && rich ? 1 : 0, side, e, zz, 1.1 + hashf(k, sd, 513) * 0.24, anyWay(hashf(k, sd, 514)), 0.92 + hashf(k, sd, 515) * 0.16);
           }
         }
       } else if (b.kind === 'pines') {

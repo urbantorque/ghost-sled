@@ -1542,8 +1542,10 @@ export function toriiRowPiece(ctx: SiteCtx): Piece {
   if (!rail) throw new Error('toriiRowPiece: no rail');
   const { night } = ctx;
   const list = bays(ctx, rail, 4.2);
-  const lac = new Color('#93405A');
-  const lacD = new Color('#6A2A40');
+  // (A deeper, redder wine than the mountain's other lacquer: in the row's own shade the paler one went
+  // to a dull mauve, a wall and not lacquer. Still a wine, well off the rider's vermillion.)
+  const lac = new Color('#A8324E');
+  const lacD = new Color('#701C38');
   const black = new Color('#24202E');
   /** A post's radius, and its black foot's. */
   const PR = 0.72;

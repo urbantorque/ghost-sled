@@ -612,7 +612,15 @@ export function finishPiece(ctx: SiteCtx): Piece {
     // Biggest of all, over the hall: what is seen from the last leap.
     const tall = new Sub(ctx, c.x, c.z - 0, c.yaw);
     const top = hi + 0.4 + 15;
-    if (biome === 'blossom') parts.push(...tall.out(place(pagodaParts(night, top, top - 1, p), 0, 0, -1, 0)));
+    if (biome === 'blossom') {
+      // The pagoda over the square (ART.md 15, a hero vista): twice the size it was built at, so it stands
+      // over the roofs from the last leap and fills the finish gate's opening down the street. Scaled about
+      // its own foot.
+      const K = 2.1;
+      const pg = pagodaParts(night, top, top - 1, p);
+      for (const g of pg) g.translate(0, -top, 0).scale(K, K, K).translate(0, top, 0);
+      parts.push(...tall.out(place(pg, 0, 0, -1, 0)));
+    }
     else if (biome === 'lantern') {
       // The tallest lamp tower on the mountain, over the hall: seen from the last leap as a stack of lights.
       parts.push(...tall.out(lampTowerParts(p, top, 11, low ? 4 : 5, low)));
