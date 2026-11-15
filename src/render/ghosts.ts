@@ -822,6 +822,11 @@ function auraMaterial(): ShaderMaterial {
   }));
 }
 
+/** A ghost's height on screen (a share of the frame's) from which one nearer the lens than the rider dissolves
+ *  whatever holds it, and over how much more it is gone (round 7: the rider stands about a fifth of the frame). */
+const FILL_FROM = 0.2;
+const FILL_SPAN = 0.12;
+
 /** Pool ghosts beyond the nearest few keep their bodies but lose their tags. */
 const POOL_TAGS = 3;
 /** A collapsed tag's dot (CSS px, its ring included). */
@@ -1670,6 +1675,19 @@ export class GhostVisuals {
         if (k > 0) {
           body = Math.max(body, 0.5 * k);
           lens = Math.max(lens, 0.6 * k);
+        }
+        // Round 7 (the shared lane): whatever holds it (a pass beat's floor above all), a ghost nearer the lens than
+        // the rider never fills the frame. Once it stands a fifth again taller than the rider on screen and a fifth
+        // of the frame's height, it dissolves, gone by a third of the frame, its wisp, sled and tag with it. One
+        // riding the bank beside the lens through the beat of being passed stood twice the rider's height at full
+        // strength (Frostfang's 2850 m, every review pass; probed at 1:29.9). One level with the rider is the rider's
+        // size and stays, however big the rider stands (a phone frames it larger). (The title reel frames its duel
+        // partner at the hero's own size, near: it keeps the rules above.)
+        if (!this.reel) {
+          const rel = riderDepth / depth;
+          const fill = 1 - smooth01((size * (1 + 0.45 * crop) - FILL_FROM) / FILL_SPAN) * smooth01((rel - 1.2) / 0.4);
+          body = Math.min(body, fill);
+          lens = Math.min(lens, fill);
         }
         // Its head and shoulders on screen, for the overlap dimming below.
         it.sx = cx;
