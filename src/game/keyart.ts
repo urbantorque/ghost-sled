@@ -86,14 +86,15 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
     desk: { r: 5.0, up: 0.9, sweep: 0.34, drift: 0.14, ahead: 30, lift: 1.3, crane: 0.2, hero: [0.08, 0.2] },
     phone: { r: 7.0, up: 1.3, sweep: 0.14, drift: 0.05, ahead: 22, lift: 0.8, crane: 0, hero: [-0.08, -0.08] },
   },
-  // A rider above a sea of cloud with the lanterns rising: the Crown before the dive, the lens high so the
-  // cloud sea lies below the hero and the moon and the lights stand over it.
+  // A rider coming out of the cloud above a valley of rising lanterns (ART.md 15, the one image): the break,
+  // from the last of the cloud over the lip and down into the Lamp Road, under the deck's light, the lens
+  // a little nearer than the plain reel's so the hero is large against the valley.
   lanternfall: {
-    from: 140,
-    to: 690,
-    light: 200,
-    desk: { r: 6.0, up: 1.6, sweep: 0.3, drift: 0.14, ahead: 44, lift: 1.4, crane: 0.4, hero: [0.08, 0.2] },
-    phone: { r: 7.8, up: 1.6, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
+    from: 1490,
+    to: 2050,
+    light: 1600,
+    desk: { r: 5.4, up: 1.4, sweep: 0.3, drift: 0.14, ahead: 44, lift: 1.4, crane: 0.3, hero: [0.08, 0.2] },
+    phone: { r: 7.2, up: 1.5, sweep: 0.12, drift: 0.05, ahead: 30, lift: 0.8, crane: 0, hero: [-0.06, -0.06] },
   },
 };
 
