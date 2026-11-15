@@ -12,7 +12,6 @@ import {
   ROCK_MODEL_H,
   cairnGeometry,
   gateBeamGeometry,
-  lightGeometry,
   kickerLipGeometry,
   kmArchGeometry,
   lanternPostGeometry,
@@ -21,6 +20,7 @@ import {
   ventGeometry,
 } from './meshes';
 import { Palette } from './palette';
+import { airMotes, flameMatrix, glowMatrix, spiritFlameGeometry, spiritFlameMaterial, spiritGlowGeometry, spiritGlowMaterial } from './spiritlights';
 
 // Instanced props for the visible chunk window: obstacles, the decorative forest beyond the
 // treeline, gifts, kicker lips, vents and spirit gates. Instance lists are rebuilt only when the
@@ -187,6 +187,10 @@ export class Props {
   private batches = new Map<string, Batch>();
   private materials: ShaderMaterial[] = [];
   private giftMat: ShaderMaterial;
+  /** The glow round every spirit light, near and far, and the motes of a trail in the air (spiritlights.ts). */
+  private glowMat: ShaderMaterial;
+  /** The last light in the air pushed this update (the one a trail's motes run from). */
+  private air = { on: false, x: 0, y: 0, z: 0 };
   /** The far gifts' material (the gift's, drawing one of two variants: plain or golden). */
   private giftFarMat: ShaderMaterial;
   /** The far gifts' variant set, made once. */
@@ -237,10 +241,12 @@ export class Props {
      *  keeps their callouts, tags and sound). */
     private arches = false,
   ) {
-    // Spirit lights glow (they are light, not paint), and shrink away as they pass the lens (and right around
-    // the rider after a perfect landing).
+    // Spirit lights are small flames of light with a glow round them, held small near the lens and gone right
+    // round the rider after a perfect landing (round 7, spiritlights.ts). Past the detail range a light is the
+    // old diamond, glowing in the toon material, with its glow.
     const giftOpts = { bob: true, coolShade: 0.1, emissive: new Color('#FFD34D'), emissiveStrength: 0.62, nearFade: [3.0, 5.2] as [number, number], clearFocus: true };
-    this.giftMat = makeToonMaterial(giftOpts);
+    this.giftMat = spiritFlameMaterial();
+    this.glowMat = spiritGlowMaterial();
     this.giftFarMat = variantMaterial(makeToonMaterial(giftOpts));
     // The trees a rider shakes as it passes are read from here (treelife.ts).
     fx.trees = this;
@@ -467,8 +473,11 @@ export class Props {
       sets.delete(k);
     }
     this.pump();
-    add('gift', lightGeometry(false), this.giftMat, 900, false);
-    add('gift5', lightGeometry(true), this.giftMat, 200, false);
+    // Sparks and great lights in one flame batch (a great light is pushed mirrored: spiritlights.ts), and every
+    // light's glow in one more, drawn after the world.
+    add('gift', spiritFlameGeometry(), this.giftMat, 1100, false);
+    add('glow', spiritGlowGeometry(), this.glowMat, 2400, false);
+    this.batches.get('glow')!.mesh.renderOrder = 2;
     // Past the detail range a light is a few pixels: a drawn-out diamond, sparks and great lights in one batch.
     this.giftFarGeo ??= variantSet([farLightGeometry(false), farLightGeometry(true)]);
     const gPick = new InstancedBufferAttribute(new Float32Array(900), 1);
@@ -526,6 +535,7 @@ export class Props {
     this.range = { from, to };
     this.dirty = false;
     for (const b of this.batches.values()) b.count = b.near = 0;
+    this.air.on = false;
     const c = this.course;
     for (const k of this.cache.keys()) if (k < from - 2 || k > to + 2) this.cache.delete(k);
     // The first km mark in range gets an arch built to its own span (made ahead on idle time; see
@@ -589,11 +599,30 @@ export class Props {
         // Each light stands upright (a flame), sways a little and is its own size (where it is stays the
         // sim's), so a line reads as lights left along a way, not a ruled fence.
         const h1 = hashf(g.id, 7, 1);
-        this.q.setFromAxisAngle(this.up, h1 * 6.28);
-        this.v.set(g.x, c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.18, -g.z);
-        this.s.setScalar(gs * (0.9 + 0.2 * hashf(g.id, 7, 4)));
-        if (far) this.push('giftL', this.v, this.q, this.s, g.value > 1 ? 1 : 0);
-        else this.push(g.value > 1 ? 'gift5' : 'gift', this.v, this.q, this.s);
+        const k = gs * (0.9 + 0.2 * hashf(g.id, 7, 4));
+        const great = g.value > 1;
+        const y = c.ground(g.x, g.z) + g.hover + (hashf(g.id, 7, 3) - 0.5) * 0.18;
+        if (far) {
+          this.q.setFromAxisAngle(this.up, h1 * 6.28);
+          this.push('giftL', this.v.set(g.x, y, -g.z), this.q, this.s.setScalar(k), great ? 1 : 0);
+        } else this.pushM('gift', flameMatrix(this.m, g.x, y, -g.z, h1 * 6.28, k, great));
+        this.pushM('glow', glowMatrix(this.m, g.x, y, -g.z, k, great ? 'great' : 'spark'));
+        // A light in the air (a leap's flight, a kicker's high line) is threaded to the one before it on the
+        // same arc by a few motes, so the line reads as a trail of light over the leap, not a drop in the sky.
+        const air = this.air;
+        if (g.hover > 2 && air.on && g.z - air.z > 1 && g.z - air.z < 12.5 && Math.abs(g.x - air.x) < 4) {
+          const n = airMotes(Math.hypot(g.x - air.x, y - air.y, g.z - air.z));
+          for (let j = 1; j <= n; j++) {
+            const u = j / (n + 1);
+            this.pushM('glow', glowMatrix(this.m, air.x + (g.x - air.x) * u, air.y + (y - air.y) * u, -(air.z + (g.z - air.z) * u), k, 'mote'));
+          }
+        }
+        if (g.hover > 2) {
+          air.on = true;
+          air.x = g.x;
+          air.y = y;
+          air.z = g.z;
+        }
       }
       if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;
     }
