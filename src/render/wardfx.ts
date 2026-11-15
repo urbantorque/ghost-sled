@@ -1,4 +1,5 @@
 import { AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, Matrix4, OneFactor, OneMinusSrcAlphaFactor, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { ghostStencil } from './materials';
 
 // A ward cracks the lantern open (round 6). At the hit a marigold paper lantern stands round the rider,
 // glowing from inside; cracks of white-gold light run across its panels, and it breaks: the panels fly
@@ -59,7 +60,7 @@ function quadGeometry(): BufferGeometry {
 }
 
 function wardMaterial(): ShaderMaterial {
-  return new ShaderMaterial({
+  const m = new ShaderMaterial({
     transparent: true,
     depthWrite: false,
     side: DoubleSide,
@@ -135,7 +136,9 @@ function wardMaterial(): ShaderMaterial {
         paper = mix(paper, uMarigold, 0.6 * crack);
         // The cracks burn white-gold along the cut lines before it breaks; a shard runs hot, then cools.
         float lines = (1.0 - smoothstep(0.0, 0.035, abs(d1))) + (1.0 - smoothstep(0.0, 0.035, abs(d2)));
-        vec3 glow = uWhiteGold * (lines * heat * 1.5 * (1.0 - crack) + heat * 0.35 * crack);
+        // (Under the bloom's knee but for the cracks' hottest frames: a whole lantern of light past it bloomed over
+        // the rider inside it.)
+        vec3 glow = uWhiteGold * (lines * heat * 1.25 * (1.0 - crack) + heat * 0.35 * crack);
         // A paper lantern is densest at its rims, where the eye looks through more of it; face on it stays
         // thin, so it never turns into a wall between the lens and the rider.
         float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.82, crack);
@@ -143,6 +146,11 @@ function wardMaterial(): ShaderMaterial {
       }
     `,
   });
+  // Round 7 (the shared lane): contract C10 as a ghost keeps it. The lantern, its shards and its ring draw only
+  // off the rider's own pixels, so the rider stands inside the lantern as a silhouette in its own colours: laid
+  // over it, the paper read as a gold blob where the rider was (the review loop's worst frames in motion).
+  ghostStencil(m);
+  return m;
 }
 
 export class WardFx {

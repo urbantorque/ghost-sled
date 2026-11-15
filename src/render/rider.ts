@@ -391,6 +391,11 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
           n = gl_FrontFacing ? n : -n;
         #endif`,
   );
+  // The local lights (lamps, gates, the lantern's moments) on the rider roll off past a lamp's strength, so a
+  // moment's flash of light right by the rider lights it without washing its pale parts (the sled's wood, the
+  // fur, the beanie's stripe) to cream (round 7, the shared lane; a lamp's ordinary light is under the knee).
+  const localAt = 'col += (base * 0.9 + 0.05) * L;';
+  if (fs.includes(localAt)) fs = fs.replace(localAt, 'col += (base * 0.9 + 0.05) * L / (1.0 + 0.8 * max(L - 0.35, 0.0));');
   const shadeAt = 'vec3 col = toonLightK(litBase, shade, n, v, shadow, uRimK);';
   fs = fs.replace(
     shadeAt,
@@ -481,12 +486,15 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // bloom threshold on Medium and High) and a brighter scarf, which goes HDR and blooms. On Low it
         // reads as saturated colour. Never gold and never a tint on the snow (decision 69). The results
         // fill holds it down.
+        // (Round 7, the shared lane: the rim keeps to the silhouette's outer facets and the coat keeps its navy
+        // inside it. Grown in from a third of the way across at 1.7, a full flow turned the whole coat red and the
+        // pulse bloomed the rider into one vermillion blob, its silhouette lost.)
         float flowE = pow(uFlow.x, 0.7);
         #ifdef DOUBLE_SIDED
           col *= 1.0 + (0.7 * flowE + 0.35 * uFlow.y) * rimCut;
         #else
-          float flowK = 0.55 * flowE + uFlow.y;
-          col += uFlowC * smoothstep(mix(0.55, 0.38, uFlow.x), 0.94, riderEdge) * flowK * 1.7 * rimCut;
+          float flowK = 0.55 * flowE + 0.8 * uFlow.y;
+          col += uFlowC * smoothstep(mix(0.72, 0.58, uFlow.x), 0.96, riderEdge) * flowK * 1.45 * rimCut;
         #endif
         // A dash (round 6): the rider as a spirit for its 1.4 s. The body goes pale and luminous, a white-gold
         // rim burns round the whole silhouette, and bands of light ripple up through the coat and the scarf
@@ -506,8 +514,12 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             // The scarf keeps the player's vermillion (ART.md section 1): only a breath of the rim.
             col += spiritC * smoothstep(0.5, 0.95, riderEdge) * 0.5 * sk * rimCut;
           #else
-            col = mix(col, col * 0.7 + spiritC * 0.22, 0.25 * sk);
-            col += (spiritC * smoothstep(0.32, 0.92, riderEdge) * 1.5 + bandC * band * 1.1) * sk * rimCut;
+            // (Round 7, the shared lane: the rim on the silhouette's edge only and the bands over the coat's own
+            // value, so the rider stays a navy and vermillion figure in a white-gold outline. A rim from a third
+            // of the way in at 1.5 and the body lifted toward white-gold bleached it to a cream blob in every
+            // dash frame of the review.)
+            col = mix(col, col * 0.85 + spiritC * 0.06, 0.25 * sk);
+            col += (spiritC * smoothstep(0.62, 0.95, riderEdge) * 1.3 + bandC * band * 0.6 * mix(0.45, 1.0, darkCloth)) * sk * rimCut;
           #endif
         }
         `;
