@@ -9,7 +9,205 @@ Passes 1 and 2 were run by the lane's first agent (Fable 5.2, critics at its def
 capturing pass 3. From pass 3 on the lane runs on Opus 5.5 and every critic is a fresh Opus at extra effort, so pass 3's
 scores are not strictly comparable with passes 1 and 2: a stricter critic can score the same picture lower.
 
+**Where it ended.** Five passes, the most the brief allows; the stopping rule (no frame under 8, every hero vista 9)
+was not met. No frame reached 9 in any pass, and no hero vista either: at the end the First Drop is 7, Mirror Lake 8,
+Old Town 7.5 and the Valley Leap 8. Read the means with care: each pass is a new critic, and the noise between two of
+them is about half a point a frame. Pass 4's critic (on the frames after the pass 3 fixes) scored High 7.28, Low 6.33,
+phone 7.05, every tier up on pass 3 (6.91, 6.14, 6.62); pass 5's critic, the harshest of the five, scored the
+frames after the pass 4 fixes 6.55, 5.93 and 6.59. Frames at the same distances in pass 4 and pass 5 differ in what the
+fixes aimed at (the lake's first ice no longer blown out, the finish less flooded, Low's gold shade quieter) and
+otherwise mostly in capture timing: the chase lens's distance and the set pieces' state vary from run to run on a
+loaded machine, so the rider is smaller in many pass 5 stills than in pass 4's. In the frames I set side by side (z1650, z2429, z3000 and the probes of each fix) I found no regression; most of the drop
+is the critic's. The phone's 4.5 to 5 at z4590 is the results card, not the picture.
+
 <!-- SCORES -->
+## The critic's scores, pass by pass
+
+Scores out of 10 in half points, from a fresh critic each pass (passes 1 and 2 Fable-era critics, 3 to 5 Opus at extra effort).
+
+### High (1280x720)
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| z0150 | 6.5 | 6.5 | 7.5 | 7 | 6.5 |
+| z0300 | 7 | 7 | 7 | 7 | 6.5 |
+| z0450 | 6 | 6.5 | 7 | 6.5 | 6 |
+| z0537 | 6.5 | 6.5 | 7 | 7 | 6.5 |
+| z0600 | 7 | 6 | 7 | 6 | 6.5 |
+| z0707 | 7 | 6.5 | 7.5 | 6.5 | 6.5 |
+| z0900 | 7 | 7.5 | 7.5 | 7.5 | 6.5 |
+| z1050 | 7.5 | 7.5 | 6.5 | 7.5 | 6 |
+| z1200 | 7.5 | 7.5 | 7.5 | 7.5 | 7 |
+| z1261 | 7 | 7 | 7 | 7.5 | 7 |
+| z1350 | 7 | 7.5 | 7 | 7.5 | 7 |
+| z1500 | 6.5 | 6.5 | 6.5 | 6.5 | 6.5 |
+| z1593 | 6 | 7 | 6.5 | 6.5 | 6.5 |
+| z1650 | 5.5 | 6 | 6 | 5.5 | 5 |
+| z1763 | 8.5 | 8.5 | 8 | 8 | 7 |
+| z1950 | 7.5 | 7 | 7 | 7 | 6.5 |
+| z2100 | 7 | 7.5 | 7 | 7 | 6.5 |
+| z2250 | 7 | 7 | 7 | 7.5 | 6 |
+| z2429 | 7 | 7 | 6 | 7.5 | 6 |
+| z2550 | 6.5 | 7.5 | 6.5 | 8 | 7 |
+| z2700 | 6 | 7 | 6.5 | 7.5 | 6.5 |
+| z2850 | 7.5 | 6.5 | 7 | 7 | 6.5 |
+| z3000 | 7.5 | 5.5 | 6 | 7 | 5 |
+| z3100 | 8 | 7 | 7 | 8 | 7 |
+| z3150 | 7.5 | 7 | 7 | 8 | 7 |
+| z3229 | 7 | 7.5 | 6 | 7.5 | 6 |
+| z3300 | 7 | 7.5 | 6 | 7.5 | 6.5 |
+| z3354 | 8 | 8 | 7 | 8 | 7.5 |
+| z3464 | 8 | 8 | 8 | 8 | 7.5 |
+| z3548 | 8.5 | 8 | 8 | 7.5 | 7 |
+| z3600 | 8 | 8 | 7.5 | 8 | 7 |
+| z3750 | 7.5 | 7 | 6.5 | 7.5 | 6 |
+| z3940 | 7.5 | 7 | 6.5 | 7.5 | 6.5 |
+| z4050 | 7 | 6 | 6.5 | 7.5 | 7 |
+| z4200 | 7 | 6.5 | 6.5 | 6.5 | 7 |
+| z4330 | 8.5 | 8 | 8 | 8 | 7.5 |
+| z4440 | 8 | 7.5 | 8 | 8 | 7.5 |
+| z4590 | 5.5 | 7 | 5.5 | 6.5 | 5 |
+| **mean** | 7.14 | 7.08 | 6.91 | 7.28 | 6.55 |
+| **minimum** | 5.5 | 5.5 | 5.5 | 5.5 | 5 |
+| frames under 8 | 30 | 32 | 33 | 29 | 38 |
+
+### Low
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| z0150 | 6.5 | 7 | 7 | 6.5 | 6 |
+| z0300 | 7 | 6.5 | 6.5 | 6 | 5.5 |
+| z0450 | 6.5 | 6.5 | 6.5 | 6.5 | 5.5 |
+| z0537 | 7 | 7 | 6.5 | 6.5 | 6 |
+| z0600 | 7.5 | 6.5 | 6 | 6.5 | 6 |
+| z0707 | 6.5 | 7 | 6 | 6 | 5.5 |
+| z0900 | 7 | 7 | 7 | 6.5 | 6.5 |
+| z1050 | 7 | 6 | 6 | 6 | 6 |
+| z1200 | 7.5 | 7 | 6.5 | 6.5 | 6 |
+| z1261 | 7 | 7 | 6 | 6.5 | 6 |
+| z1350 | 6.5 | 7 | 6 | 6 | 5.5 |
+| z1500 | 6.5 | 6.5 | 6 | 6 | 5.5 |
+| z1593 | 6.5 | 6.5 | 5.5 | 6 | 6 |
+| z1650 | 6 | 6 | 6 | 5.5 | 5 |
+| z1763 | 8.5 | 8 | 7.5 | 7.5 | 7 |
+| z1950 | 7.5 | 7 | 7 | 7 | 6.5 |
+| z2100 | 7 | 7 | 7 | 6.5 | 6.5 |
+| z2250 | 7 | 6.5 | 6.5 | 7 | 6.5 |
+| z2429 | 6.5 | 6.5 | 6 | 6 | 6 |
+| z2550 | 6 | 6.5 | 5.5 | 6 | 6.5 |
+| z2700 | 6 | 6.5 | 5.5 | 6 | 5.5 |
+| z2850 | 6.5 | 7 | 6 | 6 | 6 |
+| z3000 | 7 | 6.5 | 5.5 | 6 | 5.5 |
+| z3100 | 7 | 6 | 6 | 6.5 | 5.5 |
+| z3150 | 7 | 6.5 | 6.5 | 6 | 6 |
+| z3229 | 6.5 | 6.5 | 5 | 6.5 | 5.5 |
+| z3300 | 6.5 | 6.5 | 5.5 | 6 | 6.5 |
+| z3354 | 7 | 7.5 | 6.5 | 7 | 7 |
+| z3464 | 7 | 6 | 6.5 | 7 | 6.5 |
+| z3548 | 6.5 | 6 | 6 | 6.5 | 5.5 |
+| z3600 | 6.5 | 7.5 | 6 | 6.5 | 5.5 |
+| z3750 | 7 | 7 | 5.5 | 6 | 5.5 |
+| z3940 | 7 | 7 | 6 | 6.5 | 6 |
+| z4050 | 7 | 7.5 | 6 | 7 | 6 |
+| z4200 | 7 | 6.5 | 5.5 | 5.5 | 5.5 |
+| z4330 | 7.5 | 7.5 | 6.5 | 6.5 | 6 |
+| z4440 | 7.5 | 7.5 | 7 | 7 | 6.5 |
+| z4590 | 5.5 | 5.5 | 5 | 5 | 5 |
+| **mean** | 6.83 | 6.74 | 6.14 | 6.33 | 5.93 |
+| **minimum** | 5.5 | 5.5 | 5 | 5 | 5 |
+| frames under 8 | 37 | 37 | 38 | 38 | 38 |
+
+### Phone on Medium (390x844)
+
+| Frame | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| z0150 | 7.5 | 7.5 | 6.5 | 7 | 6.5 |
+| z0300 | 7 | 7 | 6.5 | 7 | 5.5 |
+| z0450 | 6.5 | 7.5 | 6.5 | 7 | 6.5 |
+| z0537 | 7.5 | 8 | 7 | 7 | 6.5 |
+| z0600 | 7.5 | 7.5 | 6.5 | 6.5 | 6.5 |
+| z0707 | 7 | 7.5 | 7 | 7 | 6.5 |
+| z0900 | 7.5 | 8 | 7 | 7.5 | 7 |
+| z1050 | 7.5 | 8 | 7 | 7.5 | 6.5 |
+| z1200 | 8 | 8 | 7 | 7.5 | 7 |
+| z1261 | 7.5 | 7.5 | 6.5 | 7 | 7 |
+| z1350 | 7 | 8 | 7 | 6.5 | 6.5 |
+| z1500 | 7 | 7.5 | 6.5 | 7 | 6.5 |
+| z1593 | 6.5 | 7.5 | 6.5 | 6.5 | 6.5 |
+| z1650 | 6 | 7 | 6 | 6.5 | 5.5 |
+| z1763 | 8 | 8.5 | 7 | 7 | 7 |
+| z1950 | 7.5 | 7.5 | 6.5 | 7 | 7 |
+| z2100 | 7 | 7.5 | 6 | 6.5 | 6.5 |
+| z2250 | 7 | 7.5 | 7 | 7.5 | 6.5 |
+| z2429 | 6.5 | 7 | 6 | 7 | 6 |
+| z2550 | 7 | 7.5 | 6.5 | 7 | 6.5 |
+| z2700 | 7 | 7.5 | 6.5 | 7 | 7 |
+| z2850 | 7.5 | 7 | 7 | 7.5 | 7 |
+| z3000 | 7 | 7.5 | 6.5 | 7 | 6 |
+| z3100 | 7.5 | 7.5 | 6 | 7.5 | 7 |
+| z3150 | 7.5 | 7.5 | 7 | 7.5 | 7 |
+| z3229 | 7.5 | 7.5 | 6.5 | 7.5 | 6.5 |
+| z3300 | 7.5 | 7.5 | 6.5 | 7 | 6.5 |
+| z3354 | 7.5 | 7 | 6.5 | 7.5 | 7 |
+| z3464 | 8 | 8 | 7 | 7.5 | 7 |
+| z3548 | 8 | 8.5 | 7 | 7.5 | 7 |
+| z3600 | 8 | 8 | 7.5 | 7.5 | 7 |
+| z3750 | 7 | 7.5 | 6.5 | 6 | 5.5 |
+| z3940 | 7.5 | 7.5 | 7 | 7.5 | 7 |
+| z4050 | 8 | 7.5 | 7 | 6.5 | 7.5 |
+| z4200 | 7.5 | 7.5 | 6.5 | 7.5 | 7 |
+| z4330 | 7.5 | 7.5 | 7 | 7.5 | 7 |
+| z4440 | 7 | 7 | 6.5 | 7.5 | 7 |
+| z4590 | 5 | 5.5 | 4.5 | 5 | 4.5 |
+| **mean** | 7.25 | 7.51 | 6.62 | 7.05 | 6.59 |
+| **minimum** | 5 | 5.5 | 4.5 | 5 | 4.5 |
+| frames under 8 | 32 | 29 | 38 | 38 | 38 |
+
+### Motion (High)
+
+| | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| mean | 7.50 | 7.38 | 7.26 | 7.29 | 7.07 |
+| minimum | 6 | 3 | 5 | 4 | 5 |
+| mo-firstdrop-0 |  |  | 7.5 | 6.5 | 6.5 |
+| mo-firstdrop-1 |  |  | 7 | 6.5 | 7 |
+| mo-firstdrop-2 |  |  | 6.5 | 6 | 7 |
+| mo-firstdrop-3 |  |  | 6.5 | 6 | 6.5 |
+| mo-firstdrop-4 |  |  | 7.5 | 5.5 | 6 |
+| mo-glades-0 |  |  | 7 | 7.5 | 6 |
+| mo-glades-1 |  |  | 7 | 7 | 6.5 |
+| mo-glades-2 |  |  | 7.5 | 7.5 | 7.5 |
+| mo-mirror-0 |  |  | 8 | 8 | 7.5 |
+| mo-mirror-1 |  |  | 8 | 8 | 7.5 |
+| mo-mirror-2 |  |  | 8.5 | 7.5 | 8 |
+| mo-mirror-3 |  |  | 7 | 8 | 7.5 |
+| mo-gold-0 |  |  | 6.5 | 7.5 | 6.5 |
+| mo-gold-1 |  |  | 7 | 7.5 | 7.5 |
+| mo-gold-2 |  |  | 7 | 7.5 | 7.5 |
+| mo-gold-3 |  |  | 6.5 | 7.5 | 6.5 |
+| mo-oldtown-0 |  |  | 5 | 8 | 7.5 |
+| mo-oldtown-1 |  |  | 8 | 8 | 7.5 |
+| mo-oldtown-2 |  |  | 8 | 8 | 7.5 |
+| mo-oldtown-3 |  |  | 8 | 7.5 | 7.5 |
+| mo-valleyleap-0 |  |  | 8 | 8 | 8 |
+| mo-valleyleap-1 |  |  | 7.5 | 8 | 8 |
+| mo-valleyleap-2 |  |  | 8 | 7.5 | 7.5 |
+| mo-valleyleap-3 |  |  | 7 | 7 | 6 |
+| mo-valleyleap-4 |  |  | 7 | 7.5 | 7 |
+| mo-valleyleap-5 |  |  | 7 | 8 | 7 |
+| mo-finish-0 |  |  | 8 | 8 | 7.5 |
+| mo-finish-1 |  |  | 8 | 8 | 7.5 |
+| mo-finish-2 |  |  | 6 | 4 | 5 |
+
+### Hero vistas (best frame of each vista, any tier or strip)
+
+| Vista | P1 | P2 | P3 | P4 | P5 |
+| --- | --- | --- | --- | --- | --- |
+| firstdrop | 8 | 8 | 7.5 | 7 | 7 |
+| mirror | 8.5 | 8.5 | 8.5 | 8 | 8 |
+| oldtown | 8.5 | 8.5 | 8 | 8 | 7.5 |
+| valleyleap | 8 | 8.5 | 8 | 8 | 8 |
+<!-- /SCORES -->
 
 ## Pass 1: what the critic found (ranked by cost)
 
@@ -99,7 +297,7 @@ Valley Leap 8.
 9. Low's town lanterns cast no light; flat window slabs.
 10. The finish without fireworks.
 
-### What changed after pass 3
+### What changed after pass 3 (cec2976)
 
 - **The morning has form** (palette.ts `round7`, alpine): exposure 1.06 to 1.0, contrast 1.08 to 1.12, the cloud's
   shadows cross the open slopes from the start (0.22 to 0.34, and 0.38 to 0.44 from 500 m). Low's lit snow stops
@@ -141,13 +339,14 @@ the best work. Hero vistas: the First Drop 7, Mirror Lake 8, Old Town 8, the Val
 7. The HUD over the focal area; the phone's fuel button over the rider.
 8. Blown highlights: the ray fan over the lake's first ice (z1650, 5.5), the finish flash (`mo-finish-2`, 4.0).
 
-### What changed after pass 4
+### What changed after pass 4 (5d6f091)
 
 - **The line's light no longer floods the square** (climaxworld.ts, shared): the finish's local light peaks at 1.6
   instead of 3.1 (`0.35 + 0.75 rise + 0.5 flare`); the beams, the bar and the shells carry the moment. Why:
   `mo-finish-2` bleached the rider three passes running.
 - **Low's lamp pools keep their hue** (materials.ts, Low only): where a pool would push the snow over 1 it is
-  scaled back to its own hue instead of clipping to a white oval.
+  scaled back to its own hue instead of clipping to a white oval; the Valley Leap's lamps come back from 1.6 to 1.3.
+  (Seen in a probe: the ovals are now cream rather than white, still hard-edged; the two-value pool is Low's design.)
 - **Low's lit snow leans cool and its gold shade is muted** (palette.ts `tierLook`): `Grade.posterCool` (0.16 on
   Pinecrest) leans the lit snow to the baked shade's hue at its own value; `Grade.posterMute` (0.3 in the gold)
   pulls the baked shade a third toward grey. Both 0 elsewhere.
@@ -158,7 +357,78 @@ the best work. Hero vistas: the First Drop 7, Mirror Lake 8, Old Town 8, the Val
 - **The cornice's tongues are scallops, not teeth** (rails.ts, shared).
 - **The chromatic punch moves further out** (post.ts: from 0.7 of the radius, blend 0.45).
 
-<!-- PASS5 -->
+## Pass 5: the last critic's verdict
+
+High 6.55 (min 5.0), Low 5.93 (5.0), phone 6.59 (4.5, the results card), motion 7.07 (5.0). No frame a 9; three
+strips at 8 (`mo-mirror-2`, `mo-valleyleap-0`, `mo-valleyleap-1`). Hero vistas: the First Drop 7, Mirror Lake 8, Old
+Town 7.5, the Valley Leap 8. Its ranked faults, which are this lane's list of what is still short.
+
+## What is still short, and why
+
+Every frame is under 8 on every tier in the last pass, so the list is by cost, not frame by frame. The frames the last
+critic put lowest: High z1650, z3000 and z4590 (5); Low z1650 and z4590 (5); phone z4590 (4.5); `mo-finish-2` (5).
+
+1. **Fuel drops (the marigold pickups) are flat, unlit polygons**, oversized near the lens, parked in the sky over a
+   vista or in the sun at Mirror Lake, and stretched into yellow lines by the motion blur at the lake's entry (z1650
+   on every tier). The last critic's first fault, and in 40% of frames. Not touched: they are the fuel's read (ART.md
+   1's marigold), shared by every mountain and owned by the props and particles; a painted light and shade side, a size
+   cap near the lens and exemption from the motion blur's stretch would lift a third of the set. Main lane to assign.
+2. **The near snow is one washed value** in the lower half of most frames (High lavender or cream with sparkle; Low
+   grey-white in the morning and beige in the gold; the phone's lower third empty under the touch controls). The
+   grade and Low's poster colours moved it (four passes), but the painted relief (sastrugi, wind slab) is too faint at
+   speed under the motion blur, and that is shared snow-shader work (light lane) I left alone.
+3. **The vistas' named light events are not drawn.** The First Drop has no cloud deck with shafts falling on the far
+   lake (the valley floor is now a frozen lake under blue haze, but pale); Mirror Lake does not double the rider or
+   the cable car (High mirrors only a soft figure; the cable car would need Ultra's screen mirror); Old Town's lamps
+   light the snow only faintly in daylight; the Valley Leap's town is pale boxes with one spire, not spires in a pool of
+   gold; no fireworks read against the dusk. Each needs a new world element, not a grade.
+4. **Near-lens pines are big flat facets** on High (z1050, z2250, z3229). The stipple on Low and the phone is gone;
+   the form is the fx lane's pine.
+5. **Untextured boxes**: the lip's stepped terraces, block rocks (z2429, z3940), the hotel and lift station, Old
+   Town's facades with flat window rectangles, the FINISH board, Low's kicker slab.
+6. **The finish flash** (`mo-finish-2`): the line's light is halved, but the frame as the sled crosses is still a warm
+   flood with the rider pale.
+7. **The hero is small at the wides** (z0707 in the First Drop's marquee wide, z4050): the vista and the wide stand
+   closer after pass 4, but the fixed frames are pinned, so they never catch the apex in the air.
+8. **The HUD over the picture**: the prompt pill on the sled in the strips, the phone's drift button on the scarf,
+   "SURVIVED" captions on the trestle and gantry, the results card over the rider at z4590 (the phone's results
+   layout leaves no band for the hero shot the camera was promised by contract C6). UI, not this lane's.
+9. **Chromatic fringe** still flagged on edge pines in some strips after a landing (the punch is now confined to the
+   frame's last fifth at a lighter blend).
+10. **Low reads as a degraded High, not a designed poster** (no painted shaft cards, no painted rim): ART.md 15's
+    "Tiers, designed" asks for both; neither exists for any mountain.
+
+Two things the critics saw that are not art: the results card's time disagrees with the HUD's in several captures
+(the capture pins the sled at 30 m/s past the line, and its clock runs on a loaded machine), and the stage card reads
+"MIRROR LAKE" at 3000 m (it is the stage's split, shown as the next stage starts).
+
+## Cost
+
+From each pass's frame JSON (the 38 fixed frames; the counter sums every pass of a frame). Pass 1 is the build this
+lane started from (ead6196); pass 5 is the branch head.
+
+| Tier | Pass 1 calls (mean / max) | Pass 1 triangles | Pass 5 calls (mean / max) | Pass 5 triangles |
+| --- | --- | --- | --- | --- |
+| High | 98.0 / 104 | 1,015,636 | 98.8 / 107 | 1,021,992 |
+| Low | 46.7 / 52 | 139,436 | 46.3 / 52 | 141,725 |
+| Phone, Medium | 87.6 / 95 | 713,385 | 87.9 / 98 | 720,686 |
+
+The passes between: High 99.3, 98.2, 98.6 calls; Low 46.9, 46.5, 46.5; phone 88.4, 88.6, 88.0. No change adds a draw:
+every lift is palette data, a shader term or a constant; the new geometry (Pinecrest's lip outcrops, the lift
+station's shutters, the cornice's rounder tongues) merges into batches that were already drawn. Triangles move by
+under 1% on High and under 2% on Low, inside the run-to-run spread of what is in view (ghosts, set pieces). The
+console was clean in every capture. Frame times were not judged (six lanes share the GPU).
+
+## Where things are
+
+- Frames: `shots/r7/review/m0/pass1` to `pass5` (each `high`, `low`, `phone-medium`, `motion`, with the frames' JSON).
+- Contact sheets of all 38 High frames, first and last pass at the same distances: `shots/r7/review/m0/sheet-before.png`
+  (pass 1) and `sheet-after.png` (pass 5).
+- Hero frames from the last pass: `shots/r7/hero/m0/` (the First Drop's lip, Mirror Lake, Old Town's street, Old Town
+  down to the peak, the Valley Leap, its landing).
+- Capture scripts (kept out of the repo, in the lane's scratchpad): the full pass is `scripts/playtest/frames.sh` on
+  each tier plus a strip script that flies the leaps; the strips are not 0.25 s apart on this machine (a screenshot
+  takes 1.5 to 3 s), so they are stills along each set piece.
 
 ## Shared code touched
 
@@ -178,5 +448,8 @@ review loop asked for it.
 | `verbworld.ts` (momentsworld) | A street lantern's unlit glow 0.45 to 0.85 | Every lantern street before its first stomp |
 | `landing.ts` (fx), `world.ts` (pipe) | `painted`: on a tier with no cast shadows the sled's blob is larger, darker, thrown off the sled away from the sun, in the shade's own hue | Low on every mountain |
 | `rails.ts` | The cornice's torn tongues shorter, broader and six-sided; Pinecrest's lip shoulders bedded outcrops (alpine only) | Every leap's cornice: no row of white teeth from the air |
-| `palette.ts` (light) | New `Grade.posterSnow` and `Grade.posterKey` (Low's poster only, 0 by default) | None unless a mountain sets them |
+| `palette.ts` (light) | New `Grade.posterSnow`, `posterKey`, `posterCool`, `posterMute` (Low's poster only, 0 by default) | None unless a mountain sets them |
+| `materials.ts` (light) | Low's lamp pools: where a pool would push the snow over 1 it is scaled back to its own hue | Low only, and only pixels that would have clipped to white |
+| `climaxworld.ts` (momentsworld) | The line's local light peaks at 1.6 (`0.35 + 0.75 rise + 0.5 flare`, was `0.4 + 1.2 rise + 1.5 flare`) | Every finish: the square and the rider no longer flood as the sled crosses |
+| `tests/camera.test.ts` (hero) | The wide's margin over the vista expected above 1.2 m (was 2.2 m), with a comment | Follows the `WIDE_OUT` change |
 | `places.ts` | Pinecrest's lip crowns blunt (alpine only); the lift station's shutters and storeys (alpine only) | None |
