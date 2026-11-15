@@ -723,6 +723,15 @@ export class AudioEngine {
             if (!c.music.landing() && now - c.music.landedAt > 1.5) c.music.land(now + 2.2, 'drop', now);
           } else c.music.breakdown();
         }
+        else if (b.type === 'heroFrame' && b.phase === 'lip') {
+          // The slow hero frame is coming: the score takes its breath off this lip, wherever the picture has
+          // chosen to hold (the produced score cuts to its own tail; the live band ducks). The landing brings
+          // it back, as it does after any breath. Once a run: the tallest leap does not take a second one.
+          if (!this.breathed || !c.music.holding) {
+            this.breathed = true;
+            if (!c.music.breath(now)) c.graph.music.duck(0.15, now, Math.max(0.6, b.inS + b.secs), 0.3, 0.05);
+          }
+        }
         if (b.type === 'unlockPop') c.graph.music.duck(0.75, now, 0.9, 0.5);
         // The flow was snuffed (a bump, a botched landing or the crash): the singing wind bends down a
         // fourth and opens back to noise.
@@ -894,6 +903,27 @@ export class AudioEngine {
   /** Debug-only (the jukebox): the produced score, or the live band it falls back to. */
   debugProduced(on: boolean): void {
     if (this.core) this.core.music.store = on ? this.store : null;
+  }
+
+  /**
+   * The score's clock, for anything that wants to cut on it (the reel): seconds a bar and a beat last now,
+   * and seconds until the next bar line and the next beat. Null with no music playing (not unlocked, or
+   * between decks): the caller then keeps its own lengths.
+   */
+  clock(): { barS: number; beatS: number; toBar: number; toBeat: number } | null {
+    const ctx = this.ctx;
+    const c = this.core;
+    if (!ctx || !c) return null;
+    try {
+      return c.music.bar(ctx.currentTime);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Probe: the round 7 cues played so far, by name (sfx.ts `cues`), and the stingers the score has played. */
+  debugCues(): Record<string, number> {
+    return { ...(this.core?.sfx.cues ?? {}), stingers: this.core?.music.stingers ?? 0 };
   }
 
   /** Debug-only (the jukebox): the breath before the biggest leap, and `afterS` later the landing. */
@@ -1131,6 +1161,10 @@ export class AudioEngine {
       case 'marquee':
         // The band swells into a set piece (and a little out of a clean one).
         amt = b.phase === 'enter' ? 0.16 : b.clean ? 0.08 : 0;
+        break;
+      case 'legend':
+        // A legend lifts the band as the rider reaches it (its own cue has the moment it is said).
+        if (b.phase === 'start') amt = 0.14;
         break;
       case 'flow':
         if (b.phase === 'in') amt = 0.1;

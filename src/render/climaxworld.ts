@@ -26,6 +26,11 @@ const KINDS: readonly ShellKind[] = ['peony', 'willow', 'ring', 'chrysanthemum',
 const from = new Vector3();
 const to = new Vector3();
 
+/** The volley that breaks over the line: how many shells and how high, for a rider who leads and one who does not. */
+export function lineShells(leading: boolean): { n: number; high: number } {
+  return leading ? { n: 5, high: 58 } : { n: 2, high: 44 };
+}
+
 export class ClimaxWorld {
   readonly root = new Object3D();
   private cx: Climax | null = null;
@@ -35,6 +40,8 @@ export class ClimaxWorld {
   /** Which volleys this run has sent up, a bit each, and whether the line's own burst has gone. */
   private sent = 0;
   private lineAt = 0;
+  /** The rider is at the head of the field (marqueeworld.ts hands it on each frame). */
+  leading = true;
 
   constructor(private readonly kit: MomentKit) {
     this.lanterns = kit.pool(lanternGeo(6), 72, kit.lit);
@@ -144,6 +151,10 @@ export class ClimaxWorld {
     };
     send(1, s.z >= cx.landZ && s.grounded, 2, 1.3, 46);
     send(2, s.z >= cx.townZ, 3, 1.2, 52);
-    send(4, eta < 1.7 && s.z < cx.lineZ, 5, Math.max(0.6, eta - 0.1), 58);
+    // The volley over the line is the win's: five shells, high, for a rider at the head of the field. Anyone
+    // else is still welcomed home, by two that break lower, so a win reads as a win from the saddle. (Decided
+    // on the frame they are sent, about 1.7 s out: a pass on the line itself comes too late to change it.)
+    const shells = lineShells(this.leading);
+    send(4, eta < 1.7 && s.z < cx.lineZ, shells.n, Math.max(0.6, eta - 0.1), shells.high);
   }
 }

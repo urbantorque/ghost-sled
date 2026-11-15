@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Vector3 } from 'three';
-import { ChaseCamera, crashPack } from '../src/render/camera';
+import { ChaseCamera, LEGEND_YAW_MAX, crashPack } from '../src/render/camera';
 import { visualGround } from '../src/render/ground';
 import { courseFor } from '../src/sim/course';
 import { MOUNTAINS } from '../src/sim/mountains';
@@ -1040,5 +1040,104 @@ describe('the slow hero frame: the director', () => {
     }
     expect(predicted).toBeGreaterThan(1.5);
     expect(Math.abs(predicted - (took + 1) / 60)).toBeLessThan(0.25);
+  });
+});
+
+// Round 7, the wire lane: the legend look. While a legend is in reach the chase turns a few degrees toward
+// it and lifts the sky into frame; it never takes the steering, and reduced motion keeps the lens still.
+describe('the legend look', () => {
+  const RIDER = new Vector3(0, 0, -400);
+  const ride = (legend: { x: number; y: number; z: number; peak: number } | null, feel: Feel = IDLE_FEEL, frames = 240, more: Partial<Parameters<ChaseCamera['update']>[0]> = {}): ChaseCamera => {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = () => 0;
+    cam.mode = 'chase';
+    cam.beats([], feel);
+    // The rider rides (26 m/s down the course), so the chase trails it as it does in a run.
+    RIDER.set(0, 0, -400);
+    const step = (l: typeof legend, extra: typeof more = {}): void => {
+      RIDER.z -= 26 / 60;
+      cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend: l ? { ...l, z: l.z + RIDER.z + 400 } : null, ...extra }, 1 / 60);
+    };
+    for (let i = 0; i < 90; i++) step(null);
+    for (let i = 0; i < frames; i++) step(legend, more);
+    cam.camera.updateMatrixWorld(true);
+    cam.camera.matrixWorldInverse.copy(cam.camera.matrixWorld).invert();
+    return cam;
+  };
+  /** Rides on with the legend gone. */
+  const rideOn = (cam: ChaseCamera, frames: number): void => {
+    for (let i = 0; i < frames; i++) {
+      RIDER.z -= 26 / 60;
+      cam.update({ pos: RIDER, dir: DOWN, speed: 26, steer: 0, airborne: false, boost: 0, legend: null }, 1 / 60);
+    }
+  };
+  /** The lens's compass yaw (0 down the course, + toward +x) and pitch (radians, + up). */
+  const aim = (cam: ChaseCamera): { yaw: number; pitch: number } => {
+    const d = new Vector3();
+    cam.camera.getWorldDirection(d);
+    return { yaw: Math.atan2(d.x, -d.z), pitch: Math.asin(d.y) };
+  };
+  // The cone: high and well to the right, 300 m off (the eruption's focus is of this kind).
+  const cone = { x: 140, y: 150, z: -690, peak: 1 };
+
+  it('turns toward the legend and lifts, by no more than its caps', () => {
+    const plain = aim(ride(null));
+    const cam = ride(cone);
+    const a = aim(cam);
+    expect(a.yaw - plain.yaw).toBeGreaterThan(0.08);
+    expect(a.yaw - plain.yaw).toBeLessThanOrEqual(LEGEND_YAW_MAX + 0.005);
+    expect(a.pitch - plain.pitch).toBeGreaterThan(0.03);
+    expect(cam.legendLook.lift).toBeGreaterThan(0.6);
+    // The rider is still in the frame: within the middle of the width, and no lower than its floor (70% of
+    // the way down, clear of the hint row).
+    const p = RIDER.clone().setY(0.55).project(cam.camera);
+    expect(Math.abs(p.x)).toBeLessThan(0.3);
+    expect(p.y).toBeGreaterThan(-0.42);
+    expect(p.y).toBeLessThan(0);
+    // A legend on the other side turns the other way.
+    expect(aim(ride({ ...cone, x: -140 })).yaw - plain.yaw).toBeLessThan(-0.08);
+  });
+
+  it('is scaled by how near its peak the legend is, and eases back when it is gone', () => {
+    const far = ride({ ...cone, peak: 0.1 });
+    const full = ride(cone);
+    expect(Math.abs(far.legendLook.yaw)).toBeLessThan(Math.abs(full.legendLook.yaw) * 0.5);
+    // Gone: three seconds on the look is back to nothing.
+    rideOn(full, 360);
+    expect(Math.abs(full.legendLook.yaw)).toBeLessThan(0.01);
+    expect(full.legendLook.lift).toBeLessThan(0.03);
+  });
+
+  it('eases in over about a second: half a second in it is under half way', () => {
+    const cam = ride(cone, IDLE_FEEL, 30);
+    const full = ride(cone).legendLook.yaw;
+    expect(cam.legendLook.yaw).toBeGreaterThan(0);
+    expect(cam.legendLook.yaw).toBeLessThan(full * 0.6);
+  });
+
+  it('does not move the lens under reduced motion, in a tumble, or for a legend behind the lens', () => {
+    const still = ride(cone, { ...IDLE_FEEL, reduced: true });
+    expect(still.legendLook).toEqual({ yaw: 0, lift: 0 });
+    const plain = aim(ride(null, { ...IDLE_FEEL, reduced: true }));
+    expect(aim(still).yaw).toBeCloseTo(plain.yaw, 6);
+    expect(aim(still).pitch).toBeCloseTo(plain.pitch, 6);
+    expect(Math.abs(ride(cone, IDLE_FEEL, 240, { tumble: 1 }).legendLook.yaw)).toBeLessThan(1e-6);
+    expect(Math.abs(ride({ x: 30, y: 20, z: -370, peak: 1 }).legendLook.yaw)).toBeLessThan(1e-6);
+  });
+
+  it('never steers: the lens is all it moves (the target it is handed is read, not written)', () => {
+    RIDER.set(0, 0, -400);
+    const t = { pos: RIDER.clone(), dir: DOWN.clone(), speed: 26, steer: 0.3, airborne: false, boost: 0, legend: { ...cone } };
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = () => 0;
+    cam.mode = 'chase';
+    cam.beats([], IDLE_FEEL);
+    for (let i = 0; i < 120; i++) cam.update(t, 1 / 60);
+    expect(t.steer).toBe(0.3);
+    expect(t.pos.equals(new Vector3(0, 0, -400))).toBe(true);
+    expect(t.dir.equals(DOWN)).toBe(true);
+    expect(t.legend).toEqual(cone);
   });
 });

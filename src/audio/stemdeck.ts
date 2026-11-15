@@ -209,6 +209,11 @@ export class StemDeck {
     return this.form.finaleS;
   }
 
+  /** Beats in a bar of the piece (its metre). */
+  get beats(): number {
+    return Math.max(1, Math.round(this.form.barS / this.form.beatS));
+  }
+
   /** The first beat of the piece at or after t. */
   nextBeat(t: number): number {
     const g = this.form.grid();

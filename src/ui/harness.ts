@@ -4,7 +4,7 @@
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
 import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, ResultsModel, SettingsModel, SledCard, TitleModel, TitleTwelve, TwelveRung, UIHandlers } from './contract';
-import { ROSTER } from '../bot/roster';
+import { TWELVE } from '../game/twelve';
 import { SHELVES } from '../game/garage';
 import { PAINTS } from '../game/paints';
 import type { Beat, BankTier, GhostRef, PassWord } from '../game/beats';
@@ -69,7 +69,7 @@ let selected = 'pinecrest';
 const HOMES = ['Pinecrest', 'Frostfang Glacier', 'Ember Peak', 'Sakura Ridge', 'Lanternfall'];
 const HOME_IDS = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
 function twelve(beaten: number, open: number[] = [0, 1], crowned = false): TitleTwelve {
-  const order = [...ROSTER].sort((a, b) => a.skill - b.skill);
+  const order = [...TWELVE];
   const reach = order.filter((r) => open.includes(r.home));
   const fallen = new Set(beaten >= 12 ? order.map((r) => r.key) : reach.slice(0, beaten).map((r) => r.key));
   const next = order.find((r) => !fallen.has(r.key) && open.includes(r.home)) ?? null;

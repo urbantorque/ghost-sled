@@ -1,6 +1,6 @@
 import { AddEquation, BufferAttribute, BufferGeometry, Color, CustomBlending, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, OneFactor, OneMinusSrcAlphaFactor, ShaderMaterial, type Vector3 } from 'three';
 import { BUDGET, byTier } from './fxhub';
-import { pushLocalLight } from './lights';
+import { pushSkyLight } from './lights';
 
 // Fireworks that read as fireworks (round 6). The old shells were particle sparkles and gouache dabs: from
 // the lens, red and gold puffs. Now a shell climbs on a thin trail of embers, bursts with a flash into a
@@ -363,7 +363,7 @@ export class Fireworks {
       if (pushed >= cap || l.life <= 0) continue;
       const k = l.life / l.max;
       const flash = this.reduced ? 0 : Math.pow(k, 6) * 2.2;
-      pushLocalLight(l.x, l.y, l.z, l.r, l.g, l.b, 150, k * k * 0.9 + flash);
+      pushSkyLight(l.x, l.y, l.z, l.r, l.g, l.b, 150, k * k * 0.9 + flash);
       pushed++;
     }
   }

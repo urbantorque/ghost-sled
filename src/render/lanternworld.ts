@@ -9,6 +9,7 @@ import { SNOW, merge, part } from './flora';
 import { ledgeAt, standable, visualGround } from './ground';
 import { box, seg } from './landmarkKit';
 import { LAMP_BRONZE, LAMP_SLATE, LAMP_TIMBER, LAMP_TIMBER_LIT, PAPER_DARK, WAY_LAMP_FLAME, wayLampGeometry } from './lanternkit';
+import type { LegendShot } from './legendworld';
 import { pushLocalLight } from './lights';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
@@ -62,6 +63,10 @@ const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
 const CANAL_E = 17;
 const CANAL_W = 7;
+
+/** How far out a legend is said (sim.ts's LEGEND_WARN), and how far past its end the look lets go (m). */
+const LEGEND_WARN_M = 220;
+const LEGEND_REACH_OUT = 120;
 
 const smooth01 = (x: number): number => {
   const t = x < 0 ? 0 : x > 1 ? 1 : x;
@@ -1336,6 +1341,7 @@ export class LanternWorld {
       this.carry(c, s, sim!, time, dt, lampK);
       this.lamplighter(c, s, sim!, time, low, lampK);
     } else if (this.tall) this.tall.visible = false;
+    this.aimLegend(run ? sim : null, s);
     this.great(c, s, time, dt, mode, lampK);
 
     // Upload what the frame drew with.
@@ -1487,6 +1493,48 @@ export class LanternWorld {
       this.sparkAcc = 0;
       this.particles.sparkle(ts.set(x, y + 0.4, -zz), gut ? EMBER : FLAME, gut ? 3 : 1, 1.6, 0.5, 0.13, tv.set(s.vx * 0.8, 0.6, -s.vz * 0.8), 0.5);
     }
+  }
+
+  /** Lanternfall's legend in reach this frame, in the shape MarqueeWorld.legendShot() gives the other
+   *  mountains' (the camera's look, the HUD and the reel read either): the Great Rising's focus is the valley
+   *  ahead and above on its side, where the lanterns climb; the Tall Lamplighter's is the lantern on his pole. */
+  private readonly look: LegendShot = { key: '', name: '', phase: 0, k: 0, peak: 0, x: 0, y: 0, z: 0, side: 1, kind: '', ahead: 0 };
+  private lookLive = false;
+
+  legendShot(): LegendShot | null {
+    return this.lookLive ? this.look : null;
+  }
+
+  private aimLegend(sim: Sim | null, s: Snap): void {
+    this.lookLive = false;
+    const lg = sim?.legend;
+    if (!sim || !lg || (lg.key !== 'rising' && lg.key !== 'lamplighter')) return;
+    const st = sim.lg;
+    if (st.phase === 0 || s.z > lg.z1 + LEGEND_REACH_OUT) return;
+    const L = this.look;
+    const span = Math.max(1, lg.z1 - lg.z0);
+    const kIn = Math.max(0, Math.min(1, (s.z - (lg.z0 - LEGEND_WARN_M)) / LEGEND_WARN_M));
+    const kOut = Math.max(0, Math.min(1, (s.z - lg.z1) / LEGEND_REACH_OUT));
+    L.key = lg.key;
+    L.name = lg.name;
+    L.phase = st.phase;
+    L.side = lg.side;
+    L.kind = lg.kind;
+    L.k = Math.max(0, Math.min(1, (s.z - (lg.z0 - LEGEND_WARN_M)) / (span + LEGEND_WARN_M + LEGEND_REACH_OUT)));
+    // (The same shape as the other mountains' legends: a third as it is said, whole at its middle.)
+    L.peak = st.phase === 2 ? 0.35 + 0.65 * Math.sin(Math.PI * Math.max(0, Math.min(1, (s.z - lg.z0) / span))) : st.phase === 1 ? 0.35 * kIn : 0.35 * (1 - kOut);
+    const tall = this.tall;
+    if (lg.key === 'lamplighter' && tall && tall.visible) {
+      L.x = tall.position.x;
+      L.y = tall.position.y + TALL_TIP[1] - 1.2;
+      L.z = tall.position.z;
+    } else {
+      L.x = s.x + lg.side * 40;
+      L.y = s.y + 34;
+      L.z = -(s.z + 160);
+    }
+    L.ahead = -L.z - s.z;
+    this.lookLive = true;
   }
 
   /** The Tall Lamplighter (a legend, the lamp grove): he walks the grove ahead of the rider, and the light

@@ -14,6 +14,10 @@ export function fmBell(v: Voice, t: number, f: number, amp: number, tau: number,
   const end = perc(g.gain, t, amp, 0.002, tau);
   const car = v.osc('sine', f, t, end, g);
   const mf = f * ratio;
+  // A modulator past the context's Nyquist cannot run (the browser clamps it and says so in the console: a
+  // high bell an octave up at ratio 3.5 asked for 26.9 kHz), and the sidebands it would give lie past
+  // hearing anyway, so a bell that high is its carrier alone.
+  if (mf >= v.ctx.sampleRate * 0.45) return end;
   const mg = v.gain(0, car.frequency);
   mg.gain.setValueAtTime(index * mf, t);
   mg.gain.setTargetAtTime(index * mf * 0.1, t, tau * 0.3);

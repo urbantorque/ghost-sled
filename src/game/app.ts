@@ -1445,9 +1445,10 @@ export class App {
             );
           },
           click: (k) => this.audio.ui(k),
-          // The hook the reel wants of the audio: a clock that says how long a bar of the score is now.
-          // (None on this branch: the cut then stands on its own lengths.)
-          bar: () => (this.audio as unknown as { clock?: () => { barS: number } | null }).clock?.()?.barS ?? null,
+          // The score's clock: how long a bar is now (the shots are cut to whole bars) and how far off its next
+          // line is (each cut lands on one). With no music playing the cut stands on its own lengths.
+          bar: () => this.audio.clock()?.barS ?? null,
+          toLine: () => this.audio.clock(),
           time: () => this.renderTime,
           setTime: (t) => {
             this.renderTime = t;
@@ -2611,6 +2612,8 @@ export class App {
       mirror: this.ui.mirrorRect(),
       // The ghost the rival pill names.
       rival: this.phase === 'run' ? out.rival : null,
+      // At the head of the field on this frame: the town saves its biggest shells for a rider who is winning.
+      lead: st.rank <= 1,
       beats: out.beats,
       feel: out.feel,
     });

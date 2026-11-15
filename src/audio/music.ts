@@ -1064,6 +1064,22 @@ export class Music {
     return top ? top.grid() : null;
   }
 
+  /**
+   * The bar the playing deck is in: how long a bar and a beat last (seconds), and how long until the next bar
+   * line and the next beat from `now`. The live band is in four; a produced piece has its own metre. Null with
+   * no deck playing.
+   */
+  bar(now: number): { barS: number; beatS: number; toBar: number; toBeat: number } | null {
+    const top = this.top;
+    if (!top) return null;
+    const g = top.grid();
+    const beatS = g.dur * 4;
+    const barS = beatS * (top.produced ? top.beats : 4);
+    if (!(beatS > 0.05) || !(barS < 30) || !Number.isFinite(g.t0)) return null;
+    const left = (span: number): number => span - ((((now - g.t0) % span) + span) % span);
+    return { barS, beatS, toBar: left(barS), toBeat: left(beatS) };
+  }
+
   /** The chord sounding now on the playing deck (absolute root, tones), or null. */
   chord(): { root: number; tones: readonly number[] } | null {
     const top = this.top;

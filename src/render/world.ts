@@ -113,6 +113,9 @@ export interface FrameView {
   /** Contract C2: the avalanche mirror's rect (CSS px, top-left origin) from the HUD's own layout,
    *  null while no chase is on. Absent, the renderer falls back to its built-in geometry. */
   mirror?: { x: number; y: number; w: number; h: number } | null;
+  /** The rider is at the head of the field on this frame (absent reads as leading: a run with nobody to
+   *  race, the reel). The climax sends its full volley over the line only for a rider who is winning. */
+  lead?: boolean;
   /** This frame's named moments from the director (the same list the HUD and audio get; never kept). */
   beats?: readonly Beat[];
   /** This frame's continuous feel from the director; absent reads as IDLE_FEEL. */
@@ -846,6 +849,7 @@ export class World {
     this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.detail === 'low');
     // Round 7, the momentsworld lane: the set pieces' stages take the tier, reduced motion and the effects.
     this.marquee.stage(this.quality.detail === 'low' ? 0 : this.quality.detail === 'medium' ? 1 : this.quality.detail === 'high' ? 2 : 3, feel.reduced || reduced(), this.spirit.fireworks, this.spirit.breaks);
+    this.marquee.leading = v.lead !== false;
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
@@ -1046,7 +1050,10 @@ export class World {
     // A run's drift leans the horizon into it with its slip (the camera's roll, off under reduced
     // motion); the title reel's snapshot carries no drift direction or slip, so it rolls with steer.
     const drifting = v.mode === 'run' && s.drifting;
-    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    // The legend in reach (the four mountains' from the marquee's world, Lanternfall's from its own): the
+    // chase looks a little toward it.
+    const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot()) : null;
+    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
 

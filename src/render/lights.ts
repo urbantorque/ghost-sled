@@ -5,6 +5,8 @@
 // The contract (the light lane owns the implementation and may change the internals, not these names):
 //   beginLocalLights()            once a frame, before the world's systems update
 //   pushLocalLight(x, y, z, r, g, b, radius, power?)   linear colour, radius in metres
+//   pushSkyLight(...)             the same, for a light high over the run with a reach of a hundred metres or
+//                                 more (a firework's burst): at most MAX_SKY_LIGHTS of them are kept
 //   localLights.count / .data     what the materials upload (the nearest MAX_LOCAL_LIGHTS to the focus)
 //
 // How it reaches the picture (materials.ts LOCAL_GLSL): every material built on the shared model takes
@@ -20,6 +22,9 @@
 export const MAX_LOCAL_LIGHTS = 8;
 /** How many of them Low's snow takes. */
 export const LOW_LIGHTS = 4;
+/** How many slots lights in the sky may hold. A burst's reach (150 m) puts its edge nearer the rider than any
+ *  lamp's, so a volley of eight used to take every slot and the street under it went dark for the finale. */
+export const MAX_SKY_LIGHTS = 2;
 
 export interface LocalLights {
   /** Lights pushed this frame, before selection. */
@@ -50,6 +55,9 @@ export const localUniforms = {
 
 const focus = { x: 0, y: 0, z: 0 };
 const score = new Float32Array(MAX_LOCAL_LIGHTS);
+/** Which kept lights are the sky's, and how strong each is (the weaker gives way to a stronger one). */
+const sky = new Uint8Array(MAX_LOCAL_LIGHTS);
+const skyPower = new Float32Array(MAX_LOCAL_LIGHTS);
 let low = false;
 
 /** Low keeps the nearest few on the snow alone (painted pools); the other tiers light everything. */
@@ -83,6 +91,7 @@ export function beginLocalLights(fx = 0, fy = 0, fz = 0): void {
   focus.z = fz;
   localLights.pushed = 0;
   localLights.count = 0;
+  sky.fill(0);
   for (let i = 0; i < sources.length; i++) sources[i](fx, fy, fz);
   sync();
 }
@@ -90,16 +99,44 @@ export function beginLocalLights(fx = 0, fy = 0, fz = 0): void {
 /** Offer a light. The nearest to the focus (weighted by reach) are kept. */
 export function pushLocalLight(x: number, y: number, z: number, r: number, g: number, b: number, radius: number, power = 1): void {
   if (!(radius > 0) || !(power > 0)) return;
+  place(x, y, z, r, g, b, radius, power, -1);
+}
+
+/** Offer a light in the sky (a firework's burst). The strongest MAX_SKY_LIGHTS are kept, one on Low; the
+ *  rest of the slots stay the lamps', the gates' and the rider's own. */
+export function pushSkyLight(x: number, y: number, z: number, r: number, g: number, b: number, radius: number, power = 1): void {
+  if (!(radius > 0) || !(power > 0)) return;
   const L = localLights;
+  const cap = low ? 1 : MAX_SKY_LIGHTS;
+  let n = 0;
+  let weakest = -1;
+  for (let i = 0; i < L.count; i++) {
+    if (!sky[i]) continue;
+    n++;
+    if (weakest < 0 || skyPower[i] < skyPower[weakest]) weakest = i;
+  }
+  if (n < cap) {
+    place(x, y, z, r, g, b, radius, power, -1, true);
+    return;
+  }
   L.pushed++;
+  if (weakest >= 0 && power > skyPower[weakest]) place(x, y, z, r, g, b, radius, power, weakest, true);
+}
+
+/** Keeps a light: in `into` when a slot is named, else in a free slot or the worst-placed one it beats. */
+function place(x: number, y: number, z: number, r: number, g: number, b: number, radius: number, power: number, into: number, high = false): void {
+  const L = localLights;
+  if (into < 0) L.pushed++;
   const dx = x - focus.x;
   const dy = y - focus.y;
   const dz = z - focus.z;
   const s = Math.sqrt(dx * dx + dy * dy + dz * dz) - radius;
   // (Low keeps fewer, so its few are the nearest ones.)
   const cap = low ? LOW_LIGHTS : MAX_LOCAL_LIGHTS;
-  let slot = L.count;
-  if (slot >= cap) {
+  let slot = into >= 0 ? into : L.count;
+  if (into >= 0) {
+    // (A named slot is taken as it is.)
+  } else if (slot >= cap) {
     slot = -1;
     let worst = s;
     for (let i = 0; i < cap; i++) {
@@ -113,6 +150,8 @@ export function pushLocalLight(x: number, y: number, z: number, r: number, g: nu
     L.count++;
   }
   score[slot] = s;
+  sky[slot] = high ? 1 : 0;
+  skyPower[slot] = power;
   const o = slot * 4;
   L.pos[o] = x;
   L.pos[o + 1] = y;

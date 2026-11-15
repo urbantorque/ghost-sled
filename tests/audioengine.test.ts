@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from '../src/audio/engine';
+import { fmBell } from '../src/audio/instruments';
+import type { Voice } from '../src/audio/voices';
+import type { Beat } from '../src/game/beats';
+import { cutHold } from '../src/game/reelshow';
 import { RESULTS_TIMING } from '../src/ui/results';
 
 // The engine on a stub AudioContext that keeps only the clock and the state (the graph's nodes are
@@ -377,5 +381,134 @@ describe('Done chimes played from the stamp (UIHandlers.onMissionStamp)', () => 
     run(ctx, 17);
     eng.ui('coin');
     expect(built.filter((b) => b.name === 'coin')).toHaveLength(1);
+  });
+});
+
+// Round 7, the wire lane: the beats nobody listened to (the legend, the slow hero frame), the new verbs'
+// steps, the forge gate's roar and a bell's swing, and the clock the reel cuts on.
+describe('round 7 cues: every beat a set piece or a legend sends is heard', () => {
+  const B = { tick: 0 };
+  const moment = (verb: string, phase: string, n: number, of: number): Beat => ({ ...B, type: 'moment', key: 'k', verb, phase, n, of }) as unknown as Beat;
+  const legend = (phase: 'warn' | 'start' | 'step' | 'end', n = 0): Beat => ({ ...B, type: 'legend', phase, key: 'stag', name: 'The White Stag', line: 'l', kind: 'runner', side: 1, n });
+  const hero = (phase: 'lip' | 'apex' | 'out'): Beat => ({ ...B, type: 'heroFrame', phase, key: 'leap', inS: 0.8, secs: 0.9 });
+  const riding = (): { eng: AudioEngine; ctx: StubCtx } => {
+    const { eng, ctx } = rig();
+    eng.setScene('run');
+    run(ctx, 300);
+    return { eng, ctx };
+  };
+
+  it('a legend has a cue as it is said, as it starts, on a ribbon’s quarters and as it is left', () => {
+    const { eng, ctx } = riding();
+    eng.beats([legend('warn')]);
+    run(ctx, 100);
+    eng.beats([legend('start')]);
+    eng.beats([legend('step', 1), legend('step', 2)]);
+    eng.beats([legend('end', 2)]);
+    expect(eng.debugCues()).toMatchObject({ 'legend.warn': 1, 'legend.start': 1, 'legend.step': 2, 'legend.end': 1 });
+  });
+
+  it('the slow hero frame takes a breath off the lip and holds it at the apex; its end is the landing’s', () => {
+    const { eng, ctx } = riding();
+    eng.beats([hero('lip')]);
+    run(ctx, 800);
+    eng.beats([hero('apex')]);
+    run(ctx, 900);
+    eng.beats([hero('out')]);
+    const c = eng.debugCues();
+    expect(c['heroFrame.lip']).toBe(1);
+    expect(c['heroFrame.apex']).toBe(1);
+    expect(c['heroFrame.out']).toBeUndefined();
+  });
+
+  it('each new verb’s steps sound: a bell rung, a lamp lit, the wake, the glass, the low flame', () => {
+    const { eng, ctx } = riding();
+    eng.beats([moment('shatter', 'step', 1, 3)]);
+    run(ctx, 50);
+    eng.beats([moment('shatter', 'step', 2, 3), moment('kindle', 'step', 1, 6), moment('follow', 'step', 3, 8), moment('slide', 'step', 2, 4)]);
+    // The flame says nothing as it burns down, until it is low.
+    for (const n of [9, 8, 4]) eng.beats([moment('carry', 'step', n, 10)]);
+    expect(eng.debugCues()['carry.low']).toBeUndefined();
+    for (const n of [3, 2, 1]) eng.beats([moment('carry', 'step', n, 10)]);
+    eng.beats([moment('carry', 'trail', 4, 10), moment('carry', 'lead', 4, 10), moment('carry', 'close', 6, 10), moment('follow', 'lead', 2, 8)]);
+    expect(eng.debugCues()).toMatchObject({ 'shatter.step': 2, 'kindle.step': 1, 'follow.step': 1, 'slide.step': 1, 'carry.low': 3, 'carry.trail': 1, 'carry.lead': 1, 'carry.close': 1, 'follow.lead': 1 });
+  });
+
+  it('the forge gate roars for a sled off the lip at the speed asked, and gutters for a slower one', () => {
+    const { eng } = riding();
+    // The surge's step carries the speed off the lip (whole m/s) against the speed its far line wants.
+    eng.beats([moment('surge', 'step', 43, 44)]);
+    expect(eng.debugCues()).toMatchObject({ 'surge.gutter': 1 });
+    eng.beats([moment('surge', 'step', 44, 44)]);
+    eng.beats([moment('surge', 'step', 51, 47)]);
+    expect(eng.debugCues()).toMatchObject({ 'surge.gutter': 1, 'surge.roar': 2 });
+  });
+
+  it('a set piece’s card calls its verb (the produced stinger when the score is playing, the live call here)', () => {
+    const { eng } = riding();
+    for (const verb of ['race', 'gates', 'rings', 'collapse', 'steps', 'slide', 'shatter', 'surge', 'flourish', 'follow', 'kindle', 'carry']) {
+      eng.beats([{ ...B, type: 'marquee', phase: 'enter', key: verb, name: verb, verb, line: '', cam: 'wide', light: 'none', side: 1, took: 0, total: 0, clean: true, won: false } as unknown as Beat]);
+      const c = eng.debugCues();
+      expect((c[`call.${verb}`] ?? 0) + (c[`stinger.${verb}`] ?? 0), verb).toBe(1);
+    }
+  });
+});
+
+describe('the score’s clock (the reel cuts on it)', () => {
+  it('is null before there is a context, then says a bar, a beat and how far off the next of each is', () => {
+    const cold = new AudioEngine();
+    expect(cold.clock()).toBeNull();
+    cold.dispose();
+    const { eng, ctx } = rig();
+    eng.setScene('run');
+    run(ctx, 400);
+    const c = eng.clock();
+    expect(c).not.toBeNull();
+    expect(c!.barS).toBeGreaterThan(1);
+    expect(c!.barS).toBeLessThan(6);
+    expect(c!.barS / c!.beatS).toBeCloseTo(4, 6);
+    expect(c!.toBar).toBeGreaterThan(0);
+    expect(c!.toBar).toBeLessThanOrEqual(c!.barS + 1e-9);
+    expect(c!.toBeat).toBeLessThanOrEqual(c!.beatS + 1e-9);
+    // The line comes nearer as the clock runs, by exactly the time that passed.
+    run(ctx, 100);
+    const d = eng.clock()!;
+    const gone = (c!.toBeat - d.toBeat + c!.beatS) % c!.beatS;
+    expect(gone).toBeCloseTo(0.1 % c!.beatS, 3);
+  });
+
+  it('a cut waits for the bar line when one is near, else for the beat, and never without a clock', () => {
+    expect(cutHold(null)).toBe(0);
+    expect(cutHold({ toBar: 0.4, toBeat: 0.4 })).toBe(0.4);
+    expect(cutHold({ toBar: 1.6, toBeat: 0.1 })).toBe(0.1);
+    expect(cutHold({ toBar: 1.9, toBeat: 0.45 })).toBe(0.45);
+    // A beat too slow to wait for (a very slow piece): the cut falls as its card ends.
+    expect(cutHold({ toBar: 3, toBeat: 1.2 })).toBe(0);
+  });
+});
+
+describe('an FM bell too high for its modulator', () => {
+  /** A voice that only counts what is asked of it. */
+  const voice = (sampleRate: number): { v: Voice; freqs: number[] } => {
+    const freqs: number[] = [];
+    const node = (): Node => new Node();
+    const v = { ctx: { sampleRate }, out: node(), envelope: node, gain: node, osc: (_w: string, f: number) => (freqs.push(f), node()) } as unknown as Voice;
+    return { v, freqs };
+  };
+
+  it('never asks an oscillator for a frequency past Nyquist (the browser clamps it, with a console warning)', () => {
+    // The warning seen in round 7: a gate's bell an octave up, 7,685 Hz at ratio 3.5, is a 26.9 kHz modulator.
+    for (const sr of [44100, 48000]) {
+      for (const f of [440, 3842.5, 5200, 7685, 9000]) {
+        const { v, freqs } = voice(sr);
+        fmBell(v, 0, f, 0.05, 0.5, 3.5, 1.1);
+        expect(freqs[0]).toBe(f);
+        for (const q of freqs) expect(q, `${f} Hz at ${sr}`).toBeLessThan(sr / 2);
+      }
+    }
+    // An ordinary bell keeps its modulator.
+    const { v, freqs } = voice(48000);
+    fmBell(v, 0, 880, 0.05, 0.5, 3.5, 1.1);
+    expect(freqs).toEqual([880, 3080]);
   });
 });
