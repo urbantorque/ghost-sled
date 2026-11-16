@@ -1004,13 +1004,13 @@ export class PostFX {
   setMsaa(samples: number): void {
     if (samples === this.msaa) return;
     this.msaa = samples;
-    this.aimAA();
     const eff = sceneSamples(samples, this.pipe.passes, this.pipe.switches);
     for (const t of this.targets) {
       if (t.samples === eff) continue;
       t.samples = eff;
       t.dispose();
     }
+    this.aimAA();
   }
 
   setGrade(g: GradeParams): void {
