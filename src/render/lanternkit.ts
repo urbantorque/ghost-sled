@@ -121,21 +121,25 @@ export function stoneLampGeometry(low = false): BufferGeometry {
   const dk = C('#262240');
   // (The visual lift: every stone of it dressed, its arrises chamfered so the moon finds an edge, where round 7's
   // was boxes the critics read as dark boxes. Its fire box stands where it stood: lanternworld.ts draws the flame
-  // there.)
+  // there. Low stands a score of them in view: its lamp chamfers the shaft and the platform only, the arrises that
+  // read at its resolution, and drops the band, the frame, the cap stone and the seat of snow.)
+  const c = (v: number) => (low ? 0 : v);
   const parts: BufferGeometry[] = [
-    softPart(new IcosahedronGeometry(0.62, 0), SNOW, { pos: [0, 0, 0], scale: [1.05, 0.2, 1.02] }),
-    nbox(0.86, 0.18, 0.86, 0.03, dk, [0, 0.09, 0]),
-    nbox(0.64, 0.1, 0.64, 0.024, st, [0, 0.23, 0]),
+    nbox(0.86, 0.18, 0.86, c(0.03), dk, [0, 0.09, 0]),
+    nbox(0.64, 0.1, 0.64, c(0.024), st, [0, 0.23, 0]),
     tbox(0.42, 0.3, 0.6, st, [0, 0.28, 0], namedChamfer(0.03)),
-    nbox(0.4, 0.05, 0.4, low ? 0 : 0.014, dk, [0, 0.66, 0]),
     nbox(0.74, 0.1, 0.74, 0.026, dk, [0, 0.9, 0]),
   ];
-  // (The posts are too slim for a chamfer to show; on Low so is the fire box's frame.)
+  if (!low) {
+    parts.push(softPart(new IcosahedronGeometry(0.62, 0), SNOW, { pos: [0, 0, 0], scale: [1.05, 0.2, 1.02] }));
+    parts.push(nbox(0.4, 0.05, 0.4, 0.014, dk, [0, 0.66, 0]));
+    parts.push(nbox(0.7, 0.06, 0.7, 0.016, dk, [0, 1.37, 0]));
+    parts.push(nbox(0.12, 0.1, 0.12, 0.02, st, [0, 1.74, 0]));
+  }
+  // (The posts are too slim for a chamfer to show.)
   for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(nbox(0.1, 0.4, 0.1, 0, dk, [sx * 0.28, 1.15, sz * 0.28]));
-  parts.push(nbox(0.7, 0.06, 0.7, low ? 0 : 0.016, dk, [0, 1.37, 0]));
-  parts.push(nbox(0.98, 0.06, 0.98, 0.02, st, [0, 1.42, 0]));
+  parts.push(nbox(0.98, 0.06, 0.98, c(0.02), st, [0, 1.42, 0]));
   parts.push(...hipRoof(0.92, 0.92, 0.3, 1.45, dk));
-  parts.push(nbox(0.12, 0.1, 0.12, low ? 0 : 0.02, st, [0, 1.74, 0]));
   return merge(parts);
 }
 

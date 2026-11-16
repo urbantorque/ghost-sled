@@ -112,7 +112,7 @@ describe('the named pieces', () => {
       expect(tris(obstacleGeometry('lantern', sakura, low, 'blossom'))).toBe(tris(g));
       const s = stoneLampGeometry(low);
       expect(formBounds(s, 0.05).r).toBeLessThanOrEqual(0.7);
-      expect(tris(s)).toBeLessThanOrEqual(low ? 360 : 460);
+      expect(tris(s)).toBeLessThanOrEqual(low ? 200 : 460);
       expect(tris(obstacleGeometry('lantern', lantern, low, 'lantern'))).toBe(tris(s));
     }
   });
