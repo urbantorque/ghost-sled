@@ -4,6 +4,7 @@ import { lampTowerParts, lanternCrown, paper } from './lanternkit';
 import { StillFigure, crowdColors, stillCrowd } from './crowd';
 import { ASH_TOP, SNOW, basaltTones, part, shade } from './flora';
 import { Facets, columnInto, strataInto } from './rockforms';
+import { builtLetters } from './lettering';
 import { LINE_Z, liftLayout } from './liftline';
 import { CREAM, Glow, INK, Piece, Rail, ROPE, SiteCtx, Spot, Sub, TIMBER, TIMBER_DARK, TIMBER_LIGHT, V3, banners, box, bunting, crag, drift, grade, lampColor, latticeTower, pagodaParts, place, quad, ribbon, rnd, seed, seg, stone, windowColor } from './landmarkKit';
 import { AIR_MARGIN, barrier, frontAt, house, kerbAt, landmark, lantern, streetPiece, townStyle } from './town';
@@ -26,38 +27,10 @@ const C = (h: string) => new Color(h);
 
 // ---------------------------------------------------------------- lettering
 
-/** A 5 by 7 dot font, the few letters the boards use. */
-const FONT: Record<string, readonly string[]> = {
-  S: ['01111', '10000', '10000', '01110', '00001', '00001', '11110'],
-  T: ['11111', '00100', '00100', '00100', '00100', '00100', '00100'],
-  A: ['01110', '10001', '10001', '11111', '10001', '10001', '10001'],
-  R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
-  F: ['11111', '10000', '10000', '11110', '10000', '10000', '10000'],
-  I: ['11111', '00100', '00100', '00100', '00100', '00100', '11111'],
-  N: ['10001', '11001', '10101', '10101', '10011', '10001', '10001'],
-  H: ['10001', '10001', '10001', '11111', '10001', '10001', '10001'],
-};
-
-/** Letters in merged dots on a board in the x-y plane, facing +z, centred on x and sitting at y. */
+/** A board's word, centred on x with its foot at y, standing proud of a board whose face is a little behind z:
+ *  built letters, each edge bevelled (lettering.ts; round 7 drew a 5 by 7 dot font here). */
 function letters(text: string, y: number, z: number, dot: number, col: Color): BufferGeometry[] {
-  const parts: BufferGeometry[] = [];
-  const adv = 6 * dot;
-  const x0 = -((text.length * adv - dot) / 2);
-  for (let i = 0; i < text.length; i++) {
-    const g = FONT[text[i]];
-    if (!g) continue;
-    for (let r = 0; r < 7; r++) {
-      // Runs of dots as one box.
-      for (let c = 0; c < 5; c++) {
-        if (g[r][c] !== '1') continue;
-        let e = c;
-        while (e + 1 < 5 && g[r][e + 1] === '1') e++;
-        parts.push(box((e - c + 1) * dot, dot, 0.12, col, [x0 + i * adv + ((c + e + 1) / 2) * dot, y + (6.5 - r) * dot, z]));
-        c = e;
-      }
-    }
-  }
-  return parts;
+  return builtLetters(text, y, z + 0.06, dot, col);
 }
 
 /** A long thin pennant streaming off a mast top toward s. */

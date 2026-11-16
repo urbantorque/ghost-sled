@@ -101,7 +101,10 @@ describe("Lanternfall's kit", () => {
     expect(tris(silverTreeGeometry(0, false))).toBeLessThan(110);
     expect(tris(silverTreeGeometry(1, true))).toBeLessThan(170);
     expect(tris(wayLampGeometry())).toBeLessThan(200);
-    expect(tris(stoneLampGeometry())).toBeLessThan(160);
+    // (The run's stone lamp is a named piece of the visual lift: every stone dressed and chamfered, as it passes at
+    // the lens. About sixty stand on the course, a handful in view: tests/chamfer.test.ts holds its budget.)
+    expect(tris(stoneLampGeometry())).toBeLessThan(460);
+    expect(tris(stoneLampGeometry(true))).toBeLessThan(360);
     expect(tris(standingStoneGeometry(p))).toBeLessThan(160);
     expect(tris(stoneRowGeometry(p, true))).toBeLessThanOrEqual(tris(stoneRowGeometry(p)));
   });

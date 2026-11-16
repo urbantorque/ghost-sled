@@ -20,9 +20,10 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { BiomeId } from '../sim/mountains';
 import { silverTreeGeometry } from './lanternkit';
-import { blossomGeometry, charPineGeometry, seracGeometry, spireGeometry } from './meshes';
+import { charPineGeometry, seracGeometry, spireGeometry } from './meshes';
 import { Palette } from './palette';
 import { Facets, columnInto, columnsInto, honeycomb } from './rockforms';
+import { liftEdges } from './chamfer';
 
 // Forest variety without extra draw calls. A batch's geometry holds several variants merged into one
 // mesh, each vertex tagged with its variant (aVar); each instance picks one (aPick, per instance) and
@@ -83,6 +84,8 @@ export function part(geo: BufferGeometry, color: Color | string, o: PartOpts = {
     arr[i * 3 + 2] = col.b;
   }
   g.setAttribute('color', new BufferAttribute(arr, 3));
+  // (A chamfered box's chamfers take their light: chamfer.ts.)
+  liftEdges(g);
   return g;
 }
 
@@ -699,25 +702,192 @@ export function basaltSentinelGeometry(p: Palette): BufferGeometry {
   return f.build();
 }
 
-/** Sakura Ridge: a paler, spreading blossom tree on a taller, leaning trunk. */
-export function paleBlossomGeometry(p: Palette): BufferGeometry {
-  reseed(313);
-  const parts: BufferGeometry[] = [part(new CylinderGeometry(0.14, 0.26, 3.0, 6), new Color('#5A3A3E'), { pos: [0.12, 1.5, 0], rot: [0, 0, -0.08], jitter: 0.05 })];
-  const pinkA = p.tall.clone().lerp(new Color('#FFFFFF'), 0.42);
-  const pinkB = shade(pinkA, 0.86);
-  const blobs = [
-    [0.2, 3.5, 0, 1.2],
-    [1.4, 3.05, 0.2, 0.9],
-    [-1.1, 3.15, -0.3, 0.95],
-    [0.3, 3.0, 1.15, 0.82],
-    [-0.2, 2.95, -1.15, 0.86],
-  ];
-  // (A wine-rose underside lifting to the crown, as blossomGeometry.)
-  blobs.forEach(([x, y, z, r], i) => {
-    parts.push(paint(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], scale: [1, 0.78, 1], rot: [rnd(), rnd(), rnd()], jitter: 0.16 }), 2.2, 4.4, 0.66, 1.06, 0.14));
+// ---------------------------------------------------------------- blossom
+
+/** How a blossom canopy is built (the visual lift): 'rich' for the run's own blossom trees, which pass at the
+ *  lens (round puffs, about 80 triangles each); 'near' for the orchards' treeline and near rows on Medium and
+ *  High (lumpier puffs of 32); 'lean' for Low's (puffs of 20); 'far' past the detail range (three puffs, under
+ *  half a round 7 tree, where a tree is a few dozen pixels). */
+export type CanopyBuild = 'rich' | 'near' | 'lean' | 'far';
+
+/** One puff of bloom: its centre and radius, how flat it is (sy), and a value of its own (k). */
+export type Puff = [x: number, y: number, z: number, r: number, k?: number];
+
+function puffShape(build: CanopyBuild, r: number, big: boolean): BufferGeometry {
+  if (build === 'rich') return big ? new IcosahedronGeometry(r, 1) : new OctahedronGeometry(r, 1);
+  // (The near orchards: the heart of the cloud a rounder puff, the rest the leanest that still shade round; the
+  // treeline is never nearer than 9 m, and a variant set counts both its trees in every instance.)
+  if (build === 'near') return big && r > 1.2 ? new OctahedronGeometry(r, 1) : new IcosahedronGeometry(r, 0);
+  return new IcosahedronGeometry(r, 0);
+}
+
+/** A hash of a direction (a puff's lumps: a corner shared by two faces moves once). */
+function dirHash(x: number, y: number, z: number, s: number): number {
+  const h = Math.sin(Math.round(x * 97) * 12.9898 + Math.round(y * 97) * 78.233 + Math.round(z * 97) * 37.719 + s * 4.37) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+/** A canopy of bloom: clustered rounded puffs, each lumpy, shaded as one soft mass (every corner's normal
+ *  turned half way from its own puff's toward the canopy's heart, so the canopy lights as one cloud of bloom,
+ *  its outline soft against the sky and light can come through it: the light lane's term reads the normal
+ *  there), painted from a wine-rose underside up to its pale crown. Round 7's canopy was five faceted
+ *  icosahedra: every critic read it as pink polyhedra, frontlit, never backlit. */
+/** The petals' white a canopy pales toward over its crown, and the wine its underside deepens to. */
+const PETAL = new Color('#FFF0F4');
+const WINE = new Color('#8A3458');
+
+function canopy(puffs: readonly Puff[], build: CanopyBuild, pink: Color, sy: number, y0: number, y1: number, k0: number, k1: number, seedK: number): BufferGeometry {
+  let cx = 0;
+  let cy = 0;
+  let cz = 0;
+  let wsum = 0;
+  for (const [x, y, z, r] of puffs) {
+    const w = r * r * r;
+    cx += x * w;
+    cy += y * w;
+    cz += z * w;
+    wsum += w;
+  }
+  cx /= wsum;
+  cy = cy / wsum - 0.45;
+  cz /= wsum;
+  const bloom = Math.min(pink.r, pink.g, pink.b) < 0.85;
+  const parts: BufferGeometry[] = [];
+  puffs.forEach(([x, y, z, r, k = 1], i) => {
+    const g0 = puffShape(build, 1, i < 5);
+    const g = g0.index ? g0.toNonIndexed() : g0;
+    const pos = g.getAttribute('position') as BufferAttribute;
+    const nrm = new Float32Array(pos.count * 3);
+    const col = new Float32Array(pos.count * 3);
+    const amp = build === 'far' ? 0.08 : 0.16;
+    for (let v = 0; v < pos.count; v++) {
+      const dx = pos.getX(v);
+      const dy = pos.getY(v);
+      const dz = pos.getZ(v);
+      const lump = 1 + amp * (dirHash(dx, dy, dz, seedK + i) - 0.5);
+      const px = x + dx * r * lump;
+      const py = y + dy * r * lump * sy;
+      const pz = z + dz * r * lump;
+      pos.setXYZ(v, px, py, pz);
+      // Half its puff's own round, half the canopy's.
+      let nx = dx;
+      let ny = dy / sy;
+      let nz = dz;
+      let l = Math.hypot(nx, ny, nz) || 1;
+      let mx = px - cx;
+      let my = py - cy;
+      let mz = pz - cz;
+      const m = Math.hypot(mx, my, mz) || 1;
+      nx = nx / l + mx / m;
+      ny = ny / l + my / m;
+      nz = nz / l + mz / m;
+      l = Math.hypot(nx, ny, nz) || 1;
+      nrm.set([nx / l, ny / l, nz / l], v * 3);
+      // The wine-rose underside lifting to the crown, and each puff a step of its own.
+      const t = Math.max(0, Math.min(1, (py - y0) / (y1 - y0)));
+      const kk = (k0 + (k1 - k0) * t) * k * (0.95 + 0.05 * (ny / l));
+      // Bloom pales toward the petals' white over the crown and deepens to wine underneath, so a canopy has a
+      // range of value and not one pink (snow keeps its own colour).
+      const wine = bloom ? Math.max(0, 0.38 - t) * 0.55 : 0;
+      const pale = bloom ? t * t * 0.34 * (0.35 + 0.65 * Math.max(0, ny / l)) : 0;
+      const r0 = pink.r + (WINE.r - pink.r) * wine;
+      const g0 = pink.g + (WINE.g - pink.g) * wine;
+      const b0 = pink.b + (WINE.b - pink.b) * wine;
+      col.set([(r0 + (PETAL.r - r0) * pale) * kk, (g0 + (PETAL.g - g0) * pale) * kk, (b0 + (PETAL.b - b0) * pale) * kk], v * 3);
+    }
+    g.setAttribute('normal', new BufferAttribute(nrm, 3));
+    g.setAttribute('color', new BufferAttribute(col, 3));
+    g.deleteAttribute('uv');
+    parts.push(g);
   });
-  parts.push(part(new IcosahedronGeometry(0.85, 0), SNOW, { pos: [0.2, 4.05, 0], scale: [1.4, 0.35, 1.3], jitter: 0.1 }));
   return merge(parts);
+}
+
+/** A soft cap of snow lying on a canopy's crown: one more lumpy puff, sunk into the crown so only its top shows
+ *  (a whole flattened puff read as a white slab laid on the bloom). */
+function crownSnow(build: CanopyBuild, pos: [number, number, number], r: number): BufferGeometry {
+  return canopy([[pos[0], pos[1], pos[2], r]], build === 'rich' ? 'near' : 'lean', SNOW, 0.5, pos[1] - r, pos[1] + r * 0.5, 0.86, 1, 41);
+}
+
+/** Sakura Ridge's blossom tree (the run's `blossom` hazard and the orchards' first tree): a dark trunk under a
+ *  rounded canopy of bloom, snow on its crown. `build` says how fine (CanopyBuild). */
+export function blossomGeometry(p: Palette, build: CanopyBuild = 'rich'): BufferGeometry {
+  reseed(303);
+  const bark = new Color('#5A3A3E');
+  const far = build === 'far';
+  const parts: BufferGeometry[] = [part(new CylinderGeometry(far ? 0.2 : 0.18, 0.3, 2.6, far ? 3 : build === 'lean' ? 5 : 6, 1, far || build === 'lean'), bark, { pos: [0, 1.3, 0], jitter: far ? 0 : 0.05 })];
+  if (build === 'rich') {
+    // Two limbs up into the canopy, seen from under it as a rider passes.
+    parts.push(part(new CylinderGeometry(0.07, 0.13, 1.3, 4, 1, true), bark, { pos: [0.35, 2.75, 0.1], rot: [0.1, 0, -0.6] }));
+    parts.push(part(new CylinderGeometry(0.07, 0.12, 1.2, 4, 1, true), bark, { pos: [-0.3, 2.7, -0.15], rot: [-0.15, 0, 0.65] }));
+  }
+  const puffs: Puff[] = far
+    ? [
+        [0, 3.5, 0, 1.68],
+        [1.0, 3.0, 0.3, 1.12, 0.94],
+        [-0.9, 3.1, -0.35, 1.15, 1.04],
+      ]
+    : build === 'lean'
+      ? [
+          [0, 3.4, 0, 1.5],
+          [1.0, 2.9, 0.3, 1.05, 0.92],
+          [-0.9, 3.0, -0.4, 1.1, 1.05],
+          [0.3, 4.3, -0.5, 1.0, 0.96],
+          [-0.4, 3.9, 0.8, 0.95, 1.04],
+        ]
+      : [
+          [0, 3.45, 0, 1.36],
+          [1.05, 2.95, 0.35, 0.98, 0.92],
+          [-0.95, 3.05, -0.4, 1.02, 1.05],
+          [0.3, 4.25, -0.45, 0.96, 0.97],
+          [-0.4, 3.95, 0.82, 0.92, 1.04],
+          [0.9, 3.75, -0.85, 0.68, 0.98],
+          [-0.95, 3.45, 0.8, 0.7, 0.93],
+        ];
+  parts.push(canopy(puffs, build, p.tall, 0.92, 2.0, 5.0, 0.62, 1.08, 3));
+  if (!far) parts.push(crownSnow(build, [0.05, 4.5, -0.1], 0.82));
+  return dropSlivers(merge(parts));
+}
+
+/** Sakura Ridge: a paler, spreading blossom tree on a taller, leaning trunk. */
+export function paleBlossomGeometry(p: Palette, build: CanopyBuild = 'near'): BufferGeometry {
+  reseed(313);
+  const far = build === 'far';
+  const parts: BufferGeometry[] = [part(new CylinderGeometry(0.14, 0.26, 3.0, far ? 3 : build === 'lean' ? 5 : 6, 1, far || build === 'lean'), new Color('#5A3A3E'), { pos: [0.12, 1.5, 0], rot: [0, 0, -0.08], jitter: far ? 0 : 0.05 })];
+  const pinkA = p.tall.clone().lerp(new Color('#FFFFFF'), 0.42);
+  const puffs: Puff[] = far
+    ? [
+        [0.2, 3.45, 0, 1.35],
+        [1.3, 3.05, 0.2, 0.98, 0.9],
+        [-1.1, 3.1, -0.3, 1.0, 1.04],
+      ]
+    : build === 'lean'
+      ? [
+          [0.2, 3.5, 0, 1.2],
+          [1.4, 3.05, 0.2, 0.9, 0.88],
+          [-1.1, 3.15, -0.3, 0.95, 1.03],
+          [0.3, 3.0, 1.15, 0.82, 0.9],
+          [-0.2, 2.95, -1.15, 0.86, 1.02],
+        ]
+      : [
+          [0.2, 3.55, 0, 1.12],
+          [1.4, 3.08, 0.2, 0.86, 0.88],
+          [-1.1, 3.18, -0.3, 0.9, 1.03],
+          [0.3, 3.02, 1.15, 0.8, 0.9],
+          [-0.2, 2.98, -1.15, 0.84, 1.02],
+          [0.95, 3.5, 0.85, 0.62, 0.97],
+          [-0.75, 3.62, 0.7, 0.6, 0.94],
+        ];
+  // (A wine-rose underside lifting to the crown, as blossomGeometry.)
+  parts.push(canopy(puffs, build, pinkA, 0.78, 2.2, 4.4, 0.66, 1.06, 9));
+  if (!far) parts.push(crownSnow(build, [0.2, 4.0, 0], 0.86));
+  return dropSlivers(merge(parts));
+}
+
+/** A street's blossom tree's canopy (town.ts), in the orchards' near build: its puffs, a pink, and the
+ *  heights its underside and crown stand at. */
+export function streetBlossomCanopy(pink: Color, puffs: readonly Puff[], y0: number, y1: number): BufferGeometry {
+  return canopy(puffs, 'near', pink, 0.82, y0, y1, 0.74, 1.04, 17);
 }
 
 /** The two forest variant sets for a biome: 'a' and 'b', each [the original tree, a variant]. Each
@@ -734,12 +904,15 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   // Lanternfall: ink conifers hold the values, and bare silver trees are the light shape among them (the
   // second of them hung with small lit lanterns: the lamp grove's own tree).
   if (biome === 'lantern') return a ? [() => boughPineGeometry(p, 5, lod), () => heavyPineGeometry(p, lod)] : [() => silverTreeGeometry(0, false), () => silverTreeGeometry(1, true)];
-  return a ? [() => blossomGeometry(p), () => paleBlossomGeometry(p)] : [() => boughPineGeometry(p, 3, lod, CEDAR), () => youngPineGeometry(p, lod, CEDAR)];
+  // (Sakura's blossom has a build a level: the treeline's and near rows' rounded puffs, Low's leaner ones, and
+  // the far orchards' three puffs: chamfer.ts's lift, the visual lift's blossom.)
+  const bl: CanopyBuild = lod === 0 ? 'near' : lod === 1 ? 'lean' : 'far';
+  return a ? [() => blossomGeometry(p, bl), () => paleBlossomGeometry(p, bl)] : [() => boughPineGeometry(p, 3, lod, CEDAR), () => youngPineGeometry(p, lod, CEDAR)];
 }
 
 /** Whether a biome's set has cheaper builds at lod 1 and 2 (else every lod is the full set). */
 export function hasLod(biome: BiomeId, set: 'a' | 'b'): boolean {
-  return biome === 'alpine' || (biome === 'blossom' && set === 'b') || (biome === 'lantern' && set === 'a');
+  return biome === 'alpine' || biome === 'blossom' || (biome === 'lantern' && set === 'a');
 }
 
 /** A forest set made at once (tests and probes; the game makes it a variant per idle callback). */

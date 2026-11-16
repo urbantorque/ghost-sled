@@ -358,7 +358,9 @@ describe('the budget', () => {
           const tris = g.getAttribute('position').count / 3;
           // (Low's streets carry their own crowd now, baked and posed, since Low draws no animated one:
           // +2k on a street, +8k on the finish's two.)
-          const most = s.kind === 'finish' ? (low ? 78000 : 130000) : low ? 30000 : 60000;
+          // (The visual lift chamfers the front rows' storeys, plinths, roofs and chimneys on Medium and High,
+          // chamfer.ts: about a fifth more on a finish town and a tenth on a street, the second row left plain.)
+          const most = s.kind === 'finish' ? (low ? 78000 : 155000) : low ? 30000 : 66000;
           expect(tris, `${m.name} ${s.kind} low ${low}`).toBeLessThanOrEqual(most);
           g.dispose();
         }

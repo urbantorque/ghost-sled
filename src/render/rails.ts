@@ -7,6 +7,7 @@ import { visualGround } from './ground';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
 import { Facets, strataInto } from './rockforms';
+import { chamferBox, kitBox, namedChamfer } from './chamfer';
 
 // What the course is furnished with so a place reads before you reach it, on every tier, in one draw:
 // the grindable rails, and the leaps' and the forks' markers. One instanced variant set (flora.ts), so
@@ -76,10 +77,15 @@ function railLook(biome: BiomeId): RailLook {
  *  world up, so posts stand plumb); these keep a post's section round whatever the length. */
 const zk = 1 / LEN;
 
+// (The visual lift: a rail's bar and its cap are chamfered, so its top edges catch the light along their length on
+// every tier, the pale strip along the top ART.md 6 asks for; chamfer.ts.)
+const railBar = () => chamferBox(0.15, 0.1, 1, namedChamfer(0.02));
+const railCap = () => chamferBox(0.09, 0.03, 1, namedChamfer(0.009));
+
 function barGeometry(look: RailLook): BufferGeometry {
   const parts: BufferGeometry[] = [
-    part(new BoxGeometry(0.15, 0.1, 1), look.bar, { pos: [0, -0.05, -0.5] }),
-    part(new BoxGeometry(0.09, 0.03, 1), look.top, { pos: [0, 0.012, -0.5] }),
+    part(railBar(), look.bar, { pos: [0, -0.05, -0.5] }),
+    part(railCap(), look.top, { pos: [0, 0.012, -0.5] }),
     part(new CylinderGeometry(0.075, 0.09, 2.6, 6), look.post, { pos: [0, -1.34, -0.5], scale: [1, 1, zk] }),
     part(new BoxGeometry(0.1, 0.1, 0.3), look.post, { pos: [0, -0.14, -0.5], scale: [1, 1, zk] }),
     part(new IcosahedronGeometry(0.34, 0), SNOW, { pos: [0, -1.18, -0.5], scale: [1, 0.34, zk * 1.1], jitter: 0.05 }),
@@ -90,8 +96,8 @@ function barGeometry(look: RailLook): BufferGeometry {
 function rampGeometry(look: RailLook): BufferGeometry {
   // The low end: the bar comes up out of a long mound of packed snow, a strap holding it down.
   return merge([
-    part(new BoxGeometry(0.15, 0.1, 1), look.bar, { pos: [0, -0.05, -0.5] }),
-    part(new BoxGeometry(0.09, 0.03, 1), look.top, { pos: [0, 0.012, -0.5] }),
+    part(railBar(), look.bar, { pos: [0, -0.05, -0.5] }),
+    part(railCap(), look.top, { pos: [0, 0.012, -0.5] }),
     softPart(new SphereGeometry(1, 6, 3), SNOW, { pos: [0, -0.1, -0.03], scale: [0.5, 0.2, 0.16] }),
     part(new CylinderGeometry(0.07, 0.085, 1.8, 6), look.post, { pos: [0, -0.9, -0.82], scale: [1, 1, zk] }),
   ]);
@@ -213,15 +219,15 @@ function signGeometry(bold: number, lantern = false): BufferGeometry {
   const half = GANTRY / 2;
   const y = 10.4;
   const board = (dir: number, face: Color, tip: Color): BufferGeometry[] => [
-    part(new BoxGeometry(11.4, 3.3, 0.2), face, { pos: [dir * 8.8, y, 0.3] }),
-    part(new BoxGeometry(11.6, 0.2, 0.26), wood, { pos: [dir * 8.8, y - 1.74, 0.3] }),
+    part(kitBox(11.4, 3.3, 0.2), face, { pos: [dir * 8.8, y, 0.3] }),
+    part(kitBox(11.6, 0.2, 0.26), wood, { pos: [dir * 8.8, y - 1.74, 0.3] }),
     part(new BoxGeometry(11.6, 0.26, 0.5), SNOW, { pos: [dir * 8.8, y + 1.78, 0.3] }),
     ...(lantern
       ? [
           // A frame round the board, an eave over it holding a line of snow.
-          part(new BoxGeometry(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 - 5.8, y, 0.32] }),
-          part(new BoxGeometry(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 + 5.8, y, 0.32] }),
-          part(new BoxGeometry(12.4, 0.22, 1.3), wood, { pos: [dir * 8.8, y + 1.95, 0.3], rot: [0.18, 0, 0] }),
+          part(kitBox(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 - 5.8, y, 0.32] }),
+          part(kitBox(0.24, 3.5, 0.3), wood, { pos: [dir * 8.8 + 5.8, y, 0.32] }),
+          part(kitBox(12.4, 0.22, 1.3), wood, { pos: [dir * 8.8, y + 1.95, 0.3], rot: [0.18, 0, 0] }),
           part(new BoxGeometry(12.2, 0.16, 1.1), SNOW, { pos: [dir * 8.8, y + 2.1, 0.26], rot: [0.18, 0, 0] }),
         ]
       : []),
@@ -231,11 +237,11 @@ function signGeometry(bold: number, lantern = false): BufferGeometry {
   ];
   const safe = -bold;
   return merge([
-    part(new BoxGeometry(GANTRY + 1, 0.42, 0.42), wood, { pos: [0, y + 1.5, 0] }),
-    part(new BoxGeometry(GANTRY + 1, 0.3, 0.3), wood, { pos: [0, y - 1.5, 0] }),
-    part(new BoxGeometry(0.46, 22, 0.46), wood, { pos: [-half, y - 9.4, 0] }),
-    part(new BoxGeometry(0.46, 22, 0.46), wood, { pos: [half, y - 9.4, 0] }),
-    part(new BoxGeometry(0.2, 3.2, 0.2), wood, { pos: [0, y, 0] }),
+    part(kitBox(GANTRY + 1, 0.42, 0.42), wood, { pos: [0, y + 1.5, 0] }),
+    part(kitBox(GANTRY + 1, 0.3, 0.3), wood, { pos: [0, y - 1.5, 0] }),
+    part(kitBox(0.46, 22, 0.46), wood, { pos: [-half, y - 9.4, 0] }),
+    part(kitBox(0.46, 22, 0.46), wood, { pos: [half, y - 9.4, 0] }),
+    part(kitBox(0.2, 3.2, 0.2), wood, { pos: [0, y, 0] }),
     ...board(safe, light, new Color('#2A3350')),
     part(new CylinderGeometry(1.2, 1.2, 0.06, 12), disc, { pos: [safe * 4.8, y, 0.44], rot: [Math.PI / 2, 0, 0] }),
     ...board(bold, dark, light),

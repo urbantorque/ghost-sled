@@ -1,5 +1,6 @@
 import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
+import { setChamferTier } from './chamfer';
 import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
@@ -268,6 +269,9 @@ export class Props {
   }
 
   private build(): void {
+    // (The visual lift: every kit piece built from here on, here and in the set pieces' worlds on idle time,
+    // takes the chamfer this tier draws: chamfer.ts. Props builds first whenever the tier changes.)
+    setChamferTier(!this.arches);
     for (const b of this.batches.values()) {
       this.root.remove(b.mesh);
       b.mesh.dispose();
@@ -477,7 +481,7 @@ export class Props {
     add('gift', spiritFlameGeometry(), this.giftMat, 1100, false);
     add('glow', spiritGlowGeometry(), this.glowMat, 2400, false);
     this.batches.get('glow')!.mesh.renderOrder = 2;
-    add('lip', kickerLipGeometry(p), plain, 120, false);
+    add('lip', kickerLipGeometry(p, !this.arches), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p, biome === 'lantern'), plain, 60);
     if (this.arches) {

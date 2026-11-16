@@ -1,5 +1,6 @@
-import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry } from 'three';
+import { BoxGeometry, BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeometry, SphereGeometry } from 'three';
 import { SNOW, merge, part, reseed, shade, softPart } from './flora';
+import { chamferBox, chamferFor, namedChamfer } from './chamfer';
 import { type Kind, type Piece, type SiteCtx, type Spot, type V3, Sub, box, crag, drift, grade, rnd, seed, seg, stone } from './landmarkKit';
 import type { Palette } from './palette';
 import { lanternString, type Town } from './town';
@@ -33,11 +34,18 @@ export const LAMP_BRONZE = '#6A5238';
 /** Silver bark. */
 export const SILVER = '#B6B2D6';
 
-/** A square column that tapers: w0 across at its foot, w1 at its head. */
-function tbox(w0: number, w1: number, h: number, col: Color, pos: V3): BufferGeometry {
+/** A square column that tapers: w0 across at its foot, w1 at its head. Its arrises are chamfered as a kit's box
+ *  is (chamfer.ts), or by c where a builder asks by name. */
+function tbox(w0: number, w1: number, h: number, col: Color, pos: V3, c = chamferFor(w0, h, w0, col)): BufferGeometry {
+  if (c > 0) return part(chamferBox(w0, h, w0, c, [w1 / w0, w1 / w0]), col, { pos: [pos[0], pos[1] + h / 2, pos[2]] });
   const g = new CylinderGeometry(w1 * Math.SQRT1_2, w0 * Math.SQRT1_2, h, 4);
   g.rotateY(Math.PI / 4);
   return part(g, col, { pos: [pos[0], pos[1] + h / 2, pos[2]] });
+}
+
+/** A named piece's box (its chamfer on every tier: chamfer.ts). */
+function nbox(w: number, h: number, d: number, c: number, col: Color, pos: V3): BufferGeometry {
+  return part(chamferBox(w, h, d, namedChamfer(c)), col, { pos });
 }
 
 /** A four-sided roof on a w by d base at y, `rise` tall, with snow lying on its upper faces. */
@@ -108,12 +116,26 @@ export function lampTower(parts: BufferGeometry[], p: Palette, x: number, base: 
  *  fire box of four posts and a low roof with snow on it. It carries no light of its own: its flame is
  *  drawn over it by lanternworld.ts, lit or waiting to be kindled, so the stone itself stays a hazard's
  *  dark silhouette. */
-export function stoneLampGeometry(): BufferGeometry {
+export function stoneLampGeometry(low = false): BufferGeometry {
   const st = C('#3A3558');
   const dk = C('#262240');
-  const parts: BufferGeometry[] = [box(0.86, 0.2, 0.86, dk, [0, 0.1, 0]), tbox(0.42, 0.3, 0.62, st, [0, 0.2, 0]), box(0.74, 0.12, 0.74, dk, [0, 0.88, 0])];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.1, 0.4, 0.1, dk, [sx * 0.28, 1.14, sz * 0.28]));
-  parts.push(...hipRoof(0.92, 0.92, 0.3, 1.34, dk));
+  // (The visual lift: every stone of it dressed, its arrises chamfered so the moon finds an edge, where round 7's
+  // was boxes the critics read as dark boxes. Its fire box stands where it stood: lanternworld.ts draws the flame
+  // there.)
+  const parts: BufferGeometry[] = [
+    softPart(new IcosahedronGeometry(0.62, 0), SNOW, { pos: [0, 0, 0], scale: [1.05, 0.2, 1.02] }),
+    nbox(0.86, 0.18, 0.86, 0.03, dk, [0, 0.09, 0]),
+    nbox(0.64, 0.1, 0.64, 0.024, st, [0, 0.23, 0]),
+    tbox(0.42, 0.3, 0.6, st, [0, 0.28, 0], namedChamfer(0.03)),
+    nbox(0.4, 0.05, 0.4, low ? 0 : 0.014, dk, [0, 0.66, 0]),
+    nbox(0.74, 0.1, 0.74, 0.026, dk, [0, 0.9, 0]),
+  ];
+  // (The posts are too slim for a chamfer to show; on Low so is the fire box's frame.)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(nbox(0.1, 0.4, 0.1, 0, dk, [sx * 0.28, 1.15, sz * 0.28]));
+  parts.push(nbox(0.7, 0.06, 0.7, low ? 0 : 0.016, dk, [0, 1.37, 0]));
+  parts.push(nbox(0.98, 0.06, 0.98, 0.02, st, [0, 1.42, 0]));
+  parts.push(...hipRoof(0.92, 0.92, 0.3, 1.45, dk));
+  parts.push(nbox(0.12, 0.1, 0.12, low ? 0 : 0.02, st, [0, 1.74, 0]));
   return merge(parts);
 }
 
@@ -124,8 +146,11 @@ export const WAY_LAMP_FLAME = 2.34;
 export function wayLampGeometry(): BufferGeometry {
   const st = C('#3E3960');
   const dk = C('#27223F');
-  const parts: BufferGeometry[] = [box(1.1, 0.24, 1.1, dk, [0, 0.02, 0]), box(0.8, 0.22, 0.8, st, [0, 0.24, 0]), tbox(0.46, 0.3, 1.66, st, [0, 0.34, 0]), box(0.82, 0.14, 0.82, dk, [0, 2.07, 0])];
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(box(0.1, 0.52, 0.1, dk, [sx * 0.31, 2.4, sz * 0.31]));
+  // (Way lamps stand by the hundred down the mountain: only the shaft takes the kit's chamfer, on Medium and
+  // High, so a lamp stays as light as it was.)
+  const plain = (w: number, h: number, d: number, col: Color, pos: V3) => part(new BoxGeometry(w, h, d), col, { pos });
+  const parts: BufferGeometry[] = [plain(1.1, 0.24, 1.1, dk, [0, 0.02, 0]), plain(0.8, 0.22, 0.8, st, [0, 0.24, 0]), tbox(0.46, 0.3, 1.66, st, [0, 0.34, 0]), plain(0.82, 0.14, 0.82, dk, [0, 2.07, 0])];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) parts.push(plain(0.1, 0.52, 0.1, dk, [sx * 0.31, 2.4, sz * 0.31]));
   parts.push(...hipRoof(1.06, 1.06, 0.42, 2.66, dk));
   parts.push(part(new IcosahedronGeometry(0.5, 0), SNOW, { pos: [0, 0.1, 0.2], scale: [1.5, 0.4, 1.3], jitter: 0.1 }));
   return merge(parts);
