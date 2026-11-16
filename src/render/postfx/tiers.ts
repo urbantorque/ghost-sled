@@ -65,8 +65,8 @@ const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4
 export const PASSES: Record<Tier, PassSettings> = {
   low: { ...OFF },
   medium: { ...OFF, shaftTaps: 6, shaftDiv: 4, mirror: 'bake', fxaa: 2 },
-  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, scale: 0.7, sharpen: 0.5, fxaa: 2, fringe: 0.3, shadowReach: 34 },
-  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, scale: 0.85, sharpen: 0.4, fxaa: 2, fringe: 1, shadowReach: 44 },
+  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
+  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
 };
 
 /** The fewest scene pixels to a page (CSS) pixel the reconstruction draws: at a pixel ratio of 1 it

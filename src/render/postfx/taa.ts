@@ -82,6 +82,10 @@ const RESOLVE_FRAG = /* glsl */ `
   uniform float uTaaView;
   // How far the box is drawn toward the cross's (0: the 3x3's).
   uniform float uTaaR;
+  // How quickly a scene pixel's weight falls with its distance from the frame pixel's middle (per frame pixel
+  // squared): 2.29 is a Blackman-Harris's width; 4, narrower, kept the trees as crisp as round 7's at speed,
+  // where 2.29 laid a half-pixel blur on every frame before it was blended.
+  uniform float uTaaKern;
   varying vec2 vUv;
 
   float top3(vec3 c) { return max(c.r, max(c.g, c.b)); }
@@ -181,7 +185,7 @@ const RESOLVE_FRAG = /* glsl */ `
         ivec2 q = ib + ivec2(i, j);
         vec3 s = squash(max(texelFetch(tScene, clamp(q, ivec2(0), lim), 0).rgb, vec3(0.0)));
         vec2 d = (vec2(q) - tp) * ratio;
-        float w = exp(-2.29 * dot(d, d));
+        float w = exp(-uTaaKern * dot(d, d));
         sum += s * w;
         wsum += w;
         wmax = max(wmax, w);
@@ -341,9 +345,10 @@ export class TemporalPass {
   private lastDir = new Vector3();
   private havePose = false;
   private programs: 'none' | 'building' | 'ready' = 'none';
-  /** Tuning (dev: `world.post.pipe.taa.k`): the least and most share of this frame, the motion at the
-   *  most, the box at rest and in motion, a new highlight's share. */
-  readonly k = { min: 0.08, max: 0.16, motionPx: 40, boxRest: 1.25, boxMove: 0.9, flash: 0.6, round: 0.5 };
+  /** Tuning (dev: `world.post.pipe.taa.k`): the least and most share of this frame (0.22 in motion read
+   *  aliased just after a fast pan, 0.12 soft), the motion at the most, the box at rest and in motion, a new
+   *  highlight's share, how far the box is drawn toward the cross's, the reconstruction filter's width. */
+  readonly k = { min: 0.08, max: 0.16, motionPx: 40, boxRest: 1.25, boxMove: 0.9, flash: 0.6, round: 0.5, kernel: 4 };
   private bodies: Body[] = Array.from({ length: BODIES }, () => ({ id: 0, world: new Matrix4(), center: new Vector3(), half: new Vector3() }));
   private nBodies = 0;
   private prevBody = new Map<number, Matrix4>();
@@ -392,6 +397,7 @@ export class TemporalPass {
         uBodyRect: { value: Array.from({ length: BODIES }, () => new Vector4(1, 1, 0, 0)) },
         uTaaView: { value: 0 },
         uTaaR: { value: 0.5 },
+        uTaaKern: { value: 4 },
       },
     });
     this.presentMat = new ShaderMaterial({
@@ -613,6 +619,7 @@ export class TemporalPass {
     (u.uTaaM.value as Vector4).set(k.motionPx, k.boxRest, k.boxMove, prevDepth && this.valid ? 1 : 0);
     u.uTaaView.value = this.debugView ? 1 : 0;
     u.uTaaR.value = k.round;
+    u.uTaaKern.value = k.kernel;
     this.quad.draw(this.resolveMat, this.hist[1]);
     const t = this.hist[0];
     this.hist[0] = this.hist[1];

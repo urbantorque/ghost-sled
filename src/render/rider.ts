@@ -131,6 +131,12 @@ const FLIP_PIVOT = 0.5;
 const MOTION_RIDE: [Vector3, Vector3] = [new Vector3(0, 0.76, 0), new Vector3(0.66, 0.7, 1.15)];
 const MOTION_BODY: [Vector3, Vector3] = [new Vector3(0, 0.6, 0), new Vector3(0.7, 0.85, 0.7)];
 const MOTION_SLED: [Vector3, Vector3] = [new Vector3(0, 0.2, 0), new Vector3(0.7, 0.4, 1.15)];
+const motionInv = new Matrix4();
+const motionP = new Vector3();
+const motionLo = new Vector3();
+const motionHi = new Vector3();
+const motionC = new Vector3();
+const motionH = new Vector3();
 /** Steepest climb of a tail segment above level: sin and cos of 30 degrees. */
 const SCARF_MAX_RISE = 0.5;
 const SCARF_MAX_RUN = Math.sqrt(3) / 2;
@@ -1075,7 +1081,28 @@ export class Rider {
    * they tumble; each with an id of its own (0 to 2) and its box in its own frame.
    */
   motionParts(cb: (id: number, frame: Object3D, center: Vector3, half: Vector3) => void): void {
-    if (this.root.visible) cb(0, this.leanG, MOTION_RIDE[0], MOTION_RIDE[1]);
+    if (this.root.visible) {
+      this.leanG.updateWorldMatrix(true, false);
+      cb(0, this.leanG, MOTION_RIDE[0], MOTION_RIDE[1]);
+      // The scarf streams in world space, out past the rig's box: a box of its own round its points this
+      // frame (in the lean group's frame), carried by the rig's motion.
+      if (this.scarf.visible) {
+        const pos = this.tailGeo.getAttribute('position');
+        motionInv.copy(this.leanG.matrixWorld).invert();
+        motionLo.set(Infinity, Infinity, Infinity);
+        motionHi.set(-Infinity, -Infinity, -Infinity);
+        for (let i = 0; i < pos.count; i++) {
+          motionP.fromBufferAttribute(pos, i).applyMatrix4(this.scarf.matrixWorld).applyMatrix4(motionInv);
+          motionLo.min(motionP);
+          motionHi.max(motionP);
+        }
+        if (pos.count > 0) {
+          motionC.addVectors(motionLo, motionHi).multiplyScalar(0.5);
+          motionH.subVectors(motionHi, motionLo).multiplyScalar(0.5).addScalar(0.06);
+          cb(3, this.leanG, motionC, motionH);
+        }
+      }
+    }
     if (this.crashBody.visible) cb(1, this.crashBody, MOTION_BODY[0], MOTION_BODY[1]);
     if (this.crashSled.visible) cb(2, this.crashSled, MOTION_SLED[0], MOTION_SLED[1]);
   }
