@@ -3196,3 +3196,36 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     (`toggles.js`) was tried to find more and was too noisy to trust (a system that does nothing on Sakura read 7.6%).
     The second sitting ran on battery, which halves the frame rate and swings it pass to pass; Sakura's Low against
     round 6 wants a quiet sitting on mains (item 343).
+
+## The visual lift (after round 7)
+
+360. **The review: five lifts, ranked by how much they change what a player sees.** Asked for a "DLSS on" step in
+    polish after round 7 shipped, read against the code and five critics' findings on every mountain (342, 358):
+    1. *Temporal reconstruction.* High draws at up to twice the pixel density with 2x MSAA and the edge walk, Ultra 4x;
+       thin things still shimmer at speed (cables, bunting, rails, tree edges, the snow's glitter). Temporal AA was
+       tried and shelved soft in motion (287); `postfx/taa.ts` shows why: camera-only reprojection from depth,
+       bilinear history, no sharpening, at full resolution so it bought nothing back.
+    2. *Shadows to the horizon.* One cascade: 26 m on Medium, 34 on High, 44 on Ultra, none on Low. Past it nothing
+       casts, so the vistas (the frames the critics judged hardest) have no ridge or forest shadows, though long
+       shadows raking toward the lens is ART.md 11's second mark of a screenshot. The sun's direction is the palette's,
+       keyed to metres, so a stretch's far shadows can be baked once, on idle time, as it is built.
+    3. *Light that bounces and passes through.* Toon shading with a cool shade tint: Sakura's blossom never reads
+       backlit, the shaded side of a building or a tree is one flat value, nothing takes the lit snow's bounce.
+    4. *Edges that look made.* Every critic named boxes (the kicker's lip plank, stone lanterns, the FINISH board's
+       dotted lettering) and facets close to the lens.
+    5. *Low and the phone as a designed poster.* Low scored 5.9 to 7.0 and read as "a degraded High": no painted
+       shafts or rims, and no shadows at all; on a phone the results card covers the hero shot.
+361. **The plan: five lanes at once, each judged against round 7's final frames, merged and judged again.**
+    `notes/vl-lanes.md` holds the rules. *Temporal:* draw at part of the output's resolution with a sub-pixel jitter
+    and rebuild the full frame from the last frames (sharper history sampling, variance clipping, motion for what
+    moves on its own, a mask so particles and glows do not smear, a sharpening pass after), replacing MSAA where it
+    wins; High and Ultra first, Medium only if it pays. *Far light:* a world-space shadow field over the course,
+    baked per stretch on idle at that stretch's own sun, read by every lit material past the near cascade and as the
+    only cast shadow on Low. *Light:* snow bounce, sky fill, light through blossom, ice, paper and glass, a sheen on
+    snow at grazing angles, and a crease light from the occlusion pass (convex edges catch a hairline of key light,
+    inner creases darken). *Props:* the named pieces remodelled, a shared chamfer so every kit piece catches an edge
+    on every tier, blossom as rounded clusters. *Poster:* painted shafts and rims for Low, its own take on the far
+    shadows, the results card yielding the hero shot on a phone. *Budgets:* High and Ultra at most two more draws,
+    Medium one and no new full-frame pass unless it replaces one, Low no pass and no more script a frame, nothing new
+    before the first frame. *Judged:* each lane by one fresh critic on the same frames before and after; the merge
+    by a fresh critic a mountain and by performance against round 7 on mains power.
