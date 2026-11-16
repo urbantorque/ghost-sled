@@ -1268,7 +1268,9 @@ export class World {
     const t = this.sunTarget.position;
     this.far.setNearBox(t.x, t.y, t.z, q.shadows ? q.passes.shadowReach : 0, this.palette.shadowDir);
     const p = this.palette;
-    const strength = this.farOff ? 0 : p.shadowK * (1 - 0.45 * p.sunSoft);
+    // (Where the aurora is the night's key light, a low moon's long shadows give way to it: at full strength they lay
+    // the whole Crevasse Fields in one blue and put out the curtains' green, which the snow takes only in the open.)
+    const strength = this.farOff ? 0 : p.shadowK * (1 - 0.45 * p.sunSoft) * (1 - 0.8 * Math.min(1, p.key2.k));
     const soften = 1 + 1.5 * p.sunSoft + 1.5 * (1 - p.shadowK);
     const ci = Math.max(0, Math.floor(z / CHUNK_LEN));
     const ahead = q.detail === 'low' ? 900 : q.detail === 'medium' ? 1200 : 1300;
