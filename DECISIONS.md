@@ -2980,8 +2980,8 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     legend and hero-frame beats (347, 348), the camera reads the legend shot (345), `audio.clock()` exists and the
     reel cuts on it (350), the forge roars (349), Ember's review calls `setConeBearing` from `World.setCourse`, the
     ladder is ordered by home time (344), `mountains.ts` says The Twelve opens Lanternfall, the X3595 warning is gone
-    (356), and the preview on 4522 is no longer running. The `C:\c` folder (an empty `Users` tree) is still there,
-    for the owner to remove.
+    (356), and the preview on 4522 is no longer running. The `C:\c` folder is still there, for the owner to remove:
+    it holds 146 frames (161 MB) that lanes meant for `shots/r7/` (fx, light, lanternworld, momentsworld, a review).
 
 ### Round 7: the review loop and the numbers
 
