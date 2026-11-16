@@ -163,6 +163,9 @@ const smooth01 = (x: number) => {
   return k * k * (3 - 2 * k);
 };
 
+/** The least time between two re-blends of the colour script on Low (ms). */
+const JOURNEY_LOW_MS = 200;
+
 export class World {
   readonly renderer: WebGLRenderer;
   readonly scene = new Scene();
@@ -268,6 +271,8 @@ export class World {
   readonly riderScreen = { x: 0, y: 0 };
   /** The sun's journey (palette.ts journeyPalette): the weights last applied, -1 to force a refresh. */
   private journeyKey = -1;
+  /** When the palette was last re-blended (performance.now, ms): Low re-blends at most every JOURNEY_LOW_MS. */
+  private journeyAt0 = -Infinity;
   /** The weather's density last set by the journey, in steps. */
   private journeyFall = -1;
   /** Play-tests: ride the journey at this many metres instead of the run's distance (null: off). */
@@ -597,6 +602,7 @@ export class World {
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
+    this.journeyAt0 = -Infinity;
   }
 
   setMood(mood: Mood): void {
@@ -622,6 +628,7 @@ export class World {
     this.applyWeather();
     this.lastChunkRange = '';
     this.journeyKey = -1;
+    this.journeyAt0 = -Infinity;
   }
 
   /** Each mountain's journey over a Clear Skies run (palette.ts JOURNEY, keyed off the distance ridden;
@@ -634,6 +641,12 @@ export class World {
     // (Round 7, the light lane: the course's places grade the hour's light, palette.ts PLACES.)
     const key = journeyStamp(biome, metres, this.course);
     if (key === this.journeyKey) return;
+    // (On Low a re-blend repaints every material's baked colours, and on a course thick with places, Sakura's
+    // first kilometre, the stamp moved every couple of frames: Low takes the light at most five times a second,
+    // still smooth over metres, and saves a few tenths of a millisecond a frame at 6x.)
+    const now = performance.now();
+    if (this.quality.detail === 'low' && now - this.journeyAt0 < JOURNEY_LOW_MS) return;
+    this.journeyAt0 = now;
     this.journeyKey = key;
     const p = journeyPalette(biome, metres, this.palette, this.course);
     applyPalette(p);
