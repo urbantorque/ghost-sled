@@ -602,8 +602,15 @@
     flex-basis: 100%;
   }
 
+  /* The climb's news keeps no line of the phone's first view, but a reader still hears it: the band's copy
+     is hidden from readers, so this one is only clipped, never removed. */
   .gs-lad.is-inline .gs-lad-moment {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 
