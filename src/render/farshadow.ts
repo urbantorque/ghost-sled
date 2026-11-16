@@ -1264,18 +1264,30 @@ export class FarShadow {
   }
 }
 
-/** A set piece's standing cells: what its made geometry holds over each metre of ground, sampled over its
- *  triangles (corners, middles and, over a big face, a grid about a metre apart), turned into the sim's
- *  frame, so a town's houses, a tower and a gate's posts cast and what hangs over the run does not. */
+/** A set piece's standing cells: what its made geometry holds over each metre of ground (two on a very big piece),
+ *  sampled over its triangles (corners, middles and, over a big face, a grid about a metre apart) into a grid
+ *  over its footprint in the sim's frame, so a town's houses, a tower and a gate's posts cast and what hangs over
+ *  the run does not. Made in slices: the footprint, the triangles, then the cells read out. */
 class SiteCells {
-  private tri = 0;
-  private cells = new Map<number, number>();
+  private stage = 0;
+  private at = 0;
   private pos: ArrayLike<number>;
   private index: ArrayLike<number> | null;
+  private verts: number;
   private count: number;
   private cy: number;
   private sy: number;
   private site: FarSite;
+  /** The footprint's bounds (sim, relative to the site's origin), then the grid over it. */
+  private x0 = Infinity;
+  private x1 = -Infinity;
+  private z0 = Infinity;
+  private z1 = -Infinity;
+  private d = 1;
+  private w = 0;
+  private h = 0;
+  private top = new Float32Array(0);
+  private out: number[] = [];
 
   constructor(
     site: FarSite,
@@ -1284,73 +1296,104 @@ class SiteCells {
   ) {
     // (The record is the caller's, reused between calls.)
     this.site = { ...site };
-    this.pos = geo.getAttribute('position').array as ArrayLike<number>;
+    const pos = geo.getAttribute('position');
+    this.pos = pos.array as ArrayLike<number>;
+    this.verts = pos.count;
     const idx = geo.getIndex();
     this.index = idx ? (idx.array as ArrayLike<number>) : null;
-    this.count = idx ? idx.count / 3 : geo.getAttribute('position').count / 3;
+    this.count = idx ? idx.count / 3 : pos.count / 3;
     this.cy = Math.cos(site.yaw);
     this.sy = Math.sin(site.yaw);
   }
 
-  /** Samples triangles until `until`; the cells (x, z, top a cell) once every triangle is in. */
+  /** Works until `until`; the cells (sim x, z and top a cell) once all is done. */
   step(until: number): Float32Array | null {
     const p = this.pos;
-    const ix = this.index;
-    const s = this.site;
-    for (; this.tri < this.count; this.tri++) {
-      const t3 = this.tri * 3;
-      const a = (ix ? ix[t3] : t3) * 3;
-      const b = (ix ? ix[t3 + 1] : t3 + 1) * 3;
-      const c = (ix ? ix[t3 + 2] : t3 + 2) * 3;
-      const ax = p[a];
-      const ay = p[a + 1];
-      const az = p[a + 2];
-      const bx = p[b] - ax;
-      const by = p[b + 1] - ay;
-      const bz = p[b + 2] - az;
-      const cx = p[c] - ax;
-      const cy = p[c + 1] - ay;
-      const cz = p[c + 2] - az;
-      const len = Math.max(Math.hypot(bx, bz), Math.hypot(cx, cz), Math.hypot(cx - bx, cz - bz), 0.5);
-      const n = Math.min(24, Math.ceil(len));
-      for (let u = 0; u <= n; u++) {
-        for (let v = 0; v <= n - u; v++) {
-          const fu = u / n;
-          const fv = v / n;
-          this.add(ax + bx * fu + cx * fv, ay + by * fu + cy * fv, az + bz * fu + cz * fv);
+    if (this.stage === 0) {
+      // The footprint (landmarks.ts siteToWorld, into the sim's frame: z down the run).
+      for (; this.at < this.verts; this.at++) {
+        const lx = p[this.at * 3];
+        const lz = p[this.at * 3 + 2];
+        const x = lx * this.cy + lz * this.sy;
+        const z = lx * this.sy - lz * this.cy;
+        if (x < this.x0) this.x0 = x;
+        if (x > this.x1) this.x1 = x;
+        if (z < this.z0) this.z0 = z;
+        if (z > this.z1) this.z1 = z;
+        if ((this.at & 1023) === 0 && performance.now() > until) {
+          this.at++;
+          return null;
         }
       }
-      if ((this.tri & 63) === 0 && performance.now() > until) {
-        this.tri++;
+      if (this.x0 > this.x1) return new Float32Array(0);
+      this.d = (this.x1 - this.x0) * (this.z1 - this.z0) > 250000 ? 2 : 1;
+      this.w = Math.ceil((this.x1 - this.x0) / this.d) + 1;
+      this.h = Math.ceil((this.z1 - this.z0) / this.d) + 1;
+      this.top = new Float32Array(this.w * this.h).fill(NONE);
+      this.stage = 1;
+      this.at = 0;
+    }
+    if (this.stage === 1) {
+      const ix = this.index;
+      for (; this.at < this.count; this.at++) {
+        const t3 = this.at * 3;
+        const a = (ix ? ix[t3] : t3) * 3;
+        const b = (ix ? ix[t3 + 1] : t3 + 1) * 3;
+        const c = (ix ? ix[t3 + 2] : t3 + 2) * 3;
+        const ax = p[a];
+        const ay = p[a + 1];
+        const az = p[a + 2];
+        const bx = p[b] - ax;
+        const by = p[b + 1] - ay;
+        const bz = p[b + 2] - az;
+        const cx = p[c] - ax;
+        const cy = p[c + 1] - ay;
+        const cz = p[c + 2] - az;
+        const len = Math.max(Math.hypot(bx, bz), Math.hypot(cx, cz), Math.hypot(cx - bx, cz - bz), 0.5);
+        const n = Math.min(24, Math.ceil(len / this.d));
+        for (let u = 0; u <= n; u++) {
+          for (let v = 0; v <= n - u; v++) this.add(ax + (bx * u + cx * v) / n, ay + (by * u + cy * v) / n, az + (bz * u + cz * v) / n);
+        }
+        if ((this.at & 15) === 0 && performance.now() > until) {
+          this.at++;
+          return null;
+        }
+      }
+      this.stage = 2;
+      this.at = 0;
+    }
+    // Read out, a row at a time. Spans: what hangs over the corridor goes (a beam or a deck's truss), what stands
+    // outside it stays.
+    const s = this.site;
+    const c = this.course;
+    for (; this.at < this.h; this.at++) {
+      const z = s.z + this.z0 + (this.at + 0.5) * this.d;
+      const cx = c.centerX(z);
+      const hw = c.halfWidth(z) + 0.6;
+      const row = this.at * this.w;
+      for (let i = 0; i < this.w; i++) {
+        const top = this.top[row + i];
+        if (top <= NONE) continue;
+        const x = s.x + this.x0 + (i + 0.5) * this.d;
+        if (s.span && !s.roof && Math.abs(x - cx) < hw && top > c.ground(x, z) + 2.5) continue;
+        this.out.push(x, z, top);
+      }
+      if (performance.now() > until && this.at < this.h - 1) {
+        this.at++;
         return null;
       }
     }
-    // Spans: what hangs over the corridor goes (a beam or a deck's truss), what stands outside it stays.
-    const out: number[] = [];
-    const c = this.course;
-    for (const [key, top] of this.cells) {
-      const cx = (key % 8192) - 4096 + 0.5;
-      const cz = Math.floor(key / 8192) - 4096 + 0.5;
-      const x = cx + Math.round(s.x);
-      const z = cz + Math.round(s.z);
-      if (s.span && !s.roof && Math.abs(x - c.centerX(z)) < c.halfWidth(z) + 0.6 && top > c.ground(x, z) + 2.5) continue;
-      out.push(x, z, top);
-    }
-    return Float32Array.from(out);
+    this.top = new Float32Array(0);
+    return Float32Array.from(this.out);
   }
 
   /** One sample in the site's frame: its cell's top rises to it. */
   private add(lx: number, ly: number, lz: number): void {
-    const s = this.site;
-    // landmarks.ts siteToWorld, into the sim's frame (z down the run).
-    const x = lx * this.cy + lz * this.sy;
-    const z = lx * this.sy - lz * this.cy;
-    const kx = Math.floor(x + s.x - Math.round(s.x)) + 4096;
-    const kz = Math.floor(z + s.z - Math.round(s.z)) + 4096;
-    if (kx < 0 || kz < 0 || kx >= 8192 || kz >= 8192) return;
-    const key = kz * 8192 + kx;
-    const y = s.y + ly;
-    const was = this.cells.get(key);
-    if (was === undefined || y > was) this.cells.set(key, y);
+    const i = Math.floor((lx * this.cy + lz * this.sy - this.x0) / this.d);
+    const j = Math.floor((lx * this.sy - lz * this.cy - this.z0) / this.d);
+    if (i < 0 || j < 0 || i >= this.w || j >= this.h) return;
+    const k = j * this.w + i;
+    const y = this.site.y + ly;
+    if (y > this.top[k]) this.top[k] = y;
   }
 }
