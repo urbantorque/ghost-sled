@@ -356,8 +356,9 @@ export class Sky {
           if (h >= 0.0) {
             col = gradient(h);
             // A warm band hugging the horizon.
-            // (Low's poster: the band as a printed stripe of its colour over the ridges.)
-            float bandW = mix(exp(-h * uBandFade), 1.0 - smoothstep(0.7, 1.05, h * uBandFade), uPosterSky.y);
+            // (Low's poster: a thin printed line of the band's colour along the ridges, over its own soft glow. A
+            // full stripe of it read as a pasted bar, the lane's critic.)
+            float bandW = max(exp(-h * uBandFade), uPosterSky.y * (1.0 - smoothstep(0.28, 0.55, h * uBandFade)));
             col = mix(col, uBand, bandW * uBandK);
           } else {
             col = mix(uHorizon, uBelow, clamp(-h * 6.0, 0.0, 1.0));

@@ -512,14 +512,15 @@ vec3 posterRim(vec3 col, vec3 base, vec3 n, vec3 v, float shadow, float k, float
   float side = max(facing, behind * 0.85);
   // A prop's band is its outermost facets on the light's side; the hero's is wider and runs all round it,
   // in the key light's colour on the light's side and the sky's on the other.
-  float from = mix(0.64, 0.5, hero);
-  float band = smoothstep(from, from + 0.1, edge) * mix(side, 0.4 + 0.6 * side, hero);
+  // (The hero's band crisper and never under 0.6 round the outline: at 0.4 off the light's side no critic saw it.)
+  float from = mix(0.64, 0.48, hero);
+  float band = smoothstep(from, from + mix(0.1, 0.07, hero), edge) * mix(side, 0.6 + 0.4 * side, hero);
   vec3 keyC = uSunColor / max(max(uSunColor.r, uSunColor.g), max(uSunColor.b, 0.001));
   vec3 rimC = mix(uRim, keyC, mix(0.65, side, hero));
   float hiB = max(base.r, 0.001);
   float warm = smoothstep(0.5, 0.8, (base.r - max(base.g, base.b)) / hiB);
   rimC = mix(rimC, base / hiB * 1.08, warm);
-  float amt = band * mix(0.5, 1.0, shadow) * clamp(k * mix(uPoster.y, uPoster.z, hero) * 2.2, 0.0, 1.0);
+  float amt = band * mix(0.5, 1.0, shadow) * clamp(k * mix(uPoster.y, uPoster.z, hero) * mix(2.2, 3.0, hero), 0.0, 1.0);
   return mix(col, max(col, rimC), amt);
 }
 float posterShadow(float s) {

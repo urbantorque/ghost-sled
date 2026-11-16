@@ -288,7 +288,7 @@ const FINISH_R_PORTRAIT = 9.2;
 /** Portrait results (contract C6): where in the open band the rider is centred, as a multiple of the band
  *  measured from the top (0.5 its middle): low enough that the moment's line over the band's top clears the
  *  head and the stars. */
-const BAND_AIM = 1.3;
+const BAND_AIM = 1.36;
 const FINISH_UP = 0.95;
 /** Its lens, and where the rider sits (NDC): low in a wide frame, the sky over the slope above it, where
  *  the shells burst. A lens straight at the rider saw only the snow it came down. */

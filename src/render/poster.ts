@@ -235,9 +235,10 @@ export class PosterLayer {
 
   /**
    * Each frame on Low, after the world's systems have offered their bright place (shaftPlace) and the
-   * camera has moved: aims the cards and sets the frame. Allocates nothing.
+   * camera has moved: aims the cards and sets the frame. `enclosed` is how far under a roof the run is (0 to 1,
+   * the set pieces' light.shade). Allocates nothing.
    */
-  update(camera: PerspectiveCamera, aspect: number, reduced: boolean): void {
+  update(camera: PerspectiveCamera, aspect: number, reduced: boolean, enclosed = 0): void {
     if (!this.low) return;
     if (this.stage !== 'in') {
       this.join(camera);
@@ -252,7 +253,9 @@ export class PosterLayer {
     let sunK = 0;
     if (f.shafts > 0.001 && !behind) {
       probe.copy(camera.position).add(d).project(camera);
-      sunK = f.shafts * shaftReach(probe.x, probe.y, false, d.y);
+      // (Under a roof (a gallery, the cavern, the Thousand Torii) the sun's own fan goes: laid over the floor at a
+      // fixed depth it washed out the bars of light the roof's own gaps throw, the lane's critic.)
+      sunK = f.shafts * shaftReach(probe.x, probe.y, false, d.y) * (1 - Math.max(0, Math.min(1, enclosed * 1.5)));
     }
     u.uSun.value.set(d.x, d.y, d.z, sunK * SHAFT_GAIN);
     (u.uSunLight.value as Color).copy(f.light);

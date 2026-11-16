@@ -1188,7 +1188,7 @@ export class World {
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
     if (this.cineHold) Object.assign(cine, this.cineHold);
     // (Low's poster, after every system has offered its bright place and the lens has moved.)
-    this.poster.update(this.cam.camera, this.width / this.height, feel.reduced || reduced());
+    this.poster.update(this.cam.camera, this.width / this.height, feel.reduced || reduced(), this.setPieces.light.shade);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
     // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
