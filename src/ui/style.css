@@ -7896,14 +7896,16 @@
     flex: none;
   }
 
-  /* Contract C6: the card's top edge sits at 28% of the height (plus the top inset), so the band
-     above shows the live wreck the results camera frames there, under a light scrim only. The card
-     runs down to the bottom gutter, so Run again keeps the thumb zone. */
+  /* Contract C6: the card's top edge sits at 44% of the height (plus the top inset; RESULTS_BAND in
+     contract.ts), so the band above shows the live rider the results camera frames there, under a light
+     scrim only. (At 28%, under the moment's line and the ladder, the band kept a cropped torso: the visual
+     lift gave the picture back.) The card runs down to the bottom gutter, so Run again keeps the thumb
+     zone, and what does not fit its first view scrolls inside it. */
   .gs-results {
-    grid-template-rows: calc(28% + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
+    grid-template-rows: calc(44% + env(safe-area-inset-top, 0px)) minmax(0, 1fr);
     align-items: stretch;
     padding-top: 0;
-    background: linear-gradient(180deg, rgba(8, 12, 30, 0.2) 0%, rgba(8, 12, 30, 0) 12%, rgba(8, 12, 30, 0) 21%, rgba(8, 12, 30, 0.5) 28%, rgba(8, 12, 30, 0.74) 100%);
+    background: linear-gradient(180deg, rgba(8, 12, 30, 0.22) 0%, rgba(8, 12, 30, 0) 14%, rgba(8, 12, 30, 0) 36%, rgba(8, 12, 30, 0.5) 44%, rgba(8, 12, 30, 0.74) 100%);
   }
 
   .gs-res-card {

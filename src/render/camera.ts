@@ -282,7 +282,13 @@ const WALL_IN = 0.5;
 const FINISH_SWING_S = 2.5;
 const FINISH_SHORT = 0.55;
 const FINISH_R = 5.2;
-const FINISH_R_PORTRAIT = 6.6;
+// (The visual lift, poster lane: on a phone the standing, cheering rider at 6.6 m filled the open band and lost
+// its head under the moment's line; from further back the whole figure stands in the band's lower part.)
+const FINISH_R_PORTRAIT = 9.2;
+/** Portrait results (contract C6): where in the open band the rider is centred, as a multiple of the band
+ *  measured from the top (0.5 its middle): low enough that the moment's line over the band's top clears the
+ *  head and the stars. */
+const BAND_AIM = 1.3;
 const FINISH_UP = 0.95;
 /** Its lens, and where the rider sits (NDC): low in a wide frame, the sky over the slope above it, where
  *  the shells burst. A lens straight at the rider saw only the snow it came down. */
@@ -1160,7 +1166,7 @@ export class ChaseCamera {
     const toward = azimuth(t.pos.x - desired.x, t.pos.z - desired.z);
     const off = portrait ? 0 : Math.atan(0.5 * tanHalfW) * this.finRes;
     const elev = Math.atan2(t.pos.y + 0.7 - desired.y, Math.hypot(t.pos.x - desired.x, t.pos.z - desired.z));
-    const ndc = portrait ? MathUtils.lerp(-0.2, 1 - this.heroBand * 1.14, this.finRes) : MathUtils.lerp(FINISH_NDC, -0.14, this.finRes);
+    const ndc = portrait ? MathUtils.lerp(-0.2, 1 - this.heroBand * BAND_AIM, this.finRes) : MathUtils.lerp(FINISH_NDC, -0.14, this.finRes);
     this.aimAt(lookAt, desired, toward + off, elev, ndc);
   }
 
@@ -2320,7 +2326,7 @@ export class ChaseCamera {
     // the shot looks down at the wreck instead, or it sank to the bottom corner. Portrait: the middle
     // of the open band.
     // (Portrait: a touch below the band's middle, so the beanie and the dazed stars clear the top.)
-    if (portrait) this.aimAt(lookAt, desired, yaw, elev, 1 - this.heroBand * 1.14);
+    if (portrait) this.aimAt(lookAt, desired, yaw, elev, 1 - this.heroBand * BAND_AIM);
     else this.aimAt(lookAt, desired, yaw, elev, treeline ? -0.02 : -0.1, this.heroUp > 1.4 ? undefined : 0.37, -0.32);
   }
 
