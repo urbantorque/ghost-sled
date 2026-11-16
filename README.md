@@ -746,7 +746,7 @@ the garage's looks are worth buying.
 
 ## Round 7 play test and performance
 
-Round 7 (DECISIONS 276 to 343) changed the sim once (SIM_VERSION 9: a fall that is got up from, twelve verbs
+Round 7 (DECISIONS 276 to 359) changed the sim once (SIM_VERSION 9: a fall that is got up from, twelve verbs
 with variants, legends, Lanternfall) and most of what is drawn and heard: a film curve and a grade for every
 place, local lights, an Ultra tier, a rebuilt rider, directed camera shots, the set pieces' own worlds, a fifth
 mountain, The Twelve, a produced score, a gamepad, a highlight reel, and labels drawn in the canvas. The lanes'
@@ -757,8 +757,126 @@ skilled pilot is faster for falling (the least a fall cost was 1.03 s, of 73 fal
 pilot's race on runs 2 to 6 is live for 0.65 to 0.73 of a run where the fixed roles gave 0.51 to 0.64; five-run
 telemetry in the browser could not confirm it. No human has played this build or heard it.
 
-(filled by the main lane: telemetry by pilot, how live the race is on runs 1, 2 and 5, performance on every
-tier, the first frame, size, loudness and audio CPU, the critic's scores, and what still needs a person)
+**The pilot lab** (`lab.ts`, six seeds a mountain; round 6's sim on its four mountains, this one's on five; the skilled
+pilots try every set piece). Median finish in seconds, by mountain (Pinecrest/Frostfang/Ember/Sakura/Lanternfall):
+
+| Pilot | Round 6 | Round 7 | Finished, round 6 / 7 | Set pieces won, round 6 / 7 |
+| --- | --- | --- | --- | --- |
+| Hands off | 161/146/148/150 | 167/140/148/150/153 | 4 of 4 / 5 of 5 | 5 of 12 / 1 of 15 |
+| Careful line | 160/152/152/161 | 144/142/145/154/151 | 24 of 24 / 30 of 30 | 13 of 72 / 6 of 90 |
+| Novice | 162/150/138/153 | 166/143/144/160/159 | 23 of 24 / 30 of 30 | 27 of 71 / 18 of 90 |
+| Mid | 122/133/128/128 | 123/128/124/121/129 | 24 of 24 / 30 of 30 | 50 of 72 / 80 of 90 |
+| Expert | 137/129/135/125 | 122/124/125/117/132 | 24 of 24 / 30 of 30 | 36 of 72 / 82 of 90 |
+| Stunt | 140/125/127/134 | 136/121/122/140/146 | 24 of 24 / 30 of 30 | 25 of 66 / 31 of 90 |
+| Clumsy | no finish | 403/356/376/394/411 | 0 of 24 / 26 of 30 | 1 of 27 / 1 of 90 |
+| Zigzag | no finish | 371/289/303/372/312 | 0 of 4 / 5 of 5 | 0 of 6 / 0 of 15 |
+
+A fall is now got up from, so the clumsy and zigzag pilots finish (slowly: six to seven minutes); the one pilot that
+still never finishes is the stress case that holds right into the trees. Mastery pays: the mid and expert pilots
+win nine in ten set pieces where they won half to two thirds. The novice wins fewer (18 of 90, a fifth, where it
+won 38%): the set pieces now ask a verb of you (a bell to ring, a gate to beat at speed, a glass to slide), and a
+pilot that only steers and dashes does not do them. No skilled pilot is faster for falling: the least a fall
+cost was 1.03 s, of 73 falls (`final-falls.txt`).
+
+**How live the race is** (`race-lab.ts`: each pilot's own rides raced against fields built as the game builds them,
+twelve orders of six runs on every mountain; live is the share of a run with a riding ghost within 40 m). The
+same rides against round 6's five riders on fixed roles, and against round 7's field laid across your own runs:
+
+| Pilot | Run 1 | Run 2, fixed / laid | Run 5, fixed / laid | Runs 2 to 6, fixed / laid | Quiet runs (live under 0.35), fixed / laid |
+| --- | --- | --- | --- | --- | --- |
+| Novice | 0.56 | 0.53 / 0.59 | 0.57 / 0.63 | 0.56 / 0.62 | 32 / 14 of 300 |
+| Mid | 0.43 | 0.61 / 0.70 | 0.65 / 0.75 | 0.64 / 0.73 | 14 / 10 of 300 |
+| Expert | 0.45 | 0.55 / 0.68 | 0.53 / 0.71 | 0.54 / 0.70 | 52 / 8 of 300 |
+| Stunt | 0.56 | 0.51 / 0.64 | 0.53 / 0.68 | 0.51 / 0.65 | 41 / 29 of 300 |
+
+Run 1 is the same field either way (the pacer's), and the quietest run for a skilled pilot (0.43 to 0.45): on a
+first run you meet the field at its own pace. On runs 2 to 6 the laid field is live for 0.62 to 0.73 of a run, and
+passes a minute rise from 1.7 to 2.3 a minute on the fixed roles to 2.4 to 3.6 on the laid field.
+
+**Variants and legends** (`moments-plan.ts --rolls 4000`, rolled as the game rolls them): every variant of a set
+piece comes up about as often as its others (a third each of three, half each of two), and each mountain's two
+legends come up about one later run in ten between them (1 in 9.5 to 1 in 10.4), never on a session's first run.
+
+**Sound** (`loudness.js`, the first 70 s of each mountain's best pool run at the default sliders; `audiocpu.js`,
+the builds interleaved):
+
+| Measure | Round 6 | Round 7 |
+| --- | --- | --- |
+| Mix, integrated (Pinecrest/Frostfang/Ember/Sakura; Lanternfall) | -16.1 / -15.7 / -15.9 / -16.3 LUFS | -16.2 / -15.9 / -15.8 / -15.4; -16.5 LUFS |
+| True peak | -1.2 dBTP | -1.1 to -1.2 dBTP |
+| Loudness range, the mix | 2.4 to 3.5 LU | 2.8 to 5.3 LU |
+| The music alone, Pinecrest (true peak; range) | -19.8 LUFS (-6.1 dBTP; 5.2 LU) | -19.4 LUFS (-2.4 dBTP; 5.9 LU); Lanternfall -18.8 (8.9 LU) |
+| Music against the effects, Pinecrest; Lanternfall | 1.5 LU under | 0.9 LU under; 0.4 LU over |
+| Lost folded to mono / through a phone's band | 0.9 to 1.3 / 2.9 to 3.7 LU | 0.8 to 1.2 / 2.3 to 4.1 LU |
+| Audio main thread, a cruise on High at 1x (two passes) | 10.1 / 10.2 ms a second | 10.1 / 10.3 ms a second (Lanternfall 11.1) |
+| Audio main thread, a cruise on Low at 6x (two passes) | 58.1 / 59.6 ms a second | 53.9 / 57.7 ms a second (Lanternfall 50.6) |
+| Audio nodes made a second, High / Low at 6x | 77 / 73 to 76 | 56 to 59 / 52 to 57 |
+
+The produced score keeps the master where round 6 put it (-16 LUFS, true peak under -1 dBTP) and is more dynamic:
+its range is wider, and the music alone peaks 3.7 dB higher where its sections build. It costs the main thread
+nothing more than the live band did (it is decoded audio, not voices), and a little less on Low.
+
+**The critic's scores** (DECISIONS 342; one review lane a mountain, five passes, a fresh critic each pass, judging
+High at 1280x720, Low and a phone on Medium against ART.md 15). No mountain met the stopping rule (no frame under
+8, every hero vista 9): no critic gave any frame a 9, and the best frames are 8 to 8.5. High's mean, pass 1 to pass
+5 (passes 1 and 2 were judged by an earlier model, about a point kinder): Pinecrest 7.14 to 6.55, Frostfang 6.8 to
+6.69, Ember 7.19 to 6.97, Sakura 7.57 to 7.38, Lanternfall 6.73 to 6.49. Under one critic standard Ember and Sakura
+rose every pass, Frostfang held while its worst frame went from 6 to 7.5, and Lanternfall's worst frames rose from
+3.5 to 5.5. The faults every critic named (flat fuel drops, a ghost at the lens, glows bleaching the rider) were then
+fixed once for all five mountains (DECISIONS 358) and judged clearly better, but not scored again.
+
+### Round 7 performance
+
+Measured on the production build in headless Chrome on the laptop's GPU, round 6's build (`5f70fe5`) and this one
+interleaved in fresh sessions with the save cleared, nothing else of ours on the machine (`perf-r7.sh`). The plan
+ran on mains power in the morning; the Low bar and the first frame were run again in the evening after the fixes
+below, on battery (`perf-low.sh`), when the laptop's speed swung by half between passes.
+
+| Check | Round 6 | Round 7 |
+| --- | --- | --- |
+| High at 1x, a whole descent, Pinecrest/Frostfang/Ember/Sakura | 60 / 60 / 60 / 60 fps | 60 / 60 / 60 / 60 fps |
+| High at 1x, Lanternfall; Ultra at 1x, Pinecrest and Lanternfall | (no Lanternfall, no Ultra) | 60; 60 / 60 fps |
+| Medium at 1x, Pinecrest/Ember; Frostfang/Sakura/Lanternfall | 60 / 60 fps | 60 / 60; 60 / 60 / 60 fps |
+| High at 1x, Lantern Night on Sakura | 60 fps | 60 fps |
+| Phone layout: Medium, Low, an avalanche chase | 60 / 60 / 60 fps | 60 / 60 / 60 fps (Lanternfall 60 / 60) |
+| High through an avalanche chase, CPU 4x (one pass each) | 52 fps | 48 fps |
+| Low at 6x, a very first run, Pinecrest/Ember/Sakura, median of 5 (mains) | 43 / 43 / 46 fps | 46 / 48 / 39 fps |
+| The same after the fixes, median of 5 (battery) | 24 / 23 / 24 fps | 29 / 26 / 27 fps |
+| Low at 6x, Frostfang/Lanternfall (mains) | | 46 / 48 fps |
+| First rendered frame at 6x, fresh save, before the fixes (median of 4) | 2,075 ms | 2,445 ms |
+| The same after the fixes (median of 8; mean 2,164 / 2,157) | 2,179 ms | 2,140 ms |
+| Draw calls settled, High (four mountains) / Medium / Low | 93 to 100 / 87 to 90 / 43 to 47 | 96 to 101 / 87 to 95 / 44 to 51 |
+| Draw calls, Ultra / at the peak on High / in a chase | | 94 to 104 / 106 to 111 / 147 (round 6: 101 to 107, 143) |
+| Triangles settled, High / Medium / Low | 748k to 1,022k / 524k to 651k / 108k to 131k | 758k to 996k / 528k to 703k / 98k to 132k |
+
+**What the fixes were.** The first frame came out 370 ms later than round 6's. A CPU profile from navigation to
+the first frame (`firstframe-profile.js`, on unminified builds) found it: the title built the medal wall's boards
+for all five mountains (a whole course and its set pieces each) for a popover nobody had opened; the landmarks flew
+every site from the start to the title's shot, far down the mountain, though none is made before a grace of 2.7 s;
+every ghost's glass body and the dash's after-images were built though the first frame draws none; the crowd was
+built twice; and the lake mirror baked the sky on the very first frame. Each now happens when it is first wanted or
+on idle time, and the first frame is level with round 6's. On Low, Sakura's first kilometre re-blended the colour
+script five times a second, each re-blend repainting every baked colour; Low now takes the light at most five times
+a second. `systime.js` times each world system per frame: a Low frame's script grew by about 2.5 ms at 6x, spread
+over the renderer, the canvas labels, the colour script and the set pieces' worlds, and on Pinecrest and Ember the
+page work the labels took out of the DOM more than pays it back.
+
+**Low against round 6.** The two sittings disagree on Sakura: on mains in the morning round 7 was 7 fps under round
+6 there (and 3 and 5 over on Pinecrest and Ember); in the evening, after the fixes and on battery, it was over on all
+three (by 3 to 5 fps, inside a spread of half the frame rate). The brief's bar, that Low not get worse and should beat
+round 6, is met on Pinecrest and Ember in both sittings and on Sakura only in the second: a quiet sitting on mains
+power is what would settle it.
+
+**Size.** The whole build is 59.78 MB in 31 files (56.58 MB zipped); the initial download, everything outside `music/`
+and the largest course's desktop pack, is 10.73 MB. CrazyGames allows 250 MB, 1,500 files and 50 MB of initial
+download (20 MB to be eligible for the mobile homepage), and `npm run release` fails over 80 MB, 1,500 files or 20
+MB initial. 56.8 MB of the build is the produced score (`ASSETS.md`); the main script is 2,736 KB (907 KB gzipped),
+549 KB more than round 6's, and the first frame does not pay for it (above).
+
+What this does not show: whether any of it feels better under a person's hands; how the score sounds
+(`LISTENING.md`); whether the camera's beats direct or distract; whether The Twelve's duels can be won by a person;
+whether the legend moments land as wonder or as noise; and Low on a real low-end device rather than a throttled
+laptop.
 
 ## Layout
 

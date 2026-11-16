@@ -3038,9 +3038,19 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     (Sakura), 103 to 99 (Lanternfall); Low unchanged or lighter except Ember's, one draw for each lava river in view.
     High sat over the brief's "near 95" before the loop started.
 
-343. **Round 7 measured: performance, first frame, size, loudness.**
-
-    (filled by the main lane)
+343. **Round 7 measured: performance, first frame, size, loudness.** The tables are in the README ("Round 7 play
+    test and performance"); what they say in short. *Every tier but Low* holds 60 fps at 1x on every mountain,
+    Lanternfall and Ultra included, and so does the phone on Medium and Low. *Low at 6x on a very first run* beat
+    round 6 on Pinecrest and Ember in both sittings (46 and 48 against 43 and 43 on mains); on Sakura it was 39
+    against 46 on mains in the morning and 27 against 24 on battery in the evening, after item 359's fixes, so the
+    bar there is not settled. *The first frame* came out 370 ms later and, after item 359, is level (2,140 ms against
+    2,179 ms, medians of eight at 6x on a fresh save). *Size:* 59.78 MB in 31 files, 10.73 MB initial, against
+    CrazyGames' 250 MB, 1,500 files and 50 MB (20 for the mobile homepage). *Sound:* the mix at -15.4 to -16.5 LUFS
+    with true peak -1.1 to -1.2 dBTP on all five mountains, a wider range than round 6's (2.8 to 5.3 LU), and the
+    audio's main-thread cost level on High and a little lighter on Low. *Play:* the clumsy pilot finishes 26 of 30
+    where it finished none; the skilled pilots win nine set pieces in ten; the race laid across your runs is live for
+    0.62 to 0.73 of runs 2 to 6 where fixed roles gave 0.51 to 0.64; variants come up evenly and legends one later run
+    in ten. Rejected: calling Low "beats round 6" on one sitting.
 
 ### Round 7: the wiring (the lanes' hooks, connected)
 
@@ -3156,3 +3166,33 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     (`verbworld.ts`), not fuel; lights over a leap still read as in the sky in a still before the lip; the ward still
     floods the Ice Cavern's snow gold; a dashing rider's sled deck is a bright plank; the Gift Storm still draws the
     old lights; a ghost passed beside the lens goes with no trace.
+
+### Round 7: what the last measurement found
+
+359. **The first frame is level with round 6 again, and Low re-blends its light at most five times a second.** The
+    round's measurement found the first frame 370 ms later at 6x on a fresh save. A CPU profile from navigation to the
+    first frame on unminified builds (`firstframe-profile.js`) named the work, none of which the first frame draws:
+    - the title counted every mountain's mastery stars, each a whole course and its set pieces planned, for a medal
+      wall nobody had opened: the stars are now counted when the wall reads them;
+    - the landmarks flew every site from the start of the course to the title's shot (far down the mountain since
+      round 7's composed titles), though nothing is made before a grace of 2.7 s: until the grace has passed, idle time
+      flies them in order, as it does the sites further on (the order matters: a span that cannot clear the air turns
+      into the next bank piece in a round);
+    - every ghost's glass body was built when the field was set, before its replay had come in, and the dash's
+      after-images were built with the rider: a body is now made on its ghost's first pose, the after-images on idle
+      time or at the first dash;
+    - the crowd's figure was built for Pinecrest and then again for the course's own mountain;
+    - the lake mirror baked the sky on the very first frame: its first bake waits 0.4 s (a glaze shows the painted
+      sky until then, as it always did before a bake).
+    After: 2,140 ms against round 6's 2,179 ms (medians of eight, means 2,157 and 2,164). Rejected: splitting the
+    bundle (the profile showed the script's own evaluation had not grown the first frame).
+
+    *Low.* Exact timing of each world system on a Sakura run at 6x (`systime.js`) showed a Low frame's script grown
+    by about 2.5 ms, spread thin: the renderer 0.8 ms (more uniforms a material), the labels in the canvas 0.6 ms
+    (which took far more than that out of the page), the colour script 0.4 ms, the set pieces' worlds and the spirit
+    lights a few tenths. The one piece worth a rule was the colour script: on a course thick with places, Sakura's
+    first kilometre, its stamp moved five times a second and each re-blend repaints every colour Low bakes. Low now
+    re-blends at most every 200 ms, still smooth over metres. Toggling systems off and on inside one run
+    (`toggles.js`) was tried to find more and was too noisy to trust (a system that does nothing on Sakura read 7.6%).
+    The second sitting ran on battery, which halves the frame rate and swings it pass to pass; Sakura's Low against
+    round 6 wants a quiet sitting on mains (item 343).
