@@ -13,7 +13,7 @@ if (!dir || !out || !existsSync(dir)) {
 const n = readdirSync(dir).filter((f) => /^f\d{4}\.jpg$/.test(f)).length;
 const r = spawnSync(
   ffmpeg,
-  ['-y', '-loglevel', 'error', '-framerate', fps, '-i', join(dir, 'f%04d.jpg'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out],
+  ['-y', '-loglevel', 'error', '-framerate', fps, '-i', join(dir, 'f%04d.jpg'), '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', out],
   { stdio: 'inherit' },
 );
 console.log(`${n} frames -> ${out} (exit ${r.status})`);
