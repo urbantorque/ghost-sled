@@ -91,6 +91,8 @@ const GROUND_HALF = 148;
 const GROUND_COLS = (2 * GROUND_HALF) / GROUND_D + 1;
 const GROUND_ROWS = CHUNK_LEN / GROUND_D + 1;
 const GROUND_SLOTS = 24;
+/** Fine tiles more than this many chunks ahead of the rider wait for their casters to be laid out. */
+const WAIT_AHEAD = 4;
 /** How often the tiles baked without some of the mid-ground's rows look for them again (seconds). */
 const ROW_CHECK_S = 0.4;
 /** The valley's height rows (one each mid-ground row), metres between columns and how many. */
@@ -724,6 +726,9 @@ export class FarShadow {
         // (Baked already, unless a set piece was made since; or still holding a chunk in the window.)
         if (t.key === key && !t.stale) continue;
         if (!Number.isNaN(t.key) && t.key !== key && t.key >= this.c0 && t.key <= this.c1) continue;
+        // A tile far ahead waits for the chunks round it to be laid out (it would be baked twice otherwise); one
+        // near the rider is baked with what there is.
+        if (key > ci + WAIT_AHEAD && !this.laidOut(key)) continue;
         return this.makeJob(true, key, s);
       }
       if (key < this.t0 || key > this.t1) continue;
@@ -735,6 +740,12 @@ export class FarShadow {
     }
     void c;
     return null;
+  }
+
+  /** Whether the chunks a tile's casters can stand in (three either way, a shadow's reach) are laid out. */
+  private laidOut(i: number): boolean {
+    for (let k = i - 3; k <= i + 3; k++) if (k >= 0 && !this.world.casters(k, null)) return false;
+    return true;
   }
 
   private hasCoarse(t: number): boolean {
@@ -1259,12 +1270,14 @@ export class FarShadow {
     return { tile, terrain: base + h(d[o]), terrainSoft: h(d[o + 1]), casters: base + h(d[o + 2]), castersSoft: h(d[o + 3]), base };
   }
 
-  /** How many tiles in the window are still to be baked (play-tests wait for none, as for the set pieces). */
+  /** How many tiles in the window are still to be baked now (play-tests wait for none, as for the set pieces): a
+   *  far tile waiting for its casters to be laid out is not counted. */
   get pending(): number {
     let n = 0;
+    const ci = Math.floor(this.riderZ / CHUNK_LEN);
     for (let i = this.c0; i <= this.c1; i++) {
       const t = this.fine[((i % FINE_SLOTS) + FINE_SLOTS) % FINE_SLOTS];
-      if (t.key !== i || t.stale) n++;
+      if ((t.key !== i || t.stale) && !(i > ci + WAIT_AHEAD && !this.laidOut(i))) n++;
     }
     for (let i = this.t0; i <= this.t1; i++) {
       const t = this.coarse[((i % COARSE_SLOTS) + COARSE_SLOTS) % COARSE_SLOTS];
