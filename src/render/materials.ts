@@ -152,7 +152,7 @@ function applyLift(p: Palette): void {
   // (The sky the shade side sees is the half away from the key: the horizon's glow toward the sun is the
   // key's own, so the low sky here is the horizon cooled as the air cools away from the sun.)
   shared.uSkyUp.value.copy(p.skyMid ?? p.skyZenith).lerp(p.skyZenith, 0.35).lerp(p.hemiSky, 0.4);
-  shared.uSkySide.value.copy(p.skyHorizon).lerp(p.fog, 0.3).lerp(shared.uSkyUp.value, 0.35).multiply(p.air.cool);
+  shared.uSkySide.value.copy(p.skyHorizon).lerp(p.fog, 0.3).lerp(shared.uSkyUp.value, 0.55).multiply(p.air.cool);
   const u = shared.uUnder.value;
   u.set(p.under.color.r, p.under.color.g, p.under.color.b, p.under.k);
   if (cloudShadowsOn) {
@@ -336,8 +336,10 @@ uniform vec3 uSkySide;
  *  own: its bright half stands opposite the key and high, so on the shade side a face turned up and back
  *  toward the lens is lighter and bluer than one turned across the slope, and the side toward the key
  *  darkest: the shade gets three values where it had one. What faces down and sideways takes the bounce.
- *  What it adds is the surface's own colour lit, never a wash: the navy stays navy, the darks stay dark,
- *  and the shade side's own flat value gives back about what the fill puts in, so it gains form, not milk. */
+ *  What it adds is the surface's own colour lit, never a wash: the fill's own hue is half held back, so a
+ *  plum lacquer stays plum and the navy navy; a dark surface takes a quarter of it (ink, basalt, trunks and
+ *  the coat are the frame's darks, its spine); and the shade side's own flat value gives back about what
+ *  the fill puts in, so it gains form, not milk. The lit side is left as the key draws it. */
 vec3 liftFill(vec3 col, vec3 lit, vec3 n, float t) {
   if (uLiftK.x + uLiftK.y <= 0.0) return col;
   vec3 skyDir = normalize(vec3(-uSunDir.x, 0.9, -uSunDir.z));
@@ -346,22 +348,22 @@ vec3 liftFill(vec3 col, vec3 lit, vec3 n, float t) {
   float ground = smoothstep(0.3, -0.9, n.y);
   vec3 skyC = mix(uSkySide, uSkyUp, smoothstep(-0.3, 0.6, n.y));
   vec3 fill = skyC * (sky * uLiftK.y) + uBounce * (ground * uLiftK.x);
+  fill = mix(vec3(dot(fill, vec3(0.2126, 0.7152, 0.0722))), fill, 0.5);
   float shadeK = 1.0 - 0.75 * t;
-  // (A dark surface keeps its own shade whole: ink, basalt and the navy coat are the frame's darks.)
-  float give = 0.24 * smoothstep(0.02, 0.2, dot(lit, vec3(0.2126, 0.7152, 0.0722)));
-  return col * (1.0 - give * shadeK * min(uLiftK.x + uLiftK.y, 1.0)) + lit * fill * shadeK;
+  float litL = dot(lit, vec3(0.2126, 0.7152, 0.0722));
+  float give = 0.24 * smoothstep(0.02, 0.2, litL);
+  return col * (1.0 - give * (1.0 - t) * min(uLiftK.x + uLiftK.y, 1.0)) + lit * fill * (shadeK * mix(0.25, 1.0, smoothstep(0.03, 0.25, litL)));
 }
 
 /** How much of the key light comes through a thin surface facing n, seen from v, when the key is behind
- *  it: a little over the whole of it while the lens looks toward the light, and most through a face
- *  turned from the light where it is thinnest (thin, 0 at a face seen square on, 1 at its outline). A
- *  cheap translucency: the light's direction bent by the normal, so it gathers toward the outline. 0 on
- *  Low. */
+ *  it: through a face turned from the light, where it is thinnest (thin, 0 at a face seen square on, 1 at
+ *  its outline), so it gathers at the rim and a big face keeps its shade plane (the critic: lit across
+ *  the whole of it, a canopy went to one value and an ice rib lost its plane). A cheap translucency: the
+ *  light's direction bent by the normal. 0 on Low. */
 float liftThrough(vec3 n, vec3 v, float thin) {
   if (uLiftK.z <= 0.0) return 0.0;
-  float view = clamp(dot(-v, uSunDir), 0.0, 1.0);
   float bent = clamp(dot(v, -normalize(uSunDir + n * 0.45)), 0.0, 1.0);
-  return uLiftK.z * (0.12 * view * view + bent * bent * bent * (0.3 + 0.7 * thin));
+  return uLiftK.z * bent * bent * bent * (0.1 + 0.9 * thin);
 }
 `;
 
@@ -1964,8 +1966,8 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             }
           }
           // The visual lift (LIFT_GLSL): the key comes through the ice seen against it, a cold cyan-white
-          // gathering at its thin edges and tips, never mint.
-          float trI = liftThrough(n, v, fr);
+          // gathering at its thin edges and tips, never mint; a rib's face keeps its shade plane.
+          float trI = liftThrough(n, v, fr * fr) * 0.8;
           iceCol += vec3(0.55, 0.88, 1.0) * mix(uSunColor, vec3(1.0), 0.5) * trI * (0.35 + 0.65 * tipK) * uHazardFog;
           #ifndef HAZARD
             // Round 7's review: ice built over the run (Frostfang's cavern and spans) goes down with the
@@ -2008,18 +2010,23 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           }
           if (uSway > 0.0) {
             // The visual lift (LIFT_GLSL): the key comes through a canopy seen against it, every kind of
-            // foliage, gathering toward its outline. In the leaf's own colour, so dark needles glow only
-            // a little at their tips and stay the hard dark shape (ART.md 1), while blossom (uLeaf) is lit
-            // through like paper: its heart a deep rose, its edges burning the sun's peach. Snow on the
-            // boughs takes none.
+            // foliage, gathering at its rim. In the leaf's own colour, so dark needles glow only a little at
+            // their tips and stay the hard dark shape (ART.md 1), while blossom (uLeaf) is lit through like
+            // paper at its edges in its own pink (toward the petals' #FFC9DA, never warmer: a sun-warmed
+            // glow slid the orchid toward the grudge's rose). What faces down keeps most of its shade, so a
+            // canopy keeps its underside a step under its lit facets, and a canopy right at the lens takes
+            // little (near, the glow flattened it to one shape). Snow on the boughs takes none.
             float thinT = 1.0 - abs(dot(n, v));
             float trL = liftThrough(n, v, thinT * thinT);
             if (trL > 0.0) {
               float snowB = smoothstep(0.7, 0.88, min(base.r, min(base.g, base.b)));
               float hiL = max(base.r, max(base.g, base.b));
               float bloomK = smoothstep(0.25, 0.6, hiL) * min(uLeaf, 1.0);
-              vec3 through = mix(base * 0.9, base / max(hiL, 0.001) * mix(0.85, 1.0, thinT), bloomK) * mix(uSunColor, vec3(1.0, 0.9, 0.82), 0.3);
-              col += through * trL * (1.0 - snowB) * mix(0.55, 2.2, bloomK) * uHazardDim;
+              vec3 petalC = mix(base / max(hiL, 0.001), vec3(1.0, 0.584, 0.701), 0.4) * mix(0.75, 0.95, thinT);
+              vec3 through = mix(base * 0.9 * mix(uSunColor, vec3(1.0), 0.5), petalC, bloomK);
+              float keepUnder = 0.3 + 0.7 * smoothstep(-0.55, 0.45, n.y);
+              float nearL = smoothstep(7.0, 18.0, length(cameraPosition - vWorldPos));
+              col += through * trL * (1.0 - snowB) * mix(0.55, 1.5, bloomK) * keepUnder * mix(0.35, 1.0, nearL) * uHazardDim;
             }
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,

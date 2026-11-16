@@ -305,7 +305,7 @@ export class AOPass {
   /** The crease light (the visual lift): 1 as tuned, 0 off. creaseEdge is how much light a convex edge
    *  catches, creaseDark how dark an inner crease goes. */
   crease = 1;
-  creaseEdge = 0.9;
+  creaseEdge = 1.3;
   creaseDark = 0.5;
 
   constructor(private quad: Quad) {

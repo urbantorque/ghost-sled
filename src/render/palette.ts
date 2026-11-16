@@ -1238,7 +1238,9 @@ function visualLift(p: Palette, biome: BiomeId): void {
       p.lift = { bounce: 0.36, sun: 0.6, tint: c('#FFE6D2'), sky: 0.34, through: 0.5, sheen: 0.55 };
       return;
     case 'blossom':
-      p.lift = { bounce: 0.42, sun: 0.8, tint: c('#FFF4EC'), sky: 0.46, through: 1, sheen: 0.7 };
+      // (The critic: at a sky of 0.46 and a peach bounce the spine's darks softened and the torii's plum went
+      // toward crimson. A softer fill, and a bounce with no warmth of its own.)
+      p.lift = { bounce: 0.32, sun: 0.8, tint: c('#F6F4F6'), sky: 0.3, through: 1, sheen: 0.7 };
       return;
     case 'lantern':
       p.lift = { bounce: 0.38, sun: 0.55, tint: c('#FFFFFF'), sky: 0.42, through: 0.6, sheen: 0.5 };
