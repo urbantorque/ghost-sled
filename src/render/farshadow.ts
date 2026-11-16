@@ -430,6 +430,8 @@ interface Tile {
    *  (it is baked again once they are). */
   missing: number[];
   rows: number[];
+  /** Its sun's way down the run (+1 straight down it): which way its upwind set pieces lie. */
+  sz: number;
   /** Coarse tiles keep their ceilings on the CPU for the fine tiles' terrain. */
   ceil?: Float32Array;
   soft?: Float32Array;
@@ -537,8 +539,8 @@ export class FarShadow {
   private atlas: DataTexture | null = null;
   private stageFine = new DataTexture(new Uint16Array(ATLAS_W * FINE_H * 4), ATLAS_W, FINE_H, RGBAFormat, HalfFloatType);
   private stageCoarse = new DataTexture(new Uint16Array(ATLAS_W * COARSE_H * 4), ATLAS_W, COARSE_H, RGBAFormat, HalfFloatType);
-  private fine: Tile[] = Array.from({ length: FINE_SLOTS }, () => ({ key: NaN, xc: 0, base: 0, age: 0, sites: new Set<number>(), stale: false, missing: [] as number[], rows: [] as number[] }));
-  private coarse: Tile[] = Array.from({ length: COARSE_SLOTS }, () => ({ key: NaN, xc: 0, base: 0, age: 0, sites: new Set<number>(), stale: false, missing: [] as number[], rows: [] as number[], ceil: new Float32Array(COARSE_W * COARSE_H), soft: new Float32Array(COARSE_W * COARSE_H) }));
+  private fine: Tile[] = Array.from({ length: FINE_SLOTS }, () => ({ key: NaN, xc: 0, base: 0, age: 0, sites: new Set<number>(), stale: false, missing: [] as number[], rows: [] as number[], sz: 0 }));
+  private coarse: Tile[] = Array.from({ length: COARSE_SLOTS }, () => ({ key: NaN, xc: 0, base: 0, age: 0, sites: new Set<number>(), stale: false, missing: [] as number[], rows: [] as number[], sz: 0, ceil: new Float32Array(COARSE_W * COARSE_H), soft: new Float32Array(COARSE_W * COARSE_H) }));
   private job: Job | null = null;
   private obj = new SweepGrid();
   private ter = new SweepGrid();
@@ -574,7 +576,7 @@ export class FarShadow {
   private rowCheck = 0;
   private sunOut = new Vector3();
   /** The longest single job (ms), how many there were, and each kind's total (ms). */
-  readonly stats = { maxJobMs: 0, jobs: 0, fineMs: 0, coarseMs: 0, fineTiles: 0, coarseTiles: 0, siteMs: 0, uploadMs: 0, initMs: 0, uploads: [] as number[], worst: '' };
+  readonly stats = { maxJobMs: 0, jobs: 0, fineMs: 0, coarseMs: 0, fineTiles: 0, coarseTiles: 0, siteMs: 0, uploadMs: 0, initMs: 0, uploads: [] as number[], worst: '', top: [] as string[], over: [0, 0, 0, 0] };
 
   constructor(private world: FarWorld) {
     this.stageFine.flipY = false;
@@ -663,13 +665,19 @@ export class FarShadow {
     // Casters laid out since a tile was baked (the window moved on): the tile is baked again with them.
     for (const t of this.fine) {
       if (Number.isNaN(t.key) || t.stale || t.missing.length === 0) continue;
-      for (const i of t.missing) if (this.world.casters(i, null)) t.stale = true;
+      // (Once all of them are: one bake more, not one each time a chunk comes.)
+      let all = true;
+      for (const i of t.missing) if (!this.world.casters(i, null)) all = false;
+      if (all) t.stale = true;
     }
     // A set piece made since a tile was baked: the tile is baked again with it.
     this.world.sites((c0 - 1) * CHUNK_LEN - SITE_REACH, (c1 + 2) * CHUNK_LEN + SITE_REACH, (site) => {
       for (const t of this.fine) {
         if (Number.isNaN(t.key) || t.stale || t.sites.has(site.n)) continue;
-        if (site.z + site.len > t.key * CHUNK_LEN - SITE_REACH && site.z - site.len < (t.key + 1) * CHUNK_LEN + SITE_REACH) t.stale = true;
+        // (Only a piece upwind of the tile, toward its sun, can shadow it.)
+        const ahead = SITE_REACH * Math.max(0, t.sz) + 20;
+        const behind = SITE_REACH * Math.max(0, -t.sz) + 20;
+        if (site.z + site.len > t.key * CHUNK_LEN - behind && site.z - site.len < (t.key + 1) * CHUNK_LEN + ahead) t.stale = true;
       }
     });
     this.pump();
@@ -765,8 +773,16 @@ export class FarShadow {
         const done = this.step(job, t0 + SLICE_MS);
         const ms = performance.now() - t0;
         this.stats.jobs++;
-        if (ms > this.stats.maxJobMs) this.stats.worst = (job.fine ? 'fine ' : 'coarse ') + stage + '..' + job.stage;
-        this.stats.maxJobMs = Math.max(this.stats.maxJobMs, ms);
+        const st = this.stats;
+        if (ms > st.maxJobMs) st.worst = (job.fine ? 'fine ' : 'coarse ') + stage + '..' + job.stage;
+        st.maxJobMs = Math.max(st.maxJobMs, ms);
+        // (Slices over 2, 4, 8 and 16 ms, and the five longest, for play-tests.)
+        for (let b = 0; b < 4; b++) if (ms > 2 << b) st.over[b]++;
+        if (ms > 2) {
+          st.top.push(ms.toFixed(1) + ' ' + (job.fine ? 'fine ' : 'coarse ') + stage + '..' + job.stage);
+          st.top.sort((a, b) => parseFloat(b) - parseFloat(a));
+          if (st.top.length > 5) st.top.length = 5;
+        }
         if (job.fine) this.stats.fineMs += ms;
         else this.stats.coarseMs += ms;
         if (done) this.job = null;
@@ -1164,6 +1180,7 @@ export class FarShadow {
     t.stale = false;
     t.missing = job.missing;
     t.rows = job.rows;
+    t.sz = job.sun.sz;
     farUniforms.uFarSlot.value[job.slot].set(job.xc, job.key, job.base, again ? farUniforms.uFarSlot.value[job.slot].w : 0);
     this.stats.fineTiles++;
     return true;
@@ -1287,7 +1304,8 @@ class SiteCells {
   private w = 0;
   private h = 0;
   private top = new Float32Array(0);
-  private out: number[] = [];
+  private out = new Float32Array(3 * 1024);
+  private n = 0;
 
   constructor(
     site: FarSite,
@@ -1376,7 +1394,14 @@ class SiteCells {
         if (top <= NONE) continue;
         const x = s.x + this.x0 + (i + 0.5) * this.d;
         if (s.span && !s.roof && Math.abs(x - cx) < hw && top > c.ground(x, z) + 2.5) continue;
-        this.out.push(x, z, top);
+        if (this.n + 3 > this.out.length) {
+          const o = new Float32Array(this.out.length * 2);
+          o.set(this.out);
+          this.out = o;
+        }
+        this.out[this.n++] = x;
+        this.out[this.n++] = z;
+        this.out[this.n++] = top;
       }
       if (performance.now() > until && this.at < this.h - 1) {
         this.at++;
@@ -1384,7 +1409,7 @@ class SiteCells {
       }
     }
     this.top = new Float32Array(0);
-    return Float32Array.from(this.out);
+    return this.out.slice(0, this.n);
   }
 
   /** One sample in the site's frame: its cell's top rises to it. */

@@ -2026,6 +2026,8 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       uSnowLit: shared.uSnowLit,
       uGlow: { value: 1 },
       uGlass: { value: glass },
+      // (The far shadows: a ghost far down a shaded valley is in its shade. farshadow.ts.)
+      ...farUniforms,
     },
     vertexShader: /* glsl */ `
       varying vec3 vN;
@@ -2060,6 +2062,7 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       varying vec3 vWorldPos;
       varying float vH;
       ${GHOST_MOOD_GLSL}
+      ${FAR_GLSL}
       void main() {
         vec3 n = normalize(vN);
         vec3 v = normalize(cameraPosition - vWorldPos);
@@ -2123,8 +2126,11 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
         float shimmer = 0.92 + 0.08 * wave;
         float flicker = 0.95 + 0.05 * sin(uTime * 37.7 + vWorldPos.y * 5.0);
         vec3 col = mix(face, rim, max(band, smoothstep(0.55, 1.0, wave) * 0.18));
-        // A glassy glint where the sun catches the body.
-        float glint = pow(max(dot(reflect(-v, n), uSunDir), 0.0), 18.0);
+        // A glassy glint where the sun catches the body. In the far shadows (a ridge's, a forest's) the glass loses
+        // its glint and a step of its face by day; its rim and its glow at night are its own.
+        float farLit = farShadow(vWorldPos, 1.0);
+        col *= mix(1.0, mix(0.78, 1.0, farLit), day);
+        float glint = pow(max(dot(reflect(-v, n), uSunDir), 0.0), 18.0) * farLit;
         col += kc * glint * 0.5 * day;
         // The core: tinted glass you can see the snow (and another ghost's edge) through, densest
         // toward its rim and on the inner edge band, at least about a third of the scene covered by

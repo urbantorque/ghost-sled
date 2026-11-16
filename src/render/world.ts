@@ -189,6 +189,7 @@ export class World {
   readonly far: FarShadow;
   /** The far shadows' light is the title's (the start of the run) while the title plays. */
   private farTitle = false;
+  private farAt: number | null = null;
   /** Dev: the far shadows drawn at no strength (`far=0`). */
   farOff = false;
   private farPal = {} as Palette;
@@ -1256,9 +1257,11 @@ export class World {
    *  hand over to it, and the palette says how strong and how soft the light is (a flat grey day casts little,
    *  and softly). The title's light is the run's start, as the colour script's is. */
   private updateFar(v: FrameView, z: number, dt: number): void {
+    // (The light the field is baked for is the colour script's: the title's own time, a play-test's.)
     const title = v.mode === 'title';
-    if (title !== this.farTitle) {
+    if (title !== this.farTitle || this.journeyAt !== this.farAt) {
       this.farTitle = title;
+      this.farAt = this.journeyAt;
       this.far.invalidate();
     }
     const q = this.quality;
