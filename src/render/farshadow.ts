@@ -64,6 +64,8 @@ export const SOFT_TERRAIN = [0.25, 0.018] as const;
 const BIAS_TERRAIN = 0.55;
 const BIAS_COARSE = 3;
 const BIAS_OBJ = 0.04;
+/** Texels out from a fine tile's middle where it starts to ease into the coarse tile (it is 128 to its side). */
+const SIDE_FROM = 112;
 /** Where nothing casts, how far the casters' ceiling lies under the terrain's (metres). */
 const OPEN_DROP = 1.5;
 
@@ -455,6 +457,8 @@ interface Job {
   missing: number[];
   /** The mid-ground's rows it stood on that were still to be built. */
   rows: number[];
+  /** Where a set piece's cells were left off (a big town is laid in over several slices). */
+  cell: number;
 }
 
 /** The GLSL every lit material shares (materials.ts LIGHT_GLSL). farShadow(wp, near) takes the near shadow
@@ -759,7 +763,7 @@ export class FarShadow {
     const z1 = z0 + (fine ? CHUNK_LEN : COARSE_LEN);
     const zm = (z0 + z1) / 2;
     const sun = sunFrame(this.world.sunAt(zm, this.sunOut));
-    return { fine, key, slot, stage: 0, row: 0, sun, xc: c.centerX(zm), base: c.baseY(zm), z0, z1, sites: new Set<number>(), missing: [], rows: [] };
+    return { fine, key, slot, stage: 0, row: 0, sun, xc: c.centerX(zm), base: c.baseY(zm), z0, z1, sites: new Set<number>(), missing: [], rows: [], cell: 0 };
   }
 
   /** Idle jobs, as many as each idle period has room for. */
@@ -1111,8 +1115,11 @@ export class FarShadow {
     if (job.stage === 5) {
       // The set pieces: each made piece's standing cells (made once a piece, a slice at a time).
       let pending = false;
+      let at = 0;
       this.world.sites(job.z0 - SITE_REACH, job.z1 + SITE_REACH, (site, geo) => {
         if (pending) return;
+        // (Pieces splatted in an earlier slice are passed over: job.row counts them, job.cell a piece's cells.)
+        if (at++ < job.row) return;
         let e = this.siteCells.get(site.n);
         if (!e || e.geo !== geo) {
           e = { geo, cells: null, job: new SiteCells(site, geo, c) };
@@ -1130,7 +1137,16 @@ export class FarShadow {
           e.job = null;
         }
         const cells = e.cells;
-        for (let k = 0; k < cells.length; k += 3) obj.point(cells[k], cells[k + 1], cells[k + 2]);
+        for (let k = job.cell; k < cells.length; k += 3) {
+          obj.point(cells[k], cells[k + 1], cells[k + 2]);
+          if (k % 12288 === 0 && performance.now() > until) {
+            job.cell = k + 3;
+            pending = true;
+            return;
+          }
+        }
+        job.cell = 0;
+        job.row++;
         job.sites.add(site.n);
       });
       if (pending) return false;
@@ -1161,6 +1177,14 @@ export class FarShadow {
             tc = far.x;
             ts = far.y;
           }
+          // Toward its sides the tile eases into the coarse tile's terrain and its casters into open sky, so where the
+          // two meet (141 m out) no shadow ends in a straight line.
+          const side = Math.abs(i + 0.5 - FINE_W / 2);
+          const edge = side < SIDE_FROM ? 0 : Math.min(1, (side - SIDE_FROM) / (FINE_W / 2 - 2 - SIDE_FROM));
+          if (edge > 0 && far) {
+            tc += (far.x - tc) * edge;
+            ts += (far.y - ts) * edge;
+          }
           // Where nothing casts, the casters' ceiling lies just under the ground's own (the terrain's ceiling), so
           // the filter between a shadowed texel and an open one keeps a thin caster's shadow its own width.
           const open = Math.max(job.base + FINE_FLOOR, tc - OPEN_DROP);
@@ -1168,7 +1192,7 @@ export class FarShadow {
           const o = (j * FINE_W + i) * 4;
           data[o] = h(Math.max(FINE_FLOOR, tc - job.base));
           data[o + 1] = h(ts);
-          data[o + 2] = h(Math.max(open, tmp2.x - BIAS_OBJ) - job.base);
+          data[o + 2] = h(Math.max(open, tmp2.x - BIAS_OBJ - 40 * edge * edge) - job.base);
           data[o + 3] = h(SOFT_OBJ[0] + SOFT_OBJ[1] * tmp2.y);
         }
         if (performance.now() > until && j < FINE_H - 1) {

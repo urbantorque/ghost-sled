@@ -76,4 +76,19 @@ Callers: the snow (`farShadow(vWorldPos, mix(1.0, snowShadow(), uShadowK))`), th
 hazards, set pieces, rails, the rider), the mid-ground's shoulders, its forest carpet and its villages, and the
 ghosts' glass (by day a ghost in shade loses its glint and a step of its face; its rim and night glow are its own).
 
+## Shared code touched
+
+Each edit is the smallest that does the job and carries a comment saying why.
+
+| File (owner) | Change |
+| --- | --- |
+| `materials.ts` (light) | An import; `...farUniforms` in `shared`; `${FAR_GLSL}` at the end of `LIGHT_GLSL` (the one function); the snow's `shadow` line and the toon material's line after its `USE_SHADOWMAP` block call `farShadow`; the ghost material spreads `farUniforms`, includes `FAR_GLSL` and multiplies its face and glint by it (four lines). No shading term changed. |
+| `world.ts` (temporal: render targets; farlight: shadow setup) | `far: FarShadow` made in the constructor with its `FarWorld` (the stretch's sun, the ground with the overlooks' fall, the accessors below); `updateFar()` after the shadow box is fitted (the near box, the strength and softness from the palette, the window); `invalidate()` on a new course, mood, tier, the title's light or a play-test's `journeyAt`; `?far=0` / `world.farOff` draws it at no strength (A/B). |
+| `props.ts` (props: batches) | `farCasters(i, out)`, read only: a chunk's packed batches as cones and boxes from each variant's bounds (`variantDims`, cached a geometry). |
+| `midground.ts` | `shoulders(r, ...)`, read only (the built row's own columns), and the window it keeps (`win0`, `win1`, two lines in `update`); one call each in the shoulder and forest shaders. |
+| `landmarks.ts` | `farSites(z0, z1, cb)`, read only: the made pieces with their frames. |
+| `village.ts` | One call in its shader. |
+| `scripts/playtest/frames.js` | After a jump down the course the rider is held until the field is in (a build without it goes straight on). |
+| `scripts/playtest/systime.js` | `far` among the systems it times. |
+
 (The rest of this file is filled in as the lane closes: see below.)
