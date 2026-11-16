@@ -8,6 +8,10 @@ import { ICE_MIRROR_GLSL, iceMirror } from './postfx/reflect';
 // same uniform objects by reference, so a mood change updates the whole world at once.
 
 export const shared = {
+  /** The temporal lane (postfx/taa.ts): which frame of 64 the screen-space dithers (a near prop's fade, the
+   *  soft shadow's tap rotation) are on while the temporal reconstruction runs, so it averages them into a
+   *  smooth fade and penumbra; 0 (a dither fixed on the screen, as round 7) everywhere else. */
+  uNoiseFrame: { value: 0 },
   uSunDir: { value: new Vector3(0, 1, 0) },
   uSunColor: { value: new Color(1, 1, 1) },
   uHemi: { value: new Color(0.5, 0.6, 0.9) },
@@ -258,6 +262,7 @@ export function applyPalette(full: Palette): void {
 }
 
 export const LIGHT_GLSL = /* glsl */ `
+uniform float uNoiseFrame;
 uniform vec3 uSunDir;
 uniform vec3 uSunColor;
 uniform vec3 uHemi;
@@ -736,7 +741,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           sc.z += directionalLightShadows[0].shadowBias;
           if (sc.x < 0.0 || sc.x > 1.0 || sc.y < 0.0 || sc.y > 1.0 || sc.z > 1.0) return 1.0;
           vec2 tx = uShadowScale.x / directionalLightShadows[0].shadowMapSize;
-          float phi = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) * 6.2831853;
+          float phi = fract(52.9829189 * fract(dot(gl_FragCoord.xy + uNoiseFrame * 5.588238, vec2(0.06711056, 0.00583715)))) * 6.2831853;
           // The taps are unrolled (three's unroll pragma) and read at LOD 0: the shadow map has no mips,
           // and a texture read inside a per-pixel loop with branches makes D3D's compiler warn that
           // its derivatives are undefined.
@@ -1743,7 +1748,8 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               // metre or more half stippled, and every still that caught it read as a broken render
               // (the review loop, three passes running). Now a prop is solid, then gone within a
               // few centimetres of travel.
-              float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+              // (It moves each frame while the temporal reconstruction runs, which rebuilds it into a fade.)
+              float ign = fract(52.9829189 * fract(dot(gl_FragCoord.xy + uNoiseFrame * 5.588238, vec2(0.06711056, 0.00583715))));
               if (ign >= (keep - 0.42) / 0.16) discard;
             }
             keep = 1.0;

@@ -884,6 +884,8 @@ export class GhostVisuals {
   /** Every label, drawn in the canvas in one call (labels.ts). */
   readonly batch = new LabelBatch();
   private items: Item[] = [];
+  private near: Item[] = [];
+  private nearD: number[] = [];
   private glow = 1;
   labels = true;
   /** The title's attract reel: ghosts may race closer beside the hero before they fade. */
@@ -2135,6 +2137,32 @@ export class GhostVisuals {
     it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
     it.sledQ.copy(sledQ);
     it.sledP.copy(pos);
+  }
+
+  /** The ghosts drawn this frame, nearest the lens first and at most n, for the temporal reconstruction's
+   *  own motion (postfx/taa.ts): each one's id and its sled's pose (world), as this frame placed it. */
+  nearestPoses(from: Vector3, n: number, cb: (id: number, pos: Vector3, q: Quaternion) => void): void {
+    // (An insertion into the n nearest so far: nothing is made a frame.)
+    const near = this.near;
+    const d = this.nearD;
+    let k = 0;
+    for (const it of this.items) {
+      if (!it.mesh.visible || !it.body) continue;
+      const dd = it.sledP.distanceToSquared(from);
+      let j = Math.min(k, n);
+      if (j === n && dd >= d[n - 1]) continue;
+      while (j > 0 && d[j - 1] > dd) {
+        if (j < n) {
+          d[j] = d[j - 1];
+          near[j] = near[j - 1];
+        }
+        j--;
+      }
+      d[j] = dd;
+      near[j] = it;
+      k = Math.min(n, k + 1);
+    }
+    for (let i = 0; i < k; i++) cb(near[i].id, near[i].sledP, near[i].sledQ);
   }
 
   /** How much glass the ghosts are drawn in (ghostGlassMaterial): 2 High, 1 Medium, 0 Low. Read as

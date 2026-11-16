@@ -26,7 +26,9 @@ import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from '
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
-import { PASSES, detailOf, parseSwitches, type Detail, type PassSettings, type Tier } from './postfx/tiers';
+import { PASSES, allSwitches, detailOf, parseSwitches, sceneSamples, type Detail, type PassSettings, type PassSwitches, type Tier } from './postfx/tiers';
+import { AFTER_LAYER } from './postfx/after';
+import { BODIES } from './postfx/taa';
 import { VIEWS, type PipeView } from './postfx/pipeline';
 import { cine } from './cine';
 import { beginShaftSources } from './postfx/shafts';
@@ -87,6 +89,16 @@ export function qualityFor(tier: Tier): QualitySettings {
   const dpr = Math.min(window.devicePixelRatio || 1, q.maxPixelRatio);
   return { ...q, detail: detailOf(tier), passes: PASSES[tier], pixelRatio: tier === 'low' ? Math.max(0.75, Math.min(1, dpr)) : dpr };
 }
+
+/** Near props fade through MSAA coverage (a smooth dissolve) only where the scene is drawn multisampled:
+ *  under the temporal reconstruction it is not (it replaces the MSAA), and they dither, which the
+ *  reconstruction resolves into a fade of its own. */
+function smoothFade(q: QualitySettings, sw: PassSwitches, r: WebGLRenderer): boolean {
+  return q.post && r.capabilities.isWebGL2 && sceneSamples(q.msaa, q.passes, sw) > 0;
+}
+
+/** The temporal reconstruction's box round a ghost and its sled, in the sled's frame (metres). */
+const GHOST_BOX: [Vector3, Vector3] = [new Vector3(0, 0.92, 0), new Vector3(0.8, 0.84, 1.4)];
 
 export type ViewMode = 'run' | 'title' | 'results';
 
@@ -297,11 +309,11 @@ export class World {
     applyPalette(this.palette);
     this.terrain = new Terrain(this.course, quality.terrain, quality.shadows);
     this.midground = new Midground(this.course, this.palette, quality.detail, quality.terrain.reach);
-    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2, quality.detail !== 'low');
+    this.props = new Props(this.course, this.palette, quality.forestDensity, quality.shadows, smoothFade(quality, allSwitches(true), this.renderer), quality.detail !== 'low');
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.detail, quality.shadows);
     this.overlooks = new Overlooks(this.course, this.palette, quality.detail);
     this.terrain.overlooks = this.midground.overlooks = this.overlooks;
-    this.rails = new Rails(this.course, this.palette, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2);
+    this.rails = new Rails(this.course, this.palette, quality.shadows, smoothFade(quality, allSwitches(true), this.renderer));
     this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
     this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
     this.sky = new Sky(seed);
@@ -410,6 +422,12 @@ export class World {
     this.post.enabled = quality.post && canHalf;
     this.post.bloomEnabled = quality.bloom;
     this.post.configure(quality.passes);
+    // What the temporal reconstruction draws after itself sits on a layer of its own (postfx/after.ts): every
+    // lens that draws this scene sees it. The sky and the far ranges always stay in the scene's own pass (the
+    // lake's mirror draws the sky with a lens of its own).
+    this.cam.camera.layers.enable(AFTER_LAYER);
+    this.mirrorCam.layers.enable(AFTER_LAYER);
+    this.post.pipe.after.kept.push(this.sky.root, this.midground.root, this.overlooks.root);
     // (As setCourse: a run on the mountain the world was built for never passes through it.)
     this.post.fringeK = this.course.biome === 'blossom' ? 0 : 1;
     this.post.setGrade({ ...this.palette.grade, bloom: this.palette.bloom });
@@ -435,14 +453,24 @@ export class World {
     if (q.has('post')) {
       pipe.switches = parseSwitches(q.get('post'));
       this.post.configure(this.quality.passes);
+      this.refade();
     }
     const view = q.get('postview') as PipeView | null;
     if (view && VIEWS.includes(view)) pipe.view = view;
     if (q.has('gpu')) pipe.timer.on = true;
-    // The temporal anti-aliasing experiment, on whatever tier has a depth (`?taa`).
-    if (q.has('taa')) {
-      this.quality = { ...this.quality, passes: { ...this.quality.passes, taa: true } };
+    // The temporal reconstruction on any tier with a post stack (`?taa`, Medium's trial), its share of the
+    // frame (`?tscale=0.75`) and its sharpen (`?tsharp=0.3`).
+    const ts = Number(q.get('tscale'));
+    const tk = Number(q.get('tsharp'));
+    if (q.has('taa') || ts > 0 || (q.has('tsharp') && tk >= 0)) {
+      const p = { ...this.quality.passes };
+      if (q.has('taa')) p.taa = true;
+      if (ts > 0) p.scale = Math.min(1, ts);
+      if (q.has('tsharp') && tk >= 0) p.sharpen = Math.min(1, tk);
+      this.quality = { ...this.quality, passes: p };
       this.post.configure(this.quality.passes);
+      this.refade();
+      this.resize();
     }
     const c = q.get('cine');
     if (c) {
@@ -458,6 +486,14 @@ export class World {
       }
       this.cineHold = hold;
     }
+  }
+
+  /** After a dev switch: near props fade the way the scene is now drawn (smoothFade). */
+  refade(): void {
+    const q = this.quality;
+    const fade = smoothFade(q, this.post.pipe.switches, this.renderer);
+    this.rails.setQuality(q.shadows, fade);
+    this.props.setQuality(q.forestDensity, q.shadows, fade, q.detail !== 'low');
   }
 
   /** The camera's cine state (cine.ts), for play-tests. */
@@ -536,8 +572,9 @@ export class World {
     this.ghosts.lowPage = q.detail === 'low';
     this.ghosts.glass = q.detail === 'low' ? 0 : q.detail === 'medium' ? 1 : 2;
     this.rider.setDetail(q.detail === 'low' ? 'lite' : 'full');
-    this.rails.setQuality(q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2);
-    this.props.setQuality(q.forestDensity, q.shadows, q.post && q.msaa > 0 && this.renderer.capabilities.isWebGL2, q.detail !== 'low');
+    const fade = smoothFade(q, this.post.pipe.switches, this.renderer);
+    this.rails.setQuality(q.shadows, fade);
+    this.props.setQuality(q.forestDensity, q.shadows, fade, q.detail !== 'low');
     this.setPieces.setQuality(q.detail, q.shadows);
     const canHalf = this.renderer.capabilities.isWebGL2;
     this.post.enabled = q.post && canHalf;
@@ -1179,10 +1216,26 @@ export class World {
     this.lakeMirror.everywhere = this.post.enabled && this.quality.passes.mirror !== 'sky' && this.post.pipe.switches.mirror;
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
     if (this.cineHold) Object.assign(cine, this.cineHold);
+    this.feedBodies();
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
     // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
     this.ghosts.drawLabels(this.renderer);
+  }
+
+  /** The bodies that move on their own, for the temporal reconstruction's reprojection (postfx/taa.ts): the
+   *  rider (or its wreck's two parts) and the ghosts nearest the lens. */
+  private feedBodies(): void {
+    const taa = this.post.pipe.taa;
+    taa.clearBodies();
+    if (!this.post.enabled || !this.quality.passes.taa || !this.post.pipe.switches.taa) return;
+    let n = 0;
+    this.rider.motionParts((id, frame, c, h) => {
+      frame.updateWorldMatrix(true, false);
+      taa.body(-1 - id, frame.matrixWorld, c, h);
+      n++;
+    });
+    this.ghosts.nearestPoses(this.cam.camera.position, BODIES - n, (id, p, q) => taa.bodyAt(id, p, q, GHOST_BOX[0], GHOST_BOX[1]));
   }
 
   /**

@@ -18,7 +18,8 @@
 // percentile (in thousandths of full white) and `crawl`, the share of pixels (per cent) that move by
 // more than 4% of white. A picture with no aliasing still moves a little under a part-pixel shift, so
 // only compare variants of the same frame. A variant may set `msaa` and `settle` (draws per shift,
-// for a pass with a history).
+// for a pass with a history), and `prime` (draws of the frozen frame before its shot and the shifts: a
+// history settled on the still frame rather than on the live frames just before it).
 //
 //   playwright-cli -s=r7-pipe open --config=.playwright/cli-headless.config.json
 //   playwright-cli -s=r7-pipe eval "window.__pipeCfg = { base: 'http://127.0.0.1:4410/', out: 'C:/.../shots/r7/pipe/', jobs: [{ tier: 'ultra', m: 0, at: [707, 3400], variants: [{ tag: 'off', post: 'none' }, { tag: 'on', post: 'all' }] }] }"
@@ -99,6 +100,9 @@ async (page) => {
         const sq = new Float32Array(W * H);
         const buf = new Uint8Array(W * H * 4);
         const halton = (i, b) => { let f = 1; let x = 0; while (i > 0) { f /= b; x += f * (i % b); i = Math.floor(i / b); } return x; };
+        // (Sharpness, so a steadier frame bought with blur shows: the mean luma step between neighbours in
+        // the first draw, thousandths of white. Compare variants of the same frame only.)
+        let grad = 0;
         for (let k = 0; k < n; k++) {
           cam.setViewOffset(W, H, halton(k + 1, 2) - 0.5, halton(k + 1, 3) - 0.5, W, H);
           await new Promise((res) => raf(() => {
@@ -109,6 +113,19 @@ async (page) => {
               const l = (0.299 * buf[p] + 0.587 * buf[p + 1] + 0.114 * buf[p + 2]) / 255;
               sum[i] += l;
               sq[i] += l * l;
+            }
+            if (k === 0) {
+              let g = 0;
+              for (let y = 0; y < H - 1; y++) {
+                for (let x = 0; x < W - 1; x++) {
+                  const p = (y * W + x) * 4;
+                  const l = 0.299 * buf[p] + 0.587 * buf[p + 1] + 0.114 * buf[p + 2];
+                  const lx = 0.299 * buf[p + 4] + 0.587 * buf[p + 5] + 0.114 * buf[p + 6];
+                  const ly = 0.299 * buf[p + W * 4] + 0.587 * buf[p + W * 4 + 1] + 0.114 * buf[p + W * 4 + 2];
+                  g += Math.abs(lx - l) + Math.abs(ly - l);
+                }
+              }
+              grad = g / ((W - 1) * (H - 1) * 255);
             }
             res(true);
           }));
@@ -126,7 +143,7 @@ async (page) => {
         }
         sd.sort();
         const r3 = (x) => Math.round(x * 10000) / 10;
-        return { mean: r3(mean / (W * H)), p99: r3(sd[Math.floor(W * H * 0.99)]), crawl: Math.round((crawl / (W * H)) * 10000) / 100 };
+        return { mean: r3(mean / (W * H)), p99: r3(sd[Math.floor(W * H * 0.99)]), crawl: Math.round((crawl / (W * H)) * 10000) / 100, grad: r3(grad) };
       };
       window.__pipeRedraw = () => new Promise((res) => raf(() => {
         Object.assign(w.cine, w.cineHold || {});
@@ -152,6 +169,7 @@ async (page) => {
           // Twice: the first draw after a switch may compile a program or rebuild a target.
           await page.evaluate(() => window.__pipeRedraw());
           await page.evaluate(() => window.__pipeRedraw());
+          for (let k = 0; k < (v.prime || 0); k++) await page.evaluate(() => window.__pipeRedraw());
           const name = `${tier}-m${m}-z${String(z).padStart(4, '0')}-${v.tag}.png`;
           if (!v.noshot) await page.screenshot({ path: c.out + name });
           const row = { name };

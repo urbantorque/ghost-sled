@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { AdditiveBlending, BufferGeometry, CustomBlending, Mesh, MeshBasicMaterial, NormalBlending, NotEqualStencilFunc, OneFactor, OneMinusSrcAlphaFactor, Points, PointsMaterial, ShaderMaterial } from 'three';
 import { cine, resetCine } from '../src/render/cine';
-import { CINE_EPS, PASSES, SWITCH_NAMES, TIERS, allSwitches, detailOf, letterboxShare, parseSwitches, passCosts, planFrame, wantsDepth, type FrameSignals, type PassSettings, type Tier } from '../src/render/postfx/tiers';
+import { drawsAfter } from '../src/render/postfx/after';
+import { CINE_EPS, PASSES, SCALE_FLOOR, SWITCH_NAMES, TIERS, allSwitches, detailOf, jitterAt, jitterPhases, letterboxShare, parseSwitches, passCosts, planFrame, renderScale, sceneSamples, wantsDepth, wantsTaa, type FrameSignals, type PassSettings, type Tier } from '../src/render/postfx/tiers';
 
 // The frame's passes without a GPU: every tier has a full row, Low runs nothing, and the camera's cine
 // state at rest (cine.ts) schedules no pass at all. post.ts runs exactly the plan these functions return.
@@ -11,7 +13,7 @@ const fromCine = (over: Partial<FrameSignals> = {}): FrameSignals => rest({ dof:
 
 describe('the tier tables', () => {
   it('has a complete row of passes for every tier, Ultra included', () => {
-    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'fxaa', 'fringe', 'shadowReach'];
+    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'scale', 'sharpen', 'fxaa', 'fringe', 'shadowReach'];
     expect([...TIERS]).toEqual(['low', 'medium', 'high', 'ultra']);
     for (const t of TIERS) {
       const p = PASSES[t];
@@ -181,16 +183,119 @@ describe('the cost table', () => {
   });
 });
 
-describe('the temporal experiment', () => {
-  it('is off on every tier as shipped, and is one pass with a depth when a tier turns it on', () => {
-    for (const t of TIERS) expect(PASSES[t].taa, t).toBe(false);
-    const p = { ...PASSES.high, taa: true };
-    const plan = planFrame(p, ON, rest());
-    expect(plan.taa && plan.depth).toBe(true);
-    expect(plan.added).toBe(planFrame(PASSES.high, ON, rest()).added + 1);
-    expect(planFrame(p, parseSwitches('-taa'), rest()).taa).toBe(false);
+describe('the temporal reconstruction', () => {
+  it('runs on High and Ultra as shipped, and on neither Medium nor Low', () => {
+    expect(PASSES.high.taa && PASSES.ultra.taa).toBe(true);
+    expect(PASSES.medium.taa || PASSES.low.taa).toBe(false);
+    // High draws the smaller scene; Ultra a larger share of it.
+    expect(PASSES.high.scale).toBeGreaterThanOrEqual(0.6);
+    expect(PASSES.high.scale).toBeLessThan(PASSES.ultra.scale);
+    expect(PASSES.ultra.scale).toBeLessThanOrEqual(1);
+    for (const t of TIERS) {
+      expect(PASSES[t].sharpen, t).toBeGreaterThanOrEqual(0);
+      expect(PASSES[t].sharpen, t).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('is two full-frame passes with a depth, and replaces the MSAA and the edge walk', () => {
+    for (const t of ['high', 'ultra'] as const) {
+      const plan = planFrame(PASSES[t], ON, rest());
+      expect(plan.taa && plan.depth, t).toBe(true);
+      expect(plan.added - planFrame(PASSES[t], parseSwitches('-taa'), rest()).added, t).toBe(2);
+      expect(sceneSamples(4, PASSES[t], ON), t).toBe(0);
+      expect(sceneSamples(4, PASSES[t], parseSwitches('-taa')), t).toBe(4);
+      const names = passCosts(PASSES[t], ON, rest(), 1280, 720).map((r) => r.name);
+      expect(names, t).toContain('taa');
+      expect(names, t).not.toContain('aa');
+      // Off, the tier is round 7's: its MSAA and the walk.
+      const off = passCosts(PASSES[t], parseSwitches('-taa'), rest(), 1280, 720).map((r) => r.name);
+      expect(off, t).toContain('aa');
+      expect(off, t).not.toContain('taa');
+    }
+    expect(sceneSamples(0, PASSES.medium, ON)).toBe(0);
+    expect(wantsTaa(PASSES.medium, ON) || wantsTaa(PASSES.low, ON)).toBe(false);
+    // Medium's trial (?taa) is the same two passes on Medium's own frame.
+    expect(planFrame({ ...PASSES.medium, taa: true }, ON, rest()).added).toBe(planFrame(PASSES.medium, ON, rest()).added + 2);
     expect(wantsDepth({ ...PASSES.medium, taa: true, shaftTaps: 0 }, ON)).toBe(true);
     expect(planFrame({ ...PASSES.low, taa: true }, ON, rest({ post: false })).taa).toBe(false);
+  });
+
+  it('stands in the edge walk until its programs are built', () => {
+    const plan = planFrame(PASSES.high, ON, rest({ taaReady: false }));
+    expect(plan.taa).toBe(false);
+    expect(plan.added).toBe(planFrame(PASSES.high, parseSwitches('-taa'), rest()).added);
+    expect(passCosts(PASSES.high, ON, rest({ taaReady: false }), 1280, 720).map((r) => r.name)).toContain('aa');
+  });
+
+  it('draws the scene smaller only on a dense screen: never fewer scene pixels than page pixels', () => {
+    const p = PASSES.high;
+    expect(SCALE_FLOOR).toBe(1);
+    expect(renderScale(p, ON, 1)).toBe(1);
+    expect(renderScale(p, ON, 1.25)).toBeCloseTo(0.8, 5);
+    expect(renderScale(p, ON, 1.5)).toBeCloseTo(Math.max(p.scale, 1 / 1.5), 5);
+    expect(renderScale(p, ON, 2)).toBeCloseTo(p.scale, 5);
+    for (const pr of [0.75, 1, 1.25, 1.5, 2, 3]) {
+      const s = renderScale(p, ON, pr);
+      expect(s * pr, String(pr)).toBeGreaterThanOrEqual(Math.min(pr, SCALE_FLOOR) - 1e-9);
+      expect(s, String(pr)).toBeLessThanOrEqual(1);
+    }
+    // Off, or without its smaller scene, the frame's own size.
+    expect(renderScale(p, parseSwitches('-taa'), 2)).toBe(1);
+    expect(renderScale(p, parseSwitches('-scale'), 2)).toBe(1);
+    expect(renderScale(PASSES.medium, ON, 2)).toBe(1);
+    // The cost table sizes the scene's own passes from the smaller scene.
+    const rows = passCosts(p, ON, rest({ shafts: 1 }), 2560, 1440, 2);
+    const scale = rows.find((r) => r.name === 'scale')!;
+    expect([scale.w, scale.h]).toEqual([Math.round(2560 * p.scale), Math.round(1440 * p.scale)]);
+    const ao = rows.find((r) => r.name === 'ao')!;
+    expect(ao.w).toBe(Math.ceil(Math.round(2560 * p.scale) / 2));
+    const taa = rows.find((r) => r.name === 'taa')!;
+    expect([taa.w, taa.h]).toEqual([2560, 1440]);
+    expect(passCosts(p, ON, rest(), 1280, 720, 1).map((r) => r.name)).not.toContain('scale');
+  });
+
+  it('visits places spread through the pixel, more of them for a smaller scene', () => {
+    expect(jitterPhases(1)).toBe(8);
+    expect(jitterPhases(0.7)).toBe(16);
+    for (const n of [8, 16]) {
+      const pts = Array.from({ length: n }, (_, i) => jitterAt(i, n));
+      // Inside the pixel, all different, centred on its middle, and in every quarter of it.
+      for (const [x, y] of pts) {
+        expect(Math.abs(x)).toBeLessThan(0.5);
+        expect(Math.abs(y)).toBeLessThan(0.5);
+      }
+      expect(new Set(pts.map((q) => q.join())).size).toBe(n);
+      const mx = pts.reduce((a, q) => a + q[0], 0) / n;
+      const my = pts.reduce((a, q) => a + q[1], 0) / n;
+      expect(Math.abs(mx)).toBeLessThan(0.07);
+      expect(Math.abs(my)).toBeLessThan(0.07);
+      for (const sx of [-1, 1]) for (const sy of [-1, 1]) expect(pts.some(([x, y]) => x * sx > 0 && y * sy > 0), `${n} ${sx} ${sy}`).toBe(true);
+      // It repeats after n.
+      expect(jitterAt(n + 3, n)).toEqual(jitterAt(3, n));
+    }
+  });
+
+  it("draws what the history cannot know after it, and keeps the rider's stencil layers and the decals in the scene", () => {
+    const geo = new BufferGeometry();
+    const pts = new Points(geo, new PointsMaterial({ transparent: true, depthWrite: false }));
+    expect(drawsAfter(pts, pts.material as PointsMaterial)).toBe(true);
+    const add = new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
+    expect(drawsAfter(new Mesh(geo, add), add)).toBe(true);
+    const glow = new ShaderMaterial({ transparent: true, depthWrite: false, blending: CustomBlending, blendSrc: OneFactor, blendDst: OneMinusSrcAlphaFactor });
+    expect(drawsAfter(new Mesh(geo, glow), glow)).toBe(true);
+    // A ghost layer (contract C10: never over the rider's own pixels, which only the scene's stencil knows).
+    const ghost = new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: AdditiveBlending });
+    ghost.stencilWrite = true;
+    ghost.stencilFunc = NotEqualStencilFunc;
+    expect(drawsAfter(new Mesh(geo, ghost), ghost)).toBe(false);
+    // A decal over the snow (normal blending: its order among the scene's transparent things matters).
+    const decal = new MeshBasicMaterial({ transparent: true, depthWrite: false, blending: NormalBlending });
+    expect(drawsAfter(new Mesh(geo, decal), decal)).toBe(false);
+    // Anything that writes depth, or is lit by the scene's lights.
+    const solid = new MeshBasicMaterial({ blending: AdditiveBlending });
+    expect(drawsAfter(new Mesh(geo, solid), solid)).toBe(false);
+    const lit = new ShaderMaterial({ lights: true, transparent: true, depthWrite: false, blending: AdditiveBlending });
+    expect(drawsAfter(new Mesh(geo, lit), lit)).toBe(false);
   });
 });
 
