@@ -1,6 +1,6 @@
 # Round 7: the report
 
-Branch `round-7`, not merged, pushed or deployed. Everything below is in DECISIONS 276 to 358, the README's
+Branch `round-7`, not merged, pushed or deployed. Everything below is in DECISIONS 276 to 359, the README's
 "Round 7 play test and performance", ART.md 15 and LISTENING.md; this is the short version for the owner.
 Nobody has played this build or heard it. It is not a 10.
 
@@ -110,6 +110,23 @@ is never framed lit with the rider (its best frame scored 5.5); and Low is still
 designed poster ART.md 15 asks for (its frames score 5.9 to 7.0). Low's frame rate on Sakura against round 6 is the
 other open thing, and it needs a quiet sitting on mains to settle.
 
+## Where everything is
+
+All under `shots/r7/` (git-ignored, so not in the branch):
+
+- `final/high`, `final/medium`, `final/low`, `final/phone-medium`: the fixed frames on the final build, the same
+  distances as round 6's in `before/` (181 a tier, all five mountains), each with its JSON (console: clean).
+- `final/moments`: every set piece's every variant (41) and every legend (10), on desktop High, desktop Low and a phone
+  on Medium, a frame as each comes up and two while it plays (495 frames; console: clean).
+- `final/motion`: a 30 s clip of each mountain's best stretch on Ultra at 1080p, 30 fps, no sound (H.264, about 40 MB
+  each): Old Town to the Valley Leap, the cavern to the dawn, the Caldera Leap and the Basalt Halls, the Blossom Leap
+  and the torii, the break and the Lamp Road.
+- `sheets`: before and after contact sheets, round 6 beside round 7 at each distance, a mountain and a tier a sheet
+  (Lanternfall after only).
+- `hero-best`: the best hero frames from each mountain for a store page (its `README.txt` says where each came from).
+- `review/m0` to `m4`: every critic pass's frames and before and after sheets; `shared`: the last shared fixes'.
+- `perf`, `lab`: every measurement's raw output.
+
 ## Open questions only the owner can decide
 
 1. **Merge and ship.** `round-7` holds everything, tested; nothing is merged to `main`, pushed or deployed. When?
@@ -120,7 +137,7 @@ other open thing, and it needs a quiet sitting on mains to settle.
 4. **Should the collapse ask more?** The careful line wins it six times in six.
 5. **Should a struggling player be able to light Lanternfall's great lantern?** Today it needs pace.
 6. **A true slow-motion of the flight in the hero frame** (it would slow the trick inputs mid-air: a feel call).
-7. **Medium's music packs:** the full packs cost 108 to 155 MB decoded; Medium plays the light ones today.
+7. **Medium's music packs:** the full packs cost 108 to 155 MB of memory decoded (DECISIONS 341). Which should Medium load?
 8. **Sakura's calm lens** (no colour fringe): Sakura only, or every mountain?
 9. **The legend figure on Sakura's cone,** and **new canopy geometry** so the blossom can read backlit (a cost).
 10. **A camera beat for Lanternfall's great lantern,** lit, with the rider in the frame.
