@@ -5,6 +5,7 @@ import { fx } from './fxhub';
 import { visualGround, vnoise2 } from './ground';
 import type { Kind } from './landmarkKit';
 import { pushLocalLight } from './lights';
+import { pushShaftSource } from './postfx/shafts';
 import { shared } from './materials';
 import { Palette } from './palette';
 import { Facets, columnInto } from './rockforms';
@@ -38,6 +39,8 @@ export interface StageSite {
 
 /** How far ahead a stage is made, and how far behind it is dropped. */
 const MAKE_AHEAD = 420;
+/** The cavern mouth's dawn, as the light its shafts are painted in (Low offers it to the poster: makeMouth). */
+const SHAFT_GOLD = new Color(1.0, 0.56, 0.24);
 const DROP_BEHIND = 180;
 
 /** Light added over the scene: vertex colours past white bloom; it thins into the fog. `near` makes it
@@ -1160,6 +1163,14 @@ export class Stages {
       const zl = end - 4;
       const x = c.centerX(zl);
       pushLocalLight(x, c.ground(x, zl) + 4, -zl, dawn.r, dawn.g, dawn.b, 24, 1.0 * k0);
+      // (The visual lift, poster lane: Low draws no shafts here, so it offers the mouth as the frame's bright
+      // place and Low's poster paints its fan of light in toward the lens. poster.ts.)
+      if (low && !forge) {
+        const zm = end + 2;
+        const xm = c.centerX(zm);
+        const sc = night ? dawn : SHAFT_GOLD;
+        pushShaftSource(xm, c.ground(xm, zm) + H * 0.35, -zm, sc.r, sc.g, sc.b, k0, hwE);
+      }
     };
     return { key: 'mouth' + s.n, z0: s.z - s.len, z1: end, root, lights };
   }

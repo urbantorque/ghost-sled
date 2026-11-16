@@ -116,6 +116,9 @@ export interface Palette {
   /** How much of the lit snow's colour Low's poster keeps (1: all of it). With no film to roll it off, a
    *  warm light on the snow that reads as light on High reads as sand on Low. */
   posterSnowSat: number;
+  /** Low's poster (the visual lift, ART.md 15 "Tiers, designed"): what Low paints where the other tiers
+   *  draw an effect. None of it touches another tier. See PosterLook below. */
+  poster: PosterLook;
   /** A sled lantern short of Lantern Night's (0..1): blue hour lights a soft one at the end of a long
    *  Clear Skies run. Lantern Night's own lantern (lantern: true) is always full. */
   lanternGlow: number;
@@ -145,6 +148,37 @@ export interface Palette {
    *  dark, hard shapes in the murk. */
   hazardFog: number;
   exposure: number;
+}
+
+/** Low's poster: the stylised tricks Low draws instead of the effects it cannot afford (ART.md 15, "Tiers,
+ *  designed"). Read only on Low (materials.ts POSTER_GLSL, poster.ts, sky.ts); blended like every field. */
+export interface PosterLook {
+  /** The painted rim on silhouettes, in the key light's colour: a hard band of it on the edge that faces the
+   *  light, all round when the light is behind (0: none). The hero takes `hero`. */
+  rim: number;
+  hero: number;
+  /** Painted shafts (poster.ts): how much of the grade's `shafts` Low paints as cards fanning from the disc. */
+  shafts: number;
+  /** The frame's foot: the lower frame laid over with the shade's colour, so the near snow has a value
+   *  under the rider (High's cool foot, painted). And the corners, a little. */
+  foot: number;
+  vignette: number;
+  /** The sky in steps: how many flat bands its gradient is painted in (0: smooth), and the horizon's band
+   *  as a printed stripe of its colour (0: the soft glow every tier has, 1: a flat stripe). */
+  bands: number;
+  stripe: number;
+  /** The sun's scatter on the dome in rings: how many (0: the smooth glow). */
+  rings: number;
+  /** The snow's light in flat values: how many steps from shade to lit (2: shade, a middle and lit; 0: the
+   *  smooth ramp every other tier draws), and how soft each step's edge is (a share of a step, 0 to 0.5). */
+  steps: number;
+  soft: number;
+  /** A cast shadow as Low paints it (the far shadow field, when it lands: POSTER_GLSL posterShadow): the
+   *  colour it leans to, how far (0: the snow's own shade, as every tier), and how hard its edge is (0: as
+   *  the field gives it, 1: cut). */
+  shadow: Color;
+  shadowK: number;
+  edge: number;
 }
 
 /** The frame's finish (post.ts GradeParams reads these by name). Round 7 adds the film curve's strength
@@ -272,6 +306,7 @@ function base(): Palette {
     poolSoft: 0,
     leaf: 0,
     posterSnowSat: 1,
+    poster: { rim: 0.55, hero: 1, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 2, steps: 2, soft: 0.14, shadow: c('#3A4AA8'), shadowK: 0.3, edge: 0.55 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
@@ -444,6 +479,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       p.skyMid = null;
       p.skyBelow = c('#B8C3D2');
       p.sunColor = c('#F2F1EA');
+      // (Low's poster: an overcast sky has no bands, no rings and almost no rim to paint; the light is flat.)
+      Object.assign(p.poster, { rim: 0.2, bands: 0, stripe: 0, rings: 0, steps: 0 });
       // A pale sun glows through the cloud deck low ahead-left: a soft focal point that gives the
       // grey sky some value range. The light itself stays high and flat.
       p.sunDir = sunDir(-16, 15);
@@ -885,6 +922,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.glowK = 0.55;
       p.ice = 0.6;
       p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.12, grain: 0.7, foot: 0.3, shafts: 0.3, lens: 0.25, focal: 1, gust: 0, glitter: 0.25 };
+      // (Low's poster: the blue hour in printed steps of cobalt over the thin lemon band, laid as a flat stripe
+      // where the other tiers glow it, ART.md 15; the low sun's scatter in rings.)
+      Object.assign(p.poster, { bands: 6, stripe: 1, rings: 3, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35 });
       p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#AFC6EC'), shade: c('#34559E'), rim: c('#FFEFAE'), shadow: 0.08 };
       p.atmo = { rays: 0.25, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6084C8'), drift: 0.1 };
       p.stars = 0.7;
@@ -943,6 +983,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#5A2A26'), shade: c('#24141A'), rim: c('#FF7A38'), shadow: 0 };
       p.shadowK = 0.7;
       p.grade = { lift: c('#120A10'), gain: c('#FFF4EA'), saturation: 1.06, contrast: 1.06, grain: 0.8, foot: 0.3, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0 };
+      // (Low's poster: the deck's glow in four steps, no rings round a dim coin, the frame's foot deep.)
+      Object.assign(p.poster, { bands: 4, stripe: 0, rings: 0, foot: 0.34, shadow: c('#3A2A55'), shadowK: 0.35 });
       p.atmo = { rays: 0.25, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.2, valley: 0.8, valleyColor: c('#8A4A38'), drift: 0.4 };
       // (Bloom kept for the fire: more washed the planes together and bleached the coat.)
       p.bloom = 0.42;
@@ -988,6 +1030,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.clouds = { low: 0.3, high: 0.35, top: 0.16, lit: c('#FFF8EE'), shade: c('#E4DCCF'), rim: c('#FFDCC4'), shadow: 0.1 };
       p.shadowK = 0.82;
       p.grade = { lift: c('#22282E'), gain: c('#FFFDF8'), saturation: 1.06, contrast: 1.03, grain: 0.5, foot: 0.14, shafts: 0.7, lens: 0.3, focal: 0.5, gust: 0, glitter: 0.1 };
+      // (Low's poster: the calm mountain, low contrast on purpose: three soft steps of peach sky, a light foot.)
+      Object.assign(p.poster, { bands: 3, stripe: 0, rings: 2, foot: 0.2, vignette: 0.14, shadow: c('#7A6CC0'), shadowK: 0.3 });
       p.atmo = { rays: 0.8, halo: 0, meteors: 0, banner: 0.3, slide: 0, sweep: 0.2, valley: 1, valleyColor: c('#FFE4D2'), drift: 0.7 };
       p.bloom = 0.22;
       p.sparkle = 0.6;
@@ -1041,6 +1085,8 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.massif.seaWarm = 0.75;
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
+      // (Low's poster: the indigo night in six printed steps and the great moon's halo in rings, a silver rim.)
+      Object.assign(p.poster, { bands: 6, stripe: 0, rings: 3, rim: 0.6, vignette: 0.26, shadow: c('#2A2270'), shadowK: 0.35 });
       p.grade.saturation = 1.02;
       p.grade.contrast = 1.12;
       // (A night of point lights: at speed each lantern split into a red, a green and a blue one, and the
@@ -2648,7 +2694,7 @@ export function tierLook(p: Palette): Palette {
     const l = 0.2126 * s.r + 0.7152 * s.g + 0.0722 * s.b;
     s.setRGB(l + (s.r - l) * p.posterSnowSat, l + (s.g - l) * p.posterSnowSat, l + (s.b - l) * p.posterSnowSat);
   }
-  for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor]) gradeColor(col, g);
+  for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor, o.poster.shadow]) gradeColor(col, g);
   if (g.posterMute) {
     for (const col of [o.snowShade, o.snowDeep]) {
       const l = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;
