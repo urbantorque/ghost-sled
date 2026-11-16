@@ -12,6 +12,7 @@ import type { ListenSources } from '../audio/listen';
 import { ChaseCamera, crashPack } from './camera';
 import { liftLine } from './dressing';
 import { ChaosVisuals } from './chaos';
+import { FarShadow } from './farshadow';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { standable, visualGround } from './ground';
 import { placeGraves, type GravePlace } from './graves';
@@ -20,7 +21,7 @@ import { LakeMirror } from './lakemirror';
 import { Life } from './life';
 import { applyPalette, bands, lake, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
-import { Overlooks } from './overlook';
+import { LIP_FROM, Overlooks } from './overlook';
 import { beginLocalLights } from './lights';
 import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from './palette';
 import { Particles, Weather } from './particles';
@@ -183,6 +184,14 @@ export class World {
   readonly setPieces: SetPieces;
   /** Where one bank opens over the valley (overlook.ts); the terrain, mid-ground and forest read it. */
   readonly overlooks: Overlooks;
+  /** The visual lift's far shadows (farshadow.ts): the terrain's, the forest's and the set pieces' shadows past
+   *  the shadow map's reach and on Low, baked on idle time for each stretch's own sun. */
+  readonly far: FarShadow;
+  /** The far shadows' light is the title's (the start of the run) while the title plays. */
+  private farTitle = false;
+  /** Dev: the far shadows drawn at no strength (`far=0`). */
+  farOff = false;
+  private farPal = {} as Palette;
   /** The lantern in the world: sky gates, a dash's trail, a ward's light, ghosts' dashes. */
   private readonly spirit: SpiritFx;
   /** The set pieces' own world: race machines, lantern gates, a falling span (round 6). */
@@ -301,6 +310,24 @@ export class World {
     this.setPieces = new SetPieces(this.course, this.palette, Mood.None, quality.detail, quality.shadows);
     this.overlooks = new Overlooks(this.course, this.palette, quality.detail);
     this.terrain.overlooks = this.midground.overlooks = this.overlooks;
+    // Each stretch's own shadow light, what stands there and the ground it falls on (farshadow.ts FarWorld).
+    const world = this;
+    this.far = new FarShadow({
+      get course() {
+        return world.course;
+      },
+      sunAt: (z, out) => out.copy(this.mood === Mood.None ? journeyPalette(this.course.biome, this.journeyAt ?? (this.farTitle ? 0 : Math.max(0, z)), this.farPal, this.course).shadowDir : this.palette.shadowDir),
+      ground: (x, z) => {
+        const c = this.course;
+        const off = x - c.centerX(z);
+        const e = Math.abs(off) - c.halfWidth(z);
+        const y = visualGround(c, x, z);
+        return e > LIP_FROM ? y - this.overlooks.drop(z, off < 0 ? -1 : 1, e) : y;
+      },
+      shoulders: (z, x0, dx, n, out, at) => this.midground.shoulders(z, x0, dx, n, out, at),
+      casters: (i, out) => this.props.farCasters(i, out),
+      sites: (z0, z1, cb) => this.setPieces.farSites(z0, z1, cb),
+    });
     this.rails = new Rails(this.course, this.palette, quality.shadows, quality.post && quality.msaa > 0 && this.renderer.capabilities.isWebGL2);
     this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
     this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
@@ -439,6 +466,8 @@ export class World {
     const view = q.get('postview') as PipeView | null;
     if (view && VIEWS.includes(view)) pipe.view = view;
     if (q.has('gpu')) pipe.timer.on = true;
+    // The far shadows off (`far=0`), to shoot a frame with and without them.
+    if (q.get('far') === '0') this.farOff = true;
     // The temporal anti-aliasing experiment, on whatever tier has a depth (`?taa`).
     if (q.has('taa')) {
       this.quality = { ...this.quality, passes: { ...this.quality.passes, taa: true } };
@@ -554,6 +583,8 @@ export class World {
     setCloudShadows(q.detail !== 'low');
     this.applyWeather();
     this.lastChunkRange = '';
+    // (What casts differs by tier: the forest's density, the dressing, the terrain's reach.)
+    this.far.invalidate();
     this.resize();
     // Materials recompile when the shadow define changes (the hidden ones now, not on first use).
     this.scene.traverse((o) => {
@@ -603,6 +634,7 @@ export class World {
     this.lastChunkRange = '';
     this.journeyKey = -1;
     this.journeyAt0 = -Infinity;
+    this.far.invalidate();
   }
 
   setMood(mood: Mood): void {
@@ -629,6 +661,8 @@ export class World {
     this.lastChunkRange = '';
     this.journeyKey = -1;
     this.journeyAt0 = -Infinity;
+    // (Another mood is another sun, or none.)
+    if (!same) this.far.invalidate();
   }
 
   /** Each mountain's journey over a Clear Skies run (palette.ts JOURNEY, keyed off the distance ridden;
@@ -1120,6 +1154,7 @@ export class World {
     // rake across the run; the snow is still shaded by the lifted key light (uSunDir).
     this.sun.position.copy(this.sunTarget.position).addScaledVector(this.palette.shadowDir, 90);
     this.sunTarget.updateMatrixWorld();
+    this.updateFar(v, s.z, dt);
     this.sky.follow(this.cam.camera.position);
     this.weather.follow(this.cam.camera.position);
 
@@ -1216,6 +1251,26 @@ export class World {
 
   private fitX = new Vector3();
   private fitY = new Vector3();
+
+  /** The far shadows (farshadow.ts) follow the run's window and the light: the near map's box is where they
+   *  hand over to it, and the palette says how strong and how soft the light is (a flat grey day casts little,
+   *  and softly). The title's light is the run's start, as the colour script's is. */
+  private updateFar(v: FrameView, z: number, dt: number): void {
+    const title = v.mode === 'title';
+    if (title !== this.farTitle) {
+      this.farTitle = title;
+      this.far.invalidate();
+    }
+    const q = this.quality;
+    const t = this.sunTarget.position;
+    this.far.setNearBox(t.x, t.y, t.z, q.shadows ? q.passes.shadowReach : 0, this.palette.shadowDir);
+    const p = this.palette;
+    const strength = this.farOff ? 0 : p.shadowK * (1 - 0.45 * p.sunSoft);
+    const soften = 1 + 1.5 * p.sunSoft + 1.5 * (1 - p.shadowK);
+    const ci = Math.max(0, Math.floor(z / CHUNK_LEN));
+    const ahead = q.detail === 'low' ? 900 : q.detail === 'medium' ? 1200 : 1300;
+    this.far.update(this.renderer, z, ci === 0 ? -2 : ci - 1, ci + q.viewChunks, ahead, strength, soften, dt);
+  }
 
   /** Rear-view mirror while an avalanche is chasing you: the threat is behind the chase camera,
    *  so a framed inset sitting on the HUD's danger meter looks back up the slope at the wall.

@@ -6,6 +6,7 @@ import type { BiomeId } from '../sim/mountains';
 import { CrowdUniforms, FIGURE_H, crowdColors, crowdMaterial, figureGeometry, restyleCrowd } from './crowd';
 import { ENCLOSED, Kind, Piece, Rail, SPANS, SiteCtx, mergePiece, pieceFor } from './landmarkKit';
 import { inClearing, liftLine, type Clearing } from './dressing';
+import type { FarSite } from './farshadow';
 import { Chairs } from './liftline';
 import { pushLocalLight } from './lights';
 import { makeToonMaterial, shared } from './materials';
@@ -1085,6 +1086,28 @@ export class SetPieces {
     this.setPalette(palette);
     this.stages.setCourse(course, palette);
   }
+
+  /** The visual lift's far shadows (farshadow.ts), read only: every made piece whose span touches sim
+   *  [z0, z1], with its frame (one record, reused between calls). */
+  farSites(z0: number, z1: number, cb: (site: FarSite, geo: BufferGeometry) => void): void {
+    const list = this.plan.planned;
+    const f = this.farSite;
+    for (const [n, g] of this.built) {
+      const s = list[n];
+      if (!s || s.z + s.len < z0 || s.z - s.len > z1) continue;
+      f.n = n;
+      f.x = s.x;
+      f.y = s.y;
+      f.z = s.z;
+      f.yaw = s.yaw;
+      f.len = s.len;
+      f.span = s.span;
+      f.roof = ENCLOSED.has(s.kind) && s.clear > 0;
+      cb(f, g);
+    }
+  }
+
+  private farSite: FarSite = { n: 0, x: 0, y: 0, z: 0, yaw: 0, len: 0, span: false, roof: false };
 
   /** The sites planned so far (other systems keep their own pieces clear of them). */
   get planned(): readonly Site[] {

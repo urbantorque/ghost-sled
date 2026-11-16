@@ -1,5 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
+import { FAR_GLSL, farUniforms } from './farshadow';
 import { localUniforms, setLocalLightTier } from './lights';
 import { Palette, setPoster, tierLook } from './palette';
 import { ICE_MIRROR_GLSL, iceMirror } from './postfx/reflect';
@@ -96,6 +97,8 @@ export const shared = {
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
   ...localUniforms,
+  // (The visual lift's far shadows: the field every lit material reads in farShadow(). farshadow.ts.)
+  ...farUniforms,
 };
 
 /** Cloud shadows on the snow are a Medium and High touch (world.ts turns them off on Low), and so is
@@ -426,6 +429,7 @@ float hash13(vec3 p) {
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
 }
+${FAR_GLSL}
 `;
 
 /** The sled lantern's pool of light on the snow (Lantern Night, ART.md section 7), shared by the snow
@@ -782,7 +786,8 @@ export function makeSnowMaterial(): ShaderMaterial {
       void main() {
         vec3 n = normalize(vNormalW);
         vec3 v = normalize(cameraPosition - vWorldPos);
-        float shadow = mix(1.0, snowShadow(), uShadowK);
+        // (The far shadows take over from the shadow map past its reach, and add the terrain's own. farshadow.ts.)
+        float shadow = farShadow(vWorldPos, mix(1.0, snowShadow(), uShadowK));
         // A wall's shadow over the floor (the terrain casts none into the shadow map): the sun has to clear
         // the crest on its own side, which stands across the floor from here at the wall's height.
         if (vRock.w > 0.5) {
@@ -1708,6 +1713,9 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
         #ifdef USE_SHADOWMAP
           shadow = mix(1.0, getShadowMask(), uShadowK);
         #endif
+        // (The far shadows past the shadow map's reach, and the terrain's own: what stands in a shaded valley is
+        // in its shade. farshadow.ts.)
+        shadow = farShadow(vWorldPos, shadow);
         float keep = 1.0;
         #ifndef BOB
           // Props near the camera, or in the line of sight to the rider, dissolve instead of blocking it.

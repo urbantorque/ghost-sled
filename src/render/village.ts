@@ -636,7 +636,8 @@ export function makeVillageMaterial(aerial: string, extra: Record<string, { valu
         base = mix(base, uSnowLit * 0.92, white * 0.85);
         vec3 shade = mix(base * 0.42, uShadeTint * (0.35 + 0.4 * dot(base, vec3(0.33))), 0.45);
         shade = mix(shade, mix(uSnowShade, uShadeTint, 0.3), white * 0.7);
-        vec3 col = toonLightK(base, shade, n, v, 1.0, 0.22);
+        // (A village in the valley's shadow is in it too. farshadow.ts.)
+        vec3 col = toonLightK(base, shade, n, v, farShadow(vWorldPos, 1.0), 0.22);
         float glowK = 0.0;
         if (vKind > 0.5 && vKind < 1.5) {
           // Frozen water: the sky's colours on glazed ice.
