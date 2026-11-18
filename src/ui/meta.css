@@ -581,14 +581,36 @@
   animation: none;
 }
 
-/* Portrait: the band over the card (contract C6) keeps the wreck; the strip sits at its foot, under
-   the rider, where the scrim has already begun, and the card below it does not move. */
+/* Portrait: the band over the card (contract C6) is the rider's alone (the visual lift: the strip at its
+   foot covered the hero shot), so the ladder rides the card's mountain line, as on a small landscape
+   screen below: the rank shares that row and Next takes the one under it. */
 @media (max-aspect-ratio: 1/1) {
   .gs-lad.is-band {
-    grid-row: 1;
-    grid-column: 1;
-    align-self: end;
-    margin-bottom: 8px;
+    display: none;
+  }
+
+  .gs-lad.is-inline {
+    position: static;
+    display: contents;
+  }
+
+  .gs-lad.is-inline .gs-lad-main {
+    margin-left: auto;
+  }
+
+  .gs-lad.is-inline .gs-lad-next {
+    flex-basis: 100%;
+  }
+
+  /* The climb's news keeps no line of the phone's first view, but a reader still hears it: the band's copy
+     is hidden from readers, so this one is only clipped, never removed. */
+  .gs-lad.is-inline .gs-lad-moment {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 }
 

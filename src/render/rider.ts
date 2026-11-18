@@ -378,7 +378,8 @@ const FLOW_C = new Color(FLOW_HEX);
 function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, horizonRim: number, sway = false, joint?: { value: Vector3 }): ShaderMaterial {
   // Props dissolve within about 3 m of the lens; the chase camera now rides closer than that on a
   // hard landing, which screen-doored the whole rider. The rider only gives way to a lens inside it.
-  const m = makeToonMaterial({ nearFade: [0.25, 0.45], ...opts });
+  // (hero: on Low the rider takes the poster's widest painted rim, materials.ts POSTER_GLSL; the visual lift's poster lane.)
+  const m = makeToonMaterial({ nearFade: [0.25, 0.45], hero: true, ...opts });
   riderStencil(m);
   if (sway) {
     addSway(m, u, joint);

@@ -8,6 +8,12 @@ import type { Beat } from '../game/beats';
 
 export type GhostKind = 'pool' | 'you' | 'grudge' | 'friend' | 'daily';
 
+/** Contract C6: on a screen held upright the results card leaves this share of the height open at the top (the
+ *  safe-area inset on top of it), and the results lens frames the rider in that band. The visual lift raised it
+ *  from 0.28: under the moment's line and the ladder the band kept only a cropped torso, and on a phone the
+ *  picture is the game. style.css's portrait results rule says the same share (tests/results-band.test.ts). */
+export const RESULTS_BAND = 0.44;
+
 export interface MountainCard {
   id: string;
   name: string;

@@ -96,7 +96,23 @@ export const shared = {
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
   ...localUniforms,
+  ...posterUniforms(),
 };
+
+/** Low's poster (the visual lift, poster lane; POSTER_GLSL below): x 1 on Low and 0 on every other tier,
+ *  y the painted rim on a silhouette, z the hero's, w how hard a cast shadow's edge is cut. uPosterShade:
+ *  rgb the colour Low paints a cast shadow's shade toward, w how far. uPosterSnow: x the steps the snow's light
+ *  is painted in (0: smooth), y how soft each step's edge is. (A function, so the uniforms sit
+ *  in `shared` with the rest and every material that spreads it reads them.) */
+function posterUniforms() {
+  return { uPoster: { value: new Vector4(0, 0, 0, 0) }, uPosterShade: { value: new Vector4(0, 0, 0, 0) }, uPosterSnow: { value: new Vector4(0, 0, 0, 0) } };
+}
+
+/** What Low's poster layer draws from the palette in force (poster.ts), written by applyPalette: how strong
+ *  its painted shafts are (the grade's shafts times the poster's), whether a bright place may throw its own,
+ *  the light they are painted in (the key light's own colour, warmed toward the clouds' rim), and the frame's
+ *  foot and corners and the shade colour laid over them. */
+export const posterFrame = { shafts: 0, place: 1, light: new Color(1, 1, 1), shade: new Color(0.1, 0.12, 0.3), foot: 0, vignette: 0 };
 
 /** Cloud shadows on the snow are a Medium and High touch (world.ts turns them off on Low), and so is
  *  the snow's finer painted detail (uSnowFx). */
@@ -111,6 +127,7 @@ export function setCloudShadows(on: boolean): void {
   // (Low: the snow alone takes the nearest few local lights, as painted pools. lights.ts.)
   setLocalLightTier(!on);
   setPoster(!on);
+  shared.uPoster.value.x = on ? 0 : 1;
 }
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
@@ -255,6 +272,19 @@ export function applyPalette(full: Palette): void {
   shared.uLampK.value = p.lamps;
   shared.uPoolSoft.value = p.poolSoft;
   shared.uLeaf.value = p.leaf;
+  // (Low's poster: read only where uPoster.x is 1, which setCloudShadows sets with the tier.)
+  const ps = p.poster;
+  shared.uPoster.value.set(shared.uPoster.value.x, ps.rim, ps.hero, ps.edge);
+  shared.uPosterShade.value.set(ps.shadow.r, ps.shadow.g, ps.shadow.b, ps.shadowK);
+  shared.uPosterSnow.value.set(ps.steps, ps.soft, 0, 0);
+  posterFrame.shafts = p.grade.shafts * ps.shafts;
+  posterFrame.place = ps.shafts;
+  const sc = p.sunColor;
+  const sm = Math.max(sc.r, sc.g, sc.b, 0.001);
+  posterFrame.light.setRGB(sc.r / sm, sc.g / sm, sc.b / sm).lerp(p.clouds.rim, 0.3);
+  posterFrame.shade.copy(p.snowDeep).lerp(p.snowShade, 0.35).multiplyScalar(0.55);
+  posterFrame.foot = ps.foot;
+  posterFrame.vignette = ps.vignette;
 }
 
 export const LIGHT_GLSL = /* glsl */ `
@@ -446,6 +476,63 @@ vec3 lanternLamp(vec3 lanternColor) {
 }
 `;
 
+/**
+ * Low's poster (the visual lift, poster lane): the stylised tricks Low paints where the other tiers draw an
+ * effect (ART.md 15, "Tiers, designed"). Every function returns its input untouched unless uPoster.x is 1,
+ * which it is on Low alone, so a material that carries the chunk costs the other tiers one compare.
+ *
+ * - posterRim: the painted rim. Low has no bloom and no occlusion to cut a silhouette out of the snow, so
+ *   the edge that faces the key light takes a hard band of that light's own colour, laid over the surface
+ *   like a stroke of gouache rather than added as a glow, and all round the outline when the light is
+ *   behind. A saturated warm surface (the rider's vermillion) takes it in its own hue. The hero (HERO, the
+ *   rider's materials) takes a wider, stronger band than a prop.
+ * - posterShadow, posterShade: a cast shadow as a poster paints it. Low's only cast shadow is to come from
+ *   the far shadow field (the farlight lane); where that is read on Low, its lit share goes through
+ *   posterShadow (its edge cut harder, uPoster.w) and the shade it darkens toward through posterShade (a
+ *   lean to the palette's poster shadow colour). Both are the identity on every other tier.
+ */
+export const POSTER_GLSL = /* glsl */ `
+uniform vec4 uPoster;
+uniform vec4 uPosterShade;
+uniform vec4 uPosterSnow;
+/** The snow's light in a poster's flat values: shade to lit in uPosterSnow.x steps (2: shade, a middle and lit),
+ *  each edge a short soft ramp uPosterSnow.y wide, so a slope reads as shapes of light and shade rather
+ *  than an airbrushed fall-off. */
+float posterValue(float t) {
+  if (uPoster.x <= 0.0 || uPosterSnow.x < 0.5) return t;
+  float q = clamp(t, 0.0, 1.0) * uPosterSnow.x;
+  return (floor(q) + smoothstep(0.5 - uPosterSnow.y, 0.5 + uPosterSnow.y, fract(q))) / uPosterSnow.x;
+}
+vec3 posterRim(vec3 col, vec3 base, vec3 n, vec3 v, float shadow, float k, float hero) {
+  if (uPoster.x <= 0.0) return col;
+  float edge = 1.0 - clamp(dot(n, v), 0.0, 1.0);
+  // The side toward the light, and the whole outline when the light is behind the form.
+  float facing = smoothstep(-0.15, 0.35, dot(n, uSunDir));
+  float behind = smoothstep(0.0, 0.6, dot(-v, uSunDir));
+  float side = max(facing, behind * 0.85);
+  // A prop's band is its outermost facets on the light's side; the hero's is wider and runs all round it,
+  // in the key light's colour on the light's side and the sky's on the other.
+  // (The hero's band crisper and never under 0.6 round the outline: at 0.4 off the light's side no critic saw it.)
+  float from = mix(0.64, 0.48, hero);
+  float band = smoothstep(from, from + mix(0.1, 0.07, hero), edge) * mix(side, 0.6 + 0.4 * side, hero);
+  vec3 keyC = uSunColor / max(max(uSunColor.r, uSunColor.g), max(uSunColor.b, 0.001));
+  vec3 rimC = mix(uRim, keyC, mix(0.65, side, hero));
+  float hiB = max(base.r, 0.001);
+  float warm = smoothstep(0.5, 0.8, (base.r - max(base.g, base.b)) / hiB);
+  rimC = mix(rimC, base / hiB * 1.08, warm);
+  float amt = band * mix(0.5, 1.0, shadow) * clamp(k * mix(uPoster.y, uPoster.z, hero) * mix(2.2, 3.0, hero), 0.0, 1.0);
+  return mix(col, max(col, rimC), amt);
+}
+float posterShadow(float s) {
+  if (uPoster.x <= 0.0) return s;
+  return mix(s, smoothstep(0.38, 0.62, s), uPoster.w);
+}
+vec3 posterShade(vec3 shade, float s) {
+  if (uPoster.x <= 0.0) return shade;
+  return mix(shade, uPosterShade.rgb, uPosterShade.w * (1.0 - s));
+}
+`;
+
 const SHADOW_VERT_PARS = /* glsl */ `
 #include <common>
 #include <shadowmap_pars_vertex>
@@ -559,6 +646,7 @@ export function makeSnowMaterial(): ShaderMaterial {
       /** Terrain (aPaint): the lake, the fork's strip, a leap's groomed landing, a tree run's canopy. */
       varying vec4 vPaint;
       uniform float uSnowFx;
+      ${POSTER_GLSL}
       /** A distance band across the corridor at three.js z0 (centre x0, half-width hw), halfD metres
        *  deep each way: 1 on it, feathering out over its last metre and a half at the banks. Never
        *  thinner than about two pixels (fwz: metres of z one pixel spans), so a band far down the
@@ -791,6 +879,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           float cleared = across * uSunDir.y / max(abs(uSunDir.x), 0.05) + vRock.y - crest;
           shadow = min(shadow, mix(1.0, 0.28 + 0.72 * smoothstep(-1.5, 1.5, cleared), uShadowK));
         }
+        // (Low's poster: a cast shadow's edge cut as a poster cuts it. POSTER_GLSL; the identity on every other
+        // tier. Low's cast shadows are the walls' above and, when it lands, the far shadow field's.)
+        shadow = posterShadow(shadow);
         vec3 dpx = dFdx(vWorldPos);
         vec3 dpy = dFdy(vWorldPos);
         float dist = length(cameraPosition - vWorldPos);
@@ -910,6 +1001,8 @@ export function makeSnowMaterial(): ShaderMaterial {
         // that lights them (by day: at night the sky is darker than the snow).
         shade = mix(shade, uSnowDeep, (1.0 - shadow) * 0.3);
         shade = mix(shade, shade * 0.55 + uSkyZenith * 0.5, (0.1 + 0.16 * (1.0 - shadow)) * dayK);
+        // (Low's poster: what a cast shadow's shade leans to, the palette's poster shadow colour.)
+        shade = posterShade(shade, shadow);
         lit = mix(lit, mix(lit, uSnowShade, 0.25), smoothstep(9.0, 16.0, vEdge));
         // Lit snow stays below the bloom threshold, a little lower in bright day moods, where full
         // strength washes the whole foreground out to one value.
@@ -948,6 +1041,8 @@ export function makeSnowMaterial(): ShaderMaterial {
         // drifts have an edge to their light).
         float driftK = smoothstep(10.5, 16.0, vEdge);
         t = mix(t, smoothstep(0.0, 0.2, ndl) * mix(0.18, 1.0, shadow), driftK * 0.45);
+        // (Low's poster: the light in flat values. POSTER_GLSL; the identity on every other tier.)
+        t = posterValue(t);
         vec3 col = mix(shade, lit * sunSnow, t);
         col = mix(col, col * mix(vec3(0.92), uSnowShade / max(uSnowLit, vec3(0.05)), 0.4), driftK * (1.0 - vSnow.y) * 0.3);
         col += lit * sunSnow * smoothstep(0.55, 0.95, vSnow.y) * 0.09 * t;
@@ -1473,6 +1568,9 @@ export interface ToonOptions {
    *  (0 held, 1 hanging free) swings it with the wind in the vertex shader, off the shared clock, by
    *  uCloth metres; a geometry without aSway stands still. */
   cloth?: boolean;
+  /** The visual lift: the hero's materials (the rider). On Low its painted rim is the frame's strongest
+   *  (POSTER_GLSL); nothing else changes. */
+  hero?: boolean;
 }
 
 export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
@@ -1497,7 +1595,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uStoneSnow: shared.uSnowLit,
       uStoneShade: shared.uSnowShade,
     },
-    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}) },
+    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}), ...(opts.hero ? { HERO: 1 } : {}) },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       #ifdef CLOTH
@@ -1699,6 +1797,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       varying vec4 vClip;
       varying float vLocalY;
       varying float vCull;
+      ${POSTER_GLSL}
       void main() {
         vec3 n = normalize(vNormalW);
         vec3 v = normalize(cameraPosition - vWorldPos);
@@ -1898,6 +1997,12 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           }
         #else
           col = lanternLight(col, base, vWorldPos, n);
+        #endif
+        // Low's poster: the painted rim (POSTER_GLSL; the identity on every other tier).
+        #ifdef HERO
+          col = posterRim(col, base, n, v, shadow, uRimK, 1.0);
+        #else
+          col = posterRim(col, base, n, v, shadow, uRimK, 0.0);
         #endif
         #ifdef BOB
           // A glowing gift cuts through the fog it would otherwise sink into.

@@ -3,27 +3,30 @@
 # the final build's (shots/r7/final), at the same distances, a mountain and a tier a sheet; Lanternfall, new this
 # round, has after sheets only. Tiles are labelled r6-/r7- so the pairs read left to right.
 #   scripts/playtest/round-sheets.sh shots/r7/before shots/r7/final shots/r7/sheets
-BEFORE="$1"; AFTER="$2"; OUT="$3"
+# The visual lift's lanes name their tiers and the two labels (round 7's final frames as the before, so
+# Lanternfall has pairs too):
+#   scripts/playtest/round-sheets.sh shots/r7/final shots/vl/poster/after shots/vl/poster/sheets "low phone-medium" r7 vl
+BEFORE="$1"; AFTER="$2"; OUT="$3"; TIERS="${4:-high low phone-medium}"; LB="${5:-r6}"; LA="${6:-r7}"
 mkdir -p "$OUT"
 TMP="$OUT/.tiles"
-for tier in high low phone-medium; do
+for tier in $TIERS; do
   for m in 0 1 2 3 4; do
     rm -rf "$TMP"; mkdir -p "$TMP"
     list=()
     for f in "$AFTER/$tier"/m$m-z*.png; do
       [ -f "$f" ] || continue
       b="$(basename "$f")"
-      if [ "$m" != 4 ] && [ -f "$BEFORE/$tier/$b" ]; then
-        cp "$BEFORE/$tier/$b" "$TMP/r6-$b"
-        list+=("$TMP/r6-$b")
+      if { [ "$m" != 4 ] || [ "$LB" != r6 ]; } && [ -f "$BEFORE/$tier/$b" ]; then
+        cp "$BEFORE/$tier/$b" "$TMP/$LB-$b"
+        list+=("$TMP/$LB-$b")
       fi
-      cp "$f" "$TMP/r7-$b"
-      list+=("$TMP/r7-$b")
+      cp "$f" "$TMP/$LA-$b"
+      list+=("$TMP/$LA-$b")
     done
     [ ${#list[@]} -gt 0 ] || continue
     cols=6; width=2400
     [ "$tier" = phone-medium ] && cols=10 && width=2400
-    [ "$m" = 4 ] && cols=$((cols / 2))
+    [ "$m" = 4 ] && [ "$LB" = r6 ] && cols=$((cols / 2))
     # (At most 40 tiles a sheet: the tiler holds every frame in one page, and more than that closed the browser.)
     part=0
     for ((i = 0; i < ${#list[@]}; i += 40)); do

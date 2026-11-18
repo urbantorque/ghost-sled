@@ -6,7 +6,7 @@ import type { GhostPose } from '../game/ghosts';
 import { BEST_HEX, DRIFT_TIER_HEX, FLOW_HEX, IDLE_FEEL, type Beat, type BeatOf, type Feel, type GhostRole } from '../game/beats';
 import type { Light, ObstacleKind } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
-import type { GhostKind } from '../ui/contract';
+import { RESULTS_BAND, type GhostKind } from '../ui/contract';
 import { reduced } from '../ui/motion';
 import type { ListenSources } from '../audio/listen';
 import { ChaseCamera, crashPack } from './camera';
@@ -26,6 +26,7 @@ import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from '
 import { Particles, Weather } from './particles';
 import { BRUSH_REACH_BOUGH, brushPoint } from './brush';
 import { PostFX } from './post';
+import { POSTER_LAYER, PosterLayer } from './poster';
 import { PASSES, detailOf, parseSwitches, type Detail, type PassSettings, type Tier } from './postfx/tiers';
 import { VIEWS, type PipeView } from './postfx/pipeline';
 import { cine } from './cine';
@@ -207,6 +208,8 @@ export class World {
   readonly sloughs: Sloughs;
   readonly moments: Moments;
   readonly post: PostFX;
+  /** Low's poster (the visual lift): painted shafts and the frame's foot, one draw on Low only (poster.ts). */
+  readonly poster = new PosterLayer();
   /** What a frozen lake mirrors (lakemirror.ts): baked only when one is near. */
   private lakeMirror: LakeMirror;
   readonly sun = new DirectionalLight(0xffffff, 1);
@@ -400,6 +403,10 @@ export class World {
       ...this.particles.objects,
       this.weather.points,
     );
+    // (The poster joins the scene on idle time after Low's first frame: poster.ts. Only the chase lens draws it.)
+    this.poster.host = { renderer: this.renderer, scene: this.scene };
+    this.poster.setTier(quality.detail === 'low');
+    this.cam.camera.layers.enable(POSTER_LAYER);
     this.sun.castShadow = quality.shadows;
     this.configureShadow();
     this.scene.add(this.sun, this.sunTarget);
@@ -547,6 +554,7 @@ export class World {
     this.spirit.setQuality(q.particleBudget, q.bloom);
     this.post.shaftTaps = q.detail === 'high' ? 14 : 8;
     this.sky.setDetail(q.detail);
+    this.poster.setTier(q.detail === 'low');
     this.lantern.setDetail(q.detail);
     this.life.setQuality(q.detail, q.forestDensity);
     this.speedPosts.setTier(q.detail);
@@ -1042,11 +1050,11 @@ export class World {
     // Camera.
     const dir = s.speed > 1 ? new Vector3(s.vx, 0, -s.vz).normalize() : fwd;
     // Contract C4: a wide landscape results screen settles into a hero shot of the wreck beside the
-    // panel. Contract C6: on a portrait screen the card leaves the top ~28% (plus the safe-area
+    // panel. Contract C6: on a portrait screen the card leaves the top RESULTS_BAND (plus the safe-area
     // inset) open, and the hero shot centres the wreck in that band. Narrow landscape screens keep
     // the drift around it under a full-screen panel.
     const hero = v.mode === 'results' && !this.moments.finishing && ((this.width > 900 && this.width > this.height) || this.width < this.height);
-    if ((hero || this.moments.finishing) && this.width < this.height) this.cam.heroBand = Math.min(0.4, 0.28 + this.ghosts.safeTop / this.height);
+    if ((hero || this.moments.finishing) && this.width < this.height) this.cam.heroBand = Math.min(0.56, RESULTS_BAND + this.ghosts.safeTop / this.height);
     // (Reduced motion never swings: the chase follows the rider to a stop.)
     this.cam.mode = v.mode === 'title' ? 'orbit' : this.moments.finishing && !feel.reduced ? 'finish' : hero ? 'hero' : this.rider.crashing ? 'crash' : 'chase';
     let chaosShake = 0;
@@ -1179,6 +1187,8 @@ export class World {
     this.lakeMirror.everywhere = this.post.enabled && this.quality.passes.mirror !== 'sky' && this.post.pipe.switches.mirror;
     this.lakeMirror.update(this.renderer, this.sky.root, this.course, s.z, v.time);
     if (this.cineHold) Object.assign(cine, this.cineHold);
+    // (Low's poster, after every system has offered its bright place and the lens has moved.)
+    this.poster.update(this.cam.camera, this.width / this.height, feel.reduced || reduced(), this.setPieces.light.shade);
     this.post.render(this.scene, this.cam.camera);
     this.renderMirror(v, focus, dir, dt);
     // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).

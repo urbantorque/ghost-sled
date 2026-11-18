@@ -1,4 +1,4 @@
-import { BackSide, BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3 } from 'three';
+import { BackSide, BufferAttribute, BufferGeometry, Color, DoubleSide, Mesh, Object3D, ShaderMaterial, SphereGeometry, Vector3, Vector4 } from 'three';
 import { COMET_DIR, Palette, tierLook } from './palette';
 import { shared } from './materials';
 import { Massif, NOISE, SEA_GLSL, makeSeaUniforms } from './massif';
@@ -16,6 +16,9 @@ export class Sky {
   private sea = makeSeaUniforms();
   private wisps = true;
   private highClouds = 0;
+  /** Low draws the poster's sky (setDetail), from the last palette's poster fields (setPalette). */
+  private poster = false;
+  private posterSky = new Vector4();
 
   constructor(seed: number) {
     this.domeMat = new ShaderMaterial({
@@ -61,6 +64,9 @@ export class Sky {
         uRays: { value: 0 },
         uHalo: { value: 0 },
         uMeteors: { value: 0 },
+        // Low's poster (setPalette): x the gradient's bands (0: smooth), y the horizon's printed stripe,
+        // z the scatter's rings round the sun (0: smooth), w 1 on Low.
+        uPosterSky: { value: new Vector4(0, 0, 0, 0) },
         ...this.sea,
       },
       defines: { CLOUD_Q: 1, SEA_Q: 1 },
@@ -130,6 +136,13 @@ export class Sky {
         uniform float uRays;
         uniform float uHalo;
         uniform float uMeteors;
+        uniform vec4 uPosterSky;
+        // Low's poster: a value painted in n flat steps, each edge a short soft ramp (a screen print's, never
+        // an 8-bit sky's many hairline steps).
+        float posterSteps(float x, float n) {
+          float q = x * n;
+          return (floor(q) + smoothstep(0.4, 0.6, fract(q))) / n;
+        }
         varying vec3 vDir;
         varying vec4 vClip;
         varying vec4 vSunClip;
@@ -156,6 +169,8 @@ export class Sky {
         // dark zenith reads as dark instead of being swamped by a bright horizon in linear light.
         vec3 gradient(float h) {
           float t = pow(clamp(h / uSpread, 0.0, 1.0), uCurve);
+          // (Low's poster: the gradient in a few flat bands.)
+          if (uPosterSky.x > 0.5) t = posterSteps(t, uPosterSky.x);
           vec3 a = sqrt(uHorizon);
           vec3 z = sqrt(uZenith);
           vec3 m = 2.0 * sqrt(uMid) - 0.5 * (a + z);
@@ -341,7 +356,10 @@ export class Sky {
           if (h >= 0.0) {
             col = gradient(h);
             // A warm band hugging the horizon.
-            col = mix(col, uBand, exp(-h * uBandFade) * uBandK);
+            // (Low's poster: a thin printed line of the band's colour along the ridges, over its own soft glow. A
+            // full stripe of it read as a pasted bar, the lane's critic.)
+            float bandW = max(exp(-h * uBandFade), uPosterSky.y * (1.0 - smoothstep(0.28, 0.55, h * uBandFade)));
+            col = mix(col, uBand, bandW * uBandK);
           } else {
             col = mix(uHorizon, uBelow, clamp(-h * 6.0, 0.0, 1.0));
             // The sea of clouds far below, which the ranges rise out of.
@@ -358,7 +376,11 @@ export class Sky {
           // A crisp edge in a clear sky; behind a cloud deck the disc melts into a wide soft blot.
           float edge = mix(0.0035 * uSunSize, R * 0.85, uSunSoft);
           float disc = smoothstep(R + edge, R - edge, sunScr);
-          float glow = exp(-sunAng * 8.0) * 0.45 * (1.0 - 0.6 * uSunSoft) + exp(-sunAng * 2.6) * 0.14 + exp(-sunAng * 4.5) * 0.3 * uSunSoft;
+          float glowNear = exp(-sunAng * 8.0) * 0.45 * (1.0 - 0.6 * uSunSoft);
+          // (Low's poster: the scatter close round the disc as rings of flat value, printed rather than airbrushed;
+          // the broad glow over that side of the sky stays a smooth gradient, so no ring edge crosses the sky.)
+          if (uPosterSky.z > 0.5) glowNear = posterSteps(glowNear * 1.6, uPosterSky.z * 2.0) / 1.6;
+          float glow = glowNear + exp(-sunAng * 2.6) * 0.14 + exp(-sunAng * 4.5) * 0.3 * uSunSoft;
           // Painted clouds, under the sun and moon: they part round the disc (its core is never
           // covered) and only veil the corona, which shines on over them.
           float cloudA = 0.0;
@@ -629,6 +651,8 @@ export class Sky {
     u.uRays.value = p.moon ? 0 : p.atmo.rays * (1 - Math.max(0, Math.min(1, (p.diskDir.y - 0.3) / 0.25)));
     u.uHalo.value = p.atmo.halo;
     u.uMeteors.value = p.atmo.meteors;
+    this.posterSky.set(p.poster.bands, p.poster.stripe, p.poster.rings, 1);
+    u.uPosterSky.value.copy(this.posterSky).multiplyScalar(this.poster ? 1 : 0);
     this.massif.setPalette(p);
     this.mist.setPalette(p);
   }
@@ -645,6 +669,8 @@ export class Sky {
   setDetail(tier: 'low' | 'medium' | 'high'): void {
     const q = tier === 'low' ? 0 : 1;
     this.wisps = q > 0;
+    this.poster = tier === 'low';
+    this.domeMat.uniforms.uPosterSky.value.copy(this.posterSky).multiplyScalar(this.poster ? 1 : 0);
     this.domeMat.uniforms.uCloudHigh.value = this.wisps ? this.highClouds : 0;
     if (this.domeMat.defines.CLOUD_Q !== q) {
       this.domeMat.defines.CLOUD_Q = q;
