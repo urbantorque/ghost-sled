@@ -874,7 +874,9 @@ export class FarShadow {
         const hw = c.halfWidth(z);
         for (let k = 0; k < GROUND_COLS; k++) {
           const x = x0 + k * GROUND_D;
-          this.grid[o + j * GROUND_COLS + k] = Math.abs(x - cx) - hw <= REF_REACH ? this.world.ground(x, z) : this.valleyAt(x, z);
+          // (Only the run's own ground, out to the reference edge: the mountainside past it casts through the coarse
+          // tiles, by the key light.)
+          this.grid[o + j * GROUND_COLS + k] = Math.abs(x - cx) - hw <= REF_REACH ? this.world.ground(x, z) : NONE;
         }
       }
       this.gRow[s] = j + 1;
@@ -884,13 +886,14 @@ export class FarShadow {
     return true;
   }
 
-  /** The ground at sim (x, z): the run's own from its ring, the valley's past it (NONE where unknown). */
+  /** The run's own ground at sim (x, z) from its ring (NONE past the reference edge and where unknown): what the fine
+   *  tiles' terrain casts from, by the low shadow light. */
   private groundAt(x: number, z: number): number {
     const i = Math.floor(z / CHUNK_LEN);
     const s = ((i % GROUND_SLOTS) + GROUND_SLOTS) % GROUND_SLOTS;
-    if (this.gKey[s] !== i) return this.valleyAt(x, z);
+    if (this.gKey[s] !== i) return NONE;
     const fu = (x - this.gXc[s] + GROUND_HALF) / GROUND_D;
-    if (fu < 0 || fu > GROUND_COLS - 1) return this.valleyAt(x, z);
+    if (fu < 0 || fu > GROUND_COLS - 1) return NONE;
     const fv = (z - i * CHUNK_LEN) / GROUND_D;
     const k = Math.min(GROUND_COLS - 2, Math.floor(fu));
     const j = Math.min(GROUND_ROWS - 2, Math.floor(fv));
