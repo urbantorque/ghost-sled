@@ -459,12 +459,14 @@ export class World {
     if (view && VIEWS.includes(view)) pipe.view = view;
     if (q.has('gpu')) pipe.timer.on = true;
     // The temporal reconstruction on any tier with a post stack (`?taa`, Medium's trial), its share of the
-    // frame (`?tscale=0.75`) and its sharpen (`?tsharp=0.3`).
+    // frame (`?tscale=0.75`), its sharpen (`?tsharp=0.3`) and its MSAA (`?tmsaa=0`).
     const ts = Number(q.get('tscale'));
     const tk = Number(q.get('tsharp'));
-    if (q.has('taa') || ts > 0 || (q.has('tsharp') && tk >= 0)) {
+    const tm = Number(q.get('tmsaa'));
+    if (q.has('taa') || ts > 0 || (q.has('tsharp') && tk >= 0) || (q.has('tmsaa') && tm >= 0)) {
       const p = { ...this.quality.passes };
       if (q.has('taa')) p.taa = true;
+      if (q.has('tmsaa') && tm >= 0) p.taaMsaa = Math.round(tm);
       if (ts > 0) p.scale = Math.min(1, ts);
       if (q.has('tsharp') && tk >= 0) p.sharpen = Math.min(1, tk);
       this.quality = { ...this.quality, passes: p };

@@ -13,7 +13,7 @@ const fromCine = (over: Partial<FrameSignals> = {}): FrameSignals => rest({ dof:
 
 describe('the tier tables', () => {
   it('has a complete row of passes for every tier, Ultra included', () => {
-    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'scale', 'sharpen', 'fxaa', 'fringe', 'shadowReach'];
+    const keys: Array<keyof PassSettings> = ['ao', 'contact', 'shaftTaps', 'shaftDiv', 'dofTaps', 'blurTaps', 'mirror', 'taa', 'taaMsaa', 'scale', 'sharpen', 'fxaa', 'fringe', 'shadowReach'];
     expect([...TIERS]).toEqual(['low', 'medium', 'high', 'ultra']);
     for (const t of TIERS) {
       const p = PASSES[t];
@@ -197,12 +197,13 @@ describe('the temporal reconstruction', () => {
     }
   });
 
-  it('is two full-frame passes with a depth, and replaces the MSAA and the edge walk', () => {
+  it('is two full-frame passes with a depth, replaces the edge walk and keeps two of the MSAA samples', () => {
     for (const t of ['high', 'ultra'] as const) {
       const plan = planFrame(PASSES[t], ON, rest());
       expect(plan.taa && plan.depth, t).toBe(true);
       expect(plan.added - planFrame(PASSES[t], parseSwitches('-taa'), rest()).added, t).toBe(2);
-      expect(sceneSamples(4, PASSES[t], ON), t).toBe(0);
+      expect(sceneSamples(4, PASSES[t], ON), t).toBe(2);
+      expect(sceneSamples(2, PASSES[t], ON), t).toBe(2);
       expect(sceneSamples(4, PASSES[t], parseSwitches('-taa')), t).toBe(4);
       const names = passCosts(PASSES[t], ON, rest(), 1280, 720).map((r) => r.name);
       expect(names, t).toContain('taa');

@@ -38,9 +38,15 @@ export interface PassSettings {
   mirror: 'sky' | 'bake' | 'screen';
   /** Temporal reconstruction (the visual lift, notes/vl-temporal.md): the scene is drawn at `scale` of
    *  the frame with the lens moved inside a pixel each frame, and rebuilt to the full frame from the
-   *  frames before it. Where it runs it replaces the MSAA and the edge walk (both come back with
+   *  frames before it. Where it runs it replaces the edge walk and most of the MSAA (both come back with
    *  `?post=-taa`). */
   taa: boolean;
+  /** The MSAA samples the scene is drawn with while the reconstruction runs (at most the tier's own). Two
+   *  keep a cable thinner than a pixel, and an outline the rider has just uncovered, drawn in every frame:
+   *  without them the rasteriser dropped a far cable in some frames, the history could not follow a line the
+   *  frame did not draw, and it broke into dashes. On a dense screen the scene is drawn at `scale`, so two
+   *  samples there cost about half of round 7's two at the frame's own size. */
+  taaMsaa: number;
   /** The scene's resolution on each axis as a share of the frame's while the reconstruction runs (1: the
    *  frame's own). Never below one scene pixel to a page pixel (renderScale). */
   scale: number;
@@ -57,7 +63,7 @@ export interface PassSettings {
   shadowReach: number;
 }
 
-const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4, dofTaps: 0, blurTaps: 0, mirror: 'sky', taa: false, scale: 1, sharpen: 0, fxaa: 0, fringe: 0, shadowReach: 26 };
+const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4, dofTaps: 0, blurTaps: 0, mirror: 'sky', taa: false, taaMsaa: 0, scale: 1, sharpen: 0, fxaa: 0, fringe: 0, shadowReach: 26 };
 
 /** What each tier may run. Low has no post pass at all, so every row of it is off: its look is
  *  designed in the materials and the sky, never stripped from here. `fxaa` is what the composite runs
@@ -65,8 +71,8 @@ const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4
 export const PASSES: Record<Tier, PassSettings> = {
   low: { ...OFF },
   medium: { ...OFF, shaftTaps: 6, shaftDiv: 4, mirror: 'bake', fxaa: 2 },
-  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
-  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
+  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, taaMsaa: 2, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
+  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, taaMsaa: 2, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
 };
 
 /** The fewest scene pixels to a page (CSS) pixel the reconstruction draws: at a pixel ratio of 1 it
@@ -83,9 +89,10 @@ export function renderScale(p: PassSettings, sw: PassSwitches, pixelRatio: numbe
   return Math.min(1, Math.max(p.scale, SCALE_FLOOR / Math.max(pixelRatio, 1e-3)));
 }
 
-/** The MSAA samples the scene target is drawn with: none while the reconstruction runs (it replaces them). */
+/** The MSAA samples the scene target is drawn with: the tier's own, or under the reconstruction its
+ *  `taaMsaa` (never more than the tier's own). */
 export function sceneSamples(msaa: number, p: PassSettings, sw: PassSwitches): number {
-  return p.taa && sw.taa ? 0 : msaa;
+  return p.taa && sw.taa ? Math.min(msaa, p.taaMsaa) : msaa;
 }
 
 /** How many places inside a pixel the lens visits before it repeats: 8 at the frame's own size, more as
