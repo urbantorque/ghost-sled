@@ -57,7 +57,8 @@ async (page) => {
       });
       list.sort((a, b) => b.t - a.t);
       const sum = list.reduce((a, r) => a + r.t * (r.cast ? 2 : 1), 0);
-      return { sum, top: list.slice(0, top).map((r) => `${Math.round(r.t)}${r.cast ? '*2' : ''} ${r.name}`) };
+      const meshes = list.length + list.filter((r) => r.cast).length;
+      return { sum, meshes, top: list.slice(0, top).map((r) => `${Math.round(r.t)}${r.cast ? '*2' : ''} ${r.name}`) };
     }, c.top);
     out.push({ z, ...rows });
   }
