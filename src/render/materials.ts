@@ -1967,8 +1967,12 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
           }
           // The visual lift (LIFT_GLSL): the key comes through the ice seen against it, a cold cyan-white
           // gathering at its thin edges and tips, never mint; a rib's face keeps its shade plane.
+          // (Held to half the step from this face to the ice lit: a thin or far member is all rim on screen,
+          // and lit through whole it lost its cobalt core and its plane, the second critic.)
           float trI = liftThrough(n, v, fr * fr) * 0.8;
-          iceCol += vec3(0.55, 0.88, 1.0) * mix(uSunColor, vec3(1.0), 0.5) * trI * (0.35 + 0.65 * tipK) * uHazardFog;
+          vec3 iceLit = body * mix(vec3(1.0), sunN, 0.3);
+          vec3 iceGlow = vec3(0.35, 0.74, 1.0) * mix(uSunColor, vec3(1.0), 0.5) * trI * (0.35 + 0.65 * tipK) * uHazardFog;
+          iceCol += min(iceGlow, max(iceLit - iceCol, vec3(0.0)) * 0.5);
           #ifndef HAZARD
             // Round 7's review: ice built over the run (Frostfang's cavern and spans) goes down with the
             // hazards in a place darker than the night (only the Ice Cavern sets them under 0.75), so the
@@ -2026,7 +2030,10 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               vec3 through = mix(base * 0.9 * mix(uSunColor, vec3(1.0), 0.5), petalC, bloomK);
               float keepUnder = 0.3 + 0.7 * smoothstep(-0.55, 0.45, n.y);
               float nearL = smoothstep(7.0, 18.0, length(cameraPosition - vWorldPos));
-              col += through * trL * (1.0 - snowB) * mix(0.55, 1.5, bloomK) * keepUnder * mix(0.35, 1.0, nearL) * uHazardDim;
+              // (Blossom only at its rim, where a canopy is thin on screen: wider in, its shade facets warmed
+              // and the canopy lost a fifth of its value range, the second critic.)
+              float rimB = mix(1.0, smoothstep(0.35, 0.8, thinT), bloomK);
+              col += through * trL * (1.0 - snowB) * mix(0.55, 1.15, bloomK) * rimB * keepUnder * mix(0.35, 1.0, nearL) * uHazardDim;
             }
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,

@@ -236,6 +236,10 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
   }
   vec3 pipeCrease(vec3 col, vec2 uv, float lin, float keep) {
     if (uCrease.x + uCrease.y <= 0.0 || lin >= uCrease.w || keep <= 0.0) return col;
+    // (Two pixels in from the frame's edge the outer taps would read the edge's own depth again, a fold
+    // that is not there: the second critic found a hairline along the bottom of every High frame.)
+    vec2 inFrame = min(uv, 1.0 - uv) / uDepthTexel;
+    if (min(inFrame.x, inFrame.y) < 2.5) return col;
     vec3 P = viewPos(uv, lin);
     float hero = smoothstep(uCreaseHero.w, uCreaseHero.w * 1.3, length((P - uCreaseHero.xyz) * vec3(1.0, 0.8, 1.0)));
     if (hero <= 0.0) return col;
@@ -253,8 +257,10 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
     float sx = fx.x * fx.y > 0.0 ? clamp(fx.x / fx.y, 0.0, 1.0) : 0.0;
     float sy = fy.x * fy.y > 0.0 ? clamp(fy.x / fy.y, 0.0, 1.0) : 0.0;
     float fade = (1.0 - smoothstep(uCrease.z, uCrease.w, lin)) * hero * keep;
-    float edge = max(sx * smoothstep(0.4, 0.95, -fx.y), sy * smoothstep(0.4, 0.95, -fy.y)) * fade;
-    float crease = max(sx * smoothstep(0.4, 0.95, fx.y), sy * smoothstep(0.4, 0.95, fy.y)) * fade;
+    // (A crease asks for a sharper fold than an edge: beside a near edge a shallow one rang light, dark,
+    // light at two pixels.)
+    float edge = max(sx * smoothstep(0.5, 1.0, -fx.y), sy * smoothstep(0.5, 1.0, -fy.y)) * fade;
+    float crease = max(sx * smoothstep(0.75, 1.2, fx.y), sy * smoothstep(0.75, 1.2, fy.y)) * fade;
     // The edge's bevel takes the key where it turns toward the light, a breath of it where it does not;
     // the surface's own colour lifted toward the light's (a dark face too), never a white outline.
     float toL = smoothstep(-0.25, 0.55, dot(N, uCreaseV));
@@ -306,7 +312,7 @@ export class AOPass {
    *  catches, creaseDark how dark an inner crease goes. */
   crease = 1;
   creaseEdge = 1.3;
-  creaseDark = 0.5;
+  creaseDark = 0.35;
 
   constructor(private quad: Quad) {
     const opts = { format: RGBAFormat, type: UnsignedByteType, minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false, stencilBuffer: false, generateMipmaps: false };
