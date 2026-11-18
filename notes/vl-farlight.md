@@ -76,6 +76,41 @@ Callers: the snow (`farShadow(vWorldPos, mix(1.0, snowShadow(), uShadowK))`), th
 hazards, set pieces, rails, the rider), the mid-ground's shoulders, its forest carpet and its villages, and the
 ghosts' glass (by day a ghost in shade loses its glint and a step of its face; its rim and night glow are its own).
 
+### Decided, with the reason
+
+- **No second cascade on Medium or High.** The field already carries every static caster at any distance for one
+  texture read; what a second map would add is the moving casters (ghosts, the rider) between 34 and about 80 m,
+  whose shadows there are a few pixels. Its price is a second shadow pass: every caster batch drawn again (the
+  forest wall, the hazards, the set pieces' casting slots), 15 to 40 draws, against a budget of one or two.
+- **The terrain is shadowed by the same low shadow light the casters use** (`palette.shadowDir`, 10 degrees under the
+  key light and swung across the slope), not by the key light that shades the snow. The near map's casters already
+  use it, so the two agree at the hand-over, and it gives the art direction's long shadows (ART.md 11 and 15). Where
+  a slope turns from that light more steeply than its rays it falls into its own shade; a 0.55 m bias keeps a slope
+  turned to the light off its own face, and the toon ramp still takes the key light's own terminator.
+- **Ceilings, not visibility.** A visibility map would put a tall house standing in a short tree's shadow wholly in
+  shade, and needs a texel the size of the edge it draws; a ceiling does neither.
+- **Rejected: marching each texel toward the sun** (60 lookups a texel, about 50 ms a tile) and **a sweep over a
+  world-aligned grid** (its interpolation smeared and shortened a tree's shadow by a third at a slant).
+- **Rejected: waiting for the mid-ground's rows** before a tile is baked: the overlook plan holds some rows back for
+  seconds, and a waiting job blocked every tile behind it. A tile is baked with what there is and again once the
+  rows come.
+
+## How it was judged
+
+- **Before:** round 7's final frames (`shots/r7/final/{high,low,phone-medium}`, the fixed list `frames-r7.json`, all
+  five mountains, 181 frames a tier) and round 7's final build (the main checkout's `dist/game`, built from the
+  round's last code) served beside this branch's for every same-state comparison.
+- **After:** the same fixed frames on this branch (`frames.sh`, desk High and Low, phone Medium, all five mountains:
+  `shots/vl/farlight/after/`). Frostfang was shot again after the aurora fix (below); the first set's Frostfang is
+  kept in `after-r1/` as the record of the fault.
+- **A/B of the field alone:** the same held frame with the field on and off (`world.farOff`), the rider held at its
+  metre at 30 m/s so the lens keeps its speed pose (`shots/vl/farlight/ab/`, High on every mountain, Low and the
+  phone on Pinecrest and Frostfang).
+- **Vistas:** each mountain's title-shot place and two of its hero vistas, the rider held at the same metre at speed
+  on round 7's build and this one (`shots/vl/farlight/vistas/`, `-r7` before, `-vl` after): the same moment on
+  both, so these pairs differ only by the build. (The title screen itself runs its reel on the wall clock, so its
+  stills were two different shots and were not used.)
+
 ## Shared code touched
 
 Each edit is the smallest that does the job and carries a comment saying why.
