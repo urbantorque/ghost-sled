@@ -164,12 +164,13 @@ describe('far shadows: the hand-over at the near map', () => {
 });
 
 /** A flat world with one tree standing beside the run in chunk 15, for the whole bake. */
-function flatWorld(sun: Vector3, tree: { x: number; z: number; h: number } | null, wall = false): FarWorld {
+function flatWorld(sun: Vector3, tree: { x: number; z: number; h: number } | null, wall = false, key: Vector3 = sun): FarWorld {
   const course = { centerX: () => 0, halfWidth: () => 10, baseY: () => 0, biome: 'alpine' } as unknown as Course;
   const ground = (x: number) => (wall && x > 60 ? 30 : 0);
   return {
     course,
     sunAt: (_z, o) => o.copy(sun),
+    keyAt: (_z, o) => o.copy(key),
     ground: (x) => ground(x),
     shoulders: (_r, x0, dx, n, o, at) => {
       for (let k = 0; k < n; k++) o[at + k] = ground(x0 + k * dx);
@@ -228,6 +229,19 @@ describe('far shadows: a stretch baked whole', () => {
     expect(behind(5)[3]).toBeGreaterThan(SOFT_OBJ[0] * 0.99);
     // The terrain's own ceiling stays under the flat snow everywhere.
     for (let x = -120; x <= 120; x += 15) for (let z = 15 * CHUNK_LEN; z < 16 * CHUNK_LEN; z += 9) expect(t.at(x, z)[0]).toBeLessThan(0);
+  });
+
+  it("lays the terrain's shadow from the key light that shades the snow, and the casters' from the low shadow light", () => {
+    // A low shadow light (8 degrees) and the key light lifted to 30 (DECISIONS 27): a 30 m bank's shadow is as long
+    // as the key light makes it, not the four times longer the shadow light would, so a sunset never puts a whole
+    // run in a far ridge's shade; a tree beside it still rakes long.
+    const z = 15 * CHUNK_LEN + 30;
+    const t = bake(flatWorld(light(80, 8), { x: -40, z, h: 12 }, true, light(80, 30)), z, 15);
+    const keyReach = 30 / Math.tan(30 * deg);
+    expect(t.at(60 - keyReach * 0.5, z)[0]).toBeGreaterThan(1);
+    expect(t.at(60 - keyReach * 1.6, z)[0]).toBeLessThan(0);
+    const s = sunFrame(light(80, 8));
+    expect(t.at(-40 - s.sx * 60, z - s.sz * 60)[2]).toBeGreaterThan(0);
   });
 
   it("lays a ridge's shadow over the snow beside it: the terrain's own, which the near map never had", () => {

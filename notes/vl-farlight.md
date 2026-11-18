@@ -111,6 +111,57 @@ ghosts' glass (by day a ghost in shade loses its glint and a step of its face; i
   both, so these pairs differ only by the build. (The title screen itself runs its reel on the wall clock, so its
   stills were two different shots and were not used.)
 
+### The first critic's verdict
+
+One fresh critic (general-purpose, `opus`, `xhigh`), given only ART.md, the 40 fixed-frame pairs (`critic/pairs.txt`:
+High four a mountain, Low three, the phone one; Frostfang's taken after the aurora fix) and the 15 held vista pairs,
+asked for each whether the after is better, worse or the same in depth, scale and light, and what broke. It
+sampled pixels (luminance, spreads, edge profiles) where it doubted its eye.
+
+| Group | Better | Same | Worse |
+| --- | --- | --- | --- |
+| High pairs (20) | 2 | 17 | 1 |
+| Low pairs (15) | 6 | 9 | 0 |
+| Phone Medium pairs (5) | 1 | 4 | 0 |
+| High vistas (15) | 3 | 11 | 1 |
+| All 55 | 12 | 41 | 2 |
+
+By mountain: Pinecrest 7 better and 4 same; Frostfang 2, 7, 2 worse; Sakura 3 better; Ember and Lanternfall the same
+throughout (under Ember's deck the sun is soft and the field gentle; Lanternfall's moon field matches the near map's
+look). Better where it said so: Low, which had no cast shadow, now has "tree shadows cross the run in the snow's own
+blue"; Pinecrest's leaps ("the right cliff now shades the right bank, so the gold-lit run stands against a blue
+bank"; at the Valley Leap "one long dusk shadow that reaches the far end"); Fang Town at dawn ("the tower's violet
+shadow now runs half the slope down the right of the run, as ART 15 asks"); Sakura's landing hill and banks.
+**Checked and not found:** shadow acne or speckle (high-frequency energy falls where the new shadows land), a shadow
+on the sky or on a light, a cut-off at a fixed distance from the lens or any seam.
+
+Its five worst faults, worst first:
+1. **Serac Gate's span goes dark and is lit by nothing** (both "worse"): the whole deck under one flat blue, the
+   parapet's shadow bars gone.
+2. **Bank-wide shadows flatten the form they fall on**: the bank's own tree shadows swallowed in one value
+   (Pinecrest's right banks at 2429 and 3900 m, Sakura's left bank on Low).
+3. **Low's shadows do not soften with distance** far from their caster (a bank's shadow with a 6 px edge).
+4. **An arch-shaped shadow with no visible caster** on the Blossom Leap's landing slope (High and Low).
+5. A long, straight (soft) diagonal edge to Pinecrest's right-bank shadow at 2429 m.
+
+What it found still short against ART.md 11 and 15 (most of it other lanes' lifts): long shadows from casters across
+the run itself are no more frequent (the field's new shadows are bank-sized); Serac Gate needs its abyss's cyan
+up-light; Lanternfall's snow has no marigold pools by the stone lamps; no light through Sakura's blossom; no bounce
+into the newly shaded banks; Frostfang's spire shadows under the aurora do not go violet; Low has no painted shafts.
+
+### What changed after it
+
+- **The terrain is shadowed by the key light that shades the snow, not by the low shadow light** (fault 1, and much
+  of 2 and 5). At Serac Gate the shadow light is down to 9 degrees, and a mid-ground spur over a kilometre off laid
+  the whole crossing in its shade (the deck stood 155 to 215 m under the terrain's ceiling). DECISIONS 27 lifts the
+  key light so slopes stay lit while the disc sits low; the field had brought the problem back through the terrain.
+  The terrain's shadows now fall from the key light (so they also meet the snow's own shading at its terminator);
+  the casters' keep the low swung light, so trees and towers still rake long shadows toward the lens.
+- **A terrain shadow softens more with the distance from its ridge** (0.03 m of band a metre, was 0.018: fault 3).
+- **Only set pieces on show cast** (fault 4): a piece made ahead and not yet shown laid its shadow with no caster.
+- **What floats over a span casts nothing** (an arch or a beam's ends past the corridor, cells whose lowest part
+  stands over 2.5 m above the ground): before, only what hung over the corridor itself was left out.
+
 ## Shared code touched
 
 Each edit is the smallest that does the job and carries a comment saying why.

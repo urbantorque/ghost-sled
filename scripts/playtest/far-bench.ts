@@ -19,7 +19,7 @@ for (const mi of (process.argv[2] ?? '0,1,2,3,4').split(',').map(Number)) {
   const mid = new Midground(course, pal, 'high', 110);
   const props = new Props(course, pal, 1, true, false, true);
   const fp = {} as Palette;
-  const world: FarWorld = { course, sunAt: (z, out) => out.copy(journeyPalette(course.biome, z, fp, course).shadowDir), ground: (x, z) => visualGround(course, x, z), shoulders: (r, x0, dx, n, out, at) => mid.shoulders(r, x0, dx, n, out, at), casters: (i, out) => props.farCasters(i, out), sites: () => {} };
+  const world: FarWorld = { course, sunAt: (z, out) => out.copy(journeyPalette(course.biome, z, fp, course).shadowDir), keyAt: (z, out) => out.copy(journeyPalette(course.biome, z, fp, course).sunDir), ground: (x, z) => visualGround(course, x, z), shoulders: (r, x0, dx, n, out, at) => mid.shoulders(r, x0, dx, n, out, at), casters: (i, out) => props.farCasters(i, out), sites: () => {} };
   const far = new FarShadow(world) as any;
   far.upload = () => true;
   const z = 2000;

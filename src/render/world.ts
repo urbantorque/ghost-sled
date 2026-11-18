@@ -318,6 +318,7 @@ export class World {
         return world.course;
       },
       sunAt: (z, out) => out.copy(this.mood === Mood.None ? journeyPalette(this.course.biome, this.journeyAt ?? (this.farTitle ? 0 : Math.max(0, z)), this.farPal, this.course).shadowDir : this.palette.shadowDir),
+      keyAt: (z, out) => out.copy(this.mood === Mood.None ? journeyPalette(this.course.biome, this.journeyAt ?? (this.farTitle ? 0 : Math.max(0, z)), this.farPal, this.course).sunDir : this.palette.sunDir),
       ground: (x, z) => {
         const c = this.course;
         const off = x - c.centerX(z);

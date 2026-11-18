@@ -58,7 +58,7 @@ const COARSE_FLOOR = -1600;
 /** How soft a shadow is (metres of height either side of its ceiling): at the caster, and per metre the
  *  light travels on past it. Things standing in a shadow use the same band. */
 export const SOFT_OBJ = [0.1, 0.028] as const;
-export const SOFT_TERRAIN = [0.25, 0.018] as const;
+export const SOFT_TERRAIN = [0.25, 0.03] as const;
 /** The terrain's ceiling sits this far under itself, so a slope never shadows its own face. The coarse
  *  tiles' cells are wide, and a smooth flank reads a few metres of curvature as an occluder. */
 const BIAS_TERRAIN = 0.55;
@@ -405,8 +405,12 @@ export interface FarSite {
 /** What the field reads of the world (World supplies it; the tests a flat slope and a tree). */
 export interface FarWorld {
   readonly course: Course;
-  /** The shadow light's direction (three.js, toward the light) for the stretch at sim z. */
+  /** The shadow light's direction (three.js, toward the light) for the stretch at sim z: what the casters' shadows
+   *  fall from (palette.shadowDir: low and swung across the slope, so they rake toward the lens). */
   sunAt(z: number, out: Vector3): Vector3;
+  /** The key light that shades the snow there (palette.sunDir, lifted so slopes stay lit at sunset: DECISIONS 27):
+   *  what the terrain's own shadows fall from, so they meet the snow's own shading. */
+  keyAt(z: number, out: Vector3): Vector3;
   /** The ground as drawn near the run at sim (x, z). */
   ground(x: number, z: number): number;
   /** The far shoulders as drawn along mid-ground row r (sim z = 16 r): n heights from world x0 every dx metres,
@@ -449,6 +453,8 @@ interface Job {
   stage: number;
   row: number;
   sun: SunFrame;
+  /** The key light's frame, for the terrain. */
+  lit: SunFrame;
   xc: number;
   base: number;
   z0: number;
@@ -763,7 +769,8 @@ export class FarShadow {
     const z1 = z0 + (fine ? CHUNK_LEN : COARSE_LEN);
     const zm = (z0 + z1) / 2;
     const sun = sunFrame(this.world.sunAt(zm, this.sunOut));
-    return { fine, key, slot, stage: 0, row: 0, sun, xc: c.centerX(zm), base: c.baseY(zm), z0, z1, sites: new Set<number>(), missing: [], rows: [], cell: 0 };
+    const lit = sunFrame(this.world.keyAt(zm, this.sunOut));
+    return { fine, key, slot, stage: 0, row: 0, sun, lit, xc: c.centerX(zm), base: c.baseY(zm), z0, z1, sites: new Set<number>(), missing: [], rows: [], cell: 0 };
   }
 
   /** Idle jobs, as many as each idle period has room for. */
@@ -941,10 +948,10 @@ export class FarShadow {
     const halfW = (COARSE_W / 2) * COARSE_DX;
     if (job.stage === 0) {
       // The rows of the valley the tile and its upwind reach stand on.
-      const za = job.z0 - COARSE_DZ * 2 + Math.min(0, job.sun.sz) * VAL_MARGIN;
-      const zb = job.z1 + COARSE_DZ * 2 + Math.max(0, job.sun.sz) * VAL_MARGIN;
+      const za = job.z0 - COARSE_DZ * 2 + Math.min(0, job.lit.sz) * VAL_MARGIN;
+      const zb = job.z1 + COARSE_DZ * 2 + Math.max(0, job.lit.sz) * VAL_MARGIN;
       if (!this.rows(job, za, zb, until)) return false;
-      g.fit(job.sun, job.xc - halfW, job.xc + halfW, job.z0 - COARSE_DZ, job.z1 + COARSE_DZ, VAL_MARGIN, VAL_D, VAL_D);
+      g.fit(job.lit, job.xc - halfW, job.xc + halfW, job.z0 - COARSE_DZ, job.z1 + COARSE_DZ, VAL_MARGIN, VAL_D, VAL_D);
       job.stage = 1;
       job.row = 0;
     }
@@ -1054,8 +1061,8 @@ export class FarShadow {
     const ter = this.ter;
     const obj = this.obj;
     const c = this.world.course;
-    const zlo = za - Math.max(0, -job.sun.sz) * TER_MARGIN - COARSE_DZ;
-    const zhi = zb + Math.max(0, job.sun.sz) * TER_MARGIN + COARSE_DZ;
+    const zlo = za - Math.max(0, -job.lit.sz) * TER_MARGIN - COARSE_DZ;
+    const zhi = zb + Math.max(0, job.lit.sz) * TER_MARGIN + COARSE_DZ;
     if (job.stage === 0) {
       // The rows its ground and its upwind reach stand on.
       if (!this.rows(job, zlo, zhi, until)) return false;
@@ -1067,7 +1074,7 @@ export class FarShadow {
       for (let i = Math.floor(zlo / CHUNK_LEN) + job.row; i <= Math.floor(zhi / CHUNK_LEN); i++, job.row++) {
         if (!this.groundChunk(i, until)) return false;
       }
-      ter.fit(job.sun, x0, x1, za, zb, TER_MARGIN, TER_D, TER_D);
+      ter.fit(job.lit, x0, x1, za, zb, TER_MARGIN, TER_D, TER_D);
       job.stage = 2;
       job.row = 0;
     }
@@ -1341,6 +1348,8 @@ class SiteCells {
   private w = 0;
   private h = 0;
   private top = new Float32Array(0);
+  /** The lowest of what stands over each cell (a span's arch or beam floats: what floats casts nothing). */
+  private bot = new Float32Array(0);
   private out = new Float32Array(3 * 1024);
   private n = 0;
 
@@ -1385,6 +1394,7 @@ class SiteCells {
       this.w = Math.ceil((this.x1 - this.x0) / this.d) + 1;
       this.h = Math.ceil((this.z1 - this.z0) / this.d) + 1;
       this.top = new Float32Array(this.w * this.h).fill(NONE);
+      if (this.site.span && !this.site.roof) this.bot = new Float32Array(this.w * this.h).fill(1e9);
       this.stage = 1;
       this.at = 0;
     }
@@ -1430,7 +1440,7 @@ class SiteCells {
         const top = this.top[row + i];
         if (top <= NONE) continue;
         const x = s.x + this.x0 + (i + 0.5) * this.d;
-        if (s.span && !s.roof && Math.abs(x - cx) < hw && top > c.ground(x, z) + 2.5) continue;
+        if (s.span && !s.roof && ((Math.abs(x - cx) < hw && top > c.ground(x, z) + 2.5) || this.bot[row + i] > c.ground(x, z) + 2.5)) continue;
         if (this.n + 3 > this.out.length) {
           const o = new Float32Array(this.out.length * 2);
           o.set(this.out);
@@ -1446,6 +1456,7 @@ class SiteCells {
       }
     }
     this.top = new Float32Array(0);
+    this.bot = new Float32Array(0);
     return this.out.slice(0, this.n);
   }
 
@@ -1457,5 +1468,6 @@ class SiteCells {
     const k = j * this.w + i;
     const y = this.site.y + ly;
     if (y > this.top[k]) this.top[k] = y;
+    if (this.bot.length && y < this.bot[k]) this.bot[k] = y;
   }
 }

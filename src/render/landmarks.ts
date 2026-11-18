@@ -1087,14 +1087,15 @@ export class SetPieces {
     this.stages.setCourse(course, palette);
   }
 
-  /** The visual lift's far shadows (farshadow.ts), read only: every made piece whose span touches sim
-   *  [z0, z1], with its frame (one record, reused between calls). */
+  /** The visual lift's far shadows (farshadow.ts), read only: every piece on show whose span touches sim [z0, z1],
+   *  with its frame (one record, reused between calls). A piece made ahead and not yet on show casts nothing: its
+   *  shadow would lie on the snow with no caster in the frame. */
   farSites(z0: number, z1: number, cb: (site: FarSite, geo: BufferGeometry) => void): void {
     const list = this.plan.planned;
     const f = this.farSite;
     for (const [n, g] of this.built) {
       const s = list[n];
-      if (!s || s.z + s.len < z0 || s.z - s.len > z1) continue;
+      if (!s || s.z + s.len < z0 || s.z - s.len > z1 || !this.shown.includes(s)) continue;
       f.n = n;
       f.x = s.x;
       f.y = s.y;
