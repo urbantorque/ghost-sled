@@ -108,6 +108,13 @@ async (page) => {
       shots.push({ name: bn, ...bi });
     }
   }
+  // What the temporal reconstruction draws after itself (postfx/after.ts), for a look at what moved.
+  const after = await page.evaluate(() => {
+    const a = window.__gs.world.post.pipe.after;
+    if (!a || !a.list) return null;
+    const chain = (o) => { const n = []; for (let p = o; p && n.length < 4; p = p.parent) n.push(p.name || p.type); return n.join('<'); };
+    return a.list.map((o) => ({ at: chain(o), mat: (Array.isArray(o.material) ? o.material[0] : o.material).type, blending: (Array.isArray(o.material) ? o.material[0] : o.material).blending }));
+  }).catch(() => null);
   await page.goto('about:blank');
-  return JSON.stringify({ shots, errors });
+  return JSON.stringify({ shots, errors, after });
 }

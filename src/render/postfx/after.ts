@@ -46,11 +46,16 @@ interface ListItem {
 export class AfterDraw {
   /** Roots whose objects always stay in the scene. */
   readonly kept: Object3D[] = [];
-  /** How many objects have been moved (a dev read). */
+  /** How many objects have been moved, and which (a dev read). */
   moved = 0;
+  readonly list: Object3D[] = [];
+
+  /** Dev: false keeps everything in the scene (nothing new is moved). */
+  enabled = true;
 
   /** After the scene pass: moves this frame's new candidates to the after layer. */
   scan(renderer: WebGLRenderer, scene: Scene): void {
+    if (!this.enabled) return;
     const list = renderer.renderLists.get(scene, 0) as unknown as { transparent: ListItem[] };
     const items = list.transparent;
     for (let i = 0; i < items.length; i++) {
@@ -63,6 +68,7 @@ export class AfterDraw {
       if (after) {
         o.layers.set(AFTER_LAYER);
         this.moved++;
+        if (this.list.length < 64) this.list.push(o);
       }
     }
   }

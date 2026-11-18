@@ -83,9 +83,10 @@ const RESOLVE_FRAG = /* glsl */ `
   // How far the box is drawn toward the cross's (0: the 3x3's).
   uniform float uTaaR;
   // How quickly a scene pixel's weight falls with its distance from the frame pixel's middle (per frame pixel
-  // squared): 2.29 is a Blackman-Harris's width; 4, narrower, kept the trees as crisp as round 7's at speed,
-  // where 2.29 laid a half-pixel blur on every frame before it was blended.
-  uniform float uTaaKern;
+  // squared), x where the history is trusted, y where it is not: 2.29 is a Blackman-Harris's width; 4, narrower,
+  // kept the trees as crisp as round 7's at speed, where 2.29 laid a half-pixel blur on every frame before it
+  // was blended.
+  uniform vec2 uTaaKern;
   varying vec2 vUv;
 
   float top3(vec3 c) { return max(c.r, max(c.g, c.b)); }
@@ -99,7 +100,7 @@ const RESOLVE_FRAG = /* glsl */ `
   // corners' weights are small enough to leave out). (In the compressed range its negative lobe beside a
   // bright sky cannot take a dark pennant below black: kept linear, it did, and the clamp left black specks
   // along the bunting that a low share of the new frame held for a dozen frames.)
-  vec3 history(vec2 uv) {
+  vec4 history(vec2 uv) {
     vec2 sz = uSize.zw;
     vec2 pos = uv * sz;
     vec2 c = floor(pos - 0.5) + 0.5;
@@ -112,13 +113,14 @@ const RESOLVE_FRAG = /* glsl */ `
     vec2 t12 = (c + w2 / w12) / sz;
     vec2 t0 = (c - 1.0) / sz;
     vec2 t3 = (c + 2.0) / sz;
+    vec4 mid = textureLod(tHistory, t12, 0.0);
     vec3 r = textureLod(tHistory, vec2(t12.x, t0.y), 0.0).rgb * (w12.x * w0.y)
       + textureLod(tHistory, vec2(t0.x, t12.y), 0.0).rgb * (w0.x * w12.y)
-      + textureLod(tHistory, t12, 0.0).rgb * (w12.x * w12.y)
+      + mid.rgb * (w12.x * w12.y)
       + textureLod(tHistory, vec2(t3.x, t12.y), 0.0).rgb * (w3.x * w12.y)
       + textureLod(tHistory, vec2(t12.x, t3.y), 0.0).rgb * (w12.x * w3.y);
     float ws = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
-    return clamp(r / ws, vec3(0.0), vec3(0.998));
+    return vec4(clamp(r / ws, vec3(0.0), vec3(0.998)), mid.a);
   }
 
   // Pulls q toward the box's middle until it is inside (a clip, not a clamp per channel, which would shift
@@ -169,6 +171,36 @@ const RESOLVE_FRAG = /* glsl */ `
     vec2 hUv = uv + motion;
     float motionPx = length(motion * uSize.zw);
 
+    // The history where this pixel's point was, and whether it was what last frame saw there.
+    bool kept = uTaaK.z > 0.5 && pc.w > 0.0 && hUv.x >= 0.0 && hUv.y >= 0.0 && hUv.x <= 1.0 && hUv.y <= 1.0;
+    float fresh = 1.0;
+    vec4 hS = vec4(0.0);
+    if (kept) {
+      fresh = 0.0;
+      if (uTaaM.w > 0.5) {
+        // Was this point what last frame saw there? Its distance from last frame's lens against last frame's
+        // depth round where it was (the nearest of four, so an edge a part-pixel off is not a miss).
+        vec2 pp = (prevUv + uJit.zw) * uSize.xy - 0.5;
+        ivec2 pb = ivec2(floor(pp));
+        float best = 1e9;
+        for (int k = 0; k < 4; k++) {
+          ivec2 q = clamp(pb + ivec2(k - (k / 2) * 2, k / 2), ivec2(0), lim);
+          float r = texelFetch(tPrevDepth, q, 0).r;
+          float pl = r >= 1.0 ? uDepthNF.y : linDepth(r);
+          best = min(best, abs(pl - pc.w) / max(pc.w, 0.05));
+        }
+        fresh = smoothstep(0.06, 0.18, best);
+      }
+      hS = history(hUv);
+    }
+    // How far this pixel's history can be trusted (kept in the history's alpha: 0 where it was just uncovered or
+    // came from off the frame, rising over four frames). Where it is low this frame is all there is, so it is
+    // rebuilt with a wide filter (smooth, as a lone frame should be) rather than the narrow one that leans on
+    // the history to fill in: an outline the rider had just uncovered was drawn raw, stair-stepped and then
+    // sharpened, and the hero's edges fizzed.
+    float conf = kept ? (1.0 - fresh) * min(1.0, hS.a + 0.25) : 0.0;
+    float kern = mix(uTaaKern.y, uTaaKern.x, conf);
+
     // This frame at the pixel: the 3x3 scene pixels round it, each weighed by how near it fell to the
     // pixel's middle (in frame pixels), and the colours round it for the box.
     vec3 sum = vec3(0.0);
@@ -185,7 +217,7 @@ const RESOLVE_FRAG = /* glsl */ `
         ivec2 q = ib + ivec2(i, j);
         vec3 s = squash(max(texelFetch(tScene, clamp(q, ivec2(0), lim), 0).rgb, vec3(0.0)));
         vec2 d = (vec2(q) - tp) * ratio;
-        float w = exp(-uTaaKern * dot(d, d));
+        float w = exp(-kern * dot(d, d));
         sum += s * w;
         wsum += w;
         wmax = max(wmax, w);
@@ -217,38 +249,21 @@ const RESOLVE_FRAG = /* glsl */ `
     hi += shift;
 
     vec3 res = toYC(squash(curAO));
-    float fresh = 1.0;
-    if (uTaaK.z > 0.5 && pc.w > 0.0 && hUv.x >= 0.0 && hUv.y >= 0.0 && hUv.x <= 1.0 && hUv.y <= 1.0) {
-      fresh = 0.0;
-      if (uTaaM.w > 0.5) {
-        // Was this point what last frame saw there? Its distance from last frame's lens against last frame's
-        // depth round where it was (the nearest of four, so an edge a part-pixel off is not a miss).
-        vec2 pp = (prevUv + uJit.zw) * uSize.xy - 0.5;
-        ivec2 pb = ivec2(floor(pp));
-        float best = 1e9;
-        for (int k = 0; k < 4; k++) {
-          ivec2 q = clamp(pb + ivec2(k - (k / 2) * 2, k / 2), ivec2(0), lim);
-          float r = texelFetch(tPrevDepth, q, 0).r;
-          float pl = r >= 1.0 ? uDepthNF.y : linDepth(r);
-          best = min(best, abs(pl - pc.w) / max(pc.w, 0.05));
-        }
-        fresh = smoothstep(0.06, 0.18, best);
-      }
+    if (kept) {
       float alpha = mix(uTaaK.x, uTaaK.y, smoothstep(1.0, uTaaM.x, motionPx));
       // A frame pixel far from every scene pixel drawn this frame leans on the history; one right on one
       // takes more of it (this is what rebuilds a frame larger than the scene).
       alpha *= mix(0.35, 1.0, wmax);
-      vec3 hS = history(hUv);
       // A highlight that was not there a frame ago (a glint's flash, a spark on the scene's side): taken as it
       // comes, not faded in over a dozen frames.
       float lc = dot(curAO, vec3(0.2126, 0.7152, 0.0722));
-      float lh = dot(unsquash(hS), vec3(0.2126, 0.7152, 0.0722));
+      float lh = dot(unsquash(hS.rgb), vec3(0.2126, 0.7152, 0.0722));
       alpha = max(alpha, uTaaK.w * smoothstep(0.9, 1.8, lc) * smoothstep(1.3, 2.4, lc / max(lh, 0.05)));
       alpha = max(alpha, fresh);
       float g = mix(uTaaM.y, uTaaM.z, smoothstep(2.0, 24.0, motionPx));
       vec3 bl = max(mean - g * sd, lo);
       vec3 bh = min(mean + g * sd, hi);
-      vec3 hY = clipBox(toYC(hS), bl, bh);
+      vec3 hY = clipBox(toYC(hS.rgb), bl, bh);
       res = mix(hY, curY, alpha);
     }
     // The history is kept compressed (squash()): the sharpen reads it so, and expands it.
@@ -256,7 +271,7 @@ const RESOLVE_FRAG = /* glsl */ `
     // (A pixel that is not a number, should a material ever write one, is never kept.)
     if (!(outS.r == outS.r && outS.g == outS.g && outS.b == outS.b)) outS = vec3(0.0);
     if (uTaaView > 0.5) outS = squash(vec3(own, fresh, min(1.0, motionPx / 32.0)));
-    gl_FragColor = vec4(clamp(outS, vec3(0.0), vec3(0.998)), 1.0);
+    gl_FragColor = vec4(clamp(outS, vec3(0.0), vec3(0.998)), conf);
   }
 `;
 
@@ -274,10 +289,13 @@ const PRESENT_FRAG = /* glsl */ `
   void main() {
     ivec2 p = ivec2(gl_FragCoord.xy);
     ivec2 lim = textureSize(tSrc, 0) - 1;
-    // (The history is kept compressed: taa.ts squash().)
-    vec3 es = texelFetch(tSrc, p, 0).rgb;
+    // (The history is kept compressed: taa.ts squash(); its alpha is how far it is trusted.)
+    vec4 e4 = texelFetch(tSrc, p, 0);
+    vec3 es = e4.rgb;
     vec3 col = unsquash(es);
-    if (uPresent.z > 0.0) {
+    // Less where the frame was only just rebuilt (an outline just uncovered): sharpened, it fizzed.
+    float sharp = uPresent.z * smoothstep(0.2, 0.9, e4.a);
+    if (sharp > 0.0) {
       // The contrast-adaptive sharpen (after AMD's RCAS): a negative lobe on the four neighbours, as strong
       // as it can be without taking a channel past black or white, and never past three sixteenths; so a
       // soft edge is lifted and a flat or already hard one is left alone. In the compressed range, where
@@ -291,13 +309,20 @@ const PRESENT_FRAG = /* glsl */ `
       vec3 hitMin = min(mn4, es) / max(4.0 * mx4, vec3(1e-4));
       vec3 hitMax = (1.0 - max(mx4, es)) / min(4.0 * mn4 - 4.0, vec3(-1e-4));
       vec3 lobeC = max(-hitMin, hitMax);
-      float lobe = max(-0.1875, min(max(lobeC.r, max(lobeC.g, lobeC.b)), 0.0)) * uPresent.z;
+      float lobe = max(-0.1875, min(max(lobeC.r, max(lobeC.g, lobeC.b)), 0.0)) * sharp;
       vec3 o = (lobe * (b + d + f + h) + es) / (4.0 * lobe + 1.0);
       col = unsquash(clamp(o, vec3(0.0), vec3(0.998)));
     }
     gl_FragColor = vec4(col, 1.0);
-    // The scene's depth at the frame's size, for what is drawn over the rebuilt frame (after.ts).
-    gl_FragDepth = texture(tDepth, vUv + uPresent.xy).r;
+    // The scene's depth at the frame's size, for what is drawn over the rebuilt frame (after.ts): the nearest of
+    // the four scene pixels round this one (the farthest let the spray behind the rider print a fringe of specks
+    // along its outline), pushed back a tenth of a per cent so a glow lying on the snow is not cut by it.
+    ivec2 ds = textureSize(tDepth, 0);
+    vec2 dp = (vUv + uPresent.xy) * vec2(ds) - 0.5;
+    ivec2 db = ivec2(floor(dp));
+    float dz = 1.0;
+    for (int k = 0; k < 4; k++) dz = min(dz, texelFetch(tDepth, clamp(db + ivec2(k - (k / 2) * 2, k / 2), ivec2(0), ds - 1), 0).r);
+    gl_FragDepth = min(1.0, dz + (1.0 - dz) * 0.001);
   }
 `;
 
@@ -347,8 +372,9 @@ export class TemporalPass {
   private programs: 'none' | 'building' | 'ready' = 'none';
   /** Tuning (dev: `world.post.pipe.taa.k`): the least and most share of this frame (0.22 in motion read
    *  aliased just after a fast pan, 0.12 soft), the motion at the most, the box at rest and in motion, a new
-   *  highlight's share, how far the box is drawn toward the cross's, the reconstruction filter's width. */
-  readonly k = { min: 0.08, max: 0.16, motionPx: 40, boxRest: 1.25, boxMove: 0.9, flash: 0.6, round: 0.5, kernel: 4 };
+   *  highlight's share, how far the box is drawn toward the cross's, the reconstruction filter's width where the
+   *  history is trusted and where it is not. */
+  readonly k = { min: 0.08, max: 0.16, motionPx: 40, boxRest: 1.25, boxMove: 1.05, flash: 0.6, round: 0.2, kernel: 4, kernelLone: 1.2 };
   private bodies: Body[] = Array.from({ length: BODIES }, () => ({ id: 0, world: new Matrix4(), center: new Vector3(), half: new Vector3() }));
   private nBodies = 0;
   private prevBody = new Map<number, Matrix4>();
@@ -391,13 +417,13 @@ export class TemporalPass {
         uJit: { value: new Vector4() },
         uSize: { value: new Vector4(2, 2, 2, 2) },
         uTaaK: { value: new Vector4(0.08, 0.16, 0, 0.6) },
-        uTaaM: { value: new Vector4(40, 1.25, 0.9, 0) },
+        uTaaM: { value: new Vector4(40, 1.25, 1.05, 0) },
         uBodyLocal: { value: Array.from({ length: BODIES }, () => new Matrix4()) },
         uBodyPrev: { value: Array.from({ length: BODIES }, () => new Matrix4()) },
         uBodyRect: { value: Array.from({ length: BODIES }, () => new Vector4(1, 1, 0, 0)) },
         uTaaView: { value: 0 },
-        uTaaR: { value: 0.5 },
-        uTaaKern: { value: 4 },
+        uTaaR: { value: 0.2 },
+        uTaaKern: { value: new Vector2(4, 1.2) },
       },
     });
     this.presentMat = new ShaderMaterial({
@@ -619,7 +645,7 @@ export class TemporalPass {
     (u.uTaaM.value as Vector4).set(k.motionPx, k.boxRest, k.boxMove, prevDepth && this.valid ? 1 : 0);
     u.uTaaView.value = this.debugView ? 1 : 0;
     u.uTaaR.value = k.round;
-    u.uTaaKern.value = k.kernel;
+    (u.uTaaKern.value as Vector2).set(k.kernel, k.kernelLone);
     this.quad.draw(this.resolveMat, this.hist[1]);
     const t = this.hist[0];
     this.hist[0] = this.hist[1];
