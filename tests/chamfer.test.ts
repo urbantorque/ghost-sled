@@ -117,7 +117,7 @@ describe('the named pieces', () => {
     }
   });
 
-  it('the blossom: a soft canopy, and the far orchard at half the triangles of round 7', () => {
+  it('the blossom: a soft canopy in three painted values, and the far orchard at half the triangles of round 7', () => {
     const budget = { rich: 560, near: 300, lean: 150, far: 72 } as const;
     for (const build of ['rich', 'near', 'lean', 'far'] as const) {
       for (const g of [blossomGeometry(sakura, build), paleBlossomGeometry(sakura, build)]) {
@@ -129,7 +129,8 @@ describe('the named pieces', () => {
           // A canopy's corners carry their own normals (the cloud shades as one soft mass), not its face's.
           if (Math.abs(n.getX(f) - n.getX(f + 1)) + Math.abs(n.getY(f) - n.getY(f + 1)) > 0.05) soft++;
         }
-        expect(soft / (n.count / 3)).toBeGreaterThan(0.5);
+        // (Low's lean canopy is flat-shaded: its few corners read as a polygon against smooth shading.)
+        if (build !== 'lean') expect(soft / (n.count / 3)).toBeGreaterThan(0.5);
       }
     }
     // The orchards: the near set and the far set, each a full and a pale tree.

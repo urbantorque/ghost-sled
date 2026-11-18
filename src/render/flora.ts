@@ -783,19 +783,30 @@ function canopy(puffs: readonly Puff[], build: CanopyBuild, pink: Color, sy: num
       nz = nz / l + mz / m;
       l = Math.hypot(nx, ny, nz) || 1;
       nrm.set([nx / l, ny / l, nz / l], v * 3);
-      // The wine-rose underside lifting to the crown, and each puff a step of its own.
+    }
+    // Painted in three values, a flat one a facet (ART.md 3 and 15: the gouache's own values, a hazard's hard
+    // steps): the wine-rose underside, the body, and the crown paling toward the petals' white, by where each
+    // facet stands up the canopy and how far it looks up, each puff a step of its own. Snow keeps its own colour,
+    // in the same three steps.
+    for (let f = 0; f + 2 < pos.count; f += 3) {
+      const py = (pos.getY(f) + pos.getY(f + 1) + pos.getY(f + 2)) / 3;
+      const ny = (nrm[f * 3 + 1] + nrm[f * 3 + 4] + nrm[f * 3 + 7]) / 3;
       const t = Math.max(0, Math.min(1, (py - y0) / (y1 - y0)));
-      const kk = (k0 + (k1 - k0) * t) * k * (0.95 + 0.05 * (ny / l));
-      // Bloom pales toward the petals' white over the crown and deepens to wine underneath, so a canopy has a
-      // range of value and not one pink (snow keeps its own colour).
-      const wine = bloom ? Math.max(0, 0.38 - t) * 0.55 : 0;
-      const pale = bloom ? t * t * 0.34 * (0.35 + 0.65 * Math.max(0, ny / l)) : 0;
+      const score = t * 0.8 + 0.25 * ny;
+      const band = score < 0.3 ? 0 : score < 0.68 ? 1 : 2;
+      const kk = (band === 0 ? k0 * 1.05 : band === 1 ? (k0 + k1) / 2 + 0.04 : k1) * k;
+      const wine = bloom && band === 0 ? 0.32 : 0;
+      const pale = bloom && band === 2 ? 0.16 : 0;
       const r0 = pink.r + (WINE.r - pink.r) * wine;
       const g0 = pink.g + (WINE.g - pink.g) * wine;
       const b0 = pink.b + (WINE.b - pink.b) * wine;
-      col.set([(r0 + (PETAL.r - r0) * pale) * kk, (g0 + (PETAL.g - g0) * pale) * kk, (b0 + (PETAL.b - b0) * pale) * kk], v * 3);
+      const c = [(r0 + (PETAL.r - r0) * pale) * kk, (g0 + (PETAL.g - g0) * pale) * kk, (b0 + (PETAL.b - b0) * pale) * kk];
+      for (let j = f; j < f + 3; j++) col.set(c, j * 3);
     }
     g.setAttribute('normal', new BufferAttribute(nrm, 3));
+    // (Low's lean canopy is flat-shaded, a facet one value of light: its few corners read as a polygon against
+    // smooth shading, and its rims washed pale.)
+    if (build === 'lean') g.computeVertexNormals();
     g.setAttribute('color', new BufferAttribute(col, 3));
     g.deleteAttribute('uv');
     parts.push(g);
@@ -806,7 +817,7 @@ function canopy(puffs: readonly Puff[], build: CanopyBuild, pink: Color, sy: num
 /** A soft cap of snow lying on a canopy's crown: one more lumpy puff, sunk into the crown so only its top shows
  *  (a whole flattened puff read as a white slab laid on the bloom). */
 function crownSnow(build: CanopyBuild, pos: [number, number, number], r: number): BufferGeometry {
-  return canopy([[pos[0], pos[1], pos[2], r]], build === 'rich' ? 'near' : 'lean', SNOW, 0.5, pos[1] - r, pos[1] + r * 0.5, 0.86, 1, 41);
+  return canopy([[pos[0], pos[1], pos[2], r]], build === 'lean' ? 'lean' : 'near', SNOW, 0.5, pos[1] - r, pos[1] + r * 0.5, 0.86, 1, 41);
 }
 
 /** Sakura Ridge's blossom tree (the run's `blossom` hazard and the orchards' first tree): a dark trunk under a
