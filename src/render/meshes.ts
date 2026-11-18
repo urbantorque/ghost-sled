@@ -413,10 +413,11 @@ export function lanternGeometry(low = false): BufferGeometry {
   return dropSlivers(merge(parts));
 }
 
-/** The run's kicker lip at its ends: the snow roll tucks down into the ramp's flanks over the last few
- *  hundredths of its unit width (a lip is 4 to 6.4 m wide, so a third of a metre or so). */
+/** The run's kicker lip at its ends: the snow roll tucks down into the ramp and back against the board over the
+ *  last eighth of its unit width (a lip is 4 to 6.4 m wide, so most of a metre: the ramp's flanks fall away
+ *  there, and a roll at full depth hung over them as a white tongue). */
 function lipTaper(x: number): number {
-  const u = Math.max(0, Math.min(1, (0.5 - Math.abs(x)) / 0.075));
+  const u = Math.max(0, Math.min(1, (0.5 - Math.abs(x)) / 0.13));
   return u * u * (3 - 2 * u);
 }
 
@@ -881,14 +882,17 @@ export function kickerLipGeometry(p?: Palette, low = false): BufferGeometry {
     [0.36, -0.012],
     [0.47, -0.03],
   ];
-  const xs = low ? [-0.5, -0.46, -0.4, -0.2, 0, 0.2, 0.4, 0.46, 0.5] : [-0.5, -0.475, -0.45, -0.41, -0.3, -0.15, 0, 0.15, 0.3, 0.41, 0.45, 0.475, 0.5];
+  const xs = low ? [-0.5, -0.46, -0.41, -0.36, 0, 0.36, 0.41, 0.46, 0.5] : [-0.5, -0.475, -0.445, -0.41, -0.37, -0.18, 0, 0.18, 0.37, 0.41, 0.445, 0.475, 0.5];
   const pos: number[] = [];
   const idx: number[] = [];
   const base = -0.035;
   for (const x of xs) {
     const s = lipTaper(x);
-    const w = 1 + 0.12 * Math.sin(x * 9.4 + 0.7) + 0.07 * Math.sin(x * 23.2 + 2.1);
-    for (const [z, y] of prof) pos.push(x, base + (y - base) * s * w, z * (0.55 + 0.45 * s));
+    // (The crest wanders along the lip, and is still at its ends; there the roll sinks under the ramp's face and
+    // draws back to the board, so nothing of it overhangs a flank.)
+    const w = 1 + s * (0.1 * Math.sin(x * 9.4 + 0.7) + 0.06 * Math.sin(x * 23.2 + 2.1));
+    const yb = base - 0.07 * (1 - s);
+    for (const [z, y] of prof) pos.push(x, yb + (y - yb) * s * w, -0.2 + (z + 0.2) * (0.15 + 0.85 * s));
   }
   const M = prof.length;
   for (let i = 0; i + 1 < xs.length; i++) {
