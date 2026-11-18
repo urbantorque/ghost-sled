@@ -82,11 +82,12 @@ ghosts' glass (by day a ghost in shade loses its glint and a step of its face; i
   texture read; what a second map would add is the moving casters (ghosts, the rider) between 34 and about 80 m,
   whose shadows there are a few pixels. Its price is a second shadow pass: every caster batch drawn again (the
   forest wall, the hazards, the set pieces' casting slots), 15 to 40 draws, against a budget of one or two.
-- **The terrain is shadowed by the same low shadow light the casters use** (`palette.shadowDir`, 10 degrees under the
-  key light and swung across the slope), not by the key light that shades the snow. The near map's casters already
-  use it, so the two agree at the hand-over, and it gives the art direction's long shadows (ART.md 11 and 15). Where
-  a slope turns from that light more steeply than its rays it falls into its own shade; a 0.55 m bias keeps a slope
-  turned to the light off its own face, and the toon ramp still takes the key light's own terminator.
+- **Two lights for the terrain.** The run's own ground (banks, walls, a ravine's sides) is shadowed by the low shadow
+  light the casters use (`palette.shadowDir`, 10 degrees under the key light and swung across the slope): the near map's
+  casters already use it, so they agree at the hand-over, and it gives the art direction's long shadows (ART.md 11 and
+  15). The mountainside past the reference edge is shadowed by the key light that shades the snow (`palette.sunDir`),
+  so a spur never lays a whole crossing in shade at sunset (DECISIONS 27's reason for lifting it; the first critic's
+  worst fault, below). A 0.55 m bias keeps a slope turned to the light off its own face.
 - **Ceilings, not visibility.** A visibility map would put a tall house standing in a short tree's shadow wholly in
   shade, and needs a texel the size of the edge it draws; a ceiling does neither.
 - **Rejected: marching each texel toward the sun** (60 lookups a texel, about 50 ms a tile) and **a sweep over a
@@ -151,12 +152,21 @@ into the newly shaded banks; Frostfang's spire shadows under the aurora do not g
 
 ### What changed after it
 
-- **The terrain is shadowed by the key light that shades the snow, not by the low shadow light** (fault 1, and much
-  of 2 and 5). At Serac Gate the shadow light is down to 9 degrees, and a mid-ground spur over a kilometre off laid
-  the whole crossing in its shade (the deck stood 155 to 215 m under the terrain's ceiling). DECISIONS 27 lifts the
-  key light so slopes stay lit while the disc sits low; the field had brought the problem back through the terrain.
-  The terrain's shadows now fall from the key light (so they also meet the snow's own shading at its terminator);
-  the casters' keep the low swung light, so trees and towers still rake long shadows toward the lens.
+- **The mountainside casts by the key light; only the run's own ground by the low shadow light** (fault 1). At
+  Serac Gate the shadow light is down to 9 degrees, and the mid-ground's shoulder beside the bridge (it climbs about
+  200 m within 250 m) laid the whole crossing in its shade: the deck stood 155 to 215 m under the terrain's ceiling.
+  DECISIONS 27 lifts the key light that shades the snow so slopes stay lit while the disc sits low, and the field had
+  brought the problem back through the terrain. Three tries, judged on the held vistas:
+  1. *All the terrain by the key light:* Serac Gate lit again, but the near banks' long shadows the critic counted as
+     better at Pinecrest's leaps went too (both frames back to round 7's look).
+  2. *The coarse tiles (far ridges) by the key light, the fine tiles by the shadow light:* Pinecrest's banks back, but
+     Serac Gate dark again (the shoulder is within the fine tiles' 260 m reach).
+  3. *Kept:* the fine tiles' terrain casts from the run's own ground alone (the terrain mesh out to the reference
+     edge: banks, walls, a ravine's sides), by the low shadow light, as the casters do; everything past it (the
+     mid-ground's shoulders, spurs and far walls) only through the coarse tiles, by the key light. Serac Gate's deck
+     is lit with its parapet bars, Pinecrest's dusk bank keeps its long shadow, Fang Town its tower's.
+- **A ridge's shadow keeps a breath of light** (0.82 of a caster's strength: fault 2), so the trees' own shadows still
+  read inside it.
 - **A terrain shadow softens more with the distance from its ridge** (0.03 m of band a metre, was 0.018: fault 3).
 - **Only set pieces on show cast** (fault 4): a piece made ahead and not yet shown laid its shadow with no caster.
 - **What floats over a span casts nothing** (an arch or a beam's ends past the corridor, cells whose lowest part
