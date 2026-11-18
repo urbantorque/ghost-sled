@@ -59,6 +59,8 @@ const COARSE_FLOOR = -1600;
  *  light travels on past it. Things standing in a shadow use the same band. */
 export const SOFT_OBJ = [0.1, 0.028] as const;
 export const SOFT_TERRAIN = [0.25, 0.03] as const;
+/** How deep a terrain shadow is (of the full strength a caster's has). */
+export const TERRAIN_K = 0.82;
 /** The terrain's ceiling sits this far under itself, so a slope never shadows its own face. The coarse
  *  tiles' cells are wide, and a smooth flank reads a few metres of curvature as an occluder. */
 const BIAS_TERRAIN = 0.55;
@@ -409,7 +411,7 @@ export interface FarWorld {
    *  fall from (palette.shadowDir: low and swung across the slope, so they rake toward the lens). */
   sunAt(z: number, out: Vector3): Vector3;
   /** The key light that shades the snow there (palette.sunDir, lifted so slopes stay lit at sunset: DECISIONS 27):
-   *  what the terrain's own shadows fall from, so they meet the snow's own shading. */
+   *  what the far ridges' shadows fall from, so a spur a kilometre off never lays a whole run in its shade. */
   keyAt(z: number, out: Vector3): Vector3;
   /** The ground as drawn near the run at sim (x, z). */
   ground(x: number, z: number): number;
@@ -453,7 +455,7 @@ interface Job {
   stage: number;
   row: number;
   sun: SunFrame;
-  /** The key light's frame, for the terrain. */
+  /** The key light's frame, for the far ridges (coarse tiles). */
   lit: SunFrame;
   xc: number;
   base: number;
@@ -508,7 +510,8 @@ float farShadow(vec3 wp, float nearShadow) {
   vec3 r = wp - uFarBox[0].xyz;
   float q = max(abs(dot(r, uFarBox[1].xyz)), abs(dot(r, uFarBox[2].xyz))) / max(uFarBox[0].w, 1e-3);
   float nearK = uFarBox[0].w > 0.0 ? 1.0 - smoothstep(${NEAR_FROM.toFixed(3)}, ${NEAR_TO.toFixed(3)}, q) : 0.0;
-  return min(mix(mix(1.0, obj, uFarK.y * sl.w), nearShadow, nearK), mix(1.0, terr, uFarK.y));
+  // (A ridge's shadow keeps a little light, so the trees' own shadows still read inside it.)
+  return min(mix(mix(1.0, obj, uFarK.y * sl.w), nearShadow, nearK), mix(1.0, terr, uFarK.y * ${TERRAIN_K.toFixed(2)}));
 }
 `;
 
@@ -1061,8 +1064,8 @@ export class FarShadow {
     const ter = this.ter;
     const obj = this.obj;
     const c = this.world.course;
-    const zlo = za - Math.max(0, -job.lit.sz) * TER_MARGIN - COARSE_DZ;
-    const zhi = zb + Math.max(0, job.lit.sz) * TER_MARGIN + COARSE_DZ;
+    const zlo = za - Math.max(0, -job.sun.sz) * TER_MARGIN - COARSE_DZ;
+    const zhi = zb + Math.max(0, job.sun.sz) * TER_MARGIN + COARSE_DZ;
     if (job.stage === 0) {
       // The rows its ground and its upwind reach stand on.
       if (!this.rows(job, zlo, zhi, until)) return false;
@@ -1074,7 +1077,9 @@ export class FarShadow {
       for (let i = Math.floor(zlo / CHUNK_LEN) + job.row; i <= Math.floor(zhi / CHUNK_LEN); i++, job.row++) {
         if (!this.groundChunk(i, until)) return false;
       }
-      ter.fit(job.lit, x0, x1, za, zb, TER_MARGIN, TER_D, TER_D);
+      // (The run's own banks and walls cast by the low shadow light, as its casters do, so they rake long; a ridge
+      // past them, from the coarse tile, by the key light.)
+      ter.fit(job.sun, x0, x1, za, zb, TER_MARGIN, TER_D, TER_D);
       job.stage = 2;
       job.row = 0;
     }

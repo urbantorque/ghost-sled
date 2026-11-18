@@ -231,15 +231,27 @@ describe('far shadows: a stretch baked whole', () => {
     for (let x = -120; x <= 120; x += 15) for (let z = 15 * CHUNK_LEN; z < 16 * CHUNK_LEN; z += 9) expect(t.at(x, z)[0]).toBeLessThan(0);
   });
 
-  it("lays the terrain's shadow from the key light that shades the snow, and the casters' from the low shadow light", () => {
-    // A low shadow light (8 degrees) and the key light lifted to 30 (DECISIONS 27): a 30 m bank's shadow is as long
-    // as the key light makes it, not the four times longer the shadow light would, so a sunset never puts a whole
-    // run in a far ridge's shade; a tree beside it still rakes long.
+  it("lays a far ridge's shadow from the key light that shades the snow, so a sunset never puts a whole run in it", () => {
+    // A ridge 160 m tall from 420 m out, a shadow light at 8 degrees and the key light lifted to 30 (DECISIONS 27): by
+    // the shadow light it would shade the run 1.1 km away; by the key light its shadow ends 140 m short of it.
+    const z = 15 * CHUNK_LEN + 30;
+    const course = flatWorld(light(80, 8), null, false, light(80, 30));
+    const ridge = (x: number) => (x > 420 ? 160 : 0);
+    course.ground = (x) => ridge(x);
+    course.shoulders = (_r, x0, dx, n, o, at) => {
+      for (let k = 0; k < n; k++) o[at + k] = ridge(x0 + k * dx);
+      return 1;
+    };
+    const t = bake(course, z, 15);
+    expect(t.at(0, z)[0]).toBeLessThan(0);
+    expect(t.at(100, z)[0]).toBeLessThan(0);
+  });
+
+  it("lays the run's own bank's shadow and a tree's from the low shadow light, so they rake long", () => {
     const z = 15 * CHUNK_LEN + 30;
     const t = bake(flatWorld(light(80, 8), { x: -40, z, h: 12 }, true, light(80, 30)), z, 15);
-    const keyReach = 30 / Math.tan(30 * deg);
-    expect(t.at(60 - keyReach * 0.5, z)[0]).toBeGreaterThan(1);
-    expect(t.at(60 - keyReach * 1.6, z)[0]).toBeLessThan(0);
+    // A 30 m bank 60 m out: by the shadow light its shadow crosses the whole run.
+    expect(t.at(-60, z)[0]).toBeGreaterThan(1);
     const s = sunFrame(light(80, 8));
     expect(t.at(-40 - s.sx * 60, z - s.sz * 60)[2]).toBeGreaterThan(0);
   });
