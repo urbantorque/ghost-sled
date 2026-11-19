@@ -671,3 +671,191 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
     }
   };
 }
+
+/** Round 8: what each air plan of the trickster is. */
+type AirKind = 'grab' | 'reach' | 'stretch' | 'paper' | 'cross' | 'flip' | 'crane' | 'ember' | 'knot' | 'sig' | 'lamp';
+
+/** Set pieces whose air the classic pilots know how to ride (a flourish's trick, bells, stomped steps, a surge's
+ *  landing, the flame): over these and on their doorstep the trickster leaves the air to them. */
+const PIECE_AIR = new Set(['flourish', 'shatter', 'steps', 'surge', 'carry', 'rings', 'slide', 'gates', 'kindle', 'follow']);
+
+/**
+ * Round 8 (G1, G2): the mid and expert pilots with the air map in their hands and a charm in mind. On the snow and
+ * over the set pieces they are the classic pilots; in the air elsewhere they pick the trick a flight has room for,
+ * one new to the run first and then one new to the combo (a person who knows the map and is trying it all), and the
+ * expert chains pops to keep a combo alive. At a charm gate the mid pilot rides for a lane at random, the expert for
+ * the family it likes best (speed). kit.lane, if given, forces the lane (the charm fairness rides).
+ */
+export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, kit: Kit & { lane?: number } = {}): Pilot {
+  const ground = classic(skill, sim, seed, kit);
+  const rnd = mulberry(seed * 31 + 7);
+  const k = new Keys();
+  const sloppy = skill === 'expert' ? 0.25 : 1;
+  const used = new Set<AirKind>();
+  const seen = new Set<AirKind>();
+  let plan: { kind: AirKind; side: number; t: number; phase: number; dir: number; bias: number } | null = null;
+  let wasAir = false;
+  let wasRail = false;
+  let railOff = -1000;
+  let crouch = 0;
+  const lanes: number[] = [];
+  const charms = sim.charmGates as AnySim[] | undefined;
+  /** The lane wanted at gate g (once its offers are dealt). */
+  const laneFor = (g: AnySim): number => {
+    if (kit.lane !== undefined) return kit.lane;
+    if (lanes[g.index] !== undefined) return lanes[g.index];
+    let lane = 1;
+    if (skill === 'mid') lane = Math.floor(rnd() * 3);
+    else {
+      let best = -1;
+      for (let l = 0; l < 3; l++) {
+        const id = g.offers[l];
+        if (id < 0) continue;
+        const fam = id < 8 ? 3 : id < 16 ? 2 : 1;
+        const score = fam + rnd();
+        if (score > best) {
+          best = score;
+          lane = l;
+        }
+      }
+    }
+    lanes[g.index] = lane;
+    return lane;
+  };
+  const pilot: Pilot = () => {
+    const s = sim.s;
+    if (s.crashed) return { steer: 4, action: false };
+    if (!sim.combo.active) used.clear();
+    if (s.grinding) wasRail = true;
+    const piece = pieceNow(sim);
+    const ahead = pieceAhead(sim);
+    if (s.grounded || s.tumble > 0) {
+      wasAir = false;
+      plan = null;
+      if (!s.grinding) wasRail = false;
+      let g = ground();
+      // A charm gate ahead: ride for the lane wanted (round 8).
+      const gate = charms ? charms.find((q) => q.lane < 0 && q.z - s.z < 110 && q.z - s.z > -2) : undefined;
+      if (gate && s.tumble === 0) {
+        const lane = laneFor(gate);
+        if (lane !== 1) {
+          const c = sim.course;
+          const look = s.z + 12 + s.speed * 0.3;
+          const target = gate.x + (lane - 1) * 4.2 + (c.safeX(look) - c.safeX(gate.z));
+          const off = target - s.x - s.vx * 0.35;
+          g = { steer: k.sample(Math.max(-1, Math.min(1, off * 0.6))), action: false };
+        }
+      }
+      // The expert keeps a combo alive with pops down a straight, line underfoot (none into a set piece).
+      if (skill === 'expert' && s.grounded && s.tumble === 0 && !s.grinding && !piece && !(ahead && ahead.z0 - s.z < 200)) {
+        const c = sim.course;
+        const straight = Math.abs(c.safeX(s.z + 30) - c.safeX(s.z)) < 2 && Math.abs(s.x - c.safeX(s.z)) < 1.5;
+        if (crouch === 0 && sim.combo.active && sim.combo.timer < 90 && s.speed > 16 && straight && !g.action) crouch = 1;
+        if (crouch > 0) {
+          crouch++;
+          if (crouch > 22) {
+            crouch = 0;
+            return { steer: g.steer, action: false };
+          }
+          return { steer: Math.max(3, Math.min(5, g.steer)), action: true };
+        }
+      }
+      return g;
+    }
+    crouch = 0;
+    // Over a set piece's air, or coming down on one's doorstep, the classic pilot's hands.
+    if ((piece && PIECE_AIR.has(piece.verb)) || (ahead && PIECE_AIR.has(ahead.verb) && ahead.z0 - s.z < 220)) {
+      plan = null;
+      wasAir = true;
+      return ground();
+    }
+    const land = timeToLand(sim);
+    if (!wasAir) {
+      wasAir = true;
+      if (wasRail) railOff = sim.tick;
+      wasRail = false;
+      const T = land.t;
+      let menu: AirKind[] = [];
+      if (sim.tick - railOff < 3) menu = ['lamp'];
+      else if (T >= 2.2) menu = ['knot', 'cross', 'crane', 'stretch', 'paper', 'ember', 'sig', 'reach'];
+      else if (T >= 1.5) menu = ['cross', 'paper', 'reach', 'ember', 'flip', 'sig', 'grab'];
+      else if (T >= 0.9) menu = ['paper', 'grab', 'flip', 'sig'];
+      else if (T >= 0.6) menu = ['grab'];
+      const unseen = menu.filter((m) => !seen.has(m) && !used.has(m));
+      const fresh = menu.filter((m) => !used.has(m));
+      const from = unseen.length ? unseen : fresh.length ? fresh : menu;
+      const pick = from.length ? from[Math.floor(rnd() * from.length)] : null;
+      plan = pick ? { kind: pick, side: rnd() < 0.5 ? 1 : -1, t: 0, phase: 0, dir: rnd() < 0.5 ? 1 : -1, bias: (rnd() - 0.5) * 0.1 * sloppy } : null;
+      if (plan) {
+        used.add(plan.kind);
+        seen.add(plan.kind);
+      }
+    }
+    const L = land.t + (plan ? plan.bias : 0);
+    // (A nudge inside the air's dead zone toward the line, as the classic pilots do.)
+    const off = land.x - sim.course.safeX(land.z);
+    const cruise = Math.abs(off) > 0.8 ? (off > 0 ? 3 : 5) : 4;
+    if (!plan) return { steer: cruise, action: L < 0.11 && L > 0.01 };
+    const p = plan;
+    p.t++;
+    const side = (d: number) => (d > 0 ? 8 : 0);
+    const yaw = Math.abs(s.airYaw) + (s.spinRate * s.spinRate) / (2 * 22);
+    const pitch = Math.abs(s.airPitch) + (s.pitchRate * s.pitchRate) / (2 * 26);
+    const stomp = L < 0.11 && L > 0.01;
+    const grab = (minTicks: number, spin = 0, tweak = false): Inp => {
+      if (p.phase === 0) {
+        p.phase = 1;
+        return { steer: side(p.side), action: true };
+      }
+      if (p.phase === 1) {
+        let steer = cruise;
+        if (spin && yaw < spin * Math.PI - 0.12) steer = side(p.side);
+        if (tweak && L < 0.5 && L > 0.16) steer = side(-p.side);
+        if ((L > 0.12 || s.grabTicks < minTicks - 2) && L > 0.02) return { steer, action: true };
+        p.phase = 2;
+      }
+      return { steer: cruise, action: false };
+    };
+    if (p.kind === 'grab') return grab(15);
+    if (p.kind === 'reach') return grab(40);
+    if (p.kind === 'stretch') return grab(75);
+    if (p.kind === 'paper') return grab(15, 2);
+    if (p.kind === 'cross') return grab(15, 0, true);
+    if (p.kind === 'lamp') {
+      if (p.t < 6) return { steer: side(p.dir), action: true };
+      return { steer: cruise, action: stomp };
+    }
+    if (p.kind === 'flip' || p.kind === 'ember') {
+      if (p.phase === 0) {
+        if (p.t < 2) return { steer: 4, action: false };
+        if (pitch < 2 * Math.PI - 0.2 && L > 0.45) return { steer: p.kind === 'ember' && p.t > 9 && yaw < 2 * Math.PI - 0.12 ? side(p.dir) : 4, action: true };
+        p.phase = 1;
+      }
+      let steer = cruise;
+      if (p.kind === 'ember' && yaw < 2 * Math.PI - 0.12 && L > 0.25) steer = side(p.dir);
+      return { steer, action: stomp };
+    }
+    if (p.kind === 'crane' || p.kind === 'knot') {
+      if (p.phase === 0) {
+        if (p.t < 2) return { steer: 4, action: false };
+        if (Math.abs(s.airPitch) < Math.PI + 0.6 && L > 0.6) return { steer: p.kind === 'knot' && p.t > 9 ? side(p.side) : 4, action: true };
+        p.phase = 1;
+        p.t = 0;
+        return { steer: cruise, action: false };
+      }
+      if (p.phase === 1) {
+        if (p.t < 3) return { steer: p.kind === 'knot' ? side(p.side) : cruise, action: false };
+        plan = { ...p, kind: p.kind === 'knot' ? 'paper' : 'grab', phase: 1 };
+        return { steer: side(p.side), action: L > 0.4 };
+      }
+      return { steer: cruise, action: false };
+    }
+    // The sled's own move: two quick taps, steer centred, then hold; let go before the landing and stomp it.
+    if (p.t <= 3) return { steer: 4, action: true };
+    if (p.t <= 6) return { steer: 4, action: false };
+    if (L > 0.3) return { steer: 4, action: true };
+    return { steer: cruise, action: stomp };
+  };
+  pilot.after = ground.after;
+  return pilot;
+}
