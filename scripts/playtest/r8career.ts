@@ -265,7 +265,9 @@ export const CHOICE_EVENTS: Readonly<Record<string, (e: Any) => boolean>> = {
   // SIM_VERSION 10 (r8-sim's stable interfaces): a charm gate ridden through, and a showdown won (the sim raises
   // 'rival' as the record's token is applied).
   charm: (e) => e.type === 'charm',
-  showdown: (e) => (e.type === 'showdown' && (e.phase === undefined || e.phase === 'start')) || (e.type === 'rival' && e.kind === 'showdown'),
+  // (Round 8, the merge: a showdown started is the choice, read off the run's rival probe as the app reads it; the
+  // sim's 'rival' token is only the win, counted apart as showdownsWon.)
+  showdown: (e) => e.type === 'showdown' && (e.phase === undefined || e.phase === 'start'),
 };
 
 /** A trick's name as today's director calls it (director.ts trickWord), and its family. */
@@ -286,6 +288,9 @@ interface PlannedRun {
   sled: number;
   entries: Any[];
   maxSeconds: number;
+  /** What the save decides for the run's SimConfig, as the app's runExtra does (charmpool.ts): the Almanac's charm
+   *  pool and gates, and a save's very first run. Absent on a build without the Almanac. */
+  extra?: Any;
 }
 
 interface RodeRun {
@@ -315,7 +320,7 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
       return { steer: o.steer, action: o.action, spirit: this.spend!() };
     },
   };
-  const run = new M.run.Run(p.mountain.seed, p.chaos, p.sled, src);
+  const run = new M.run.Run(p.mountain.seed, p.chaos, p.sled, src, p.extra ?? {});
   const sim = run.sim;
   const made = makePilot(M, p.pilot, sim, p.pilotSeed);
   src.pilot = made.pilot;
@@ -333,6 +338,8 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   }
   gm.tracks = gm.tracks.filter((t: Any) => t.ready);
   run.draftProbe = gm.draftProbe;
+  // (SIM_VERSION 10: the field's showdowns and spirit steals, decided as the app decides them, app.ts startRun.)
+  if (gm.rivalProbe) run.rivalProbe = gm.rivalProbe(sim.course.finishZ);
   const START_TICKS: number = M.race.START_TICKS ?? 360;
   const facts: RunFacts = { pilot: p.pilot, key: p.key, mountainId: p.mountain.id, mi: p.mi, chaos: p.chaos, sum: null, finished: false, time: null, distance: 0, seconds: 0, stageSeconds: [], passes: [], firstPass: null, firstPerfect: null, firstDash: null, choices: [], tricks: [], charms: [], synergies: [], moments: [], legend: 0, gates: [], tumbles: 0, wards: 0, events: {}, field: [], ticks: 0 };
   let combo = 0;
@@ -365,8 +372,10 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
       const alt = sim.course.altX(s.z);
       if (alt !== null) facts.choices.push({ tick: sim.tick, kind: 'fork', detail: Math.abs(s.x - alt) < Math.abs(s.x - sim.course.safeX(s.z)) ? 'risk' : 'safe' });
     }
+    for (const { tick, e } of run.drainRivals?.() ?? []) for (const [kind, is] of Object.entries(CHOICE_EVENTS)) if (is(e)) facts.choices.push({ tick, kind });
     for (const { tick, e } of run.drain()) {
       facts.events[e.type] = (facts.events[e.type] ?? 0) + 1;
+      if (e.type === 'rival' && e.kind === 'showdown') facts.events.showdownWon = (facts.events.showdownWon ?? 0) + 1;
       for (const [kind, is] of Object.entries(CHOICE_EVENTS)) if (is(e)) facts.choices.push({ tick, kind });
       if (e.type === 'dash' && e.phase === 'start' && facts.firstDash === null) facts.firstDash = tick;
       if (e.type === 'land' && !e.botched) {
@@ -640,7 +649,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     const dailyMedalBefore = M.settle.dailyMedalNow(d.daily, today);
     const cupMedalBefore = M.settle.cupMedalNow(d.cup, week);
     const pilotSeed = hash(seed, n, 0x9170);
-    const rode = ride(M, { pilot: o.pilot, pilotSeed, key, mountain, mi, chaos, sled: d.sled, entries, maxSeconds: o.maxSeconds ?? 600 });
+    const extra = M.almanac ? { charmPool: M.almanac.almanacPool(d), charmGates: M.almanac.almanacGates(d), firstRun: d.runs === 0 } : undefined;
+    const rode = ride(M, { pilot: o.pilot, pilotSeed, key, mountain, mi, chaos, sled: d.sled, entries, maxSeconds: o.maxSeconds ?? 600, extra });
     const f = rode.facts;
     const sim = rode.sim;
     const you = { time: f.time, distance: f.distance };
@@ -743,7 +753,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
           return { key: t.key, fresh: isNew };
         }),
         moments: f.moments,
-        showdownsWon: f.choices.filter((c) => c.kind === 'showdown').length,
+        showdownsWon: f.events.showdownWon ?? 0,
         charms: f.charms.map((id) => Object.keys(M.almanac?.CHARM_IDS ?? {}).find((k) => M.almanac.CHARM_IDS[k] === id) ?? String(id)),
         synergies: f.synergies.map((id) => M.album?.SYNERGY_KEYS?.[id] ?? String(id)),
         legend: f.legend,
@@ -1238,7 +1248,8 @@ export function firstRun(M: Mods, pilot: string, seed: number, mi = 0): RunFacts
   // (A mountain past Pinecrest is ridden as if it were open, with no duel: the expression bar's rides.)
   const duel = mi === 0 ? M.twelve.duelOn(undefined, 0, (i: number) => M.twelve.mountainOpen(d, M.mountains.MOUNTAINS[i]), 0) : null;
   const entries = fieldFor(M, d, { key: mountain.id, pool: M.pools[mountain.id], chaos, kind: 'pool', duel, promised: null });
-  return ride(M, { pilot, pilotSeed: seed, key: mountain.id, mountain, mi, chaos, sled: 0, entries, maxSeconds: 600 }).facts;
+  const extra = M.almanac ? { charmPool: M.almanac.almanacPool(d), charmGates: M.almanac.almanacGates(d), firstRun: true } : undefined;
+  return ride(M, { pilot, pilotSeed: seed, key: mountain.id, mountain, mi, chaos, sled: 0, entries, maxSeconds: 600, extra }).facts;
 }
 
 export function barFirstMinute(f: RunFacts): { pass: number | null; perfect: number | null; dash: number | null; ok: boolean } {
