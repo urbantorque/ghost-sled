@@ -2,7 +2,8 @@
 // and any tier, so a before and an after sit side by side. The list is every 150 m of the descent, each set
 // piece's approach and middle, each leap's lip (the hero vistas), and the way into every street, bridge,
 // tunnel, lake, ravine, terrace and finish. It rides the safe line at a pinned speed (as places.js), and
-// returns the lists it used (kept in scripts/playtest/frames-r7.json). Pass `at` to shoot a given list instead.
+// returns the lists it used (kept in scripts/playtest/frames-r7.json). Pass `at` to shoot a given list instead, and
+// `hold: true` to stop the page on the frame the run reaches each distance while it is shot.
 //   playwright-cli -s=fr open --config=.playwright/cli-headless.config.json
 //   playwright-cli -s=fr eval "window.__framesCfg = { base: 'http://127.0.0.1:4310/', out: 'shots/r7/before/high/', tier: 'high', ms: [0,1,2,3] }"
 //   playwright-cli -s=fr run-code --filename=scripts/playtest/frames.js
@@ -17,6 +18,22 @@ async (page) => {
     await page.goto(c.base + `?platform=mock&debug&tier=${c.tier}&autoride=1&m=${m}&mood=${c.mood}${c.extra}`, { timeout: 180000, waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 180000, waitUntil: 'domcontentloaded' });
     await page.waitForTimeout(1200);
+    await page.evaluate((hold) => {
+      if (!hold) return;
+      // The hold: every frame callback goes through here; once a frame leaves the run at or past the held distance,
+      // the next ones wait until the shot is taken.
+      const raf0 = window.requestAnimationFrame.bind(window);
+      const h = { at: Infinity, on: false, held: [] };
+      window.__hold = h;
+      window.requestAnimationFrame = (cb) => raf0((t) => {
+        if (h.on) { h.held.push(cb); return; }
+        cb(t);
+        const r = window.__gs.run;
+        if (r && r.sim.s.z >= h.at) h.on = true;
+      });
+      window.__holdAt = (z) => { h.at = z; h.on = false; };
+      window.__holdRelease = () => { h.at = Infinity; h.on = false; const q = h.held; h.held = []; for (const cb of q) window.requestAnimationFrame(cb); };
+    }, !!c.hold);
     await page.evaluate((speed) => {
       window.__pinSpeed = speed;
       const pin = () => {
@@ -94,9 +111,14 @@ async (page) => {
         await page.waitForFunction(() => { const f = window.__gs.world.far; return !f || f.pending === 0; }, null, { timeout: 8000, polling: 100 }).catch(() => {});
         await page.evaluate(() => { window.__pinSpeed = window.__pinHeld; });
       }
+      // (With `hold`, the page's frames stop on the very frame the run reaches z and the shot is of that frame: on a
+      // loaded machine a shot taken while the run rode on landed tens of metres late.)
+      if (c.hold) await page.evaluate((d) => window.__holdAt(d), z);
       await page.waitForFunction((d) => { const r = window.__gs.run; return !r || r.sim.s.z >= d; }, z, { timeout: 30000, polling: 16 }).catch(() => {});
+      if (c.hold) await page.waitForFunction(() => window.__hold.on || !window.__gs.run, null, { timeout: 10000, polling: 16 }).catch(() => {});
       const name = `m${m}-z${String(z).padStart(4, '0')}.png`;
       await page.screenshot({ path: c.out + name });
+      if (c.hold) await page.evaluate(() => window.__holdRelease());
       const st = await page.evaluate(() => ({ info: window.__frameInfo || null, fps: window.__gs.frameStats ? window.__gs.frameStats() : null }));
       report.push({ name, why: f.why, calls: st.info && st.info.calls, tris: st.info && st.info.tris, fps: st.fps && st.fps.fps });
       last = z;

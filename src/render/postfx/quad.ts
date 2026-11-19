@@ -35,4 +35,15 @@ export class Quad {
     this.renderer.compile(this.scene, this.cam);
     this.renderer.setRenderTarget(prev);
   }
+
+  /** As compile(), without waiting on the driver where the browser compiles in parallel: settles once the
+   *  program is linked. */
+  compileAsync(mat: ShaderMaterial, target: WebGLRenderTarget | null): Promise<unknown> {
+    this.mesh.material = mat;
+    const prev = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(target);
+    const done = this.renderer.compileAsync(this.scene, this.cam);
+    this.renderer.setRenderTarget(prev);
+    return done;
+  }
 }

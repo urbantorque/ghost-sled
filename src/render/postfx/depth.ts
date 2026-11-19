@@ -56,10 +56,16 @@ const nowViewProj = new Matrix4();
 let havePrev = false;
 const probe = new Vector3();
 
-/** Points the shared uniforms at this frame's depth and lens. Call once a frame, before any pass. */
-export function aimDepth(camera: PerspectiveCamera, depth: Texture | null, w: number, h: number): void {
+/**
+ * Points the shared uniforms at this frame's depth and lens. Call once a frame, before any pass. `drawnWith`
+ * is the projection the depth was drawn with, when that is not the lens's own: under the temporal
+ * reconstruction the scene is drawn with the lens moved inside a pixel (taa.ts), so every pass that turns a
+ * depth sample into a position uses that projection, while what is kept for next frame's reprojection (and
+ * the ice's mirror) is the lens itself, which the reconstruction has put back by now.
+ */
+export function aimDepth(camera: PerspectiveCamera, depth: Texture | null, w: number, h: number, drawnWith?: Matrix4): void {
   const u = depthUniforms;
-  const p = camera.projectionMatrix.elements;
+  const p = (drawnWith ?? camera.projectionMatrix).elements;
   u.tDepth.value = depth;
   u.uDepthNF.value.set(camera.near, camera.far, 1 / Math.log2(camera.far + 1), depth ? 1 : 0);
   u.uProj.value.set(1 / p[0], 1 / p[5], p[8] / p[0], p[9] / p[5]);
@@ -85,6 +91,11 @@ export function keepLens(): void {
 /** A hard cut (a new run, a revive, a camera snap): nothing reprojects across it. */
 export function cutLens(): void {
   havePrev = false;
+}
+
+/** Whether last frame's lens is kept (false before the first frame and after a cut). */
+export function lensKept(): boolean {
+  return havePrev;
 }
 
 /**

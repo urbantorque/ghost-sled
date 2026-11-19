@@ -36,8 +36,22 @@ export interface PassSettings {
   /** What glazed ice mirrors. 'sky': the painted gradient and ridges (round 6). 'bake': the baked sky
    *  and peaks on every glaze, with the riders standing in it. 'screen': the frame itself, marched. */
   mirror: 'sky' | 'bake' | 'screen';
-  /** Temporal anti-aliasing (an Ultra experiment: see notes/r7-pipe.md for whether it is kept). */
+  /** Temporal reconstruction (the visual lift, notes/vl-temporal.md): the scene is drawn at `scale` of
+   *  the frame with the lens moved inside a pixel each frame, and rebuilt to the full frame from the
+   *  frames before it. Where it runs it replaces the edge walk and most of the MSAA (both come back with
+   *  `?post=-taa`). */
   taa: boolean;
+  /** The MSAA samples the scene is drawn with while the reconstruction runs (at most the tier's own). Two
+   *  keep a cable thinner than a pixel, and an outline the rider has just uncovered, drawn in every frame:
+   *  without them the rasteriser dropped a far cable in some frames, the history could not follow a line the
+   *  frame did not draw, and it broke into dashes. On a dense screen the scene is drawn at `scale`, so two
+   *  samples there cost about half of round 7's two at the frame's own size. */
+  taaMsaa: number;
+  /** The scene's resolution on each axis as a share of the frame's while the reconstruction runs (1: the
+   *  frame's own). Never below one scene pixel to a page pixel (renderScale). */
+  scale: number;
+  /** The contrast-adaptive sharpen after the reconstruction, 0 none to 1 the most. */
+  sharpen: number;
   /** Edge anti-aliasing in the composite, on top of whatever MSAA the tier has: 0 none, 1 round 6's
    *  (five taps to find an edge, four along it), 2 the edge walk (the edge is followed to both its ends,
    *  so a long shallow stair, a wire or a roof line, is smoothed along its whole length). */
@@ -49,16 +63,59 @@ export interface PassSettings {
   shadowReach: number;
 }
 
-const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4, dofTaps: 0, blurTaps: 0, mirror: 'sky', taa: false, fxaa: 0, fringe: 0, shadowReach: 26 };
+const OFF: PassSettings = { ao: 'off', contact: false, shaftTaps: 0, shaftDiv: 4, dofTaps: 0, blurTaps: 0, mirror: 'sky', taa: false, taaMsaa: 0, scale: 1, sharpen: 0, fxaa: 0, fringe: 0, shadowReach: 26 };
 
 /** What each tier may run. Low has no post pass at all, so every row of it is off: its look is
- *  designed in the materials and the sky, never stripped from here. */
+ *  designed in the materials and the sky, never stripped from here. `fxaa` is what the composite runs
+ *  when the reconstruction does not (its switch off, or the frames before its programs are built). */
 export const PASSES: Record<Tier, PassSettings> = {
   low: { ...OFF },
   medium: { ...OFF, shaftTaps: 6, shaftDiv: 4, mirror: 'bake', fxaa: 2 },
-  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', fxaa: 2, fringe: 0.3, shadowReach: 34 },
-  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: false, fxaa: 2, fringe: 1, shadowReach: 44 },
+  high: { ...OFF, ao: 'lite', shaftTaps: 8, shaftDiv: 2, dofTaps: 8, blurTaps: 5, mirror: 'bake', taa: true, taaMsaa: 2, scale: 0.7, sharpen: 0.8, fxaa: 2, fringe: 0.3, shadowReach: 34 },
+  ultra: { ao: 'gtao', contact: true, shaftTaps: 12, shaftDiv: 2, dofTaps: 22, blurTaps: 9, mirror: 'screen', taa: true, taaMsaa: 2, scale: 0.85, sharpen: 0.7, fxaa: 2, fringe: 1, shadowReach: 44 },
 };
+
+/** The fewest scene pixels to a page (CSS) pixel the reconstruction draws: at a pixel ratio of 1 it
+ *  rebuilds at the frame's own size, on a dense screen it draws fewer pixels than the screen has. */
+export const SCALE_FLOOR = 1;
+
+/**
+ * The share of the frame (each axis) the scene is drawn at: `p.scale` while the reconstruction runs, but
+ * never fewer scene pixels than the page has pixels (SCALE_FLOOR at the renderer's pixel ratio), and the
+ * whole frame without it or with `?post=-scale`.
+ */
+export function renderScale(p: PassSettings, sw: PassSwitches, pixelRatio: number): number {
+  if (!p.taa || !sw.taa || !sw.scale) return 1;
+  return Math.min(1, Math.max(p.scale, SCALE_FLOOR / Math.max(pixelRatio, 1e-3)));
+}
+
+/** The MSAA samples the scene target is drawn with: the tier's own, or under the reconstruction its
+ *  `taaMsaa` (never more than the tier's own). */
+export function sceneSamples(msaa: number, p: PassSettings, sw: PassSwitches): number {
+  return p.taa && sw.taa ? Math.min(msaa, p.taaMsaa) : msaa;
+}
+
+/** How many places inside a pixel the lens visits before it repeats: 8 at the frame's own size, more as
+ *  the scene is drawn smaller (each frame pixel then needs more of them to be visited at all). */
+export function jitterPhases(scale: number): number {
+  return scale < 0.95 ? 16 : 8;
+}
+
+/** The i-th place inside a pixel (a Halton set on 2 and 3, from 1), as an offset from its middle in pixels. */
+export function jitterAt(i: number, phases: number): [number, number] {
+  const k = (i % phases) + 1;
+  const halton = (n: number, b: number) => {
+    let f = 1;
+    let x = 0;
+    while (n > 0) {
+      f /= b;
+      x += f * (n % b);
+      n = Math.floor(n / b);
+    }
+    return x;
+  };
+  return [halton(k, 2) - 0.5, halton(k, 3) - 0.5];
+}
 
 /** The dev switch `?post=` (and `world.post.switches` at run time): each pass can be turned off for a
  *  before and after at the same frame. All on by default. */
@@ -69,7 +126,12 @@ export interface PassSwitches {
   dof: boolean;
   blur: boolean;
   mirror: boolean;
+  /** The temporal reconstruction (off: the tier's MSAA and edge walk, as round 7). */
   taa: boolean;
+  /** The reconstruction's smaller scene (off: it rebuilds from a scene at the frame's own size). */
+  scale: boolean;
+  /** The contrast-adaptive sharpen after the reconstruction. */
+  sharpen: boolean;
   /** Round 7's edge anti-aliasing (off: round 6's, FXAA only where there is no MSAA). */
   aa: boolean;
   letterbox: boolean;
@@ -79,10 +141,10 @@ export interface PassSwitches {
   lens: boolean;
 }
 
-export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'aa', 'letterbox', 'fit', 'lens'];
+export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'scale', 'sharpen', 'aa', 'letterbox', 'fit', 'lens'];
 
 export function allSwitches(on = true): PassSwitches {
-  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, aa: on, letterbox: on, fit: on, lens: on };
+  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, scale: on, sharpen: on, aa: on, letterbox: on, fit: on, lens: on };
 }
 
 /**
@@ -120,6 +182,9 @@ export interface FrameSignals {
   reduced: boolean;
   /** How far the lens moved this frame, as the largest screen motion in pixels (a still lens blurs nothing). */
   motionPx?: number;
+  /** The reconstruction's programs are built (they compile on idle after the first frame; until then the
+   *  composite's edge walk stands in). Absent reads as ready. */
+  taaReady?: boolean;
 }
 
 export interface FramePlan {
@@ -130,7 +195,8 @@ export interface FramePlan {
   shafts: boolean;
   dof: boolean;
   blur: boolean;
-  /** The temporal blend runs (and the lens is moved inside its pixel this frame). */
+  /** The temporal reconstruction runs (the lens is moved inside its pixel this frame, the frame is rebuilt
+   *  and sharpened, and what the history cannot know is drawn over it at the frame's size). */
   taa: boolean;
   /** The full-frame lens pass runs (depth of field or motion blur is in the frame). */
   lens: boolean;
@@ -167,14 +233,22 @@ export function planFrame(p: PassSettings, sw: PassSwitches, f: FrameSignals, as
   plan.dof = p.dofTaps > 0 && sw.dof && f.dof > CINE_EPS;
   plan.blur = p.blurTaps > 0 && sw.blur && !f.reduced && f.motionBlur > CINE_EPS && (f.motionPx === undefined || f.motionPx > 0.5);
   plan.lens = plan.dof || plan.blur;
-  plan.taa = p.taa && sw.taa;
+  plan.taa = p.taa && sw.taa && f.taaReady !== false;
   plan.letterbox = sw.letterbox ? letterboxShare(f.letterbox, aspect) : 0;
   // (The ice's screen mirror marches against last frame's depth, so it needs every frame's.)
   plan.depth = plan.ao || plan.shafts || plan.lens || plan.taa || (p.mirror === 'screen' && sw.mirror);
   // The occlusion and its blur; the shafts' two radial passes; depth of field's gather at half the frame;
-  // the lens pass; the temporal blend. The letterbox is a few lines of the composite.
-  plan.added = (plan.ao ? 2 : 0) + (plan.shafts ? 2 : 0) + (plan.dof ? 1 : 0) + (plan.lens ? 1 : 0) + (plan.taa ? 1 : 0);
+  // the lens pass; the reconstruction's two (the rebuild into the history, and the sharpen into the frame,
+  // which writes the depth the particles are drawn against; the particles themselves only move from the
+  // scene's draw to their own, no draw is added). The letterbox is a few lines of the composite.
+  plan.added = (plan.ao ? 2 : 0) + (plan.shafts ? 2 : 0) + (plan.dof ? 1 : 0) + (plan.lens ? 1 : 0) + (plan.taa ? 2 : 0);
   return plan;
+}
+
+/** Whether the reconstruction is configured on a tier (its targets are built and the scene is drawn at
+ *  renderScale without MSAA), whether or not its programs are ready this frame. */
+export function wantsTaa(p: PassSettings, sw: PassSwitches): boolean {
+  return p.taa && sw.taa;
 }
 
 /** Whether a tier ever samples the frame's depth (so the scene target is built with a depth texture). */
@@ -206,22 +280,33 @@ export interface PassCost {
  * each thing that is not a pass but is paid for (the mirror's march in the snow shader, the edge walk
  * and the fringe in the composite, the shadow map's reach). The rows' draws add up to `plan.added`.
  */
-export function passCosts(p: PassSettings, sw: PassSwitches, f: FrameSignals, w: number, h: number): PassCost[] {
+export function passCosts(p: PassSettings, sw: PassSwitches, f: FrameSignals, w: number, h: number, pixelRatio = 1): PassCost[] {
   const plan = planFrame(p, sw, f, w / Math.max(1, h));
   const rows: PassCost[] = [];
   if (!f.post) return rows;
-  const half = [Math.max(1, Math.ceil(w / 2)), Math.max(1, Math.ceil(h / 2))];
-  if (plan.ao) rows.push({ name: 'ao', draws: 2, w: half[0], h: half[1], format: 'RGBA8', targets: 2, taps: (p.ao === 'gtao' ? 18 : 4) + 16, where: 'two passes, then four taps in the composite' });
+  // What reads the scene's own depth and picture works at the scene's size (smaller under the
+  // reconstruction); what reads the rebuilt frame at the frame's.
+  const s = plan.taa ? renderScale(p, sw, pixelRatio) : 1;
+  const sw0 = Math.max(1, Math.round(w * s));
+  const sh0 = Math.max(1, Math.round(h * s));
+  const half = [Math.max(1, Math.ceil(sw0 / 2)), Math.max(1, Math.ceil(sh0 / 2))];
+  if (plan.ao) rows.push({ name: 'ao', draws: 2, w: half[0], h: half[1], format: 'RGBA8', targets: 2, taps: (p.ao === 'gtao' ? 18 : 4) + 16, where: plan.taa ? 'two passes, then four taps in the reconstruction' : 'two passes, then four taps in the composite' });
   if (plan.contact) rows.push({ name: 'contact', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 8, where: 'in the occlusion pass' });
-  if (plan.shafts) rows.push({ name: 'shafts', draws: 2, w: Math.max(1, Math.ceil(w / p.shaftDiv)), h: Math.max(1, Math.ceil(h / p.shaftDiv)), format: 'R8', targets: 2, taps: p.shaftTaps, where: 'two passes a source, then one tap in the composite' });
-  if (plan.taa) rows.push({ name: 'taa', draws: 1, w, h, format: 'R11G11B10F', targets: 2, taps: 15, where: 'one pass' });
+  if (plan.shafts) rows.push({ name: 'shafts', draws: 2, w: Math.max(1, Math.ceil(sw0 / p.shaftDiv)), h: Math.max(1, Math.ceil(sh0 / p.shaftDiv)), format: 'R8', targets: 2, taps: p.shaftTaps, where: 'two passes a source, then one tap in the composite' });
+  if (plan.taa) {
+    // The rebuild: nine scene taps, five of depth, four of last frame's depth, five of the history (a
+    // Catmull-Rom read), four of the occlusion. The sharpen: five, and one of depth for the particles.
+    rows.push({ name: 'taa', draws: 2, w, h, format: 'R11G11B10F', targets: 3, taps: 27 + 6, where: 'the rebuild into the history (two targets, kept in turn) and the sharpen into the frame with its depth; the scene target is kept twice, in turn, at the scene\'s size' });
+    if (sw.sharpen && p.sharpen > 0) rows.push({ name: 'sharpen', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 5, where: 'in the reconstruction\'s second pass' });
+    if (s < 1) rows.push({ name: 'scale', draws: 0, w: sw0, h: sh0, format: 'R11G11B10F + D24S8', targets: 2, taps: 0, where: 'the scene is drawn at this size, no MSAA' });
+  }
   if (plan.dof) rows.push({ name: 'dof', draws: plan.blur ? 1 : 2, w: half[0], h: half[1], format: 'RGBA16F', targets: 1, taps: 2 * p.dofTaps + 2, where: 'a gather at half the frame, mixed in by the lens pass (one full-frame draw, shared with the motion blur)' });
   if (plan.blur) rows.push({ name: 'blur', draws: 1, w, h, format: 'R11G11B10F', targets: 1, taps: p.blurTaps + 2, where: 'the lens pass' });
   if (plan.letterbox > 0) rows.push({ name: 'letterbox', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 0, where: 'in the composite' });
   if (p.mirror !== 'sky' && sw.mirror) rows.push(p.mirror === 'screen'
     ? { name: 'mirror', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 31, where: 'in the snow shader, on ice pixels only; reads last frame\'s resolved picture and depth' }
     : { name: 'mirror', draws: 0, w: 768, h: 200, format: 'RGBA16F', targets: 1, taps: 1, where: 'in the snow shader, on ice pixels only; the sky is baked again every 3.5 s' });
-  if (p.fxaa > 0 && sw.aa) rows.push({ name: 'aa', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: p.fxaa === 2 ? 25 : 9, where: 'in the composite: five taps a pixel, the rest on edge pixels only' });
+  if (p.fxaa > 0 && sw.aa && !plan.taa) rows.push({ name: 'aa', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: p.fxaa === 2 ? 25 : 9, where: 'in the composite: five taps a pixel, the rest on edge pixels only' });
   if (p.fringe > 0 && sw.lens && !f.reduced) rows.push({ name: 'lens', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 2, where: 'in the composite: the frame\'s corners, at speed' });
   if (sw.fit) rows.push({ name: 'fit', draws: 0, w: 0, h: 0, format: '', targets: 0, taps: 0, where: 'the shadow map\'s own pass: ' + p.shadowReach + ' m of reach, no draw added' });
   return rows;

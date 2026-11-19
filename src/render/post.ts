@@ -23,7 +23,7 @@ import { shared } from './materials';
 import { FILM } from './palette';
 import { PIPE_COMPOSITE_GLSL, Pipeline, pipeUniforms } from './postfx/pipeline';
 import { iceMirror } from './postfx/reflect';
-import type { PassSettings } from './postfx/tiers';
+import { renderScale, sceneSamples, wantsTaa, type PassSettings } from './postfx/tiers';
 
 // A small custom post stack (ART.md section 9): bloom via a downsample/upsample mip chain, then one
 // composite pass for colour grade, vignette, speed streaks, chromatic punch, grain and dither.
@@ -89,7 +89,15 @@ const sunProbe = new Vector3();
 const lookProbe = new Vector3();
 
 export class PostFX {
-  private sceneRT: WebGLRenderTarget;
+  /** The scene targets: one, or two drawn into in turn under the temporal reconstruction (the frame before
+   *  this one keeps its depth, for the rebuild's disocclusion test and Ultra's ice mirror). */
+  private targets: WebGLRenderTarget[] = [];
+  private cur = 0;
+  /** The frame's size and the scene's (smaller under the reconstruction: tiers.ts renderScale). */
+  private outW = 2;
+  private outH = 2;
+  private sceneW = 2;
+  private sceneH = 2;
   private mips: WebGLRenderTarget[] = [];
   private ups: WebGLRenderTarget[] = [];
   private quad: Mesh;
@@ -143,16 +151,18 @@ export class PostFX {
     // Contract C10: a combined depth-stencil buffer (the rider masks the ghosts). Nothing reads depth or
     // stencil after the scene pass, so the MSAA resolve copies colour only: a stencil resolve is slow
     // on D3D, and the depth one was never needed.
-    this.sceneRT = new WebGLRenderTarget(w, h, {
-      type: packed ? UnsignedInt101111Type : type,
-      format: packed ? RGBFormat : RGBAFormat,
-      samples: msaa,
-      minFilter: LinearFilter,
-      magFilter: LinearFilter,
-      stencilBuffer: true,
-      resolveDepthBuffer: false,
-      resolveStencilBuffer: false,
-    });
+    this.makeTarget = () =>
+      new WebGLRenderTarget(Math.max(1, this.sceneW), Math.max(1, this.sceneH), {
+        type: packed ? UnsignedInt101111Type : type,
+        format: packed ? RGBFormat : RGBAFormat,
+        samples: this.msaa,
+        minFilter: LinearFilter,
+        magFilter: LinearFilter,
+        stencilBuffer: true,
+        resolveDepthBuffer: false,
+        resolveStencilBuffer: false,
+      });
+    this.targets.push(this.makeTarget());
     this.quad = new Mesh(fullscreenTriangle());
     this.quad.frustumCulled = false;
     this.qScene.add(this.quad);
@@ -920,8 +930,23 @@ export class PostFX {
     this.setSize(w, h);
   }
 
+  private makeTarget: () => WebGLRenderTarget;
+
+  /** The scene target this frame draws into. */
+  private get sceneRT(): WebGLRenderTarget {
+    return this.targets[this.cur];
+  }
+
+  /** The frame's size in pixels (the canvas's). The scene is drawn at it, or at the reconstruction's share
+   *  of it. */
   setSize(w: number, h: number): void {
-    this.sceneRT.setSize(w, h);
+    this.outW = w;
+    this.outH = h;
+    const pipe = this.pipe;
+    const s = renderScale(pipe.passes, pipe.switches, this.renderer.getPixelRatio());
+    this.sceneW = Math.max(1, Math.round(w * s));
+    this.sceneH = Math.max(1, Math.round(h * s));
+    for (const t of this.targets) t.setSize(this.sceneW, this.sceneH);
     for (const m of this.mips) m.dispose();
     for (const m of this.ups) m.dispose();
     this.mips = [];
@@ -937,28 +962,55 @@ export class PostFX {
     }
     this.composite.uniforms.uAspect.value = w / h;
     this.composite.uniforms.uTexel.value.set(1 / w, 1 / h);
-    this.pipe.setSize(w, h);
+    this.pipe.setSize(w, h, this.sceneW, this.sceneH);
   }
 
   /** The tier's passes (postfx/tiers.ts). Call after construction and whenever the tier changes. */
   configure(passes: PassSettings): void {
-    this.pipe.configure(passes, this.sceneRT);
+    const pipe = this.pipe;
+    pipe.passes = passes;
+    // The reconstruction draws into two scene targets in turn, without MSAA (it replaces it).
+    const want = wantsTaa(passes, pipe.switches) ? 2 : 1;
+    while (this.targets.length > want) this.targets.pop()!.dispose();
+    while (this.targets.length < want) this.targets.push(this.makeTarget());
+    this.cur = 0;
+    const samples = sceneSamples(this.msaa, passes, pipe.switches);
+    for (const t of this.targets) {
+      if (t.samples !== samples) {
+        t.samples = samples;
+        t.dispose();
+      }
+    }
+    pipe.configure(passes, this.targets);
+    this.setSize(this.outW, this.outH);
     this.aimAA();
+  }
+
+  /** Whether the scene is drawn multisampled (near props fade through coverage only then: world.ts). */
+  get multisampled(): boolean {
+    return this.sceneRT.samples > 0;
   }
 
   /** Which edge anti-aliasing the composite runs: the tier's, or round 6's with the dev switch off
    *  (FXAA only for a scene drawn without MSAA). */
   private aimAA(): void {
     const sw = this.pipe.switches;
-    this.composite.uniforms.uFxaa.value = sw.aa ? this.pipe.passes.fxaa : this.msaa > 0 ? 0 : 1;
+    this.fxaaMode = sw.aa ? this.pipe.passes.fxaa : this.multisampled ? 0 : 1;
+    this.composite.uniforms.uFxaa.value = this.fxaaMode;
   }
+
+  private fxaaMode = 0;
 
   setMsaa(samples: number): void {
     if (samples === this.msaa) return;
     this.msaa = samples;
+    const eff = sceneSamples(samples, this.pipe.passes, this.pipe.switches);
+    for (const t of this.targets) {
+      if (t.samples === eff) continue;
+      t.samples = eff;
+      t.dispose();
+    }
     this.aimAA();
-    this.sceneRT.samples = samples;
-    this.sceneRT.dispose();
   }
 
   setGrade(g: GradeParams): void {
@@ -1041,22 +1093,42 @@ export class PostFX {
       return;
     }
     const pipe = this.pipe;
+    const lens = camera as PerspectiveCamera;
     pipe.rider.set(this.params.riderX, this.params.riderY);
     pipe.time = this.params.time;
-    pipe.begin(this.sceneRT, camera as PerspectiveCamera, true, this.moodShafts, this.params.reduced);
-    r.setRenderTarget(this.sceneRT);
+    // Under the temporal reconstruction the two scene targets take turns: last frame's keeps its depth.
+    let last: WebGLRenderTarget | null = null;
+    if (this.targets.length > 1) {
+      last = this.targets[this.cur];
+      this.cur = 1 - this.cur;
+    }
+    const target = this.sceneRT;
+    pipe.begin(target, last, lens, true, this.moodShafts, this.params.reduced);
+    // (The reconstruction's scene pass leaves out what it draws after itself: postfx/after.ts.)
+    if (pipe.plan.taa) pipe.after.sceneOnly(camera);
+    r.setRenderTarget(target);
     r.render(scene, camera);
+    pipe.after.all(camera);
+    pipe.afterScene(lens, scene);
     this.aimShafts(camera);
-    // The picture the bloom and the composite read: the scene, or the lens pass's when a beat blurs it.
+    // The picture the bloom and the composite read: the scene, the rebuilt frame, or the lens pass's when a
+    // beat blurs it.
     const cu = this.composite.uniforms;
-    const src = pipe.run(this.sceneRT, camera as PerspectiveCamera, cu.uShaft.value as number, cu.uSunUv.value as Vector2);
+    const src = pipe.run(target, last, lens, cu.uShaft.value as number, cu.uSunUv.value as Vector2, scene);
+    // The composite's edge anti-aliasing stands down where the frame was rebuilt (it replaces it), and
+    // walks the picture it reads in that picture's own pixels.
+    const rebuilt = pipe.plan.taa;
+    cu.uFxaa.value = rebuilt ? 0 : this.fxaaMode;
+    const sw = rebuilt || src !== target.texture ? this.outW : this.sceneW;
+    const sh = rebuilt || src !== target.texture ? this.outH : this.sceneH;
+    cu.uTexel.value.set(1 / sw, 1 / sh);
     // (Round 6's fan of taps in the composite stands down while the marched shafts are drawn; it is
     // what `?post=-shafts` shows.)
     if (pipe.plan.shafts) cu.uShaft.value = 0;
     if (this.bloomEnabled) {
       const first = this.mips[0];
       this.prefilter.uniforms.tSrc.value = src;
-      this.prefilter.uniforms.uTexel.value.set(1 / this.sceneRT.width, 1 / this.sceneRT.height);
+      this.prefilter.uniforms.uTexel.value.set(1 / sw, 1 / sh);
       this.pass(this.prefilter, first);
       for (let i = 1; i < this.mips.length; i++) {
         this.down.uniforms.tSrc.value = this.mips[i - 1].texture;
@@ -1094,7 +1166,7 @@ export class PostFX {
     u.uStreakFoot.value = this.params.streakFoot;
     pipe.timer.begin('composite');
     this.pass(this.composite, null);
-    pipe.end(camera as PerspectiveCamera);
+    pipe.end(lens);
   }
 
   /** Renders the scene from a second camera into a framed inset. x, y, w, h are CSS pixels with the
@@ -1143,7 +1215,7 @@ export class PostFX {
   }
 
   dispose(): void {
-    this.sceneRT.dispose();
+    for (const t of this.targets) t.dispose();
     for (const m of this.mips) m.dispose();
     for (const m of this.ups) m.dispose();
     this.pipe.dispose();

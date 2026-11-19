@@ -1,13 +1,14 @@
-import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, Vector2, type PerspectiveCamera, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
+import { DepthStencilFormat, DepthTexture, NearestFilter, UnsignedInt248Type, Vector3, Vector2, type PerspectiveCamera, type Scene, type Texture, type WebGLRenderTarget, type WebGLRenderer } from 'three';
 import { cine } from '../cine';
+import { AfterDraw } from './after';
 import { AOPass, AO_COMPOSITE_GLSL, aoComposite } from './ao';
 import { DEPTH_GLSL, aimDepth, depthUniforms, keepLens, lastViewProj, lensMotionPx } from './depth';
 import { LensPass } from './lens';
 import { Quad } from './quad';
 import { aimIceMirror } from './reflect';
-import { TaaPass } from './taa';
+import { TemporalPass } from './taa';
 import { SHAFT_COMPOSITE_GLSL, ShaftsPass, shaftComposite, shaftPlace } from './shafts';
-import { PASSES, allSwitches, planFrame, wantsDepth, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
+import { PASSES, allSwitches, planFrame, wantsDepth, wantsTaa, type FramePlan, type FrameSignals, type PassSettings, type PassSwitches } from './tiers';
 import { GpuTimer } from './timing';
 
 // Round 7's passes between the scene and the composite. post.ts owns the scene target, the bloom and
@@ -20,7 +21,7 @@ import { GpuTimer } from './timing';
 // in the plan draws nothing and its composite function returns on its first line.
 
 /** What the composite shows instead of the picture (dev: `?postview=`). */
-export const VIEWS = ['none', 'depth', 'ao', 'contact', 'shafts', 'coc', 'motion'] as const;
+export const VIEWS = ['none', 'depth', 'ao', 'contact', 'shafts', 'coc', 'motion', 'taa'] as const;
 export type PipeView = (typeof VIEWS)[number];
 
 /** The composite's side of the pipeline: uniforms to spread into its own, GLSL to splice in before
@@ -77,68 +78,94 @@ export class Pipeline {
   readonly ao: AOPass;
   readonly shafts: ShaftsPass;
   readonly lens: LensPass;
-  readonly taa: TaaPass;
+  readonly taa: TemporalPass;
+  /** What the reconstruction cannot know, drawn after it (after.ts). */
+  readonly after = new AfterDraw();
   /** The rider's place on screen (uv, origin bottom left) and the clock, set by post.ts each frame. */
   readonly rider = new Vector2(0.5, 0.4);
   time = 0;
   private lastTime = 0;
-  /** Last frame left a resolved picture and depth in the scene target. */
+  /** Last frame left a resolved picture and depth in the scene target (under the reconstruction, in the
+   *  other of the two it draws into in turn). */
   private drawn = false;
-  private depthTex: DepthTexture | null = null;
+  /** One depth texture a scene target (the reconstruction keeps two targets, in turn). */
+  private depthTexs: DepthTexture[] = [];
   private signals: FrameSignals = { post: true, dof: 0, motionBlur: 0, letterbox: 0, shafts: 0, reduced: false, motionPx: 0 };
+  /** The frame's size (the scene's is smaller under the reconstruction). */
   private w = 2;
   private h = 2;
 
-  constructor(renderer: WebGLRenderer) {
+  constructor(private renderer: WebGLRenderer) {
     this.quad = new Quad(renderer);
     this.timer = new GpuTimer(renderer);
     this.ao = new AOPass(this.quad);
     this.shafts = new ShaftsPass(this.quad);
     this.lens = new LensPass(this.quad, renderer);
-    this.taa = new TaaPass(this.quad, renderer);
+    this.taa = new TemporalPass(this.quad, renderer);
   }
 
-  /** A tier's passes (and the dev switches): builds or drops the scene target's depth texture and
-   *  compiles the programs the tier will use. */
-  configure(passes: PassSettings, target: WebGLRenderTarget): void {
+  /** A tier's passes (and the dev switches): builds or drops the scene targets' depth textures and
+   *  compiles the programs the tier will use. `targets` are the scene targets (two under the
+   *  reconstruction, drawn into in turn). */
+  configure(passes: PassSettings, targets: readonly WebGLRenderTarget[]): void {
     this.passes = passes;
     const want = wantsDepth(passes, this.switches);
-    if (want && !this.depthTex) {
-      // 24 bits of depth and the 8 of stencil the rider's mask needs (contract C10), as one texture.
-      const t = new DepthTexture(target.width, target.height, UnsignedInt248Type);
-      t.format = DepthStencilFormat;
-      t.minFilter = NearestFilter;
-      t.magFilter = NearestFilter;
-      t.name = 'scene-depth';
-      this.depthTex = t;
-      target.depthTexture = t;
-      target.dispose();
-    } else if (!want && this.depthTex) {
-      target.depthTexture = null;
-      target.resolveDepthBuffer = false;
-      target.dispose();
-      this.depthTex.dispose();
-      this.depthTex = null;
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const has = this.depthTexs[i] ?? null;
+      if (want && (!has || target.depthTexture !== has)) {
+        // 24 bits of depth and the 8 of stencil the rider's mask needs (contract C10), as one texture.
+        const t = has ?? new DepthTexture(target.width, target.height, UnsignedInt248Type);
+        t.format = DepthStencilFormat;
+        t.minFilter = NearestFilter;
+        t.magFilter = NearestFilter;
+        t.name = 'scene-depth-' + i;
+        this.depthTexs[i] = t;
+        target.depthTexture = t;
+        target.dispose();
+      } else if (!want && has) {
+        target.depthTexture = null;
+        target.resolveDepthBuffer = false;
+        target.dispose();
+        has.dispose();
+        delete this.depthTexs[i];
+      }
     }
+    // A target dropped (the reconstruction off): its depth goes with it.
+    for (let i = targets.length; i < this.depthTexs.length; i++) {
+      this.depthTexs[i]?.dispose();
+      delete this.depthTexs[i];
+    }
+    this.depthTexs.length = Math.min(this.depthTexs.length, targets.length);
+    this.drawn = false;
     this.ao.configure(this.switches.ao ? passes.ao : 'off', passes.contact && this.switches.contact);
     this.shafts.configure(this.switches.shafts ? passes.shaftTaps : 0, passes.shaftDiv);
     this.lens.configure(this.switches.dof ? passes.dofTaps : 0, this.switches.blur ? passes.blurTaps : 0);
+    if (!wantsTaa(passes, this.switches)) this.taa.rest();
   }
 
-  setSize(w: number, h: number): void {
+  /** The frame's size, and the scene's (smaller under the reconstruction). What reads the scene's own
+   *  depth and picture (the occlusion, the shafts) works from the scene's; the lens pass reads the frame. */
+  setSize(w: number, h: number, rw = w, rh = h): void {
     this.w = w;
     this.h = h;
     this.drawn = false;
-    this.ao.setSize(w, h);
-    this.shafts.setSize(w, h);
+    this.ao.setSize(rw, rh);
+    this.shafts.setSize(rw, rh);
     this.lens.setSize(w, h);
-    this.taa.setSize(w, h);
+    this.taa.setSize(w, h, rw, rh);
+  }
+
+  private depthOf(target: WebGLRenderTarget | null): DepthTexture | null {
+    if (!target || !target.depthTexture) return null;
+    return this.depthTexs.includes(target.depthTexture as DepthTexture) ? (target.depthTexture as DepthTexture) : null;
   }
 
   /** Before the scene pass: reads the camera's cine state and decides whether this frame's depth is
    *  needed at all (under MSAA an unread depth is not resolved). `shafts` is the most the shafts could
-   *  be this frame (the mood's strength; where the light is on screen is known after the scene). */
-  begin(target: WebGLRenderTarget, camera: PerspectiveCamera, post: boolean, shafts: number, reducedMotion: boolean): void {
+   *  be this frame (the mood's strength; where the light is on screen is known after the scene). `last`
+   *  is the scene target drawn last frame when it is not `target` (the reconstruction's other one). */
+  begin(target: WebGLRenderTarget, last: WebGLRenderTarget | null, camera: PerspectiveCamera, post: boolean, shafts: number, reducedMotion: boolean): void {
     const f = this.signals;
     f.post = post;
     f.dof = cine.dof;
@@ -147,30 +174,52 @@ export class Pipeline {
     f.shafts = Math.max(shafts, shaftPlace.strength);
     f.reduced = reducedMotion;
     f.motionPx = lensMotionPx(camera, this.h);
+    f.taaReady = post && wantsTaa(this.passes, this.switches) ? this.taa.ready() : true;
     planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
-    if (this.depthTex) target.resolveDepthBuffer = this.plan.depth;
-    // What glazed ice mirrors while the scene is drawn: last frame's own picture and depth on Ultra
-    // (the target's resolved textures; only under MSAA, where drawing does not write them).
+    const depth = this.depthOf(target);
+    if (depth) target.resolveDepthBuffer = this.plan.depth;
+    // What glazed ice mirrors while the scene is drawn: last frame's own picture and depth on Ultra. Under
+    // the reconstruction, the last rebuilt frame and the other scene target's depth; under MSAA, the
+    // target's resolved textures (drawing into renderbuffers does not write them).
     const mode = !post || !this.switches.mirror || this.passes.mirror === 'sky' ? 0 : this.passes.mirror === 'bake' ? 1 : 2;
-    const screen = mode === 2 && target.samples > 0 && this.depthTex !== null && this.drawn;
-    aimIceMirror(mode, screen ? target.texture : null, screen ? this.depthTex : null, lastViewProj(), camera.near, camera.far);
+    let color: Texture | null = null;
+    let mirrorDepth: Texture | null = null;
+    if (mode === 2 && this.drawn) {
+      if (this.plan.taa && last) {
+        color = this.taa.lastFrame;
+        mirrorDepth = this.depthOf(last);
+      } else if (!this.plan.taa && target.samples > 0 && depth) {
+        color = target.texture;
+        mirrorDepth = depth;
+      }
+    }
+    aimIceMirror(mode, color && mirrorDepth ? color : null, color && mirrorDepth ? mirrorDepth : null, lastViewProj(), camera.near, camera.far);
     // (After the lens's own motion is measured: the part-pixel move is not motion.)
-    if (this.plan.taa && this.depthTex) this.taa.move(camera);
+    if (this.plan.taa && depth) this.taa.move(camera);
     else this.taa.rest();
     this.timer.begin('scene');
   }
 
+  /** Right after the scene pass: the lens goes back to its place, and the reconstruction finds what it
+   *  should draw after itself from now on (after.ts). */
+  afterScene(camera: PerspectiveCamera, scene: Scene): void {
+    if (!this.plan.taa) return;
+    this.taa.settle(camera);
+    this.after.scan(this.renderer, scene);
+  }
+
   /**
    * After the scene pass: draws this frame's passes and returns the picture the bloom and the composite
-   * read (the scene's own, or the lens pass's when a beat blurs it). `sunK` is the sun's shafts'
-   * strength now that its place on screen (`sunUv`) is known.
+   * read (the scene's own, the rebuilt frame under the reconstruction, or the lens pass's when a beat blurs
+   * it). `sunK` is the sun's shafts' strength now that its place on screen (`sunUv`) is known; `last` as in
+   * begin(); `scene` is drawn again for what the reconstruction draws after itself.
    */
-  run(target: WebGLRenderTarget, camera: PerspectiveCamera, sunK: number, sunUv: Vector2): Texture {
+  run(target: WebGLRenderTarget, last: WebGLRenderTarget | null, camera: PerspectiveCamera, sunK: number, sunUv: Vector2, scene: Scene): Texture {
     const f = this.signals;
     f.shafts = Math.max(sunK, shaftPlace.strength);
     const plan = planFrame(this.passes, this.switches, f, this.w / this.h, this.plan);
-    const depth = this.depthTex && plan.depth ? this.depthTex : null;
-    aimDepth(camera, depth, target.width, target.height);
+    const depth = plan.depth ? this.depthOf(target) : null;
+    aimDepth(camera, depth, target.width, target.height, plan.taa ? this.taa.drawnWith : undefined);
     if (plan.ao && depth) {
       this.timer.begin('ao');
       this.ao.render(camera, this.lightDir, plan.contact);
@@ -185,7 +234,13 @@ export class Pipeline {
     let picture = target.texture;
     if (plan.taa && depth) {
       this.timer.begin('taa');
-      picture = this.taa.render(picture, this.rider);
+      this.taa.debugView = this.view === 'taa';
+      const prevDepth = this.drawn && last ? this.depthOf(last) : null;
+      picture = this.taa.render(target.texture, prevDepth, camera, this.switches.sharpen ? this.passes.sharpen : 0);
+      // (The occlusion is in the rebuilt frame now: the composite lays on none.)
+      this.ao.rest();
+      this.timer.begin('after');
+      this.after.draw(this.renderer, scene, camera, this.taa.out);
     }
     if (plan.lens && depth) {
       this.timer.begin('lens');
@@ -210,6 +265,6 @@ export class Pipeline {
     this.shafts.dispose();
     this.lens.dispose();
     this.taa.dispose();
-    this.depthTex?.dispose();
+    for (const t of this.depthTexs) t?.dispose();
   }
 }
