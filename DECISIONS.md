@@ -3330,3 +3330,88 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     - *Draws and size:* the fixed frames' mean draw calls High 98.7 to 98.2, Low 49.1 to 50.3, the phone 89.0 to
       88.8; triangles +1.6% on High, level on Low, +2.6% on the phone. The build is 118 KB larger (all script), 31
       files as before. The console is clean in every capture and on a cold start on four tiers and five mountains.
+
+
+## Round 8: beauty and the hook
+
+The owner's brief is `prompts/round-8-beauty-and-the-hook.md`: the look from an 8.5 to a 10 and the game's fun and
+retention from a 7.5 to a 10, run end to end without stops. Lanes work in hand-made worktrees cut from `round-8`, each
+with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes/r8-lanes.md`.
+
+367. **The ground truth: the live build played against the outside review, line by line** (`notes/r8-review-m0.md`,
+    frames in `shots/r8/review/`). Scripted pilots and replays on the local build (byte for byte the deployed site):
+    a clumsy first run with real keys, the pool's best run down all five mountains, ten runs on one Pinecrest save
+    through the real Run Again and title, a Daily, a Cup, a duel won and a duel lost, Low on Ember and Lanternfall,
+    the phone with touch. Nobody played it with hands. The console was clean everywhere.
+    - *The look.* Confirmed: trees at the lens break into a third of the frame of flat planes, and so do Frostfang's
+      crevasse walls and the cavern's rocks, most on a clumsy line (2); all five mountains open on the same centred
+      trench at 250 m, though past the opening the drops and town run-ins are the best frames in the game (3); speed
+      is white scratches over the picture and a radial blur that smears the banks, nothing near the line whips past
+      (4); a perfect landing is a line of type and a puff the sled's size, smoke-grey on Ember, and a fall throws more
+      snow than a perfect (6). Partly: the near snow is a flat ramp with speckle on four mountains, but tracks are
+      broad ruts, not hairlines, and Ember already has ripples (1); Ember's and Lanternfall's open stretches are one
+      value, but the Basalt Halls and Firstlight do gather light (5); the image's instability was the held-back
+      rebuild's, and shimmer cannot be judged in stills (7). Wrong: results is not a plain card with a "+31" but a
+      busy one of about fifteen items with no order, its one button's rider name cut off (8). Low reads as a simpler
+      High, not a poster, and Lanternfall's Low pools read as stains (9).
+    - *The game.* Confirmed: the air is spin and flip and nothing else (3); nobody has played it (8). Partly: there are
+      tracks (the ladder, "Next: X, 0.6 s up", stars), but every one froze from run 2 to run 10 (1); moods and sleds
+      change how a run plays but none is chosen on the day, and dash or ward is the one choice in a run (2); the race
+      is alive but a duel is only a time to beat (4); a Daily streak exists but pays nothing, and the Cup is a lonely
+      run (6); after the crown the title is the same with a trophy (7). Wrong in letter: results always names a target
+      on its button (5), but it picks a ghost to rematch over a new mountain just opened.
+    - *What the outside review missed, biggest first.* (a) **The race has no floor:** a hands-off autoride came 2nd of
+      6 on Pinecrest, a pilot that only steers led the phone's first run from 5 s, and the mid pilot won its very
+      first run; an early "1st" means little. (b) **The rewards arrive at once and then stop:** run 1 pays a win, a
+      duel, an unlock, 8 stars, 4 medals and 470 gifts; run 2 a best and a podium; runs 3 to 10 pay nothing new, and a
+      player who stays on one mountain stops at about run 6. (c) **A clumsy first run lasts over five minutes inside
+      noise:** 8 falls, 248 m behind the last rider, the stomp hint shown 77 times and the dash hint 23; on a fresh save
+      the first run is also an unexplained duel, its words landing with a pass and a draft call inside 2 s. Also: The
+      Hollow King rides as an ordinary ghost on Pinecrest's second run; Comet Bob reads as an untextured white lump;
+      the HUD has already grown (a trick callout off the phone's edge, the dash hint over the steering thumb); a lost
+      duel pays nearly what a win does; the Daily card shows a style score beside a medal won on time.
+    - *What it means for the plan (369).* The look's order stands. The game's has one change: the first hour's shape
+      (a floor under the race, rewards paced across runs, a quiet first run) matters as much as any new mechanic, so
+      G10, G4 and G5 are built against those three findings, and the bars harness (370) measures them.
+
+368. **Low's lost frames: found and fixed in the far shadows; the frame rate's proof waits for a quiet sitting**
+    (`notes/r8-perf.md`, the perf lane; raw output in `shots/r8/perf/`). At 6x the main thread is saturated (885 to 990
+    ms of every second busy), so any added work, in the frame's callback or between frames, costs frames directly; the
+    world's own systems (`systime.js`) read level because the cost sat in three.js's draw and in idle tasks. Counted
+    call by call (`glcount.js`, exact run to run) and profiled per frame in units of one sim tick's cost (identical
+    work on every build, so a ruler for the machine's speed), it was three things in `farshadow.ts`: the far field's
+    two uniform arrays of vectors in every lit program, which three re-sends whole at every material change (about
+    13 times a Low frame, 27 `uniform4fv` calls); every fine tile baked twice (the tile four chunks ahead baked before
+    its casters were laid, then again a chunk later: 15 of 41 bakes); and the field looking for work every frame.
+    *The fix:* the slots and the near box are one 23-texel float table read with `texelFetch`, sent only when it
+    changes (about 0.3 uploads a frame on Low); `WAIT_AHEAD` 4 to 3, so each fine tile is baked once (24 bakes in a 30
+    s ride, not 41 to 44); the field looks for work every 0.4 s. A Low frame's GL calls are round 7's again plus the
+    poster's one draw (Pinecrest/Ember/Sakura 501/476/492 against round 7's 483/465/473 and the base's 523/492/521);
+    a work-per-frame ruler in the page reads the base 5.5% over round 7 and the fix 2.4% over (low confidence). Ruled
+    out: garbage collection, the page's lifecycle (level, and the lift writes no DOM in a ride), shader compiles mid-run,
+    sync calls. *Not proven:* every frame-rate sitting was shared (other lanes; then another project's two headless
+    browsers from 1:02 on 20 November), and one probe swung 22 to 38 fps; the last sitting read round 7 and the fix
+    level within noise (23/25/23 against 22/25/22, the machine at half its usual speed). The owner's decision 2 (switch
+    Low's far shadows and poster off if no cause was found) is moot: the cause was found and both stay. Milestone 4's
+    quiet sitting settles the number. *For every later lane:* never put a uniform array of vectors in a shared
+    material; count GL calls before and after; at 6x idle work costs its full time; 1 ms a frame at 6x is about 1.5
+    fps at 40.
+
+369. **The plan: the brief's order of value kept, the work overlapped where it shares no files and no browser.**
+    - *Milestone 2's design and milestone 3's logic ran during milestone 0.* Neither needs a browser, and both decide
+      what the look lanes must draw (the charm gates, the tricks' poses, the showdown marker, and the stage-line
+      thresholds that moved places by up to 200 m). Each was designed, reviewed here and built under a rule that kept
+      the laptop quiet for the perf lane. The gates still run in order: no look lane starts before the sim batch is
+      merged, its pools regenerated and the before set shot on that build, so every before and after pair stands on
+      the same course.
+    - *The before set* is shot on the merged build before any look work (the v10 courses with round 7's look), not on
+      the v9 live build: the thresholds moved places, so a v9 frame at a given metre shows a different place than a
+      v10 one. The ground truth (367) is the live build's record.
+    - *The look's lanes,* at most three at a time with one browser each, in two waves: first snow (V1), composition
+      (V3) and the batch's presentation (the play lane: charm gates, trick poses and calls, showdowns); then speed and
+      Spirit Flow (V4), light (V5), events (V6) and the forest (V2). Then the screens (V8 with G5, the Almanac, the
+      flame, the album, the HUD's overflow on the phone), and image stability (V7) last. Each lane says what Low and the
+      phone get (V9) and is judged by blind pairs (`blind-pairs.mjs`: the new frame on a seeded side, the key kept from
+      the critic) and a fresh critic told nothing.
+    - *Cut or held:* gentle set-piece variants (round 7's open item 3) stay out; Trials and G11's sharing are stretch
+      and come last if at all; no ad placement of any kind (the owner's decision 4, made: none this round).
