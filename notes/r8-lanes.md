@@ -58,6 +58,10 @@ this file first, then your own brief (your brief wins where it is more specific)
   node runs held the CPU at 100%. So: **no more than two playwright browsers on the machine at once (the main lane
   says when yours may open), and a CPU-saturating node job (the full `vitest`, lab sweeps, `generate-ghosts`) only
   with `--maxWorkers=3` for vitest and one lab process at a time.**
+  **Take a browser slot before you open a browser and give it back when it is closed:**
+  `bash scripts/playtest/browser-slot.sh take <lane>` (waits for one of the two slots; run it from the main checkout's
+  copy, `C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh`, if your branch predates it) and
+  `... give <lane>`. Hold a slot only while capturing; batch your captures so a slot is held minutes, not hours.
   **At most one playwright browser per lane, open only while you capture**, and only the headless configs
   (`.playwright/cli-headless.config.json` 1280x720, `.playwright/mobile-headless.config.json` 390x844 DPR 2). Use your
   own session name (`-s=r8-<lane>`), close it when done, and **never run `playwright-cli close-all` or `kill-all`**.
