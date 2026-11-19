@@ -4,6 +4,7 @@ import { lanternPiece } from './lanternkit';
 import { flagColors } from './dressing';
 import { ASH_TOP, SNOW, basaltTones, merge, paint, part, reseed, shade, softPart } from './flora';
 import { Facets, columnInto } from './rockforms';
+import { kitBox, withChamfer } from './chamfer';
 import type { Palette } from './palette';
 // (town.ts uses this file's helpers only inside its builders, so the two may import each other.)
 import { finishPiece, lipPiece, liftPiece, startPiece, viaductPiece } from './places';
@@ -157,8 +158,14 @@ export function seed(s: number): void {
   reseed(s);
 }
 
+/** A kit's box: chamfered on Medium and High where it is thick enough to show it (chamfer.ts). */
 export function box(w: number, h: number, d: number, col: Color, pos: V3, rot?: V3): BufferGeometry {
-  return part(new BoxGeometry(w, h, d), col, { pos, rot });
+  return part(kitBox(w, h, d, col), col, { pos, rot });
+}
+
+/** A sign's board: chamfered on Medium and High however thin, as a sign is read at the lens (chamfer.ts). */
+export function signBox(w: number, h: number, d: number, col: Color, pos: V3, rot?: V3): BufferGeometry {
+  return part(kitBox(w, h, d, col, true), col, { pos, rot });
 }
 
 /** A timber or rod from a to b (square, or `sides` round). */
@@ -1283,8 +1290,16 @@ export function pagodaParts(night: boolean, b: number, lo: number, p: Palette): 
   return parts;
 }
 
-/** The piece for a kind. */
+/** The piece for a kind. Its layout and its steps are made with the chamfer its tier takes (chamfer.ts): on
+ *  Low a box is a box, but where a builder asks for its chamfer by name. */
 export function pieceFor(kind: Kind, ctx: SiteCtx): Piece {
+  const l = ctx.low ? 'low' : 'full';
+  const piece = withChamfer(l, () => pieceOf(kind, ctx));
+  piece.steps = piece.steps.map((s) => () => withChamfer(l, s));
+  return piece;
+}
+
+function pieceOf(kind: Kind, ctx: SiteCtx): Piece {
   // Lanternfall builds its own: lamp towers, great standing lamps, bell frames and arched bridges of lights.
   if (ctx.biome === 'lantern') {
     const own = lanternPiece(kind, ctx);

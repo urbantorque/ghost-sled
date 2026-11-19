@@ -1,5 +1,6 @@
 import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
+import { setChamferTier } from './chamfer';
 import { Clearing, Dresser, L_CABLE, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
@@ -210,6 +211,8 @@ function hashf(a: number, b: number, c: number): number {
 export class Props {
   readonly root = new Object3D();
   private batches = new Map<string, Batch>();
+  /** Obstacle kinds whose form is not made yet, and how to make each (obNeed). */
+  private obMake = new Map<string, () => BufferGeometry>();
   private materials: ShaderMaterial[] = [];
   private giftMat: ShaderMaterial;
   /** The glow round every spirit light, near and far, and the motes of a trail in the air (spiritlights.ts). */
@@ -303,11 +306,15 @@ export class Props {
   }
 
   private build(): void {
+    // (The visual lift: every kit piece built from here on, here and in the set pieces' worlds on idle time,
+    // takes the chamfer this tier draws: chamfer.ts. Props builds first whenever the tier changes.)
+    setChamferTier(!this.arches);
     for (const b of this.batches.values()) {
       this.root.remove(b.mesh);
       b.mesh.dispose();
     }
     this.batches.clear();
+    this.obMake.clear();
     // Meshes queued for the old course or palette would only be made to be thrown away.
     this.queued.clear();
     this.jobs = [];
@@ -363,7 +370,10 @@ export class Props {
       // (Lanternfall's night casts the moon's shadow from its tall stones and trees only: a marker stone's or a
       // stone lamp's was a few pixels of shade for a draw of its own in the shadow pass.)
       const cast = biome !== 'lantern' || k === 'spire' || k === 'basalt' || k === 'pine';
-      add('ob:' + k, obstacleGeometry(k, p, !this.arches, biome), mat, k === 'pine' || k === 'rock' ? 700 : 300, cast);
+      // (Each kind's form is made when the course first stands one in the window: a mountain stands four or five of
+      // the thirteen, and the visual lift's named forms cost a few milliseconds each before the first frame.)
+      add('ob:' + k, NO_GEOMETRY, mat, k === 'pine' || k === 'rock' ? 700 : 300, cast);
+      this.obMake.set('ob:' + k, () => obstacleGeometry(k, p, !this.arches, biome));
     }
     // Decorative forest: biome-appropriate silhouettes, each batch a variant set (flora.ts): the
     // original tree and a variant (a snow-laden spruce, a young one, a dead snag; a snapped spire, a
@@ -512,7 +522,7 @@ export class Props {
     add('gift', spiritFlameGeometry(), this.giftMat, 1100, false);
     add('glow', spiritGlowGeometry(), this.glowMat, 2400, false);
     this.batches.get('glow')!.mesh.renderOrder = 2;
-    add('lip', kickerLipGeometry(p), plain, 120, false);
+    add('lip', kickerLipGeometry(p, !this.arches), plain, 120, false);
     add('vent', ventGeometry(), glow, 120, false);
     add('beam', gateBeamGeometry(p, biome === 'lantern'), plain, 60);
     if (this.arches) {
@@ -615,6 +625,7 @@ export class Props {
         this.q.setFromAxisAngle(this.up, o.rot);
         this.v.set(o.x, o.y - 0.05, -o.z);
         this.s.setScalar(o.scale);
+        this.obNeed('ob:' + o.kind);
         this.push('ob:' + o.kind, this.v, this.q, this.s);
       }
       // In low visibility (Blizzard) lights grow by a fifth, so the marigold trail reads through the fog.
@@ -817,6 +828,7 @@ export class Props {
         // stays inside what the sim collides with, tests/rockforms.)
         this.s.set(k, o.kind === 'basalt' ? o.h / BASALT_MODEL_H : o.kind === 'spire' ? o.h / 5 : o.kind === 'rock' || o.kind === 'lavarock' ? o.h / ROCK_MODEL_H : k * tallK, k);
       }
+      this.obNeed('ob:' + o.kind);
       this.push('ob:' + o.kind, this.v, this.q, this.s);
     }
     for (const gate of chunk.gates) {
@@ -1085,6 +1097,15 @@ export class Props {
     const p = this.arches ? pick : 0;
     this.push(b, this.v, this.q, this.s, near ? p : p + AERIAL_PICK, v * (1 + w), v, v * (1 - w));
   };
+
+  /** Makes an obstacle kind's form the first time the course stands one (build). */
+  private obNeed(key: string): void {
+    const make = this.obMake.get(key);
+    if (!make) return;
+    this.obMake.delete(key);
+    const b = this.batches.get(key);
+    if (b) b.mesh.geometry = make();
+  }
 
   private push(key: string, pos: Vector3, q: Quaternion, s: Vector3, pick = 0, r = 1, g = 1, bl = 1): void {
     this.m.compose(pos, q, s);

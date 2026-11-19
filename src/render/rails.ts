@@ -7,6 +7,7 @@ import { visualGround } from './ground';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
 import { Facets, strataInto } from './rockforms';
+import { chamferBox, chamferLevel, namedChamfer } from './chamfer';
 
 // What the course is furnished with so a place reads before you reach it, on every tier, in one draw:
 // the grindable rails, and the leaps' and the forks' markers. One instanced variant set (flora.ts), so
@@ -76,10 +77,16 @@ function railLook(biome: BiomeId): RailLook {
  *  world up, so posts stand plumb); these keep a post's section round whatever the length. */
 const zk = 1 / LEN;
 
+// (The visual lift: on Medium and High a rail's bar is chamfered, so its edges catch the light along its length
+// under the pale strip of its cap; chamfer.ts. The rails, flags, shoulders, cornices and signs are one variant set,
+// so every instance in the batch pays for what is added to the bar: Low keeps the plain bar.)
+const railBar = () => chamferBox(0.15, 0.1, 1, chamferLevel() === 'full' ? namedChamfer(0.02) : 0);
+const railCap = () => new BoxGeometry(0.09, 0.03, 1);
+
 function barGeometry(look: RailLook): BufferGeometry {
   const parts: BufferGeometry[] = [
-    part(new BoxGeometry(0.15, 0.1, 1), look.bar, { pos: [0, -0.05, -0.5] }),
-    part(new BoxGeometry(0.09, 0.03, 1), look.top, { pos: [0, 0.012, -0.5] }),
+    part(railBar(), look.bar, { pos: [0, -0.05, -0.5] }),
+    part(railCap(), look.top, { pos: [0, 0.012, -0.5] }),
     part(new CylinderGeometry(0.075, 0.09, 2.6, 6), look.post, { pos: [0, -1.34, -0.5], scale: [1, 1, zk] }),
     part(new BoxGeometry(0.1, 0.1, 0.3), look.post, { pos: [0, -0.14, -0.5], scale: [1, 1, zk] }),
     part(new IcosahedronGeometry(0.34, 0), SNOW, { pos: [0, -1.18, -0.5], scale: [1, 0.34, zk * 1.1], jitter: 0.05 }),
@@ -90,8 +97,8 @@ function barGeometry(look: RailLook): BufferGeometry {
 function rampGeometry(look: RailLook): BufferGeometry {
   // The low end: the bar comes up out of a long mound of packed snow, a strap holding it down.
   return merge([
-    part(new BoxGeometry(0.15, 0.1, 1), look.bar, { pos: [0, -0.05, -0.5] }),
-    part(new BoxGeometry(0.09, 0.03, 1), look.top, { pos: [0, 0.012, -0.5] }),
+    part(railBar(), look.bar, { pos: [0, -0.05, -0.5] }),
+    part(railCap(), look.top, { pos: [0, 0.012, -0.5] }),
     softPart(new SphereGeometry(1, 6, 3), SNOW, { pos: [0, -0.1, -0.03], scale: [0.5, 0.2, 0.16] }),
     part(new CylinderGeometry(0.07, 0.085, 1.8, 6), look.post, { pos: [0, -0.9, -0.82], scale: [1, 1, zk] }),
   ]);

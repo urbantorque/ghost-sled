@@ -10,6 +10,7 @@ import {
   Euler,
   IcosahedronGeometry,
   LatheGeometry,
+  PlaneGeometry,
   Matrix4,
   Quaternion,
   SphereGeometry,
@@ -22,9 +23,10 @@ import type { ObstacleKind } from '../sim/course';
 import type { HatKind } from '../bot/roster';
 import type { HatId } from '../game/garage';
 import { FRIEND_HEX as MINT_HEX } from '../game/beats';
-import { ASH_TOP, CEDAR, basaltTones, hazardPineGeometry } from './flora';
+import { ASH_TOP, CEDAR, basaltTones, blossomGeometry, dropSlivers, hazardPineGeometry } from './flora';
 import { Palette } from './palette';
 import { Facets, columnsInto, strata } from './rockforms';
+import { bevelled, chamferBox, kitBox, liftEdges, namedChamfer } from './chamfer';
 
 // Every mesh in the game is built here from primitives. Parts are flat-shaded (non-indexed) and
 // carry vertex colours, so the shared toon shader can light them consistently (ART.md section 3).
@@ -78,6 +80,8 @@ function part(geo: BufferGeometry, color: Color | string, o: PartOpts = {}): Buf
     arr[i * 3 + 2] = col.b;
   }
   g.setAttribute('color', new BufferAttribute(arr, 3));
+  // (A chamfered box's chamfers take their light: chamfer.ts.)
+  liftEdges(g);
   return g;
 }
 
@@ -151,27 +155,6 @@ export function charPineGeometry(p: Palette): BufferGeometry {
   return merge(parts);
 }
 
-export function blossomGeometry(p: Palette): BufferGeometry {
-  reseed(303);
-  const parts: BufferGeometry[] = [part(new CylinderGeometry(0.18, 0.3, 2.6, 6), new Color('#5A3A3E'), { pos: [0, 1.3, 0], jitter: 0.05 })];
-  const pinkA = p.tall;
-  const pinkB = shade(p.tall, 0.85).lerp(new Color('#FFFFFF'), 0.15);
-  const blobs = [
-    [0, 3.4, 0, 1.5],
-    [1.0, 2.9, 0.3, 1.05],
-    [-0.9, 3.0, -0.4, 1.1],
-    [0.3, 4.3, -0.5, 1.0],
-    [-0.4, 3.9, 0.8, 0.95],
-  ];
-  // (Round 7: each cloud of bloom deepens to a wine-rose underneath and lifts toward its crown, a step
-  // apart facet to facet, so a canopy has a dark heart for its lit rim to glow against: ART.md 15.)
-  blobs.forEach(([x, y, z, r], i) => {
-    parts.push(paint(part(new IcosahedronGeometry(r, 0), i % 2 ? pinkB : pinkA, { pos: [x, y, z], rot: [rnd(), rnd(), rnd()], jitter: 0.18 }), 2.0, 5.0, 0.62, 1.08, 0.16));
-  });
-  parts.push(part(new IcosahedronGeometry(0.9, 0), SNOW, { pos: [0, 4.4, 0], scale: [1.3, 0.45, 1.3], jitter: 0.1 }));
-  return merge(parts);
-}
-
 /** The model sizes the run's rocks are built to (obstacleModelRadius, and props.ts stretches a rock to its
  *  collider's own height): the drawn rock stands inside its collider. */
 export const ROCK_MODEL_R = 1.1;
@@ -186,9 +169,12 @@ export function rockGeometry(base: Color, lit: Color, variant: number, low = fal
     rz: 0.98,
     h: ROCK_MODEL_H,
     foot: 0.5,
-    // (Low's rock: two beds and six corners, the triangles round 6's rock had.)
+    // (Low's rock: two beds and six corners, the triangles round 6's rock had. Medium and High's is a corner
+    // finer with its beds' walls weathered round (the visual lift: at the lens a flat-shaded wall read as
+    // plainly facets); its joints, ledges and crown stay crisp, and its outline is a hazard's hard one.)
     layers: low ? 2 : 3,
-    sides: low ? 6 : 7,
+    sides: low ? 6 : 8,
+    smooth: !low,
     rock: [shade(base, 0.74), shade(base, 0.96), base.clone().lerp(lit, 0.6)],
     lie: SNOW,
     // (Beds well off each other and dipping hard, snow only where one steps well in: a boulder with a
@@ -296,6 +282,7 @@ export function lavaRockGeometry(p: Palette, low = false): BufferGeometry {
     foot: 0.5,
     layers: low ? 2 : 3,
     sides: 6,
+    smooth: !low,
     rock: [shade(p.low, 0.58), shade(p.low, 0.8), shade(p.low, 1.08)],
     lie: ASH_TOP,
     taper: 0.34,
@@ -311,19 +298,127 @@ export function lavaRockGeometry(p: Palette, low = false): BufferGeometry {
   });
 }
 
-export function lanternGeometry(): BufferGeometry {
+/** A turned part from a profile of [radius, y] points, `segs` round, flat-shaded with its slanted faces
+ *  (the chamfers a profile cuts) taking their light (chamfer.ts bevelled). */
+function turned(profile: Array<[number, number]>, segs: number, color: Color, o: PartOpts = {}, phi = 0): BufferGeometry {
+  return part(bevelled(new LatheGeometry(profile.map(([r, y]) => new Vector2(r, y)), segs, phi)), color, o);
+}
+
+/** A square roof with concave slopes and corners that turn up at the eave, as a stone lantern's cap is cut:
+ *  `R` the eave's half width at `y0`, rising `rise` to a top `top` half wide, the eave `band` thick. Each slope
+ *  is smooth within itself and crisp at its hips. `snow` lays a cap of snow down the slopes from the top
+ *  (its share of the slope), its lower edge ragged. */
+function lanternRoof(R: number, y0: number, rise: number, top: number, band: number, lift: number, col: Color, snow: number, rowsAll: number): BufferGeometry[] {
+  const out: BufferGeometry[] = [];
+  const cols = 4;
+  const at = (side: number, u: number, t: number, over: number): [number, number, number] => {
+    // The slope's own frame: d out from the middle, a along the eave.
+    const a = (side * Math.PI) / 2;
+    const dx = Math.cos(a);
+    const dz = Math.sin(a);
+    const hw = R + (top - R) * Math.pow(t, 0.8);
+    const y = y0 + rise * Math.pow(t, 1.7) + lift * Math.pow(Math.abs(u), 4) * Math.pow(1 - t, 2) + over;
+    return [dx * hw - dz * u * hw, y, dz * hw + dx * u * hw];
+  };
+  const sheet = (t0: number, t1: number, over: number, color: Color, ragged: boolean, rows = rowsAll): void => {
+    for (let side = 0; side < 4; side++) {
+      const pos: number[] = [];
+      const idx: number[] = [];
+      for (let j = 0; j <= rows; j++) {
+        for (let i = 0; i <= cols; i++) {
+          const u = -1 + (2 * i) / cols;
+          // (A snow cap's lower edge wanders, deeper in the middle of a slope than at its hips.)
+          const tl = ragged && j === 0 ? t0 - 0.08 * Math.cos(u * 1.4) + 0.05 * Math.sin(side * 2.1 + i * 1.7) : t0;
+          const t = tl + ((t1 - tl) * j) / rows;
+          pos.push(...at(side, u, t, over));
+        }
+      }
+      for (let j = 0; j < rows; j++) {
+        for (let i = 0; i < cols; i++) {
+          const k = j * (cols + 1) + i;
+          idx.push(k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2);
+        }
+      }
+      const g = new BufferGeometry();
+      g.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+      g.setIndex(idx);
+      g.computeVertexNormals();
+      // (Wound so a slope faces out: flip if its middle's normal looks in.)
+      const n = g.getAttribute('normal') as BufferAttribute;
+      const mid = Math.floor(rows / 2) * (cols + 1) + Math.floor(cols / 2);
+      const a = (side * Math.PI) / 2;
+      if (n.getX(mid) * Math.cos(a) + n.getZ(mid) * Math.sin(a) + n.getY(mid) < 0) {
+        for (let q = 0; q < idx.length; q += 3) [idx[q + 1], idx[q + 2]] = [idx[q + 2], idx[q + 1]];
+        g.setIndex(idx);
+        g.computeVertexNormals();
+      }
+      out.push(smoothPart(g, color));
+    }
+  };
+  sheet(0, 1, 0, col, false);
+  if (snow > 0) sheet(1 - snow, 1, 0.022, SNOW, true, Math.max(1, rowsAll - 1));
+  // The eave's band: a dressed edge `band` deep under the slope's rim, all round, and the soffit under it.
+  const ring: Array<[number, number, number]> = [];
+  for (let side = 0; side < 4; side++) for (let i = 0; i < cols; i++) ring.push(at(side, -1 + (2 * i) / cols, 0, 0));
+  const f = new Facets();
+  for (let k = 0; k < ring.length; k++) {
+    const p = ring[k];
+    const q = ring[(k + 1) % ring.length];
+    f.quad([p[0], p[1] - band, p[2]], [q[0], q[1] - band, q[2]], q, p, col, [p[0] + q[0], 0, p[2] + q[2]], 0.9, 1.08);
+    f.tri([0, y0 - band, 0], [q[0], q[1] - band, q[2]], [p[0], p[1] - band, p[2]], col, [0, -1, 0], 0.72);
+  }
+  out.push(f.build());
+  return out;
+}
+
+/** A stone lantern (Sakura's `lantern` hazard, a collider of 0.6 m by 1.4 m drawn at 0.85 to 1.2 times): cut
+ *  stone in the garden's way, every piece of it made: a hexagonal footing with a bevelled rim on a seat of
+ *  snow, a round shaft with a carved collar, a flared hexagonal platform, a square fire box whose four paper
+ *  windows glow a cold moonlit white (a hazard's light is never warm: props.ts lights only that paper), a cap
+ *  whose concave slopes turn up at the corners with snow lying down them, and a jewel finial. The old one was
+ *  boxes stacked on a box, and the critics read it as one at the lens on every pass. */
+export function lanternGeometry(low = false): BufferGeometry {
+  reseed(3141);
   const stone = new Color('#8A8496');
   const dark = new Color('#5E586C');
-  return merge([
-    part(new BoxGeometry(0.9, 0.25, 0.9), dark, { pos: [0, 0.12, 0] }),
-    part(new CylinderGeometry(0.16, 0.2, 0.6, 6), stone, { pos: [0, 0.55, 0] }),
-    part(new BoxGeometry(0.7, 0.5, 0.7), stone, { pos: [0, 1.05, 0] }),
-    // A pale moonlit paper window: the stone lantern is a hazard, so its light is cold (props.ts
-    // lights only this part).
-    part(new BoxGeometry(0.46, 0.3, 0.72), new Color('#BFE2FF'), { pos: [0, 1.05, 0] }),
-    part(new ConeGeometry(0.62, 0.38, 4), dark, { pos: [0, 1.48, 0], rot: [0, Math.PI / 4, 0] }),
-    part(new ConeGeometry(0.5, 0.18, 4), SNOW, { pos: [0, 1.6, 0], rot: [0, Math.PI / 4, 0] }),
-  ]);
+  const deep = new Color('#4E485C');
+  const paperC = new Color('#BFE2FF');
+  const c = namedChamfer(0.022);
+  const parts: BufferGeometry[] = [
+    // The seat of snow it stands in.
+    smoothPart(new IcosahedronGeometry(0.56, 0), SNOW, { pos: [0, 0.0, 0], scale: [1.08, 0.2, 1.04] }),
+    // The footing and its step, each with a bevelled rim.
+    turned([[0.001, -0.08], [0.44, -0.08], [0.44, 0.1], [0.4, 0.14], [0.001, 0.14]], 6, dark, {}, Math.PI / 6),
+    turned([[0.001, 0.13], [0.33, 0.13], [0.33, 0.2], [0.3, 0.23], [0.001, 0.23]], 6, stone, {}, Math.PI / 6),
+    // The shaft: round, a little slimmer at its head, a carved collar a third up.
+    smoothPart(new CylinderGeometry(0.125, 0.15, 0.53, low ? 6 : 9, 1, true), stone, { pos: [0, 0.495, 0] }),
+    turned([[0.158, 0.4], [0.172, 0.418], [0.158, 0.46]], low ? 6 : 8, deep),
+    // The platform flares out to carry the fire box.
+    turned([[0.13, 0.75], [0.33, 0.84], [0.35, 0.86], [0.35, 0.9], [0.32, 0.93], [0.001, 0.93]], 6, stone, {}, Math.PI / 6),
+    // The fire box: stone with a window cut in each face, the paper glowing in it.
+    part(chamferBox(0.42, 0.3, 0.42, c), dark, { pos: [0, 1.08, 0] }),
+  ];
+  for (let k = 0; k < 4; k++) {
+    const a = (k * Math.PI) / 2;
+    const s = Math.sin(a);
+    const co = Math.cos(a);
+    // (A pane is a single face, a hand proud of the stone: only its face is ever seen.)
+    parts.push(part(new PlaneGeometry(0.24, 0.17), paperC, { pos: [s * 0.214, 1.085, co * 0.214], rot: [0, a, 0] }));
+  }
+  parts.push(part(chamferBox(0.5, 0.04, 0.5, namedChamfer(0.012)), stone, { pos: [0, 1.25, 0] }));
+  // The cap and its snow.
+  parts.push(...lanternRoof(0.45, 1.29, 0.24, 0.06, 0.05, 0.07, dark, 0.55, low ? 2 : 3));
+  // The jewel finial on its collar.
+  parts.push(smoothPart(new LatheGeometry([new Vector2(0.075, 1.51), new Vector2(0.075, 1.55), new Vector2(0.06, 1.57), new Vector2(0.075, 1.61), new Vector2(0.05, 1.66), new Vector2(0.001, 1.71)], 6), stone));
+  return dropSlivers(merge(parts));
+}
+
+/** The run's kicker lip at its ends: the snow roll tucks down into the ramp and back against the board over the
+ *  last eighth of its unit width (a lip is 4 to 6.4 m wide, so most of a metre: the ramp's flanks fall away
+ *  there, and a roll at full depth hung over them as a white tongue). */
+function lipTaper(x: number): number {
+  const u = Math.max(0, Math.min(1, (0.5 - Math.abs(x)) / 0.13));
+  return u * u * (3 - 2 * u);
 }
 
 export function pillarGeometry(p: Palette, lantern = false): BufferGeometry {
@@ -333,7 +428,7 @@ export function pillarGeometry(p: Palette, lantern = false): BufferGeometry {
     return merge([
       part(new CylinderGeometry(0.26, 0.4, 4.6, 8), p.accentProp, { pos: [0, 2.3, 0] }),
       part(new CylinderGeometry(0.5, 0.5, 0.35, 8), new Color('#2A2230'), { pos: [0, 0.17, 0] }),
-      part(new BoxGeometry(0.62, 0.16, 0.62), slate, { pos: [0, 4.66, 0] }),
+      part(kitBox(0.62, 0.2, 0.62), slate, { pos: [0, 4.66, 0] }),
       part(new BoxGeometry(0.52, 0.72, 0.52), new Color('#FFD070').multiplyScalar(2.2), { pos: [0, 5.1, 0] }),
       part(new ConeGeometry(0.5, 0.5, 4), slate, { pos: [0, 5.7, 0], rot: [0, Math.PI / 4, 0] }),
     ]);
@@ -349,8 +444,8 @@ export function pillarGeometry(p: Palette, lantern = false): BufferGeometry {
 export function gateBeamGeometry(p: Palette, lantern = false): BufferGeometry {
   if (lantern) return part(new BoxGeometry(1, 0.06, 0.06), new Color('#4A3A2A'), { pos: [0, 4.95, 0] });
   return merge([
-    part(new BoxGeometry(1, 0.42, 0.55), p.accentProp, { pos: [0, 4.4, 0] }),
-    part(new BoxGeometry(1.25, 0.32, 0.7), new Color('#2A2230'), { pos: [0, 5.2, 0] }),
+    part(kitBox(1, 0.42, 0.55), p.accentProp, { pos: [0, 4.4, 0] }),
+    part(kitBox(1.25, 0.32, 0.7), new Color('#2A2230'), { pos: [0, 5.2, 0] }),
     part(new BoxGeometry(1.2, 0.12, 0.62), SNOW, { pos: [0, 5.42, 0] }),
   ]);
 }
@@ -646,8 +741,8 @@ export function kmArchGeometry(span: number, lantern = false): BufferGeometry {
     const slate = new Color('#2C2A44');
     for (const sx of [-1, 1]) {
       const x = sx * half;
-      parts.push(paint(part(new BoxGeometry(0.9, H + 6, 0.9), stoneC, { pos: [x, (H - 6) / 2 - 0.6, 0] }), -6, H - 1.2, 0.6, 1.05, 0.1));
-      parts.push(part(new BoxGeometry(1.2, 0.3, 1.2), slate, { pos: [x, H - 2.4, 0] }));
+      parts.push(paint(part(kitBox(0.9, H + 6, 0.9), stoneC, { pos: [x, (H - 6) / 2 - 0.6, 0] }), -6, H - 1.2, 0.6, 1.05, 0.1));
+      parts.push(part(kitBox(1.2, 0.3, 1.2), slate, { pos: [x, H - 2.4, 0] }));
       parts.push(part(new BoxGeometry(1.0, 1.3, 1.0), new Color('#FFD070').multiplyScalar(2.2), { pos: [x, H - 1.55, 0] }));
       parts.push(part(new ConeGeometry(1.0, 0.9, 4), slate, { pos: [x, H - 0.45, 0], rot: [0, Math.PI / 4, 0] }));
       parts.push(part(new CylinderGeometry(0.66, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
@@ -669,16 +764,16 @@ export function kmArchGeometry(span: number, lantern = false): BufferGeometry {
   for (const sx of [-1, 1]) {
     const x = sx * half;
     // The post: square timber, darker toward its foot.
-    parts.push(paint(part(new BoxGeometry(0.58, H + 6, 0.58), timber, { pos: [x, (H - 6) / 2 - 0.35, 0] }), -6, H, 0.7, 1.08, 0.12));
+    parts.push(paint(part(kitBox(0.58, H + 6, 0.58), timber, { pos: [x, (H - 6) / 2 - 0.35, 0] }), -6, H, 0.7, 1.08, 0.12));
     // A collar of packed snow where the post meets the slope.
     parts.push(part(new CylinderGeometry(0.62, 0.78, 0.5, 8), SNOW, { pos: [x, 0.05, 0], jitter: 0.06 }));
     // A cap of snow on the post's top, proud of the beam.
     parts.push(part(new CylinderGeometry(0.34, 0.36, 0.22, 8), SNOW, { pos: [x, H + 0.08, 0], scale: [1, 1, 1] }));
     // A diagonal brace from the post up under the beam.
-    parts.push(part(new BoxGeometry(0.2, 2.0, 0.2), beamC, { pos: [x - sx * 0.62, H - 1.25, 0], rot: [0, 0, sx * 0.785] }));
+    parts.push(part(kitBox(0.2, 2.0, 0.2), beamC, { pos: [x - sx * 0.62, H - 1.25, 0], rot: [0, 0, sx * 0.785] }));
   }
   // The beam, overhanging each post a little, and the drift along its top.
-  parts.push(paint(part(new BoxGeometry(span + 1.6, 0.62, 0.56), beamC, { pos: [0, H - 0.36, 0] }), H - 0.62, H - 0.1, 0.82, 1.06, 0.1));
+  parts.push(paint(part(kitBox(span + 1.6, 0.62, 0.56), beamC, { pos: [0, H - 0.36, 0] }), H - 0.62, H - 0.1, 0.82, 1.06, 0.1));
   parts.push(part(new CylinderGeometry(0.34, 0.34, span + 1.7, 9, 3), SNOW, { pos: [0, H - 0.04, 0], rot: [0, 0, Math.PI / 2], scale: [0.5, 1, 0.95], jitter: 0.03 }));  // The wreath at the middle of the beam's face (downhill, toward the rider coming).
   parts.push(part(new TorusGeometry(0.5, 0.16, 6, 14), spruce, { pos: [0, H - 0.5, 0.36], jitter: 0.04 }));
   parts.push(part(new SphereGeometry(0.11, 8, 6), lamp, { pos: [0, H - 0.98, 0.42] }));
@@ -759,15 +854,76 @@ export function ventGeometry(): BufferGeometry {
  *  from the chase camera it was a bright hairline cutting across the sled at deck height (worst
  *  under the sled lantern), which read as a rendering glitch. Unit width along x, in the lip's frame
  *  (+y off the ramp face, -z downhill), 0.15 m short of the lip. */
-export function kickerLipGeometry(p?: Palette): BufferGeometry {
+export function kickerLipGeometry(p?: Palette, low = false): BufferGeometry {
   const icy = !!p && p.ice > 0;
-  return merge([
-    part(new BoxGeometry(1, 0.26, 0.07), new Color(icy ? '#B8E2F4' : '#B5774B'), { pos: [0, -0.09, -0.26] }),
-    part(new BoxGeometry(1.004, 0.03, 0.08), new Color(icy ? '#C6E6F2' : '#C08758'), { pos: [0, 0.045, -0.26] }),
-    // The cap is the mood's own lit snow, so it reads as the snow it is packed from: plain white under a
-    // night moon stood a step brighter than the snow round it, a pale rail across the sled at deck height.
-    part(new CylinderGeometry(0.17, 0.17, 1.0, 8), p ? p.snowLit : SNOW, { pos: [0, 0.0, -0.1], rot: [0, 0, Math.PI / 2], scale: [0.5, 1, 1.25], jitter: 0.02 }),
-  ]);
+  const wood = new Color(icy ? '#B8E2F4' : '#B5774B');
+  const rail = new Color(icy ? '#C6E6F2' : '#A8714A');
+  // (The visual lift: the lip read as "an untextured plank" across the foreground, a ruled white bar on a
+  // ruled tan line, on every mountain. Now the board is two planks with a seam and a capping rail, every edge
+  // chamfered so it catches the light, and the snow behind it is a packed roll: soft-shaded, its crest
+  // wandering along the lip, its tail feathering into the ramp and its ends tucked into the flanks.)
+  const c = namedChamfer(0.014);
+  const parts: BufferGeometry[] = [
+    part(chamferBox(1, 0.13, 0.07, c), shade(wood, 0.86), { pos: [0, -0.155, -0.26] }),
+    part(chamferBox(1, 0.12, 0.07, c), wood, { pos: [0, -0.025, -0.26] }),
+    part(chamferBox(1.004, 0.05, 0.1, namedChamfer(0.016)), rail, { pos: [0, 0.06, -0.26] }),
+  ];
+  // The roll, as [z, y] across the lip (front to tail), swept along x; its height swells and dips along the
+  // lip, and at the ends it tucks down into the ramp.
+  const prof: Array<[number, number]> = [
+    [-0.215, -0.03],
+    [-0.205, 0.05],
+    [-0.188, 0.082],
+    [-0.145, 0.1],
+    [-0.075, 0.098],
+    [0.005, 0.075],
+    [0.1, 0.042],
+    [0.22, 0.013],
+    [0.36, -0.012],
+    [0.47, -0.03],
+  ];
+  const xs = low ? [-0.5, -0.46, -0.41, -0.36, 0, 0.36, 0.41, 0.46, 0.5] : [-0.5, -0.475, -0.445, -0.41, -0.37, -0.18, 0, 0.18, 0.37, 0.41, 0.445, 0.475, 0.5];
+  const pos: number[] = [];
+  const idx: number[] = [];
+  const base = -0.035;
+  for (const x of xs) {
+    const s = lipTaper(x);
+    // (The crest wanders along the lip, and is still at its ends; there the roll sinks under the ramp's face and
+    // draws back to the board, so nothing of it overhangs a flank.)
+    const w = 1 + s * (0.1 * Math.sin(x * 9.4 + 0.7) + 0.06 * Math.sin(x * 23.2 + 2.1));
+    const yb = base - 0.07 * (1 - s);
+    for (const [z, y] of prof) pos.push(x, yb + (y - yb) * s * w, -0.2 + (z + 0.2) * (0.15 + 0.85 * s));
+  }
+  const M = prof.length;
+  for (let i = 0; i + 1 < xs.length; i++) {
+    for (let j = 0; j + 1 < M; j++) {
+      const a = i * M + j;
+      idx.push(a, a + 1, a + M, a + 1, a + M + 1, a + M);
+    }
+  }
+  const roll = new BufferGeometry();
+  roll.setAttribute('position', new BufferAttribute(new Float32Array(pos), 3));
+  roll.setIndex(idx);
+  roll.computeVertexNormals();
+  // (Wound so it faces up: flip if the middle of its crest looks down.)
+  const nr = roll.getAttribute('normal') as BufferAttribute;
+  if (nr.getY(Math.floor(xs.length / 2) * M + 3) < 0) {
+    for (let q = 0; q < idx.length; q += 3) [idx[q + 1], idx[q + 2]] = [idx[q + 2], idx[q + 1]];
+    roll.setIndex(idx);
+    roll.computeVertexNormals();
+  }
+  // The cap is the mood's own lit snow, so it reads as the snow it is packed from (plain white under a night
+  // moon stood a step brighter than the snow round it); its tail a step deeper, toward the ramp's packed face.
+  const snowC = p ? p.snowLit : SNOW;
+  const g = smoothPart(roll, snowC);
+  const gp = g.getAttribute('position') as BufferAttribute;
+  const gc = g.getAttribute('color') as BufferAttribute;
+  for (let i = 0; i < gp.count; i++) {
+    const k = 1 - 0.07 * Math.max(0, Math.min(1, (gp.getZ(i) - 0.02) / 0.35));
+    gc.setXYZ(i, snowC.r * k, snowC.g * k, snowC.b * k);
+  }
+  parts.push(g);
+  return merge(parts);
 }
 
 /** Obstacle kinds to geometry for the current palette. */
@@ -778,7 +934,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
     if (kind === 'spire') return standingStoneGeometry(p);
     if (kind === 'basalt') return stoneRowGeometry(p, low);
     if (kind === 'iceblock') return markerStoneGeometry(p);
-    if (kind === 'lantern') return stoneLampGeometry();
+    if (kind === 'lantern') return stoneLampGeometry(low);
     if (kind === 'pillar') return pillarGeometry(p, true);
   }
   switch (kind) {
@@ -787,7 +943,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
     case 'charpine':
       return charPineGeometry(p);
     case 'blossom':
-      return blossomGeometry(p);
+      return blossomGeometry(p, low ? 'lean' : 'rich');
     case 'rock':
       return rockGeometry(p.low, p.lowLit, 0, low);
     case 'iceblock':
@@ -801,7 +957,7 @@ export function obstacleGeometry(kind: ObstacleKind, p: Palette, low = false, bi
     case 'lavarock':
       return lavaRockGeometry(p, low);
     case 'lantern':
-      return lanternGeometry();
+      return lanternGeometry(low);
     case 'pillar':
       return pillarGeometry(p);
     case 'log':

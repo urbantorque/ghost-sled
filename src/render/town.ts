@@ -2,7 +2,8 @@ import { BufferGeometry, Color, ConeGeometry, CylinderGeometry, IcosahedronGeome
 import type { BiomeId } from '../sim/mountains';
 import { lampTower, lanternHouse, lanternLandmark, lanternStreetLamp, paper } from './lanternkit';
 import { lowCrowd } from './crowd';
-import { SNOW, crystal, part, shade, softPart } from './flora';
+import { chamferLevel, withChamfer } from './chamfer';
+import { type Puff, SNOW, crystal, part, shade, softPart, streetBlossomCanopy } from './flora';
 import {
   CREAM,
   Glow,
@@ -31,6 +32,7 @@ import {
   stone,
   stringFree,
   sway,
+  signBox,
   sweptRoof,
   windowColor,
 } from './landmarkKit';
@@ -246,6 +248,9 @@ const STOREY = 3.3;
  *  (panelled, on stilts, a flat roof deep in snow), an Ember lodge (basalt under timber, ember-lit
  *  windows), a Sakura townhouse (dark lattice under plaster, low swept eaves, lanterns). */
 export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: number, o: HouseOpts, stoneC: Color, chim?: V3[]): BufferGeometry[] {
+  // (The second row, seen only from afar over the first, keeps plain boxes: its chamfers would be under a pixel,
+  // and a finish town holds a hundred houses. chamfer.ts.)
+  if (o.back && chamferLevel() === 'full') return withChamfer('low', () => house(t, biome, night, F, lo, o, stoneC, chim));
   // Lanternfall's houses are its own (lanternkit.ts): timber and lit paper under a steep roof.
   if (biome === 'lantern') return lanternHouse(t, F, lo, o, stoneC);
   const parts: BufferGeometry[] = [];
@@ -328,12 +333,12 @@ export function house(t: Town, biome: BiomeId, night: boolean, F: number, lo: nu
       for (let i = 0; i < 6; i++) parts.push(box(sw / 6 + 0.02, 0.12, reach, i % 2 ? CREAM : ac, [-sw / 2 + (i + 0.5) * (sw / 6), F + 2.95, zf + reach / 2], [0.35, 0, 0]));
       parts.push(box(sw + 0.1, 0.14, reach - 0.2, SNOW, [0, F + 3.12, zf + reach / 2], [0.35, 0, 0]));
       const vz = zf + reach - 0.12;
-      parts.push(box(signW + 0.16, 0.56, 0.08, t.trim, [0, F + 2.43, vz]));
-      parts.push(box(signW, 0.42, 0.1, night ? lit : CREAM, [0, F + 2.43, vz + 0.02]));
+      parts.push(signBox(signW + 0.16, 0.56, 0.08, t.trim, [0, F + 2.43, vz]));
+      parts.push(signBox(signW, 0.42, 0.1, night ? lit : CREAM, [0, F + 2.43, vz + 0.02]));
       parts.push(box(signW * 0.62, 0.09, 0.12, INK, [0, F + 2.43, vz + 0.03]));
       // A hanging sign on a bracket at the corner, its blade lit in its own colour after dark.
       parts.push(seg([-w / 2 + 0.4, F + 3.6, zf], [-w / 2 + 0.4, F + 3.6, zf + reach - 0.1], 0.05, INK, 4));
-      parts.push(box(0.1, 0.8, reach * 0.66, night ? ac.clone().multiplyScalar(2.1) : ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
+      parts.push(signBox(0.1, 0.8, reach * 0.66, night ? ac.clone().multiplyScalar(2.1) : ac, [-w / 2 + 0.4, F + 3.05, zf + reach * 0.62]));
     } else {
       parts.push(box(signW, 0.5, 0.12, night ? lit : CREAM, [0, F + 2.85, zf + 0.1]));
       parts.push(box(signW * 0.62, 0.1, 0.14, INK, [0, F + 2.85, zf + 0.11]));
@@ -562,12 +567,14 @@ function blossomTree(gy: number): BufferGeometry[] {
   parts.push(seg([0, gy - 0.3, 0], [0.4, gy + 2.6, 0.2], 0.28, bark, 5));
   parts.push(seg([0.4, gy + 2.6, 0.2], [1.6, gy + 3.6, 0.6], 0.18, bark, 5));
   parts.push(seg([0.4, gy + 2.6, 0.2], [-1.0, gy + 3.8, -0.3], 0.18, bark, 5));
-  const pinks = [C('#EBC2D4'), C('#F4CFDC'), C('#E2B0C4')];
+  // (The visual lift: rounded puffs shaded as one canopy, as the orchards' blossom: flora.ts.)
+  const puffs: Puff[] = [[0.3, gy + 4.35, 0.2, 1.45, 1.02]];
   for (let k = 0; k < 5; k++) {
     const a = (k / 5) * 6.28 + rnd();
-    parts.push(crag(pinks[k % 3], [0.3 + Math.cos(a) * 1.5, gy + 3.9 + rnd() * 0.8, 0.2 + Math.sin(a) * 1.3], [1.4, 1.0, 1.3], 0.3));
+    puffs.push([0.3 + Math.cos(a) * 1.5, gy + 3.9 + rnd() * 0.8, 0.2 + Math.sin(a) * 1.3, 1.05 + 0.2 * rnd(), [0.9, 1.06, 0.95][k % 3]]);
   }
-  parts.push(drift([0.3, gy + 4.7, 0.2], [1.6, 0.35, 1.4]));
+  parts.push(streetBlossomCanopy(C('#EBC2D4'), puffs, gy + 2.9, gy + 5.6));
+  parts.push(softPart(new IcosahedronGeometry(1, 1), SNOW, { pos: [0.3, gy + 5.45, 0.2], scale: [1.4, 0.3, 1.25] }));
   return parts;
 }
 

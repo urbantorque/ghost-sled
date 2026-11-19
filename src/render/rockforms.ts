@@ -19,6 +19,13 @@ type V3 = [number, number, number];
 export class Facets {
   private pos: number[] = [];
   private col: number[] = [];
+  /** Each triangle's smoothing group (0: flat). */
+  private grp: number[] = [];
+  /** The group the next triangles join: triangles of one group (above 0) that share a corner take a normal
+   *  between their own face's and the group's average there (a weathered face, `soft` of the way round). */
+  group = 0;
+  /** How far a grouped corner's normal turns from its face's toward the group's average (0 flat, 1 smooth). */
+  soft = 0.6;
 
   get triangles(): number {
     return this.pos.length / 9;
@@ -44,6 +51,7 @@ export class Facets {
     const kp = keep ? kb : kc;
     const kq = keep ? kc : kb;
     this.pos.push(a[0], a[1], a[2], p[0], p[1], p[2], q[0], q[1], q[2]);
+    this.grp.push(this.group);
     this.col.push(col.r * ka, col.g * ka, col.b * ka, col.r * kp, col.g * kp, col.b * kp, col.r * kq, col.g * kq, col.b * kq);
   }
 
@@ -88,8 +96,51 @@ export class Facets {
     g.setAttribute('position', new BufferAttribute(new Float32Array(this.pos), 3));
     g.setAttribute('color', new BufferAttribute(new Float32Array(this.col), 3));
     g.computeVertexNormals();
+    if (this.grp.some((v) => v > 0)) this.soften(g.getAttribute('normal') as BufferAttribute);
     g.computeBoundingSphere();
     return g;
+  }
+
+  /** Turns each grouped corner's flat normal toward its group's area-weighted average at that corner. */
+  private soften(n: BufferAttribute): void {
+    const P = this.pos;
+    const key = (i: number) => `${this.grp[Math.floor(i / 3)]}|${Math.round(P[i * 3] * 500)},${Math.round(P[i * 3 + 1] * 500)},${Math.round(P[i * 3 + 2] * 500)}`;
+    const sum = new Map<string, [number, number, number]>();
+    for (let t = 0; t < this.grp.length; t++) {
+      if (this.grp[t] === 0) continue;
+      // The face's normal, its length twice its area.
+      const o = t * 9;
+      const ux = P[o + 3] - P[o];
+      const uy = P[o + 4] - P[o + 1];
+      const uz = P[o + 5] - P[o + 2];
+      const vx = P[o + 6] - P[o];
+      const vy = P[o + 7] - P[o + 1];
+      const vz = P[o + 8] - P[o + 2];
+      const fx = uy * vz - uz * vy;
+      const fy = uz * vx - ux * vz;
+      const fz = ux * vy - uy * vx;
+      for (let j = 0; j < 3; j++) {
+        const k = key(t * 3 + j);
+        const s = sum.get(k) ?? [0, 0, 0];
+        s[0] += fx;
+        s[1] += fy;
+        s[2] += fz;
+        sum.set(k, s);
+      }
+    }
+    for (let t = 0; t < this.grp.length; t++) {
+      if (this.grp[t] === 0) continue;
+      for (let j = 0; j < 3; j++) {
+        const i = t * 3 + j;
+        const s = sum.get(key(i))!;
+        const l = Math.hypot(s[0], s[1], s[2]) || 1;
+        const x = n.getX(i) + (s[0] / l - n.getX(i)) * this.soft;
+        const y = n.getY(i) + (s[1] / l - n.getY(i)) * this.soft;
+        const z = n.getZ(i) + (s[2] / l - n.getZ(i)) * this.soft;
+        const m = Math.hypot(x, y, z) || 1;
+        n.setXYZ(i, x / m, y / m, z / m);
+      }
+    }
   }
 }
 
@@ -149,6 +200,9 @@ export interface StrataSpec {
    *  share of the half extents (0 for none), and the ground under a point, if the builder knows it. */
   apron?: number;
   ground?: (x: number, z: number) => number;
+  /** Each bed's walls weathered round (their normals softened round the bed, the ledges and soffits still
+   *  crisp): the run's rock near the lens, where a flat-shaded wall read as plainly facets. */
+  smooth?: boolean;
   seed: number;
 }
 
@@ -253,9 +307,12 @@ export function strataInto(f: Facets, s: StrataSpec): void {
   }
   const DOWN: V3 = [0, -1, 0];
   const UP: V3 = [0, 1, 0];
+  const group0 = f.group;
   for (let i = 0; i < L; i++) {
     const b = beds[i];
     const col = s.rock[b.tone];
+    // (A bed's walls are one smoothing group, so they weather round it and stop crisp at its joints.)
+    if (s.smooth) f.group = 1000 + i;
     for (let k = 0; k < N; k++) {
       const k1 = (k + 1) % N;
       const out: V3 = [(b.lo[k][0] + b.lo[k1][0]) / 2 - b.cx, 0, (b.lo[k][2] + b.lo[k1][2]) / 2 - b.cz];
@@ -265,6 +322,7 @@ export function strataInto(f: Facets, s: StrataSpec): void {
       const fc = r() < 0.2 ? s.rock[(b.tone + 1) % s.rock.length] : col;
       f.quad(b.lo[k], b.lo[k1], b.hi[k1], b.hi[k], fc, out, 0.78 * fk, 1.06 * fk);
     }
+    f.group = group0;
     if (i === L - 1) break;
     // Between this bed and the next: where the next steps in, a ledge (and what lies on it, banked up
     // against the wall behind); where it juts out, a soffit in the rock's darkest value.
