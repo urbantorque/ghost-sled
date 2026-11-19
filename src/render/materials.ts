@@ -1,5 +1,6 @@
 import { Color, DoubleSide, FrontSide, type Material, NormalBlending, NotEqualStencilFunc, ShaderMaterial, type Texture, UniformsLib, UniformsUtils, Vector2, Vector3, Vector4 } from 'three';
 import { BEST_HEX, FRIEND_HEX } from '../game/beats';
+import { FAR_GLSL, farUniforms } from './farshadow';
 import { localUniforms, setLocalLightTier } from './lights';
 import { Palette, setPoster, tierLook } from './palette';
 import { ICE_MIRROR_GLSL, iceMirror } from './postfx/reflect';
@@ -97,6 +98,8 @@ export const shared = {
   uLeaf: { value: 0 },
   ...localUniforms,
   ...posterUniforms(),
+  // (The visual lift's far shadows: the field every lit material reads in farShadow(). farshadow.ts.)
+  ...farUniforms,
 };
 
 /** Low's poster (the visual lift, poster lane; POSTER_GLSL below): x 1 on Low and 0 on every other tier,
@@ -456,6 +459,7 @@ float hash13(vec3 p) {
   p += dot(p, p.zyx + 31.32);
   return fract((p.x + p.y) * p.z);
 }
+${FAR_GLSL}
 `;
 
 /** The sled lantern's pool of light on the snow (Lantern Night, ART.md section 7), shared by the snow
@@ -870,7 +874,8 @@ export function makeSnowMaterial(): ShaderMaterial {
       void main() {
         vec3 n = normalize(vNormalW);
         vec3 v = normalize(cameraPosition - vWorldPos);
-        float shadow = mix(1.0, snowShadow(), uShadowK);
+        // (The far shadows take over from the shadow map past its reach, and add the terrain's own. farshadow.ts.)
+        float shadow = farShadow(vWorldPos, mix(1.0, snowShadow(), uShadowK));
         // A wall's shadow over the floor (the terrain casts none into the shadow map): the sun has to clear
         // the crest on its own side, which stands across the floor from here at the wall's height.
         if (vRock.w > 0.5) {
@@ -880,7 +885,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           shadow = min(shadow, mix(1.0, 0.28 + 0.72 * smoothstep(-1.5, 1.5, cleared), uShadowK));
         }
         // (Low's poster: a cast shadow's edge cut as a poster cuts it. POSTER_GLSL; the identity on every other
-        // tier. Low's cast shadows are the walls' above and, when it lands, the far shadow field's.)
+        // tier. Low's cast shadows are the walls' above and the far shadow field's, folded in first.)
         shadow = posterShadow(shadow);
         vec3 dpx = dFdx(vWorldPos);
         vec3 dpy = dFdy(vWorldPos);
@@ -1807,6 +1812,9 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
         #ifdef USE_SHADOWMAP
           shadow = mix(1.0, getShadowMask(), uShadowK);
         #endif
+        // (The far shadows past the shadow map's reach, and the terrain's own: what stands in a shaded valley is
+        // in its shade. farshadow.ts.)
+        shadow = farShadow(vWorldPos, shadow);
         float keep = 1.0;
         #ifndef BOB
           // Props near the camera, or in the line of sight to the rider, dissolve instead of blocking it.
@@ -2123,6 +2131,8 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       uSnowLit: shared.uSnowLit,
       uGlow: { value: 1 },
       uGlass: { value: glass },
+      // (The far shadows: a ghost far down a shaded valley is in its shade. farshadow.ts.)
+      ...farUniforms,
     },
     vertexShader: /* glsl */ `
       varying vec3 vN;
@@ -2157,6 +2167,7 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       varying vec3 vWorldPos;
       varying float vH;
       ${GHOST_MOOD_GLSL}
+      ${FAR_GLSL}
       void main() {
         vec3 n = normalize(vN);
         vec3 v = normalize(cameraPosition - vWorldPos);
@@ -2220,8 +2231,11 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
         float shimmer = 0.92 + 0.08 * wave;
         float flicker = 0.95 + 0.05 * sin(uTime * 37.7 + vWorldPos.y * 5.0);
         vec3 col = mix(face, rim, max(band, smoothstep(0.55, 1.0, wave) * 0.18));
-        // A glassy glint where the sun catches the body.
-        float glint = pow(max(dot(reflect(-v, n), uSunDir), 0.0), 18.0);
+        // A glassy glint where the sun catches the body. In the far shadows (a ridge's, a forest's) the glass loses
+        // its glint and a step of its face by day; its rim and its glow at night are its own.
+        float farLit = farShadow(vWorldPos, 1.0);
+        col *= mix(1.0, mix(0.78, 1.0, farLit), day);
+        float glint = pow(max(dot(reflect(-v, n), uSunDir), 0.0), 18.0) * farLit;
         col += kc * glint * 0.5 * day;
         // The core: tinted glass you can see the snow (and another ghost's edge) through, densest
         // toward its rim and on the inner edge band, at least about a third of the scene covered by

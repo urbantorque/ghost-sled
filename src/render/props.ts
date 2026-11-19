@@ -1,8 +1,9 @@
 import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
-import { Clearing, Dresser, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
+import { Clearing, Dresser, L_CABLE, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
 import { crestE, standable, visualGround } from './ground';
 import { AERIAL_PICK, Lod, VARIANT_SHARE, canLean, forestSteps, hasLod, variantDepthMaterial, variantMaterial, variantRange, variantSet, variantView } from './flora';
+import type { Casters } from './farshadow';
 import { fx } from './fxhub';
 import { Plant, emberGrove, hasGrove, orchard } from './groves';
 import { liveTree } from './treelife';
@@ -162,6 +163,40 @@ function boughs(biome: string, set: 'a' | 'b', pick: number): boolean {
   // (Lanternfall's conifers carry snow; its bare silver trees have none to drop.)
   if (biome === 'lantern') return set === 'a';
   return biome === 'blossom';
+}
+
+/** Each variant's model bounds in a batch's geometry (min and max x, min and max y, min and max z, six a
+ *  variant), for the far shadows (Props.farCasters). Made once a geometry. */
+const dimsOf = new WeakMap<BufferGeometry, Float32Array>();
+function variantDims(g: BufferGeometry): Float32Array {
+  let d = dimsOf.get(g);
+  if (d) return d;
+  const pos = g.getAttribute('position');
+  const starts = (g.userData.variantStarts as number[] | undefined) ?? [0, pos ? pos.count : 0];
+  d = new Float32Array(Math.max(1, starts.length - 1) * 6);
+  for (let v = 0; v < starts.length - 1; v++) {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    let z0 = Infinity;
+    let z1 = -Infinity;
+    for (let i = starts[v]; i < starts[v + 1]; i++) {
+      const x = pos.getX(i);
+      const y = pos.getY(i);
+      const z = pos.getZ(i);
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    if (x0 > x1) x0 = x1 = y0 = y1 = z0 = z1 = 0;
+    d.set([x0, x1, y0, y1, z0, z1], v * 6);
+  }
+  dimsOf.set(g, d);
+  return d;
 }
 
 function hashf(a: number, b: number, c: number): number {
@@ -987,6 +1022,51 @@ export class Props {
       }
     }
     return n;
+  }
+
+  /**
+   * The visual lift's far shadows (farshadow.ts), read only: what stands in chunk `i` and casts, the run's
+   * hazards, the forest and the bank's large pieces, each a cone (a tree, a spire) or a box (a rock, a cabin,
+   * a tower), sized from the variant it draws. Reads the chunk's packed batches: a chunk the window has not
+   * laid out yet answers false, and nothing is made for the asking. With no `out`, only whether it is laid out.
+   */
+  farCasters(i: number, out: Casters | null): boolean {
+    const packed = this.cache.get(i);
+    if (!packed) return false;
+    if (!out) return true;
+    for (const [key, pk] of packed) {
+      const cast = key.startsWith('ob:') || key.startsWith('fw:') || key.startsWith('fo:') || key === 'dr:l' || key === 'dr:w';
+      if (!cast || key === 'ob:log' || key === 'ob:snowman') continue;
+      const r = this.route.get(key);
+      const b = this.batches.get(key) ?? (r ? this.batches.get(r[0]) : undefined);
+      if (!b || b.waiting) continue;
+      const dims = variantDims(b.mesh.geometry);
+      const m = pk.m;
+      for (let k = 0; k < pk.p.length; k++) {
+        const pick = pk.p[k] >= AERIAL_PICK - 0.5 ? pk.p[k] - AERIAL_PICK : pk.p[k];
+        // (A lift's cable and its chairs hang: the towers cast.)
+        if ((key === 'dr:l' || key === 'dr:w') && pick === L_CABLE) continue;
+        const v = Math.min(dims.length / 6 - 1, Math.max(0, Math.round(pick))) * 6;
+        const o = k * 16;
+        const sy = m[o + 5];
+        const y0 = m[o + 13] + dims[v + 2] * sy;
+        const top = m[o + 13] + dims[v + 3] * sy;
+        if (top - y0 < 0.6) continue;
+        const ax = Math.hypot(m[o], m[o + 2]);
+        const az = Math.hypot(m[o + 8], m[o + 10]);
+        const hx = ((dims[v + 1] - dims[v]) / 2) * ax;
+        const hz = ((dims[v + 5] - dims[v + 4]) / 2) * az;
+        const lx = (dims[v] + dims[v + 1]) / 2;
+        const lz = (dims[v + 4] + dims[v + 5]) / 2;
+        // Sim x and z (three.js z negated) of the piece's middle, and its own axis across the ground.
+        const x = m[o + 12] + m[o] * lx + m[o + 8] * lz;
+        const z = -(m[o + 14] + m[o + 2] * lx + m[o + 10] * lz);
+        const rad = Math.max(hx, hz);
+        if (top - y0 > 2.6 * rad) out.cone(x, z, y0, top, rad * 0.85);
+        else out.box(x, z, y0, top, hx, hz, m[o] / (ax || 1), -m[o + 2] / (ax || 1));
+      }
+    }
+    return true;
   }
 
   /** One grove piece (groves.ts): its variant is the grove's choice (Low draws each set's first only), its

@@ -88,6 +88,11 @@ async (page) => {
         await page.evaluate((zz) => { window.__gs.run.sim.s.z = zz; }, z - 70);
         await page.waitForFunction(() => window.__gs.run.sim.s.z > 0 && window.__gs.world.setPieces.queue.length === 0, null, { timeout: 5000, polling: 50 }).catch(() => {});
         await page.evaluate((zz) => { window.__gs.run.sim.s.z = zz; }, z - 70);
+        // (The far shadows bake on idle time as a ridden run has them: after a jump down the course the rider is held
+        // there until they are in. A build without them goes straight on.)
+        await page.evaluate(() => { window.__pinHeld = window.__pinSpeed; window.__pinSpeed = 0.01; });
+        await page.waitForFunction(() => { const f = window.__gs.world.far; return !f || f.pending === 0; }, null, { timeout: 8000, polling: 100 }).catch(() => {});
+        await page.evaluate(() => { window.__pinSpeed = window.__pinHeld; });
       }
       await page.waitForFunction((d) => { const r = window.__gs.run; return !r || r.sim.s.z >= d; }, z, { timeout: 30000, polling: 16 }).catch(() => {});
       const name = `m${m}-z${String(z).padStart(4, '0')}.png`;

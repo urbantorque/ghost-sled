@@ -275,7 +275,8 @@ function shoulderMaterial(): ShaderMaterial {
         vec3 lit = mix(uSnowLit, uSnowShade, 0.25) * 0.88 * mix(1.0, 0.94, dayK);
         vec3 shade = mix(mix(uSnowShade, uSnowDeep, 0.2), uSnowDeep, 0.35);
         float ndl = dot(nn, uSunDir);
-        float t = smoothstep(-0.12, 0.42, ndl);
+        // (The visual lift: a spur's or the far wall's shadow over the flanks and the valley. farshadow.ts.)
+        float t = smoothstep(-0.12, 0.42, ndl) * mix(0.18, 1.0, farShadow(vWorldPos, 1.0));
         if (uCloudShadow > 0.0) {
           // Round 7: the clouds' shadows sweep the valley and the flanks too. The terrain's own pattern
           // (materials.ts), so a shadow crosses the bank's edge unbroken, and deeper out here, where
@@ -422,7 +423,8 @@ function treeMaterial(): ShaderMaterial {
         float capK = smoothstep(0.35, 0.9, vCap) * uCapK;
         base = mix(base, uSnowLit * 0.9, capK);
         vec3 shade = mix(base * 0.42, uShadeTint * (0.35 + 0.4 * dot(base, vec3(0.33))), 0.45);
-        vec3 col = toonLightK(base, shade, n, v, 1.0, 0.25) * mix(1.0, uHazardDim, 0.5);
+        // (A far tree stands in the ridges' shadow with the slope it grows on. farshadow.ts.)
+        vec3 col = toonLightK(base, shade, n, v, farShadow(vWorldPos, 1.0), 0.25) * mix(1.0, uHazardDim, 0.5);
         col = midAerial(col, vWorldPos, vE);
         gl_FragColor = vec4(col, 1.0);
         #include <tonemapping_fragment>
@@ -1224,6 +1226,8 @@ export class Midground {
     const r0 = Math.floor((z - BEHIND) / ROW);
     const r1 = r0 + this.nRows - 2;
     ring.value.set(-r0 * ROW, -r1 * ROW);
+    this.win0 = r0;
+    this.win1 = r1;
     const deadline = performance.now() + (prime ? 4 : this.budgetMs);
     let builtRows = false;
     // Nearest first, ahead before behind.
@@ -1383,6 +1387,55 @@ export class Midground {
   ground(x: number, z: number): number {
     return this.groundAt(x, z, x < this.course.centerX(z) ? -1 : 1);
   }
+
+  /**
+   * The visual lift's far shadows (farshadow.ts), read only: the shoulders as drawn along row `r` (sim z =
+   * 16 r), `n` heights from world x0 every `dx` metres written into out from `at` (NaN over the terrain's own
+   * ground, between the two edges). 1 when written, 0 while the row is still to be built here, -1 for a row
+   * this window never builds. Reads the built row: nothing is planned or made for the asking.
+   */
+  shoulders(r: number, x0: number, dx: number, n: number, out: Float32Array, at: number): number {
+    const slot = ((r % this.nRows) + this.nRows) % this.nRows;
+    if (this.slotRow[slot] !== r) return r >= this.win0 && r <= this.win1 ? 0 : -1;
+    const base = slot * this.colU.length;
+    const P = this.pos;
+    const cols = this.colU.length;
+    // The surface's columns either side (the edge and out; the skirt and the fill tuck under the terrain).
+    let iL = -1;
+    let iR = cols;
+    for (let i = 0; i < cols; i++) if (this.colU[i] < 0 && this.colKind[i] <= 1) iL = i;
+    for (let i = cols - 1; i >= 0; i--) if (this.colU[i] > 0 && this.colKind[i] <= 1) iR = i;
+    const xL = P[(base + iL) * 3];
+    const xR = P[(base + iR) * 3];
+    let i = 0;
+    for (let k = 0; k < n; k++) {
+      const x = x0 + k * dx;
+      if (x > xL && x < xR) {
+        out[at + k] = NaN;
+        continue;
+      }
+      // (The columns run left to right; the left side's are 0..iL, the right side's iR..cols-1.)
+      const lo = x <= xL ? 0 : iR;
+      const hi = x <= xL ? iL : cols - 1;
+      if (i < lo || i > hi) i = lo;
+      while (i < hi && P[(base + i + 1) * 3] < x) i++;
+      while (i > lo && P[(base + i) * 3] > x) i--;
+      const xa = P[(base + i) * 3];
+      const ya = P[(base + i) * 3 + 1];
+      if (i >= hi || x <= xa) {
+        out[at + k] = ya;
+        continue;
+      }
+      const xb = P[(base + i + 1) * 3];
+      const yb = P[(base + i + 1) * 3 + 1];
+      out[at + k] = ya + ((yb - ya) * (x - xa)) / Math.max(1e-3, xb - xa);
+    }
+    return 1;
+  }
+
+  /** The rows this window keeps (update), for shoulders(). */
+  private win0 = 0;
+  private win1 = -1;
 
   /** Shoulder height at world x and sim z on one side (for a hamlet's houses). */
   private groundAt(x: number, z: number, side: number): number {

@@ -38,7 +38,7 @@ async (page) => {
         }
       };
     };
-    const names = ['terrain', 'midground', 'props', 'setPieces', 'overlooks', 'spirit', 'marquee', 'lantern', 'rails', 'sky', 'rider', 'particles', 'weather', 'trail', 'ghosts', 'chaos', 'landing', 'life', 'speedPosts', 'sloughs', 'moments', 'lakeMirror', 'cam', 'treeLife', 'verbs', 'legends', 'climax', 'stages', 'breaks', 'poster'];
+    const names = ['terrain', 'midground', 'far', 'props', 'setPieces', 'overlooks', 'spirit', 'marquee', 'lantern', 'rails', 'sky', 'rider', 'particles', 'weather', 'trail', 'ghosts', 'chaos', 'landing', 'life', 'speedPosts', 'sloughs', 'moments', 'lakeMirror', 'cam', 'treeLife', 'verbs', 'legends', 'climax', 'stages', 'breaks', 'poster'];
     for (const n of names) wrap(n, w[n], 'update');
     wrap('journey', w, 'journey');
     wrap('updateChunks', w, 'updateChunks');
