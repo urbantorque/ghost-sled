@@ -9,8 +9,8 @@ import type { Sim } from './sim';
 //             further of you, and the first there takes a lantern cell and the points (LogEvent.Showdown). A fall
 //             does not end it; the finish line before the marker is the marker. One at a time, ten seconds apart,
 //             three a run at most and once a rival.
-//   steal     pass a rival within a metre (centre to centre, across the run), both riding and you clean: a wisp is
-//             taken and feeds your lantern (LogEvent.Steal). Once a rival.
+//   steal     pass a rival within 0.6 m (centre to centre, across the run), both riding and you clean: a wisp is
+//             taken and feeds your lantern (LogEvent.Steal). Once a rival, twice a run at most.
 //   draft     in a rival's slipstream: 1.5 to 14 m behind it and inside a cone around its line.
 //
 // Pure: no DOM, render or audio imports. Nothing here is state of a run: a watcher lives beside one.
@@ -32,7 +32,10 @@ export const SHOWDOWN_DX = 8;
 export const SHOWDOWN_RUN = 300;
 export const SHOWDOWN_GAP_TICKS = 600;
 export const SHOWDOWN_MAX = 3;
-export const STEAL_DX = 1;
+/** Round 8: within 0.6 m, at most STEAL_MAX a run. A metre and no cap gave the pool's ghosts five a run: riders who
+ *  hold the same line pass within a metre all the time, and a steal should be a thing done on purpose. */
+export const STEAL_DX = 0.6;
+export const STEAL_MAX = 2;
 /** What they give (sim.ts reads these): a showdown won lights a whole cell, a steal a third of one. */
 export const SHOWDOWN_UNITS = 100;
 export const STEAL_UNITS = 34;
@@ -67,6 +70,7 @@ export class RivalWatch {
   private stolen: boolean[];
   private lastEnd = -100000;
   private count = 0;
+  private steals = 0;
   /** The showdown under way: its rival and marker, or null. */
   active: { rival: number; markerZ: number; t0: number } | null = null;
 
@@ -115,8 +119,9 @@ export class RivalWatch {
       const both = me.riding && r.riding;
       // A steal: you pass it, close across the run, both riding and you clean.
       const was = this.prevDz[i];
-      if (!this.stolen[i] && was < 0 && dz >= 0 && dx <= STEAL_DX && both && me.clean && this.steal(i)) {
+      if (!this.stolen[i] && this.steals < STEAL_MAX && was < 0 && dz >= 0 && dx <= STEAL_DX && both && me.clean && this.steal(i)) {
         this.stolen[i] = true;
+        this.steals++;
         out.push({ type: 'steal', rival: i });
       }
       this.prevDz[i] = dz;

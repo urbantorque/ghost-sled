@@ -58,7 +58,7 @@ export const CHARMS: readonly CharmDef[] = [
   { id: 1, key: 'comet', family: 'speed', name: "Comet's Tail", does: 'Dashes last far longer and run faster, but a full lantern never wards', signal: 'The lantern drawn without its ward ring' },
   { id: 2, key: 'kite', family: 'speed', name: 'Kite String', does: 'Slingshots come twice as quick, pay more and light more', signal: 'A taut thread of light to the ghost while drafting' },
   { id: 3, key: 'frost', family: 'speed', name: 'Frost Runners', does: 'Ice holds and runs fast under you; drifts on snow charge slower', signal: 'Blue sparks off the runners on ice' },
-  { id: 4, key: 'star', family: 'speed', name: 'Falling Star', does: 'A drop landed well becomes far more speed; a sketchy landing costs more', signal: 'A streak off the sled on a big landing' },
+  { id: 4, key: 'star', family: 'speed', name: 'Falling Star', does: 'A drop landed well becomes more speed; a sketchy landing costs more', signal: 'A streak off the sled on a big landing' },
   { id: 5, key: 'drum', family: 'speed', name: 'Drift Drum', does: 'Drifts charge faster and pay more, but only start at speed', signal: 'The drift ring beats with its tiers' },
   { id: 6, key: 'step', family: 'speed', name: 'Ember Step', does: 'A dash straight after a perfect landing costs less', signal: 'The lantern pulses while the half price is open' },
   { id: 7, key: 'stride', family: 'speed', name: 'Long Stride', does: 'A deeper tuck, but you hardly steer while tucked', signal: 'The rider tucked lower, a wind line off the helmet' },

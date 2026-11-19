@@ -205,11 +205,11 @@ describe('rivals', () => {
     for (let t = 0; t < 400; t++) expect(w.step(t, pt(100), [pt(100)]).some((e) => e.type === 'showdown')).toBe(false);
   });
 
-  it('a clean pass inside a metre steals a wisp, once; a wide one does not', () => {
+  it('a clean pass inside 0.6 m steals a wisp, once; a wide one does not', () => {
     const w = new RivalWatch(2, () => false, () => true, 4500);
     const steals: number[] = [];
-    for (let t = 0; t < 40; t++) for (const e of w.step(t, pt(100 + t), [pt(120, 0.8), pt(120, 2.5)])) if (e.type === 'steal') steals.push(e.rival);
-    for (let t = 0; t < 40; t++) for (const e of w.step(100 + t, pt(100 + t), [pt(120, 0.8), pt(120, 2.5)])) if (e.type === 'steal') steals.push(e.rival);
+    for (let t = 0; t < 40; t++) for (const e of w.step(t, pt(100 + t), [pt(120, 0.4), pt(120, 2.5)])) if (e.type === 'steal') steals.push(e.rival);
+    for (let t = 0; t < 40; t++) for (const e of w.step(100 + t, pt(100 + t), [pt(120, 0.4), pt(120, 2.5)])) if (e.type === 'steal') steals.push(e.rival);
     expect(steals).toEqual([0]);
   });
 

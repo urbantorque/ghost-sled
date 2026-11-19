@@ -1733,9 +1733,9 @@ export class Sim {
     if (quality !== 'sketchy' && s.speed > 1) {
       const m = vyFollow / s.speed;
       const along = (s.speed + vyAtTouch * m) / (1 + m * m);
-      // (Falling Star: twice the drop into speed, to 14 m/s.)
       const star = this.has(CHARM.star);
-      if (along > s.speed) s.speed += Math.min(star ? 14 : 8, (along - s.speed) * (star ? 3 : 1.5));
+      // (Falling Star: 2.2x and to 11 m/s, from 3x and 14: it won 69% of the mid pilot's charm races.)
+      if (along > s.speed) s.speed += Math.min(star ? 11 : 8, (along - s.speed) * (star ? 2.2 : 1.5));
       this.capSpeed();
     }
     s.vx = s.speed * dsin(s.velHeading);

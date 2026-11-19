@@ -119,13 +119,14 @@ describe('the ladder', () => {
 
 describe('the next duel', () => {
   it('is the gentlest unbeaten rider whose home is open', () => {
-    // A new player has Pinecrest alone: Rosa (Sakura) and Pip (Frostfang) wait, Bram rides.
-    expect(nextDuel(undefined, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
-    // (Round 8's pools ride the ladder Bram, Rosa, Wren, Mila, Juno...: on Pinecrest alone Wren is next.)
-    expect(nextDuel(beat('bram'), only(0))).toEqual({ kind: 'duel', rider: riderByKey('wren') });
-    // Frostfang opens: the first of its riders on the ladder stands before Juno, so they are next.
-    const reach = TWELVE.filter((r) => r.key !== 'bram' && (r.home === 0 || r.home === 1));
-    expect(nextDuel(beat('bram'), only(0, 1))).toEqual({ kind: 'duel', rider: reach[0] });
+    // A new player has Pinecrest alone: the gentlest Pinecrest rider rides, the others wait. (Round 8: read off the
+    // ladder, which the pools' home times order, so a regenerated pool moves no expectation here.)
+    const home0 = TWELVE.filter((r) => r.home === 0);
+    expect(nextDuel(undefined, only(0))).toEqual({ kind: 'duel', rider: home0[0] });
+    expect(nextDuel(beat(home0[0].key), only(0))).toEqual({ kind: 'duel', rider: home0[1] });
+    // Frostfang opens: the first of either mountain's riders left on the ladder is next.
+    const reach = TWELVE.filter((r) => r.key !== home0[0].key && (r.home === 0 || r.home === 1));
+    expect(nextDuel(beat(home0[0].key), only(0, 1))).toEqual({ kind: 'duel', rider: reach[0] });
     // Everything open: the ladder's own order.
     expect(nextDuel(undefined, all)).toEqual({ kind: 'duel', rider: TWELVE[0] });
   });
@@ -155,9 +156,12 @@ describe('the next duel', () => {
   });
 
   it('a run is a duel only on the next rider’s own home ground', () => {
-    expect(duelOn(undefined, 0, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
-    expect(duelOn(undefined, 1, only(0, 1))).toBeNull();
-    expect(duelOn(beat('bram', 'wren'), 1, only(0, 1))).toEqual({ kind: 'duel', rider: riderByKey('mila') });
+    const open01 = TWELVE.filter((r) => r.home === 0 || r.home === 1);
+    const firstOn1 = open01.findIndex((r) => r.home === 1);
+    const before = open01.slice(0, firstOn1).map((r) => r.key);
+    expect(duelOn(undefined, open01[0].home, only(0, 1))).toEqual({ kind: 'duel', rider: open01[0] });
+    expect(duelOn(undefined, open01[0].home === 0 ? 1 : 0, only(0, 1))).toBeNull();
+    expect(duelOn(beat(...before), 1, only(0, 1))).toEqual({ kind: 'duel', rider: open01[firstOn1] });
     expect(duelMountain({ kind: 'final' })).toBe(KING.home);
   });
 
@@ -363,7 +367,7 @@ describe('the save', () => {
     const d = parseSave(JSON.stringify({ ...defaultSave('Old'), runs: 12, ghostsPassed: 30 }), 'Old');
     expect(d.twelve).toBeUndefined();
     expect(d.runs).toBe(12);
-    expect(nextDuel(d.twelve, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
+    expect(nextDuel(d.twelve, only(0))).toEqual({ kind: 'duel', rider: TWELVE.find((r) => r.home === 0) });
   });
 
   it('keeps who is beaten across a save and a load', () => {

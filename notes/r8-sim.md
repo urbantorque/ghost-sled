@@ -124,35 +124,73 @@ Sections (start of each; `cruise*` a threshold):
   2700, cruise* 2910, benches 3100, bridge 3320, street 3485, chute 3685, leap 3868. Gone: bowl (2710).
 `scripts/playtest/r8-moved.ts --root <round-8 checkout>` prints the whole list.
 
-## Measured so far (the CPU rule held: one or two seeds, single short runs)
+## The full proofs (2026-11-20)
 
-| Pilot | Finished | Median s | Set pieces | Best combo named tricks (med/max) | Trick kinds | Choices | Round 7 |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| expert (1 seed x 5) | 5/5 | 122.9 | 10/15 | 4/5 | 10 | 4 | 30/30, 122.6 s, 82/90 |
-| mid (1 seed x 5) | 5/5 | 120.3 | 14/15 | 3/4 | 8 | 4 | 30/30, 123.5 s, 80/90 |
-| clumsy (2 seeds x 5) | 9/10 | 339.1 | 2/28 | 3/4 | 5 | 4 | 26/30, 368.7 s |
-| novice (2 seeds x 5) | 10/10 | 149.2 | 8/30 | 0/0 | 0 | 4 | 30/30, 154.8 s, 18/90 |
+Raw output in `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/sim/` (lab.txt, lab.json, race.txt, charms.txt,
+charms-pairs.txt, combo.txt, combo-charms.txt, vitest.txt, pool-tokens.txt, lab-nocharms.txt, lab-classic.txt). Pools
+regenerated locally for these and not committed; after the laptop's 0xD1 restart (01:45) every run was made one
+process at a time, vitest with `--maxWorkers=3`.
 
-- **Expression:** 18 named tricks (bar 10). The expert's best combo holds 5 named tricks on its best mountain and 4 at
-  the median: short of "at least five" as a median; reached as a best. Pops chained between features are what lifts
-  it (the prototype reached 8).
-- **Decisions:** 4 a run at the median (three charms taken and a lantern spent), every charm proven to change a run.
-- **First minute:** clumsy 9 of 10 on two seeds (round 7: 26 of 30); the first run's wider stomp.
-- **Charm fairness:** `r8-charms.ts`, one ride a charm on Pinecrest only, so not a result: Comet's Tail (no ward) and
-  Featherfall rode slowest, Falling Star and Guardian Wisp quickest. The full table waits for the laptop.
-- **Showdowns a run:** not measured: race-lab needs the regenerated pools (the bundled ones are SIM 9).
+**The lab** (`lab.ts --seeds 6 --max 420`, every charm dealable; round 7 from `shots/r7/lab/final.txt`):
 
-## Waiting for the laptop (commands, in order)
+| Pilot | Finished | Median s | Set pieces | Round 7 |
+| --- | --- | --- | --- | --- |
+| clumsy | 29/30 | 339.3 | 2/88 | 26/30, 368.7 s, 1/90 |
+| novice | 30/30 | 144.1 | 29/90 | 30/30, 154.8 s, 18/90 |
+| mid | 30/30 | 126.2 | 78/90 | 30/30, 123.5 s, 80/90 |
+| expert | 30/30 | 121.3 | 82/90 | 30/30, 122.6 s, 82/90 |
+| line | 30/30 | 149.3 | 6/90 | 30/30, 144.6 s, 6/90 |
+| stunt | 30/30 | 134.4 | 24/90 | 30/30, 132.5 s, 31/90 |
+| hands-off | 5/5 | 149.7 | 2/15 | 5/5, 150.0 s, 1/15 |
+| hold-r | 0/5 | | 0/13 | 0/5 |
 
-1. `npx tsx scripts/generate-ghosts.ts` (locally; do not commit), then `npx vitest run` (all suites).
-2. `npx tsx scripts/playtest/lab.ts --seeds 6 --max 420 > lab.txt` against `shots/r7/lab/final.txt` (finishes, set
-   pieces, the Expression and Decisions columns, clumsy 26 of 30).
-3. `npx tsx scripts/playtest/lab.ts --pilots mid,novice,expert --seeds 6 --max 420 --json lab.json` then
-   `npx tsx scripts/playtest/race-lab.ts --rides lab.json`: race liveness against round 7, and "showdowns a run"
-   (an upper bound: the lab's rides carry no x, so a rider level down the run counts as level across it). If mid is
-   under one a run on runs 2 to 6, widen `ghosts.rivalProbe`'s `duel` to the field's HUD rival (`entry.rival`) and the
-   generator's to the same kind.
-4. `npx tsx scripts/playtest/r8-charms.ts --pilots mid,expert --seeds 2` and `--pairs`: no charm or pair over 60%.
+Set pieces by verb, mid / expert: carry 3/4, collapse 6/6, flourish 6/6, follow 6/5, gates sit 6/6, gates swing 6/6,
+kindle 5/6, chase 6/6, sprint 6/4, rings 6/6, shatter 5/3, slide 6/6, hops 6/6, stair 3/6, surge 2/6. Without charms
+the classic expert (its own spender) wins 80/90 at 129.0 s, the trickster expert 72/90: the 400 m before a set piece
+left to the classic hands is what brought the trickster to 82.
+
+**Expression:** 18 named tricks. The expert's best combo in named tricks: 5 at the median with no charm
+(`r8-combo.ts --seeds 6`: 30 rides, 3 to 6, median time 118.5 s), 4 with every charm dealt (3 to 7, 120.4 s), 4 at the
+median in the lab's own table (max 8). What ends its combos: bumps 91, the window 68, falls 29; only 10 of 540 snow
+gaps outrun the 2.6 s window.
+
+**Decisions:** 4 a run at the median for every pilot that steers (three charms and a lantern spent); the line 3.
+
+**Race liveness** (`race-lab.ts`, runs 2 to 6, 24 orders a mountain; the field laid across your runs):
+
+| Pilot | Live | Passes/min | Quiet runs | Round 7 |
+| --- | --- | --- | --- | --- |
+| mid | 0.73 | 3.23 | 7/600 (1%) | 0.73, 3.47, 10/300 (3%) |
+| novice | 0.53 | 2.05 | 125/600 (21%) | 0.62, 2.40, 14/300 (5%) |
+| expert | 0.62 | 3.32 | 83/600 (14%) | 0.70, 3.01, 8/300 (3%) |
+
+By run (laid across): mid 0.58 / 0.72 / 0.75 on runs 1, 2, 5; novice 0.45 / 0.53 / 0.51; expert 0.45 / 0.61 / 0.61.
+
+**Showdowns** (race-lab, runs 2 on; an upper bound, the lab's rides carry no x): mid 1.27 started a run (0.20 won),
+novice 0.63 (0.06), expert 1.39 (0.30). Mid is over one a run, so the duel rule was not widened. **Steals:** race-lab
+cannot see them (no x); in the pools, 1.90 a run (the cap of two) and 0.67 showdowns won a run, 245 of 250 ghosts
+drafting. A metre and no cap had given the pools 5.5 steals a run: now 0.6 m and two a run.
+
+**Charm fairness** (`r8-charms.ts`, mid and expert, 5 mountains x 2 seeds, every charm raced against every other on
+the same run, a tie half a win; 10 runs a charm, so about +-10 points of noise). Highest after three retunes: mid
+Hearthstone 66%, expert Crane's Memory 66%; every other charm 60% or under on both; pairs Comet Chain 64% (both),
+Paper Storm 63% (mid), Phoenix 61% (expert). Lowest: Stone Lantern 36 to 38%, Bark Skin 34%, Featherfall 19%
+(expert). The draft and near-miss charms (Slipstream Lantern, Kite String, Owl's Breath, Festival Drum, Ghost Rider,
+Night Chorus) tie with no charm: the lab has no ghosts to draft and few whiskers, so they are unjudged here. Retuned
+on the way: Lamplit Path (83%), Hearthstone (70%), Whirlwind (75%), Comet's Tail (66%), Falling Star (69%), Spirit
+Drum and Spirit Flow's own speed (5.5% to 3.5% a level).
+
+**Clumsy:** 29 of 30 (round 7: 26 of 30).
+
+**Tests:** 1628 of 1633. The five that fail are the render plan's, on the course the thresholds re-laid, in files of
+the look lanes: overlook (Frostfang plans 2 overlooks, wants 3), palette (Frostfang's blend at 3352 m steps 0.228,
+wants under 0.2), setpieces (no torii row roofs a Sakura tunnel; the pop test's fixed z = 2000 on Pinecrest is no
+longer a falling slope, 3.5 m against 8; Pinecrest's finish town on Low 78,046 triangles against 78,000).
+
+**What got worse:** race liveness for the novice (0.53 from 0.62, quiet runs 21% from 5%) and the expert (0.62
+from 0.70, quiet 14% from 3%); the stunt pilot's set pieces (24 from 31) and the mid pilot's (78 from 80); the line
+4.7 s slower and mid 2.7 s slower; Temple Town's street 34 m shorter; the First Flame's chute drops a sled most of its
+way, so a fall above the drop is lost (the carry's still air and wind burn 3% longer for it); the five render tests.
 
 ## Still short
 

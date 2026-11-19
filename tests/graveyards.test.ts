@@ -36,32 +36,32 @@ describe('graveyards', () => {
     // pieces' round, SIM_VERSION 8, rode new pools: these are where its riders fall.)
     // (Round 8: SIM_VERSION 10's pools, regenerated after the batch: where their riders fall.)
     expect(at(pinecrest)).toEqual([
-      [411, 16],
-      [1171, 4],
-      [2211, 8],
-      [2443, 6],
+      [416, 17],
+      [2210, 5],
+      [2363, 5],
+      [3342, 6],
     ]);
     expect(at(frostfang)).toEqual([
-      [353, 3],
-      [2874, 5],
+      [789, 2],
+      [2865, 5],
+      [3227, 2],
+      [3860, 2],
     ]);
     expect(at(ember)).toEqual([
-      [366, 2],
-      [2242, 6],
-      [2571, 2],
-      [4097, 3],
+      [2250, 7],
+      [2448, 2],
     ]);
     expect(at(sakura)).toEqual([
-      [464, 2],
-      [2341, 2],
-      [3423, 6],
-      [3606, 3],
+      [260, 2],
+      [2366, 4],
+      [3434, 5],
+      [3603, 3],
     ]);
     expect(at(lanternfall)).toEqual([
-      [1995, 4],
-      [2252, 4],
-      [2787, 3],
-      [3187, 2],
+      [2001, 4],
+      [2258, 2],
+      [2431, 2],
+      [3726, 3],
     ]);
   });
 
@@ -142,6 +142,7 @@ describe('graveyards', () => {
     const all = () => bundledGraveyards([pinecrest, frostfang, ember, sakura, lanternfall].map((key) => ({ key, pool: pool(key) })));
     const a = all();
     const names = [...a.values()].flat().map((g) => g.name);
+    // (Round 8's pools: eighteen places on the five.)
     expect(names.length).toBe(18);
     expect(new Set(names).size).toBe(names.length);
     expect(all()).toEqual(a);
