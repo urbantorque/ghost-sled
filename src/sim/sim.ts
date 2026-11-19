@@ -7,7 +7,7 @@ import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
 import { CHARM, CHARM_COUNT, type CharmGate, PATH_ID0, PATH_STEP, STARTER_POOL, laneOf, offersFor, synergiesOf } from './charms';
 import { SHOWDOWN_POINTS, SHOWDOWN_UNITS, STEAL_POINTS, STEAL_UNITS } from './rivals';
-import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TRICKS, TWEAK_LATE, grabTier, nameFlight } from './tricks';
+import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TRICKS, TWEAK_LATE, grabTier, nameFlight, sigFallTier, sigTier } from './tricks';
 import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
@@ -1364,6 +1364,8 @@ export class Sim {
     specialDir: 0,
     sig: 0,
     sigTicks: 0,
+    sigDir: 1,
+    sigLetGo: -1000,
     letGo: -1000,
     auto: false,
     fromRail: false,
@@ -1404,6 +1406,7 @@ export class Sim {
     ft.specialTicks = 0;
     ft.sig = 0;
     ft.sigTicks = 0;
+    ft.sigLetGo = -1000;
     ft.letGo = -1000;
     ft.auto = false;
     ft.fromRail = this.railOff;
@@ -1433,7 +1436,10 @@ export class Sim {
     const side = steerTarget >= GRAB_STEER ? 1 : steerTarget <= -GRAB_STEER ? -1 : 0;
     if (released && ft.hold >= 0) {
       if (ft.hold === 2) this.letGo(false);
-      else if (ft.hold === 3) s.move = 0;
+      else if (ft.hold === 3) {
+        s.move = 0;
+        ft.sigLetGo = this.tick;
+      }
       ft.lastRelease = this.tick;
       ft.lastLen = ft.holdLen;
       ft.lastHold = ft.hold;
@@ -1460,6 +1466,8 @@ export class Sim {
       } else if (ft.lastHold === 0 && ft.lastLen <= TAP_TICKS && this.tick - ft.lastRelease <= DOUBLE_GAP && side === 0) {
         ft.hold = 3;
         ft.sig = SIGNATURE[this.sled.id] ?? TRICK.pineBow;
+        // (A Spinning Top or a Teacup turns the way the sled was turning, or the way it was last steered.)
+        ft.sigDir = s.spinRate < -0.5 ? -1 : s.spinRate > 0.5 ? 1 : s.steer < -0.1 ? -1 : 1;
         s.move = ft.sig;
         this.events.push({ type: 'grab', phase: 'move', side: 0, tier: 0, trick: ft.sig });
       }
@@ -1532,7 +1540,8 @@ export class Sim {
     s.vy -= this.gravity * DT;
 
     // Air control: a gentle lateral nudge.
-    const lat = s.steer * 3.0 * DT;
+    // (Will-o'-Wisp: both hands off, no air control while it is held.)
+    const lat = this.ft.hold === 3 && this.ft.sig === TRICK.willowisp ? 0 : s.steer * 3.0 * DT;
     s.vx += lat * dcos(s.velHeading);
     s.vz -= lat * dsin(s.velHeading);
     s.vx *= 1 - 0.015 * DT;
@@ -1548,14 +1557,20 @@ export class Sim {
     const setting = s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS);
     // While grabbing, only steering with the grab's side spins (a little slower); against it is a tweak.
     const ft = this.ft;
-    const spinIn = s.grab !== 0 ? (s.steer * s.grab > 0.3 ? s.steer : 0) : s.steer;
+    const sig = ft.hold === 3 ? ft.sig : 0;
+    const spinIn = sig === TRICK.willowisp ? 0 : s.grab !== 0 ? (s.steer * s.grab > 0.3 ? s.steer : 0) : s.steer;
     const spinMul = s.grab !== 0 ? 0.8 : 1;
-    if (setting) {
+    if (sig === TRICK.spinningTop) {
+      // The saucer spins under a still rider while it is held, and nothing stops it but letting go.
+      s.spinRate = approach(s.spinRate, ft.sigDir * spinMax, 34 * DT);
+    } else if (setting) {
       s.spinRate = approach(s.spinRate, 0, LAND_SET_SPIN * DT);
       s.airYaw = approach(s.airYaw, PI * Math.round(s.airYaw / PI), 4 * DT);
     } else if (ft.special === TRICK.lamppost && ft.specialTicks > 0) {
       // Swung round the rail's end: a half turn in the move's length.
       s.spinRate = (ft.specialDir * PI) / (SPECIAL_TICKS * DT);
+    } else if (sig === TRICK.teacup) {
+      s.spinRate = approach(s.spinRate, ft.sigDir * spinMax * 0.5, 34 * DT);
     } else if (Math.abs(spinIn) > 0.3) {
       s.spinRate = approach(s.spinRate, spinIn * spinMax * spinMul, 34 * DT);
     } else {
@@ -1636,9 +1651,15 @@ export class Sim {
     // never a stomp. (A first-timer's thumb on the button through a landing is a short grab almost always.)
     const ft = this.ft;
     const holding = s.grab !== 0 || ft.hold === 3;
-    const deep = holding && (s.grabTier >= 2 || (ft.hold === 3 && grabTier(this.grabClock(ft.sigTicks)) >= 2));
+    // (The sled's own move, held: each sled has its own say in what that costs: tricks.ts sigFallTier.)
+    const sigHeld = ft.hold === 3 ? sigTier(ft.sig, ft.sigTicks) : 0;
+    const deep = holding && (s.grabTier >= 2 || (ft.hold === 3 && sigHeld >= sigFallTier(ft.sig)));
+    const soft = ft.hold === 3 && ft.sig === TRICK.fireside && sigHeld >= 1;
     const flight = { halfTurns, flips, grabTicks: this.grabClock(ft.grabMax), tweakTicks: ft.tweakTicks, tweakLate: ft.tweakLate, special: ft.special, sigTicks: ft.sigTicks, sig: ft.sig };
-    const letGo = ft.letGo >= 0 && !ft.auto && this.tick - ft.letGo <= Math.max(LET_GO_TICKS, this.stompTicks) && grabTier(this.grabClock(ft.grabMax)) >= 1;
+    const window = Math.max(LET_GO_TICKS, this.stompTicks);
+    const letGo =
+      (ft.letGo >= 0 && !ft.auto && this.tick - ft.letGo <= window && grabTier(this.grabClock(ft.grabMax)) >= 1) ||
+      (ft.sig !== TRICK.pineBow && this.tick - ft.sigLetGo <= window && sigTier(ft.sig, ft.sigTicks) >= 1);
     this.clearGrab();
     ft.hold = -1;
 
@@ -1662,7 +1683,7 @@ export class Sim {
       return;
     }
 
-    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol || deep;
+    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol || deep || soft;
     // A stomp: a press in the last 9 ticks, or a grab let go there.
     const stomp = (this.tick - s.lastPressTick <= this.stompTicks || letGo) && airtime >= 0.4 && !holding;
     const scale = sketchy ? 0.5 : 1;

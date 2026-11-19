@@ -72,6 +72,48 @@ describe('the air map', () => {
     expect(clean.stats.trickMask & (1 << TRICK.lanternReach) || clean.stats.trickMask & (1 << TRICK.spiritStretch)).toBeTruthy();
   });
 
+  it("each sled's own move has its own rule, and none of them touches speed or the lantern", () => {
+    const land = (sled: number): number => {
+      const probe = flying({ sled } as Partial<SimConfig>);
+      for (let t = 0; t < 600; t++) {
+        probe.step(packInput(4, false, false));
+        if (probe.events.some((e) => e.type === 'land')) return t;
+      }
+      return -1;
+    };
+    /** Double tap, then hold to `until` (a tick of the flight; Infinity: through the landing), steering `steer`. */
+    const sig = (sled: number, until: number, steer = 4) => {
+      const sim = flying({ sled } as Partial<SimConfig>);
+      let named = 0;
+      let x0 = 0;
+      const e = fly(sim, (t) => {
+        if (t === 8) x0 = sim.s.vx;
+        for (const ev of sim.events) if (ev.type === 'style' && ev.trick && TRICKS[ev.trick].family === 'signature') named = ev.trick;
+        return packInput(t >= 12 && t < until ? steer : 4, t < 3 || (t >= 6 && t < until), false);
+      });
+      for (const ev of sim.events) if (ev.type === 'style' && ev.trick && TRICKS[ev.trick].family === 'signature') named = ev.trick;
+      return { e, named, sim, dvx: sim.s.vx - x0 };
+    };
+    for (let sled = 0; sled < 6; sled++) {
+      const L = land(sled);
+      const early = sig(sled, L - 16);
+      expect(early.named, `sled ${sled}`).toBe([TRICK.pineBow, TRICK.spinningTop, TRICK.fireside, TRICK.cometTail, TRICK.willowisp, TRICK.teacup][sled]);
+      expect(early.e.botched).toBeUndefined();
+    }
+    // Held into the snow: Fireside and Teacup ride it out, Comet Tail and Pine Bow go down.
+    expect(sig(2, Infinity).e.botched).toBeUndefined();
+    expect(sig(2, Infinity).e.quality).toBe('sketchy');
+    expect(sig(5, Infinity).e.botched).toBeUndefined();
+    expect(sig(3, Infinity).e.botched).toBe(true);
+    expect(sig(0, Infinity).e.botched).toBe(true);
+    // Will-o'-Wisp: no air control while held; Spinning Top: it spins with the steer centred.
+    const L4 = land(4);
+    expect(Math.abs(sig(4, L4 - 16, 8).sim.s.x - sig(4, L4 - 16, 4).sim.s.x)).toBeLessThan(0.5);
+    const top = flying({ sled: 1 } as Partial<SimConfig>);
+    for (let t = 0; t < 40; t++) top.step(packInput(4, t < 3 || t >= 6, false));
+    expect(Math.abs(top.s.spinRate)).toBeGreaterThan(5);
+  });
+
   it('names a flight by everything done in it', () => {
     const base = { halfTurns: 0, flips: 0, grabTicks: 0, tweakTicks: 0, tweakLate: false, special: 0, sigTicks: 0, sig: 0 };
     expect(nameFlight({ ...base, halfTurns: 2 })[0].id).toBe(TRICK.spin);

@@ -139,6 +139,43 @@ function spinPoints(h: number): number {
   return h > 0 ? 150 * h * (1 + 0.25 * (h - 1)) : 0;
 }
 
+/** The sled's own move, by sled (round 8, G1): each a sidegrade, and none touches speed or the lantern beyond what
+ *  any trick lights.
+ *    Pine Bow       pays as a second-tier grab from the first tier on; held at touchdown it is deep from there
+ *    Spinning Top   while held the saucer spins at full rate by itself (the steer is free) and the landing set
+ *                   cannot stop it: let go in time. Each half turn pays half again over a spin
+ *    Fireside       held at touchdown it is sketchy, never a fall; it pays only to the second tier
+ *    Comet Tail     tiers 30% sooner and pays 1.3x, but held at touchdown it is a fall from the first tier
+ *    Will-o'-Wisp   pays as the third tier from the second, but no air control and no spin while held
+ *    Teacup         a slow spin at half rate by itself that the set always lands; each half turn pays double, and
+ *                   held at touchdown the rider lets go as it lands */
+export function sigTier(sig: number, ticks: number): number {
+  if (ticks < GRAB_T1) return 0;
+  const t = grabTier(sig === TRICK.cometTail ? Math.floor((ticks * 10) / 7) : ticks);
+  if (sig === TRICK.pineBow) return t < 2 ? 2 : t;
+  if (sig === TRICK.fireside) return t > 2 ? 2 : t;
+  if (sig === TRICK.willowisp) return t >= 2 ? 3 : t;
+  return t;
+}
+
+/** The tier at which the sled's own move, still held at touchdown on a committed flight, is a fall (99: never). */
+export function sigFallTier(sig: number): number {
+  return sig === TRICK.fireside || sig === TRICK.teacup ? 99 : sig === TRICK.cometTail ? 1 : 2;
+}
+
+function sigNamed(f: FlightTricks): boolean {
+  return f.sig > 0 && f.sigTicks >= GRAB_T1;
+}
+
+function sigPoints(sig: number, ticks: number, halfTurns: number): number {
+  if (sig === TRICK.spinningTop) return 60 + spinPoints(halfTurns) * 1.5;
+  if (sig === TRICK.teacup) return 60 + spinPoints(halfTurns) * 2;
+  const t = sigTier(sig, ticks);
+  const base = t === 3 ? 280 : t === 2 ? 150 : t === 1 ? 60 : 0;
+  const past = sig === TRICK.fireside || ticks <= GRAB_T3 ? 0 : ((ticks - GRAB_T3) * 120) / 60;
+  return (base + past) * (sig === TRICK.cometTail ? 1.3 : 1.2);
+}
+
 function grabPoints(ticks: number): number {
   const t = grabTier(ticks);
   if (t === 0) return 0;
@@ -152,8 +189,10 @@ function grabPoints(ticks: number): number {
 export function nameFlight(f: FlightTricks): TrickLanded[] {
   const out: TrickLanded[] = [];
   const tier = grabTier(f.grabTicks);
-  // (The swing round a rail's end is its own half turn: not a spin as well.)
-  const h = f.special === TRICK.lamppost && f.halfTurns > 0 ? f.halfTurns - 1 : f.halfTurns;
+  // (The swing round a rail's end is its own half turn: not a spin as well. Nor is a Spinning Top's or a Teacup's
+  // spin: the sled's own move is the spin.)
+  const own = sigNamed(f) && (f.sig === TRICK.spinningTop || f.sig === TRICK.teacup);
+  const h = own ? 0 : f.special === TRICK.lamppost && f.halfTurns > 0 ? f.halfTurns - 1 : f.halfTurns;
   const fl = f.flips;
   const sp = spinPoints(h);
   const fp = 600 * fl;
@@ -174,11 +213,10 @@ export function nameFlight(f: FlightTricks): TrickLanded[] {
   }
   if (f.special === TRICK.lamppost) t(TRICK.lamppost, 300, 10);
   else if (f.special === TRICK.snowHare) t(TRICK.snowHare, 250, 10);
-  if (f.sig > 0 && f.sigTicks >= GRAB_T1) {
-    // (Phase 1: every sled's move pays as a grab of the same hold, a little more. Each sled's own rule is in
-    // notes/r8-sim-design.md.)
-    const st = grabTier(f.sigTicks);
-    out.push({ id: f.sig as TrickId, points: Math.round(grabPoints(f.sigTicks) * 1.2), units: st === 3 ? 14 : st === 2 ? 8 : 4, halfTurns: h, flips: fl, tier: st, late: false });
+  if (sigNamed(f)) {
+    const st = sigTier(f.sig, f.sigTicks);
+    const units = st === 3 ? 14 : st === 2 ? 8 : 4;
+    out.push({ id: f.sig as TrickId, points: Math.round(sigPoints(f.sig, f.sigTicks, f.halfTurns)), units, halfTurns: f.halfTurns, flips: fl, tier: st, late: false });
   }
   return out;
 }
