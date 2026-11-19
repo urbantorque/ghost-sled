@@ -1,4 +1,4 @@
-import { DataTexture, DataUtils, HalfFloatType, LinearFilter, RGBAFormat, type BufferGeometry, type Texture, Vector2, Vector3, Vector4, type WebGLRenderer } from 'three';
+import { DataTexture, DataUtils, FloatType, HalfFloatType, LinearFilter, NearestFilter, RGBAFormat, type BufferGeometry, type Texture, Vector2, Vector3, Vector4, type WebGLRenderer } from 'three';
 import { CHUNK_LEN, type Course } from '../sim/course';
 
 // The far-shadow field (the visual lift, DECISIONS 360 and 361): how much of the key light reaches anything
@@ -50,6 +50,9 @@ const COARSE_V0 = FINE_SLOTS * FINE_H;
 const NONE = -1e9;
 /** A free slot's key (never a chunk's or a tile's index). */
 const FREE = -99999;
+/** The table's texels: one a slot, then the near map's box (three). */
+const BOX_AT = FINE_SLOTS + COARSE_SLOTS;
+const TABLE_W = BOX_AT + 3;
 /** How far up and down the run a fine tile looks for set pieces that shadow it (metres). */
 const SITE_REACH = 300;
 const FINE_FLOOR = -90;
@@ -95,8 +98,11 @@ const GROUND_HALF = 148;
 const GROUND_COLS = (2 * GROUND_HALF) / GROUND_D + 1;
 const GROUND_ROWS = CHUNK_LEN / GROUND_D + 1;
 const GROUND_SLOTS = 24;
-/** Fine tiles more than this many chunks ahead of the rider wait for their casters to be laid out. */
-const WAIT_AHEAD = 4;
+/** Fine tiles more than this many chunks ahead of the rider wait for their casters to be laid out. At 4 the tile
+ *  four ahead was baked the moment the chunk at the window's far end came, before its casters were laid out, and
+ *  baked again a chunk later with them: every fine tile twice. At 3 it waits for them (the coarse tile shades it
+ *  meanwhile), and the field's bake is about half what it was. */
+const WAIT_AHEAD = 3;
 /** How often the tiles baked without some of the mid-ground's rows look for them again (seconds). */
 const ROW_CHECK_S = 0.4;
 /** The valley's height rows (one each mid-ground row), metres between columns and how many. */
@@ -475,11 +481,10 @@ interface Job {
  *  terrain's own shadow (which the near map never had). On Low the field is the only cast shadow there is. */
 export const FAR_GLSL = /* glsl */ `
 uniform sampler2D uFarMap;
-/** Per slot: the sim x its columns centre on, the chunk (fine) or tile (coarse) it holds, its ceilings'
- *  base height, and how far its casters have faded in. Fine slots first. */
-uniform vec4 uFarSlot[${FINE_SLOTS + COARSE_SLOTS}];
-/** The near shadow map's box: its middle and half size (w 0: no map), and the light's two axes across it. */
-uniform vec4 uFarBox[3];
+/** The field's table, one texel each (TABLE_W): per slot, the sim x its columns centre on, the chunk (fine) or tile
+ *  (coarse) it holds, its ceilings' base height, and how far its casters have faded in, fine slots first; then the
+ *  near shadow map's box: its middle and half size (w 0: no map), and the light's two axes across it. */
+uniform highp sampler2D uFarTable;
 /** x: 1 while any tile is ready, y: the field's strength (the palette's), z: how far a shadow thins, w: how
  *  much wider every soft band is (1 in a clear sun). */
 uniform vec4 uFarK;
@@ -488,7 +493,7 @@ float farShadow(vec3 wp, float nearShadow) {
   float z = -wp.z;
   float ci = floor(z * ${(1 / CHUNK_LEN).toFixed(6)});
   float k = mod(ci, ${FINE_SLOTS.toFixed(1)});
-  vec4 sl = uFarSlot[int(k + 0.5)];
+  vec4 sl = texelFetch(uFarTable, ivec2(int(k + 0.5), 0), 0);
   float u = ${(FINE_W / 2).toFixed(1)} + (wp.x - sl.x) * ${(1 / FINE_DX).toFixed(6)};
   vec2 px;
   if (sl.y == ci && u > 1.0 && u < ${(FINE_W - 1).toFixed(1)}) {
@@ -496,7 +501,7 @@ float farShadow(vec3 wp, float nearShadow) {
   } else {
     float ti = floor(z * ${(1 / COARSE_LEN).toFixed(6)});
     k = mod(ti, ${COARSE_SLOTS.toFixed(1)});
-    sl = uFarSlot[${FINE_SLOTS} + int(k + 0.5)];
+    sl = texelFetch(uFarTable, ivec2(${FINE_SLOTS} + int(k + 0.5), 0), 0);
     u = ${(COARSE_W / 2).toFixed(1)} + (wp.x - sl.x) * ${(1 / COARSE_DX).toFixed(6)};
     if (sl.y != ti || u < 1.0 || u > ${(COARSE_W - 1).toFixed(1)}) return nearShadow;
     px = vec2(u, ${COARSE_V0.toFixed(1)} + k * ${COARSE_H.toFixed(1)} + 1.0 + (z - ti * ${COARSE_LEN.toFixed(1)}) * ${(1 / COARSE_DZ).toFixed(6)});
@@ -507,9 +512,13 @@ float farShadow(vec3 wp, float nearShadow) {
   float terr = smoothstep(-f.y, f.y, y - f.x);
   // A caster's shadow thins as it reaches away from it (ART.md 4: long shadows taper into soft blue).
   float obj = max(smoothstep(-f.w, f.w, y - f.z), uFarK.z * smoothstep(${SOFT_OBJ[0].toFixed(3)}, ${(SOFT_OBJ[0] + SOFT_OBJ[1] * 70).toFixed(3)}, f.w / uFarK.w));
-  vec3 r = wp - uFarBox[0].xyz;
-  float q = max(abs(dot(r, uFarBox[1].xyz)), abs(dot(r, uFarBox[2].xyz))) / max(uFarBox[0].w, 1e-3);
-  float nearK = uFarBox[0].w > 0.0 ? 1.0 - smoothstep(${NEAR_FROM.toFixed(3)}, ${NEAR_TO.toFixed(3)}, q) : 0.0;
+  vec4 b0 = texelFetch(uFarTable, ivec2(${BOX_AT}, 0), 0);
+  float nearK = 0.0;
+  if (b0.w > 0.0) {
+    vec3 r = wp - b0.xyz;
+    float q = max(abs(dot(r, texelFetch(uFarTable, ivec2(${BOX_AT + 1}, 0), 0).xyz)), abs(dot(r, texelFetch(uFarTable, ivec2(${BOX_AT + 2}, 0), 0).xyz))) / b0.w;
+    nearK = 1.0 - smoothstep(${NEAR_FROM.toFixed(3)}, ${NEAR_TO.toFixed(3)}, q);
+  }
   // (A ridge's shadow keeps a little light, so the trees' own shadows still read inside it.)
   return min(mix(mix(1.0, obj, uFarK.y * sl.w), nearShadow, nearK), mix(1.0, terr, uFarK.y * ${TERRAIN_K.toFixed(2)}));
 }
@@ -518,11 +527,23 @@ float farShadow(vec3 wp, float nearShadow) {
 const dummy = new DataTexture(new Uint16Array([0, 0, 0, 0]), 1, 1, RGBAFormat, HalfFloatType);
 dummy.needsUpdate = true;
 
+/** The slots and the near map's box, as the CPU keeps them; copied into the table (TABLE_W texels) each frame. */
+const farSlot = Array.from({ length: FINE_SLOTS + COARSE_SLOTS }, () => new Vector4(0, FREE, 0, 0));
+const farBox = [new Vector4(), new Vector4(1, 0, 0, 0), new Vector4(0, 1, 0, 0)];
+/** A texture, not two uniform arrays: three uploads an array of vectors whole at every material change, with no
+ *  cache (about 27 calls and 1,240 floats a Low frame, 3% of a frame at 6x); a texture is sent once a frame, and only
+ *  when it changed, and bound once. Float, read texel by texel (a sim x and a chunk number need all of a float). */
+const table = new DataTexture(new Float32Array(TABLE_W * 4), TABLE_W, 1, RGBAFormat, FloatType);
+table.minFilter = NearestFilter;
+table.magFilter = NearestFilter;
+table.generateMipmaps = false;
+table.flipY = false;
+table.needsUpdate = true;
+
 /** The field's uniforms, spread into materials.ts `shared` so every lit material has them. */
 export const farUniforms = {
   uFarMap: { value: dummy as Texture },
-  uFarSlot: { value: Array.from({ length: FINE_SLOTS + COARSE_SLOTS }, () => new Vector4(0, FREE, 0, 0)) },
-  uFarBox: { value: [new Vector4(), new Vector4(1, 0, 0, 0), new Vector4(0, 1, 0, 0)] },
+  uFarTable: { value: table as Texture },
   uFarK: { value: new Vector4(0, 1, 0.42, 1) },
 };
 
@@ -580,6 +601,9 @@ export class FarShadow {
   private renderer: WebGLRenderer | null = null;
   private idleOpen = false;
   private idleBusy = false;
+  /** The table as last sent, and whether the GPU holds it. */
+  private tableSent = new Float32Array(TABLE_W * 4);
+  private tableIn = false;
   private started = false;
   /** The window to keep: chunks [c0, c1], coarse tiles [t0, t1], and the rider's sim z (nearest first). */
   private c0 = 0;
@@ -591,7 +615,7 @@ export class FarShadow {
   private rowCheck = 0;
   private sunOut = new Vector3();
   /** The longest single job (ms), how many there were, and each kind's total (ms). */
-  readonly stats = { maxJobMs: 0, jobs: 0, fineMs: 0, coarseMs: 0, fineTiles: 0, coarseTiles: 0, siteMs: 0, uploadMs: 0, initMs: 0, uploads: [] as number[], worst: '', top: [] as string[], over: [0, 0, 0, 0] };
+  readonly stats = { maxJobMs: 0, jobs: 0, fineMs: 0, coarseMs: 0, fineTiles: 0, coarseTiles: 0, siteMs: 0, uploadMs: 0, initMs: 0, uploads: [] as number[], worst: '', top: [] as string[], over: [0, 0, 0, 0], stale: [0, 0, 0] };
 
   constructor(private world: FarWorld) {
     this.stageFine.flipY = false;
@@ -607,7 +631,7 @@ export class FarShadow {
     this.vrowKey.fill(NaN);
     this.gKey.fill(NaN);
     this.gFill.fill(NaN);
-    for (const s of farUniforms.uFarSlot.value) s.y = FREE;
+    for (const s of farSlot) s.y = FREE;
     farUniforms.uFarK.value.x = 0;
     this.siteCells.clear();
     this.pump();
@@ -632,7 +656,7 @@ export class FarShadow {
     this.c1 = c1;
     this.t0 = Math.floor((riderZ - 200) / COARSE_LEN);
     this.t1 = Math.min(this.t0 + COARSE_SLOTS - 1, Math.floor((riderZ + ahead) / COARSE_LEN));
-    const slots = farUniforms.uFarSlot.value;
+    const slots = farSlot;
     let any = false;
     for (let s = 0; s < FINE_SLOTS; s++) {
       const t = this.fine[s];
@@ -674,7 +698,10 @@ export class FarShadow {
         if (Number.isNaN(t.key) || t.stale || t.rows.length === 0) continue;
         let got = 0;
         for (const r of t.rows) if (this.world.shoulders(r, 0, 0, 0, this.vrow, 0) === 1) got++;
-        if (got * 2 >= t.rows.length) t.stale = true;
+        if (got * 2 >= t.rows.length) {
+          t.stale = true;
+          this.stats.stale[0]++;
+        }
       }
     }
     // Casters laid out since a tile was baked (the window moved on): the tile is baked again with them.
@@ -683,7 +710,10 @@ export class FarShadow {
       // (Once all of them are: one bake more, not one each time a chunk comes.)
       let all = true;
       for (const i of t.missing) if (!this.world.casters(i, null)) all = false;
-      if (all) t.stale = true;
+      if (all) {
+        t.stale = true;
+        this.stats.stale[1]++;
+      }
     }
     // A set piece made since a tile was baked: the tile is baked again with it.
     this.world.sites((c0 - 1) * CHUNK_LEN - SITE_REACH, (c1 + 2) * CHUNK_LEN + SITE_REACH, (site) => {
@@ -692,15 +722,46 @@ export class FarShadow {
         // (Only a piece upwind of the tile, toward its sun, can shadow it.)
         const ahead = SITE_REACH * Math.max(0, t.sz) + 20;
         const behind = SITE_REACH * Math.max(0, -t.sz) + 20;
-        if (site.z + site.len > t.key * CHUNK_LEN - behind && site.z - site.len < (t.key + 1) * CHUNK_LEN + ahead) t.stale = true;
+        if (site.z + site.len > t.key * CHUNK_LEN - behind && site.z - site.len < (t.key + 1) * CHUNK_LEN + ahead) {
+          t.stale = true;
+          this.stats.stale[2]++;
+        }
       }
     });
+    this.syncTable(renderer);
     this.pump();
+  }
+
+  /** Copies the slots and the near map's box into the table and sends it to the GPU when it changed: once a frame
+   *  at most (the box moves with the lens), through three's own state as upload() does. */
+  private syncTable(r: WebGLRenderer): void {
+    const d = table.image.data as Float32Array;
+    for (let i = 0; i < BOX_AT; i++) farSlot[i].toArray(d, i * 4);
+    for (let i = 0; i < 3; i++) farBox[i].toArray(d, (BOX_AT + i) * 4);
+    const sent = this.tableSent;
+    let same = this.tableIn;
+    for (let i = 0; same && i < d.length; i++) if (d[i] !== sent[i]) same = false;
+    if (same) return;
+    if (!this.tableIn) r.initTexture(table);
+    const tex = (r.properties.get(table) as { __webglTexture?: WebGLTexture }).__webglTexture;
+    // (Not made yet, or lost with the context: three makes it again from the CPU's copy on its next draw.)
+    this.tableIn = !!tex;
+    if (!tex) return;
+    const gl = r.getContext() as WebGL2RenderingContext;
+    r.state.bindTexture(gl.TEXTURE_2D, tex);
+    r.state.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    r.state.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    r.state.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    r.state.pixelStorei(gl.UNPACK_ROW_LENGTH, 0);
+    r.state.pixelStorei(gl.UNPACK_SKIP_PIXELS, 0);
+    r.state.pixelStorei(gl.UNPACK_SKIP_ROWS, 0);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TABLE_W, 1, gl.RGBA, gl.FLOAT, d);
+    sent.set(d);
   }
 
   /** The near shadow map's box this frame: its middle (world), half size (0: none) and the light's direction. */
   setNearBox(cx: number, cy: number, cz: number, r: number, light: Vector3): void {
-    const b = farUniforms.uFarBox.value;
+    const b = farBox;
     b[0].set(cx, cy, cz, r);
     // The shadow camera's axes as three builds them (looking along -light with y up): x = up x light.
     const h = Math.hypot(light.x, light.z);
@@ -1029,7 +1090,7 @@ export class FarShadow {
     t.age = 0;
     t.ceil!.set(ceil);
     t.soft!.set(soft);
-    farUniforms.uFarSlot.value[FINE_SLOTS + job.slot].set(job.xc, job.key, job.base, 0);
+    farSlot[FINE_SLOTS + job.slot].set(job.xc, job.key, job.base, 0);
     t.stale = false;
     t.rows = job.rows;
     this.stats.coarseTiles++;
@@ -1231,7 +1292,7 @@ export class FarShadow {
     t.missing = job.missing;
     t.rows = job.rows;
     t.sz = job.sun.sz;
-    farUniforms.uFarSlot.value[job.slot].set(job.xc, job.key, job.base, again ? farUniforms.uFarSlot.value[job.slot].w : 0);
+    farSlot[job.slot].set(job.xc, job.key, job.base, again ? farSlot[job.slot].w : 0);
     this.stats.fineTiles++;
     return true;
   }

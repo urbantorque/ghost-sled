@@ -159,7 +159,7 @@ describe('far shadows: the hand-over at the near map', () => {
 
   it('is one function every lit material calls', () => {
     expect(FAR_GLSL).toContain('float farShadow(vec3 wp, float nearShadow)');
-    expect(FAR_GLSL.match(/uniform /g)?.length).toBe(4);
+    expect(FAR_GLSL.match(/uniform /g)?.length).toBe(3);
   });
 });
 
