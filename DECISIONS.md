@@ -3229,3 +3229,104 @@ played or heard by a person. Where a later lane changed what an earlier one buil
     Medium one and no new full-frame pass unless it replaces one, Low no pass and no more script a frame, nothing new
     before the first frame. *Judged:* each lane by one fresh critic on the same frames before and after; the merge
     by a fresh critic a mountain and by performance against round 7 on mains power.
+362. **What the five lanes landed, and the merge.** Each lane's notes hold its faults, changes, critics, cost and
+    shared code (`notes/vl-{temporal,farlight,light,props,poster}.md`).
+    - *Far light* (`farshadow.ts`): a half-float atlas of shadow tiles, fine near and coarse out to the horizon,
+      baked on idle in slices of at most 1.6 ms for each stretch's own sun, read by one function every lit material
+      already runs. It adds no draw and no pass; a tile bakes in 0.4 to 1.7 ms at 1x, and nothing runs before
+      900 ms after the first frame. The run's own ground casts by the low shadow light and the mountainside by the
+      key light (Serac Gate's span went dark under one shadow light), a ridge's shadow keeps a breath of light, and
+      it is Low's first cast shadow. Its first critic: 12 better, 41 the same, 2 worse of 55; the fixes after it were
+      judged only at the merge.
+    - *Light* (`materials.ts` `LIFT_GLSL`, `postfx/ao.ts`): the shade side takes the sky by the way a face is turned
+      and the lit snow's bounce, blossom, ice and the ghosts' glass are lit through against the sun, and a crease
+      light on High and Ultra (a convex edge catches a hairline of key light, an inner crease darkens, near the lens
+      only). No draw, program or pass. Two critics: "a modest, mostly safe lift"; the gains are Sakura's blossom and
+      pines, Frostfang's ice, Pinecrest's rock strata.
+    - *Props* (`chamfer.ts`, `lettering.ts`, the kits): a shared chamfer on every kit piece on Medium and High, the
+      named pieces remodelled (Sakura's stone lantern, Lanternfall's stone lamps, the kicker's lip), blossom as lobed
+      canopies painted in three flat values, the FINISH and START boards cut as solid letters. No draw or program;
+      triangles +2 to +5% on High and the phone. Two critics: 44 better, 40 the same, 1 worse; then 25 better, 17 the
+      same, 0 worse. ART.md 3 now names Sakura's blossom as the one rounded hazard (below).
+    - *Poster* (`poster.ts`, `palette.ts` `PosterLook`): on Low, painted shafts from the sun and a bright place, a
+      painted rim on silhouettes (the hero's strongest), the sky in printed bands, the frame's foot laid over in the
+      shade's colour, one draw on idle after the first frame; on a phone the results card starts at 44% of the height
+      so the hero shot stands above it. Its critic: the phone's results "much better"; Low slightly better on
+      Pinecrest, the same elsewhere, before its fixes.
+    - *Temporal*: a reconstruction of each frame from the last ones (jitter, a history kept with a confidence,
+      variance clipping, motion boxes for the rider, sled, scarf and the nearest ghosts, an after layer for
+      particles and glows, a sharpen). It ships off (363).
+    *The merge* kept both sides of every conflict: the poster's, far light's and light's uniforms in `shared`; the
+    light lane's `applyLift` and the poster's `uPoster.x` both set by the tier; far light's field folded into the
+    snow's shadow before the poster cuts its edge, so Low's far shadows take the poster's edge and colour; the
+    poster's `round-sheets.sh` (tiers and labels as arguments) over the two lanes' variants; far light's `L_CABLE`
+    beside props' chamfer import; in `world.ts` the poster's layer, far light's `FarWorld` and switch, and the
+    temporal lane's targets, fade and bodies. One fault the lanes could not see apart: the crease light lives in
+    `pipeAO`, which the reconstruction calls in the composite's place, and its uniforms were not in the
+    reconstruction's material, so the crease would have read zero wherever the reconstruction ran; they are now
+    the composite's own objects there too.
+363. **The temporal reconstruction ships off; High and Ultra keep round 7's anti-aliasing.** Measured, it is what
+    the lift asked for in the world: shimmer (DECISIONS 287's metric) down 21 to 36% on High and Ultra at as much
+    sharpness, the snow's banding in camera beats gone, thin lava cracks whole. Its second critic (39 pairs: re-shot
+    fixed frames, same-tick motion and 2x crops) found 8 better, 12 worse and 19 the same: moving lifts doubled (the
+    gondola, the chairlift's chairs: they move on their own and carry no motion box), the rider softer with a pale
+    halo at speed, a crest's blocks missing for a frame. Looked at in the 2x crop of the lake at 1763 m, the coat's
+    facets and the outline are plainly softer than round 7's, and ART.md 5 puts the hero first. A third tuning pass
+    was not run: the lanes had been stopped twice by the laptop restarting under load (365) and twice by usage
+    limits. `PASSES` keeps the tuning (`taaMsaa`, `scale`, `sharpen`) with `taa: false`; `?taa` turns it on as tuned.
+    What it needs: motion boxes for whatever moves on its own (lift cabins and chairs, gondolas, flags), the rider
+    drawn after the rebuild or its history held only where its confidence is high, and a person playing it.
+364. **The merge, judged: a fresh critic a mountain, then the fixes, then a second look.** 112 pairs (High, Low and
+    the phone on Medium, round 7's final frames beside the merged build's at the same distances,
+    `scripts/playtest/merge-pairs.mjs`).
+    - *High:* a modest but real lift on Pinecrest, Frostfang, Sakura and Lanternfall (rounded, lit-through blossom,
+      chamfered rocks, stones and lanterns, solid finish lettering, far shadows under an open sky); Ember near
+      identical.
+    - *Low:* the clearest lift on Pinecrest, Frostfang and Sakura ("long cast shadows from banks and trees now give it
+      depth and look designed rather than degraded"); mixed on Lanternfall; net worse on Ember.
+    - *The phone:* little visible change, the blossom and some flank shadows better.
+    - *Fixed after them:* Ember's Low foot (0.34 of a shade taken from its warm deep snow) turned the foreground to
+      brown mud: the foot is 0.16 and every mountain's leans half way to its poster shade. Pinecrest's Low snow
+      stepped in two flat values printed the far shadows' soft fall-off as hard pale islands on a cobalt floor (a
+      tree run "reads as a river"): Pinecrest's snow is one smooth ramp again and its shade leans a little to its own
+      periwinkle (Frostfang, Ember and Lanternfall keep their steps). The crease light drew pale hairlines on basalt
+      and tan on lit stone: its strength 0.85 (was 1.3), its floor 0.02 (was 0.045).
+    - *The second look:* a fresh critic on 31 re-shot pairs (Low on Pinecrest, Ember and Lanternfall, High on Ember) found no
+      hairline on stone and Lanternfall's Low neutral to better, but Pinecrest's tree runs still too deep a blue and
+      Ember's ravine and bridge still brown. The cast shade was then leaned further (Pinecrest to a light periwinkle,
+      Ember most of the way to a light cold plum, ART.md 15's plum-teal) and judged by eye, with the snow's colour
+      sampled where the critic sampled it: Pinecrest's tree run at 2250 m from `#3B64BA` (the first merge) to
+      `#718DCA` (round 7 drew a lit floor there, `#B8C3E1`; ART's shade is `#7CA6EC`), Ember's ravine at 1039 m from
+      `#6A493F` to `#9E6D67`, a dusty rose in the walls' shade rather than mud. No third critic judged it.
+    - *Left as found, for later:* Low lays some streets and a bridge in shade where High's are lit (Sakura's Temple
+      Town, Frostfang's dawn bridge: on Low the field reaches the lens where High's shadow map takes over); a hard
+      overhead band across the snow on one phone frame on Ember (a beam over the start casting through the field); a
+      pale quad by the rider on Lanternfall's Low at 3581 m; Frostfang's High at 1650 m with fainter bank shadows;
+      the sled's wood greyer on Low; a beaded highlight on a far parapet rail on High.
+365. **The laptop restarted twice under the lanes' load.** At 9:30 and 10:31 on 19 November the machine bugchecked
+    (0xD1, the faulting address ending `...8ac8` both times, as on 6, 14 and 17 November: one driver, one
+    instruction) with five lanes running about eight headless GPU browsers and the CPU at 100%. Each restart ended
+    the session and every lane, server and capture. The dumps need an administrator to read, so the driver is
+    unnamed (the Wi-Fi and the Arc GPU drivers are the likeliest). From then on the lanes ran one browser each, three
+    at most at once, and the merge's captures one at a time.
+366. **Performance against round 7** (on mains, nothing else running, both builds interleaved,
+    `scripts/playtest/perf-vl.sh`; frames' JSON for draws). Two sittings; the first's Low and
+    desktop phases and the whole second are clean (a stopped run that kept probing spoiled the rest, and was
+    rerun).
+    - *High, Medium, Ultra and the phone hold their bar:* 60 fps on both builds on every mountain (High on all five,
+      Medium on all five, Ultra on Pinecrest and Lanternfall, a lantern night 60 and 59, the phone's Medium, Low and
+      avalanche chase, Lanternfall on the phone).
+    - *Low at 6x does not:* the median of five interleaved passes, Pinecrest/Ember/Sakura, was 46/46/40 for round 7
+      against 43/44/38 in the first sitting and 39/40/35 against 34/38/33 in the second; Frostfang and Lanternfall
+      (one pass) 46/46 against 41/42. The laptop's speed swings by a third between passes in one sitting, but the
+      merged build is behind on every mountain in both. Nothing in the frame's script shows it: each world system
+      timed on a matched pair of Low runs (`systime.js`) reads 18.23 against 18.22 ms a frame, the far field 0.08 ms,
+      the poster under 0.04 ms; the far bake takes 315 ms of a 30 s ride (about 1%, its longest slice 7.5 ms). Pieces
+      switched off one at a time could not be told apart from the machine's drift. The brief's bar for Low is not
+      met; it is the owner's call whether Low's first cast shadows and its poster are worth 2 to 5 fps at 6x.
+    - *High through an avalanche chase at 4x* (one pass each): 49 against 44, then 34 against 39: noise.
+    - *The first frame* at 6x on a fresh save, four rounds: 2187, 2709, 2417, 2606 ms against 2513, 2285, 2524,
+      2455 (medians 2512 and 2490): level.
+    - *Draws and size:* the fixed frames' mean draw calls High 98.7 to 98.2, Low 49.1 to 50.3, the phone 89.0 to
+      88.8; triangles +1.6% on High, level on Low, +2.6% on the phone. The build is 118 KB larger (all script), 31
+      files as before. The console is clean in every capture and on a cold start on four tiers and five mountains.

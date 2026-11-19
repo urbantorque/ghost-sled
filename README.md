@@ -878,6 +878,54 @@ What this does not show: whether any of it feels better under a person's hands; 
 whether the legend moments land as wonder or as noise; and Low on a real low-end device rather than a throttled
 laptop.
 
+## The visual lift (after round 7)
+
+The visual lift (DECISIONS 360 to 366) changed only what is drawn: the sim, the bots and the ghosts are round 7's.
+Five lanes built it at once and were merged on `visual-lift`; each lane's notes are `notes/vl-*.md`.
+
+- **Shadows to the horizon** (`farshadow.ts`): past the shadow map's reach, ridges, forests and set pieces cast from
+  a field baked on idle time for each stretch's own sun; on Low it is the first cast shadow there has been.
+- **Light with form** (`materials.ts` `LIFT_GLSL`, `postfx/ao.ts`): the shade side takes the sky's fill and the
+  snow's bounce, blossom, ice and the ghosts' glass are lit through against the sun, and on High and Ultra an edge
+  near the lens catches a hairline of the key light.
+- **Edges that look made** (`chamfer.ts`, `lettering.ts`): a chamfer on every kit piece on Medium and High, Sakura's
+  stone lanterns and Lanternfall's stone lamps remodelled, blossom as lobed canopies, solid finish lettering.
+- **Low as a poster** (`poster.ts`): painted shafts, a painted rim on silhouettes, the sky in printed bands; on a
+  phone the results card yields the hero shot.
+- **Held back:** a temporal reconstruction for High and Ultra (`?taa`). It steadied the world but softened the
+  rider, so anti-aliasing is round 7's (DECISIONS 363).
+
+**How it was judged.** Each lane by its own fresh critics on round 7's final frames. The merge by a fresh critic a
+mountain on 112 pairs (`shots/vl/merge/critic/`): a modest but real lift on High on four mountains (Ember near the
+same), the clearest lift on Low on Pinecrest, Frostfang and Sakura, little change on the phone. What they found
+broken on Low (Ember's snow brown, Pinecrest's tree runs a cobalt river) and in the crease light (hairlines on
+basalt) was fixed, looked at again by a second critic and then by eye with the snow's colour sampled
+(DECISIONS 364).
+
+**Performance against round 7** (on mains, nothing else running, both builds interleaved, `perf-vl.sh`):
+
+| Check | Round 7 | The lift |
+| --- | --- | --- |
+| High at 1x, all five mountains; Ultra on Pinecrest and Lanternfall | 60 fps | 60 fps |
+| Medium at 1x, all five mountains; the phone's Medium, Low and avalanche chase | 60 fps | 60 fps |
+| Low at 6x, Pinecrest/Ember/Sakura, median of 5 interleaved, first sitting | 46 / 46 / 40 fps | 43 / 44 / 38 fps |
+| The same, second sitting | 39 / 40 / 35 fps | 34 / 38 / 33 fps |
+| Low at 6x, Frostfang/Lanternfall, one pass | 46 / 46 fps | 41 / 42 fps |
+| First frame at 6x on a fresh save, median of 4 | 2512 ms | 2490 ms |
+| Mean draw calls on the fixed frames: High / Low / phone | 98.7 / 49.1 / 89.0 | 98.2 / 50.3 / 88.8 |
+
+High, Medium, Ultra and the phone hold their bar. **Low at 6x is 2 to 5 fps under round 7 in both sittings**, which
+the brief's bar does not allow; nothing in the frame's own script shows it (DECISIONS 366), and whether Low's new
+shadows and poster are worth it is the owner's call.
+
+**Where the captures are** (all git-ignored, under `shots/vl/`): each lane's own frames in `shots/vl/<lane>/`; the
+merge's fixed frames on High, Low and the phone in `shots/vl/merge/after/`, the re-shoots after the fixes in
+`after2/` and `after3/`; the critics' pairs in `shots/vl/merge/critic/`; the performance run in
+`shots/vl/merge/perf/` (an earlier sitting in `perf1/`).
+
+What this does not show: whether the lift is felt at full speed under a person's hands, how Low looks on a real
+low-end phone rather than a throttled laptop, and the reconstruction tuned for the rider and moving lifts.
+
 ## Layout
 
 | Path | Contents |

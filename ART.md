@@ -75,6 +75,10 @@ Skill signals live inside these roles rather than adding new ones:
 
 Pines are three stacked faceted cones with crisp snow caps, and gifts are rounded boxes with a big bow.
 
+The visual lift: Sakura's blossom is the one rounded hazard. Its canopies are lobed clusters of puffs, painted in
+three flat values a facet (a wine underside, the body, a pale crown) on a dark trunk, so it keeps a hazard's hard
+steps inside a rounder silhouette; on Low it is flat-shaded.
+
 Round 7, the hazards' row: rock is laid down in beds: each bed its own value and thickness, shifted off the one
 under it, so it has ledges that hold snow and overhangs in shade; the beds dip, and on a long outcrop they run up
 out of the slope and are cut off by its top, so no joint is level; a crown is broken, never flat; snow lies on a
@@ -947,3 +951,25 @@ stays the dark shape in the street.
   is a flat disc of the light's own colour with a wider glow on the dome, local lights are two-value painted pools
   on the snow, a lit lantern keeps its hue, powder is fewer, fuller billows, and riders' labels and the running
   figures are drawn in the canvas.
+  After the visual lift (DECISIONS 362, 364): Low paints shafts from the sun and from a bright place as cards, a
+  hard band of the key light's colour on silhouettes (the hero's strongest and all round it), the sky in printed
+  bands, and the frame's foot in its shade's colour; its cast shadows are the far shadow field's, cut with a
+  poster's edge and leaning to the mountain's own shade (Pinecrest's periwinkle, never cobalt). Frostfang, Ember
+  and Lanternfall paint the snow's light in two flat steps; Pinecrest and Sakura keep one smooth ramp, where steps
+  printed the shadows' fall-off as camouflage.
+
+### The visual lift (after round 7)
+
+- **Shadows to the horizon.** Past the shadow map's reach every lit surface reads a shadow field baked for each
+  stretch's own sun: ridges shade valleys, a forest shades its bank, a tower lays its shadow half a slope down. The
+  run's own ground casts by the low shadow light, the mountainside by the key light, and a ridge's shadow keeps a
+  breath of light so the trees' own shadows still read in it. On Low it is the only cast shadow.
+- **The shade side has form.** A face turned up takes the high sky's colour, one turned to the horizon the low
+  sky's, and the lit snow bounces up under eaves, branches, rocks and the sled. Blossom, ice and the ghosts' glass
+  are lit through when seen against the sun: blossom at its rim in its own pink, thin ice keeping its cobalt core.
+  None of it is milk: darks hold, and a lift of 0 is round 7's picture.
+- **Edges that look made.** Every kit piece catches its arrises with a chamfer on Medium and High; on High and
+  Ultra a convex edge near the lens catches a hairline of the key light and an inner crease darkens, never on the
+  rider and never a white outline. Lettering is cut solid, never dotted.
+- **Anti-aliasing is round 7's.** A temporal reconstruction was built and is held back (`?taa`): it steadied the
+  world but softened the rider, and the hero comes first (DECISIONS 363).
