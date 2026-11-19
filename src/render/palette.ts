@@ -318,9 +318,9 @@ function base(): Palette {
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
     // harder than the field gives it; the hero's rim stronger, it was not seen. After the merge's critics: the
     // snow in one smooth ramp here (Pinecrest), since stepped, the far shadows' soft fall-off on Low printed
-    // as hard pale islands, a tree run's floor read as a river; the shade a periwinkle, not cobalt. Frostfang,
-    // Ember and Lanternfall keep their two steps.)
-    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 0, soft: 0.3, shadow: c('#5C6CC4'), shadowK: 0.3, edge: 0.2 },
+    // as hard pale islands, a tree run's floor read as a river; the shade leans a little to Pinecrest's own
+    // periwinkle, not to cobalt. Frostfang, Ember and Lanternfall keep their two steps.)
+    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 0, soft: 0.3, shadow: c('#7C96E0'), shadowK: 0.2, edge: 0.2 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
