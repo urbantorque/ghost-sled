@@ -10,7 +10,7 @@ import { Lines } from './lines';
 import type { RideStyle } from './roster';
 import { AirPlan, Flight, PlanResult, Rot, RotParams, actionAt, predictFlight, runPlan, solveFlip, solveSpin, steerAt } from './model';
 import { CHARM, LANE_W, STARTER_POOL, charmFamily, synergiesOf } from '../sim/charms';
-import { GRAB_LATCH } from '../sim/tricks';
+import { GRAB_LATCH, TRICK } from '../sim/tricks';
 import { type MomentPath, type MomentPlay, gateX, pathOff } from '../sim/moments';
 import { Scene } from './scene';
 
@@ -161,6 +161,8 @@ function styleTraits(t: Traits, style: RideStyle): void {
       t.maxHalfTurns = Math.min(5, t.maxHalfTurns + 1);
       t.maxFlips = Math.min(2, t.maxFlips + 1);
       t.dashKeep = 1;
+      // (Round 8: a stunt rider pops again to keep a combo alive, so its combos hold more named tricks.)
+      t.chain = Math.min(1, t.chain + 0.35);
       break;
     case 'hoarder':
       t.dashKeep = 3;
@@ -181,6 +183,7 @@ function styleTraits(t: Traits, style: RideStyle): void {
       t.popRate *= 1.3;
       t.greed = Math.min(1, t.greed + 0.2);
       t.squeeze *= 2;
+      t.chain = Math.min(1, t.chain + (style === 'sky' ? 0.3 : 0));
       break;
     case 'grinder':
     case 'drafter':
@@ -493,6 +496,10 @@ export class Bot {
       else if (e.type === 'land' && !e.late) this.onLand(now, e.quality === 'hop');
     }
     this.wasGrinding = s.grinding;
+    for (const e of sim.events) {
+      if (e.type === 'style' && e.trick) this.comboTricks.add(e.trick);
+      else if (e.type === 'comboBank' || e.type === 'comboLost') this.comboTricks.clear();
+    }
     // A showdown under way ends at its marker, won or lost.
     if (this.racing >= 0 && (s.z >= this.racing || s.finished || s.crashed)) this.showdownOver();
     // A press that began on the snow (or has been held there a while) pops on release, so it has to
@@ -1791,8 +1798,25 @@ export class Bot {
     }
     if (k > 1 && fl === 0 && this.lastTrick === k && rng.chance(0.6)) k--;
     if (k > 1 && rng.chance(1 - t.ambition)) k--;
+    // Round 8: a rider with an eye for it tries something the combo has not had yet: a flip for a spin, a spin for a
+    // flip, then a grab on what it has, then its sled's own move (the combo's named tricks, observe()).
+    let novel = '';
+    if (t.skill >= 0.5 && this.sim.combo.active && rng.chance(0.4 + 0.6 * t.ambition)) {
+      const had = this.comboTricks;
+      const id = k > 0 && fl > 0 ? TRICK.emberTwist : k > 0 ? TRICK.spin : fl > 0 ? TRICK.backflip : 0;
+      if (id && had.has(id)) {
+        if (k > 0 && fl === 0 && bestF > 0 && !had.has(TRICK.backflip)) {
+          k = 0;
+          fl = bestF;
+        } else if (fl > 0 && k === 0 && bestK > 0 && !had.has(TRICK.spin)) {
+          fl = 0;
+          k = bestK;
+        } else if (k > 0 && fl > 0 && !had.has(TRICK.spin)) fl = 0;
+        else novel = !had.has(TRICK.paperWheel) || !had.has(TRICK.craneFold) || !had.has(TRICK.railGrab) ? 'grab' : 'sig';
+      } else if (!id) novel = !had.has(TRICK.railGrab) && !had.has(TRICK.lanternReach) ? 'grab' : 'sig';
+    }
     // Round 8: the sled's own move, from skill 0.6, in place of a rotation now and then (a stunt or sky rider most).
-    const sigOk = (!piece || !NO_GRAB.has(piece.verb)) && !this.cooling && t.skill >= 0.6 && nEst >= 60 && !this.lastSig && rng.chance(t.ambition * (this.style === 'stunt' || this.style === 'sky' ? 0.45 : 0.25));
+    const sigOk = (!piece || !NO_GRAB.has(piece.verb)) && !this.cooling && t.skill >= 0.6 && nEst >= 60 && !this.lastSig && (novel === 'sig' || rng.chance(t.ambition * (this.style === 'stunt' || this.style === 'sky' ? 0.45 : 0.25)));
     this.lastSig = sigOk;
     if (sigOk) {
       k = 0;
@@ -1813,7 +1837,7 @@ export class Bot {
     // solved, since a grab spins slower; after a flip's release (a Crane Fold), once the flip is solved. Let go into
     // the landing (the stomp, and the risk: a deep grab still held at touchdown is a fall) or well before it.
     const free = !piece || !NO_GRAB.has(piece.verb);
-    const gWant = free && !sigOk && !this.cooling && nB >= 50 && rng.chance(t.ambition * (0.25 + 0.55 * t.skill) * (this.lastGrab ? 0.45 : 1));
+    const gWant = free && !sigOk && !this.cooling && nB >= 50 && (novel === 'grab' || rng.chance(t.ambition * (0.25 + 0.55 * t.skill) * (this.lastGrab ? 0.45 : 1)));
     a.gside = 0;
     a.gLate = rng.chance(t.stompRate * 0.85);
     const gOff = a.gLate ? 4 : 15;
@@ -1894,6 +1918,8 @@ export class Bot {
 
   private wasGrinding = false;
   private lastSig = false;
+  /** The named tricks in the combo under way (round 8). */
+  private readonly comboTricks = new Set<number>();
   private racing = -1;
   private baseTuck = 0;
   private baseGreed = 0;

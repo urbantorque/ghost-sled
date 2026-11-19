@@ -24,10 +24,16 @@ for (const m of MTNS) {
     const { record, sim } = runBot(MOUNTAINS[m].seed, chaos, { skill, seed: 77 + m, sled: SLED, name: 'Bot', ...(STYLE ? { style: STYLE } : {}) });
     const tricks = new Map<number, number>();
     let grabs = 0;
+    let combo = new Set<number>();
+    let bestCombo = 0;
     let deep = 0;
     replayRecord(record, (s) => {
       for (const e of s.events) {
-        if (e.type === 'style' && e.trick) tricks.set(e.trick, (tricks.get(e.trick) ?? 0) + 1);
+        if (e.type === 'style' && e.trick) {
+          tricks.set(e.trick, (tricks.get(e.trick) ?? 0) + 1);
+          combo.add(e.trick);
+          bestCombo = Math.max(bestCombo, combo.size);
+        } else if (e.type === 'comboBank' || e.type === 'comboLost') combo = new Set();
         if (e.type === 'grab' && e.phase === 'start') grabs++;
         if (e.type === 'land' && e.botched) deep++;
       }
@@ -35,7 +41,7 @@ for (const m of MTNS) {
     const again = replayRecord(record);
     if (again.score !== record.score) bad++;
     console.log(
-      `${MOUNTAINS[m].id} skill ${skill}: ${sim.finished ? 'finished ' + (sim.s.finishTick / 60).toFixed(1) + ' s' : 'out at ' + Math.round(sim.distance) + ' m'}, falls ${sim.s.falls}, wards ${sim.stats.wards}, botched landings ${deep}, grabs ${grabs}, score ${sim.score}${again.score === record.score ? '' : ' REPLAY ' + again.score}`,
+      `${MOUNTAINS[m].id} skill ${skill}: ${sim.finished ? 'finished ' + (sim.s.finishTick / 60).toFixed(1) + ' s' : 'out at ' + Math.round(sim.distance) + ' m'}, falls ${sim.s.falls}, wards ${sim.stats.wards}, botched landings ${deep}, grabs ${grabs}, best combo ${bestCombo} named tricks, score ${sim.score}${again.score === record.score ? '' : ' REPLAY ' + again.score}`,
     );
     console.log(`   charms ${sim.charms.map((c) => CHARMS[c].name).join(', ') || '-'}; flow best ${sim.stats.bestFlow}; tricks ${[...tricks.entries()].map(([k, v]) => `${TRICKS[k].name} ${v}`).join(', ')}`);
   }

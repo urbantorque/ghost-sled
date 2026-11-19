@@ -672,6 +672,18 @@ export function spenderFor(name: string, sim: AnySim, seed: number): () => boole
   };
 }
 
+/** No obstacle within 2.5 m of the safe line between z0 and z1 (a pop's flight and its landing). */
+function clearAhead(sim: AnySim, z0: number, z1: number): boolean {
+  const c = sim.course;
+  for (let k = Math.floor(z0 / CHUNK_LEN); k <= Math.floor(z1 / CHUNK_LEN); k++) {
+    for (const o of c.chunk(k).obstacles) {
+      if (o.z < z0 || o.z > z1 || o.soft) continue;
+      if (Math.abs(o.x - c.safeX(o.z)) - o.r < 2.5) return false;
+    }
+  }
+  return true;
+}
+
 /** Round 8: what each air plan of the trickster is. */
 type AirKind = 'grab' | 'reach' | 'stretch' | 'paper' | 'cross' | 'flip' | 'crane' | 'ember' | 'knot' | 'sig' | 'lamp';
 
@@ -749,7 +761,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
       // The expert keeps a combo alive with pops down a straight, line underfoot (none into a set piece).
       if (skill === 'expert' && s.grounded && s.tumble === 0 && !s.grinding && !piece && !(ahead && ahead.z0 - s.z < 200)) {
         const c = sim.course;
-        const straight = Math.abs(c.safeX(s.z + 30) - c.safeX(s.z)) < 2 && Math.abs(s.x - c.safeX(s.z)) < 1.5;
+        const straight = Math.abs(c.safeX(s.z + 30) - c.safeX(s.z)) < 2 && Math.abs(s.x - c.safeX(s.z)) < 1.5 && clearAhead(sim, s.z, s.z + 12 + s.speed * 1.4);
         if (crouch === 0 && sim.combo.active && sim.combo.timer < 90 && s.speed > 16 && straight && !g.action) crouch = 1;
         if (crouch > 0) {
           crouch++;
@@ -794,7 +806,10 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
     const L = land.t + (plan ? plan.bias : 0);
     // (A nudge inside the air's dead zone toward the line, as the classic pilots do.)
     const off = land.x - sim.course.safeX(land.z);
-    const cruise = Math.abs(off) > 0.8 ? (off > 0 ? 3 : 5) : 4;
+    let cruise = Math.abs(off) > 0.8 ? (off > 0 ? 3 : 5) : 4;
+    // (Once the trick is in, a rider well off the line steers for it outright, as the classic pilots do: the landing
+    // set squares the sled, and a landing among the trees ends a combo as surely as a fall.)
+    if (plan && plan.phase >= 2 && Math.abs(off) > 1.2 && land.t > 0.3) cruise = off > 0 ? 2 : 6;
     if (!plan) return { steer: cruise, action: L < 0.11 && L > 0.01 };
     const p = plan;
     p.t++;
