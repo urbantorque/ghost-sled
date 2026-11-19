@@ -316,8 +316,11 @@ function base(): Palette {
     posterSnowSat: 1,
     // (After the lane's critic: no rings by default, a hard-edged disc round the sun read as a sticker; the snow's
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
-    // harder than the field gives it; the hero's rim stronger, it was not seen.)
-    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 2, soft: 0.3, shadow: c('#3A4AA8'), shadowK: 0.3, edge: 0.2 },
+    // harder than the field gives it; the hero's rim stronger, it was not seen. After the merge's critics: the
+    // snow in one smooth ramp here (Pinecrest), since stepped, the far shadows' soft fall-off on Low printed
+    // as hard pale islands, a tree run's floor read as a river; the shade a periwinkle, not cobalt. Frostfang,
+    // Ember and Lanternfall keep their two steps.)
+    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 0, soft: 0.3, shadow: c('#5C6CC4'), shadowK: 0.3, edge: 0.2 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
@@ -936,7 +939,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.grade = { lift: c('#030A26'), gain: c('#F0F5FF'), saturation: 1.1, contrast: 1.12, grain: 0.7, foot: 0.3, shafts: 0.3, lens: 0.25, focal: 1, gust: 0, glitter: 0.25 };
       // (Low's poster: the blue hour in printed steps of cobalt over the thin lemon band, a line of it printed
       // over its glow, ART.md 15.)
-      Object.assign(p.poster, { bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35 });
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0.6, rim: 0.6, shadow: c('#3A2E9A'), shadowK: 0.35 });
       p.clouds = { low: 0.3, high: 0.35, top: 0.13, lit: c('#AFC6EC'), shade: c('#34559E'), rim: c('#FFEFAE'), shadow: 0.08 };
       p.atmo = { rays: 0.25, halo: 0, meteors: 0.2, banner: 1, slide: 1, sweep: 0.3, valley: 0.6, valleyColor: c('#6084C8'), drift: 0.1 };
       p.stars = 0.7;
@@ -995,8 +998,9 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#5A2A26'), shade: c('#24141A'), rim: c('#FF7A38'), shadow: 0 };
       p.shadowK = 0.7;
       p.grade = { lift: c('#120A10'), gain: c('#FFF4EA'), saturation: 1.06, contrast: 1.06, grain: 0.8, foot: 0.3, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0 };
-      // (Low's poster: the deck's glow in four steps, no rings round a dim coin, the frame's foot deep.)
-      Object.assign(p.poster, { bands: 4, stripe: 0, foot: 0.34, shadow: c('#3A2A55'), shadowK: 0.15 });
+      // (Low's poster: the deck's glow in four steps, no rings round a dim coin. The frame's foot shallow: at
+      // 0.34 the merge's critic saw Ember's warm snow turn to brown mud across the bottom of most Low frames.)
+      Object.assign(p.poster, { steps: 2, bands: 4, stripe: 0, foot: 0.16, shadow: c('#3A2A55'), shadowK: 0.15 });
       p.atmo = { rays: 0.25, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.2, valley: 0.8, valleyColor: c('#8A4A38'), drift: 0.4 };
       // (Bloom kept for the fire: more washed the planes together and bleached the coat.)
       p.bloom = 0.42;
@@ -1099,7 +1103,7 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.deck = { k: 0, lit: c('#8E82CE'), shade: c('#3C3284'), glow: c('#FFB24E') };
       p.grade = { lift: c('#08062A'), gain: c('#F4F2FF'), saturation: 1.1, contrast: 1.08, grain: 0.6, foot: 0.3, shafts: 0, lens: 0.1, focal: 0.9, gust: 0, glitter: 0.5 };
       // (Low's poster: the indigo night in six printed steps, a silver rim.)
-      Object.assign(p.poster, { bands: 6, stripe: 0, rim: 0.6, vignette: 0.26, shadow: c('#2A2270'), shadowK: 0.35 });
+      Object.assign(p.poster, { steps: 2, bands: 6, stripe: 0, rim: 0.6, vignette: 0.26, shadow: c('#2A2270'), shadowK: 0.35 });
       p.grade.saturation = 1.02;
       p.grade.contrast = 1.12;
       // (A night of point lights: at speed each lantern split into a red, a green and a blue one, and the

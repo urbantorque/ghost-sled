@@ -262,9 +262,11 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
     float edge = max(sx * smoothstep(0.5, 1.0, -fx.y), sy * smoothstep(0.5, 1.0, -fy.y)) * fade;
     float crease = max(sx * smoothstep(0.75, 1.2, fx.y), sy * smoothstep(0.75, 1.2, fy.y)) * fade;
     // The edge's bevel takes the key where it turns toward the light, a breath of it where it does not;
-    // the surface's own colour lifted toward the light's (a dark face too), never a white outline.
+    // the surface's own colour lifted toward the light's (a dark face too), never a white outline. (Its
+    // floor 0.02 and its strength 0.85, after the merge's critics: at 0.045 and 1.3 the basalt's columns and
+    // a rock's facets showed pale hairlines like scratches, and lit stone at the lens leaned tan.)
     float toL = smoothstep(-0.25, 0.55, dot(N, uCreaseV));
-    col += (col * 0.6 + 0.045) * uCreaseC * (edge * uCrease.x * (0.25 + 0.75 * toL));
+    col += (col * 0.6 + 0.02) * uCreaseC * (edge * uCrease.x * (0.25 + 0.75 * toL));
     return col * mix(vec3(1.0), uAOTint, crease * uCrease.y);
   }
   // The half-frame occlusion laid on a full-frame colour: its four nearest texels, each weighed by how
@@ -311,7 +313,7 @@ export class AOPass {
   /** The crease light (the visual lift): 1 as tuned, 0 off. creaseEdge is how much light a convex edge
    *  catches, creaseDark how dark an inner crease goes. */
   crease = 1;
-  creaseEdge = 1.3;
+  creaseEdge = 0.85;
   creaseDark = 0.35;
 
   constructor(private quad: Quad) {

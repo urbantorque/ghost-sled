@@ -347,7 +347,8 @@ export function applyPalette(full: Palette): void {
   const sc = p.sunColor;
   const sm = Math.max(sc.r, sc.g, sc.b, 0.001);
   posterFrame.light.setRGB(sc.r / sm, sc.g / sm, sc.b / sm).lerp(p.clouds.rim, 0.3);
-  posterFrame.shade.copy(p.snowDeep).lerp(p.snowShade, 0.35).multiplyScalar(0.55);
+  // (Half way to the poster's own shade colour: from the deep snow alone, a warm mountain's foot went brown.)
+  posterFrame.shade.copy(p.snowDeep).lerp(p.snowShade, 0.35).lerp(ps.shadow, 0.5).multiplyScalar(0.55);
   posterFrame.foot = ps.foot;
   posterFrame.vignette = ps.vignette;
   // (Sets uUnder too: Low's share of the bounce rides in it.)
