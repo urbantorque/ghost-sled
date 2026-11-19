@@ -15,6 +15,8 @@ import type { PoolGhostData } from '../../src/game/ghostdata';
 import { paceOf, withSlowRiders } from '../../src/game/slowriders';
 import { MOUNTAINS } from '../../src/sim/mountains';
 import { recordFromString, replayRecord } from '../../src/sim/replay';
+import { RivalWatch } from '../../src/sim/rivals';
+import { riderByName } from '../../src/bot/roster';
 
 const argv = process.argv.slice(2);
 const opt = (k: string, d: string): string => {
@@ -71,12 +73,32 @@ interface Raced {
   passedBy: number;
   mins: number;
   nearest: number;
+  /** Round 8: showdowns started and won (rivals.ts, against the field's signature riders), the riders taken as level
+   *  across the run whenever they are level down it (the lab's rides carry no x), so an upper bound. */
+  duels: number;
+  duelsWon: number;
 }
 
 /** One run raced against a field. */
 function race(player: number[], field: FieldPick[]): Raced {
   const end = player[Math.min(player.length - 1, FINISH / 10)];
   const ghosts = field.map((p) => ({ marks: track(p.record), pace: paceOf(p.record), was: 0 }));
+  // (Round 8: who a showdown may be met with, as the game has it: The Twelve's riders, your best, a grudge, a link.)
+  const watch = new RivalWatch(field.length, (i) => riderByName(field[i].name) !== null || field[i].kind !== 'pool', () => false, FINISH);
+  let duels = 0;
+  let duelsWon = 0;
+  for (let tick = 0; tick < end; tick++) {
+    const p = zAt(player, tick);
+    const me = { x: 0, y: 0, z: p.z, riding: p.riding, clean: true, finished: !p.riding };
+    const them = ghosts.map((g) => {
+      const at = zAt(g.marks, tick * g.pace);
+      return { x: 0, y: 0, z: at.z, riding: at.riding, clean: true, finished: !at.riding && at.z >= FINISH - 10 };
+    });
+    for (const e of watch.step(tick, me, them)) {
+      if (e.type === 'showdown' && e.phase === 'start') duels++;
+      if (e.type === 'showdown' && e.phase === 'won') duelsWon++;
+    }
+  }
   let live = 0;
   let n = 0;
   let passes = 0;
@@ -104,7 +126,7 @@ function race(player: number[], field: FieldPick[]): Raced {
     if (near) live++;
     nearestSum += Math.min(nearest, 400);
   }
-  return { live: live / Math.max(1, n), passes, passedBy, mins: end / 3600, nearest: nearestSum / Math.max(1, n) };
+  return { live: live / Math.max(1, n), passes, passedBy, mins: end / 3600, nearest: nearestSum / Math.max(1, n), duels, duelsWon };
 }
 
 /** A small seeded shuffle, so the orders are the same every time. */
@@ -170,6 +192,11 @@ for (const [pilot, t] of Object.entries(total)) {
   const ppm = (rs: Raced[]): string => (rs.reduce((x, r) => x + r.passes, 0) / rs.reduce((x, r) => x + r.mins, 0)).toFixed(2);
   const quiet = (rs: Raced[]): string => `${rs.filter((r) => r.live < 0.35).length}/${rs.length}`;
   console.log(`${pilot.padEnd(8)} ${mean(t.a)}  ${ppm(t.a)}  ${quiet(t.a)}`.padEnd(60), '|', `${mean(t.b)}  ${ppm(t.b)}  ${quiet(t.b)}`);
+}
+console.log('\nshowdowns a run (round 8; laid across your runs, runs 2 on): pilot  started  won');
+for (const [pilot, t] of Object.entries(total)) {
+  const n = Math.max(1, t.b.length);
+  console.log(`${pilot.padEnd(8)} ${(t.b.reduce((x, r) => x + r.duels, 0) / n).toFixed(2)}  ${(t.b.reduce((x, r) => x + r.duelsWon, 0) / n).toFixed(2)}`);
 }
 console.log('\nby run (every mountain, every order): run  five on fixed roles: live  passes/min  quiet runs | laid across your runs: live  passes/min  quiet runs');
 for (const [pilot, rs] of Object.entries(byRun)) {
