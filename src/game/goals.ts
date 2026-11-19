@@ -16,7 +16,7 @@ import { homeTime, mountainOpen, nextDuel } from './twelve';
 //   1. Rematch <rider>: this run lost to a named rival within reach (a duel by 3 s or less, the grudge or the run's
 //      rival by 2 s or 50 m).
 //   2. Finish the mission ("12 m short"): an active mission within 15% of its target, or one short of a small count.
-//   3. Next Duel <rider>: this run won a duel, or the next duel's rider is within reach of your times there.
+//   3. Next Duel <rider>: the next duel's rider is within reach of your times there (0.4 s).
 //   4. Today's Daily: the day's Daily is open and not ridden today (a day of the flame, and its contract).
 //   5. Run Again, with the nearest goal in reach as its line: a page, a rung, a stage gold, a contract, the form
 //      contract (which a recent run already met, so there is always one).
@@ -76,7 +76,8 @@ export const NEAR_MISSION = 0.15;
 export const REMATCH_DUEL_S = 3;
 export const REMATCH_S = 2;
 export const REMATCH_M = 50;
-export const REACH_DUEL_S = 3;
+/** The next duel is in reach when one of your recent runs on its mountain came within this of the rider's time (s). */
+export const REACH_DUEL_S = 0.4;
 
 const median = (xs: number[]): number => {
   const s = xs.slice().sort((a, b) => a - b);
@@ -120,9 +121,10 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     if (!def) continue;
     const t = missionTier(def, a.tier);
     const vals = sums.filter((s) => !def.biome || s.biome === def.biome).map((s) => def.metric(s));
-    const top = Math.max(a.best, ...vals, 0);
+    // Reach is read from your last runs only; how short it says is from your best since the mission came up.
+    const top = Math.max(...vals, 0);
     const reachable = top >= t.target * REACH_MISSION || (def.unit === 'n' && t.target >= 2 && top >= t.target - 1);
-    const left = Math.max(0, t.target - top);
+    const left = Math.max(0, t.target - Math.max(top, a.best));
     const short = left <= 0 ? 'within your best' : def.unit === 'm' ? `${Math.ceil(left)} m short` : def.unit === 's' ? `${left.toFixed(1)} s short` : def.unit === 'deg' ? `${left * 180} short` : def.unit === 'm/s' ? `${Math.ceil(left)} m/s short` : `${Math.ceil(left)} to go`;
     out.push({ kind: 'mission', text: `Finish: ${t.text}`, short, reachable, gap: t.target > 0 ? left / t.target : 0, names: [t.text] });
   }
@@ -132,7 +134,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const rt = homeTime(nd.rider);
     const q = quickest(MOUNTAINS[nd.rider.home].id);
     const gap = rt !== null && q !== null ? q - rt : Infinity;
-    out.push({ kind: 'duel', text: `Duel ${nd.rider.name}`, short: rt !== null ? clock(rt) : '', reachable: ctx.duelWon || gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
+    out.push({ kind: 'duel', text: `Duel ${nd.rider.name}`, short: rt !== null ? clock(rt) : '', reachable: gap <= REACH_DUEL_S, gap: Number.isFinite(gap) ? Math.max(0, gap) / 10 : 1, names: [nd.rider.name] });
   }
   // 4. Today's Daily.
   if (ctx.dailyReady && !ctx.key.startsWith('daily:') && !recentDaily(recent, ctx.day)) out.push({ kind: 'daily', text: "Today's Daily", short: '', reachable: true, gap: 0.05, names: ['Daily'] });

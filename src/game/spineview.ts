@@ -7,7 +7,7 @@ import { CALENDAR_GIFTS, CALENDAR_XP, flameNow } from './flame';
 import type { PoolGhostData } from './ghostdata';
 import { LANTERN_TOWNS, ROW_LENGTH, lanternPrice, litIn } from './lanterns';
 import { leagueField, leagueNow } from './league';
-import { missionDef, swappable } from './missions';
+import { missionDef, missionTier, swappable } from './missions';
 import type { SpineOutcome } from './rank';
 import type { SaveData } from './save';
 import type { Contract } from './spinesave';
@@ -49,7 +49,11 @@ export function resultsSpine(o: SpineOutcome, d: SaveData, day: string): Results
     const n = d.album?.got[id];
     return { id, name: s?.name ?? id, mountain: s?.mountain ?? '', group: s?.group ?? '', hint: s?.hint ?? '', frame: n !== undefined && runs[String(n)] !== undefined };
   });
-  const swap = swappable(d.missions, day);
+  // (Never the mission the one button is asking you to finish.)
+  const swapId = swappable(d.missions, day);
+  const def = swapId ? missionDef(swapId) : undefined;
+  const text = def ? missionTier(def, d.missions.active.find((a) => a.id === swapId)?.tier).text : '';
+  const swap = swapId && !(o.primary.kind === 'mission' && o.primary.goal?.names.includes(text)) ? swapId : null;
   return {
     ticks: o.ticks.map((t) => ({ ...t })),
     before: rankBar(o.xpBefore, d.title ?? null),
@@ -60,7 +64,7 @@ export function resultsSpine(o: SpineOutcome, d: SaveData, day: string): Results
     contracts: { met: o.contracts.met, bonus: o.contracts.bonus, form: o.contracts.form, today: todaysContracts(d, day), formNext: d.contracts?.form ? contractView(d.contracts.form, false, FORM_XP) : null },
     league: o.league ? { place: o.league.place, was: o.league.was, division: o.league.div } : null,
     primary: { kind: o.primary.kind, text: o.primary.text, sub: o.primary.sub, aria: o.primary.aria },
-    swap: swap ? { id: swap, text: missionDef(swap)?.text ?? swap } : null,
+    swap: swap ? { id: swap, text } : null,
   };
 }
 

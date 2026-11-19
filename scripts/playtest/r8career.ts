@@ -770,7 +770,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
       page = sp.pageAfter;
       // The player takes the swap a mission held too long offers (one a day).
       const sw = M.missions.swappable?.(d.missions, today);
-      if (sw) M.missions.swapMission(d.missions, sw, today, { unlockedBiomes: M.missions.unlockedBiomes(d.ghostsPassed) });
+      const pushed = sp.primary.kind === 'mission' && sw && (sp.primary.goal?.names ?? []).includes(missionText(M, d, sw));
+      if (sw && !pushed) M.missions.swapMission(d.missions, sw, today, { unlockedBiomes: M.missions.unlockedBiomes(d.ghostsPassed) });
     }
     const bought = spendGifts(M, d, today, shop);
 
@@ -1088,6 +1089,13 @@ function lostToOf(M: Mods, rode: RodeRun, you: Any, duel: Any, oc: Any, grudge: 
   return best ? { name: best.t.entry.name, kind: 'rival', ...gapTo(best.st) } : null;
 }
 
+/** An active mission's text at its tier. */
+function missionText(M: Mods, d: Any, id: string): string {
+  const def = M.missions.missionDef(id);
+  const a = d.missions.active.find((x: Any) => x.id === id);
+  return def && a ? M.missions.missionTier(def, a.tier).text : '';
+}
+
 function popcount(m: number): number {
   let n = 0;
   for (let x = m >>> 0; x; x &= x - 1) n++;
@@ -1346,6 +1354,12 @@ export function barStillNew(M: Mods, runs: readonly CareerRun[], at = 50): { mou
           return quick !== null && t !== null && quick - t <= 2;
         })()) reachable.push(st.name);
       }
+    }
+    // A mountain still locked has all of it unseen: it counts when the way to open it is one run away (the next duel
+    // for Lanternfall, the passes for the others, as the harness judges the run's goals).
+    if (!open && last) {
+      const way = last.goals.find((g) => g.reachable && (mt.finale ? g.kind === 'duel' : g.kind === 'unlock' && g.names.includes(mt.name)));
+      if (way) reachable.push(`The way in: ${way.text}`);
     }
     return { mountain: mt.id, open, seen, unseen, reachable };
   });
