@@ -43,7 +43,7 @@ light while the title plays, the mood's sun in a chaos mood).
   to it sets the soft band. A turned grid keeps a thin tree's shadow whole whatever the sun's bearing to the course
   (a world-aligned sweep blurred and shortened them); a cell holds the highest point of a cone over its own area, so
   a tree's tip is never lost between cell centres. Soft edges widen with the distance from the caster (0.1 m of
-  height at the caster, 0.028 m more a metre on for casters, 0.25 and 0.018 for the terrain), and a caster's
+  height at the caster, 0.028 m more a metre on for casters, 0.25 and 0.03 for the terrain), and a caster's
   shadow thins as it reaches away from it (to 42% light at 70 m, as the near map's own `snowShadow` does).
 - **What casts.** The terrain as drawn near the run (`visualGround` with the overlooks' fall, a 4 m grid kept a
   chunk at a time), the mid-ground's built rows past it (a 10 m row each mid-ground row); the run's hazards, the
