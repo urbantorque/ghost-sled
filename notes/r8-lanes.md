@@ -53,7 +53,11 @@ this file first, then your own brief (your brief wins where it is more specific)
 
 ## The machine (hard-won; see DECISIONS 365 and 366)
 
-- Windows 11, Git Bash, Node 24, an Intel Arc 130V laptop GPU. It blue-screens with about eight browsers at once.
+- Windows 11, Git Bash, Node 24, an Intel Arc 130V laptop GPU. It blue-screens under load (0xD1): with about eight
+  browsers in the visual lift, and in this round at 1:45 on 20 November with only about four browsers while a lane's
+  node runs held the CPU at 100%. So: **no more than two playwright browsers on the machine at once (the main lane
+  says when yours may open), and a CPU-saturating node job (the full `vitest`, lab sweeps, `generate-ghosts`) only
+  with `--maxWorkers=3` for vitest and one lab process at a time.**
   **At most one playwright browser per lane, open only while you capture**, and only the headless configs
   (`.playwright/cli-headless.config.json` 1280x720, `.playwright/mobile-headless.config.json` 390x844 DPR 2). Use your
   own session name (`-s=r8-<lane>`), close it when done, and **never run `playwright-cli close-all` or `kill-all`**.
