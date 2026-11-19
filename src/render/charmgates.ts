@@ -218,8 +218,8 @@ function gateMaterial(): ShaderMaterial {
         // Metres a pixel spans at the arch's distance.
         float px = 2.0 * dist / (projectionMatrix[1][1] * uViewH);
         float b = aState.x;
-        // A taken arch swells as it answers; the next one breathes (still under reduced motion).
-        float grow = 1.0 + 0.22 * b * (2.0 - b) + aInst.z * (1.0 - uCalm) * 0.025 * sin(uTime * 3.4 + aInst.w * 6.0);
+        // A taken arch swells as it answers; the next one breathes (under reduced motion neither moves: the light says it).
+        float grow = 1.0 + 0.22 * b * (2.0 - b) * (1.0 - uCalm) + aInst.z * (1.0 - uCalm) * 0.025 * sin(uTime * 3.4 + aInst.w * 6.0);
         float top = topOf(fam);
         vec3 p;
         vec3 n = vec3(0.0, 0.0, 1.0);

@@ -345,6 +345,33 @@ async (page) => {
       return { n: tracks.length, ready: tracks.filter((t) => t.ready).length, names: tracks.map((t) => `${t.entry.name}:${t.entry.kind}`) };
     });
     shots.push({ name: 'field', why: JSON.stringify(info) });
+    if (info.n === 0) {
+      // No field (the bundled pools are a sim version behind until they are regenerated): the marker is staged
+      // through the world's own call, so its look can still be judged; the beats are covered by director.test.ts.
+      await page.evaluate(() => {
+        const w = window.__gs.world;
+        const C = w.sun.color.constructor;
+        const z = window.__gs.run.sim.s.z + 300;
+        window.__sdZ = z;
+        w.charmGates.showdown(z, new C('#8FF3E4'));
+      });
+      await step(2);
+      await shoot(`${prefix}sd-start`, 'showdown marker 300 m ahead (staged)');
+      let st = await step(1);
+      const mz = await page.evaluate(() => window.__sdZ);
+      while (st.z < mz - 150) st = await step(2);
+      await shoot(`${prefix}sd-race150`, 'marker 150 m ahead (staged)');
+      while (st.z < mz - 40) st = await step(2);
+      await shoot(`${prefix}sd-race40`, 'marker 40 m ahead (staged)');
+      while (st.z < mz - 2) st = await step(1);
+      await page.evaluate(() => {
+        const w = window.__gs.world;
+        const C = w.sun.color.constructor;
+        w.charmGates.showdownEnd(new C('#FFD34D'), true);
+      });
+      await step(8);
+      await shoot(`${prefix}sd-won`, 'marker bursts for the rider (staged)');
+    }
     if (info.n > 0) {
       await page.evaluate(() => {
         const r = window.__gs.run;
