@@ -114,7 +114,7 @@ The lift adds no draw on any tier; the table's differences are the runs'.
 and set), and on a cold start (an emptied save, the title, then a run, six and eight seconds) on Low, Medium, High
 and Ultra: no error and no warning on any tier, so every program the lift touches compiles without a D3D warning.
 
-(GPU_AND_SCRIPT)
+**GPU time and Low's script** were not priced in this lane: the last sittings were on battery with five lanes' browsers on one GPU, and the laptop restarted twice under that load. Nothing here adds a pass or a draw, and Low takes only the bounce folded into a uniform it already had. The main lane prices the merged build against round 7 on mains.
 
 ## The critic's verdict
 
@@ -184,7 +184,7 @@ fixed frames reshot on High and the phone (`shots/vl/light/after2`; all 362 pair
 3. **The border line:** the crease skips the 2.5 pixels inside the frame's edge.
 4. **Ringing:** a crease asks a sharper fold than an edge (0.75 to 1.2 against 0.5 to 1.0), its darkening 0.35.
 
-(THIRD_LOOK)
+The final build was not given a third critic of its own: the laptop restarted twice and the usage limit stopped the lane. `after3` holds its High frames and `exact3` its exact pairs; the main lane's per-mountain critics judge the merged build, this lift included.
 
 ## Shared code touched
 
@@ -241,4 +241,8 @@ All under `C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\vl\light\`:
 
 ## Commits
 
-(COMMITS)
+- `eed5b50` The shade side has form: the sky fills it by the way a face is turned, the lit snow bounces up under eaves, branches, rocks and the sled, blossom and ice are lit through against the sun, and snow toward the light takes a sheen
+- `b707721` Props at the lens read hand-bevelled: on High and Ultra a convex edge catches a hairline of the key light and an inner crease darkens, near the lens only and never on the rider
+- `d8bc3d0` round-sheets.sh: a visual-lift lane names its own labels, and pairs Lanternfall too
+- `26f8a54` Sakura's blossom glows at its rim in its own pink and keeps its shaded underside, its ink and lacquer darks hold, Frostfang's ice ribs keep their shade plane, and props' edges catch a little more light
+- `220a317` Frostfang's thin and far ice keeps its cobalt core and its plane, Sakura's blossom glows only at its rim, and the edge light leaves the frame's border and no longer rings beside a near edge
