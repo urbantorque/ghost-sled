@@ -187,4 +187,42 @@ Each edit is the smallest that does the job and carries a comment saying why.
 | `scripts/playtest/frames.js` | After a jump down the course the rider is held until the field is in (a build without it goes straight on). |
 | `scripts/playtest/systime.js` | `far` among the systems it times. |
 
-(The rest of this file is filled in as the lane closes: see below.)
+
+## Cost
+
+- **Draws: none.** The field is one half-float texture atlas, written with `texSubImage2D` from staging data baked
+  in script, and read by programs every lit surface already runs (one function in `LIGHT_GLSL`). It adds no mesh, no
+  pass and no render target. The fixed frames' mean draw calls (181 a tier, summed over every pass) read High 101.3
+  against round 7's 98.7, Low 49.2 against 49.1, the phone 90.6 against 89.0. The gap is the race, not the field:
+  `frames.js` now holds the rider at each jump until the field is in, so the ghosts and set pieces in view differ
+  from round 7's shots (the light lane saw spreads of the same size between two runs of one build).
+- **The bake** (`scripts/playtest/far-bench.ts`, node at 1x, the least of several runs, measured by the main lane
+  after the lane closed): a fine tile 0.7 to 1.7 ms (Pinecrest the most), a coarse tile 0.4 to 0.8 ms; the sweeps a
+  slice cannot stop inside 0.05 to 0.09 ms (casters), 0.01 to 0.02 (terrain), 0.02 (valley). Each runs in idle slices
+  of at most 1.6 ms, so a whole tile is one or two slices.
+- **The first frame:** nothing runs before 900 ms after the first update, and the atlas is a 1x1 stand-in until its
+  first upload, so the first frame pays nothing.
+- **Not priced in this lane:** the GPU time of the extra lookup and Low's script at 6x. The last sittings shared the
+  GPU with four other lanes' browsers and the laptop restarted twice under that load. The main lane prices the merged
+  build against round 7 on mains.
+
+## What is still short
+
+- **Long shadows across the run itself** are no more frequent: the field's new shadows are bank- and ridge-sized.
+  ART.md 11's raking shadows toward the lens still come from the near cascade only.
+- **Ember and Lanternfall** read the same as round 7 (a soft sun under Ember's deck; Lanternfall's moon field
+  matches the near map's look).
+- **Frostfang's spire shadows under the aurora** do not go violet; Serac Gate's abyss has no cyan up-light (the light
+  lane's ground).
+- **No second critic** judged the fixes after the first (the Serac Gate light, the ridge's breath of light, the
+  softer far edge, set pieces on show only, nothing floating over a span). The held vistas were re-shot on the final
+  build (`vistas/`) and looked at by the lane; the main lane's per-mountain critics judge the merged build.
+
+## Where the frames are (`C:\Users\roger\OneDrive\Desktop\Ghost Sled\shots\vl\farlight\`)
+
+- `after/{high,low,phone-medium}/`: the fixed frame set on the lane's build, all five mountains, with the frames'
+  JSON (calls, triangles, errors) beside them. `after-r1/` is the first set's Frostfang (the aurora fault),
+  `after-c1/` the set the first critic saw.
+- `vistas/`: each mountain's held vistas on round 7's build (`-r7`) and this one (`-vl`), the same moment on both.
+- `ab/`: the same held frame with the field on and off (`?far=0`). `critic/`: the first critic's pairs and brief.
+  `look/`, `probe/`, `titles/`: tuning and probes.
