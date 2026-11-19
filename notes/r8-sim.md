@@ -156,17 +156,30 @@ Sections (start of each; `cruise*` a threshold):
 
 ## Still short
 
-- `moments.test.ts`: Lanternfall's Cloud Sea, quick weave, is not proved winnable: the classic pilots ride 7 of 8
-  eighths of the wake on the ravine the threshold shortened by 40 m (a wake ending 30 m sooner did not help).
 - Temple Town's street is 34 m shorter (Sakura's last stage is at its minimum): two bells where three hung. Its wall
   variant passed the suite after the set-piece lengths were held, but was 0 of 4 in one lab look before that.
 - The density promises in `fairness.test.ts` were eased where the thresholds took the room: online kickers 3 to 2,
   rails a stage 4 to 3, Frostfang's moguls counted over the five mountains, a marginal crest (-0.0111) and a 38 m
   kicker flight on the shortened last chutes. A stage line's threshold can be up to 400 m of plain ground.
-- The bot does not seek showdowns or ride a won one as a racer, does no rail, wall or sled move of its own, and its
-  charm choice is a family preference, not a read of the run.
-- Signatures pay as a grab of the same hold, x1.2: the six sled rules in the design are not built.
-- The expert pilot loses more set pieces than round 7's at one seed (10 of 15): to be read on the full table.
+- The bot's charm choice is a family preference, not a read of the run.
+- The expert pilot lost more set pieces than round 7's at one seed (10 of 15): to be read on the full table.
+
+## Done after the first report
+
+- **The six sled moves** (`7659aff`): Pine Bow pays a second-tier grab from the first tier and cannot be stomped by
+  letting go; Spinning Top spins by itself at full rate and the landing set cannot stop it (x1.5 a half turn);
+  Fireside never falls, pays to the second tier; Comet Tail tiers 30% sooner, pays x1.3, falls from the first tier;
+  Will-o'-Wisp pays the third tier from the second with no air control or spin; Teacup spins at half rate by itself,
+  always lands, pays x2 a half turn. Tested in r8sim.test.ts.
+- **The bot** (`740a969`, `3fc9d79`): the rail's and wall's own moves, the sled's move from skill 0.6, racing a
+  showdown to its marker (tuck, no detours, every lantern a dash); it tries what its combo has not had; stunt and sky
+  riders chain pops. A bot racing another's track won a showdown, stole a wisp, drafted 246 ticks, replayed exactly.
+- **Expression** (`3fc9d79`, `scripts/playtest/r8-combo.ts`, two seeds a mountain): the expert's best combo is 6
+  named tricks at the median with no charm and 5 with every charm (bar 5), at 126.8 and 123.8 s (round 7: 122.6).
+  Bumps and scrapes end its combos twice as often as the 2.6 s window (38 to 17), and 3 of 207 snow gaps outrun the
+  window: the window stays. Stunt bots reach 3 to 5.
+- **The Cloud Sea's quick weave** (`e58defd`): asks 85% of the wake (135 m from 158); the ground now throws a sled
+  off the light's line mid-weave. moments.test.ts passes whole.
 
 ## Touched outside my files
 
