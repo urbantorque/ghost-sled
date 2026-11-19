@@ -16,11 +16,12 @@ const opt = (k: string, d: string): string => {
 const MTNS = opt('mountains', '0').split(',').map(Number);
 const SKILLS = opt('skills', '0.2,0.5,0.9').split(',').map(Number);
 const STYLE = opt('style', '') as RideStyle | '';
+const SLED = +opt('sled', '0');
 let bad = 0;
 for (const m of MTNS) {
   for (const skill of SKILLS) {
     const chaos = { mood: 0, event: 0, seed: 0xabc + Math.round(skill * 100) };
-    const { record, sim } = runBot(MOUNTAINS[m].seed, chaos, { skill, seed: 77 + m, sled: 0, name: 'Bot', ...(STYLE ? { style: STYLE } : {}) });
+    const { record, sim } = runBot(MOUNTAINS[m].seed, chaos, { skill, seed: 77 + m, sled: SLED, name: 'Bot', ...(STYLE ? { style: STYLE } : {}) });
     const tricks = new Map<number, number>();
     let grabs = 0;
     let deep = 0;

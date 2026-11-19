@@ -345,6 +345,8 @@ interface Air {
   gLate: boolean;
   T0: number;
   T1: number;
+  /** The sled's own move is planned: tapped at G0 - 6, held from G0 to G1. */
+  sig: boolean;
 }
 
 /** Set pieces a rider grabs nothing over: each wants its landings, its line or its flame. */
@@ -451,7 +453,8 @@ export class Bot {
     const s = this.sim.s;
     const t = this.t;
     if (s.dash > 0 || now < this.spiritUntil + 40 || !s.grounded || this.mode !== 'ride' || s.tumble > 0) return;
-    if (Math.floor(s.lantern / LANTERN) <= t.dashKeep) return;
+    // (In a showdown every lantern is a dash, the moment the line is open.)
+    if (Math.floor(s.lantern / LANTERN) <= (this.racing >= 0 ? 0 : t.dashKeep)) return;
     // A rider who tries a set piece that wants control does not dash into it, or in the three seconds before
     // it (nobody who has ridden Old Town twice does): a dash is 7 m/s the slalom has no room for.
     if (this.holdsDash()) return;
@@ -489,6 +492,9 @@ export class Bot {
       if (e.type === 'takeoff') this.onTakeoff(now);
       else if (e.type === 'land' && !e.late) this.onLand(now, e.quality === 'hop');
     }
+    this.wasGrinding = s.grinding;
+    // A showdown under way ends at its marker, won or lost.
+    if (this.racing >= 0 && (s.z >= this.racing || s.finished || s.crashed)) this.showdownOver();
     // A press that began on the snow (or has been held there a while) pops on release, so it has to
     // be handled as a crouch.
     if (s.grounded && this.act.value === 1 && (s.pressStartedGrounded || s.groundHold > 8) && (this.mode === 'land' || (this.mode === 'ride' && this.act.last === 1))) {
@@ -1561,8 +1567,22 @@ export class Bot {
       gLate: false,
       T0: 0,
       T1: 0,
+      sig: false,
     };
     this.nextThink = now + (planned ? Math.max(2, Math.round(t.reaction * 0.35)) : t.reaction);
+    // Round 8: off a rail's end or a wall ride, a rider who knows it presses at once for the place's own move (a
+    // Lamppost Swing, a Snow Hare), and plans the rest of the flight once the move is done.
+    const s = this.sim.s;
+    if ((this.wasGrinding || s.wallTicks >= 30) && t.skill >= 0.45 && this.rng.chance(0.3 + 0.5 * t.ambition)) {
+      const side = this.rng.chance(0.5) ? 1 : -1;
+      this.act.cut(now);
+      this.steer.cut(now);
+      this.act.set(now + MOTOR, 1);
+      this.act.set(now + MOTOR + 4, 0);
+      this.steer.set(now + MOTOR, level(side));
+      this.steer.set(now + MOTOR + 4, this.groundLevel);
+      this.nextThink = now + MOTOR + 26;
+    }
   }
 
   private onLand(now: number, hop: boolean): void {
@@ -1771,6 +1791,13 @@ export class Bot {
     }
     if (k > 1 && fl === 0 && this.lastTrick === k && rng.chance(0.6)) k--;
     if (k > 1 && rng.chance(1 - t.ambition)) k--;
+    // Round 8: the sled's own move, from skill 0.6, in place of a rotation now and then (a stunt or sky rider most).
+    const sigOk = (!piece || !NO_GRAB.has(piece.verb)) && !this.cooling && t.skill >= 0.6 && nEst >= 60 && !this.lastSig && rng.chance(t.ambition * (this.style === 'stunt' || this.style === 'sky' ? 0.45 : 0.25));
+    this.lastSig = sigOk;
+    if (sigOk) {
+      k = 0;
+      fl = 0;
+    }
     a.k = k;
     a.f = fl;
     this.lastTrick = fl > 0 ? 10 + fl : k;
@@ -1786,7 +1813,7 @@ export class Bot {
     // solved, since a grab spins slower; after a flip's release (a Crane Fold), once the flip is solved. Let go into
     // the landing (the stomp, and the risk: a deep grab still held at touchdown is a fall) or well before it.
     const free = !piece || !NO_GRAB.has(piece.verb);
-    const gWant = free && !this.cooling && nB >= 50 && rng.chance(t.ambition * (0.25 + 0.55 * t.skill) * (this.lastGrab ? 0.45 : 1));
+    const gWant = free && !sigOk && !this.cooling && nB >= 50 && rng.chance(t.ambition * (0.25 + 0.55 * t.skill) * (this.lastGrab ? 0.45 : 1));
     a.gside = 0;
     a.gLate = rng.chance(t.stompRate * 0.85);
     const gOff = a.gLate ? 4 : 15;
@@ -1823,12 +1850,53 @@ export class Bot {
       this.grabPlan(plan, now);
     }
     this.lastGrab = a.gside !== 0;
+    // Round 8: the sled's own move, from skill 0.6, in place of a rotation on a flight with room (a stunt or sky rider
+    // most): two quick taps and a hold, let go where its rule wants (a Spinning Top early enough for the set to stop
+    // it; a Pine Bow before a stomp's press, since letting it go is no stomp).
+    a.sig = false;
+    if (sigOk) {
+      a.sig = true;
+      a.G0 = now + MOTOR + 6;
+      a.G1 = now + nEst - this.sigMargin();
+      a.stomp = this.sim.sled.id === 0 && a.stomp;
+    }
     // Human error: now and then a rotation is held far too long.
     if ((a.k > 0 || a.f > 0) && rng.chance(t.blunder)) a.over = 1;
     a.land = now + nEst;
     a.ST = now + stompOff;
     this.commit(now);
   }
+
+  /** How long before touchdown this sled's own move is let go (tricks.ts): a Spinning Top in time for the set, a Pine
+   *  Bow before the stomp's press, the rest into the landing (the let-go is the stomp). */
+  private sigMargin(): number {
+    const id = this.sim.sled.id;
+    return id === 1 ? 18 : id === 0 ? 14 : 4;
+  }
+
+  /** A showdown has started against this rider (rivals.ts, in the pool generator): ride for the marker as a racer. */
+  showdown(markerZ: number): void {
+    if (this.racing < 0) {
+      this.baseTuck = this.t.tuck;
+      this.baseGreed = this.t.greed;
+    }
+    this.racing = markerZ;
+    this.t.tuck = 1;
+    this.t.greed = 0;
+  }
+
+  showdownOver(): void {
+    if (this.racing < 0) return;
+    this.racing = -1;
+    this.t.tuck = this.baseTuck;
+    this.t.greed = this.baseGreed;
+  }
+
+  private wasGrinding = false;
+  private lastSig = false;
+  private racing = -1;
+  private baseTuck = 0;
+  private baseGreed = 0;
 
   /** The grab's part of the shared plan buffer, in steps from now. */
   private grabPlan(plan: AirPlan, now: number): void {
@@ -1861,6 +1929,7 @@ export class Bot {
       a.F1 = now + plan.f1;
     }
     if (!a.stFixed) a.ST = now + nEst - 3;
+    if (a.sig && !a.g1Fixed) a.G1 = Math.max(a.G0 + 16, now + nEst - this.sigMargin());
     if (a.gside !== 0 && !a.g1Fixed) {
       const was = a.G1;
       a.G1 = Math.max(a.G0 + 16, now + nEst - (a.gLate ? 4 : 15));
@@ -1891,7 +1960,7 @@ export class Bot {
       if (a.over > 0) a.F1 = Math.max(a.F1, a.land - rng.int(0, 10));
       a.f1Fixed = true;
     }
-    if (a.gside !== 0 && !a.g1Fixed && a.G1 <= due) {
+    if ((a.gside !== 0 || a.sig) && !a.g1Fixed && a.G1 <= due) {
       // The let-go, with the hands' own error: late enough, and a deep grab meets the snow still held.
       a.G1 = Math.max(now + 1, a.G1 + Math.round(gauss(rng) * t.timingSd));
       if (a.over > 0) a.G1 = Math.max(a.G1, a.land - rng.int(0, 3));
@@ -1910,6 +1979,19 @@ export class Bot {
   private writeAirPlan(now: number): void {
     const a = this.air;
     if (!a) return;
+    if (a.sig) {
+      // The sled's own move: tap, gap, press and hold to G1, then a stomp's press if one is planned.
+      this.steer.cut(now);
+      this.steer.set(now, level(a.cruise));
+      this.act.cut(now);
+      const marks: [number, number][] = [[a.G0 - 6, 1], [a.G0 - 3, 0], [a.G0, 1], [a.G1, 0]];
+      if (a.stomp) marks.push([Math.max(a.ST, a.G1 + 2), 1]);
+      let v = this.act.value;
+      for (const [t, x] of marks) if (t <= now) v = x;
+      this.act.set(now, v);
+      for (const [t, x] of marks) if (t > now) this.act.set(t, x);
+      return;
+    }
     const p = this.planNow(now, a.cruise);
     this.steer.cut(now);
     this.act.cut(now);
@@ -2007,6 +2089,8 @@ export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxT
     if (watch) {
       for (let i = 0; i < tracks.length; i++) them[i] = pointAt(tracks[i], sim.tick - 1);
       for (const e of watch.step(sim.tick - 1, riderPoint(sim), them)) {
+        if (e.type === 'showdown' && e.phase === 'start') bot.showdown(e.markerZ);
+        else if (e.type === 'showdown') bot.showdownOver();
         if (e.type === 'showdown' && e.phase === 'won') tokens.push(LogEvent.Showdown);
         else if (e.type === 'steal') tokens.push(LogEvent.Steal);
       }
