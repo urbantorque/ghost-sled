@@ -19,7 +19,8 @@ describe('near-miss event fields', () => {
       const pool = JSON.parse(readFileSync(join(dir, f), 'utf8')) as { ghosts: Array<{ record: string; score: number }> };
       // A low, a middle and the top ghost: different lines, different speeds.
       const n = pool.ghosts.length;
-      const picks = [pool.ghosts[Math.floor(n * 0.3)], pool.ghosts[Math.floor(n * 0.65)], pool.ghosts[n - 1]];
+      // (Round 8: five, so a pool whose three riders happen to graze nothing still shows the fields.)
+      const picks = [pool.ghosts[Math.floor(n * 0.1)], pool.ghosts[Math.floor(n * 0.3)], pool.ghosts[Math.floor(n * 0.5)], pool.ghosts[Math.floor(n * 0.65)], pool.ghosts[n - 1]];
       let seen = 0;
       for (const g of picks) {
         const rec = recordFromString(g.record);

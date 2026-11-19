@@ -27,7 +27,12 @@ export type StyleKind =
   | 'grind'
   | 'phase'
   | 'skyGate'
-  | 'lanternGate';
+  | 'lanternGate'
+  /** A named air trick (tricks.ts) other than a plain spin or flip: its id rides in the event. */
+  | 'trick'
+  /** A showdown won and a wisp stolen (rivals.ts). */
+  | 'showdown'
+  | 'steal';
 
 export const STYLE_LABEL: Record<StyleKind, string> = {
   carve: 'Deep carve',
@@ -52,6 +57,9 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   phase: 'Phased',
   skyGate: 'Sky gate',
   lanternGate: 'Lantern gate',
+  trick: 'Trick',
+  showdown: 'Showdown',
+  steal: 'Spirit steal',
 };
 
 export const COMBO_WINDOW_TICKS = 156; // 2.6 s at 60 Hz
@@ -71,7 +79,10 @@ export class Combo {
   banked = 0;
   best = 0;
   window: number;
-  private variety = new Map<StyleKind, number>();
+  /** Links a multiplier step takes (Festival Drum: 2), and what a repeat keeps (Crane's Memory: half). */
+  stepLinks = 3;
+  repeatKeep = 0.7;
+  private variety = new Map<string, number>();
 
   constructor(windowScale = 1) {
     this.window = Math.round(COMBO_WINDOW_TICKS * windowScale);
@@ -82,18 +93,33 @@ export class Combo {
   }
 
   get multiplier(): number {
-    const m = 1 + Math.floor(this.chain / 3);
+    const m = 1 + Math.floor(this.chain / this.stepLinks);
     return m > MAX_MULTIPLIER ? MAX_MULTIPLIER : m;
   }
 
-  add(kind: StyleKind, base: number): StyleResult {
-    const f = this.variety.get(kind) ?? 1;
-    this.variety.set(kind, f * 0.7 < 0.2 ? 0.2 : f * 0.7);
+  /** `key`: what counts as the same move for the repeat cut (a named trick's own id; the kind by default). */
+  add(kind: StyleKind, base: number, key: string = kind): StyleResult {
+    const f = this.variety.get(key) ?? 1;
+    const k = f * this.repeatKeep;
+    this.variety.set(key, k < 0.2 ? 0.2 : k);
     const points = Math.round(base * f);
     this.pending += points;
     this.chain++;
     this.timer = this.window;
     return { points, chain: this.chain, mult: this.multiplier };
+  }
+
+  /** Count one more link without points (a near miss under Night Chorus). */
+  link(): void {
+    if (this.active) this.chain++;
+  }
+
+  /** Refill the timer and add `extra` ticks over the window, up to `cap` over it (Owl's Breath). */
+  refill(extra: number, cap: number): void {
+    if (!this.active) return;
+    const max = this.window + cap;
+    const t = Math.max(this.timer, this.window) + extra;
+    this.timer = t > max ? max : t;
   }
 
   /** Advance one tick. `hold` freezes the timer (airborne, drifting, drafting). Returns banked

@@ -3,7 +3,8 @@ import { clamp } from '../sim/dmath';
 import { Rng, hash32 } from '../sim/prng';
 import { RunRecord, recordToString, replayRecord } from '../sim/replay';
 import { Sim } from '../sim/sim';
-import { runBot } from './bot';
+import { type Field, type Track, runBot } from './bot';
+import { ALL_CHARMS, STARTER_POOL } from '../sim/charms';
 import { uniqueGhostName } from './names';
 import { ROSTER, riderSkill } from './roster';
 
@@ -88,6 +89,27 @@ export function fallsOf(record: RunRecord): number[] {
   return falls;
 }
 
+/** The field a pool run races (round 8): up to FIELD of the runs made before it, the nearest to its skill, and of
+ *  them the signature riders may be met in a showdown (a player meets the same kinds). */
+const FIELD = 7;
+
+function fieldFor(made: readonly { skill: number; track: Track; signature: boolean }[], skill: number): Field {
+  const near = made
+    .map((r, i) => ({ r, i, d: Math.abs(r.skill - skill) }))
+    .sort((a, b) => a.d - b.d || a.i - b.i)
+    .slice(0, FIELD)
+    .sort((a, b) => a.i - b.i);
+  return { tracks: near.map((n) => n.r.track), duel: near.map((n) => n.r.signature) };
+}
+
+/** How much of the skill range the crowd spans (round 8; see generatePool). */
+const CROWD_REACH = 0.72;
+
+/** The charms a pool rider may be offered: a newcomer the starter pool, everyone else all of them. */
+function poolCharms(skill: number): number {
+  return skill < 0.35 ? STARTER_POOL : ALL_CHARMS;
+}
+
 export function generatePool(seed: number, count: number, salt: number, opts: PoolOptions = {}): PoolGhost[] {
   // Without this an empty request would still pay for a handful of bot runs.
   if (!(count >= 1)) return [];
@@ -95,13 +117,41 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
   const budget = Math.max(count, opts.budgetRuns ?? Math.max(count + 4, Math.round(count * 2.4)));
   const maxTicks = opts.maxTicks ?? 60 * 60 * 5;
   const runs: PoolRun[] = [];
+  // Every run, in the order made, for the fields of the runs after it.
+  const made: { skill: number; track: Track; signature: boolean }[] = [];
+
+  // The signature riders ride first (round 8), so the crowd after them can meet them in a showdown, as a player
+  // does: each rides once at its own level and style, on its own sled, plain chaos.
+  const riders = opts.riders ?? (opts.mountain !== undefined ? ROSTER.length : 0);
+  const signed: PoolRun[] = [];
+  if (riders > 0) {
+    const pick = new Rng(hash32(seed, salt, 0x51d3));
+    const cast = ROSTER.slice();
+    for (let i = cast.length - 1; i > 0; i--) {
+      const j = pick.int(0, i);
+      const t = cast[i];
+      cast[i] = cast[j];
+      cast[j] = t;
+    }
+    for (const rd of cast.slice(0, Math.min(riders, cast.length))) {
+      const skill = riderSkill(rd, opts.mountain ?? -1);
+      const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xc4a1, rd.key.length) };
+      const { record, sim, track } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0x51d0, ROSTER.indexOf(rd)), sled: rd.sled, name: rd.name, style: rd.style, charmPool: ALL_CHARMS }, maxTicks, fieldFor(made, skill));
+      made.push({ skill, track, signature: true });
+      signed.push({ skill, record, sim, selected: true });
+    }
+  }
+
   for (let i = 0; i < budget; i++) {
     // Stratified over the skill range, leaning a little toward the top where scores spread most.
     const u = (i + rng.next()) / budget;
-    const skill = clamp(u * (1.25 - 0.25 * u), 0, 1);
+    // (Round 8: the crowd's skills reach CROWD_REACH of the old range. Riders who draft their field, take charms and
+    // win lanterns off rivals ride faster than round 7's at the same skill, and the pool lost its slow end.)
+    const skill = clamp(u * (1.25 - 0.25 * u) * CROWD_REACH, 0, 1);
     const sled = rng.chance(0.65) ? 0 : rng.int(1, 5);
     const chaos = chaosFor(rng, seed, salt, i);
-    const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, i, 0xb075), sled, name: '' }, maxTicks);
+    const { record, sim, track } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, i, 0xb075), sled, name: '', charmPool: poolCharms(skill) }, maxTicks, fieldFor(made, skill));
+    made.push({ skill, track, signature: false });
     runs.push({ skill, record, sim, selected: false });
   }
 
@@ -116,26 +166,10 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
     picked.push(runs[at]);
   }
 
-  // The signature riders: each rides once at its own level and style, on its own sled, plain chaos. They join
-  // the crowd in race order, so the pool still steps evenly through every pace.
-  const riders = opts.riders ?? (opts.mountain !== undefined ? ROSTER.length : 0);
-  if (riders > 0) {
-    const pick = new Rng(hash32(seed, salt, 0x51d3));
-    const cast = ROSTER.slice();
-    for (let i = cast.length - 1; i > 0; i--) {
-      const j = pick.int(0, i);
-      const t = cast[i];
-      cast[i] = cast[j];
-      cast[j] = t;
-    }
-    for (const rd of cast.slice(0, Math.min(riders, cast.length))) {
-      const skill = riderSkill(rd, opts.mountain ?? -1);
-      const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xc4a1, rd.key.length) };
-      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0x51d0, ROSTER.indexOf(rd)), sled: rd.sled, name: rd.name, style: rd.style }, maxTicks);
-      const run = { skill, record, sim, selected: true };
-      runs.push(run);
-      picked.push(run);
-    }
+  // The signature riders join the crowd in race order, so the pool still steps evenly through every pace.
+  if (signed.length) {
+    runs.push(...signed);
+    picked.push(...signed);
     picked.sort((a, b) => raceKey(a) - raceKey(b));
   }
 
@@ -149,7 +183,8 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
       const chaos = { mood: Mood.None, event: ChaosEvent.None, seed: hash32(seed, salt, 0xfa57, i) };
       // (Racers, round 7's simfix: tucked on every straight, every set piece tried, every lantern a dash. They
       // are two to four seconds quicker at the top than the best of the crowd's own kind.)
-      const { record, sim } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0xfa58, i), sled: i % 6, name: '', style: 'racer' }, maxTicks);
+      const { record, sim, track } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, 0xfa58, i), sled: i % 6, name: '', style: 'racer', charmPool: ALL_CHARMS }, maxTicks, fieldFor(made, skill));
+      made.push({ skill, track, signature: false });
       if (sim.s.finished) tries.push({ skill, record, sim, selected: false });
     }
     tries.sort((a, b) => a.sim.s.finishTick - b.sim.s.finishTick);

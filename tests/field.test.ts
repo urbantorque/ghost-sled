@@ -314,8 +314,9 @@ describe('a field laid across your own runs', () => {
     expect(ts[0]).toBeGreaterThanOrEqual(FIELD_CARROT[2] * 112.5 - 1.5);
     expect(ts[0]).toBeLessThan(112.5);
     expect(ts[4]).toBeLessThanOrEqual(FIELD_SLOW_MIN * 114.1 + 1.5);
-    // Any finish this player has had lately lands within 2 s of a rider.
-    for (const t of recent) expect(nearest(ts, t), String(t)).toBeLessThanOrEqual(2);
+    // Any finish this player has had lately lands within 2.5 s of a rider (round 8: 2 s before the slow end
+    // moved from 1.1 to 1.13 of the pace, which spreads five riders a little wider).
+    for (const t of recent) expect(nearest(ts, t), String(t)).toBeLessThanOrEqual(2.5);
   });
 
   it('an erratic player gets a long string that still reaches the slow day and the quick one', () => {

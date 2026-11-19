@@ -5,12 +5,15 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
+import { CHARM, CHARM_COUNT, type CharmGate, PATH_ID0, PATH_STEP, STARTER_POOL, laneOf, offersFor, synergiesOf } from './charms';
+import { SHOWDOWN_POINTS, SHOWDOWN_UNITS, STEAL_POINTS, STEAL_UNITS } from './rivals';
+import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TRICKS, TWEAK_LATE, grabTier, nameFlight, sigFallTier, sigTier } from './tricks';
 import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 9;
+export const SIM_VERSION = 10;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -117,6 +120,12 @@ const SHATTER_UNITS = 8;
 const KINDLE_UNITS = 4;
 /** A legend moment (moments.ts) is said this far up the run from where it plays, and a runner never falls below
  *  this pace. */
+/** Spirit Flow (round 8): heat a whole level per this many base style points; it starts cooling after this many
+ *  dull ticks, a level every FLOW_COOL; heat runs a little over the top level so one quiet beat does not drop it. */
+const FLOW_HEAT_PER = 1000;
+const FLOW_DULL = 180;
+const FLOW_COOL = 60;
+const FLOW_HEAT_MAX = 7;
 const LEGEND_WARN = 220;
 const LEGEND_PACE = 20;
 
@@ -146,7 +155,11 @@ export type SimEvent =
   | { type: 'grind'; phase: 'start' | 'end'; id: number }
   /** Near-miss styles may carry the edge gap (m), the side (+1 = obstacle on the sled's +x side), the
    *  nearest point on the obstacle (x, z), its kind and id. Optional and never hashed; filled later. */
-  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
+  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number; trick?: number; halfTurns?: number; flips?: number; tier?: number; late?: boolean; fresh?: boolean }
+  /** In the air (tricks.ts): a grab taken ('start', its side), a tier reached, a tweak begun, let go ('release'), let
+   *  go by the rider itself as it sets for the landing ('auto'); a rail's, a wall's or the sled's own move begun
+   *  ('move'). `trick` is the pose's trick id. */
+  | { type: 'grab'; phase: 'start' | 'tier' | 'tweak' | 'release' | 'auto' | 'move'; side: number; tier: number; trick: number }
   | { type: 'comboBank'; points: number; mult: number }
   | { type: 'comboLost'; points: number }
   /** A spirit light taken: its id, value (1 or 3), the charge it gave and where it was. */
@@ -173,13 +186,45 @@ export type SimEvent =
   | { type: 'drift'; phase: 'start' | 'tier' | 'release' | 'end'; tier: number }
   | { type: 'boost'; amount: number; source: 'drift' | 'perfect' | 'slingshot' | 'pop' }
   | { type: 'chaos'; phase: 'warn' | 'start' | 'end' | 'success'; event: ChaosEvent }
-  | { type: 'revive' };
+  | { type: 'revive' }
+  /** A charm gate crossed (charms.ts): the lane taken and the charm it gave (-1 for an empty arch). */
+  | { type: 'charm'; gate: number; lane: number; id: number }
+  /** A named pair of charms now held (charms.ts SYNERGIES). */
+  | { type: 'synergy'; id: number }
+  /** Spirit Flow's whole level changed (0 to 6). */
+  | { type: 'flow'; level: number; from: number }
+  /** A showdown won or a wisp stolen, as its log token is applied (rivals.ts). */
+  | { type: 'rival'; kind: 'showdown' | 'steal'; gain: number };
 
 export interface SimConfig {
   seed: number;
   chaos: ChaosRoll;
   sled: number;
+  /** The charms this rider may be offered (charms.ts, a 24-bit mask). Absent: STARTER_POOL. */
+  charmPool?: number;
+  /** How many charm gates stand, in order (1: only the start's). Absent: 3. */
+  charmGates?: 1 | 2 | 3;
+  /** A Long Night leg: what it starts with from the leg before. Absent: a fresh start. */
+  carry?: Carry;
+  /** A fresh save's very first run: a wider stomp window. */
+  firstRun?: boolean;
 }
+
+/** What a Long Night leg carries in (and its record holds exactly): the lantern (0 to LANTERN_MAX), the get-ups (0 to
+ *  GET_UPS) and up to three charms held, which this leg's gates then never offer. (The chaos that rises leg by leg
+ *  is the leg's own ChaosRoll, which every record already holds: nothing more is needed here.) */
+export interface Carry {
+  lantern: number;
+  getUps: number;
+  charms: number[];
+}
+
+/** Ember Step: a dash this many ticks after a perfect landing costs 0.7 of a lantern. */
+export const EMBER_STEP_TICKS = 24;
+
+/** A first run's stomp: a press this many ticks before touchdown (9 otherwise), or this many after it (5). */
+export const FIRST_RUN_STOMP = 15;
+export const FIRST_RUN_LATE = 8;
 
 export interface SledState {
   x: number;
@@ -223,7 +268,9 @@ export interface SledState {
   draftTicks: number;
   draftCharge: number;
   drafting: boolean;
+  /** Spirit Flow as the picture reads it, eased (0 to 6); `flowLevel` is the whole level that pays. */
   flow: number;
+  flowLevel: number;
   invuln: number;
   crashed: boolean;
   crashCause: CrashCause | null;
@@ -256,6 +303,13 @@ export interface SledState {
   dash: number;
   /** Ticks the sled passes through obstacles without a dash's speed: after a ward, or a rescue. */
   ghost: number;
+  /** A grab held (tricks.ts): its side (-1, 1; 0 none), ticks held and tier; ticks a tweak has been held. */
+  grab: number;
+  grabTicks: number;
+  grabTier: number;
+  tweak: number;
+  /** The trick the rider is posed in now (tricks.ts TRICK; 0 none): a grab's tier, a move, the sled's own. */
+  move: number;
 }
 
 export interface AvalancheState {
@@ -340,6 +394,14 @@ export interface RunStats {
   /** The legend moment the run met (its slot, 0 for none), and the charge its lights and its ribbon gave. */
   legend: number;
   legendLit: number;
+  /** The named tricks landed this run, a bit each by id (tricks.ts). */
+  trickMask: number;
+  /** Spirit Flow: the highest level held a second or more, and the ticks ridden at each level (0 to 6). */
+  bestFlow: number;
+  flowTicks: number[];
+  /** Showdowns won and wisps stolen (rivals.ts). */
+  showdowns: number;
+  steals: number;
 }
 
 /** A set piece being played: which, from which tick, its count so far and how it stands. */
@@ -458,6 +520,7 @@ export class Sim {
       draftCharge: 0,
       drafting: false,
       flow: 0,
+      flowLevel: 0,
       invuln: 0,
       crashed: false,
       crashCause: null,
@@ -477,6 +540,11 @@ export class Sim {
       lantern: 0,
       dash: 0,
       ghost: 0,
+      grab: 0,
+      grabTicks: 0,
+      grabTier: 0,
+      tweak: 0,
+      move: 0,
     };
     this.plays = momentPlays(this.course, config.chaos);
     this.legend = legendFor(this.course, config.chaos);
@@ -526,7 +594,31 @@ export class Sim {
       momentMask: 0,
       legend: 0,
       legendLit: 0,
+      trickMask: 0,
+      bestFlow: 0,
+      flowTicks: [0, 0, 0, 0, 0, 0, 0],
+      showdowns: 0,
+      steals: 0,
     };
+    this.pool = (config.charmPool ?? STARTER_POOL) >>> 0;
+    // (How many gates stand: the Almanac opens the second and third. Absent, all three.)
+    const gates = config.charmGates === 1 || config.charmGates === 2 ? config.charmGates : 3;
+    this.charmGates = this.course.charmGateZs.slice(0, gates).map((z, index): CharmGate => ({ index, z, x: this.course.safeX(z), offers: [-1, -1, -1], lane: -1, pick: -1 }));
+    // A leg of the Long Night starts with what the leg before ended with (its gates then never offer a charm held).
+    const carry = config.carry;
+    if (carry) {
+      this.s.lantern = clamp(Math.round(carry.lantern), 0, LANTERN_MAX);
+      this.s.getUps = clamp(carry.getUps | 0, 0, GET_UPS);
+      for (const id of carry.charms.slice(0, 3)) {
+        if (id < 0 || id >= CHARM_COUNT || this.has(id)) continue;
+        this.charms.push(id);
+        this.charmMask |= 1 << id;
+        this.takeCharm(id);
+      }
+      for (const p of synergiesOf(this.charmMask)) this.synergyMask |= 1 << p.id;
+    }
+    this.stompTicks = config.firstRun ? FIRST_RUN_STOMP : 9;
+    if (this.charmGates.length) this.charmGates[0].offers = offersFor(config.chaos.seed, 0, this.pool, this.charms);
   }
 
   /** The run's set pieces and what their verbs hold: the variants its roll picked (moments.ts). */
@@ -546,6 +638,30 @@ export class Sim {
   finishBonus = 0;
   /** The tick each stage line was crossed. */
   readonly stageTicks: number[] = [];
+  /** The charm pool this run deals from, the run's charm gates (where, what each lane offers, what was taken),
+   *  the charms held in the order taken, and the same as a mask; the named pairs held, a bit each. */
+  readonly pool: number;
+  readonly charmGates: CharmGate[];
+  /** How close to touchdown a press (or a grab let go) still stomps: wider on a save's very first run. */
+  private readonly stompTicks: number;
+  readonly charms: number[] = [];
+  charmMask = 0;
+  synergyMask = 0;
+  /** Spirit Flow's heat (style adds it, a dull stretch and a hit take it), and ticks since the last style. */
+  private heat = 0;
+  private dull = 0;
+  private flowHeld = 0;
+  private gateNext = 0;
+
+  /** Holds a charm (charms.ts CHARM). */
+  has(id: number): boolean {
+    return (this.charmMask & (1 << id)) !== 0;
+  }
+
+  /** Holds a named pair (charms.ts SYNERGIES id). */
+  hasPair(id: number): boolean {
+    return (this.synergyMask & (1 << id)) !== 0;
+  }
 
   get score(): number {
     return Math.floor(this.maxZ) + this.combo.banked + this.lightScore + this.finishBonus;
@@ -622,6 +738,8 @@ export class Sim {
     s.airPitch = 0;
     s.spinRate = 0;
     s.pitchRate = 0;
+    this.clearGrab();
+    this.ft.hold = -1;
     s.drifting = false;
     s.driftCharge = 0;
     s.driftTier = 0;
@@ -631,6 +749,7 @@ export class Sim {
     s.crashed = false;
     s.crashCause = null;
     s.flow = 0;
+    this.coolFlow(7);
     s.tumble = 0;
     s.fall = FALL_NONE;
     s.fallTick = -1;
@@ -692,7 +811,7 @@ export class Sim {
     else if (s.finished) this.coast();
     else if (s.grinding) this.grindStep(action, released);
     else if (s.grounded) this.groundStep(action, pressed, released);
-    else this.airStep(action, pressed, released);
+    else this.airStep(action, pressed, released, steerTarget);
 
     const riding = !s.finished && s.tumble === 0;
     const race = !this.homeward;
@@ -714,8 +833,8 @@ export class Sim {
     const bankedNow = this.combo.tick(hold);
     if (bankedNow > 0) this.events.push({ type: 'comboBank', points: bankedNow, mult: this.combo.lastMult });
 
-    const flowTarget = this.combo.active ? Math.min(6, Math.floor(this.combo.chain / 4)) : 0;
-    s.flow = approach(s.flow, flowTarget, 1.5 * DT);
+    if (!s.crashed && !s.finished && !this.homeward) this.crossGates(prevZ);
+    this.flowStep();
     s.boostGlow = approach(s.boostGlow, s.boostPool > 0.2 ? 1 : 0, 4 * DT);
     if (s.invuln > 0) s.invuln--;
     if (s.ghost > 0) s.ghost--;
@@ -742,10 +861,233 @@ export class Sim {
     this.tick++;
   }
 
+  /** A charm gate crossed this tick: the lane the sled was in as it crossed the gate's line is its charm (a fall
+   *  eases the rider to the safe line, so a faller takes the middle). The next gate's offers are dealt now. */
+  private crossGates(prevZ: number): void {
+    const s = this.s;
+    const g = this.charmGates[this.gateNext];
+    if (!g || prevZ >= g.z || s.z < g.z) return;
+    this.gateNext++;
+    const u = s.z > prevZ ? (g.z - prevZ) / (s.z - prevZ) : 1;
+    const x = this.prevX + (s.x - this.prevX) * u;
+    g.lane = laneOf(g.x, x);
+    g.pick = g.offers[g.lane];
+    if (g.pick >= 0) {
+      this.charms.push(g.pick);
+      this.charmMask |= 1 << g.pick;
+      this.takeCharm(g.pick);
+    }
+    this.events.push({ type: 'charm', gate: g.index, lane: g.lane, id: g.pick });
+    for (const p of synergiesOf(this.charmMask)) {
+      if (this.synergyMask & (1 << p.id)) continue;
+      this.synergyMask |= 1 << p.id;
+      this.events.push({ type: 'synergy', id: p.id });
+    }
+    const next = this.charmGates[this.gateNext];
+    if (next) next.offers = offersFor(this.config.chaos.seed, next.index, this.pool, this.charms);
+  }
+
+  /** What a charm changes the moment it is taken (most are read where they act, through `has`). */
+  private takeCharm(id: number): void {
+    if (id === CHARM.festival) this.combo.stepLinks = 2;
+    else if (id === CHARM.memory) this.combo.repeatKeep = 0.5;
+    else if (id === CHARM.path) this.pathNext = Math.ceil((this.s.z + 1) / PATH_STEP);
+  }
+
+  /** Charm state: the tick of the last perfect landing (Ember Step), a dash's cost owed back (Hearthstone), the
+   *  stage each once-a-stage spare was spent in (Featherfall, Last Lamp, Guardian Wisp), the next path spark. */
+  private lastPerfect = -1000;
+
+  /** Read-only views of the charm state above, for drawing only (the play lane's charmsignals.ts): the tick of the
+   *  last perfect landing (Ember Step's price is open for EMBER_STEP_TICKS after it), the lantern a Hearthstone owes
+   *  back, and the stage each once-a-stage spare was spent in (-1 never: Featherfall, Last Lamp, Guardian Wisp). */
+  get perfectTick(): number {
+    return this.lastPerfect;
+  }
+
+  get hearthOwing(): number {
+    return this.hearthOwed;
+  }
+
+  get featherSpentStage(): number {
+    return this.featherStage;
+  }
+
+  get lampSpentStage(): number {
+    return this.lampStage;
+  }
+
+  get wispSpentStage(): number {
+    return this.wispStage;
+  }
+
+  private hearthOwed = 0;
+  private featherStage = -1;
+  private lampStage = -1;
+  private wispStage = -1;
+  private pathNext = 0;
+
+  /** A drift's charge rate as the charms have it: Drift Drum +35%; Frost Runners 20% slower on snow; Black Ice
+   *  double on ice. */
+  private driftCharm(ice: boolean): number {
+    return (this.has(CHARM.drum) ? 1.35 : 1) * (!ice && this.has(CHARM.frost) ? 0.8 : 1) * (ice && this.hasPair(6) ? 2 : 1);
+  }
+
+  /** A drift's release, by tier (Drift Drum: 3 m/s more at the third). */
+  private driftBoost(): number {
+    const s = this.s;
+    return DRIFT_BOOST[s.driftTier] + (s.driftTier === 3 && this.has(CHARM.drum) ? 3 : 0);
+  }
+
+  /** A grab's clock as its tiers read it (Paper Kite: 30% sooner). */
+  private grabClock(ticks: number): number {
+    return this.has(CHARM.paper) ? Math.floor((ticks * 10) / 7) : ticks;
+  }
+
+  /** Featherfall: once a stage a landing that would floor the rider is only sketchy. True if it was spent now. */
+  private featherSpare(): boolean {
+    const stage = this.stageTicks.length;
+    if (!this.has(CHARM.feather) || this.featherStage === stage || this.homeward) return false;
+    this.featherStage = stage;
+    return true;
+  }
+
+  /** A bump or a scrape and the combo: banked (as ever), lost under a Festival Drum, run on with Bark Skin on a
+   *  glancing blow. */
+  private bumpCombo(glancing: boolean): void {
+    if (glancing && this.has(CHARM.bark)) return;
+    if (this.has(CHARM.festival)) {
+      const lost = this.combo.lose();
+      if (lost > 0) this.events.push({ type: 'comboLost', points: lost });
+      return;
+    }
+    const banked = this.combo.bank();
+    if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+  }
+
+  /** Lamplit Path's sparks: one on the safe line every PATH_STEP metres from where it was taken to the line, taken
+   *  by riding over it (a spark, as a course's; ids from PATH_ID0). */
+  private pathSparks(): void {
+    const s = this.s;
+    const c = this.course;
+    while (this.pathNext * PATH_STEP <= s.z) {
+      const z = this.pathNext * PATH_STEP;
+      const k = this.pathNext++;
+      if (z >= c.finishZ) {
+        this.pathNext = -1;
+        return;
+      }
+      const x = c.safeX(z);
+      const y = c.ground(x, z) + 0.8;
+      const dx = x - s.x;
+      const dy = y - (s.y + 0.5);
+      const reach = 1.55 * this.sled.magnet + 0.25;
+      if (dx * dx + dy * dy < reach * reach) this.collectLight(PATH_ID0 + k, 1, x, y, z);
+    }
+  }
+
+  /** Spirit Flow (round 8, G6): style heats it, a dull five seconds cools it a level every 1.5 s, a hit costs it.
+   *  The whole level pays (charge and points) and the eased value is what the picture and the drag read. */
+  private flowStep(): void {
+    const s = this.s;
+    if (!s.crashed && !s.finished && s.tumble === 0) {
+      if (++this.dull >= FLOW_DULL && (this.dull - FLOW_DULL) % FLOW_COOL === 0 && this.heat > 0) this.heat = this.heat > 1 ? this.heat - 1 : 0;
+      this.stats.flowTicks[s.flowLevel]++;
+    }
+    this.setFlow();
+    s.flow = approach(s.flow, s.flowLevel, 1.5 * DT);
+    if (s.flowLevel > this.stats.bestFlow && ++this.flowHeld >= TICK_RATE) this.stats.bestFlow = s.flowLevel;
+  }
+
+  /** The whole level from the heat, said when it changes. */
+  private setFlow(): void {
+    const s = this.s;
+    if (this.heat > FLOW_HEAT_MAX) this.heat = FLOW_HEAT_MAX;
+    const level = Math.min(6, Math.floor(this.heat));
+    if (level === s.flowLevel) return;
+    this.events.push({ type: 'flow', level, from: s.flowLevel });
+    s.flowLevel = level;
+    this.flowHeld = 0;
+  }
+
+  /** Style heats Spirit Flow (its base points / FLOW_HEAT_PER; twice that under Spirit Drum) and resets the dull
+   *  clock. */
+  private heatUp(base: number): void {
+    this.heat += (base / FLOW_HEAT_PER) * (this.has(CHARM.spirit) ? 1.5 : 1);
+    this.dull = 0;
+    this.setFlow();
+  }
+
+  /** A hit cools it by whole levels (a fall: all of it). */
+  private coolFlow(levels: number): void {
+    this.heat = levels >= 7 ? 0 : Math.max(0, this.heat - levels);
+    this.setFlow();
+  }
+
+  /** Points as Spirit Flow pays them: +10% a level. */
+  private flowPoints(base: number): number {
+    return Math.round(base * (1 + 0.1 * this.s.flowLevel));
+  }
+
+  /** A showdown won (LogEvent.Showdown, at the start of the tick after the game layer or the generator decided it):
+   *  a whole cell and the points. */
+  showdownWon(): void {
+    if (this.s.crashed) return;
+    this.events.length = 0;
+    const before = this.s.lantern;
+    this.lightRaw(SHOWDOWN_UNITS);
+    this.stats.showdowns++;
+    this.style('showdown', SHOWDOWN_POINTS);
+    this.events.push({ type: 'rival', kind: 'showdown', gain: this.s.lantern - before });
+  }
+
+  /** A wisp stolen from a rival passed close (LogEvent.Steal): a third of a cell and the points. */
+  stealWisp(): void {
+    if (this.s.crashed) return;
+    this.events.length = 0;
+    const before = this.s.lantern;
+    this.lightRaw(STEAL_UNITS);
+    this.stats.steals++;
+    this.style('steal', STEAL_POINTS);
+    this.events.push({ type: 'rival', kind: 'steal', gain: this.s.lantern - before });
+  }
+
+  /** Light the lantern by exactly this much (no sled or flow scaling): what a rival gives is the same for all. */
+  private lightRaw(units: number): void {
+    const s = this.s;
+    const before = this.cells;
+    const got = Math.min(units, LANTERN_MAX - s.lantern);
+    if (got <= 0) return;
+    s.lantern += got;
+    this.stats.lit += got;
+    if (this.cells > before) this.events.push({ type: 'lantern', phase: 'lit', cells: this.cells });
+  }
+
   /** `extra`: optional presentation fields spread into the event (never hashed, never scored). */
+  /** A named air trick, paid: its own lantern charge, the repeat cut keyed by its id, its id in the event. */
+  private trickStyle(id: number, points: number, units: number, call: { halfTurns: number; flips: number; tier: number; late: boolean }): void {
+    const fresh = (this.stats.trickMask & (1 << id)) === 0;
+    this.stats.trickMask |= 1 << id;
+    // A trick new to the run pays half again (Crane's Memory: two and a half times): the 200th run should still be
+    // finding things. (Crane's Memory 2.5x, from 3x: 66% of the expert's charm races.)
+    let pts = points * (fresh ? (this.has(CHARM.memory) ? 2.5 : 1.5) : 1);
+    const fam = TRICKS[id]?.family;
+    if (this.has(CHARM.paper) && (fam === 'grab' || id === TRICK.paperWheel || id === TRICK.craneFold || id === TRICK.spiritKnot)) pts *= 1.5;
+    if (this.has(CHARM.whirl) && call.halfTurns > 1 && (id === TRICK.spin || id === TRICK.paperWheel || id === TRICK.emberTwist || id === TRICK.spiritKnot)) pts *= 1 + 0.25 * (call.halfTurns - 1);
+    if (this.hasPair(3) && id === TRICK.paperWheel) pts *= 1.5;
+    if (this.has(CHARM.feather)) pts *= 0.75;
+    this.heatUp(pts);
+    const base = this.flowPoints(pts);
+    this.charge(units, true);
+    const kind: StyleKind = id === TRICK.spin ? 'spin' : id === TRICK.backflip ? 'flip' : 'trick';
+    const r = this.combo.add(kind, base, `t${id}`);
+    this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, trick: id, halfTurns: call.halfTurns, flips: call.flips, tier: call.tier, late: call.late, fresh });
+  }
+
   private style(kind: StyleKind, base: number, extra?: { gap: number; side: -1 | 1; x: number; z: number; obs: ObstacleKind; id: number }): void {
     this.charge(skillCharge(kind, base, extra ? extra.gap : -1), true);
-    const r = this.combo.add(kind, base);
+    this.heatUp(base);
+    const r = this.combo.add(kind, this.flowPoints(base));
     if (extra) this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, ...extra });
     else this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult });
   }
@@ -782,7 +1124,7 @@ export class Sim {
     else s.groundHold = 0;
 
     // Drift entry and exit.
-    if (!s.drifting && action && Math.abs(s.steer) >= 0.5 && s.speed >= 9 && s.wobble === 0 && s.groundHold > 2) {
+    if (!s.drifting && action && Math.abs(s.steer) >= 0.5 && s.speed >= (this.has(CHARM.drum) ? 22 : 9) && s.wobble === 0 && s.groundHold > 2) {
       s.drifting = true;
       s.driftDir = s.steer > 0 ? 1 : -1;
       this.events.push({ type: 'drift', phase: 'start', tier: 0 });
@@ -794,6 +1136,8 @@ export class Sim {
 
     // Yaw.
     let turn = this.turnRate(s.speed) * this.sled.turn;
+    // (Long Stride: hardly a steer while the button is held.)
+    if (action && !s.drifting && this.has(CHARM.stride)) turn *= 0.6;
     if (action && !s.drifting) turn *= 1.12;
     if (s.drifting) turn *= 1.5;
     if (s.wobble > 0) turn *= 0.55;
@@ -855,6 +1199,7 @@ export class Sim {
 
     // Grip turns velocity toward the heading.
     let grip = (s.drifting ? 1.7 : 6.5) * this.sled.grip * this.mood.grip * surf.grip;
+    if (surf.ice && this.has(CHARM.frost)) grip *= 2.2;
     if (action && !s.drifting) grip *= 1.15;
     const k = grip * DT > 1 ? 1 : grip * DT;
     s.velHeading += slip * k;
@@ -878,7 +1223,7 @@ export class Sim {
     // Drift charge.
     if (s.drifting) {
       this.stats.driftTicks++;
-      if (absSlip > 0.18) s.driftCharge += DT * (0.55 + absSlip) * this.sled.driftCharge * this.mood.driftCharge;
+      if (absSlip > 0.18) s.driftCharge += DT * (0.55 + absSlip) * this.sled.driftCharge * this.mood.driftCharge * this.driftCharm(surf.ice);
       const tier = s.driftCharge >= 2.4 ? 3 : s.driftCharge >= 1.35 ? 2 : s.driftCharge >= 0.6 ? 1 : 0;
       if (tier > s.driftTier) {
         s.driftTier = tier;
@@ -887,10 +1232,13 @@ export class Sim {
     }
 
     // Drag and boosts.
-    const flowDrag = 1 / (1 + 0.055 * s.flow);
+    // (Round 8: 3.5% a level, from 5.5%: Spirit Flow pays in the lantern and the score, and its speed made every style
+    // charm a speed charm in the charm races.)
+    const flowDrag = 1 / (1 + 0.035 * s.flow);
     let cd = CD * this.sled.drag * this.mood.drag * surf.drag * flowDrag;
+    if (surf.ice && this.has(CHARM.frost)) cd *= 0.8;
     // The tuck: the crouch on a straight line is worth about 3 m/s at cruise.
-    if (action && Math.abs(s.steer) < 0.3 && !s.drifting) cd *= 0.82;
+    if (action && Math.abs(s.steer) < 0.3 && !s.drifting) cd *= this.has(CHARM.stride) ? 0.72 : 0.82;
     // A dash cuts through the air: most of the drag is gone while it lasts.
     if (s.dash > 0) cd *= DASH_DRAG;
     s.speed -= (cd * s.speed * s.speed + MU * g) * DT;
@@ -952,7 +1300,7 @@ export class Sim {
     // Release: pay out drift charge, then pop.
     if (released && s.grounded) {
       if (s.driftTier > 0) {
-        const boost = DRIFT_BOOST[s.driftTier];
+        const boost = this.driftBoost();
         s.boostPool += boost;
         this.events.push({ type: 'drift', phase: 'release', tier: s.driftTier });
         this.events.push({ type: 'boost', amount: boost, source: 'drift' });
@@ -989,7 +1337,7 @@ export class Sim {
   private latePop(): void {
     const s = this.s;
     if (s.driftTier > 0) {
-      const boost = DRIFT_BOOST[s.driftTier];
+      const boost = this.driftBoost();
       s.boostPool += boost;
       this.events.push({ type: 'drift', phase: 'release', tier: s.driftTier });
       this.events.push({ type: 'boost', amount: boost, source: 'drift' });
@@ -1026,8 +1374,74 @@ export class Sim {
   private coyote = 0;
   private coyoteRamp = false;
 
+  /** What the present flight holds (tricks.ts), read at touchdown and cleared at takeoff. `hold`: what the press
+   *  now held is, -1 none (the button up, or held over from the snow), 0 a fresh press not yet decided, 1 a flip,
+   *  2 a grab, 3 the sled's own move, 4 a rail's or a wall's move, 5 spent (a stomp's press, a grab let go for the
+   *  rider). `last*`: the press before it, for a double tap. `letGo`: the tick a grab was let go, and whether the
+   *  rider did it by itself. `fromRail`: off a rail's end; `fromWall`: off a wall ride, the wall's side. */
+  private readonly ft = {
+    hold: -1,
+    holdLen: 0,
+    lastRelease: -1000,
+    lastLen: 0,
+    lastHold: -1,
+    grabMax: 0,
+    tweakTicks: 0,
+    tweakLate: false,
+    special: 0,
+    specialTicks: 0,
+    specialDir: 0,
+    sig: 0,
+    sigTicks: 0,
+    sigDir: 1,
+    sigLetGo: -1000,
+    letGo: -1000,
+    auto: false,
+    fromRail: false,
+    fromWall: 0,
+  };
+  /** What the press now held in the air is (the ft.hold codes above) and its ticks: the bot's model reads them. */
+  get airHoldKind(): number {
+    return this.ft.hold;
+  }
+
+  get airHoldLen(): number {
+    return this.ft.holdLen;
+  }
+
+  /** Set by a grind's end for the takeoff it makes. */
+  private railOff = false;
+
+  private clearGrab(): void {
+    const s = this.s;
+    s.grab = 0;
+    s.grabTicks = 0;
+    s.grabTier = 0;
+    s.tweak = 0;
+    s.move = 0;
+  }
+
   private takeoff(kind: TakeoffKind): void {
     const s = this.s;
+    const ft = this.ft;
+    ft.hold = -1;
+    ft.holdLen = 0;
+    ft.lastRelease = -1000;
+    ft.lastHold = -1;
+    ft.grabMax = 0;
+    ft.tweakTicks = 0;
+    ft.tweakLate = false;
+    ft.special = 0;
+    ft.specialTicks = 0;
+    ft.sig = 0;
+    ft.sigTicks = 0;
+    ft.sigLetGo = -1000;
+    ft.letGo = -1000;
+    ft.auto = false;
+    ft.fromRail = this.railOff;
+    this.railOff = false;
+    ft.fromWall = s.wallTicks >= WALL_RIDE_TICKS ? (s.x > this.course.centerX(s.z) ? 1 : -1) : 0;
+    this.clearGrab();
     this.airPressed = false;
     this.coyote = 0;
     s.grounded = false;
@@ -1042,7 +1456,98 @@ export class Sim {
     this.events.push({ type: 'takeoff', kind, vy: s.vy });
   }
 
-  private airStep(action: boolean, pressed: boolean, released: boolean): void {
+  /** The button and the steer in the air, read as tricks (tricks.ts): a fresh press decides in its first
+   *  LATCH_TICKS, to a side a grab and centred a flip; two quick taps are the sled's own move; a press just off
+   *  a rail or a wall ride is its move. Nothing starts in the last FLIP_GUARD_TICKS: a press there is a stomp. */
+  private airTricks(action: boolean, pressed: boolean, released: boolean, steerTarget: number): void {
+    const s = this.s;
+    const ft = this.ft;
+    const side = steerTarget >= GRAB_STEER ? 1 : steerTarget <= -GRAB_STEER ? -1 : 0;
+    if (released && ft.hold >= 0) {
+      if (ft.hold === 2) this.letGo(false);
+      else if (ft.hold === 3) {
+        s.move = 0;
+        ft.sigLetGo = this.tick;
+      }
+      ft.lastRelease = this.tick;
+      ft.lastLen = ft.holdLen;
+      ft.lastHold = ft.hold;
+      ft.hold = -1;
+      ft.holdLen = 0;
+    }
+    if (pressed) {
+      ft.holdLen = 0;
+      ft.hold = 0;
+      if (this.landingWithin(FLIP_GUARD_TICKS)) ft.hold = 5;
+      else if (ft.special === 0 && (ft.fromRail || ft.fromWall !== 0) && s.airTicks <= SPECIAL_WINDOW) {
+        ft.hold = 4;
+        ft.special = ft.fromRail ? TRICK.lamppost : TRICK.snowHare;
+        ft.specialTicks = SPECIAL_TICKS;
+        ft.specialDir = side !== 0 ? side : s.spinRate < 0 ? -1 : 1;
+        s.move = ft.special;
+        if (ft.special === TRICK.snowHare) {
+          // A bound off the wall, back into the run.
+          s.vx -= ft.fromWall * 3;
+          s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
+          s.velHeading = datan2(s.vx, s.vz);
+        }
+        this.events.push({ type: 'grab', phase: 'move', side: ft.specialDir, tier: 0, trick: ft.special });
+      } else if (ft.lastHold === 0 && ft.lastLen <= TAP_TICKS && this.tick - ft.lastRelease <= DOUBLE_GAP && side === 0) {
+        ft.hold = 3;
+        ft.sig = SIGNATURE[this.sled.id] ?? TRICK.pineBow;
+        // (A Spinning Top or a Teacup turns the way the sled was turning, or the way it was last steered.)
+        ft.sigDir = s.spinRate < -0.5 ? -1 : s.spinRate > 0.5 ? 1 : s.steer < -0.1 ? -1 : 1;
+        s.move = ft.sig;
+        this.events.push({ type: 'grab', phase: 'move', side: 0, tier: 0, trick: ft.sig });
+      }
+    }
+    if (action && ft.hold >= 0) {
+      ft.holdLen++;
+      if (ft.hold === 0) {
+        if (side !== 0 && ft.holdLen <= GRAB_LATCH && !this.landingWithin(FLIP_GUARD_TICKS)) {
+          ft.hold = 2;
+          s.grab = side;
+          s.grabTicks = 0;
+          s.grabTier = 0;
+          this.events.push({ type: 'grab', phase: 'start', side, tier: 0, trick: TRICK.railGrab });
+        } else if (ft.holdLen >= LATCH_TICKS) ft.hold = 1;
+      }
+      if (ft.hold === 2 && s.grab !== 0) {
+        s.grabTicks++;
+        if (s.grabTicks > ft.grabMax) ft.grabMax = s.grabTicks;
+        const tier = grabTier(this.grabClock(s.grabTicks));
+        if (tier > s.grabTier) {
+          s.grabTier = tier;
+          s.move = tier === 3 ? TRICK.spiritStretch : tier === 2 ? TRICK.lanternReach : TRICK.railGrab;
+          this.events.push({ type: 'grab', phase: 'tier', side: s.grab, tier, trick: s.move });
+        }
+        // Steer against the grab and the sled is shoved out the other way: a tweak, worth most late.
+        if (side === -s.grab && s.grabTier >= 1) {
+          if (s.tweak === 0) this.events.push({ type: 'grab', phase: 'tweak', side: s.grab, tier: s.grabTier, trick: TRICK.crosswind });
+          s.tweak++;
+          ft.tweakTicks++;
+          if (!ft.tweakLate && this.landingWithin(TWEAK_LATE)) ft.tweakLate = true;
+        } else s.tweak = 0;
+      } else if (ft.hold === 3) ft.sigTicks++;
+    }
+    if (ft.specialTicks > 0 && --ft.specialTicks === 0) {
+      if (s.move === ft.special) s.move = 0;
+      if (ft.special === TRICK.lamppost) s.spinRate = 0;
+    }
+  }
+
+  /** A grab let go: by the player (a stomp, if close enough to touchdown), or by the rider as it sets. */
+  private letGo(auto: boolean): void {
+    const s = this.s;
+    if (s.grab === 0) return;
+    this.events.push({ type: 'grab', phase: auto ? 'auto' : 'release', side: s.grab, tier: s.grabTier, trick: s.move });
+    this.ft.letGo = this.tick;
+    this.ft.auto = auto;
+    if (auto) this.ft.hold = 5;
+    this.clearGrab();
+  }
+
+  private airStep(action: boolean, pressed: boolean, released: boolean, steerTarget: number): void {
     const s = this.s;
     const c = this.course;
     s.airTicks++;
@@ -1060,10 +1565,12 @@ export class Sim {
     }
     if (action && this.airPressed) s.airHold++;
     else s.airHold = 0;
+    this.airTricks(action, pressed, released, steerTarget);
     s.vy -= this.gravity * DT;
 
     // Air control: a gentle lateral nudge.
-    const lat = s.steer * 3.0 * DT;
+    // (Will-o'-Wisp: both hands off, no air control while it is held.)
+    const lat = this.ft.hold === 3 && this.ft.sig === TRICK.willowisp ? 0 : s.steer * 3.0 * DT;
     s.vx += lat * dcos(s.velHeading);
     s.vz -= lat * dsin(s.velHeading);
     s.vx *= 1 - 0.015 * DT;
@@ -1072,16 +1579,29 @@ export class Sim {
     if (s.speed > 0.01) s.velHeading = datan2(s.vx, s.vz);
 
     // Spins from steering (with a dead zone), flips from holding the action.
-    const spinMax = 9 * this.sled.spin * this.mood.spin;
+    const spinMax = 9 * this.sled.spin * this.mood.spin * (this.has(CHARM.whirl) ? 1.1 : 1) * (this.has(CHARM.paper) ? 0.85 : 1);
     // The landing set (round 7 made it hold): a key held through a flight spins at full rate, and the old set
     // could not stop that in time, so a first-timer who only steered in the air came down sideways one flight
     // in four. Now the spin is stopped hard and the swing has time left: a spin alone lands sketchy at worst.
     const setting = s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS);
-    if (setting) {
+    // While grabbing, only steering with the grab's side spins (a little slower); against it is a tweak.
+    const ft = this.ft;
+    const sig = ft.hold === 3 ? ft.sig : 0;
+    const spinIn = sig === TRICK.willowisp ? 0 : s.grab !== 0 ? (s.steer * s.grab > 0.3 ? s.steer : 0) : s.steer;
+    const spinMul = s.grab !== 0 ? 0.8 : 1;
+    if (sig === TRICK.spinningTop) {
+      // The saucer spins under a still rider while it is held, and nothing stops it but letting go.
+      s.spinRate = approach(s.spinRate, ft.sigDir * spinMax, 34 * DT);
+    } else if (setting) {
       s.spinRate = approach(s.spinRate, 0, LAND_SET_SPIN * DT);
       s.airYaw = approach(s.airYaw, PI * Math.round(s.airYaw / PI), 4 * DT);
-    } else if (Math.abs(s.steer) > 0.3) {
-      s.spinRate = approach(s.spinRate, s.steer * spinMax, 34 * DT);
+    } else if (ft.special === TRICK.lamppost && ft.specialTicks > 0) {
+      // Swung round the rail's end: a half turn in the move's length.
+      s.spinRate = (ft.specialDir * PI) / (SPECIAL_TICKS * DT);
+    } else if (sig === TRICK.teacup) {
+      s.spinRate = approach(s.spinRate, ft.sigDir * spinMax * 0.5, 34 * DT);
+    } else if (Math.abs(spinIn) > 0.3) {
+      s.spinRate = approach(s.spinRate, spinIn * spinMax * spinMul, 34 * DT);
     } else {
       s.spinRate = approach(s.spinRate, 0, 22 * DT);
       const nearest = PI * Math.round(s.airYaw / PI);
@@ -1090,7 +1610,7 @@ export class Sim {
     s.airYaw += s.spinRate * DT;
     // A flip never starts in the last FLIP_GUARD_TICKS before touchdown: a stomp held a little too
     // long used to tip the rider into the snow. One already under way carries on.
-    const flipping = action && s.airHold >= 7;
+    const flipping = action && s.airHold >= 7 && ft.hold === 1;
     const whole = TAU * Math.round(s.airPitch / TAU);
     // (A flip turns toward lower pitch, so past its half the nearest whole turn lies ahead of it.)
     const finishing = flipping && s.pitchRate < -1 && whole < s.airPitch;
@@ -1101,7 +1621,7 @@ export class Sim {
       s.pitchRate = approach(s.pitchRate, 0, 60 * DT);
       s.airPitch = approach(s.airPitch, whole, LAND_SET_PITCH * DT);
     } else if (flipping && (s.pitchRate < -1 || !this.landingWithin(FLIP_GUARD_TICKS))) {
-      s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin, 20 * DT);
+      s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin * (this.has(CHARM.whirl) ? 0.75 : 1), 20 * DT);
     } else {
       s.pitchRate = approach(s.pitchRate, 0, 26 * DT);
       // Let go of a flip and the rider comes out of it (twice as fast as before round 7: a hold begun in the
@@ -1155,6 +1675,23 @@ export class Sim {
       s.pressStartedGrounded = false;
     }
 
+    // Still holding at touchdown: a grab (or the sled's own move) held deep, tier 2 and on, is a fall on a
+    // committed flight and sketchy on a short one. A short grab the rider lets go of as it lands: clean at best,
+    // never a stomp. (A first-timer's thumb on the button through a landing is a short grab almost always.)
+    const ft = this.ft;
+    const holding = s.grab !== 0 || ft.hold === 3;
+    // (The sled's own move, held: each sled has its own say in what that costs: tricks.ts sigFallTier.)
+    const sigHeld = ft.hold === 3 ? sigTier(ft.sig, ft.sigTicks) : 0;
+    const deep = holding && (s.grabTier >= 2 || (ft.hold === 3 && sigHeld >= sigFallTier(ft.sig)));
+    const soft = ft.hold === 3 && ft.sig === TRICK.fireside && sigHeld >= 1;
+    const flight = { halfTurns, flips, grabTicks: this.grabClock(ft.grabMax), tweakTicks: ft.tweakTicks, tweakLate: ft.tweakLate, special: ft.special, sigTicks: ft.sigTicks, sig: ft.sig };
+    const window = Math.max(LET_GO_TICKS, this.stompTicks);
+    const letGo =
+      (ft.letGo >= 0 && !ft.auto && this.tick - ft.letGo <= window && grabTier(this.grabClock(ft.grabMax)) >= 1) ||
+      (ft.sig !== TRICK.pineBow && this.tick - ft.sigLetGo <= window && sigTier(ft.sig, ft.sigTicks) >= 1);
+    this.clearGrab();
+    ft.hold = -1;
+
     if (airtime < 0.3 && halfTurns === 0 && flips === 0) {
       s.airYaw = 0;
       s.airPitch = 0;
@@ -1164,7 +1701,7 @@ export class Sim {
 
     // A short flight never wrecks: nobody meant that. Commit to a real one and land it wrong, and you go.
     const committed = airtime >= 0.75;
-    if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol)) {
+    if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol || deep) && !this.featherSpare()) {
       s.airYaw = 0;
       s.airPitch = 0;
       // The landing is always said, whatever becomes of it: under a ward or the grace after a get-up it used to
@@ -1175,16 +1712,18 @@ export class Sim {
       return;
     }
 
-    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol;
-    const stomp = this.tick - s.lastPressTick <= 9 && airtime >= 0.4;
+    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol || deep || soft;
+    // A stomp: a press in the last 9 ticks, or a grab let go there.
+    const stomp = (this.tick - s.lastPressTick <= this.stompTicks || letGo) && airtime >= 0.4 && !holding;
     const scale = sketchy ? 0.5 : 1;
-    const spinPts = halfTurns > 0 ? 150 * halfTurns * (1 + 0.25 * (halfTurns - 1)) * scale : 0;
-    const flipPts = flips > 0 ? 600 * flips * scale : 0;
-    const trickPts = spinPts + flipPts;
+    let trickPts = 0;
 
     if (airtime >= 0.5) this.style('air', Math.round(60 * airtime));
-    if (spinPts > 0) this.style('spin', Math.round(spinPts));
-    if (flipPts > 0) this.style('flip', Math.round(flipPts));
+    for (const t of nameFlight(flight)) {
+      const pts = t.points * scale;
+      trickPts += pts;
+      this.trickStyle(t.id, pts, t.units, t);
+    }
     this.stats.maxAirtime = Math.max(this.stats.maxAirtime, airtime);
     this.stats.maxHalfTurns = Math.max(this.stats.maxHalfTurns, halfTurns);
     this.stats.flips += flips;
@@ -1200,7 +1739,7 @@ export class Sim {
     if (sketchy) {
       quality = 'sketchy';
       this.stats.sketchies++;
-      s.speed *= committed ? 0.8 : 0.97;
+      s.speed *= committed ? (this.has(CHARM.star) ? 0.7 : 0.8) : 0.97;
       s.wobble = committed ? 32 : 8;
     } else if (stomp) {
       quality = 'perfect';
@@ -1213,7 +1752,7 @@ export class Sim {
       const cleanBoost = Math.min(4, (halfTurns * 0.5 + flips) * 1.2);
       s.boostPool += cleanBoost;
       // A press just after touchdown still upgrades to a perfect (airtime permitting).
-      s.lateStompTicks = airtime >= 0.4 ? 5 : 0;
+      s.lateStompTicks = airtime >= 0.4 ? (this.stompTicks > 9 ? FIRST_RUN_LATE : 5) : 0;
       this.lateTricks = { halfTurns, flips, trickPts, cleanPts, cleanBoost };
     }
     if (quality !== 'perfect' && impact > 12) s.speed *= 0.93;
@@ -1221,7 +1760,9 @@ export class Sim {
     if (quality !== 'sketchy' && s.speed > 1) {
       const m = vyFollow / s.speed;
       const along = (s.speed + vyAtTouch * m) / (1 + m * m);
-      if (along > s.speed) s.speed += Math.min(8, (along - s.speed) * 1.5);
+      const star = this.has(CHARM.star);
+      // (Falling Star: 2.2x and to 11 m/s, from 3x and 14: it won 69% of the mid pilot's charm races.)
+      if (along > s.speed) s.speed += Math.min(star ? 11 : 8, (along - s.speed) * (star ? 2.2 : 1.5));
       this.capSpeed();
     }
     s.vx = s.speed * dsin(s.velHeading);
@@ -1237,8 +1778,16 @@ export class Sim {
     this.style('perfect', Math.max(0, Math.round(250 + trickPts * 0.4) - alreadyPts));
     const boost = Math.max(0, Math.min(10, 2.5 + 1.5 * (halfTurns * 0.5 + flips)) - alreadyBoost);
     s.boostPool += boost;
-    s.flow = Math.min(6, s.flow + 0.5);
     this.events.push({ type: 'boost', amount: boost, source: 'perfect' });
+    this.lastPerfect = this.tick;
+    // Hearthstone: the dash's lantern back, once a dash. Comet Chain: two thirds of a second more of a dash under way.
+    if (this.hearthOwed > 0) {
+      // (A quarter of it: round 8's charm races had the whole lantern back winning 70% of them, a third 66%.)
+      this.lightRaw(this.hearthOwed / 4);
+      this.hearthOwed = 0;
+    }
+    // (Two thirds of a second, from one: 64% of the pair races.)
+    if (s.dash > 0 && this.hasPair(1)) s.dash += 40;
   }
 
   /** A press just after a clean landing still counts as a stomp. */
@@ -1255,10 +1804,10 @@ export class Sim {
   /** The speed cap, raised while a dash lasts; what a dash carried over it eases off, never in a step. */
   private capSpeed(): void {
     const s = this.s;
-    if (s.dash > 0) this.overcap = DASH_CAP;
+    if (s.dash > 0) this.overcap = DASH_CAP + (this.has(CHARM.comet) ? 2 : 0);
     // The allowance only ever falls once the dash is over: with the ease, or with the speed, if that drops first.
     else if (this.overcap > 0) this.overcap = Math.max(0, Math.min(this.overcap - OVERCAP_EASE * DT, s.speed - MAX_SPEED));
-    const cap = MAX_SPEED + this.overcap;
+    const cap = MAX_SPEED - (this.has(CHARM.bark) ? 1 : 0) + this.overcap;
     if (s.speed > cap) s.speed = cap;
   }
 
@@ -1277,7 +1826,9 @@ export class Sim {
     if (units <= 0) return;
     const s = this.s;
     const before = this.cells;
-    const add = units * (skill ? this.sled.skillGain : this.sled.lightGain);
+    // Spirit Flow pays: +8% a level, on what skill and lights both give. (Guardian Wisp: lights 25% slower.)
+    let add = units * (skill ? this.sled.skillGain : this.sled.lightGain) * (1 + 0.08 * s.flowLevel);
+    if (!skill && this.has(CHARM.wisp)) add *= 0.75;
     const room = LANTERN_MAX - s.lantern;
     const got = add < room ? add : room;
     if (got <= 0) return;
@@ -1292,9 +1843,14 @@ export class Sim {
    *  sled rides as a spirit, through anything that would stop it (never through the mountain's walls). */
   private startDash(): void {
     const s = this.s;
-    if (s.crashed || s.dash > 0 || s.lantern < LANTERN) return;
-    s.lantern -= LANTERN;
-    s.dash = Math.round(DASH_TICKS * this.sled.dashLen);
+    // What it costs: a lantern; a lantern and a half on a Stone Lantern; half of one straight after a perfect landing
+    // on an Ember Step.
+    const cost = this.has(CHARM.stone) ? LANTERN * 1.5 : this.has(CHARM.step) && this.tick - this.lastPerfect <= EMBER_STEP_TICKS ? LANTERN * 0.7 : LANTERN;
+    if (s.crashed || s.dash > 0 || s.lantern < cost) return;
+    s.lantern -= cost;
+    // (Hearthstone: the next perfect landing gives it back.)
+    this.hearthOwed = this.has(CHARM.hearth) ? cost : 0;
+    s.dash = Math.round(DASH_TICKS * this.sled.dashLen * (this.has(CHARM.comet) ? 1.3 : 1));
     s.boostPool += DASH_BOOST;
     this.stats.dashes++;
     this.events.push({ type: 'dash', phase: 'start', cells: this.cells });
@@ -1316,6 +1872,9 @@ export class Sim {
   private wipeout(cause: TumbleCause): void {
     const s = this.s;
     if (s.tumble > 0 || s.crashed) return;
+    // (Whatever was held in the air goes with the hit; the flight is never named.)
+    this.clearGrab();
+    this.ft.hold = -1;
     if (this.homeward || s.invuln > 0) {
       // Riding home nothing can go wrong: a landing that would have floored a racer just lands. The same for a
       // rider who has only just got up (or been warded): the first lip after a fall is never a second fall.
@@ -1326,11 +1885,26 @@ export class Sim {
       s.pitchRate = 0;
       return;
     }
-    // A full lantern takes the hit: the rider rides on, slower, the combo banked rather than lost.
-    if (s.lantern >= LANTERN) {
-      s.lantern -= LANTERN;
+    const stage = this.stageTicks.length;
+    const free = s.z < FREE_TUMBLE_Z;
+    // A full lantern takes the hit: the rider rides on, slower, the combo banked rather than lost. (Never on a Comet's
+    // Tail; half a lantern on a Stone Lantern; free once a stage with a Guardian Wisp, and once a stage with a Last
+    // Lamp for a rider with no get-up left.)
+    const wardCost = this.has(CHARM.stone) ? LANTERN / 2 : LANTERN;
+    let cost = -1;
+    if (this.has(CHARM.wisp) && this.wispStage !== stage) {
+      this.wispStage = stage;
+      cost = 0;
+    } else if (!this.has(CHARM.comet) && s.lantern >= wardCost) cost = wardCost;
+    else if (this.has(CHARM.lamp) && !free && s.getUps <= 0 && this.lampStage !== stage) {
+      this.lampStage = stage;
+      cost = 0;
+    }
+    if (cost >= 0) {
+      s.lantern -= cost;
       this.stats.wards++;
-      s.speed *= WARD_KEEP * this.sled.wardKeep;
+      this.coolFlow(2);
+      s.speed *= this.has(CHARM.stone) ? 0.95 : WARD_KEEP * this.sled.wardKeep;
       s.heading = s.velHeading;
       s.airYaw = 0;
       s.airPitch = 0;
@@ -1348,14 +1922,18 @@ export class Sim {
       const banked = this.combo.bank();
       if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
       this.events.push({ type: 'ward', cause, cells: this.cells });
+      // (Shrine Keeper: a ward lights a third of a cell back.)
+      if (this.hasPair(5)) this.lightRaw(LANTERN / 3);
       return;
     }
-    const free = s.z < FREE_TUMBLE_Z;
     if (!free && s.getUps <= 0) {
       this.crash(cause);
       return;
     }
-    if (!free) s.getUps--;
+    // Second Wind: no get-up spent, but the lantern goes out. Quick Feet: the part-lit cell goes.
+    if (!free && !this.has(CHARM.second)) s.getUps--;
+    if (this.has(CHARM.second)) s.lantern = 0;
+    else if (this.has(CHARM.quick)) s.lantern = LANTERN * Math.floor(s.lantern / LANTERN);
     s.falls++;
     s.tumble = TUMBLE_TICKS;
     s.fall = FALL_FALLING;
@@ -1373,7 +1951,7 @@ export class Sim {
     s.boostPool = 0;
     s.carveTicks = 0;
     s.wallTicks = 0;
-    s.flow = 0;
+    this.coolFlow(7);
     s.draftTicks = 0;
     s.draftCharge = 0;
     s.airYaw = 0;
@@ -1394,7 +1972,7 @@ export class Sim {
   /** The speed a rider gets up at: a share of cruise, and above the least of it never more than the speed
    *  the fall began at. */
   private getUpSpeed(): number {
-    const push = GET_UP_SPEED * this.cruiseSpeed();
+    const push = (this.has(CHARM.quick) ? 0.65 : GET_UP_SPEED) * this.cruiseSpeed();
     const had = this.fallSpeed > GET_UP_MIN ? this.fallSpeed : GET_UP_MIN;
     return had < push ? had : push;
   }
@@ -1418,6 +1996,12 @@ export class Sim {
         s.fall = FALL_DOWN;
         s.fallTick = this.tick;
         this.events.push({ type: 'fall', phase: 'down' });
+        // (Quick Feet: no lying in the snow, straight up.)
+        if (this.has(CHARM.quick)) {
+          s.tumble -= DOWN_TICKS;
+          s.fall = FALL_UP;
+          this.events.push({ type: 'fall', phase: 'up' });
+        }
       }
     } else if (into <= FALL_TICKS + DOWN_TICKS) {
       s.speed = 0;
@@ -1468,6 +2052,12 @@ export class Sim {
     this.airPressed = false;
     this.nearMiss.clear();
     this.events.push({ type: 'tumble', phase: 'end', cause: this.tumbleCause, left: s.getUps });
+    // (Phoenix: up from a fall into a short dash, no lantern spent.)
+    if (this.hasPair(2) && !this.homeward) {
+      s.dash = DASH_TICKS / 2;
+      s.boostPool += DASH_BOOST / 2;
+      this.events.push({ type: 'dash', phase: 'start', cells: this.cells });
+    }
   }
 
   /** Get-ups come back with the riding: one for every GET_UP_BACK_M since the first of them was spent. */
@@ -1502,8 +2092,8 @@ export class Sim {
     s.vz = sp * dcos(s.velHeading);
     if (out > 3) {
       s.wobble = 14;
-      const banked = this.combo.bank();
-      if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+      this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
+      this.bumpCombo(false);
       this.events.push({ type: 'scrape', side, speed: sp });
     }
   }
@@ -2039,7 +2629,8 @@ export class Sim {
         const len = r.z1 - r.z0;
         if (len <= 0) continue;
         const rx = r.x0 + ((r.x1 - r.x0) * d) / len;
-        if (Math.abs(s.x - rx) > 0.7 || s.speed < 9 || s.velHeading < -0.6 || s.velHeading > 0.6) continue;
+        const bell = this.has(CHARM.bell);
+        if (Math.abs(s.x - rx) > (bell ? 1.3 : 0.7) || s.speed < (bell ? 7 : 9) || s.velHeading < -0.6 || s.velHeading > 0.6) continue;
         this.rail = r;
         this.railU = d / len;
         this.railTicks = 0;
@@ -2047,7 +2638,7 @@ export class Sim {
         s.drifting = false;
         s.wallTicks = 0;
         this.events.push({ type: 'grind', phase: 'start', id: r.id });
-        this.style('grind', 180);
+        this.style('grind', this.has(CHARM.bell) ? 360 : 180);
         return;
       }
     }
@@ -2090,11 +2681,12 @@ export class Sim {
     s.groundHold = action ? s.groundHold + 1 : 0;
     s.lean = approach(s.lean, 0, 5 * DT);
     this.railTicks++;
-    if (this.railTicks % 24 === 0) this.style('grind', 60);
+    if (this.railTicks % 24 === 0) this.style('grind', this.has(CHARM.bell) ? 120 : 60);
     const off = Math.abs(s.steer) > 0.7 && this.railTicks > 12;
     if (u < 1 && !off && !released) return;
     const popped = released;
     this.endGrind();
+    this.railOff = true;
     if (off) {
       s.vx += s.steer * 4;
       s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
@@ -2185,7 +2777,7 @@ export class Sim {
             continue;
           }
           const vn = -(s.vx * hit.nx + s.vz * hit.nz);
-          if (s.invuln === 0 && (vn > HIT_HARD || (vn > HIT_FAST && s.speed > HIT_FAST_SPEED))) {
+          if (s.invuln === 0 && (vn > (this.has(CHARM.bark) ? 15 : HIT_HARD) || (vn > HIT_FAST && s.speed > HIT_FAST_SPEED))) {
             this.wipeout(o.kind === 'pine' || o.kind === 'blossom' || o.kind === 'charpine' ? 'tree' : 'rock');
             return;
           }
@@ -2201,9 +2793,9 @@ export class Sim {
           s.heading = s.velHeading;
           s.vx = s.speed * dsin(s.velHeading);
           s.vz = s.speed * dcos(s.velHeading);
-          s.wobble = 22;
-          const banked = this.combo.bank();
-          if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
+          s.wobble = this.has(CHARM.bark) ? 11 : 22;
+          this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
+          this.bumpCombo(true);
           this.events.push({ type: 'bump', id: o.id });
         } else if (!o.soft && hit.d < touch + 1.15 && s.speed > 12 && !this.resolvedObstacles.has(o.id)) {
           const prev = this.nearMiss.get(o.id);
@@ -2235,6 +2827,9 @@ export class Sim {
       pz = o.z + ez * t;
     }
     this.style('nearMiss', 120, { gap: Math.max(0, d - o.r - SLED_RADIUS), side: px > s.x ? 1 : -1, x: px, z: pz, obs: o.kind, id: o.id });
+    // Owl's Breath: the combo's timer refilled and a second more, up to three. Night Chorus: two links.
+    if (this.has(CHARM.owl)) this.combo.refill(TICK_RATE, 3 * TICK_RATE);
+    if (this.hasPair(4)) this.combo.link();
   }
 
   private pickups(prevZ: number): void {
@@ -2262,6 +2857,8 @@ export class Sim {
         }
       }
     }
+    // Lamplit Path: a spark on the safe line every PATH_STEP metres, for this rider only.
+    if (this.pathNext > 0) this.pathSparks();
     // A sky gate: through its ring as the sled crosses its plane.
     while (this.gateAt < this.gates.length && this.gates[this.gateAt].z < prevZ - 1) this.gateAt++;
     const gate = this.gateAt < this.gates.length ? this.gates[this.gateAt] : null;
@@ -2302,10 +2899,12 @@ export class Sim {
     this.collected.add(id);
     const great = value > 1;
     const before = this.s.lantern;
-    this.charge((great ? GREAT : SPARK) * this.mood.lightValue, false);
+    // (Lamplit Path: its own sparks light half a spark; the course's great lights 40% less.)
+    const path = id >= PATH_ID0 && id < PATH_ID0 + 1000;
+    this.charge((great ? GREAT : SPARK) * this.mood.lightValue * (path ? 0.5 : great && this.has(CHARM.path) ? 0.6 : 1), false);
     this.stats.lights++;
     if (great) this.stats.greatLights++;
-    if (id >= LEGEND_ID0) this.stats.legendLit += this.s.lantern - before;
+    if (id >= LEGEND_ID0 && !path) this.stats.legendLit += this.s.lantern - before;
     this.events.push({ type: 'light', id, value, gain: this.s.lantern - before, x, y, z });
     this.lightScore += great ? 50 : 10;
   }
@@ -2326,6 +2925,8 @@ export class Sim {
     }
     s.drafting = active && !s.crashed;
     if (s.drafting) {
+      // (Slipstream Lantern: a draft lights the lantern.)
+      if (this.has(CHARM.slip)) this.charge(0.6, true);
       s.draftTicks++;
       this.stats.draftTicks++;
       s.draftCharge = Math.min(1, s.draftTicks / 90);
@@ -2336,11 +2937,15 @@ export class Sim {
       }
       if (s.draftTicks % 30 === 0) this.style('draft', 40);
     } else {
-      if (s.draftTicks >= 36) {
-        const boost = (2.5 + 3.5 * s.draftCharge) * this.mood.draft;
+      const kite = this.has(CHARM.kite);
+      if (s.draftTicks >= (kite ? 18 : 36)) {
+        const boost = (2.5 + 3.5 * s.draftCharge) * this.mood.draft * (kite ? 1.5 : 1);
         s.boostPool += boost;
         this.events.push({ type: 'boost', amount: boost, source: 'slingshot' });
         this.style('slingshot', 200);
+        if (kite) this.charge(12, true);
+        // (Ghost Rider: a whole cell a slingshot.)
+        if (this.hasPair(0)) this.lightRaw(LANTERN);
       }
       s.draftTicks = 0;
       s.draftCharge = 0;
@@ -2596,6 +3201,8 @@ export class Sim {
     mixF(s.finished ? 1 : 0);
     mixF(s.grinding ? this.railU : -1);
     mixF(s.lantern);
+    mixF(s.grab);
+    mixF(s.grabTicks);
     mixF(s.dash);
     mixF(s.ghost);
     mixF(this.overcap);
@@ -2609,6 +3216,11 @@ export class Sim {
     mixF(this.lg.phase);
     mixF(this.lg.n);
     mixF(this.lg.head);
+    mixF(this.charmMask);
+    mixF(this.heat);
+    mixF(s.flowLevel);
+    mixF(this.stats.showdowns);
+    mixF(this.stats.steals);
     return h >>> 0;
   }
 }

@@ -1,6 +1,7 @@
 import { Course } from '../sim/course';
 import { PI, TAU, approach } from '../sim/dmath';
 import { DT, FLIP_GUARD_TICKS, LAND_SET_TICKS } from '../sim/sim';
+import { GRAB_LATCH, GRAB_STEER, LATCH_TICKS } from '../sim/tricks';
 import { Scene } from './scene';
 
 // The bot's internal model of its own body: a ballistic flight predictor and a copy of the air
@@ -66,7 +67,9 @@ export function predictFlight(
   return { ticks: maxTicks, x, z, clearance };
 }
 
-/** Rotation state, mirroring the sim's air fields. `armed` is a fresh press since takeoff. */
+/** Rotation state, mirroring the sim's air fields. `armed` is a fresh press since takeoff. Round 8: `kind` is what
+ *  the press now held is (the sim's air trick hold: -1 none, 0 not yet decided, 1 a flip, 2 a grab, 5 spent), `len`
+ *  its ticks, `grab` the side held. */
 export interface Rot {
   steer: number;
   spin: number;
@@ -76,6 +79,9 @@ export interface Rot {
   hold: number;
   armed: boolean;
   prev: boolean;
+  kind: number;
+  len: number;
+  grab: number;
 }
 
 export interface RotParams {
@@ -92,6 +98,9 @@ export function copyRot(from: Rot, to: Rot): Rot {
   to.hold = from.hold;
   to.armed = from.armed;
   to.prev = from.prev;
+  to.kind = from.kind;
+  to.len = from.len;
+  to.grab = from.grab;
   return to;
 }
 
@@ -101,21 +110,45 @@ export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotPara
   const rate = Math.abs(steerTarget) < Math.abs(r.steer) || steerTarget * r.steer < 0 ? 10 : 8;
   r.steer = approach(r.steer, steerTarget, rate * DT);
   const pressed = action && !r.prev;
+  const released = !action && r.prev;
   r.prev = action;
   if (pressed) r.armed = true;
   r.hold = action && r.armed ? r.hold + 1 : 0;
+  // The press decides (sim.ts airTricks): a side in its first GRAB_LATCH ticks is a grab, centred at LATCH_TICKS a
+  // flip; nothing starts inside the flip guard.
+  if (released) {
+    r.kind = -1;
+    r.grab = 0;
+    r.len = 0;
+  }
+  if (pressed) {
+    r.kind = left <= FLIP_GUARD_TICKS ? 5 : 0;
+    r.len = 0;
+  }
+  if (action && r.kind >= 0) {
+    r.len++;
+    if (r.kind === 0) {
+      const side = steerTarget >= GRAB_STEER ? 1 : steerTarget <= -GRAB_STEER ? -1 : 0;
+      if (side !== 0 && r.len <= GRAB_LATCH && left > FLIP_GUARD_TICKS) {
+        r.kind = 2;
+        r.grab = side;
+      } else if (r.len >= LATCH_TICKS) r.kind = 1;
+    }
+  }
+  const spinIn = r.grab !== 0 ? (r.steer * r.grab > 0.3 ? r.steer : 0) : r.steer;
+  const spinMul = r.grab !== 0 ? 0.8 : 1;
   // (The sim samples the ground every 4 ticks, so its set starts 2 ticks short of the limit.)
   if (left <= LAND_SET_TICKS - 2) {
     r.spin = approach(r.spin, 0, 40 * DT);
     r.yaw = approach(r.yaw, PI * Math.round(r.yaw / PI), 4 * DT);
-  } else if (Math.abs(r.steer) > 0.3) {
-    r.spin = approach(r.spin, r.steer * p.spinMax, 34 * DT);
+  } else if (Math.abs(spinIn) > 0.3) {
+    r.spin = approach(r.spin, spinIn * p.spinMax * spinMul, 34 * DT);
   } else {
     r.spin = approach(r.spin, 0, 22 * DT);
     r.yaw = approach(r.yaw, PI * Math.round(r.yaw / PI), 2.6 * DT);
   }
   r.yaw += r.spin * DT;
-  if (action && r.hold >= 7 && (r.pr < -1 || left > FLIP_GUARD_TICKS)) {
+  if (action && r.hold >= 7 && r.kind === 1 && (r.pr < -1 || left > FLIP_GUARD_TICKS)) {
     r.pr = approach(r.pr, -p.flipRate, 20 * DT);
   } else {
     r.pr = approach(r.pr, 0, 26 * DT);
@@ -126,7 +159,9 @@ export function rotStep(r: Rot, steerTarget: number, action: boolean, p: RotPara
 
 /**
  * An air plan in steps from now. Steer is dir * mag on [s0, s1) and `cruise` otherwise; the action
- * is held on [f0, f1) for a flip and again from `stomp` on (stomp < 0: no stomp).
+ * is held on [f0, f1) for a flip and again from `stomp` on (stomp < 0: no stomp). Round 8: a grab is the action held
+ * on [g0, g1) with the steer at `gside` for its first GRAB_LATCH ticks (the press's side), and a tweak the steer
+ * against it on [t0, t1). gside 0: no grab.
  */
 export interface AirPlan {
   dir: number;
@@ -137,19 +172,28 @@ export interface AirPlan {
   f0: number;
   f1: number;
   stomp: number;
+  gside: number;
+  g0: number;
+  g1: number;
+  t0: number;
+  t1: number;
 }
 
 export function steerAt(p: AirPlan, i: number): number {
+  if (p.gside !== 0) {
+    if (i >= p.g0 && i < p.g0 + GRAB_LATCH) return p.gside;
+    if (i >= p.t0 && i < p.t1) return -p.gside;
+  }
   return p.dir !== 0 && i >= p.s0 && i < p.s1 ? p.dir * p.mag : p.cruise;
 }
 
 export function actionAt(p: AirPlan, i: number): boolean {
-  return (i >= p.f0 && i < p.f1) || (p.stomp >= 0 && i >= p.stomp);
+  return (i >= p.f0 && i < p.f1) || (p.gside !== 0 && i >= p.g0 && i < p.g1) || (p.stomp >= 0 && i >= p.stomp);
 }
 
 const AIR_LATERAL = 3.0;
 
-const tmp: Rot = { steer: 0, spin: 0, yaw: 0, pr: 0, pitch: 0, hold: 0, armed: false, prev: false };
+const tmp: Rot = { steer: 0, spin: 0, yaw: 0, pr: 0, pitch: 0, hold: 0, armed: false, prev: false, kind: -1, len: 0, grab: 0 };
 
 /** Yaw and pitch after nA and nB steps (nA <= nB) of a plan. */
 export interface PlanResult {

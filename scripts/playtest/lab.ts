@@ -46,7 +46,7 @@
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
-import { type Inp, type Kit, type Pilot, classic, clumsy, mulberry, scripted, spenderFor, steadyPilot } from './labpilots';
+import { type Inp, type Kit, type Pilot, classic, clumsy, mulberry, scripted, spenderFor, steadyPilot, trickster } from './labpilots';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnySim = any;
@@ -69,6 +69,12 @@ const PILOTS = opt('pilots', 'hands-off,hold2s-r,hold2s-l,hold-r,zigzag,clumsy,n
 const VARIANT = +opt('variant', '-1');
 const LEGEND = +opt('legend', '0');
 const ONLY = opt('mountains', '');
+/** Round 8: --lane 0|1|2 rides every charm gate in that lane (the mid and expert pilots), --pool <mask> deals from
+ *  that charm pool (default: every charm), --carry <id> holds that charm from the start, --gates 1|2|3. */
+const LANE = +opt('lane', '-1');
+const POOL = +opt('pool', String((1 << 24) - 1));
+const CARRY = +opt('carry', '-1');
+const GATES = +opt('gates', '3');
 
 const load = async (p: string) => import(pathToFileURL(resolve(ROOT, p)).href);
 const { Sim } = await load('src/sim/sim.ts');
@@ -298,7 +304,14 @@ function pilotFor(name: string, sim: AnySim, seed: number, passes: RailPass[], a
       return () => p.sample();
     }
     case 'expert-dash':
+    case 'expert-classic':
       return classic('expert', sim, seed, KIT);
+    case 'mid-classic':
+      return classic('mid', sim, seed, KIT);
+    // Round 8: the mid and expert pilots ride the air map and the charm gates (labpilots.ts trickster).
+    case 'mid':
+    case 'expert':
+      return trickster(name, sim, seed, LANE >= 0 ? { ...KIT, lane: LANE } : KIT);
     default:
       return classic(name as 'novice', sim, seed, KIT);
   }
@@ -352,6 +365,15 @@ interface Ride {
   /** The legend moment the run met (its key, '' for none) and what it lit (round 7). */
   legend: string;
   legendLit: number;
+  /** Round 8: the most different named tricks one combo held, the named tricks landed and their kinds, the charms
+   *  taken (ids), Spirit Flow's best level, and the choices that changed the rest of the run (charms taken, and
+   *  dashes and wards: a lantern spent either way). */
+  comboTricks?: number;
+  tricks?: number;
+  trickKinds?: number;
+  charms?: number[];
+  bestFlow?: number;
+  choices?: number;
 }
 
 interface Fall {
@@ -379,10 +401,11 @@ interface Fall {
  *  `steady`: from this tick on a steady hand rides (steadyPilot; nobody spends a lantern), and the ride stops
  *  PRICE_M on: two rides that differ only by the fall are then ridden the same way after it. */
 function ride(pilotName: string, m: number, seed: number, alone: Alone | null = null, spare = -1, steady = -1): Ride {
-  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: rollFor(m, seed), sled: 0 });
+  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: rollFor(m, seed), sled: 0, charmPool: POOL, ...(GATES === 1 || GATES === 2 ? { charmGates: GATES } : {}), ...(CARRY >= 0 ? { carry: { lantern: 0, getUps: 3, charms: [CARRY] } } : {}) });
   const passes: RailPass[] = [];
   let pilot = pilotFor(pilotName, sim, seed, passes, alone);
-  let spend = spenderFor(pilotName, sim, seed);
+  // (The classic pilots spend as their namesakes do.)
+  let spend = spenderFor(pilotName.replace(/-classic$/, ''), sim, seed);
   let steadyZ = Infinity;
   const speeds: number[] = [];
   const falls: Fall[] = [];
@@ -390,6 +413,11 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   let spareZ = Infinity;
   const r: Ride = { pilot: pilotName, m, seed, seconds: 0, distance: 0, cause: null, meanSpeed: 0, p50: 0, p90: 0, peak: 0, first15Mean: 0, speed60: 0, rescues: 0, takeoffs: 0, airSeconds: 0, landings: {}, stomps: 0, bumps: 0, bankShare: 0, score: 0, gifts: 0, sections: {}, finished: false, stages: 0, grinds: 0, grindSeconds: 0, rails: passes, lastHit: -1e9, falls, marks, lights: 0, lit: 0, dashes: 0, wards: 0, gates: 0, phased: 0, moments: [], legend: '', legendLit: 0 };
   const mStart = new Map<number, { tick: number; v: number }>();
+  // (Round 8: the named tricks in the combo under way, and the most a combo held.)
+  let combo = new Set<number>();
+  let bestCombo = 0;
+  let tricksLanded = 0;
+  const trickKinds = new Set<number>();
   let bankTicks = 0;
   let airTicks = 0;
   let grindTicks = 0;
@@ -427,6 +455,12 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
     const sec = sim.course.section(s.z).kind;
     r.sections[sec] = (r.sections[sec] || 0) + 1;
     for (const e of sim.events) {
+      if (e.type === 'style' && e.trick) {
+        combo.add(e.trick);
+        trickKinds.add(e.trick);
+        tricksLanded++;
+        if (combo.size > bestCombo) bestCombo = combo.size;
+      } else if (e.type === 'comboBank' || e.type === 'comboLost') combo = new Set();
       if (e.type === 'takeoff') r.takeoffs++;
       else if (e.type === 'land') {
         r.landings[e.quality] = (r.landings[e.quality] || 0) + 1;
@@ -475,6 +509,12 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   r.phased = st.phased ?? 0;
   r.legend = st.legend ? (sim.legend?.key ?? '') : '';
   r.legendLit = st.legendLit ?? 0;
+  r.comboTricks = bestCombo;
+  r.tricks = tricksLanded;
+  r.trickKinds = trickKinds.size;
+  r.charms = [...(sim.charms ?? [])];
+  r.bestFlow = st.bestFlow ?? 0;
+  r.choices = r.charms.length + (st.dashes > 0 || st.wards > 0 ? 1 : 0);
   return r;
 }
 
@@ -651,13 +691,13 @@ function momentTable(rides: Ride[]): void {
     };
     console.log(v.padEnd(16) + human.map(cell).join(''));
   }
-  console.log('\npilot       finished   median s (finishers)   set pieces won   lanterns lit (med)');
+  console.log('\npilot       finished   median s (finishers)   set pieces won   lanterns lit (med)   best combo tricks (med/max)   trick kinds (med)   choices (med)   best flow (med)');
   for (const pilot of PILOTS) {
     const rs = rides.filter((r) => r.pilot === pilot);
     if (!rs.length) continue;
     const fin = rs.filter((r) => r.finished);
     const met = rs.flatMap((r) => r.moments);
-    console.log(pilot.padEnd(11), `${fin.length}/${rs.length}`.padStart(8), fmt(med(fin.map((r) => r.seconds))).padStart(14), `${met.filter((q) => q.won).length}/${met.length}`.padStart(22), fmt(med(rs.map((r) => r.lit / 100))).padStart(14));
+    console.log(pilot.padEnd(11), `${fin.length}/${rs.length}`.padStart(8), fmt(med(fin.map((r) => r.seconds))).padStart(14), `${met.filter((q) => q.won).length}/${met.length}`.padStart(22), fmt(med(rs.map((r) => r.lit / 100))).padStart(14), `${med(rs.map((r) => r.comboTricks ?? 0))}/${Math.max(...rs.map((r) => r.comboTricks ?? 0))}`.padStart(22), String(med(rs.map((r) => r.trickKinds ?? 0))).padStart(18), String(med(rs.map((r) => r.choices ?? 0))).padStart(14), String(med(rs.map((r) => r.bestFlow ?? 0))).padStart(14));
   }
   const withLegend = rides.filter((r) => r.legend);
   if (withLegend.length) {

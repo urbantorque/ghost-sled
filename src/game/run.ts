@@ -1,7 +1,8 @@
 import { ChaosRoll } from '../sim/chaos';
 import { InputRecorder, LogEvent, packInput } from '../sim/input';
-import { RunRecord } from '../sim/replay';
-import { Sim, SimEvent, SledState } from '../sim/sim';
+import { RunRecord, applyLogEvent } from '../sim/replay';
+import { type RiderPoint, type RivalEvent, riderPoint } from '../sim/rivals';
+import { Sim, SimConfig, SimEvent, SledState } from '../sim/sim';
 
 // One live run: owns the Sim, samples input once per tick, records the input log, and keeps the
 // previous and current tick snapshots for render interpolation.
@@ -140,6 +141,13 @@ export interface InputSource {
 
 export type DraftProbe = (tick: number, x: number, y: number, z: number) => boolean;
 
+/** Round 8: the field's rules for showdowns and the spirit steal (rivals.ts), asked once a tick with the rider as it
+ *  now is; what it decides that gives something goes into the log as a token. */
+export type RivalProbe = (tick: number, me: RiderPoint) => readonly RivalEvent[];
+
+/** What the save decides for a run's SimConfig beyond the mountain, the roll and the sled (round 8). */
+export type RunExtra = Pick<SimConfig, 'charmPool' | 'charmGates' | 'carry' | 'firstRun'>;
+
 export class Run {
   readonly sim: Sim;
   readonly recorder = new InputRecorder();
@@ -148,16 +156,21 @@ export class Run {
   /** Events produced since the presentation layer last drained them. */
   readonly pending: Array<{ tick: number; e: SimEvent }> = [];
   draftProbe: DraftProbe | null = null;
+  rivalProbe: RivalProbe | null = null;
+  /** What the rival rules decided, for the director (drainRivals). */
+  readonly rivalPending: Array<{ tick: number; e: RivalEvent }> = [];
   paused = false;
-  private pendingRevive = false;
+  /** Log tokens to apply at the start of the next tick (a revive, a showdown won, a wisp stolen). */
+  private readonly tokens: LogEvent[] = [];
 
   constructor(
     readonly seed: number,
     readonly chaos: ChaosRoll,
     readonly sled: number,
     private input: InputSource,
+    readonly extra: RunExtra = {},
   ) {
-    this.sim = new Sim({ seed, chaos, sled });
+    this.sim = new Sim({ seed, chaos, sled, ...extra });
     copySnap(this.sim.s, this.prev);
     copySnap(this.sim.s, this.cur);
   }
@@ -175,12 +188,12 @@ export class Run {
    *  run keeps advancing through its coast. */
   tick(): boolean {
     if (this.paused) return false;
-    if (this.pendingRevive) {
-      this.pendingRevive = false;
-      this.recorder.event(LogEvent.Revive);
-      this.sim.revive();
+    for (const t of this.tokens) {
+      this.recorder.event(t);
+      applyLogEvent(this.sim, t);
       for (const e of this.sim.events) this.pending.push({ tick: this.sim.tick, e });
     }
+    this.tokens.length = 0;
     if (this.sim.s.crashed) return false;
     const s = this.sim.s;
     const inp = this.input.sample();
@@ -191,11 +204,24 @@ export class Run {
     this.sim.step(byte);
     copySnap(s, this.cur);
     for (const e of this.sim.events) this.pending.push({ tick: this.sim.tick, e });
+    if (this.rivalProbe && !s.crashed) {
+      for (const e of this.rivalProbe(this.sim.tick - 1, riderPoint(this.sim))) {
+        this.rivalPending.push({ tick: this.sim.tick, e });
+        if (e.type === 'showdown' && e.phase === 'won') this.tokens.push(LogEvent.Showdown);
+        else if (e.type === 'steal') this.tokens.push(LogEvent.Steal);
+      }
+    }
     return !s.crashed;
   }
 
   revive(): void {
-    if (this.sim.s.crashed) this.pendingRevive = true;
+    if (this.sim.s.crashed && !this.tokens.includes(LogEvent.Revive)) this.tokens.push(LogEvent.Revive);
+  }
+
+  drainRivals(): Array<{ tick: number; e: RivalEvent }> {
+    const out = this.rivalPending.slice();
+    this.rivalPending.length = 0;
+    return out;
   }
 
   drain(): Array<{ tick: number; e: SimEvent }> {
@@ -209,6 +235,7 @@ export class Run {
       seed: this.seed,
       chaos: this.chaos,
       sled: this.sled,
+      ...this.extra,
       inputs: this.recorder.encode(),
       // (A finished run's header carries its finish; the log runs on through the coast.)
       ticks: this.sim.finished ? this.sim.s.finishTick : this.recorder.tickCount,

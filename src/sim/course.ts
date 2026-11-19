@@ -2,7 +2,8 @@ import { TAU, clamp, dcos, dsin, lerp, smoothstep } from './dmath';
 import { BiomeId, CourseBiome, MountainParams, isNamedSeed, lookOf, paramsForSeed } from './mountains';
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
-import { momentPlays } from './moments';
+import { momentPlays, setPieceKinds } from './moments';
+import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 
 // The course is a pure function of its seed. +z is downhill, +x is the rider's right when facing
 // downhill, +y is up. Chunks are generated lazily and cached, but every chunk depends only on
@@ -587,6 +588,8 @@ const WALL_KINDS: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'bo
 const RAIL_LAST: ReadonlySet<SectionKind> = new Set<SectionKind>(['bridge', 'ravine', 'tunnel', 'fork', 'chute', 'gully']);
 /** Pads an act out when its beats cannot fill the stage. */
 const FILLERS: readonly SectionKind[] = ['cruise', 'bowl', 'chute'];
+/** The plain kinds a stage drops first when it is too long for its room (round 8's thresholds). */
+const GIVE_WAY: ReadonlySet<SectionKind> = new Set<SectionKind>(['cruise', 'bowl', 'chute', 'gully', 'switchbacks', 'benches', 'split']);
 
 /** Two sections may not meet like this. */
 function legalPair(a: SectionKind, b: SectionKind): boolean {
@@ -695,6 +698,8 @@ export interface Section {
   blend: number;
   /** This section's own numbers (its kind's, with the seed's choice of width and gradient). */
   shape: SectionShape;
+  /** A stage line's threshold (round 8): a charm gate stands on it. */
+  gate?: true;
   /** The ledges inside it, in order. */
   ledges: readonly Ledge[];
   prev: Section | null;
@@ -807,7 +812,22 @@ interface Beat {
   kind: SectionKind;
   len: number;
   blend: number;
+  /** A stage line's threshold (round 8): the calm, wide ground a charm gate stands on. */
+  gate?: true;
 }
+
+/** The threshold at every stage line (round 8, the charm gates): a plain corridor from THRESHOLD_BEFORE metres above
+ *  the line to THRESHOLD_AFTER past it, at least THRESHOLD_HW wide each side, with nothing standing on it, no kicker,
+ *  mogul, drop, vent, rail or ice, and no place or set piece. Its kind is 'cruise' (every lane already draws one). The
+ *  gate stands GATE_PAST_LINE past the line, 50 m into its body, with the 100 m above it plain and 80 m of it below. */
+export const THRESHOLD_BEFORE = 40;
+/** As far above the line as a threshold may start, where the stage above cannot fill its room exactly without it. */
+export const THRESHOLD_BEFORE_MAX = 220;
+export const THRESHOLD_AFTER = 180;
+export const THRESHOLD_AFTER_MIN = 150;
+export const THRESHOLD_HW = 11;
+/** What may not come before a threshold: a flight lands in what follows a leap, a terrace or a lake's outlet. */
+const NOT_BEFORE_GATE: ReadonlySet<SectionKind> = new Set<SectionKind>(['terraces', 'lake', 'cruise']);
 
 export class Course {
   readonly seed: number;
@@ -1015,6 +1035,36 @@ export class Course {
     ];
   }
 
+  /** Whether the i-th beat of a stage's list is a named mountain's set piece: its kind, the nth of that kind down the
+   *  descent (moments.ts AUTHORED). */
+  private isSetPiece(k: SectionKind, laid: readonly Beat[], list: readonly SectionKind[], i: number): boolean {
+    const nth = laid.filter((b) => b.kind === k).length + list.slice(0, i).filter((q) => q === k).length;
+    return setPieceKinds(this.seed, true).some((s) => s === `${k}:${nth}`);
+  }
+
+  /** As stretch, with the beats `fixed` marks held at the top of their range when the rest can still fill the total. The
+   *  draw is the same either way, so a stage with no such kind is laid exactly as stretch lays it. */
+  private stretchKeeping(list: readonly SectionKind[], spans: readonly (readonly [number, number])[], total: number, rng: Rng, fixed: readonly boolean[]): number[] {
+    void list;
+    if (!fixed.some((f) => f)) return this.stretch(spans, total, rng);
+    const rest = spans.filter((_, i) => !fixed[i]);
+    const restLo = rest.reduce((sum, [a]) => sum + a, 0);
+    const restHi = rest.reduce((sum, [, b]) => sum + b, 0);
+    // Each held beat as long as it can be while the rest can still fill what is left.
+    let room = total - restLo;
+    const held = spans.map(([lo, hi], i) => {
+      if (!fixed[i]) return 0;
+      const len = Math.max(lo, Math.min(hi, room - spans.reduce((sum, [l], j) => sum + (fixed[j] && j > i ? l : 0), 0)));
+      room -= len;
+      return len;
+    });
+    const left = total - held.reduce((a, b) => a + b, 0);
+    if (!rest.length || left < restLo - 1e-6 || left > restHi + 1e-6) return this.stretch(spans, total, rng);
+    const drawn = this.stretch(rest, left, rng);
+    let j = 0;
+    return spans.map((_, i) => (fixed[i] ? held[i] : drawn[j++]));
+  }
+
   /** Every length in its range, summing to total: drawn free, then drawn in toward whichever end fits. */
   private stretch(spans: readonly (readonly [number, number])[], total: number, rng: Rng): number[] {
     const at = spans.map(() => rng.next());
@@ -1031,7 +1081,11 @@ export class Course {
   private pour(acts: SectionKind[][], rng: Rng): Beat[] | null {
     const beats = this.opening(rng);
     const openLen = beats.reduce((sum, b) => sum + b.len, 0);
-    const caps = [STAGE_LENGTHS[0] - openLen, STAGE_LENGTHS[1], STAGE_LENGTHS[2] - FINISH_SQUARE];
+    // (Round 8: each stage line's threshold takes its metres from the stages either side of the line: from the stage
+    // above THRESHOLD_BEFORE to THRESHOLD_BEFORE_MAX, from the stage below THRESHOLD_AFTER_MIN to THRESHOLD_AFTER,
+    // whatever lets each stage's own beats fill the rest exactly.)
+    const room = [STAGE_LENGTHS[0] - openLen, STAGE_LENGTHS[1], STAGE_LENGTHS[2] - FINISH_SQUARE];
+    let threshold: Beat | null = null;
     const slots = acts.map((a) => a.slice());
     // The first place past the first leap comes up to meet it, and what it leaves behind must still meet.
     const open = slots[0];
@@ -1043,11 +1097,24 @@ export class Course {
     if (first < 0) return null;
     open.unshift(open.splice(first, 1)[0]);
     const must = SIGNATURES[this.params.biome];
+    // (What a named mountain's set pieces stand in never gives way: round 8's thresholds made the stages tighter.)
+    const sets = setPieceKinds(this.seed);
+    const keep = [...must, ...sets];
     let before: SectionKind = 'leap';
     for (let n = 0; n < slots.length; n++) {
       const list = slots[n];
-      const cap = caps[n];
+      const gated = n < slots.length - 1;
+      const capMax = room[n] - (gated ? THRESHOLD_BEFORE : 0) - (n > 0 ? THRESHOLD_AFTER_MIN : 0);
+      const capMin = room[n] - (gated ? THRESHOLD_BEFORE_MAX : 0) - (n > 0 ? THRESHOLD_AFTER : 0);
+      const cap = capMax;
       while (this.reach(list, before).lo > cap) {
+        // (Round 8: the thresholds take 360 m from the stages. A filler gives way before a place is handed on to
+        // the next stage, so each stage keeps its places and its set piece.)
+        const give = this.spareFiller(list, before, keep, capMin, gated);
+        if (give >= 0) {
+          list.splice(give, 1);
+          continue;
+        }
         if (n < slots.length - 1) {
           const k = list.pop();
           if (k === undefined) return null;
@@ -1058,7 +1125,7 @@ export class Course {
         // may meet.
         let spare = list.length - 1;
         const free = (i: number): boolean => {
-          if (list[i] === 'leap' || must.includes(list[i])) return false;
+          if (list[i] === 'leap' || keep.includes(list[i])) return false;
           const a = i > 0 ? list[i - 1] : before;
           return i + 1 >= list.length || legalPair(a, list[i + 1]);
         };
@@ -1066,33 +1133,68 @@ export class Course {
         if (spare < 0) return null;
         list.splice(spare, 1);
       }
-      while (this.reach(list, before).hi < cap) {
+      while (this.reach(list, before).hi < capMin) {
         const last = list.length > 0 ? list[list.length - 1] : before;
         const next = n < slots.length - 1 ? slots[n + 1].shift() : undefined;
-        const k = next ?? FILLERS.find((c) => legalPair(last, c));
+        // (Before a threshold, which is itself plain corridor, a filler that is not.)
+        const k = next ?? FILLERS.find((c) => legalPair(last, c) && (n === slots.length - 1 || !NOT_BEFORE_GATE.has(c)));
         if (k === undefined) return null;
         list.push(k);
       }
       const r = this.reach(list, before);
-      if (r.lo > cap || r.hi < cap || list.length === 0) return null;
+      if (r.lo > capMax || r.hi < capMin || list.length === 0) return null;
+      // (The longest the stage's beats reach, up to its room: the threshold above the line takes what is left.)
+      const fill = r.hi < capMax ? r.hi : capMax;
       let prev: SectionKind = before;
       const spans = list.map((k) => {
         const b = this.blendOf(k, prev);
         prev = k;
         return [b + BODY[k][0], b + BODY[k][1]] as const;
       });
-      const lens = this.stretch(spans, cap, rng);
+      // (Round 8: a named mountain's set-piece places keep their full length where the stage has the room, so the
+      // thresholds' metres come out of the beats around them: a street of bells cut short holds a bell fewer.)
+      const lens = this.stretchKeeping(list, spans, fill, rng, list.map((k, i) => this.isSetPiece(k, beats, list, i)));
       prev = before;
       list.forEach((k, i) => {
         beats.push({ kind: k, len: lens[i], blend: this.blendOf(k, prev) });
         prev = k;
       });
       before = prev;
+      // What is left of the stage's room goes to the thresholds: the one above it as much below the line as it can
+      // take, the one below it the rest above its line.
+      let left = room[n] - fill;
+      if (threshold) {
+        const after = Math.max(THRESHOLD_AFTER_MIN, Math.min(THRESHOLD_AFTER, gated ? left - THRESHOLD_BEFORE : left));
+        threshold.len += after;
+        left -= after;
+      }
+      if (gated) {
+        if (NOT_BEFORE_GATE.has(prev)) return null;
+        threshold = { kind: 'cruise', len: left, blend: this.blendOf('cruise', prev), gate: true };
+        beats.push(threshold);
+        before = 'cruise';
+      }
     }
     beats.push({ kind: 'finish', len: FINISH_SQUARE + RUN_OUT, blend: this.blendOf('finish', before) });
     for (let i = 1; i < beats.length; i++) if (!legalPair(beats[i - 1].kind, beats[i].kind)) return null;
     for (const k of must) if (!beats.some((b) => b.kind === k)) return null;
     return beats;
+  }
+
+  /** The last plain beat in a stage's list that can go (a filler, nothing the mountain promises), where what it stood
+   *  between may meet; -1 for none. */
+  private spareFiller(list: readonly SectionKind[], before: SectionKind, must: readonly SectionKind[], cap: number, gated: boolean): number {
+    // (Only one whose going still leaves the stage room enough to fill: the stage is never left short of it.)
+    for (let i = list.length - 1; i >= 0; i--) {
+      const k = list[i];
+      if (!GIVE_WAY.has(k) || must.includes(k) || list.length <= 1) continue;
+      const a = i > 0 ? list[i - 1] : before;
+      if (i + 1 < list.length && !legalPair(a, list[i + 1])) continue;
+      // (Nor one that leaves a flight's landing, or plain corridor, against the threshold.)
+      if (gated && i === list.length - 1 && NOT_BEFORE_GATE.has(a)) continue;
+      if (this.reach([...list.slice(0, i), ...list.slice(i + 1)], before).hi >= cap) return i;
+    }
+    return -1;
   }
 
   /** The seed's descent: the script's order, tried until it meets every rule. The authored order always does. */
@@ -1137,7 +1239,7 @@ export class Course {
     let leapsLeft = beats.filter((b) => b.kind === 'leap').length;
     let leapNo = 0;
     beats.forEach((b, i) => {
-      const sec = this.pushSection(b.kind, b.len, b.blend);
+      const sec = this.pushSection(b.kind, b.len, b.blend, b.gate === true);
       const rng = new Rng(hash32(this.seed, i, 0xed6e));
       // The run-in is wide, but a first run's line through it is calm.
       if (i === 1) sec.shape.reach *= 0.4;
@@ -1156,12 +1258,13 @@ export class Course {
   }
 
   /** Sections are made in order, each from its own hash. */
-  private pushSection(kind: SectionKind, len: number, blend: number): Section {
+  private pushSection(kind: SectionKind, len: number, blend: number, gate = false): Section {
     const list = this.sections;
     const i = list.length;
     const prev = i > 0 ? list[i - 1] : null;
     const rng = new Rng(hash32(this.seed, i, 0x5ec7));
-    const shape = { ...SHAPES[kind] };
+    // (A threshold: the plain corridor, bare, calm, and wide enough for three arches.)
+    const shape = gate ? { ...SHAPES[kind], obstacles: 0, kickers: 0, moguls: 0, drops: 0, wander: 0.25, span: 0.25 } : { ...SHAPES[kind] };
     const grade = GRADE[kind];
     if (grade) shape.slope = rng.range(grade[0], grade[1]) / this.params.slope;
     const width = WIDTH[kind];
@@ -1169,13 +1272,15 @@ export class Course {
     const z0 = prev ? prev.z1 : 0;
     const side = rng.chance(0.5) ? 1 : -1;
     // The width this section mostly has: what the safe line's reach and shift are measured against.
-    const wide = lerp(this.params.halfWidthStart, this.params.halfWidthEnd, this.difficulty(z0 + len / 2)) * (1 - shape.pin) + shape.width;
+    const plain = lerp(this.params.halfWidthStart, this.params.halfWidthEnd, this.difficulty(z0 + len / 2)) * (1 - shape.pin);
+    if (gate && plain + shape.width < THRESHOLD_HW) shape.width = THRESHOLD_HW - plain;
+    const wide = plain + shape.width;
     shape.reach = Math.max(0, wide - 4.2) * 0.8 * shape.span;
     shape.shift = shape.split * wide * side;
     const drop0 = prev ? prev.drop0 + this.sectionInt(prev, prev.z1 - prev.z0, slopeOf) : 0;
     const phase0 = prev ? prev.phase0 + this.sectionInt(prev, prev.z1 - prev.z0, freqOf) : 0;
     const fall0 = prev ? prev.ledges.reduce((sum, l) => sum + l.total, prev.fall0) : 0;
-    const sec: Section = { kind, z0, z1: z0 + len, side, drop0, phase0, fall0, blend, shape, ledges: [], prev };
+    const sec: Section = { kind, z0, z1: z0 + len, side, drop0, phase0, fall0, blend, shape, ledges: [], prev, ...(gate ? { gate: true as const } : {}) };
     list.push(sec);
     return sec;
   }
@@ -1318,6 +1423,13 @@ export class Course {
         // Nothing launches inside, or for the 120 m up the hill of it.
         busy.push({ z0: sec.z0 - 120, z1: sec.z1 + 10 });
         break;
+      case 'cruise':
+        // A threshold: nothing stands on it and nothing is laid on it.
+        if (sec.gate) {
+          clear.push({ z0: sec.z0, z1: sec.z1 });
+          busy.push({ z0: sec.z0, z1: sec.z1 });
+        }
+        break;
       case 'finish':
         clear.push({ z0: sec.z0, z1: 1e9 });
         busy.push({ z0: sec.z0, z1: 1e9 });
@@ -1445,7 +1557,7 @@ export class Course {
         if (close && made >= 4) break;
         const sites: { z: number; side: 1 | -1 }[] = [];
         for (const sec of this.sections) {
-          if (sec.z0 >= stage.z1 || sec.z1 <= stage.z0 || !kinds.has(sec.kind)) continue;
+          if (sec.z0 >= stage.z1 || sec.z1 <= stage.z0 || !kinds.has(sec.kind) || sec.gate) continue;
           // (Lanternfall's streets are avenues of stone lamps, which stand where a street's rails would.)
           if (sec.kind === 'street' && this.params.biome === 'lantern') continue;
           const z0 = Math.max(sec.z0 + sec.blend + 4, stage.z0);
@@ -1737,6 +1849,9 @@ export class Course {
   }
 
   surface(x: number, z: number): Surface {
+    // (A threshold's body is plain snow: the chunk-long patches a fork's strip or a sheet lays reach into it.)
+    const sec = this.section(z);
+    if (sec.gate && z >= sec.z0 + sec.blend) return SNOW;
     const sh = this.shapeAt(z);
     if (sh.ice >= 0.5 && this.edgeExcess(x, z) < 0.5) return GLASS;
     if (sh.ridge >= 0.5 * RIDGE_H) {
@@ -1753,6 +1868,12 @@ export class Course {
       }
     }
     return SNOW;
+  }
+
+  /** Whether z0 to z1 meets a stage line's threshold (round 8). */
+  private onThreshold(z0: number, z1: number): boolean {
+    for (const sec of this.sections) if (sec.gate && sec.z1 > z0 && sec.z0 < z1) return true;
+    return false;
   }
 
   zones(i: number): Zones {
@@ -1948,7 +2069,10 @@ export class Course {
     if (rng.chance(p.iceChance)) {
       const iz = z0 + rng.range(10, 50);
       const off = rng.signed() * this.halfWidth(iz) * 0.5;
-      zn.ice.push({ x: this.centerX(iz) + off, z: iz, rx: rng.range(5, 10), rz: rng.range(14, 30) });
+      const rx = rng.range(5, 10);
+      const rz = rng.range(14, 30);
+      // (Never on a stage line's threshold: a charm gate's lanes are plain snow.)
+      if (!this.onThreshold(iz - rz - 4, iz + rz + 4)) zn.ice.push({ x: this.centerX(iz) + off, z: iz, rx, rz });
     }
 
     return zn;
@@ -2262,6 +2386,12 @@ export class Course {
     return chunk;
   }
 
+  /** Where the charm gates stand (charms.ts, round 8): on the start's run-in, and GATE_PAST_LINE past each stage
+   *  line, inside the calm threshold the course lays there. */
+  get charmGateZs(): readonly number[] {
+    return this.stages.map((st) => (st.index === 0 ? START_GATE_Z : st.z0 + GATE_PAST_LINE));
+  }
+
   /** The sky gates, one a stage: over the stage's most open online kicker past the first 800 m, set for a
    *  boosted pop at 30 m/s, where a plain flight passes about 2 m under its rim. Worked out once,
    *  whole-course (a few chunks' features), on first ask. */
@@ -2377,8 +2507,15 @@ export class Course {
       const lipY = this.baseY(l.z);
       const sx = this.safeX(l.z);
       const lean = (this.safeX(l.z + 1) - this.safeX(l.z - 1)) / 2;
+      // (Round 8: the line starts on the snow before the lip, so from the run-in it reads as one trail over the
+      // edge, not as lights hanging in the sky before it: round 7's open item 14.)
+      for (const back of [24, 16, 8]) {
+        const z = l.z - back;
+        if (!inChunk(z) || blocked(this.safeX(z), z)) continue;
+        lights.push({ id: id++, x: this.safeX(z), z, hover: 0.8, value: 1 });
+      }
       for (let k = 1; k <= 6; k++) {
-        const t = k * 0.34;
+        const t = 0.2 + (k - 1) * 0.32;
         const z = l.z + 30 * t;
         if (!inChunk(z)) continue;
         const y = lipY - LIP_SLOPE * 30 * t - 4.9 * t * t;
