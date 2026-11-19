@@ -318,9 +318,10 @@ function base(): Palette {
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
     // harder than the field gives it; the hero's rim stronger, it was not seen. After the merge's critics: the
     // snow in one smooth ramp here (Pinecrest), since stepped, the far shadows' soft fall-off on Low printed
-    // as hard pale islands, a tree run's floor read as a river; the shade leans a little to Pinecrest's own
-    // periwinkle, not to cobalt. Frostfang, Ember and Lanternfall keep their two steps.)
-    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 0, soft: 0.3, shadow: c('#7C96E0'), shadowK: 0.2, edge: 0.2 },
+    // as hard pale islands, a tree run's floor read as a river; the shade leans to a light
+    // periwinkle, so a tree run's floor in the field's shade stays snow, not a cobalt river. Frostfang, Ember and
+    // Lanternfall keep their two steps.)
+    poster: { rim: 0.55, hero: 1.3, shafts: 1, foot: 0.3, vignette: 0.2, bands: 5, stripe: 0.5, rings: 0, steps: 0, soft: 0.3, shadow: c('#AEC6F6'), shadowK: 0.5, edge: 0.2 },
     lanternGlow: 0,
     bloom: 0.38,
     stars: 0,
@@ -999,8 +1000,10 @@ function clearSkies(p: Palette, biome: BiomeId): void {
       p.shadowK = 0.7;
       p.grade = { lift: c('#120A10'), gain: c('#FFF4EA'), saturation: 1.06, contrast: 1.06, grain: 0.8, foot: 0.3, shafts: 0, lens: 0, focal: 0.8, gust: 0, glitter: 0 };
       // (Low's poster: the deck's glow in four steps, no rings round a dim coin. The frame's foot shallow: at
-      // 0.34 the merge's critic saw Ember's warm snow turn to brown mud across the bottom of most Low frames.)
-      Object.assign(p.poster, { steps: 2, bands: 4, stripe: 0, foot: 0.16, shadow: c('#3A2A55'), shadowK: 0.15 });
+      // 0.34 the merge's critic saw Ember's warm snow turn to brown mud across the bottom of most Low frames;
+      // for the same reason a cast shade leans most of the way to a light cold plum (ART.md 15's plum-teal):
+      // toward a dark one the ravine's shade only went darker brown.)
+      Object.assign(p.poster, { steps: 2, bands: 4, stripe: 0, foot: 0.16, shadow: c('#B496C4'), shadowK: 0.6 });
       p.atmo = { rays: 0.25, halo: 0, meteors: 0, banner: 0, slide: 0, sweep: 0.2, valley: 0.8, valleyColor: c('#8A4A38'), drift: 0.4 };
       // (Bloom kept for the fire: more washed the planes together and bleached the coat.)
       p.bloom = 0.42;
