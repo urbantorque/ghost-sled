@@ -2,8 +2,9 @@ import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { RivalEvent } from '../sim/rivals';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
+import { CHARMS, SYNERGIES } from '../sim/charms';
 import { trickCall } from '../sim/tricks';
-import { FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
+import { FIRST_RUN_STOMP, FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
 import { CRASH_PACK_NEAR_M, IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
 import { FinaleTracker } from './finales';
@@ -272,6 +273,10 @@ const CHOIR_MAX = 3;
 /** A ghost riding past your wreck has gone by once it leads it by this much (m): the race's own
  *  hysteresis (ghosts.ts race), so a wreck pass reads like a live one. */
 const WRECK_PASS_M = 0.8;
+/** Round 8: a charm gate is named this far out (m), about 7 s at cruise and 6 at the cap: the arches' outlines read
+ *  from about 150 m, so the line comes first. A run that starts nearer than GATE_CALL_LATE_M names none. */
+const GATE_CALL_M = 280;
+const GATE_CALL_LATE_M = 60;
 
 function styleTone(kind: string, points: number): StyleTone {
   if (kind === 'perfect') return 'perfect';
@@ -350,6 +355,9 @@ export class Director {
   private heldSince = -1e9;
   /** The duel just resolved: the rival stays on its ghost until `until` (run clock). */
   private rivalHold: { id: number; until: number } | null = null;
+  /** Round 8: the charm gates already named as they came up, and the showdown under way (its ghost's entry id). */
+  private readonly gatesCalled = new Set<number>();
+  private showdownId: number | null = null;
   /** Run clock when the open duel opened. */
   private duelOpenAt = -1e9;
   /** Sim tick each ghost's duel last resolved won or held off. */
@@ -618,6 +626,8 @@ export class Director {
     this.heldNext = null;
     this.heldSince = -1e9;
     this.rivalHold = null;
+    this.gatesCalled.clear();
+    this.showdownId = null;
     this.duelOpenAt = -1e9;
     this.duelEnd.clear();
     this.slungN = 0;
@@ -1046,8 +1056,12 @@ export class Director {
           if (e.kind === 'spin' && this.lastLand && this.lastLand.halfTurns > 0) label = `Spin ${this.lastLand.halfTurns * 180}`;
           if (e.kind === 'flip' && this.lastLand) label = FLIPS[Math.max(1, this.lastLand.flips) - 1] ?? `${this.lastLand.flips} Backflips`;
           if (e.kind === 'drift') label = this.lastReleaseTier >= 3 ? 'Max drift' : this.lastReleaseTier === 2 ? 'Big drift' : label;
-          // (Round 8: a named trick is called by its own name, from the event: tricks.ts.)
+          // (Round 8: a named trick is called by its own name, from the event: tricks.ts; one new to the run says so.
+          // A showdown won and a stolen wisp say what happened.)
           if (e.trick) label = trickCall(e.trick, e.halfTurns ?? 0, e.flips ?? 0, e.late === true);
+          if (e.trick && e.fresh) label = `New ${label}`;
+          if (e.kind === 'showdown') label = 'Showdown won';
+          else if (e.kind === 'steal') label = 'Wisp stolen';
           this.push({ type: 'callout', tick: p.tick, source: e.kind, say: { label, points: e.points, tone: styleTone(e.kind, e.points) } }, sim);
           break;
         }
@@ -1156,11 +1170,24 @@ export class Director {
         case 'grind':
           this.push({ type: 'grind', tick: p.tick, phase: e.phase, id: e.id }, sim);
           break;
+        case 'charm': {
+          // Round 8: a charm taken by riding through its arch. The arch answers with light; the line names it.
+          const g = sim.charmGates?.[e.gate];
+          if (e.id >= 0) this.push({ type: 'charmGate', tick: p.tick, phase: 'take', gate: e.gate, offers: g ? g.offers : [], id: e.id, lane: e.lane, say: { label: CHARMS[e.id]?.name ?? '', points: 0, tone: 'big' } }, sim);
+          break;
+        }
+        case 'synergy': {
+          // A named pair is called once, as its second half is taken.
+          const syn = SYNERGIES[e.id];
+          if (syn) this.push({ type: 'synergy', tick: p.tick, id: e.id, name: syn.name, say: { label: syn.name, points: 0, tone: 'big' } }, sim);
+          break;
+        }
         default:
           break;
       }
     }
     this.streak.tick(sim.tick);
+    if (f.phase === 'run') this.rivalsAndGates(f, sim, live);
     for (let i = 0; i < finales.length; i++) if (!placed[i]) this.pushFinale(finales[i], sim, now, motion);
 
     // ---- State beats.
@@ -1289,7 +1316,8 @@ export class Director {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    const rv = rivalPick(steady, this.gapOf(duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
+    // (Round 8: a showdown holds the pill on its rival as a duel does, so who leads the race to the marker is its gap.)
+    const rv = rivalPick(steady, this.gapOf(duelId ?? this.showdownId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
     // One number for the pill and the edge chip, held on this clock (C12); the race maths keep raw.
     if (rv) out.rival = { id: rv.id, gap: this.gapRead.show(rv.id, rv.gap, now), raw: rv.gap };
     else {
@@ -1645,8 +1673,10 @@ export class Director {
       }
       return;
     }
-    const ttl = f.timeToLand;
-    const flight = f.airTicks / 60 + ttl;
+    // (Round 8: on a save's first run the stomp window opens 0.25 s out, not 0.15: the ladder moves with it, so the
+    // open tick still lands as the ring burns gold.)
+    const ttl = f.timeToLand - (sim.config?.firstRun ? FIRST_RUN_STOMP / 60 - TICK_AT[TICK_AT.length - 1] : 0);
+    const flight = f.airTicks / 60 + f.timeToLand;
     if (Number.isNaN(this.prevTtl)) {
       // The first look at this flight: crossings already behind it stay silent.
       for (let i = 0; i < TICK_AT.length; i++) if (ttl <= TICK_AT[i]) this.ticked[i] = true;
@@ -1884,6 +1914,50 @@ export class Director {
   }
 
   /** A ghost as beats name it. dx: ghost x minus rider x in sim metres (0 without a pose). */
+  /** Round 8: the gates and the field's rival rules, as beats. A charm gate coming up is named once, its three
+   *  offers left to right as its arches stand (GATE_CALL_M out, or at once if a run starts nearer). A showdown's start,
+   *  its result and a stolen wisp come from the rival rules' events (director.rivalEvents), each naming its rider;
+   *  while a showdown runs, its rival holds the pill (rivalPick reads `showdownId`), so who leads is the pill's gap. */
+  private rivalsAndGates(f: DirectorFrame, sim: Sim, live: boolean): void {
+    const s = sim.s;
+    if (live) {
+      // (A sim built before round 8, or a test's stand-in, has no gates.)
+      for (const g of sim.charmGates ?? []) {
+        if (g.lane >= 0 || this.gatesCalled.has(g.index)) continue;
+        if (!g.offers.some((o) => o >= 0)) break;
+        if (g.z - s.z > GATE_CALL_M) break;
+        this.gatesCalled.add(g.index);
+        if (g.z - s.z < GATE_CALL_LATE_M) break;
+        const label = g.offers
+          .filter((o) => o >= 0)
+          .map((o) => CHARMS[o].name)
+          .join('  ·  ');
+        this.push({ type: 'charmGate', tick: sim.tick, phase: 'near', gate: g.index, offers: g.offers, id: -1, lane: -1, say: { label, points: 0, tone: 'normal' } }, sim);
+        break;
+      }
+    }
+    for (const { tick, e } of this.rivalEvents) {
+      const t = f.tracks[e.rival];
+      if (!t) continue;
+      const ghost = this.ref(t, f, sim);
+      // (A wisp stolen and a showdown won are called by the sim's own style line, with their points: 'Wisp stolen',
+      // 'Showdown won'.)
+      if (e.type === 'steal') {
+        this.push({ type: 'steal', tick, ghost }, sim);
+        continue;
+      }
+      const who = ghost.kind === 'you' ? 'Your best' : ghost.name;
+      if (e.phase === 'start') {
+        this.showdownId = t.entry.id;
+        this.push({ type: 'showdown', tick, phase: 'start', ghost, markerZ: e.markerZ, say: { label: `Showdown: ${who}`, points: 0, tone: 'big' } }, sim);
+      } else {
+        this.showdownId = null;
+        if (e.phase === 'won') this.push({ type: 'showdown', tick, phase: 'won', ghost, markerZ: e.markerZ }, sim);
+        else this.push({ type: 'showdown', tick, phase: 'lost', ghost, markerZ: e.markerZ, say: { label: `${who} took the showdown`, points: 0, tone: 'lost' } }, sim);
+      }
+    }
+  }
+
   private ref(t: GhostTrack, f: DirectorFrame, sim: Sim): GhostRef {
     const p = f.poses.get(t.entry.id);
     const ref: GhostRef = { id: t.entry.id, name: t.entry.name, kind: t.entry.kind, dx: p ? p.x - sim.s.x : 0 };

@@ -130,6 +130,16 @@ const SLUNG_BURST_MS = 1500;
 export const SLUNG_KEY = '\u0000slung';
 /** News lines' side-line keys start with this (newsKey). */
 const NEWS_KEY = 'news\u0000';
+/** Round 8: the lantern's charm signals (charmsignals.ts SIG) and the class each puts on it (style.css). */
+const LAN_SIG: ReadonlyArray<readonly [number, string]> = [
+  [1, 'is-noward'],
+  [2, 'is-halves'],
+  [4, 'is-step'],
+  [8, 'is-owed'],
+  [16, 'is-feather'],
+  [32, 'is-ember'],
+  [64, 'is-lean'],
+];
 /**
  * The gap number changes only once the gap is a metre from the shown number, and each number holds at
  * least GAP_DWELL_MS (C12): the race maths' half-metre jitter never shimmers "13 m" and "14 m".
@@ -1807,7 +1817,17 @@ export class Hud {
     }
     if (this.lanWards >= 0 && l.wards > this.lanWards) play(this.lanternEl, [{ filter: 'brightness(2.2)' }, { filter: 'brightness(1)' }], { duration: 420, easing: EASE_OUT });
     this.lanWards = l.wards;
+    // Round 8: a held charm's one signal is on the lantern itself (charmsignals.ts), a class each; the HUD grows
+    // nothing else for it.
+    const sig = l.sig ?? 0;
+    if (sig !== this.lanSig) {
+      const el = this.lanternEl.classList;
+      for (const [bit, cls] of LAN_SIG) el.toggle(cls, (sig & bit) !== 0);
+      this.lanSig = sig;
+    }
   }
+
+  private lanSig = 0;
 
   update(m: HudModel): void {
     let moved = false;

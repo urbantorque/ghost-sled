@@ -10,6 +10,8 @@ import { type Motif, motifFor } from './motifs';
 import type { Prerender } from './prerender';
 import type { SledSoundId } from './sledsounds';
 import { BRIGHT_ARP, BRIGHT_VOICING, Key, brightRoot, fit, ladder, ladderIndexOf, mtof } from './theory';
+import { charmFamily } from '../sim/charms';
+import { TRICK } from '../sim/tricks';
 import { PRIO, Voice, VoicePool, bandComp, clamp, perc, rand, swell } from './voices';
 
 // One-shot sound effects for sim events, the run's named moments (beats) and UI. Every tonal reward
@@ -270,6 +272,12 @@ export class Sfx {
         break;
       case 'style':
         this.style(e.kind, e.chain, e.mult, t, e.side);
+        if (e.trick) this.trick(e.trick, e.tier ?? 0, e.halfTurns ?? 0, e.flips ?? 0, e.late === true, e.fresh === true, t);
+        else if (e.kind === 'showdown') this.showdownWon(t);
+        else if (e.kind === 'steal') this.steal(t);
+        break;
+      case 'grab':
+        this.grab(e.phase, e.tier, e.side, e.trick, t);
         break;
       case 'comboBank':
         // Voiced by its bank beat (the roll and the drop); the arpeggio is the fallback.
@@ -1947,6 +1955,16 @@ export class Sfx {
       case 'unlockPop':
         this.uiNow('unlock', 0, t);
         break;
+      case 'charmGate':
+        this.charmGate(b, t);
+        break;
+      case 'synergy':
+        this.synergy(t);
+        break;
+      case 'showdown':
+        if (b.phase === 'start') this.showdownStart(b, t);
+        else if (b.phase === 'lost') this.showdownLost(b, t);
+        break;
       case 'ghostTrick':
         this.ghostTrick(b, t);
         break;
@@ -2452,6 +2470,147 @@ export class Sfx {
       default:
         break;
     }
+  }
+
+  // ---------------------------------------------------------------- round 8: the air, charms and rivals
+
+  /**
+   * A named trick landed (round 8, G1), over the style note it is paid with: each family has its own voice in the
+   * game's bells and plucks. A grab is a paper pluck that climbs with its tier; a combination two bells a fourth apart
+   * through a short rush; a Crosswind a bent twang (late, a bright tink on top); a rail's end a ring of steel, a wall's
+   * bound a soft thump; the sled's own move three notes of its own. A trick new to the run adds a little shimmer; a
+   * deep grab held to the end and landed adds a low bell under it (the dare paid). Spin and Backflip keep the style
+   * note's own voice.
+   */
+  private trick(id: number, tier: number, halfTurns: number, flips: number, late: boolean, fresh: boolean, t0: number): void {
+    const t = Math.max(t0, this.styleNext - STYLE_GAP * 0.5);
+    const v = this.voice(t, 0.32, rand(-0.2, 0.2), 1.3);
+    if (id >= TRICK.railGrab && id <= TRICK.spiritStretch) {
+      const i = 5 + tier * 2;
+      pluck(v, t, this.note(i), 0.12, 0.26, 4.5);
+      pluck(v, t + 0.05, this.note(i + 2), 0.1, 0.32, 4.5);
+    } else if (id >= TRICK.paperWheel && id <= TRICK.spiritKnot) {
+      whoosh(v, t, 0.22, 900, 3600, 0.05, 1.2);
+      const base = 4 + Math.min(4, halfTurns + flips);
+      fmBell(v, t, this.note(base), 0.07, 0.35, 3.5, 1.2);
+      this.at(v, t + 0.07, (tn) => fmBell(v, tn, this.note(base + 3), 0.08, 0.5, 3.5, 1.4));
+      if (id === TRICK.spiritKnot) this.at(v, t + 0.14, (tn) => fmBell(v, tn, this.note(base + 6), 0.07, 0.6, 2, 1));
+    } else if (id === TRICK.crosswind) {
+      pluck(v, t, this.note(6), 0.13, 0.22, 3.5, v.out, late ? 0.06 : 0.03);
+      if (late) {
+        ping(v, t + 0.04, this.note(14), 0.05, 0.09);
+        fmBell(v, t + 0.06, this.note(12), 0.06, 0.4, 5, 0.9);
+      }
+    } else if (id === TRICK.lamppost) {
+      fmBell(v, t, this.note(9), 0.07, 0.6, 3.5, 2.2);
+      ping(v, t + 0.01, this.note(16), 0.03, 0.15);
+    } else if (id === TRICK.snowHare) {
+      thump(v, t, 120, 70, 0.16, 0.05);
+      pluck(v, t + 0.03, this.note(8), 0.1, 0.25, 3);
+    } else if (id >= TRICK.pineBow) {
+      // The sled's own: three notes, each sled its own turn of them.
+      const shape = [[0, 2, 4], [0, 4, 2], [4, 2, 0], [0, 3, 6], [2, 5, 3], [4, 0, 4]][(id - TRICK.pineBow) % 6];
+      shape.forEach((d, k) => this.at(v, t + k * 0.07, (tn) => fmBell(v, tn, this.note(7 + d), 0.07, 0.4, 2, 1)));
+    }
+    if (fresh) this.shimmer(t + 0.08, 5, 10, 0.022);
+    // (The dare paid: a grab of the second tier or the third, let go into the landing.)
+    if (tier >= 2 && (id === TRICK.lanternReach || id === TRICK.spiritStretch || (id >= TRICK.paperWheel && id <= TRICK.spiritKnot))) {
+      fmBell(v, t + 0.02, this.note(tier >= 3 ? -3 : -1), 0.08, 0.8, 1.5, 0.8);
+    }
+  }
+
+  /** A grab in the air: a soft flick of cloth as the hand finds the rail, a tick that climbs with each tier (the
+   *  dare counted out), a twang as a tweak starts and a swirl for a rail's, a wall's or the sled's own move. */
+  private grab(phase: string, tier: number, side: number, trick: number, t: number): void {
+    const v = this.voice(t, 0.15, side * 0.35, 1, PRIO.low);
+    switch (phase) {
+      case 'start':
+        puff(v, t, 0.07, 5200, 2600, 0.025, v.bank.white);
+        break;
+      case 'tier':
+        // The ticks go up the ladder, one a tier; the third rings longer.
+        ping(v, t, this.note(6 + tier * 3), 0.05 + 0.012 * tier, tier >= 3 ? 0.18 : 0.08);
+        if (tier >= 2) ping(v, t + 0.035, this.note(8 + tier * 3), 0.03, 0.08);
+        break;
+      case 'tweak':
+        pluck(v, t, this.note(4), 0.08, 0.12, 3, v.out, -0.04);
+        break;
+      case 'move':
+        whoosh(v, t, 0.3, 700, 2800, 0.05, 1.4);
+        if (trick >= TRICK.pineBow) ping(v, t + 0.05, this.note(11), 0.035, 0.12);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** A charm gate (round 8, G2): as it comes up, three soft notes left to right, one an arch; a charm taken, a chime
+   *  in its family's voice (speed a quick rising pluck, style a pair of bells, survival a warm low bell under a
+   *  pad's breath). */
+  private charmGate(b: BeatOf<'charmGate'>, t: number): void {
+    if (b.phase === 'near') {
+      const v = this.voice(t, 0.5, 0, 0.9, PRIO.low);
+      [-0.6, 0, 0.6].forEach((p, k) => this.at(v, t + k * 0.11, (tn) => void fmBell(v, tn, this.note(7 + k * 2), 0.04, 0.5, 2, 0.8, v.panner(p, v.out))));
+      return;
+    }
+    const fam = charmFamily(b.id);
+    const pan = b.lane === 0 ? -0.4 : b.lane === 2 ? 0.4 : 0;
+    const v = this.voice(t, 0.45, pan, 1.4, PRIO.payoff);
+    whoosh(v, t, 0.35, 1400, 5200, 0.06, 1.1);
+    if (fam === 'speed') {
+      [5, 7, 9, 12].forEach((i, k) => this.at(v, t + k * 0.045, (tn) => void pluck(v, tn, this.note(i), 0.12, 0.3, 4)));
+    } else if (fam === 'style') {
+      fmBell(v, t, this.note(7), 0.08, 0.6, 3.5, 1.4);
+      this.at(v, t + 0.09, (tn) => void fmBell(v, tn, this.note(11), 0.09, 0.8, 3.5, 1.6));
+    } else {
+      fmBell(v, t, this.note(0), 0.09, 1.1, 1.5, 0.9);
+      pad(v, t, [this.note(2), this.note(4)], 0.6, 0.03, 1800, 0.05, 6, 0.2);
+    }
+  }
+
+  /** A named pair completed: the bright chord a step up, and a shimmer. */
+  private synergy(t: number): void {
+    this.chord(t + 0.05, 0.06, 0.9, 5, 2);
+    this.shimmer(t + 0.12, 9, 11, 0.03);
+  }
+
+  /** A showdown begins (round 8, G3): a rush up into two low brass notes and a bell, then the rider's own motif if it
+   *  has one. It is a challenge, not a reward: low, and short. */
+  private showdownStart(b: BeatOf<'showdown'>, t: number): void {
+    const p = panOf(b.ghost.dx, 3, 0) * 0.6;
+    this.swellUp(t, 0.28, 0.05, p);
+    const v = this.voice(t + 0.28, 0.4, p, 1.3, PRIO.payoff);
+    const r = brightRoot(this.key(), 43);
+    this.at(v, t + 0.28, (tn) => {
+      thump(v, tn, 70, 40, 0.26, 0.1);
+      this.brass(v, tn, [r - 12, r - 5], 0.35, 0.05);
+      fmBell(v, tn + 0.02, this.note(1), 0.07, 0.6, 2.4, 1.1);
+    });
+    this.riderMotif(b.ghost.name, t + 0.8, p, 0.8);
+  }
+
+  /** A showdown won: a short fanfare that lands with the lantern cell it lights. */
+  private showdownWon(t: number): void {
+    const v = this.voice(t, 0.4, 0, 1.4, PRIO.payoff);
+    const r = brightRoot(this.key(), 43);
+    this.brass(v, t, [r, r + 7, r + 12, r + 16], 0.4, 0.045);
+    fmBell(v, t + 0.02, this.note(12), 0.09, 0.7, 3.5, 1.3);
+    this.shimmer(t + 0.1, 8, 10, 0.03);
+  }
+
+  /** A showdown lost: two falling bells, quiet. */
+  private showdownLost(b: BeatOf<'showdown'>, t: number): void {
+    const v = this.voice(t, 0.35, panOf(b.ghost.dx, 3, 0) * 0.5, 1, PRIO.normal);
+    fmBell(v, t, this.note(4), 0.045, 0.35, 2.4, 0.8);
+    fmBell(v, t + 0.18, this.note(0), 0.04, 0.6, 2.4, 0.8);
+  }
+
+  /** A wisp stolen: a rush drawn in toward the rider and a glassy tink as it reaches the lantern. */
+  private steal(t: number): void {
+    const v = this.voice(t, 0.4, 0, 1.2);
+    whoosh(v, t, 0.3, 4800, 1200, 0.05, 1.6);
+    fmBell(v, t + 0.22, this.note(13), 0.06, 0.5, 5, 0.8);
+    ping(v, t + 0.24, this.note(17), 0.025, 0.12);
   }
 
   /** The start-line call: a two-note 'vs' motif, coloured by who is waiting. */

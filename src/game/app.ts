@@ -45,6 +45,7 @@ import { TierController, deviceCeiling, guessTier } from './quality';
 import { Rumble } from './rumble';
 import { type InputSource, Run, type RunExtra, copySnap, emptySnap, lerpSnap } from './run';
 import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
+import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS } from '../sim/charms';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
@@ -2673,7 +2674,7 @@ export class App {
         // the next has come back.
         wipeouts: sim.s.getUps < GET_UPS || this.tumbles > 0 ? { left: sim.s.getUps, of: GET_UPS, back: sim.s.getUps < GET_UPS ? Math.min(1, Math.max(0, (sim.s.z - sim.s.getUpZ) / GET_UP_BACK_M)) : 0 } : null,
         gifts: runPay(sim) + this.passBonus,
-        lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes },
+        lantern: { charge: sim.s.lantern, cells: sim.cells, dashing: sim.s.dash > 0, wards: sim.stats.wards, dashes: sim.stats.dashes, sig: lanternSignals(sim, sim.s.drafting) },
         combo: { active: c.active, pending: c.pending, mult: c.multiplier, chain: c.chain, timer: c.window > 0 ? c.timer / c.window : 0, stake: hm.stake, fuse: hm.fuse, pace: hm.pace },
         speed: sim.s.speed,
         nextGhost: next,

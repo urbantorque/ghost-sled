@@ -16,7 +16,7 @@ import { FarShadow } from './farshadow';
 import { GHOST_COLORS, GhostVisuals } from './ghosts';
 import { standable, visualGround } from './ground';
 import { placeGraves, type GravePlace } from './graves';
-import { LandingAid } from './landing';
+import { LandingAid, stompWindowS } from './landing';
 import { LakeMirror } from './lakemirror';
 import { Life } from './life';
 import { applyPalette, bands, lake, setCloudShadows, shared } from './materials';
@@ -38,7 +38,13 @@ import { Props } from './props';
 import { SetPieces } from './landmarks';
 import { Moments } from './moments';
 import { Rails } from './rails';
-import { Rider } from './rider';
+import { Rider, type RiderPose } from './rider';
+import { grabDanger } from './trickpose';
+import { CharmGates } from './charmgates';
+import { FAMILY_HEX } from './charmglyphs';
+import { CHARM, PATH_STEP, charmFamily } from '../sim/charms';
+import { draftsOn } from '../sim/rivals';
+import { wispUp } from '../game/charmsignals';
 import { Sky } from './sky';
 import { Sloughs } from './sloughs';
 import { edgeK, kickK, roosterK, streakK } from './speedfeel';
@@ -172,6 +178,24 @@ const FLARE_S = 0.6;
 const FLOW_PULSE_S = 0.3;
 
 const clamp01 = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : x);
+
+/** Lamplit Path's first spark for this run (props.ts draws one every PATH_STEP metres from it), or -1 for a rider who
+ *  does not hold it. The sim's first is ceil((z + 1) / PATH_STEP) for the z it was taken at, a tick past its gate's
+ *  line at most: counted from that tick's furthest reach, a spark is never drawn that the sim did not lay (one by the
+ *  gate may go undrawn). Carried into a run (the Long Night), it starts at the start. */
+export function pathFromOf(sim: Pick<Sim, 'charms' | 'charmGates'>): number {
+  if (!sim.charms.includes(CHARM.path)) return -1;
+  const g = sim.charmGates.find((q) => q.pick === CHARM.path);
+  return g ? Math.ceil((g.z + 1.8) / PATH_STEP) : 1;
+}
+
+/** Each charm family's colour (charmglyphs.ts), as three.js colours, and the charms' own signals' colours: snow, a
+ *  paper cream, a pale leaf-white wisp (never mint: it is no ghost), a pale wind line. */
+const FAMILY_C = { speed: new Color(FAMILY_HEX.speed), style: new Color(FAMILY_HEX.style), survival: new Color(FAMILY_HEX.survival) };
+const SNOW_C = new Color('#F2F6FF');
+const PAPER_C = new Color('#FFF6E0');
+const WISP_C = new Color('#E6FFD0');
+const WIND_C = new Color('#E8EEFF');
 const smooth01 = (x: number) => {
   const k = clamp01(x);
   return k * k * (3 - 2 * k);
@@ -215,6 +239,9 @@ export class World {
   private readonly lantern: LanternWorld;
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
+  /** Round 8: the charm gates' arches and a showdown's marker (charmgates.ts): one draw, on every tier, built on
+   *  idle time after the first frame. */
+  readonly charmGates = new CharmGates();
   readonly sky: Sky;
   readonly rider = new Rider();
   readonly particles: Particles;
@@ -422,6 +449,9 @@ export class World {
       this.lantern.clearings(z0, z1, out);
     };
     this.spirit.setQuality(quality.particleBudget, quality.bloom);
+    this.charmGates.setCourse(this.course);
+    this.charmGates.setLow(quality.detail === 'low');
+    this.charmGates.host = { renderer: this.renderer, scene: this.scene, camera: this.cam.camera };
     this.scene.add(
       this.spirit.root,
       this.marquee.root,
@@ -588,6 +618,8 @@ export class World {
     this.particles.setQuality(this.quality.particleBudget, px);
     this.spirit.setViewport(w * pr, px);
     this.lantern.setViewport(px);
+    // (The charm gates hold their medallions to a size the eye sees: CSS pixels, whatever the tier renders at.)
+    this.charmGates.setViewport(h);
     this.weather.setScale(px);
     this.post.setSize(Math.max(1, Math.floor(w * pr)), Math.max(1, Math.floor(h * pr)));
     for (const cb of this.onResize) cb(w, h);
@@ -626,6 +658,7 @@ export class World {
     this.sky.setDetail(q.detail);
     this.poster.setTier(q.detail === 'low');
     this.lantern.setDetail(q.detail);
+    this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
     this.speedPosts.setTier(q.detail);
     this.sloughs.setTier(q.detail);
@@ -658,6 +691,7 @@ export class World {
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.spirit.setCourse(c);
+    this.charmGates.setCourse(c);
     this.marquee.setCourse(c);
     // The eruption rises from the cone where the massif stands it (only Ember's erupts; 0 would be "the
     // massif's own default bearing", which the eruption cannot know, so it keeps its own then).
@@ -872,6 +906,7 @@ export class World {
     this.spirit.reset();
     this.marquee.reset();
     this.lantern.reset();
+    this.charmGates.reset();
     this.dashK = 0;
     this.ghosts.resetRun();
     this.chaos.begin(event);
@@ -959,9 +994,15 @@ export class World {
     if (v.mode === 'run') for (const e of v.events) {
       this.onEvent(e, s);
       this.spirit.onEvent(e, s);
+      if (v.sim && v.sim.charms.length > 0) this.charmEvent(e, s, v.sim);
     }
+    if (v.mode === 'run' && v.sim && v.sim.charms.length > 0 && !this.rider.crashing) this.charmSignals(v, dt);
     this.spirit.setReduced(feel.reduced || reduced());
     this.spirit.update(dt, v.mode, s, v.sim, v.ghostPoses, this.quality.detail === 'low');
+    // Round 8: the charm gates and a showdown's marker; Lamplit Path's sparks for the rider who holds it.
+    const runSim = v.mode === 'run' ? v.sim : null;
+    this.charmGates.update(dt, runSim ? runSim.charmGates : null, s.z, feel.reduced || reduced());
+    this.props.pathFrom = runSim ? pathFromOf(runSim) : -1;
     // Round 7, the momentsworld lane: the set pieces' stages take the tier, reduced motion and the effects.
     this.marquee.stage(this.quality.detail === 'low' ? 0 : this.quality.detail === 'medium' ? 1 : this.quality.detail === 'high' ? 2 : 3, feel.reduced || reduced(), this.spirit.fireworks, this.spirit.breaks);
     this.marquee.leading = v.lead !== false;
@@ -1014,6 +1055,7 @@ export class World {
           perfectPulse: this.perfectPulse,
           act: this.moments.act,
           driftCharge: v.mode === 'run' ? feel.driftCharge : 0,
+          trick: this.trickOf(v),
         },
         dt,
         v.time,
@@ -1180,6 +1222,9 @@ export class World {
     // The slipstream you ride in: motes of the drafted ghost's colour stream back past the runners.
     if (this.ghosts.wakeK > 0.05 && s.grounded) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
     this.landing.streak = v.mode === 'run' ? feel.streak : 0;
+    // (Round 8: the gold flash keeps to the sim's own window, wider on a save's first run.)
+    this.landing.stompS = stompWindowS(v.sim?.config.firstRun === true);
+    if (v.mode !== 'run') this.landing.deepGrab = false;
     this.landing.update(s, v.sim ? v.sim.gravity : 9.81, v.airTicks, dt, showRider && v.mode === 'run' && !this.rider.crashing && !this.moments.tumbling);
     this.updateBands(v, feel, s, dt);
     // While the results frame the wreck, gifts within about 3 m of it clear away (the gift shader's
@@ -1456,10 +1501,145 @@ export class World {
         case 'pass':
           this.passFx(b, v);
           break;
+        case 'charmGate':
+          if (b.phase === 'take') this.charmFx(b, v);
+          break;
+        case 'synergy':
+          // A named pair: a ring of white-gold light round the rider, low over the snow.
+          this.particles.ring(this.fxA.set(s.x, s.y + 0.4, -s.z), GOLD_WHITE, this.quality.detail === 'low' ? 14 : 30, 4.2, this.riderCarrier(s), 3, 1.5, 0.6, 0.2);
+          break;
+        case 'showdown':
+          this.showdownFx(b, v);
+          break;
+        case 'steal':
+          this.stealFx(b, v);
+          break;
         default:
           break;
       }
     }
+  }
+
+  /** Round 8: a charm taken. Its arch answers with light (charmgates.ts) and throws a ring of its family's colour off
+   *  its crown; the motes of it ride with the rider for a moment. */
+  private charmFx(b: BeatOf<'charmGate'>, v: FrameView): void {
+    const g = v.sim?.charmGates[b.gate];
+    if (!g || b.lane < 0) return;
+    const col = FAMILY_C[charmFamily(b.id)];
+    const low = this.quality.detail === 'low';
+    const top = this.charmGates.crown(g, b.lane, this.fxA);
+    this.particles.ring(top, col, low ? 12 : 26, 3.4, null, 4, 1.6, 0.55, 0.22);
+    this.particles.sparkle(this.fxB.set(v.snap.x, v.snap.y + 0.9, -v.snap.z), col, low ? 8 : 16, 2.2, 0.5, 0.2, this.riderCarrier(v.snap), 0.6);
+  }
+
+  /** Round 8: a showdown. Its marker stands 300 m on with a band of the rival's colour; decided, it bursts in the
+   *  winner's (a won showdown lights a lantern cell: marigold motes run into the rider). */
+  private showdownFx(b: BeatOf<'showdown'>, v: FrameView): void {
+    const rival = GHOST_C[b.ghost.kind] ?? GHOST_C.pool;
+    if (b.phase === 'start') {
+      this.charmGates.showdown(b.markerZ, rival);
+      return;
+    }
+    const won = b.phase === 'won';
+    this.charmGates.showdownEnd(won ? LIGHT_C : rival, won);
+    const z = b.markerZ;
+    const x = this.course.safeX(z);
+    const at = this.fxA.set(x, this.course.ground(x, z) + 8, -z);
+    this.particles.burst(at, 2.4, this.quality.detail === 'low' ? 20 : 44, undefined, won ? LIGHT_C : rival);
+    if (won) this.particles.sparkle(this.fxB.set(v.snap.x, v.snap.y + 0.9, -v.snap.z), LIGHT_C, this.quality.detail === 'low' ? 10 : 22, 2.4, 0.55, 0.22, this.riderCarrier(v.snap), 0.6);
+  }
+
+  /** Round 8: a wisp stolen. A thread of the ghost's own light is pulled from it into the rider, where it turns to
+   *  the lantern's marigold. */
+  private stealFx(b: BeatOf<'steal'>, v: FrameView): void {
+    const pose = v.ghostPoses.get(b.ghost.id);
+    const s = v.snap;
+    const car = this.riderCarrier(s);
+    const me = this.fxB.set(s.x, s.y + 0.9, -s.z);
+    const low = this.quality.detail === 'low';
+    if (pose && !pose.done) {
+      const from = this.fxA.set(pose.x, this.course.ground(pose.x, pose.z) + 1.0, -pose.z);
+      this.particles.line(from, me, GHOST_C[b.ghost.kind] ?? GHOST_C.pool, low ? 8 : 18, car, 1.4);
+    }
+    this.particles.sparkle(me, LIGHT_C, low ? 6 : 12, 1.6, 0.5, 0.2, car, 0.5);
+  }
+
+  /** Round 8: the held charms' signals in the world (charms.ts CHARMS[id].signal), each the one thing on screen that
+   *  says its charm is working: blue sparks off the runners on ice (Frost Runners), a streak off a big landing
+   *  (Falling Star), a ring of snow off a spin (Whirlwind), paper ribbons at each grab tier (Paper Kite), snow shed
+   *  instead of a stagger (Bark Skin), the rider springing up (Quick Feet), the drift ring beating its tiers (Drift
+   *  Drum). Low throws fewer of each. */
+  private charmEvent(e: SimEvent, s: Snap, sim: Sim): void {
+    const low = this.quality.detail === 'low';
+    const at = this.fxA.set(s.x, s.y + 0.25, -s.z);
+    switch (e.type) {
+      case 'land':
+        if (sim.has(CHARM.star) && e.airtime >= 1 && e.quality !== 'sketchy') {
+          const car = this.riderCarrier(s);
+          const back = this.fxB.copy(at).addScaledVector(car, -0.12);
+          this.particles.line(back, at, FAMILY_C.speed, low ? 6 : 14, car, 1.6);
+        }
+        if (sim.has(CHARM.whirl) && e.halfTurns >= 2) this.particles.ring(at, SNOW_C, low ? 10 : 22, 3.6, this.riderCarrier(s), 0, 1.1, 0.5, 0.24);
+        break;
+      case 'grab':
+        if (e.phase === 'tier' && sim.has(CHARM.paper)) {
+          this.particles.sparkle(this.fxB.set(s.x, s.y + 1.0, -s.z), FAMILY_C.style, low ? 5 : 10, 2.2, 0.5, 0.2, this.riderCarrier(s), 0.4);
+          this.particles.sparkle(this.fxB.set(s.x, s.y + 1.0, -s.z), PAPER_C, low ? 3 : 6, 2.0, 0.55, 0.22, this.riderCarrier(s), 0.4);
+        }
+        break;
+      case 'bump':
+        if (sim.has(CHARM.bark)) this.particles.shedAt(s.x, s.y + 1.2, -s.z, low ? 6 : 14);
+        break;
+      case 'tumble':
+        if (e.phase === 'end' && sim.has(CHARM.quick)) this.particles.ring(at, FAMILY_C.survival, low ? 8 : 16, 3, this.riderCarrier(s), 0, 1.3, 0.4, 0.18);
+        break;
+      case 'drift':
+        if (e.phase === 'tier' && sim.has(CHARM.drum)) this.particles.ring(at, FAMILY_C.speed, low ? 6 : 12 + 4 * e.tier, 2.4 + 0.6 * e.tier, this.riderCarrier(s), 0, 1.3, 0.35, 0.16);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /** Round 8: the held charms' standing signals, every frame (charmEvent has the momentary ones): Guardian Wisp's
+   *  wisp circling the rider until it is spent, Kite String's taut thread to the ghost drafted, Frost Runners' sparks
+   *  on ice, Long Stride's wind line off the helmet in a tuck. Reduced motion keeps the wisp still at the shoulder. */
+  private charmSignals(v: FrameView, dt: number): void {
+    const sim = v.sim!;
+    const s = v.snap;
+    const low = this.quality.detail === 'low';
+    this.charmT += dt;
+    const every = low ? 0.12 : 0.06;
+    if (this.charmT < every) return;
+    this.charmT = 0;
+    const calm = reduced();
+    const car = this.riderCarrier(s);
+    if (wispUp(sim)) {
+      const a = calm ? 0.8 : v.time * 3.2;
+      this.particles.sparkle(this.fxA.set(s.x + Math.cos(a) * 0.95, s.y + 1.25, -s.z + Math.sin(a) * 0.95), WISP_C, 1, 0.15, 0.5, 0.2, car, 0.05);
+    }
+    if (sim.has(CHARM.frost) && s.onIce && s.grounded && s.speed > 8) this.particles.sparkle(this.fxA.set(s.x, s.y + 0.08, -s.z), FAMILY_C.speed, low ? 2 : 4, 1.8, 0.3, 0.12, car, 0.1);
+    if (sim.has(CHARM.stride) && s.grounded && s.action && !s.drifting && s.speed > 18) {
+      const head = this.fxA.set(s.x, s.y + 1.35, -s.z);
+      this.particles.line(head, this.fxB.copy(head).addScaledVector(car, -0.05), WIND_C, low ? 2 : 3, car, 0.9);
+    }
+    if (sim.has(CHARM.kite) && s.drafting) {
+      // The ghost being drafted: the nearest ahead in the slipstream's cone.
+      let best: GhostPose | null = null;
+      for (const p of v.ghostPoses.values()) {
+        if (!p || p.done || p.finished) continue;
+        if (draftsOn(s, p) && (!best || p.z < best.z)) best = p;
+      }
+      if (best) this.particles.line(this.fxA.set(s.x, s.y + 0.8, -s.z), this.fxB.set(best.x, best.y + 0.8, -best.z), FAMILY_C.speed, low ? 4 : 8, car, 1.5);
+    }
+  }
+
+  private charmT = 0;
+
+  /** The sled's velocity in three.js space, for effects that ride with it. */
+  private riderCarrier(s: Snap): Vector3 {
+    this.course.gradient(s.x, s.z, this.landG);
+    return this.landV.set(s.vx, this.landG.x * s.vx + this.landG.z * s.vz, -s.vz);
   }
 
   /** The sled's velocity in three.js space, its vertical part following the slope under it: the
@@ -1648,6 +1828,23 @@ export class World {
       bands.uFriendX.value = c.centerX(fl.z);
       bands.uFriendHW.value = c.halfWidth(fl.z) + 2;
     } else bands.uFriendHW.value = 0;
+  }
+
+  /** Round 8: what the sim says the rider is doing in the air, for its pose (rider.ts, trickpose.ts); a deep grab
+   *  still held as the snow comes up strains it (the landing ring warns too: landing.ts). */
+  private readonly trickIn = { move: 0, grab: 0, tier: 0, tweak: 0, danger: 0 };
+  private trickOf(v: FrameView): RiderPose['trick'] {
+    const sim = v.sim;
+    if (v.mode !== 'run' || !sim) return undefined;
+    const s = sim.s;
+    const t = this.trickIn;
+    t.move = s.move;
+    t.grab = s.grab;
+    t.tier = s.grabTier;
+    t.tweak = s.tweak;
+    t.danger = grabDanger(s.grab !== 0 && s.grabTier >= 2, this.landing.timeToLand);
+    this.landing.deepGrab = s.grab !== 0 && s.grabTier >= 2;
+    return t;
   }
 
   private onEvent(e: SimEvent, s: Snap): void {

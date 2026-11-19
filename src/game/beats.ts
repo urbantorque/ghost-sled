@@ -130,7 +130,16 @@ export type Beat =
    *  kind: a runner ahead on the line, a ribbon to ride in, or spectacle in the sky. side: where it plays
    *  (+1 right of the line), for a lens or a pan. */
   | (B & { type: 'legend'; phase: 'warn' | 'start' | 'step' | 'end'; key: string; name: string; line: string; kind: 'runner' | 'ribbon' | 'sky'; side: 1 | -1; n: number })
-  | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number });
+  | (B & { type: 'moment'; key: string; verb: MomentVerb; phase: 'start' | 'step' | 'miss' | 'lead' | 'trail' | 'close' | 'won' | 'lost'; n: number; of: number })
+  /** Round 8: a charm gate. 'near' as it comes up (its three offers named left to right as the arches stand, in the
+   *  callout line); 'take' as a charm is taken by riding through its arch (id, lane). */
+  | (B & { type: 'charmGate'; phase: 'near' | 'take'; gate: number; offers: readonly number[]; id: number; lane: number })
+  /** Round 8: a named pair of charms (charms.ts SYNERGIES), called once as its second half is taken. */
+  | (B & { type: 'synergy'; id: number; name: string })
+  /** Round 8: a showdown (rivals.ts): 'start' as it begins (its marker 300 m on, sim metres), 'won' or 'lost'. */
+  | (B & { type: 'showdown'; phase: 'start' | 'won' | 'lost'; ghost: GhostRef; markerZ: number })
+  /** Round 8: a wisp stolen from a ghost passed within a metre. */
+  | (B & { type: 'steal'; ghost: GhostRef });
 
 export type BeatType = Beat['type'];
 import type { MarqueeCam, MarqueeLight, MomentVerb } from './marquee';
