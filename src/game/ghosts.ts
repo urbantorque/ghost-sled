@@ -1,4 +1,6 @@
 import { paceOf } from './slowriders';
+import { type RiderPoint, type RivalEvent, RivalWatch, draftsOn } from '../sim/rivals';
+import { riderByName } from '../bot/roster';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
 import { AIR_RATE, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
@@ -465,19 +467,40 @@ export class GhostManager {
 
   private poseTmp = emptyPose();
 
-  /** Is the player in a live ghost's slipstream at this tick? */
+  /** Is the player in a live ghost's slipstream at this tick? (The rule is the sim's, rivals.ts draftsOn, so a pool
+   *  ghost generated offline drafts its field the same way.) */
   draftProbe = (tick: number, x: number, y: number, z: number): boolean => {
+    const me = { x, y, z };
     for (const t of this.tracks) {
       if (!this.pose(t, tick, this.poseTmp) || this.poseTmp.done || this.poseTmp.finished) continue;
-      const p = this.poseTmp;
-      const ahead = p.z - z;
-      if (ahead < 1.5 || ahead > 14) continue;
-      if (Math.abs(p.x - x) > 1.8 + ahead * 0.06) continue;
-      if (Math.abs(p.y - y) > 3) continue;
-      return true;
+      if (draftsOn(me, this.poseTmp)) return true;
     }
     return false;
   };
+
+  /** Round 8: the field's showdowns and spirit steals for one run (rivals.ts), as a Run's rivalProbe. A showdown is
+   *  met only with The Twelve's riders, your grudge, a friend's link and your own best; a wisp may be stolen from
+   *  any rider in the field. Each event names its rider by the track's index in `tracks` as the run began. */
+  rivalProbe(finishZ: number): (tick: number, me: RiderPoint) => readonly RivalEvent[] {
+    const tracks = this.tracks.slice();
+    const duel = (i: number): boolean => {
+      const e = tracks[i].entry;
+      return e.kind === 'you' || e.kind === 'grudge' || e.kind === 'friend' || riderByName(e.name) !== null;
+    };
+    const watch = new RivalWatch(tracks.length, duel, () => true, finishZ);
+    const them: (RiderPoint | null)[] = tracks.map(() => null);
+    const pose = emptyPose();
+    return (tick, me) => {
+      for (let i = 0; i < tracks.length; i++) {
+        if (!this.pose(tracks[i], tick, pose) || (pose.done && !pose.finished)) {
+          them[i] = null;
+          continue;
+        }
+        them[i] = { x: pose.x, y: pose.y, z: pose.z, riding: !pose.done && !pose.finished && pose.fall === 0, clean: pose.fall === 0 && !pose.warded, finished: pose.finished };
+      }
+      return watch.step(tick, me, them);
+    };
+  }
 
   /** Update overtakes for the player's progress at a tick. */
   race(tick: number, playerZ: number): RaceEvent[] {

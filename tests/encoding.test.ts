@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
 import { InputRecorder, LogEvent, decodeLog, packInput } from '../src/sim/input';
 import { Rng } from '../src/sim/prng';
-import { RunRecord, decodeRecord, encodeRecord, fromBase64Url, recordFromString, recordToString, toBase64Url } from '../src/sim/replay';
+import { RunRecord, decodeRecord, encodeRecord, fromBase64Url, readHeader, recordFromString, recordToString, toBase64Url } from '../src/sim/replay';
+import { ALL_CHARMS, STARTER_POOL } from '../src/sim/charms';
 
 describe('input log codec', () => {
   it('round-trips arbitrary input streams with events', () => {
@@ -77,10 +78,38 @@ describe('run record codec', () => {
   it('round-trips through binary and base64url', () => {
     const r = sample();
     const back = decodeRecord(encodeRecord(r));
-    expect(back).toEqual({ ...r, distance: 1888.4 });
+    // (A record with no pool is the starter pool's, in its bytes and in its replay: round 8.)
+    expect(back).toEqual({ ...r, charmPool: STARTER_POOL, distance: 1888.4 });
     const s = recordToString(r);
     expect(s).toMatch(/^[A-Za-z0-9_-]+$/);
     expect(recordFromString(s)).toEqual(back);
+  });
+
+  it('carries the charm pool, the gates that stood, a Long Night carry and a first run (round 8)', () => {
+    const plain = { ...sample(), charmPool: ALL_CHARMS };
+    expect(decodeRecord(encodeRecord(plain))).toEqual(plain);
+    const full = { ...sample(), charmPool: 0x00a5a5, charmGates: 2 as const, carry: { lantern: 233, getUps: 1, charms: [3, 17] }, firstRun: true };
+    expect(decodeRecord(encodeRecord(full))).toEqual(full);
+    expect(recordFromString(recordToString(full))).toEqual(full);
+    const one = { ...sample(), charmPool: 1, charmGates: 1 as const, carry: { lantern: 0, getUps: 3, charms: [] } };
+    expect(decodeRecord(encodeRecord(one))).toEqual(one);
+    // The header reads the same as version 2's: bytes 0 to 27.
+    const h = readHeader(encodeRecord(full));
+    expect(h.name).toBe('Mila_on_Ice');
+    expect(h.distance).toBeCloseTo(1888.4);
+  });
+
+  it('a version 2 record (SIM_VERSION 9) still has a header, and no longer decodes', () => {
+    const v3 = encodeRecord(sample());
+    const v2 = new Uint8Array(v3.length - 4);
+    const nameEnd = 28 + v3[27];
+    v2.set(v3.slice(0, nameEnd));
+    v2.set(v3.slice(nameEnd + 4), nameEnd);
+    v2[2] = 2;
+    v2[3] = 9;
+    expect(readHeader(v2).name).toBe('Mila_on_Ice');
+    expect(readHeader(v2).simVersion).toBe(9);
+    expect(() => decodeRecord(v2)).toThrow();
   });
 
   it('base64url round-trips every length', () => {

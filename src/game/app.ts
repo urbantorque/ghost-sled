@@ -43,7 +43,9 @@ import { type MissionCtx, type MissionResult, type MissionState, RunSummary, mis
 import { challengeShareTitle, crashLine, dailyHook, ellipsize, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, deviceCeiling, guessTier } from './quality';
 import { Rumble } from './rumble';
-import { type InputSource, Run, copySnap, emptySnap, lerpSnap } from './run';
+import { type InputSource, Run, type RunExtra, copySnap, emptySnap, lerpSnap } from './run';
+import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
+import { ALL_CHARMS } from '../sim/charms';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
 import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
@@ -617,6 +619,27 @@ export class App {
     this.world.beginRun(pose, ChaosEvent.None);
   }
 
+  /** Round 8: what the save decides for the run's SimConfig (charmpool.ts), and the dev switches that let the owner
+   *  try the batch alone: ?charms=all (every charm can be dealt), ?charms=<mask>, ?gates=1|2|3, ?firstrun. */
+  private demoExtra: RunExtra = {};
+
+  private runExtra(demo: boolean): RunExtra {
+    if (demo) return this.demoExtra;
+    const d = this.save.data;
+    const extra: RunExtra = { charmPool: charmPoolOf(d), charmGates: charmGatesOf(d), firstRun: !demo && firstRunOf(d) };
+    if (DEV_ON) {
+      const c = DEV.get('charms');
+      if (c === 'all') extra.charmPool = ALL_CHARMS;
+      else if (c && Number.isFinite(Number(c))) extra.charmPool = Number(c) & ALL_CHARMS;
+      const g = Number(DEV.get('gates'));
+      if (g === 1 || g === 2 || g === 3) extra.charmGates = g;
+      if (DEV.has('firstrun')) extra.firstRun = true;
+    }
+    if (extra.charmGates === 3) delete extra.charmGates;
+    if (!extra.firstRun) delete extra.firstRun;
+    return extra;
+  }
+
   private poolForMountain(m: RideMountain): PoolGhostData[] {
     return m.id === 'daily' ? this.dailyPool : m.id === 'cup' ? this.cupPool : poolFor(m.id);
   }
@@ -971,6 +994,7 @@ export class App {
         // (fox84's 3,584 m run hit a tree at 216 m).
         source = { sample: () => { const b = log.inputs[Math.min(i++, log.inputs.length - 1)] ?? 4; return { steer: b & 15, action: (b & 16) !== 0, draft: (b & 32) !== 0, spirit: (b & 64) !== 0 }; } };
         demo = true;
+        this.demoExtra = { charmPool: rec.charmPool, ...(rec.charmGates ? { charmGates: rec.charmGates } : {}), ...(rec.carry ? { carry: rec.carry } : {}), ...(rec.firstRun ? { firstRun: true } : {}) };
         chaos = rec.chaos;
         this.chaos = chaos;
         sled = rec.sled;
@@ -989,8 +1013,10 @@ export class App {
         this.world.setGhostField(this.ghostField());
       }
     }
-    this.run = new Run(this.mountain.seed, chaos, sled, source);
+    this.run = new Run(this.mountain.seed, chaos, sled, source, this.runExtra(demo));
     this.run.draftProbe = demo ? null : this.ghosts.draftProbe;
+    // (Round 8: the field's showdowns and spirit steals; a demo replays its own log and decides nothing.)
+    this.run.rivalProbe = demo ? null : this.ghosts.rivalProbe(this.run.sim.course.finishZ);
     this.loop = new FixedLoop(() => this.run!.tick());
     this.world.beginRun(this.run.cur, chaos.event, sled);
     this.world.resetFeel();
@@ -2525,6 +2551,7 @@ export class App {
     for (const ev of race) this.onRace(ev);
 
     const drained = run.drain();
+    const rivals = run.drainRivals();
     const events = drained.map((p) => p.e);
     for (const e of events) {
       if (e.type === 'skyGate') this.gatesThisRun.push(e.id);
@@ -2547,6 +2574,7 @@ export class App {
       dt: frozen ? 0 : dt,
       sim,
       events: drained,
+      rivals,
       race,
       tracks: this.ghosts.tracks,
       poses: this.ghostPoses,
@@ -2724,7 +2752,10 @@ export class App {
       case 'land':
         if (e.quality === 'perfect') this.markHint('stomp');
         if (e.quality !== 'sketchy' && e.halfTurns >= 2) this.markHint('spin');
-        if (e.quality !== 'sketchy' && e.flips >= 1) this.markHint('flip');
+        if (e.quality !== 'sketchy' && e.flips >= 1) {
+          this.markHint('flip');
+          this.markHint('flipSpin');
+        }
         break;
       case 'drift':
         if (e.phase === 'release') this.markHint('drift');
@@ -2833,6 +2864,7 @@ export class App {
         lit: s.lantern >= 100,
         dashed: sim.stats.dashes > 0,
         astray: s.grounded && sim.course.edgeExcess(s.x, s.z) > 0,
+        grabbing: s.grab !== 0,
       },
       h,
       this.save.data.hintsSeen,

@@ -1,5 +1,5 @@
-import { LogEvent, decodeLog, type DecodedLog } from '../sim/input';
-import type { RunRecord } from '../sim/replay';
+import { decodeLog, type DecodedLog } from '../sim/input';
+import { type RunRecord, applyLogEvent, simConfigOf } from '../sim/replay';
 import { Sim, type SimEvent } from '../sim/sim';
 import type { GhostKind } from '../ui/contract';
 import { copySnap, emptySnap, lerpSnap } from './run';
@@ -120,7 +120,7 @@ export class ReelScanner {
     private readonly riders: readonly ReelRider[] = [],
   ) {
     this.log = decodeLog(rec.inputs);
-    this.sim = new Sim({ seed: rec.seed, chaos: rec.chaos, sled: rec.sled });
+    this.sim = new Sim(simConfigOf(rec));
     this.status = riders.map(() => 0);
   }
 
@@ -138,7 +138,7 @@ export class ReelScanner {
     for (let n = 0; this.t < log.inputs.length && n < budget; n++, this.t++) {
       const t = this.t;
       const ev = log.events.get(t);
-      if (ev) for (const e of ev) if (e === LogEvent.Revive) s.revive();
+      if (ev) for (const e of ev) applyLogEvent(s, e);
       s.step(log.inputs[t]);
       const p = s.s;
       for (const e of s.events) {
@@ -354,7 +354,7 @@ export class ReelPlayer {
     this.at = 0;
     this.acc = 0;
     this.airTicks = 0;
-    const sim = new Sim({ seed: this.rec.seed, chaos: this.rec.chaos, sled: this.rec.sled });
+    const sim = new Sim(simConfigOf(this.rec));
     copySnap(sim.s, this.prev);
     copySnap(sim.s, this.cur);
     copySnap(sim.s, this.view);
@@ -378,7 +378,7 @@ export class ReelPlayer {
 
   private step(keep: boolean): void {
     const ev = this.log.events.get(this.at);
-    if (ev) for (const e of ev) if (e === LogEvent.Revive) this.sim.revive();
+    if (ev) for (const e of ev) applyLogEvent(this.sim, e);
     copySnap(this.sim.s, this.prev);
     this.sim.step(this.log.inputs[this.at]);
     copySnap(this.sim.s, this.cur);

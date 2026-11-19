@@ -1,14 +1,15 @@
 import { ChaosEvent, ChaosRoll } from '../sim/chaos';
 import { CHUNK_LEN, Course, Obstacle, Ramp } from '../sim/course';
 import { clamp, datan2, dcos, dsin, lerp, smoothstep, wrapAngle } from '../sim/dmath';
-import { InputRecorder, packInput } from '../sim/input';
+import { DRAFT_BIT, InputRecorder, LogEvent, packInput } from '../sim/input';
 import { Rng, hash32, hashFloat } from '../sim/prng';
-import { RunRecord } from '../sim/replay';
+import { RunRecord, applyLogEvent } from '../sim/replay';
+import { type RiderPoint, RivalWatch, draftsOn, riderPoint } from '../sim/rivals';
 import { DT, LANTERN, Sim, TICK_RATE } from '../sim/sim';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
 import { AirPlan, Flight, PlanResult, Rot, RotParams, actionAt, predictFlight, runPlan, solveFlip, solveSpin, steerAt } from './model';
-import { CHARM, LANE_W, charmFamily, synergiesOf } from '../sim/charms';
+import { CHARM, LANE_W, STARTER_POOL, charmFamily, synergiesOf } from '../sim/charms';
 import { GRAB_LATCH } from '../sim/tricks';
 import { type MomentPath, type MomentPlay, gateX, pathOff } from '../sim/moments';
 import { Scene } from './scene';
@@ -29,6 +30,8 @@ export interface BotProfile {
   bold?: boolean;
   /** A signature rider's way of riding (roster.ts): it shapes the traits, so it shows in the record. */
   style?: RideStyle;
+  /** The charms it may be offered (charms.ts; absent: STARTER_POOL). */
+  charmPool?: number;
 }
 
 interface Traits {
@@ -1931,28 +1934,100 @@ export class Bot {
 /** Ticks a run keeps recording past the finish line: the coast through the square. */
 const COAST_TICKS = 480;
 
-/** Plays one bot run on the real Sim and also returns the finished Sim (for stats). */
-export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6): { record: RunRecord; sim: Sim } {
-  const sim = new Sim({ seed, chaos, sled: profile.sled });
+/** A run as the field sees it, tick by tick (round 8): where it was and how it rode, a bit each: riding, clean,
+ *  over the line. What a later pool run drafts, duels and steals from. */
+export interface Track {
+  n: number;
+  x: Float32Array;
+  y: Float32Array;
+  z: Float32Array;
+  flags: Uint8Array;
+}
+
+const T_RIDING = 1;
+const T_CLEAN = 2;
+const T_FINISHED = 4;
+
+/** The earlier runs a pool run races (round 8): their tracks, and which may be met in a showdown (the kinds a
+ *  player may meet: signature riders). A wisp may be stolen from any of them, as from any ghost in a live field. */
+export interface Field {
+  tracks: readonly Track[];
+  duel: readonly boolean[];
+}
+
+/** Where a track's rider is at tick t, as the rules see it: null once a run that never finished has ended. */
+function pointAt(tr: Track, t: number): RiderPoint | null {
+  const i = t < tr.n ? t : tr.n - 1;
+  if (i < 0) return null;
+  const f = tr.flags[i];
+  if (t >= tr.n && !(f & T_FINISHED)) return null;
+  return { x: tr.x[i], y: tr.y[i], z: tr.z[i], riding: (f & T_RIDING) !== 0 && t < tr.n, clean: (f & T_CLEAN) !== 0, finished: (f & T_FINISHED) !== 0 };
+}
+
+/** Plays one bot run on the real Sim and also returns the finished Sim (for stats) and its track. With a field
+ *  (round 8) the run drafts the field's riders (the draft bit, by the game's own rule), and the showdowns it wins and
+ *  the wisps it steals go into its log as the live game's do. */
+export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6, field?: Field): { record: RunRecord; sim: Sim; track: Track } {
+  const charmPool = profile.charmPool ?? STARTER_POOL;
+  const sim = new Sim({ seed, chaos, sled: profile.sled, charmPool });
   const bot = new Bot(sim, profile);
   const rec = new InputRecorder();
+  const cap = maxTicks + 2;
+  const track: Track = { n: 0, x: new Float32Array(cap), y: new Float32Array(cap), z: new Float32Array(cap), flags: new Uint8Array(cap) };
+  const tracks = field ? field.tracks : [];
+  const watch = field ? new RivalWatch(tracks.length, (i) => field.duel[i], () => true, sim.course.finishZ) : null;
+  const them: (RiderPoint | null)[] = tracks.map(() => null);
+  const tokens: LogEvent[] = [];
   while (sim.tick < maxTicks && !sim.s.crashed && !(sim.finished && sim.tick >= sim.s.finishTick + COAST_TICKS)) {
-    const input = bot.input();
+    for (const e of tokens) {
+      rec.event(e);
+      applyLogEvent(sim, e);
+    }
+    tokens.length = 0;
+    let input = bot.input();
+    if (tracks.length && !sim.finished && sim.s.tumble === 0) {
+      const s = sim.s;
+      for (const tr of tracks) {
+        const p = pointAt(tr, sim.tick - 1);
+        if (p && !p.finished && draftsOn(s, p)) {
+          input |= DRAFT_BIT;
+          break;
+        }
+      }
+    }
     rec.push(input);
     sim.step(input);
     bot.observe();
+    const s = sim.s;
+    const k = track.n++;
+    track.x[k] = s.x;
+    track.y[k] = s.y;
+    track.z[k] = s.z;
+    track.flags[k] = (!s.crashed && !s.finished && s.tumble === 0 ? T_RIDING : 0) | (s.tumble === 0 && s.wobble === 0 && s.ghost === 0 ? T_CLEAN : 0) | (s.finished ? T_FINISHED : 0);
+    if (watch) {
+      for (let i = 0; i < tracks.length; i++) them[i] = pointAt(tracks[i], sim.tick - 1);
+      for (const e of watch.step(sim.tick - 1, riderPoint(sim), them)) {
+        if (e.type === 'showdown' && e.phase === 'won') tokens.push(LogEvent.Showdown);
+        else if (e.type === 'steal') tokens.push(LogEvent.Steal);
+      }
+    }
   }
+  track.x = track.x.slice(0, track.n);
+  track.y = track.y.slice(0, track.n);
+  track.z = track.z.slice(0, track.n);
+  track.flags = track.flags.slice(0, track.n);
   const record: RunRecord = {
     seed,
     chaos,
     sled: profile.sled,
+    charmPool,
     inputs: rec.encode(),
     ticks: rec.tickCount,
     score: sim.score,
     distance: sim.distance,
     name: profile.name,
   };
-  return { record, sim };
+  return { record, sim, track };
 }
 
 /** Plays one bot run. The record replays exactly through replayRecord. */

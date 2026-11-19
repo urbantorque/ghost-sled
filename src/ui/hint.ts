@@ -24,6 +24,8 @@ const TEXT: Record<HintKind, string> = {
   // keys (the mouse sweep, the left zone); a flip and the boosted pop are holds, so they show the hold.
   spin: 'Steer in the air to spin',
   flip: 'Press and hold in the air to flip',
+  // (Round 8: a press with the steer held is a grab. A rider who meant a flip is told how the two go together.)
+  flipSpin: 'That was a grab. For a flip, press first, then steer',
   boostPop: 'Hold, release at the lip',
   // The lantern lit: spend it on a dash, or keep it to take a hit.
   dash: 'Dash: spend a lantern, or keep it as a ward',
@@ -187,6 +189,7 @@ const HOLD_TEXT: Record<HintKind, string> = {
   // A spin is taught on the left (drag) zone; the hold zone keeps its plain air verb.
   spin: 'Hold to flip',
   flip: 'Hold in the air to flip',
+  flipSpin: 'Press, then steer',
   boostPop: 'Hold, release at the lip',
   dash: 'Hold to drift',
 };

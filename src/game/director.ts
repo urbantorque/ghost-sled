@@ -1,6 +1,8 @@
 import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
+import type { RivalEvent } from '../sim/rivals';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
+import { trickCall } from '../sim/tricks';
 import { FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
 import { CRASH_PACK_NEAR_M, IDLE_FEEL, NAMED, POP_DEFER, WHISKER_GAP, WHISKER_SPEED, type Beat, type BeatLogEntry, type BeatOf, type Feel, type GhostRef } from './beats';
@@ -94,6 +96,9 @@ export interface DirectorRun {
 }
 
 export interface DirectorFrame {
+  /** Round 8: what the field's rival rules decided this frame (rivals.ts: a showdown started, won or lost, a wisp
+   *  stolen), the rider by its index in the run's tracks. Kept on `rivalEvents` for the lanes that draw them. */
+  rivals?: readonly { tick: number; e: RivalEvent }[];
   /** 'finished': over the line, coasting (the results may be up). */
   phase: 'run' | 'crashed' | 'finished';
   /** Real seconds this frame (0 while frozen). */
@@ -250,7 +255,7 @@ const FLOW_IN_KINDS = 3;
 /** ...one of them a trick: a spin or flip in the air, or a gate. The pack's drafting holds the combo
  *  open, so jumps, landings, carves and near misses alone piled up a novice's flow: 3 of 22 first
  *  runs named the beat on air, clean and perfect landings (the glow still shows what they earned). */
-const FLOW_IN_TRICKS: ReadonlySet<StyleKind> = new Set<StyleKind>(['spin', 'flip', 'gate']);
+const FLOW_IN_TRICKS: ReadonlySet<StyleKind> = new Set<StyleKind>(['spin', 'flip', 'trick', 'gate']);
 const FLOW_SNUFF_MIN = 1.2;
 const SNUFF_S = 0.15;
 const FLOW_PULSE_S = 0.3;
@@ -270,7 +275,7 @@ const WRECK_PASS_M = 0.8;
 
 function styleTone(kind: string, points: number): StyleTone {
   if (kind === 'perfect') return 'perfect';
-  if (points >= 300 || kind === 'flip' || kind === 'spin' || kind === 'yetiHop' || kind === 'avalanche') return 'big';
+  if (points >= 300 || kind === 'flip' || kind === 'spin' || kind === 'trick' || kind === 'yetiHop' || kind === 'avalanche') return 'big';
   return 'normal';
 }
 
@@ -700,10 +705,16 @@ export class Director {
     this.snuffAt = -1;
   }
 
+  /** Round 8: the rival rules' events of the last frame (rivals.ts), as they came: for the lanes that draw the
+   *  showdown's marker and the steal. No beat or UI of the director's own yet. */
+  readonly rivalEvents: { tick: number; e: RivalEvent }[] = [];
+
   step(f: DirectorFrame): DirectorOutput {
     const beats = this.beats;
     beats.length = 0;
     const sim = f.sim;
+    this.rivalEvents.length = 0;
+    if (f.rivals) this.rivalEvents.push(...f.rivals);
     const s = sim.s;
     const run = this.run;
     const dt = Math.max(0, f.dt);
@@ -1035,6 +1046,8 @@ export class Director {
           if (e.kind === 'spin' && this.lastLand && this.lastLand.halfTurns > 0) label = `Spin ${this.lastLand.halfTurns * 180}`;
           if (e.kind === 'flip' && this.lastLand) label = FLIPS[Math.max(1, this.lastLand.flips) - 1] ?? `${this.lastLand.flips} Backflips`;
           if (e.kind === 'drift') label = this.lastReleaseTier >= 3 ? 'Max drift' : this.lastReleaseTier === 2 ? 'Big drift' : label;
+          // (Round 8: a named trick is called by its own name, from the event: tricks.ts.)
+          if (e.trick) label = trickCall(e.trick, e.halfTurns ?? 0, e.flips ?? 0, e.late === true);
           this.push({ type: 'callout', tick: p.tick, source: e.kind, say: { label, points: e.points, tone: styleTone(e.kind, e.points) } }, sim);
           break;
         }

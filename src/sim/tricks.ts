@@ -182,3 +182,14 @@ export function nameFlight(f: FlightTricks): TrickLanded[] {
   }
   return out;
 }
+
+/** A trick's call on screen: its name, a spin's size, a double flip, a late tweak. */
+export function trickCall(id: number, halfTurns = 0, flips = 0, late = false): string {
+  const t = TRICKS[id];
+  if (!t || id === TRICK.none) return '';
+  if (id === TRICK.spin) return `Spin ${halfTurns * 180}`;
+  if (id === TRICK.backflip) return flips >= 3 ? `${flips} Backflips` : flips === 2 ? 'Double Backflip' : 'Backflip';
+  if (id === TRICK.crosswind) return late ? 'Late Crosswind' : t.name;
+  if ((id === TRICK.paperWheel || id === TRICK.emberTwist || id === TRICK.spiritKnot) && halfTurns > 1) return `${t.name} ${halfTurns * 180}`;
+  return t.name;
+}

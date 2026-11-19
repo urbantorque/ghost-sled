@@ -474,7 +474,7 @@ export interface MirrorRect {
 
 export type StyleTone = 'normal' | 'big' | 'perfect' | 'lost' | 'best';
 export type ToastTone = 'ghost' | 'mission' | 'gift' | 'warn' | 'info' | 'grudge' | 'finale' | 'unlock';
-export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop' | 'dash';
+export type HintKind = 'steer' | 'crouch' | 'drift' | 'pop' | 'stomp' | 'draft' | 'spin' | 'flip' | 'boostPop' | 'dash' | 'flipSpin';
 
 export interface GameUI {
   showTitle(m: TitleModel): void;

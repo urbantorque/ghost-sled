@@ -91,6 +91,8 @@ export interface HintFrame {
   dashed?: boolean;
   /** Off the corridor: in the bank or against the edge. A rider there who has never steered needs telling. */
   astray?: boolean;
+  /** Round 8: a grab is held (the button was pressed with the steer to a side). */
+  grabbing?: boolean;
 }
 
 export interface HintStep {
@@ -182,6 +184,9 @@ export class HintCoach {
       if (n('spin') < 2 && !gone('spin') && ring && f.ttl > room('spin', 0.8) && (this.shown === 'spin' || this.spinShows < SPIN_SHOWS)) want = 'spin';
       else if (n('spin') >= 1 && n('flip') < 1 && !gone('flip') && f.ttl > room('flip', 0.9)) want = 'flip';
     }
+    // Round 8: a rider who knows the spin and grabs before it has flipped twice may have meant a flip with a spin:
+    // the press decides, so press first and steer after. It retires on the first flip landed, like the others.
+    if (!want && !f.grounded && f.grabbing && n('spin') >= 1 && n('flip') < 2 && n('flipSpin') < 1 && !gone('flipSpin') && f.ttl > 0.6) want = 'flipSpin';
     // The stomp cue always wins (one threshold; it waits only for a hint's HINT_MIN_S), on a real flight,
     // once the lip has been taught.
     const realFlight = f.airTicks > STOMP_CUE_AIR_TICKS || f.ttl >= STOMP_CUE_MIN_TTL_S;
@@ -213,7 +218,7 @@ export class HintCoach {
     const doing =
       (this.shown === 'steer' && f.steered) ||
       (this.shown === 'drift' && f.drifting) ||
-      ((this.shown === 'spin' || this.shown === 'flip') && f.grounded) ||
+      ((this.shown === 'spin' || this.shown === 'flip' || this.shown === 'flipSpin') && f.grounded) ||
       (this.shown === 'dash' && (f.dashed || !f.lit)) ||
       (this.shown === 'boostPop' && !f.grounded);
     const stompIn = want === 'stomp' && (this.shown === null || this.up >= HINT_MIN_S);
