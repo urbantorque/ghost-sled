@@ -8962,16 +8962,24 @@
 }
 
 /* Ember Step: the lantern pulses while a dash costs half, just after a perfect landing. */
-.gs-lantern.is-step {
+
+/* (A glow layer whose opacity pulses: compositor-only, where a pulsing box-shadow repaints every frame.) */
+.gs-lantern.is-step::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.95), 0 0 22px rgba(255, 211, 77, 0.7);
+  pointer-events: none;
   animation: gs-lan-step 300ms ease-in-out infinite alternate;
 }
 
 @keyframes gs-lan-step {
   from {
-    box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.5), 0 0 10px rgba(255, 211, 77, 0.3);
+    opacity: 0.35;
   }
   to {
-    box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.95), 0 0 22px rgba(255, 211, 77, 0.7);
+    opacity: 1;
   }
 }
 
@@ -8983,8 +8991,8 @@
 
 /* Featherfall: a feather on the lantern while this stage's spare landing is held. Last Lamp: a small ember in the
    empty lantern once the get-ups are gone. Both sit at the pill's top left. */
-.gs-lantern.is-feather,
-.gs-lantern.is-ember {
+/* (Low specificity: on touch the lantern stays position: fixed by the thumb.) */
+.gs-lantern:where(.is-step, .is-feather, .is-ember) {
   position: relative;
 }
 
@@ -9021,9 +9029,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gs-lantern.is-step {
+  .gs-lantern.is-step::after {
     animation: none;
-    box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.95), 0 0 18px rgba(255, 211, 77, 0.6);
   }
 
   .gs-lantern.is-lean .gs-lan-cells {
