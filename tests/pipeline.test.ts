@@ -184,8 +184,12 @@ describe('the cost table', () => {
 });
 
 describe('the temporal reconstruction', () => {
-  it('runs on High and Ultra as shipped, and on neither Medium nor Low', () => {
-    expect(PASSES.high.taa && PASSES.ultra.taa).toBe(true);
+  // (As `?taa` turns it on: the tier's own settings with the reconstruction switched on.)
+  const RB = (t: 'high' | 'ultra'): PassSettings => ({ ...PASSES[t], taa: true });
+
+  it('ships off on every tier; High and Ultra keep their tuning for ?taa', () => {
+    expect(PASSES.high.taa || PASSES.ultra.taa).toBe(false);
+    expect(PASSES.high.taaMsaa && PASSES.ultra.taaMsaa).toBe(2);
     expect(PASSES.medium.taa || PASSES.low.taa).toBe(false);
     // High draws the smaller scene; Ultra a larger share of it.
     expect(PASSES.high.scale).toBeGreaterThanOrEqual(0.6);
@@ -199,17 +203,17 @@ describe('the temporal reconstruction', () => {
 
   it('is two full-frame passes with a depth, replaces the edge walk and keeps two of the MSAA samples', () => {
     for (const t of ['high', 'ultra'] as const) {
-      const plan = planFrame(PASSES[t], ON, rest());
+      const plan = planFrame(RB(t), ON, rest());
       expect(plan.taa && plan.depth, t).toBe(true);
-      expect(plan.added - planFrame(PASSES[t], parseSwitches('-taa'), rest()).added, t).toBe(2);
-      expect(sceneSamples(4, PASSES[t], ON), t).toBe(2);
-      expect(sceneSamples(2, PASSES[t], ON), t).toBe(2);
-      expect(sceneSamples(4, PASSES[t], parseSwitches('-taa')), t).toBe(4);
-      const names = passCosts(PASSES[t], ON, rest(), 1280, 720).map((r) => r.name);
+      expect(plan.added - planFrame(RB(t), parseSwitches('-taa'), rest()).added, t).toBe(2);
+      expect(sceneSamples(4, RB(t), ON), t).toBe(2);
+      expect(sceneSamples(2, RB(t), ON), t).toBe(2);
+      expect(sceneSamples(4, RB(t), parseSwitches('-taa')), t).toBe(4);
+      const names = passCosts(RB(t), ON, rest(), 1280, 720).map((r) => r.name);
       expect(names, t).toContain('taa');
       expect(names, t).not.toContain('aa');
       // Off, the tier is round 7's: its MSAA and the walk.
-      const off = passCosts(PASSES[t], parseSwitches('-taa'), rest(), 1280, 720).map((r) => r.name);
+      const off = passCosts(RB(t), parseSwitches('-taa'), rest(), 1280, 720).map((r) => r.name);
       expect(off, t).toContain('aa');
       expect(off, t).not.toContain('taa');
     }
@@ -222,14 +226,14 @@ describe('the temporal reconstruction', () => {
   });
 
   it('stands in the edge walk until its programs are built', () => {
-    const plan = planFrame(PASSES.high, ON, rest({ taaReady: false }));
+    const plan = planFrame(RB('high'), ON, rest({ taaReady: false }));
     expect(plan.taa).toBe(false);
-    expect(plan.added).toBe(planFrame(PASSES.high, parseSwitches('-taa'), rest()).added);
-    expect(passCosts(PASSES.high, ON, rest({ taaReady: false }), 1280, 720).map((r) => r.name)).toContain('aa');
+    expect(plan.added).toBe(planFrame(RB('high'), parseSwitches('-taa'), rest()).added);
+    expect(passCosts(RB('high'), ON, rest({ taaReady: false }), 1280, 720).map((r) => r.name)).toContain('aa');
   });
 
   it('draws the scene smaller only on a dense screen: never fewer scene pixels than page pixels', () => {
-    const p = PASSES.high;
+    const p = RB('high');
     expect(SCALE_FLOOR).toBe(1);
     expect(renderScale(p, ON, 1)).toBe(1);
     expect(renderScale(p, ON, 1.25)).toBeCloseTo(0.8, 5);
