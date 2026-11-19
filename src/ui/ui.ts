@@ -4,6 +4,7 @@ import type {
   GhostKind,
   HintKind,
   HudModel,
+  LanternTownView,
   MissionView,
   ResultsModel,
   RevealModel,
@@ -152,7 +153,7 @@ export class UI implements GameUI {
     this.title = new Title(this.el, ctx, hd, {
       openSleds: () => {
         if (hd.onOpenSleds) hd.onOpenSleds();
-        else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves);
+        else if (this.menus.lastSleds) this.menus.showSleds(this.menus.lastSleds.cards, this.menus.lastSleds.wallet, this.menus.lastSleds.paints, this.menus.lastSleds.shelves, this.menus.lastSleds.lanterns);
       },
       openSettings: () => {
         if (hd.onOpenSettings) hd.onOpenSettings();
@@ -433,8 +434,8 @@ export class UI implements GameUI {
     this.menus.hidePause();
   }
 
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void {
-    this.menus.showSleds(cards, wallet, paints, shelves);
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[], lanterns?: LanternTownView[]): void {
+    this.menus.showSleds(cards, wallet, paints, shelves, lanterns);
   }
 
   showSettings(m: SettingsModel): void {

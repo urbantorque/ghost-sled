@@ -1,4 +1,4 @@
-import type { GarageCard, GarageShelf, GarageShelfId, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
+import type { GarageCard, GarageShelf, GarageShelfId, LanternTownView, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -181,13 +181,15 @@ function statRow(r: StatRow): HTMLElement {
 }
 
 /** The garage's tabs: the sleds, their paints, and the round 6 shelves. */
-type GarageTab = 'sleds' | 'paint' | GarageShelfId;
+// (Round 8: the Lantern Row's tab, a plain list until the screens lane draws it.)
+type GarageTab = 'sleds' | 'paint' | GarageShelfId | 'lanterns';
+type LookTab = Exclude<GarageTab, 'sleds' | 'lanterns'>;
 const SHELF_ORDER: readonly GarageShelfId[] = ['scarf', 'hat', 'trail', 'sound'];
-const TAB_LABEL: Record<GarageTab, string> = { sleds: 'Sleds', paint: 'Paint', scarf: 'Scarves', hat: 'Hats', trail: 'Trails', sound: 'Sounds' };
+const TAB_LABEL: Record<GarageTab, string> = { sleds: 'Sleds', paint: 'Paint', scarf: 'Scarves', hat: 'Hats', trail: 'Trails', sound: 'Sounds', lanterns: 'Lanterns' };
 /** What an item already on says, by shelf. */
-const ON_WORD: Record<Exclude<GarageTab, 'sleds'>, string> = { paint: 'On your sled', scarf: 'Wearing', hat: 'Wearing', trail: 'On your sled', sound: 'On your sled' };
+const ON_WORD: Record<LookTab, string> = { paint: 'On your sled', scarf: 'Wearing', hat: 'Wearing', trail: 'On your sled', sound: 'On your sled' };
 /** One plain line under each shelf's preview: what the look touches, and that it is only a look. */
-const NOTE: Record<Exclude<GarageTab, 'sleds'>, string> = {
+const NOTE: Record<LookTab, string> = {
   paint: 'A look only: every sled rides the same in any paint.',
   scarf: 'A look only. Your scarf stays vermillion, so you always know which rider is you.',
   hat: 'Seen from behind, as you see it on the run. A look only.',
@@ -225,7 +227,7 @@ export class Menus {
   private homeArmed = 0;
   /** Last data the game gave us, so the title buttons can reopen a sheet without a round trip. */
   lastSettings: SettingsModel | null = null;
-  lastSleds: { cards: SledCard[]; wallet: number; paints?: PaintCard[]; shelves?: GarageShelf[] } | null = null;
+  lastSleds: { cards: SledCard[]; wallet: number; paints?: PaintCard[]; shelves?: GarageShelf[]; lanterns?: LanternTownView[] } | null = null;
   /** The garage's open tab, and the item each look shelf's preview shows. */
   private tab: GarageTab = 'sleds';
   private itemPick: Partial<Record<GarageTab, string>> = {};
@@ -402,8 +404,8 @@ export class Menus {
     this.onChange();
   }
 
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void {
-    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet, paints: paints?.map((p) => ({ ...p })), shelves: shelves?.map((s) => ({ id: s.id, items: s.items.map((i) => ({ ...i })) })) };
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[], lanterns?: LanternTownView[]): void {
+    this.lastSleds = { cards: cards.map((c) => ({ ...c })), wallet, paints: paints?.map((p) => ({ ...p })), shelves: shelves?.map((s) => ({ id: s.id, items: s.items.map((i) => ({ ...i })) })), lanterns: lanterns?.map((t) => ({ ...t, lanterns: t.lanterns.map((l) => ({ ...l })), next: t.next ? { ...t.next } : null })) };
     const fresh = !this.sleds.open;
     // A fresh open previews the equipped sled and what is worn on every shelf; a refresh (bought,
     // equipped) keeps the picks and the tab.
@@ -425,6 +427,7 @@ export class Menus {
     const out: GarageTab[] = ['sleds'];
     if (last?.paints?.length) out.push('paint');
     for (const id of SHELF_ORDER) if (last?.shelves?.some((s) => s.id === id && s.items.length)) out.push(id);
+    if (last?.lanterns?.length) out.push('lanterns');
     return out;
   }
 
@@ -447,6 +450,8 @@ export class Menus {
       grid.setAttribute('aria-label', 'All sleds');
       for (const c of cards) grid.append(this.sledTile(c, c === pick, wallet));
       panel = h('div', 'gs-shop', pick ? this.sledHero(pick, wallet, fresh) : null, grid);
+    } else if (this.tab === 'lanterns') {
+      panel = this.lanternPanel(last.lanterns ?? [], wallet);
     } else {
       panel = this.lookPanel(this.tab, wallet, fresh);
     }
@@ -501,8 +506,32 @@ export class Menus {
     return bar;
   }
 
+  /**
+   * The Lantern Row (round 8, game/lanterns.ts): each open finish town's eight lanterns, lit in order with gifts.
+   * A plain list for now (the screens lane draws the row properly): the town, how many are lit, and one button for
+   * the next. A look only, hung in the town at the finish: nothing in it reaches a race.
+   */
+  private lanternPanel(towns: LanternTownView[], wallet: number): HTMLElement {
+    const list = h('ul', 'gs-lrow-list');
+    list.setAttribute('aria-label', 'The Lantern Row, by finish town');
+    for (const t of towns) {
+      const name = h('span', 'gs-shop-name', t.town);
+      name.setAttribute('translate', 'no');
+      const count = h('span', 'gs-shop-effect', h('span', 'gs-num', `${t.lit} of ${t.of}`), ' lit');
+      let act: HTMLElement;
+      if (!t.next) act = h('span', 'gs-sled-state', icon('check'), 'All lit');
+      else if (t.next.affordable) {
+        const next = t.next;
+        act = btn(this.ctx, { cls: 'gs-btn-primary gs-shop-btn', label: 'Light the next', fk: `lantern-${t.mountain}`, onClick: () => this.hd.onLightLantern?.(next.id) }, h('span', 'gs-shop-price', icon('gift'), h('span', 'gs-num', fmt(next.price))));
+        act.setAttribute('aria-label', `Light the next lantern in ${t.town} for ${fmt(next.price)} gifts`);
+      } else act = h('span', 'gs-shop-effect', icon('gift'), h('span', 'gs-num', fmt(t.next.price)), `, ${fmt(Math.max(1, t.next.price - wallet))} more to go`);
+      list.append(h('li', 'gs-lrow-town', name, count, act));
+    }
+    return h('div', 'gs-shop gs-lrow-shop', h('p', 'gs-look-note', 'Lanterns you light hang in the finish town. A look only.'), list);
+  }
+
   /** A look shelf's items, paints included, in the one shape the preview and the tiles draw. */
-  private lookItems(tab: Exclude<GarageTab, 'sleds'>): LookItem[] {
+  private lookItems(tab: LookTab): LookItem[] {
     const last = this.lastSleds;
     if (tab === 'paint') {
       return (last?.paints ?? []).map((p) => ({ id: p.id, name: p.name, blurb: p.hex ? 'Recolours the deck; the grain and the vermillion trim stay' : "The sled's own wood", price: p.price, owned: p.owned, on: p.on, affordable: p.affordable, art: paintArt(p.hex) }));
@@ -514,7 +543,7 @@ export class Menus {
 
   /** A look shelf (paint, scarf, hat, trail or sound): the picked item's preview and its one action beside
    *  a grid of tiles that pick what the preview shows, as the sleds do. */
-  private lookPanel(tab: Exclude<GarageTab, 'sleds'>, wallet: number, fresh: boolean): HTMLElement {
+  private lookPanel(tab: LookTab, wallet: number, fresh: boolean): HTMLElement {
     const items = this.lookItems(tab);
     const picked = items.find((i) => i.id === this.itemPick[tab]) ?? items.find((i) => i.on) ?? items[0];
     if (picked) this.itemPick[tab] = picked.id;
@@ -525,7 +554,7 @@ export class Menus {
     return h('div', 'gs-shop gs-look-shop', picked ? this.lookHero(tab, picked, wallet, fresh) : null, grid);
   }
 
-  private lookTile(tab: Exclude<GarageTab, 'sleds'>, it: LookItem, picked: boolean, wallet: number): HTMLButtonElement {
+  private lookTile(tab: LookTab, it: LookItem, picked: boolean, wallet: number): HTMLButtonElement {
     const short = !it.owned && !it.affordable;
     const b = h('button', `gs-look${picked ? ' is-pick' : ''}${it.on ? ' is-on' : ''}${short ? ' is-short' : ''}${!it.owned && it.affordable ? ' is-buy' : ''}`);
     b.type = 'button';
@@ -562,7 +591,7 @@ export class Menus {
 
   /** The picked item large on the shop's dusk stage, what it is in one line, and its one action: Equip,
    *  Buy (two taps, as a sled), what it still needs, or a chip when it is already on. */
-  private lookHero(tab: Exclude<GarageTab, 'sleds'>, it: LookItem, wallet: number, fresh: boolean): HTMLElement {
+  private lookHero(tab: LookTab, it: LookItem, wallet: number, fresh: boolean): HTMLElement {
     const sky = h('span', 'gs-shop-sky');
     sky.innerHTML = STAGE_SVG;
     const art = h('span', `gs-look-big is-${tab}`);

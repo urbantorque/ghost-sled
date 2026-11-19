@@ -18,7 +18,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
+import type { GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -31,7 +31,7 @@ import { planMarquee } from './marquee';
 import { ROSTER, riderByName } from '../bot/roster';
 import { STAR_GIFTS, masteryBoard, readMastery, settleMastery } from './mastery';
 import { PAINTS, paintById } from './paints';
-import { SHELVES, type ShelfId, hatById, scarfById, soundById, trailById } from './garage';
+import { SHELVES, type ShelfId, freeItem, hatById, scarfById, soundById, trailById } from './garage';
 import { WARD_CURVE } from './timescale';
 import { courseFor } from '../sim/course';
 import { rollForVariant } from '../sim/moments';
@@ -39,17 +39,25 @@ import { HintCoach } from './hints';
 import { intensity } from './intensity';
 import { InputController, startsFromMenu } from './input';
 import { FixedLoop } from './loop';
-import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, unlockedBiomes } from './missions';
+import { type MissionCtx, type MissionResult, type MissionState, RunSummary, missionViews, swapMission, unlockedBiomes } from './missions';
 import { challengeShareTitle, crashLine, dailyHook, ellipsize, friendLine, liveMissionViews, missionsCrossed, nextUnlock, resultsRaceLine, revealGoal, runAgainLabel, runPay, titleGreeting } from './progress';
 import { TierController, deviceCeiling, guessTier } from './quality';
 import { Rumble } from './rumble';
 import { type InputSource, Run, type RunExtra, copySnap, emptySnap, lerpSnap } from './run';
 import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
-import { ALL_CHARMS } from '../sim/charms';
+import { ALL_CHARMS, CHARMS } from '../sim/charms';
+import { TRICKS } from '../sim/tricks';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, shelfExtras } from './almanac';
+import { SYNERGY_KEYS } from './album';
+import { type LostTo, type PrimaryButton, primaryButton } from './goals';
+import { lightLantern } from './lanterns';
+import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } from './rank';
+import { lanternRow, resultsSpine, titleSpine } from './spineview';
+import { flameNow } from './flame';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
-import { type GrudgeRow, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
+import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
 import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
 import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider } from './twelve';
@@ -229,6 +237,16 @@ export class App {
   private goAfterReveal = false;
   /** What this run has already credited to the save (a revive settles it again, by difference). */
   private settlement: Settlement | null = null;
+  /** Round 8: what this run did that the spine settles (rank.ts SpineRun), gathered from the sim's events: named
+   *  tricks (fresh the first time in the run), charms taken, named pairs found, showdowns won, set pieces met. */
+  private spineFacts = { tricks: [] as Array<{ key: string; fresh: boolean }>, charms: [] as string[], synergies: [] as string[], showdownsWon: 0, moments: [] as Array<{ key: string; variant: number; won: boolean }> };
+  /** What this run's spine settle paid and granted: a revive's second settle takes it back first. */
+  private spineSettlement: SpineSettlement | null = null;
+  /** The Daily's or the Cup's medal, and whether Lanternfall was open by its Almanac page, as the run started. */
+  private dayMedalAtStart = 0;
+  private lanternfallPagedAtStart = false;
+  /** Where the results' one button sends Run Again when it names another place: 'daily', or a duel's home. */
+  private againTo: string | null = null;
   private passedThisRun = new Set<number>();
   /** Gifts earned for passing ghosts (kept out of the sim so live state matches replays). */
   private passBonus = 0;
@@ -336,7 +354,9 @@ export class App {
       onSelectSled: (id) => this.selectSled(id),
       onBuySled: (id) => this.buySled(id),
       onSettings: (s) => this.applySettings(s),
-      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves()),
+      onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves(), this.lanternRows()),
+      onLightLantern: (id) => this.lightLantern(id),
+      onSwapMission: (id) => this.swapMission(id),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -431,7 +451,8 @@ export class App {
   private duelHere(): Duel | null {
     const mi = MOUNTAINS.indexOf(this.mountain as MountainDef);
     if (mi < 0 || (this.challenge && this.challenge.record.seed === this.mountain.seed)) return null;
-    return duelOn(this.save.data.twelve, mi, (i) => this.isOpen(MOUNTAINS[i]));
+    // (The first duel waits for the third run: one idea at a time, twelve.ts FIRST_DUEL_RUN.)
+    return duelOn(this.save.data.twelve, mi, (i) => this.isOpen(MOUNTAINS[i]), this.save.data.runs);
   }
 
   /** The card art a named mountain wears: its course's biome, the finale its own. */
@@ -679,6 +700,10 @@ export class App {
     const week = this.cup.tagline;
     const cupRoll = cupChaos(week);
     const named = MOUNTAINS.some((m) => m === this.mountain);
+    const flame = flameNow(d.flame, today);
+    const cupPool = (): PoolGhostData[] | null => (this.cupReady ? this.cupPool : null);
+    const open = (id: string): boolean => MOUNTAINS.some((m) => m.id === id && this.isOpen(m));
+    let spine: TitleSpine | undefined;
     const model: TitleModel = {
       mountains: MOUNTAINS.map((m) => {
         const spot = this.spotFor(m.id);
@@ -708,7 +733,8 @@ export class App {
         };
       }),
       selected: this.mountain.id,
-      daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: dailyStreakNow(d.daily, today) },
+      // (Round 8: the flame, days in a row with a run of any kind, takes the Daily-only streak line's place.)
+      daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: flame.alive ? flame.streak : 0, flame: true },
       best: topScore(d.best[this.mountain.id]),
       bestTime: d.best[this.mountain.id]?.time ?? 0,
       oldBest: oldBest(d, this.mountain.id)?.score ?? 0,
@@ -732,6 +758,11 @@ export class App {
         medal: cupMedalNow(d.cup, week),
       },
       twelve: d.runs > 0 ? this.twelveModel() : null,
+      // Round 8's spine (spineview.ts): built when a screen first reads it, since its album count plans every
+      // mountain's set pieces and the title opens before the first frame.
+      get spine() {
+        return (spine ??= titleSpine(d, today, { week, cupPool: cupPool(), open }));
+      },
     };
     this.ui.showTitle(model);
   }
@@ -758,49 +789,52 @@ export class App {
     if (!this.save.data.ownedSleds.includes(id)) return;
     this.save.data.sled = id;
     this.save.save();
-    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves());
+    this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
     this.refreshTitle();
   }
 
-  /** A sled paint: bought with gifts the first time, then put on (a look, never an edge). */
+  /** A sled paint: bought with gifts the first time, then put on (a look, never an edge). Round 8: an Almanac paint
+   *  is only ever found (never sold), and a chapter's is sold from its month on (almanac.ts shelfExtras). */
   private paint(id: string): void {
     const p = paintById(id);
+    if (p.id !== id) return;
     const d = this.save.data;
-    const owned = p.price === 0 || (d.paints ?? []).includes(p.id);
+    const owned = p === PAINTS[0] || (d.paints ?? []).includes(p.id);
     if (!owned) {
-      if (d.gifts < p.price) return;
+      if (d.gifts < p.price || !(PAINTS.includes(p) || this.extrasSold('paint').some((e) => e.id === p.id))) return;
       d.gifts -= p.price;
       d.paints = [...(d.paints ?? []), p.id];
       this.audio.ui('unlock');
       this.ui.toast(`${p.name} paint`, 'gift', 'On your sled');
     }
-    if (p.price === 0) delete d.paint;
+    if (p === PAINTS[0]) delete d.paint;
     else d.paint = p.id;
     this.save.flush();
     this.world.rider.setPaint(p.hex);
-    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
   }
 
   /** A garage item (round 6): bought with gifts the first time, then worn. A look or a sound, never an edge:
    *  nothing here reaches the sim, a sled or the lantern. */
   private garage(shelf: ShelfId, id: string): void {
-    const item = SHELVES[shelf].find((i) => i.id === id);
-    if (!item) return;
     const d = this.save.data;
     const k = SHELF_KEYS[shelf];
     const owned = shelfState(d, shelf).owned.includes(id);
+    // (Round 8: the scarf and trail shelves also hold the chapters' sets for gifts and the Almanac's found pieces.)
+    const item = SHELVES[shelf].find((i) => i.id === id) ?? (shelf === 'scarf' || shelf === 'trail' ? this.extrasOn(shelf).find((e) => e.id === id) : undefined);
+    if (!item) return;
     if (!owned) {
-      if (d.gifts < item.price) return;
+      if (d.gifts < item.price || (item as GarageExtra).page !== undefined) return;
       d.gifts -= item.price;
       d[k.owned] = [...(d[k.owned] ?? []), id];
       this.audio.ui('unlock');
       this.ui.toast(item.name, 'gift', shelf === 'sound' ? 'On your sled' : shelf === 'trail' ? 'On your sled' : 'Wearing it');
     }
-    if (item.price === 0) delete d[k.on];
+    if (id === freeItem(shelf)) delete d[k.on];
     else d[k.on] = id;
     this.save.flush();
     this.applyLook();
-    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
   }
 
   /** Puts on what the save says is worn: the rider's hat and scarf, the sled's trail and its sound. */
@@ -818,14 +852,49 @@ export class App {
     const d = this.save.data;
     return (['scarf', 'hat', 'trail', 'sound'] as const).map((shelf) => {
       const st = shelfState(d, shelf);
-      return { id: shelf, items: SHELVES[shelf].map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, price: i.price, owned: st.owned.includes(i.id), on: st.on === i.id, affordable: d.gifts >= i.price })) };
+      const items = [...SHELVES[shelf], ...(shelf === 'scarf' || shelf === 'trail' ? this.extrasOn(shelf) : [])];
+      return { id: shelf, items: items.map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, price: i.price, owned: st.owned.includes(i.id), on: st.on === i.id, affordable: d.gifts >= i.price })) };
     });
   }
 
   paintCards(): PaintCard[] {
     const d = this.save.data;
     const on = paintById(d.paint).id;
-    return PAINTS.map((p) => ({ id: p.id, name: p.name, hex: p.hex, price: p.price, owned: p.price === 0 || (d.paints ?? []).includes(p.id), on: p.id === on, affordable: d.gifts >= p.price }));
+    const paints = [...PAINTS, ...this.extrasOn('paint').map((e) => paintById(e.id))];
+    return paints.map((p) => ({ id: p.id, name: p.name, hex: p.hex, price: p.price, owned: p === PAINTS[0] || (d.paints ?? []).includes(p.id), on: p.id === on, affordable: d.gifts >= p.price }));
+  }
+
+  /** Round 8: the chapters' pieces on sale today (almanac.ts shelfExtras), by shelf. */
+  private extrasSold(shelf: GarageExtra['shelf']): GarageExtra[] {
+    return shelfExtras(this.daily.tagline).filter((e) => e.shelf === shelf);
+  }
+
+  /** A shelf's added pieces as the garage lists them: the chapters' sets on sale today, then any Almanac or chapter
+   *  piece already owned (an Almanac piece is found on its page, never sold, so it shows only once owned). */
+  private extrasOn(shelf: GarageExtra['shelf']): GarageExtra[] {
+    const d = this.save.data;
+    const sold = this.extrasSold(shelf);
+    const have = shelf === 'scarf' ? d.scarves : shelf === 'trail' ? d.trails : d.paints;
+    const owned = [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS].filter((e) => e.shelf === shelf && (have ?? []).includes(e.id) && !sold.includes(e));
+    return [...sold, ...owned];
+  }
+
+  /** Round 8: the Lantern Row (lanterns.ts), a town a mountain that is open: lights the next lantern for gifts. A look
+   *  only, hung in the finish town; nothing in it reaches a race. */
+  private lightLantern(id: string): void {
+    const d = this.save.data;
+    const open = (m: string): boolean => MOUNTAINS.some((x) => x.id === m && this.isOpen(x));
+    if (!lightLantern(d, id, open)) return;
+    this.save.flush();
+    this.audio.ui('unlock');
+    this.ui.toast('A lantern lit', 'gift', 'In the finish town');
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
+    this.refreshTitle();
+  }
+
+  /** The Lantern Row's model (spineview.ts lanternRow) for the garage. */
+  lanternRows(): LanternTownView[] {
+    return lanternRow(this.save.data, (m) => MOUNTAINS.some((x) => x.id === m && this.isOpen(x)));
   }
 
   private buySled(id: number): void {
@@ -838,7 +907,7 @@ export class App {
     this.save.flush();
     this.audio.ui('unlock');
     this.ui.toast(`${def.name} unlocked`, 'gift', def.trait);
-    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves());
+    this.ui.showSleds(this.sledCards(), d.gifts, this.paintCards(), this.garageShelves(), this.lanternRows());
     this.refreshTitle();
   }
 
@@ -1045,6 +1114,11 @@ export class App {
     this.grudgeBeaten = false;
     this.passedAtStart = d.ghostsPassed;
     this.settlement = null;
+    this.spineFacts = { tricks: [], charms: [], synergies: [], showdownsWon: 0, moments: [] };
+    this.spineSettlement = null;
+    this.againTo = null;
+    this.dayMedalAtStart = this.mountain.id === 'daily' ? dailyMedalNow(d.daily, this.daily.tagline) : this.mountain.id === 'cup' ? cupMedalNow(d.cup, this.cup.tagline) : 0;
+    this.lanternfallPagedAtStart = almanacOpens(d, 'lanternfall');
     this.results = null;
     this.airTicks = 0;
     this.hintTimer = 0;
@@ -1196,6 +1270,7 @@ export class App {
   private runAgain(): void {
     if (this.phase !== 'results' && this.phase !== 'crashed') return;
     this.finalizeRun();
+    this.followAgain();
     this.pacing.runEnded();
     if (this.platform.adsAvailable && this.pacing.shouldShowMidgame(Date.now())) {
       this.hideResults();
@@ -1764,7 +1839,8 @@ export class App {
     // A finish is graded against its mountain's pool (bronze, silver and gold times); the Daily's medal
     // goes on the save.
     const medals = medalThresholds(this.poolForMountain(this.mountain).map(poolTime));
-    const settled = settleRun(d, this.summary(), this.settlement, this.mountainKey(), medals);
+    const sum = this.summary();
+    const settled = settleRun(d, sum, this.settlement, this.mountainKey(), medals);
     this.settlement = settled.settlement;
     // A named mountain's ladder and lines: pays each rung and medal once, however often this settles.
     const key = this.mountainKey();
@@ -1824,7 +1900,8 @@ export class App {
         d.gifts += pay;
         d.lifetimeGifts += pay;
       }
-      if (kept.opened) {
+      // (Lanternfall already open by its Almanac page said so once, on that page's card: not again here.)
+      if (kept.opened && !this.lanternfallPagedAtStart) {
         const m = MOUNTAINS[KING.home];
         unlocked.push(m.name);
         unlockedMountains.push({ id: m.id, name: m.name, biome: this.cardArt(m), tagline: m.tagline });
@@ -1842,6 +1919,19 @@ export class App {
           of: TWELVE.length,
           gifts: kept.fell ? DUEL_GIFTS : kept.crowned ? CROWN_GIFTS : 0,
         };
+    }
+    // Round 8's spine (rank.ts): one settle of everything this run did, after the settles above, taken back and
+    // made again on a revive's second card. Its one button names Run Again (below) until the screens lane draws the
+    // rest of results.spine.
+    const spineOut = this.settleSpineRun(sim, sum, settled, climb, board, you, mi);
+    // (A page that opens a mountain shows its unlock card, as the ghosts passed and The Twelve do.)
+    for (const { reward: r } of spineOut.outcome.opened) {
+      if (r.kind !== 'open') continue;
+      const m = MOUNTAINS.find((x) => x.id === r.mountain);
+      if (m && !unlocked.includes(m.name)) {
+        unlocked.push(m.name);
+        unlockedMountains.push({ id: m.id, name: m.name, biome: this.cardArt(m), tagline: m.tagline });
+      }
     }
     this.save.flush();
     // The race is decided by time, then distance (standing.ts): each ghost carries its whole run (the
@@ -1948,7 +2038,8 @@ export class App {
       // A phone card, whose race line takes the crash note's slot, shows the place you fell in beside
       // the finishing place (results.ts, only when it was better).
       rankAtCrash: this.rankAtCrash,
-      runAgainLabel: duelLabel ?? runAgainLabel(friendLabel, grudgeNext, friendLabel?.beaten === false || grudgeNext ? null : this.promiseNext(you, key, climb?.spot ?? null)),
+      runAgainLabel: this.againLabel(duelLabel ?? runAgainLabel(friendLabel, grudgeNext, friendLabel?.beaten === false || grudgeNext ? null : this.promiseNext(you, key, climb?.spot ?? null)), spineOut.primary, friendLabel?.beaten === false, spineOut.lostTo, key),
+      spine: sim.s.crashed && !this.reviveUsed && this.platform.adsAvailable && !this.adblock && sim.distance > 120 ? { ...spineOut.view, swap: null } : spineOut.view,
       twelve,
       nextUnlock: unlocked.length ? null : nextUnlock(d),
       sendItBack: this.friendBeaten(sim),
@@ -1997,6 +2088,136 @@ export class App {
       first.ready.then(go, go);
       window.setTimeout(go, 250);
     });
+  }
+
+  /**
+   * Round 8: the spine's settle of this run (rank.ts settleSpine), from the run's own events and what the settles
+   * before it returned, built as the bars harness builds it (scripts/playtest/r8career.ts). A revive's second card
+   * passes the first settle's settlement, which is taken back first, so the run is settled once on its final self.
+   * The one button it picks names a duel only if the next run rides it (the first duel waits for the third run).
+   */
+  private settleSpineRun(sim: Sim, sum: RunSummary, settled: SettleResult, climb: ClimbOutcome | null, board: Board | null, you: Standing, mi: number): { outcome: SpineOutcome; view: ResultsSpine; primary: PrimaryButton; lostTo: LostTo | null } {
+    const d = this.save.data;
+    const key = this.mountainKey();
+    const today = this.daily.tagline;
+    const kept = this.twelveOutcome;
+    const lostTo = this.lostTo(you);
+    const held = medalsHeld(d.climb?.[key]);
+    const dayMedal = settled.daily ?? settled.cup;
+    const tier = (text: string): number => (text.endsWith(' (III)') ? 3 : text.endsWith(' (II)') ? 2 : 1);
+    const f = this.spineFacts;
+    const run: SpineRun = {
+      key,
+      mi,
+      mountainId: this.mountain.id,
+      mirror: false,
+      day: today,
+      week: this.cup.tagline,
+      sum,
+      time: you.time,
+      stageSeconds: stageSeconds(sim.stageTicks),
+      beaten: this.ghosts.tracks.filter((t) => t.ready && t.entry.kind !== 'you' && !aheadOf(trackStanding(t), you)).length,
+      passed: sum.ghostsPassed,
+      tricks: f.tricks,
+      moments: f.moments,
+      showdownsWon: f.showdownsWon,
+      charms: f.charms,
+      synergies: f.synergies,
+      legend: sim.stats.legend,
+      mood: this.chaos.mood,
+      missions: settled.missions.filter((v) => v.justCompleted).map((v) => tier(v.text)),
+      rungs: climb && climb.rankWas !== null && climb.spot.rank !== null ? Math.max(0, climb.rankWas - climb.spot.rank) : 0,
+      stageMedals: climb ? climb.fresh.filter((i) => i < 3).map((i) => held.stages[i]) : [],
+      runMedal: climb && climb.fresh.includes(3) ? held.run : 0,
+      dayMedal: dayMedal && dayMedal.best > this.dayMedalAtStart ? dayMedal.best : 0,
+      stars: this.masteryFresh.length,
+      duelWon: kept?.fell && kept.duel?.kind === 'duel' ? kept.duel.rider.key : null,
+      crowned: !!kept?.crowned,
+      newBestTime: this.newBestTime && this.bestAtStart?.time !== undefined,
+      lostTo,
+      board,
+      open: MOUNTAINS.filter((m) => this.isOpen(m)).map((m) => m.id),
+      dailyReady: this.dailyReady,
+      cupPool: this.mountain.id === 'cup' ? this.cupPool : undefined,
+      record: this.run ? recordToString(this.run.toRecord(d.name)) : undefined,
+    };
+    const outcome = settleSpine(d, run, this.spineSettlement);
+    this.spineSettlement = outcome.settlement;
+    let primary = outcome.primary;
+    const open = (i: number): boolean => this.isOpen(MOUNTAINS[i]);
+    const next = nextDuel(d.twelve, open);
+    const rides = next !== null && duelOn(d.twelve, duelMountain(next), open, d.runs) !== null;
+    if (primary.kind === 'duel' && !rides) primary = primaryButton(outcome.goals.filter((g) => g.kind !== 'duel'));
+    this.againTo = primary.kind === 'daily' ? 'daily' : primary.kind === 'duel' && next ? MOUNTAINS[duelMountain(next)].id : null;
+    return { outcome, view: resultsSpine({ ...outcome, primary }, d, today), primary, lostTo };
+  }
+
+  /** The named rival this run lost to, nearest first: the duel's rider (unless beaten), the grudge, else the rider
+   *  just ahead (goals.ts LostTo: seconds behind when both finished, else metres). */
+  private lostTo(you: Standing): LostTo | null {
+    const gap = (st: Standing): { seconds: number; metres: null } | { seconds: null; metres: number } =>
+      st.time !== null && you.time !== null ? { seconds: Math.max(0, you.time - st.time), metres: null } : { seconds: null, metres: Math.max(0, st.distance - you.distance) };
+    const rows = this.ghosts.tracks
+      .filter((t) => t.ready && t.entry.kind !== 'you' && t.entry.kind !== 'friend')
+      .map((t) => ({ t, st: realStanding(t) }))
+      .filter((x) => aheadOf(x.st, you));
+    const duel = this.duel;
+    if (duel?.kind === 'duel' && !this.twelveOutcome?.fell) {
+      const row = rows.find((x) => x.t.entry.name === duel.rider.name);
+      if (row) return { name: duel.rider.name, kind: 'duel', ...gap(row.st) };
+    }
+    const g = this.grudgeAtStart;
+    if (g?.record) {
+      const row = rows.find((x) => x.t.entry.record === g.record);
+      if (row) return { name: g.name, kind: 'grudge', ...gap(row.st) };
+    }
+    let near: (typeof rows)[number] | null = null;
+    for (const x of rows) if (!near || aheadOf(near.st, x.st)) near = x;
+    return near ? { name: near.t.entry.name, kind: 'rival', ...gap(near.st) } : null;
+  }
+
+  /** Run Again's words (round 8): the spine's one button, unless a friend's challenge still stands here (it rides
+   *  next, whatever the button says). A rematch with the rider just ahead promises that rider to the next field. */
+  private againLabel(old: { text: string; aria: string }, primary: PrimaryButton, friendUp: boolean, lostTo: LostTo | null, key: string): { text: string; aria: string } {
+    if (friendUp) {
+      this.againTo = null;
+      return old;
+    }
+    if (primary.kind === 'rematch' && lostTo?.kind === 'rival') {
+      const t = this.ghosts.tracks.find((q) => q.entry.name === lostTo.name && q.entry.kind !== 'you');
+      if (t) this.promised = { key, name: t.entry.name, score: t.entry.score, record: t.entry.record };
+    }
+    return { text: primary.text, aria: primary.aria };
+  }
+
+  /** Round 8: the results' secondary action, a mission held too long swapped for the next (missions.ts, once a
+   *  day). Not offered while a revive is (its second settle starts again from the missions the run began with). */
+  private swapMission(id: string): void {
+    const r = this.results;
+    if (this.phase !== 'results' || !r?.spine?.swap || r.spine.swap.id !== id) return;
+    const d = this.save.data;
+    if (!swapMission(d.missions, id, this.daily.tagline, { unlockedBiomes: unlockedBiomes(d.ghostsPassed) })) return;
+    this.save.flush();
+    const was = r.spine.swap.text;
+    const fresh = missionViews(d.missions).find((v) => !r.missions.some((o) => o.text === v.text));
+    this.results = { ...r, spine: { ...r.spine, swap: null }, missions: [...r.missions.filter((v) => v.text !== was), ...(fresh ? [fresh] : [])] };
+    this.ui.updateResults(this.results);
+    this.ui.toast('Mission swapped', 'mission', fresh?.text);
+  }
+
+  /** The results' one button may name another place (today's Daily, a duel's home ground): Run Again goes there. */
+  private followAgain(): void {
+    const to = this.againTo;
+    this.againTo = null;
+    if (!to) return;
+    if (to === 'daily') {
+      if (this.dailyReady) this.mountain = this.daily;
+      return;
+    }
+    const m = MOUNTAINS.find((x) => x.id === to);
+    if (!m || m === this.mountain || !this.isOpen(m)) return;
+    this.mountain = m;
+    this.save.data.mountain = m.id;
   }
 
   /** A results reward landed in the wallet (results.ts, flown or not): its coin, in landing order. Under
@@ -2775,6 +2996,27 @@ export class App {
         if (e.kind === 'wallRide' && this.run) {
           if (this.run.sim.tick - this.lastWallTick > 40) this.wallRides++;
           this.lastWallTick = this.run.sim.tick;
+        }
+        // (Round 8: every named trick lands as a style event carrying its id, tricks.ts TRICKS.)
+        if (typeof e.trick === 'number' && e.trick > 0) {
+          const key = TRICKS[e.trick]?.key ?? String(e.trick);
+          this.spineFacts.tricks.push({ key, fresh: !this.spineFacts.tricks.some((t) => t.key === key) });
+        }
+        break;
+      case 'charm':
+        if (e.id >= 0) this.spineFacts.charms.push(CHARMS[e.id]?.key ?? String(e.id));
+        break;
+      case 'synergy':
+        this.spineFacts.synergies.push(SYNERGY_KEYS[e.id] ?? String(e.id));
+        break;
+      case 'rival':
+        // (A showdown won is a token the sim applies; one lost raises nothing in the sim.)
+        if (e.kind === 'showdown') this.spineFacts.showdownsWon++;
+        break;
+      case 'moment':
+        if ((e.phase === 'won' || e.phase === 'lost') && this.run) {
+          const p = this.run.sim.plays.find((q) => q.index === e.index);
+          this.spineFacts.moments.push({ key: p?.key ?? String(e.index), variant: p?.variant ?? 0, won: e.phase === 'won' });
         }
         break;
       case 'tumble':

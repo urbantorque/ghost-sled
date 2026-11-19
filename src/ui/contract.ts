@@ -165,8 +165,9 @@ export interface SledCard {
 export interface TitleModel {
   mountains: MountainCard[];
   selected: string;
-  /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row. */
-  daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number };
+  /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row, or with
+   *  `flame` (round 8) the flame's days in a row with a run of any kind, which takes the Daily-only line's place. */
+  daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number; flame?: boolean };
   best: number;
   /** Your best finish time on the selected mountain, seconds (0 for none). */
   bestTime?: number;
@@ -439,6 +440,10 @@ export interface UIHandlers {
   onPaint?(id: string): void;
   /** A garage item (scarf, hat, trail or sled sound): buy it (if not owned) and wear it. */
   onGarage?(shelf: GarageShelfId, id: string): void;
+  /** Round 8: light the next lantern of a finish town's Lantern Row (LanternTownView.next.id), for gifts. */
+  onLightLantern?(id: string): void;
+  /** Round 8: the results' secondary action: swap a mission held too long (ResultsSpine.swap.id). */
+  onSwapMission?(id: string): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
@@ -520,7 +525,8 @@ export interface GameUI {
   showPause(settings: SettingsModel, missions?: MissionView[]): void;
   hidePause(): void;
   /** The garage: sleds, then (when given) paints and the round 6 shelves. */
-  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[]): void;
+  /** lanterns (round 8): the Lantern Row's towns, listed in the garage until the screens lane draws them. */
+  showSleds(cards: SledCard[], wallet: number, paints?: PaintCard[], shelves?: GarageShelf[], lanterns?: LanternTownView[]): void;
   showSettings(m: SettingsModel): void;
   closeMenus(): void;
   touchVisual(v: TouchVisual, visible: boolean): void;

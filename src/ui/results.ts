@@ -605,6 +605,17 @@ export class Results {
     // Your run, directed (round 7, the reel lane's one button here): the highlight reel of the run just
     // ridden. It sits with the card's other offers and never takes Run Again's place.
     if (this.hd.onWatchReel) extra.append(btn(ctx, { cls: 'gs-btn-soft gs-res-opt gs-res-reel', icon: 'play', label: 'Watch Your Run', sound: 'tap', fk: 'reel', onClick: () => this.hd.onWatchReel?.() }));
+    // Round 8: a mission held five runs without progress may be swapped, once a day (the spine's one secondary
+    // action, never the mission Run Again is asking you to finish). Once taken its slot says so, as a spent offer.
+    const swap = m.spine?.swap ?? null;
+    if (swap && this.hd.onSwapMission) {
+      const b = btn(ctx, { cls: 'gs-btn-soft gs-res-opt gs-res-swap', icon: 'flag', label: 'Swap Mission', sound: 'tap', fk: 'swap', onClick: () => {
+        this.pressed.add('swap');
+        this.hd.onSwapMission?.(swap.id);
+      } });
+      b.setAttribute('aria-label', `Swap the mission: ${swap.text}`);
+      extra.append(b);
+    } else if (this.pressed.has('swap')) extra.append(this.spent('swap', 'Mission Swapped'));
     const actions = h('div', 'gs-res-actions', extra.childElementCount > 0 ? extra : null, h('div', `gs-res-main${chal ? ' has-chal' : ''}`, chal, home, again));
 
     // The body scrolls on short screens. A sentinel at its end drives a bottom fade and a More cue,

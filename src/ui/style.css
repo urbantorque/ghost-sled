@@ -9604,3 +9604,28 @@
     box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.5);
   }
 }
+
+/* Round 8: the Lantern Row in the garage, a plain list until the screens lane draws the row (menus.ts lanternPanel). */
+.gs-lrow-list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-lrow-town {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
+.gs-lrow-town .gs-shop-name {
+  margin: 0;
+  min-width: 9em;
+}
+
+.gs-lrow-town .gs-shop-effect {
+  margin: 0;
+}

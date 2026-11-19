@@ -212,6 +212,7 @@ describe('charm gates', () => {
 });
 
 describe("a held charm's signal", () => {
+  // (A stub with the sim's read-only getters for the charm state, sim.ts perfectTick and the rest.)
   function sim(charms: number[], over: Record<string, unknown> = {}): Sim {
     const mask = charms.reduce((m, id) => m | (1 << id), 0);
     return {
@@ -221,11 +222,11 @@ describe("a held charm's signal", () => {
       tick: 500,
       s: { lantern: 120, getUps: 2 },
       has: (id: number) => (mask & (1 << id)) !== 0,
-      lastPerfect: -1000,
-      hearthOwed: 0,
-      featherStage: -1,
-      lampStage: -1,
-      wispStage: -1,
+      perfectTick: -1000,
+      hearthOwing: 0,
+      featherSpentStage: -1,
+      lampSpentStage: -1,
+      wispSpentStage: -1,
       ...over,
     } as unknown as Sim;
   }
@@ -239,25 +240,25 @@ describe("a held charm's signal", () => {
   });
 
   it("opens Ember Step's half price just after a perfect landing, and only with half a lantern to spend", () => {
-    expect(lanternSignals(sim([CHARM.step], { lastPerfect: 480 }), false) & SIG.step).toBe(SIG.step);
-    expect(lanternSignals(sim([CHARM.step], { lastPerfect: 400 }), false) & SIG.step).toBe(0);
-    expect(lanternSignals(sim([CHARM.step], { lastPerfect: 480, s: { lantern: 30, getUps: 2 } }), false) & SIG.step).toBe(0);
+    expect(lanternSignals(sim([CHARM.step], { perfectTick: 480 }), false) & SIG.step).toBe(SIG.step);
+    expect(lanternSignals(sim([CHARM.step], { perfectTick: 400 }), false) & SIG.step).toBe(0);
+    expect(lanternSignals(sim([CHARM.step], { perfectTick: 480, s: { lantern: 30, getUps: 2 } }), false) & SIG.step).toBe(0);
   });
 
   it("keeps a stage's spare on the lantern until it is spent in that stage", () => {
     expect(lanternSignals(sim([CHARM.feather]), false) & SIG.feather).toBe(SIG.feather);
-    expect(lanternSignals(sim([CHARM.feather], { featherStage: 1 }), false) & SIG.feather).toBe(0);
+    expect(lanternSignals(sim([CHARM.feather], { featherSpentStage: 1 }), false) & SIG.feather).toBe(0);
     // Last Lamp's ember shows only once the get-ups are gone.
     expect(lanternSignals(sim([CHARM.lamp]), false) & SIG.ember).toBe(0);
     expect(lanternSignals(sim([CHARM.lamp], { s: { lantern: 0, getUps: 0 } }), false) & SIG.ember).toBe(SIG.ember);
     expect(wispUp(sim([CHARM.wisp]))).toBe(true);
-    expect(wispUp(sim([CHARM.wisp], { wispStage: 1 }))).toBe(false);
+    expect(wispUp(sim([CHARM.wisp], { wispSpentStage: 1 }))).toBe(false);
   });
 
   it('leans the Slipstream Lantern only while drafting, and outlines a Hearthstone cell while it is owed', () => {
     expect(lanternSignals(sim([CHARM.slip]), false)).toBe(0);
     expect(lanternSignals(sim([CHARM.slip]), true)).toBe(SIG.lean);
-    expect(lanternSignals(sim([CHARM.hearth], { hearthOwed: 100 }), false)).toBe(SIG.owed);
+    expect(lanternSignals(sim([CHARM.hearth], { hearthOwing: 100 }), false)).toBe(SIG.owed);
   });
 });
 
