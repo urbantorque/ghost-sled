@@ -80,10 +80,10 @@ describe('round 8 bars', () => {
     expect(f.finished).toBeGreaterThanOrEqual(26);
   });
 
-  // Before the spine Lanternfall had nothing left at run 50 but two legends. With it every open mountain has its
-  // mirror, rivals' records or stars in reach, and Lanternfall is still locked at run 50 for the mid pilot (ten of The
-  // Twelve down, the next duel 0.7 s out of reach). At run 30 it held: the next duel was in reach then.
-  it.fails('still new: something unseen and reachable next run on every mountain', () => {
+  // Before the spine Lanternfall had nothing left at run 50 but two legends. With it every mountain has something
+  // unseen in reach: a variant, a rival's record, a star or its mirror, and Lanternfall opens to ride on Almanac page
+  // 21 (the mid pilot's about run 40) even before the eleventh duel.
+  it('still new: something unseen and reachable next run on every mountain', () => {
     const b = barStillNew(M, runs, 50);
     for (const m of b) expect(m.reachable.length, m.mountain).toBeGreaterThan(0);
   });

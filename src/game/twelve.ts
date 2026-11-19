@@ -1,4 +1,5 @@
 import { ROSTER, type Rider, riderByKey } from '../bot/roster';
+import { almanacOpens } from './almanac';
 import { MOUNTAINS, type MountainDef } from '../sim/mountains';
 import type { FieldPick } from './field';
 import type { PoolGhostData } from './ghostdata';
@@ -112,9 +113,11 @@ export function lanternfallOpen(t: TwelveSave | undefined): boolean {
   return gateCount(t) >= TWELVE_GATE;
 }
 
-/** Whether a named mountain is open to ride: the finale by The Twelve, the others by ghosts passed. */
-export function mountainOpen(d: { ghostsPassed: number; twelve?: TwelveSave }, m: Pick<MountainDef, 'unlockGhosts' | 'finale'>): boolean {
-  return m.finale ? lanternfallOpen(d.twelve) : d.ghostsPassed >= m.unlockGhosts;
+/** Whether a named mountain is open to ride: the finale by The Twelve or by its Almanac page (round 8, almanac.ts
+ *  LANTERNFALL_PAGE: a rider stuck on the eleventh duel still sees the finale's world), the others by ghosts passed.
+ *  Riding it is not the King's duel: that still waits for eleven of The Twelve (nextDuel). */
+export function mountainOpen(d: { ghostsPassed: number; twelve?: TwelveSave; rank?: { xp: number; claimed: number } }, m: Pick<MountainDef, 'unlockGhosts' | 'finale'>): boolean {
+  return m.finale ? lanternfallOpen(d.twelve) || almanacOpens(d, 'lanternfall') : d.ghostsPassed >= m.unlockGhosts;
 }
 
 /** What a locked mountain's card says ("to unlock" is the card's own word for the lock). */
@@ -138,7 +141,8 @@ export type Duel = { kind: 'duel'; rider: Rider } | { kind: 'final' };
  * King, the last race; after that, nothing.
  */
 export function nextDuel(t: TwelveSave | undefined, open: (mountain: number) => boolean): Duel | null {
-  for (const r of TWELVE) if (!hasBeaten(t, r.key) && open(r.home)) return { kind: 'duel', rider: r };
+  // (The King waits for the eleven whatever opened his mountain.)
+  for (const r of TWELVE) if (!hasBeaten(t, r.key) && open(r.home) && (r !== KING || lanternfallOpen(t))) return { kind: 'duel', rider: r };
   if (TWELVE.every((r) => hasBeaten(t, r.key))) return t?.crowned ? null : { kind: 'final' };
   return null;
 }

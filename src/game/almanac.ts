@@ -69,7 +69,9 @@ export type Reward =
   | { kind: 'garage'; shelf: 'scarf' | 'trail' | 'paint'; id: string }
   | { kind: 'title'; title: string }
   | { kind: 'gifts'; gifts: number }
-  | { kind: 'legs'; legs: number };
+  | { kind: 'legs'; legs: number }
+  /** A mountain opened to ride (Lanternfall, for a rider still short of eleven of The Twelve). */
+  | { kind: 'open'; mountain: string };
 
 export interface Page {
   n: number;
@@ -103,7 +105,7 @@ export const ALMANAC: readonly Page[] = (
     [{ kind: 'hour', mountain: 'ember' }],
     [c('festival')],
     [{ kind: 'mirror', mountain: 'ember' }, t('Ash Runner')],
-    [f('backflip')],
+    [{ kind: 'open', mountain: 'lanternfall' }, f('backflip')],
     [{ kind: 'legs', legs: 6 }, c('stone')],
     [{ kind: 'gifts', gifts: 200 }],
     [{ kind: 'hour', mountain: 'sakura' }],
@@ -176,6 +178,15 @@ export function mirrorOpen(d: Pick<SaveData, 'rank' | 'twelve'>, mountain: strin
 
 const MOUNTAIN_ORDER = ['pinecrest', 'frostfang', 'ember', 'sakura', 'lanternfall'];
 
+/** The page that opens Lanternfall to ride and explore (its King and the last race still wait for eleven of The
+ *  Twelve): about run 40 for the mid pilot and run 70 for the novice in the bars' careers. */
+export const LANTERNFALL_PAGE = 21;
+
+/** A mountain the Almanac has opened to ride. */
+export function almanacOpens(d: Pick<SaveData, 'rank'>, mountain: string): boolean {
+  return rewardsOpened(d).some((r) => r.kind === 'open' && r.mountain === mountain);
+}
+
 export function hourOpen(d: Pick<SaveData, 'rank'>, mountain: string): boolean {
   return rewardsOpened(d).some((r) => r.kind === 'hour' && r.mountain === mountain);
 }
@@ -220,6 +231,8 @@ export function rewardName(r: Reward): string {
       return `${r.gifts} gifts`;
     case 'legs':
       return r.legs >= 10 ? 'Every leg of the Long Night' : `The Long Night to ${r.legs} legs`;
+    case 'open':
+      return `${MOUNTAIN_NAMES[r.mountain] ?? r.mountain}, open to ride`;
   }
 }
 

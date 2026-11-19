@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { ALMANAC, CHAPTERS, CHAPTER_EXTRAS, CHARM_IDS, GARAGE_EXTRAS, PAGES, STARTER_CHARMS, almanacGates, almanacPool, chapterKey, chapterRewards, mirrorOpen, pageAt, pageCost, shelfExtras, xpToPage } from '../src/game/almanac';
+import { ALMANAC, LANTERNFALL_PAGE, CHAPTERS, CHAPTER_EXTRAS, CHARM_IDS, GARAGE_EXTRAS, PAGES, STARTER_CHARMS, almanacGates, almanacPool, chapterKey, chapterRewards, mirrorOpen, pageAt, pageCost, shelfExtras, xpToPage } from '../src/game/almanac';
 import { albumCatalogue, albumCompletion, awardStickers, stickersFor, type AlbumRun } from '../src/game/album';
 import { drawContracts, drawForm, meets, settleContracts, type ContractRun } from '../src/game/contracts';
 import { CALENDAR_XP, flameNow, lightDay } from '../src/game/flame';
 import { isItem, scarfById, trailById } from '../src/game/garage';
 import { nextGoals, primaryButton, type NextGoal } from '../src/game/goals';
 import { DIVISIONS, LEAGUE_SIZE, leagueField, leagueNow, nextDivision, settleLeague } from '../src/game/league';
-import { LANTERNS, lightLantern, litIn, readLit } from '../src/game/lanterns';
+import { LANTERNS, lightLantern, litByTown, litIn, readLit } from '../src/game/lanterns';
+import { lanternRow } from '../src/game/spineview';
 import { SWAP_AFTER, applyRun, newMissionState, swapMission, swappable, type RunSummary } from '../src/game/missions';
 import { LEGS, legChaos, legStep, mirrorSteer, settleLongNight } from '../src/game/modes';
 import { OPENER_BACK, OPENER_LEAD, openerOf, stringOffset } from '../src/game/pacer';
@@ -14,7 +15,8 @@ import { isPaint, paintById } from '../src/game/paints';
 import { XP, nextPage, settleSpine, xpTicks, type SpineRun } from '../src/game/rank';
 import { defaultSave, type SaveData } from '../src/game/save';
 import { FINISH_Z } from '../src/game/standing';
-import { FIRST_DUEL_RUN, duelMountain, duelOn, nextDuel } from '../src/game/twelve';
+import { FIRST_DUEL_RUN, KING, TWELVE, duelMountain, duelOn, mountainOpen, nextDuel } from '../src/game/twelve';
+import { MOUNTAINS } from '../src/sim/mountains';
 import type { RecentRun } from '../src/game/spinesave';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
 
@@ -66,6 +68,19 @@ describe('the Almanac', () => {
     for (let n = 2; n <= PAGES; n++) expect(pageCost(n)).toBeGreaterThanOrEqual(pageCost(n - 1));
     for (const n of [1, 10, 25, 50]) expect(pageAt(xpToPage(n)).page).toBe(n);
     expect(pageAt(xpToPage(10) - 1).page).toBe(9);
+  });
+
+  it('opens Lanternfall to ride on its page, and keeps the King and the last race for the eleven', () => {
+    const d = save();
+    const lf = MOUNTAINS.find((m) => m.finale)!;
+    const all = (): boolean => true;
+    expect(mountainOpen(d, lf)).toBe(false);
+    d.rank = { xp: xpToPage(LANTERNFALL_PAGE), claimed: LANTERNFALL_PAGE };
+    expect(mountainOpen(d, lf)).toBe(true);
+    // Ten of the eleven down: the next duel is the eleventh rider, never the King.
+    const ten = TWELVE.filter((r) => r !== KING).slice(0, 10).map((r) => r.key);
+    expect(nextDuel({ beaten: ten }, all)).toMatchObject({ kind: 'duel', rider: TWELVE.filter((r) => r !== KING)[10] });
+    expect(nextDuel({ beaten: TWELVE.filter((r) => r !== KING).map((r) => r.key) }, all)).toMatchObject({ kind: 'duel', rider: KING });
   });
 
   it('opens a mirror on its page, or once its home riders have all fallen in duels', () => {
@@ -261,6 +276,11 @@ describe('the Lantern Row', () => {
     expect(d.gifts).toBe(850);
     expect(readLit(['pinecrest:0', 'pinecrest:2', 'nope'])).toEqual(['pinecrest:0']);
     expect(LANTERNS.reduce((a, l) => a + l.price, 0)).toBeGreaterThan(15000);
+    expect(litByTown(d)).toMatchObject({ pinecrest: 1, ember: 0 });
+    const row = lanternRow(d, open);
+    expect(row).toHaveLength(1);
+    expect(row[0]).toMatchObject({ town: 'Old Town', lit: 1, of: 8, next: { id: 'pinecrest:1', price: 225, affordable: true } });
+    expect(row[0].lanterns.filter((l) => l.lit).map((l) => l.index)).toEqual([0]);
   });
 });
 

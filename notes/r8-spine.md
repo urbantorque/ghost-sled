@@ -20,9 +20,9 @@ Checked with `tsc` and single test files only (the CPU rule): `spine`, `spinesav
 | **Contracts** (`contracts.ts`): three a day from page 2 (one on the Daily, two on open mountains, from the day and the save's seed, each set from your form), 50 XP each and 100 for all three; and a standing **form contract** from the first run, set at your median over your last five runs and re-drawn when met. | There is always a goal a recent run already reached. | It is what makes the next bar hold by design. |
 | **The one button** (`goals.ts`): Rematch (lost to a named rival by 3 s in a duel, 2 s or 50 m otherwise) > Finish the mission (within 15%) > Next Duel (within 0.4 s of your times there) > Today's Daily > Run Again with the nearest goal in reach as its line. Reach is read from `save.recent` (last five runs). | "I didn't even think, I just hit go again." | The button names a goal the harness independently finds in reach after 100 of 100 runs for the mid pilot and for the novice (38 of 100 and 21 of 100 before). |
 | **Cup leagues** (`league.ts`): five divisions, you and nineteen records of the week's Cup pool at your division's band, top four up, bottom four down, a week not ridden holds. | A weekly ladder of real records, shown as records. | `tests/spine.test.ts`. |
-| **The Spirit Album** (`album.ts`): variants won, legends, moods finished per mountain, every signature rider's record beaten on every mountain, mirrors, named tricks, The Twelve, charms and synergies, Long Night depths; a sticker keeps the run's record for its frame (the last 40 such runs). | Run 50 still has silhouettes to fill. | Mid: 14 stickers after run 1, 103 at run 50, 134 at 100. |
+| **The Spirit Album** (`album.ts`): variants won, legends, moods finished per mountain, every signature rider's record beaten on every mountain, mirrors, named tricks, The Twelve, charms and synergies, Long Night depths; a sticker keeps the run's record for its frame (the last 40 such runs). | Run 50 still has silhouettes to fill. | Mid: 14 stickers after run 1, 122 at run 50, 131 at 100. |
 | **The Long Night and mirrors** (`modes.ts`): ten whole mountains (then their mirrors), chaos stepping up, carry in `SimConfig.carry`'s names; a mirror opens on its page or once its home riders have all fallen in duels, so a finished mountain hands you its mirror. | Somewhere to go after The Twelve. | `tests/spine.test.ts`. |
-| **The Lantern Row** (`lanterns.ts`): eight lanterns to light in each mountain's finish town, in order, 150 to 675 gifts each (16,500 in all). Purely a look. | Gifts outrun the garage: the mid pilot could buy everything the garage sells by about run 25 with the spine's gifts, and one chapter set (960) does not change that at four runs a day (run 100 is day 25). | Mid at run 100 still has 7 pieces (4,765 gifts) to want, novice 6 (3,640). |
+| **The Lantern Row** (`lanterns.ts`): eight lanterns to light in each mountain's finish town, in order, 150 to 675 gifts each (16,500 in all). Purely a look. | Gifts outrun the garage: the mid pilot could buy everything the garage sells by about run 25 with the spine's gifts, and one chapter set (960) does not change that at four runs a day (run 100 is day 25). | Mid at run 100 still has 7 pieces (4,915 gifts) to want, novice 7 (3,865). |
 | **The first minute's opener** (`pacer.ts`): on a first run the quickest rider of the string leads you off the line by up to 18 m, comes back to 12 m behind by 250 m, then eases to its place. | A first-timer overtakes a real rider early. | Prompted novice: first shown pass by 20 s on 6 of 6 seeds (before: 24 to 54 s). |
 | **The first duel waits for the third run** (`twelve.ts FIRST_DUEL_RUN`, `duelOn`'s `runs`). | One idea at a time: run 1 is not also a duel. | |
 | **A stuck mission can be swapped** (`missions.ts swappable`, `swapMission`): after five runs without progress, one a day, never the mission the button is pushing. | The novice no longer holds three missions it cannot finish for 80 runs. | Novice missions done at run 100: 70 (12 before). |
@@ -37,7 +37,7 @@ Checked with `tsc` and single test files only (the CPU rule): `spine`, `spinesav
 | Decisions | 2 kinds (dash, fork), median 12 a run | the same: four kinds need the batch's charm gates and showdowns (`CHOICE_EVENTS` reads them) |
 | Expression | 3 families, best combo 2 | the same: ten named tricks need the batch (`style` events with `trick`, read already) |
 | First minute (6 seeds) | no run met all three | prompted novice **5 of 6**, prompted clumsy 2 of 6; blind novice 3 of 6, blind clumsy 0 of 6; clumsy finishes 29 of 30 |
-| Still new at run 50, mid | Lanternfall 0 (all but two legends seen) | Pinecrest 1, Frostfang 2, Ember 3, Sakura 4 reachable; Lanternfall **still locked** for the mid pilot at run 50 (ten of The Twelve down, the next duel 0.7 s out of reach; at run 30 the way in was in reach) |
+| Still new at run 50, mid | Lanternfall 0 (all but two legends seen) | **met:** Pinecrest 1, Frostfang 2, Ember 3, Sakura 4, Lanternfall 3 reachable (a variant, Kaito Mori's record there, its mirror). Lanternfall opens to ride on Almanac page 21 (the mid pilot's about run 40, the novice's about run 70) as well as by The Twelve |
 
 What the first minute still needs: the prompted clumsy pilot falls early on four seeds, so its first pass (23 to 43 s)
 or its first dash (55 to 79 s, waiting on a lit lantern) comes late. The sim lane's `SimConfig.firstRun` (a wider
@@ -51,13 +51,13 @@ whether a clumsy first-timer passes anyone early.
 | 1 | mid | 3 | 8 | 14 | 0 | 10 | 730 | 9 | 29 (6,810) | 0 | 3 | 1 |
 | 5 | mid | 7 | 11 | 35 | 2 | 130 | 2,020 | 18 | 21 (5,790) | 0 | 8 | 2 |
 | 20 | mid | 15 | 14 | 79 | 8 | 45 | 5,355 | 36 | 9 (3,660) | 7 | 25 | 5 |
-| 50 | mid | 23 | 17 | 103 | 10 | 410 | 10,240 | 49 | 6 (3,490) | 10 | 55 | 13 |
-| 100 | mid | 32 | 19 | 134 | 10 | 295 | 16,950 | 64 | 7 (4,765) | 12 | 84 | 25 |
+| 50 | mid | 24 | 17 | 122 | 10 | 130 | 11,010 | 53 | 7 (3,940) | 12 | 55 | 13 |
+| 100 | mid | 32 | 19 | 131 | 10 | 0 | 17,855 | 66 | 7 (4,915) | 12 | 94 | 25 |
 | 1 | novice | 1 | 7 | 0 | 0 | 60 | 310 | 4 | 34 (7,280) | 0 | 3 | 1 |
 | 5 | novice | 5 | 9 | 6 | 1 | 105 | 1,185 | 12 | 26 (6,480) | 0 | 8 | 2 |
 | 20 | novice | 11 | 13 | 13 | 5 | 75 | 3,125 | 25 | 17 (5,300) | 0 | 21 | 7 |
 | 50 | novice | 18 | 15 | 20 | 10 | 250 | 6,240 | 38 | 7 (3,235) | 1 | 43 | 17 |
-| 100 | novice | 26 | 18 | 20 | 11 | 25 | 11,595 | 53 | 6 (3,640) | 1 | 70 | 34 |
+| 100 | novice | 26 | 18 | 20 | 11 | 325 | 11,595 | 54 | 7 (3,865) | 1 | 70 | 34 |
 
 "Still to want" at run 100 is the Lantern Row's last lanterns and, for the novice on 3 January, January's chapter
 set. Without the Lantern Row the mid pilot would hold gifts with nothing to buy from about run 25.
@@ -77,7 +77,11 @@ an exact round trip of every field and a mangled save.
 - `src/game/garage.ts`, `src/game/paints.ts`: the Almanac's and the chapters' pieces are items of their shelves
   (`extraOn`, `isItem`, `scarfById`, `trailById`, `paintById`, `isPaint`), so an owned one loads, wears and renders as
   any other. The shelves' own lists (`SHELVES`, `PAINTS`) are unchanged.
-- `src/game/twelve.ts`: `FIRST_DUEL_RUN`, `duelOn`'s optional `runs`, `riderTimeOn`.
+- `src/game/twelve.ts`: `FIRST_DUEL_RUN`, `duelOn`'s optional `runs`, `riderTimeOn`; `mountainOpen` also opens the
+  finale by its Almanac page (`almanacOpens`, `LANTERNFALL_PAGE` 21), and `nextDuel` never offers The Hollow King until
+  eleven of The Twelve have fallen (`lanternfallOpen`), so riding Lanternfall early changes nothing about his duel or
+  the last race. The title's gate (`app.ts isOpen`) goes through `mountainOpen`, so it needs no edit. `unlockedBiomes`
+  (missions) is unchanged: no mission is set on Lanternfall's biome.
 - `scripts/playtest/labpilots.ts`: `prompted`.
 - Not touched: `app.ts`, `run.ts`, `reel.ts`, `director.ts`, `ghosts.ts`, `hints.ts`, the sim.
 
@@ -96,17 +100,24 @@ an exact round trip of every field and a mangled save.
 4. **The sim's config**: `charmPoolOf(save)` returns `almanacPool(save)`; `SimConfig.charmGates = almanacGates(save)`;
    `SimConfig.firstRun = save.runs === 0`.
 5. **The garage**: the scarf, trail and paint shelves list `shelfExtras(today)` for gifts and the Almanac's pieces only
-   once owned; the Lantern Row (`lanternShelf`, `lightLantern`) needs a shelf and the world needs to hang the lit
-   lanterns in each finish town (world or screens lane).
-6. **The swap**: the results' secondary action calls `swapMission(d.missions, id, today, ctx)` (`results.spine.swap`).
-7. **Modes**: mirrors (`mirrorKey`, `mirrorSteer` on input, the scene flipped, signs kept the right way round), the
+   once owned. The Lantern Row's model is `LanternTownView` (`ui/contract.ts`, built by `spineview.ts lanternRow`, on
+   `TitleSpine.lanterns`): each open town's eight lanterns, which are lit, the next one's id and price and whether the
+   wallet holds it; buying calls `lightLantern(d, id, open)`.
+   **The world part:** each named mountain's finish town (Old Town, the Ice Hall, the Ash Market, Temple Town,
+   Firstlight) hangs `litByTown(save)[mountain]` lanterns, in row order from the first, at the finish and in the
+   mountain's title shot; marigold, the lantern's and the gifts' role (ART.md 1). Where the eight hang in each town is
+   the world lane's call; nothing of it is in the sim, a ghost's record or a race. On Low and the phone they can be
+   emissive cards with no light of their own.
+6. **The Twelve's results card**: when Lanternfall was already open by its page, `settleTwelve`'s `opened` should not
+   put Lanternfall's unlock card on the eleventh duel's results again (it says so once, when the page opens it).
+7. **The swap**: the results' secondary action calls `swapMission(d.missions, id, today, ctx)` (`results.spine.swap`).
+8. **Modes**: mirrors (`mirrorKey`, `mirrorSteer` on input, the scene flipped, signs kept the right way round), the
    Long Night (`LEGS`, `legChaos`, `carryFrom` into `SimConfig.carry`, `settleLongNight`), the album's frames
    (`album.runs`, rendered by the reel), an alternate hour's palette (`hourOpen`): each a screens or world lane's.
 
 ## What is still short, and what only a person can judge
 
 - Decisions and Expression wait on the sim lane's batch; the harness reads its events already.
-- Still new at run 50 fails on Lanternfall for the mid pilot (locked; its way in 0.7 s out of reach).
 - The prompted clumsy pilot meets the first minute on 2 of 6 seeds.
 - Whether the bar's ticks, a page turning and the one button feel like a reason to go again; whether the form
   contract reads as a goal or as homework; whether the flame feels kind or nagging; whether the Lantern Row is worth

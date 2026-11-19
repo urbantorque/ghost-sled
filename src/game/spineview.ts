@@ -1,11 +1,11 @@
 import { MOUNTAINS } from '../sim/mountains';
-import type { AlbumModel, AlmanacModel, ChapterView, ContractView, FlameView, LeagueView, RankBarView, ResultsSpine, RewardCard, StickerCard, TitleSpine } from '../ui/contract';
+import type { AlbumModel, AlmanacModel, ChapterView, ContractView, FlameView, LanternTownView, LeagueView, RankBarView, ResultsSpine, RewardCard, StickerCard, TitleSpine } from '../ui/contract';
 import { ALMANAC, CHAPTER_PAGES, CHAPTER_PAGE_XP, PAGES, type Reward, chapterKey, chapterOf, chapterSet, featureOpen, hourOpen, legsOpen, mirrorOpen, pageAt, pagesOpened, rewardName, titlesEarned } from './almanac';
 import { albumCatalogue, albumCompletion } from './album';
 import { CONTRACT_XP, FORM_XP, contractText } from './contracts';
 import { CALENDAR_GIFTS, CALENDAR_XP, flameNow } from './flame';
 import type { PoolGhostData } from './ghostdata';
-import { LANTERN_TOWNS, ROW_LENGTH, lanternPrice, litIn } from './lanterns';
+import { LANTERNS, LANTERN_TOWNS, ROW_LENGTH, litIn } from './lanterns';
 import { leagueField, leagueNow } from './league';
 import { missionDef, missionTier, swappable } from './missions';
 import type { SpineOutcome } from './rank';
@@ -133,11 +133,18 @@ export function titleSpine(d: SaveData, today: string, o: { week: string; cupPoo
     mirrors: MOUNTAINS.filter((m) => mirrorOpen(d, m.id)).map((m) => m.id),
     hours: MOUNTAINS.filter((m) => hourOpen(d, m.id)).map((m) => m.id),
     titles: titlesEarned(d),
-    lanterns: LANTERN_TOWNS.filter((t) => o.open(t.mountain)).map((t) => {
-      const lit = litIn(d, t.mountain);
-      return { mountain: t.mountain, town: t.town, lit, of: ROW_LENGTH, next: lit < ROW_LENGTH ? lanternPrice(lit) : null };
-    }),
+    lanterns: lanternRow(d, o.open),
   };
+}
+
+/** The Lantern Row, a town a mountain that is open: for the title, the garage's shelf and the world. */
+export function lanternRow(d: SaveData, open: (mountain: string) => boolean): LanternTownView[] {
+  return LANTERN_TOWNS.filter((t) => open(t.mountain)).map((t) => {
+    const lit = litIn(d, t.mountain);
+    const row = LANTERNS.filter((l) => l.mountain === t.mountain);
+    const next = row[lit];
+    return { mountain: t.mountain, town: t.town, lit, of: ROW_LENGTH, lanterns: row.map((l) => ({ id: l.id, index: l.index, price: l.price, lit: l.index < lit })), next: next ? { id: next.id, price: next.price, affordable: d.gifts >= next.price } : null };
+  });
 }
 
 export function almanacModel(d: SaveData, today: string): AlmanacModel {

@@ -115,7 +115,7 @@ export interface XpTick {
 
 /** A thing the run gained that the save keeps (the results' "what opened" step; the no-dead-runs bar). */
 export interface SpineGain {
-  kind: 'page' | 'sticker' | 'streak' | 'contract' | 'chapter' | 'league' | 'ember';
+  kind: 'page' | 'sticker' | 'streak' | 'contract' | 'chapter' | 'league' | 'ember' | 'unlock';
   text: string;
   durable: true;
 }
@@ -307,6 +307,7 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
     for (const r of ALMANAC[n - 1].rewards) {
       grant(d, r, st);
       opened.push({ page: n, reward: r, name: rewardName(r) });
+      if (r.kind === 'open') gains.push({ kind: 'unlock', text: MOUNTAIN_NAME[r.mountain] ?? r.mountain, durable: true });
     }
     gains.push({ kind: 'page', text: `Page ${n}`, durable: true });
   }
@@ -359,6 +360,9 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
     settlement: st,
   };
 }
+
+/** A mountain's name, as the unlock card and the career harness call it (sim/mountains.ts MOUNTAINS). */
+const MOUNTAIN_NAME: Readonly<Record<string, string>> = { lanternfall: 'Lanternfall' };
 
 function ordinal(n: number): string {
   const t = n % 100;

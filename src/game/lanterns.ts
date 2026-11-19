@@ -43,6 +43,11 @@ export function litIn(d: Pick<SaveData, 'lit'>, mountain: string): number {
   return n;
 }
 
+/** What each finish town hangs: its lanterns lit, by mountain id (the world's whole read of the row). */
+export function litByTown(d: Pick<SaveData, 'lit'>): Record<string, number> {
+  return Object.fromEntries(LANTERN_TOWNS.map((t) => [t.mountain, litIn(d, t.mountain)]));
+}
+
 /** The next lantern each town can light: its row's first unlit one, on a mountain that is open. */
 export function lanternShelf(d: Pick<SaveData, 'lit'>, open: (mountain: string) => boolean): Array<(typeof LANTERNS)[number]> {
   const out: Array<(typeof LANTERNS)[number]> = [];

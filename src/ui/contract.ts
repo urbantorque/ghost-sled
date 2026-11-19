@@ -559,7 +559,7 @@ export interface GameUI {
 
 /** A reward as its card shows it: what it is and where it came from (an Almanac page, or a chapter's). */
 export interface RewardCard {
-  kind: 'charm' | 'gate' | 'feature' | 'sled' | 'mirror' | 'hour' | 'flourish' | 'garage' | 'title' | 'gifts' | 'legs';
+  kind: 'charm' | 'gate' | 'feature' | 'sled' | 'mirror' | 'hour' | 'flourish' | 'garage' | 'title' | 'gifts' | 'legs' | 'open';
   name: string;
   page: number;
   /** The chapter's month key ('2026-12') for a chapter page, else null. */
@@ -684,7 +684,22 @@ export interface TitleSpine {
   mirrors: string[];
   hours: string[];
   titles: string[];
-  lanterns: Array<{ mountain: string; town: string; lit: number; of: number; next: number | null }>;
+  /** The Lantern Row, a town a mountain that is open. */
+  lanterns: LanternTownView[];
+}
+
+/** The Lantern Row (game/lanterns.ts): one finish town's row of eight, as the title, the garage and the world read it.
+ *  A look only, bought with gifts: nothing in it reaches a race. The world hangs exactly the lit ones, in row order
+ *  from the first, in the town at the finish and on the mountain's title shot, marigold (the lantern's and the
+ *  gifts' role, ART.md 1). */
+export interface LanternTownView {
+  mountain: string;
+  town: string;
+  lit: number;
+  of: number;
+  lanterns: Array<{ id: string; index: number; price: number; lit: boolean }>;
+  /** The next to light, its price and whether the wallet holds it; null once the row is full. */
+  next: { id: string; price: number; affordable: boolean } | null;
 }
 
 /** The Almanac's screen: every page, its state and rewards. */
