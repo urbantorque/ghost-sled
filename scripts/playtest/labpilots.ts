@@ -705,7 +705,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
   const sloppy = skill === 'expert' ? 0.25 : 1;
   const used = new Set<AirKind>();
   const seen = new Set<AirKind>();
-  let plan: { kind: AirKind; side: number; t: number; phase: number; dir: number; bias: number } | null = null;
+  let plan: { kind: AirKind; side: number; t: number; phase: number; dir: number; bias: number; T: number } | null = null;
   let wasAir = false;
   let wasRail = false;
   let railOff = -1000;
@@ -797,7 +797,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
       const fresh = menu.filter((m) => !used.has(m));
       const from = unseen.length ? unseen : fresh.length ? fresh : menu;
       const pick = from.length ? from[Math.floor(rnd() * from.length)] : null;
-      plan = pick ? { kind: pick, side: rnd() < 0.5 ? 1 : -1, t: 0, phase: 0, dir: rnd() < 0.5 ? 1 : -1, bias: (rnd() - 0.5) * 0.1 * sloppy } : null;
+      plan = pick ? { kind: pick, side: rnd() < 0.5 ? 1 : -1, t: 0, phase: 0, dir: rnd() < 0.5 ? 1 : -1, bias: (rnd() - 0.5) * 0.1 * sloppy, T } : null;
       if (plan) {
         used.add(plan.kind);
         seen.add(plan.kind);
@@ -817,7 +817,10 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
     const yaw = Math.abs(s.airYaw) + (s.spinRate * s.spinRate) / (2 * 22);
     const pitch = Math.abs(s.airPitch) + (s.pitchRate * s.pitchRate) / (2 * 26);
     const stomp = L < 0.11 && L > 0.01;
-    const grab = (minTicks: number, spin = 0, tweak = false): Inp => {
+    // (The expert shoves every grab out late on a flight with room: a Crosswind, a second named trick.)
+    const long = skill === 'expert' && p.T >= 1.4;
+    const grab = (minTicks: number, spin = 0, tweakAsked = false): Inp => {
+      const tweak = tweakAsked || long;
       if (p.phase === 0) {
         p.phase = 1;
         return { steer: side(p.side), action: true };

@@ -34,34 +34,34 @@ describe('graveyards', () => {
     const at = (key: string) => graveyards(pool(key), key).map((g) => [Math.round(g.z), g.fell]);
     // (Since the lantern round a ward is a fall the lantern took, and counts: the place is as deadly. The set
     // pieces' round, SIM_VERSION 8, rode new pools: these are where its riders fall.)
+    // (Round 8: SIM_VERSION 10's pools, regenerated after the batch: where their riders fall.)
     expect(at(pinecrest)).toEqual([
-      [428, 7],
-      [1427, 8],
-      [2047, 7],
-      [2978, 7],
+      [411, 16],
+      [1171, 4],
+      [2211, 8],
+      [2443, 6],
     ]);
     expect(at(frostfang)).toEqual([
-      [2141, 2],
-      [3104, 14],
-      [3417, 3],
-      [3878, 2],
+      [353, 3],
+      [2874, 5],
     ]);
     expect(at(ember)).toEqual([
-      [2143, 5],
-      [3087, 3],
+      [366, 2],
+      [2242, 6],
+      [2571, 2],
+      [4097, 3],
     ]);
     expect(at(sakura)).toEqual([
-      [2130, 3],
-      [2280, 2],
-      [2969, 3],
-      [3416, 4],
+      [464, 2],
+      [2341, 2],
+      [3423, 6],
+      [3606, 3],
     ]);
-    // (The fifth mountain, since round 7.)
     expect(at(lanternfall)).toEqual([
-      [1866, 2],
-      [2069, 4],
-      [2958, 2],
-      [3879, 4],
+      [1995, 4],
+      [2252, 4],
+      [2787, 3],
+      [3187, 2],
     ]);
   });
 

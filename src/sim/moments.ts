@@ -125,9 +125,11 @@ const FAMILY: Record<string, readonly Variant[]> = {
     { key: 'row', name: 'One row dark', line: 'One row is dark: light it all the way down', t: { pattern: 1 } },
     { key: 'halves', name: 'One row, then the other', line: 'Light the dark lamps: one row, then the other', t: { pattern: 2 } },
   ],
+  // (Round 8: still air 1.03 and the wind 1.01, from 1 and 0.98: the shrine's chute is 50 m shorter since the stage
+  // lines' thresholds and drops a sled most of its way, and a rider who fell above it lit the lantern once in five.)
   carry: [
-    { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1, hit: 0.3 } },
-    { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 0.98, hit: 0.18 } },
+    { key: 'still', name: 'Still air', line: 'Carry the flame to the great lantern', t: { slack: 1.03, hit: 0.3 } },
+    { key: 'wind', name: 'A wind off the Crown', line: 'Carry the flame: a wind is up, so do not slow', t: { slack: 1.01, hit: 0.18 } },
     { key: 'ember', name: 'A low flame', line: 'Carry a low flame: feed it at the brazier', t: { slack: 1.09, hit: 0.24, start: 0.7, relight: 1 } },
   ],
 };

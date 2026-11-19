@@ -121,7 +121,8 @@ describe('the next duel', () => {
   it('is the gentlest unbeaten rider whose home is open', () => {
     // A new player has Pinecrest alone: Rosa (Sakura) and Pip (Frostfang) wait, Bram rides.
     expect(nextDuel(undefined, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
-    expect(nextDuel(beat('bram'), only(0))).toEqual({ kind: 'duel', rider: riderByKey('juno') });
+    // (Round 8's pools ride the ladder Bram, Rosa, Wren, Mila, Juno...: on Pinecrest alone Wren is next.)
+    expect(nextDuel(beat('bram'), only(0))).toEqual({ kind: 'duel', rider: riderByKey('wren') });
     // Frostfang opens: the first of its riders on the ladder stands before Juno, so they are next.
     const reach = TWELVE.filter((r) => r.key !== 'bram' && (r.home === 0 || r.home === 1));
     expect(nextDuel(beat('bram'), only(0, 1))).toEqual({ kind: 'duel', rider: reach[0] });
@@ -156,7 +157,7 @@ describe('the next duel', () => {
   it('a run is a duel only on the next rider’s own home ground', () => {
     expect(duelOn(undefined, 0, only(0))).toEqual({ kind: 'duel', rider: riderByKey('bram') });
     expect(duelOn(undefined, 1, only(0, 1))).toBeNull();
-    expect(duelOn(beat('bram'), 1, only(0, 1))).toEqual({ kind: 'duel', rider: riderByKey('pip') });
+    expect(duelOn(beat('bram', 'wren'), 1, only(0, 1))).toEqual({ kind: 'duel', rider: riderByKey('mila') });
     expect(duelMountain({ kind: 'final' })).toBe(KING.home);
   });
 

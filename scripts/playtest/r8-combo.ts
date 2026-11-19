@@ -38,7 +38,7 @@ for (let m = 0; m < MOUNTAINS.length; m++) {
       // (A bump banks the combo before it is said: what ended a combo is read off the whole tick first.)
       const ev = sim.events;
       why = ev.some((e) => e.type === 'bump' || e.type === 'scrape') ? 'bump' : ev.some((e) => (e.type === 'tumble' && e.phase === 'start') || e.type === 'ward' || e.type === 'crash') ? 'fall' : ev.some((e) => e.type === 'finish') ? 'finish' : '';
-      if (why === 'bump' && combo.size && argv.includes('--where')) console.log(`  bump at ${Math.round(sim.s.z)} in ${sim.course.section(sim.s.z).kind}, ${(sim.s.x - sim.course.safeX(sim.s.z)).toFixed(1)} m off the line, ${sim.s.grounded ? 'on the snow' : 'in the air'}, ${landed >= 0 ? ((sim.tick - landed) / 60).toFixed(2) + ' s after a landing' : ''}`);
+      if (why === 'bump' && combo.size && argv.includes('--where')) console.log(`  bump at ${Math.round(sim.s.z)} in ${sim.course.section(sim.s.z).kind}, ${(sim.s.x - sim.course.safeX(sim.s.z)).toFixed(1)} m off the line, ${sim.s.grounded ? 'on the snow' : 'in the air ' + (sim.s.airTicks / 60).toFixed(1) + ' s, vx ' + sim.s.vx.toFixed(1) + ', edge ' + sim.course.edgeExcess(sim.s.x, sim.s.z).toFixed(1)}, ${landed >= 0 ? ((sim.tick - landed) / 60).toFixed(2) + ' s after a landing' : ''}`);
       for (const e of sim.events) {
         if (e.type === 'style' && e.trick) {
           combo.add(e.trick);

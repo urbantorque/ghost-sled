@@ -741,11 +741,12 @@ describe('the descent', () => {
     for (const m of MOUNTAINS) {
       const n = count(m.seed);
       // Ember's open ground is scarce, so its off-line kickers are few: its vents do that job.
-      expect(n.off + n.vents, `${m.id} off-line kickers and vents`).toBeGreaterThanOrEqual(4);
+      // (Round 8: Sakura gave a plain beat to its thresholds, and an off-line kicker with it.)
+      expect(n.off + n.vents, `${m.id} off-line kickers and vents`).toBeGreaterThanOrEqual(3);
       // (Round 8: Frostfang's plain beats gave way to its thresholds, and its moguls with them: counted over the five.)
       drops += n.drops + n.moguls;
     }
-    expect(drops, 'drops and moguls on the five').toBeGreaterThanOrEqual(4);
+    expect(drops, 'drops and moguls on the five').toBeGreaterThanOrEqual(3);
     expect(count(MOUNTAINS[2].seed).vents, 'Ember vents').toBeGreaterThanOrEqual(8);
     expect(count(MOUNTAINS[3].seed).gates, 'Sakura gates').toBeGreaterThanOrEqual(4);
   });
