@@ -1517,7 +1517,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     {
       // The deep of the night on the way to the Fang: the aurora past its crest, the band gone, the
       // glacier holding what light there is. It is darkest at the Ice Cavern's mouth.
-      from: 2700, at: 3180, dusk: 1,
+      // (Round 8: the thresholds moved the Ice Cavern 106 m down the run, to 3300; the night and the dawn moved
+      // with it, so the night is deepest at its mouth and the dawn still turns in its first hundred metres.)
+      from: 2700, at: 3286, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.1;
         p.skyZenith = c('#030A30');
@@ -1535,7 +1537,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // the rider is under the ice, so the far mouth opens onto it), rose gold on the snow and the peaks,
       // the stars and the aurora fading out of a lightening sky.
       // (It turns in the cavern's first hundred metres, so the far mouth is the dawn from the moment it shows.)
-      from: 3185, at: 3345, dusk: 1,
+      from: 3291, at: 3451, dusk: 1,
       edit: (p) => {
         setSun(p, 30, 3.6, 20, 9);
         p.sunColor = c('#FFC8A4');

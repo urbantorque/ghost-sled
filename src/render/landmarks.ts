@@ -115,7 +115,9 @@ const DUSK_LIT = 0.45;
 /** An enclosure's roof stands at least this high over its floor (it reads as a roof, not a lid), and
  *  where it would have to stand higher than ENC_MAX, over its mouth, it comes off. */
 const ENC_MIN: Partial<Record<Kind, number>> = { gallery: 13.5, icetunnel: 12.5, lavatunnel: 12.5, toriirow: 11.5 };
-const ENC_MAX = 42;
+// (Round 8: 44, from 42. The thresholds put a chute straight before Sakura's tunnel, and the air over the torii
+// row's mouth is now 42.6 m: its first gate stands a little taller and the row keeps its roof.)
+const ENC_MAX = 44;
 /** The air profile's bin, metres. */
 const AIR_BIN = 2;
 

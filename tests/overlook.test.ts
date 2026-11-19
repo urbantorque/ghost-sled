@@ -17,10 +17,11 @@ const RUN = 5000;
 const MOUNTAIN_SEEDS = MOUNTAINS.filter((m) => m.id !== 'daily').map((m) => m.seed);
 
 /** How far a piece keeps from an overlook. A tight one (the plain rules left too few) comes closer to
- *  what the course fixes, which cannot make way: its long sites, leaps, lifts and ravine spans. */
+ *  what the course fixes, which cannot make way: its long sites, leaps, lifts and ravine spans. A lift line
+ *  and a long site's end (round 8: overlook.ts TIGHT_LONG) keep less than a leap or a span. */
 function keepOf(c: Course, o: Overlook, s: Site): number {
   const fixed = s.len > 0 || s.kind === 'lip' || s.kind === 'lift' || c.section(s.z).kind === 'ravine';
-  return !o.tight || !fixed ? 120 : s.kind === 'lift' ? 40 : 70;
+  return !o.tight || !fixed ? 120 : s.kind === 'lift' || s.len > 0 ? 40 : 70;
 }
 
 describe('overlook plan', () => {

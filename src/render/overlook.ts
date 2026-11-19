@@ -83,6 +83,10 @@ const FIRST_END = 1500;
  *  line is a thin thing across the run, and keeps less. */
 const TIGHT_KEEP = 60;
 const TIGHT_LIFT = 30;
+/** A long piece (a town, a bridge, an enclosure) is passed by the time its end is: a tight overlook may open as near
+ *  its end as a lift line. (Round 8: Frostfang's first stage-line threshold is the only open ground in the middle of
+ *  its descent, 190 m between the Serac Gate's bridge and the street's town, and its third overlook stands there.) */
+const TIGHT_LONG = 30;
 /** One overlook in this many opens both banks (a ridge), never the first. */
 const RIDGE_CHANCE = 0.2;
 /** The sections an overlook prefers: the open, flowing ones. */
@@ -217,7 +221,7 @@ export class OverlookPlan {
     for (const sp of this.sites) {
       sp.planTo(z + SITE_KEEP + 160);
       // (A long site, a village or an enclosed run, keeps the distance from its own ends.)
-      for (const s of sp.planned) if (Math.abs(s.z - z) < (tight ? (s.kind === 'lift' ? TIGHT_LIFT : TIGHT_KEEP) : SITE_KEEP) + 10 + s.len) return false;
+      for (const s of sp.planned) if (Math.abs(s.z - z) < (tight ? (s.kind === 'lift' ? TIGHT_LIFT : s.len > 0 ? TIGHT_LONG : TIGHT_KEEP) : SITE_KEEP) + 10 + s.len) return false;
     }
     return true;
   }

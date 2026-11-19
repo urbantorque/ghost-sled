@@ -607,6 +607,12 @@ function shanty(gy: number, col: Color): BufferGeometry[] {
 /** The barrier stands this far past the sim's own limit: a sled turned back there touches it. */
 export const KERB = 0.25;
 
+/** A street's run (one bank's length) up to this many metres is built as dense as round 7's; a longer one spaces its
+ *  lots, lamps, stalls and crowd out by the length past it, so a street costs what round 7's longest did. (Round 8's
+ *  thresholds hold a set piece's street at the longest its stage allows: Ember's Ash Market and Lanternfall's Lamp
+ *  Road run 247 m where round 7's longest ran 226, and built at the old density they cost up to 8% over the budget.) */
+const STREET_REF = 200;
+
 /** The metres between the barrier and the fronts: 1.75 at a street's limit of 2 m, wider with the limit. */
 function walkAt(limit: number): number {
   return Math.min(3.4, 1.75 + (limit - 2) * 0.65);
@@ -726,6 +732,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
     const mid = (a + b) / 2;
     const narrowAll = rail.limit(mid) < 6;
     const markAt = mid + (rnd() - 0.5) * L * 0.5;
+    const stretch = Math.max(1, (b - a) / STREET_REF);
     const hotelAt = mid + (rnd() - 0.5) * L * 0.6;
     for (const s of spec.houses ? [-1, 1] : []) {
       let dz = a + 1 + rnd() * 4;
@@ -779,7 +786,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
           const what: Prop['kind'] = biome === 'blossom' ? 'tree' : biome === 'volcanic' ? 'pool' : biome === 'glacier' ? 'shanty' : rnd() < 0.5 ? 'stall' : 'wood';
           props.push({ s, dz: lane, e: frontAt(rail, lane) + (what === 'shanty' ? 2.8 : 2.2), kind: what });
         }
-        dz += w + gap;
+        dz += (w + gap) * stretch;
       }
       // The second row, on the crest behind the fronts: more roofs over them.
       if (narrowAll && !low) {
@@ -802,7 +809,7 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
           lots.push({ s, dz: dz2 + w / 2, w, d, e: eb, kind, storeys: biome === 'glacier' ? 1 + (rnd() < 0.6 ? 1 : 0) : 2 + (rnd() < 0.5 ? 1 : 0), jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });
           bk++;
           // (Lanternfall's crest keeps every other lot: its streets were the mountain's heaviest frames.)
-          dz2 += w + 2.5 + rnd() * 4 + (bk % 3 === 0 ? 5 : 0) + (biome === 'lantern' ? 10 : 0);
+          dz2 += (w + 2.5 + rnd() * 4 + (bk % 3 === 0 ? 5 : 0) + (biome === 'lantern' ? 10 : 0)) * stretch;
         }
       } else if (narrowAll && s === markSide && spec.mark) {
         lots.push({ s, dz: markAt, w: 21, d: 15, e: 14.4, kind: 'landmark', storeys: 1, jet: 0, eave: 1.3, room: 9, balconies: false, back: true, sunk: false });
@@ -811,9 +818,9 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
     for (const s of [-1, 1]) {
       // Lamps down the barrier, and stalls, snowmen and sleds where there is room before the fronts.
       if (!spec.houses) continue;
-      for (let lz = a + 6 + (s > 0 ? 7 : 0); lz < b - 4; lz += 15 + rnd() * 4) props.push({ s, dz: lz, e: kerbAt(rail, lz) + 1.15, kind: 'lamp' });
+      for (let lz = a + 6 + (s > 0 ? 7 : 0); lz < b - 4; lz += (15 + rnd() * 4) * stretch) props.push({ s, dz: lz, e: kerbAt(rail, lz) + 1.15, kind: 'lamp' });
       if (narrowAll) continue;
-      for (let sz = a + 12 + rnd() * 10; sz < b - 8; sz += 18 + rnd() * 14) {
+      for (let sz = a + 12 + rnd() * 10; sz < b - 8; sz += (18 + rnd() * 14) * stretch) {
         const r = rnd();
         props.push({ s, dz: sz, e: frontAt(rail, sz) - 0.6, kind: r < 0.45 ? 'stall' : r < 0.75 ? 'snowman' : 'sled' });
       }
@@ -826,7 +833,9 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
   const strings: Array<{ dz: number; banner: boolean; across: boolean; yA: number; run: number }> = [];
   spec.runs.forEach(([a, b], run) => {
     const first = strings.length;
-    const every = !spec.houses ? 34 : low ? 22 : 14;
+    // (Round 8: Low's masts every 24 m, from 22. A town's draw is seeded by its place in the plan, and the plan's new
+    // pieces moved Pinecrest's finish town 46 triangles over Low's budget.)
+    const every = !spec.houses ? 34 : low ? 24 : 14;
     for (let sz = a + 6 + rnd() * 4; sz < b - 4; sz += every + rnd() * 6) strings.push({ dz: sz, banner: false, across: false, yA: 0, run });
     if (strings.length - first > 4) {
       strings[first + 1].banner = true;
@@ -850,10 +859,11 @@ export function streetPiece(ctx: SiteCtx, spec: StreetSpec): Piece {
   const front = lots.filter((l) => !l.back);
   const blocked = (s: number, dz: number, e: number) => props.some((q) => q.s === s && Math.abs(q.dz - dz) < (q.kind === 'stall' ? 2.4 : 0.9) && Math.abs(q.e - e) < (q.kind === 'stall' ? 1.4 : 0.8)) || front.some((l) => l.s === s && Math.abs(l.dz - dz) < l.w / 2 + 0.4 && e > l.e - 0.45);
   for (const [a, b] of spec.runs) {
+    const stretch = Math.max(1, (b - a) / STREET_REF);
     for (const s of [-1, 1]) {
       const rows = Math.min(3, Math.floor(walkAt(rail.limit((a + b) / 2)) / 0.58));
       for (let r = 0; r < rows; r++) {
-        for (let dz = a + 1 + r * 0.6; dz < b - 1; dz += 1.25) {
+        for (let dz = a + 1 + r * 0.6; dz < b - 1; dz += 1.25 * stretch) {
           if (rnd() < 0.12 + r * 0.06) continue;
           const jz = dz + (rnd() - 0.5) * 0.5;
           const e = kerbAt(rail, jz) + 0.5 + r * 0.6 + (rnd() - 0.5) * 0.14;

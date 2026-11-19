@@ -159,7 +159,8 @@ describe('the plan is the course', () => {
 
   it('flies a pop on a falling slope higher than the floor', () => {
     const c = courseFor(MOUNTAINS[0].seed);
-    const z = 2000;
+    // (57 m into the bowl past Mirror Lake, as 2000 was before round 8's thresholds moved the lake 152 m down.)
+    const z = 2152;
     const top = airCeiling(c, z - 7, z + 7, 1, 1);
     expect(top - c.ground(c.centerX(z), z)).toBeGreaterThan(8);
     // Low gravity flies higher still.

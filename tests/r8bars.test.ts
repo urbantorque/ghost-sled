@@ -62,9 +62,9 @@ describe('round 8 bars', () => {
 
   // Judged on the prompted first-timers (labpilots.ts prompted: they follow the stomp ring and the lantern's prompt
   // with the same slow hands); the blind pilots are the harness's floor. With the spine's opener the prompted novice
-  // meets all three on 5 of 6 seeds and the prompted clumsy pilot on 2 of 6: its first pass and first dash come late
-  // after an early fall, which the sim lane's first-run stomp window and a person at the keys are left to settle.
-  it.fails('first minute: a pass by 20 s, a perfect by 45 s, a dash by 60 s, for the prompted clumsy pilot and novice', () => {
+  // met all three on 5 of 6 seeds and the prompted clumsy pilot on 2 of 6 (SIM_VERSION 9). With the sim lane's batch
+  // merged (a first run's wider stomp window, SimConfig.firstRun) both meet all three on these two seeds.
+  it('first minute: a pass by 20 s, a perfect by 45 s, a dash by 60 s, for the prompted clumsy pilot and novice', () => {
     for (const pilot of ['clumsy-prompted', 'novice-prompted']) for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, pilot, seed)).ok, `${pilot} ${seed}`).toBe(true);
   });
 
