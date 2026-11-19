@@ -255,7 +255,8 @@ describe('the descent', () => {
         const stops = [body0(s), ...inner, s.z1];
         for (let i = 1; i < stops.length; i++) if (s.kind !== 'finish' && stops[i] - stops[i - 1] > 300) bad.push(`${tag} ${s.kind} runs ${(stops[i] - stops[i - 1]).toFixed(0)} m unchanged at ${s.z0.toFixed(0)}`);
       }
-      for (const st of c.stages.slice(0, -1)) if (!secs.some((s) => Math.abs(s.z0 - st.z1) < 1e-6)) bad.push(`${tag} stage ${st.index} ends inside a section`);
+      // (Round 8: a stage line stands inside its threshold, the calm section a charm gate stands on.)
+      for (const st of c.stages.slice(0, -1)) if (!secs.some((s) => Math.abs(s.z0 - st.z1) < 1e-6 || (s.gate && s.z0 < st.z1 && s.z1 > st.z1))) bad.push(`${tag} stage ${st.index} ends inside a section`);
     }
     expect(bad.slice(0, 12)).toEqual([]);
   });

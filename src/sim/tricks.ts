@@ -142,9 +142,9 @@ function spinPoints(h: number): number {
 function grabPoints(ticks: number): number {
   const t = grabTier(ticks);
   if (t === 0) return 0;
-  const base = t === 3 ? 900 : t === 2 ? 500 : 200;
+  const base = t === 3 ? 280 : t === 2 ? 150 : 60;
   // As long as you dare: past the third tier every second held is worth more.
-  return base + (ticks > GRAB_T3 ? ((ticks - GRAB_T3) * 400) / 60 : 0);
+  return base + (ticks > GRAB_T3 ? ((ticks - GRAB_T3) * 120) / 60 : 0);
 }
 
 /** Names a flight: the rotation and the grab as one named trick, then a tweak, a rail's or wall's move and the
@@ -162,18 +162,18 @@ export function nameFlight(f: FlightTricks): TrickLanded[] {
   const t = (id: TrickId, points: number, units: number): void => {
     out.push({ id, points: Math.round(points), units, halfTurns: h, flips: fl, tier, late: false });
   };
-  if (tier > 0 && h > 0 && fl > 0) t(TRICK.spiritKnot, (sp + fp + gp) * 1.6, 4 + 8 * fl + gu);
-  else if (tier > 0 && h > 0) t(TRICK.paperWheel, (sp + gp) * 1.3, 4 + gu);
-  else if (tier > 0 && fl > 0) t(TRICK.craneFold, (fp + gp) * 1.3, 8 * fl + gu);
-  else if (h > 0 && fl > 0) t(TRICK.emberTwist, (sp + fp) * 1.2, 4 + 8 * fl);
+  if (tier > 0 && h > 0 && fl > 0) t(TRICK.spiritKnot, (sp + fp + gp) * 1.1, 4 + 8 * fl + gu);
+  else if (tier > 0 && h > 0) t(TRICK.paperWheel, sp + gp, 4 + gu);
+  else if (tier > 0 && fl > 0) t(TRICK.craneFold, fp + gp, 8 * fl + gu);
+  else if (h > 0 && fl > 0) t(TRICK.emberTwist, sp + fp, 4 + 8 * fl);
   else if (tier > 0) t(tier === 3 ? TRICK.spiritStretch : tier === 2 ? TRICK.lanternReach : TRICK.railGrab, gp, gu);
   else if (h > 0) t(TRICK.spin, sp, 4);
   else if (fl > 0) t(TRICK.backflip, fp, 8);
   if (f.tweakTicks >= TWEAK_MIN && tier > 0) {
-    out.push({ id: TRICK.crosswind, points: f.tweakLate ? 700 : 300, units: f.tweakLate ? 10 : 6, halfTurns: h, flips: fl, tier, late: f.tweakLate });
+    out.push({ id: TRICK.crosswind, points: f.tweakLate ? 350 : 150, units: f.tweakLate ? 10 : 6, halfTurns: h, flips: fl, tier, late: f.tweakLate });
   }
-  if (f.special === TRICK.lamppost) t(TRICK.lamppost, 500, 10);
-  else if (f.special === TRICK.snowHare) t(TRICK.snowHare, 450, 10);
+  if (f.special === TRICK.lamppost) t(TRICK.lamppost, 300, 10);
+  else if (f.special === TRICK.snowHare) t(TRICK.snowHare, 250, 10);
   if (f.sig > 0 && f.sigTicks >= GRAB_T1) {
     // (Phase 1: every sled's move pays as a grab of the same hold, a little more. Each sled's own rule is in
     // notes/r8-sim-design.md.)

@@ -110,7 +110,12 @@ export const STARTER_POOL = (1 << CHARM.comet) | (1 << CHARM.stride) | (1 << CHA
 export const LANE_W = 4.6;
 /** Where the gates stand: the start's on its run-in, the rest this far past each stage line. */
 export const START_GATE_Z = 110;
-export const GATE_PAST_LINE = 60;
+export const GATE_PAST_LINE = 100;
+
+/** Lamplit Path's sparks: one on the safe line (0.8 m up) at every multiple of PATH_STEP metres from where the charm
+ *  was taken to the finish, for the rider who holds it; their light ids are PATH_ID0 + z / PATH_STEP. */
+export const PATH_STEP = 15;
+export const PATH_ID0 = 20_000_000;
 
 /** A charm gate as the run meets it: where, which charm each lane offers (-1 none), and what was taken. */
 export interface CharmGate {

@@ -241,6 +241,13 @@ const family = (verb: MomentVerb, style: MomentStyle): readonly Variant[] => FAM
 const specCache = new WeakMap<Course, MomentSpec[]>();
 
 /** The run's set pieces, in order down the course: a pure function of the course. */
+/** The place kinds a named mountain's set pieces stand in (round 8: the course writer never gives one of these way
+ *  to make room for a stage line's threshold). None for a Daily or a Cup. */
+export function setPieceKinds(seed: number): readonly SectionKind[] {
+  const authored = AUTHORED[namedMountain(seed) ?? ''];
+  return authored ? authored.map((d) => d.kind) : [];
+}
+
 export function planMoments(course: Course): MomentSpec[] {
   const hit = specCache.get(course);
   if (hit) return hit;
