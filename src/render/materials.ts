@@ -96,6 +96,17 @@ export const shared = {
   uPoolSoft: { value: 0 },
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
+  /** The visual lift's light (LIFT_GLSL): x the snow's bounce, y the sky's fill, z light through what is
+   *  thin, w the snow's sheen toward the light. Each is the palette's strength (palette.lift) times the
+   *  tier's share: every tier but Low takes all four; Low takes none here (applyLift folds its bounce
+   *  into uUnder, a constant it already draws with). */
+  uLiftK: { value: new Vector4(0, 0, 0, 0) },
+  /** What the snow throws back up, at full strength: the snow round the lens as the lens sees it, lit
+   *  and shaded in the palette's share (applyLift). */
+  uBounce: { value: new Color(0, 0, 0) },
+  /** The sky's fill: what a face turned up takes (the high sky) and one turned to the horizon. */
+  uSkyUp: { value: new Color(0, 0, 0) },
+  uSkySide: { value: new Color(0, 0, 0) },
   ...localUniforms,
   ...posterUniforms(),
   // (The visual lift's far shadows: the field every lit material reads in farShadow(). farshadow.ts.)
@@ -131,6 +142,54 @@ export function setCloudShadows(on: boolean): void {
   setLocalLightTier(!on);
   setPoster(!on);
   shared.uPoster.value.x = on ? 0 : 1;
+  // (The visual lift's terms by tier: the last palette's, again. The light lane's one line here.)
+  if (liftPalette) applyLift(liftPalette);
+}
+
+let liftPalette: Palette | null = null;
+const liftLit = new Color();
+const liftShade = new Color();
+
+/** The visual lift's light from a palette (the light lane, DECISIONS 361): the snow's bounce, the sky's
+ *  fill by the normal, light through what is thin and the snow's sheen, as palette.lift asks, by tier.
+ *  Every tier but Low draws all four in LIFT_GLSL (a handful of sums a pixel, no taps). Low draws none of
+ *  them: its share of the bounce is added to uUnder, the light from below it already draws with, so it
+ *  costs Low nothing. A lift of 0 everywhere is round 7's picture. */
+function applyLift(p: Palette): void {
+  liftPalette = p;
+  const L = p.lift;
+  // What the snow round the lens looks like, so what it throws back: its lit colour as the snow shader
+  // draws it (a trace of the key's hue by day, the moon's whole colour at night) over the share in the
+  // sun, its shade over the rest. The aurora's green where it lies on the snow (Frostfang) goes up too.
+  const sunMax = Math.max(p.sunColor.r, p.sunColor.g, p.sunColor.b, 1e-3);
+  const day = shared.uDayK.value;
+  liftLit.setRGB(0.85 + 0.15 * p.sunColor.r / sunMax, 0.85 + 0.15 * p.sunColor.g / sunMax, 0.85 + 0.15 * p.sunColor.b / sunMax);
+  liftLit.lerp(p.sunColor, 1 - day).multiply(p.snowLit).multiplyScalar(0.88 * (1 - 0.06 * day));
+  liftShade.copy(p.snowShade).lerp(p.snowDeep, 0.2);
+  const b = shared.uBounce.value.copy(liftShade).lerp(liftLit, L.sun);
+  if (p.key2.k > 0) b.lerp(liftShade.copy(p.key2.color).multiplyScalar(0.7), Math.min(0.4, p.key2.k * 0.32));
+  b.multiply(L.tint);
+  // (The sky the shade side sees is the half away from the key: the horizon's glow toward the sun is the
+  // key's own, so the low sky here is the horizon cooled as the air cools away from the sun.)
+  shared.uSkyUp.value.copy(p.skyMid ?? p.skyZenith).lerp(p.skyZenith, 0.35).lerp(p.hemiSky, 0.4);
+  shared.uSkySide.value.copy(p.skyHorizon).lerp(p.fog, 0.3).lerp(shared.uSkyUp.value, 0.55).multiply(p.air.cool);
+  const u = shared.uUnder.value;
+  u.set(p.under.color.r, p.under.color.g, p.under.color.b, p.under.k);
+  if (cloudShadowsOn) {
+    shared.uLiftK.value.set(L.bounce, L.sky, L.through, L.sheen);
+  } else {
+    shared.uLiftK.value.set(0, 0, 0, 0);
+    // Low: the bounce rides in the light from below, which already finds what faces down and sideways
+    // (toonLightK), in the share Low's flat light can carry. Its colour and the lava's add.
+    const bk = L.bounce * 0.55;
+    if (bk > 0) {
+      const r = u.x * u.w + b.r * bk;
+      const g = u.y * u.w + b.g * bk;
+      const bb = u.z * u.w + b.b * bk;
+      const m = Math.max(r, g, bb, 1e-4);
+      u.set(r / m, g / m, bb / m, m);
+    }
+  }
 }
 
 /** Your best distance (gold-white) and an unbeaten friend's (mint) as bands painted across the
@@ -271,7 +330,6 @@ export function applyPalette(full: Palette): void {
   shared.uAir.value.set(1, p.air.low * (1 - 0.7 * dense), 0, 0);
   shared.uKey2.value.set(p.key2.color.r, p.key2.color.g, p.key2.color.b, p.key2.k);
   shared.uKey2Shade.value.copy(p.key2.shade);
-  shared.uUnder.value.set(p.under.color.r, p.under.color.g, p.under.color.b, p.under.k);
   shared.uLampK.value = p.lamps;
   shared.uPoolSoft.value = p.poolSoft;
   shared.uLeaf.value = p.leaf;
@@ -288,7 +346,59 @@ export function applyPalette(full: Palette): void {
   posterFrame.shade.copy(p.snowDeep).lerp(p.snowShade, 0.35).multiplyScalar(0.55);
   posterFrame.foot = ps.foot;
   posterFrame.vignette = ps.vignette;
+  // (Sets uUnder too: Low's share of the bounce rides in it.)
+  applyLift(p);
 }
+
+/** The visual lift's light (the light lane, DECISIONS 361), a chunk of LIGHT_GLSL: the light that is not
+ *  the key's. The chase lens looks down the run toward the sun on every mountain, so most of what it sees
+ *  of a building, a tree or a rock is its shade side, and round 7 drew that side as one flat value. Here
+ *  the shade has form: a face turned up takes the high sky's colour, one turned to the horizon the low
+ *  sky's, and what faces sideways and down takes the snow's bounce (warm where the snow round it is in
+ *  the sun, cool where it is in shade, coloured by the place: the palette's lift). Light comes through
+ *  what is thin when the key is behind it (liftThrough: blossom and foliage, ice, glass). uLiftK is 0 on
+ *  Low, where every function here returns at its first line. */
+export const LIFT_GLSL = /* glsl */ `
+uniform vec4 uLiftK;
+uniform vec3 uBounce;
+uniform vec3 uSkyUp;
+uniform vec3 uSkySide;
+
+/** The sky's fill and the snow's bounce on a surface of colour lit facing n, laid on col (the key's
+ *  picture of it) mostly on its shade side (t is how much of the key it takes). The sky is a light of its
+ *  own: its bright half stands opposite the key and high, so on the shade side a face turned up and back
+ *  toward the lens is lighter and bluer than one turned across the slope, and the side toward the key
+ *  darkest: the shade gets three values where it had one. What faces down and sideways takes the bounce.
+ *  What it adds is the surface's own colour lit, never a wash: the fill's own hue is half held back, so a
+ *  plum lacquer stays plum and the navy navy; a dark surface takes a quarter of it (ink, basalt, trunks and
+ *  the coat are the frame's darks, its spine); and the shade side's own flat value gives back about what
+ *  the fill puts in, so it gains form, not milk. The lit side is left as the key draws it. */
+vec3 liftFill(vec3 col, vec3 lit, vec3 n, float t) {
+  if (uLiftK.x + uLiftK.y <= 0.0) return col;
+  vec3 skyDir = normalize(vec3(-uSunDir.x, 0.9, -uSunDir.z));
+  float sky = clamp(0.5 + 0.5 * dot(n, skyDir), 0.0, 1.0);
+  sky *= sky;
+  float ground = smoothstep(0.3, -0.9, n.y);
+  vec3 skyC = mix(uSkySide, uSkyUp, smoothstep(-0.3, 0.6, n.y));
+  vec3 fill = skyC * (sky * uLiftK.y) + uBounce * (ground * uLiftK.x);
+  fill = mix(vec3(dot(fill, vec3(0.2126, 0.7152, 0.0722))), fill, 0.5);
+  float shadeK = 1.0 - 0.75 * t;
+  float litL = dot(lit, vec3(0.2126, 0.7152, 0.0722));
+  float give = 0.24 * smoothstep(0.02, 0.2, litL);
+  return col * (1.0 - give * (1.0 - t) * min(uLiftK.x + uLiftK.y, 1.0)) + lit * fill * (shadeK * mix(0.25, 1.0, smoothstep(0.03, 0.25, litL)));
+}
+
+/** How much of the key light comes through a thin surface facing n, seen from v, when the key is behind
+ *  it: through a face turned from the light, where it is thinnest (thin, 0 at a face seen square on, 1 at
+ *  its outline), so it gathers at the rim and a big face keeps its shade plane (the critic: lit across
+ *  the whole of it, a canopy went to one value and an ice rib lost its plane). A cheap translucency: the
+ *  light's direction bent by the normal. 0 on Low. */
+float liftThrough(vec3 n, vec3 v, float thin) {
+  if (uLiftK.z <= 0.0) return 0.0;
+  float bent = clamp(dot(v, -normalize(uSunDir + n * 0.45)), 0.0, 1.0);
+  return uLiftK.z * bent * bent * bent * (0.1 + 0.9 * thin);
+}
+`;
 
 export const LIGHT_GLSL = /* glsl */ `
 uniform vec3 uSunDir;
@@ -318,6 +428,7 @@ uniform vec4 uLocalPos[8];
 uniform vec4 uLocalCol[8];
 uniform float uLocalCount;
 uniform float uLocalProps;
+${LIFT_GLSL}
 
 /** The local lights (lights.ts: lamps, windows, lantern gates, lava, fireworks) on a surface at wp facing
  *  n, as light to multiply the surface's own colour by. Each falls off smoothly to nothing at its radius
@@ -334,7 +445,8 @@ vec3 localLight(vec3 wp, vec3 n, float count) {
     if (q < 1.0) {
       float a = 1.0 - q;
       float ndl = dot(n, d) * inversesqrt(max(d2, 1e-4));
-      acc += uLocalCol[i].rgb * (uLocalCol[i].a * a * a * (0.35 + 0.65 * max(ndl, 0.0)));
+      // (The visual lift: what faces down over a lamp's pool takes the pool's light back off the snow, uLiftK.x.)
+      acc += uLocalCol[i].rgb * (uLocalCol[i].a * a * a * (0.35 + 0.65 * max(ndl, 0.0) + uLiftK.x * max(-n.y, 0.0)));
     }
   }
   return acc * uLampK;
@@ -348,6 +460,8 @@ vec3 toonLightK(vec3 lit, vec3 shade, vec3 n, vec3 v, float shadow, float rimK) 
   // Light from below (Ember): what faces down or sideways takes the lava's colour, so a column, a trunk
   // and the rider are lit from underneath while the snow under them is not.
   col += (lit * 0.8 + 0.03) * uUnder.rgb * (uUnder.a * smoothstep(0.55, -0.7, n.y));
+  // The visual lift: the sky's fill and the snow's bounce (LIFT_GLSL), mostly on the shade side.
+  col = liftFill(col, lit, n, t);
   float fres = 1.0 - clamp(dot(n, v), 0.0, 1.0);
   fres = fres * fres * fres;
   col += uRim * fres * rimK * (0.35 + 0.65 * t);
@@ -1084,6 +1198,16 @@ export function makeSnowMaterial(): ShaderMaterial {
         // broad soft sheen of it, so the distance has a lit face and not one even value.
         float sheen = pow(max(dot(reflect(-uSunDir, n), v), 0.0), 7.0) * smoothstep(35.0, 140.0, dist) * shadow * t;
         col += lit * sunSnow * sheen * 0.2;
+        if (uLiftK.w > 0.0) {
+          // The visual lift: snow seen at a grazing angle toward the light takes a soft sheen of it (its
+          // crystals scatter a low light forward), from a few metres past the lens into the middle
+          // distance, on the lit snow only. It breaks over the ripples and the drifts, whose relief is in n,
+          // so it is light on carved snow, not a wash over the run.
+          float lobe = max(dot(reflect(-uSunDir, n), v), 0.0);
+          float graze = 1.0 - clamp(dot(n, v), 0.0, 1.0);
+          float fwd = lobe * lobe * lobe * graze * graze * smoothstep(5.0, 18.0, dist) * (1.0 - smoothstep(70.0, 160.0, dist));
+          col += lit * mix(sunSnow, sunN, 0.35) * (fwd * shadow * t * 0.32 * uLiftK.w);
+        }
         // Periwinkle settles in the ripple troughs.
         col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5), trough * 0.8);
         // Wind-scoured patches: broad, soft-edged hollows a step cooler than the powder around them,
@@ -1948,6 +2072,14 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
               iceCol = mix(iceCol, vec3(0.86, 0.96, 1.0) * (0.55 + 0.45 * iceT), (1.0 - smoothstep(0.1, 0.2, bd)) * 0.45 * fineI * heart);
             }
           }
+          // The visual lift (LIFT_GLSL): the key comes through the ice seen against it, a cold cyan-white
+          // gathering at its thin edges and tips, never mint; a rib's face keeps its shade plane.
+          // (Held to half the step from this face to the ice lit: a thin or far member is all rim on screen,
+          // and lit through whole it lost its cobalt core and its plane, the second critic.)
+          float trI = liftThrough(n, v, fr * fr) * 0.8;
+          vec3 iceLit = body * mix(vec3(1.0), sunN, 0.3);
+          vec3 iceGlow = vec3(0.35, 0.74, 1.0) * mix(uSunColor, vec3(1.0), 0.5) * trI * (0.35 + 0.65 * tipK) * uHazardFog;
+          iceCol += min(iceGlow, max(iceLit - iceCol, vec3(0.0)) * 0.5);
           #ifndef HAZARD
             // Round 7's review: ice built over the run (Frostfang's cavern and spans) goes down with the
             // hazards in a place darker than the night (only the Ice Cavern sets them under 0.75), so the
@@ -1986,6 +2118,30 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
             // the outline against it, so a tree has a lit rim and a rose heart, not one pink.
             float rimL = thin * thin * max(smoothstep(-0.1, 0.7, dot(n, uSunDir)), back);
             col += mix(uSunColor, vec3(1.0, 0.86, 0.8), 0.5) * (uLeaf * petal * rimL * 0.85);
+          }
+          if (uSway > 0.0) {
+            // The visual lift (LIFT_GLSL): the key comes through a canopy seen against it, every kind of
+            // foliage, gathering at its rim. In the leaf's own colour, so dark needles glow only a little at
+            // their tips and stay the hard dark shape (ART.md 1), while blossom (uLeaf) is lit through like
+            // paper at its edges in its own pink (toward the petals' #FFC9DA, never warmer: a sun-warmed
+            // glow slid the orchid toward the grudge's rose). What faces down keeps most of its shade, so a
+            // canopy keeps its underside a step under its lit facets, and a canopy right at the lens takes
+            // little (near, the glow flattened it to one shape). Snow on the boughs takes none.
+            float thinT = 1.0 - abs(dot(n, v));
+            float trL = liftThrough(n, v, thinT * thinT);
+            if (trL > 0.0) {
+              float snowB = smoothstep(0.7, 0.88, min(base.r, min(base.g, base.b)));
+              float hiL = max(base.r, max(base.g, base.b));
+              float bloomK = smoothstep(0.25, 0.6, hiL) * min(uLeaf, 1.0);
+              vec3 petalC = mix(base / max(hiL, 0.001), vec3(1.0, 0.584, 0.701), 0.4) * mix(0.75, 0.95, thinT);
+              vec3 through = mix(base * 0.9 * mix(uSunColor, vec3(1.0), 0.5), petalC, bloomK);
+              float keepUnder = 0.3 + 0.7 * smoothstep(-0.55, 0.45, n.y);
+              float nearL = smoothstep(7.0, 18.0, length(cameraPosition - vWorldPos));
+              // (Blossom only at its rim, where a canopy is thin on screen: wider in, its shade facets warmed
+              // and the canopy lost a fifth of its value range, the second critic.)
+              float rimB = mix(1.0, smoothstep(0.35, 0.8, thinT), bloomK);
+              col += through * trL * (1.0 - snowB) * mix(0.55, 1.15, bloomK) * rimB * keepUnder * mix(0.35, 1.0, nearL) * uHazardDim;
+            }
           }
           // Contact occlusion: a hazard darkens and cools toward where it stands in the snow (its foot,
           // the snow heaped round it), so a tree or a rock sits in the slope instead of on it.
@@ -2129,6 +2285,7 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       uFogFar: shared.uFogFar,
       uSunDir: shared.uSunDir,
       uSnowLit: shared.uSnowLit,
+      uLiftK: shared.uLiftK,
       uGlow: { value: 1 },
       uGlass: { value: glass },
       // (The far shadows: a ghost far down a shaded valley is in its shade. farshadow.ts.)
@@ -2163,6 +2320,7 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
       uniform float uFogFar;
       uniform vec3 uSunDir;
       uniform vec3 uSnowLit;
+      uniform vec4 uLiftK;
       varying vec3 vN;
       varying vec3 vWorldPos;
       varying float vH;
@@ -2237,6 +2395,10 @@ export function makeGhostMaterial(color: Color, glass = 0): ShaderMaterial {
         col *= mix(1.0, mix(0.78, 1.0, farLit), day);
         float glint = pow(max(dot(reflect(-v, n), uSunDir), 0.0), 18.0) * farLit;
         col += kc * glint * 0.5 * day;
+        // The visual lift (LIFT_GLSL): by day the key comes through the glass seen against it, a glow in the
+        // kind colour gathering toward the outline, so a ghost ahead in a low sun reads lit from behind.
+        float backG = clamp(dot(v, -normalize(uSunDir + n * 0.45)), 0.0, 1.0);
+        col += kc * (backG * backG * backG * fres * uLiftK.z * 0.4 * day);
         // The core: tinted glass you can see the snow (and another ghost's edge) through, densest
         // toward its rim and on the inner edge band, at least about a third of the scene covered by
         // day; glassier at night, where it glows instead. It never hollows: a ghost growing on screen

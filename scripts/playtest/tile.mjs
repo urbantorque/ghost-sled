@@ -11,7 +11,8 @@ const tiles = files.map((f) => `<figure><img src="data:image/png;base64,${readFi
 const html = `<!doctype html><style>body{margin:0;background:#111;color:#eee;font:11px system-ui}main{display:grid;grid-template-columns:repeat(${cols},1fr);gap:3px;width:${width}px}figure{margin:0;position:relative}figcaption{position:absolute;left:0;bottom:0;background:#000a;padding:1px 4px}img{width:100%;display:block}</style><main>${tiles}</main>`;
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const page = await browser.newPage({ viewport: { width, height: 400 } });
-await page.setContent(html);
+// (A long wait: forty full frames as data URLs on a busy machine took longer than the default half minute.)
+await page.setContent(html, { timeout: 180000 });
 await page.waitForTimeout(200);
 await page.locator('main').screenshot({ path: out });
 await browser.close();

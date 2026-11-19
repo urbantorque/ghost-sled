@@ -193,19 +193,88 @@ export const aoComposite = {
   uAO: { value: new Vector4(0, 0, 1, 1) },
   /** What full occlusion multiplies a colour by: the mood's shade over its lit snow. */
   uAOTint: { value: new Vector3(0.6, 0.68, 0.92) },
+  /** The crease light (the visual lift, the light lane): x how much light a convex edge catches, y how
+   *  dark an inner crease goes (both 0: off), z and w the metres it fades out over. */
+  uCrease: { value: new Vector4(0, 0, 35, 60) },
+  /** The key light's colour, at full value, and its direction in view space. */
+  uCreaseC: { value: new Vector3(1, 1, 1) },
+  uCreaseV: { value: new Vector3(0, 1, 0) },
+  /** The rider in view space (xyz, its middle) and the reach round it that takes no crease (w, metres). */
+  uCreaseHero: { value: new Vector4(0, 0, 1e6, 0) },
 };
 
 export const AO_COMPOSITE_GLSL = /* glsl */ `
   uniform sampler2D tAO;
   uniform vec4 uAO;
   uniform vec3 uAOTint;
+  uniform vec4 uCrease;
+  uniform vec3 uCreaseC;
+  uniform vec3 uCreaseV;
+  uniform vec4 uCreaseHero;
+  // The crease light (the visual lift, the light lane), from the frame's own depth at full resolution:
+  // near the lens a convex edge catches a hairline of the key light's colour and an inner crease darkens
+  // toward the shade, so a low-poly prop reads hand-bevelled rather than as a box. Found from how the
+  // surface turns along each axis: the chords between neighbouring pixels run the same way on a plane
+  // and turn at a fold, toward the lens at an edge and away from it at a crease. The outer chords (two
+  // pixels out) give the fold's whole turn, which holds along an edge; the inner ones the part of it at
+  // this pixel, so a fold between two pixels is shared by both by where it falls and the line is a
+  // hairline that does not stair-step. A step in depth (an outline, a gap behind a rail) is no fold and
+  // draws nothing, and neither do the rider and its sled (the reach round uCreaseHero), the sky or a
+  // light (keep).
+  // x: the part of the fold at this pixel, y: its whole turn (about 2 sin of half the angle: 0 on a
+  // plane, 1.41 at a box's edge, under 0.4 between the snow's facets), both < 0 at an edge; 0 at a step.
+  vec2 creaseAxis(vec2 uv, vec3 P, vec3 m1, vec3 p1, vec2 d, vec3 N, float lin) {
+    vec3 m2 = viewPos(uv - 2.0 * d, depthAt(uv - 2.0 * d));
+    vec3 p2 = viewPos(uv + 2.0 * d, depthAt(uv + 2.0 * d));
+    float lim = 0.07 * lin + 0.04;
+    if (max(max(abs(m1.z - P.z), abs(p1.z - P.z)), max(abs(m2.z - m1.z), abs(p2.z - p1.z))) > lim) return vec2(0.0);
+    vec3 a = normalize(m1 - m2);
+    vec3 b = normalize(P - m1);
+    vec3 c = normalize(p1 - P);
+    vec3 e = normalize(p2 - p1);
+    return vec2(dot(c - b, N), dot(e - a, N));
+  }
+  vec3 pipeCrease(vec3 col, vec2 uv, float lin, float keep) {
+    if (uCrease.x + uCrease.y <= 0.0 || lin >= uCrease.w || keep <= 0.0) return col;
+    // (Two pixels in from the frame's edge the outer taps would read the edge's own depth again, a fold
+    // that is not there: the second critic found a hairline along the bottom of every High frame.)
+    vec2 inFrame = min(uv, 1.0 - uv) / uDepthTexel;
+    if (min(inFrame.x, inFrame.y) < 2.5) return col;
+    vec3 P = viewPos(uv, lin);
+    float hero = smoothstep(uCreaseHero.w, uCreaseHero.w * 1.3, length((P - uCreaseHero.xyz) * vec3(1.0, 0.8, 1.0)));
+    if (hero <= 0.0) return col;
+    vec2 dx = vec2(uDepthTexel.x, 0.0);
+    vec2 dy = vec2(0.0, uDepthTexel.y);
+    // The surface's normal toward the lens, across the pixel (at a fold, the bevel's).
+    vec3 l = viewPos(uv - dx, depthAt(uv - dx));
+    vec3 r = viewPos(uv + dx, depthAt(uv + dx));
+    vec3 b = viewPos(uv - dy, depthAt(uv - dy));
+    vec3 t = viewPos(uv + dy, depthAt(uv + dy));
+    vec3 N = normalize(cross(r - l, t - b));
+    N = dot(N, P) > 0.0 ? -N : N;
+    vec2 fx = creaseAxis(uv, P, l, r, dx, N, lin);
+    vec2 fy = creaseAxis(uv, P, b, t, dy, N, lin);
+    float sx = fx.x * fx.y > 0.0 ? clamp(fx.x / fx.y, 0.0, 1.0) : 0.0;
+    float sy = fy.x * fy.y > 0.0 ? clamp(fy.x / fy.y, 0.0, 1.0) : 0.0;
+    float fade = (1.0 - smoothstep(uCrease.z, uCrease.w, lin)) * hero * keep;
+    // (A crease asks for a sharper fold than an edge: beside a near edge a shallow one rang light, dark,
+    // light at two pixels.)
+    float edge = max(sx * smoothstep(0.5, 1.0, -fx.y), sy * smoothstep(0.5, 1.0, -fy.y)) * fade;
+    float crease = max(sx * smoothstep(0.75, 1.2, fx.y), sy * smoothstep(0.75, 1.2, fy.y)) * fade;
+    // The edge's bevel takes the key where it turns toward the light, a breath of it where it does not;
+    // the surface's own colour lifted toward the light's (a dark face too), never a white outline.
+    float toL = smoothstep(-0.25, 0.55, dot(N, uCreaseV));
+    col += (col * 0.6 + 0.045) * uCreaseC * (edge * uCrease.x * (0.25 + 0.75 * toL));
+    return col * mix(vec3(1.0), uAOTint, crease * uCrease.y);
+  }
   // The half-frame occlusion laid on a full-frame colour: its four nearest texels, each weighed by how
   // close its depth is to this pixel's, so a rider's outline stays clean against the snow behind it.
   vec3 pipeAO(vec3 col, vec2 uv) {
     if (uAO.x + uAO.y <= 0.0) return col;
     float raw = texture2D(tDepth, uv).r;
     if (raw >= 1.0) return col;
-    float key = depthKey(linDepth(raw));
+    float lin = linDepth(raw);
+    float key = depthKey(lin);
     vec2 p = uv / uAO.zw - 0.5;
     vec2 f = fract(p);
     vec2 b = (floor(p) + 0.5) * uAO.zw;
@@ -221,11 +290,13 @@ export const AO_COMPOSITE_GLSL = /* glsl */ `
     // Never on a light: anything brighter than lit snow keeps its value.
     float keep = 1.0 - smoothstep(0.95, 1.45, dot(col, vec3(0.2126, 0.7152, 0.0722)));
     float k = clamp((1.0 - ao.x) * uAO.x + (1.0 - ao.y) * uAO.y, 0.0, 1.0) * keep;
-    return col * mix(vec3(1.0), uAOTint, k);
+    return pipeCrease(col * mix(vec3(1.0), uAOTint, k), uv, lin, keep);
   }
 `;
 
 const lightProbe = new Vector3();
+const creaseProbe = new Vector3();
+const creaseWhite = new Vector3(1, 1, 1);
 
 export class AOPass {
   private raw: WebGLRenderTarget;
@@ -237,6 +308,11 @@ export class AOPass {
   /** How dark full occlusion goes, and the contact shadow's share (the light lane may tune both). */
   strength = 0.8;
   contactStrength = 0.5;
+  /** The crease light (the visual lift): 1 as tuned, 0 off. creaseEdge is how much light a convex edge
+   *  catches, creaseDark how dark an inner crease goes. */
+  crease = 1;
+  creaseEdge = 1.3;
+  creaseDark = 0.35;
 
   constructor(private quad: Quad) {
     const opts = { format: RGBAFormat, type: UnsignedByteType, minFilter: NearestFilter, magFilter: NearestFilter, depthBuffer: false, stencilBuffer: false, generateMipmaps: false };
@@ -322,12 +398,30 @@ export class AOPass {
     // Scale the ratio so its brightest channel sits at 0.78 at most: the hue of the shade, a set depth.
     const k = Math.min(1, 0.78 / m);
     c.uAOTint.value.set(Math.max(0.3, r * k), Math.max(0.3, g * k), Math.max(0.3, b * k));
+    this.aimCrease(camera, far);
+  }
+
+  /** The crease light's uniforms for this frame (the visual lift, the light lane): the key's colour and
+   *  direction in view space, the rider's place, and how far out it reaches (to about 60 m, nearer when
+   *  the fog closes in). */
+  private aimCrease(camera: Camera, far: number): void {
+    const c = aoComposite;
+    const reach = Math.min(60, far * 0.55);
+    c.uCrease.value.set(this.creaseEdge * this.crease, this.creaseDark * this.crease, reach * 0.55, reach);
+    const s = shared.uSunColor.value;
+    const top = Math.max(s.r, s.g, s.b, 1e-3);
+    c.uCreaseC.value.set(s.r / top, s.g / top, s.b / top).lerp(creaseWhite, 0.3);
+    c.uCreaseV.value.copy(shared.uSunDir.value).transformDirection(camera.matrixWorldInverse);
+    creaseProbe.copy(shared.uFocus.value).applyMatrix4(camera.matrixWorldInverse);
+    c.uCreaseHero.value.set(creaseProbe.x, creaseProbe.y, creaseProbe.z, 1.5);
   }
 
   /** The pass is off this frame: the composite's function returns at once. */
   rest(): void {
     aoComposite.uAO.value.x = 0;
     aoComposite.uAO.value.y = 0;
+    aoComposite.uCrease.value.x = 0;
+    aoComposite.uCrease.value.y = 0;
   }
 
   get texture() {

@@ -113,6 +113,13 @@ export interface Palette {
   poolSoft: number;
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   leaf: number;
+  /** The visual lift's light (materials.ts LIFT_GLSL, the light lane). bounce: how much light the snow
+   *  throws back up onto what faces sideways and down; sun: the share of the snow round the lens in the
+   *  key light (1 the bounce is the lit snow's colour, 0 the shade's: warm in the sun, cool in a slot or a
+   *  street); tint: what the place colours it (white: the snow's own); sky: the sky's fill by the way a
+   *  face is turned; through: light through what is thin with the key behind it (blossom and foliage, ice,
+   *  the ghosts' glass); sheen: the snow's sheen at a grazing angle toward the light. All 0 is round 7. */
+  lift: { bounce: number; sun: number; tint: Color; sky: number; through: number; sheen: number };
   /** How much of the lit snow's colour Low's poster keeps (1: all of it). With no film to roll it off, a
    *  warm light on the snow that reads as light on High reads as sand on Low. */
   posterSnowSat: number;
@@ -305,6 +312,7 @@ function base(): Palette {
     lamps: 0.25,
     poolSoft: 0,
     leaf: 0,
+    lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
     // (After the lane's critic: no rings by default, a hard-edged disc round the sun read as a sticker; the snow's
     // steps softer, hard-edged they turned the macro tone into camouflage; a cast shadow's edge only a little
@@ -475,6 +483,7 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
     case Mood.None:
       clearSkies(p, biome);
       round7(p, biome);
+      visualLift(p, biome);
       break;
     case Mood.Blizzard:
       p.skyZenith = c('#6D7C93');
@@ -1262,6 +1271,33 @@ function round7(p: Palette, biome: BiomeId): void {
   }
 }
 
+/** The visual lift's light over each mountain's Clear Skies (the light lane, DECISIONS 361): the snow's
+ *  bounce, the sky's fill, light through what is thin and the snow's sheen (Palette.lift). The chaos moods
+ *  keep round 7's light (all 0). The journey's stops and the places shade it from here: a slot or a
+ *  street is cooler (less of the snow round it in the sun), Ember's halls bounce the lava's orange,
+ *  Lanternfall's lamp roads marigold, Frostfang's fields the aurora's teal. */
+function visualLift(p: Palette, biome: BiomeId): void {
+  switch (biome) {
+    case 'alpine':
+      p.lift = { bounce: 0.42, sun: 0.75, tint: c('#FFFFFF'), sky: 0.48, through: 0.6, sheen: 0.8 };
+      return;
+    case 'glacier':
+      p.lift = { bounce: 0.38, sun: 0.65, tint: c('#FFFFFF'), sky: 0.5, through: 0.9, sheen: 0.7 };
+      return;
+    case 'volcanic':
+      p.lift = { bounce: 0.36, sun: 0.6, tint: c('#FFE6D2'), sky: 0.34, through: 0.5, sheen: 0.55 };
+      return;
+    case 'blossom':
+      // (The critic: at a sky of 0.46 and a peach bounce the spine's darks softened and the torii's plum went
+      // toward crimson. A softer fill, and a bounce with no warmth of its own.)
+      p.lift = { bounce: 0.32, sun: 0.8, tint: c('#F6F4F6'), sky: 0.3, through: 1, sheen: 0.7 };
+      return;
+    case 'lantern':
+      p.lift = { bounce: 0.38, sun: 0.55, tint: c('#FFFFFF'), sky: 0.42, through: 0.6, sheen: 0.5 };
+      return;
+  }
+}
+
 /** One change of light on a mountain's run. */
 export interface JourneyStop {
   /** Metres where the light starts to leave the stop before. */
@@ -1699,6 +1735,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       edit: (p) => {
         p.sunColor = c('#FFF2E4');
         p.leaf = 1.6;
+        // (The visual lift: the canopies are lit through most here.)
+        p.lift.through = 1.25;
         p.atmo.rays = 1;
         p.grade.shafts = 0.75;
         p.snowShade = c('#7482D4');
@@ -2089,6 +2127,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       edit: (p) => {
         lamps(p, 1.6);
         p.snowShade = c('#5064C8');
+        // (The visual lift: half the street's snow is in the fronts' shade and the rest in lamplight, so
+        // what it throws up under the eaves and balconies is cooler and a little amber.)
+        p.lift.sun = 0.45;
+        p.lift.tint = c('#FFF0DC');
         p.grade.gain = c('#FFF4E0');
         p.grade.hi = c('#FFEAC4');
         p.grade.lo = c('#D4D8FF');
@@ -2127,6 +2169,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.fog.lerp(c('#141A58'), 0.6);
         p.air.low = 0.9;
         p.under = { color: c('#38C8FF'), k: 0.2 };
+        // (The visual lift: the slot's floor is shade, so it bounces its own cold blue.)
+        p.lift.sun = 0.25;
       },
     },
     {
@@ -2143,6 +2187,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       edit: (p) => {
         lamps(p, 1);
         p.snowShade = c('#2E4AA6');
+        // (The visual lift: the windows' amber lies on the street's snow and comes back up the hulls.)
+        p.lift.tint = c('#FFE2B8');
         p.grade.hi = c('#FFEED6');
         p.bloom += 0.12;
       },
@@ -2182,6 +2228,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
         lamps(p, 1.35);
+        // (The visual lift: the floor under the roof is dark, so it bounces little, and that cold.)
+        p.lift.sun = 0.15;
+        p.lift.bounce = 0.2;
+        p.lift.sky = 0.12;
       },
     },
     {
@@ -2204,6 +2254,9 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.snowShade = c('#383254');
         p.grade.contrast += 0.04;
         lamps(p, 1.25);
+        // (The visual lift: the floor's own shade, with the lava's light lying on it, comes back up orange.)
+        p.lift.sun = 0.35;
+        p.lift.tint = c('#FFC8A0');
       },
     },
     {
@@ -2230,6 +2283,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.contrast = 1.18;
         p.bloom = 0.7;
         lamps(p, 1.3);
+        // (The visual lift: under the roof no sky fills the shade; the lava's pools on the floor bounce.)
+        p.lift.sun = 0.3;
+        p.lift.sky = 0.1;
+        p.lift.tint = c('#FFC8A0');
       },
     },
     {
@@ -2274,6 +2331,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.exposure! *= 1.04;
         p.bloom += 0.15;
         lamps(p, 1.2);
+        p.lift.tint = c('#FFC090');
       },
     },
     {
@@ -2437,6 +2495,10 @@ export const PLACES: Record<BiomeId, Place[]> = {
       edit: (p) => {
         lamps(p, 1.15);
         p.snowShade = c('#5440AC');
+        // (The visual lift: the pools of marigold on the snow come back up under the eaves and the lamps'
+        // stone. Marigold is the world's own light here, and only here: ART.md 15.)
+        p.lift.tint = c('#FFC878');
+        p.lift.bounce = 0.46;
         p.grade.hi = c('#FFF2DC');
         p.grade.lo = c('#DCD0FF');
         p.grade.saturation += 0.05;
@@ -2451,6 +2513,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.under.k = Math.max(p.under.k, 0.24);
         p.air.low = 1;
         p.grade.hi = c('#FFF2DC');
+        p.lift.tint = c('#FFD08C');
       },
     },
     {
@@ -2461,6 +2524,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.contrast += 0.06;
         p.grade.exposure! *= 0.96;
         p.grade.lo = c('#DCCCFF');
+        p.lift.tint = c('#FFC878');
+        p.lift.bounce = 0.46;
       },
     },
     {
@@ -2477,6 +2542,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'finish',
       edit: (p) => {
         lamps(p, 1);
+        p.lift.tint = c('#FFD08C');
         // (Warm light on pale paint and stands of people: at the journey's bloom the square bloomed into a
         // cream veil when the great lantern lit. The lantern is the brightest thing here, and the bloom its.)
         p.grade.hi = c('#FFE8CC');
