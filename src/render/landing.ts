@@ -1,5 +1,7 @@
 import { BufferAttribute, BufferGeometry, type Camera, CircleGeometry, Color, Mesh, NormalBlending, Object3D, Quaternion, RingGeometry, Sphere, ShaderMaterial, Vector3 } from 'three';
 import { Course } from '../sim/course';
+import { FIRST_RUN_STOMP } from '../sim/sim';
+import { reduced } from '../ui/motion';
 import type { Snap } from '../game/run';
 import { shared } from './materials';
 
@@ -358,6 +360,21 @@ class Crater {
 const tmpN = new Vector3();
 const Z_AXIS = new Vector3(0, 0, 1);
 
+/** The sim's stomp window before touchdown, in ticks: a press (or a grab let go) this close stomps (sim.ts
+ *  stompTicks: 9, and FIRST_RUN_STOMP on a save's very first run). */
+const STOMP_TICKS = 9;
+
+/** Seconds before touchdown the ring burns gold: the sim's own stomp window, so a first-timer who presses on the
+ *  flash is right (round 8: the first run's window is wider). */
+export function stompWindowS(firstRun: boolean): number {
+  return (firstRun ? FIRST_RUN_STOMP : STOMP_TICKS) / 60;
+}
+
+/** A deep grab still held this close to touchdown (s) turns the ring to the clock's amber and throbs it: let go. */
+export const DEEP_WARN_S = 0.55;
+/** Amber: time running out (ART.md 1), never a reward. */
+const AMBER = '#FFB040';
+
 export class LandingAid {
   readonly root = new Object3D();
   private ring: Mesh;
@@ -398,6 +415,11 @@ export class LandingAid {
   /** The current stomp streak (Feel.streak): the stomp window's ring opens a little wider as a streak
    *  builds (x(1.08 + 0.04n)), so the next stomp reads as a bigger target. */
   streak = 0;
+  /** Round 8: the stomp window (s) the gold flash keeps to (stompWindowS: wider on a first run). */
+  stompS = stompWindowS(false);
+  /** Round 8: a deep grab is held (tier 2 on): near the snow the ring warns in amber until it is let go. */
+  deepGrab = false;
+  private warnT = 0;
 
   /** Burst crater pressed into the snow on a perfect landing. `strength` is its width, 1 for a single
    *  stomp up to 1.6 for a streak of five or more. */
@@ -517,7 +539,12 @@ export class LandingAid {
       return;
     }
     const t = this.timeToLand;
-    const hot = t <= 0.15 ? 1 : 0;
+    // (The window is the sim's own, to the tick: a press on the first gold frame stomps.)
+    const hot = t <= this.stompS + 1e-6 ? 1 : 0;
+    // A deep grab still held as the snow comes up: the ring takes the clock's amber and throbs (steady under
+    // reduced motion), and in the window it burns gold inside an amber edge: let go now and it is a stomp.
+    const warn = this.deepGrab && t < DEEP_WARN_S;
+    this.warnT = warn ? this.warnT + dt : 0;
     // It closes in to just around the sled, so the stomp flash still shows past the rider.
     const radius = 1.05 + 1.9 * Math.min(1, t / 1.1);
     c.gradient(px, pz, g);
@@ -525,14 +552,16 @@ export class LandingAid {
     this.ring.position.set(px, c.ground(px, pz) + 0.05, -pz);
     this.ring.quaternion.copy(this.q.setFromUnitVectors(Z_AXIS, n));
     this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : 1));
-    this.ringMat.uniforms.uColor.value.set(hot ? '#FFE08A' : '#F5F3FF');
-    this.ringMat.uniforms.uEdge.value.copy(shared.uSnowDeep.value).multiplyScalar(0.7);
-    this.ringMat.uniforms.uHot.value = hot;
+    this.ringMat.uniforms.uColor.value.set(hot ? '#FFE08A' : warn ? AMBER : '#F5F3FF');
+    if (warn && hot) this.ringMat.uniforms.uEdge.value.set(AMBER);
+    else this.ringMat.uniforms.uEdge.value.copy(shared.uSnowDeep.value).multiplyScalar(0.7);
+    // (The throb: about 7 a second, a quarter brighter at its peak.)
+    this.ringMat.uniforms.uHot.value = hot || (warn ? (reduced() ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.cos(this.warnT * 44))) : 0);
     // The dashes wind inward as it closes (one dash per second of fall).
     this.ringMat.uniforms.uSpin.value = (t * 1.0) % 1;
     // The band thickens in the stomp window. It stays a ring: from the low chase camera a band much
     // wider than this foreshortens into a solid white plate under the sled.
-    this.ringMat.uniforms.uInner.value = hot ? 0.68 : 0.75;
+    this.ringMat.uniforms.uInner.value = hot ? 0.68 : warn ? 0.71 : 0.75;
     this.ringMat.uniforms.uAlpha.value = this.shown * (hot ? 1 : 0.7 + 0.25 * (1 - Math.min(1, t / 1.1)));
   }
 }

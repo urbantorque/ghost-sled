@@ -214,7 +214,7 @@ export interface HudModel {
    * The lantern: charge 0..300 (100 a lantern), how many are lit, whether a dash is on, and ward/dash/lit
    * counters that tick up when one happens (so the HUD can flash on a change it did not see happen).
    */
-  lantern: { charge: number; cells: number; dashing: boolean; wards: number; dashes: number };
+  lantern: { charge: number; cells: number; dashing: boolean; wards: number; dashes: number; /** Round 8: a held charm's signal on the lantern (charmsignals.ts SIG bits). */ sig?: number };
   /**
    * stake: the figure at stake (pending x multiplier); fuse: 0..1 tension while a big stake drains
    * (stake.fuseLevel); pace: the stake has passed your lifetime best combo this run.

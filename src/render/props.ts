@@ -1,4 +1,5 @@
 import { AdditiveBlending, BufferGeometry, Color, InstancedBufferAttribute, InstancedMesh, Matrix4, Object3D, PlaneGeometry, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { PATH_ID0, PATH_STEP } from '../sim/charms';
 import { CHUNK_LEN, Course, FOREST_LIMIT, ObstacleKind } from '../sim/course';
 import { setChamferTier } from './chamfer';
 import { Clearing, Dresser, L_CABLE, L_ROCKBAND, inClearing, largeKitSteps, signature, smallKitSteps, wallThinning } from './dressing';
@@ -290,6 +291,18 @@ export class Props {
   }
 
   markDirty(): void {
+    this.dirty = true;
+  }
+
+  /** Round 8, Lamplit Path: the first of its sparks this run (a spark every PATH_STEP metres from there), or -1 for
+   *  a rider who does not hold it. */
+  private pathK = -1;
+  get pathFrom(): number {
+    return this.pathK;
+  }
+  set pathFrom(k: number) {
+    if (k === this.pathK) return;
+    this.pathK = k;
     this.dirty = true;
   }
 
@@ -655,6 +668,21 @@ export class Props {
           air.x = g.x;
           air.y = y;
           air.z = g.z;
+        }
+      }
+      // Round 8, Lamplit Path: the rider who holds it has a spark on the safe line every PATH_STEP metres from where
+      // it was taken to the line (charms.ts; the sim takes them), drawn as any spark is, in the same batches.
+      if (this.pathFrom >= 0) {
+        const z0 = i * CHUNK_LEN;
+        for (let k = Math.max(this.pathFrom, Math.ceil(z0 / PATH_STEP)); k * PATH_STEP < z0 + CHUNK_LEN; k++) {
+          const z = k * PATH_STEP;
+          if (z >= c.finishZ) break;
+          if (collected.has(PATH_ID0 + k)) continue;
+          const x = c.safeX(z);
+          const y = c.ground(x, z) + 0.8;
+          const k1 = gs * (0.9 + 0.2 * hashf(k, 7, 4));
+          if (!far) this.pushM('gift', flameMatrix(this.m, x, y, -z, hashf(k, 7, 1) * 6.28, k1, false));
+          this.pushM('glow', glowMatrix(this.m, x, y, -z, k1, 'spark', far));
         }
       }
       if (i === nearChunk) for (const b of this.batches.values()) b.near = b.count;

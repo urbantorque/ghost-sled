@@ -8943,6 +8943,101 @@
   box-shadow: inset 0 0 0 2px #ffffff, 0 0 14px rgba(255, 246, 216, 0.9);
 }
 
+/* Round 8: a held charm's one signal is on the lantern itself (charmsignals.ts), never a list of icons.
+   Comet's Tail: a full lantern never wards, so it is drawn without its ward ring. */
+.gs-lantern.is-noward.is-ready {
+  box-shadow: none;
+}
+
+/* Stone Lantern: each cell drawn in halves (a ward costs half a lantern). */
+.gs-lantern.is-halves .gs-lan-cell::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  top: 50%;
+  height: 2px;
+  margin-top: -1px;
+  background: rgba(18, 25, 51, 0.85);
+}
+
+/* Ember Step: the lantern pulses while a dash costs half, just after a perfect landing. */
+
+/* (A glow layer whose opacity pulses: compositor-only, where a pulsing box-shadow repaints every frame.) */
+.gs-lantern.is-step::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 3px rgba(255, 211, 77, 0.95), 0 0 22px rgba(255, 211, 77, 0.7);
+  pointer-events: none;
+  animation: gs-lan-step 300ms ease-in-out infinite alternate;
+}
+
+@keyframes gs-lan-step {
+  from {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Hearthstone: the cell a dash spent is outlined until a perfect landing gives it back. */
+.gs-lantern.is-owed .gs-lan-cell:first-child:not(.is-full),
+.gs-lantern.is-owed .gs-lan-cell.is-full + .gs-lan-cell:not(.is-full) {
+  box-shadow: inset 0 0 0 2px #ffd34d, 0 0 0 1px rgba(255, 211, 77, 0.6);
+}
+
+/* Featherfall: a feather on the lantern while this stage's spare landing is held. Last Lamp: a small ember in the
+   empty lantern once the get-ups are gone. Both sit at the pill's top left. */
+/* (Low specificity: on touch the lantern stays position: fixed by the thumb.) */
+.gs-lantern:where(.is-step, .is-feather, .is-ember) {
+  position: relative;
+}
+
+.gs-lantern.is-feather::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: -6px;
+  width: 7px;
+  height: 15px;
+  border-radius: 7px 0 7px 0;
+  background: #f5f3ff;
+  transform: rotate(35deg);
+  box-shadow: 0 0 0 1.5px #121933;
+}
+
+.gs-lantern.is-ember .gs-lan-cell:first-child:not(.is-full)::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  margin-left: -3px;
+  border-radius: 50%;
+  background: #ff9e1a;
+  box-shadow: 0 0 6px rgba(255, 158, 26, 0.9);
+}
+
+/* Slipstream Lantern: the lanterns' light leans forward, toward the ghost being drafted, as it fills. */
+.gs-lantern.is-lean .gs-lan-cells {
+  transform: skewX(-10deg);
+  transition: transform 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-lantern.is-step::after {
+    animation: none;
+  }
+
+  .gs-lantern.is-lean .gs-lan-cells {
+    transition: none;
+  }
+}
+
 /* Touch: the lantern is the spirit button, round and big by the right thumb, above the zone labels. */
 .gs-touch-mode .gs-lantern {
   position: fixed;

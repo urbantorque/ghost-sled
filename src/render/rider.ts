@@ -5,6 +5,7 @@ import { Course } from '../sim/course';
 import { reduced } from '../ui/motion';
 import { inRock, visualGround } from './ground';
 import { ghostStencil, makeToonMaterial, shared, type ToonOptions } from './materials';
+import { type TrickIn, emptyTrickPose, trickPose } from './trickpose';
 import { ARM_ELBOW, ARM_REST_BEND, ARM_WRIST, RIDER_COLORS, RIDER_HALF_WIDTH, RIDER_HEIGHT, RIDER_NECK, RIDER_SCALE, RIDER_SHOULDER, SCARF_KNOT, type RiderDetail, type SledSeat, ghostRiderGeometry, paintSled, riderArmGeometry, riderHeadGeometry, riderTorsoGeometry, sledGeometryFor, sledSeat, withSway } from './meshes';
 
 // The player's rider: sled + body + arms with procedural poses and a verlet scarf. The scarf's
@@ -33,6 +34,8 @@ export interface RiderPose {
   act?: RiderAct;
   /** The held drift's charge, 0 to 1 (Feel.driftCharge): the drift's lean deepens with it. */
   driftCharge?: number;
+  /** Round 8: what the sim says the rider is doing in the air (trickpose.ts reads the turn rates itself). */
+  trick?: { move: number; grab: number; tier: number; tweak: number; danger: number };
 }
 
 /** A reaction the rider plays once: a look and a lean at a ghost going by ('look'); a glance at one it
@@ -773,6 +776,19 @@ export class Rider {
   private restP = new Vector3();
   /** The scarf of a wreck sitting up for the results: its tails spread out across the snow. */
   private settled = false;
+  /** Round 8: the trick's pose (trickpose.ts), the last one held while it eases out, its eased weight, last
+   *  frame's turn in the air (for the rates), and the turn a Spinning Top's rider sits still against. */
+  private readonly tpIn: TrickIn = { move: 0, grab: 0, tier: 0, tweak: 0, spin: 0, flip: 0, danger: 0, time: 0, calm: false };
+  private readonly tpNew = emptyTrickPose();
+  private readonly tp = emptyTrickPose();
+  private tpK = 0;
+  private tpYaw = NaN;
+  private tpPitch = NaN;
+  private tpYaw0 = 0;
+  /** The pose the trick weight is on now (for play-tests: window.__gs). */
+  get trickName(): string {
+    return this.tpK > 0.05 ? this.tp.name : '';
+  }
 
   constructor() {
     const mat = riderMaterial({ coolShade: 0.5, rim: 0.4 }, this.u, 0.7, 0.75, true);
@@ -1210,18 +1226,21 @@ export class Rider {
     if (spun > 0) this.root.position.y += Math.abs(Math.sin(Math.PI * 2.5 * spun)) * (1 - spun) * TUMBLE_BOUNCE;
     this.tickCue(act, dt);
     const cel = this.celebrate(p, calm);
+    // Round 8: the trick's pose (trickpose.ts), eased in fast and out a little slower; it lets go at touchdown.
+    const tp = this.trickFrame(p, dt, time, calm, tumble > 0 || fin0 > 0.5 || wipe !== null);
+    const tk = this.tpK;
     // Tilt the whole rig to the ground normal when grounded; level out in the air.
     const n = p.airborne ? UP : p.normal;
     this.tmpQ.setFromUnitVectors(UP, n);
     this.tilt.quaternion.slerp(this.tmpQ, Math.min(1, dt * (p.airborne ? 4 : 14)));
     // (A round sled spins under its rider over the line.)
-    this.yaw.rotation.set(0, -(p.heading + p.airYaw) + rollSin * 1.3 + this.grindK * GRIND_YAW + cel.sledSpin + (wipe ? wipe.sledYaw : 0), 0);
+    this.yaw.rotation.set(0, -(p.heading + p.airYaw) + rollSin * 1.3 + this.grindK * GRIND_YAW + cel.sledSpin + (wipe ? wipe.sledYaw : 0) + tp.sledYaw * tk, 0);
     const wob = p.wobble > 0 ? Math.sin(time * 38) * 0.08 * Math.min(1, p.wobble / 20) : 0;
     this.flip.rotation.set(-p.airPitch - rollEase * Math.PI * 2 * TUMBLE_TURNS, 0, 0);
     // The sled banks a little; most of the carve lean comes from the hips (below), so the rider bends
     // into the turn rather than tipping over as one rigid block with its sled.
     // (A rail's balance sways it side to side; a tumble throws it over.)
-    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK) + (wipe ? wipe.sledRock : 0));
+    this.leanG.rotation.set(0, 0, -p.lean * 0.2 + wob + rollSin * 0.8 + (calm ? 0 : Math.sin(time * 11) * 0.05 * this.grindK) + (wipe ? wipe.sledRock : 0) + tp.sledRoll * tk);
 
     // Body pose. A perfect landing squashes the torso and legs flat on touchdown (0.7 tall, 1.25
     // wide) and holds it for about 150 ms, springs back through a stretch, and rides the landing out
@@ -1271,7 +1290,7 @@ export class Rider {
     const lean = this.leanS + this.wallS * 0.85 + inside * dk * (0.16 + 0.14 * (p.driftCharge ?? 0));
     const bob = this.bobY + this.chatY;
     const speedTuck = this.tuckK;
-    const crouch = Math.max(p.crouch, stomp * 0.85, speedTuck * 0.62, this.grindK * 0.8, load, touch * 0.9, dk * 0.3, tumble > 0 && calm ? 1 : 0) * (1 - fin) * (1 - 0.8 * ext);
+    const crouch = Math.max(p.crouch * (1 - tk * (1 - tp.crouch)), stomp * 0.85, speedTuck * 0.62, this.grindK * 0.8, load, touch * 0.9, dk * 0.3, tp.crouch * tk, tumble > 0 && calm ? 1 : 0) * (1 - fin) * (1 - 0.8 * ext);
     const tuck = p.airborne && p.crouch > 0.5 ? 1 : 0;
     // Drifting, the sled slides sideways while the rider keeps its chest to the way it is going, as a
     // rider does: crouched over a sled turned across the view, it read from the chase camera as a
@@ -1288,16 +1307,28 @@ export class Rider {
     // (Over the line it sits up tall.)
     // (Standing over the line it is upright, so its legs hang straight down to the deck.)
     // (The pop's release throws the chest up and back off the knees; a touchdown folds it over them.)
-    const pitch = (-0.15 - this.seat.lean - crouch * 0.3 - load * 0.14 - dk * 0.06 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 - touch * 0.16 + ext * 0.34 + Math.min(0, bob) * 1.6) * (1 - fin * 0.85) * (1 - cel.stand) + cel.lean;
+    let pitch = (-0.15 - this.seat.lean - crouch * 0.3 - load * 0.14 - dk * 0.06 - tuck * 0.35 - stomp * 0.2 - speedTuck * 0.14 - touch * 0.16 + ext * 0.34 + Math.min(0, bob) * 1.6) * (1 - fin * 0.85) * (1 - cel.stand) + cel.lean;
+    // (A trick's pose sets the body's pitch itself, but a backflip keeps the flight's tuck.)
+    if (!Number.isNaN(tp.pitch)) pitch += (tp.pitch - pitch) * tk;
     // Weight into a carve (round 7): the shoulders open toward the turn and the hips slide to its inside
     // further than they did, so a carve is a shift of the whole body and not a tilt of it; held by the
     // finish, a drift (which has its own posture) and a reaction.
     const carve = lean * (1 - fin) * (1 - dk) * (1 - air0);
-    this.bodyPivot.rotation.set(pitch + this.cuePitch + rollSin * 0.5, -this.twist - this.grindK * GRIND_YAW * 0.7 + cel.yaw + this.cueTwist - carve * 0.16, -lean * 0.26 + this.cueRoll);
+    // (A trick turns, rolls and lifts the body over its sled; a Spinning Top's rider sits still while the saucer
+    // spins under it.)
+    const counter = tp.counter > 0 ? (p.airYaw - this.tpYaw0) * tp.counter : 0;
+    this.bodyPivot.rotation.set(pitch + this.cuePitch + rollSin * 0.5, -this.twist - this.grindK * GRIND_YAW * 0.7 + cel.yaw + this.cueTwist - carve * 0.16 + (tp.yaw + counter) * tk, -lean * 0.26 + this.cueRoll + (tp.roll + tp.shake) * tk);
     // (A tumble throws the body up off the sled; over the line it may hop up to stand on it.)
-    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - load * 0.05 - dk * 0.025 - stomp * 0.05 + ext * 0.07 - this.cueDip + bob + rollSin * 0.2 + (calm ? 0 : fin * (1 - cel.stand) * Math.abs(Math.sin(time * 3.4)) * 0.05) + cel.lift;
+    // (A Pine Bow stands on the deck as the finish does.)
+    const deck = STAND_DECK[this.sledId];
+    const trickStand = deck !== undefined ? tp.stand * tk : 0;
+    if (trickStand > this.u.stand.value) this.u.stand.value = trickStand;
+    const standLift = deck !== undefined ? (deck + 0.59 - this.seat.y) * Math.max(0, trickStand - cel.stand) : 0;
+    this.bodyPivot.position.y = this.seat.y - crouch * 0.08 - load * 0.05 - dk * 0.025 - stomp * 0.05 + ext * 0.07 - this.cueDip + bob + rollSin * 0.2 + (calm ? 0 : fin * (1 - cel.stand) * Math.abs(Math.sin(time * 3.4)) * 0.05) + cel.lift + (tp.lift * tk + standLift);
     // The hips slide to the inside of the carve: the weight goes where the turn is.
     this.bodyPivot.position.x = Math.max(-0.085, Math.min(0.085, lean * 0.075));
+    // (A Comet Tail streams the body out off the back of the sled.)
+    this.bodyPivot.position.z = this.seat.z + tp.back * tk;
     // (The release stretches the body a touch, the touchdown squashes it by its impact.)
     const sx = 1 + sq * 0.25 - rebound * 0.04 + touch * 0.14 - ext * 0.05;
     const sy = 1 - sq * 0.3 + rebound * 0.08 - touch * 0.2 + ext * 0.1;
@@ -1308,7 +1339,7 @@ export class Rider {
     // beanie stay above the shoulder line (the roll is countered once the lean is capped, below).
     // A reaction turns it on the neck (a look, a nod, a shake), and loading for a lip lifts the chin.
     // (Into a carve it looks where it is going; a touchdown nods it.)
-    this.neck.rotation.set(-(pitch + 0.15) * 0.7 + 0.06 + stomp * 0.12 + load * 0.12 - touch * 0.14 + this.cueNod, this.cueYaw + cel.look - carve * 0.42, 0);
+    this.neck.rotation.set(-(pitch + 0.15) * 0.7 + 0.06 + stomp * 0.12 + load * 0.12 - touch * 0.14 + this.cueNod - tp.nod * tk, this.cueYaw + cel.look - carve * 0.42, 0);
     const air = p.airborne ? 1 : 0;
     const flail = air * (1 - tuck);
     const armSwing = Math.sin(time * 9) * 0.25 * flail;
@@ -1375,6 +1406,14 @@ export class Rider {
     }
     this.cueArms(arm, calm, (1 - fin) * (1 - stomp) * (tumble > 0 ? 0 : 1) * (1 - 0.6 * tuck));
     this.celebrateArms(arm, cel);
+    // Round 8: the trick's arms over the flight's (a hand on the rail, an arm up for a Lantern Reach...).
+    if (tk > 0.001) for (let i = 0; i < 2; i++) {
+      const w = tk * tp.armK[i];
+      if (w <= 0) continue;
+      arm[i * 2] += (tp.arm[i * 2] - arm[i * 2]) * w;
+      arm[i * 2 + 1] += (tp.arm[i * 2 + 1] - arm[i * 2 + 1]) * w;
+      bend[i] += (tp.bend[i] - bend[i]) * w;
+    }
     if (wipe) {
       arm.set(wipe.arm);
       bend.set(wipe.bend);
@@ -1708,6 +1747,58 @@ export class Rider {
    *  A round sled has no deck to stand on and spins under its rider instead (once and a half for a
    *  win). Reduced motion stays seated and still: arms up for first place, out wide for any other
    *  (standing, the stopped rider filled the chase lens that reduced motion keeps through the results). */
+  /** This frame's trick pose (trickpose.ts) and its eased weight (tpK): the turn rates come off the pose's own
+   *  air yaw and pitch. While it eases out the last pose held is kept, so a landing lets go of a grab rather than
+   *  snapping through a blend toward nothing. `off`: a tumble, the finish or a wipeout owns the body. */
+  private trickFrame(p: RiderPose, dt: number, time: number, calm: boolean, off: boolean) {
+    const t = this.tpIn;
+    const tr = p.trick;
+    const h = Math.max(1 / 240, dt);
+    t.spin = Number.isNaN(this.tpYaw) || !p.airborne ? 0 : (p.airYaw - this.tpYaw) / h;
+    t.flip = Number.isNaN(this.tpPitch) || !p.airborne ? 0 : (p.airPitch - this.tpPitch) / h;
+    this.tpYaw = p.airYaw;
+    this.tpPitch = p.airPitch;
+    t.move = tr?.move ?? 0;
+    t.grab = tr?.grab ?? 0;
+    t.tier = tr?.tier ?? 0;
+    t.tweak = tr?.tweak ?? 0;
+    t.danger = tr?.danger ?? 0;
+    t.time = time;
+    t.calm = calm;
+    const pose = trickPose(t, this.tpNew);
+    const want = p.airborne && !off && tr !== undefined ? pose.k : 0;
+    if (want > 0) {
+      // (A new sled move that counter-turns starts from the turn it is at.)
+      if (pose.counter > 0 && this.tp.counter === 0) this.tpYaw0 = p.airYaw;
+      const tp = this.tp;
+      tp.pitch = pose.pitch;
+      tp.roll = pose.roll;
+      tp.yaw = pose.yaw;
+      tp.lift = pose.lift;
+      tp.back = pose.back;
+      tp.crouch = pose.crouch;
+      tp.stand = pose.stand;
+      tp.sledRoll = pose.sledRoll;
+      tp.sledYaw = pose.sledYaw;
+      tp.arm[0] = pose.arm[0];
+      tp.arm[1] = pose.arm[1];
+      tp.arm[2] = pose.arm[2];
+      tp.arm[3] = pose.arm[3];
+      tp.bend[0] = pose.bend[0];
+      tp.bend[1] = pose.bend[1];
+      tp.armK[0] = pose.armK[0];
+      tp.armK[1] = pose.armK[1];
+      tp.nod = pose.nod;
+      tp.shake = pose.shake;
+      tp.counter = pose.counter;
+      tp.name = pose.name;
+    } else if (!p.airborne) this.tp.counter = 0;
+    // In fast (a grab is a snap of the hand), out a touch slower; on the snow it is gone in about 0.15 s.
+    this.tpK += (want - this.tpK) * Math.min(1, dt * (want > this.tpK ? 16 : p.airborne ? 9 : 22));
+    if (this.tpK < 0.002) this.tpK = 0;
+    return this.tp;
+  }
+
   private celebrate(p: RiderPose, calm: boolean): Celebration {
     const c = this.cel;
     const a = p.act;
