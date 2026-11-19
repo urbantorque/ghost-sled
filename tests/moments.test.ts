@@ -30,7 +30,9 @@ const PLAIN: ChaosRoll = { mood: 0, event: 0, seed: 0x1234 };
 /** A lab pilot's whole ride on a roll (scripts/playtest/labpilots.ts: the pilots the lab's tables are made of),
  *  with its inputs recorded. `hits`: its wipeouts and wards spent; `hitsIn`: the ones inside a set piece; `fallsIn`: the wipeouts there. */
 function ride(skill: 'mid' | 'expert' | 'line', m: number, roll: ChaosRoll, seed: number): { sim: Sim; rec: InputRecorder; hits: number; hitsIn: number; fallsIn: number } {
-  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: roll, sled: 0 });
+  // (Round 8: with no charm, so what is proved is the set piece: a charm is a trade the rider chose, and Second Wind
+  // or a Guardian Wisp, taken by riding the middle, can leave a pilot with no lantern for the surge.)
+  const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: roll, sled: 0, charmPool: 0 });
   const pilot = classic(skill, sim, seed, KIT);
   const spend = spenderFor(skill, sim, seed);
   const rec = new InputRecorder();
@@ -251,7 +253,7 @@ describe('set pieces', () => {
       const c = courseFor(MOUNTAINS[m].seed);
       const roll: ChaosRoll = { ...rollForVariant(c, PLAIN, (m % 2) + 1), legend: 1 + (m % 2) };
       const a = ride('expert', m, roll, 1271);
-      const record: RunRecord = { seed: MOUNTAINS[m].seed, chaos: roll, sled: 0, inputs: a.rec.encode(), ticks: a.rec.tickCount, score: a.sim.score, distance: a.sim.distance, name: 'Lab' };
+      const record: RunRecord = { seed: MOUNTAINS[m].seed, chaos: roll, sled: 0, charmPool: 0, inputs: a.rec.encode(), ticks: a.rec.tickCount, score: a.sim.score, distance: a.sim.distance, name: 'Lab' };
       // Through the string a link or a pool carries, so the roll's legend and seed make the trip too.
       const b = replayRecord(recordFromString(recordToString(record)));
       expect(b.plays.map((p) => p.variantKey), MOUNTAINS[m].id).toEqual(a.sim.plays.map((p) => p.variantKey));

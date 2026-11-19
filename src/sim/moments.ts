@@ -243,9 +243,12 @@ const specCache = new WeakMap<Course, MomentSpec[]>();
 /** The run's set pieces, in order down the course: a pure function of the course. */
 /** The place kinds a named mountain's set pieces stand in (round 8: the course writer never gives one of these way
  *  to make room for a stage line's threshold). None for a Daily or a Cup. */
-export function setPieceKinds(seed: number): readonly SectionKind[] {
+export function setPieceKinds(seed: number): readonly SectionKind[];
+/** ...or, with `nth`, each as 'kind:nth' (the nth of its kind down the descent). */
+export function setPieceKinds(seed: number, nth: true): readonly string[];
+export function setPieceKinds(seed: number, nth = false): readonly string[] {
   const authored = AUTHORED[namedMountain(seed) ?? ''];
-  return authored ? authored.map((d) => d.kind) : [];
+  return authored ? authored.map((d) => (nth ? `${d.kind}:${d.nth}` : d.kind)) : [];
 }
 
 export function planMoments(course: Course): MomentSpec[] {
@@ -957,6 +960,9 @@ interface LegendDef {
   kind: LegendKind;
   at: SectionKind;
   nth: number;
+  /** Round 8: where it runs if its own place gave way to a stage line's threshold (the first of this kind past
+   *  500 m that no set piece stands in). */
+  alt?: SectionKind;
   amp?: number;
   wave?: number;
 }
@@ -967,7 +973,7 @@ const LEGENDS: Record<string, readonly LegendDef[]> = {
     { key: 'fleet', name: 'The Lantern Fleet', line: 'A thousand lanterns rise from the lake', kind: 'sky', at: 'lake', nth: 0 },
   ],
   frostfang: [
-    { key: 'aurora', name: 'The Aurora Comes Down', line: 'The aurora has come down to the snow: ride in it', kind: 'ribbon', at: 'switchbacks', nth: 0, amp: 3.4, wave: 150 },
+    { key: 'aurora', name: 'The Aurora Comes Down', line: 'The aurora has come down to the snow: ride in it', kind: 'ribbon', at: 'switchbacks', nth: 0, alt: 'bowl', amp: 3.4, wave: 150 },
     { key: 'herd', name: 'The Ghost Herd', line: 'The ghost herd is running: ride with it', kind: 'runner', at: 'chute', nth: 0, amp: 3.6, wave: 120 },
   ],
   ember: [
@@ -975,7 +981,7 @@ const LEGENDS: Record<string, readonly LegendDef[]> = {
     { key: 'wyrm', name: 'The Cinder Wyrm', line: 'The cinder wyrm swims the halls: follow its sparks', kind: 'runner', at: 'ravine', nth: 1, amp: 2.4, wave: 110 },
   ],
   sakura: [
-    { key: 'dragon', name: 'The Lantern Dragon', line: 'The lantern dragon winds down the benches: follow it', kind: 'runner', at: 'benches', nth: 0, amp: 5, wave: 140 },
+    { key: 'dragon', name: 'The Lantern Dragon', line: 'The lantern dragon winds down the benches: follow it', kind: 'runner', at: 'benches', nth: 0, alt: 'chute', amp: 5, wave: 140 },
     { key: 'cranes', name: 'The Thousand Cranes', line: 'A thousand paper cranes take the air', kind: 'sky', at: 'leap', nth: 2 },
   ],
   lanternfall: [
@@ -1026,7 +1032,10 @@ export function planLegends(course: Course): readonly (LegendPlay | null)[] {
   const pieces = planMoments(course);
   const out: (LegendPlay | null)[] = defs.map((d, slot) => {
     let seen = 0;
-    const sec = secs.find((s) => s.kind === d.at && seen++ === d.nth) ?? (namedMountain(course.seed) ? undefined : secs.find((s) => s.kind === d.at && s.z0 > 500));
+    const free = (s: { z0: number; z1: number }): boolean => !pieces.some((p) => p.z0 < s.z1 && p.z1 > s.z0);
+    const sec =
+      secs.find((s) => s.kind === d.at && seen++ === d.nth) ??
+      (namedMountain(course.seed) ? (d.alt ? secs.find((s) => s.kind === d.alt && s.z0 > 500 && free(s)) : undefined) : secs.find((s) => s.kind === d.at && s.z0 > 500));
     // Never over a set piece: one thing asks for the rider's eyes at a time.
     if (!sec || sec.z1 > course.finishZ - 100 || pieces.some((p) => p.z0 < sec.z1 && p.z1 > sec.z0 && d.kind !== 'sky')) return null;
     const side: 1 | -1 = hash32(course.seed, 0x1e6e, slot) & 1 ? 1 : -1;

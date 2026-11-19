@@ -1035,6 +1035,36 @@ export class Course {
     ];
   }
 
+  /** Whether the i-th beat of a stage's list is a named mountain's set piece: its kind, the nth of that kind down the
+   *  descent (moments.ts AUTHORED). */
+  private isSetPiece(k: SectionKind, laid: readonly Beat[], list: readonly SectionKind[], i: number): boolean {
+    const nth = laid.filter((b) => b.kind === k).length + list.slice(0, i).filter((q) => q === k).length;
+    return setPieceKinds(this.seed, true).some((s) => s === `${k}:${nth}`);
+  }
+
+  /** As stretch, with the beats `fixed` marks held at the top of their range when the rest can still fill the total. The
+   *  draw is the same either way, so a stage with no such kind is laid exactly as stretch lays it. */
+  private stretchKeeping(list: readonly SectionKind[], spans: readonly (readonly [number, number])[], total: number, rng: Rng, fixed: readonly boolean[]): number[] {
+    void list;
+    if (!fixed.some((f) => f)) return this.stretch(spans, total, rng);
+    const rest = spans.filter((_, i) => !fixed[i]);
+    const restLo = rest.reduce((sum, [a]) => sum + a, 0);
+    const restHi = rest.reduce((sum, [, b]) => sum + b, 0);
+    // Each held beat as long as it can be while the rest can still fill what is left.
+    let room = total - restLo;
+    const held = spans.map(([lo, hi], i) => {
+      if (!fixed[i]) return 0;
+      const len = Math.max(lo, Math.min(hi, room - spans.reduce((sum, [l], j) => sum + (fixed[j] && j > i ? l : 0), 0)));
+      room -= len;
+      return len;
+    });
+    const left = total - held.reduce((a, b) => a + b, 0);
+    if (!rest.length || left < restLo - 1e-6 || left > restHi + 1e-6) return this.stretch(spans, total, rng);
+    const drawn = this.stretch(rest, left, rng);
+    let j = 0;
+    return spans.map((_, i) => (fixed[i] ? held[i] : drawn[j++]));
+  }
+
   /** Every length in its range, summing to total: drawn free, then drawn in toward whichever end fits. */
   private stretch(spans: readonly (readonly [number, number])[], total: number, rng: Rng): number[] {
     const at = spans.map(() => rng.next());
@@ -1068,7 +1098,8 @@ export class Course {
     open.unshift(open.splice(first, 1)[0]);
     const must = SIGNATURES[this.params.biome];
     // (What a named mountain's set pieces stand in never gives way: round 8's thresholds made the stages tighter.)
-    const keep = [...must, ...setPieceKinds(this.seed)];
+    const sets = setPieceKinds(this.seed);
+    const keep = [...must, ...sets];
     let before: SectionKind = 'leap';
     for (let n = 0; n < slots.length; n++) {
       const list = slots[n];
@@ -1120,7 +1151,9 @@ export class Course {
         prev = k;
         return [b + BODY[k][0], b + BODY[k][1]] as const;
       });
-      const lens = this.stretch(spans, fill, rng);
+      // (Round 8: a named mountain's set-piece places keep their full length where the stage has the room, so the
+      // thresholds' metres come out of the beats around them: a street of bells cut short holds a bell fewer.)
+      const lens = this.stretchKeeping(list, spans, fill, rng, list.map((k, i) => this.isSetPiece(k, beats, list, i)));
       prev = before;
       list.forEach((k, i) => {
         beats.push({ kind: k, len: lens[i], blend: this.blendOf(k, prev) });
