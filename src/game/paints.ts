@@ -4,6 +4,8 @@
 //
 // Pure data: no DOM, render or audio imports.
 
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS } from './almanac';
+
 export interface Paint {
   id: string;
   name: string;
@@ -25,5 +27,16 @@ export const PAINTS: readonly Paint[] = [
 ];
 
 export function paintById(id: string | null | undefined): Paint {
-  return PAINTS.find((p) => p.id === id) ?? PAINTS[0];
+  return PAINTS.find((p) => p.id === id) ?? extraPaint(id) ?? PAINTS[0];
+}
+
+/** A paint the Almanac or a chapter adds (almanac.ts), or null. */
+function extraPaint(id: string | null | undefined): Paint | null {
+  const e = [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS].find((x) => x.id === id && x.shelf === 'paint');
+  return e ? { id: e.id, name: e.name, hex: String(e.look.hex), price: e.price } : null;
+}
+
+/** A paint a save may hold: the shelf's own or an added one. */
+export function isPaint(id: unknown): id is string {
+  return typeof id === 'string' && (PAINTS.some((p) => p.id === id) || extraPaint(id) !== null);
 }

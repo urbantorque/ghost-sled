@@ -22,7 +22,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { type Kit, type Pilot, classic, clumsy, mulberry, spenderFor } from './labpilots';
+import { type Kit, type Pilot, classic, clumsy, mulberry, prompted, spenderFor } from './labpilots';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -38,6 +38,9 @@ export interface Mods {
   replay: Any;
   prng: Any;
   moments: Any;
+  /** SIM_VERSION 10's tricks and charms, null on an older build. */
+  tricks: Any | null;
+  charms: Any | null;
   run: Any;
   ghosts: Any;
   field: Any;
@@ -55,7 +58,14 @@ export interface Mods {
   pacer: Any;
   pool: Any;
   roster: Any;
+  garage: Any;
+  paints: Any;
+  sleds: Any;
   rank: Any | null;
+  contracts: Any | null;
+  lanterns: Any | null;
+  almanac: Any | null;
+  album: Any | null;
   /** Each bundled mountain's pool as the app holds it: with its slow riders (app.ts poolFor). */
   pools: Record<string, Any[]>;
 }
@@ -82,6 +92,8 @@ export async function loadMods(root: string, imp?: (p: string) => Promise<Any>):
     replay: await load('src/sim/replay.ts'),
     prng: await load('src/sim/prng.ts'),
     moments: await load('src/sim/moments.ts').catch(() => ({})),
+    tricks: existsSync(resolve(at, 'src/sim/tricks.ts')) ? await load('src/sim/tricks.ts') : null,
+    charms: existsSync(resolve(at, 'src/sim/charms.ts')) ? await load('src/sim/charms.ts') : null,
     run: await load('src/game/run.ts'),
     ghosts: await load('src/game/ghosts.ts'),
     field: await load('src/game/field.ts'),
@@ -99,7 +111,14 @@ export async function loadMods(root: string, imp?: (p: string) => Promise<Any>):
     pacer: await load('src/game/pacer.ts'),
     pool: await load('src/bot/pool.ts'),
     roster: await load('src/bot/roster.ts'),
+    garage: await load('src/game/garage.ts'),
+    paints: await load('src/game/paints.ts'),
+    sleds: await load('src/sim/sleds.ts'),
     rank: existsSync(resolve(at, 'src/game/rank.ts')) ? await load('src/game/rank.ts') : null,
+    contracts: existsSync(resolve(at, 'src/game/contracts.ts')) ? await load('src/game/contracts.ts') : null,
+    lanterns: existsSync(resolve(at, 'src/game/lanterns.ts')) ? await load('src/game/lanterns.ts') : null,
+    almanac: existsSync(resolve(at, 'src/game/almanac.ts')) ? await load('src/game/almanac.ts') : null,
+    album: existsSync(resolve(at, 'src/game/album.ts')) ? await load('src/game/album.ts') : null,
     pools: {},
   };
   for (const mt of m.mountains.MOUNTAINS) {
@@ -222,7 +241,10 @@ export interface RunFacts {
   /** Choices the run made that change how the rest of it plays (CHOICE_EVENTS, a dash, a fork's channel). */
   choices: { tick: number; kind: string; detail?: string }[];
   /** Named tricks landed, by the combo they were in. */
-  tricks: { tick: number; name: string; family: string; combo: number }[];
+  tricks: { tick: number; name: string; family: string; key: string; combo: number }[];
+  /** Charms ridden through (ids) and synergies found (ids), on a SIM_VERSION 10 build. */
+  charms: number[];
+  synergies: number[];
   /** Set pieces met: key, variant index and whether won. */
   moments: { key: string; index: number; variant: number; won: boolean }[];
   /** The legend slot the run met (0 none). */
@@ -240,15 +262,17 @@ export interface RunFacts {
  *  showdown taken up). A dash and a fork's channel are read from today's sim. */
 export const CHOICE_EVENTS: Readonly<Record<string, (e: Any) => boolean>> = {
   dash: (e) => e.type === 'dash' && e.phase === 'start',
-  charm: (e) => e.type === 'charm' && (e.phase === undefined || e.phase === 'pick'),
-  showdown: (e) => e.type === 'showdown' && (e.phase === undefined || e.phase === 'start'),
+  // SIM_VERSION 10 (r8-sim's stable interfaces): a charm gate ridden through, and a showdown won (the sim raises
+  // 'rival' as the record's token is applied).
+  charm: (e) => e.type === 'charm',
+  showdown: (e) => (e.type === 'showdown' && (e.phase === undefined || e.phase === 'start')) || (e.type === 'rival' && e.kind === 'showdown'),
 };
 
 /** A trick's name as today's director calls it (director.ts trickWord), and its family. */
-function trickOf(halfTurns: number, flips: number): { name: string; family: string } | null {
+function trickOf(halfTurns: number, flips: number): { name: string; family: string; key: string } | null {
   const FLIPS = ['Backflip', 'Double Backflip', 'Triple Backflip'];
-  if (flips > 0) return { name: FLIPS[flips - 1] ?? `${flips} Backflips`, family: halfTurns > 0 ? 'spin+flip' : 'flip' };
-  if (halfTurns > 0) return { name: `Spin ${halfTurns * 180}`, family: 'spin' };
+  if (flips > 0) return { name: FLIPS[flips - 1] ?? `${flips} Backflips`, family: halfTurns > 0 ? 'spin+flip' : 'flip', key: 'backflip' };
+  if (halfTurns > 0) return { name: `Spin ${halfTurns * 180}`, family: 'spin', key: 'spin' };
   return null;
 }
 
@@ -272,9 +296,14 @@ interface RodeRun {
   gapAtEnd: Map<number, number>;
 }
 
-function makePilot(M: Mods, name: string, sim: Any, seed: number): Pilot {
+/** A pilot and how it spends its lantern. '<pilot>-prompted' is the clumsy pilot or the novice following the hints
+ *  (labpilots.ts prompted). */
+function makePilot(M: Mods, name: string, sim: Any, seed: number): { pilot: Pilot; spend: () => boolean } {
   const kit: Kit = { gateX: M.moments.gateX, pathX: M.moments.pathX, machineZ: M.moments.machineZ };
-  return name === 'clumsy' ? clumsy(sim, seed) : classic(name as 'mid', sim, seed, kit);
+  const base = name.replace(/-prompted$/, '');
+  const pilot = base === 'clumsy' ? clumsy(sim, seed) : classic(base as 'mid', sim, seed, kit);
+  const spend = spenderFor(base, sim, seed);
+  return name.endsWith('-prompted') ? prompted(pilot, spend, sim, seed, base === 'clumsy' ? 'clumsy' : 'novice') : { pilot, spend };
 }
 
 function ride(M: Mods, p: PlannedRun): RodeRun {
@@ -288,8 +317,9 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   };
   const run = new M.run.Run(p.mountain.seed, p.chaos, p.sled, src);
   const sim = run.sim;
-  src.pilot = makePilot(M, p.pilot, sim, p.pilotSeed);
-  src.spend = spenderFor(p.pilot, sim, p.pilotSeed);
+  const made = makePilot(M, p.pilot, sim, p.pilotSeed);
+  src.pilot = made.pilot;
+  src.spend = made.spend;
   const gm = new M.ghosts.GhostManager();
   gm.setField(p.entries);
   for (const t of gm.tracks) {
@@ -304,7 +334,7 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   gm.tracks = gm.tracks.filter((t: Any) => t.ready);
   run.draftProbe = gm.draftProbe;
   const START_TICKS: number = M.race.START_TICKS ?? 360;
-  const facts: RunFacts = { pilot: p.pilot, key: p.key, mountainId: p.mountain.id, mi: p.mi, chaos: p.chaos, sum: null, finished: false, time: null, distance: 0, seconds: 0, stageSeconds: [], passes: [], firstPass: null, firstPerfect: null, firstDash: null, choices: [], tricks: [], moments: [], legend: 0, gates: [], tumbles: 0, wards: 0, events: {}, field: [], ticks: 0 };
+  const facts: RunFacts = { pilot: p.pilot, key: p.key, mountainId: p.mountain.id, mi: p.mi, chaos: p.chaos, sum: null, finished: false, time: null, distance: 0, seconds: 0, stageSeconds: [], passes: [], firstPass: null, firstPerfect: null, firstDash: null, choices: [], tricks: [], charms: [], synergies: [], moments: [], legend: 0, gates: [], tumbles: 0, wards: 0, events: {}, field: [], ticks: 0 };
   let combo = 0;
   let inCombo = false;
   let wallRides = 0;
@@ -312,6 +342,7 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   let grinds = 0;
   let forkAt = -1;
   const met = new Map<number, number>();
+  const named = !!M.tricks?.TRICKS;
   const specs: Any[] = M.moments.planMoments ? M.moments.planMoments(sim.course) : [];
   const variantOf = (index: number): number => {
     const s = specs.find((q) => q.index === index);
@@ -340,7 +371,7 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
       if (e.type === 'dash' && e.phase === 'start' && facts.firstDash === null) facts.firstDash = tick;
       if (e.type === 'land' && !e.botched) {
         if (e.quality === 'perfect' && facts.firstPerfect === null) facts.firstPerfect = tick;
-        const t = trickOf(e.halfTurns, e.flips);
+        const t = named ? null : trickOf(e.halfTurns, e.flips);
         if (t) {
           if (!inCombo) {
             combo++;
@@ -349,14 +380,17 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
           facts.tricks.push({ tick, ...t, combo });
         }
       }
-      // The sim lane's named tricks, when its batch lands: one entry each.
-      if (e.type === 'trick' && typeof e.name === 'string') {
+      // SIM_VERSION 10's named tricks: every one is a style event carrying its id (tricks.ts TRICKS).
+      if (named && e.type === 'style' && typeof e.trick === 'number' && e.trick > 0) {
+        const def = M.tricks.TRICKS[e.trick];
         if (!inCombo) {
           combo++;
           inCombo = true;
         }
-        facts.tricks.push({ tick, name: e.name, family: e.name, combo });
+        facts.tricks.push({ tick, name: def?.name ?? String(e.trick), family: def?.name ?? String(e.trick), key: def?.key ?? String(e.trick), combo });
       }
+      if (e.type === 'charm' && typeof e.id === 'number' && e.id >= 0) facts.charms.push(e.id);
+      if (e.type === 'synergy' && typeof e.id === 'number') facts.synergies.push(e.id);
       if (e.type === 'comboBank' || e.type === 'comboLost' || e.type === 'crash' || (e.type === 'tumble' && e.phase === 'start')) inCombo = false;
       if (e.type === 'tumble' && e.phase === 'start') facts.tumbles++;
       if (e.type === 'ward') facts.wards++;
@@ -455,7 +489,7 @@ export interface ResultsView {
   nextUnlock: string | null;
   missions: string[];
   /** Milestone 3's chosen goal for the one button, when its build has one. */
-  spinePrimary?: { kind: string; label: string } | null;
+  spinePrimary?: { kind: string; label: string; names: string[] } | null;
 }
 
 export interface CareerRun {
@@ -466,7 +500,34 @@ export interface CareerRun {
   results: ResultsView;
   goals: Goal[];
   /** The save's figures after this run (for the economy table). */
-  after: { gifts: number; lifetimeGifts: number; ghostsPassed: number; open: string[]; twelve: number; beaten: string[]; stars: number; missions: number; streak: number; climb: Record<string, Any>; mastery: Record<string, Any> };
+  after: {
+    gifts: number;
+    lifetimeGifts: number;
+    ghostsPassed: number;
+    open: string[];
+    twelve: number;
+    beaten: string[];
+    stars: number;
+    missions: number;
+    streak: number;
+    climb: Record<string, Any>;
+    mastery: Record<string, Any>;
+    /** The spine: Almanac pages turned, charms in the pool, stickers held, chapter pages opened. */
+    page: number;
+    charms: number;
+    stickers: number;
+    chapterPages: number;
+    /** The garage: pieces bought so far and this run, and what is still on the shelf to want (pieces, gifts). */
+    bought: number;
+    boughtNow: string[];
+    wanted: { pieces: number; gifts: number };
+    /** The Almanac's pages opened, and the stickers held (for the run 50 bar). */
+    claimed: number;
+    albumGot: string[];
+  };
+  /** XP the run paid, and the rival it lost to (for the rematch goal). */
+  xp: number;
+  lostTo: LostTo | null;
 }
 
 /** Runs read back for "reachable next run": the pilot's last this many. */
@@ -531,6 +592,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
   let dailyDone = '';
   let cupDone = '';
   let sameStreak = 0;
+  const shop = { bought: [] as string[] };
   for (let n = 0; n < o.runs; n++) {
     // The clock: a new day after perDay runs, and a new session with it (its first run is plain).
     const di = Math.floor(n / perDay);
@@ -566,7 +628,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     sessionRuns++;
     const mi = MOUNTAINS.indexOf(mountain);
     // The duel on this mountain (app.ts duelHere), and the field (app.ts pickField).
-    const duel = mi >= 0 ? M.twelve.duelOn(d.twelve, mi, open) : null;
+    // (Round 8: the duels wait for a save's third run, duelOn's `runs`; an older build ignores it.)
+    const duel = mi >= 0 ? M.twelve.duelOn(d.twelve, mi, open, d.runs) : null;
     const entries = fieldFor(M, d, { key, pool, chaos, kind, duel, promised: promised?.key === key ? promised : null });
     promised = null;
     const bestAtStart = d.best[key] ? { ...d.best[key] } : null;
@@ -611,11 +674,13 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     if (settled.cup && settled.cup.best > cupMedalBefore) gains.push({ kind: 'medal', text: `Cup ${M.settle.MEDAL_NAMES[settled.cup.best]}`, durable: true });
     let climb: Any = null;
     let board: Any = null;
+    let fresh: string[] = [];
+    let oc: Any = null;
     if (mi >= 0) {
       board = M.ladder.boardOf(M.pools[mountain.id]);
       climb = M.ladder.settleClimb(d, key, board, M.sim.SIM_VERSION, climbAtStart, { standing: you, best: M.ladder.bestStanding(d.best[key]), bestBefore: M.ladder.bestStanding(bestAtStart), ticks: sim.stageTicks });
-      if (climb.spot.rank !== null && climb.rankWas !== null && climb.spot.rank < climb.rankWas) gains.push({ kind: 'rank', text: `Rank ${climb.spot.rank} of ${climb.spot.of}`, durable: true });
-      else if (climb.spot.rank !== null && climb.rankWas === null && !bestAtStart) gains.push({ kind: 'rank', text: `On the ladder: rank ${climb.spot.rank}`, durable: true });
+      if (climb.spot.rank !== null && climb.rankWas !== null && climb.spot.rank < climb.rankWas) gains.push({ kind: 'rung', text: `Rank ${climb.spot.rank} of ${climb.spot.of}`, durable: true });
+      else if (climb.spot.rank !== null && climb.rankWas === null && !bestAtStart) gains.push({ kind: 'rung', text: `On the ladder: rank ${climb.spot.rank}`, durable: true });
       for (const at of climb.fresh) gains.push({ kind: 'medal', text: at >= 3 ? 'Run medal' : `Stage ${at + 1} medal`, durable: true });
       // Mastery.
       d.mastery ??= {};
@@ -626,7 +691,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
           return [r.key, pg && (pg.finishTick ?? -1) > 0 ? pg.finishTick / 60 : null];
         }),
       );
-      const fresh: string[] = M.mastery.settleMastery(sim.course, key, rec, { gates: f.gates, moments: f.moments.map((q) => ({ key: q.key, took: 0, total: 0, clean: false, won: q.won })), time: f.time, riderTimes, clean: f.tumbles === 0 && f.wards === 0 }, climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
+      fresh = M.mastery.settleMastery(sim.course, key, rec, { gates: f.gates, moments: f.moments.map((q) => ({ key: q.key, took: 0, total: 0, clean: false, won: q.won })), time: f.time, riderTimes, clean: f.tumbles === 0 && f.wards === 0 }, climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
       d.mastery[key] = rec;
       if (fresh.length) {
         d.gifts += M.mastery.STAR_GIFTS * fresh.length;
@@ -639,7 +704,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
       const t = (d.twelve = M.twelve.readTwelve(d.twelve));
       const standings = new Map<string, Any>();
       for (const tr of rode.gm.tracks) if (tr.entry.kind !== 'you') standings.set(tr.entry.name, M.ghosts.trackStanding(tr));
-      const oc = M.twelve.settleTwelve(t, duel, you, standings);
+      oc = M.twelve.settleTwelve(t, duel, you, standings);
       if (!t.beaten.length) delete d.twelve;
       const pay = oc.fell ? M.twelve.DUEL_GIFTS : oc.crowned ? M.twelve.CROWN_GIFTS : 0;
       d.gifts += pay;
@@ -650,13 +715,64 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     if (f.sum.ghostsPassed > 0) gains.push({ kind: 'pass', text: `${f.sum.ghostsPassed} passed`, durable: false });
     if (best.newTop || best.newTime) gains.push({ kind: 'best', text: best.newTime ? 'New best time' : 'New best', durable: false });
 
-    // Milestone 3's spine, on a build that has it.
+    // The rival the run lost to, nearest first: the duel's rider, the grudge, else the rider just ahead.
+    const lostTo = lostToOf(M, rode, you, duel, oc, grudgeAtStart);
+    // Milestone 3's spine, on a build that has it (rank.ts settleSpine, as the app calls it on the results).
     let spinePrimary: ResultsView['spinePrimary'] = null;
+    let xp = 0;
+    let page = 0;
     if (M.rank?.settleSpine) {
-      const sp = M.rank.settleSpine(d, f, { day: today, week });
-      for (const gn of sp?.gains ?? []) gains.push(gn);
-      spinePrimary = sp?.primary ?? null;
+      const held0 = M.ladder.medalsHeld(d.climb?.[key]);
+      const firstSeen = new Set<string>();
+      const tierOf = (text: string): number => (text.endsWith(' (III)') ? 3 : text.endsWith(' (II)') ? 2 : 1);
+      const sp = M.rank.settleSpine(d, {
+        key,
+        mi,
+        mountainId: mi >= 0 ? mountain.id : kind,
+        mirror: false,
+        day: today,
+        week,
+        sum: f.sum,
+        time: f.time,
+        stageSeconds: f.stageSeconds,
+        beaten: f.field.filter((q) => q.kind !== 'you' && !M.standing.aheadOf({ time: q.time, distance: q.distance }, you)).length,
+        passed: f.sum.ghostsPassed,
+        tricks: f.tricks.map((t) => {
+          const isNew = !firstSeen.has(t.key);
+          firstSeen.add(t.key);
+          return { key: t.key, fresh: isNew };
+        }),
+        moments: f.moments,
+        showdownsWon: f.choices.filter((c) => c.kind === 'showdown').length,
+        charms: f.charms.map((id) => Object.keys(M.almanac?.CHARM_IDS ?? {}).find((k) => M.almanac.CHARM_IDS[k] === id) ?? String(id)),
+        synergies: f.synergies.map((id) => M.album?.SYNERGY_KEYS?.[id] ?? String(id)),
+        legend: f.legend,
+        mood: chaos.mood,
+        missions: settled.missions.filter((v: Any) => v.justCompleted).map((v: Any) => tierOf(v.text)),
+        rungs: climb && climb.rankWas !== null && climb.spot.rank !== null ? Math.max(0, climb.rankWas - climb.spot.rank) : 0,
+        stageMedals: climb ? climb.fresh.filter((i: number) => i < 3).map((i: number) => held0.stages[i]) : [],
+        runMedal: climb && climb.fresh.includes(3) ? held0.run : 0,
+        dayMedal: settled.daily && settled.daily.best > dailyMedalBefore ? settled.daily.best : settled.cup && settled.cup.best > cupMedalBefore ? settled.cup.best : 0,
+        stars: fresh.length,
+        duelWon: oc?.fell && duel?.kind === 'duel' ? duel.rider.key : null,
+        crowned: !!oc?.crowned,
+        newBestTime: best.newTime && bestAtStart?.time !== undefined,
+        lostTo,
+        board,
+        open: MOUNTAINS.filter((_: Any, i: number) => open(i)).map((x: Any) => x.id),
+        dailyReady: !!o.daily,
+        cupPool: kind === 'cup' ? pool : undefined,
+        record: M.replay.recordToString(rode.run.toRecord(d.name)),
+      });
+      for (const gn of sp.gains) gains.push({ kind: gn.kind, text: gn.text, durable: true });
+      spinePrimary = { kind: sp.primary.goal?.kind ?? 'none', label: sp.primary.sub ? `${sp.primary.text}: ${sp.primary.sub}` : sp.primary.text, names: sp.primary.goal?.names ?? [] };
+      xp = sp.xp;
+      page = sp.pageAfter;
+      // The player takes the swap a mission held too long offers (one a day).
+      const sw = M.missions.swappable?.(d.missions, today);
+      if (sw) M.missions.swapMission(d.missions, sw, today, { unlockedBiomes: M.missions.unlockedBiomes(d.ghostsPassed) });
     }
+    const bought = spendGifts(M, d, today, shop);
 
     // What the card says today (app.ts showResults).
     const grudgeNext = M.save.rideableGrudge(d, key);
@@ -697,6 +813,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
       gains,
       results,
       goals: [],
+      xp,
+      lostTo,
       after: {
         gifts: d.gifts,
         lifetimeGifts: d.lifetimeGifts,
@@ -706,9 +824,18 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
         beaten: [...(d.twelve?.beaten ?? [])],
         stars: Object.values(d.mastery ?? {}).reduce((a: number, r: Any) => a + r.gates.length + r.moments.length + r.riders.length + (r.clean ? 1 : 0), 0) + Object.values(d.climb ?? {}).reduce((a: number, c: Any) => a + (c.medal ?? 0), 0),
         missions: d.missions.completed,
-        streak: M.settle.dailyStreakNow(d.daily, today),
+        streak: d.flame ? d.flame.streak : M.settle.dailyStreakNow(d.daily, today),
         climb: JSON.parse(JSON.stringify(d.climb ?? {})),
         mastery: JSON.parse(JSON.stringify(d.mastery ?? {})),
+        page,
+        charms: M.almanac ? popcount(M.almanac.almanacPool(d)) : 0,
+        stickers: Object.keys(d.album?.got ?? {}).length,
+        chapterPages: Object.values(d.chapters ?? {}).reduce((a: number, c: Any) => a + c.claimed, 0),
+        bought: shop.bought.length,
+        boughtNow: bought,
+        wanted: wantedLeft(M, d, today),
+        claimed: d.rank?.claimed ?? 0,
+        albumGot: Object.keys(d.album?.got ?? {}),
       },
     };
     out.push(cr);
@@ -896,19 +1023,123 @@ function nearGoals(M: Mods, d: Any, hist: CareerRun[], at: { today: string; week
   }
   // Today's Daily, not yet ridden: a streak day is one run away.
   if (at.daily && d.daily.last !== at.today) out.push({ kind: 'daily', text: "Today's Daily", reachable: true, gap: 0, names: ['Daily'] });
-  // Milestone 3's rank page, on a build that has it.
+  // Milestone 3's rank page, on a build that has it: in reach when the XP still to go is no more than the median run
+  // of the last few paid.
   if (M.rank?.nextPage) {
     const np = M.rank.nextPage(d);
     if (np) {
-      const xs = recent.map((r) => (r.gains.find((gn) => gn.kind === 'xp') as Any)?.amount ?? 0);
-      const per = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
-      out.push({ kind: 'page', text: np.label, reachable: np.need <= per, gap: np.need, names: [np.label] });
+      const xs = recent.map((r) => r.xp).sort((a, b) => a - b);
+      const per = xs.length ? xs[(xs.length - 1) >> 1] : 0;
+      out.push({ kind: 'page', text: np.label, reachable: per > 0 && np.need <= per, gap: np.need, names: [np.label] });
     }
+  }
+  // Contracts (today's not met, and the form contract): in reach when one of the last runs met the measure.
+  const c = d.contracts;
+  if (c && M.contracts) {
+    const value = (r: CareerRun, metric: string): number => {
+      const sm = r.facts.sum;
+      const m: Record<string, number> = { finish: sm.finished ? 1 : 0, passes: sm.ghostsPassed, perfects: sm.perfects, setPieces: r.facts.moments.filter((q) => q.won).length, tricks: new Set(r.facts.tricks.map((t) => t.key)).size, lights: sm.lights, nearMisses: sm.nearMisses, dashes: sm.dashes, stageGold: 0 };
+      return metric === 'time' ? (r.facts.time ?? Infinity) : (m[metric] ?? 0);
+    };
+    const inReach = (k: Any): boolean => recent.some((r) => (k.metric === 'time' ? r.facts.key === k.on && value(r, 'time') <= k.target : value(r, k.metric) >= k.target));
+    if (c.day === at.today) c.list.forEach((k: Any, i: number) => {
+      if (c.done & (1 << i)) return;
+      const text = M.contracts!.contractText(k);
+      out.push({ kind: 'contract', text, reachable: inReach(k), gap: 0, names: [text] });
+    });
+    if (c.form) {
+      const text = M.contracts.contractText(c.form);
+      out.push({ kind: 'form', text, reachable: inReach(c.form), gap: 0, names: [text] });
+    }
+  }
+  // A rematch with the rival this run lost to: in reach within 3 s of a duel's rider, 2 s or 50 m of anyone else.
+  const last = hist[hist.length - 1];
+  const l = last?.lostTo;
+  if (l) {
+    const near = l.seconds !== null ? l.seconds <= (l.kind === 'duel' ? 3 : 2) : l.metres !== null && l.metres <= 50;
+    out.push({ kind: 'rematch', text: `Rematch ${l.name}`, reachable: near, gap: l.seconds ?? (l.metres ?? 999) / 25, names: [l.name] });
   }
   return out;
 }
 
+/** The rival a run lost to, for a rematch: the duel's rider if the duel was lost, else the grudge if it rode and
+ *  beat you, else the rider who finished just ahead of you. Seconds when both finished, else metres. */
+export interface LostTo {
+  name: string;
+  kind: 'duel' | 'grudge' | 'rival';
+  seconds: number | null;
+  metres: number | null;
+}
+
+function lostToOf(M: Mods, rode: RodeRun, you: Any, duel: Any, oc: Any, grudge: Any): LostTo | null {
+  const A = M.standing.aheadOf;
+  const gapTo = (st: Any): { seconds: number | null; metres: number | null } => (st.time !== null && you.time !== null ? { seconds: Math.max(0, you.time - st.time), metres: null } : { seconds: null, metres: Math.max(0, st.distance - you.distance) });
+  const rows = rode.gm.tracks.filter((t: Any) => t.entry.kind !== 'you' && t.entry.kind !== 'friend').map((t: Any) => ({ t, st: M.ghosts.realStanding(t) })).filter((x: Any) => A(x.st, you));
+  if (duel?.kind === 'duel' && !oc?.fell) {
+    const row = rows.find((x: Any) => x.t.entry.name === duel.rider.name);
+    if (row) return { name: duel.rider.name, kind: 'duel', ...gapTo(row.st) };
+  }
+  if (grudge) {
+    const row = rows.find((x: Any) => x.t.entry.record === grudge.record);
+    if (row) return { name: grudge.name, kind: 'grudge', ...gapTo(row.st) };
+  }
+  let best: Any = null;
+  for (const x of rows) if (!best || A(best.st, x.st)) best = x;
+  return best ? { name: best.t.entry.name, kind: 'rival', ...gapTo(best.st) } : null;
+}
+
+function popcount(m: number): number {
+  let n = 0;
+  for (let x = m >>> 0; x; x &= x - 1) n++;
+  return n;
+}
+
+/** What is on the garage's shelves today that the save does not own: sleds, the four shelves, paints, and the
+ *  chapters' sets from their months on (almanac.ts shelfExtras, on a build that has it). */
+function shelfToday(M: Mods, d: Any, day: string): { id: string; price: number; buy: () => void }[] {
+  const out: { id: string; price: number; buy: () => void }[] = [];
+  for (const s of M.sleds.SLEDS) if (s.price > 0 && !d.ownedSleds.includes(s.id)) out.push({ id: `sled:${s.id}`, price: s.price, buy: () => (d.ownedSleds = [...d.ownedSleds, s.id]) });
+  const lists: Record<string, string> = { scarf: 'scarves', hat: 'hats', trail: 'trails', sound: 'sounds' };
+  for (const [shelf, items] of Object.entries(M.garage.SHELVES as Record<string, Any[]>)) {
+    const list = lists[shelf];
+    for (const it of items) if (it.price > 0 && !(d[list] ?? []).includes(it.id)) out.push({ id: `${shelf}:${it.id}`, price: it.price, buy: () => (d[list] = [...(d[list] ?? []), it.id]) });
+  }
+  for (const it of M.paints.PAINTS) if (it.price > 0 && !(d.paints ?? []).includes(it.id)) out.push({ id: `paint:${it.id}`, price: it.price, buy: () => (d.paints = [...(d.paints ?? []), it.id]) });
+  for (const e of M.almanac?.shelfExtras?.(day) ?? []) {
+    const list = e.shelf === 'scarf' ? 'scarves' : e.shelf === 'trail' ? 'trails' : 'paints';
+    if (!(d[list] ?? []).includes(e.id)) out.push({ id: `${e.shelf}:${e.id}`, price: e.price, buy: () => (d[list] = [...(d[list] ?? []), e.id]) });
+  }
+  // The Lantern Row (lanterns.ts), on a build that has it: each open town's next lantern.
+  const open = (id: string): boolean => M.twelve.mountainOpen(d, M.mountains.MOUNTAINS.find((m: Any) => m.id === id));
+  for (const l of M.lanterns?.lanternShelf(d, open) ?? []) out.push({ id: `lantern:${l.id}`, price: l.price, buy: () => (d.lit = [...(d.lit ?? []), l.id]) });
+  return out.sort((a, b) => a.price - b.price || (a.id < b.id ? -1 : 1));
+}
+
+/** The player spends its gifts as it can: the cheapest piece it does not own, again while the wallet holds. */
+function spendGifts(M: Mods, d: Any, day: string, shop: { bought: string[] }): string[] {
+  const got: string[] = [];
+  for (;;) {
+    const next = shelfToday(M, d, day)[0];
+    if (!next || next.price > d.gifts) break;
+    d.gifts -= next.price;
+    next.buy();
+    shop.bought.push(next.id);
+    got.push(next.id);
+  }
+  return got;
+}
+
+function wantedLeft(M: Mods, d: Any, day: string): { pieces: number; gifts: number } {
+  const left = shelfToday(M, d, day);
+  return { pieces: left.length, gifts: left.reduce((a, x) => a + x.price, 0) };
+}
+
 // ---------------------------------------------------------------- the bars, one function each
+
+/** What keeps a run from being dead (the main lane's ruling, round 8): a rank page turned (the Almanac's or a
+ *  chapter's), an unlock, a sticker, a duel won, a medal, a streak day, a mission or a contract done. A ladder rung,
+ *  a mastery star that is not a medal, XP that turns no page, a pass and a best do not count. */
+export const DEAD_RUN_COUNTS: ReadonlySet<string> = new Set(['page', 'chapter', 'unlock', 'sticker', 'duel', 'medal', 'streak', 'mission', 'contract']);
 
 /** No dead runs: every run gained something results shows. `strict` counts only what the save keeps (the brief's
  *  own list: a rank, an unlock, a sticker, a duel, a medal, a streak day, a mission); the loose list adds a pass and
@@ -920,7 +1151,7 @@ export function barNoDeadRuns(runs: readonly CareerRun[]): { runs: number; deadS
   const lacked: Record<string, number> = {};
   for (const r of runs) {
     for (const gn of r.gains) byKind[gn.kind] = (byKind[gn.kind] ?? 0) + 1;
-    if (!r.gains.some((gn) => gn.durable)) {
+    if (!r.gains.some((gn) => DEAD_RUN_COUNTS.has(gn.kind))) {
       deadStrict.push(r.n);
       // What it had instead (so we know what a fix has to beat).
       const had = r.gains.map((gn) => gn.kind).join('+') || 'nothing';
@@ -949,7 +1180,8 @@ export function barOneRunAway(runs: readonly CareerRun[]): { runs: number; withN
     for (const g of near) kinds[g.kind] = (kinds[g.kind] ?? 0) + 1;
     const says = (text: string | null | undefined, g: Goal): boolean => !!text && g.names.some((nm) => text.includes(nm));
     const sp = r.results.spinePrimary;
-    if (near.some((g) => says(r.results.primary, g) || (sp && sp.kind === g.kind))) primaryNames++;
+    const spNames = (g: Goal): boolean => !!sp && sp.kind === g.kind && g.names.some((nm) => sp.names.includes(nm));
+    if (sp ? near.some(spNames) : near.some((g) => says(r.results.primary, g))) primaryNames++;
     const lines = [r.results.primary, r.results.raceLine, r.results.nextUnlock, ...r.results.missions];
     if (near.some((g) => lines.some((l) => says(l, g)))) anywhere++;
   }
@@ -972,7 +1204,7 @@ export function barDecisions(runs: readonly RunFacts[]): { kinds: string[]; perR
  *  `trick` events land, their names are. */
 export function barExpression(M: Mods, runs: readonly RunFacts[]): { vocabulary: string[]; seen: string[]; bestCombo: string[]; bestComboFamilies: number } {
   const named = runs.some((f) => f.tricks.some((t) => t.family === t.name));
-  const vocabulary: string[] = M.sim.TRICKS ? M.sim.TRICKS.map((t: Any) => t.name ?? t) : named ? [...new Set(runs.flatMap((f) => f.tricks.map((t) => t.name)))] : ['spin', 'flip', 'spin+flip'];
+  const vocabulary: string[] = M.tricks?.TRICKS ? M.tricks.TRICKS.filter((t: Any) => t.id > 0).map((t: Any) => t.name) : named ? [...new Set(runs.flatMap((f) => f.tricks.map((t) => t.name)))] : ['spin', 'flip', 'spin+flip'];
   const seen = [...new Set(runs.flatMap((f) => f.tricks.map((t) => t.name)))].sort();
   let bestCombo: string[] = [];
   let bestFam = 0;
@@ -996,7 +1228,7 @@ export function firstRun(M: Mods, pilot: string, seed: number, mi = 0): RunFacts
   const mountain = M.mountains.MOUNTAINS[mi];
   const chaos = M.chaos.rollChaos(seed, 0, 0);
   // (A mountain past Pinecrest is ridden as if it were open, with no duel: the expression bar's rides.)
-  const duel = mi === 0 ? M.twelve.duelOn(undefined, 0, (i: number) => M.twelve.mountainOpen(d, M.mountains.MOUNTAINS[i])) : null;
+  const duel = mi === 0 ? M.twelve.duelOn(undefined, 0, (i: number) => M.twelve.mountainOpen(d, M.mountains.MOUNTAINS[i]), 0) : null;
   const entries = fieldFor(M, d, { key: mountain.id, pool: M.pools[mountain.id], chaos, kind: 'pool', duel, promised: null });
   return ride(M, { pilot, pilotSeed: seed, key: mountain.id, mountain, mi, chaos, sled: 0, entries, maxSeconds: 600 }).facts;
 }
@@ -1092,6 +1324,28 @@ export function barStillNew(M: Mods, runs: readonly CareerRun[], at = 50): { mou
         can = quick !== null && t !== null && quick - t <= 2;
       } else if (star.group === 'clean') can = cleanLately;
       if (can) reachable.push(star.label);
+    }
+    // Milestone 3's album, on a build that has it: a signature rider's record on this mountain not yet beaten (in
+    // reach within 2 s of your quickest recent run here), and its mirror (open by its page or by its home riders
+    // falling in duels, and in reach for a pilot that finishes here). The album's other stickers here (variants,
+    // legends, moods) are rolled, counted above or not counted.
+    if (M.album && last) {
+      const got = new Set(last.after.albumGot);
+      const save = { rank: { xp: 0, claimed: last.after.claimed }, twelve: { beaten: last.after.beaten } };
+      const finishesHere = here.slice(-REACH_RUNS).some((r) => r.facts.finished);
+      for (const st of M.album.albumCatalogue().filter((x: Any) => x.mountain === mt.id && (x.group === 'rival' || x.group === 'mirror'))) {
+        if (got.has(st.id)) {
+          seen++;
+          continue;
+        }
+        unseen++;
+        if (!open) continue;
+        if (st.group === 'mirror' ? M.almanac.mirrorOpen(save, mt.id) && finishesHere : (() => {
+          const r = M.roster.ROSTER.find((x: Any) => st.id === `rv:${mt.id}:${x.key}`);
+          const t = r ? M.twelve.riderTimeOn(r, mt.id) : null;
+          return quick !== null && t !== null && quick - t <= 2;
+        })()) reachable.push(st.name);
+      }
     }
     return { mountain: mt.id, open, seen, unseen, reachable };
   });

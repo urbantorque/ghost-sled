@@ -48,8 +48,8 @@ if (ONLY.has('nodead')) {
   const runs = ride('mid').slice(0, 30);
   const b = barNoDeadRuns(runs);
   console.log(`\nNO DEAD RUNS (mid, first ${runs.length} runs; bar: none dead)`);
-  console.log(`  dead, counting only what the save keeps (rank, unlock, sticker, duel, medal or star, streak day, mission): ${b.deadStrict.length}  runs ${b.deadStrict.join(' ') || '-'}`);
-  console.log(`  dead, counting a pass and a best too: ${b.deadLoose.length}  runs ${b.deadLoose.join(' ') || '-'}`);
+  console.log(`  dead (nothing of: a page turned, an unlock, a sticker, a duel won, a medal, a streak day, a mission or a contract): ${b.deadStrict.length}  runs ${b.deadStrict.join(' ') || '-'}`);
+  console.log(`  (with nothing at all, not even a pass or a best: ${b.deadLoose.length})`);
   console.log(`  what the strictly dead runs had instead: ${Object.entries(b.lacked).map(([k, v]) => `${k}:${v}`).join(' ') || '-'}`);
   console.log(`  gains by kind over the ${runs.length}: ${Object.entries(b.byKind).map(([k, v]) => `${k}:${v}`).join(' ')}`);
   // Past the bar's thirty, as the boards fill: dead runs by blocks of ten.
@@ -106,16 +106,17 @@ if (ONLY.has('first')) {
   const t = performance.now();
   console.log(`\nFIRST MINUTE (run 1 on Pinecrest, a fresh save, the field a first run lays; bar: a pass by 20 s, a perfect by 45 s, a dash by 60 s; the clumsy pilot finishes 26 of 30)`);
   const out: Record<string, unknown[]> = {};
-  for (const pilot of ['clumsy', 'novice']) {
+  for (const pilot of ['clumsy-prompted', 'novice-prompted', 'clumsy', 'novice']) {
     const rows = [];
     for (let i = 0; i < SEEDS; i++) {
       const f = firstRun(M, pilot, 1234 + i * 37);
       const b = barFirstMinute(f);
       rows.push(b);
       const s = (v: number | null): string => (v === null ? '  -  ' : v.toFixed(1).padStart(5));
-      console.log(`  ${pilot.padEnd(7)} seed ${i}  pass ${s(b.pass)}  perfect ${s(b.perfect)}  dash ${s(b.dash)}  ${f.finished ? `finished ${f.time?.toFixed(1)} s` : `fell at ${f.distance.toFixed(0)} m`}  ${b.ok ? 'MET' : 'short'}`);
+      console.log(`  ${pilot.padEnd(15)} seed ${i}  pass ${s(b.pass)}  perfect ${s(b.perfect)}  dash ${s(b.dash)}  ${f.finished ? `finished ${f.time?.toFixed(1)} s` : `fell at ${f.distance.toFixed(0)} m`}  ${b.ok ? 'MET' : 'short'}`);
     }
     out[pilot] = rows;
+    console.log(`  ${pilot.padEnd(15)} met all three: ${rows.filter((r) => r.ok).length} of ${rows.length}${pilot.endsWith('prompted') ? '   (the bar is judged on these)' : '   (blind: the floor)'}`);
   }
   const cf = clumsyFinishes(M, SMALL ? 2 : 6);
   console.log(`  clumsy finishes ${cf.finished} of ${cf.of}   (${secs(t)})`);
@@ -131,15 +132,22 @@ if (ONLY.has('new')) {
   json.stillNew = b;
 }
 
-/** The economy as the careers left it: what a player has at runs 1, 5, 20, 50 and 100. */
+/** The economy as the careers left it: what a player has at runs 1, 5, 20, 50 and 100. The player spends its
+ *  gifts as it can (the cheapest piece first); "to want" is what is still on the shelves that day. */
 for (const [pilot, runs] of Object.entries(careers)) {
-  console.log(`\nECONOMY (${pilot}): run  day         gifts  lifetime  passed  open  twelve  stars+medals  missions  streak`);
+  console.log(`\nECONOMY (${pilot}): run  day         page  charms  stickers  chapter  wallet  lifetime  bought  to want (gifts)  passed  open  twelve  missions  flame`);
   for (const k of [1, 5, 20, 50, 100]) {
     const r = runs[k - 1];
     if (!r) continue;
     const a = r.after;
-    console.log(`  ${String(k).padStart(5)}  ${r.day}  ${String(a.gifts).padStart(6)}  ${String(a.lifetimeGifts).padStart(8)}  ${String(a.ghostsPassed).padStart(6)}  ${String(a.open.length).padStart(4)}  ${String(a.twelve).padStart(6)}  ${String(a.stars).padStart(12)}  ${String(a.missions).padStart(8)}  ${String(a.streak).padStart(6)}`);
+    console.log(`  ${String(k).padStart(5)}  ${r.day}  ${String(a.page).padStart(4)}  ${String(a.charms).padStart(6)}  ${String(a.stickers).padStart(8)}  ${String(a.chapterPages).padStart(7)}  ${String(a.gifts).padStart(6)}  ${String(a.lifetimeGifts).padStart(8)}  ${String(a.bought).padStart(6)}  ${`${a.wanted.pieces} (${a.wanted.gifts})`.padStart(15)}  ${String(a.ghostsPassed).padStart(6)}  ${String(a.open.length).padStart(4)}  ${String(a.twelve).padStart(6)}  ${String(a.missions).padStart(8)}  ${String(a.streak).padStart(5)}`);
   }
+  const blocks: string[] = [];
+  for (let i = 0; i < runs.length; i += 10) {
+    const xs = runs.slice(i, i + 10).map((r) => r.xp).sort((x, y) => x - y);
+    blocks.push(`${i + 1}-${i + xs.length}:${xs[(xs.length - 1) >> 1]}`);
+  }
+  console.log(`  median XP a run, by ten runs: ${blocks.join(' ')}`);
 }
 
 console.log(`\ntotal ${secs(t0)}`);

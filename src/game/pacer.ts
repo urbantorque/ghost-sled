@@ -60,8 +60,37 @@ const STRING_TIGHT = 200;
 /** Samples either side a slow rider's change of rate is eased over: about a quarter of a second. */
 const AIR_EASE = 8;
 
+/** The first pass (round 8, G10): on a first run one rider, the front of the string (the quickest record, so it can, leads you
+ *  off the line by up to OPENER_LEAD metres, comes back to OPENER_BACK behind you by OPENER_PASS_Z, so a first-timer
+ *  overtakes a real rider in the first twenty seconds, then eases to its place on the string by OPENER_END. */
+export const OPENER_LEAD = 18;
+export const OPENER_BACK = -12;
+export const OPENER_TOP_Z = 110;
+export const OPENER_PASS_Z = 250;
+export const OPENER_END = 480;
+
+/** The rider of n who is the opener, or -1 with too few to spare one. */
+export function openerOf(n: number): number {
+  return n >= 3 ? n - 1 : -1;
+}
+
+const smooth = (t: number): number => {
+  const k = Math.min(1, Math.max(0, t));
+  return k * k * (3 - 2 * k);
+};
+
 /** Where rider i of n (slowest first) aims, in metres off your position: + is ahead of you. */
 export function stringOffset(i: number, n: number, z: number, finishZ: number): number {
+  if (i === openerOf(n) && z < OPENER_END) {
+    if (z < OPENER_TOP_Z) return OPENER_LEAD * smooth(z / OPENER_TOP_Z);
+    if (z < OPENER_PASS_Z) return OPENER_LEAD + (OPENER_BACK - OPENER_LEAD) * smooth((z - OPENER_TOP_Z) / (OPENER_PASS_Z - OPENER_TOP_Z));
+    return OPENER_BACK + (onString(i, n, OPENER_END, finishZ) - OPENER_BACK) * smooth((z - OPENER_PASS_Z) / (OPENER_END - OPENER_PASS_Z));
+  }
+  return onString(i, n, z, finishZ);
+}
+
+/** A rider's place on the string, wandering, as it opens. */
+function onString(i: number, n: number, z: number, finishZ: number): number {
   const at = n > 1 ? i / (n - 1) : 0.5;
   const place = STRING_BACK + (STRING_FRONT - STRING_BACK) * at;
   const wander = WANDER * Math.sin((2 * Math.PI * z) / (WANDER_LEN + WANDER_STEP * i) + 1.9 * i);

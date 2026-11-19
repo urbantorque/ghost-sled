@@ -41,6 +41,14 @@ export function poolStanding(g: Pick<PoolGhostData, 'distance' | 'finishTick'>):
 /** The bundled pools by mountain id: the records the duels are ridden against. */
 const POOLS: Record<string, { ghosts: PoolGhostData[] }> = { pinecrest, frostfang, ember, sakura, lanternfall };
 
+/** A signature rider's time on any bundled mountain (seconds), or null with no finished record there: what a rival
+ *  sticker asks you to beat (album.ts). */
+export function riderTimeOn(r: Rider, mountainId: string): number | null {
+  const pool = POOLS[mountainId]?.ghosts;
+  const g = pool ? duelRecord(pool, r) : null;
+  return g ? poolStanding(g).time : null;
+}
+
 /** A rider's time on their own home ground in the bundled pools (seconds), or null with no finished record. */
 export function homeTime(r: Rider): number | null {
   const pool = POOLS[MOUNTAINS[r.home]?.id ?? '']?.ghosts;
@@ -147,8 +155,14 @@ export function duelMountain(d: Duel): number {
   return d.kind === 'final' ? KING.home : d.rider.home;
 }
 
-/** The duel a run on this mountain is, or null: only the next duel's own home ground. */
-export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mountain: number) => boolean): Duel | null {
+/** Runs a save rides before its first duel (round 8, G10): a first run teaches one idea at a time, so the duels wait
+ *  for the third run. */
+export const FIRST_DUEL_RUN = 2;
+
+/** The duel a run on this mountain is, or null: only the next duel's own home ground, and none in a save's first
+ *  FIRST_DUEL_RUN runs (`runs`: runs ridden before this one; omitted, as before round 8, nothing waits). */
+export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mountain: number) => boolean, runs?: number): Duel | null {
+  if (runs !== undefined && runs < FIRST_DUEL_RUN && !t?.beaten.length) return null;
   const d = nextDuel(t, open);
   return d && duelMountain(d) === mountain ? d : null;
 }
