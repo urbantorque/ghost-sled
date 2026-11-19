@@ -27,7 +27,9 @@ export type StyleKind =
   | 'grind'
   | 'phase'
   | 'skyGate'
-  | 'lanternGate';
+  | 'lanternGate'
+  /** A named air trick (tricks.ts) other than a plain spin or flip: its id rides in the event. */
+  | 'trick';
 
 export const STYLE_LABEL: Record<StyleKind, string> = {
   carve: 'Deep carve',
@@ -52,6 +54,7 @@ export const STYLE_LABEL: Record<StyleKind, string> = {
   phase: 'Phased',
   skyGate: 'Sky gate',
   lanternGate: 'Lantern gate',
+  trick: 'Trick',
 };
 
 export const COMBO_WINDOW_TICKS = 156; // 2.6 s at 60 Hz
@@ -71,7 +74,7 @@ export class Combo {
   banked = 0;
   best = 0;
   window: number;
-  private variety = new Map<StyleKind, number>();
+  private variety = new Map<string, number>();
 
   constructor(windowScale = 1) {
     this.window = Math.round(COMBO_WINDOW_TICKS * windowScale);
@@ -86,9 +89,10 @@ export class Combo {
     return m > MAX_MULTIPLIER ? MAX_MULTIPLIER : m;
   }
 
-  add(kind: StyleKind, base: number): StyleResult {
-    const f = this.variety.get(kind) ?? 1;
-    this.variety.set(kind, f * 0.7 < 0.2 ? 0.2 : f * 0.7);
+  /** `key`: what counts as the same move for the repeat cut (a named trick's own id; the kind by default). */
+  add(kind: StyleKind, base: number, key: string = kind): StyleResult {
+    const f = this.variety.get(key) ?? 1;
+    this.variety.set(key, f * 0.7 < 0.2 ? 0.2 : f * 0.7);
     const points = Math.round(base * f);
     this.pending += points;
     this.chain++;

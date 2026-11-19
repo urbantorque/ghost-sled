@@ -160,7 +160,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
   // A set piece's own notes (its own stream of chance, so the rest of the ride is what it always was).
   const mr = mulberry(seed ^ 0x51ce);
   const sloppy = skill === 'expert' ? 0.25 : 1;
-  const M = { index: -1, st: 0, dir: 0, at: -1, bias: 0, tap: 0, wait: 0, side: 0, flipped: false, pressed: false, airHold: 0 };
+  const M = { index: -1, st: 0, dir: 0, at: -1, bias: 0, tap: 0, wait: 0, side: 0, flipped: false, pressed: false, airHold: 0, pressT: 0 };
   const steerTo = (s: AnySim, target: (z: number) => number, gain: number, lat: number): number => {
     const look = s.z + 4 + s.speed * 0.35;
     const desired = Math.atan2(target(look) - s.x, look - s.z);
@@ -388,6 +388,7 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
       // the lip, read it so, took the flight for a hop, and spun where two flips were asked.)
       if (land.t < 0.5) return null;
       M.flipped = true;
+      M.pressT = 0;
       const need = Math.max(wantYaw / 9 + 0.5, wantPitch > 0 ? wantPitch / 6.8 + 0.6 : 0);
       M.st = land.t > need + 0.1 ? 1 : 0;
       M.dir = mr() < 0.5 ? 1 : -1;
@@ -402,8 +403,13 @@ export function classic(skill: 'novice' | 'mid' | 'expert' | 'line', sim: AnySim
     const coastPitch = (s.pitchRate * s.pitchRate) / (2 * 26);
     const flipping = wantPitch > 0 && Math.abs(s.airPitch) + coastPitch < wantPitch - 0.2 + M.bias && land.t > 0.45;
     if (M.wait > 0) M.wait--; // (a beat with the key up, so the flip's press is a fresh one)
-    else if (flipping) action = true;
-    else {
+    else if (flipping) {
+      action = true;
+      // (Round 8: a press with the steer to a side is a grab, so a spin on a flip waits for the flip's latch: the
+      // press goes in centred and the steer follows it.)
+      M.pressT++;
+      if (M.pressT <= 5) steer = 4;
+    } else {
       // The trick is in: stomp the landing.
       const w = land.t - P.stompBias;
       action = Math.abs(s.pitchRate) < 1 && w < 0.11 && w > 0.01;

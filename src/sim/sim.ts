@@ -5,6 +5,7 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
+import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TWEAK_LATE, grabTier, nameFlight } from './tricks';
 import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
@@ -146,7 +147,11 @@ export type SimEvent =
   | { type: 'grind'; phase: 'start' | 'end'; id: number }
   /** Near-miss styles may carry the edge gap (m), the side (+1 = obstacle on the sled's +x side), the
    *  nearest point on the obstacle (x, z), its kind and id. Optional and never hashed; filled later. */
-  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number }
+  | { type: 'style'; kind: StyleKind; points: number; chain: number; mult: number; gap?: number; side?: -1 | 1; x?: number; z?: number; obs?: ObstacleKind; id?: number; trick?: number; halfTurns?: number; flips?: number; tier?: number; late?: boolean; fresh?: boolean }
+  /** In the air (tricks.ts): a grab taken ('start', its side), a tier reached, a tweak begun, let go ('release'), let
+   *  go by the rider itself as it sets for the landing ('auto'); a rail's, a wall's or the sled's own move begun
+   *  ('move'). `trick` is the pose's trick id. */
+  | { type: 'grab'; phase: 'start' | 'tier' | 'tweak' | 'release' | 'auto' | 'move'; side: number; tier: number; trick: number }
   | { type: 'comboBank'; points: number; mult: number }
   | { type: 'comboLost'; points: number }
   /** A spirit light taken: its id, value (1 or 3), the charge it gave and where it was. */
@@ -256,6 +261,13 @@ export interface SledState {
   dash: number;
   /** Ticks the sled passes through obstacles without a dash's speed: after a ward, or a rescue. */
   ghost: number;
+  /** A grab held (tricks.ts): its side (-1, 1; 0 none), ticks held and tier; ticks a tweak has been held. */
+  grab: number;
+  grabTicks: number;
+  grabTier: number;
+  tweak: number;
+  /** The trick the rider is posed in now (tricks.ts TRICK; 0 none): a grab's tier, a move, the sled's own. */
+  move: number;
 }
 
 export interface AvalancheState {
@@ -340,6 +352,8 @@ export interface RunStats {
   /** The legend moment the run met (its slot, 0 for none), and the charge its lights and its ribbon gave. */
   legend: number;
   legendLit: number;
+  /** The named tricks landed this run, a bit each by id (tricks.ts). */
+  trickMask: number;
 }
 
 /** A set piece being played: which, from which tick, its count so far and how it stands. */
@@ -477,6 +491,11 @@ export class Sim {
       lantern: 0,
       dash: 0,
       ghost: 0,
+      grab: 0,
+      grabTicks: 0,
+      grabTier: 0,
+      tweak: 0,
+      move: 0,
     };
     this.plays = momentPlays(this.course, config.chaos);
     this.legend = legendFor(this.course, config.chaos);
@@ -526,6 +545,7 @@ export class Sim {
       momentMask: 0,
       legend: 0,
       legendLit: 0,
+      trickMask: 0,
     };
   }
 
@@ -622,6 +642,8 @@ export class Sim {
     s.airPitch = 0;
     s.spinRate = 0;
     s.pitchRate = 0;
+    this.clearGrab();
+    this.ft.hold = -1;
     s.drifting = false;
     s.driftCharge = 0;
     s.driftTier = 0;
@@ -692,7 +714,7 @@ export class Sim {
     else if (s.finished) this.coast();
     else if (s.grinding) this.grindStep(action, released);
     else if (s.grounded) this.groundStep(action, pressed, released);
-    else this.airStep(action, pressed, released);
+    else this.airStep(action, pressed, released, steerTarget);
 
     const riding = !s.finished && s.tumble === 0;
     const race = !this.homeward;
@@ -743,6 +765,18 @@ export class Sim {
   }
 
   /** `extra`: optional presentation fields spread into the event (never hashed, never scored). */
+  /** A named air trick, paid: its own lantern charge, the repeat cut keyed by its id, its id in the event. */
+  private trickStyle(id: number, points: number, units: number, call: { halfTurns: number; flips: number; tier: number; late: boolean }): void {
+    const fresh = (this.stats.trickMask & (1 << id)) === 0;
+    this.stats.trickMask |= 1 << id;
+    // A trick new to the run pays half again: the 200th run should still be finding things.
+    const base = Math.round(points * (fresh ? 1.5 : 1));
+    this.charge(units, true);
+    const kind: StyleKind = id === TRICK.spin ? 'spin' : id === TRICK.backflip ? 'flip' : 'trick';
+    const r = this.combo.add(kind, base, `t${id}`);
+    this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, trick: id, halfTurns: call.halfTurns, flips: call.flips, tier: call.tier, late: call.late, fresh });
+  }
+
   private style(kind: StyleKind, base: number, extra?: { gap: number; side: -1 | 1; x: number; z: number; obs: ObstacleKind; id: number }): void {
     this.charge(skillCharge(kind, base, extra ? extra.gap : -1), true);
     const r = this.combo.add(kind, base);
@@ -1026,8 +1060,62 @@ export class Sim {
   private coyote = 0;
   private coyoteRamp = false;
 
+  /** What the present flight holds (tricks.ts), read at touchdown and cleared at takeoff. `hold`: what the press
+   *  now held is, -1 none (the button up, or held over from the snow), 0 a fresh press not yet decided, 1 a flip,
+   *  2 a grab, 3 the sled's own move, 4 a rail's or a wall's move, 5 spent (a stomp's press, a grab let go for the
+   *  rider). `last*`: the press before it, for a double tap. `letGo`: the tick a grab was let go, and whether the
+   *  rider did it by itself. `fromRail`: off a rail's end; `fromWall`: off a wall ride, the wall's side. */
+  private readonly ft = {
+    hold: -1,
+    holdLen: 0,
+    lastRelease: -1000,
+    lastLen: 0,
+    lastHold: -1,
+    grabMax: 0,
+    tweakTicks: 0,
+    tweakLate: false,
+    special: 0,
+    specialTicks: 0,
+    specialDir: 0,
+    sig: 0,
+    sigTicks: 0,
+    letGo: -1000,
+    auto: false,
+    fromRail: false,
+    fromWall: 0,
+  };
+  /** Set by a grind's end for the takeoff it makes. */
+  private railOff = false;
+
+  private clearGrab(): void {
+    const s = this.s;
+    s.grab = 0;
+    s.grabTicks = 0;
+    s.grabTier = 0;
+    s.tweak = 0;
+    s.move = 0;
+  }
+
   private takeoff(kind: TakeoffKind): void {
     const s = this.s;
+    const ft = this.ft;
+    ft.hold = -1;
+    ft.holdLen = 0;
+    ft.lastRelease = -1000;
+    ft.lastHold = -1;
+    ft.grabMax = 0;
+    ft.tweakTicks = 0;
+    ft.tweakLate = false;
+    ft.special = 0;
+    ft.specialTicks = 0;
+    ft.sig = 0;
+    ft.sigTicks = 0;
+    ft.letGo = -1000;
+    ft.auto = false;
+    ft.fromRail = this.railOff;
+    this.railOff = false;
+    ft.fromWall = s.wallTicks >= WALL_RIDE_TICKS ? (s.x > this.course.centerX(s.z) ? 1 : -1) : 0;
+    this.clearGrab();
     this.airPressed = false;
     this.coyote = 0;
     s.grounded = false;
@@ -1042,7 +1130,93 @@ export class Sim {
     this.events.push({ type: 'takeoff', kind, vy: s.vy });
   }
 
-  private airStep(action: boolean, pressed: boolean, released: boolean): void {
+  /** The button and the steer in the air, read as tricks (tricks.ts): a fresh press decides in its first
+   *  LATCH_TICKS, to a side a grab and centred a flip; two quick taps are the sled's own move; a press just off
+   *  a rail or a wall ride is its move. Nothing starts in the last FLIP_GUARD_TICKS: a press there is a stomp. */
+  private airTricks(action: boolean, pressed: boolean, released: boolean, steerTarget: number): void {
+    const s = this.s;
+    const ft = this.ft;
+    const side = steerTarget >= GRAB_STEER ? 1 : steerTarget <= -GRAB_STEER ? -1 : 0;
+    if (released && ft.hold >= 0) {
+      if (ft.hold === 2) this.letGo(false);
+      else if (ft.hold === 3) s.move = 0;
+      ft.lastRelease = this.tick;
+      ft.lastLen = ft.holdLen;
+      ft.lastHold = ft.hold;
+      ft.hold = -1;
+      ft.holdLen = 0;
+    }
+    if (pressed) {
+      ft.holdLen = 0;
+      ft.hold = 0;
+      if (this.landingWithin(FLIP_GUARD_TICKS)) ft.hold = 5;
+      else if (ft.special === 0 && (ft.fromRail || ft.fromWall !== 0) && s.airTicks <= SPECIAL_WINDOW) {
+        ft.hold = 4;
+        ft.special = ft.fromRail ? TRICK.lamppost : TRICK.snowHare;
+        ft.specialTicks = SPECIAL_TICKS;
+        ft.specialDir = side !== 0 ? side : s.spinRate < 0 ? -1 : 1;
+        s.move = ft.special;
+        if (ft.special === TRICK.snowHare) {
+          // A bound off the wall, back into the run.
+          s.vx -= ft.fromWall * 3;
+          s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
+          s.velHeading = datan2(s.vx, s.vz);
+        }
+        this.events.push({ type: 'grab', phase: 'move', side: ft.specialDir, tier: 0, trick: ft.special });
+      } else if (ft.lastHold === 0 && ft.lastLen <= TAP_TICKS && this.tick - ft.lastRelease <= DOUBLE_GAP && side === 0) {
+        ft.hold = 3;
+        ft.sig = SIGNATURE[this.sled.id] ?? TRICK.pineBow;
+        s.move = ft.sig;
+        this.events.push({ type: 'grab', phase: 'move', side: 0, tier: 0, trick: ft.sig });
+      }
+    }
+    if (action && ft.hold >= 0) {
+      ft.holdLen++;
+      if (ft.hold === 0) {
+        if (side !== 0 && ft.holdLen <= GRAB_LATCH && !this.landingWithin(FLIP_GUARD_TICKS)) {
+          ft.hold = 2;
+          s.grab = side;
+          s.grabTicks = 0;
+          s.grabTier = 0;
+          this.events.push({ type: 'grab', phase: 'start', side, tier: 0, trick: TRICK.railGrab });
+        } else if (ft.holdLen >= LATCH_TICKS) ft.hold = 1;
+      }
+      if (ft.hold === 2 && s.grab !== 0) {
+        s.grabTicks++;
+        if (s.grabTicks > ft.grabMax) ft.grabMax = s.grabTicks;
+        const tier = grabTier(s.grabTicks);
+        if (tier > s.grabTier) {
+          s.grabTier = tier;
+          s.move = tier === 3 ? TRICK.spiritStretch : tier === 2 ? TRICK.lanternReach : TRICK.railGrab;
+          this.events.push({ type: 'grab', phase: 'tier', side: s.grab, tier, trick: s.move });
+        }
+        // Steer against the grab and the sled is shoved out the other way: a tweak, worth most late.
+        if (side === -s.grab && s.grabTier >= 1) {
+          if (s.tweak === 0) this.events.push({ type: 'grab', phase: 'tweak', side: s.grab, tier: s.grabTier, trick: TRICK.crosswind });
+          s.tweak++;
+          ft.tweakTicks++;
+          if (!ft.tweakLate && this.landingWithin(TWEAK_LATE)) ft.tweakLate = true;
+        } else s.tweak = 0;
+      } else if (ft.hold === 3) ft.sigTicks++;
+    }
+    if (ft.specialTicks > 0 && --ft.specialTicks === 0) {
+      if (s.move === ft.special) s.move = 0;
+      if (ft.special === TRICK.lamppost) s.spinRate = 0;
+    }
+  }
+
+  /** A grab let go: by the player (a stomp, if close enough to touchdown), or by the rider as it sets. */
+  private letGo(auto: boolean): void {
+    const s = this.s;
+    if (s.grab === 0) return;
+    this.events.push({ type: 'grab', phase: auto ? 'auto' : 'release', side: s.grab, tier: s.grabTier, trick: s.move });
+    this.ft.letGo = this.tick;
+    this.ft.auto = auto;
+    if (auto) this.ft.hold = 5;
+    this.clearGrab();
+  }
+
+  private airStep(action: boolean, pressed: boolean, released: boolean, steerTarget: number): void {
     const s = this.s;
     const c = this.course;
     s.airTicks++;
@@ -1060,6 +1234,7 @@ export class Sim {
     }
     if (action && this.airPressed) s.airHold++;
     else s.airHold = 0;
+    this.airTricks(action, pressed, released, steerTarget);
     s.vy -= this.gravity * DT;
 
     // Air control: a gentle lateral nudge.
@@ -1077,11 +1252,18 @@ export class Sim {
     // could not stop that in time, so a first-timer who only steered in the air came down sideways one flight
     // in four. Now the spin is stopped hard and the swing has time left: a spin alone lands sketchy at worst.
     const setting = s.airTicks > 8 && this.landingWithin(LAND_SET_TICKS);
+    // While grabbing, only steering with the grab's side spins (a little slower); against it is a tweak.
+    const ft = this.ft;
+    const spinIn = s.grab !== 0 ? (s.steer * s.grab > 0.3 ? s.steer : 0) : s.steer;
+    const spinMul = s.grab !== 0 ? 0.8 : 1;
     if (setting) {
       s.spinRate = approach(s.spinRate, 0, LAND_SET_SPIN * DT);
       s.airYaw = approach(s.airYaw, PI * Math.round(s.airYaw / PI), 4 * DT);
-    } else if (Math.abs(s.steer) > 0.3) {
-      s.spinRate = approach(s.spinRate, s.steer * spinMax, 34 * DT);
+    } else if (ft.special === TRICK.lamppost && ft.specialTicks > 0) {
+      // Swung round the rail's end: a half turn in the move's length.
+      s.spinRate = (ft.specialDir * PI) / (SPECIAL_TICKS * DT);
+    } else if (Math.abs(spinIn) > 0.3) {
+      s.spinRate = approach(s.spinRate, spinIn * spinMax * spinMul, 34 * DT);
     } else {
       s.spinRate = approach(s.spinRate, 0, 22 * DT);
       const nearest = PI * Math.round(s.airYaw / PI);
@@ -1090,7 +1272,7 @@ export class Sim {
     s.airYaw += s.spinRate * DT;
     // A flip never starts in the last FLIP_GUARD_TICKS before touchdown: a stomp held a little too
     // long used to tip the rider into the snow. One already under way carries on.
-    const flipping = action && s.airHold >= 7;
+    const flipping = action && s.airHold >= 7 && ft.hold === 1;
     const whole = TAU * Math.round(s.airPitch / TAU);
     // (A flip turns toward lower pitch, so past its half the nearest whole turn lies ahead of it.)
     const finishing = flipping && s.pitchRate < -1 && whole < s.airPitch;
@@ -1155,6 +1337,17 @@ export class Sim {
       s.pressStartedGrounded = false;
     }
 
+    // Still holding at touchdown: a grab (or the sled's own move) held deep, tier 2 and on, is a fall on a
+    // committed flight and sketchy on a short one. A short grab the rider lets go of as it lands: clean at best,
+    // never a stomp. (A first-timer's thumb on the button through a landing is a short grab almost always.)
+    const ft = this.ft;
+    const holding = s.grab !== 0 || ft.hold === 3;
+    const deep = holding && (s.grabTier >= 2 || (ft.hold === 3 && grabTier(ft.sigTicks) >= 2));
+    const flight = { halfTurns, flips, grabTicks: ft.grabMax, tweakTicks: ft.tweakTicks, tweakLate: ft.tweakLate, special: ft.special, sigTicks: ft.sigTicks, sig: ft.sig };
+    const letGo = ft.letGo >= 0 && !ft.auto && this.tick - ft.letGo <= LET_GO_TICKS && grabTier(ft.grabMax) >= 1;
+    this.clearGrab();
+    ft.hold = -1;
+
     if (airtime < 0.3 && halfTurns === 0 && flips === 0) {
       s.airYaw = 0;
       s.airPitch = 0;
@@ -1164,7 +1357,7 @@ export class Sim {
 
     // A short flight never wrecks: nobody meant that. Commit to a real one and land it wrong, and you go.
     const committed = airtime >= 0.75;
-    if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol)) {
+    if (committed && (pitchErr > 1.35 + tol || yawErr > 1.2 + tol || deep)) {
       s.airYaw = 0;
       s.airPitch = 0;
       // The landing is always said, whatever becomes of it: under a ward or the grace after a get-up it used to
@@ -1175,16 +1368,18 @@ export class Sim {
       return;
     }
 
-    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol;
-    const stomp = this.tick - s.lastPressTick <= 9 && airtime >= 0.4;
+    const sketchy = pitchErr > 0.72 + tol || yawErr > 0.62 + tol || deep;
+    // A stomp: a press in the last 9 ticks, or a grab let go there.
+    const stomp = (this.tick - s.lastPressTick <= 9 || letGo) && airtime >= 0.4 && !holding;
     const scale = sketchy ? 0.5 : 1;
-    const spinPts = halfTurns > 0 ? 150 * halfTurns * (1 + 0.25 * (halfTurns - 1)) * scale : 0;
-    const flipPts = flips > 0 ? 600 * flips * scale : 0;
-    const trickPts = spinPts + flipPts;
+    let trickPts = 0;
 
     if (airtime >= 0.5) this.style('air', Math.round(60 * airtime));
-    if (spinPts > 0) this.style('spin', Math.round(spinPts));
-    if (flipPts > 0) this.style('flip', Math.round(flipPts));
+    for (const t of nameFlight(flight)) {
+      const pts = t.points * scale;
+      trickPts += pts;
+      this.trickStyle(t.id, pts, t.units, t);
+    }
     this.stats.maxAirtime = Math.max(this.stats.maxAirtime, airtime);
     this.stats.maxHalfTurns = Math.max(this.stats.maxHalfTurns, halfTurns);
     this.stats.flips += flips;
@@ -1316,6 +1511,9 @@ export class Sim {
   private wipeout(cause: TumbleCause): void {
     const s = this.s;
     if (s.tumble > 0 || s.crashed) return;
+    // (Whatever was held in the air goes with the hit; the flight is never named.)
+    this.clearGrab();
+    this.ft.hold = -1;
     if (this.homeward || s.invuln > 0) {
       // Riding home nothing can go wrong: a landing that would have floored a racer just lands. The same for a
       // rider who has only just got up (or been warded): the first lip after a fall is never a second fall.
@@ -2095,6 +2293,7 @@ export class Sim {
     if (u < 1 && !off && !released) return;
     const popped = released;
     this.endGrind();
+    this.railOff = true;
     if (off) {
       s.vx += s.steer * 4;
       s.speed = Math.sqrt(s.vx * s.vx + s.vz * s.vz);
@@ -2596,6 +2795,8 @@ export class Sim {
     mixF(s.finished ? 1 : 0);
     mixF(s.grinding ? this.railU : -1);
     mixF(s.lantern);
+    mixF(s.grab);
+    mixF(s.grabTicks);
     mixF(s.dash);
     mixF(s.ghost);
     mixF(this.overcap);
