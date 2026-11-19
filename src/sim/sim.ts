@@ -5,13 +5,15 @@ import { MAX_RUN_TICKS, actionOf, draftOf, spiritOf, steerOf } from './input';
 import { Rng } from './prng';
 import { Combo, StyleKind } from './scoring';
 import { SledDef, sledById } from './sleds';
-import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TWEAK_LATE, grabTier, nameFlight } from './tricks';
+import { CHARM, type CharmGate, STARTER_POOL, laneOf, offersFor, synergiesOf } from './charms';
+import { SHOWDOWN_POINTS, SHOWDOWN_UNITS, STEAL_POINTS, STEAL_UNITS } from './rivals';
+import { DOUBLE_GAP, GRAB_LATCH, GRAB_STEER, LATCH_TICKS, LET_GO_TICKS, SIGNATURE, SPECIAL_TICKS, SPECIAL_WINDOW, TAP_TICKS, TRICK, TRICKS, TWEAK_LATE, grabTier, nameFlight } from './tricks';
 import { KINDLE_COLD, KINDLE_REACH, LEGEND_AHEAD, WAKE_MIN, pathOff, LEGEND_ID0, type LegendPlay, type MomentPlay, RIBBON_CAP, RIBBON_HW, RIBBON_RATE, coastSeconds, fallPace, fallZ, flamePace, gateX, legendFor, machineZ, momentPlays, pathX } from './moments';
 
 // The deterministic run simulation. One call to step() advances exactly one 60 Hz tick.
 
 /** Bump whenever simulation behaviour changes; bundled ghost pools record the version they were made with. */
-export const SIM_VERSION = 9;
+export const SIM_VERSION = 10;
 export const TICK_RATE = 60;
 export const DT = 1 / TICK_RATE;
 export const SLED_RADIUS = 0.55;
@@ -118,6 +120,12 @@ const SHATTER_UNITS = 8;
 const KINDLE_UNITS = 4;
 /** A legend moment (moments.ts) is said this far up the run from where it plays, and a runner never falls below
  *  this pace. */
+/** Spirit Flow (round 8): heat a whole level per this many base style points; it starts cooling after this many
+ *  dull ticks, a level every FLOW_COOL; heat runs a little over the top level so one quiet beat does not drop it. */
+const FLOW_HEAT_PER = 600;
+const FLOW_DULL = 300;
+const FLOW_COOL = 90;
+const FLOW_HEAT_MAX = 7;
 const LEGEND_WARN = 220;
 const LEGEND_PACE = 20;
 
@@ -178,12 +186,22 @@ export type SimEvent =
   | { type: 'drift'; phase: 'start' | 'tier' | 'release' | 'end'; tier: number }
   | { type: 'boost'; amount: number; source: 'drift' | 'perfect' | 'slingshot' | 'pop' }
   | { type: 'chaos'; phase: 'warn' | 'start' | 'end' | 'success'; event: ChaosEvent }
-  | { type: 'revive' };
+  | { type: 'revive' }
+  /** A charm gate crossed (charms.ts): the lane taken and the charm it gave (-1 for an empty arch). */
+  | { type: 'charm'; gate: number; lane: number; id: number }
+  /** A named pair of charms now held (charms.ts SYNERGIES). */
+  | { type: 'synergy'; id: number }
+  /** Spirit Flow's whole level changed (0 to 6). */
+  | { type: 'flow'; level: number; from: number }
+  /** A showdown won or a wisp stolen, as its log token is applied (rivals.ts). */
+  | { type: 'rival'; kind: 'showdown' | 'steal'; gain: number };
 
 export interface SimConfig {
   seed: number;
   chaos: ChaosRoll;
   sled: number;
+  /** The charms this rider may be offered (charms.ts, a 24-bit mask). Absent: STARTER_POOL. */
+  charmPool?: number;
 }
 
 export interface SledState {
@@ -228,7 +246,9 @@ export interface SledState {
   draftTicks: number;
   draftCharge: number;
   drafting: boolean;
+  /** Spirit Flow as the picture reads it, eased (0 to 6); `flowLevel` is the whole level that pays. */
   flow: number;
+  flowLevel: number;
   invuln: number;
   crashed: boolean;
   crashCause: CrashCause | null;
@@ -354,6 +374,12 @@ export interface RunStats {
   legendLit: number;
   /** The named tricks landed this run, a bit each by id (tricks.ts). */
   trickMask: number;
+  /** Spirit Flow: the highest level held a second or more, and the ticks ridden at each level (0 to 6). */
+  bestFlow: number;
+  flowTicks: number[];
+  /** Showdowns won and wisps stolen (rivals.ts). */
+  showdowns: number;
+  steals: number;
 }
 
 /** A set piece being played: which, from which tick, its count so far and how it stands. */
@@ -472,6 +498,7 @@ export class Sim {
       draftCharge: 0,
       drafting: false,
       flow: 0,
+      flowLevel: 0,
       invuln: 0,
       crashed: false,
       crashCause: null,
@@ -546,7 +573,14 @@ export class Sim {
       legend: 0,
       legendLit: 0,
       trickMask: 0,
+      bestFlow: 0,
+      flowTicks: [0, 0, 0, 0, 0, 0, 0],
+      showdowns: 0,
+      steals: 0,
     };
+    this.pool = (config.charmPool ?? STARTER_POOL) >>> 0;
+    this.charmGates = this.course.charmGateZs.map((z, index): CharmGate => ({ index, z, x: this.course.safeX(z), offers: [-1, -1, -1], lane: -1, pick: -1 }));
+    if (this.charmGates.length) this.charmGates[0].offers = offersFor(config.chaos.seed, 0, this.pool, []);
   }
 
   /** The run's set pieces and what their verbs hold: the variants its roll picked (moments.ts). */
@@ -566,6 +600,28 @@ export class Sim {
   finishBonus = 0;
   /** The tick each stage line was crossed. */
   readonly stageTicks: number[] = [];
+  /** The charm pool this run deals from, the run's charm gates (where, what each lane offers, what was taken),
+   *  the charms held in the order taken, and the same as a mask; the named pairs held, a bit each. */
+  readonly pool: number;
+  readonly charmGates: CharmGate[];
+  readonly charms: number[] = [];
+  charmMask = 0;
+  synergyMask = 0;
+  /** Spirit Flow's heat (style adds it, a dull stretch and a hit take it), and ticks since the last style. */
+  private heat = 0;
+  private dull = 0;
+  private flowHeld = 0;
+  private gateNext = 0;
+
+  /** Holds a charm (charms.ts CHARM). */
+  has(id: number): boolean {
+    return (this.charmMask & (1 << id)) !== 0;
+  }
+
+  /** Holds a named pair (charms.ts SYNERGIES id). */
+  hasPair(id: number): boolean {
+    return (this.synergyMask & (1 << id)) !== 0;
+  }
 
   get score(): number {
     return Math.floor(this.maxZ) + this.combo.banked + this.lightScore + this.finishBonus;
@@ -653,6 +709,7 @@ export class Sim {
     s.crashed = false;
     s.crashCause = null;
     s.flow = 0;
+    this.coolFlow(7);
     s.tumble = 0;
     s.fall = FALL_NONE;
     s.fallTick = -1;
@@ -736,8 +793,8 @@ export class Sim {
     const bankedNow = this.combo.tick(hold);
     if (bankedNow > 0) this.events.push({ type: 'comboBank', points: bankedNow, mult: this.combo.lastMult });
 
-    const flowTarget = this.combo.active ? Math.min(6, Math.floor(this.combo.chain / 4)) : 0;
-    s.flow = approach(s.flow, flowTarget, 1.5 * DT);
+    if (!s.crashed && !s.finished && !this.homeward) this.crossGates(prevZ);
+    this.flowStep();
     s.boostGlow = approach(s.boostGlow, s.boostPool > 0.2 ? 1 : 0, 4 * DT);
     if (s.invuln > 0) s.invuln--;
     if (s.ghost > 0) s.ghost--;
@@ -764,13 +821,130 @@ export class Sim {
     this.tick++;
   }
 
+  /** A charm gate crossed this tick: the lane the sled was in as it crossed the gate's line is its charm (a fall
+   *  eases the rider to the safe line, so a faller takes the middle). The next gate's offers are dealt now. */
+  private crossGates(prevZ: number): void {
+    const s = this.s;
+    const g = this.charmGates[this.gateNext];
+    if (!g || prevZ >= g.z || s.z < g.z) return;
+    this.gateNext++;
+    const u = s.z > prevZ ? (g.z - prevZ) / (s.z - prevZ) : 1;
+    const x = this.prevX + (s.x - this.prevX) * u;
+    g.lane = laneOf(g.x, x);
+    g.pick = g.offers[g.lane];
+    if (g.pick >= 0) {
+      this.charms.push(g.pick);
+      this.charmMask |= 1 << g.pick;
+      this.takeCharm(g.pick);
+    }
+    this.events.push({ type: 'charm', gate: g.index, lane: g.lane, id: g.pick });
+    for (const p of synergiesOf(this.charmMask)) {
+      if (this.synergyMask & (1 << p.id)) continue;
+      this.synergyMask |= 1 << p.id;
+      this.events.push({ type: 'synergy', id: p.id });
+    }
+    const next = this.charmGates[this.gateNext];
+    if (next) next.offers = offersFor(this.config.chaos.seed, next.index, this.pool, this.charms);
+  }
+
+  /** What a charm changes the moment it is taken (most are read where they act, through `has`). */
+  private takeCharm(id: number): void {
+    if (id === CHARM.festival) this.combo.stepLinks = 2;
+    else if (id === CHARM.memory) this.combo.repeatKeep = 0.5;
+  }
+
+  /** Spirit Flow (round 8, G6): style heats it, a dull five seconds cools it a level every 1.5 s, a hit costs it.
+   *  The whole level pays (charge and points) and the eased value is what the picture and the drag read. */
+  private flowStep(): void {
+    const s = this.s;
+    if (!s.crashed && !s.finished && s.tumble === 0) {
+      if (++this.dull >= FLOW_DULL && (this.dull - FLOW_DULL) % FLOW_COOL === 0 && this.heat > 0) this.heat = this.heat > 1 ? this.heat - 1 : 0;
+      this.stats.flowTicks[s.flowLevel]++;
+    }
+    this.setFlow();
+    s.flow = approach(s.flow, s.flowLevel, 1.5 * DT);
+    if (s.flowLevel > this.stats.bestFlow && ++this.flowHeld >= TICK_RATE) this.stats.bestFlow = s.flowLevel;
+  }
+
+  /** The whole level from the heat, said when it changes. */
+  private setFlow(): void {
+    const s = this.s;
+    if (this.heat > FLOW_HEAT_MAX) this.heat = FLOW_HEAT_MAX;
+    const level = Math.min(6, Math.floor(this.heat));
+    if (level === s.flowLevel) return;
+    this.events.push({ type: 'flow', level, from: s.flowLevel });
+    s.flowLevel = level;
+    this.flowHeld = 0;
+  }
+
+  /** Style heats Spirit Flow (its base points / FLOW_HEAT_PER; twice that under Spirit Drum) and resets the dull
+   *  clock. */
+  private heatUp(base: number): void {
+    this.heat += (base / FLOW_HEAT_PER) * (this.has(CHARM.spirit) ? 2 : 1);
+    this.dull = 0;
+    this.setFlow();
+  }
+
+  /** A hit cools it by whole levels (a fall: all of it). */
+  private coolFlow(levels: number): void {
+    this.heat = levels >= 7 ? 0 : Math.max(0, this.heat - levels);
+    this.setFlow();
+  }
+
+  /** Points as Spirit Flow pays them: +10% a level. */
+  private flowPoints(base: number): number {
+    return Math.round(base * (1 + 0.1 * this.s.flowLevel));
+  }
+
+  /** A showdown won (LogEvent.Showdown, at the start of the tick after the game layer or the generator decided it):
+   *  a whole cell and the points. */
+  showdownWon(): void {
+    if (this.s.crashed) return;
+    this.events.length = 0;
+    const before = this.s.lantern;
+    this.lightRaw(SHOWDOWN_UNITS);
+    this.stats.showdowns++;
+    this.style('showdown', SHOWDOWN_POINTS);
+    this.events.push({ type: 'rival', kind: 'showdown', gain: this.s.lantern - before });
+  }
+
+  /** A wisp stolen from a rival passed close (LogEvent.Steal): a third of a cell and the points. */
+  stealWisp(): void {
+    if (this.s.crashed) return;
+    this.events.length = 0;
+    const before = this.s.lantern;
+    this.lightRaw(STEAL_UNITS);
+    this.stats.steals++;
+    this.style('steal', STEAL_POINTS);
+    this.events.push({ type: 'rival', kind: 'steal', gain: this.s.lantern - before });
+  }
+
+  /** Light the lantern by exactly this much (no sled or flow scaling): what a rival gives is the same for all. */
+  private lightRaw(units: number): void {
+    const s = this.s;
+    const before = this.cells;
+    const got = Math.min(units, LANTERN_MAX - s.lantern);
+    if (got <= 0) return;
+    s.lantern += got;
+    this.stats.lit += got;
+    if (this.cells > before) this.events.push({ type: 'lantern', phase: 'lit', cells: this.cells });
+  }
+
   /** `extra`: optional presentation fields spread into the event (never hashed, never scored). */
   /** A named air trick, paid: its own lantern charge, the repeat cut keyed by its id, its id in the event. */
   private trickStyle(id: number, points: number, units: number, call: { halfTurns: number; flips: number; tier: number; late: boolean }): void {
     const fresh = (this.stats.trickMask & (1 << id)) === 0;
     this.stats.trickMask |= 1 << id;
-    // A trick new to the run pays half again: the 200th run should still be finding things.
-    const base = Math.round(points * (fresh ? 1.5 : 1));
+    // A trick new to the run pays half again (Crane's Memory: three times): the 200th run should still be finding
+    // things.
+    let pts = points * (fresh ? (this.has(CHARM.memory) ? 3 : 1.5) : 1);
+    const fam = TRICKS[id]?.family;
+    if (this.has(CHARM.paper) && (fam === 'grab' || id === TRICK.paperWheel || id === TRICK.craneFold || id === TRICK.spiritKnot)) pts *= 1.5;
+    if (this.has(CHARM.whirl) && call.halfTurns > 1 && (id === TRICK.spin || id === TRICK.paperWheel || id === TRICK.emberTwist || id === TRICK.spiritKnot)) pts *= 1 + 0.25 * (call.halfTurns - 1);
+    if (this.hasPair(3) && id === TRICK.paperWheel) pts *= 2;
+    if (this.has(CHARM.feather)) pts *= 0.75;
+    this.heatUp(pts);
+    const base = this.flowPoints(pts);
     this.charge(units, true);
     const kind: StyleKind = id === TRICK.spin ? 'spin' : id === TRICK.backflip ? 'flip' : 'trick';
     const r = this.combo.add(kind, base, `t${id}`);
@@ -779,7 +953,8 @@ export class Sim {
 
   private style(kind: StyleKind, base: number, extra?: { gap: number; side: -1 | 1; x: number; z: number; obs: ObstacleKind; id: number }): void {
     this.charge(skillCharge(kind, base, extra ? extra.gap : -1), true);
-    const r = this.combo.add(kind, base);
+    this.heatUp(base);
+    const r = this.combo.add(kind, this.flowPoints(base));
     if (extra) this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult, ...extra });
     else this.events.push({ type: 'style', kind, points: r.points, chain: r.chain, mult: r.mult });
   }
@@ -1432,7 +1607,6 @@ export class Sim {
     this.style('perfect', Math.max(0, Math.round(250 + trickPts * 0.4) - alreadyPts));
     const boost = Math.max(0, Math.min(10, 2.5 + 1.5 * (halfTurns * 0.5 + flips)) - alreadyBoost);
     s.boostPool += boost;
-    s.flow = Math.min(6, s.flow + 0.5);
     this.events.push({ type: 'boost', amount: boost, source: 'perfect' });
   }
 
@@ -1472,7 +1646,9 @@ export class Sim {
     if (units <= 0) return;
     const s = this.s;
     const before = this.cells;
-    const add = units * (skill ? this.sled.skillGain : this.sled.lightGain);
+    // Spirit Flow pays: +8% a level, on what skill and lights both give. (Guardian Wisp: lights 25% slower.)
+    let add = units * (skill ? this.sled.skillGain : this.sled.lightGain) * (1 + 0.08 * s.flowLevel);
+    if (!skill && this.has(CHARM.wisp)) add *= 0.75;
     const room = LANTERN_MAX - s.lantern;
     const got = add < room ? add : room;
     if (got <= 0) return;
@@ -1528,6 +1704,7 @@ export class Sim {
     if (s.lantern >= LANTERN) {
       s.lantern -= LANTERN;
       this.stats.wards++;
+      this.coolFlow(2);
       s.speed *= WARD_KEEP * this.sled.wardKeep;
       s.heading = s.velHeading;
       s.airYaw = 0;
@@ -1571,7 +1748,7 @@ export class Sim {
     s.boostPool = 0;
     s.carveTicks = 0;
     s.wallTicks = 0;
-    s.flow = 0;
+    this.coolFlow(7);
     s.draftTicks = 0;
     s.draftCharge = 0;
     s.airYaw = 0;
@@ -1700,6 +1877,7 @@ export class Sim {
     s.vz = sp * dcos(s.velHeading);
     if (out > 3) {
       s.wobble = 14;
+      this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
       const banked = this.combo.bank();
       if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
       this.events.push({ type: 'scrape', side, speed: sp });
@@ -2401,6 +2579,7 @@ export class Sim {
           s.vx = s.speed * dsin(s.velHeading);
           s.vz = s.speed * dcos(s.velHeading);
           s.wobble = 22;
+          this.coolFlow(this.has(CHARM.spirit) ? 2 : 1);
           const banked = this.combo.bank();
           if (banked > 0) this.events.push({ type: 'comboBank', points: banked, mult: this.combo.lastMult });
           this.events.push({ type: 'bump', id: o.id });
@@ -2810,6 +2989,11 @@ export class Sim {
     mixF(this.lg.phase);
     mixF(this.lg.n);
     mixF(this.lg.head);
+    mixF(this.charmMask);
+    mixF(this.heat);
+    mixF(s.flowLevel);
+    mixF(this.stats.showdowns);
+    mixF(this.stats.steals);
     return h >>> 0;
   }
 }

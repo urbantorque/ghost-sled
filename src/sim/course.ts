@@ -3,6 +3,7 @@ import { BiomeId, CourseBiome, MountainParams, isNamedSeed, lookOf, paramsForSee
 import { fbm1, noise1, noise2 } from './noise';
 import { Rng, hash32 } from './prng';
 import { momentPlays } from './moments';
+import { GATE_PAST_LINE, START_GATE_Z } from './charms';
 
 // The course is a pure function of its seed. +z is downhill, +x is the rider's right when facing
 // downhill, +y is up. Chunks are generated lazily and cached, but every chunk depends only on
@@ -2260,6 +2261,12 @@ export class Course {
 
     this.placeLights(chunk, rng, diff);
     return chunk;
+  }
+
+  /** Where the charm gates stand (charms.ts, round 8): on the start's run-in, and GATE_PAST_LINE past each stage
+   *  line, inside the calm threshold the course lays there. */
+  get charmGateZs(): readonly number[] {
+    return this.stages.map((st) => (st.index === 0 ? START_GATE_Z : st.z0 + GATE_PAST_LINE));
   }
 
   /** The sky gates, one a stage: over the stage's most open online kicker past the first 800 m, set for a

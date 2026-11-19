@@ -1,14 +1,18 @@
+import { STARTER_POOL } from './charms';
 import { ChaosEvent, ChaosRoll, Mood } from './chaos';
 import { LogEvent, decodeLog } from './input';
-import { SIM_VERSION, Sim } from './sim';
+import { SIM_VERSION, Sim, SimConfig } from './sim';
 
-// A RunRecord fully reproduces a run: seed + chaos + sled + input log. Score and distance are
+// A RunRecord fully reproduces a run: seed + chaos + sled + charm pool + input log. Score and distance are
 // carried for sorting and are verified by replay where it matters (tests, pool generation).
 
 export interface RunRecord {
   seed: number;
   chaos: ChaosRoll;
   sled: number;
+  /** The charms the rider could be offered (charms.ts, a 24-bit mask; SIM_VERSION 10). Absent: STARTER_POOL, in
+   *  the record's bytes and in its replay alike. */
+  charmPool?: number;
   /** Encoded input log (see input.ts). */
   inputs: Uint8Array;
   /** The run's length in ticks. A live run that finished records the tick it crossed the line here
@@ -21,7 +25,8 @@ export interface RunRecord {
 
 const MAGIC0 = 0x47; // G
 const MAGIC1 = 0x53; // S
-const VERSION = 2;
+/** 3 (SIM_VERSION 10): the charm pool, a u32 after the name. Bytes 0 to 27 are as version 2's. */
+const VERSION = 3;
 
 export function sanitizeName(name: string): string {
   const clean = name.replace(/[^A-Za-z0-9 _.\-]/g, '').trim();
@@ -30,7 +35,7 @@ export function sanitizeName(name: string): string {
 
 export function encodeRecord(r: RunRecord): Uint8Array {
   const name = sanitizeName(r.name);
-  const out = new Uint8Array(28 + name.length + r.inputs.length);
+  const out = new Uint8Array(32 + name.length + r.inputs.length);
   let o = 0;
   const u8 = (v: number) => {
     out[o++] = v & 255;
@@ -57,6 +62,7 @@ export function encodeRecord(r: RunRecord): Uint8Array {
   u32(Math.max(0, Math.round(r.distance * 10)));
   u8(name.length);
   for (let i = 0; i < name.length; i++) u8(name.charCodeAt(i));
+  u32(r.charmPool ?? STARTER_POOL);
   out.set(r.inputs, o);
   return out;
 }
@@ -84,9 +90,10 @@ export function decodeRecord(data: Uint8Array): RunRecord {
   const score = u32();
   const distance = u32() / 10;
   const nameLen = u8();
-  if (o + nameLen > data.length) throw new Error('run record truncated');
+  if (o + nameLen + 4 > data.length) throw new Error('run record truncated');
   let name = '';
   for (let i = 0; i < nameLen; i++) name += String.fromCharCode(data[o++]);
+  const charmPool = u32();
   if (mood > 6 || event > 4 || sled > 15) throw new Error('run record out of range');
   return {
     seed,
@@ -96,6 +103,7 @@ export function decodeRecord(data: Uint8Array): RunRecord {
     score,
     distance,
     name: sanitizeName(name),
+    charmPool,
     inputs: data.slice(o),
   };
 }
@@ -114,7 +122,8 @@ export interface RecordHeader {
  *  from an older build still says whose run it was, where, and how far. Throws on what is no record. */
 export function readHeader(data: Uint8Array): RecordHeader {
   if (data.length < 28 || data[0] !== MAGIC0 || data[1] !== MAGIC1) throw new Error('not a run record');
-  if (data[2] !== VERSION) throw new Error('unsupported run record version');
+  // (Version 2 and 3 share the header: an old link is still read as a target.)
+  if (data[2] !== VERSION && data[2] !== 2) throw new Error('unsupported run record version');
   const u32 = (o: number) => (data[o] | (data[o + 1] << 8) | (data[o + 2] << 16) | (data[o + 3] << 24)) >>> 0;
   const nameLen = data[27];
   if (28 + nameLen > data.length) throw new Error('run record truncated');
@@ -176,13 +185,26 @@ export function headerFromString(s: string): RecordHeader {
   return readHeader(fromBase64Url(s));
 }
 
+/** The SimConfig a record rides on: every replay builds its Sim from this, never by hand. */
+export function simConfigOf(r: Pick<RunRecord, 'seed' | 'chaos' | 'sled'> & { charmPool?: number }): SimConfig {
+  return { seed: r.seed, chaos: r.chaos, sled: r.sled, charmPool: r.charmPool ?? STARTER_POOL };
+}
+
+/** A log's event token, applied at the start of the tick it precedes: every replay path calls this, so a token
+ *  added later reaches them all. */
+export function applyLogEvent(sim: Sim, e: LogEvent): void {
+  if (e === LogEvent.Revive) sim.revive();
+  else if (e === LogEvent.Showdown) sim.showdownWon();
+  else if (e === LogEvent.Steal) sim.stealWisp();
+}
+
 /** Replay a record to completion (crash or end of log). Calls onTick after each tick. */
 export function replayRecord(r: RunRecord, onTick?: (sim: Sim) => void): Sim {
-  const sim = new Sim({ seed: r.seed, chaos: r.chaos, sled: r.sled });
+  const sim = new Sim(simConfigOf(r));
   const log = decodeLog(r.inputs);
   for (let t = 0; t < log.inputs.length; t++) {
     const ev = log.events.get(t);
-    if (ev) for (const e of ev) if (e === LogEvent.Revive) sim.revive();
+    if (ev) for (const e of ev) applyLogEvent(sim, e);
     sim.step(log.inputs[t]);
     onTick?.(sim);
   }

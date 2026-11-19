@@ -15,6 +15,10 @@ export const SPIRIT_BIT = 1 << 6;
 
 export enum LogEvent {
   Revive = 1,
+  /** A showdown won (rivals.ts): the sim lights a cell and pays it at the start of the next tick. */
+  Showdown = 2,
+  /** A wisp taken from a rival passed close (rivals.ts). */
+  Steal = 3,
 }
 
 export function packInput(steerLevel: number, action: boolean, draft: boolean, spirit = false): number {
