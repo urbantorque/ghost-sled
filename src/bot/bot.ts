@@ -1,13 +1,15 @@
 import { ChaosEvent, ChaosRoll } from '../sim/chaos';
 import { CHUNK_LEN, Course, Obstacle, Ramp } from '../sim/course';
-import { clamp, datan2, dcos, dsin, lerp, wrapAngle } from '../sim/dmath';
+import { clamp, datan2, dcos, dsin, lerp, smoothstep, wrapAngle } from '../sim/dmath';
 import { InputRecorder, packInput } from '../sim/input';
 import { Rng, hash32, hashFloat } from '../sim/prng';
 import { RunRecord } from '../sim/replay';
 import { DT, LANTERN, Sim, TICK_RATE } from '../sim/sim';
 import { Lines } from './lines';
 import type { RideStyle } from './roster';
-import { AirPlan, Flight, PlanResult, Rot, RotParams, predictFlight, runPlan, solveFlip, solveSpin } from './model';
+import { AirPlan, Flight, PlanResult, Rot, RotParams, actionAt, predictFlight, runPlan, solveFlip, solveSpin, steerAt } from './model';
+import { CHARM, LANE_W, charmFamily, synergiesOf } from '../sim/charms';
+import { GRAB_LATCH } from '../sim/tricks';
 import { type MomentPath, type MomentPlay, gateX, pathOff } from '../sim/moments';
 import { Scene } from './scene';
 
@@ -331,7 +333,19 @@ interface Air {
   /** Estimated touchdown tick. */
   land: number;
   stompBias: number;
+  /** Round 8: a grab (its side, 0 none), pressed at G0 and let go at G1 (late: into the landing, the stomp), and a
+   *  tweak against it on [T0, T1). */
+  gside: number;
+  G0: number;
+  G1: number;
+  g1Fixed: boolean;
+  gLate: boolean;
+  T0: number;
+  T1: number;
 }
+
+/** Set pieces a rider grabs nothing over: each wants its landings, its line or its flame. */
+const NO_GRAB: ReadonlySet<string> = new Set(['shatter', 'steps', 'surge', 'flourish', 'carry', 'slide', 'gates']);
 
 /** Ticks from deciding on a pre-planned move to the finger actually moving. */
 const MOTOR = 2;
@@ -347,11 +361,12 @@ export class Bot {
   private readonly rng: Rng;
   private readonly t: Traits;
   private readonly key: number;
-  private readonly rotP: RotParams;
+  private rotP: RotParams;
+  private readonly style: RideStyle | '';
   private readonly steer = new Channel(4);
   private readonly act = new Channel(0);
-  private readonly rotBuf: Rot = { steer: 0, spin: 0, yaw: 0, pr: 0, pitch: 0, hold: 0, armed: false, prev: false };
-  private readonly planBuf: AirPlan = { dir: 0, mag: 1, s0: 0, s1: 0, cruise: 0, f0: 0, f1: 0, stomp: -1 };
+  private readonly rotBuf: Rot = { steer: 0, spin: 0, yaw: 0, pr: 0, pitch: 0, hold: 0, armed: false, prev: false, kind: -1, len: 0, grab: 0 };
+  private readonly planBuf: AirPlan = { dir: 0, mag: 1, s0: 0, s1: 0, cruise: 0, f0: 0, f1: 0, stomp: -1, gside: 0, g0: 0, g1: 0, t0: 0, t1: 0 };
   private readonly res: PlanResult = { yawA: 0, yawB: 0, pitchA: 0, pitchB: 0, lat: 0, vlat: 0 };
   private mode: Mode = 'ride';
   private nextThink = 0;
@@ -397,12 +412,20 @@ export class Bot {
     this.scene = new Scene(sim.course);
     this.rng = new Rng(hash32(profile.seed, 0xb07));
     this.t = traitsFor(profile.skill, this.rng, profile.style);
+    this.style = profile.style ?? '';
     // The ambitious take a fork's risk route, so ghosts show the player it exists.
     const bold = this.rng.chance(this.t.ambition * (0.2 + 0.8 * this.t.skill));
     this.lines = new Lines(sim.course, profile.bold ?? bold);
     this.key = hash32(profile.seed, 0x5ee);
-    this.rotP = { spinMax: 9 * sim.sled.spin * sim.mood.spin, flipRate: 6.8 * sim.sled.flip * sim.mood.spin };
+    this.rotP = this.rotParams();
     this.nextThink = this.rng.int(2, 12);
+  }
+
+  /** The body's rates as the sim has them: the sled, the mood and the charms held (Whirlwind, Paper Kite). */
+  private rotParams(): RotParams {
+    const sim = this.sim;
+    const whirl = sim.has(CHARM.whirl);
+    return { spinMax: 9 * sim.sled.spin * sim.mood.spin * (whirl ? 1.2 : 1) * (sim.has(CHARM.paper) ? 0.85 : 1), flipRate: 6.8 * sim.sled.flip * sim.mood.spin * (whirl ? 0.8 : 1) };
   }
 
   /** The input byte for the tick about to be simulated. */
@@ -521,7 +544,59 @@ export class Bot {
     // (In the guide light's wake the line is the light's own, weave and all.)
     if (this.wake) return this.lines.safeX(z) + pathOff(this.wake, z);
     // (Down a slalom of sitting gates the line is the slalom itself, one smooth swing gate to gate.)
-    return this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off);
+    return this.lines.safeX(z) + (this.slalom ? this.slalomOff(this.slalom, z) : this.off) + this.charmOff(z);
+  }
+
+  /** The lane this rider rides for at each charm gate, chosen once its offers are dealt (-1 not yet). */
+  private readonly lanes: number[] = [-1, -1, -1];
+
+  /** Round 8: metres off the line toward the charm this rider wants at the gate ahead: in over the 100 m above it,
+   *  held through it, out again past it. The middle arch is the line itself. */
+  private charmOff(z: number): number {
+    const sim = this.sim;
+    for (const g of sim.charmGates) {
+      if (z < g.z - 110 || z > g.z + 25) continue;
+      if (g.lane >= 0 && z > g.z) return 0;
+      let lane = this.lanes[g.index];
+      if (lane < 0 && g.offers[1] >= 0) lane = this.lanes[g.index] = this.pickLane(g.offers);
+      if (lane < 0 || lane === 1) return 0;
+      const u = z < g.z - 40 ? smoothstep(g.z - 110, g.z - 40, z) : z <= g.z + 5 ? 1 : 1 - smoothstep(g.z + 5, g.z + 25, z);
+      // (Aim a metre inside the arch's middle, toward the line: the lane is 4.6 m wide.)
+      return (lane - 1) * (LANE_W - 0.6) * u;
+    }
+    return 0;
+  }
+
+  /** Which arch a rider of this kind rides for: the family its style wants (a racer speed, a stunt rider style, a
+   *  careful one survival: the middle, no steering at all), a named pair with what it holds above all for the
+   *  master and the wild; the crowd by its nerve, a novice mostly keeping to its line. */
+  private pickLane(offers: readonly number[]): number {
+    const t = this.t;
+    const rng = this.rng;
+    const held = this.sim.charmMask;
+    const want: Record<string, number> =
+      this.style === 'racer' || this.style === 'dasher' || this.style === 'drafter'
+        ? { speed: 3, style: 0.5, survival: 1 }
+        : this.style === 'stunt' || this.style === 'sky' || this.style === 'grinder'
+          ? { speed: 0.5, style: 3, survival: 1 }
+          : this.style === 'liner' || this.style === 'hoarder' || this.style === 'collector'
+            ? { speed: 0.5, style: 0.5, survival: 3 }
+            : { speed: 1 + t.tuck + t.dashRate, style: 0.5 + 2 * t.ambition, survival: 1.5 - t.skill };
+    // A first-timer mostly rides the line it is on: the middle.
+    if (!this.style && rng.chance(0.75 * (1 - t.skill))) return 1;
+    let best = 1;
+    let bestScore = -1;
+    for (let lane = 0; lane < 3; lane++) {
+      const id = offers[lane];
+      if (id < 0) continue;
+      let score = want[charmFamily(id)] * (0.6 + 0.8 * rng.next());
+      if ((this.style === 'master' || this.style === 'wild' || t.skill > 0.8) && synergiesOf(held | (1 << id)).length > synergiesOf(held).length) score += 4;
+      if (score > bestScore) {
+        bestScore = score;
+        best = lane;
+      }
+    }
+    return best;
   }
 
   /** The sitting gates this rider is threading (round 7's simfix), or null. */
@@ -1451,6 +1526,7 @@ export class Bot {
 
   private onTakeoff(now: number): void {
     const t = this.t;
+    this.rotP = this.rotParams();
     const planned = now - this.releasedAt <= 3;
     this.mode = 'air';
     this.armed = false;
@@ -1475,6 +1551,13 @@ export class Bot {
       over: 0,
       land: 0,
       stompBias: 0,
+      gside: 0,
+      G0: 0,
+      G1: 0,
+      g1Fixed: false,
+      gLate: false,
+      T0: 0,
+      T1: 0,
     };
     this.nextThink = now + (planned ? Math.max(2, Math.round(t.reaction * 0.35)) : t.reaction);
   }
@@ -1508,6 +1591,10 @@ export class Bot {
     r.hold = s.airHold;
     r.armed = this.armed;
     r.prev = this.act.value === 1;
+    const k = this.sim.airHoldKind;
+    r.kind = k === 3 || k === 4 ? 5 : k;
+    r.len = this.sim.airHoldLen;
+    r.grab = s.grab;
     return r;
   }
 
@@ -1564,14 +1651,21 @@ export class Bot {
       p.dir = 0;
       p.s0 = p.s1 = p.f0 = p.f1 = 0;
       p.stomp = -1;
+      p.gside = 0;
       return p;
     }
+    p.gside = a.gside;
+    p.g0 = a.G0 - now;
+    p.g1 = a.G1 - now;
+    p.t0 = a.T0 - now;
+    p.t1 = a.T1 - now;
     p.dir = a.dir;
     p.s0 = a.S0 - now;
     p.s1 = a.dir !== 0 ? a.S1 - now : p.s0;
     p.f0 = a.F0 - now;
     p.f1 = a.f > 0 ? a.F1 - now : p.f0;
-    p.stomp = a.stomp ? a.ST - now : -1;
+    // (A stomp pressed and not landed on within 10 ticks is let go: held on, it would be a flip.)
+    p.stomp = a.stomp && now - a.ST <= 10 ? a.ST - now : -1;
     return p;
   }
 
@@ -1619,6 +1713,7 @@ export class Bot {
     const spinning = r0.spin > 1.5 ? 1 : r0.spin < -1.5 ? -1 : 0;
     const f0 = MOTOR + (this.act.value === 1 ? 2 : 0);
     const plan = this.planBuf;
+    plan.gside = 0;
     plan.dir = 0;
     plan.mag = 1;
     plan.s0 = MOTOR;
@@ -1677,9 +1772,27 @@ export class Bot {
     a.f = fl;
     this.lastTrick = fl > 0 ? 10 + fl : k;
     a.dir = k > 0 ? dir : 0;
-    a.S0 = now + MOTOR;
+    // (Round 8: a press with the steer to a side is a grab, so a spin on a flip starts once the flip's press has
+    // latched, steer centred.)
+    const s0 = k > 0 && fl > 0 ? f0 + GRAB_LATCH + 1 : MOTOR;
+    a.S0 = now + s0;
     a.F0 = now + f0;
+    plan.s0 = s0;
     plan.f1 = f0;
+    // Round 8: a grab, by appetite. Alone or on a spin (its side the spin's: a Paper Wheel), set before the spin is
+    // solved, since a grab spins slower; after a flip's release (a Crane Fold), once the flip is solved. Let go into
+    // the landing (the stomp, and the risk: a deep grab still held at touchdown is a fall) or well before it.
+    const free = !piece || !NO_GRAB.has(piece.verb);
+    const gWant = free && !this.cooling && nB >= 50 && rng.chance(t.ambition * (0.25 + 0.55 * t.skill) * (this.lastGrab ? 0.45 : 1));
+    a.gside = 0;
+    a.gLate = rng.chance(t.stompRate * 0.85);
+    const gOff = a.gLate ? 4 : 15;
+    if (gWant && fl === 0 && nEst - gOff - MOTOR >= 20) {
+      a.gside = k > 0 ? dir : rng.chance(0.5) ? 1 : -1;
+      a.G0 = now + MOTOR;
+      a.G1 = now + nEst - gOff;
+      this.grabPlan(plan, now);
+    }
     if (a.dir !== 0) {
       plan.dir = a.dir;
       solveSpin(r0, plan, k, nA, nB, this.rotP);
@@ -1688,13 +1801,44 @@ export class Bot {
     if (a.f > 0) {
       solveFlip(r0, plan, a.f, nA, nB, this.rotP);
       a.F1 = now + plan.f1;
+      const g0 = plan.f1 + 3;
+      if (gWant && nEst - gOff - g0 >= 20 && g0 < nEst - 24) {
+        a.gside = rng.chance(0.5) ? 1 : -1;
+        a.G0 = now + g0;
+        a.G1 = now + nEst - gOff;
+      }
     }
+    a.T0 = a.T1 = 0;
+    if (a.gside !== 0) {
+      // (Let go into the landing, the press is not needed: that let-go is the stomp.)
+      if (a.gLate) a.stomp = false;
+      // A skilled rider shoves it out late: a Crosswind.
+      if (t.skill > 0.55 && rng.chance(t.ambition * 0.5) && a.G1 - a.G0 >= 40) {
+        a.T0 = a.G1 - 22;
+        a.T1 = a.G1 - 10;
+      }
+      this.grabPlan(plan, now);
+    }
+    this.lastGrab = a.gside !== 0;
     // Human error: now and then a rotation is held far too long.
     if ((a.k > 0 || a.f > 0) && rng.chance(t.blunder)) a.over = 1;
     a.land = now + nEst;
     a.ST = now + stompOff;
     this.commit(now);
   }
+
+  /** The grab's part of the shared plan buffer, in steps from now. */
+  private grabPlan(plan: AirPlan, now: number): void {
+    const a = this.air;
+    if (!a) return;
+    plan.gside = a.gside;
+    plan.g0 = a.G0 - now;
+    plan.g1 = a.G1 - now;
+    plan.t0 = a.T0 - now;
+    plan.t1 = a.T1 - now;
+  }
+
+  private lastGrab = false;
 
   /** Re-solve the releases with a fresher (more accurate) estimate of the touchdown. */
   private refineTrick(now: number, nEst: number): void {
@@ -1714,6 +1858,14 @@ export class Bot {
       a.F1 = now + plan.f1;
     }
     if (!a.stFixed) a.ST = now + nEst - 3;
+    if (a.gside !== 0 && !a.g1Fixed) {
+      const was = a.G1;
+      a.G1 = Math.max(a.G0 + 16, now + nEst - (a.gLate ? 4 : 15));
+      if (a.T1 > 0) {
+        a.T0 += a.G1 - was;
+        a.T1 += a.G1 - was;
+      }
+    }
     a.land = now + nEst;
     this.commit(now);
   }
@@ -1736,6 +1888,12 @@ export class Bot {
       if (a.over > 0) a.F1 = Math.max(a.F1, a.land - rng.int(0, 10));
       a.f1Fixed = true;
     }
+    if (a.gside !== 0 && !a.g1Fixed && a.G1 <= due) {
+      // The let-go, with the hands' own error: late enough, and a deep grab meets the snow still held.
+      a.G1 = Math.max(now + 1, a.G1 + Math.round(gauss(rng) * t.timingSd));
+      if (a.over > 0) a.G1 = Math.max(a.G1, a.land - rng.int(0, 3));
+      a.g1Fixed = true;
+    }
     if (a.stomp && !a.stFixed && a.ST <= due) {
       a.ST = a.ST + Math.round(gauss(rng) * t.stompSd * 0.8) + a.stompBias;
       a.ST = Math.max(a.ST, now + 1, a.f > 0 ? a.F1 + 2 : 0);
@@ -1743,37 +1901,30 @@ export class Bot {
     }
   }
 
-  /** Rebuild both input channels from the air plan (absolute ticks). */
+  /** Rebuild both input channels from the air plan (absolute ticks), sampled through the model's own steerAt and
+   *  actionAt so the hands do exactly what the plan was solved for (round 8: a grab, a tweak and a flip's press
+   *  steer centred need the two channels in step). */
   private writeAirPlan(now: number): void {
     const a = this.air;
     if (!a) return;
-    const cruise = level(a.cruise);
+    const p = this.planNow(now, a.cruise);
     this.steer.cut(now);
-    if (a.dir !== 0 && a.S1 > now) {
-      const spin = level(a.dir);
-      if (a.S0 > now) {
-        this.steer.set(now, cruise);
-        this.steer.set(a.S0, spin);
-      } else this.steer.set(now, spin);
-      this.steer.set(a.S1, cruise);
-    } else this.steer.set(now, cruise);
-
     this.act.cut(now);
-    if (a.stomp && a.ST < now) {
-      // Pressed for the stomp; a rider who is still airborne well after that lets go again.
-      this.act.set(now, now - a.ST > 10 ? 0 : 1);
-      return;
+    const end = Math.max(2, a.land - now + 12);
+    let ls = -1;
+    let la = -1;
+    for (let i = 0; i <= end; i++) {
+      const sv = level(steerAt(p, i));
+      const av = actionAt(p, i) ? 1 : 0;
+      if (sv !== ls) {
+        this.steer.set(now + i, sv);
+        ls = sv;
+      }
+      if (av !== la) {
+        this.act.set(now + i, av);
+        la = av;
+      }
     }
-    if (a.f > 0 && a.F1 > now) {
-      if (a.F0 > now) {
-        this.act.set(now, 0);
-        this.act.set(a.F0, 1);
-      } else this.act.set(now, 1);
-      this.act.set(a.F1, 0);
-    } else this.act.set(now, 0);
-    // set() drops later changes, so a stomp at or before the flip release would erase the release
-    // and hold the flip into the snow. Keep the stomp after it, as commit() does.
-    if (a.stomp) this.act.set(Math.max(a.ST, now, a.f > 0 && a.F1 > now ? a.F1 + 2 : now), 1);
   }
 }
 

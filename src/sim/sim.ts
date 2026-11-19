@@ -1369,6 +1369,15 @@ export class Sim {
     fromRail: false,
     fromWall: 0,
   };
+  /** What the press now held in the air is (the ft.hold codes above) and its ticks: the bot's model reads them. */
+  get airHoldKind(): number {
+    return this.ft.hold;
+  }
+
+  get airHoldLen(): number {
+    return this.ft.holdLen;
+  }
+
   /** Set by a grind's end for the takeoff it makes. */
   private railOff = false;
 
