@@ -117,7 +117,7 @@ const FAMILY: Record<string, readonly Variant[]> = {
   ],
   follow: [
     { key: 'wide', name: 'A slow, wide weave', line: "Stay in the guide light's wake", t: { amp: 3.6, wave: 132 } },
-    { key: 'quick', name: 'A quick weave', line: "Stay in the guide light's wake: it weaves quick", t: { amp: 3.3, wave: 96 } },
+    { key: 'quick', name: 'A quick weave', line: "Stay in the guide light's wake: it weaves quick", t: { amp: 3.3, wave: 96, share: 0.85 } },
     { key: 'darts', name: 'It darts', line: "Stay in the guide light's wake: it darts", t: { amp: 3.8, wave: 128, darts: 1 } },
   ],
   kindle: [
@@ -775,7 +775,10 @@ function build(course: Course, m: MomentSpec, vi: number, g: number): MomentPlay
     case 'follow': {
       p.hw = WAKE_HW;
       p.path = weave(course, m.z0 + 50, m.z1 - 30, k('amp', 4), k('wave', 132), FOLLOW_PAD, side, !!t.darts);
-      p.need = Math.max(24, Math.round(FOLLOW_SHARE * PATH_STEP * p.path.off.filter((o) => o >= WAKE_MIN || o <= -WAKE_MIN).length));
+      // (Round 8: the quick weave asks 85% of what the others ask. Since the stage line's threshold the cloud sea's
+      // ravine is laid 13 m longer and its switchbacks 53 m shorter: the ground throws a sled at 40 m/s off its line for
+      // a 50 m flight in the middle of the weave, and the lab's skilled pilots rode 7 eighths of it at best.)
+      p.need = Math.max(24, Math.round(FOLLOW_SHARE * k('share', 1) * PATH_STEP * p.path.off.filter((o) => o >= WAKE_MIN || o <= -WAKE_MIN).length));
       break;
     }
     case 'kindle':
