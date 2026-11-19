@@ -877,3 +877,84 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
   pilot.after = ground.after;
   return pilot;
 }
+
+/**
+ * A first-timer who follows the hints (round 8): the same hands as the clumsy pilot or the novice, reacting to what
+ * the screen shows a first run. The stomp cue (hints.ts: under 1.2 s to touchdown on a real flight, until three
+ * perfects are learned) shows the landing ring closing in, and it flashes gold inside the stomp window (the last
+ * nine ticks, sim.ts): the rider aims a tap at the flash, a few ticks early or late (the novice's spread four ticks,
+ * the clumsy pilot's six) and lets a cue go by now and then (one in seven, one in three). The lantern's prompt (a
+ * lantern lit, on the snow, out of a drift, until two dashes are learned) is taken after a slow reaction (0.5 to 0.9
+ * s, 0.8 to 1.5 s) most times it shows. Otherwise the pilot is its blind self: it rides, steers and mashes as before.
+ * The first-minute bar is judged on these; the blind ones stay in the table as a floor.
+ */
+export function prompted(base: Pilot, baseSpend: () => boolean, sim: AnySim, seed: number, hands: 'clumsy' | 'novice'): { pilot: Pilot; spend: () => boolean } {
+  const rnd = mulberry(seed * 31 + 0x9e1);
+  const spread = hands === 'clumsy' ? 6 : 4;
+  const missCue = hands === 'clumsy' ? 0.33 : 0.15;
+  const react = hands === 'clumsy' ? [0.8, 1.5] : [0.5, 0.9];
+  let air = 0;
+  let cue: { at: number } | null = null;
+  let cueDone = false;
+  let pressFor = 0;
+  let wasAction = false;
+  let dashAt = -1;
+  let dashFor = 0;
+  let nextDashLook = 0;
+  const pilot: Pilot = () => {
+    const s = sim.s;
+    const o = base();
+    if (s.grounded || s.tumble > 0) {
+      air = 0;
+      cue = null;
+      cueDone = false;
+    } else air++;
+    if (!s.grounded && s.tumble === 0 && !cueDone && (sim.stats.perfects ?? 0) < 3) {
+      const ttl = timeToLand(sim).t;
+      const real = air > 6 || ttl >= 0.3;
+      if (!cue && real && ttl < 1.2) {
+        cue = rnd() < missCue ? null : { at: (4 + (rnd() * 2 - 1) * spread) / 60 };
+        if (!cue) cueDone = true;
+      }
+      if (cue && ttl <= Math.max(0, cue.at)) {
+        cue = null;
+        cueDone = true;
+        pressFor = 3;
+      }
+    }
+    let action = o.action;
+    if (pressFor > 0) {
+      // A fresh tap: let go first if the hand was already down, then press.
+      action = !(wasAction && pressFor === 3);
+      pressFor--;
+    }
+    wasAction = action;
+    return { steer: o.steer, action };
+  };
+  const spend = (): boolean => {
+    const s = sim.s;
+    const T = sim.tick / 60;
+    const own = baseSpend();
+    if (dashFor > 0) {
+      dashFor--;
+      return true;
+    }
+    const lit = Math.floor((s.lantern ?? 0) / 100) >= 1;
+    const shows = lit && s.grounded && !s.drifting && (sim.stats.dashes ?? 0) < 2 && s.dash === 0 && s.tumble === 0;
+    if (!shows) {
+      dashAt = -1;
+      return own;
+    }
+    if (dashAt < 0 && T >= nextDashLook) {
+      if (rnd() < 0.85) dashAt = T + react[0] + rnd() * (react[1] - react[0]);
+      else nextDashLook = T + 5;
+    }
+    if (dashAt >= 0 && T >= dashAt) {
+      dashAt = -1;
+      dashFor = 2;
+      return true;
+    }
+    return own;
+  };
+  return { pilot, spend };
+}

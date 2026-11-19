@@ -11,6 +11,7 @@
 // Pure data: no DOM, render or audio engine imports.
 
 import { SLED_SOUNDS, type SledSoundId } from '../audio/sledsounds';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra } from './almanac';
 
 export type ShelfId = 'scarf' | 'hat' | 'trail' | 'sound';
 
@@ -103,7 +104,7 @@ export const TRAILS: readonly TrailDef[] = [
 export const SOUNDS: readonly SoundDef[] = SLED_SOUNDS.map((s) => ({ id: s.id, name: s.name, blurb: s.blurb, price: s.price }));
 
 export function scarfById(id: string | null | undefined): ScarfDef {
-  return SCARVES.find((s) => s.id === id) ?? SCARVES[0];
+  return SCARVES.find((s) => s.id === id) ?? (extraOn('scarf', id) as ScarfDef | null) ?? SCARVES[0];
 }
 
 export function hatById(id: string | null | undefined): HatDef {
@@ -111,8 +112,18 @@ export function hatById(id: string | null | undefined): HatDef {
 }
 
 export function trailById(id: string | null | undefined): TrailDef {
-  return TRAILS.find((t) => t.id === id) ?? TRAILS[0];
+  return TRAILS.find((t) => t.id === id) ?? (extraOn('trail', id) as TrailDef | null) ?? TRAILS[0];
 }
+
+/** A piece the Almanac or a chapter adds (almanac.ts GARAGE_EXTRAS, CHAPTER_EXTRAS), as its shelf's own def, or null.
+ *  Owned ones live in the shelf's owned list like any other; the Almanac's are never sold, a chapter's are sold
+ *  from its month on (almanac.ts shelfExtras). */
+export function extraOn(shelf: 'scarf' | 'trail' | 'paint', id: string | null | undefined): Record<string, unknown> | null {
+  const e = EXTRAS.find((x) => x.id === id && x.shelf === shelf);
+  return e ? { id: e.id, name: e.name, blurb: e.blurb, price: e.price, ...e.look } : null;
+}
+
+const EXTRAS: readonly GarageExtra[] = [...GARAGE_EXTRAS, ...CHAPTER_EXTRAS];
 
 export function soundById(id: string | null | undefined): SoundDef {
   return SOUNDS.find((s) => s.id === id) ?? SOUNDS.find((s) => s.price === 0) ?? SOUNDS[0];
@@ -132,5 +143,5 @@ export function freeItem(shelf: ShelfId): string {
 }
 
 export function isItem(shelf: ShelfId, id: unknown): id is string {
-  return typeof id === 'string' && SHELVES[shelf].some((i) => i.id === id);
+  return typeof id === 'string' && (SHELVES[shelf].some((i) => i.id === id) || ((shelf === 'scarf' || shelf === 'trail') && extraOn(shelf, id) !== null));
 }

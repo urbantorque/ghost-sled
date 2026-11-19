@@ -129,13 +129,16 @@ const BANDS: ReadonlyArray<readonly [number, number]> = [
 const ROMAN = ['', '', ' (II)', ' (III)'];
 
 export interface MissionState {
-  /** tier: 1 to 3 from the second cycle on (read as a.tier ?? 1). */
-  active: Array<{ id: string; best: number; tier?: number }>;
+  /** tier: 1 to 3 from the second cycle on (read as a.tier ?? 1). stale: runs in a row it has made no progress in
+   *  (round 8: five offers a swap). */
+  active: Array<{ id: string; best: number; tier?: number; stale?: number }>;
   /** Next index into the rotation (cycle = floor(cursor / MISSIONS.length)). */
   cursor: number;
   completed: number;
   /** The rotation's shuffle seed, captured once so a later name change never reshuffles it. */
   seed?: number;
+  /** The UTC day a mission was last swapped (one swap a day). */
+  swapDay?: string;
 }
 
 /** Which biomes count for the rotation: the ones whose mountain is unlocked. */
@@ -262,6 +265,8 @@ export function applyRun(s: MissionState, r: RunSummary, ctx?: MissionCtx): { vi
     const t = missionTier(def, a.tier);
     const applicable = !def.biome || def.biome === r.biome;
     const value = applicable ? def.metric(r) : 0;
+    if (value > a.best) delete a.stale;
+    else a.stale = (a.stale ?? 0) + 1;
     a.best = Math.max(a.best, value);
     const done = a.best >= t.target;
     views.push({ id: def.id, text: t.text, progress: Math.min(a.best, t.target), target: t.target, dp: def.unit === 's' ? 1 : 0, reward: t.reward, done, justCompleted: done });
@@ -273,6 +278,33 @@ export function applyRun(s: MissionState, r: RunSummary, ctx?: MissionCtx): { vi
   s.active = keep;
   topUp(s, ctx);
   return { views, reward };
+}
+
+/** Runs without progress before a mission may be swapped (round 8: a mission the player cannot finish no longer
+ *  holds its slot for good; the novice pilot held three for 80 runs). */
+export const SWAP_AFTER = 5;
+
+/** The mission the results may offer to swap today, or null: the stalest one held SWAP_AFTER runs or more without
+ *  progress, at most one swap a day. */
+export function swappable(s: MissionState, day: string): string | null {
+  if (s.swapDay === day) return null;
+  let best: MissionState['active'][number] | null = null;
+  for (const a of s.active) if ((a.stale ?? 0) >= SWAP_AFTER && (!best || (a.stale ?? 0) > (best.stale ?? 0))) best = a;
+  return best?.id ?? null;
+}
+
+/** Swaps a stale mission for the next in the rotation (it comes back in a later cycle). False when it may not be. */
+export function swapMission(s: MissionState, id: string, day: string, ctx?: MissionCtx): boolean {
+  if (swappable(s, day) !== id) return false;
+  s.active = s.active.filter((a) => a.id !== id);
+  s.swapDay = day;
+  topUp(s, ctx);
+  // The one just dropped may not come straight back.
+  if (s.active.some((a) => a.id === id)) {
+    s.active = s.active.filter((a) => a.id !== id);
+    topUp(s, ctx);
+  }
+  return true;
 }
 
 /** Live view of current missions (title screen). Unknown ids are left out. */

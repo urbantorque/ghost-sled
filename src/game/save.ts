@@ -3,7 +3,10 @@ import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from
 import { type MasteryRecord, readMastery } from './mastery';
 import { type TwelveSave, readTwelve } from './twelve';
 import { type ShelfId, freeItem, isItem } from './garage';
-import { PAINTS } from './paints';
+import { isPaint } from './paints';
+import { type AlbumSave, type ChapterSave, type ContractsSave, type FlameSave, type LeagueSave, type LongNightSave, type RankSave, type RecentRun, readAlbum, readChapters, readContracts, readFlame, readLeague, readLongNight, readRank, readRecent, seedXp } from './spinesave';
+import { xpToPage } from './almanac';
+import { readLit } from './lanterns';
 import { dailyKey } from '../sim/mountains';
 import { hashString } from '../sim/prng';
 import { recordFromString } from '../sim/replay';
@@ -147,6 +150,20 @@ export interface SaveData {
   /** The Twelve (round 7, twelve.ts): the signature riders beaten in a duel, and the last race won. Kept
    *  across a clean break: a rider beaten stays beaten whatever the pools are re-ridden to. */
   twelve?: TwelveSave;
+  /** The spine (round 8, spinesave.ts): Rider Rank and the Almanac's pages opened, the title worn, the monthly
+   *  chapters, the Spirit Album, the flame, today's contracts, the Cup's league, the Long Night's best depth and the
+   *  last few runs as the next-run goals read them. Each written only once it holds something. */
+  rank?: RankSave;
+  title?: string;
+  chapters?: Record<string, ChapterSave>;
+  album?: AlbumSave;
+  flame?: FlameSave;
+  contracts?: ContractsSave;
+  league?: LeagueSave;
+  longNight?: LongNightSave;
+  recent?: RecentRun[];
+  /** The Lantern Row's lanterns lit with gifts (lanterns.ts), by id. */
+  lit?: string[];
 }
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
@@ -422,6 +439,7 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
     seen.add(id);
     const e: MissionState['active'][number] = { id, best: !renamed && isNum(a.best) && a.best > 0 ? a.best : 0 };
     if (a.tier === 2 || a.tier === 3) e.tier = a.tier;
+    if (!renamed && isNum(a.stale) && a.stale >= 1) e.stale = Math.min(999, Math.floor(a.stale));
     active.push(e);
   }
   const s: MissionState = {
@@ -430,6 +448,7 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
     completed: isNum(p.completed) && p.completed >= 0 ? Math.floor(p.completed) : 0,
     seed: isNum(p.seed) ? p.seed >>> 0 : hashString(name),
   };
+  if (typeof p.swapDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.swapDay)) s.swapDay = p.swapDay;
   if (s.active.length < 3) topUp(s, { unlockedBiomes: unlockedBiomes(ghostsPassed) });
   return s;
 }
@@ -510,7 +529,7 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   if (cup) d.cup = cup;
   else delete d.cup;
   // Paints: known ids only.
-  const owned = Array.isArray(p.paints) ? (p.paints as unknown[]).filter((x): x is string => typeof x === 'string' && PAINTS.some((q) => q.id === x)) : [];
+  const owned = Array.isArray(p.paints) ? (p.paints as unknown[]).filter((x): x is string => isPaint(x)) : [];
   if (owned.length) d.paints = owned;
   else delete d.paints;
   if (typeof p.paint === 'string' && owned.includes(p.paint)) d.paint = p.paint;
@@ -528,6 +547,36 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   const twelve = readTwelve(p.twelve);
   if (twelve.beaten.length) d.twelve = twelve;
   else delete d.twelve;
+  loadSpine(d, p, today);
   pruneDaily(d, today);
   return d;
+}
+
+/** A sticker id as album.ts writes them: a kind, a colon, and its parts. */
+const STICKER_ID = /^(v|l|m|t|rv|c|s|x|n|w):[A-Za-z0-9:._-]+$/;
+
+/** The spine's fields, each through its reader (spinesave.ts) and written only when it holds something. A save from
+ *  before the spine that has ridden is seeded once with what it has earned (seedXp). */
+function loadSpine(d: SaveData, p: Partial<SaveData>, today: string): void {
+  const set = <K extends keyof SaveData>(k: K, v: SaveData[K] | null): void => {
+    if (v === null || v === undefined) delete d[k];
+    else d[k] = v;
+  };
+  let rank = readRank(p.rank);
+  if (!rank && p.rank === undefined && d.runs > 0) {
+    const stars = Object.values(d.mastery ?? {}).reduce((a, r) => a + r.gates.length + r.moments.length + r.riders.length + (r.clean ? 1 : 0), 0);
+    const medals = Object.values(d.climb ?? {}).reduce((a, c) => a + (c.medal ?? 0) + (c.stages ?? []).reduce((x, y) => x + y, 0), 0);
+    const xp = seedXp({ runs: d.runs, missionsDone: d.missions.completed, stars, medals, twelve: d.twelve?.beaten.length ?? 0, crowned: d.twelve?.crowned === true }, xpToPage);
+    rank = xp > 0 ? { xp, claimed: 0 } : null;
+  }
+  set('rank', rank);
+  set('title', typeof p.title === 'string' && p.title.length > 0 && p.title.length <= 40 ? p.title : null);
+  set('chapters', readChapters(p.chapters));
+  set('album', readAlbum(p.album, (id) => STICKER_ID.test(id)));
+  set('flame', readFlame(p.flame, today));
+  set('contracts', readContracts(p.contracts));
+  set('league', readLeague(p.league));
+  set('longNight', readLongNight(p.longNight));
+  set('recent', readRecent(p.recent));
+  set('lit', readLit(p.lit));
 }

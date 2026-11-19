@@ -194,6 +194,8 @@ export interface TitleModel {
   cup?: TitleCup | null;
   /** The Twelve: the campaign's card and ladder (absent on a first visit). */
   twelve?: TitleTwelve | null;
+  /** Round 8: Rider Rank, the flame, contracts, the league, the chapter, the album and the one line of news. */
+  spine?: TitleSpine | null;
 }
 
 export interface HudModel {
@@ -353,6 +355,8 @@ export interface ResultsModel {
   stages?: ResultsStages | null;
   /** The Twelve: this run was a duel or the last race, and how it went. */
   twelve?: ResultsTwelve | null;
+  /** Round 8: the spine's part of the results (the bar, what opened, the one button). */
+  spine?: ResultsSpine | null;
 }
 
 /** Your place on this mountain's ladder as the run left it, and what the run earned on it. */
@@ -507,6 +511,9 @@ export interface GameUI {
    */
   hint(kind: HintKind | null, mode: InputMode, learned?: boolean): void;
   showResults(m: ResultsModel): void;
+  /** Round 8: the Almanac and the Spirit Album (the screens lane builds them; optional until it does). */
+  showAlmanac?(m: AlmanacModel): void;
+  showAlbum?(m: AlbumModel): void;
   updateResults(m: ResultsModel): void;
   hideResults(): void;
   /** missions: the run's live mission progress, shown on the pause card (at most 3 rows). */
@@ -544,4 +551,167 @@ export interface GameUI {
   mirrorRect(): { x: number; y: number; w: number; h: number } | null;
   /** True while any overlay that captures input is open. */
   readonly modal: boolean;
+}
+
+// ---------------------------------------------------------------- round 8: the spine (game/rank.ts and its systems)
+// What the screens lane builds the results sequence, the Almanac, the title's flame and the album from. The game
+// layer fills these (game/spineview.ts) from the save and the spine's settle; nothing here is computed by a screen.
+
+/** A reward as its card shows it: what it is and where it came from (an Almanac page, or a chapter's). */
+export interface RewardCard {
+  kind: 'charm' | 'gate' | 'feature' | 'sled' | 'mirror' | 'hour' | 'flourish' | 'garage' | 'title' | 'gifts' | 'legs' | 'open';
+  name: string;
+  page: number;
+  /** The chapter's month key ('2026-12') for a chapter page, else null. */
+  chapter: string | null;
+}
+
+/** Rider Rank's bar: the page turned, the XP into the next and what it still needs, and the next page's rewards. */
+export interface RankBarView {
+  page: number;
+  of: number;
+  xp: number;
+  into: number;
+  need: number;
+  /** The next page's rewards (null once page 50 is turned). */
+  next: RewardCard[] | null;
+  /** The title worn, if any. */
+  title: string | null;
+}
+
+/** One tick of the bar on the results ("Mission +40"). */
+export interface XpTickView {
+  source: string;
+  label: string;
+  xp: number;
+}
+
+/** A sticker as its card shows it; `frame` when the save holds the run it came from (the reel can render it). */
+export interface StickerCard {
+  id: string;
+  name: string;
+  mountain: string;
+  group: string;
+  hint: string;
+  frame: boolean;
+}
+
+/** The results' one primary button (game/goals.ts primaryButton). */
+export interface PrimaryButtonView {
+  kind: 'rematch' | 'mission' | 'duel' | 'daily' | 'again';
+  text: string;
+  /** The line under it ("12 m short", "Page 8: 60 to go"), or null. */
+  sub: string | null;
+  aria: string;
+}
+
+/** A contract's row. */
+export interface ContractView {
+  text: string;
+  /** A named mountain's id, 'daily' or 'any'. */
+  on: string;
+  done: boolean;
+  xp: number;
+}
+
+/** Keep the lantern lit: the title's flame and the seven-day calendar. */
+export interface FlameView {
+  streak: number;
+  litToday: boolean;
+  alive: boolean;
+  /** Not ridden today, and the flame goes out (or spends the ember) if today passes without a run. */
+  atRisk: boolean;
+  ember: boolean;
+  best: number;
+  /** The calendar's seven days, which one is next, and what each pays. */
+  calendar: Array<{ day: number; xp: number; gifts: number; ember: boolean }>;
+  nextDay: number;
+}
+
+/** The Cup's league this week: your division, your place, the nineteen records (shown as records, never as live
+ *  players) and how last week ended. */
+export interface LeagueView {
+  week: string;
+  division: number;
+  place: number | null;
+  rows: Array<{ name: string; time: number; you?: boolean }>;
+  last: { division: number; place: number | null; moved: number } | null;
+}
+
+/** This month's chapter: its pages and its set (on the garage's shelf for gifts too). */
+export interface ChapterView {
+  key: string;
+  name: string;
+  line: string;
+  page: number;
+  of: number;
+  into: number;
+  need: number;
+  set: Array<{ id: string; shelf: string; name: string; price: number; owned: boolean }>;
+  /** Earlier chapters not finished, which XP goes to once this one is done. */
+  older: string[];
+}
+
+/** The spine's part of the results: the bar filling, what opened, the stickers, the flame, the contracts, the league
+ *  and the one button. Each step of the sequence (V8, G5) reads one of these. */
+export interface ResultsSpine {
+  ticks: XpTickView[];
+  before: RankBarView;
+  after: RankBarView;
+  opened: RewardCard[];
+  stickers: StickerCard[];
+  flame: { lit: boolean; streak: number; calendarDay: number; embered: boolean; emberEarned: boolean };
+  contracts: { met: string[]; bonus: boolean; form: string | null; today: ContractView[]; formNext: ContractView | null };
+  league: { place: number | null; was: number | null; division: number } | null;
+  primary: PrimaryButtonView;
+  /** A mission held too long, offered as a swap (a secondary action), or null. */
+  swap: { id: string; text: string } | null;
+}
+
+/** The spine's part of the title. */
+export interface TitleSpine {
+  bar: RankBarView;
+  flame: FlameView;
+  contracts: ContractView[];
+  form: ContractView | null;
+  league: LeagueView | null;
+  chapter: ChapterView | null;
+  album: { got: number; of: number; byMountain: Record<string, { got: number; of: number }> } | null;
+  /** One line of what is new today for a returning player, or null. */
+  whatsNew: string | null;
+  /** The Long Night's legs open and best depth, once it is open. */
+  longNight: { legs: number; best: { legs: number; z: number } | null } | null;
+  mirrors: string[];
+  hours: string[];
+  titles: string[];
+  /** The Lantern Row, a town a mountain that is open. */
+  lanterns: LanternTownView[];
+}
+
+/** The Lantern Row (game/lanterns.ts): one finish town's row of eight, as the title, the garage and the world read it.
+ *  A look only, bought with gifts: nothing in it reaches a race. The world hangs exactly the lit ones, in row order
+ *  from the first, in the town at the finish and on the mountain's title shot, marigold (the lantern's and the
+ *  gifts' role, ART.md 1). */
+export interface LanternTownView {
+  mountain: string;
+  town: string;
+  lit: number;
+  of: number;
+  lanterns: Array<{ id: string; index: number; price: number; lit: boolean }>;
+  /** The next to light, its price and whether the wallet holds it; null once the row is full. */
+  next: { id: string; price: number; affordable: boolean } | null;
+}
+
+/** The Almanac's screen: every page, its state and rewards. */
+export interface AlmanacModel {
+  bar: RankBarView;
+  pages: Array<{ n: number; state: 'opened' | 'turned' | 'next' | 'ahead'; rewards: RewardCard[] }>;
+  chapter: ChapterView | null;
+}
+
+/** The Spirit Album's screen: each mountain's stickers and the rest, held or a silhouette with where to find it. */
+export interface AlbumModel {
+  got: number;
+  of: number;
+  sections: Array<{ id: string; name: string; got: number; of: number; stickers: Array<StickerCard & { got: boolean }> }>;
 }

@@ -1,4 +1,5 @@
 import { ROSTER, type Rider, riderByKey } from '../bot/roster';
+import { almanacOpens } from './almanac';
 import { MOUNTAINS, type MountainDef } from '../sim/mountains';
 import type { FieldPick } from './field';
 import type { PoolGhostData } from './ghostdata';
@@ -40,6 +41,14 @@ export function poolStanding(g: Pick<PoolGhostData, 'distance' | 'finishTick'>):
 
 /** The bundled pools by mountain id: the records the duels are ridden against. */
 const POOLS: Record<string, { ghosts: PoolGhostData[] }> = { pinecrest, frostfang, ember, sakura, lanternfall };
+
+/** A signature rider's time on any bundled mountain (seconds), or null with no finished record there: what a rival
+ *  sticker asks you to beat (album.ts). */
+export function riderTimeOn(r: Rider, mountainId: string): number | null {
+  const pool = POOLS[mountainId]?.ghosts;
+  const g = pool ? duelRecord(pool, r) : null;
+  return g ? poolStanding(g).time : null;
+}
 
 /** A rider's time on their own home ground in the bundled pools (seconds), or null with no finished record. */
 export function homeTime(r: Rider): number | null {
@@ -104,9 +113,11 @@ export function lanternfallOpen(t: TwelveSave | undefined): boolean {
   return gateCount(t) >= TWELVE_GATE;
 }
 
-/** Whether a named mountain is open to ride: the finale by The Twelve, the others by ghosts passed. */
-export function mountainOpen(d: { ghostsPassed: number; twelve?: TwelveSave }, m: Pick<MountainDef, 'unlockGhosts' | 'finale'>): boolean {
-  return m.finale ? lanternfallOpen(d.twelve) : d.ghostsPassed >= m.unlockGhosts;
+/** Whether a named mountain is open to ride: the finale by The Twelve or by its Almanac page (round 8, almanac.ts
+ *  LANTERNFALL_PAGE: a rider stuck on the eleventh duel still sees the finale's world), the others by ghosts passed.
+ *  Riding it is not the King's duel: that still waits for eleven of The Twelve (nextDuel). */
+export function mountainOpen(d: { ghostsPassed: number; twelve?: TwelveSave; rank?: { xp: number; claimed: number } }, m: Pick<MountainDef, 'unlockGhosts' | 'finale'>): boolean {
+  return m.finale ? lanternfallOpen(d.twelve) || almanacOpens(d, 'lanternfall') : d.ghostsPassed >= m.unlockGhosts;
 }
 
 /** What a locked mountain's card says ("to unlock" is the card's own word for the lock). */
@@ -130,7 +141,8 @@ export type Duel = { kind: 'duel'; rider: Rider } | { kind: 'final' };
  * King, the last race; after that, nothing.
  */
 export function nextDuel(t: TwelveSave | undefined, open: (mountain: number) => boolean): Duel | null {
-  for (const r of TWELVE) if (!hasBeaten(t, r.key) && open(r.home)) return { kind: 'duel', rider: r };
+  // (The King waits for the eleven whatever opened his mountain.)
+  for (const r of TWELVE) if (!hasBeaten(t, r.key) && open(r.home) && (r !== KING || lanternfallOpen(t))) return { kind: 'duel', rider: r };
   if (TWELVE.every((r) => hasBeaten(t, r.key))) return t?.crowned ? null : { kind: 'final' };
   return null;
 }
@@ -147,8 +159,14 @@ export function duelMountain(d: Duel): number {
   return d.kind === 'final' ? KING.home : d.rider.home;
 }
 
-/** The duel a run on this mountain is, or null: only the next duel's own home ground. */
-export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mountain: number) => boolean): Duel | null {
+/** Runs a save rides before its first duel (round 8, G10): a first run teaches one idea at a time, so the duels wait
+ *  for the third run. */
+export const FIRST_DUEL_RUN = 2;
+
+/** The duel a run on this mountain is, or null: only the next duel's own home ground, and none in a save's first
+ *  FIRST_DUEL_RUN runs (`runs`: runs ridden before this one; omitted, as before round 8, nothing waits). */
+export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mountain: number) => boolean, runs?: number): Duel | null {
+  if (runs !== undefined && runs < FIRST_DUEL_RUN && !t?.beaten.length) return null;
   const d = nextDuel(t, open);
   return d && duelMountain(d) === mountain ? d : null;
 }
