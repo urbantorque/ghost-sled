@@ -433,7 +433,7 @@ export class Bot {
   private rotParams(): RotParams {
     const sim = this.sim;
     const whirl = sim.has(CHARM.whirl);
-    return { spinMax: 9 * sim.sled.spin * sim.mood.spin * (whirl ? 1.2 : 1) * (sim.has(CHARM.paper) ? 0.85 : 1), flipRate: 6.8 * sim.sled.flip * sim.mood.spin * (whirl ? 0.8 : 1) };
+    return { spinMax: 9 * sim.sled.spin * sim.mood.spin * (whirl ? 1.1 : 1) * (sim.has(CHARM.paper) ? 0.85 : 1), flipRate: 6.8 * sim.sled.flip * sim.mood.spin * (whirl ? 0.75 : 1) };
   }
 
   /** The input byte for the tick about to be simulated. */

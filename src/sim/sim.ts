@@ -986,7 +986,7 @@ export class Sim {
   /** Style heats Spirit Flow (its base points / FLOW_HEAT_PER; twice that under Spirit Drum) and resets the dull
    *  clock. */
   private heatUp(base: number): void {
-    this.heat += (base / FLOW_HEAT_PER) * (this.has(CHARM.spirit) ? 2 : 1);
+    this.heat += (base / FLOW_HEAT_PER) * (this.has(CHARM.spirit) ? 1.5 : 1);
     this.dull = 0;
     this.setFlow();
   }
@@ -1047,7 +1047,7 @@ export class Sim {
     const fam = TRICKS[id]?.family;
     if (this.has(CHARM.paper) && (fam === 'grab' || id === TRICK.paperWheel || id === TRICK.craneFold || id === TRICK.spiritKnot)) pts *= 1.5;
     if (this.has(CHARM.whirl) && call.halfTurns > 1 && (id === TRICK.spin || id === TRICK.paperWheel || id === TRICK.emberTwist || id === TRICK.spiritKnot)) pts *= 1 + 0.25 * (call.halfTurns - 1);
-    if (this.hasPair(3) && id === TRICK.paperWheel) pts *= 2;
+    if (this.hasPair(3) && id === TRICK.paperWheel) pts *= 1.5;
     if (this.has(CHARM.feather)) pts *= 0.75;
     this.heatUp(pts);
     const base = this.flowPoints(pts);
@@ -1205,7 +1205,9 @@ export class Sim {
     }
 
     // Drag and boosts.
-    const flowDrag = 1 / (1 + 0.055 * s.flow);
+    // (Round 8: 3.5% a level, from 5.5%: Spirit Flow pays in the lantern and the score, and its speed made every style
+    // charm a speed charm in the charm races.)
+    const flowDrag = 1 / (1 + 0.035 * s.flow);
     let cd = CD * this.sled.drag * this.mood.drag * surf.drag * flowDrag;
     if (surf.ice && this.has(CHARM.frost)) cd *= 0.8;
     // The tuck: the crouch on a straight line is worth about 3 m/s at cruise.
@@ -1550,7 +1552,7 @@ export class Sim {
     if (s.speed > 0.01) s.velHeading = datan2(s.vx, s.vz);
 
     // Spins from steering (with a dead zone), flips from holding the action.
-    const spinMax = 9 * this.sled.spin * this.mood.spin * (this.has(CHARM.whirl) ? 1.2 : 1) * (this.has(CHARM.paper) ? 0.85 : 1);
+    const spinMax = 9 * this.sled.spin * this.mood.spin * (this.has(CHARM.whirl) ? 1.1 : 1) * (this.has(CHARM.paper) ? 0.85 : 1);
     // The landing set (round 7 made it hold): a key held through a flight spins at full rate, and the old set
     // could not stop that in time, so a first-timer who only steered in the air came down sideways one flight
     // in four. Now the spin is stopped hard and the swing has time left: a spin alone lands sketchy at worst.
@@ -1592,7 +1594,7 @@ export class Sim {
       s.pitchRate = approach(s.pitchRate, 0, 60 * DT);
       s.airPitch = approach(s.airPitch, whole, LAND_SET_PITCH * DT);
     } else if (flipping && (s.pitchRate < -1 || !this.landingWithin(FLIP_GUARD_TICKS))) {
-      s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin * (this.has(CHARM.whirl) ? 0.8 : 1), 20 * DT);
+      s.pitchRate = approach(s.pitchRate, -6.8 * this.sled.flip * this.mood.spin * (this.has(CHARM.whirl) ? 0.75 : 1), 20 * DT);
     } else {
       s.pitchRate = approach(s.pitchRate, 0, 26 * DT);
       // Let go of a flip and the rider comes out of it (twice as fast as before round 7: a hold begun in the
@@ -1753,7 +1755,8 @@ export class Sim {
     this.lastPerfect = this.tick;
     // Hearthstone: the dash's lantern back, once a dash. Comet Chain: a second more of a dash under way.
     if (this.hearthOwed > 0) {
-      this.lightRaw(this.hearthOwed);
+      // (A third of it: round 8's charm races had the whole lantern back winning 70% of them, half of it 66%.)
+      this.lightRaw(this.hearthOwed / 3);
       this.hearthOwed = 0;
     }
     if (s.dash > 0 && this.hasPair(1)) s.dash += TICK_RATE;
@@ -1776,7 +1779,7 @@ export class Sim {
     if (s.dash > 0) this.overcap = DASH_CAP + (this.has(CHARM.comet) ? 2 : 0);
     // The allowance only ever falls once the dash is over: with the ease, or with the speed, if that drops first.
     else if (this.overcap > 0) this.overcap = Math.max(0, Math.min(this.overcap - OVERCAP_EASE * DT, s.speed - MAX_SPEED));
-    const cap = MAX_SPEED - (this.has(CHARM.bark) ? 1.5 : 0) + this.overcap;
+    const cap = MAX_SPEED - (this.has(CHARM.bark) ? 1 : 0) + this.overcap;
     if (s.speed > cap) s.speed = cap;
   }
 
@@ -1814,12 +1817,12 @@ export class Sim {
     const s = this.s;
     // What it costs: a lantern; a lantern and a half on a Stone Lantern; half of one straight after a perfect landing
     // on an Ember Step.
-    const cost = this.has(CHARM.stone) ? LANTERN * 1.5 : this.has(CHARM.step) && this.tick - this.lastPerfect <= 30 ? LANTERN / 2 : LANTERN;
+    const cost = this.has(CHARM.stone) ? LANTERN * 1.5 : this.has(CHARM.step) && this.tick - this.lastPerfect <= 24 ? LANTERN * 0.7 : LANTERN;
     if (s.crashed || s.dash > 0 || s.lantern < cost) return;
     s.lantern -= cost;
     // (Hearthstone: the next perfect landing gives it back.)
     this.hearthOwed = this.has(CHARM.hearth) ? cost : 0;
-    s.dash = Math.round(DASH_TICKS * this.sled.dashLen * (this.has(CHARM.comet) ? 1.6 : 1));
+    s.dash = Math.round(DASH_TICKS * this.sled.dashLen * (this.has(CHARM.comet) ? 1.3 : 1));
     s.boostPool += DASH_BOOST;
     this.stats.dashes++;
     this.events.push({ type: 'dash', phase: 'start', cells: this.cells });
@@ -2868,10 +2871,12 @@ export class Sim {
     this.collected.add(id);
     const great = value > 1;
     const before = this.s.lantern;
-    this.charge((great ? GREAT : SPARK) * this.mood.lightValue * (great && this.has(CHARM.path) ? 0.8 : 1), false);
+    // (Lamplit Path: its own sparks light half a spark; the course's great lights 40% less.)
+    const path = id >= PATH_ID0 && id < PATH_ID0 + 1000;
+    this.charge((great ? GREAT : SPARK) * this.mood.lightValue * (path ? 0.5 : great && this.has(CHARM.path) ? 0.6 : 1), false);
     this.stats.lights++;
     if (great) this.stats.greatLights++;
-    if (id >= LEGEND_ID0) this.stats.legendLit += this.s.lantern - before;
+    if (id >= LEGEND_ID0 && !path) this.stats.legendLit += this.s.lantern - before;
     this.events.push({ type: 'light', id, value, gain: this.s.lantern - before, x, y, z });
     this.lightScore += great ? 50 : 10;
   }

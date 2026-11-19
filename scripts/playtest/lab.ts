@@ -404,7 +404,8 @@ function ride(pilotName: string, m: number, seed: number, alone: Alone | null = 
   const sim = new Sim({ seed: MOUNTAINS[m].seed, chaos: rollFor(m, seed), sled: 0, charmPool: POOL, ...(GATES === 1 || GATES === 2 ? { charmGates: GATES } : {}), ...(CARRY >= 0 ? { carry: { lantern: 0, getUps: 3, charms: [CARRY] } } : {}) });
   const passes: RailPass[] = [];
   let pilot = pilotFor(pilotName, sim, seed, passes, alone);
-  let spend = spenderFor(pilotName, sim, seed);
+  // (The classic pilots spend as their namesakes do.)
+  let spend = spenderFor(pilotName.replace(/-classic$/, ''), sim, seed);
   let steadyZ = Infinity;
   const speeds: number[] = [];
   const falls: Fall[] = [];

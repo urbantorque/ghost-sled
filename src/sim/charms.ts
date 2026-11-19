@@ -60,16 +60,16 @@ export const CHARMS: readonly CharmDef[] = [
   { id: 3, key: 'frost', family: 'speed', name: 'Frost Runners', does: 'Ice holds and runs fast under you; drifts on snow charge slower', signal: 'Blue sparks off the runners on ice' },
   { id: 4, key: 'star', family: 'speed', name: 'Falling Star', does: 'A drop landed well becomes far more speed; a sketchy landing costs more', signal: 'A streak off the sled on a big landing' },
   { id: 5, key: 'drum', family: 'speed', name: 'Drift Drum', does: 'Drifts charge faster and pay more, but only start at speed', signal: 'The drift ring beats with its tiers' },
-  { id: 6, key: 'step', family: 'speed', name: 'Ember Step', does: 'A dash right after a perfect landing costs half a lantern', signal: 'The lantern pulses while the half price is open' },
+  { id: 6, key: 'step', family: 'speed', name: 'Ember Step', does: 'A dash straight after a perfect landing costs less', signal: 'The lantern pulses while the half price is open' },
   { id: 7, key: 'stride', family: 'speed', name: 'Long Stride', does: 'A deeper tuck, but you hardly steer while tucked', signal: 'The rider tucked lower, a wind line off the helmet' },
   { id: 8, key: 'owl', family: 'style', name: "Owl's Breath", does: 'Near misses keep your combo going longer', signal: 'The combo ring refills on a whisker' },
-  { id: 9, key: 'hearth', family: 'style', name: 'Hearthstone', does: 'The first perfect landing after a dash gives the lantern back', signal: 'An empty cell outlined after a dash, filled by the stomp' },
+  { id: 9, key: 'hearth', family: 'style', name: 'Hearthstone', does: 'The first perfect landing after a dash gives a third of its lantern back', signal: 'An empty cell outlined after a dash, filled by the stomp' },
   { id: 10, key: 'paper', family: 'style', name: 'Paper Kite', does: 'Grabs come sooner and pay more; spins turn slower', signal: 'Paper ribbons off the rider at each grab tier' },
   { id: 11, key: 'whirl', family: 'style', name: 'Whirlwind', does: 'Spins faster and big spins pay more; flips turn slower', signal: 'A ring of snow off a spin' },
   { id: 12, key: 'memory', family: 'style', name: "Crane's Memory", does: 'A trick new to the run pays triple; a repeat pays half', signal: "A new trick's call drawn gilded" },
   { id: 13, key: 'festival', family: 'style', name: 'Festival Drum', does: 'The multiplier climbs faster, but a bump loses the combo', signal: 'The multiplier beats on each step' },
   { id: 14, key: 'bell', family: 'style', name: 'Bell Rope', does: 'Rails take you from further off and pay double', signal: 'Rails ring as you near them' },
-  { id: 15, key: 'spirit', family: 'style', name: 'Spirit Drum', does: 'Spirit Flow climbs twice as fast; a bump costs more of it', signal: "The flow state's picture comes sooner" },
+  { id: 15, key: 'spirit', family: 'style', name: 'Spirit Drum', does: 'Spirit Flow climbs faster; a bump costs more of it', signal: "The flow state's picture comes sooner" },
   { id: 16, key: 'second', family: 'survival', name: 'Second Wind', does: 'A fall costs no get-up, but empties the lantern', signal: 'The lantern gutters out on a fall' },
   { id: 17, key: 'feather', family: 'survival', name: 'Featherfall', does: 'Once a stage a landing that would floor you is only sketchy; tricks pay less', signal: "A feather on the lantern while the stage's spare is held" },
   { id: 18, key: 'stone', family: 'survival', name: 'Stone Lantern', does: 'A ward costs half a lantern and keeps your speed; a dash costs one and a half', signal: "The lantern's cells drawn in halves" },
@@ -94,7 +94,7 @@ export const SYNERGIES: readonly Synergy[] = [
   { id: 0, key: 'ghostRider', name: 'Ghost Rider', a: CHARM.slip, b: CHARM.kite, adds: 'Every slingshot lights a whole cell' },
   { id: 1, key: 'cometChain', name: 'Comet Chain', a: CHARM.comet, b: CHARM.step, adds: 'A perfect landing during a dash adds a second to it' },
   { id: 2, key: 'phoenix', name: 'Phoenix', a: CHARM.second, b: CHARM.quick, adds: 'You get up from a fall into a short dash, no lantern spent' },
-  { id: 3, key: 'paperStorm', name: 'Paper Storm', a: CHARM.paper, b: CHARM.whirl, adds: 'Paper Wheels pay double' },
+  { id: 3, key: 'paperStorm', name: 'Paper Storm', a: CHARM.paper, b: CHARM.whirl, adds: 'Paper Wheels pay half again' },
   { id: 4, key: 'nightChorus', name: 'Night Chorus', a: CHARM.owl, b: CHARM.festival, adds: 'A near miss counts two links' },
   { id: 5, key: 'shrineKeeper', name: 'Shrine Keeper', a: CHARM.stone, b: CHARM.wisp, adds: 'A ward lights a third of a cell back' },
   { id: 6, key: 'blackIce', name: 'Black Ice', a: CHARM.frost, b: CHARM.drum, adds: 'Drifts on ice charge double and never wobble' },
@@ -114,7 +114,7 @@ export const GATE_PAST_LINE = 100;
 
 /** Lamplit Path's sparks: one on the safe line (0.8 m up) at every multiple of PATH_STEP metres from where the charm
  *  was taken to the finish, for the rider who holds it; their light ids are PATH_ID0 + z / PATH_STEP. */
-export const PATH_STEP = 15;
+export const PATH_STEP = 60;
 export const PATH_ID0 = 20_000_000;
 
 /** A charm gate as the run meets it: where, which charm each lane offers (-1 none), and what was taken. */

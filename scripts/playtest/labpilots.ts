@@ -759,7 +759,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
         }
       }
       // The expert keeps a combo alive with pops down a straight, line underfoot (none into a set piece).
-      if (skill === 'expert' && s.grounded && s.tumble === 0 && !s.grinding && !piece && !(ahead && ahead.z0 - s.z < 200)) {
+      if (skill === 'expert' && s.grounded && s.tumble === 0 && !s.grinding && !piece && !(ahead && ahead.z0 - s.z < 400)) {
         const c = sim.course;
         const straight = Math.abs(c.safeX(s.z + 30) - c.safeX(s.z)) < 2 && Math.abs(s.x - c.safeX(s.z)) < 1.5 && clearAhead(sim, s.z, s.z + 12 + s.speed * 1.4);
         if (crouch === 0 && sim.combo.active && sim.combo.timer < 90 && s.speed > 16 && straight && !g.action) crouch = 1;
@@ -776,7 +776,7 @@ export function trickster(skill: 'mid' | 'expert', sim: AnySim, seed: number, ki
     }
     crouch = 0;
     // Over a set piece's air, or coming down on one's doorstep, the classic pilot's hands.
-    if ((piece && PIECE_AIR.has(piece.verb)) || (ahead && PIECE_AIR.has(ahead.verb) && ahead.z0 - s.z < 220)) {
+    if ((piece && PIECE_AIR.has(piece.verb)) || (ahead && ahead.z0 - s.z < 400)) {
       plan = null;
       wasAir = true;
       return ground();
