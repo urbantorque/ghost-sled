@@ -219,6 +219,9 @@ export interface Carry {
   charms: number[];
 }
 
+/** Ember Step: a dash this many ticks after a perfect landing costs 0.7 of a lantern. */
+export const EMBER_STEP_TICKS = 24;
+
 /** A first run's stomp: a press this many ticks before touchdown (9 otherwise), or this many after it (5). */
 export const FIRST_RUN_STOMP = 15;
 export const FIRST_RUN_LATE = 8;
@@ -894,6 +897,30 @@ export class Sim {
   /** Charm state: the tick of the last perfect landing (Ember Step), a dash's cost owed back (Hearthstone), the
    *  stage each once-a-stage spare was spent in (Featherfall, Last Lamp, Guardian Wisp), the next path spark. */
   private lastPerfect = -1000;
+
+  /** Read-only views of the charm state above, for drawing only (the play lane's charmsignals.ts): the tick of the
+   *  last perfect landing (Ember Step's price is open for EMBER_STEP_TICKS after it), the lantern a Hearthstone owes
+   *  back, and the stage each once-a-stage spare was spent in (-1 never: Featherfall, Last Lamp, Guardian Wisp). */
+  get perfectTick(): number {
+    return this.lastPerfect;
+  }
+
+  get hearthOwing(): number {
+    return this.hearthOwed;
+  }
+
+  get featherSpentStage(): number {
+    return this.featherStage;
+  }
+
+  get lampSpentStage(): number {
+    return this.lampStage;
+  }
+
+  get wispSpentStage(): number {
+    return this.wispStage;
+  }
+
   private hearthOwed = 0;
   private featherStage = -1;
   private lampStage = -1;
@@ -1041,9 +1068,9 @@ export class Sim {
   private trickStyle(id: number, points: number, units: number, call: { halfTurns: number; flips: number; tier: number; late: boolean }): void {
     const fresh = (this.stats.trickMask & (1 << id)) === 0;
     this.stats.trickMask |= 1 << id;
-    // A trick new to the run pays half again (Crane's Memory: three times): the 200th run should still be finding
-    // things.
-    let pts = points * (fresh ? (this.has(CHARM.memory) ? 3 : 1.5) : 1);
+    // A trick new to the run pays half again (Crane's Memory: two and a half times): the 200th run should still be
+    // finding things. (Crane's Memory 2.5x, from 3x: 66% of the expert's charm races.)
+    let pts = points * (fresh ? (this.has(CHARM.memory) ? 2.5 : 1.5) : 1);
     const fam = TRICKS[id]?.family;
     if (this.has(CHARM.paper) && (fam === 'grab' || id === TRICK.paperWheel || id === TRICK.craneFold || id === TRICK.spiritKnot)) pts *= 1.5;
     if (this.has(CHARM.whirl) && call.halfTurns > 1 && (id === TRICK.spin || id === TRICK.paperWheel || id === TRICK.emberTwist || id === TRICK.spiritKnot)) pts *= 1 + 0.25 * (call.halfTurns - 1);
@@ -1753,13 +1780,14 @@ export class Sim {
     s.boostPool += boost;
     this.events.push({ type: 'boost', amount: boost, source: 'perfect' });
     this.lastPerfect = this.tick;
-    // Hearthstone: the dash's lantern back, once a dash. Comet Chain: a second more of a dash under way.
+    // Hearthstone: the dash's lantern back, once a dash. Comet Chain: two thirds of a second more of a dash under way.
     if (this.hearthOwed > 0) {
-      // (A third of it: round 8's charm races had the whole lantern back winning 70% of them, half of it 66%.)
-      this.lightRaw(this.hearthOwed / 3);
+      // (A quarter of it: round 8's charm races had the whole lantern back winning 70% of them, a third 66%.)
+      this.lightRaw(this.hearthOwed / 4);
       this.hearthOwed = 0;
     }
-    if (s.dash > 0 && this.hasPair(1)) s.dash += TICK_RATE;
+    // (Two thirds of a second, from one: 64% of the pair races.)
+    if (s.dash > 0 && this.hasPair(1)) s.dash += 40;
   }
 
   /** A press just after a clean landing still counts as a stomp. */
@@ -1817,7 +1845,7 @@ export class Sim {
     const s = this.s;
     // What it costs: a lantern; a lantern and a half on a Stone Lantern; half of one straight after a perfect landing
     // on an Ember Step.
-    const cost = this.has(CHARM.stone) ? LANTERN * 1.5 : this.has(CHARM.step) && this.tick - this.lastPerfect <= 24 ? LANTERN * 0.7 : LANTERN;
+    const cost = this.has(CHARM.stone) ? LANTERN * 1.5 : this.has(CHARM.step) && this.tick - this.lastPerfect <= EMBER_STEP_TICKS ? LANTERN * 0.7 : LANTERN;
     if (s.crashed || s.dash > 0 || s.lantern < cost) return;
     s.lantern -= cost;
     // (Hearthstone: the next perfect landing gives it back.)

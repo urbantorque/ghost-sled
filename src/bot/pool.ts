@@ -102,6 +102,9 @@ function fieldFor(made: readonly { skill: number; track: Track; signature: boole
   return { tracks: near.map((n) => n.r.track), duel: near.map((n) => n.r.signature) };
 }
 
+/** How much of the skill range the crowd spans (round 8; see generatePool). */
+const CROWD_REACH = 0.72;
+
 /** The charms a pool rider may be offered: a newcomer the starter pool, everyone else all of them. */
 function poolCharms(skill: number): number {
   return skill < 0.35 ? STARTER_POOL : ALL_CHARMS;
@@ -142,7 +145,9 @@ export function generatePool(seed: number, count: number, salt: number, opts: Po
   for (let i = 0; i < budget; i++) {
     // Stratified over the skill range, leaning a little toward the top where scores spread most.
     const u = (i + rng.next()) / budget;
-    const skill = clamp(u * (1.25 - 0.25 * u), 0, 1);
+    // (Round 8: the crowd's skills reach CROWD_REACH of the old range. Riders who draft their field, take charms and
+    // win lanterns off rivals ride faster than round 7's at the same skill, and the pool lost its slow end.)
+    const skill = clamp(u * (1.25 - 0.25 * u) * CROWD_REACH, 0, 1);
     const sled = rng.chance(0.65) ? 0 : rng.int(1, 5);
     const chaos = chaosFor(rng, seed, salt, i);
     const { record, sim, track } = runBot(seed, chaos, { skill, seed: hash32(seed, salt, i, 0xb075), sled, name: '', charmPool: poolCharms(skill) }, maxTicks, fieldFor(made, skill));

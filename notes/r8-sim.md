@@ -32,9 +32,14 @@ do not change in this batch; numbers behind them may.
   `has(id)`, `hasPair(id)`.
 - (later) Gates stand at z 110 (`START_GATE_Z`) and `GATE_PAST_LINE` (100 m) past each stage line, on the stage line's
   threshold (`Section.gate`, kind 'cruise'; `THRESHOLD_*` in course.ts).
-- (later) Lamplit Path's sparks: one on the safe line, 0.8 m up, at every multiple of `PATH_STEP` (15 m) from where the
-  charm was taken to the finish, light ids `PATH_ID0 + z / 15`; the `light` event says each one taken. The renderer
-  draws them for a rider who holds the charm (`sim.has(CHARM.path)`).
+- (later) Lamplit Path's sparks: one on the safe line, 0.8 m up, at every multiple of `PATH_STEP` (60 m) from where the
+  charm was taken to the finish, light ids `PATH_ID0 + z / PATH_STEP`; the `light` event says each one taken. The
+  renderer draws them for a rider who holds the charm (`sim.has(CHARM.path)`).
+- (later) What the charms' signals read, read-only on `Sim` (for `src/game/charmsignals.ts`, in place of its cast):
+  `perfectTick` (the tick of the last perfect landing; Ember Step's dash is cheap while `tick - perfectTick <=
+  EMBER_STEP_TICKS`, 24, exported from sim.ts: the play lane's `STEP_TICKS = 30` should read it instead),
+  `hearthOwing` (the lantern Hearthstone gives a quarter of back at the next perfect landing), `featherSpentStage`,
+  `lampSpentStage`, `wispSpentStage` (the stage Featherfall, Spare Lamp and Will-o'-Wisp were spent on; -1 unspent).
 
 **Config and records**
 - `SimConfig`: `charmPool?` (24-bit mask; absent `STARTER_POOL`), (later) `charmGates?: 1 | 2 | 3` (absent 3),
@@ -127,7 +132,8 @@ Sections (start of each; `cruise*` a threshold):
 ## The full proofs (2026-11-20)
 
 Raw output in `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/sim/` (lab.txt, lab.json, race.txt, charms.txt,
-charms-pairs.txt, combo.txt, combo-charms.txt, vitest.txt, pool-tokens.txt, lab-nocharms.txt, lab-classic.txt). Pools
+charms-pairs.txt, combo.txt, combo-charms.txt, vitest.txt, pool-tokens.txt, lab-nocharms.txt, lab-classic.txt;
+after the liveness fixes: lab-race-pilots.txt, lab.json and race.txt re-made, charms-seeds4*.txt, charms-pairs-seeds4.txt). Pools
 regenerated locally for these and not committed; after the laptop's 0xD1 restart (01:45) every run was made one
 process at a time, vitest with `--maxWorkers=3`.
 
@@ -156,18 +162,36 @@ gaps outrun the 2.6 s window.
 
 **Decisions:** 4 a run at the median for every pilot that steers (three charms and a lantern spent); the line 3.
 
-**Race liveness** (`race-lab.ts`, runs 2 to 6, 24 orders a mountain; the field laid across your runs):
+**Race liveness** (`race-lab.ts`, runs 2 to 6, 24 orders a mountain; the field laid across your runs; the lab's
+rides re-ridden on the final sim, the pools regenerated with the fixes below):
 
-| Pilot | Live | Passes/min | Quiet runs | Round 7 |
-| --- | --- | --- | --- | --- |
-| mid | 0.73 | 3.23 | 7/600 (1%) | 0.73, 3.47, 10/300 (3%) |
-| novice | 0.53 | 2.05 | 125/600 (21%) | 0.62, 2.40, 14/300 (5%) |
-| expert | 0.62 | 3.32 | 83/600 (14%) | 0.70, 3.01, 8/300 (3%) |
+| Pilot | Live | Passes/min | Quiet runs | Round 7 | First pass (round 8) |
+| --- | --- | --- | --- | --- | --- |
+| novice | 0.64 | 2.21 | 19/600 (3%) | 0.62, 2.40, 14/300 (5%) | 0.53, 2.05, 125/600 (21%) |
+| mid | 0.79 | 4.19 | 0/600 | 0.73, 3.47, 10/300 (3%) | 0.73, 3.23, 7/600 (1%) |
+| expert | 0.67 | 3.98 | 27/600 (4.5%) | 0.70, 3.01, 8/300 (3%) | 0.62, 3.32, 83/600 (14%) |
+| stunt | 0.71 | 3.55 | 23/600 (4%) | 0.65, 3.60, 29/300 (10%) | |
 
-By run (laid across): mid 0.58 / 0.72 / 0.75 on runs 1, 2, 5; novice 0.45 / 0.53 / 0.51; expert 0.45 / 0.61 / 0.61.
+Why the first pass was quieter, and what changed:
+- **The start.** Every pool rider raced a field of seven that starts on one spot, and seven riders slipstreaming
+  each other off the line were 2.7 s up on a lone rider of the same finish by 500 m (Sakura: 16.3 s against the
+  expert's 19.0 s), then slow at the end: they rode away from every player at the start. A pool rider now drafts
+  its field only past 600 m (`FIELD_DRAFT_FROM`, bot.ts). The pools got their slow half back (median 120 to 124 s,
+  p90 132 to 147 s; round 7 116 to 125 and 134 to 148). No draft at all was no better (expert 0.67, quiet 54).
+- **The crowd's skills** reach 0.72 of the old range (`CROWD_REACH`, pool.ts), for the same slow half.
+- **The slow riders** (`slowriders.ts`) are made from plain runs (no mood, no event) where the pool has six:
+  Lanternfall's slow end had one plain rider between 140 and 167 s, the rest a Comet run's, which no plain field
+  takes. And they step 2% apart (from 3.5%), holes from 4% (from 7%). Novice 0.53 to 0.63.
+- **The field's slow end** (`FIELD_SLOW_MIN`, field.ts) 1.13 of the pace from 1.1: the expert's quiet runs were its
+  slow days (Ember 132 s against 112 to 121, 23 of the 58), with nobody past 1.1. Quiet 58 to 27.
+- Still short of round 7: the expert's live share (0.67 against 0.70) and the novice's passes (2.21 against 2.40).
+  Nine riders in a laid-across field (`FIELD_MORE` 4) would give novice 0.70, 2.79, 10/600; mid 0.86, 5.45, 0;
+  expert 0.74, 5.13, 22/600; that is two more ghosts drawn every run, the main lane's call, not made here.
 
-**Showdowns** (race-lab, runs 2 on; an upper bound, the lab's rides carry no x): mid 1.27 started a run (0.20 won),
-novice 0.63 (0.06), expert 1.39 (0.30). Mid is over one a run, so the duel rule was not widened. **Steals:** race-lab
+By run (laid across): novice 0.48 / 0.61 / 0.65 on runs 1, 2, 5.
+
+**Showdowns** (race-lab, runs 2 on; an upper bound, the lab's rides carry no x): mid 1.61 started a run (0.52 won),
+novice 0.66 (0.11), expert 1.39 (0.41), stunt 1.19 (0.32). Mid is over one a run, so the duel rule was not widened. **Steals:** race-lab
 cannot see them (no x); in the pools, 1.90 a run (the cap of two) and 0.67 showdowns won a run, 245 of 250 ghosts
 drafting. A metre and no cap had given the pools 5.5 steals a run: now 0.6 m and two a run.
 
@@ -180,6 +204,19 @@ Night Chorus) tie with no charm: the lab has no ghosts to draft and few whiskers
 on the way: Lamplit Path (83%), Hearthstone (70%), Whirlwind (75%), Comet's Tail (66%), Falling Star (69%), Spirit
 Drum and Spirit Flow's own speed (5.5% to 3.5% a level).
 
+**The last trims** (one notch each, then no more tuning). Over 2 seeds (the table above's sample) and 4 (20 runs a
+charm; `charms-seeds4.txt`, `charms-pairs-seeds4.txt`):
+
+| Charm | Was | Now | 2 seeds, mid / expert | 4 seeds, mid / expert |
+| --- | --- | --- | --- | --- |
+| Hearthstone | a third of the lantern back | a quarter | 75% / 73% | 65% / 55% |
+| Crane's Memory | a fresh trick x3 | x2.5 | 41% / 41% | 49% / 57% |
+| Comet Chain (pair) | +1 s of dash | +0.67 s | 64% / 69% | 56% / 65% |
+
+These charms work through lantern and dash timing, so a run with one changes everywhere after it: a third gave
+Hearthstone 66% / 55% over 2 seeds and 69% / 51% over 4, so the 2-seed rows are mostly noise. Over 4 seeds Frost
+Runners (65%, mid), Spirit Drum (61 to 62%, mid) and Black Ice (66%, mid pairs) also read over 60%; left as they are.
+
 **Clumsy:** 29 of 30 (round 7: 26 of 30).
 
 **Tests:** 1628 of 1633. The five that fail are the render plan's, on the course the thresholds re-laid, in files of
@@ -187,8 +224,9 @@ the look lanes: overlook (Frostfang plans 2 overlooks, wants 3), palette (Frostf
 wants under 0.2), setpieces (no torii row roofs a Sakura tunnel; the pop test's fixed z = 2000 on Pinecrest is no
 longer a falling slope, 3.5 m against 8; Pinecrest's finish town on Low 78,046 triangles against 78,000).
 
-**What got worse:** race liveness for the novice (0.53 from 0.62, quiet runs 21% from 5%) and the expert (0.62
-from 0.70, quiet 14% from 3%); the stunt pilot's set pieces (24 from 31) and the mid pilot's (78 from 80); the line
+**What got worse:** the expert's race (live 0.67 from 0.70, quiet 4.5% from 3%) and the novice's passes (2.21 a
+minute from 2.40); the stunt pilot's set pieces (24 from 31: Sakura's stair 5 to 2, Ember's sprint 6 to 4; its frozen
+hands are not it, with no lapses it wins 26 and with every air press centred so it flips, 25) and the mid pilot's (78 from 80); the line
 4.7 s slower and mid 2.7 s slower; Temple Town's street 34 m shorter; the First Flame's chute drops a sled most of its
 way, so a fall above the drop is lost (the carry's still air and wind burn 3% longer for it); the five render tests.
 
@@ -227,7 +265,10 @@ way, so a fall above the drop is lost (the carry's still air and wind burn 3% lo
   (both replays through `simConfigOf`/`applyLogEvent`), `src/game/director.ts` (`rivals` frame field and
   `rivalEvents`, trick names in the callout, 'trick' as a flow trick and a big tone), `src/game/hints.ts` and
   `src/ui/hint.ts`, `src/ui/contract.ts` (the `flipSpin` hint).
-- Tests: `charmgates.test.ts`, `r8sim.test.ts` (new); `encoding.test.ts`, `fairness.test.ts`, `moments.test.ts`.
+- The race's liveness (after the full proofs): `src/game/field.ts` (`FIELD_SLOW_MIN` 1.13), `src/game/slowriders.ts`
+  (plain bases, `STEP` 1.02, `HOLE` 1.04).
+- Tests: `charmgates.test.ts`, `r8sim.test.ts` (new); `encoding.test.ts`, `fairness.test.ts`, `moments.test.ts`,
+  `field.test.ts` (a steady player's pack within 2.5 s, from 2), `graveyards.test.ts` (pinned to the local pools).
 - Scripts: `lab.ts`, `labpilots.ts` (trickster; the flourish presses before it steers), `race-lab.ts` (showdowns),
   `r8-air.ts`, `r8-bots.ts`, `r8-charms.ts`, `r8-first.ts`, `r8-moved.ts`, `r8-score.ts` (new).
 

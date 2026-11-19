@@ -113,9 +113,10 @@ export const ANCHOR_NEW = 1.1;
 export const FIELD_CARROT = [0.94, 0.95, 0.97] as const;
 export const FIELD_FAST_MIN = 0.85;
 /** Its slowest rider: your slowest of the last FIELD_SLOW_RUNS, but at least and at most these shares
- *  of the field's pace. */
+ *  of the field's pace. (Round 8: 1.13 from 1.1. The expert's quiet runs were its slow days, a ride 10% or more
+ *  over its pace with nobody past 1.1; race-lab on the round 8 pools, expert quiet runs 58 of 600 to 27.) */
 export const FIELD_SLOW_RUNS = 3;
-export const FIELD_SLOW_MIN = 1.1;
+export const FIELD_SLOW_MIN = 1.13;
 export const FIELD_SLOW_MAX = 1.16;
 /** Riders added to a field laid across your runs, and the most a field holds (Haunted Hollow's nine). */
 export const FIELD_MORE = 2;

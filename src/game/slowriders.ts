@@ -14,14 +14,15 @@ import type { PoolGhostData } from './ghostdata';
 // all tell riders apart by record, need to know nothing about any of this. A saved grudge comes back to
 // its pace because the same pool always makes the same riders.
 
-/** Each slow rider's time is this much over the next one's: close enough to fill a pack at any pace. */
-const STEP = 1.035;
+/** Each slow rider's time is this much over the next one's: close enough to fill a pack at any pace. (Round 8:
+ *  1.02 from 1.035, and holes from 1.04 from 1.07: the novice's runs had one rider every 5 s past the pool.) */
+const STEP = 1.02;
 /** The slowest time a slow rider rides, seconds: past this nobody is racing. */
 const SLOWEST = 300;
 /** Runs the slow riders are made from: the pool's slowest finishers, so they ride like beginners. */
 const BASES = 6;
 /** A gap in the pool's own finish times this wide or wider (one time over the next) is filled too. */
-const HOLE = 1.07;
+const HOLE = 1.04;
 
 const paces = new Map<string, number>();
 
@@ -40,23 +41,28 @@ export function withSlowRiders(pool: readonly PoolGhostData[], salt: string): Po
   const rng = new Rng(hashString('slow/' + salt));
   const taken = new Set(pool.map((g) => g.name.toLowerCase()));
   const rows: PoolGhostData[] = [];
-  const bases = finishers.slice(0, BASES);
+  // (Round 8: made from plain runs, no mood and no event, where the pool has enough. A field takes plain
+  // riders into any run, but a mood's riders only into that mood's, so a hole filled from a Comet run was
+  // still a hole in every plain field: Lanternfall's slow end was one plain rider between 140 and 167 s.)
+  const plain = finishers.filter((g) => !g.mood && !g.event);
+  const from = plain.length >= BASES ? plain : finishers;
+  const bases = from.slice(0, BASES);
   const secs = (g: PoolGhostData): number => g.finishTick! / 60;
   // Where the pool's own slow end has a hole (a beginner bot that tumbled twice finishes well behind the
   // next), slow riders fill it too, each made from the slowest finisher still faster than it.
   const targets: number[] = [];
-  const fastest = [...finishers].reverse();
+  const fastest = [...from].reverse();
   for (let i = 1; i < fastest.length; i++) {
     const a = secs(fastest[i - 1]);
     const b = secs(fastest[i]);
     if (b / a < HOLE) continue;
     for (let t = a * STEP; t < b / 1.02; t *= STEP) targets.push(t);
   }
-  for (let t = secs(finishers[0]) * STEP; t <= SLOWEST; t *= STEP) targets.push(t);
+  for (let t = secs(from[0]) * STEP; t <= SLOWEST; t *= STEP) targets.push(t);
   for (let i = 0; i < targets.length; i++) {
     const target = targets[i];
-    const under = finishers.filter((g) => secs(g) < target * 0.999);
-    const base = target > secs(finishers[0]) ? bases[i % bases.length] : under[0];
+    const under = from.filter((g) => secs(g) < target * 0.999);
+    const base = target > secs(from[0]) ? bases[i % bases.length] : under[0];
     if (!base) continue;
     const pace = base.finishTick! / 60 / target;
     let rec;

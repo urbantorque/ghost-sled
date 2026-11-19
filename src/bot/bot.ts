@@ -2072,9 +2072,15 @@ function pointAt(tr: Track, t: number): RiderPoint | null {
   return { x: tr.x[i], y: tr.y[i], z: tr.z[i], riding: (f & T_RIDING) !== 0 && t < tr.n, clean: (f & T_CLEAN) !== 0, finished: (f & T_FINISHED) !== 0 };
 }
 
+/** A pool rider drafts its field from here on (metres). The whole field starts on one spot, and seven riders
+ *  slipstreaming each other off the line were 2.7 s up on a lone rider of the same finish by 500 m: they rode away
+ *  from every player at the start and were slow at the end (race-lab, the expert's runs live 0.62 to 0.66, quiet
+ *  83 of 600 to 58, and the pools' slow half came back). */
+export const FIELD_DRAFT_FROM = 600;
+
 /** Plays one bot run on the real Sim and also returns the finished Sim (for stats) and its track. With a field
- *  (round 8) the run drafts the field's riders (the draft bit, by the game's own rule), and the showdowns it wins and
- *  the wisps it steals go into its log as the live game's do. */
+ *  (round 8) the run drafts the field's riders past FIELD_DRAFT_FROM (the draft bit, by the game's own rule), and the
+ *  showdowns it wins and the wisps it steals go into its log as the live game's do. */
 export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxTicks = 60 * 60 * 6, field?: Field): { record: RunRecord; sim: Sim; track: Track } {
   const charmPool = profile.charmPool ?? STARTER_POOL;
   const sim = new Sim({ seed, chaos, sled: profile.sled, charmPool });
@@ -2093,7 +2099,7 @@ export function runBot(seed: number, chaos: ChaosRoll, profile: BotProfile, maxT
     }
     tokens.length = 0;
     let input = bot.input();
-    if (tracks.length && !sim.finished && sim.s.tumble === 0) {
+    if (tracks.length && !sim.finished && sim.s.tumble === 0 && sim.s.z > FIELD_DRAFT_FROM) {
       const s = sim.s;
       for (const tr of tracks) {
         const p = pointAt(tr, sim.tick - 1);

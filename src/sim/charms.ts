@@ -63,10 +63,10 @@ export const CHARMS: readonly CharmDef[] = [
   { id: 6, key: 'step', family: 'speed', name: 'Ember Step', does: 'A dash straight after a perfect landing costs less', signal: 'The lantern pulses while the half price is open' },
   { id: 7, key: 'stride', family: 'speed', name: 'Long Stride', does: 'A deeper tuck, but you hardly steer while tucked', signal: 'The rider tucked lower, a wind line off the helmet' },
   { id: 8, key: 'owl', family: 'style', name: "Owl's Breath", does: 'Near misses keep your combo going longer', signal: 'The combo ring refills on a whisker' },
-  { id: 9, key: 'hearth', family: 'style', name: 'Hearthstone', does: 'The first perfect landing after a dash gives a third of its lantern back', signal: 'An empty cell outlined after a dash, filled by the stomp' },
+  { id: 9, key: 'hearth', family: 'style', name: 'Hearthstone', does: 'The first perfect landing after a dash gives a quarter of its lantern back', signal: 'An empty cell outlined after a dash, filled by the stomp' },
   { id: 10, key: 'paper', family: 'style', name: 'Paper Kite', does: 'Grabs come sooner and pay more; spins turn slower', signal: 'Paper ribbons off the rider at each grab tier' },
   { id: 11, key: 'whirl', family: 'style', name: 'Whirlwind', does: 'Spins faster and big spins pay more; flips turn slower', signal: 'A ring of snow off a spin' },
-  { id: 12, key: 'memory', family: 'style', name: "Crane's Memory", does: 'A trick new to the run pays triple; a repeat pays half', signal: "A new trick's call drawn gilded" },
+  { id: 12, key: 'memory', family: 'style', name: "Crane's Memory", does: 'A trick new to the run pays far more; a repeat pays half', signal: "A new trick's call drawn gilded" },
   { id: 13, key: 'festival', family: 'style', name: 'Festival Drum', does: 'The multiplier climbs faster, but a bump loses the combo', signal: 'The multiplier beats on each step' },
   { id: 14, key: 'bell', family: 'style', name: 'Bell Rope', does: 'Rails take you from further off and pay double', signal: 'Rails ring as you near them' },
   { id: 15, key: 'spirit', family: 'style', name: 'Spirit Drum', does: 'Spirit Flow climbs faster; a bump costs more of it', signal: "The flow state's picture comes sooner" },
@@ -92,7 +92,7 @@ export interface Synergy {
 /** Pairs with a name: held together they add one rule (sim.ts). */
 export const SYNERGIES: readonly Synergy[] = [
   { id: 0, key: 'ghostRider', name: 'Ghost Rider', a: CHARM.slip, b: CHARM.kite, adds: 'Every slingshot lights a whole cell' },
-  { id: 1, key: 'cometChain', name: 'Comet Chain', a: CHARM.comet, b: CHARM.step, adds: 'A perfect landing during a dash adds a second to it' },
+  { id: 1, key: 'cometChain', name: 'Comet Chain', a: CHARM.comet, b: CHARM.step, adds: 'A perfect landing during a dash makes it last longer' },
   { id: 2, key: 'phoenix', name: 'Phoenix', a: CHARM.second, b: CHARM.quick, adds: 'You get up from a fall into a short dash, no lantern spent' },
   { id: 3, key: 'paperStorm', name: 'Paper Storm', a: CHARM.paper, b: CHARM.whirl, adds: 'Paper Wheels pay half again' },
   { id: 4, key: 'nightChorus', name: 'Night Chorus', a: CHARM.owl, b: CHARM.festival, adds: 'A near miss counts two links' },
