@@ -33,8 +33,9 @@ describe('round 8 bars', () => {
   // rung, a star that is not a medal, a pass and a best do not count (DEAD_RUN_COUNTS).
   // (The merge: once the career rides the game's own SimConfig, the Almanac's pool and gates and the first run, and
   // the field's rival probe, as app.ts does, runs 27 and 28, the third and fourth of day 7 on Ember after a duel
-  // won, gain only passes: not met, so it.fails until the spine's pacing is looked at; notes/r8-int.md.)
-  it.fails('no dead runs: every one of the first 30 gains something the save keeps', () => {
+  // won, gain only passes; notes/r8-int.md.) Phase 3: the day's board refills (a contract met is replaced by one on that
+  // mountain, three times a day): none dead in 30, 1 in 100.
+  it('no dead runs: every one of the first 30 gains something the save keeps', () => {
     const b = barNoDeadRuns(first30);
     expect(b.deadStrict).toEqual([]);
   });
@@ -55,10 +56,11 @@ describe('round 8 bars', () => {
     expect(b.median).toBeGreaterThanOrEqual(4);
   });
 
-  // On SIM_VERSION 9: three families (a spin, a flip, both), and the expert's best combo holds two. The sim lane's
-  // eighteen named tricks are its batch's.
-  it.fails('expression: ten named air tricks, five of them in the expert best combo', () => {
-    const facts = M.mountains.MOUNTAINS.map((_: unknown, m: number) => firstRun(M, 'expert', 4242, m));
+  // On SIM_VERSION 9: three families (a spin, a flip, both), and the expert's best combo holds two. On the batch the
+  // classic expert still said 3; the lab's expert on the air map (labpilots.ts trickster) is the bar's pilot: 18 named
+  // tricks, its best combo 7 distinct, 5 at the median ride (r8-bars.ts).
+  it('expression: ten named air tricks, five of them in the expert best combo', () => {
+    const facts = M.mountains.MOUNTAINS.map((_: unknown, m: number) => firstRun(M, 'trickster-expert', 4242, m));
     const b = barExpression(M, facts);
     expect(b.vocabulary.length).toBeGreaterThanOrEqual(10);
     expect(b.bestComboFamilies).toBeGreaterThanOrEqual(5);
@@ -72,10 +74,44 @@ describe('round 8 bars', () => {
     for (const pilot of ['clumsy-prompted', 'novice-prompted']) for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, pilot, seed)).ok, `${pilot} ${seed}`).toBe(true);
   });
 
-  // The opener (pacer.ts) puts a rider ahead off the line and behind you by 250 m: the prompted novice's first shown
-  // pass comes by 20 s (before it, 24 to 54 s).
+  // The opener (pacer.ts openerRate) left the line a moment before you and answers the rider: it keeps a few metres
+  // on you, waits when you slow or fall, never outrides its own record. The prompted novice's first shown pass comes
+  // by 20 s (before the round, 24 to 54 s); the hands-off pilot's not before 25 s.
   it('first minute: the opener gives the prompted novice a pass by 20 s', () => {
     for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, 'novice-prompted', seed)).pass ?? 99).toBeLessThanOrEqual(20);
+  });
+
+  it('first minute: the opener gives nothing to a run that does nothing (no pass by 20 s hands-off)', () => {
+    for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, 'hands-off', seed)).pass ?? 99).toBeGreaterThan(20);
+  });
+
+  // The race has a floor (phase 3): a first run's field is laid round what a run that only steers rides there
+  // (field.ts FIRST_RUN_PACE), and the riders ride their own pace over the last stage. Before: a hands-off run reached
+  // the podium on 9 of 10 first runs, a steer-only one on 8 of 10.
+  it('the race has a floor: a run that does nothing or only steers is off the podium on every first run', () => {
+    for (const pilot of ['hands-off', 'line']) for (let m = 0; m < M.mountains.MOUNTAINS.length; m++) {
+      const f = firstRun(M, pilot, 1234, m);
+      const you = { time: f.time, distance: f.distance };
+      const ahead = f.field.filter((q) => q.kind !== 'you' && M.standing.aheadOf({ time: q.time, distance: q.distance }, you)).length;
+      expect(ahead + 1, `${pilot} on ${M.mountains.MOUNTAINS[m].id}`).toBeGreaterThan(3);
+    }
+  });
+
+  it('the race has a floor: the steady time a first run is laid round is what a steering-only run rides', () => {
+    for (let m = 0; m < M.mountains.MOUNTAINS.length; m++) {
+      const id = M.mountains.MOUNTAINS[m].id;
+      const f = firstRun(M, 'line', 1234, m);
+      expect(Math.abs((f.time ?? 0) / M.field.FIRST_RUN_PACE[id] - 1), id).toBeLessThan(0.06);
+    }
+  });
+
+  // The Hollow King rode as an ordinary ghost on Pinecrest's second run (DECISIONS 367): he is met first in his duel.
+  it('The Hollow King rides in no field before his duel', () => {
+    let beaten = 0;
+    for (const r of runs) {
+      if (beaten < 11) expect(r.facts.field.some((q) => q.name === 'The Hollow King'), `run ${r.n}`).toBe(false);
+      beaten = r.after.twelve;
+    }
   });
 
   it('first minute: the clumsy pilot finishes at least 26 of 30', () => {

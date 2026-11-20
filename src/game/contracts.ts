@@ -13,6 +13,10 @@ import type { Contract, ContractMetric, ContractsSave, RecentRun } from './spine
 export const CONTRACT_XP = 50;
 export const CONTRACT_BONUS_XP = 100;
 export const FORM_XP = 40;
+/** A day's board refills (round 8, no dead runs): a contract met is replaced by a new one on the mountain it was met
+ *  on, set from your form there, this many times a day; so a day holds up to six, and the third and fourth runs of a
+ *  day on one mountain still have something there to take. The bonus is for the first three met. */
+export const CONTRACT_REFILLS = 3;
 
 /** What a run did, as a contract reads it. */
 export interface ContractRun {
@@ -127,19 +131,20 @@ export function drawContracts(day: string, seed: number, open: readonly string[]
   const mountains = open.length ? open : ['pinecrest'];
   const first = h(1) % mountains.length;
   const picks = mountains.length > 1 ? [mountains[first], mountains[(first + 1 + (h(2) % (mountains.length - 1))) % mountains.length]] : [mountains[0], mountains[0]];
-  picks.forEach((on, i) => {
-    for (let k = 0; k < DAY_METRICS.length; k++) {
-      const m = DAY_METRICS[(h(3 + i) + k) % DAY_METRICS.length];
-      if (out.some((c) => c.on === on && c.metric === m)) continue;
-      const t = targetFor(m, recent, on);
-      if (t !== null) {
-        out.push({ id: `${day}:${i + 1}`, on, metric: m, target: t });
-        return;
-      }
-    }
-    out.push({ id: `${day}:${i + 1}`, on, metric: 'finish', target: 1 });
-  });
+  picks.forEach((on, i) => out.push(drawOn(on, `${day}:${i + 1}`, h(3 + i), recent, out)));
   return out;
+}
+
+/** One contract on a mountain: the first measure in turn (from `salt`) your form reaches that the board does not hold
+ *  there already. */
+function drawOn(on: string, id: string, salt: number, recent: readonly RecentRun[], held: readonly Contract[]): Contract {
+  for (let k = 0; k < DAY_METRICS.length; k++) {
+    const m = DAY_METRICS[(salt + k) % DAY_METRICS.length];
+    if (held.some((c) => c.on === on && c.metric === m)) continue;
+    const t = targetFor(m, recent, on);
+    if (t !== null) return { id, on, metric: m, target: t };
+  }
+  return { id, on, metric: 'finish', target: 1 };
 }
 
 /** The next form contract: the next measure in turn your recent runs reach at all, at your median there (so at least
@@ -174,21 +179,29 @@ export function settleContracts(was: ContractsSave | undefined, day: string, run
     s.list = drawContracts(day, o.seed, o.open, o.recent.slice(0, -1));
     s.done = 0;
     delete s.bonus;
+    delete s.met;
+    delete s.refills;
   }
   const met: string[] = [];
   let xp = 0;
   if (o.daily) {
     s.list.forEach((c, i) => {
       if (s.done & (1 << i)) return;
-      if (meets(c, run)) {
-        s.done |= 1 << i;
-        met.push(contractText(c));
-        xp += CONTRACT_XP;
-      }
+      if (!meets(c, run)) return;
+      met.push(contractText(c));
+      xp += CONTRACT_XP;
+      s.met = (s.met ?? 0) + 1;
+      // The board refills: a new contract on the mountain this one was met on (a Daily's or a Cup's on the first open
+      // named mountain), at your form there.
+      if ((s.refills ?? 0) < CONTRACT_REFILLS) {
+        s.refills = (s.refills ?? 0) + 1;
+        const on = o.open.includes(run.key) ? run.key : (o.open[0] ?? 'pinecrest');
+        s.list[i] = drawOn(on, `${day}:r${s.refills}`, hash32(o.seed >>> 0, s.refills, 0xc0ad) % 97, o.recent, s.list);
+      } else s.done |= 1 << i;
     });
   }
   let bonus = false;
-  if (o.daily && s.list.length === 3 && s.done === 7 && !s.bonus) {
+  if (o.daily && (s.met ?? 0) >= 3 && !s.bonus) {
     s.bonus = true;
     bonus = true;
     xp += CONTRACT_BONUS_XP;

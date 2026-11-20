@@ -72,6 +72,10 @@ export interface FieldInput {
   /** The rider the last results promised by name (the Run Again button): it rides next, whatever the
    *  mood, and it is the rival. The app promises nobody while an unbeaten friend or a grudge rides. */
   promised?: { name: string; score: number; record: string } | null;
+  /** The mountain's save key (round 8): a very first run's field is laid round FIRST_RUN_PACE for it. */
+  key?: string;
+  /** Riders who may not ride yet, by name (round 8: The Hollow King before his duel, twelve.ts withheldRiders). */
+  withheld?: readonly string[];
 }
 
 export interface FieldPick {
@@ -100,6 +104,13 @@ export const ANCHOR_MAX = 420;
  *  read you (pacer.ts). A Daily or a Cup shares its field, so two true beginners ride far behind it there,
  *  and anyone finds a rider near them. */
 export const ANCHOR_DEFAULT = 150;
+/** A save's very first run on a bundled mountain (round 8, the race's floor): what a steady hand that only steers
+ *  rides there (the lab's `line` pilot on run 1, scripts/playtest/r8-floor.ts; tests/r8bars.test.ts holds it
+ *  within 6%). The field is laid round it (firstRoles): three riders quicker than a run that only steers or does
+ *  nothing, so the podium is earned, and two a little slower, so a beginner who rides has someone to beat. The riders
+ *  still read you (pacer.ts) until the last stage, which they ride on their own pace. A Daily or a Cup is shared and
+ *  keeps ANCHOR_DEFAULT. */
+export const FIRST_RUN_PACE: Readonly<Record<string, number>> = { pinecrest: 138, frostfang: 138, ember: 128, sakura: 132, lanternfall: 136 };
 /** Predicted times the anchor reads per key (the most recent). */
 export const ANCHOR_RUNS = 5;
 /** One quick run pulls the next anchor to this multiple of it at most (anchorFor). */
@@ -245,6 +256,22 @@ function roles(a: number, count: number, beginners: boolean): Role[] {
   return out.sort((x, y) => order[x.role] - order[y.role] || y.target - x.target);
 }
 
+/** A very first run's roles round the steady time (FIRST_RUN_PACE): three quicker (the podium is earned), two slower
+ *  (a beginner who rides beats one or two). Further ghosts join the slow end. */
+function firstRoles(a: number, count: number): Role[] {
+  const all: Role[] = [
+    { role: 'opener', target: 1.1 * a, lo: 1.05 * a, hi: 1.16 * a },
+    { role: 'pack', target: 0.96 * a, lo: 0.93 * a, hi: 0.98 * a },
+    { role: 'pace', target: 0.93 * a, lo: 0.9 * a, hi: 0.95 * a },
+    { role: 'opener', target: 1.19 * a, lo: 1.13 * a, hi: 1.3 * a },
+    { role: 'pace', target: 0.87 * a, lo: 0.8 * a, hi: 0.9 * a },
+  ];
+  const more = [1.05, 1.24, 1.12, 1.3];
+  for (let k = 0; all.length < count; k++) all.push({ role: 'opener', target: more[k % more.length] * a, lo: 1.02 * a, hi: 1.4 * a });
+  const order: Record<GhostRole, number> = { opener: 0, pack: 1, pace: 2 };
+  return all.slice(0, Math.max(0, count)).sort((x, y) => order[x.role] - order[y.role] || y.target - x.target);
+}
+
 /** The window after k widenings: 25% wider each time about its middle. */
 function widen(r: Role, k: number): { lo: number; hi: number } {
   if (k === 0) return { lo: r.lo, hi: r.hi };
@@ -316,11 +343,12 @@ export function pickField(i: FieldInput): FieldPick[] {
   for (const g of i.pool) times.set(g, poolTime(g));
   const timeOf = (g: PoolGhostData): number => times.get(g) ?? 0;
   const cands = fieldCandidates(i.pool, i.mood, i.event, count + 3)
-    .filter((g) => g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
+    .filter((g) => !i.withheld?.includes(g.name) && g.record !== you?.record && g.record !== friend?.record && timeOf(g) > 0)
     .sort((x, y) => timeOf(x) - timeOf(y));
   const first = !(Number.isFinite(i.anchor) && i.anchor > 0);
   const recent = runs(i.recent);
-  const a = first ? ANCHOR_DEFAULT : recent.length ? fieldPace(i.anchor, recent) : i.anchor;
+  const paced = first && i.kind === 'pool' && i.key !== undefined ? FIRST_RUN_PACE[i.key] : undefined;
+  const a = first ? (paced ?? ANCHOR_DEFAULT) : recent.length ? fieldPace(i.anchor, recent) : i.anchor;
 
   const wreckOf = (distance: number): number | null => (distance >= FINISH_Z ? null : distance);
   const used = new Set<PoolGhostData>();
@@ -333,7 +361,7 @@ export function pickField(i: FieldInput): FieldPick[] {
   };
 
   const picks: Array<{ g: PoolGhostData; role: GhostRole; widened: boolean }> = [];
-  for (const r of !first && recent.length ? spread(a, count, recent) : roles(a, count, first && i.kind !== 'pool')) {
+  for (const r of !first && recent.length ? spread(a, count, recent) : paced ? firstRoles(a, count) : roles(a, count, first && i.kind !== 'pool')) {
     const fits = (g: PoolGhostData) => !used.has(g) && spaced(g);
     let found: PoolGhostData | null = null;
     let widened = false;

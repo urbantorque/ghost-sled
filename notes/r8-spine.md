@@ -123,3 +123,132 @@ an exact round trip of every field and a mangled save.
   contract reads as a goal or as homework; whether the flame feels kind or nagging; whether the Lantern Row is worth
   wanting. Only a person can say.
 - XP rates were set from these careers; pilots never get better, so a real player's later runs will pay more.
+
+## Phase 3: the integrated build (round-8 merged at `0dd71a1`)
+
+The six findings of DECISIONS 367 that were the spine's, each fixed by design and measured in the harness on the
+merged build (SIM_VERSION 10). Full bars in `shots/r8/spine/bars-phase3.txt`; the full suite (`vitest
+--maxWorkers=3`, in the heavy slot) is green: 90 files, 1,711 tests, none expected to fail.
+
+1. **No dead runs: the day's board refills.** A contract met is replaced by a new one on the mountain it was met on,
+   set from your form there, three times a day (`contracts.ts CONTRACT_REFILLS`; the bonus is for the first three
+   met). The third and fourth runs of a day on one mountain now have something there to take; a day holds at most six
+   contracts, each a target your own last runs reached, so a contract stays a goal and not a gift. Stickers count as
+   gains only once the album is open (page 3). Mid pilot: **0 dead in its first 30 and 0 in 100** (merged build before:
+   2 in 30, 6 in 100).
+2. **Expression rides the lab's expert on the air map** (`trickster-expert`, as `lab.ts` rides `expert`): 18 named
+   tricks; its best combo **6 distinct** (Spin, Spirit Stretch, Crosswind, Ember Twist, Crane Fold, Rail Grab), each
+   ride's best a median of **4** over ten rides (4 4 4 5 4 6 4 4 4 6). The bar (five in the best combo) is met.
+3. **The race has a floor.** A save's very first run on a bundled mountain is laid round what a run that only steers
+   rides there (`field.ts FIRST_RUN_PACE`, the `line` pilot's run 1: 136 to 138 s, Ember 128): three riders quicker,
+   two a little slower (`firstRoles`). The riders still read you, but from the last stage line they ride their own
+   record's pace (`pacer.ts PACE_OPEN` is now the last stage; `ghosts.ts pace` eases each back to it), so the last
+   stage is raced on what each really rides. Run 1 on every mountain, seeds 1234 and 1271 (`scripts/playtest/r8-floor.ts`):
+
+   | Pilot | Podium before | Podium after | Places after |
+   | --- | --- | --- | --- |
+   | hands-off | 9 of 10 (3 wins) | **0 of 10** | 4th to 6th |
+   | line (steers only) | 8 of 10 (1 win) | **0 of 10** | 4th or 5th |
+   | clumsy | 1 of 10 | 0 of 10 | 6th |
+   | prompted novice | 9 of 10 (2 wins) | 6 of 10 (2 wins) | 1st to 5th |
+   | mid | 10 of 10 (7 wins) | 9 of 10 (4 wins) | 1st to 4th |
+
+   The pass by 20 s is kept by a new opener: the front rider of a first run left the line a moment before you
+   (`OPENER_HEAD`, 2.5 s of its run), may ride up to 1.4 times its pace while it leads, and is timed (not placed) to be
+   behind you about 11 s in (`OPENER_*_T`): with the quicker field the old one, placed by metres, could not get ahead
+   of a quick first-timer. First minute, prompted pilots: **novice 6 of 6, clumsy 4 of 6** (its two misses fall or
+   slow at 10 to 13 s with the opener 5 m ahead); blind floors 3 of 6 each; the clumsy pilot finishes 28 of 30.
+4. **Rewards paced.** A first ride of a mountain places you on its ladder and pays no rungs (you are paid for
+   climbing it); its stage medals open on the second ride; its mastery board opens a row a ride (medals, sky gates,
+   set pieces, home riders, a clean finish: `mastery.ts MASTERY_ROWS`); one Almanac page opens a run; a first run
+   holds one mission slot, the second two (`missions.ts missionSlots`); the month's chapter starts on the second run.
+   Run 1 now pays 140 gifts (the merged build: 730; the review's live build: 470 on the ladder and 66 on the card).
+   Runs 1 to 10, the mid pilot staying on Pinecrest (following the button rides the same ten: the button named a
+   rematch or Pinecrest's own duels throughout):
+
+   | Run | Place | What the save keeps (pass and best apart) | Gifts |
+   | --- | --- | --- | --- |
+   | 1 | 3/6 | mission, run medal (and its two stars), flame day 1, page 1 | 140 |
+   | 2 | 3/9 | 2 missions, a rung, 3 medals, 2 stars, Frostfang, a contract, page 2 | 330 |
+   | 3 | 2/10 | 2 missions, a rung, 3 stars, Ember, a duel won, page 3, a chapter page | 325 |
+   | 4 | 3/9 | mission, 4 stars, Sakura, a duel won, 2 stickers, page 4 | 255 |
+   | 5 | 6/9 | mission, flame day 2, 2 stickers, a contract, page 5 | 85 |
+   | 6 | 4/9 | mission, 2 stickers, a contract, page 6, a chapter page | 125 |
+   | 7 | 3/9 | mission, a rung, a star, 4 stickers, 3 contracts, page 7 | 120 |
+   | 8 | 8/9 | 2 missions, page 8 | 95 |
+   | 9 | 2/9 | mission, a rung, flame day 3, 2 stickers, 2 contracts, page 9, a chapter page | 110 |
+   | 10 | 4/9 | mission, a sticker, a contract, page 10 | 100 |
+
+5. **A quiet first run.** Every lesson goes up at most three times a run (the stomp cue six, the steer lesson its own
+   three), and lessons retire after 2 runs not taken up (the ring after 4; they were 3 and 6) (`hints.ts
+   HINT_RUN_SHOWS`, `STOMP_RUN_SHOWS`). On a save's first run the director makes no start-line call, and calls no
+   slipstream or slingshot and pops no mission or unlock in its first 15 s (`director.ts FIRST_QUIET_S`); the first
+   duel already waits for run 3. Hints shown on the blind clumsy pilot's first run, before: stomp 3 to 29, pop 47 to
+   74, dash 46 to 63, flip up to 33; after: at most 6, 3, 3, 3.
+6. **The Hollow King** is withheld from every field until his duel (`twelve.ts withheldRiders`, `field.ts
+   FieldInput.withheld`; tested over a 50-run career). **A duel won** pays 120 gifts (was 40) and 300 XP; one lost
+   pays 40 XP ("A duel ridden"), and with the ladder's first ride paying no rungs a lost duel no longer pays nearly
+   what a win does. **The Daily's card** shows the day's best time beside the medal it is won on (`DailyRecord.time`,
+   `TitleModel.daily.time`), the style score only with no medal and no finish.
+
+**Bars on the integrated build, now:** no dead runs 0 of 30 (0 of 100); one run away 100 of 100 for the mid pilot and
+the novice; decisions four kinds (charm, dash, fork, showdown), a median of 17 a run; expression 18 named tricks, best
+combo 6; first minute met by the prompted novice on 6 of 6 and the prompted clumsy pilot on 4 of 6, clumsy finishes 28
+of 30; still new at run 50 met on all five mountains (Lanternfall 6 in reach).
+
+**Economy, phase 3** (mid / novice; lifetime gifts, page, stickers): run 1 140 / 75, page 2 / 1, stickers 10 / 1;
+run 5 875 / 560, 6 / 4; run 20 4,495 / 2,755, 16 / 13; run 50 10,145 / 5,900, 26 / 20; run 100 17,260 / 12,170, 35 /
+30, still 7 pieces to want each (4,840 / 4,015 gifts).
+
+**Touched outside my files (phase 3):** `src/game/ghosts.ts` (a reader eases back to its own pace once it stops
+reading; the opener's head start and its wider rate), `src/game/director.ts` (`FIRST_QUIET_S`: no start-line call,
+no slipstream callout and no pop in a first run's first 15 s), `src/game/hints.ts` (per-run caps, faster retiring),
+`src/game/app.ts` (the field's `key` and `withheld`; the ladder's and mastery's `rides`; `duelLost`; the Daily's
+`time` on the title), `src/ui/title.ts` (the Daily card's best is its time), `src/game/field.ts`.
+
+**For the main lane:** nothing new to wire; the app edits above are in. The opener's head start shows a rider 40 to 50
+m down the run as you leave the line on a first run: a person should say whether that reads as "the rider who set off
+first". The clumsy pilot's first minute (4 of 6) is the one bar short.
+
+
+## Phase 3, the last tune: an opener that answers the rider
+
+The prompted clumsy pilot had passed a ghost within 20 s on 4 of 6 seeds. The opener no longer follows a script (lead,
+then drop behind by a set second); it rides like a rider looking over its shoulder (`pacer.ts openerRate`, read in
+`ghosts.ts pace`):
+
+- it leaves the line a moment before you (`OPENER_HEAD`, 100 ticks of its own run) and, while ahead, keeps about
+  `OPENER_LEAD` (6 m) on where you will be, read from your speed now (not the field's eased reading);
+- it never rides faster than its own record (rate at most its pace), and once you are past it rides its own pace and
+  does not chase;
+- it waits for a rider in trouble: when your speed drops under `OPENER_SLOW` (0.7) of your quickest so far (a fall,
+  a stop against the bank) it drops back to `OPENER_WAIT` (3 m behind you), easing quickly (`OPENER_EASE`), down to
+  `OPENER_MIN` (0.15) of its pace, and in the air down to `OPENER_AIR` (0.45, where the rest of the field keeps 0.85:
+  a rider waiting over a jump floats a little);
+- for a rider riding steadily it never hangs back below `OPENER_STEADY` (0.6) of its pace, so a run that does nothing
+  never catches it early.
+
+First minute, run 1 on Pinecrest, six seeds (`r8-bars.ts --only first`):
+
+| Pilot | First pass (s) | Met all three |
+| --- | --- | --- |
+| prompted clumsy | 8.2, 15.2, 13.7, 8.1, 10.1, 14.3 | **6 of 6** (was 4) |
+| prompted novice | 10.0, 11.3, 10.0, 8.4, 9.8, 8.4 | **6 of 6** |
+| clumsy (blind) | 12.1, 15.2, 13.9, 24.7, 12.5, 14.3 | 5 of 6 |
+| novice (blind) | 10.0, 14.8, 10.0, 8.8, 9.8, 8.4 | 6 of 6 |
+| hands-off | 25.7 on every seed | 0 (no pass inside 20 s) |
+
+The clumsy pilot finishes 28 of 30. The floor, run 1 on every mountain, seeds 1234 and 1271 (`r8-floor.ts`):
+
+| Pilot | Podium | Places |
+| --- | --- | --- |
+| hands-off | 0 of 10 | 4th or 5th |
+| line (steers only) | 0 of 10 | 4th |
+| clumsy | 0 of 10 | 6th |
+| prompted novice | 3 of 10 | 2nd to 6th |
+| mid | 10 of 10 (2 wins) | 1st or 2nd |
+
+Tests: `tests/spine.test.ts` (the opener waits for a rider in trouble, never outrides its record, does not hang
+back for a steady one), `tests/r8bars.test.ts` (the prompted novice passes by 20 s, the hands-off pilot does not).
+What only a person can judge: whether the opener's float over a jump while it waits for a fallen rider reads as kind or
+as odd.

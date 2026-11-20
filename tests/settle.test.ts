@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RunSummary, unlockedBiomes } from '../src/game/missions';
+import { RunSummary, missionSlots, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { Grudge, defaultSave } from '../src/game/save';
 import { GrudgeOutcome, dailyLine, dailyMedalNow, grudgeLine, dailyStreakNow, medalFor, medalThresholds, prevDay, rowMargin, settleGrudge, settleRun } from '../src/game/settle';
@@ -77,7 +77,8 @@ describe('settling a run (revive guard)', () => {
     const third = settleRun(d, summary({ distance: 1000, ghostsPassed: 1 }), second.settlement);
     expect(third.missionReward).toBe(0);
     expect(d.gifts - gifts0).toBe(50);
-    expect(d.missions.active).toHaveLength(3);
+    // (Round 8: a save's second run holds two slots, missionSlots.)
+    expect(d.missions.active).toHaveLength(missionSlots(d.runs));
   });
 
   it('a mission that popped mid-run is credited exactly once, by settleRun', () => {
