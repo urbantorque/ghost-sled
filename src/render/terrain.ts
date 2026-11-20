@@ -22,6 +22,11 @@ const smooth = (a: number, b: number, x: number): number => {
 
 const sec0Kind = (c: Course, z: number): string => c.section(z).kind;
 
+/** A composed wall's crest (compose.ts), metres over the floor: its ice ramps from its dark foot to its pale skin by
+ *  it (the aurora takes only its top third). Only the wall carries it: a canyon's floor laid in the crest's shadow lost
+ *  the long shadows raking down the lit run (ART.md 11), and a critic on stills chose the open run for them. */
+const CANYON_CREST = 40;
+
 export interface TerrainDetail {
   /** Lateral vertex spacing inside the corridor, metres. */
   inner: number;
@@ -230,6 +235,13 @@ class ChunkJob {
       // How fully the land past the lip falls away on each side of this row (an overlook).
       const wl = this.ov ? this.ov.fall(z, -1) : 0;
       const wr = this.ov ? this.ov.fall(z, 1) : 0;
+      // A composed place's banks past the limit (compose.ts): how fully each side is shaped, and on a canyon the
+      // walls' height, which the snow shader ramps the ice by and casts across the floor.
+      const cp = this.ov ? this.ov.compose : null;
+      const cl = cp ? cp.shaped(z, -1) : 0;
+      const cr = cp ? cp.shaped(z, 1) : 0;
+      const wallL = cp && cl > 0 && cp.kindAt(z, -1) === 'wall' ? cl : 0;
+      const wallR = cp && cr > 0 && cp.kindAt(z, 1) === 'wall' ? cr : 0;
       let p = this.row * cols;
       groomRow(this.groom, p, cols, groomedAt(c, z));
       for (let col = 0; col < cols; col++) {
@@ -253,6 +265,13 @@ class ChunkJob {
           let lx = snowDrift(x + e, z, c.edgeExcess(x + e, z), this.drift)[0];
           let lz = snowDrift(x, z + e, c.edgeExcess(x, z + e), this.drift)[0];
           const w = this.offs[col] < 0 ? wl : wr;
+          // (On a composed bank the drifts lie only on what is left of the plain one.)
+          const cw = 1 - (this.offs[col] < 0 ? cl : cr);
+          if (cw < 1) {
+            lift *= cw;
+            lx *= cw;
+            lz *= cw;
+          }
           if (w > 0 && ed > LIP_FROM - 1) {
             // An overlook: the cornice's crest, then the lip rolls over, and the drifts thin out down
             // its face (so the edge meets the mid-ground's fall cleanly).
@@ -280,6 +299,15 @@ class ChunkJob {
           gz += (rampart(z + e, c.edgeExcess(x, z + e), side, wk, limit) - r) / e;
           y += r;
         }
+        let cRock = 0;
+        if (cp && (side < 0 ? cl : cr) > 0 && ed > limit) {
+          // A composed bank: a wall, a fall or a flight of terraces past the limit, and its face bare where steep.
+          const d = cp.delta(x, z, y0);
+          gx += (cp.delta(x + e, z, yx) - d) / e;
+          gz += (cp.delta(x, z + e, yz) - d) / e;
+          y += d;
+          cRock = cp.rock(x, z);
+        }
         this.pos[p * 3] = x;
         this.pos[p * 3 + 1] = y;
         this.pos[p * 3 + 2] = -z;
@@ -306,10 +334,11 @@ class ChunkJob {
           break;
         }
         const rq = p * 4;
-        this.rock[rq] = rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0);
+        this.rock[rq] = Math.max(rockWeight(ridge, wall, fall, limit, ed, off, sx, sz, z, this.kick[kq] > 0), cRock);
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
-        this.rock[rq + 3] = crestH;
+        // (A wall on one bank only ramps its own ice by its height: its crest casts on the floor only in a canyon.)
+        this.rock[rq + 3] = Math.max(crestH, ed > 0 ? (side < 0 ? wallL : wallR) * CANYON_CREST : 0);
         // (A pond is carried as a negative lake: the two never meet on one vertex.)
         this.paint[rq] = pondRow && lakeK === 0 ? -smoothK(0.4, 1.6, ed) * (1 - smoothK(8.5, 11, ed)) * (1 - smoothK(0.05, 0.16, Math.abs(sz))) * (1 - smoothK(0.06, 0.2, Math.abs(sx))) : lakeK;
         this.paint[rq + 1] = alt === null ? 0 : stripK * (1 - smoothK(2.3, 3.1, Math.abs(x - alt)));

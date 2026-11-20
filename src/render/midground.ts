@@ -854,6 +854,24 @@ export class Midground {
         out.yE -= this.plan.drop(z, side, eRef);
         out.s0 = (this.plan.drop(z, side, eRef + 1) - this.plan.drop(z, side, eRef - 1)) / 2 / out.ov;
       }
+      // A composed place's fall or flight (compose.ts): the edge on what the terrain draws there, and the fall
+      // carrying on from the drawn face's own slope.
+      const cp = this.plan.compose;
+      const cw = cp ? cp.shaped(z, side) : 0;
+      if (cp && cw > 0) {
+        const at = (x: number) => {
+          const g = c.ground(x, z);
+          return g + cp.delta(x, z, g);
+        };
+        const y = at(out.xE);
+        const s = (at(out.xE - side) - at(out.xE + side)) / 2;
+        out.yE = y - this.plan.drop(z, side, uRef - c.halfWidth(z));
+        if (s > 0) {
+          const ov = Math.max(out.ov, cw);
+          out.s0 = Math.max(out.s0 * out.ov, s) / ov;
+          out.ov = ov;
+        }
+      }
     }
     out.k = this.modeK(z, side);
     // Past an overlook the valley's far wall stands lower, so the view goes on over the sea of clouds
@@ -986,6 +1004,8 @@ export class Midground {
         y = kind === 3 ? by - 14 : c.ground(x, z) - (kind === 2 ? 2.5 : 0);
         // (On an overlook, the terrain's lowered lip, and the bank carrying on down its face.)
         if (kind !== 3 && this.plan) y -= this.plan.drop(z, u < 0 ? -1 : 1, Math.abs(u) - c.halfWidth(z));
+        // (And a composed place's banks, as the terrain draws them.)
+        if (kind !== 3 && this.plan?.compose) y += this.plan.compose.delta(x, z, c.ground(x, z));
       }
       xs[i] = x;
       ys[i] = y;
