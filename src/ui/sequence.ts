@@ -245,7 +245,7 @@ export class Story {
       this.xpEl = h('span', 'gs-num', `+${fmt(this.xp)}`);
       const gifts = m.giftsEarned > 0 ? h('span', 'gs-sq-gifts', h('span', 'gs-num', `+${fmt(m.giftsEarned)}`), icon('gift'), sr(' gifts')) : null;
       const flame = spine.flame.lit ? h('span', 'gs-sq-flame', icon('flame'), h('span', 'gs-num', `Day ${spine.flame.streak}`), sr(' of your flame')) : null;
-      const head = h('div', 'gs-sq-rank-head', h('span', 'gs-sq-page', h('span', 'gs-sq-page-k', 'Rank'), this.pageEl), h('span', 'gs-sq-xp', this.xpEl, h('span', 'gs-sq-xp-u', NBSP + 'XP')), flame, gifts);
+      const head = h('div', 'gs-sq-rank-head', h('span', 'gs-sq-page', h('span', 'gs-sq-page-k', 'Rider Rank'), this.pageEl), h('span', 'gs-sq-xp', this.xpEl, h('span', 'gs-sq-xp-u', NBSP + 'XP')), flame, gifts);
       this.fillEl = h('span', 'gs-sq-fill');
       const bar = h('span', 'gs-sq-bar', this.fillEl);
       bar.setAttribute('aria-hidden', 'true');

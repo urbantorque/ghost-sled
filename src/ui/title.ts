@@ -855,7 +855,7 @@ export class Title {
     const nextEl = next
       ? h('span', 'gs-t-book-next', h('span', 'gs-t-book-nk', `Page ${b.page + 1}`), h('span', 'gs-t-book-nn', next), h('span', 'gs-t-book-togo gs-num', `${fmt(b.need)}${NBSP}to go`))
       : h('span', 'gs-t-book-next', 'Every page turned');
-    const main = h('button', 'gs-t-book-main', icon('book', 'gs-t-book-ico'), h('span', 'gs-t-book-txt', h('span', 'gs-t-book-rank', 'Rank ', h('span', 'gs-num', String(b.page))), bar, nextEl));
+    const main = h('button', 'gs-t-book-main', icon('book', 'gs-t-book-ico'), h('span', 'gs-t-book-txt', h('span', 'gs-t-book-rank', 'Rider Rank ', h('span', 'gs-num', String(b.page))), bar, nextEl));
     main.type = 'button';
     main.dataset.fk = 'almanac';
     main.setAttribute('aria-label', `Almanac: Rider Rank ${b.page} of ${b.of}${next ? `. Page ${b.page + 1}: ${next}, ${fmt(b.need)} XP to go` : ''}`);

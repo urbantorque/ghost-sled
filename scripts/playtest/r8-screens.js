@@ -40,7 +40,7 @@ async (page) => {
       window.__gs.run.sim.s.z = Math.max(window.__gs.run.sim.s.z, from);
     }, from);
   const reach = (z) => page.waitForFunction((d) => { const r = window.__gs.run; return !r || r.sim.s.z >= d; }, z, { timeout: 60000, polling: 32 }).catch(() => {});
-  await page.goto(c.base + `?debug&tier=${c.tier}&autoride=1&m=${c.m}`);
+  await page.goto(c.base + `?debug&tier=${c.tier}&autoride=1&m=${c.m}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 90000 });
   for (let run = 1; run <= c.runs; run++) {
     await page.waitForTimeout(800);
@@ -93,7 +93,7 @@ async (page) => {
     report.runs.push({ run, res, again: times });
   }
   if (c.title) {
-    await page.goto(c.base + `?debug&tier=${c.tier}`);
+    await page.goto(c.base + `?debug&tier=${c.tier}`, { waitUntil: 'domcontentloaded', timeout: 90000 });
     await page.waitForFunction(() => window.__gs && window.__gs.phase === 'title', null, { timeout: 90000 }).catch(() => {});
     await page.waitForTimeout(1500);
     await shoot('title-1500');

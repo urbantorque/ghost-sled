@@ -460,6 +460,7 @@
 /* "+2 more": a card that is a button into Details. */
 .gs-sq-face.is-more {
   align-content: end;
+  white-space: normal;
   border-radius: var(--r-card);
   cursor: pointer;
 }
@@ -470,6 +471,7 @@
 
 .gs-sq-more-l {
   display: -webkit-box;
+  max-width: 100%;
   overflow: hidden;
   color: var(--text);
   font-size: max(12px, 0.8em);

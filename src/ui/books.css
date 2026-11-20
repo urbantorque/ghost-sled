@@ -402,10 +402,14 @@
     text-shadow: none;
   }
 
+  /* Two balanced lines at most, never a lone word on the second. */
   .gs-t-news-t {
+    display: -webkit-box;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    text-wrap: balance;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
   }
 
   .gs-flame-pop {
