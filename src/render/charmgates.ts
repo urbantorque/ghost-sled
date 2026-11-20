@@ -42,6 +42,8 @@ const AROUND = 5;
 const TUBE = 0.17;
 /** The marker: a square arch this much wider and taller. */
 export const MARKER_SCALE = [2.6, 2.2] as const;
+/** The marker's columns of light stand this tall (m) over its posts. */
+export const MARKER_BEAM = 46;
 
 /** Gates are drawn from this far ahead (fading in over the last 60 m) to this far behind. */
 export const DRAW_AHEAD = 460;
@@ -250,9 +252,16 @@ function gateMaterial(): ShaderMaterial {
           vQ = position.xy;
           vPx = px / hs.y;
         } else {
-          // The veil fills the opening, from the snow to the crown.
-          p = vec3(position.x * ${ARCH_HALF.toFixed(2)} * mk.x, (position.y * 0.5 + 0.5) * top * mk.y, -0.06);
-          vQ = vec2(position.x * ${ARCH_HALF.toFixed(2)}, (position.y * 0.5 + 0.5) * top);
+          // The veil fills the opening, from the snow to the crown. A marker's is two columns of light standing
+          // ${MARKER_BEAM} m over its posts, so the finish of the race is found over a crest from its start (in metres).
+          if (marker > 0.5) {
+            p = vec3(position.x * (${ARCH_HALF.toFixed(2)} * mk.x + 1.5), (position.y * 0.5 + 0.5) * ${MARKER_BEAM.toFixed(1)}, -0.06);
+            vQ = p.xy;
+            vPx = px;
+          } else {
+            p = vec3(position.x * ${ARCH_HALF.toFixed(2)} * mk.x, (position.y * 0.5 + 0.5) * top * mk.y, -0.06);
+            vQ = vec2(position.x * ${ARCH_HALF.toFixed(2)}, (position.y * 0.5 + 0.5) * top);
+          }
         }
         p.xy = vec2(p.x * grow, (p.y - 2.2 * mk.y) * grow + 2.2 * mk.y);
         vec4 wp = m * vec4(p, 1.0);
@@ -385,7 +394,22 @@ function gateMaterial(): ShaderMaterial {
             a = inside * mix(0.9, 1.0, rim);
           }
         } else {
-          // The veil: the family's light filling the opening, stronger toward the crown.
+          // The veil: the family's light filling the opening, stronger toward the crown. The marker's columns
+          // of light: soft beams over its posts that thin away upward, held a few pixels wide however far off.
+          if (vMarker > 0.5) {
+            float post = ${(ARCH_HALF * MARKER_SCALE[0]).toFixed(2)};
+            float w = max(0.35, 2.5 * vPx);
+            float dx = (abs(vQ.x) - post) / w;
+            float beam = exp(-dx * dx) * (1.0 - smoothstep(${(MARKER_BEAM * 0.25).toFixed(1)}, ${MARKER_BEAM.toFixed(1)}, vQ.y));
+            if (beam < 0.01) discard;
+            col = mix(fc, vec3(1.0), 0.35) * (1.0 + 2.0 * flare);
+            a = beam * (uLow > 0.5 ? 0.6 : 0.5) * (1.0 + flare);
+            col = mix(col, mix(vTint, vec3(1.0), 0.4) * 1.6, flare);
+            a *= alpha * (1.0 - burst * burst);
+            col = mix(col, uFog, fogK * 0.6);
+            gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a);
+            return;
+          }
           float inside = opening(vQ, vFam);
           if (inside <= 0.0) discard;
           float h = clamp(vQ.y / vTop, 0.0, 1.0);
