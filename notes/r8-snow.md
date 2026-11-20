@@ -220,3 +220,40 @@ surfaces and the trench, not the moving snow.
 - Side by sides from the iterations: `shots/r8/snow/sbs*`, crops in `crops/`, the landing probe in `fx/`.
 - Tests: `tests/snow.test.ts` (surfaces, the terrain's attribute, the trench's reach, uploads, a perfect against a fall,
   the moving snow's budgets and reduced motion), `tests/ruts.test.ts`.
+
+## The stills pass (round-8's `stills.sh`: the run held still, a pool rider replayed on a virtual clock)
+
+Merged round-8 (a3c8398, b2ff12f). The main lane's calls: a groomed lane's corduroy lies across the fall line only (ribs
+30 cm apart, under the lens), the glints at the halfway setting until re-judged. Pairs cut by `blind-pairs.mjs --max 10`
+from the frames where the snow is the subject (every fixed frame but streets, tunnels, bridge decks and the finish, 148
+on High), against `shots/r8/before-stills/`.
+
+| Pass | Build | Tier | New frame picked | Pairs, key, picks |
+|---|---|---|---|---|
+| 1 | 434585f + corduroy across | High | 0 of 10 | `stills-pairs1/`, `keys/stills-pairs1.json`, `stills-picks1.json` |
+| 2 | 26121f0 (the fixes below) | High | 4 of 10 | `stills-pairs2/`, `stills-pairs2.json`, `stills-picks2.json` |
+| 2 | 26121f0 | Low | 6 of 10 | `stills-pairs-low/` |
+| 2 | 26121f0 | phone, Medium | 3 of 10 | `stills-pairs-phone-medium/` |
+
+- *Stills critic one (0/10)* named my ruts first: the wide trench's lit berms, seen from straight behind the sled, "fan
+  out from under the sled as bright radial smears" that "read as speed lines on the near snow", where round 7's
+  "crisp twin grooves with a lit lip" won; and the old frames' denser glitter. Fixed: the groove is round 7's width and
+  crispness again (still a little deeper and wider in powder, shallow on a groomed lane, a frost scratch on ice, ghosts
+  fainter), the glints at critic one's density, the pillows' painted faces a lighter hand.
+- *Stills critic two (4/10)*: on the snow, the across-the-fall-line corduroy as "regular horizontal banding ... like
+  scanlines or dunes" (the groomed start, a bridge deck), Sakura's shadow pools "large and heavily saturated", a night
+  spray "a dull grey-beige smudge". Most other picks went on where a ghost or its pill sat, which still differs a little
+  between builds (the ghosts' worker timing).
+- *Low and the phone (one critic, both folders)*: Low prefers the new frame 6 of 10, so it passes the brief's "prefers
+  or calls level" (the losses: ghost placement, and a dark spiked crater lip on the old side won by the new). The phone
+  prefers the old 7 of 10: on the new side "regular horizontal banding" (my corduroy, three pairs), "huge blue-violet
+  streaks converge behind the sled", "dark smeared shadow blobs", "dark violet scribble smudges" (my pillows on a tall
+  frame, where the near snow is half the picture). Both sides throw "dark navy clods" of spray now and then.
+
+**Where it stands.** On held stills the snow lane does not beat round 7 on High or the phone; it does on Low. What every
+critic has rejected is drawn now as round 7 had it or nearly (the groove, the glints); what is still mine and still
+named is the corduroy in any direction (down the fall line it is speed lines, across it scanlines) and the pillows on a
+tall frame. If the main lane takes this branch, my advice is to take the surfaces' data, the ruts' surface awareness
+(the scratch on ice, the shallower groomed cut), the facet glints, Ember's spray as snow, the perfect's ring, the ghosts'
+hanging powder and the spindrift, and to set the corduroy's ribs and the pillows' painted faces to zero
+(`corduroy`'s `cd.w` and `faceSh`/`hollow` in `materials.ts`) until a person has looked at them in motion.
