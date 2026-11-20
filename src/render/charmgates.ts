@@ -456,7 +456,7 @@ function gateMaterial(): ShaderMaterial {
         col = mix(col, EMBER, gutter);
         a *= alpha * fade * (1.0 - 0.75 * gutter);
         // Whatever the lens passes through dissolves over its last metres (ART.md 14), so the take never fills the frame.
-        a *= smoothstep(2.5, 11.0, d);
+        a *= smoothstep(4.0, 16.0, d);
         col = mix(col, uFog, fogK);
         gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a);
       }

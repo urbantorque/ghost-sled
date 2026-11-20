@@ -2424,7 +2424,7 @@ describe('round 8: charm gates, tricks and the rival rules', () => {
     r.idle(0.5);
     expect(r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id).toBe(1);
     const lost = r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'lost', rival: 0, markerZ: 402 } }] });
-    expect(of(lost, 'showdown')[0]).toMatchObject({ phase: 'lost', say: { label: 'Old Wren took the showdown', tone: 'lost' } });
+    expect(of(lost, 'showdown')[0]).toMatchObject({ phase: 'lost', say: { label: 'Old Wren took the showdown', tone: 'normal' } });
     // The result owns the pill for a moment, as a duel's does; then the nearest rider has it back.
     const pill = () => r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id;
     r.idle(1);
