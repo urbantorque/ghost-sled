@@ -410,6 +410,8 @@ async (page) => {
         live = true;
         await step(2);
         await shoot(`${prefix}live-start`, 'live: showdown starts');
+        await step(70);
+        await shoot(`${prefix}live-lean`, 'live: 1.2 s in, the lens leaning toward the rival');
         await ride(52, 14, 'live-win');
         await step(620);
         const b = await startOne(0);
