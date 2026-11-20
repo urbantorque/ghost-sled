@@ -3,7 +3,7 @@ import { type RiderPoint, type RivalEvent, RivalWatch, draftsOn } from '../sim/r
 import { riderByName } from '../bot/roster';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
-import { AIR_RATE, OPENER_END_T, OPENER_HEAD, openerOf, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
+import { AIR_RATE, OPENER_END_T, OPENER_HEAD, OPENER_AIR, openerLead, openerOf, openerRate, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
 import { FINISH_Z, type Standing } from './standing';
 import {
   F_AIRPITCH,
@@ -190,6 +190,8 @@ export class GhostManager {
   private paceTick = 0;
   private paceV = 0;
   private readers = 0;
+  /** Your quickest reading this run (the opener sees you slow against it, pacer.ts openerLead). */
+  private openerPeak = 0;
   onReady: (() => void) | null = null;
 
   constructor() {
@@ -279,6 +281,7 @@ export class GhostManager {
     this.paceTick = 0;
     this.paceV = 0;
     this.readers = this.tracks.filter((t) => t.entry.reads).length;
+    this.openerPeak = 0;
     const msg: WorkerIn = { type: 'replay', jobs: this.tracks.map((t) => ({ id: t.entry.id, record: t.entry.record })) };
     if (this.worker && this.tracks.length) this.worker.postMessage(msg);
   }
@@ -422,7 +425,10 @@ export class GhostManager {
   pace(tick: number, z: number, riding: boolean): void {
     if (this.readers === 0 || tick < this.paceAt) return;
     this.paceAt = tick + PACE_EVERY;
+    // (The opener reads your speed now, not the eased one: it looks over its shoulder.)
+    const vNow = tick > this.paceTick ? ((z - this.paceZ) * 60) / (tick - this.paceTick) : 0;
     this.paceV = easeSpeed(this.paceV, z, this.paceZ, tick - this.paceTick);
+    this.openerPeak = Math.max(this.openerPeak, this.paceV);
     this.paceZ = z;
     this.paceTick = tick;
     const reads = riding && reading(z, FINISH_Z);
@@ -437,11 +443,16 @@ export class GhostManager {
       if (own >= end) continue;
       const s = Math.max(0, Math.min(t.samples - 1, Math.round(own / SAMPLE_EVERY - 1)));
       // (Round 8: past the readings, each rider eases back to its own record's pace.)
-      // (The opener's clock: the run's seconds where the reading aims, pacer.ts OPENER_*.)
-      const at = (tick + PACE_AIM) / 60;
-      t.rate = reads ? paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z, at), s) - own) / PACE_AIM, k === openerOf(this.readers) && at < OPENER_END_T) : paceRate(t.rate, t.pace);
+      // (The opener, a first run's first seconds: it answers the rider, pacer.ts openerRate.)
+      const opening = reads && k === openerOf(this.readers) && tick < OPENER_END_T * 60;
+      let waiting = false;
+      if (opening) {
+        const ahead = this.zAt(t, tick) > z;
+        waiting = openerLead(vNow, this.openerPeak) < 0;
+        t.rate = openerRate(t.rate, ahead ? (this.ownAt(t, z + (vNow * PACE_AIM) / 60 + openerLead(vNow, this.openerPeak), s) - own) / PACE_AIM : t.pace, ahead, t.pace, waiting);
+      } else t.rate = reads ? paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z), s) - own) / PACE_AIM) : paceRate(t.rate, t.pace);
       const flying = (t.frames[s * FRAME_STRIDE + F_FLAGS] & FLAG_GROUNDED) === 0;
-      t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, AIR_RATE) : t.rate };
+      t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, waiting ? OPENER_AIR : AIR_RATE) : t.rate };
       if (!t.warps) {
         t.warps = [];
         t.swing0 = t.swing;

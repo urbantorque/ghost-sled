@@ -63,39 +63,52 @@ const STRING_TIGHT = 200;
 /** Samples either side a slow rider's change of rate is eased over: about a quarter of a second. */
 const AIR_EASE = 8;
 
-/** The first pass (round 8, G10): on a first run one rider, the front of the string (the quickest record, so it can),
- *  is ahead of you by OPENER_LEAD metres OPENER_TOP_T seconds in, comes back to OPENER_BACK behind you by
- *  OPENER_PASS_T, so a first-timer overtakes a real rider in the first twenty seconds, then eases to its place on the
- *  string by OPENER_END_T. Timed, not placed: a quick first-timer leaves the whole field behind in the first seconds
- *  (the records start slower than a sled on a first run), a slow one does not, and both must meet the opener. The
- *  times are where you will be (the readings aim PACE_AIM ahead), so the pass itself comes about four seconds
- *  sooner: after the start line's jostle (6 s), before 15 s. */
-export const OPENER_LEAD = 20;
-/** Ticks of its own run the opener has ridden as you leave the line: the rider who set off first. */
-export const OPENER_HEAD = 150;
-export const OPENER_BACK = -12;
-export const OPENER_TOP_T = 10;
-export const OPENER_PASS_T = 15;
-export const OPENER_END_T = 26;
+/** The first pass (round 8, G10): on a first run one rider, the front of the string (the quickest record), set off a
+ *  moment before you (OPENER_HEAD ticks of its own run) and for the first OPENER_END_T seconds rides like a rider
+ *  looking over its shoulder: while it is ahead it keeps about OPENER_LEAD metres on you, easing off as far as
+ *  OPENER_MIN of its own pace when you slow or fall (it waits for you; for a rider riding steadily it keeps at least
+ *  OPENER_STEADY of it), and never riding faster than its own record;
+ *  once you are past it rides its own record's pace and does not chase. So a first-timer who rides (a dash, a perfect
+ *  landing's boost, a quick line) goes past a real rider early, and one who only sits on the sled at a steady speed does
+ *  not: the opener is as quick as that. Then it takes its place on the string. */
+export const OPENER_HEAD = 100;
+export const OPENER_LEAD = 6;
+export const OPENER_END_T = 20;
+export const OPENER_MIN = 0.15;
+/** How fast the opener eases off (a reading's step down), quicker than a string rider's: it sees you fall. */
+export const OPENER_EASE = 0.25;
+/** In the air the opener may ride as slowly as this (the rest of the field never under AIR_RATE): a rider waiting
+ *  for you over a jump floats a little, where at AIR_RATE it would leave a fallen first-timer behind every time. */
+export const OPENER_AIR = 0.45;
+
+/** The lead the opener keeps: OPENER_LEAD while you ride, and when you slow below OPENER_SLOW of your quickest so far
+ *  (read steadily: a fall, a stop against the bank) it drops back to OPENER_WAIT, level with you or a step behind, as a rider waiting
+ *  for a friend would; you still have to ride past it. */
+export const OPENER_SLOW = 0.7;
+export const OPENER_WAIT = -3;
+export function openerLead(speed: number, peak: number): number {
+  return peak > 0 && speed < OPENER_SLOW * peak ? OPENER_WAIT : OPENER_LEAD;
+}
 
 /** The rider of n who is the opener, or -1 with too few to spare one. */
 export function openerOf(n: number): number {
   return n >= 3 ? n - 1 : -1;
 }
 
-const smooth = (t: number): number => {
-  const k = Math.min(1, Math.max(0, t));
-  return k * k * (3 - 2 * k);
-};
+/** The opener's next rate: toward the rate that keeps its lead while it is ahead (`want`), never past its own record's
+ *  pace (`pace`) and down to OPENER_MIN of it to wait; once you are past, toward its own pace. */
+export function openerRate(cur: number, want: number, ahead: boolean, pace: number, waiting = false): number {
+  const target = ahead ? want : pace;
+  const step = Math.max(-(waiting ? OPENER_EASE : PACE_EASE), Math.min(PACE_SLEW, target - cur));
+  return Math.max((waiting ? OPENER_MIN : OPENER_STEADY) * pace, Math.min(pace, cur + step));
+}
 
-/** Where rider i of n (slowest first) aims, in metres off your position: + is ahead of you. `t`: the seconds of the
- *  run the aim is at (the opener's clock); without it every rider keeps to the string. */
-export function stringOffset(i: number, n: number, z: number, finishZ: number, t?: number): number {
-  if (t !== undefined && i === openerOf(n) && t < OPENER_END_T) {
-    if (t < OPENER_TOP_T) return OPENER_LEAD * smooth(t / OPENER_TOP_T);
-    if (t < OPENER_PASS_T) return OPENER_LEAD + (OPENER_BACK - OPENER_LEAD) * smooth((t - OPENER_TOP_T) / (OPENER_PASS_T - OPENER_TOP_T));
-    return OPENER_BACK + (onString(i, n, z, finishZ) - OPENER_BACK) * smooth((t - OPENER_PASS_T) / (OPENER_END_T - OPENER_PASS_T));
-  }
+/** While you ride steadily the opener never eases below this share of its own pace: it does not hang back for a
+ *  rider who is not in trouble (it waits, down to OPENER_MIN, only for one who slowed or fell). */
+export const OPENER_STEADY = 0.6;
+
+/** Where rider i of n (slowest first) aims, in metres off your position: + is ahead of you. */
+export function stringOffset(i: number, n: number, z: number, finishZ: number): number {
   return onString(i, n, z, finishZ);
 }
 
@@ -119,16 +132,10 @@ export function reading(z: number, finishZ: number): boolean {
 }
 
 /** The next rate from the current one and the rate that would land a rider on its place. */
-export function paceRate(cur: number, want: number, opener = false): number {
-  const up = opener ? OPENER_SLEW : PACE_SLEW;
-  const step = Math.max(-PACE_EASE, Math.min(up, want - cur));
-  return Math.max(PACE_MIN, Math.min(opener ? OPENER_MAX : PACE_MAX, cur + step));
+export function paceRate(cur: number, want: number): number {
+  const step = Math.max(-PACE_EASE, Math.min(PACE_SLEW, want - cur));
+  return Math.max(PACE_MIN, Math.min(PACE_MAX, cur + step));
 }
-
-/** The opener may ride quicker than the rest while it leads you off the line (the string asks it to be ahead of a
- *  first-timer who is still finding the keys), and pick up pace faster. */
-export const OPENER_MAX = 1.4;
-export const OPENER_SLEW = 0.06;
 
 /** Your speed, read steadily (m/s). */
 export function easeSpeed(cur: number, z: number, wasZ: number, ticks: number): number {
