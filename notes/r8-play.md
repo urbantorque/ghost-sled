@@ -201,6 +201,27 @@ snowmen, a near ghost not dissolving, rocks as prisms under white lids, the dark
 The plain loss line and the wider dissolve (`d7b3f0d`) are tested but not seen in a frame. A plain ("normal") loss line
 can be held out of the callout while a stamp is up.
 
+## Addendum: the main lane's calls on the second critic
+
+- **The offers line says each charm's gist before the choice** ("Drift Drum: faster drifts · Guardian Wisp: a free
+  hit · Paper Kite: grabs pay"; `CHARM_GIST`, two or three words each, tested). The line is its own kind
+  (`Fx.gate`): never held out as a minor line, one line on a desktop at up to 20 px, two balanced lines on a phone held
+  at 11 px or more. The worst case a gate can deal (101 letters) is tested against both. The take's full line stays.
+- **A showdown holds the top of the HUD:** while one runs, mission and unlock pops wait with their give-up and lateness
+  clocks stopped, then go up once it is decided (and after the result's 1.5 s on the pill). Tested in
+  `director.test.ts`.
+- **The family colours** go into ART.md as the gates' own (the main lane's). On Sakura the style family takes a deeper
+  violet, `#9B3DF2`, the same hue a step darker (tested), set by mountain with one float uniform.
+- **"Ring 0 of 3" while rings are flown:** neither the capture's clock nor the chip. The chip counts the sim's own
+  ring events; in that capture the pinned run-in launched the sled at 30 m/s, under the ring line, so it passed the
+  rings in perspective without flying through them (another run of the same capture counted one: "1 of 3 rings").
+  "Ring 0 of 3" while it plays and "0 of 3 rings" at its end are the chip's two forms (its live count and its
+  result), as ART.md 14 has them.
+- **Seen** (`v6/`): the gist line one line on a 1280 px desktop (Sakura) and two balanced lines on the phone
+  (Pinecrest), both just after it goes up 280 m out; the deep violet holding against Sakura's peach mist at 90 m. Both
+  gist lines are faint in those frames, under a set piece's result card that hushes the callout line: whether a
+  gate's offers should rise over that card is still open. Not seen in a frame: pops held through a showdown (tested).
+
 ## Touched outside my files
 
 - `src/render/world.ts` (the gates, the trick input to the rider, Lamplit Path, the charm and rival effects),
