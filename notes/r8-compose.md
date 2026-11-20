@@ -36,7 +36,10 @@ threshold under the charm gate, about 1410 to 1600 and 2910 to 3100 m) is a plac
     flight of **steps** (8 m flats, 4 m risers) and an up flight (**rise**).
   - A fall's far ground comes down over a longer stretch than its crest (1.4 m of run per metre out): with the plain
     ramps the cut's ends stood as white cliffs across the view (Pinecrest's 150 m and Lanternfall's first frames).
-  - Steep faces keep the forest and the dressing off (`keeps`, through the props' `siteKeep`); flats are planted.
+  - Steep faces keep the forest and the dressing off (`keeps`, through the props' `siteKeep`); flats are planted. A
+    fall keeps only its crest clear (3 m past the limit, under the rail): cleared to 26 m, a crest read as "bare,
+    empty snow behind rails" to the second stills critic, and the forest standing on down the fall gives the drop
+    its dark ranks.
   - Where a place shapes a side, an overlook's own lip gives way to it (`OverlookPlan.drop`), its rocks stand down and
     its rail does not stand at a wall's foot; a fall or a flight takes the mid-ground's valley form (`wide`), and the
     mid-ground's edge reads the drawn ground (`midground.ts sideInfo`).
@@ -62,6 +65,22 @@ threshold under the charm gate, about 1410 to 1600 and 2910 to 3100 m) is a plac
   where it is today) would let the lens see down the fall. What was done instead: the fall starts 0.3 m past the limit,
   the lens steps toward it and turns to it, and the crest carries a rail and leaning spruces against an open sky.
 
+## The verdict, first
+
+**V3 is not done.** On stills that hold the run still (the main lane's `stills.sh`, round-8 30dd5b3), three fresh critics
+picked the new frame in **4, 4 and 5 of 10** blind pairs (the bar is 8). The greyscale test passes (5 of 5 openings,
+10 of 10 stage starts) but so does the before set (a control critic, 5 of 5 and 10 of 10): the mountains are told
+apart by their skies and landmarks, not by what this lane drew. Asked directly, the critic on the after set said the
+five openings are "one layout, five skins": the same trough, the rider bottom centre, the vanishing point just above
+the middle, a rail along both berms, "the places told apart almost entirely by the sky and the far landmark". Only
+Frostfang's canyon departs from it, and two of three stills critics preferred the old open Frostfang (its lit floor and
+the long shadow a spire throws down it) to the walls. The live-frame critics (8, 5 and 9 of 10, below) were judging
+the run as much as the change, as the main lane found.
+
+Why, in one line: the trench is the sim's own bank (9.5 m in its first 10 m past the edge), and from a chase lens 1.5
+to 3 m over the snow nothing past a bank's crest 30 m away shows below its line; shaping past the limit changes the
+skyline over the banks, not the frame's layout. What would break it is listed under "For the main lane".
+
 ## How it was judged
 
 Every critic was a fresh general-purpose subagent (`model: "opus"`, `effort: "high"`) given only ART.md's path, the pairs
@@ -75,12 +94,21 @@ folder and the brief's question, never told what changed or which side is new. P
 | 2 (`pairs2`) | lens up 0.7 to 2.8 m | 5 of 10 | Pinecrest 150 m and Sakura 150 m (a smaller rider, ART.md 15 rule 4), Lanternfall 300 m (the moon cropped), Pinecrest 1500 m (the old frame happened to hold a drafted ghost), Frostfang 3000 m (the wall "a huge flat mint-teal slab") |
 | 3 (`pairs3`) | the fixes below (commit cf7781b) | **9 of 10** | Sakura 1500 m: "the grey terrace slabs at top left read as untextured boxes" (fixed after it: dressed blocks, below; not re-judged by a critic) |
 
+**On stills** (`before-stills/high` against `after-stills{,2,3}/high`, the same tick of the same replayed pool rider):
+
+| Critic | Build | New picked | What it held against the new frame |
+| --- | --- | --- | --- |
+| S1 (`pairs-s1`) | cf7781b and the dressed walls | 4 of 10 | Frostfang's canyon "boxed in by two huge ice walls almost one blue", no long shadow on the floor; Pinecrest's rider pushed to the lower left and a ghost near the lens a mint smear at the edge; Ember's ghost swept out of frame by the lens's step aside; two pairs on ghosts and labels |
+| S2 (`pairs-s2`) | the floor out of the canyon walls' shadow, the step aside under a metre | 4 of 10 | Pinecrest 150 m from the air: "a big flat greyish-pink rectangle" (the fall's first metres seen side on) and its pines lost to a fence; Frostfang's canyon again; Lanternfall's banks "bare, empty snow behind rails" where the old had pines and a smoking cabin; Sakura's walls still a slab; the rider low with the sled cut off at Lanternfall 1528 m |
+| S3 (`pairs-s3`) | the forest back on the falls below the crest, the fall ramping in over 80 m | 5 of 10 | picked side A in 9 of 10 (a side bias; the new frame was on A in 6); for the new it named Lanternfall's crest ("a ridge with the cloud sea opening on both sides, height and scale") and Sakura's torii and terraces; against it Frostfang's walls ("closes the view and loses the sun") and the ghost smear at Pinecrest |
+
 Fixed after the second: the lens rises a metre at most (it was up to 2.8 m), the canyon's lens no longer sinks, a wall's
 ice ramps by its own height so the aurora takes only its top third, and its face is cut in shards. Fixed after the
 third: the retaining walls are three dressed blocks a segment, each its own value and set a little proud or back,
 under a mossy coping.
 
-**The greyscale test** (the brief's done line): a fresh critic shown only ART.md 15's five "Feeling" and "Colour
+**The greyscale test** (the brief's done line; on live frames here, on stills and against a control in "The verdict,
+first"): a fresh critic shown only ART.md 15's five "Feeling" and "Colour
 script" paragraphs and greyscale frames with the HUD's top band and the hint row cropped off, unlabelled and shuffled,
 matched **the five openings 5 of 5** and **the ten stage starts 10 of 10** (two a mountain). Its reasons: Ember "a dark,
 fluted cone fills the centre with a heavy dark band of cloud above it"; Pinecrest "the brightest frame", dark pines
@@ -108,6 +136,9 @@ opening road to 24 m; it rides at the plain height now. The rider's height on sc
 145 px, where the lens stands 1.2 m higher to see the cloud.
 
 ## Cost
+
+(Measured on the build of cf7781b, when a fall kept its forest off to 26 m; the last build plants the fall below its
+crest again, so its triangle saving is smaller than this. Not re-measured: no slot was free for it.)
 
 - **Draws and triangles** (the frames' JSON, summed over a frame's passes; the 39 touched frames on each tier: 150, 300
   and 450 m and every fixed frame from 1400 to 1700 and 2880 to 3200 m): High 101.4 to 98.4 calls, 866k to 831k
@@ -151,6 +182,25 @@ opening road to 24 m; it rides at the plain height now. The rider's height on sc
 
 ## For the main lane
 
+- **A decision: keep, trim or drop this lane's work.** It is safe (nothing a sled touches moves, every suite green,
+  readability no worse, Low and every tier lighter, the console clean), but it does not break the trench and the
+  stills critics do not prefer it. My reading of the critics: keep Lanternfall's crest, Sakura's terraces and torii,
+  Ember's ridge and the rails; consider dropping Frostfang's canyon (the open run with its raking shadows won two of
+  three stills pairs) or keeping it shorter so the opening has both; Pinecrest's fall changes little.
+  `compose.ts recipe()` is the one place to change any of it.
+- **What would break the trench** (none of it this lane's to build):
+  1. *The sim's bank.* A section kind for an opening with one bank low (`course.ts bank(e)` capped near 3 m on that
+     side, the limit where it is today) lets the lens see down the fall: Pinecrest's "valley below", Ember's ridge,
+     Lanternfall's crest would read as places. This is the request this lane makes of a later sim batch.
+  2. *A camera allowed off the chase at the opening.* A director's shot (`game/shots.ts`, as the reveal's whip and the
+     street's tracking shot) for the first seconds of each opening: a side lens on the open side, a low lens in the
+     canyon looking up, a high lens over the terraces, a few seconds each, never taking the steering. The chase's
+     placement here is a metre and a turn, which a critic does not see.
+  3. *Foreground that crosses the frame.* An arch or a torii over the run at the opening, with its clearance from the
+     landmarks' flown air profile (`SitePlan`), so something frames the run itself.
+- The critics' standing complaints that are not this lane's: the neon charm-gate boards, a flipped sled's underside
+  hiding the rider, ribless lanterns, Ember's grey-lilac snow, the HUD's stack over the sky, and (on live frames)
+  ghosts and labels.
 - Nothing to wire: the composition rides in the overlooks' object the world already has.
 - ART.md and the README: the text below.
 - The speed lane owns the FOV, breath and shake: the placement is in `CamPlacer` and enters the chase's sums as
@@ -158,6 +208,9 @@ opening road to 24 m; it rides at the plain height now. The rider's height on sc
 
 ## Still short
 
+- **The item.** See "The verdict, first": not met on stills.
+- **Pinecrest's fall from the air** shows its first metres side on as a pale face (the stretch cannot start before the
+  start's stands end, so the fall cannot ramp in earlier).
 - **The valley below is not below.** From inside the sim's 9.5 m bank the lens sees over a fall's crest only toward the
   frame's edge; Pinecrest's opening is open and asymmetric (open sky over the crest's rail and spruces) but the valley
   floor shows only down the fall line. The request above (a low bank on one side at the opening) is what would give it.
@@ -196,7 +249,12 @@ a crest over the cloud), and every stage start too, drawn past the run's limits 
 All under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/compose/`:
 - `after/{high,low,phone-medium}`: the touched frames on the second build (lens up to 2.8 m); `after2/high`: the final
   lens (commit cf7781b); `after3`: Sakura's dressed walls (the last build); `nohud`: the greyscale test's sources.
-- `pairs1`, `pairs2`, `pairs3`: the critics' pairs; `keys/`: their keys and picks (outside the pairs).
-- `gray-open`, `gray-stage`, `gray-feelings.md`: the greyscale test as the critic saw it; `keys/gray-*.json`.
+- `after-stills/{high,low,phone-medium}`, `after-stills2/high`, `after-stills3/high` (the last build): the touched
+  frames as stills, beside the main lane's `shots/r8/before-stills`.
+- `pairs1`, `pairs2`, `pairs3` (live), `pairs-s1`, `pairs-s2`, `pairs-s3` (stills): the critics' pairs; `keys/`: their
+  keys and picks (outside the pairs).
+- `gray-open`, `gray-stage` (live, cropped), `gray-open-s`, `gray-stage-s` (stills, after), `gray-open-b`,
+  `gray-stage-b` (stills, before, the control), `gray-feelings.md`: the greyscale tests as the critics saw them;
+  `keys/gray-*.json`.
 - `probe/`: readability (`read-*`) and Low's GL counts (`gl-*`), before and after.
 - `it1`, `it2`, `try`: iteration frames.
