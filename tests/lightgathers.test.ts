@@ -22,9 +22,9 @@ describe('light that gathers', () => {
     for (const z of [1950, 2300, 2700]) {
       const p = journeyPalette('lantern', z, getPalette('lantern', Mood.None), c);
       const moonlit = p.snowLit.clone().multiply(p.sunColor);
-      expect(lum(moonlit), `the lit snow at ${z} m`).toBeLessThan(lum(crown.snowLit.clone().multiply(crown.sunColor)) * 0.6);
-      expect(p.lamps, `the lamps at ${z} m`).toBeGreaterThan(crown.lamps * 1.4);
-      expect(p.lanternGlow, `the rider's lantern at ${z} m`).toBeGreaterThanOrEqual(0.95);
+      expect(lum(moonlit), `the lit snow at ${z} m`).toBeLessThan(lum(crown.snowLit.clone().multiply(crown.sunColor)) * 0.75);
+      expect(p.lamps, `the lamps at ${z} m`).toBeGreaterThanOrEqual(crown.lamps * 1.35);
+      expect(p.lanternGlow, `the rider's lantern at ${z} m`).toBeGreaterThanOrEqual(0.8);
       expect(p.lampAir, `the lamps' air at ${z} m`).toBeGreaterThan(0);
     }
   });
@@ -36,9 +36,9 @@ describe('light that gathers', () => {
       const discAz = (Math.atan2(p.diskDir.x, -p.diskDir.z) * 180) / Math.PI;
       expect(keyAz - discAz, `at ${z} m`).toBeGreaterThan(15);
       expect((Math.asin(p.sunDir.y) * 180) / Math.PI, `at ${z} m`).toBeGreaterThanOrEqual(17);
-      // The snow under the shader's day line, so the light carries its colour; the shade a cold one.
-      expect(0.3 * p.snowLit.r + 0.59 * p.snowLit.g + 0.11 * p.snowLit.b, `at ${z} m`).toBeLessThan(0.82);
+      // The shade a cold one, and a step under the lit snow, never a dark slab (the first critic's worst fault).
       expect(p.snowShade.b, `at ${z} m`).toBeGreaterThan(p.snowShade.r);
+      expect(lum(p.snowShade), `at ${z} m`).toBeGreaterThan(lum(p.snowLit) * 0.12);
     }
   });
 

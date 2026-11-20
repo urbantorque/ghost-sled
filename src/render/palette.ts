@@ -1328,18 +1328,15 @@ function valuePass(p: Palette, biome: BiomeId): void {
       // (The disc keeps its place, a dim coin right of the cone; the light that shades the snow comes from further
       // round and lower, the lava fields' side: from 44 degrees every face down the run sat in one even light.)
       p.sunDir = sunDir(64, 40);
-      // (Peach on cream, not orange: a saturated orange on a warm snow read as sand, the first pass's frames, and a
-      // snow dimmed to take the light's whole colour read as mud. The snow sits just over the shader's night, so it
-      // takes most of the light's colour and keeps its value.)
-      p.sunColor = c('#FFE0C8');
-      p.snowLit = c('#ECE2E0');
-      p.grade.saturation = 1.08;
-      p.snowShade = c('#3E3C64');
-      p.snowDeep = c('#22203E');
-      p.hemiSky = c('#4C5A7E');
-      // (The deck's own shadows wider and deeper: the firelit snow lies in pools between them.)
-      p.clouds.shadow = 0.7;
-      p.lampAir = 0.12;
+      // (The snow and its light stay round 7's warm white: under the shader's day line, so that the light carried
+      // its orange, the first critic read the lit snow as sand where the light was strong and as cold grey where it
+      // was not. What turns from the light is a cold plum-teal a step under the lit snow, never a dark slab: at
+      // round 7's deep plum-slate the far bank was a near-black wall, far more than the 30% a cloud's shadow may
+      // take, ART.md 2, and the frame went murky.)
+      p.snowShade = c('#6C6A92');
+      p.snowDeep = c('#47476E');
+      p.hemiSky = c('#5C6A8E');
+      p.clouds.shadow = 0.45;
       // (What the firelit snow throws back up under a column or the coat is the lava's orange, never a pink: the
       // lit snow's orange over its plum shade mixed to the grudge's rose.)
       p.lift.tint = c('#FFF8B0');
@@ -1401,8 +1398,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // The gold comes: the sun drops under the cloud, honey light, long violet-blue shadows, the peaks
       // glowing, and the saturation rises. Gold against blue, never the old lilac.
       // (Full by the benches under the second leap: at 3250 the leap's own frames, 2430 to 2700, were
-      // a quarter of the way there and read as beige. The disc stays inside the frame.)
-      from: 2250, at: 2800, dusk: 0.55,
+      // a quarter of the way there and read as beige. The disc stays inside the frame. Round 8: the thresholds
+      // moved the second leap to 2567 m and Mirror Lake to 1785 to 2095, so the gold comes in past the lake's shore
+      // and is full at the leap's lip.)
+      from: 2110, at: 2560, dusk: 0.55,
       edit: (p) => {
         setSun(p, 29, 8, 28, 13);
         // (Second pass: honey, not orange. At #FFDCA8 on cream snow under a 1.22 saturation the slopes
@@ -1654,9 +1653,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#0C080C');
         p.skyMid = c('#2E1618');
         p.skyHorizon = c('#C04A20');
-        // (Round 8: under the value the snow shader reads as day, so the lava's orange lies on it; valuePass.)
-        p.snowLit = c('#EADED8');
-        p.snowShade = c('#383660');
+        p.snowLit = c('#FAE8DE');
+        // (Round 8: a cold plum-teal a step under the snow, not a dark slab; valuePass.)
+        p.snowShade = c('#625E88');
         p.fogFar = 340;
         p.deck.k = 1;
         p.deck.lit = c('#3A2A2E');
@@ -1675,14 +1674,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.sunDir = sunDir(68, 34);
         p.sunDisc = 0.35;
         // (Round 8: the shield is lit from below, a deeper orange than the deck's first light.)
-        p.sunColor = c('#FFD6B8');
+        p.sunColor = c('#FFD4BC');
         p.skyHorizon = c('#E8521C');
         p.skyMid = c('#5A2018');
         p.deck.glow = c('#FF6A22');
         // (Lit from below: the deck's own body takes the fire, not only its far edge.)
         p.deck.lit = c('#8E3A1E');
         p.deck.shade = c('#3A1612');
-        p.snowLit = c('#EADCD6');
+        p.snowLit = c('#FFEEE2');
         p.grade.exposure = 1.08;
         p.grade.contrast = 1.12;
         p.under.k = 0.3;
@@ -1708,10 +1707,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E8481A');
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
-        p.sunColor = c('#FFCCA8');
-        p.snowLit = c('#E6D6D0');
+        p.sunColor = c('#FFB490');
+        p.snowLit = c('#FCE6DA');
         p.lift.tint = c('#FFF4B0');
-        p.snowShade = c('#343258');
+        p.snowShade = c('#585484');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
         p.fogNear = 60;
         p.fogFar = 430;
@@ -1732,8 +1731,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.5;
         p.lamps = 1.1;
-        // (Round 8: the lava's light hangs in the ash beside the rivers.)
-        p.lampAir = 0.2;
+        // (Round 8: the lava's light hangs in the ash beside the rivers, thinly: more lay over the halls as milk.)
+        p.lampAir = 0.08;
       },
     },
     {
@@ -1765,7 +1764,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.flow = 1;
         p.hazardDim = 0.9;
         p.lamps = 1.3;
-        p.lampAir = 0.24;
+        p.lampAir = 0.1;
         // (What the night's lilac snow throws back up is the lamps' and forges' orange, never a pink.)
         p.lift.tint = c('#FFE8B0');
         p.bloom = 0.6;
@@ -1820,7 +1819,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     },
     {
       // A clear, high frame: the cone sharp at last, the air blue behind it, a river of petals on the wind.
-      from: 2100, at: 2450, dusk: 0.5,
+      // (Round 8: the thresholds moved the Blossom Leap 200 m down the run, its lip to 2560; the clear frame follows.)
+      from: 2260, at: 2580, dusk: 0.5,
       edit: (p) => {
         setSun(p, -28, 27, 36, 19);
         p.sunColor = c('#FFF8F2');
@@ -1896,7 +1896,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         // (Round 8, the value pass: the moon is gone behind the deck, so what lights the snow between the lamps is
         // the deck's dim violet, a step under the Crown's silver. At the moon's value the Lamp Road was one even
         // lilac and the lamps' pools could not be seen on it: DECISIONS 367.)
-        p.sunColor = c('#8A80C4');
+        p.sunColor = c('#A6A2D2');
         p.sunDisc = 0;
         p.sunGlow = 0.2;
         p.skyZenith = c('#120E44');
@@ -1910,8 +1910,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.deck.lit = c('#5C50A6');
         p.deck.shade = c('#221A60');
         p.deck.glow = c('#8E5C8C');
-        p.snowLit = c('#CC9ED6');
-        p.snowShade = c('#4E2888');
+        p.snowLit = c('#D0AED8');
+        p.snowShade = c('#543892');
         p.snowDeep = c('#1A1056');
         p.rim = c('#FFD9A0');
         p.fog = c('#46297E');
@@ -1936,11 +1936,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.shadowK = 0.6;
         p.bloom = 0.78;
         // (Round 8: the lamps are the light down the Lamp Road, and the rider carries a whole one of its own.)
-        p.lamps = 1.6;
-        p.lampAir = 0.22;
+        p.lamps = 1.4;
+        p.lampAir = 0.08;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.2;
-        p.lanternGlow = 1;
+        p.lanternGlow = 0.85;
         p.grade.exposure = 1.0;
         p.grade.saturation = 1.0;
         p.grade.hi = c('#FFF6E8');
@@ -1959,15 +1959,15 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#9A66A4');
         p.skyBand = { color: c('#F0A088'), fade: 22, k: 0.7 };
         // (Round 8: a step paler than the Lamp Road as the east pales, still under the lamps.)
-        p.sunColor = c('#9C90D0');
-        p.snowLit = c('#CEACD8');
-        p.snowShade = c('#503896');
+        p.sunColor = c('#ACA6D6');
+        p.snowLit = c('#D0B6DC');
+        p.snowShade = c('#58409A');
         p.rim = c('#FFD2C0');
         p.hemiSky = c('#6458BC');
         p.fog = c('#5C4A9C');
         p.air.far = c('#4A3480');
         p.under.k = 0.1;
-        p.lamps = 1.4;
+        p.lamps = 1.2;
         p.stars = 0.35;
         p.massif.glowK = 0.45;
         p.grade.exposure = 1.02;
@@ -2605,8 +2605,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.skyMid = c('#8A2C12');
         p.skyHorizon = c('#FF6A22');
         p.sunDisc = 0.2;
-        // (Round 8: under the value the snow shader reads as day, so the lake's light lies on it in its own orange.)
-        p.snowLit = c('#E8D2CA');
+        p.snowLit = c('#FFE8D8');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
         p.massif.seaWarm = 2.2;
@@ -2752,7 +2751,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.focal = 0.5;
         lamps(p, 1.3);
         // (Round 8: a lamp in cloud is a wide soft halo far off, ART.md 15: the cloud takes its light.)
-        p.lampAir = 0.35;
+        p.lampAir = 0.15;
       },
     },
     {
@@ -2773,15 +2772,15 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');
         p.grade.contrast += 0.04;
-        lamps(p, 1.6);
+        lamps(p, 1.4);
       },
     },
     {
       // The Lamp Road's avenue and Firstlight's street: lilac snow in pools of marigold.
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.75);
-        p.snowShade = c('#30247E');
+        lamps(p, 1.4);
+        p.snowShade = c('#3E3290');
         // (The visual lift: the pools of marigold on the snow come back up under the eaves and the lamps'
         // stone. Marigold is the world's own light here, and only here: ART.md 15.)
         p.lift.tint = c('#FFC878');
@@ -2807,7 +2806,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The lamp grove: ink trunks, and the light between them.
       kind: 'treerun',
       edit: (p) => {
-        lamps(p, 1.85);
+        lamps(p, 1.5);
         p.grade.contrast += 0.06;
         p.grade.exposure! *= 0.96;
         p.grade.lo = c('#DCCCFF');
