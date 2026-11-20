@@ -36,11 +36,11 @@ export function chaseFov(v: number): number {
   return 62 + 3 * speedK(v) + 14 * fastK(v);
 }
 
-/** The radial speed streaks (post.ts), round 8: a hair in the frame's outer band, 0 to 26 m/s, under a tenth
- *  at 30 and 0.6 at the cap. It carried the speed on the lens (a quarter at 30, all of it at the cap, from a
+/** The radial speed streaks (post.ts), round 8: kept to the frame's outer band, 0 to 24 m/s, about a sixth
+ *  at 30 and 0.8 at the cap. It carried the speed on the lens (a quarter at 30, all of it at the cap, from a
  *  third of the way in); the world rushing past carries it now. */
 export function streakK(v: number): number {
-  return 0.6 * Math.pow(clamp01((v - 26) / 20), 1.3);
+  return 0.8 * Math.pow(clamp01((v - 24) / 22), 1.2);
 }
 
 /** Round 8: the chatter of hard snow under the runners, 0 to 1 (the sled's and the lens's fine shake): none

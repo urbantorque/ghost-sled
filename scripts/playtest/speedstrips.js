@@ -8,7 +8,7 @@
 //   playwright-cli -s=r8-speed run-code --filename=scripts/playtest/speedstrips.js
 async (page) => {
   const c = Object.assign(
-    { base: 'http://127.0.0.1:4750/', out: 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/speed/strips-default/', tier: 'high', m: 0, demo: 0, zs: [300], n: 8, every: 4, extra: '' },
+    { base: 'http://127.0.0.1:4750/', out: 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/speed/strips-default/', tier: 'high', m: 0, demo: 0, zs: [300], n: 8, every: 4, extra: '', scan: 0 },
     (await page.evaluate(() => window.__stripsCfg).catch(() => null)) || {},
   );
   const errors = [];
@@ -85,6 +85,21 @@ async (page) => {
       return { z: zNow(), tick: r ? r.sim.tick : -1, speed: s ? Math.round(s.speed * 10) / 10 : -1, flow: s ? Math.round(s.flow * 100) / 100 : -1, level: s ? s.flowLevel : -1, dash: s ? s.dash > 0 : false, fov: Math.round(window.__gs.world.cam.camera.fov * 10) / 10, info };
     };
   });
+  // cfg.scan: no frames, only the ride as the replay plays it in the page (speed, flow, level, dash every scan
+  // metres to the line), to pick the strips' metres from (a replay in node can differ: the page's demo decides nothing).
+  if (c.scan) {
+    const rows = [];
+    for (let z = c.scan; ; z += c.scan) {
+      let st;
+      do st = await page.evaluate((zz) => window.__spTo(zz, 600), z);
+      while (st.z >= 0 && st.z < z);
+      if (st.z < 0) break;
+      const p = await page.evaluate(() => window.__spStep(1));
+      rows.push([Math.round(p.z), p.speed, p.level, p.dash ? 1 : 0]);
+    }
+    await page.goto('about:blank');
+    return JSON.stringify({ m: c.m, demo: c.demo, rows, errors });
+  }
   const strips = [];
   for (const z of [...c.zs].sort((a, b) => a - b)) {
     let st;

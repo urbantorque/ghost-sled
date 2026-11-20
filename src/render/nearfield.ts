@@ -178,7 +178,7 @@ export class NearField {
           // diagonal scratches over every mountain's lower half that carried the speed on the lens. A
           // sixtieth of a second and a few flake-lengths at most: the flakes rush past and the world
           // carries the speed.)
-          vec4 c1 = projectionMatrix * modelViewMatrix * vec4(position + (wisp ? aVel * 0.22 : (aVel - uCamVel) * (vKind < 0.5 ? 0.016 : 0.032)), 1.0);
+          vec4 c1 = projectionMatrix * modelViewMatrix * vec4(position + (wisp ? aVel * 0.22 : (aVel - uCamVel) * (vKind < 0.5 ? 0.024 : 0.032)), 1.0);
           vAxis = vec2(1.0, 0.0);
           vRatio = 1.0;
           if (c1.w > 0.1 && c0.w > 0.1) {
@@ -186,8 +186,8 @@ export class NearField {
             float len = length(dpx);
             if (len > 0.5) vAxis = vec2(dpx.x, -dpx.y) / len;
             // (A flake's smear still grows to the cap, but only to a few of its own lengths.)
-            float lmax = (vKind < 0.5 ? (vKind > 0.1 ? 26.0 : 16.0 + 18.0 * uFast) : vKind > 2.5 ? 26.0 : 70.0) * px720;
-            float l = clamp(size + len, size, max(wisp ? size * 2.4 : min(lmax, size * (vKind < 0.5 ? 5.0 : 9.0)), size));
+            float lmax = (vKind < 0.5 ? (vKind > 0.1 ? 30.0 : 22.0 + 28.0 * uFast) : vKind > 2.5 ? 26.0 : 70.0) * px720;
+            float l = clamp(size + len, size, max(wisp ? size * 2.4 : min(lmax, size * (vKind < 0.5 ? 7.0 : 9.0)), size));
             vRatio = clamp(size / l, 0.04, 1.0);
             // A streak is a thin smear, thinner than the fleck it smears out.
             if (vKind < 0.5 || vKind > 2.5) vRatio *= mix(1.0, 0.6, smoothstep(1.0, 4.0, l / size));

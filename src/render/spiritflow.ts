@@ -136,7 +136,7 @@ function ribbonMaterial(hdr: number): ShaderMaterial {
         float d = -mv.z;
         vFog = smoothstep(uFogNear, uFogFar, d);
         // Nothing grows into a blot at the lens: a ribbon thins away inside about two and a half metres.
-        vNear = smoothstep(1.2, 2.6, d);
+        vNear = smoothstep(2.2, 3.4, d);
         gl_Position = projectionMatrix * mv;
       }
     `,
@@ -162,7 +162,8 @@ function ribbonMaterial(hdr: number): ShaderMaterial {
           float heart = smoothstep(0.55, 1.0, across);
           col = mix(col, mix(col, vec3(1.0, 0.97, 0.9), 0.55), heart * (1.0 - u));
           col *= uHdr * (1.0 + 0.6 * heart);
-          a = across * (1.0 - smoothstep(0.55, 1.0, u)) * smoothstep(0.0, 0.06, u + 0.02);
+          // (A glow, not a band of paint: soft from its heart to its edges.)
+          a = pow(across, 1.7) * (1.0 - smoothstep(0.45, 1.0, u)) * smoothstep(0.0, 0.06, u + 0.02);
         } else {
           // A wind line: a pale stream of air, a little of the lantern's gold in it, faint at its ends.
           col = mix(vec3(0.96, 0.97, 1.0), uTip, 0.45) * mix(1.0, uHdr, 0.5);
@@ -407,8 +408,10 @@ export class SpiritFlow {
       this.tp[i3 + 2] += this.tv[i3 + 2] * dt;
     }
     while (this.tn > 0 && this.ta[this.tn - 1] > life) this.tn--;
-    // A new point a step, carried on with most of the rider's motion and on along the scarf's own line, so the
-    // ribbon continues the scarf past its tip and curls up off it (the air the rider drags with it).
+    // A new point a step, held in the rider's own frame (an offset from the scarf's knot) and drifting up and a little
+    // back along the scarf's line, so the ribbon continues the scarf past its tip and curls up off it as a plume of
+    // spirit fire. (Round 8's first looks left the points in the air: behind the rider they were nearer the lens, which
+    // looks down on them, so the ribbon ran down the frame to its foot as a yellow stripe.)
     this.tAcc += dt;
     const every = life / (n - 2);
     if (on && this.tAcc >= every) {
@@ -422,20 +425,20 @@ export class SpiritFlow {
       const sl = Math.max(0.2, s.length());
       s.multiplyScalar(1 / sl);
       // The scarf's line, a little up, and a slow curl that turns with time (never the same twice).
-      const curl = Math.sin(o.time * 5.3) * 0.9;
-      const keep = 0.86;
-      this.tp[0] = o.tip.x;
-      this.tp[1] = o.tip.y;
-      this.tp[2] = o.tip.z;
-      this.tv[0] = o.vel.x * keep + s.x * 2.4 - o.dir.z * curl;
-      this.tv[1] = o.vel.y * keep + s.y * 2.4 + 0.9;
-      this.tv[2] = o.vel.z * keep + s.z * 2.4 + o.dir.x * curl;
+      // (A slow lean, not a curl: a curl turned the plume into an S that read as a stray glyph.)
+      const curl = Math.sin(o.time * 1.7) * 0.1;
+      this.tp[0] = o.tip.x - o.knot.x;
+      this.tp[1] = o.tip.y - o.knot.y;
+      this.tp[2] = o.tip.z - o.knot.z;
+      this.tv[0] = s.x * 0.35 - o.dir.x * 0.9 - o.dir.z * curl;
+      this.tv[1] = s.y * 0.35 + 1.5;
+      this.tv[2] = s.z * 0.35 - o.dir.z * 0.9 + o.dir.x * curl;
       this.ta[0] = 0;
     } else if (this.tn > 0 && on) {
       // The head follows the tip between sheds, so the ribbon never comes away from the scarf.
-      this.tp[0] = o.tip.x;
-      this.tp[1] = o.tip.y;
-      this.tp[2] = o.tip.z;
+      this.tp[0] = o.tip.x - o.knot.x;
+      this.tp[1] = o.tip.y - o.knot.y;
+      this.tp[2] = o.tip.z - o.knot.z;
     }
     const show = this.tn >= 3 && (L.trail > 0.02 || this.gutter > 0);
     this.trail.visible = show;
@@ -448,19 +451,24 @@ export class SpiritFlow {
     const pa = pos.array as Float32Array;
     const ra = rib.array as Float32Array;
     // Width and light: thin at level 2, a band at full flow, flared by a breath; a gutter flickers and thins it.
-    const w = (0.05 + 0.08 * L.trail + 0.03 * L.top) * (1 + 0.6 * this.flare);
+    const w = (0.03 + 0.045 * L.trail + 0.02 * L.top) * (1 + 0.6 * this.flare);
+    // (Round 8's first look: by age alone the ribbon reached back past the lens and lay on the snow as a broad yellow
+    // stripe to the frame's foot. It is held to its last metres off the scarf, measured along itself.)
+    const reach = 0.8 + 1.1 * L.trail + 0.5 * L.top;
+    let arc = 0;
     const flick = this.gutter > 0 && !o.reduced ? 0.35 + 0.65 * Math.abs(Math.sin(o.time * 41) * Math.sin(o.time * 17 + 1)) : 1;
     const alpha = Math.min(1, (0.25 + 0.75 * L.trail) * (1 + 0.5 * this.flare)) * flick * (this.gutter > 0 ? 1 - 0.5 * this.gutter : 1);
     for (let i = 0; i < this.tn; i++) {
       const a = i > 0 ? i - 1 : 0;
       const b = i < this.tn - 1 ? i + 1 : this.tn - 1;
       tmpA.set(this.tp[b * 3] - this.tp[a * 3], this.tp[b * 3 + 1] - this.tp[a * 3 + 1], this.tp[b * 3 + 2] - this.tp[a * 3 + 2]);
-      const p = tmpB.set(this.tp[i * 3], this.tp[i * 3 + 1], this.tp[i * 3 + 2]);
+      const p = tmpB.set(this.tp[i * 3], this.tp[i * 3 + 1], this.tp[i * 3 + 2]).add(o.knot);
       const toCam = tmpC.copy(o.cam).sub(p);
       const side = tmpA.cross(toCam);
       const sl = side.length();
       if (sl > 1e-6) side.multiplyScalar(1 / sl);
-      const u = this.ta[i] / life;
+      if (i > 0) arc += Math.hypot(this.tp[i * 3] - this.tp[i * 3 - 3], this.tp[i * 3 + 1] - this.tp[i * 3 - 2], this.tp[i * 3 + 2] - this.tp[i * 3 - 1]);
+      const u = Math.min(1, Math.max(this.ta[i] / life, arc / reach));
       // Narrow at the root (it grows out of the scarf's tip), widest a third of the way, tapering to its end.
       const width = w * Math.min(1, 0.35 + u * 3) * (1 - 0.6 * u);
       for (let k = 0; k < 2; k++) {
@@ -555,17 +563,18 @@ export class SpiritFlow {
     const rx = -f.z;
     const rz = f.x;
     // Ahead of the lens, out to either side or high over the line (never on the line of sight to the rider).
-    const ahead = 10 + Math.random() * 26;
+    const ahead = 7 + Math.random() * 20;
     const sideS = Math.random() < 0.5 ? -1 : 1;
     const side = sideS * (1.8 + Math.random() * 5);
-    const len = 6 + Math.random() * 7;
+    const len = 3.5 + Math.random() * 4;
     const cx = o.cam.x + f.x * ahead + rx * side;
     const cz = o.cam.z + f.z * ahead + rz * side;
     const g = o.ground(cx, cz);
-    const h = 0.5 + Math.random() * 2.6;
+    // (Low over the snow and under the lens: the first look hung one across the sky as a white scratch.)
+    const h = 0.3 + Math.random() * Math.max(0.2, Math.min(1.6, o.cam.y - g - 0.6));
     const pts = new Float32Array(WIND_PTS * 3);
     const ph = Math.random() * 6.28;
-    const amp = 0.25 + Math.random() * 0.35;
+    const amp = 0.18 + Math.random() * 0.25;
     const twist = (Math.random() - 0.5) * 0.08;
     for (let k = 0; k < WIND_PTS; k++) {
       // k = 0 is the head (downhill), the last the tail (uphill): a gentle S with a lift, along the travel.
@@ -579,7 +588,7 @@ export class SpiritFlow {
       pts[k * 3 + 2] = z;
     }
     const race = Math.hypot(o.vel.x, o.vel.z) * (0.3 + Math.random() * 0.15);
-    this.winds.push({ t: 0, life: 0.55 + Math.random() * 0.35, pts, vx: f.x * race, vz: f.z * race, width: 0.022 + Math.random() * 0.02, alpha: 0.45 + 0.4 * Math.random() });
+    this.winds.push({ t: 0, life: 0.55 + Math.random() * 0.35, pts, vx: f.x * race, vz: f.z * race, width: 0.016 + Math.random() * 0.014, alpha: 0.28 + 0.3 * Math.random() });
   }
 
   /** A ring of sparks off the scarf for a level gained. */
@@ -617,7 +626,7 @@ export class SpiritFlow {
         this.sAcc -= 1;
         // Off a point along the ribbon's first half, keeping less of the rider's speed so they fall behind past the lens.
         const j = Math.floor(Math.random() * Math.max(1, this.tn / 2));
-        tmpA.set(this.tp[j * 3], this.tp[j * 3 + 1], this.tp[j * 3 + 2]);
+        tmpA.set(this.tp[j * 3], this.tp[j * 3 + 1], this.tp[j * 3 + 2]).add(o.knot);
         const ember = this.gutter > 0 && Math.random() < 0.7;
         const keep = ember ? 0.7 : 0.55 + Math.random() * 0.2;
         this.spark(tmpA, o.vel.x * keep + (Math.random() - 0.5) * 2, o.vel.y * keep + (ember ? -0.5 : 0.4 + Math.random()), o.vel.z * keep + (Math.random() - 0.5) * 2, ember ? 0.45 : 0.4 + Math.random() * 0.35, ember ? 0 : 1);
