@@ -164,7 +164,7 @@ function terraceWalls(c: Course, side: number, z0: number, z1: number, p: Palett
   const stone = p.low.clone().lerp(new Color('#C9BBAE'), 0.7);
   const moss = new Color('#4F6B4A');
   // (Plain blocks, not the kit's chamfered boxes: a hundred and more of them at 30 m and further.)
-  const SEG = 12;
+  const SEG = 15;
   for (let k = 0; k < 6; k++) {
     const t = 3 + k * 10.4 + 8 + 1.2;
     for (let z = z0; z < z1 - 1; z += SEG) {
@@ -175,9 +175,17 @@ function terraceWalls(c: Course, side: number, z0: number, z1: number, p: Palett
       const h = hi[1] - lo[1];
       if (h < 1) continue;
       const mid = bank(c, side, lim + t, zm);
-      const tone = 0.9 + 0.12 * Math.sin(k * 3.1 + z * 0.37);
-      const g = part(new BoxGeometry(1.4, h + 0.5, SEG - 0.15), stone.clone().multiplyScalar(tone), { pos: [0, (h + 0.5) / 2, 0] });
-      out.push(at(g, mid[0] - side * 0.6, lo[1] - 0.2, mid[2], 0, 1));
+      // Dressed blocks, each its own value and standing a little proud or back of its neighbours, so a wall reads as
+      // stone in courses and not one grey slab (the third critic's "untextured boxes").
+      const BLOCKS = 3;
+      const bl = SEG / BLOCKS;
+      for (let j = 0; j < BLOCKS; j++) {
+        const u = Math.sin(k * 3.1 + z * 0.37 + j * 2.3);
+        const tone = 0.84 + 0.22 * (0.5 + 0.5 * u);
+        const proud = 0.12 * Math.sin(j * 1.7 + z * 0.9 + k);
+        const g = part(new BoxGeometry(1.4, h + 0.5 + 0.25 * u, bl - 0.22), stone.clone().multiplyScalar(tone), { pos: [0, (h + 0.5) / 2, 0], jitter: 0.06 });
+        out.push(at(g, mid[0] - side * (0.6 + proud), lo[1] - 0.2, mid[2] - SEG / 2 + bl * (j + 0.5), 0, 1));
+      }
       out.push(at(part(new BoxGeometry(1.6, 0.35, SEG - 0.1), moss), mid[0] - side * 0.6, lo[1] + h + 0.42, mid[2], 0, 1));
     }
   }

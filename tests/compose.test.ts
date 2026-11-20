@@ -145,7 +145,7 @@ describe('what frames them', () => {
         const g = framingGeometry(c, plan, n, pal);
         if (!g) continue;
         const pos = g.getAttribute('position');
-        expect(pos.count / 3, 'triangles').toBeLessThan(8000);
+        expect(pos.count / 3, 'triangles').toBeLessThan(10000);
         for (let i = 0; i < pos.count; i++) {
           const x = pos.getX(i);
           const z = -pos.getZ(i);
