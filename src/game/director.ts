@@ -1966,6 +1966,8 @@ export class Director {
         this.push({ type: 'showdown', tick, phase: 'start', ghost, markerZ: e.markerZ, say: { label: `Showdown: ${who}`, points: 0, tone: 'big' } }, sim);
       } else {
         this.showdownId = null;
+        // (The result owns the rival pill for a moment, as a duel's does: ART.md 10.)
+        this.rivalHold = { id: t.entry.id, until: this.clock + RIVAL_HOLD_S };
         if (e.phase === 'won') this.push({ type: 'showdown', tick, phase: 'won', ghost, markerZ: e.markerZ }, sim);
         else this.push({ type: 'showdown', tick, phase: 'lost', ghost, markerZ: e.markerZ, say: { label: `${who} took the showdown`, points: 0, tone: 'lost' } }, sim);
       }

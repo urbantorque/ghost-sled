@@ -551,17 +551,18 @@ export class LandingAid {
     const n = tmpN.set(-g.x, 1, g.z).normalize();
     this.ring.position.set(px, c.ground(px, pz) + 0.05, -pz);
     this.ring.quaternion.copy(this.q.setFromUnitVectors(Z_AXIS, n));
-    this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : 1));
+    // (A warning ring stands wider than the sled, so it is never hidden under it.)
+    this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : warn ? 1.3 : 1));
     this.ringMat.uniforms.uColor.value.set(hot ? '#FFE08A' : warn ? AMBER : '#F5F3FF');
     if (warn && hot) this.ringMat.uniforms.uEdge.value.set(AMBER);
     else this.ringMat.uniforms.uEdge.value.copy(shared.uSnowDeep.value).multiplyScalar(0.7);
     // (The throb: about 7 a second, a quarter brighter at its peak.)
-    this.ringMat.uniforms.uHot.value = hot || (warn ? (reduced() ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.cos(this.warnT * 44))) : 0);
+    this.ringMat.uniforms.uHot.value = hot || (warn ? (reduced() ? 0.85 : 0.6 + 0.4 * (0.5 + 0.5 * Math.cos(this.warnT * 44))) : 0);
     // The dashes wind inward as it closes (one dash per second of fall).
     this.ringMat.uniforms.uSpin.value = (t * 1.0) % 1;
     // The band thickens in the stomp window. It stays a ring: from the low chase camera a band much
     // wider than this foreshortens into a solid white plate under the sled.
-    this.ringMat.uniforms.uInner.value = hot ? 0.68 : warn ? 0.71 : 0.75;
-    this.ringMat.uniforms.uAlpha.value = this.shown * (hot ? 1 : 0.7 + 0.25 * (1 - Math.min(1, t / 1.1)));
+    this.ringMat.uniforms.uInner.value = hot ? 0.68 : warn ? 0.64 : 0.75;
+    this.ringMat.uniforms.uAlpha.value = this.shown * (hot || warn ? 1 : 0.7 + 0.25 * (1 - Math.min(1, t / 1.1)));
   }
 }
