@@ -1698,15 +1698,20 @@ export class Particles {
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const d = Math.sqrt(Math.random()) * spread;
-      const hot = 1.15 + Math.random() * 0.35;
-      this.glow.emit(x + Math.cos(a) * d, y + Math.random() * 3, z + Math.sin(a) * d, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 1.1, (Math.random() - 0.5) * 0.8, 5 + Math.random() * 2, 0.8 + Math.random() * 0.25, 0.55, color.r * hot, color.g * hot, color.b * hot, 1, -0.12, 0.25, KIND_GRAIN);
+      const hot = 2.4 + Math.random() * 0.5;
+      this.glow.emit(x + Math.cos(a) * d, y + Math.random() * 3, z + Math.sin(a) * d, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 1.1, (Math.random() - 0.5) * 0.8, 5 + Math.random() * 2, 1.6 + Math.random() * 0.5, 1.1, color.r * hot, color.g * hot, color.b * hot, 1, -0.12, 0.25, KIND_GRAIN);
     }
   }
 
   /** Round 8: a lamp of the town lit for the finish, a soft warm orb that holds for a few seconds where it hangs. */
   lamp(x: number, y: number, z: number, color: Color, size: number, life: number): void {
-    if (this.n(1) === 0) return;
-    this.glow.emit(x, y, z, 0, 0.05, 0, life, size * 0.7, size, color.r * 1.5, color.g * 1.5, color.b * 1.5, 1, 0, 0, KIND_GRAIN);
+    // A cluster of hot motes (a mote's light is its small hot core: one alone at a hundred metres was lost on a
+    // bright sky), so a lamp reads as a lit lantern at the far end of the square.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const r = i === 0 ? 0 : 0.5;
+      this.glow.emit(x + Math.cos(a) * r, y + (i === 0 ? 0 : Math.sin(a) * r), z, 0, 0.05, 0, life, size * 0.8, size, color.r * 3, color.g * 3, color.b * 3, 1, 0, 0, KIND_GRAIN);
+    }
   }
 
   /** Round 8: after a wreck the snow it threw comes down gently round the rider, soft dabs drifting and settling

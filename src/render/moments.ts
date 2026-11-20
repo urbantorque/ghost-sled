@@ -466,16 +466,19 @@ export class Moments {
     });
     // The lanterns let go and the town's lamps (scheduled from the line: stepFinish lights them).
     this.lanternsLeft = scale.lanterns;
+    this.townT = Math.max(this.real, 0);
     this.town.length = 0;
     if (scale.town) {
       const c = this.world.course;
       for (let i = 0; i < TOWN_N; i++) {
-        // (From just behind the line to 60 m on, down both sides over the barriers: the coasting rider rides past
-        // them, so the chase lens sees them ahead and the swung lens, looking back up the square, behind it.)
-        const z = s.z - 8 + i * 10;
+        // (Down the square and the town ahead, 40 to 140 m on, where the lens looks as the rider coasts in, both
+        // sides just inside the barriers over the run's own snow: placed by the rider they stood beside the lens,
+        // out of the frame, and inside the stands cut into the banks they were hidden.)
+        const z = s.z + 40 + i * 14;
         const side = i % 2 === 0 ? -1 : 1;
-        const x = c.centerX(z) + side * (c.halfWidth(z) + 1);
-        this.town.push({ at: 0.25 + i * TOWN_STEP, x, y: c.ground(x, z) + 5.5, z: -z, t: -1 });
+        const cx = c.centerX(z);
+        const x = cx + side * Math.max(3, c.halfWidth(z) - 1.2);
+        this.town.push({ at: 0.25 + i * TOWN_STEP, x, y: c.ground(cx, z) + 7, z: -z, t: -1 });
       }
     }
     // The cannons at the line: either side of the rider and a little ahead, firing in over it.
@@ -497,6 +500,7 @@ export class Moments {
   /** Lanterns still to let go over the square, and the town's lamps lighting in a wave (render seconds since the
    *  line each lights at, where, and how long it has burned: -1 not yet). */
   private lanternsLeft = 0;
+  private townT = 0;
   private lanternAcc = 0;
   private town: Array<{ at: number; x: number; y: number; z: number; t: number }> = [];
   /** Render seconds since a wreck (-1 none): its snow settles for three. */
@@ -506,11 +510,11 @@ export class Moments {
   /** The square's lamps light one after another down both sides, each a beat of warm light over the snow and a
    *  burst of its glow, and a few lanterns go up from each; the lanterns let go over the square on their own
    *  through the first seconds. */
-  private stepTown(s: Snap, dt: number): void {
+  private stepTown(s: Snap, now: number, dt: number): void {
     const p = this.world.particles;
     for (const l of this.town) {
       if (l.t < 0) {
-        if (this.finT < l.at) continue;
+        if (now < l.at) continue;
         l.t = 0;
         p.sparkle(this.a.set(l.x, l.y, l.z), TOWN_GLOW, 14, 1.6, 0.8, 0.24, null, 0.4);
         p.lamp(l.x, l.y, l.z, TOWN_GLOW, 2.1, TOWN_LIFE + 2.5);
@@ -524,18 +528,19 @@ export class Moments {
       const k = l.t < 0.12 ? l.t / 0.12 : 1 - (l.t - 0.12) / (TOWN_BEAT - 0.12);
       pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 15, 1.9 * k);
     }
-    if (this.lanternsLeft > 0 && this.finT > 0.3 && !fx.reduced) {
+    if (this.lanternsLeft > 0 && now > 0.3 && !fx.reduced) {
       this.lanternAcc += dt * 28;
       const n = Math.min(this.lanternsLeft, Math.floor(this.lanternAcc));
       if (n > 0) {
         this.lanternAcc -= n;
         this.lanternsLeft -= n;
         const c = this.world.course;
-        // Over the stands either side of the coasting rider, where both of the finish's lenses look.
-        const z = s.z - 15 + Math.random() * 45;
+        // Over the run's edges down the square ahead, rising past the stands, where the lens looks.
+        const z = s.z + 30 + Math.random() * 100;
         const side = Math.random() < 0.5 ? -1 : 1;
-        const x = c.centerX(z) + side * (c.halfWidth(z) + 2 + Math.random() * 6);
-        p.skyLanterns(x, c.ground(x, z) + 3, -z, 2, n, LANTERN);
+        const cx = c.centerX(z);
+        const x = cx + side * Math.max(2, c.halfWidth(z) - 1 - Math.random() * 4);
+        p.skyLanterns(x, c.ground(cx, z) + 3.5, -z, 1.5, n, LANTERN);
       }
     }
   }
@@ -629,7 +634,11 @@ export class Moments {
   private stepFinish(s: Snap, dt: number): void {
     const p = this.world.particles;
     this.finT += dt;
-    this.stepTown(s, dt);
+    // (The town keeps real seconds, as the celebration does: on the eased clock its lamps were still lighting when
+    // the results came up. Under reduced motion there is no ease and the two agree.)
+    const tr = Math.max(this.real, this.finT);
+    this.stepTown(s, tr, Math.max(0, tr - this.townT));
+    this.townT = tr;
     for (let i = this.shellNext; i < this.shells.length; i++) {
       const sh = this.shells[i];
       if (!sh.up && sh.t - SHELL_RISE <= this.finT) this.launch(sh);

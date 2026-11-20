@@ -168,6 +168,9 @@ async (page) => {
     while (st.more);
     do st = await page.evaluate((t) => window.__evTo(t, 300), ev.tick);
     while (st.live && st.tick < ev.tick);
+    // (ev.wreck: no pool record ends in a wreck when replayed as the player, so the capture page ends this run
+    // here: no get-ups or lantern left and a fall. Capture only: a probe of the presentation, never a record.)
+    if (ev.wreck) await page.evaluate(() => { const sim = window.__gs.run.sim; const s = sim.s; s.getUps = 0; s.lantern = 0; s.invuln = 0; sim.wipeout('tree'); });
     const n = ev.n ?? 8;
     const every = ev.every ?? 3;
     const frames = [];

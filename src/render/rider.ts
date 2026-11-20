@@ -1967,6 +1967,12 @@ export class Rider {
     // Reduced motion keeps the beat as a glow over the whole figure that fades, with no band moving.
     this.igniteT += dt;
     const r = this.u.rise.value;
+    // (Low keeps round 7's thin rim flash and the dash's own rim and bands: a changing uniform on every rider
+    // material is a dozen GL calls a frame there, and Low's main thread is its budget.)
+    if (this.lite) {
+      r.y = 0;
+      return;
+    }
     const calm = reduced() || this.u.spirit.value.z < 1;
     const it = this.igniteT;
     if (it < 0.42) {
