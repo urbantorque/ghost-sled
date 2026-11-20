@@ -192,6 +192,8 @@ export function pathFromOf(sim: Pick<Sim, 'charms' | 'charmGates'>): number {
 /** Each charm family's colour (charmglyphs.ts), as three.js colours, and the charms' own signals' colours: snow, a
  *  paper cream, a pale leaf-white wisp (never mint: it is no ghost), a pale wind line. */
 const FAMILY_C = { speed: new Color(FAMILY_HEX.speed), style: new Color(FAMILY_HEX.style), survival: new Color(FAMILY_HEX.survival) };
+/** How long (s) the lens leans toward a showdown's rival as it starts. */
+const SD_LOOK_S = 2.6;
 const SNOW_C = new Color('#F2F6FF');
 const PAPER_C = new Color('#FFF6E0');
 const WISP_C = new Color('#E6FFD0');
@@ -907,6 +909,7 @@ export class World {
     this.marquee.reset();
     this.lantern.reset();
     this.charmGates.reset();
+    this.sdLook = null;
     this.dashK = 0;
     this.ghosts.resetRun();
     this.chaos.begin(event);
@@ -1209,7 +1212,7 @@ export class World {
     const drifting = v.mode === 'run' && s.drifting;
     // The legend in reach (the four mountains' from the marquee's world, Lanternfall's from its own): the
     // chase looks a little toward it.
-    const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot()) : null;
+    const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot() ?? this.showdownLook(v, dt)) : null;
     const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
@@ -1537,6 +1540,7 @@ export class World {
   private showdownFx(b: BeatOf<'showdown'>, v: FrameView): void {
     const rival = GHOST_C[b.ghost.kind] ?? GHOST_C.pool;
     if (b.phase === 'start') {
+      this.sdLook = { id: b.ghost.id, t: 0 };
       this.charmGates.showdown(b.markerZ, rival);
       return;
     }
@@ -1547,6 +1551,31 @@ export class World {
     const at = this.fxA.set(x, this.course.ground(x, z) + 8, -z);
     this.particles.burst(at, 2.4, this.quality.detail === 'low' ? 20 : 44, undefined, won ? LIGHT_C : rival);
     if (won) this.particles.sparkle(this.fxB.set(v.snap.x, v.snap.y + 0.9, -v.snap.z), LIGHT_C, this.quality.detail === 'low' ? 10 : 22, 2.4, 0.55, 0.22, this.riderCarrier(v.snap), 0.6);
+  }
+
+  /** Round 8: as a showdown starts the lens leans toward its rival for a moment, as it does toward a legend (the
+   *  camera's own legend look: at most about 8 degrees, never the steering, giving way in the air and in a tumble,
+   *  none under reduced motion), so the player sees who they race. It looks a little past the rival, down its side
+   *  of the run: a rival level with the rider is beside the lens, where no chase camera can look. */
+  private sdLook: { id: number; t: number } | null = null;
+  private readonly sdAt = { x: 0, y: 0, z: 0, peak: 0 };
+  private showdownLook(v: FrameView, dt: number): { x: number; y: number; z: number; peak: number } | null {
+    const l = this.sdLook;
+    if (!l) return null;
+    l.t += dt;
+    const p = v.ghostPoses.get(l.id);
+    if (l.t > SD_LOOK_S || !p || p.done) {
+      this.sdLook = null;
+      return null;
+    }
+    const at = this.sdAt;
+    const z = p.z + 14;
+    at.x = p.x;
+    at.y = this.course.ground(p.x, z) + 1;
+    at.z = -z;
+    // (Whole for most of it, then letting go over its last 0.8 s; the camera eases both ways itself.)
+    at.peak = l.t < SD_LOOK_S - 0.8 ? 1 : (SD_LOOK_S - l.t) / 0.8;
+    return at;
   }
 
   /** Round 8: a wisp stolen. A thread of the ghost's own light is pulled from it into the rider, where it turns to

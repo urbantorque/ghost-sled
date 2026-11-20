@@ -162,7 +162,7 @@ async (page) => {
           return cc.safeX(z) * (1 - s) + lx * s;
         };
       }, { gz: g.z, lane });
-      for (const [d, tag] of [[300, 'far300'], [200, 'far200'], [150, 'mid150'], [90, 'near090'], [45, 'near045'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
+      for (const [d, tag] of [[300, 'far300'], [200, 'far200'], [150, 'mid150'], [120, 'mid120'], [90, 'near090'], [40, 'near040'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
         let st = await step(1);
         let guard = 0;
         while (st.z >= 0 && st.z < g.z - d && guard++ < 2000) st = await step(1);
@@ -316,6 +316,9 @@ async (page) => {
           sn.airPitch = 0;
           sn.vy = 0;
         }
+        // (The sim's own sled is lifted too: the frame's snapshot and the contact shadow read it, so height shows.)
+        s.y = r.sim.course.ground(s.x, s.z) + lift;
+        s.vy = 0;
         s.grounded = false;
         s.move = p.move || 0;
         s.grab = p.grab || 0;
@@ -407,6 +410,8 @@ async (page) => {
         live = true;
         await step(2);
         await shoot(`${prefix}live-start`, 'live: showdown starts');
+        await step(70);
+        await shoot(`${prefix}live-lean`, 'live: 1.2 s in, the lens leaning toward the rival');
         await ride(52, 14, 'live-win');
         await step(620);
         const b = await startOne(0);

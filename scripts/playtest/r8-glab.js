@@ -38,6 +38,7 @@ async (page) => {
       // Built on idle time after the first frame: wait for it (on the real clock) before riding.
       const t0 = Date.now();
       while (!w.charmGates.drawn.in && Date.now() - t0 < 15000) { step(); await new Promise((res) => setTimeout(res, 50)); }
+      if (!w.charmGates.drawn.in) return { error: 'the gates never joined the scene' };
       if (!c.gatesOn) {
         w.charmGates.update = () => {};
         if (w.charmGates.mesh) w.charmGates.mesh.visible = false;
@@ -56,17 +57,20 @@ async (page) => {
         s.velHeading = s.heading;
         s.invuln = 10;
       };
-      // The second gate's approach: from 240 m out (it fades in from about 460) to just short of its line.
-      const g = app.run.sim.charmGates[1] || app.run.sim.charmGates[0];
-      c.from = g.z - 240;
+      // The first gate's approach from the start line, ridden as a run rides it (a later gate is dealt only once the
+      // one before is crossed, so the course is never jumped). Every loop has a frame guard: a run that does not move
+      // (a start held, an intro) ends the count instead of hanging the page.
+      const g = app.run.sim.charmGates[0];
+      for (let i = 0; i < 30; i++) { pin(); step(); }
+      c.from = app.run.sim.s.z + 3;
       c.to = g.z - 5;
-      app.run.sim.s.z = c.from - 60;
-      for (let i = 0; i < 90; i++) { pin(); step(); }
-      while (app.run.sim.s.z < c.from) { pin(); step(); }
+      let guard = 0;
+      while (app.run.sim.s.z < c.from && guard++ < 600) { pin(); step(); }
       window.__gl.start();
       let frames = 0;
       let drawn = 0;
-      while (app.run.sim.s.z < c.to) { pin(); step(); frames++; drawn += w.charmGates.drawn.count > 0 ? 1 : 0; }
+      while (app.run.sim.s.z < c.to && frames < 900) { pin(); step(); frames++; drawn += w.charmGates.drawn.count > 0 ? 1 : 0; }
+      frames = Math.max(1, frames);
       const counts = window.__gl.stop();
       const per = (re) => counts.filter(([k]) => re.test(k)).reduce((a, [, v]) => a + v, 0) / frames;
       return { gateZ: g.z, frames, gateFrames: drawn, calls: +per(/./).toFixed(1), draws: +per(/^draw/).toFixed(2), uniforms: +per(/^uniform/).toFixed(1), programs: +per(/^useProgram$/).toFixed(2) };

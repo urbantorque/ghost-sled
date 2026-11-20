@@ -4,8 +4,8 @@ Render, UI and sound only: the sim, the bots and the pools are untouched. Everyt
 its events and `director.rivalEvents`, and nothing drawn feeds back.
 
 Status: built, unit-tested, merged into `round-8` once (`f1931fc`) and seen in frames on desktop High, Low and the
-phone, with a live showdown won, one lost and a steal on each. One fresh critic; its worst faults are listed below,
-most of them still open.
+phone, with a live showdown won, one lost and a steal on each. Two fresh critics (one each phase); phase 2 below answers the
+main lane's seven items and the second critic.
 
 ## What a player gets, and why they would feel it
 
@@ -134,6 +134,73 @@ kickers and rocks (not this lane's).
   real sim through each lane (`r8play.test.ts`). The first pass's mismatch was the capture, not the code.
 - **The medallions at 90 m:** still too small (above).
 
+## Phase 2 (after the first merge, `d95e45b`)
+
+What changed for a player, the main lane's seven items in order:
+
+1. **A gate's glyphs read from about 120 m.** The size floor never failed: it hit its cap. At speed the lens is about
+   80 degrees, so a metre at 90 m is a few pixels, and the old 2.15 cap left a medallion about 16 px tall. The probe
+   confirmed the shader's own numbers (field of view 62.7 degrees at the start, `uViewH` 720, 0.17 m a pixel at 102 m;
+   `v4/logs/probe.json`). The medallion now keeps 32 px tall up to five times its size, and as they grow the outer two
+   step out sideways so the three never overlap (`medalHalf`, `medalSpread`, tested). Frames at 150, 120, 90 and 40 m:
+   `v4/desk-high/high-m0-gate1-*`, `high-m3-gate1-*`, `v4/desk-low/`, `v4/phone/`. At 90 m they are about 30 px with
+   their glyphs legible; at 150 m three badges.
+2. **A gate is light, not a structure.** The tubes take the gouache's three values off the key light (a lit side, the
+   body, a cooler shade side) with a thin darker turn for the snow, their feet rise out of the snow as light, and every
+   part dissolves over its last 16 m to the lens, so the take never fills the frame.
+3. **The take says what the charm does** ("Hearthstone: a stomp after a dash refills it"; `charmcopy.ts`, 24 short
+   lines, tested). The offers line as the gate comes up is as it was.
+4. **A showdown on screen.** At its start the lens leans toward the rival for 2.6 s through the camera's own legend look
+   (capped at about 8 degrees, never the steering, giving way in the air and a tumble, none under reduced motion),
+   looking a little past the rival down its side. The rival takes the pill and its ring ahead of any duel, and the
+   result keeps the pill for 1.5 s. Seen: `v4/desk-high/high-m0-live-lean.png`, `v4/phone/medium-m0-live-start.png`
+   (Old Wren beside the rider, ringed, "neck and neck").
+5. **Fireside and Comet Tail:** two tries. Leaning back at all brings the head toward the chase lens and read as a fall;
+   both now sit nearly upright (a slight recline, hands behind the head; a short stretch back, head up). The pose lab
+   lifts the sim's sled, so the shadow shows height. The second critic still found Fireside "a generic hunch" and Comet
+   Tail too like Lantern Reach: these two want a person's eye and probably a different idea, not more tuning.
+6. **The phone's "Showdown: <name>"** keeps the word and ellipsizes the name at the edges (`.gs-call-who`, `--rest`).
+   Seen fitting: `v4/phone/medium-m0-live-start.png`.
+7. **Low's GL calls with a gate in reach,** in one build, gates on against off on the first gate's approach, two
+   passes each (`v4/logs/glab-*.json`):
+
+   | Tier | Gates on | Gates off | Cost | Draws | Programs | Uniform calls |
+   | --- | --- | --- | --- | --- | --- | --- |
+   | Low | 421.3 | 399.2 | +22.1 calls | +1.0 | +1.0 | +4.1 |
+   | High | 884.5 | 862.4 | +22.1 calls | +1.0 | +1.0 | +4.1 |
+
+   Inside the budgets (Low +1 draw, High +2). The deeper-gold light columns are seen at 40 m and far ahead
+   (`v4/desk-high/high-m0-live-lean.png`, `v4/phone/medium-m0-live-start.png`). The deep-grab warning ring now stands
+   round the sled's shadow, which the lens keeps in frame (a leap's touchdown often lies past its knuckle): seen,
+   `v5/desk-high/high-m0-fl-danger.png`.
+
+### The second critic (fresh, Opus, high; ART.md and the new frames only, the same question)
+
+Its five worst, and what is mine:
+
+1. **The charm choice is blind:** name and effect come only after the take; at decision distance the clue is a glyph.
+   The offers line names the three as the gate comes up (280 m out), but none of its frames caught it. Whether to say
+   what each does before the choice is the main lane's call (it asked the offers line to stay as it is).
+2. **The showdown loses its readout at the decisive moment:** the unlock toast took the rank and rival pills in the last
+   40 m, and the top centre stacks four or five rows. Shared HUD, not mine; worth a rule that a showdown holds the pill
+   row against a toast.
+3. **The landing ring fails as a signal:** hidden under the rider as it closes, gold where time is amber, "ring" shared
+   with the sky rings, its prompt stale. Mine in part: the deep-grab warning is now visible; the window's colour and
+   size are round 7's, and the prompts are the hints'.
+4. **The HUD contradicts the picture:** "Ring 0 of 3" while rings are flown; the distance frozen at 710 m for 7.5 s.
+   Not mine; the distance is likely the capture's virtual clock (the page's DOM beat runs on the wall clock).
+5. **The gates break the colour roles and the painted look:** lime, azure and violet are new hues, the lilac gate
+   vanishes on Sakura's shade, passed arches smeared on Low. Fixed: the smear (dissolve over 16 m). Open: whether the
+   family colours belong in ART.md's roles (they take none of the locked ones), and Sakura's lilac.
+
+Also: the loss line wore the loss style's red edge; it is now said plainly (`d7b3f0d`). Not mine: ghosts read as glass
+snowmen, a near ghost not dissolving, rocks as prisms under white lids, the dark slab of a fork's ice.
+
+### Not verified after the last commit
+
+The plain loss line and the wider dissolve (`d7b3f0d`) are tested but not seen in a frame. A plain ("normal") loss line
+can be held out of the callout while a stamp is up.
+
 ## Touched outside my files
 
 - `src/render/world.ts` (the gates, the trick input to the rider, Lamplit Path, the charm and rival effects),
@@ -144,7 +211,9 @@ kickers and rocks (not this lane's).
 - `src/audio/sfx.ts` (tricks, grabs, gates, synergies, showdowns, steals).
 - Tests: `tests/r8play.test.ts` (new), `tests/director.test.ts` (a describe block and a `rivals` option on its rig).
 - Scripts: `scripts/playtest/r8-play.js` (gates, flights, poses, a live showdown on a virtual clock), `r8-glab.js`
-  (the gates' cost in one build; it has not yet given a number).
+  (the gates' cost in one build, on and off, with frame guards).
+- Phase 2: `src/game/charmcopy.ts` (new), `src/ui/beatsui.ts` and `fx.ts` (the showdown's name as its own span),
+  `style.css` (its ellipsis), `world.ts` (the showdown look).
 
 ## For the main lane
 

@@ -151,24 +151,27 @@ export function trickPose(t: TrickIn, o: TrickPose = emptyTrickPose()): TrickPos
   if (m === TRICK.fireside) {
     o.name = 'fireside';
     o.k = 1;
-    // Lying back along the toboggan, hands behind the head, boots up.
-    o.pitch = 1.05;
-    o.lift = 0.04;
-    setArm(o, 0, -0.35, 2.45, 2.15);
-    setArm(o, 1, -0.35, 2.45, 2.15);
-    o.nod = -0.2;
+    // Sitting back at ease in the seat, hands behind the head, elbows wide, chin up: held and relaxed, the sled
+    // level under it. (From the chase lens any real lean back brings the head toward the lens: laid flat, and even
+    // half back, it read as a wipeout.)
+    o.pitch = 0.18;
+    setArm(o, 0, -0.2, 2.35, 2.05);
+    setArm(o, 1, -0.2, 2.35, 2.05);
+    o.nod = -0.12;
     return o;
   }
   if (m === TRICK.cometTail) {
     o.name = 'cometTail';
     o.k = 1;
-    // Let go and trailing off the back of the sled from one runner, the body streamed out flat behind it.
-    o.back = 0.55;
-    o.lift = 0.16;
-    o.pitch = 1.3;
-    setArm(o, 0, 2.85, 0.18, 0.05);
-    setArm(o, 1, 0.4, 1.35, 0.2, 0.9);
-    o.nod = -0.5;
+    // Stretched back off the seat over the sled's tail, one hand firm on the runner and the other arm out wide for
+    // balance, head up to the way ahead: a streamed, held line, the sled under it. (Streamed out flat behind and off it,
+    // or even half back, it read as a fall from the chase lens.)
+    o.back = 0.14;
+    o.lift = 0.06;
+    o.pitch = 0.3;
+    setArm(o, 0, 2.2, 0.25, 0.15);
+    setArm(o, 1, 0.5, 1.6, 0.15, 0.9);
+    o.nod = 0.05;
     return o;
   }
   if (m === TRICK.willowisp) {

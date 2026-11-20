@@ -420,6 +420,8 @@ export class LandingAid {
   /** Round 8: a deep grab is held (tier 2 on): near the snow the ring warns in amber until it is let go. */
   deepGrab = false;
   private warnT = 0;
+  /** Where the contact shadow stands this frame (sim metres), kept in the lens's frame: a warning ring stands there. */
+  private blobAt = { x: 0, z: 0, on: false };
 
   /** Burst crater pressed into the snow on a perfect landing. `strength` is its width, 1 for a single
    *  stomp up to 1.6 for a streak of five or more. */
@@ -460,6 +462,7 @@ export class LandingAid {
     // Contact shadow under the sled.
     const h = Math.max(0, s.y - c.ground(s.x, s.z));
     this.blob.visible = blobVisible && !s.crashed;
+    this.blobAt.on = false;
     if (this.blob.visible) {
       // An airborne sled's shadow falls a little ahead of the point under it, as if from a high light
       // behind the lens, so the chase camera (which rises with the sled) keeps it in the frame: straight
@@ -494,6 +497,9 @@ export class LandingAid {
       c.gradient(bx, bz, g);
       const n = tmpN.set(-g.x, 1, g.z).normalize();
       this.blob.position.set(bx, gy + 0.03, -bz);
+      this.blobAt.x = bx;
+      this.blobAt.z = bz;
+      this.blobAt.on = true;
       this.blob.quaternion.setFromUnitVectors(Z_AXIS, n);
       this.blob.rotateZ(-s.heading);
       // It is how you judge a jump (ART.md section 2), so an airborne sled keeps a clear one: it
@@ -547,6 +553,12 @@ export class LandingAid {
     this.warnT = warn ? this.warnT + dt : 0;
     // It closes in to just around the sled, so the stomp flash still shows past the rider.
     const radius = 1.05 + 1.9 * Math.min(1, t / 1.1);
+    // (A deep grab's warning stands round the sled's shadow, which is kept in the lens's frame: the touchdown point
+    // of a leap often lies past its knuckle, where the lens cannot see the snow.)
+    if (warn && !hot && this.blobAt.on) {
+      px = this.blobAt.x;
+      pz = this.blobAt.z;
+    }
     c.gradient(px, pz, g);
     const n = tmpN.set(-g.x, 1, g.z).normalize();
     this.ring.position.set(px, c.ground(px, pz) + 0.05, -pz);
