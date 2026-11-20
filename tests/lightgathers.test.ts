@@ -6,29 +6,15 @@ import { MOUNTAINS } from '../src/sim/mountains';
 import { LIGHT_GLSL, applyPalette, setCloudShadows, shared } from '../src/render/materials';
 import { getPalette, journeyPalette } from '../src/render/palette';
 
-// Round 8, the light lane (V5, "light that gathers"): the value pass and the air that takes a lamp's light. Lanternfall
-// goes dark under the deck and its lamps and the rider's own lantern are the light; Ember's snow is lit from the
-// lava's side; the haze of a lamp's colour is drawn only where a palette asks for it, and never on Low.
+// Round 8, the light lane (V5, "light that gathers"): the value pass and the air that takes a lamp's light. Ember's snow is
+// lit from the lava's side with a cold far bank; the haze of a lamp's colour is drawn only where a palette asks for it,
+// and never on Low. (Lanternfall's darker night went back to round 7's after three blind critics: notes/r8-light.md.)
 
 const lum = (c: Color) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
 const CHAOS = [Mood.Blizzard, Mood.Lantern, Mood.GlassIce, Mood.Comet, Mood.Haunted, Mood.Powder];
 const course = (id: string) => courseFor(MOUNTAINS.find((m) => m.id === id)!.seed);
 
 describe('light that gathers', () => {
-  it('takes Lanternfall down under the deck, with the lamps and the rider carrying the light', () => {
-    const c = course('lanternfall');
-    const crown = journeyPalette('lantern', 300, getPalette('lantern', Mood.None), c);
-    // The Lamp Road and the lamp grove, between the break and Firstlight.
-    for (const z of [1950, 2300, 2700]) {
-      const p = journeyPalette('lantern', z, getPalette('lantern', Mood.None), c);
-      const moonlit = p.snowLit.clone().multiply(p.sunColor);
-      expect(lum(moonlit), `the lit snow at ${z} m`).toBeLessThan(lum(crown.snowLit.clone().multiply(crown.sunColor)) * 0.75);
-      expect(p.lamps, `the lamps at ${z} m`).toBeGreaterThanOrEqual(crown.lamps * 1.35);
-      expect(p.lanternGlow, `the rider's lantern at ${z} m`).toBeGreaterThanOrEqual(0.8);
-      expect(p.lampAir, `the lamps' air at ${z} m`).toBeGreaterThan(0);
-    }
-  });
-
   it('lights Ember from the lava\'s side: the key low and further round than the dim disc, above the slope', () => {
     for (const z of [0, 900, 2000, 3000]) {
       const p = journeyPalette('volcanic', z, getPalette('volcanic', Mood.None));
@@ -55,7 +41,7 @@ describe('light that gathers', () => {
     expect(LIGHT_GLSL).toContain('vec3 lampAir(');
     expect(LIGHT_GLSL).toMatch(/float\(i\) >= uLocalProps/);
     expect(LIGHT_GLSL).toMatch(/fogColor\(dir, d\), f\) \+ lampAir\(dir, d\)/);
-    const p = journeyPalette('lantern', 2300, getPalette('lantern', Mood.None), course('lanternfall'));
+    const p = journeyPalette('volcanic', 3500, getPalette('volcanic', Mood.None), course('ember'));
     setCloudShadows(true);
     applyPalette(p);
     expect(shared.uLampAir.value).toBeCloseTo(p.lampAir, 6);
