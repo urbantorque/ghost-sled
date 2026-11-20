@@ -3,7 +3,7 @@ import type { Beat } from '../game/beats';
 import type { GhostPose } from '../game/ghosts';
 import type { MarqueeLight } from '../game/marquee';
 import type { Snap } from '../game/run';
-import type { Course } from '../sim/course';
+import { CHUNK_LEN, type Course, type Obstacle } from '../sim/course';
 import type { Sim, SimEvent } from '../sim/sim';
 import { fallZ } from '../sim/moments';
 import { Breaks } from './breaks';
@@ -26,6 +26,9 @@ import { WardFx } from './wardfx';
 const LIGHT = new Color('#FFD34D');
 const WHITE_GOLD = new Color('#FFF3C4');
 const GHOST_DASH = new Color('#D9FFF8');
+/** Round 8: what a hazard turns to as a dashing rider goes through or past it, pale spirit glass (a white-gold
+ *  breath, never the hazard's own colour, never mint: that is the ghosts'). */
+const PHASED = new Color('#FFF6DC');
 /** A set piece's air: embers off Ember's caldera, petals over Sakura, lantern light down a festival street. */
 const EMBER = new Color('#FF9A4A');
 const PETAL = new Color('#FFC9DA');
@@ -208,6 +211,67 @@ export class SpiritFx {
       this.show.push({ at: base + t - RISE, sky, a, b, c, pair: (i + 1) % FW_PAIRS.length, kind });
     });
     this.show.sort((x, y) => x.at - y.at);
+  }
+
+  /** How much the world cools while a dash burns (post.ts uCool), from the rider's eased spirit shimmer (world.ts
+   *  dashK): it comes in with the dash's ignition and lets go with it. Low draws no post pass and has none: its
+   *  dash is the rider's rim, bands and light. */
+  coolK(dashK: number): number {
+    const k = Math.max(0, Math.min(1, dashK));
+    return k * k * (3 - 2 * k);
+  }
+
+  /** Round 8 (the events lane): hazards a dash goes through or past this dash, so each ghosts once. */
+  private readonly phased = new Set<number>();
+  private dashWas = false;
+
+  /** A hazard turns to spirit as the dashing rider goes through it (`through`) or past it: a column of pale glass
+   *  motes over its footprint up its height, drifting up and apart, and a breath of light at its foot. The hazard
+   *  itself stands (the sim's collider never moves); the motes say the rider went through it as a spirit. */
+  private ghostHazard(o: Obstacle, through: boolean, low: boolean): void {
+    const c = this.course;
+    if (!c) return;
+    const gy = c.ground(o.x, o.z);
+    const h = Math.max(0.8, Math.min(9, o.h * (o.scale || 1)));
+    const r = Math.max(0.35, Math.min(2.2, o.r));
+    const n = Math.round((through ? 26 : 12) * (low ? 0.5 : 1) * Math.min(1.6, 0.6 + h / 5));
+    const keep = this.carry.set(this.vel.x * 0.15, 0, this.vel.z * 0.15);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const y = gy + Math.pow(Math.random(), 0.8) * h;
+      // Narrower up a tree's cone, round a rock's shoulders.
+      const rr = r * (o.kind === 'pine' || o.kind === 'charpine' || o.kind === 'spire' ? 1.1 - 0.75 * ((y - gy) / h) : 1);
+      this.particles.sparkle(this.w.set(o.x + Math.cos(a) * rr, y, -o.z + Math.sin(a) * rr), i % 3 === 0 ? WHITE_GOLD : PHASED, 1, 0.9, through ? 0.75 : 0.55, through ? 0.2 : 0.16, keep, 0.9);
+    }
+    if (through) {
+      this.particles.ring(this.w.set(o.x, gy + 0.1, -o.z), PHASED, low ? 8 : 16, 3.2, keep, 3, 1.2, 0.45, 0.16);
+      this.pulse(o.x, gy + 1.2, -o.z, WHITE_GOLD, 7, 0.9, 0.35);
+    }
+  }
+
+  /** While a dash burns: every hazard the rider draws level with inside 4 m ghosts once, the one it rides through
+   *  (the sim's 'phase') fully. */
+  private dashPass(s: Snap, dashing: boolean, low: boolean): void {
+    if (!dashing) {
+      if (this.dashWas) this.phased.clear();
+      this.dashWas = false;
+      return;
+    }
+    this.dashWas = true;
+    const c = this.course;
+    if (!c) return;
+    const k0 = Math.max(0, Math.floor(s.z / CHUNK_LEN));
+    for (let k = k0; k <= k0 + 1; k++) {
+      for (const o of c.chunk(k).obstacles) {
+        if (this.phased.has(o.id) || o.soft) continue;
+        const dz = o.z - s.z;
+        if (dz < -1 || dz > 2.5) continue;
+        const d = Math.abs(o.x - s.x) - o.r;
+        if (d > 4) continue;
+        this.phased.add(o.id);
+        this.ghostHazard(o, d < 0.7, low);
+      }
+    }
   }
 
   /** A beat of light at three.js (x, y, z): `radius` metres, gone in `life` seconds; `ride` keeps it on
@@ -393,6 +457,9 @@ export class SpiritFx {
     }
     this.trailAcc += dt;
     const dashing = mode === 'run' && !!sim && sim.s.dash > 0;
+    this.dashPass(s, dashing, low);
+    // Round 8: the spirit streams off the rider's shoulders and hat while it burns, rising as it falls behind.
+    if (dashing && !low && this.trailAcc === 0) this.particles.sparkle(this.v.set(s.x + (Math.random() - 0.5) * 0.5, s.y + 1.25, -s.z + 0.3), WHITE_GOLD, 2, 0.7, 0.7, 0.15, this.carry.set(s.vx * 0.82, 0, -s.vz * 0.82), 1.2);
     if (dashing && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
       this.particles.sparkle(this.v.set(s.x, s.y + 0.5, -s.z + 0.8), WHITE_GOLD, low ? 2 : 3, 0.9, 0.55, 0.2, this.carry.set(s.vx * 0.6, 0, -s.vz * 0.6), 0.15);

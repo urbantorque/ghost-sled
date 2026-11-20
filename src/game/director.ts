@@ -1171,7 +1171,9 @@ export class Director {
         case 'finish': {
           const place = placeAtFinish(f.tracks, e.tick);
           this.finishT = 0;
-          this.push({ type: 'finish', tick: p.tick, bonus: e.bonus, seconds: e.tick / 60, rank: place.rank, of: place.of }, sim);
+          const bt = run?.bestTimeAtStart;
+          const pb = typeof bt === 'number' ? e.tick / 60 < bt : (run?.bestDistAtStart ?? 0) > 0;
+          this.push({ type: 'finish', tick: p.tick, bonus: e.bonus, seconds: e.tick / 60, rank: place.rank, of: place.of, pb }, sim);
           break;
         }
         case 'grind':
@@ -2036,6 +2038,9 @@ export class Director {
         entry.label = b.text;
         entry.gifts = b.gifts;
         entry.grade = String(b.grade);
+        break;
+      case 'finish':
+        entry.grade = `${b.rank}/${b.of}${b.pb ? ' pb' : ''}`;
         break;
       case 'missionPop':
         entry.label = b.text;

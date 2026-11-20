@@ -12,7 +12,7 @@
 //   playwright-cli -s=r8-events --raw run-code --filename=scripts/playtest/eventstrips.js
 async (page) => {
   const c = Object.assign(
-    { base: 'http://127.0.0.1:4770/', out: 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/events/x/', tier: 'high', m: 0, demo: 0, scan: false, events: [], gl: false, extra: '', width: 0, height: 0 },
+    { base: 'http://127.0.0.1:4770/', out: 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/events/x/', tier: 'high', m: 0, demo: 0, scan: false, events: [], gl: false, extra: '', width: 0, height: 0, pbAt: 0 },
     (await page.evaluate(() => window.__evCfg).catch(() => null)) || {},
   );
   const errors = [];
@@ -51,6 +51,8 @@ async (page) => {
   await page.goto(`${c.base}?platform=mock&debug&tier=${c.tier}&autoride=1&m=${c.m}&demo=${c.demo}${c.extra}`);
   await page.waitForFunction(() => window.__gs && window.__gs.phase === 'run' && window.__gs.run, null, { timeout: 120000 });
   await page.addStyleTag({ content: 'body * { visibility: hidden !important; } canvas { visibility: visible !important; }' });
+  // A best to beat (cfg.pbAt, seconds): a fresh save has none, so its finish is never a best beaten.
+  if (c.pbAt > 0) await page.evaluate((s) => { const d = window.__gs.director; if (d && d.run) d.run.bestTimeAtStart = s; }, c.pbAt);
   await page.evaluate(() => {
     const vc = { t: performance.now(), q: [], timers: [], id: 1 };
     performance.now = () => vc.t;
@@ -121,7 +123,7 @@ async (page) => {
     };
     window.__evLog = () => {
       const d = window.__gs.director;
-      const log = d && d.log ? d.log.filter((x) => x.type === 'pass' || x.type === 'finish' || x.type === 'newBest' || x.type === 'stomp' || x.type === 'crash').map((x) => ({ tick: Math.round(x.t * 60), type: x.type, label: x.label, word: x.word })) : [];
+      const log = d && d.log ? d.log.filter((x) => x.type === 'pass' || x.type === 'finish' || x.type === 'newBest' || x.type === 'stomp' || x.type === 'crash').map((x) => ({ tick: Math.round(x.t * 60), type: x.type, label: x.label, word: x.word, grade: x.grade })) : [];
       const r = window.__gs.run;
       return { seen, log, finished: r ? r.sim.s.finished : null, crashed: r ? r.sim.s.crashed : null, phase: window.__gs.phase };
     };

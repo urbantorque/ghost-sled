@@ -23,6 +23,7 @@ import {
   FLAG_UP,
   FRAME_STRIDE,
   SAMPLE_EVERY,
+  packTrick,
   WorkerIn,
   WorkerOut,
 } from '../game/ghostdata';
@@ -72,7 +73,7 @@ function replay(id: number, recordStr: string): void {
       frames[o + F_AIRPITCH] = st.airPitch;
       frames[o + F_LEAN] = st.lean;
       frames[o + F_SPEED] = st.speed;
-      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0) | (st.dash > 0 ? FLAG_DASHING : 0) | (st.ghost > 0 && st.dash === 0 ? FLAG_WARDED : 0) | (st.fall === FALL_FALLING ? FLAG_FALLING : st.fall === FALL_DOWN ? FLAG_DOWN : st.fall === FALL_UP ? FLAG_UP : 0);
+      frames[o + F_FLAGS] = (st.grounded ? FLAG_GROUNDED : 0) | (st.drifting ? FLAG_DRIFTING : 0) | (st.crashed ? FLAG_CRASHED : 0) | (st.dash > 0 ? FLAG_DASHING : 0) | (st.ghost > 0 && st.dash === 0 ? FLAG_WARDED : 0) | (st.fall === FALL_FALLING ? FLAG_FALLING : st.fall === FALL_DOWN ? FLAG_DOWN : st.fall === FALL_UP ? FLAG_UP : 0) | (st.grounded ? 0 : packTrick(st.move, st.grab, st.grabTier));
       frames[o + F_CARVE] = st.carve;
       n++;
     });

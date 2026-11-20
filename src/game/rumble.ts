@@ -64,9 +64,34 @@ export function rumbleFor(e: SimEvent): RumbleEffect | null {
     case 'crash':
       return one(5, 260, 0.8, 1);
     case 'ward':
-      return one(3, 110, 1, 0.3);
+      // The lantern cracks, then its shards scatter (round 8: a second, lighter tick).
+      return {
+        weight: 3,
+        pulses: [
+          { delay: 0, duration: 110, weak: 1, strong: 0.3 },
+          { delay: 150, duration: 60, weak: 0.5, strong: 0 },
+        ],
+      };
     case 'dash':
-      return e.phase === 'start' ? one(2, 140, 0.6, 0.55) : null;
+      // Ignition, then the spirit's hum settling under the hands (round 8).
+      return e.phase === 'start'
+        ? {
+            weight: 2,
+            pulses: [
+              { delay: 0, duration: 140, weak: 0.6, strong: 0.55 },
+              { delay: 150, duration: 100, weak: 0.25, strong: 0 },
+            ],
+          }
+        : null;
+    case 'finish':
+      // Over the line (round 8): a roll that swells, the square's roar in the hands.
+      return {
+        weight: 3,
+        pulses: [
+          { delay: 0, duration: 90, weak: 0.35, strong: 0.5 },
+          { delay: 120, duration: 130, weak: 0.7, strong: 0.85 },
+        ],
+      };
     case 'moment':
       // A set piece won: a rising pair.
       if (e.phase !== 'won') return null;

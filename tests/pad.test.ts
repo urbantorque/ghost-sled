@@ -441,8 +441,9 @@ describe('rumble', () => {
     expect(fx({ type: 'bump', id: 1 })).toEqual({ weight: 3, pulses: [{ delay: 0, duration: 50, weak: 0.7, strong: 0.5 }] });
     expect(fx({ type: 'tumble', phase: 'start', cause: 'obstacle' as never, left: 1 })).toEqual({ weight: 4, pulses: [{ delay: 0, duration: 200, weak: 0.5, strong: 0.9 }] });
     expect(fx({ type: 'crash', cause: 'avalanche' as never })).toEqual({ weight: 5, pulses: [{ delay: 0, duration: 260, weak: 0.8, strong: 1 }] });
-    expect(fx({ type: 'ward', cause: 'obstacle' as never, cells: 0 })).toEqual({ weight: 3, pulses: [{ delay: 0, duration: 110, weak: 1, strong: 0.3 }] });
-    expect(fx({ type: 'dash', phase: 'start', cells: 0 })).toEqual({ weight: 2, pulses: [{ delay: 0, duration: 140, weak: 0.6, strong: 0.55 }] });
+    // (Round 8, the events lane: a ward's shards scatter after its crack, a dash's hum settles after its ignition.)
+    expect(fx({ type: 'ward', cause: 'obstacle' as never, cells: 0 })).toEqual({ weight: 3, pulses: [{ delay: 0, duration: 110, weak: 1, strong: 0.3 }, { delay: 150, duration: 60, weak: 0.5, strong: 0 }] });
+    expect(fx({ type: 'dash', phase: 'start', cells: 0 })).toEqual({ weight: 2, pulses: [{ delay: 0, duration: 140, weak: 0.6, strong: 0.55 }, { delay: 150, duration: 100, weak: 0.25, strong: 0 }] });
     expect(fx({ type: 'drift', phase: 'release', tier: 1 }).pulses).toEqual([{ delay: 0, duration: 60, weak: 0.35, strong: 0 }]);
     expect(fx({ type: 'drift', phase: 'release', tier: 2 }).pulses).toEqual([{ delay: 0, duration: 90, weak: 0.55, strong: 0.15 }]);
     expect(fx({ type: 'drift', phase: 'release', tier: 3 }).pulses).toEqual([{ delay: 0, duration: 120, weak: 0.8, strong: 0.35 }]);

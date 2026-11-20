@@ -25,6 +25,24 @@ export const FLAG_WARDED = 16;
 export const FLAG_FALLING = 32;
 export const FLAG_DOWN = 64;
 export const FLAG_UP = 128;
+/** Round 8 (the events lane): what the rider is doing in the air, packed over the flags (a Float32 holds every
+ *  integer to 2^24 exactly), so a ghost in glass takes the trick poses the rider does (render/ghosts.ts). Bits 8
+ *  to 12 the trick posed (tricks.ts TRICK, sim s.move), 13 to 14 a grab's side plus one, 15 to 16 its tier. A
+ *  sample without them (an older trajectory) reads as no trick. Presentation only: nothing reads them back. */
+export const TRICK_SHIFT = 8;
+export function packTrick(move: number, grab: number, tier: number): number {
+  const m = Math.max(0, Math.min(31, Math.floor(move)));
+  const g = Math.max(0, Math.min(2, Math.round(grab) + 1));
+  const t = Math.max(0, Math.min(3, Math.floor(tier)));
+  return (m << TRICK_SHIFT) | (g << (TRICK_SHIFT + 5)) | (t << (TRICK_SHIFT + 7));
+}
+export function unpackTrick(flags: number, out: { move: number; grab: number; tier: number }): void {
+  const f = Math.floor(flags);
+  out.move = (f >> TRICK_SHIFT) & 31;
+  const g = (f >> (TRICK_SHIFT + 5)) & 3;
+  out.grab = g === 0 && out.move === 0 ? 0 : g - 1;
+  out.tier = (f >> (TRICK_SHIFT + 7)) & 3;
+}
 
 export interface PoolGhostData {
   name: string;

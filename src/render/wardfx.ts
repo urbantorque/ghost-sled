@@ -15,8 +15,10 @@ const WHITE_GOLD = new Color('#FFF3C4');
 const CREAM = new Color('#FFF1D6');
 
 /** The lantern round the seated rider: its height, its widest radius and how far over the sled it starts. */
-const LANTERN_H = 1.55;
-const LANTERN_R = 0.86;
+// (Round 8, the events lane: a size larger, so from the chase lens behind the rider the lantern stands out past
+// the rider's shoulders on both sides and over its hat, where it reads; at round 7's size the rider hid most of it.)
+const LANTERN_H = 1.8;
+const LANTERN_R = 1.08;
 const LANTERN_Y0 = 0.08;
 const ROWS = 5;
 const COLS = 10;
@@ -25,10 +27,13 @@ const SHARDS = ROWS * COLS;
 const CRACK_AT = 0.035;
 const BREAK_AT = 0.09;
 const BREAK_AT_REDUCED = 0.2;
-const END = 1.05;
+const END = 1.5;
 /** How far the ring of light runs out over the snow (m), and how long it takes. */
-const RING_R = 5.6;
-const RING_S = 0.5;
+const RING_R = 8.5;
+const RING_S = 0.62;
+/** Round 8: how much of the sled's pace the broken lantern keeps. At round 7's 0.88 a shard fell back 5 m a second
+ *  at 40 m/s, under the lens in a blink; now it hangs beside the rider as it flies out and only slowly drops back. */
+const KEEP = 0.95;
 
 /** The lantern's radius at height `h` (0 at its foot to LANTERN_H at its top): a round paper lantern,
  *  pinched at both ends where the rims are. */
@@ -258,17 +263,17 @@ export class WardFx {
         sh.life -= dt;
         // A shard keeps most of the sled's speed (so it streams past rather than vanishing behind),
         // flies out against the drag, droops and spins.
-        sh.v.x = this.carrier.x * 0.88 + (sh.v.x - this.carrier.x * 0.88) * drag;
-        sh.v.z = this.carrier.z * 0.88 + (sh.v.z - this.carrier.z * 0.88) * drag;
-        sh.v.y -= 7.5 * dt;
+        sh.v.x = this.carrier.x * KEEP + (sh.v.x - this.carrier.x * KEEP) * drag;
+        sh.v.z = this.carrier.z * KEEP + (sh.v.z - this.carrier.z * KEEP) * drag;
+        sh.v.y -= 6 * dt;
         sh.p.addScaledVector(sh.v, dt);
         sh.q.premultiply(this.q.setFromAxisAngle(sh.axis, sh.spin * dt));
         const left = Math.max(0, sh.life);
-        const fade = Math.min(1, left / 0.35);
-        const shrink = 0.55 + 0.45 * fade;
+        const fade = Math.min(1, left / 0.4);
+        const shrink = 0.7 + 0.3 * fade;
         this.m.compose(sh.p, sh.q, this.s.set(sh.w * shrink, sh.h * shrink, 1));
         this.mesh.setMatrixAt(n, this.m);
-        const heat = Math.max(0, 1 - since / 0.45);
+        const heat = Math.max(0, 1 - since / 0.6);
         wa.set([fade, 1, heat, 0], n * 4);
         n++;
       }
@@ -276,7 +281,7 @@ export class WardFx {
       if (since < RING_S) {
         const k = since / RING_S;
         const r = 0.9 + (RING_R - 0.9) * (1 - (1 - k) * (1 - k));
-        this.ringAt.addScaledVector(this.carrier, dt * 0.92);
+        this.ringAt.addScaledVector(this.carrier, dt * 0.97);
         this.m.compose(this.v.copy(this.ringAt), this.flat, this.s.set(r * 2, r * 2, 1));
         this.mesh.setMatrixAt(n, this.m);
         wa.set([(1 - k) * (1 - k) * (this.reduced ? 0.7 : 1), 0, 0, 1], n * 4);
@@ -295,12 +300,16 @@ export class WardFx {
     for (const sh of this.shards) {
       sh.p.copy(sh.rest).add(this.anchor);
       sh.q.copy(sh.restQ);
-      const out = 2.6 + Math.random() * 3.2;
-      sh.v.copy(this.carrier).addScaledVector(sh.out, out);
-      sh.v.y += 1.2 + Math.random() * 2.4;
+      // Out to the sides and up, where the lens behind the rider sees them (round 8): what flew straight back was
+      // lost under the lens, what flew ahead was hidden by the rider.
+      const out = 3.4 + Math.random() * 3.6;
+      this.v.copy(sh.out).setY(0);
+      const side = Math.abs(this.v.x * this.carrier.z - this.v.z * this.carrier.x) / Math.max(0.5, Math.hypot(this.carrier.x, this.carrier.z));
+      sh.v.copy(this.carrier).addScaledVector(sh.out, out * (0.7 + 0.5 * side));
+      sh.v.y += 2.2 + Math.random() * 3.2;
       sh.axis.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).normalize();
       sh.spin = (this.reduced ? 3 : 7) + Math.random() * 8;
-      sh.life = 0.55 + Math.random() * 0.4;
+      sh.life = 0.85 + Math.random() * 0.5;
     }
   }
 
