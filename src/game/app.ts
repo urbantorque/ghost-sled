@@ -53,7 +53,7 @@ import { SYNERGY_KEYS } from './album';
 import { type LostTo, type PrimaryButton, primaryButton } from './goals';
 import { lightLantern } from './lanterns';
 import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } from './rank';
-import { lanternRow, resultsSpine, titleSpine } from './spineview';
+import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from './spineview';
 import { flameNow } from './flame';
 import { type Board, type ClimbOutcome, type Spot, bestStanding, boardOf, climbMoment, decidedLine, goldHook, laps, medalsHeld, nextLine, rungHook, settleClimb, spotOn, stageSeconds } from './ladder';
 import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retireGrudge, rideableGrudge, shelfState } from './save';
@@ -357,6 +357,10 @@ export class App {
       onOpenSleds: () => this.ui.showSleds(this.sledCards(), this.save.data.gifts, this.paintCards(), this.garageShelves(), this.lanternRows()),
       onLightLantern: (id) => this.lightLantern(id),
       onSwapMission: (id) => this.swapMission(id),
+      // Round 8: the books (the title's Rider Rank card and the album's count, and their tabs) and the results' beats.
+      onOpenAlmanac: () => this.ui.showAlmanac?.(almanacModel(this.save.data, this.daily.tagline)),
+      onOpenAlbum: () => this.ui.showAlbum?.(albumModel(this.save.data)),
+      onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
       onUiSound: (k) => {
         this.audio.unlock();
@@ -2236,6 +2240,15 @@ export class App {
   /** A mission's Done stamp started on screen (results.ts): its chime, in landing order, once per row.
    *  A list folded away or scrolled out of view draws no stamp and makes no sound. Under reduced
    *  motion the card lands whole and cueResults plays the one chime. */
+  /** A beat of the results' sequence (ui/sequence.ts): a tick as the rank bar starts each stretch, the stamp as a
+   *  page turns at the top, a mallet as each card turns over. Reduced motion lands the sequence whole: none. */
+  private resultsBeat(kind: 'fill' | 'page' | 'card' | 'button', i: number): void {
+    if (this.phase !== 'results' || reduced()) return;
+    if (kind === 'fill') this.resultsSound('results-tick', Math.min(9, 5 + i * 2));
+    else if (kind === 'page') this.resultsSound('results-stamp');
+    else if (kind === 'card') this.resultsSound('results-mallet', i);
+  }
+
   private missionStamp(row: number): void {
     if (this.phase !== 'results' || reduced() || this.chimedRows.has(row)) return;
     this.chimedRows.add(row);

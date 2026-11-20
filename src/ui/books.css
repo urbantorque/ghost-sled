@@ -1,0 +1,897 @@
+/* ------------------------------------------------------------------ Round 8: the spine on the title, and the books
+
+   The title's corner is one stack at the far edge: the pill (the flame, the gifts, the best), Rider Rank's card
+   (opens the Almanac; the album's count beside it), and the one line of what is new today as scene text. The
+   Almanac and the Spirit Album are one sheet with a tab each, drawn like the garage. The flame is the lantern's
+   (marigold, ART.md 1: "keep the lantern lit"); a day not yet ridden draws it hollow. */
+
+.gs-t-top {
+  position: relative;
+  grid-area: stats;
+  justify-self: end;
+  align-self: start;
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+  width: min(100%, 360px);
+}
+
+/* (The pill and the line keep no grid area of their own inside the stack.) */
+.gs-t-top > * {
+  grid-area: auto;
+  justify-self: end;
+  max-width: 100%;
+}
+
+.gs-title.is-in .gs-t-top {
+  animation-delay: 140ms;
+}
+
+.gs-t-flame {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 42px;
+  margin: 0 -4px 0 -6px;
+  padding: 0 8px 0 6px;
+  border-radius: var(--r-pill);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.gs-t-flame .gs-i {
+  width: 1.25em;
+  height: 1.25em;
+  color: var(--gift);
+}
+
+/* Not yet ridden today: the flame drawn hollow, its fill gone, until a run lights it. */
+.gs-t-flame:not(.is-lit) .gs-i path:last-child {
+  opacity: 0.25;
+}
+
+.gs-t-flame.is-risk .gs-i {
+  color: rgba(255, 211, 77, 0.72);
+}
+
+.gs-t-ember {
+  width: 7px;
+  height: 7px;
+  margin-left: 1px;
+  border-radius: var(--r-pill);
+  background: var(--gift);
+  box-shadow: 0 0 0 2px rgba(255, 211, 77, 0.22);
+}
+
+.gs-t-flame:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .gs-t-flame:hover {
+    background: rgba(245, 243, 255, 0.07);
+  }
+}
+
+/* Rider Rank's card: the page, a bar to the next, and what that page gives. */
+.gs-t-book {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+}
+
+.gs-t-book-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+  padding: 10px 14px 10px 12px;
+  border-radius: var(--r-card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.gs-t-book-ico {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+
+.gs-t-book-txt {
+  display: grid;
+  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 5px 10px;
+  min-width: 0;
+}
+
+.gs-t-book-next {
+  grid-column: 1 / -1;
+}
+
+.gs-t-book-rank {
+  font-style: italic;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.gs-t-book-rank .gs-num {
+  font-size: 1.12em;
+}
+
+.gs-t-book-bar,
+.gs-bk-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+}
+
+.gs-t-book-fill,
+.gs-bk-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--text);
+  transform-origin: left center;
+}
+
+.gs-t-book-next {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  color: var(--dim);
+  font-size: max(12px, 0.8em);
+  font-weight: 750;
+}
+
+.gs-t-book-nk {
+  flex: none;
+}
+
+.gs-t-book-nn {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-t-book-togo {
+  flex: none;
+  margin-left: auto;
+}
+
+.gs-t-album {
+  align-self: center;
+  min-height: 44px;
+  margin-right: 8px;
+  padding: 0 12px 0 10px;
+  background: rgba(245, 243, 255, 0.07);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  font-size: 0.9em;
+  gap: 5px;
+}
+
+.gs-t-album .gs-i {
+  width: 1.1em;
+  height: 1.1em;
+}
+
+.gs-t-album-of {
+  color: var(--dim);
+  font-weight: 700;
+}
+
+.gs-t-book-main:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+
+@media (hover: hover) {
+  .gs-t-book-main:hover {
+    background: rgba(245, 243, 255, 0.05);
+  }
+}
+
+/* What is new today: one line of scene text under the card. */
+.gs-t-news {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  color: var(--text);
+  font-size: max(13px, 0.92em);
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: right;
+  text-shadow: var(--halo);
+}
+
+.gs-t-news-t {
+  text-wrap: balance;
+}
+
+.gs-t-news .gs-i {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--gift);
+  filter: drop-shadow(0 0 2px var(--halo-c));
+}
+
+/* The flame's calendar. */
+.gs-flame-pop {
+  position: absolute;
+  top: 52px;
+  right: 0;
+  bottom: auto;
+  left: auto;
+  z-index: 3;
+  display: grid;
+  gap: 12px;
+  width: min(92vw, 380px);
+  padding: 16px;
+}
+
+.gs-flame-best {
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-flame-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-flame-day {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 8px 2px 7px;
+  border-radius: 12px;
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.gs-flame-dn {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.gs-flame-ico {
+  width: 18px;
+  height: 18px;
+  opacity: 0.4;
+}
+
+.gs-flame-day.is-done .gs-flame-ico {
+  color: var(--gift);
+  opacity: 1;
+}
+
+.gs-flame-day.is-next {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 211, 77, 0.7);
+}
+
+.gs-flame-day.is-next .gs-flame-ico {
+  color: var(--gift);
+  opacity: 0.7;
+}
+
+.gs-flame-pay {
+  white-space: nowrap;
+}
+
+.gs-flame-gift {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--gift);
+}
+
+.gs-flame-gift .gs-i {
+  width: 11px;
+  height: 11px;
+}
+
+.gs-flame-line {
+  font-weight: 800;
+}
+
+.gs-flame-key {
+  color: var(--dim);
+  font-size: 0.86em;
+  font-weight: 700;
+}
+
+/* A phone held upright: the corner is the top of the screen, the card a slim row. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-t-top {
+    justify-self: stretch;
+    justify-items: stretch;
+    gap: 8px;
+    width: auto;
+  }
+
+  .gs-t-top > .gs-t-stats {
+    justify-self: end;
+  }
+
+  .gs-t-top > .gs-t-book {
+    justify-self: stretch;
+    min-width: 0;
+  }
+
+  .gs-t-book-main {
+    min-height: 50px;
+    padding: 6px 12px 6px 10px;
+  }
+
+  .gs-t-book-ico {
+    width: 22px;
+    height: 22px;
+  }
+
+  /* One row: Rider Rank's card (its figure and bar) beside the pill, and the day's news under both as one short
+     ink pill, so the corner costs the logo no more than a line (the logo and the rider keep their places). */
+  .gs-t-top {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .gs-t-top > .gs-t-book {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .gs-t-top > .gs-t-stats {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .gs-t-book-main {
+    min-height: 44px;
+    padding: 4px 10px 4px 10px;
+    gap: 8px;
+  }
+
+  .gs-t-book-next,
+  .gs-t-album-of {
+    display: none;
+  }
+
+  .gs-t-album {
+    min-height: 36px;
+    margin-right: 4px;
+    padding: 0 9px 0 8px;
+  }
+
+  /* The best leaves the pill here: the picked mountain's card carries it, with its label. */
+  .gs-t-top > .gs-t-stats > .gs-stat:last-child:not(.gs-stat-gift),
+  .gs-t-top > .gs-t-stats:has(> .gs-stat:last-child:not(.gs-stat-gift)) > .gs-stat-sep:nth-last-child(2) {
+    display: none;
+  }
+
+  .gs-t-news {
+    grid-column: 1 / -1;
+    justify-self: start;
+    padding: 5px 12px 5px 9px;
+    border-radius: var(--r-pill);
+    background: var(--panel);
+    box-shadow: inset 0 0 0 1px var(--hair);
+    font-size: 12.5px;
+    text-align: left;
+    text-shadow: none;
+  }
+
+  /* Two balanced lines at most, never a lone word on the second. */
+  .gs-t-news-t {
+    display: -webkit-box;
+    overflow: hidden;
+    text-wrap: balance;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  .gs-flame-pop {
+    top: 50px;
+    width: 100%;
+  }
+}
+
+/* ------------------------------------------------------------------ The books: the Almanac and the Spirit Album */
+
+.gs-sheet-books {
+  width: min(960px, 100%);
+}
+
+.gs-books-tabs {
+  margin-bottom: 14px;
+}
+
+.gs-bk-rank {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 16px;
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-bk-rank-n {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  grid-row: span 2;
+  font-size: clamp(30px, calc(var(--u) * 2.1), 42px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 0.9;
+}
+
+.gs-bk-rank-k,
+.gs-bk-rank-of {
+  color: var(--dim);
+  font-size: max(12px, 0.36em);
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gs-bk-rank-title {
+  grid-column: 2;
+  color: var(--dim);
+  font-style: italic;
+  font-weight: 800;
+}
+
+.gs-bk-bar {
+  height: 8px;
+}
+
+.gs-bk-rank-next {
+  grid-column: 2;
+  font-weight: 800;
+}
+
+.gs-bk-togo {
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-bk {
+  display: grid;
+  gap: 20px;
+}
+
+.gs-bk-h {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--dim);
+  font-size: 0.82em;
+  font-weight: 800;
+}
+
+.gs-bk-h-n {
+  color: var(--text);
+}
+
+.gs-bk-pages {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-bk-page {
+  position: relative;
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-height: 92px;
+  padding: 10px 10px 9px;
+  border-radius: 14px;
+  background: rgba(245, 243, 255, 0.05);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-bk-page-n {
+  color: var(--dim);
+  font-size: 0.82em;
+  font-weight: 900;
+}
+
+.gs-bk-page-rw {
+  display: grid;
+  gap: 4px;
+}
+
+.gs-bk-rw {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
+  font-size: max(12px, 0.8em);
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.gs-bk-rw .gs-i {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+}
+
+.gs-bk-rw.k-gifts .gs-i {
+  color: var(--gift);
+}
+
+.gs-bk-page-ok {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 16px;
+  height: 16px;
+}
+
+.gs-bk-page-ok .gs-i {
+  width: 100%;
+  height: 100%;
+}
+
+.gs-bk-page.is-opened {
+  background: rgba(245, 243, 255, 0.09);
+}
+
+.gs-bk-page.is-turned {
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+}
+
+.gs-bk-page.is-next {
+  background: rgba(245, 243, 255, 0.08);
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.gs-bk-page-togo {
+  margin-top: auto;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 800;
+}
+
+.gs-bk-page.is-ahead {
+  opacity: 0.55;
+}
+
+/* The month's chapter. */
+.gs-bk-ch {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: linear-gradient(120deg, rgba(245, 243, 255, 0.08), rgba(245, 243, 255, 0.02));
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+}
+
+.gs-bk-ch-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gs-bk-ch-name {
+  font-size: 1.1em;
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-bk-ch-count {
+  color: var(--dim);
+  font-weight: 800;
+}
+
+.gs-bk-ch-line {
+  color: var(--dim);
+  font-weight: 700;
+}
+
+.gs-bk-ch-pips {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.gs-bk-ch-pip {
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.12);
+}
+
+.gs-bk-ch-pip.is-on {
+  background: var(--text);
+}
+
+.gs-bk-ch-pip.is-next {
+  box-shadow: inset 0 0 0 1px var(--text);
+}
+
+.gs-bk-ch-set {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-bk-ch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  color: var(--dim);
+  font-size: max(12px, 0.8em);
+  font-weight: 800;
+}
+
+.gs-bk-ch-item.is-owned {
+  color: var(--text);
+}
+
+.gs-bk-ch-item .gs-i {
+  width: 13px;
+  height: 13px;
+}
+
+/* The Album: the book's figure, then a section a mountain and one for each of the rest. */
+.gs-bk-al-head {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-bk-al-n {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: clamp(26px, calc(var(--u) * 1.8), 36px);
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-bk-al-pct {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 0.5em;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gs-bk-stickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-bk-st {
+  position: relative;
+  display: grid;
+  align-content: end;
+  gap: 4px;
+  min-height: 108px;
+  padding: 10px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: linear-gradient(170deg, #2a3a78, var(--ink));
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+}
+
+.gs-bk-st-art {
+  position: absolute;
+  inset: 0;
+  opacity: 0.85;
+}
+
+.gs-bk-st-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Held: painted in its mountain's sky, the name on an ink band at its foot. */
+.gs-bk-st.is-got::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: 62%;
+  background: linear-gradient(180deg, rgba(18, 25, 51, 0), rgba(18, 25, 51, 0.92) 60%);
+}
+
+.gs-bk-st-ico,
+.gs-bk-st-n,
+.gs-bk-st-hint {
+  position: relative;
+  z-index: 1;
+}
+
+.gs-bk-st-ico {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-pill);
+  background: rgba(18, 25, 51, 0.6);
+}
+
+.gs-bk-st-ico .gs-i {
+  width: 15px;
+  height: 15px;
+}
+
+.gs-bk-st-n {
+  font-size: max(12px, 0.8em);
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+/* Not yet seen: a silhouette in ink, the glyph a shadow, and where to find it. */
+.gs-bk-st.is-unseen {
+  align-content: start;
+  background: rgba(245, 243, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-bk-st.is-unseen .gs-bk-st-ico {
+  background: rgba(245, 243, 255, 0.06);
+  color: rgba(245, 243, 255, 0.3);
+}
+
+.gs-bk-st.is-unseen .gs-bk-st-n {
+  color: var(--dim);
+}
+
+.gs-bk-st-hint {
+  color: rgba(245, 243, 255, 0.6);
+  font-size: max(11px, 0.72em);
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-bk-pages {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gs-bk-stickers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .gs-bk-rank {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gs-bk-rank-n {
+    grid-row: auto;
+  }
+
+  .gs-bk-rank-title,
+  .gs-bk-rank-next {
+    grid-column: 1;
+  }
+}
+
+/* The corner leaves the way it is built, off its own side (screens.css's exit for the right column). */
+.gs-title.is-out .gs-t-top {
+  animation: gs-exit-r 190ms cubic-bezier(0.5, 0, 0.9, 0.4) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-title.is-out .gs-t-top {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------------ The garage's Lantern Row: eight a town, in order */
+
+.gs-lrow-town {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: rgba(245, 243, 255, 0.04);
+  box-shadow: inset 0 0 0 1px var(--hair);
+}
+
+.gs-lrow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+
+.gs-lrow-row {
+  grid-column: 1;
+  display: flex;
+  gap: 4px;
+}
+
+.gs-lrow-lamp {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 36px;
+  border-radius: 10px;
+  background: rgba(245, 243, 255, 0.04);
+  color: rgba(245, 243, 255, 0.28);
+}
+
+.gs-lrow-lamp .gs-i {
+  width: 22px;
+  height: 22px;
+}
+
+.gs-lrow-lamp.is-lit {
+  background: rgba(255, 211, 77, 0.12);
+  color: var(--gift);
+}
+
+.gs-lrow-lamp.is-next {
+  box-shadow: inset 0 0 0 1.5px rgba(255, 211, 77, 0.6);
+  color: rgba(255, 211, 77, 0.6);
+}
+
+.gs-lrow-town > :last-child {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .gs-lrow-town {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gs-lrow-town > :last-child {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
+
+  .gs-lrow-lamp {
+    width: 26px;
+    height: 32px;
+  }
+}

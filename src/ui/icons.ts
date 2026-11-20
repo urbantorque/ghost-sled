@@ -44,7 +44,12 @@ export type IconName =
   | 'ghostPlus'
   | 'rider'
   | 'tri'
-  | 'stick';
+  | 'stick'
+  | 'flame'
+  | 'book'
+  | 'sticker'
+  | 'lantern'
+  | 'star';
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const FILL = 'fill="currentColor"';
@@ -148,6 +153,13 @@ const GLYPHS: Record<IconName, string> = {
   tri: `<path ${FILL} d="M12 4.4a1.7 1.7 0 0 1 1.5.9l6.8 11.6a1.7 1.7 0 0 1-1.5 2.6H5.2a1.7 1.7 0 0 1-1.5-2.6l6.8-11.6a1.7 1.7 0 0 1 1.5-.9z"/>`,
   // A gamepad's stick from above: its well as a ring, its cap solid inside, and which way it is pushed.
   stick: `<circle ${STROKE} cx="12" cy="12" r="6.2"/><circle ${FILL} cx="12" cy="12" r="3"/><path ${STROKE} d="M3.2 9.8L1 12l2.2 2.2M20.8 9.8L23 12l-2.2 2.2"/>`,
+  // Round 8, the spine's glyphs: the flame (a day ridden), the Almanac's book, a sticker with its corner turned, the
+  // Lantern Row's lantern, and a star for a page's reward.
+  flame: `<path ${STROKE} d="M12 21.2c-3.9 0-6.6-2.7-6.6-6.3 0-3.4 2.4-5.4 3.9-8.2.5 1.7 1.4 2.8 2.5 3.4.2-2.9 1.4-5.6 3.6-7.3-.3 2.6.6 4.6 2.1 6.5 1.3 1.6 1.9 3.3 1.9 5.4 0 3.8-3.1 6.5-7.4 6.5z"/><path ${FILL} d="M12 21.2c-1.7 0-2.9-1.2-2.9-2.8 0-1.8 1.5-2.9 2.6-4.6.7 1.5 3.2 2.5 3.2 4.6 0 1.6-1.2 2.8-2.9 2.8z"/>`,
+  book: `<g ${STROKE}><path d="M12 6.4C10 5 7.3 4.5 3.5 4.8v13.7c3.8-.3 6.5.2 8.5 1.6 2-1.4 4.7-1.9 8.5-1.6V4.8C16.7 4.5 14 5 12 6.4z"/><path d="M12 6.4v13.7"/></g>`,
+  sticker: `<g ${STROKE}><path d="M20.5 13.2V5.8a2.3 2.3 0 0 0-2.3-2.3H5.8a2.3 2.3 0 0 0-2.3 2.3v12.4a2.3 2.3 0 0 0 2.3 2.3h7.4z"/><path d="M13.2 20.5v-4.9a2.4 2.4 0 0 1 2.4-2.4h4.9"/></g>`,
+  lantern: `<g ${STROKE}><path d="M9.5 3.5h5M12 3.5v2"/><path d="M7.6 8.3c0-1.5 1.2-2.8 2.7-2.8h3.4c1.5 0 2.7 1.3 2.7 2.8v7.4c0 1.5-1.2 2.8-2.7 2.8h-3.4c-1.5 0-2.7-1.3-2.7-2.8z"/><path d="M10 18.5v2h4v-2"/></g><path ${FILL} d="M12 9.2c1.1 1.3 1.8 2.3 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-1.1.7-2.1 1.8-3.4z"/>`,
+  star: `<path ${STROKE} d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>`,
 };
 
 /** Raw SVG markup for a glyph (24 x 24 viewBox). */

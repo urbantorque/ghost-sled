@@ -1,5 +1,8 @@
 import './style.css';
+import './phone.css';
 import type {
+  AlbumModel,
+  AlmanacModel,
   GameUI,
   GhostKind,
   HintKind,
@@ -162,7 +165,7 @@ export class UI implements GameUI {
     });
     this.results = new Results(this.el, ctx, hd);
     // Menus are created before title/results for module wiring; keep them stacked on top.
-    this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.settings.el);
+    this.el.append(this.menus.pause.el, this.menus.sleds.el, this.menus.settings.el, this.menus.books.el);
 
     this.loadEl = h('div', 'gs-load');
     this.loadEl.setAttribute('role', 'progressbar');
@@ -440,6 +443,14 @@ export class UI implements GameUI {
 
   showSettings(m: SettingsModel): void {
     this.menus.showSettings(m);
+  }
+
+  showAlmanac(m: AlmanacModel): void {
+    this.menus.showAlmanac(m);
+  }
+
+  showAlbum(m: AlbumModel): void {
+    this.menus.showAlbum(m);
   }
 
   closeMenus(): void {
