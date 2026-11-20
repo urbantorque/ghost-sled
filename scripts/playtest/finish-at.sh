@@ -8,7 +8,8 @@ CFG=.playwright/cli-headless.config.json; [ "$DEV" = phone ] && CFG=.playwright/
 S="r8-fin-$LANE"
 J="[$(for m in $MS; do printf '{ m: %s, mood: 0 },' "$m"; done)]"
 mkdir -p "$OUT"
-slot=$(bash "C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh" take "$LANE-fin"); echo "$(date +%H:%M) took $slot"
+slot=$(bash "$HERE/slot-take.sh" "$LANE-fin") || { echo "no slot: $slot"; exit 2; }
+echo "$(date +%H:%M) took $slot"
 playwright-cli -s="$S" open --config="$CFG" >/dev/null 2>&1
 playwright-cli -s="$S" goto "$BASE" >/dev/null 2>&1
 playwright-cli -s="$S" eval "window.__finishCfg = { base: '$BASE', out: '$OUT/', tier: '$T', jobs: $J }" >/dev/null 2>&1

@@ -11,6 +11,7 @@ import { box, seg } from './landmarkKit';
 import { LAMP_BRONZE, LAMP_SLATE, LAMP_TIMBER, LAMP_TIMBER_LIT, PAPER_DARK, WAY_LAMP_FLAME, paper, wayLampGeometry } from './lanternkit';
 import type { LegendShot } from './legendworld';
 import { pushLocalLight } from './lights';
+import { pushShaftSource } from './postfx/shafts';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
 import { CLOUD_BREAK, type Palette } from './palette';
@@ -1727,6 +1728,9 @@ export class LanternWorld {
       this.sprite(x, y, z, 17 + 6 * flash, 0, MARIGOLD, (0.3 + 0.25 * flash) * lit * full);
       this.sprite(x, y - 0.6, z, 6, 0, FLAME, (0.5 + 0.4 * flash) * lit * full);
       pushLocalLight(x, y - 3, -z, 1, 0.7, 0.3, 36, (0.3 + 0.08 * flash) * lit * full * lampK);
+      // (Round 8, the light lane: lit, it is the frame's one light, and its light comes through the air past its
+      // frame and the square's masts toward the lens as shafts. Medium and High; Low has none.)
+      pushShaftSource(x, y, -z, 1, 0.72, 0.34, (0.75 + 0.35 * flash) * lit * full, 3.6);
       if (this.valley) {
         const vu = (this.valley.material as ShaderMaterial).uniforms;
         if (vu.uRelease.value < 0 && t > 0.25) {

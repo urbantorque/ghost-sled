@@ -1331,9 +1331,13 @@ function valuePass(p: Palette, biome: BiomeId): void {
     case 'volcanic':
       // (The disc keeps its place, a dim coin right of the cone; the light that shades the snow comes from further
       // round and lower, the lava fields' side: from 44 degrees every face down the run sat in one even light.)
-      p.sunDir = sunDir(64, 26);
-      p.sunColor = c('#FFBC94');
-      p.snowLit = c('#EED4CC');
+      p.sunDir = sunDir(64, 40);
+      // (Peach on cream, not orange: a saturated orange on a warm snow read as sand, the first pass's frames, and a
+      // snow dimmed to take the light's whole colour read as mud. The snow sits just over the shader's night, so it
+      // takes most of the light's colour and keeps its value.)
+      p.sunColor = c('#FFE0C8');
+      p.snowLit = c('#ECE2E0');
+      p.grade.saturation = 1.08;
       p.snowShade = c('#3E3C64');
       p.snowDeep = c('#22203E');
       p.hemiSky = c('#4C5A7E');
@@ -1647,7 +1651,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       edit: (p) => {
         setSun(p, 42, 11, 42, 14);
         // (Round 8: the light that shades the snow is the lava's, low from the valley's side. valuePass.)
-        p.sunDir = sunDir(66, 24);
+        p.sunDir = sunDir(66, 37);
         p.sunDisc = 0.5;
         p.sunSoft = 0.6;
         // The deck closes: the top of the sky goes to smoke, the fire draws down to a band at the
@@ -1656,7 +1660,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#2E1618');
         p.skyHorizon = c('#C04A20');
         // (Round 8: under the value the snow shader reads as day, so the lava's orange lies on it; valuePass.)
-        p.snowLit = c('#E8CCC4');
+        p.snowLit = c('#EADED8');
         p.snowShade = c('#383660');
         p.fogFar = 340;
         p.deck.k = 1;
@@ -1673,17 +1677,17 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 1700, at: 2250, dusk: 0.7,
       edit: (p) => {
         setSun(p, 45, 8, 40, 13);
-        p.sunDir = sunDir(68, 23);
+        p.sunDir = sunDir(68, 34);
         p.sunDisc = 0.35;
         // (Round 8: the shield is lit from below, a deeper orange than the deck's first light.)
-        p.sunColor = c('#FFBA8C');
+        p.sunColor = c('#FFD6B8');
         p.skyHorizon = c('#E8521C');
         p.skyMid = c('#5A2018');
         p.deck.glow = c('#FF6A22');
         // (Lit from below: the deck's own body takes the fire, not only its far edge.)
         p.deck.lit = c('#8E3A1E');
         p.deck.shade = c('#3A1612');
-        p.snowLit = c('#EACEC4');
+        p.snowLit = c('#EADCD6');
         p.grade.exposure = 1.08;
         p.grade.contrast = 1.12;
         p.under.k = 0.3;
@@ -1701,7 +1705,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 2600, at: 3300, dusk: 1,
       edit: (p) => {
         setSun(p, 48, 6, 40, 13);
-        p.sunDir = sunDir(70, 21);
+        p.sunDir = sunDir(70, 30);
         p.sunDisc = 0.25;
         p.sunColor = c('#FFC8AC');
         p.skyZenith = c('#0E0A0E');
@@ -1709,8 +1713,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E8481A');
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
-        p.sunColor = c('#FFAA78');
-        p.snowLit = c('#E4C6BC');
+        p.sunColor = c('#FFCCA8');
+        p.snowLit = c('#E6D6D0');
         p.lift.tint = c('#FFF4B0');
         p.snowShade = c('#343258');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
@@ -2405,6 +2409,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'street',
       edit: (p) => {
         lamps(p, 1.6);
+        // (Round 8: the lanterns' light hangs in the street's evening air.)
+        p.lampAir = Math.max(p.lampAir, 0.12);
         p.snowShade = c('#5064C8');
         // (The visual lift: half the street's snow is in the fronts' shade and the rest in lamplight, so
         // what it throws up under the eaves and balconies is cooler and a little amber.)
@@ -2465,6 +2471,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'street',
       edit: (p) => {
         lamps(p, 1);
+        p.lampAir = Math.max(p.lampAir, 0.14);
         p.snowShade = c('#2E4AA6');
         // (The visual lift: the windows' amber lies on the street's snow and comes back up the hulls.)
         p.lift.tint = c('#FFE2B8');
@@ -2507,6 +2514,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.lanternGlow = 0.7;
         p.bloom = 0.9;
         lamps(p, 1.35);
+        // (Round 8: the cavern's lanterns stand in a glow of their own light; the ice holds it.)
+        p.lampAir = 0.2;
         // (The visual lift: the floor under the roof is dark, so it bounces little, and that cold.)
         p.lift.sun = 0.15;
         p.lift.bounce = 0.2;
@@ -2602,7 +2611,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.skyHorizon = c('#FF6A22');
         p.sunDisc = 0.2;
         // (Round 8: under the value the snow shader reads as day, so the lake's light lies on it in its own orange.)
-        p.snowLit = c('#ECCEC2');
+        p.snowLit = c('#E8D2CA');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
         p.massif.seaWarm = 2.2;
@@ -2672,6 +2681,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       kind: 'street',
       edit: (p) => {
         lamps(p, 0.65);
+        p.lampAir = Math.max(p.lampAir, 0.06);
         p.grade.hi = c('#FFEED8');
       },
     },
@@ -2747,7 +2757,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.focal = 0.5;
         lamps(p, 1.3);
         // (Round 8: a lamp in cloud is a wide soft halo far off, ART.md 15: the cloud takes its light.)
-        p.lampAir = 0.6;
+        p.lampAir = 0.35;
       },
     },
     {
