@@ -145,6 +145,22 @@ describe('snow that moves', () => {
     expect(billows(a)).toBeGreaterThan(billows(fall));
   });
 
+  it("thrown snow is snow: off ice and where a ghost rode, never leaning to the ghosts' mint (ART.md 1)", () => {
+    setFxBudget(1);
+    const p = new Particles(1800);
+    p.setQuality(1, 720);
+    for (let k = 0; k < 6; k++) p.spray(at, 0, 1, vel, 2, true);
+    p.ghostPowder(0, 0, -100, 0, -30, 30);
+    p.update(1e-4);
+    const col = p.powder.points.geometry.getAttribute('aColor') as BufferAttribute;
+    const n = p.powder.points.geometry.drawRange.count;
+    expect(n).toBeGreaterThan(10);
+    // (A white leans to cyan and mint when its green stands over its red by more than its blue stands over its green;
+    // snow's whites and periwinkles rise from red to green to blue in even steps or bluer. The old ice tint, #DDF6FF,
+    // failed this.)
+    for (let k = 0; k < n; k++) expect(col.getY(k) - col.getX(k)).toBeLessThanOrEqual(col.getZ(k) - col.getY(k) + 0.02);
+  });
+
   it("a ghost leaves powder hanging on Medium and High, none on Low, and the hub knows who to ask", () => {
     for (const [budget, tier] of [[0.45, 0], [0.75, 1], [1, 2]] as const) {
       const p = new Particles(1800);

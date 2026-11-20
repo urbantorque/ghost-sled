@@ -610,7 +610,9 @@ class Layer {
 }
 
 const WHITE = new Color('#FFFFFF');
-const ICE = new Color('#DDF6FF');
+/** Spray off ice: a cool white on the snow's own periwinkle axis (round 8: a cyan one, #DDF6FF, lit as snow, leaned
+ *  mint-teal, the ghosts' colour, ART.md 1). */
+const ICE = new Color('#E4EAFF');
 const GOLD = new Color('#FFE08A');
 /** A gift's colours (marigold, its role): the flare, the confetti of its wrap and ribbon (and a golden
  *  gift's gold-white and mint), and the coins. */
