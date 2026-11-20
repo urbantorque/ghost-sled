@@ -74,10 +74,15 @@ describe('round 8 bars', () => {
     for (const pilot of ['clumsy-prompted', 'novice-prompted']) for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, pilot, seed)).ok, `${pilot} ${seed}`).toBe(true);
   });
 
-  // The opener (pacer.ts) left the line a moment before you and is back behind you about 11 s in: the prompted
-  // novice's first shown pass comes by 20 s (before it, 24 to 54 s).
+  // The opener (pacer.ts openerRate) left the line a moment before you and answers the rider: it keeps a few metres
+  // on you, waits when you slow or fall, never outrides its own record. The prompted novice's first shown pass comes
+  // by 20 s (before the round, 24 to 54 s); the hands-off pilot's not before 25 s.
   it('first minute: the opener gives the prompted novice a pass by 20 s', () => {
     for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, 'novice-prompted', seed)).pass ?? 99).toBeLessThanOrEqual(20);
+  });
+
+  it('first minute: the opener gives nothing to a run that does nothing (no pass by 20 s hands-off)', () => {
+    for (const seed of [1234, 1271]) expect(barFirstMinute(firstRun(M, 'hands-off', seed)).pass ?? 99).toBeGreaterThan(20);
   });
 
   // The race has a floor (phase 3): a first run's field is laid round what a run that only steers rides there

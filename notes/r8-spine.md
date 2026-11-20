@@ -209,3 +209,46 @@ no slipstream callout and no pop in a first run's first 15 s), `src/game/hints.t
 **For the main lane:** nothing new to wire; the app edits above are in. The opener's head start shows a rider 40 to 50
 m down the run as you leave the line on a first run: a person should say whether that reads as "the rider who set off
 first". The clumsy pilot's first minute (4 of 6) is the one bar short.
+
+
+## Phase 3, the last tune: an opener that answers the rider
+
+The prompted clumsy pilot had passed a ghost within 20 s on 4 of 6 seeds. The opener no longer follows a script (lead,
+then drop behind by a set second); it rides like a rider looking over its shoulder (`pacer.ts openerRate`, read in
+`ghosts.ts pace`):
+
+- it leaves the line a moment before you (`OPENER_HEAD`, 100 ticks of its own run) and, while ahead, keeps about
+  `OPENER_LEAD` (6 m) on where you will be, read from your speed now (not the field's eased reading);
+- it never rides faster than its own record (rate at most its pace), and once you are past it rides its own pace and
+  does not chase;
+- it waits for a rider in trouble: when your speed drops under `OPENER_SLOW` (0.7) of your quickest so far (a fall,
+  a stop against the bank) it drops back to `OPENER_WAIT` (3 m behind you), easing quickly (`OPENER_EASE`), down to
+  `OPENER_MIN` (0.15) of its pace, and in the air down to `OPENER_AIR` (0.45, where the rest of the field keeps 0.85:
+  a rider waiting over a jump floats a little);
+- for a rider riding steadily it never hangs back below `OPENER_STEADY` (0.6) of its pace, so a run that does nothing
+  never catches it early.
+
+First minute, run 1 on Pinecrest, six seeds (`r8-bars.ts --only first`):
+
+| Pilot | First pass (s) | Met all three |
+| --- | --- | --- |
+| prompted clumsy | 8.2, 15.2, 13.7, 8.1, 10.1, 14.3 | **6 of 6** (was 4) |
+| prompted novice | 10.0, 11.3, 10.0, 8.4, 9.8, 8.4 | **6 of 6** |
+| clumsy (blind) | 12.1, 15.2, 13.9, 24.7, 12.5, 14.3 | 5 of 6 |
+| novice (blind) | 10.0, 14.8, 10.0, 8.8, 9.8, 8.4 | 6 of 6 |
+| hands-off | 25.7 on every seed | 0 (no pass inside 20 s) |
+
+The clumsy pilot finishes 28 of 30. The floor, run 1 on every mountain, seeds 1234 and 1271 (`r8-floor.ts`):
+
+| Pilot | Podium | Places |
+| --- | --- | --- |
+| hands-off | 0 of 10 | 4th or 5th |
+| line (steers only) | 0 of 10 | 4th |
+| clumsy | 0 of 10 | 6th |
+| prompted novice | 3 of 10 | 2nd to 6th |
+| mid | 10 of 10 (2 wins) | 1st or 2nd |
+
+Tests: `tests/spine.test.ts` (the opener waits for a rider in trouble, never outrides its record, does not hang
+back for a steady one), `tests/r8bars.test.ts` (the prompted novice passes by 20 s, the hands-off pilot does not).
+What only a person can judge: whether the opener's float over a jump while it waits for a fallen rider reads as kind or
+as odd.

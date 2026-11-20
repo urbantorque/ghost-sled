@@ -129,7 +129,7 @@ if (ONLY.has('first')) {
   const t = performance.now();
   console.log(`\nFIRST MINUTE (run 1 on Pinecrest, a fresh save, the field a first run lays; bar: a pass by 20 s, a perfect by 45 s, a dash by 60 s; the clumsy pilot finishes 26 of 30)`);
   const out: Record<string, unknown[]> = {};
-  for (const pilot of ['clumsy-prompted', 'novice-prompted', 'clumsy', 'novice']) {
+  for (const pilot of ['clumsy-prompted', 'novice-prompted', 'clumsy', 'novice', 'hands-off']) {
     const rows = [];
     for (let i = 0; i < SEEDS; i++) {
       const f = firstRun(M, pilot, 1234 + i * 37);
