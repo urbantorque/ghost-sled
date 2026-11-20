@@ -41,6 +41,8 @@ describe('light that gathers', () => {
     expect(LIGHT_GLSL).toContain('vec3 lampAir(');
     expect(LIGHT_GLSL).toMatch(/float\(i\) >= uLocalProps/);
     expect(LIGHT_GLSL).toMatch(/fogColor\(dir, d\), f\) \+ lampAir\(dir, d\)/);
+    // (Only in the programs that already read the local lights: elsewhere the two vec4 arrays stay compiled out.)
+    expect(LIGHT_GLSL).toMatch(/#ifdef LAMP_AIR\s+vec3 lampAir/);
     const p = journeyPalette('volcanic', 3500, getPalette('volcanic', Mood.None), course('ember'));
     setCloudShadows(true);
     applyPalette(p);

@@ -570,12 +570,17 @@ float fogAmount(vec3 wp, float d) {
   return 1.0 - (1.0 - f) * (1.0 - uAir.y * 0.7 * low);
 }
 
-/** Round 8 (V5, the light lane): the air takes a lamp's colour near it. Each local light the props take (none on
+/** Round 8 (V5, the light lane): the air takes a lamp's colour near it. Only the materials that already read the
+ *  local lights (the snow and the shared toon model, LAMP_AIR) draw it: in every other program that fogs (the
+ *  mid-ground, the village, life, the gates) the lights' two vec4 arrays were compiled out, and naming them here made
+ *  them live, so three re-sent them at each material change, about five uniform4fv calls a Low frame (glcount.js;
+ *  notes/r8-perf.md, never a uniform array of vectors in a shared material). Each local light the props take (none on
  *  Low) hangs a haze of its own hue round it, and a sight line d metres long in dir gathers what it passes
  *  through: an inverse-square haze whose integral along the line is closed (two atans), normalised so a line
  *  through the light's heart across its whole breadth gathers 1, and cut off at the light's reach so a frame is
  *  never washed by a lamp beside it. A light the lens stands inside (the ones that ride with the rider) gives
  *  little, so the hero is never seen through a fog of its own light. */
+#ifdef LAMP_AIR
 vec3 lampAir(vec3 dir, float d) {
   vec3 acc = vec3(0.0);
   if (uLampAir <= 0.0) return acc;
@@ -594,6 +599,7 @@ vec3 lampAir(vec3 dir, float d) {
   }
   return acc * (uLampK * uLampAir);
 }
+#endif
 
 vec3 fogged(vec3 col, vec3 wp) {
   vec3 dv = wp - cameraPosition;
@@ -601,7 +607,11 @@ vec3 fogged(vec3 col, vec3 wp) {
   float f = fogAmount(wp, d);
   col = mix(col, uMistColor, mistAt(wp, d) * (1.0 - f));
   vec3 dir = dv / max(d, 0.001);
+  #ifdef LAMP_AIR
   return mix(col, fogColor(dir, d), f) + lampAir(dir, d);
+  #else
+  return mix(col, fogColor(dir, d), f);
+  #endif
 }
 
 float hash13(vec3 p) {
@@ -808,6 +818,8 @@ export const SNOW_SURF_GLSL = /* glsl */ `
 export function makeSnowMaterial(): ShaderMaterial {
   return new ShaderMaterial({
     lights: true,
+    // (Round 8, the light lane: the lamps' air, LIGHT_GLSL fogged. The snow already reads the local lights.)
+    defines: { LAMP_AIR: 1 },
     uniforms: { ...lightsUniforms(), ...shared, ...bands, ...rock, ...lake, ...iceMirror },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
@@ -1944,7 +1956,7 @@ export function makeToonMaterial(opts: ToonOptions = {}): ShaderMaterial {
       uStoneSnow: shared.uSnowLit,
       uStoneShade: shared.uSnowShade,
     },
-    defines: { ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}), ...(opts.hero ? { HERO: 1 } : {}) },
+    defines: { LAMP_AIR: 1, ...(opts.bob ? { BOB: 1 } : {}), ...(opts.clearFocus ? { CLEAR_FOCUS: 1 } : {}), ...(opts.coverageFade ? { COVERAGE_FADE: 1 } : {}), ...(opts.hazard ? { HAZARD: 1 } : {}), ...(opts.glowMask ? { GLOW_MASK: 1 } : {}), ...(opts.ice ? { ICE: 1 } : {}), ...(opts.aerial ? { AERIAL: 1 } : {}), ...(opts.cloth ? { CLOTH: 1 } : {}), ...(opts.stone || opts.hazard ? { STONE: 1 } : {}), ...(opts.hero ? { HERO: 1 } : {}) },
     vertexShader: /* glsl */ `
       ${SHADOW_VERT_PARS}
       #ifdef CLOTH
