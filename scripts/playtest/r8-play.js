@@ -162,7 +162,7 @@ async (page) => {
           return cc.safeX(z) * (1 - s) + lx * s;
         };
       }, { gz: g.z, lane });
-      for (const [d, tag] of [[300, 'far300'], [200, 'far200'], [150, 'mid150'], [120, 'mid120'], [90, 'near090'], [40, 'near040'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
+      for (const [d, tag] of [[300, 'far300'], [262, 'line262'], [200, 'far200'], [150, 'mid150'], [120, 'mid120'], [90, 'near090'], [40, 'near040'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
         let st = await step(1);
         let guard = 0;
         while (st.z >= 0 && st.z < g.z - d && guard++ < 2000) st = await step(1);
