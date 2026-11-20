@@ -3415,3 +3415,102 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       the critic) and a fresh critic told nothing.
     - *Cut or held:* gentle set-piece variants (round 7's open item 3) stay out; Trials and G11's sharing are stretch
       and come last if at all; no ad placement of any kind (the owner's decision 4, made: none this round).
+
+370. **The sim batch, SIM_VERSION 10: the air, charms, showdowns and flow, landed once** (`notes/r8-sim-design.md`,
+    `notes/r8-sim.md`, the sim lane; merged by the integration lane, `notes/r8-int.md`; raw output `shots/r8/sim/`).
+    Designed together on one input scheme (steer and one button, keys, mouse, touch and pad; the input byte has no
+    spare bit, so everything comes from the steer, the button and the line ridden), reviewed here before it was built.
+    - *The air (G1).* What the steer is doing when you press decides the trick: a press with the steer to a side grabs
+      that side (tiers at 0.25, 0.67 and 1.25 s; steering with it spins at 80%, against it tweaks); centred and held it
+      flips, as before; letting go of a grab inside the stomp window is a stomp. A short grab (tier 0 or 1) held through
+      a landing lands clean and only a deep one (0.67 s and more) held into the snow on a committed flight is a fall:
+      the dare starts where a player chooses it, and a first-timer's thumb on the button is not punished (the clumsy
+      pilot's landing falls went from a quarter of its falls to an eighth). Eighteen named tricks (Spin, Backflip,
+      Rail Grab, Lantern Reach, Spirit Stretch, Paper Wheel, Crane Fold, Ember Twist, Spirit Knot, Crosswind, Lamppost
+      Swing off a rail's end, Snow Hare off a wall ride, and one move a sled, each a sidegrade like its trait: Pine Bow,
+      Spinning Top, Fireside, Comet Tail, Will-o'-Wisp, Teacup), each paying half again the first time in a run; grabs
+      and combinations were cut to about half so a rider using the whole map scores 1.67 times a spin-only one. A hint
+      teaches "press, then steer" for the flip, since a steer held at the press is now a grab.
+    - *Charms (G2).* Three gates a run (the start's run-in and 100 m past each stage line), each three arches side by
+      side; the arch you are in as you cross is your charm for the rest of the run, no menu and no stop. The middle arch
+      stands on the safe line and is always the survival family's, so a rider who does nothing still takes one. Twenty
+      four charms (eight each of speed, style, survival) and seven named pairs; the offers come from the run's seed and
+      `SimConfig.charmPool`, a mask the Almanac widens (six to start), and `charmGates` (1 to 3), `carry` (the Long
+      Night's lantern, get-ups, charms and chaos step) and `firstRun` (a wider stomp window on a fresh save's first run)
+      ride in the record's one new word, so every ghost replays its own offers and picks. Stage lines got a calm
+      threshold so every gate is fair by construction (a probe found no fair window within 500 m of a stage line on 3
+      of 10 courses): the stretch above a line flexes so each stage still fills, all fifteen set pieces stay in their
+      own stages (moved -58 to +200 m), a few plain beats gave way, two legends got a second place, Temple Town's street
+      is 34 m shorter (two bells where there were three), and the fairness suite's density promises eased where the
+      thresholds took the room (online kickers 3 to 2, rails a stage 4 to 3).
+    - *Showdowns and the steal (G3's record part).* A pure `rivals.ts` decides both from two trajectories, called by the
+      live game and by the pool generator alike: level with an eligible rider (The Twelve in the field, your grudge, a
+      friend's link, your own best) for 2 s starts a showdown to a marker 300 m on, first there takes a lantern cell and
+      the points; a clean pass within 0.6 m steals a wisp (at most two a run: within 1 m with no cap gave 5.5 a run,
+      because riders on one line pass that close all the time). What they give is a log token, so a run replays
+      exactly. Pool riders now race a field of the seven earlier runs nearest their skill, draft it past 600 m, duel the
+      signature riders and steal (no pool ghost had ever drafted before). Showdowns started a run: mid 1.27, expert
+      1.39, novice 0.63, so the eligibility was not widened.
+    - *Spirit Flow pays (G6).* A whole level (0 to 6) built from style points that outlives a banked combo, cooled by
+      five dull seconds, dropped by a bump, a ward or a fall; it multiplies the lantern's gain (to x1.48) and points (to
+      x1.6), and its speed help is 3.5% a level (5.5% made every style charm a speed charm). Best flow held and time at
+      each level are run stats; a `flow` event drives the picture (V4).
+    - *Also:* the spirit lights over a leap start on the snow before the lip (round 7's open item 14). Gentle set-piece
+      variants were left out (round 7's open item 3 stays the owner's).
+    - *Measured against round 7* (six seeds a mountain): finishes clumsy 28 to 29 of 30 (26), the rest 30 of 30; median
+      seconds novice 144 (155), mid 126 (124), expert 121 (123); set pieces won novice 29 (18), mid 78 (80), expert 82
+      (82), stunt 24 (31, spread over the re-laid course, not its hands). Race liveness on runs 2 to 6: novice 0.64
+      (0.62), mid 0.79 (0.73), expert 0.67 (0.70), stunt 0.71 (0.65); the expert is a little short and the novice's
+      passes a minute too (2.21 against 2.40). The first regenerated pools were far quieter (novice 0.53, 21% quiet
+      runs): pool riders slipstreaming each other off the start line were 2.7 s ahead of a lone rider by 500 m and the
+      pools lost their slow half; they now draft only past 600 m and the slow riders step 2% apart. A field of nine
+      would beat round 7 on every row, but two more ghosts a frame is Low's budget, so the field stays seven. Charm
+      fairness (mid and expert, every charm raced against every other on the same runs, about plus or minus ten points
+      of noise): every charm and pair at or under about 60% but Hearthstone, Frost Runners and the Black Ice pair on the
+      mid pilot (61 to 66%), after three retunes. The drafting and near-miss charms are not judged by that table (the
+      lab has no ghosts to draft).
+    - *The bars it carries:* Decisions met (four kinds a run: a charm at each gate, a lantern spent, the fork, a
+      showdown; a median of 17 choices a run for the mid pilot); Expression met by the best combo (eighteen named
+      tricks; the expert's best combo holds 6 to 8, the median ride's best 4 to 5); clumsy finishes 28 to 29 of 30.
+    - *For a person (dev switches `?charms=all`, `?charms=<mask>`, `?gates=1|2|3`, `?firstrun`):* whether "the press
+      decides" reads on a keyboard, whether the dare should start at 0.67 s, whether letting go into a landing feels like
+      a stomp, whether three arches read at speed, whether charms feel like builds, whether a showdown is a moment.
+
+371. **The spine and the first hour: one rank, an Almanac, reasons to come back, and a first hour paced by design**
+    (`notes/r8-spine-design.md`, `notes/r8-spine.md`, the spine lane; the bars harness `scripts/playtest/r8-bars.ts` and
+    `r8career.ts`, which rides the real sim and settles every run into a real save through the game layer).
+    - *G4.* Every run pays experience into one rank (placing, passes, named tricks, set pieces, showdowns, charms found,
+      missions, rungs, medals, stars, duels, contracts): experience is progress and cannot be spent, so gifts stay the
+      one currency. The Almanac is fifty pages, a reward on each; pages 1 to 10 each change play (the second and third
+      charm gates, charms into the pool, daily contracts, the album, a sled, mirror Pinecrest, the Long Night), the rest
+      widen the charm pool to all 24 by page 43 and add mirrors, alternate hours, flourishes, titles and pieces. Page 21
+      also opens Lanternfall to ride (The Hollow King's duel and the last race still need eleven of The Twelve), so a
+      player stuck on the eleventh duel still sees the finale's world. **The owner's decision 3, made: monthly chapters,
+      yes**, by calendar month, nothing expires, old chapters finishable any time, each chapter's set also on the garage
+      shelf for gifts; and a Lantern Row of eight lanterns a finish town to light for gifts (cosmetic), so a player has
+      something to want at run 100.
+    - *G5's rule and G7.* Results' one button is chosen for the run (Claim, Rematch a rival within reach, Finish the
+      mission, Next Duel, today's Daily, or Run Again with the nearest goal); a standing "form contract" set from the
+      last five runs means a reachable goal always exists. The flame: any run lights the day, the seven-day calendar
+      never goes back, one earned ember covers one missed day. Three daily contracts with a bonus for all three, refilled
+      on the mountain where one is met, at most three times a day. Cup leagues of you and nineteen generated records in
+      five divisions, shown as the week's records, never as live people. **The owner's decision 4, made: no ad
+      placement of any kind.**
+    - *The first hour, from the ground truth (367).* A first run is laid round what a steer-only rider rides on that
+      mountain, its riders ease back to their own records over the last stage, and an opener leaves the line just
+      ahead so a first-timer passes someone early: hands-off and steer-only first runs went from the podium 9 and 8
+      times in 10 to none, the prompted novice 9 to 6, mid 10 to 9. Run 1 pays one or two things (140 gifts where it paid
+      730) and the rest is spread over the first ten runs (ladders pay for climbing, medals from a mountain's second
+      ride, the mastery board a row a ride, a page a run). Each hint shows at most three times a run (the stomp cue six)
+      and retires after two runs ignored, and a first run's first 15 s carry one idea at a time (the clumsy first run's
+      pop hint went from 47 to 74 showings to 3). The first duel waits for run 3; The Hollow King is withheld from every
+      field until his duel; a duel won pays 120 gifts and 300 experience, a loss 40 experience.
+    - *The bars on the integrated build:* no dead runs met (0 of the mid pilot's first 30, 0 of 100); always one run
+      away met (100 of 100, mid and novice); first minute met for the prompted novice (6 of 6) and short for the
+      prompted clumsy pilot (4 of 6: it slows or falls at 10 to 13 s with the opener 5 m ahead; being tuned); still new
+      at run 50 met on all five mountains. The economy: the mid pilot's lifetime gifts 140, 875, 4,495, 10,145 and
+      17,260 at runs 1, 5, 20, 50 and 100 (pages 2, 6, 16, 26, 35), the novice's 75 to 12,170 (pages 1 to 30), seven
+      garage pieces still wanted at run 100.
+    - *For a person:* whether the bar's ticks, a page turning and the one button feel like a reason to go again; whether
+      the form contract reads as a goal or as homework; whether the flame feels kind or nagging; whether the opener
+      reads as "the rider who set off first".
