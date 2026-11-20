@@ -179,6 +179,7 @@ async (page) => {
     }
     shots.push({ name: ev.name, tick: ev.tick, frames });
   }
+  const fin = await page.evaluate(() => window.__evLog().log.filter((x) => x.type === 'finish'));
   await page.goto('about:blank');
-  return JSON.stringify({ m: c.m, demo: c.demo, tier: c.tier, shots, errors });
+  return JSON.stringify({ m: c.m, demo: c.demo, tier: c.tier, shots, finish: fin, errors });
 }

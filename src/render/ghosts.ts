@@ -260,6 +260,8 @@ const ghostTrickIn: TrickIn = { move: 0, grab: 0, tier: 0, tweak: 0, spin: 0, fl
 /** Round 8: how long a passed ghost's start lasts (s), and its motes' carrier. */
 const REACT_S = 0.9;
 const reactCar = new Vector3();
+const reactAway = new Vector3();
+const reactAt = new Vector3();
 /** The best and friend line tags show from this far (metres from the lens). */
 const LINE_RANGE = 120;
 /** A graveyard's tag shows from this far: a landmark, so further out than a single crash marker's. */
@@ -1586,6 +1588,7 @@ export class GhostVisuals {
     this.batch.begin(w, h, this.pixelRatio);
     // The rider is the hero: no tag ever sits on it.
     this.riderBounds(player, camera, w, h);
+    this.playerAt.copy(player);
     const portrait = w < h;
     const rivalId = rival && this.labels && !this.reel ? rival.id : -1;
     // Screen-size fades are measured against the frame height (a phone's narrow width caps it).
@@ -2176,7 +2179,16 @@ export class GhostVisuals {
       if (sink && t < 0.5 && dt > 0) {
         const sp = p.speed;
         reactCar.set(Math.sin(p.heading) * sp, 0, -Math.cos(p.heading) * sp);
-        sink.ghostMotes(pos, 1.5 * RIDER_SCALE, it.col, reactCar, (t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1) / (t < 0.08 ? 5 : 1));
+        // (Off its side away from the rider and out from it, so none crosses the hero: contract C10.)
+        reactAway.set(pos.x - this.playerAt.x, 0, pos.z - this.playerAt.z);
+        const al = Math.hypot(reactAway.x, reactAway.z);
+        if (al > 0.01) reactAway.multiplyScalar(1 / al);
+        else reactAway.set(1, 0, 0);
+        // (The race's pass rule fires with the ghost a little behind the rider, often beside the lens: the motes
+        // leave from level with the rider at the ghost's side of the run, so they play out beside the hero and
+        // stream back past it, as world.ts passFx places its shatter.)
+        reactAt.set(pos.x, pos.y, Math.min(pos.z, this.playerAt.z - 0.9));
+        sink.ghostMotes(reactAt, 1.5 * RIDER_SCALE, it.col, reactCar, ((t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1)) / (t < 0.08 ? 5 : 1), reactAway);
       }
     }
     // (Round 8: and its trick pose's fold and roll, about the hips too.)
@@ -2214,6 +2226,9 @@ export class GhostVisuals {
     }
     for (let i = 0; i < k; i++) cb(near[i].id, near[i].sledP, near[i].sledQ);
   }
+
+  /** The rider this frame (three.js), so a passed ghost's motes go off its far side (round 8). */
+  private readonly playerAt = new Vector3();
 
   /** How much glass the ghosts are drawn in (ghostGlassMaterial): 2 High, 1 Medium, 0 Low. Read as
    *  the field is set. */

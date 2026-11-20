@@ -273,7 +273,7 @@ function craterMaterial(): ShaderMaterial {
           float wk = t / WAVE_S;
           float run = 1.0 - pow(1.0 - wk, 2.4);
           float Rw = M(1.7) + M(${(WAVE_R - 1.7).toFixed(2)}) * run;
-          float ww = M(0.16 + 0.55 * wk);
+          float ww = M(0.14 + 0.3 * wk);
           float wq = (r - Rw) / ww;
           float wK = pow(1.0 - wk, 1.4) * smoothstep(0.0, 0.03, t);
           float hot = exp(-t * 11.0);

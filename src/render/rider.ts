@@ -548,13 +548,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         col = mix(col, vec3(1.5), uFlash * 0.9 * smoothstep(0.74, 0.96, riderEdge) * upright);
         // Round 8 (the events lane): a band of light runs up the rider from the runners to the hat, a perfect
         // landing's in the snow's white and a dash's ignition in the spirit's white-gold. It burns on the
-        // silhouette's edge and only breathes over the cloth inside it (a fifth), so the navy and the
-        // vermillion hold as it passes.
+        // silhouette's edge and only breathes over the dark cloth inside it, so the navy and the vermillion hold
+        // as it passes (at a fifth over the whole body the dash's ignition bleached the rider to peach).
         if (uRise.y > 0.001) {
           float rb = (vWorldPos.y - uSpirit.y - uRise.x) / uRise.z;
           float rk = exp(-rb * rb * 1.6) * uRise.y;
           vec3 riseC = mix(vec3(1.35, 1.32, 1.25), vec3(1.4, 1.12, 0.62), uRise.w);
-          col += riseC * rk * (0.2 * mix(0.5, 1.0, darkCloth) + 1.1 * smoothstep(0.5, 0.95, riderEdge)) * rimCut;
+          col += riseC * rk * (0.05 * darkCloth + 1.1 * smoothstep(0.55, 0.95, riderEdge)) * rimCut;
         }
         // Earned flow burns in the player's own vermillion: a rim on the silhouette facets that thickens
         // and brightens as it builds (a warm edge at 0.3, a clear rim at 0.6, a hot one at full flow,
@@ -1972,11 +1972,11 @@ export class Rider {
     if (it < 0.42) {
       const k = it < 0.03 ? it / 0.03 : 1 - smooth((it - 0.24) / 0.18);
       if (calm) r.set(0.7, 0.45 * k, 1.6, 1);
-      else r.set(-0.2 + 2.1 * smooth(it / 0.32), 1.15 * k, 0.34, 1);
+      else r.set(-0.2 + 2.1 * smooth(it / 0.32), 0.9 * k, 0.26, 1);
     } else if (lt < 0.3) {
       const k = lt < 0.02 ? lt / 0.02 : 1 - smooth((lt - 0.16) / 0.14);
       if (calm) r.set(0.7, 0.35 * k, 1.6, 0);
-      else r.set(-0.15 + 1.95 * smooth(lt / 0.24), 0.9 * k, 0.24, 0);
+      else r.set(-0.15 + 1.95 * smooth(lt / 0.24), 0.85 * k, 0.22, 0);
     } else r.y = 0;
   }
   /** Seconds since a dash lit the rider up (setSpirit's rising edge). */

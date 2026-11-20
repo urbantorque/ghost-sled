@@ -1699,8 +1699,14 @@ export class Particles {
       const a = Math.random() * Math.PI * 2;
       const d = Math.sqrt(Math.random()) * spread;
       const hot = 1.15 + Math.random() * 0.35;
-      this.glow.emit(x + Math.cos(a) * d, y + Math.random() * 3, z + Math.sin(a) * d, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 1.1, (Math.random() - 0.5) * 0.8, 3.8 + Math.random() * 1.6, 0.34 + Math.random() * 0.1, 0.24, color.r * hot, color.g * hot, color.b * hot, 1, -0.12, 0.25, KIND_GRAIN);
+      this.glow.emit(x + Math.cos(a) * d, y + Math.random() * 3, z + Math.sin(a) * d, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 1.1, (Math.random() - 0.5) * 0.8, 5 + Math.random() * 2, 0.8 + Math.random() * 0.25, 0.55, color.r * hot, color.g * hot, color.b * hot, 1, -0.12, 0.25, KIND_GRAIN);
     }
+  }
+
+  /** Round 8: a lamp of the town lit for the finish, a soft warm orb that holds for a few seconds where it hangs. */
+  lamp(x: number, y: number, z: number, color: Color, size: number, life: number): void {
+    if (this.n(1) === 0) return;
+    this.glow.emit(x, y, z, 0, 0.05, 0, life, size * 0.7, size, color.r * 1.5, color.g * 1.5, color.b * 1.5, 1, 0, 0, KIND_GRAIN);
   }
 
   /** Round 8: after a wreck the snow it threw comes down gently round the rider, soft dabs drifting and settling
@@ -1716,16 +1722,18 @@ export class Particles {
 
   /** Round 8: a passed ghost comes apart into motes of its kind colour (mint, rose for a grudge, gold-white for
    *  your best) streaming off its glass as it falls back: from `count` points over its body (three.js base
-   *  `pos`, its height `h`), each riding most of its pace so they hang back past the rider, lifting a little. */
-  ghostMotes(pos: Vector3, h: number, color: Color, carrier: Vector3, count: number): void {
+   *  `pos`, its height `h`), each riding most of its pace so they hang back past the rider, lifting a little.
+   *  They leave from its side away from the rider (`away`, a unit horizontal) and fly out from it, never across it. */
+  ghostMotes(pos: Vector3, h: number, color: Color, carrier: Vector3, count: number, away: Vector3): void {
     const n = this.n(count);
     const car = tmpC.set(carrier.x * 0.86, 0, carrier.z * 0.86);
+    const a0 = Math.atan2(away.z, away.x);
     for (let i = 0; i < n; i++) {
-      const a = Math.random() * Math.PI * 2;
+      const a = a0 + (Math.random() - 0.5) * Math.PI * 1.1;
       const up = Math.random();
       const r = 0.25 + 0.2 * (1 - up);
       const hot = 1.2 + Math.random() * 0.45;
-      this.glow.emit(pos.x + Math.cos(a) * r, pos.y + 0.2 + up * h, pos.z + Math.sin(a) * r, car.x + Math.cos(a) * 1.4, 0.5 + Math.random() * 1.2, car.z + Math.sin(a) * 1.4, 0.55 + Math.random() * 0.45, 0.17, 0.05, color.r * hot, color.g * hot, color.b * hot, 1, -0.6, 2.2, KIND_GRAIN, car);
+      this.glow.emit(pos.x + Math.cos(a) * r, pos.y + 0.2 + up * h, pos.z + Math.sin(a) * r, car.x + Math.cos(a) * 1.4, 0.5 + Math.random() * 1.2, car.z + Math.sin(a) * 1.4, 0.7 + Math.random() * 0.5, 0.22, 0.07, color.r * hot, color.g * hot, color.b * hot, 1, -0.6, 2.2, KIND_GRAIN, car);
     }
   }
 

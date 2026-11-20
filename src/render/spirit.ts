@@ -249,7 +249,7 @@ export class SpiritFx {
     }
   }
 
-  /** While a dash burns: every hazard the rider draws level with inside 4 m ghosts once, the one it rides through
+  /** While a dash burns: every hazard the rider draws level with inside 6 m ghosts once, the one it rides through
    *  (the sim's 'phase') fully. */
   private dashPass(s: Snap, dashing: boolean, low: boolean): void {
     if (!dashing) {
@@ -267,7 +267,7 @@ export class SpiritFx {
         const dz = o.z - s.z;
         if (dz < -1 || dz > 2.5) continue;
         const d = Math.abs(o.x - s.x) - o.r;
-        if (d > 4) continue;
+        if (d > 6) continue;
         this.phased.add(o.id);
         this.ghostHazard(o, d < 0.7, low);
       }
@@ -458,10 +458,10 @@ export class SpiritFx {
     this.trailAcc += dt;
     const dashing = mode === 'run' && !!sim && sim.s.dash > 0;
     this.dashPass(s, dashing, low);
-    // Round 8: the spirit streams off the rider's shoulders and hat while it burns, rising as it falls behind.
-    if (dashing && !low && this.trailAcc === 0) this.particles.sparkle(this.v.set(s.x + (Math.random() - 0.5) * 0.5, s.y + 1.25, -s.z + 0.3), WHITE_GOLD, 2, 0.7, 0.7, 0.15, this.carry.set(s.vx * 0.82, 0, -s.vz * 0.82), 1.2);
     if (dashing && this.trailAcc > (low ? 0.07 : 0.035)) {
       this.trailAcc = 0;
+      // Round 8: the spirit streams off the rider's shoulders and hat while it burns, rising as it falls behind.
+      if (!low) this.particles.sparkle(this.v.set(s.x + (Math.random() - 0.5) * 0.5, s.y + 1.25, -s.z + 0.3), WHITE_GOLD, 2, 0.7, 0.7, 0.15, this.carry.set(s.vx * 0.82, 0, -s.vz * 0.82), 1.2);
       this.particles.sparkle(this.v.set(s.x, s.y + 0.5, -s.z + 0.8), WHITE_GOLD, low ? 2 : 3, 0.9, 0.55, 0.2, this.carry.set(s.vx * 0.6, 0, -s.vz * 0.6), 0.15);
       // Round 7, the wake and the tail: two lines of light laid on the snow off the runners, a sled's
       // width apart, that hold for most of a second behind the rider (they keep a third of its pace), and

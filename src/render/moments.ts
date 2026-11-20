@@ -9,6 +9,7 @@ import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
 import { runnersOnSnow, shakeCrowns } from './nearfield';
 import { FW_PAIRS, type Fireworks, type ShellKind } from './fireworks';
+import { fx } from './fxhub';
 import { pushLocalLight } from './lights';
 import type { Particles } from './particles';
 import type { RiderAct } from './rider';
@@ -138,7 +139,8 @@ const WARM_SHOW: readonly number[] = [0, 3, 5];
 /** The town's lamps lighting down the square: how many, how far apart in time (s) and how long each burns. */
 const TOWN_N = 8;
 const TOWN_STEP = 0.2;
-const TOWN_LIFE = 2.4;
+const TOWN_LIFE = 4;
+const TOWN_BEAT = 0.6;
 const LANTERN = new Color('#FFD34D');
 const TOWN_GLOW = new Color('#FFE29A');
 
@@ -468,10 +470,12 @@ export class Moments {
     if (scale.town) {
       const c = this.world.course;
       for (let i = 0; i < TOWN_N; i++) {
-        const z = s.z + 12 + i * 10;
+        // (From just behind the line to 60 m on, down both sides over the barriers: the coasting rider rides past
+        // them, so the chase lens sees them ahead and the swung lens, looking back up the square, behind it.)
+        const z = s.z - 8 + i * 10;
         const side = i % 2 === 0 ? -1 : 1;
-        const x = c.centerX(z) + side * (c.halfWidth(z) + 3.5);
-        this.town.push({ at: 0.25 + i * TOWN_STEP, x, y: c.ground(x, z) + 4.5, z: -z, t: -1 });
+        const x = c.centerX(z) + side * (c.halfWidth(z) + 1);
+        this.town.push({ at: 0.25 + i * TOWN_STEP, x, y: c.ground(x, z) + 5.5, z: -z, t: -1 });
       }
     }
     // The cannons at the line: either side of the rider and a little ahead, firing in over it.
@@ -509,22 +513,29 @@ export class Moments {
         if (this.finT < l.at) continue;
         l.t = 0;
         p.sparkle(this.a.set(l.x, l.y, l.z), TOWN_GLOW, 14, 1.6, 0.8, 0.24, null, 0.4);
-        p.skyLanterns(l.x, l.y - 1, l.z, 2, 3, LANTERN);
+        p.lamp(l.x, l.y, l.z, TOWN_GLOW, 2.1, TOWN_LIFE + 2.5);
+        // (Reduced motion keeps the lamps' light and lets no lantern drift away.)
+        if (!fx.reduced) p.skyLanterns(l.x, l.y - 1, l.z, 2, 3, LANTERN);
       }
       l.t += dt;
-      if (l.t > TOWN_LIFE) continue;
-      const k = l.t < 0.12 ? l.t / 0.12 : 1 - (l.t - 0.12) / (TOWN_LIFE - 0.12);
-      pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 15, 1.7 * k * k);
+      // Its beat of light on the snow as it lights (three at most at once, so the square's own lamps and the
+      // shells keep their light slots: lights.ts); its orb holds the lamp lit after.
+      if (l.t > TOWN_BEAT) continue;
+      const k = l.t < 0.12 ? l.t / 0.12 : 1 - (l.t - 0.12) / (TOWN_BEAT - 0.12);
+      pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 15, 1.9 * k);
     }
-    if (this.lanternsLeft > 0 && this.finT > 0.5) {
-      this.lanternAcc += dt * 10;
+    if (this.lanternsLeft > 0 && this.finT > 0.3 && !fx.reduced) {
+      this.lanternAcc += dt * 28;
       const n = Math.min(this.lanternsLeft, Math.floor(this.lanternAcc));
       if (n > 0) {
         this.lanternAcc -= n;
         this.lanternsLeft -= n;
         const c = this.world.course;
-        const z = s.z + 18 + Math.random() * 40;
-        p.skyLanterns(c.centerX(z) + (Math.random() - 0.5) * 2 * (c.halfWidth(z) + 4), c.ground(c.centerX(z), z) + 1.5, -z, 3, n, LANTERN);
+        // Over the stands either side of the coasting rider, where both of the finish's lenses look.
+        const z = s.z - 15 + Math.random() * 45;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const x = c.centerX(z) + side * (c.halfWidth(z) + 2 + Math.random() * 6);
+        p.skyLanterns(x, c.ground(x, z) + 3, -z, 2, n, LANTERN);
       }
     }
   }
@@ -600,7 +611,7 @@ export class Moments {
     if (this.wreckT >= 0) {
       this.wreckT += dt;
       this.wreckAcc += dt * 8;
-      if (this.wreckAcc >= 1 && this.wreckT < 3) {
+      if (this.wreckAcc >= 1 && this.wreckT < 3 && !fx.reduced) {
         w.particles.settle(this.at(s), Math.floor(this.wreckAcc));
         this.wreckAcc = 0;
       }

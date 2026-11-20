@@ -20,7 +20,7 @@ export interface SnowSink {
   /** Powder a ghost left hanging where it rode by, at three.js (x, y, z) on the snow, moving (vx, vz) at `speed`. */
   ghostPowder(x: number, y: number, z: number, vx: number, vz: number, speed: number): void;
   /** Round 8 (the events lane): a passed ghost coming apart into motes of its kind colour (particles.ts). */
-  ghostMotes(pos: Vector3, h: number, color: Color, carrier: Vector3, count: number): void;
+  ghostMotes(pos: Vector3, h: number, color: Color, carrier: Vector3, count: number, away: Vector3): void;
 }
 
 export const fx = {

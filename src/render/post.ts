@@ -708,12 +708,12 @@ export class PostFX {
           col += uFlash * 0.35;
           if (uCool > 0.001) {
             // Round 8 (the events lane): a dash cools the world while the rider burns. Everything but the rider
-            // leans to a cold, quieter blue (colour kept at a little over half), so the white-gold spirit and
+            // leans to a cold, quieter blue (colour kept at a little under half), so the white-gold spirit and
             // its vermillion are the warm thing in the frame; round the rider the frame is untouched.
             float lcool = dot(col, vec3(0.2126, 0.7152, 0.0722));
             float keepR = smoothstep(0.06, 0.2, length((uv - uRider) * vec2(uAspect, 1.0)));
-            vec3 cold = mix(vec3(lcool), col, 0.58) * vec3(0.86, 0.96, 1.14);
-            col = mix(col, cold, uCool * 0.65 * keepR);
+            vec3 cold = mix(vec3(lcool), col, 0.45) * vec3(0.82, 0.94, 1.18);
+            col = mix(col, cold, uCool * 0.8 * keepR);
           }
           float vig = smoothstep(1.05, 0.35, r);
           col *= mix(1.0, vig, 0.38 * uVignette);
