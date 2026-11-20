@@ -62,6 +62,11 @@ this file first, then your own brief (your brief wins where it is more specific)
   `bash scripts/playtest/browser-slot.sh take <lane>` (waits for one of the two slots; run it from the main checkout's
   copy, `C:/Users/roger/OneDrive/Desktop/Ghost Sled/scripts/playtest/browser-slot.sh`, if your branch predates it) and
   `... give <lane>`. Hold a slot only while capturing; batch your captures so a slot is held minutes, not hours.
+  **A full `vitest`, a lab sweep, `generate-ghosts` or a production build takes the one heavy slot**
+  (`browser-slot.sh take-heavy <lane>` ... `give-heavy <lane>`), so only one such job runs on the whole machine.
+  **Never `playwright-cli close-all` or `kill-all`, in a script or at the end of your work**, whatever the owner's
+  global CLAUDE.md says about the end of a task: that is the main lane's, once, at the end of the round. A lane's
+  `close-all` killed the before set's capture mid-run on 20 November.
   **At most one playwright browser per lane, open only while you capture**, and only the headless configs
   (`.playwright/cli-headless.config.json` 1280x720, `.playwright/mobile-headless.config.json` 390x844 DPR 2). Use your
   own session name (`-s=r8-<lane>`), close it when done, and **never run `playwright-cli close-all` or `kill-all`**.

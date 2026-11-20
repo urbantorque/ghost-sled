@@ -115,15 +115,21 @@ describe('a rider reading you', () => {
     expect(t.stageTicks[0]).toBe(stood);
   });
 
-  it('holds its rate once your run is over, or near the line', () => {
+  // Round 8 (the race's floor): once your run is over, or over the last stage, a rider stops reading you and eases
+  // back to its own record's pace, gently (PACE_SLEW up, PACE_EASE down a reading), never past it.
+  it('eases back to its own pace once your run is over, or over the last stage', () => {
     const g = field([{ reads: true }], frames, samples, end);
     const t = g.tracks[0];
     for (let tick = PACE_FROM; tick < 600; tick += 15) g.pace(tick, (tick / 60) * 20, true);
     const held = t.rate;
-    for (let tick = 600; tick < 1200; tick += 15) g.pace(tick, 200, false);
-    expect(t.rate).toBe(held);
+    expect(held).toBeLessThan(1);
+    g.pace(600, 200, false);
+    expect(t.rate).toBeCloseTo(Math.min(1, held + PACE_SLEW));
+    for (let tick = 615; tick < 1200; tick += 15) g.pace(tick, 200, false);
+    expect(t.rate).toBe(t.pace);
+    t.rate = 0.6;
     for (let tick = 1200; tick < 1800; tick += 15) g.pace(tick, FINISH_Z - 10, true);
-    expect(t.rate).toBe(held);
+    expect(t.rate).toBe(t.pace);
   });
 
   it('flies near true speed, however slowly it is riding', () => {
@@ -132,7 +138,8 @@ describe('a rider reading you', () => {
     const t = g.tracks[0];
     t.rate = 0.5;
     g.pace(PACE_FROM, 10, false);
-    expect(t.warp!.rate).toBe(0.5);
+    // (Its run over, it eases a step back toward its own pace on the ground.)
+    expect(t.warp!.rate).toBeCloseTo(0.5 + PACE_SLEW);
     t.warp = { from: 1200, at: 800, rate: 0.5 };
     (g as unknown as { paceAt: number }).paceAt = 0;
     g.pace(1200, 300, false);

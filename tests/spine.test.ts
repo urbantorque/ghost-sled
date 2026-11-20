@@ -10,7 +10,7 @@ import { LANTERNS, lightLantern, litByTown, litIn, readLit } from '../src/game/l
 import { lanternRow } from '../src/game/spineview';
 import { SWAP_AFTER, applyRun, newMissionState, swapMission, swappable, type RunSummary } from '../src/game/missions';
 import { LEGS, legChaos, legStep, mirrorSteer, settleLongNight } from '../src/game/modes';
-import { OPENER_BACK, OPENER_LEAD, openerOf, stringOffset } from '../src/game/pacer';
+import { OPENER_LEAD, OPENER_MIN, OPENER_STEADY, openerOf, openerRate } from '../src/game/pacer';
 import { isPaint, paintById } from '../src/game/paints';
 import { XP, nextPage, settleSpine, xpTicks, type SpineRun } from '../src/game/rank';
 import { defaultSave, type SaveData } from '../src/game/save';
@@ -285,11 +285,22 @@ describe('the Lantern Row', () => {
 });
 
 describe('the first minute and the missions', () => {
-  it('sends one rider of a first run ahead off the line, back behind you by 250 m, then to its place', () => {
+  it('a first run\'s opener waits for a rider who slows, and never outrides its own record', () => {
     const k = openerOf(7);
-    expect(stringOffset(k, 7, 110, FINISH_Z)).toBeCloseTo(OPENER_LEAD, 0);
-    expect(stringOffset(k, 7, 250, FINISH_Z)).toBeCloseTo(OPENER_BACK, 0);
-    expect(Math.abs(stringOffset(k, 7, 0, FINISH_Z))).toBeLessThan(1);
+    expect(k).toBe(6);
+    // Ahead of you it eases off to wait (down to OPENER_MIN of its pace), and never rides past its own pace.
+    let r = 1;
+    for (let i = 0; i < 40; i++) r = openerRate(r, 0, true, 1, true);
+    expect(r).toBeCloseTo(OPENER_MIN);
+    // For a rider who is not in trouble it does not hang back.
+    for (let i = 0; i < 40; i++) r = openerRate(r, 0, true, 1, false);
+    expect(r).toBeCloseTo(OPENER_STEADY);
+    for (let i = 0; i < 40; i++) r = openerRate(r, 3, true, 1);
+    expect(r).toBe(1);
+    // Once you are past it rides its own record's pace, a slow rider's included, and does not chase.
+    for (let i = 0; i < 40; i++) r = openerRate(r, 3, false, 0.8);
+    expect(r).toBe(0.8);
+    expect(OPENER_LEAD).toBeGreaterThan(0);
   });
 
   it('waits for the third run before the first duel', () => {

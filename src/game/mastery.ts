@@ -71,6 +71,17 @@ export function masteryBoard(course: Course, mountainId: string, rec: MasteryRec
 }
 
 /** What one run adds to a record. Returns the stars it earned now (their labels), in board order. */
+/** Round 8, the rewards paced: a mountain's board opens a row a ride (its medals on the first ride, its sky gates on
+ *  the second, its set pieces on the third, its home riders on the fourth, a clean finish on the fifth), so a first
+ *  ride pays a star or two and the next four each open something new to take. A star counts only once its row is
+ *  open; what a run did in a row still shut is not banked. `rides` (this ride included; the app reads it off the
+ *  save's run times, which keep five) left out opens every row, as before round 8. */
+export const MASTERY_ROWS: readonly Star['group'][] = ['medal', 'gate', 'moment', 'rider', 'clean'];
+
+export function rowOpen(group: Star['group'], rides: number): boolean {
+  return MASTERY_ROWS.indexOf(group) < Math.max(1, rides);
+}
+
 export function settleMastery(
   course: Course,
   mountainId: string,
@@ -86,17 +97,18 @@ export function settleMastery(
   },
   medalBefore: number,
   medalNow: number,
+  rides: number = MASTERY_ROWS.length,
 ): string[] {
   const before = new Set(masteryBoard(course, mountainId, rec, medalBefore).filter((s) => s.done).map((s) => s.key));
-  for (const g of run.gates) if (!rec.gates.includes(g)) rec.gates.push(g);
+  if (rowOpen('gate', rides)) for (const g of run.gates) if (!rec.gates.includes(g)) rec.gates.push(g);
   const verbs = new Map(planMarquee(course, mountainId).map((mq) => [mq.key, mq.verb]));
-  for (const mq of run.moments) {
+  for (const mq of rowOpen('moment', rides) ? run.moments : []) {
     const token = `${mq.key}:${verbs.get(mq.key) ?? 'won'}`;
     if (mq.won && !rec.moments.includes(token)) rec.moments.push(token);
   }
   if (run.time !== null) {
-    for (const [key, t] of run.riderTimes) if ((t === null || run.time < t) && !rec.riders.includes(key)) rec.riders.push(key);
-    if (run.clean) rec.clean = true;
+    if (rowOpen('rider', rides)) for (const [key, t] of run.riderTimes) if ((t === null || run.time < t) && !rec.riders.includes(key)) rec.riders.push(key);
+    if (run.clean && rowOpen('clean', rides)) rec.clean = true;
   }
   return masteryBoard(course, mountainId, rec, medalNow)
     .filter((s) => s.done && !before.has(s.key))

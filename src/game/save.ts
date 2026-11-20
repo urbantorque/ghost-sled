@@ -1,5 +1,5 @@
 import { weekOfDay } from './cup';
-import { MissionState, missionDef, newMissionState, topUp, unlockedBiomes } from './missions';
+import { MissionState, missionDef, missionSlots, newMissionState, topUp, unlockedBiomes } from './missions';
 import { type MasteryRecord, readMastery } from './mastery';
 import { type TwelveSave, readTwelve } from './twelve';
 import { type ShelfId, freeItem, isItem } from './garage';
@@ -101,6 +101,8 @@ export interface DailyRecord {
   medal?: number;
   streak?: number;
   last?: string;
+  /** The day's best finish time, seconds (round 8): what the Daily's medal is won on. */
+  time?: number;
 }
 
 export interface SaveData {
@@ -196,7 +198,7 @@ export function defaultSave(name: string): SaveData {
     mountain: 'pinecrest',
     best: {},
     grudge: {},
-    missions: newMissionState(hashString(name), { unlockedBiomes: unlockedBiomes(0) }),
+    missions: newMissionState(hashString(name), { unlockedBiomes: unlockedBiomes(0), slots: missionSlots(0) }),
     settings: { master: 0.9, music: DEFAULT_MUSIC, sfx: DEFAULT_SFX, quality: 'auto', hints: true, rumble: true },
     stats: { bestScore: 0, bestCombo: 0, longestAir: 0, perfects: 0, topSpeed: 0, yetiHops: 0, avalanches: 0 },
     hints: {},
@@ -427,7 +429,7 @@ const RENAMED: Readonly<Record<string, string>> = { gifts20: 'lights20' };
 /** Missions: unknown ids (retired missions) and duplicates dropped, a renamed one carried to its successor,
  *  bad tiers read as I, the shuffle seed captured now if the save predates it (from the save's name, once),
  *  and free slots refilled. */
-function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPassed: number): MissionState {
+function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPassed: number, runs: number): MissionState {
   if (!isObj(p) || !Array.isArray(p.active)) return fallback;
   const seen = new Set<string>();
   const active: MissionState['active'] = [];
@@ -449,7 +451,7 @@ function loadMissions(p: unknown, fallback: MissionState, name: string, ghostsPa
     seed: isNum(p.seed) ? p.seed >>> 0 : hashString(name),
   };
   if (typeof p.swapDay === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(p.swapDay)) s.swapDay = p.swapDay;
-  if (s.active.length < 3) topUp(s, { unlockedBiomes: unlockedBiomes(ghostsPassed) });
+  if (s.active.length < missionSlots(runs)) topUp(s, { unlockedBiomes: unlockedBiomes(ghostsPassed), slots: missionSlots(runs) });
   return s;
 }
 
@@ -508,7 +510,7 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
     ghostsPassed,
     settings: loadSettings(base.settings, p.settings),
     stats: { ...base.stats, ...(isObj(p.stats) ? p.stats : {}) },
-    missions: loadMissions(p.missions, base.missions, name, ghostsPassed),
+    missions: loadMissions(p.missions, base.missions, name, ghostsPassed, isNum(p.runs) ? p.runs : 0),
     best: loadBest(p.best, archive),
     grudge: loadGrudges(p.grudge, archive),
     hints: isObj(p.hints) ? (p.hints as Record<string, number>) : {},

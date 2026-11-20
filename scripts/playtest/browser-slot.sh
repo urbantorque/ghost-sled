@@ -6,11 +6,29 @@
 #   scripts/playtest/browser-slot.sh who              lists the slots held, by whom and since when
 # A slot is a directory under the main checkout's shots/r8/slots (mkdir is atomic, so two lanes never take the same
 # one). A slot held for more than 90 minutes is stale (a lane that died) and may be taken.
+#   scripts/playtest/browser-slot.sh take-heavy <lane>   the one heavy slot (a full vitest, a lab sweep, generate-ghosts,
+#   scripts/playtest/browser-slot.sh give-heavy <lane>   a production build): one lane at a time on the whole machine
 SLOTS="C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/slots"
 mkdir -p "$SLOTS"
 cmd="$1"; lane="$2"
 now() { date +%s; }
 case "$cmd" in
+  take-heavy)
+    [ -z "$lane" ] && { echo "usage: take-heavy <lane>"; exit 1; }
+    d="$SLOTS/heavy"; deadline=$(( $(now) + 3600 ))
+    while :; do
+      if [ -f "$d/owner" ]; then
+        [ "$(cut -d' ' -f1 "$d/owner")" = "$lane" ] && { echo heavy; exit 0; }
+        since=$(cut -d' ' -f2 "$d/owner" 2>/dev/null || echo 0)
+        [ $(( $(now) - since )) -gt 3600 ] && rm -rf "$d"
+      fi
+      if mkdir "$d" 2>/dev/null; then echo "$lane $(now)" > "$d/owner"; echo heavy; exit 0; fi
+      [ "$(now)" -gt "$deadline" ] && { echo "the heavy slot was not free for an hour"; exit 2; }
+      sleep 15
+    done ;;
+  give-heavy)
+    d="$SLOTS/heavy"
+    [ -f "$d/owner" ] && [ "$(cut -d' ' -f1 "$d/owner")" = "$lane" ] && rm -rf "$d" && echo "gave heavy"; exit 0 ;;
   take)
     [ -z "$lane" ] && { echo "usage: take <lane>"; exit 1; }
     deadline=$(( $(now) + 2400 ))
@@ -33,6 +51,7 @@ case "$cmd" in
       [ -f "$d/owner" ] && [ "$(cut -d' ' -f1 "$d/owner")" = "$lane" ] && rm -rf "$d" && echo "gave slot$s"
     done; exit 0 ;;
   who)
+    if [ -f "$SLOTS/heavy/owner" ]; then read -r o t < "$SLOTS/heavy/owner"; echo "heavy: $o for $(( ($(now) - t) / 60 )) min"; else echo "heavy: free"; fi
     for s in 1 2; do
       d="$SLOTS/slot$s"
       if [ -f "$d/owner" ]; then read -r o t < "$d/owner"; echo "slot$s: $o for $(( ($(now) - t) / 60 )) min"; else echo "slot$s: free"; fi

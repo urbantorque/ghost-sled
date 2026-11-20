@@ -171,6 +171,12 @@ export function duelOn(t: TwelveSave | undefined, mountain: number, open: (mount
   return d && duelMountain(d) === mountain ? d : null;
 }
 
+/** Riders who may not ride in an ordinary field yet (round 8): The Hollow King is met first in his own duel, after
+ *  eleven of The Twelve (field.ts FieldInput.withheld). */
+export function withheldRiders(t: TwelveSave | undefined): string[] {
+  return lanternfallOpen(t) ? [] : [KING.name];
+}
+
 /** The last race's field: all twelve, each on their real Lanternfall record, quickest first. The King is the
  *  rival. Your own best joins it in the app, as it does any field. */
 export function finalField(pool: readonly PoolGhostData[]): FieldPick[] {
@@ -247,7 +253,7 @@ export function settleTwelve(t: TwelveSave, duel: Duel | null, you: Standing, st
 }
 
 /** Gifts a rider pays when they fall, and the crown's. */
-export const DUEL_GIFTS = 40;
+export const DUEL_GIFTS = 120;
 export const CROWN_GIFTS = 200;
 
 const mountainName = (i: number): string => MOUNTAINS[i]?.name ?? '';

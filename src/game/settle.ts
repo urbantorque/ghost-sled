@@ -1,4 +1,4 @@
-import { MissionResult, MissionState, RunSummary, applyRun, unlockedBiomes } from './missions';
+import { MissionResult, MissionState, RunSummary, applyRun, missionSlots, unlockedBiomes } from './missions';
 import { RUN_TIMES_KEEP, pruneDaily, type BestRun, type DailyRecord, type Grudge, type SaveData } from './save';
 import { type Standing, FINISH_Z, aheadOf, clock, marginPhrase, predictedTime } from './standing';
 import { dailyKey } from '../sim/mountains';
@@ -127,10 +127,13 @@ function settleDaily(d: SaveData, day: string, time: number | null, t: MedalThre
   if (dr.last === day) {
     dr.streak = Math.max(1, dr.streak ?? 1);
     dr.medal = Math.max(dr.medal ?? 0, medal);
+    if (time !== null && time > 0 && !(typeof dr.time === 'number' && dr.time > 0 && dr.time <= time)) dr.time = time;
   } else {
     dr.streak = dr.last && dr.last === prevDay(day) ? Math.max(1, dr.streak ?? 1) + 1 : 1;
     dr.medal = medal;
     dr.last = day;
+    if (time !== null && time > 0) dr.time = time;
+    else delete dr.time;
   }
   return { medal, best: dr.medal ?? 0, streak: dr.streak, line: t ? dailyLine(medal, t) : null };
 }
@@ -344,7 +347,7 @@ export function settleRun(d: SaveData, sum: RunSummary, prior: Settlement | null
   // Missions refill from the biomes open now, so a mountain this run unlocked joins the rotation.
   const missionsBefore = prior ? prior.missionsBefore : clone(d.missions);
   d.missions = clone(missionsBefore);
-  const m = applyRun(d.missions, sum, { unlockedBiomes: unlockedBiomes(d.ghostsPassed) });
+  const m = applyRun(d.missions, sum, { unlockedBiomes: unlockedBiomes(d.ghostsPassed), slots: missionSlots(d.runs) });
   const missionReward = Math.max(0, m.reward - (prior?.missionReward ?? 0));
   d.gifts += missionReward;
   d.lifetimeGifts += missionReward;

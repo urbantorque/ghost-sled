@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MISSIONS } from '../src/game/missions';
+import { MISSIONS, missionSlots } from '../src/game/missions';
 import { SAVE_KEY, SaveStore, defaultSave } from '../src/game/save';
 import { settleGrudge } from '../src/game/settle';
 import { ChaosEvent, Mood } from '../src/sim/chaos';
@@ -104,7 +104,7 @@ describe('save migration (schema v1 forever)', () => {
       let store: SaveStore | null = null;
       expect(() => (store = new SaveStore(new MemStorage(raw), 'Fallback', TODAY))).not.toThrow();
       const d = store!.data;
-      expect(d.missions.active).toHaveLength(3);
+      expect(d.missions.active).toHaveLength(missionSlots(d.runs));
       expect(Array.isArray(d.ownedSleds)).toBe(true);
       expect(typeof d.daily.best).toBe('number');
     }

@@ -57,6 +57,9 @@ export interface ContractsSave {
   list: Contract[];
   done: number;
   bonus?: boolean;
+  /** Contracts met today, and the refills drawn (round 8: contracts.ts CONTRACT_REFILLS). */
+  met?: number;
+  refills?: number;
   form?: Contract;
   drawn?: number;
 }
@@ -160,6 +163,10 @@ export function readContracts(v: unknown): ContractsSave | null {
   const form = readContract(v.form);
   const out: ContractsSave = { day: day(v.day), list, done: Math.floor(num(v.done, 0, 7) ?? 0) };
   if (v.bonus === true) out.bonus = true;
+  const met = num(v.met, 0, 99);
+  if (met) out.met = Math.floor(met);
+  const refills = num(v.refills, 0, 99);
+  if (refills) out.refills = Math.floor(refills);
   if (form) out.form = form;
   const drawn = num(v.drawn, 0, 1e6);
   if (drawn) out.drawn = Math.floor(drawn);
