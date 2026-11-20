@@ -519,10 +519,10 @@ export class Menus {
       name.setAttribute('translate', 'no');
       const count = h('span', 'gs-shop-effect', h('span', 'gs-num', `${t.lit} of ${t.of}`), ' lit');
       let act: HTMLElement;
-      if (!t.next) act = h('span', 'gs-sled-state', icon('check'), 'All lit');
+      if (!t.next) act = h('span', 'gs-sled-state', icon('check'), 'All Lit');
       else if (t.next.affordable) {
         const next = t.next;
-        act = btn(this.ctx, { cls: 'gs-btn-primary gs-shop-btn', label: 'Light the next', fk: `lantern-${t.mountain}`, onClick: () => this.hd.onLightLantern?.(next.id) }, h('span', 'gs-shop-price', icon('gift'), h('span', 'gs-num', fmt(next.price))));
+        act = btn(this.ctx, { cls: 'gs-btn-primary gs-shop-btn', label: 'Light a Lantern', fk: `lantern-${t.mountain}`, onClick: () => this.hd.onLightLantern?.(next.id) }, h('span', 'gs-shop-price', icon('gift'), h('span', 'gs-num', fmt(next.price))));
         act.setAttribute('aria-label', `Light the next lantern in ${t.town} for ${fmt(next.price)} gifts`);
       } else act = h('span', 'gs-shop-effect', icon('gift'), h('span', 'gs-num', fmt(t.next.price)), `, ${fmt(Math.max(1, t.next.price - wallet))} more to go`);
       list.append(h('li', 'gs-lrow-town', name, count, act));
