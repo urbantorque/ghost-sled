@@ -4,7 +4,7 @@ import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
 import { Vector3 } from 'three';
 import { CamPlacer, ChaseCamera } from '../src/render/camera';
 import { IDLE_FEEL, type Feel } from '../src/game/beats';
-import { PLACE_LENS, planShots, type Shot } from '../src/game/shots';
+import { PLACE_HIGH, PLACE_LENS, PLACE_SHOULDER, planShots, type Shot } from '../src/game/shots';
 import { LOOKS, composeFor, fallProf, segWeight, stepsProf, wallProf, type ComposePlan } from '../src/render/compose';
 import { shapeGround, visualGround } from '../src/render/ground';
 import { OverlookPlan } from '../src/render/overlook';
@@ -240,15 +240,16 @@ describe('the lens by place', () => {
 });
 
 describe('the place shots', () => {
-  it('plans an opening shot on every named mountain but Ember, each with its mountain\'s lens and its place\'s sides', () => {
+  it('plans an opening shot on every named mountain the lens table covers, each with its mountain\'s lens and its place\'s sides', () => {
     for (const m of NAMED) {
       const c = courseFor(m.seed);
       const { plan } = planFor(c);
       const shots = plan.sideShots(planShots(c)).filter((s) => s.kind === 'place');
       // (Ember has none, and no stage start has one: PLACE_LENS, PLACE_STAGES.)
-      expect(shots.map((s) => s.key), m.name).toEqual(c.biome === 'volcanic' ? [] : ['opening']);
+      const table = PLACE_HIGH ? PLACE_LENS : PLACE_SHOULDER;
+      expect(shots.map((s) => s.key), m.name).toEqual(table[c.biome] ? ['opening'] : []);
       for (const s of shots) {
-        expect(s.lens).toBe(PLACE_LENS[c.biome]);
+        expect(s.lens).toBe((PLACE_HIGH ? PLACE_LENS : PLACE_SHOULDER)[c.biome]);
         expect(s.z1 - s.z0).toBeLessThanOrEqual(100);
         const p = plan.at((s.z0 + s.z1) / 2) ?? plan.at(s.z1 - 1);
         if (p) {

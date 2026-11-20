@@ -120,8 +120,9 @@ const RAMP_IN = 34;
 const RAMP_OUT = 46;
 /** A fall comes in longer: over 34 m its first metres stood as a pale slab across the view from the air. */
 const FALL_RAMP_IN = 80;
-/** Frostfang's canyon stands up this far before the overlook it opens onto. */
-const CANYON_BEFORE = 70;
+/** Frostfang's canyon stands up this far before the overlook it opens onto: only short, at the overlook's mouth (the
+ *  critics on stills chose the open run, its lit floor and its long shadows, over the walls five times in six). */
+const CANYON_BEFORE = 20;
 /** A stretch shorter than this is not composed. */
 const LEN_MIN = 90;
 /** Ahead of a fall the mid-ground starts taking the valley form this far before, and holds it this far after, so the

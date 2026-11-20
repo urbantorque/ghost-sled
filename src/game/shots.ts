@@ -43,6 +43,20 @@ export const PLACE_LENS: Readonly<Partial<Record<string, PlaceLens>>> = {
   blossom: { back: 7, up: 10, aside: 4, toOpen: true, ahead: 30, lookUp: -6, lookAside: 5, fov: 4 },
   lantern: { back: 8, up: 8, aside: 0, toOpen: false, ahead: 40, lookUp: -6, lookAside: 0, fov: 6 },
 };
+/** The shoulder lenses (the default): close behind and low on the side away from the open one, so the rider stands big
+ *  in the foreground (as big as the chase has it) and the place opens past its shoulder: Pinecrest's fall and the
+ *  valley, Frostfang's arch over the slot (looking up), Ember's fall toward the lava, Sakura's terraces, Lanternfall's
+ *  cloud. A negative `aside` with `toOpen` stands the lens on the far side from the open one. */
+export const PLACE_SHOULDER: Readonly<Partial<Record<string, PlaceLens>>> = {
+  alpine: { back: 2.8, up: 1.25, aside: -1.7, toOpen: true, ahead: 20, lookUp: -0.6, lookAside: 7, fov: 2 },
+  glacier: { back: 2.9, up: 0.7, aside: 0, toOpen: false, ahead: 22, lookUp: 6, lookAside: 0, fov: 4 },
+  volcanic: { back: 2.8, up: 1.25, aside: -1.7, toOpen: true, ahead: 20, lookUp: -0.2, lookAside: 6, fov: 2 },
+  blossom: { back: 2.8, up: 1.3, aside: -1.7, toOpen: true, ahead: 20, lookUp: -0.4, lookAside: 7, fov: 2 },
+  lantern: { back: 2.8, up: 1.4, aside: -1.5, toOpen: true, ahead: 22, lookUp: -0.8, lookAside: 5, fov: 2 },
+};
+/** Whether the openings take the high lenses (PLACE_LENS, the second pass, 6 of 10 on stills) instead of the
+ *  shoulder ones. Kept to compare. */
+export const PLACE_HIGH = false;
 /** A place shot starts this far into the opening's first section after the start (none) or into a stage line's
  *  threshold (past its blend, so the charm gate is ahead in the frame), and lasts this many metres: about three
  *  seconds at 30 m/s, the last of them easing back to the chase. */
@@ -150,7 +164,7 @@ export function planShots(course: Course): Shot[] {
     if (Number.isFinite(at)) out.push({ kind: 'whip', key: 'reveal', name: r.name, z0: at - 70, z1: at + 45, at });
   }
   // The places: the opening, then each stage start's threshold.
-  const lens = PLACE_LENS[course.biome];
+  const lens = (PLACE_HIGH ? PLACE_LENS : PLACE_SHOULDER)[course.biome];
   if (lens) {
     const first = secs[0];
     if (first && first.kind === 'start') out.push({ kind: 'place', key: 'opening', name: 'The opening', z0: first.z1 + PLACE_IN_OPEN, z1: first.z1 + PLACE_IN_OPEN + PLACE_LEN, at: first.z1 + PLACE_IN_OPEN, lens });

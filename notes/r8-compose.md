@@ -83,6 +83,23 @@ threshold under the charm gate, about 1410 to 1600 and 2910 to 3100 m) is a plac
 
 ## The verdict, first
 
+**The last try (the main lane's third decisions): the shoulder lens.** The openings' shot is now close behind and low on
+the far side from the open one (`PLACE_SHOULDER`, the default; the high lenses kept behind `PLACE_HIGH`): the rider
+big in the foreground, the place past its shoulder (Frostfang's arch and slot looking up, Ember's cone and the fall
+toward the lava, Sakura's terraces, Pinecrest's fall, Lanternfall's cloud). Frostfang's walls stand only at the
+overlook's mouth (from 20 m before it, about 230 to 370 m); the arch stays. One fresh critic on stills against the same
+before set (`pairs-s6`, `after7`): **5 of 10** blind pairs, and **"five places": yes** for the after openings and no
+for the before ("X's five read as five places. The lens stands in different places"; "in Y those two collapse into the
+same centred trough as Sakura, so three of Y's five share one composition"). Every opening pair where the shot played
+went to the new frame: Frostfang ("the run passes under a segmented ice arch flanked by crystal walls... so the frame
+is a place"), Ember ("a big, rim-lit rider carving with spray... rules 2 and 4") and Sakura (the whole cone, the
+terraces, a torii). The five old picks were Pinecrest at 150 m (the cut's slab again; its rider was in the air, so no
+shot), Lanternfall at 300 m and 3000 m (its forest banks against the crest's bare rails; no shot at either) and two
+stage starts with no shot at all (near-identical frames). The stage frames are the same code in `after6` and `after7`,
+so the 6 against 5 between the two lenses' totals is the critics' spread there, not the lens; on the openings the
+shoulder lens won all three it played and the layout question, which the high lens did not. **The shoulder lens is the
+default.** The bar (8 of 10) is still not met: V3 closes as partly met.
+
 **V3 is not done, after a second pass.** The latest: **6 of 10** blind pairs on stills from the same round-8 commit
 (the bar is 8), and a critic asked "five places or one layout" answered "two layouts (a low trough and a high spine)
 dressed five ways", the after set closer than the before (Frostfang's canyon under its arch, Lanternfall's crest). The
@@ -277,7 +294,8 @@ crest again, so its triangle saving is smaller than this. Not re-measured: no sl
 - **The title shots** (`keyart.ts`; the screens lane's critic: "the rider small or hidden in spray"): not looked at or
   changed. The frames the screens lane judged (`shots/r8/screens/after4/h-*-title-*.png`) catch the title at 1.5 s,
   in the crane's wide establishing shot, where the rider is a dot by design; whether the rested shot hides the rider
-  in spray needs a capture of each mountain's title after the crane settles.
+  in spray needs a capture of each mountain's title after the crane settles. **For the polish pass: the title shots
+  after the crane settles (`keyart.ts`, desk and phone, all five mountains) were not checked by this lane.**
 - **Spans over the run** (a torii, an arch or a lantern string framing the opening) were not built: their clearance
   must come from `SitePlan`'s flown air, and the openings' bowls have kickers.
 - **A lens that keeps the rider big and shows the place** is the shot the critics would have taken: close behind and
@@ -325,7 +343,7 @@ All under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/compose/`:
   lens (commit cf7781b); `after3`: Sakura's dressed walls (the last build); `nohud`: the greyscale test's sources.
 - `after-stills/{high,low,phone-medium}`, `after-stills2/high`, `after-stills3/high` (the last build): the touched
   frames as stills, beside the main lane's `shots/r8/before-stills`.
-- `before5` (a build of round-8 f784510) and `after5`, `after6` (this branch; `after5` also Low and the phone): the second pass's stills.
+- `after7`, `pairs-s6`, `gray-open-7`: the shoulder lens (the last try). `before5` (a build of round-8 f784510) and `after5`, `after6` (this branch; `after5` also Low and the phone): the second pass's stills.
 - `pairs1`, `pairs2`, `pairs3` (live), `pairs-s1` to `pairs-s5` (stills): the critics' pairs; `keys/`: their
   keys and picks (outside the pairs).
 - `gray-open`, `gray-stage` (live, cropped), `gray-open-s`, `gray-stage-s` (stills, after), `gray-open-b`,
