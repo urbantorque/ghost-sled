@@ -1321,7 +1321,7 @@ export class World {
     this.ghosts.drawLabels(this.renderer);
   }
 
-  /** Round 8, the forest's level of detail by the lens: once the lens has moved, the trees within about 24 m of it are
+  /** Round 8, the forest's level of detail by the lens: once the lens has moved, the trees within about 26 m of it are
    *  handed from the far forest to their near build (nearforest.ts), on Medium and up; Low keeps its own trees. */
   private forestLod(): void {
     if (!this.nearForest.root.parent) this.scene.add(this.nearForest.root);

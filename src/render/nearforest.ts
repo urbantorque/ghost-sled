@@ -23,12 +23,12 @@ import { NEAR_OFF, liveTree, wind } from './treelife';
 /** Within NEAR_IN m of the lens a tree is its near build, past NEAR_OUT its far one, between them it is handed over.
  *  (A band of four metres stippled a tree caught in it in a still, the second critic: the two builds share their
  *  outline, so the hand-over is a cut a hand wide, where only what is inside the outline changes.) */
-export const NEAR_IN = 22;
-export const NEAR_OUT = 22.15;
+export const NEAR_IN = 26;
+export const NEAR_OUT = 26.15;
 /** How far from the lens trees are gathered: a little past NEAR_OUT. */
 const GATHER = NEAR_OUT + 0.5;
-/** Trees a near batch holds (a tree run crowds about thirty of one kind within GATHER of the lens). */
-const CAP = 80;
+/** Trees a near batch holds (a tree run crowds about forty of one kind within GATHER of the lens). */
+const CAP = 110;
 /** No near build is made before this long after the first frame, then one an idle callback. */
 const START_MS = 1500;
 

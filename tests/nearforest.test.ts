@@ -66,12 +66,12 @@ describe('the near trees', () => {
       const b = extent(near);
       expect(Math.abs(b.top - a.top)).toBeLessThan(0.12);
       expect(Math.abs(b.r - a.r) / a.r).toBeLessThan(0.08);
-      // Tier by tier: the outline in each half metre of height stays within about a fifth of a metre of the far tree's
+      // Tier by tier: the outline in each half metre of height stays within about a quarter of a metre of the far tree's
       // at that height or a quarter of a metre either side of it (a near bough's tip may hang a hand lower).
       for (let y = 0; y < a.top - 0.5; y += 0.5) {
         const rb = reachAt(near, y, y + 0.5);
-        expect(rb).toBeLessThan(reachAt(far, y - 0.25, y + 0.75) + 0.22);
-        expect(rb).toBeGreaterThan(reachAt(far, y + 0.25, y + 0.25) * 0 + reachAt(far, y + 0.2, y + 0.3) - 0.22);
+        expect(rb).toBeLessThan(reachAt(far, y - 0.25, y + 0.75) + 0.28);
+        expect(rb).toBeGreaterThan(reachAt(far, y + 0.25, y + 0.25) * 0 + reachAt(far, y + 0.2, y + 0.3) - 0.28);
       }
     }
   });

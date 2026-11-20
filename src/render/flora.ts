@@ -663,7 +663,15 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
     const j = i % N;
     const l = L(j);
     const base = inner ? snowK * 0.35 : 0.28 + snowK * 0.5 + (0.2 + 0.3 * snowK) * Math.pow(l, 1.2);
-    sn.push(Math.max(0.06, Math.min(0.94, base + 0.24 * (nh(j + twist * 10, top) - 0.5))));
+    // (Ragged by the bough, not by the facet: a wander from one half-segment to the next, eased between, so a shelf's
+    // edge is a wavy line along each bough. Noise a column read as loose white shards, the second critic; none, as
+    // rings of white cake.)
+    const q = (j / N) * segs * 2;
+    const q0 = Math.floor(q);
+    const fq = q - q0;
+    const e = fq * fq * (3 - 2 * fq);
+    const wob = nh((q0 % (segs * 2)) + twist * 10, top) * (1 - e) + nh(((q0 + 1) % (segs * 2)) + twist * 10, top) * e;
+    sn.push(Math.max(0.06, Math.min(0.94, base + 0.26 * (wob - 0.5))));
   }
   sn[N] = sn[0];
   const c = new Color();
@@ -760,7 +768,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
  *  that reads differently from a near one is a bug), drawn so it holds up at the lens. Each tier is layered, rounded
  *  boughs under a shelf of snow (nearTier); the trunk is a real one, barked, broad at the foot, with a few
  *  dead stubs under the lowest boughs; clumps of snow sit out on the lower tips; a tree well at the foot. About 4,000
- *  triangles 'fine' and 2,300 'lean', drawn only for the few trees within about 24 m of the lens. */
+ *  triangles 'fine' and 2,300 'lean', drawn only for the few trees within about 26 m of the lens. */
 export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?: PineTones, nb: NearBuild = 'fine'): BufferGeometry {
   const s = pineSpec(kind, variant, tones);
   const twists: number[] = [];
@@ -995,7 +1003,7 @@ export function basaltSentinelGeometry(p: Palette): BufferGeometry {
 /** How a blossom canopy is built (the visual lift): 'rich' for the run's own blossom trees, which pass at the
  *  lens (round puffs, about 80 triangles each); 'near' for the orchards' treeline and near rows on Medium and
  *  High (lumpier puffs of 32); 'lean' for Low's (puffs of 20); 'far' past the detail range (three puffs, under
- *  half a round 7 tree, where a tree is a few dozen pixels). Round 8: 'close' for the few within about 24 m of the lens
+ *  half a round 7 tree, where a tree is a few dozen pixels). Round 8: 'close' for the few within about 26 m of the lens
  *  on High and Ultra (nearforest.ts): the rich tree's puffs a step rounder, so a canopy passing at the lens is a cloud
  *  of bloom and never a few pink planes. */
 export type CanopyBuild = 'close' | 'rich' | 'near' | 'lean' | 'far';
