@@ -444,6 +444,12 @@ export interface UIHandlers {
   onLightLantern?(id: string): void;
   /** Round 8: the results' secondary action: swap a mission held too long (ResultsSpine.swap.id). */
   onSwapMission?(id: string): void;
+  /** Round 8: a beat of the results' sequence landed (ui/sequence.ts), for its sound: the rank bar starts a stretch of
+   *  its fill, a page turns at the top, a card turns over (i its index), the one button comes forward. */
+  onResultsBeat?(kind: 'fill' | 'page' | 'card' | 'button', i: number): void;
+  /** Round 8: open the Almanac or the Spirit Album (the title's and the garage's way in). */
+  onOpenAlmanac?(): void;
+  onOpenAlbum?(): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;

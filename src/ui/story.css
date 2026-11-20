@@ -1,0 +1,811 @@
+/* ------------------------------------------------------------------ Results, round 8: the directed sequence
+
+   The run told in about five seconds over the live scene (sequence.ts): the moment (screens.css, top left), then the
+   place with the nearest rider named, Rider Rank's bar filling short of the next page, what opened turning over, and
+   the one button. One column at the screen's far edge (the bottom on a phone held upright), so the scene and the
+   rider stay the hero: the place is scene text, the rank and each card are ink panels, the button stands on its own.
+   Details (the card with everything) is one level down and swaps in for the column. Transform and opacity only; a
+   step arrives from the column's side and the button comes forward; reduced motion lands it all at once. */
+
+.gs-results[data-view='story'] .gs-res-card,
+.gs-results[data-view='story'] .gs-lad.is-band,
+.gs-results[data-view='details'] .gs-story {
+  display: none;
+}
+
+.gs-results[data-view='story'] {
+  background:
+    radial-gradient(120% 90% at 100% 100%, rgba(8, 12, 30, 0.62) 0%, rgba(8, 12, 30, 0.3) 40%, rgba(8, 12, 30, 0) 70%),
+    linear-gradient(180deg, rgba(8, 12, 30, 0.28) 0%, rgba(8, 12, 30, 0) 34%);
+}
+
+.gs-res-extra:empty {
+  display: none;
+}
+
+/* Details' way back to the sequence: the card's own top corner. */
+.gs-res-card {
+  position: relative;
+}
+
+.gs-res-back {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  min-width: 40px;
+  min-height: 40px;
+}
+
+.gs-results[data-view='story'] .gs-res-back {
+  display: none;
+}
+
+.gs-story {
+  position: absolute;
+  right: var(--sr);
+  bottom: var(--sb);
+  z-index: 2;
+  display: grid;
+  gap: 12px;
+  width: clamp(330px, 33vw, 452px);
+  max-height: calc(100% - var(--st) - var(--sb));
+}
+
+/* The section takes focus itself (a container, not a control) until its button arrives: no ring. */
+.gs-story:focus,
+.gs-story:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* A step waits, then arrives from the column's side; the button comes forward. */
+.gs-sq-step {
+  transition:
+    opacity 260ms ease,
+    transform 440ms var(--spring);
+}
+
+.gs-story.is-playing .gs-sq-step:not(.is-on) {
+  opacity: 0;
+  transform: translateX(28px);
+}
+
+.gs-story.is-playing .gs-sq-go:not(.is-on) {
+  transform: scale(0.9);
+}
+
+.gs-story.is-playing .gs-sq-foot:not(.is-on) {
+  transform: translateY(10px);
+}
+
+/* The place: scene text, the nearest rider in their own colour. */
+.gs-sq-place {
+  display: flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+  max-width: 100%;
+  padding: 0 4px;
+  color: var(--text);
+  font-size: clamp(17px, calc(var(--u) * 1.22), 23px);
+  font-style: italic;
+  font-weight: 850;
+  line-height: 1.2;
+  text-align: right;
+  text-shadow: var(--halo);
+}
+
+.gs-sq-place-ico {
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  color: var(--ghost);
+  filter: drop-shadow(0 0 2px var(--halo-c)) drop-shadow(0 1px 3px rgba(18, 25, 51, 0.7));
+}
+
+.gs-sq-place.is-short .gs-sq-place-ico {
+  color: var(--text);
+}
+
+.gs-sq-gap {
+  font-weight: 900;
+}
+
+.gs-sq-who {
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.gs-sq-who.k-ghost {
+  color: var(--ghost);
+}
+
+.gs-sq-who.k-grudge {
+  color: var(--grudge);
+}
+
+.gs-sq-who.k-you {
+  color: var(--you);
+}
+
+/* Rider Rank: the page figure, what the run paid, the bar, and the next page's reward with what it still needs. */
+.gs-sq-rank {
+  display: grid;
+  gap: 9px;
+  padding: 14px 16px 13px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+}
+
+.gs-sq-rank-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.gs-sq-page {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.gs-sq-page-k {
+  color: var(--dim);
+  font-size: 0.8em;
+  font-weight: 800;
+}
+
+.gs-sq-page-n {
+  display: inline-block;
+  min-width: 1.2ch;
+  font-size: clamp(28px, calc(var(--u) * 2), 38px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+
+.gs-sq-xp {
+  font-size: 1.08em;
+  font-style: italic;
+  font-weight: 900;
+}
+
+.gs-sq-xp-u {
+  color: var(--dim);
+  font-size: 0.78em;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.gs-sq-flame,
+.gs-sq-gifts {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 850;
+}
+
+.gs-sq-flame {
+  color: var(--text);
+}
+
+.gs-sq-flame .gs-i {
+  width: 1.05em;
+  height: 1.05em;
+  color: var(--gift);
+}
+
+.gs-sq-gifts {
+  margin-left: auto;
+  color: var(--gift);
+}
+
+.gs-sq-gifts .gs-i {
+  width: 1em;
+  height: 1em;
+}
+
+.gs-sq-bar {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(245, 243, 255, 0.07);
+}
+
+.gs-sq-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(245, 243, 255, 0.78), var(--text));
+  transform-origin: left center;
+}
+
+.gs-sq-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--text);
+  opacity: 0;
+}
+
+/* A page turned at the top: the bar flashes and the figure kicks. */
+.gs-sq-rank.is-turn .gs-sq-bar::after {
+  animation: gs-sq-flash 520ms ease-out both;
+}
+
+.gs-sq-rank.is-turn .gs-sq-page-n {
+  animation: gs-sq-kick 460ms var(--spring) both;
+}
+
+.gs-sq-next {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 0.92em;
+  font-weight: 800;
+}
+
+.gs-sq-next-k {
+  flex: none;
+  color: var(--dim);
+}
+
+.gs-sq-next-n {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gs-sq-togo {
+  flex: none;
+  color: var(--dim);
+  font-weight: 750;
+}
+
+.gs-sq-ticks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-sq-tick {
+  display: inline-flex;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--dim);
+  font-size: max(12px, 0.78em);
+  font-weight: 750;
+  transition:
+    opacity 220ms ease,
+    transform 300ms var(--spring);
+}
+
+.gs-sq-tick .gs-num {
+  color: var(--text);
+  font-weight: 850;
+}
+
+.gs-story.is-playing .gs-sq-tick:not(.is-on) {
+  opacity: 0;
+  transform: translateY(5px) scale(0.94);
+}
+
+/* What opened: cards that turn over, one at a time. */
+.gs-sq-cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-sq-cards.n-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.gs-sq-cards.n-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gs-sq-card {
+  position: relative;
+  min-height: 104px;
+  perspective: 700px;
+}
+
+.gs-sq-face,
+.gs-sq-back {
+  border-radius: var(--r-card);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transition: transform 520ms var(--spring);
+}
+
+.gs-sq-face {
+  position: relative;
+  display: grid;
+  align-content: end;
+  justify-items: start;
+  gap: 3px;
+  width: 100%;
+  height: 100%;
+  min-height: 104px;
+  padding: 12px 12px 11px;
+  overflow: hidden;
+  background: var(--panel-solid);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--text);
+  text-align: left;
+}
+
+.gs-sq-back {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(160deg, #1d2750, var(--ink));
+  box-shadow: inset 0 0 0 1px var(--hair-2), inset 0 0 0 6px rgba(18, 25, 51, 0.6), inset 0 0 0 7px var(--hair);
+  color: rgba(245, 243, 255, 0.36);
+  transform: rotateY(-180deg);
+}
+
+.gs-sq-back .gs-i {
+  width: 30px;
+  height: 30px;
+}
+
+.gs-story.is-playing .gs-sq-card:not(.is-turned) .gs-sq-face {
+  transform: rotateY(180deg);
+}
+
+.gs-story.is-playing .gs-sq-card:not(.is-turned) .gs-sq-back {
+  transform: none;
+}
+
+.gs-sq-card-ico {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: auto;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.08);
+}
+
+.gs-sq-card-ico .gs-i {
+  width: 18px;
+  height: 18px;
+}
+
+.gs-sq-face.k-gifts .gs-sq-card-ico {
+  color: var(--gift);
+}
+
+.gs-sq-card-n {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.98em;
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.12;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.gs-sq-card-k {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font-size: max(11px, 0.74em);
+  font-weight: 750;
+}
+
+.gs-sq-card-k .gs-i {
+  width: 1em;
+  height: 1em;
+  color: var(--text);
+}
+
+/* A mountain opened: its own sky on the card, and Ride It. */
+.gs-sq-face.is-mountain {
+  padding-top: 52px;
+}
+
+.gs-sq-card-art {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 50px;
+  overflow: hidden;
+}
+
+.gs-sq-card-art .gs-mtn-sky,
+.gs-sq-card-art svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.gs-sq-card-go {
+  min-height: 32px;
+  margin-top: 4px;
+  padding: 0 12px 0 10px;
+  background: rgba(245, 243, 255, 0.1);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  font-size: 0.8em;
+}
+
+.gs-sq-card-go .gs-i {
+  width: 0.9em;
+  height: 0.9em;
+}
+
+/* "+2 more": a card that is a button into Details. */
+.gs-sq-face.is-more {
+  align-content: center;
+  justify-items: center;
+  border-radius: var(--r-card);
+  cursor: pointer;
+}
+
+.gs-sq-face.is-more .gs-sq-card-n {
+  font-size: 1.5em;
+}
+
+/* The one button: vermillion, its words whole, the reason under them. */
+.gs-sq-go {
+  display: grid;
+}
+
+.gs-sq-again {
+  justify-content: flex-start;
+  min-height: clamp(62px, 10vmin, 78px);
+  padding: 8px clamp(16px, 1.8vw, 22px) 8px clamp(20px, 2vw, 26px);
+  font-size: clamp(19px, calc(var(--u) * 1.32), 25px);
+  font-style: italic;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.gs-sq-again.is-long {
+  font-size: clamp(17px, calc(var(--u) * 1.12), 21px);
+}
+
+.gs-sq-again.is-xlong {
+  font-size: clamp(15px, calc(var(--u) * 0.98), 18px);
+  letter-spacing: 0;
+}
+
+.gs-sq-again > .gs-i {
+  flex: none;
+  width: 0.95em;
+  height: 0.95em;
+}
+
+.gs-sq-again-t {
+  display: grid;
+  flex: 1;
+  justify-items: start;
+  gap: 3px;
+  min-width: 0;
+  text-align: left;
+}
+
+.gs-sq-again-l {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.gs-sq-again-sub {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: max(13px, 0.56em);
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.gs-sq-again .gs-kbd {
+  flex: none;
+  font-size: max(11px, 0.52em);
+}
+
+.gs-sq-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gs-sq-foot > .gs-btn {
+  min-height: 44px;
+  padding: 0 14px 0 12px;
+  font-size: 0.92em;
+}
+
+.gs-sq-home {
+  margin-right: auto;
+}
+
+.gs-sq-foot .gs-res-opt-pre {
+  display: none;
+}
+
+/* The way out: the column goes back off its side and the button goes forward (ART.md 10). */
+.gs-results.is-out .gs-story {
+  animation: gs-sq-out 200ms ease-in both;
+}
+
+.gs-results.is-out .gs-sq-go {
+  animation: gs-sq-forward 200ms ease-in both;
+}
+
+@keyframes gs-sq-out {
+  to {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+}
+
+@keyframes gs-sq-forward {
+  to {
+    opacity: 0;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes gs-sq-flash {
+  from {
+    opacity: 0.9;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes gs-sq-kick {
+  from {
+    transform: scale(1.4) translateY(-2px);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* A phone held upright: the column is the bottom of the screen, the button in the thumb's reach, the rider and the
+   moment above it. The place line stands at the left over the rank, as the moment reads. */
+@media (max-aspect-ratio: 1/1) {
+  .gs-results[data-view='story'] {
+    background: linear-gradient(180deg, rgba(8, 12, 30, 0.26) 0%, rgba(8, 12, 30, 0) 18%, rgba(8, 12, 30, 0) 42%, rgba(8, 12, 30, 0.6) 64%, rgba(8, 12, 30, 0.8) 100%);
+  }
+
+  .gs-story {
+    left: var(--sl);
+    right: var(--sr);
+    width: auto;
+    gap: 10px;
+  }
+
+  .gs-story.is-playing .gs-sq-step:not(.is-on) {
+    transform: translateY(18px);
+  }
+
+  .gs-story.is-playing .gs-sq-go:not(.is-on) {
+    transform: scale(0.92);
+  }
+
+  .gs-sq-place {
+    justify-self: start;
+    font-size: 17px;
+    text-align: left;
+  }
+
+  .gs-sq-rank {
+    padding: 12px 14px 11px;
+  }
+
+  .gs-sq-card,
+  .gs-sq-face {
+    min-height: 88px;
+  }
+
+  .gs-sq-face {
+    padding: 10px 10px 9px;
+  }
+
+  .gs-sq-face.is-mountain {
+    padding-top: 44px;
+  }
+
+  .gs-sq-card-art {
+    height: 40px;
+  }
+
+  .gs-sq-card-n {
+    font-size: 14px;
+  }
+
+  .gs-sq-again {
+    min-height: 64px;
+    font-size: 20px;
+  }
+
+  .gs-sq-again.is-long {
+    font-size: 17px;
+  }
+
+  .gs-sq-again.is-xlong {
+    font-size: 15px;
+  }
+
+  @keyframes gs-sq-out {
+    to {
+      opacity: 0;
+      transform: translateY(40px);
+    }
+  }
+}
+
+/* A phone on its side: one compact column at the right, the scene and the moment beside it; the ticks stay in
+   Details. */
+@media (min-aspect-ratio: 1/1) and (max-height: 520px) {
+  .gs-story {
+    width: min(48vw, 400px);
+    gap: 8px;
+  }
+
+  .gs-sq-ticks {
+    display: none;
+  }
+
+  .gs-sq-rank {
+    gap: 6px;
+    padding: 10px 14px;
+  }
+
+  .gs-sq-card,
+  .gs-sq-face {
+    min-height: 72px;
+  }
+
+  .gs-sq-face.is-mountain {
+    padding-top: 34px;
+  }
+
+  .gs-sq-card-art {
+    height: 30px;
+  }
+
+  .gs-sq-card-ico {
+    display: none;
+  }
+
+  .gs-sq-again {
+    min-height: 54px;
+  }
+
+  .gs-results[data-view='story'] .gs-mo {
+    display: grid;
+    width: min(44vw, 360px);
+  }
+
+  .gs-results[data-view='story'] .gs-mo-fact {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gs-sq-step,
+  .gs-sq-tick,
+  .gs-sq-face,
+  .gs-sq-back {
+    transition: none;
+  }
+
+  .gs-sq-rank.is-turn .gs-sq-bar::after,
+  .gs-sq-rank.is-turn .gs-sq-page-n,
+  .gs-results.is-out .gs-story,
+  .gs-results.is-out .gs-sq-go {
+    animation: none;
+  }
+}
+
+/* Details: the run's Rider Rank in full (results.ts spineDetails), under the race or the missions. */
+.gs-res-rank {
+  display: grid;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.gs-res-xp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.gs-res-xp-row {
+  display: inline-flex;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.06);
+  box-shadow: inset 0 0 0 1px var(--hair);
+  color: var(--dim);
+  font-size: max(12px, 0.82em);
+  font-weight: 750;
+}
+
+.gs-res-xp-row .gs-num {
+  color: var(--text);
+  font-weight: 850;
+}
+
+.gs-res-rank-note {
+  color: var(--dim);
+  font-size: 0.9em;
+  font-weight: 700;
+}
+
+@media (hover: hover) {
+  .gs-sq-card-go:hover,
+  .gs-sq-face.is-more:hover {
+    background: rgba(30, 40, 80, 0.94);
+  }
+
+  .gs-t-album:hover {
+    background: rgba(245, 243, 255, 0.12);
+  }
+}
+
+.gs-sq-card-go,
+.gs-sq-face.is-more,
+.gs-t-album {
+  touch-action: manipulation;
+}
+
+/* The offers (Revive, Double Gifts) sit between Home and Details; on a phone they lead the foot on a row of
+   their own, so Home and Details keep theirs. */
+.gs-story .gs-sq-foot > .gs-res-opt {
+  width: auto;
+  min-width: 0;
+  grid-column: auto;
+}
+
+@media (max-aspect-ratio: 1/1) {
+  /* A phone keeps the bar, its figure and its next page; the paid ticks are one level down. */
+  .gs-sq-ticks {
+    display: none;
+  }
+
+  .gs-sq-foot > .gs-btn {
+    padding: 0 12px 0 10px;
+  }
+
+  .gs-story .gs-sq-foot > .gs-res-opt {
+    order: -1;
+    flex: 1 1 40%;
+  }
+}
