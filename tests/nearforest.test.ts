@@ -142,12 +142,13 @@ describe('the near trees', () => {
     expect(far.fragmentShader).toContain('if (gsN < vHand) discard;');
     // Off until the near trees are made: no far tree hides.
     expect(wind.uNearWall.value.x).toBeLessThan(0);
-    // Low's trees (no shiver) never hand over: they dissolve whole beside the lens instead, and only there.
+    // Low's trees (no shiver) never hand over. Every tree dissolves whole beside the lens, Low's from further off.
     const low = liveTree(makeToonMaterial({ sway: 0.12 }), false);
     expect(low.defines.GS_HANDOFF).toBeUndefined();
     expect(low.defines.GS_LENS).toBe(1);
-    expect(far.defines.GS_LENS).toBeUndefined();
-    expect(low.vertexShader).toContain('smoothstep(4.50, 8.00,');
+    expect(near.defines.GS_LENS).toBe(1);
+    expect([low.defines.GS_LENS_A, low.defines.GS_LENS_B]).toEqual(['4.50', '8.00']);
+    expect([near.defines.GS_LENS_A, near.defines.GS_LENS_B]).toEqual(['3.00', '5.50']);
   });
 });
 

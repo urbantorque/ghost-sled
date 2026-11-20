@@ -58,7 +58,8 @@ async (page) => {
           const path = [];
           for (let p = o; p && path.length < 4; p = p.parent) if (p.name) path.push(p.name);
           const g = o.geometry;
-          return (path.join('<') || o.type) + '#' + (g && g.attributes.position ? g.attributes.position.count : 0);
+          const m0 = Array.isArray(o.material) ? o.material[0] : o.material;
+          return (path.join('<') || o.type) + (m0 && m0.defines && m0.defines.ICE ? '[ice]' : '') + '#' + (g && g.attributes.position ? g.attributes.position.count : 0);
         };
         const visible = (o) => { for (let p = o; p; p = p.parent) if (!p.visible) return false; return true; };
         let best = [];
@@ -190,7 +191,7 @@ async (page) => {
             const cm = clip(mid);
             const keep = keepOf(mat, mid, cm[3] > 0 ? cm[0] / cm[3] : 0, inst);
             if (keep < 0.5) continue;
-            best.push({ w, flat, lab, scope, d: Math.round(near * 10) / 10 });
+            best.push({ w, flat, lab, scope, d: Math.round(near * 10) / 10, at: [A, B, C].map((q) => q.map((v) => Math.round(v * 10) / 10)) });
           }
         };
         const M = new Array(16);
@@ -239,7 +240,7 @@ async (page) => {
         const scLab = new Map();
         for (const b of sc) if (!scLab.has(b.lab)) scLab.set(b.lab, b);
         const nearN = window.__gs.world.nearForest ? window.__gs.world.nearForest.drawn : -1;
-        return { nearN, maxScope: sc.length ? Math.round(sc[0].w * 1000) / 1000 : 0, topScope: [...scLab.values()].slice(0, top).map((b) => `${b.lab} ${Math.round(b.w * 1000) / 10}% @${b.d}m`), maxFlat: flat.length ? Math.round(flat[0].w * 1000) / 1000 : 0, maxAny: best.length ? Math.round(best[0].w * 1000) / 1000 : 0, top: [...byLab.values()].slice(0, top).map((b) => `${b.lab} ${Math.round(b.w * 1000) / 10}% @${b.d}m`) };
+        return { nearN, maxScope: sc.length ? Math.round(sc[0].w * 1000) / 1000 : 0, topScope: [...scLab.values()].slice(0, top).map((b) => `${b.lab} ${Math.round(b.w * 1000) / 10}% @${b.d}m`), worst: sc.length ? { lab: sc[0].lab, at: sc[0].at, eye: [cp.x, cp.y, cp.z].map((v) => Math.round(v * 10) / 10) } : null, maxFlat: flat.length ? Math.round(flat[0].w * 1000) / 1000 : 0, maxAny: best.length ? Math.round(best[0].w * 1000) / 1000 : 0, top: [...byLab.values()].slice(0, top).map((b) => `${b.lab} ${Math.round(b.w * 1000) / 10}% @${b.d}m`) };
       };
     }, c.speed);
     const list = c.at[m];

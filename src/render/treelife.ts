@@ -55,11 +55,12 @@ uniform float uWindK;
 #endif
 `;
 
-// Round 8, Low's trees (no near build there): a tree beside or behind the rider dissolves whole through a screen-door as
-// it nears the lens, gone by LENS_IN m from it and solid from LENS_OUT, before its few broad facets fill the frame's
-// side. A tree ahead of the rider is a threat and stays solid however near.
-export const LENS_IN = 4.5;
-export const LENS_OUT = 8;
+// Round 8: a tree beside or behind the rider dissolves whole through a screen-door as it nears the lens, before it can
+// fill the frame's side: on Low (no near build there) from LENS_LOW, before its few broad facets do; on Medium and up
+// from LENS_NEAR, a near tree, which a still caught half dissolved by the fragments' own near fade as a milky dome (the
+// first critic). A tree ahead of the rider is a threat and stays solid however near.
+export const LENS_LOW: [number, number] = [4.5, 8];
+export const LENS_NEAR: [number, number] = [3, 5.5];
 const LENS_VERT = /* glsl */ `
   #ifdef GS_LENS
     {
@@ -67,7 +68,7 @@ const LENS_VERT = /* glsl */ `
       vec3 gsFw = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
       float gsRd = dot(uFocus - cameraPosition, gsFw);
       float gsBeside = smoothstep(gsRd + 2.0, gsRd + 0.5, dot(gsF - cameraPosition, gsFw));
-      vLens = mix(1.0, smoothstep(${LENS_IN.toFixed(2)}, ${LENS_OUT.toFixed(2)}, distance(gsF.xz, cameraPosition.xz)), gsBeside);
+      vLens = mix(1.0, smoothstep(GS_LENS_A, GS_LENS_B, distance(gsF.xz, cameraPosition.xz)), gsBeside);
     }
   #endif`;
 
@@ -99,7 +100,9 @@ const HAND_FRAG = /* glsl */ `
 #endif
 void main() {
   #ifdef GS_LENS
-    if (vLens < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vLens) discard;
+    // (Only the middle of the band is dithered, as a near prop's own fade is, materials.ts: a tree is solid, then gone in
+    // the few tenths of a metre a frame carries the lens, and no still catches it stippled or milky.)
+    if (vLens < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= (vLens - 0.42) / 0.16) discard;
   #endif
   #ifdef GS_HANDOFF
     if (vHand < 1.0) {
@@ -180,21 +183,27 @@ export function liveTree(mat: ShaderMaterial, shiver: boolean, near?: 'wall' | '
     };
     mat.defines = { ...mat.defines, GS_HANDOFF: 1, ...(near ? { GS_NEAR: 1 } : {}) };
     mat.fragmentShader = mat.fragmentShader.replace('void main() {', HAND_FRAG);
-  } else {
-    // (Low's trees, and the far rows, which never come this near: dissolve whole beside the lens. LENS_VERT.)
-    mat.defines = { ...mat.defines, GS_LENS: 1 };
-    mat.fragmentShader = mat.fragmentShader.replace('void main() {', HAND_FRAG);
+  }
+  {
+    // (Every tree dissolves whole beside the lens: LENS_VERT. Low's, and the far rows', which never come this near, from
+    // further off.)
+    const lens = shiver ? LENS_NEAR : LENS_LOW;
+    mat.defines = { ...mat.defines, GS_LENS: 1, GS_LENS_A: lens[0].toFixed(2), GS_LENS_B: lens[1].toFixed(2) };
+    if (!shiver) mat.fragmentShader = mat.fragmentShader.replace('void main() {', HAND_FRAG);
+    const hand = mat.userData.gsKeep as ((m: number[], f: number[] | null) => number) | undefined;
     const ss = (a: number, b: number, x: number) => {
       const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
       return t * t * (3 - 2 * t);
     };
-    mat.userData.gsKeep = (_mid: number[], foot: number[] | null, eye: { x: number; y: number; z: number }, fw: number[]) => {
+    mat.userData.gsKeep = (mid: number[], foot: number[] | null, eye: { x: number; y: number; z: number }, fw: number[]) => {
+      const h = hand ? hand(mid, foot) : 1;
+      if (h < 0.5) return h;
       const f = mat.uniforms.uFocus?.value as { x: number; y: number; z: number } | undefined;
-      if (!foot || !f || !fw) return 1;
+      if (!foot || !f || !fw) return h;
       const rd = (f.x - eye.x) * fw[0] + (f.y - eye.y) * fw[1] + (f.z - eye.z) * fw[2];
       const ah = (foot[0] - eye.x) * fw[0] + (foot[1] - eye.y) * fw[1] + (foot[2] - eye.z) * fw[2];
       const beside = ss(rd + 2, rd + 0.5, ah);
-      return 1 + (ss(LENS_IN, LENS_OUT, Math.hypot(foot[0] - eye.x, foot[2] - eye.z)) - 1) * beside;
+      return Math.min(h, 1 + (ss(lens[0], lens[1], Math.hypot(foot[0] - eye.x, foot[2] - eye.z)) - 1) * beside);
     };
   }
   live.push({ mat, sway: (mat.uniforms.uSway?.value as number) ?? 0 });

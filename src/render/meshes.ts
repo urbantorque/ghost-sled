@@ -219,10 +219,12 @@ export function iceBlockGeometry(p: Palette): BufferGeometry {
 
 export function spireGeometry(p: Palette): BufferGeometry {
   reseed(606);
+  // (Round 8: the main shaft in eight sides and five courses, where five sides and two read as a few broad panes a
+  // seventh of the frame wide when the run took a sled past one; still crystal, its jitter cracking it into facets.)
   return merge([
-    part(new ConeGeometry(0.95, 5.5, 5, 2), p.tall, { pos: [0, 2.75, 0], jitter: 0.25 }),
-    part(new ConeGeometry(0.55, 3.2, 5, 1), p.tallDark, { pos: [0.6, 1.6, 0.3], rot: [0, 0, -0.25], jitter: 0.15 }),
-    part(new ConeGeometry(0.45, 2.4, 5, 1), shade(p.tall, 1.15), { pos: [-0.55, 1.2, -0.2], rot: [0.2, 0, 0.3], jitter: 0.1 }),
+    part(new ConeGeometry(0.95, 5.5, 8, 5), p.tall, { pos: [0, 2.75, 0], jitter: 0.2 }),
+    part(new ConeGeometry(0.55, 3.2, 7, 3), p.tallDark, { pos: [0.6, 1.6, 0.3], rot: [0, 0, -0.25], jitter: 0.12 }),
+    part(new ConeGeometry(0.45, 2.4, 6, 2), shade(p.tall, 1.15), { pos: [-0.55, 1.2, -0.2], rot: [0.2, 0, 0.3], jitter: 0.08 }),
   ]);
 }
 

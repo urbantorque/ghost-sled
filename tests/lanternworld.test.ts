@@ -105,7 +105,8 @@ describe("Lanternfall's kit", () => {
     // the lens. About sixty stand on the course, a score in view on Low, where it is leaner: tests/chamfer.test.ts.)
     expect(tris(stoneLampGeometry())).toBeLessThan(460);
     expect(tris(stoneLampGeometry(true))).toBeLessThan(200);
-    expect(tris(standingStoneGeometry(p))).toBeLessThan(160);
+    // (Round 8: its shaft cut finer so it holds at the lens, the forest lane; a stone stands on the run, not in thousands.)
+    expect(tris(standingStoneGeometry(p))).toBeLessThan(200);
     expect(tris(stoneRowGeometry(p, true))).toBeLessThanOrEqual(tris(stoneRowGeometry(p)));
   });
 

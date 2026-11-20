@@ -758,7 +758,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
 
 /** A near spruce (round 8, nearforest.ts): the far tree's tiers, height, reach, snow and turn (ART.md 12: a far tree
  *  that reads differently from a near one is a bug), drawn so it holds up at the lens. Each tier is layered, rounded
- *  boughs under a shelf of snow (nearTier); the trunk is a real one, barked, flaring into roots at the foot with a few
+ *  boughs under a shelf of snow (nearTier); the trunk is a real one, barked, broad at the foot, with a few
  *  dead stubs under the lowest boughs; clumps of snow sit out on the lower tips; a tree well at the foot. About 4,000
  *  triangles 'fine' and 2,300 'lean', drawn only for the few trees within about 24 m of the lens. */
 export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?: PineTones, nb: NearBuild = 'fine'): BufferGeometry {
@@ -780,7 +780,8 @@ export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?
   });
   const g = f.build();
   reseed(s.seed + 77);
-  // The trunk: up into the crown, a little bark in its value, flaring at the foot into roots under the snow.
+  // The trunk: up into the crown, a little bark in its value, broad at the foot. (Roots splayed from it read as a dark
+  // star at the foot of a tree dissolving by the lens, the first critic: the tree well hides the foot instead.)
   const bark = WOOD.clone().multiplyScalar(0.82);
   const trunkTop = s.tiers[Math.min(2, s.tiers.length - 1)].top - 0.4;
   const trunk = part(new CylinderGeometry(s.trunkR * 0.42, s.trunkR * 1.05, trunkTop, fine ? 8 : 6, fine ? 4 : 2, true), bark, { pos: [0, trunkTop / 2, 0], jitter: s.trunkR * 0.12 });
@@ -794,11 +795,6 @@ export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?
     for (let j = i; j < i + 3; j++) tc.setXYZ(j, tc.getX(j) * k, tc.getY(j) * k, tc.getZ(j) * k);
   }
   const parts: BufferGeometry[] = [g, trunk];
-  const roots = fine ? 5 : 4;
-  for (let k = 0; k < roots; k++) {
-    const a = (k / roots) * Math.PI * 2 + rnd() * 0.5;
-    parts.push(part(new ConeGeometry(s.trunkR * 0.55, s.trunkR * 2.2, 4, 1), shade(bark, 0.85), { pos: [Math.cos(a) * s.trunkR * 0.9, s.trunkR * 0.5, Math.sin(a) * s.trunkR * 0.9], rot: [Math.sin(a) * 1.1, 0, -Math.cos(a) * 1.1], scale: [1, 1, 0.6] }));
-  }
   // Dead stubs under the lowest boughs, where a spruce sheds its shaded branches.
   const low = s.tiers[0].top - s.tiers[0].h * 0.75;
   for (let k = 0; k < (fine ? 4 : 2); k++) {

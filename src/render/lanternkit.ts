@@ -167,7 +167,9 @@ export function standingStoneGeometry(p: Palette): BufferGeometry {
   reseed(4606);
   const a = shade(p.low, 1.15);
   const b = p.lowLit.clone().lerp(p.low, 0.35);
-  const main = new CylinderGeometry(0.38, 0.72, 4.9, 5, 3);
+  // (Round 8, the forest lane: seven sides and five courses, where five and three put a pane a tenth of the frame wide
+  // beside a sled passing one; open at its ends, which the ground and its cap of snow hide.)
+  const main = new CylinderGeometry(0.38, 0.72, 4.9, 7, 5, true);
   return merge([
     grade(part(main, a, { pos: [0, 2.45, 0], rot: [0.03, 0.4, -0.04], jitter: 0.22 }), 0, 5, 0.8, 1.15, 0.12),
     part(new CylinderGeometry(0.53, 0.57, 0.24, 5), b, { pos: [0.02, 3.2, 0.02], rot: [0.03, 0.4, -0.04] }),

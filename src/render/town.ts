@@ -1316,7 +1316,10 @@ export function galleryPiece(ctx: SiteCtx): Piece {
 /** A faceted mass that only turns about the vertical, so its reach is its scale (and a quarter more
  *  for the jitter): what keeps a vault's lowest facet over the clearance. */
 function rock(col: Color, pos: V3, scale: V3, jitter = 0.28): BufferGeometry {
-  return part(new IcosahedronGeometry(1, 0), col, { pos, scale, jitter });
+  // (Round 8, the forest lane: a mass over two metres is cut a step finer, its corners jittered less, so a tunnel's
+  // wall beside the lens is rock in facets and not a few panes a tenth of the frame wide.)
+  const big = Math.max(scale[0], scale[1], scale[2]) > 2.2;
+  return part(new IcosahedronGeometry(1, big ? 1 : 0), col, { pos, scale, jitter: big ? jitter * 0.55 : jitter });
 }
 
 /** The vault of a rock or ice tunnel, bay by bay: wall masses standing on each bank past the limit, roof
