@@ -1978,7 +1978,7 @@ export class Rider {
     if (it < 0.42) {
       const k = it < 0.03 ? it / 0.03 : 1 - smooth((it - 0.24) / 0.18);
       if (calm) r.set(0.7, 0.45 * k, 1.6, 1);
-      else r.set(-0.2 + 2.1 * smooth(it / 0.32), 0.9 * k, 0.26, 1);
+      else r.set(-0.2 + 2.1 * smooth(it / 0.32), 0.6 * k, 0.26, 1);
     } else if (lt < 0.3) {
       const k = lt < 0.02 ? lt / 0.02 : 1 - smooth((lt - 0.16) / 0.14);
       if (calm) r.set(0.7, 0.35 * k, 1.6, 0);

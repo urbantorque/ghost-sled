@@ -2187,8 +2187,10 @@ export class GhostVisuals {
         // (The race's pass rule fires with the ghost a little behind the rider, often beside the lens: the motes
         // leave from level with the rider at the ghost's side of the run, so they play out beside the hero and
         // stream back past it, as world.ts passFx places its shatter.)
-        reactAt.set(pos.x, pos.y, Math.min(pos.z, this.playerAt.z - 0.9));
-        sink.ghostMotes(reactAt, 1.5 * RIDER_SCALE, it.col, reactCar, ((t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1)) / (t < 0.08 ? 5 : 1), reactAway);
+        // (And a metre out from the ghost's far side, from its waist down: a ghost passed right beside the rider put
+        // its motes against the rider's chest.)
+        reactAt.set(pos.x + reactAway.x * 0.9, pos.y, Math.min(pos.z, this.playerAt.z - 0.9) + reactAway.z * 0.9);
+        sink.ghostMotes(reactAt, 0.9 * RIDER_SCALE, it.col, reactCar, ((t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1)) / (t < 0.08 ? 5 : 1), reactAway);
       }
     }
     // (Round 8: and its trick pose's fold and roll, about the hips too.)

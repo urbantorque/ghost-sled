@@ -527,8 +527,10 @@ export class Moments {
         const c = this.world.course;
         const cx = c.centerX(-l.z);
         const g = c.ground(cx, -l.z);
-        // (Every other lamp: one each flooded the square with their light and the frame went to a gold floor.)
-        if (this.town.indexOf(l) % 2 === 0) this.world.fireworks.shell(this.a.set(l.x, g + 1, l.z), this.b.set(cx + (l.x - cx) * 1.15, g + 13 + ((l.at * 7) % 4), l.z), 0.42, TOWN_A, TOWN_B, 'willow');
+        // (Every other lamp: one each crowded the sky.)
+        // (A dark burst: its own light on the square read with the show's as a gold floor that drowned the rider. A
+        // win's show is festival enough: its lamps light without them.)
+        if (this.scale.kind !== 'win' && this.town.indexOf(l) % 2 === 0) this.world.fireworks.shell(this.a.set(l.x, g + 1, l.z), this.b.set(cx + (l.x - cx) * 1.15, g + 13 + ((l.at * 7) % 4), l.z), 0.42, TOWN_A, TOWN_B, 'willow', true);
         // (Reduced motion keeps the lamps' light and lets no lantern drift away.)
         if (!fx.reduced) p.skyLanterns(l.x, l.y - 1, l.z, 2, 3, LANTERN);
       }

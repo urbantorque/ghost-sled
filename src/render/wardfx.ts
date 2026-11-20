@@ -138,15 +138,17 @@ function wardMaterial(): ShaderMaterial {
         float g = clamp(1.0 - length(q) * 1.5, 0.0, 1.0);
         vec3 paper = mix(uMarigold, mix(uMarigold, uCream, 0.45) * 1.15, g) * (0.6 + 0.4 * rib);
         // Broken free, a shard is a solid flake of the lantern's marigold, so it reads on white snow.
-        paper = mix(paper, uMarigold, 0.6 * crack);
+        // (Round 8: a shard keeps more of the lit paper and burns longer, so the larger lantern breaks into light,
+        // not flat yellow card.)
+        paper = mix(paper, uMarigold, 0.35 * crack);
         // The cracks burn white-gold along the cut lines before it breaks; a shard runs hot, then cools.
         float lines = (1.0 - smoothstep(0.0, 0.035, abs(d1))) + (1.0 - smoothstep(0.0, 0.035, abs(d2)));
         // (Under the bloom's knee but for the cracks' hottest frames: a whole lantern of light past it bloomed over
         // the rider inside it.)
-        vec3 glow = uWhiteGold * (lines * heat * 1.25 * (1.0 - crack) + heat * 0.35 * crack);
+        vec3 glow = uWhiteGold * (lines * heat * 1.25 * (1.0 - crack) + heat * 0.6 * crack);
         // A paper lantern is densest at its rims, where the eye looks through more of it; face on it stays
         // thin, so it never turns into a wall between the lens and the rider.
-        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.82, crack);
+        float a = alpha * mix(0.34 + 0.22 * g + 0.3 * (1.0 - vFace), 0.62, crack);
         gl_FragColor = vec4(linearToOutputTexel(vec4(paper, 1.0)).rgb * a + linearToOutputTexel(vec4(glow, 1.0)).rgb * alpha, a);
       }
     `,

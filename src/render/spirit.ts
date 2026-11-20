@@ -245,7 +245,8 @@ export class SpiritFx {
     }
     if (through) {
       this.particles.ring(this.w.set(o.x, gy + 0.1, -o.z), PHASED, low ? 8 : 16, 3.2, keep, 3, 1.2, 0.45, 0.16);
-      this.pulse(o.x, gy + 1.2, -o.z, WHITE_GOLD, 7, 0.9, 0.35);
+      // (Not on Low, where each light is a painted pool's draw: the motes carry it there.)
+      if (!low) this.pulse(o.x, gy + 1.2, -o.z, WHITE_GOLD, 7, 0.9, 0.35);
     }
   }
 
