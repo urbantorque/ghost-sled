@@ -700,6 +700,13 @@ function lightsUniforms() {
  *  the view and gather toward the sun; light bleeds cool through the snow at a shadow's edge. Needs hash13 and
  *  uSunDir (LIGHT_GLSL). */
 export const SNOW_SURF_GLSL = /* glsl */ `
+  // (Off for now, the main lane's call after the stills' critics: a groomed lane's corduroy read as speed lines
+  // down the fall line and as scanlines across it, and the powder's painted faces and hollows as smudges and
+  // camouflage on a tall phone frame. The surfaces, the pillows' warm crests and relief in the light stay; these
+  // turn back on here. notes/r8-snow.md, "What a second attempt should try".)
+  const float CORDUROY_RIB = 0.0;
+  const float PILLOW_FACE = 0.0;
+  const float PILLOW_HOLLOW = 0.0;
   /** Value noise with its gradient (value, d/dx, d/dy) in one pass, on vnoise's own lattice. */
   vec3 vnoiseD(vec2 p) {
     vec2 i = floor(p);
@@ -1335,8 +1342,8 @@ export function makeSnowMaterial(): ShaderMaterial {
           float faceSh = smoothstep(-0.1 + pw, -0.1 - pw, rakeP) * uSnowFx;
           float hollow = smoothstep(0.36 + pw * 0.6, 0.36 - pw * 0.6, pil.x);
           float crestP = smoothstep(0.66 - pw * 0.6, 0.66 + pw * 0.6, pil.x);
-          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * 0.2 * palK * pilK * mix(0.15, 1.0, shadow));
-          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * 0.18 * palK * pilK * mix(0.25, 1.0, shadow));
+          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * PILLOW_FACE * palK * pilK * mix(0.15, 1.0, shadow));
+          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * PILLOW_HOLLOW * palK * pilK * mix(0.25, 1.0, shadow));
           col += lit * sunSnow * warmC * crestP * (1.0 - faceSh) * 0.09 * t * pilK;
         }
         if (groomK > 0.01 && dist < 140.0) {
@@ -1351,7 +1358,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // (No seam lines: two critics read the long straight lines of a lane's seams and ribs as speed lines, which
           // ART.md 4 forbids down the fall line. The ribs keep to the snow under the lens, where they do not converge.)
           cd.w *= 1.0 - smoothstep(7.0, 13.0, dist);
-          col *= 1.0 + cd.x * 0.06 * cd.w * gk * uSnowFx * mix(0.5, 1.0, shadow);
+          col *= 1.0 + cd.x * CORDUROY_RIB * cd.w * gk * uSnowFx * mix(0.5, 1.0, shadow);
           col = mix(col, col * mix(vec3(1.0), warmC, 0.25) * 1.03, gk * 0.5 * t);
         }
         if (grainK > 0.0) {

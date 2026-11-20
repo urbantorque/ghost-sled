@@ -257,3 +257,65 @@ tall frame. If the main lane takes this branch, my advice is to take the surface
 (the scratch on ice, the shallower groomed cut), the facet glints, Ember's spray as snow, the perfect's ring, the ghosts'
 hanging powder and the spindrift, and to set the corduroy's ribs and the pillows' painted faces to zero
 (`corduroy`'s `cd.w` and `faceSh`/`hollow` in `materials.ts`) until a person has looked at them in motion.
+
+## The merge check (corduroy ribs and the pillows' painted faces off; everything else kept)
+
+Built with `CORDUROY_RIB`, `PILLOW_FACE` and `PILLOW_HOLLOW` at 0 (named constants at the top of `SNOW_SURF_GLSL`), shot
+as stills on High and the phone (`shots/r8/snow/stills3/`), fresh pairs (seed 23, the same snow-subject frames,
+`stills-pairs3-{high,phone-medium}/`, keys and picks in `keys/`), one fresh critic.
+
+- **High: the new frame 6 of 10.** Level or better: it holds.
+- **The phone: the new frame 2 of 10.** It does not hold. The critic: "most of these picks were decided by whether a
+  mint ghost sits just ahead with its runner lines, rather than by the snow itself" (the stills still differ in which
+  ghost and pill are in view). What it named on the new side that is the snow's: "a fan of blue grooves converges down
+  the foreground like speed lines" (Frostfang 3750), and a spray that "leans mint-teal, which belongs to ghosts"
+  (Sakura 3706). Nothing it called broken in the new frames is new to them alone except those two; the rest (pills on
+  the hero, the sled's pale underside, Ember's grey ash, the hex columns) is in both.
+
+By the main lane's bar (5 of 10 or more on each, nothing broken named) this build is not ready to merge: High passes,
+the phone does not.
+
+## What a second attempt should try
+
+Everything the critics said across eleven blind passes (three on the run's own frames, five on held stills, three on
+Low and the phone), sorted.
+
+**What reads as snow.**
+- Long cast shadows raking toward the lens with sparkle along them (ART.md 11's second mark): every critic rewarded it,
+  on both builds. The snow is best where the light does the drawing.
+- Wind relief with a lit crest and a cool lee face, crisp and sparse: round 7's sastrugi and slab on the banks were
+  named as good in every pass. Relief that carves the snow at a scale the lens can read (metres, not centimetres).
+- Crisp twin runner grooves with a lit lip running to the bottom of the frame, and a ghost's mint runner lines ahead:
+  "skill written in the snow". A groove that is a crisp line beats a trench that is a band.
+- Glitter in the light's own colour, gathered toward the sun, a little denser than looks safe: one critic punished
+  rainbow speckle spread evenly over the lane, another rewarded the old denser glitter; facet glints at the denser
+  setting satisfied both kinds of comment.
+- Lit cream powder in a spray or a landing (and a ring of it); never darker than about half its lit side.
+
+**What reads as paint, and what to avoid.**
+- *Speed lines:* anything long and straight that runs down the fall line and converges on the vanishing point, whatever
+  it is meant to be: a groomed lane's ribs or seams, wide lit berms either side of a trench seen from straight behind
+  the sled, a fan of grooves under a tall frame. ART.md 4 forbids it and every critic found it.
+- *Scanlines:* anything fine, regular and across the fall line: corduroy across the slope compresses at a grazing angle
+  into horizontal bands. So a groomed lane cannot be drawn with ribs from a chase lens at all; it must be told by value
+  (whiter, smoother, a soft swath step), and by what is on it (old tracks, a pressed groove), never by lines.
+- *Smudges and camouflage:* painted shapes from noise, however crisp their edges, read as blotches, puddles or water
+  caustics on the soft palettes (Sakura, a moonlit Lanternfall) and as "dark scribble smudges" on a tall phone frame.
+  Pillows of powder want real form: a lit face and a shaded face on shapes a few metres across that follow the wind,
+  lit by the frame's own key, not a value laid over noise. Try them as geometry (a few centimetres of real relief in
+  the near terrain's normal, the mesh being dense enough near the lens) before painting them again.
+- *Saturated shadow:* a hue lift inside a soft shadow fills it and reads as a puddle; keep any bleed to a crisp edge's
+  rim, or leave it out.
+- *Colour leaks:* thrown snow must keep the snow's hues; a lift toward a cool shade went lavender on Ember and, once,
+  mint-teal on Sakura (mint is the ghosts').
+
+**What the near snow on a tall phone frame needs.** On an upright phone the snow under and behind the rider is the
+lower half of the picture, seen at its steepest. Every mark there is twice the size of the desktop's and runs straight
+at the lens. It wants fewer, larger, softer forms (the shadows and the light, not texture), the groove as two crisp
+lines, and nothing that repeats at a regular pitch. Judge a phone version on the phone's own frames; what passed on
+High failed there.
+
+**How to judge it.** The held stills are the right tool; they still differ in which ghost and pill are in view (the
+ghosts' worker timing), and that decided most of the pairs in every pass. Hide the ghosts and labels for a snow pass
+(or freeze the ghost poses with the run), then judge the snow alone; and look at the moving snow (spindrift, a ghost's
+hanging powder, the landing ring) in motion, which no critic here has seen.
