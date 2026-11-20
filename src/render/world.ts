@@ -1148,6 +1148,8 @@ export class World {
         }
       }
     }
+    // (Round 8, the snow lane: the wind lifts spindrift off the banks' crests ahead. particles.ts.)
+    this.particles.spindrift(this.course, s.z, dt);
 
     shared.uFocus.value.copy(focus).add(new Vector3(0, 0.9, 0));
     // Lantern ahead of the sled at night.

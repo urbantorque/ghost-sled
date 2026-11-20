@@ -1,5 +1,6 @@
 import { AddEquation, AdditiveBlending, BufferAttribute, BufferGeometry, Color, CustomBlending, DynamicDrawUsage, Mesh, NormalBlending, Object3D, OneFactor, OneMinusSrcAlphaFactor, Points, ShaderMaterial, Vector2, Vector3 } from 'three';
-import { fx, setFxBudget } from './fxhub';
+import type { Course } from '../sim/course';
+import { BUDGET, byTier, fx, setFxBudget } from './fxhub';
 import { makeToonMaterial, shared } from './materials';
 import { giftGeometry } from './meshes';
 import { roosterK } from './speedfeel';
@@ -376,6 +377,11 @@ class Layer {
             // Under a dim moon, powder still reads a step brighter than the snow it is thrown over.
             litCol *= 1.0 + 0.8 * smoothstep(0.6, 0.25, dot(litCol, vec3(0.3, 0.59, 0.11)));
             vec3 shadeCol = mix(uSnowShade, uSnowLit, 0.35);
+            // (Round 8: thrown snow is snow. Under a dark shade (Ember's plum, a night's) a puff's shaded side
+            // went to a grey that read as smoke; it keeps its hue but never falls under 0.6 of the lit
+            // powder's value, so powder reads as powder on every mountain.)
+            float litV = dot(litCol, vec3(0.3, 0.59, 0.11));
+            shadeCol *= max(1.0, 0.6 * litV / max(dot(shadeCol, vec3(0.3, 0.59, 0.11)), 0.001));
             vec3 col;
             float a;
             // How much of this fragment faces the sled lantern (Lantern Night), set per kind below.
@@ -424,6 +430,8 @@ class Layer {
               // The crest is the lit snow's own cream, a step brighter, with only a trace of the sun's hue
               // (a gold sun turned whole plumes into yellow puffs).
               vec3 crestC = mix(litCol, vec3(dot(litCol, vec3(0.3, 0.59, 0.11))), 0.7) * 1.15;
+              // (Round 8: the belly never under 0.55 of the crest's value: on Ember a billow was smoke.)
+              belly *= max(1.0, 0.55 * dot(crestC, vec3(0.3, 0.59, 0.11)) / max(dot(belly, vec3(0.3, 0.59, 0.11)), 0.001));
               col = mix(belly, crestC, crestK) * vColor;
               // The sunlit rim, brightest when a low sun backlights the plume (forward scattering).
               // (Round 7: the rim takes the key light's own colour and, backlit, burns past white, so it
@@ -616,6 +624,10 @@ const SLATE = new Color(0.3, 0.34, 0.5);
 const SHARD = new Color(0.78, 0.92, 1.05);
 const tmpTint = new Color();
 const tmpLook = new Color();
+/** The wind the spindrift blows on (round 8): across the run toward +x and a little down it, about 20 degrees
+ *  off square, as the snow's ripples lie (three.js x and z, a unit vector). */
+const WIND_X = 0.94;
+const WIND_Z = -0.34;
 /** Tint for freshly thrown powder: a touch over white, so a burst outshines the lit snow under it. */
 const POWDER = 1.12;
 const tmpF = new Vector3();
@@ -713,6 +725,8 @@ export class Particles {
   constructor(cap: number) {
     this.powder = new Layer(cap, false);
     this.glow = new Layer(Math.round(cap * 0.6), true);
+    // (Round 8: the ghosts' trails leave powder hanging through the hub, fxhub.ts.)
+    fx.snow = this;
   }
 
   get objects(): Object3D[] {
@@ -1157,6 +1171,10 @@ export class Particles {
         car,
       );
     }
+    // Round 8: a perfect throws more snow than any fall. A ring of powder skims out flat over the snow all
+    // round the crater, a shockwave in the snow itself (low, swelling as it slows, its crest lit), and a veil
+    // of lit powder is left hanging over the crater as the rider rides on out of it.
+    this.landingRing(pos, car, f, st, reach);
     // A few gold sparks skimming out over the snow and dying in about a third of a second, about a
     // third as many as before and never lifted off it: a ring of star sprites salted the sky, the
     // ghosts and the crater, and the hit lost its focus. None are thrown back at the lens, where even
@@ -1197,6 +1215,87 @@ export class Particles {
         KIND_GRAIN,
         car,
       );
+    }
+  }
+
+  /** A perfect landing's ring and veil (round 8, the snow lane): billows thrown out flat all round the crater
+   *  at ground level, a ring of powder that runs out over the snow and swells as it slows, crest lit and belly
+   *  in shade, riding along with the sled; then a few broad lit dabs left hanging over the crater, rising as
+   *  they thin. With the burst and the crown it is more snow than a fall throws, and it reads as a ring from
+   *  the chase lens. */
+  private landingRing(pos: Vector3, car: Vector3, f: Vector3, st: number, reach: number): void {
+    const n = this.n(26 * st);
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2 + Math.random() * 0.12;
+      const dx = Math.cos(a);
+      const dz = Math.sin(a);
+      const out = (6.2 + Math.random() * 1.6) * reach;
+      // (Thrown back toward the lens is thrown uphill: it climbs the slope a little.)
+      const climb = 0.3 * out * Math.max(0, -(dx * f.x + dz * f.z));
+      this.powder.emit(pos.x + dx * 1.3, pos.y + 0.06, pos.z + dz * 1.3, car.x + dx * out, car.y + 0.2 + Math.random() * 0.3 + climb, car.z + dz * out, 0.42 + Math.random() * 0.16, 0.14, 0.46 + Math.random() * 0.2, POWDER, POWDER, POWDER, 0.86, 1.2, 4.2, puffKind(), car);
+    }
+    const nv = this.n(8 * st);
+    const car2 = tmpC2.set(car.x * 0.9, car.y * 0.9, car.z * 0.9);
+    for (let i = 0; i < nv; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.8 + Math.random() * 1.4;
+      this.powder.emit(pos.x + Math.cos(a) * r, pos.y + 0.3, pos.z + Math.sin(a) * r, car2.x + Math.cos(a) * 1.2, car2.y + 0.7 + Math.random() * 0.6, car2.z + Math.sin(a) * 1.2, 0.9 + Math.random() * 0.5, 0.35, 1.1 + Math.random() * 0.5, 1, 1, 1, 0.42, 0.6, 1.6, dabKind(), car2);
+    }
+  }
+
+  /** Powder a ghost left hanging where it rode by (round 8; trails.ts GhostTrails asks through fxhub.ts): a
+   *  pair of thin lit veils either side of its line and now and then a dab, thrown up by its runners, drifting
+   *  out and settling over a second or two, so a ghost that went by leaves the air it rode through. Medium and
+   *  High; under reduced motion it hangs still. */
+  ghostPowder(x: number, y: number, z: number, vx: number, vz: number, speed: number): void {
+    if (fx.tier === 0) return;
+    const k = Math.min(1, speed / 30);
+    const l = Math.hypot(vx, vz) || 1;
+    const ux = vx / l;
+    const uz = vz / l;
+    const m = fx.reduced ? 0 : 1;
+    const n = this.n(2);
+    for (let i = 0; i < n; i++) {
+      const side = i % 2 ? 1 : -1;
+      const sx = -uz * side;
+      const sz = ux * side;
+      const o = 0.45 + Math.random() * 0.55;
+      this.powder.emit(x + sx * o - ux * 0.8, y + 0.22 + Math.random() * 0.3, z + sz * o - uz * 0.8, (vx * 0.05 + sx * 0.7) * m, (0.3 + Math.random() * 0.3) * m, (vz * 0.05 + sz * 0.7) * m, 1.5 + Math.random() * 0.8, 0.45, (1.2 + Math.random() * 0.6) * (0.7 + 0.3 * k), 1, 1, 1, 0.2 + 0.12 * k, 0.12, 1.4, KIND_MIST);
+    }
+    if (Math.random() < 0.45 * k) {
+      const side = Math.random() < 0.5 ? -1 : 1;
+      this.powder.emit(x - uz * side * 0.6 - ux * 0.5, y + 0.35, z + ux * side * 0.6 - uz * 0.5, (vx * 0.08 - uz * side * 0.9) * m, 0.5 * m, (vz * 0.08 + ux * side * 0.9) * m, 1.1 + Math.random() * 0.5, 0.3, 0.75 + Math.random() * 0.35, 1, 1, 1, 0.34, 0.4, 1.8, dabKind());
+    }
+  }
+
+  private driftAcc = 0;
+
+  /** Spindrift (round 8): the wind lifting thin wisps of snow off the crests of the banks ahead and streaming
+   *  them across the run in gusts, a soft lit veil of mist in a line down the wind, low over the bank. Called
+   *  each frame with the rider's sim z. Medium and High (fxhub.ts BUDGET.spindrift); none under reduced motion,
+   *  where the wind is still. */
+  spindrift(c: Course, z: number, dt: number): void {
+    const rate = byTier(BUDGET.spindrift);
+    if (rate <= 0 || fx.reduced || dt <= 0) return;
+    const t = shared.uTime.value;
+    // Gusts come and go over a few seconds.
+    const g = 0.5 + 0.5 * Math.sin(t * 0.83) * Math.sin(t * 0.31 + 1.3);
+    this.driftAcc += rate * (0.25 + 0.75 * g * g) * Math.min(dt, 0.1);
+    while (this.driftAcc >= 1) {
+      this.driftAcc -= 1;
+      const zz = z + 14 + Math.random() * 56;
+      const side = Math.random() < 0.5 ? -1 : 1;
+      const cx = c.centerX(zz);
+      const x = cx + side * (c.halfWidth(zz) + 1.2 + Math.random() * 5.5);
+      const y = c.ground(x, zz);
+      // Only off a bank standing over the run: a crest, not the open snow of a bowl or a lake.
+      if (y - c.ground(cx, zz) < 0.6) continue;
+      const w = 4 + Math.random() * 3.5;
+      const puffs = 3 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < puffs; i++) {
+        const d = i * 0.55;
+        this.powder.emit(x + d, y + 0.15 + i * 0.07, -zz + d * 0.25, WIND_X * w, 0.35 + Math.random() * 0.4, WIND_Z * w, 0.9 + Math.random() * 0.6, 0.35, 0.9 + Math.random() * 0.5, 1, 1, 1, 0.16 + 0.1 * g, -0.25, 0.5, KIND_MIST);
+      }
     }
   }
 
