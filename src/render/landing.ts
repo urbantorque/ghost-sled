@@ -87,10 +87,16 @@ function blobMaterial(): ShaderMaterial {
 /** Crater decal radius in metres (the longest streaks, about 2.4 m off a lip 1.5 m out, reach about
  *  95% of it). */
 const CRATER_R = 4.2;
-const CRATER_SEGS = 18;
+const CRATER_SEGS = 24;
 const CRATER_LIFE = 6;
 /** Seconds the crater rides along under the sled before it is left in the snow. */
 const FOLLOW = 0.42;
+/** Round 8: the stomp's shockwave, how far it runs (m, at a single stomp's width) and how long it takes (s).
+ *  While it runs the crater's grid is laid wide enough to hold it, then drawn back to the crater's own size. */
+export const WAVE_R = 8.5;
+export const WAVE_S = 0.55;
+/** The grid's half-size while the wave runs, in crater radii (a margin past the ring's crest). */
+const WAVE_EXT = (WAVE_R + 0.9) / CRATER_R;
 
 function craterMaterial(): ShaderMaterial {
   return new ShaderMaterial({
@@ -113,13 +119,14 @@ function craterMaterial(): ShaderMaterial {
       uFogNear: shared.uFogNear,
       uFogFar: shared.uFogFar,
       uFocus: shared.uFocus,
+      uExt: { value: 1 },
     },
     vertexShader: /* glsl */ `
       attribute vec2 aP;
-      varying vec2 vP;
+      varying vec2 vQ;
       varying vec3 vWorldPos;
       void main() {
-        vP = aP;
+        vQ = aP;
         vWorldPos = position;
         gl_Position = projectionMatrix * viewMatrix * vec4(position, 1.0);
       }
@@ -137,19 +144,24 @@ function craterMaterial(): ShaderMaterial {
       uniform float uFogNear;
       uniform float uFogFar;
       uniform vec3 uFocus;
-      varying vec2 vP;
+      uniform float uExt;
+      varying vec2 vQ;
       varying vec3 vWorldPos;
       float h11(float x) { return fract(sin(x * 127.1 + uSeed * 311.7) * 43758.5453); }
       // Metres to the decal's unit radius.
       #define M(x) ((x) / ${CRATER_R.toFixed(2)})
       #define FOLLOW_S ${FOLLOW.toFixed(2)}
+      #define WAVE_S ${WAVE_S.toFixed(2)}
       // A hard-edged band lo < r < hi, anti-aliased by one pixel either side.
       float band(float r, float lo, float hi, float aa) {
         return smoothstep(lo - aa, lo + aa, r) * smoothstep(hi + aa, hi - aa, r);
       }
       void main() {
+        // (Round 8: while the shockwave runs the grid is laid wider, uExt crater radii; the crater's own parts
+        // are measured in crater radii as before.)
+        vec2 vP = vQ * uExt;
         float r = length(vP);
-        if (r > 1.0) discard;
+        if (r > uExt) discard;
         // One pixel of radius, capped: seen at a grazing angle the radial derivative is huge, and an
         // edge padded by it smears into a soft blob (the oil puddle the critics saw).
         float aa = min(fwidth(r) * 0.75, M(0.03));
@@ -251,6 +263,40 @@ function craterMaterial(): ShaderMaterial {
         vec3 crestC = mix(mix(shadeP, powder * 1.1, 0.55 + 0.45 * faceW), vec3(1.2, 1.12, 0.98), flash * 0.7);
         P = crestC * kc + P * (1.0 - kc);
         A = kc + A * (1.0 - kc);
+        // Round 8 (the events lane): the stomp's own shockwave, the event in the snow. A ring of snow heaved up
+        // runs out from the lip to about 8.5 m in half a second, a hand's width tall: its crest a bright line
+        // of lifted powder (lit on its sun side, its own periwinkle on the other), a cool trough dragged in
+        // behind it, and a second, fainter ring after it. For its first tenth of a second the crest burns
+        // white-gold and the snow inside it lifts toward the light; then it is snow. It thins and widens as
+        // it runs and is gone by WAVE_S. Displaced snow, never a painted target.
+        if (t < WAVE_S) {
+          float wk = t / WAVE_S;
+          float run = 1.0 - pow(1.0 - wk, 2.4);
+          float Rw = M(1.7) + M(${(WAVE_R - 1.7).toFixed(2)}) * run;
+          float ww = M(0.16 + 0.55 * wk);
+          float wq = (r - Rw) / ww;
+          float wK = pow(1.0 - wk, 1.4) * smoothstep(0.0, 0.03, t);
+          float hot = exp(-t * 11.0);
+          // The ring's outer face turned to the sun is lit; the far side of the ring is its shade.
+          float wFace = smoothstep(-0.7, 0.7, sunward + 0.25);
+          vec3 waveC = mix(shadeP, powder * 1.12, 0.45 + 0.55 * wFace);
+          waveC = mix(waveC, vec3(1.25, 1.12, 0.86), hot * 0.75);
+          // The snow inside the ring lifts toward the light for the impact's instant.
+          float kw = (1.0 - smoothstep(Rw * 0.6, Rw, r)) * hot * 0.22;
+          P = mix(powder, vec3(1.15, 1.06, 0.88), 0.5) * kw + P * (1.0 - kw);
+          A = kw + A * (1.0 - kw);
+          float kTr = exp(-(wq + 2.0) * (wq + 2.0) * 0.9) * wK * 0.42;
+          P = shadeP * kTr + P * (1.0 - kTr);
+          A = kTr + A * (1.0 - kTr);
+          float kCr = exp(-wq * wq * 2.2) * wK * 0.9;
+          P = waveC * kCr + P * (1.0 - kCr);
+          A = kCr + A * (1.0 - kCr);
+          // The echo: a fainter ring of lifted snow at three fifths of the first.
+          float eq = (r - Rw * 0.6) / (ww * 0.8);
+          float kE = exp(-eq * eq * 2.2) * wK * 0.4 * smoothstep(0.08, 0.2, t);
+          P = mix(shadeP, powder, 0.4 + 0.6 * wFace) * kE + P * (1.0 - kE);
+          A = kE + A * (1.0 - kE);
+        }
         float life = 1.0 - smoothstep(${CRATER_LIFE - 2}.0, ${CRATER_LIFE}.0, t);
         float d = length(cameraPosition - vWorldPos);
         float fogF = smoothstep(uFogNear, uFogFar, d);
@@ -305,7 +351,7 @@ class Crater {
     this.geo.setAttribute('aP', new BufferAttribute(p, 2));
     this.geo.setIndex(idx);
     // Room for the widest streak crater (1.6 times).
-    this.geo.boundingSphere = new Sphere(new Vector3(), CRATER_R * 1.6 * 1.5);
+    this.geo.boundingSphere = new Sphere(new Vector3(), CRATER_R * 1.6 * WAVE_EXT * 1.5);
     this.mesh = new Mesh(this.geo, this.mat);
     this.mesh.renderOrder = 2;
     this.mesh.visible = false;
@@ -315,9 +361,16 @@ class Crater {
   /** How wide this crater is pressed (1, or up to 1.6 for a stomp streak): every part of it, bowl, lip
    *  and streaks, grows with the grid it is drawn on. */
   private scale = 1;
+  /** The grid's half-size in crater radii: WAVE_EXT while the shockwave runs, then 1. */
+  private ext = 1;
+  private readonly at = { x: 0, z: 0, fx: 0, fz: -1 };
+  private course: Course | null = null;
 
   stamp(c: Course, x: number, z: number, fx: number, fz: number, scale = 1): void {
     this.scale = scale;
+    this.ext = WAVE_EXT;
+    this.mat.uniforms.uExt.value = WAVE_EXT;
+    this.course = c;
     this.place(c, x, z, fx, fz);
     this.mat.uniforms.uSeed.value = Math.random() * 100;
     this.mat.uniforms.uT.value = 0;
@@ -330,7 +383,11 @@ class Crater {
   place(c: Course, x: number, z: number, fx: number, fz: number): void {
     const n = CRATER_SEGS + 1;
     const p = this.geo.getAttribute('aP') as BufferAttribute;
-    const R = CRATER_R * this.scale;
+    const R = CRATER_R * this.scale * this.ext;
+    this.at.x = x;
+    this.at.z = z;
+    this.at.fx = fx;
+    this.at.fz = fz;
     for (let k = 0; k < n * n; k++) {
       // Local x is world x, local y is three.js z (sim z is flipped).
       const wx = x + p.getX(k) * R;
@@ -348,6 +405,12 @@ class Crater {
     if (this.t < 0) return;
     this.t += dt;
     if (this.t >= FOLLOW) this.following = false;
+    // The shockwave has run: the grid is drawn back to the crater's own size where it was last laid.
+    if (this.ext > 1 && this.t >= WAVE_S && this.course) {
+      this.ext = 1;
+      this.mat.uniforms.uExt.value = 1;
+      this.place(this.course, this.at.x, this.at.z, this.at.fx, this.at.fz);
+    }
     if (this.t >= CRATER_LIFE) {
       this.t = -1;
       this.mesh.visible = false;

@@ -19,7 +19,7 @@ import { CHAIN_TICKS, DUEL_GIFTS, DuelTracker, ExtraGifts, GapReadout, LEVEL_IN_
 import { BANK_MS, bankHeader, bankTier, fuseLevel } from './stake';
 import { StompStreak, stompTitle } from './streak';
 import { planShots, type Shot } from './shots';
-import { APEX_CURVE, APEX_S, CRASH_CURVE, TimeScale } from './timescale';
+import { APEX_CURVE, APEX_S, CRASH_CURVE, STOMP_HOLD_SCALE, stompHoldS, TimeScale } from './timescale';
 
 // The director: turns this frame's sim events, race events and sim state into Beats (named moments)
 // and continuous Feel, once per frame, before any consumer runs. The app hands the same beat list to
@@ -1609,6 +1609,8 @@ export class Director {
     const yeti = tick - this.yetiHopTick >= 0 && tick - this.yetiHopTick <= YETI_TITLE_TICKS;
     const lead: Array<{ label: string; points: number }> = [{ label: n >= 2 ? (yeti ? stompTitle(n) : 'Perfect') : 'Stomp', points }];
     if (motion) this.time.pulse(HITSTOP_SCALE, STOMP_STOP[Math.min(n, STOMP_STOP.length) - 1] ?? 0.13, 'feed');
+    // (Round 8: and the picture holds on the impact for a beat, longer for a streak: timescale.ts stompHoldS.)
+    if (motion) this.time.pulse(STOMP_HOLD_SCALE, stompHoldS(n), 'render');
     this.lastStompAt = this.clock;
     const h = this.rivalHold;
     if (h && this.clock - (h.until - RIVAL_HOLD_S) < REQUEUE_S) h.until = this.clock + STAMP_S + RIVAL_HOLD_S;
