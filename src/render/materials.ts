@@ -100,8 +100,6 @@ export const shared = {
   uLampAir: { value: 0 },
   /** Low's painted pools laid over in their own hue (palette.poolSoft). */
   uPoolSoft: { value: 0 },
-  /** Round 8: Low's pools laid over the snow as a step of the lamp's own light (palette.poolLaid; posterPool). */
-  uPoolLaid: { value: 0 },
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
   /** The visual lift's light (LIFT_GLSL): x the snow's bounce, y the sky's fill, z light through what is
@@ -341,7 +339,6 @@ export function applyPalette(full: Palette): void {
   shared.uLampK.value = p.lamps;
   shared.uLampAir.value = p.lampAir;
   shared.uPoolSoft.value = p.poolSoft;
-  shared.uPoolLaid.value = p.poolLaid;
   shared.uLeaf.value = p.leaf;
   // (Low's poster: read only where uPoster.x is 1, which setCloudShadows sets with the tier.)
   const ps = p.poster;
@@ -436,7 +433,6 @@ uniform vec4 uUnder;
 uniform float uLampK;
 uniform float uLampAir;
 uniform float uPoolSoft;
-uniform float uPoolLaid;
 uniform float uLeaf;
 uniform vec4 uLocalPos[8];
 uniform vec4 uLocalCol[8];
@@ -464,23 +460,6 @@ vec3 localLight(vec3 wp, vec3 n, float count) {
     }
   }
   return acc * uLampK;
-}
-
-/** Round 8 (V5, the light lane): Low's pool of lamplight laid over the snow, not added to it. The light L the snow
- *  takes at a point (localLight) is painted in two values of the lamp's own hue, an outer step and a heart, each
- *  at least a set brightness and always above the snow under it, so on a dark night it is a pool of marigold and
- *  never a stain: added, a warm light on Lanternfall's lilac snow went to beige (DECISIONS 367). A gouache pool for
- *  the price of the loop alone. */
-vec3 posterPool(vec3 col, vec3 L) {
-  float li = max(L.r, max(L.g, L.b));
-  if (li < 0.001) return col;
-  vec3 hue = L / li;
-  float lv = max(col.r, max(col.g, col.b));
-  float outer = smoothstep(0.03, 0.06, li);
-  float heart = smoothstep(0.22, 0.27, li);
-  col = mix(col, mix(vec3(1.0), hue, 0.7) * max(lv * 1.35, 0.3), outer * 0.8);
-  col = mix(col, mix(vec3(1.0), hue, 0.5) * max(lv * 1.9, 0.72), heart * 0.9);
-  return min(col, vec3(0.97));
 }
 
 vec3 toonLightK(vec3 lit, vec3 shade, vec3 n, vec3 v, float shadow, float rimK) {
@@ -1836,9 +1815,6 @@ export function makeSnowMaterial(): ShaderMaterial {
           // lights are painted: two flat values with a soft step between, a gouache pool, for the price
           // of the loop alone.
           vec3 L = localLight(vWorldPos, n, uLocalCount);
-          // (Round 8, the light lane: the snow and the light as they were, for Low's laid pool below.)
-          vec3 cPre = col;
-          vec3 L0 = L;
           if (uSnowFx <= 0.0) {
             float li = max(L.r, max(L.g, L.b));
             L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
@@ -1854,7 +1830,6 @@ export function makeSnowMaterial(): ShaderMaterial {
           // (Low has no curve after this: a pool on bright day snow went over 1 in every channel and was
           // drawn as a hard white oval, the review loop. Where it would clip, it keeps its hue instead.)
           if (uSnowFx <= 0.0 && max(L.r, max(L.g, L.b)) > 0.001) col /= max(1.0, max(col.r, max(col.g, col.b)));
-          if (uSnowFx <= 0.0 && uPoolLaid > 0.0) col = mix(col, posterPool(cPre, L0), uPoolLaid);
         }
         if (uLantern > 0.0) {
           // Lantern Night: a tight round pool of lamplight on the snow around and just ahead of the sled

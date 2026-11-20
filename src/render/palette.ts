@@ -115,9 +115,6 @@ export interface Palette {
   /** Low's painted pools (lights.ts): 0 adds the light in two flat values; 1 lays it over the snow in the
    *  light's own hue without clipping (Ember: added to a coloured snow, they clipped to mustard). */
   poolSoft: number;
-  /** Round 8: Low's pools laid over the snow as two values of the lamp's own light (materials.ts posterPool), in
-   *  place of added (0: added, as round 7). Lanternfall: added to its lilac snow they read as stains. */
-  poolLaid: number;
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   leaf: number;
   /** The visual lift's light (materials.ts LIFT_GLSL, the light lane). bounce: how much light the snow
@@ -319,7 +316,6 @@ function base(): Palette {
     lamps: 0.25,
     lampAir: 0,
     poolSoft: 0,
-    poolLaid: 0,
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
@@ -1353,7 +1349,6 @@ function valuePass(p: Palette, biome: BiomeId): void {
       p.snowShade = c('#4C40A8');
       p.snowDeep = c('#1E1660');
       p.lampAir = 0.1;
-      p.poolLaid = 1;
       return;
   }
 }
