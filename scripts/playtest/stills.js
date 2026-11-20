@@ -10,7 +10,7 @@
 // scripts/playtest/stills.sh shoots the round's fixed list (frames-r7.json) for every mountain on the tiers named.
 async (page) => {
   const c = Object.assign(
-    { base: 'http://127.0.0.1:4860/', out: 'shots/r8/stills/', tier: 'high', m: 0, demo: 0, zs: [300], extra: '' },
+    { base: 'http://127.0.0.1:4860/', out: 'C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/stills-default/', tier: 'high', m: 0, demo: 0, zs: [300], extra: '' },
     (await page.evaluate(() => window.__stillsCfg).catch(() => null)) || {},
   );
   const errors = [];
