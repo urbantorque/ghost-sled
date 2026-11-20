@@ -21,7 +21,8 @@ import { prevDay } from './settle';
 // Pure: no DOM, render or audio imports.
 
 function card(r: Reward, page: number, chapter: string | null = null): RewardCard {
-  return { kind: r.kind, name: rewardName(r), page, chapter };
+  // (A mirror's card names its mountain's id too: its Almanac page rides it, the modes lane.)
+  return r.kind === 'mirror' ? { kind: r.kind, name: rewardName(r), page, chapter, mountain: r.mountain } : { kind: r.kind, name: rewardName(r), page, chapter };
 }
 
 /** The rank bar at an amount of XP. */

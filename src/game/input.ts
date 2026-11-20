@@ -1,4 +1,5 @@
 import { STEER_CENTER } from '../sim/input';
+import { mirrorSteer } from './modes';
 import { type PadLike, type PadMenu, type PadRead, type TriggerHold, idlePad, mergePad, newTriggerHold, padBusy, readPad } from './pad';
 
 // Keyboard, mouse, touch and a gamepad, merged into one steer level (0..8) and one action button.
@@ -393,8 +394,19 @@ export class InputController {
     return Math.abs(this.rawSteer()) > 0.3;
   }
 
+  /** A mirror mountain (modes.ts): the picture is flipped, so the steer the sim is sent is read the other way
+   *  (mirrorSteer). Left on the keys, the stick or the screen is still left on the screen; the record is an
+   *  ordinary record of the steer the sim took. */
+  mirrored = false;
+
   /** Sample once per sim tick. Quantised with hysteresis so the input log stays compact. */
   sample(): { steer: number; action: boolean; spirit: boolean } {
+    const s = this.sampleHeld();
+    if (this.mirrored) s.steer = mirrorSteer(s.steer);
+    return s;
+  }
+
+  private sampleHeld(): { steer: number; action: boolean; spirit: boolean } {
     if (!this.enabled) return { steer: STEER_CENTER, action: false, spirit: false };
     if (this.padLive) this.readPads();
     this.rampKeys();

@@ -44,6 +44,7 @@ import { Rider, type RiderPose } from './rider';
 import { grabDanger } from './trickpose';
 import { CharmGates } from './charmgates';
 import { FAMILY_HEX } from './charmglyphs';
+import { setLetteringMirror } from './lettering';
 import { CHARM, PATH_STEP, charmFamily } from '../sim/charms';
 import { draftsOn } from '../sim/rivals';
 import { wispUp } from '../game/charmsignals';
@@ -733,6 +734,43 @@ export class World {
     this.far.invalidate();
   }
 
+  /** A mirror mountain (the modes lane, modes.ts): the picture flipped left for right, the sim untouched. The canvas
+   *  is shown turned over (a CSS transform: no pass, no draw, the same frame on every tier), so everything in it is
+   *  mirrored with it, the ghosts too, and what must read the right way round is drawn turned over to meet it: the
+   *  boards' built letters (lettering.ts, the pieces remade), the medallions' glyphs (charmgates.ts) and the labels
+   *  (labels.ts, laid out as the player sees the screen). The DOM over the canvas is never flipped: what it reads
+   *  from the frame (the rider's place on screen, the rear-view mirror's box) is turned over here. */
+  get mirrored(): boolean {
+    return this.isMirrored;
+  }
+
+  setMirrored(on: boolean): void {
+    if (on === this.isMirrored) return;
+    this.isMirrored = on;
+    this.renderer.domElement.style.transform = on ? 'scaleX(-1)' : '';
+    this.ghosts.batch.setFlip(on);
+    this.ghosts.mirrored = on;
+    this.charmGates.setMirrored(on);
+    // (The boards are baked into their pieces: those made the other way are made again, as a new mood remakes them.)
+    if (setLetteringMirror(on)) this.setPieces.setCourse(this.course, this.palette, this.mood);
+  }
+
+  private isMirrored = false;
+
+  /** On a mirrored run, turns the lens's projection over left for right (its x row; called again to turn it back),
+   *  so what the ghosts' labels measure on screen (a tag over its ghost, the rider's box) is measured as the player
+   *  sees it; the edge chip, which measures in view space, is told by the ghost layer's own flag. Only the ghosts'
+   *  update runs between the two calls, and the frame is drawn with the lens as it is. (The view matrix would not do:
+   *  three.js makes it again whenever the lens's direction is read.) */
+  private mirrorView(): void {
+    if (!this.isMirrored) return;
+    const e = this.cam.camera.projectionMatrix.elements;
+    e[0] = -e[0];
+    e[4] = -e[4];
+    e[8] = -e[8];
+    e[12] = -e[12];
+  }
+
   setMood(mood: Mood): void {
     const same = mood === this.mood;
     this.mood = mood;
@@ -1235,7 +1273,10 @@ export class World {
     this.ghosts.labels = v.labels !== false;
     this.ghosts.reel = v.mode === 'title';
     this.ghosts.drafting = v.mode === 'run' && s.drafting && !s.crashed;
+    // (A mirrored run's labels are laid out on the screen as the player sees it: modes lane.)
+    this.mirrorView();
     this.ghosts.update(v.ghostPoses, this.cam.camera, this.width, this.height, v.time, focus, (p, c) => this.particles.sparkle(p, c, 16, 2.2, 0.55, 0.2, null, 0.6), v.occluders, v.rival);
+    this.mirrorView();
     // The slipstream you ride in: motes of the drafted ghost's colour stream back past the runners.
     if (this.ghosts.wakeK > 0.05 && s.grounded) this.particles.wake(pos, vel, this.ghosts.wakeCol, this.ghosts.wakeK * Math.min(2, dt * 60));
     this.landing.streak = v.mode === 'run' ? feel.streak : 0;
@@ -1310,6 +1351,8 @@ export class World {
     // The powder cloud keeps clear of the rider (post.ts), in uv with the origin bottom left.
     pp.riderX = this.riderScreen.x / this.width;
     pp.riderY = 1 - this.riderScreen.y / this.height;
+    // (The passes read the frame as drawn; the HUD's callouts read it as shown: a mirrored run's is turned over.)
+    if (this.isMirrored) this.riderScreen.x = this.width - this.riderScreen.x;
     if (pp.danger > 0) {
       // Its crest stops under the sled, and its powder streams toward the course's vanishing point.
       const fp = this.screenProbe.copy(focus).project(this.cam.camera);
@@ -1447,7 +1490,9 @@ export class World {
     if (rect) {
       mw = Math.max(1, Math.round(rect.w));
       mh = Math.max(1, Math.round(rect.h));
-      x = Math.round(rect.x);
+      // (The HUD's box is where it shows; a mirrored run's canvas is shown turned over, so the inset is drawn at the
+      // box's mirror image, and its picture, mirrored with the rest, looks back up the same mirrored slope.)
+      x = this.isMirrored ? w - Math.round(rect.x) - mw : Math.round(rect.x);
       // WebGL viewports count from the bottom left.
       y = h - Math.round(rect.y) - mh + Math.round((1 - this.mirrorFade) * 8);
     } else {

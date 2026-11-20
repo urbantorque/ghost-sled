@@ -58,15 +58,35 @@ const GLYPHS: Record<string, { o: P[]; h?: P[][] }> = {
   S: { o: stroke([...arc(2.5, 4.97, 1.9, 1.47, 22, 270, 12), ...arc(2.5, 2.03, 1.9, 1.47, 90, -158, 12).slice(1)], W) },
 };
 
+// A mirrored run (modes.ts) shows the whole picture flipped (world.ts setMirrored), so a board built then is built
+// in mirror writing: its letters in the other order, each one turned over within its own box. Flipped with the
+// picture, it reads the right way round. Boards made while it is set are made so; the world remakes its pieces
+// when it changes (landmarks.ts setCourse).
+let mirrored = false;
+
+export function setLetteringMirror(on: boolean): boolean {
+  const changed = on !== mirrored;
+  mirrored = on;
+  return changed;
+}
+
+export function letteringMirrored(): boolean {
+  return mirrored;
+}
+
 const shapes = new Map<string, Shape>();
 function shapeOf(ch: string): Shape | null {
   const g = GLYPHS[ch];
   if (!g) return null;
-  let s = shapes.get(ch);
+  const key = mirrored ? `~${ch}` : ch;
+  let s = shapes.get(key);
   if (!s) {
-    s = new Shape(g.o.map(([x, y]) => new Vector2(x, y)));
-    for (const h of g.h ?? []) s.holes.push(new Path(h.map(([x, y]) => new Vector2(x, y))));
-    shapes.set(ch, s);
+    // (Turned over within the 5-unit box: x to 5 - x. ExtrudeGeometry winds every outline and hole its own way, so
+    // a turned outline still faces out.)
+    const at = ([x, y]: P): Vector2 => new Vector2(mirrored ? 5 - x : x, y);
+    s = new Shape(g.o.map(at));
+    for (const h of g.h ?? []) s.holes.push(new Path(h.map(at)));
+    shapes.set(key, s);
   }
   return s;
 }
@@ -81,7 +101,8 @@ export function builtLetters(text: string, y: number, z: number, unit: number, c
   const depth = 0.1;
   const bev = Math.min(0.045, unit * 0.12);
   for (let i = 0; i < text.length; i++) {
-    const s = shapeOf(text[i]);
+    // (In mirror writing the last letter stands first.)
+    const s = shapeOf(text[mirrored ? text.length - 1 - i : i]);
     if (!s) continue;
     // (On Low the letters are cut square, a third of the triangles: still built, never dots.)
     const b = chamferLevel() === 'low' ? 0 : namedChamfer(bev) / unit;

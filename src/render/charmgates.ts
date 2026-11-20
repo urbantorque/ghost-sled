@@ -539,6 +539,21 @@ export class CharmGates {
   /** Sakura's shade is lavender: there the style family takes its deeper violet. */
   private deep = false;
 
+  /** A mirrored run (the modes lane): the medallions' glyphs are drawn turned over, so with the picture flipped
+   *  (world.ts setMirrored) they read as drawn. The atlas is drawn again only when this changes. */
+  private mirrored = false;
+
+  setMirrored(on: boolean): void {
+    if (on === this.mirrored) return;
+    this.mirrored = on;
+    const tex = this.atlas;
+    const cv = tex ? drawGlyphAtlas(on) : null;
+    if (tex && cv) {
+      tex.image = cv;
+      tex.needsUpdate = true;
+    }
+  }
+
   setLow(low: boolean): void {
     this.low = low;
     if (this.mat) this.mat.uniforms.uLow.value = low ? 1 : 0;
@@ -581,7 +596,7 @@ export class CharmGates {
       mat.uniforms.uLow.value = this.low ? 1 : 0;
       mat.uniforms.uDeep.value = this.deep ? 1 : 0;
       mat.uniforms.uViewH.value = this.viewH;
-      const cv = drawGlyphAtlas();
+      const cv = drawGlyphAtlas(this.mirrored);
       if (cv) {
         const tex = new CanvasTexture(cv);
         tex.colorSpace = NoColorSpace;

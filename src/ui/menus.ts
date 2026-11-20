@@ -1,5 +1,5 @@
 import type { AlbumModel, AlmanacModel, GarageCard, GarageShelf, GarageShelfId, LanternTownView, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
-import { albumBody, almanacBody, rankHead } from './almanac';
+import { type RideMode, albumBody, almanacBody, rankHead } from './almanac';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -933,7 +933,14 @@ export class Menus {
     }
     const a = this.lastAlmanac;
     const al = this.lastAlbum;
-    const panel = tab === 'almanac' && a ? h('div', 'gs-books-panel', rankHead(a.bar), almanacBody(a)) : tab === 'album' && al ? albumBody(al) : h('div', 'gs-books-panel');
+    // (The modes lane: an opened page's Ride, for a mirror or the Long Night.)
+    const ride = this.hd.onRideMode
+      ? (mode: RideMode) => {
+          this.ctx.sound('confirm');
+          this.hd.onRideMode?.(mode);
+        }
+      : undefined;
+    const panel = tab === 'almanac' && a ? h('div', 'gs-books-panel', rankHead(a.bar), almanacBody(a, ride)) : tab === 'album' && al ? albumBody(al) : h('div', 'gs-books-panel');
     panel.id = 'gs-books-panel';
     panel.setAttribute('role', 'tabpanel');
     panel.setAttribute('aria-labelledby', `gs-btab-${tab}`);

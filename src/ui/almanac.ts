@@ -80,8 +80,34 @@ export function chapterBox(c: ChapterView): HTMLElement {
   return box;
 }
 
-/** The Almanac's body: the chapter, then the fifty pages in rows of ten. */
-export function almanacBody(m: AlmanacModel): HTMLElement {
+export type RideMode = { kind: 'night' } | { kind: 'mirror'; mountain: string };
+
+/** Round 8, the modes lane: an opened page that opens a mode rides it from here (a mirror mountain, or the Long Night
+ *  on each page that adds to its legs). One small control a page, after the page's rewards; null where the page
+ *  opens none, or off the title (`m.modes` absent). */
+function rideOn(m: AlmanacModel, rewards: AlmanacModel['pages'][number]['rewards'], ride: (mode: RideMode) => void): HTMLElement | null {
+  const modes = m.modes;
+  if (!modes) return null;
+  const mirror = rewards.find((r) => r.kind === 'mirror' && r.mountain && modes.mirrors.includes(r.mountain));
+  const night = modes.night && rewards.some((r) => r.kind === 'legs') ? modes.night : null;
+  if (!mirror?.mountain && !night) return null;
+  const b = h('button', 'gs-btn gs-btn-soft gs-bk-ride', icon('play'), h('span', 'gs-btn-label', 'Ride'));
+  b.type = 'button';
+  if (mirror?.mountain) {
+    const id = mirror.mountain;
+    b.dataset.fk = `ride-mirror-${id}`;
+    b.setAttribute('aria-label', `Ride ${mirror.name}`);
+    b.addEventListener('click', () => ride({ kind: 'mirror', mountain: id }));
+  } else if (night) {
+    b.dataset.fk = 'ride-night';
+    b.setAttribute('aria-label', `Ride the Long Night, ${night.legs} legs${night.best ? `. Your deepest: ${night.best}` : ''}`);
+    b.addEventListener('click', () => ride({ kind: 'night' }));
+  }
+  return b;
+}
+
+/** The Almanac's body: the chapter, then the fifty pages in rows of ten. `ride` takes an opened page's mode. */
+export function almanacBody(m: AlmanacModel, ride?: (mode: RideMode) => void): HTMLElement {
   const out = h('div', 'gs-bk gs-bk-almanac');
   if (m.chapter) out.append(chapterBox(m.chapter));
   for (let r = 0; r < m.pages.length; r += PAGES_A_ROW) {
@@ -98,6 +124,8 @@ export function almanacBody(m: AlmanacModel): HTMLElement {
         ...(p.state === 'opened' ? [h('span', 'gs-bk-page-ok', icon('check'))] : p.state === 'next' ? [h('span', 'gs-bk-page-togo gs-num', `${fmt(m.bar.need)}${NBSP}to go`)] : []),
         sr(`, ${said}`),
       );
+      const go = p.state === 'opened' && ride ? rideOn(m, p.rewards, ride) : null;
+      if (go) li.append(go);
       list.append(li);
     }
     out.append(h('section', 'gs-bk-row', head, list));

@@ -191,6 +191,9 @@ export interface TitleModel {
   greet?: string | null;
   /** The name above you on the selected mountain's ladder ("Next: SparkleCedar, 2:11.4, 1.6 s up"). */
   nextRung?: string | null;
+  /** Round 8, the modes lane: the picked mountain's mirror, once open (its Almanac page, or its home riders all
+   *  beaten): whether Ride rides it mirrored. Absent where it is not open. */
+  mirror?: { on: boolean } | null;
   /** The weekly Cup, when there is one to show. */
   cup?: TitleCup | null;
   /** The Twelve: the campaign's card and ladder (absent on a first visit). */
@@ -450,6 +453,10 @@ export interface UIHandlers {
   /** Round 8: open the Almanac or the Spirit Album (the title's and the garage's way in). */
   onOpenAlmanac?(): void;
   onOpenAlbum?(): void;
+  /** Round 8, the modes lane: the title's mirror toggle for the picked mountain, and an Almanac page's Ride (a mirror
+   *  mountain, or the Long Night from its first leg). */
+  onMirror?(on: boolean): void;
+  onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
   onSettings(s: Partial<SettingsModel>): void;
@@ -576,6 +583,8 @@ export interface RewardCard {
   page: number;
   /** The chapter's month key ('2026-12') for a chapter page, else null. */
   chapter: string | null;
+  /** A mirror's mountain id (its page rides it). */
+  mountain?: string;
 }
 
 /** Rider Rank's bar: the page turned, the XP into the next and what it still needs, and the next page's rewards. */
@@ -719,6 +728,9 @@ export interface AlmanacModel {
   bar: RankBarView;
   pages: Array<{ n: number; state: 'opened' | 'turned' | 'next' | 'ahead'; rewards: RewardCard[] }>;
   chapter: ChapterView | null;
+  /** Round 8, the modes lane: what the opened pages let you ride from here (only on the title): the Long Night (its
+   *  legs and your deepest night in words) and the mirrors open, by mountain id. */
+  modes?: { night: { legs: number; best: string | null } | null; mirrors: string[] };
 }
 
 /** The Spirit Album's screen: each mountain's stickers and the rest, held or a silhouette with where to find it. */

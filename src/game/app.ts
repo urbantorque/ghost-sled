@@ -18,7 +18,7 @@ import { reduced } from '../ui/motion';
 import { REVEAL_TIMING } from '../ui/reveal';
 import { RESULTS_TIMING } from '../ui/results';
 import { forgetSeatedPortraits, prewarmSledPortraits, setSledPortraits } from '../ui/menus';
-import type { GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
+import type { AlmanacModel, GarageShelf, GhostKind, HintKind, HudModel, MountainCard, PaintCard, ResultsModel, ResultsSpine, TitleSpine, LanternTownView, SettingsModel, TitleModel, TitleTwelve, TwelveRung } from '../ui/contract';
 import { CRASH_PACK_MAX_MS, CRASH_PACK_NEAR_M, CRASH_RESULTS_MS, CRASH_RESULTS_REDUCED_MS, FINISH_RESULTS_MS, FINISH_SKIP_MS, IDLE_FEEL } from './beats';
 import { type OldLink, linkLine, linkMountain, readChallengeLink, targetZ } from './challenge';
 import { Director } from './director';
@@ -48,7 +48,9 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, legsOpen, mirrorOpen, shelfExtras } from './almanac';
+import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
+import { showNightBeat } from '../ui/nightbeat';
 import { SYNERGY_KEYS } from './album';
 import { type LostTo, type PrimaryButton, primaryButton } from './goals';
 import { lightLantern } from './lanterns';
@@ -303,7 +305,11 @@ export class App {
   readonly frameTimes: number[] = [];
   private fpsEl: HTMLElement | null = null;
 
+  /** The page's root (the Long Night's beat between legs hangs from it). */
+  private readonly root: HTMLElement;
+
   constructor(root: HTMLElement) {
+    this.root = root;
     this.platform = getPlatform();
     const nameSeed = hashString(String(Date.now()) + Math.random());
     this.save = new SaveStore(this.platform.storage, ghostName(new Rng(nameSeed)));
@@ -358,7 +364,10 @@ export class App {
       onLightLantern: (id) => this.lightLantern(id),
       onSwapMission: (id) => this.swapMission(id),
       // Round 8: the books (the title's Rider Rank card and the album's count, and their tabs) and the results' beats.
-      onOpenAlmanac: () => this.ui.showAlmanac?.(almanacModel(this.save.data, this.daily.tagline)),
+      onOpenAlmanac: () => this.ui.showAlmanac?.(this.almanacWithModes()),
+      // (The modes lane: the title's mirror toggle, and an Almanac page's Ride for a mirror or the Long Night.)
+      onMirror: (on) => this.pickMirror(on),
+      onRideMode: (mode) => this.rideMode(mode),
       onOpenAlbum: () => this.ui.showAlbum?.(albumModel(this.save.data)),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
       onOpenSettings: () => this.ui.showSettings(this.settingsModel()),
@@ -398,7 +407,11 @@ export class App {
     this.refreshTitle();
     // Once the title has settled, the shop's portraits are drawn in the background (title only).
     window.setTimeout(() => prewarmSledPortraits(SLEDS.map((s) => s.id), this.save.data.sled, () => this.phase === 'title'), 1200);
-    if (DEV_ON && DEV.has('autoride')) this.ride();
+    // (The modes lane: ?night rides a Long Night from its first leg, ?legs=N with N legs whatever the save holds.)
+    if (DEV_ON && DEV.has('autoride')) {
+      if (DEV.has('night')) this.rideNight();
+      else this.ride();
+    }
     // A link to the Cup is waiting on the Cup's rivals, so those go first this once.
     if (this.mountain === this.cup) this.generateCup(() => this.generateDaily());
     else this.generateDaily();
@@ -455,6 +468,8 @@ export class App {
   private duelHere(): Duel | null {
     const mi = MOUNTAINS.indexOf(this.mountain as MountainDef);
     if (mi < 0 || (this.challenge && this.challenge.record.seed === this.mountain.seed)) return null;
+    // (The Twelve ride their own ground as it stands: never on a mirror or a leg of the Long Night.)
+    if (this.night || this.mirrorHere()) return null;
     // (The first duel waits for the third run: one idea at a time, twelve.ts FIRST_DUEL_RUN.)
     return duelOn(this.save.data.twelve, mi, (i) => this.isOpen(MOUNTAINS[i]), this.save.data.runs);
   }
@@ -607,9 +622,15 @@ export class App {
     this.paused = false;
     this.run = null;
     this.loop = null;
+    this.endNight();
     this.refreshDaily();
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(Mood.None);
+    // (The title is the mountain's key art, composed for the logo's side: it is never shown mirrored. The toggle says
+    // what Ride rides.)
+    this.input.mirrored = false;
+    this.director.mirrored = false;
+    this.applyMirror(false);
     this.audio.setScene('title');
     this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.ui.hideHud();
@@ -752,6 +773,8 @@ export class App {
       ghostsPassed: d.ghostsPassed,
       greet: titleGreeting(d, this.mountainKey(), this.mountain.name),
       nextRung: named ? nextLine(this.spotFor(this.mountain.id), bestStanding(d.best[this.mountain.id])) : null,
+      // (The modes lane: the picked mountain's mirror toggle, once its mirror is open.)
+      mirror: this.mirrorOpenHere() ? { on: this.mirrorPick } : null,
       cup: {
         key: week,
         week: weekNumber(week),
@@ -1009,8 +1032,183 @@ export class App {
   /** The save's key for this mountain (a Daily Mountain is keyed by its day). */
   private mountainKey(): string {
     if (this.mountain.id === 'cup') return `cup:${this.cup.tagline}`;
-    return this.mountain.id === 'daily' ? `daily:${this.daily.tagline}` : this.mountain.id;
+    if (this.mountain.id === 'daily') return `daily:${this.daily.tagline}`;
+    // (Round 8, the modes lane: a Long Night's leg keeps its own key, a mirror mountain its own.)
+    if (this.night) return nightLeg(this.night).key;
+    return this.mirrorHere() ? mirrorKey(this.mountain.id) : this.mountain.id;
   }
+
+  // ---------------------------------------------------------------- the modes lane: mirrors and the Long Night
+
+  /** The mirror the title's toggle picked (it holds across mountains; each mountain mirrors only once open). */
+  private mirrorPick = DEV_ON && DEV.has('mirror');
+  /** This run is mirrored (snapshotted as it starts: a page that opens a mirror on its results changes nothing). */
+  private mirrorRun = false;
+  /** The Long Night under way, null outside one. It outlives its last leg's results, so a revive settles that leg
+   *  the same way; Home and the title end it. */
+  private night: Night | null = null;
+  /** The night's depth as its last results settled it, and whether it was a new best (null while it rides on). */
+  private nightEnd: { legs: number; z: number; best: boolean } | null = null;
+  private nightBeatOff: (() => void) | null = null;
+
+  /** Whether the selected mountain rides mirrored: on a run, as it started; on the title, the toggle where its
+   *  mirror is open (dev: `?mirror` mirrors any named mountain). */
+  private mirrorHere(): boolean {
+    if (this.night) return nightLeg(this.night).mirror;
+    if (this.phase !== 'title' && this.phase !== 'boot') return this.mirrorRun;
+    return this.mirrorPick && this.mirrorOpenHere();
+  }
+
+  private mirrorOpenHere(): boolean {
+    const named = MOUNTAINS.some((m) => m === this.mountain);
+    return named && (mirrorOpen(this.save.data, this.mountain.id) || (DEV_ON && DEV.has('mirror')));
+  }
+
+  /** The picture and the sound mirrored, or not (world.ts setMirrored, the audio's last node). */
+  private applyMirror(on: boolean): void {
+    this.world.setMirrored(on);
+    this.audio.setMirror(on);
+  }
+
+  /** The title's mirror toggle. (The title's scene stays its key art: mirrored, its hero and landmark would stand
+   *  behind the logo's column. Ride's line says the mountain is mirrored, and the run is.) */
+  private pickMirror(on: boolean): void {
+    if (this.phase !== 'title') return;
+    this.mirrorPick = on;
+    this.refreshTitle();
+  }
+
+  /** A Long Night from its first leg, from the title (the Almanac's page). Run Again on its last results starts the
+   *  next night itself (every way into a run goes through ride() or runAgain(): tests/guards.test.ts). */
+  private rideNight(): void {
+    if (this.phase === 'title' && this.newNight()) this.ride();
+  }
+
+  /** A new night at its first leg, if the save has legs open (dev: ?legs=N, or ?night alone with none open: 3). */
+  private newNight(): boolean {
+    const open = legsOpen(this.save.data);
+    const legs = DEV_ON && DEV.has('legs') ? Number(DEV.get('legs')) : DEV_ON && DEV.has('night') && open === 0 ? 3 : open;
+    const night = startNight((Math.random() * 4294967296) >>> 0, legs);
+    if (!night) return false;
+    this.night = night;
+    this.nightEnd = null;
+    return true;
+  }
+
+  /** An Almanac page's Ride: a mirror mountain picked and ridden, or the Long Night. */
+  private rideMode(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void {
+    if (this.phase !== 'title') return;
+    this.ui.closeMenus();
+    if (mode.kind === 'night') return this.rideNight();
+    const m = MOUNTAINS.find((x) => x.id === mode.mountain);
+    if (!m || !this.isOpen(m) || !mirrorOpen(this.save.data, m.id)) return;
+    this.mountain = m;
+    this.save.data.mountain = m.id;
+    this.mirrorPick = true;
+    this.ride();
+  }
+
+  /** The Almanac, with Ride on the pages that open a mode (only from the title: a run under way is not left from a
+   *  book). */
+  private almanacWithModes(): AlmanacModel {
+    const d = this.save.data;
+    const m = almanacModel(d, this.daily.tagline);
+    if (this.phase !== 'title') return m;
+    const legs = legsOpen(d);
+    const best = d.longNight;
+    return {
+      ...m,
+      modes: {
+        night: legs > 0 ? { legs, best: best && (best.legs > 0 || best.z > 0) ? depthWords(best) : null } : null,
+        mirrors: MOUNTAINS.filter((x) => this.isOpen(x) && mirrorOpen(d, x.id)).map((x) => x.id),
+      },
+    };
+  }
+
+  /** The night ends on this leg (a fall with no get-up left, or its last open leg crossed): its depth against the
+   *  best (a revive's second card settles it again, deeper or not). */
+  private settleNight(sim: Sim): void {
+    const night = this.night;
+    if (!night) return;
+    const depth = nightDepth(night, sim.finished, sim.distance);
+    const d = this.save.data;
+    const out = settleLongNight(d.longNight, depth.legs, depth.z);
+    if (out.save) d.longNight = out.save;
+    // (A new best said once a night, whatever a revive's second card finds.)
+    this.nightEnd = { ...depth, best: out.newBest || (this.nightEnd?.best ?? false) };
+  }
+
+  /** A night's last results: the one button rides the night again, and the depth is its reason. */
+  private nightResults(r: ResultsModel, end: { legs: number; z: number; best: boolean }): ResultsModel {
+    const d = this.save.data;
+    const deepest = d.longNight ?? end;
+    const said = depthWords(end);
+    const sub = end.best ? `${said}: your deepest night` : `${said}. Your deepest: ${depthWords(deepest)}`;
+    const text = 'Ride the Long Night';
+    const aria = `Ride the Long Night again from its first leg. This night: ${said}.`;
+    this.againTo = null;
+    this.promised = null;
+    return {
+      ...r,
+      runAgainLabel: { text, aria },
+      spine: r.spine ? { ...r.spine, primary: { kind: 'again', text, sub, aria } } : r.spine,
+      raceLine: { text: `The Long Night: ${sub}`, tone: 'event' },
+    };
+  }
+
+  /** Run Again off a night's results (or its crash beat, skipped): the depth settled if it was not yet. */
+  private endNightRun(): void {
+    if (this.run && !this.nightEnd) this.settleNight(this.run.sim);
+    this.save.flush();
+  }
+
+  /** Ends any night under way (Home, the title). */
+  private endNight(): void {
+    // (The title comes back on the mountain the save picked, not the leg the night ended on.)
+    if (this.night) this.mountain = this.savedMountain();
+    this.night = null;
+    this.nightEnd = null;
+    this.nightBeatOff?.();
+    this.nightBeatOff = null;
+  }
+
+  /** Between two legs (a leg's line crossed, its run settled quietly): what rides in, over the live scene for a
+   *  breath, then the next leg. A tap or a key goes at once. */
+  private nightBetween(sim: Sim): void {
+    const night = this.night;
+    if (!night) return;
+    const next = nightOn(night, this.nightHeld ?? { lantern: sim.s.lantern, getUps: sim.s.getUps, charms: sim.charms });
+    if (!next) return;
+    this.night = next;
+    // (A leg revived after a fall and then finished rides on: the depth that fall settled is not the night's end.)
+    this.nightEnd = null;
+    const run = this.run;
+    let off: (() => void) | null = null;
+    const go = (): void => {
+      if (this.nightGo !== go) return;
+      this.nightGo = null;
+      this.nightBeatOff = null;
+      off?.();
+      if (this.night !== next || this.run !== run || this.phase !== 'results') return;
+      this.nightStep = true;
+      this.runAgain();
+    };
+    this.nightGo = go;
+    off = showNightBeat(this.root, nightBeat(next), reduced(), go);
+    this.nightBeatOff = () => {
+      this.nightGo = null;
+      off?.();
+    };
+  }
+
+  /** The beat between legs is over: Run Again starts the next leg. */
+  private nightStep = false;
+
+  /** What a night's leg held as it crossed its line (crossedLine). */
+  private nightHeld: { lantern: number; getUps: number; charms: number[] } | null = null;
+
+  /** The beat between legs going on to the next (its own timer, a tap on it, or Run Again's key). */
+  private nightGo: (() => void) | null = null;
 
   /** Starts a run; returns whether a reveal card opens it. */
   private startRun(): boolean {
@@ -1022,11 +1220,17 @@ export class App {
     this.ui.hideTitle();
     // (Run Again and a new reveal both cancel any sound still scheduled by the last screen.)
     this.hideResults();
+    // (The modes lane: a Long Night's leg rides its own mountain, mirrored or not; any run's mirror is fixed here.)
+    this.nightBeatOff?.();
+    this.nightBeatOff = null;
+    const leg = this.night ? nightLeg(this.night) : null;
+    if (leg) this.mountain = MOUNTAINS.find((m) => m.id === leg.mountain) ?? this.mountain;
+    this.mirrorRun = leg ? leg.mirror : this.mirrorPick && this.mirrorOpenHere();
     // Chaos: the first run of a session is always plain. A friend's challenge replays their
     // conditions from the second attempt on (the rematch).
     const seed = (Math.random() * 4294967296) >>> 0;
     let chaos = rollChaos(seed, this.sessionRuns, this.lastMood);
-    if (this.challenge && this.challenge.record.seed === this.mountain.seed) {
+    if (!leg && this.challenge && this.challenge.record.seed === this.mountain.seed) {
       chaos = this.challenge.attempts > 0 && this.sessionRuns > 0 ? this.challenge.record.chaos : { ...chaos, mood: Mood.None, event: ChaosEvent.None };
       this.challenge.attempts++;
     }
@@ -1036,12 +1240,16 @@ export class App {
     // (r7, dev only: ?variant=N rides every set piece's Nth variant, ?legend=1 or 2 the mountain's legend.)
     if (DEV_ON && DEV.has('variant')) chaos = rollForVariant(courseFor(this.mountain.seed), chaos, Number(DEV.get('variant')));
     if (DEV_ON && DEV.has('legend')) chaos = { ...chaos, event: ChaosEvent.None, legend: Number(DEV.get('legend')) };
+    // A leg of the Long Night: its chaos is the night's, rising leg by leg (modes.ts legChaos).
+    if (leg) chaos = leg.chaos;
     this.chaos = chaos;
     if (chaos.mood !== Mood.None) this.lastMood = chaos.mood;
     this.sessionRuns++;
 
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(chaos.mood);
+    this.applyMirror(this.mirrorRun);
+    this.director.mirrored = this.mirrorRun;
     this.world.journeyAt = null;
     this.duel = this.duelHere();
     this.twelveOutcome = null;
@@ -1090,7 +1298,11 @@ export class App {
         this.world.setGhostField(this.ghostField());
       }
     }
-    this.run = new Run(this.mountain.seed, chaos, sled, source, this.runExtra(demo));
+    // (A mirror's steer is read the other way as the sim takes it; a leg carries in what the last one held.)
+    this.input.mirrored = this.mirrorRun;
+    const extra = this.runExtra(demo);
+    if (leg?.carry && !demo) extra.carry = leg.carry;
+    this.run = new Run(this.mountain.seed, chaos, sled, source, extra);
     this.run.draftProbe = demo ? null : this.ghosts.draftProbe;
     // (Round 8: the field's showdowns and spirit steals; a demo replays its own log and decides nothing.)
     this.run.rivalProbe = demo ? null : this.ghosts.rivalProbe(this.run.sim.course.finishZ);
@@ -1276,7 +1488,26 @@ export class App {
 
   private runAgain(): void {
     if (this.phase !== 'results' && this.phase !== 'crashed') return;
+    // (Between two legs of a night, Run Again's key goes on to the next leg at once, and the beat's own end comes
+    // here to start it.)
+    if (this.nightGo) return this.nightGo();
+    if (this.nightStep) {
+      this.nightStep = false;
+      this.startRun();
+      return;
+    }
     this.finalizeRun();
+    // (A night's last results: Run Again rides a new night from its first leg. A night still riding never shows
+    // its results; a crash beat skipped into Run Again ends it where it fell, settled as its results would.)
+    if (this.night) {
+      this.endNightRun();
+      this.pacing.runEnded();
+      this.night = null;
+      if (this.newNight()) {
+        this.startRun();
+        return;
+      }
+    }
     this.followAgain();
     this.pacing.runEnded();
     if (this.platform.adsAvailable && this.pacing.shouldShowMidgame(Date.now())) {
@@ -1662,6 +1893,9 @@ export class App {
    *  town square, and the results open after FINISH_RESULTS_MS (a tap skips). Never a crash: nothing
    *  here passes through crashed(), and a wreck's note, revive and cause do not apply. */
   private crossedLine(): void {
+    // (A night's carry is what the rider holds at the line, before the coast through the town.)
+    const s = this.run?.sim;
+    this.nightHeld = this.night && s ? { lantern: s.s.lantern, getUps: s.s.getUps, charms: [...s.charms] } : null;
     this.phase = 'finished';
     this.crashTime = performance.now();
     this.platform.gameplayStop();
@@ -1852,30 +2086,32 @@ export class App {
     // A named mountain's ladder and lines: pays each rung and medal once, however often this settles.
     const key = this.mountainKey();
     const you = this.youStanding(sim);
-    const board = MOUNTAINS.some((m) => m === this.mountain) ? this.boardFor(this.mountain.id) : null;
+    // (A Long Night's leg stands on no ladder and fills no mastery board: its lantern and chaos were carried in.)
+    const board = MOUNTAINS.some((m) => m === this.mountain) && !this.night ? this.boardFor(this.mountain.id) : null;
     // (Round 8: rides of this mountain, this one in: the ladder and the mastery board open a step a ride.)
     const rides = Math.max(1, d.runTimes?.[key]?.length ?? 1);
     const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks, rides }) : null;
     // A named mountain's mastery board: what this run added, each new star paid once.
     let mastery: ResultsModel['mastery'] = null;
     const mi = MOUNTAINS.indexOf(this.mountain as (typeof MOUNTAINS)[number]);
-    if (mi >= 0) {
+    if (mi >= 0 && !this.night) {
       d.mastery ??= {};
       const rec = readMastery(d.mastery[key]);
-      const pool = poolFor(key);
+      // (A mirror's board is its own, under its own key; its riders are the mountain's.)
+      const pool = poolFor(this.mountain.id);
       const riderTimes = new Map(ROSTER.filter((r) => r.home === mi).map((r) => {
         const g = pool.find((p) => p.name === r.name);
         return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
       }));
       const course = courseFor(this.mountain.seed);
-      const fresh = settleMastery(course, key, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0, rides);
+      const fresh = settleMastery(course, this.mountain.id, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0, rides);
       d.mastery[key] = rec;
       if (fresh.length) {
         d.gifts += STAR_GIFTS * fresh.length;
         d.lifetimeGifts += STAR_GIFTS * fresh.length;
         this.masteryFresh.push(...fresh);
       }
-      const board = masteryBoard(course, key, rec, d.climb?.[key]?.medal ?? 0);
+      const board = masteryBoard(course, this.mountain.id, rec, d.climb?.[key]?.medal ?? 0);
       mastery = { got: board.filter((s) => s.done).length, of: board.length, fresh: [...this.masteryFresh] };
     }
     // The missions this card shows Done: a revive never pops them again mid-run.
@@ -1932,6 +2168,11 @@ export class App {
     // Round 8's spine (rank.ts): one settle of everything this run did, after the settles above, taken back and
     // made again on a revive's second card. Its one button names Run Again (below) until the screens lane draws the
     // rest of results.spine.
+    // (The modes lane: a Long Night's leg crossed with legs still to ride is settled as any run and goes on with no
+    // results; the leg it ends on settles the night's depth first, so the spine's album reads it.)
+    const nightGoesOn = !!this.night && sim.finished && this.night.leg + 1 < this.night.legs;
+    if (this.night && !nightGoesOn) this.settleNight(sim);
+    else this.nightEnd = null;
     const spineOut = this.settleSpineRun(sim, sum, settled, climb, board, you, mi);
     // (A page that opens a mountain shows its unlock card, as the ghosts passed and The Twelve do.)
     for (const { reward: r } of spineOut.outcome.opened) {
@@ -2070,6 +2311,11 @@ export class App {
       canRideHome: sim.s.crashed && !sim.finished && sim.distance < sim.course.finishZ - 300 && !this.homeRide,
     };
     this.ui.hideHud();
+    if (nightGoesOn) {
+      this.save.flush();
+      return this.nightBetween(sim);
+    }
+    if (this.nightEnd) this.results = this.nightResults(this.results, this.nightEnd);
     this.ui.showResults(this.results);
     this.audio.setScene('results');
     // The card's sounds start on its first painted frame, where its CSS beats start: anchored here, a
@@ -2119,7 +2365,7 @@ export class App {
       key,
       mi,
       mountainId: this.mountain.id,
-      mirror: false,
+      mirror: this.mirrorRun,
       day: today,
       week: this.cup.tagline,
       sum,
@@ -2150,6 +2396,8 @@ export class App {
       dailyReady: this.dailyReady,
       cupPool: this.mountain.id === 'cup' ? this.cupPool : undefined,
       record: this.run ? recordToString(this.run.toRecord(d.name)) : undefined,
+      // (The night's depth in legs finished, on the leg it ended on: the album's Long Night stickers.)
+      ...(this.nightEnd ? { nightLegs: this.nightEnd.legs } : {}),
     };
     const outcome = settleSpine(d, run, this.spineSettlement);
     this.spineSettlement = outcome.settlement;

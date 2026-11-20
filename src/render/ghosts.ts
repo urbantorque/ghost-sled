@@ -888,6 +888,8 @@ export class GhostVisuals {
   private nearD: number[] = [];
   private glow = 1;
   labels = true;
+  /** A mirrored run (the modes lane): the edge chip measures its rival on the screen as the player sees it. */
+  mirrored = false;
   /** The title's attract reel: ghosts may race closer beside the hero before they fade. */
   reel = false;
   /** The rider is in a slipstream this frame (the sim's drafting): the ghost it rides behind lays a
@@ -1985,6 +1987,8 @@ export class GhostVisuals {
     if (it && p && !p.done && this.labels) {
       // The ghost's chest in view space (the camera looks down -z).
       const v = tmpP.set(p.x, p.y + 0.8, -p.z).applyMatrix4(camera.matrixWorldInverse);
+      // (A mirrored run's chip is laid out on the screen as the player sees it: the modes lane, world.ts setMirrored.)
+      if (this.mirrored) v.x = -v.x;
       const tanV = Math.tan((camera.fov * Math.PI) / 360);
       const tanH = tanV * camera.aspect;
       let sx: number;

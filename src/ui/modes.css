@@ -1,0 +1,220 @@
+/* ------------------------------------------------------------------ The Long Night: the beat between two legs
+
+   One ink panel over the live scene for a breath (nightbeat.ts): the leg to come, its mountain in the italic of the
+   game's speed words, the night deepening, and what rides in with you. It stands at the reading edge where the
+   results' column does not, low on the frame, so the town the rider has just crossed into stays the picture.
+   Transform and opacity only; reduced motion lands and leaves it in place. */
+
+.gs-nightbeat {
+  position: absolute;
+  left: var(--sl);
+  bottom: calc(var(--sb) + 4vh);
+  z-index: 3;
+  display: grid;
+  gap: 8px;
+  width: min(440px, calc(100% - var(--sl) - var(--sr)));
+  padding: 16px 18px 15px;
+  border-radius: var(--r-card);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--hair-2), var(--shadow);
+  color: var(--text);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  opacity: 0;
+}
+
+.gs-nightbeat.is-in {
+  opacity: 1;
+}
+
+.gs-nightbeat.is-moving {
+  transform: translateX(-24px);
+  transition:
+    opacity 240ms ease,
+    transform 420ms var(--spring);
+}
+
+.gs-nightbeat.is-moving.is-in {
+  transform: none;
+}
+
+.gs-nightbeat.is-out {
+  opacity: 0;
+}
+
+.gs-nightbeat.is-moving.is-out {
+  transform: translateX(-12px);
+  transition:
+    opacity 200ms ease,
+    transform 220ms var(--out);
+}
+
+.gs-nb-leg,
+.gs-nb-carry {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0;
+  color: var(--dim);
+  font-size: 13px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+}
+
+.gs-nb-k {
+  color: var(--dim);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.gs-nb-leg .gs-num {
+  color: var(--text);
+}
+
+.gs-nb-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: clamp(26px, calc(var(--u) * 1.9), 36px);
+  font-style: italic;
+  font-weight: 900;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+
+.gs-nb-where {
+  min-width: 0;
+}
+
+.gs-nb-mirror {
+  padding: 3px 10px 4px;
+  border-radius: var(--r-pill);
+  box-shadow: inset 0 0 0 1.5px var(--hair-2);
+  color: var(--text);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.gs-nb-deep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 750;
+}
+
+.gs-nb-deep .gs-i {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--dim);
+}
+
+/* The lantern is marigold, the lantern's own (ART.md 1). */
+.gs-nb-lantern {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--gift);
+  font-weight: 850;
+}
+
+.gs-nb-lantern .gs-i {
+  width: 16px;
+  height: 16px;
+}
+
+.gs-nb-pips {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.gs-nb-pip {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px rgba(245, 243, 255, 0.72);
+}
+
+.gs-nb-pip.is-on {
+  background: var(--text);
+}
+
+.gs-nb-charms {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+}
+
+.gs-nb-charm {
+  padding: 2px 8px 3px;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.08);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) and (orientation: portrait) {
+  .gs-nightbeat {
+    right: var(--sr);
+    bottom: calc(var(--sb) + 24vh);
+    width: auto;
+  }
+}
+
+/* ------------------------------------------------------------------ Riding a mode from where it opens
+
+   An opened Almanac page that opens a mirror or adds to the Long Night carries one small Ride (almanac.ts); the
+   title's picked mountain carries its mirror's toggle beside Ride (title.ts). Both are the soft pills the books and
+   the title already use: nothing new to learn, and neither competes with the vermillion Ride. */
+
+.gs-bk-ride {
+  justify-self: start;
+  align-self: end;
+  min-height: 32px;
+  margin-top: auto;
+  padding: 4px 12px 4px 9px;
+  font-size: 12px;
+  touch-action: manipulation;
+}
+
+.gs-bk-ride .gs-i {
+  width: 14px;
+  height: 14px;
+}
+
+.gs-t-mirror {
+  justify-self: start;
+  min-height: 36px;
+  padding: 5px 14px 5px 10px;
+  font-size: 13px;
+  touch-action: manipulation;
+}
+
+.gs-t-mirror .gs-t-mirror-mark {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  box-shadow: inset 0 0 0 1.5px var(--hair-2);
+}
+
+.gs-t-mirror[aria-pressed='true'] .gs-t-mirror-mark {
+  background: var(--text);
+  box-shadow: none;
+}

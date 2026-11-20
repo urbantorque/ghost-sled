@@ -113,6 +113,8 @@ const VERT = /* glsl */ `
   attribute vec4 aStroke;
   attribute vec2 aUv;
   uniform vec2 uView;
+  // -1 on a mirrored run: the canvas is shown flipped (world.ts setMirrored), so the labels are drawn flipped back.
+  uniform float uFlip;
   varying vec2 vLocal;
   varying vec2 vHalf;
   varying vec4 vShape;
@@ -126,7 +128,7 @@ const VERT = /* glsl */ `
     vFill = aFill;
     vStroke = aStroke;
     vUv = aUv;
-    gl_Position = vec4(position.x / uView.x * 2.0 - 1.0, 1.0 - position.y / uView.y * 2.0, 0.0, 1.0);
+    gl_Position = vec4((position.x / uView.x * 2.0 - 1.0) * uFlip, 1.0 - position.y / uView.y * 2.0, 0.0, 1.0);
   }
 `;
 
@@ -231,7 +233,7 @@ export class LabelBatch {
     this.mat = new ShaderMaterial({
       vertexShader: VERT,
       fragmentShader: FRAG,
-      uniforms: { tAtlas: { value: null }, uView: { value: new Vector2(1, 1) }, uPx: { value: 1 } },
+      uniforms: { tAtlas: { value: null }, uView: { value: new Vector2(1, 1) }, uPx: { value: 1 }, uFlip: { value: 1 } },
       transparent: true,
       // (Screen px count down the frame, so a quad's winding is the other way round in clip space.)
       side: DoubleSide,
@@ -246,6 +248,18 @@ export class LabelBatch {
     this.mesh = new Mesh(geo, this.mat);
     this.mesh.frustumCulled = false;
     this.scene.add(this.mesh);
+  }
+
+  /** A mirrored run (modes.ts): the whole canvas is shown flipped, so the labels are drawn flipped back. Everything is
+   *  laid out in screen px as the player sees the screen (a ghost's tag where its ghost shows, the edge chip on the
+   *  edge its rival is past, the HUD's figures in their boxes); only the draw turns it over, so a word reads the right
+   *  way round where it was laid. */
+  setFlip(on: boolean): void {
+    this.mat.uniforms.uFlip.value = on ? -1 : 1;
+  }
+
+  get flipped(): boolean {
+    return this.mat.uniforms.uFlip.value < 0;
   }
 
   /** The first frame is out: words may be rasterised from now on. */
