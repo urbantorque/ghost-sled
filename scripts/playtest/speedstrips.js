@@ -17,6 +17,8 @@ async (page) => {
     if (m.type() === 'error' || m.type() === 'warning') errors.push(m.type() + ': ' + m.text().slice(0, 300));
   });
   if (c.width && c.height) await page.setViewportSize({ width: c.width, height: c.height });
+  // (cfg.reduced: the player asked for reduced motion.)
+  await page.emulateMedia({ reducedMotion: c.reduced ? 'reduce' : 'no-preference' });
   // A fresh save every load (a save left by the last load lays a different field).
   await page.goto(c.base);
   await page.evaluate(() => {

@@ -504,10 +504,10 @@ export class PostFX {
           // Speed streaks: a short radial smear that only touches the edges of the frame, strongest at
           // the sides and all but gone across the bottom, where it smeared the foreground snow's sparkle
           // and ripples into one pale sheet of radial lines (worst on a tall phone screen).
-          // (Round 8, speed: only the frame's outer band, from 0.55 of the half-diagonal: from 0.3 it smeared
-          // the near banks and trees a third of the way in, and the world rushing past is the speed now.)
+          // (Round 8, speed: only the frame's outer band, from half the half-diagonal: from 0.3 it smeared the far
+          // planes, the rider's surroundings and the trees a third of the way in. The middle stays sharp.)
           vec3 col;
-          float streak = uSpeed * smoothstep(0.55, 1.0, r) * mix(uStreakFoot, 1.0, smoothstep(0.25, 0.6, uv.y)) * mix(0.5, 1.0, smoothstep(0.12, 0.45, abs(dc.x) * uAspect));
+          float streak = uSpeed * smoothstep(0.5, 0.95, r) * mix(uStreakFoot, 1.0, smoothstep(0.25, 0.6, uv.y)) * mix(0.5, 1.0, smoothstep(0.12, 0.45, abs(dc.x) * uAspect));
           // The lens's colour split: the chromatic punch on boosts and perfect landings, and round 7's
           // lens character (at speed the glass shows in the frame's corners and nowhere else, a hair of
           // colour fringe, two and a half pixels of a 1280 frame in the very corner at the cap; a calm
@@ -527,7 +527,7 @@ export class PostFX {
             vec3 acc = vec3(0.0);
             for (int i = 0; i < 6; i++) {
               float k = float(i) / 5.0;
-              vec2 at = uv - dc * k * streak * 0.05;
+              vec2 at = uv - dc * k * streak * 0.07;
               vec3 tap = texture2D(tScene, at).rgb;
               if (splitK > 0.0) {
                 tap.r = mix(tap.r, texture2D(tScene, at + split).r, splitK);

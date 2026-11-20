@@ -107,12 +107,12 @@ const LENS_FRAG = /* glsl */ `
       // corners, little across the foot) the middle stays sharp and what rushes past the sides streaks along
       // its own path. A whip's blur (w 0) is still the whole frame's.
       float rim = length((vUv - 0.5) * vec2(uBlur.z, 1.0));
-      // (And there it runs longer, up to two and a half times a beat's: held to a beat's length the sides were as
+      // (And there it runs longer, up to three times a beat's: held to a beat's length the sides were as
       // still as the middle, and a sharp frame read slower than the old whole-frame smear.)
       float edgeM = smoothstep(0.46, 0.95, rim);
       vel *= mix(1.0, edgeM, uBlur.w);
       len *= mix(1.0, edgeM, uBlur.w);
-      float cap = uBlur.y * mix(1.0, 1.0 + 1.5 * edgeM, uBlur.w);
+      float cap = uBlur.y * mix(1.0, 1.0 + 2.2 * edgeM, uBlur.w);
       if (len > uDepthTexel.y * 0.75 && here < 0.98) {
         vel *= min(1.0, cap / len) * (1.0 - here);
         float j = hash(gl_FragCoord.xy) - 0.5;

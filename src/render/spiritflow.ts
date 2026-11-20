@@ -430,9 +430,12 @@ export class SpiritFlow {
       this.tp[0] = o.tip.x - o.knot.x;
       this.tp[1] = o.tip.y - o.knot.y;
       this.tp[2] = o.tip.z - o.knot.z;
-      this.tv[0] = s.x * 0.35 - o.dir.x * 0.9 - o.dir.z * curl;
-      this.tv[1] = s.y * 0.35 + 1.5;
-      this.tv[2] = s.z * 0.35 - o.dir.z * 0.9 + o.dir.x * curl;
+      // (Straight up and a little out to the scarf's side, never back: back is toward the lens, which looks down,
+      // so a drift back read on screen as a hook hanging under the scarf's tip.)
+      const out = (s.x * -o.dir.z + s.z * o.dir.x) >= 0 ? 1 : -1;
+      this.tv[0] = -o.dir.z * (0.45 * out + curl);
+      this.tv[1] = 2.1;
+      this.tv[2] = o.dir.x * (0.45 * out + curl);
       this.ta[0] = 0;
     } else if (this.tn > 0 && on) {
       // The head follows the tip between sheds, so the ribbon never comes away from the scarf.

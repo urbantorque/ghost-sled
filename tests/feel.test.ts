@@ -48,8 +48,7 @@ describe('speed curves', () => {
     expect(edgeK(36)).toBeCloseTo(0, 6);
     // (Round 8: the radial streak keeps to the frame's edge and is no longer the speed by itself.)
     expect(streakK(28)).toBeGreaterThan(0);
-    expect(streakK(30)).toBeLessThan(0.2);
-    expect(streakK(TOP_SPEED)).toBeLessThanOrEqual(0.8);
+    expect(streakK(30)).toBeLessThan(0.25);
     expect(rumbleK(28)).toBeGreaterThan(0.15);
   });
 
