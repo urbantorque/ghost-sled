@@ -1,4 +1,5 @@
-import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import type { MedalSet, MissionView, MountainCard, TitleCup, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import { barShare } from './almanac';
 import type { InputMode } from '../game/input';
 import { oldLinkLine } from '../game/challenge';
 import { clock } from '../game/standing';
@@ -51,7 +52,9 @@ export class Title {
   readonly layer: Layer;
   private readonly el: HTMLElement;
   private popover: HTMLElement | null = null;
-  private popKind: 'missions' | 'medals' | 'twelve' = 'missions';
+  private popKind: 'missions' | 'medals' | 'twelve' | 'flame' = 'missions';
+  /** Round 8: the flame's button in the corner pill (its calendar's popover hangs under it). */
+  private flameBtnEl: HTMLButtonElement | null = null;
   private missionsBtn: HTMLButtonElement | null = null;
   private medalsBtn: HTMLButtonElement | null = null;
   private twelveBtn: HTMLButtonElement | null = null;
@@ -122,6 +125,7 @@ export class Title {
     }
     if (hadPopover && popKind === 'medals') this.openMedals(m, false);
     else if (hadPopover && popKind === 'twelve') this.openTwelve(m, false);
+    else if (hadPopover && popKind === 'flame' && m.spine) this.openFlame(m.spine, false);
     else if (hadPopover) this.openMissions(m.missions, false);
     restoreFocus(this.el, fk);
     this.dock();
@@ -305,7 +309,16 @@ export class Title {
     const gifts = m.wallet > 0 ? h('span', 'gs-stat gs-stat-gift', icon('gift'), h('span', 'gs-num', fmt(m.wallet)), sr(' gifts')) : null;
     const rec = record(m);
     const best = rec ? h('span', 'gs-stat', icon('trophy', 'gs-stat-trophy'), h('span', 'gs-stat-l', rec.label), h('span', 'gs-num', rec.value)) : null;
-    if (gifts || best) el.append(h('div', 'gs-t-stats gs-panel gs-pill gs-t-anim', gifts, gifts && best ? h('span', 'gs-stat-sep') : null, best));
+    // Round 8: the spine's corner (TitleSpine). The flame leads the pill (its calendar a tap away), Rider Rank's
+    // card under it opens the Almanac at the page being filled toward, and the one line of what is new today under
+    // that. The corner is one stack, so a phone keeps it at the top in the same order.
+    const sp = m.spine ?? null;
+    const flame = sp && (sp.flame.streak > 0 || sp.flame.ember) ? this.flameBtn(sp) : null;
+    this.flameBtnEl = flame;
+    const pill = gifts || best || flame ? h('div', 'gs-t-stats gs-panel gs-pill', flame, flame && (gifts || best) ? h('span', 'gs-stat-sep') : null, gifts, gifts && best ? h('span', 'gs-stat-sep') : null, best) : null;
+    const book = sp ? this.bookCard(sp) : null;
+    const news = sp?.whatsNew ? h('p', 'gs-t-news', icon('star'), h('span', 'gs-t-news-t', sp.whatsNew)) : null;
+    if (pill || book || news) el.append(h('div', 'gs-t-top gs-t-anim', pill, book, news));
 
     // Mountains + daily.
     const side = h('div', 'gs-t-side gs-t-anim');
@@ -467,11 +480,11 @@ export class Title {
     const status = d.ready ? 'Fresh rivals' : 'Finding rivals…';
     // Days in a row with a Daily run ("3 days in a row", from the second day: "Day 3" alone read as a
     // date or a level), and today's medal beside the best. Round 8: with `flame` the days are the flame's (a run of
-    // any kind lights the day), which takes the Daily-only line's place until the screens lane draws the flame.
+    // any kind lights the day), and the flame is drawn in the title's corner, so the card leaves them to it.
     const streak = Math.floor(d.streak ?? 0);
     const medal = Math.max(0, Math.min(3, Math.floor(d.medal ?? 0)));
-    const days = d.flame ? `${NBSP}day flame` : `${NBSP}days in a row`;
-    const day = streak >= 2 ? h('span', 'gs-tag gs-daily-day', h('span', 'gs-num', String(streak)), days) : null;
+    const days = `${NBSP}days in a row`;
+    const day = streak >= 2 && !d.flame ? h('span', 'gs-tag gs-daily-day', h('span', 'gs-num', String(streak)), days) : null;
     const meta = h('span', `gs-daily-meta${day ? ' has-day' : ''}`, h('span', 'gs-daily-date gs-num', date), day, h('span', 'gs-tag gs-daily-status', status));
     b.append(
       h('span', 'gs-daily-ico', icon('snowflake')),
@@ -493,7 +506,7 @@ export class Title {
     // The second call to action: an outlined ink disc with a play glyph. Vermillion Ride stays the
     // only filled play target, and mint stays ghost information.
     b.append(h('span', 'gs-daily-go', icon('play')));
-    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 ? (d.flame ? `Your flame: ${streak} days in a row` : `${streak} days in a row`) : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', figure ? `Best ${figure}` : ''];
+    const said = [`Daily Mountain, ${date}`, status.replace(/…$/, ''), streak >= 2 && !d.flame ? `${streak} days in a row` : '', medal > 0 ? `${MEDAL[medal]} medal today` : '', figure ? `Best ${figure}` : ''];
     b.setAttribute('aria-label', said.filter(Boolean).join('. '));
     b.addEventListener('click', () => {
       if (!d.ready) return;
@@ -770,6 +783,91 @@ export class Title {
     this.medalsBtn?.removeAttribute('aria-controls');
     this.twelveBtn?.setAttribute('aria-expanded', 'false');
     this.twelveBtn?.removeAttribute('aria-controls');
+    this.flameBtnEl?.setAttribute('aria-expanded', 'false');
+    this.flameBtnEl?.removeAttribute('aria-controls');
+  }
+
+  /**
+   * Keep the lantern lit (round 8): the flame and its days, in the corner pill. A day not yet ridden leaves the
+   * flame drawn hollow (the ember, if held, beside it); a tap opens the seven-day calendar.
+   */
+  private flameBtn(sp: TitleSpine): HTMLButtonElement {
+    const f = sp.flame;
+    const b = h('button', `gs-t-flame${f.litToday ? ' is-lit' : ''}${f.atRisk ? ' is-risk' : ''}`, icon('flame'), h('span', 'gs-num', String(f.streak)), f.ember ? h('span', 'gs-t-ember') : null);
+    b.type = 'button';
+    b.dataset.fk = 'flame';
+    b.setAttribute('aria-label', `Your flame: ${f.streak} ${f.streak === 1 ? 'day' : 'days'}${f.litToday ? ', lit today' : f.atRisk ? ', ride today to keep it' : ''}${f.ember ? ', an ember held' : ''}. Open the calendar`);
+    b.setAttribute('aria-expanded', 'false');
+    b.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      if (this.popover && this.popKind === 'flame') this.closeMissions();
+      else this.openFlame(sp, true);
+    });
+    return b;
+  }
+
+  /** The seven-day calendar: the days ridden, today's, and what each pays (the seventh pays gifts and an ember). */
+  private openFlame(sp: TitleSpine, animate: boolean): void {
+    this.closeMissions();
+    const top = this.el.querySelector('.gs-t-top');
+    if (!top || !this.flameBtnEl) return;
+    const f = sp.flame;
+    const pop = h('div', 'gs-pop gs-panel gs-flame-pop');
+    pop.id = 'gs-flame-pop';
+    pop.setAttribute('role', 'region');
+    pop.setAttribute('aria-label', 'Your flame');
+    const days = h('ol', 'gs-flame-days');
+    for (const c of f.calendar) {
+      const state = c.day < f.nextDay ? 'is-done' : c.day === f.nextDay ? 'is-next' : 'is-ahead';
+      const pay = h('span', 'gs-flame-pay', h('span', 'gs-num', `+${fmt(c.xp)}`), ' XP');
+      const gift = c.gifts > 0 ? h('span', 'gs-flame-gift', icon('gift'), h('span', 'gs-num', fmt(c.gifts))) : null;
+      const li = h('li', `gs-flame-day ${state}${c.ember ? ' has-ember' : ''}`, h('span', 'gs-flame-dn gs-num', String(c.day)), icon('flame', 'gs-flame-ico'), pay, gift);
+      li.setAttribute('aria-label', `Day ${c.day}: ${fmt(c.xp)} XP${c.gifts > 0 ? `, ${fmt(c.gifts)} gifts` : ''}${c.ember ? ' and an ember' : ''}${state === 'is-done' ? ', done' : state === 'is-next' ? ', next' : ''}`);
+      days.append(li);
+    }
+    const line = f.litToday ? 'Lit today. Come back tomorrow for the next day.' : f.atRisk ? 'Ride today to keep it lit.' : 'Any run lights the day.';
+    const ember = f.ember ? 'You hold an ember: it keeps the flame through one missed day.' : 'Day 7 gives an ember, which keeps the flame through one missed day.';
+    pop.append(
+      h('h2', 'gs-h2 gs-flame-h', 'Your Flame', h('span', 'gs-wall-n', h('span', 'gs-num', `${f.streak} ${f.streak === 1 ? 'day' : 'days'}`), f.best > f.streak ? h('span', 'gs-flame-best', `, best ${f.best}`) : null)),
+      days,
+      h('p', 'gs-flame-line', line),
+      h('p', 'gs-flame-key', ember),
+    );
+    top.append(pop);
+    if (animate) play(pop, [{ opacity: 0, transform: 'translateY(-8px) scale(0.97)' }, { opacity: 1, transform: 'none' }], { duration: 220, easing: SPRING });
+    this.popover = pop;
+    this.popKind = 'flame';
+    this.flameBtnEl.setAttribute('aria-expanded', 'true');
+    this.flameBtnEl.setAttribute('aria-controls', pop.id);
+  }
+
+  /**
+   * Rider Rank on the title (round 8): the page reached, the bar toward the next and what that page gives; it opens
+   * the Almanac. The Spirit Album's count rides beside it once the album is open.
+   */
+  private bookCard(sp: TitleSpine): HTMLElement {
+    const b = sp.bar;
+    const fill = h('span', 'gs-t-book-fill');
+    fill.style.transform = `scaleX(${barShare(b).toFixed(4)})`;
+    const bar = h('span', 'gs-t-book-bar', fill);
+    bar.setAttribute('aria-hidden', 'true');
+    const next = b.next && b.next.length > 0 ? b.next.map((r) => r.name).join(', ') : null;
+    const nextEl = next
+      ? h('span', 'gs-t-book-next', h('span', 'gs-t-book-nk', `Page ${b.page + 1}`), h('span', 'gs-t-book-nn', next), h('span', 'gs-t-book-togo gs-num', `${fmt(b.need)}${NBSP}to go`))
+      : h('span', 'gs-t-book-next', 'Every page turned');
+    const main = h('button', 'gs-t-book-main', icon('book', 'gs-t-book-ico'), h('span', 'gs-t-book-txt', h('span', 'gs-t-book-rank', 'Rank ', h('span', 'gs-num', String(b.page))), bar, nextEl));
+    main.type = 'button';
+    main.dataset.fk = 'almanac';
+    main.setAttribute('aria-label', `Almanac: Rider Rank ${b.page} of ${b.of}${next ? `. Page ${b.page + 1}: ${next}, ${fmt(b.need)} XP to go` : ''}`);
+    main.addEventListener('click', () => {
+      this.ctx.sound('tap');
+      this.hd.onOpenAlmanac?.();
+    });
+    const al = sp.album;
+    const album = al
+      ? btn(this.ctx, { cls: 'gs-t-album', icon: 'sticker', fk: 'album', aria: `Spirit Album: ${al.got} of ${al.of} stickers`, sound: 'tap', onClick: () => this.hd.onOpenAlbum?.() }, h('span', 'gs-num', String(al.got)), h('span', 'gs-t-album-of gs-num', `/${al.of}`))
+      : null;
+    return h('div', 'gs-t-book', main, album);
   }
 }
 
