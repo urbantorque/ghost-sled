@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Color, PerspectiveCamera, Vector3 } from 'three';
+import { Color, PerspectiveCamera, SRGBColorSpace, Vector3 } from 'three';
 import { Mood } from '../src/sim/chaos';
 import { BiomeId } from '../src/sim/mountains';
 import { JOURNEY, getPalette, journeyPalette } from '../src/render/palette';
@@ -22,6 +22,14 @@ const hue = (c: Color) => {
   return new Color(c.r / m, c.g / m, c.b / m);
 };
 const dist = (a: Color, b: Color) => Math.hypot(a.r - b.r, a.g - b.g, a.b - b.b);
+/** Degrees between two colours' hues as the eye sees them (sRGB HSL). (Round 8: in linear light a deep firelit orange
+ *  sat as near the grudge's rose as a pink would; on the wheel they are a third of a sixth apart.) */
+const hueApart = (a: Color, b: Color) => {
+  const ha = a.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace).h * 360;
+  const hb = b.getHSL({ h: 0, s: 0, l: 0 }, SRGBColorSpace).h * 360;
+  const d = Math.abs(ha - hb) % 360;
+  return Math.min(d, 360 - d);
+};
 const marks = (b: BiomeId) => [0, ...JOURNEY[b].flatMap((s) => [s.from, (s.from + s.at) / 2, s.at]), 9000];
 
 describe('the lift in the palettes', () => {
@@ -51,7 +59,7 @@ describe('the lift in the palettes', () => {
 
   it('bounces the snow, never in a ghost colour and never more light than the lit snow', () => {
     setCloudShadows(true);
-    const ghosts = ['#8FF3E4', '#FF5A7A'].map((h) => hue(new Color(h)));
+    const ghosts = ['#8FF3E4', '#FF5A7A'].map((h) => new Color(h));
     for (const b of BIOMES) {
       for (const at of marks(b)) {
         const p = journeyPalette(b, at, getPalette(b, Mood.None));
@@ -61,7 +69,8 @@ describe('the lift in the palettes', () => {
         expect(lum(bounce), `${b} at ${at} m`).toBeLessThanOrEqual(lum(p.snowLit) + 1e-6);
         // The ghosts' mint and rose stay theirs. (A light may be warm: Ember's lava is orange, Lanternfall's lamps
         // marigold, and what the bounce lands on keeps its own colour, the coat its navy.)
-        for (const g of ghosts) expect(dist(hue(bounce), g), `${b} at ${at} m`).toBeGreaterThan(0.25);
+        // (A ghost's colour only if near it both in linear light and on the wheel: a pale bounce has no hue to speak of.)
+        for (const g of ghosts) expect(dist(hue(bounce), hue(g)) > 0.25 || hueApart(bounce, g) > 25, `${b} at ${at} m`).toBe(true);
       }
     }
   });

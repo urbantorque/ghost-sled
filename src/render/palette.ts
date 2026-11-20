@@ -108,9 +108,16 @@ export interface Palette {
   /** How strongly lamps, windows, lanterns and lava light the world (lights.ts): about 0.2 at noon, 1 at
    *  night. */
   lamps: number;
+  /** Round 8, the light lane: how much the air takes a lamp's colour near it (materials.ts lampAir): a haze of
+   *  each local light's own hue along the sight lines that pass by it, so a lamp in cloud or in a lit street
+   *  stands in a glow of its light and not only on its pool. 0 for none (by day, and on Low). */
+  lampAir: number;
   /** Low's painted pools (lights.ts): 0 adds the light in two flat values; 1 lays it over the snow in the
    *  light's own hue without clipping (Ember: added to a coloured snow, they clipped to mustard). */
   poolSoft: number;
+  /** Round 8: Low's pools laid over the snow as two values of the lamp's own light (materials.ts posterPool), in
+   *  place of added (0: added, as round 7). Lanternfall: added to its lilac snow they read as stains. */
+  poolLaid: number;
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   leaf: number;
   /** The visual lift's light (materials.ts LIFT_GLSL, the light lane). bounce: how much light the snow
@@ -310,7 +317,9 @@ function base(): Palette {
     key2: { color: c('#58E0A8'), k: 0, shade: c('#5A46B0') },
     under: { color: c('#FF6A28'), k: 0 },
     lamps: 0.25,
+    lampAir: 0,
     poolSoft: 0,
+    poolLaid: 0,
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
@@ -488,6 +497,7 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       clearSkies(p, biome);
       round7(p, biome);
       visualLift(p, biome);
+      valuePass(p, biome);
       break;
     case Mood.Blizzard:
       p.skyZenith = c('#6D7C93');
@@ -1305,6 +1315,43 @@ function visualLift(p: Palette, biome: BiomeId): void {
   }
 }
 
+/** Round 8, the light lane (V5, "light that gathers"; DECISIONS 367): a value pass over Clear Skies. The ground
+ *  truth found Ember's open slopes one warm beige from edge to edge and Lanternfall's snow one even lilac at the
+ *  break and down the open road: light gathered in the places (the Basalt Halls, Firstlight) and nowhere between
+ *  them. Here the light that motivates the frame (ART.md 15 rule 2) is placed so that half a slope is in it and
+ *  half is not. Ember's key is the lava's, low and from the valley's side: the snow that faces it takes its orange,
+ *  the snow turned from it the cold plum-teal of the sky (the snow's own colour stays a warm white, under the
+ *  value at which the snow shader reads a frame as day, so the light carries the orange once). Lanternfall under
+ *  the deck goes properly dark, so the lamps' pools, the rider's own light and the valley's lanterns are what
+ *  lights it (its stops and places, below). */
+function valuePass(p: Palette, biome: BiomeId): void {
+  switch (biome) {
+    case 'volcanic':
+      // (The disc keeps its place, a dim coin right of the cone; the light that shades the snow comes from further
+      // round and lower, the lava fields' side: from 44 degrees every face down the run sat in one even light.)
+      p.sunDir = sunDir(64, 26);
+      p.sunColor = c('#FFBC94');
+      p.snowLit = c('#EED4CC');
+      p.snowShade = c('#3E3C64');
+      p.snowDeep = c('#22203E');
+      p.hemiSky = c('#4C5A7E');
+      // (The deck's own shadows wider and deeper: the firelit snow lies in pools between them.)
+      p.clouds.shadow = 0.7;
+      p.lampAir = 0.12;
+      // (What the firelit snow throws back up under a column or the coat is the lava's orange, never a pink: the
+      // lit snow's orange over its plum shade mixed to the grudge's rose.)
+      p.lift.tint = c('#FFF8B0');
+      return;
+    case 'lantern':
+      // The Crown keeps its silver; its shade goes a step deeper, so the moonlit snow is the light of its frame.
+      p.snowShade = c('#4C40A8');
+      p.snowDeep = c('#1E1660');
+      p.lampAir = 0.1;
+      p.poolLaid = 1;
+      return;
+  }
+}
+
 /** One change of light on a mountain's run. */
 export interface JourneyStop {
   /** Metres where the light starts to leave the stop before. */
@@ -1597,6 +1644,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 500, at: 1250, dusk: 0.4,
       edit: (p) => {
         setSun(p, 42, 11, 42, 14);
+        // (Round 8: the light that shades the snow is the lava's, low from the valley's side. valuePass.)
+        p.sunDir = sunDir(66, 24);
         p.sunDisc = 0.5;
         p.sunSoft = 0.6;
         // The deck closes: the top of the sky goes to smoke, the fire draws down to a band at the
@@ -1604,8 +1653,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyZenith = c('#0C080C');
         p.skyMid = c('#2E1618');
         p.skyHorizon = c('#C04A20');
-        p.snowLit = c('#FAE8DE');
-        p.snowShade = c('#3E3858');
+        // (Round 8: under the value the snow shader reads as day, so the lava's orange lies on it; valuePass.)
+        p.snowLit = c('#E8CCC4');
+        p.snowShade = c('#383660');
         p.fogFar = 340;
         p.deck.k = 1;
         p.deck.lit = c('#3A2A2E');
@@ -1621,15 +1671,17 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       from: 1700, at: 2250, dusk: 0.7,
       edit: (p) => {
         setSun(p, 45, 8, 40, 13);
+        p.sunDir = sunDir(68, 23);
         p.sunDisc = 0.35;
-        p.sunColor = c('#FFD4BC');
+        // (Round 8: the shield is lit from below, a deeper orange than the deck's first light.)
+        p.sunColor = c('#FFBA8C');
         p.skyHorizon = c('#E8521C');
         p.skyMid = c('#5A2018');
         p.deck.glow = c('#FF6A22');
         // (Lit from below: the deck's own body takes the fire, not only its far edge.)
         p.deck.lit = c('#8E3A1E');
         p.deck.shade = c('#3A1612');
-        p.snowLit = c('#FFEEE2');
+        p.snowLit = c('#EACEC4');
         p.grade.exposure = 1.08;
         p.grade.contrast = 1.12;
         p.under.k = 0.3;
@@ -1642,9 +1694,12 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
     {
       // A glowing dusk through the Basalt Halls: the sky goes dark, and the lava lights what is left of
       // it. The air is thick with ash and warm with light, never a grey fog with nothing in it.
-      from: 2700, at: 3400, dusk: 1,
+      // (Round 8: the thresholds moved the halls' ravine to 2620 m and the market's bridge to 3358 m; the dusk and
+      // the night moved with them.)
+      from: 2600, at: 3300, dusk: 1,
       edit: (p) => {
         setSun(p, 48, 6, 40, 13);
+        p.sunDir = sunDir(70, 21);
         p.sunDisc = 0.25;
         p.sunColor = c('#FFC8AC');
         p.skyZenith = c('#0E0A0E');
@@ -1652,9 +1707,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#E8481A');
         // As the day goes the light is the deck's and the lava's, and it is ember, not peach: a pale
         // light on a dusk snow gave a grey-mauve floor that nothing lit.
-        p.sunColor = c('#FFB490');
-        p.snowLit = c('#FCE6DA');
-        p.snowShade = c('#3A3456');
+        p.sunColor = c('#FFAA78');
+        p.snowLit = c('#E4C6BC');
+        p.lift.tint = c('#FFF4B0');
+        p.snowShade = c('#343258');
         // The ash stands off the lens: thick from the first metre it turned the shade under it brown.
         p.fogNear = 60;
         p.fogFar = 430;
@@ -1675,6 +1731,8 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.ghostGlow = 1.75;
         p.lanternGlow = 0.5;
         p.lamps = 1.1;
+        // (Round 8: the lava's light hangs in the ash beside the rivers.)
+        p.lampAir = 0.2;
       },
     },
     {
@@ -1682,7 +1740,7 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // light the snow, the cone runs with lava behind the roofs.
       // (It has come by the market's bridge: begun at 3500 m, the bridge was still the halls' dusk.)
       // (Full night by the bridge: half blended there, the bridge was still the afternoon's orange.)
-      from: 3400, at: 3540, dusk: 1,
+      from: 3300, at: 3440, dusk: 1,
       edit: (p) => {
         p.sunDisc = 0.12;
         // (A dim key under the dark deck: a peach one on the night's lilac snow read as candy pink.)
@@ -1706,6 +1764,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.massif.flow = 1;
         p.hazardDim = 0.9;
         p.lamps = 1.3;
+        p.lampAir = 0.24;
+        // (What the night's lilac snow throws back up is the lamps' and forges' orange, never a pink.)
+        p.lift.tint = c('#FFE8B0');
         p.bloom = 0.6;
         p.grade.exposure = 1.04;
         p.grade.hi = c('#FFE0C0');
@@ -1831,7 +1892,10 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
       // from beneath, and the valley's lanterns the light of the frame, from below and ahead.
       from: 900, at: 1420, dusk: 1,
       edit: (p) => {
-        p.sunColor = c('#C0B4EC');
+        // (Round 8, the value pass: the moon is gone behind the deck, so what lights the snow between the lamps is
+        // the deck's dim violet, a step under the Crown's silver. At the moon's value the Lamp Road was one even
+        // lilac and the lamps' pools could not be seen on it: DECISIONS 367.)
+        p.sunColor = c('#8A80C4');
         p.sunDisc = 0;
         p.sunGlow = 0.2;
         p.skyZenith = c('#120E44');
@@ -1845,11 +1909,11 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.deck.lit = c('#5C50A6');
         p.deck.shade = c('#221A60');
         p.deck.glow = c('#8E5C8C');
-        p.snowLit = c('#DAD8F6');
-        p.snowShade = c('#6656B2');
-        p.snowDeep = c('#2A1A6E');
+        p.snowLit = c('#CC9ED6');
+        p.snowShade = c('#4E2888');
+        p.snowDeep = c('#1A1056');
         p.rim = c('#FFD9A0');
-        p.fog = c('#3A2C80');
+        p.fog = c('#46297E');
         p.fogFar = 640;
         // (Less of the sky's light between the lamps, so the Lamp Road's snow is lilac in pools of marigold
         // and not lilac all over.)
@@ -1870,10 +1934,12 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.stars = 0.15;
         p.shadowK = 0.6;
         p.bloom = 0.78;
-        p.lamps = 1.3;
+        // (Round 8: the lamps are the light down the Lamp Road, and the rider carries a whole one of its own.)
+        p.lamps = 1.6;
+        p.lampAir = 0.22;
         p.giftGlow = 0.6;
         p.ghostGlow = 1.2;
-        p.lanternGlow = 0.6;
+        p.lanternGlow = 1;
         p.grade.exposure = 1.0;
         p.grade.saturation = 1.0;
         p.grade.hi = c('#FFF6E8');
@@ -1891,14 +1957,16 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyMid = c('#5444A0');
         p.skyHorizon = c('#9A66A4');
         p.skyBand = { color: c('#F0A088'), fade: 22, k: 0.7 };
-        p.snowLit = c('#D8D0F2');
-        p.snowShade = c('#5658BE');
+        // (Round 8: a step paler than the Lamp Road as the east pales, still under the lamps.)
+        p.sunColor = c('#9C90D0');
+        p.snowLit = c('#CEACD8');
+        p.snowShade = c('#503896');
         p.rim = c('#FFD2C0');
-        p.hemiSky = c('#7468CC');
+        p.hemiSky = c('#6458BC');
         p.fog = c('#5C4A9C');
         p.air.far = c('#4A3480');
         p.under.k = 0.1;
-        p.lamps = 1.05;
+        p.lamps = 1.4;
         p.stars = 0.35;
         p.massif.glowK = 0.45;
         p.grade.exposure = 1.02;
@@ -1923,8 +1991,9 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
         p.skyHorizon = c('#DC8CA0');
         p.skyBand = { color: c('#FFC09A'), fade: 24, k: 1.0 };
         p.skyBelow = c('#6A4A8C');
-        p.snowLit = c('#E6DAF2');
-        p.snowShade = c('#6650B8');
+        // (Round 8: the rose lies on the snow that faces the east; the rest stays in the night's shade.)
+        p.snowLit = c('#D2C4E8');
+        p.snowShade = c('#4C3EA4');
         p.rim = c('#FFC6B4');
         p.fog = c('#6A4E9C');
         p.hemiSky = c('#7A66CC');
@@ -2265,7 +2334,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         lamps(p, 1.25);
         // (The visual lift: the floor's own shade, with the lava's light lying on it, comes back up orange.)
         p.lift.sun = 0.35;
-        p.lift.tint = c('#FFC8A0');
+        p.lift.tint = c('#FFDCA4');
       },
     },
     {
@@ -2295,7 +2364,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         // (The visual lift: under the roof no sky fills the shade; the lava's pools on the floor bounce.)
         p.lift.sun = 0.3;
         p.lift.sky = 0.1;
-        p.lift.tint = c('#FFC8A0');
+        p.lift.tint = c('#FFECA0');
       },
     },
     {
@@ -2331,7 +2400,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.skyMid = c('#8A2C12');
         p.skyHorizon = c('#FF6A22');
         p.sunDisc = 0.2;
-        p.snowLit = c('#FFE8D8');
+        // (Round 8: under the value the snow shader reads as day, so the lake's light lies on it in its own orange.)
+        p.snowLit = c('#ECCEC2');
         p.atmo.valleyColor = c('#E0541C');
         p.atmo.valley = 1;
         p.massif.seaWarm = 2.2;
@@ -2340,7 +2410,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.exposure! *= 1.04;
         p.bloom += 0.15;
         lamps(p, 1.2);
-        p.lift.tint = c('#FFC090');
+        p.lift.tint = c('#FFD498');
       },
     },
     {
@@ -2475,6 +2545,8 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.grade.lo = c('#E4DCFF');
         p.grade.focal = 0.5;
         lamps(p, 1.3);
+        // (Round 8: a lamp in cloud is a wide soft halo far off, ART.md 15: the cloud takes its light.)
+        p.lampAir = 0.6;
       },
     },
     {
@@ -2495,15 +2567,15 @@ export const PLACES: Record<BiomeId, Place[]> = {
         p.bloom += 0.12;
         p.grade.hi = c('#FFF4E2');
         p.grade.contrast += 0.04;
-        lamps(p, 1.35);
+        lamps(p, 1.6);
       },
     },
     {
       // The Lamp Road's avenue and Firstlight's street: lilac snow in pools of marigold.
       kind: 'street',
       edit: (p) => {
-        lamps(p, 1.15);
-        p.snowShade = c('#5440AC');
+        lamps(p, 1.75);
+        p.snowShade = c('#30247E');
         // (The visual lift: the pools of marigold on the snow come back up under the eaves and the lamps'
         // stone. Marigold is the world's own light here, and only here: ART.md 15.)
         p.lift.tint = c('#FFC878');
@@ -2529,7 +2601,7 @@ export const PLACES: Record<BiomeId, Place[]> = {
       // The lamp grove: ink trunks, and the light between them.
       kind: 'treerun',
       edit: (p) => {
-        lamps(p, 1.4);
+        lamps(p, 1.85);
         p.grade.contrast += 0.06;
         p.grade.exposure! *= 0.96;
         p.grade.lo = c('#DCCCFF');
