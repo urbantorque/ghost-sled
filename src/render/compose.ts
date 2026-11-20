@@ -81,7 +81,7 @@ export interface LookSet {
   row: number;
 }
 export const LOOKS: Record<Look, LookSet> = {
-  valley: { up: 0.7, back: 0, aside: 0.8, yaw: 0.1, horizon: -0.02, row: -0.04 },
+  valley: { up: 0.7, back: 0, aside: 0.3, yaw: 0.1, horizon: -0.02, row: -0.04 },
   canyon: { up: 0.2, back: 0, aside: 0, yaw: 0, horizon: 0.03, row: -0.05 },
   ridge: { up: 0.5, back: 0, aside: 0.6, yaw: 0.06, horizon: 0.02, row: -0.03 },
   terraces: { up: 0.5, back: 0, aside: 0, yaw: 0.07, horizon: 0.02, row: -0.03 },
@@ -120,6 +120,8 @@ const RAMP_IN = 34;
 const RAMP_OUT = 46;
 /** A fall comes in longer: over 34 m its first metres stood as a pale slab across the view from the air. */
 const FALL_RAMP_IN = 80;
+/** Frostfang's canyon stands up this far before the overlook it opens onto. */
+const CANYON_BEFORE = 70;
 /** A stretch shorter than this is not composed. */
 const LEN_MIN = 90;
 /** Ahead of a fall the mid-ground starts taking the valley form this far before, and holds it this far after, so the
@@ -311,6 +313,11 @@ export class ComposePlan {
           if (w) {
             w.z1 = mouth + 20;
             w.rout = 40;
+            // (And it stands up only a little before the overlook: the run in from the start keeps its lit floor and
+            // the long shadows down it, which three critics on stills preferred to walls the whole way; the canyon
+            // frames the reveal at its foot.)
+            const from = Math.max(a, Math.min(mouth - LEN_MIN, o.z0 - CANYON_BEFORE));
+            for (const k of banks) if (k.kind === 'wall') k.z0 = from;
             banks.push({ side: o.side as 1 | -1, kind: 'fall', z0: mouth - 10, z1: b, rin: 40, rout: Math.min(RAMP_OUT, (b - mouth) / 3), h: 0 });
           }
         }
@@ -366,9 +373,11 @@ export class ComposePlan {
       if (s.side !== side) continue;
       const w = segWeight(s, z);
       if (w <= 0) continue;
-      const slope = Math.abs(prof(s, t + 0.4, z) - prof(s, t - 0.4, z)) / 0.8;
+      // (The face as drawn, at its weight: where a stretch ramps in, a fall's face is a gentle slope of snow, not a
+      // pale slab of rock seen side on from the air.)
+      const slope = (w * Math.abs(prof(s, t + 0.4, z) - prof(s, t - 0.4, z))) / 0.8;
       const k = s.kind === 'wall' ? smooth(0.7, 1.3, slope) * holds(s.kind, t) : s.kind === 'fall' ? smooth(1.15, 1.7, slope) : smooth(0.6, 1.1, slope);
-      r = Math.max(r, w * k);
+      r = Math.max(r, k);
     }
     return r;
   }
@@ -446,6 +455,25 @@ export class ComposePlan {
       return { c: p, w };
     }
     return null;
+  }
+
+  /** The directed shots (game/shots.ts) with each place shot given the sides of the composed place it opens on (the
+   *  nearest within 80 m of its start): where none is composed (a course whose opening has no room) it is dropped. */
+  sideShots<T extends { kind: string; at: number; z1: number; open?: number; stand?: number }>(shots: T[]): T[] {
+    this.plan();
+    const out: T[] = [];
+    for (const sh of shots) {
+      if (sh.kind !== 'place') {
+        out.push(sh);
+        continue;
+      }
+      const p = this.list.find((q) => sh.at > q.z0 - 80 && sh.at < q.z1);
+      if (!p) continue;
+      sh.open = p.open;
+      sh.stand = p.stand;
+      out.push(sh);
+    }
+    return out;
   }
 
   /** The lens's placement at sim z (camera.ts CamTarget.place), written into `out` at the place's weight: zero

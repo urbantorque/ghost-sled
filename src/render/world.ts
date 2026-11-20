@@ -418,7 +418,7 @@ export class World {
       return cor;
     };
     this.cam.section = (z) => this.course.section(-z);
-    this.cam.shots = planShots(this.course);
+    this.cam.shots = this.overlooks.compose.sideShots(planShots(this.course));
     // The results hero shot never sets its lens among the props: a tree within a few metres fills
     // the frame with a cone (or a dithered one). Only asked while it picks a framing.
     this.cam.blocked = (x, z, r) => {
@@ -693,8 +693,9 @@ export class World {
     this.palette = getPalette(c.biome, this.mood);
     applyPalette(this.palette);
     this.midground.setCourse(c, this.palette);
-    this.cam.shots = planShots(c);
     this.overlooks.setCourse(c, this.palette);
+    // (After the overlooks: the place shots take their sides from the new course's composed places.)
+    this.cam.shots = this.overlooks.compose.sideShots(planShots(c));
     this.rails.setCourse(c, this.palette);
     this.props.setCourse(c, this.palette);
     this.spirit.setCourse(c);

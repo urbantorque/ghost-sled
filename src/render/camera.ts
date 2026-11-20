@@ -402,6 +402,12 @@ const WHIP_S = 0.22;
 const WHIP_SETTLE = 0.6;
 const WHIP_LEAD_S = 1.0;
 const SHOT_YAW_MAX = 0.32;
+/** The place shot (round 8): how fast it comes in and goes back (1/s), how far short of its end it hands back, and
+ *  the thin letterbox that marks it (under reduced motion that is all of it). */
+const PLACE_IN_RATE = 2.4;
+const PLACE_OUT_RATE = 1.8;
+const PLACE_HANDBACK = 40;
+const PLACE_BOX = 0.4;
 
 /** Scratch for crashPack (Map.forEach with a module-level callback: no per-frame allocation). */
 const packScan = { x: 0, z: 0, best: Infinity, p: null as GhostPose | null };
@@ -495,6 +501,11 @@ export class ChaseCamera {
   /** Their eased weights: in the air off the biggest leap's lip, the slow hero frame (and the real
    *  seconds of it left), and the tracking shot with the side it stepped to. */
   private wideK = 0;
+  /** The place shot (game/shots.ts 'place', round 8): the one in range, its eased weight, and the weight the lens
+   *  moves by (none under reduced motion, whose letterbox still marks it). */
+  private placeShot: Shot | null = null;
+  private placeShotK = 0;
+  private placeShotM = 0;
   private heroK = 0;
   private heroLeft = 0;
   private trackK = 0;
@@ -539,6 +550,7 @@ export class ChaseCamera {
   private tmp2 = new Vector3();
   private tmp3 = new Vector3();
   private tmp4 = new Vector3();
+  private tmp5 = new Vector3();
   private mateV = new Vector3();
   private crowd = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
   private crowdN = 0;
@@ -933,6 +945,40 @@ export class ChaseCamera {
     return Math.abs(lat) > 1 && Math.abs(rightX) > 0.05 ? Math.sign(lat * rightX) : 0;
   }
 
+  /** The place shot's weight (0 to 1), for probes. */
+  get placeNow(): number {
+    return this.placeShotK;
+  }
+
+  /** Degrees the place shot adds to the lens. */
+  private placeFov(): number {
+    const L = this.placeShot?.lens;
+    return L && this.mode === 'chase' ? L.fov * smooth01(this.placeShotM) : 0;
+  }
+
+  /** Takes the lens and its look point toward the place shot's own (game/shots.ts PLACE_LENS), by its weight: a
+   *  lens set off the rider in its direction of travel, its sides the composed place's (+ toward three.js +x). */
+  private placeLens(t: CamTarget, lens: Vector3, look: Vector3): void {
+    const s = this.placeShot;
+    const L = s?.lens;
+    if (!s || !L || this.placeShotM < 1e-4) return;
+    const k = smooth01(this.placeShotM);
+    const fx = this.dirS.x;
+    const fz = this.dirS.z;
+    const rx = -fz;
+    const rz = fx;
+    const open = s.open ?? 0;
+    const side = L.toOpen ? open || s.stand || 0 : s.stand || 0;
+    // (The place's sides are along three.js x; the run's right is near it, as the course runs down -z.)
+    const ax = L.aside * side * Math.sign(rx || 1);
+    const lx = L.lookAside * open * Math.sign(rx || 1);
+    this.tmp5.set(t.pos.x - fx * L.back + rx * ax, t.pos.y + L.up, t.pos.z - fz * L.back + rz * ax);
+    if (this.ground) this.tmp5.y = Math.max(this.tmp5.y, this.ground(this.tmp5.x, this.tmp5.z) + 0.4);
+    lens.lerp(this.tmp5, k);
+    this.tmp5.set(t.pos.x + fx * L.ahead + rx * lx, t.pos.y + L.lookUp, t.pos.z + fz * L.ahead + rz * lx);
+    look.lerp(this.tmp5, k);
+  }
+
   /** The directed shots (chase only): eases each one's weight from where the sled is on the course.
    *  `realDt` is unscaled time: the hero frame's clock, since render time is what it slows. */
   private stepShots(t: CamTarget, dt: number, realDt: number, reduced: boolean): void {
@@ -941,11 +987,13 @@ export class ChaseCamera {
     let wide: Shot | null = null;
     let track: Shot | null = null;
     let whip: Shot | null = null;
+    let place: Shot | null = null;
     if (this.shots && chase) {
       for (const s of this.shots) {
         if (z < s.z0 || z > s.z1) continue;
         if (s.kind === 'wide') wide = s;
         else if (s.kind === 'track') track = s;
+        else if (s.kind === 'place') place = s;
         else whip = s;
       }
     }
@@ -962,6 +1010,17 @@ export class ChaseCamera {
     if (inTrack && this.trackSide === 0) this.trackSide = this.middleSide(t) || 1;
     this.trackK += (inTrack - this.trackK) * (1 - Math.exp(-dt * (inTrack ? 1.6 : 1.2)));
     if (!inTrack && this.trackK < 0.02) this.trackSide = 0;
+    // The place shot: in from its start, held, and handed back to the chase PLACE_HANDBACK metres short of its end, so
+    // the chase has the road again before the next thing on it needs reading; it gives way in the air, in a tumble
+    // and to the run's opening reveal. Its side and lens are the place's.
+    const inPlace = place && place.lens && !t.airborne && (t.tumble ?? 0) === 0 && (t.intro ?? 0) < 0.05 && z < place.z1 - PLACE_HANDBACK ? 1 : 0;
+    if (place) this.placeShot = place;
+    this.placeShotK += (inPlace - this.placeShotK) * (1 - Math.exp(-dt * (inPlace ? PLACE_IN_RATE : PLACE_OUT_RATE)));
+    if (this.placeShotK < 1e-4 && !inPlace) {
+      this.placeShotK = 0;
+      this.placeShot = null;
+    }
+    this.placeShotM = reduced ? 0 : this.placeShotK;
     // The whip: the drift off the road as the place comes up, the snap as it arrives, the settle.
     if (this.whipT < 0) {
       if (whip && !reduced && !this.whipFired && !t.airborne && (t.tumble ?? 0) === 0) {
@@ -1011,7 +1070,7 @@ export class ChaseCamera {
     let slow = 1;
     if (this.mode === 'chase') {
       dof = Math.max(this.heroK, this.trackK * TRACK_DOF);
-      box = Math.max(this.heroK, this.wideK * this.flightK * WIDE_BOX, this.trackK * TRACK_BOX);
+      box = Math.max(this.heroK, this.wideK * this.flightK * WIDE_BOX, this.trackK * TRACK_BOX, this.placeShotK * PLACE_BOX);
       // Speed's blur, held back in the hero frame (a slow frame is a sharp one) and halved under reduced
       // motion, as the streaks are; the whip smears the whole frame for its fifth of a second.
       blur = Math.max(blurK(t.speed) * (reduced ? 0.5 : 1) * (1 - 0.7 * this.heroK), this.whipBlur);
@@ -1694,7 +1753,7 @@ export class ChaseCamera {
     // out and it goes on opening to the cap (speedfeel.ts chaseFov).
     // (The title crane widens a little for its establishing shot.)
     const chaseWide = this.mode === 'chase' && this.aspect >= 1;
-    let baseFov = chaseFov(t.speed) + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (chaseWide ? this.airK * 4 + vista * VISTA_FOV + wideM * WIDE_FOV - trackM * TRACK_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
+    let baseFov = chaseFov(t.speed) + this.placeFov() + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (chaseWide ? this.airK * 4 + vista * VISTA_FOV + wideM * WIDE_FOV - trackM * TRACK_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
     if (chaseWide) baseFov = Math.min(baseFov, CHASE_FOV_MAX);
     if (this.mode === 'chase' && !portrait) baseFov = MathUtils.lerp(baseFov, HERO_FOV, heroM);
     if (this.mode === 'finish') {
@@ -1736,6 +1795,8 @@ export class ChaseCamera {
       // An overlook leans the horizon down toward the drop (a carve toward it adds to that).
       rollT -= open * OPEN_ROLL * (portrait ? 0.5 : 1);
       rollT -= this.wallK * WALL_ROLL;
+      // (A place shot's lens stands level.)
+      rollT *= 1 - smooth01(this.placeShotM);
       rollT = MathUtils.clamp(rollT, -ROLL_MAX, ROLL_MAX);
     }
     if (reduced) this.roll = 0;
@@ -1786,6 +1847,7 @@ export class ChaseCamera {
     const rz = fx;
     const lens = this.lens.copy(this.pos);
     const look = this.lookT.copy(this.look);
+    if (this.mode === 'chase') this.placeLens(t, lens, look);
     if (this.mode === 'chase') {
       const jr = this.jx;
       const jb = this.jz;

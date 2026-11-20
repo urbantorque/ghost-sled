@@ -8,10 +8,46 @@ import { namedMountain } from '../sim/moments';
 //    slow hero frame at the top of its flight;
 //  - 'track': a low tracking shot down the mountain's first street;
 //  - 'whip': a whip-pan that lands on the mountain's reveal, the frame a player remembers it by.
+//  - 'place' (round 8, the compose lane): a lens that is not the chase's for the first seconds of the opening and of
+//    each stage start's threshold, each mountain's own (PLACE_LENS): Pinecrest high over the valley side, Frostfang
+//    low in the canyon looking up at its arch, Ember beside the ridge with the fall below, Sakura over the terraces
+//    stepping down, Lanternfall high on the crest with the cloud on both sides. It hands back to the chase inside
+//    about three seconds, gives way in the air and in a tumble, and under reduced motion only its letterbox plays.
 //
 // Pure: a function of the course, so a Daily, a Cup and a ghost's replay all get the same shots.
 
-export type ShotKind = 'wide' | 'track' | 'whip';
+export type ShotKind = 'wide' | 'track' | 'whip' | 'place';
+
+/** A place shot's lens, in the rider's frame at full weight: metres back, up and aside, and where it looks: metres
+ *  ahead of the rider, up from it and aside toward the open side; degrees added to the lens. */
+export interface PlaceLens {
+  back: number;
+  up: number;
+  /** Metres aside: toward the open side when `toOpen`, else toward the place's stand side. */
+  aside: number;
+  toOpen: boolean;
+  ahead: number;
+  lookUp: number;
+  lookAside: number;
+  fov: number;
+}
+
+/** Each biome's opening and stage-start lens (the compose lane's places, render/compose.ts). The lenses that look
+ *  over a bank stand 8 to 11 m up: the sim's bank stands 9.5 m by the limit, and a lens under its crest saw only the
+ *  bank (Ember's ridge at 3.6 m showed its own bank, not the fall). */
+export const PLACE_LENS: Readonly<Record<string, PlaceLens>> = {
+  alpine: { back: 8, up: 11, aside: 4, toOpen: true, ahead: 34, lookUp: -6, lookAside: 8, fov: 4 },
+  glacier: { back: 4.4, up: 0.55, aside: 0, toOpen: false, ahead: 30, lookUp: 9, lookAside: 0, fov: 7 },
+  volcanic: { back: 7, up: 10, aside: 3, toOpen: true, ahead: 34, lookUp: -5, lookAside: 4, fov: 4 },
+  blossom: { back: 7, up: 10, aside: 4, toOpen: true, ahead: 30, lookUp: -6, lookAside: 5, fov: 4 },
+  lantern: { back: 8, up: 8, aside: 0, toOpen: false, ahead: 40, lookUp: -6, lookAside: 0, fov: 6 },
+};
+/** A place shot starts this far into the opening's first section after the start (none) or into a stage line's
+ *  threshold (past its blend, so the charm gate is ahead in the frame), and lasts this many metres: about three
+ *  seconds at 30 m/s, the last of them easing back to the chase. */
+export const PLACE_IN_OPEN = 0;
+export const PLACE_IN_STAGE = 40;
+export const PLACE_LEN = 100;
 
 export interface Shot {
   kind: ShotKind;
@@ -21,8 +57,13 @@ export interface Shot {
   /** Where it may play, metres down the course. */
   z0: number;
   z1: number;
-  /** A wide: its lip. A whip: the metre the pan lands on. A track: where it starts. */
+  /** A wide: its lip. A whip: the metre the pan lands on. A track: where it starts. A place: where it starts. */
   at: number;
+  /** A place: its lens, and the sides the composed place stands and opens on (+1 toward three.js +x; 0 none),
+   *  which the world fills in from the place (render/compose.ts ComposePlan.sideShots). */
+  lens?: PlaceLens;
+  open?: number;
+  stand?: number;
 }
 
 interface Reveal {
@@ -102,6 +143,22 @@ export function planShots(course: Course): Shot[] {
     const lip = r.at === 'lip' ? leaps.find((l) => l.z >= sec.z0 && l.z < sec.z1) : undefined;
     const at = lip ? lip.z - WHIP_BEFORE_LIP : r.at === 'end' ? sec.z1 - WHIP_BEFORE_END : NaN;
     if (Number.isFinite(at)) out.push({ kind: 'whip', key: 'reveal', name: r.name, z0: at - 70, z1: at + 45, at });
+  }
+  // The places: the opening, then each stage start's threshold.
+  const lens = PLACE_LENS[course.biome];
+  if (lens) {
+    const first = secs[0];
+    if (first && first.kind === 'start') out.push({ kind: 'place', key: 'opening', name: 'The opening', z0: first.z1 + PLACE_IN_OPEN, z1: first.z1 + PLACE_IN_OPEN + PLACE_LEN, at: first.z1 + PLACE_IN_OPEN, lens });
+    let n = 0;
+    for (let z = 0; z < course.finishZ; ) {
+      const sec = course.section(z);
+      if (sec.gate) {
+        n++;
+        const z0 = sec.z0 + PLACE_IN_STAGE;
+        out.push({ kind: 'place', key: 'stage' + n, name: 'Stage ' + (n + 1), z0, z1: Math.min(sec.z1, z0 + PLACE_LEN), at: z0, lens });
+      }
+      z = sec.z1 + 0.01;
+    }
   }
   return out.sort((a, b) => a.z0 - b.z0);
 }

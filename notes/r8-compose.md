@@ -198,6 +198,23 @@ crest again, so its triangle saving is smaller than this. Not re-measured: no sl
      placement here is a metre and a turn, which a critic does not see.
   3. *Foreground that crosses the frame.* An arch or a torii over the run at the opening, with its clearance from the
      landmarks' flown air profile (`SitePlan`), so something frames the run itself.
+- **The sim request, for a later round's batch** (the sim is closed this round; the main lane's decision 2): a low bank
+  on one side where each mountain is composed. Today `course.ts bank(e)` rises to 9.5 m by 10 m past the edge on every
+  plain section; the request is a shape flag (say `bankLow`) that caps it near 3 m on one side over the section's body,
+  the limit where it is, so a sled is turned back at the same place and the lens 1.5 to 3 m up sees down the fall.
+  Section and side for each (sim z; +1 right of travel, three.js +x):
+
+  | Mountain | Opening (the bowl and cruise after the start, to the first leap) | Stage 1 (the threshold) | Stage 2 (the threshold) |
+  | --- | --- | --- | --- |
+  | Pinecrest | bowl 120 to 367 and cruise 367 to 499: right | cruise* 1410 to 1600: right | cruise* 2910 to 3100: left |
+  | Frostfang | cruise 373 to 495 (after the canyon, out of its mouth): left | cruise* 1410 to 1600 (1450 to 1590 clear of the viaduct and the village): right | cruise* 2910 to 3100: left |
+  | Ember | bowl 120 to 374 and cruise 374 to 523: left | cruise* 1410 to 1600: left | cruise* 2910 to 3100 (from 2950, past the lift span): right |
+  | Sakura | bowl 120 to 389 and cruise 389 to 514: left | cruise* 1410 to 1600: right | cruise* 2910 to 3100 (from 2950): left |
+  | Lanternfall | bowl 120 to 373 and cruise 373 to 493: both (a crest) | cruise* 1410 to 1600: both | cruise* 2910 to 3100 (from 2950): both |
+
+  The sides are the overlooks' (the mid-ground already takes the valley form there), so nothing past the bank changes.
+  Things to check in that batch: the threshold's `THRESHOLD_HW` stays, kickers in a bowl's banks and the bot's wall
+  rides read the lower bank, and every pool is regenerated.
 - The critics' standing complaints that are not this lane's: the neon charm-gate boards, a flipped sled's underside
   hiding the rider, ribless lanterns, Ember's grey-lilac snow, the HUD's stack over the sky, and (on live frames)
   ghosts and labels.

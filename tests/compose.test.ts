@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { courseFor, type Course } from '../src/sim/course';
 import { MOUNTAINS, dailySeed } from '../src/sim/mountains';
-import { CamPlacer } from '../src/render/camera';
+import { Vector3 } from 'three';
+import { CamPlacer, ChaseCamera } from '../src/render/camera';
+import { IDLE_FEEL, type Feel } from '../src/game/beats';
+import { PLACE_LENS, planShots, type Shot } from '../src/game/shots';
 import { LOOKS, composeFor, fallProf, segWeight, stepsProf, wallProf, type ComposePlan } from '../src/render/compose';
 import { shapeGround, visualGround } from '../src/render/ground';
 import { OverlookPlan } from '../src/render/overlook';
@@ -233,5 +236,71 @@ describe('the lens by place', () => {
     plan.place(1000, out);
     expect(out.up).toBe(0);
     shapeGround(c, null);
+  });
+});
+
+describe('the place shots', () => {
+  it('plans an opening and both stage starts on every named mountain, each with its mountain\'s lens and its place\'s sides', () => {
+    for (const m of NAMED) {
+      const c = courseFor(m.seed);
+      const { plan } = planFor(c);
+      const shots = plan.sideShots(planShots(c)).filter((s) => s.kind === 'place');
+      expect(shots.map((s) => s.key), m.name).toEqual(['opening', 'stage1', 'stage2']);
+      for (const s of shots) {
+        expect(s.lens).toBe(PLACE_LENS[c.biome]);
+        expect(s.z1 - s.z0).toBeLessThanOrEqual(100);
+        const p = plan.at((s.z0 + s.z1) / 2) ?? plan.at(s.z1 - 1);
+        if (p) {
+          expect(s.open).toBe(p.c.open);
+          expect(s.stand).toBe(p.c.stand);
+        }
+      }
+      shapeGround(c, null);
+    }
+  });
+
+  const DOWN = new Vector3(0, 0, -1);
+  const SLOPE = 0.3;
+  const SHOT: Shot = { kind: 'place', key: 'opening', name: '', z0: 120, z1: 220, at: 120, lens: PLACE_LENS.alpine, open: 1, stand: 1 };
+  function ride(shots: Shot[], feel: Feel = IDLE_FEEL, air = (_z: number) => false) {
+    const cam = new ChaseCamera();
+    cam.setAspect(16 / 9);
+    cam.ground = (_x, z) => z * SLOPE;
+    cam.corridor = () => ({ x: 0, hw: 12 });
+    cam.shots = shots;
+    cam.resetFeel();
+    cam.mode = 'chase';
+    const out: { z: number; k: number; up: number; side: number }[] = [];
+    for (let z = -60; z > -300; z -= 0.5) {
+      const pos = new Vector3(0, z * SLOPE, z);
+      cam.beats([], feel);
+      cam.update({ pos, dir: DOWN, speed: 30, steer: 0, airborne: air(-z), boost: 0 }, 1 / 60);
+      out.push({ z: -z, k: cam.placeNow, up: cam.camera.position.y - pos.y, side: cam.camera.position.x });
+    }
+    return out;
+  }
+
+  it('lifts the lens over the open side through its stretch and hands back to the chase before its end', () => {
+    const plain = ride([]);
+    const shot = ride([SHOT]);
+    const mid = shot.findIndex((q) => q.z >= 170);
+    expect(shot[mid].k).toBeGreaterThan(0.9);
+    expect(shot[mid].up - plain[mid].up).toBeGreaterThan(2.5);
+    expect(shot[mid].side).toBeGreaterThan(2);
+    // About three seconds at 30 m/s: back on the chase within 60 m of its end.
+    const after = shot.findIndex((q) => q.z >= 280);
+    expect(shot[after].k).toBeLessThan(0.05);
+    expect(Math.abs(shot[after].up - plain[after].up)).toBeLessThan(0.3);
+  });
+
+  it('gives way in the air, and under reduced motion only its letterbox plays', () => {
+    const flying = ride([SHOT], IDLE_FEEL, (z) => z > 140);
+    expect(flying[flying.findIndex((q) => q.z >= 190)].k).toBeLessThan(0.1);
+    const feel = { ...IDLE_FEEL, reduced: true };
+    const plain = ride([], feel);
+    const shot = ride([SHOT], feel);
+    const mid = shot.findIndex((q) => q.z >= 170);
+    expect(shot[mid].k).toBeGreaterThan(0.9);
+    expect(Math.abs(shot[mid].up - plain[mid].up)).toBeLessThan(1e-9);
   });
 });
