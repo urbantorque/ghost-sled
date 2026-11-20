@@ -1168,6 +1168,7 @@ export class App {
     if (this.night) this.mountain = this.savedMountain();
     this.night = null;
     this.nightEnd = null;
+    this.nightStep = false;
     this.nightBeatOff?.();
     this.nightBeatOff = null;
   }

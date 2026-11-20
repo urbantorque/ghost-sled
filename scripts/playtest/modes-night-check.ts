@@ -19,7 +19,10 @@ interface Leg {
 }
 
 const raw = readFileSync(process.argv[2], 'utf8');
-const data = JSON.parse(raw.slice(raw.indexOf('{'))) as { legs: Leg[]; save: unknown; label: string | null; errors: string[] };
+// (playwright-cli --raw prints the returned string as a JSON string, after its own banner.)
+const body = raw.slice(Math.min(...['"{', '{'].map((k) => raw.indexOf(k)).filter((i) => i >= 0)));
+const once = JSON.parse(body) as unknown;
+const data = (typeof once === 'string' ? JSON.parse(once) : once) as { legs: Leg[]; save: unknown; label: string | null; errors: string[] };
 let ok = true;
 const atLine: Held[] = [];
 for (const l of data.legs) {
