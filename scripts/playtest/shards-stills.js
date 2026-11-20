@@ -292,6 +292,16 @@ async (page) => {
     const name = `m${c.m}-z${String(z).padStart(4, '0')}.png`;
     if (c.shoot) await page.screenshot({ path: `${c.out}${name}` });
     const r = await page.evaluate((top) => window.__shards(top), c.top || 4);
+    // The frame's cost, summed over its passes (as frames.js reports it), on the next tick.
+    r.cost = await page.evaluate(() => {
+      const rr = window.__gs.world.renderer;
+      rr.info.autoReset = false;
+      rr.info.reset();
+      window.__stTo(1e9, 1);
+      const out = { calls: rr.info.render.calls, tris: rr.info.render.triangles };
+      rr.info.autoReset = true;
+      return out;
+    });
     shots.push({ name: name.replace('.png', ''), z, at: Math.round(st.z * 10) / 10, tick: st.tick, ...r });
   }
   await page.goto('about:blank');
