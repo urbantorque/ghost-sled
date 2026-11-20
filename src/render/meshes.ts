@@ -195,7 +195,10 @@ export function rockGeometry(base: Color, lit: Color, variant: number, low = fal
 /** One hexagonal ice crystal: a prism with a pointed tip, standing on `pos` and leaning by `rot`. */
 function crystal(col: Color, r: number, h: number, pos: [number, number, number], rot: [number, number, number]): BufferGeometry {
   const tip = r * 1.7;
-  const g = merge([part(new CylinderGeometry(r * 0.9, r, h, 6), col, { pos: [0, h / 2, 0] }), part(new ConeGeometry(r * 0.9, tip, 6), shade(col, 1.12), { pos: [0, h + tip / 2, 0] })]);
+  // (Round 8: a big crystal's faces in courses about a metre tall, so a serac's beside the lens is not one pane a
+  // tenth of the frame wide.)
+  const courses = Math.max(1, Math.round(h / 1.1));
+  const g = merge([part(new CylinderGeometry(r * 0.9, r, h, 6, courses), col, { pos: [0, h / 2, 0] }), part(new ConeGeometry(r * 0.9, tip, 6), shade(col, 1.12), { pos: [0, h + tip / 2, 0] })]);
   return g.applyMatrix4(new Matrix4().compose(new Vector3(...pos), new Quaternion().setFromEuler(new Euler(...rot)), new Vector3(1, 1, 1)));
 }
 
