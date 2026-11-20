@@ -32,8 +32,8 @@ export function grooveReach(depth: number, surf: number): number {
   const D = (1 - 0.58 * g) * (1 - scr);
   const d = Math.min(1, depth);
   const tw = (0.03 + 0.05 * d) * 1.2;
-  const floorW = RUNNER + tw + 0.03 + (0.06 + 0.2 * d) * D;
-  const berm = (0.06 + 0.16 * D + 0.12 * d * D) * (1 - scr);
+  const floorW = RUNNER + tw + 0.03 + (0.12 + 0.42 * d) * 0.35 * d + 0.04 * D;
+  const berm = (0.04 + 0.05 * D + 0.06 * d * D) * (1 - scr);
   return floorW + berm + (0.05 + 0.16 * D) * (1 - scr) + 0.02;
 }
 
@@ -312,11 +312,13 @@ export class Trail {
             float scratch = (0.5 + 0.5 * sin(vAcross * 21.0 + nz * 3.0)) * smoothstep(vHw, vHw * 0.6, an) * vFan;
             // The trench: the floor the sled pressed, its own width and more, wider and deeper the softer the
             // snow and the harder the carve.
-            float floorW = ${RUNNER.toFixed(2)} + tw + 0.03 + (0.06 + 0.2 * deep) * D + (vHw - ${RUNNER.toFixed(2)}) * 0.3 * vFan;
+            // (The stills' critic: a trench as wide as the sled, with broad lit berms, fanned out from under the sled as
+            // bright radial smears seen from straight behind it. It is round 7's width again, a little deeper in powder.)
+            float floorW = ${RUNNER.toFixed(2)} + tw + 0.03 + (0.12 + 0.42 * min(deep, 1.0)) * 0.35 * deep + 0.04 * D + (vHw - ${RUNNER.toFixed(2)}) * 0.3 * vFan;
             float floor0 = smoothstep(floorW + px + 0.04 * soft, floorW - px - 0.04 - 0.1 * soft, an);
             // The berm the sled threw up outside each wall, broken into clumps: in powder a soft ridge whose
             // face toward the sun is lit and the other in its own shade, on a groomed lane a low crisp lip.
-            float bermW = (0.06 + 0.16 * D + 0.12 * deep * D) * (1.0 - scr);
+            float bermW = (0.04 + 0.05 * D + 0.06 * deep * D) * (1.0 - scr);
             float bt = (an - floorW) / max(bermW, 0.001);
             float berm = smoothstep(-0.05, 0.18, bt) * smoothstep(1.05, 0.7, bt) * (1.0 - scr);
             berm *= mix(1.0, smoothstep(-0.32, 0.12, nz2 + nz * 0.6), D);
@@ -338,7 +340,7 @@ export class Trail {
             cutCol = mix(cutCol, mix(uLit, vec3(1.0), 0.35), scr);
             // A packed lip catching the sun reads a step above the lit snow beside it.
             vec3 brightLip = mix(uLit, vec3(1.0), 0.15) * mix(vec3(1.0), uSunColor, 0.4);
-            vec3 bermCol = mix(mix(uShade, uLit, 0.22), brightLip * 1.04, bermLit);
+            vec3 bermCol = mix(mix(uShade, uLit, 0.3), brightLip, bermLit);
             // Layered bottom to top, premultiplied: the floor, the drift's scratches, the walls, the cuts, the berms.
             float kf = floor0 * (0.1 + D * (0.42 + 0.25 * smoothstep(0.1, 0.7, deep)) + 0.18 * vFan) * (1.0 - scr);
             vec3 P = floorCol * kf;
@@ -352,18 +354,18 @@ export class Trail {
             float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.6, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
-            float kwl = wallLit * 0.45;
+            float kwl = wallLit * 0.15;
             P = brightLip * kwl + P * (1.0 - kwl);
             A = kwl + A * (1.0 - kwl);
-            float kbs = bermSh * 0.45;
+            float kbs = bermSh * 0.2;
             P = mix(uShade, uDeep, 0.35) * kbs + P * (1.0 - kbs);
             A = kbs + A * (1.0 - kbs);
-            float kbm = berm * (0.4 + 0.45 * D) * mix(1.0, 0.8, soft);
+            float kbm = berm * (0.22 + 0.2 * D) * mix(1.0, 0.8, soft);
             P = bermCol * kbm + P * (1.0 - kbm);
             A = kbm + A * (1.0 - kbm);
             // Never a white stripe: the trail cannot see the cast shadows, and a full-strength lip across shaded
             // snow (the rider's own shadow, a phone's darker foreground) read as a painted line.
-            float kb = max(lipS * 0.42, lipF * 0.28) * mix(1.0, 0.45, soft) * mix(1.0, 0.45, D);
+            float kb = max(lipS * 0.42, lipF * 0.28) * mix(1.0, 0.45, soft) * mix(1.0, 0.8, D);
             P = brightLip * kb + P * (1.0 - kb);
             A = kb + A * (1.0 - kb);
             // Snow moved, not marked: a deep carve throws clods out past its berm, each a small lit crumb

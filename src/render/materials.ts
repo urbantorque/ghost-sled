@@ -725,24 +725,21 @@ export const SNOW_SURF_GLSL = /* glsl */ `
     vec2 g = a.yz * vec2(0.62, 0.24) * 0.7 + b.yz * vec2(1.45, 0.6) * 0.3;
     return vec3(a.x * 0.7 + b.x * 0.3, RA * g.x + RB * g.y);
   }
-  /** A groomed lane: corduroy, ribs 11 cm apart running down the lane, laid in the groomer's swaths 4.3 m wide,
-   *  each swath a value step of its own with a low seam between two. across is metres across the lane (the
-   *  corridor's own lateral, so the ribs bend with it), z metres along, fw metres a pixel spans across, sunX the
-   *  sun's side across the lane (-1..1). x: the rib's light (the face turned to the sun's side lit, the other in
-   *  its own shade; with the sun dead ahead the troughs alone read), y: the swath's step (-1..1), z: the seam
-   *  (0..1), w: how much of the ribs shows (they go before they could alias). */
-  vec4 corduroy(float across, float z, float fw, float sunX) {
-    float swi = floor(across / 4.3 + 0.5);
-    float a = across + 0.09 * sin(z * 0.037 + swi * 2.1);
-    float swf = fract(a / 4.3 + 0.5);
-    // (A soft step across each swath, never a hard edge: long straight lines down the fall line read as speed lines.)
-    float swh = vnoise(vec2(a / 4.3, 3.7)) * 2.0 - 1.0;
-    float ph = fract(a / 0.11);
+  /** A groomed lane: the groomer's swaths 4.3 m wide down the lane, each a soft value step of its own (never an
+   *  edge: long straight lines down the fall line read as speed lines, ART.md 4), and corduroy ribs 30 cm apart
+   *  lying across the fall line, as on a leap's landing. across is metres across the lane (the corridor's own
+   *  lateral), z metres along, fw metres a pixel spans along the run, sunZ the sun's side along it (-1 behind the
+   *  lens .. 1 ahead). x: the rib's light (the face turned to the sun lit, the other in its own shade; with the sun
+   *  square across the run the troughs alone read), y: the swath's step (-1..1), z: unused, w: how much of the ribs
+   *  shows (they go before they could alias into dune bands). */
+  vec4 corduroy(float across, float z, float fw, float sunZ) {
+    float swh = vnoise(vec2(across / 4.3, 3.7)) * 2.0 - 1.0;
+    // (Each swath's ribs a little off its neighbour's, as each pass of the groomer lays its own.)
+    float ph = fract(z / 0.3 + 0.37 * floor(across / 4.3 + 0.5));
     float face = sin(6.2831853 * ph);
     float trough = smoothstep(0.25, 0.5, abs(ph - 0.5)) - 0.5;
-    float lit = sign(face * sunX) * pow(abs(face * sunX), 0.6) - trough * 0.55;
-    float seam = 1.0 - smoothstep(0.03, 0.08 + fw * 1.5, min(swf, 1.0 - swf) * 4.3);
-    return vec4(lit, swh, seam, 1.0 - smoothstep(0.1, 0.24, fw / 0.11));
+    float lit = sign(face * sunZ) * pow(abs(face * sunZ), 0.6) - trough * 0.55;
+    return vec4(lit, swh, 0.0, 1.0 - smoothstep(0.12, 0.28, fw / 0.3));
   }
   /** The snow's grain under the lens, painted: a stipple of small dabs lying along the wind, each a step lighter,
    *  level or darker than the snow and tilted its own way. x the step (-1, 0, 1), yz the dab's tilt (its normal's
@@ -1338,15 +1335,16 @@ export function makeSnowMaterial(): ShaderMaterial {
           float faceSh = smoothstep(-0.1 + pw, -0.1 - pw, rakeP) * uSnowFx;
           float hollow = smoothstep(0.36 + pw * 0.6, 0.36 - pw * 0.6, pil.x);
           float crestP = smoothstep(0.66 - pw * 0.6, 0.66 + pw * 0.6, pil.x);
-          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * 0.3 * palK * pilK * mix(0.15, 1.0, shadow));
-          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * 0.26 * palK * pilK * mix(0.25, 1.0, shadow));
+          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * 0.2 * palK * pilK * mix(0.15, 1.0, shadow));
+          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * 0.18 * palK * pilK * mix(0.25, 1.0, shadow));
           col += lit * sunSnow * warmC * crestP * (1.0 - faceSh) * 0.09 * t * pilK;
         }
         if (groomK > 0.01 && dist < 140.0) {
           // A groomed lane: the swaths' steps and seams read far down the run, the ribs under the lens (Medium
           // and High), and the lane a step whiter and smoother than the powder beside it.
-          float sunX = uSunDir.x / max(length(uSunDir.xz), 0.001);
-          vec4 cd = corduroy(vSnow.x, vWorldPos.z, fwx, sunX);
+          // (Round 8, the main lane's call: corduroy across the fall line only, as on a leap's landing.)
+          float sunZ = -uSunDir.z / max(length(uSunDir.xz), 0.001);
+          vec4 cd = corduroy(vSnow.x, vWorldPos.z, fwz, sunZ);
           float gk = groomK * (1.0 - smoothstep(0.85, 1.0, vPaint.z));
           float swK = 1.0 - smoothstep(30.0, 70.0, dist);
           col *= 1.0 + cd.y * 0.035 * gk * swK;
@@ -1644,7 +1642,8 @@ export function makeSnowMaterial(): ShaderMaterial {
           // (Round 8: a candidate is a crystal facet with a tilt of its own; it glints only while its mirror of the
           // light turns to the eye, so the glints move with the view and gather where the snow mirrors the sun.
           // More cells hold one, since only a few of them face the eye at once.)
-          if (h > 0.58 - 0.12 * nightK - 0.1 * nearG) {
+          // (The stills' critic preferred the denser glitter: critic one's density, which won where the old one was rainbow speckle.)
+          if (h > 0.5 - 0.12 * nightK - 0.1 * nearG) {
             vec2 pt = cell + 0.18 + 0.64 * vec2(hash13(vec3(cell, 1.7)), hash13(vec3(cell, 9.2)));
             vec2 o = (gp - pt) / 2.4;
             float rad = 0.008 + 0.004 * nearG + dist * 0.0021;
@@ -1659,7 +1658,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             float rays = (smoothstep(0.3, 0.0, abs(q.y)) * smoothstep(3.0, 0.0, abs(q.x)) + smoothstep(0.3, 0.0, abs(q.x)) * smoothstep(3.0, 0.0, abs(q.y))) * (1.0 - farG);
             vec2 ftilt = (vec2(hash13(vec3(cell, 2.3)), hash13(vec3(cell, 6.1))) - 0.5) * 2.2;
             float fm = facetMirror(n, ftilt, v);
-            float on = smoothstep(0.948 - 0.1 * nightK, 0.988 - 0.06 * nightK, fm);
+            float on = smoothstep(0.94 - 0.1 * nightK, 0.985 - 0.06 * nightK, fm);
             // A powder crystal flashes harder than a packed or glazed one; each its own strength.
             float facing = (0.55 + 0.6 * fract(h * 37.0)) * (1.0 + 0.35 * powderK) + 0.3 * toSun;
             glint = on * (core * core + rays * 0.45) * facing * uSparkle * (1.0 - ice * 0.6) * (1.0 - smoothstep(glintFar * 0.64, glintFar, dist));
