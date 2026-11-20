@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, Color, CustomBlending, AddEquation, OneFactor, OneMinusSrcAlphaFactor, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, Matrix4, NoColorSpace, Quaternion, ShaderMaterial, Vector3, type Camera, type Scene, type Texture, type WebGLRenderer } from 'three';
 import { type CharmGate, LANE_W, charmFamily, laneX } from '../sim/charms';
 import type { Course } from '../sim/course';
-import { FAMILY_HEX, FAMILY_INDEX, GLYPH_COLS, GLYPH_ROWS, drawGlyphAtlas } from './charmglyphs';
+import { FAMILY_HEX, FAMILY_INDEX, STYLE_DEEP_HEX, GLYPH_COLS, GLYPH_ROWS, drawGlyphAtlas } from './charmglyphs';
 import { shared } from './materials';
 
 // The charm gates (round 8, G2): at each gate the sim places, three arches stand side by side across the course, one
@@ -42,6 +42,25 @@ const AROUND = 5;
 const TUBE = 0.17;
 /** The marker: a square arch this much wider and taller. */
 export const MARKER_SCALE = [2.6, 2.2] as const;
+/** The medallion: its half size (m), the least height it keeps on screen (CSS px), the most it may grow (times), and
+ *  the gap kept between two as the outer ones step out. */
+export const MEDAL_HALF = 0.95;
+export const MEDAL_FLOOR_PX = 32;
+export const MEDAL_CAP = 5;
+export const MEDAL_GAP = 0.4;
+
+/** How far (m) an outer medallion steps out from its arch's centre at a half size (the shader's own sum). */
+export function medalSpread(half: number): number {
+  return Math.max(0, 2 * half + MEDAL_GAP - LANE_W);
+}
+
+/** The medallion's half size (m) at a pixel's span in metres (the shader's own sum). */
+export function medalHalf(px: number): number {
+  return MEDAL_HALF * Math.min(MEDAL_CAP, Math.max(1, ((MEDAL_FLOOR_PX / 2) * px) / MEDAL_HALF));
+}
+
+/** The marker's columns of light stand this tall (m) over its posts. */
+export const MARKER_BEAM = 46;
 
 /** Gates are drawn from this far ahead (fading in over the last 60 m) to this far behind. */
 export const DRAW_AHEAD = 460;
@@ -176,10 +195,12 @@ function gateMaterial(): ShaderMaterial {
     uniforms: {
       uTime: shared.uTime,
       uFog: shared.uFog,
+      uSunDir: shared.uSunDir,
       uFogNear: shared.uFogNear,
       uFogFar: shared.uFogFar,
       uViewH: { value: 720 },
       uLow: { value: 0 },
+      uDeep: { value: 0 },
       uCalm: { value: 0 },
       uAtlas: { value: null as Texture | null },
       uAtlasOn: { value: 0 },
@@ -234,25 +255,35 @@ function gateMaterial(): ShaderMaterial {
           float r = max(${TUBE.toFixed(2)}, 2.6 * px) * (1.0 + 0.5 * b) * (marker > 0.5 ? 1.5 : 1.0);
           n = aOff;
           p = vec3(position.xy * mk, 0.0) + aOff * r;
-          vQ = vec2(aInfo.z, 0.0);
+          vQ = vec2(aInfo.z, position.y * mk.y);
         } else if (part < 1.5) {
           // An empty lane has no medallion.
           if (aInst.y < -0.5 && marker < 0.5) {
             gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
             return;
           }
-          // At least about 30 px tall, up to a little over twice its size (it never crowds its neighbours).
-          float half0 = 0.95;
-          float half1 = half0 * clamp(22.0 * px / half0, 1.0, 2.15);
+          // At least MEDAL_FLOOR_PX tall on screen up to MEDAL_CAP times its size: at speed the lens is wide (about 80
+          // degrees), so a gate 120 m out is a few pixels a metre. As they grow the outer two step out sideways
+          // (medalSpread), so the three never overlap however far off they stand.
+          float half0 = ${MEDAL_HALF.toFixed(2)};
+          float half1 = half0 * clamp(${(MEDAL_FLOOR_PX / 2).toFixed(1)} * px / half0, 1.0, ${MEDAL_CAP.toFixed(1)});
           vec2 hs = marker > 0.5 ? vec2(4.3, 0.85) : vec2(half1);
           float cy = marker > 0.5 ? ${(SQUARE_H * MARKER_SCALE[1]).toFixed(2)} - 0.55 : top + 0.35 + half1;
-          p = vec3(position.x * hs.x, cy + position.y * hs.y, 0.14);
+          float spread = marker > 0.5 ? 0.0 : aState.w * max(0.0, 2.0 * half1 + ${MEDAL_GAP.toFixed(2)} - ${LANE_W.toFixed(2)});
+          p = vec3(position.x * hs.x + spread, cy + position.y * hs.y, 0.14);
           vQ = position.xy;
           vPx = px / hs.y;
         } else {
-          // The veil fills the opening, from the snow to the crown.
-          p = vec3(position.x * ${ARCH_HALF.toFixed(2)} * mk.x, (position.y * 0.5 + 0.5) * top * mk.y, -0.06);
-          vQ = vec2(position.x * ${ARCH_HALF.toFixed(2)}, (position.y * 0.5 + 0.5) * top);
+          // The veil fills the opening, from the snow to the crown. A marker's is two columns of light standing
+          // ${MARKER_BEAM} m over its posts, so the finish of the race is found over a crest from its start (in metres).
+          if (marker > 0.5) {
+            p = vec3(position.x * (${ARCH_HALF.toFixed(2)} * mk.x + 1.5), (position.y * 0.5 + 0.5) * ${MARKER_BEAM.toFixed(1)}, -0.06);
+            vQ = p.xy;
+            vPx = px;
+          } else {
+            p = vec3(position.x * ${ARCH_HALF.toFixed(2)} * mk.x, (position.y * 0.5 + 0.5) * top * mk.y, -0.06);
+            vQ = vec2(position.x * ${ARCH_HALF.toFixed(2)}, (position.y * 0.5 + 0.5) * top);
+          }
         }
         p.xy = vec2(p.x * grow, (p.y - 2.2 * mk.y) * grow + 2.2 * mk.y);
         vec4 wp = m * vec4(p, 1.0);
@@ -273,9 +304,11 @@ function gateMaterial(): ShaderMaterial {
     fragmentShader: /* glsl */ `
       uniform float uTime;
       uniform vec3 uFog;
+      uniform vec3 uSunDir;
       uniform float uFogNear;
       uniform float uFogFar;
       uniform float uLow;
+      uniform float uDeep;
       uniform float uCalm;
       uniform sampler2D uAtlas;
       uniform float uAtlasOn;
@@ -294,12 +327,14 @@ function gateMaterial(): ShaderMaterial {
       varying float vTop;
       const vec3 SPEED = ${glsl(FAMILY_HEX.speed)};
       const vec3 STYLE = ${glsl(FAMILY_HEX.style)};
+      const vec3 STYLE_DEEP = ${glsl(STYLE_DEEP_HEX)};
       const vec3 SURVIVAL = ${glsl(FAMILY_HEX.survival)};
       const vec3 INK = ${glsl('#121933')};
       const vec3 CREAM = ${glsl('#F5F3FF')};
       const vec3 GOLDW = ${glsl('#FFE08A')};
       const vec3 EMBER = ${glsl('#4A3436')};
-      vec3 famCol(float f) { return f < 0.5 ? SPEED : (f < 1.5 ? STYLE : SURVIVAL); }
+      const vec3 DEEPGOLD = ${glsl('#D08A1E')};
+      vec3 famCol(float f) { return f < 0.5 ? SPEED : (f < 1.5 ? mix(STYLE, STYLE_DEEP, uDeep) : SURVIVAL); }
       // The medallion's outline, a signed distance in its own units (about -1 inside to 0 on the edge).
       float medal(vec2 q, float f) {
         if (vMarker > 0.5) {
@@ -343,17 +378,26 @@ function gateMaterial(): ShaderMaterial {
         vec3 col;
         float a;
         if (vPart < 0.5) {
-          float face = abs(dot(normalize(vN), normalize(-dv)));
+          // Light, not a structure, painted in the gouache's three values: a lit side toward the key light, the body,
+          // and a shade side in a deeper, cooler step of its own colour, with a thin darker edge where the tube turns
+          // away so it holds on white snow. Its foot rises out of the snow as light: nothing solid stands on the line.
+          vec3 nn = normalize(vN);
+          float face = abs(dot(nn, normalize(-dv)));
+          float l = dot(nn, normalize(uSunDir));
+          vec3 litC = mix(fc, vec3(1.0, 0.98, 0.92), 0.42);
+          vec3 shadeC = mix(fc * 0.5, vec3(0.16, 0.18, 0.34), 0.25);
           if (uLow > 0.5) {
-            // Low: a flat poster of it, a dark edge and a lit body.
-            col = mix(fc * 0.45, fc, step(0.38, face));
+            // Low: two flat values, the lit side and the body.
+            col = mix(fc, litC, step(0.3, l));
           } else {
-            col = mix(fc * 0.42, fc, smoothstep(0.12, 0.6, face));
+            col = mix(shadeC, fc, smoothstep(-0.3, -0.12, l));
+            col = mix(col, litC, smoothstep(0.22, 0.4, l));
+            col = mix(col * 0.78, col, smoothstep(0.08, 0.3, face));
             float run = pow(max(0.0, cos((vQ.x - uTime * 0.18 - vSeed) * 6.2831)), 14.0) * (1.0 - uCalm);
-            col = mix(col, mix(fc, vec3(1.0), 0.55), smoothstep(0.78, 1.0, face) * 0.6 + run * 0.35 * vNext);
+            col = mix(col, mix(fc, vec3(1.0), 0.55), run * 0.35 * vNext);
           }
           col *= lit;
-          a = 1.0;
+          a = smoothstep(-0.1, 1.3, vQ.y);
         } else if (vPart < 1.5) {
           vec2 q = vQ;
           float sd = medal(q, vFam);
@@ -382,10 +426,27 @@ function gateMaterial(): ShaderMaterial {
               }
             }
             col = mix(col, mix(fc, vec3(1.0), 0.4) * lit, ga * (1.0 - rim));
-            a = inside * mix(0.9, 1.0, rim);
+            a = inside * mix(0.8, 1.0, max(rim, ga));
           }
         } else {
-          // The veil: the family's light filling the opening, stronger toward the crown.
+          // The veil: the family's light filling the opening, stronger toward the crown. The marker's columns
+          // of light: soft beams over its posts that thin away upward, held a few pixels wide however far off.
+          if (vMarker > 0.5) {
+            float post = ${(ARCH_HALF * MARKER_SCALE[0]).toFixed(2)};
+            float w = max(0.35, 2.5 * vPx);
+            float dx = (abs(vQ.x) - post) / w;
+            float beam = exp(-dx * dx) * (1.0 - smoothstep(${(MARKER_BEAM * 0.6).toFixed(1)}, ${MARKER_BEAM.toFixed(1)}, vQ.y));
+            if (beam < 0.01) discard;
+            // (A deep gold edge round a gold-white core, as the sky gates' amber edge, so the column holds against a bright
+            // sky and white snow, where pale light alone vanished.)
+            col = mix(DEEPGOLD, mix(fc, vec3(1.0), 0.35), smoothstep(0.35, 0.05, dx * dx)) * (1.0 + 2.0 * flare);
+            a = beam * 0.8 * (1.0 + flare);
+            col = mix(col, mix(vTint, vec3(1.0), 0.4) * 1.6, flare);
+            a *= alpha * (1.0 - burst * burst);
+            col = mix(col, uFog, fogK * 0.6);
+            gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a);
+            return;
+          }
           float inside = opening(vQ, vFam);
           if (inside <= 0.0) discard;
           float h = clamp(vQ.y / vTop, 0.0, 1.0);
@@ -397,6 +458,8 @@ function gateMaterial(): ShaderMaterial {
         // The other arches gutter to an ember and thin away.
         col = mix(col, EMBER, gutter);
         a *= alpha * fade * (1.0 - 0.75 * gutter);
+        // Whatever the lens passes through dissolves over its last metres (ART.md 14), so the take never fills the frame.
+        a *= smoothstep(4.0, 16.0, d);
         col = mix(col, uFog, fogK);
         gl_FragColor = vec4(linearToOutputTexel(vec4(col, 1.0)).rgb * a, a);
       }
@@ -462,6 +525,8 @@ export class CharmGates {
 
   setCourse(c: Course): void {
     this.course = c;
+    this.deep = c.biome === 'blossom';
+    if (this.mat) this.mat.uniforms.uDeep.value = this.deep ? 1 : 0;
     this.reset();
   }
 
@@ -470,6 +535,9 @@ export class CharmGates {
     this.takenAt.clear();
     this.marker = null;
   }
+
+  /** Sakura's shade is lavender: there the style family takes its deeper violet. */
+  private deep = false;
 
   setLow(low: boolean): void {
     this.low = low;
@@ -511,6 +579,7 @@ export class CharmGates {
       geo.setAttribute('aTint', this.tint);
       const mat = gateMaterial();
       mat.uniforms.uLow.value = this.low ? 1 : 0;
+      mat.uniforms.uDeep.value = this.deep ? 1 : 0;
       mat.uniforms.uViewH.value = this.viewH;
       const cv = drawGlyphAtlas();
       if (cv) {
@@ -585,7 +654,8 @@ export class CharmGates {
           st[n * 4] = a.burst;
           st[n * 4 + 1] = a.gutter;
           st[n * 4 + 2] = a.alpha;
-          st[n * 4 + 3] = 0;
+          // (The arch's place in the gate, -1 left to 1 right: its medallion steps out that way as it grows.)
+          st[n * 4 + 3] = lane - 1;
           tn[n * 3] = tn[n * 3 + 1] = tn[n * 3 + 2] = 1;
           n++;
         }
@@ -608,7 +678,7 @@ export class CharmGates {
           st[n * 4] = mk.endAt >= 0 ? Math.min(1, t) : 0;
           st[n * 4 + 1] = 0;
           st[n * 4 + 2] = Math.max(0, Math.min(1, (DRAW_AHEAD + 200 - (mk.z - riderZ)) / 60));
-          st[n * 4 + 3] = 1;
+          st[n * 4 + 3] = 0;
           tn[n * 3] = mk.tint.r;
           tn[n * 3 + 1] = mk.tint.g;
           tn[n * 3 + 2] = mk.tint.b;

@@ -1,7 +1,8 @@
 import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Mesh, NormalBlending, ShaderMaterial } from 'three';
 import { Course } from '../sim/course';
-import { BUDGET, byTier } from './fxhub';
+import { BUDGET, byTier, fx } from './fxhub';
 import { LANTERN_POOL_GLSL, shared } from './materials';
+import { rutSurface } from './snowsurf';
 
 // Round 7: ruts last the run. Your own groove no longer ages away or thins toward the lens: it is cut into
 // the snow for as long as it is in the buffer (540 m and more behind the sled), so the finish's swing, a
@@ -22,6 +23,20 @@ import { LANTERN_POOL_GLSL, shared } from './materials';
 
 export type TrailStyle = 'groove' | 'ghost';
 
+/** How far out from the track a groove reaches (round 8), for a carve `depth` cut in `surf` (snowsurf.ts
+ *  rutSurface): the runners, the trench's floor, the berm thrown up outside it and the shadow it throws. The
+ *  same figures as the groove's shader; in powder about twice a groomed cut's, on ice the runners alone. */
+export function grooveReach(depth: number, surf: number): number {
+  const scr = Math.max(0, Math.min(1, surf - 1));
+  const g = Math.max(0, Math.min(1, surf)) * (1 - scr);
+  const D = (1 - 0.58 * g) * (1 - scr);
+  const d = Math.min(1, depth);
+  const tw = (0.03 + 0.05 * d) * 1.2;
+  const floorW = RUNNER + tw + 0.03 + (0.12 + 0.42 * d) * 0.35 * d + 0.04 * D;
+  const berm = (0.04 + 0.05 * D + 0.06 * d * D) * (1 - scr);
+  return floorW + berm + (0.05 + 0.16 * D) * (1 - scr) + 0.02;
+}
+
 /** Half the distance between the sled's runners (meshes.ts sledGeometry), metres. */
 const RUNNER = 0.28;
 /** Half-width of a ghost trail ribbon: room for the 15 cm line plus its anti-aliased edge. */
@@ -40,7 +55,8 @@ const TRAIL_DYNAMIC: ReadonlyArray<readonly [string, number]> = [
   ['aPerp', 2],
   ['aFan', 1],
   ['aHw', 1],
-  ['aArc', 1],
+  // (Round 8: the arc and what the runners cut share one attribute, x and y, so a sample is still one upload.)
+  ['aArc', 2],
 ];
 
 export class Trail {
@@ -82,7 +98,7 @@ export class Trail {
     this.perp = new Float32Array(max * 2 * 2);
     this.fan = new Float32Array(max * 2);
     this.hw = new Float32Array(max * 2);
-    this.arc = new Float32Array(max * 2);
+    this.arc = new Float32Array(max * 2 * 2);
     for (let i = 0; i < max; i++) {
       this.across[i * 2] = -1;
       this.across[i * 2 + 1] = 1;
@@ -94,7 +110,7 @@ export class Trail {
     this.geo.setAttribute('aPerp', new BufferAttribute(this.perp, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aFan', new BufferAttribute(this.fan, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aHw', new BufferAttribute(this.hw, 1).setUsage(DynamicDrawUsage));
-    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 2).setUsage(DynamicDrawUsage));
     const idx = new Uint32Array((max - 1) * 6);
     this.geo.setIndex(new BufferAttribute(idx, 1).setUsage(DynamicDrawUsage));
     this.mat = new ShaderMaterial({
@@ -131,7 +147,8 @@ export class Trail {
         attribute vec2 aPerp;
         attribute float aFan;
         attribute float aHw;
-        attribute float aArc;
+        // x: metres along the track; y: what the runners cut (round 8, snowsurf.ts rutSurface: 0 powder, 1 groomed, 2 ice).
+        attribute vec2 aArc;
         uniform float uTime;
         uniform vec3 uSunDir;
         varying float vAcross;
@@ -142,6 +159,7 @@ export class Trail {
         varying float vAge;
         varying float vHw;
         varying float vArc;
+        varying float vSurf;
         varying vec3 vWorldPos;
         // How far up the screen this point sits, from the bottom edge (0) to the sled (1), so the groove
         // fades by where it lands in the frame, whatever the lens: a tall phone camera sees far more of
@@ -158,7 +176,8 @@ export class Trail {
           vDepth = aDepth;
           vFan = aFan;
           vHw = aHw;
-          vArc = aArc;
+          vArc = aArc.x;
+          vSurf = aArc.y;
           vAge = uTime - aBorn;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorldPos = wp.xyz;
@@ -191,6 +210,7 @@ export class Trail {
         varying float vAge;
         varying float vHw;
         varying float vArc;
+        varying float vSurf;
         varying vec3 vWorldPos;
         varying float vScreenK;
         ${LANTERN_POOL_GLSL}
@@ -253,71 +273,102 @@ export class Trail {
           #else
             float a = abs(x);
             float deep = vDepth;
+            // Round 8: what the runners cut (snowsurf.ts rutSurface): a trench with a thrown berm either side in
+            // powder, a shallow cut through a groomed lane's corduroy, a scratch on ice. D is how deep the snow
+            // lets the sled sink (1 powder, about 0.4 groomed, 0 ice), g how groomed, scr how much of a scratch.
+            float scr = clamp(vSurf - 1.0, 0.0, 1.0);
+            float g = clamp(vSurf, 0.0, 1.0) * (1.0 - scr);
+            float D = mix(1.0, 0.42, g) * (1.0 - scr);
             // Edges and the lip wander with the snow, never a ruled line.
             // (The noise runs along the track, stretched by the speed it was cut at.)
             vec2 tq = vec2(x, vArc);
             float nz = vnoise(tq * 2.7) - 0.5;
             float nz2 = vnoise(tq * 7.3 + 17.0) - 0.5;
-            float an = a + nz * 0.07 * (0.4 + deep);
+            float an = a + nz * 0.07 * (0.4 + deep) * (0.35 + 0.65 * D);
             // Toward the lens the marks soften (a wider feather, a little less contrast), so up close
             // they read as carved snow under raking light, never as two hard stripes of road paint.
             float soft = zr > 1.0 ? 1.0 - smoothstep(0.12, 0.6, vScreenK) : 0.0;
             // Which way the sun lies across the track, and how strongly (0 with the sun straight ahead).
             float sunK = abs(vSunK);
+            float sgn = sign(vSunK + 0.0001);
+            // Across in metres, positive on the sun's side of the track.
+            float s = x * sgn;
             // Two runner cuts pressed into the snow, a runner's width apart, wider and deeper the harder
             // the carve. Each wanders a little and presses deeper in places, so it reads carved, not ruled.
-            float tw = (0.03 + 0.05 * deep) * (0.8 + 0.4 * (nz + 0.5));
+            float tw = (0.03 + 0.05 * deep) * (0.8 + 0.4 * (nz + 0.5)) * mix(1.0, 0.35, scr);
             // Across one cut in metres from its centre line, signed toward the sun.
-            float u = sign(x) * (a - ${RUNNER.toFixed(2)} + nz2 * 0.014) * sign(vSunK + 0.0001);
+            float u = sign(x) * (a - ${RUNNER.toFixed(2)} + nz2 * 0.014) * sgn;
             float fe = tw * mix(0.5, 1.4, soft);
             float cut = band(u, -tw, tw, fe, px) * (0.75 + 0.25 * (nz2 + 0.5)) * (1.0 - vFan * 0.7);
             // The sun-side wall of each cut sits in its own shadow, the far wall in the light.
             float cutShade = smoothstep(-0.3 * tw, 0.9 * tw, u) * sunK;
             // And a bright lip of packed snow along its sun-side edge, catching the light; the far lip
             // more faintly. With the low sun ahead (sunK near 0) both lips are backlit and catch it: a cut
-            // with no bright edge read as a soft blue shadow line, not snow pressed aside.
+            // with no bright edge read as a soft blue shadow line, not snow pressed aside. (In powder the
+            // berm carries the edge; a groomed cut keeps its crisp lips.)
             float lw = 0.03 + 0.04 * deep;
             float lipS = band(u, tw * 0.75, tw * 0.75 + lw, lw * mix(0.6, 1.2, soft), px) * mix(0.6, 1.0, sunK) * (1.0 - vFan * 0.6);
             float lipF = band(-u, tw * 0.75, tw * 0.75 + lw, lw * mix(0.6, 1.2, soft), px) * (1.0 - sunK * 0.6) * 0.65 * (1.0 - vFan * 0.6);
             float scratch = (0.5 + 0.5 * sin(vAcross * 21.0 + nz * 3.0)) * smoothstep(vHw, vHw * 0.6, an) * vFan;
-            // The pressed floor between and just around the runners, as deep as the carve.
-            float floorW = ${RUNNER.toFixed(2)} + tw + 0.03 + (vHw - ${RUNNER.toFixed(2)}) * 0.35 * deep;
+            // The trench: the floor the sled pressed, its own width and more, wider and deeper the softer the
+            // snow and the harder the carve.
+            // (The stills' critic: a trench as wide as the sled, with broad lit berms, fanned out from under the sled as
+            // bright radial smears seen from straight behind it. It is round 7's width again, a little deeper in powder.)
+            float floorW = ${RUNNER.toFixed(2)} + tw + 0.03 + (0.12 + 0.42 * min(deep, 1.0)) * 0.35 * deep + 0.04 * D + (vHw - ${RUNNER.toFixed(2)}) * 0.3 * vFan;
             float floor0 = smoothstep(floorW + px + 0.04 * soft, floorW - px - 0.04 - 0.1 * soft, an);
-            // A deep carve throws a lip of snow up on the outside, broken into clumps.
-            float lipR = mix(floorW, vHw, 0.55);
-            float lip = smoothstep(floorW - 0.01, lipR, an) * smoothstep(vHw, lipR, an) * smoothstep(0.22, 0.65, deep);
-            lip *= smoothstep(-0.25, 0.2, nz2 + nz * 0.5);
-            float sunLip = lip * smoothstep(-0.3, 0.4, vSunSide);
+            // The berm the sled threw up outside each wall, broken into clumps: in powder a soft ridge whose
+            // face toward the sun is lit and the other in its own shade, on a groomed lane a low crisp lip.
+            float bermW = (0.04 + 0.05 * D + 0.06 * deep * D) * (1.0 - scr);
+            float bt = (an - floorW) / max(bermW, 0.001);
+            float berm = smoothstep(-0.05, 0.18, bt) * smoothstep(1.05, 0.7, bt) * (1.0 - scr);
+            berm *= mix(1.0, smoothstep(-0.32, 0.12, nz2 + nz * 0.6), D);
+            // Which half of the berm faces the sun: the outer face on the sun's side, the inner face (the one
+            // over the trench) on the other. With the sun ahead or behind, the crests catch it on both.
+            float sideLit = s > 0.0 ? smoothstep(0.38, 0.62, bt) : 1.0 - smoothstep(0.38, 0.62, bt);
+            float bermLit = mix(smoothstep(0.15, 0.5, bt) * smoothstep(0.85, 0.5, bt), sideLit, sunK);
+            // The sun-side wall shades the floor under it; the far wall stands in the light; past the far berm
+            // its own shadow falls on the snow.
+            float wallSh = smoothstep(floorW - 0.05 - 0.2 * D, floorW - 0.02, an) * floor0 * step(0.0, s) * sunK * D;
+            float wallLit = smoothstep(floorW - 0.08, floorW - 0.03, an) * (1.0 - smoothstep(floorW - 0.01, floorW + 0.02, an)) * step(s, 0.0) * D;
+            float os = an - floorW - bermW;
+            float bermSh = smoothstep(-0.02, 0.02, os) * (1.0 - smoothstep(0.02, 0.05 + 0.16 * D, os)) * step(s, 0.0) * sunK * D * (1.0 - scr);
             // Soft periwinkle in the cut (never navy: a navy cut read as a painted line), deeper with the
-            // carve, and a step deeper on the shaded wall.
-            vec3 floorCol = mix(uShade, uDeep, 0.15 + 0.3 * deep);
-            vec3 cutCol = mix(mix(uShade, uDeep, 0.12 + 0.3 * deep), mix(uShade, uDeep, 0.6), cutShade);
-            vec3 lipCol = mix(mix(uShade, uLit, 0.7), uLit * uSunColor * 1.1, smoothstep(-0.3, 0.4, vSunSide));
+            // carve, and a step deeper on the shaded wall. A groomed floor is pressed smooth, a step paler.
+            vec3 floorCol = mix(mix(mix(uShade, uLit, 0.3), uDeep, 0.3 * deep), mix(uShade, uLit, 0.55), g);
+            vec3 cutCol = mix(mix(uShade, uDeep, 0.12 + 0.3 * deep + 0.08 * D), mix(uShade, uDeep, 0.6), cutShade);
+            // On ice a runner scratches the glaze to frost.
+            cutCol = mix(cutCol, mix(uLit, vec3(1.0), 0.35), scr);
             // A packed lip catching the sun reads a step above the lit snow beside it.
             vec3 brightLip = mix(uLit, vec3(1.0), 0.15) * mix(vec3(1.0), uSunColor, 0.4);
-            // Layered bottom to top, premultiplied: the floor, the drift's scratches, the cuts and lips.
-            float kf = floor0 * (0.06 + 0.46 * smoothstep(0.15, 0.7, deep) + 0.18 * vFan);
+            vec3 bermCol = mix(mix(uShade, uLit, 0.3), brightLip, bermLit);
+            // Layered bottom to top, premultiplied: the floor, the drift's scratches, the walls, the cuts, the berms.
+            float kf = floor0 * (0.1 + D * (0.42 + 0.25 * smoothstep(0.1, 0.7, deep)) + 0.18 * vFan) * (1.0 - scr);
             vec3 P = floorCol * kf;
             float A = kf;
             float ks = scratch * 0.5;
             P = mix(uShade, uDeep, 0.5) * ks + P * (1.0 - ks);
             A = ks + A * (1.0 - ks);
-            // The wall under the outer sun-side lip of a deep carve sits in its own shadow.
-            float wall = smoothstep(floorW - 0.06, floorW, an) * (1.0 - smoothstep(floorW, lipR, an)) * deep * smoothstep(0.1, 0.5, vSunSide) * 0.45;
-            P = mix(uShade, uDeep, 0.55) * wall + P * (1.0 - wall);
-            A = wall + A * (1.0 - wall);
-            float kc = cut * (0.36 + 0.4 * deep) * mix(1.0, 0.8, soft);
+            float kw = wallSh * 0.6;
+            P = mix(uShade, uDeep, 0.55) * kw + P * (1.0 - kw);
+            A = kw + A * (1.0 - kw);
+            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.6, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
-            float kl = max(sunLip * 0.9, lip * 0.45);
-            P = lipCol * kl + P * (1.0 - kl);
-            A = kl + A * (1.0 - kl);
+            float kwl = wallLit * 0.15;
+            P = brightLip * kwl + P * (1.0 - kwl);
+            A = kwl + A * (1.0 - kwl);
+            float kbs = bermSh * 0.2;
+            P = mix(uShade, uDeep, 0.35) * kbs + P * (1.0 - kbs);
+            A = kbs + A * (1.0 - kbs);
+            float kbm = berm * (0.22 + 0.2 * D) * mix(1.0, 0.8, soft);
+            P = bermCol * kbm + P * (1.0 - kbm);
+            A = kbm + A * (1.0 - kbm);
             // Never a white stripe: the trail cannot see the cast shadows, and a full-strength lip across shaded
             // snow (the rider's own shadow, a phone's darker foreground) read as a painted line.
-            float kb = max(lipS * 0.42, lipF * 0.28) * mix(1.0, 0.45, soft);
+            float kb = max(lipS * 0.42, lipF * 0.28) * mix(1.0, 0.45, soft) * mix(1.0, 0.8, D);
             P = brightLip * kb + P * (1.0 - kb);
             A = kb + A * (1.0 - kb);
-            // Snow moved, not marked: a deep carve throws clods out past its lip, each a small lit crumb
+            // Snow moved, not marked: a deep carve throws clods out past its berm, each a small lit crumb
             // with its own shade under it, thinning with distance from the cut. Stretched along the track
             // with the rest of the groove's noise, so at speed they are flecks, not dots.
             vec2 cq = vec2(x * 9.0, vArc * 3.2);
@@ -325,11 +376,16 @@ export class Trail {
             vec2 cf = fract(cq) - 0.5;
             float ch = h12(ci);
             float clod = step(0.8, ch) * smoothstep(0.34, 0.12, length(cf + (vec2(h12(ci + 7.0), h12(ci + 13.0)) - 0.5) * 0.4));
-            float outside = smoothstep(floorW, floorW + 0.05, an) * smoothstep(vHw - 0.02, vHw - 0.2, an);
-            float kcl = clod * outside * smoothstep(0.25, 0.7, deep) * (1.0 - soft * 0.5) * (1.0 - smoothstep(0.02, 0.06, px));
+            float outside = smoothstep(floorW + bermW * 0.6, floorW + bermW * 0.6 + 0.05, an) * smoothstep(vHw - 0.02, vHw - 0.2, an);
+            float kcl = clod * outside * smoothstep(0.25, 0.7, deep) * D * (1.0 - soft * 0.5) * (1.0 - smoothstep(0.02, 0.06, px));
             vec3 clodCol = mix(mix(uShade, uDeep, 0.3), brightLip, smoothstep(-0.1, 0.25, cf.y * sign(vSunK + 0.0001) + 0.1));
             P = clodCol * kcl + P * (1.0 - kcl);
             A = kcl + A * (1.0 - kcl);
+            // On ice, fine scratches either side of each runner's line, frost-white in the glaze.
+            float hatch = smoothstep(0.55, 1.0, sin(x * 240.0 + nz * 9.0)) * (1.0 - smoothstep(0.03, 0.08, abs(a - ${RUNNER.toFixed(2)}))) * scr * (1.0 - smoothstep(0.004, 0.012, px));
+            float kh = hatch * 0.3;
+            P = mix(uLit, vec3(1.0), 0.35) * kh + P * (1.0 - kh);
+            A = kh + A * (1.0 - kh);
             vec3 col = P / max(A, 0.001);
             // The sled lantern's amber pool falls into the groove too (the same pool as the snow's).
             if (uLantern > 0.0) {
@@ -407,7 +463,9 @@ export class Trail {
     // Ghost lines are a fixed hairline. The groove is a runner's width plus a lip that grows with
     // the carve; only a drift fans out wider.
     // (A deep carve's ribbon runs a hand wider than its lip, for the clods it throws out.)
-    const hw = this.ghost ? GHOST_HW : Math.max(RUNNER + 0.12 + 0.42 * Math.min(1, depth), width * 0.45 * fan);
+    // (Round 8: in powder it is laid wider again, for the trench's berms and the shadow one throws.)
+    const surf = this.ghost ? 0 : rutSurface(this.course, x, z);
+    const hw = this.ghost ? GHOST_HW : Math.max(RUNNER + 0.12 + 0.42 * Math.min(1, depth), grooveReach(depth, surf), width * 0.45 * fan);
     // Perpendicular in sim space.
     const px = tz;
     const pz = -tx;
@@ -430,7 +488,8 @@ export class Trail {
     this.perp[i * 4 + 1] = this.perp[i * 4 + 3] = -pz;
     this.fan[i * 2] = this.fan[i * 2 + 1] = fan;
     this.hw[i * 2] = this.hw[i * 2 + 1] = hw;
-    this.arc[i * 2] = this.arc[i * 2 + 1] = this.arcNow;
+    this.arc[i * 4] = this.arc[i * 4 + 2] = this.arcNow;
+    this.arc[i * 4 + 1] = this.arc[i * 4 + 3] = surf;
     this.segStart[i] = startNew ? 1 : 0;
     this.head = (this.head + 1) % this.max;
     this.count = Math.min(this.count + 1, this.max);
@@ -496,6 +555,9 @@ export class GhostTrails {
   private geo: BufferGeometry;
   private pos: Float32Array;
   private born: Float32Array;
+  /** When each ghost's last sample was laid and where it last left powder hanging (round 8). */
+  private lastT: Float64Array;
+  private hungZ: Float64Array;
   private heads: Int32Array;
   private counts: Int32Array;
   private lastX: Float64Array;
@@ -525,7 +587,8 @@ export class GhostTrails {
     this.coarse = byTier(BUDGET.rutCoarse);
     const verts = n * max * 2;
     this.pos = new Float32Array(verts * 3);
-    this.born = new Float32Array(verts);
+    // (Round 8: x the time a sample was laid, y what its runners cut, snowsurf.ts rutSurface: one upload a sample.)
+    this.born = new Float32Array(verts * 2);
     const across = new Float32Array(verts);
     const col = new Float32Array(verts * 3);
     const gi = new Float32Array(verts);
@@ -542,12 +605,14 @@ export class GhostTrails {
     this.counts = new Int32Array(n);
     this.lastX = new Float64Array(n).fill(NaN);
     this.lastZ = new Float64Array(n).fill(NaN);
+    this.lastT = new Float64Array(n);
+    this.hungZ = new Float64Array(n).fill(-1e9);
     this.broken = new Uint8Array(n).fill(1);
     this.segStart = new Uint8Array(n * max);
     this.geo = new BufferGeometry();
     this.geo.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aAcross', new BufferAttribute(across, 1));
-    this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aCol', new BufferAttribute(col, 3));
     this.geo.setAttribute('aG', new BufferAttribute(gi, 1));
     // (A 16-bit index wherever the field's vertices fit one: half the bytes a rebuild sends.)
@@ -578,7 +643,7 @@ export class GhostTrails {
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
-        attribute float aBorn;
+        attribute vec2 aBorn;
         attribute vec3 aCol;
         attribute float aG;
         uniform float uTime;
@@ -589,9 +654,11 @@ export class GhostTrails {
         varying vec3 vCol;
         varying vec3 vWorldPos;
         varying float vWake;
+        varying float vSurf;
         void main() {
+          vSurf = aBorn.y;
           vAcross = aAcross;
-          vAge = uTime - aBorn;
+          vAge = uTime - aBorn.x;
           vCol = aCol;
           vWake = abs(aG - uWakeG) < 0.5 ? uWake : 0.0;
           vec4 wp = modelMatrix * vec4(position, 1.0);
@@ -615,6 +682,7 @@ export class GhostTrails {
         varying vec3 vCol;
         varying vec3 vWorldPos;
         varying float vWake;
+        varying float vSurf;
         float line(float x, float hw, float px) {
           float w = max(hw, px * 0.6);
           return smoothstep(w + px * 0.75, w - px * 0.75, abs(x)) * (hw / w);
@@ -654,17 +722,28 @@ export class GhostTrails {
           // The rut under the light (round 7): two runner cuts pressed into the snow in its own shade, a lip
           // of packed snow outside each catching the light. It does not age: it lies on the snow ahead of
           // you until you ride over it, shallower than your own groove, and on glass ice only a scratch.
-          float cut = line(r, 0.034, px);
-          float lipX = abs(x) - 0.28 - 0.062;
-          float lip = line(lipX, 0.022, px) * (1.0 - smoothstep(0.015, 0.05, px));
+          // (Round 8: the same trench as your own, shallower and fainter: a pressed floor, the two cuts, a low
+          // berm outside each with its crest lit; on a groomed lane a shallow cut, on ice a frost scratch.)
+          float scr = clamp(vSurf - 1.0, 0.0, 1.0);
+          float D = mix(1.0, 0.42, clamp(vSurf, 0.0, 1.0) * (1.0 - scr)) * (1.0 - scr);
+          float ax = abs(x);
+          float floorW = 0.28 + 0.08 + 0.1 * D;
+          float fl = smoothstep(floorW + px, floorW - px - 0.03, ax) * D;
+          float cut = line(r, 0.034 * mix(1.0, 0.45, scr), px);
+          float bt = (ax - floorW) / (0.06 + 0.12 * D);
+          float berm = smoothstep(-0.1, 0.25, bt) * smoothstep(1.05, 0.6, bt) * (1.0 - scr) * (1.0 - smoothstep(0.015, 0.06, px));
+          float lip = line(ax - 0.28 - 0.062, 0.022, px) * (1.0 - smoothstep(0.015, 0.05, px)) * (1.0 - D * 0.6);
           float rutK = (1.0 - fogF) * mix(1.0, 0.6, smoothstep(50.0, 160.0, d)) * (uIceMood >= 1.0 ? 0.5 : 1.0) * smoothstep(0.0, 0.25, vAge);
-          float ka = cut * 0.46 * rutK;
-          float kl = lip * 0.3 * rutK;
-          vec3 rutCol = mix(mix(uShade, uDeep, 0.38), uFog, fogF);
+          float kf = fl * 0.16 * rutK;
+          float ka = cut * mix(0.46, 0.36, scr) * rutK;
+          float kl = max(lip * 0.3, berm * (0.12 + 0.16 * D)) * rutK;
+          vec3 rutCol = mix(mix(mix(uShade, uDeep, 0.38), mix(uLit, vec3(1.0), 0.35), scr), uFog, fogF);
           vec3 lipCol = mix(mix(uLit, vec3(1.0), 0.15) * mix(vec3(1.0), uSunColor, 0.4), uFog, fogF);
-          // Under the light: the rut and its lip first, the luminous line over them.
-          vec3 P = rutCol * ka;
-          float A = ka;
+          // Under the light: the floor, the rut and its berm first, the luminous line over them.
+          vec3 P = mix(mix(uShade, uDeep, 0.2), uFog, fogF) * kf;
+          float A = kf;
+          P = rutCol * ka + P * (1.0 - ka);
+          A = ka + A * (1.0 - ka);
           P = lipCol * kl + P * (1.0 - kl);
           A = kl + A * (1.0 - kl);
           P = col * alpha + P * (1.0 - alpha);
@@ -691,6 +770,7 @@ export class GhostTrails {
     this.broken.fill(1);
     this.lastX.fill(NaN);
     this.lastZ.fill(NaN);
+    this.hungZ.fill(-1e9);
     this.geo.setDrawRange(0, 0);
   }
 
@@ -711,12 +791,14 @@ export class GhostTrails {
     const lz0 = this.lastZ[i];
     let tx = 0;
     let tz = 1;
+    let step = 0;
     if (!Number.isNaN(lx0)) {
       const dx = x - lx0;
       const dz = z - lz0;
       const l2 = dx * dx + dz * dz;
       if (l2 < this.gap * this.gap) return;
       const l = Math.sqrt(l2);
+      step = l2 > 64 ? 0 : l;
       tx = dx / l;
       tz = dz / l;
       // A jump (a new run, the reel changing leads) starts a new stroke.
@@ -743,13 +825,33 @@ export class GhostTrails {
     this.pos[o + 3] = bx;
     this.pos[o + 4] = c.ground(bx, bz) + 0.04;
     this.pos[o + 5] = -bz;
-    this.born[s * 2] = this.born[s * 2 + 1] = time;
+    const sf = rutSurface(c, x, z);
+    this.born[s * 4] = this.born[s * 4 + 2] = time;
+    this.born[s * 4 + 1] = this.born[s * 4 + 3] = sf;
     this.heads[i] = (k + 1) % this.max;
     this.counts[i] = Math.min(this.counts[i] + 1, this.max);
     this.dirtyFlag = true;
     // Only this sample goes up to the GPU.
     (this.geo.getAttribute('position') as BufferAttribute).addUpdateRange(o, 6);
-    (this.geo.getAttribute('aBorn') as BufferAttribute).addUpdateRange(s * 2, 2);
+    (this.geo.getAttribute('aBorn') as BufferAttribute).addUpdateRange(s * 4, 4);
+    this.hang(i, x, z, tx, tz, step, time);
+  }
+
+  /** Powder left hanging where a ghost has just ridden (round 8): every few metres of a grounded ghost's line
+   *  near the rider, a thin lit veil it threw up drifts and settles over a second or two, so a ghost that
+   *  went by leaves the air it passed through. Through the effects' hub (fxhub.ts fx.snow), so the field needs
+   *  no handle of its own on the particles. */
+  private hang(i: number, x: number, z: number, tx: number, tz: number, step: number, time: number): void {
+    const dt = time - this.lastT[i];
+    this.lastT[i] = time;
+    const snow = fx.snow;
+    if (!snow || step <= 0 || dt <= 0 || z - this.hungZ[i] < byTier(BUDGET.hangEvery)) return;
+    const ahead = z + shared.uFocus.value.z;
+    if (ahead < -6 || ahead > 80) return;
+    const v = step / dt;
+    if (v < 8 || v > 90) return;
+    this.hungZ[i] = z;
+    snow.ghostPowder(x, this.course.ground(x, z), -z, tx * v, -tz * v, v);
   }
 
   /** Triangles in the last flush (tests and the cost report). */

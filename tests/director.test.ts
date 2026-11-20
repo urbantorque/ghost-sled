@@ -7,6 +7,7 @@ import { ChaosEvent, Mood } from '../src/sim/chaos';
 import type { StyleKind } from '../src/sim/scoring';
 import type { Sim, SimEvent } from '../src/sim/sim';
 import { CHARM } from '../src/sim/charms';
+import { offersGistLine } from '../src/game/charmcopy';
 import { TRICK } from '../src/sim/tricks';
 
 // Synthetic batches through the director: the order rules (a 'perfect' style before its land, a bank
@@ -2394,12 +2395,28 @@ describe('round 8: charm gates, tricks and the rival rules', () => {
     sim.s.z = 330;
     const near = of(r.frame(), 'charmGate');
     expect(near).toHaveLength(1);
-    expect(near[0]).toMatchObject({ phase: 'near', gate: 0, say: { label: "Comet's Tail  \u00B7  Second Wind  \u00B7  Owl's Breath" } });
+    expect(near[0]).toMatchObject({ phase: 'near', gate: 0, say: { label: offersGistLine([CHARM.comet, CHARM.second, CHARM.owl]) } });
     expect(of(r.idle(1), 'charmGate')).toHaveLength(0);
     sim.charmGates[0].lane = 2;
     const take = r.frame([{ type: 'charm', gate: 0, lane: 2, id: CHARM.owl }, { type: 'synergy', id: 4 }]);
-    expect(of(take, 'charmGate')[0]).toMatchObject({ phase: 'take', id: CHARM.owl, lane: 2, say: { label: "Owl's Breath", tone: 'big' } });
+    expect(of(take, 'charmGate')[0]).toMatchObject({ phase: 'take', id: CHARM.owl, lane: 2, say: { label: "Owl's Breath: near misses hold the combo", tone: 'big' } });
     expect(of(take, 'synergy')[0]).toMatchObject({ name: 'Night Chorus', say: { label: 'Night Chorus' } });
+  });
+
+  it('holds a pop while a showdown runs, its clock stopped, and lets it go once the showdown is decided', () => {
+    let met = false;
+    let given = false;
+    const r = new Rig({ missionsCrossed: () => (met && !given ? ((given = true), [{ id: 'm', text: 'Pass a ghost', reward: 25 }]) : []) });
+    r.tracks = [track(1, 'pool', 'Old Wren')];
+    r.poses.set(1, pose(102, 1));
+    (r.sim.s as { z: number }).z = 100;
+    r.idle(4);
+    r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'start', rival: 0, markerZ: 402 } }] });
+    met = true;
+    // Longer than a mission's give-up clock and its lateness cap: still held, never dropped.
+    expect(of(r.idle(16), 'missionPop')).toHaveLength(0);
+    r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'lost', rival: 0, markerZ: 402 } }] });
+    expect(of(r.idle(6), 'missionPop')).toHaveLength(1);
   });
 
   it('calls a trick by its name, New the first time in a run', () => {
@@ -2419,12 +2436,18 @@ describe('round 8: charm gates, tricks and the rival rules', () => {
     (r.sim.s as { z: number }).z = 100;
     const start = r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'start', rival: 0, markerZ: 402 } }] });
     expect(of(start, 'showdown')[0]).toMatchObject({ phase: 'start', markerZ: 402, ghost: { name: 'Old Wren' }, say: { label: 'Showdown: Old Wren' } });
-    // The pill names the showdown's rival (G1, 30 m ahead) though another rider is nearer (an open duel would still
-    // take it: a duel is the shorter fight).
+    // The pill names the showdown's rival (G1, 30 m ahead) though another rider is nearer (ahead of any duel, so
+    // the player sees who they race).
     r.idle(0.5);
     expect(r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id).toBe(1);
     const lost = r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'lost', rival: 0, markerZ: 402 } }] });
-    expect(of(lost, 'showdown')[0]).toMatchObject({ phase: 'lost', say: { label: 'Old Wren took the showdown', tone: 'lost' } });
+    expect(of(lost, 'showdown')[0]).toMatchObject({ phase: 'lost', say: { label: 'Old Wren took the showdown', tone: 'normal' } });
+    // The result owns the pill for a moment, as a duel's does; then the nearest rider has it back.
+    const pill = () => r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id;
+    r.idle(1);
+    expect(pill()).toBe(1);
+    r.idle(1);
+    expect(pill()).toBe(2);
     // A won showdown and a stolen wisp are said by the sim's own style line, with their points.
     const won = r.frame([style('showdown', 1000)], { rivals: [{ tick: r.sim.tick, e: { type: 'steal', rival: 0 } }] });
     expect(of(won, 'steal')).toHaveLength(1);

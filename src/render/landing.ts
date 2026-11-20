@@ -420,6 +420,8 @@ export class LandingAid {
   /** Round 8: a deep grab is held (tier 2 on): near the snow the ring warns in amber until it is let go. */
   deepGrab = false;
   private warnT = 0;
+  /** Where the contact shadow stands this frame (sim metres), kept in the lens's frame: a warning ring stands there. */
+  private blobAt = { x: 0, z: 0, on: false };
 
   /** Burst crater pressed into the snow on a perfect landing. `strength` is its width, 1 for a single
    *  stomp up to 1.6 for a streak of five or more. */
@@ -460,6 +462,7 @@ export class LandingAid {
     // Contact shadow under the sled.
     const h = Math.max(0, s.y - c.ground(s.x, s.z));
     this.blob.visible = blobVisible && !s.crashed;
+    this.blobAt.on = false;
     if (this.blob.visible) {
       // An airborne sled's shadow falls a little ahead of the point under it, as if from a high light
       // behind the lens, so the chase camera (which rises with the sled) keeps it in the frame: straight
@@ -494,6 +497,9 @@ export class LandingAid {
       c.gradient(bx, bz, g);
       const n = tmpN.set(-g.x, 1, g.z).normalize();
       this.blob.position.set(bx, gy + 0.03, -bz);
+      this.blobAt.x = bx;
+      this.blobAt.z = bz;
+      this.blobAt.on = true;
       this.blob.quaternion.setFromUnitVectors(Z_AXIS, n);
       this.blob.rotateZ(-s.heading);
       // It is how you judge a jump (ART.md section 2), so an airborne sled keeps a clear one: it
@@ -547,21 +553,28 @@ export class LandingAid {
     this.warnT = warn ? this.warnT + dt : 0;
     // It closes in to just around the sled, so the stomp flash still shows past the rider.
     const radius = 1.05 + 1.9 * Math.min(1, t / 1.1);
+    // (A deep grab's warning stands round the sled's shadow, which is kept in the lens's frame: the touchdown point
+    // of a leap often lies past its knuckle, where the lens cannot see the snow.)
+    if (warn && !hot && this.blobAt.on) {
+      px = this.blobAt.x;
+      pz = this.blobAt.z;
+    }
     c.gradient(px, pz, g);
     const n = tmpN.set(-g.x, 1, g.z).normalize();
     this.ring.position.set(px, c.ground(px, pz) + 0.05, -pz);
     this.ring.quaternion.copy(this.q.setFromUnitVectors(Z_AXIS, n));
-    this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : 1));
+    // (A warning ring stands wider than the sled, so it is never hidden under it.)
+    this.ring.scale.setScalar(radius * (hot ? 1.08 + 0.04 * Math.min(5, Math.max(0, this.streak)) : warn ? 1.3 : 1));
     this.ringMat.uniforms.uColor.value.set(hot ? '#FFE08A' : warn ? AMBER : '#F5F3FF');
     if (warn && hot) this.ringMat.uniforms.uEdge.value.set(AMBER);
     else this.ringMat.uniforms.uEdge.value.copy(shared.uSnowDeep.value).multiplyScalar(0.7);
     // (The throb: about 7 a second, a quarter brighter at its peak.)
-    this.ringMat.uniforms.uHot.value = hot || (warn ? (reduced() ? 0.5 : 0.3 + 0.35 * (0.5 + 0.5 * Math.cos(this.warnT * 44))) : 0);
+    this.ringMat.uniforms.uHot.value = hot || (warn ? (reduced() ? 0.85 : 0.6 + 0.4 * (0.5 + 0.5 * Math.cos(this.warnT * 44))) : 0);
     // The dashes wind inward as it closes (one dash per second of fall).
     this.ringMat.uniforms.uSpin.value = (t * 1.0) % 1;
     // The band thickens in the stomp window. It stays a ring: from the low chase camera a band much
     // wider than this foreshortens into a solid white plate under the sled.
-    this.ringMat.uniforms.uInner.value = hot ? 0.68 : warn ? 0.71 : 0.75;
-    this.ringMat.uniforms.uAlpha.value = this.shown * (hot ? 1 : 0.7 + 0.25 * (1 - Math.min(1, t / 1.1)));
+    this.ringMat.uniforms.uInner.value = hot ? 0.68 : warn ? 0.64 : 0.75;
+    this.ringMat.uniforms.uAlpha.value = this.shown * (hot || warn ? 1 : 0.7 + 0.25 * (1 - Math.min(1, t / 1.1)));
   }
 }

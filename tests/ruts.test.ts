@@ -8,7 +8,8 @@ import type { Course } from '../src/sim/course';
 // Round 7's ruts: they last the run inside the visible range, to a budget per tier, with a cheaper far
 // representation, and Low keeps round 6's vertex count.
 
-const flat = { ground: () => 0 } as unknown as Course;
+// (A plain groomed cruise with no ice, as far as the ruts ask: snowsurf.ts rutSurface.)
+const flat = { ground: () => 0, surface: () => ({ ice: false }), edgeExcess: () => -3, section: () => ({ kind: 'cruise', z0: -1e9, z1: 1e9, prev: null, ledges: [] }) } as unknown as Course;
 const mint = [new Color('#8FF3E4'), new Color('#8FF3E4'), new Color('#8FF3E4')];
 
 /** Rides ghost `i` straight down the run from z0 to z1 in half-metre steps. */

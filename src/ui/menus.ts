@@ -1,4 +1,5 @@
-import type { GarageCard, GarageShelf, GarageShelfId, LanternTownView, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
+import type { AlbumModel, AlmanacModel, GarageCard, GarageShelf, GarageShelfId, LanternTownView, MissionView, PaintCard, SettingsModel, SledCard, UIHandlers } from './contract';
+import { albumBody, almanacBody, rankHead } from './almanac';
 import { sledById } from '../sim/sleds';
 import { sledArt, sledTint } from './art';
 import { btn, captureFocus, h, kbd, Layer, restoreFocus, sr, type Ctx } from './dom';
@@ -213,6 +214,13 @@ export class Menus {
   readonly pause: Layer;
   readonly sleds: Layer;
   readonly settings: Layer;
+  /** Round 8: the Almanac and the Spirit Album, one sheet with a tab each (almanac.ts draws them). */
+  readonly books: Layer;
+  private readonly booksSheet: HTMLElement;
+  private readonly booksBody: HTMLElement;
+  private booksTab: 'almanac' | 'album' = 'almanac';
+  private lastAlmanac: AlmanacModel | null = null;
+  private lastAlbum: AlbumModel | null = null;
   private readonly pausePanel: SettingsPanel;
   /** The run's missions on the pause card, as they stand now (hidden with none). */
   private readonly pauseMis: HTMLElement;
@@ -310,6 +318,14 @@ export class Menus {
     const setWrap = this.wrap(this.settingsSheet, () => this.closeSheet(this.settings));
     this.settings = new Layer(setWrap, 200);
     parent.append(setWrap);
+
+    // The books (round 8).
+    this.booksBody = h('div', 'gs-sheet-body gs-books-body');
+    const booksHead = this.sheetHead('Almanac', 'gs-books-title', () => this.closeSheet(this.books), null);
+    this.booksSheet = this.sheet('gs-sheet-books', 'gs-books-title', booksHead, this.booksBody);
+    const booksWrap = this.wrap(this.booksSheet, () => this.closeSheet(this.books));
+    this.books = new Layer(booksWrap, 200);
+    parent.append(booksWrap);
   }
 
   private sheetHead(title: string, id: string, onClose: () => void, extra: HTMLElement | null): HTMLElement {
@@ -340,16 +356,17 @@ export class Menus {
 
   /** True when the node is part of the pause overlay or one of the sheets. */
   contains(n: Node): boolean {
-    return this.pause.el.contains(n) || this.sleds.el.contains(n) || this.settings.el.contains(n);
+    return this.pause.el.contains(n) || this.sleds.el.contains(n) || this.settings.el.contains(n) || this.books.el.contains(n);
   }
 
   get anyOpen(): boolean {
-    return this.pause.open || this.sleds.open || this.settings.open;
+    return this.pause.open || this.sleds.open || this.settings.open || this.books.open;
   }
 
   /** The open menu surface on top (settings over sleds over pause), or null. */
   get topEl(): HTMLElement | null {
     if (this.settings.open) return this.settings.el;
+    if (this.books.open) return this.books.el;
     if (this.sleds.open) return this.sleds.el;
     if (this.pause.open) return this.pause.el;
     return null;
@@ -507,9 +524,10 @@ export class Menus {
   }
 
   /**
-   * The Lantern Row (round 8, game/lanterns.ts): each open finish town's eight lanterns, lit in order with gifts.
-   * A plain list for now (the screens lane draws the row properly): the town, how many are lit, and one button for
-   * the next. A look only, hung in the town at the finish: nothing in it reaches a race.
+   * The Lantern Row (round 8, game/lanterns.ts): each open finish town's eight lanterns, lit in order with gifts. Each
+   * town is its row of eight drawn as they hang (the lit ones marigold, the lantern's and the gifts' colour; the next
+   * one outlined; the rest dark), its count, and one button for the next. A look only, hung in the town at the
+   * finish: nothing in it reaches a race.
    */
   private lanternPanel(towns: LanternTownView[], wallet: number): HTMLElement {
     const list = h('ul', 'gs-lrow-list');
@@ -525,7 +543,10 @@ export class Menus {
         act = btn(this.ctx, { cls: 'gs-btn-primary gs-shop-btn', label: 'Light a Lantern', fk: `lantern-${t.mountain}`, onClick: () => this.hd.onLightLantern?.(next.id) }, h('span', 'gs-shop-price', icon('gift'), h('span', 'gs-num', fmt(next.price))));
         act.setAttribute('aria-label', `Light the next lantern in ${t.town} for ${fmt(next.price)} gifts`);
       } else act = h('span', 'gs-shop-effect', icon('gift'), h('span', 'gs-num', fmt(t.next.price)), `, ${fmt(Math.max(1, t.next.price - wallet))} more to go`);
-      list.append(h('li', 'gs-lrow-town', name, count, act));
+      const row = h('span', 'gs-lrow-row');
+      row.setAttribute('aria-hidden', 'true');
+      for (const l of t.lanterns) row.append(h('span', `gs-lrow-lamp${l.lit ? ' is-lit' : t.next?.id === l.id ? ' is-next' : ''}`, icon('lantern')));
+      list.append(h('li', 'gs-lrow-town', h('span', 'gs-lrow-head', name, count), row, act));
     }
     return h('div', 'gs-shop gs-lrow-shop', h('p', 'gs-look-note', 'Lanterns you light hang in the finish town. A look only.'), list);
   }
@@ -847,9 +868,10 @@ export class Menus {
 
   /** Closes the sheets (Sleds, Settings). Pause and results are closed by their own calls. */
   closeMenus(): void {
-    const was = this.sleds.open || this.settings.open;
+    const was = this.sleds.open || this.settings.open || this.books.open;
     this.sleds.hide();
     this.settings.hide();
+    this.books.hide();
     this.onChange();
     if (was && !this.pause.open) this.restore();
   }
@@ -857,7 +879,76 @@ export class Menus {
   private closeSheet(l: Layer): void {
     l.hide();
     this.onChange();
-    if (!this.sleds.open && !this.settings.open) this.restore();
+    if (!this.sleds.open && !this.settings.open && !this.books.open) this.restore();
+  }
+
+  /** Round 8: the Almanac's tab of the books (the rank, the month's chapter, the fifty pages), opened at the page the
+   *  bar fills toward. */
+  showAlmanac(m: AlmanacModel): void {
+    this.lastAlmanac = m;
+    this.booksTab = 'almanac';
+    this.renderBooks();
+  }
+
+  /** Round 8: the Spirit Album's tab of the books. */
+  showAlbum(m: AlbumModel): void {
+    this.lastAlbum = m;
+    this.booksTab = 'album';
+    this.renderBooks();
+  }
+
+  private renderBooks(): void {
+    const fresh = !this.books.open;
+    const tab = this.booksTab;
+    const title = this.booksSheet.querySelector('.gs-sheet-title');
+    if (title) title.textContent = tab === 'almanac' ? 'Almanac' : 'Spirit Album';
+    // The tabs: the other book is a round trip to the game for its model (onOpenAlmanac, onOpenAlbum).
+    const tabs = h('div', 'gs-gtabs gs-books-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'Books');
+    for (const [id, label] of [['almanac', 'Almanac'], ['album', 'Spirit Album']] as const) {
+      const on = id === tab;
+      const b = h('button', `gs-gtab${on ? ' is-on' : ''}`, label);
+      b.type = 'button';
+      b.id = `gs-btab-${id}`;
+      b.dataset.fk = `btab-${id}`;
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(on));
+      b.setAttribute('aria-controls', 'gs-books-panel');
+      b.tabIndex = on ? 0 : -1;
+      const go = () => {
+        if (id === this.booksTab) return;
+        this.ctx.sound('tap');
+        if (id === 'album') this.hd.onOpenAlbum?.();
+        else this.hd.onOpenAlmanac?.();
+        this.booksSheet.querySelector<HTMLElement>(`[data-fk="btab-${id}"]`)?.focus({ preventScroll: true });
+      };
+      b.addEventListener('click', go);
+      b.addEventListener('keydown', (e) => {
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+        e.preventDefault();
+        this.booksSheet.querySelector<HTMLElement>(`[data-fk="btab-${id === 'almanac' ? 'album' : 'almanac'}"]`)?.click();
+      });
+      tabs.append(b);
+    }
+    const a = this.lastAlmanac;
+    const al = this.lastAlbum;
+    const panel = tab === 'almanac' && a ? h('div', 'gs-books-panel', rankHead(a.bar), almanacBody(a)) : tab === 'album' && al ? albumBody(al) : h('div', 'gs-books-panel');
+    panel.id = 'gs-books-panel';
+    panel.setAttribute('role', 'tabpanel');
+    panel.setAttribute('aria-labelledby', `gs-btab-${tab}`);
+    this.booksBody.replaceChildren(tabs, panel);
+    if (this.books.show()) {
+      this.rememberFocus();
+      this.booksSheet.querySelector<HTMLElement>('[data-fk^="close-"]')?.focus({ preventScroll: true });
+    }
+    // The Almanac opens at the page being filled toward; the Album at its top.
+    const next = tab === 'almanac' ? panel.querySelector<HTMLElement>('[data-next]') : null;
+    const body = this.booksBody;
+    body.scrollTop = 0;
+    if (next) body.scrollTop = Math.max(0, next.getBoundingClientRect().bottom - body.getBoundingClientRect().top - body.clientHeight * 0.85);
+    void fresh;
+    this.onChange();
   }
 
   private rememberFocus(): void {

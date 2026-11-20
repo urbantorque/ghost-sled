@@ -3437,6 +3437,17 @@
   text-transform: none;
 }
 
+/* Round 8: in a long line a rider's name is what gives way to a phone's edges ("Showdown: Bram Oakh..."), never the
+   words round it: --rest is their letter count (Fx), 0.78 em a heavy italic capital, 32 px the gutters. */
+.gs-call.is-fit .gs-call-who {
+  display: inline-block;
+  max-width: calc(100vw - 32px - var(--rest, 0) * 0.78em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 /* Merged repeats: a row of small pips after the label (--n of them, up to five), "SLIPSTREAM ••• +28".
    Never "x3": "x" is the combo multiplier's alone. Drawn as one repeated dot, with an ink edge so it
    holds on white snow like the halo'd type. */
@@ -3506,6 +3517,16 @@
    0.68 em is a wide estimate of one heavy capital. */
 .gs-call.is-fit .gs-call-label {
   font-size: min(clamp(17px, calc(var(--u) * 1.22), 23px), calc((100vw - 32px) / (var(--len, 1) * 0.68)));
+}
+
+/* Round 8: a charm gate's offers line (Fx.gate) wraps to two balanced lines on a phone; on a desktop it is one. */
+.gs-call.is-gate .gs-call-label {
+  white-space: normal;
+  text-align: center;
+  max-width: calc(100vw - 32px);
+  text-wrap: balance;
+  /* One line where it fits at up to 20 px (0.62 em a letter); else two balanced lines, never under 11 px. */
+  font-size: min(20px, max(calc((100vw - 32px) / (var(--len, 1) * 0.62)), min(13px, max(11px, calc((100vw - 32px) / (var(--len, 1) * 0.31))))));
 }
 
 .gs-call.is-fit.is-lost .gs-call-label {
