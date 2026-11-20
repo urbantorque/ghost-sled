@@ -20,9 +20,11 @@ import { NEAR_OFF, liveTree, wind } from './treelife';
 // and each near build is made on idle time after it. Medium and High (the phone on Medium a leaner build); Low keeps
 // its own trees.
 
-/** Within NEAR_IN m of the lens a tree is its near build, past NEAR_OUT its far one, between them it is handed over. */
-export const NEAR_IN = 20;
-export const NEAR_OUT = 24;
+/** Within NEAR_IN m of the lens a tree is its near build, past NEAR_OUT its far one, between them it is handed over.
+ *  (A band of four metres stippled a tree caught in it in a still, the second critic: the two builds share their
+ *  outline, so the hand-over is a cut a hand wide, where only what is inside the outline changes.) */
+export const NEAR_IN = 22;
+export const NEAR_OUT = 22.15;
 /** How far from the lens trees are gathered: a little past NEAR_OUT. */
 const GATHER = NEAR_OUT + 0.5;
 /** Trees a near batch holds (a tree run crowds about thirty of one kind within GATHER of the lens). */
@@ -104,7 +106,9 @@ export class NearForest {
     // tree only inside the band.
     const leafCool = biome === 'blossom' ? 0.2 : 0.38;
     const mat = (group: 'wall' | 'ob') => {
-      const m = liveTree(makeToonMaterial({ sway: 0.12, coolShade: leafCool, nearFade: [1.8, 3.6], coverageFade: smoothFade, hazard: true }), true, group);
+      // (Its own near fade dithers in a narrow band rather than fading through coverage: a near tree half inside the
+      // coverage fade read as glassy translucent polygons, the critics.)
+      const m = liveTree(makeToonMaterial({ sway: 0.12, coolShade: leafCool, nearFade: [1.8, 3.6], coverageFade: false, hazard: true }), true, group);
       this.mats.push(m);
       return m;
     };

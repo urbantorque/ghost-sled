@@ -622,7 +622,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
     const k1 = (k0 + 1) % segs;
     // Distance from the nearest tip, in segments (tips are the even segments).
     const d = k0 % 2 === 0 ? fr : 1 - fr;
-    lobe.push(Math.pow(Math.cos((d * Math.PI) / 2), 0.55));
+    lobe.push(Math.pow(Math.cos((d * Math.PI) / 2), 0.8));
     jr.push(ring.jr[k0] + (ring.jr[k1] - ring.jr[k0]) * fr);
     jy.push(ring.jy[k0] + (ring.jy[k1] - ring.jy[k0]) * fr);
   }
@@ -647,7 +647,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
       rad = rr * (0.5 * jr[i] + (sEnd - 0.5 * jr[i]) * v);
       // The bough holds up, then droops to its tip; its middle stands a little proud of its sides.
       const sh = tt - 0.46 * hh + jy[i];
-      y = sh + (tt - hh + yEnd - sh) * Math.pow(v, 1.2) + 0.05 * hh * (l - 0.45) * Math.sin(Math.PI * v);
+      y = sh + (tt - hh + yEnd - sh) * v + 0.05 * hh * (l - 0.45) * Math.sin(Math.PI * v);
     }
     const th = (i / N) * Math.PI * 2;
     const x0 = Math.sin(th) * rad;
@@ -662,8 +662,8 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
   for (let i = 0; i <= N; i++) {
     const j = i % N;
     const l = L(j);
-    const base = inner ? snowK * 0.35 : 0.35 + snowK * 0.55 + (0.15 + 0.35 * snowK) * Math.pow(l, 0.8);
-    sn.push(Math.max(0.06, Math.min(0.94, base + 0.14 * (nh(j + twist * 10, top) - 0.5))));
+    const base = inner ? snowK * 0.35 : 0.28 + snowK * 0.5 + (0.2 + 0.3 * snowK) * Math.pow(l, 1.2);
+    sn.push(Math.max(0.06, Math.min(0.94, base + 0.24 * (nh(j + twist * 10, top) - 0.5))));
   }
   sn[N] = sn[0];
   const c = new Color();
