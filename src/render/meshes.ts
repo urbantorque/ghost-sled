@@ -236,13 +236,14 @@ export function seracGeometry(p: Palette): BufferGeometry {
   // An ice tower as a cluster of leaning crystals with pointed tips, rising out of a dark faceted
   // base and a drift of snow. Any flat top (a block with a snow lid) reads as concrete.
   return merge([
-    part(new IcosahedronGeometry(1.25, 0), shade(p.tallDark, 0.8), { pos: [0.1, 0.35, 0.1], scale: [1.35, 0.6, 1.2], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.3 }),
+    // (Round 8: its boulder and drift a step finer, so the one a sled passes is not a few broad panes.)
+    part(new IcosahedronGeometry(1.25, 1), shade(p.tallDark, 0.8), { pos: [0.1, 0.35, 0.1], scale: [1.35, 0.6, 1.2], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.18 }),
     crystal(p.tall, 0.95, 3.1, [0, 0.2, 0], [0.06, 0.3, -0.1]),
     crystal(p.tallDark, 0.68, 2.2, [1.15, 0.1, 0.55], [0.16, 0.9, 0.3]),
     crystal(shade(p.tall, 1.1), 0.55, 1.6, [-1.1, 0.05, -0.45], [-0.2, 0.4, 0.42]),
     crystal(shade(p.tallDark, 1.2), 0.42, 1.1, [0.3, 0.05, -1.1], [-0.42, 1.3, -0.12]),
     crystal(shade(p.tall, 0.92), 0.36, 0.9, [-0.55, 0.05, 1.0], [0.5, 0.2, 0.3]),
-    part(new IcosahedronGeometry(1.5, 0), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.3, 1.2], jitter: 0.2 }),
+    part(new IcosahedronGeometry(1.5, 1), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.3, 1.2], jitter: 0.12 }),
     part(new IcosahedronGeometry(0.5, 0), SNOW, { pos: [0.75, 1.15, 0.35], scale: [1.1, 0.35, 0.9], jitter: 0.1 }),
   ]);
 }
