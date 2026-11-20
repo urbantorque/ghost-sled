@@ -136,17 +136,39 @@ export function handoverY(c: Course, y: number, off: number, z: number, e: numbe
   return y + (ya + ((yb - ya) * (z - a)) / MID_ROW - y) * smoothK(HANDOVER_FROM, HANDOVER_TO, e);
 }
 
+/** How a composed place (compose.ts) reshapes the drawn ground past the limit of a course: metres over the sim's
+ *  own `g` at sim (x, z). Registered per course by the world that draws it; a course nobody composes is drawn as
+ *  the sim has it. */
+export type GroundShape = (x: number, z: number, g: number) => number;
+const shapes = new WeakMap<Course, GroundShape>();
+
+/** Registers the composed shape of a course's ground past its limits (null takes it off). */
+export function shapeGround(c: Course, f: GroundShape | null): void {
+  if (f) shapes.set(c, f);
+  else shapes.delete(c);
+}
+
+/** The composed shape over the sim's ground at sim (x, z) (0 where nothing is composed). */
+export function composedAt(c: Course, x: number, z: number, g: number): number {
+  const f = shapes.get(c);
+  return f ? f(x, z, g) : 0;
+}
+
 /** The height of what is drawn at sim (x, z), before the drifts and an overlook's fall: the sim's ground,
- *  a wall's rock and a ledge's handover. What a prop past the corridor should stand on. */
+ *  a wall's rock, a ledge's handover and a composed place's banks. What a prop past the corridor should stand on. */
 export function visualGround(c: Course, x: number, z: number): number {
   const off = x - c.centerX(z);
   const e = Math.abs(off) - c.halfWidth(z);
   let y = c.ground(x, z);
   if (e <= 0) return y;
   const sh = c.shapeAt(z);
-  if (sh.wall > 0) y += rampart(z, e, Math.sign(off), wallK(sh.wall), sh.limit);
+  const wall = sh.wall;
+  const limit = sh.limit;
+  const f = e > limit ? shapes.get(c) : undefined;
+  const d = f ? f(x, z, y) : 0;
+  if (wall > 0) y += rampart(z, e, Math.sign(off), wallK(wall), limit);
   if (e > HANDOVER_FROM && handoverRow(c, z)) y = handoverY(c, y, off, z, e);
-  return y;
+  return y + d;
 }
 
 /** Whether something at sim (x, z) and height y stands inside a wall's drawn rock: under what is drawn

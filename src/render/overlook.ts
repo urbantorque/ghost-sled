@@ -1,11 +1,13 @@
-import { BoxGeometry, BufferGeometry, Color, CylinderGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Object3D, Quaternion, ShaderMaterial, Vector3 } from 'three';
+import { BoxGeometry, BufferGeometry, Color, CylinderGeometry, IcosahedronGeometry, InstancedMesh, Matrix4, Mesh, Object3D, Quaternion, ShaderMaterial, Vector3 } from 'three';
 import { MOODS } from '../sim/chaos';
 import { Course, FOREST_LIMIT, RUN_OUT, type Section, type SectionKind } from '../sim/course';
 import type { BiomeId } from '../sim/mountains';
 import { noise1 } from '../sim/noise';
+import { composeFor, type ComposePlan } from './compose';
 import { signature, type Clearing } from './dressing';
+import { framingGeometry } from './framing';
 import { SNOW, merge, part, reseed, shade } from './flora';
-import { SitePlan } from './landmarks';
+import { SitePlan, type Site } from './landmarks';
 import { makeToonMaterial } from './materials';
 import type { Palette } from './palette';
 import type { Tier } from './world';
@@ -177,6 +179,9 @@ export class OverlookPlan {
   private done = false;
   /** The set pieces' plan for each distinct gravity and pop among the moods. */
   private sites: SitePlan[] = [];
+  /** The course's composed places (compose.ts), when a world draws this plan: on a side one shapes, the lip's
+   *  drop gives way to it, and its falls take the mid-ground's valley form too. */
+  compose: ComposePlan | null = null;
 
   constructor(readonly course: Course) {
     const seen = new Set<string>();
@@ -191,6 +196,13 @@ export class OverlookPlan {
   /** Overlooks planned so far. */
   get planned(): readonly Overlook[] {
     return this.list;
+  }
+
+  /** Every landmark any mood's plan stands (compose.ts keeps its places clear of them all). */
+  siteList(): Site[] {
+    const out: Site[] = [];
+    for (const sp of this.sites) out.push(...sp.planned);
+    return out;
   }
 
   /** How far the plan is final (sim z). */
@@ -347,7 +359,7 @@ export class OverlookPlan {
    *  to WIDE_AFTER past it. */
   wide(z: number, side: number): number {
     this.planTo(z + WIDE + 10);
-    let w = 0;
+    let w = this.compose ? this.compose.wide(z, side) : 0;
     for (let i = this.list.length - 1; i >= 0; i--) {
       const o = this.list[i];
       if (o.z1 + WIDE_AFTER < z) break;
@@ -381,7 +393,9 @@ export class OverlookPlan {
    *  the cornice's crest). Zero inside LIP_FROM and away from overlooks. */
   drop(z: number, side: number, e: number): number {
     if (e <= LIP_FROM) return 0;
-    const w = this.fall(z, side);
+    let w = this.fall(z, side);
+    // (A composed bank is drawn through visualGround: the lip gives way to it.)
+    if (w > 0 && this.compose) w *= 1 - this.compose.shaped(z, side);
     return w > 0 ? w * lipDrop(e) : 0;
   }
 
@@ -455,6 +469,15 @@ function rockGeometry(p: Palette): BufferGeometry {
 export class Overlooks {
   readonly root = new Object3D();
   plan: OverlookPlan;
+  /** The course's composed places: the opening and the stage starts (compose.ts). */
+  compose: ComposePlan;
+  /** What frames them (framing.ts), one draw, and the plan it was built for. */
+  private frames: Mesh;
+  private framesFor: ComposePlan | null = null;
+  private framesWant: ComposePlan | null = null;
+  private framesN = -1;
+  private framesWantN = -1;
+  private palette: Palette;
   private mat: ShaderMaterial;
   private rails: InstancedMesh;
   private rocks: InstancedMesh;
@@ -485,8 +508,15 @@ export class Overlooks {
     this.enabled = tier !== 'low' || LOW_OPENS;
     this.rocksOn = tier !== 'low';
     this.plan = new OverlookPlan(course);
+    this.compose = this.composeOf(this.plan);
     this.mat = makeToonMaterial({ coolShade: 0.5, nearFade: [0.9, 3.2] });
     this.rails = new InstancedMesh(railGeometry(course.biome, palette), this.mat, RAIL_CAP);
+    this.palette = palette;
+    this.frames = new Mesh(new BufferGeometry(), this.mat);
+    this.frames.frustumCulled = false;
+    this.frames.visible = false;
+    this.frames.name = 'compose-frames';
+    this.root.add(this.frames);
     this.rocks = new InstancedMesh(rockGeometry(palette), this.mat, ROCK_CAP);
     for (const im of [this.rails, this.rocks]) {
       im.count = 0;
@@ -506,9 +536,29 @@ export class Overlooks {
     if (course !== this.course) {
       this.course = course;
       this.plan = new OverlookPlan(course);
+      this.compose = this.composeOf(this.plan);
       this.shown = '';
     }
     this.setPalette(palette);
+  }
+
+  /** The course's composed places (compose.ts), read from this plan's landmarks and overlooks, and registered so
+   *  what stands past the limit stands on what is drawn. */
+  private composeOf(plan: OverlookPlan): ComposePlan {
+    const p = composeFor(plan.course, {
+      sites: () => plan.siteList(),
+      overlooks: () => {
+        plan.planTo(Infinity);
+        return plan.planned;
+      },
+    });
+    plan.compose = p;
+    return p;
+  }
+
+  /** The ground the forest and the dressing keep off between sim z0 and z1: a composed place's steep faces. */
+  keeps(z0: number, z1: number, out: Clearing[]): void {
+    this.compose.keeps(z0, z1, out);
   }
 
   setPalette(p: Palette): void {
@@ -516,6 +566,35 @@ export class Overlooks {
     this.rails.geometry = railGeometry(this.course.biome, p);
     this.rocks.geometry.dispose();
     this.rocks.geometry = rockGeometry(p);
+    this.palette = p;
+    this.framesFor = this.framesWant = null;
+  }
+
+  /** Keeps the pieces that frame the composed places (framing.ts) standing while one is in range, one draw. They
+   *  are built on idle time once one comes within reach (never in the frame that asks: the opening's are in reach
+   *  from the start line, so a build there would land before the first frame), and stand from the next frame on. */
+  private updateFrames(z: number): void {
+    const near = this.compose.planned.some((p) => p.z1 > z - STAND_BEHIND && p.z0 < z + STAND_AHEAD);
+    // (One place at a time: they stand a kilometre and more apart, so one geometry serves.)
+    const n = this.compose.planned.findIndex((p) => p.z1 > z - STAND_BEHIND && p.z0 < z + STAND_AHEAD);
+    const key = n;
+    if (near && (this.framesFor !== this.compose || this.framesN !== key) && (this.framesWant !== this.compose || this.framesWantN !== key)) {
+      const want = (this.framesWant = this.compose);
+      this.framesWantN = key;
+      const build = () => {
+        // (A course, a palette or the place in range changed while it waited: the next frame asks again.)
+        if (this.framesWant !== want || this.compose !== want || this.framesWantN !== key) return;
+        this.framesFor = want;
+        this.framesN = key;
+        this.framesWant = null;
+        this.frames.geometry.dispose();
+        this.frames.geometry = framingGeometry(this.course, want, key, this.palette) ?? new BufferGeometry();
+      };
+      const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+      if (idle) idle(build, { timeout: 1500 });
+      else setTimeout(build, 0);
+    }
+    this.frames.visible = near && this.framesFor === this.compose && this.framesN === n && this.frames.geometry.getAttribute('position') !== undefined;
   }
 
   setTier(tier: Tier): void {
@@ -526,7 +605,8 @@ export class Overlooks {
 
   /** The signed open side at sim z for the chase lens: + right, - left, 0 none (or a ridge). */
   lean(z: number): number {
-    return this.enabled ? this.plan.open(z) : 0;
+    // (A composed place sets the lens itself: CamTarget.place.)
+    return this.enabled ? this.plan.open(z) * (1 - (this.compose.at(z)?.w ?? 0)) : 0;
   }
 
   /** How open the view is at sim z, 0..1 (OverlookPlan.openness); zero on a tier without overlooks. */
@@ -542,6 +622,7 @@ export class Overlooks {
   /** Keeps the rail and rocks of the overlooks round sim z standing (placed only when the set in
    *  range changes: a few hundred matrices, once per overlook). */
   update(z: number): void {
+    this.updateFrames(z);
     if (!this.enabled) {
       this.rails.visible = this.rocks.visible = false;
       return;
@@ -551,10 +632,23 @@ export class Overlooks {
     this.plan.planTo(hi);
     let key = '';
     for (const o of this.plan.planned) if (o.z1 > lo && o.z0 < hi) key += o.n + ',';
+    for (const p of this.compose.planned) if (p.z1 > lo && p.z0 < hi) key += 'c' + p.n + ',';
     if (key === this.shown) return;
     this.shown = key;
     let nr = 0;
     let nk = 0;
+    // A composed place's crest over a fall or a flight carries the same rail along its limit, where an overlook's
+    // own does not already.
+    for (const p of this.compose.planned) {
+      if (p.z1 <= lo || p.z0 >= hi) continue;
+      for (const b of p.banks) {
+        if (b.kind !== 'fall' && b.kind !== 'steps') continue;
+        for (let zz = b.z0 + b.rin * 0.4 + RAIL_LEN / 2; zz < b.z1 - b.rout * 0.4 && nr < RAIL_CAP; zz += RAIL_LEN) {
+          if (this.plan.weight(zz, b.side) > 0) continue;
+          this.rails.setMatrixAt(nr++, this.alongBank(b.side, RAIL_E, zz, RAIL_LEN));
+        }
+      }
+    }
     for (const o of this.plan.planned) {
       if (o.z1 <= lo || o.z0 >= hi) continue;
       for (const side of o.side === 0 ? [-1, 1] : [o.side]) {
@@ -564,13 +658,15 @@ export class Overlooks {
         for (let zz = o.z0 + RAIL_LEN / 2; zz < o.z1 && nr < RAIL_CAP; zz += RAIL_LEN) {
           const sig = signature(c, zz);
           if (sig.kind === 'benches' && sig.k > 0.2) continue;
+          // (Nor at the foot of a composed wall: the wall bounds the run there.)
+          if (this.compose.kindAt(zz, side) === 'wall') continue;
           this.rails.setMatrixAt(nr++, this.alongBank(side, RAIL_E, zz, RAIL_LEN));
         }
         // Rocks breaking through the cornice where the lip is open, bigger and more of them on the face.
         for (let k = 0, zz = o.z0 + 8; this.rocksOn && zz < o.z1 - 8 && nk < ROCK_CAP; k++) {
           const h = hashf(o.n * 31 + side, k, 81);
           zz += 4 + 9 * h;
-          const w = this.plan.weight(zz, side);
+          const w = this.plan.weight(zz, side) * (1 - this.compose.shaped(zz, side));
           if (w < 0.35) continue;
           const e = LIP - 2.5 + hashf(o.n * 31 + side, k, 82) * 6.5;
           const x = c.centerX(zz) + side * (c.halfWidth(zz) + e);

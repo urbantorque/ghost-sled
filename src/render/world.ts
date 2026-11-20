@@ -22,6 +22,7 @@ import { Life } from './life';
 import { applyPalette, bands, lake, setCloudShadows, shared } from './materials';
 import { Midground } from './midground';
 import { LIP_FROM, Overlooks } from './overlook';
+import type { LookSet } from './compose';
 import { beginLocalLights } from './lights';
 import { Palette, getPalette, journeyDusk, journeyPalette, journeyStamp } from './palette';
 import { Particles, Weather } from './particles';
@@ -297,6 +298,8 @@ export class World {
   private screenProbe = new Vector3();
   /** The rival ghost's chest, handed to the chase camera. */
   private rivalAt = new Vector3();
+  /** The lens's placement at a composed place (compose.ts), written each frame. */
+  private placeAt: LookSet = { up: 0, back: 0, aside: 0, yaw: 0, horizon: 0, row: 0 };
   /** The chest of the ghost riding past your wreck, and where you fell, handed to the crash orbit. */
   private packAt = new Vector3();
   private fellAt = new Vector3();
@@ -373,7 +376,11 @@ export class World {
       sites: (z0, z1, cb) => this.setPieces.farSites(z0, z1, cb),
     });
     this.rails = new Rails(this.course, this.palette, quality.shadows, smoothFade(quality, allSwitches(true), this.renderer));
-    this.props.siteKeep = (z0, z1, out) => this.setPieces.clearings(z0, z1, out);
+    this.props.siteKeep = (z0, z1, out) => {
+      this.setPieces.clearings(z0, z1, out);
+      // (A composed place's steep faces: compose.ts.)
+      this.overlooks.keeps(z0, z1, out);
+    };
     this.props.siteClearings = (z0, z1, out) => this.overlooks.clearings(z0, z1, out);
     this.sky = new Sky(seed);
     this.sky.setDetail(quality.detail);
@@ -1210,7 +1217,7 @@ export class World {
     // The legend in reach (the four mountains' from the marquee's world, Lanternfall's from its own): the
     // chase looks a little toward it.
     const legend = v.mode === 'run' ? (this.marquee.legendShot() ?? this.lantern.legendShot()) : null;
-    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
+    const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, place: v.mode === 'run' ? this.overlooks.compose.place(s.z + 20, this.placeAt) : null, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
 
