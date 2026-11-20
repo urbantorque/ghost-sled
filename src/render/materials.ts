@@ -735,13 +735,14 @@ export const SNOW_SURF_GLSL = /* glsl */ `
     float swi = floor(across / 4.3 + 0.5);
     float a = across + 0.09 * sin(z * 0.037 + swi * 2.1);
     float swf = fract(a / 4.3 + 0.5);
-    float swh = hash13(vec3(swi, 3.7, 9.1)) * 2.0 - 1.0;
+    // (A soft step across each swath, never a hard edge: long straight lines down the fall line read as speed lines.)
+    float swh = vnoise(vec2(a / 4.3, 3.7)) * 2.0 - 1.0;
     float ph = fract(a / 0.11);
     float face = sin(6.2831853 * ph);
     float trough = smoothstep(0.25, 0.5, abs(ph - 0.5)) - 0.5;
     float lit = sign(face * sunX) * pow(abs(face * sunX), 0.6) - trough * 0.55;
     float seam = 1.0 - smoothstep(0.03, 0.08 + fw * 1.5, min(swf, 1.0 - swf) * 4.3);
-    return vec4(lit, swh, seam, 1.0 - smoothstep(0.16, 0.42, fw / 0.11));
+    return vec4(lit, swh, seam, 1.0 - smoothstep(0.1, 0.24, fw / 0.11));
   }
   /** The snow's grain under the lens, painted: a stipple of small dabs lying along the wind, each a step lighter,
    *  level or darker than the snow and tilted its own way. x the step (-1, 0, 1), yz the dab's tilt (its normal's
@@ -1161,7 +1162,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // Round 8: powder's pillows, a hand deep, out to where they would be a few pixels across. Their slope
           // tilts the normal (so the key light and the sheen break over them) and their height paints the value
           // below (so they read in a flat noon light too).
-          pilK = powderK * (1.0 - smoothstep(0.3, 0.8, fwz)) * (1.0 - smoothstep(40.0, 75.0, dist));
+          pilK = powderK * (1.0 - smoothstep(0.3, 0.8, fwz)) * (1.0 - smoothstep(25.0, 45.0, dist)) * (1.0 - smoothstep(0.5, 3.5, vEdge));
           if (pilK > 0.0) {
             // (Low paints the pillows' value from their broad octave alone and leaves the normal be.)
             if (uSnowFx > 0.0) {
@@ -1172,7 +1173,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             }
           }
           // The grain under the lens: each dab tilted its own way (Medium and High).
-          grainK = uSnowFx * (1.0 - ice) * (1.0 - smoothstep(0.018, 0.04, fwr)) * (1.0 - smoothstep(0.12, 0.3, fwz)) * (1.0 - smoothstep(9.0, 16.0, dist));
+          grainK = uSnowFx * (1.0 - ice) * (1.0 - smoothstep(0.018, 0.04, fwr)) * (1.0 - smoothstep(0.12, 0.3, fwz)) * (1.0 - smoothstep(5.0, 9.0, dist)) * (1.0 - smoothstep(-1.0, 1.0, vEdge));
           if (grainK > 0.0) {
             grain = snowGrain(p);
             pert.xz += grain.yz * grain.w * 0.16 * grainK;
@@ -1330,12 +1331,15 @@ export function makeSnowMaterial(): ShaderMaterial {
           // the hollows and crests alone.
           float rakeP = -dot(pil.yz, sunXZ) * mix(1.0, 0.6, smoothstep(0.5, 0.9, uSunDir.y));
           // (How much of the pillows' value a pixel spans: the edges are a brushstroke, never a stair.)
-          float pw = length(pil.yz) * max(fwz * 0.5, fwx) + 0.012;
+          float pw = length(pil.yz) * max(fwz * 0.5, fwx) + 0.03;
+          // (In the palette's own contrast: a low-contrast morning or a moonlit night paints them faintly, where at
+          // full strength they read as camouflage. Pinecrest's shade is about 0.6 of its lit snow, Sakura's 0.8.)
+          float palK = clamp((1.0 - dot(uSnowShade, vec3(0.3, 0.59, 0.11)) / max(dot(uSnowLit, vec3(0.3, 0.59, 0.11)), 0.05)) / 0.4, 0.25, 1.0) * mix(0.4, 1.0, dayK);
           float faceSh = smoothstep(-0.1 + pw, -0.1 - pw, rakeP) * uSnowFx;
           float hollow = smoothstep(0.36 + pw * 0.6, 0.36 - pw * 0.6, pil.x);
           float crestP = smoothstep(0.66 - pw * 0.6, 0.66 + pw * 0.6, pil.x);
-          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * 0.36 * pilK * mix(0.5, 1.0, shadow));
-          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * 0.3 * pilK);
+          col = mix(col, col * mix(vec3(0.92), coolR, 0.6), faceSh * 0.3 * palK * pilK * mix(0.15, 1.0, shadow));
+          col = mix(col, col * mix(vec3(0.88), coolR, 0.8), hollow * 0.26 * palK * pilK * mix(0.25, 1.0, shadow));
           col += lit * sunSnow * warmC * crestP * (1.0 - faceSh) * 0.09 * t * pilK;
         }
         if (groomK > 0.01 && dist < 140.0) {
@@ -1344,25 +1348,30 @@ export function makeSnowMaterial(): ShaderMaterial {
           float sunX = uSunDir.x / max(length(uSunDir.xz), 0.001);
           vec4 cd = corduroy(vSnow.x, vWorldPos.z, fwx, sunX);
           float gk = groomK * (1.0 - smoothstep(0.85, 1.0, vPaint.z));
-          float swK = 1.0 - smoothstep(60.0, 140.0, dist);
-          col *= 1.0 + cd.y * 0.045 * gk * swK;
-          col = mix(col, col * mix(vec3(0.92), coolR, 0.5), cd.z * 0.35 * gk * swK);
-          col *= 1.0 + cd.x * 0.075 * cd.w * gk * uSnowFx * mix(0.5, 1.0, shadow);
+          float swK = 1.0 - smoothstep(30.0, 70.0, dist);
+          col *= 1.0 + cd.y * 0.035 * gk * swK;
+          // (No seam lines: two critics read the long straight lines of a lane's seams and ribs as speed lines, which
+          // ART.md 4 forbids down the fall line. The ribs keep to the snow under the lens, where they do not converge.)
+          cd.w *= 1.0 - smoothstep(7.0, 13.0, dist);
+          col *= 1.0 + cd.x * 0.06 * cd.w * gk * uSnowFx * mix(0.5, 1.0, shadow);
           col = mix(col, col * mix(vec3(1.0), warmC, 0.25) * 1.03, gk * 0.5 * t);
         }
         if (grainK > 0.0) {
           // The grain under the lens: each dab a step of its own, lit on the side it tilts to the sun.
-          col *= 1.0 + (grain.x * 0.05 + dot(grain.yz, sunXZ) * 0.06) * grain.w * grainK * mix(0.5, 1.0, shadow);
+          col *= 1.0 + (max(grain.x, 0.0) * 0.04 + dot(grain.yz, sunXZ) * 0.04) * grain.w * grainK * mix(0.5, 1.0, shadow);
         }
         // Light bleeding cool through the snow at a cast shadow's edge. By day; at night the shade is the light's
         // absence and keeps more of the moon's own colour. It is the shade's hue made richer at the snow's own
         // value, a step lifted, so the frame's values (the light's to set) stay where they are and only the edge
         // glows. (Laid on the light's turn across a whole slope too, it repainted Ember's ash snow lavender.)
-        float pen = smoothstep(0.06, 0.4, shadow) * (1.0 - smoothstep(0.5, 0.95, shadow));
+        // (Near the lens only, where the shadow map's edges are crisp: the far field's broad soft shadows took it
+        // across a whole bank.)
+        float pen = smoothstep(0.06, 0.4, shadow) * (1.0 - smoothstep(0.5, 0.95, shadow)) * (1.0 - smoothstep(16.0, 28.0, dist));
         if (pen > 0.0) {
           vec3 bleed = snowBleed(lit, uSnowShade);
           bleed *= dot(col, vec3(0.2126, 0.7152, 0.0722)) * 1.08 / max(dot(bleed, vec3(0.2126, 0.7152, 0.0722)), 0.001);
-          col = mix(col, bleed, pen * 0.55 * mix(0.35, 1.0, dayK) * (1.0 - ice) * (1.0 - bare));
+          // (A light hand: across a soft shadow's whole breadth a stronger one read as a puddle.)
+          col = mix(col, bleed, pen * 0.24 * mix(0.35, 1.0, dayK) * (1.0 - ice) * (1.0 - bare));
         }
         // The sun held on the far snow: past the near field a slope turned to mirror the sun carries a
         // broad soft sheen of it, so the distance has a lit face and not one even value.
@@ -1380,7 +1389,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         }
         // Periwinkle settles in the ripple troughs.
         // (Round 8: deeper in powder, where the wind has worked the snow.)
-        col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5 + 0.2 * powderK), trough * (0.8 + 0.15 * powderK));
+        col = mix(col, col * mix(vec3(1.0), uSnowShade / max(uSnowLit, vec3(0.05)), 0.5 + 0.2 * powderK * shadow), trough * (0.8 + 0.15 * powderK * shadow));
         // Wind-scoured patches: broad, soft-edged hollows a step cooler than the powder around them,
         // scattered over the near and middle run, so the groomed corridor under the lens is never one
         // flat sheet of a single value. Patches, never bands (bands read as dunes).
@@ -1635,7 +1644,7 @@ export function makeSnowMaterial(): ShaderMaterial {
           // (Round 8: a candidate is a crystal facet with a tilt of its own; it glints only while its mirror of the
           // light turns to the eye, so the glints move with the view and gather where the snow mirrors the sun.
           // More cells hold one, since only a few of them face the eye at once.)
-          if (h > 0.5 - 0.1 * nightK - 0.1 * nearG) {
+          if (h > 0.58 - 0.12 * nightK - 0.1 * nearG) {
             vec2 pt = cell + 0.18 + 0.64 * vec2(hash13(vec3(cell, 1.7)), hash13(vec3(cell, 9.2)));
             vec2 o = (gp - pt) / 2.4;
             float rad = 0.008 + 0.004 * nearG + dist * 0.0021;
@@ -1650,7 +1659,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             float rays = (smoothstep(0.3, 0.0, abs(q.y)) * smoothstep(3.0, 0.0, abs(q.x)) + smoothstep(0.3, 0.0, abs(q.x)) * smoothstep(3.0, 0.0, abs(q.y))) * (1.0 - farG);
             vec2 ftilt = (vec2(hash13(vec3(cell, 2.3)), hash13(vec3(cell, 6.1))) - 0.5) * 2.2;
             float fm = facetMirror(n, ftilt, v);
-            float on = smoothstep(0.94, 0.985, fm);
+            float on = smoothstep(0.948 - 0.1 * nightK, 0.988 - 0.06 * nightK, fm);
             // A powder crystal flashes harder than a packed or glazed one; each its own strength.
             float facing = (0.55 + 0.6 * fract(h * 37.0)) * (1.0 + 0.35 * powderK) + 0.3 * toSun;
             glint = on * (core * core + rays * 0.45) * facing * uSparkle * (1.0 - ice * 0.6) * (1.0 - smoothstep(glintFar * 0.64, glintFar, dist));
@@ -1672,7 +1681,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             vec2 mq = mo / max(vec2(fwx, fwz) * 1.1, vec2(0.002));
             // (Round 8: a facet too, so the fine glitter turns with the view as the star glints do.)
             float mon = smoothstep(0.93, 0.98, facetMirror(n, (vec2(hash13(vec3(mc, 1.9)), hash13(vec3(mc, 3.3))) - 0.5) * 2.2, v));
-            vec3 prism = mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831 * (mh * 7.0 + vec3(0.0, 0.33, 0.67))), 0.4);
+            vec3 prism = mix(vec3(1.0), 0.5 + 0.5 * cos(6.2831 * (mh * 7.0 + vec3(0.0, 0.33, 0.67))), 0.1);
             col += mix(uSunColor, vec3(1.0), 0.3) * prism * smoothstep(1.0, 0.25, length(mq)) * mon * (1.0 - smoothstep(12.0, 22.0, dist)) * (1.0 + 0.8 * mSun) * smoothstep(0.0, 0.35, ndl) * mix(shadow, 1.0, 0.3) * 1.8 * uSparkle;
           }
         }

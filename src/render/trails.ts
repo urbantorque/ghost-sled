@@ -55,8 +55,8 @@ const TRAIL_DYNAMIC: ReadonlyArray<readonly [string, number]> = [
   ['aPerp', 2],
   ['aFan', 1],
   ['aHw', 1],
-  ['aArc', 1],
-  ['aSurf', 1],
+  // (Round 8: the arc and what the runners cut share one attribute, x and y, so a sample is still one upload.)
+  ['aArc', 2],
 ];
 
 export class Trail {
@@ -71,8 +71,6 @@ export class Trail {
   private hw: Float32Array;
   /** Metres along the track, stretched by speed (the groove's noise runs along this). */
   private arc: Float32Array;
-  /** What the runners cut at each sample (round 8, snowsurf.ts rutSurface): 0 powder, 1 groomed, 2 ice. */
-  private surf: Float32Array;
   private arcNow = 0;
   private head = 0;
   private count = 0;
@@ -100,8 +98,7 @@ export class Trail {
     this.perp = new Float32Array(max * 2 * 2);
     this.fan = new Float32Array(max * 2);
     this.hw = new Float32Array(max * 2);
-    this.arc = new Float32Array(max * 2);
-    this.surf = new Float32Array(max * 2);
+    this.arc = new Float32Array(max * 2 * 2);
     for (let i = 0; i < max; i++) {
       this.across[i * 2] = -1;
       this.across[i * 2 + 1] = 1;
@@ -113,8 +110,7 @@ export class Trail {
     this.geo.setAttribute('aPerp', new BufferAttribute(this.perp, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aFan', new BufferAttribute(this.fan, 1).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aHw', new BufferAttribute(this.hw, 1).setUsage(DynamicDrawUsage));
-    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 1).setUsage(DynamicDrawUsage));
-    this.geo.setAttribute('aSurf', new BufferAttribute(this.surf, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aArc', new BufferAttribute(this.arc, 2).setUsage(DynamicDrawUsage));
     const idx = new Uint32Array((max - 1) * 6);
     this.geo.setIndex(new BufferAttribute(idx, 1).setUsage(DynamicDrawUsage));
     this.mat = new ShaderMaterial({
@@ -151,8 +147,8 @@ export class Trail {
         attribute vec2 aPerp;
         attribute float aFan;
         attribute float aHw;
-        attribute float aArc;
-        attribute float aSurf;
+        // x: metres along the track; y: what the runners cut (round 8, snowsurf.ts rutSurface: 0 powder, 1 groomed, 2 ice).
+        attribute vec2 aArc;
         uniform float uTime;
         uniform vec3 uSunDir;
         varying float vAcross;
@@ -180,8 +176,8 @@ export class Trail {
           vDepth = aDepth;
           vFan = aFan;
           vHw = aHw;
-          vArc = aArc;
-          vSurf = aSurf;
+          vArc = aArc.x;
+          vSurf = aArc.y;
           vAge = uTime - aBorn;
           vec4 wp = modelMatrix * vec4(position, 1.0);
           vWorldPos = wp.xyz;
@@ -337,7 +333,7 @@ export class Trail {
             // Soft periwinkle in the cut (never navy: a navy cut read as a painted line), deeper with the
             // carve, and a step deeper on the shaded wall. A groomed floor is pressed smooth, a step paler.
             vec3 floorCol = mix(mix(mix(uShade, uLit, 0.3), uDeep, 0.3 * deep), mix(uShade, uLit, 0.55), g);
-            vec3 cutCol = mix(mix(uShade, uDeep, 0.12 + 0.3 * deep + 0.3 * D), mix(uShade, uDeep, 0.6 + 0.15 * D), cutShade);
+            vec3 cutCol = mix(mix(uShade, uDeep, 0.12 + 0.3 * deep + 0.08 * D), mix(uShade, uDeep, 0.6), cutShade);
             // On ice a runner scratches the glaze to frost.
             cutCol = mix(cutCol, mix(uLit, vec3(1.0), 0.35), scr);
             // A packed lip catching the sun reads a step above the lit snow beside it.
@@ -353,7 +349,7 @@ export class Trail {
             float kw = wallSh * 0.6;
             P = mix(uShade, uDeep, 0.55) * kw + P * (1.0 - kw);
             A = kw + A * (1.0 - kw);
-            float kc = cut * (0.36 + 0.4 * deep + 0.18 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.6, scr);
+            float kc = cut * (0.36 + 0.4 * deep + 0.06 * D) * mix(1.0, 0.8, soft) * mix(1.0, 0.6, scr);
             P = cutCol * kc + P * (1.0 - kc);
             A = kc + A * (1.0 - kc);
             float kwl = wallLit * 0.45;
@@ -490,8 +486,8 @@ export class Trail {
     this.perp[i * 4 + 1] = this.perp[i * 4 + 3] = -pz;
     this.fan[i * 2] = this.fan[i * 2 + 1] = fan;
     this.hw[i * 2] = this.hw[i * 2 + 1] = hw;
-    this.arc[i * 2] = this.arc[i * 2 + 1] = this.arcNow;
-    this.surf[i * 2] = this.surf[i * 2 + 1] = surf;
+    this.arc[i * 4] = this.arc[i * 4 + 2] = this.arcNow;
+    this.arc[i * 4 + 1] = this.arc[i * 4 + 3] = surf;
     this.segStart[i] = startNew ? 1 : 0;
     this.head = (this.head + 1) % this.max;
     this.count = Math.min(this.count + 1, this.max);
@@ -557,8 +553,6 @@ export class GhostTrails {
   private geo: BufferGeometry;
   private pos: Float32Array;
   private born: Float32Array;
-  /** What each sample's runners cut (round 8, snowsurf.ts rutSurface): 0 powder, 1 groomed, 2 ice. */
-  private surf: Float32Array;
   /** When each ghost's last sample was laid and where it last left powder hanging (round 8). */
   private lastT: Float64Array;
   private hungZ: Float64Array;
@@ -591,8 +585,8 @@ export class GhostTrails {
     this.coarse = byTier(BUDGET.rutCoarse);
     const verts = n * max * 2;
     this.pos = new Float32Array(verts * 3);
-    this.born = new Float32Array(verts);
-    this.surf = new Float32Array(verts);
+    // (Round 8: x the time a sample was laid, y what its runners cut, snowsurf.ts rutSurface: one upload a sample.)
+    this.born = new Float32Array(verts * 2);
     const across = new Float32Array(verts);
     const col = new Float32Array(verts * 3);
     const gi = new Float32Array(verts);
@@ -616,10 +610,9 @@ export class GhostTrails {
     this.geo = new BufferGeometry();
     this.geo.setAttribute('position', new BufferAttribute(this.pos, 3).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aAcross', new BufferAttribute(across, 1));
-    this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 1).setUsage(DynamicDrawUsage));
+    this.geo.setAttribute('aBorn', new BufferAttribute(this.born, 2).setUsage(DynamicDrawUsage));
     this.geo.setAttribute('aCol', new BufferAttribute(col, 3));
     this.geo.setAttribute('aG', new BufferAttribute(gi, 1));
-    this.geo.setAttribute('aSurf', new BufferAttribute(this.surf, 1).setUsage(DynamicDrawUsage));
     // (A 16-bit index wherever the field's vertices fit one: half the bytes a rebuild sends.)
     const indices = Math.max(1, n * (max - 1) * 6);
     this.geo.setIndex(new BufferAttribute(verts <= 65535 ? new Uint16Array(indices) : new Uint32Array(indices), 1).setUsage(DynamicDrawUsage));
@@ -648,10 +641,9 @@ export class GhostTrails {
       },
       vertexShader: /* glsl */ `
         attribute float aAcross;
-        attribute float aBorn;
+        attribute vec2 aBorn;
         attribute vec3 aCol;
         attribute float aG;
-        attribute float aSurf;
         uniform float uTime;
         uniform float uWake;
         uniform float uWakeG;
@@ -662,9 +654,9 @@ export class GhostTrails {
         varying float vWake;
         varying float vSurf;
         void main() {
-          vSurf = aSurf;
+          vSurf = aBorn.y;
           vAcross = aAcross;
-          vAge = uTime - aBorn;
+          vAge = uTime - aBorn.x;
           vCol = aCol;
           vWake = abs(aG - uWakeG) < 0.5 ? uWake : 0.0;
           vec4 wp = modelMatrix * vec4(position, 1.0);
@@ -831,15 +823,15 @@ export class GhostTrails {
     this.pos[o + 3] = bx;
     this.pos[o + 4] = c.ground(bx, bz) + 0.04;
     this.pos[o + 5] = -bz;
-    this.born[s * 2] = this.born[s * 2 + 1] = time;
-    this.surf[s * 2] = this.surf[s * 2 + 1] = rutSurface(c, x, z);
+    const sf = rutSurface(c, x, z);
+    this.born[s * 4] = this.born[s * 4 + 2] = time;
+    this.born[s * 4 + 1] = this.born[s * 4 + 3] = sf;
     this.heads[i] = (k + 1) % this.max;
     this.counts[i] = Math.min(this.counts[i] + 1, this.max);
     this.dirtyFlag = true;
     // Only this sample goes up to the GPU.
     (this.geo.getAttribute('position') as BufferAttribute).addUpdateRange(o, 6);
-    (this.geo.getAttribute('aBorn') as BufferAttribute).addUpdateRange(s * 2, 2);
-    (this.geo.getAttribute('aSurf') as BufferAttribute).addUpdateRange(s * 2, 2);
+    (this.geo.getAttribute('aBorn') as BufferAttribute).addUpdateRange(s * 4, 4);
     this.hang(i, x, z, tx, tz, step, time);
   }
 
@@ -919,7 +911,6 @@ export class GhostTrails {
     this.geo.setDrawRange(0, q);
     (this.geo.getAttribute('position') as BufferAttribute).needsUpdate = true;
     (this.geo.getAttribute('aBorn') as BufferAttribute).needsUpdate = true;
-    (this.geo.getAttribute('aSurf') as BufferAttribute).needsUpdate = true;
   }
 
   dispose(): void {

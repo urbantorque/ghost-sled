@@ -381,7 +381,9 @@ class Layer {
             // went to a grey that read as smoke; it keeps its hue but never falls under 0.6 of the lit
             // powder's value, so powder reads as powder on every mountain.)
             float litV = dot(litCol, vec3(0.3, 0.59, 0.11));
-            shadeCol *= max(1.0, 0.6 * litV / max(dot(shadeCol, vec3(0.3, 0.59, 0.11)), 0.001));
+            // (Lifted toward the lit powder, not scaled in its own hue: scaled, Ember's plum became a lavender puff
+            // that clashed with the orange light.)
+            shadeCol = mix(shadeCol, litCol * 0.72, clamp(1.0 - dot(shadeCol, vec3(0.3, 0.59, 0.11)) / max(0.6 * litV, 0.001), 0.0, 1.0));
             vec3 col;
             float a;
             // How much of this fragment faces the sled lantern (Lantern Night), set per kind below.
@@ -431,7 +433,7 @@ class Layer {
               // (a gold sun turned whole plumes into yellow puffs).
               vec3 crestC = mix(litCol, vec3(dot(litCol, vec3(0.3, 0.59, 0.11))), 0.7) * 1.15;
               // (Round 8: the belly never under 0.55 of the crest's value: on Ember a billow was smoke.)
-              belly *= max(1.0, 0.55 * dot(crestC, vec3(0.3, 0.59, 0.11)) / max(dot(belly, vec3(0.3, 0.59, 0.11)), 0.001));
+              belly = mix(belly, crestC * 0.66, clamp(1.0 - dot(belly, vec3(0.3, 0.59, 0.11)) / max(0.55 * dot(crestC, vec3(0.3, 0.59, 0.11)), 0.001), 0.0, 1.0));
               col = mix(belly, crestC, crestK) * vColor;
               // The sunlit rim, brightest when a low sun backlights the plume (forward scattering).
               // (Round 7: the rim takes the key light's own colour and, backlit, burns past white, so it
@@ -1232,7 +1234,7 @@ export class Particles {
       const out = (6.2 + Math.random() * 1.6) * reach;
       // (Thrown back toward the lens is thrown uphill: it climbs the slope a little.)
       const climb = 0.3 * out * Math.max(0, -(dx * f.x + dz * f.z));
-      this.powder.emit(pos.x + dx * 1.3, pos.y + 0.06, pos.z + dz * 1.3, car.x + dx * out, car.y + 0.2 + Math.random() * 0.3 + climb, car.z + dz * out, 0.42 + Math.random() * 0.16, 0.14, 0.46 + Math.random() * 0.2, POWDER, POWDER, POWDER, 0.86, 1.2, 4.2, puffKind(), car);
+      this.powder.emit(pos.x + dx * 1.3, pos.y + 0.06, pos.z + dz * 1.3, car.x + dx * out, car.y + 0.2 + Math.random() * 0.3 + climb, car.z + dz * out, 0.5 + Math.random() * 0.18, 0.2, 0.72 + Math.random() * 0.3, POWDER, POWDER, POWDER, 0.9, 1.2, 3.6, puffKind(), car);
     }
     const nv = this.n(8 * st);
     const car2 = tmpC2.set(car.x * 0.9, car.y * 0.9, car.z * 0.9);

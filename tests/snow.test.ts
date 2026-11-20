@@ -98,17 +98,24 @@ describe('ruts with depth', () => {
     expect(grooveReach(1, 0)).toBeLessThan(1.4);
   });
 
-  it('the groove and the ghosts upload what each sample cut, and only the samples added', () => {
+  it('the groove and the ghosts carry what each sample cut in an attribute they already upload, and only the samples added', () => {
     setFxBudget(1);
     const t = new Trail(pine, 900, 'groove');
     const z0 = bodyOf(pine, 'treerun');
     for (let k = 0; k < 20; k++) t.add(pine.safeX(z0 + k), z0 + k, 0.5, 0.4, k / 30, 30);
-    const surf = t.mesh.geometry.getAttribute('aSurf') as BufferAttribute;
-    expect(surf.updateRanges.reduce((n, r) => n + r.count, 0)).toBe(20 * 2);
+    // (No attribute of its own: one more upload a sample is one more GL call a Low frame.)
+    expect(t.mesh.geometry.getAttribute('aSurf')).toBeUndefined();
+    const arc = t.mesh.geometry.getAttribute('aArc') as BufferAttribute;
+    expect(arc.itemSize).toBe(2);
+    expect(arc.updateRanges.reduce((n, r) => n + r.count, 0)).toBe(20 * 4);
+    // Powder under a tree run: the surface it carries is 0.
+    expect(arc.getY(0)).toBe(0);
     const g = new GhostTrails(pine, 2, 360, [new Color('#8FF3E4'), new Color('#8FF3E4')]);
     for (let k = 0; k < 10; k++) g.add(1, pine.safeX(z0 + k), z0 + k, k / 30);
-    const gs = g.mesh.geometry.getAttribute('aSurf') as BufferAttribute;
-    expect(gs.updateRanges.reduce((n, r) => n + r.count, 0)).toBe(10 * 2);
+    expect(g.mesh.geometry.getAttribute('aSurf')).toBeUndefined();
+    const born = g.mesh.geometry.getAttribute('aBorn') as BufferAttribute;
+    expect(born.itemSize).toBe(2);
+    expect(born.updateRanges.reduce((n, r) => n + r.count, 0)).toBe(10 * 4);
   });
 });
 
