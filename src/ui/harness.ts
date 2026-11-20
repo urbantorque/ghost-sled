@@ -3,7 +3,12 @@
 // URL params: s=<scenario> (see SCENARIOS), mode=keyboard|mouse|touch,
 // bg=alpine|blizzard|night|ember|powder|glass, bare=1 hides the control panel (for screenshots).
 
-import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, ResultsModel, SettingsModel, SledCard, TitleModel, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import type { GarageShelf, GarageShelfId, GhostKind, HudModel, MissionView, PaintCard, PrimaryButtonView, ResultsModel, ResultsSpine, RewardCard, SettingsModel, SledCard, StickerCard, TitleModel, TitleSpine, TitleTwelve, TwelveRung, UIHandlers } from './contract';
+import { albumModel, almanacModel, lanternRow, rankBar, titleSpine } from '../game/spineview';
+import { albumCatalogue } from '../game/album';
+import { chapterKey } from '../game/almanac';
+import { defaultSave, type SaveData } from '../game/save';
+import { lanternId } from '../game/lanterns';
 import { TWELVE } from '../game/twelve';
 import { SHELVES } from '../game/garage';
 import { PAINTS } from '../game/paints';
@@ -152,6 +157,41 @@ const STAGES: NonNullable<ResultsModel['stages']> = {
     { name: 'Stage 3', seconds: 59.85, medal: 0, rival: 61.2, best: 63.9 },
   ],
 };
+/**
+ * Round 8: the spine's part of the results (game/spineview.ts), built on the real Almanac: the bar from `xp0` to
+ * `xp1`, the ticks that paid it, the cards opened, the stickers, the flame and the one button.
+ */
+function spine(o: { xp0: number; xp1: number; opened?: RewardCard[]; stickers?: StickerCard[]; primary?: PrimaryButtonView; streak?: number; swap?: boolean }): ResultsSpine {
+  const before = rankBar(o.xp0);
+  const after = rankBar(o.xp1);
+  const paid = o.xp1 - o.xp0;
+  const parts: Array<[string, number]> = [
+    ['Finished', 0.22],
+    ["Day's first run", 0.3],
+    ['Medals', 0.17],
+    ['Mission', 0.12],
+    ['Set piece', 0.1],
+    ['Passes', 0.09],
+  ];
+  return {
+    ticks: parts.map(([label, k]) => ({ source: label.toLowerCase(), label, xp: Math.round(paid * k) })),
+    before,
+    after,
+    opened: o.opened ?? [],
+    stickers: o.stickers ?? [],
+    flame: { lit: (o.streak ?? 0) > 0, streak: o.streak ?? 0, calendarDay: o.streak ?? 0, embered: false, emberEarned: false },
+    contracts: { met: [], bonus: false, form: null, today: [], formNext: null },
+    league: null,
+    primary: o.primary ?? { kind: 'again', text: 'Run Again', sub: after.next ? `Page ${after.page + 1}: ${after.next.map((r) => r.name).join(', ')}: ${after.need} to go` : null, aria: 'Run Again' },
+    swap: o.swap ? { id: 'drift-2', text: 'Drift for 400 m total' } : null,
+  };
+}
+const STICKERS: StickerCard[] = [
+  { id: 'p-mirror-lake', name: 'Mirror Lake, clean', mountain: 'pinecrest', group: 'variant', hint: '', frame: false },
+  { id: 'trick-crane', name: 'Crane Fold', mountain: '', group: 'trick', hint: '', frame: false },
+];
+const REMATCH: PrimaryButtonView = { kind: 'rematch', text: 'Rematch Ansel', sub: '1.2 s behind', aria: 'Rematch Ansel, 1.2 s behind, run again' };
+
 /** A finish as the app sends it now, with the ladder and the stage table. */
 const FINISH: Partial<ResultsModel> = {
   score: 15862,
@@ -181,7 +221,8 @@ const FINISH: Partial<ResultsModel> = {
   ],
   ladder: LADDER,
   stages: STAGES,
-  runAgainLabel: { text: 'Rematch Ansel', aria: 'Rematch Ansel, run again' },
+  runAgainLabel: { text: 'Rematch Ansel', aria: 'Rematch Ansel, 1.2 s behind, run again' },
+  spine: spine({ xp0: 2100, xp1: 2610, primary: REMATCH, streak: 3 }),
 };
 
 function hudModel(over: Partial<HudModel> = {}): HudModel {
@@ -324,6 +365,23 @@ const handlers: UIHandlers & UIMenuHandlers = {
     wearLook(shelf, id);
   },
   onListenSound: (id) => log(`onListenSound(${id})`),
+  onSwapMission: (id) => {
+    log(`onSwapMission(${id})`);
+    window.setTimeout(() => {
+      results = { ...results, spine: results.spine ? { ...results.spine, swap: null } : null };
+      ui.updateResults(results);
+      ui.toast('Mission swapped', 'mission', 'Pass 2 ghosts in a tuck');
+    }, 200);
+  },
+  onResultsBeat: (kind, i) => log(`onResultsBeat(${kind}, ${i})`),
+  onOpenAlmanac: () => {
+    log('onOpenAlmanac');
+    ui.showAlmanac(almanacModel(spineD, SPINE_DAY));
+  },
+  onOpenAlbum: () => {
+    log('onOpenAlbum');
+    ui.showAlbum(albumModel(spineD));
+  },
   onOpenSleds: () => showGarage(),
   onOpenSettings: () => ui.showSettings(settings),
 };
@@ -344,7 +402,11 @@ function shelves(): GarageShelf[] {
   return (['scarf', 'hat', 'trail', 'sound'] as const).map((id) => ({ id, items: SHELVES[id].map((i) => ({ id: i.id, name: i.name, blurb: i.blurb, price: i.price, owned: looks[id].owned.has(i.id), on: looks[id].on === i.id, affordable: wallet >= i.price })) }));
 }
 function showGarage(): void {
-  ui.showSleds(sleds, wallet, paintCards(), shelves());
+  // (Round 8: the Lantern Row from the spine save, three lit in Pinecrest's Old Town.)
+  const d = spineD;
+  d.gifts = wallet;
+  d.lit = [0, 1, 2].map((i) => lanternId('pinecrest', i));
+  ui.showSleds(sleds, wallet, paintCards(), shelves(), lanternRow(d, (m) => m === 'pinecrest' || m === 'frostfang'));
 }
 function wearLook(shelf: 'paint' | GarageShelfId, id: string): void {
   const st = looks[shelf];
@@ -390,6 +452,30 @@ placeRider();
 function stopLive(): void {
   cancelAnimationFrame(live);
   live = 0;
+}
+
+/**
+ * Round 8: a save part-way through its first weeks, for the spine's title corner and the books, read through the
+ * game's own views (spineview.ts) so the Almanac's pages, the chapter and the album are the real ones.
+ */
+const SPINE_DAY = '2026-11-20';
+function spineSave(o: { xp?: number; claimed?: number; stickers?: number; streak?: number; lastDay?: string; ember?: number; chapterXp?: number } = {}): SaveData {
+  const d = defaultSave('Nico');
+  d.runs = 24;
+  d.gifts = wallet;
+  d.rank = { xp: o.xp ?? 2610, claimed: o.claimed ?? 5 };
+  const cat = albumCatalogue();
+  const got: Record<string, number> = {};
+  // Every third sticker of the first mountain and the tricks, as a few weeks of riding leave it.
+  cat.filter((s, i) => i % 3 === 0 || s.group === 'trick').slice(0, o.stickers ?? 22).forEach((s, i) => (got[s.id] = i + 1));
+  d.album = { got };
+  d.flame = { last: o.lastDay ?? SPINE_DAY, streak: o.streak ?? 3, best: Math.max(5, o.streak ?? 3), ember: o.ember ?? 0, days: 9 };
+  d.chapters = { [chapterKey(SPINE_DAY)]: { xp: o.chapterXp ?? 4200, claimed: 2 } };
+  return d;
+}
+let spineD = spineSave();
+function titleSpineOf(d: SaveData): TitleSpine {
+  return titleSpine(d, SPINE_DAY, { week: '2026-W47', open: (m) => m === 'pinecrest' || m === 'frostfang' });
 }
 
 function goTitle(over: Partial<TitleModel> = {}): void {
@@ -996,6 +1082,30 @@ const SCENARIOS: Record<string, () => void> = {
     hintRun();
     ui.hint('draft', mode);
   },
+  // Round 8: the lantern's lesson (on a phone it points at the lantern button), and the grab's correction.
+  'hint-dash': () => {
+    const m = hintRun();
+    m.lantern = { charge: 220, cells: 2, dashing: false, wards: 0, dashes: 0 };
+    ui.updateHud(m);
+    ui.hint('dash', mode);
+  },
+  'hint-flipspin': () => {
+    hintRun();
+    ui.hint('flipSpin', mode);
+  },
+  // Round 8's named tricks on the callout line: the longest names, "New" the first time in a run.
+  'tricks-long': () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 4200, mult: 4, chain: 6, timer: 0.9 } });
+    ui.popStyle('New Lamppost Swing 720', 2400, 4, 'big');
+    window.setTimeout(() => ui.popStyle('Late Crosswind', 1500, 4, 'big'), 300);
+  },
+  // A perfect landing that names two long tricks: the stamp's sub-line wraps inside the stamp, on the screen.
+  'stamp-long': () => {
+    staticHud({ ...quietHud, combo: { active: true, pending: 5400, mult: 4, chain: 7, timer: 0.9 } });
+    ui.popStyle('Paper Wheel 360', 1800, 4, 'big');
+    ui.popStyle('Lamppost Swing 720', 2400, 4, 'big');
+    ui.popStyle('Perfect landing', 1200, 4, 'perfect');
+  },
   // The player starts drifting while "Hold while turning to drift" is up: it goes at once, and does not
   // come back this run when the game asks for it again after the drift's release.
   'hint-drift-done': () => {
@@ -1029,6 +1139,91 @@ const SCENARIOS: Record<string, () => void> = {
     ui.ghostPass('Maximilian the Unstoppable', 'friend', true);
   },
   results: () => showResults(),
+  // ------------------------------------------------------------ Round 8: the spine on the title, and the books
+  // The corner: the flame (lit today, day 3), Rider Rank's card toward page 6, the album's count, the day's news.
+  'title-spine': () => {
+    spineD = spineSave();
+    goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
+  },
+  // A returning player who has not ridden today: the flame hollow, the ember held, the news line on the ember.
+  'title-spine-risk': () => {
+    spineD = spineSave({ lastDay: '2026-11-18', ember: 1, streak: 6 });
+    goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
+  },
+  // The flame's calendar open.
+  'title-flame': () => {
+    spineD = spineSave({ streak: 4 });
+    goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
+    document.querySelector<HTMLElement>('[data-fk="flame"]')?.click();
+  },
+  // A first week: page 1, no album yet (it opens on page 3), the flame on day 1.
+  'title-spine-early': () => {
+    spineD = spineSave({ xp: 420, claimed: 1, stickers: 0, streak: 1 });
+    spineD.album = undefined;
+    goTitle({ spine: titleSpineOf(spineD) });
+  },
+  almanac: () => {
+    spineD = spineSave();
+    goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
+    handlers.onOpenAlmanac?.();
+  },
+  album: () => {
+    spineD = spineSave({ stickers: 40 });
+    goTitle(ladderTitle({ spine: titleSpineOf(spineD) }));
+    handlers.onOpenAlbum?.();
+  },
+
+  // ------------------------------------------------------------ Round 8: the results as a sequence (sequence.ts)
+  // Each plays its five seconds; a tap or a key lands it. ?view=details opens Details on any results scenario.
+  // A first run: a page turned (0 to 1), its reward turned over, the button Run Again with the next page as its line.
+  'seq-first': () =>
+    showResults({
+      ...FINISH,
+      ladder: null,
+      stages: null,
+      finish: { ...FINISH.finish!, newBest: true, bestTime: null, medal: 1 },
+      runAgainLabel: { text: 'Run Again', aria: 'Run Again' },
+      spine: spine({ xp0: 0, xp1: 420, opened: rankBar(0).next ?? [], streak: 1 }),
+    }),
+  // A rematch: third, 1.2 s behind Ansel, no page turned, nothing opened.
+  'seq-rematch': () => showResults(FINISH),
+  // A big one: a page turned, a mountain opened, two rewards and two stickers (the last slot says how many more).
+  'seq-turn': () =>
+    showResults({
+      ...FINISH,
+      unlockedMountains: [{ id: 'ember', name: 'Ember Peak', biome: 'volcanic', tagline: 'Ash snow over a lava glow' }],
+      runAgainLabel: { text: 'Run Again', aria: 'Run Again' },
+      spine: spine({ xp0: 1900, xp1: 2400, opened: [...(rankBar(1900).next ?? []), { kind: 'gifts', name: '150 gifts', page: 5, chapter: null }], stickers: STICKERS, streak: 4 }),
+    }),
+  // Two cards, no mountain: a page turned with its reward, and a sticker.
+  'seq-cards': () =>
+    showResults({
+      ...FINISH,
+      runAgainLabel: { text: 'Run Again', aria: 'Run Again' },
+      spine: spine({ xp0: 1500, xp1: 1700, opened: rankBar(1500).next ?? [], stickers: STICKERS.slice(0, 1), streak: 2 }),
+    }),
+  // A wreck with both ad offers up and a mission 12 m short as the button.
+  'seq-wreck': () =>
+    showResults({
+      runAgainLabel: { text: 'Finish the mission', aria: 'Finish the mission, Ride 800 m in one run, 12 m short, run again' },
+      finishZ: 4500,
+      spine: spine({ xp0: 640, xp1: 900, primary: { kind: 'mission', text: 'Finish the mission', sub: 'Ride 800 m in one run: 12 m short', aria: 'Finish the mission' }, swap: true }),
+    }),
+  // The longest label the spine names: a duel of The Twelve.
+  'seq-duel': () =>
+    showResults({
+      ...FINISH,
+      runAgainLabel: { text: 'Next Duel: Bram Oakhollow', aria: 'Duel Bram Oakhollow' },
+      spine: spine({ xp0: 3400, xp1: 3990, primary: { kind: 'duel', text: 'Next Duel: Bram Oakhollow', sub: 'Time to beat 2:09.2', aria: 'Duel Bram Oakhollow' } }),
+    }),
+  // First place: clear of second, the button today's Daily.
+  'seq-win': () =>
+    showResults({
+      ...FINISH,
+      ghosts: (FINISH.ghosts ?? []).map((g) => (typeof g.time === 'number' && g.time < 171.45 ? { ...g, time: g.time + 9, passed: true } : g)),
+      runAgainLabel: { text: "Today's Daily", aria: "Ride today's Daily" },
+      spine: spine({ xp0: 2700, xp1: 3300, primary: { kind: 'daily', text: "Today's Daily", sub: 'Keep the flame lit', aria: "Ride today's Daily" }, streak: 6 }),
+    }),
   'results-plain': () =>
     showResults({ newBest: false, score: 9120, canRevive: false, canDouble: false, canChallenge: false, crashCause: 'Hit a rock', mood: '', missions: missions.map((m) => ({ ...m, justCompleted: false })), unlocked: [] }),
   'results-unlock': () => showResults({ unlocked: ['Ember Peak'], canRevive: false }),
@@ -1122,6 +1317,12 @@ const SCENARIOS: Record<string, () => void> = {
   sleds: () => {
     goTitle();
     showGarage();
+  },
+  // Round 8: the garage open on the Lantern Row.
+  lanterns: () => {
+    goTitle();
+    showGarage();
+    document.querySelector<HTMLElement>('[data-fk="gtab-lanterns"]')?.click();
   },
   settings: () => {
     goTitle();
@@ -1439,7 +1640,8 @@ const GROUPS: Record<string, string[]> = {
   hud: ['hud', 'hud-live', 'hud-grudge', 'hud-you', 'hud-you-named', 'hud-even', 'hud-behind', 'hud-long', 'rank-gain', 'rank-swing', 'rank-first', 'rank-first-you', 'combo-single', 'draft-pill', 'night-pills', 'touch', 'danger-far', 'danger-mid', 'danger-near', 'danger-urgent', 'danger-chase'],
   fx: ['callouts', 'callouts-merge', 'callouts-landing', 'callouts-landing-big', 'callouts-late-stomp', 'callouts-perfect', 'callouts-chase', 'callouts-chase-band', 'callouts-band', 'callouts-pass', 'overtake-frame', 'lost', 'bank', 'toasts', 'toasts-2', 'pass', 'pass-you', 'pass-landing', 'landing-pass', 'pass-grudge', 'pass-grudge-settled', 'passed-by', 'passed-by-grudge', 'passed-by-you', 'queue'],
   chaos: ['reveal', 'reveal-lantern', 'reveal-comet', 'reveal-haunted', 'reveal-event', 'reveal-plain', 'warn-avalanche', 'warn-yeti', 'warn-gifts', 'warn-train'],
-  hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-learn'],
+  hints: ['hint-steer', 'hint-crouch', 'hint-drift', 'hint-drift-done', 'hint-pop', 'hint-stomp', 'hint-draft', 'hint-dash', 'hint-flipspin', 'hint-learn', 'tricks-long', 'stamp-long'],
+  spine: ['seq-first', 'seq-rematch', 'seq-turn', 'seq-cards', 'seq-wreck', 'seq-duel', 'seq-win', 'title-spine', 'title-spine-risk', 'title-flame', 'title-spine-early', 'almanac', 'album', 'lanterns'],
   menus: ['results', 'results-win', 'results-duel', 'results-duel-lost', 'results-duel-opens', 'results-crowned', 'results-finish', 'results-finish-solo', 'results-short', 'results-plain', 'results-unlock', 'results-record', 'results-mid', 'results-last', 'results-zero', 'results-doubled', 'pause', 'sleds', 'settings'],
   cash: ['bank-tiers', 'bank-t0', 'bank-t1', 'bank-t2', 'bank-t3', 'bank-best', 'bank-draft', 'bank-bump', 'stake', 'stake-fuse', 'stake-held', 'lost-crack', 'lost-best', 'lost-small', 'chase-stake'],
   beats: ['streak', 'streak-5', 'pass-words', 'pass-streak', 'race-news', 'race-queue', 'race-call', 'race-call-grudge', 'race-call-you', 'duel', 'duel-lost', 'lead', 'grudge-settled', 'nemesis-down', 'finale-avalanche', 'finale-storm', 'finale-train', 'finale-yeti', 'finale-dodged', 'pops', 'pop-mission', 'pop-unlock', 'new-best', 'friend-beaten', 'says', 'countdown', 'countdown-storm', 'countdown-plain', 'countdown-yeti'],
@@ -1485,6 +1687,9 @@ function run(s: string): void {
   ui.hidePause();
   ui.closeMenus();
   fn();
+  // Round 8: ?view=details opens a results scenario one level down; ?land=1 lands its sequence at once.
+  if (params.get('land') === '1' || params.get('view') === 'details') document.querySelector<HTMLElement>('.gs-results')?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
+  if (params.get('view') === 'details') document.querySelector<HTMLElement>('[data-fk="details"]')?.click();
   log(`scenario ${s}`);
   const q = new URLSearchParams(location.search);
   q.set('s', s);
