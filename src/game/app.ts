@@ -60,7 +60,7 @@ import { type BestRun, type Climb, Grudge, SHELF_KEYS, SaveStore, oldBest, retir
 import { type GrudgeRow, type SettleResult, Settlement, cupMedalNow, dailyMedalNow, dailyStreakNow, isNemesis, medalFor, medalThresholds, settleBest, settleGrudge, settleRun, topScore } from './settle';
 import { inReach } from './pacer';
 import { PLAIN_SHOT, type TitleShot, devShot, titleShot } from './keyart';
-import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider } from './twelve';
+import { CROWN_GIFTS, DUEL_GIFTS, type Duel, KING, TWELVE, type TwelveOutcome, duelMountain, duelOn, duelRecord, duelStartLine, finalField, gateLine, hasBeaten, lockText, mountainOpen, nextDuel, outcomeLine, poolStanding, readTwelve, settleTwelve, tallyLine, waitingRider, withheldRiders } from './twelve';
 import { FINISH_Z, type Standing, aheadOf, byStanding, clock, marginPhrase, placeAtFinish, predictedTime, recordStanding } from './standing';
 
 // The app: boot, title attract mode, run lifecycle, results, menus, ads and saves. Owns every
@@ -734,7 +734,7 @@ export class App {
       }),
       selected: this.mountain.id,
       // (Round 8: the flame, days in a row with a run of any kind, takes the Daily-only streak line's place.)
-      daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: flame.alive ? flame.streak : 0, flame: true },
+      daily: { key: today, best: d.daily.key === today ? d.daily.best : 0, time: d.daily.last === today ? d.daily.time : undefined, ready: this.dailyReady, medal: dailyMedalNow(d.daily, today), streak: flame.alive ? flame.streak : 0, flame: true },
       best: topScore(d.best[this.mountain.id]),
       bestTime: d.best[this.mountain.id]?.time ?? 0,
       oldBest: oldBest(d, this.mountain.id)?.score ?? 0,
@@ -987,6 +987,9 @@ export class App {
       grudge: grudge?.record ? { name: grudge.name, score: grudge.score, record: grudge.record, distance: grudge.distance, nemesis: isNemesis(grudge) } : null,
       friend: friend ? { name: friend.name, score: friend.score, record: recordToString(friend) } : null,
       promised,
+      // (Round 8: a very first run is laid round its mountain's steady time, and The Hollow King waits for his duel.)
+      key,
+      withheld: withheldRiders(d.twelve),
     });
     if (cup && mine) picks.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record, distance: mine.distance });
     return picks.map((g) => {
@@ -1846,7 +1849,9 @@ export class App {
     const key = this.mountainKey();
     const you = this.youStanding(sim);
     const board = MOUNTAINS.some((m) => m === this.mountain) ? this.boardFor(this.mountain.id) : null;
-    const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks }) : null;
+    // (Round 8: rides of this mountain, this one in: the ladder and the mastery board open a step a ride.)
+    const rides = Math.max(1, d.runTimes?.[key]?.length ?? 1);
+    const climb: ClimbOutcome | null = board ? settleClimb(d, key, board, SIM_VERSION, this.climbAtStart, { standing: you, best: bestStanding(d.best[key]), bestBefore: bestStanding(this.bestAtStart), ticks: sim.stageTicks, rides }) : null;
     // A named mountain's mastery board: what this run added, each new star paid once.
     let mastery: ResultsModel['mastery'] = null;
     const mi = MOUNTAINS.indexOf(this.mountain as (typeof MOUNTAINS)[number]);
@@ -1859,7 +1864,7 @@ export class App {
         return [r.key, g && (g.finishTick ?? -1) > 0 ? (g.finishTick as number) / 60 : null] as const;
       }));
       const course = courseFor(this.mountain.seed);
-      const fresh = settleMastery(course, key, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
+      const fresh = settleMastery(course, key, rec, { gates: this.gatesThisRun, moments: this.director.marqueeDone, time: sim.finished ? sim.s.finishTick / 60 : null, riderTimes, clean: this.director.falls === 0 }, this.climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0, rides);
       d.mastery[key] = rec;
       if (fresh.length) {
         d.gifts += STAR_GIFTS * fresh.length;
@@ -2132,6 +2137,7 @@ export class App {
       dayMedal: dayMedal && dayMedal.best > this.dayMedalAtStart ? dayMedal.best : 0,
       stars: this.masteryFresh.length,
       duelWon: kept?.fell && kept.duel?.kind === 'duel' ? kept.duel.rider.key : null,
+      duelLost: kept?.duel?.kind === 'duel' && !kept.fell,
       crowned: !!kept?.crowned,
       newBestTime: this.newBestTime && this.bestAtStart?.time !== undefined,
       lostTo,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MISSIONS, MissionState, RunSummary, applyRun, cycleOrder, missionDef, missionTier, missionViews, newMissionState, topUp, unlockedBiomes } from '../src/game/missions';
+import { MISSIONS, MissionState, RunSummary, applyRun, cycleOrder, missionDef, missionSlots, missionTier, missionViews, newMissionState, topUp, unlockedBiomes } from '../src/game/missions';
 import { missionsCrossed } from '../src/game/progress';
 import { SaveStore, defaultSave } from '../src/game/save';
 import { FINISH_Z } from '../src/game/standing';
@@ -85,8 +85,11 @@ describe('missions', () => {
     expect(new Set(s.active.map((a) => a.id)).size).toBe(3);
   });
 
-  it('a fresh save starts on the onboarding trio', () => {
-    expect(defaultSave('Anyone').missions.active.map((a) => a.id)).toEqual(['dist800', 'perfect2', 'pass1']);
+  // (Round 8, the rewards paced: a first run holds one mission slot, the second two, then three: missionSlots.)
+  it('a fresh save starts on the onboarding trio, one slot at a time', () => {
+    expect(defaultSave('Anyone').missions.active.map((a) => a.id)).toEqual(['dist800']);
+    const s = newMissionState(hashString('Anyone'), { unlockedBiomes: unlockedBiomes(0), slots: 3 });
+    expect(s.active.map((a) => a.id)).toEqual(['dist800', 'perfect2', 'pass1']);
   });
 
   it('completing a mission pays its reward and rotates in a new one', () => {
@@ -300,6 +303,6 @@ describe('missions for a descent with a finish', () => {
   it('keeps an old save whose mission ids are all still here', () => {
     const d = defaultSave('Old');
     for (const id of ['dist800', 'dist2000', 'dist4000', 'pass3', 'score40k']) expect(missionDef(id), id).toBeDefined();
-    expect(d.missions.active).toHaveLength(3);
+    expect(d.missions.active).toHaveLength(missionSlots(0));
   });
 });

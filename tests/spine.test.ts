@@ -10,7 +10,7 @@ import { LANTERNS, lightLantern, litByTown, litIn, readLit } from '../src/game/l
 import { lanternRow } from '../src/game/spineview';
 import { SWAP_AFTER, applyRun, newMissionState, swapMission, swappable, type RunSummary } from '../src/game/missions';
 import { LEGS, legChaos, legStep, mirrorSteer, settleLongNight } from '../src/game/modes';
-import { OPENER_BACK, OPENER_LEAD, openerOf, stringOffset } from '../src/game/pacer';
+import { OPENER_BACK, OPENER_LEAD, OPENER_PASS_T, OPENER_TOP_T, openerOf, stringOffset } from '../src/game/pacer';
 import { isPaint, paintById } from '../src/game/paints';
 import { XP, nextPage, settleSpine, xpTicks, type SpineRun } from '../src/game/rank';
 import { defaultSave, type SaveData } from '../src/game/save';
@@ -285,11 +285,13 @@ describe('the Lantern Row', () => {
 });
 
 describe('the first minute and the missions', () => {
-  it('sends one rider of a first run ahead off the line, back behind you by 250 m, then to its place', () => {
+  it('sends one rider of a first run ahead of you, then back behind you within the first twenty seconds, then to its place', () => {
     const k = openerOf(7);
-    expect(stringOffset(k, 7, 110, FINISH_Z)).toBeCloseTo(OPENER_LEAD, 0);
-    expect(stringOffset(k, 7, 250, FINISH_Z)).toBeCloseTo(OPENER_BACK, 0);
-    expect(Math.abs(stringOffset(k, 7, 0, FINISH_Z))).toBeLessThan(1);
+    expect(stringOffset(k, 7, 300, FINISH_Z, OPENER_TOP_T)).toBeCloseTo(OPENER_LEAD, 0);
+    expect(stringOffset(k, 7, 450, FINISH_Z, OPENER_PASS_T)).toBeCloseTo(OPENER_BACK, 0);
+    expect(Math.abs(stringOffset(k, 7, 0, FINISH_Z, 0))).toBeLessThan(1);
+    // Without the run's clock it keeps to the string.
+    expect(stringOffset(k, 7, 300, FINISH_Z)).not.toBeCloseTo(OPENER_LEAD, 0);
   });
 
   it('waits for the third run before the first duel', () => {

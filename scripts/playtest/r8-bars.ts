@@ -43,6 +43,29 @@ const ride = (pilot: string): CareerRun[] => {
   return (careers[pilot] = runs);
 };
 
+/** What each of runs 1 to 10 gains (round 8, the rewards paced): the mid pilot staying on Pinecrest, and following
+ *  the results' one button. */
+if (ONLY.has('gains')) {
+  const show = (label: string, runs: CareerRun[]): void => {
+    console.log(`
+RUNS 1 TO 10, ${label}: run  where         place   gains (what the save keeps; pass and best in brackets)   gifts`);
+    let gifts = 0;
+    for (const r of runs.slice(0, 10)) {
+      const by: Record<string, number> = {};
+      for (const gn of r.gains) by[gn.kind] = (by[gn.kind] ?? 0) + 1;
+      const kept = Object.entries(by).filter(([k]) => k !== 'pass' && k !== 'best').map(([k, v]) => (v > 1 ? `${k} x${v}` : k)).join(', ');
+      const loose = ['pass', 'best'].filter((k) => by[k]).map((k) => (by[k] > 1 ? `${k} x${by[k]}` : k)).join(', ');
+      const you = { time: r.facts.time, distance: r.facts.distance };
+      const place = 1 + r.facts.field.filter((q) => q.kind !== 'you' && M.standing.aheadOf({ time: q.time, distance: q.distance }, you)).length;
+      const paid = r.after.lifetimeGifts - gifts;
+      gifts = r.after.lifetimeGifts;
+      console.log(`  ${String(r.n).padStart(4)}  ${r.facts.key.slice(0, 12).padEnd(12)}  ${`${place}/${r.facts.field.length + 1}`.padStart(5)}   ${(kept || '-') + (loose ? ` (${loose})` : '')}`.padEnd(100) + String(paid).padStart(6));
+    }
+  };
+  show('mid staying on Pinecrest', career(M, { pilot: 'mid', runs: 10, follow: 'stay', cacheDir: CACHE }));
+  show('mid following the button', career(M, { pilot: 'mid', runs: 10, follow: 'button', daily: DAILY, cup: CUP, cacheDir: CACHE }));
+}
+
 if (ONLY.has('nodead')) {
   const t = performance.now();
   const runs = ride('mid').slice(0, 30);
@@ -93,12 +116,12 @@ if (ONLY.has('decisions')) {
 if (ONLY.has('expression')) {
   const t = performance.now();
   const facts: RunFacts[] = [];
-  for (let i = 0; i < Math.max(1, Math.round(SEEDS / 3)); i++) for (let m = 0; m < M.mountains.MOUNTAINS.length; m++) facts.push(firstRun(M, 'expert', 4242 + i * 97, m));
+  for (let i = 0; i < Math.max(1, Math.round(SEEDS / 3)); i++) for (let m = 0; m < M.mountains.MOUNTAINS.length; m++) facts.push(firstRun(M, 'trickster-expert', 4242 + i * 97, m));
   const b = barExpression(M, facts);
-  console.log(`\nEXPRESSION (expert, ${facts.length} runs; bar: at least ten named air tricks, and five of them in the expert's best combo)`);
+  console.log(`\nEXPRESSION (the lab's expert on the air map, labpilots.ts trickster, ${facts.length} runs; bar: at least ten named air tricks, and five of them in the expert's best combo)`);
   console.log(`  the vocabulary: ${b.vocabulary.length} (${b.vocabulary.join(', ')})`);
   console.log(`  names said: ${b.seen.join(', ')}`);
-  console.log(`  best combo: ${b.bestComboFamilies} distinct (${b.bestCombo.join(', ')})   (${secs(t)})`);
+  console.log(`  best combo: ${b.bestComboFamilies} distinct (${b.bestCombo.join(', ')}); each ride's best combo: median ${b.medianRide}, rides ${b.perRide.join(' ')}   (${secs(t)})`);
   json.expression = b;
 }
 
@@ -113,7 +136,7 @@ if (ONLY.has('first')) {
       const b = barFirstMinute(f);
       rows.push(b);
       const s = (v: number | null): string => (v === null ? '  -  ' : v.toFixed(1).padStart(5));
-      console.log(`  ${pilot.padEnd(15)} seed ${i}  pass ${s(b.pass)}  perfect ${s(b.perfect)}  dash ${s(b.dash)}  ${f.finished ? `finished ${f.time?.toFixed(1)} s` : `fell at ${f.distance.toFixed(0)} m`}  ${b.ok ? 'MET' : 'short'}`);
+      console.log(`  ${pilot.padEnd(15)} seed ${i}  pass ${s(b.pass)}  perfect ${s(b.perfect)}  dash ${s(b.dash)}  ${f.finished ? `finished ${f.time?.toFixed(1)} s` : `fell at ${f.distance.toFixed(0)} m`}  ${b.ok ? 'MET' : 'short'}   hints shown: ${Object.entries(f.hintShows).map(([k, v]) => `${k}:${v}`).join(' ')}`);
     }
     out[pilot] = rows;
     console.log(`  ${pilot.padEnd(15)} met all three: ${rows.filter((r) => r.ok).length} of ${rows.length}${pilot.endsWith('prompted') ? '   (the bar is judged on these)' : '   (blind: the floor)'}`);

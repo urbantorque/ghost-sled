@@ -167,7 +167,7 @@ export interface TitleModel {
   selected: string;
   /** medal: today's best Daily medal (0 none, 1 bronze, 2 silver, 3 gold); streak: Daily days in a row, or with
    *  `flame` (round 8) the flame's days in a row with a run of any kind, which takes the Daily-only line's place. */
-  daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number; flame?: boolean };
+  daily: { key: string; best: number; ready: boolean; medal?: number; streak?: number; flame?: boolean; time?: number };
   best: number;
   /** Your best finish time on the selected mountain, seconds (0 for none). */
   bestTime?: number;

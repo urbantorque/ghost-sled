@@ -36,6 +36,10 @@ export const HERO_IN_MIN = 0.45;
 export const HERO_HOME = 0.5;
 const HERO_LIP_PAST = 14;
 
+/** A save's first run keeps its first seconds to one idea at a time (round 8): no start-line call, no slipstream or
+ *  slingshot callout and no mission or unlock pop before this (s). A pass is still called. */
+export const FIRST_QUIET_S = 15;
+
 /** Seconds until an airborne sled comes down, marched over the real ground as the landing ring does
  *  (5 at most). Reads the sim and changes nothing in it. */
 export function flightSeconds(sim: Sim): number {
@@ -1060,6 +1064,8 @@ export class Director {
           // A showdown won and a stolen wisp say what happened.)
           if (e.trick) label = trickCall(e.trick, e.halfTurns ?? 0, e.flips ?? 0, e.late === true);
           if (e.trick && e.fresh) label = `New ${label}`;
+          // (Round 8, a quiet first run: its first FIRST_QUIET_S seconds call no slipstream or slingshot.)
+          if ((e.kind === 'draft' || e.kind === 'slingshot') && sim.config?.firstRun && p.tick < FIRST_QUIET_S * 60) break;
           if (e.kind === 'showdown') label = 'Showdown won';
           else if (e.kind === 'steal') label = 'Wisp stolen';
           this.push({ type: 'callout', tick: p.tick, source: e.kind, say: { label, points: e.points, tone: styleTone(e.kind, e.points) } }, sim);
@@ -1740,6 +1746,12 @@ export class Director {
   private raceCall(f: DirectorFrame, sim: Sim, now: number): void {
     const run = this.run;
     if (this.callDone || !run) return;
+    // (Round 8, a quiet first run: a save's first run makes no start-line call; the steer lesson is its first idea.)
+    if (sim.config?.firstRun) {
+      this.callDone = true;
+      this.callWaiting = false;
+      return;
+    }
     const at = run.hasReveal ? run.revealLeaveS + 0.3 : 0.6;
     const field = f.tracks.map((t) => ({ id: t.entry.id, kind: t.entry.kind, role: t.entry.role, ready: t.ready, nemesis: t.entry.nemesis, rival: t.entry.rival }));
     if (this.fieldReadyAt < 0 && field.some((g) => g.ready)) this.fieldReadyAt = now;
@@ -1828,6 +1840,8 @@ export class Director {
       !(this.call && now - this.call.at < POP_DEFER.call / 1000) &&
       now - this.lastFinaleAt >= FINALE_HOLD_S &&
       !this.finales.pending &&
+      // (Round 8: a save's first run holds its pops for its first FIRST_QUIET_S seconds.)
+      !(sim.config?.firstRun && sim.tick < FIRST_QUIET_S * 60) &&
       now - this.lastPopAt >= (this.lastPopUnlock ? UNLOCK_BANNER_S + AFTER_UNLOCK_S : POP_DEFER.spacing / 1000);
     if (!clear) return;
     // A waiting unlock goes before any mission.
