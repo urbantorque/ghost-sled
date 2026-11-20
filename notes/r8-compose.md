@@ -100,6 +100,22 @@ so the 6 against 5 between the two lenses' totals is the critics' spread there, 
 shoulder lens won all three it played and the layout question, which the high lens did not. **The shoulder lens is the
 default.** The bar (8 of 10) is still not met: V3 closes as partly met.
 
+**Readability with the shoulder lens's shot in** (`readability.js` from 160 m, five reads 30 m apart, so the shot and
+its hand-back at 180 to 220 m are inside it; before on a build of round-8 f784510; `probe/read-base-160.json`,
+`probe/read-after7-160.json`): road median / worst in metres, and the rider's height in pixels.
+
+| Opening | 30 m/s before | 30 m/s after | 44 m/s before | 44 m/s after | Rider at 30, before / after |
+| --- | --- | --- | --- | --- | --- |
+| Pinecrest | 24 / 4 | 60 / 5 | 68 / 34 | 68 / 35 | 166 / 185 |
+| Frostfang | 67 / 0 | 70 / 4 | 66 / 33 | 67 / 34 | 178 / 179 |
+| Ember | 72 / 5 | 74 / 4 | 67 / 35 | 67 / 35 | 162 / 170 |
+| Sakura | 68 / 4 | 73 / 4 | 67 / 33 | 69 / 34 | 173 / 171 |
+| Lanternfall | 44 / 13 | 61 / 13 | 68 / 44 | 68 / 44 | 165 / 144 |
+
+No opening reads worse: every median is level or further (1.5 s is 45 m at 30 m/s and 66 m at 44), every worst read
+is within a metre of the before (the same kicker lips and ghosts over the line), so no shot was shortened. The rider is
+as big or bigger everywhere but Lanternfall's crest, whose lens is 1.4 m up.
+
 **V3 is not done, after a second pass.** The latest: **6 of 10** blind pairs on stills from the same round-8 commit
 (the bar is 8), and a critic asked "five places or one layout" answered "two layouts (a low trough and a high spine)
 dressed five ways", the after set closer than the before (Frostfang's canyon under its arch, Lanternfall's crest). The
