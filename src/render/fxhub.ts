@@ -13,6 +13,12 @@ export interface TreeSource {
   treesNear(x: number, z: number, r: number, ahead: number, out: number[]): number;
 }
 
+/** The snow's moving parts that other systems set off (round 8, the snow lane; particles.ts Particles). */
+export interface SnowSink {
+  /** Powder a ghost left hanging where it rode by, at three.js (x, y, z) on the snow, moving (vx, vz) at `speed`. */
+  ghostPowder(x: number, y: number, z: number, vx: number, vz: number, speed: number): void;
+}
+
 export const fx = {
   tier: 2 as FxTier,
   /** The tier's particle budget (world.ts QUALITY: 0.45, 0.75, 1, and more on Ultra). */
@@ -20,6 +26,8 @@ export const fx = {
   /** Reduced motion, from the system or the game's own setting: beats stay, motion goes. */
   reduced: false,
   trees: null as TreeSource | null,
+  /** The particles' snow (round 8): set by Particles as it is made. */
+  snow: null as SnowSink | null,
 };
 
 /** The tier, from its particle budget (the one number every tier already hands the effects). */
@@ -51,4 +59,8 @@ export const BUDGET = {
   /** Firework streaks alive at once (fireworks.ts), and the local lights a show may push a frame. */
   streaks: [420, 900, 1700, 2600],
   showLights: [1, 2, 3, 4],
+  /** Round 8, the snow that moves (particles.ts): metres of a ghost's line between the veils of powder it leaves
+   *  hanging (Low none), and spindrift wisps a second off the crests ahead (Low none). */
+  hangEvery: [Infinity, 4.5, 3, 2.5],
+  spindrift: [0, 7, 12, 16],
 } as const;
