@@ -1131,20 +1131,8 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       parts.push(part(new CylinderGeometry(0.02, 0.02, 0.66, 5), C.accent, { pos: [0, 0.18, 0.1], rot: [0, 0, Math.PI / 2] }));
       return merge(parts);
     }
-    case 3: {
-      // Comet Bob: a sleek pearl shell with a vermillion stripe, flank stripes and a tail fin, so
-      // it still reads as yours (and not as a snowdrift) from the chase camera behind it. The stripes
-      // sit proud of the shell (its top is at y 0.52, its flanks at x 0.6), never buried inside it.
-      return merge([
-        part(new CapsuleLikeGeometry(), new Color('#D3DDF2'), { pos: [0, 0.2, 0.05], scale: [0.6, 0.32, 1.5] }),
-        part(new BoxGeometry(0.1, 0.06, 1.4), C.accent, { pos: [0, 0.52, 0.05] }),
-        part(new BoxGeometry(0.07, 0.08, 1.0), C.accent, { pos: [-0.61, 0.25, 0.05] }),
-        part(new BoxGeometry(0.07, 0.08, 1.0), C.accent, { pos: [0.61, 0.25, 0.05] }),
-        part(new BoxGeometry(0.06, 0.26, 0.42), C.accent, { pos: [0, 0.5, 1.12], rot: [-0.35, 0, 0] }),
-        part(new BoxGeometry(0.05, 0.05, 1.5), new Color('#2B3550'), { pos: [-0.26, 0.02, 0.05] }),
-        part(new BoxGeometry(0.05, 0.05, 1.5), new Color('#2B3550'), { pos: [0.26, 0.02, 0.05] }),
-      ]);
-    }
+    case 3:
+      return cometBobGeometry(lite);
     case 4: {
       // Wisp: pale spectral runners and deck.
       const mint = new Color('#BFF8EE');
@@ -1177,11 +1165,68 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
   }
 }
 
-/** A rounded pod (scaled icosphere) used for the bobsled shell. */
-class CapsuleLikeGeometry extends IcosahedronGeometry {
-  constructor() {
-    super(1, 1);
+/** Comet Bob's own paint: a violet lacquer in two values, and the cream of its comet. Nothing a role owns (ART.md 1). */
+export const COMET_BOB = { lacquer: new Color('#5A3E96'), lacquerDark: new Color('#3F2A70'), comet: new Color('#F4E8CF') };
+
+/** Comet Bob (round 8): a racing bob that reads as a sled from the chase lens, where the pearl pod it was read as an
+ *  untextured white lump. The classic sled's five slats (so its underside is drawn as theirs) in violet lacquer with the
+ *  grain showing through, low sideboards along the deck pinstriped in cream, a cowl over the nose that the rider's
+ *  boots go under, a cream comet streaking back over the cowl from a round head at its tip, the vermillion runners on
+ *  steel shoes curling up into the cowl and flicking up behind, and two steel push bars at the tail, which is what the
+ *  lens behind it sees. `lite` is Low's: three slats, fewer sides, no bars. */
+function cometBobGeometry(lite: boolean): BufferGeometry {
+  const C = RIDER_COLORS;
+  const { lacquer, lacquerDark, comet } = COMET_BOB;
+  reseed(5153);
+  const parts: BufferGeometry[] = [];
+  const slats = lite ? 3 : 5;
+  const span = 0.6;
+  const sw = span / slats - 0.016;
+  for (let i = 0; i < slats; i++) {
+    const x = -span / 2 + (i + 0.5) * (span / slats);
+    parts.push(grain(part(new BoxGeometry(sw, 0.05, 1.22, lite ? 1 : 2, 1, lite ? 4 : 10), i % 2 ? lacquerDark : lacquer, { pos: [x, 0.2, 0.12] }), -0.49, 0.73));
   }
+  for (const z of [-0.36, 0.5]) parts.push(part(new BoxGeometry(0.64, 0.05, 0.1, lite ? 1 : 4, 1, 1), lacquerDark, { pos: [0, 0.165, z] }));
+  // The sideboards, a cream pinstripe along each.
+  for (const sx of [-1, 1]) {
+    parts.push(part(new BoxGeometry(0.035, 0.11, 1.0, 1, 1, lite ? 2 : 5), lacquerDark, { pos: [sx * 0.322, 0.27, 0.2] }));
+    parts.push(part(new BoxGeometry(0.04, 0.018, 0.94), comet, { pos: [sx * 0.33, 0.3, 0.2] }));
+  }
+  // The cowl: a low dome over the nose, open at the back where the boots go in.
+  parts.push(part(new SphereGeometry(1, lite ? 8 : 14, lite ? 3 : 5, 0, Math.PI * 2, 0, Math.PI / 2), lacquer, { pos: [0, 0.2, -0.36], scale: [0.335, 0.27, 0.46] }));
+  parts.push(part(new TorusGeometry(0.3, 0.022, 4, lite ? 10 : 16, Math.PI), lacquerDark, { pos: [0, 0.2, -0.14], rot: [0, 0, 0], scale: [1.1, 0.86, 1] }));
+  // The comet: a round head at the cowl's tip and its tail streaking back over the crown, tapering.
+  parts.push(smoothPart(new IcosahedronGeometry(0.08, lite ? 0 : 1), comet, { pos: [0, 0.275, -0.83] }));
+  const tail: Vector3[] = [];
+  for (let i = 0; i <= 4; i++) {
+    const a = 0.3 + (i / 4) * 1.22;
+    tail.push(new Vector3(0, 0.2 + 0.27 * Math.sin(a) + 0.012, -0.36 - 0.46 * Math.cos(a) - 0.012));
+  }
+  for (let i = 0; i < 4; i++) parts.push(capsule(tail[i], tail[i + 1], 0.045 - 0.008 * i, 0.045 - 0.008 * (i + 1), comet, lite ? 5 : 7));
+  // The runners, as the classic sled's: steel shoes, a curl up into the cowl's nose, tails flicking up, stanchions.
+  const sides = lite ? 5 : 7;
+  const curl: Vector3[] = [];
+  const steps = lite ? 4 : 6;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const a = -Math.PI / 2 + u * Math.PI * 0.95;
+    const r = 0.16 * (1 - 0.25 * u * u);
+    curl.push(new Vector3(0, 0.19 + r * Math.sin(a), -0.71 - r * Math.cos(a)));
+  }
+  for (const sx of [-0.27, 0.27]) {
+    parts.push(part(new BoxGeometry(0.05, 0.05, 1.46), C.accent, { pos: [sx, 0.03, 0.03] }));
+    parts.push(part(new BoxGeometry(0.034, 0.016, 1.44), STEEL, { pos: [sx, 0.0, 0.03] }));
+    for (let i = 0; i < steps; i++) {
+      const u = i / steps;
+      parts.push(capsule(curl[i].clone().setX(sx), curl[i + 1].clone().setX(sx), 0.028 - 0.006 * u, 0.028 - 0.006 * (u + 1 / steps), C.accent, sides));
+    }
+    parts.push(capsule(new Vector3(sx, 0.03, 0.74), new Vector3(sx, 0.11, 0.87), 0.027, 0.02, C.accent, sides));
+    for (const z of lite ? [0.42, -0.3] : [0.5, 0.1, -0.3]) parts.push(part(new BoxGeometry(0.04, 0.15, 0.045), C.accent, { pos: [sx, 0.105, z] }));
+    // A push bar off each tail, steel, angled up and back.
+    if (!lite) parts.push(capsule(new Vector3(sx * 0.85, 0.25, 0.66), new Vector3(sx * 0.85, 0.41, 0.84), 0.018, 0.018, STEEL, 6));
+  }
+  if (!lite) parts.push(capsule(new Vector3(-0.23, 0.41, 0.84), new Vector3(0.23, 0.41, 0.84), 0.017, 0.017, STEEL, 6));
+  return merge(parts);
 }
 
 /** How the rider sits each sled (body-pivot height and depth above the sled base, extra forward

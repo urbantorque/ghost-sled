@@ -368,11 +368,11 @@ function addSway(m: ShaderMaterial, u: RiderUniforms, joint?: { value: Vector3 }
 
 /** A sled carries what its underside is (riderMaterial) in aSway.w: -1 the classic sled's five slats, -2 Low's three,
  *  -3 the toboggan's three broad ones, -4 a flat deck over runners (the Wisp), -5 a round or shelled hull (the
- *  saucer, the bob, the tray), whose whole underside is the hull. */
+ *  saucer, the tray), whose whole underside is the hull. (Round 8: Comet Bob is slatted as the classic sled is.) */
 function markSled(g: BufferGeometry, id: number, lite: boolean): BufferGeometry {
   const a = g.getAttribute('aSway') as BufferAttribute | undefined;
   if (!a || a.itemSize !== 4) return g;
-  const code = id === 2 ? -3 : id === 4 ? -4 : id === 1 || id === 3 || id === 5 ? -5 : lite ? -2 : -1;
+  const code = id === 2 ? -3 : id === 4 ? -4 : id === 1 || id === 5 ? -5 : lite ? -2 : -1;
   for (let i = 0; i < a.count; i++) a.setW(i, code);
   a.needsUpdate = true;
   return g;
