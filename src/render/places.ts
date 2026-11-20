@@ -106,7 +106,9 @@ export function viaductPiece(ctx: SiteCtx): Piece {
         const here: V3 = [pt.x, pt.y, pt.z];
         if (st.ice) {
           const out = rail.at(dz, s, e + 0.62);
-          parts.push(part(new IcosahedronGeometry(1, 0), rnd() < 0.5 ? st.post : st.rail, { pos: [out.x, pt.y + 0.55, out.z], scale: [0.42, 0.72, 1.25], rot: [0, (rnd() - 0.5) * 0.3, 0], jitter: 0.05 }));
+          // (Round 8, the forest lane: a block cut a step finer, so the parapet beside the lens is blocks of ice and not
+          // panes a tenth of the frame wide.)
+          parts.push(part(new IcosahedronGeometry(1, 1), rnd() < 0.5 ? st.post : st.rail, { pos: [out.x, pt.y + 0.55, out.z], scale: [0.42, 0.72, 1.25], rot: [0, (rnd() - 0.5) * 0.3, 0], jitter: 0.05 }));
         }
         else parts.push(grade(box(0.2, 1.42, 0.2, st.post, [pt.x, pt.y + 0.62, pt.z]), pt.y, pt.y + 1.3, 0.8, 1.05));
         if (prev) {
@@ -121,7 +123,9 @@ export function viaductPiece(ctx: SiteCtx): Piece {
           edgeB.push([out.x, pt.y - 1.5, out.z]);
         }
       }
-      parts.push(s > 0 ? ribbon(edgeB, edgeA, st.beam) : ribbon(edgeA, edgeB, st.beam));
+      // (Round 8, the forest lane: in two courses, so the beam beside the lens is never a pane a tenth of the frame wide.)
+      const edgeM = edgeA.map((a, k): V3 => [(a[0] + edgeB[k][0]) / 2, (a[1] + edgeB[k][1]) / 2, (a[2] + edgeB[k][2]) / 2]);
+      parts.push(...(s > 0 ? [ribbon(edgeB, edgeM, st.beam), ribbon(edgeM, edgeA, st.beam)] : [ribbon(edgeA, edgeM, st.beam), ribbon(edgeM, edgeB, st.beam)]));
       return parts;
     });
   }

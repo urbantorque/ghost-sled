@@ -33,6 +33,8 @@ import { liftEdges } from './chamfer';
 
 // ---------------------------------------------------------------- shared helpers (as meshes.ts)
 
+type V3 = [number, number, number];
+
 let seedState = 12345;
 function rnd(): number {
   seedState = (seedState * 1664525 + 1013904223) >>> 0;
@@ -425,7 +427,7 @@ function treeWell(r: number, shadeC: Color, segs = 6): BufferGeometry {
  *  the tips, a dark underside under every tier, and a tree well at its foot. Faceted and flat-shaded,
  *  so the low sun splits it into a lit side and a cool shade side. About the old pine's footprint (it
  *  stands where that one stood). */
-function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0): BufferGeometry {
+function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0, twists?: number[]): BufferGeometry {
   reseed(s.seed);
   const needle = shade(s.tones ? s.tones.needle : p.tall, s.tone);
   const under = s.tones ? shade(s.tones.under, s.tone) : shade(p.tallDark.clone().lerp(p.tall, 0.3), 0.62 * s.tone);
@@ -434,6 +436,8 @@ function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0): BufferGeometry {
   const parts: BufferGeometry[] = [part(new CylinderGeometry(s.trunkR * 0.65, s.trunkR, s.trunk, lod === 0 ? 5 : lod === 1 ? 4 : 3, 1, true), WOOD, { pos: [0, s.trunk / 2, 0] })];
   s.tiers.forEach((t, i) => {
     const twist = rnd() * 6.28;
+    // (The near tree turns each tier as this one does: nearPine.)
+    twists?.push(twist);
     const top = i === s.tiers.length - 1 && i > 2;
     const segs = lod === 0 ? (top ? 6 : BOUGH_SEGS) : top ? 4 : 6;
     parts.push(boughTier(t, i % 2 ? shade(needle, 0.9) : needle, under, s.snow * (1 - i * 0.08), twist, segs, lod > 0));
@@ -455,9 +459,60 @@ function boughPine(p: Palette, s: BoughSpec, lod: Lod = 0): BufferGeometry {
   return dropSlivers(merge(parts));
 }
 
-/** The forest's spruce, in its plain and blossom-ridge colourings (variant reseeds it). */
-export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0, tones?: PineTones): BufferGeometry {
-  return boughPine(p, {
+/** The spruces' specs: the forest's own (variant reseeds it), the run's hazard, the snow-laden one and the young one.
+ *  Each is drawn far, near (nearPine) and on Low from the one spec, so a tree keeps its tiers at every distance. */
+function pineSpec(kind: PineKind, variant = 0, tones?: PineTones): BoughSpec {
+  if (kind === 'hazard') {
+    return {
+      tones,
+      seed: 511,
+      trunk: 1.3,
+      trunkR: 0.24,
+      snow: 0.3,
+      clumps: 1,
+      tone: 0.96,
+      tiers: [
+        { top: 2.95, h: 2.05, r: 1.45 },
+        { top: 3.9, h: 1.85, r: 1.15 },
+        { top: 4.75, h: 1.55, r: 0.86 },
+        { top: 5.5, h: 1.2, r: 0.55 },
+      ],
+    };
+  }
+  if (kind === 'heavy') {
+    return {
+      tones,
+      seed: 121,
+      trunk: 1.1,
+      trunkR: 0.27,
+      snow: 0.7,
+      clumps: 2,
+      tone: 0.9,
+      tiers: [
+        { top: 2.75, h: 2.1, r: 1.68 },
+        { top: 3.7, h: 1.9, r: 1.32 },
+        { top: 4.5, h: 1.55, r: 0.95 },
+        { top: 5.15, h: 1.15, r: 0.58 },
+      ],
+    };
+  }
+  if (kind === 'young') {
+    return {
+      tones,
+      seed: 131,
+      trunk: 0.7,
+      trunkR: 0.12,
+      snow: 0.36,
+      clumps: 1,
+      tone: 1.06,
+      tiers: [
+        { top: 1.95, h: 1.45, r: 0.95 },
+        { top: 2.65, h: 1.2, r: 0.68 },
+        { top: 3.2, h: 0.85, r: 0.4 },
+      ],
+    };
+  }
+  return {
     tones,
     seed: 501 + variant,
     trunk: 1.3,
@@ -471,7 +526,15 @@ export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0, tones?:
       { top: 4.75, h: 1.55, r: 0.88 },
       { top: 5.5, h: 1.2, r: 0.56 },
     ],
-  }, lod);
+  };
+}
+
+/** Which spruce: the forest's, the run's hazard, the snow-laden one, the young one. */
+export type PineKind = 'bough' | 'hazard' | 'heavy' | 'young';
+
+/** The forest's spruce, in its plain and blossom-ridge colourings (variant reseeds it). */
+export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0, tones?: PineTones): BufferGeometry {
+  return boughPine(p, pineSpec('bough', variant, tones), lod);
 }
 
 /** The run's own pine hazard in the bough style (for meshes.ts obstacleGeometry 'pine'): the forest
@@ -479,57 +542,281 @@ export function boughPineGeometry(p: Palette, variant = 0, lod: Lod = 0, tones?:
  *  1), and a bottom tier as wide as the old pine's (1.35 m; colliders are 0.7 to 0.95 m), so it looks
  *  at least as wide as it collides. */
 export function hazardPineGeometry(p: Palette, tones?: PineTones): BufferGeometry {
-  return boughPine(p, {
-    tones,
-    seed: 511,
-    trunk: 1.3,
-    trunkR: 0.24,
-    snow: 0.3,
-    clumps: 1,
-    tone: 0.96,
-    tiers: [
-      { top: 2.95, h: 2.05, r: 1.45 },
-      { top: 3.9, h: 1.85, r: 1.15 },
-      { top: 4.75, h: 1.55, r: 0.86 },
-      { top: 5.5, h: 1.2, r: 0.55 },
-    ],
-  });
+  return boughPine(p, pineSpec('hazard', 0, tones));
 }
 
 /** A snow-laden spruce: broad, a little shorter, its boughs bowed under deep caps and clumps. */
 export function heavyPineGeometry(p: Palette, lod: Lod = 0): BufferGeometry {
-  return boughPine(p, {
-    seed: 121,
-    trunk: 1.1,
-    trunkR: 0.27,
-    snow: 0.7,
-    clumps: 2,
-    tone: 0.9,
-    tiers: [
-      { top: 2.75, h: 2.1, r: 1.68 },
-      { top: 3.7, h: 1.9, r: 1.32 },
-      { top: 4.5, h: 1.55, r: 0.95 },
-      { top: 5.15, h: 1.15, r: 0.58 },
-    ],
-  }, lod);
+  return boughPine(p, pineSpec('heavy'), lod);
 }
 
 /** A young spruce: three small tiers on a thin stem, about half a grown tree's height. */
 export function youngPineGeometry(p: Palette, lod: Lod = 0, tones?: PineTones): BufferGeometry {
-  return boughPine(p, {
-    tones,
-    seed: 131,
-    trunk: 0.7,
-    trunkR: 0.12,
-    snow: 0.36,
-    clumps: 1,
-    tone: 1.06,
-    tiers: [
-      { top: 1.95, h: 1.45, r: 0.95 },
-      { top: 2.65, h: 1.2, r: 0.68 },
-      { top: 3.2, h: 0.85, r: 0.4 },
-    ],
-  }, lod);
+  return boughPine(p, pineSpec('young', 0, tones), lod);
+}
+
+// ---------------------------------------------------------------- the near trees (round 8)
+
+/** How fine a near tree is built (nearforest.ts): 'fine' on High and Ultra, 'lean' on Medium and the phone. */
+export type NearBuild = 'fine' | 'lean';
+
+/** How finely a near tier is cut: about how wide a facet is round the tier and down its face (metres; a big tier is cut
+ *  into more of them), rows under it, rows of its shelf of snow (0: the snow painted on the face, as the far tree's). */
+interface TierRes {
+  col: number;
+  row: number;
+  under: number;
+  shelf: number;
+}
+
+/** The outer layer of boughs and the shorter one under its notches, by build. */
+const NEAR_RES: Record<NearBuild, { outer: TierRes; inner: TierRes }> = {
+  fine: { outer: { col: 0.3, row: 0.4, under: 3, shelf: 3 }, inner: { col: 0.42, row: 0.45, under: 2, shelf: 0 } },
+  lean: { outer: { col: 0.42, row: 0.52, under: 2, shelf: 2 }, inner: { col: 0.6, row: 0.6, under: 2, shelf: 0 } },
+};
+
+/** One far tier's ring, segment by segment, as boughTier lays it out (the same seeds), so a near tier keeps the far
+ *  one's bough tips, gaps and wander: its jitter in reach and height at each segment, and whether it is a tip. */
+function farRing(t: BoughTier, twist: number, segs: number): { jr: number[]; jy: number[] } {
+  const jr: number[] = [];
+  const jy: number[] = [];
+  for (let seg = 0; seg < segs; seg++) {
+    reseed(9000 + Math.round(twist * 1000) + seg * 7);
+    jr.push(0.92 + rnd() * 0.16);
+    jy.push((rnd() - 0.5) * 0.12 * t.h);
+  }
+  return { jr, jy };
+}
+
+/** A small value hash (a near tier's ragged snow line, its facets' steps): 0 to 1. */
+function nh(a: number, b: number): number {
+  const h = Math.sin(a * 127.1 + b * 311.7) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+/** One tier of a near spruce (round 8): the far tier's form (its tips, gaps, droop and wander, segment for segment)
+ *  drawn as layered, rounded boughs. Each bough is a lobe that swells out to its tip and arches before it droops, a
+ *  notch between it and the next; a second, shorter layer of boughs sits under the notches, so a tier reads as boughs
+ *  laid over boughs and not one skirt; under the tier, a lip of thickness at the bough ends and the dark underside.
+ *  Snow lies on it as a shelf with depth: a crust standing off the boughs, out along each bough's top further than in
+ *  the notches, its ragged edge folding down in a band of shade. Facets are about a third of a metre and flat, as a
+ *  hazard's are (ART.md 3): many small planes the low sun models a bough with, never a few that split the tree. (Softened
+ *  normals were tried: the tree went to a smooth green blob beside the far forest's crisp facets.) */
+function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShade: Color, snowK: number, twist: number, segs: number, res: TierRes, inner: boolean): void {
+  const { top, h, r } = t;
+  const ring = farRing(t, twist, segs);
+  const w = (Math.PI * 2) / segs;
+  const N = segs * Math.max(2, Math.min(5, Math.ceil((w * r) / res.col)));
+  const M = Math.max(3, Math.min(9, Math.ceil(Math.hypot(r, h) / res.row)));
+  const ca = Math.cos(twist);
+  const sa = Math.sin(twist);
+  // A column's lobe (1 at a bough tip, 0 in a notch), its reach and height wander (between the far ring's).
+  const lobe: number[] = [];
+  const jr: number[] = [];
+  const jy: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const th = (i / N) * Math.PI * 2;
+    const q = th / w;
+    const k0 = Math.floor(q) % segs;
+    const fr = q - Math.floor(q);
+    const k1 = (k0 + 1) % segs;
+    // Distance from the nearest tip, in segments (tips are the even segments).
+    const d = k0 % 2 === 0 ? fr : 1 - fr;
+    lobe.push(Math.pow(Math.cos((d * Math.PI) / 2), 0.8));
+    jr.push(ring.jr[k0] + (ring.jr[k1] - ring.jr[k0]) * fr);
+    jy.push(ring.jy[k0] + (ring.jy[k1] - ring.jy[k0]) * fr);
+  }
+  // The inner layer's boughs stand under the outer one's notches, shorter, their tips no lower than the outer's.
+  const rr = inner ? r * 0.92 : r;
+  const hh = inner ? h * 0.72 : h;
+  const tt = inner ? top - h * 0.3 : top;
+  const L = (i: number) => (inner ? 1 - lobe[i] : lobe[i]);
+  /** A point on the tier's upper face: column i, u from the tier's tip (0) to the bough end (1). */
+  const at = (i: number, u: number): V3 => {
+    const l = L(i);
+    const sEnd = (0.74 + 0.3 * l) * jr[i];
+    const yEnd = (0.09 - 0.22 * l) * hh;
+    let rad: number;
+    let y: number;
+    if (u <= 0.5) {
+      const v = u / 0.5;
+      rad = rr * 0.5 * jr[i] * v * (1 + 0.04 * Math.sin(Math.PI * v));
+      y = tt + v * (-0.46 * hh + jy[i]);
+    } else {
+      const v = (u - 0.5) / 0.5;
+      rad = rr * (0.5 * jr[i] + (sEnd - 0.5 * jr[i]) * v);
+      // The bough holds up, then droops to its tip; its middle stands a little proud of its sides.
+      const sh = tt - 0.46 * hh + jy[i];
+      y = sh + (tt - hh + yEnd - sh) * v + 0.05 * hh * (l - 0.45) * Math.sin(Math.PI * v);
+    }
+    const th = (i / N) * Math.PI * 2;
+    const x0 = Math.sin(th) * rad;
+    const z0 = Math.cos(th) * rad;
+    return [x0 * ca - z0 * sa, y, x0 * sa + z0 * ca];
+  };
+  const out = (p: V3): V3 => [p[0], 0.35, p[2]];
+  // How far down each column the snow lies, ragged: the tier above hides the top of this one from a lens by the run, so
+  // what shows is the skirt, and the snow lies out along each bough's top nearly to its tip (as the far tree paints it
+  // there), a cap only part way into a notch.
+  const sn: number[] = [];
+  for (let i = 0; i <= N; i++) {
+    const j = i % N;
+    const l = L(j);
+    const base = inner ? snowK * 0.35 : 0.22 + snowK * 0.45 + (0.18 + 0.3 * snowK) * Math.pow(l, 1.2);
+    // (Ragged by the bough, not by the facet: a wander from one half-segment to the next, eased between, so a shelf's
+    // edge is a wavy line along each bough. Noise a column read as loose white shards, the second critic; none, as
+    // rings of white cake.)
+    const q = (j / N) * segs * 2;
+    const q0 = Math.floor(q);
+    const fq = q - q0;
+    const e = fq * fq * (3 - 2 * fq);
+    const wob = nh((q0 % (segs * 2)) + twist * 10, top) * (1 - e) + nh(((q0 + 1) % (segs * 2)) + twist * 10, top) * e;
+    sn.push(Math.max(0.06, Math.min(0.94, base + 0.26 * (wob - 0.5))));
+  }
+  sn[N] = sn[0];
+  const c = new Color();
+  // (Rows a little closer down the droop, where the face turns.)
+  const us = Array.from({ length: M + 1 }, (_, j) => Math.pow(j / M, 0.85));
+  // (A deep shelf on a laden tree is cut in as many rows as the face it covers.)
+  const Ks = res.shelf > 0 ? Math.max(res.shelf, Math.ceil(Math.max(...sn) * M * 0.9)) : 0;
+  // The upper face of needles, row by row, but none of what a shelf of snow covers (without one, the snow is painted
+  // on the face, as the far tree's is).
+  for (let i = 0; i < N; i++) {
+    for (let j = 0; j < M; j++) {
+      const covered = us[j + 1] <= Math.min(sn[i], sn[i + 1]) - 0.02;
+      if (covered && Ks > 0) continue;
+      const a = at(i, us[j]);
+      const b = at(i + 1, us[j]);
+      const d = at(i + 1, us[j + 1]);
+      const e = at(i, us[j + 1]);
+      const l = (L(i) + L(i + 1)) / 2;
+      const down = (us[j] + us[j + 1]) / 2;
+      if (covered) c.copy(SNOW).multiplyScalar(0.95 - 0.08 * down);
+      // Lighter up a bough's top, darker toward its skirt and into the notches (the boughs read as laid one over
+      // the next), a step per facet.
+      else c.copy(needle).multiplyScalar((1.08 - down * 0.3) * (0.8 + 0.22 * l) * (0.93 + 0.14 * nh(i * 3.1 + twist, j + top)) * (inner ? 0.86 : 1));
+      f.quad(a, b, d, e, c, out(a));
+    }
+  }
+  // The bough ends' lip and the underside, back in to the trunk in rows: the darkest values on the tree.
+  const U = res.under;
+  const ringU = (ii: number): V3[] => {
+    const e = at(ii, 1);
+    const l = L(ii % N);
+    const th = (ii / N) * Math.PI * 2;
+    const sEnd = (0.74 + 0.3 * l) * jr[ii];
+    const yEnd = (0.09 - 0.22 * l) * hh;
+    const ux = Math.sin(th);
+    const uz = Math.cos(th);
+    const rot = (rad: number, y: number): V3 => [ux * rad * ca - uz * rad * sa, y, ux * rad * sa + uz * rad * ca];
+    const lipY = e[1] - hh * (0.035 + 0.03 * l);
+    const pts: V3[] = [e, rot(rr * sEnd * 0.95, lipY)];
+    // From the lip in to the trunk, rising to the underside's heart: the far tree's underside, in U rows.
+    for (let k = 1; k <= U; k++) {
+      const v = k / U;
+      pts.push(rot(rr * sEnd * (0.95 - 0.69 * v), lipY + (tt - hh * 0.7 + yEnd * 0.6 - lipY) * Math.pow(v, 0.8)));
+    }
+    return pts;
+  };
+  for (let i = 0; i < N; i++) {
+    const r0 = ringU(i);
+    const r1 = ringU(i + 1);
+    for (let k = 0; k + 1 < r0.length; k++) {
+      c.copy(under).multiplyScalar(k === 0 ? 1.35 * (0.95 + 0.1 * nh(i, top)) : 1.12 - 0.14 * (k / (r0.length - 1)));
+      f.quad(r0[k], r1[k], r1[k + 1], r0[k + 1], c, k === 0 ? [r0[k][0], -0.2, r0[k][2]] : [0, -1, 0]);
+    }
+  }
+  if (Ks === 0) return;
+  // The snow: a crust standing off the boughs to each column's snow line, its edge folding down in shade.
+  // (A thin crust: a thick one with a shaded fold read as rolls of marshmallow, the fourth critic.)
+  const thick = (inner ? 0.025 : 0.03) + 0.02 * snowK;
+  const shell = (i: number, u: number): V3 => {
+    const p = at(i, u);
+    // Off the face along its upward normal (the face's slope from a step down it).
+    const q = at(i, Math.min(1, u + 0.04));
+    const radial = Math.hypot(q[0], q[2]) - Math.hypot(p[0], p[2]);
+    const drop = p[1] - q[1];
+    const n = Math.hypot(radial, drop) || 1;
+    const rx = Math.hypot(p[0], p[2]) || 1;
+    const up = radial / n;
+    const outK = drop / n;
+    return [p[0] + (p[0] / rx) * outK * thick, p[1] + up * thick, p[2] + (p[2] / rx) * outK * thick];
+  };
+  if (inner && snowK < 0.2) return;
+  const lit = new Color();
+  const cool = SNOW.clone().lerp(snowShade, 0.25);
+  for (let i = 0; i < N; i++) {
+    for (let k = 0; k < Ks; k++) {
+      const a = shell(i, (sn[i] * k) / Ks);
+      const b = shell(i + 1, (sn[i + 1] * k) / Ks);
+      const d = shell(i + 1, (sn[i + 1] * (k + 1)) / Ks);
+      const e = shell(i, (sn[i] * (k + 1)) / Ks);
+      lit.copy(SNOW).multiplyScalar((1 - 0.1 * ((k + 0.5) / Ks) * sn[i]) * (0.97 + 0.05 * nh(i + k * 7.3, top + twist)));
+      f.quad(a, b, d, e, lit, [a[0] * 0.3, 1, a[2] * 0.3]);
+    }
+    // The shelf's edge: down from the crust to under the face, a band in the snow's shade.
+    const a = shell(i, sn[i]);
+    const b = shell(i + 1, sn[i + 1]);
+    const a2 = at(i, Math.min(1, sn[i] + 0.035));
+    const b2 = at(i + 1, Math.min(1, sn[i + 1] + 0.035));
+    a2[1] -= thick * 0.7;
+    b2[1] -= thick * 0.7;
+    f.quad(a, b, b2, a2, cool, [a[0], 0.2, a[2]]);
+  }
+}
+
+/** A near spruce (round 8, nearforest.ts): the far tree's tiers, height, reach, snow and turn (ART.md 12: a far tree
+ *  that reads differently from a near one is a bug), drawn so it holds up at the lens. Each tier is layered, rounded
+ *  boughs under a shelf of snow (nearTier); the trunk is a real one, barked, broad at the foot, with a few
+ *  dead stubs under the lowest boughs; clumps of snow sit out on the lower tips; a tree well at the foot. About 4,000
+ *  triangles 'fine' and 2,300 'lean', drawn only for the few trees within about 26 m of the lens. */
+export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?: PineTones, nb: NearBuild = 'fine'): BufferGeometry {
+  const s = pineSpec(kind, variant, tones);
+  const twists: number[] = [];
+  boughPine(p, s, 0, twists).dispose();
+  const needle = shade(s.tones ? s.tones.needle : p.tall, s.tone);
+  const under = s.tones ? shade(s.tones.under, s.tone) : shade(p.tallDark.clone().lerp(p.tall, 0.3), 0.62 * s.tone);
+  const f = new Facets();
+  const fine = nb === 'fine';
+  s.tiers.forEach((t, i) => {
+    const topTier = i === s.tiers.length - 1 && i > 2;
+    const segs = topTier ? 6 : BOUGH_SEGS;
+    const nd = i % 2 ? shade(needle, 0.9) : needle;
+    // (Sakura's cedars carry less: they are the ink spine the blossom glows against, ART.md 15.)
+    const snowK = s.snow * (1 - i * 0.08) * (s.tones ? 0.6 : 1);
+    // (The top tier is a small cone of a few boughs: no layer under it.)
+    if (!topTier && (fine || i < 2)) nearTier(f, t, nd, under, p.snowShade, snowK, twists[i], segs, NEAR_RES[nb].inner, true);
+    nearTier(f, t, nd, under, p.snowShade, snowK, twists[i], segs, NEAR_RES[nb].outer, false);
+  });
+  const g = f.build();
+  reseed(s.seed + 77);
+  // The trunk: up into the crown, a little bark in its value, broad at the foot. (Roots splayed from it read as a dark
+  // star at the foot of a tree dissolving by the lens, the first critic: the tree well hides the foot instead.)
+  const bark = WOOD.clone().multiplyScalar(0.82);
+  const trunkTop = s.tiers[Math.min(2, s.tiers.length - 1)].top - 0.4;
+  const trunk = part(new CylinderGeometry(s.trunkR * 0.42, s.trunkR * 1.05, trunkTop, fine ? 8 : 6, fine ? 4 : 2, true), bark, { pos: [0, trunkTop / 2, 0], jitter: s.trunkR * 0.12 });
+  const tp = trunk.getAttribute('position') as BufferAttribute;
+  const tc = trunk.getAttribute('color') as BufferAttribute;
+  for (let i = 0; i < tp.count; i += 3) {
+    const ax = (tp.getX(i) + tp.getX(i + 1) + tp.getX(i + 2)) / 3;
+    const az = (tp.getZ(i) + tp.getZ(i + 1) + tp.getZ(i + 2)) / 3;
+    // Bark in strips up the trunk, darker toward the foot where the snow wets it.
+    const k = (0.82 + 0.3 * nh(Math.round(Math.atan2(az, ax) * 4), 3)) * (0.85 + 0.15 * Math.min(1, tp.getY(i) / 0.8));
+    for (let j = i; j < i + 3; j++) tc.setXYZ(j, tc.getX(j) * k, tc.getY(j) * k, tc.getZ(j) * k);
+  }
+  const parts: BufferGeometry[] = [g, trunk];
+  // Dead stubs under the lowest boughs, where a spruce sheds its shaded branches.
+  const low = s.tiers[0].top - s.tiers[0].h * 0.75;
+  for (let k = 0; k < (fine ? 4 : 2); k++) {
+    const a = rnd() * 6.28;
+    const len = 0.35 + 0.3 * rnd();
+    parts.push(part(new CylinderGeometry(0.012, 0.03, len, 3, 1, true), BARK_DARK, { pos: [Math.cos(a) * len * 0.45, low - 0.15 * k, Math.sin(a) * len * 0.45], rot: [0, -a, -1.2] }));
+  }
+  // (No clumps out on the tips: on the near build's drooping boughs they floated off the bough ends as pillows, the
+  // fourth critic. The shelf carries the snow out along each bough.)
+  parts.push(treeWell(Math.max(0.7, s.tiers[0].r * 0.62), p.snowShade, fine ? 12 : 9));
+  for (const q of parts) if (q.getAttribute('uv')) q.deleteAttribute('uv');
+  return dropSlivers(merge(parts.map((q) => (q.index ? q.toNonIndexed() : q))));
 }
 
 /** A dead snag: a bare, broken grey trunk with a few stub branches, snow on its stubs and foot. */
@@ -707,14 +994,17 @@ export function basaltSentinelGeometry(p: Palette): BufferGeometry {
 /** How a blossom canopy is built (the visual lift): 'rich' for the run's own blossom trees, which pass at the
  *  lens (round puffs, about 80 triangles each); 'near' for the orchards' treeline and near rows on Medium and
  *  High (lumpier puffs of 32); 'lean' for Low's (puffs of 20); 'far' past the detail range (three puffs, under
- *  half a round 7 tree, where a tree is a few dozen pixels). */
-export type CanopyBuild = 'rich' | 'near' | 'lean' | 'far';
+ *  half a round 7 tree, where a tree is a few dozen pixels). Round 8: 'close' for the few within about 26 m of the lens
+ *  on High and Ultra (nearforest.ts): the rich tree's puffs a step rounder, so a canopy passing at the lens is a cloud
+ *  of bloom and never a few pink planes. */
+export type CanopyBuild = 'close' | 'rich' | 'near' | 'lean' | 'far';
 
 /** One puff of bloom: its centre and radius, how flat it is (sy), and a value of its own (k). */
 export type Puff = [x: number, y: number, z: number, r: number, k?: number];
 
 function puffShape(build: CanopyBuild, r: number, big: boolean): BufferGeometry {
-  if (build === 'rich') return big ? new IcosahedronGeometry(r, 1) : new OctahedronGeometry(r, 1);
+  if (build === 'close') return new IcosahedronGeometry(r, big ? 2 : 1);
+  if (build === 'rich')return big ? new IcosahedronGeometry(r, 1) : new OctahedronGeometry(r, 1);
   // (The near orchards: the heart of the cloud a rounder puff, the rest the leanest that still shade round; the
   // treeline is never nearer than 9 m, and a variant set counts both its trees in every instance.)
   if (build === 'near') return big && r > 1.2 ? new OctahedronGeometry(r, 1) : new IcosahedronGeometry(r, 0);
@@ -817,7 +1107,7 @@ function canopy(puffs: readonly Puff[], build: CanopyBuild, pink: Color, sy: num
 /** A soft cap of snow lying on a canopy's crown: one more lumpy puff, sunk into the crown so only its top shows
  *  (a whole flattened puff read as a white slab laid on the bloom). */
 function crownSnow(build: CanopyBuild, pos: [number, number, number], r: number): BufferGeometry {
-  return canopy([[pos[0], pos[1], pos[2], r]], build === 'lean' ? 'lean' : 'near', SNOW, 0.5, pos[1] - r, pos[1] + r * 0.5, 0.86, 1, 41);
+  return canopy([[pos[0], pos[1], pos[2], r]], build === 'lean' ? 'lean' : build === 'close' ? 'close' : 'near', SNOW, 0.5, pos[1] - r, pos[1] + r * 0.5, 0.86, 1, 41);
 }
 
 /** Sakura Ridge's blossom tree (the run's `blossom` hazard and the orchards' first tree): a dark trunk under a
@@ -826,8 +1116,9 @@ export function blossomGeometry(p: Palette, build: CanopyBuild = 'rich'): Buffer
   reseed(303);
   const bark = new Color('#5A3A3E');
   const far = build === 'far';
-  const parts: BufferGeometry[] = [part(new CylinderGeometry(far ? 0.2 : 0.18, 0.3, 2.6, far ? 3 : build === 'lean' ? 5 : 6, 1, far || build === 'lean'), bark, { pos: [0, 1.3, 0], jitter: far ? 0 : 0.05 })];
-  if (build === 'rich') {
+  const close = build === 'close';
+  const parts: BufferGeometry[] = [part(new CylinderGeometry(far ? 0.2 : 0.18, 0.3, 2.6, far ? 3 : build === 'lean' ? 5 : close ? 8 : 6, close ? 3 : 1, far || build === 'lean'), bark, { pos: [0, 1.3, 0], jitter: far ? 0 : 0.05 })];
+  if (build === 'rich' || close) {
     // Two limbs up into the canopy, seen from under it as a rider passes.
     parts.push(part(new CylinderGeometry(0.07, 0.13, 1.3, 4, 1, true), bark, { pos: [0.35, 2.75, 0.1], rot: [0.1, 0, -0.6] }));
     parts.push(part(new CylinderGeometry(0.07, 0.12, 1.2, 4, 1, true), bark, { pos: [-0.3, 2.7, -0.15], rot: [-0.15, 0, 0.65] }));
@@ -919,6 +1210,24 @@ export function forestSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', lod: Lod
   // the far orchards' three puffs: chamfer.ts's lift, the visual lift's blossom.)
   const bl: CanopyBuild = lod === 0 ? 'near' : lod === 1 ? 'lean' : 'far';
   return a ? [() => blossomGeometry(p, bl), () => paleBlossomGeometry(p, bl)] : [() => boughPineGeometry(p, 3, lod, CEDAR), () => youngPineGeometry(p, lod, CEDAR)];
+}
+
+/** The near trees of a forest set (round 8, nearforest.ts), one maker a pick, in forestSteps' order: the spruces and
+ *  the blossom are built for the lens (nearPineGeometry, the blossom's 'close' build on High and its rich one on
+ *  Medium); what is already fine at the lens (a snag, a silver tree) is its own full build. */
+export function nearSteps(biome: BiomeId, p: Palette, set: 'a' | 'b', nb: NearBuild): Array<() => BufferGeometry> {
+  const a = set === 'a';
+  const bl: CanopyBuild = nb === 'fine' ? 'close' : 'rich';
+  if (biome === 'alpine') return a ? [() => nearPineGeometry(p, 'bough', 1, undefined, nb), () => nearPineGeometry(p, 'heavy', 0, undefined, nb)] : [() => nearPineGeometry(p, 'young', 0, undefined, nb), () => snagGeometry(0)];
+  if (biome === 'lantern') return a ? [() => nearPineGeometry(p, 'bough', 5, undefined, nb), () => nearPineGeometry(p, 'heavy', 0, undefined, nb)] : forestSteps(biome, p, set, 0);
+  if (biome === 'blossom') return a ? [() => blossomGeometry(p, bl), () => paleBlossomGeometry(p, bl)] : [() => nearPineGeometry(p, 'bough', 3, CEDAR, nb), () => nearPineGeometry(p, 'young', 0, CEDAR, nb)];
+  return forestSteps(biome, p, set, 0);
+}
+
+/** Whether a biome's forest wall hands its trees near the lens to the near trees (its wall moves in the wind: the
+ *  spruce and blossom mountains; Frostfang's ice and Ember's basalt stand still and are drawn as they are). */
+export function nearWall(biome: BiomeId): boolean {
+  return biome === 'alpine' || biome === 'lantern' || biome === 'blossom';
 }
 
 /** Whether a biome's set has cheaper builds at lod 1 and 2 (else every lod is the full set). */

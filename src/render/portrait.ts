@@ -83,17 +83,13 @@ const KEY_DIR = new Vector3(-0.45, 0.75, -0.5).normalize();
  * strong warm rim, so it reads as polished metal catching the sunset. The Whirl Saucer's flat blue
  * face, lit from high above and washed by the warm rim at its grazing angle, went the lavender of the
  * drift behind it (a red hoop around a cream dot): a low key, no cool shade and a faint rim keep it
- * a saturated cobalt, and a decal paints it as a glossy bowl (BOWL). The pearl Comet Bob read as a
- * white lump, then as a grey-faceted capsule: its shell is shaded smooth here (`smooth`, its flat
- * facets each caught the studio light differently), a near-white key from in front and to its left
- * models its nose and flanks, the shell is brought down toward blue pearl so the light has a range
- * to work in, and a vermillion rim traces its outline. Every other sled keeps its own colours and the
- * shared key. (A rim colour applies to the bare sled only: with the rider seated the rim stays warm,
- * or it would tint the rider.)
+ * a saturated cobalt, and a decal paints it as a glossy bowl (BOWL). (Round 8: Comet Bob is no longer a
+ * pearl pod that needed its own light here, but a slatted bob in violet lacquer: meshes.ts.) Every other
+ * sled keeps its own colours and the shared key. (A rim colour applies to the bare sled only: with the
+ * rider seated the rim stays warm, or it would tint the rider.)
  */
 const SLED_LOOK: Record<number, { cool: number; rim: number; rimColor?: Color; glow?: Color; glowK?: number; tint?: Color; key?: Vector3; white?: number; bowl?: boolean; smooth?: Color }> = {
   1: { cool: 0.05, rim: 0.3, tint: new Color(0.8, 0.95, 1.22), key: new Vector3(-0.6, 0.14, -0.79).normalize(), bowl: true },
-  3: { cool: 0.95, rim: 1.6, rimColor: new Color('#FF5A3C'), tint: new Color(0.7, 0.78, 1.0), key: new Vector3(-0.8, 0.5, -0.6).normalize(), white: 0.85, smooth: new Color('#D3DDF2') },
   4: { cool: 0.95, rim: 1.8, rimColor: new Color('#8FF3E4'), glow: new Color('#4FD9C4'), glowK: 0.34, tint: new Color(0.62, 1.0, 0.92) },
   5: { cool: 0.9, rim: 1.8, glow: new Color('#8EA4E6'), glowK: 0.16, tint: new Color(1.34, 1.4, 1.52) },
 };

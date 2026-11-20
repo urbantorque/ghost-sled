@@ -195,7 +195,10 @@ export function rockGeometry(base: Color, lit: Color, variant: number, low = fal
 /** One hexagonal ice crystal: a prism with a pointed tip, standing on `pos` and leaning by `rot`. */
 function crystal(col: Color, r: number, h: number, pos: [number, number, number], rot: [number, number, number]): BufferGeometry {
   const tip = r * 1.7;
-  const g = merge([part(new CylinderGeometry(r * 0.9, r, h, 6), col, { pos: [0, h / 2, 0] }), part(new ConeGeometry(r * 0.9, tip, 6), shade(col, 1.12), { pos: [0, h + tip / 2, 0] })]);
+  // (Round 8: a big crystal's faces in courses about a metre tall, so a serac's beside the lens is not one pane a
+  // tenth of the frame wide.)
+  const courses = Math.max(1, Math.round(h / 1.1));
+  const g = merge([part(new CylinderGeometry(r * 0.9, r, h, 6, courses), col, { pos: [0, h / 2, 0] }), part(new ConeGeometry(r * 0.9, tip, 6), shade(col, 1.12), { pos: [0, h + tip / 2, 0] })]);
   return g.applyMatrix4(new Matrix4().compose(new Vector3(...pos), new Quaternion().setFromEuler(new Euler(...rot)), new Vector3(1, 1, 1)));
 }
 
@@ -219,10 +222,12 @@ export function iceBlockGeometry(p: Palette): BufferGeometry {
 
 export function spireGeometry(p: Palette): BufferGeometry {
   reseed(606);
+  // (Round 8: the main shaft in eight sides and five courses, where five sides and two read as a few broad panes a
+  // seventh of the frame wide when the run took a sled past one; still crystal, its jitter cracking it into facets.)
   return merge([
-    part(new ConeGeometry(0.95, 5.5, 5, 2), p.tall, { pos: [0, 2.75, 0], jitter: 0.25 }),
-    part(new ConeGeometry(0.55, 3.2, 5, 1), p.tallDark, { pos: [0.6, 1.6, 0.3], rot: [0, 0, -0.25], jitter: 0.15 }),
-    part(new ConeGeometry(0.45, 2.4, 5, 1), shade(p.tall, 1.15), { pos: [-0.55, 1.2, -0.2], rot: [0.2, 0, 0.3], jitter: 0.1 }),
+    part(new ConeGeometry(0.95, 5.5, 8, 5), p.tall, { pos: [0, 2.75, 0], jitter: 0.2 }),
+    part(new ConeGeometry(0.55, 3.2, 7, 3), p.tallDark, { pos: [0.6, 1.6, 0.3], rot: [0, 0, -0.25], jitter: 0.12 }),
+    part(new ConeGeometry(0.45, 2.4, 6, 2), shade(p.tall, 1.15), { pos: [-0.55, 1.2, -0.2], rot: [0.2, 0, 0.3], jitter: 0.08 }),
   ]);
 }
 
@@ -231,13 +236,14 @@ export function seracGeometry(p: Palette): BufferGeometry {
   // An ice tower as a cluster of leaning crystals with pointed tips, rising out of a dark faceted
   // base and a drift of snow. Any flat top (a block with a snow lid) reads as concrete.
   return merge([
-    part(new IcosahedronGeometry(1.25, 0), shade(p.tallDark, 0.8), { pos: [0.1, 0.35, 0.1], scale: [1.35, 0.6, 1.2], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.3 }),
+    // (Round 8: its boulder and drift a step finer, so the one a sled passes is not a few broad panes.)
+    part(new IcosahedronGeometry(1.25, 1), shade(p.tallDark, 0.8), { pos: [0.1, 0.35, 0.1], scale: [1.35, 0.6, 1.2], rot: [rnd(), rnd() * 3, rnd()], jitter: 0.18 }),
     crystal(p.tall, 0.95, 3.1, [0, 0.2, 0], [0.06, 0.3, -0.1]),
     crystal(p.tallDark, 0.68, 2.2, [1.15, 0.1, 0.55], [0.16, 0.9, 0.3]),
     crystal(shade(p.tall, 1.1), 0.55, 1.6, [-1.1, 0.05, -0.45], [-0.2, 0.4, 0.42]),
     crystal(shade(p.tallDark, 1.2), 0.42, 1.1, [0.3, 0.05, -1.1], [-0.42, 1.3, -0.12]),
     crystal(shade(p.tall, 0.92), 0.36, 0.9, [-0.55, 0.05, 1.0], [0.5, 0.2, 0.3]),
-    part(new IcosahedronGeometry(1.5, 0), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.3, 1.2], jitter: 0.2 }),
+    part(new IcosahedronGeometry(1.5, 1), SNOW, { pos: [0, 0.05, 0], scale: [1.3, 0.3, 1.2], jitter: 0.12 }),
     part(new IcosahedronGeometry(0.5, 0), SNOW, { pos: [0.75, 1.15, 0.35], scale: [1.1, 0.35, 0.9], jitter: 0.1 }),
   ]);
 }
@@ -1131,20 +1137,8 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
       parts.push(part(new CylinderGeometry(0.02, 0.02, 0.66, 5), C.accent, { pos: [0, 0.18, 0.1], rot: [0, 0, Math.PI / 2] }));
       return merge(parts);
     }
-    case 3: {
-      // Comet Bob: a sleek pearl shell with a vermillion stripe, flank stripes and a tail fin, so
-      // it still reads as yours (and not as a snowdrift) from the chase camera behind it. The stripes
-      // sit proud of the shell (its top is at y 0.52, its flanks at x 0.6), never buried inside it.
-      return merge([
-        part(new CapsuleLikeGeometry(), new Color('#D3DDF2'), { pos: [0, 0.2, 0.05], scale: [0.6, 0.32, 1.5] }),
-        part(new BoxGeometry(0.1, 0.06, 1.4), C.accent, { pos: [0, 0.52, 0.05] }),
-        part(new BoxGeometry(0.07, 0.08, 1.0), C.accent, { pos: [-0.61, 0.25, 0.05] }),
-        part(new BoxGeometry(0.07, 0.08, 1.0), C.accent, { pos: [0.61, 0.25, 0.05] }),
-        part(new BoxGeometry(0.06, 0.26, 0.42), C.accent, { pos: [0, 0.5, 1.12], rot: [-0.35, 0, 0] }),
-        part(new BoxGeometry(0.05, 0.05, 1.5), new Color('#2B3550'), { pos: [-0.26, 0.02, 0.05] }),
-        part(new BoxGeometry(0.05, 0.05, 1.5), new Color('#2B3550'), { pos: [0.26, 0.02, 0.05] }),
-      ]);
-    }
+    case 3:
+      return cometBobGeometry(lite);
     case 4: {
       // Wisp: pale spectral runners and deck.
       const mint = new Color('#BFF8EE');
@@ -1177,11 +1171,68 @@ export function sledGeometryFor(id: number, lite = false): BufferGeometry {
   }
 }
 
-/** A rounded pod (scaled icosphere) used for the bobsled shell. */
-class CapsuleLikeGeometry extends IcosahedronGeometry {
-  constructor() {
-    super(1, 1);
+/** Comet Bob's own paint: a violet lacquer in two values, and the cream of its comet. Nothing a role owns (ART.md 1). */
+export const COMET_BOB = { lacquer: new Color('#5A3E96'), lacquerDark: new Color('#3F2A70'), comet: new Color('#F4E8CF') };
+
+/** Comet Bob (round 8): a racing bob that reads as a sled from the chase lens, where the pearl pod it was read as an
+ *  untextured white lump. The classic sled's five slats (so its underside is drawn as theirs) in violet lacquer with the
+ *  grain showing through, low sideboards along the deck pinstriped in cream, a cowl over the nose that the rider's
+ *  boots go under, a cream comet streaking back over the cowl from a round head at its tip, the vermillion runners on
+ *  steel shoes curling up into the cowl and flicking up behind, and two steel push bars at the tail, which is what the
+ *  lens behind it sees. `lite` is Low's: three slats, fewer sides, no bars. */
+function cometBobGeometry(lite: boolean): BufferGeometry {
+  const C = RIDER_COLORS;
+  const { lacquer, lacquerDark, comet } = COMET_BOB;
+  reseed(5153);
+  const parts: BufferGeometry[] = [];
+  const slats = lite ? 3 : 5;
+  const span = 0.6;
+  const sw = span / slats - 0.016;
+  for (let i = 0; i < slats; i++) {
+    const x = -span / 2 + (i + 0.5) * (span / slats);
+    parts.push(grain(part(new BoxGeometry(sw, 0.05, 1.22, lite ? 1 : 2, 1, lite ? 4 : 10), i % 2 ? lacquerDark : lacquer, { pos: [x, 0.2, 0.12] }), -0.49, 0.73));
   }
+  for (const z of [-0.36, 0.5]) parts.push(part(new BoxGeometry(0.64, 0.05, 0.1, lite ? 1 : 4, 1, 1), lacquerDark, { pos: [0, 0.165, z] }));
+  // The sideboards, a cream pinstripe along each.
+  for (const sx of [-1, 1]) {
+    parts.push(part(new BoxGeometry(0.035, 0.11, 1.0, 1, 1, lite ? 2 : 5), lacquerDark, { pos: [sx * 0.322, 0.27, 0.2] }));
+    parts.push(part(new BoxGeometry(0.04, 0.018, 0.94), comet, { pos: [sx * 0.33, 0.3, 0.2] }));
+  }
+  // The cowl: a low dome over the nose, open at the back where the boots go in.
+  parts.push(part(new SphereGeometry(1, lite ? 8 : 14, lite ? 3 : 5, 0, Math.PI * 2, 0, Math.PI / 2), lacquer, { pos: [0, 0.2, -0.36], scale: [0.335, 0.27, 0.46] }));
+  parts.push(part(new TorusGeometry(0.3, 0.022, 4, lite ? 10 : 16, Math.PI), lacquerDark, { pos: [0, 0.2, -0.14], rot: [0, 0, 0], scale: [1.1, 0.86, 1] }));
+  // The comet: a round head at the cowl's tip and its tail streaking back over the crown, tapering.
+  parts.push(smoothPart(new IcosahedronGeometry(0.08, lite ? 0 : 1), comet, { pos: [0, 0.275, -0.83] }));
+  const tail: Vector3[] = [];
+  for (let i = 0; i <= 4; i++) {
+    const a = 0.3 + (i / 4) * 1.22;
+    tail.push(new Vector3(0, 0.2 + 0.27 * Math.sin(a) + 0.012, -0.36 - 0.46 * Math.cos(a) - 0.012));
+  }
+  for (let i = 0; i < 4; i++) parts.push(capsule(tail[i], tail[i + 1], 0.045 - 0.008 * i, 0.045 - 0.008 * (i + 1), comet, lite ? 5 : 7));
+  // The runners, as the classic sled's: steel shoes, a curl up into the cowl's nose, tails flicking up, stanchions.
+  const sides = lite ? 5 : 7;
+  const curl: Vector3[] = [];
+  const steps = lite ? 4 : 6;
+  for (let i = 0; i <= steps; i++) {
+    const u = i / steps;
+    const a = -Math.PI / 2 + u * Math.PI * 0.95;
+    const r = 0.16 * (1 - 0.25 * u * u);
+    curl.push(new Vector3(0, 0.19 + r * Math.sin(a), -0.71 - r * Math.cos(a)));
+  }
+  for (const sx of [-0.27, 0.27]) {
+    parts.push(part(new BoxGeometry(0.05, 0.05, 1.46), C.accent, { pos: [sx, 0.03, 0.03] }));
+    parts.push(part(new BoxGeometry(0.034, 0.016, 1.44), STEEL, { pos: [sx, 0.0, 0.03] }));
+    for (let i = 0; i < steps; i++) {
+      const u = i / steps;
+      parts.push(capsule(curl[i].clone().setX(sx), curl[i + 1].clone().setX(sx), 0.028 - 0.006 * u, 0.028 - 0.006 * (u + 1 / steps), C.accent, sides));
+    }
+    parts.push(capsule(new Vector3(sx, 0.03, 0.74), new Vector3(sx, 0.11, 0.87), 0.027, 0.02, C.accent, sides));
+    for (const z of lite ? [0.42, -0.3] : [0.5, 0.1, -0.3]) parts.push(part(new BoxGeometry(0.04, 0.15, 0.045), C.accent, { pos: [sx, 0.105, z] }));
+    // A push bar off each tail, steel, angled up and back.
+    if (!lite) parts.push(capsule(new Vector3(sx * 0.85, 0.25, 0.66), new Vector3(sx * 0.85, 0.41, 0.84), 0.018, 0.018, STEEL, 6));
+  }
+  if (!lite) parts.push(capsule(new Vector3(-0.23, 0.41, 0.84), new Vector3(0.23, 0.41, 0.84), 0.017, 0.017, STEEL, 6));
+  return merge(parts);
 }
 
 /** How the rider sits each sled (body-pivot height and depth above the sled base, extra forward
