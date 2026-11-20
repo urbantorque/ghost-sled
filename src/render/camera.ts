@@ -403,11 +403,12 @@ const WHIP_SETTLE = 0.6;
 const WHIP_LEAD_S = 1.0;
 const SHOT_YAW_MAX = 0.32;
 /** The place shot (round 8): how fast it comes in and goes back (1/s), how far short of its end it hands back, and
- *  the thin letterbox that marks it (under reduced motion that is all of it). */
+ *  its letterbox (none). */
 const PLACE_IN_RATE = 2.4;
 const PLACE_OUT_RATE = 1.8;
 const PLACE_HANDBACK = 40;
-const PLACE_BOX = 0.4;
+// (No bar: a letterboxed opening read as a smaller rider to every critic that saw one.)
+const PLACE_BOX = 0;
 
 /** Scratch for crashPack (Map.forEach with a module-level callback: no per-frame allocation). */
 const packScan = { x: 0, z: 0, best: Infinity, p: null as GhostPose | null };

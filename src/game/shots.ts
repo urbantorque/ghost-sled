@@ -35,10 +35,11 @@ export interface PlaceLens {
 /** Each biome's opening and stage-start lens (the compose lane's places, render/compose.ts). The lenses that look
  *  over a bank stand 8 to 11 m up: the sim's bank stands 9.5 m by the limit, and a lens under its crest saw only the
  *  bank (Ember's ridge at 3.6 m showed its own bank, not the fall). */
-export const PLACE_LENS: Readonly<Record<string, PlaceLens>> = {
+export const PLACE_LENS: Readonly<Partial<Record<string, PlaceLens>>> = {
   alpine: { back: 8, up: 11, aside: 4, toOpen: true, ahead: 34, lookUp: -6, lookAside: 8, fov: 4 },
   glacier: { back: 4.4, up: 0.55, aside: 0, toOpen: false, ahead: 30, lookUp: 9, lookAside: 0, fov: 7 },
-  volcanic: { back: 7, up: 10, aside: 3, toOpen: true, ahead: 34, lookUp: -5, lookAside: 4, fov: 4 },
+  // (Ember's ridge has none: from over the fall the rider was a figure in the frame's corner, and a critic on stills
+  // chose the chase's big rider under the cone every time.)
   blossom: { back: 7, up: 10, aside: 4, toOpen: true, ahead: 30, lookUp: -6, lookAside: 5, fov: 4 },
   lantern: { back: 8, up: 8, aside: 0, toOpen: false, ahead: 40, lookUp: -6, lookAside: 0, fov: 6 },
 };
@@ -48,6 +49,10 @@ export const PLACE_LENS: Readonly<Record<string, PlaceLens>> = {
 export const PLACE_IN_OPEN = 0;
 export const PLACE_IN_STAGE = 40;
 export const PLACE_LEN = 100;
+/** Whether the stage starts get a place shot too. Off: just past a threshold the charm gates' gantry crosses the
+ *  run, and from a lens over the open side its beam and lantern string cut the frame in two (the fourth critic on
+ *  stills, both stage starts it saw); the composed banks there stand without a shot. */
+export const PLACE_STAGES = false;
 
 export interface Shot {
   kind: ShotKind;
@@ -150,7 +155,7 @@ export function planShots(course: Course): Shot[] {
     const first = secs[0];
     if (first && first.kind === 'start') out.push({ kind: 'place', key: 'opening', name: 'The opening', z0: first.z1 + PLACE_IN_OPEN, z1: first.z1 + PLACE_IN_OPEN + PLACE_LEN, at: first.z1 + PLACE_IN_OPEN, lens });
     let n = 0;
-    for (let z = 0; z < course.finishZ; ) {
+    for (let z = 0; PLACE_STAGES && z < course.finishZ; ) {
       const sec = course.section(z);
       if (sec.gate) {
         n++;

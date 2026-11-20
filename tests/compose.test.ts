@@ -240,12 +240,13 @@ describe('the lens by place', () => {
 });
 
 describe('the place shots', () => {
-  it('plans an opening and both stage starts on every named mountain, each with its mountain\'s lens and its place\'s sides', () => {
+  it('plans an opening shot on every named mountain but Ember, each with its mountain\'s lens and its place\'s sides', () => {
     for (const m of NAMED) {
       const c = courseFor(m.seed);
       const { plan } = planFor(c);
       const shots = plan.sideShots(planShots(c)).filter((s) => s.kind === 'place');
-      expect(shots.map((s) => s.key), m.name).toEqual(['opening', 'stage1', 'stage2']);
+      // (Ember has none, and no stage start has one: PLACE_LENS, PLACE_STAGES.)
+      expect(shots.map((s) => s.key), m.name).toEqual(c.biome === 'volcanic' ? [] : ['opening']);
       for (const s of shots) {
         expect(s.lens).toBe(PLACE_LENS[c.biome]);
         expect(s.z1 - s.z0).toBeLessThanOrEqual(100);

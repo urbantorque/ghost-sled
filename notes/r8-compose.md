@@ -52,6 +52,22 @@ threshold under the charm gate, about 1410 to 1600 and 2910 to 3100 m) is a plac
   two critics preferred the old frames for their bigger rider (ART.md 15 rule 4) and a cropped moon, so a place now
   rises a metre at most (0.2 to 1.2 m) and composes by its turn and its step aside. Under reduced motion the placement
   is kept, eased at half speed: it is a framing held over a place, as the speed's height is, not a movement.
+- **The place shots (the second pass, after the main lane's decisions).** The chase's metre of placement does not
+  change a layout a critic can see, so each opening and each stage start now opens on a shot of its own
+  (`game/shots.ts` kind `'place'`, `PLACE_LENS` per biome; `camera.ts placeLens`): from the first section after the
+  start, and from 40 m into each threshold, for 100 m (about three seconds at 30 m/s), handed back to the chase 40 m
+  short of its end (eased out at 1.8/s, so the chase has the road again within about a second and a half). Pinecrest,
+  Ember and Sakura stand the lens 10 to 11 m up and 3 to 4 m out over their open side, looking down the fall (a lens
+  under the bank's 9.5 m crest saw only the bank: Ember's first try at 3.6 m); Frostfang's stands 0.55 m over the
+  snow in the canyon looking up at its ice arch; Lanternfall's 8 m up on the crest. Each takes its sides from the
+  composed place (`ComposePlan.sideShots`), gives way in the air, in a tumble and to the run's opening reveal, stands
+  level, adds 4 to 7 degrees of lens and a thin letterbox; under reduced motion only the letterbox plays. Keyed to
+  the course's sections, so a replay, a still and a Daily get the same shots.
+- **Frostfang's canyon is shorter:** its walls stand up 70 m before the overlook (from about 180 m), so the run in from
+  the start keeps its lit floor and the long shadows down it (three critics on stills chose those), and the canyon
+  frames the reveal at its foot. **Pinecrest's cut from the air:** a fall's face is painted as rock only where it is
+  truly steep at its weight, so the stretch's ramp reads as a slope of snow. **Bare banks:** a fall keeps only its
+  crest clear and the forest stands on down it; Lanternfall's crest keeps its own pines below the rail.
 - **What frames them** (`framing.ts`): the spruces, the ice arch and seracs, the basalt, the torii, lanterns and
   retaining walls. One place's pieces in one geometry, one draw while it is in range, built on idle time (never in the
   frame that asks: the opening's are in reach from the start line). Nothing stands over the run except the arch, high
