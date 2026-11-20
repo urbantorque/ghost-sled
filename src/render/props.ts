@@ -47,7 +47,7 @@ interface Batch {
 }
 
 /** One chunk's static instances for a batch: matrices, and each one's variant and colour. */
-interface Packed {
+export interface Packed {
   m: Float32Array;
   p: Float32Array;
   c: Float32Array;
@@ -830,6 +830,16 @@ export class Props {
       b.mesh.count = on ? (b.dress ? 0 : b.near) : b.count;
       b.mesh.visible = b.mesh.count > 0;
     }
+  }
+
+  /** Round 8, the near trees (nearforest.ts), read only: what the forest is drawn for (its course and palette, whether
+   *  near props fade through coverage, whether the tier is Medium or up), and chunk `i`'s packed static instances
+   *  (undefined until the window lays it out). Nothing is made for the asking. */
+  get forestLook(): { course: Course; palette: Palette; smoothFade: boolean; rich: boolean } {
+    return { course: this.course, palette: this.palette, smoothFade: this.smoothFade, rich: this.arches };
+  }
+  packedAt(i: number): ReadonlyMap<string, Packed> | undefined {
+    return this.cache.get(i);
   }
 
   private buildStatic(i: number): Map<string, Packed> {

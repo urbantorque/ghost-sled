@@ -1,4 +1,4 @@
-import { Color, type ShaderMaterial, Vector4 } from 'three';
+import { Color, type ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import type { GhostPose } from '../game/ghosts';
 import type { Snap } from '../game/run';
 import type { Course } from '../sim/course';
@@ -27,14 +27,90 @@ export const wind = {
   uWindK: { value: 1 },
   /** Trees shaking: x, z (three.js space), the time it began, how hard (0 to 1). */
   uShiver: { value: [new Vector4(0, 0, -99, 0), new Vector4(0, 0, -99, 0), new Vector4(0, 0, -99, 0), new Vector4(0, 0, -99, 0)] },
+  /** Round 8, the near trees (nearforest.ts): the distances from the lens over which a tree is handed from the far
+   *  build to the near one, the forest wall's and the run's own trees' (each switched on only once its near trees are
+   *  made). Off (NEAR_OFF): no tree is handed over and the near batches draw nothing. */
+  uNearWall: { value: new Vector2(-1, -0.5) },
+  uNearOb: { value: new Vector2(-1, -0.5) },
+  /** Where the near trees were gathered round this frame (the chase lens): every pass that draws the forest (the
+   *  mirror, the ice's reflection) splits it by the distance from here, so it splits it as the gathering did. */
+  uNearEye: { value: new Vector3() },
 };
+
+/** The hand-over switched off. */
+export const NEAR_OFF = new Vector2(-1, -0.5);
 
 const WIND_PARS = /* glsl */ `
 uniform float uWindK;
 #ifdef GS_SHIVER
   uniform vec4 uShiver[4];
 #endif
+#ifdef GS_HANDOFF
+  uniform vec2 uNearLod;
+  uniform vec3 uNearEye;
+  varying float vHand;
+#endif
+#ifdef GS_LENS
+  varying float vLens;
+#endif
 `;
+
+// Round 8, Low's trees (no near build there): a tree beside or behind the rider dissolves whole through a screen-door as
+// it nears the lens, gone by LENS_IN m from it and solid from LENS_OUT, before its few broad facets fill the frame's
+// side. A tree ahead of the rider is a threat and stays solid however near.
+export const LENS_IN = 4.5;
+export const LENS_OUT = 8;
+const LENS_VERT = /* glsl */ `
+  #ifdef GS_LENS
+    {
+      vec3 gsF = (modelMatrix * vec4(gsIp, 1.0)).xyz;
+      vec3 gsFw = -vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2]);
+      float gsRd = dot(uFocus - cameraPosition, gsFw);
+      float gsBeside = smoothstep(gsRd + 2.0, gsRd + 0.5, dot(gsF - cameraPosition, gsFw));
+      vLens = mix(1.0, smoothstep(${LENS_IN.toFixed(2)}, ${LENS_OUT.toFixed(2)}, distance(gsF.xz, cameraPosition.xz)), gsBeside);
+    }
+  #endif`;
+
+// Round 8: a tree is handed between its far build and its near one by its foot's distance from the lens, whole: the far
+// batch lets go of it inside the band and the near batch takes it, each through the other's half of one screen-door
+// (the same noise, so between them every pixel is drawn once), and outside the band each draws nothing of it.
+const HAND_VERT = /* glsl */ `
+  #ifdef GS_HANDOFF
+    {
+      float gsD = distance((modelMatrix * vec4(gsIp, 1.0)).xyz, uNearEye);
+      vHand = (gsD - uNearLod.x) / max(uNearLod.y - uNearLod.x, 0.001);
+      #ifdef GS_NEAR
+        if (vHand >= 1.0) {
+      #else
+        if (vHand <= 0.0) {
+      #endif
+          gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+          return;
+        }
+    }
+  #endif`;
+
+const HAND_FRAG = /* glsl */ `
+#ifdef GS_HANDOFF
+  varying float vHand;
+#endif
+#ifdef GS_LENS
+  varying float vLens;
+#endif
+void main() {
+  #ifdef GS_LENS
+    if (vLens < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) >= vLens) discard;
+  #endif
+  #ifdef GS_HANDOFF
+    if (vHand < 1.0) {
+      float gsN = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      #ifdef GS_NEAR
+        if (gsN < vHand) discard;
+      #else
+        if (gsN >= vHand) discard;
+      #endif
+    }
+  #endif`;
 
 // Added right after the vertex's own position is read: the instance's foot names the tree (its phase, and
 // which front of wind it stands in). Offsets are in the tree's own frame, so each leans its own way off the
@@ -46,6 +122,8 @@ const WIND = /* glsl */ `#include <begin_vertex>
     #else
       vec3 gsIp = vec3(0.0);
     #endif
+    ${HAND_VERT}
+    ${LENS_VERT}
     float gsK = max(transformed.y, 0.0) / 6.0;
     float gsK2 = gsK * gsK;
     float gsPh = gsIp.x * 0.37 + gsIp.z * 0.21;
@@ -77,14 +155,47 @@ const WIND = /* glsl */ `#include <begin_vertex>
 const live: Array<{ mat: ShaderMaterial; sway: number }> = [];
 
 /** Patches a toon material made for foliage (materials.ts, `sway` > 0) to move in the wind. `shiver` adds
- *  the bough bob and the shaken trees (Medium and High). Safe on a material already patched for variants. */
-export function liveTree(mat: ShaderMaterial, shiver: boolean): ShaderMaterial {
+ *  the bough bob and the shaken trees (Medium and High). Safe on a material already patched for variants.
+ *  Round 8: with `shiver` a tree also hands itself to its near build inside the near band (the forest wall's batch,
+ *  a variant material, by uNearWall; the run's own trees by uNearOb); `near` makes the near build's own material,
+ *  which draws a tree only inside the band. */
+export function liveTree(mat: ShaderMaterial, shiver: boolean, near?: 'wall' | 'ob'): ShaderMaterial {
   if (!mat.vertexShader.includes('#include <begin_vertex>')) throw new Error('liveTree: no begin_vertex');
+  if (!mat.fragmentShader.includes('void main() {')) throw new Error('liveTree: no main');
   mat.vertexShader = WIND_PARS + mat.vertexShader.replace('#include <begin_vertex>', WIND);
   mat.uniforms.uWindK = wind.uWindK;
   if (shiver) {
     mat.uniforms.uShiver = wind.uShiver;
     mat.defines = { ...mat.defines, GS_SHIVER: 1 };
+    const group = near ?? (mat.vertexShader.includes('attribute float aVar') ? 'wall' : 'ob');
+    mat.uniforms.uNearLod = group === 'wall' ? wind.uNearWall : wind.uNearOb;
+    mat.uniforms.uNearEye = wind.uNearEye;
+    // (What share of a tree standing at `foot` this material draws, for the playtest probes: scripts/playtest/shards.js.)
+    const band = mat.uniforms.uNearLod.value as Vector2;
+    mat.userData.gsKeep = (_mid: number[], foot: number[] | null) => {
+      if (!foot) return 1;
+      const e = wind.uNearEye.value;
+      const h = Math.max(0, Math.min(1, (Math.hypot(foot[0] - e.x, foot[1] - e.y, foot[2] - e.z) - band.x) / Math.max(band.y - band.x, 1e-3)));
+      return near ? 1 - h : h;
+    };
+    mat.defines = { ...mat.defines, GS_HANDOFF: 1, ...(near ? { GS_NEAR: 1 } : {}) };
+    mat.fragmentShader = mat.fragmentShader.replace('void main() {', HAND_FRAG);
+  } else {
+    // (Low's trees, and the far rows, which never come this near: dissolve whole beside the lens. LENS_VERT.)
+    mat.defines = { ...mat.defines, GS_LENS: 1 };
+    mat.fragmentShader = mat.fragmentShader.replace('void main() {', HAND_FRAG);
+    const ss = (a: number, b: number, x: number) => {
+      const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
+      return t * t * (3 - 2 * t);
+    };
+    mat.userData.gsKeep = (_mid: number[], foot: number[] | null, eye: { x: number; y: number; z: number }, fw: number[]) => {
+      const f = mat.uniforms.uFocus?.value as { x: number; y: number; z: number } | undefined;
+      if (!foot || !f || !fw) return 1;
+      const rd = (f.x - eye.x) * fw[0] + (f.y - eye.y) * fw[1] + (f.z - eye.z) * fw[2];
+      const ah = (foot[0] - eye.x) * fw[0] + (foot[1] - eye.y) * fw[1] + (foot[2] - eye.z) * fw[2];
+      const beside = ss(rd + 2, rd + 0.5, ah);
+      return 1 + (ss(LENS_IN, LENS_OUT, Math.hypot(foot[0] - eye.x, foot[2] - eye.z)) - 1) * beside;
+    };
   }
   live.push({ mat, sway: (mat.uniforms.uSway?.value as number) ?? 0 });
   if (live.length > 24) live.splice(0, live.length - 24);

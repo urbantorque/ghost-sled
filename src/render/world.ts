@@ -35,6 +35,7 @@ import { VIEWS, type PipeView } from './postfx/pipeline';
 import { cine } from './cine';
 import { beginShaftSources } from './postfx/shafts';
 import { Props } from './props';
+import { NearForest } from './nearforest';
 import { SetPieces } from './landmarks';
 import { Moments } from './moments';
 import { Rails } from './rails';
@@ -259,6 +260,8 @@ export class World {
   readonly post: PostFX;
   /** Low's poster (the visual lift): painted shafts and the frame's foot, one draw on Low only (poster.ts). */
   readonly poster = new PosterLayer();
+  /** Round 8: the trees nearest the lens, drawn from their near build (nearforest.ts; forestLod). */
+  readonly nearForest = new NearForest();
   /** What a frozen lake mirrors (lakemirror.ts): baked only when one is near. */
   private lakeMirror: LakeMirror;
   readonly sun = new DirectionalLight(0xffffff, 1);
@@ -1213,6 +1216,7 @@ export class World {
     const chase = () => this.cam.update({ pos: focus, dir, speed: s.speed, steer: s.steer, airborne: !s.grounded && !this.moments.tumbling, boost: s.boostGlow, drifting, driftDir: s.driftDir, slip: s.slip, mate, rival, intro, pack, fell, legend, airTime: v.mode === 'run' ? v.airTicks / 60 : 0, airLeft: v.mode === 'run' ? this.landing.timeToLand : Infinity, open: v.mode === 'run' ? this.overlooks.lean(s.z + 25) : 0, tumble: this.moments.tumbling ? 1 : 0, wall: this.moments.act.wall, results: v.mode === 'results' }, dt);
     chase();
     if (this.lens) this.lens(this.cam.camera, focus, dir, dt);
+    this.forestLod();
 
     // Ghosts, landing ring.
     this.ghosts.labels = v.labels !== false;
@@ -1315,6 +1319,13 @@ export class World {
     this.renderMirror(v, focus, dir, dt);
     // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
     this.ghosts.drawLabels(this.renderer);
+  }
+
+  /** Round 8, the forest's level of detail by the lens: once the lens has moved, the trees within about 24 m of it are
+   *  handed from the far forest to their near build (nearforest.ts), on Medium and up; Low keeps its own trees. */
+  private forestLod(): void {
+    if (!this.nearForest.root.parent) this.scene.add(this.nearForest.root);
+    this.nearForest.update(this.cam.camera.position, this.props, this.quality.detail === 'high');
   }
 
   /** The bodies that move on their own, for the temporal reconstruction's reprojection (postfx/taa.ts): the
