@@ -1,7 +1,7 @@
 import { BufferAttribute, BufferGeometry, CanvasTexture, Color, CustomBlending, AddEquation, OneFactor, OneMinusSrcAlphaFactor, DoubleSide, DynamicDrawUsage, InstancedBufferAttribute, InstancedMesh, LinearFilter, LinearMipmapLinearFilter, Matrix4, NoColorSpace, Quaternion, ShaderMaterial, Vector3, type Camera, type Scene, type Texture, type WebGLRenderer } from 'three';
 import { type CharmGate, LANE_W, charmFamily, laneX } from '../sim/charms';
 import type { Course } from '../sim/course';
-import { FAMILY_HEX, FAMILY_INDEX, GLYPH_COLS, GLYPH_ROWS, drawGlyphAtlas } from './charmglyphs';
+import { FAMILY_HEX, FAMILY_INDEX, STYLE_DEEP_HEX, GLYPH_COLS, GLYPH_ROWS, drawGlyphAtlas } from './charmglyphs';
 import { shared } from './materials';
 
 // The charm gates (round 8, G2): at each gate the sim places, three arches stand side by side across the course, one
@@ -200,6 +200,7 @@ function gateMaterial(): ShaderMaterial {
       uFogFar: shared.uFogFar,
       uViewH: { value: 720 },
       uLow: { value: 0 },
+      uDeep: { value: 0 },
       uCalm: { value: 0 },
       uAtlas: { value: null as Texture | null },
       uAtlasOn: { value: 0 },
@@ -307,6 +308,7 @@ function gateMaterial(): ShaderMaterial {
       uniform float uFogNear;
       uniform float uFogFar;
       uniform float uLow;
+      uniform float uDeep;
       uniform float uCalm;
       uniform sampler2D uAtlas;
       uniform float uAtlasOn;
@@ -325,13 +327,14 @@ function gateMaterial(): ShaderMaterial {
       varying float vTop;
       const vec3 SPEED = ${glsl(FAMILY_HEX.speed)};
       const vec3 STYLE = ${glsl(FAMILY_HEX.style)};
+      const vec3 STYLE_DEEP = ${glsl(STYLE_DEEP_HEX)};
       const vec3 SURVIVAL = ${glsl(FAMILY_HEX.survival)};
       const vec3 INK = ${glsl('#121933')};
       const vec3 CREAM = ${glsl('#F5F3FF')};
       const vec3 GOLDW = ${glsl('#FFE08A')};
       const vec3 EMBER = ${glsl('#4A3436')};
       const vec3 DEEPGOLD = ${glsl('#D08A1E')};
-      vec3 famCol(float f) { return f < 0.5 ? SPEED : (f < 1.5 ? STYLE : SURVIVAL); }
+      vec3 famCol(float f) { return f < 0.5 ? SPEED : (f < 1.5 ? mix(STYLE, STYLE_DEEP, uDeep) : SURVIVAL); }
       // The medallion's outline, a signed distance in its own units (about -1 inside to 0 on the edge).
       float medal(vec2 q, float f) {
         if (vMarker > 0.5) {
@@ -522,6 +525,8 @@ export class CharmGates {
 
   setCourse(c: Course): void {
     this.course = c;
+    this.deep = c.biome === 'blossom';
+    if (this.mat) this.mat.uniforms.uDeep.value = this.deep ? 1 : 0;
     this.reset();
   }
 
@@ -530,6 +535,9 @@ export class CharmGates {
     this.takenAt.clear();
     this.marker = null;
   }
+
+  /** Sakura's shade is lavender: there the style family takes its deeper violet. */
+  private deep = false;
 
   setLow(low: boolean): void {
     this.low = low;
@@ -571,6 +579,7 @@ export class CharmGates {
       geo.setAttribute('aTint', this.tint);
       const mat = gateMaterial();
       mat.uniforms.uLow.value = this.low ? 1 : 0;
+      mat.uniforms.uDeep.value = this.deep ? 1 : 0;
       mat.uniforms.uViewH.value = this.viewH;
       const cv = drawGlyphAtlas();
       if (cv) {

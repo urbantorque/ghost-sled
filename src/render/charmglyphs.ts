@@ -15,6 +15,10 @@ export const FAMILY_HEX: Record<CharmFamily, string> = {
   survival: '#7ED957',
 };
 
+/** The style family on Sakura Ridge: its lilac faded into the lavender shade and the peach mist there, so on that
+ *  mountain it takes a deeper, more saturated violet of its own hue (charmgates.ts setCourse). */
+export const STYLE_DEEP_HEX = '#9B3DF2';
+
 /** The family's index: its arch's shape (charmgates.ts) and its place in FAMILY_HEX. */
 export const FAMILY_INDEX: Record<CharmFamily, number> = { speed: 0, style: 1, survival: 2 };
 
