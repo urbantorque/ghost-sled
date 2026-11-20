@@ -66,7 +66,9 @@ export interface Composed {
  *  toward `open`, and the horizon's cap and the rider's row in the frame, as camera.ts reads them). Mutable so a
  *  tuning probe can try values live (`__gs.world.overlooks.compose.looks`). The lens keeps close: rising 2.4 m and
  *  1.2 m back left the rider a size smaller, and two blind critics preferred the old frame for its bigger hero (ART.md
- *  15's fourth rule), so a place moves the lens up a metre at most and composes by its turn and its step aside. */
+ *  15's fourth rule), so a place moves the lens up a metre at most and composes by its turn and its step aside; and
+ *  a critic on stills that hold the run still preferred the rider in the lower middle (ART.md 8) to one stepped 1.7 m
+ *  aside, which also swept a passing ghost to a smear at the frame's edge: the step is under a metre. */
 export interface LookSet {
   up: number;
   back: number;
@@ -79,9 +81,9 @@ export interface LookSet {
   row: number;
 }
 export const LOOKS: Record<Look, LookSet> = {
-  valley: { up: 0.7, back: 0, aside: 1.7, yaw: 0.15, horizon: -0.02, row: -0.04 },
+  valley: { up: 0.7, back: 0, aside: 0.8, yaw: 0.1, horizon: -0.02, row: -0.04 },
   canyon: { up: 0.2, back: 0, aside: 0, yaw: 0, horizon: 0.03, row: -0.05 },
-  ridge: { up: 0.5, back: 0, aside: 1.4, yaw: 0.09, horizon: 0.02, row: -0.03 },
+  ridge: { up: 0.5, back: 0, aside: 0.6, yaw: 0.06, horizon: 0.02, row: -0.03 },
   terraces: { up: 0.5, back: 0, aside: 0, yaw: 0.07, horizon: 0.02, row: -0.03 },
   crest: { up: 1.2, back: 0.2, aside: 0, yaw: 0, horizon: 0.02, row: -0.04 },
 };
@@ -116,6 +118,8 @@ const START_KEEP = 8;
 /** A stretch's ramps at its ends. */
 const RAMP_IN = 34;
 const RAMP_OUT = 46;
+/** A fall comes in longer: over 34 m its first metres stood as a pale slab across the view from the air. */
+const FALL_RAMP_IN = 80;
 /** A stretch shorter than this is not composed. */
 const LEN_MIN = 90;
 /** Ahead of a fall the mid-ground starts taking the valley form this far before, and holds it this far after, so the
@@ -296,7 +300,7 @@ export class ComposePlan {
       }
       const r = recipe(c.biome, at, valley);
       const n = this.list.length;
-      const banks: BankSeg[] = r.banks.map((k) => ({ side: k.side, kind: k.kind, z0: a, z1: b, rin: Math.min(RAMP_IN, (b - a) / 3), rout: Math.min(RAMP_OUT, (b - a) / 3), h: k.h }));
+      const banks: BankSeg[] = r.banks.map((k) => ({ side: k.side, kind: k.kind, z0: a, z1: b, rin: Math.min(k.kind === 'fall' ? FALL_RAMP_IN : RAMP_IN, (b - a) / 3), rout: Math.min(RAMP_OUT, (b - a) / 3), h: k.h }));
       // Frostfang's opening: the valley side's wall breaks off where the overlook there opens, and the mountain falls
       // away out of the canyon's mouth (the overlook's own lip gives way to it).
       if (c.biome === 'glacier' && at === 'opening') {
@@ -418,7 +422,9 @@ export class ComposePlan {
       const a = s.z0 + s.rin * 0.25;
       const b = s.z1 - s.rout * 0.25;
       if (s.kind === 'wall') out.push({ side: s.side, e: lim + WALL_BACK0 / 2 + 2, z0: a, z1: b, w: WALL_BACK0 / 2 + 2 });
-      else if (s.kind === 'fall') out.push({ side: s.side, e: lim + 13, z0: a, z1: b, w: 13 });
+      // (Only the crest: past it the forest stands on down the fall, dark ranks below the rail, as a critic on stills
+      // asked when the cleared face read as a bare bank.)
+      else if (s.kind === 'fall') out.push({ side: s.side, e: lim + 3, z0: a, z1: b, w: 3.2 });
       else {
         const n = s.kind === 'steps' ? STEPS_DOWN : STEPS_UP;
         for (let k = 0; k < n; k++) {

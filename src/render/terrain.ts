@@ -22,7 +22,8 @@ const smooth = (a: number, b: number, x: number): number => {
 const sec0Kind = (c: Course, z: number): string => c.section(z).kind;
 
 /** A composed wall's crest (compose.ts), metres over the floor: its ice ramps from its dark foot to its pale skin by
- *  it (the aurora takes only its top third), and in a canyon the floor takes the crest's shadow. */
+ *  it (the aurora takes only its top third). Only the wall carries it: a canyon's floor laid in the crest's shadow lost
+ *  the long shadows raking down the lit run (ART.md 11), and a critic on stills chose the open run for them. */
 const CANYON_CREST = 40;
 
 export interface TerrainDetail {
@@ -230,7 +231,6 @@ class ChunkJob {
       const cr = cp ? cp.shaped(z, 1) : 0;
       const wallL = cp && cl > 0 && cp.kindAt(z, -1) === 'wall' ? cl : 0;
       const wallR = cp && cr > 0 && cp.kindAt(z, 1) === 'wall' ? cr : 0;
-      const canyon = Math.min(wallL, wallR);
       let p = this.row * cols;
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
@@ -326,7 +326,7 @@ class ChunkJob {
         this.rock[rq + 1] = led ? y - lipY : y - by;
         this.rock[rq + 2] = led ? x : z;
         // (A wall on one bank only ramps its own ice by its height: its crest casts on the floor only in a canyon.)
-        this.rock[rq + 3] = Math.max(crestH, canyon * CANYON_CREST, ed > 0 ? (side < 0 ? wallL : wallR) * CANYON_CREST : 0);
+        this.rock[rq + 3] = Math.max(crestH, ed > 0 ? (side < 0 ? wallL : wallR) * CANYON_CREST : 0);
         // (A pond is carried as a negative lake: the two never meet on one vertex.)
         this.paint[rq] = pondRow && lakeK === 0 ? -smoothK(0.4, 1.6, ed) * (1 - smoothK(8.5, 11, ed)) * (1 - smoothK(0.05, 0.16, Math.abs(sz))) * (1 - smoothK(0.06, 0.2, Math.abs(sx))) : lakeK;
         this.paint[rq + 1] = alt === null ? 0 : stripK * (1 - smoothK(2.3, 3.1, Math.abs(x - alt)));
