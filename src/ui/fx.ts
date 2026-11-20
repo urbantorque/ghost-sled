@@ -573,6 +573,8 @@ export class Fx {
     if (fits(text, race)) {
       inner.classList.add('is-fit');
       inner.style.setProperty('--len', String(text.length));
+      // (A rider's name in a long line gives way first: the rest of the line keeps --rest letters' room.)
+      if (o.who && text.includes(o.who)) inner.style.setProperty('--rest', String(text.length - o.who.length));
     }
     const countEl = h('span', 'gs-call-count');
     const tEl = h('span', 'gs-call-t');

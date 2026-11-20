@@ -2398,7 +2398,7 @@ describe('round 8: charm gates, tricks and the rival rules', () => {
     expect(of(r.idle(1), 'charmGate')).toHaveLength(0);
     sim.charmGates[0].lane = 2;
     const take = r.frame([{ type: 'charm', gate: 0, lane: 2, id: CHARM.owl }, { type: 'synergy', id: 4 }]);
-    expect(of(take, 'charmGate')[0]).toMatchObject({ phase: 'take', id: CHARM.owl, lane: 2, say: { label: "Owl's Breath", tone: 'big' } });
+    expect(of(take, 'charmGate')[0]).toMatchObject({ phase: 'take', id: CHARM.owl, lane: 2, say: { label: "Owl's Breath: near misses hold the combo", tone: 'big' } });
     expect(of(take, 'synergy')[0]).toMatchObject({ name: 'Night Chorus', say: { label: 'Night Chorus' } });
   });
 
@@ -2419,8 +2419,8 @@ describe('round 8: charm gates, tricks and the rival rules', () => {
     (r.sim.s as { z: number }).z = 100;
     const start = r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'start', rival: 0, markerZ: 402 } }] });
     expect(of(start, 'showdown')[0]).toMatchObject({ phase: 'start', markerZ: 402, ghost: { name: 'Old Wren' }, say: { label: 'Showdown: Old Wren' } });
-    // The pill names the showdown's rival (G1, 30 m ahead) though another rider is nearer (an open duel would still
-    // take it: a duel is the shorter fight).
+    // The pill names the showdown's rival (G1, 30 m ahead) though another rider is nearer (ahead of any duel, so
+    // the player sees who they race).
     r.idle(0.5);
     expect(r.d.step({ phase: 'run', dt: 1 / 60, sim: r.sim as unknown as Sim, events: [], race: [], tracks: r.tracks, poses: r.poses, standings: { next: null, rank: 1, of: 3 }, passedThisRun: 0, settledPassed: 0, timeToLand: Infinity, airTicks: 0, reduced: false }).rival?.id).toBe(1);
     const lost = r.frame([], { rivals: [{ tick: r.sim.tick, e: { type: 'showdown', phase: 'lost', rival: 0, markerZ: 402 } }] });

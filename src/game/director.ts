@@ -3,6 +3,7 @@ import type { BiomeId } from '../sim/mountains';
 import type { RivalEvent } from '../sim/rivals';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
 import { CHARMS, SYNERGIES } from '../sim/charms';
+import { charmTakeLine } from './charmcopy';
 import { trickCall } from '../sim/tricks';
 import { FIRST_RUN_STOMP, FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
@@ -1179,7 +1180,7 @@ export class Director {
         case 'charm': {
           // Round 8: a charm taken by riding through its arch. The arch answers with light; the line names it.
           const g = sim.charmGates?.[e.gate];
-          if (e.id >= 0) this.push({ type: 'charmGate', tick: p.tick, phase: 'take', gate: e.gate, offers: g ? g.offers : [], id: e.id, lane: e.lane, say: { label: CHARMS[e.id]?.name ?? '', points: 0, tone: 'big' } }, sim);
+          if (e.id >= 0) this.push({ type: 'charmGate', tick: p.tick, phase: 'take', gate: e.gate, offers: g ? g.offers : [], id: e.id, lane: e.lane, say: { label: charmTakeLine(e.id), points: 0, tone: 'big' } }, sim);
           break;
         }
         case 'synergy': {
@@ -1322,8 +1323,9 @@ export class Director {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    // (Round 8: a showdown holds the pill on its rival as a duel does, so who leads the race to the marker is its gap.)
-    const rv = rivalPick(steady, this.gapOf(duelId ?? this.showdownId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
+    // (Round 8: a showdown holds the pill and its ring on its rival, ahead of any duel, so the player sees who they
+    // race and who leads the race to the marker is its gap.)
+    const rv = rivalPick(steady, this.gapOf(this.showdownId ?? duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
     // One number for the pill and the edge chip, held on this clock (C12); the race maths keep raw.
     if (rv) out.rival = { id: rv.id, gap: this.gapRead.show(rv.id, rv.gap, now), raw: rv.gap };
     else {
@@ -1336,7 +1338,7 @@ export class Director {
     out.hud.stake = stake;
     out.hud.fuse = fuseLevel(stake, timerFrac, draining);
     out.hud.pace = this.paceDone && c.active && run !== null && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart;
-    out.hud.duel = duelId !== null;
+    out.hud.duel = duelId !== null && this.showdownId === null;
     out.hud.hold = duelId === null && this.rivalHold !== null && rv !== null && rv.id === this.rivalHold.id;
     out.hud.bestIn = null;
     if (run && line >= 150 && this.newGroundAt < 0 && !s.crashed) {

@@ -33,7 +33,7 @@ import { momentLine } from './momentcopy';
 // Muted passes show nothing at all.
 
 /** Beats that draw their own picture: a `say` on them would print the same moment twice. */
-const OWN_PICTURE = new Set<Beat['type']>(['callout', 'stomp', 'bank', 'comboLost', 'pass', 'passedBy', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'finale', 'missionPop', 'unlockPop', 'streakBroken', 'bestComboPace', 'newBest', 'friendBeaten']);
+const OWN_PICTURE = new Set<Beat['type']>(['showdown', 'callout', 'stomp', 'bank', 'comboLost', 'pass', 'passedBy', 'lead', 'raceNews', 'duel', 'raceCall', 'grudgeSettled', 'finale', 'missionPop', 'unlockPop', 'streakBroken', 'bestComboPace', 'newBest', 'friendBeaten']);
 
 /**
  * The unlock tease ("1 more ghost opens Frostfang Glacier") only ever comes with the pass that made it
@@ -73,6 +73,11 @@ export class BeatRouter {
   handle(list: readonly Beat[]): void {
     for (const b of list) {
       switch (b.type) {
+        case 'showdown':
+          // Round 8: the rider's name is its own span, so on a phone it is the name that gives way to the edges
+          // (ellipsized), never the word "Showdown".
+          if (b.say) this.fx.pop(b.say.label, b.say.points, b.say.tone, b.ghost.kind === 'you' ? undefined : b.ghost.name);
+          break;
         case 'callout':
           // A sketchy landing is a loss of the landing: a PERFECT LANDING stamp still up retires first.
           if (b.source === 'sketchy') this.fx.retireStamp();

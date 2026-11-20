@@ -1,12 +1,13 @@
 import { Color, SRGBColorSpace } from 'three';
 import { describe, expect, it } from 'vitest';
+import { CHARM_SHORT, charmTakeLine } from '../src/game/charmcopy';
 import { SIG, lanternSignals, wispUp } from '../src/game/charmsignals';
-import { ARCH_TOP, BURST_S, DRAW_AHEAD, GUTTER_S, archPath, archState, charmGateGeometry, offersLine } from '../src/render/charmgates';
+import { ARCH_TOP, BURST_S, DRAW_AHEAD, GUTTER_S, MEDAL_FLOOR_PX, MEDAL_GAP, MEDAL_HALF, archPath, archState, charmGateGeometry, medalHalf, medalSpread, offersLine } from '../src/render/charmgates';
 import { FAMILY_HEX, GLYPH_COLS, GLYPH_ROWS, glyphCell, glyphIds } from '../src/render/charmglyphs';
 import { stompWindowS } from '../src/render/landing';
 import { grabDanger, trickPose, type TrickIn } from '../src/render/trickpose';
 import { pathFromOf } from '../src/render/world';
-import { ALL_CHARMS, CHARM, CHARMS, PATH_STEP, laneX } from '../src/sim/charms';
+import { ALL_CHARMS, CHARM, CHARMS, LANE_W, PATH_STEP, laneX } from '../src/sim/charms';
 import { PLAIN } from '../src/sim/chaos';
 import { packInput } from '../src/sim/input';
 import { MOUNTAINS } from '../src/sim/mountains';
@@ -202,6 +203,29 @@ describe('charm gates', () => {
       expect(sim.charms[0]).toBe(offers[lane]);
       expect(events).toEqual([offers[lane]]);
     }
+  });
+
+  it('holds a medallion at least 32 px tall far off, and never lets two overlap as they grow', () => {
+    // At speed the lens is about 80 degrees: 720 px tall, a metre spans about 1 / (2 d tan 40 / 720) px.
+    const pxAt = (d: number) => (2 * d * Math.tan((40 * Math.PI) / 180)) / 720;
+    for (const d of [40, 90, 120]) {
+      const half = medalHalf(pxAt(d));
+      expect((2 * half) / pxAt(d)).toBeGreaterThanOrEqual(MEDAL_FLOOR_PX - 0.5);
+      // Neighbours stand LANE_W apart, the outer ones stepped out by medalSpread: the gap between two is kept.
+      expect(LANE_W + medalSpread(half) - 2 * half).toBeGreaterThanOrEqual(MEDAL_GAP - 1e-9);
+    }
+    // Close in it is its own size, standing over its own arch.
+    expect(medalHalf(pxAt(10))).toBe(MEDAL_HALF);
+    expect(medalSpread(MEDAL_HALF)).toBe(0);
+  });
+
+  it('says what each charm does as it is taken, in a few words after its name', () => {
+    for (const c of CHARMS) {
+      expect(CHARM_SHORT[c.id]?.length ?? 0).toBeGreaterThan(8);
+      expect(CHARM_SHORT[c.id].length).toBeLessThanOrEqual(34);
+      expect(charmTakeLine(c.id)).toBe(`${c.name}: ${CHARM_SHORT[c.id]}`);
+    }
+    expect(charmTakeLine(CHARM.slip)).toBe('Slipstream Lantern: drafting fills your lantern');
   });
 
   it('names the three offers left to right as the arches stand, an empty one left out', () => {

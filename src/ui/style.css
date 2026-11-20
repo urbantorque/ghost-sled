@@ -3437,6 +3437,17 @@
   text-transform: none;
 }
 
+/* Round 8: in a long line a rider's name is what gives way to a phone's edges ("Showdown: Bram Oakh..."), never the
+   words round it: --rest is their letter count (Fx), 0.78 em a heavy italic capital, 32 px the gutters. */
+.gs-call.is-fit .gs-call-who {
+  display: inline-block;
+  max-width: calc(100vw - 32px - var(--rest, 0) * 0.78em);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 /* Merged repeats: a row of small pips after the label (--n of them, up to five), "SLIPSTREAM ••• +28".
    Never "x3": "x" is the combo multiplier's alone. Drawn as one repeated dot, with an ink edge so it
    holds on white snow like the halo'd type. */
