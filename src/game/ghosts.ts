@@ -3,7 +3,7 @@ import { type RiderPoint, type RivalEvent, RivalWatch, draftsOn } from '../sim/r
 import { riderByName } from '../bot/roster';
 import type { GhostKind } from '../ui/contract';
 import type { GhostRole } from './beats';
-import { AIR_RATE, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
+import { AIR_RATE, OPENER_END_T, OPENER_HEAD, openerOf, PACE_AIM, PACE_EVERY, PACE_FROM, easeSpeed, ownOnMap, paceRate, playedOnMap, reading, slowMap, stringOffset } from './pacer';
 import { FINISH_Z, type Standing } from './standing';
 import {
   F_AIRPITCH,
@@ -223,6 +223,14 @@ export class GhostManager {
       t.distance = m.distance;
       t.tricks = t.pace === 1 && t.swing === 0 ? m.tricks : m.tricks.map((v, i) => (i % 4 === 0 ? at(v) : v));
       if (t.entry.reads) t.own = { ticks: m.ticks, crashTick: m.crashTick, finishTick: m.finishTick, stageTicks: m.stageTicks, tricks: m.tricks };
+      // (Round 8, the first pass: a first run's opener left the line a moment before you, pacer.ts OPENER_HEAD.)
+      if (t.own && this.tracks.filter((k) => k.entry.reads).indexOf(t) === openerOf(this.readers)) {
+        t.warp = { from: 0, at: OPENER_HEAD, rate: t.rate };
+        t.warps = [0, OPENER_HEAD, t.rate];
+        t.swing0 = t.swing;
+        t.swing = 0;
+        this.retime(t, t.own, t.warp);
+      }
       t.ready = m.samples > 0;
       if (this.tracks.every((k) => k.ready)) this.onReady?.();
     } else if (m.type === 'pool') {
@@ -428,7 +436,10 @@ export class GhostManager {
       const end = t.own.finishTick >= 0 ? t.own.finishTick : t.own.ticks;
       if (own >= end) continue;
       const s = Math.max(0, Math.min(t.samples - 1, Math.round(own / SAMPLE_EVERY - 1)));
-      if (reads) t.rate = paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z), s) - own) / PACE_AIM);
+      // (Round 8: past the readings, each rider eases back to its own record's pace.)
+      // (The opener's clock: the run's seconds where the reading aims, pacer.ts OPENER_*.)
+      const at = (tick + PACE_AIM) / 60;
+      t.rate = reads ? paceRate(t.rate, (this.ownAt(t, aim + stringOffset(k, this.readers, aim, FINISH_Z, at), s) - own) / PACE_AIM, k === openerOf(this.readers) && at < OPENER_END_T) : paceRate(t.rate, t.pace);
       const flying = (t.frames[s * FRAME_STRIDE + F_FLAGS] & FLAG_GROUNDED) === 0;
       t.warp = { from: tick, at: own, rate: flying ? Math.max(t.rate, AIR_RATE) : t.rate };
       if (!t.warps) {

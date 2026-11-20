@@ -48,7 +48,9 @@ export const XP = {
   runMedal: [0, 30, 50, 80] as readonly number[],
   dayMedal: [0, 20, 35, 60] as readonly number[],
   star: 30,
-  duel: 150,
+  /** A duel won pays clearly more than one lost: the win 300, the loss (ridden to the line or not) 40. */
+  duel: 300,
+  duelLost: 40,
   crown: 400,
   bestTime: 20,
   /** The day's first run: its experience again, up to this much more. */
@@ -92,6 +94,8 @@ export interface SpineRun {
   dayMedal: number;
   stars: number;
   duelWon: string | null;
+  /** A duel of The Twelve was ridden this run and not won (round 8: still kind, clearly less). */
+  duelLost?: boolean;
   crowned: boolean;
   newBestTime: boolean;
   /** How the run ended against a named rival it lost to, for a rematch. */
@@ -175,7 +179,7 @@ export function xpTicks(run: SpineRun, fresh: { variants: number; charms: number
   add('rung', `${run.rungs} ${run.rungs === 1 ? 'rung' : 'rungs'}`, Math.min(XP.rungCap, XP.rung * run.rungs));
   add('medal', 'Medals', run.stageMedals.reduce((a, m) => a + (XP.stageMedal[m] ?? 0), 0) + (XP.runMedal[run.runMedal] ?? 0) + (XP.dayMedal[run.dayMedal] ?? 0));
   add('star', `${run.stars} ${run.stars === 1 ? 'star' : 'stars'}`, XP.star * run.stars);
-  add('duel', run.crowned ? 'The last race' : 'A duel won', run.crowned ? XP.crown : run.duelWon ? XP.duel : 0);
+  add('duel', run.crowned ? 'The last race' : run.duelWon ? 'A duel won' : 'A duel ridden', run.crowned ? XP.crown : run.duelWon ? XP.duel : run.duelLost ? XP.duelLost : 0);
   add('best', 'A new best time', run.newBestTime ? XP.bestTime : 0);
   return t;
 }
@@ -255,7 +259,8 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
   const stickers = stickersFor(d.album, albumRun);
   d.album = awardStickers(d.album, stickers, d.runs, run.record);
   if (!d.album) delete d.album;
-  for (const id of stickers) gains.push({ kind: 'sticker', text: id, durable: true });
+  // (Stickers before the album opens, page 3, are kept and shown when it opens; they are no news on the run itself.)
+  if (featureOpen(d, 'album')) for (const id of stickers) gains.push({ kind: 'sticker', text: id, durable: true });
 
   // Experience from the run itself.
   const ticks = xpTicks(run, { variants: stickers.filter((s) => s.startsWith('v:')).length, charms: stickers.filter((s) => s.startsWith('c:')).length });
@@ -299,8 +304,9 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
   const pageBefore = pageAt(xpBefore).page;
   const xpAfter = xpBefore + xp;
   const pageAfter = pageAt(xpAfter).page;
-  const backlog = Math.max(0, pageBefore - claimedBefore);
-  const claimed = Math.min(pageAfter, claimedBefore + (pageAfter - pageBefore) + (backlog > 0 ? 1 : 0));
+  // (Round 8, the rewards paced: one page opens a run, its reward a card on the results; pages turned faster wait for
+  // the next runs, so a big first run opens one page and the next runs each open one more.)
+  const claimed = Math.min(pageAfter, claimedBefore + 1);
   d.rank = { xp: xpAfter, claimed };
   const opened: OpenedReward[] = [];
   for (let n = claimedBefore + 1; n <= claimed; n++) {
@@ -313,8 +319,9 @@ export function settleSpine(d: SaveData, run: SpineRun, prior: SpineSettlement |
   }
 
   // The month's chapter, and once it is done the oldest one unfinished.
+  // (The month's chapter opens on a save's second run: a first run has one or two things to show.)
   const ck = chapterKey(run.day);
-  if (chapterOf(ck)) {
+  if (chapterOf(ck) && d.runs >= 2) {
     const chapters = { ...(d.chapters ?? {}) };
     chapters[ck] ??= { xp: 0, claimed: 0 };
     let key = ck;

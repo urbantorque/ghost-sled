@@ -144,6 +144,14 @@ export interface MissionState {
 /** Which biomes count for the rotation: the ones whose mountain is unlocked. */
 export interface MissionCtx {
   unlockedBiomes: ReadonlySet<string>;
+  /** Mission slots held (round 8: missionSlots). Left out, three. */
+  slots?: number;
+}
+
+/** Mission slots by runs ridden (round 8, the rewards paced): one for a save's first run, two for its second, then
+ *  three. A first run finishes one mission, not three. */
+export function missionSlots(runs: number): number {
+  return Math.max(1, Math.min(3, runs + 1));
 }
 
 /** The biomes of every mountain open at this many lifetime passes. */
@@ -197,7 +205,7 @@ export function topUp(s: MissionState, ctx?: MissionCtx): void {
   const seed = (s.seed ?? DEFAULT_SEED) >>> 0;
   const L = MISSIONS.length;
   let guard = 0;
-  while (s.active.length < 3 && guard++ < L * 3) {
+  while (s.active.length < (ctx?.slots ?? 3) && guard++ < L * 3) {
     const cycle = Math.floor(s.cursor / L);
     const def = MISSIONS[cycleOrder(seed, cycle)[s.cursor % L]];
     s.cursor++;

@@ -159,6 +159,10 @@ export interface ClimbRun {
   bestBefore: Standing | null;
   /** The tick it crossed each stage line it reached. */
   ticks: readonly number[];
+  /** Rides of this mountain, this one included (round 8, the rewards paced; the app reads it off the save's run
+   *  times). On the first ride the ladder places you and pays no rungs (you are paid for climbing it), and the stage
+   *  medals open from the second. Left out, as before round 8. */
+  rides?: number;
 }
 
 export interface ClimbOutcome {
@@ -193,9 +197,11 @@ export function settleClimb(d: SaveData, key: string, board: Board, version: num
   const of = spot.of;
   const held = spotOn(board, run.bestBefore);
   // Where the run set out from, and where the save stands now (the same, on a first settle).
-  const start: Climb = atStart ?? { v: version, ...(held.rank !== null ? { rung: held.rank } : {}), ...(held.top ? { top: true } : {}) };
+  const firstRide = run.rides !== undefined && run.rides <= 1 && !atStart && !run.bestBefore;
+  const placed = firstRide ? spot : held;
+  const start: Climb = atStart ?? { v: version, ...(placed.rank !== null ? { rung: placed.rank } : {}), ...(placed.top ? { top: true } : {}) };
   const was: Climb = d.climb?.[key] ?? start;
-  const stageMedals = stageSeconds(run.ticks).map((s, i) => stageMedal(s, board.stages[i] ?? null));
+  const stageMedals = stageSeconds(run.ticks).map((s, i) => (run.rides !== undefined && run.rides < 2 ? 0 : stageMedal(s, board.stages[i] ?? null)));
   const runMedal = board.run ? medalFor(run.standing.time, board.run) : 0;
   const c: Climb = { ...was, v: version };
   c.stages = Array.from({ length: STAGES }, (_, i) => Math.max(was.stages?.[i] ?? 0, stageMedals[i] ?? 0));

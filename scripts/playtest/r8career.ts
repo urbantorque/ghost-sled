@@ -22,7 +22,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { type Kit, type Pilot, classic, clumsy, mulberry, prompted, spenderFor } from './labpilots';
+import { type Kit, type Pilot, classic, clumsy, mulberry, prompted, scripted, spenderFor, timeToLand, trickster } from './labpilots';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
@@ -64,6 +64,7 @@ export interface Mods {
   rank: Any | null;
   contracts: Any | null;
   lanterns: Any | null;
+  hints: Any;
   almanac: Any | null;
   album: Any | null;
   /** Each bundled mountain's pool as the app holds it: with its slow riders (app.ts poolFor). */
@@ -117,6 +118,7 @@ export async function loadMods(root: string, imp?: (p: string) => Promise<Any>):
     rank: existsSync(resolve(at, 'src/game/rank.ts')) ? await load('src/game/rank.ts') : null,
     contracts: existsSync(resolve(at, 'src/game/contracts.ts')) ? await load('src/game/contracts.ts') : null,
     lanterns: existsSync(resolve(at, 'src/game/lanterns.ts')) ? await load('src/game/lanterns.ts') : null,
+    hints: await load('src/game/hints.ts'),
     almanac: existsSync(resolve(at, 'src/game/almanac.ts')) ? await load('src/game/almanac.ts') : null,
     album: existsSync(resolve(at, 'src/game/album.ts')) ? await load('src/game/album.ts') : null,
     pools: {},
@@ -256,6 +258,10 @@ export interface RunFacts {
   /** The field as it rode, and where each ghost finished in this race. */
   field: { name: string; kind: string; reads: boolean; time: number | null; distance: number; passed: boolean }[];
   ticks: number;
+  /** The first 30 s, a second at a time: [s, your metres, each rider's gap to you in field order]. */
+  trace: number[][];
+  /** On a coached run (a save's first): how often each hint went up, as hints.ts's coach steps it in the app. */
+  hintShows: Record<string, number>;
 }
 
 /** Event types the sim lane's batch may add that are a choice by themselves (a charm gate ridden through, a
@@ -288,6 +294,8 @@ interface PlannedRun {
   sled: number;
   entries: Any[];
   maxSeconds: number;
+  /** Step the hint coach as the app does (a fresh save's counts), and count what it shows. */
+  coach?: boolean;
   /** What the save decides for the run's SimConfig, as the app's runExtra does (charmpool.ts): the Almanac's charm
    *  pool and gates, and a save's very first run. Absent on a build without the Almanac. */
   extra?: Any;
@@ -302,9 +310,15 @@ interface RodeRun {
 }
 
 /** A pilot and how it spends its lantern. '<pilot>-prompted' is the clumsy pilot or the novice following the hints
- *  (labpilots.ts prompted). */
+ *  (labpilots.ts prompted); 'trickster-<skill>' the lab's mid or expert on the air map and the charm gates (lab.ts
+ *  rides them as 'mid' and 'expert'); 'hands-off' no input at all. */
 function makePilot(M: Mods, name: string, sim: Any, seed: number): { pilot: Pilot; spend: () => boolean } {
   const kit: Kit = { gateX: M.moments.gateX, pathX: M.moments.pathX, machineZ: M.moments.machineZ };
+  if (name === 'hands-off') return { pilot: scripted(() => 0)(sim), spend: () => false };
+  if (name.startsWith('trickster-')) {
+    const skill = name.slice(10) as 'mid' | 'expert';
+    return { pilot: trickster(skill, sim, seed, kit), spend: spenderFor(skill, sim, seed) };
+  }
   const base = name.replace(/-prompted$/, '');
   const pilot = base === 'clumsy' ? clumsy(sim, seed) : classic(base as 'mid', sim, seed, kit);
   const spend = spenderFor(base, sim, seed);
@@ -341,7 +355,7 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   // (SIM_VERSION 10: the field's showdowns and spirit steals, decided as the app decides them, app.ts startRun.)
   if (gm.rivalProbe) run.rivalProbe = gm.rivalProbe(sim.course.finishZ);
   const START_TICKS: number = M.race.START_TICKS ?? 360;
-  const facts: RunFacts = { pilot: p.pilot, key: p.key, mountainId: p.mountain.id, mi: p.mi, chaos: p.chaos, sum: null, finished: false, time: null, distance: 0, seconds: 0, stageSeconds: [], passes: [], firstPass: null, firstPerfect: null, firstDash: null, choices: [], tricks: [], charms: [], synergies: [], moments: [], legend: 0, gates: [], tumbles: 0, wards: 0, events: {}, field: [], ticks: 0 };
+  const facts: RunFacts = { pilot: p.pilot, key: p.key, mountainId: p.mountain.id, mi: p.mi, chaos: p.chaos, sum: null, finished: false, time: null, distance: 0, seconds: 0, stageSeconds: [], passes: [], firstPass: null, firstPerfect: null, firstDash: null, choices: [], tricks: [], charms: [], synergies: [], moments: [], legend: 0, gates: [], tumbles: 0, wards: 0, events: {}, field: [], ticks: 0, trace: [], hintShows: {} };
   let combo = 0;
   let inCombo = false;
   let wallRides = 0;
@@ -349,6 +363,35 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
   let grinds = 0;
   let forkAt = -1;
   const met = new Map<number, number>();
+  // The hint coach (app.ts updateHints and markHint), on a coached run.
+  const coach = p.coach ? new M.hints.HintCoach() : null;
+  const learnt: Record<string, number> = {};
+  const seenRuns: Record<string, number> = {};
+  let airTicks = 0;
+  let steered = false;
+  const kickerAhead = (s: Any): boolean => {
+    const reach = Math.max(40, s.speed * 2.2);
+    const ci = Math.floor(s.z / 64);
+    for (let k = ci; k <= ci + 2; k++) for (const r of sim.course.zones(k).ramps) {
+      const lip = r.z + r.len - s.z;
+      if (lip > 0 && lip <= reach && Math.abs(s.x - r.x) < r.w / 2 + 3) return true;
+    }
+    return false;
+  };
+  const mark = (k: string): void => {
+    learnt[k] = (learnt[k] ?? 0) + 1;
+    if (coach && coach.shown === k) coach.drop();
+  };
+  const coachStep = (sm: Any): void => {
+    const s = sm.s;
+    airTicks = s.grounded ? 0 : airTicks + 1;
+    if (Math.abs(s.steer) > 0.2) steered = true;
+    const ttl = s.grounded ? Infinity : timeToLand(sm).t;
+    const step = coach!.step({ dt: 1 / 60, timer: sm.tick / 60, steered, grounded: s.grounded, drifting: s.drifting, action: s.action, drafting: s.drafting, airTicks, ttl, runs: 0, z: s.z, kickerAhead: s.grounded && (learnt.boostPop ?? 0) < 1 && kickerAhead(s), heldLip: false, draftTarget: false, chased: false, tumbling: s.tumble > 0, lit: s.lantern >= 100, dashed: sm.stats.dashes > 0, astray: s.grounded && sm.course.edgeExcess(s.x, s.z) > 0, grabbing: (s.grab ?? 0) !== 0 }, learnt, seenRuns);
+    if (step.seen) seenRuns[step.seen] = (seenRuns[step.seen] ?? 0) + 1;
+    for (const k of step.learned) learnt[k] = Math.max(1, learnt[k] ?? 0);
+    if (step.show) facts.hintShows[step.show] = (facts.hintShows[step.show] ?? 0) + 1;
+  };
   const named = !!M.tricks?.TRICKS;
   const specs: Any[] = M.moments.planMoments ? M.moments.planMoments(sim.course) : [];
   const variantOf = (index: number): number => {
@@ -359,6 +402,9 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
     run.tick();
     const s = sim.s;
     gm.pace(sim.tick, s.z, !sim.finished && !s.crashed);
+    if (coach) coachStep(sim);
+    // The first 30 s, a second at a time: your metres and each rider's gap to you (for reading a first run's race).
+    if (sim.tick % 60 === 0 && sim.tick <= 1800) facts.trace.push([sim.tick / 60, Math.round(s.z), ...gm.tracks.map((t: Any) => Math.round(gm.zAt(t, sim.tick) - s.z))]);
     for (const ev of gm.race(sim.tick, s.z)) {
       if (ev.type !== 'pass') continue;
       const muted = sim.tick < START_TICKS;
@@ -378,6 +424,14 @@ function ride(M: Mods, p: PlannedRun): RodeRun {
       if (e.type === 'rival' && e.kind === 'showdown') facts.events.showdownWon = (facts.events.showdownWon ?? 0) + 1;
       for (const [kind, is] of Object.entries(CHOICE_EVENTS)) if (is(e)) facts.choices.push({ tick, kind });
       if (e.type === 'dash' && e.phase === 'start' && facts.firstDash === null) facts.firstDash = tick;
+      if (coach) {
+        if (e.type === 'land' && e.quality === 'perfect') mark('stomp');
+        if (e.type === 'land' && e.quality !== 'sketchy' && e.halfTurns >= 2) mark('spin');
+        if (e.type === 'land' && e.quality !== 'sketchy' && e.flips >= 1) mark('flip');
+        if (e.type === 'drift' && e.phase === 'release') mark('drift');
+        if (e.type === 'style' && e.kind === 'pop') mark('pop');
+        if (e.type === 'style' && e.kind === 'boostPop') mark('boostPop');
+      }
       if (e.type === 'land' && !e.botched) {
         if (e.quality === 'perfect' && facts.firstPerfect === null) facts.firstPerfect = tick;
         const t = named ? null : trickOf(e.halfTurns, e.flips);
@@ -563,6 +617,10 @@ export interface CareerOptions {
   /** Where generated Daily and Cup pools are kept between sittings (null: not kept). */
   cacheDir?: string | null;
   maxSeconds?: number;
+  /** Where the player goes after a run: 'roam' (the default: a mountain just opened, the next duel's home, somewhere
+   *  fresher after five runs that kept nothing), 'stay' (the first mountain, always), or 'button' (where the results'
+   *  one button goes, as app.ts againTo: today's Daily, a duel rider's home, else the same mountain again). */
+  follow?: 'roam' | 'stay' | 'button';
   /** Called after each run (progress). */
   onRun?: (r: CareerRun) => void;
 }
@@ -601,6 +659,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
   let dailyDone = '';
   let cupDone = '';
   let sameStreak = 0;
+  let wantDaily = false;
   const shop = { bought: [] as string[] };
   for (let n = 0; n < o.runs; n++) {
     // The clock: a new day after perDay runs, and a new session with it (its first run is plain).
@@ -619,7 +678,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     let chaos: Any;
     let kind: 'pool' | 'daily' | 'cup' = 'pool';
     const chaosSeed = hash(seed, n, 0xc4a05);
-    if (o.daily && dayIndex >= 1 && dailyDone !== today && sessionRuns === 0) {
+    if (o.daily && dailyDone !== today && (wantDaily || (o.follow !== 'button' && dayIndex >= 1 && sessionRuns === 0))) {
+      wantDaily = false;
       mountain = M.mountains.dailyMountain(today);
       key = `daily:${today}`;
       pool = generatedPool(M, mountain.seed, M.prng.hashString(today), today, o.cacheDir ?? null);
@@ -688,7 +748,8 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
     let oc: Any = null;
     if (mi >= 0) {
       board = M.ladder.boardOf(M.pools[mountain.id]);
-      climb = M.ladder.settleClimb(d, key, board, M.sim.SIM_VERSION, climbAtStart, { standing: you, best: M.ladder.bestStanding(d.best[key]), bestBefore: M.ladder.bestStanding(bestAtStart), ticks: sim.stageTicks });
+      const rides = Math.max(1, d.runTimes?.[key]?.length ?? 1);
+      climb = M.ladder.settleClimb(d, key, board, M.sim.SIM_VERSION, climbAtStart, { standing: you, best: M.ladder.bestStanding(d.best[key]), bestBefore: M.ladder.bestStanding(bestAtStart), ticks: sim.stageTicks, rides });
       if (climb.spot.rank !== null && climb.rankWas !== null && climb.spot.rank < climb.rankWas) gains.push({ kind: 'rung', text: `Rank ${climb.spot.rank} of ${climb.spot.of}`, durable: true });
       else if (climb.spot.rank !== null && climb.rankWas === null && !bestAtStart) gains.push({ kind: 'rung', text: `On the ladder: rank ${climb.spot.rank}`, durable: true });
       for (const at of climb.fresh) gains.push({ kind: 'medal', text: at >= 3 ? 'Run medal' : `Stage ${at + 1} medal`, durable: true });
@@ -701,7 +762,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
           return [r.key, pg && (pg.finishTick ?? -1) > 0 ? pg.finishTick / 60 : null];
         }),
       );
-      fresh = M.mastery.settleMastery(sim.course, key, rec, { gates: f.gates, moments: f.moments.map((q) => ({ key: q.key, took: 0, total: 0, clean: false, won: q.won })), time: f.time, riderTimes, clean: f.tumbles === 0 && f.wards === 0 }, climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0);
+      fresh = M.mastery.settleMastery(sim.course, key, rec, { gates: f.gates, moments: f.moments.map((q) => ({ key: q.key, took: 0, total: 0, clean: false, won: q.won })), time: f.time, riderTimes, clean: f.tumbles === 0 && f.wards === 0 }, climbAtStart?.medal ?? 0, d.climb?.[key]?.medal ?? 0, rides);
       d.mastery[key] = rec;
       if (fresh.length) {
         d.gifts += M.mastery.STAR_GIFTS * fresh.length;
@@ -765,6 +826,7 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
         dayMedal: settled.daily && settled.daily.best > dailyMedalBefore ? settled.daily.best : settled.cup && settled.cup.best > cupMedalBefore ? settled.cup.best : 0,
         stars: fresh.length,
         duelWon: oc?.fell && duel?.kind === 'duel' ? duel.rider.key : null,
+        duelLost: duel?.kind === 'duel' && !oc?.fell,
         crowned: !!oc?.crowned,
         newBestTime: best.newTime && bestAtStart?.time !== undefined,
         lostTo,
@@ -855,6 +917,16 @@ export function career(M: Mods, o: CareerOptions): CareerRun[] {
 
     // Where the next run goes: a mountain this run opened, else the next duel's home after a few runs here,
     // else somewhere fresher when this mountain has given nothing durable for five runs.
+    if (o.follow === 'stay') continue;
+    if (o.follow === 'button') {
+      const goal = results.spinePrimary?.kind;
+      if (goal === 'daily') wantDaily = true;
+      else if (goal === 'duel') {
+        const nd = M.twelve.nextDuel(d.twelve, open);
+        if (nd) current = MOUNTAINS[M.twelve.duelMountain(nd)];
+      }
+      continue;
+    }
     if (kind !== 'pool') continue;
     const opened = MOUNTAINS.find((x: Any) => gains.some((gn) => gn.kind === 'unlock' && gn.text === x.name));
     sameStreak++;
@@ -913,6 +985,8 @@ function fieldFor(M: Mods, d: Any, o: { key: string; pool: Any[]; chaos: Any; ki
     grudge: grudge?.record ? { name: grudge.name, score: grudge.score, record: grudge.record, distance: grudge.distance, nemesis: M.settle.isNemesis(grudge) } : null,
     friend: null,
     promised,
+    key: o.key,
+    withheld: M.twelve.withheldRiders?.(d.twelve) ?? [],
   });
   if (cup && mine) picks.push({ name: mine.name, kind: 'you', score: mine.score, record: mine.record, distance: mine.distance });
   return picks.map((g: Any) => {
@@ -1220,24 +1294,30 @@ export function barDecisions(runs: readonly RunFacts[]): { kinds: string[]; perR
 /** Expression: the named air tricks there are, and the most distinct ones in one combo of the expert's. Today a
  *  spin's size is not a new trick: the families (spin, flip, spin+flip) are the vocabulary; once the sim lane's
  *  `trick` events land, their names are. */
-export function barExpression(M: Mods, runs: readonly RunFacts[]): { vocabulary: string[]; seen: string[]; bestCombo: string[]; bestComboFamilies: number } {
+export function barExpression(M: Mods, runs: readonly RunFacts[]): { vocabulary: string[]; seen: string[]; bestCombo: string[]; bestComboFamilies: number; perRide: number[]; medianRide: number } {
   const named = runs.some((f) => f.tricks.some((t) => t.family === t.name));
   const vocabulary: string[] = M.tricks?.TRICKS ? M.tricks.TRICKS.filter((t: Any) => t.id > 0).map((t: Any) => t.name) : named ? [...new Set(runs.flatMap((f) => f.tricks.map((t) => t.name)))] : ['spin', 'flip', 'spin+flip'];
   const seen = [...new Set(runs.flatMap((f) => f.tricks.map((t) => t.name)))].sort();
   let bestCombo: string[] = [];
   let bestFam = 0;
+  // Each ride's best combo (distinct tricks in it), for the median over the rides.
+  const perRide: number[] = [];
   for (const f of runs) {
     const by = new Map<number, typeof f.tricks>();
     for (const t of f.tricks) by.set(t.combo, [...(by.get(t.combo) ?? []), t]);
+    let rideBest = 0;
     for (const ts of by.values()) {
       const fam = new Set(ts.map((t) => t.family)).size;
+      rideBest = Math.max(rideBest, fam);
       if (fam > bestFam || (fam === bestFam && ts.length > bestCombo.length)) {
         bestFam = fam;
         bestCombo = ts.map((t) => t.name);
       }
     }
+    perRide.push(rideBest);
   }
-  return { vocabulary, seen, bestCombo, bestComboFamilies: bestFam };
+  const sorted = [...perRide].sort((a, b) => a - b);
+  return { vocabulary, seen, bestCombo, bestComboFamilies: bestFam, perRide, medianRide: sorted.length ? sorted[(sorted.length - 1) >> 1] : 0 };
 }
 
 /** First minute: a first-time player's run 1 on Pinecrest with the field the game lays on a first run. */
@@ -1249,7 +1329,23 @@ export function firstRun(M: Mods, pilot: string, seed: number, mi = 0): RunFacts
   const duel = mi === 0 ? M.twelve.duelOn(undefined, 0, (i: number) => M.twelve.mountainOpen(d, M.mountains.MOUNTAINS[i]), 0) : null;
   const entries = fieldFor(M, d, { key: mountain.id, pool: M.pools[mountain.id], chaos, kind: 'pool', duel, promised: null });
   const extra = M.almanac ? { charmPool: M.almanac.almanacPool(d), charmGates: M.almanac.almanacGates(d), firstRun: true } : undefined;
-  return ride(M, { pilot, pilotSeed: seed, key: mountain.id, mountain, mi, chaos, sled: 0, entries, maxSeconds: 600, extra }).facts;
+  return ride(M, { pilot, pilotSeed: seed, key: mountain.id, mountain, mi, chaos, sled: 0, entries, maxSeconds: 600, extra, coach: true }).facts;
+}
+
+/** The race's floor (round 8, phase 3): each pilot's place on run 1 of every mountain, a fresh save's field, as the
+ *  results count it (by time, then distance, against every rider as it rode this race). */
+export function firstRunPlaces(M: Mods, pilots: readonly string[], seeds: readonly number[]): Record<string, { mountain: string; seed: number; place: number; of: number; time: number | null }[]> {
+  const out: Record<string, { mountain: string; seed: number; place: number; of: number; time: number | null }[]> = {};
+  for (const pilot of pilots) {
+    out[pilot] = [];
+    for (let mi = 0; mi < M.mountains.MOUNTAINS.length; mi++) for (const seed of seeds) {
+      const f = firstRun(M, pilot, seed, mi);
+      const you = { time: f.time, distance: f.distance };
+      const ahead = f.field.filter((q) => q.kind !== 'you' && M.standing.aheadOf({ time: q.time, distance: q.distance }, you)).length;
+      out[pilot].push({ mountain: M.mountains.MOUNTAINS[mi].id, seed, place: ahead + 1, of: f.field.filter((q) => q.kind !== 'you').length + 1, time: f.time });
+    }
+  }
+  return out;
 }
 
 export function barFirstMinute(f: RunFacts): { pass: number | null; perfect: number | null; dash: number | null; ok: boolean } {

@@ -52,8 +52,14 @@ export const STEER_SHOWS = 3;
 export const STEER_REST_S = 20;
 /** A lesson shown in this many runs and never taken up is not shown again. The landing ring is a timing
  *  aid more than a lesson, so it has longer. */
-export const RETIRE_RUNS = 3;
-export const RETIRE_RING_RUNS = 6;
+export const RETIRE_RUNS = 2;
+export const RETIRE_RING_RUNS = 4;
+/** Round 8, a quiet first run: each lesson goes up at most this many times a run (the stomp cue STOMP_RUN_SHOWS, the
+ *  steer lesson its own STEER_SHOWS), so one not taken up stops asking until the next run, and the runs above retire
+ *  it (2 runs; the ring 4; they were 3 and 6). A clumsy first run had shown the stomp cue 77 times and the dash
+ *  lesson 23. */
+export const HINT_RUN_SHOWS = 3;
+export const STOMP_RUN_SHOWS = 6;
 
 /** The lifetime lesson counts (save.hints). */
 export type HintCounts = Partial<Record<HintKind, number>>;
@@ -124,6 +130,8 @@ export class HintCoach {
   private ground = 0;
   /** Seconds since a stomp cue last went. */
   private sinceStomp = Infinity;
+  /** Showings of each lesson this run (HINT_RUN_SHOWS). */
+  private runShows = new Map<HintKind, number>();
 
   /** A new run: nothing up, the per-run caps start over. */
   reset(): void {
@@ -141,6 +149,7 @@ export class HintCoach {
     this.ringShown = false;
     this.ground = 0;
     this.sinceStomp = Infinity;
+    this.runShows.clear();
   }
 
   /** The shown hint was learned (its count went up): it goes at once. */
@@ -199,6 +208,8 @@ export class HintCoach {
     if (!want && n('draft') < 1 && !gone('draft') && f.timer > 20 && f.draftTarget) want = 'draft';
     if (f.drafting && n('draft') < 1) learned.push('draft');
     if (f.chased || f.tumbling) want = null;
+    // A lesson that has had its showings this run waits for the next run (one already up stays up).
+    if (want && want !== this.shown && want !== 'steer' && (this.runShows.get(want) ?? 0) >= (want === 'stomp' ? STOMP_RUN_SHOWS : HINT_RUN_SHOWS)) want = null;
     return { want, learned };
   }
 
@@ -233,6 +244,7 @@ export class HintCoach {
     this.shown = want;
     this.hold = want ? HINT_HOLD_S : 0;
     this.up = 0;
+    if (want) this.runShows.set(want, (this.runShows.get(want) ?? 0) + 1);
     if (want === 'drift') this.driftShows++;
     if (want === 'spin') this.spinShows++;
     if (want === 'boostPop') this.lipShows++;

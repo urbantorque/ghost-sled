@@ -1,3 +1,4 @@
+import { STAGE_LENGTHS } from '../sim/course';
 import { FLAG_GROUNDED, FRAME_STRIDE, F_FLAGS, SAMPLE_EVERY } from './ghostdata';
 
 // A rider's clock when a steady pace is not enough. Two jobs, and neither touches the sim: where a ghost
@@ -40,8 +41,10 @@ export const PACE_SLEW = 0.03;
 export const PACE_EASE = 0.06;
 /** How fast a rider flies, however slowly it rides: gravity reads as the square of this. */
 export const AIR_RATE = 0.85;
-/** Metres before the line where the riders stop reading you. */
-export const PACE_OPEN = 800;
+/** Metres before the line where the riders stop reading you: the whole last stage (round 8, the race's floor; it was
+ *  800). From its line each rider eases back to its own record's pace (ghosts.ts pace), so the last stage is raced on
+ *  what each rider really rides and a first run's place is earned there. */
+export const PACE_OPEN = STAGE_LENGTHS[STAGE_LENGTHS.length - 1];
 /** A rider who read you can be promised next only if its real time is this share of yours or slower:
  *  beyond that the rematch is a rider you never see again. */
 const REACH = 0.88;
@@ -60,14 +63,20 @@ const STRING_TIGHT = 200;
 /** Samples either side a slow rider's change of rate is eased over: about a quarter of a second. */
 const AIR_EASE = 8;
 
-/** The first pass (round 8, G10): on a first run one rider, the front of the string (the quickest record, so it can, leads you
- *  off the line by up to OPENER_LEAD metres, comes back to OPENER_BACK behind you by OPENER_PASS_Z, so a first-timer
- *  overtakes a real rider in the first twenty seconds, then eases to its place on the string by OPENER_END. */
-export const OPENER_LEAD = 18;
+/** The first pass (round 8, G10): on a first run one rider, the front of the string (the quickest record, so it can),
+ *  is ahead of you by OPENER_LEAD metres OPENER_TOP_T seconds in, comes back to OPENER_BACK behind you by
+ *  OPENER_PASS_T, so a first-timer overtakes a real rider in the first twenty seconds, then eases to its place on the
+ *  string by OPENER_END_T. Timed, not placed: a quick first-timer leaves the whole field behind in the first seconds
+ *  (the records start slower than a sled on a first run), a slow one does not, and both must meet the opener. The
+ *  times are where you will be (the readings aim PACE_AIM ahead), so the pass itself comes about four seconds
+ *  sooner: after the start line's jostle (6 s), before 15 s. */
+export const OPENER_LEAD = 20;
+/** Ticks of its own run the opener has ridden as you leave the line: the rider who set off first. */
+export const OPENER_HEAD = 150;
 export const OPENER_BACK = -12;
-export const OPENER_TOP_Z = 110;
-export const OPENER_PASS_Z = 250;
-export const OPENER_END = 480;
+export const OPENER_TOP_T = 10;
+export const OPENER_PASS_T = 15;
+export const OPENER_END_T = 26;
 
 /** The rider of n who is the opener, or -1 with too few to spare one. */
 export function openerOf(n: number): number {
@@ -79,12 +88,13 @@ const smooth = (t: number): number => {
   return k * k * (3 - 2 * k);
 };
 
-/** Where rider i of n (slowest first) aims, in metres off your position: + is ahead of you. */
-export function stringOffset(i: number, n: number, z: number, finishZ: number): number {
-  if (i === openerOf(n) && z < OPENER_END) {
-    if (z < OPENER_TOP_Z) return OPENER_LEAD * smooth(z / OPENER_TOP_Z);
-    if (z < OPENER_PASS_Z) return OPENER_LEAD + (OPENER_BACK - OPENER_LEAD) * smooth((z - OPENER_TOP_Z) / (OPENER_PASS_Z - OPENER_TOP_Z));
-    return OPENER_BACK + (onString(i, n, OPENER_END, finishZ) - OPENER_BACK) * smooth((z - OPENER_PASS_Z) / (OPENER_END - OPENER_PASS_Z));
+/** Where rider i of n (slowest first) aims, in metres off your position: + is ahead of you. `t`: the seconds of the
+ *  run the aim is at (the opener's clock); without it every rider keeps to the string. */
+export function stringOffset(i: number, n: number, z: number, finishZ: number, t?: number): number {
+  if (t !== undefined && i === openerOf(n) && t < OPENER_END_T) {
+    if (t < OPENER_TOP_T) return OPENER_LEAD * smooth(t / OPENER_TOP_T);
+    if (t < OPENER_PASS_T) return OPENER_LEAD + (OPENER_BACK - OPENER_LEAD) * smooth((t - OPENER_TOP_T) / (OPENER_PASS_T - OPENER_TOP_T));
+    return OPENER_BACK + (onString(i, n, z, finishZ) - OPENER_BACK) * smooth((t - OPENER_PASS_T) / (OPENER_END_T - OPENER_PASS_T));
   }
   return onString(i, n, z, finishZ);
 }
@@ -109,10 +119,16 @@ export function reading(z: number, finishZ: number): boolean {
 }
 
 /** The next rate from the current one and the rate that would land a rider on its place. */
-export function paceRate(cur: number, want: number): number {
-  const step = Math.max(-PACE_EASE, Math.min(PACE_SLEW, want - cur));
-  return Math.max(PACE_MIN, Math.min(PACE_MAX, cur + step));
+export function paceRate(cur: number, want: number, opener = false): number {
+  const up = opener ? OPENER_SLEW : PACE_SLEW;
+  const step = Math.max(-PACE_EASE, Math.min(up, want - cur));
+  return Math.max(PACE_MIN, Math.min(opener ? OPENER_MAX : PACE_MAX, cur + step));
 }
+
+/** The opener may ride quicker than the rest while it leads you off the line (the string asks it to be ahead of a
+ *  first-timer who is still finding the keys), and pick up pace faster. */
+export const OPENER_MAX = 1.4;
+export const OPENER_SLEW = 0.06;
 
 /** Your speed, read steadily (m/s). */
 export function easeSpeed(cur: number, z: number, wasZ: number, ticks: number): number {
