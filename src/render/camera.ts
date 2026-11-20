@@ -1,7 +1,7 @@
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three';
 import { cine, resetCine } from './cine';
 import { WRECK_SLED } from './rider';
-import { TOP_SPEED, blurK, chaseBack, chaseFov, chaseRow, chaseUp, edgeK, fastK, lookLead, lookReach, rumbleK, speedK } from './speedfeel';
+import { TOP_SPEED, blurK, breathFov, chaseBack, chaseFov, chaseRow, chaseUp, chatterK, chatterPitch, dashFov, edgeK, fastK, lookLead, lookReach, rumbleK, speedK, surgeFov } from './speedfeel';
 import { CRASH_FREEZE_S, CRASH_PACK_NEAR_M, IDLE_FEEL, type Beat, type Feel, type GhostRef, type PassWord } from '../game/beats';
 import type { GhostPose } from '../game/ghosts';
 import type { Shot } from '../game/shots';
@@ -87,6 +87,12 @@ export interface CamTarget {
   /** Run only: the legend in reach (MarqueeWorld.legendShot, LanternWorld.legendShot): where to look, in
    *  three.js space, and how near its peak it is (0 to 1). The chase turns and lifts a little toward it. */
   legend?: { x: number; y: number; z: number; peak: number } | null;
+  /** Round 8 (speed), run only: a dash is running (the sim's dash): the lens surges with it. */
+  dash?: boolean;
+  /** Round 8 (speed), run only: how hard the snow under the runners is, 0 deep powder to 1 ice: the chatter. */
+  hard?: number;
+  /** Round 8 (speed), run only: Spirit Flow's picture, 0 to 1 (spiritflow.ts flowLook): the lens opens with it. */
+  flow?: number;
 }
 
 /** The legend look: the most the lens turns toward a legend (radians, about 8 degrees: the rider stays in the
@@ -302,6 +308,13 @@ const VISTA_RING_NDC = -0.78;
  *  on the edge of control. */
 const FOLLOW_RATE = 9;
 const RUMBLE_Y = 0.03;
+/** Round 8 (speed): the chatter of hard snow at its fullest (on ice at the cap): the lens's lift (metres) and
+ *  its look's pitch and yaw (radians), a fine high judder under the rumble's slower one. */
+const CHATTER_Y = 0.012;
+const CHATTER_PITCH = 0.0028;
+const CHATTER_YAW = 0.0015;
+/** The chatter's fastest beat (Hz): over half the frame rate it would alias into a slow wobble. */
+const CHATTER_HZ_MAX = 26;
 const EDGE_ROLL = 0.0035;
 /** Looking down the slope, the lens stands chaseUp metres clear of the snow from about this speed. */
 const CLEAR_FROM = 15;
@@ -523,6 +536,17 @@ export class ChaseCamera {
   /** The rumble's own clock (scaled like the shake's) and its eased weight. */
   private rumbleT = 0;
   private rumbleK = 0;
+  /** Round 8 (speed): the lens breathing with the speed's change (the last speed and the smoothed acceleration),
+   *  a dash's surge (seconds into it, -1 none), Spirit Flow's breath (seconds into it, -1 none, and its signed
+   *  size: + a level gained, - one lost), and the chatter's phases and eased weight. */
+  private lastSpeed = NaN;
+  private accelS = 0;
+  private dashT = -1;
+  private breathT = -1;
+  private breathK = 0;
+  private chatterPh = 0;
+  private chatterPh2 = 0;
+  private chatterS = 0;
   /** The slope's eased fall along the lens's line (metres per metre), the look's eased turn toward the
    *  road ahead (radians) and the eased weights of a tumble and a wall ride. */
   private fallS = 0;
@@ -910,7 +934,59 @@ export class ChaseCamera {
     this.whipYaw = this.whipSide = this.whipBlur = 0;
     this.whipT = -1;
     this.whipFired = false;
+    this.lastSpeed = NaN;
+    this.accelS = this.chatterS = 0;
+    this.dashT = this.breathT = -1;
     resetCine();
+  }
+
+  /** Round 8 (speed): a Spirit Flow level gained (k > 0: a breath in, the lens drawing in then opening out) or
+   *  lost (k < 0: a gutter out, the lens sagging in), sized 0 to 1 by how far the level moved. Off under reduced
+   *  motion, which keeps the flow's colour and drops the breath. */
+  flowBreath(k: number): void {
+    if (this.feel.reduced || k === 0) return;
+    this.breathT = 0;
+    this.breathK = Math.max(-1, Math.min(1, k));
+  }
+
+  /** Round 8 (speed): what the lens's breath adds to the FOV this frame (degrees): the speed's change, a dash's
+   *  surge and Spirit Flow's breath. The chase only; none under reduced motion (the speed's own FOV stays). */
+  private speedBreath(t: CamTarget, dt: number, reduced: boolean): number {
+    const v = t.speed;
+    if (this.mode !== 'chase' || reduced) {
+      this.lastSpeed = v;
+      this.accelS = 0;
+      this.dashT = this.breathT = -1;
+      return 0;
+    }
+    if (dt > 0) {
+      const a = Number.isFinite(this.lastSpeed) ? (v - this.lastSpeed) / dt : 0;
+      this.accelS += (MathUtils.clamp(a, -40, 40) - this.accelS) * (1 - Math.exp(-dt / 0.3));
+      this.lastSpeed = v;
+    }
+    const on = t.dash === true;
+    if (on && this.dashT < 0) this.dashT = 0;
+    else if (this.dashT >= 0) {
+      this.dashT += dt;
+      if (!on && this.dashT > 2) this.dashT = -1;
+    }
+    let out = surgeFov(this.accelS) + (this.dashT >= 0 ? dashFov(this.dashT, on) : 0);
+    if (this.breathT >= 0) {
+      this.breathT += dt;
+      out += breathFov(this.breathT, this.breathK);
+      if (this.breathT > 1.6) this.breathT = -1;
+    }
+    return out;
+  }
+
+  /** The chase's chatter on hard snow now (0 to 1), for probes. */
+  get chatterNow(): number {
+    return this.chatterS;
+  }
+
+  /** The lens's breath on the FOV now (degrees, the speed's change, a dash and the flow), for probes. */
+  get breathNow(): number {
+    return surgeFov(this.accelS) + (this.dashT >= 0 ? dashFov(this.dashT, true) : 0) + (this.breathT >= 0 ? breathFov(this.breathT, this.breathK) : 0);
   }
 
   /** The cine state as last written (cine.ts), for probes. */
@@ -1068,13 +1144,17 @@ export class ChaseCamera {
     let dof = 0;
     let box = 0;
     let blur = 0;
+    let edge = 1;
     let slow = 1;
     if (this.mode === 'chase') {
       dof = Math.max(this.heroK, this.trackK * TRACK_DOF);
       box = Math.max(this.heroK, this.wideK * this.flightK * WIDE_BOX, this.trackK * TRACK_BOX, this.placeShotK * PLACE_BOX);
       // Speed's blur, held back in the hero frame (a slow frame is a sharp one) and halved under reduced
       // motion, as the streaks are; the whip smears the whole frame for its fifth of a second.
-      blur = Math.max(blurK(t.speed) * (reduced ? 0.5 : 1) * (1 - 0.7 * this.heroK), this.whipBlur);
+      const speedBlur = blurK(t.speed) * (reduced ? 0.5 : 1) * (1 - 0.7 * this.heroK);
+      blur = Math.max(speedBlur, this.whipBlur);
+      // (Round 8: speed's blur keeps to the frame's edge; the whip's is the whole frame's.)
+      edge = this.whipBlur > speedBlur * 0.5 ? 0 : 1;
       if (this.heroK > 0.01) slow = Math.min(1, this.feel.timeRender);
     } else if (this.mode === 'hero') dof = 0.6;
     else if (this.mode === 'finish') dof = 0.45 * smooth01(this.finT / FINISH_SWING_S);
@@ -1082,6 +1162,7 @@ export class ChaseCamera {
     cine.dof += (dof - cine.dof) * (1 - Math.exp(-e * 12));
     cine.letterbox += (box - cine.letterbox) * (1 - Math.exp(-e * 5));
     cine.motionBlur = Math.max(cine.motionBlur + (blur - cine.motionBlur) * k, this.whipBlur);
+    cine.edge += (edge - cine.edge) * (1 - Math.exp(-e * 20));
     cine.focus += (this.camera.position.distanceTo(t.pos) - cine.focus) * (1 - Math.exp(-e * 16));
     cine.slow = slow;
     if (cine.dof < 1e-4) cine.dof = 0;
@@ -1424,6 +1505,7 @@ export class ChaseCamera {
 
   snap(t: CamTarget): void {
     this.initialized = false;
+    this.lastSpeed = NaN;
     this.update(t, 1 / 60);
   }
 
@@ -1749,12 +1831,16 @@ export class ChaseCamera {
     // FOV: breathe with speed, kick on boosts and perfect landings, and open a little in earned flow
     // (the chase only; the kick and the flow are off under reduced motion, the breathing stays).
     this.punch = reduced ? 0 : Math.max(0, this.punch - dt * 2.4);
-    const flowFov = this.mode === 'chase' && !reduced ? 2.5 * MathUtils.clamp(this.feel.flow, 0, 1) : 0;
+    // (Round 8: Spirit Flow is the sim's whole level now; the lens opens with its picture, up to 3.5 degrees at full
+    // flow, or with the director's earned flow where that is more.)
+    const flowFov = this.mode === 'chase' && !reduced ? Math.max(2.5 * MathUtils.clamp(this.feel.flow, 0, 1), 3.5 * MathUtils.clamp(t.flow ?? 0, 0, 1)) : 0;
+    // Round 8 (speed): the lens breathes with the speed's change, a dash and the flow's levels (speedBreath).
+    const breath = this.speedBreath(t, dt, reduced);
     // The breathing is mostly on fastK, so 15 m/s sits at the calm 62 degrees, 28 m/s has opened the lens
     // out and it goes on opening to the cap (speedfeel.ts chaseFov).
     // (The title crane widens a little for its establishing shot.)
     const chaseWide = this.mode === 'chase' && this.aspect >= 1;
-    let baseFov = chaseFov(t.speed) + this.placeFov() + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + (chaseWide ? this.airK * 4 + vista * VISTA_FOV + wideM * WIDE_FOV - trackM * TRACK_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
+    let baseFov = chaseFov(t.speed) + this.placeFov() + t.boost * 4 + this.punch * 8 + this.rivalFov + flowFov + breath + (chaseWide ? this.airK * 4 + vista * VISTA_FOV + wideM * WIDE_FOV - trackM * TRACK_FOV : 0) + (this.mode === 'orbit' ? this.craneK * 6 : 0);
     if (chaseWide) baseFov = Math.min(baseFov, CHASE_FOV_MAX);
     if (this.mode === 'chase' && !portrait) baseFov = MathUtils.lerp(baseFov, HERO_FOV, heroM);
     if (this.mode === 'finish') {
@@ -1830,6 +1916,27 @@ export class ChaseCamera {
       const edge = edgeK(t.speed) * this.rumbleK;
       if (edge > 1e-3) this.rollOut = MathUtils.clamp(this.rollOut + (Math.sin(r * 53 + 0.7) * 0.6 + Math.sin(r * 83) * 0.4) * EDGE_ROLL * edge, -ROLL_MAX, ROLL_MAX);
     }
+    // Round 8 (speed): the chatter of hard snow, under the rumble: a fine judder of the lens and its look whose beat
+    // rises with the speed (a washboard's, chatterPitch cycles a metre), strongest on ice, a little on groomed snow and
+    // all but gone in deep powder. On the shake's clock, never in the air, off under reduced motion.
+    const hard = t.hard ?? 0.4;
+    const chatT = this.mode === 'chase' && !reduced && !t.airborne ? chatterK(t.speed, hard) : 0;
+    this.chatterS += (chatT - this.chatterS) * (1 - Math.exp(-dt * 8));
+    if (reduced) this.chatterS = 0;
+    let jPitch = 0;
+    let jYaw = 0;
+    if (this.chatterS > 1e-3) {
+      const hz = Math.min(CHATTER_HZ_MAX, t.speed * chatterPitch(hard));
+      const step = realDt * this.feel.shakeScale * Math.PI * 2;
+      this.chatterPh = (this.chatterPh + step * hz) % 6283.2;
+      this.chatterPh2 = (this.chatterPh2 + step * Math.min(CHATTER_HZ_MAX, hz * 1.618)) % 6283.2;
+      const k = this.chatterS;
+      const a = this.chatterPh;
+      const b = this.chatterPh2;
+      oy += (Math.sin(a) * 0.6 + Math.sin(b + 0.7) * 0.4) * k * CHATTER_Y;
+      jPitch = (Math.sin(a * 0.77 + 2.1) * 0.5 + Math.sin(b * 1.13) * 0.5) * k * CHATTER_PITCH;
+      jYaw = Math.sin(b * 0.61 + 1.3) * k * CHATTER_YAW;
+    }
 
     // The lens: the eased position plus the jolt and the shake in camera-local axes (right is level,
     // up is the world's, back is away from the look point), then held clear of the snow again, so a
@@ -1871,6 +1978,12 @@ export class ChaseCamera {
       const mx = (lens.x + t.pos.x) * 0.5;
       const mz = (lens.z + t.pos.z) * 0.5;
       lens.y = Math.max(lens.y, this.ground(lens.x, lens.z) + 0.2, this.ground(mx, mz) + 0.3);
+    }
+    if (jPitch !== 0 || jYaw !== 0) {
+      // (The chatter's judder of the look: a pitch and a yaw of the line of sight, at the look point's distance.)
+      look.y += jPitch * fl;
+      look.x += rx * jYaw * fl;
+      look.z += rz * jYaw * fl;
     }
     this.camera.position.copy(lens);
     if (this.mode === 'chase') {

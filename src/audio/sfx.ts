@@ -171,6 +171,10 @@ export class Sfx {
   private flowLive: { voices: Voice[]; cut: boolean } | null = null;
   /** The snuff's pfft waiting to land (its token), or null. */
   private snuffDue: object | null = null;
+  /** Round 8 (speed): Spirit Flow's bed while a level is held (its voice, its noise's level and band, the high air's
+   *  level, and the source to stop), and when the last level step sounded. */
+  private flowBed: { v: Voice; g: GainNode; bp: BiquadFilterNode; air: GainNode; src: AudioBufferSourceNode[]; end: number } | null = null;
+  private flowStepAt = -10;
   /** Probe-only: the snuff's delay (s), level (x SNUFF_PFFT's), music duck and lowpass sweep and decay,
    *  to tune it; and the snuff without its pfft (everything else it does), the masker it is read
    *  against. */
@@ -216,6 +220,8 @@ export class Sfx {
     this.goldAt = -10;
     this.flowLive = null;
     this.snuffDue = null;
+    this.stopFlowBed(this.ctx.currentTime);
+    this.flowStepAt = -10;
     this.frame();
   }
 
@@ -233,6 +239,8 @@ export class Sfx {
     for (const b of list) {
       if (b.type === 'crash' || b.type === 'comboLost') this.frameCrash = true;
       else if (b.type === 'bump' || (b.type === 'bank' && b.bump)) this.frameBump = true;
+      // (Spirit Flow's bed ends with the run: the line crossed, or a crash.)
+      if (b.type === 'finish' || b.type === 'crash') this.stopFlowBed(this.ctx.currentTime);
     }
   }
 
@@ -324,6 +332,9 @@ export class Sfx {
         break;
       case 'revive':
         this.revive(t);
+        break;
+      case 'flow':
+        this.flowLevel(e.level, e.from, t);
         break;
     }
     if (this.music) this.duckFor(e, this.music, t);
@@ -1051,6 +1062,76 @@ export class Sfx {
       const f = this.chordNote(i);
       this.at(v, tb + j * gap, (tn) => fmBell(v, tn, f, 0.05, 1.2, 3.5, 1.1));
     });
+  }
+
+  /** Round 8 (speed): Spirit Flow's sound, a rising bed and never music. While a level is held a bed of air sounds
+   *  under the run, thicker and brighter a step for each level (pink noise in a band that climbs from about 450 Hz at
+   *  level 1 to 2 kHz at 6, with a high hiss of air over it from level 4). A level gained is a breath in (a rising
+   *  sweep, longer and higher the higher the level); a level lost is a gutter (a falling sweep and a soft pfft). Several
+   *  levels in one tick are one step. */
+  private flowLevel(level: number, from: number, t: number): void {
+    this.flowBedTo(level, t);
+    if (t - this.flowStepAt < 0.12) return;
+    this.flowStepAt = t;
+    const v = this.voice(t, 0.3, 0, 1, PRIO.low);
+    if (level > from) {
+      const L = Math.max(1, level);
+      whoosh(v, t, 0.45 + 0.06 * L, 260 + 90 * L, 2000 + 700 * L, 0.05 + 0.012 * L, 0.9, v.bank.pink);
+      // (The top of flow breathes a high air over it.)
+      if (L >= 5) whoosh(v, t + 0.05, 0.7, 4200, 9000, 0.02 + 0.01 * (L - 5), 1.4);
+    } else {
+      whoosh(v, t, 0.6, 1700, 240, 0.055, 0.9, v.bank.pink);
+      puff(v, t + 0.04, 0.035, 1400, 180, 0.16);
+    }
+  }
+
+  /** The bed toward a level (0 lets it go). */
+  private flowBedTo(level: number, t: number): void {
+    const bed = this.flowBed && !this.flowBed.v.dead && t < this.flowBed.end - 2 ? this.flowBed : null;
+    if (level <= 0) {
+      this.stopFlowBed(t);
+      return;
+    }
+    const sr = this.ctx.sampleRate;
+    const f = 340 * Math.pow(1.33, level);
+    const amp = (0.012 + 0.006 * level) * bandComp(f, 0.8, sr);
+    const air = level >= 4 ? (0.004 + 0.003 * (level - 4)) * bandComp(7000, 1.3, sr) : 0;
+    if (bed) {
+      bed.g.gain.setTargetAtTime(amp, t, 0.35);
+      bed.bp.frequency.setTargetAtTime(f, t, 0.4);
+      bed.air.gain.setTargetAtTime(air, t, 0.5);
+      return;
+    }
+    this.stopFlowBed(t);
+    const v = this.voice(t, 0.2, 0, 1, PRIO.low);
+    const end = t + 120;
+    const g = v.gain(0, v.out);
+    g.gain.setValueAtTime(0, t);
+    g.gain.setTargetAtTime(amp, t, 0.35);
+    const bp = v.filter('bandpass', f, 0.8, g);
+    const ag = v.gain(0, v.out);
+    ag.gain.setValueAtTime(0, t);
+    ag.gain.setTargetAtTime(air, t, 0.5);
+    const hp = v.filter('bandpass', 7000, 1.3, ag);
+    const src = [v.buffer(v.bank.pink, t, end, bp), v.buffer(v.bank.white, t, end, hp)];
+    this.flowBed = { v, g, bp, air: ag, src, end };
+  }
+
+  /** The bed lets go over about a second. */
+  private stopFlowBed(t: number): void {
+    const bed = this.flowBed;
+    this.flowBed = null;
+    if (!bed || bed.v.dead) return;
+    bed.g.gain.setTargetAtTime(0, t, 0.25);
+    bed.air.gain.setTargetAtTime(0, t, 0.2);
+    for (const s of bed.src) {
+      try {
+        s.stop(t + 1.6);
+      } catch {
+        // (Already stopped.)
+      }
+    }
+    bed.v.end = Math.min(bed.v.end, t + 1.6);
   }
 
   /** Solid again: the shimmer folds back down. */

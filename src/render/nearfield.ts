@@ -138,6 +138,7 @@ export class NearField {
         varying float vRatio;
         varying float vFog;
         varying float vBack;
+        varying float vSoft;
         void main() {
           vKind = aAttr.x;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
@@ -160,27 +161,38 @@ export class NearField {
           }
           float px720 = uScale / 720.0;
           float size = aAttr.y * uScale / depth;
+          // Round 8 (speed): a flake is a crystal in the air with a place in depth, not a scratch on the
+          // lens. Within a few metres it is out of focus: a soft, faint disc a little larger than its
+          // crisp size (the lens's depth of field), which is what puts it in front of the world.
+          vSoft = vKind < 0.5 ? 1.0 - smoothstep(1.8, 4.5, depth) : 0.0;
           // Flurries and grit stay crisp specks; spindrift and gusts are soft wisps.
-          size = clamp(size, (vKind < 0.5 ? 2.2 : 1.6) * px720, uScale * (vKind > 0.5 && vKind < 2.5 ? 0.05 : 0.012));
+          size = clamp(size * (1.0 + 0.6 * vSoft), (vKind < 0.5 ? 2.2 : 1.6) * px720, uScale * (vKind > 0.5 && vKind < 2.5 ? 0.05 : mix(0.012, 0.026, vSoft)));
+          a *= 1.0 - 0.55 * vSoft;
           // Stretch along the motion relative to the lens over a short virtual shutter: the flakes
-          // the chase camera rushes past streak out of the frame, wisps smear along the wind.
+          // the chase camera rushes past smear a little along their path, wisps along the wind.
           vec4 c0 = projectionMatrix * mv;
           // Spindrift is a soft wisp hung in the wind: it smears along its own drift only (stretched by
           // the lens's motion, wisps high on the banks streaked across the sky like meteors).
           bool wisp = vKind > 0.5 && vKind < 1.5;
-          vec4 c1 = projectionMatrix * modelViewMatrix * vec4(position + (wisp ? aVel * 0.22 : (aVel - uCamVel) * (vKind < 0.5 ? 0.045 : 0.032)), 1.0);
+          // (Round 8: the shutter was 0.045 s and a flake's smear ran to 150 px at the cap: the white
+          // diagonal scratches over every mountain's lower half that carried the speed on the lens. A
+          // sixtieth of a second and a few flake-lengths at most: the flakes rush past and the world
+          // carries the speed.)
+          vec4 c1 = projectionMatrix * modelViewMatrix * vec4(position + (wisp ? aVel * 0.22 : (aVel - uCamVel) * (vKind < 0.5 ? 0.016 : 0.032)), 1.0);
           vAxis = vec2(1.0, 0.0);
           vRatio = 1.0;
           if (c1.w > 0.1 && c0.w > 0.1) {
             vec2 dpx = (c1.xy / c1.w - c0.xy / c0.w) * vec2(projectionMatrix[1][1] / projectionMatrix[0][0], 1.0) * uScale * 0.5;
             float len = length(dpx);
             if (len > 0.5) vAxis = vec2(dpx.x, -dpx.y) / len;
-            // (A flake's streak goes on growing to the cap: it ran out at about 36 m/s.)
-            float lmax = (vKind < 0.5 ? 84.0 + 66.0 * uFast : vKind > 2.5 ? 26.0 : 70.0) * px720;
-            float l = clamp(size + len, size, max(wisp ? size * 2.4 : lmax, size));
+            // (A flake's smear still grows to the cap, but only to a few of its own lengths.)
+            float lmax = (vKind < 0.5 ? (vKind > 0.1 ? 26.0 : 16.0 + 18.0 * uFast) : vKind > 2.5 ? 26.0 : 70.0) * px720;
+            float l = clamp(size + len, size, max(wisp ? size * 2.4 : min(lmax, size * (vKind < 0.5 ? 5.0 : 9.0)), size));
             vRatio = clamp(size / l, 0.04, 1.0);
             // A streak is a thin smear, thinner than the fleck it smears out.
             if (vKind < 0.5 || vKind > 2.5) vRatio *= mix(1.0, 0.6, smoothstep(1.0, 4.0, l / size));
+            // The light a flake catches is spread along its smear: a long one is a faint one.
+            if (vKind < 0.5) a *= mix(1.0, sqrt(size / l), 0.75);
             size = l;
           }
           // Backlit by a low sun ahead of the lens, powder glows (forward scattering).
@@ -202,11 +214,14 @@ export class NearField {
         varying float vRatio;
         varying float vFog;
         varying float vBack;
+        varying float vSoft;
         void main() {
           vec2 c = gl_PointCoord - 0.5;
           vec2 q = vec2(dot(c, vAxis), dot(c, vec2(-vAxis.y, vAxis.x)) / vRatio) * 2.0;
           float r2 = dot(q, q);
           if (r2 > 1.0) discard;
+          // Out of focus near the lens: a soft disc with no hard rim (r2 squared toward its edge).
+          r2 = mix(r2, sqrt(r2), vSoft);
           vec3 lit = mix(uSnowLit, vec3(1.0, 0.96, 0.9), 0.4) * uSunColor;
           // Sunlit powder keeps only a trace of the sun's hue (particles.ts): never a yellow smear.
           lit = mix(lit, vec3(dot(lit, vec3(0.3, 0.59, 0.11))), 0.5);

@@ -46,7 +46,10 @@ describe('speed curves', () => {
     expect(fastK(28)).toBeLessThan(0.65);
     expect(fastK(TOP_SPEED)).toBeCloseTo(1, 6);
     expect(edgeK(36)).toBeCloseTo(0, 6);
-    expect(streakK(28)).toBeGreaterThan(0.1);
+    // (Round 8: the radial streak is a hair at the frame's edge, no longer the speed itself.)
+    expect(streakK(28)).toBeGreaterThan(0);
+    expect(streakK(30)).toBeLessThan(0.1);
+    expect(streakK(TOP_SPEED)).toBeLessThanOrEqual(0.6);
     expect(rumbleK(28)).toBeGreaterThan(0.15);
   });
 
@@ -110,7 +113,7 @@ describe('speed posts', () => {
     expect(p).not.toBeNull();
     expect(p!.e).toBeLessThanOrEqual(1.6 + 1e-6);
     // Hard up against the corridor there is no room for one at all.
-    expect(placePost(corridor({ edgeLimit: () => 0.9 }), 500, 1, POST_E_MAX)).toBeNull();
+    expect(placePost(corridor({ edgeLimit: () => 0.8 }), 500, 1, POST_E_MAX)).toBeNull();
   });
 
   it('skips where the ground past the edge falls away', () => {
@@ -126,8 +129,9 @@ describe('speed posts', () => {
   it('spaces each kind for a strobe at speed', () => {
     for (const k of [PostKind.Stake, PostKind.Pole, PostKind.Flag, PostKind.Fence]) {
       const [a, b] = POST_GAP[k];
-      expect(a).toBeGreaterThanOrEqual(10);
-      expect(b).toBeLessThanOrEqual(18);
+      // (Round 8: a strobe a player feels, 4.5 to 12 m apart; at 10 to 18 nothing near the line rushed past.)
+      expect(a).toBeGreaterThanOrEqual(4.5);
+      expect(b).toBeLessThanOrEqual(12);
     }
     const seen = new Set<PostKind>();
     for (const b of BIOMES) {
