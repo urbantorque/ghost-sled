@@ -64,7 +64,9 @@ export interface Composed {
 
 /** The lens's placement for a look at full weight (metres up, back and aside toward `stand`, radians of turn
  *  toward `open`, and the horizon's cap and the rider's row in the frame, as camera.ts reads them). Mutable so a
- *  tuning probe can try values live (`__gs.world.compose`'s module, LOOKS). */
+ *  tuning probe can try values live (`__gs.world.overlooks.compose.looks`). The lens keeps close: rising 2.4 m and
+ *  1.2 m back left the rider a size smaller, and two blind critics preferred the old frame for its bigger hero (ART.md
+ *  15's fourth rule), so a place moves the lens up a metre at most and composes by its turn and its step aside. */
 export interface LookSet {
   up: number;
   back: number;
@@ -77,11 +79,11 @@ export interface LookSet {
   row: number;
 }
 export const LOOKS: Record<Look, LookSet> = {
-  valley: { up: 1.4, back: 0.6, aside: 1.8, yaw: 0.16, horizon: -0.02, row: -0.04 },
-  canyon: { up: -0.35, back: -0.2, aside: 0, yaw: 0, horizon: 0, row: -0.06 },
-  ridge: { up: 0.9, back: 0.4, aside: 1.4, yaw: 0.09, horizon: 0.02, row: -0.03 },
-  terraces: { up: 1.0, back: 0.4, aside: 0, yaw: 0.07, horizon: 0, row: -0.03 },
-  crest: { up: 2.8, back: 1.4, aside: 0, yaw: 0, horizon: -0.08, row: -0.04 },
+  valley: { up: 0.7, back: 0, aside: 1.7, yaw: 0.15, horizon: -0.02, row: -0.04 },
+  canyon: { up: 0.2, back: 0, aside: 0, yaw: 0, horizon: 0.03, row: -0.05 },
+  ridge: { up: 0.5, back: 0, aside: 1.4, yaw: 0.09, horizon: 0.02, row: -0.03 },
+  terraces: { up: 0.5, back: 0, aside: 0, yaw: 0.07, horizon: 0.02, row: -0.03 },
+  crest: { up: 1.2, back: 0.2, aside: 0, yaw: 0, horizon: 0.02, row: -0.04 },
 };
 
 /** A wall: how far past the limit it takes to stand up, and where (past the limit) its back has come down again to
@@ -156,7 +158,9 @@ export function wallProf(t: number, h: number, z: number, side: number): number 
   const s = side > 0 ? 1 : 0;
   const crest = facetNoise(z / 8.5 + s * 31, t / 6, 401 + s);
   const fine = facetNoise(z / 3.3 + s * 13, t / 2.6, 409 + s);
-  return up * (h * (0.62 + 0.55 * crest) + 2.4 * fine);
+  // (Its face in big planes, a shard of a few metres each, so a wall is cut ice or jointed basalt and never one slab.)
+  const shard = facetNoise(z / 5.2 + s * 7, t / 3.4, 417 + s);
+  return up * (h * (0.62 + 0.55 * crest) + 2.4 * fine + 4.5 * (shard - 0.5) * smooth(2, 7, t));
 }
 
 /** How much of a bank's shape holds `t` metres past the limit (a wall's and an up flight's backs give back to the
