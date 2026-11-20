@@ -308,6 +308,7 @@ function gateMaterial(): ShaderMaterial {
       const vec3 CREAM = ${glsl('#F5F3FF')};
       const vec3 GOLDW = ${glsl('#FFE08A')};
       const vec3 EMBER = ${glsl('#4A3436')};
+      const vec3 DEEPGOLD = ${glsl('#D08A1E')};
       vec3 famCol(float f) { return f < 0.5 ? SPEED : (f < 1.5 ? STYLE : SURVIVAL); }
       // The medallion's outline, a signed distance in its own units (about -1 inside to 0 on the edge).
       float medal(vec2 q, float f) {
@@ -400,10 +401,12 @@ function gateMaterial(): ShaderMaterial {
             float post = ${(ARCH_HALF * MARKER_SCALE[0]).toFixed(2)};
             float w = max(0.35, 2.5 * vPx);
             float dx = (abs(vQ.x) - post) / w;
-            float beam = exp(-dx * dx) * (1.0 - smoothstep(${(MARKER_BEAM * 0.25).toFixed(1)}, ${MARKER_BEAM.toFixed(1)}, vQ.y));
+            float beam = exp(-dx * dx) * (1.0 - smoothstep(${(MARKER_BEAM * 0.6).toFixed(1)}, ${MARKER_BEAM.toFixed(1)}, vQ.y));
             if (beam < 0.01) discard;
-            col = mix(fc, vec3(1.0), 0.35) * (1.0 + 2.0 * flare);
-            a = beam * (uLow > 0.5 ? 0.6 : 0.5) * (1.0 + flare);
+            // (A deep gold edge round a gold-white core, as the sky gates' amber edge, so the column holds against a bright
+            // sky and white snow, where pale light alone vanished.)
+            col = mix(DEEPGOLD, mix(fc, vec3(1.0), 0.35), smoothstep(0.35, 0.05, dx * dx)) * (1.0 + 2.0 * flare);
+            a = beam * 0.8 * (1.0 + flare);
             col = mix(col, mix(vTint, vec3(1.0), 0.4) * 1.6, flare);
             a *= alpha * (1.0 - burst * burst);
             col = mix(col, uFog, fogK * 0.6);
