@@ -143,6 +143,9 @@ const TOWN_LIFE = 4;
 const TOWN_BEAT = 0.6;
 const LANTERN = new Color('#FFD34D');
 const TOWN_GLOW = new Color('#FFE29A');
+/** A lamp's willow: the lantern's marigold opening to white-gold (fireworks.ts's own pair colours). */
+const TOWN_A = FW_PAIRS[1][0];
+const TOWN_B = FW_PAIRS[0][1];
 
 /** How far ahead of a lip the rider loads for it, in seconds at its speed. */
 const LOAD_AHEAD = 0.55;
@@ -471,10 +474,10 @@ export class Moments {
     if (scale.town) {
       const c = this.world.course;
       for (let i = 0; i < TOWN_N; i++) {
-        // (Down the square and the town ahead, 40 to 140 m on, where the lens looks as the rider coasts in, both
+        // (Down the square ahead, 20 to 85 m on, where the lens looks as the rider coasts in, both
         // sides just inside the barriers over the run's own snow: placed by the rider they stood beside the lens,
         // out of the frame, and inside the stands cut into the banks they were hidden.)
-        const z = s.z + 40 + i * 14;
+        const z = s.z + 20 + i * 9;
         const side = i % 2 === 0 ? -1 : 1;
         const cx = c.centerX(z);
         const x = cx + side * Math.max(3, c.halfWidth(z) - 1.2);
@@ -518,6 +521,14 @@ export class Moments {
         l.t = 0;
         p.sparkle(this.a.set(l.x, l.y, l.z), TOWN_GLOW, 14, 1.6, 0.8, 0.24, null, 0.4);
         p.lamp(l.x, l.y, l.z, TOWN_GLOW, 2.1, TOWN_LIFE + 2.5);
+        // Each lamp sends up a little willow of its own light, low over its side of the square, so the lighting runs
+        // down the town in the sky as well as on the snow (a mote a hundred metres off is a few pixels: a lamp's
+        // light alone was lost by day).
+        const c = this.world.course;
+        const cx = c.centerX(-l.z);
+        const g = c.ground(cx, -l.z);
+        // (Every other lamp: one each flooded the square with their light and the frame went to a gold floor.)
+        if (this.town.indexOf(l) % 2 === 0) this.world.fireworks.shell(this.a.set(l.x, g + 1, l.z), this.b.set(cx + (l.x - cx) * 1.15, g + 13 + ((l.at * 7) % 4), l.z), 0.42, TOWN_A, TOWN_B, 'willow');
         // (Reduced motion keeps the lamps' light and lets no lantern drift away.)
         if (!fx.reduced) p.skyLanterns(l.x, l.y - 1, l.z, 2, 3, LANTERN);
       }
@@ -526,7 +537,7 @@ export class Moments {
       // shells keep their light slots: lights.ts); its orb holds the lamp lit after.
       if (l.t > TOWN_BEAT) continue;
       const k = l.t < 0.12 ? l.t / 0.12 : 1 - (l.t - 0.12) / (TOWN_BEAT - 0.12);
-      pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 15, 1.9 * k);
+      pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 12, 0.8 * k);
     }
     if (this.lanternsLeft > 0 && now > 0.3 && !fx.reduced) {
       this.lanternAcc += dt * 28;
