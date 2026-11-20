@@ -3514,3 +3514,54 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
     - *For a person:* whether the bar's ticks, a page turning and the one button feel like a reason to go again; whether
       the form contract reads as a goal or as homework; whether the flame feels kind or nagging; whether the opener
       reads as "the rider who set off first".
+
+372. **The look's first wave: how it was judged, and what landed** (`notes/r8-{snow,compose,play,screens}.md`; frames,
+    pairs and keys under `shots/r8/<lane>/`).
+    - *Judging on stills that hold the run still.* The fixed frames come from a live pilot's run, so two builds' frames
+      at one metre differed in where the rider was, which ghost was in view and what the HUD said, and the snow lane's
+      first critics judged the run, not the snow. `scripts/playtest/stills.js` and `stills.sh` replay a pool rider as the
+      player (`?demo=N`) on a virtual clock from a fresh save, in exact 1/60 s steps from the line, the DOM HUD hidden,
+      and shoot each frame on the first tick past its metre: two shots of one tick on one build differ by a hair of the
+      camera's lean and a ghost's tag (its replay runs in a worker on real time). Blind pairs (`blind-pairs.mjs`: the
+      new frame on a seeded side, the key kept from the critic) and a fresh critic told nothing judge every look item.
+      The before stills are `shots/r8/before-stills/` (the integrated build; each lane re-shoots its own before from the
+      round-8 commit it started on, so a pair differs only by its work).
+    - *V1, snow: built, short of its bar, merged in part.* Three surfaces from the course (groomed lanes smoother and
+      whiter in made places and on landings, powder in wild places and on the banks, the sim's ice), glints that flash
+      only when a crystal facet mirrors the light to the eye, ruts that know the surface (a frost scratch on ice, a
+      shallower cut when groomed), a perfect landing that throws a ring and a veil of powder (54 billows against a
+      fall's 39), Ember's spray as snow, ghosts' hanging powder and spindrift off the crests (Medium and above). On live
+      frames three critics picked it 13 of 30; on stills High 0 then 4 of 10, Low 6, the phone 3. What failed: the
+      wider powder trench and corduroy down the fall line read as speed lines, corduroy across it as scanlines, and the
+      painted powder pillows as smudges and camouflage (worst on a tall phone frame). Those are held off by three named
+      constants at the top of the snow's GLSL, and the rest was judged level (High 6 of 10; the phone 2 of 10, with
+      most picks turning on which ghost sat ahead) and merged. The bar (9 of 10, the snow named unprompted) is not met;
+      a second attempt starts from the lane's "What a second attempt should try" (relief from geometry before paint,
+      nothing long down the fall line or regular across it, a groomed lane told by value, the phone judged on its own
+      frames, ghosts hidden for a snow-only pass, the moving snow judged in motion).
+    - *V3, break the trench: partly met.* The sim's own bank (9.5 m within 10 m of the edge) sets the frame from a lens
+      1.5 to 3 m over the snow, so reshaping the drawn banks changed the skyline, not the layout: critics called the
+      first pass "one layout, five skins" (4, 4 and 5 of 10 on stills), and a greyscale matching test passed on the
+      before set too, so it proved nothing. What shipped: each opening composed past the limit (Pinecrest's fall to the
+      valley, Frostfang's ice arch with walls only at the overlook's mouth, Ember's ridge over the lava, Sakura's
+      terraces and torii, Lanternfall's crest over the cloud), and for its first seconds a low lens close beside the
+      rider with the place past its shoulder (`shots.ts` place shots; high lenses lost every pair on rider size, stage
+      starts' shots were cut where the charm gate's beam split the frame, the letterbox read as a smaller rider). The
+      last critic: 5 of 10, the new frame at every opening where the shot played, and "five places" where the before
+      reads as one trough. Readability at the openings no worse (Pinecrest's road from 24 to 60 m at 30 m/s). The low
+      bank that would truly break the trench is a sim request for a later round (`notes/r8-compose.md` has the sections
+      and sides).
+    - *The batch's presentation (play).* Charm gates of light in three values, the families told by shape and colour
+      (pointed azure speed, round orchid style, square leaf survival; the gates' own colours, never on the rider, a ghost
+      or a hazard), a glyph legible from about 120 m, each offer's gist named as a gate comes up and the take saying what
+      the charm does; a pose, a name and a sound for every trick, a deep grab's warning ring round the sled's shadow; a
+      showdown's marker of light columns, the lens leaning to the rival, the pill held through the race and its result,
+      pops held until it is decided; the first run's stomp flash on the sim's wider window. With a gate in reach a frame
+      costs 22 GL calls and one draw on Low and High. Two critics; still weak: Fireside and Comet Tail's poses.
+    - *G5 and V8 (screens).* Results as a directed five seconds over the live scene (the moment, the nearest rider
+      named, Rider Rank's bar stopping short of the next page, what opened turned over card by card, one button chosen
+      for the run with its whole label), everything else one level down in Details; the title's flame, Rider Rank card,
+      album count and one line of news; the Almanac and the Spirit Album; the Lantern Row in the garage; the phone's
+      hints moved out from under the thumbs (27 HUD scenarios, no fault). Restart to riding from 909 to about 550 ms.
+      Critics: 5 then 7 of 10, every results pair to the new screen in the second. Photo mode and album frames from the
+      reel were not built.
