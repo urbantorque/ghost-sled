@@ -151,9 +151,10 @@ export function trickPose(t: TrickIn, o: TrickPose = emptyTrickPose()): TrickPos
   if (m === TRICK.fireside) {
     o.name = 'fireside';
     o.k = 1;
-    // Leaning back at ease in the seat, hands behind the head, elbows wide, chin up: held and relaxed, the sled
-    // level under it. (Laid flat it read as a wipeout from the chase lens.)
-    o.pitch = 0.5;
+    // Sitting back at ease in the seat, hands behind the head, elbows wide, chin up: held and relaxed, the sled
+    // level under it. (From the chase lens any real lean back brings the head toward the lens: laid flat, and even
+    // half back, it read as a wipeout.)
+    o.pitch = 0.18;
     setArm(o, 0, -0.2, 2.35, 2.05);
     setArm(o, 1, -0.2, 2.35, 2.05);
     o.nod = -0.12;
@@ -164,10 +165,10 @@ export function trickPose(t: TrickIn, o: TrickPose = emptyTrickPose()): TrickPos
     o.k = 1;
     // Stretched back off the seat over the sled's tail, one hand firm on the runner and the other arm out wide for
     // balance, head up to the way ahead: a streamed, held line, the sled under it. (Streamed out flat behind and off it,
-    // it read as a fall.)
-    o.back = 0.28;
-    o.lift = 0.1;
-    o.pitch = 0.78;
+    // or even half back, it read as a fall from the chase lens.)
+    o.back = 0.14;
+    o.lift = 0.06;
+    o.pitch = 0.3;
     setArm(o, 0, 2.2, 0.25, 0.15);
     setArm(o, 1, 0.5, 1.6, 0.15, 0.9);
     o.nod = 0.05;
