@@ -291,7 +291,8 @@ async (page) => {
     if (st.z < 0) break;
     const name = `m${c.m}-z${String(z).padStart(4, '0')}.png`;
     if (c.shoot) await page.screenshot({ path: `${c.out}${name}` });
-    const r = await page.evaluate((top) => window.__shards(top), c.top || 4);
+    // (`costOnly`: the frame's draws and triangles without the triangle measure, which takes seconds a still.)
+    const r = c.costOnly ? {} : await page.evaluate((top) => window.__shards(top), c.top || 4);
     // The frame's cost, summed over its passes (as frames.js reports it), on the next tick.
     r.cost = await page.evaluate(() => {
       const rr = window.__gs.world.renderer;
