@@ -82,6 +82,18 @@ async (page) => {
       q.heading = Math.atan2(q.vx, q.vz);
       q.velHeading = q.heading;
       q.invuln = 10;
+      // Follow: held beside a rider of the field (its pose at this tick), dz metres ahead and dx across.
+      const fo = pilot.follow;
+      if (fo) {
+        const app = window.__gs;
+        const p = window.__fpose || (window.__fpose = {});
+        const tr = app.ghosts.tracks[fo.i];
+        if (tr && app.ghosts.pose(tr, rr.sim.tick, p) && !p.done) {
+          q.z = p.z + fo.dz;
+          q.x = p.x + fo.dx;
+          q.y = cc.ground(q.x, q.z);
+        }
+      }
     };
     window.__step = (n) => {
       for (let i = 0; i < n; i++) {
@@ -150,7 +162,7 @@ async (page) => {
           return cc.safeX(z) * (1 - s) + lx * s;
         };
       }, { gz: g.z, lane });
-      for (const [d, tag] of [[300, 'far300'], [200, 'far200'], [150, 'mid150'], [90, 'near090'], [45, 'near045'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
+      for (const [d, tag] of [[300, 'far300'], [262, 'line262'], [200, 'far200'], [150, 'mid150'], [120, 'mid120'], [90, 'near090'], [40, 'near040'], [12, 'close012'], [-3, 'take'], [-12, 'after']]) {
         let st = await step(1);
         let guard = 0;
         while (st.z >= 0 && st.z < g.z - d && guard++ < 2000) st = await step(1);
@@ -304,6 +316,9 @@ async (page) => {
           sn.airPitch = 0;
           sn.vy = 0;
         }
+        // (The sim's own sled is lifted too: the frame's snapshot and the contact shadow read it, so height shows.)
+        s.y = r.sim.course.ground(s.x, s.z) + lift;
+        s.vy = 0;
         s.grounded = false;
         s.move = p.move || 0;
         s.grab = p.grab || 0;
@@ -345,7 +360,97 @@ async (page) => {
       return { n: tracks.length, ready: tracks.filter((t) => t.ready).length, names: tracks.map((t) => `${t.entry.name}:${t.entry.kind}`) };
     });
     shots.push({ name: 'field', why: JSON.stringify(info) });
-    if (info.n === 0) {
+    let live = false;
+    if (info.n > 0 && c.live !== false) {
+      // Live: held level with each rider in turn until the rival rules start a showdown on their own (2 s level,
+      // only with an eligible rider), then ridden out fast to win it; the next one ridden slow to lose it; then a
+      // wisp stolen by passing a rider close across. Nothing here pushes a rival event: rivals.ts decides.
+      const seen = () => page.evaluate(() => (window.__gs.director.log || []).filter((e) => /showdown|steal|Showdown|Wisp/i.test(`${e.type} ${e.label || ''}`)).map((e) => `${e.type} ${e.label || ''}`));
+      const startOne = async (from) => {
+        for (let i = from; i < info.n; i++) {
+          const before = (await seen()).length;
+          await page.evaluate((k) => {
+            window.__pilot.follow = { i: k, dz: 0.5, dx: 2.5 };
+          }, i);
+          for (let t = 0; t < 10; t++) {
+            await step(16);
+            const now = await seen();
+            if (now.length > before && now.slice(before).some((x) => /start|Showdown:/.test(x))) return i;
+          }
+        }
+        return -1;
+      };
+      const ride = async (v, secs, name) => {
+        await page.evaluate((sp) => {
+          window.__pilot.follow = null;
+          window.__pilot.pin = sp;
+        }, v);
+        let st = await step(1);
+        const mz = await page.evaluate(() => window.__gs.world.charmGates.marker?.z ?? NaN);
+        if (Number.isFinite(mz)) {
+          while (st.z < mz - 150) st = await step(2);
+          await shoot(`${prefix}${name}-150`, 'live: marker 150 m ahead');
+          while (st.z < mz - 40) st = await step(2);
+          await shoot(`${prefix}${name}-40`, 'live: marker 40 m ahead');
+        }
+        for (let k = 0; k < secs * 60; k += 6) {
+          st = await step(6);
+          const l = (await seen()).slice(-1)[0] || '';
+          if (/won|took|lost/i.test(l)) break;
+        }
+        await step(3);
+        await shoot(`${prefix}${name}-end`, 'live: decided');
+        await step(20);
+        await shoot(`${prefix}${name}-end2`, 'live: decided, 0.35 s on');
+      };
+      await page.evaluate(() => window.__pilot.pin = 34);
+      const a = await startOne(0);
+      shots.push({ name: 'live-a', why: `rider ${a}` });
+      if (a >= 0) {
+        live = true;
+        await step(2);
+        await shoot(`${prefix}live-start`, 'live: showdown starts');
+        await step(70);
+        await shoot(`${prefix}live-lean`, 'live: 1.2 s in, the lens leaning toward the rival');
+        await ride(52, 14, 'live-win');
+        await step(620);
+        const b = await startOne(0);
+        shots.push({ name: 'live-b', why: `rider ${b}` });
+        if (b >= 0) {
+          await step(2);
+          await shoot(`${prefix}live-start2`, 'live: second showdown starts');
+          await ride(18, 20, 'live-lose');
+        }
+      }
+      // A steal: from behind to ahead of a rider, close across, clean.
+      for (let i = 0; i < info.n; i++) {
+        const before = (await seen()).length;
+        await page.evaluate((k) => {
+          window.__pilot.pin = 34;
+          window.__pilot.follow = { i: k, dz: -2, dx: 0.3 };
+        }, i);
+        await step(4);
+        for (let d = -2; d <= 2; d += 0.5) {
+          await page.evaluate((dz) => {
+            if (window.__pilot.follow) window.__pilot.follow.dz = dz;
+          }, d);
+          await step(1);
+        }
+        await step(3);
+        const now = await seen();
+        if (now.length > before) {
+          await shoot(`${prefix}live-steal`, `live: a wisp stolen from rider ${i}`);
+          await step(12);
+          await shoot(`${prefix}live-steal2`, 'live: the steal, 0.2 s on');
+          break;
+        }
+      }
+      await page.evaluate(() => {
+        window.__pilot.follow = null;
+      });
+      shots.push({ name: 'live-log', why: JSON.stringify(await seen()) });
+    }
+    if (info.n === 0 || (!live && c.live === false)) {
       // No field (the bundled pools are a sim version behind until they are regenerated): the marker is staged
       // through the world's own call, so its look can still be judged; the beats are covered by director.test.ts.
       await page.evaluate(() => {
@@ -372,7 +477,7 @@ async (page) => {
       await step(8);
       await shoot(`${prefix}sd-won`, 'marker bursts for the rider (staged)');
     }
-    if (info.n > 0) {
+    if (info.n > 0 && c.live === false) {
       await page.evaluate(() => {
         const r = window.__gs.run;
         const z = r.sim.s.z;

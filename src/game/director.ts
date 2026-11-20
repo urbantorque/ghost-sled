@@ -2,7 +2,8 @@ import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { RivalEvent } from '../sim/rivals';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
-import { CHARMS, SYNERGIES } from '../sim/charms';
+import { SYNERGIES } from '../sim/charms';
+import { charmTakeLine, offersGistLine } from './charmcopy';
 import { trickCall } from '../sim/tricks';
 import { FIRST_RUN_STOMP, FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
@@ -1179,7 +1180,7 @@ export class Director {
         case 'charm': {
           // Round 8: a charm taken by riding through its arch. The arch answers with light; the line names it.
           const g = sim.charmGates?.[e.gate];
-          if (e.id >= 0) this.push({ type: 'charmGate', tick: p.tick, phase: 'take', gate: e.gate, offers: g ? g.offers : [], id: e.id, lane: e.lane, say: { label: CHARMS[e.id]?.name ?? '', points: 0, tone: 'big' } }, sim);
+          if (e.id >= 0) this.push({ type: 'charmGate', tick: p.tick, phase: 'take', gate: e.gate, offers: g ? g.offers : [], id: e.id, lane: e.lane, say: { label: charmTakeLine(e.id), points: 0, tone: 'big' } }, sim);
           break;
         }
         case 'synergy': {
@@ -1322,8 +1323,9 @@ export class Director {
       this.heldNext = sid;
       this.heldSince = now;
     }
-    // (Round 8: a showdown holds the pill on its rival as a duel does, so who leads the race to the marker is its gap.)
-    const rv = rivalPick(steady, this.gapOf(duelId ?? this.showdownId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
+    // (Round 8: a showdown holds the pill and its ring on its rival, ahead of any duel, so the player sees who they
+    // race and who leads the race to the marker is its gap.)
+    const rv = rivalPick(steady, this.gapOf(this.showdownId ?? duelId, f), this.gapOf(callUp, f), this.gapOf(this.rivalHold ? this.rivalHold.id : null, f));
     // One number for the pill and the edge chip, held on this clock (C12); the race maths keep raw.
     if (rv) out.rival = { id: rv.id, gap: this.gapRead.show(rv.id, rv.gap, now), raw: rv.gap };
     else {
@@ -1336,7 +1338,7 @@ export class Director {
     out.hud.stake = stake;
     out.hud.fuse = fuseLevel(stake, timerFrac, draining);
     out.hud.pace = this.paceDone && c.active && run !== null && run.bestComboAtStart >= 1000 && stake > run.bestComboAtStart;
-    out.hud.duel = duelId !== null;
+    out.hud.duel = duelId !== null && this.showdownId === null;
     out.hud.hold = duelId === null && this.rivalHold !== null && rv !== null && rv.id === this.rivalHold.id;
     out.hud.bestIn = null;
     if (run && line >= 150 && this.newGroundAt < 0 && !s.crashed) {
@@ -1813,6 +1815,12 @@ export class Director {
       this.push({ type: 'raceNews', tick: sim.tick, ghost: { id: -1, name: '', kind: 'pool', dx: 0 }, news: 'unlockTease', text: `1 more ghost opens ${tease.name}`, pan: 0, gain: 0 }, sim);
       this.lastNewsAt = now;
     }
+    // (Round 8: a showdown holds the top of the HUD until it is decided: pops wait, their clocks stopped, so the
+    // rival pill and its gap are never covered on the run to the marker. ART.md 10: one banner at a time.)
+    if (this.showdownId !== null) {
+      for (const q of this.pops) q.since += dt;
+      return;
+    }
     // Only the head of the queue (a waiting unlock, else the oldest mission) runs its give-up clock;
     // anything more than POP_LATE_S after its moment goes regardless.
     const head = this.pops.findIndex((q) => q.beat.type === 'unlockPop');
@@ -1942,10 +1950,7 @@ export class Director {
         if (g.z - s.z > GATE_CALL_M) break;
         this.gatesCalled.add(g.index);
         if (g.z - s.z < GATE_CALL_LATE_M) break;
-        const label = g.offers
-          .filter((o) => o >= 0)
-          .map((o) => CHARMS[o].name)
-          .join('  ·  ');
+        const label = offersGistLine(g.offers);
         this.push({ type: 'charmGate', tick: sim.tick, phase: 'near', gate: g.index, offers: g.offers, id: -1, lane: -1, say: { label, points: 0, tone: 'normal' } }, sim);
         break;
       }
@@ -1966,8 +1971,10 @@ export class Director {
         this.push({ type: 'showdown', tick, phase: 'start', ghost, markerZ: e.markerZ, say: { label: `Showdown: ${who}`, points: 0, tone: 'big' } }, sim);
       } else {
         this.showdownId = null;
+        // (The result owns the rival pill for a moment, as a duel's does: ART.md 10.)
+        this.rivalHold = { id: t.entry.id, until: this.clock + RIVAL_HOLD_S };
         if (e.phase === 'won') this.push({ type: 'showdown', tick, phase: 'won', ghost, markerZ: e.markerZ }, sim);
-        else this.push({ type: 'showdown', tick, phase: 'lost', ghost, markerZ: e.markerZ, say: { label: `${who} took the showdown`, points: 0, tone: 'lost' } }, sim);
+        else this.push({ type: 'showdown', tick, phase: 'lost', ghost, markerZ: e.markerZ, say: { label: `${who} took the showdown`, points: 0, tone: 'normal' } }, sim);
       }
     }
   }

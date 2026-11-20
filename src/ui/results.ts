@@ -7,9 +7,11 @@ import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } 
 import { fmt, kindCls, metres, NBSP, ordinal, seconds } from './fmt';
 import { icon, type IconName } from './icons';
 import { bump, reduced } from './motion';
+import { Story } from './sequence';
 import { medalDots, missionList, progText } from './title';
 import './meta.css';
 import './screens.css';
+import './story.css';
 
 // Results: slides in fast, then lands one beat at a time (the score counts up, then your place, the
 // race, and the missions last), so the card reads as a story rather than a form. The head is the
@@ -212,6 +214,12 @@ export class Results {
   private stagesOpen = false;
   /** This card's tip for next time, picked once per results (an update keeps it). */
   private tipIx = 0;
+  /** Round 8: the directed sequence (sequence.ts) and which level is up: the sequence, or Details (the card). */
+  private story: Story | null = null;
+  private view: 'story' | 'details' = 'story';
+  /** The offers that ride on the sequence's foot or in the card's, whichever level is up (Revive, Double Gifts). */
+  private offers: HTMLElement[] = [];
+  private offerHome: { story: HTMLElement | null; card: HTMLElement | null } = { story: null, card: null };
   inputMode: InputMode = 'keyboard';
 
   constructor(
@@ -236,6 +244,59 @@ export class Results {
       const t = e.target;
       if (this.layer.open && t instanceof HTMLElement && t.classList.contains('gs-mis-complete')) this.stampStarted(t);
     });
+    // Round 8: a tap anywhere but on a control, or any key, lands the sequence whole (the key still does what it
+    // does: Space is the game's Run Again once the results have been up 700 ms). Escape in Details goes back.
+    this.el.addEventListener('pointerdown', (e) => {
+      if (!this.layer.open || !this.story?.playing) return;
+      if (e.target instanceof Element && e.target.closest('button')) return;
+      this.skip();
+    });
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!this.layer.open) return;
+        if (this.story?.playing) this.skip();
+        else if (e.code === 'Escape' && this.view === 'details') {
+          e.stopPropagation();
+          this.setView('story');
+        }
+      },
+      { capture: true },
+    );
+  }
+
+  /** The sequence lands at its end at once (a tap or a key), and focus goes to the one button. */
+  private skip(): void {
+    this.story?.finish();
+    this.focusDefault();
+  }
+
+  /**
+   * Which level is up: the sequence over the scene, or Details (the card with everything). The offers move with it,
+   * so a Revive is always one press away and never twice on screen. Opening Details plays the card's own entrance.
+   */
+  private setView(v: 'story' | 'details'): void {
+    if (this.view === v) return;
+    this.view = v;
+    this.story?.finish();
+    this.el.dataset.view = v;
+    this.placeOffers();
+    if (v === 'details') {
+      this.el.classList.remove('is-static');
+      const card = this.el.querySelector<HTMLElement>('.gs-res-card');
+      card?.focus({ preventScroll: true });
+      if (this.inputMode === 'keyboard') this.el.querySelector<HTMLElement>('[data-fk="again"]')?.focus({ preventScroll: true });
+    } else {
+      this.el.querySelector<HTMLElement>(this.inputMode === 'keyboard' ? '[data-fk="details"]' : '.gs-story')?.focus({ preventScroll: true });
+    }
+  }
+
+  private placeOffers(): void {
+    const to = this.view === 'story' ? this.offerHome.story : this.offerHome.card;
+    if (!to) return;
+    // The sequence's foot keeps Home first and Details last; the card's row keeps its offers first.
+    const anchor = this.view === 'story' ? to.querySelector('.gs-sq-details') : to.firstChild;
+    for (const o of this.offers) to.insertBefore(o, anchor);
   }
 
   show(m: ResultsModel): void {
@@ -249,8 +310,11 @@ export class Results {
     // With no race to show (no ghosts rode), the missions have the room: they open from the start.
     this.misOpen = m.ghosts.length === 0;
     this.tipIx = tipTurn++;
+    this.view = 'story';
+    this.el.dataset.view = 'story';
     this.render(m, true);
     this.layer.show();
+    this.story?.play();
     this.focusDefault();
     if (!reduced()) {
       if (m.finish) this.countUp(m.finish.seconds, clock);
@@ -289,6 +353,7 @@ export class Results {
   }
 
   hide(): void {
+    this.story?.dispose();
     cancelAnimationFrame(this.raf);
     cancelAnimationFrame(this.stampRaf);
     this.stampRaf = 0;
@@ -307,6 +372,13 @@ export class Results {
    * still start inside it, and Run again shows its glow without a focus ring stacked around it.
    */
   private focusDefault(): void {
+    // The sequence: keyboard players land on its one button once it has come forward (the section itself until
+    // then, so no ring shows round a button not yet drawn); pointer players on the section.
+    if (this.view === 'story' && this.story) {
+      const s = this.story;
+      (this.inputMode === 'keyboard' && !s.playing ? s.again : s.el).focus({ preventScroll: true });
+      return;
+    }
     const target = this.inputMode !== 'keyboard' ? this.el.querySelector<HTMLElement>('.gs-res-card') : this.el.querySelector<HTMLElement>('[data-fk="again"]');
     target?.focus({ preventScroll: true });
   }
@@ -360,6 +432,8 @@ export class Results {
       };
       // Just after the card's Done stamp (its CSS delay is MIS_STAMP_MS plus 140 ms per row).
       const t = window.setTimeout(() => {
+        // (Round 8: with the sequence up the card is one level down: the reward lands without a flight.)
+        if (this.view !== 'details') return land();
         const src = cards[i]?.querySelector<HTMLElement>('.gs-mis-reward');
         const body = this.el.querySelector<HTMLElement>('.gs-res-body');
         if (!src || !body || typeof src.animate !== 'function') return land();
@@ -550,6 +624,10 @@ export class Results {
     const stg = race && m.stages ? this.stagesFold(m.stages, m) : null;
     const stacked = window.matchMedia?.('(max-aspect-ratio: 1/1)').matches === true;
     if (stg && !stacked) race?.append(stg);
+    // Round 8: everything the run paid Rider Rank, one level down from the sequence's bar: in the race's column on
+    // wide screens (or the missions' with no race), and under the missions on a phone.
+    const paid = spineDetails(m);
+    if (paid && !stacked) (race ?? mis)?.append(paid);
 
     // Actions. In portrait the "Watch Ad:" prefix is read but not shown (the video glyph carries it),
     // so the offers stay one-line pills.
@@ -557,10 +635,13 @@ export class Results {
     // keeps its slot as a quiet status, so focus stays where it was instead of falling onto Run
     // again, where the next Space would start a run.
     const extra = h('div', 'gs-res-extra');
-    if (m.canRevive) extra.append(this.rewarded('revive', 'video', 'Revive', true, () => this.hd.onRevive()));
-    else if (this.pressed.has('revive')) extra.append(this.spent('revive', 'Revive Used'));
-    if (m.canDouble && !m.doubled) extra.append(this.rewarded('double', 'video', 'Double Gifts', true, () => this.hd.onDouble()));
-    else if (this.pressed.has('double')) extra.append(this.spent('double', m.doubled ? 'Gifts Doubled' : 'No Ad Right Now'));
+    // (Round 8: the two ad offers ride on whichever level is up, the sequence's foot or this row: placeOffers.)
+    this.offers = [];
+    if (m.canRevive) this.offers.push(this.rewarded('revive', 'video', 'Revive', true, () => this.hd.onRevive()));
+    else if (this.pressed.has('revive')) this.offers.push(this.spent('revive', 'Revive Used'));
+    if (m.canDouble && !m.doubled) this.offers.push(this.rewarded('double', 'video', 'Double Gifts', true, () => this.hd.onDouble()));
+    else if (this.pressed.has('double')) this.offers.push(this.spent('double', m.doubled ? 'Gifts Doubled' : 'No Ad Right Now'));
+    extra.append(...this.offers);
     // Challenge a Friend rides with Home: at the far left of that row on wide screens, and a compact
     // glyph button beside Home on phones, so Run again carries the footer on its own. You beat a
     // friend's challenge: answering back is the move, so that same slot holds a filled mint Send It
@@ -594,6 +675,9 @@ export class Results {
       // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
       if ([...name].length >= LONG_NAME) again.classList.add('is-long');
     }
+    // Round 8: the spine's longer labels ("Next Duel: Bram Oakhollow", "Finish the mission") keep their words whole in
+    // Details too: a step smaller, and the keycap gives them its room (Space still works).
+    if (!named && [...label].length > 16) again.classList.add('is-wordy');
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
       again.querySelector('kbd')?.setAttribute('aria-hidden', 'true');
@@ -622,7 +706,7 @@ export class Results {
     // so a clipped card never looks like a layout bug.
     const end = h('div', 'gs-res-end');
     end.setAttribute('aria-hidden', 'true');
-    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, stacked ? stg : null, tip, end);
+    const body = h('div', `gs-res-body${race ? '' : ' no-race'}${unlock ? ' has-ul' : ''}${run ? '' : ' no-run'}`, head, run, race, mis, stacked ? stg : null, stacked ? paid : null, tip, end);
     // Focusable, so keyboard players can reach what sits below the fold (Safari never focuses a
     // scroller on its own). The UI root routes the scroll keys here instead of to the game.
     body.tabIndex = 0;
@@ -647,7 +731,35 @@ export class Results {
     // The strip sits outside the card: over its top edge in portrait (the wreck's band), in the free
     // corner beside it on wide screens. The card itself is laid out as if it were not there.
     this.el.dataset.moment = resultsMoment(m).kind;
-    this.el.replaceChildren(momentEl(m), ...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), card);
+    // Round 8: Details goes back to the sequence from the card's own corner (and with Escape).
+    const toStory = btn(ctx, { cls: 'gs-btn-soft gs-btn-round gs-res-back', icon: 'chevL', aria: 'Back to the summary', sound: 'back', fk: 'res-back', onClick: () => this.setView('story') });
+    card.prepend(toStory);
+    // The sequence over the scene (sequence.ts): built on every render, played only on the first.
+    this.story?.dispose();
+    const story = new Story(m, ctx, this.inputMode, {
+      again: () => this.hd.onRunAgain(),
+      home: () => this.hd.onHome(),
+      details: () => this.setView('details'),
+      ride: (id) => {
+        this.hd.onSelectMountain(id);
+        this.hd.onRunAgain();
+      },
+      beat: (kind, i) => this.hd.onResultsBeat?.(kind, i),
+      paid: () => {
+        for (let i = 0; i < m.missions.length; i++) if (m.missions[i].justCompleted) this.stampShown(i);
+      },
+    }, []);
+    this.story = story;
+    story.el.tabIndex = -1;
+    story.el.setAttribute('role', 'dialog');
+    story.el.setAttribute('aria-modal', 'true');
+    story.el.setAttribute('aria-labelledby', title.id);
+    story.el.setAttribute('aria-describedby', `${scoreSr.id} ${where.id}`);
+    this.offerHome = { story: story.el.querySelector<HTMLElement>('.gs-sq-foot'), card: extra };
+    if (!actions.contains(extra)) actions.prepend(extra);
+    if (!intro || this.view === 'details') story.finish();
+    this.el.replaceChildren(momentEl(m), ...(m.ladder ? [ladderStrip(m.ladder, 'is-band')] : []), story.el, card);
+    this.placeOffers();
     this.watchMore(body, end, scroll, more, moreT, { mis, race, run, tip, head: mis?.querySelector<HTMLElement>('.gs-res-mis-toggle') ?? null });
   }
 
@@ -1119,6 +1231,38 @@ function momentEl(m: ResultsModel): HTMLElement {
     el.append(fact);
   }
   return el;
+}
+
+/**
+ * Round 8: the run's Rider Rank in full, for Details: every tick the bar was paid, then what else the spine settled
+ * (the contracts met, the stickers found, the Cup's league), each a short line. The sequence over the scene shows the
+ * bar and the biggest three; this is the whole account. Null without the spine.
+ */
+function spineDetails(m: ResultsModel): HTMLElement | null {
+  const s = m.spine;
+  if (!s || s.ticks.length === 0) return null;
+  const total = s.ticks.reduce((n, t) => n + t.xp, 0);
+  const list = h('ul', 'gs-res-xp');
+  for (const t of s.ticks) list.append(h('li', 'gs-res-xp-row', h('span', 'gs-res-xp-l', t.label), h('span', 'gs-num', `+${fmt(t.xp)}`)));
+  const notes: string[] = [];
+  if (s.contracts.met.length > 0) notes.push(`Contracts met: ${s.contracts.met.join(', ')}${s.contracts.bonus ? ', and all three today' : ''}.`);
+  if (s.contracts.form) notes.push(`Your form: ${s.contracts.form}.`);
+  if (s.stickers.length > 0) notes.push(`Stickers: ${s.stickers.map((x) => x.name).join(', ')}.`);
+  if (s.league && s.league.place !== null) notes.push(`Cup league: ${ordinal(s.league.place)} in division ${s.league.division}${s.league.was !== null && s.league.was !== s.league.place ? `, was ${ordinal(s.league.was)}` : ''}.`);
+  if (s.flame.emberEarned) notes.push('An ember earned: it keeps your flame through one missed day.');
+  const sec = h(
+    'section',
+    'gs-res-rank',
+    h('h3', 'gs-h2 gs-res-h', 'Rider Rank', h('span', 'gs-res-h-meta', h('span', 'gs-num', `+${fmt(total)}`), ' XP')),
+    list,
+    ...notes.map((n) => {
+      const p = h('p', 'gs-res-rank-note', n);
+      p.setAttribute('translate', 'no');
+      return p;
+    }),
+  );
+  sec.setAttribute('aria-label', 'Rider Rank this run');
+  return sec;
 }
 
 /** The Twelve's news, in the card's one race line: who fell and what that leaves, or how close it was. */

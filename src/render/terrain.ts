@@ -4,6 +4,7 @@ import { HANDOVER_FROM, HANDOVER_TO, MID_ROW, handoverRow, ledgeAt, rampart, roc
 import { addLightSource, pushLocalLight } from './lights';
 import { makeSnowMaterial, shared } from './materials';
 import { LIP, LIP_FROM, lipDrop, type OverlookPlan, type Overlooks } from './overlook';
+import { groomedAt } from './snowsurf';
 
 // Terrain chunks that bend with the corridor: each row of vertices is laid out relative to the
 // centreline at that z, so the playable lane gets dense vertices and the far forest floor is
@@ -80,6 +81,13 @@ export function snowDrift(x: number, z: number, edge: number, out: [number, numb
   return out;
 }
 
+/** Round 8 (the snow lane): one row's groomed weight (snowsurf.ts groomedAt) written to every vertex of it,
+ *  for the snow shader's surfaces (a groomed lane with corduroy, or powder). The shader keeps it to the
+ *  corridor's floor; heights and the corridor's geometry are untouched. */
+function groomRow(out: Float32Array, p: number, cols: number, g: number): void {
+  out.fill(g, p, p + cols);
+}
+
 /** The snow's lift past the treeline on an overlook opened by `w`, from the drifts' own `lift`. */
 function overLip(lift: number, e: number, w: number): number {
   return lift * (1 - w * smooth(LIP - 2, LIP + 8, e)) - w * lipDrop(e);
@@ -139,6 +147,8 @@ class ChunkJob {
   /** Per vertex: the lake (1 on the sheet), the fork's strip, a leap's groomed landing and a tree run's
    *  canopy, each 0..1. */
   readonly paint: Float32Array;
+  /** Per vertex (round 8, the snow lane): how groomed the corridor's lane is at this row (snowsurf.ts). */
+  readonly groom: Float32Array;
   private ramps: Ramp[] = [];
   private drift: [number, number] = [0, 0];
   row = 0;
@@ -161,6 +171,7 @@ class ChunkJob {
     this.snow = new Float32Array(n * 2);
     this.rock = new Float32Array(n * 4);
     this.paint = new Float32Array(n * 4);
+    this.groom = new Float32Array(n);
   }
 
   get done(): boolean {
@@ -232,6 +243,7 @@ class ChunkJob {
       const wallL = cp && cl > 0 && cp.kindAt(z, -1) === 'wall' ? cl : 0;
       const wallR = cp && cr > 0 && cp.kindAt(z, 1) === 'wall' ? cr : 0;
       let p = this.row * cols;
+      groomRow(this.groom, p, cols, groomedAt(c, z));
       for (let col = 0; col < cols; col++) {
         const x = cx + this.offs[col];
         const ed = Math.abs(this.offs[col]) - hw;
@@ -368,6 +380,7 @@ class ChunkJob {
     geo.setAttribute('aSnow', new BufferAttribute(this.snow, 2));
     geo.setAttribute('aRock', new BufferAttribute(this.rock, 4));
     geo.setAttribute('aPaint', new BufferAttribute(this.paint, 4));
+    geo.setAttribute('aGroom', new BufferAttribute(this.groom, 1));
     geo.setIndex(new BufferAttribute(idx, 1));
     geo.computeBoundingSphere();
     geo.computeBoundingBox();
