@@ -83,7 +83,10 @@ threshold under the charm gate, about 1410 to 1600 and 2910 to 3100 m) is a plac
 
 ## The verdict, first
 
-**V3 is not done.** On stills that hold the run still (the main lane's `stills.sh`, round-8 30dd5b3), three fresh critics
+**V3 is not done, after a second pass.** The latest: **6 of 10** blind pairs on stills from the same round-8 commit
+(the bar is 8), and a critic asked "five places or one layout" answered "two layouts (a low trough and a high spine)
+dressed five ways", the after set closer than the before (Frostfang's canyon under its arch, Lanternfall's crest). The
+first pass's record follows. On stills that hold the run still (the main lane's `stills.sh`, round-8 30dd5b3), three fresh critics
 picked the new frame in **4, 4 and 5 of 10** blind pairs (the bar is 8). The greyscale test passes (5 of 5 openings,
 10 of 10 stage starts) but so does the before set (a control critic, 5 of 5 and 10 of 10): the mountains are told
 apart by their skies and landmarks, not by what this lane drew. Asked directly, the critic on the after set said the
@@ -92,6 +95,35 @@ the middle, a rail along both berms, "the places told apart almost entirely by t
 Frostfang's canyon departs from it, and two of three stills critics preferred the old open Frostfang (its lit floor and
 the long shadow a spire throws down it) to the walls. The live-frame critics (8, 5 and 9 of 10, below) were judging
 the run as much as the change, as the main lane found.
+
+**The second pass** (the main lane's decisions after the first report: the Frostfang trim, the bare banks, Pinecrest's
+cut, then the camera, judged on stills shot from the same round-8 commit, f784510, so a pair differs only by this
+lane's work: `before5` from a build of f784510, `after5` from this branch merged with it):
+- With a place shot at every opening and stage start (`pairs-s4`): **3 of 10**. The critic picked the new frame at
+  Pinecrest's opening (ghost pills, the rail leading the eye), Sakura's 3000 m (the plum torii and the terraces) and
+  Frostfang's 1500 m; it chose the old frame where the shot made the rider small ("its rider is tiny in the bottom-right
+  corner", Ember), where the stage starts' high lens put the charm gates' gantry beam and lantern string across the
+  middle of the frame (Pinecrest 3000, Ember 3000, Frostfang 1500 on the other side), where a letterbox shrank the
+  picture, and at Lanternfall's crest ("two blank grey slabs at the ends of the ridge", the cut's ends seen from above).
+- The layout question, on greyscale openings of both builds (`gray-open-5` after, `gray-open-5b` before): neither set
+  reads as five places; both are "two layouts (a low trough and a high spine) dressed five ways", and the after set
+  "comes closer": "its Frostfang is a walled ice canyon with an arch closing the frame, and its Lanternfall, bare and
+  starry over the cloud sea, stands apart from Pinecrest", where in the before set Frostfang sits in the shared trough
+  and Lanternfall reads as Pinecrest's cousin.
+- After that critic: the stage-start shots are off (`PLACE_STAGES`), Ember has no shot, and the shot has no letterbox
+  (commit ca11dda). **The fifth critic on stills (`pairs-s5`, the same before5 against `after6`): 6 of 10**, the best
+  on stills, still under the bar of 8. It took the new frame for Ember's basalt ridge ("which is Ember as the bible
+  describes it"), Lanternfall's crest ("the sea of cloud with its warm pools opens on both flanks: a real vista with
+  strong leading lines"), Sakura's torii and terraces at 3000 m ("tell you where you are"), Ember's 1500 m and two
+  more. It took the old frame for Pinecrest 150 m (the cut's face from the air, "a big flat white slab", still),
+  Frostfang's canyon at 150 m and its wall at 3000 m ("smeared ice walls", "one big smooth blue ice face with little
+  drawn on it", "no sun in shot") and Pinecrest 1500 m (near identical; crows in the old).
+- Readability at the openings with the shot in (`readability.js` from 160 m, the hand-back at 180 to 220 m inside it;
+  before on f784510): road median / worst at 30 m/s, Pinecrest 24/4 to 60/4, Frostfang 67/0 to 70/4, Ember 72/5 to
+  74/4, Sakura 68/4 to 72/4, Lanternfall 44/13 to 60/14; at 44 m/s 66 to 68 m everywhere, before and after. The
+  rider at 30 m/s: level or larger, except Lanternfall's 165 to 143 px.
+- The ghost's mint smear at the right edge of Pinecrest 300 m is in the before stills of f784510 too: not this lane's
+  (the events lane's ghost near the lens).
 
 Why, in one line: the trench is the sim's own bank (9.5 m in its first 10 m past the edge), and from a chase lens 1.5
 to 3 m over the snow nothing past a bank's crest 30 m away shows below its line; shaping past the limit changes the
@@ -242,6 +274,15 @@ crest again, so its triangle saving is smaller than this. Not re-measured: no sl
 ## Still short
 
 - **The item.** See "The verdict, first": not met on stills.
+- **The title shots** (`keyart.ts`; the screens lane's critic: "the rider small or hidden in spray"): not looked at or
+  changed. The frames the screens lane judged (`shots/r8/screens/after4/h-*-title-*.png`) catch the title at 1.5 s,
+  in the crane's wide establishing shot, where the rider is a dot by design; whether the rested shot hides the rider
+  in spray needs a capture of each mountain's title after the crane settles.
+- **Spans over the run** (a torii, an arch or a lantern string framing the opening) were not built: their clearance
+  must come from `SitePlan`'s flown air, and the openings' bowls have kickers.
+- **A lens that keeps the rider big and shows the place** is the shot the critics would have taken: close behind and
+  low to one side, the rider large in the foreground and the canyon, the cone or the terraces past its shoulder. The
+  high lenses tried here lost on rider size every time.
 - **Pinecrest's fall from the air** shows its first metres side on as a pale face (the stretch cannot start before the
   start's stands end, so the fall cannot ramp in earlier).
 - **The valley below is not below.** From inside the sim's 9.5 m bank the lens sees over a fall's crest only toward the
@@ -284,7 +325,8 @@ All under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/compose/`:
   lens (commit cf7781b); `after3`: Sakura's dressed walls (the last build); `nohud`: the greyscale test's sources.
 - `after-stills/{high,low,phone-medium}`, `after-stills2/high`, `after-stills3/high` (the last build): the touched
   frames as stills, beside the main lane's `shots/r8/before-stills`.
-- `pairs1`, `pairs2`, `pairs3` (live), `pairs-s1`, `pairs-s2`, `pairs-s3` (stills): the critics' pairs; `keys/`: their
+- `before5` (a build of round-8 f784510) and `after5`, `after6` (this branch; `after5` also Low and the phone): the second pass's stills.
+- `pairs1`, `pairs2`, `pairs3` (live), `pairs-s1` to `pairs-s5` (stills): the critics' pairs; `keys/`: their
   keys and picks (outside the pairs).
 - `gray-open`, `gray-stage` (live, cropped), `gray-open-s`, `gray-stage-s` (stills, after), `gray-open-b`,
   `gray-stage-b` (stills, before, the control), `gray-feelings.md`: the greyscale tests as the critics saw them;
