@@ -498,6 +498,8 @@ export function getPalette(biome: BiomeId, mood: Mood): Palette {
       round7(p, biome);
       visualLift(p, biome);
       valuePass(p, biome);
+      // (Round 8: the mountain's other hour, when the Almanac has opened it and the player picked it. ALT_HOURS.)
+      if (hourOf(biome) === 'alt') ALT_HOURS[biome]!.start(p);
       break;
     case Mood.Blizzard:
       p.skyZenith = c('#6D7C93');
@@ -2014,6 +2016,205 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
   ],
 };
 
+/** Round 8, the light lane: a mountain's other hour (the Almanac's `hourOpen`, G4's reward: a second Clear Skies
+ *  palette). `start` edits the mountain's Clear Skies, which is the title's and the run's first light, and
+ *  `journey` replaces JOURNEY for the run; the places (PLACES) lie over it as they do over the day. */
+export interface AltHour {
+  /** What the Almanac's card and the title call it. */
+  name: string;
+  start: (p: Palette) => void;
+  journey: JourneyStop[];
+}
+
+/** The hours that exist. A mountain missing here has only its day (the Almanac's card waits on it). */
+export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
+  // Pinecrest at dusk (the Almanac's page 8): the run starts in the gold the day ends in, the town below is lit
+  // by the Valley Leap and the line is crossed in the blue of the first night, its windows and lamps the light.
+  alpine: {
+    name: 'Dusk',
+    start: (p) => {
+      JOURNEY.alpine[1].edit(p);
+      p.lamps = 0.8;
+      p.lampAir = 0.06;
+    },
+    journey: [
+      { from: 700, at: 1900, dusk: 0.85, edit: (p) => JOURNEY.alpine[2].edit(p) },
+      {
+        // The first night: the sun under the far range, the sky a deep blue over a last rose band, stars, the
+        // snow in the sky's cold light, and every lamp, window and lantern gate lit against it.
+        from: 2500, at: 3300, dusk: 1,
+        edit: (p) => {
+          setSun(p, 33, 2.9, 24, 10);
+          p.sunDisc = 0;
+          p.sunGlow = 0.35;
+          p.sunColor = c('#A8B8E8');
+          p.skyZenith = c('#0A1848');
+          p.skyMid = c('#2A3C88');
+          p.skyHorizon = c('#6A6CB0');
+          p.skyBand = { color: c('#E89C8C'), fade: 26, k: 0.45 };
+          p.skyBelow = c('#3A4682');
+          p.snowLit = c('#A4B4E2');
+          p.snowShade = c('#343E92');
+          p.snowDeep = c('#18205E');
+          p.rim = c('#C8D4FF');
+          p.fog = c('#3A4A8E');
+          p.hemiSky = c('#4A5CB4');
+          p.air.far = c('#24306E');
+          p.clouds.lit = c('#6A74B8');
+          p.clouds.shade = c('#2E3478');
+          p.clouds.rim = c('#E8A08C');
+          p.clouds.shadow = 0;
+          p.massif.glowK = 0.25;
+          p.massif.glowLine = 600;
+          p.hazardDim = 0.82;
+          p.stars = 0.85;
+          p.lamps = 1.5;
+          p.lampAir = 0.16;
+          p.lanternGlow = 0.8;
+          p.giftGlow = 0.5;
+          p.ghostGlow = 1.5;
+          p.bloom = 0.6;
+          p.grade.shafts = 0;
+          p.grade.saturation = 1.04;
+          p.grade.contrast = 1.12;
+          p.grade.exposure = 1.04;
+          p.grade.hi = c('#FFF0DC');
+          p.grade.lo = c('#DCE0FF');
+          p.grade.glitter = 0.2;
+          p.sparkle = 1.1;
+        },
+      },
+    ],
+  },
+  // Sakura in the evening: a low warm sun through the orchards, the blue hour over the Blossom Leap and the
+  // paper lanterns of Temple Town lit under a night sky, the blossom pale against it.
+  blossom: {
+    name: 'Evening',
+    start: (p) => {
+      setSun(p, -30, 6, 24, 11);
+      p.sunColor = c('#FFD6B0');
+      p.sunCore.setRGB(2.9, 2.2, 1.5);
+      p.sunDisc = 1;
+      p.sunSoft = 0.3;
+      p.sunGlow = 1;
+      p.skyZenith = c('#5C70B8');
+      p.skyMid = c('#C8A4C4');
+      p.skyHorizon = c('#FFC49C');
+      p.skyBelow = c('#E8B4B0');
+      p.snowLit = c('#FFF0E2');
+      p.snowShade = c('#6A70C4');
+      p.snowDeep = c('#4A3C9C');
+      p.fog = c('#F0C4BC');
+      p.air.far = c('#8A84C8');
+      p.clouds.lit = c('#FFD0B4');
+      p.clouds.shade = c('#B496C0');
+      p.clouds.rim = c('#FFB08C');
+      p.massif.glowK = 0.6;
+      p.atmo.rays = 1;
+      p.grade.shafts = 0.8;
+      p.grade.hi = c('#FFEEDC');
+      p.grade.lo = c('#E4DCFF');
+      p.lamps = 0.5;
+    },
+    journey: [
+      {
+        // The blue hour: the sun gone under the far hills, a rose band, the lit snow cooling, the first lamps.
+        from: 1500, at: 2500, dusk: 0.8,
+        edit: (p) => {
+          setSun(p, -32, 2.9, 22, 10);
+          p.sunDisc = 0.2;
+          p.sunGlow = 0.5;
+          p.sunColor = c('#C8BCE8');
+          p.skyZenith = c('#2A3478');
+          p.skyMid = c('#7A6CB0');
+          p.skyHorizon = c('#E8A08E');
+          p.skyBelow = c('#8A6C9C');
+          p.snowLit = c('#C8C2EA');
+          p.snowShade = c('#484AA8');
+          p.snowDeep = c('#2A2478');
+          p.fog = c('#8A78B4');
+          p.air.far = c('#4A4890');
+          p.hemiSky = c('#6C70C4');
+          p.clouds.lit = c('#C8A0B8');
+          p.clouds.shade = c('#5A5494');
+          p.hazardDim = 0.85;
+          p.stars = 0.35;
+          p.lamps = 1.1;
+          p.lampAir = 0.12;
+          p.lanternGlow = 0.5;
+          p.grade.shafts = 0.2;
+          p.atmo.rays = 0.3;
+          p.bloom = 0.4;
+          p.grade.hi = c('#FFF0E4');
+          p.grade.lo = c('#DCDCFF');
+        },
+      },
+      {
+        // Night over Temple Town: indigo, stars, the blossom pale, the lanterns under the eaves the light.
+        from: 3200, at: 3900, dusk: 1,
+        edit: (p) => {
+          p.sunDisc = 0;
+          p.sunGlow = 0.3;
+          p.sunColor = c('#A4A8DC');
+          p.skyZenith = c('#10163E');
+          p.skyMid = c('#2C2C6C');
+          p.skyHorizon = c('#5A4C8C');
+          p.skyBelow = c('#3C3470');
+          p.snowLit = c('#A8A6DA');
+          p.snowShade = c('#2E3080');
+          p.snowDeep = c('#181650');
+          p.fog = c('#3C3878');
+          p.air.far = c('#262460');
+          p.hemiSky = c('#4C4CA8');
+          p.clouds.lit = c('#5A5698');
+          p.clouds.shade = c('#262458');
+          p.clouds.shadow = 0;
+          p.hazardDim = 0.72;
+          p.stars = 0.8;
+          p.lamps = 1.5;
+          p.lampAir = 0.18;
+          p.lanternGlow = 0.8;
+          p.giftGlow = 0.5;
+          p.ghostGlow = 1.4;
+          p.bloom = 0.6;
+          p.grade.exposure = 1.04;
+          p.grade.contrast = 1.14;
+          p.grade.hi = c('#FFEEDC');
+        },
+      },
+    ],
+  },
+};
+
+let hourNow: Hour = (() => {
+  try {
+    const q = new URLSearchParams(location.search);
+    return q.has('debug') && q.get('hour') === 'alt' ? 'alt' : 'day';
+  } catch {
+    return 'day';
+  }
+})();
+
+/** The day, or the mountain's other hour. */
+export type Hour = 'day' | 'alt';
+
+/** Which hour the next run and the title are lit at (the game sets it from the player's pick, where the Almanac
+ *  has opened it, before it sets the course; a dev switch `?debug&hour=alt` turns it on everywhere it exists). A
+ *  mountain with no other hour keeps its day. */
+export function setHour(h: Hour): void {
+  hourNow = h;
+}
+
+/** The hour a mountain is lit at now. */
+export function hourOf(biome: BiomeId): Hour {
+  return hourNow === 'alt' && ALT_HOURS[biome] ? 'alt' : 'day';
+}
+
+/** The journey in force on a mountain: its day's, or its other hour's. */
+export function journeyOf(biome: BiomeId): JourneyStop[] {
+  return hourOf(biome) === 'alt' ? ALT_HOURS[biome]!.journey : JOURNEY[biome];
+}
+
 /** A place on a mountain: what its section of the course does to the light of the hour. */
 export interface Place {
   /** The section it is. */
@@ -2640,20 +2841,21 @@ export const CLOUD_BREAK = 80;
 
 const copyOf = (p: Palette): Palette => lerpPalette(p, p, 0, {} as Palette);
 
-const STOPS = new Map<BiomeId, Palette[]>();
+const STOPS = new Map<string, Palette[]>();
 
-/** A mountain's palettes at the start and at each stop of its journey, built on first use. */
+/** A mountain's palettes at the start and at each stop of its journey (at the hour in force), built on first use. */
 function journeyStops(biome: BiomeId): Palette[] {
-  let st = STOPS.get(biome);
+  const key = biome + ':' + hourOf(biome);
+  let st = STOPS.get(key);
   if (!st) {
     st = [getPalette(biome, Mood.None)];
-    for (const stop of JOURNEY[biome]) {
+    for (const stop of journeyOf(biome)) {
       const p = copyOf(st[st.length - 1]);
       stop.edit(p);
       p.shadowDir = shadowFrom(p.sunDir, p.shadowSwing, p.shadowMinEl);
       st.push(p);
     }
-    STOPS.set(biome, st);
+    STOPS.set(key, st);
   }
   return st;
 }
@@ -2661,7 +2863,7 @@ function journeyStops(biome: BiomeId): Palette[] {
 /** How far along its journey a run is: 0 at the start, n at the n-th stop, smooth between, flat where
  *  the light holds (so the world re-blends only while it moves). */
 export function journeyProgress(biome: BiomeId, metres: number): number {
-  const stops = JOURNEY[biome];
+  const stops = journeyOf(biome);
   let at = 0;
   for (let i = 0; i < stops.length; i++) {
     const k = Math.max(0, Math.min(1, (metres - stops[i].from) / (stops[i].at - stops[i].from)));
@@ -2691,11 +2893,12 @@ interface LaidPlace {
   steps?: number;
 }
 
-const LAID = new WeakMap<Course, LaidPlace[]>();
+const LAID = { day: new WeakMap<Course, LaidPlace[]>(), alt: new WeakMap<Course, LaidPlace[]>() };
 
 /** A course's places, in order down the run, laid on first use (a walk of its sections, once). */
 function laidPlaces(course: Course): LaidPlace[] {
-  let laid = LAID.get(course);
+  const cache = LAID[hourOf(course.biome)];
+  let laid = cache.get(course);
   if (laid) return laid;
   laid = [];
   const table = PLACES[course.biome];
@@ -2728,7 +2931,7 @@ function laidPlaces(course: Course): LaidPlace[] {
   }
   // A span is blended last, over whatever section it crosses: inside the cloud nothing else is seen.
   laid.push(...spans);
-  LAID.set(course, laid);
+  cache.set(course, laid);
   return laid;
 }
 
@@ -2760,7 +2963,7 @@ export function journeyPalette(biome: BiomeId, metres: number, out: Palette, cou
 /** A number that changes whenever journeyPalette's answer would, in steps fine enough to blend smoothly
  *  and coarse enough that the world re-blends only while the light moves. */
 export function journeyStamp(biome: BiomeId, metres: number, course?: Course): number {
-  let key = Math.round(journeyProgress(biome, metres) * 400);
+  let key = Math.round(journeyProgress(biome, metres) * 400) + (hourOf(biome) === 'alt' ? 7e8 : 0);
   if (course && course.biome === biome) {
     const laid = laidPlaces(course);
     for (let i = 0; i < laid.length; i++) {
@@ -2776,7 +2979,7 @@ export function journeyStamp(biome: BiomeId, metres: number, course?: Course): n
 export function journeyDusk(biome: BiomeId, metres: number): number {
   // Lanternfall is ridden at the end of night, from the first metre: its lamps and windows are always lit.
   if (biome === 'lantern') return 1;
-  const stops = JOURNEY[biome];
+  const stops = journeyOf(biome);
   const at = journeyProgress(biome, metres);
   const i = Math.min(Math.floor(at), stops.length - 1);
   const a = i > 0 ? stops[i - 1].dusk : 0;
