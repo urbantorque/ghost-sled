@@ -148,7 +148,7 @@ describe('what turned over', () => {
   it('past three, the last slot says how many more wait in Details', () => {
     const cards = storyCards(model({ spine: { ...spineStub(), opened: [page(1, 'A'), page(2, 'B'), page(3, 'C'), page(4, 'D')] } }));
     expect(cards).toHaveLength(MAX_CARDS);
-    expect(cards[MAX_CARDS - 1]).toEqual({ kind: 'more', count: 2 });
+    expect(cards[MAX_CARDS - 1]).toEqual({ kind: 'more', count: 2, names: ['C', 'D'] });
   });
 
   it('a page that opens a mountain is not shown twice', () => {

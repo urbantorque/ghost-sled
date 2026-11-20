@@ -139,7 +139,7 @@ export type StoryCard =
   | { kind: 'mountain'; id: string | null; name: string; biome: UnlockedMountain['biome'] | null }
   | { kind: 'reward'; reward: RewardCard }
   | { kind: 'stickers'; count: number; first: StickerCard }
-  | { kind: 'more'; count: number };
+  | { kind: 'more'; count: number; names: string[] };
 
 /** At most this many cards turn over; past it the last slot says how many more are in Details. */
 export const MAX_CARDS = 3;
@@ -154,7 +154,9 @@ export function storyCards(m: ResultsModel): StoryCard[] {
   const st = m.spine?.stickers ?? [];
   if (st.length > 0) all.push({ kind: 'stickers', count: st.length, first: st[0] });
   if (all.length <= MAX_CARDS) return all;
-  return [...all.slice(0, MAX_CARDS - 1), { kind: 'more', count: all.length - (MAX_CARDS - 1) }];
+  const rest = all.slice(MAX_CARDS - 1);
+  const name = (c: StoryCard): string => (c.kind === 'mountain' ? c.name : c.kind === 'reward' ? c.reward.name : c.kind === 'stickers' ? (c.count > 1 ? `${c.count} stickers` : c.first.name) : '');
+  return [...all.slice(0, MAX_CARDS - 1), { kind: 'more', count: rest.length, names: rest.map(name) }];
 }
 
 /** The ticks the bar names as it fills: the biggest few, in the order they were paid. */
@@ -337,8 +339,11 @@ export class Story {
       if (c.count === 1) name.setAttribute('translate', 'no');
       return h('span', 'gs-sq-face is-sticker', h('span', 'gs-sq-card-ico', icon('sticker')), name, h('span', 'gs-sq-card-k', c.count > 1 ? `${c.first.name} and more` : 'New sticker'));
     }
-    const all = btn(ctx, { cls: 'gs-sq-face is-more', sound: 'tap', fk: 'st-more', onClick: () => this.hooks.details() }, h('span', 'gs-sq-card-n gs-num', `+${c.count}`), h('span', 'gs-sq-card-k', 'more in Details'));
-    all.setAttribute('aria-label', `${c.count} more opened: see Details`);
+    // What waits in Details, named (two at most), so the slot is a card and not a blank.
+    const list = h('span', 'gs-sq-more-l', c.names.slice(0, 2).join(', ') + (c.names.length > 2 ? ', and more' : ''));
+    list.setAttribute('translate', 'no');
+    const all = btn(ctx, { cls: 'gs-sq-face is-more', sound: 'tap', fk: 'st-more', onClick: () => this.hooks.details() }, h('span', 'gs-sq-card-n gs-num', `+${c.count} more`), list, h('span', 'gs-sq-card-k', 'In Details', icon('chevR')));
+    all.setAttribute('aria-label', `${c.count} more opened: ${c.names.join(', ')}. See Details`);
     return all;
   }
 

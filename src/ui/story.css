@@ -459,14 +459,25 @@
 
 /* "+2 more": a card that is a button into Details. */
 .gs-sq-face.is-more {
-  align-content: center;
-  justify-items: center;
+  align-content: end;
   border-radius: var(--r-card);
   cursor: pointer;
 }
 
 .gs-sq-face.is-more .gs-sq-card-n {
-  font-size: 1.5em;
+  font-size: 1.12em;
+}
+
+.gs-sq-more-l {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--text);
+  font-size: max(12px, 0.8em);
+  font-weight: 750;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 
 /* The one button: vermillion, its words whole, the reason under them. */
@@ -808,4 +819,14 @@
     order: -1;
     flex: 1 1 40%;
   }
+}
+
+/* Details' Run Again with a long label from the spine: whole, a step smaller, no keycap. */
+.gs-again.is-wordy {
+  font-size: clamp(16px, calc(var(--u) * 1.08), 21px);
+  letter-spacing: 0.01em;
+}
+
+.gs-again.is-wordy .gs-kbd {
+  display: none;
 }

@@ -3,19 +3,7 @@
 
    The thumbs own the bottom 22% of a phone held upright (fx.ts LOW_FLOOR; the left 60% steers, the right 40% holds).
    A lesson about the lantern sits beside the lantern it teaches, above the thumbs' band, not across the steering
-   thumb; the perfect-landing stamp's sub-line wraps inside the stamp, so a landing that names two long tricks
-   ("PAPER WHEEL 360 +1,800 · LAMPPOST SWING 720 +2,400") never runs off the screen's edge. Measured by
-   scripts/playtest/r8-hudfit.js. */
-
-/* The stamp's one column is the stamp's width: its widest line (the sub-line) wraps instead of widening it. */
-.gs-hero-in {
-  grid-template-columns: minmax(0, 1fr);
-  width: 100%;
-}
-
-.gs-hero-sub {
-  min-width: 0;
-}
+   thumb. Measured by scripts/playtest/r8-hudfit.js (every HUD leaf's box against the screen's edges and that band). */
 
 /* The lantern's lesson and the slipstream's, on a touch screen: one pill to the right, under the lantern button and
    over the thumbs' band, its words on two lines if they need them. */
@@ -24,6 +12,7 @@
   left: auto;
   right: var(--sr);
   bottom: calc(22% + 10px);
+  width: fit-content;
   max-width: min(66vw, 320px);
   min-height: 0;
   padding: 8px 16px 8px 12px;

@@ -38,6 +38,8 @@ async (page) => {
         if (!(el instanceof HTMLElement) || exempt(el)) continue;
         // Leaves only (a box with its own words or a glyph), so a wide wrapper never counts for its child.
         if (el.children.length > 0 && !el.matches('.gs-call, .gs-hero-in, .gs-hint, .gs-toast, .gs-pill')) continue;
+        // An empty layer (the callout and hint layers span the screen) draws nothing.
+        if (!(el.textContent || '').trim() && !el.matches('.gs-i, .gs-lan-cell, .gs-ring, svg, svg *')) continue;
         const cs = getComputedStyle(el);
         if (cs.visibility === 'hidden' || cs.display === 'none') continue;
         let o = 1;

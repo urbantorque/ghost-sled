@@ -675,6 +675,9 @@ export class Results {
       // A long handle (the game ellipsizes past 12) gets the room it needs to show whole (meta.css).
       if ([...name].length >= LONG_NAME) again.classList.add('is-long');
     }
+    // Round 8: the spine's longer labels ("Next Duel: Bram Oakhollow", "Finish the mission") keep their words whole in
+    // Details too: a step smaller, and the keycap gives them its room (Space still works).
+    if (!named && [...label].length > 16) again.classList.add('is-wordy');
     // The keycap is a hint, not part of the name.
     if (this.inputMode !== 'touch') {
       again.querySelector('kbd')?.setAttribute('aria-hidden', 'true');
