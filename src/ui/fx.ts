@@ -423,6 +423,13 @@ export class Fx {
     this.line(label, points, tone, { who });
   }
 
+  /** Round 8: a charm gate's offers as it comes up, each charm's name and gist, left to right as its arches stand. It
+   *  is a choice to read, so it is never held out as a minor line, and on a phone it takes two lines rather than
+   *  shrinking past reading. */
+  gate(label: string): void {
+    this.line(label, 0, 'normal', { wrap: true, force: true });
+  }
+
   /**
    * 'In the flow' (the director's flow-in beat), the run's momentum reward: its own line, vermillion
    * (the player's colour, and flow's) at a size over a trick's, ranked over your best's lines. It never
@@ -488,7 +495,7 @@ export class Fx {
    * `stepped`: a trick already stepped that race word back off the line once; `flow`: 'In the flow'
    * (flowIn), which comes with `force`.
    */
-  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string; stepped?: boolean; flow?: boolean } = {}): void {
+  private line(label: string, points: number, tone: StyleTone, o: { force?: boolean; race?: string; again?: boolean; back?: number; who?: string; stepped?: boolean; flow?: boolean; wrap?: boolean } = {}): void {
     const raw = label.trim();
     if (raw === '' || raw === '0') return;
     const text = DISPLAY[raw] ?? raw;
@@ -512,7 +519,7 @@ export class Fx {
     // A race word on the line is that pill's word, so for its HOLD_MS a minor line stays out under it
     // too ("CLEAN LANDING +80" no longer cuts "TobogganTeo wiped out" after 234 ms).
     const top = this.items[this.items.length - 1];
-    if (tone === 'normal' && race === undefined && (this.heroEl !== null || this.hud.passing || raceHolds(top, now) || (text === SLIPSTREAM && this.hud.drafting))) {
+    if (tone === 'normal' && race === undefined && !o.wrap && (this.heroEl !== null || this.hud.passing || raceHolds(top, now) || (text === SLIPSTREAM && this.hud.drafting))) {
       this.remember(text, points, 1, now);
       return;
     }
@@ -570,6 +577,8 @@ export class Fx {
     // (style.css .is-fit, --len its letter count).
     if (race !== undefined) inner.classList.add('is-race');
     if (flow) inner.classList.add('is-flow');
+    // (Round 8: a charm gate's offers line may take two lines on a phone, and fits as two.)
+    if (o.wrap) inner.classList.add('is-gate');
     if (fits(text, race)) {
       inner.classList.add('is-fit');
       inner.style.setProperty('--len', String(text.length));

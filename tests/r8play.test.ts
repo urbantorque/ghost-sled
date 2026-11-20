@@ -1,9 +1,9 @@
 import { Color, SRGBColorSpace } from 'three';
 import { describe, expect, it } from 'vitest';
-import { CHARM_SHORT, charmTakeLine } from '../src/game/charmcopy';
+import { CHARM_GIST, CHARM_SHORT, charmTakeLine, offersGistLine } from '../src/game/charmcopy';
 import { SIG, lanternSignals, wispUp } from '../src/game/charmsignals';
 import { ARCH_TOP, BURST_S, DRAW_AHEAD, GUTTER_S, MEDAL_FLOOR_PX, MEDAL_GAP, MEDAL_HALF, archPath, archState, charmGateGeometry, medalHalf, medalSpread, offersLine } from '../src/render/charmgates';
-import { FAMILY_HEX, GLYPH_COLS, GLYPH_ROWS, glyphCell, glyphIds } from '../src/render/charmglyphs';
+import { FAMILY_HEX, GLYPH_COLS, GLYPH_ROWS, STYLE_DEEP_HEX, glyphCell, glyphIds } from '../src/render/charmglyphs';
 import { stompWindowS } from '../src/render/landing';
 import { grabDanger, trickPose, type TrickIn } from '../src/render/trickpose';
 import { pathFromOf } from '../src/render/world';
@@ -144,13 +144,17 @@ describe('charm gates', () => {
 
   it("never takes a locked role's colour: no family near mint, vermillion, marigold, rose, gold-white or amber", () => {
     const locked = ['#8FF3E4', '#FF4D2E', '#FFD34D', '#FF5A7A', '#FFE08A', '#FFB040', '#FF9E1A'];
-    const fam = Object.values(FAMILY_HEX).map(hsl);
+    // (Sakura's deeper violet for the style family too.)
+    const fam = [...Object.values(FAMILY_HEX), STYLE_DEEP_HEX].map(hsl);
     for (const f of fam) {
       expect(f.s).toBeGreaterThan(0.5);
       for (const l of locked) expect(hueGap(f.h, hsl(l).h)).toBeGreaterThan(30);
     }
     // ...and the three are far apart from each other.
     for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) expect(hueGap(fam[i].h, fam[j].h)).toBeGreaterThan(60);
+    // The deeper violet keeps its family's hue and is darker than it.
+    expect(hueGap(fam[3].h, fam[1].h)).toBeLessThan(15);
+    expect(fam[3].l).toBeLessThan(fam[1].l);
   });
 
   it('has a glyph for every charm, each in its own cell of the atlas', () => {
@@ -217,6 +221,23 @@ describe('charm gates', () => {
     // Close in it is its own size, standing over its own arch.
     expect(medalHalf(pxAt(10))).toBe(MEDAL_HALF);
     expect(medalSpread(MEDAL_HALF)).toBe(0);
+  });
+
+  it('names each offer with a gist of two or three words before the choice, one line on a desktop', () => {
+    for (const c of CHARMS) {
+      const words = (CHARM_GIST[c.id] ?? '').split(' ').filter(Boolean).length;
+      expect(words).toBeGreaterThanOrEqual(2);
+      expect(words).toBeLessThanOrEqual(3);
+    }
+    const dot = '  ' + String.fromCharCode(0xb7) + '  ';
+    expect(offersGistLine([CHARM.drum, CHARM.wisp, CHARM.paper])).toBe(['Drift Drum: faster drifts', 'Guardian Wisp: a free hit', 'Paper Kite: grabs pay'].join(dot));
+    expect(offersGistLine([-1, CHARM.wisp, CHARM.paper])).toBe(['Guardian Wisp: a free hit', 'Paper Kite: grabs pay'].join(dot));
+    // The longest three a gate can deal, one of each family: one line on a 1280 px desktop at 15 px or more, and two
+    // lines on a 390 px phone at 11 px or more (style.css .is-gate: 0.62 em a letter, 16 px gutters).
+    const longest = (fam: string) => Math.max(...CHARMS.filter((c) => c.family === fam).map((c) => c.name.length + 2 + CHARM_GIST[c.id].length));
+    const len = longest('speed') + longest('style') + longest('survival') + 10;
+    expect((1280 - 32) / (len * 0.62)).toBeGreaterThanOrEqual(15);
+    expect((390 - 32) / ((len / 2) * 0.62)).toBeGreaterThanOrEqual(11);
   });
 
   it('says what each charm does as it is taken, in a few words after its name', () => {

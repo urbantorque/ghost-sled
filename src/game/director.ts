@@ -2,8 +2,8 @@ import { type ChaosEvent, Mood } from '../sim/chaos';
 import type { BiomeId } from '../sim/mountains';
 import type { RivalEvent } from '../sim/rivals';
 import { STYLE_LABEL, type StyleKind } from '../sim/scoring';
-import { CHARMS, SYNERGIES } from '../sim/charms';
-import { charmTakeLine } from './charmcopy';
+import { SYNERGIES } from '../sim/charms';
+import { charmTakeLine, offersGistLine } from './charmcopy';
 import { trickCall } from '../sim/tricks';
 import { FIRST_RUN_STOMP, FREE_TUMBLE_Z, type Sim, type SimEvent } from '../sim/sim';
 import type { StyleTone } from '../ui/contract';
@@ -1815,6 +1815,12 @@ export class Director {
       this.push({ type: 'raceNews', tick: sim.tick, ghost: { id: -1, name: '', kind: 'pool', dx: 0 }, news: 'unlockTease', text: `1 more ghost opens ${tease.name}`, pan: 0, gain: 0 }, sim);
       this.lastNewsAt = now;
     }
+    // (Round 8: a showdown holds the top of the HUD until it is decided: pops wait, their clocks stopped, so the
+    // rival pill and its gap are never covered on the run to the marker. ART.md 10: one banner at a time.)
+    if (this.showdownId !== null) {
+      for (const q of this.pops) q.since += dt;
+      return;
+    }
     // Only the head of the queue (a waiting unlock, else the oldest mission) runs its give-up clock;
     // anything more than POP_LATE_S after its moment goes regardless.
     const head = this.pops.findIndex((q) => q.beat.type === 'unlockPop');
@@ -1944,10 +1950,7 @@ export class Director {
         if (g.z - s.z > GATE_CALL_M) break;
         this.gatesCalled.add(g.index);
         if (g.z - s.z < GATE_CALL_LATE_M) break;
-        const label = g.offers
-          .filter((o) => o >= 0)
-          .map((o) => CHARMS[o].name)
-          .join('  ·  ');
+        const label = offersGistLine(g.offers);
         this.push({ type: 'charmGate', tick: sim.tick, phase: 'near', gate: g.index, offers: g.offers, id: -1, lane: -1, say: { label, points: 0, tone: 'normal' } }, sim);
         break;
       }

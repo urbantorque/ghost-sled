@@ -33,6 +33,43 @@ export const CHARM_SHORT: Readonly<Record<number, string>> = {
   [CHARM.wisp]: 'a wisp takes the first hit',
 };
 
+/** Its gist, two or three words, for the offers line as a gate comes up ("Drift Drum: faster drifts"): a choice the
+ *  player cannot read is not a decision, and the full line is the take's. */
+export const CHARM_GIST: Readonly<Record<number, string>> = {
+  [CHARM.slip]: 'drafting fills',
+  [CHARM.comet]: 'long dashes',
+  [CHARM.kite]: 'big slingshots',
+  [CHARM.frost]: 'grip on ice',
+  [CHARM.star]: 'drops to speed',
+  [CHARM.drum]: 'faster drifts',
+  [CHARM.step]: 'cheap dashes',
+  [CHARM.stride]: 'a deep tuck',
+  [CHARM.owl]: 'near misses',
+  [CHARM.hearth]: 'dashes back',
+  [CHARM.paper]: 'grabs pay',
+  [CHARM.whirl]: 'spins pay',
+  [CHARM.memory]: 'new tricks pay',
+  [CHARM.festival]: 'quick multiplier',
+  [CHARM.bell]: 'rails pay',
+  [CHARM.spirit]: 'faster flow',
+  [CHARM.second]: 'free get-ups',
+  [CHARM.feather]: 'soft landings',
+  [CHARM.stone]: 'cheap wards',
+  [CHARM.bark]: 'tough bumps',
+  [CHARM.lamp]: 'a last ward',
+  [CHARM.path]: 'a lit path',
+  [CHARM.quick]: 'quick get-ups',
+  [CHARM.wisp]: 'a free hit',
+};
+
+/** The offers line as a gate comes up, left to right as its arches stand: each charm's name and gist. */
+export function offersGistLine(offers: readonly number[]): string {
+  return offers
+    .filter((id) => id >= 0 && CHARMS[id])
+    .map((id) => `${CHARMS[id].name}: ${CHARM_GIST[id] ?? ''}`)
+    .join('  ·  ');
+}
+
 /** The take's callout: the charm's name and what it does. */
 export function charmTakeLine(id: number): string {
   const c = CHARMS[id];
