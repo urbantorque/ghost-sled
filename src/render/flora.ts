@@ -662,7 +662,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
   for (let i = 0; i <= N; i++) {
     const j = i % N;
     const l = L(j);
-    const base = inner ? snowK * 0.35 : 0.28 + snowK * 0.5 + (0.2 + 0.3 * snowK) * Math.pow(l, 1.2);
+    const base = inner ? snowK * 0.35 : 0.22 + snowK * 0.45 + (0.18 + 0.3 * snowK) * Math.pow(l, 1.2);
     // (Ragged by the bough, not by the facet: a wander from one half-segment to the next, eased between, so a shelf's
     // edge is a wavy line along each bough. Noise a column read as loose white shards, the second critic; none, as
     // rings of white cake.)
@@ -728,7 +728,8 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
   }
   if (Ks === 0) return;
   // The snow: a crust standing off the boughs to each column's snow line, its edge folding down in shade.
-  const thick = (inner ? 0.035 : 0.05) + 0.035 * snowK;
+  // (A thin crust: a thick one with a shaded fold read as rolls of marshmallow, the fourth critic.)
+  const thick = (inner ? 0.025 : 0.03) + 0.02 * snowK;
   const shell = (i: number, u: number): V3 => {
     const p = at(i, u);
     // Off the face along its upward normal (the face's slope from a step down it).
@@ -743,7 +744,7 @@ function nearTier(f: Facets, t: BoughTier, needle: Color, under: Color, snowShad
   };
   if (inner && snowK < 0.2) return;
   const lit = new Color();
-  const cool = SNOW.clone().lerp(snowShade, 0.42);
+  const cool = SNOW.clone().lerp(snowShade, 0.25);
   for (let i = 0; i < N; i++) {
     for (let k = 0; k < Ks; k++) {
       const a = shell(i, (sn[i] * k) / Ks);
@@ -781,7 +782,8 @@ export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?
     const topTier = i === s.tiers.length - 1 && i > 2;
     const segs = topTier ? 6 : BOUGH_SEGS;
     const nd = i % 2 ? shade(needle, 0.9) : needle;
-    const snowK = s.snow * (1 - i * 0.08);
+    // (Sakura's cedars carry less: they are the ink spine the blossom glows against, ART.md 15.)
+    const snowK = s.snow * (1 - i * 0.08) * (s.tones ? 0.6 : 1);
     // (The top tier is a small cone of a few boughs: no layer under it.)
     if (!topTier && (fine || i < 2)) nearTier(f, t, nd, under, p.snowShade, snowK, twists[i], segs, NEAR_RES[nb].inner, true);
     nearTier(f, t, nd, under, p.snowShade, snowK, twists[i], segs, NEAR_RES[nb].outer, false);
@@ -810,19 +812,8 @@ export function nearPineGeometry(p: Palette, kind: PineKind, variant = 0, tones?
     const len = 0.35 + 0.3 * rnd();
     parts.push(part(new CylinderGeometry(0.012, 0.03, len, 3, 1, true), BARK_DARK, { pos: [Math.cos(a) * len * 0.45, low - 0.15 * k, Math.sin(a) * len * 0.45], rot: [0, -a, -1.2] }));
   }
-  // Snow clumps out on the lower tips, as the far tree has them, rounder.
-  for (let i = 0; i < 2; i++) {
-    const t = s.tiers[i];
-    for (let k = 0; k < s.clumps; k++) {
-      const phi = ((k * 2 + i * 2) * Math.PI * 2) / BOUGH_SEGS;
-      const x0 = Math.sin(phi) * t.r * 0.9;
-      const z0 = Math.cos(phi) * t.r * 0.9;
-      const tw = twists[i];
-      const x = x0 * Math.cos(tw) - z0 * Math.sin(tw);
-      const z = x0 * Math.sin(tw) + z0 * Math.cos(tw);
-      parts.push(softPart(new IcosahedronGeometry(0.21 + 0.05 * rnd(), fine ? 1 : 0), SNOW, { pos: [x, t.top - t.h * 1.06 + 0.12, z], scale: [1.45, 0.6, 1.15], rot: [0, Math.atan2(x, z), 0] }));
-    }
-  }
+  // (No clumps out on the tips: on the near build's drooping boughs they floated off the bough ends as pillows, the
+  // fourth critic. The shelf carries the snow out along each bough.)
   parts.push(treeWell(Math.max(0.7, s.tiers[0].r * 0.62), p.snowShade, fine ? 12 : 9));
   for (const q of parts) if (q.getAttribute('uv')) q.deleteAttribute('uv');
   return dropSlivers(merge(parts.map((q) => (q.index ? q.toNonIndexed() : q))));

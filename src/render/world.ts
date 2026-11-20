@@ -1330,7 +1330,9 @@ export class World {
    *  handed from the far forest to their near build (nearforest.ts), on Medium and up; Low keeps its own trees. */
   private forestLod(): void {
     if (!this.nearForest.root.parent) this.scene.add(this.nearForest.root);
-    this.nearForest.update(this.cam.camera.position, this.props, this.quality.detail === 'high');
+    // (A phone held upright sees a frame a third as wide at the same distance, where Medium's leaner facets were a seventh
+    // of it: it draws High's near build.)
+    this.nearForest.update(this.cam.camera.position, this.props, this.quality.detail === 'high' || this.width < this.height);
   }
 
   /** The bodies that move on their own, for the temporal reconstruction's reprojection (postfx/taa.ts): the
