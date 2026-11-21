@@ -3721,3 +3721,36 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       treads, starkest on Low); a checker dither inside High's cast shadows; Low missing a leap's outcrops and crowds
       High draws at 600 m; a radial smear on Low's near snow; Sakura's hazards reading as ice spires; a flip's saucer
       underside as an ink-black disc.
+
+378. **V8's photo mode and G8's album frames: built, judged, merged** (`notes/r8-photo.md`; frames, saved photos, pairs and
+    keys under `shots/r8/photo/`).
+    - *Photo mode.* A Photo button beside Home on the pause card and a camera beside Home in the results' foot. The run
+      holds exactly where it was (sim, ghosts, particles, shader clocks); the HUD, the cards and the tags leave the
+      picture, and so do speed's streaks, a punch, a flash and the flow's pulse. The lens turns round the rider's chest
+      from 1.3 to 32 m, its pivot carried up to 12 m off the rider, never into the snow, a rock or a tree, opening on
+      the paused frame with no swoop. A bar holds the lens as a focal length (12 to 85 mm), tilt, a grid, focus on the
+      rider (High and Ultra), reset and Save Photo; on a phone it is three rows that fade while the view moves, and a
+      tap on the picture hides it. Mouse, keys, pad and touch. Save Photo writes a PNG at the canvas's size with no HUD;
+      With Run Card adds the mountain, the time, the place (gold-white for a win) and the rider's name in vermillion in
+      the lower left (G11's stretch, the card only: no share button, no SDK call, no ad). Checked under playwright on
+      desk and phone: the run is the same tick, place and speed before, during and after, the lens comes back, Resume
+      rides on, the console is clean. A photo and a sticker's frame turn over with a mirrored page (`world.mirrored`,
+      wired at the merge), and a drag across turns the other way.
+    - *Album stickers are frames from their run.* As a sticker's moment happens the game keeps a small crop round the
+      rider from the live picture, the HUD out: a set piece at its height, a legend in reach, a trick at its grab or
+      the top of its flight, a charm's arch, and for stickers earned at the line four finish frames dealt in turn.
+      Older stickers keep their painted cards, and so does every sticker on another device (the frames live in this
+      browser's IndexedDB as WebP, about 10 KB each, a full album about 2.3 MB; the save does not grow). Two fresh
+      critics on blind pairs of the album on one save: the new sheet in 8 of 8 decided pairs, desk and phone, both
+      times (the second after the first's finds were fixed: a rider under the ink band, finish frames too alike,
+      lower-case names).
+    - *Cost.* Low's GL calls with photo mode shut level (Pinecrest 490 and 497 before, 487 and 487 after; Ember 501 and
+      519, 504 and 484); a sticker frame 0.2 to 0.8 ms on the frame of its moment and no GL call, its encode and write
+      on idle time; nothing new before the first frame; JS +28 KB, CSS +4.8 KB.
+    - *Left as found.* `album.runs` (the last 40 sticker runs' records, up to about 30 KB of the save) is kept for a
+      later frame rendered from the record. Trick and Twelve stickers show the chase view (the rider's back, the
+      player rather than the rival); frames taken inside a hero shot are soft. Save uses an `<a download>`: on
+      CrazyGames, if the portal's iframe lacks `allow-downloads`, a browser may drop it while the bar says "Saved", so
+      Save must be tried on the portal. The books' layout faults both critics named (screens lane's) go to the polish
+      list. For a person: how the drag, keys, pad and touch feel, whether the phone bar is small enough, whether the
+      album feels like "my runs".
