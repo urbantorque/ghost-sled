@@ -2344,9 +2344,11 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.skyBand = { color: c('#FF7A3A'), fade: 22, k: 0.6 };
       // (Night snow under a red deck is a cold lilac and the lava and the lamps are what is orange, as the day's own
       // night over the market found: a pale ash under the lava's peach key read as a sand floor.)
-      p.snowLit = c('#A8A2C8');
-      p.snowShade = c('#24264E');
-      p.snowDeep = c('#16163A');
+      p.snowLit = c('#B4AED0');
+      // (A cold plum-teal a step under the lit snow, never a dark slab: at #24264E the second critic read the far bank as a
+      // navy slab, as the light lane's first Ember critic did, ART.md 15.)
+      p.snowShade = c('#3E3C6C');
+      p.snowDeep = c('#26244C');
       p.rim = c('#FF8A4C');
       p.fog = c('#3A1416');
       p.fogNear = 50;
@@ -2412,7 +2414,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.air.far = c('#6A2010');
           p.deck.lit = c('#3A1612');
           p.deck.glow = c('#C8401A');
-          p.snowShade = c('#20224A');
+          p.snowShade = c('#38366A');
           p.lamps = 1.4;
           p.lampAir = 0.1;
           p.embers = 1.1;

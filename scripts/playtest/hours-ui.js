@@ -115,4 +115,4 @@ async (page) => {
   await page.screenshot({ path: `${c.out}${c.tag}-run-hour.png` });
   out.errors = errors;
   return JSON.stringify(out, null, 1);
-};
+}
