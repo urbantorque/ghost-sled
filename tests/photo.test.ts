@@ -2,7 +2,7 @@ import { PerspectiveCamera, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { PHOTO_REACH, PhotoRig } from '../src/render/camera';
 import { cine } from '../src/render/cine';
-import { APEX_MIN_AIR_S, FINISH_DELAY_S, PIECE_DELAY_S, StickerShots, aimFor, atTheLine, type ShotCtx } from '../src/game/albumframes';
+import { APEX_MIN_AIR_S, FINISH_DELAY_S, FINISH_FRAMES, FINISH_STEP_S, PIECE_DELAY_S, StickerShots, aimFor, atTheLine, type ShotCtx } from '../src/game/albumframes';
 import { cropAround } from '../src/game/photoshoot';
 import { photoName } from '../src/ui/photo';
 import type { SimEvent } from '../src/sim/sim';
@@ -204,12 +204,31 @@ describe('the album: a frame from the run it happened in', () => {
     expect(first.get('s:ghostRider')).toBe('gate');
     expect(first.get('t:railGrab')).toBe('grab');
     expect(first.has('m:pinecrest:2')).toBe(false);
-    frame(FINISH_DELAY_S, 'finish');
-    const second = s.ready();
-    expect(second).toEqual([{ id: 'm:pinecrest:2', frame: 'finish' }]);
+    frame(FINISH_DELAY_S, 'finish-0');
+    // (The line's stickers wait for the rest of the finish's frames.)
+    expect(s.ready()).toEqual([]);
+    for (let k = 1; k < FINISH_FRAMES; k++) frame(FINISH_STEP_S, `finish-${k}`);
+    expect(s.ready()).toEqual([{ id: 'm:pinecrest:2', frame: 'finish-0' }]);
     // Settled again (a revive): nothing handed twice; a sticker not earned is never handed.
     s.settle(['v:pinecrest:firstDrop:1', 'm:pinecrest:2']);
     expect(s.ready()).toEqual([]);
+  });
+
+  it("deals the finish's frames in turn to the line's stickers, and hands over what there is when the run ends early", () => {
+    const s = new StickerShots<string>(ctx());
+    s.events([ev({ type: 'finish', tick: 9000, bonus: 0 })]);
+    const ids = ['rv:pinecrest:a', 'rv:pinecrest:b', 'rv:pinecrest:c', 'rv:pinecrest:d', 'rv:pinecrest:e', 'm:pinecrest:4'];
+    s.settle(ids);
+    for (let k = 0; k < FINISH_FRAMES; k++) if (s.step(k === 0 ? FINISH_DELAY_S : FINISH_STEP_S, null)) s.took(`f${k}`);
+    const got = s.ready();
+    expect(got.map((g) => g.frame)).toEqual(ids.map((_, i) => `f${i % FINISH_FRAMES}`));
+    // Run Again a second after the line: the one frame there is.
+    const e = new StickerShots<string>(ctx());
+    e.events([ev({ type: 'finish', tick: 9000, bonus: 0 })]);
+    e.settle(['m:pinecrest:4', 'w:wren']);
+    if (e.step(FINISH_DELAY_S, null)) e.took('only');
+    expect(e.ready()).toEqual([]);
+    expect(e.ready(true).map((g) => g.frame)).toEqual(['only', 'only']);
   });
 
   it('shoots a spin at its flight top, and nothing for a flight too short or a trick held', () => {

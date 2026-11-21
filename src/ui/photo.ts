@@ -51,7 +51,7 @@ export interface PhotoOpts {
 }
 
 /** Turning speed: radians per pixel dragged, per second at full stick or key. */
-const DRAG_RAD = 0.0062;
+const DRAG_RAD = 0.0045;
 const KEY_RAD = 1.5;
 /** Moving across: shares of the lens's distance per pixel dragged, per second at full stick or key. */
 const DRAG_MOVE = 0.0016;

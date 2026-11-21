@@ -288,9 +288,12 @@
   }
 }
 
-/* The rest of the UI while photo mode is open: out of the picture and out of reach. */
+/* The rest of the UI while photo mode is open: out of the picture (opacity, which no child's own visibility can
+   override: the HUD's pills set theirs) and out of reach (inert, set by the game). */
 .gs-ui.is-photo-hidden {
-  visibility: hidden;
+  opacity: 0 !important;
+  transition: none !important;
+  pointer-events: none !important;
 }
 
 /* Pause: Photo beside Home (menus.ts). */

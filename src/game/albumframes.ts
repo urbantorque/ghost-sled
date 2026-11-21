@@ -6,8 +6,9 @@ import type { SimEvent } from '../sim/sim';
 // its grab (or the flight's top, for a spin or a flip), a charm as the rider rides through its arch, and the finish
 // once the lens has swung round to the rider. Only stickers the album does not hold yet are shot, so after the first
 // runs a run keeps a frame or two. What the run earns is known only when it is settled; the frames wait for that, and
-// a sticker earned at the line (a mood finished, a rider's record beaten, a mirror, a duel, a Long Night leg) takes the
-// finish's frame.
+// a sticker earned at the line (a mood finished, a rider's record beaten, a mirror, a duel, a Long Night leg) takes one
+// of the finish's frames (a few, as the lens creeps round the rider, dealt out in turn so a run that beats eight records
+// does not fill a row with one picture).
 //
 // This file decides what to keep and when, and pairs frames with the stickers settled. Pure: the frame itself is a
 // thumbnail the app grabs (the generic T), and where it is kept is framestore.ts's.
@@ -19,6 +20,9 @@ export const LEGEND_DELAY_S = 0.8;
 /** Seconds after the line: the finish lens has swung round to the rider (camera.ts FINISH_SWING_S is 2.5 on the
  *  render clock, which runs slow over the line). */
 export const FINISH_DELAY_S = 2.4;
+/** The finish's frames: this many, this far apart (s). */
+export const FINISH_FRAMES = 4;
+export const FINISH_STEP_S = 0.8;
 /** A flight is shot at its top only when it lasts at least this long in the air (s). */
 export const APEX_MIN_AIR_S = 0.45;
 /** The most frames one run keeps waiting for its settlement. */
@@ -113,7 +117,7 @@ export class StickerShots<T> {
   private readonly waits: Array<{ aim: Aim; left: number }> = [];
   private readonly kept: Array<Kept<T>> = [];
   private flight: T | null = null;
-  private finish: Kept<T> | null = null;
+  private readonly finishes: T[] = [];
   private airS = 0;
   private lastVy = 0;
   private settled = new Set<string>();
@@ -129,6 +133,7 @@ export class StickerShots<T> {
     for (const e of list) {
       const a = aimFor(e, this.ctx);
       if (a) this.waits.push({ aim: a, left: a.delay });
+      if (a && a.slot === 'finish') for (let k = 1; k < FINISH_FRAMES; k++) this.waits.push({ aim: a, left: a.delay + k * FINISH_STEP_S });
       // A trick landed: the flight's frame is its sticker's (the touchdown and its tricks come on one tick, in
       // either order, so the flight is let go after the tick's events).
       if (e.type === 'style' && typeof e.trick === 'number' && e.trick > 0) {
@@ -149,7 +154,7 @@ export class StickerShots<T> {
     for (let i = this.waits.length - 1; i >= 0; i--) {
       const w = this.waits[i];
       w.left -= dt;
-      if (w.left <= 0) {
+      if (w.left <= 1e-6) {
         this.want.push(w.aim);
         this.waits.splice(i, 1);
       }
@@ -180,8 +185,7 @@ export class StickerShots<T> {
         continue;
       }
       if (a.slot === 'finish') {
-        this.finish = { frame, ids: new Set() };
-        for (const id of this.settled) if (atTheLine(id)) this.finish.ids.add(id);
+        if (this.finishes.length < FINISH_FRAMES) this.finishes.push(frame);
         continue;
       }
       this.keep(frame, a.ids, !a.keep);
@@ -205,24 +209,29 @@ export class StickerShots<T> {
   /** What the run earned (the settlement's sticker ids). A settlement made again replaces the last. */
   settle(ids: readonly string[]): void {
     this.settled = new Set(ids);
-    if (this.finish) for (const id of ids) if (atTheLine(id)) this.finish.ids.add(id);
   }
 
-  /** Each settled sticker with a frame, not handed over before. */
-  ready(): Array<{ id: string; frame: T }> {
+  /** Each settled sticker with a frame, not handed over before. The line's stickers wait for all the finish's frames
+   *  (or for `final`: the run is over, Run Again or Home came first) and are dealt them in turn. */
+  ready(final = false): Array<{ id: string; frame: T }> {
     const out: Array<{ id: string; frame: T }> = [];
+    const dealt = final ? this.finishes.length > 0 : this.finishes.length >= FINISH_FRAMES;
+    let n = 0;
     for (const id of this.settled) {
+      const line = atTheLine(id);
+      const turn = line ? n++ : 0;
       if (this.handed.has(id)) continue;
-      const k = this.kept.find((x) => x.ids.has(id)) ?? (this.finish && this.finish.ids.has(id) ? this.finish : null);
-      if (!k) continue;
+      const k = this.kept.find((x) => x.ids.has(id));
+      const frame = k ? k.frame : line && dealt ? this.finishes[turn % this.finishes.length] : null;
+      if (frame === null) continue;
       this.handed.add(id);
-      out.push({ id, frame: k.frame });
+      out.push({ id, frame });
     }
     return out;
   }
 
   /** Frames held now (the app frees what is left at the run's end). */
   get holding(): number {
-    return this.kept.length + (this.flight !== null ? 1 : 0) + (this.finish ? 1 : 0);
+    return this.kept.length + (this.flight !== null ? 1 : 0) + this.finishes.length;
   }
 }

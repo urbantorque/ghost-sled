@@ -614,6 +614,7 @@ export class App {
 
   private enterTitle(): void {
     this.leavePhoto(false);
+    this.keepShots(true);
     this.shots = null;
     this.phase = 'title';
     this.paused = false;
@@ -1615,8 +1616,9 @@ export class App {
     });
   }
 
-  /** A run starts: its album frames start empty (and what the last run left is let go). */
+  /** A run starts: its album frames start empty (what the last run kept for its line is handed over first). */
   private beginShots(): void {
+    this.keepShots(true);
     const named = MOUNTAINS.some((m) => m.id === this.mountain.id) ? this.mountain.id : '';
     this.shots = new StickerShots<HTMLCanvasElement>({
       mountain: named,
@@ -1658,12 +1660,13 @@ export class App {
     return false;
   }
 
-  /** The stickers the run earned with a frame: encoded on idle time and kept (framestore.ts). */
-  private keepShots(): void {
+  /** The stickers the run earned with a frame: encoded on idle time and kept (framestore.ts). `final`: the run is over,
+   *  so the line's stickers take what finish frames there are. */
+  private keepShots(final = false): void {
     const shots = this.shots;
     if (!shots) return;
     const got = this.save.data.album?.got ?? {};
-    for (const { id, frame } of shots.ready()) {
+    for (const { id, frame } of shots.ready(final)) {
       const run = got[id];
       if (run === undefined) continue;
       const grabMs = this.grabMs;
