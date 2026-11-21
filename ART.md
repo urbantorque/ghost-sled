@@ -1073,3 +1073,14 @@ critics passed; what they did not pass stays out of the picture (DECISIONS 372 o
 - **A showdown is a race with a finish line of light:** two posts of gold-white light with a band of the rival's colour
   300 m ahead, the rival named in the pill; won, it bursts in the lantern's marigold and runs into the rider; lost,
   in the rival's colour. A steal pulls a thread of the ghost's own light into the rider, turning marigold.
+- **Every action is an event.** A perfect landing holds the whole picture for a beat (50 ms, longer for a streak) and
+  runs one shockwave of heaved snow out from the crater to about 8.5 m, a lit crest with a cool trough, white-gold for
+  its first instant, and a band of the snow's white runs up the rider's edge. A dash ignites the rider in white-gold,
+  cools the world round it (everything but the rider leans to a colder, quieter blue) and turns every hazard it passes
+  inside 6 m to pale glass motes. A ward's lantern stands larger than the rider so it reads from behind, and its shards
+  fly out to the sides, lit paper keeping the sled's pace. A passed ghost flares in its kind's colour, rocks back with
+  its arms flung up and comes apart into motes of its colour from its far side, never across the rider. The finish is
+  scaled to the result: a win is a festival, a best beaten lights the town (lamps down the square, each with a low
+  willow of marigold, lanterns let go), a podium a smaller show, an ordinary finish warm, a wreck gentle (the snow
+  settling round the rider). Nothing an event draws sits over the rider. Ghosts in glass take the trick poses. Low
+  keeps every beat but the light up the rider and the cooling; reduced motion keeps every beat and drops the motion.
