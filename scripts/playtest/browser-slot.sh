@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Round 8: the laptop blue-screens under load (DECISIONS 365, notes/r8-lanes.md), so lanes share two browser slots.
+# Round 8: the laptop blue-screens under load (DECISIONS 365, notes/r8-lanes.md), so lanes share one browser slot (two until a crash with two on 21 November).
 # Take a slot before opening a playwright browser and give it back when the browser is closed:
-#   scripts/playtest/browser-slot.sh take <lane>      waits (up to 40 min) for one of the two slots, prints it
+#   scripts/playtest/browser-slot.sh take <lane>      waits (up to 40 min) for the slot (one since 21 November), prints it
 #   scripts/playtest/browser-slot.sh give <lane>      gives back whatever slot <lane> holds
 #   scripts/playtest/browser-slot.sh who              lists the slots held, by whom and since when
 # A slot is a directory under the main checkout's shots/r8/slots (mkdir is atomic, so two lanes never take the same
@@ -33,7 +33,7 @@ case "$cmd" in
     [ -z "$lane" ] && { echo "usage: take <lane>"; exit 1; }
     deadline=$(( $(now) + 2400 ))
     while :; do
-      for s in 1 2; do
+      for s in 1; do  # one browser on the machine since the 21 November crash with two
         d="$SLOTS/slot$s"
         if [ -d "$d" ] && [ -f "$d/owner" ]; then
           since=$(cut -d' ' -f2 "$d/owner" 2>/dev/null || echo 0)
