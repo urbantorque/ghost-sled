@@ -395,6 +395,20 @@ palette, not a mode, so every tier draws it, Low through its poster.
   and the rider), and powder gusts and grit overtake the lens from behind. Fine flurries streak past
   the lens at speed and spindrift blows off the bank crests (Medium and High; reduced motion turns
   the flurries off).
+- **Speed in the world (round 8).** The near flakes are crystals in the air, not scratches on the lens: a short smear
+  whose light spreads along it, soft and out of focus within a few metres. Speed's blur keeps to the frame's outer
+  band, where what rushes past streaks along its own path; the middle, the far planes and the rider stay sharp, and only
+  a whip-pan blurs the whole frame. Posts, poles, flags and roped fences strobe past 4.5 to 12 m apart at the corridor's
+  edge, with a rank of tall poles behind them for depth. The lens breathes: it opens with a surge, punches out with a
+  dash and holds while it runs, and draws in a little as the run slows. On hard snow the runners chatter, through the
+  sled and the lens, hardest on ice and gone in powder.
+- **Spirit Flow.** The flow level (0 to 6) changes the picture's state as it climbs: the colour richer from level 1, a
+  flame off the scarf from 2 (the rider's vermillion burning into the lantern's marigold, never mint), wind lines in
+  the air from 3, sparks off the flame and the ghosts at their brightest at 5 and 6. A level gained is a breath in (the
+  lens draws in and opens out, the colour lifts, the flame flares, a ring of sparks); a level lost a gutter out (the
+  lens sags, the colour drains, the flame flickers and drops embers). Under the run a bed of air rises a step a level.
+  Reduced motion keeps the colour and the flame and drops the breath, the wind lines, the sparks and the chatter. Low
+  draws the flame alone.
 
 ## 9. Post-processing
 
