@@ -3818,3 +3818,40 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       stay gentle where the snow is largest), judge the glitter alone on golden-hour and night frames (the clearest win,
       and also read as "confetti"), try cornices as geometry past 10.5 m, and start the sheen at 12 m. The moving snow is
       unchanged.
+
+381. **The other hours, Lanternfall's silver pools and the hour picker: built, judged short, shipped as Almanac rewards**
+    (`notes/r8-hours.md`; frames, pairs, keys and the picker's frames under `shots/r8/hours/`).
+    - *Three more hours,* one for each Almanac page that promised one, so every mountain has two: Frostfang at Noon (a
+      polar noon: a low sun in sun dogs, diamond dust, a cobalt sky over a white-hot horizon, hard blue shadows, cloud
+      before the cavern and the glare outside it), Ember Peak at Night (a smoke deck lit red from below, the cone running
+      with lava under the lightning's threshold, cold lilac snow, windows and forges lit from the first metre) and
+      Lanternfall at First Light (the night's end with the lanterns burning low, a rose-violet underside to the deck,
+      never orange, the sunrise over Firstlight's street, lilac and silver snow throughout), beside the light lane's
+      Pinecrest at Dusk and Sakura Ridge in the Evening. Each has its own journey keyed to the places as the sim batch
+      moved them, and every tier draws it, Low through its poster. The Almanac's cards name them.
+    - *The picker.* Under Ride, one row: the day and the mountain's other hour as two halves of a soft pill, each with a
+      swatch of its sky, then the mirror's toggle. A pick relights the title at once, Ride's line names it, the save keeps
+      it per mountain (`SaveData.hours`), a run rides it and its results and reel keep it. Nothing reaches the sim, a
+      ghost or a record; the Long Night, the Daily and the Cup ride the day. Checked under playwright on desk and phone
+      (keys, pad, reduced motion, the console clean); on a finger both halves and the mirror's toggle are 44 px targets
+      (the lane's 34 and 36 px were raised at the merge).
+    - *Judged short, shipped anyway.* No hour reached its bar (picked or level in half the pairs): Frostfang at Noon 0
+      and 0 of 10, Ember at Night 4 and 2, Lanternfall at First Light 4 and 4. Every critic gave one reason, that the
+      other frame "follows the colour script" and the hour is "the wrong hour for this place": the critic is told only
+      ART.md, which describes each mountain's day, so the question cannot pass an hour. The hours are a look a player
+      chooses after earning it, the day is unchanged, and ART.md now describes them (section 7), so they ship as the
+      Almanac's rewards and go on the owner's play route. Ember at Night's last change (its far bank lifted off a "navy
+      slab") is unjudged; Lanternfall at First Light's title shot is a pale haze, weaker than the day's.
+    - *Lanternfall's pools are silver* (`silverPool` in `LIGHT_GLSL`, the palette's `poolSilver`): a pool lifts the snow's
+      own lilac toward silver with marigold only at its heart, as ART.md 15 asks; Low paints two soft silver steps and a
+      small warm heart. Blind pairs against the lane's base: Low 6 better and 4 level, then 5, 2 and 3 worse (its bar,
+      level or better, met in the first round); High 2 better, 6 level and 2 worse, then 4, 3 and 3 (its bar of 7 not
+      met). Shipped on both tiers as one look, because it is the one ART.md describes and High was never called worse
+      in more than three pairs; a tier switch would need the shared uniform split.
+    - *Cost.* No draw, program or pass; one shared vec4 uniform. Low's GL calls on Lanternfall by day level (488.5 and
+      497.1 within the ride's spread). At the hours, Ember at Night about 15 calls a frame over its day (mostly
+      `uniform4f`: the lamps and windows lit from the start), Frostfang at Noon about 10, First Light level. No hour
+      meets the light lane's histogram bar (Frostfang at Noon has the most true lights, 1.4%; Ember at Night true darks
+      over 45% on High).
+    - *Also at the merge:* Bram Oakhollow said "Afternoon." and "Lovely day." on every hour, Lanternfall's night too; his
+      lines are now for any hour ("Steady on.", "Nice and easy.").
