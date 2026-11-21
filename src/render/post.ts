@@ -132,7 +132,7 @@ export class PostFX {
   readonly pipe: Pipeline;
   /** bloomScale tames the bloom (portrait run, results hero shot); feetY is the sled's height on screen and vpX, vpY the
    *  course's vanishing point (uv, origin bottom left), for the avalanche. */
-  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1, reduced: false };
+  readonly params = { speed: 0, punch: 0, flash: 0, vignette: 1, grain: 1, time: 0, danger: 0, cool: 0, riderX: 0.5, riderY: 0.4, feetY: 0.3, vpX: 0.5, vpY: 0.75, bloomScale: 1, streakFoot: 0.12, footScale: 1, reduced: false };
 
   constructor(
     private renderer: WebGLRenderer,
@@ -251,6 +251,7 @@ export class PostFX {
         uFoot: { value: 0 },
         uTime: { value: 0 },
         uDanger: { value: 0 },
+        uCool: { value: 0 },
         uRider: { value: new Vector2(0.5, 0.4) },
         uFeet: { value: 0.3 },
         uVp: { value: new Vector2(0.5, 0.75) },
@@ -300,6 +301,7 @@ export class PostFX {
         uniform float uFoot;
         uniform float uTime;
         uniform float uDanger;
+        uniform float uCool;
         uniform vec2 uRider;
         uniform float uFeet;
         uniform vec2 uVp;
@@ -704,6 +706,15 @@ export class PostFX {
           col = max(col, 0.0);
           col = mix(col / (1.0 + max(col - 0.85, 0.0) * 0.6), filmic(col, lightHue), uTone);
           col += uFlash * 0.35;
+          if (uCool > 0.001) {
+            // Round 8 (the events lane): a dash cools the world while the rider burns. Everything but the rider
+            // leans to a cold, quieter blue (three fifths of its colour kept: at under half Sakura's peach sky went flat grey), so the white-gold spirit and
+            // its vermillion are the warm thing in the frame; round the rider the frame is untouched.
+            float lcool = dot(col, vec3(0.2126, 0.7152, 0.0722));
+            float keepR = smoothstep(0.06, 0.2, length((uv - uRider) * vec2(uAspect, 1.0)));
+            vec3 cold = mix(vec3(lcool), col, 0.62) * vec3(0.85, 0.95, 1.14);
+            col = mix(col, cold, uCool * 0.6 * keepR);
+          }
           float vig = smoothstep(1.05, 0.35, r);
           col *= mix(1.0, vig, 0.38 * uVignette);
           // A cool darkening toward the bottom edge (deepest in day moods), so the bright snow under the
@@ -1160,6 +1171,7 @@ export class PostFX {
     u.uGrain.value = this.params.grain * this.moodGrain;
     u.uTime.value = this.params.time;
     u.uDanger.value = this.params.danger;
+    u.uCool.value = this.params.cool;
     u.uRider.value.set(this.params.riderX, this.params.riderY);
     u.uFeet.value = this.params.feetY;
     u.uVp.value.set(this.params.vpX, this.params.vpY);

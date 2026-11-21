@@ -15,6 +15,8 @@ import { ROSTER, riderByName, type Emblem, type HatKind, type Rider } from '../b
 import { reduced as reducedMotion } from '../ui/motion';
 import { figures } from '../ui/figures';
 import { drawFigures } from './hudfigs';
+import { fx } from './fxhub';
+import { emptyTrickPose, trickPose, type TrickIn } from './trickpose';
 
 // Spectral ghosts: one glass silhouette per rider (a depth prepass, then the glass), a wisp ribbon
 // tail, a kind-tinted shadow that sells their height, a luminous groove line showing their line, a
@@ -143,6 +145,16 @@ interface Item {
   pom: number;
   pomV: number;
   armS: number;
+  /** Round 8 (the events lane): the trick pose its glass takes in the air (trickpose.ts, read off its record), eased:
+   *  how much (0 to 1), the body's fold, roll and lift, and how much one arm is raised over the other (its
+   *  material's uShoulder.w, the shoulders' own uniform). */
+  shoulder: { value: Vector4 };
+  trickK: number;
+  tPitch: number;
+  tRoll: number;
+  tLift: number;
+  lastYaw: number;
+  lastPitch: number;
   lastY: number;
   lastVy: number;
   /** The sled this ghost rode (meshes.ts sledGeometryFor id), how it sits it, its glass sled's
@@ -205,6 +217,9 @@ interface Item {
   /** Seconds left of a wreck pass's call (it rode past your wreck: the HUD's pill names it), while
    *  which its tag counts as the rival's (ringed, placed first, never a dot). */
   wreckT: number;
+  /** Round 8 (the events lane): seconds since you passed it (-1: not now). It starts, flares in its kind colour and
+   *  comes apart into motes as it falls back (moveGhost, poseGhost). */
+  reactT: number;
   /** The tag's kind word ('grudge', 'nemesis', 'challenge', 'daily'), if it has one, and whether a
    *  settled grudge has dropped it for the rest of the run. */
   kw: string | null;
@@ -239,6 +254,14 @@ const STAMP_QUIET = 1.5;
 const CALL_HOLD = 2.6;
 /** A ghost's perfect landing near you rings its tag once (the world drops a ring of motes there). */
 const STOMP_HOLD = 0.55;
+/** Round 8: a ghost's trick pose, worked out in place each frame (trickpose.ts). */
+const ghostTrickPose = emptyTrickPose();
+const ghostTrickIn: TrickIn = { move: 0, grab: 0, tier: 0, tweak: 0, spin: 0, flip: 0, danger: 0, time: 0, calm: false };
+/** Round 8: how long a passed ghost's start lasts (s), and its motes' carrier. */
+const REACT_S = 0.9;
+const reactCar = new Vector3();
+const reactAway = new Vector3();
+const reactAt = new Vector3();
 /** The best and friend line tags show from this far (metres from the lens). */
 const LINE_RANGE = 120;
 /** A graveyard's tag shows from this far: a landmark, so further out than a single crash marker's. */
@@ -498,12 +521,13 @@ function markerGeometry(): BufferGeometry {
 const GHOST_POSE_GLSL = /* glsl */ `
   attribute float aPart;
   uniform vec4 uPose;
-  uniform vec3 uShoulder;
+  uniform vec4 uShoulder;
   vec3 ghostPose(vec3 p, inout vec3 nrm) {
     if (aPart < -2.5) {
       float s = aPart < -3.5 ? 1.0 : -1.0;
       vec3 sh = vec3(s * uShoulder.x, uShoulder.y, uShoulder.z);
-      float a = s * uPose.x;
+      // (Round 8: uShoulder.w raises the right arm over the left by twice itself, for a ghost's trick pose.)
+      float a = s * (uPose.x + s * uShoulder.w);
       float c = cos(a);
       float sn = sin(a);
       vec3 q = p - sh;
@@ -530,7 +554,7 @@ const GHOST_POSE_GLSL = /* glsl */ `
  *  `level` 2 is all of it (High), 1 drops the far glint and the breathing (Medium), 0 is the shared
  *  material as it was, with the ghost's motion (Low). Mint stays mint: every term is multiplied through
  *  the kind colour, never added over it in white. */
-function ghostGlassMaterial(color: Color, gold: number, level: number, pose: { value: Vector4 }, shoulder: { value: Vector3 }): ShaderMaterial {
+function ghostGlassMaterial(color: Color, gold: number, level: number, pose: { value: Vector4 }, shoulder: { value: Vector4 }): ShaderMaterial {
   const m = makeGhostMaterial(color, gold);
   m.uniforms.uPose = pose;
   m.uniforms.uShoulder = shoulder;
@@ -597,7 +621,7 @@ function ghostGlassMaterial(color: Color, gold: number, level: number, pose: { v
 /** Depth only, pushed back a hair so the glass pass's front surface always wins LEQUAL. The
  *  dissolved lower body (legs and sled, all but invisible glass) writes no depth: an invisible sled
  *  would otherwise cut a sled-shaped hole in every wisp, spark and faint ghost drawn behind it. */
-function makeDepthMaterial(pose: { value: Vector4 }, shoulder: { value: Vector3 }): ShaderMaterial {
+function makeDepthMaterial(pose: { value: Vector4 }, shoulder: { value: Vector4 }): ShaderMaterial {
   return withStencil(new ShaderMaterial({
     transparent: true,
     colorWrite: false,
@@ -1062,6 +1086,7 @@ export class GhostVisuals {
         // its glass into petals, world.ts passFx).
         const it = this.items.find((g) => g.id === b.ghost.id);
         if (it && !this.reel) it.dropT = DROP_HOLD;
+        if (it && !this.reel && !b.muted) it.reactT = 0;
         this.riderSays(b.ghost.id, b.muted, false);
       } else if (b.type === 'grudgeSettled') {
         // A settled grudge is a grudge no more this run: its tag drops the word, so the one riding past
@@ -1150,7 +1175,8 @@ export class GhostVisuals {
       // The ghost's own motion (GHOST_POSE_GLSL): at rest until its first frame.
       const pose = { value: new Vector4(0, 1, 0, seat.y) };
       const pitch = -0.15 - seat.lean;
-      const shoulder = { value: RIDER_SHOULDER.clone().applyAxisAngle(AX, pitch).add(tmp.set(0, seat.y, seat.z)) };
+      const sh = RIDER_SHOULDER.clone().applyAxisAngle(AX, pitch).add(tmp.set(0, seat.y, seat.z));
+      const shoulder = { value: new Vector4(sh.x, sh.y, sh.z, 0) };
       const mat = ghostGlassMaterial(color, g.kind === 'you' ? 1 : 0, this.glass, pose, shoulder);
       mat.uniforms.uGlow.value = this.glow;
       mat.uniforms.uMood.value = this.mood;
@@ -1189,6 +1215,13 @@ export class GhostVisuals {
         pom: 0,
         pomV: 0,
         armS: 0,
+        shoulder,
+        trickK: 0,
+        tPitch: 0,
+        tRoll: 0,
+        tLift: 0,
+        lastYaw: 0,
+        lastPitch: 0,
         lastY: NaN,
         lastVy: 0,
         sv0: 0,
@@ -1225,6 +1258,7 @@ export class GhostVisuals {
         callT: 0,
         stompT: 0,
         wreckT: 0,
+        reactT: -1,
         kw,
         kwOff: false,
         duelOn: false,
@@ -1491,6 +1525,7 @@ export class GhostVisuals {
       it.callT = 0;
       it.stompT = 0;
       it.wreckT = 0;
+      it.reactT = -1;
       if (it.kw && it.kwOff) {
         it.tag.art.sub = it.kw;
         it.kwOff = false;
@@ -1553,6 +1588,7 @@ export class GhostVisuals {
     this.batch.begin(w, h, this.pixelRatio);
     // The rider is the hero: no tag ever sits on it.
     this.riderBounds(player, camera, w, h);
+    this.playerAt.copy(player);
     const portrait = w < h;
     const rivalId = rival && this.labels && !this.reel ? rival.id : -1;
     // Screen-size fades are measured against the frame height (a phone's narrow width caps it).
@@ -1748,6 +1784,8 @@ export class GhostVisuals {
       it.mat.uniforms.uBody.value = body;
       it.mat.uniforms.uNear.value = nearCam;
       it.mat.uniforms.uDim.value = it.dim;
+      // (Round 8: passed, its glass flares in its own colour and settles as it comes apart.)
+      it.mat.uniforms.uGlow.value = it.reactT >= 0 ? this.glow * (1 + 1.6 * Math.exp(-it.reactT * 6)) : this.glow;
       it.mesh.visible = core > 0.004;
       it.shown = vis;
       if (!it.mesh.visible) it.sr = 0;
@@ -2132,9 +2170,35 @@ export class GhostVisuals {
     sledQ.multiply(tmpQ.setFromAxisAngle(AX, -p.airPitch)).multiply(tmpQ.setFromAxisAngle(AZ, -p.lean * 0.2));
     // (The body is carried into the carve on its spring: it lags the sled's bank and settles past it.)
     q.copy(sledQ).multiply(tmpQ.setFromAxisAngle(AZ, -it.leanS * 0.28));
+    // Round 8: passed, it rocks back on its sled for a moment, and its glass comes apart into motes of its kind
+    // colour that hang back past the rider (mint, rose for a grudge, gold-white for your best).
+    if (it.reactT >= 0) {
+      const t = it.reactT;
+      if (!this.feel.reduced) q.multiply(tmpQ.setFromAxisAngle(AX, 0.42 * Math.sin(Math.min(1, t / 0.5) * Math.PI)));
+      const sink = fx.snow;
+      if (sink && t < 0.5 && dt > 0) {
+        const sp = p.speed;
+        reactCar.set(Math.sin(p.heading) * sp, 0, -Math.cos(p.heading) * sp);
+        // (Off its side away from the rider and out from it, so none crosses the hero: contract C10.)
+        reactAway.set(pos.x - this.playerAt.x, 0, pos.z - this.playerAt.z);
+        const al = Math.hypot(reactAway.x, reactAway.z);
+        if (al > 0.01) reactAway.multiplyScalar(1 / al);
+        else reactAway.set(1, 0, 0);
+        // (The race's pass rule fires with the ghost a little behind the rider, often beside the lens: the motes
+        // leave from level with the rider at the ghost's side of the run, so they play out beside the hero and
+        // stream back past it, as world.ts passFx places its shatter.)
+        // (And a metre out from the ghost's far side, from its waist down: a ghost passed right beside the rider put
+        // its motes against the rider's chest.)
+        reactAt.set(pos.x + reactAway.x * 0.9, pos.y, Math.min(pos.z, this.playerAt.z - 0.9) + reactAway.z * 0.9);
+        sink.ghostMotes(reactAt, 0.9 * RIDER_SCALE, it.col, reactCar, ((t < 0.08 ? 40 : 15) * dt * 60 * (fx.tier === 0 ? 0.4 : 1)) / (t < 0.08 ? 5 : 1), reactAway);
+      }
+    }
+    // (Round 8: and its trick pose's fold and roll, about the hips too.)
+    if (Math.abs(it.tPitch) + Math.abs(it.tRoll) > 1e-3) q.multiply(tmpQ.setFromAxisAngle(AX, it.tPitch)).multiply(tmpQ.setFromAxisAngle(AZ, it.tRoll));
     // Turned about the hips: position = pos + sled * hips - body * hips.
     hip.set(0, it.seat.y * RIDER_SCALE, it.seat.z * RIDER_SCALE);
     it.mesh.position.copy(pos).add(tmpA.copy(hip).applyQuaternion(sledQ)).sub(hip.applyQuaternion(q));
+    if (it.tLift !== 0) it.mesh.position.addScaledVector(UP, it.tLift * RIDER_SCALE);
     it.sledQ.copy(sledQ);
     it.sledP.copy(pos);
   }
@@ -2164,6 +2228,9 @@ export class GhostVisuals {
     }
     for (let i = 0; i < k; i++) cb(near[i].id, near[i].sledP, near[i].sledQ);
   }
+
+  /** The rider this frame (three.js), so a passed ghost's motes go off its far side (round 8). */
+  private readonly playerAt = new Vector3();
 
   /** How much glass the ghosts are drawn in (ghostGlassMaterial): 2 High, 1 Medium, 0 Low. Read as
    *  the field is set. */
@@ -2205,8 +2272,48 @@ export class GhostVisuals {
     }
     it.lastY = p.y;
     // Arms out in the air (and waving a little), up for a drift's balance, down on the snow.
-    const want = p.grounded ? (p.drifting ? 0.45 : 0) : 0.95 + (calm ? 0 : 0.18 * Math.sin(shared.uTime.value * 9 + it.id));
-    it.armS += (want - it.armS) * Math.min(1, dt === 0 ? 1 : dt * 8);
+    let want = p.grounded ? (p.drifting ? 0.45 : 0) : 0.95 + (calm ? 0 : 0.18 * Math.sin(shared.uTime.value * 9 + it.id));
+    // Passed (round 8): it starts, arms flung up and out, as you go by (reduced motion: no start, the flare and
+    // the motes still say it).
+    if (it.reactT >= 0) {
+      it.reactT += dt;
+      if (it.reactT > REACT_S) it.reactT = -1;
+      else if (!calm) want = Math.max(want, 1.7 * (1 - smooth01((it.reactT - 0.25) / 0.4)));
+    }
+    // Round 8: in the air its glass takes the rider's trick pose (trickpose.ts, from what its record says it is doing),
+    // cheaply: the body's fold, roll and lift and how high each arm is raised, eased in as fast as the rider's.
+    const tp = ghostTrickPose;
+    let tk = 0;
+    let armD = 0;
+    if (!p.grounded && p.move > 0 && p.fall === 0 && h > 0) {
+      const ti = ghostTrickIn;
+      ti.move = p.move;
+      ti.grab = p.grab;
+      ti.tier = p.tier;
+      ti.tweak = 0;
+      ti.spin = (p.airYaw - it.lastYaw) / h;
+      ti.flip = (p.airPitch - it.lastPitch) / h;
+      ti.danger = 0;
+      ti.time = shared.uTime.value;
+      ti.calm = calm;
+      trickPose(ti, tp);
+      tk = tp.k;
+      if (tk > 0) {
+        const l = want + (tp.arm[1] - want) * tp.armK[0];
+        const r = want + (tp.arm[3] - want) * tp.armK[1];
+        want = (l + r) / 2;
+        armD = (r - l) / 2;
+      }
+    }
+    it.lastYaw = p.airYaw;
+    it.lastPitch = p.airPitch;
+    const ek = Math.min(1, dt === 0 ? 1 : dt * (tk > it.trickK ? 14 : 8));
+    it.trickK += (tk - it.trickK) * ek;
+    it.tPitch += ((tk > 0 && !Number.isNaN(tp.pitch) ? tp.pitch : 0) - it.tPitch) * ek;
+    it.tRoll += ((tk > 0 ? tp.roll : 0) - it.tRoll) * ek;
+    it.tLift += ((tk > 0 ? tp.lift : 0) - it.tLift) * ek;
+    it.shoulder.value.w += (armD - it.shoulder.value.w) * ek;
+    it.armS += (want - it.armS) * Math.min(1, dt === 0 ? 1 : dt * (tk > 0 ? 14 : 8));
     it.pose.value.set(it.armS, 1 + it.bob * 2.2, it.pom, it.seat.y);
   }
 

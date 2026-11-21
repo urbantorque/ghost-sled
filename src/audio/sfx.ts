@@ -802,6 +802,9 @@ export class Sfx {
       thump(v, t, 72, 36, 0.48 + 0.03 * Math.min(n - 1, 4), 0.11);
       puff(v, t, 0.16, 3200, 800, 0.1);
       this.click(v, t, 0.1);
+      // Round 8 (the events lane): the shockwave heaving out through the snow, a low wash of snow that opens
+      // as it runs (landing.ts WAVE_S), wider for a streak.
+      whoosh(v, t + 0.04, 0.5, 160, 900 + 120 * Math.min(n - 1, 4), 0.13, 0.8, v.bank.pink);
     }
     // The payoff: a major add9 bell chord over a soft bloom (on the chord's voice; it swells in
     // slowly, so it is built on a later scheduler pass), then a rising shimmer.
@@ -1041,10 +1044,22 @@ export class Sfx {
   }
 
   /** A dash: the air tears open (a rising rush) and a glass shimmer rides on it for the dash's length. */
+  /** Round 8 (the events lane): the town's lamps lighting down the square for a best beaten, one soft bell a lamp,
+   *  climbing the chord, in step with the light (moments.ts TOWN_STEP). */
+  private townBells(t: number): void {
+    const v = this.voice(t, 0.5, 0, 1.1, PRIO.low);
+    [7, 9, 11, 12, 14, 16, 18, 19].forEach((i, j) => {
+      const f = this.chordNote(i);
+      this.at(v, t + j * 0.2, (tn) => fmBell(v, tn, f, 0.035, 0.9, 2, 0.8));
+    });
+  }
+
   private dashStart(t: number): void {
     const v = this.voice(t, 0.4, 0, 1.5);
     whoosh(v, t, 0.5, 500, 5200, 0.22, 1.1);
     whoosh(v, t + 0.05, 1.3, 2600, 7000, 0.05, 2.5, v.bank.white);
+    // Round 8: the world cools round the burning rider (post.ts uCool): a thin cold air high over it.
+    whoosh(v, t + 0.08, 1.2, 9500, 5200, 0.025, 3, v.bank.white);
     const tb = this.onGrid(t, 1, 0.16);
     const gap = this.runGap(0.06);
     [12, 16, 19].forEach((i, j) => {
@@ -1071,6 +1086,8 @@ export class Sfx {
       const f = this.chordNote(i);
       this.at(v, tb + j * gap, (tn) => fmBell(v, tn, f, 0.06, 0.7, 5.1, 1.6));
     });
+    // Round 8: the lantern's paper shards scattering, a fall of small bright ticks (wardfx.ts).
+    this.shimmer(t + 0.1, 9, 12, 0.03);
   }
 
   /** Through a sky gate: a bright open chord, high and wide. */
@@ -1993,6 +2010,8 @@ export class Sfx {
         break;
       case 'finish':
         this.finishCue(t, b.rank, b.of);
+        // Round 8: a best beaten lights the town (moments.ts): a soft bell for each lamp as it lights.
+        if (b.pb) this.townBells(t + 0.25);
         break;
       case 'moment':
         this.moment(b.verb, b.phase as string, b.n, b.of, t);
@@ -2286,6 +2305,8 @@ export class Sfx {
       whoosh(v, t, 0.16, 2600, 900, 0.05, 1.2);
       whoosh(v, t + 0.1, 0.3, 700, 2400, 0.09, 1.1);
     } else whoosh(v, t, 0.35, 700, 2400, 0.1, 1.1);
+    // Round 8 (the events lane): the passed ghost coming apart into motes, a glassy fizz falling away behind.
+    whoosh(v, t + 0.05, 0.3, 7000, 2600, 0.028, 2.2, v.bank.white);
     const tb = this.onGrid(t + 0.06, 1, 0.14);
     if (best) {
       this.goldAt = t;

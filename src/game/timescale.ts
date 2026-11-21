@@ -70,6 +70,17 @@ export const APEX_CURVE: readonly TimeKey[] = [
   { at: APEX_S, scale: 1 },
 ];
 
+/** A perfect landing's held beat (round 8, the events lane), on the render channel beside the stomp's feed
+ *  hit-stop: the whole picture (the burst, the scarf, the shockwave in the snow, the lens's shake) holds near
+ *  still on the impact for 50 ms, and a streak holds it longer, up to 98 ms at five in a row, so the stamp is
+ *  felt in the world before it is read on the HUD. The sim is untouched (only how much real time it is fed).
+ *  Reduced motion plays none of it and keeps the beat. */
+export const STOMP_HOLD_SCALE = 0.1;
+export function stompHoldS(streak: number): number {
+  const n = Math.max(1, Math.min(5, Math.floor(streak) || 1));
+  return 0.05 + 0.012 * (n - 1);
+}
+
 /** Live pulses kept per channel (a beat never needs more: the weakest is dropped when full). */
 const SLOTS = 4;
 

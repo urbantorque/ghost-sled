@@ -23,6 +23,7 @@ import {
   FLAG_DOWN,
   FLAG_UP,
   FLAG_GROUNDED,
+  unpackTrick,
   FRAME_STRIDE,
   PoolGhostData,
   SAMPLE_EVERY,
@@ -126,12 +127,17 @@ export interface GhostPose {
   sinceDone: number;
   /** Over the finish line at this tick: a run that ended well (no wreck to mark). */
   finished: boolean;
+  /** Round 8: in the air, the trick posed (tricks.ts TRICK; 0 none), a grab's side (-1, 1; 0 none) and its tier, as
+   *  its record rode it (ghostdata.ts packTrick), so its glass takes the rider's trick poses. */
+  move: number;
+  grab: number;
+  tier: number;
 }
 
 export type RaceEvent = { type: 'pass'; track: GhostTrack; first: boolean } | { type: 'passedBy'; track: GhostTrack } | { type: 'crashed'; track: GhostTrack };
 
 export function emptyPose(): GhostPose {
-  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, dashing: false, warded: false, fall: 0, done: false, sinceDone: 0, finished: false };
+  return { x: 0, y: 0, z: 0, heading: 0, airYaw: 0, airPitch: 0, lean: 0, speed: 0, carve: 0, grounded: true, drifting: false, dashing: false, warded: false, fall: 0, done: false, sinceDone: 0, finished: false, move: 0, grab: 0, tier: 0 };
 }
 
 /** A track's place in the race order. */
@@ -375,6 +381,7 @@ export class GhostManager {
     out.dashing = (flags1 & FLAG_DASHING) !== 0;
     out.warded = (flags1 & FLAG_WARDED) !== 0;
     out.fall = flags1 & FLAG_FALLING ? 1 : flags1 & FLAG_DOWN ? 2 : flags1 & FLAG_UP ? 3 : 0;
+    unpackTrick(flags1, out);
     return true;
   }
 

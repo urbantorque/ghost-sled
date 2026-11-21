@@ -101,8 +101,10 @@ export type Beat =
    *  clock at the line. vsGhost: against the ghost just ahead, or in the lead the one just behind.
    *  vsGhost.delta and vsBest are seconds, + = you are behind it; null with nothing to compare. */
   | (B & { type: 'stage'; index: number; name: string; last: boolean; seconds: number; vsGhost: { name: string; kind: GhostKind; delta: number } | null; vsBest: number | null })
-  /** Over the line: the race ends here. rank and of: your place (only ghosts already over it lead you). */
-  | (B & { type: 'finish'; bonus: number; seconds: number; rank: number; of: number })
+  /** Over the line: the race ends here. rank and of: your place (only ghosts already over it lead you). pb (round 8):
+   *  a best beaten, faster than your best's finish, or a finish where your best did not (a first finish is not one:
+   *  there was nothing to beat). The world scales the finish by these (moments.ts finishScale). */
+  | (B & { type: 'finish'; bonus: number; seconds: number; rank: number; of: number; pb?: boolean })
   | (B & { type: 'grind'; phase: 'start' | 'end'; id: number })
   | (B & { type: 'km'; km: number })
   | (B & { type: 'ghostTrick'; ghost: GhostRef; quality: 'clean' | 'perfect' | 'sketchy'; word: string | null; x: number; y: number; z: number })

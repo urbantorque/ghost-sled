@@ -1305,6 +1305,8 @@ export class World {
     this.post.pipe.lightDir.copy(this.palette.shadowDir);
     pp.punch = feel.reduced ? 0 : this.punch;
     pp.flash = this.flash * (feel.reduced ? 0.5 : 1);
+    // (Round 8, the events lane: a dash cools the world round the burning rider, post.ts uCool.)
+    pp.cool = v.mode === 'run' ? this.spirit.coolK(this.dashK) : 0;
     // An enclosed run (landmarks.ts): its dark at the frame's edges, the strobe and the way out's flash.
     const encl = this.setPieces.light;
     pp.flash = Math.max(pp.flash, encl.flash * (feel.reduced ? 0.4 : 1));

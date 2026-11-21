@@ -53,6 +53,9 @@ interface Pending {
   b: Color;
   kind: ShellKind;
   emberAcc: number;
+  /** Round 8: a burst that lights nothing round it (a town lamp's small willow: lit, a row of them turned the
+   *  square to a gold floor). */
+  dark?: boolean;
 }
 
 function streakGeometry(): BufferGeometry {
@@ -232,7 +235,7 @@ export class Fireworks {
   }
 
   /** A shell from `from` that bursts at `to` after `rise` seconds (three.js space). */
-  shell(from: Vector3, to: Vector3, rise: number, a: Color, b: Color, kind?: ShellKind): void {
+  shell(from: Vector3, to: Vector3, rise: number, a: Color, b: Color, kind?: ShellKind, dark = false): void {
     if (this.noRed) {
       a = a === FW_VERMILLION ? FW_MARIGOLD : a === FW_CORAL ? FW_LILAC : a;
       b = b === FW_VERMILLION ? FW_MARIGOLD : b === FW_CORAL ? FW_LILAC : b;
@@ -251,6 +254,7 @@ export class Fireworks {
       b,
       kind: kind ?? KINDS[Math.floor(Math.random() * KINDS.length)],
       emberAcc: 0,
+      dark,
     });
   }
 
@@ -345,6 +349,7 @@ export class Fireworks {
     }
     // ...and it lights the square: a local light where it broke, in its own colour, gone in about a second
     // (lights.ts; the nearest few to the rider are kept, and the tier says how many a show may offer).
+    if (p.dark) return;
     const L = this.lights[this.lightNext];
     this.lightNext = (this.lightNext + 1) % this.lights.length;
     L.x = x;

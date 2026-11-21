@@ -9,6 +9,8 @@ import type { ChaseCamera } from './camera';
 import { crowdRoar } from './crowd';
 import { runnersOnSnow, shakeCrowns } from './nearfield';
 import { FW_PAIRS, type Fireworks, type ShellKind } from './fireworks';
+import { fx } from './fxhub';
+import { pushLocalLight } from './lights';
 import type { Particles } from './particles';
 import type { RiderAct } from './rider';
 import { nearBank, type Sloughs } from './sloughs';
@@ -114,6 +116,37 @@ const SHOW: readonly (readonly [number, number, number, number])[] = [
 
 const HIST = 720;
 
+/** How big the finish is (round 8, the events lane): scaled to the result, so a win is a festival, a best beaten
+ *  lights the town, an ordinary finish is warm and a wreck (no finish: moments.ts wreck) is gentle. shells: how
+ *  many of SHOW go up (a win's own show and finale are spirit.ts's on top); cannons: confetti a cannon; ribbons a
+ *  second drifting down; lanterns let go over the square; town: the square's lamps light in a wave down it. */
+export interface FinishScale {
+  kind: 'win' | 'pb' | 'podium' | 'finish';
+  shells: number;
+  cannons: number;
+  ribbons: number;
+  lanterns: number;
+  town: boolean;
+}
+export function finishScale(rank: number, pb: boolean): FinishScale {
+  if (rank === 1) return { kind: 'win', shells: SHOW.length, cannons: 60, ribbons: 30, lanterns: 26, town: true };
+  if (pb) return { kind: 'pb', shells: 5, cannons: 30, ribbons: 12, lanterns: 44, town: true };
+  if (rank >= 1 && rank <= 3) return { kind: 'podium', shells: 7, cannons: 40, ribbons: 20, lanterns: 14, town: false };
+  return { kind: 'finish', shells: 3, cannons: 0, ribbons: 6, lanterns: 18, town: false };
+}
+/** An ordinary finish's three shells: low, slow willows of warm light, not a show. */
+const WARM_SHOW: readonly number[] = [0, 3, 5];
+/** The town's lamps lighting down the square: how many, how far apart in time (s) and how long each burns. */
+const TOWN_N = 8;
+const TOWN_STEP = 0.2;
+const TOWN_LIFE = 4;
+const TOWN_BEAT = 0.6;
+const LANTERN = new Color('#FFD34D');
+const TOWN_GLOW = new Color('#FFE29A');
+/** A lamp's willow: the lantern's marigold opening to white-gold (fireworks.ts's own pair colours). */
+const TOWN_A = FW_PAIRS[1][0];
+const TOWN_B = FW_PAIRS[0][1];
+
 /** How far ahead of a lip the rider loads for it, in seconds at its speed. */
 const LOAD_AHEAD = 0.55;
 
@@ -166,6 +199,9 @@ export class Moments {
     this.histN = 0;
     this.real = this.shown = this.lag = 0;
     this.confettiAcc = 0;
+    this.town.length = 0;
+    this.lanternsLeft = 0;
+    this.wreckT = -1;
   }
 
   get tumbling(): boolean {
@@ -287,7 +323,13 @@ export class Moments {
           break;
         case 'finish':
           this.act.rank = b.rank;
-          this.startFinish(s);
+          this.startFinish(s, finishScale(b.rank, !!b.pb));
+          break;
+        case 'crash':
+          // A wreck ends the run gently: the snow it threw settles round the rider (no shells, no crowd).
+          this.wreckT = 0;
+          this.roar = 0;
+          this.roarHold = 0;
           break;
         case 'grudgeSettled':
           this.answer(s, 0, ROSE, 1.2);
@@ -406,8 +448,9 @@ export class Moments {
 
   /** Over the line: the burst from the square, a shell at a time over the next seconds, the first ahead
    *  of the chase lens and the rest round the line behind the rider, where the swung lens looks. */
-  private startFinish(s: Snap): void {
+  private startFinish(s: Snap, scale: FinishScale = finishScale(2, false)): void {
     this.finishing = true;
+    this.scale = scale;
     this.finT = 0;
     this.roarHold = ROAR_HOLD;
     this.roar = 1;
@@ -415,17 +458,103 @@ export class Moments {
     this.shellNext = 0;
     SHOW.forEach(([t, nx, ny, d], i) => {
       const [a, b] = SHELLS[i % SHELLS.length];
+      if (scale.kind === 'finish') {
+        // Warm: three willows, low in the sky.
+        if (!WARM_SHOW.includes(i)) return;
+        this.shells.push({ t: t + 0.4, nx, ny: ny * 0.7, d, a, b, kind: 'willow', up: false, x: 0, y: 0, z: 0 });
+        return;
+      }
+      if (i >= scale.shells) return;
       this.shells.push({ t, nx, ny, d, a, b, kind: SHELL_KINDS[i % SHELL_KINDS.length], up: false, x: 0, y: 0, z: 0 });
     });
+    // The lanterns let go and the town's lamps (scheduled from the line: stepFinish lights them).
+    this.lanternsLeft = scale.lanterns;
+    this.townT = Math.max(this.real, 0);
+    this.town.length = 0;
+    if (scale.town) {
+      const c = this.world.course;
+      for (let i = 0; i < TOWN_N; i++) {
+        // (Down the square ahead, 20 to 85 m on, where the lens looks as the rider coasts in, both
+        // sides just inside the barriers over the run's own snow: placed by the rider they stood beside the lens,
+        // out of the frame, and inside the stands cut into the banks they were hidden.)
+        const z = s.z + 20 + i * 9;
+        const side = i % 2 === 0 ? -1 : 1;
+        const cx = c.centerX(z);
+        const x = cx + side * Math.max(3, c.halfWidth(z) - 1.2);
+        this.town.push({ at: 0.25 + i * TOWN_STEP, x, y: c.ground(cx, z) + 7, z: -z, t: -1 });
+      }
+    }
     // The cannons at the line: either side of the rider and a little ahead, firing in over it.
     const p = this.world.particles;
     const c = this.world.course;
     const vel = this.carrier(s);
     const z = s.z + Math.max(10, s.speed * 0.55);
     const hw = Math.min(11, c.halfWidth(z));
-    for (const side of [-1, 1]) {
-      const x = s.x + side * hw;
-      p.confetti(this.a.set(x, c.ground(x, z) + 0.6, -z), this.b.set(-side * 7, 12, 0), 60, vel);
+    if (scale.cannons > 0) {
+      for (const side of [-1, 1]) {
+        const x = s.x + side * hw;
+        p.confetti(this.a.set(x, c.ground(x, z) + 0.6, -z), this.b.set(-side * 7, 12, 0), scale.cannons, vel);
+      }
+    }
+  }
+
+  /** The finish's scale this run (startFinish). */
+  private scale: FinishScale = finishScale(2, false);
+  /** Lanterns still to let go over the square, and the town's lamps lighting in a wave (render seconds since the
+   *  line each lights at, where, and how long it has burned: -1 not yet). */
+  private lanternsLeft = 0;
+  private townT = 0;
+  private lanternAcc = 0;
+  private town: Array<{ at: number; x: number; y: number; z: number; t: number }> = [];
+  /** Render seconds since a wreck (-1 none): its snow settles for three. */
+  private wreckT = -1;
+  private wreckAcc = 0;
+
+  /** The square's lamps light one after another down both sides, each a beat of warm light over the snow and a
+   *  burst of its glow, and a few lanterns go up from each; the lanterns let go over the square on their own
+   *  through the first seconds. */
+  private stepTown(s: Snap, now: number, dt: number): void {
+    const p = this.world.particles;
+    for (const l of this.town) {
+      if (l.t < 0) {
+        if (now < l.at) continue;
+        l.t = 0;
+        p.sparkle(this.a.set(l.x, l.y, l.z), TOWN_GLOW, 14, 1.6, 0.8, 0.24, null, 0.4);
+        p.lamp(l.x, l.y, l.z, TOWN_GLOW, 2.1, TOWN_LIFE + 2.5);
+        // Each lamp sends up a little willow of its own light, low over its side of the square, so the lighting runs
+        // down the town in the sky as well as on the snow (a mote a hundred metres off is a few pixels: a lamp's
+        // light alone was lost by day).
+        const c = this.world.course;
+        const cx = c.centerX(-l.z);
+        const g = c.ground(cx, -l.z);
+        // (Every other lamp: one each crowded the sky.)
+        // (A dark burst: its own light on the square read with the show's as a gold floor that drowned the rider. A
+        // win's show is festival enough: its lamps light without them.)
+        if (this.scale.kind !== 'win' && this.town.indexOf(l) % 2 === 0) this.world.fireworks.shell(this.a.set(l.x, g + 1, l.z), this.b.set(cx + (l.x - cx) * 1.15, g + 13 + ((l.at * 7) % 4), l.z), 0.42, TOWN_A, TOWN_B, 'willow', true);
+        // (Reduced motion keeps the lamps' light and lets no lantern drift away.)
+        if (!fx.reduced) p.skyLanterns(l.x, l.y - 1, l.z, 2, 3, LANTERN);
+      }
+      l.t += dt;
+      // Its beat of light on the snow as it lights (three at most at once, so the square's own lamps and the
+      // shells keep their light slots: lights.ts); its orb holds the lamp lit after.
+      if (l.t > TOWN_BEAT) continue;
+      const k = l.t < 0.12 ? l.t / 0.12 : 1 - (l.t - 0.12) / (TOWN_BEAT - 0.12);
+      pushLocalLight(l.x, l.y, l.z, TOWN_GLOW.r, TOWN_GLOW.g, TOWN_GLOW.b, 12, 0.8 * k);
+    }
+    if (this.lanternsLeft > 0 && now > 0.3 && !fx.reduced) {
+      this.lanternAcc += dt * 28;
+      const n = Math.min(this.lanternsLeft, Math.floor(this.lanternAcc));
+      if (n > 0) {
+        this.lanternAcc -= n;
+        this.lanternsLeft -= n;
+        const c = this.world.course;
+        // Over the run's edges down the square ahead, rising past the stands, where the lens looks.
+        const z = s.z + 30 + Math.random() * 100;
+        const side = Math.random() < 0.5 ? -1 : 1;
+        const cx = c.centerX(z);
+        const x = cx + side * Math.max(2, c.halfWidth(z) - 1 - Math.random() * 4);
+        p.skyLanterns(x, c.ground(cx, z) + 3.5, -z, 1.5, n, LANTERN);
+      }
     }
   }
 
@@ -497,6 +626,15 @@ export class Moments {
       }
     }
     if (this.finishing) this.stepFinish(s, dt);
+    if (this.wreckT >= 0) {
+      this.wreckT += dt;
+      this.wreckAcc += dt * 8;
+      if (this.wreckAcc >= 1 && this.wreckT < 3 && !fx.reduced) {
+        w.particles.settle(this.at(s), Math.floor(this.wreckAcc));
+        this.wreckAcc = 0;
+      }
+      if (this.wreckT > 3) this.wreckT = -1;
+    }
     // The celebration keeps real seconds: the eased clock would spend the whole coast before the
     // results on its first half-second (under reduced motion there is no ease, and the two agree).
     act.finT = this.finishing ? Math.max(this.real, this.finT) : 0;
@@ -509,6 +647,11 @@ export class Moments {
   private stepFinish(s: Snap, dt: number): void {
     const p = this.world.particles;
     this.finT += dt;
+    // (The town keeps real seconds, as the celebration does: on the eased clock its lamps were still lighting when
+    // the results came up. Under reduced motion there is no ease and the two agree.)
+    const tr = Math.max(this.real, this.finT);
+    this.stepTown(s, tr, Math.max(0, tr - this.townT));
+    this.townT = tr;
     for (let i = this.shellNext; i < this.shells.length; i++) {
       const sh = this.shells[i];
       if (!sh.up && sh.t - SHELL_RISE <= this.finT) this.launch(sh);
@@ -517,7 +660,7 @@ export class Moments {
     while (this.shellNext < this.shells.length && this.shells[this.shellNext].t <= this.finT) this.shellNext++;
     // Ribbons drift down over the rider while it coasts and for a little after.
     if (this.finT < 5.5) {
-      this.confettiAcc += dt * 30;
+      this.confettiAcc += dt * this.scale.ribbons;
       const n = Math.floor(this.confettiAcc);
       if (n > 0) {
         this.confettiAcc -= n;

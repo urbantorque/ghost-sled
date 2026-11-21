@@ -1,4 +1,4 @@
-import { AdditiveBlending, AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, InstancedBufferAttribute, InstancedMesh, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3 } from 'three';
+import { AdditiveBlending, AlwaysStencilFunc, BufferAttribute, BufferGeometry, Color, DoubleSide, DynamicDrawUsage, Euler, Group, InstancedBufferAttribute, InstancedMesh, Material, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, ReplaceStencilOp, ShaderMaterial, Vector2, Vector3, Vector4 } from 'three';
 import { FLOW_HEX } from '../game/beats';
 import { type HatId, type ScarfDef, SCARVES } from '../game/garage';
 import { Course } from '../sim/course';
@@ -287,6 +287,10 @@ interface RiderUniforms {
   /** The hero's own light (round 7): x the soft key's floor, y the rim from the frame's light, z how
    *  firmly the vermillion holds its value and hue. 1 each; the results' fill and a tier may trim them. */
   hero: { value: Vector3 };
+  /** Round 8 (the events lane): light running up the rider. x the band's height over the rider's base (m), y its
+   *  strength (0 to 1), z its half-height (m), w its colour (0 the snow's white for a perfect landing, 1 the
+   *  spirit's white-gold for a dash's ignition). */
+  rise: { value: Vector4 };
 }
 
 /** Secondary motion in the vertex shader (presentation only, no extra draw): vertices weighted by
@@ -420,12 +424,13 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
   m.uniforms.uHorizonRim = { value: horizonRim };
   m.uniforms.uSpirit = u.spirit;
   m.uniforms.uHero = u.hero;
+  m.uniforms.uRise = u.rise;
   // The toon shader dissolves whatever sits on the sight line from the camera to the rider. The
   // rider itself must never dissolve (least of all the scarf, which streams back toward the
   // camera), so its own focus sits far overhead: that sight line runs straight up, clear of it.
   m.uniforms.uFocus = { value: new Vector3(0, 1e6, 0) };
   const before = m.fragmentShader;
-  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;\n      uniform vec3 uHero;');
+  let fs = before.replace('uniform float uRimK;', 'uniform float uRimK;\n      uniform float uFlash;\n      uniform float uFill;\n      uniform float uEmber;\n      uniform vec2 uFlow;\n      uniform vec3 uFlowC;\n      uniform float uSunRim;\n      uniform float uHorizonRim;\n      uniform vec3 uSnowLit;\n      uniform vec3 uSpirit;\n      uniform vec3 uHero;\n      uniform vec4 uRise;');
   fs = fs.replace(
     'vec3 n = normalize(vNormalW);',
     `vec3 n = normalize(vNormalW);
@@ -541,6 +546,16 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
         // keeps its colour: over the whole body it read as bleached, and across a pale saucer's face,
         // seen edge-on from the low camera, as the sled blown out to white.
         col = mix(col, vec3(1.5), uFlash * 0.9 * smoothstep(0.74, 0.96, riderEdge) * upright);
+        // Round 8 (the events lane): a band of light runs up the rider from the runners to the hat, a perfect
+        // landing's in the snow's white and a dash's ignition in the spirit's white-gold. It burns on the
+        // silhouette's edge and only breathes over the dark cloth inside it, so the navy and the vermillion hold
+        // as it passes (at a fifth over the whole body the dash's ignition bleached the rider to peach).
+        if (uRise.y > 0.001) {
+          float rb = (vWorldPos.y - uSpirit.y - uRise.x) / uRise.z;
+          float rk = exp(-rb * rb * 1.6) * uRise.y;
+          vec3 riseC = mix(vec3(1.35, 1.32, 1.25), vec3(1.4, 1.12, 0.62), uRise.w);
+          col += riseC * rk * (0.05 * darkCloth + 1.1 * smoothstep(0.55, 0.95, riderEdge)) * rimCut;
+        }
         // Earned flow burns in the player's own vermillion: a rim on the silhouette facets that thickens
         // and brightens as it builds (a warm edge at 0.3, a clear rim at 0.6, a hot one at full flow,
         // eased in so the first steps already show; the 'In the flow' pulse to full strength, past the
@@ -680,7 +695,7 @@ export class Rider {
   /** Results hero shot: the compass direction the camera looks along (null: no hero shot). Once the
    *  tumble is over the wreck sits up in the snow, dazed, turned to show its profile to the lens. */
   restView: number | null = null;
-  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() }, hero: { value: new Vector3(1, 1, 1) } };
+  private readonly u: RiderUniforms = { flash: { value: 0 }, fill: { value: 0 }, ember: { value: 0 }, flow: { value: new Vector2() }, pom: { value: new Vector3() }, hem: { value: 0 }, stand: { value: 0 }, spirit: { value: new Vector3(0, 0, 1) }, soft: { value: new Vector3() }, hero: { value: new Vector3(1, 1, 1) }, rise: { value: new Vector4(0, 0, 0.3, 0) } };
   /** Each arm's joints (left, right): x the elbow's bend, y the wrist's nod, z its sideways flop. */
   private readonly joints = [{ value: new Vector3(ARM_REST_BEND, 0, 0) }, { value: new Vector3(ARM_REST_BEND, 0, 0) }];
   /** Low's cheaper build (setDetail). */
@@ -1009,6 +1024,8 @@ export class Rider {
    *  when `echoes` (Medium and High). `calm` (reduced motion) slows the bands' rise. */
   setSpirit(k: number, echoes: boolean, calm: boolean): void {
     const s = this.u.spirit.value;
+    // (Round 8: the first frame of a dash ignites the rider: tickFlash runs the light up it.)
+    if (s.x === 0 && k > 0) this.igniteT = 0;
     s.x = Math.max(0, Math.min(1, k));
     s.z = calm ? 0.35 : 1;
     this.echoOn = echoes && !this.crash;
@@ -1944,7 +1961,32 @@ export class Rider {
     this.landT += dt;
     const lt = this.landT;
     this.u.flash.value = lt < 0.03 ? 1 : lt < 0.15 ? 1 - smooth((lt - 0.03) / 0.12) : 0;
+    // Round 8 (the events lane): the light that runs up the rider, a perfect landing's from the runners to the
+    // hat in a quarter of a second, a dash's ignition wider, white-gold and a little slower. (The perfect's hold,
+    // timescale.ts, keeps it at the runners for the held beat, so it leaves the snow as the picture lets go.)
+    // Reduced motion keeps the beat as a glow over the whole figure that fades, with no band moving.
+    this.igniteT += dt;
+    const r = this.u.rise.value;
+    // (Low keeps round 7's thin rim flash and the dash's own rim and bands: a changing uniform on every rider
+    // material is a dozen GL calls a frame there, and Low's main thread is its budget.)
+    if (this.lite) {
+      r.y = 0;
+      return;
+    }
+    const calm = reduced() || this.u.spirit.value.z < 1;
+    const it = this.igniteT;
+    if (it < 0.42) {
+      const k = it < 0.03 ? it / 0.03 : 1 - smooth((it - 0.24) / 0.18);
+      if (calm) r.set(0.7, 0.45 * k, 1.6, 1);
+      else r.set(-0.2 + 2.1 * smooth(it / 0.32), 0.6 * k, 0.26, 1);
+    } else if (lt < 0.3) {
+      const k = lt < 0.02 ? lt / 0.02 : 1 - smooth((lt - 0.16) / 0.14);
+      if (calm) r.set(0.7, 0.35 * k, 1.6, 0);
+      else r.set(-0.15 + 1.95 * smooth(lt / 0.24), 0.85 * k, 0.22, 0);
+    } else r.y = 0;
   }
+  /** Seconds since a dash lit the rider up (setSpirit's rising edge). */
+  private igniteT = 9;
 
   /** Secondary motion: the pom-pom rides a damped spring that a landing, a bump or a pop kicks (any
    *  sudden change of vertical speed, capped so a hard landing is a bounce, not a launch) and a

@@ -1690,6 +1690,58 @@ export class Particles {
     this.powder.emit(pos.x, pos.y, pos.z, (Math.random() - 0.5) * 2.4, -1.3 - Math.random(), (Math.random() - 0.5) * 2.4, 2.4 + Math.random() * 1.2, 0.34, 0.28, c.r, c.g, c.b, 1, 0.3, 0.4, seeded(KIND_CONFETTI));
   }
 
+  /** Round 8 (the events lane): lanterns let go over the finish, small marigold lights that rise slowly on the
+   *  warm air and drift apart, glowing, for four or five seconds (the lantern's own colour: a good thing, given).
+   *  Round (x, z) three.js, from `y`, over `spread` metres. Low takes fewer through the budget. */
+  skyLanterns(x: number, y: number, z: number, spread: number, count: number, color: Color): void {
+    const n = this.n(count);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = Math.sqrt(Math.random()) * spread;
+      const hot = 2.4 + Math.random() * 0.5;
+      this.glow.emit(x + Math.cos(a) * d, y + Math.random() * 3, z + Math.sin(a) * d, (Math.random() - 0.5) * 0.8, 0.9 + Math.random() * 1.1, (Math.random() - 0.5) * 0.8, 5 + Math.random() * 2, 1.6 + Math.random() * 0.5, 1.1, color.r * hot, color.g * hot, color.b * hot, 1, -0.12, 0.25, KIND_GRAIN);
+    }
+  }
+
+  /** Round 8: a lamp of the town lit for the finish, a soft warm orb that holds for a few seconds where it hangs. */
+  lamp(x: number, y: number, z: number, color: Color, size: number, life: number): void {
+    // A cluster of hot motes (a mote's light is its small hot core: one alone at a hundred metres was lost on a
+    // bright sky), so a lamp reads as a lit lantern at the far end of the square.
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const r = i === 0 ? 0 : 0.5;
+      this.glow.emit(x + Math.cos(a) * r, y + (i === 0 ? 0 : Math.sin(a) * r), z, 0, 0.05, 0, life, size * 0.8, size, color.r * 3, color.g * 3, color.b * 3, 1, 0, 0, KIND_GRAIN);
+    }
+  }
+
+  /** Round 8: after a wreck the snow it threw comes down gently round the rider, soft dabs drifting and settling
+   *  over two or three seconds (`count` a call; the wreck's quiet, not its impact). */
+  settle(pos: Vector3, count: number): void {
+    const n = this.n(count);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = 0.6 + Math.random() * 3.4;
+      this.powder.emit(pos.x + Math.cos(a) * d, pos.y + 1.4 + Math.random() * 2.2, pos.z + Math.sin(a) * d, (Math.random() - 0.5) * 0.5, -0.25 - Math.random() * 0.3, (Math.random() - 0.5) * 0.5, 2.2 + Math.random() * 1.2, 0.1, 0.16, POWDER, POWDER, POWDER, 0.75, 0.08, 1.2, KIND_GRAIN);
+    }
+  }
+
+  /** Round 8: a passed ghost comes apart into motes of its kind colour (mint, rose for a grudge, gold-white for
+   *  your best) streaming off its glass as it falls back: from `count` points over its body (three.js base
+   *  `pos`, its height `h`), each riding most of its pace so they hang back past the rider, lifting a little.
+   *  They leave from its side away from the rider (`away`, a unit horizontal) and fly out from it, never across it. */
+  ghostMotes(pos: Vector3, h: number, color: Color, carrier: Vector3, count: number, away: Vector3): void {
+    const n = this.n(count);
+    const car = tmpC.set(carrier.x * 0.86, 0, carrier.z * 0.86);
+    const a0 = Math.atan2(away.z, away.x);
+    for (let i = 0; i < n; i++) {
+      const a = a0 + (Math.random() - 0.5) * Math.PI * 1.1;
+      const up = Math.random();
+      const r = 0.25 + 0.2 * (1 - up);
+      const hot = 1.2 + Math.random() * 0.45;
+      this.glow.emit(pos.x + Math.cos(a) * r, pos.y + 0.2 + up * h, pos.z + Math.sin(a) * r, car.x + Math.cos(a) * 1.4, 0.5 + Math.random() * 1.2, car.z + Math.sin(a) * 1.4, 0.7 + Math.random() * 0.5, 0.22, 0.07, color.r * hot, color.g * hot, color.b * hot, 1, -0.6, 2.2, KIND_GRAIN, car);
+    }
+  }
+
   /** Powder coming off a slough's front as it slides (sloughs.ts). */
   sloughPuff(pos: Vector3, vx: number, vz: number): void {
     const n = this.n(2.4);
