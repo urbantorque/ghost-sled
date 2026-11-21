@@ -3788,3 +3788,33 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
     - *The machine.* The lane's first capture, and one of the main lane's, ran without the browser slot after a
       40-minute take timed out and the script carried on; both scripts now stop or wait. Their frames were only
       looked at, never paired.
+
+380. **V1, the snow's second attempt: relief the light draws, 7 of 10 on High, merged short of its bar** (`notes/r8-snow2.md`;
+    frames, pairs, keys and strips under `shots/r8/snow2/`).
+    - *What changed.* The first attempt's painted pillows and corduroy read as smudges, speed lines and scanlines (372).
+      This one starts from relief, not paint. Two small tiles are baked once on idle after the first frame (slices of at
+      most 4 ms, about 200 ms in all): powder's pillows (rounded mounds 5 to 10 m long, 30 degrees off the fall line,
+      shouldering into each other) and round 7's sastrugi (in fields, broken into lengths). The shader marches the height
+      five steps toward the key light, so each form casts its own shadow by a low light on the key's bearing, and a flank
+      that mirrors the sun takes a sheen. Full on the banks, gentle on the floor a sled rides and under the lens, almost
+      none on a groomed lane, none in cast shadow or on ground turned from the light. The glitter gathers harder toward
+      the sun by day only. A leap's landing's corduroy is a lighter step and Low keeps its fine ribs off (the flow lane's
+      critics read it as dunes and stair treads). Low draws no relief and never bakes the tiles: its snow is round 7's
+      plus the glitter. `?debug&ghosts=0` leaves the ghosts and everything of theirs out of a still.
+    - *Judged on snow-only stills* (ghosts hidden, against the lane's own base): High 4, then 5, then 7 of 10, the third
+      critic naming the snow unprompted ("carved relief, with lit crests and blue lee faces like sastrugi", the glitter
+      toward the sun, the old bank's ribs gone); phone 6 and Low 5 of 10, both read as nearly identical, which the brief
+      accepts for them; with ghosts in, 4 of 10, every reason a ghost, a petal or a pose; strips in motion 3 of 4. The bar
+      (9 of 10 with the snow named) is not met. Merged with its last commit (`d63addb`: a face the light stands well over
+      keeps its light under the relief's shadows, after the motion critic saw Ember's firelit bank go lavender; and the
+      lighter corduroy), which no critic has judged; the final critic loop judges the whole build. One loss read "white
+      streaks like lens scratches", probably the sheen smeared by the edge blur near the lens: a polish item.
+    - *Cost.* No draw, triangle or program on any tier; the snow material gains two samplers and two vec4 uniforms of its
+      own (nothing shared, no array). Low's GL calls level within the ride's spread. Nothing new before the first frame
+      or per frame. High's GPU time is unproven (the probe swung 1.5 to 12 ms on one held frame): the shader adds twelve
+      texture reads a terrain pixel within 110 m on Medium and above. The quiet sitting checks High's 60 fps; if it is
+      short, the march goes from five steps to two first, then the sastrugi tile.
+    - *A third attempt* should judge on the speed lane's edge blur (relief near the lens smears into streaks, so it must
+      stay gentle where the snow is largest), judge the glitter alone on golden-hour and night frames (the clearest win,
+      and also read as "confetti"), try cornices as geometry past 10.5 m, and start the sheen at 12 m. The moving snow is
+      unchanged.
