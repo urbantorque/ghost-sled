@@ -1619,6 +1619,7 @@ export class App {
   /** A run starts: its album frames start empty (what the last run kept for its line is handed over first). */
   private beginShots(): void {
     this.keepShots(true);
+    this.shotAir.trickMissing = this.trickMissing();
     const named = MOUNTAINS.some((m) => m.id === this.mountain.id) ? this.mountain.id : '';
     this.shots = new StickerShots<HTMLCanvasElement>({
       mountain: named,
@@ -1639,7 +1640,11 @@ export class App {
     const shots = this.shots;
     if (!shots || this.photo) return;
     shots.events(events);
-    const air = this.phase === 'run' ? { airborne: !sim.s.grounded, vy: sim.s.vy, trickMissing: this.trickMissing() } : null;
+    const air = this.phase === 'run' ? this.shotAir : null;
+    if (air) {
+      air.airborne = !sim.s.grounded;
+      air.vy = sim.s.vy;
+    }
     if (!shots.step(dt, air)) return;
     this.takePicture((c) => {
       if (this.shots !== shots) return;
@@ -1651,6 +1656,9 @@ export class App {
       this.keepShots();
     });
   }
+
+  /** The rider in the air, for the album's frames (one object, written each frame; `trickMissing` set as a run starts). */
+  private readonly shotAir = { airborne: false, vy: 0, trickMissing: true };
 
   /** A named trick the album does not hold yet (the flight's top is worth a frame). */
   private trickMissing(): boolean {
