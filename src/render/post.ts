@@ -527,8 +527,11 @@ export class PostFX {
           float splitK = punch > 0.01 ? 0.45 : fringe > 0.004 ? 0.5 : 0.0;
           if (streak > 0.002) {
             vec3 acc = vec3(0.0);
+            // (Each pixel starts its taps at its own offset: six fixed steps copied a near-level edge into six parallel
+            // lines, and at full strength in the outer band a bank's shadow read as scanlines.)
+            float sj = hash(gl_FragCoord.xy * 0.37 + 1.7);
             for (int i = 0; i < 6; i++) {
-              float k = float(i) / 5.0;
+              float k = (float(i) + sj) / 6.0;
               vec2 at = uv - dc * k * streak * 0.07;
               vec3 tap = texture2D(tScene, at).rgb;
               if (splitK > 0.0) {
