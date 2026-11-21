@@ -2611,6 +2611,12 @@
   text-shadow: none;
 }
 
+/* The canvas sets each numeral centred on one shared advance with a halo round it, so an italic clock ending in a
+   wide 9 met a distance starting with a 4 ("3:13.94,442 m"): Low keeps a wider gap between them. */
+.gs-hud.gs-figs .gs-hud-run {
+  gap: 0.85em;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .gs-combo-bar {
     transition: none;
