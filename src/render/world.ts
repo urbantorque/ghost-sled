@@ -55,6 +55,7 @@ import { SpeedPosts } from './speedposts';
 import { SpiritFx } from './spirit';
 import { MarqueeWorld } from './marqueeworld';
 import { LanternWorld } from './lanternworld';
+import { LanternRow } from './lanternrow';
 import type { Fireworks } from './fireworks';
 import type { TrailDef } from '../game/garage';
 import { Terrain, TerrainDetail } from './terrain';
@@ -241,6 +242,8 @@ export class World {
   /** Lanternfall's own world: the cloud sea, the valley of lanterns, its lamps and set pieces (round 7, the
    *  lanternworld lane). Empty on every other mountain. */
   private readonly lantern: LanternWorld;
+  /** Round 8, the light lane: the Lantern Row's lit lanterns over the finish town and the title shot. */
+  private readonly row = new LanternRow();
   /** The rails and the marks of the leaps and forks (rails.ts): one draw, on every tier. */
   readonly rails: Rails;
   /** Round 8: the charm gates' arches and a showdown's marker (charmgates.ts): one draw, on every tier, built on
@@ -456,6 +459,8 @@ export class World {
     this.lantern.kept = (x, z) => this.setPieces.keeps(x, z);
     this.lantern.setDetail(quality.detail);
     this.lantern.setCourse(this.course);
+    this.row.setDetail(quality.detail);
+    this.row.setCourse(this.course);
     this.props.siteClearings = (z0, z1, out) => {
       this.overlooks.clearings(z0, z1, out);
       this.lantern.clearings(z0, z1, out);
@@ -468,6 +473,7 @@ export class World {
       this.spirit.root,
       this.marquee.root,
       this.lantern.root,
+      this.row.root,
       this.sky.root,
       this.terrain.root,
       this.midground.root,
@@ -670,6 +676,7 @@ export class World {
     this.sky.setDetail(q.detail);
     this.poster.setTier(q.detail === 'low');
     this.lantern.setDetail(q.detail);
+    this.row.setDetail(q.detail);
     this.charmGates.setLow(q.detail === 'low');
     this.life.setQuality(q.detail, q.forestDensity);
     this.speedPosts.setTier(q.detail);
@@ -711,6 +718,7 @@ export class World {
     if (this.palette.massif.heroAz) this.marquee.setConeBearing(this.palette.massif.heroAz);
     this.setPieces.setCourse(c, this.palette, this.mood);
     this.lantern.setCourse(c);
+    this.row.setCourse(c);
     this.sky.setPalette(this.palette);
     this.ghosts.setGlow(this.palette.ghostGlow);
     this.trail.setCourse(c);
@@ -1022,6 +1030,7 @@ export class World {
     this.marquee.leading = v.lead !== false;
     this.marquee.update(dt, v.time, v.mode, s, v.sim, this.quality.detail === 'low');
     this.lantern.update(dt, v.time, v.mode, s, v.sim, this.cam.camera, this.palette);
+    this.row.update(s.z, v.mode, this.palette);
     // Named moments after the raw events: the camera, the ghost layer, then the world's own.
     this.cam.beats(beats, feel);
     this.ghosts.beats(beats, feel);

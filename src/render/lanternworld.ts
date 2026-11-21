@@ -11,6 +11,7 @@ import { box, seg } from './landmarkKit';
 import { LAMP_BRONZE, LAMP_SLATE, LAMP_TIMBER, LAMP_TIMBER_LIT, PAPER_DARK, WAY_LAMP_FLAME, paper, wayLampGeometry } from './lanternkit';
 import type { LegendShot } from './legendworld';
 import { pushLocalLight } from './lights';
+import { pushShaftSource } from './postfx/shafts';
 import { NOISE } from './massif';
 import { makeToonMaterial, shared } from './materials';
 import { CLOUD_BREAK, type Palette } from './palette';
@@ -58,11 +59,17 @@ const WAY_STEP = 36;
 /** Way-lamp posts are drawn from this far behind the rider to this far ahead. */
 const LAMP_BACK = 70;
 const LAMP_AHEAD = 400;
-/** The great lantern hangs this far past the line (here, before it, over the square), its foot this high
- *  over the snow. (It hung 36 m past the line, where the finish lens, which swings round to look back up the
- *  run at the rider, never saw it: lit over the square it stands behind the rider in that shot.) */
-const GREAT_Z = -28;
+/** The great lantern hangs this far past the line, over the square, its foot this high over the snow, and as the
+ *  rider comes to the line it is walked along its yoke this far toward the rider's side of the run. (Round 8, the
+ *  light lane: at 28 m before the line it stood 95 m behind a stopped rider, just past the left edge of the
+ *  results' frame, and no critic ever saw it lit with the rider; the finish lens swings round to look back up the
+ *  run across the course's middle, and measured in that frame (scripts/playtest/finishprobe.js) a lantern 35 m
+ *  past the line and 12 m to the rider's side hangs over the rider's head in the left column the results leave
+ *  open, about a seventh of the frame tall. Round 7 had it 36 m past the line on the run's middle, where it was
+ *  off the frame's edge.) */
+const GREAT_Z = 35;
 const GREAT_Y = 6.5;
+const GREAT_SIDE = 12;
 /** The guide light keeps this far ahead of the rider. */
 const GUIDE_AHEAD = 26;
 /** The canal's reaches lie this far past the edge. */
@@ -542,9 +549,12 @@ function greatFrame(X: number, top: number, gy: (x: number) => number): BufferGe
   for (const z of [-0.55, 0.55]) parts.push(box(2 * X + 2.4, 0.8, 0.55, lit, [0, top + 0.6, z]));
   parts.push(box(2 * X + 3, 0.2, 2, new Color(LAMP_SLATE), [0, top + 1.2, 0]));
   parts.push(box(2 * X + 2.6, 0.24, 1.7, SNOW, [0, top + 1.42, 0]));
-  // The chains it hangs by.
-  for (const s of [-1, 1]) parts.push(seg([s * 1.5, top + 0.3, 0], [s * 1.1, top - 2.1, 0], 0.07, new Color(LAMP_BRONZE), 4));
   return merge(parts);
+}
+
+/** The chains the great lantern hangs by from the yoke (they travel with it along the yoke). */
+function greatChains(top: number): BufferGeometry[] {
+  return [-1, 1].map((s) => seg([s * 1.5, top + 0.3, 0], [s * 1.1, top - 2.1, 0], 0.07, new Color(LAMP_BRONZE), 4));
 }
 
 /** The great lantern itself, hanging from the origin: a paper drum fuller at its waist on eight timber ribs
@@ -684,6 +694,11 @@ export class LanternWorld {
   private reaches: Reach[] = [];
   private greatRoot: Object3D | null = null;
   private greatPaper: Mesh | null = null;
+  /** The lantern on its yoke (the paper, ribs and chains), walked along it toward the rider's side: which side
+   *  (0 not yet known), and when the walk began. */
+  private greatNode: Object3D | null = null;
+  private greatSide = 0;
+  private greatWalk = -1;
   private tall: Mesh | null = null;
   private readonly owned: Array<{ dispose(): void }> = [];
   private cloudTop = 0;
@@ -739,6 +754,9 @@ export class LanternWorld {
     this.flameOut = -1;
     this.greatLit = -1;
     this.greatWon = false;
+    this.greatSide = 0;
+    this.greatWalk = -1;
+    if (this.greatNode) this.greatNode.position.x = 0;
     this.surge = 0;
     this.tallZ = 0;
     if (this.valley) (this.valley.material as ShaderMaterial).uniforms.uRelease.value = -1;
@@ -756,7 +774,7 @@ export class LanternWorld {
     this.valley = this.sprites = null;
     this.sheets = this.puffs = this.pools = this.canal = this.greatPaper = this.tall = null;
     this.lampMesh = null;
-    this.greatRoot = null;
+    this.greatRoot = this.greatNode = null;
     this.lamps = [];
     this.reaches = [];
     this.built = false;
@@ -1098,16 +1116,22 @@ export class LanternWorld {
     const root = new Object3D();
     root.position.set(cx, g0, -z);
     const lan = greatLantern(3.3, 6.6);
-    // (The lantern's ribs ride in the frame's own draw.)
     lan.frame.translate(0, top, 0);
-    const frame = new Mesh(this.keep(merge([greatFrame(X, top, (x) => visualGround(c, cx + x, z) - g0), lan.frame])), this.keep(makeToonMaterial({ coolShade: 0.4, rim: 0.3 })));
+    const toon = this.keep(makeToonMaterial({ coolShade: 0.4, rim: 0.3 }));
+    const frame = new Mesh(this.keep(greatFrame(X, top, (x) => visualGround(c, cx + x, z) - g0)), toon);
+    // (Round 8: the lantern's ribs, cap and chains in a draw of their own, so it can be walked along the yoke.)
+    const ribs = new Mesh(this.keep(merge([lan.frame, ...greatChains(top)])), toon);
     // The paper: dark until lit. The emissive is the light inside it.
     const paper = new Mesh(this.keep(lan.paper), this.keep(makeToonMaterial({ coolShade: 0.25, rim: 0.2, emissive: new Color('#FFB84E'), emissiveStrength: 0 })));
     paper.position.y = top;
-    for (const m of [frame, paper]) m.frustumCulled = false;
-    root.add(frame, paper);
+    const node = new Object3D();
+    node.userData.reach = Math.max(0, X - 4.5);
+    for (const m of [frame, ribs, paper]) m.frustumCulled = false;
+    node.add(ribs, paper);
+    root.add(frame, node);
     this.greatRoot = root;
     this.greatPaper = paper;
+    this.greatNode = node;
     this.root.add(root);
   }
 
@@ -1418,7 +1442,7 @@ export class LanternWorld {
       this.lamplighter(c, s, sim!, time, low, lampK);
     } else if (this.tall) this.tall.visible = false;
     this.aimLegend(run ? sim : null, s);
-    this.great(c, s, time, dt, mode, lampK);
+    this.great(c, s, time, dt, mode, lampK, cam);
 
     // The hamlets on the valley's floor: a wide pool of marigold each and a few windows in it. (Last, so a
     // full budget drops a far hamlet and never the guide light or the carried flame.)
@@ -1692,7 +1716,7 @@ export class LanternWorld {
 
   /** The great lantern over the square: dark all run, lit as the flame arrives (or, a breath later, by the
    *  lamplighters when a rider crosses the line without it), and the town lets its lanterns go. */
-  private great(c: Course, s: Snap, time: number, dt: number, mode: 'run' | 'title' | 'results', lampK: number): void {
+  private great(c: Course, s: Snap, time: number, dt: number, mode: 'run' | 'title' | 'results', lampK: number, cam: { position: Vector3 }): void {
     const root = this.greatRoot;
     const paper = this.greatPaper;
     if (!root || !paper) return;
@@ -1719,7 +1743,22 @@ export class LanternWorld {
     const flash = t < 0 ? 0 : Math.exp(-t * 2.2);
     const full = this.greatWon ? 1 : 0.72;
     u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5));
-    const x = root.position.x;
+    // (Round 8: once the rider is over the line and the finish lens has begun its swing round to the rider's front,
+    // the lamplighters walk it along its yoke to the side away from the lens's, where the lens, looking back up the
+    // run past the rider, finds it over the rider's head. Read from the lens itself, so the two always agree:
+    // decided by the rider's side of the course, a rider who drifted across in the last metres left it out of the
+    // frame, scripts/playtest/finishprobe.js.)
+    const node = this.greatNode;
+    if (node) {
+      const dx = cam.position.x - s.x;
+      if (this.greatSide === 0 && mode !== 'title' && s.z >= c.finishZ + 4 && Math.abs(dx) > 0.5) {
+        this.greatSide = dx > 0 ? -1 : 1;
+        this.greatWalk = time;
+      }
+      const reach = Math.min(GREAT_SIDE, node.userData.reach as number);
+      node.position.x = this.greatSide * reach * (this.greatWalk < 0 ? 0 : smooth01((time - this.greatWalk) / 1.2));
+    }
+    const x = root.position.x + (node ? node.position.x : 0);
     const y = root.position.y + GREAT_Y + 11.6 - 2.2 - 3.3;
     // It sways a little on its chains.
     paper.rotation.z = 0.02 * Math.sin(time * 0.9);
@@ -1727,6 +1766,9 @@ export class LanternWorld {
       this.sprite(x, y, z, 17 + 6 * flash, 0, MARIGOLD, (0.3 + 0.25 * flash) * lit * full);
       this.sprite(x, y - 0.6, z, 6, 0, FLAME, (0.5 + 0.4 * flash) * lit * full);
       pushLocalLight(x, y - 3, -z, 1, 0.7, 0.3, 36, (0.3 + 0.08 * flash) * lit * full * lampK);
+      // (Round 8, the light lane: lit, it is the frame's one light, and its light comes through the air past its
+      // frame and the square's masts toward the lens as shafts. Medium and High; Low has none.)
+      pushShaftSource(x, y, -z, 1, 0.72, 0.34, (0.75 + 0.35 * flash) * lit * full, 3.6);
       if (this.valley) {
         const vu = (this.valley.material as ShaderMaterial).uniforms;
         if (vu.uRelease.value < 0 && t > 0.25) {
