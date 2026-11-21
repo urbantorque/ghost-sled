@@ -142,7 +142,7 @@ export function pillowHeight(u: number, v: number): number {
 /** Where the wind has carved the snow into sastrugi (0..1), in fields some fifteen to thirty metres across. */
 export function sastrugiField(u: number, v: number): number {
   const f = pnoise(u / 14, v / 7, PILLOW_TILE / 14, PILLOW_TILE / 7, 31) * 0.7 + pnoise(u / 4, v / 3.5, PILLOW_TILE / 4, PILLOW_TILE / 3.5, 32) * 0.3;
-  return smooth(0.46, 0.7, f);
+  return smooth(0.36, 0.62, f);
 }
 
 /** Round 7's sastrugi (materials.ts `sastrugi`), made to repeat over the tile: at (a, b), metres across the ridges
@@ -273,9 +273,9 @@ blank.needsUpdate = true;
 export const relief = {
   uReliefP: { value: blank as Texture },
   uReliefS: { value: blank as Texture },
-  uRelief: { value: new Vector4(0, 1, 1, 1.5) },
+  uRelief: { value: new Vector4(0, 1, 1, 1.1) },
   /** x the pillows' height and y the sastrugi's (metres), z the light the forms turn to and from, w the sheen on them. */
-  uReliefK: { value: new Vector4(0.8, 0.06, 1.2, 1) },
+  uReliefK: { value: new Vector4(0.8, 0.09, 1.2, 1) },
 };
 
 /** Dev only (`?debug&rk=0.55,0.09,1,1&rg=1`): the relief's heights, light and sheen and the glitter's gathering toward the
