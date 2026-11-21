@@ -9,6 +9,7 @@ import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } 
 import { dailyDate, fmt, metres, NBSP, progFigures, rewardsLine } from './fmt';
 import { icon } from './icons';
 import { EASE_OUT, SPRING, play, reduced } from './motion';
+import './hours.css';
 
 // Title screen. Landscape: one column on the left reads logo, mountain cards, the Ride that rides
 // them, then the menu row; wallet and the daily and Cup cards keep to the right, and the 3D scene owns
@@ -263,17 +264,20 @@ export class Title {
     const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
     // (The modes lane: the picked mountain mirrored, its toggle on. A mirror is never a duel's ground.)
     const mirrored = !raced && !picked && !m.firstVisit && !!m.mirror?.on;
+    // (The hours lane: the picked mountain's other hour, and Ride's line naming it when it is picked.)
+    const hour = !raced && !picked && !m.firstVisit && m.hour ? m.hour : null;
+    const named = hour?.on ? `${sel?.name ?? ''} ${hour.phrase}` : (sel?.name ?? '');
     // The Twelve: on the next rider's home ground the run is the duel, and the button says so.
     const tw = raced || m.firstVisit || picked || mirrored ? null : (m.twelve ?? null);
     const duel = tw?.next?.here ? tw.next.name : tw?.final?.here ? 'The last race' : null;
     const verb = raced ? 'Accept' : tw?.next?.here ? 'Duel' : 'Ride';
-    const where = raced ? raced.mountain : mirrored ? `${sel?.name ?? ''}, mirrored` : (picked ?? sel?.name ?? '');
+    const where = raced ? raced.mountain : mirrored ? `${named}, mirrored` : (picked ?? named);
     const aim = raced || m.firstVisit || picked || mirrored ? null : (m.nextRung ?? null);
     // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
     // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
     const waiting = !!m.challenge?.waiting;
     const status = 'Finding rivals…';
-    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked || mirrored ? where : (sel?.tagline ?? where)));
+    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked || mirrored || hour?.on ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
     if (subline === where || aim || duel) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
@@ -295,14 +299,18 @@ export class Title {
     if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
-    // (The modes lane: the picked mountain's mirror, once open, a toggle under the Ride that rides it.)
+    // Under the Ride, one row of choices for how the picked mountain is ridden: the hour (the hours lane: the day or
+    // its other hour, once the Almanac has opened it) and the mirror (the modes lane, once open).
+    const opts = h('div', 'gs-t-opts');
+    if (hour) opts.append(this.hourPick(hour, sel?.name ?? 'this mountain'));
     if (m.mirror && !raced && !picked && !m.firstVisit) {
       const on = m.mirror.on;
       const tg = btn(ctx, { cls: 'gs-btn-soft gs-t-mirror', fk: 'mirror', onClick: () => this.hd.onMirror?.(!on) }, h('span', 'gs-t-mirror-mark'), h('span', 'gs-btn-label', 'Mirrored'));
       tg.setAttribute('aria-pressed', String(on));
       tg.setAttribute('aria-label', `Ride ${sel?.name ?? 'this mountain'} mirrored`);
-      ride.append(tg);
+      opts.append(tg);
     }
+    if (opts.childElementCount) ride.append(opts);
     // A brand-new player learns the loop before the first tap: what the ghosts are for.
     if (m.firstVisit && !m.challenge) ride.append(h('p', 'gs-t-goal', 'Pass ghosts to unlock new mountains'));
     el.append(ride);
@@ -444,6 +452,28 @@ export class Title {
       if (!selected) this.travel(c.id, c.name, () => this.hd.onSelectMountain(c.id));
     });
     return b;
+  }
+
+  /** Round 8, the hours lane: the day or the picked mountain's other hour, as two halves of one soft pill beside the
+   *  mirror. Each half wears a swatch of its hour's sky at the start of a run, so the pick shows the light it picks;
+   *  the picked half is lit, never in vermillion (Ride's alone). A look only: the run, its ghosts and its record are
+   *  the same either way. */
+  private hourPick(hr: NonNullable<TitleModel['hour']>, mountain: string): HTMLElement {
+    const half = (alt: boolean): HTMLButtonElement => {
+      const [z, hz] = alt ? hr.alt : hr.day;
+      const sky = h('span', 'gs-t-hour-sky');
+      sky.style.setProperty('--sky-z', z);
+      sky.style.setProperty('--sky-h', hz);
+      sky.setAttribute('aria-hidden', 'true');
+      const b = btn(this.ctx, { cls: 'gs-t-hour-opt', fk: alt ? 'hour-alt' : 'hour-day', onClick: () => this.hd.onHour?.(alt) }, sky, h('span', 'gs-btn-label', alt ? hr.name : 'Day'));
+      b.setAttribute('aria-pressed', String(hr.on === alt));
+      b.setAttribute('aria-label', alt ? `Ride ${mountain} ${hr.phrase}` : `Ride ${mountain} by day`);
+      return b;
+    };
+    const g = h('div', 'gs-t-hour', half(false), half(true));
+    g.setAttribute('role', 'group');
+    g.setAttribute('aria-label', 'Hour');
+    return g;
   }
 
   /**

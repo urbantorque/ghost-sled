@@ -115,6 +115,10 @@ export interface Palette {
   /** Low's painted pools (lights.ts): 0 adds the light in two flat values; 1 lays it over the snow in the
    *  light's own hue without clipping (Ember: added to a coloured snow, they clipped to mustard). */
   poolSoft: number;
+  /** Round 8, the hours lane: a lamp's pool as a lift of the snow's own colour toward this silver (materials.ts
+   *  silverPool), the lamp's hue only at its heart; k how far (0: the light is added in its hue, as every mountain
+   *  but Lanternfall has it). ART.md 15: lilac snow with a silver lit side, never a gold floor. */
+  poolSilver: { color: Color; k: number };
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   leaf: number;
   /** The visual lift's light (materials.ts LIFT_GLSL, the light lane). bounce: how much light the snow
@@ -316,6 +320,7 @@ function base(): Palette {
     lamps: 0.25,
     lampAir: 0,
     poolSoft: 0,
+    poolSilver: { color: c('#E4E2FA'), k: 0 },
     leaf: 0,
     lift: { bounce: 0, sun: 0.7, tint: c('#FFFFFF'), sky: 0, through: 0, sheen: 0 },
     posterSnowSat: 1,
@@ -1340,6 +1345,12 @@ function valuePass(p: Palette, biome: BiomeId): void {
       // lit snow's orange over its plum shade mixed to the grudge's rose.)
       p.lift.tint = c('#FFF8B0');
       return;
+    case 'lantern':
+      // (Round 8, the hours lane, the light lane's next attempt: a lamp's pool keeps the snow's own lilac and lifts
+      // its value toward silver, the lamp's marigold only at its heart (materials.ts silverPool). Added in its hue,
+      // a road of pools read to three critics as a peach or gold floor, ART.md 15; on Low as stains.)
+      p.poolSilver = { color: c('#E6E4FA'), k: 0.85 };
+      return;
   }
 }
 
@@ -2004,8 +2015,14 @@ export const JOURNEY: Record<BiomeId, JourneyStop[]> = {
  *  palette). `start` edits the mountain's Clear Skies, which is the title's and the run's first light, and
  *  `journey` replaces JOURNEY for the run; the places (PLACES) lie over it as they do over the day. */
 export interface AltHour {
-  /** What the Almanac's card and the title call it. */
+  /** What the title's pick calls it, beside the day ("Dusk"). */
   name: string;
+  /** How the Almanac's card and Ride's line put it after the mountain's name ("at Dusk": "Pinecrest at Dusk").
+   *  (Round 8, the hours lane; game/almanac.ts HOUR_PHRASES keeps the same words for the game layer.) */
+  phrase: string;
+  /** How much of the day has gone at the start (journeyDusk; 0 when left out): a night hour's windows are lit
+   *  and its valley bells ring from the first metre. */
+  dusk?: number;
   start: (p: Palette) => void;
   journey: JourneyStop[];
 }
@@ -2016,6 +2033,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
   // by the Valley Leap and the line is crossed in the blue of the first night, its windows and lamps the light.
   alpine: {
     name: 'Dusk',
+    phrase: 'at Dusk',
+    // (It starts in the day's gold, whose stop has 0.55 of the day gone.)
+    dusk: 0.55,
     start: (p) => {
       JOURNEY.alpine[1].edit(p);
       p.lamps = 0.8;
@@ -2074,6 +2094,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
   // paper lanterns of Temple Town lit under a night sky, the blossom pale against it.
   blossom: {
     name: 'Evening',
+    phrase: 'in the Evening',
     start: (p) => {
       setSun(p, -30, 6, 24, 11);
       p.sunColor = c('#FFD6B0');
@@ -2168,6 +2189,393 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       },
     ],
   },
+  // Round 8, the hours lane. Frostfang at noon (the Almanac's page 12): the day's mountain is a blue hour that goes to
+  // night and breaks into dawn; its other hour is the glacier's glare, the same awe in the opposite light. A polar
+  // noon: the sun as high as it climbs here, still low, left of the run in a ring of sun dogs, diamond dust glittering
+  // in the air, a deep cobalt sky down to a white-hot horizon the Fang stands dark against, the snow white and the
+  // shadows long and a hard blue, the ice lit from inside. (A high, plain midday read to the first critic as any
+  // mountain's day.) The fields go to a silver afternoon, and out of
+  // the cavern the glare is ahead, over the Fang.
+  glacier: {
+    name: 'Noon',
+    phrase: 'at Noon',
+    start: (p) => {
+      setSun(p, -30, 8, 36, 12);
+      p.sunColor = c('#FFF8E8');
+      p.sunCore.setRGB(3, 3, 2.85);
+      p.sunTint = 0.6;
+      p.sunSize = 0.8;
+      p.sunGlow = 1.1;
+      p.sunDisc = 1;
+      p.sunSoft = 0;
+      p.skyZenith = c('#061E70');
+      p.skyMid = c('#2458BC');
+      p.skyHorizon = c('#E4F0FF');
+      p.skyBand = { color: c('#FFFFFF'), fade: 26, k: 0.85 };
+      p.skyBelow = c('#A8C8EC');
+      p.skySpread = 0.6;
+      p.skyCurve = 0.55;
+      // (White-hot, under the film's paper white; the shade a hard cobalt-blue, the noon's long-lens contrast.)
+      p.snowLit = c('#F2F6FF');
+      p.snowShade = c('#3A64C8');
+      p.snowDeep = c('#173C9C');
+      p.rim = c('#FFF8E0');
+      p.fog = c('#A2C0EC');
+      p.fogNear = 70;
+      p.fogFar = 620;
+      p.hemiSky = c('#7AA6E8');
+      p.hazardFog = 0.7;
+      // (The far needles and the Fang a step darker than the haze, so they stand against the white-hot horizon.)
+      p.ridge = [c('#A8C4EC'), c('#5E86CC'), c('#2A4C98')];
+      p.massif.rock = c('#14285E');
+      p.massif.glowK = 0;
+      p.massif.flow = 0.8;
+      p.massif.sea = 0.8;
+      p.ice = 0.9;
+      p.grade = { lift: c('#04102E'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.14, grain: 0.6, foot: 0.26, shafts: 0.5, lens: 0.25, focal: 0.6, gust: 0, glitter: 0.8, exposure: 0.97, hi: c('#FFFCF4'), lo: c('#DCE6FF') };
+      p.clouds = { low: 0.35, high: 0.5, top: 0.2, lit: c('#FFFFFF'), shade: c('#A6BEE8'), rim: c('#FFFFFF'), shadow: 0.26 };
+      p.atmo = { rays: 0.7, halo: 0.75, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#DCEAFA'), drift: 0.1 };
+      p.air = { far: c('#4A7ACC'), cool: c('#E0EAFF'), low: 0.45, scatter: 1.1 };
+      p.lift.sun = 0.8;
+      p.lift.bounce = 0.45;
+      Object.assign(p.poster, { bands: 5, stripe: 0.3, shadow: c('#4A5CC8'), shadowK: 0.4 });
+      p.stars = 0;
+      p.aurora = 0;
+      // (The glare is the disc and the glints: more bloom laid a milky veil over the near snow.)
+      p.bloom = 0.3;
+      // (Diamond dust: fine flakes in the air that catch the low sun, and the snow's glitter turned up toward it.)
+      p.sparkle = 1.3;
+      p.snowfall = 0.06;
+      p.giftGlow = 0;
+      p.ghostGlow = 1.25;
+      p.lanternGlow = 0;
+      p.lamps = 0.3;
+    },
+    journey: [
+      {
+        // The afternoon over the Crevasse Fields: the sun swings round behind the run's left and lowers, the glare
+        // goes to a silver light, the shadows lie long and blue across the fields, and the ice glows from inside.
+        from: 1400, at: 2200, dusk: 0.15,
+        edit: (p) => {
+          setSun(p, -46, 6, 30, 10);
+          p.sunColor = c('#F4F2FF');
+          p.skyZenith = c('#0A2C80');
+          p.skyMid = c('#3A70C8');
+          p.skyHorizon = c('#D8E2F6');
+          p.snowLit = c('#E6EEFF');
+          p.snowShade = c('#4068C4');
+          p.massif.flow = 0.9;
+          p.clouds.low = 0.6;
+          p.clouds.shadow = 0.3;
+          p.atmo.halo = 0.3;
+          p.grade.shafts = 0.6;
+          p.ice = 0.8;
+        },
+      },
+      {
+        // Cloud comes over the glacier as the run nears the cavern: the sun goes behind it, the light flattens and
+        // cools, so the cavern is a dark mouth in a grey-blue afternoon and the glare past it is a change.
+        // (In full glare to the mouth, the step from the cavern's dark to the light outside was too wide to blend.)
+        from: 2700, at: 3286, dusk: 0.25,
+        edit: (p) => {
+          p.sunDisc = 0.3;
+          p.sunGlow = 0.5;
+          p.sunColor = c('#D8E0F4');
+          p.skyZenith = c('#1C3A84');
+          p.skyMid = c('#5A7CC0');
+          p.skyHorizon = c('#C4D2EC');
+          p.snowLit = c('#C4D0EC');
+          p.snowShade = c('#3C5AAE');
+          p.clouds.low = 0.85;
+          p.clouds.high = 0.7;
+          p.clouds.lit = c('#E4ECFA');
+          p.clouds.shade = c('#8CA0CC');
+          p.clouds.shadow = 0.2;
+          p.atmo.rays = 0.2;
+          p.grade.shafts = 0.2;
+          p.bloom = 0.36;
+        },
+      },
+      {
+        // Out of the cavern into the glare: the sun ahead over the Fang, the snow white-hot, the station's hulls
+        // bright, the Fang lit on its face.
+        from: 3330, at: 3560, dusk: 0.3,
+        edit: (p) => {
+          setSun(p, 22, 12, 36, 14);
+          p.sunColor = c('#FFF6E6');
+          p.sunCore.setRGB(3, 2.9, 2.6);
+          p.sunGlow = 1.1;
+          p.skyZenith = c('#0C3492');
+          p.skyMid = c('#3A7AD6');
+          p.skyHorizon = c('#DCEEFF');
+          p.snowLit = c('#F6F8FF');
+          p.snowShade = c('#4A72CC');
+          p.massif.glow = c('#FFF4DC');
+          p.massif.glowK = 0.2;
+          p.massif.glowLine = 600;
+          p.atmo.rays = 0.8;
+          p.grade.shafts = 0.9;
+          p.grade.exposure = 1.02;
+          p.bloom = 0.5;
+        },
+      },
+    ],
+  },
+  // Ember Peak at night (page 18): ART.md 15's one image, a ceiling of smoke lit from below. No coin in the sky:
+  // the deck is the sky, lit red from under it, and the light that shades the snow is the lava's, low from the
+  // valley's side, so one face of every slope is firelit and the other turns to a cold plum-teal night. The cone
+  // runs with lava from the start line (under the 0.75 that wakes a night mood's lightning), and the town's windows
+  // and forges are lit from the first metre.
+  volcanic: {
+    name: 'Night',
+    phrase: 'at Night',
+    dusk: 1,
+    start: (p) => {
+      setSun(p, 46, 4, 34, 14);
+      p.sunDir = sunDir(66, 32);
+      p.sunDisc = 0;
+      p.sunGlow = 0.25;
+      p.sunColor = c('#DCB0A4');
+      p.sunCore.setRGB(1.6, 0.5, 0.14);
+      p.skyZenith = c('#0A0608');
+      p.skyMid = c('#36100E');
+      p.skyHorizon = c('#C8401A');
+      p.skyBelow = c('#2A0E0E');
+      p.skyBand = { color: c('#FF7A3A'), fade: 22, k: 0.6 };
+      // (Night snow under a red deck is a cold lilac and the lava and the lamps are what is orange, as the day's own
+      // night over the market found: a pale ash under the lava's peach key read as a sand floor.)
+      p.snowLit = c('#B4AED0');
+      // (A cold plum-teal a step under the lit snow, never a dark slab: at #24264E the second critic read the far bank as a
+      // navy slab, as the light lane's first Ember critic did, ART.md 15.)
+      p.snowShade = c('#3E3C6C');
+      p.snowDeep = c('#26244C');
+      p.rim = c('#FF8A4C');
+      p.fog = c('#3A1416');
+      p.fogNear = 50;
+      p.fogFar = 380;
+      p.hemiSky = c('#3C3C6C');
+      p.air = { far: c('#4A140E'), cool: c('#D8D4F0'), low: 0.7, scatter: 0.8 };
+      // (A dark ceiling lit only low toward the fire: lit red all over, the first critic read the sky as one flat red.)
+      p.deck = { k: 1, lit: c('#4A1C16'), shade: c('#120A0E'), glow: c('#FF5A1E') };
+      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#4A1A14'), shade: c('#140A0C'), rim: c('#FF6A2A'), shadow: 0.35 };
+      p.massif.lava = 0.74;
+      p.massif.flow = 1;
+      p.massif.glow = c('#FF6A2A');
+      p.massif.glowK = 0.4;
+      p.massif.glowLine = -200;
+      p.massif.seaWarm = 2;
+      p.under = { color: c('#FF6A28'), k: 0.42 };
+      // (Fewer embers and glints: at 1.3 and 0.7 the snow read as covered in orange specks, noise.)
+      p.embers = 0.85;
+      p.lamps = 1.3;
+      p.lampAir = 0.08;
+      p.hazardDim = 0.86;
+      p.shadowK = 0.6;
+      p.lift.tint = c('#FFE4A8');
+      p.lift.sun = 0.55;
+      p.atmo.valley = 0.9;
+      p.atmo.valleyColor = c('#8A2A14');
+      p.atmo.rays = 0;
+      p.grade.lift = c('#0C060C');
+      p.grade.exposure = 1.06;
+      p.grade.contrast = 1.16;
+      p.grade.saturation = 1.14;
+      p.grade.hi = c('#FFE2C4');
+      p.grade.lo = c('#D4DAFF');
+      p.grade.shafts = 0;
+      p.grade.glitter = 0.15;
+      p.posterSnowSat = 0.7;
+      Object.assign(p.poster, { shadow: c('#7C6AA8'), shadowK: 0.5 });
+      p.stars = 0;
+      p.sparkle = 0.35;
+      p.bloom = 0.6;
+      p.giftGlow = 0.6;
+      p.ghostGlow = 1.7;
+      p.lanternGlow = 0.6;
+    },
+    journey: [
+      {
+        // Out on the shield the deck is lit hottest from under it, the cone's flanks run, the embers thicken.
+        from: 1700, at: 2250, dusk: 1,
+        edit: (p) => {
+          p.deck.lit = c('#6A2618');
+          p.deck.glow = c('#FF6A22');
+          p.skyHorizon = c('#E0481A');
+          p.under.k = 0.5;
+          p.embers = 1;
+        },
+      },
+      {
+        // The Basalt Halls and the market: the ash thick with the lava's light, the deck burning down to embers over
+        // the town, the windows and forges the light.
+        from: 2600, at: 3300, dusk: 1,
+        edit: (p) => {
+          p.fog = c('#5A2016');
+          p.air.far = c('#6A2010');
+          p.deck.lit = c('#3A1612');
+          p.deck.glow = c('#C8401A');
+          p.snowShade = c('#38366A');
+          p.lamps = 1.4;
+          p.lampAir = 0.1;
+          p.embers = 1.1;
+        },
+      },
+    ],
+  },
+  // Lanternfall at first light (page 32): the night is over and the lanterns burn out. The Crown above a cloud that
+  // warms rose and gold from the east, the stars going, the sun's rim under the far range; under the deck a dove
+  // violet with the underside rose and the valley's lanterns paler; the sun up over Firstlight; morning at the line.
+  // The snow stays lilac with a silver lit side all the way (ART.md 15): the dawn is in the sky and on the rims,
+  // never a gold floor.
+  lantern: {
+    name: 'First Light',
+    phrase: 'at First Light',
+    start: (p) => {
+      setSun(p, 24, 3, 30, 10);
+      p.moon = false;
+      // (The sun not yet up: a glow under the far range, no disc and no rays. With a disc and shafts at the Crown the
+      // first critic read the run's start as Firstlight's hour.)
+      p.sunDisc = 0;
+      p.sunColor = c('#F2D8E8');
+      p.sunCore.setRGB(2.4, 1.8, 1.7);
+      p.sunGlow = 1.1;
+      p.sunSize = 1.3;
+      p.skyZenith = c('#1C2470');
+      p.skyMid = c('#5A5AAE');
+      p.skyHorizon = c('#F0B4B4');
+      p.skyBand = { color: c('#FFD0B0'), fade: 24, k: 0.9 };
+      p.skyBelow = c('#8A78C0');
+      p.snowLit = c('#DCDCF6');
+      p.snowShade = c('#6A5CBC');
+      p.snowDeep = c('#302678');
+      p.rim = c('#FFD4CC');
+      p.fog = c('#6A5AAE');
+      p.hemiSky = c('#8478D4');
+      p.air.far = c('#5848A0');
+      p.air.scatter = 1.2;
+      p.clouds = { low: 0.35, high: 0.35, top: 0.14, lit: c('#FFD2C8'), shade: c('#7E70C0'), rim: c('#FFE0C8'), shadow: 0 };
+      p.massif.glow = c('#FFB8A8');
+      p.massif.glowK = 0.6;
+      p.massif.glowLine = -200;
+      p.massif.seaWarm = 1.2;
+      p.stars = 0.5;
+      p.atmo.meteors = 0;
+      p.atmo.rays = 0;
+      p.grade.shafts = 0;
+      p.lamps = 0.75;
+      p.lanternGlow = 0.25;
+      p.bloom = 0.55;
+      p.sparkle = 1.4;
+      p.grade.exposure = 1.02;
+      p.grade.contrast = 1.1;
+      p.grade.saturation = 1.04;
+      p.grade.hi = c('#FFF0EA');
+      p.grade.lo = c('#E2DCFF');
+    },
+    journey: [
+      {
+        // Under the deck at first light: its underside rose from the east, the valley's lanterns paler in a dove
+        // violet, the light from ahead.
+        from: 900, at: 1420, dusk: 1,
+        edit: (p) => {
+          p.sunDisc = 0;
+          p.sunGlow = 0.3;
+          p.sunColor = c('#D8CCEC');
+          p.skyZenith = c('#241E66');
+          p.skyMid = c('#4C3C94');
+          p.skyHorizon = c('#B88AB4');
+          p.skyBand = { color: c('#C898C0'), fade: 26, k: 0.35 };
+          p.skyBelow = c('#6A5294');
+          // (Rose-violet under the deck, never orange, ART.md 15: the lanterns are the brightest thing under it.)
+          p.deck = { k: 0.9, lit: c('#6A5CB4'), shade: c('#2E2878'), glow: c('#C890B8') };
+          p.snowLit = c('#D8D6F4');
+          p.snowShade = c('#6252B4');
+          p.snowDeep = c('#2C1E70');
+          p.fog = c('#403488');
+          p.fogFar = 640;
+          p.hemiSky = c('#6E60C8');
+          p.air.far = c('#4C3A88');
+          p.air.low = 0.9;
+          p.under = { color: c('#FFB04A'), k: 0.08 };
+          p.atmo.valley = 1;
+          // (A dusky rose the lanterns stand in: paler, the valley under the deck read as milk.)
+          p.atmo.valleyColor = c('#A27CA8');
+          p.massif.sea = 0;
+          p.massif.seaWarm = 0;
+          p.massif.veil = 0.5;
+          p.ridge = [c('#6A5CB0'), c('#463A90'), c('#2A2266')];
+          p.massif.glow = c('#FFB4A4');
+          p.massif.glowK = 0.4;
+          p.massif.glowLine = -900;
+          p.stars = 0.05;
+          p.shadowK = 0.6;
+          p.lamps = 0.95;
+          p.bloom = 0.6;
+          p.giftGlow = 0.5;
+          p.lanternGlow = 0.35;
+          p.grade.hi = c('#FFF2EE');
+          p.grade.lo = c('#E0D8FF');
+        },
+      },
+      {
+        // Sunrise over Firstlight: the deck breaks, the sun's rim comes up rose-gold over the far range, the snow
+        // silver with a rose edge and long lilac shadows, the lanterns leaving the valley.
+        // (From the town's own street on, and rose: begun on the Lamp Road its orange sky took the lanterns' place.)
+        from: 3350, at: 3900, dusk: 1,
+        edit: (p) => {
+          setSun(p, 26, 4.5, 26, 10);
+          p.sunDisc = 0.6;
+          p.sunGlow = 0.8;
+          p.sunColor = c('#FFE0DC');
+          p.deck.k = 0.35;
+          p.deck.glow = c('#FFB8A0');
+          p.skyZenith = c('#2A3A8C');
+          p.skyMid = c('#8478C4');
+          p.skyHorizon = c('#F4B8C0');
+          p.skyBand = { color: c('#FFD0C8'), fade: 22, k: 0.8 };
+          p.skyBelow = c('#9A84C0');
+          p.snowLit = c('#E4E0F6');
+          p.snowShade = c('#6458BE');
+          p.rim = c('#FFD8C8');
+          p.fog = c('#7A6AB8');
+          p.air.far = c('#6A5AAC');
+          p.hemiSky = c('#8A80D8');
+          p.clouds.lit = c('#FFD4C4');
+          p.clouds.rim = c('#FFE4C8');
+          p.massif.glow = c('#FFBCA8');
+          p.massif.glowK = 0.9;
+          p.massif.glowLine = -300;
+          p.stars = 0;
+          p.lamps = 0.7;
+          p.atmo.rays = 0.4;
+          p.grade.shafts = 0.3;
+          p.under.k = 0.04;
+        },
+      },
+      {
+        // Morning at the line: the sun clear of the range, a violet-blue over a rose horizon, the snow silver-white, the
+        // great lantern lit as the morning comes. (A pale blue day sky took the glow from the town's lanterns, the first
+        // critic: the sky keeps a step of the night's violet so they still read as light.)
+        from: 3950, at: 4400, dusk: 1,
+        edit: (p) => {
+          setSun(p, 28, 8, 30, 12);
+          p.sunColor = c('#FFF0E8');
+          p.skyZenith = c('#2C3890');
+          p.skyMid = c('#7A78C4');
+          p.skyHorizon = c('#F0C4CC');
+          p.skyBand = { color: c('#FFDCD4'), fade: 26, k: 0.6 };
+          p.deck.k = 0.15;
+          p.snowLit = c('#E6E4F8');
+          p.snowShade = c('#6A60C2');
+          p.fog = c('#8A80C4');
+          p.air.far = c('#6C64B4');
+          p.lamps = 0.8;
+          p.bloom = 0.45;
+          p.grade.exposure = 1.0;
+        },
+      },
+    ],
+  },
 };
 
 let hourNow: Hour = (() => {
@@ -2192,6 +2600,26 @@ export function setHour(h: Hour): void {
 /** The hour a mountain is lit at now. */
 export function hourOf(biome: BiomeId): Hour {
   return hourNow === 'alt' && ALT_HOURS[biome] ? 'alt' : 'day';
+}
+
+const SWATCHES = new Map<BiomeId, { day: [string, string]; alt: [string, string] }>();
+
+/** Round 8, the hours lane: the title's swatch for each of a mountain's two hours, its sky at the start of a run
+ *  (zenith and horizon, as CSS hex), so the pick shows the light it picks. Built once a mountain. */
+export function hourSwatches(biome: BiomeId): { day: [string, string]; alt: [string, string] } {
+  let sw = SWATCHES.get(biome);
+  if (!sw) {
+    const was = hourNow;
+    const sky = (h: Hour): [string, string] => {
+      hourNow = h;
+      const p = getPalette(biome, Mood.None);
+      return ['#' + p.skyZenith.getHexString(), '#' + p.skyHorizon.getHexString()];
+    };
+    sw = { day: sky('day'), alt: sky('alt') };
+    hourNow = was;
+    SWATCHES.set(biome, sw);
+  }
+  return sw;
 }
 
 /** The journey in force on a mountain: its day's, or its other hour's. */
@@ -2969,7 +3397,7 @@ export function journeyDusk(biome: BiomeId, metres: number): number {
   const stops = journeyOf(biome);
   const at = journeyProgress(biome, metres);
   const i = Math.min(Math.floor(at), stops.length - 1);
-  const a = i > 0 ? stops[i - 1].dusk : 0;
+  const a = i > 0 ? stops[i - 1].dusk : hourOf(biome) === 'alt' ? (ALT_HOURS[biome]!.dusk ?? 0) : 0;
   return a + (stops[i].dusk - a) * (at - i);
 }
 
@@ -3036,6 +3464,8 @@ export function tierLook(p: Palette): Palette {
     s.setRGB(l + (s.r - l) * p.posterSnowSat, l + (s.g - l) * p.posterSnowSat, l + (s.b - l) * p.posterSnowSat);
   }
   for (const col of [o.snowShade, o.snowDeep, o.fog, o.air.far, o.skyZenith, o.skyHorizon, o.skyBelow, o.hemiSky, o.ridge[0], o.ridge[1], o.ridge[2], o.clouds.lit, o.clouds.shade, o.clouds.rim, o.deck.lit, o.deck.shade, o.deck.glow, o.massif.rock, o.atmo.valleyColor, o.poster.shadow]) gradeColor(col, g);
+  // (The pools' silver is lit snow: graded where the lit snow is.)
+  gradeColor(o.poolSilver.color, g, 0.85);
   if (g.posterMute) {
     for (const col of [o.snowShade, o.snowDeep]) {
       const l = 0.2126 * col.r + 0.7152 * col.g + 0.0722 * col.b;

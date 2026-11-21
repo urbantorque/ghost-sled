@@ -166,6 +166,9 @@ export interface SaveData {
   recent?: RecentRun[];
   /** The Lantern Row's lanterns lit with gifts (lanterns.ts), by id. */
   lit?: string[];
+  /** Round 8, the hours lane: the named mountains ridden at their other hour (palette.ts ALT_HOURS), by id, as the
+   *  title last picked them; a look only, nothing reaches the sim, a record or a ghost. Written only when one is picked. */
+  hours?: string[];
 }
 
 /** Where each garage shelf keeps what is owned, and what is worn, in the save. */
@@ -550,8 +553,19 @@ export function merge(base: SaveData, p: Partial<SaveData>, today: string): Save
   if (twelve.beaten.length) d.twelve = twelve;
   else delete d.twelve;
   loadSpine(d, p, today);
+  // The hours picked: mountain ids only, once each, and written only when one is.
+  const hours = readHours(p.hours);
+  if (hours.length) d.hours = hours;
+  else delete d.hours;
   pruneDaily(d, today);
   return d;
+}
+
+/** The mountains picked at their other hour, as a save holds them: ids only (a strange value is dropped), once each. */
+export function readHours(v: unknown): string[] {
+  const out: string[] = [];
+  if (Array.isArray(v)) for (const x of v) if (typeof x === 'string' && /^[a-z]{1,24}$/.test(x) && !out.includes(x)) out.push(x);
+  return out;
 }
 
 /** A sticker id as album.ts writes them: a kind, a colon, and its parts. */

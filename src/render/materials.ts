@@ -101,6 +101,9 @@ export const shared = {
   uLampAir: { value: 0 },
   /** Low's painted pools laid over in their own hue (palette.poolSoft). */
   uPoolSoft: { value: 0 },
+  /** Round 8, the hours lane: a lamp's pool as Lanternfall paints it (palette.poolSilver; LIGHT_GLSL silverPool):
+   *  rgb the silver the snow's own lilac lifts toward, w how far (0: the light is added in its hue, as everywhere). */
+  uPoolSilver: { value: new Vector4(0, 0, 0, 0) },
   /** How much a canopy glows with the light behind it (Sakura's blossom). */
   uLeaf: { value: 0 },
   /** The visual lift's light (LIFT_GLSL): x the snow's bounce, y the sky's fill, z light through what is
@@ -340,6 +343,7 @@ export function applyPalette(full: Palette): void {
   shared.uLampK.value = p.lamps;
   shared.uLampAir.value = p.lampAir;
   shared.uPoolSoft.value = p.poolSoft;
+  shared.uPoolSilver.value.set(p.poolSilver.color.r, p.poolSilver.color.g, p.poolSilver.color.b, p.poolSilver.k);
   shared.uLeaf.value = p.leaf;
   // (Low's poster: read only where uPoster.x is 1, which setCloudShadows sets with the tier.)
   const ps = p.poster;
@@ -434,6 +438,7 @@ uniform vec4 uUnder;
 uniform float uLampK;
 uniform float uLampAir;
 uniform float uPoolSoft;
+uniform vec4 uPoolSilver;
 uniform float uLeaf;
 uniform vec4 uLocalPos[8];
 uniform vec4 uLocalCol[8];
@@ -461,6 +466,32 @@ vec3 localLight(vec3 wp, vec3 n, float count) {
     }
   }
   return acc * uLampK;
+}
+
+/** Round 8, the hours lane: a lamp's pool on the snow as Lanternfall paints it (ART.md 15: lilac snow with a
+ *  silver lit side, never a gold floor). The light lane added each pool's marigold to the lilac snow, and three
+ *  critics read the darker road that made the pools strong as a peach or gold floor. Here a pool keeps the snow's
+ *  own lilac and lifts its value toward silver (uPoolSilver.rgb, as far as uPoolSilver.w), and the lamp's own hue
+ *  is laid only at its heart, so the marigold is the lamp and a small warm core under it. L is localLight's sum
+ *  at this point; painted (Low) gives the same pool in flat values: a silver disc and a smaller warm heart, the
+ *  poster's painted pool, never a stain of the lamp's colour across the snow. */
+vec3 silverPool(vec3 col, vec3 L, float painted) {
+  float li = max(L.r, max(L.g, L.b));
+  vec3 hue = L / max(li, 1e-4);
+  float lift;
+  float heart;
+  if (painted > 0.5) {
+    // (Two soft steps and a small heart: at 0.6 and 1 with hard edges the pools were near-white islands.)
+    lift = smoothstep(0.03, 0.09, li) * 0.32 + smoothstep(0.2, 0.32, li) * 0.26;
+    heart = smoothstep(0.6, 0.72, li) * 0.32;
+  } else {
+    // (The lift kept off the pool's faint rim and the heart begun a step sooner: a wide pale lift read to the first
+    // critic as a milky haze where a lamp's own small warm pool read as lamplight.)
+    lift = smoothstep(0.08, 0.6, li) * 0.8;
+    heart = smoothstep(0.35, 1.1, li) * min(li, 1.4) * 0.55;
+  }
+  vec3 c = mix(col, max(col, uPoolSilver.rgb), lift * uPoolSilver.w);
+  return c + hue * heart;
 }
 
 vec3 toonLightK(vec3 lit, vec3 shade, vec3 n, vec3 v, float shadow, float rimK) {
@@ -1895,6 +1926,9 @@ export function makeSnowMaterial(): ShaderMaterial {
           // lights are painted: two flat values with a soft step between, a gouache pool, for the price
           // of the loop alone.
           vec3 L = localLight(vWorldPos, n, uLocalCount);
+          // (Round 8, the hours lane: where the palette paints its pools in silver, LIGHT_GLSL silverPool.)
+          if (uPoolSilver.w > 0.0) col = silverPool(col, L, uSnowFx <= 0.0 ? 1.0 : 0.0);
+          else {
           if (uSnowFx <= 0.0) {
             float li = max(L.r, max(L.g, L.b));
             L *= (smoothstep(0.03, 0.06, li) * 0.22 + smoothstep(0.22, 0.27, li) * 0.4) / max(li, 0.001);
@@ -1907,6 +1941,7 @@ export function makeSnowMaterial(): ShaderMaterial {
             }
           }
           col += L * mix(vec3(0.86, 0.88, 0.94), uRockLit * 1.3, smoothstep(0.46, 0.54, vRock.x));
+          }
           // (Low has no curve after this: a pool on bright day snow went over 1 in every channel and was
           // drawn as a hard white oval, the review loop. Where it would clip, it keeps its hue instead.)
           if (uSnowFx <= 0.0 && max(L.r, max(L.g, L.b)) > 0.001) col /= max(1.0, max(col.r, max(col.g, col.b)));

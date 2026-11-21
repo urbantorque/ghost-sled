@@ -845,6 +845,15 @@ export class World {
     if (!same) this.far.invalidate();
   }
 
+  /** Round 8, the hours lane: the hour changed (palette.ts setHour) with the world already on its course, as when the
+   *  title's pick turns from the day to the mountain's other hour. Its light is built again as another mood's is: the
+   *  props' baked colours, the sky, the grade and the far shadows' sun. */
+  relight(): void {
+    const mood = this.mood;
+    this.mood = -1 as Mood;
+    this.setMood(mood);
+  }
+
   /** The ghosts' glow for the palette (Ghosts.setGlow), with Spirit Flow's lift on it (round 8, speed). */
   private setGhostGlow(g: number): void {
     this.ghostGlowBase = g;
