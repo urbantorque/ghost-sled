@@ -48,7 +48,8 @@ and an event), each finished; **every leg's record replayed to the browser's has
 equal to what the leg before held at its line** (lantern 54 and 69 points, get-ups 3, charms [23] and then
 [23, 16, 9]); the save's `longNight` `{ legs: 3, z: 0 }`, the legs' bests under `night:pinecrest`, `night:frostfang`,
 `night:ember`, the album's night stickers 1 to 3; the last results' one button "Ride the Long Night" over "3 legs: your
-deepest night"; the console clean. A second, two-leg browser night on the final build: see Frames.
+deepest night"; the console clean. A second, two-leg night on the final build: both legs replayed exactly, the carry in
+(lantern 143, get-ups 3, Second Wind) the line's, the beat as fixed below, the console clean.
 
 **Mirrored runs on every mountain, High, Low and the phone** (`modes-mirror.js`: a pool rider replayed from a fresh
 save with `&mirror`, the HUD's DOM shown, frames at the start's charm gate, the second gate close, and the FINISH board
@@ -58,8 +59,9 @@ banner, ghost name tag, rival name and HUD string reads the right way round." Wh
 and is the same on a plain run (left for the lanes that own it): HUD callouts drawn over each other at the top centre
 (a pot over its total, two landing stamps at once, a split card over a fading one); Sakura's and Lanternfall's lanterns
 hanging in front of FINISH (Lanternfall's a dark unlit one); a straight edge across the phone's snow on Frostfang at
-1,535 m. One it named might have been the mirror's: Low's clock and distance touching ("3:13.94,442 m"); checked plain
-against mirrored on the final build (Frames).
+1,535 m. One it named looked as if it might be the mirror's: Low's clock and distance touching ("3:13.94,442 m"). A plain Low run
+on the final build shows the same (`figs/plain/m0-z4440.png`), so it is Low's canvas figures with the HUD's DOM shown,
+not the mirror (the stills that hide the DOM keep the gap): for the HUD's owner.
 
 **The places it is found, and the beat** (UI frames, a second fresh critic given ART.md and asked what each frame tells
 the player, and what is broken): the Almanac's Ride on the pages that open each mode read as part of the books; the
@@ -77,7 +79,7 @@ the next leg itself; it now goes through Run Again).
 
 - **A plain run:** no new draw, pass, texture or uniform array. Two calls a frame that return at once (`mirrorView`), one
   float uniform in the labels' material (never re-sent unchanged). Low, Pinecrest, GL calls a frame (`glcount.js`, 10 s
-  of a steered ride): the round-8 base 483.9; this branch LOWNUMBERS.
+  of a steered ride): the round-8 base 483.9; this branch 484.6 (+0.7, within the ride's own spread: a first plain run on another line read 510.5, having ridden 296 m of the window where the others rode 328 to 335 m).
 - **A mirrored run:** the same frame as a plain one, shown turned over by the compositor: 487.7 GL calls a frame on Low
   (base 483.9; the difference is the ride's path, as the plain runs show). The pieces with boards are remade once as a
   mirrored run starts (as a new mood remakes them), on the run's start, not in a ride.
