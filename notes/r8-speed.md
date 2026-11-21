@@ -47,8 +47,9 @@ I did not have the browser time to run under the one-slot rule.
 
 **The streak overlay's share of the speed, named gone.** Both critics described the new strips as "a sharp world" with
 "streaks on top" at the edges, and the first critic named only the old strips' whole-frame smear. Neither named the
-white diagonal scratches the ground truth found (`review/high/m1-0250.png`): the first critic's one mention of white
-radial streaks is the second critic's pair 08 over the ice. The full-flow strips were not chosen as the best-looking
+white diagonal scratches the ground truth found (`review/high/m1-0250.png`) in a new strip; the one mention of white
+radial streaks ("like scratches converging on the rider") is the second critic's pair 08 over Sakura's ice, without
+saying which strip. The full-flow strips were not chosen as the best-looking
 frame (that was Ember at flow 4, a new frame); the second bar is therefore short too, by the letter.
 
 ## What changed, and why a player would feel it
@@ -119,13 +120,14 @@ frame (that was Ember at flow 4, a new frame); the second bar is therefore short
 
 Keeps the flow's colour, the trail (no flicker), the brighter ghosts and the bed; drops the chatter (lens and sled), the
 breath (the speed's surge, the dash's surge and the levels' breaths), the wind lines and the sparks. The speed's own FOV
-stays, as round 7 has it. Shot: `final-reduced/after-high/` (Frostfang's dash at flow 5).
+stays, as round 7 has it. Verified by the tests (`spiritflow.test.ts`: no wind under reduced motion, the trail kept) and by the code paths; a
+reduced-motion capture was queued but not shot (the one browser slot stayed with another lane's long stills run).
 
 ## Low and the phone
 
 - **Low:** the trail alone, half as wide again and 12 samples (no bloom to carry a thin flame), the ghosts' lift and the
   bed; no wind lines, sparks, posts or near field (Low had none of the last two before); its colour is baked, so there is no
-  composite to lift. GL calls a frame on Pinecrest at 6x-free counting (`glcount.js`, 600 frames): before 486.4, after
+  composite to lift. GL calls a frame on Pinecrest (`glcount.js`, unthrottled, 600 frames): before 486.4, after
   485.0 at rest; **507.4 held at full flow** (`?flowlook=6`): about 21 calls and two draw calls, the trail. Script per
   frame (`systime.js`, Sakura at 6x, 20 s): the two passes ran at different machine speeds (frameRun 9.1 against 14.0 ms,
   every system scaled alike), so the totals are not comparable; the ratio world.frame / renderer.render is 1.75 on both, and
@@ -183,7 +185,9 @@ speed has no acceleration, no dash and no flow, so the FOV there is round 7's. T
 
 - The "faster" pick (0 of 10 twice) and the full-flow strip as the set's best frame (the best frame was a new one, at
   flow 4).
-- The trail took four looks and was last shot only in the final short capture: a critic has not seen its last form.
+- The trail took four looks. Its last change (75ddc40: a saturated flame with a line of heat instead of a pale tail, half as
+  wide again on Low) and the wind lines' softer tint are tested but **not shot**: the one browser slot stayed with another
+  lane. The first thing to shoot is `?flowlook=6&debug` on Pinecrest and Sakura, High and Low.
 - The flow's sound and the chatter are unheard and unfelt by a person.
 - The phone's frames were not shot under the one-slot rule.
 - What the critics named that is not this lane's: the high wide lens on Ember's ridge, the milky lilac of Sakura's street,
@@ -218,5 +222,5 @@ speed lane, `notes/r8-speed.md`): `?flowlook=0..6` with `?debug` holds the flow'
 - `pairs1/`, `pairs2/` the blind pairs; `keys/` their keys and the critics' picks.
 - `scan/` the page's own ride on each mountain (demo 0), every 25 m.
 - `probe/` GL counts, GPU passes, systime and readability, before and after.
-- `look*/`, `lowlook/`, `final/`, `final-reduced/` look-dev and the last short captures (Low and reduced motion).
+- `look*/`, `lowlook/` look-dev (Low: before and after at Pinecrest 290 m and Sakura 1280 m).
 - The builds: `.claude/worktrees/r8-speed/dist/r8-speed-before` (fac4c46) and `dist/r8-speed`.
