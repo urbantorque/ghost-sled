@@ -3,7 +3,7 @@ import type { InputMode } from '../game/input';
 import { type Standing, aheadOf, byStanding, margin } from '../game/standing';
 import { biomeArt } from './art';
 import { btn, h, kbd, padBtn, sr, type Ctx } from './dom';
-import { fmt, metres, NBSP } from './fmt';
+import { fmt, metres, NBSP, rewardsLine } from './fmt';
 import { icon } from './icons';
 import { barShare, rewardGlyph } from './almanac';
 import { EASE_OUT, reduced } from './motion';
@@ -252,7 +252,7 @@ export class Story {
       this.fillEl.style.transform = `scaleX(${barShare(spine.before).toFixed(4)})`;
       const nextR = a.next && a.next.length > 0 ? a.next.map((r) => r.name).join(', ') : null;
       const next = nextR
-        ? h('p', 'gs-sq-next', h('span', 'gs-sq-next-k', `Page ${a.page + 1}`), h('span', 'gs-sq-next-n', nextR), h('span', 'gs-sq-togo', h('span', 'gs-num', fmt(a.need)), `${NBSP}to go`))
+        ? h('p', 'gs-sq-next', h('span', 'gs-sq-next-k', `Page ${a.page + 1}`), Object.assign(h('span', 'gs-sq-next-n', rewardsLine(a.next!.map((r) => r.name))), { title: nextR }), h('span', 'gs-sq-togo', h('span', 'gs-num', fmt(a.need)), `${NBSP}to go`))
         : h('p', 'gs-sq-next', h('span', 'gs-sq-next-n', 'Every page turned'));
       const ticks = h('ul', 'gs-sq-ticks');
       for (const t of namedTicks(spine.ticks, 3)) {

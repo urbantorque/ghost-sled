@@ -13,6 +13,12 @@ export function fmt(n: number): string {
 /** Non-breaking space, so "34 m" never wraps between number and unit. */
 export const NBSP = ' ';
 
+/** A page's rewards on one line that never cuts a name: the first, then "+N" for the rest (the whole list is spoken
+ *  and in the line's title). */
+export function rewardsLine(names: string[]): string {
+  return names.length > 1 ? `${names[0]}${NBSP}+${names.length - 1}` : (names[0] ?? '');
+}
+
 export function metres(n: number): string {
   return fmt(n) + NBSP + 'm';
 }

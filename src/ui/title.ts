@@ -6,7 +6,7 @@ import { clock } from '../game/standing';
 import { MOUNTAINS } from '../sim/mountains';
 import { biomeArt, riderBust } from './art';
 import { btn, captureFocus, h, kbd, Layer, padBtn, restoreFocus, sr, type Ctx } from './dom';
-import { dailyDate, fmt, metres, NBSP, progFigures } from './fmt';
+import { dailyDate, fmt, metres, NBSP, progFigures, rewardsLine } from './fmt';
 import { icon } from './icons';
 import { EASE_OUT, SPRING, play, reduced } from './motion';
 
@@ -853,7 +853,7 @@ export class Title {
     bar.setAttribute('aria-hidden', 'true');
     const next = b.next && b.next.length > 0 ? b.next.map((r) => r.name).join(', ') : null;
     const nextEl = next
-      ? h('span', 'gs-t-book-next', h('span', 'gs-t-book-nk', `Page ${b.page + 1}`), h('span', 'gs-t-book-nn', next), h('span', 'gs-t-book-togo gs-num', `${fmt(b.need)}${NBSP}to go`))
+      ? h('span', 'gs-t-book-next', h('span', 'gs-t-book-nk', `Page ${b.page + 1}`), Object.assign(h('span', 'gs-t-book-nn', rewardsLine(b.next!.map((r) => r.name))), { title: next }), h('span', 'gs-t-book-togo gs-num', `${fmt(b.need)}${NBSP}to go`))
       : h('span', 'gs-t-book-next', 'Every page turned');
     const main = h('button', 'gs-t-book-main', icon('book', 'gs-t-book-ico'), h('span', 'gs-t-book-txt', h('span', 'gs-t-book-rank', 'Rider Rank ', h('span', 'gs-num', String(b.page))), bar, nextEl));
     main.type = 'button';
