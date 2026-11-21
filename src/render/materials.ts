@@ -953,7 +953,15 @@ export function makeSnowMaterial(): ShaderMaterial {
         vec2 q = vec2(p.x * 0.55, p.y * 0.22);
         return vnoise(q) * 0.65 + vnoise(q * 2.7 + 13.1) * 0.35;
       }
-      // (Round 7's sastrugi are baked now, with round 8's pillows: snowrelief.ts sastrugiHeight.)
+      /** Round 7's wind slab's profile: a sawtooth across the wind (a long gentle windward rise and a short steep lee
+       *  drop under a crisp crest), the crests wandering. 0..1 at p. (The finer sastrugi are baked now, with round 8's
+       *  pillows: snowrelief.ts.) */
+      float sastrugi(vec2 p) {
+        const vec2 W = vec2(0.42, 0.91);
+        vec2 sp = vec2(dot(p, W), dot(p, vec2(-W.y, W.x)));
+        float s = fract(sp.x * 0.62 + vnoise(sp * vec2(0.09, 0.22)) * 2.4 + vnoise(sp * vec2(0.4, 0.9) + 3.0) * 0.25);
+        return smoothstep(0.0, 0.84, s) * (1.0 - smoothstep(0.84, 1.0, s));
+      }
       ${SNOW_SURF_GLSL}
       /** Old sled tracks down the corridor's packed middle lane: pairs of faint runner grooves that
        *  wander a little and come and go. lat is metres from the centreline, z the three.js z, w the
@@ -1209,6 +1217,12 @@ export function makeSnowMaterial(): ShaderMaterial {
         float relC = 0.0;
         float relL = 0.0;
         float relTop = 0.0;
+        // Round 7, wind slab: broad carved drifts some seven metres from crest to crest, lying across the wind, in
+        // fields. A long windward rise, a crest that takes the light, a short lee face in the shade's blue. (Kept under
+        // the second attempt's relief: the critics read the snow flat without it.)
+        float slabC = 0.0;
+        float slabL = 0.0;
+        float slabK = (1.0 - smoothstep(60.0, 150.0, dist)) * (1.0 - smoothstep(0.5, 1.4, footprint)) * (1.0 - ice) * (1.0 - bare) * (1.0 - 0.75 * packed) * (1.0 - 0.7 * groomK);
         // (The relief's slope, world xz.)
         vec2 relG = vec2(0.0);
         if (detail > 0.0) {
@@ -1227,10 +1241,11 @@ export function makeSnowMaterial(): ShaderMaterial {
           float relK = uRelief.x * (1.0 - ice) * (1.0 - bare) * (1.0 - smoothstep(55.0, 110.0, dist)) * (1.0 - smoothstep(0.02, 0.3, vKick.x)) * (1.0 - smoothstep(0.1, 0.6, vPaint.z)) * (1.0 - pond);
           // (Softer under the lens, where the frame's motion would smear it into streaks: the forms are for the middle
           // distance, and a tall phone frame keeps fewer, larger, softer ones under the rider.)
-          relK *= mix(0.4, 1.0, smoothstep(3.0, 12.0, dist));
+          relK *= mix(0.7, 1.0, smoothstep(3.0, 12.0, dist)) * uSnowFx;
           if (relK > 0.0) {
-            float ap = RELIEF_PILLOW * relK * mix(1.0, mix(0.5, 0.05, groomK), floorK);
-            float as = RELIEF_SASTRUGI * relK * mix(1.0, mix(0.3, 0.0, groomK), floorK) * uSnowFx;
+            // (The sastrugi all but go in a cast shadow, where the frame's motion drew their creases as dark scribbles.)
+            float ap = RELIEF_PILLOW * relK * mix(1.0, mix(0.3, 0.05, groomK), floorK);
+            float as = RELIEF_SASTRUGI * relK * mix(1.0, mix(0.3, 0.0, groomK), floorK) * uSnowFx * mix(0.15, 1.0, shadow);
             vec4 rp = textureGrad(uReliefP, reliefUvP(p), rgP.xy, rgP.zw);
             vec4 rq = as > 0.0 ? textureGrad(uReliefS, reliefUvS(p), rgS.xy, rgS.zw) : vec4(0.0, 0.5, 0.5, 0.0);
             vec2 sP = (rp.gb * 2.0 - 1.0) * uRelief.y;
@@ -1246,10 +1261,18 @@ export function makeSnowMaterial(): ShaderMaterial {
             vec2 toL = normalize(uSunDir.xz + vec2(0.0001, 0.0));
             float sinT = dot(ng, uSunDir);
             float lift = clamp(sinT / sqrt(max(1.0 - sinT * sinT, 0.01)), 0.18, RELIEF_TAN);
-            relSh = mix(1.0, reliefShadow(p, h0, ap, as, toL, lift, rgP, rgS, uSnowFx > 0.0), (1.0 - smoothstep(40.0, 90.0, dist)) * smoothstep(0.08, 0.22, sinT));
+            relSh = mix(1.0, reliefShadow(p, h0, ap, as, toL, lift, rgP, rgS, uSnowFx > 0.0), (1.0 - smoothstep(40.0, 90.0, dist)) * smoothstep(0.08, 0.22, sinT) * (1.0 - 0.5 * floorK));
             relC = smoothstep(0.7, 0.9, rq.r) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
             relL = (1.0 - smoothstep(0.05, 0.4, rq.r)) * rp.a * as / max(RELIEF_SASTRUGI, 0.001);
             relTop = smoothstep(0.55, 0.85, rp.r) * ap / max(RELIEF_PILLOW, 0.001);
+          }
+          if (slabK > 0.0) {
+            vec2 sp = p * 0.22 + vec2(7.3, 1.9);
+            float s0 = sastrugi(sp);
+            float k = slabK * (0.3 + 0.7 * smoothstep(0.3, 0.62, vnoise(p * vec2(0.033, 0.017) + 5.5)));
+            if (uSnowFx > 0.0) pert.xz += vec2(s0 - sastrugi(sp + vec2(0.035, 0.0)), s0 - sastrugi(sp + vec2(0.0, 0.035))) * 0.55 * k;
+            slabC = smoothstep(0.7, 0.86, s0) * k;
+            slabL = (1.0 - smoothstep(0.02, 0.36, s0)) * k;
           }
           // The grain under the lens: each dab tilted its own way (Medium and High).
           grainK = uSnowFx * (1.0 - ice) * (1.0 - smoothstep(0.018, 0.04, fwr)) * (1.0 - smoothstep(0.12, 0.3, fwz)) * (1.0 - smoothstep(5.0, 9.0, dist)) * (1.0 - smoothstep(-1.0, 1.0, vEdge));
@@ -1356,7 +1379,7 @@ export function makeSnowMaterial(): ShaderMaterial {
         // shade too, where the sky toward the sun is the brighter: so a pillow reads in a flat noon light and in a
         // bank's shadow, soft and broad.)
         float relFace = clamp(-dot(relG, normalize(uSunDir.xz + vec2(0.0001, 0.0))), -0.4, 0.4);
-        col *= 1.0 + relFace * mix(0.2, 0.6, t) * uReliefK.z;
+        col *= 1.0 + relFace * mix(0.1, 0.6, t) * uReliefK.z;
         if (uKey2.a > 0.0) {
           // The aurora is the night's key light (Frostfang): curtains of its light, a couple of hundred
           // metres long, sweep slowly across the slope. Where one lies the snow that faces the sky takes
@@ -1384,8 +1407,8 @@ export function makeSnowMaterial(): ShaderMaterial {
         col *= 1.0 + dot(rip, vec2(0.866, 0.5)) * sign(sunAcross) * max(abs(sunAcross), 0.6);
         // (Round 8: a crest the wind packed takes the light warm, the lee under it the shade's own blue.)
         vec3 warmC = mix(sunN, vec3(1.0, 0.9, 0.76), 0.55);
-        col += lit * sunSnow * mix(vec3(1.0), warmC, 0.6) * (crestR * (0.07 + 0.07 * powderK) + relC * 0.14 + relTop * 0.05) * t;
-        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), relL * 0.08 * t);
+        col += lit * sunSnow * mix(vec3(1.0), warmC, 0.6) * (crestR * (0.07 + 0.07 * powderK) + relC * 0.14 + relTop * 0.05 + slabC * 0.1) * t;
+        col = mix(col, col * mix(vec3(0.9), uSnowShade / max(uSnowLit, vec3(0.05)), 0.55), relL * 0.08 * t + slabL * 0.4);
         // Round 8, a groomed lane's own light (SNOW_SURF_GLSL).
         if (groomK > 0.01 && dist < 140.0) {
           // A groomed lane: the swaths' steps and seams read far down the run, the ribs under the lens (Medium

@@ -96,8 +96,8 @@ function pillowCells(): Array<Pillow | null> {
       cells.push({
         u: (wu + 0.25 + 0.5 * hashI(wu, wv, 12)) * CELL_U,
         v: (wv + 0.2 + 0.6 * hashI(wu, wv, 13)) * CELL_V,
-        half: 1.7 + 1.4 * hashI(wu, wv, 14),
-        len: 3.4 + 3.4 * hashI(wu, wv, 15),
+        half: 2.4 + 1.4 * hashI(wu, wv, 14),
+        len: 4.4 + 3.4 * hashI(wu, wv, 15),
         tall: 0.4 + 0.6 * hashI(wu, wv, 16),
         ca: Math.cos(a),
         sa: Math.sin(a),
@@ -126,10 +126,12 @@ export function pillowHeight(u: number, v: number): number {
       const dv = v - (p.v + (gv - wrap(gv, NV)) * CELL_V);
       const ru = du * p.ca - dv * p.sa;
       const rv = du * p.sa + dv * p.ca;
-      const lv = rv > 0 ? p.len * 1.15 : p.len * 0.9;
-      const r2 = (ru / p.half) * (ru / p.half) + (rv / lv) * (rv / lv);
+      const lv = rv > 0 ? p.len * 1.6 : p.len * 1.25;
+      const hu = p.half * 1.4;
+      const r2 = (ru / hu) * (ru / hu) + (rv / lv) * (rv / lv);
       if (r2 >= 1) continue;
-      const b = (1 - r2) * (1 - r2);
+      // (A cubic falloff, with no slope left at its edge: a squared one drew each pillow's rim as an egg's outline.)
+      const b = (1 - r2) * (1 - r2) * (1 - r2);
       open *= 1 - b * p.tall;
     }
   }
@@ -273,7 +275,7 @@ export const relief = {
   uReliefS: { value: blank as Texture },
   uRelief: { value: new Vector4(0, 1, 1, 1.5) },
   /** x the pillows' height and y the sastrugi's (metres), z the light the forms turn to and from, w the sheen on them. */
-  uReliefK: { value: new Vector4(0.6, 0.06, 1.2, 1) },
+  uReliefK: { value: new Vector4(0.8, 0.06, 1.2, 1) },
 };
 
 /** Dev only (`?debug&rk=0.55,0.09,1,1&rg=1`): the relief's heights, light and sheen and the glitter's gathering toward the
@@ -309,6 +311,8 @@ export function startReliefBake(fine: () => boolean): void {
     if (!firstFrame()) return later(250);
     // (A slice of at most 4 ms, or what the idle period has left; a starved queue still gets one every half second.)
     const end = performance.now() + Math.min(4, deadline && !deadline.didTimeout ? Math.max(1, deadline.timeRemaining()) : 4);
+    // (Low draws no relief: its snow is round 7's painted slab, and it never pays for the tiles.)
+    if (!fine()) return later(1000);
     if (pillows.row < RELIEF_N) {
       if (!pillows.rows(end)) return later();
       const p = pillows.pack();
