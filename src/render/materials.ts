@@ -484,8 +484,10 @@ vec3 silverPool(vec3 col, vec3 L, float painted) {
     lift = smoothstep(0.03, 0.09, li) * 0.32 + smoothstep(0.2, 0.32, li) * 0.26;
     heart = smoothstep(0.6, 0.72, li) * 0.32;
   } else {
-    lift = smoothstep(0.0, 0.5, li);
-    heart = smoothstep(0.45, 1.25, li) * min(li, 1.4) * 0.5;
+    // (The lift kept off the pool's faint rim and the heart begun a step sooner: a wide pale lift read to the first
+    // critic as a milky haze where a lamp's own small warm pool read as lamplight.)
+    lift = smoothstep(0.08, 0.6, li) * 0.8;
+    heart = smoothstep(0.35, 1.1, li) * min(li, 1.4) * 0.55;
   }
   vec3 c = mix(col, max(col, uPoolSilver.rgb), lift * uPoolSilver.w);
   return c + hue * heart;

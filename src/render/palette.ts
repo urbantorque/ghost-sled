@@ -2190,48 +2190,51 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
     ],
   },
   // Round 8, the hours lane. Frostfang at noon (the Almanac's page 12): the day's mountain is a blue hour that goes to
-  // night and breaks into dawn; its other hour is the glacier's glare, the same awe in the opposite light. A high
-  // white sun left of the run, a cobalt sky down to a pale ice horizon with a halo in the crystal air, the snow
-  // white-hot and the shadows a hard blue, the ice lit from inside. The fields go to a silver afternoon, and out of
+  // night and breaks into dawn; its other hour is the glacier's glare, the same awe in the opposite light. A polar
+  // noon: the sun as high as it climbs here, still low, left of the run in a ring of sun dogs, diamond dust glittering
+  // in the air, a deep cobalt sky down to a white-hot horizon the Fang stands dark against, the snow white and the
+  // shadows long and a hard blue, the ice lit from inside. (A high, plain midday read to the first critic as any
+  // mountain's day.) The fields go to a silver afternoon, and out of
   // the cavern the glare is ahead, over the Fang.
   glacier: {
     name: 'Noon',
     phrase: 'at Noon',
     start: (p) => {
-      setSun(p, -38, 14, 40, 18);
-      p.sunColor = c('#FFFCF2');
+      setSun(p, -30, 8, 36, 12);
+      p.sunColor = c('#FFF8E8');
       p.sunCore.setRGB(3, 3, 2.85);
       p.sunTint = 0.6;
       p.sunSize = 0.8;
       p.sunGlow = 1.1;
       p.sunDisc = 1;
       p.sunSoft = 0;
-      p.skyZenith = c('#08328C');
-      p.skyMid = c('#2A6ED0');
-      p.skyHorizon = c('#CFE6FA');
-      p.skyBand = { color: c('#F4FAFF'), fade: 30, k: 0.5 };
+      p.skyZenith = c('#061E70');
+      p.skyMid = c('#2458BC');
+      p.skyHorizon = c('#E4F0FF');
+      p.skyBand = { color: c('#FFFFFF'), fade: 26, k: 0.85 };
       p.skyBelow = c('#A8C8EC');
       p.skySpread = 0.6;
       p.skyCurve = 0.55;
       // (White-hot, under the film's paper white; the shade a hard cobalt-blue, the noon's long-lens contrast.)
       p.snowLit = c('#F2F6FF');
-      p.snowShade = c('#4C78D0');
-      p.snowDeep = c('#1E46A8');
-      p.rim = c('#E8F4FF');
+      p.snowShade = c('#3A64C8');
+      p.snowDeep = c('#173C9C');
+      p.rim = c('#FFF8E0');
       p.fog = c('#A2C0EC');
       p.fogNear = 70;
       p.fogFar = 620;
       p.hemiSky = c('#7AA6E8');
       p.hazardFog = 0.7;
-      p.ridge = [c('#C4DAF4'), c('#86AEE4'), c('#4E7CCC')];
-      p.massif.rock = c('#20386E');
+      // (The far needles and the Fang a step darker than the haze, so they stand against the white-hot horizon.)
+      p.ridge = [c('#A8C4EC'), c('#5E86CC'), c('#2A4C98')];
+      p.massif.rock = c('#14285E');
       p.massif.glowK = 0;
-      p.massif.flow = 0.6;
+      p.massif.flow = 0.8;
       p.massif.sea = 0.8;
-      p.ice = 0.85;
-      p.grade = { lift: c('#04102E'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.14, grain: 0.6, foot: 0.26, shafts: 0.5, lens: 0.25, focal: 0.6, gust: 0, glitter: 0.6, exposure: 0.97, hi: c('#FFFCF4'), lo: c('#DCE6FF') };
+      p.ice = 0.9;
+      p.grade = { lift: c('#04102E'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.14, grain: 0.6, foot: 0.26, shafts: 0.5, lens: 0.25, focal: 0.6, gust: 0, glitter: 0.8, exposure: 0.97, hi: c('#FFFCF4'), lo: c('#DCE6FF') };
       p.clouds = { low: 0.35, high: 0.5, top: 0.2, lit: c('#FFFFFF'), shade: c('#A6BEE8'), rim: c('#FFFFFF'), shadow: 0.26 };
-      p.atmo = { rays: 0.5, halo: 0.4, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#DCEAFA'), drift: 0.1 };
+      p.atmo = { rays: 0.7, halo: 0.75, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#DCEAFA'), drift: 0.1 };
       p.air = { far: c('#4A7ACC'), cool: c('#E0EAFF'), low: 0.45, scatter: 1.1 };
       p.lift.sun = 0.8;
       p.lift.bounce = 0.45;
@@ -2240,7 +2243,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.aurora = 0;
       // (The glare is the disc and the glints: more bloom laid a milky veil over the near snow.)
       p.bloom = 0.3;
-      p.sparkle = 1;
+      // (Diamond dust: fine flakes in the air that catch the low sun, and the snow's glitter turned up toward it.)
+      p.sparkle = 1.3;
+      p.snowfall = 0.06;
       p.giftGlow = 0;
       p.ghostGlow = 1.25;
       p.lanternGlow = 0;
@@ -2252,7 +2257,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
         // goes to a silver light, the shadows lie long and blue across the fields, and the ice glows from inside.
         from: 1400, at: 2200, dusk: 0.15,
         edit: (p) => {
-          setSun(p, -50, 9, 32, 12);
+          setSun(p, -46, 6, 30, 10);
           p.sunColor = c('#F4F2FF');
           p.skyZenith = c('#0A2C80');
           p.skyMid = c('#3A70C8');
@@ -2262,7 +2267,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.massif.flow = 0.9;
           p.clouds.low = 0.6;
           p.clouds.shadow = 0.3;
-          p.atmo.halo = 0;
+          p.atmo.halo = 0.3;
           p.grade.shafts = 0.6;
           p.ice = 0.8;
         },
@@ -2348,8 +2353,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.fogFar = 380;
       p.hemiSky = c('#3C3C6C');
       p.air = { far: c('#4A140E'), cool: c('#D8D4F0'), low: 0.7, scatter: 0.8 };
-      p.deck = { k: 1, lit: c('#7A2E1A'), shade: c('#1C0C10'), glow: c('#FF5A1E') };
-      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#5A2018'), shade: c('#1A0A0E'), rim: c('#FF6A2A'), shadow: 0.35 };
+      // (A dark ceiling lit only low toward the fire: lit red all over, the first critic read the sky as one flat red.)
+      p.deck = { k: 1, lit: c('#4A1C16'), shade: c('#120A0E'), glow: c('#FF5A1E') };
+      p.clouds = { low: 0.7, high: 0, top: 0.16, lit: c('#4A1A14'), shade: c('#140A0C'), rim: c('#FF6A2A'), shadow: 0.35 };
       p.massif.lava = 0.74;
       p.massif.flow = 1;
       p.massif.glow = c('#FF6A2A');
@@ -2357,7 +2363,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.massif.glowLine = -200;
       p.massif.seaWarm = 2;
       p.under = { color: c('#FF6A28'), k: 0.42 };
-      p.embers = 1.3;
+      // (Fewer embers and glints: at 1.3 and 0.7 the snow read as covered in orange specks, noise.)
+      p.embers = 0.85;
       p.lamps = 1.3;
       p.lampAir = 0.08;
       p.hazardDim = 0.86;
@@ -2378,7 +2385,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.posterSnowSat = 0.7;
       Object.assign(p.poster, { shadow: c('#7C6AA8'), shadowK: 0.5 });
       p.stars = 0;
-      p.sparkle = 0.7;
+      p.sparkle = 0.35;
       p.bloom = 0.6;
       p.giftGlow = 0.6;
       p.ghostGlow = 1.7;
@@ -2389,11 +2396,11 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
         // Out on the shield the deck is lit hottest from under it, the cone's flanks run, the embers thicken.
         from: 1700, at: 2250, dusk: 1,
         edit: (p) => {
-          p.deck.lit = c('#9A3A1C');
+          p.deck.lit = c('#6A2618');
           p.deck.glow = c('#FF6A22');
           p.skyHorizon = c('#E0481A');
           p.under.k = 0.5;
-          p.embers = 1.5;
+          p.embers = 1;
         },
       },
       {
@@ -2403,12 +2410,12 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
         edit: (p) => {
           p.fog = c('#5A2016');
           p.air.far = c('#6A2010');
-          p.deck.lit = c('#4A1A14');
+          p.deck.lit = c('#3A1612');
           p.deck.glow = c('#C8401A');
           p.snowShade = c('#20224A');
           p.lamps = 1.4;
           p.lampAir = 0.1;
-          p.embers = 1.6;
+          p.embers = 1.1;
         },
       },
     ],
@@ -2424,7 +2431,9 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
     start: (p) => {
       setSun(p, 24, 3, 30, 10);
       p.moon = false;
-      p.sunDisc = 0.35;
+      // (The sun not yet up: a glow under the far range, no disc and no rays. With a disc and shafts at the Crown the
+      // first critic read the run's start as Firstlight's hour.)
+      p.sunDisc = 0;
       p.sunColor = c('#F2D8E8');
       p.sunCore.setRGB(2.4, 1.8, 1.7);
       p.sunGlow = 1.1;
@@ -2447,10 +2456,10 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.massif.glowK = 0.6;
       p.massif.glowLine = -200;
       p.massif.seaWarm = 1.2;
-      p.stars = 0.3;
+      p.stars = 0.5;
       p.atmo.meteors = 0;
-      p.atmo.rays = 0.4;
-      p.grade.shafts = 0.3;
+      p.atmo.rays = 0;
+      p.grade.shafts = 0;
       p.lamps = 0.75;
       p.lanternGlow = 0.25;
       p.bloom = 0.55;
@@ -2473,9 +2482,10 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.skyZenith = c('#241E66');
           p.skyMid = c('#4C3C94');
           p.skyHorizon = c('#B88AB4');
-          p.skyBand = { color: c('#E8A8A8'), fade: 26, k: 0.4 };
+          p.skyBand = { color: c('#C898C0'), fade: 26, k: 0.35 };
           p.skyBelow = c('#6A5294');
-          p.deck = { k: 0.9, lit: c('#8A7ACC'), shade: c('#3C3488'), glow: c('#E8A0A8') };
+          // (Rose-violet under the deck, never orange, ART.md 15: the lanterns are the brightest thing under it.)
+          p.deck = { k: 0.9, lit: c('#6A5CB4'), shade: c('#2E2878'), glow: c('#C890B8') };
           p.snowLit = c('#D8D6F4');
           p.snowShade = c('#6252B4');
           p.snowDeep = c('#2C1E70');
@@ -2508,18 +2518,19 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       {
         // Sunrise over Firstlight: the deck breaks, the sun's rim comes up rose-gold over the far range, the snow
         // silver with a rose edge and long lilac shadows, the lanterns leaving the valley.
-        from: 2900, at: 3600, dusk: 1,
+        // (From the town's own street on, and rose: begun on the Lamp Road its orange sky took the lanterns' place.)
+        from: 3350, at: 3900, dusk: 1,
         edit: (p) => {
           setSun(p, 26, 4.5, 26, 10);
-          p.sunDisc = 1;
-          p.sunGlow = 1.1;
+          p.sunDisc = 0.6;
+          p.sunGlow = 0.8;
           p.sunColor = c('#FFE0DC');
           p.deck.k = 0.35;
           p.deck.glow = c('#FFB8A0');
           p.skyZenith = c('#2A3A8C');
           p.skyMid = c('#8478C4');
-          p.skyHorizon = c('#FFC4A8');
-          p.skyBand = { color: c('#FFD8B0'), fade: 22, k: 1 };
+          p.skyHorizon = c('#F4B8C0');
+          p.skyBand = { color: c('#FFD0C8'), fade: 22, k: 0.8 };
           p.skyBelow = c('#9A84C0');
           p.snowLit = c('#E4E0F6');
           p.snowShade = c('#6458BE');
@@ -2534,28 +2545,29 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.massif.glowLine = -300;
           p.stars = 0;
           p.lamps = 0.7;
-          p.atmo.rays = 0.8;
-          p.grade.shafts = 0.6;
+          p.atmo.rays = 0.4;
+          p.grade.shafts = 0.3;
           p.under.k = 0.04;
         },
       },
       {
-        // Morning at the line: the sun clear of the range, a pale blue over lilac, the snow silver-white, the great
-        // lantern lit in the daylight.
-        from: 3650, at: 4300, dusk: 1,
+        // Morning at the line: the sun clear of the range, a violet-blue over a rose horizon, the snow silver-white, the
+        // great lantern lit as the morning comes. (A pale blue day sky took the glow from the town's lanterns, the first
+        // critic: the sky keeps a step of the night's violet so they still read as light.)
+        from: 3950, at: 4400, dusk: 1,
         edit: (p) => {
-          setSun(p, 28, 9, 30, 12);
+          setSun(p, 28, 8, 30, 12);
           p.sunColor = c('#FFF0E8');
-          p.skyZenith = c('#3450A8');
-          p.skyMid = c('#9AA0D8');
-          p.skyHorizon = c('#F4D8D4');
-          p.skyBand = { color: c('#FFE8D8'), fade: 26, k: 0.6 };
+          p.skyZenith = c('#2C3890');
+          p.skyMid = c('#7A78C4');
+          p.skyHorizon = c('#F0C4CC');
+          p.skyBand = { color: c('#FFDCD4'), fade: 26, k: 0.6 };
           p.deck.k = 0.15;
-          p.snowLit = c('#EAE8F8');
-          p.snowShade = c('#6A64C4');
-          p.fog = c('#9A90CC');
-          p.air.far = c('#7C74BC');
-          p.lamps = 0.6;
+          p.snowLit = c('#E6E4F8');
+          p.snowShade = c('#6A60C2');
+          p.fog = c('#8A80C4');
+          p.air.far = c('#6C64B4');
+          p.lamps = 0.8;
           p.bloom = 0.45;
           p.grade.exposure = 1.0;
         },
