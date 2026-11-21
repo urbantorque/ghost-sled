@@ -3565,3 +3565,38 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       hints moved out from under the thumbs (27 HUD scenarios, no fault). Restart to riding from 909 to about 550 ms.
       Critics: 5 then 7 of 10, every results pair to the new screen in the second. Photo mode and album frames from the
       reel were not built.
+
+373. **V5, light that gathers: Ember met, Lanternfall back to round 7's night** (`notes/r8-light.md`; frames, pairs and
+    keys under `shots/r8/light/`).
+    - *Ember is lit from the lava's side.* The light that shades the snow comes from further round than the dim disc (64
+      to 70 degrees right, 30 to 40 up), so the snow facing the lava is a firelit warm white and the far bank turns a
+      cold plum-teal one step down; the deck's shadows take 45% of the light, not 70%. The first try (the snow dimmed
+      so the light carried its whole colour, round 7's deep plum shade) read as sand and a near-black slab and lost all
+      ten pairs; round 7's warm-white snow with the side key and a lighter cold shade won 8 of 10, the critic naming
+      "the clearer warm-against-cool split". The journey's stops follow the places the sim batch moved.
+    - *Lanternfall's night is round 7's again.* Three fresh critics, given only ART.md, read the darker road with
+      stronger pools against ART.md 15's "lilac snow with a silver lit side" and "never a gold floor" and picked round 7
+      2, 5 and 1 times of 10. The brief's "properly dark with warm pools" and ART.md disagree here, and ART.md wins: it
+      is the owner's direction, and the critics read it as written. What a next attempt should try is in the notes
+      (pools that lift the snow's own lilac toward silver, marigold only at the heart).
+    - *The great lantern is lit with the rider.* It hangs 35 m past the line (it was 28 m short, just off the results
+      frame), and as the finish lens swings the lamplighters walk it along its yoke to the side the lens looks back
+      across, so it burns over the rider's head in the results on every tier (shafts on Medium and High). Placed from
+      the lens, not the rider's side, after a rider drifting across in the last metres put it off the frame. Round 7's
+      open item 10.
+    - *Lamps light the air round them* (`lampAir`, Medium and High): a closed-form in-scatter inside `fogged()`, thin
+      (0.06 to 0.2) in the towns, the cavern and Ember's halls; the critics read it as milk wherever it was strong. It
+      first made the lights' vec4 arrays live in every fogged program (five more `uniform4fv` a Low frame); it is now
+      defined only in the snow and toon materials and Low's uploads are level.
+    - *The Lantern Row hangs in the world* (`lanternrow.ts`): a player's lit lanterns, marigold over each finish square
+      and over the title shot's stretch; glowing paper on Low; nothing on a fresh save.
+    - *Two other hours:* Pinecrest at Dusk and Sakura in the Evening (`ALT_HOURS`, palettes keyed by the hour, every
+      tier through its poster).
+    - *Not met:* the histogram bar (Ember's change is hue at much the same value, which the critic preferred; nothing
+      but lamp hearts goes over 85% on either build); Lanternfall's value pass and its Low pools; shafts through tree
+      runs and gate arches; the canyons' cold haze. No critic judged the Row, the hours or the finish's lantern: there
+      is no before frame of them.
+    - *Cost:* Low's GL calls level within the live ride's spread; one draw for the lantern's ribs near Lanternfall's
+      square, two per hung Row; no new pass or program. GPU pass times and Low's script could not be told from the
+      machine's swings while other lanes ran: the quiet sitting judges them.
+    - *Merged with one change:* the lane's `slot-take.sh` still looked for two browser slots; it takes the one.
