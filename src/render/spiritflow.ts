@@ -515,7 +515,7 @@ export class SpiritFlow {
     if (on) {
       // (A flip hides the scarf behind the sled's underside: the flame thins to an ember while it does, or it read as a
       // fireball beside a dark lid.)
-      const hide = 1 - 0.85 * Math.max(0, Math.min(1, o.flip ?? 0));
+      const hide = 1 - Math.max(0, Math.min(1, o.flip ?? 0));
       const rate = FLAME_RATE[this.tier] * (this.gutter > 0 && L.trail < 0.05 ? 0.35 : 0.3 + 0.7 * L.trail) * (1 + 0.8 * this.flare) * hide;
       this.fAcc += rate * dt;
       const life0 = trailLife(L);
@@ -536,7 +536,8 @@ export class SpiritFlow {
         const sway = (Math.random() - 0.5) * 0.35;
         const along = 0.5 + Math.random() * 0.5;
         this.fv[k * 3] = ln.x * along - o.dir.z * sway;
-        this.fv[k * 3 + 1] = ln.y * along + 0.45 + Math.random() * 0.5 + 0.3 * L.top;
+        // (Lifting clear of the sled's spray: low along the cloth, a flame in the powder read as exhaust and smoke.)
+        this.fv[k * 3 + 1] = ln.y * along + 0.75 + Math.random() * 0.6 + 0.3 * L.top;
         this.fv[k * 3 + 2] = ln.z * along + o.dir.x * sway;
         this.fa[k] = 0;
         this.fl[k] = life0 * (0.7 + 0.6 * Math.random()) * (this.gutter > 0 && L.trail < 0.05 ? 0.6 : 1);
@@ -556,14 +557,16 @@ export class SpiritFlow {
     const ra = (this.flameGeo.getAttribute('aRise') as BufferAttribute).array as Float32Array;
     // A guttering flame flickers.
     const flick = this.gutter > 0 && !o.reduced ? 0.4 + 0.6 * Math.abs(Math.sin(o.time * 41) * Math.sin(o.time * 17 + 1)) : 1;
-    const hidden = 1 - 0.85 * Math.max(0, Math.min(1, o.flip ?? 0));
+    // (Out altogether in a flip: thinned to an ember, it floated beside the sled as a stray blob.)
+    const hidden = 1 - Math.max(0, Math.min(1, o.flip ?? 0));
     const alpha = Math.min(1, (0.55 + 0.45 * L.trail) * (1 + 0.3 * this.flare)) * flick * hidden;
     // Slot 0: the glow on the scarf's tip.
     pa[0] = o.tip.x;
     pa[1] = o.tip.y;
     pa[2] = o.tip.z;
     fa[0] = 0;
-    fa[1] = (0.4 + 0.26 * L.trail + 0.14 * L.top) * (1 + 0.4 * this.flare) * (this.tier === 'low' ? 1.4 : 1);
+    // (Low's glow no bigger than High's: at half as big again it read as an oval blob at the flame's end.)
+    fa[1] = (0.4 + 0.26 * L.trail + 0.14 * L.top) * (1 + 0.4 * this.flare) * (this.tier === 'low' ? 0.85 : 1);
     fa[2] = (0.35 + 0.4 * L.trail) * flick * (L.trail > 0.02 ? 1 : this.gutter) * hidden;
     fa[3] = 1;
     ra[0] = 0;
@@ -585,7 +588,7 @@ export class SpiritFlow {
       // Stretched along the scarf's line where it rides now, lifted a little, so the tongues stream off the cloth.
       const ln = this.scarfLine(o, this.fu[k], tmpC);
       const sx = ln.x;
-      const sy = ln.y + 0.4;
+      const sy = ln.y + 0.65;
       const sz = ln.z;
       const vl = Math.hypot(sx, sy, sz) || 1;
       ra[v * 3] = sx / vl;
