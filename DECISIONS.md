@@ -3600,3 +3600,34 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       square, two per hung Row; no new pass or program. GPU pass times and Low's script could not be told from the
       machine's swings while other lanes ran: the quiet sitting judges them.
     - *Merged with one change:* the lane's `slot-take.sh` still looked for two browser slots; it takes the one.
+
+374. **V6, every action is an event: built, judged level, merged** (`notes/r8-events.md`; strips, pairs and keys under
+    `shots/r8/events/`).
+    - *What a player sees.* A perfect landing holds the picture at a tenth of its speed for 50 ms (98 ms at a streak of
+      five, on the render clock beside round 7's hit-stop) and runs one shockwave of heaved snow out from the crater
+      to about 8.5 m, with a band of the snow's white up the rider's edge. A dash ignites the rider in white-gold, cools
+      the world round it (the composite leans everything but the rider colder) and turns each hazard passed inside 6 m
+      to pale glass motes. A ward's lantern stands a size larger so it reads past the shoulders from behind, and its
+      shards fly to the sides at the sled's pace, lit paper. A passed ghost flares in its kind's colour, rocks back and
+      sheds motes from its far side, never across the rider. The finish is scaled to the result (`finishScale`): a win
+      a festival, a best beaten lights the town (lamps down the square, marigold willows, lanterns let go, a bell a
+      lamp), a podium a smaller show, an ordinary finish warm, a wreck gentle. Ghosts take the trick poses in the air
+      (the worker packs the trick, grab side and tier into a trajectory's flags), so a ghost can do anything a player
+      can, visibly.
+    - *Judged on strips, not stills:* an event is motion, so each pair was a sheet of eight frames of the same seconds
+      from the replayed record. Two fresh critics picked the new sheets 5 and then 6 of 10 (bar 8), naming the event
+      in the new sheet in most pairs and losing them on what drew over the hero: the dash's grey sky and haloed head,
+      a pass's motes on the rider's chest, two finishes read as a "gold floor", and the perfect's echoing rings read as
+      "a sonar ripple". Each was fixed (the last after the second critic, so unjudged). Merged as level with the
+      events now told, because no pair called the new build broken after the fixes and every beat the brief lists is
+      there; the final critic loop judges them again in the integrated build.
+    - *Calls made here.* A first finish on a mountain is not "a best beaten" (there is nothing to beat; its own beat is
+      the mountain opening's), so it does not light the town. The town's lamps lit by the lane read weakly by day; the
+      light lane's windows and lamps brightening with them is a polish item, not a reason to hold the merge.
+    - *Cost.* No new draw or program on any tier and no uniform array of vectors. Low keeps every beat with fewer
+      motes and without the light up the rider (10 to 15 GL calls a frame), the cooling (no composite pass on Low) and
+      the dash's wisps. Low's GL calls in held frames: the perfect level, the finish +3, the dash about +8 before its
+      per-hazard light came off Low, the ward about +20, which nothing the lane draws on Low explains (likely the
+      ghosts in view): the quiet sitting recounts it.
+    - *The machine.* The session's scratchpad was shared between lanes, and twice a helper of the speed lane's with the
+      same name ran with this lane's arguments; lanes keep their helpers in a folder of their own from now on.

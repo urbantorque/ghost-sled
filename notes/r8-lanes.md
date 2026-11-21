@@ -72,6 +72,9 @@ this file first, then your own brief (your brief wins where it is more specific)
   own session name (`-s=r8-<lane>`), close it when done, and **never run `playwright-cli close-all` or `kill-all`**.
 - Never judge frames per second from your own runs while other lanes run; only the main lane's quiet sittings count.
   Same-run measures (draw calls, triangles, `systime.js` per-system ms, `?gpu` pass times) are fine.
+- Keep your helper scripts and logs in your worktree or in a folder named for your lane (`<scratchpad>/<lane>/`), never
+  loose in the session's scratchpad: it is shared, and twice on 21 November a helper of one lane's overwrote
+  another's of the same name and drove its browser.
 - If you stop a capture or perf script, also stop its children: list processes whose command line matches the
   script, `perf.js` or `cliDaemon` (`Get-CimInstance Win32_Process`) and stop them.
 - Build with `npx vite build --outDir dist/r8-<lane> --emptyOutDir` and serve with
