@@ -316,6 +316,9 @@ interface Pop {
 
 export class Director {
   readonly time: TimeScale;
+  /** A mirrored run (the modes lane): the picture is flipped, so a gate's offers are named left to right as the
+   *  player sees its arches, the sim's order turned round. */
+  mirrored = false;
   /** Telemetry ring (window.__gs.director.log), cleared on beginRun. */
   readonly log: BeatLogEntry[] = [];
   private readonly shown = new Set<number>();
@@ -1954,7 +1957,7 @@ export class Director {
         if (g.z - s.z > GATE_CALL_M) break;
         this.gatesCalled.add(g.index);
         if (g.z - s.z < GATE_CALL_LATE_M) break;
-        const label = offersGistLine(g.offers);
+        const label = offersGistLine(this.mirrored ? [...g.offers].reverse() : g.offers);
         this.push({ type: 'charmGate', tick: sim.tick, phase: 'near', gate: g.index, offers: g.offers, id: -1, lane: -1, say: { label, points: 0, tone: 'normal' } }, sim);
         break;
       }

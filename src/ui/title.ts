@@ -261,17 +261,19 @@ export class Title {
     // Another day's Daily or another week's Cup: its course has gone, so nobody is being raced and the
     // button is the plain one. The banner says so rather than promising a ghost that will not ride.
     const raced = m.challenge && (m.challenge.old || m.challenge.mountain) ? m.challenge : null;
+    // (The modes lane: the picked mountain mirrored, its toggle on. A mirror is never a duel's ground.)
+    const mirrored = !raced && !picked && !m.firstVisit && !!m.mirror?.on;
     // The Twelve: on the next rider's home ground the run is the duel, and the button says so.
-    const tw = raced || m.firstVisit || picked ? null : (m.twelve ?? null);
+    const tw = raced || m.firstVisit || picked || mirrored ? null : (m.twelve ?? null);
     const duel = tw?.next?.here ? tw.next.name : tw?.final?.here ? 'The last race' : null;
     const verb = raced ? 'Accept' : tw?.next?.here ? 'Duel' : 'Ride';
-    const where = raced ? raced.mountain : (picked ?? sel?.name ?? '');
-    const aim = raced || m.firstVisit || picked ? null : (m.nextRung ?? null);
+    const where = raced ? raced.mountain : mirrored ? `${sel?.name ?? ''}, mirrored` : (picked ?? sel?.name ?? '');
+    const aim = raced || m.firstVisit || picked || mirrored ? null : (m.nextRung ?? null);
     // A link's Daily or Cup is still finding its rivals: the banner says where, the button why it does
     // not go yet. (Not `disabled`, for the mode cards' reason: it keeps its focus and its name.)
     const waiting = !!m.challenge?.waiting;
     const status = 'Finding rivals…';
-    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked ? where : (sel?.tagline ?? where)));
+    const subline = waiting ? status : (duel ?? aim ?? (raced || m.firstVisit || bare || picked || mirrored ? where : (sel?.tagline ?? where)));
     const mtn = subline ? h('span', 'gs-ride-mtn', subline) : null;
     if (subline === where || aim || duel) mtn?.setAttribute('translate', 'no');
     const rideBtn = btn(
@@ -293,6 +295,14 @@ export class Title {
     if (waiting) rideBtn.setAttribute('aria-disabled', 'true');
     if (showKey) rideBtn.setAttribute('aria-keyshortcuts', 'Space');
     ride.append(rideBtn);
+    // (The modes lane: the picked mountain's mirror, once open, a toggle under the Ride that rides it.)
+    if (m.mirror && !raced && !picked && !m.firstVisit) {
+      const on = m.mirror.on;
+      const tg = btn(ctx, { cls: 'gs-btn-soft gs-t-mirror', fk: 'mirror', onClick: () => this.hd.onMirror?.(!on) }, h('span', 'gs-t-mirror-mark'), h('span', 'gs-btn-label', 'Mirrored'));
+      tg.setAttribute('aria-pressed', String(on));
+      tg.setAttribute('aria-label', `Ride ${sel?.name ?? 'this mountain'} mirrored`);
+      ride.append(tg);
+    }
     // A brand-new player learns the loop before the first tap: what the ghosts are for.
     if (m.firstVisit && !m.challenge) ride.append(h('p', 'gs-t-goal', 'Pass ghosts to unlock new mountains'));
     el.append(ride);

@@ -552,6 +552,15 @@ export class AudioEngine {
     this.core?.scape.setOpenness(this.openK);
   }
 
+  /** Round 8, the modes lane: a mirrored run is heard mirrored, left for right at the very end of the chain, so a
+   *  ghost passing on the screen's left is heard on the left. */
+  setMirror(on: boolean): void {
+    this.mirrored = on;
+    this.core?.graph.mirror(on);
+  }
+
+  private mirrored = false;
+
   /** Called every render frame during a run. */
   update(frame: AudioFrame, dt: number): void {
     if (this.cpu) this.metered(true, () => this.updateNow(frame, dt));
@@ -1243,6 +1252,7 @@ export class AudioEngine {
     core.scape.setTier(this.tier);
     core.scape.setMood(this.mood, this.biome);
     core.scape.setScene(this.scene, ctx.currentTime);
+    if (this.mirrored) core.graph.mirror(true);
     core.scape.setOpenness(this.openK);
     // The moment a parked context runs again, the UI sounds asked for while it resumed play (the
     // scheduler tick does the same, for a browser without the event).

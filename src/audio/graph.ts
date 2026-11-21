@@ -349,8 +349,36 @@ export class Graph {
     this.mute.gain.setTargetAtTime(muted ? 0 : 1, now, tau);
   }
 
+  /** Round 8, the modes lane: a mirrored run's left and right change places after the ceiling, the last node before
+   *  the speakers, so everything panned by where it stands is heard where the flipped picture shows it. */
+  mirror(on: boolean): void {
+    const ctx = this.ctx;
+    if (on === (this.swap !== null) || typeof ctx.createChannelSplitter !== 'function' || typeof ctx.createChannelMerger !== 'function') return;
+    this.ceiling.disconnect();
+    if (on) {
+      const split = ctx.createChannelSplitter(2);
+      const merge = ctx.createChannelMerger(2);
+      this.ceiling.connect(split);
+      split.connect(merge, 0, 1);
+      split.connect(merge, 1, 0);
+      merge.connect(ctx.destination);
+      this.swap = { split, merge };
+    } else if (this.swap) {
+      this.swap.split.disconnect();
+      this.swap.merge.disconnect();
+      this.swap = null;
+      this.ceiling.connect(ctx.destination);
+    }
+  }
+
+  private swap: { split: ChannelSplitterNode; merge: ChannelMergerNode } | null = null;
+
   disconnect(): void {
     this.disposed = true;
+    if (this.swap) {
+      this.swap.split.disconnect();
+      this.swap.merge.disconnect();
+    }
     this.music.disconnect();
     this.sfx.disconnect();
     for (const n of [this.reverb, this.verbHP, this.verbLP, this.verbOut, this.master, this.mute, this.limiter, this.ceiling, ...this.echoNodes]) n.disconnect();

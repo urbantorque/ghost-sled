@@ -317,7 +317,7 @@ function flame(g: Ctx, x: number, y: number, w: number, h: number): void {
 }
 
 /** Draws every charm's glyph into a fresh canvas atlas (white on clear). Null where there is no 2D canvas (tests). */
-export function drawGlyphAtlas(): HTMLCanvasElement | null {
+export function drawGlyphAtlas(mirror = false): HTMLCanvasElement | null {
   if (typeof document === 'undefined') return null;
   const cv = document.createElement('canvas');
   cv.width = GLYPH_CELL * GLYPH_COLS;
@@ -336,6 +336,12 @@ export function drawGlyphAtlas(): HTMLCanvasElement | null {
     g.beginPath();
     g.rect(0, 0, GLYPH_CELL, GLYPH_CELL);
     g.clip();
+    // (A mirrored run's medallions: each glyph turned over in its own cell, so with the picture flipped it reads as
+    // drawn. The comet's tail and the kite's string trail the way they always do.)
+    if (mirror) {
+      g.translate(GLYPH_CELL, 0);
+      g.scale(-1, 1);
+    }
     DRAW[id](g);
     g.restore();
   }
