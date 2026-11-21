@@ -1323,6 +1323,8 @@ export class World {
       cam: this.cam.camera.position,
       ground: (x, z) => this.course.ground(x, -z),
       reduced: feel.reduced || reduced(),
+      // (How far a flip has turned the rider over: the scarf hides behind the sled's underside.)
+      flip: s.grounded ? 0 : Math.max(0, Math.min(1, (0.3 - Math.cos(s.airPitch)) / 0.9)),
     });
     const fl = this.spiritFlow.look;
     const fb = this.spiritFlow.takeBreath();

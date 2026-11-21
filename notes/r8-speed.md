@@ -295,3 +295,37 @@ petals as flat pink dots, a flip's saucer underside as an ink-black disc, orange
 
 Frames: `shots/r8/flow/` (`diag-*` the banding diagnosis on round-8's head, `band-f0` the fix, `flame1` the first tongues,
 `flow6`, `flow6b`, `flow6c`, `flow6d` the twelve stills of each look, `crops/`).
+
+### The flow pass, round two (on round-8 at bf76cc7)
+
+The main lane asked for my three next steps. Same twelve stills (Pinecrest and Sakura at 600, 1500 and 2700 m, High and
+Low, `?flowlook=6`), a fresh critic each time told only ART.md, the same count; the bar a flame off the scarf in 10 of 12.
+
+- **Take one (3617bb2, kept).** Each tongue is stretched along the scarf's own line where it rides now (the scarf's
+  tangent from `scarfAt`, lifted a little) and drifts off along it, instead of standing upright. Its colour runs from the
+  rider's vermillion into a flame's orange and only half way on to marigold at its very end (a whole marigold teardrop is
+  the course's fuel). Low has more and smaller tongues (48 at most, 110 a second, at 1.15 times High's size). The flame
+  thins to an ember while a flip turns the rider over (`flip` from the air pitch's cosine). **7 of 12** read as fire off
+  the scarf, from 5: both tiers at Pinecrest 600 m and 2700 m and Sakura 2700 m, and High Sakura 600 m ("a burning scarf,
+  a fire tail off the rider"). Not: Sakura 1500 m on both tiers (the flame met the sled's powder spray and read as
+  "exhaust with smoke"), the flip at Pinecrest 1500 m on both tiers ("a stray orange smudge"), Low Sakura 600 m (half a
+  flaming tail, half an orange puff). No scanlines.
+- **Take two (e74d789, reverted in f65c0f1).** The tongues lifted harder to clear the spray, the flame out altogether in a
+  flip, Low's tip glow smaller. **4 of 12**: the lifted tongues read as "a smear", "fire on the snow" or "an arrowhead" in
+  frames that had read well, and the flip still showed an ember (the air pitch's cosine misses that pose: the flip is
+  the trick pose's, not the sim's pitch alone). Two honest tries did not reach the bar, so I stopped, as asked, and left
+  the branch at take one.
+
+**The orange dots on the rider's hair at Sakura 1500 m are not the flow's**: the same frame at `flowlook=0` has them
+(`shots/r8/flow/crops/hair.png`, flow 0 left, flow 6 right). Not traced further.
+
+**Still short, and what I would try next.** The two flip frames cannot show the scarf; the flame there should go out on
+the trick pose's own measure of being upside down (`rider.ts` trick pose, not `s.airPitch`), and those two frames are then
+lost to the count whatever the flame does, so 10 of 12 needs every other frame. Sakura 1500 m needs the flame kept off the
+spray, which a harder lift did not do; a narrower flame along the scarf's upper edge, or the spray thinned while flow
+burns, are the two ways left. Critics on every pass also named things that are not the flow's: regular stripes in the
+snow material (Pinecrest 2700 m's dunes, Sakura 2700 m's cobalt crests, a landing's corduroy on Low), a stipple inside
+High's cast shadows, Low's watery radial smear at 600 m, the flipped saucer's near-black underside, Low missing a leap's
+crowd.
+
+Frames: `shots/r8/flow/flow6e/` (take one), `flow6f/` (take two), `hair-f0/`, `crops/flow6e-four.png`, `crops/hair.png`.

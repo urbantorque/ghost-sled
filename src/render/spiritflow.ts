@@ -63,8 +63,8 @@ export const WIND_MAX: Record<Tier, number> = { low: 0, medium: 5, high: 9, ultr
 /** Sparks off the trail per second at the top of flow, per tier (Low none). */
 export const SPARK_RATE: Record<Tier, number> = { low: 0, medium: 22, high: 44, ultra: 44 };
 /** The flame's tongues alive at most, per tier, and how many it sheds a second at full flow: Low fewer and fuller. */
-export const FLAME_MAX: Record<Tier, number> = { low: 28, medium: 70, high: 110, ultra: 110 };
-export const FLAME_RATE: Record<Tier, number> = { low: 55, medium: 120, high: 180, ultra: 180 };
+export const FLAME_MAX: Record<Tier, number> = { low: 48, medium: 80, high: 120, ultra: 120 };
+export const FLAME_RATE: Record<Tier, number> = { low: 110, medium: 150, high: 210, ultra: 210 };
 
 /** How long a tongue of the flame lives (seconds): a lick at level 2, the tallest flame at full flow. */
 export function trailLife(look: FlowLook): number {
@@ -104,6 +104,8 @@ export const FLOW_GLSL = /* glsl */ `
 `;
 
 const ROOT_C = new Color('#FF4D2E');
+/** A flame's orange, between the rider's vermillion and the lantern's marigold. */
+const ORANGE_C = new Color('#FF7A1E');
 const MID_C = new Color('#FFD34D');
 const TIP_C = new Color('#FFF1C8');
 
@@ -118,7 +120,7 @@ function flameMaterial(hdr: number): ShaderMaterial {
     transparent: true,
     depthWrite: false,
     blending: NormalBlending,
-    uniforms: { uScale: { value: 600 }, uHdr: { value: hdr }, uRoot: { value: ROOT_C.clone() }, uMid: { value: MID_C.clone() } },
+    uniforms: { uScale: { value: 600 }, uHdr: { value: hdr }, uRoot: { value: ROOT_C.clone() }, uMid: { value: MID_C.clone() }, uOrange: { value: ORANGE_C.clone() } },
     vertexShader: /* glsl */ `
       attribute vec4 aFlame;
       attribute vec3 aRise;
@@ -140,8 +142,8 @@ function flameMaterial(hdr: number): ShaderMaterial {
           float l = length(s);
           if (l > 1e-5) vAxis = vec2(s.x, -s.y) / l;
         }
-        // A tongue stands half as tall again as it is wide (thinner, a cluster read as a sparkler); the glow is round.
-        vRatio = aFlame.w > 0.5 ? 1.0 : 0.68;
+        // A tongue is about twice as long as it is wide, streaming along the scarf; the glow is round.
+        vRatio = aFlame.w > 0.5 ? 1.0 : 0.52;
         // (Nothing grows into a blot at the lens: a tongue thins away inside about two metres.)
         vFlame.z *= smoothstep(1.2, 2.2, d);
         gl_PointSize = clamp(aFlame.y * uScale / d, 2.0 * uScale / 720.0, uScale * 0.12);
@@ -152,6 +154,7 @@ function flameMaterial(hdr: number): ShaderMaterial {
       uniform float uHdr;
       uniform vec3 uRoot;
       uniform vec3 uMid;
+      uniform vec3 uOrange;
       varying vec4 vFlame;
       varying vec2 vAxis;
       varying float vRatio;
@@ -167,15 +170,17 @@ function flameMaterial(hdr: number): ShaderMaterial {
           // The glow on the scarf's tip: a soft round light, vermillion warming to orange.
           float g2 = dot(c, c);
           a = exp(-g2 * 3.2) * (1.0 - smoothstep(0.75, 1.0, g2));
-          col = mix(uRoot, uMid, 0.4) * uHdr;
+          col = mix(uRoot, uOrange, 0.5) * uHdr;
         } else {
           // A teardrop: full at its foot, narrowing to a point at its tip.
-          float w = mix(1.0, 0.38, clamp(al * 0.5 + 0.5, 0.0, 1.0));
+          float w = mix(1.0, 0.3, clamp(al * 0.5 + 0.5, 0.0, 1.0));
           float r2 = al * al + (ac * ac) / (w * w);
           a = pow(clamp(1.0 - r2, 0.0, 1.0), 1.05);
-          // Vermillion at its birth burning into marigold as it climbs; a hot pale heart while it is young.
-          col = mix(uRoot, uMid, smoothstep(0.05, 0.6, t));
-          col = mix(col, vec3(1.0, 0.93, 0.72), clamp(1.0 - r2, 0.0, 1.0) * 0.45 * (1.0 - t));
+          // The rider's vermillion at its birth burning into a flame's orange, and only toward its end half way on to
+          // marigold: a whole marigold teardrop is the course's own fuel (the fourth critic read Low's tongues as pickups).
+          col = mix(uRoot, uOrange, smoothstep(0.0, 0.45, t));
+          col = mix(col, uMid, 0.45 * smoothstep(0.55, 1.0, t));
+          col = mix(col, vec3(1.0, 0.9, 0.7), clamp(1.0 - r2, 0.0, 1.0) * 0.25 * (1.0 - t));
           col *= uHdr;
         }
         a *= vFlame.z;
@@ -312,6 +317,8 @@ export interface SpiritFlowInput {
   knot: Vector3;
   tip: Vector3;
   scarfAt: (u: number, out: Vector3) => Vector3;
+  /** How far a flip has turned the rider over, 0 upright to 1 upside down: the flame thins while the scarf is hidden. */
+  flip?: number;
   /** Direction of travel (three.js, unit, horizontal) and the lens. */
   dir: Vector3;
   cam: Vector3;
@@ -326,6 +333,7 @@ const MAX_SPARK = 160;
 const tmpA = new Vector3();
 const tmpB = new Vector3();
 const tmpC = new Vector3();
+const tmpD = new Vector3();
 
 interface Wind {
   /** Seconds lived and lifetime. */
@@ -505,10 +513,14 @@ export class SpiritFlow {
     }
     // Shed new tongues: more and taller with the flow, a flare on a level gained; a guttering flame sheds few, short ones.
     if (on) {
-      const rate = FLAME_RATE[this.tier] * (this.gutter > 0 && L.trail < 0.05 ? 0.35 : 0.3 + 0.7 * L.trail) * (1 + 0.8 * this.flare);
+      // (A flip hides the scarf behind the sled's underside: the flame thins to an ember while it does, or it read as a
+      // fireball beside a dark lid.)
+      const hide = 1 - 0.85 * Math.max(0, Math.min(1, o.flip ?? 0));
+      const rate = FLAME_RATE[this.tier] * (this.gutter > 0 && L.trail < 0.05 ? 0.35 : 0.3 + 0.7 * L.trail) * (1 + 0.8 * this.flare) * hide;
       this.fAcc += rate * dt;
       const life0 = trailLife(L);
-      const size0 = (0.15 + 0.07 * L.trail + 0.05 * L.top) * (1 + 0.5 * this.flare) * (this.tier === 'low' ? 1.6 : 1);
+      // (Low: more and smaller tongues than before; a few big ones read as fuel drops.)
+      const size0 = (0.15 + 0.07 * L.trail + 0.05 * L.top) * (1 + 0.5 * this.flare) * (this.tier === 'low' ? 1.15 : 1);
       while (this.fAcc >= 1 && this.fn < cap) {
         this.fAcc -= 1;
         const k = this.fn++;
@@ -518,11 +530,14 @@ export class SpiritFlow {
         this.fp[k * 3] = (Math.random() - 0.5) * 0.04;
         this.fp[k * 3 + 1] = (Math.random() - 0.5) * 0.04;
         this.fp[k * 3 + 2] = (Math.random() - 0.5) * 0.04;
-        // Up, swaying a little either side; never back toward the lens (it would read as hanging under the scarf).
-        const sway = (Math.random() - 0.5) * 0.7;
-        this.fv[k * 3] = -o.dir.z * sway;
-        this.fv[k * 3 + 1] = 1.2 + Math.random() * 1.3 + 0.6 * L.top;
-        this.fv[k * 3 + 2] = o.dir.x * sway;
+        // Off along the scarf's own line toward its tip, lifting a little, swaying either side: a tongue streams off the
+        // cloth. (Rising straight up, beside a short scarf they read as a picket of candles or a bonfire.)
+        const ln = this.scarfLine(o, this.fu[k], tmpC);
+        const sway = (Math.random() - 0.5) * 0.35;
+        const along = 0.5 + Math.random() * 0.5;
+        this.fv[k * 3] = ln.x * along - o.dir.z * sway;
+        this.fv[k * 3 + 1] = ln.y * along + 0.45 + Math.random() * 0.5 + 0.3 * L.top;
+        this.fv[k * 3 + 2] = ln.z * along + o.dir.x * sway;
         this.fa[k] = 0;
         this.fl[k] = life0 * (0.7 + 0.6 * Math.random()) * (this.gutter > 0 && L.trail < 0.05 ? 0.6 : 1);
         // (Smaller toward the knot: the flame grows toward the tip.)
@@ -541,14 +556,15 @@ export class SpiritFlow {
     const ra = (this.flameGeo.getAttribute('aRise') as BufferAttribute).array as Float32Array;
     // A guttering flame flickers.
     const flick = this.gutter > 0 && !o.reduced ? 0.4 + 0.6 * Math.abs(Math.sin(o.time * 41) * Math.sin(o.time * 17 + 1)) : 1;
-    const alpha = Math.min(1, (0.55 + 0.45 * L.trail) * (1 + 0.3 * this.flare)) * flick;
+    const hidden = 1 - 0.85 * Math.max(0, Math.min(1, o.flip ?? 0));
+    const alpha = Math.min(1, (0.55 + 0.45 * L.trail) * (1 + 0.3 * this.flare)) * flick * hidden;
     // Slot 0: the glow on the scarf's tip.
     pa[0] = o.tip.x;
     pa[1] = o.tip.y;
     pa[2] = o.tip.z;
     fa[0] = 0;
     fa[1] = (0.4 + 0.26 * L.trail + 0.14 * L.top) * (1 + 0.4 * this.flare) * (this.tier === 'low' ? 1.4 : 1);
-    fa[2] = (0.35 + 0.4 * L.trail) * flick * (L.trail > 0.02 ? 1 : this.gutter);
+    fa[2] = (0.35 + 0.4 * L.trail) * flick * (L.trail > 0.02 ? 1 : this.gutter) * hidden;
     fa[3] = 1;
     ra[0] = 0;
     ra[1] = 1;
@@ -566,13 +582,27 @@ export class SpiritFlow {
       fa[v * 4 + 1] = this.fs[k] * Math.min(1, 0.55 + t * 4) * (1 - 0.7 * t) * jit;
       fa[v * 4 + 2] = alpha * Math.min(1, t * 10) * (1 - t * t);
       fa[v * 4 + 3] = 0;
-      const vl = Math.hypot(this.fv[k * 3], this.fv[k * 3 + 1], this.fv[k * 3 + 2]) || 1;
-      ra[v * 3] = this.fv[k * 3] / vl;
-      ra[v * 3 + 1] = this.fv[k * 3 + 1] / vl;
-      ra[v * 3 + 2] = this.fv[k * 3 + 2] / vl;
+      // Stretched along the scarf's line where it rides now, lifted a little, so the tongues stream off the cloth.
+      const ln = this.scarfLine(o, this.fu[k], tmpC);
+      const sx = ln.x;
+      const sy = ln.y + 0.4;
+      const sz = ln.z;
+      const vl = Math.hypot(sx, sy, sz) || 1;
+      ra[v * 3] = sx / vl;
+      ra[v * 3 + 1] = sy / vl;
+      ra[v * 3 + 2] = sz / vl;
     }
     for (const a of ['position', 'aFlame', 'aRise']) (this.flameGeo.getAttribute(a) as BufferAttribute).needsUpdate = true;
     this.flameGeo.setDrawRange(0, this.fn + 1);
+  }
+
+  /** The scarf's line at u (unit, toward the tip), from the scarf as it now stands. */
+  private scarfLine(o: SpiritFlowInput, u: number, out: Vector3): Vector3 {
+    const a = o.scarfAt(Math.max(0, u - 0.12), tmpD);
+    const b = o.scarfAt(Math.max(0.12, u), out);
+    b.sub(a);
+    const l = b.length();
+    return l > 1e-5 ? b.multiplyScalar(1 / l) : b.set(0, 1, 0);
   }
 
   /** Wind lines: spawned ahead in the air beside and over the line, racing a little with the rider so they whip past. */
