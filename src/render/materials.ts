@@ -480,8 +480,9 @@ vec3 silverPool(vec3 col, vec3 L, float painted) {
   float lift;
   float heart;
   if (painted > 0.5) {
-    lift = smoothstep(0.04, 0.07, li) * 0.6 + smoothstep(0.24, 0.3, li) * 0.4;
-    heart = smoothstep(0.62, 0.7, li) * 0.42;
+    // (Two soft steps and a small heart: at 0.6 and 1 with hard edges the pools were near-white islands.)
+    lift = smoothstep(0.03, 0.09, li) * 0.32 + smoothstep(0.2, 0.32, li) * 0.26;
+    heart = smoothstep(0.6, 0.72, li) * 0.32;
   } else {
     lift = smoothstep(0.0, 0.5, li);
     heart = smoothstep(0.45, 1.25, li) * min(li, 1.4) * 0.5;

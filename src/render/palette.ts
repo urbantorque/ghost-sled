@@ -2218,7 +2218,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.snowShade = c('#4C78D0');
       p.snowDeep = c('#1E46A8');
       p.rim = c('#E8F4FF');
-      p.fog = c('#B6CEF0');
+      p.fog = c('#A2C0EC');
       p.fogNear = 70;
       p.fogFar = 620;
       p.hemiSky = c('#7AA6E8');
@@ -2229,7 +2229,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.massif.flow = 0.6;
       p.massif.sea = 0.8;
       p.ice = 0.85;
-      p.grade = { lift: c('#04102E'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.14, grain: 0.6, foot: 0.26, shafts: 0.5, lens: 0.25, focal: 0.6, gust: 0, glitter: 0.6, exposure: 1.0, hi: c('#FFFCF4'), lo: c('#DCE6FF') };
+      p.grade = { lift: c('#04102E'), gain: c('#FFFFFF'), saturation: 1.1, contrast: 1.14, grain: 0.6, foot: 0.26, shafts: 0.5, lens: 0.25, focal: 0.6, gust: 0, glitter: 0.6, exposure: 0.97, hi: c('#FFFCF4'), lo: c('#DCE6FF') };
       p.clouds = { low: 0.35, high: 0.5, top: 0.2, lit: c('#FFFFFF'), shade: c('#A6BEE8'), rim: c('#FFFFFF'), shadow: 0.26 };
       p.atmo = { rays: 0.5, halo: 0.4, meteors: 0, banner: 1, slide: 1, sweep: 1, valley: 0.5, valleyColor: c('#DCEAFA'), drift: 0.1 };
       p.air = { far: c('#4A7ACC'), cool: c('#E0EAFF'), low: 0.45, scatter: 1.1 };
@@ -2238,7 +2238,8 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       Object.assign(p.poster, { bands: 5, stripe: 0.3, shadow: c('#4A5CC8'), shadowK: 0.4 });
       p.stars = 0;
       p.aurora = 0;
-      p.bloom = 0.42;
+      // (The glare is the disc and the glints: more bloom laid a milky veil over the near snow.)
+      p.bloom = 0.3;
       p.sparkle = 1;
       p.giftGlow = 0;
       p.ghostGlow = 1.25;
@@ -2329,17 +2330,17 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
       p.sunDir = sunDir(66, 32);
       p.sunDisc = 0;
       p.sunGlow = 0.25;
-      p.sunColor = c('#FFB88C');
+      p.sunColor = c('#DCB0A4');
       p.sunCore.setRGB(1.6, 0.5, 0.14);
       p.skyZenith = c('#0A0608');
       p.skyMid = c('#36100E');
       p.skyHorizon = c('#C8401A');
       p.skyBelow = c('#2A0E0E');
       p.skyBand = { color: c('#FF7A3A'), fade: 22, k: 0.6 };
-      // (The snow's own colour a pale ash a step under the shader's day line, so the lava's light carries some of
-      // its colour onto the lit face; the shade a cold plum-teal well under it.)
-      p.snowLit = c('#D6C6C6');
-      p.snowShade = c('#2C2C5A');
+      // (Night snow under a red deck is a cold lilac and the lava and the lamps are what is orange, as the day's own
+      // night over the market found: a pale ash under the lava's peach key read as a sand floor.)
+      p.snowLit = c('#A8A2C8');
+      p.snowShade = c('#24264E');
       p.snowDeep = c('#16163A');
       p.rim = c('#FF8A4C');
       p.fog = c('#3A1416');
@@ -2404,7 +2405,7 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.air.far = c('#6A2010');
           p.deck.lit = c('#4A1A14');
           p.deck.glow = c('#C8401A');
-          p.snowShade = c('#24264E');
+          p.snowShade = c('#20224A');
           p.lamps = 1.4;
           p.lampAir = 0.1;
           p.embers = 1.6;
@@ -2478,14 +2479,15 @@ export const ALT_HOURS: Partial<Record<BiomeId, AltHour>> = {
           p.snowLit = c('#D8D6F4');
           p.snowShade = c('#6252B4');
           p.snowDeep = c('#2C1E70');
-          p.fog = c('#4A3C90');
+          p.fog = c('#403488');
           p.fogFar = 640;
           p.hemiSky = c('#6E60C8');
-          p.air.far = c('#5A4490');
+          p.air.far = c('#4C3A88');
           p.air.low = 0.9;
           p.under = { color: c('#FFB04A'), k: 0.08 };
           p.atmo.valley = 1;
-          p.atmo.valleyColor = c('#C49AB0');
+          // (A dusky rose the lanterns stand in: paler, the valley under the deck read as milk.)
+          p.atmo.valleyColor = c('#A27CA8');
           p.massif.sea = 0;
           p.massif.seaWarm = 0;
           p.massif.veil = 0.5;

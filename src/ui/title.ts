@@ -473,7 +473,6 @@ export class Title {
     const g = h('div', 'gs-t-hour', half(false), half(true));
     g.setAttribute('role', 'group');
     g.setAttribute('aria-label', 'Hour');
-    g.setAttribute('translate', 'no');
     return g;
   }
 
