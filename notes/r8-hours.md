@@ -19,7 +19,12 @@ under `C:/Users/roger/OneDrive/Desktop/Ghost Sled/shots/r8/hours/` (see "Where t
   - Low: 6 better, 4 level, 0 worse; then 5 better, 2 level, 3 worse. That is level or better both times.
   - High: 2 better, 6 level, 2 worse; then 4 better, 3 level, 3 worse. The bar is 7 of 10. On High the critics mostly
     could not see a difference at frame size.
-- **The picker and cost** are in their sections below.
+- **The picker is checked:** desk and phone, keys, pad and reduced motion, with a clean console.
+- **Cost:**
+  - Low's GL calls on Lanternfall's day are level within the ride's spread, with no new uniform uploads and no new
+    draw, program or pass.
+  - Ember at Night costs about 15 calls a frame over its day.
+- **Servers stopped, browser closed, slots free.**
 
 ## What changed for a player
 
@@ -172,11 +177,72 @@ The bar (true darks and lights where ART.md 15 puts them) is not met by any hour
 
 ## The picker (playwright, desk 1280x720 and the phone 390x844; `scripts/playtest/hours-ui.js`)
 
-(Results below; see `shots/r8/hours/ui/`.)
+The save was on Almanac page 50, so every hour was open. Results are in `ui/desk.json` and `ui/phone.json`, frames in
+`ui/`.
+
+**On every mountain**
+- The row reads "Day | <hour> | Mirrored".
+- Picking the hour relights the key art at once (`desk-m*-title-hour.png`).
+- The save's `hours` gains the mountain, and Ride's name reads, for example, "Ride: Ember Peak at Night. Next: ..."
+  (Sakura's reads "Duel: Rosa Quill on Sakura Ridge in the Evening").
+- On desk the row is 40 px tall, left under Ride. On the phone it is 366 px wide, centred under the full-width Ride.
+
+**The keys**
+- Space on "Day" picks the day and does not start a run; the phase stays title.
+- Tab from Ride reaches "Day", then the hour's half; Enter picks it.
+- Focus stays on the half pressed across the title's re-render (`data-fk`).
+
+**The pad** (`ui.padMenu`)
+- The first press lands on Ride. Down reaches "Day", right reaches the hour, and A picks it. Right again reaches
+  Mirrored.
+- The focus ring is drawn round the half (`phone-pad-focus.png`).
+
+**Reduced motion:** the pick picks. Nothing in the row moves but the 0.97 press every `.gs-btn` has (a 0.16 s
+transform), as before.
+
+**A run:** Ride at the hour started a run on Ember at its night sky (`*-run-hour.png`).
+
+**The console** was clean on desk and phone. Every still capture's console was also clean, except the Ember Low
+capture noted under "Low and the phone".
+
+**web-design-guidelines** (on `hours.css` and the row in `title.ts`):
+- Real buttons with names, `aria-pressed` and a group label.
+- Focus is the title's own `:focus-visible` ring; `touch-action: manipulation` is set.
+- Only transform and opacity move. Labels are in title case.
+- Contrast: the unpicked label is the UI's `--dim` on the ink panel.
+- One finding was fixed: the group was marked `translate="no"`, but "Day" and the hour's names are ordinary words.
+- The halves are 34 px tall in a 40 px pill, as the mirror toggle beside them is 36. That is under the 44 px touch
+  target on a phone. It is kept to match the mirror's, and the main lane may want both raised together.
+
+**One thing to look at:** Lanternfall's title shot at its hour (`desk-m4-title-hour.png`) is a pale, hazy lilac at the
+break, weaker than its day's. The title's light is read at 1600 m, under the deck, where the hour is a dove violet.
 
 ## Cost (Low's GL calls a frame, `glcount.js`, a live ride; `shots/r8/hours/cost/`)
 
-(Results below.)
+| Run | Calls a frame | `uniform4fv` | `drawElements` | Programs |
+|---|---|---|---|---|
+| Lanternfall by day, base (two runs) | 493.6, 483.4 (mean 488.5) | 27.3, 26.7 | 23.3, 22.9 | 75 |
+| Lanternfall by day, silver pools (two runs, interleaved) | 496.4, 497.7 (mean 497.1) | 27.1, 26.2 | 23.2, 23.3 | 75 |
+| Frostfang, day / at Noon | 467.2 / 476.8 | 26.6 / 26.5 | 21.0 / 21.8 | 71 / 71 |
+| Ember, day / at Night | 497.9 / 512.5 | 31.1 / 31.1 | 22.3 / 23.1 | 73 / 73 |
+| Lanternfall, day / at First Light | 492.0 / 490.3 | 27.2 / 27.6 | 23.0 / 22.9 | 75 / 75 |
+
+**The pools.**
+- Lanternfall's day is level within the live ride's spread: the two base runs alone differ by 10 calls.
+- The difference sits in exactly the calls a live ride's ghosts move: `bufferSubData` +1.5, `bindBuffer` +1.8,
+  `uniformMatrix4fv` +1.1, `useProgram` +0.5.
+- The uniform uploads and the programs are the same. `uPoolSilver` is a `vec4` (`uniform4f`), which does not move.
+
+**The hours.**
+- An hour is a choice, not the default: the day's calls are unchanged.
+- Ember at Night costs about 15 calls a frame more than its day, almost all `uniform4f` (3.8 to 12.7). It is lit as a
+  night from the first metre (windows, forges and lamps on, `lamps` 1.3, `journeyDusk` 1), so more local lights and
+  lit windows are in play. It was not traced further.
+- Frostfang's noon is +9.6 (one more draw, the halo and sun dogs). Lanternfall's first light is level.
+- At 6x, 15 calls is roughly a third of a millisecond; the quiet sitting should count Ember's night if it ships.
+
+**Not measured:** `?gpu` pass times on High and `systime.js` on Low. The machine was shared with other lanes all
+session (DECISIONS 368: nothing read through it).
 
 - No new draw, program, pass or texture on any tier. One new `vec4` shared uniform (`uPoolSilver`), cached by three
   as every vector uniform is, so it uploads only when the palette changes.
