@@ -13,7 +13,7 @@ import './photo.css';
 //            G the grid, Enter saves, Escape (or P) goes back
 //   pad      the left stick turns, the right stick moves, the triggers move in and out, the bumpers set the lens, the
 //            d-pad tilts, A saves, Y the grid, X hides the bar, B goes back
-//   touch    one finger turns, two move across and pinch in and out
+//   touch    one finger turns, two move across and pinch in and out, a tap puts the bar away and brings it back
 //
 // While the view is being moved the bar and the help fade back, so the picture is what is seen. Reduced motion drops
 // the fades and the save's flash and keeps every beat.
@@ -65,6 +65,9 @@ const MM_HI = 85;
 const TILT_DEG = 20;
 /** The bar fades back while the view moves, and returns this long after the last move (ms). */
 const CALM_MS = 900;
+/** A tap: a finger down and up within this distance (px) and time (ms). */
+const TAP_PX = 10;
+const TAP_MS = 320;
 /** A stick's rest. */
 const DEAD = 0.18;
 
@@ -96,7 +99,7 @@ export class PhotoMode {
   private readonly gridBtn: HTMLButtonElement;
   private readonly focusBtn: HTMLButtonElement | null;
   private readonly held = new Set<string>();
-  private readonly pointers = new Map<number, { x: number; y: number; button: number }>();
+  private readonly pointers = new Map<number, { x: number; y: number; button: number; x0: number; y0: number; t0: number; alone: boolean }>();
   private pinch = 0;
   private mid = { x: 0, y: 0 };
   private calmAt = 0;
@@ -222,7 +225,7 @@ export class PhotoMode {
   private helpLines(mode: InputMode): HTMLElement {
     const row = (...kids: Array<Node | string>) => h('li', 'gs-ph-help-row', ...kids);
     const list = h('ul', 'gs-ph-help-list');
-    if (mode === 'touch') list.append(row(h('b', '', 'One finger'), ' turns'), row(h('b', '', 'Two'), ' move and pinch'));
+    if (mode === 'touch') list.append(row(h('b', '', 'One finger'), ' turns'), row(h('b', '', 'Two'), ' move and pinch'), row(h('b', '', 'A tap'), ' hides this'));
     else if (mode === 'gamepad') list.append(row(h('b', '', 'Left stick'), ' turns'), row(h('b', '', 'Right stick'), ' moves'), row(h('b', '', 'Triggers'), ' zoom'), row(padBtn('A'), ' saves'), row(padBtn('B'), ' done'));
     else list.append(row(h('b', '', 'Drag'), ' turns'), row(h('b', '', 'Right-drag'), ' moves'), row(h('b', '', 'Wheel'), ' zooms'), row(kbd('Enter'), ' saves'), row(kbd('Esc'), ' done'));
     return list;
@@ -310,8 +313,11 @@ export class PhotoMode {
 
   private down(e: PointerEvent): void {
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
-    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button });
-    if (this.pointers.size === 2) this.twoStart();
+    this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, button: e.button, x0: e.clientX, y0: e.clientY, t0: performance.now(), alone: this.pointers.size === 0 });
+    if (this.pointers.size === 2) {
+      for (const q of this.pointers.values()) q.alone = false;
+      this.twoStart();
+    }
     e.preventDefault();
   }
 
@@ -347,7 +353,11 @@ export class PhotoMode {
   }
 
   private up(e: PointerEvent): void {
+    const p = this.pointers.get(e.pointerId);
     this.pointers.delete(e.pointerId);
+    // A finger's tap on the picture (no drag, no second finger) puts the bar away or brings it back: a touch screen's
+    // H key.
+    if (p && p.alone && e.type === 'pointerup' && e.pointerType !== 'mouse' && Math.hypot(e.clientX - p.x0, e.clientY - p.y0) < TAP_PX && performance.now() - p.t0 < TAP_MS) this.toggleBar();
     if (this.pointers.size === 2) this.twoStart();
   }
 

@@ -137,6 +137,12 @@ describe('photo mode: the file', () => {
     const edge = cropAround(1280, 720, 1270, 10);
     expect(edge.x + edge.w).toBeLessThanOrEqual(1280 + 1e-9);
     expect(edge.x).toBeGreaterThanOrEqual(0);
+    // Closer on the rider, and never into a letterbox's bars (12% of the height each).
+    const bars = 720 * 0.12;
+    const lb = cropAround(1280, 720, 640, 700, 1.6, 0.62, bars, 720 - bars);
+    expect(lb.y).toBeGreaterThanOrEqual(bars);
+    expect(lb.y + lb.h).toBeLessThanOrEqual(720 - bars + 1e-9);
+    expect(lb.h).toBeCloseTo((720 - 2 * bars) * 0.62, 6);
   });
 });
 

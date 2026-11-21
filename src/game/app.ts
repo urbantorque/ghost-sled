@@ -15,6 +15,7 @@ import { GET_UPS, GET_UP_BACK_M, SIM_VERSION, Sim, SimEvent } from '../sim/sim';
 import { SLEDS, sledById } from '../sim/sleds';
 import { PhotoRig } from '../render/camera';
 import { type CineState, cine } from '../render/cine';
+import { pipeUniforms } from '../render/postfx/pipeline';
 import { PhotoMode, photoName } from '../ui/photo';
 import { metres, ordinal } from '../ui/fmt';
 import { StickerShots } from './albumframes';
@@ -1650,7 +1651,7 @@ export class App {
       if (this.shots !== shots) return;
       const t0 = performance.now();
       const scale = c.width / Math.max(1, c.clientWidth || c.width);
-      const thumb = thumbOf(c, this.world.riderScreen.x * scale, this.world.riderScreen.y * scale, this.mirroredView());
+      const thumb = thumbOf(c, this.world.riderScreen.x * scale, this.world.riderScreen.y * scale, this.mirroredView(), pipeUniforms.uBars.value);
       this.grabMs = performance.now() - t0;
       if (thumb) shots.took(thumb);
       this.keepShots();

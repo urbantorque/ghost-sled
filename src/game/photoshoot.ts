@@ -9,6 +9,9 @@ export const THUMB_W = 320;
 export const THUMB_H = 200;
 /** WebP's quality for a sticker's frame (a JPEG's where WebP cannot be written). */
 const THUMB_Q = 0.8;
+/** A sticker's frame is this share of the largest crop the picture holds: closer on the rider, who is the sticker's
+ *  subject (the whole frame drawn 125 px wide left the rider a speck). */
+export const THUMB_ZOOM = 0.62;
 
 /** The run, as its card in a photo's corner says it. */
 export interface RunCard {
@@ -31,25 +34,31 @@ function canvas2d(w: number, h: number): { c: HTMLCanvasElement; g: CanvasRender
   return g ? { c, g } : null;
 }
 
-/** The crop of a `w` x `h` picture at the sticker's shape, as large as fits, centred on (fx, fy) and kept inside. */
-export function cropAround(w: number, h: number, fx: number, fy: number, aspect = THUMB_W / THUMB_H): { x: number; y: number; w: number; h: number } {
+/** The crop of a `w` x `h` picture at the sticker's shape, `zoom` of the largest that fits between `top` and
+ *  `bottom` (a letterbox's bars left out), centred on (fx, fy) and kept inside. */
+export function cropAround(w: number, h: number, fx: number, fy: number, aspect = THUMB_W / THUMB_H, zoom = 1, top = 0, bottom = h): { x: number; y: number; w: number; h: number } {
+  const band = Math.max(1, bottom - top);
   let cw = w;
   let ch = w / aspect;
-  if (ch > h) {
-    ch = h;
-    cw = h * aspect;
+  if (ch > band) {
+    ch = band;
+    cw = band * aspect;
   }
+  cw *= zoom;
+  ch *= zoom;
   const x = Math.max(0, Math.min(w - cw, fx - cw / 2));
-  const y = Math.max(0, Math.min(h - ch, fy - ch / 2));
+  const y = Math.max(top, Math.min(bottom - ch, fy - ch / 2));
   return { x, y, w: cw, h: ch };
 }
 
 /** A sticker's frame from the canvas as it stands: the crop round the rider (`fx`, `fy` in the canvas's own pixels;
- *  the rider sits a little under the middle). Null when the canvas cannot be read. */
-export function thumbOf(src: HTMLCanvasElement, fx: number, fy: number, mirrored: boolean): HTMLCanvasElement | null {
+ *  the rider sits a little under the middle), inside a directed shot's letterbox (`bars`: each bar's share of the
+ *  height). Null when the canvas cannot be read. */
+export function thumbOf(src: HTMLCanvasElement, fx: number, fy: number, mirrored: boolean, bars = 0): HTMLCanvasElement | null {
   const t = canvas2d(THUMB_W, THUMB_H);
   if (!t) return null;
-  const r = cropAround(src.width, src.height, fx, fy - src.height * 0.04);
+  const b = Math.max(0, Math.min(0.3, bars)) * src.height;
+  const r = cropAround(src.width, src.height, fx, fy - src.height * 0.06, THUMB_W / THUMB_H, THUMB_ZOOM, Math.ceil(b) + 1, src.height - Math.ceil(b) - 1);
   try {
     if (mirrored) {
       t.g.translate(THUMB_W, 0);
