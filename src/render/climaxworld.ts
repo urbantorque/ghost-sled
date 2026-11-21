@@ -56,7 +56,10 @@ export class ClimaxWorld {
     this.cx = climaxOf(c);
     this.strings = [];
     const parts: BufferGeometry[] = [];
-    for (let z = this.cx.landZ + 20; z < this.cx.lineZ - 12; z += STRING_STEP) {
+    // (Round 8: the strings stop 40 m short of the line, not 12. From the last 60 m of the approach a string within
+    // 12 to 46 m of the line hung across the FINISH board's lettering at its own height; 40 m short, it is overhead by
+    // then and the board reads clear.)
+    for (let z = this.cx.landZ + 20; z < this.cx.lineZ - 40; z += STRING_STEP) {
       this.strings.push(z);
       const hw = c.halfWidth(z) + 1.6;
       const y = c.baseY(z) + STRING_H;

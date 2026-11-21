@@ -1742,7 +1742,9 @@ export class LanternWorld {
     const u = (paper.material as ShaderMaterial).uniforms;
     const flash = t < 0 ? 0 : Math.exp(-t * 2.2);
     const full = this.greatWon ? 1 : 0.72;
-    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5));
+    // (Round 8: banked low until it is lit, a lamp turned down and waiting. Dark, it hung behind the FINISH board on the
+    // approach as a violet mass a critic read as "a dark unlit one" over the lettering.)
+    u.uEmissiveStrength.value = lit * full * (1.9 + 0.7 * flash + 0.06 * Math.sin(time * 5)) + (1 - lit) * 0.14;
     // (Round 8: once the rider is over the line and the finish lens has begun its swing round to the rider's front,
     // the lamplighters walk it along its yoke to the side away from the lens's, where the lens, looking back up the
     // run past the rider, finds it over the rider's head. Read from the lens itself, so the two always agree:
