@@ -48,13 +48,14 @@ import { charmGatesOf, charmPoolOf, firstRunOf } from './charmpool';
 import { lanternSignals } from './charmsignals';
 import { ALL_CHARMS, CHARMS } from '../sim/charms';
 import { TRICKS } from '../sim/tricks';
-import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, legsOpen, mirrorOpen, shelfExtras } from './almanac';
+import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, hourOpen, legsOpen, mirrorOpen, shelfExtras } from './almanac';
 import { type Night, depthWords, mirrorKey, nightBeat, nightDepth, nightLeg, nightOn, settleLongNight, startNight } from './modes';
 import { showNightBeat } from '../ui/nightbeat';
 import { SYNERGY_KEYS } from './album';
 import { type LostTo, type PrimaryButton, primaryButton } from './goals';
 import { litByTown, lightLantern } from './lanterns';
 import { setLanternRow } from '../render/lanternrow';
+import { ALT_HOURS, type Hour, hourOf, hourSwatches, setHour } from '../render/palette';
 import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } from './rank';
 import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from './spineview';
 import { flameNow } from './flame';
@@ -324,6 +325,8 @@ export class App {
     if (DEV_ON && DEV.has('m')) this.mountain = MOUNTAINS[Number(DEV.get('m'))] ?? this.mountain;
     this.daily = dailyMountain(dailyKey(new Date()));
     this.cup = cupMountain(weekKey(new Date()));
+    // (The hours lane: the world's first light is the hour picked for the mountain it opens on.)
+    setHour(this.hourPicked() ? 'alt' : 'day');
     this.world = new World(root, this.mountain.seed, qualityFor(this.tiers.tier));
     if (DEV_ON) this.world.devPipe(DEV);
     this.world.rider.setPaint(paintById(this.save.data.paint).hex);
@@ -368,6 +371,8 @@ export class App {
       onOpenAlmanac: () => this.ui.showAlmanac?.(this.almanacWithModes()),
       // (The modes lane: the title's mirror toggle, and an Almanac page's Ride for a mirror or the Long Night.)
       onMirror: (on) => this.pickMirror(on),
+      // (The hours lane: the title's pick of the day or the mountain's other hour.)
+      onHour: (on) => this.pickHour(on),
       onRideMode: (mode) => this.rideMode(mode),
       onOpenAlbum: () => this.ui.showAlbum?.(albumModel(this.save.data)),
       onResultsBeat: (kind, i) => this.resultsBeat(kind, i),
@@ -611,6 +616,7 @@ export class App {
   /** The title's scene and sound, rebuilt on the selected mountain. */
   private showMountain(): void {
     if (this.phase !== 'title') return;
+    this.applyHour();
     this.world.setCourse(this.mountain.seed);
     this.audio.setMood(Mood.None, biomeForSeed(this.mountain.seed), this.mountain.id);
     this.setAttractField();
@@ -625,6 +631,7 @@ export class App {
     this.loop = null;
     this.endNight();
     this.refreshDaily();
+    this.applyHour();
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(Mood.None);
     // (The title is the mountain's key art, composed for the logo's side: it is never shown mirrored. The toggle says
@@ -778,6 +785,8 @@ export class App {
       nextRung: named ? nextLine(this.spotFor(this.mountain.id), bestStanding(d.best[this.mountain.id])) : null,
       // (The modes lane: the picked mountain's mirror toggle, once its mirror is open.)
       mirror: this.mirrorOpenHere() ? { on: this.mirrorPick } : null,
+      // (The hours lane: the picked mountain's other hour, once the Almanac has opened it.)
+      hour: this.hourModel(),
       cup: {
         key: week,
         week: weekNumber(week),
@@ -1041,6 +1050,60 @@ export class App {
     return this.mirrorHere() ? mirrorKey(this.mountain.id) : this.mountain.id;
   }
 
+  // ---------------------------------------------------------------- the hours lane: a mountain's other hour
+
+  /** The dev switch `?debug&hour=alt`: every other hour there is is open and picked, until the title's pick is used. */
+  private hourDev = DEV_ON && DEV.get('hour') === 'alt';
+
+  /** The selected mountain's other hour (palette.ts ALT_HOURS), where the Almanac has opened it: its name and how a
+   *  line puts it. Null for the Daily, the Cup and a mountain with no other hour. */
+  private hourHere(): { name: string; phrase: string } | null {
+    if (!MOUNTAINS.some((m) => m === this.mountain)) return null;
+    const alt = ALT_HOURS[courseFor(this.mountain.seed).biome];
+    return alt && (hourOpen(this.save.data, this.mountain.id) || (DEV_ON && DEV.get('hour') === 'alt')) ? alt : null;
+  }
+
+  /** Whether the selected mountain is lit at its other hour: the title's pick, remembered per mountain in the save.
+   *  A look only: the sim, the field, the ghosts and the records never hear of it (a ghost rides your hour with you).
+   *  A Long Night's leg rides its mountain's day. */
+  private hourPicked(): boolean {
+    if (this.night || !this.hourHere()) return false;
+    return this.hourDev || (this.save.data.hours ?? []).includes(this.mountain.id);
+  }
+
+  /** Sets the hour the selected mountain is lit at (palette.ts setHour), before the course is set for the title or a
+   *  run; where the world already stands on that course and the hour changed, it relights it. Nothing sets it between
+   *  a run's start and the title, so the results and the reel keep the hour of the run they show. */
+  private applyHour(): void {
+    const course = courseFor(this.mountain.seed);
+    const was: Hour = hourOf(course.biome);
+    setHour(this.hourPicked() ? 'alt' : 'day');
+    if (hourOf(course.biome) !== was && this.world.course === course) this.world.relight();
+  }
+
+  /** The title's hour pick: the day, or the mountain's other hour, saved for this mountain. */
+  private pickHour(on: boolean): void {
+    if (this.phase !== 'title' || !this.hourHere() || on === this.hourPicked()) return;
+    const id = this.mountain.id;
+    const d = this.save.data;
+    const list = (d.hours ?? []).filter((x) => x !== id);
+    if (on) list.push(id);
+    if (list.length) d.hours = list;
+    else delete d.hours;
+    this.hourDev = false;
+    this.save.save();
+    this.applyHour();
+    this.refreshTitle();
+  }
+
+  /** The title's hour pick for the selected mountain, with each hour's sky for its swatch. */
+  private hourModel(): TitleModel['hour'] {
+    const alt = this.hourHere();
+    if (!alt) return null;
+    const sw = hourSwatches(courseFor(this.mountain.seed).biome);
+    return { name: alt.name, phrase: alt.phrase, on: this.hourPicked(), day: sw.day, alt: sw.alt };
+  }
+
   // ---------------------------------------------------------------- the modes lane: mirrors and the Long Night
 
   /** The mirror the title's toggle picked (it holds across mountains; each mountain mirrors only once open). */
@@ -1250,6 +1313,7 @@ export class App {
     if (chaos.mood !== Mood.None) this.lastMood = chaos.mood;
     this.sessionRuns++;
 
+    this.applyHour();
     this.world.setCourse(this.mountain.seed);
     this.world.setMood(chaos.mood);
     this.applyMirror(this.mirrorRun);

@@ -194,6 +194,10 @@ export interface TitleModel {
   /** Round 8, the modes lane: the picked mountain's mirror, once open (its Almanac page, or its home riders all
    *  beaten): whether Ride rides it mirrored. Absent where it is not open. */
   mirror?: { on: boolean } | null;
+  /** Round 8, the hours lane: the picked mountain's other hour, once its Almanac page has opened it: its name ("Night"),
+   *  how a line says it after the mountain ("at Night"), whether it is picked, and each hour's sky at the start (zenith
+   *  and horizon, CSS colours) for the pick's swatches. Absent where there is none to pick. */
+  hour?: { name: string; phrase: string; on: boolean; day: [string, string]; alt: [string, string] } | null;
   /** The weekly Cup, when there is one to show. */
   cup?: TitleCup | null;
   /** The Twelve: the campaign's card and ladder (absent on a first visit). */
@@ -456,6 +460,8 @@ export interface UIHandlers {
   /** Round 8, the modes lane: the title's mirror toggle for the picked mountain, and an Almanac page's Ride (a mirror
    *  mountain, or the Long Night from its first leg). */
   onMirror?(on: boolean): void;
+  /** Round 8, the hours lane: the title's pick of the day (false) or the picked mountain's other hour (true). */
+  onHour?(on: boolean): void;
   onRideMode?(mode: { kind: 'night' } | { kind: 'mirror'; mountain: string }): void;
   /** A sled sound's Listen button: a few seconds of it under a carving rider, bought or not. */
   onListenSound?(id: string): void;
