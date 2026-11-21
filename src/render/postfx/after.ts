@@ -23,8 +23,14 @@ import { AdditiveBlending, AlwaysStencilFunc, CustomBlending, OneFactor, OneMinu
 
 /** The layer what draws after the rebuild is moved to (the scene's own is 0). */
 export const AFTER_LAYER = 1;
+/** Round 8 (image): the rider's layer, beside the scene's own. The rider is drawn in the scene (its depth and the
+ *  stencil that keeps every ghost off it, contract C10, are the scene's) and again over the rebuilt frame, at the
+ *  frame's size with the tier's MSAA: the rebuild's own rider underneath is never what is seen, so the hero is as
+ *  crisp at speed as round 7's and nothing of its history can smear or halo it. */
+export const HERO_LAYER = 2;
 const SCENE_MASK = 1 << 0;
 const AFTER_MASK = 1 << AFTER_LAYER;
+const HERO_MASK = 1 << HERO_LAYER;
 
 /** Whether a transparent draw of this object with this material is drawn after the reconstruction. */
 export function drawsAfter(o: Object3D, m: Material): boolean {
@@ -78,6 +84,31 @@ export class AfterDraw {
     return false;
   }
 
+  /**
+   * Round 8 (image): an opaque thing that moves on its own (a lift's chairs and gondolas) is drawn only after the
+   * rebuild, as the sprites are: the history never holds it, so it cannot trail or double where it was (the
+   * reprojection knows the lens's motion, not its own), and the history holds the world behind it. It is drawn
+   * first in that pass (opaque before transparent), with the tier's MSAA, depth-tested against the world and
+   * writing its own depth for the sprites after it. Nothing draws it twice: every other lens draws both layers.
+   */
+  adopt(o: Object3D): void {
+    if (o.userData.taaAfter === true) return;
+    o.userData.taaAfter = true;
+    o.layers.set(AFTER_LAYER);
+    this.moved++;
+    if (this.list.length < 64) this.list.push(o);
+  }
+
+  /** Round 8 (image): the rider's opaque parts are drawn again over the rebuilt frame (HERO_LAYER). A part that
+   *  blends is left to the scene (drawn twice it would be twice as strong), as is one already drawn after. */
+  hero(root: Object3D): void {
+    root.traverse((o) => {
+      const m = (o as Object3D & { material?: Material | Material[] }).material;
+      if (!m || Array.isArray(m) || m.transparent || o.userData.taaAfter === true) return;
+      o.layers.enable(HERO_LAYER);
+    });
+  }
+
   /** The lens draws the scene's own layer only (the scene pass under the reconstruction). */
   sceneOnly(camera: Camera): void {
     camera.layers.mask = SCENE_MASK;
@@ -85,24 +116,25 @@ export class AfterDraw {
 
   /** Every layer (any other pass, and every lens that is not the reconstruction's). */
   all(camera: Camera): void {
-    camera.layers.mask = SCENE_MASK | AFTER_MASK;
+    camera.layers.mask = SCENE_MASK | AFTER_MASK | HERO_MASK;
   }
 
   /**
    * Draws the after layer over `target` (the rebuilt frame, with the scene's depth), with the lens as it
-   * stands. Nothing is cleared, the scene's matrices are this frame's already, and no shadow is drawn.
+   * stands, and with `hero` the rider again (opaque, so first). Nothing is cleared, the scene's matrices are
+   * this frame's already, and no shadow is drawn.
    */
-  draw(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget): void {
+  draw(renderer: WebGLRenderer, scene: Scene, camera: Camera, target: WebGLRenderTarget, hero = false): void {
     const autoClear = renderer.autoClear;
     const autoShadow = renderer.shadowMap.autoUpdate;
     const autoMatrix = scene.matrixWorldAutoUpdate;
     renderer.autoClear = false;
     renderer.shadowMap.autoUpdate = false;
     scene.matrixWorldAutoUpdate = false;
-    camera.layers.mask = AFTER_MASK;
+    camera.layers.mask = AFTER_MASK | (hero ? HERO_MASK : 0);
     renderer.setRenderTarget(target);
     renderer.render(scene, camera);
-    camera.layers.mask = SCENE_MASK | AFTER_MASK;
+    camera.layers.mask = SCENE_MASK | AFTER_MASK | HERO_MASK;
     scene.matrixWorldAutoUpdate = autoMatrix;
     renderer.shadowMap.autoUpdate = autoShadow;
     renderer.autoClear = autoClear;

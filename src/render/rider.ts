@@ -1147,6 +1147,12 @@ export class Rider {
     if (this.crashSled.visible) cb(2, this.crashSled, MOTION_SLED[0], MOTION_SLED[1]);
   }
 
+  /** Round 8 (image): what is the hero on screen (the rig, the scarf, a wreck's body and sled), drawn again over
+   *  the temporal reconstruction's rebuilt frame (postfx/after.ts HERO_LAYER). Not the echo or the stars. */
+  heroRoots(): Object3D[] {
+    return [this.root, this.scarf, this.crashBody, this.crashSled];
+  }
+
   /** Show or hide the rider; the world-space scarf follows (it also stays with a tumbling body). */
   setVisible(v: boolean): void {
     this.root.visible = v && !this.crash;

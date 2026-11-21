@@ -938,6 +938,11 @@ export class SetPieces {
   private aSeed: InstancedBufferAttribute;
   /** The lift lines' chairs, on the lines in view (Medium and High). */
   private chairs: Chairs;
+  /** Round 8 (image): the solids that move on their own (the lift lines' chairs and gondolas), drawn after the
+   *  temporal reconstruction's rebuild so its history never holds them (postfx/after.ts adopt). */
+  get movers(): Object3D[] {
+    return [this.chairs.mesh];
+  }
   /** The light a place holds, staged (stages.ts): the caldera's lava, the cavern's dawn, the torii's bars. */
   readonly stages: Stages;
   /** A village's lamplight on the snow (night, Medium and High) and Ember's steam. */

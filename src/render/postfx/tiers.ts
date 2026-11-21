@@ -135,6 +135,10 @@ export interface PassSwitches {
   scale: boolean;
   /** The contrast-adaptive sharpen after the reconstruction. */
   sharpen: boolean;
+  /** Under the reconstruction, the rider drawn again over the rebuilt frame at the frame's own size with the
+   *  tier's MSAA, and what moves on its own drawn only there (off: both are the rebuild's, as the visual lift
+   *  built it). */
+  hero: boolean;
   /** Round 7's edge anti-aliasing (off: round 6's, FXAA only where there is no MSAA). */
   aa: boolean;
   letterbox: boolean;
@@ -144,10 +148,10 @@ export interface PassSwitches {
   lens: boolean;
 }
 
-export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'scale', 'sharpen', 'aa', 'letterbox', 'fit', 'lens'];
+export const SWITCH_NAMES: ReadonlyArray<keyof PassSwitches> = ['ao', 'contact', 'shafts', 'dof', 'blur', 'mirror', 'taa', 'scale', 'sharpen', 'hero', 'aa', 'letterbox', 'fit', 'lens'];
 
 export function allSwitches(on = true): PassSwitches {
-  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, scale: on, sharpen: on, aa: on, letterbox: on, fit: on, lens: on };
+  return { ao: on, contact: on, shafts: on, dof: on, blur: on, mirror: on, taa: on, scale: on, sharpen: on, hero: on, aa: on, letterbox: on, fit: on, lens: on };
 }
 
 /**

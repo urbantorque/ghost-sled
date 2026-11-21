@@ -577,6 +577,13 @@ export class World {
       this.refade();
       this.resize();
     }
+    // Round 8 (image): the scene's MSAA samples (`?msaa=4`), for the spatial path's trial against the rebuild.
+    const ms = Number(q.get('msaa'));
+    if (q.has('msaa') && ms >= 0 && this.post.enabled) {
+      this.quality = { ...this.quality, msaa: Math.round(ms) };
+      this.post.setMsaa(Math.round(ms));
+      this.refade();
+    }
     const c = q.get('cine');
     if (c) {
       const hold: { dof?: number; focus?: number; motionBlur?: number; letterbox?: number } = {};
@@ -1460,6 +1467,15 @@ export class World {
     const taa = this.post.pipe.taa;
     taa.clearBodies();
     if (!this.post.enabled || !this.quality.passes.taa || !this.post.pipe.switches.taa) return;
+    // Round 8 (image): the rider's parts are drawn again over the rebuilt frame (a part added since, a hat from the
+    // garage, is found here on its first frame).
+    // What moves on its own is drawn only after the rebuild (adopted once, for good).
+    if (this.post.pipe.switches.hero) {
+      const after = this.post.pipe.after;
+      for (const r of this.rider.heroRoots()) after.hero(r);
+      for (const o of this.life.movers) after.adopt(o);
+      for (const o of this.setPieces.movers) after.adopt(o);
+    }
     let n = 0;
     this.rider.motionParts((id, frame, c, h) => {
       frame.updateWorldMatrix(true, false);

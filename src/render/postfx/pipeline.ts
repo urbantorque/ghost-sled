@@ -240,7 +240,7 @@ export class Pipeline {
       // (The occlusion is in the rebuilt frame now: the composite lays on none.)
       this.ao.rest();
       this.timer.begin('after');
-      this.after.draw(this.renderer, scene, camera, this.taa.out);
+      this.after.draw(this.renderer, scene, camera, this.taa.out, this.switches.hero);
     }
     if (plan.lens && depth) {
       this.timer.begin('lens');

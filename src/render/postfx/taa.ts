@@ -280,8 +280,12 @@ const PRESENT_FRAG = /* glsl */ `
   precision highp int;
   uniform sampler2D tSrc;
   uniform sampler2D tDepth;
+  uniform vec4 uDepthNF;
   // xy this frame's move (uv), z the sharpen (0 none to 1 the most).
   uniform vec3 uPresent;
+  // The rider's box on screen (uv: x0, y0, x1, y1; empty when x0 > x1), where the rider is drawn again over this
+  // frame (after.ts HERO_LAYER).
+  uniform vec4 uHeroRect;
   varying vec2 vUv;
   float top3(vec3 c) { return max(c.r, max(c.g, c.b)); }
   vec3 squash(vec3 c) { return c / (1.0 + top3(c)); }
@@ -321,8 +325,26 @@ const PRESENT_FRAG = /* glsl */ `
     vec2 dp = (vUv + uPresent.xy) * vec2(ds) - 0.5;
     ivec2 db = ivec2(floor(dp));
     float dz = 1.0;
-    for (int k = 0; k < 4; k++) dz = min(dz, texelFetch(tDepth, clamp(db + ivec2(k - (k / 2) * 2, k / 2), ivec2(0), ds - 1), 0).r);
-    gl_FragDepth = min(1.0, dz + (1.0 - dz) * 0.001);
+    float dx = 0.0;
+    for (int k = 0; k < 4; k++) {
+      float r = texelFetch(tDepth, clamp(db + ivec2(k - (k / 2) * 2, k / 2), ivec2(0), ds - 1), 0).r;
+      dz = min(dz, r);
+      dx = max(dx, r);
+    }
+    // Round 8 (image): round the rider, where it is drawn again at the middle of each frame pixel, pushed back by
+    // the four's own spread too (at most 3% of the distance): the nearest of four on a sloped coat is nearer than
+    // the coat at the pixel's middle, and the rider failed its own depth in patches. Anything more than 3% behind
+    // the rider's outline is still behind it (the spray's specks).
+    float f = uDepthNF.y;
+    float n = uDepthNF.x;
+    if (dz < 1.0 && vUv.x >= uHeroRect.x && vUv.y >= uHeroRect.y && vUv.x <= uHeroRect.z && vUv.y <= uHeroRect.w) {
+      float l0 = n * f / (f - dz * (f - n));
+      float l1 = dx >= 1.0 ? f : n * f / (f - dx * (f - n));
+      float lz = l0 + clamp(l1 - l0, 0.001 * l0, 0.03 * l0);
+      gl_FragDepth = min(1.0, f * (1.0 - n / lz) / (f - n));
+    } else {
+      gl_FragDepth = min(1.0, dz + (1.0 - dz) * 0.001);
+    }
   }
 `;
 
@@ -394,6 +416,8 @@ export class TemporalPass {
     const packed = renderer.capabilities.isWebGL2 && renderer.extensions.has('EXT_color_buffer_float');
     this.out = new WebGLRenderTarget(2, 2, { format: packed ? RGBFormat : RGBAFormat, type: packed ? UnsignedInt101111Type : HalfFloatType, minFilter: LinearFilter, magFilter: LinearFilter, depthBuffer: true, stencilBuffer: false, generateMipmaps: false });
     this.out.texture.name = 'taa-frame';
+    // (Nothing reads this frame's depth but what is drawn into it: only its colour is resolved under MSAA.)
+    this.out.resolveDepthBuffer = false;
     const d = depthUniforms;
     const a = aoComposite;
     this.resolveMat = new ShaderMaterial({
@@ -442,7 +466,9 @@ export class TemporalPass {
       uniforms: {
         tSrc: { value: null as Texture | null },
         tDepth: d.tDepth,
+        uDepthNF: d.uDepthNF,
         uPresent: { value: new Vector3() },
+        uHeroRect: { value: new Vector4(1, 1, 0, 0) },
       },
     });
   }
@@ -456,6 +482,15 @@ export class TemporalPass {
     this.rh = rh;
     this.phases = jitterPhases(rw / Math.max(1, ow));
     this.sized = false;
+    this.valid = false;
+  }
+
+  /** Round 8 (image): the MSAA samples of the rebuilt frame, which what is drawn after the rebuild is drawn with
+   *  (the rider again, what moves on its own, the sprites): the tier's own, 0 for none. */
+  setSamples(n: number): void {
+    if (this.out.samples === n) return;
+    this.out.samples = n;
+    this.out.dispose();
     this.valid = false;
   }
 
@@ -567,6 +602,8 @@ export class TemporalPass {
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     const last = lastViewProj();
     const seen = new Set<number>();
+    const hero = this.presentMat.uniforms.uHeroRect.value as Vector4;
+    hero.set(1, 1, 0, 0);
     for (let i = 0; i < BODIES; i++) {
       if (i >= this.nBodies) {
         rect[i].set(1, 1, 0, 0);
@@ -607,6 +644,12 @@ export class TemporalPass {
       }
       if (behind) rect[i].set(0, 0, 1, 1);
       else rect[i].set(x0 - 4 / this.ow, y0 - 4 / this.oh, x1 + 4 / this.ow, y1 + 4 / this.oh);
+      // (The rider's parts, ids below 0 (world.ts feedBodies), together: where it is drawn again.)
+      if (b.id < 0) {
+        const r = rect[i];
+        if (hero.x > hero.z) hero.copy(r);
+        else hero.set(Math.min(hero.x, r.x), Math.min(hero.y, r.y), Math.max(hero.z, r.z), Math.max(hero.w, r.w));
+      }
     }
     // Each body's pose is kept for next frame; a body not seen this frame is forgotten.
     for (const [id, m] of this.prevBody) {
