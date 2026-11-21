@@ -3706,8 +3706,14 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       flame as fire off the scarf over twelve stills: 1, 0, 2, then 5 (7 with two borderline Low frames). The bar was
       10. It fails where a flip hides the scarf behind the saucer, where Sakura's scarf is short and the upright tongues
       read as candles, and on Low where big marigold tongues read as the course's fuel drops. Merged for the scanlines
-      and a flame better than the one merged in 375; the lane's next pass tries tongues laid along the scarf, a colour
-      further from the fuel's marigold, and a thinner flame while a flip hides the scarf.
+      and a flame better than the one merged in 375. *A second pass* (merged `beb328f`) laid each tongue along the
+      scarf's own line, coloured it vermillion into a flame's orange that stops halfway to marigold, gave Low more and
+      smaller tongues and thinned the flame in a flip: 7 of 12. A second try (tongues lifted clear of the spray, the
+      flame out in a flip) fell to 4 and was reverted, and the lane stopped there as told. What is left is structural:
+      in the two flip frames the scarf is behind the saucer (the flip is read from the trick pose, not `airPitch`), and
+      at Sakura 1500 m the flame meets the sled's spray and reads as exhaust. So 10 of 12 would need every other frame.
+      Left at 7 for the owner's eye in motion. The orange dots on the rider's hair at Sakura 1500 m show at flow 0 too,
+      so they are not the flow's.
     - *Touched outside the lane's files:* `postfx/ao.ts` (the light lane's), `materials.ts ghostStencil` and `chaos.ts`
       (the stencil mask). A later rework of the occlusion keeps the plane test.
     - *Named by its critics, not the flow's (for the polish pass and the snow lane):* regular stripes in the snow
