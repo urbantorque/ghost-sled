@@ -541,7 +541,10 @@ function riderMaterial(opts: ToonOptions, u: RiderUniforms, sunRim: number, hori
             float seam = (1.0 - smoothstep(0.004, 0.012, min(slat, 1.0 - slat) * pitch)) * step(0.05, vSledI.y);
             float grainU = 0.5 + 0.5 * sin(vSledP.x * 210.0 + sin(vSledP.z * 9.0) * 2.2);
             float edgeU = smoothstep(0.17, 0.32, abs(vSledP.x));
-            vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * 0.14;
+            // (Round 8: a round hull, the saucer's and the tray's, takes the snow's bounce at 0.5, not 0.14. Its
+            // whole underside faces the lit snow, and in a flip it filled the rider's place as an ink-black disc.)
+            float bounceU = mix(0.14, 0.5, step(vSledI.w, -5.0));
+            vec3 underC = col * (0.62 + 0.1 * grainU) * (1.0 - 0.55 * seam) * (1.0 - 0.3 * edgeU) + base * mix(uSnowLit, uShadeTint, 0.5) * bounceU;
             col = mix(col, underC, underK);
           }
         }`
