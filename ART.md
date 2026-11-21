@@ -159,6 +159,21 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   (section 4's one painted line stands).
 - **The fork's strip** is clear blue ice with a scribed bright edge and hard points of light that wink
   on any bearing to the sun; it holds its colour where a plain mirror would go white.
+- **Three snows (round 8).** A made place (the start, a cruise, benches and switchbacks, a street, a bridge's deck,
+  a tunnel, the square, a leap's landing) is a groomed lane, a step whiter and smoother than the powder beside it; a
+  wild one (a bowl, a chute, a gully, a tree run, a ravine, the terraces, a fork's channels) and every bank are
+  powder; ice is the sim's. Never a long straight line down the fall line, nothing regular across it: a groomed
+  lane's own corduroy and painted powder pillows were tried and read as speed lines, scanlines and smudges, so they
+  are held off (`CORDUROY_RIB`, `PILLOW_FACE`, `PILLOW_HOLLOW` in the snow's GLSL) until relief comes from geometry
+  before paint. A leap's landing keeps its corduroy (above).
+- **Glints are facets.** A glint flashes only while a crystal's facet mirrors the light to the eye, so the glitter
+  turns with the lens and gathers toward the sun, in the light's own colour.
+- **The runners know the surface:** a trench with a berm of thrown snow either side in powder, a shallower cut in a
+  groomed lane, a frost scratch on ice; a ghost's is the same, fainter. A perfect landing throws a ring of powder
+  flat over the snow and leaves a veil over the crater, more snow than any fall; thrown snow is never darker than
+  about half its lit side, so it is never smoke, and Ember's spray is snow too. A ghost leaves powder hanging where
+  it passed, and the wind lifts spindrift off the banks' crests in gusts (Medium and High). Low keeps the painted
+  surfaces and the trench, not the moving snow.
 
 ## 5. The rider
 
@@ -174,6 +189,10 @@ values (`rockforms.ts` builds the forms, the stone material paints them).
   with arms up in a V on a perfect landing.
 - The wooden sled has curled vermillion runners. On the round sleds (the Whirl Saucer and the Tea
   Tray) the rider sits cross-legged and leans forward over the rim.
+- **Comet Bob** is a racing bob in violet lacquer (`#5A3E96`, `#3F2A70`): the classic sled's five slats with the
+  grain under the lacquer, low sideboards pinstriped in cream (`#F4E8CF`), a cowl over the nose that the boots go
+  under, a cream comet streaking back over the cowl from a round head at its tip, the vermillion runners on steel
+  shoes curling up into the cowl, and two steel push bars at its tail.
 - The rider's look is the player's to choose in the garage, inside the signal: the hat and the scarf are
   always vermillion with at most the beanie's cream or an ink accent, so whatever is worn, the rider is the
   one vermillion figure on the run. Hats are told apart by their outline from behind (the chase lens always
@@ -306,6 +325,12 @@ Each mountain's run (metres are tunable, in `JOURNEY`):
 The baked props never change during a run. A late stop dims hazards through `hazardDim`, and the sky
 stays clear of the ghosts' mint on every mountain at every stop (`tests/palette.test.ts`).
 
+A mountain may have a second hour, opened by an Almanac page and picked on the title (`ALT_HOURS`, round 8): Pinecrest
+at Dusk runs from the day's gold through the dusk by 1900 m to the first night by 3300 m, a deep blue over a rose
+band with stars and the town's lamps the light at the line; Sakura in the Evening is a low warm sun through the
+orchards, the blue hour over the Blossom Leap and Temple Town's paper lanterns under a night sky. An hour is a
+palette, not a mode, so every tier draws it, Low through its poster.
+
 | Biome | Props |
 | --- | --- |
 | Pinecrest | deep teal pines, slate rocks, snowmen |
@@ -435,7 +460,20 @@ Round 7:
   and the colour of their name. It is theirs alone: it is never used for an action.
 - **The results lead with the moment.** One figure and one line in italic 900 over the scene: gold-white for
   a win (your best's colour), a silver step for a podium, off-white for a finish, off-white and a little
-  crooked for a wreck. The card beside it is the detail. Vermillion stays on Run Again.
+  crooked for a wreck. The card beside it is the detail. Vermillion is on the one button the results end on (the
+  run again, whatever the spine names it: "Run Again", "Rematch Ansel", "Finish the mission", "Next Duel: ...").
+- **The results are a story told in about five seconds over the scene, then one button (round 8).** The moment; the
+  place with the nearest rider named in their colour ("0.4 s behind Old Wren"); Rider Rank's bar filling and stopping
+  short of the next page, the page's reward named under it (the first whole, "+1" for the rest); what opened turned
+  over card by card (a mountain in its own sky); the one button, its words whole and its reason under it. One column
+  at the far edge (the bottom on a phone), so the rider stays the picture. A tap or a key lands it; reduced motion
+  shows the end. Everything else is Details, one level down.
+- **The title's corner is one stack:** the pill (the flame first: marigold, the lantern's; hollow until today is
+  ridden), Rider Rank's card, and the day's one line of news. On a phone it is one row and a short pill.
+- **The books** (the Almanac and the Spirit Album) are one sheet drawn like the garage: pages in rows of ten, the next
+  outlined; stickers painted in their mountain's sky, silhouettes with where to find them.
+- **A touch lesson sits beside the control it teaches,** never in the thumbs' band (the bottom 22% of a phone held
+  upright).
 - **Motion has a direction.** A screen leaves the way it is built: the logo's column off the logo's side,
   the cards off theirs, the primary button forward. The HUD arrives from its corners once; a lantern cell
   that fills lifts once; a set piece's card settles into its chip. Transform and opacity only, nothing
@@ -547,6 +585,17 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   fall line the view goes out over the valley haze and the sea of clouds to the hero peak. The lens
   leans toward the open side and takes a breath as it opens. Sometimes both sides open and the run
   rides a ridge.
+- **Places of their own (round 8).** Each mountain's opening (from the start's stands to the first leap) and every
+  stage start (the threshold under the charm gate) is composed, past the sim's limits only, after its feeling:
+  Pinecrest's valley side rolls over a cornice into a long fall past leaning spruces, a rail on the crest; Frostfang
+  rides a canyon of crevasse ice 30 m tall with an arch of blue ice across it, and a stage start there is one wall over
+  an abyss; Ember rides a ridge, a low wall of basalt with organ pipes on one hand and the fall toward the lava on the
+  other; Sakura's open side steps down in terraces and the far side steps up the hill in walls of dressed stone, with
+  torii in plum lacquer and stone lanterns on the flats; Lanternfall rides a crest, both banks falling away to the
+  cloud. Whatever stands there stands on what is drawn. For a run's first seconds the lens sits low and close beside
+  the rider with the place past its shoulder; it turns toward the place, steps aside a metre or two and rises at most
+  a metre, so the rider keeps its size; a phone takes half; reduced motion keeps the framing, eased slower. (The
+  sim's own banks still set the run's section: a lower opening bank is a sim request for a later round.)
 - **Towns.** A street puts walls at the lens. Fronts stand 2 to 4 m past the run's edge, cut into the bank
   with their floors at the snow: alpine chalets, a red-and-ochre research station, basalt hot-spring
   lodges, a lacquered temple town. Upper storeys lean out, balconies and awnings reach toward the
@@ -600,6 +649,23 @@ The run is high on a real mountain, in a world that goes on past the banks and i
   Ember's volcano flashes with lightning at night.
 - **Far trees** keep the same tiers, height, reach and snow caps with fewer segments. Stand 128 m or more
   away and the forest should read the same: a far tree that reads differently from a near one is a bug.
+- **Near trees (round 8).** Within about 26 m of the lens a tree is drawn again from a near build of the same tree:
+  the same tiers, height, reach, snow and turn, so it is the tree you saw from far off, come close. Each tier is
+  layered boughs (each a lobe that swells to its tip and droops, a notch between it and the next, a shorter layer of
+  boughs under the notches), a lip of thickness at the bough ends over the dark underside, and a shelf of snow with
+  depth out along each bough's top, its edge a wavy line folding down in a band of the snow's shade. A barked trunk,
+  dead stubs under the lowest boughs, a tree well at the foot. Facets are about a third of a metre and flat. Sakura's
+  blossom at the lens is its canopy a step rounder. A tree is swapped between its builds at 26 m, where they share
+  their outline. Medium on a wide screen draws a leaner near build, a phone held upright the full one; Low keeps its
+  own trees.
+- **Nothing fills the frame's side as a shard.** A tree beside or behind the rider goes whole before it can (about 4 m
+  from the lens, 6 m on Low), solid and then gone, never stippled or milky; a tree ahead of the rider is a threat and
+  stays. What a sled passes is cut fine enough to hold at the lens: a spire, a standing stone, a tunnel's rock, a
+  bridge's parapet and beam.
+- **The Lantern Row (round 8).** Each finish town hangs the lanterns a player has lit there, marigold, on a wire across
+  the square 58 m past the line, and the same row hangs over the stretch the mountain's title shot rides. Only lit
+  lanterns hang, so a fresh save's frames do not change. Medium and High light the snow under it; Low hangs glowing
+  paper.
 
 ## 13. The lantern, the set pieces and the riders (round 5)
 
@@ -853,6 +919,11 @@ stays the dark shape in the street.
   lens and never cools to grey. Caldera Leap: lava lies on the banks, its crust near-black, only the heart glows.
   (It is not yet a lake under the flight, and no smoke ceiling is lit from below: the direction above still asks
   for both.)
+- **As built in round 8.** The light that shades the snow comes from the lava's side, low and further round than the
+  dim disc (64 to 70 degrees right, 30 to 40 up), so the snow facing it is firelit warm white and the far bank turns
+  to a cold plum-teal a step down, never a dark slab (a near-black bank lost every blind pair); the deck's shadows
+  take at most half the light. Lamps, forges and windows hang a thin haze of their own light in the air round them
+  (Medium and High; strong, it reads as milk).
 
 ### Sakura Ridge: the spring morning
 
@@ -930,6 +1001,11 @@ stays the dark shape in the street.
   drops to an ember shedding sparks while it gutters.
 - **Low** is a poster of it: one cloud sheet, lanterns as flat squares, flames as flat painted shapes with one
   paler value, no canal, the lamps' light as painted pools.
+- **As built in round 8.** The great lantern hangs over the square 35 m past the line; as the finish lens swings round
+  to the rider's front the lamplighters walk it along its yoke to the side the lens looks back across, so in the
+  results it burns over the rider's head (shafts on Medium and High). The night itself stays round 7's: a darker road
+  with stronger pools was read three times, against this section, as a flat violet with a gold floor. A next attempt
+  keeps the snow's own lilac in a pool and lifts its value toward silver, marigold only at the heart and the lamp.
 
 ### Tiers, designed
 
@@ -973,3 +1049,27 @@ stays the dark shape in the street.
   rider and never a white outline. Lettering is cut solid, never dotted.
 - **Anti-aliasing is round 7's.** A temporal reconstruction was built and is held back (`?taa`): it steadied the
   world but softened the rider, and the hero comes first (DECISIONS 363).
+
+## 16. Round 8: the look and the hook
+
+How the look was judged: every item was shot as stills that hold the run still (a pool rider replayed as the player
+on a virtual clock from a fresh save, `scripts/playtest/stills.js`), paired blind with the before (`blind-pairs.mjs`,
+the new frame on a seeded side) and picked by a fresh critic told only this file. A section here records what the
+critics passed; what they did not pass stays out of the picture (DECISIONS 372 on).
+
+- **Charm gates are light, not structures.** Three arches a gate, one a lane, a family told by shape and colour:
+  speed a pointed arch in azure `#4DA6FF`, style a round arch in orchid `#D07BFF`, survival a square arch in leaf
+  `#7ED957`. These are the gates' own colours, never a role's (each stands 30 degrees of hue off mint, vermillion,
+  marigold, rose, gold-white and amber) and never on the rider, a ghost or a hazard. A medallion in the same outline
+  over each crown carries its charm's glyph, legible from about 120 m; a faint veil of the family's light fills each
+  opening so a lane reads as a door. The next gate breathes brightest; the arch ridden through burns toward white in
+  its own colour, the other two gutter. Nothing stands on the snow a sled rides (section 14 holds).
+- **A held charm has one signal,** on the lantern or in the world (a wisp circling the rider, sparks on the safe line,
+  a thread to the ghost drafted), never a list or a corner icon: the HUD does not grow.
+- **Tricks are poses with names.** Every trick has a pose (a hand on the rail, an arm up for a Lantern Reach, laid out
+  flat for a Spirit Stretch, a corkscrew for an Ember Twist) that eases in fast and lets go at touchdown, a name in
+  the callout and a sound by family. A deep grab near the snow strains the rider and turns the landing ring the
+  clock's amber, throbbing; in the stomp window it burns gold inside an amber edge.
+- **A showdown is a race with a finish line of light:** two posts of gold-white light with a band of the rival's colour
+  300 m ahead, the rival named in the pill; won, it bursts in the lantern's marigold and runs into the rider; lost,
+  in the rival's colour. A steal pulls a thread of the ghost's own light into the rider, turning marigold.
