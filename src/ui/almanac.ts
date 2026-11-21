@@ -111,8 +111,20 @@ export function stickerCard(s: StickerCard & { got: boolean }): HTMLElement {
   const name = h('span', 'gs-bk-st-n', s.got ? s.name : 'Not yet seen');
   if (s.got) name.setAttribute('translate', 'no');
   const art = h('span', 'gs-bk-st-art');
-  if (s.got && biome) art.innerHTML = biomeArt(biome);
-  const li = h('li', `gs-bk-st${s.got ? ' is-got' : ' is-unseen'}${biome ? ` b-${biome}` : ''} g-${s.group}`, art, h('span', 'gs-bk-st-ico', icon(GROUP_GLYPH[s.group] ?? 'sticker')), name);
+  // Round 8 (the photo lane): a sticker held is a frame from the run it happened in where one was kept; the painted
+  // card in its mountain's sky where not (a sticker from before frames were kept, or another device's).
+  const shot = s.got && s.img ? s.img : null;
+  if (shot) {
+    const img = h('img', 'gs-bk-st-img');
+    img.src = shot;
+    img.alt = '';
+    img.decoding = 'async';
+    img.loading = 'lazy';
+    img.width = 320;
+    img.height = 200;
+    art.append(img);
+  } else if (s.got && biome) art.innerHTML = biomeArt(biome);
+  const li = h('li', `gs-bk-st${s.got ? ' is-got' : ' is-unseen'}${shot ? ' is-shot' : ''}${biome ? ` b-${biome}` : ''} g-${s.group}`, art, h('span', 'gs-bk-st-ico', icon(GROUP_GLYPH[s.group] ?? 'sticker')), name);
   if (!s.got) li.append(h('span', 'gs-bk-st-hint', s.hint));
   li.setAttribute('aria-label', s.got ? s.name : `Not yet seen. ${s.hint}`);
   return li;

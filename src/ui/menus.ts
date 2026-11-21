@@ -294,7 +294,10 @@ export class Menus {
     this.pauseMis = h('section', 'gs-pause-mis');
     this.pauseMis.setAttribute('aria-labelledby', 'gs-pause-mis-h');
     this.pauseMis.hidden = true;
-    const card = h('div', 'gs-pause-card gs-panel', title, this.pauseMis, this.resumeBtn, this.pausePanel.el, home, key);
+    // Round 8 (the photo lane): photo mode holds the run where it stopped and hands the lens to the player.
+    const photo = hd.onPhoto ? btn(ctx, { cls: 'gs-btn-soft gs-pause-photo', icon: 'camera', label: 'Photo', sound: 'tap', fk: 'p-photo', onClick: () => hd.onPhoto?.() }) : null;
+    const acts = h('div', 'gs-pause-acts', photo, home);
+    const card = h('div', 'gs-pause-card gs-panel', title, this.pauseMis, this.resumeBtn, this.pausePanel.el, acts, key);
     card.setAttribute('role', 'dialog');
     card.setAttribute('aria-modal', 'true');
     card.setAttribute('aria-labelledby', title.id);

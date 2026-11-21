@@ -218,6 +218,14 @@ export class World {
   /** The highlight reel's lens (render/reelcam.ts), set while a reel plays: it takes the camera after the
    *  chase has had its frame, and writes the cine state. Null in play, always. */
   lens: ((camera: PerspectiveCamera, focus: Vector3, dir: Vector3, dt: number) => void) | null = null;
+  /** Round 8, photo mode (the photo lane): the run held and the lens free. What belongs to the chase lens and the
+   *  HUD leaves the picture (the speed streaks, the punch and flash, the corners closing at speed, the riders' tags
+   *  and Low's running figures); the grade, the light and the moment stay. */
+  photo = false;
+  /** Round 8 (the photo lane): called once a frame with the canvas the moment the picture is drawn, before the tags
+   *  and the avalanche mirror go over it, so a saved photo or an album sticker's frame never carries them. Null
+   *  almost always: a ride costs nothing for it. */
+  onPicture: ((canvas: HTMLCanvasElement) => void) | null = null;
   course: Course;
   palette: Palette;
   quality: QualitySettings;
@@ -1370,6 +1378,14 @@ export class World {
     // (On the edge of control the frame's corners close in a little.)
     pp.vignette = 1 + encl.shade * 1.5 + (v.mode === 'run' ? 0.3 * edgeK(s.speed) * this.streakK : 0);
     pp.time = v.time;
+    // (Photo mode: the lens is free, so what the chase lens does at speed leaves the picture.)
+    if (this.photo) {
+      pp.speed = 0;
+      pp.punch = 0;
+      pp.flash = 0;
+      pp.flowPulse = 0;
+      pp.vignette = 1 + encl.shade * 1.5;
+    }
     // The results hero shot is a calm frame: the danger grade lets go once the run is over. It
     // builds from about 60 m and eases in and out, so the wall arriving or a revive never pops it.
     const dangerTo = v.mode === 'run' && v.sim && v.sim.dyn.avalanche.phase === 2 ? Math.max(0, Math.min(1, 1 - (v.sim.s.z - v.sim.dyn.avalanche.z - 4) / 56)) : 0;
@@ -1397,9 +1413,10 @@ export class World {
     this.poster.update(this.cam.camera, this.width / this.height, feel.reduced || reduced(), this.setPieces.light.shade);
     this.feedBodies();
     this.post.render(this.scene, this.cam.camera);
+    if (this.onPicture) this.onPicture(this.renderer.domElement);
     this.renderMirror(v, focus, dir, dt);
-    // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM).
-    this.ghosts.drawLabels(this.renderer);
+    // The riders' labels, over the finished frame (labels.ts: one draw, nothing in the DOM). Photo mode draws none.
+    if (!this.photo) this.ghosts.drawLabels(this.renderer);
   }
 
   /** Round 8, the forest's level of detail by the lens: once the lens has moved, the trees within about 26 m of it are
@@ -1493,7 +1510,7 @@ export class World {
     // (Never in the highlight reel: its lens is the picture, and the HUD the mirror hangs from is away.)
     const want = v.mode === 'run' && sim && sim.dyn.avalanche.phase === 2 && this.quality.detail !== 'low' && !this.lens ? 1 : 0;
     this.mirrorFade += (want - this.mirrorFade) * Math.min(1, dt * 6);
-    if (this.mirrorFade < 0.05 || !sim) return;
+    if (this.mirrorFade < 0.05 || !sim || this.photo) return;
     // Contract C2 with the HUD: the mirror and the meter are one unit, and the HUD lays it out (it
     // hangs top-centre in the sky above the rider) and hands over the mirror's rect, top-left origin.
     // It drops a few pixels into place as it fades in. Without a rect the old geometry stands: the

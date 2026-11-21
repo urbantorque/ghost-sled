@@ -49,7 +49,11 @@ export type IconName =
   | 'book'
   | 'sticker'
   | 'lantern'
-  | 'star';
+  | 'star'
+  | 'camera'
+  | 'grid'
+  | 'focus'
+  | 'reset';
 
 const STROKE = 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 const FILL = 'fill="currentColor"';
@@ -160,6 +164,11 @@ const GLYPHS: Record<IconName, string> = {
   sticker: `<g ${STROKE}><path d="M20.5 13.2V5.8a2.3 2.3 0 0 0-2.3-2.3H5.8a2.3 2.3 0 0 0-2.3 2.3v12.4a2.3 2.3 0 0 0 2.3 2.3h7.4z"/><path d="M13.2 20.5v-4.9a2.4 2.4 0 0 1 2.4-2.4h4.9"/></g>`,
   lantern: `<g ${STROKE}><path d="M9.5 3.5h5M12 3.5v2"/><path d="M7.6 8.3c0-1.5 1.2-2.8 2.7-2.8h3.4c1.5 0 2.7 1.3 2.7 2.8v7.4c0 1.5-1.2 2.8-2.7 2.8h-3.4c-1.5 0-2.7-1.3-2.7-2.8z"/><path d="M10 18.5v2h4v-2"/></g><path ${FILL} d="M12 9.2c1.1 1.3 1.8 2.3 1.8 3.4a1.8 1.8 0 0 1-3.6 0c0-1.1.7-2.1 1.8-3.4z"/>`,
   star: `<path ${STROKE} d="M12 3.6l2.5 5.2 5.7.8-4.1 4 1 5.7L12 16.6l-5.1 2.7 1-5.7-4.1-4 5.7-.8z"/>`,
+  // Round 8, photo mode (the photo lane): the lens, the thirds, the focus ring and the way back to the first frame.
+  camera: `<g ${STROKE}><path d="M3.5 8.6a2 2 0 0 1 2-2h2.3l1.6-2.1h5.2l1.6 2.1h2.3a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/><circle cx="12" cy="12.9" r="3.6"/></g>`,
+  grid: `<g ${STROKE}><rect x="3.5" y="5" width="17" height="14" rx="2.2"/><path d="M9.2 5v14M14.8 5v14M3.5 9.7h17M3.5 14.3h17"/></g>`,
+  focus: `<g ${STROKE}><path d="M4 8.5V6a2 2 0 0 1 2-2h2.5M15.5 4H18a2 2 0 0 1 2 2v2.5M20 15.5V18a2 2 0 0 1-2 2h-2.5M8.5 20H6a2 2 0 0 1-2-2v-2.5"/></g><circle ${FILL} cx="12" cy="12" r="3"/>`,
+  reset: `<g ${STROKE}><path d="M4.6 12a7.4 7.4 0 1 0 2.2-5.3"/><path d="M4.4 4.2v4.4h4.4"/></g>`,
 };
 
 /** Raw SVG markup for a glyph (24 x 24 viewBox). */

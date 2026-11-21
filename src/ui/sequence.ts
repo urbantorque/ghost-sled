@@ -180,6 +180,8 @@ export interface StoryHooks {
   beat(kind: 'fill' | 'page' | 'card' | 'button', i: number): void;
   /** The bar's fill starts: the run's finished missions are paid now (their chimes). */
   paid(): void;
+  /** Round 8 (the photo lane): photo mode over the scene as it stands (absent: no button). */
+  photo?: () => void;
 }
 
 /**
@@ -306,7 +308,10 @@ export class Story {
     const home = btn(ctx, { cls: 'gs-btn-soft gs-sq-home', icon: 'back', label: 'Home', sound: 'back', fk: 'st-home', onClick: () => this.hooks.home() });
     const more = btn(ctx, { cls: 'gs-btn-soft gs-sq-details', icon: 'chevR', label: 'Details', sound: 'tap', fk: 'details', onClick: () => this.hooks.details() });
     more.setAttribute('aria-label', 'Details: the race, your splits and missions');
-    const foot = h('div', 'gs-sq-foot gs-sq-step', home, ...offers, more);
+    // (Round 8, the photo lane: the lens, beside Home, for the scene the results stand over.)
+    const shot = this.hooks.photo;
+    const photo = shot ? btn(ctx, { cls: 'gs-btn-soft gs-sq-photo', icon: 'camera', aria: 'Photo mode', sound: 'tap', fk: 'st-photo', onClick: () => shot() }) : null;
+    const foot = h('div', 'gs-sq-foot gs-sq-step', home, photo, ...offers, more);
     this.steps.push(foot);
     this.el.append(...[place, rank, row, go, foot].filter((x): x is HTMLElement => x !== null));
     this.plan = seqPlan({ place: place !== null, segments: this.segs, bar: rank !== null, cards: this.cardEls.length });
