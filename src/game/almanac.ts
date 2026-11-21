@@ -220,7 +220,7 @@ export function rewardName(r: Reward): string {
     case 'mirror':
       return `Mirror ${MOUNTAIN_NAMES[r.mountain] ?? r.mountain}`;
     case 'hour':
-      return `${MOUNTAIN_NAMES[r.mountain] ?? r.mountain} at its other hour`;
+      return `${MOUNTAIN_NAMES[r.mountain] ?? r.mountain} ${HOUR_PHRASES[r.mountain] ?? 'at its other hour'}`;
     case 'flourish':
       return `A flourish for ${TRICK_NAMES[r.trick] ?? r.trick}`;
     case 'garage':
@@ -237,6 +237,10 @@ export function rewardName(r: Reward): string {
 }
 
 const MOUNTAIN_NAMES: Readonly<Record<string, string>> = { pinecrest: 'Pinecrest', frostfang: 'Frostfang', ember: 'Ember Peak', sakura: 'Sakura Ridge', lanternfall: 'Lanternfall' };
+/** Round 8, the hours lane: each mountain's other hour as its card says it after the name ("Ember Peak at Night"). The
+ *  same words as the palettes' (render/palette.ts ALT_HOURS phrase, which tests/hours.test.ts holds them to), kept here
+ *  so the game layer reads no render code. */
+export const HOUR_PHRASES: Readonly<Record<string, string>> = { pinecrest: 'at Dusk', frostfang: 'at Noon', ember: 'at Night', sakura: 'in the Evening', lanternfall: 'at First Light' };
 /** The charms' names (charms.ts CHARMS), for the cards. */
 export const CHARM_NAMES: Readonly<Record<string, string>> = {
   slip: 'Slipstream Lantern', comet: "Comet's Tail", kite: 'Kite String', frost: 'Frost Runners', star: 'Falling Star', drum: 'Drift Drum', step: 'Ember Step', stride: 'Long Stride',
