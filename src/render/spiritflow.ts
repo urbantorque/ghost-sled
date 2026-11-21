@@ -1,4 +1,4 @@
-import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Group, Mesh, NormalBlending, Points, ShaderMaterial, Vector3 } from 'three';
+import { BufferAttribute, BufferGeometry, Color, DynamicDrawUsage, Group, Mesh, NormalBlending, NotEqualStencilFunc, Points, ShaderMaterial, Vector3 } from 'three';
 import { ghostStencil, shared } from './materials';
 import type { Tier } from './world';
 
@@ -129,6 +129,8 @@ function flameMaterial(hdr: number): ShaderMaterial {
       void main() {
         vFlame = aFlame;
         vec4 mv = viewMatrix * vec4(position, 1.0);
+        // (A tongue born on the scarf stands a hand in front of it, so the cloth it burns on never hides half of it.)
+        mv.z += 0.08;
         float d = max(-mv.z, 0.05);
         vec4 c0 = projectionMatrix * mv;
         vec4 c1 = projectionMatrix * viewMatrix * vec4(position + aRise * 0.1, 1.0);
@@ -183,8 +185,12 @@ function flameMaterial(hdr: number): ShaderMaterial {
       }
     `,
   });
-  // Never over the rider's own pixels (contract C10): the flame burns off the scarf's tip, behind the scarf itself.
-  ghostStencil(m);
+  // Never over the rider's body (contract C10: the body's pixels hold 1), but over the scarf (3), which it burns on.
+  m.stencilWrite = true;
+  m.stencilWriteMask = 0;
+  m.stencilFunc = NotEqualStencilFunc;
+  m.stencilRef = 1;
+  m.stencilFuncMask = 3;
   return m;
 }
 

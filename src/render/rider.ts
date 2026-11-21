@@ -173,10 +173,10 @@ const TASSELS = 4;
 const TASSEL_L = 0.11 * RIDER_SCALE;
 const CREAM_KNIT = new Color('#F3E6D4');
 /** Round 8 (the flow pass): the scarf's tail burning at full Spirit Flow, from the rider's vermillion at the knot through
- *  a flame's orange to the lantern's marigold at the tip, brighter than the cloth so it glows (and blooms on Medium and
- *  High). */
-const BURN_MID = new Color('#FF7A1E').multiplyScalar(1.25);
-const BURN_TIP = new Color('#FFD34D').multiplyScalar(1.4);
+ *  a flame's orange to a deep marigold at the tip, a little brighter than the cloth so it glows (brighter still, its tip
+ *  bloomed to cream and read as a stick in the fire). */
+const BURN_MID = new Color('#FF6A1A').multiplyScalar(1.15);
+const BURN_TIP = new Color('#FFC23A').multiplyScalar(1.1);
 const INK_KNIT = new Color('#1A2140');
 
 /** The after-image's glass: a white-gold fresnel edge with a breath of light inside, added over the scene. */
@@ -883,6 +883,10 @@ export class Rider {
     // A ribbon is all edge when seen at a grazing angle, so a fresnel rim would wash the whole face
     // out: the scarf keeps only a trace of it and stays saturated vermillion.
     this.scarf = new Mesh(this.tailGeo, riderMaterial({ coolShade: 0.35, doubleSided: true, rim: 0.15 }, this.u, 0.12, 0));
+    // (Round 8, the flow pass: the scarf writes the rider's bit and one of its own, 3, so Spirit Flow's flame may burn
+    // over the scarf and never over the body; every ghost layer tests the rider's bit alone. With the scarf held off like
+    // the body, the flame showed only round the scarf's edges and read as a fire beside it.)
+    (this.scarf.material as ShaderMaterial).stencilRef = 3;
     this.scarf.frustumCulled = false;
     this.scarf.castShadow = true;
 

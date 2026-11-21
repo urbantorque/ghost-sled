@@ -2474,6 +2474,8 @@ export function ghostStencil(m: Material): void {
   m.stencilWriteMask = 0;
   m.stencilFunc = NotEqualStencilFunc;
   m.stencilRef = 1;
+  // (Only the rider's bit: the scarf writes 3, its own bit as well, which Spirit Flow's flame reads. Round 8.)
+  m.stencilFuncMask = 1;
 }
 
 /** Spectral ghosts (ART.md section 6): one glass silhouette per rider (GhostVisuals draws a depth

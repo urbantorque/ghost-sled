@@ -320,6 +320,8 @@ export class ChaosVisuals {
       mat.stencilWrite = true;
       mat.stencilFunc = NotEqualStencilFunc;
       mat.stencilRef = 1;
+      // (The rider's bit only: the scarf also writes a bit of its own, round 8.)
+      mat.stencilFuncMask = 1;
       mat.stencilWriteMask = 0;
       const m = new Mesh(spiritGeo, mat);
       m.frustumCulled = false;
