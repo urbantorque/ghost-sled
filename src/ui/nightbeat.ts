@@ -26,14 +26,17 @@ export function showNightBeat(root: HTMLElement, v: NightBeatView, still: boolea
   for (let i = 0; i < GET_UPS; i++) pips.append(h('span', `gs-nb-pip${i < v.getUps ? ' is-on' : ''}`));
   const charms = v.charms.length > 0 ? h('span', 'gs-nb-charms', ...v.charms.map((c) => h('span', 'gs-nb-charm', c))) : null;
   const lantern = h('span', 'gs-nb-lantern', icon('lantern'), h('span', 'gs-num', `${Math.round(v.lantern * 100)}%`));
-  const carried = v.n > 1 ? h('p', 'gs-nb-carry', h('span', 'gs-nb-k', 'Carried'), lantern, pips, charms) : null;
+  // (Each figure says what it is: a critic read a bare 54% and three dots as a riddle.)
+  const carried = v.n > 1 ? h('p', 'gs-nb-carry', h('span', 'gs-nb-k', 'Carried in'), h('span', 'gs-nb-item', h('span', 'gs-nb-l', 'Lantern'), lantern), h('span', 'gs-nb-item', h('span', 'gs-nb-l', 'Get-ups'), pips), charms) : null;
   const el = h(
     'section',
     `gs-nightbeat${still ? '' : ' is-moving'}`,
     h('p', 'gs-nb-leg', h('span', 'gs-nb-k', 'The Long Night'), h('span', 'gs-num', `Leg ${v.n} of ${v.of}`)),
     h('h2', 'gs-nb-head', where, v.mirror ? h('span', 'gs-nb-mirror', 'Mirrored') : null),
-    deep ? h('p', 'gs-nb-deep', icon('flame'), h('span', '', `The night deepens: ${deep}`)) : null,
+    deep ? h('p', 'gs-nb-deep', icon('flame'), h('span', '', `The night deepens ahead: ${deep}`)) : null,
     carried,
+    // (It goes on by itself: a bar drains to the next leg, and a tap goes now.)
+    h('p', 'gs-nb-go', h('span', 'gs-nb-l', 'Next leg'), h('span', 'gs-nb-bar', h('span', 'gs-nb-fill')), h('span', 'gs-nb-l', 'Tap or Space to go now')),
     sr(`Leg ${v.n} of ${v.of}: ${v.mountain}${v.mirror ? ', mirrored' : ''}.${deep ? ` The night deepens: ${deep}.` : ''} Carried: ${Math.round(v.lantern * 100)}% of a lantern, ${v.getUps} get-ups${v.charms.length ? `, ${v.charms.join(', ')}` : ''}.`),
   );
   el.setAttribute('role', 'status');

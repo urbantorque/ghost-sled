@@ -12,7 +12,7 @@
   z-index: 3;
   display: grid;
   gap: 8px;
-  width: min(440px, calc(100% - var(--sl) - var(--sr)));
+  width: min(400px, calc(100% - var(--sl) - var(--sr)));
   padding: 16px 18px 15px;
   border-radius: var(--r-card);
   background: var(--panel);
@@ -120,6 +120,54 @@
   width: 18px;
   height: 18px;
   color: var(--dim);
+}
+
+.gs-nb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.gs-nb-l {
+  color: var(--dim);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.gs-nb-go {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 2px 0 0;
+}
+
+.gs-nb-bar {
+  flex: 1;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: rgba(245, 243, 255, 0.14);
+}
+
+/* Drains over the beat (nightbeat.ts NIGHT_BEAT_MS); reduced motion leaves it full and still. */
+.gs-nb-fill {
+  display: block;
+  height: 100%;
+  background: var(--text);
+  transform-origin: left center;
+}
+
+.gs-nightbeat.is-moving.is-in .gs-nb-fill {
+  animation: gs-nb-drain 2400ms linear forwards;
+}
+
+@keyframes gs-nb-drain {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 
 /* The lantern is marigold, the lantern's own (ART.md 1). */
