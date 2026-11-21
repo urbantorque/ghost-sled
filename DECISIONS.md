@@ -3631,3 +3631,33 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       ghosts in view): the quiet sitting recounts it.
     - *The machine.* The session's scratchpad was shared between lanes, and twice a helper of the speed lane's with the
       same name ran with this lane's arguments; lanes keep their helpers in a folder of their own from now on.
+
+375. **V4, speed in the world, and Spirit Flow's look: a better picture on every pair, "faster" left to a person**
+    (`notes/r8-speed.md`; strips, pairs and keys under `shots/r8/speed/`).
+    - *What changed.* The near flakes are short crystals in the air, soft and out of focus close to the lens, not
+      150 px white scratches. Speed's blur keeps to the frame's outer band (the corner streak and a lens blur up to
+      three times a camera beat's length there); the middle, the far planes and the rider stay sharp, and only a
+      whip-pan blurs the whole frame. Posts and flags strobe past 4.5 to 12 m apart at the corridor's edge (they were
+      10 to 18), with a rank of tall poles 4.5 to 8 m behind them for depth. The lens opens with a surge, punches out
+      on a dash and holds while it runs, and opens up to 3.5 degrees at full flow. On hard snow the sled and the lens
+      chatter, hardest on ice, faint in powder, off under reduced motion.
+    - *Spirit Flow* (`spiritflow.ts`, read from the sim's `s.flow` and its `flow` event): richer colour from level 1, a
+      flame off the scarf from 2 (vermillion burning into marigold, never mint), wind lines from 3, sparks and the
+      ghosts at their brightest at 5 and 6; a level gained is a breath in, a level lost a gutter out; a bed of air
+      under the run rises a step a level, never music. Low draws the flame alone; the phone half the wind lines and
+      sparks; reduced motion keeps the colour, the flame, the glow and the bed.
+    - *Judged on strips of eight frames at speed.* Two fresh critics picked the new strip as the better picture 10 of
+      10 both times, and as reading faster 0 of 10 both times: on a still, smear reads as speed, and the brief retires
+      the smear. The bar asked for both. Merged on the first, because "reads faster" is the one thing stills cannot
+      show and the edge band is one constant each in `lens.ts` and `post.ts` if a person finds it slow; it goes on the
+      owner's play route as a question. The flame's last form (a saturated flame and softer wind lines, after the
+      critics read the first as "a plank" and "hard cyan lines") is unit-tested and shot by the main lane after the
+      merge.
+    - *Two flows.* The director's round 7 display flow (earned from skill moves only, the rider's vermillion rim, the
+      wind's song and "In the flow") still runs beside Spirit Flow, which reads the sim's level and its rewards. Left
+      as it is for the feel pass to judge in motion: rewiring the rim to the sim's level would let a drafting pack
+      light a novice's rim, which round 7 tuned out.
+    - *Cost.* High: no draw at flow 0, one to three at flow; triangles up 0.2 to 2.5% (the second rank of poles). Low's
+      GL calls on Pinecrest 486.4 before, 485.0 at rest and 507.4 at full flow (the flame). Readability level: the road
+      reads within 2 m at 30 and 44 m/s and the tree pixels are identical. The lens pass a little cheaper (0.40 to about
+      0.33 ms). Nothing new before the first frame.
