@@ -82,7 +82,7 @@ export const TITLE_SHOTS: Readonly<Record<string, TitleShot>> = {
   sakura: {
     from: 1980,
     to: 2620,
-    light: 2450,
+    light: 2580,
     desk: { r: 5.0, up: 0.9, sweep: 0.34, drift: 0.14, ahead: 30, lift: 1.3, crane: 0.2, hero: [0.08, 0.2] },
     phone: { r: 7.0, up: 1.3, sweep: 0.14, drift: 0.05, ahead: 22, lift: 0.8, crane: 0, hero: [-0.08, -0.08] },
   },

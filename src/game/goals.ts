@@ -125,7 +125,7 @@ export function nextGoals(d: SaveData, ctx: GoalContext): NextGoal[] {
     const top = Math.max(...vals, 0);
     const reachable = top >= t.target * REACH_MISSION || (def.unit === 'n' && t.target >= 2 && top >= t.target - 1);
     const left = Math.max(0, t.target - Math.max(top, a.best));
-    const short = left <= 0 ? 'within your best' : def.unit === 'm' ? `${Math.ceil(left)} m short` : def.unit === 's' ? `${left.toFixed(1)} s short` : def.unit === 'deg' ? `${left * 180} short` : def.unit === 'm/s' ? `${Math.ceil(left)} m/s short` : `${Math.ceil(left)} to go`;
+    const short = left <= 0 ? 'done before, so again' : def.unit === 'm' ? `${Math.ceil(left)} m short` : def.unit === 's' ? `${left.toFixed(1)} s short` : def.unit === 'deg' ? `${left * 180} short` : def.unit === 'm/s' ? `${Math.ceil(left)} m/s short` : `${Math.ceil(left)} to go`;
     out.push({ kind: 'mission', text: `Finish: ${t.text}`, short, reachable, gap: t.target > 0 ? left / t.target : 0, names: [t.text] });
   }
   // 3. The next duel.

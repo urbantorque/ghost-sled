@@ -51,7 +51,8 @@ import { TRICKS } from '../sim/tricks';
 import { CHAPTER_EXTRAS, GARAGE_EXTRAS, type GarageExtra, almanacOpens, shelfExtras } from './almanac';
 import { SYNERGY_KEYS } from './album';
 import { type LostTo, type PrimaryButton, primaryButton } from './goals';
-import { lightLantern } from './lanterns';
+import { litByTown, lightLantern } from './lanterns';
+import { setLanternRow } from '../render/lanternrow';
 import { type SpineOutcome, type SpineRun, type SpineSettlement, settleSpine } from './rank';
 import { albumModel, almanacModel, lanternRow, resultsSpine, titleSpine } from './spineview';
 import { flameNow } from './flame';
@@ -699,6 +700,8 @@ export class App {
   private refreshTitle(): void {
     if (this.phase !== 'title') return;
     const d = this.save.data;
+    // (Round 8: the finish towns hang the lanterns this save has lit; the title shot's stretch hangs its own.)
+    setLanternRow(litByTown(d));
     // (The Daily's day key; settleRun records the day streak and medal under it.)
     const today = this.daily.tagline;
     const week = this.cup.tagline;
