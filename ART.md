@@ -488,6 +488,13 @@ Round 7:
   outlined; stickers painted in their mountain's sky, silhouettes with where to find them.
 - **A touch lesson sits beside the control it teaches,** never in the thumbs' band (the bottom 22% of a phone held
   upright).
+- **A mirror mountain is the picture turned over, never a second look.** The canvas is shown flipped; every word in
+  the world is built in mirror writing to meet it (the boards' letters, the medallions' glyphs) and every label is laid
+  out as the player sees the screen, so nothing reads backwards and nothing else changes. The title is never mirrored:
+  its key art is composed for the logo's side.
+- **The Long Night's beat between legs** is one ink panel low at the reading edge over the finish town: the leg and its
+  mountain in the italic of speed words, the night deepening, then what rides in (the lantern in marigold, the get-up
+  pips, the charms by name) and a bar draining to the next leg. It is never a menu: it goes on by itself.
 - **Motion has a direction.** A screen leaves the way it is built: the logo's column off the logo's side,
   the cards off theirs, the primary button forward. The HUD arrives from its corners once; a lantern cell
   that fills lifts once; a set piece's card settles into its chip. Transform and opacity only, nothing

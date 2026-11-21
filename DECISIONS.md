@@ -3661,3 +3661,28 @@ with its notes in `notes/r8-<lane>.md`; the rules every lane works to are `notes
       GL calls on Pinecrest 486.4 before, 485.0 at rest and 507.4 at full flow (the flame). Readability level: the road
       reads within 2 m at 30 and 44 m/s and the tree pixels are identical. The lens pass a little cheaper (0.40 to about
       0.33 ms). Nothing new before the first frame.
+
+376. **G9, somewhere to go after The Twelve: mirror mountains and the Long Night** (`notes/r8-modes.md`; frames under
+    `shots/r8/modes/`).
+    - *Mirrors.* The page shows the canvas turned over (CSS `scaleX(-1)`): no pass and no draw on any tier, where
+      flipping the projection would have broken triangle winding and the `dFdx` normals in three shaders. The steer is
+      read the other way where the sim takes it, so a mirrored run's record is an ordinary record and its ghosts are
+      mirrored with you; tags, the edge chip and Low's canvas HUD are laid out as the player sees the screen; FINISH and
+      START are built in mirror writing and the medallions' glyphs drawn turned over; a gate's offers are named left to
+      right as the player sees them; sound swaps after the master. Records live under `mirror:<id>`; no duel rides a
+      mirror. The title is never mirrored (its key art is composed for the logo's side). A fresh critic told only "find
+      anything that reads backwards or looks wrong" found nothing backwards in 45 frames on every mountain, High, Low
+      and the phone. Low's GL calls: 483.9 plain, 487.7 mirrored.
+    - *The Long Night.* Whole mountains back to back as the Almanac opens legs, each leg an ordinary record under
+      `night:<id>`, the lantern and get-ups held at the line carried in through `SimConfig.carry` with the last three
+      charms taken (the spine carried the first three, which made every later gate a pick for one leg only), chaos
+      plain, then a mood, then a mood and an event from leg 3 (the spine started events at leg 4, which a three-leg
+      night never reached). Between legs one ink panel over the finish town says the leg, what rides in and that it goes
+      on by itself, a bar draining 2.4 s; it goes through Run Again, as every way into a run must
+      (`tests/guards.test.ts` caught the first version). Proved in node (the lab's mid pilot, four nights three legs
+      deep, every carry equal to the line before, every leg replaying alone to its hash) and in the browser by a
+      scripted pilot from a fresh save.
+    - *Short, and left for later.* The night is long rather than hard: the sim hands every get-up back at each stage
+      line, so a novice rode all ten legs on two nights of four. Holding a night's get-ups across stage lines is a sim
+      flag for a later sim round (the sim is closed, DECISIONS 370); a full night's time as a second record is the
+      spine's to add. Trials (the stretch) were not built. Only scripts have ridden either mode.
